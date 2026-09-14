@@ -6,6 +6,10 @@ use crate::error::Trap;
 const FIELD_SIZE: usize = 8;
 
 /// Reads an i32 from an FB instance field.
+#[allow(
+    clippy::unwrap_used,
+    reason = "slice is exactly 4 bytes by construction (offset..offset+4)"
+)]
 fn read_i32(instance: &[u8], field: usize) -> i32 {
     let offset = field * FIELD_SIZE;
     let bytes: [u8; 4] = instance[offset..offset + 4].try_into().unwrap();
@@ -21,6 +25,10 @@ fn write_i32(instance: &mut [u8], field: usize, value: i32) {
 }
 
 /// Reads an i64 from an FB instance field.
+#[allow(
+    clippy::unwrap_used,
+    reason = "slice is exactly 8 bytes by construction (offset..offset+8)"
+)]
 fn read_i64(instance: &[u8], field: usize) -> i64 {
     let offset = field * FIELD_SIZE;
     let bytes: [u8; 8] = instance[offset..offset + 8].try_into().unwrap();

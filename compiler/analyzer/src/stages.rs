@@ -164,7 +164,7 @@ pub fn resolve_types(
         use crate::intermediates::stdlib_function::get_sizeof_function;
         function_environment
             .insert(get_sizeof_function())
-            .expect("SIZEOF should not conflict with stdlib");
+            .map_err(|d| vec![d])?;
     }
 
     let mut symbol_environment = SymbolEnvironment::new();

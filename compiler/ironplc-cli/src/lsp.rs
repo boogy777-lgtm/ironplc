@@ -374,9 +374,7 @@ impl<'a> LspServer<'a> {
             };
 
             let response = lsp_server::Response::new_ok(req_id, result);
-            self.sender
-                .send(lsp_server::Message::Response(response))
-                .unwrap();
+            let _ = self.sender.send(lsp_server::Message::Response(response));
             return "ironplc/disassemble";
         }
 
@@ -387,9 +385,7 @@ impl<'a> LspServer<'a> {
 
             let result = self.project.run_load(source, cycle_time_us);
             let response = lsp_server::Response::new_ok(req_id, result);
-            self.sender
-                .send(lsp_server::Message::Response(response))
-                .unwrap();
+            let _ = self.sender.send(lsp_server::Message::Response(response));
             return "ironplc/run";
         }
 
@@ -399,24 +395,24 @@ impl<'a> LspServer<'a> {
 
             let result = self.project.run_step(scans);
             let response = lsp_server::Response::new_ok(req_id, result);
-            self.sender
-                .send(lsp_server::Message::Response(response))
-                .unwrap();
+            let _ = self.sender.send(lsp_server::Message::Response(response));
             return "ironplc/step";
         }
 
         if _req.method == "ironplc/stop" {
             let result = self.project.run_stop();
             let response = lsp_server::Response::new_ok(req_id, result);
-            self.sender
-                .send(lsp_server::Message::Response(response))
-                .unwrap();
+            let _ = self.sender.send(lsp_server::Message::Response(response));
             return "ironplc/stop";
         }
 
         ""
     }
 
+    #[allow(
+        clippy::panic,
+        reason = "ExtractError::JsonError consumes the request, so it cannot be handed back; mirrors rust-analyzer's cast pattern"
+    )]
     fn cast_request<T>(request: lsp_server::Request) -> Result<T::Params, lsp_server::Request>
     where
         T: lsp_types::request::Request,
@@ -438,7 +434,8 @@ impl<'a> LspServer<'a> {
     {
         trace!("Response for method {}", R::METHOD);
         let response = lsp_server::Response::new_ok(request_id, params);
-        self.sender.send(Message::Response(response)).unwrap()
+        // A send failure means the client disconnected; nothing to answer to.
+        let _ = self.sender.send(Message::Response(response));
     }
 
     fn handle_notification(&mut self, notification: lsp_server::Notification) -> &'static str {
@@ -473,7 +470,11 @@ impl<'a> LspServer<'a> {
                         "DidChangeTextDocument {}",
                         params.text_document.uri.as_str()
                     );
-                    let contents = params.content_changes.into_iter().next().unwrap().text;
+                    let Some(change) = params.content_changes.into_iter().next() else {
+                        // A DidChange with no changes carries nothing to apply.
+                        return "";
+                    };
+                    let contents = change.text;
                     let uri = params.text_document.uri;
                     let version = params.text_document.version;
 
@@ -489,6 +490,10 @@ impl<'a> LspServer<'a> {
         ""
     }
 
+    #[allow(
+        clippy::panic,
+        reason = "ExtractError::JsonError consumes the notification, so it cannot be handed back; mirrors rust-analyzer's cast pattern"
+    )]
     fn cast_notification<T>(
         notification: lsp_server::Notification,
     ) -> Result<T::Params, lsp_server::Notification>
@@ -508,9 +513,8 @@ impl<'a> LspServer<'a> {
         N::Params: Serialize,
     {
         let notification = lsp_server::Notification::new(N::METHOD.to_string(), params);
-        self.sender
-            .send(Message::Notification(notification))
-            .unwrap()
+        // A send failure means the client disconnected; nothing to answer to.
+        let _ = self.sender.send(Message::Notification(notification));
     }
 }
 
@@ -674,7 +678,14 @@ mod test {
                 .unwrap();
 
             match message {
-                Message::Request(_) => panic!(),
+                Message::Request(request) => {
+                    // The test client never expects requests from the server.
+                    assert!(
+                        request.method.is_empty(),
+                        "unexpected request in test client: {}",
+                        request.method
+                    );
+                }
                 Message::Response(response) => {
                     let id = response.id.clone();
                     self.responses.insert(id, response);

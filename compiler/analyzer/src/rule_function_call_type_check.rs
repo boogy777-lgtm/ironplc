@@ -1252,6 +1252,10 @@ END_VAR
     result := TAKES_BYTE(0);
 END_PROGRAM";
 
+    #[allow(
+        clippy::panic,
+        reason = "test helper: an unknown flag literal is a test-authoring bug, not user input"
+    )]
     fn only(flag: &str) -> CompilerOptions {
         let mut opts = CompilerOptions::default();
         match flag {

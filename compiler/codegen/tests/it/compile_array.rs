@@ -457,13 +457,13 @@ END_PROGRAM
     let desc = type_section
         .array_descriptors
         .iter()
-        .find(|d| d.element_type == 10)
-        .unwrap_or_else(|| {
-            panic!(
-                "expected a slot-typed descriptor, got: {:?}",
-                type_section.array_descriptors
-            )
-        });
+        .find(|d| d.element_type == 10);
+    assert!(
+        desc.is_some(),
+        "expected a slot-typed descriptor, got: {:?}",
+        type_section.array_descriptors
+    );
+    let desc = desc.unwrap();
     // 4 elements * 2 slots each.
     assert_eq!(desc.total_elements, 8);
     assert_eq!(desc.element_extra, 0);
@@ -567,12 +567,12 @@ END_PROGRAM
     let desc = type_section
         .array_descriptors
         .iter()
-        .find(|d| d.total_elements == 4)
-        .unwrap_or_else(|| {
-            panic!(
-                "expected a 4-element descriptor, got: {:?}",
-                type_section.array_descriptors
-            )
-        });
+        .find(|d| d.total_elements == 4);
+    assert!(
+        desc.is_some(),
+        "expected a 4-element descriptor, got: {:?}",
+        type_section.array_descriptors
+    );
+    let desc = desc.unwrap();
     assert_eq!(desc.element_type, 3);
 }

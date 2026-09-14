@@ -109,11 +109,7 @@ fn initial_step(library: &Library) -> &Step {
 }
 
 fn network(library: &Library) -> &Network {
-    match &library.elements[0] {
-        LibraryElementKind::ProgramDeclaration(program) => match &program.body {
-            FunctionBlockBodyKind::Sfc(sfc) => &sfc.networks[0],
-            body => panic!("expected an SFC body, found {body:?}"),
-        },
-        element => panic!("expected a program, found {element:?}"),
-    }
+    let program = cast!(&library.elements[0], LibraryElementKind::ProgramDeclaration);
+    let sfc = cast!(&program.body, FunctionBlockBodyKind::Sfc);
+    &sfc.networks[0]
 }

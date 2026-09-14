@@ -895,7 +895,11 @@ fn compile_program_with_functions(
         let field_var_off = var_offset.raw();
 
         // Update the var_offset in the registered type info.
-        ctx.user_fb_types.get_mut(&fb_name).unwrap().var_offset = field_var_off;
+        let Some(fb_type) = ctx.user_fb_types.get_mut(&fb_name) else {
+            // The type was registered when `fb_func_id` was read above.
+            return Err(Diagnostic::internal_error());
+        };
+        fb_type.var_offset = field_var_off;
 
         let (compiled, saved_scope) = compile_user_function_block(
             fb_decl,

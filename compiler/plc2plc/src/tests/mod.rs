@@ -5,6 +5,8 @@
 
 mod common;
 
+pub(crate) use common::unwrap_parse;
+
 mod adr;
 mod case;
 mod constant_initializers;

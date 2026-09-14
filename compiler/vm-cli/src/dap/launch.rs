@@ -324,10 +324,12 @@ mod tests {
             .add_var_name(a_var_name())
             .build();
         let mut bufs = VmBuffers::from_container(&container);
-        let err = match start_vm(&container, &mut bufs) {
-            Ok(_) => panic!("expected the dividing-by-zero init to trap"),
-            Err(err) => err,
-        };
+        let result = start_vm(&container, &mut bufs);
+        assert!(
+            result.is_err(),
+            "expected the dividing-by-zero init to trap"
+        );
+        let err = result.err().unwrap();
         assert!(matches!(err, LaunchError::VmStartFailed { .. }));
         // The start-time trap surfaces its own V-code (divide by zero → V4001).
         assert_eq!(err.v_code(), "V4001");

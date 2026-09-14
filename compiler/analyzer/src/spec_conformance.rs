@@ -17,6 +17,7 @@ use ironplc_dsl::textual::{Assignment, StmtKind};
 use ironplc_parser::options::{CompilerOptions, Dialect};
 use ironplc_parser::parse_program;
 use ironplc_problems::Problem;
+use ironplc_test::cast;
 use spec_test_macro::spec_test;
 
 use crate::stages::analyze;
@@ -89,15 +90,16 @@ END_PROGRAM";
 
 /// Returns the statements of the (single) PROGRAM in a library.
 fn program_statements(lib: &Library) -> Vec<StmtKind> {
-    for element in &lib.elements {
-        if let LibraryElementKind::ProgramDeclaration(prog) = element {
-            let FunctionBlockBodyKind::Statements(stmts) = &prog.body else {
-                panic!("program body is not a statement list");
-            };
-            return stmts.body.clone();
-        }
-    }
-    panic!("no program declaration found");
+    let program = lib.elements.iter().find_map(|element| match element {
+        LibraryElementKind::ProgramDeclaration(prog) => Some(prog),
+        _ => None,
+    });
+    cast!(
+        &program.expect("no program declaration found").body,
+        FunctionBlockBodyKind::Statements
+    )
+    .body
+    .clone()
 }
 
 /// REQ-RTO-analyzer-502: The target of a `REF=` binding is not auto-dereferenced

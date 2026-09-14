@@ -863,9 +863,15 @@ mod test {
             library
                 .elements
                 .iter()
-                .map(|element| match element {
-                    LibraryElementKind::FunctionBlockDeclaration(fb) => fb.name.to_string(),
-                    other => panic!("unexpected element: {other:?}"),
+                .map(|element| {
+                    assert!(
+                        matches!(element, LibraryElementKind::FunctionBlockDeclaration(_)),
+                        "unexpected element: {element:?}"
+                    );
+                    let LibraryElementKind::FunctionBlockDeclaration(fb) = element else {
+                        return String::new();
+                    };
+                    fb.name.to_string()
                 })
                 .collect()
         }

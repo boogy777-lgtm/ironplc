@@ -130,25 +130,41 @@ fn resolve_initializer_expr(type_name: TypeName, e: Expr) -> InitialValueAssignm
     }
 }
 
+/// Builds the syntax-error diagnostic for a failed parse. `token_index`
+/// points past the offending token; an empty token stream gets a span-less
+/// message instead of a panic.
+fn syntax_error(tokens: &[Token], token_index: usize, expected: String) -> Diagnostic {
+    let Some(actual) = tokens.get(token_index.saturating_sub(1)) else {
+        return Diagnostic::problem(
+            Problem::SyntaxError,
+            Label::span(
+                SourceSpan::default(),
+                "Expected further input. Found end of input",
+            ),
+        );
+    };
+
+    Diagnostic::problem(
+        Problem::SyntaxError,
+        Label::span(
+            actual.span.clone(),
+            format!(
+                "Expected {}. Found text '{}' that matched token {}",
+                expected,
+                actual.text.replace('\n', "\\n").replace('\r', "\\r"),
+                actual.token_type.describe()
+            ),
+        ),
+    )
+}
+
 /// Parses a IEC 61131-3 library into object form.
 pub fn parse_library(tokens: Vec<Token>) -> Result<Vec<LibraryElementKind>, Diagnostic> {
     plc_parser::library(&SliceByRef(&tokens[..]), &tokens[..]).map_err(|e| {
-        let token_index = e.location;
-
-        let expected = Vec::from_iter(e.expected.tokens()).join(" | ");
-        let actual = tokens.get(token_index - 1).unwrap();
-
-        Diagnostic::problem(
-            Problem::SyntaxError,
-            Label::span(
-                actual.span.clone(),
-                format!(
-                    "Expected {}. Found text '{}' that matched token {}",
-                    expected,
-                    actual.text.replace('\n', "\\n").replace('\r', "\\r"),
-                    actual.token_type.describe()
-                ),
-            ),
+        syntax_error(
+            &tokens,
+            e.location,
+            Vec::from_iter(e.expected.tokens()).join(" | "),
         )
     })
 }
@@ -163,22 +179,10 @@ pub fn parse_statements(tokens: Vec<Token>) -> Result<Vec<StmtKind>, Diagnostic>
     }
 
     plc_parser::statement_list(&SliceByRef(&tokens[..]), &tokens[..]).map_err(|e| {
-        let token_index = e.location;
-
-        let expected = Vec::from_iter(e.expected.tokens()).join(" | ");
-        let actual = tokens.get(token_index.saturating_sub(1)).unwrap();
-
-        Diagnostic::problem(
-            Problem::SyntaxError,
-            Label::span(
-                actual.span.clone(),
-                format!(
-                    "Expected {}. Found text '{}' that matched token {}",
-                    expected,
-                    actual.text.replace('\n', "\\n").replace('\r', "\\r"),
-                    actual.token_type.describe()
-                ),
-            ),
+        syntax_error(
+            &tokens,
+            e.location,
+            Vec::from_iter(e.expected.tokens()).join(" | "),
         )
     })
 }
@@ -1462,7 +1466,7 @@ parser! {
         let oop_span = oop_spans
           .into_iter()
           .reduce(|acc, span| SourceSpan::join(&acc, &span))
-          .expect("at least one OOP token present");
+          .unwrap_or_else(|| SourceSpan::join(&start.span, &end.span));
         Some(FunctionBlockOop {
           base,
           implements: implements_list,

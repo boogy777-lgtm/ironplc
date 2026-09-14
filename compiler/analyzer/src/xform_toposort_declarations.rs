@@ -273,10 +273,15 @@ impl DeclarationsGraph {
                 Label::span(span, "Cycle"),
             )
         })?;
-        let sorted_ids: Vec<Id> = sorted_nodes
-            .iter()
-            .map(|node| self.index_to_id.get(node).unwrap().clone())
-            .collect();
+        let mut sorted_ids: Vec<Id> = Vec::with_capacity(sorted_nodes.len());
+        for node in &sorted_nodes {
+            let Some(id) = self.index_to_id.get(node) else {
+                // Toposort emits only nodes that are keys of the graph;
+                // absence is a compiler invariant violation.
+                return Err(Diagnostic::internal_error());
+            };
+            sorted_ids.push(id.clone());
+        }
         Ok(sorted_ids)
     }
 }

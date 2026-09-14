@@ -6,6 +6,7 @@
 use super::*;
 use ironplc_dsl::common::{FunctionBlockDeclaration, LibraryElementKind, TypeName};
 use ironplc_dsl::core::{FileId, Id};
+use ironplc_test::cast;
 
 fn test_file_id() -> FileId {
     FileId::from_string("test.TcPOU")
@@ -350,10 +351,10 @@ fn parse_when_itf_extends_base_interface_then_succeeds() {
     let result = parse(xml, &test_file_id(), &opts_with_fb_inheritance());
     assert!(result.is_ok(), "Expected Ok, got: {:?}", result.err());
     let library = result.unwrap();
-    let interface = match &library.elements[0] {
-        LibraryElementKind::InterfaceDeclaration(decl) => decl,
-        other => panic!("expected InterfaceDeclaration, got {other:?}"),
-    };
+    let interface = cast!(
+        &library.elements[0],
+        LibraryElementKind::InterfaceDeclaration
+    );
     assert_eq!(interface.extends, vec![TypeName::from("I_BaseAxis")]);
 }
 
@@ -628,6 +629,10 @@ END_VAR]]></Declaration>
 
 /// Extract the single function block from a library, or panic describing
 /// what was found instead.
+#[allow(
+    clippy::panic,
+    reason = "test helper: a wrong fixture shape is a test-authoring bug, not user input"
+)]
 fn only_function_block(library: Library) -> FunctionBlockDeclaration {
     assert_eq!(library.elements.len(), 1);
     match library.elements.into_iter().next() {

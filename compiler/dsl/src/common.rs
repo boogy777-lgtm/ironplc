@@ -2,7 +2,6 @@
 //!
 //! See section 2.
 use core::str::FromStr;
-use lazy_static::lazy_static;
 use regex::Regex;
 use std::fmt::{self, Display};
 use std::hash::{Hash, Hasher};
@@ -2500,16 +2499,31 @@ impl AddressAssignment {
     }
 }
 
-lazy_static! {
-    static ref DIRECT_ADDRESS_UNASSIGNED: Regex = Regex::new(r"%([IQM])\*").unwrap();
-    static ref DIRECT_ADDRESS: Regex = Regex::new(r"%([IQM])([XBWDL])?(\d(\.\d)*)").unwrap();
+#[allow(
+    clippy::unwrap_used,
+    reason = "static regex literals are compile-time-validated patterns; regex has no const constructor"
+)]
+fn direct_address_unassigned_re() -> &'static Regex {
+    static RE: std::sync::LazyLock<Regex> =
+        std::sync::LazyLock::new(|| Regex::new(r"%([IQM])\*").unwrap());
+    &RE
+}
+
+#[allow(
+    clippy::unwrap_used,
+    reason = "static regex literals are compile-time-validated patterns; regex has no const constructor"
+)]
+fn direct_address_re() -> &'static Regex {
+    static RE: std::sync::LazyLock<Regex> =
+        std::sync::LazyLock::new(|| Regex::new(r"%([IQM])([XBWDL])?(\d(\.\d)*)").unwrap());
+    &RE
 }
 
 impl TryFrom<&str> for AddressAssignment {
     type Error = &'static str;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        if let Some(cap) = DIRECT_ADDRESS_UNASSIGNED.captures(value) {
+        if let Some(cap) = direct_address_unassigned_re().captures(value) {
             let location_prefix = LocationPrefix::try_from(&cap[1])?;
             return Ok(AddressAssignment {
                 location: location_prefix,
@@ -2519,13 +2533,14 @@ impl TryFrom<&str> for AddressAssignment {
             });
         }
 
-        if let Some(cap) = DIRECT_ADDRESS.captures(value) {
+        if let Some(cap) = direct_address_re().captures(value) {
             let location_prefix = LocationPrefix::try_from(&cap[1])?;
             let size_prefix = SizePrefix::try_from(&cap[2])?;
             let pos: Vec<u32> = cap[3]
                 .split('.')
-                .map(|v| v.parse::<u32>().unwrap())
-                .collect();
+                .map(|v| v.parse::<u32>())
+                .collect::<Result<_, _>>()
+                .map_err(|_| "address component is not a number")?;
 
             return Ok(AddressAssignment {
                 location: location_prefix,

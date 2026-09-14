@@ -119,7 +119,7 @@ impl LibraryRenderer {
                 self.write_ws(spec.width.keyword());
                 if let Some(len) = &spec.length {
                     self.write_ws("[");
-                    self.visit_integer(len.as_integer().unwrap())?;
+                    self.visit_integer(len.as_integer().ok_or_else(Diagnostic::internal_error)?)?;
                     self.write_ws("]");
                 }
             }
@@ -558,7 +558,11 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         self.write_ws(node.width.keyword());
 
         self.write_ws("[");
-        self.visit_integer(node.length.as_integer().unwrap())?;
+        self.visit_integer(
+            node.length
+                .as_integer()
+                .ok_or_else(Diagnostic::internal_error)?,
+        )?;
         self.write_ws("]");
 
         if let Some(init) = &node.init {
@@ -606,7 +610,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
                 self.write_ws(spec.width.keyword());
                 if let Some(len) = &spec.length {
                     self.write_ws("[");
-                    self.visit_integer(len.as_integer().unwrap())?;
+                    self.visit_integer(len.as_integer().ok_or_else(Diagnostic::internal_error)?)?;
                     self.write_ws("]");
                 }
             }
@@ -619,9 +623,17 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         &mut self,
         node: &ironplc_dsl::common::Subrange,
     ) -> Result<Self::Value, Diagnostic> {
-        self.visit_signed_integer(node.start.as_signed_integer().unwrap())?;
+        self.visit_signed_integer(
+            node.start
+                .as_signed_integer()
+                .ok_or_else(Diagnostic::internal_error)?,
+        )?;
         self.write("..");
-        self.visit_signed_integer(node.end.as_signed_integer().unwrap())
+        self.visit_signed_integer(
+            node.end
+                .as_signed_integer()
+                .ok_or_else(Diagnostic::internal_error)?,
+        )
     }
 
     fn visit_program_access_decl(
@@ -817,7 +829,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
 
         if let Some(len) = &node.length {
             self.write_ws("[");
-            self.visit_integer(len.as_integer().unwrap())?;
+            self.visit_integer(len.as_integer().ok_or_else(Diagnostic::internal_error)?)?;
             self.write_ws("]");
         }
 

@@ -79,7 +79,7 @@ fn assert_self_recursion_traps_at_depth(max_call_depth: u16) {
         .max_call_depth(max_call_depth)
         .build();
     let mut b = crate::common::VmBuffers::from_container(&c);
-    let mut vm = crate::common::load_and_start(&c, &mut b).unwrap();
+    let mut vm = crate::common::load_and_start_ok(&c, &mut b);
     crate::common::assert_trap(&mut vm, Trap::CallStackOverflow);
 }
 

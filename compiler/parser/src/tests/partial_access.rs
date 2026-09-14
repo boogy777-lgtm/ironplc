@@ -174,16 +174,13 @@ fn parser_spec_req_pab_020_dot_percent_x_and_dot_n_produce_equal_ast() {
 fn parser_spec_req_pab_050_disabled_flag_produces_partial_access_syntax_disabled() {
     let src = wrap_program("r := b.%X0;");
     let result = parse_program(&src, &FileId::default(), &CompilerOptions::default());
-    match result {
-        Ok(_) => panic!("expected error, got Ok"),
-        Err(d) => {
-            assert_eq!(
-                d.code,
-                "P4033",
-                "expected P4033 PartialAccessSyntaxDisabled, got {}: {}",
-                d.code,
-                d.description(),
-            );
-        }
-    }
+    assert!(result.is_err(), "expected error, got Ok");
+    let d = result.unwrap_err();
+    assert_eq!(
+        d.code,
+        "P4033",
+        "expected P4033 PartialAccessSyntaxDisabled, got {}: {}",
+        d.code,
+        d.description(),
+    );
 }

@@ -36,10 +36,9 @@ fn start_when_container_declares_call_depth_exceeding_buffer_then_returns_progra
     assert_eq!(b.frames.len(), 8, "buffer sized from the small container");
 
     let deep = empty_init_container_with_depth(64);
-    let fault = match Vm::new().load(&deep, &mut b).start() {
-        Ok(_) => panic!("start should reject over-deep container"),
-        Err(f) => f,
-    };
+    let result = Vm::new().load(&deep, &mut b).start();
+    assert!(result.is_err(), "start should reject over-deep container");
+    let fault = result.err().unwrap();
     assert_eq!(
         fault.trap,
         Trap::ProgramExceedsCallDepth {
@@ -73,10 +72,12 @@ fn start_when_container_declares_zero_call_depth_then_rejected() {
     // or hand-built container) and is rejected at load.
     let c = empty_init_container_with_depth(0);
     let mut b = VmBuffers::from_container(&c);
-    let fault = match Vm::new().load(&c, &mut b).start() {
-        Ok(_) => panic!("start should reject a zero-call-depth container"),
-        Err(f) => f,
-    };
+    let result = Vm::new().load(&c, &mut b).start();
+    assert!(
+        result.is_err(),
+        "start should reject a zero-call-depth container"
+    );
+    let fault = result.err().unwrap();
     assert_eq!(fault.trap, Trap::ZeroCallDepth);
 }
 

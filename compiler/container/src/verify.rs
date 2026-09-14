@@ -321,7 +321,9 @@ fn verify_function(
     work.push_back(0);
 
     while let Some(pc) = work.pop_front() {
-        let depth = depth_at[pc].expect("queued offsets always carry a depth");
+        let Some(depth) = depth_at[pc] else {
+            continue;
+        };
 
         if pc == len {
             // Fell off the end of the body; the VM treats this as RET_VOID

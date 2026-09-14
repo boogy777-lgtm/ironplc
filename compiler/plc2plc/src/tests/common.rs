@@ -23,6 +23,7 @@ pub(crate) use dsl::core::FileId;
 
 pub(crate) use ironplc_parser::options::{CompilerOptions, Dialect};
 pub(crate) use ironplc_parser::parse_program;
+pub(crate) use ironplc_test::cast;
 pub(crate) use ironplc_test::read_shared_resource;
 
 pub(crate) use crate::write_to_string;
@@ -32,7 +33,25 @@ pub(crate) fn read_resource(name: &'static str) -> String {
     path.push("resources/test");
     path.push(name);
 
-    fs::read_to_string(path.clone()).unwrap_or_else(|_| panic!("Unable to read file {path:?}"))
+    let content = fs::read_to_string(path.clone());
+    assert!(content.is_ok(), "Unable to read file {path:?}");
+    content.unwrap()
+}
+
+/// Unwraps a parse result, failing the test with the offending source text
+/// attached — `expect` would report the error but lose the input.
+pub(crate) fn unwrap_parse<E: core::fmt::Debug>(
+    result: Result<dsl::common::Library, E>,
+    context: &str,
+    text: &str,
+) -> dsl::common::Library {
+    assert!(
+        result.is_ok(),
+        "{context}: {:?}\n{}",
+        result.as_ref().err(),
+        text
+    );
+    result.unwrap()
 }
 
 /// The edition-3 dialect options, the most common non-default set.
@@ -48,12 +67,18 @@ pub(crate) fn edition3() -> CompilerOptions {
 /// re-parsed with the *same* options as the source: a rendering that needs a
 /// laxer dialect than its source did is a renderer bug.
 pub(crate) fn assert_round_trips(source: &str, options: &CompilerOptions) -> String {
-    let library_original = parse_program(source, &FileId::default(), options)
-        .unwrap_or_else(|e| panic!("Source did not parse: {e:?}\n{source}"));
+    let library_original = unwrap_parse(
+        parse_program(source, &FileId::default(), options),
+        "Source did not parse",
+        source,
+    );
     let rendered = write_to_string(&library_original).unwrap();
 
-    let library_rendered = parse_program(&rendered, &FileId::default(), options)
-        .unwrap_or_else(|e| panic!("Rendered output did not re-parse: {e:?}\n{rendered}"));
+    let library_rendered = unwrap_parse(
+        parse_program(&rendered, &FileId::default(), options),
+        "Rendered output did not re-parse",
+        &rendered,
+    );
     assert_eq!(
         library_original, library_rendered,
         "Round trip changed the AST. Rendered:\n{rendered}"
@@ -74,12 +99,18 @@ pub(crate) fn assert_round_trips(source: &str, options: &CompilerOptions) -> Str
 /// Prefer [`assert_round_trips`] — reach for this only when the AST
 /// difference is understood and documented at the call site.
 pub(crate) fn assert_round_trips_idempotently(source: &str, options: &CompilerOptions) -> String {
-    let library_original = parse_program(source, &FileId::default(), options)
-        .unwrap_or_else(|e| panic!("Source did not parse: {e:?}\n{source}"));
+    let library_original = unwrap_parse(
+        parse_program(source, &FileId::default(), options),
+        "Source did not parse",
+        source,
+    );
     let rendered = write_to_string(&library_original).unwrap();
 
-    let library_rendered = parse_program(&rendered, &FileId::default(), options)
-        .unwrap_or_else(|e| panic!("Rendered output did not re-parse: {e:?}\n{rendered}"));
+    let library_rendered = unwrap_parse(
+        parse_program(&rendered, &FileId::default(), options),
+        "Rendered output did not re-parse",
+        &rendered,
+    );
     let rendered_again = write_to_string(&library_rendered).unwrap();
     assert_eq!(
         rendered, rendered_again,
@@ -120,8 +151,11 @@ pub(crate) fn assert_library_renders_to_parseable_text(
 ) -> String {
     let rendered = write_to_string(library).unwrap();
 
-    let reparsed = parse_program(&rendered, &FileId::default(), options)
-        .unwrap_or_else(|e| panic!("Rendered output did not re-parse: {e:?}\n{rendered}"));
+    let reparsed = unwrap_parse(
+        parse_program(&rendered, &FileId::default(), options),
+        "Rendered output did not re-parse",
+        &rendered,
+    );
     let rendered_again = write_to_string(&reparsed).unwrap();
     assert_eq!(
         rendered, rendered_again,

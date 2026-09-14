@@ -742,9 +742,12 @@ fn optimize_when_instructions_are_removed_then_map_covers_every_boundary() {
     let (result, offset_map) = optimize(unpatched(&bytecode), &mut all_patterns_constants());
 
     for offset in instruction_boundaries(&bytecode) {
-        let new_offset = *offset_map
-            .get(&offset)
-            .unwrap_or_else(|| panic!("instruction boundary {offset} is missing from the map"));
+        let new_offset = offset_map.get(&offset);
+        assert!(
+            new_offset.is_some(),
+            "instruction boundary {offset} is missing from the map"
+        );
+        let new_offset = *new_offset.unwrap();
         assert!(
             new_offset <= result.len(),
             "boundary {offset} maps to {new_offset}, past the new end {}",

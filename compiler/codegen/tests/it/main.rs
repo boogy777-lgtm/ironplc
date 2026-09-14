@@ -9,6 +9,14 @@
 //! `main.rs` is the crate root — that lets `mod foo;` resolve to `it/foo.rs`
 //! without `#[path]` attributes on every declaration.
 
+// Test-target boundary: the workspace denies panicking constructs in
+// production code; tests assert by panicking, so they are exempt here.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "integration test target: panicking helpers are sanctioned in tests"
+)]
+
 #[macro_use]
 mod common;
 

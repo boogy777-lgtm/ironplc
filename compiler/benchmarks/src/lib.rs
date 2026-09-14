@@ -17,6 +17,10 @@ use ironplc_parser::parse_program;
 /// Panics if the source fails to parse, has semantic diagnostics, or fails
 /// to compile. The panic message lists the diagnostic codes so a failing
 /// benchmark program can be fixed without re-running under a debugger.
+#[allow(
+    clippy::unwrap_used,
+    reason = "benchmark tooling: a failing fixture is a benchmark-authoring bug, not user input"
+)]
 pub fn compile_st(source: &str) -> Container {
     let options = CompilerOptions::default();
     let library = parse_program(source, &FileId::default(), &options).unwrap();

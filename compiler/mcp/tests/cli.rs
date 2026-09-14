@@ -364,9 +364,9 @@ fn tools_list_when_parsed_then_no_tool_uses_boolean_property_schema(
             .get("name")
             .and_then(|n| n.as_str())
             .unwrap_or("<unnamed>");
-        let schema = tool
-            .get("inputSchema")
-            .unwrap_or_else(|| panic!("tool {name} is missing inputSchema"));
+        let schema = tool.get("inputSchema");
+        assert!(schema.is_some(), "tool {name} is missing inputSchema");
+        let schema = schema.unwrap();
         assert!(
             schema.is_object(),
             "tool {name} inputSchema must be an object"

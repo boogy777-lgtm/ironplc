@@ -159,7 +159,7 @@ pub fn benchmark(path: &Path, cycles: u64, warmup: u64) -> Result<(), VmError> {
     running.stop();
 
     // Compute statistics
-    durations_us.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    durations_us.sort_by(|a, b| a.total_cmp(b));
     let count = durations_us.len() as f64;
     let mean = durations_us.iter().sum::<f64>() / count;
     let variance = durations_us.iter().map(|d| (d - mean).powi(2)).sum::<f64>() / count;

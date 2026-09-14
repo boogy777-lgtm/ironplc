@@ -666,7 +666,7 @@ mod tests {
         let mut codes = Vec::new();
 
         for section_entry in std::fs::read_dir(&reference)
-            .unwrap_or_else(|e| panic!("read {}: {e}", reference.display()))
+            .expect("read docs/reference directory")
             .flatten()
         {
             let section = section_entry.file_name().to_string_lossy().to_string();
@@ -813,7 +813,7 @@ mod tests {
         let mut dirs = vec![compiler.clone()];
         while let Some(dir) = dirs.pop() {
             for entry in std::fs::read_dir(&dir)
-                .unwrap_or_else(|e| panic!("read {}: {e}", dir.display()))
+                .expect("read compiler directory")
                 .flatten()
             {
                 let path = entry.path();

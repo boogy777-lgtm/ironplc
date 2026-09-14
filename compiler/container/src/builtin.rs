@@ -741,6 +741,10 @@ pub fn mux_info(func_id: u16) -> Option<u16> {
 ///
 /// Panics if `func_id` is not a known built-in function ID. Callers
 /// that must not panic on malformed input use [`arg_count_opt`].
+#[allow(
+    clippy::panic,
+    reason = "documented panicking convenience over arg_count_opt; the bytecode verifier uses the non-panicking form"
+)]
 pub fn arg_count(func_id: u16) -> u16 {
     arg_count_opt(func_id)
         .unwrap_or_else(|| panic!("unknown builtin function ID: 0x{:04X}", func_id))

@@ -600,6 +600,10 @@ pub fn run_source(
     })
 }
 
+#[allow(
+    clippy::unwrap_used,
+    reason = "bytecode is Some when diagnostics are empty (checked above); base64 is compiler-produced"
+)]
 fn run_source_inner(
     source: &str,
     scans: u32,
@@ -686,6 +690,10 @@ pub fn load_program(
     })
 }
 
+#[allow(
+    clippy::unwrap_used,
+    reason = "bytecode is Some when diagnostics are empty (checked above); base64 is compiler-produced"
+)]
 fn load_program_inner(
     source: &str,
     cycle_time_us: u32,

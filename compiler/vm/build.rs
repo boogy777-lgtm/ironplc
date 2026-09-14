@@ -24,7 +24,8 @@ fn generate_trap_codes() -> Result<(), Box<dyn Error>> {
     src_path.push("resources");
     src_path.push("problem-codes.csv");
 
-    let src = fs::read_to_string(src_path).expect("Unable to read 'problem-codes.csv'");
+    let src = fs::read_to_string(src_path)
+        .map_err(|e| format!("Unable to read 'problem-codes.csv': {e}"))?;
     let src = src.as_bytes();
 
     let mut defs = vec![];
@@ -102,7 +103,7 @@ fn generate_trap_codes() -> Result<(), Box<dyn Error>> {
         } else if def.code.starts_with("V9") {
             3
         } else {
-            panic!("Unexpected V-code prefix for trap: {}", def.code);
+            return Err(format!("Unexpected V-code prefix for trap: {}", def.code).into());
         };
         out.write_all(
             format!(

@@ -473,10 +473,12 @@ mod tests {
     /// discovery-only failure reports 1, while discovery + a real
     /// analysis finding reports 2 or more.
     fn problem_count(err: &str) -> usize {
-        err.rsplit_once(" failed with ")
+        let parsed = err
+            .rsplit_once(" failed with ")
             .and_then(|(_, rest)| rest.strip_suffix(" problem(s)"))
-            .and_then(|n| n.parse().ok())
-            .unwrap_or_else(|| panic!("not a command failure message: {err}"))
+            .and_then(|n| n.parse().ok());
+        assert!(parsed.is_some(), "not a command failure message: {err}");
+        parsed.unwrap()
     }
 
     #[test]

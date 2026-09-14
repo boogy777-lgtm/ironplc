@@ -309,20 +309,17 @@ mod tests {
 
     /// Find the first VarDecl with the given name from a POU.
     fn find_var_decl<'a>(lib: &'a Library, var_name: &str) -> &'a VarDecl {
-        for element in &lib.elements {
+        let found = lib.elements.iter().find_map(|element| {
             let vars = match element {
                 LibraryElementKind::FunctionBlockDeclaration(fb) => &fb.variables,
                 LibraryElementKind::FunctionDeclaration(f) => &f.variables,
                 LibraryElementKind::ProgramDeclaration(p) => &p.variables,
-                _ => continue,
+                _ => return None,
             };
-            for var in vars {
-                if var.identifier.to_string().eq_ignore_ascii_case(var_name) {
-                    return var;
-                }
-            }
-        }
-        panic!("Variable '{}' not found", var_name);
+            vars.iter()
+                .find(|var| var.identifier.to_string().eq_ignore_ascii_case(var_name))
+        });
+        found.expect("variable missing from parsed test library")
     }
 
     /// Extract the string length from a variable's initializer.

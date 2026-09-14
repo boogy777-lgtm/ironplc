@@ -28,10 +28,10 @@ END_FUNCTION_BLOCK
     // Both variables keep their original shape through the round trip.
     let library_rendered = parse_program(&rendered, &FileId::default(), &options).unwrap();
 
-    let fb = match &library_rendered.elements[0] {
-        LibraryElementKind::FunctionBlockDeclaration(fb) => fb,
-        other => panic!("expected FunctionBlockDeclaration, got {other:?}"),
-    };
+    let fb = cast!(
+        &library_rendered.elements[0],
+        LibraryElementKind::FunctionBlockDeclaration
+    );
     assert_eq!(fb.variables.len(), 2);
     let temp_sensor = fb
             .variables

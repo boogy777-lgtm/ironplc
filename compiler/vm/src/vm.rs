@@ -552,6 +552,10 @@ impl<'a> VmRunning<'a> {
     /// The recording happens before the flag check: the program only *sees* the
     /// uptime when it was compiled with the globals, but the VM knows it either
     /// way, which is what [`uptime`](Self::uptime) reports.
+    #[allow(
+        clippy::expect_used,
+        reason = "FLAG_HAS_SYSTEM_UPTIME implies codegen emitted uptime variables at indices 0 and 1"
+    )]
     fn set_uptime(&mut self, uptime_us: u64) {
         self.uptime = Duration::from_micros(uptime_us);
         if self.container.header.flags & ironplc_container::FLAG_HAS_SYSTEM_UPTIME == 0 {
@@ -1133,7 +1137,9 @@ pub(crate) fn execute_with_hook<H: DebugHook>(
     while !frame_stack.is_empty() {
         // Snapshot the top frame's authoritative `pc` into the working copy.
         let (current_function_id, scope, mut pc) = {
-            let top = frame_stack.top().expect("non-empty by loop condition");
+            let Some(top) = frame_stack.top() else {
+                break;
+            };
             (top.function_id, top.scope, top.pc)
         };
         let bytecode = container
@@ -2908,6 +2914,10 @@ pub(crate) fn execute_with_hook<H: DebugHook>(
 /// Panics if the frame stack is empty; every caller holds the loop invariant
 /// that a frame is live at the commit point.
 #[inline(always)]
+#[allow(
+    clippy::expect_used,
+    reason = "documented invariant helper: callers hold a live frame at the commit point"
+)]
 fn commit_pc(frame_stack: &mut FrameStack, pc: usize) {
     frame_stack
         .top_mut()
@@ -2931,9 +2941,11 @@ fn handle_frame_return<H: DebugHook>(
     variables: &mut VariableTable,
     hook: &mut H,
 ) -> Result<(), Trap> {
-    let popped = frame_stack
-        .pop()
-        .expect("caller must hold the loop invariant: non-empty before return");
+    let Some(popped) = frame_stack.pop() else {
+        // Callers hold the non-empty invariant; an empty stack has no frame
+        // to rewind or copy out, so the no-op keeps the never-panic contract.
+        return Ok(());
+    };
     temp_alloc.rewind_to(popped.temp_alloc_mark);
 
     if let Some(fbr) = popped.fb_return {

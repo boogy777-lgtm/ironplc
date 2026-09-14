@@ -7,5 +7,17 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 
-[lints]
-workspace = true
+[lints.rust]
+# Duplicates workspace lints: cargo cannot inherit [lints] and override
+# individual lints in the same crate.
+unsafe_code = "deny"
+deprecated = "deny"
+
+# Build-time codegen (spec requirements): panicking helpers are sanctioned here, unlike production
+# compiler code where the workspace denies them.
+[lints.clippy]
+unwrap_used = "allow"
+expect_used = "allow"
+panic = "allow"
+todo = "allow"
+unimplemented = "allow"

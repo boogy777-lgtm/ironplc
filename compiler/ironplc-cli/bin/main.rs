@@ -465,12 +465,15 @@ mod tests {
         }
 
         for fd in CompilerOptions::FEATURE_DESCRIPTORS {
-            let cli = TestCli::try_parse_from(["ironplcc", fd.cli_flag]).unwrap_or_else(|e| {
-                panic!(
-                    "CLI does not accept `{}` (for CompilerOptions.{}): {e}",
-                    fd.cli_flag, fd.option_key
-                )
-            });
+            let cli = TestCli::try_parse_from(["ironplcc", fd.cli_flag]);
+            assert!(
+                cli.is_ok(),
+                "CLI does not accept `{}` (for CompilerOptions.{}): {:?}",
+                fd.cli_flag,
+                fd.option_key,
+                cli.as_ref().err()
+            );
+            let cli = cli.unwrap();
             let options = cli.file_args.compiler_options();
             assert_eq!(
                 options.get_flag_by_key(fd.option_key),
@@ -499,13 +502,15 @@ mod tests {
                 // `--dialect codesys` selects a non-default alternative for
                 // every policy, so the flag is proven to replace it.
                 let cli =
-                    TestCli::try_parse_from(["ironplcc", "--dialect", "codesys", pd.cli_flag, alt])
-                        .unwrap_or_else(|e| {
-                            panic!(
-                                "CLI does not accept `{} {alt}` (for CompilerOptions.{}): {e}",
-                                pd.cli_flag, pd.option_key
-                            )
-                        });
+                    TestCli::try_parse_from(["ironplcc", "--dialect", "codesys", pd.cli_flag, alt]);
+                assert!(
+                    cli.is_ok(),
+                    "CLI does not accept `{} {alt}` (for CompilerOptions.{}): {:?}",
+                    pd.cli_flag,
+                    pd.option_key,
+                    cli.as_ref().err()
+                );
+                let cli = cli.unwrap();
                 let options = cli.file_args.compiler_options();
                 assert_eq!(
                     options.get_policy_by_key(pd.option_key),
@@ -563,12 +568,15 @@ mod tests {
             env!("CARGO_MANIFEST_DIR"),
             "/../../integrations/vscode/package.json"
         );
-        let text = std::fs::read_to_string(package_json_path).unwrap_or_else(|e| {
-            panic!("failed to read {package_json_path}: {e}");
-        });
-        let package: serde_json::Value = serde_json::from_str(&text).unwrap_or_else(|e| {
-            panic!("failed to parse {package_json_path} as JSON: {e}");
-        });
+        let text = std::fs::read_to_string(package_json_path);
+        assert!(text.is_ok(), "failed to read {package_json_path}");
+        let text = text.unwrap();
+        let parsed = serde_json::from_str::<serde_json::Value>(&text);
+        assert!(
+            parsed.is_ok(),
+            "failed to parse {package_json_path} as JSON"
+        );
+        let package = parsed.unwrap();
 
         let dialect = &package["contributes"]["configuration"]["properties"]["ironplc.dialect"];
         assert!(
@@ -593,10 +601,9 @@ mod tests {
         // The parallel label/description arrays must stay index-aligned with
         // `enum`, so a new dialect cannot leave one array short.
         for key in ["enumItemLabels", "enumDescriptions"] {
-            let len = dialect[key]
-                .as_array()
-                .unwrap_or_else(|| panic!("ironplc.dialect.{key} must be an array"))
-                .len();
+            let arr = dialect[key].as_array();
+            assert!(arr.is_some(), "ironplc.dialect.{key} must be an array");
+            let len = arr.unwrap().len();
             assert_eq!(
                 len,
                 expected_names.len(),

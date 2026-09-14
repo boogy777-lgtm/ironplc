@@ -304,7 +304,7 @@ impl IntermediateType {
 
                 // Calculate the end position of the last field
                 // Fields are guaranteed to be in offset order, so we just use the last one
-                let last_field = fields.last().unwrap(); // Safe: checked not empty above
+                let last_field = fields.last()?;
                 let last_field_size = last_field.field_type.size_in_bytes()?;
                 let size_after_last_field = last_field.offset + last_field_size;
 
@@ -328,7 +328,7 @@ impl IntermediateType {
 
                 // Calculate the end position of the last field
                 // Fields are guaranteed to be in offset order, so we just use the last one
-                let last_field = fields.last().unwrap(); // Safe: checked not empty above
+                let last_field = fields.last()?;
                 let last_field_size = last_field.field_type.size_in_bytes()?;
                 let size_after_last_field = last_field.offset + last_field_size;
 

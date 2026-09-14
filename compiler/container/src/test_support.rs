@@ -14,6 +14,11 @@
 //! scenario; where such a fixture is steel-thread-shaped it composes one of
 //! the partially-applied builders below.
 
+#![allow(
+    clippy::unwrap_used,
+    reason = "test-only fixtures (cfg(test) or test-support feature); panicking helpers are sanctioned in tests"
+)]
+
 use std::io::Cursor;
 use std::vec;
 use std::vec::Vec;

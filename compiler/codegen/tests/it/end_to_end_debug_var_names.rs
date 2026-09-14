@@ -15,12 +15,12 @@ use ironplc_parser::options::CompilerOptions;
 /// FUNC_NAME table by name (case-insensitive). Panics if absent.
 fn function_id_of(container: &ironplc_container::Container, name: &str) -> FunctionId {
     let debug = container.debug_section.as_ref().unwrap();
-    debug
+    let found = debug
         .func_names
         .iter()
-        .find(|f| f.name.eq_ignore_ascii_case(name))
-        .unwrap_or_else(|| panic!("func name {name} present in debug section"))
-        .function_id
+        .find(|f| f.name.eq_ignore_ascii_case(name));
+    assert!(found.is_some(), "func name {name} present in debug section");
+    found.unwrap().function_id
 }
 
 /// Collects the VAR_NAME entries owned by a given function id.

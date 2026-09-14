@@ -658,7 +658,11 @@ fn compile_if(
 
     // If there are more branches, jump to end.
     if needs_end_label {
-        emitter.emit_jmp(end_label.unwrap());
+        let Some(end) = end_label else {
+            // needs_end_label implies the label was allocated.
+            return Err(Diagnostic::internal_error());
+        };
+        emitter.emit_jmp(end);
     }
 
     emitter.bind_label(next_label);
@@ -676,7 +680,11 @@ fn compile_if(
 
         compile_stmts(emitter, ctx, &elsif.body)?;
 
-        emitter.emit_jmp(end_label.unwrap());
+        let Some(end) = end_label else {
+            // The ELSIF loop runs only when an end label was allocated.
+            return Err(Diagnostic::internal_error());
+        };
+        emitter.emit_jmp(end);
 
         emitter.bind_label(elsif_next);
     }

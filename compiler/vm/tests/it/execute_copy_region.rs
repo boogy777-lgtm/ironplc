@@ -143,9 +143,9 @@ fn copy_container(
 /// Runs one round, returning var[2] (the destination's first slot) or the trap.
 fn run(container: &ironplc_container::Container) -> Result<i32, Trap> {
     let mut bufs = VmBuffers::from_container(container);
-    let mut vm = load_and_start(container, &mut bufs).unwrap();
+    let mut vm = load_and_start(container, &mut bufs).map_err(|fault| fault.trap)?;
     match vm.run_round(0) {
-        Ok(_) => Ok(vm.read_variable(VarIndex::new(READ_VAR)).unwrap()),
+        Ok(_) => vm.read_variable(VarIndex::new(READ_VAR)),
         Err(fault) => Err(fault.trap),
     }
 }

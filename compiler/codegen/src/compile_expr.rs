@@ -1624,6 +1624,10 @@ fn classify_with_named(
 /// to true. When `branch_when_true` is `false`, the comparison operator
 /// is negated so the branch fires on the false-polarity (e.g. for
 /// "branch to END if NOT cond" zero-trip and IF skip patterns).
+#[allow(
+    clippy::expect_used,
+    reason = "classified cmp_op bytes are valid comparison codes by construction"
+)]
 pub(crate) fn emit_classified_cmp_br(
     emitter: &mut crate::emit::Emitter,
     classified: ClassifiedCmp,

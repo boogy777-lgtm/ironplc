@@ -190,7 +190,7 @@ pub fn build_response(input: &RunInput, cache: &Mutex<ContainerCache>) -> RunRes
 
     // --- Container lookup (REQ-ARC-mcp-073) ---
     let container_id = input.container_id.as_deref().unwrap_or_default();
-    let mut guard = cache.lock().unwrap();
+    let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
     let cached = match guard.get(container_id) {
         Some(c) => c,
         None => {

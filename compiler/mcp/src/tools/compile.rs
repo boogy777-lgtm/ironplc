@@ -197,7 +197,7 @@ pub fn build_response(
     // Cache the container
     let cached = CachedContainer::new(bytes, task_metas, program_metas, symbols);
     let container_id = {
-        let mut guard = cache.lock().unwrap();
+        let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
         match guard.insert(cached) {
             Ok(id) => id,
             Err(InsertError::TooLarge { size, max }) => {

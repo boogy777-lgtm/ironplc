@@ -271,9 +271,11 @@ impl FunctionEnvironmentBuilder {
 
         if self.has_stdlib_functions {
             for sig in get_all_stdlib_functions() {
-                // Stdlib functions should never have duplicates, so unwrap is safe here
-                env.insert(sig)
-                    .expect("Stdlib function names should be unique");
+                // Stdlib function names are unique by construction; a
+                // duplicate would be a stdlib authoring bug, not user input.
+                if env.insert(sig).is_err() {
+                    debug_assert!(false, "stdlib function name duplicated");
+                }
             }
         }
 

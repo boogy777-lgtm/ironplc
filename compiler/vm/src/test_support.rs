@@ -10,11 +10,26 @@
 //! `container` → `vm` dev-dependency cycle. They are re-exported below so
 //! VM-side callers have a single import surface.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test-only helpers (cfg(test) or test-support feature); panicking helpers are sanctioned in tests"
+)]
+
 use crate::error::Trap;
 use crate::{FaultContext, Vm, VmBuffers, VmRunning};
 use ironplc_container::{Container, VarIndex};
 
 pub use ironplc_container::test_support::*;
+
+/// Like [`load_and_start`], but panics on failure — for tests where a failed
+/// start is a broken fixture, not the behavior under test.
+pub fn load_and_start_ok<'a>(
+    container: &'a Container,
+    buffers: &'a mut VmBuffers,
+) -> VmRunning<'a> {
+    load_and_start(container, buffers).expect("container must load and start")
+}
 
 /// Loads a container into the VM using the given buffers and starts execution.
 ///

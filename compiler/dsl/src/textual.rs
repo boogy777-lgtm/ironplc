@@ -604,6 +604,10 @@ impl ExprKind {
         })
     }
 
+    #[allow(
+        clippy::unwrap_used,
+        reason = "AST test builder: callers pass validated literals; a Result here would pollute every test callsite"
+    )]
     pub fn integer_literal(value: &str) -> ExprKind {
         ExprKind::Const(ConstantKind::IntegerLiteral(IntegerLiteral {
             value: SignedInteger::new(value, SourceSpan::default()).unwrap(),

@@ -403,9 +403,9 @@ fn sources_spec_req_cl_007_provenance_references_recorded() {
         // Loading validates the manifest is well-formed (`from_toml` rejects a
         // malformed or field-missing manifest) and, in particular, that its
         // `references` list is non-empty.
-        let loaded = registry.load(name).unwrap_or_else(|diagnostic| {
-            panic!("bundled library `{name}` must load: {diagnostic:?}")
-        });
+        let loaded = registry.load(name);
+        assert!(loaded.is_ok(), "bundled library `{name}` must load");
+        let loaded = loaded.unwrap();
         assert!(
             !loaded.manifest.references.is_empty(),
             "bundled library `{name}` must record a non-empty `references` list"

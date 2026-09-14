@@ -180,9 +180,11 @@ impl Fold<Diagnostic> for NamedToPositionalResolver<'_> {
         let mut param_assignment: Vec<ParamAssignmentKind> =
             Vec::with_capacity(order.len() + outputs.len());
         for name in order {
-            let ni = named
-                .remove(&name)
-                .expect("planned name came from these arguments");
+            let Some(ni) = named.remove(&name) else {
+                // Planned names come from these arguments; absence is a
+                // compiler invariant violation.
+                return Err(Diagnostic::internal_error());
+            };
             param_assignment.push(ParamAssignmentKind::PositionalInput(PositionalInput {
                 expr: self.fold_expr(ni.expr)?,
             }));
@@ -210,6 +212,7 @@ mod tests {
     use crate::test_helpers::{parse_and_resolve_types, parse_only};
     use ironplc_dsl::common::{FunctionReturnType, TypeName};
     use ironplc_dsl::core::Id;
+    use ironplc_test::cast;
 
     /// Applies the pass and asserts it rewrote everything cleanly, returning
     /// the rewritten library.
@@ -651,10 +654,7 @@ END_PROGRAM
         let names: Vec<String> = call
             .param_assignment
             .iter()
-            .map(|p| match p {
-                ParamAssignmentKind::NamedInput(ni) => ni.name.to_string(),
-                other => panic!("expected the call to stay named, got {other:?}"),
-            })
+            .map(|p| cast!(p, ParamAssignmentKind::NamedInput).name.to_string())
             .collect();
         assert_eq!(names, vec!["A".to_string(), "WRONG".to_string()]);
     }

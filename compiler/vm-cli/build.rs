@@ -14,7 +14,8 @@ fn generate_io_codes() -> Result<(), Box<dyn Error>> {
     src_path.push("resources");
     src_path.push("problem-codes.csv");
 
-    let src = fs::read_to_string(src_path).expect("Unable to read 'problem-codes.csv'");
+    let src = fs::read_to_string(src_path)
+        .map_err(|e| format!("Unable to read 'problem-codes.csv': {e}"))?;
     let src = src.as_bytes();
 
     let out_path = PathBuf::from(env::var("OUT_DIR")?).join("io_codes.rs");
@@ -58,10 +59,13 @@ fn pascal_to_screaming_snake(s: &str) -> String {
 }
 
 fn main() {
-    println!(
-        "cargo:rustc-env=BUILD_OPT_LEVEL={}",
-        std::env::var("OPT_LEVEL").unwrap()
-    );
+    match std::env::var("OPT_LEVEL") {
+        Ok(level) => println!("cargo:rustc-env=BUILD_OPT_LEVEL={level}"),
+        Err(err) => {
+            eprintln!("OPT_LEVEL not set: {err}");
+            process::exit(1);
+        }
+    }
 
     if let Err(err) = generate_io_codes() {
         eprintln!("problem generating io_codes.rs: {err}");
