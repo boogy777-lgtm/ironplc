@@ -14,7 +14,9 @@ use crate::header::FileHeader;
 use crate::id_types::{FunctionId, InstanceId, TaskId, VarIndex};
 use crate::task_table::{ProgramInstanceEntry, TaskEntry, TaskTable};
 use crate::task_type::TaskType;
-use crate::type_section::{ArrayDescriptor, FbTypeDescriptor, TypeSection, UserFbDescriptor};
+use crate::type_section::{
+    ArrayDescriptor, FbTypeDescriptor, TypeSection, UserFbDescriptor, VarEntry,
+};
 
 /// Fluent builder for constructing a [`Container`].
 pub struct ContainerBuilder {
@@ -36,6 +38,7 @@ pub struct ContainerBuilder {
     array_descriptors: Vec<ArrayDescriptor>,
     array_descriptor_cache: HashMap<(u8, u32, u16), u16>,
     user_fb_types: Vec<UserFbDescriptor>,
+    variable_table: Vec<VarEntry>,
     debug_var_names: Vec<VarNameEntry>,
     debug_func_names: Vec<FuncNameEntry>,
     debug_line_map: Vec<LineMapEntry>,
@@ -65,6 +68,7 @@ impl ContainerBuilder {
             array_descriptors: Vec::new(),
             array_descriptor_cache: HashMap::new(),
             user_fb_types: Vec::new(),
+            variable_table: Vec::new(),
             debug_var_names: Vec::new(),
             debug_func_names: Vec::new(),
             debug_line_map: Vec::new(),
@@ -279,6 +283,13 @@ impl ContainerBuilder {
         self
     }
 
+    /// Adds a variable table entry to the type section. Entries are stored
+    /// in call order, which is the variable index order.
+    pub fn add_var_entry(mut self, entry: VarEntry) -> Self {
+        self.variable_table.push(entry);
+        self
+    }
+
     /// Adds an array descriptor to the type section, deduplicating
     /// identical `(element_type, total_elements, element_extra)` triples.
     ///
@@ -315,15 +326,18 @@ impl ContainerBuilder {
             bytecode: self.bytecode,
         };
 
-        // Build type section if there are any type descriptors.
+        // Build type section if there are any type descriptors or variable
+        // table entries.
         let type_section = if !self.fb_types.is_empty()
             || !self.array_descriptors.is_empty()
             || !self.user_fb_types.is_empty()
+            || !self.variable_table.is_empty()
         {
             Some(TypeSection {
                 fb_types: self.fb_types,
                 array_descriptors: self.array_descriptors,
                 user_fb_types: self.user_fb_types,
+                variable_table: self.variable_table,
             })
         } else {
             None
@@ -684,6 +698,26 @@ mod tests {
         let ts = container.type_section.unwrap();
         assert_eq!(ts.fb_types.len(), 1);
         assert_eq!(ts.fb_types[0], desc);
+    }
+
+    #[test]
+    fn builder_when_add_var_entry_then_included_in_type_section() {
+        use crate::type_section::FieldType;
+
+        let entry = VarEntry {
+            var_type: FieldType::FbInstance,
+            flags: 0,
+            extra: 9,
+        };
+
+        let container = ContainerBuilder::new()
+            .num_variables(1)
+            .add_var_entry(entry.clone())
+            .build();
+
+        let ts = container.type_section.unwrap();
+        assert_eq!(ts.variable_table.len(), 1);
+        assert_eq!(ts.variable_table[0], entry);
     }
 
     #[test]

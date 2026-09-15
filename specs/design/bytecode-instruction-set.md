@@ -113,7 +113,7 @@ The full op-class table (63 of 64 slots used; 0x3F free):
 
 ### Migration status
 
-The encoding migration is complete: every opcode in `opcode.rs` is derived via `encode_opcode(OP_CLASS_*, type_tag)` and matches the byte values in this document. The container `FORMAT_VERSION` is **3**. Tests in `wire_format.rs` assert specific hex bytes to guard against accidental renumbering — any change to an opcode byte requires updating the corresponding test bytes and bumping `FORMAT_VERSION`.
+The encoding migration is complete: every opcode in `opcode.rs` is derived via `encode_opcode(OP_CLASS_*, type_tag)` and matches the byte values in this document. The container `FORMAT_VERSION` is **4**. Tests in `wire_format.rs` assert specific hex bytes to guard against accidental renumbering — any change to an opcode byte requires updating the corresponding test bytes and bumping `FORMAT_VERSION`.
 
 ## Type System
 

@@ -158,15 +158,35 @@ pub struct UserFbDescriptor {
 /// Size of a single user FB descriptor on disk in bytes.
 const USER_FB_DESCRIPTOR_SIZE: usize = 8;
 
+/// `VarEntry.flags` bit 0: the variable is an array, and `extra` is the
+/// index of its descriptor in the array-descriptor sub-table.
+pub const VAR_FLAG_IS_ARRAY: u8 = 0x01;
+
+/// A single variable table entry in the type section.
+///
+/// On disk this is 4 bytes: var_type (u8), flags (u8), extra (u16 LE).
+/// `extra` carries the STRING/WSTRING maximum length, the FB_INSTANCE
+/// `fb_type_id`, or the array descriptor index, depending on `var_type`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VarEntry {
+    pub var_type: FieldType,
+    pub flags: u8,
+    pub extra: u16,
+}
+
+/// Size of a single variable table entry on disk in bytes.
+const VAR_ENTRY_SIZE: usize = 4;
+
 /// The type section of a bytecode container.
 ///
-/// Contains FB type descriptors and array descriptors used by the verifier
-/// and VM for type safety checking.
+/// Contains FB type descriptors, array descriptors, user FB descriptors and
+/// the variable table used by the verifier and VM for type safety checking.
 #[derive(Clone, Debug, Default)]
 pub struct TypeSection {
     pub fb_types: Vec<FbTypeDescriptor>,
     pub array_descriptors: Vec<ArrayDescriptor>,
     pub user_fb_types: Vec<UserFbDescriptor>,
+    pub variable_table: Vec<VarEntry>,
 }
 
 impl TypeSection {
@@ -181,12 +201,16 @@ impl TypeSection {
         size += 2 + self.array_descriptors.len() as u32 * ARRAY_DESCRIPTOR_SIZE as u32;
         // User FB descriptors: count(2) + descriptors * 8
         size += 2 + self.user_fb_types.len() as u32 * USER_FB_DESCRIPTOR_SIZE as u32;
+        // Variable table: count(2) + entries * 4
+        size += 2 + self.variable_table.len() as u32 * VAR_ENTRY_SIZE as u32;
         size
     }
 
     /// Writes the type section to the given writer.
     ///
-    /// Format: FB count (u16 LE), FB descriptors, array count (u16 LE), array descriptors.
+    /// Format: FB count (u16 LE), FB descriptors, array count (u16 LE), array
+    /// descriptors, user FB count (u16 LE), user FB descriptors, variable
+    /// table count (u16 LE), variable entries.
     pub fn write_to(&self, w: &mut impl Write) -> Result<(), ContainerError> {
         // FB type descriptors
         w.write_all(&(self.fb_types.len() as u16).to_le_bytes())?;
@@ -218,6 +242,13 @@ impl TypeSection {
             w.write_all(&desc.var_offset.to_le_bytes())?;
             w.write_all(&[desc.num_fields])?;
             w.write_all(&[0u8])?; // reserved
+        }
+
+        // Variable table (fourth and last sub-table)
+        w.write_all(&(self.variable_table.len() as u16).to_le_bytes())?;
+        for entry in &self.variable_table {
+            w.write_all(&[entry.var_type as u8, entry.flags])?;
+            w.write_all(&entry.extra.to_le_bytes())?;
         }
         Ok(())
     }
@@ -298,10 +329,34 @@ impl TypeSection {
             });
         }
 
+        // Variable table (fourth and last sub-table). A type section that
+        // ends before it (a container written before format v4) reads as
+        // zero entries, matching the user-FB handling above.
+        let mut buf2 = [0u8; 2];
+        let var_count = if r.read_exact(&mut buf2).is_ok() {
+            u16::from_le_bytes(buf2) as usize
+        } else {
+            0
+        };
+
+        let mut variable_table = Vec::with_capacity(var_count);
+        for _ in 0..var_count {
+            let mut entry_buf = [0u8; VAR_ENTRY_SIZE];
+            r.read_exact(&mut entry_buf)?;
+            let var_type = FieldType::from_u8(entry_buf[0])?;
+            let extra = u16::from_le_bytes([entry_buf[2], entry_buf[3]]);
+            variable_table.push(VarEntry {
+                var_type,
+                flags: entry_buf[1],
+                extra,
+            });
+        }
+
         Ok(TypeSection {
             fb_types,
             array_descriptors,
             user_fb_types,
+            variable_table,
         })
     }
 }
@@ -325,6 +380,7 @@ mod tests {
 
         assert!(decoded.fb_types.is_empty());
         assert!(decoded.array_descriptors.is_empty());
+        assert!(decoded.variable_table.is_empty());
     }
 
     #[test]
@@ -361,6 +417,7 @@ mod tests {
             }],
             array_descriptors: vec![],
             user_fb_types: vec![],
+            variable_table: vec![],
         };
 
         let mut buf = Vec::new();
@@ -398,6 +455,7 @@ mod tests {
                 },
             ],
             user_fb_types: vec![],
+            variable_table: vec![],
         };
 
         let mut buf = Vec::new();
@@ -436,6 +494,7 @@ mod tests {
                 element_extra: 0,
             }],
             user_fb_types: vec![],
+            variable_table: vec![],
         };
 
         let mut buf = Vec::new();
@@ -457,8 +516,8 @@ mod tests {
     #[test]
     fn section_size_when_empty_then_returns_header_counts_only() {
         let section = TypeSection::default();
-        // 2 bytes for FB count + 2 bytes for array count + 2 bytes for user FB count
-        assert_eq!(section.section_size(), 6);
+        // 2 bytes for each of the four sub-table counts
+        assert_eq!(section.section_size(), 8);
     }
 
     #[test]
@@ -478,9 +537,10 @@ mod tests {
                 },
             ],
             user_fb_types: vec![],
+            variable_table: vec![],
         };
-        // 2 (FB count) + 2 (array count) + 2 * 8 (descriptors) + 2 (user FB count) = 22
-        assert_eq!(section.section_size(), 22);
+        // 4 counts(8) + 2 * 8 (descriptors) = 24
+        assert_eq!(section.section_size(), 24);
     }
 
     #[test]
@@ -502,6 +562,7 @@ mod tests {
                     num_fields: 5,
                 },
             ],
+            variable_table: vec![],
         };
 
         let mut buf = Vec::new();
@@ -519,6 +580,81 @@ mod tests {
         assert_eq!(decoded.user_fb_types[1].function_id, FunctionId::new(3));
         assert_eq!(decoded.user_fb_types[1].var_offset, 7);
         assert_eq!(decoded.user_fb_types[1].num_fields, 5);
+    }
+
+    #[test]
+    fn type_section_write_read_when_variable_table_then_roundtrips() {
+        let entries = vec![
+            VarEntry {
+                var_type: FieldType::I32,
+                flags: 0,
+                extra: 0,
+            },
+            VarEntry {
+                var_type: FieldType::String,
+                flags: 0,
+                extra: 80,
+            },
+            VarEntry {
+                var_type: FieldType::FbInstance,
+                flags: 0,
+                extra: 7,
+            },
+            VarEntry {
+                var_type: FieldType::F64,
+                flags: VAR_FLAG_IS_ARRAY,
+                extra: 2,
+            },
+        ];
+        let section = TypeSection {
+            variable_table: entries.clone(),
+            ..Default::default()
+        };
+
+        let mut buf = Vec::new();
+        section.write_to(&mut buf).unwrap();
+
+        let mut cursor = Cursor::new(&buf);
+        let decoded = TypeSection::read_from(&mut cursor).unwrap();
+
+        assert_eq!(decoded.variable_table, entries);
+    }
+
+    #[test]
+    fn section_size_when_variable_table_then_includes_entry_bytes() {
+        let section = TypeSection {
+            variable_table: vec![
+                VarEntry {
+                    var_type: FieldType::I32,
+                    flags: 0,
+                    extra: 0,
+                },
+                VarEntry {
+                    var_type: FieldType::F64,
+                    flags: VAR_FLAG_IS_ARRAY,
+                    extra: 3,
+                },
+            ],
+            ..Default::default()
+        };
+        // 4 counts(8) + 2 entries * 4 = 16
+        assert_eq!(section.section_size(), 16);
+    }
+
+    #[test]
+    fn type_section_read_from_when_no_variable_table_then_empty_variable_table() {
+        // Build a type section payload that stops after the user FB count,
+        // simulating a legacy container without the variable table sub-table.
+        // The reader should treat the missing data as zero entries.
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&0u16.to_le_bytes()); // FB count = 0
+        buf.extend_from_slice(&0u16.to_le_bytes()); // array count = 0
+        buf.extend_from_slice(&0u16.to_le_bytes()); // user FB count = 0
+
+        let mut cursor = Cursor::new(&buf);
+        let decoded = TypeSection::read_from(&mut cursor).unwrap();
+
+        assert!(decoded.variable_table.is_empty());
     }
 
     #[test]
@@ -551,12 +687,13 @@ mod tests {
             }],
             array_descriptors: vec![],
             user_fb_types: vec![],
+            variable_table: vec![],
         };
 
-        // Header: 2 (FB count) + 2 (array count) + 2 (user FB count) = 6
+        // Header: 4 counts * 2 = 8
         // Per descriptor: 4 (header) + 3 fields * 4 = 16
-        // Total: 6 + 16 = 22
-        assert_eq!(section.section_size(), 22);
+        // Total: 8 + 16 = 24
+        assert_eq!(section.section_size(), 24);
 
         let mut buf = Vec::new();
         section.write_to(&mut buf).unwrap();
@@ -579,5 +716,6 @@ mod tests {
         assert!(decoded.fb_types.is_empty());
         assert!(decoded.array_descriptors.is_empty());
         assert!(decoded.user_fb_types.is_empty());
+        assert!(decoded.variable_table.is_empty());
     }
 }

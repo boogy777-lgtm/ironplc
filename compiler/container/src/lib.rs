@@ -47,7 +47,7 @@ pub mod verify;
 // Always-available re-exports
 pub use char_width::CharWidth;
 pub use const_type::ConstType;
-pub use container_ref::{ContainerRef, ProgramEntryRef, TaskEntryRef};
+pub use container_ref::{ContainerRef, ProgramEntryRef, TaskEntryRef, VarEntryRef};
 pub use error::ContainerError;
 pub use header::{
     FileHeader, FLAG_HAS_DEBUG_SECTION, FLAG_HAS_SYSTEM_UPTIME, FLAG_HAS_TYPE_SECTION,
@@ -84,6 +84,7 @@ pub use task_table::{ProgramInstanceEntry, TaskEntry, TaskTable};
 #[cfg(feature = "std")]
 pub use type_section::{
     ArrayDescriptor, FbTypeDescriptor, FieldEntry, FieldType, TypeSection, UserFbDescriptor,
+    VarEntry, VAR_FLAG_IS_ARRAY,
 };
 #[cfg(feature = "std")]
 pub use verify::{verify_stack_balance, StackImbalance};

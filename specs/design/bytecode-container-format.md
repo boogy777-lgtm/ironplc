@@ -73,13 +73,13 @@ Per-file source integrity lives in the debug section's `SOURCE_FILE_TABLE` (tag 
 | Requirement | Offset | Field | Type | Description |
 |-------------|--------|-------|------|-------------|
 | **REQ-CF-container-002** | 0 | magic | u32 | `0x49504C43` ("IPLC" in ASCII) |
-| **REQ-CF-container-003** | 4 | format_version | u16 | Container format version (currently 3; bumped to 2 from 1 by ADR-0033 opcode-encoding migration, then to 3 by ADR-0035 WSTRING string-header/constant-pool encoding tags) |
+| **REQ-CF-container-003** | 4 | format_version | u16 | Container format version (currently 4; bumped to 2 from 1 by ADR-0033 opcode-encoding migration, to 3 by ADR-0035 WSTRING string-header/constant-pool encoding tags, and to 4 by the variable table added to the type section) |
 | | 6 | profile | u8 | Reserved for future VM profile definitions; must be zero |
 | **REQ-CF-container-007** | 7 | flags | u8 | Bit 0: has system uptime variables (`FLAG_HAS_SYSTEM_UPTIME`); Bit 1: has debug section (`FLAG_HAS_DEBUG_SECTION`); Bit 2: has type section (`FLAG_HAS_TYPE_SECTION`); bits 3–7 reserved. No bit indicates a signature section (see below) |
 | | 8 | content_hash | [u8; 32] | BLAKE3 over `type_section \|\| constant_pool \|\| code_section` (see Content Hash Scope). **Planned** — currently written as all zeros |
 | | 40 | reserved_hash_slot | [u8; 32] | Reserved (formerly `source_hash`); must be zero. Per-file source integrity is now in the debug section's `SOURCE_FILE_TABLE` (tag 6). |
 | | 72 | debug_hash | [u8; 32] | BLAKE3 over debug section (all zeros if no debug section). **Planned** — currently written as all zeros |
-| | 104 | layout_hash | [u8; 32] | BLAKE3 over the memory layout signature (see Layout Hash and Online Change). **Planned** — currently written as all zeros |
+| | 104 | layout_hash | [u8; 32] | BLAKE3 over the memory layout signature (see Layout Hash and Online Change). Computed and written by the container writer; all-zero only in a header that was never serialized |
 | | 136 | sig_section_offset | u32 | Offset of content signature section (0 if absent) |
 | | 140 | sig_section_size | u32 | Size of content signature section |
 | | 144 | debug_sig_offset | u32 | Offset of debug signature section (0 if absent) |
@@ -115,7 +115,7 @@ Per-file source integrity lives in the debug section's `SOURCE_FILE_TABLE` (tag 
 
 **REQ-CF-container-016** A container with no signature sections has `sig_section_offset`, `sig_section_size`, `debug_sig_offset` and `debug_sig_size` all zero.
 
-**REQ-CF-codegen-025** The compiler does not yet compute `content_hash`, `debug_hash` or `layout_hash`; it writes all three as zeros, and a reader must not validate them. Tracked by the Implementation Status in [ADR-0007](../adrs/0007-dual-signature-integrity-model.md) and [issue #1583](https://github.com/ironplc/ironplc/issues/1583).
+**REQ-CF-codegen-025** The compiler computes `layout_hash` (see [Layout Hash and Online Change](#layout-hash-and-online-change)) and writes it into the header when the container is serialized. `content_hash` and `debug_hash` are not yet computed — they are written as zeros, and a reader must not validate them. Tracked by the Implementation Status in [ADR-0007](../adrs/0007-dual-signature-integrity-model.md) and [issue #1583](https://github.com/ironplc/ironplc/issues/1583).
 
 ### Resource Budget Calculation
 
@@ -164,7 +164,7 @@ Present when `flags` bit 2 is set. Required for on-device verification (ADR-0006
 
 The type section describes the aggregate types a program uses. The interpreter reads the array descriptors (element stride and bounds) and the user FB descriptors (body dispatch) at runtime; the FB type descriptors are for the verifier.
 
-**REQ-CF-container-018** The type section is three sub-tables in this order, each prefixed by a u16 count: FB type descriptors, array descriptors, user FB descriptors.
+**REQ-CF-container-018** The type section is four sub-tables in this order, each prefixed by a u16 count: FB type descriptors, array descriptors, user FB descriptors, variable table.
 
 | Offset | Field | Type | Description |
 |--------|-------|------|-------------|
@@ -174,6 +174,8 @@ The type section describes the aggregate types a program uses. The interpreter r
 | varies | arrays | [ArrayDescriptor; num_arrays] | 8 bytes each |
 | varies | num_user_fb_types | u16 | Number of user FB descriptors |
 | varies | user_fb_types | [UserFbDescriptor; num_user_fb_types] | 8 bytes each |
+| varies | num_variables | u16 | Number of variable table entries (must match header `num_variables`) |
+| varies | variables | [VarEntry; num_variables] | 4 bytes each (see below) |
 
 ### FB Type Descriptors
 
@@ -229,11 +231,9 @@ Each user FB descriptor maps a user-defined `FUNCTION_BLOCK` type to the compile
 | 6 | num_fields | u8 | Number of data-region fields in an instance |
 | 7 | reserved | u8 | Reserved; must be zero |
 
-### Variable Table (planned, not emitted)
+### Variable Table
 
-> **Status.** The type section carries no variable table today: the load-time verifier that would consume it (ADR-0006) does not exist, and the interpreter uses compiler-assigned indices directly. The layout below is retained because [Layout Hash and Online Change](#layout-hash-and-online-change) is defined over it.
-
-The variable table describes the type of each variable slot. The verifier uses types to check that LOAD_VAR/STORE_VAR opcodes use the correct typed variant.
+The variable table is the fourth and last sub-table of the type section ([REQ-CF-container-018](#type-section)), emitted by the compiler with one entry per compiler-assigned variable index. It describes the type of each variable slot, and it is the primary input to [Layout Hash and Online Change](#layout-hash-and-online-change). The load-time verifier that would check LOAD_VAR/STORE_VAR opcodes against it (ADR-0006) is still planned, so the interpreter continues to use the compiler-assigned indices directly.
 
 | Offset | Field | Type | Description |
 |--------|-------|------|-------------|
@@ -245,7 +245,7 @@ Each VarEntry (4 bytes, fixed size):
 | Offset | Field | Type | Description |
 |--------|-------|------|-------------|
 | 0 | var_type | u8 | Type encoding (see below) |
-| 1 | flags | u8 | Bit 0: is array (see array descriptors) |
+| 1 | flags | u8 | Bit 0: is array (see array descriptors); bits 1–7 reserved, written as zero |
 | 2 | extra | u16 | For STRING/WSTRING: max length. For FB_INSTANCE: fb_type_id. For arrays: array descriptor index. |
 
 **REQ-CF-container-009** The `var_type` / `field_type` encoding is: 0=I32, 1=U32, 2=I64, 3=U64, 4=F32, 5=F64, 6=STRING, 7=WSTRING, 8=FB_INSTANCE, 9=TIME, 10=SLOT. The SLOT type represents a heterogeneous structure field slot (8-byte slot for flattened struct layouts).
@@ -698,7 +698,7 @@ Per-variable migration (adding a variable while preserving others) is an advance
 
 ## Versioning
 
-The `format_version` field allows future changes to the container format. The VM must reject versions it does not support. The current version is 3 (`FORMAT_VERSION`; see the header table for the history), and the reader rejects any other value.
+The `format_version` field allows future changes to the container format. The VM must reject versions it does not support. The current version is 4 (`FORMAT_VERSION`; see the header table for the history), and the reader rejects any other value.
 
 Rules for version increments:
 - Adding new optional sections → minor version (backward compatible)

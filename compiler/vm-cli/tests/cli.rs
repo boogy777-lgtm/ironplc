@@ -45,16 +45,17 @@ fn all_spec_requirements_have_tests() {
 /// One-time generator for golden test files. Run with:
 /// cargo test -p ironplc-vm-cli --test cli generate_golden -- --ignored --nocapture
 ///
-/// `steel_thread.iplc` is intentionally **not** regenerated here — it
-/// is a frozen artifact that exercises the container reader end-to-end.
-/// Adding a new entry to this generator is fine; if you ever need to
-/// refresh the steel-thread golden, do it from a throwaway script with
-/// full awareness of what the format change is. It was last refreshed for
-/// the format_version 2 -> 3 string-header/constant-pool encoding bump
-/// (ADR-0035); the reader only accepts the current `FORMAT_VERSION`.
+/// Both goldens are frozen artifacts that exercise the container reader
+/// end-to-end, and both must be refreshed whenever `FORMAT_VERSION` bumps:
+/// the reader only accepts the current version. Last refreshed for the
+/// format_version 3 -> 4 bump that added the type section's variable table.
 #[test]
 #[ignore]
 fn generate_golden_files() {
+    let steel_thread_path = path_to_golden_resource("steel_thread.iplc");
+    write_steel_thread_container(&steel_thread_path);
+    eprintln!("Generated golden file: {}", steel_thread_path.display());
+
     let path = path_to_golden_resource("debug_source_file_table.iplc");
     write_debug_source_file_table_container(&path);
     eprintln!("Generated golden file: {}", path.display());

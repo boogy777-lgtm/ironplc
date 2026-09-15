@@ -23,10 +23,51 @@ pub struct Container {
 }
 
 impl Container {
+    /// Computes the layout hash for online change: BLAKE3 over the variable
+    /// table, FB type descriptors and array descriptors, as defined by the
+    /// Layout Hash and Online Change formula
+    /// (`specs/design/bytecode-container-format.md`). Code, constants and
+    /// debug info are excluded, so a logic-only edit yields the same hash
+    /// and can be swapped in without restarting.
+    ///
+    /// [`write_to`](Self::write_to) stores this value in
+    /// `header.layout_hash`. `content_hash` and `debug_hash` are not
+    /// computed yet and stay zero.
+    pub fn compute_layout_hash(&self) -> [u8; 32] {
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(&self.header.num_variables.to_le_bytes());
+
+        let empty_type_section = TypeSection::default();
+        let type_section = self.type_section.as_ref().unwrap_or(&empty_type_section);
+
+        for entry in &type_section.variable_table {
+            hasher.update(&[entry.var_type as u8, entry.flags]);
+            hasher.update(&entry.extra.to_le_bytes());
+        }
+
+        hasher.update(&(type_section.fb_types.len() as u16).to_le_bytes());
+        for desc in &type_section.fb_types {
+            hasher.update(&[desc.fields.len() as u8]);
+            for field in &desc.fields {
+                hasher.update(&[field.field_type as u8]);
+                hasher.update(&field.field_extra.to_le_bytes());
+            }
+        }
+
+        hasher.update(&(type_section.array_descriptors.len() as u16).to_le_bytes());
+        for desc in &type_section.array_descriptors {
+            hasher.update(&[desc.element_type]);
+            hasher.update(&desc.total_elements.to_le_bytes());
+            hasher.update(&desc.element_extra.to_le_bytes());
+        }
+
+        *hasher.finalize().as_bytes()
+    }
+
     /// Writes the container to the given writer.
     ///
-    /// Computes section offsets and fills the header before writing
-    /// sections in file-layout order.
+    /// Computes section offsets and fills the header (including the layout
+    /// hash) before writing sections in file-layout order.
     pub fn write_to(&self, w: &mut impl Write) -> Result<(), ContainerError> {
         let task_section_offset = HEADER_SIZE as u32;
         let task_section_size = self.task_table.section_size();
@@ -65,6 +106,8 @@ impl Container {
             header.debug_section_size = debug_section_size;
             header.flags |= FLAG_HAS_DEBUG_SECTION;
         }
+
+        header.layout_hash = self.compute_layout_hash();
 
         header.write_to(w)?;
         self.task_table.write_to(w)?;
@@ -160,10 +203,11 @@ mod tests {
     use crate::debug_section::{
         function_id, iec_type_tag, var_section, FuncNameEntry, VarNameEntry,
     };
-    use crate::id_types::{ConstantIndex, FunctionId, InstanceId, TaskId, VarIndex};
+    use crate::id_types::{ConstantIndex, FbTypeId, FunctionId, InstanceId, TaskId, VarIndex};
     use crate::test_support::{
         round_trip, steel_thread_bytecode, steel_thread_single_function_container,
     };
+    use crate::type_section::{FbTypeDescriptor, FieldEntry, FieldType, VarEntry};
     use crate::ContainerBuilder;
 
     #[test]
@@ -369,6 +413,104 @@ mod tests {
 
         let decoded = Container::read_from(&mut Cursor::new(&tampered)).unwrap();
         assert!(decoded.debug_section.is_none());
+    }
+
+    /// A container exercising every input of the layout hash: a variable
+    /// table, an FB type with two fields and an array descriptor.
+    fn layout_hash_container() -> Container {
+        let mut builder = ContainerBuilder::new();
+        builder.add_array_descriptor(FieldType::I32 as u8, 4, 0);
+        builder
+            .num_variables(2)
+            .add_var_entry(VarEntry {
+                var_type: FieldType::I32,
+                flags: 0,
+                extra: 0,
+            })
+            .add_var_entry(VarEntry {
+                var_type: FieldType::String,
+                flags: 0,
+                extra: 80,
+            })
+            .add_fb_type(FbTypeDescriptor {
+                type_id: FbTypeId::new(0),
+                fields: vec![
+                    FieldEntry {
+                        field_type: FieldType::I32,
+                        field_extra: 0,
+                    },
+                    FieldEntry {
+                        field_type: FieldType::Time,
+                        field_extra: 0,
+                    },
+                ],
+            })
+            .add_function(FunctionId::INIT, &[0x8C], 0, 0, 0)
+            .build()
+    }
+
+    #[test]
+    fn container_write_read_when_variable_table_then_roundtrips() {
+        let container = layout_hash_container();
+
+        let decoded = round_trip(&container);
+
+        let ts = decoded.type_section.unwrap();
+        assert_eq!(ts.variable_table.len(), 2);
+        assert_eq!(ts.variable_table[0].var_type, FieldType::I32);
+        assert_eq!(ts.variable_table[0].flags, 0);
+        assert_eq!(ts.variable_table[0].extra, 0);
+        assert_eq!(ts.variable_table[1].var_type, FieldType::String);
+        assert_eq!(ts.variable_table[1].extra, 80);
+    }
+
+    #[test]
+    fn compute_layout_hash_when_same_inputs_then_equal() {
+        let first = layout_hash_container();
+        let second = layout_hash_container();
+
+        assert_eq!(first.compute_layout_hash(), second.compute_layout_hash());
+    }
+
+    #[test]
+    fn compute_layout_hash_when_variable_entry_changes_then_differs() {
+        let first = layout_hash_container();
+        let mut second = layout_hash_container();
+        second.type_section.as_mut().unwrap().variable_table[0].extra = 1;
+
+        assert_ne!(first.compute_layout_hash(), second.compute_layout_hash());
+    }
+
+    #[test]
+    fn compute_layout_hash_when_fb_field_changes_then_differs() {
+        let first = layout_hash_container();
+        let mut second = layout_hash_container();
+        second.type_section.as_mut().unwrap().fb_types[0].fields[0].field_extra = 1;
+
+        assert_ne!(first.compute_layout_hash(), second.compute_layout_hash());
+    }
+
+    #[test]
+    fn compute_layout_hash_when_array_descriptor_changes_then_differs() {
+        let first = layout_hash_container();
+        let mut second = layout_hash_container();
+        second.type_section.as_mut().unwrap().array_descriptors[0].total_elements = 5;
+
+        assert_ne!(first.compute_layout_hash(), second.compute_layout_hash());
+    }
+
+    #[test]
+    fn write_to_when_called_then_header_layout_hash_matches_computation() {
+        let container = layout_hash_container();
+        let mut buf = Vec::new();
+        container.write_to(&mut buf).unwrap();
+
+        let decoded = Container::read_from(&mut Cursor::new(&buf)).unwrap();
+
+        assert_eq!(decoded.header.layout_hash, decoded.compute_layout_hash());
+        assert_ne!(decoded.header.layout_hash, [0u8; 32]);
+        assert_eq!(decoded.header.content_hash, [0u8; 32]);
+        assert_eq!(decoded.header.debug_hash, [0u8; 32]);
     }
 
     #[test]

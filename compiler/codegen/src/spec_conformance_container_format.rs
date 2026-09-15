@@ -9,14 +9,14 @@
 
 use std::io::Cursor;
 
-use ironplc_container::{FileHeader, HEADER_SIZE};
+use ironplc_container::Container;
 use ironplc_dsl::core::FileId;
 use ironplc_parser::options::CompilerOptions;
 use spec_test_macro::spec_test;
 
-/// Compiles `source` and parses the header back out of the serialized bytes,
-/// so the assertion is about what reaches the file.
-fn compiled_header(source: &str) -> FileHeader {
+/// Compiles `source` and parses the container back out of the serialized
+/// bytes, so the assertions are about what reaches the file.
+fn compiled_container(source: &str) -> Container {
     let options = CompilerOptions::default();
     let library = ironplc_parser::parse_program(source, &FileId::default(), &options).unwrap();
     let (analyzed, ctx) = ironplc_analyzer::stages::resolve_types(&[&library], &options).unwrap();
@@ -29,14 +29,15 @@ fn compiled_header(source: &str) -> FileHeader {
     .unwrap();
     let mut buf = Vec::new();
     container.write_to(&mut buf).unwrap();
-    FileHeader::read_from(&mut Cursor::new(&buf[..HEADER_SIZE])).unwrap()
+    Container::read_from(&mut Cursor::new(&buf)).unwrap()
 }
 
-/// REQ-CF-codegen-025: content_hash, debug_hash and layout_hash are written
-/// as zeros — nothing computes them yet.
+/// REQ-CF-codegen-025: `layout_hash` is computed when the container is
+/// written; `content_hash` and `debug_hash` are written as zeros — nothing
+/// computes those yet.
 #[spec_test(REQ_CF_codegen_025)]
-fn container_spec_req_cf_025_header_hashes_are_written_as_zeros() {
-    let header = compiled_header(
+fn container_spec_req_cf_025_header_layout_hash_is_computed() {
+    let container = compiled_container(
         "PROGRAM main
          VAR
              x : DINT;
@@ -44,7 +45,11 @@ fn container_spec_req_cf_025_header_hashes_are_written_as_zeros() {
              x := 1;
          END_PROGRAM",
     );
-    assert_eq!(header.content_hash, [0u8; 32]);
-    assert_eq!(header.debug_hash, [0u8; 32]);
-    assert_eq!(header.layout_hash, [0u8; 32]);
+    assert_eq!(container.header.content_hash, [0u8; 32]);
+    assert_eq!(container.header.debug_hash, [0u8; 32]);
+    assert_eq!(
+        container.header.layout_hash,
+        container.compute_layout_hash()
+    );
+    assert_ne!(container.header.layout_hash, [0u8; 32]);
 }

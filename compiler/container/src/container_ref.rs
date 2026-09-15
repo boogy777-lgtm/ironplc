@@ -1,6 +1,6 @@
 use crate::const_type::ConstType;
 use crate::error::ContainerError;
-use crate::header::{FileHeader, HEADER_SIZE};
+use crate::header::{FileHeader, FLAG_HAS_TYPE_SECTION, HEADER_SIZE};
 use crate::id_types::{ConstantIndex, FunctionId, InstanceId, TaskId, VarIndex};
 use crate::task_type::TaskType;
 
@@ -15,6 +15,18 @@ const TASK_ENTRY_SIZE: usize = 32;
 
 /// Size of a single program instance entry in bytes.
 const PROGRAM_ENTRY_SIZE: usize = 16;
+
+/// Size of a single FB field entry in bytes.
+const FIELD_ENTRY_SIZE: usize = 4;
+
+/// Size of a single array descriptor in bytes.
+const ARRAY_DESCRIPTOR_SIZE: usize = 8;
+
+/// Size of a single user FB descriptor in bytes.
+const USER_FB_DESCRIPTOR_SIZE: usize = 8;
+
+/// Size of a single variable table entry in bytes.
+const VAR_ENTRY_SIZE: usize = 4;
 
 /// A task entry parsed from a container's task table (no_std-compatible).
 #[derive(Clone, Debug)]
@@ -44,6 +56,18 @@ pub struct ProgramEntryRef {
     pub reserved: u16,
 }
 
+/// A variable table entry parsed from a container's type section (no_std-compatible).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VarEntryRef {
+    /// Type encoding (same values as the owned path's `FieldType`).
+    pub var_type: u8,
+    /// Bit 0: the variable is an array; bits 1–7 are reserved.
+    pub flags: u8,
+    /// STRING/WSTRING max length, FB_INSTANCE `fb_type_id`, or array
+    /// descriptor index, depending on `var_type`.
+    pub extra: u16,
+}
+
 /// Zero-copy, `no_std`-compatible view over a serialized bytecode container.
 ///
 /// Borrows the underlying byte slice and provides O(1) accessors for all
@@ -57,6 +81,7 @@ pub struct ContainerRef<'a> {
     code_bytes: &'a [u8],
     func_dir: &'a [u8],
     task_table_bytes: &'a [u8],
+    variable_table_bytes: &'a [u8],
 }
 
 /// Helper to read a little-endian u16 from a byte slice at the given offset.
@@ -67,6 +92,55 @@ fn read_u16(data: &[u8], offset: usize) -> Result<u16, ContainerError> {
         return Err(ContainerError::SectionSizeMismatch);
     }
     Ok(u16::from_le_bytes([data[offset], data[offset + 1]]))
+}
+
+/// Locates the variable table — the fourth and last sub-table of a
+/// serialized type section — and returns the slice holding its entries (the
+/// u16 count is skipped). The first three sub-tables are variable size, so
+/// reaching the fourth means walking them.
+///
+/// A type section that ends before the sub-table (a container written
+/// before format v4) yields an empty slice.
+fn variable_table_entries(type_section: &[u8]) -> Result<&[u8], ContainerError> {
+    // FB type descriptors: count, then per descriptor a 4-byte header
+    // followed by its 4-byte field entries.
+    let num_fb_types = read_u16(type_section, 0)? as usize;
+    let mut pos: usize = 2;
+    for _ in 0..num_fb_types {
+        let num_fields = *type_section
+            .get(pos + 2)
+            .ok_or(ContainerError::SectionSizeMismatch)? as usize;
+        pos += 4 + num_fields * FIELD_ENTRY_SIZE;
+        if pos > type_section.len() {
+            return Err(ContainerError::SectionSizeMismatch);
+        }
+    }
+
+    // Array descriptors: count + 8 bytes each.
+    let num_arrays = read_u16(type_section, pos)? as usize;
+    pos += 2 + num_arrays * ARRAY_DESCRIPTOR_SIZE;
+    if pos > type_section.len() {
+        return Err(ContainerError::SectionSizeMismatch);
+    }
+
+    // User FB descriptors: count + 8 bytes each.
+    let num_user_fb_types = read_u16(type_section, pos)? as usize;
+    pos += 2 + num_user_fb_types * USER_FB_DESCRIPTOR_SIZE;
+    if pos > type_section.len() {
+        return Err(ContainerError::SectionSizeMismatch);
+    }
+
+    // Variable table: count + 4 bytes per entry.
+    if pos + 2 > type_section.len() {
+        return Ok(&type_section[type_section.len()..]);
+    }
+    let count = read_u16(type_section, pos)? as usize;
+    pos += 2;
+    let entries_len = count * VAR_ENTRY_SIZE;
+    if pos + entries_len > type_section.len() {
+        return Err(ContainerError::SectionSizeMismatch);
+    }
+    Ok(&type_section[pos..pos + entries_len])
 }
 
 impl<'a> ContainerRef<'a> {
@@ -177,6 +251,19 @@ impl<'a> ContainerRef<'a> {
             return Err(ContainerError::SectionSizeMismatch);
         }
 
+        // 6. Locate the variable table (type section's fourth and last sub-table)
+        let variable_table_bytes =
+            if (header.flags & FLAG_HAS_TYPE_SECTION) != 0 && header.type_section_size > 0 {
+                let ts_start = header.type_section_offset as usize;
+                let ts_end = ts_start + header.type_section_size as usize;
+                if ts_end > data.len() {
+                    return Err(ContainerError::SectionSizeMismatch);
+                }
+                variable_table_entries(&data[ts_start..ts_end])?
+            } else {
+                &data[0..0]
+            };
+
         Ok(ContainerRef {
             header,
             const_pool_bytes,
@@ -184,6 +271,7 @@ impl<'a> ContainerRef<'a> {
             code_bytes,
             func_dir,
             task_table_bytes,
+            variable_table_bytes,
         })
     }
 
@@ -321,6 +409,28 @@ impl<'a> ContainerRef<'a> {
             reserved: u16::from_le_bytes([buf[14], buf[15]]),
         })
     }
+
+    /// Returns the number of entries in the type section's variable table.
+    ///
+    /// Zero when the container carries no type section, or carries one
+    /// written before the variable table existed.
+    pub fn variable_count(&self) -> u16 {
+        (self.variable_table_bytes.len() / VAR_ENTRY_SIZE) as u16
+    }
+
+    /// Parses and returns the variable table entry at the given index.
+    pub fn var_entry(&self, index: VarIndex) -> Result<VarEntryRef, ContainerError> {
+        let offset = index.raw() as usize * VAR_ENTRY_SIZE;
+        if offset + VAR_ENTRY_SIZE > self.variable_table_bytes.len() {
+            return Err(ContainerError::SectionSizeMismatch);
+        }
+        let entry = &self.variable_table_bytes[offset..offset + VAR_ENTRY_SIZE];
+        Ok(VarEntryRef {
+            var_type: entry[0],
+            flags: entry[1],
+            extra: u16::from_le_bytes([entry[2], entry[3]]),
+        })
+    }
 }
 
 #[cfg(test)]
@@ -330,8 +440,12 @@ mod tests {
     use std::vec;
     use std::vec::Vec;
 
+    use crate::id_types::FbTypeId;
     use crate::opcode;
     use crate::test_support::{container_bytes, steel_thread_single_function_container};
+    use crate::type_section::{
+        FbTypeDescriptor, FieldEntry, FieldType, UserFbDescriptor, VarEntry, VAR_FLAG_IS_ARRAY,
+    };
     use crate::ContainerBuilder;
 
     fn steel_thread_bytes() -> Vec<u8> {
@@ -656,6 +770,85 @@ mod tests {
         // The builder synthesizes a single default program with shared_globals_size=0.
         assert_eq!(cref.num_programs(), 1);
         assert_eq!(cref.shared_globals_size(), 0);
+    }
+
+    /// A container whose type section carries all four sub-tables, so the
+    /// variable table walk has to skip the earlier ones.
+    fn variable_table_bytes() -> Vec<u8> {
+        let mut builder = ContainerBuilder::new();
+        builder.add_array_descriptor(FieldType::I32 as u8, 4, 0);
+        container_bytes(
+            &builder
+                .num_variables(2)
+                .add_fb_type(FbTypeDescriptor {
+                    type_id: FbTypeId::new(0),
+                    fields: vec![FieldEntry {
+                        field_type: FieldType::I32,
+                        field_extra: 0,
+                    }],
+                })
+                .add_user_fb_type(UserFbDescriptor {
+                    type_id: FbTypeId::new(0),
+                    function_id: FunctionId::new(1),
+                    var_offset: 0,
+                    num_fields: 1,
+                })
+                .add_var_entry(VarEntry {
+                    var_type: FieldType::I32,
+                    flags: 0,
+                    extra: 0,
+                })
+                .add_var_entry(VarEntry {
+                    var_type: FieldType::F64,
+                    flags: VAR_FLAG_IS_ARRAY,
+                    extra: 0,
+                })
+                .add_function(FunctionId::INIT, &[opcode::RET_VOID], 0, 0, 0)
+                .build(),
+        )
+    }
+
+    #[test]
+    fn container_ref_var_entry_when_valid_index_then_returns_fields() {
+        let data = variable_table_bytes();
+        let mut offsets = vec![0u32; 0];
+        let cref = ContainerRef::from_slice(&data, &mut offsets).unwrap();
+
+        assert_eq!(cref.variable_count(), 2);
+        let first = cref.var_entry(VarIndex::new(0)).unwrap();
+        assert_eq!(first.var_type, FieldType::I32 as u8);
+        assert_eq!(first.flags, 0);
+        assert_eq!(first.extra, 0);
+        let second = cref.var_entry(VarIndex::new(1)).unwrap();
+        assert_eq!(second.var_type, FieldType::F64 as u8);
+        assert_eq!(second.flags, VAR_FLAG_IS_ARRAY);
+        assert_eq!(second.extra, 0);
+    }
+
+    #[test]
+    fn container_ref_var_entry_when_index_out_of_bounds_then_errors() {
+        let data = variable_table_bytes();
+        let mut offsets = vec![0u32; 0];
+        let cref = ContainerRef::from_slice(&data, &mut offsets).unwrap();
+
+        assert!(matches!(
+            cref.var_entry(VarIndex::new(2)),
+            Err(ContainerError::SectionSizeMismatch)
+        ));
+    }
+
+    #[test]
+    fn container_ref_variable_count_when_no_type_section_then_zero() {
+        let data = steel_thread_bytes();
+        let count = ContainerRef::const_count(&data).unwrap();
+        let mut offsets = vec![0u32; count as usize];
+        let cref = ContainerRef::from_slice(&data, &mut offsets).unwrap();
+
+        assert_eq!(cref.variable_count(), 0);
+        assert!(matches!(
+            cref.var_entry(VarIndex::new(0)),
+            Err(ContainerError::SectionSizeMismatch)
+        ));
     }
 
     #[test]
