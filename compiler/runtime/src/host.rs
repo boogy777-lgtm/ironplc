@@ -23,8 +23,8 @@
 //! A candidate whose layout hash differs is a *migration candidate*: it is
 //! staged with a [`StateMigrationPlan`] that rebuilds the persistent state
 //! per stable variable ID (ADR 0053) at the boundary. Its buffers are built
-//! fresh and initialized by the candidate's init image, then the plan copies
-//! the values of the entities both containers share. A migration candidate
+//! fresh and initialized by the candidate's init image, then the migration
+//! plan copies the values of the entities both containers share. A migration candidate
 //! has no untest path: writes made under the candidate's layout have no
 //! reverse mapping for added or removed variables, so it can only be
 //! assembled or discarded while the original is active.
@@ -342,8 +342,8 @@ impl RuntimeHost {
     /// plan applied.
     ///
     /// The candidate's init image runs once here, so entities with no source
-    /// UID carry the candidate's declared initial values. The plan then
-    /// copies every entity the two layouts share, and the old buffers are
+    /// UID carry the candidate's declared initial values. The migration plan
+    /// then copies every entity the two layouts share, and the old buffers are
     /// dropped: a schema change has no untest path.
     fn apply_migration_swap(&mut self) -> Result<(), RuntimeError> {
         let (Some(candidate), Some(plan)) = (self.candidate.as_ref(), self.migration.as_ref())

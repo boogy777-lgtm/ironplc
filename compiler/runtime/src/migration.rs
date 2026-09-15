@@ -17,8 +17,8 @@
 //! ## Data-region payloads
 //!
 //! A STRING/WSTRING or aggregate variable's 8-byte slot holds the byte offset
-//! of its data-region region. The plan sizes the copy from the container's
-//! type data, never from the runtime header:
+//! of its data-region region. The migration plan sizes the copy from the
+//! container's type data, never from the runtime header:
 //!
 //! - STRING/WSTRING: `STRING_HEADER_BYTES + max_length * char_width`, with
 //!   the width taken from the type tag (STRING narrow, WSTRING wide). The
@@ -35,8 +35,8 @@
 //!
 //! An FB instance's slot holds the offset of its field region, but the field
 //! values themselves are not UID-covered yet: they are addressed through the
-//! type section's FB descriptors. The plan therefore copies an FB instance
-//! like a scalar only when the layout after the program prefix is
+//! type section's FB descriptors. The migration plan therefore copies an FB
+//! instance like a scalar only when the layout after the program prefix is
 //! index-identical: the program prefix size
 //! (`task_table.shared_globals_size`), the user FB descriptors and the FB type
 //! descriptors must match. A candidate that changes any of them while either
@@ -48,8 +48,8 @@
 //!
 //! [`StateMigrationPlan::apply`] copies from the active [`VmBuffers`] into a
 //! candidate buffer set that has already run the candidate's init image, so
-//! entities the plan does not mention keep their initialized candidate
-//! values. The host runs the copy at a scan boundary.
+//! entities the migration plan does not mention keep their initialized
+//! candidate values. The host runs the copy at a scan boundary.
 
 use core::fmt;
 use std::collections::HashMap;
@@ -68,7 +68,7 @@ use ironplc_vm::VmBuffers;
 /// here, to check it against the candidate's maximum length.
 const STRING_CUR_LENGTH_OFFSET: usize = 2;
 
-/// One copy the plan performs at the scan boundary.
+/// One copy the migration plan performs at the scan boundary.
 ///
 /// `Slot` covers scalars and, under the FB safety rule, FB instances. The
 /// other variants carry the data-region region size computed at build time.
@@ -160,9 +160,9 @@ impl fmt::Display for MigrationError {
 
 /// The per-variable state copies an online change performs at the boundary.
 ///
-/// Build the plan with [`StateMigrationPlan::build`] while the normal
-/// artifact is running; apply it with [`StateMigrationPlan::apply`] at the
-/// scan boundary to the candidate's freshly initialized buffers.
+/// Build a migration plan with [`StateMigrationPlan::build`] while the
+/// normal artifact is running; apply it with [`StateMigrationPlan::apply`]
+/// at the scan boundary to the candidate's freshly initialized buffers.
 #[derive(Debug)]
 pub struct StateMigrationPlan {
     actions: Vec<MigrationAction>,
@@ -171,8 +171,8 @@ pub struct StateMigrationPlan {
 impl StateMigrationPlan {
     /// Diffs the active (`base`) and staged (`candidate`) containers by UID.
     ///
-    /// Returns the plan when every UID the two containers share names the
-    /// same variable type and layout; otherwise the edit cannot preserve
+    /// Returns a migration plan when every UID the two containers share names
+    /// the same variable type and layout; otherwise the edit cannot preserve
     /// those values and is rejected with a typed error. UIDs unique to either
     /// side produce no action: candidate-only entities are initialized by the
     /// candidate's init image and base-only entities are discarded with the
@@ -223,8 +223,8 @@ impl StateMigrationPlan {
     /// Copies every planned value from `base` into `candidate`.
     ///
     /// `candidate` must be the candidate container's freshly initialized
-    /// buffers; the plan overwrites only the entities it migrates, leaving
-    /// the init image of every other entity in place.
+    /// buffers; the migration plan overwrites only the entities it migrates,
+    /// leaving the init image of every other entity in place.
     pub fn apply(&self, base: &VmBuffers, candidate: &mut VmBuffers) -> Result<(), MigrationError> {
         for action in &self.actions {
             match *action {
