@@ -9,8 +9,9 @@ use crate::migration::MigrationError;
 /// Why a candidate was rejected or an online change request was refused.
 ///
 /// These are host-level protocol errors; the VM traps live in
-/// [`RuntimeError`]. User-facing runtime problem codes are deferred to the
-/// P0.5 CLI surface, so this enum is the whole vocabulary for now.
+/// [`RuntimeError`]. The command layer maps this enum onto stable user-facing
+/// V-codes ([`CommandError`](crate::CommandError)) from the crate's
+/// `problem-codes.csv`, so this enum stays the whole host vocabulary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OnlineChangeError {
     /// The candidate changes the variable layout (layout hash, variable

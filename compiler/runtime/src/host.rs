@@ -46,7 +46,8 @@ use crate::online_change::{
 };
 
 /// Which artifact is executing.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum HostMode {
     /// The normal (original) artifact is active.
     Normal,

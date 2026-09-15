@@ -1,0 +1,34 @@
+=====
+V4007
+=====
+
+.. problem-summary:: V4007
+
+Online change refused the candidate because its variable layout is
+incompatible with the running application and the runtime cannot carry the
+state across the difference. The layout covers the container's ``layout_hash``,
+the variable count, and the header flags; a candidate that changes any of them
+without a migration plan is rejected so the running application keeps
+executing with its state byte-for-byte intact.
+
+Example
+-------
+
+A session stages a candidate compiled from a program that adds a variable,
+but the candidate was compiled without the stable variable IDs a migration
+needs. The command is accepted on the wire and refused by the host:
+
+.. code-block::
+
+   {"command":"acceptEdits","program":[...]}
+   {"response":"error","vCode":"V4007","message":"candidate layout is incompatible with the active application"}
+
+The candidate was not staged; a later ``getStatus`` reports no candidate.
+
+To fix this error, compile the candidate from a source edit that keeps the
+variable layout unchanged (a code-body edit, or a rename when stable variable
+IDs are assigned), or assign stable variable IDs so a declaration-level edit
+can migrate per variable. Until a schema edit can be migrated, apply it as a
+cold start: stop the runtime and load the new container. See
+:doc:`V4010` for the migration case and :doc:`V4016` for payloads that are
+not containers at all.

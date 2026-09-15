@@ -17,70 +17,11 @@
     reason = "integration test target: panicking helpers are sanctioned in tests"
 )]
 
-use std::io::Cursor;
+mod common;
 
-use ironplc_codegen::EmptyLookup;
-use ironplc_container::{Container, VarIndex};
-use ironplc_dsl::core::FileId;
-use ironplc_parser::options::CompilerOptions;
-use ironplc_project::{compile, MemoryBackedProject};
+use common::{compile_source, counter_host, counter_program, variable_index};
+use ironplc_container::VarIndex;
 use ironplc_runtime::{HostMode, OnlineChangeError, RuntimeHost};
-
-/// Compiles `source` and round-trips the container through the wire format.
-fn compile_source(source: &str) -> Container {
-    let mut project = MemoryBackedProject::new(CompilerOptions::default());
-    project.add_source(FileId::from_string("main.st"), source.to_owned());
-
-    let output = compile(
-        &mut project,
-        &CompilerOptions::default(),
-        &EmptyLookup,
-        vec![],
-    );
-    assert!(
-        output.diagnostics.is_empty(),
-        "fixture must compile cleanly: {:?}",
-        output.diagnostics
-    );
-
-    let container = output.container.unwrap();
-    let mut bytes = Vec::new();
-    container.write_to(&mut bytes).unwrap();
-    Container::read_from(&mut Cursor::new(&bytes)).unwrap()
-}
-
-/// Finds the variable table index of a named variable via the debug section.
-fn variable_index(container: &Container, name: &str) -> VarIndex {
-    container
-        .debug_section
-        .as_ref()
-        .unwrap()
-        .var_names
-        .iter()
-        .find(|entry| entry.name.eq_ignore_ascii_case(name))
-        .unwrap()
-        .var_index
-}
-
-/// A `PROGRAM main` with one DINT `Counter` and the given body.
-fn counter_program(body: &str) -> String {
-    format!(
-        "PROGRAM main
-  VAR
-    Counter : DINT;
-  END_VAR
-  {body}
-END_PROGRAM
-"
-    )
-}
-
-/// A host whose program increments `Counter` by one per scan.
-fn counter_host(step: i32) -> (RuntimeHost, VarIndex) {
-    let base = compile_source(&counter_program(&format!("Counter := Counter + {step};")));
-    let counter = variable_index(&base, "Counter");
-    (RuntimeHost::new(base).unwrap(), counter)
-}
 
 #[test]
 fn run_when_logic_only_edit_then_counter_continues_without_reset() {

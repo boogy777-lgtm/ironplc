@@ -1,0 +1,11 @@
+Code,Name,Message
+V4007,LayoutIncompatible,Candidate layout is incompatible with the active application
+V4008,ScheduleIncompatible,Candidate task schedule is incompatible with the active application
+V4009,IoIncompatible,Candidate process-image sizes are incompatible with the active application
+V4010,MigrationUnsupported,Candidate state cannot be migrated across the declaration edit
+V4011,UntestUnsupported,Untest is not supported after a schema-changing test
+V4012,NoCandidateStaged,The operation requires a staged candidate and none is staged
+V4013,CandidateAlreadyStaged,A candidate is already staged
+V4014,NoTestInProgress,No test is in progress
+V4015,NotAllowedInThisMode,The operation is not allowed in the current hot-edit phase
+V4016,InvalidContainer,AcceptEdits payload is not a valid compiled container

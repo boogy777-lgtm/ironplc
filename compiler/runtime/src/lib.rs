@@ -7,19 +7,25 @@
 //! reverts on `untest`; process state never does.
 //!
 //! See [`RuntimeHost`] for the protocol and `specs/design/bytecode-container-format.md`
-//! ("Layout Hash and Online Change") for the container-side contract.
+//! ("Layout Hash and Online Change") for the container-side contract. The
+//! [`commands`] module exposes the same protocol to external clients as typed,
+//! line-delimited JSON commands with stable V-codes.
 
 // This crate surfaces VM errors (`FaultContext`, whose trap variants are
 // large) directly; boxing every one to satisfy clippy would obscure the
 // error vocabulary for no runtime benefit.
 #![allow(clippy::result_large_err)]
 
+mod commands;
 mod error;
 mod generation;
 mod host;
 mod migration;
 mod online_change;
 
+pub use commands::{
+    execute, parse_command, render_response, Command, CommandError, Response, StatusPayload,
+};
 pub use error::{OnlineChangeError, RuntimeError};
 pub use generation::{ApplicationGeneration, LogicGeneration};
 pub use host::{HostMode, HostStatus, RuntimeHost};

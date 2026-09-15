@@ -18,56 +18,10 @@
     reason = "integration test target: panicking helpers are sanctioned in tests"
 )]
 
-use std::io::Cursor;
+mod common;
 
-use ironplc_codegen::EmptyLookup;
-use ironplc_container::{Container, VarIndex};
-use ironplc_dsl::core::{FileId, Id};
-use ironplc_parser::options::CompilerOptions;
-use ironplc_project::{compile, MemoryBackedProject};
+use common::{compile_with_ids, variable_index};
 use ironplc_runtime::{HostMode, MigrationError, OnlineChangeError, RuntimeHost};
-
-/// Compiles `source` with the given engineering-side `(name, uid)` table and
-/// round-trips the container through the wire format.
-fn compile_with_ids(source: &str, ids: &[(&str, u64)]) -> Container {
-    let mut project = MemoryBackedProject::new(CompilerOptions::default());
-    project.add_source(FileId::from_string("main.st"), source.to_owned());
-    project.set_stable_var_ids(
-        ids.iter()
-            .map(|(name, uid)| (Id::from(name), *uid))
-            .collect(),
-    );
-
-    let output = compile(
-        &mut project,
-        &CompilerOptions::default(),
-        &EmptyLookup,
-        vec![],
-    );
-    assert!(
-        output.diagnostics.is_empty(),
-        "fixture must compile cleanly: {:?}",
-        output.diagnostics
-    );
-
-    let container = output.container.unwrap();
-    let mut bytes = Vec::new();
-    container.write_to(&mut bytes).unwrap();
-    Container::read_from(&mut Cursor::new(&bytes)).unwrap()
-}
-
-/// Finds the variable table index of a named variable via the debug section.
-fn variable_index(container: &Container, name: &str) -> VarIndex {
-    container
-        .debug_section
-        .as_ref()
-        .unwrap()
-        .var_names
-        .iter()
-        .find(|entry| entry.name.eq_ignore_ascii_case(name))
-        .unwrap()
-        .var_index
-}
 
 #[test]
 fn test_when_same_type_rename_then_value_continues_from_the_old_entity() {

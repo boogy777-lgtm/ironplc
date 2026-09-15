@@ -1,0 +1,32 @@
+=====
+V4016
+=====
+
+.. problem-summary:: V4016
+
+``acceptEdits`` carried a payload that does not parse as a compiled container.
+The command expects the wire format the compiler emits — the same bytes
+written to an ``.iplc`` file — transported as a JSON array of byte values.
+Anything else (truncated bytes, a different format, source text) is refused
+before any validation runs, and nothing about the running application or a
+previously staged candidate changes.
+
+Example
+-------
+
+A session hand-builds a payload that is not container bytes:
+
+.. code-block::
+
+   {"command":"acceptEdits","program":[1,2,3]}
+   {"response":"error","vCode":"V4016","message":"accept payload is not a valid compiled container: invalid magic number"}
+
+The message names what the container reader found, such as an invalid magic
+number, an unsupported format version, or a section size mismatch.
+
+To fix this error, compile the edited program with the existing compile path
+and send the produced container bytes unchanged. The runtime never accepts
+IEC source; compilation stays the client's job. If the bytes came from a file
+or a previous session, re-emit them rather than reconstructing them by hand.
+Once the payload parses, the usual online change validations — V4007 through
+V4015 — decide whether the edit can be staged.

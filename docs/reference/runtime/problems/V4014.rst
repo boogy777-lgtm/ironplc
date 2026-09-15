@@ -1,0 +1,30 @@
+=====
+V4014
+=====
+
+.. problem-summary:: V4014
+
+``untestEdits`` arrived while the original artifact — not the candidate — is
+the active code. Untest is the revert half of a test: it switches executable
+logic back at the next scan boundary while the process state stays current.
+With no test in progress there is no candidate code to revert to, so the
+request is refused and nothing changes.
+
+Example
+-------
+
+A session accepts a candidate and asks to untest before ever testing:
+
+.. code-block::
+
+   {"command":"acceptEdits","program":[...]}
+   {"response":"ack"}
+   {"command":"untestEdits"}
+   {"response":"error","vCode":"V4014","message":"no test is in progress"}
+
+To fix this error, check the intended step against the session's state with
+``getStatus``: with the mode ``normal`` and a candidate present, the choices
+are ``testEdits`` to try the candidate, ``assembleEdits`` to commit it
+untested, or ``cancelEdits`` to discard it. Once the mode reads ``testing``,
+``untestEdits`` reverts the code change. After a schema-changing test the
+untest path is closed; see :doc:`V4011`.

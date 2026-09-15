@@ -1,0 +1,35 @@
+=====
+V4010
+=====
+
+.. problem-summary:: V4010
+
+Online change refused a schema edit because the state migration planner
+cannot justify carrying the running values into the candidate. The candidate
+and the running application both carry stable variable IDs, but at least one
+ID that exists on both sides is bound to an incompatible entry — a changed
+variable type or layout class, a changed array descriptor, a current string
+value that no longer fits the candidate's maximum length, or a changed
+function-block tail layout. Copying such a value would risk writing it onto
+the wrong entity, so the whole candidate is rejected.
+
+Example
+-------
+
+A session stages a candidate that retypes a persistent variable while
+keeping its stable ID. The planner cannot migrate the old value into the new
+type and fails the stage:
+
+.. code-block::
+
+   {"command":"acceptEdits","program":[...]}
+   {"response":"error","vCode":"V4010","message":"candidate state cannot be migrated: entity 7 cannot migrate: the variable type changed"}
+
+The message names the entity's stable ID and the planner's reason.
+
+To fix this error, keep the edit inside what the planner can justify: renames,
+reorders, and adding or removing variables migrate; a retype, a string
+maximum that shrinks below the current value, or an FB field layout change
+does not. Split the edit so the incompatible declaration changes are applied
+as a cold start, or adjust the candidate so every shared ID keeps its entry.
+See :doc:`V4007` when the candidate lacks the stable IDs a migration needs.
