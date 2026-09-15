@@ -29,6 +29,10 @@ pub enum ContainerError {
     /// operand) is not a recognized [`crate::CharWidth`] discriminant
     /// (1 = `Narrow`, 2 = `Wide`).
     InvalidCharWidth(u8),
+    /// Load-time verification failed (ADR-0006): an integrity hash did not
+    /// match, or a type-section invariant was violated.
+    #[cfg(feature = "std")]
+    VerificationFailed(crate::load_verify::LoadViolation),
 }
 
 impl fmt::Display for ContainerError {
@@ -55,6 +59,10 @@ impl fmt::Display for ContainerError {
             }
             ContainerError::InvalidCharWidth(t) => {
                 write!(f, "invalid char_width: {t}")
+            }
+            #[cfg(feature = "std")]
+            ContainerError::VerificationFailed(v) => {
+                write!(f, "container verification failed: {v}")
             }
         }
     }

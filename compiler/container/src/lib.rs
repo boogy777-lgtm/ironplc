@@ -34,6 +34,8 @@ pub mod debug_format;
 #[cfg(feature = "std")]
 pub mod debug_section;
 #[cfg(feature = "std")]
+mod load_verify;
+#[cfg(feature = "std")]
 pub mod task_table;
 // Shared container fixtures. Compiled for this crate's own tests, and for
 // downstream test suites via the `test-support` feature.
@@ -81,6 +83,8 @@ pub use debug_section::{
     DebugSection, EnumDefEntry, FuncNameEntry, LineMapEntry, SourceFileEntry, StringLayoutEntry,
     VarNameEntry, SOURCE_FILE_HASH_LEN,
 };
+#[cfg(feature = "std")]
+pub use load_verify::{verify_load, LoadViolation};
 #[cfg(feature = "std")]
 pub use task_table::{ProgramInstanceEntry, TaskEntry, TaskTable};
 #[cfg(feature = "std")]

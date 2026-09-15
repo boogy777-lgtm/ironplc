@@ -76,9 +76,9 @@ Per-file source integrity lives in the debug section's `SOURCE_FILE_TABLE` (tag 
 | **REQ-CF-container-003** | 4 | format_version | u16 | Container format version (currently 5; bumped to 2 from 1 by ADR-0033 opcode-encoding migration, to 3 by ADR-0035 WSTRING string-header/constant-pool encoding tags, to 4 by the variable table added to the type section, and to 5 by the stable variable IDs added to the type section) |
 | | 6 | profile | u8 | Reserved for future VM profile definitions; must be zero |
 | **REQ-CF-container-007** | 7 | flags | u8 | Bit 0: has system uptime variables (`FLAG_HAS_SYSTEM_UPTIME`); Bit 1: has debug section (`FLAG_HAS_DEBUG_SECTION`); Bit 2: has type section (`FLAG_HAS_TYPE_SECTION`); bits 3–7 reserved. No bit indicates a signature section (see below) |
-| | 8 | content_hash | [u8; 32] | BLAKE3 over `type_section \|\| constant_pool \|\| code_section` (see Content Hash Scope). **Planned** — currently written as all zeros |
+| | 8 | content_hash | [u8; 32] | BLAKE3 over `type_section \|\| constant_pool \|\| code_section` (see Content Hash Scope). Computed and written by the container writer; the reader verifies a nonzero value against the section bytes, and a zero value (a container written before this hash was populated) is accepted as legacy |
 | | 40 | reserved_hash_slot | [u8; 32] | Reserved (formerly `source_hash`); must be zero. Per-file source integrity is now in the debug section's `SOURCE_FILE_TABLE` (tag 6). |
-| | 72 | debug_hash | [u8; 32] | BLAKE3 over debug section (all zeros if no debug section). **Planned** — currently written as all zeros |
+| | 72 | debug_hash | [u8; 32] | BLAKE3 over the debug section (all zeros if no debug section). Computed and written by the container writer; the reader verifies a nonzero value, and discards the debug section (non-fatal) on mismatch, matching step 13 of the Loading Sequence |
 | | 104 | layout_hash | [u8; 32] | BLAKE3 over the memory layout signature (see Layout Hash and Online Change). Computed and written by the container writer; all-zero only in a header that was never serialized |
 | | 136 | sig_section_offset | u32 | Offset of content signature section (0 if absent) |
 | | 140 | sig_section_size | u32 | Size of content signature section |
@@ -115,7 +115,7 @@ Per-file source integrity lives in the debug section's `SOURCE_FILE_TABLE` (tag 
 
 **REQ-CF-container-016** A container with no signature sections has `sig_section_offset`, `sig_section_size`, `debug_sig_offset` and `debug_sig_size` all zero.
 
-**REQ-CF-codegen-025** The compiler computes `layout_hash` (see [Layout Hash and Online Change](#layout-hash-and-online-change)) and writes it into the header when the container is serialized. `content_hash` and `debug_hash` are not yet computed — they are written as zeros, and a reader must not validate them. Tracked by the Implementation Status in [ADR-0007](../adrs/0007-dual-signature-integrity-model.md) and [issue #1583](https://github.com/ironplc/ironplc/issues/1583).
+**REQ-CF-codegen-025** The compiler computes `layout_hash` (see [Layout Hash and Online Change](#layout-hash-and-online-change)) and writes it into the header when the container is serialized. It also computes `content_hash` (BLAKE3 over the type, constant and code sections) and `debug_hash` (BLAKE3 over the debug section, zero when absent) and writes them into the header; the reader verifies nonzero hashes at load (see [Loading Sequence](#loading-sequence) and REQ-CF-container-029), and a zero hash is accepted as a legacy container. The signature sections remain unimplemented: `sig_section_offset` and `sig_section_size` stay zero, and no reader validates a signature. Content and debug signatures are tracked by the Implementation Status in [ADR-0007](../adrs/0007-dual-signature-integrity-model.md) and [issue #1583](https://github.com/ironplc/ironplc/issues/1583).
 
 ### Resource Budget Calculation
 
@@ -275,6 +275,8 @@ Each StableVarEntry (10 bytes, fixed size):
 | 2 | uid | u64 | Engineering-side entity UID; survives renames |
 
 **REQ-CF-container-028** The stable variable ID table is emitted with a u16 count, followed by that many 10-byte entries in ascending `var_index` order; each entry maps a persistent variable's `var_index` to its u64 entity UID.
+
+**REQ-CF-container-029** The container reader verifies a container at load time (ADR-0006). When `content_hash` is nonzero it must equal BLAKE3 over the type, constant and code sections; when `layout_hash` is nonzero it must recompute over the variable table, FB type descriptors and array descriptors; and the type section's tables must be internally consistent — the variable table count matches `num_variables`, variable entries set no reserved flag bits, array variables reference an existing array descriptor, FB type IDs and stable variable IDs are distinct (stable IDs ascending and within `num_variables`), user FB descriptors reference an existing function and a field range within the variable table, and array descriptor element types are defined tags. A violated invariant is rejected with `ContainerError::VerificationFailed` carrying the specific violation; a hash field of all zeros is a container written before this verification existed and is accepted as legacy. When `debug_hash` is nonzero but does not match the debug section, the debug section is discarded (non-fatal), per step 13 of the Loading Sequence. Implemented by `ironplc_container::verify_load` and the hash checks in `Container::read_from` (ADR-0058).
 
 ### Function Signatures (planned, not emitted)
 
@@ -586,7 +588,7 @@ See [Debugger Support](debugger-support.md) for the full debugger architecture i
 
 ## Loading Sequence
 
-> **Status.** Of the sequence below, steps 1–3 are implemented by the container reader, step 7 by `Container::read_from`, and step 12 by `VmBuffers::from_container`; the VM additionally rejects a zero `max_call_depth` with trap `V9017` at start. Steps 4–6, 8–11 and 13 are planned: the VM loads any container it can parse. See the Implementation Status in [ADR-0006](../adrs/0006-bytecode-verification-requirement.md) and [ADR-0007](../adrs/0007-dual-signature-integrity-model.md), tracked by [issue #1582](https://github.com/ironplc/ironplc/issues/1582) and [issue #1583](https://github.com/ironplc/ironplc/issues/1583).
+> **Status.** Of the sequence below, steps 1–3 and 7–9 are implemented by the container reader, step 9's hash comparison and the type-section consistency checks of step 10 by `Container::read_from` and `ironplc_container::verify_load` (REQ-CF-container-029, ADR-0058), step 12 by `VmBuffers::from_container`; the VM additionally rejects a zero `max_call_depth` with trap `V9017` at start. Steps 4–6, the bytecode-level half of step 10 (opcode operands checked against the tables), 11 and 13 are planned: signature sections do not exist yet, so step 13's debug-signature verification has no trigger, and a debug-hash mismatch discards the debug section non-fatally instead. See the Implementation Status in [ADR-0006](../adrs/0006-bytecode-verification-requirement.md) and [ADR-0007](../adrs/0007-dual-signature-integrity-model.md), tracked by [issue #1582](https://github.com/ironplc/ironplc/issues/1582) and [issue #1583](https://github.com/ironplc/ironplc/issues/1583).
 
 **REQ-CF-container-026** A header whose magic is not `0x49504C43` is rejected with `ContainerError::InvalidMagic`.
 
@@ -634,7 +636,7 @@ The content hash covers the type section, constant pool, and code section in fil
 
 Per-file source integrity lives in the debug section's `SOURCE_FILE_TABLE` (tag 6): each entry carries a BLAKE3 hash over the exact source bytes the parser saw, so a debugger can detect drift between an `.iplc` and the user's working copy on a per-file basis. The header has no top-level `source_hash` field — the debug section's `debug_hash` (BLAKE3 over the whole debug section) transitively protects every per-file hash.
 
-Note: The content hash does not directly cover the header bytes. Instead, the content signature signs the content_hash value, and the VM verifies that the content_hash in the header matches the actual hash of the type+constant+code sections (step 9 in the loading sequence). To make the binding explicit: the content_hash is computed as `BLAKE3(type_section_bytes || const_section_bytes || code_section_bytes)`. None of this is computed today; see the status of the hash fields in [File Header](#file-header).
+Note: The content hash does not directly cover the header bytes. Instead, the content signature signs the content_hash value, and the VM verifies that the content_hash in the header matches the actual hash of the type+constant+code sections (step 9 in the loading sequence). To make the binding explicit: the content_hash is computed as `BLAKE3(type_section_bytes || const_section_bytes || code_section_bytes)`. The writer computes it over the exact section bytes it writes; the reader recomputes it over the same byte range and rejects a nonzero mismatch at load (REQ-CF-container-029).
 
 ## Deterministic Ordering
 

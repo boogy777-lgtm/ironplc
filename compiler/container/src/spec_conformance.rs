@@ -605,6 +605,48 @@ fn container_spec_req_cf_027_unsupported_version_is_rejected() {
 }
 
 // ---------------------------------------------------------------------------
+// Container Format — Load-Time Verification (REQ-CF-container-029)
+// ---------------------------------------------------------------------------
+
+/// REQ-CF-container-029: The reader verifies a container at load time: a
+/// nonzero `content_hash` must match the type, constant and code sections,
+/// the type section's tables must be internally consistent, and a zero hash
+/// (a legacy container) is accepted. A violated invariant is rejected with
+/// `ContainerError::VerificationFailed`.
+#[spec_test(REQ_CF_container_029)]
+fn container_spec_req_cf_029_load_time_verification() {
+    use crate::{verify_load, LoadViolation};
+
+    // A consistent container round-trips and verifies.
+    let consistent = crate::test_support::steel_thread_single_function_container();
+    let mut buf = Vec::new();
+    consistent.write_to(&mut buf).unwrap();
+    let decoded = crate::Container::read_from(&mut Cursor::new(&buf)).unwrap();
+    assert_eq!(verify_load(&decoded), Ok(()));
+
+    // A corrupted code byte fails the content hash.
+    let code_end = {
+        let header = FileHeader::read_from(&mut Cursor::new(&buf[..HEADER_SIZE])).unwrap();
+        (header.code_section_offset + header.code_section_size) as usize
+    };
+    buf[code_end - 1] = buf[code_end - 1].wrapping_add(1);
+    assert!(matches!(
+        crate::Container::read_from(&mut Cursor::new(&buf)),
+        Err(ContainerError::VerificationFailed(
+            LoadViolation::ContentHashMismatch
+        ))
+    ));
+
+    // A zeroed content hash marks the bytes as legacy and is accepted.
+    let mut header = FileHeader::read_from(&mut Cursor::new(&buf[..HEADER_SIZE])).unwrap();
+    header.content_hash = [0u8; 32];
+    let mut legacy = Vec::new();
+    header.write_to(&mut legacy).unwrap();
+    legacy.extend_from_slice(&buf[HEADER_SIZE..]);
+    assert!(crate::Container::read_from(&mut Cursor::new(&legacy)).is_ok());
+}
+
+// ---------------------------------------------------------------------------
 // Container Format — Type Section (REQ-CF-container-008 through REQ-CF-container-009)
 // ---------------------------------------------------------------------------
 

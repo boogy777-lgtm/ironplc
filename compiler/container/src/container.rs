@@ -5,6 +5,7 @@ use crate::code_section::CodeSection;
 use crate::constant_pool::ConstantPool;
 use crate::debug_section::DebugSection;
 use crate::header::{FileHeader, FLAG_HAS_DEBUG_SECTION, FLAG_HAS_TYPE_SECTION, HEADER_SIZE};
+use crate::load_verify::{verify_content_hash, verify_debug_hash, verify_load};
 use crate::task_table::TaskTable;
 use crate::type_section::TypeSection;
 use crate::ContainerError;
@@ -31,8 +32,9 @@ impl Container {
     /// and can be swapped in without restarting.
     ///
     /// [`write_to`](Self::write_to) stores this value in
-    /// `header.layout_hash`. `content_hash` and `debug_hash` are not
-    /// computed yet and stay zero.
+    /// `header.layout_hash`, along with `content_hash` and `debug_hash`;
+    /// the in-memory header keeps zeros until serialized (ADR-0052's hash
+    /// contract).
     pub fn compute_layout_hash(&self) -> [u8; 32] {
         let mut hasher = blake3::Hasher::new();
         hasher.update(&self.header.num_variables.to_le_bytes());
@@ -66,11 +68,50 @@ impl Container {
 
     /// Writes the container to the given writer.
     ///
-    /// Computes section offsets and fills the header (including the layout
-    /// hash) before writing sections in file-layout order.
+    /// Computes section offsets and fills the header before writing sections
+    /// in file-layout order. The header carries three integrity hashes, all
+    /// computed over the exact bytes written:
+    ///
+    /// * `content_hash` — BLAKE3 over `type_section || constant_pool ||
+    ///   code_section` (the Content Hash Scope; the header, signature
+    ///   sections and debug section are excluded).
+    /// * `debug_hash` — BLAKE3 over the debug section, or zero when no debug
+    ///   section is present.
+    /// * `layout_hash` — see [`compute_layout_hash`](Self::compute_layout_hash).
     pub fn write_to(&self, w: &mut impl Write) -> Result<(), ContainerError> {
+        // Serialize each section once so the header hashes cover exactly the
+        // bytes that follow the header. The sections are small (the header's
+        // resource summary bounds their total), so buffering them whole is
+        // not a regression over streaming.
+        let mut task_bytes = Vec::new();
+        self.task_table.write_to(&mut task_bytes)?;
+
+        let type_bytes = match &self.type_section {
+            Some(type_section) => {
+                let mut bytes = Vec::new();
+                type_section.write_to(&mut bytes)?;
+                Some(bytes)
+            }
+            None => None,
+        };
+
+        let mut const_bytes = Vec::new();
+        self.constant_pool.write_to(&mut const_bytes)?;
+
+        let mut code_bytes = Vec::new();
+        self.code.write_to(&mut code_bytes)?;
+
+        let debug_bytes = match &self.debug_section {
+            Some(debug) => {
+                let mut bytes = Vec::new();
+                debug.write_to(&mut bytes)?;
+                Some(bytes)
+            }
+            None => None,
+        };
+
         let task_section_offset = HEADER_SIZE as u32;
-        let task_section_size = self.task_table.section_size();
+        let task_section_size = task_bytes.len() as u32;
 
         let mut next_offset = task_section_offset + task_section_size;
 
@@ -79,54 +120,71 @@ impl Container {
         header.task_section_size = task_section_size;
 
         // Type section (optional, between task table and constant pool)
-        if let Some(type_section) = &self.type_section {
-            let type_section_size = type_section.section_size();
+        if let Some(bytes) = &type_bytes {
             header.type_section_offset = next_offset;
-            header.type_section_size = type_section_size;
+            header.type_section_size = bytes.len() as u32;
             header.flags |= FLAG_HAS_TYPE_SECTION;
-            next_offset += type_section_size;
+            next_offset += bytes.len() as u32;
         }
 
         let const_section_offset = next_offset;
-        let const_section_size = self.constant_pool.section_size();
+        let const_section_size = const_bytes.len() as u32;
         header.const_section_offset = const_section_offset;
         header.const_section_size = const_section_size;
         next_offset = const_section_offset + const_section_size;
 
         let code_section_offset = next_offset;
-        let code_section_size = self.code.section_size();
+        let code_section_size = code_bytes.len() as u32;
         header.code_section_offset = code_section_offset;
         header.code_section_size = code_section_size;
         header.num_functions = self.code.functions.len() as u16;
         next_offset = code_section_offset + code_section_size;
 
-        if let Some(debug) = &self.debug_section {
-            let debug_section_size = debug.section_size();
+        if let Some(bytes) = &debug_bytes {
             header.debug_section_offset = next_offset;
-            header.debug_section_size = debug_section_size;
+            header.debug_section_size = bytes.len() as u32;
             header.flags |= FLAG_HAS_DEBUG_SECTION;
         }
+
+        // Content Hash Scope: type || constant || code, in file order.
+        let mut content_hasher = blake3::Hasher::new();
+        if let Some(bytes) = &type_bytes {
+            content_hasher.update(bytes);
+        }
+        content_hasher.update(&const_bytes);
+        content_hasher.update(&code_bytes);
+        header.content_hash = *content_hasher.finalize().as_bytes();
+
+        header.debug_hash = match &debug_bytes {
+            Some(bytes) => *blake3::hash(bytes).as_bytes(),
+            None => [0u8; 32],
+        };
 
         header.layout_hash = self.compute_layout_hash();
 
         header.write_to(w)?;
-        self.task_table.write_to(w)?;
-
-        if let Some(type_section) = &self.type_section {
-            type_section.write_to(w)?;
+        w.write_all(&task_bytes)?;
+        if let Some(bytes) = &type_bytes {
+            w.write_all(bytes)?;
         }
-
-        self.constant_pool.write_to(w)?;
-        self.code.write_to(w)?;
-
-        if let Some(debug) = &self.debug_section {
-            debug.write_to(w)?;
+        w.write_all(&const_bytes)?;
+        w.write_all(&code_bytes)?;
+        if let Some(bytes) = &debug_bytes {
+            w.write_all(bytes)?;
         }
 
         Ok(())
     }
 
     /// Reads a container from the given reader.
+    ///
+    /// Loads only a container that passes the ADR-0006 load-time checks
+    /// (see [`verify_load`](crate::verify_load)): when `content_hash` is
+    /// nonzero it must match the type, constant and code sections, and the
+    /// type section's tables must be internally consistent; a zero hash is a
+    /// legacy container and is accepted. When `debug_hash` is nonzero but
+    /// does not match, the debug section is discarded (non-fatal), matching
+    /// the loading sequence's step 13.
     pub fn read_from(r: &mut impl Read) -> Result<Self, ContainerError> {
         let header = FileHeader::read_from(r)?;
 
@@ -134,6 +192,8 @@ impl Container {
         // section offsets within them.
         let mut rest = Vec::new();
         r.read_to_end(&mut rest)?;
+
+        verify_content_hash(&header, &rest)?;
 
         let base = HEADER_SIZE as u32;
 
@@ -171,7 +231,7 @@ impl Container {
         )?;
 
         // Parse debug section if present (non-fatal on error).
-        let debug_section = if header.debug_section_size > 0 {
+        let mut debug_section = if header.debug_section_size > 0 {
             let debug_start = (header.debug_section_offset - base) as usize;
             let debug_end = debug_start + header.debug_section_size as usize;
             if debug_end <= rest.len() {
@@ -183,14 +243,25 @@ impl Container {
             None
         };
 
-        Ok(Container {
+        // A debug hash that does not match discards the debug section rather
+        // than the container (loading sequence step 13: invalid debug info
+        // is non-fatal).
+        if verify_debug_hash(&header, &rest).is_err() {
+            debug_section = None;
+        }
+
+        let container = Container {
             header,
             task_table,
             type_section,
             constant_pool,
             code,
             debug_section,
-        })
+        };
+
+        verify_load(&container).map_err(ContainerError::VerificationFailed)?;
+
+        Ok(container)
     }
 }
 
@@ -205,7 +276,7 @@ mod tests {
     };
     use crate::id_types::{ConstantIndex, FbTypeId, FunctionId, InstanceId, TaskId, VarIndex};
     use crate::test_support::{
-        round_trip, steel_thread_bytecode, steel_thread_single_function_container,
+        container_bytes, round_trip, steel_thread_bytecode, steel_thread_single_function_container,
     };
     use crate::type_section::{FbTypeDescriptor, FieldEntry, FieldType, StableVarEntry, VarEntry};
     use crate::ContainerBuilder;
@@ -318,6 +389,11 @@ mod tests {
 
         let container = builder
             .num_variables(1)
+            .add_var_entry(VarEntry {
+                var_type: FieldType::I32,
+                flags: 0,
+                extra: 0,
+            })
             .add_i32_constant(42)
             .add_function(FunctionId::INIT, &bytecode, 1, 1, 0)
             .build();
@@ -347,8 +423,24 @@ mod tests {
         assert_eq!(decoded.code.functions.len(), 1);
     }
 
+    /// Rebuilds the byte image with the header rewritten by `f`. The body
+    /// bytes (including every section and its hashes) are left untouched.
+    fn with_tampered_header(bytes: &[u8], f: impl FnOnce(&mut FileHeader)) -> Vec<u8> {
+        let mut header = FileHeader::read_from(&mut Cursor::new(&bytes[..HEADER_SIZE])).unwrap();
+        f(&mut header);
+
+        let mut tampered = Vec::with_capacity(bytes.len());
+        header.write_to(&mut tampered).unwrap();
+        tampered.extend_from_slice(&bytes[HEADER_SIZE..]);
+        tampered
+    }
+
+    /// A tampered type-section size makes the directory inconsistent with
+    /// the file: the type section no longer parses, so the layout hash no
+    /// longer recomputes over the declared variable table and load-time
+    /// verification rejects the container.
     #[test]
-    fn container_read_from_when_type_section_truncated_then_type_section_is_none() {
+    fn container_read_from_when_type_section_size_tampered_then_rejected() {
         #[rustfmt::skip]
         let bytecode: Vec<u8> = vec![
             0x01, 0x00, 0x00,
@@ -367,19 +459,24 @@ mod tests {
         let mut buf = Vec::new();
         container.write_to(&mut buf).unwrap();
 
-        // Inflate the declared type_section_size so ts_end exceeds available
-        // bytes, forcing the bounds check at container.rs:109 to return None.
-        let mut header = FileHeader::read_from(&mut Cursor::new(&buf[..HEADER_SIZE])).unwrap();
-        header.type_section_size = buf.len() as u32 * 2;
+        // Inflate the declared type_section_size so the section no longer
+        // fits the file and the reader treats it as absent.
+        let tampered = with_tampered_header(&buf, |h| {
+            h.type_section_size = buf.len() as u32 * 2;
+        });
 
-        let mut tampered = Vec::with_capacity(buf.len());
-        header.write_to(&mut tampered).unwrap();
-        tampered.extend_from_slice(&buf[HEADER_SIZE..]);
-
-        let decoded = Container::read_from(&mut Cursor::new(&tampered)).unwrap();
-        assert!(decoded.type_section.is_none());
+        let result = Container::read_from(&mut Cursor::new(&tampered));
+        assert!(matches!(
+            result,
+            Err(ContainerError::VerificationFailed(
+                crate::LoadViolation::LayoutHashMismatch
+            ))
+        ));
     }
 
+    /// An inflated debug-section size leaves no debug bytes to verify, so
+    /// the debug section loads as absent — discarded, non-fatally, exactly
+    /// like a malformed debug section.
     #[test]
     fn container_read_from_when_debug_section_truncated_then_debug_section_is_none() {
         #[rustfmt::skip]
@@ -402,14 +499,10 @@ mod tests {
         let mut buf = Vec::new();
         container.write_to(&mut buf).unwrap();
 
-        // Inflate the declared debug_section_size past the end of the buffer,
-        // triggering the bounds check that returns None at container.rs:135.
-        let mut header = FileHeader::read_from(&mut Cursor::new(&buf[..HEADER_SIZE])).unwrap();
-        header.debug_section_size = buf.len() as u32 * 2;
-
-        let mut tampered = Vec::with_capacity(buf.len());
-        header.write_to(&mut tampered).unwrap();
-        tampered.extend_from_slice(&buf[HEADER_SIZE..]);
+        // Inflate the declared debug_section_size past the end of the buffer.
+        let tampered = with_tampered_header(&buf, |h| {
+            h.debug_section_size = buf.len() as u32 * 2;
+        });
 
         let decoded = Container::read_from(&mut Cursor::new(&tampered)).unwrap();
         assert!(decoded.debug_section.is_none());
@@ -548,7 +641,7 @@ mod tests {
     }
 
     #[test]
-    fn write_to_when_called_then_header_layout_hash_matches_computation() {
+    fn write_to_when_called_then_header_hashes_match_computation() {
         let container = layout_hash_container();
         let mut buf = Vec::new();
         container.write_to(&mut buf).unwrap();
@@ -557,8 +650,115 @@ mod tests {
 
         assert_eq!(decoded.header.layout_hash, decoded.compute_layout_hash());
         assert_ne!(decoded.header.layout_hash, [0u8; 32]);
-        assert_eq!(decoded.header.content_hash, [0u8; 32]);
+        // The integrity hashes are populated on the wire; the in-memory
+        // header keeps zeros until serialized (ADR-0052's hash contract).
+        // This container has no debug section, so `debug_hash` is zero on
+        // the wire per the Content Hash Scope.
+        assert_ne!(decoded.header.content_hash, [0u8; 32]);
         assert_eq!(decoded.header.debug_hash, [0u8; 32]);
+        assert_eq!(container.header.content_hash, [0u8; 32]);
+        assert_eq!(container.header.debug_hash, [0u8; 32]);
+        assert_eq!(container.header.layout_hash, [0u8; 32]);
+    }
+
+    /// Corrupting a code byte invalidates the content hash, and the reader
+    /// rejects the container before any section is used.
+    #[test]
+    fn read_from_when_code_byte_tampered_then_content_hash_rejected() {
+        let container = layout_hash_container();
+        let mut buf = Vec::new();
+        container.write_to(&mut buf).unwrap();
+
+        let header = FileHeader::read_from(&mut Cursor::new(&buf[..HEADER_SIZE])).unwrap();
+        let code_end = (header.code_section_offset + header.code_section_size) as usize;
+        buf[code_end - 1] = buf[code_end - 1].wrapping_add(1);
+
+        let result = Container::read_from(&mut Cursor::new(&buf));
+        assert!(matches!(
+            result,
+            Err(ContainerError::VerificationFailed(
+                crate::LoadViolation::ContentHashMismatch
+            ))
+        ));
+    }
+
+    /// Zeroing the content hash marks the container as legacy, and the
+    /// reader accepts it without checking — even when a type-section
+    /// invariant is violated, which the structural verifier still catches.
+    #[test]
+    fn read_from_when_content_hash_zeroed_then_legacy_accept() {
+        let container = layout_hash_container();
+        let buf = container_bytes(&container);
+        let tampered = with_tampered_header(&buf, |h| h.content_hash = [0u8; 32]);
+
+        let decoded = Container::read_from(&mut Cursor::new(&tampered)).unwrap();
+        assert_eq!(decoded.header.content_hash, [0u8; 32]);
+    }
+
+    /// The structural verifier runs even when the integrity hashes are zero:
+    /// a reserved variable flag bit is rejected with the specific violation.
+    #[test]
+    fn read_from_when_reserved_var_flags_and_zero_hashes_then_verification_failed() {
+        let mut container = layout_hash_container();
+        container.type_section.as_mut().unwrap().variable_table[0].flags = 0x80;
+        let buf = container_bytes(&container);
+        let tampered = with_tampered_header(&buf, |h| {
+            h.content_hash = [0u8; 32];
+            h.debug_hash = [0u8; 32];
+            h.layout_hash = [0u8; 32];
+        });
+
+        let result = Container::read_from(&mut Cursor::new(&tampered));
+        assert!(matches!(
+            result,
+            Err(ContainerError::VerificationFailed(
+                crate::LoadViolation::ReservedVariableFlags { flags: 0x80, .. }
+            ))
+        ));
+    }
+
+    /// A layout hash that does not recompute over the type section is
+    /// rejected: a candidate declaring the wrong layout must not reach the
+    /// online-change comparison.
+    #[test]
+    fn read_from_when_layout_hash_tampered_then_verification_failed() {
+        let container = layout_hash_container();
+        let buf = container_bytes(&container);
+        let tampered = with_tampered_header(&buf, |h| h.layout_hash = [0xFF; 32]);
+
+        let result = Container::read_from(&mut Cursor::new(&tampered));
+        assert!(matches!(
+            result,
+            Err(ContainerError::VerificationFailed(
+                crate::LoadViolation::LayoutHashMismatch
+            ))
+        ));
+    }
+
+    /// A debug byte corruption invalidates the debug hash; the debug
+    /// section is discarded (non-fatal) and the container still loads.
+    #[test]
+    fn read_from_when_debug_byte_tampered_then_debug_section_discarded() {
+        let mut container = layout_hash_container();
+        container.debug_section = Some(crate::debug_section::DebugSection {
+            var_names: vec![],
+            func_names: vec![crate::debug_section::FuncNameEntry {
+                function_id: FunctionId::INIT,
+                name: "MAIN".into(),
+            }],
+            line_map: vec![],
+            string_layouts: vec![],
+            source_files: vec![],
+            enum_defs: vec![],
+        });
+        let mut buf = Vec::new();
+        container.write_to(&mut buf).unwrap();
+        assert_ne!(buf.len(), 0);
+        let last = buf.len() - 1;
+        buf[last] = buf[last].wrapping_add(1);
+
+        let decoded = Container::read_from(&mut Cursor::new(&buf)).unwrap();
+        assert!(decoded.debug_section.is_none());
     }
 
     #[test]

@@ -337,6 +337,7 @@ impl ContainerBuilder {
             functions: self.functions,
             bytecode: self.bytecode,
         };
+        let num_fb_types = self.fb_types.len() as u16;
 
         // Build type section if there are any type descriptors, variable
         // table entries or stable variable IDs.
@@ -423,6 +424,7 @@ impl ContainerBuilder {
             num_temp_bufs: self.num_temp_bufs,
             max_temp_buf_bytes: self.max_temp_buf_bytes,
             num_functions: code.functions.len() as u16,
+            num_fb_types,
             ..FileHeader::default()
         };
 

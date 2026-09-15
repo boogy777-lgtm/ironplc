@@ -48,8 +48,9 @@ fn all_spec_requirements_have_tests() {
 /// Both goldens are frozen artifacts that exercise the container reader
 /// end-to-end, and both must be refreshed whenever `FORMAT_VERSION` bumps:
 /// the reader only accepts the current version. Last refreshed for the
-/// format_version 4 -> 5 bump that added the type section's stable variable
-/// IDs.
+/// population of the header integrity hashes (`content_hash`, `debug_hash`,
+/// `layout_hash`), so a golden load also exercises the ADR-0006 load-time
+/// verifier (REQ-CF-container-029).
 #[test]
 #[ignore]
 fn generate_golden_files() {
@@ -230,12 +231,12 @@ fn run_when_golden_container_file_then_ok() -> Result<(), Box<dyn std::error::Er
     cmd.assert().success();
 
     let contents = std::fs::read_to_string(&dump_path)?;
-    // Golden file pre-dates several header revisions; the fact that it
-    // still loads and runs is itself the backwards-compatibility check —
-    // bytes 40-71 (formerly `source_hash`) are silently accepted by the
-    // new reader as `reserved_hash_slot`, and every other field offset is
-    // unchanged. Its `max_call_depth` field (offset 194) was bumped 0 -> 1
-    // when zero call depth became invalid; every other byte is preserved.
+    // The golden is a frozen artifact written by the current container
+    // writer: loading it succeeds only because its nonzero integrity hashes
+    // verify against its sections — the golden load is itself the
+    // end-to-end check of the ADR-0006 load-time verifier. Containers with
+    // zero hashes (written before the hashes were populated) stay loadable
+    // and are covered by the container crate's legacy-accept tests.
     assert_eq!(contents, "x: 10\ny: 42\n");
 
     Ok(())

@@ -32,11 +32,12 @@ fn compiled_container(source: &str) -> Container {
     Container::read_from(&mut Cursor::new(&buf)).unwrap()
 }
 
-/// REQ-CF-codegen-025: `layout_hash` is computed when the container is
-/// written; `content_hash` and `debug_hash` are written as zeros — nothing
-/// computes those yet.
+/// REQ-CF-codegen-025: `layout_hash`, `content_hash` and `debug_hash` are
+/// computed when the container is written; the reader verifies the nonzero
+/// hashes at load time, so a successful round-trip is itself proof the
+/// hashes match the serialized sections.
 #[spec_test(REQ_CF_codegen_025)]
-fn container_spec_req_cf_025_header_layout_hash_is_computed() {
+fn container_spec_req_cf_025_header_hashes_are_computed() {
     let container = compiled_container(
         "PROGRAM main
          VAR
@@ -45,11 +46,15 @@ fn container_spec_req_cf_025_header_layout_hash_is_computed() {
              x := 1;
          END_PROGRAM",
     );
-    assert_eq!(container.header.content_hash, [0u8; 32]);
-    assert_eq!(container.header.debug_hash, [0u8; 32]);
+    assert_ne!(container.header.content_hash, [0u8; 32]);
+    assert_ne!(container.header.layout_hash, [0u8; 32]);
+    if container.header.debug_section_size > 0 {
+        assert_ne!(container.header.debug_hash, [0u8; 32]);
+    } else {
+        assert_eq!(container.header.debug_hash, [0u8; 32]);
+    }
     assert_eq!(
         container.header.layout_hash,
         container.compute_layout_hash()
     );
-    assert_ne!(container.header.layout_hash, [0u8; 32]);
 }
