@@ -7,3 +7,4 @@ E0005,DebugProgramNotDebuggable,Program is not a Structured Text source or compi
 E0006,CompileFailed,Failed to compile the program
 E0007,DebugServerNotFound,IronPLC debug server (ironplcvmd) not found
 E0008,VmNotFound,IronPLC virtual machine (ironplcvm) not found next to the compiler
+E0009,MapUidFailed,Failed to record the variable ID mapping

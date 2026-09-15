@@ -18,6 +18,7 @@ const HOT_EDIT_COMMANDS: { id: string; title: string }[] = [
   { id: 'ironplc.assembleEdits', title: 'Assemble Edits' },
   { id: 'ironplc.cancelEdits', title: 'Cancel Edits' },
   { id: 'ironplc.showHotEditStatus', title: 'Show Status' },
+  { id: 'ironplc.syncVariableIds', title: 'Sync Variable IDs' },
 ];
 
 interface CommandContribution {

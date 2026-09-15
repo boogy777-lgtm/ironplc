@@ -20,12 +20,25 @@ import {
   HotEditSession,
   HotEditTransport,
 } from './hotEditSession';
+import {
+  candidatesOf,
+  describeMapping,
+  formatSyncSummary,
+  MapUidError,
+  SyncCandidate,
+  syncVariableIds,
+  SyncResolutionUi,
+} from './syncUidsLogic';
 
 /**
  * Registers the "IronPLC Hot Edit" commands: a thin client that drives one
  * `ironplcvm serve` session (the hot-edit engineering protocol, ADR-0052)
- * over the child's stdin/stdout. The section is glue only — protocol framing
- * and response matching live in the unit-testable `hotEditSession` module,
+ * over the child's stdin/stdout, plus the "Sync Variable IDs" command that
+ * reconciles the project's stable variable UID sidecar through the
+ * `ironplcc refactor sync-uids` / `map-uid` commands (ADR-0053). The
+ * sections are glue only — protocol framing and response matching live in
+ * the unit-testable `hotEditSession` module, sync parsing and the
+ * resolution flow live in the unit-testable `syncUidsLogic` module,
  * compilation reuses the debug adapter's compile path (`compileArgs` +
  * `containerOutputPath`), and program classification reuses
  * `programKind`/`isDebuggableProgram` so "a runnable file" means the same
@@ -66,6 +79,7 @@ export function registerHotEditSupport(
     vscode.commands.registerCommand('ironplc.assembleEdits', () => runSessionCommand(s => s.assembleEdits())),
     vscode.commands.registerCommand('ironplc.cancelEdits', () => runSessionCommand(s => s.cancelEdits())),
     vscode.commands.registerCommand('ironplc.showHotEditStatus', showStatus),
+    vscode.commands.registerCommand('ironplc.syncVariableIds', syncVariableIdsCommand),
   );
 
   async function startSession(): Promise<void> {
@@ -208,6 +222,66 @@ export function registerHotEditSupport(
     }
   }
 
+  async function syncVariableIdsCommand(): Promise<void> {
+    const selected = await resolveProject();
+    if (!selected) {
+      return;
+    }
+    if (!compilerPath) {
+      reportProblem(ProblemCode.NoCompiler, 'Install the compiler to sync variable IDs.');
+      return;
+    }
+
+    try {
+      const report = await syncVariableIds(compilerPath, selected, runCompiler, resolutionUi);
+      if (candidatesOf(report).length > 0) {
+        void vscode.window.showWarningMessage(
+          `IronPLC Hot Edit: Sync Variable IDs: ${formatSyncSummary(report)}. `
+          + 'Rename/swap candidates remain unresolved, so variable IDs are not fully synced. '
+          + 'Run the command again to resolve them.',
+        );
+      }
+      else {
+        void vscode.window.showInformationMessage(
+          `IronPLC Hot Edit: Sync Variable IDs: ${formatSyncSummary(report)}.`,
+        );
+      }
+    }
+    catch (err) {
+      if (err instanceof MapUidError) {
+        reportProblem(
+          ProblemCode.MapUidFailed,
+          `${selected}: ${err.message} (see the "IronPLC Hot Edit" output for details).`,
+        );
+      }
+      else {
+        reportCompileFailure(selected, err);
+      }
+    }
+  }
+
+  /** UI callbacks for the sync resolution flow; the flow logic itself is unit-testable. */
+  const resolutionUi: SyncResolutionUi = {
+    async pickCandidate(candidates: SyncCandidate[]): Promise<SyncCandidate | undefined> {
+      const picked = await vscode.window.showQuickPick(
+        candidates.map(candidate => ({
+          label: `${candidate.kind === 'rename' ? 'Rename' : 'Swap'}: ${describeMapping(candidate)}`,
+          candidate,
+        })),
+        { title: 'Select a candidate to resolve, or press Esc to leave the IDs unresolved' },
+      );
+      return picked?.candidate;
+    },
+    async confirmMapping(mapping: string): Promise<boolean> {
+      const choice = await vscode.window.showInformationMessage(
+        `Map ${mapping}? The recorded variable ID moves to the new declaration.`,
+        'Map',
+        'Cancel',
+      );
+      return choice === 'Map';
+    },
+  };
+
   function requireSession(): HotEditSession | undefined {
     if (!session) {
       void vscode.window.showWarningMessage(
@@ -242,6 +316,15 @@ export function registerHotEditSupport(
   function compileToContainer(compiler: string, source: string): Promise<string> {
     const output = containerOutputPath(source, os.tmpdir());
     const args = compileArgs(source, output);
+    return runCompiler(compiler, args).then(() => output);
+  }
+
+  /**
+   * Runs one compiler invocation, echoing the command and its output to the
+   * output channel; rejects with the first diagnostic line on failure. The
+   * single transport every compiler-spawning command in this section shares.
+   */
+  function runCompiler(compiler: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
     outputChannel.appendLine(`$ ${compiler} ${args.join(' ')}`);
     return new Promise((resolve, reject) => {
       execFile(compiler, args, (error, stdout, stderr) => {
@@ -256,7 +339,7 @@ export function registerHotEditSupport(
           reject(new Error(detail));
           return;
         }
-        resolve(output);
+        resolve({ stdout, stderr });
       });
     });
   }
@@ -278,16 +361,49 @@ export function registerHotEditSupport(
   }
 
   async function resolveProgram(): Promise<string | undefined> {
-    const active = vscode.window.activeTextEditor?.document.uri.fsPath;
-    if (active && isDebuggableProgram(active, sourceExtensions)) {
-      return active;
-    }
-    const picked = await vscode.window.showOpenDialog({
-      title: 'Select the program to hot edit',
-      filters: { 'IronPLC programs': ['iplc', ...sourceExtensions.map(ext => ext.replace('.', ''))] },
-    });
-    return picked && picked.length > 0 ? picked[0].fsPath : undefined;
+    return resolvePathInteractive(
+      'Select the program to hot edit',
+      candidate => isDebuggableProgram(candidate, sourceExtensions),
+      'IronPLC programs',
+      ['iplc', ...sourceExtensions.map(ext => ext.replace('.', ''))],
+    );
   }
+
+  /**
+   * The project the sync command reconciles: the active editor when it holds
+   * a source file (sync analyzes sources; a compiled container is not a
+   * valid input), otherwise a file picked from the same open dialog pattern.
+   */
+  async function resolveProject(): Promise<string | undefined> {
+    return resolvePathInteractive(
+      'Select the project to sync variable IDs',
+      candidate => programKind(candidate, sourceExtensions) === 'source',
+      'IronPLC sources',
+      sourceExtensions.map(ext => ext.replace('.', '')),
+    );
+  }
+}
+
+/**
+ * Shared "active editor, else open dialog" resolution for the commands that
+ * operate on one project path: returns the active editor's path when it
+ * satisfies `accept`, otherwise asks the user to pick a file.
+ */
+async function resolvePathInteractive(
+  title: string,
+  accept: (path: string) => boolean,
+  filterName: string,
+  extensions: string[],
+): Promise<string | undefined> {
+  const active = vscode.window.activeTextEditor?.document.uri.fsPath;
+  if (active && accept(active)) {
+    return active;
+  }
+  const picked = await vscode.window.showOpenDialog({
+    title,
+    filters: { [filterName]: extensions },
+  });
+  return picked && picked.length > 0 ? picked[0].fsPath : undefined;
 }
 
 /** The VM executable name on `platform` (`.exe` on Windows). */

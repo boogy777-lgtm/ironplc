@@ -102,6 +102,11 @@
         "command": "ironplc.showHotEditStatus",
         "title": "Show Status",
         "category": "IronPLC Hot Edit"
+      },
+      {
+        "command": "ironplc.syncVariableIds",
+        "title": "Sync Variable IDs",
+        "category": "IronPLC Hot Edit"
       }
     ],
     "menus": {

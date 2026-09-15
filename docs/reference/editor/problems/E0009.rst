@@ -1,0 +1,25 @@
+=====
+E0009
+=====
+
+.. problem-summary:: E0009
+
+The extension could not record a variable ID mapping in the project's stable
+variable ID sidecar.
+
+This error appears when "IronPLC Hot Edit: Sync Variable IDs" resolves a
+rename or swap candidate and the compiler's ``refactor map-uid`` command
+fails. The most common cause is that the sidecar changed after the sync
+report was produced — for example, the sources were reverted, the
+``<project>.uids.json`` file was replaced, or another sync ran in the
+meantime — so the variable the mapping starts from no longer has a recorded
+ID. The "IronPLC Hot Edit" output channel shows the compiler's own message.
+
+**Solutions**:
+
+1. **Run the sync again**: Re-run "IronPLC Hot Edit: Sync Variable IDs" to
+   produce a fresh report, then resolve the candidates it lists.
+
+2. **Check the sidecar**: Make sure the ``<project>.uids.json`` file next to
+   the project is the one you expect — not deleted, and not restored from an
+   old copy.
