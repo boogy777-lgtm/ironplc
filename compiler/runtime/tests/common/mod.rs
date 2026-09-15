@@ -19,34 +19,45 @@ use std::io::Cursor;
 
 use ironplc_codegen::EmptyLookup;
 use ironplc_container::{Container, VarIndex};
-use ironplc_dsl::core::{FileId, Id};
+use ironplc_dsl::core::FileId;
 use ironplc_parser::options::CompilerOptions;
-use ironplc_project::{compile, MemoryBackedProject};
+use ironplc_project::{compile, MemoryBackedProject, SidecarKey};
 use ironplc_runtime::RuntimeHost;
 
 /// Compiles `source` and round-trips the container through the wire format.
 pub fn compile_source(source: &str) -> Container {
-    compile_container(source, None)
+    compile_container(source, &[])
 }
 
-/// Compiles `source` with the given engineering-side `(name, uid)` table and
-/// round-trips the container through the wire format.
+/// Compiles `source` with the given engineering-side program-variable
+/// `(name, uid)` table and round-trips the container through the wire
+/// format. The scope is the conventional program name of these fixtures;
+/// codegen matches program variables by name, so it does not participate.
 pub fn compile_with_ids(source: &str, ids: &[(&str, u64)]) -> Container {
-    compile_container(source, Some(ids))
+    let keys: Vec<(SidecarKey, u64)> = ids
+        .iter()
+        .map(|(name, uid)| (SidecarKey::new("main", name), *uid))
+        .collect();
+    compile_container(source, &keys)
 }
 
-/// Compiles `source`, assigning stable variable IDs when `ids` is present,
-/// and round-trips the container through the wire format.
-fn compile_container(source: &str, ids: Option<&[(&str, u64)]>) -> Container {
+/// Compiles `source` with the given engineering-side keyed UID table —
+/// `(scope, name, uid)` triples where an FB field's scope is its FB type
+/// name (ADR 0059) — and round-trips the container through the wire format.
+pub fn compile_with_uid_keys(source: &str, keys: &[(&str, &str, u64)]) -> Container {
+    let keyed: Vec<(SidecarKey, u64)> = keys
+        .iter()
+        .map(|(scope, name, uid)| (SidecarKey::new(scope, name), *uid))
+        .collect();
+    compile_container(source, &keyed)
+}
+
+/// Compiles `source`, assigning the given stable variable IDs, and
+/// round-trips the container through the wire format.
+fn compile_container(source: &str, ids: &[(SidecarKey, u64)]) -> Container {
     let mut project = MemoryBackedProject::new(CompilerOptions::default());
     project.add_source(FileId::from_string("main.st"), source.to_owned());
-    if let Some(ids) = ids {
-        project.set_stable_var_ids(
-            ids.iter()
-                .map(|(name, uid)| (Id::from(name), *uid))
-                .collect(),
-        );
-    }
+    project.set_stable_var_ids(ids.to_vec());
 
     let output = compile(
         &mut project,

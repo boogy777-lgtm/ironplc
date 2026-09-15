@@ -54,6 +54,23 @@ fn user_fb(type_id: u16, fields: u8) -> UserFbDescriptor {
     }
 }
 
+/// A user FB descriptor whose fields map at `var_offset`.
+fn user_fb_at(type_id: u16, var_offset: u16, fields: u8) -> UserFbDescriptor {
+    UserFbDescriptor {
+        var_offset,
+        ..user_fb(type_id, fields)
+    }
+}
+
+/// An FB field UID entry.
+fn field_uid(type_id: u16, field_index: u8, uid: u64) -> FbFieldUidEntry {
+    FbFieldUidEntry {
+        fb_type_id: FbTypeId::new(type_id),
+        field_index,
+        uid,
+    }
+}
+
 /// Builds a container whose type section carries `variables` and the given
 /// `(var_index, uid)` stable variable IDs.
 fn container(variables: &[VarEntry], stable: &[(u16, u64)]) -> Container {
@@ -247,7 +264,7 @@ fn build_when_array_descriptor_changed_then_array_descriptor_mismatch() {
 }
 
 #[test]
-fn build_when_fb_tail_identical_then_copy_slot() {
+fn build_when_fb_tail_identical_then_copy_slot_and_region() {
     let base = ContainerBuilder::new()
         .shared_globals_size(2)
         .add_user_fb_type(user_fb(0x1000, 2))
@@ -273,11 +290,14 @@ fn build_when_fb_tail_identical_then_copy_slot() {
 
     let plan = StateMigrationPlan::build(&base, &candidate).unwrap();
 
+    // The identical descriptor lets the planner carry the slot and the
+    // whole field region, so the instance's values survive the reorder.
     assert_eq!(
         plan.actions,
-        vec![MigrationAction::Slot {
+        vec![MigrationAction::FbInstance {
             from_index: VarIndex::new(0),
             to_index: VarIndex::new(1),
+            byte_size: 16,
         }]
     );
 }
@@ -337,7 +357,11 @@ fn build_when_no_fb_instance_then_tail_change_is_ignored() {
 }
 
 #[test]
-fn build_when_fb_instance_and_program_prefix_grows_then_fb_layout_unsupported() {
+fn build_when_fb_instance_and_program_prefix_grows_then_copy_slot_and_region() {
+    // The per-instance rule (ADR 0059) no longer keys on the program prefix
+    // size: the type's own descriptor decides whether the instance's layout
+    // is identical, and an added scalar program variable consumes no data
+    // region, so the field region copy stays valid.
     let base = ContainerBuilder::new()
         .shared_globals_size(1)
         .add_user_fb_type(user_fb(0x1000, 2))
@@ -360,9 +384,154 @@ fn build_when_fb_instance_and_program_prefix_grows_then_fb_layout_unsupported() 
         .num_variables(2)
         .build();
 
+    let plan = StateMigrationPlan::build(&base, &candidate).unwrap();
+
+    assert_eq!(
+        plan.actions,
+        vec![MigrationAction::FbInstance {
+            from_index: VarIndex::new(0),
+            to_index: VarIndex::new(0),
+            byte_size: 16,
+        }]
+    );
+}
+
+#[test]
+fn build_when_fb_field_uids_cover_layout_change_then_per_field_copy() {
+    // ADR 0059: the candidate inserts a field at ordinal 1, shifting the
+    // surviving field's ordinal to 2. The field UIDs — not the ordinals —
+    // decide which value continues: uid 101 (base field 0) copies to
+    // candidate field 0, uid 102 (base field 1) copies to candidate field 2,
+    // and uid 103 is candidate-only (no action; the candidate's init image
+    // initializes it).
+    let base = ContainerBuilder::new()
+        .add_user_fb_type(user_fb_at(0x1000, 1, 2))
+        .add_var_entry(fb_entry(0x1000))
+        .add_var_entry(i32_entry())
+        .add_var_entry(i32_entry())
+        .add_fb_field_uid(field_uid(0x1000, 0, 101))
+        .add_fb_field_uid(field_uid(0x1000, 1, 102))
+        .add_stable_var(StableVarEntry {
+            var_index: VarIndex::new(0),
+            uid: 7,
+        })
+        .num_variables(3)
+        .build();
+    let candidate = ContainerBuilder::new()
+        .add_user_fb_type(user_fb_at(0x1000, 1, 3))
+        .add_var_entry(fb_entry(0x1000))
+        .add_var_entry(i32_entry())
+        .add_var_entry(i32_entry())
+        .add_var_entry(i32_entry())
+        .add_fb_field_uid(field_uid(0x1000, 0, 101))
+        .add_fb_field_uid(field_uid(0x1000, 1, 103))
+        .add_fb_field_uid(field_uid(0x1000, 2, 102))
+        .add_stable_var(StableVarEntry {
+            var_index: VarIndex::new(0),
+            uid: 7,
+        })
+        .num_variables(4)
+        .build();
+
+    let plan = StateMigrationPlan::build(&base, &candidate).unwrap();
+
+    assert_eq!(
+        plan.actions,
+        vec![
+            MigrationAction::FbField {
+                from_index: VarIndex::new(0),
+                to_index: VarIndex::new(0),
+                from_field: 0,
+                to_field: 0,
+            },
+            MigrationAction::FbField {
+                from_index: VarIndex::new(0),
+                to_index: VarIndex::new(0),
+                from_field: 1,
+                to_field: 2,
+            },
+        ]
+    );
+}
+
+#[test]
+fn build_when_fb_field_uid_unknown_and_layout_differs_then_fail_closed() {
+    // The candidate's field 2 carries no UID while the layout differs
+    // underneath it: the value's identity is unprovable, so the planner
+    // rejects the whole candidate (ADR 0059's fail-closed rule).
+    let base = ContainerBuilder::new()
+        .add_user_fb_type(user_fb_at(0x1000, 1, 2))
+        .add_var_entry(fb_entry(0x1000))
+        .add_var_entry(i32_entry())
+        .add_var_entry(i32_entry())
+        .add_fb_field_uid(field_uid(0x1000, 0, 101))
+        .add_fb_field_uid(field_uid(0x1000, 1, 102))
+        .add_stable_var(StableVarEntry {
+            var_index: VarIndex::new(0),
+            uid: 7,
+        })
+        .num_variables(3)
+        .build();
+    let candidate = ContainerBuilder::new()
+        .add_user_fb_type(user_fb_at(0x1000, 1, 3))
+        .add_var_entry(fb_entry(0x1000))
+        .add_var_entry(i32_entry())
+        .add_var_entry(i32_entry())
+        .add_var_entry(i32_entry())
+        .add_fb_field_uid(field_uid(0x1000, 0, 101))
+        .add_stable_var(StableVarEntry {
+            var_index: VarIndex::new(0),
+            uid: 7,
+        })
+        .num_variables(4)
+        .build();
+
     let result = StateMigrationPlan::build(&base, &candidate);
 
     assert_eq!(result.unwrap_err(), MigrationError::FbLayoutUnsupported);
+}
+
+#[test]
+fn build_when_shared_fb_field_retyped_then_incompatible_entry() {
+    // A shared field UID whose variable-table entry changed rejects with the
+    // same typed error as a retyped program variable. The candidate also
+    // grows the type so the per-field path (not the identical-descriptor
+    // whole-region path) classifies the field.
+    let base = ContainerBuilder::new()
+        .add_user_fb_type(user_fb_at(0x1000, 1, 1))
+        .add_var_entry(fb_entry(0x1000))
+        .add_var_entry(i32_entry())
+        .add_fb_field_uid(field_uid(0x1000, 0, 101))
+        .add_stable_var(StableVarEntry {
+            var_index: VarIndex::new(0),
+            uid: 7,
+        })
+        .num_variables(2)
+        .build();
+    let candidate = ContainerBuilder::new()
+        .add_user_fb_type(user_fb_at(0x1000, 1, 2))
+        .add_var_entry(fb_entry(0x1000))
+        .add_var_entry(VarEntry {
+            var_type: FieldType::F64,
+            flags: 0,
+            extra: 0,
+        })
+        .add_var_entry(i32_entry())
+        .add_fb_field_uid(field_uid(0x1000, 0, 101))
+        .add_fb_field_uid(field_uid(0x1000, 1, 103))
+        .add_stable_var(StableVarEntry {
+            var_index: VarIndex::new(0),
+            uid: 7,
+        })
+        .num_variables(3)
+        .build();
+
+    let result = StateMigrationPlan::build(&base, &candidate);
+
+    assert!(matches!(
+        result,
+        Err(MigrationError::IncompatibleEntry { uid: 101, .. })
+    ));
 }
 
 /// An FB type descriptor for `type_id` with `fields` I32 fields.
@@ -694,7 +863,7 @@ fn migration_error_display_when_variant_then_names_the_reason() {
     );
     assert_eq!(
         MigrationError::FbLayoutUnsupported.to_string(),
-        "function-block instance layout changed; only rename or reorder edits are supported for FB instances"
+        "function-block instance layout changed and field UIDs cannot justify the change"
     );
     assert_eq!(
         MigrationError::IndexOutOfRange {

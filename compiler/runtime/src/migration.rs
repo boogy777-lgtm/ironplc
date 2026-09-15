@@ -31,18 +31,29 @@
 //!   `element_extra`). Structures are flat arrays of [`FieldType::Slot`] and
 //!   take this path too.
 //!
-//! ## Function-block instances (POC safety rule)
+//! ## Function-block instances (ADR 0059)
 //!
-//! An FB instance's slot holds the offset of its field region, but the field
-//! values themselves are not UID-covered yet: they are addressed through the
-//! type section's FB descriptors. The migration plan therefore copies an FB
-//! instance like a scalar only when the layout after the program prefix is
-//! index-identical: the program prefix size
-//! (`task_table.shared_globals_size`), the user FB descriptors and the FB type
-//! descriptors must match. A candidate that changes any of them while either
-//! container has an FB instance in its stable variable IDs is rejected with
-//! [`MigrationError::FbLayoutUnsupported`] rather than risking a slot that
-//! points at another instance's fields.
+//! An FB instance's slot holds the offset of its field region, and the field
+//! values themselves are addressed through the type section's user FB
+//! descriptors. The type section's FB field UID table gives each field of a
+//! user-defined FB type a stable UID, so the planner no longer needs the
+//! stage-2 POC's global "identical tail layout" rule (ADR 0054) for
+//! user-defined instances. For every shared-UID instance of a user FB type
+//! (a descriptor exists on both sides):
+//!
+//! | Layout | Action |
+//! |---|---|
+//! | Descriptors identical | Copy the slot and the whole field region (`num_fields * 8` bytes) |
+//! | Descriptors differ | Match fields by UID; copy each shared-UID field's 8-byte slot, initialise candidate-only UIDs, drop base-only UIDs |
+//!
+//! A candidate field whose UID is unknown (no entry, or the reserved UID 0)
+//! while the layout differs rejects the whole candidate with
+//! [`MigrationError::FbLayoutUnsupported`] — the value's identity is
+//! unprovable, so the planner fails closed rather than guess. Standard-
+//! library FB instances (TON, ...), which have no user FB descriptor, keep
+//! the stage-2 rule: when any unhandled instance exists on either side, the
+//! layout after the program prefix (program prefix size, user FB descriptors,
+//! FB type descriptors) must be identical.
 //!
 //! ## Applying a plan
 //!
@@ -56,8 +67,9 @@ use std::collections::HashMap;
 use std::vec::Vec;
 
 use ironplc_container::{
-    string_region_size, CharWidth, Container, FbTypeDescriptor, FieldType, StableVarEntry,
-    TypeSection, UserFbDescriptor, VarEntry, VarIndex, VAR_FLAG_IS_ARRAY,
+    string_region_size, CharWidth, Container, FbFieldUidEntry, FbTypeDescriptor, FbTypeId,
+    FieldType, StableVarEntry, TypeSection, UserFbDescriptor, VarEntry, VarIndex,
+    VAR_FLAG_IS_ARRAY,
 };
 use ironplc_vm::VmBuffers;
 
@@ -70,8 +82,10 @@ const STRING_CUR_LENGTH_OFFSET: usize = 2;
 
 /// One copy the migration plan performs at the scan boundary.
 ///
-/// `Slot` covers scalars and, under the FB safety rule, FB instances. The
-/// other variants carry the data-region region size computed at build time.
+/// `Slot` covers scalars. The other variants carry the data-region sizes and
+/// offsets computed at build time; an FB instance takes the whole-region
+/// path only when its type's layout is identical on both sides, and the
+/// per-field path when field UIDs cover the change.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum MigrationAction {
     /// Copy the 8-byte variable slot.
@@ -92,6 +106,23 @@ enum MigrationAction {
         to_index: VarIndex,
         byte_size: u32,
     },
+    /// Copy the slot and the instance's whole field region; used only when
+    /// the instance's type layout is identical on both sides.
+    FbInstance {
+        from_index: VarIndex,
+        to_index: VarIndex,
+        byte_size: u32,
+    },
+    /// Copy one field's 8-byte slot inside the instance's field region,
+    /// base field `from_field` to candidate field `to_field`. The instance's
+    /// own slot is not copied: the candidate's init image already aimed it
+    /// at the candidate's field region.
+    FbField {
+        from_index: VarIndex,
+        to_index: VarIndex,
+        from_field: u8,
+        to_field: u8,
+    },
 }
 
 /// Why a state migration could not be built or applied.
@@ -110,8 +141,9 @@ pub enum MigrationError {
     },
     /// The array descriptor backing the UID changed, or is missing.
     ArrayDescriptorMismatch { uid: u64 },
-    /// An FB instance's tail layout changed; per-field migration is not
-    /// supported yet.
+    /// An FB instance's tail layout changed and field UIDs cannot justify the
+    /// change (a field carries no UID, or the instance is a standard-library
+    /// FB whose layout is not UID-covered).
     FbLayoutUnsupported,
     /// A stable variable ID entry references an index outside the variable
     /// table.
@@ -140,7 +172,7 @@ impl fmt::Display for MigrationError {
             }
             MigrationError::FbLayoutUnsupported => write!(
                 f,
-                "function-block instance layout changed; only rename or reorder edits are supported for FB instances"
+                "function-block instance layout changed and field UIDs cannot justify the change"
             ),
             MigrationError::IndexOutOfRange { index } => {
                 write!(f, "variable index {index} is out of range")
@@ -190,6 +222,10 @@ impl StateMigrationPlan {
         index_by_uid(candidate_stable)?;
 
         let mut actions = Vec::new();
+        // Shared-UID instances of user FB types are planned per type below,
+        // not by the per-variable classification: their slot's entry can be
+        // identical while the field layout behind it changed.
+        let mut fb_instances: Vec<(VarIndex, VarIndex)> = Vec::new();
         for entry in candidate_stable {
             let to_index = entry.var_index;
             let candidate_var = variable_at(candidate_variables, to_index)?;
@@ -205,6 +241,14 @@ impl StateMigrationPlan {
                     reason: entry_difference(base_var, candidate_var),
                 });
             }
+            if candidate_var.var_type == FieldType::FbInstance
+                && user_fb_descriptor(base_section, FbTypeId::new(candidate_var.extra)).is_some()
+                && user_fb_descriptor(candidate_section, FbTypeId::new(candidate_var.extra))
+                    .is_some()
+            {
+                fb_instances.push((from_index, to_index));
+                continue;
+            }
             actions.push(copy_action(
                 entry.uid,
                 from_index,
@@ -215,7 +259,14 @@ impl StateMigrationPlan {
             )?);
         }
 
-        check_fb_safety(base, candidate, base_stable, candidate_stable)?;
+        plan_fb_instances(
+            &mut actions,
+            base,
+            candidate,
+            base_stable,
+            candidate_stable,
+            &fb_instances,
+        )?;
 
         Ok(StateMigrationPlan { actions })
     }
@@ -255,6 +306,25 @@ impl StateMigrationPlan {
                     byte_size,
                 } => {
                     copy_data_region(base, candidate, from_index, to_index, byte_size, None)?;
+                }
+                MigrationAction::FbInstance {
+                    from_index,
+                    to_index,
+                    byte_size,
+                } => {
+                    // Identical field layout: the region copy carries every
+                    // field value, and the slot copy carries the region
+                    // offset (equal on both sides, so a self-copy when the
+                    // offsets match).
+                    copy_data_region(base, candidate, from_index, to_index, byte_size, None)?;
+                }
+                MigrationAction::FbField {
+                    from_index,
+                    to_index,
+                    from_field,
+                    to_field,
+                } => {
+                    copy_fb_field(base, candidate, from_index, to_index, from_field, to_field)?;
                 }
             }
         }
@@ -384,49 +454,182 @@ fn array_action(
     })
 }
 
-/// Enforces the FB instance safety rule (see the module documentation).
-fn check_fb_safety(
+/// Plans the copies for shared-UID FB instances of user FB types and enforces
+/// the fallback rule for everything else (see the module documentation).
+///
+/// `instances` holds `(base index, candidate index)` pairs for the
+/// shared-UID instances whose type has a user FB descriptor on both sides;
+/// every other FB instance named by either stable table (standard-library
+/// instances, instances only one side has) makes the planner fall back to
+/// the stage-2 rule: the layout after the program prefix must be identical.
+fn plan_fb_instances(
+    actions: &mut Vec<MigrationAction>,
     base: &Container,
     candidate: &Container,
     base_stable: &[StableVarEntry],
     candidate_stable: &[StableVarEntry],
+    instances: &[(VarIndex, VarIndex)],
 ) -> Result<(), MigrationError> {
     let base_section = base.type_section.as_ref();
     let candidate_section = candidate.type_section.as_ref();
+    let base_variables = variable_table(base_section);
+    let candidate_variables = variable_table(candidate_section);
 
-    let base_has_instance = has_fb_instance(base_stable, variable_table(base_section))?;
-    let candidate_has_instance =
-        has_fb_instance(candidate_stable, variable_table(candidate_section))?;
-    if !base_has_instance && !candidate_has_instance {
-        return Ok(());
+    let mut handled: Vec<(VarIndex, VarIndex)> = Vec::with_capacity(instances.len());
+    for &(from_index, to_index) in instances {
+        let type_id = FbTypeId::new(variable_at(candidate_variables, to_index)?.extra);
+        let (Some(base_descriptor), Some(candidate_descriptor)) = (
+            user_fb_descriptor(base_section, type_id),
+            user_fb_descriptor(candidate_section, type_id),
+        ) else {
+            return Err(MigrationError::FbLayoutUnsupported);
+        };
+        handled.push((from_index, to_index));
+
+        if base_descriptor == candidate_descriptor {
+            // Identical layout: carry the slot and the whole field region.
+            // The descriptor comparison covers var_offset and num_fields, so
+            // both sides agree on where the region lives and how big it is.
+            actions.push(MigrationAction::FbInstance {
+                from_index,
+                to_index,
+                byte_size: u32::from(candidate_descriptor.num_fields)
+                    .checked_mul(ironplc_container::SLOT_BYTES)
+                    .ok_or(MigrationError::FbLayoutUnsupported)?,
+            });
+            continue;
+        }
+
+        // The layout differs: match the type's fields by UID (ADR 0059).
+        let base_fields = field_uid_indexes(base_section, type_id)?;
+        let candidate_fields = field_uid_indexes(candidate_section, type_id)?;
+        for field_index in 0..candidate_descriptor.num_fields {
+            let Some(&field_uid) = candidate_fields.by_index.get(&field_index) else {
+                // The field carries no UID (or the reserved UID 0) while
+                // the layout differs: the value's identity is unprovable,
+                // so the planner fails closed.
+                return Err(MigrationError::FbLayoutUnsupported);
+            };
+            let Some(&from_field) = base_fields.by_uid.get(&field_uid) else {
+                // A candidate-only field UID is a new entity; the
+                // candidate's init image has already initialized it.
+                continue;
+            };
+            let base_field = variable_at(
+                base_variables,
+                VarIndex::new(base_descriptor.var_offset + u16::from(from_field)),
+            )?;
+            let candidate_field = variable_at(
+                candidate_variables,
+                VarIndex::new(candidate_descriptor.var_offset + u16::from(field_index)),
+            )?;
+            if base_field != candidate_field {
+                return Err(MigrationError::IncompatibleEntry {
+                    uid: field_uid,
+                    reason: entry_difference(base_field, candidate_field),
+                });
+            }
+            actions.push(MigrationAction::FbField {
+                from_index,
+                to_index,
+                from_field,
+                to_field: field_index,
+            });
+        }
     }
 
-    if base.task_table.shared_globals_size != candidate.task_table.shared_globals_size
-        || !same_user_fb_descriptors(
-            user_fb_descriptors(base_section),
-            user_fb_descriptors(candidate_section),
-        )
-        || !same_fb_descriptors(
-            fb_descriptors(base_section),
-            fb_descriptors(candidate_section),
-        )
+    // Any shared instance the per-field path did not take over — a
+    // standard-library FB, or one whose descriptor exists on only one side —
+    // falls back to the stage-2 rule: nothing above can match its internals,
+    // so the post-prefix layout must be identical for a copy to be safe.
+    // Instances only one stable table names need no fallback: a base-only
+    // instance is dropped with the old buffers and a candidate-only one is
+    // initialized by the candidate's init image, so no copy references
+    // either.
+    if has_unhandled_shared_instance(base_stable, base_variables, candidate_stable, &handled)?
+        && (base.task_table.shared_globals_size != candidate.task_table.shared_globals_size
+            || !same_user_fb_descriptors(
+                user_fb_descriptors(base_section),
+                user_fb_descriptors(candidate_section),
+            )
+            || !same_fb_descriptors(
+                fb_descriptors(base_section),
+                fb_descriptors(candidate_section),
+            ))
     {
         return Err(MigrationError::FbLayoutUnsupported);
     }
     Ok(())
 }
 
-/// Whether any stable variable ID names an FB instance.
-fn has_fb_instance(
-    stable: &[StableVarEntry],
-    variables: &[VarEntry],
+/// Whether a UID both stable tables share names an FB instance the per-field
+/// path did not take over (see [`plan_fb_instances`]). `handled` holds the
+/// `(base index, candidate index)` pairs the per-field path planned; the
+/// base side of each pair is enough to recognize a shared instance.
+fn has_unhandled_shared_instance(
+    base_stable: &[StableVarEntry],
+    base_variables: &[VarEntry],
+    candidate_stable: &[StableVarEntry],
+    handled: &[(VarIndex, VarIndex)],
 ) -> Result<bool, MigrationError> {
-    for entry in stable {
-        if variable_at(variables, entry.var_index)?.var_type == FieldType::FbInstance {
+    let candidate_uids: HashMap<u64, VarIndex> = candidate_stable
+        .iter()
+        .map(|entry| (entry.uid, entry.var_index))
+        .collect();
+    for entry in base_stable {
+        let Some(&candidate_index) = candidate_uids.get(&entry.uid) else {
+            continue;
+        };
+        if variable_at(base_variables, entry.var_index)?.var_type == FieldType::FbInstance
+            && !handled
+                .iter()
+                .any(|(base, candidate)| *base == entry.var_index && *candidate == candidate_index)
+        {
             return Ok(true);
         }
     }
     Ok(false)
+}
+
+/// UID → field index and field index → UID maps for one FB type's entries in
+/// the type section's FB field UID table. UID 0 is reserved (the UID sidecar
+/// never assigns it) and excluded: an entry carrying it is treated as no
+/// UID. A UID bound twice is a corrupt table.
+struct FieldUidIndexes {
+    by_uid: HashMap<u64, u8>,
+    by_index: HashMap<u8, u64>,
+}
+
+fn field_uid_indexes(
+    section: Option<&TypeSection>,
+    type_id: FbTypeId,
+) -> Result<FieldUidIndexes, MigrationError> {
+    let mut by_uid = HashMap::new();
+    let mut by_index = HashMap::new();
+    for entry in fb_field_uids(section) {
+        if entry.fb_type_id == type_id && entry.uid != 0 {
+            if by_uid.insert(entry.uid, entry.field_index).is_some() {
+                return Err(MigrationError::DuplicateUid { uid: entry.uid });
+            }
+            by_index.insert(entry.field_index, entry.uid);
+        }
+    }
+    Ok(FieldUidIndexes { by_uid, by_index })
+}
+
+/// The FB field UID table, or an empty slice without a type section.
+fn fb_field_uids(section: Option<&TypeSection>) -> &[FbFieldUidEntry] {
+    section.map_or(&[], |section| section.fb_field_uids.as_slice())
+}
+
+/// The user FB descriptor for `type_id`, if the type section carries one.
+fn user_fb_descriptor(
+    section: Option<&TypeSection>,
+    type_id: FbTypeId,
+) -> Option<&UserFbDescriptor> {
+    user_fb_descriptors(section)
+        .iter()
+        .find(|descriptor| descriptor.type_id == type_id)
 }
 
 /// The user FB descriptors, or an empty slice without a type section.
@@ -515,6 +718,52 @@ fn copy_data_region(
     copy_slot(base, candidate, from_index, to_index)?;
     candidate.data_region[target_span].copy_from_slice(&base.data_region[source_span]);
     Ok(())
+}
+
+/// Copies one 8-byte field between the instances' field regions.
+///
+/// Each instance's slot holds its field region's byte offset, so the copy
+/// resolves both sides through their own slot and moves the single field
+/// the planner matched by UID. The instance slots themselves are left alone:
+/// the candidate's init image already aimed its slot at the candidate's
+/// field region, which is where the copied bytes land.
+fn copy_fb_field(
+    base: &VmBuffers,
+    candidate: &mut VmBuffers,
+    from_index: VarIndex,
+    to_index: VarIndex,
+    from_field: u8,
+    to_field: u8,
+) -> Result<(), MigrationError> {
+    let source = field_span(base, from_index, from_field)?;
+    let target = field_span(candidate, to_index, to_field)?;
+    candidate.data_region[target].copy_from_slice(&base.data_region[source]);
+    Ok(())
+}
+
+/// Resolves the 8-byte span one field occupies inside an instance's field
+/// region, through the instance's slot.
+fn field_span(
+    buffers: &VmBuffers,
+    index: VarIndex,
+    field: u8,
+) -> Result<core::ops::Range<usize>, MigrationError> {
+    let slot = buffers
+        .vars
+        .get(usize::from(index.raw()))
+        .ok_or(MigrationError::IndexOutOfRange { index })?;
+    // The slot carries the region offset as an i32 (codegen stores
+    // `data_offset as i32` and checks it fits); anything else is corrupt.
+    let start =
+        u32::try_from(slot.as_i64()).map_err(|_| MigrationError::RegionOutOfRange { index })?;
+    let start = start as usize + usize::from(field) * ironplc_container::SLOT_BYTES as usize;
+    let end = start
+        .checked_add(ironplc_container::SLOT_BYTES as usize)
+        .ok_or(MigrationError::RegionOutOfRange { index })?;
+    if end > buffers.data_region.len() {
+        return Err(MigrationError::RegionOutOfRange { index });
+    }
+    Ok(start..end)
 }
 
 /// Resolves the data-region region a variable's slot points to.

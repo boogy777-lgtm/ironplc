@@ -20,7 +20,7 @@
 
 mod common;
 
-use common::{compile_with_ids, variable_index};
+use common::{compile_with_ids, compile_with_uid_keys, variable_index};
 use ironplc_runtime::{HostMode, MigrationError, OnlineChangeError, RuntimeHost};
 
 #[test]
@@ -455,6 +455,158 @@ END_PROGRAM
             MigrationError::FbLayoutUnsupported
         ))
     ));
+    host.run(1, || 0).unwrap();
+    assert_eq!(host.read_variable(total).unwrap(), 3);
+}
+
+#[test]
+fn run_when_fb_field_inserted_in_middle_with_uids_then_existing_field_values_follow() {
+    // ADR 0059: the field UIDs, not the field positions, decide which value
+    // continues. `extra` is declared between `step` and `total`, so the
+    // candidate's `total` sits at a new ordinal; its UID must carry the
+    // running value there.
+    let base = compile_with_uid_keys(
+        "FUNCTION_BLOCK Accumulator
+  VAR_INPUT
+    step : DINT;
+  END_VAR
+  VAR
+    total : DINT;
+  END_VAR
+  total := total + step;
+END_FUNCTION_BLOCK
+
+PROGRAM main
+  VAR
+    acc : Accumulator;
+  END_VAR
+  acc(step := 1);
+END_PROGRAM
+",
+        &[
+            ("main", "acc", 1),
+            ("Accumulator", "step", 101),
+            ("Accumulator", "total", 102),
+        ],
+    );
+    let total = variable_index(&base, "total");
+    let mut host = RuntimeHost::new(base).unwrap();
+    host.run(2, || 0).unwrap();
+    assert_eq!(host.read_variable(total).unwrap(), 2);
+
+    let candidate = compile_with_uid_keys(
+        "FUNCTION_BLOCK Accumulator
+  VAR_INPUT
+    step : DINT;
+  END_VAR
+  VAR
+    extra : DINT;
+    total : DINT;
+  END_VAR
+  total := total + step;
+END_FUNCTION_BLOCK
+
+PROGRAM main
+  VAR
+    acc : Accumulator;
+  END_VAR
+  acc(step := 1);
+END_PROGRAM
+",
+        // `extra` is a new entity with a fresh UID; the surviving fields
+        // keep theirs.
+        &[
+            ("main", "acc", 1),
+            ("Accumulator", "step", 101),
+            ("Accumulator", "extra", 103),
+            ("Accumulator", "total", 102),
+        ],
+    );
+    let total = variable_index(&candidate, "total");
+    let extra = variable_index(&candidate, "extra");
+
+    host.stage(candidate).unwrap();
+    assert!(host.status().migration);
+    host.test().unwrap();
+    host.run(1, || 0).unwrap();
+
+    // total carried 2 across the ordinal shift and kept accumulating;
+    // extra is a candidate-only entity, so the candidate's init image (a
+    // zeroed field region) is what it starts from.
+    assert_eq!(host.read_variable(total).unwrap(), 3);
+    assert_eq!(host.read_variable(extra).unwrap(), 0);
+}
+
+#[test]
+fn stage_when_fb_layout_changes_and_field_uid_missing_then_fail_closed() {
+    // The candidate drops `total`'s UID while changing the layout: the
+    // value's identity is unprovable, so the planner must reject rather
+    // than guess (ADR 0059's fail-closed rule).
+    let base = compile_with_uid_keys(
+        "FUNCTION_BLOCK Accumulator
+  VAR_INPUT
+    step : DINT;
+  END_VAR
+  VAR
+    total : DINT;
+  END_VAR
+  total := total + step;
+END_FUNCTION_BLOCK
+
+PROGRAM main
+  VAR
+    acc : Accumulator;
+  END_VAR
+  acc(step := 1);
+END_PROGRAM
+",
+        &[
+            ("main", "acc", 1),
+            ("Accumulator", "step", 101),
+            ("Accumulator", "total", 102),
+        ],
+    );
+    let total = variable_index(&base, "total");
+    let mut host = RuntimeHost::new(base).unwrap();
+    host.run(2, || 0).unwrap();
+
+    let candidate = compile_with_uid_keys(
+        "FUNCTION_BLOCK Accumulator
+  VAR_INPUT
+    step : DINT;
+  END_VAR
+  VAR
+    extra : DINT;
+    total : DINT;
+  END_VAR
+  total := total + step;
+END_FUNCTION_BLOCK
+
+PROGRAM main
+  VAR
+    acc : Accumulator;
+  END_VAR
+  acc(step := 1);
+END_PROGRAM
+",
+        // `total` has no UID on the candidate side even though the layout
+        // changed underneath it.
+        &[
+            ("main", "acc", 1),
+            ("Accumulator", "step", 101),
+            ("Accumulator", "extra", 103),
+        ],
+    );
+
+    let result = host.stage(candidate);
+
+    assert!(matches!(
+        result,
+        Err(OnlineChangeError::MigrationUnsupported(
+            MigrationError::FbLayoutUnsupported
+        ))
+    ));
+    // The rejection leaves the running application untouched.
     host.run(1, || 0).unwrap();
     assert_eq!(host.read_variable(total).unwrap(), 3);
 }

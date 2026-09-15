@@ -132,7 +132,7 @@ mod tests {
         assert_eq!(
             OnlineChangeError::MigrationUnsupported(MigrationError::FbLayoutUnsupported)
                 .to_string(),
-            "candidate state cannot be migrated: function-block instance layout changed; only rename or reorder edits are supported for FB instances"
+            "candidate state cannot be migrated: function-block instance layout changed and field UIDs cannot justify the change"
         );
         assert_eq!(
             OnlineChangeError::UntestUnsupported.to_string(),
