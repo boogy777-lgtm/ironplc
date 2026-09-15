@@ -6,6 +6,7 @@ use clap::Parser;
 mod cli;
 mod error;
 mod logger;
+mod serve;
 
 #[cfg(test)]
 mod spec_requirements {
@@ -70,6 +71,11 @@ enum Action {
     },
     /// Prints the version number of the virtual machine.
     Version,
+    /// Loads a bytecode container file and serves hot-edit commands on stdin/stdout.
+    Serve {
+        /// Path to the bytecode container file (.iplc).
+        file: PathBuf,
+    },
 }
 
 pub fn main() -> ExitCode {
@@ -90,6 +96,7 @@ pub fn main() -> ExitCode {
             println!("ironplcvm version {VERSION}");
             Ok(())
         }
+        Action::Serve { file } => serve::serve(&file),
     });
 
     match result {

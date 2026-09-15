@@ -94,6 +94,28 @@ ironplcvm version
 
 Output: `ironplcvm version <VERSION>` followed by a newline on stdout.
 
+#### `serve`
+
+Loads a bytecode container file into the runtime host and serves the
+hot-edit command protocol (ADR-0052, ADR-0055) on stdin/stdout until EOF.
+
+```
+ironplcvm serve <FILE>
+```
+
+**Behavior:**
+
+- **REQ-VC-vm-cli-018** `serve` loads `<FILE>` exactly like `run`: a file that cannot be opened exits 2 with V6001, and bytes that are not a container exit 2 with V6002. The container starts on the runtime host (its init functions run once); a trap during init exits 1 with the trap's V-code.
+- **REQ-VC-vm-cli-019** After startup, `serve` reads one command line from stdin, executes it through the runtime command layer, and writes exactly one response line to stdout, flushing after every line. Startup prints nothing to stdout; stdout carries response lines only.
+- **REQ-VC-vm-cli-020** A line that does not parse as a command is a codec error, not an online change refusal, so it has no V-code (ADR-0055). The session answers it with one error line whose `vCode` is null, logs the diagnostic to stderr, and continues.
+- **REQ-VC-vm-cli-021** When stdin reaches EOF, the session ends and the command exits 0.
+- **REQ-VC-vm-cli-022** A failure reading stdin or writing stdout ends the session: the command exits 2 and emits V6011 to stderr.
+
+The session is a pure command channel: it drives no scan rounds, so a
+`testEdits`/`untestEdits` swap — applied at the next scan boundary — stays
+pending for the whole session, and commands issued while a swap is pending are
+refused with the protocol's usual V-codes.
+
 ## Variable Dump Format
 
 The `--dump-vars [PATH]` option writes all variable slot values after the VM stops (successfully or from a fault).

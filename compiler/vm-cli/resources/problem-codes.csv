@@ -9,3 +9,4 @@ V6007,LogConfig,Unable to configure the logger
 V6008,LaunchArgumentInvalid,Launch request argument is missing or out of range
 V6009,LaunchNoDebugInfo,Container was compiled without debug information
 V6010,LaunchMultiInstance,Container declares multiple program instances
+V6011,SessionIo,Unable to read or write the command session

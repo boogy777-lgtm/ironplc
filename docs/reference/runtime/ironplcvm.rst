@@ -80,6 +80,24 @@ Commands
 :program:`ironplcvm version`
    Print the version number of the virtual machine.
 
+:program:`ironplcvm serve` *FILE*
+   Load a bytecode container (``.iplc``) file into the runtime host and serve
+   the hot-edit command protocol on stdin/stdout until EOF. One line of
+   stdin carries one command; one line of stdout carries one response,
+   flushed after every line. Startup prints nothing to stdout — the stream
+   carries protocol lines only, so the session is safe to script.
+
+   Commands are the hot-edit protocol commands: ``getStatus``, ``acceptEdits``
+   (the compiled container as a JSON array of byte values), ``testEdits``,
+   ``untestEdits``, ``assembleEdits`` and ``cancelEdits``. Responses are JSON:
+   an acknowledgment, a status payload, or an error carrying a stable
+   ``vCode`` and ``message``. A line that does not parse as a command is
+   answered with an error line whose ``vCode`` is null — codec errors carry
+   no V-code. The session drives no scan rounds: a ``testEdits`` or
+   ``untestEdits`` acknowledgment records a swap that applies at the next
+   scan boundary, so commands issued while a swap is pending are refused
+   with the protocol's usual V-codes.
+
 Options
 =======
 
@@ -110,6 +128,12 @@ Examples
    .. code-block:: shell
 
       ironplcvm -vv run main.iplc
+
+4. Serve a program to a scripted hot-edit session:
+
+   .. code-block:: shell
+
+      ironplcvm serve main.iplc
 
 See Also
 ========
