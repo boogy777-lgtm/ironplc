@@ -20,6 +20,7 @@ import {
   IronplcDebugConfigurationProvider,
 } from './debugAdapter';
 import { registerCustomRequests } from './customRequests';
+import { registerHotEditSupport } from './hotEdit';
 import { sourceExtensionsFromLanguages } from './debugAdapterLogic';
 
 /**
@@ -134,6 +135,17 @@ export function activate(context: vscode.ExtensionContext) {
       + '" (source: ' + result.source + ')',
     );
   }
+
+  // Single source of truth for the source extensions: the extension's own
+  // `contributes.languages` declarations, so new dialects need no code change.
+  const languages = context.extension.packageJSON?.contributes?.languages ?? [];
+  const sourceExtensions = sourceExtensionsFromLanguages(languages);
+
+  // Hot-edit commands register unconditionally (like the run commands) so they
+  // exist even without a compiler; they report a coded problem when the
+  // compiler or the VM is missing.
+  registerHotEditSupport(context, result?.path, sourceExtensions, showProblem);
+
   if (!result) {
     vscode.window.showErrorMessage(
       formatProblem(ProblemCode.NoCompiler, 'IronPLC is not installed or not configured.'),
@@ -151,7 +163,7 @@ export function activate(context: vscode.ExtensionContext) {
     ),
   );
 
-  registerDebugSupport(context, result.path);
+  registerDebugSupport(context, result.path, sourceExtensions);
 
   const config = vscode.workspace.getConfiguration('ironplc');
   client = createClient(result.path, config);
@@ -296,16 +308,15 @@ function registerRunSupport(context: vscode.ExtensionContext) {
  * that spawns the `ironplcvmd` debug server (resolved from the compiler's
  * directory).
  */
-function registerDebugSupport(context: vscode.ExtensionContext, compilerPath: string) {
+function registerDebugSupport(
+  context: vscode.ExtensionContext,
+  compilerPath: string,
+  sourceExtensions: readonly string[],
+) {
   const compilerDir = path.dirname(compilerPath);
 
   const log = vscode.window.createOutputChannel('IronPLC Debug');
   context.subscriptions.push(log);
-
-  // Single source of truth for the source extensions: the extension's own
-  // `contributes.languages` declarations, so new dialects need no code change.
-  const languages = context.extension.packageJSON?.contributes?.languages ?? [];
-  const sourceExtensions = sourceExtensionsFromLanguages(languages);
 
   context.subscriptions.push(
     vscode.debug.registerDebugConfigurationProvider(

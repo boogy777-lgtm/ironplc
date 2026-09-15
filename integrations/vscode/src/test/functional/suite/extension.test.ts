@@ -80,6 +80,21 @@ suite('Extension Test Suite', () => {
     assert.ok(commands.includes('ironplc.stepScan'));
   });
 
+  for (const id of [
+    'ironplc.startHotEditSession',
+    'ironplc.acceptEdits',
+    'ironplc.testEdits',
+    'ironplc.untestEdits',
+    'ironplc.assembleEdits',
+    'ironplc.cancelEdits',
+    'ironplc.showHotEditStatus',
+  ]) {
+    test(`${id} command is registered`, async () => {
+      const commands = await vscode.commands.getCommands(true);
+      assert.ok(commands.includes(id));
+    });
+  }
+
   test('does not detect non-ST extension as 61131-3-st', async () => {
     const filePath = testResourcePath('invalid-ext.notst');
     const textDocument = await vscode.workspace.openTextDocument(filePath);

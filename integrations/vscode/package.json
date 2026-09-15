@@ -67,6 +67,41 @@
         "title": "Step Scan Cycle",
         "category": "IronPLC",
         "icon": "$(debug-step-over)"
+      },
+      {
+        "command": "ironplc.startHotEditSession",
+        "title": "Start Session",
+        "category": "IronPLC Hot Edit"
+      },
+      {
+        "command": "ironplc.acceptEdits",
+        "title": "Accept Edits",
+        "category": "IronPLC Hot Edit"
+      },
+      {
+        "command": "ironplc.testEdits",
+        "title": "Test Edits",
+        "category": "IronPLC Hot Edit"
+      },
+      {
+        "command": "ironplc.untestEdits",
+        "title": "Untest Edits",
+        "category": "IronPLC Hot Edit"
+      },
+      {
+        "command": "ironplc.assembleEdits",
+        "title": "Assemble Edits",
+        "category": "IronPLC Hot Edit"
+      },
+      {
+        "command": "ironplc.cancelEdits",
+        "title": "Cancel Edits",
+        "category": "IronPLC Hot Edit"
+      },
+      {
+        "command": "ironplc.showHotEditStatus",
+        "title": "Show Status",
+        "category": "IronPLC Hot Edit"
       }
     ],
     "menus": {
