@@ -88,8 +88,8 @@ export function registerHotEditSupport(
     const vmPath = path.join(compilerDir, vmFileName(process.platform));
     if (!existsSync(vmPath)) {
       reportProblem(
-        ProblemCode.NoCompiler,
-        `The IronPLC VM (${vmFileName(process.platform)}) was not found next to the compiler at "${compilerDir}".`,
+        ProblemCode.VmNotFound,
+        `Install the IronPLC VM so ${vmFileName(process.platform)} sits next to the compiler at "${compilerDir}".`,
       );
       return;
     }
@@ -264,7 +264,7 @@ export function registerHotEditSupport(
   function reportCompileFailure(source: string, err: unknown): void {
     const detail = err instanceof Error ? err.message : String(err);
     reportProblem(
-      ProblemCode.DebugCompileFailed,
+      ProblemCode.CompileFailed,
       `${source}: ${detail} (see the "IronPLC Hot Edit" output for details).`,
     );
   }

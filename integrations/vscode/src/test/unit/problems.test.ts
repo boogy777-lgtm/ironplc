@@ -14,8 +14,12 @@ suite('ProblemCode', () => {
   test('ProblemCode_when_debug_codes_accessed_then_returns_expected_codes', () => {
     assert.strictEqual(ProblemCode.DebugNoProgram, 'E0004');
     assert.strictEqual(ProblemCode.DebugProgramNotDebuggable, 'E0005');
-    assert.strictEqual(ProblemCode.DebugCompileFailed, 'E0006');
+    assert.strictEqual(ProblemCode.CompileFailed, 'E0006');
     assert.strictEqual(ProblemCode.DebugServerNotFound, 'E0007');
+  });
+
+  test('ProblemCode_when_hot_edit_codes_accessed_then_returns_expected_codes', () => {
+    assert.strictEqual(ProblemCode.VmNotFound, 'E0008');
   });
 
   test('PROBLEM_MESSAGES_when_debug_server_not_found_then_names_the_binary', () => {
@@ -67,13 +71,18 @@ suite('formatProblem', () => {
     assert.strictEqual(result, 'E0003 - Failed to disassemble .iplc bytecode file. connection lost');
   });
 
-  test('formatProblem_when_debug_compile_failed_then_includes_code_and_detail', () => {
-    const result = formatProblem(ProblemCode.DebugCompileFailed, 'main.st: P0001 undeclared X.');
-    assert.strictEqual(result, 'E0006 - Failed to compile the program for debugging. main.st: P0001 undeclared X.');
+  test('formatProblem_when_compile_failed_then_includes_code_and_detail', () => {
+    const result = formatProblem(ProblemCode.CompileFailed, 'main.st: P0001 undeclared X.');
+    assert.strictEqual(result, 'E0006 - Failed to compile the program. main.st: P0001 undeclared X.');
   });
 
   test('formatProblem_when_debug_server_not_found_then_includes_code', () => {
     const result = formatProblem(ProblemCode.DebugServerNotFound);
     assert.strictEqual(result, `E0007 - IronPLC debug server (${DEBUG_SERVER_BINARY}) not found`);
+  });
+
+  test('formatProblem_when_vm_not_found_then_names_the_binary', () => {
+    const result = formatProblem(ProblemCode.VmNotFound);
+    assert.strictEqual(result, 'E0008 - IronPLC virtual machine (ironplcvm) not found next to the compiler');
   });
 });

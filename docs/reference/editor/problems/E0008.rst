@@ -1,0 +1,25 @@
+=====
+E0008
+=====
+
+.. problem-summary:: E0008
+
+The IronPLC virtual machine (:program:`ironplcvm`) could not be found next
+to the compiler.
+
+A hot edit session runs your program inside :program:`ironplcvm` in a served
+command session. The extension looks for the VM executable in the same
+directory as the discovered :program:`ironplcc` compiler, so an installation
+that ships the compiler without the VM has nothing to start a session with.
+
+**Solutions**:
+
+1. **Reinstall the IronPLC tools**: Official installers place
+   :program:`ironplcvm` (:program:`ironplcvm.exe` on Windows) in the same
+   directory as :program:`ironplcc`. Reinstall so both executables sit
+   together.
+
+2. **Point the setting at the real install**: If the compiler was found
+   through the ``ironplc.path`` setting aimed at a copied or partial
+   directory, set it to the installation directory that contains both
+   executables.

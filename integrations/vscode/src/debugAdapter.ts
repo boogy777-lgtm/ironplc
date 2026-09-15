@@ -116,7 +116,7 @@ implements vscode.DebugConfigurationProvider {
       this.log.appendLine(`Compilation failed (exit ${result.code}). The program must compile on its own — a file that references POUs or types from other files will not compile in isolation.`);
       this.log.show(true);
       const detail = firstLine(result.stderr) || firstLine(result.stdout) || `compiler exited with ${result.code}`;
-      this.reportProblem(ProblemCode.DebugCompileFailed, `${program}: ${detail} (see the "IronPLC Debug" output for details).`);
+      this.reportProblem(ProblemCode.CompileFailed, `${program}: ${detail} (see the "IronPLC Debug" output for details).`);
       return undefined;
     }
 
