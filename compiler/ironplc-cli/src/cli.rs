@@ -148,7 +148,10 @@ pub fn compile(
 /// The report lists preserved, assigned, and removed keys plus rename and
 /// swap candidates; the candidates are heuristics the user resolves
 /// explicitly with [`map_uid`]. A clean analysis is required: a broken
-/// project must not rewrite the sidecar.
+/// project must not rewrite the sidecar. A report with unresolved candidates
+/// must not rewrite it either: saving would drop the removed keys, leaving
+/// nothing for `map-uid` to move, so the sidecar is persisted only when the
+/// reconciliation is unambiguous.
 pub fn sync_uids(
     paths: &[PathBuf],
     compiler_options: CompilerOptions,
@@ -184,9 +187,12 @@ pub fn sync_uids(
         }
     };
     let report = sidecar.sync(&declared_var_keys(library));
-    if let Err(err) = sidecar.save(&sidecar_path) {
-        diagnostics.push(err);
-        return finish("Sync UIDs", diagnostics, Some(&project), suppress_output);
+    let has_candidates = !report.rename_candidates.is_empty() || !report.swap_candidates.is_empty();
+    if !has_candidates {
+        if let Err(err) = sidecar.save(&sidecar_path) {
+            diagnostics.push(err);
+            return finish("Sync UIDs", diagnostics, Some(&project), suppress_output);
+        }
     }
 
     print!("{report}");
@@ -561,6 +567,7 @@ mod tests {
         cli::check, cli::compile, cli::map_uid, cli::sync_uids, cli::tokenize,
         test_helpers::resource_path,
     };
+    use ironplc_project::sidecar::Sidecar;
 
     // The plain valid/syntax-error/semantic-error outcomes of check, echo,
     // tokenize, and compile against the shared fixtures are asserted by the
@@ -917,6 +924,56 @@ mod tests {
 
         assert!(result.is_err());
         assert!(!ironplc_project::sidecar_path_for(&dir).unwrap().exists());
+    }
+
+    #[test]
+    fn sync_uids_when_rename_candidate_then_sidecar_unchanged() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let dir = project_dir_with_counter(&temp, "proj");
+        sync_uids(std::slice::from_ref(&dir), CompilerOptions::default(), true).unwrap();
+        let sidecar_path = ironplc_project::sidecar_path_for(&dir).unwrap();
+        let before = std::fs::read_to_string(&sidecar_path).unwrap();
+
+        // Rename in the source: the next sync reports a rename candidate
+        // but must not persist it — saving would drop the removed key and
+        // leave nothing for `map-uid` to move.
+        std::fs::write(
+            dir.join("main.st"),
+            "PROGRAM main VAR Ticks : INT; END_VAR Ticks := 1; END_PROGRAM",
+        )
+        .unwrap();
+        let result = sync_uids(std::slice::from_ref(&dir), CompilerOptions::default(), true);
+
+        assert!(result.is_ok(), "unexpected error: {:?}", result.err());
+        let after = std::fs::read_to_string(&sidecar_path).unwrap();
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn sync_uids_when_candidate_resolved_with_map_uid_then_uid_preserved() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let dir = project_dir_with_counter(&temp, "proj");
+        sync_uids(std::slice::from_ref(&dir), CompilerOptions::default(), true).unwrap();
+
+        // The full resolution flow: sync reports the candidate without
+        // rewriting the sidecar, `map-uid` moves the UID, and the re-sync
+        // persists the moved UID as preserved.
+        std::fs::write(
+            dir.join("main.st"),
+            "PROGRAM main VAR Ticks : INT; END_VAR Ticks := 1; END_PROGRAM",
+        )
+        .unwrap();
+        sync_uids(std::slice::from_ref(&dir), CompilerOptions::default(), true).unwrap();
+        map_uid(&dir, "main", "Counter", "main", "Ticks").unwrap();
+        let result = sync_uids(std::slice::from_ref(&dir), CompilerOptions::default(), true);
+
+        assert!(result.is_ok(), "unexpected error: {:?}", result.err());
+        let sidecar = Sidecar::load(&ironplc_project::sidecar_path_for(&dir).unwrap()).unwrap();
+        let entries: Vec<(String, u64)> = sidecar
+            .entries()
+            .map(|(key, uid)| (key.name().to_string(), uid))
+            .collect();
+        assert_eq!(entries, vec![(String::from("Ticks"), 1)]);
     }
 
     #[test]

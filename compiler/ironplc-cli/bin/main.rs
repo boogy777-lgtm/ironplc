@@ -407,7 +407,9 @@ enum RefactorAction {
     /// Reconcile the stable variable UID sidecar with the project's
     /// declarations: new variables are assigned UIDs, removed variables are
     /// dropped, and rename/swap candidates are reported for the user to
-    /// resolve with `refactor map-uid`.
+    /// resolve with `refactor map-uid`. When candidates are reported the
+    /// sidecar is left unchanged so the resolution stays possible; it is
+    /// rewritten only by an unambiguous sync.
     SyncUids {
         #[command(flatten)]
         file_args: FileArgs,

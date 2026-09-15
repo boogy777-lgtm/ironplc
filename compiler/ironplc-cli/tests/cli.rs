@@ -653,6 +653,75 @@ fn refactor_sync_uids_when_run_after_rename_then_reports_rename_candidate(
 }
 
 #[test]
+fn refactor_sync_uids_when_rename_candidate_then_sidecar_not_rewritten(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let project = project_with_vars(&temp, "proj", "x : INT;")?;
+    let sidecar = sidecar_path(&project)?;
+    let mut cmd = Command::new(cargo::cargo_bin!("ironplcc"));
+    cmd.arg("refactor").arg("sync-uids").arg(&project);
+    cmd.assert().success();
+    let before = std::fs::read_to_string(&sidecar)?;
+
+    // The candidate report must stay resolvable: syncing an ambiguous
+    // project reports the heuristic but rewrites nothing, so `map-uid` can
+    // still move the removed key's UID afterwards.
+    std::fs::write(
+        project.join("main.st"),
+        "PROGRAM main VAR y : INT; END_VAR y := 1; END_PROGRAM",
+    )?;
+    let mut cmd = Command::new(cargo::cargo_bin!("ironplcc"));
+    cmd.arg("refactor").arg("sync-uids").arg(&project);
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("rename candidates: 1"));
+    let after = std::fs::read_to_string(&sidecar)?;
+
+    assert_eq!(before, after);
+
+    Ok(())
+}
+
+#[test]
+fn refactor_map_uid_after_candidate_sync_then_uid_preserved(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let project = project_with_vars(&temp, "proj", "x : INT;")?;
+    let mut cmd = Command::new(cargo::cargo_bin!("ironplcc"));
+    cmd.arg("refactor").arg("sync-uids").arg(&project);
+    cmd.assert().success();
+
+    std::fs::write(
+        project.join("main.st"),
+        "PROGRAM main VAR y : INT; END_VAR y := 1; END_PROGRAM",
+    )?;
+    let mut cmd = Command::new(cargo::cargo_bin!("ironplcc"));
+    cmd.arg("refactor").arg("sync-uids").arg(&project);
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("rename candidates: 1"));
+
+    let mut cmd = Command::new(cargo::cargo_bin!("ironplcc"));
+    cmd.arg("refactor")
+        .arg("map-uid")
+        .arg(&project)
+        .arg("main")
+        .arg("x")
+        .arg("main")
+        .arg("y");
+    cmd.assert().success();
+
+    let mut cmd = Command::new(cargo::cargo_bin!("ironplcc"));
+    cmd.arg("refactor").arg("sync-uids").arg(&project);
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("preserved: 1"))
+        .stdout(predicate::str::contains("main.y (uid 1)"));
+
+    Ok(())
+}
+
+#[test]
 fn refactor_map_uid_when_rename_resolved_then_uid_preserved(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
