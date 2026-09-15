@@ -25,16 +25,22 @@ use super::compile::{
 use super::compile_call::resolve_fb_type;
 use super::compile_expr::{compile_constant, emit_store_var, emit_truncation, resolve_variable};
 use super::compile_stmt::resolve_string_max_length;
-use super::compile_var_table::record_decl_var_entry;
+use super::compile_var_table::{record_decl_var_entry, record_stable_var_entry};
 use super::type_info::resolve_type_name;
 use crate::emit::Emitter;
 
 /// Assigns variable table indices and type info for all variable declarations.
+///
+/// `stable_var_ids` is the engineering-side name -> entity UID table
+/// (ADR 0053). A declaration whose name it lists records a stable variable ID
+/// entry at its assigned index; transient slots assigned by other paths
+/// (`compile_fn`, `compile_method`, scratch) are never looked up here.
 pub(crate) fn assign_variables(
     ctx: &mut CompileContext,
     builder: &mut ContainerBuilder,
     declarations: &[VarDecl],
     types: &TypeEnvironment,
+    stable_var_ids: &[(Id, u64)],
 ) -> Result<(), Diagnostic> {
     for decl in declarations {
         if let Some(id) = decl.identifier.symbolic_id() {
@@ -297,6 +303,7 @@ pub(crate) fn assign_variables(
             });
 
             record_decl_var_entry(ctx, decl, id, index);
+            record_stable_var_entry(ctx, stable_var_ids, id, index);
         }
     }
     Ok(())

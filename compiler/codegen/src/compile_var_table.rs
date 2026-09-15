@@ -14,7 +14,9 @@
 //! Separated from `compile.rs` to keep module sizes within the 1000-line
 //! guideline.
 
-use ironplc_container::{CharWidth, FieldType, VarEntry, VarIndex, VAR_FLAG_IS_ARRAY};
+use ironplc_container::{
+    CharWidth, FieldType, StableVarEntry, VarEntry, VarIndex, VAR_FLAG_IS_ARRAY,
+};
 use ironplc_dsl::common::{
     ElementaryTypeName, FunctionReturnType, InitialValueAssignmentKind, SpecificationKind,
     TypeName, VarDecl,
@@ -50,6 +52,30 @@ pub(crate) fn record_decl_var_entry(
 ) {
     let entry = registered_entry(ctx, id).unwrap_or_else(|| scalar_entry(ctx, decl, id));
     ctx.record_var_entry(index, entry);
+}
+
+/// Records the stable variable ID for a persistent declaration that has just
+/// been assigned `index`, when the engineering-side table names it (ADR 0053).
+///
+/// Only the program/global allocation path (`compile_setup::assign_variables`)
+/// calls this, so transient slots -- function locals, method parameters, FB
+/// field regions, compiler scratch -- get no entry even when a name matches.
+pub(crate) fn record_stable_var_entry(
+    ctx: &mut CompileContext,
+    stable_var_ids: &[(Id, u64)],
+    id: &Id,
+    index: VarIndex,
+) {
+    let uid = stable_var_ids
+        .iter()
+        .find(|(name, _)| name == id)
+        .map(|(_, uid)| *uid);
+    if let Some(uid) = uid {
+        ctx.stable_var_entries.push(StableVarEntry {
+            var_index: index,
+            uid,
+        });
+    }
 }
 
 /// Records the entry for a function- or method-return slot. The slot has no
@@ -228,6 +254,31 @@ impl CompileContext {
                     )))
                 }
             }
+        }
+        Ok(table)
+    }
+
+    /// Returns the stable variable ID table (ADR 0053), ascending by
+    /// `var_index`. Entries are recorded in allocation order, which is
+    /// already ascending for the program/global prefix; the sort makes the
+    /// writer's ordering contract independent of that. Two entries claiming
+    /// the same index are an internal error, never a silent overwrite: the
+    /// migration planner keys on the index, so a duplicate would make the
+    /// table ambiguous.
+    pub(crate) fn collect_stable_vars(&self) -> Result<Vec<StableVarEntry>, Diagnostic> {
+        let mut table = self.stable_var_entries.clone();
+        table.sort_by_key(|entry| entry.var_index.raw());
+        if let Some(duplicate) = table
+            .windows(2)
+            .find(|pair| pair[0].var_index == pair[1].var_index)
+        {
+            return Err(Diagnostic::internal_error_at(Label::file(
+                FileId::default(),
+                format!(
+                    "Variable index {} has more than one stable variable ID",
+                    duplicate[0].var_index
+                ),
+            )));
         }
         Ok(table)
     }

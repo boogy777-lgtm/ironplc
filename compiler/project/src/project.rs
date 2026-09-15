@@ -8,7 +8,7 @@ use std::path::Path;
 use ironplc_analyzer::{stages::analyze, SemanticContext};
 use ironplc_dsl::{
     common::Library,
-    core::{FileId, SourceSpan},
+    core::{FileId, Id, SourceSpan},
     diagnostic::{Diagnostic, Label},
 };
 use ironplc_parser::{options::CompilerOptions, token::Token, tokenize_program};
@@ -152,6 +152,15 @@ pub trait Project {
     /// `semantic_context()` and `analyzed_library()`.
     fn semantic(&mut self) -> Vec<Diagnostic>;
 
+    /// Engineering-side stable variable IDs, mapping a persistent
+    /// declaration's current name to its entity UID (ADR 0053), or an empty
+    /// slice when the caller has none. [`crate::compile::compile`] passes
+    /// this through to codegen, which emits the container's `stable_vars`
+    /// table.
+    fn stable_var_ids(&self) -> &[(Id, u64)] {
+        &[]
+    }
+
     /// Gets the semantic context from the last analysis.
     ///
     /// Returns `Some` when the last call to `semantic()` succeeded in building
@@ -185,6 +194,8 @@ pub struct FileBackedProject {
     semantic_context: Option<SemanticContext>,
     /// Cached analyzed library from the last successful analysis
     analyzed_library: Option<Library>,
+    /// Engineering-side stable variable IDs (ADR 0053).
+    stable_var_ids: Vec<(Id, u64)>,
 }
 
 impl Default for FileBackedProject {
@@ -200,6 +211,7 @@ impl FileBackedProject {
             compiler_options: CompilerOptions::default(),
             semantic_context: None,
             analyzed_library: None,
+            stable_var_ids: Vec::new(),
         }
     }
 
@@ -209,6 +221,7 @@ impl FileBackedProject {
             compiler_options,
             semantic_context: None,
             analyzed_library: None,
+            stable_var_ids: Vec::new(),
         }
     }
 
@@ -234,6 +247,13 @@ impl FileBackedProject {
     /// diagnostic per library that could not be loaded.
     pub fn load_activated_libraries(&self) -> (Vec<Library>, Vec<Diagnostic>) {
         self.source_project.load_activated_libraries()
+    }
+
+    /// Sets the engineering-side stable variable IDs, mapping each
+    /// persistent declaration's current name to its entity UID (ADR 0053).
+    /// Replaces any previous table.
+    pub fn set_stable_var_ids(&mut self, stable_var_ids: Vec<(Id, u64)>) {
+        self.stable_var_ids = stable_var_ids;
     }
 }
 
@@ -296,6 +316,10 @@ impl Project for FileBackedProject {
         self.analyzed_library.as_ref()
     }
 
+    fn stable_var_ids(&self) -> &[(Id, u64)] {
+        &self.stable_var_ids
+    }
+
     fn sources(&self) -> Vec<&Source> {
         self.source_project.sources()
     }
@@ -325,6 +349,8 @@ pub struct MemoryBackedProject {
     /// Compatibility libraries the caller parsed itself, injected ahead of
     /// user source alongside any the bundled registry loads.
     preparsed_libraries: Vec<Library>,
+    /// Engineering-side stable variable IDs (ADR 0053).
+    stable_var_ids: Vec<(Id, u64)>,
 }
 
 impl MemoryBackedProject {
@@ -336,6 +362,7 @@ impl MemoryBackedProject {
             semantic_context: None,
             analyzed_library: None,
             preparsed_libraries: Vec::new(),
+            stable_var_ids: Vec::new(),
         }
     }
 
@@ -378,6 +405,13 @@ impl MemoryBackedProject {
     /// injected ahead of user source, registry-loaded first.
     pub fn set_preparsed_libraries(&mut self, libraries: Vec<Library>) {
         self.preparsed_libraries = libraries;
+    }
+
+    /// Sets the engineering-side stable variable IDs, mapping each
+    /// persistent declaration's current name to its entity UID (ADR 0053).
+    /// Replaces any previous table.
+    pub fn set_stable_var_ids(&mut self, stable_var_ids: Vec<(Id, u64)>) {
+        self.stable_var_ids = stable_var_ids;
     }
 }
 
@@ -430,6 +464,10 @@ impl Project for MemoryBackedProject {
 
     fn analyzed_library(&self) -> Option<&Library> {
         self.analyzed_library.as_ref()
+    }
+
+    fn stable_var_ids(&self) -> &[(Id, u64)] {
+        &self.stable_var_ids
     }
 
     fn sources(&self) -> Vec<&Source> {

@@ -88,8 +88,11 @@ pub fn compile(
     };
 
     // Generate bytecode, skipping user-defined functions not reachable from
-    // the PROGRAM root to reduce container size.
-    let codegen_options = CodegenOptions::from(compiler_options);
+    // the PROGRAM root to reduce container size. The stable variable IDs are
+    // the project model's, not the parser's, so they are set on the derived
+    // options here (ADR 0053).
+    let mut codegen_options = CodegenOptions::from(compiler_options);
+    codegen_options.stable_var_ids = project.stable_var_ids().to_vec();
 
     match ironplc_codegen::compile(library, context, &codegen_options, source_lookup) {
         Ok(container) => CompileOutput {
@@ -109,7 +112,8 @@ pub fn compile(
 #[cfg(test)]
 mod tests {
     use ironplc_codegen::EmptyLookup;
-    use ironplc_dsl::core::{FileId, SourceSpan};
+    use ironplc_container::StableVarEntry;
+    use ironplc_dsl::core::{FileId, Id, SourceSpan};
     use ironplc_dsl::diagnostic::{Diagnostic, Label};
     use ironplc_parser::options::CompilerOptions;
     use ironplc_problems::Problem;
@@ -157,6 +161,63 @@ END_PROGRAM
             output.diagnostics
         );
         assert!(output.container.is_some());
+    }
+
+    /// The project model owns the stable variable IDs (ADR 0053); the
+    /// pipeline must forward them to codegen without touching the parser
+    /// options that `CodegenOptions::from` reads.
+    #[test]
+    fn compile_when_project_has_stable_var_ids_then_container_carries_them() {
+        let mut project = project_with(VALID_PROGRAM);
+        project.set_stable_var_ids(vec![(Id::from("x"), 42)]);
+
+        let output = compile(
+            &mut project,
+            &CompilerOptions::default(),
+            &EmptyLookup,
+            vec![],
+        );
+        let container = output.container.expect("valid program must compile");
+        let type_section = container
+            .type_section
+            .as_ref()
+            .expect("the variable table implies a type section");
+        let index = container
+            .debug_section
+            .as_ref()
+            .expect("named variables imply a debug section")
+            .var_names
+            .iter()
+            .find(|entry| entry.name.eq_ignore_ascii_case("x"))
+            .expect("the program declares x")
+            .var_index;
+
+        assert_eq!(
+            type_section.stable_vars.as_slice(),
+            [StableVarEntry {
+                var_index: index,
+                uid: 42,
+            }]
+        );
+    }
+
+    #[test]
+    fn compile_when_project_has_no_stable_var_ids_then_table_empty() {
+        let mut project = project_with(VALID_PROGRAM);
+        let output = compile(
+            &mut project,
+            &CompilerOptions::default(),
+            &EmptyLookup,
+            vec![],
+        );
+
+        let container = output.container.expect("valid program must compile");
+        assert!(container
+            .type_section
+            .as_ref()
+            .expect("the variable table implies a type section")
+            .stable_vars
+            .is_empty());
     }
 
     #[test]

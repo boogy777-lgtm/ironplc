@@ -45,8 +45,8 @@ use ironplc_container::debug_section::{
     EnumDefEntry, FuncNameEntry, StringLayoutEntry, VarNameEntry,
 };
 use ironplc_container::{
-    CharWidth, Container, ContainerBuilder, FbTypeId, FunctionId, TaskType, UserFbDescriptor,
-    VarEntry, VarIndex,
+    CharWidth, Container, ContainerBuilder, FbTypeId, FunctionId, StableVarEntry, TaskType,
+    UserFbDescriptor, VarEntry, VarIndex,
 };
 // The string data-region layout lives in `ironplc-container` so the analyzer
 // and codegen size strings the same way. Re-exported here because the rest of
@@ -208,8 +208,10 @@ pub(crate) fn emit_string_literal_load(
 ///
 /// Every front end derives this from the project's [`CompilerOptions`] via
 /// [`From`], so the mapping from a compiler option to what codegen does with
-/// it has exactly one definition.
-#[derive(Debug, Default, Clone, Copy)]
+/// it has exactly one definition. Options the project model owns rather than
+/// the parser (the stable variable IDs, ADR 0053) are set on the derived
+/// value by the orchestrator.
+#[derive(Debug, Default, Clone)]
 pub struct CodegenOptions {
     /// When `true`, inject `__SYSTEM_UP_TIME` (TIME) and `__SYSTEM_UP_LTIME`
     /// (LTIME) as implicit globals at the start of the variable table.
@@ -217,6 +219,12 @@ pub struct CodegenOptions {
     /// The behavior policies `STRING_TO_<numeric>` calls are compiled under
     /// (ADR-0049). They select the builtin func_id the call emits.
     pub string_to_num: StringToNumPolicies,
+    /// Engineering-side entity UIDs keyed by the current declaration name
+    /// (ADR 0053). Names are matched with [`Id`] semantics, so the
+    /// comparison is case-insensitive; a name no persistent variable has is
+    /// ignored. The project API supplies the table, so the derived
+    /// [`From<&CompilerOptions>`] value leaves it empty.
+    pub stable_var_ids: Vec<(Id, u64)>,
 }
 
 /// The two behavior policies of a `STRING_TO_<numeric>` conversion.
@@ -234,6 +242,7 @@ impl From<&CompilerOptions> for CodegenOptions {
                 non_numeric: options.policy_string_to_num_non_numeric,
                 failure: options.policy_string_to_num_failure,
             },
+            stable_var_ids: Vec::new(),
         }
     }
 }
@@ -313,7 +322,7 @@ pub fn compile(
         context.functions(),
         context.types(),
         enum_map,
-        options.string_to_num,
+        options,
         sources,
     )?;
 
@@ -699,7 +708,7 @@ fn compile_program_with_functions(
     functions: &FunctionEnvironment,
     types: &TypeEnvironment,
     enum_map: crate::compile_enum::EnumOrdinalMap,
-    string_to_num: StringToNumPolicies,
+    options: &CodegenOptions,
     sources: &dyn crate::source_lookup::SourceLookup,
 ) -> Result<Container, Diagnostic> {
     let ProgramInputs {
@@ -710,7 +719,7 @@ fn compile_program_with_functions(
     } = inputs;
     let mut ctx = CompileContext::new();
     ctx.enum_map = enum_map;
-    ctx.string_to_num = string_to_num;
+    ctx.string_to_num = options.string_to_num;
     let mut builder = ContainerBuilder::new();
 
     // Register every top-level POU's source file with the debug
@@ -730,7 +739,13 @@ fn compile_program_with_functions(
     }
 
     // Assign global variable indices first (indices 0..G).
-    assign_variables(&mut ctx, &mut builder, global_vars, types)?;
+    assign_variables(
+        &mut ctx,
+        &mut builder,
+        global_vars,
+        types,
+        &options.stable_var_ids,
+    )?;
     let num_globals = ctx.variables.len() as u16;
 
     // Pre-scan user-defined FB declarations to register type metadata
@@ -856,7 +871,17 @@ fn compile_program_with_functions(
 
     // Assign program-local variable indices (indices G..N).
     // This can now resolve user-defined FB instances via ctx.user_fb_types.
-    assign_variables(&mut ctx, &mut builder, &local_vars, types)?;
+    // Globals and program variables are the persistent prefix whose UIDs
+    // may appear in `options.stable_var_ids`; function/FB/method slots are
+    // assigned later by their own compilation paths and never reach the
+    // lookup (ADR 0053).
+    assign_variables(
+        &mut ctx,
+        &mut builder,
+        &local_vars,
+        types,
+        &options.stable_var_ids,
+    )?;
     let program_var_count = ctx.variables.len() as u16;
 
     // Now compile the FB bodies with correct var_offsets.
@@ -1128,6 +1153,13 @@ fn compile_program_with_functions(
         builder = builder.add_var_entry(entry);
     }
 
+    // Add the stable variable ID sub-table (ADR 0053), ascending by
+    // `var_index`. It is excluded from the layout hash, so a rename that
+    // only rebinds a UID keeps the active hash.
+    for entry in ctx.collect_stable_vars()? {
+        builder = builder.add_stable_var(entry);
+    }
+
     for entry in ctx.debug_var_names {
         builder = builder.add_var_name(entry);
     }
@@ -1383,6 +1415,14 @@ pub(crate) struct CompileContext {
     /// scope swaps. A `None` slot is an index no allocation site claimed,
     /// which `collect_variable_table` reports as an internal error.
     pub(crate) var_entries: Vec<Option<VarEntry>>,
+    /// Stable variable IDs (ADR 0053) for the persistent variables whose
+    /// declaration name matched `CodegenOptions::stable_var_ids`, recorded
+    /// when their index was assigned. Function locals, method parameters,
+    /// FB field regions and scratch never reach this collection. Like
+    /// `var_entries`, it is never saved or restored across the per-function
+    /// scope swaps; `collect_stable_vars` sorts it and rejects a duplicate
+    /// `var_index`.
+    pub(crate) stable_var_entries: Vec<StableVarEntry>,
 }
 
 /// Describes how a `RETURN` statement should yield the function's value.
@@ -1426,6 +1466,7 @@ impl CompileContext {
             current_function_id: None,
             call_graph: HashMap::new(),
             var_entries: Vec::new(),
+            stable_var_entries: Vec::new(),
         }
     }
 
