@@ -4,6 +4,8 @@ use core::fmt;
 
 use ironplc_vm::FaultContext;
 
+use crate::migration::MigrationError;
+
 /// Why a candidate was rejected or an online change request was refused.
 ///
 /// These are host-level protocol errors; the VM traps live in
@@ -21,6 +23,14 @@ pub enum OnlineChangeError {
     /// The candidate's process-image sizes (input, output, or memory image)
     /// differ from the active application's.
     IoIncompatible,
+    /// The candidate changes the state layout and its stable variable IDs do
+    /// not justify a per-variable migration. Carries the planner's reason.
+    MigrationUnsupported(MigrationError),
+    /// `untest` was called after a schema-changing test. Writes made under
+    /// the candidate's layout have no reverse mapping for added or removed
+    /// variables, so the change can only be assembled or cancelled while the
+    /// original is active.
+    UntestUnsupported,
     /// The requested operation needs a staged candidate and none is staged.
     NoCandidateStaged,
     /// `stage` was called while a candidate is already staged.
@@ -46,6 +56,13 @@ impl fmt::Display for OnlineChangeError {
             OnlineChangeError::IoIncompatible => write!(
                 f,
                 "candidate process-image sizes are incompatible with the active application"
+            ),
+            OnlineChangeError::MigrationUnsupported(error) => {
+                write!(f, "candidate state cannot be migrated: {error}")
+            }
+            OnlineChangeError::UntestUnsupported => write!(
+                f,
+                "untest is not supported after a schema-changing test; assemble or cancel instead"
             ),
             OnlineChangeError::NoCandidateStaged => write!(f, "no candidate is staged"),
             OnlineChangeError::CandidateAlreadyStaged => {
@@ -110,6 +127,15 @@ mod tests {
         assert_eq!(
             OnlineChangeError::IoIncompatible.to_string(),
             "candidate process-image sizes are incompatible with the active application"
+        );
+        assert_eq!(
+            OnlineChangeError::MigrationUnsupported(MigrationError::FbLayoutUnsupported)
+                .to_string(),
+            "candidate state cannot be migrated: function-block instance layout changed; only rename or reorder edits are supported for FB instances"
+        );
+        assert_eq!(
+            OnlineChangeError::UntestUnsupported.to_string(),
+            "untest is not supported after a schema-changing test; assemble or cancel instead"
         );
         assert_eq!(
             OnlineChangeError::NoCandidateStaged.to_string(),

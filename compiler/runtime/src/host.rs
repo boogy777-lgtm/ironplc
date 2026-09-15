@@ -20,6 +20,15 @@
 //! logic back to the original artifact while the process state stays
 //! current (the hard baseline invariant).
 //!
+//! A candidate whose layout hash differs is a *migration candidate*: it is
+//! staged with a [`StateMigrationPlan`] that rebuilds the persistent state
+//! per stable variable ID (ADR 0053) at the boundary. Its buffers are built
+//! fresh and initialized by the candidate's init image, then the plan copies
+//! the values of the entities both containers share. A migration candidate
+//! has no untest path: writes made under the candidate's layout have no
+//! reverse mapping for added or removed variables, so it can only be
+//! assembled or discarded while the original is active.
+//!
 //! `run` never holds a [`VmRunning`](ironplc_vm::VmRunning) borrow across a
 //! mutation of the host fields: the VM borrows the active container and the
 //! buffers for the duration of one session of rounds, and is dropped before
@@ -31,7 +40,10 @@ use ironplc_vm::{Vm, VmBuffers};
 
 use crate::error::{OnlineChangeError, RuntimeError};
 use crate::generation::{ApplicationGeneration, LogicGeneration};
-use crate::online_change::{swap_buffers, validate_candidate};
+use crate::migration::StateMigrationPlan;
+use crate::online_change::{
+    has_stable_vars, swap_buffers, validate_candidate, validate_migration_candidate,
+};
 
 /// Which artifact is executing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -62,6 +74,9 @@ pub struct HostStatus {
     pub application: ApplicationGeneration,
     /// Whether the normal artifact or the candidate is executing.
     pub mode: HostMode,
+    /// Whether the staged candidate is a migration candidate, i.e. one whose
+    /// layout hash differs and which carries a state migration plan.
+    pub migration: bool,
     /// Completed scan rounds since the host was created.
     pub rounds: u64,
 }
@@ -78,6 +93,7 @@ pub struct RuntimeHost {
     next_logic_generation: u32,
     application_generation: ApplicationGeneration,
     pending: Option<PendingSwap>,
+    migration: Option<StateMigrationPlan>,
 }
 
 impl RuntimeHost {
@@ -104,14 +120,18 @@ impl RuntimeHost {
             next_logic_generation: 2,
             application_generation: ApplicationGeneration::new(1),
             pending: None,
+            migration: None,
         })
     }
 
     /// Stages `candidate` after validating it against the normal artifact.
     ///
     /// This is the controller-side `Accept`: the candidate is present and
-    /// validated, the normal artifact keeps executing. A declared change
-    /// that alters the state layout is rejected here and the running
+    /// validated, the normal artifact keeps executing. A candidate whose
+    /// layout hash matches is validated as a logic-only change. A candidate
+    /// whose hash differs is staged as a migration candidate when both
+    /// artifacts carry stable variable IDs and the migration planner can
+    /// justify every copy; otherwise it is rejected and the running
     /// application is untouched.
     pub fn stage(&mut self, candidate: Container) -> Result<(), OnlineChangeError> {
         if self.candidate.is_some() {
@@ -121,12 +141,26 @@ impl RuntimeHost {
             return Err(OnlineChangeError::NotAllowedInThisMode);
         }
 
-        validate_candidate(&self.normal, &candidate)?;
+        let migration = if self.normal.header.layout_hash == candidate.header.layout_hash {
+            validate_candidate(&self.normal, &candidate)?;
+            None
+        } else if has_stable_vars(&self.normal) && has_stable_vars(&candidate) {
+            validate_migration_candidate(&self.normal, &candidate)?;
+            Some(
+                StateMigrationPlan::build(&self.normal, &candidate)
+                    .map_err(OnlineChangeError::MigrationUnsupported)?,
+            )
+        } else {
+            // No stable variable IDs on at least one side means there is
+            // nothing to migrate by; a safe rejection, never a guess.
+            return Err(OnlineChangeError::LayoutIncompatible);
+        };
 
         let generation = LogicGeneration::new(self.next_logic_generation);
         self.next_logic_generation = self.next_logic_generation.saturating_add(1);
         self.candidate = Some(candidate);
         self.candidate_generation = Some(generation);
+        self.migration = migration;
         Ok(())
     }
 
@@ -146,12 +180,20 @@ impl RuntimeHost {
     ///
     /// Reverting switches executable logic only: the buffers keep the
     /// current process state.
+    ///
+    /// A migration candidate has no revert path: its buffers were rebuilt
+    /// under a new layout, so `untest` is refused with
+    /// [`OnlineChangeError::UntestUnsupported`] and the state is left
+    /// unchanged. Assemble or cancel while the original is active instead.
     pub fn untest(&mut self) -> Result<(), OnlineChangeError> {
         if self.candidate.is_none() || !self.active_is_candidate {
             return Err(OnlineChangeError::NoTestInProgress);
         }
         if self.pending.is_some() {
             return Err(OnlineChangeError::NotAllowedInThisMode);
+        }
+        if self.migration.is_some() {
+            return Err(OnlineChangeError::UntestUnsupported);
         }
         self.pending = Some(PendingSwap::Untest);
         Ok(())
@@ -176,6 +218,7 @@ impl RuntimeHost {
                 self.normal_generation = generation;
             }
             self.active_is_candidate = false;
+            self.migration = None;
             self.application_generation =
                 ApplicationGeneration::new(self.application_generation.raw().saturating_add(1));
         }
@@ -192,6 +235,7 @@ impl RuntimeHost {
         }
         self.candidate = None;
         self.candidate_generation = None;
+        self.migration = None;
         Ok(())
     }
 
@@ -211,6 +255,7 @@ impl RuntimeHost {
             } else {
                 HostMode::Normal
             },
+            migration: self.migration.is_some(),
             rounds: self.rounds,
         }
     }
@@ -272,12 +317,16 @@ impl RuntimeHost {
         match self.pending.take() {
             None => Ok(()),
             Some(PendingSwap::Test) => {
-                let Some(candidate) = self.candidate.as_ref() else {
-                    return Err(RuntimeError::internal(
-                        "swap to candidate without a staged candidate",
-                    ));
-                };
-                swap_buffers(candidate, &mut self.buffers, self.rounds);
+                if self.migration.is_some() {
+                    self.apply_migration_swap()?;
+                } else {
+                    let Some(candidate) = self.candidate.as_ref() else {
+                        return Err(RuntimeError::internal(
+                            "swap to candidate without a staged candidate",
+                        ));
+                    };
+                    swap_buffers(candidate, &mut self.buffers, self.rounds);
+                }
                 self.active_is_candidate = true;
                 Ok(())
             }
@@ -287,6 +336,34 @@ impl RuntimeHost {
                 Ok(())
             }
         }
+    }
+
+    /// Adopts the migration candidate's freshly initialized buffers with the
+    /// plan applied.
+    ///
+    /// The candidate's init image runs once here, so entities with no source
+    /// UID carry the candidate's declared initial values. The plan then
+    /// copies every entity the two layouts share, and the old buffers are
+    /// dropped: a schema change has no untest path.
+    fn apply_migration_swap(&mut self) -> Result<(), RuntimeError> {
+        let (Some(candidate), Some(plan)) = (self.candidate.as_ref(), self.migration.as_ref())
+        else {
+            return Err(RuntimeError::internal(
+                "migration swap without a staged candidate or plan",
+            ));
+        };
+
+        let mut migrated = VmBuffers::from_container(candidate);
+        Vm::new()
+            .load(candidate, &mut migrated)
+            .start()
+            .map_err(RuntimeError::Trap)?;
+
+        plan.apply(&self.buffers, &mut migrated)
+            .map_err(|_| RuntimeError::internal("state migration failed at the scan boundary"))?;
+
+        self.buffers = migrated;
+        Ok(())
     }
 
     /// Reads a variable value as an i32 from the host's buffers.

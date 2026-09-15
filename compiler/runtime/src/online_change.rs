@@ -68,6 +68,70 @@ pub(crate) fn task_table_matches(a: &TaskTable, b: &TaskTable) -> bool {
             .all(|(left, right)| program_entry_matches(left, right))
 }
 
+/// Validates a candidate whose layout hash differs but whose stable variable
+/// IDs may justify per-variable migration.
+///
+/// The same protections as [`validate_candidate`] apply, except the ones a
+/// declaration edit legitimately changes: the variable count, the program
+/// prefix size and the per-program variable/FB counts. The migration planner
+/// is the authority on whether those changes can carry the old state.
+pub(crate) fn validate_migration_candidate(
+    active: &Container,
+    candidate: &Container,
+) -> Result<(), OnlineChangeError> {
+    if active.header.flags != candidate.header.flags {
+        return Err(OnlineChangeError::LayoutIncompatible);
+    }
+
+    if active.header.input_image_bytes != candidate.header.input_image_bytes
+        || active.header.output_image_bytes != candidate.header.output_image_bytes
+        || active.header.memory_image_bytes != candidate.header.memory_image_bytes
+    {
+        return Err(OnlineChangeError::IoIncompatible);
+    }
+
+    if !migration_schedule_matches(&active.task_table, &candidate.task_table) {
+        return Err(OnlineChangeError::ScheduleIncompatible);
+    }
+
+    Ok(())
+}
+
+/// Whether the container carries stable variable IDs for a migration.
+pub(crate) fn has_stable_vars(container: &Container) -> bool {
+    container
+        .type_section
+        .as_ref()
+        .is_some_and(|section| !section.stable_vars.is_empty())
+}
+
+/// Compares task tables for a migration candidate.
+///
+/// Task definitions must match exactly: a genuine schedule change stays a
+/// cold start. The program prefix size and the per-program variable/FB counts
+/// are layout data a declaration edit legitimately changes, so they are not
+/// compared here.
+fn migration_schedule_matches(a: &TaskTable, b: &TaskTable) -> bool {
+    a.tasks.len() == b.tasks.len()
+        && a.tasks
+            .iter()
+            .zip(b.tasks.iter())
+            .all(|(left, right)| task_entry_matches(left, right))
+        && a.programs.len() == b.programs.len()
+        && a.programs
+            .iter()
+            .zip(b.programs.iter())
+            .all(|(left, right)| migration_program_entry_matches(left, right))
+}
+
+/// Program identity fields that a declaration edit never changes.
+fn migration_program_entry_matches(a: &ProgramInstanceEntry, b: &ProgramInstanceEntry) -> bool {
+    a.instance_id == b.instance_id
+        && a.task_id == b.task_id
+        && a.entry_function_id == b.entry_function_id
+        && a.init_function_id == b.init_function_id
+}
+
 fn task_entry_matches(a: &TaskEntry, b: &TaskEntry) -> bool {
     a.task_id == b.task_id
         && a.priority == b.priority
@@ -181,5 +245,33 @@ mod tests {
         changed.tasks.clear();
 
         assert!(!task_table_matches(&task_table(), &changed));
+    }
+
+    #[test]
+    fn migration_schedule_matches_when_variable_counts_change_then_true() {
+        // A declaration edit legitimately changes the program prefix and the
+        // variable count; the migration planner judges those, not the
+        // schedule check.
+        let mut changed = task_table();
+        changed.shared_globals_size = 3;
+        changed.programs[0].var_table_count = 3;
+
+        assert!(migration_schedule_matches(&task_table(), &changed));
+    }
+
+    #[test]
+    fn migration_schedule_matches_when_priority_changes_then_false() {
+        let mut changed = task_table();
+        changed.tasks[0].priority = 9;
+
+        assert!(!migration_schedule_matches(&task_table(), &changed));
+    }
+
+    #[test]
+    fn migration_schedule_matches_when_entry_function_changes_then_false() {
+        let mut changed = task_table();
+        changed.programs[0].entry_function_id = FunctionId::SCAN;
+
+        assert!(!migration_schedule_matches(&task_table(), &changed));
     }
 }

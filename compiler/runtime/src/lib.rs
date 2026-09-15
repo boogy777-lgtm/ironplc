@@ -17,8 +17,10 @@
 mod error;
 mod generation;
 mod host;
+mod migration;
 mod online_change;
 
 pub use error::{OnlineChangeError, RuntimeError};
 pub use generation::{ApplicationGeneration, LogicGeneration};
 pub use host::{HostMode, HostStatus, RuntimeHost};
+pub use migration::{MigrationError, StateMigrationPlan};
