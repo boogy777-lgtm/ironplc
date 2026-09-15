@@ -13,6 +13,7 @@ use crate::tools::common::ParseCheckInput;
 use crate::tools::compile::CompileInput;
 use crate::tools::container_drop::ContainerDropInput;
 use crate::tools::explain_diagnostic::ExplainDiagnosticInput;
+use crate::tools::hot_edit::HotEditSession;
 use crate::tools::pou_lineage::PouLineageInput;
 use crate::tools::pou_scope::PouScopeInput;
 use crate::tools::run::RunInput;
@@ -22,6 +23,7 @@ use crate::tools::symbols::SymbolsInput;
 pub struct IronPlcMcp {
     tool_router: ToolRouter<Self>,
     cache: Arc<Mutex<ContainerCache>>,
+    hot_edit: Arc<Mutex<HotEditSession>>,
 }
 
 impl Default for IronPlcMcp {
@@ -32,6 +34,7 @@ impl Default for IronPlcMcp {
                 crate::cache::DEFAULT_MAX_ENTRIES,
                 crate::cache::DEFAULT_MAX_BYTES,
             ))),
+            hot_edit: Arc::new(Mutex::new(HotEditSession::default())),
         }
     }
 }
@@ -234,6 +237,86 @@ impl IronPlcMcp {
         Parameters(input): Parameters<RunInput>,
     ) -> Result<ContentBlock, rmcp::ErrorData> {
         let response = tools::run::build_response(&input, &self.cache);
+        let json = serde_json::to_string(&response)
+            .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))?;
+        Ok(ContentBlock::text(json))
+    }
+
+    /// Reports the hot-edit state of the running application.
+    #[tool(
+        name = "hot_edit_status",
+        description = "Reports the hot-edit state of the running application: the active mode (normal or testing), the logic and application generation counters, whether a candidate edit is staged, and completed scan rounds. Fails with a diagnostic until `hot_edit_accept` has started a session."
+    )]
+    fn hot_edit_status(&self) -> Result<ContentBlock, rmcp::ErrorData> {
+        let response = tools::hot_edit::build_status_response(&self.hot_edit);
+        let json = serde_json::to_string(&response)
+            .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))?;
+        Ok(ContentBlock::text(json))
+    }
+
+    /// Compiles sources and feeds them to the hot-edit protocol.
+    #[tool(
+        name = "hot_edit_accept",
+        description = "Compiles the supplied IEC sources and hands them to the hot-edit protocol. The first call establishes the running application session and reports `established`; each later call stages the compiled program as an edit candidate to activate with `hot_edit_test` and promote with `hot_edit_assemble`, or discard with `hot_edit_cancel`. Compilation failures return the usual diagnostics; staging refusals return a stable V-code such as V4007 (layout change) or V4013 (candidate already staged)."
+    )]
+    async fn hot_edit_accept(
+        &self,
+        Parameters(input): Parameters<ParseCheckInput>,
+    ) -> Result<ContentBlock, rmcp::ErrorData> {
+        let response = tools::hot_edit::build_accept_response(
+            &input.sources,
+            &input.options,
+            &self.cache,
+            &self.hot_edit,
+        );
+        let json = serde_json::to_string(&response)
+            .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))?;
+        Ok(ContentBlock::text(json))
+    }
+
+    /// Activates the staged candidate.
+    #[tool(
+        name = "hot_edit_test",
+        description = "Activates the staged candidate at the next scan boundary and drives one scan round, so the candidate is executing when the call returns. Refusals carry a stable V-code, e.g. V4012 when no candidate is staged."
+    )]
+    fn hot_edit_test(&self) -> Result<ContentBlock, rmcp::ErrorData> {
+        let response = tools::hot_edit::build_test_response(&self.hot_edit);
+        let json = serde_json::to_string(&response)
+            .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))?;
+        Ok(ContentBlock::text(json))
+    }
+
+    /// Reverts to the original artifact.
+    #[tool(
+        name = "hot_edit_untest",
+        description = "Switches back to the original artifact at the next scan boundary and drives one scan round, so the revert is executing when the call returns; process state is preserved. Refused with V4011 after a schema-changing test — promote with `hot_edit_assemble` or discard with `hot_edit_cancel` instead."
+    )]
+    fn hot_edit_untest(&self) -> Result<ContentBlock, rmcp::ErrorData> {
+        let response = tools::hot_edit::build_untest_response(&self.hot_edit);
+        let json = serde_json::to_string(&response)
+            .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))?;
+        Ok(ContentBlock::text(json))
+    }
+
+    /// Promotes the staged candidate.
+    #[tool(
+        name = "hot_edit_assemble",
+        description = "Promotes the staged candidate to the running application and drives one scan round, so the promoted program is executing when the call returns. Works from both the staged and the testing phases. Refusals carry a stable V-code, e.g. V4012 when no candidate is staged."
+    )]
+    fn hot_edit_assemble(&self) -> Result<ContentBlock, rmcp::ErrorData> {
+        let response = tools::hot_edit::build_assemble_response(&self.hot_edit);
+        let json = serde_json::to_string(&response)
+            .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))?;
+        Ok(ContentBlock::text(json))
+    }
+
+    /// Discards the staged candidate.
+    #[tool(
+        name = "hot_edit_cancel",
+        description = "Discards the staged candidate while the original artifact keeps running. Takes effect immediately. Refused with V4015 while a candidate test is in progress."
+    )]
+    fn hot_edit_cancel(&self) -> Result<ContentBlock, rmcp::ErrorData> {
+        let response = tools::hot_edit::build_cancel_response(&self.hot_edit);
         let json = serde_json::to_string(&response)
             .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))?;
         Ok(ContentBlock::text(json))

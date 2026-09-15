@@ -166,6 +166,13 @@ fn missing_dialect_args() -> String {
     ed2_args(COUNTER_PROGRAM_WITH_TASK),
     r#"\"name\":\"program1\""#
 )]
+// hot_edit_accept: the subprocess starts a fresh server, so the first
+// accept establishes the session
+#[case::hot_edit_accept_valid_program_establishes(
+    "hot_edit_accept",
+    ed2_args(COUNTER_PROGRAM),
+    r#"\"result\":\"established\""#
+)]
 // symbols
 #[case::symbols_valid_program_programs_populated(
     "symbols",
@@ -415,5 +422,59 @@ fn run_when_compile_then_run_counter_then_trace_shows_increment(
             r#"\"terminated_reason\":\"completed\""#,
         ))
         .stdout(predicate::str::contains("Main.Counter"));
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// `hot_edit_*` tools
+// ---------------------------------------------------------------------------
+
+/// Hot-edit flow over the wire: accept establishes the session, test
+/// activates the candidate at a scan boundary, assemble promotes it, and the
+/// final status shows the advanced generations. Proves the session survives
+/// across tool calls in one server process.
+#[test]
+fn hot_edit_when_accept_test_assemble_then_generations_advance(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let accept_args = ed2_args(COUNTER_PROGRAM);
+    let accept_call = format!(
+        r#"{{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{{"name":"hot_edit_accept","arguments":{accept_args}}}}}"#
+    );
+    let stage_args =
+        ed2_args(&COUNTER_PROGRAM.replace("Counter := Counter + 1;", "Counter := Counter + 10;"));
+    let stage_call = format!(
+        r#"{{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{{"name":"hot_edit_accept","arguments":{stage_args}}}}}"#
+    );
+    let test_call = r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"hot_edit_test","arguments":{}}}"#;
+    let assemble_call = r#"{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"hot_edit_assemble","arguments":{}}}"#;
+    let status_call = r#"{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"hot_edit_status","arguments":{}}}"#;
+    let stdin = format!(
+        "{MCP_INITIALIZE}\n{MCP_INITIALIZED}\n{accept_call}\n{stage_call}\n{test_call}\n{assemble_call}\n{status_call}\n"
+    );
+
+    Command::cargo_bin("ironplcmcp")?
+        .write_stdin(stdin)
+        .assert()
+        .success()
+        // Accept response: the session is established.
+        .stdout(predicate::str::contains(r#"\"result\":\"established\""#))
+        // Test response: the candidate is executing.
+        .stdout(predicate::str::contains(r#"\"mode\":\"testing\""#))
+        // Assemble/status responses: the candidate is the running application.
+        .stdout(predicate::str::contains(r#"\"application\":2"#));
+    Ok(())
+}
+
+/// A hot-edit command with no session fails with a diagnostic, not an
+/// MCP-level error.
+#[test]
+fn hot_edit_status_when_no_session_then_ok_false() -> Result<(), Box<dyn std::error::Error>> {
+    let stdin = mcp_tool_call("hot_edit_status", "{}");
+    Command::cargo_bin("ironplcmcp")?
+        .write_stdin(stdin)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(r#"\"ok\":false"#))
+        .stdout(predicate::str::contains("P8001"));
     Ok(())
 }

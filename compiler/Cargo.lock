@@ -1043,6 +1043,7 @@ dependencies = [
  "ironplc-parser",
  "ironplc-problems",
  "ironplc-project",
+ "ironplc-runtime",
  "ironplc-spec-requirements-gen",
  "ironplc-test",
  "ironplc-vm",
