@@ -15,7 +15,7 @@ use crate::id_types::{FunctionId, InstanceId, TaskId, VarIndex};
 use crate::task_table::{ProgramInstanceEntry, TaskEntry, TaskTable};
 use crate::task_type::TaskType;
 use crate::type_section::{
-    ArrayDescriptor, FbTypeDescriptor, TypeSection, UserFbDescriptor, VarEntry,
+    ArrayDescriptor, FbTypeDescriptor, StableVarEntry, TypeSection, UserFbDescriptor, VarEntry,
 };
 
 /// Fluent builder for constructing a [`Container`].
@@ -39,6 +39,7 @@ pub struct ContainerBuilder {
     array_descriptor_cache: HashMap<(u8, u32, u16), u16>,
     user_fb_types: Vec<UserFbDescriptor>,
     variable_table: Vec<VarEntry>,
+    stable_vars: Vec<StableVarEntry>,
     debug_var_names: Vec<VarNameEntry>,
     debug_func_names: Vec<FuncNameEntry>,
     debug_line_map: Vec<LineMapEntry>,
@@ -69,6 +70,7 @@ impl ContainerBuilder {
             array_descriptor_cache: HashMap::new(),
             user_fb_types: Vec::new(),
             variable_table: Vec::new(),
+            stable_vars: Vec::new(),
             debug_var_names: Vec::new(),
             debug_func_names: Vec::new(),
             debug_line_map: Vec::new(),
@@ -290,6 +292,16 @@ impl ContainerBuilder {
         self
     }
 
+    /// Adds a stable variable ID entry to the type section, mapping a
+    /// persistent variable's index to its engineering-side entity UID.
+    ///
+    /// Callers add entries in ascending `var_index` order; the writer
+    /// preserves the given order.
+    pub fn add_stable_var(mut self, entry: StableVarEntry) -> Self {
+        self.stable_vars.push(entry);
+        self
+    }
+
     /// Adds an array descriptor to the type section, deduplicating
     /// identical `(element_type, total_elements, element_extra)` triples.
     ///
@@ -326,18 +338,20 @@ impl ContainerBuilder {
             bytecode: self.bytecode,
         };
 
-        // Build type section if there are any type descriptors or variable
-        // table entries.
+        // Build type section if there are any type descriptors, variable
+        // table entries or stable variable IDs.
         let type_section = if !self.fb_types.is_empty()
             || !self.array_descriptors.is_empty()
             || !self.user_fb_types.is_empty()
             || !self.variable_table.is_empty()
+            || !self.stable_vars.is_empty()
         {
             Some(TypeSection {
                 fb_types: self.fb_types,
                 array_descriptors: self.array_descriptors,
                 user_fb_types: self.user_fb_types,
                 variable_table: self.variable_table,
+                stable_vars: self.stable_vars,
             })
         } else {
             None
@@ -718,6 +732,25 @@ mod tests {
         let ts = container.type_section.unwrap();
         assert_eq!(ts.variable_table.len(), 1);
         assert_eq!(ts.variable_table[0], entry);
+    }
+
+    #[test]
+    fn builder_when_add_stable_var_then_included_in_type_section() {
+        use crate::type_section::StableVarEntry;
+
+        let entry = StableVarEntry {
+            var_index: VarIndex::new(3),
+            uid: 0xDEAD_BEEF,
+        };
+
+        let container = ContainerBuilder::new()
+            .num_variables(4)
+            .add_stable_var(entry)
+            .build();
+
+        let ts = container.type_section.unwrap();
+        assert_eq!(ts.stable_vars.len(), 1);
+        assert_eq!(ts.stable_vars[0], entry);
     }
 
     #[test]

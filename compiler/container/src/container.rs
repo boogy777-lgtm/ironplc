@@ -207,7 +207,7 @@ mod tests {
     use crate::test_support::{
         round_trip, steel_thread_bytecode, steel_thread_single_function_container,
     };
-    use crate::type_section::{FbTypeDescriptor, FieldEntry, FieldType, VarEntry};
+    use crate::type_section::{FbTypeDescriptor, FieldEntry, FieldType, StableVarEntry, VarEntry};
     use crate::ContainerBuilder;
 
     #[test]
@@ -416,7 +416,8 @@ mod tests {
     }
 
     /// A container exercising every input of the layout hash: a variable
-    /// table, an FB type with two fields and an array descriptor.
+    /// table, an FB type with two fields, an array descriptor and the stable
+    /// variable IDs (which are deliberately not part of the hash).
     fn layout_hash_container() -> Container {
         let mut builder = ContainerBuilder::new();
         builder.add_array_descriptor(FieldType::I32 as u8, 4, 0);
@@ -431,6 +432,14 @@ mod tests {
                 var_type: FieldType::String,
                 flags: 0,
                 extra: 80,
+            })
+            .add_stable_var(StableVarEntry {
+                var_index: VarIndex::new(0),
+                uid: 0x1000,
+            })
+            .add_stable_var(StableVarEntry {
+                var_index: VarIndex::new(1),
+                uid: 0x2000,
             })
             .add_fb_type(FbTypeDescriptor {
                 type_id: FbTypeId::new(0),
@@ -465,9 +474,48 @@ mod tests {
     }
 
     #[test]
+    fn container_write_read_when_stable_vars_then_roundtrips() {
+        let container = layout_hash_container();
+
+        let decoded = round_trip(&container);
+
+        let ts = decoded.type_section.unwrap();
+        assert_eq!(
+            ts.stable_vars,
+            vec![
+                StableVarEntry {
+                    var_index: VarIndex::new(0),
+                    uid: 0x1000,
+                },
+                StableVarEntry {
+                    var_index: VarIndex::new(1),
+                    uid: 0x2000,
+                },
+            ]
+        );
+    }
+
+    #[test]
     fn compute_layout_hash_when_same_inputs_then_equal() {
         let first = layout_hash_container();
         let second = layout_hash_container();
+
+        assert_eq!(first.compute_layout_hash(), second.compute_layout_hash());
+    }
+
+    #[test]
+    fn compute_layout_hash_when_only_stable_var_uids_change_then_equal() {
+        // A rename (a new UID binding for the same variable index, or new
+        // UIDs for the same entities) must not look like a layout change:
+        // migration compatibility is the migration planner's decision, not
+        // this hash's.
+        let first = layout_hash_container();
+        let mut second = layout_hash_container();
+        {
+            let stable_vars = &mut second.type_section.as_mut().unwrap().stable_vars;
+            stable_vars[0].uid = 0xFFFF_FFFF_FFFF_FFFF;
+            stable_vars[1].uid = 0;
+        }
 
         assert_eq!(first.compute_layout_hash(), second.compute_layout_hash());
     }

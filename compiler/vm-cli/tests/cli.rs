@@ -48,7 +48,8 @@ fn all_spec_requirements_have_tests() {
 /// Both goldens are frozen artifacts that exercise the container reader
 /// end-to-end, and both must be refreshed whenever `FORMAT_VERSION` bumps:
 /// the reader only accepts the current version. Last refreshed for the
-/// format_version 3 -> 4 bump that added the type section's variable table.
+/// format_version 4 -> 5 bump that added the type section's stable variable
+/// IDs.
 #[test]
 #[ignore]
 fn generate_golden_files() {

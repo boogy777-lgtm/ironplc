@@ -24,10 +24,10 @@ use crate::header::{
     FileHeader, FLAG_HAS_DEBUG_SECTION, FLAG_HAS_SYSTEM_UPTIME, FLAG_HAS_TYPE_SECTION,
     FORMAT_VERSION, HEADER_SIZE, MAGIC,
 };
-use crate::id_types::{FbTypeId, FunctionId};
+use crate::id_types::{FbTypeId, FunctionId, VarIndex};
 use crate::type_section::{
-    ArrayDescriptor, FbTypeDescriptor, FieldEntry, FieldType, TypeSection, UserFbDescriptor,
-    VarEntry,
+    ArrayDescriptor, FbTypeDescriptor, FieldEntry, FieldType, StableVarEntry, TypeSection,
+    UserFbDescriptor, VarEntry,
 };
 use crate::{opcode, ConstType, ContainerError};
 
@@ -67,10 +67,10 @@ fn container_spec_req_cf_002_magic_is_iplc() {
     assert_eq!(bytes, [0x43, 0x4C, 0x50, 0x49]);
 }
 
-/// REQ-CF-container-003: Format version is 4.
+/// REQ-CF-container-003: Format version is 5.
 #[spec_test(REQ_CF_container_003)]
-fn container_spec_req_cf_003_format_version_is_4() {
-    assert_eq!(FORMAT_VERSION, 4);
+fn container_spec_req_cf_003_format_version_is_5() {
+    assert_eq!(FORMAT_VERSION, 5);
 }
 
 /// REQ-CF-container-004: All multi-byte values in the header are little-endian.
@@ -307,8 +307,8 @@ fn write_type_section(section: &TypeSection) -> Vec<u8> {
 }
 
 /// REQ-CF-container-018: The type section is FB type descriptors, then array
-/// descriptors, then user FB descriptors, then the variable table, each
-/// behind a u16 count.
+/// descriptors, then user FB descriptors, then the variable table, then the
+/// stable variable IDs, each behind a u16 count.
 #[spec_test(REQ_CF_container_018)]
 fn container_spec_req_cf_018_type_section_sub_table_order() {
     let section = TypeSection {
@@ -335,12 +335,17 @@ fn container_spec_req_cf_018_type_section_sub_table_order() {
             flags: 0,
             extra: 0,
         }],
+        stable_vars: vec![StableVarEntry {
+            var_index: VarIndex::new(7),
+            uid: 0x0102_0304_0506_0708,
+        }],
     };
     let buf = write_type_section(&section);
     // fb count(2) + fb header(4) + one field(4) = 10, then array count(2) +
     // descriptor(8) = 20, then user count(2) + descriptor(8) = 30, then
-    // variable count(2) + entry(4) = 36.
-    assert_eq!(buf.len(), 36);
+    // variable count(2) + entry(4) = 36, then stable var count(2) +
+    // entry(10) = 48.
+    assert_eq!(buf.len(), 48);
     assert_eq!(&buf[0..2], &1u16.to_le_bytes());
     assert_eq!(&buf[2..4], &0x0Au16.to_le_bytes());
     assert_eq!(&buf[10..12], &1u16.to_le_bytes());
@@ -349,6 +354,42 @@ fn container_spec_req_cf_018_type_section_sub_table_order() {
     assert_eq!(&buf[22..24], &0x0Bu16.to_le_bytes());
     assert_eq!(&buf[30..32], &1u16.to_le_bytes());
     assert_eq!(&buf[32..36], &[FieldType::Time as u8, 0, 0, 0]);
+    assert_eq!(&buf[36..38], &1u16.to_le_bytes());
+    assert_eq!(&buf[38..40], &7u16.to_le_bytes());
+    assert_eq!(&buf[40..48], &0x0102_0304_0506_0708u64.to_le_bytes());
+}
+
+/// REQ-CF-container-028: The stable variable ID table is a u16 count followed
+/// by 10-byte `var_index`/`uid` entries in ascending `var_index` order.
+#[spec_test(REQ_CF_container_028)]
+fn container_spec_req_cf_028_stable_var_table_layout() {
+    let section = TypeSection {
+        stable_vars: vec![
+            StableVarEntry {
+                var_index: VarIndex::new(0x0102),
+                uid: 0x0304_0506_0708_090A,
+            },
+            StableVarEntry {
+                var_index: VarIndex::new(0x0B0C),
+                uid: 0x0D0E_0F10_1112_1314,
+            },
+        ],
+        ..Default::default()
+    };
+    let buf = write_type_section(&section);
+
+    // Five counts(10) + 2 entries * 10 = 30. The stable var count is the
+    // fifth count, at bytes 8..10; entries follow at 10..20 and 20..30.
+    assert_eq!(buf.len(), 30);
+    assert_eq!(&buf[8..10], &2u16.to_le_bytes());
+    assert_eq!(
+        &buf[10..20],
+        &[0x02, 0x01, 0x0A, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03]
+    );
+    assert_eq!(
+        &buf[20..30],
+        &[0x0C, 0x0B, 0x14, 0x13, 0x12, 0x11, 0x10, 0x0F, 0x0E, 0x0D]
+    );
 }
 
 /// REQ-CF-container-019: An ArrayDescriptor is element_type u8, reserved u8,
@@ -365,8 +406,8 @@ fn container_spec_req_cf_019_array_descriptor_is_8_bytes() {
     };
     let buf = write_type_section(&section);
     // fb count(2) + array count(2) + descriptor(8) + user count(2)
-    //   + variable count(2)
-    assert_eq!(buf.len(), 16);
+    //   + variable count(2) + stable var count(2)
+    assert_eq!(buf.len(), 18);
     assert_eq!(
         &buf[4..12],
         &[
@@ -397,8 +438,8 @@ fn container_spec_req_cf_020_user_fb_descriptor_is_8_bytes() {
     };
     let buf = write_type_section(&section);
     // fb count(2) + array count(2) + user count(2) + descriptor(8)
-    //   + variable count(2)
-    assert_eq!(buf.len(), 16);
+    //   + variable count(2) + stable var count(2)
+    assert_eq!(buf.len(), 18);
     assert_eq!(&buf[6..14], &[0x02, 0x01, 0x04, 0x03, 0x06, 0x05, 7, 0]);
 }
 
@@ -424,8 +465,8 @@ fn container_spec_req_cf_021_fb_type_descriptor_header_is_4_bytes() {
     };
     let buf = write_type_section(&section);
     // fb count(2) + header(4) + 2 fields(8) + array count(2) + user count(2)
-    //   + variable count(2)
-    assert_eq!(buf.len(), 20);
+    //   + variable count(2) + stable var count(2)
+    assert_eq!(buf.len(), 22);
     assert_eq!(&buf[2..6], &[0x02, 0x01, 2, 0]);
     assert_eq!(&buf[6..10], &[FieldType::I32 as u8, 0, 0, 0]);
     assert_eq!(&buf[10..14], &[FieldType::String as u8, 0, 0x08, 0x07]);
@@ -583,9 +624,10 @@ fn container_spec_req_cf_008_field_entry_is_4_bytes() {
     let mut buf = Vec::new();
     section.write_to(&mut buf).unwrap();
     // fb_count(2) + type_id(2) + num_fields(1) + reserved(1) + field(4)
-    //   + array_count(2) + user_fb_count(2) + variable_count(2) = 16
+    //   + array_count(2) + user_fb_count(2) + variable_count(2)
+    //   + stable_var_count(2) = 18
     // The single field entry occupies exactly 4 bytes (bytes 6..10).
-    assert_eq!(buf.len(), 16);
+    assert_eq!(buf.len(), 18);
 }
 
 /// REQ-CF-container-009: FieldType/var_type encoding values 0 through 10.

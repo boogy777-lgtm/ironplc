@@ -73,7 +73,7 @@ Per-file source integrity lives in the debug section's `SOURCE_FILE_TABLE` (tag 
 | Requirement | Offset | Field | Type | Description |
 |-------------|--------|-------|------|-------------|
 | **REQ-CF-container-002** | 0 | magic | u32 | `0x49504C43` ("IPLC" in ASCII) |
-| **REQ-CF-container-003** | 4 | format_version | u16 | Container format version (currently 4; bumped to 2 from 1 by ADR-0033 opcode-encoding migration, to 3 by ADR-0035 WSTRING string-header/constant-pool encoding tags, and to 4 by the variable table added to the type section) |
+| **REQ-CF-container-003** | 4 | format_version | u16 | Container format version (currently 5; bumped to 2 from 1 by ADR-0033 opcode-encoding migration, to 3 by ADR-0035 WSTRING string-header/constant-pool encoding tags, to 4 by the variable table added to the type section, and to 5 by the stable variable IDs added to the type section) |
 | | 6 | profile | u8 | Reserved for future VM profile definitions; must be zero |
 | **REQ-CF-container-007** | 7 | flags | u8 | Bit 0: has system uptime variables (`FLAG_HAS_SYSTEM_UPTIME`); Bit 1: has debug section (`FLAG_HAS_DEBUG_SECTION`); Bit 2: has type section (`FLAG_HAS_TYPE_SECTION`); bits 3–7 reserved. No bit indicates a signature section (see below) |
 | | 8 | content_hash | [u8; 32] | BLAKE3 over `type_section \|\| constant_pool \|\| code_section` (see Content Hash Scope). **Planned** — currently written as all zeros |
@@ -162,9 +162,9 @@ Present when `debug_sig_offset` is nonzero, which requires a debug section (`fla
 
 Present when `flags` bit 2 is set. Required for on-device verification (ADR-0006). May be stripped for constrained targets using the signature fallback.
 
-The type section describes the aggregate types a program uses. The interpreter reads the array descriptors (element stride and bounds) and the user FB descriptors (body dispatch) at runtime; the FB type descriptors are for the verifier.
+The type section describes the aggregate types a program uses. The interpreter reads the array descriptors (element stride and bounds) and the user FB descriptors (body dispatch) at runtime; the FB type descriptors are for the verifier; the stable variable IDs are for the online-change migration planner ([ADR-0053](../adrs/0053-stable-variable-ids-for-declaration-level-hot-edit.md)), and the interpreter ignores them.
 
-**REQ-CF-container-018** The type section is four sub-tables in this order, each prefixed by a u16 count: FB type descriptors, array descriptors, user FB descriptors, variable table.
+**REQ-CF-container-018** The type section is five sub-tables in this order, each prefixed by a u16 count: FB type descriptors, array descriptors, user FB descriptors, variable table, stable variable IDs.
 
 | Offset | Field | Type | Description |
 |--------|-------|------|-------------|
@@ -176,6 +176,8 @@ The type section describes the aggregate types a program uses. The interpreter r
 | varies | user_fb_types | [UserFbDescriptor; num_user_fb_types] | 8 bytes each |
 | varies | num_variables | u16 | Number of variable table entries (must match header `num_variables`) |
 | varies | variables | [VarEntry; num_variables] | 4 bytes each (see below) |
+| varies | num_stable_vars | u16 | Number of stable variable ID entries |
+| varies | stable_vars | [StableVarEntry; num_stable_vars] | 10 bytes each (see below) |
 
 ### FB Type Descriptors
 
@@ -233,7 +235,7 @@ Each user FB descriptor maps a user-defined `FUNCTION_BLOCK` type to the compile
 
 ### Variable Table
 
-The variable table is the fourth and last sub-table of the type section ([REQ-CF-container-018](#type-section)), emitted by the compiler with one entry per compiler-assigned variable index. It describes the type of each variable slot, and it is the primary input to [Layout Hash and Online Change](#layout-hash-and-online-change). The load-time verifier that would check LOAD_VAR/STORE_VAR opcodes against it (ADR-0006) is still planned, so the interpreter continues to use the compiler-assigned indices directly.
+The variable table is the fourth sub-table of the type section ([REQ-CF-container-018](#type-section)), emitted by the compiler with one entry per compiler-assigned variable index. It describes the type of each variable slot, and it is the primary input to [Layout Hash and Online Change](#layout-hash-and-online-change). The load-time verifier that would check LOAD_VAR/STORE_VAR opcodes against it (ADR-0006) is still planned, so the interpreter continues to use the compiler-assigned indices directly.
 
 | Offset | Field | Type | Description |
 |--------|-------|------|-------------|
@@ -251,6 +253,28 @@ Each VarEntry (4 bytes, fixed size):
 **REQ-CF-container-009** The `var_type` / `field_type` encoding is: 0=I32, 1=U32, 2=I64, 3=U64, 4=F32, 5=F64, 6=STRING, 7=WSTRING, 8=FB_INSTANCE, 9=TIME, 10=SLOT. The SLOT type represents a heterogeneous structure field slot (8-byte slot for flattened struct layouts).
 
 Variable indices are compiler-assigned. The compiler must produce deterministic indices across compilations using the ordering rules in [Deterministic Ordering](#deterministic-ordering) to ensure that the same source program (with only logic changes) produces compatible bytecode.
+
+### Stable Variable IDs
+
+The stable variable ID table is the fifth and last sub-table of the type section ([REQ-CF-container-018](#type-section)). It maps a persistent variable's compiler-assigned index to the engineering-side entity UID: the identity of the declaration, assigned when the declaration is created and surviving every rename. The name is only a binding to that identity, and the container carries no names (they belong in the debug section).
+
+The table exists for declaration-level hot edit ([ADR-0053](../adrs/0053-stable-variable-ids-for-declaration-level-hot-edit.md)): a rename — including a name swap between two variables — keeps each entity's UID, so the variable's type and value stay with the entity and the rename moves no data. A runtime migration planner compares the active and candidate tables to decide which values are copied, initialised or dropped; it decides migration compatibility, not the `layout_hash`. The table is therefore excluded from [`layout_hash`](#layout-hash-and-online-change): a change that touches only UIDs and names keeps the hash identical, so it is not mistaken for a layout change.
+
+The table is emitted always, with a count of zero when it is empty (containers written before format v5 end after the variable table). Entries are stored in ascending `var_index` order; the UIDs come from the engineering project model (a rename or swap refactor keeps them) and are supplied through the compiler API for now, while project-model plumbing follows. Transient slots (function locals, scratch) have no entry.
+
+| Offset | Field | Type | Description |
+|--------|-------|------|-------------|
+| 0 | count | u16 | Number of stable variable ID entries |
+| 2 | entries | [StableVarEntry; count] | Stable variable ID descriptors |
+
+Each StableVarEntry (10 bytes, fixed size):
+
+| Offset | Field | Type | Description |
+|--------|-------|------|-------------|
+| 0 | var_index | u16 | Variable table index of the entity; entries ascend |
+| 2 | uid | u64 | Engineering-side entity UID; survives renames |
+
+**REQ-CF-container-028** The stable variable ID table is emitted with a u16 count, followed by that many 10-byte entries in ascending `var_index` order; each entry maps a persistent variable's `var_index` to its u64 entity UID.
 
 ### Function Signatures (planned, not emitted)
 
@@ -694,15 +718,15 @@ The swap occurs at a safe point (between scan cycles) to ensure the program neve
 This design relies on the compiler producing deterministic output rather than embedding names in the container for runtime matching. This is the right trade-off because:
 
 - **Logic-only changes are the common case** — most PLC online changes modify function bodies while keeping the same variables and FB types
-- **All-or-nothing is simple and safe** — if any declaration changes, the hash changes, and the VM requires a full restart; there is no partial migration that could silently corrupt data
+- **All-or-nothing is safe by default** — if any declaration changes, the hash changes, and the host requires a full restart unless a migration planner can prove per-variable compatibility from the stable variable IDs; there is no unverified partial migration that could silently corrupt data
 - **Smaller container format** — no variable names, type names, or field names in the type section; names belong in the debug section
 - **Simpler runtime** — one 32-byte hash comparison replaces O(n) name matching and per-item layout checking
 
-Per-variable migration (adding a variable while preserving others) is an advanced feature that can be added later if needed by extending the type section with optional name metadata.
+Per-variable migration is the successor feature: the type section's stable variable ID table (see [Stable Variable IDs](#stable-variable-ids)) carries a UID per persistent variable, and a runtime migration planner compares the active and candidate tables to decide which values are copied, which are initialised, and which are dropped. The table is deliberately excluded from `layout_hash`: a rename changes UIDs and names only, the hash stays equal, and the planner — not a single hash — decides compatibility ([ADR-0053](../adrs/0053-stable-variable-ids-for-declaration-level-hot-edit.md)).
 
 ## Versioning
 
-The `format_version` field allows future changes to the container format. The VM must reject versions it does not support. The current version is 4 (`FORMAT_VERSION`; see the header table for the history), and the reader rejects any other value.
+The `format_version` field allows future changes to the container format. The VM must reject versions it does not support. The current version is 5 (`FORMAT_VERSION`; see the header table for the history), and the reader rejects any other value.
 
 Rules for version increments:
 - Adding new optional sections → minor version (backward compatible)
