@@ -614,6 +614,23 @@ mod tests {
     }
 
     #[test]
+    fn compute_layout_hash_when_only_fb_field_uids_change_then_equal() {
+        // FB field UIDs (ADR 0059) are identity, not layout: assigning or
+        // changing them must not look like a layout change.
+        let first = layout_hash_container();
+        let mut second = layout_hash_container();
+        second.type_section.as_mut().unwrap().fb_field_uids.push(
+            crate::type_section::FbFieldUidEntry {
+                fb_type_id: FbTypeId::new(0x1000),
+                field_index: 0,
+                uid: 0xBEEF,
+            },
+        );
+
+        assert_eq!(first.compute_layout_hash(), second.compute_layout_hash());
+    }
+
+    #[test]
     fn compute_layout_hash_when_variable_entry_changes_then_differs() {
         let first = layout_hash_container();
         let mut second = layout_hash_container();

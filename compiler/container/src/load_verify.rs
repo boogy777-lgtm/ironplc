@@ -18,6 +18,7 @@
 //! | Array element type tags are defined | [`LoadViolation::InvalidArrayElementType`] |
 //! | Stable variable IDs are in bounds and ascending | [`LoadViolation::StableVarIdOutOfBounds`] / [`LoadViolation::StableVarIdsOutOfOrder`] |
 //! | User FB descriptors reference an existing function and a field range inside the variable table | [`LoadViolation::UserFbFunctionOutOfBounds`] / [`LoadViolation::UserFbVarsOutOfBounds`] |
+//! | FB field UIDs name an existing user FB type and a field inside it, ascending | [`LoadViolation::FbFieldUidUnknownType`] / [`LoadViolation::FbFieldUidFieldOutOfBounds`] / [`LoadViolation::FbFieldUidsOutOfOrder`] |
 //! | `layout_hash` recomputes over the type section | [`LoadViolation::LayoutHashMismatch`] |
 //!
 //! Integrity hashes are verified separately, against the raw section bytes:
@@ -144,6 +145,35 @@ pub enum LoadViolation {
         /// The header's `num_variables`.
         num_variables: u16,
     },
+    /// An FB field UID entry names a type ID that has no user FB descriptor.
+    /// Standard-library FBs own their layouts and never carry entries, so an
+    /// entry for one (or for a nonexistent type) can only be corrupt.
+    FbFieldUidUnknownType {
+        /// The type ID carried in the entry.
+        type_id: FbTypeId,
+    },
+    /// An FB field UID entry names a field ordinal at or past the type's
+    /// `num_fields`.
+    FbFieldUidFieldOutOfBounds {
+        /// The FB type ID owning the entry.
+        type_id: FbTypeId,
+        /// The field ordinal carried in the entry.
+        field_index: u8,
+        /// Number of data-region fields the descriptor declares.
+        num_fields: u8,
+    },
+    /// FB field UID entries are not in strictly ascending
+    /// `(fb_type_id, field_index)` order (a duplicate or unsorted entry).
+    FbFieldUidsOutOfOrder {
+        /// The out-of-order entry's type ID.
+        type_id: FbTypeId,
+        /// The out-of-order entry's field ordinal.
+        field_index: u8,
+        /// The type ID that preceded it.
+        previous_type_id: FbTypeId,
+        /// The field ordinal that preceded it.
+        previous_field_index: u8,
+    },
 }
 
 impl core::fmt::Display for LoadViolation {
@@ -222,6 +252,26 @@ impl core::fmt::Display for LoadViolation {
                 f,
                 "user FB {type_id} fields at variable offset {var_offset} ({} fields) exceed {num_variables} variables",
                 u32::from(*num_fields)
+            ),
+            LoadViolation::FbFieldUidUnknownType { type_id } => {
+                write!(f, "FB field UID references user FB {type_id}, which has no descriptor")
+            }
+            LoadViolation::FbFieldUidFieldOutOfBounds {
+                type_id,
+                field_index,
+                num_fields,
+            } => write!(
+                f,
+                "FB field UID for {type_id} references field {field_index} of {num_fields}"
+            ),
+            LoadViolation::FbFieldUidsOutOfOrder {
+                type_id,
+                field_index,
+                previous_type_id,
+                previous_field_index,
+            } => write!(
+                f,
+                "FB field UIDs are not ascending: ({type_id}, {field_index}) follows ({previous_type_id}, {previous_field_index})"
             ),
         }
     }
@@ -348,6 +398,43 @@ fn verify_type_section(
                 var_offset: descriptor.var_offset,
                 num_fields: descriptor.num_fields,
                 num_variables: header.num_variables,
+            });
+        }
+    }
+
+    // FB field UIDs reference a user FB descriptor's field range, so the
+    // descriptor table must be validated first (as it is above).
+    let mut previous_field: Option<(FbTypeId, u8)> = None;
+    for entry in &type_section.fb_field_uids {
+        let field = (entry.fb_type_id, entry.field_index);
+        if let Some((previous_type_id, previous_field_index)) = previous_field {
+            let out_of_order = field.0.raw() < previous_type_id.raw()
+                || (field.0 == previous_type_id && field.1 <= previous_field_index);
+            if out_of_order {
+                return Err(LoadViolation::FbFieldUidsOutOfOrder {
+                    type_id: entry.fb_type_id,
+                    field_index: entry.field_index,
+                    previous_type_id,
+                    previous_field_index,
+                });
+            }
+        }
+        previous_field = Some(field);
+
+        let Some(descriptor) = type_section
+            .user_fb_types
+            .iter()
+            .find(|d| d.type_id == entry.fb_type_id)
+        else {
+            return Err(LoadViolation::FbFieldUidUnknownType {
+                type_id: entry.fb_type_id,
+            });
+        };
+        if entry.field_index >= descriptor.num_fields {
+            return Err(LoadViolation::FbFieldUidFieldOutOfBounds {
+                type_id: entry.fb_type_id,
+                field_index: entry.field_index,
+                num_fields: descriptor.num_fields,
             });
         }
     }
@@ -670,6 +757,84 @@ mod tests {
                 num_fields: 1,
                 num_variables: 3
             }) if type_id == FbTypeId::new(0x1000)
+        ));
+    }
+
+    #[test]
+    fn verify_load_when_fb_field_uids_consistent_then_ok() {
+        let mut container = consistent_container();
+        container.type_section.as_mut().unwrap().fb_field_uids.push(
+            crate::type_section::FbFieldUidEntry {
+                fb_type_id: FbTypeId::new(0x1000),
+                field_index: 0,
+                uid: 77,
+            },
+        );
+        assert_eq!(verify_load(&container), Ok(()));
+    }
+
+    #[test]
+    fn verify_load_when_fb_field_uid_unknown_type_then_violation() {
+        let mut container = consistent_container();
+        container.type_section.as_mut().unwrap().fb_field_uids.push(
+            crate::type_section::FbFieldUidEntry {
+                fb_type_id: FbTypeId::new(0x1001),
+                field_index: 0,
+                uid: 77,
+            },
+        );
+        let result = verify_load(&container);
+        assert!(matches!(
+            result,
+            Err(LoadViolation::FbFieldUidUnknownType { type_id })
+                if type_id == FbTypeId::new(0x1001)
+        ));
+    }
+
+    #[test]
+    fn verify_load_when_fb_field_uid_field_out_of_bounds_then_violation() {
+        let mut container = consistent_container();
+        container.type_section.as_mut().unwrap().fb_field_uids.push(
+            crate::type_section::FbFieldUidEntry {
+                fb_type_id: FbTypeId::new(0x1000),
+                field_index: 1,
+                uid: 77,
+            },
+        );
+        let result = verify_load(&container);
+        assert!(matches!(
+            result,
+            Err(LoadViolation::FbFieldUidFieldOutOfBounds {
+                type_id,
+                field_index: 1,
+                num_fields: 1
+            }) if type_id == FbTypeId::new(0x1000)
+        ));
+    }
+
+    #[test]
+    fn verify_load_when_fb_field_uids_unsorted_then_violation() {
+        let mut container = consistent_container();
+        let uids = &mut container.type_section.as_mut().unwrap().fb_field_uids;
+        uids.push(crate::type_section::FbFieldUidEntry {
+            fb_type_id: FbTypeId::new(0x1000),
+            field_index: 0,
+            uid: 77,
+        });
+        uids.push(crate::type_section::FbFieldUidEntry {
+            fb_type_id: FbTypeId::new(0x1000),
+            field_index: 0,
+            uid: 78,
+        });
+        let result = verify_load(&container);
+        assert!(matches!(
+            result,
+            Err(LoadViolation::FbFieldUidsOutOfOrder {
+                type_id,
+                field_index: 0,
+                previous_type_id,
+                previous_field_index: 0
+            }) if type_id == FbTypeId::new(0x1000) && previous_type_id == FbTypeId::new(0x1000)
         ));
     }
 

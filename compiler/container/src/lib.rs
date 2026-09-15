@@ -88,9 +88,11 @@ pub use load_verify::{verify_load, LoadViolation};
 #[cfg(feature = "std")]
 pub use task_table::{ProgramInstanceEntry, TaskEntry, TaskTable};
 #[cfg(feature = "std")]
+pub use type_section::SLOT_BYTES;
+#[cfg(feature = "std")]
 pub use type_section::{
-    ArrayDescriptor, FbTypeDescriptor, FieldEntry, FieldType, StableVarEntry, TypeSection,
-    UserFbDescriptor, VarEntry, VAR_FLAG_IS_ARRAY,
+    ArrayDescriptor, FbFieldUidEntry, FbTypeDescriptor, FieldEntry, FieldType, StableVarEntry,
+    TypeSection, UserFbDescriptor, VarEntry, VAR_FLAG_IS_ARRAY,
 };
 #[cfg(feature = "std")]
 pub use verify::{verify_stack_balance, StackImbalance};
