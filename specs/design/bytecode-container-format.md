@@ -667,7 +667,10 @@ The hash covers all information that determines memory layout. It excludes code,
 
 ### Online change protocol
 
-When the VM receives new bytecode while running:
+A runtime host performs the online change, not the VM: the VM is a pure
+execution kernel that borrows a container and caller-owned buffers for the
+duration of a scan session. When the host receives new bytecode while the
+application runs:
 
 ```
 1. Read new file header
@@ -675,7 +678,8 @@ When the VM receives new bytecode while running:
 3. If hashes match:
    a. Verify new bytecode (signature + optional verifier)
    b. At the end of the current scan cycle (after OUTPUT_FLUSH):
-      - Swap code section to new bytecode
+      - Reload the VM from the new container on the host's buffers
+        (`Vm::load(...).resume(...)`)
       - Keep all variable, FB instance, and process image memory intact
       - Resume execution with new code on next scan cycle
 4. If hashes differ:
@@ -683,7 +687,7 @@ When the VM receives new bytecode while running:
    b. The operator must perform a full stop-load-start sequence
 ```
 
-The swap occurs at a safe point (between scan cycles) to ensure the program never executes a mix of old and new code within a single scan.
+The swap occurs at a safe point (between scan cycles) to ensure the program never executes a mix of old and new code within a single scan. The host rebuilds the buffers for the destination container and carries the persistent bytes over, which accommodates a candidate that grows the data region. See [ADR-0052](../adrs/0052-online-change-performed-by-the-runtime-host.md) for the host-level decision and the typed validation errors.
 
 ### Why compiler-determined ordering is sufficient
 

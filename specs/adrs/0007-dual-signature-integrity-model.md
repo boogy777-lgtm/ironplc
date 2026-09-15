@@ -4,6 +4,7 @@ status: proposed
 date: 2026-02-18
 amended: 2026-05-22 (BLAKE3 throughout; per-file source hashes moved to debug section)
 amended: 2026-09-11 (Implementation Status added; status unchanged)
+amended: 2026-09-15 (layout hash now computed; content_hash/debug_hash remain open)
 
 ## Context and Problem Statement
 
@@ -67,7 +68,7 @@ Verify by:
 4. Confirming each `SOURCE_FILE_TABLE` entry's hash matches a BLAKE3 computed over the corresponding source file
 5. Attempting to replace any per-file hash in the `SOURCE_FILE_TABLE` and confirming the debug signature rejects it
 
-## Implementation Status (as of 2026-09-11)
+## Implementation Status (as of 2026-09-15)
 
 This ADR is still `proposed`, and that is accurate: one of its three
 cryptographic elements exists, and neither signature does. Recorded here so a
@@ -81,6 +82,12 @@ What landed:
   `codegen::source_lookup` and pinned by tests that recompute `blake3::hash` over
   the same bytes. The "which file drifted" granularity this ADR argued for is
   real and usable today.
+* **The layout hash.** `Container::write_to` computes `layout_hash` over the
+  variable table, FB type descriptors and array descriptors and writes it into
+  the header, as "Layout Hash and Online Change" in
+  [the container spec](../design/bytecode-container-format.md#layout-hash-and-online-change)
+  defines. It is meaningful only once the container is serialized; a header
+  built but never written still carries zeros.
 * BLAKE3 throughout, as the 2026-05-22 amendment recorded.
 * The container *shape* for the rest: `FileHeader` declares `content_hash`,
   `debug_hash` and `layout_hash`, and the section directory reserves
@@ -90,10 +97,10 @@ What landed:
 
 What did not:
 
-* **The header hashes are never computed.** `content_hash`, `debug_hash` and
-  `layout_hash` are written as zeros; the only code that reads them is
-  `project::disassemble`, which prints them as hex. Elements 1 and 3 of the model
-  exist as field declarations only.
+* **`content_hash` and `debug_hash` are never computed.** Both are written as
+  zeros; the only code that reads them is `project::disassemble`, which prints
+  them as hex. Elements 1 and 3 of the model exist as field declarations only.
+  (`layout_hash` is computed; see above.)
 * **Neither signature exists.** Nothing writes the signature sections and nothing
   reads them; there is no key handling, and no signing crate is a dependency of
   any crate in the workspace. The algorithm question is settled on paper — this
