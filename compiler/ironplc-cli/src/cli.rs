@@ -23,6 +23,7 @@ use std::{
 };
 
 use ironplc_parser::options::CompilerOptions;
+use ironplc_project::sidecar::{declared_var_keys, sidecar_path_for, Sidecar, SidecarKey};
 use ironplc_sources::discovery::DiscoveredProject;
 use ironplc_sources::LibraryName;
 
@@ -141,6 +142,96 @@ pub fn compile(
     )
 }
 
+/// Reconciles the stable variable UID sidecar with the project's
+/// declarations and prints the sync report.
+///
+/// The report lists preserved, assigned, and removed keys plus rename and
+/// swap candidates; the candidates are heuristics the user resolves
+/// explicitly with [`map_uid`]. A clean analysis is required: a broken
+/// project must not rewrite the sidecar.
+pub fn sync_uids(
+    paths: &[PathBuf],
+    compiler_options: CompilerOptions,
+    suppress_output: bool,
+) -> Result<(), String> {
+    let Some(project_path) = paths.first() else {
+        return Err(String::from("Sync UIDs requires a project path"));
+    };
+    let Some(sidecar_path) = sidecar_path_for(project_path) else {
+        return Err(format!(
+            "Cannot derive a sidecar path from {}",
+            project_path.display()
+        ));
+    };
+
+    let (mut project, mut diagnostics) = create_project(paths, compiler_options, &[]);
+    diagnostics.extend(project.semantic());
+    if !diagnostics.is_empty() {
+        return finish("Sync UIDs", diagnostics, Some(&project), suppress_output);
+    }
+    let Some(library) = project.analyzed_library() else {
+        // A clean analysis always caches its artifacts, so this is a
+        // compiler defect rather than a problem with the input.
+        diagnostics.push(Diagnostic::internal_error());
+        return finish("Sync UIDs", diagnostics, Some(&project), suppress_output);
+    };
+
+    let mut sidecar = match Sidecar::load(&sidecar_path) {
+        Ok(sidecar) => sidecar,
+        Err(err) => {
+            diagnostics.push(err);
+            return finish("Sync UIDs", diagnostics, Some(&project), suppress_output);
+        }
+    };
+    let report = sidecar.sync(&declared_var_keys(library));
+    if let Err(err) = sidecar.save(&sidecar_path) {
+        diagnostics.push(err);
+        return finish("Sync UIDs", diagnostics, Some(&project), suppress_output);
+    }
+
+    print!("{report}");
+    finish("Sync UIDs", diagnostics, Some(&project), suppress_output)
+}
+
+/// Records an explicit rename or swap resolution in the project's stable
+/// variable UID sidecar by moving the old key's UID to the new key.
+pub fn map_uid(
+    project_path: &Path,
+    old_scope: &str,
+    old_name: &str,
+    new_scope: &str,
+    new_name: &str,
+) -> Result<(), String> {
+    let Some(sidecar_path) = sidecar_path_for(project_path) else {
+        return Err(format!(
+            "Cannot derive a sidecar path from {}",
+            project_path.display()
+        ));
+    };
+    let mut sidecar = Sidecar::load(&sidecar_path).map_err(|err| diagnostic_message(&err))?;
+    sidecar
+        .map_uid(
+            &SidecarKey::new(old_scope, old_name),
+            &SidecarKey::new(new_scope, new_name),
+        )
+        .map_err(|err| err.to_string())?;
+    sidecar
+        .save(&sidecar_path)
+        .map_err(|err| diagnostic_message(&err))?;
+    Ok(())
+}
+
+/// Flattens a diagnostic into the command's `Result` error string, the way
+/// operational (non-diagnostic-collection) failures are reported.
+fn diagnostic_message(diagnostic: &Diagnostic) -> String {
+    format!(
+        "{}: {}: {}",
+        diagnostic.code,
+        diagnostic.description(),
+        diagnostic.primary.message
+    )
+}
+
 /// Codegen [`SourceLookup`](ironplc_codegen::SourceLookup) backed by an
 /// in-memory map populated from the project's loaded sources. The map
 /// owns the bytes so the lookup can outlive any borrow on the project.
@@ -231,6 +322,15 @@ fn create_project(
 
     for file_path in files {
         if let Err(err) = project.push(FileId::from_path(&file_path)) {
+            diagnostics.push(err);
+        }
+    }
+
+    // Load the UID sidecar derived from the first path so the compile
+    // pipeline injects the project's stable variable IDs (ADR 0053). A
+    // missing or malformed sidecar is an empty table, not an error.
+    if let Some(sidecar_path) = paths.first().and_then(|path| sidecar_path_for(path)) {
+        if let Err(err) = project.load_uid_sidecar(&sidecar_path) {
             diagnostics.push(err);
         }
     }
@@ -457,7 +557,10 @@ mod tests {
 
     use ironplc_parser::options::CompilerOptions;
 
-    use crate::{cli::check, cli::compile, cli::tokenize, test_helpers::resource_path};
+    use crate::{
+        cli::check, cli::compile, cli::map_uid, cli::sync_uids, cli::tokenize,
+        test_helpers::resource_path,
+    };
 
     // The plain valid/syntax-error/semantic-error outcomes of check, echo,
     // tokenize, and compile against the shared fixtures are asserted by the
@@ -751,6 +854,117 @@ mod tests {
             &[],
             true,
         );
+        assert!(result.is_err());
+    }
+
+    // -----------------------------------------------------------------
+    // Refactor commands: UID sidecar maintenance (ADR 0053).
+    // -----------------------------------------------------------------
+
+    const COUNTER_PROGRAM: &str =
+        "PROGRAM main VAR Counter : INT; END_VAR Counter := 1; END_PROGRAM";
+
+    /// Creates `name` as a subdirectory of a temporary directory holding
+    /// `COUNTER_PROGRAM` as main.st, returning both.
+    fn project_dir_with_counter(temp: &tempfile::TempDir, name: &str) -> std::path::PathBuf {
+        let dir = temp.path().join(name);
+        std::fs::create_dir(&dir).unwrap();
+        std::fs::write(dir.join("main.st"), COUNTER_PROGRAM).unwrap();
+        dir
+    }
+
+    #[test]
+    fn sync_uids_when_valid_project_then_creates_sidecar_and_reports() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let dir = project_dir_with_counter(&temp, "proj");
+
+        let result = sync_uids(std::slice::from_ref(&dir), CompilerOptions::default(), true);
+
+        assert!(result.is_ok(), "unexpected error: {:?}", result.err());
+        let sidecar_path = ironplc_project::sidecar_path_for(&dir).unwrap();
+        let text = std::fs::read_to_string(&sidecar_path).unwrap();
+        assert!(text.contains("\"Counter\""));
+    }
+
+    #[test]
+    fn sync_uids_when_run_twice_then_key_preserved() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let dir = project_dir_with_counter(&temp, "proj");
+        sync_uids(std::slice::from_ref(&dir), CompilerOptions::default(), true).unwrap();
+
+        let sidecar_path = ironplc_project::sidecar_path_for(&dir).unwrap();
+        let before = std::fs::read_to_string(&sidecar_path).unwrap();
+        sync_uids(std::slice::from_ref(&dir), CompilerOptions::default(), true).unwrap();
+        let after = std::fs::read_to_string(&sidecar_path).unwrap();
+
+        // Nothing changed between runs, so the deterministic serialization
+        // is byte-identical.
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn sync_uids_when_project_has_error_then_no_sidecar() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let dir = temp.path().join("proj");
+        std::fs::create_dir(&dir).unwrap();
+        std::fs::write(
+            dir.join("main.st"),
+            "PROGRAM main VAR x : INT; END_VAR x := undeclared_var; END_PROGRAM",
+        )
+        .unwrap();
+
+        let result = sync_uids(std::slice::from_ref(&dir), CompilerOptions::default(), true);
+
+        assert!(result.is_err());
+        assert!(!ironplc_project::sidecar_path_for(&dir).unwrap().exists());
+    }
+
+    #[test]
+    fn map_uid_when_old_key_known_then_moves_uid() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let dir = project_dir_with_counter(&temp, "proj");
+        sync_uids(std::slice::from_ref(&dir), CompilerOptions::default(), true).unwrap();
+        let sidecar_path = ironplc_project::sidecar_path_for(&dir).unwrap();
+        let before = std::fs::read_to_string(&sidecar_path).unwrap();
+        assert!(before.contains("\"Counter\""));
+
+        let result = map_uid(&dir, "main", "Counter", "main", "Ticks");
+
+        assert!(result.is_ok(), "unexpected error: {:?}", result.err());
+        let after = std::fs::read_to_string(&sidecar_path).unwrap();
+        assert!(after.contains("\"Ticks\""));
+        assert!(!after.contains("\"Counter\""));
+    }
+
+    #[test]
+    fn map_uid_when_old_key_unknown_then_error_and_sidecar_unchanged() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let dir = project_dir_with_counter(&temp, "proj");
+        sync_uids(std::slice::from_ref(&dir), CompilerOptions::default(), true).unwrap();
+        let sidecar_path = ironplc_project::sidecar_path_for(&dir).unwrap();
+        let before = std::fs::read_to_string(&sidecar_path).unwrap();
+
+        let result = map_uid(&dir, "main", "Missing", "main", "Ticks");
+
+        assert!(result.is_err());
+        let after = std::fs::read_to_string(&sidecar_path).unwrap();
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn map_uid_when_new_key_already_mapped_then_error() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let dir = temp.path().join("proj");
+        std::fs::create_dir(&dir).unwrap();
+        std::fs::write(
+            dir.join("main.st"),
+            "PROGRAM main VAR Counter : INT; Other : INT; END_VAR Counter := 1; END_PROGRAM",
+        )
+        .unwrap();
+        sync_uids(std::slice::from_ref(&dir), CompilerOptions::default(), true).unwrap();
+
+        let result = map_uid(&dir, "main", "Counter", "main", "Other");
+
         assert!(result.is_err());
     }
 }

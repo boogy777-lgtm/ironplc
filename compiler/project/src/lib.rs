@@ -4,10 +4,12 @@
 pub mod compile;
 pub mod disassemble;
 pub mod project;
+pub mod sidecar;
 pub mod tokenizer;
 
 pub use compile::{compile, CompileOutput};
 pub use project::{FileBackedProject, MemoryBackedProject, Project};
+pub use sidecar::{sidecar_path_for, Sidecar, SidecarKey, SyncReport};
 
 #[cfg(test)]
 #[ctor::ctor(unsafe)]

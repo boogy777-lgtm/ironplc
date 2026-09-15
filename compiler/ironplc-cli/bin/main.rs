@@ -390,8 +390,48 @@ enum Action {
     },
     /// Show available dialects and which features each enables.
     Dialects,
+    /// Refactoring commands for maintaining a project's stable variable UID
+    /// sidecar (ADR 0053). The sidecar stores each persistent declaration's
+    /// entity UID next to the project so renames keep variable identity
+    /// across hot edits.
+    Refactor {
+        #[command(subcommand)]
+        command: RefactorAction,
+    },
     /// Prints the version number of the compiler.
     Version,
+}
+
+#[derive(clap::Subcommand, Debug)]
+enum RefactorAction {
+    /// Reconcile the stable variable UID sidecar with the project's
+    /// declarations: new variables are assigned UIDs, removed variables are
+    /// dropped, and rename/swap candidates are reported for the user to
+    /// resolve with `refactor map-uid`.
+    SyncUids {
+        #[command(flatten)]
+        file_args: FileArgs,
+    },
+    /// Record an explicit rename or swap resolution by moving the UID of the
+    /// old (scope, name) key to the new one. Fails when the old key has no
+    /// UID or the new key already has one.
+    MapUid {
+        /// The project file or directory whose sidecar is updated.
+        project: PathBuf,
+
+        /// Scope path of the existing key (the declaring program's name, or
+        /// `global` for top-level VAR_GLOBAL declarations).
+        old_scope: String,
+
+        /// Name of the existing key.
+        old_name: String,
+
+        /// Scope path the UID moves to.
+        new_scope: String,
+
+        /// Name the UID moves to.
+        new_name: String,
+    },
 }
 
 pub fn main() -> Result<(), String> {
@@ -432,6 +472,18 @@ pub fn main() -> Result<(), String> {
             print!("{}", describe_dialects());
             Ok(())
         }
+        Action::Refactor { command } => match command {
+            RefactorAction::SyncUids { file_args } => {
+                cli::sync_uids(&file_args.files, file_args.compiler_options(), false)
+            }
+            RefactorAction::MapUid {
+                project,
+                old_scope,
+                old_name,
+                new_scope,
+                new_name,
+            } => cli::map_uid(&project, &old_scope, &old_name, &new_scope, &new_name),
+        },
         Action::Version => {
             println!("ironplcc version {VERSION}");
             Ok(())

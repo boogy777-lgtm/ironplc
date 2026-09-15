@@ -580,3 +580,125 @@ fn version_then_ok() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+/// Creates `name` as a subdirectory of `temp` holding a main.st with the
+/// given declaration block, returning the project directory.
+fn project_with_vars(
+    temp: &tempfile::TempDir,
+    name: &str,
+    declarations: &str,
+) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+    let dir = temp.path().join(name);
+    std::fs::create_dir(&dir)?;
+    std::fs::write(
+        dir.join("main.st"),
+        format!("PROGRAM main VAR {declarations} END_VAR x := 1; END_PROGRAM"),
+    )?;
+    Ok(dir)
+}
+
+/// The sidecar path the CLI derives for a project directory.
+fn sidecar_path(
+    project_dir: &std::path::Path,
+) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+    let name = project_dir
+        .file_name()
+        .ok_or("project directory has no name")?
+        .to_str()
+        .ok_or("project directory name is not UTF-8")?;
+    Ok(project_dir.with_file_name(format!("{name}.uids.json")))
+}
+
+#[test]
+fn refactor_sync_uids_when_project_then_creates_sidecar_and_reports(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let project = project_with_vars(&temp, "proj", "x : INT;")?;
+    let mut cmd = Command::new(cargo::cargo_bin!("ironplcc"));
+
+    cmd.arg("refactor").arg("sync-uids").arg(&project);
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("assigned: 1"))
+        .stdout(predicate::str::contains("main.x"));
+
+    assert!(sidecar_path(&project)?.is_file());
+
+    Ok(())
+}
+
+#[test]
+fn refactor_sync_uids_when_run_after_rename_then_reports_rename_candidate(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let project = project_with_vars(&temp, "proj", "x : INT;")?;
+    let mut cmd = Command::new(cargo::cargo_bin!("ironplcc"));
+    cmd.arg("refactor").arg("sync-uids").arg(&project);
+    cmd.assert().success();
+
+    // Rename x to y in the source, without resolving it: sync reports the
+    // pair as a rename candidate instead of deciding it.
+    std::fs::write(
+        project.join("main.st"),
+        "PROGRAM main VAR y : INT; END_VAR y := 1; END_PROGRAM",
+    )?;
+    let mut cmd = Command::new(cargo::cargo_bin!("ironplcc"));
+    cmd.arg("refactor").arg("sync-uids").arg(&project);
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("rename candidates: 1"))
+        .stdout(predicate::str::contains("main.x -> main.y"));
+
+    Ok(())
+}
+
+#[test]
+fn refactor_map_uid_when_rename_resolved_then_uid_preserved(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let project = project_with_vars(&temp, "proj", "x : INT;")?;
+    let mut cmd = Command::new(cargo::cargo_bin!("ironplcc"));
+    cmd.arg("refactor").arg("sync-uids").arg(&project);
+    cmd.assert().success();
+
+    std::fs::write(
+        project.join("main.st"),
+        "PROGRAM main VAR y : INT; END_VAR y := 1; END_PROGRAM",
+    )?;
+    let mut cmd = Command::new(cargo::cargo_bin!("ironplcc"));
+    cmd.arg("refactor")
+        .arg("map-uid")
+        .arg(&project)
+        .arg("main")
+        .arg("x")
+        .arg("main")
+        .arg("y");
+    cmd.assert().success();
+
+    let mut cmd = Command::new(cargo::cargo_bin!("ironplcc"));
+    cmd.arg("refactor").arg("sync-uids").arg(&project);
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("preserved: 1"))
+        .stdout(predicate::str::contains("main.y"));
+
+    Ok(())
+}
+
+#[test]
+fn refactor_map_uid_when_old_key_unknown_then_err() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let project = project_with_vars(&temp, "proj", "x : INT;")?;
+    let mut cmd = Command::new(cargo::cargo_bin!("ironplcc"));
+
+    cmd.arg("refactor")
+        .arg("map-uid")
+        .arg(&project)
+        .arg("main")
+        .arg("missing")
+        .arg("main")
+        .arg("y");
+    cmd.assert().failure();
+
+    Ok(())
+}

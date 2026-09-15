@@ -76,6 +76,26 @@ Informational Commands
 :program:`ironplcc version`
    Print the version number of the compiler.
 
+Refactor Commands
+-----------------
+
+:program:`ironplcc refactor sync-uids` [*FILES*...]
+   Reconcile the project's stable variable UID sidecar (``<stem>.uids.json``)
+   with the declarations in the source files. Unchanged variables keep their
+   UID, new variables are assigned the next UID monotonically, and removed
+   variables are dropped. The command prints a report of preserved, assigned,
+   and removed variables, plus rename candidates (exactly one removed and one
+   added variable) and swap candidates (exactly two of each); the candidates
+   are heuristics for the user to resolve, never applied automatically. A
+   project that does not analyze cleanly leaves the sidecar untouched.
+
+:program:`ironplcc refactor map-uid` *PROJECT* *OLD-SCOPE* *OLD-NAME* *NEW-SCOPE* *NEW-NAME*
+   Record an explicit rename or swap resolution in the project's stable
+   variable UID sidecar by moving the UID of the old ``(scope, name)`` key to
+   the new one. The scope of a program variable is the program's name; the
+   scope of a top-level ``VAR_GLOBAL`` declaration is ``global``. The command
+   fails when the old key has no UID or the new key already has one.
+
 Other Commands
 --------------
 

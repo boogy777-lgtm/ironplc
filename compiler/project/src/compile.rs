@@ -119,7 +119,7 @@ mod tests {
     use ironplc_problems::Problem;
 
     use super::compile;
-    use crate::project::{MemoryBackedProject, Project};
+    use crate::project::{FileBackedProject, MemoryBackedProject, Project};
 
     /// Stands in for a problem the caller found before the pipeline ran, the
     /// way project discovery does for the CLI.
@@ -194,6 +194,66 @@ END_PROGRAM
 
         assert_eq!(
             type_section.stable_vars.as_slice(),
+            [StableVarEntry {
+                var_index: index,
+                uid: 42,
+            }]
+        );
+    }
+
+    /// Phase 3: `FileBackedProject` auto-loads the UID sidecar at
+    /// initialization (ADR 0053), so compiling a project whose sidecar holds
+    /// UIDs produces a container whose `stable_vars` table carries them.
+    #[test]
+    fn compile_when_file_backed_project_with_sidecar_then_container_carries_uids() {
+        use crate::sidecar::sidecar_path_for;
+
+        let temp = tempfile::tempdir().unwrap();
+        let project_dir = temp.path().join("proj");
+        std::fs::create_dir(&project_dir).unwrap();
+        std::fs::write(project_dir.join("main.st"), VALID_PROGRAM).unwrap();
+        std::fs::write(
+            sidecar_path_for(&project_dir).unwrap(),
+            r#"{"version": 1, "variables": [{"scope": "main", "name": "x", "uid": 42}]}"#,
+        )
+        .unwrap();
+
+        let mut project = FileBackedProject::default();
+        let diagnostics = project.initialize(&project_dir);
+        assert!(
+            diagnostics.is_empty(),
+            "unexpected initialization diagnostics: {diagnostics:?}"
+        );
+
+        let output = compile(
+            &mut project,
+            &CompilerOptions::default(),
+            &EmptyLookup,
+            vec![],
+        );
+        assert!(
+            output.diagnostics.is_empty(),
+            "expected a clean compile, got: {:?}",
+            output.diagnostics
+        );
+        let container = output.container.expect("valid program must compile");
+        let index = container
+            .debug_section
+            .as_ref()
+            .expect("named variables imply a debug section")
+            .var_names
+            .iter()
+            .find(|entry| entry.name.eq_ignore_ascii_case("x"))
+            .expect("the program declares x")
+            .var_index;
+
+        assert_eq!(
+            container
+                .type_section
+                .as_ref()
+                .expect("the variable table implies a type section")
+                .stable_vars
+                .as_slice(),
             [StableVarEntry {
                 var_index: index,
                 uid: 42,
