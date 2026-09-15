@@ -1,12 +1,16 @@
 //! Unit tests for the state migration planner.
 //!
-//! The cases pin the per-UID classification, each reject reason and the
-//! data-region copies; the end-to-end host behavior lives in
-//! `tests/migration_acceptance.rs`.
+//! The cases pin the per-UID classification, each reject reason, the
+//! data-region copies, and the type-conversion policy (ADR 0060); the
+//! end-to-end host behavior lives in `tests/migration_acceptance.rs`.
 
 use super::*;
-use ironplc_container::{Container, ContainerBuilder, FbTypeId, FieldEntry, FunctionId};
+use ironplc_container::{
+    Container, ContainerBuilder, FbFieldUidEntry, FbTypeDescriptor, FbTypeId, FieldEntry,
+    FieldType, FunctionId, UserFbDescriptor,
+};
 use ironplc_vm::Slot;
+use rstest::rstest;
 
 /// An I32 variable-table entry.
 fn i32_entry() -> VarEntry {
@@ -166,18 +170,19 @@ fn build_when_uid_only_in_base_then_no_action() {
 }
 
 #[test]
-fn build_when_variable_type_changed_then_incompatible_entry() {
+fn build_when_variable_type_changed_outside_policy_then_type_change_unsupported() {
     let base = container(&[i32_entry()], &[(0, 7)]);
     let mut candidate = container(&[i32_entry()], &[(0, 7)]);
-    candidate.type_section.as_mut().unwrap().variable_table[0].var_type = FieldType::F64;
+    candidate.type_section.as_mut().unwrap().variable_table[0].var_type = FieldType::U32;
 
     let result = StateMigrationPlan::build(&base, &candidate);
 
     assert_eq!(
         result.unwrap_err(),
-        MigrationError::IncompatibleEntry {
+        MigrationError::TypeChangeUnsupported {
             uid: 7,
-            reason: "the variable type changed",
+            from: FieldType::I32,
+            to: FieldType::U32,
         }
     );
 }
@@ -230,6 +235,269 @@ fn build_when_string_entry_equal_then_emits_header_sized_region_copy() {
             byte_size: 16,
             candidate_max_length: 10,
         }]
+    );
+}
+
+/// A scalar variable-table entry of the given storage class.
+fn scalar_entry(var_type: FieldType) -> VarEntry {
+    VarEntry {
+        var_type,
+        flags: 0,
+        extra: 0,
+    }
+}
+
+/// A container with one stable array variable of `element` with `elements`
+/// elements, sized so its data region holds every element.
+fn typed_array_container(element: FieldType, elements: u32, data_region_bytes: u32) -> Container {
+    let mut builder = ContainerBuilder::new();
+    builder.add_array_descriptor(element as u8, elements, 0);
+    builder
+        .add_var_entry(VarEntry {
+            var_type: element,
+            flags: VAR_FLAG_IS_ARRAY,
+            extra: 0,
+        })
+        .add_stable_var(StableVarEntry {
+            var_index: VarIndex::new(0),
+            uid: 7,
+        })
+        .num_variables(1)
+        .data_region_bytes(data_region_bytes)
+        .build()
+}
+
+#[rstest]
+#[case::signed_widen(FieldType::I32, FieldType::I64, ValueConversion::SignedWiden32To64)]
+#[case::unsigned_widen(FieldType::U32, FieldType::U64, ValueConversion::UnsignedWiden32To64)]
+#[case::int_to_real(FieldType::I32, FieldType::F32, ValueConversion::SignedToReal)]
+#[case::int_to_lreal(FieldType::I32, FieldType::F64, ValueConversion::SignedToLReal)]
+#[case::long_to_lreal(FieldType::I64, FieldType::F64, ValueConversion::LongToLReal)]
+#[case::real_to_lreal(FieldType::F32, FieldType::F64, ValueConversion::RealToLReal)]
+fn build_when_policy_pair_then_emits_convert_action(
+    #[case] base_type: FieldType,
+    #[case] candidate_type: FieldType,
+    #[case] expected: ValueConversion,
+) {
+    let base = container(&[scalar_entry(base_type)], &[(0, 7)]);
+    let candidate = container(&[scalar_entry(candidate_type)], &[(0, 7)]);
+
+    let plan = StateMigrationPlan::build(&base, &candidate).unwrap();
+
+    assert_eq!(
+        plan.actions,
+        vec![MigrationAction::Convert {
+            from_index: VarIndex::new(0),
+            to_index: VarIndex::new(0),
+            conversion: expected,
+        }]
+    );
+}
+
+#[rstest]
+#[case::signed_widen(
+    FieldType::I32,
+    FieldType::I64,
+    Slot::from_i32(-30_000),
+    Slot::from_i64(-30_000)
+)]
+#[case::unsigned_widen(
+    FieldType::U32,
+    FieldType::U64,
+    Slot::from_u64(4_000_000_000),
+    Slot::from_u64(4_000_000_000)
+)]
+#[case::int_to_real(
+    FieldType::I32,
+    FieldType::F32,
+    Slot::from_i32(21),
+    Slot::from_f32(21.0)
+)]
+#[case::int_to_lreal(
+    FieldType::I32,
+    FieldType::F64,
+    Slot::from_i32(-21),
+    Slot::from_f64(-21.0)
+)]
+#[case::long_to_lreal(
+    FieldType::I64,
+    FieldType::F64,
+    Slot::from_i64(1_000_000_000_000),
+    Slot::from_f64(1_000_000_000_000.0)
+)]
+#[case::real_to_lreal(
+    FieldType::F32,
+    FieldType::F64,
+    Slot::from_f32(2.5),
+    Slot::from_f64(2.5)
+)]
+fn apply_when_policy_pair_then_candidate_carries_converted_value(
+    #[case] base_type: FieldType,
+    #[case] candidate_type: FieldType,
+    #[case] value: Slot,
+    #[case] expected: Slot,
+) {
+    let base = container(&[scalar_entry(base_type)], &[(0, 7)]);
+    let candidate = container(&[scalar_entry(candidate_type)], &[(0, 7)]);
+    let plan = StateMigrationPlan::build(&base, &candidate).unwrap();
+
+    let mut base_buffers = VmBuffers::from_container(&base);
+    base_buffers.vars[0] = value;
+    let mut candidate_buffers = VmBuffers::from_container(&candidate);
+
+    plan.apply(&base_buffers, &mut candidate_buffers).unwrap();
+
+    assert_eq!(candidate_buffers.vars[0], expected);
+}
+
+#[rstest]
+#[case::narrowing(FieldType::I64, FieldType::I32)]
+#[case::real_to_int(FieldType::F64, FieldType::I32)]
+#[case::real_narrowing(FieldType::F64, FieldType::F32)]
+#[case::signedness_change(FieldType::I32, FieldType::U32)]
+#[case::int_to_time(FieldType::I32, FieldType::Time)]
+#[case::int_to_string(FieldType::I32, FieldType::String)]
+#[case::string_width(FieldType::String, FieldType::WString)]
+#[case::fb_instance(FieldType::FbInstance, FieldType::I32)]
+fn build_when_pair_outside_policy_then_type_change_unsupported_named(
+    #[case] base_type: FieldType,
+    #[case] candidate_type: FieldType,
+) {
+    let base = container(&[scalar_entry(base_type)], &[(0, 7)]);
+    let candidate = container(&[scalar_entry(candidate_type)], &[(0, 7)]);
+
+    let result = StateMigrationPlan::build(&base, &candidate);
+
+    assert_eq!(
+        result.unwrap_err(),
+        MigrationError::TypeChangeUnsupported {
+            uid: 7,
+            from: base_type,
+            to: candidate_type,
+        }
+    );
+}
+
+#[test]
+fn build_when_array_elements_in_policy_and_length_equal_then_convert_array() {
+    let base = typed_array_container(FieldType::I32, 2, 16);
+    let candidate = typed_array_container(FieldType::I64, 2, 16);
+
+    let plan = StateMigrationPlan::build(&base, &candidate).unwrap();
+
+    assert_eq!(
+        plan.actions,
+        vec![MigrationAction::ConvertArray {
+            from_index: VarIndex::new(0),
+            to_index: VarIndex::new(0),
+            conversion: ValueConversion::SignedWiden32To64,
+            byte_size: 16,
+        }]
+    );
+}
+
+#[test]
+fn apply_when_array_elements_in_policy_then_each_element_converts() {
+    let base = typed_array_container(FieldType::I32, 2, 16);
+    let candidate = typed_array_container(FieldType::I64, 2, 16);
+    let plan = StateMigrationPlan::build(&base, &candidate).unwrap();
+
+    let mut base_buffers = VmBuffers::from_container(&base);
+    base_buffers.vars[0] = Slot::from_i32(0);
+    base_buffers.data_region[0..8].copy_from_slice(&Slot::from_i32(-11).as_u64().to_le_bytes());
+    base_buffers.data_region[8..16].copy_from_slice(&Slot::from_i32(22).as_u64().to_le_bytes());
+    let mut candidate_buffers = VmBuffers::from_container(&candidate);
+    candidate_buffers.vars[0] = Slot::from_i32(0);
+
+    plan.apply(&base_buffers, &mut candidate_buffers).unwrap();
+
+    assert_eq!(
+        candidate_buffers.data_region[0..8],
+        Slot::from_i64(-11).as_u64().to_le_bytes()
+    );
+    assert_eq!(
+        candidate_buffers.data_region[8..16],
+        Slot::from_i64(22).as_u64().to_le_bytes()
+    );
+}
+
+#[test]
+fn build_when_array_length_changes_with_in_policy_elements_then_descriptor_mismatch() {
+    // The policy admits the element pair, but an aggregate whose length
+    // changed cannot carry values element-wise: the shapes differ.
+    let base = typed_array_container(FieldType::I32, 2, 16);
+    let candidate = typed_array_container(FieldType::I64, 3, 24);
+
+    let result = StateMigrationPlan::build(&base, &candidate);
+
+    assert_eq!(
+        result.unwrap_err(),
+        MigrationError::ArrayDescriptorMismatch { uid: 7 }
+    );
+}
+
+#[test]
+fn build_when_array_descriptor_missing_then_array_descriptor_mismatch() {
+    // The candidate's entry names a descriptor index the candidate does not
+    // carry: the shape cannot be proven, so the planner fails closed.
+    let base = typed_array_container(FieldType::I32, 2, 16);
+    let mut candidate = typed_array_container(FieldType::I64, 2, 16);
+    candidate.type_section.as_mut().unwrap().variable_table[0].extra = 9;
+
+    let result = StateMigrationPlan::build(&base, &candidate);
+
+    assert_eq!(
+        result.unwrap_err(),
+        MigrationError::ArrayDescriptorMismatch { uid: 7 }
+    );
+}
+
+#[rstest]
+#[case::narrowing(FieldType::I64, FieldType::I32)]
+#[case::signedness_change(FieldType::I32, FieldType::U32)]
+#[case::element_to_string(FieldType::I32, FieldType::String)]
+fn build_when_array_elements_outside_policy_then_type_change_unsupported_named(
+    #[case] base_element: FieldType,
+    #[case] candidate_element: FieldType,
+) {
+    let base = typed_array_container(base_element, 2, 16);
+    let candidate = typed_array_container(candidate_element, 2, 16);
+
+    let result = StateMigrationPlan::build(&base, &candidate);
+
+    assert_eq!(
+        result.unwrap_err(),
+        MigrationError::TypeChangeUnsupported {
+            uid: 7,
+            from: base_element,
+            to: candidate_element,
+        }
+    );
+}
+
+#[test]
+fn build_when_string_width_changes_then_type_change_unsupported_named() {
+    // STRING -> WSTRING is a type-tag change outside the policy: strings
+    // migrate only within the same width and maximum length.
+    let base = container(&[string_entry(10)], &[(0, 7)]);
+    let candidate = container(
+        &[VarEntry {
+            var_type: FieldType::WString,
+            flags: 0,
+            extra: 10,
+        }],
+        &[(0, 7)],
+    );
+
+    let result = StateMigrationPlan::build(&base, &candidate);
+
+    assert_eq!(
+        result.unwrap_err(),
+        MigrationError::TypeChangeUnsupported {
+            uid: 7,
+            from: FieldType::String,
+            to: FieldType::WString,
+        }
     );
 }
 
@@ -860,6 +1128,15 @@ fn migration_error_display_when_variant_then_names_the_reason() {
     assert_eq!(
         MigrationError::ArrayDescriptorMismatch { uid: 7 }.to_string(),
         "entity 7 has a changed array descriptor"
+    );
+    assert_eq!(
+        MigrationError::TypeChangeUnsupported {
+            uid: 7,
+            from: FieldType::I32,
+            to: FieldType::String,
+        }
+        .to_string(),
+        "entity 7 cannot change type from I32 to STRING: the conversion is outside the migration policy"
     );
     assert_eq!(
         MigrationError::FbLayoutUnsupported.to_string(),

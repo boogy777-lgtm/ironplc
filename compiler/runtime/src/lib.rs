@@ -17,6 +17,7 @@
 #![allow(clippy::result_large_err)]
 
 mod commands;
+mod conversion;
 mod error;
 mod generation;
 mod host;

@@ -21,6 +21,7 @@
 mod common;
 
 use common::{compile_with_ids, compile_with_uid_keys, variable_index};
+use ironplc_container::FieldType;
 use ironplc_runtime::{HostMode, MigrationError, OnlineChangeError, RuntimeHost};
 
 #[test]
@@ -318,7 +319,10 @@ END_PROGRAM
 }
 
 #[test]
-fn stage_when_variable_retyped_then_migration_unsupported_and_application_runs() {
+fn stage_when_variable_retyped_outside_policy_then_rejected_with_named_types() {
+    // DINT -> STRING is outside the conversion policy (ADR 0060): the stage
+    // rejects with the pair named, through the existing V4010 path, and the
+    // running application is untouched.
     let base = compile_with_ids(
         "PROGRAM main
   VAR
@@ -336,9 +340,9 @@ END_PROGRAM
     let candidate = compile_with_ids(
         "PROGRAM main
   VAR
-    Counter : REAL;
+    Counter : STRING[10];
   END_VAR
-  Counter := Counter + 1.0;
+  Counter := 'AB';
 END_PROGRAM
 ",
         &[("Counter", 1)],
@@ -349,13 +353,191 @@ END_PROGRAM
     assert!(matches!(
         result,
         Err(OnlineChangeError::MigrationUnsupported(
-            MigrationError::IncompatibleEntry { uid: 1, .. }
+            MigrationError::TypeChangeUnsupported {
+                uid: 1,
+                from: FieldType::I32,
+                to: FieldType::String,
+            }
         ))
     ));
+    let message = result.unwrap_err().to_string();
+    assert!(message.contains("I32"));
+    assert!(message.contains("STRING"));
     assert_eq!(host.status().candidate, None);
     assert_eq!(host.status().mode, HostMode::Normal);
     host.run(1, || 0).unwrap();
     assert_eq!(host.read_variable(counter).unwrap(), 4);
+}
+
+#[test]
+fn run_when_variable_changed_from_dint_to_real_then_value_converts_and_continues() {
+    // ADR 0060: DINT -> REAL is an admitted pair. The running DINT value
+    // converts at the swap, and the REAL entity continues from it.
+    let base = compile_with_ids(
+        "PROGRAM main
+  VAR
+    Counter : DINT;
+  END_VAR
+  Counter := Counter + 1;
+END_PROGRAM
+",
+        &[("Counter", 1)],
+    );
+    let mut host = RuntimeHost::new(base).unwrap();
+    host.run(4, || 0).unwrap();
+
+    let candidate = compile_with_ids(
+        "PROGRAM main
+  VAR
+    Counter : REAL;
+  END_VAR
+  Counter := Counter + 1.0;
+END_PROGRAM
+",
+        &[("Counter", 1)],
+    );
+    let counter = variable_index(&candidate, "Counter");
+
+    host.stage(candidate).unwrap();
+    assert!(host.status().migration);
+    host.test().unwrap();
+    host.run(1, || 0).unwrap();
+
+    // The DINT value 4 converted to REAL at the swap, then the candidate's
+    // body added one more: a REAL slot's low 32 bits are its f32 pattern.
+    let bits = host.read_variable(counter).unwrap() as u32;
+    assert_eq!(f32::from_bits(bits), 5.0);
+}
+
+#[test]
+fn run_when_variable_widened_from_int_to_dint_then_value_continues_without_migration() {
+    // INT and DINT share the container's I32 storage class, so the widening
+    // changes no VarEntry: the candidate is not even a migration candidate,
+    // and the ordinary online change carries the sign-extended slot value.
+    let base = compile_with_ids(
+        "PROGRAM main
+  VAR
+    Counter : INT;
+  END_VAR
+  Counter := Counter + 1;
+END_PROGRAM
+",
+        &[("Counter", 1)],
+    );
+    let mut host = RuntimeHost::new(base).unwrap();
+    host.run(4, || 0).unwrap();
+
+    let candidate = compile_with_ids(
+        "PROGRAM main
+  VAR
+    Counter : DINT;
+  END_VAR
+  Counter := Counter + 1;
+END_PROGRAM
+",
+        &[("Counter", 1)],
+    );
+    let counter = variable_index(&candidate, "Counter");
+
+    host.stage(candidate).unwrap();
+    assert!(!host.status().migration);
+    host.test().unwrap();
+    host.run(1, || 0).unwrap();
+
+    assert_eq!(host.read_variable(counter).unwrap(), 5);
+}
+
+#[test]
+fn run_when_array_elements_widen_from_dint_to_lint_then_each_element_converts() {
+    // ADR 0060: arrays migrate when the element pair is admitted and the
+    // length matches; each element converts at the swap.
+    let base = compile_with_ids(
+        "PROGRAM main
+  VAR
+    Vals : ARRAY[0..1] OF DINT;
+  END_VAR
+  Vals[0] := Vals[0] + 1;
+  Vals[1] := Vals[1] + 2;
+END_PROGRAM
+",
+        &[("Vals", 1)],
+    );
+    let mut host = RuntimeHost::new(base).unwrap();
+    host.run(1, || 0).unwrap();
+
+    let candidate = compile_with_ids(
+        "PROGRAM main
+  VAR
+    Vals : ARRAY[0..1] OF LINT;
+  END_VAR
+  Vals[0] := Vals[0] + 1;
+  Vals[1] := Vals[1] + 2;
+END_PROGRAM
+",
+        &[("Vals", 1)],
+    );
+    let vals = variable_index(&candidate, "Vals");
+
+    host.stage(candidate).unwrap();
+    assert!(host.status().migration);
+    host.test().unwrap();
+    host.run(1, || 0).unwrap();
+
+    // 1 -> 2 and 2 -> 4: both elements converted at the swap (DINT to LINT)
+    // and kept accumulating under the candidate's body.
+    let offset = host.read_variable(vals).unwrap() as usize;
+    let region = host.data_region();
+    let first = i64::from_le_bytes(region[offset..offset + 8].try_into().unwrap());
+    let second = i64::from_le_bytes(region[offset + 8..offset + 16].try_into().unwrap());
+    assert_eq!(first, 2);
+    assert_eq!(second, 4);
+}
+
+#[test]
+fn stage_when_array_length_changes_then_migration_unsupported_and_application_runs() {
+    // ADR 0060: an aggregate whose element pair is admitted but whose length
+    // changed cannot carry values element-wise; the stage rejects. `Peek`
+    // reports `Vals[0]`: an array's own slot holds its region offset, not a
+    // value.
+    let base = compile_with_ids(
+        "PROGRAM main
+  VAR
+    Vals : ARRAY[0..1] OF DINT;
+    Peek : DINT;
+  END_VAR
+  Vals[0] := Vals[0] + 1;
+  Peek := Vals[0];
+END_PROGRAM
+",
+        &[("Vals", 1), ("Peek", 2)],
+    );
+    let mut host = RuntimeHost::new(base).unwrap();
+    host.run(2, || 0).unwrap();
+
+    let candidate = compile_with_ids(
+        "PROGRAM main
+  VAR
+    Vals : ARRAY[0..2] OF DINT;
+    Peek : DINT;
+  END_VAR
+  Vals[0] := Vals[0] + 1;
+  Peek := Vals[0];
+END_PROGRAM
+",
+        &[("Vals", 1), ("Peek", 2)],
+    );
+    let peek = variable_index(&candidate, "Peek");
+
+    let result = host.stage(candidate);
+
+    assert!(matches!(
+        result,
+        Err(OnlineChangeError::MigrationUnsupported(
+            MigrationError::ArrayDescriptorMismatch { uid: 1 }
+        ))
+    ));
+    host.run(1, || 0).unwrap();
+    assert_eq!(host.read_variable(peek).unwrap(), 3);
 }
 
 #[test]

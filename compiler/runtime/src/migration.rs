@@ -10,9 +10,10 @@
 //! | Case | Action |
 //! |---|---|
 //! | UID in both, identical [`VarEntry`] | Copy the slot, and the data-region region it points to for aggregates |
+//! | UID in both, entry differs only by an admitted type change | Convert the value at the swap per the policy table (ADR 0060) |
 //! | UID only in the candidate | None: the candidate's init image has already initialized it |
 //! | UID only in the base | None: the value belongs to a dropped entity |
-//! | UID in both, different entry | [`MigrationError::IncompatibleEntry`] |
+//! | UID in both, any other entry difference | [`MigrationError::IncompatibleEntry`] or, for a type pair outside the policy, [`MigrationError::TypeChangeUnsupported`] naming the pair |
 //!
 //! ## Data-region payloads
 //!
@@ -55,6 +56,20 @@
 //! layout after the program prefix (program prefix size, user FB descriptors,
 //! FB type descriptors) must be identical.
 //!
+//! ## Type-changing variables (ADR 0060)
+//!
+//! A shared UID whose entry differs only in `var_type` is classified against
+//! the conversion policy in [`conversion`]: an admitted `(base, candidate)`
+//! pair plans a [`MigrationAction::Convert`] (scalar) or
+//! [`MigrationAction::ConvertArray`] (an aggregate whose element pair is
+//! admitted, with equal element count and element size), executed at the
+//! scan boundary; any other pair rejects the candidate with
+//! [`MigrationError::TypeChangeUnsupported`] naming the pair. Structural
+//! differences (flags, or `extra` with the type tag unchanged — a STRING
+//! maximum length or an FB type ID) keep the stage-2 rejection. FB instance
+//! *fields* are not converted: a shared field UID whose entry differs
+//! rejects as before; extending the policy to fields is follow-up.
+//!
 //! ## Applying a plan
 //!
 //! [`StateMigrationPlan::apply`] copies from the active [`VmBuffers`] into a
@@ -67,11 +82,12 @@ use std::collections::HashMap;
 use std::vec::Vec;
 
 use ironplc_container::{
-    string_region_size, CharWidth, Container, FbFieldUidEntry, FbTypeDescriptor, FbTypeId,
-    FieldType, StableVarEntry, TypeSection, UserFbDescriptor, VarEntry, VarIndex,
-    VAR_FLAG_IS_ARRAY,
+    string_region_size, ArrayDescriptor, CharWidth, Container, FbTypeId, FieldType, StableVarEntry,
+    TypeSection, VarEntry, VarIndex, VAR_FLAG_IS_ARRAY,
 };
-use ironplc_vm::VmBuffers;
+use ironplc_vm::{Slot, VmBuffers};
+
+use crate::conversion::{self, type_name, ValueConversion};
 
 /// Byte offset of the `cur_length` field of a data-region string header.
 ///
@@ -123,6 +139,22 @@ enum MigrationAction {
         from_field: u8,
         to_field: u8,
     },
+    /// Convert the slot's value from the base variable's type to the
+    /// candidate's per an admitted policy pair (ADR 0060).
+    Convert {
+        from_index: VarIndex,
+        to_index: VarIndex,
+        conversion: ValueConversion,
+    },
+    /// Convert each 8-byte element of the array/struct region the slot
+    /// points to; used only when the descriptors' element pair is admitted
+    /// by the policy and the element count and size match.
+    ConvertArray {
+        from_index: VarIndex,
+        to_index: VarIndex,
+        conversion: ValueConversion,
+        byte_size: u32,
+    },
 }
 
 /// Why a state migration could not be built or applied.
@@ -134,6 +166,13 @@ enum MigrationAction {
 pub enum MigrationError {
     /// A UID present in both containers is bound to a different [`VarEntry`].
     IncompatibleEntry { uid: u64, reason: &'static str },
+    /// A shared UID's variable type changed to a pair the conversion policy
+    /// does not admit (ADR 0060); carries the rejected pair.
+    TypeChangeUnsupported {
+        uid: u64,
+        from: FieldType,
+        to: FieldType,
+    },
     /// The active string value does not fit the candidate's maximum length.
     StringShrink {
         current_length: u16,
@@ -159,6 +198,14 @@ impl fmt::Display for MigrationError {
         match self {
             MigrationError::IncompatibleEntry { uid, reason } => {
                 write!(f, "entity {uid} cannot migrate: {reason}")
+            }
+            MigrationError::TypeChangeUnsupported { uid, from, to } => {
+                write!(
+                    f,
+                    "entity {uid} cannot change type from {} to {}: the conversion is outside the migration policy",
+                    type_name(*from),
+                    type_name(*to)
+                )
             }
             MigrationError::StringShrink {
                 current_length,
@@ -236,14 +283,25 @@ impl StateMigrationPlan {
             };
             let base_var = variable_at(base_variables, from_index)?;
             if base_var != candidate_var {
-                return Err(MigrationError::IncompatibleEntry {
-                    uid: entry.uid,
-                    reason: entry_difference(base_var, candidate_var),
-                });
+                // The entries differ: reconcile the difference against the
+                // conversion policy (ADR 0060) or reject with the typed
+                // error. A conversion plans its own action and skips the
+                // per-variable classification below.
+                actions.push(type_change_action(
+                    entry.uid,
+                    from_index,
+                    to_index,
+                    base_var,
+                    candidate_var,
+                    base_section,
+                    candidate_section,
+                )?);
+                continue;
             }
             if candidate_var.var_type == FieldType::FbInstance
-                && user_fb_descriptor(base_section, FbTypeId::new(candidate_var.extra)).is_some()
-                && user_fb_descriptor(candidate_section, FbTypeId::new(candidate_var.extra))
+                && fb::user_fb_descriptor(base_section, FbTypeId::new(candidate_var.extra))
+                    .is_some()
+                && fb::user_fb_descriptor(candidate_section, FbTypeId::new(candidate_var.extra))
                     .is_some()
             {
                 fb_instances.push((from_index, to_index));
@@ -259,7 +317,7 @@ impl StateMigrationPlan {
             )?);
         }
 
-        plan_fb_instances(
+        fb::plan_fb_instances(
             &mut actions,
             base,
             candidate,
@@ -326,6 +384,21 @@ impl StateMigrationPlan {
                 } => {
                     copy_fb_field(base, candidate, from_index, to_index, from_field, to_field)?;
                 }
+                MigrationAction::Convert {
+                    from_index,
+                    to_index,
+                    conversion,
+                } => {
+                    convert_slot(base, candidate, from_index, to_index, conversion)?;
+                }
+                MigrationAction::ConvertArray {
+                    from_index,
+                    to_index,
+                    conversion,
+                    byte_size,
+                } => {
+                    convert_region(base, candidate, from_index, to_index, conversion, byte_size)?;
+                }
             }
         }
         Ok(())
@@ -369,6 +442,56 @@ fn entry_difference(base: &VarEntry, candidate: &VarEntry) -> &'static str {
     } else {
         "the variable's type details changed"
     }
+}
+
+/// Classifies a shared UID whose base and candidate entries differ.
+///
+/// Three outcomes: the difference is a value conversion the policy admits
+/// (ADR 0060) and the returned action converts it at the swap; the
+/// difference is structural (the layout flags, or the type details with the
+/// type tag unchanged — a STRING maximum length, an FB type ID) and the
+/// candidate rejects with the stage-2 error; or the type pair is outside
+/// the policy and the candidate rejects with the pair named.
+fn type_change_action(
+    uid: u64,
+    from_index: VarIndex,
+    to_index: VarIndex,
+    base_var: &VarEntry,
+    candidate_var: &VarEntry,
+    base_section: Option<&TypeSection>,
+    candidate_section: Option<&TypeSection>,
+) -> Result<MigrationAction, MigrationError> {
+    if base_var.flags != candidate_var.flags || base_var.var_type == candidate_var.var_type {
+        return Err(MigrationError::IncompatibleEntry {
+            uid,
+            reason: entry_difference(base_var, candidate_var),
+        });
+    }
+    let Some(conversion) = conversion::policy(base_var.var_type, candidate_var.var_type) else {
+        return Err(MigrationError::TypeChangeUnsupported {
+            uid,
+            from: base_var.var_type,
+            to: candidate_var.var_type,
+        });
+    };
+    if base_var.flags & VAR_FLAG_IS_ARRAY == 0 {
+        return Ok(MigrationAction::Convert {
+            from_index,
+            to_index,
+            conversion,
+        });
+    }
+    let base_descriptor = array_descriptor(base_section, usize::from(base_var.extra));
+    let candidate_descriptor =
+        array_descriptor(candidate_section, usize::from(candidate_var.extra));
+    array_conversion_action(
+        uid,
+        from_index,
+        to_index,
+        conversion,
+        base_descriptor,
+        candidate_descriptor,
+    )
 }
 
 /// Classifies one shared UID's copy from its (identical) candidate entry.
@@ -429,10 +552,8 @@ fn array_action(
     candidate_section: Option<&TypeSection>,
 ) -> Result<MigrationAction, MigrationError> {
     let descriptor_index = usize::from(entry.extra);
-    let base_descriptor =
-        base_section.and_then(|section| section.array_descriptors.get(descriptor_index));
-    let candidate_descriptor =
-        candidate_section.and_then(|section| section.array_descriptors.get(descriptor_index));
+    let base_descriptor = array_descriptor(base_section, descriptor_index);
+    let candidate_descriptor = array_descriptor(candidate_section, descriptor_index);
     let (Some(base_descriptor), Some(candidate_descriptor)) =
         (base_descriptor, candidate_descriptor)
     else {
@@ -454,219 +575,45 @@ fn array_action(
     })
 }
 
-/// Plans the copies for shared-UID FB instances of user FB types and enforces
-/// the fallback rule for everything else (see the module documentation).
-///
-/// `instances` holds `(base index, candidate index)` pairs for the
-/// shared-UID instances whose type has a user FB descriptor on both sides;
-/// every other FB instance named by either stable table (standard-library
-/// instances, instances only one side has) makes the planner fall back to
-/// the stage-2 rule: the layout after the program prefix must be identical.
-fn plan_fb_instances(
-    actions: &mut Vec<MigrationAction>,
-    base: &Container,
-    candidate: &Container,
-    base_stable: &[StableVarEntry],
-    candidate_stable: &[StableVarEntry],
-    instances: &[(VarIndex, VarIndex)],
-) -> Result<(), MigrationError> {
-    let base_section = base.type_section.as_ref();
-    let candidate_section = candidate.type_section.as_ref();
-    let base_variables = variable_table(base_section);
-    let candidate_variables = variable_table(candidate_section);
+/// The array descriptor at `descriptor_index`, if the section carries one.
+fn array_descriptor(
+    section: Option<&TypeSection>,
+    descriptor_index: usize,
+) -> Option<&ArrayDescriptor> {
+    section.and_then(|section| section.array_descriptors.get(descriptor_index))
+}
 
-    let mut handled: Vec<(VarIndex, VarIndex)> = Vec::with_capacity(instances.len());
-    for &(from_index, to_index) in instances {
-        let type_id = FbTypeId::new(variable_at(candidate_variables, to_index)?.extra);
-        let (Some(base_descriptor), Some(candidate_descriptor)) = (
-            user_fb_descriptor(base_section, type_id),
-            user_fb_descriptor(candidate_section, type_id),
-        ) else {
-            return Err(MigrationError::FbLayoutUnsupported);
-        };
-        handled.push((from_index, to_index));
-
-        if base_descriptor == candidate_descriptor {
-            // Identical layout: carry the slot and the whole field region.
-            // The descriptor comparison covers var_offset and num_fields, so
-            // both sides agree on where the region lives and how big it is.
-            actions.push(MigrationAction::FbInstance {
-                from_index,
-                to_index,
-                byte_size: u32::from(candidate_descriptor.num_fields)
-                    .checked_mul(ironplc_container::SLOT_BYTES)
-                    .ok_or(MigrationError::FbLayoutUnsupported)?,
-            });
-            continue;
-        }
-
-        // The layout differs: match the type's fields by UID (ADR 0059).
-        let base_fields = field_uid_indexes(base_section, type_id)?;
-        let candidate_fields = field_uid_indexes(candidate_section, type_id)?;
-        for field_index in 0..candidate_descriptor.num_fields {
-            let Some(&field_uid) = candidate_fields.by_index.get(&field_index) else {
-                // The field carries no UID (or the reserved UID 0) while
-                // the layout differs: the value's identity is unprovable,
-                // so the planner fails closed.
-                return Err(MigrationError::FbLayoutUnsupported);
-            };
-            let Some(&from_field) = base_fields.by_uid.get(&field_uid) else {
-                // A candidate-only field UID is a new entity; the
-                // candidate's init image has already initialized it.
-                continue;
-            };
-            let base_field = variable_at(
-                base_variables,
-                VarIndex::new(base_descriptor.var_offset + u16::from(from_field)),
-            )?;
-            let candidate_field = variable_at(
-                candidate_variables,
-                VarIndex::new(candidate_descriptor.var_offset + u16::from(field_index)),
-            )?;
-            if base_field != candidate_field {
-                return Err(MigrationError::IncompatibleEntry {
-                    uid: field_uid,
-                    reason: entry_difference(base_field, candidate_field),
-                });
-            }
-            actions.push(MigrationAction::FbField {
-                from_index,
-                to_index,
-                from_field,
-                to_field: field_index,
-            });
-        }
-    }
-
-    // Any shared instance the per-field path did not take over — a
-    // standard-library FB, or one whose descriptor exists on only one side —
-    // falls back to the stage-2 rule: nothing above can match its internals,
-    // so the post-prefix layout must be identical for a copy to be safe.
-    // Instances only one stable table names need no fallback: a base-only
-    // instance is dropped with the old buffers and a candidate-only one is
-    // initialized by the candidate's init image, so no copy references
-    // either.
-    if has_unhandled_shared_instance(base_stable, base_variables, candidate_stable, &handled)?
-        && (base.task_table.shared_globals_size != candidate.task_table.shared_globals_size
-            || !same_user_fb_descriptors(
-                user_fb_descriptors(base_section),
-                user_fb_descriptors(candidate_section),
-            )
-            || !same_fb_descriptors(
-                fb_descriptors(base_section),
-                fb_descriptors(candidate_section),
-            ))
+/// Sizes a per-element conversion for an array whose element types the
+/// policy admits (ADR 0060). The element count and the per-element size must
+/// match on both sides; the admitted element pairs are non-string, so every
+/// element is one 8-byte slot in both regions.
+fn array_conversion_action(
+    uid: u64,
+    from_index: VarIndex,
+    to_index: VarIndex,
+    conversion: ValueConversion,
+    base_descriptor: Option<&ArrayDescriptor>,
+    candidate_descriptor: Option<&ArrayDescriptor>,
+) -> Result<MigrationAction, MigrationError> {
+    let (Some(base_descriptor), Some(candidate_descriptor)) =
+        (base_descriptor, candidate_descriptor)
+    else {
+        return Err(MigrationError::ArrayDescriptorMismatch { uid });
+    };
+    if base_descriptor.total_elements != candidate_descriptor.total_elements
+        || base_descriptor.element_extra != candidate_descriptor.element_extra
     {
-        return Err(MigrationError::FbLayoutUnsupported);
+        return Err(MigrationError::ArrayDescriptorMismatch { uid });
     }
-    Ok(())
-}
-
-/// Whether a UID both stable tables share names an FB instance the per-field
-/// path did not take over (see [`plan_fb_instances`]). `handled` holds the
-/// `(base index, candidate index)` pairs the per-field path planned; the
-/// base side of each pair is enough to recognize a shared instance.
-fn has_unhandled_shared_instance(
-    base_stable: &[StableVarEntry],
-    base_variables: &[VarEntry],
-    candidate_stable: &[StableVarEntry],
-    handled: &[(VarIndex, VarIndex)],
-) -> Result<bool, MigrationError> {
-    let candidate_uids: HashMap<u64, VarIndex> = candidate_stable
-        .iter()
-        .map(|entry| (entry.uid, entry.var_index))
-        .collect();
-    for entry in base_stable {
-        let Some(&candidate_index) = candidate_uids.get(&entry.uid) else {
-            continue;
-        };
-        if variable_at(base_variables, entry.var_index)?.var_type == FieldType::FbInstance
-            && !handled
-                .iter()
-                .any(|(base, candidate)| *base == entry.var_index && *candidate == candidate_index)
-        {
-            return Ok(true);
-        }
-    }
-    Ok(false)
-}
-
-/// UID → field index and field index → UID maps for one FB type's entries in
-/// the type section's FB field UID table. UID 0 is reserved (the UID sidecar
-/// never assigns it) and excluded: an entry carrying it is treated as no
-/// UID. A UID bound twice is a corrupt table.
-struct FieldUidIndexes {
-    by_uid: HashMap<u64, u8>,
-    by_index: HashMap<u8, u64>,
-}
-
-fn field_uid_indexes(
-    section: Option<&TypeSection>,
-    type_id: FbTypeId,
-) -> Result<FieldUidIndexes, MigrationError> {
-    let mut by_uid = HashMap::new();
-    let mut by_index = HashMap::new();
-    for entry in fb_field_uids(section) {
-        if entry.fb_type_id == type_id && entry.uid != 0 {
-            if by_uid.insert(entry.uid, entry.field_index).is_some() {
-                return Err(MigrationError::DuplicateUid { uid: entry.uid });
-            }
-            by_index.insert(entry.field_index, entry.uid);
-        }
-    }
-    Ok(FieldUidIndexes { by_uid, by_index })
-}
-
-/// The FB field UID table, or an empty slice without a type section.
-fn fb_field_uids(section: Option<&TypeSection>) -> &[FbFieldUidEntry] {
-    section.map_or(&[], |section| section.fb_field_uids.as_slice())
-}
-
-/// The user FB descriptor for `type_id`, if the type section carries one.
-fn user_fb_descriptor(
-    section: Option<&TypeSection>,
-    type_id: FbTypeId,
-) -> Option<&UserFbDescriptor> {
-    user_fb_descriptors(section)
-        .iter()
-        .find(|descriptor| descriptor.type_id == type_id)
-}
-
-/// The user FB descriptors, or an empty slice without a type section.
-fn user_fb_descriptors(section: Option<&TypeSection>) -> &[UserFbDescriptor] {
-    section.map_or(&[], |section| section.user_fb_types.as_slice())
-}
-
-/// The FB type descriptors, or an empty slice without a type section.
-fn fb_descriptors(section: Option<&TypeSection>) -> &[FbTypeDescriptor] {
-    section.map_or(&[], |section| section.fb_types.as_slice())
-}
-
-/// Compares user FB descriptors as a set keyed by type ID.
-///
-/// Codegen emits the descriptors from a hash map, so their order is not part
-/// of the container contract; only the descriptor contents are.
-fn same_user_fb_descriptors(a: &[UserFbDescriptor], b: &[UserFbDescriptor]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut a = a.to_vec();
-    let mut b = b.to_vec();
-    a.sort_by_key(|descriptor| descriptor.type_id.raw());
-    b.sort_by_key(|descriptor| descriptor.type_id.raw());
-    a == b
-}
-
-/// Compares FB type descriptors as a set keyed by type ID.
-fn same_fb_descriptors(a: &[FbTypeDescriptor], b: &[FbTypeDescriptor]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut a = a.to_vec();
-    let mut b = b.to_vec();
-    a.sort_by_key(|descriptor| descriptor.type_id.raw());
-    b.sort_by_key(|descriptor| descriptor.type_id.raw());
-    a == b
+    let byte_size = candidate_descriptor
+        .byte_size()
+        .ok_or(MigrationError::ArrayDescriptorMismatch { uid })?;
+    Ok(MigrationAction::ConvertArray {
+        from_index,
+        to_index,
+        conversion,
+        byte_size,
+    })
 }
 
 /// Copies the 8-byte variable slot at `to_index` from `from_index`.
@@ -685,6 +632,59 @@ fn copy_slot(
         .get_mut(usize::from(to_index.raw()))
         .ok_or(MigrationError::IndexOutOfRange { index: to_index })?;
     *target = value;
+    Ok(())
+}
+
+/// Converts the base slot's value and writes it to the candidate slot.
+///
+/// The candidate slot's prior value (its init image) is overwritten, exactly
+/// like a copy; only the transformation differs (ADR 0060).
+fn convert_slot(
+    base: &VmBuffers,
+    candidate: &mut VmBuffers,
+    from_index: VarIndex,
+    to_index: VarIndex,
+    conversion: ValueConversion,
+) -> Result<(), MigrationError> {
+    let value = *base
+        .vars
+        .get(usize::from(from_index.raw()))
+        .ok_or(MigrationError::IndexOutOfRange { index: from_index })?;
+    let target = candidate
+        .vars
+        .get_mut(usize::from(to_index.raw()))
+        .ok_or(MigrationError::IndexOutOfRange { index: to_index })?;
+    *target = conversion.apply(value);
+    Ok(())
+}
+
+/// Converts each 8-byte element of the base region into the candidate region.
+///
+/// Both slots hold their own region's byte offset; the candidate's slot is
+/// left alone (its init image already aimed it at the candidate's region).
+/// Admitted element pairs are non-string, so both regions are runs of 8-byte
+/// slots and `byte_size` is a multiple of [`ironplc_container::SLOT_BYTES`].
+fn convert_region(
+    base: &VmBuffers,
+    candidate: &mut VmBuffers,
+    from_index: VarIndex,
+    to_index: VarIndex,
+    conversion: ValueConversion,
+    byte_size: u32,
+) -> Result<(), MigrationError> {
+    let source_span = region_span(base, from_index, byte_size)?;
+    let target_span = region_span(candidate, to_index, byte_size)?;
+    let source = &base.data_region[source_span];
+    let target = &mut candidate.data_region[target_span];
+
+    // The descriptor sized the copy to whole 8-byte elements, so neither
+    // remainder can be nonempty; every chunk pair is one element.
+    let (source_chunks, _) = source.as_chunks::<{ ironplc_container::SLOT_BYTES as usize }>();
+    let (target_chunks, _) = target.as_chunks_mut::<{ ironplc_container::SLOT_BYTES as usize }>();
+    for (from, to) in source_chunks.iter().zip(target_chunks.iter_mut()) {
+        let converted = conversion.apply(Slot::from_u64(u64::from_le_bytes(*from)));
+        *to = converted.as_u64().to_le_bytes();
+    }
     Ok(())
 }
 
@@ -802,6 +802,8 @@ fn string_current_length(region: &[u8]) -> u16 {
         .unwrap_or_default();
     u16::from_le_bytes([low, high])
 }
+
+mod fb;
 
 #[cfg(test)]
 mod tests;
