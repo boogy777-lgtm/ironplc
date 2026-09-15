@@ -45,8 +45,8 @@ use ironplc_container::debug_section::{
     EnumDefEntry, FuncNameEntry, StringLayoutEntry, VarNameEntry,
 };
 use ironplc_container::{
-    CharWidth, Container, ContainerBuilder, FbTypeId, FunctionId, StableVarEntry, TaskType,
-    UserFbDescriptor, VarEntry, VarIndex,
+    CharWidth, Container, ContainerBuilder, FbFieldUidEntry, FbTypeId, FunctionId, StableVarEntry,
+    TaskType, UserFbDescriptor, VarEntry, VarIndex,
 };
 // The string data-region layout lives in `ironplc-container` so the analyzer
 // and codegen size strings the same way. Re-exported here because the rest of
@@ -204,13 +204,35 @@ pub(crate) fn emit_string_literal_load(
 ///
 /// Returns an error if no program is found or if the program contains
 /// unsupported constructs.
+/// An engineering-side key for a function-block field's stable UID
+/// (ADR 0059): the qualified FB type name and the field name. This is the
+/// UID sidecar's `(scope, name)` key, where an FB field's scope is its type
+/// name; `Id` semantics make both comparisons case-insensitive.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FbFieldUidKey {
+    /// The qualified name of the declaring FB type.
+    pub fb_type: Id,
+    /// The field's declaration name.
+    pub field: Id,
+}
+
+impl FbFieldUidKey {
+    /// Creates a key from an FB type name and a field name.
+    pub fn new(fb_type: &str, field: &str) -> Self {
+        FbFieldUidKey {
+            fb_type: Id::from(fb_type),
+            field: Id::from(field),
+        }
+    }
+}
+
 /// Options that affect code generation.
 ///
 /// Every front end derives this from the project's [`CompilerOptions`] via
 /// [`From`], so the mapping from a compiler option to what codegen does with
 /// it has exactly one definition. Options the project model owns rather than
-/// the parser (the stable variable IDs, ADR 0053) are set on the derived
-/// value by the orchestrator.
+/// the parser (the stable variable IDs, ADR 0053, and the FB field UIDs,
+/// ADR 0059) are set on the derived value by the orchestrator.
 #[derive(Debug, Default, Clone)]
 pub struct CodegenOptions {
     /// When `true`, inject `__SYSTEM_UP_TIME` (TIME) and `__SYSTEM_UP_LTIME`
@@ -225,6 +247,13 @@ pub struct CodegenOptions {
     /// ignored. The project API supplies the table, so the derived
     /// [`From<&CompilerOptions>`] value leaves it empty.
     pub stable_var_ids: Vec<(Id, u64)>,
+    /// Engineering-side entity UIDs for user-defined function-block fields
+    /// (ADR 0059), keyed by ([`FbFieldUidKey`], uid). A field the table names
+    /// records an FB field UID entry at its `(fb_type_id, field_index)` in
+    /// the container's type section; fields the table does not name carry no
+    /// entry, and the migration planner treats them as fail-closed when the
+    /// FB layout changes.
+    pub fb_field_uids: Vec<(FbFieldUidKey, u64)>,
 }
 
 /// The two behavior policies of a `STRING_TO_<numeric>` conversion.
@@ -243,6 +272,7 @@ impl From<&CompilerOptions> for CodegenOptions {
                 failure: options.policy_string_to_num_failure,
             },
             stable_var_ids: Vec::new(),
+            fb_field_uids: Vec::new(),
         }
     }
 }
@@ -760,6 +790,10 @@ fn compile_program_with_functions(
         let mut field_indices: HashMap<String, u8> = HashMap::new();
         let mut field_op_types: HashMap<String, OpType> = HashMap::new();
         let mut field_decls_tmp: Vec<&VarDecl> = Vec::new();
+        // UIDs of this type's fields named by the engineering-side table
+        // (ADR 0059), collected with the pre-scan and recorded once the
+        // type ID is assigned below.
+        let mut field_uids: Vec<(u8, u64)> = Vec::new();
 
         for decl in &fb_decl.variables {
             if decl.var_type == VariableType::Input {
@@ -789,6 +823,13 @@ fn compile_program_with_functions(
                 } else {
                     field_op_types.insert(name, DEFAULT_OP_TYPE);
                 }
+                if let Some((_, uid)) = options
+                    .fb_field_uids
+                    .iter()
+                    .find(|(key, _)| key.fb_type == fb_decl.name.name && key.field == *id)
+                {
+                    field_uids.push((i as u8, *uid));
+                }
             }
         }
 
@@ -806,6 +847,13 @@ fn compile_program_with_functions(
                 methods: HashMap::new(),
             },
         );
+        for (field_index, uid) in field_uids {
+            ctx.fb_field_uid_entries.push(FbFieldUidEntry {
+                fb_type_id: FbTypeId::new(type_id),
+                field_index,
+                uid,
+            });
+        }
     }
 
     // Pre-scan METHOD declarations (OOP extension, ADR-0041 Phase 1) to
@@ -1160,6 +1208,13 @@ fn compile_program_with_functions(
         builder = builder.add_stable_var(entry);
     }
 
+    // Add the FB field UID sub-table (ADR 0059), ascending by
+    // `(fb_type_id, field_index)`. Like the stable variable IDs, it is
+    // identity rather than layout and stays out of the layout hash.
+    for entry in ctx.collect_fb_field_uids()? {
+        builder = builder.add_fb_field_uid(entry);
+    }
+
     for entry in ctx.debug_var_names {
         builder = builder.add_var_name(entry);
     }
@@ -1423,6 +1478,12 @@ pub(crate) struct CompileContext {
     /// scope swaps; `collect_stable_vars` sorts it and rejects a duplicate
     /// `var_index`.
     pub(crate) stable_var_entries: Vec<StableVarEntry>,
+    /// FB field UIDs (ADR 0059) for the user-defined FB type fields the
+    /// engineering-side table named, recorded during the FB pre-scan. Like
+    /// `var_entries`, it is never saved or restored across the per-function
+    /// scope swaps; `collect_fb_field_uids` sorts it and rejects a duplicate
+    /// `(fb_type_id, field_index)`.
+    pub(crate) fb_field_uid_entries: Vec<FbFieldUidEntry>,
 }
 
 /// Describes how a `RETURN` statement should yield the function's value.
@@ -1467,6 +1528,7 @@ impl CompileContext {
             call_graph: HashMap::new(),
             var_entries: Vec::new(),
             stable_var_entries: Vec::new(),
+            fb_field_uid_entries: Vec::new(),
         }
     }
 

@@ -15,7 +15,7 @@
 //! guideline.
 
 use ironplc_container::{
-    CharWidth, FieldType, StableVarEntry, VarEntry, VarIndex, VAR_FLAG_IS_ARRAY,
+    CharWidth, FbFieldUidEntry, FieldType, StableVarEntry, VarEntry, VarIndex, VAR_FLAG_IS_ARRAY,
 };
 use ironplc_dsl::common::{
     ElementaryTypeName, FunctionReturnType, InitialValueAssignmentKind, SpecificationKind,
@@ -277,6 +277,31 @@ impl CompileContext {
                 format!(
                     "Variable index {} has more than one stable variable ID",
                     duplicate[0].var_index
+                ),
+            )));
+        }
+        Ok(table)
+    }
+
+    /// Returns the FB field UID table (ADR 0059), ascending by
+    /// `(fb_type_id, field_index)`. Entries are recorded in FB pre-scan
+    /// order, which is already ascending (type IDs are handed out in
+    /// declaration order and field indices within a type ascend); the sort
+    /// makes the writer's ordering contract independent of that. Two entries
+    /// claiming the same `(fb_type_id, field_index)` are an internal error,
+    /// never a silent overwrite: the migration planner keys on the pair, so
+    /// a duplicate would make the table ambiguous.
+    pub(crate) fn collect_fb_field_uids(&self) -> Result<Vec<FbFieldUidEntry>, Diagnostic> {
+        let mut table = self.fb_field_uid_entries.clone();
+        table.sort_by_key(|entry| (entry.fb_type_id.raw(), entry.field_index));
+        if let Some(duplicate) = table.windows(2).find(|pair| {
+            pair[0].fb_type_id == pair[1].fb_type_id && pair[0].field_index == pair[1].field_index
+        }) {
+            return Err(Diagnostic::internal_error_at(Label::file(
+                FileId::default(),
+                format!(
+                    "FB type {} field {} has more than one field UID",
+                    duplicate[0].fb_type_id, duplicate[0].field_index
                 ),
             )));
         }

@@ -52,7 +52,7 @@ mod stack_balance;
 mod string_width;
 mod type_info;
 
-pub use compile::{compile, CodegenOptions, StringToNumPolicies};
+pub use compile::{compile, CodegenOptions, FbFieldUidKey, StringToNumPolicies};
 pub use source_lookup::{EmptyLookup, SourceLookup};
 
 // Spec conformance testing infrastructure (test-only)
