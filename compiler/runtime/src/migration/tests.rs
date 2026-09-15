@@ -5,6 +5,7 @@
 //! end-to-end host behavior lives in `tests/migration_acceptance.rs`.
 
 use super::*;
+use crate::conversion::{policy, NUMERIC_CLASSES};
 use ironplc_container::{
     Container, ContainerBuilder, FbFieldUidEntry, FbTypeDescriptor, FbTypeId, FieldEntry,
     FieldType, FunctionId, UserFbDescriptor,
@@ -351,10 +352,6 @@ fn apply_when_policy_pair_then_candidate_carries_converted_value(
 }
 
 #[rstest]
-#[case::narrowing(FieldType::I64, FieldType::I32)]
-#[case::real_to_int(FieldType::F64, FieldType::I32)]
-#[case::real_narrowing(FieldType::F64, FieldType::F32)]
-#[case::signedness_change(FieldType::I32, FieldType::U32)]
 #[case::int_to_time(FieldType::I32, FieldType::Time)]
 #[case::int_to_string(FieldType::I32, FieldType::String)]
 #[case::string_width(FieldType::String, FieldType::WString)]
@@ -376,6 +373,49 @@ fn build_when_pair_outside_policy_then_type_change_unsupported_named(
             to: candidate_type,
         }
     );
+}
+
+/// Runs the exhaustive numeric reject matrix: every cross-class pair the
+/// policy does not admit must reject with the pair named. `build` makes the
+/// container pair for a class pair, so the scalar and array matrices share
+/// the assertions; same-class pairs never reach the policy (the equal-entry
+/// copy path serves them) and the admitted pairs are covered separately.
+fn assert_cross_class_pairs_rejected(build: fn(FieldType, FieldType) -> (Container, Container)) {
+    let mut rejected = 0;
+    for base_type in NUMERIC_CLASSES {
+        for candidate_type in NUMERIC_CLASSES {
+            if base_type == candidate_type || policy(base_type, candidate_type).is_some() {
+                continue;
+            }
+            let (base, candidate) = build(base_type, candidate_type);
+
+            let result = StateMigrationPlan::build(&base, &candidate);
+
+            assert_eq!(
+                result.unwrap_err(),
+                MigrationError::TypeChangeUnsupported {
+                    uid: 7,
+                    from: base_type,
+                    to: candidate_type,
+                },
+                "pair {base_type:?} -> {candidate_type:?}"
+            );
+            rejected += 1;
+        }
+    }
+
+    // 36 numeric class pairs - 6 same-class - 6 admitted conversions.
+    assert_eq!(rejected, 24);
+}
+
+#[test]
+fn build_when_every_cross_class_numeric_pair_outside_policy_then_type_change_unsupported_named() {
+    assert_cross_class_pairs_rejected(|base_type, candidate_type| {
+        (
+            container(&[scalar_entry(base_type)], &[(0, 7)]),
+            container(&[scalar_entry(candidate_type)], &[(0, 7)]),
+        )
+    });
 }
 
 #[test]
@@ -452,16 +492,10 @@ fn build_when_array_descriptor_missing_then_array_descriptor_mismatch() {
     );
 }
 
-#[rstest]
-#[case::narrowing(FieldType::I64, FieldType::I32)]
-#[case::signedness_change(FieldType::I32, FieldType::U32)]
-#[case::element_to_string(FieldType::I32, FieldType::String)]
-fn build_when_array_elements_outside_policy_then_type_change_unsupported_named(
-    #[case] base_element: FieldType,
-    #[case] candidate_element: FieldType,
-) {
-    let base = typed_array_container(base_element, 2, 16);
-    let candidate = typed_array_container(candidate_element, 2, 16);
+#[test]
+fn build_when_array_element_to_string_then_type_change_unsupported_named() {
+    let base = typed_array_container(FieldType::I32, 2, 16);
+    let candidate = typed_array_container(FieldType::String, 2, 16);
 
     let result = StateMigrationPlan::build(&base, &candidate);
 
@@ -469,10 +503,20 @@ fn build_when_array_elements_outside_policy_then_type_change_unsupported_named(
         result.unwrap_err(),
         MigrationError::TypeChangeUnsupported {
             uid: 7,
-            from: base_element,
-            to: candidate_element,
+            from: FieldType::I32,
+            to: FieldType::String,
         }
     );
+}
+
+#[test]
+fn build_when_every_numeric_array_pair_outside_policy_then_type_change_unsupported_named() {
+    assert_cross_class_pairs_rejected(|base_type, candidate_type| {
+        (
+            typed_array_container(base_type, 2, 16),
+            typed_array_container(candidate_type, 2, 16),
+        )
+    });
 }
 
 #[test]

@@ -370,6 +370,57 @@ END_PROGRAM
 }
 
 #[test]
+fn stage_when_variable_retyped_from_dint_to_udint_then_rejected_with_named_types() {
+    // DINT -> UDINT is a signedness change (I32 -> U32), a pair outside the
+    // conversion policy (ADR 0060): the stage rejects through the V4010 path
+    // with both classes named, and the running application is untouched.
+    let base = compile_with_ids(
+        "PROGRAM main
+  VAR
+    Counter : DINT;
+  END_VAR
+  Counter := Counter + 1;
+END_PROGRAM
+",
+        &[("Counter", 1)],
+    );
+    let counter = variable_index(&base, "Counter");
+    let mut host = RuntimeHost::new(base).unwrap();
+    host.run(3, || 0).unwrap();
+
+    let candidate = compile_with_ids(
+        "PROGRAM main
+  VAR
+    Counter : UDINT;
+  END_VAR
+  Counter := Counter + 1;
+END_PROGRAM
+",
+        &[("Counter", 1)],
+    );
+
+    let result = host.stage(candidate);
+
+    assert!(matches!(
+        result,
+        Err(OnlineChangeError::MigrationUnsupported(
+            MigrationError::TypeChangeUnsupported {
+                uid: 1,
+                from: FieldType::I32,
+                to: FieldType::U32,
+            }
+        ))
+    ));
+    let message = result.unwrap_err().to_string();
+    assert!(message.contains("I32"));
+    assert!(message.contains("U32"));
+    assert_eq!(host.status().candidate, None);
+    assert_eq!(host.status().mode, HostMode::Normal);
+    host.run(1, || 0).unwrap();
+    assert_eq!(host.read_variable(counter).unwrap(), 4);
+}
+
+#[test]
 fn run_when_variable_changed_from_dint_to_real_then_value_converts_and_continues() {
     // ADR 0060: DINT -> REAL is an admitted pair. The running DINT value
     // converts at the swap, and the REAL entity continues from it.

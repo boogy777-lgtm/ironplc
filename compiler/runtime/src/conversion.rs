@@ -123,10 +123,27 @@ pub(crate) fn type_name(field_type: FieldType) -> &'static str {
     }
 }
 
+/// The six numeric storage classes the conversion policy is defined over, in
+/// the container format's tag order. Test-only: production code never
+/// iterates the classes, and the policy table names each pair it admits.
+#[cfg(test)]
+pub(crate) const NUMERIC_CLASSES: [FieldType; 6] = [
+    FieldType::I32,
+    FieldType::U32,
+    FieldType::I64,
+    FieldType::U64,
+    FieldType::F32,
+    FieldType::F64,
+];
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use rstest::rstest;
+    use ValueConversion::{
+        LongToLReal, RealToLReal, SignedToLReal, SignedToReal, SignedWiden32To64,
+        UnsignedWiden32To64,
+    };
 
     #[rstest]
     #[case::signed_widen(FieldType::I32, FieldType::I64, ValueConversion::SignedWiden32To64)]
@@ -162,6 +179,41 @@ mod tests {
         #[case] candidate: FieldType,
     ) {
         assert_eq!(policy(base, candidate), None);
+    }
+
+    /// The independent specification of the policy as an explicit 6x6
+    /// matrix over [`NUMERIC_CLASSES`]: rows are the base class, columns the
+    /// candidate class. `None` everywhere except the six admitted
+    /// conversions; the same-class diagonal is `None` too, because those
+    /// cells take the ordinary copy path and the policy is not consulted.
+    /// Deliberately duplicates `POLICY`, so any policy change fails the
+    /// truth-table test below.
+    const EXPECTED: [[Option<ValueConversion>; 6]; 6] = [
+        [
+            None,
+            None,
+            Some(SignedWiden32To64),
+            None,
+            Some(SignedToReal),
+            Some(SignedToLReal),
+        ],
+        [None, None, None, Some(UnsignedWiden32To64), None, None],
+        [None, None, None, None, None, Some(LongToLReal)],
+        [None, None, None, None, None, None],
+        [None, None, None, None, None, Some(RealToLReal)],
+        [None, None, None, None, None, None],
+    ];
+
+    #[test]
+    fn policy_when_numeric_class_pair_then_matches_the_full_truth_table() {
+        let mut actual = [[None; 6]; 6];
+        for (row, base) in NUMERIC_CLASSES.iter().enumerate() {
+            for (column, candidate) in NUMERIC_CLASSES.iter().enumerate() {
+                actual[row][column] = policy(*base, *candidate);
+            }
+        }
+
+        assert_eq!(actual, EXPECTED);
     }
 
     #[rstest]
