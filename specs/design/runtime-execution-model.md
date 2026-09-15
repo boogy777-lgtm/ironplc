@@ -586,13 +586,13 @@ The diagnostic interface is read-only. External tools cannot modify variables, p
 
 The following are explicitly out of scope for this version of the runtime execution model:
 
-1. **Multi-task scheduling** — Multiple programs running at different priorities and intervals within the same VM instance. This spec covers single-program, single-scan-cycle execution only.
+1. **Preemptive scheduling** — The cooperative scheduler already runs multiple cyclic/freewheeling tasks with priorities from the container task table (`vm/src/scheduler.rs`); preemption and resumable execution remain out of scope.
 
-2. **Online change** — Hot-swapping bytecode while the VM is in RUNNING state, preserving variable values across the change. This requires a separate specification covering variable matching, state migration, and safe transition points.
+2. **Online change** — specified in [bytecode-container-format.md](bytecode-container-format.md) ("Layout Hash and Online Change", "Stable Variable IDs") and implemented by the host-level `ironplc-runtime` crate ([ADR-0052](../adrs/0052-online-change-performed-by-the-runtime-host.md)); the VM itself remains single-artifact.
 
 3. **RETAIN / PERSISTENT variables** — Saving variable values to non-volatile storage across power cycles. The initialization sequence always starts from zero/default values.
 
-4. **Debug interface** — Breakpoints, single-stepping, variable forcing, and other interactive debugging capabilities. The diagnostic interface is observation-only.
+4. **Variable forcing** — Breakpoints and single-stepping are implemented (the DAP debugger); forcing variables or overriding outputs through the diagnostic interface remains out of scope.
 
 5. **I/O driver model** — How the input process image is populated from physical hardware and how the output process image drives physical hardware. This spec assumes the I/O driver is a platform-specific component that the VM interacts with only during INPUT_FREEZE and OUTPUT_FLUSH.
 

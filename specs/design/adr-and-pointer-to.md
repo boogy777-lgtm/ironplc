@@ -230,4 +230,4 @@ source using `POINTER TO` round-trips without being normalized to `REF_TO`.
 - **`MEMCPY`/`MEMSET`-style Tc2_System functions** that consume `ADR`
   results — separate compatibility-library + builtin work per ADR-0042
   rule 3.
-- **Online-change pointer semantics** — IronPLC has no online change.
+- **Online-change pointer semantics** — online change exists ([ADR-0052](../adrs/0052-online-change-performed-by-the-runtime-host.md)), but it carries values by entity and never rewrites a stored slot index: an `ADR` result held in a variable is an ordinary integer, so nothing here needs pointer semantics.
