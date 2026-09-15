@@ -22,8 +22,7 @@
 //! session, exactly as restarting `ironplcvm serve` does, which also hosts
 //! exactly one running application per process. If a client ever needs
 //! parallel sessions keyed by program identity, this type is the one place
-//! to grow (ADR follow-up; noted in the task report rather than decided
-//! here).
+//! to grow (ADR-0056).
 //!
 //! # Scan driving
 //!
