@@ -25,6 +25,7 @@ use super::compile::{
 use super::compile_call::resolve_fb_type;
 use super::compile_expr::{compile_constant, emit_store_var, emit_truncation, resolve_variable};
 use super::compile_stmt::resolve_string_max_length;
+use super::compile_var_table::record_decl_var_entry;
 use super::type_info::resolve_type_name;
 use crate::emit::Emitter;
 
@@ -294,6 +295,8 @@ pub(crate) fn assign_variables(
                 name: id.to_string(),
                 type_name: type_name_str,
             });
+
+            record_decl_var_entry(ctx, decl, id, index);
         }
     }
     Ok(())

@@ -23,6 +23,7 @@ use super::compile::{
 use super::compile_expr::emit_load_var;
 use super::compile_setup::emit_function_local_prologue;
 use super::compile_stmt::compile_statements;
+use super::compile_var_table::{record_decl_var_entry, record_return_var_entry, slot_entry};
 use super::type_info::resolve_type_name;
 use crate::emit::Emitter;
 
@@ -85,7 +86,16 @@ pub(crate) fn compile_user_fb_methods(
         // method's span re-covers the shared field region). Harmless
         // (a few extra flat-table slots, never aliased or read), just
         // not maximally compact; fine to tighten later if it matters.
+        let own_slots = result.num_locals - (param_var_off.raw() - field_var_off);
+        let first_unclaimed = param_var_off.raw() + own_slots;
         *var_offset = VarIndex::new(var_offset.raw() + result.num_locals);
+
+        // The over-reserved tail above is never read by any bytecode, but it
+        // is part of the container's variable count, so the variable table
+        // needs an entry for each slot: record it as compiler scratch.
+        for index in first_unclaimed..var_offset.raw() {
+            ctx.record_var_entry(VarIndex::new(index), slot_entry());
+        }
 
         if let Some(info) = ctx
             .user_fb_types
@@ -132,6 +142,7 @@ fn compile_user_method(
                     ctx.var_types.insert(id.clone(), type_info);
                 }
             }
+            record_decl_var_entry(ctx, decl, id, current_index);
             current_index = VarIndex::new(current_index.raw() + 1);
             num_params += 1;
         }
@@ -149,6 +160,7 @@ fn compile_user_method(
                     ctx.var_types.insert(id.clone(), type_info);
                 }
             }
+            record_decl_var_entry(ctx, decl, id, current_index);
             current_index = VarIndex::new(current_index.raw() + 1);
         }
     }
@@ -189,6 +201,12 @@ fn compile_user_method(
         }
     }
 
+    record_return_var_entry(
+        ctx,
+        method.return_type.as_ref(),
+        &return_id,
+        return_var_index,
+    );
     current_index = VarIndex::new(current_index.raw() + 1);
 
     // Reported num_locals spans from the *type's field region* (not just

@@ -176,4 +176,5 @@ mod end_to_end_user_function;
 mod end_to_end_var_temp;
 mod end_to_end_write_variable_raw;
 mod end_to_end_wstring;
+mod layout_hash;
 mod wire_format;

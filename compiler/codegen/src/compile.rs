@@ -46,7 +46,7 @@ use ironplc_container::debug_section::{
 };
 use ironplc_container::{
     CharWidth, Container, ContainerBuilder, FbTypeId, FunctionId, TaskType, UserFbDescriptor,
-    VarIndex,
+    VarEntry, VarIndex,
 };
 // The string data-region layout lives in `ironplc-container` so the analyzer
 // and codegen size strings the same way. Re-exported here because the rest of
@@ -72,6 +72,7 @@ use crate::emit::Emitter;
 use super::compile_fn::{compile_user_function, compile_user_function_block};
 use super::compile_setup::{assign_variables, emit_initial_values};
 use super::compile_stmt::compile_body;
+use super::compile_var_table::slot_entry;
 use super::type_info::resolve_type_name;
 
 /// The native operation width used for arithmetic and comparisons.
@@ -1116,6 +1117,17 @@ fn compile_program_with_functions(
             name: compiled.name.clone(),
         });
     }
+    // Add the type section's variable table, one entry per index
+    // `0..num_variables`. `collect_variable_table` reports an internal error
+    // for an index no allocation site recorded, so a forgotten site fails
+    // the compilation instead of silently corrupting the layout hash. It is
+    // collected before the debug loops below, which move their vectors out
+    // of `ctx`.
+    let variable_table = ctx.collect_variable_table(total_variables.raw())?;
+    for entry in variable_table {
+        builder = builder.add_var_entry(entry);
+    }
+
     for entry in ctx.debug_var_names {
         builder = builder.add_var_name(entry);
     }
@@ -1364,6 +1376,13 @@ pub(crate) struct CompileContext {
     ///
     /// [`record_call_edge`]: CompileContext::record_call_edge
     pub(crate) call_graph: HashMap<FunctionId, HashSet<FunctionId>>,
+    /// One entry per compiler-assigned variable index, for the type section's
+    /// variable table (see `compile_var_table`). Unlike the scope-scoped maps
+    /// above, this collection is never saved or restored: an index, once
+    /// assigned, is never reused, so its entry must survive the per-function
+    /// scope swaps. A `None` slot is an index no allocation site claimed,
+    /// which `collect_variable_table` reports as an internal error.
+    pub(crate) var_entries: Vec<Option<VarEntry>>,
 }
 
 /// Describes how a `RETURN` statement should yield the function's value.
@@ -1406,6 +1425,7 @@ impl CompileContext {
             current_function_return: None,
             current_function_id: None,
             call_graph: HashMap::new(),
+            var_entries: Vec::new(),
         }
     }
 
@@ -1458,6 +1478,7 @@ impl CompileContext {
         let idx = VarIndex::new(self.variables.len() as u16);
         self.variables
             .insert(Id::from(&format!("$scratch_{}", suffix)), idx);
+        self.record_var_entry(idx, slot_entry());
         idx
     }
 

@@ -28,6 +28,7 @@ use super::compile_setup::{
 use super::compile_stmt::{
     compile_body, compile_statements, resolve_string_max_length, resolve_string_spec_max_length,
 };
+use super::compile_var_table::{record_decl_var_entry, record_return_var_entry};
 use super::type_info::resolve_type_name;
 use crate::emit::Emitter;
 
@@ -190,6 +191,7 @@ pub(crate) fn compile_user_function(
                 }
                 _ => {}
             }
+            record_decl_var_entry(ctx, decl, id, current_index);
             current_index = VarIndex::new(current_index.raw() + 1);
             num_params += 1;
         }
@@ -257,6 +259,7 @@ pub(crate) fn compile_user_function(
                 }
                 _ => {}
             }
+            record_decl_var_entry(ctx, decl, id, current_index);
             current_index = VarIndex::new(current_index.raw() + 1);
         }
     }
@@ -338,6 +341,12 @@ pub(crate) fn compile_user_function(
     // Captured here because `ctx.struct_vars` is restored to the caller's
     // scope at the end of this function, losing the return variable's entry.
     let return_struct_desc_index = ctx.struct_vars.get(&return_id).map(|info| info.desc_index);
+    record_return_var_entry(
+        ctx,
+        Some(&func_decl.return_type),
+        &return_id,
+        return_var_index,
+    );
     current_index = VarIndex::new(current_index.raw() + 1);
 
     let num_locals = current_index.raw() - var_offset.raw();
@@ -641,6 +650,7 @@ pub(crate) fn compile_user_function_block(
                 }
                 _ => {}
             }
+            record_decl_var_entry(ctx, decl, id, current_index);
             current_index = VarIndex::new(current_index.raw() + 1);
         }
     }
