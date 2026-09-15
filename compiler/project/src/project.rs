@@ -8,7 +8,7 @@ use std::path::Path;
 use ironplc_analyzer::{stages::analyze, SemanticContext};
 use ironplc_dsl::{
     common::Library,
-    core::{FileId, Id, SourceSpan},
+    core::{FileId, SourceSpan},
     diagnostic::{Diagnostic, Label},
 };
 use ironplc_parser::{options::CompilerOptions, token::Token, tokenize_program};
@@ -16,7 +16,7 @@ use ironplc_problems::Problem;
 use ironplc_sources::{FileType, LibraryName, Source, SourceProject};
 use log::{debug, trace};
 
-use crate::sidecar::{sidecar_path_for, Sidecar};
+use crate::sidecar::{sidecar_path_for, Sidecar, SidecarKey};
 
 /// Runs semantic analysis on the given source project and compiler options.
 ///
@@ -155,11 +155,13 @@ pub trait Project {
     fn semantic(&mut self) -> Vec<Diagnostic>;
 
     /// Engineering-side stable variable IDs, mapping a persistent
-    /// declaration's current name to its entity UID (ADR 0053), or an empty
-    /// slice when the caller has none. [`crate::compile::compile`] passes
-    /// this through to codegen, which emits the container's `stable_vars`
-    /// table.
-    fn stable_var_ids(&self) -> &[(Id, u64)] {
+    /// declaration's or FB field's `(scope, name)` to its entity UID (ADR
+    /// 0053; an FB field's scope is its qualified FB type name, ADR 0059),
+    /// or an empty slice when the caller has none.
+    /// [`crate::compile::compile`] splits the table with the library's
+    /// declarations and passes both parts through to codegen, which emits
+    /// the container's `stable_vars` and `fb_field_uids` tables.
+    fn stable_var_ids(&self) -> &[(SidecarKey, u64)] {
         &[]
     }
 
@@ -196,8 +198,9 @@ pub struct FileBackedProject {
     semantic_context: Option<SemanticContext>,
     /// Cached analyzed library from the last successful analysis
     analyzed_library: Option<Library>,
-    /// Engineering-side stable variable IDs (ADR 0053).
-    stable_var_ids: Vec<(Id, u64)>,
+    /// Engineering-side stable variable IDs (ADR 0053); the keys also cover
+    /// FB fields, whose scope is the qualified FB type name (ADR 0059).
+    stable_var_ids: Vec<(SidecarKey, u64)>,
     /// The UID sidecar auto-loaded at initialization, when the
     /// initialization path yields one.
     sidecar_path: Option<std::path::PathBuf>,
@@ -257,9 +260,9 @@ impl FileBackedProject {
     }
 
     /// Sets the engineering-side stable variable IDs, mapping each
-    /// persistent declaration's current name to its entity UID (ADR 0053).
-    /// Replaces any previous table.
-    pub fn set_stable_var_ids(&mut self, stable_var_ids: Vec<(Id, u64)>) {
+    /// persistent declaration's or FB field's `(scope, name)` to its entity
+    /// UID (ADR 0053, ADR 0059). Replaces any previous table.
+    pub fn set_stable_var_ids(&mut self, stable_var_ids: Vec<(SidecarKey, u64)>) {
         self.stable_var_ids = stable_var_ids;
     }
 
@@ -278,7 +281,7 @@ impl FileBackedProject {
     pub fn load_uid_sidecar(&mut self, path: &Path) -> Result<(), Diagnostic> {
         let sidecar = Sidecar::load(path)?;
         self.sidecar_path = Some(path.to_path_buf());
-        self.set_stable_var_ids(sidecar.stable_var_ids());
+        self.set_stable_var_ids(sidecar.keyed_entries());
         Ok(())
     }
 
@@ -361,7 +364,7 @@ impl Project for FileBackedProject {
         self.analyzed_library.as_ref()
     }
 
-    fn stable_var_ids(&self) -> &[(Id, u64)] {
+    fn stable_var_ids(&self) -> &[(SidecarKey, u64)] {
         &self.stable_var_ids
     }
 
@@ -395,7 +398,7 @@ pub struct MemoryBackedProject {
     /// user source alongside any the bundled registry loads.
     preparsed_libraries: Vec<Library>,
     /// Engineering-side stable variable IDs (ADR 0053).
-    stable_var_ids: Vec<(Id, u64)>,
+    stable_var_ids: Vec<(SidecarKey, u64)>,
 }
 
 impl MemoryBackedProject {
@@ -453,9 +456,9 @@ impl MemoryBackedProject {
     }
 
     /// Sets the engineering-side stable variable IDs, mapping each
-    /// persistent declaration's current name to its entity UID (ADR 0053).
-    /// Replaces any previous table.
-    pub fn set_stable_var_ids(&mut self, stable_var_ids: Vec<(Id, u64)>) {
+    /// persistent declaration's or FB field's `(scope, name)` to its entity
+    /// UID (ADR 0053, ADR 0059). Replaces any previous table.
+    pub fn set_stable_var_ids(&mut self, stable_var_ids: Vec<(SidecarKey, u64)>) {
         self.stable_var_ids = stable_var_ids;
     }
 }
@@ -511,7 +514,7 @@ impl Project for MemoryBackedProject {
         self.analyzed_library.as_ref()
     }
 
-    fn stable_var_ids(&self) -> &[(Id, u64)] {
+    fn stable_var_ids(&self) -> &[(SidecarKey, u64)] {
         &self.stable_var_ids
     }
 
@@ -1176,8 +1179,8 @@ END_CONFIGURATION
         assert_eq!(
             project.stable_var_ids(),
             [
-                (ironplc_dsl::core::Id::from("x"), 42),
-                (ironplc_dsl::core::Id::from("y"), 43)
+                (crate::sidecar::SidecarKey::new("main", "x"), 42),
+                (crate::sidecar::SidecarKey::new("main", "y"), 43)
             ]
         );
     }

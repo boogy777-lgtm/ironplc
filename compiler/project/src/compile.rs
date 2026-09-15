@@ -90,9 +90,13 @@ pub fn compile(
     // Generate bytecode, skipping user-defined functions not reachable from
     // the PROGRAM root to reduce container size. The stable variable IDs are
     // the project model's, not the parser's, so they are set on the derived
-    // options here (ADR 0053).
+    // options here (ADR 0053). The keyed table covers both persistent
+    // program/global declarations and FB fields; the library decides which
+    // is which, and codegen receives the two tables separately (ADR 0059).
+    let split = crate::sidecar::split_var_uids(project.stable_var_ids(), library);
     let mut codegen_options = CodegenOptions::from(compiler_options);
-    codegen_options.stable_var_ids = project.stable_var_ids().to_vec();
+    codegen_options.stable_var_ids = split.vars;
+    codegen_options.fb_field_uids = split.fields;
 
     match ironplc_codegen::compile(library, context, &codegen_options, source_lookup) {
         Ok(container) => CompileOutput {
@@ -113,7 +117,7 @@ pub fn compile(
 mod tests {
     use ironplc_codegen::EmptyLookup;
     use ironplc_container::StableVarEntry;
-    use ironplc_dsl::core::{FileId, Id, SourceSpan};
+    use ironplc_dsl::core::{FileId, SourceSpan};
     use ironplc_dsl::diagnostic::{Diagnostic, Label};
     use ironplc_parser::options::CompilerOptions;
     use ironplc_problems::Problem;
@@ -169,7 +173,7 @@ END_PROGRAM
     #[test]
     fn compile_when_project_has_stable_var_ids_then_container_carries_them() {
         let mut project = project_with(VALID_PROGRAM);
-        project.set_stable_var_ids(vec![(Id::from("x"), 42)]);
+        project.set_stable_var_ids(vec![(crate::sidecar::SidecarKey::new("main", "x"), 42)]);
 
         let output = compile(
             &mut project,
@@ -257,6 +261,85 @@ END_PROGRAM
             [StableVarEntry {
                 var_index: index,
                 uid: 42,
+            }]
+        );
+    }
+
+    /// The sidecar keys an FB field as (FB type name, field) without a
+    /// sidecar format change (ADR 0059); the pipeline must split the keyed
+    /// table with the library so the field UID reaches the container's
+    /// `fb_field_uids` table and program variables keep reaching
+    /// `stable_vars`.
+    #[test]
+    fn compile_when_sidecar_keys_fb_field_then_container_carries_field_uid() {
+        const FB_PROGRAM: &str = r#"
+FUNCTION_BLOCK Accumulator
+VAR_INPUT
+  step : INT;
+END_VAR
+VAR
+  total : INT;
+END_VAR
+  total := total + step;
+END_FUNCTION_BLOCK
+PROGRAM Main
+VAR
+  x : INT;
+  acc : Accumulator;
+END_VAR
+  acc(step := x);
+END_PROGRAM
+"#;
+
+        let mut project = project_with(FB_PROGRAM);
+        project.set_stable_var_ids(vec![
+            (crate::sidecar::SidecarKey::new("main", "x"), 42),
+            (crate::sidecar::SidecarKey::new("Accumulator", "total"), 102),
+        ]);
+
+        let output = compile(
+            &mut project,
+            &CompilerOptions::default(),
+            &EmptyLookup,
+            vec![],
+        );
+        assert!(
+            output.diagnostics.is_empty(),
+            "expected a clean compile, got: {:?}",
+            output.diagnostics
+        );
+        let container = output.container.expect("valid program must compile");
+        let type_section = container
+            .type_section
+            .as_ref()
+            .expect("the variable table implies a type section");
+
+        // The program variable lands in `stable_vars` as before.
+        let x_index = container
+            .debug_section
+            .as_ref()
+            .expect("named variables imply a debug section")
+            .var_names
+            .iter()
+            .find(|entry| entry.name.eq_ignore_ascii_case("x"))
+            .expect("the program declares x")
+            .var_index;
+        assert_eq!(
+            type_section.stable_vars.as_slice(),
+            [StableVarEntry {
+                var_index: x_index,
+                uid: 42,
+            }]
+        );
+
+        // The FB field lands in `fb_field_uids` under the type's ID at the
+        // field's ordinal (VAR_INPUT step = 0, VAR total = 1).
+        assert_eq!(
+            type_section.fb_field_uids.as_slice(),
+            [ironplc_container::FbFieldUidEntry {
+                fb_type_id: type_section.user_fb_types[0].type_id,
+                field_index: 1,
+                uid: 102,
             }]
         );
     }

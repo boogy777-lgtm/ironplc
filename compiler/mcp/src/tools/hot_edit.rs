@@ -352,7 +352,6 @@ END_PROGRAM"
     /// scenario establishes its session directly instead of through
     /// `build_accept_response`.
     fn compile_container_with_ids(source: &str, ids: &[(&str, u64)]) -> Container {
-        use ironplc_dsl::core::Id;
         use ironplc_parser::options::CompilerOptions;
         use ironplc_project::{compile, MemoryBackedProject};
 
@@ -365,7 +364,7 @@ END_PROGRAM"
         if !ids.is_empty() {
             project.set_stable_var_ids(
                 ids.iter()
-                    .map(|(name, uid)| (Id::from(name), *uid))
+                    .map(|(name, uid)| (ironplc_project::SidecarKey::new("main", name), *uid))
                     .collect(),
             );
         }

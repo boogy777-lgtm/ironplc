@@ -8,9 +8,12 @@
 //!
 //! The mapping covers the persistent prefix -- program variables and
 //! top-level `VAR_GLOBAL` declarations -- the same population codegen records
-//! in the container's `stable_vars` table. Codegen matches declarations by
-//! name only, so the sidecar's scope exists for disambiguation and for
-//! rename/swap tracking, not for the container lookup.
+//! in the container's `stable_vars` table, plus the fields of user-defined
+//! function blocks, which codegen records in the container's `fb_field_uids`
+//! table (ADR 0059). Codegen matches persistent declarations by name only,
+//! so the sidecar's scope exists for disambiguation and for rename/swap
+//! tracking, not for the container lookup; an FB field's scope is its
+//! qualified FB type name.
 //!
 //! ## Format
 //!
@@ -51,6 +54,7 @@ use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use ironplc_codegen::FbFieldUidKey;
 use ironplc_dsl::common::{Library, LibraryElementKind, VarDecl, VariableType};
 use ironplc_dsl::core::{FileId, Id};
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
@@ -356,14 +360,14 @@ impl Sidecar {
         Ok(())
     }
 
-    /// The `(name, uid)` table the compile pipeline forwards to codegen
-    /// (ADR 0053). Codegen matches declarations by name only, so the scope
-    /// does not participate; when two scopes declare the same name, the
-    /// first entry in key order wins, matching codegen's first-match lookup.
-    pub fn stable_var_ids(&self) -> Vec<(Id, u64)> {
+    /// The full `(scope, name) -> uid` table in deterministic key order.
+    /// The compile pipeline splits it with the library's declarations
+    /// ([`split_var_uids`]) into the program/global name table and the FB
+    /// field table codegen consumes (ADR 0053, ADR 0059).
+    pub fn keyed_entries(&self) -> Vec<(SidecarKey, u64)> {
         self.entries
             .iter()
-            .map(|(key, uid)| (key.name.clone(), *uid))
+            .map(|(key, uid)| (key.clone(), *uid))
             .collect()
     }
 
@@ -404,9 +408,11 @@ pub fn sidecar_path_for(project: &Path) -> Option<PathBuf> {
 
 /// Collects the keys the sidecar tracks for a library: the persistent
 /// prefix's declared variables -- program variables (scope = program name)
-/// and top-level `VAR_GLOBAL` declarations (scope = `global`), ADR 0053.
-/// `VAR_EXTERNAL` aliases are skipped, matching codegen, which allocates the
-/// global itself. The result is sorted and deduplicated.
+/// and top-level `VAR_GLOBAL` declarations (scope = `global`), ADR 0053 --
+/// and the fields of user-defined function blocks (scope = qualified FB type
+/// name, name = field), ADR 0059. `VAR_EXTERNAL` aliases are skipped,
+/// matching codegen, which allocates the global itself. The result is
+/// sorted and deduplicated.
 pub fn declared_var_keys(library: &Library) -> Vec<SidecarKey> {
     let mut keys = Vec::new();
     for element in &library.elements {
@@ -416,6 +422,17 @@ pub fn declared_var_keys(library: &Library) -> Vec<SidecarKey> {
             }
             LibraryElementKind::GlobalVarDeclarations(variables) => {
                 push_var_keys(&Id::from(GLOBAL_SCOPE), variables, &mut keys);
+            }
+            LibraryElementKind::FunctionBlockDeclaration(fb) => {
+                // The same field population codegen records in the
+                // container's `fb_field_uids` table: VAR_INPUT, VAR_OUTPUT,
+                // VAR, in that order (order is normalized away by the final
+                // sort).
+                for var_type in [VariableType::Input, VariableType::Output, VariableType::Var] {
+                    for variable in fb.variables.iter().filter(|v| v.var_type == var_type) {
+                        push_var_key(&fb.name.name, variable, &mut keys);
+                    }
+                }
             }
             _ => {}
         }
@@ -432,13 +449,60 @@ fn push_var_keys(scope: &Id, variables: &[VarDecl], keys: &mut Vec<SidecarKey>) 
             // keyed, so the alias must not become a second key.
             continue;
         }
-        if let Some(name) = variable.identifier.symbolic_id() {
-            keys.push(SidecarKey {
-                scope: scope.clone(),
-                name: name.clone(),
-            });
+        push_var_key(scope, variable, keys);
+    }
+}
+
+fn push_var_key(scope: &Id, variable: &VarDecl, keys: &mut Vec<SidecarKey>) {
+    if let Some(name) = variable.identifier.symbolic_id() {
+        keys.push(SidecarKey {
+            scope: scope.clone(),
+            name: name.clone(),
+        });
+    }
+}
+
+/// The two UID tables codegen consumes: persistent program/global
+/// declarations matched by name (ADR 0053), and FB fields matched by
+/// `(qualified FB type name, field name)` (ADR 0059).
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct SplitVarUids {
+    /// `(name, uid)` pairs in the keyed table's sort order; codegen matches
+    /// declarations by name only.
+    pub vars: Vec<(Id, u64)>,
+    /// `((fb_type, field), uid)` pairs in the keyed table's sort order.
+    pub fields: Vec<(FbFieldUidKey, u64)>,
+}
+
+/// Splits the engineering-side UID table into the two tables codegen
+/// consumes (see [`SplitVarUids`]). The library decides which scopes name FB
+/// types; the relative order of each output preserves the keyed table's sort
+/// order, so the name-first-match rule for program variables is unchanged.
+pub fn split_var_uids(ids: &[(SidecarKey, u64)], library: &Library) -> SplitVarUids {
+    let fb_types: Vec<&Id> = library
+        .elements
+        .iter()
+        .filter_map(|element| match element {
+            LibraryElementKind::FunctionBlockDeclaration(fb) => Some(&fb.name.name),
+            _ => None,
+        })
+        .collect();
+
+    let mut split = SplitVarUids::default();
+    for (key, uid) in ids {
+        if fb_types.iter().any(|name| *name == key.scope()) {
+            split.fields.push((
+                FbFieldUidKey {
+                    fb_type: key.scope().clone(),
+                    field: key.name().clone(),
+                },
+                *uid,
+            ));
+        } else {
+            split.vars.push((key.name().clone(), *uid));
         }
     }
+    split
 }
 
 /// Parses sidecar text into a table. Returns `None` for any deviation from
@@ -585,7 +649,7 @@ mod tests {
         assert!(report.removed.is_empty());
         assert!(report.rename_candidates.is_empty());
         assert!(report.swap_candidates.is_empty());
-        assert_eq!(sidecar.stable_var_ids(), vec![(Id::from("x"), 42)]);
+        assert_eq!(sidecar.keyed_entries(), vec![(key("main", "x"), 42)]);
     }
 
     #[test]
@@ -595,7 +659,7 @@ mod tests {
 
         assert_eq!(report.preserved, vec![(key("main", "x"), 42)]);
         assert_eq!(report.assigned, vec![(key("main", "y"), 43)]);
-        assert_eq!(sidecar.stable_var_ids().len(), 2);
+        assert_eq!(sidecar.keyed_entries().len(), 2);
     }
 
     #[test]
@@ -615,7 +679,7 @@ mod tests {
         let report = sidecar.sync(&[key("main", "x")]);
 
         assert_eq!(report.removed, vec![(key("main", "old"), 7)]);
-        assert_eq!(sidecar.stable_var_ids(), vec![(Id::from("x"), 42)]);
+        assert_eq!(sidecar.keyed_entries(), vec![(key("main", "x"), 42)]);
     }
 
     #[test]
@@ -628,7 +692,7 @@ mod tests {
         // key is a new entity with initialization semantics.
         assert_eq!(report.removed, vec![(key("main", "x"), 100)]);
         assert_eq!(report.assigned, vec![(key("main", "y"), 101)]);
-        assert_eq!(sidecar.stable_var_ids(), vec![(Id::from("y"), 101)]);
+        assert_eq!(sidecar.keyed_entries(), vec![(key("main", "y"), 101)]);
     }
 
     #[test]
@@ -693,8 +757,8 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            sidecar.stable_var_ids(),
-            vec![(Id::from("new"), 7), (Id::from("other"), 3)]
+            sidecar.keyed_entries(),
+            vec![(key("main", "new"), 7), (key("main", "other"), 3)]
         );
     }
 
@@ -704,7 +768,7 @@ mod tests {
         let result = sidecar.map_uid(&key("main", "missing"), &key("main", "new"));
 
         assert_eq!(result.unwrap_err(), MapUidError::UnknownKey);
-        assert_eq!(sidecar.stable_var_ids(), vec![(Id::from("x"), 7)]);
+        assert_eq!(sidecar.keyed_entries(), vec![(key("main", "x"), 7)]);
     }
 
     #[test]
@@ -714,18 +778,18 @@ mod tests {
 
         assert_eq!(result.unwrap_err(), MapUidError::KeyAlreadyMapped);
         assert_eq!(
-            sidecar.stable_var_ids(),
-            vec![(Id::from("new"), 9), (Id::from("old"), 7)]
+            sidecar.keyed_entries(),
+            vec![(key("main", "new"), 9), (key("main", "old"), 7)]
         );
     }
 
     #[test]
-    fn stable_var_ids_when_entries_then_names_only() {
+    fn keyed_entries_when_entries_then_full_keys() {
         let sidecar = loaded(&[("main", "x", 42), ("global", "g", 7)]);
 
         assert_eq!(
-            sidecar.stable_var_ids(),
-            vec![(Id::from("g"), 7), (Id::from("x"), 42)]
+            sidecar.keyed_entries(),
+            vec![(key("global", "g"), 7), (key("main", "x"), 42)]
         );
     }
 
@@ -781,6 +845,84 @@ mod tests {
         assert_eq!(
             keys,
             vec![key("global", "g"), key("main", "e"), key("main", "x")]
+        );
+    }
+
+    #[test]
+    fn declared_var_keys_when_function_block_then_fields_keyed_by_type() {
+        let library = ironplc_sources::parse_source(
+            ironplc_sources::FileType::StructuredText,
+            "FUNCTION_BLOCK Accumulator \
+             VAR_INPUT step : DINT; END_VAR \
+             VAR_OUTPUT done : BOOL; END_VAR \
+             VAR total : DINT; temp : DINT; END_VAR \
+             total := total + step; \
+             END_FUNCTION_BLOCK \
+             PROGRAM main VAR acc : Accumulator; END_VAR acc(step := 1); END_PROGRAM",
+            &FileId::from_string("main.st"),
+            &ironplc_parser::options::CompilerOptions::default(),
+        )
+        .unwrap();
+
+        let keys = declared_var_keys(&library);
+
+        // FB fields are keyed by (FB type name, field); the instance `acc`
+        // is a program variable like any other.
+        assert_eq!(
+            keys,
+            vec![
+                key("Accumulator", "done"),
+                key("Accumulator", "step"),
+                key("Accumulator", "temp"),
+                key("Accumulator", "total"),
+                key("main", "acc"),
+            ]
+        );
+    }
+
+    #[test]
+    fn split_var_uids_when_fb_field_scope_then_field_table() {
+        let library = ironplc_sources::parse_source(
+            ironplc_sources::FileType::StructuredText,
+            "FUNCTION_BLOCK Accumulator \
+             VAR_INPUT step : DINT; END_VAR \
+             VAR total : DINT; END_VAR \
+             total := total + step; \
+             END_FUNCTION_BLOCK \
+             PROGRAM main VAR x : INT; acc : Accumulator; END_VAR acc(step := 1); END_PROGRAM",
+            &FileId::from_string("main.st"),
+            &ironplc_parser::options::CompilerOptions::default(),
+        )
+        .unwrap();
+        let ids = vec![
+            (key("main", "x"), 1),
+            (key("Accumulator", "step"), 101),
+            (key("Accumulator", "total"), 102),
+        ];
+
+        let split = split_var_uids(&ids, &library);
+
+        // Program variables stay name-keyed (scope ignored); FB fields are
+        // keyed by (FB type name, field name).
+        assert_eq!(split.vars, vec![(Id::from("x"), 1)]);
+        assert_eq!(
+            split.fields,
+            vec![
+                (
+                    FbFieldUidKey {
+                        fb_type: Id::from("Accumulator"),
+                        field: Id::from("step"),
+                    },
+                    101
+                ),
+                (
+                    FbFieldUidKey {
+                        fb_type: Id::from("Accumulator"),
+                        field: Id::from("total"),
+                    },
+                    102
+                ),
+            ]
         );
     }
 }

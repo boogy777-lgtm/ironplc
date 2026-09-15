@@ -9,7 +9,7 @@ pub mod tokenizer;
 
 pub use compile::{compile, CompileOutput};
 pub use project::{FileBackedProject, MemoryBackedProject, Project};
-pub use sidecar::{sidecar_path_for, Sidecar, SidecarKey, SyncReport};
+pub use sidecar::{sidecar_path_for, Sidecar, SidecarKey, SplitVarUids, SyncReport};
 
 #[cfg(test)]
 #[ctor::ctor(unsafe)]
