@@ -7,16 +7,22 @@
 //! startup prints nothing, every response line is flushed as written, and
 //! anything diagnostic goes to stderr through the logger.
 //!
-//! The session is a pure command channel: it drives no scan rounds, so a
-//! `testEdits`/`untestEdits` swap — applied at the next scan boundary
-//! ([`RuntimeHost::run`]) — stays pending for the whole session and commands
-//! issued while it is pending are refused with the protocol's usual V-codes.
+//! The FSM-advancing commands (`testEdits`, `untestEdits`, `assembleEdits`)
+//! only *request* a swap; the host applies it at the next scan boundary
+//! ([`RuntimeHost::run`]). After one of them is acknowledged, the session
+//! drives one scan round at a constant zero uptime — the convention of the
+//! runtime acceptance tests — so a scripted client reads back state that has
+//! actually switched. A trap in the driven round is the running
+//! application's own fault: it is logged to stderr with the trap's V-code
+//! and the session continues.
 
 use std::io::{self, BufRead, Write};
 use std::path::Path;
 
 use ironplc_container::Container;
-use ironplc_runtime::{execute, parse_command, render_response, RuntimeError, RuntimeHost};
+use ironplc_runtime::{
+    execute, parse_command, render_response, Command, Response, RuntimeError, RuntimeHost,
+};
 
 use crate::error::{self, VmError};
 
@@ -53,6 +59,10 @@ fn start_host(container: Container) -> Result<RuntimeHost, VmError> {
 /// Serves one command session: reads one line per command from `reader`,
 /// writes one line per response to `writer`, flushing after every line.
 ///
+/// A command that advances the hot-edit FSM (`testEdits`, `untestEdits`,
+/// `assembleEdits`) drives one scan round after its acknowledgment, before
+/// the response line is written (see [`drive_scan_round`]).
+///
 /// Returns when the reader reaches EOF, or with the first I/O failure.
 pub fn serve_session(
     host: &mut RuntimeHost,
@@ -62,8 +72,17 @@ pub fn serve_session(
     for line in reader.lines() {
         let line = line?;
         let response = match parse_command(&line) {
-            Ok(command) => render_response(&execute(command, host))
-                .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?,
+            Ok(command) => {
+                let advances = advances_state(&command);
+                let response = execute(command, host);
+                if advances && matches!(response, Response::Ack) {
+                    if let Some(err) = drive_scan_round(host) {
+                        log::error!("driven scan round trapped: {err}");
+                    }
+                }
+                render_response(&response)
+                    .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?
+            }
             Err(err) => {
                 // A malformed line is a codec error, not an online change
                 // refusal: it has no V-code (ADR-0055). The transport answers
@@ -77,6 +96,40 @@ pub fn serve_session(
         writer.flush()?;
     }
     Ok(())
+}
+
+/// Whether acknowledging `command` advances the hot-edit FSM at a scan
+/// boundary. `testEdits`/`untestEdits`/`assembleEdits` only *request* a swap;
+/// `acceptEdits` and `cancelEdits` take effect without one.
+fn advances_state(command: &Command) -> bool {
+    matches!(
+        command,
+        Command::TestEdits | Command::UntestEdits | Command::AssembleEdits
+    )
+}
+
+/// Drives the one scan round that applies a swap acknowledged on the wire,
+/// at the constant-zero clock of the runtime acceptance tests (every task is
+/// ready immediately after a (re)load, so the boundary round runs each task
+/// exactly once).
+///
+/// Returns the trap as a [`VmError`] — its V-code is the trap's own — so the
+/// caller can surface it; a trapped round does not end the session. A
+/// violated host invariant keeps no V-code of its own (ADR-0055): it is
+/// logged here and reported as `None`.
+fn drive_scan_round(host: &mut RuntimeHost) -> Option<VmError> {
+    match host.run(1, || 0) {
+        Ok(()) => None,
+        Err(RuntimeError::Trap(context)) => Some(VmError::from_trap(
+            &context.trap,
+            context.task_id,
+            context.instance_id,
+        )),
+        Err(RuntimeError::Internal { reason }) => {
+            log::error!("runtime host invariant violated during a driven scan round: {reason}");
+            None
+        }
+    }
 }
 
 /// Renders the transport-level error for a line that did not parse as a
@@ -141,6 +194,20 @@ END_PROGRAM
         bytes
     }
 
+    /// The wire-format bytes of a candidate whose scan divides by the
+    /// zero-initialized `Counter`, so the first driven round traps.
+    fn trapping_container_bytes() -> Vec<u8> {
+        container_bytes(
+            "PROGRAM main
+  VAR
+    Counter : DINT;
+  END_VAR
+  Counter := 1 / Counter;
+END_PROGRAM
+",
+        )
+    }
+
     /// Runs `lines` through one session, returning the parsed response per
     /// input line.
     fn run_session(host: &mut RuntimeHost, lines: &[&str]) -> Vec<serde_json::Value> {
@@ -183,20 +250,73 @@ END_PROGRAM
         assert_eq!(responses[0]["mode"], "normal");
         assert_eq!(responses[0]["candidate"], serde_json::Value::Null);
         assert_eq!(responses[1]["response"], "ack");
+        // Each FSM-advancing command drives one scan round at the boundary,
+        // so the test swap is applied — and the untest revert and the
+        // assemble promotion likewise — by the time its acknowledgment is
+        // written: the whole scripted path is ack.
         assert_eq!(responses[2]["response"], "ack");
-        // The session drives no scan rounds, so the pending test swap never
-        // reaches a boundary: untest has no test in progress, and assemble
-        // and cancel are refused while a swap is pending (V4014/V4015).
-        assert_eq!(responses[3]["response"], "error");
-        assert_eq!(responses[3]["vCode"], "V4014");
-        assert_eq!(responses[4]["response"], "error");
-        assert_eq!(responses[4]["vCode"], "V4015");
+        assert_eq!(responses[3]["response"], "ack");
+        assert_eq!(responses[4]["response"], "ack");
+        // Assembling left nothing staged, so the final cancel is refused
+        // with the protocol's usual V-code.
         assert_eq!(responses[5]["response"], "error");
-        assert_eq!(responses[5]["vCode"], "V4015");
-        // The candidate staged by acceptEdits is still staged at the end.
+        assert_eq!(responses[5]["vCode"], "V4012");
+        // Three rounds were driven (test, untest, assemble): the candidate
+        // is the promoted, running application.
         assert_eq!(responses[6]["response"], "status");
-        assert_eq!(responses[6]["candidate"], 2);
-        assert_eq!(responses[6]["rounds"], 0);
+        assert_eq!(responses[6]["mode"], "normal");
+        assert_eq!(responses[6]["normal"], 2);
+        assert_eq!(responses[6]["application"], 2);
+        assert_eq!(responses[6]["candidate"], serde_json::Value::Null);
+        assert_eq!(responses[6]["rounds"], 3);
+    }
+
+    /// REQ-VC-vm-cli-023: a trap in a driven round does not change the
+    /// protocol answer (the swap was recorded, so the wire carries the ack);
+    /// the trap surfaces with its V-code and the session keeps serving.
+    #[spec_test(REQ_VC_vm_cli_023)]
+    #[test]
+    fn serve_session_when_driven_round_traps_then_ack_on_wire_and_session_continues() {
+        let accept =
+            serde_json::json!({"command": "acceptEdits", "program": trapping_container_bytes()})
+                .to_string();
+        let lines = [
+            &accept,
+            r#"{"command":"testEdits"}"#,
+            r#"{"command":"getStatus"}"#,
+        ];
+        let mut host = counter_host();
+
+        let responses = run_session(&mut host, &lines);
+
+        assert_eq!(responses.len(), lines.len());
+        assert_eq!(responses[0]["response"], "ack");
+        // The driven boundary round trapped (divide by zero, V4001, logged
+        // to stderr); the acknowledgment still stands and the session
+        // answers the next command.
+        assert_eq!(responses[1]["response"], "ack");
+        assert_eq!(responses[2]["response"], "status");
+    }
+
+    #[test]
+    fn drive_scan_round_when_round_traps_then_trap_v_code() {
+        let mut host = counter_host();
+        let accept = parse_command(
+            &serde_json::json!({"command": "acceptEdits", "program": trapping_container_bytes()})
+                .to_string(),
+        )
+        .unwrap();
+        assert!(matches!(execute(accept, &mut host), Response::Ack));
+        assert!(matches!(
+            execute(Command::TestEdits, &mut host),
+            Response::Ack
+        ));
+
+        let err = drive_scan_round(&mut host).unwrap();
+
+        assert!(err
+            .to_string()
+            .starts_with("V4001 - runtime error: divide by zero"));
     }
 
     /// REQ-VC-vm-cli-020: a malformed line is a codec error — no V-code — so

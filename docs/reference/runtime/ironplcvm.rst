@@ -93,10 +93,12 @@ Commands
    an acknowledgment, a status payload, or an error carrying a stable
    ``vCode`` and ``message``. A line that does not parse as a command is
    answered with an error line whose ``vCode`` is null — codec errors carry
-   no V-code. The session drives no scan rounds: a ``testEdits`` or
-   ``untestEdits`` acknowledgment records a swap that applies at the next
-   scan boundary, so commands issued while a swap is pending are refused
-   with the protocol's usual V-codes.
+   no V-code. A ``testEdits``, ``untestEdits`` or ``assembleEdits``
+   acknowledgment records a swap that applies at the next scan boundary:
+   after the acknowledgment, the session drives one scan round at a constant
+   zero uptime, before the response line is written, so the swap has been
+   applied when the line reaches the client. A trap in that round is logged
+   to stderr with the trap's V-code and the session continues.
 
 Options
 =======
