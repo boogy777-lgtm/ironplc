@@ -13,7 +13,7 @@ use crate::tools::common::ParseCheckInput;
 use crate::tools::compile::CompileInput;
 use crate::tools::container_drop::ContainerDropInput;
 use crate::tools::explain_diagnostic::ExplainDiagnosticInput;
-use crate::tools::hot_edit::HotEditSession;
+use crate::tools::hot_edit::{HotEditAcceptInput, HotEditSession};
 use crate::tools::pou_lineage::PouLineageInput;
 use crate::tools::pou_scope::PouScopeInput;
 use crate::tools::run::RunInput;
@@ -257,15 +257,16 @@ impl IronPlcMcp {
     /// Compiles sources and feeds them to the hot-edit protocol.
     #[tool(
         name = "hot_edit_accept",
-        description = "Compiles the supplied IEC sources and hands them to the hot-edit protocol. The first call establishes the running application session and reports `established`; each later call stages the compiled program as an edit candidate to activate with `hot_edit_test` and promote with `hot_edit_assemble`, or discard with `hot_edit_cancel`. Compilation failures return the usual diagnostics; staging refusals return a stable V-code such as V4007 (layout change) or V4013 (candidate already staged)."
+        description = "Compiles the supplied IEC sources and hands them to the hot-edit protocol. The first call establishes the running application session and reports `established`; each later call stages the compiled program as an edit candidate to activate with `hot_edit_test` and promote with `hot_edit_assemble`, or discard with `hot_edit_cancel`. Compilation failures return the usual diagnostics; staging refusals return a stable V-code such as V4007 (layout change) or V4013 (candidate already staged). A V4010 refusal carries a `pairs` list of out-of-policy type changes; resubmit the identical sources with the `migration` map (`uid -> \"init\" | \"preserve\"`) to resolve them."
     )]
     async fn hot_edit_accept(
         &self,
-        Parameters(input): Parameters<ParseCheckInput>,
+        Parameters(input): Parameters<HotEditAcceptInput>,
     ) -> Result<ContentBlock, rmcp::ErrorData> {
-        let response = tools::hot_edit::build_accept_response(
+        let response = tools::hot_edit::build_accept_response_with_decisions(
             &input.sources,
             &input.options,
+            &input.migration,
             &self.cache,
             &self.hot_edit,
         );

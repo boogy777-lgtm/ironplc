@@ -36,6 +36,7 @@
 //! so the boundary round executes each task exactly once. A trap in that
 //! round surfaces the trap's own V-code.
 
+use std::collections::BTreeMap;
 use std::io::Cursor;
 use std::sync::Mutex;
 
@@ -44,9 +45,11 @@ use ironplc_dsl::core::SourceSpan;
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
 use ironplc_problems::Problem;
 use ironplc_runtime::{
-    execute, Command, CommandError, Response, RuntimeError, RuntimeHost, StatusPayload,
+    execute, Command, CommandError, MigrationDecisionSpec, Response, RuntimeError, RuntimeHost,
+    StatusPayload, TypeChangeDetail,
 };
-use serde::Serialize;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
 use super::common::{serialize_diagnostic, serialize_diagnostics, SourceInput};
 use crate::cache::ContainerCache;
@@ -60,6 +63,38 @@ use crate::cache::ContainerCache;
 #[derive(Default)]
 pub struct HotEditSession {
     host: Option<RuntimeHost>,
+}
+
+/// Combined input accepted by `hot_edit_accept`: the shared sources/options
+/// pair every analysis tool takes, plus optional per-UID migration decisions
+/// (ADR 0061).
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct HotEditAcceptInput {
+    /// One or more source files.
+    pub sources: Vec<SourceInput>,
+    /// Compiler options (dialect + optional feature-flag overrides).
+    #[schemars(schema_with = "super::common::options_schema")]
+    pub options: serde_json::Value,
+    /// Engineer decisions for out-of-policy type changes, keyed by stable
+    /// variable UID: `"init"` (the default when omitted) discards the old
+    /// value, `"preserve"` keeps the old storage bytes under the candidate
+    /// type (legal only when both sides' sizes match). An empty map fails
+    /// closed with a V4010 naming every problematic pair.
+    #[serde(default)]
+    #[schemars(schema_with = "migration_schema")]
+    pub migration: BTreeMap<u64, MigrationDecisionSpec>,
+}
+
+/// schemars schema function for the UID-keyed `migration` map.
+///
+/// [`MigrationDecisionSpec`] comes from the runtime crate and does not
+/// implement `JsonSchema`; this explicit object schema also keeps the field
+/// from rendering as a boolean schema, which some MCP clients reject.
+pub fn migration_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    schemars::json_schema!({
+        "type": "object",
+        "description": "Engineer decisions for out-of-policy type changes (ADR 0061): stable variable UID -> \"init\" | \"preserve\"."
+    })
 }
 
 /// Top-level response shared by every `hot_edit_*` tool.
@@ -80,6 +115,9 @@ pub struct HotEditResponse {
     pub v_code: Option<String>,
     /// The failure message accompanying `v_code`.
     pub message: Option<String>,
+    /// The V4010 type changes to decide, one entry per problematic entity
+    /// (ADR 0061). Null on success and on every other refusal.
+    pub pairs: Option<Vec<TypeChangeDetail>>,
     /// Compiler diagnostics: compile failures on `hot_edit_accept`, and
     /// validation failures (such as calling a tool before any session
     /// exists) with code P8001.
@@ -95,13 +133,15 @@ impl HotEditResponse {
             status: Some(status),
             v_code: None,
             message: None,
+            pairs: None,
             diagnostics: vec![],
         }
     }
 
     /// Builds the failure response for a command-layer refusal. The V-code
     /// and message are the command layer's whole contract (ADR-0055), so the
-    /// tool forwards them verbatim and adds nothing of its own.
+    /// tool forwards them verbatim and adds nothing of its own; a V4010
+    /// refusal additionally surfaces its pair list for the client to decide.
     fn command_error(error: &CommandError) -> Self {
         HotEditResponse {
             ok: false,
@@ -109,6 +149,7 @@ impl HotEditResponse {
             status: None,
             v_code: Some(error.v_code().to_string()),
             message: Some(error.message().to_string()),
+            pairs: error.pairs().map(<[TypeChangeDetail]>::to_vec),
             diagnostics: vec![],
         }
     }
@@ -128,6 +169,7 @@ impl HotEditResponse {
                     context.task_id.raw(),
                     context.instance_id.raw()
                 )),
+                pairs: None,
                 diagnostics: vec![],
             },
             RuntimeError::Internal { reason } => {
@@ -146,6 +188,7 @@ fn validation_failure(message: &str) -> HotEditResponse {
         status: None,
         v_code: None,
         message: None,
+        pairs: None,
         diagnostics: serialize_diagnostics(&[Diagnostic::problem(
             Problem::McpInputValidation,
             Label::span(SourceSpan::default(), message),
@@ -163,6 +206,7 @@ fn internal_failure(message: String) -> HotEditResponse {
         status: None,
         v_code: None,
         message: None,
+        pairs: None,
         diagnostics: vec![serialize_diagnostic(&Diagnostic::internal_error_at(
             Label::span(SourceSpan::default(), message),
         ))],
@@ -202,7 +246,23 @@ pub fn build_status_response(session: &Mutex<HotEditSession>) -> HotEditResponse
     dispatch(Command::GetStatus, &mut guard, false)
 }
 
-/// Builds the `hot_edit_accept` response.
+/// Builds the `hot_edit_accept` response without migration decisions.
+///
+/// Equivalent to
+/// [`build_accept_response_with_decisions`](Self::build_accept_response_with_decisions)
+/// with an empty decision map: an out-of-policy type change is refused with a
+/// V4010 that names every problematic pair.
+pub fn build_accept_response(
+    sources: &[SourceInput],
+    options_value: &serde_json::Value,
+    cache: &Mutex<ContainerCache>,
+    session: &Mutex<HotEditSession>,
+) -> HotEditResponse {
+    build_accept_response_with_decisions(sources, options_value, &BTreeMap::new(), cache, session)
+}
+
+/// Builds the `hot_edit_accept` response, resolving out-of-policy type
+/// changes with `migration` (ADR 0061).
 ///
 /// Compiles `sources` through the same pipeline as the `compile` tool, then:
 ///
@@ -210,10 +270,13 @@ pub fn build_status_response(session: &Mutex<HotEditSession>) -> HotEditResponse
 ///   (the session is established and the result is `"established"`); or
 /// - session running: the compiled container is staged through the command
 ///   layer's [`Command::AcceptEdits`], so every refusal (V4007 layout, V4008
-///   schedule, V4013 already staged, ...) comes back with its stable V-code.
-pub fn build_accept_response(
+///   schedule, V4010 type changes, V4013 already staged, ...) comes back with
+///   its stable V-code. A V4010 refusal carries its pair list, and the caller
+///   resubmits the identical sources with the decisions map.
+pub fn build_accept_response_with_decisions(
     sources: &[SourceInput],
     options_value: &serde_json::Value,
+    migration: &BTreeMap<u64, MigrationDecisionSpec>,
     cache: &Mutex<ContainerCache>,
     session: &Mutex<HotEditSession>,
 ) -> HotEditResponse {
@@ -228,6 +291,7 @@ pub fn build_accept_response(
             status: None,
             v_code: None,
             message: None,
+            pairs: None,
             diagnostics: compiled.diagnostics,
         };
     }
@@ -250,7 +314,14 @@ pub fn build_accept_response(
     if guard.host.is_none() {
         return establish(program, &mut guard);
     }
-    dispatch(Command::AcceptEdits { program }, &mut guard, false)
+    dispatch(
+        Command::AcceptEdits {
+            program,
+            migration: migration.clone(),
+        },
+        &mut guard,
+        false,
+    )
 }
 
 /// Creates the session from the compiled program's wire bytes.
@@ -648,7 +719,10 @@ END_PROGRAM
             let mut bytes = Vec::new();
             schema_edit.write_to(&mut bytes).unwrap();
             execute(
-                Command::AcceptEdits { program: bytes },
+                Command::AcceptEdits {
+                    program: bytes,
+                    migration: BTreeMap::new(),
+                },
                 guard.host.as_mut().unwrap(),
             )
         };
@@ -671,6 +745,201 @@ END_PROGRAM
         let status = status.status.unwrap();
         assert_eq!(status.mode, HostMode::Testing);
         assert_eq!(status.candidate, Some(2));
+    }
+
+    #[test]
+    fn hot_edit_accept_input_when_migration_map_then_parses_decisions() {
+        let input: HotEditAcceptInput = serde_json::from_value(serde_json::json!({
+            "sources": [{"name": "main.st", "content": "PROGRAM main END_PROGRAM"}],
+            "options": {},
+            "migration": {"7": "init", "9": "preserve"},
+        }))
+        .unwrap();
+
+        assert_eq!(
+            input.migration,
+            BTreeMap::from([
+                (7, MigrationDecisionSpec::Init),
+                (9, MigrationDecisionSpec::Preserve),
+            ])
+        );
+    }
+
+    #[test]
+    fn hot_edit_accept_input_when_migration_absent_then_empty() {
+        let input: HotEditAcceptInput = serde_json::from_value(serde_json::json!({
+            "sources": [{"name": "main.st", "content": "PROGRAM main END_PROGRAM"}],
+            "options": {},
+        }))
+        .unwrap();
+
+        assert!(input.migration.is_empty());
+    }
+
+    #[test]
+    fn dispatch_when_type_change_without_decisions_then_v4010_and_pairs() {
+        let (_cache, session) = make_state();
+        let base = compile_container_with_ids(
+            "PROGRAM main
+  VAR
+    Counter : DINT;
+  END_VAR
+  Counter := Counter + 1;
+END_PROGRAM
+",
+            &[("Counter", 1)],
+        );
+        {
+            let mut guard = session.lock().unwrap();
+            guard.host = Some(RuntimeHost::new(base).unwrap());
+        }
+        let candidate = compile_container_with_ids(
+            "PROGRAM main
+  VAR
+    Counter : UDINT;
+  END_VAR
+  Counter := Counter + 1;
+END_PROGRAM
+",
+            &[("Counter", 1)],
+        );
+        let mut bytes = Vec::new();
+        candidate.write_to(&mut bytes).unwrap();
+
+        let mut guard = session.lock().unwrap();
+        let resp = dispatch(
+            Command::AcceptEdits {
+                program: bytes,
+                migration: BTreeMap::new(),
+            },
+            &mut guard,
+            false,
+        );
+
+        assert!(!resp.ok);
+        assert_eq!(resp.v_code.as_deref(), Some("V4010"));
+        assert_eq!(
+            resp.pairs,
+            Some(vec![TypeChangeDetail {
+                uid: 1,
+                name: Some("Counter".to_string()),
+                from: "I32".to_string(),
+                to: "U32".to_string(),
+                size_equal: true,
+            }])
+        );
+        // The refusal staged nothing: the client can resubmit with a decision.
+        assert!(guard.host.as_ref().unwrap().status().candidate.is_none());
+    }
+
+    #[test]
+    fn dispatch_when_preserve_decision_then_old_bits_survive_the_retype() {
+        let (_cache, session) = make_state();
+        let base = compile_container_with_ids(
+            "PROGRAM main
+  VAR
+    Counter : DINT;
+  END_VAR
+  Counter := Counter + 1;
+END_PROGRAM
+",
+            &[("Counter", 1)],
+        );
+        {
+            let mut guard = session.lock().unwrap();
+            guard.host = Some(RuntimeHost::new(base).unwrap());
+            guard.host.as_mut().unwrap().run(3, || 0).unwrap();
+        }
+        let candidate = compile_container_with_ids(
+            "PROGRAM main
+  VAR
+    Counter : UDINT;
+  END_VAR
+  Counter := Counter + 1;
+END_PROGRAM
+",
+            &[("Counter", 1)],
+        );
+        let counter = variable_index(&candidate, "Counter");
+        let mut bytes = Vec::new();
+        candidate.write_to(&mut bytes).unwrap();
+
+        let mut guard = session.lock().unwrap();
+        let staged = dispatch(
+            Command::AcceptEdits {
+                program: bytes,
+                migration: BTreeMap::from([(1, MigrationDecisionSpec::Preserve)]),
+            },
+            &mut guard,
+            false,
+        );
+        assert!(
+            staged.ok,
+            "v_code: {:?} message: {:?}",
+            staged.v_code, staged.message
+        );
+        let tested = dispatch(Command::TestEdits, &mut guard, true);
+        assert!(tested.ok);
+
+        // The DINT 3 (0x3) was preserved bit for bit; the UDINT body added
+        // one more.
+        let value = guard.host.as_ref().unwrap().read_variable(counter).unwrap();
+        assert_eq!(value, 4);
+    }
+
+    #[test]
+    fn dispatch_when_init_decision_then_candidate_initial_value_stands() {
+        let (_cache, session) = make_state();
+        let base = compile_container_with_ids(
+            "PROGRAM main
+  VAR
+    Counter : DINT;
+  END_VAR
+  Counter := Counter + 1;
+END_PROGRAM
+",
+            &[("Counter", 1)],
+        );
+        {
+            let mut guard = session.lock().unwrap();
+            guard.host = Some(RuntimeHost::new(base).unwrap());
+            guard.host.as_mut().unwrap().run(3, || 0).unwrap();
+        }
+        let candidate = compile_container_with_ids(
+            "PROGRAM main
+  VAR
+    Counter : UDINT := 100;
+  END_VAR
+  Counter := Counter + 1;
+END_PROGRAM
+",
+            &[("Counter", 1)],
+        );
+        let counter = variable_index(&candidate, "Counter");
+        let mut bytes = Vec::new();
+        candidate.write_to(&mut bytes).unwrap();
+
+        let mut guard = session.lock().unwrap();
+        let staged = dispatch(
+            Command::AcceptEdits {
+                program: bytes,
+                migration: BTreeMap::from([(1, MigrationDecisionSpec::Init)]),
+            },
+            &mut guard,
+            false,
+        );
+        assert!(
+            staged.ok,
+            "v_code: {:?} message: {:?}",
+            staged.v_code, staged.message
+        );
+        let tested = dispatch(Command::TestEdits, &mut guard, true);
+        assert!(tested.ok);
+
+        // The old 3 was discarded; the candidate's declared 100 initialized
+        // the variable before the candidate body ran.
+        let value = guard.host.as_ref().unwrap().read_variable(counter).unwrap();
+        assert_eq!(value, 101);
     }
 
     #[test]
@@ -786,6 +1055,7 @@ END_PROGRAM
         let resp = dispatch(
             Command::AcceptEdits {
                 program: vec![1, 2, 3],
+                migration: BTreeMap::new(),
             },
             &mut guard,
             false,
