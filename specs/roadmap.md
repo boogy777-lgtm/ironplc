@@ -123,7 +123,13 @@ Autonomy: full.
   epoch persistence in NV storage; verify target firmware allows multiple
   concurrent Input Only originators; mid-chain break policy (primary
   continues with partial I/O, degraded — secondary fencing fails,
-  redundancy lost).
+  redundancy lost); **network HAL abstraction** — the redundancy layer
+  sits above a NIC abstraction (per-port drivers may differ, e.g. pair
+  link vs I/O chain; timestamp/IRQ/DMA capability advertised per port,
+  calibration metrics collected per port, PHY counters exposed uniformly);
+  **engineering UI backend + tabs** — backend surface (pair status,
+  SYNC/CONTROL state, per-channel calibration EMA metrics, ownership
+  barrier, takeover readiness) and Studio tab structure are undesigned.
 - **I/O firmware contract (AUDIT — decide with the I/O firmware spec):**
   three profiles — GENERIC (Exclusive Owner + observer-if-available;
   takeover via owner expiry + Forward_Open), REDUNDANT_OWNER (standard CIP
