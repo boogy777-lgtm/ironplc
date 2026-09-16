@@ -7,7 +7,7 @@ date: 2026-09-16
 
 The redundancy layer (see `specs/design/ha-redundancy-fsm.md`) needs a
 failover-time story the engineer can trust. A constant promise is
-unattainable: takeover time depends on heartbeat transport, per-module
+unattainable: takeover time depends on ping/pong transport, per-module
 claim/ARM behavior, scan position, and output apply, all of which vary per
 installation and per device. The honest contract is a formula whose terms
 are measured, not a marketing number.
@@ -15,15 +15,15 @@ are measured, not a marketing number.
 ## Paradigm change
 
 This decision replaces the classical supervision paradigm — a pre-set magic
-threshold ("declare the peer dead after N missed heartbeats") — with a
+threshold ("declare the peer dead after N missed ping replies") — with a
 measured-reality paradigm: **measure → calibrate → qualify → configure a
 budget → continuously verify reality**.
 
 - The pair's timing model is established by a commissioning calibration
   under realistic worst load (PLC application running, I/O running,
-  crossload running), not on an idle controller: a heartbeat response
-  delayed by a heavy scan is otherwise indistinguishable from a peer
-  failure, so calibration without load is meaningless.
+  crossload running), not on an idle controller: a PONG delayed by a
+  heavy scan is otherwise indistinguishable from a peer failure, so
+  calibration without load is meaningless.
 - Calibration measures the whole chain, in both directions (A→B→A and
   B→A→B): HA task, driver, NIC/PHY, medium, peer NIC/PHY, driver, peer HA
   task, and the reply. Scheduler behavior, IRQ affinity, NIC queues, and
@@ -42,7 +42,7 @@ budget → continuously verify reality**.
 - **Failover/takeover time is NEVER promised as a constant.** It is computed
   from a formula whose terms come from (a) qualification bounds and (b)
   continuous runtime measurements of the actual installation: per-channel
-  heartbeat latencies, per-module claim/ARM latencies, scan safe-point, and
+  ping/pong latencies, per-module claim/ARM latencies, scan safe-point, and
   output apply. Each term is tracked as current / EMA10 / EMA100 / max /
   count. I/O firmware instruments its own delays and reports them; the PLC
   measures peer-detection. The engineering UI (Studio) shows per-device
@@ -128,9 +128,9 @@ budget → continuously verify reality**.
 - Per I/O module (each as current / EMA10 / EMA100 / max / count):
   ClaimLatency, ArmToOutputLatency, OwnerLossDetectionLatency,
   FaultApplyLatency, InputSampleJitter, OutputCommitJitter.
-- Per pair channel: heartbeat latency, peer-detection time, owner-A
-  connection quality, owner-B connection quality (continuously measured
-  pre-fault).
+- Per pair channel: ping/pong round-trip latency, peer-detection time,
+  owner-A connection quality, owner-B connection quality (continuously
+  measured pre-fault).
 - Ownership status view (from T->O status): OwnerState, OwnerControllerId,
   OwnerEpoch, OwnerConnectionAge, OwnerOutputSeq, OwnerArmed,
   OwnerPacketAge, ModuleState, FaultCode, Port1State, Port2State.

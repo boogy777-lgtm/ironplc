@@ -75,12 +75,13 @@ Autonomy: full.
   daisy-chain on embedded 2-port switches, optionally closed as a ring
   (DLR if the ring nodes support it). Owner constraint: 4x 10/100 Ethernet
   ports, no add-on redundancy module. Port map: 1 = redundancy link
-  (state replication/heartbeat/commit replication between the pair), 2 = I/O ring
+  (state replication/ping-pong liveness/commit replication between the pair), 2 = I/O ring
   side (daisy/ring), 3/4 = engineering, uplink, witness path.
 - **Decided 2026-09-16:** no hardware arbiter; redundancy is a software
   layer above the runtime. Quorum (five layers):
-  1. two-channel observation — the SAME logical heartbeat (pair id, role,
-     epoch, generations, seqs, io_owner_state, crc) on port 1 (pair link)
+  1. two-channel observation — the SAME logical ping/pong packet (pair id,
+     role, epoch, generations, ping/pong seqs, io_owner_state, crc) on
+     port 1 (pair link)
      and port 2 (through the whole I/O daisy-chain); it proves runtime and
      Ethernet-stack life plus chain traversability, not mere PHY link;
   2. logical epochs for ordering and stale-state rejection (NTP for
@@ -118,7 +119,7 @@ Autonomy: full.
   cases (commanded swap, proven Primary death per layer 3); a revived
   ex-Primary never re-enters as Primary. Details:
   [HA Redundancy FSM](design/ha-redundancy-fsm.md).
-- **Still open:** failover timing/heartbeat thresholds and the detection
+- **Still open:** failover timing/ping-pong confirmation thresholds and the detection
   time budget across N adapters; readiness policy; state replication sizing;
   epoch persistence in NV storage; verify target firmware allows multiple
   concurrent Input Only originators; mid-chain break policy (primary

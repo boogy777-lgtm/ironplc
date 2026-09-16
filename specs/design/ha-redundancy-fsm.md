@@ -250,7 +250,7 @@ Ordered steps:
    ownership never means ACTIVE.
 
 **(b) Proven death of the Primary.** The Primary is silent on both
-heartbeat channels with no I/O evidence (`!P && !I`, case table) and the
+ping/pong channels with no I/O evidence (`!P && !I`, case table) and the
 Secondary is SYNC_READY: IDLE → CLAIMING, OWNERSHIP_BARRIER passed →
 ACTIVE. This is the takeover barrier of the guard table.
 
@@ -271,7 +271,7 @@ Four rules sit above the tables:
   the Primary (above). In all other cases a Secondary never controls
   I/O.
 - **Silence makes a claimant, never an owner.** Losing the peer on both
-  heartbeat channels only moves a unit from IDLE to CLAIMING. The I/O
+  ping/pong channels only moves a unit from IDLE to CLAIMING. The I/O
   target is the last fence.
 - **The barrier is all-or-nothing.** CLAIMING acquires Exclusive Owner
   connections in a fixed, configured order and verifies each. One failure
@@ -282,9 +282,10 @@ Four rules sit above the tables:
 
 Signals, from the non-ACTIVE unit's viewpoint, per quorum layers 1 and 3:
 
-- **P** — Peer heartbeat observed: the same logical heartbeat arrives on
-  port 1 (pair link) or on port 2 (traversing the I/O daisy-chain). This
-  proves peer runtime and Ethernet-stack life, not mere PHY link.
+- **P** — Peer ping/pong observed: the same logical ping/pong packet
+  arrives on port 1 (pair link) or on port 2 (traversing the I/O
+  daisy-chain). This proves peer runtime and Ethernet-stack life, not
+  mere PHY link.
 - **I** — I/O evidence of a live peer: input data keeps changing on the
   unit's Input Only connections in a way attributable to the peer's
   ownership epoch.
@@ -295,15 +296,15 @@ Signals, from the non-ACTIVE unit's viewpoint, per quorum layers 1 and 3:
 |---|---|---|---------|--------|
 | 1 | — | 1 | Normal | Stay in SYNC_READY; keep state replication current |
 | 1 | — | 0 | Peer alive, own sync broken | SYNC chart to deSYNC; re-establish readiness per policy |
-| 0 | 1 | 1 | Heartbeat lost but peer demonstrably owns I/O (pair-link failure) | Stay in IDLE; raise degraded-channel alarm; never claim |
-| 0 | 0 | 1 | No heartbeat, no I/O evidence, self ready | Enter CLAIMING; run the OWNERSHIP_BARRIER |
+| 0 | 1 | 1 | Ping/pong lost but peer demonstrably owns I/O (pair-link failure) | Stay in IDLE; raise degraded-channel alarm; never claim |
+| 0 | 0 | 1 | No ping/pong, no I/O evidence, self ready | Enter CLAIMING; run the OWNERSHIP_BARRIER |
 | 0 | — | 0 | Ambiguous and self not ready | SYNC chart to deSYNC; claim forbidden |
 | 0 | 0 | 1, acquisition fails | Peer alive behind a partition | REDUNDANCY_LOST (all-or-nothing OWNERSHIP_BARRIER) |
 
 The `!P && !I && S` case is deliberately a candidacy, not a promotion: if
 the peer is in fact alive behind a network partition it still owns the
 outputs, the acquisition fails, and redundancy is lost with an alarm
-rather than risk two owners. Loss of only one heartbeat channel is
+rather than risk two owners. Loss of only one ping/pong channel is
 degraded transport, not redundancy loss.
 
 ## Invariants
@@ -324,11 +325,13 @@ A controller holding an older epoch never commands physical outputs, even
 if it claims a numerically larger state generation. A controller in
 ACTIVE never waits on peer acknowledgement inside its scan.
 
-## Heartbeat
+## Ping/Pong Liveness
 
-One logical heartbeat packet is sent on **both** channels: port 1 (pair
-link, alongside state replication) and port 2 (routed through the whole
-I/O daisy-chain, proving chain traversability). Fields:
+Pair liveness is a ping/pong exchange owned by the redundancy layer; the
+I/O firmware plays no part in it. One logical ping/pong packet is sent on
+**both** channels: port 1 (pair link, alongside state replication) and
+port 2 (routed through the whole I/O daisy-chain, proving chain
+traversability). Fields:
 
 ```text
 ┌──────────────────────────────────────────────────────────┐
@@ -336,15 +339,31 @@ I/O daisy-chain, proving chain traversability). Fields:
 │ role             │ sender's configured role + chart state│
 │ epoch            │ ownership/fencing epoch               │
 │ generations      │ application + committed state gen     │
-│ seqs             │ per-channel sequence numbers          │
+│ ping_seq         │ per-channel PING sequence, +1 per PING│
+│ pong_seq         │ per-channel PONG sequence, +1 per PONG│
 │ io_owner_state   │ sender's view of required-IO ownership│
 │ crc              │ integrity over all fields             │
 └──────────────────────────────────────────────────────────┘
 ```
 
 Both channels carry the same logical content so a receiver can cross-check
-them; per-channel sequence numbers detect a silently repeating link.
-Periods and timeouts are open parameters (below).
+them; the per-channel sequence counters detect a silently repeating link.
+
+Silence detection is a **missing expected increment**, not a bare packet
+timeout: a peer is silent when the expected +1 (PING sent, PONG received)
+fails to arrive within the configured peer-failure confirmation time (see
+[ADR-0062](../adrs/0062-measured-failover-timing-and-network-calibration.md)).
+
+The owner dialogue additionally defines an operational penalty counter on
+top of the exchange: a successful exchange adds +1, a missing exchange
+adds +1000, so silence dominates the indicator immediately. The dialogue
+assigns this counter a diagnostics role on the engineering HMI — it is
+not the arbiter of takeover (the detection case table and the fencing
+chain are). Whether the +1000 step also appears on the wire — for example
+as a sequence jump proving traversal or processing on the second channel
+— is not defined in the dialogue; **owner to confirm**.
+
+Periods and the confirmation time are open parameters (below).
 
 ## Connection Roles (EtherNet/IP)
 
@@ -371,7 +390,7 @@ program/task synchronization points. One known approach to ownership
 arbitration is a dedicated hardware module in the chassis that manages the
 pair and runs state replication in hardware; this design instead does both
 in software — the OWNERSHIP_BARRIER at the I/O target plus the two-channel
-heartbeat.
+ping/pong exchange.
 
 What we honestly lose versus hardware-module arbitration: failover is
 deterministic but **not bumpless**. Takeover time is
@@ -393,7 +412,7 @@ lifecycle, and the three-mode readiness policy.
 All values in this section are **open** (roadmap: still open); the
 statechart is parameterized over them and none are decided here:
 
-- Heartbeat period and timeout, per channel
+- Ping/pong period and peer-failure confirmation time, per channel
 - Detection time budget across N adapters on the daisy-chain
 - Readiness policy default (off / on-link-change / continuous)
 - State replication sizing: segment layout, bandwidth budget on port 1

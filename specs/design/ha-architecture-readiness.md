@@ -19,7 +19,7 @@ This spec builds on:
   admission before application start, commanded swap, and the three I/O
   firmware profiles
 - **[HA Redundancy FSM](ha-redundancy-fsm.md)**: the SYNC/CONTROL
-  statechart, admission, the OWNERSHIP_BARRIER, and the heartbeat contract
+  statechart, admission, the OWNERSHIP_BARRIER, and the ping/pong contract
   the foundation must serve
 - **[ADR-0062](../adrs/0062-measured-failover-timing-and-network-calibration.md)**:
   measured failover timing, the OwnerLease minting rule, and the
@@ -89,7 +89,7 @@ pattern for registering new user-facing runtime codes. Redundancy commands
 statechart's REDUNDANCY_LOST alarm has an established surfacing path.
 
 *Lacks:* the vocabulary is hot-edit only; the layer is request/response
-with no event or stream surface for heartbeats, metrics, or alarms; the
+  with no event or stream surface for ping/pong traffic, metrics, or alarms; the
 payload encoding (container bytes as a JSON array) does not suit cyclic
 replication traffic.
 
@@ -98,8 +98,8 @@ replication traffic.
 `compiler/runtime/src/generation.rs:15` (`LogicGeneration`) and
 `compiler/runtime/src/generation.rs:37` (`ApplicationGeneration`).
 
-*Gives:* the local source for the heartbeat's `generations` field
-([HA Redundancy FSM](ha-redundancy-fsm.md), "Heartbeat"): one compiled
+*Gives:* the local source for the ping/pong packet's `generations` field
+([HA Redundancy FSM](ha-redundancy-fsm.md), "Ping/Pong Liveness"): one compiled
 artifact and one active manifest are already versioned, ordered, and
 comparable, so "does the peer hold my application generation" is answerable
 without new runtime state.
@@ -232,7 +232,7 @@ priority; see the sequencing recommendation below.
    collection, no per-module latency ingestion, no engineering surface for
    the ADR-0062 variables; `ironplcvm benchmark` (REQ-VC-vm-cli-013) is
    the nearest existing measurement surface and is offline-only.
-8. **Witness-free quorum machinery.** No heartbeat encode/decode, no
+8. **Witness-free quorum machinery.** No ping/pong encode/decode, no
    two-channel cross-check, no detection case table evaluation, no
    `TakeoverPermission` gate (ADR-0062); the five-layer quorum is decided
    on paper only.
@@ -297,7 +297,7 @@ preceding design:
    matrix. Everything below consumes these decisions; ADR-0062 fixes the
    minting rule (the host mints OwnerLease at scan commit; the network
    task never does).
-2. **NIC HAL abstraction and the two-channel heartbeat.** Detection feeds
+2. **NIC HAL abstraction and the two-channel ping/pong exchange.** Detection feeds
    every later gate, and the calibration philosophy of ADR-0062 requires
    measurement from day one — per-port metrics are part of the HAL, not a
    retrofit.
