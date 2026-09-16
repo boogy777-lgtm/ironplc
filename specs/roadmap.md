@@ -86,28 +86,44 @@ Autonomy: full.
   2. logical epochs for ordering and stale-state rejection (NTP for
      diagnostics; optional future CIP Sync / IEEE-1588; no TSN needed);
   3. fencing at the target — silence on BOTH channels only makes the
-     standby to CLAIMING; it must acquire Exclusive Owner on ALL
+     secondary to CLAIMING; it must acquire Exclusive Owner on ALL
      required outputs before running the application
      (CAN_EXECUTE_OUTPUTS = ACTIVE && owns_all_required_io); the I/O
      target is the last fence;
   4. all-or-nothing ownership barrier — any failed acquisition releases
-     everything, REDUNDANCY_LOST; partial ownership never means duty
+     everything, REDUNDANCY_LOST; partial ownership never means ACTIVE
      (no functional split-brain);
   5. readiness re-establishment — after restart / pair loss / epoch discontinuity /
      unclean shutdown a controller boots deSYNC and becomes ready
      (SYNC_READY); zombie-ACTIVE re-entry is forbidden.
-  Connection roles: duty = Input Only (inputs) + Exclusive Owner
-  (outputs); reserve = Input Only observer, never Listen Only (it
+  Connection roles: primary = Input Only (inputs) + Exclusive Owner
+  (outputs); secondary = Input Only observer, never Listen Only (it
   depends on an existing owner). v1 scope: standard Exclusive Owner +
-  Input Only; Rockwell-style Redundant Owner is a v2 reference. Failover
-  is deterministic but not bumpless: T = detection + old-connection
-  timeout + Forward_Open + validation + scan boundary.
+  Input Only; dual-owner arbitrating output modules are a v2 reference.
+  Failover is deterministic but not bumpless: T = detection +
+  old-connection timeout + Forward_Open + validation + scan boundary.
+- **Decided 2026-09-16 (owner):** configured role names = Primary /
+  Secondary, assigned in the engineering UI (the engineer flashes PLC 1
+  as Primary with its IP; the UI registers PLC 2's IP with the Secondary
+  role). **Admission before app start:** a PLC does not know a priori
+  whether it runs standalone or redundant — the redundancy layer decides
+  before the application starts and grants permission (discover the
+  neighbor; a live Primary neighbor makes this unit the Secondary; the
+  sync pipeline runs per the readiness policy; only then may the app
+  start — Secondary in monitor mode). **Manual commanded swap:** an
+  engineer-commanded Primary↔Secondary swap while SYNC_READY — the old
+  Primary releases ownership to IDLE and re-syncs as Secondary; the new
+  Primary passes CLAIMING → ACTIVE; barrier failure rolls back to
+  REDUNDANCY_LOST. A Secondary gains I/O control in exactly these two
+  cases (commanded swap, proven Primary death per layer 3); a revived
+  ex-Primary never re-enters as Primary. Details:
+  [HA Redundancy FSM](design/ha-redundancy-fsm.md).
 - **Still open:** failover timing/heartbeat thresholds and the detection
   time budget across N adapters; readiness policy; state replication sizing;
   epoch persistence in NV storage; verify target firmware allows multiple
-  concurrent Input Only originators; mid-chain break policy (duty
-  continues with partial I/O, degraded — standby fencing fails, redundancy
-  lost).
+  concurrent Input Only originators; mid-chain break policy (primary
+  continues with partial I/O, degraded — secondary fencing fails,
+  redundancy lost).
 
 Autonomy: design proposals are autonomous; implementation starts only after
 the decisions above.
