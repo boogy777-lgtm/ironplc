@@ -71,7 +71,10 @@ Autonomy: full.
 - Design first: Arbitration Quorum + Commit Certificate + Fencing (HA
   handoff, section 25), then the redundancy layer: role manager, state
   crossload, generation replicator, edit replicator, qualification, takeover.
-- **Decided 2026-09-15:** network technology = EtherNet/IP.
+- **Decided 2026-09-15:** network technology = EtherNet/IP; media topology =
+  daisy-chain on embedded 2-port switches, optionally closed as a ring
+  (DLR if the ring nodes support it). Owner constraint: 4x 10/100 Ethernet
+  ports, no add-on redundancy module.
 - **Still open** (the reference documents' open problems): quorum/arbiter
   topology, physical fencing mechanism, cluster clock, TSN/prioritization
   within EtherNet/IP, I/O ownership model.
