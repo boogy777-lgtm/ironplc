@@ -77,16 +77,19 @@ Autonomy: full.
   ports, no add-on redundancy module. Port map: 1 = redundancy link
   (crossload/heartbeat/commit replication between the pair), 2 = I/O ring
   side (daisy/ring), 3/4 = engineering, uplink, witness path.
-- **Consequence of "no redundancy module":** the quorum arbiter/witness must
-  live outside the controller pair (a witness process on an always-on
-  network host; the engineering station is not a reliable choice). Two
-  controllers alone cannot break ties: without a witness, failover degrades
-  to manual promotion. Physical fencing degrades to protocol-level I/O
-  ownership: only the active controller opens EtherNet/IP I/O connections,
-  the standby never asserts ownership.
-- **Still open** (the reference documents' open problems): quorum/arbiter
-  topology, physical fencing mechanism, cluster clock, TSN/prioritization
-  within EtherNet/IP, I/O ownership model.
+- **Decided 2026-09-16:** no hardware arbiter. The redundancy layer is a
+  software layer above the runtime; I/O ownership is pinned to the primary
+  (only it opens EtherNet/IP I/O connections). Standby observes the primary
+  on two independent channels: the redundancy link (port 1) and the I/O
+  daisy-chain (port 2, seen from the far side). Standby auto-promotes only
+  when the primary is silent on BOTH channels; a link break between the
+  PLCs destroys the redundant pair (alarm + manual repair), it is never a
+  failover. Fencing is protocol-level I/O ownership; standby monitors the
+  chain without asserting ownership (exclusive EtherNet/IP connections).
+  Cluster clock = logical epochs bumped on promotion/commit, NTP for
+  diagnostics only. No TSN on bridged 10/100.
+- **Still open:** failover timing/heartbeat thresholds, qualification
+  policy, crossload sizing.
 
 Autonomy: design proposals are autonomous; implementation starts only after
 the decisions above.
