@@ -86,16 +86,16 @@ Autonomy: full.
   2. logical epochs for ordering and stale-state rejection (NTP for
      diagnostics; optional future CIP Sync / IEEE-1588; no TSN needed);
   3. fencing at the target — silence on BOTH channels only makes the
-     standby to RESERVE_CLAIMING; it must acquire Exclusive Owner on ALL
+     standby to CLAIMING; it must acquire Exclusive Owner on ALL
      required outputs before running the application
-     (CAN_EXECUTE_OUTPUTS = duty && owns_all_required_io); the I/O
+     (CAN_EXECUTE_OUTPUTS = ACTIVE && owns_all_required_io); the I/O
      target is the last fence;
   4. all-or-nothing ownership barrier — any failed acquisition releases
      everything, REDUNDANCY_LOST; partial ownership never means duty
      (no functional split-brain);
   5. readiness re-establishment — after restart / pair loss / epoch discontinuity /
-     unclean shutdown a controller boots RESERVE_UNSYNCED and becomes ready
-     (RESERVE_READY); zombie-duty re-entry is forbidden.
+     unclean shutdown a controller boots deSYNC and becomes ready
+     (SYNC_READY); zombie-ACTIVE re-entry is forbidden.
   Connection roles: duty = Input Only (inputs) + Exclusive Owner
   (outputs); reserve = Input Only observer, never Listen Only (it
   depends on an existing owner). v1 scope: standard Exclusive Owner +
