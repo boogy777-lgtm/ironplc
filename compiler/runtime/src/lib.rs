@@ -30,4 +30,4 @@ pub use commands::{
 pub use error::{OnlineChangeError, RuntimeError};
 pub use generation::{ApplicationGeneration, LogicGeneration};
 pub use host::{HostMode, HostStatus, RuntimeHost};
-pub use migration::{MigrationError, StateMigrationPlan};
+pub use migration::{MigrationDecision, MigrationError, StateMigrationPlan, TypeChangePair};

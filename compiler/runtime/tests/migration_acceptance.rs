@@ -22,7 +22,7 @@ mod common;
 
 use common::{compile_with_ids, compile_with_uid_keys, variable_index};
 use ironplc_container::FieldType;
-use ironplc_runtime::{HostMode, MigrationError, OnlineChangeError, RuntimeHost};
+use ironplc_runtime::{HostMode, MigrationError, OnlineChangeError, RuntimeHost, TypeChangePair};
 
 #[test]
 fn test_when_same_type_rename_then_value_continues_from_the_old_entity() {
@@ -350,17 +350,20 @@ END_PROGRAM
 
     let result = host.stage(candidate);
 
-    assert!(matches!(
-        result,
-        Err(OnlineChangeError::MigrationUnsupported(
-            MigrationError::TypeChangeUnsupported {
+    let error = result.unwrap_err();
+    assert_eq!(
+        error,
+        OnlineChangeError::MigrationUnsupported(MigrationError::TypeChangeUnsupported {
+            pairs: vec![TypeChangePair {
                 uid: 1,
+                name: Some("Counter".into()),
                 from: FieldType::I32,
                 to: FieldType::String,
-            }
-        ))
-    ));
-    let message = result.unwrap_err().to_string();
+                size_equal: false,
+            }],
+        })
+    );
+    let message = error.to_string();
     assert!(message.contains("I32"));
     assert!(message.contains("STRING"));
     assert_eq!(host.status().candidate, None);
@@ -401,17 +404,20 @@ END_PROGRAM
 
     let result = host.stage(candidate);
 
-    assert!(matches!(
-        result,
-        Err(OnlineChangeError::MigrationUnsupported(
-            MigrationError::TypeChangeUnsupported {
+    let error = result.unwrap_err();
+    assert_eq!(
+        error,
+        OnlineChangeError::MigrationUnsupported(MigrationError::TypeChangeUnsupported {
+            pairs: vec![TypeChangePair {
                 uid: 1,
+                name: Some("Counter".into()),
                 from: FieldType::I32,
                 to: FieldType::U32,
-            }
-        ))
-    ));
-    let message = result.unwrap_err().to_string();
+                size_equal: true,
+            }],
+        })
+    );
+    let message = error.to_string();
     assert!(message.contains("I32"));
     assert!(message.contains("U32"));
     assert_eq!(host.status().candidate, None);

@@ -16,6 +16,7 @@ use ironplc_container::{
     UserFbDescriptor, VarEntry, VarIndex,
 };
 
+use super::decision::{self, Decisions, TypeChangeChoice};
 use super::{entry_difference, variable_at, variable_table, MigrationAction, MigrationError};
 
 /// Plans the copies for shared-UID FB instances of user FB types and enforces
@@ -26,8 +27,14 @@ use super::{entry_difference, variable_at, variable_table, MigrationAction, Migr
 /// every other FB instance named by either stable table (standard-library
 /// instances, instances only one side has) makes the planner fall back to
 /// the stage-2 rule: the layout after the program prefix must be identical.
+///
+/// A shared field whose entry changed is a storage-class change: it converts
+/// per the ADR-0060 policy, resolves through the engineer's decisions
+/// (ADR 0061), or joins the collected
+/// [`TypeChangeUnsupported`](MigrationError::TypeChangeUnsupported) pairs.
 pub(super) fn plan_fb_instances(
     actions: &mut Vec<MigrationAction>,
+    decisions: &mut Decisions<'_>,
     base: &Container,
     candidate: &Container,
     base_stable: &[StableVarEntry],
@@ -79,25 +86,49 @@ pub(super) fn plan_fb_instances(
                 // candidate's init image has already initialized it.
                 continue;
             };
-            let base_field = variable_at(
-                base_variables,
-                VarIndex::new(base_descriptor.var_offset + u16::from(from_field)),
-            )?;
-            let candidate_field = variable_at(
-                candidate_variables,
-                VarIndex::new(candidate_descriptor.var_offset + u16::from(field_index)),
-            )?;
+            let base_field_index =
+                VarIndex::new(base_descriptor.var_offset + u16::from(from_field));
+            let candidate_field_index =
+                VarIndex::new(candidate_descriptor.var_offset + u16::from(field_index));
+            let base_field = variable_at(base_variables, base_field_index)?;
+            let candidate_field = variable_at(candidate_variables, candidate_field_index)?;
             if base_field != candidate_field {
-                return Err(MigrationError::IncompatibleEntry {
-                    uid: field_uid,
-                    reason: entry_difference(base_field, candidate_field),
+                // The field entry differs: reconcile the storage-class
+                // change against the policy (ADR 0060) and the engineer's
+                // decisions (ADR 0061), or reject the structural difference
+                // as before.
+                if base_field.flags != candidate_field.flags
+                    || base_field.var_type == candidate_field.var_type
+                {
+                    return Err(MigrationError::IncompatibleEntry {
+                        uid: field_uid,
+                        reason: entry_difference(base_field, candidate_field),
+                    });
+                }
+                let from = base_field.var_type;
+                let to = candidate_field.var_type;
+                let name = decision::debug_name(candidate, candidate_field_index);
+                let size_equal = decision::scalar_size_equal(from, to);
+                let conversion = match decisions.resolve(field_uid, name, from, to, size_equal)? {
+                    TypeChangeChoice::Convert(conversion) => Some(conversion),
+                    TypeChangeChoice::Preserve => None,
+                    TypeChangeChoice::Init => continue,
+                };
+                actions.push(MigrationAction::FbField {
+                    from_index,
+                    to_index,
+                    from_field,
+                    to_field: field_index,
+                    conversion,
                 });
+                continue;
             }
             actions.push(MigrationAction::FbField {
                 from_index,
                 to_index,
                 from_field,
                 to_field: field_index,
+                conversion: None,
             });
         }
     }

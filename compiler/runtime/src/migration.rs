@@ -13,7 +13,7 @@
 //! | UID in both, entry differs only by an admitted type change | Convert the value at the swap per the policy table (ADR 0060) |
 //! | UID only in the candidate | None: the candidate's init image has already initialized it |
 //! | UID only in the base | None: the value belongs to a dropped entity |
-//! | UID in both, any other entry difference | [`MigrationError::IncompatibleEntry`] or, for a type pair outside the policy, [`MigrationError::TypeChangeUnsupported`] naming the pair |
+//! | UID in both, entry differs by a storage-class change | Convert per policy, or resolve with a [`MigrationDecision`] (ADR 0061); structural differences reject with [`MigrationError::IncompatibleEntry`] |
 //!
 //! ## Data-region payloads
 //!
@@ -56,19 +56,29 @@
 //! layout after the program prefix (program prefix size, user FB descriptors,
 //! FB type descriptors) must be identical.
 //!
-//! ## Type-changing variables (ADR 0060)
+//! ## Type-changing variables (ADR 0060, ADR 0061)
 //!
-//! A shared UID whose entry differs only in `var_type` is classified against
-//! the conversion policy in [`conversion`]: an admitted `(base, candidate)`
-//! pair plans a [`MigrationAction::Convert`] (scalar) or
-//! [`MigrationAction::ConvertArray`] (an aggregate whose element pair is
-//! admitted, with equal element count and element size), executed at the
-//! scan boundary; any other pair rejects the candidate with
-//! [`MigrationError::TypeChangeUnsupported`] naming the pair. Structural
+//! A shared UID whose entry differs only in `var_type` is a storage-class
+//! change. The planner classifies it against the conversion policy in
+//! [`conversion`]: an admitted `(base, candidate)` pair plans a
+//! [`MigrationAction::Convert`] (scalar) or [`MigrationAction::ConvertArray`]
+//! (an aggregate whose element pair is admitted, with equal element count
+//! and element size), executed at the scan boundary.
+//!
+//! Every out-of-policy pair is collected instead of rejecting on the first
+//! offender; without a decision the build fails with
+//! [`MigrationError::TypeChangeUnsupported`] carrying all of them as
+//! [`TypeChangePair`] values. The caller — the staged edit's engineering
+//! client — answers per UID with a [`MigrationDecision`]:
+//! [`MigrationDecision::Init`] plans no action, so the candidate's init
+//! image initializes the value, and [`MigrationDecision::Preserve`] plans a
+//! plain byte copy when both sides' storage sizes match (scalars: the same
+//! numeric width family; arrays: equal element width and element count). A
+//! decision may also override an admitted pair (init or preserve instead of
+//! convert); the automatic conversion stays the default. Structural
 //! differences (flags, or `extra` with the type tag unchanged — a STRING
 //! maximum length or an FB type ID) keep the stage-2 rejection. FB instance
-//! *fields* are not converted: a shared field UID whose entry differs
-//! rejects as before; extending the policy to fields is follow-up.
+//! *fields* follow the same path via their field UIDs (ADR 0059).
 //!
 //! ## Applying a plan
 //!
@@ -78,7 +88,7 @@
 //! candidate values. The host runs the copy at a scan boundary.
 
 use core::fmt;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::vec::Vec;
 
 use ironplc_container::{
@@ -87,7 +97,7 @@ use ironplc_container::{
 };
 use ironplc_vm::{Slot, VmBuffers};
 
-use crate::conversion::{self, type_name, ValueConversion};
+use crate::conversion::{type_name, ValueConversion};
 
 /// Byte offset of the `cur_length` field of a data-region string header.
 ///
@@ -132,12 +142,15 @@ enum MigrationAction {
     /// Copy one field's 8-byte slot inside the instance's field region,
     /// base field `from_field` to candidate field `to_field`. The instance's
     /// own slot is not copied: the candidate's init image already aimed it
-    /// at the candidate's field region.
+    /// at the candidate's field region. `conversion` transforms the field
+    /// value when the rebuilt FB type retyped it to an admitted pair
+    /// (ADR 0060); `None` copies the slot unchanged.
     FbField {
         from_index: VarIndex,
         to_index: VarIndex,
         from_field: u8,
         to_field: u8,
+        conversion: Option<ValueConversion>,
     },
     /// Convert the slot's value from the base variable's type to the
     /// candidate's per an admitted policy pair (ADR 0060).
@@ -162,17 +175,21 @@ enum MigrationAction {
 /// The variants are deliberately structural: the host surfaces the reason
 /// through [`OnlineChangeError::MigrationUnsupported`](crate::OnlineChangeError)
 /// and never guesses a migration it cannot justify.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MigrationError {
     /// A UID present in both containers is bound to a different [`VarEntry`].
     IncompatibleEntry { uid: u64, reason: &'static str },
-    /// A shared UID's variable type changed to a pair the conversion policy
-    /// does not admit (ADR 0060); carries the rejected pair.
-    TypeChangeUnsupported {
-        uid: u64,
-        from: FieldType,
-        to: FieldType,
-    },
+    /// Shared UIDs whose variable type changed to pairs the conversion policy
+    /// does not admit (ADR 0060) and that no [`MigrationDecision`] resolved
+    /// (ADR 0061); carries every offender.
+    TypeChangeUnsupported { pairs: Vec<TypeChangePair> },
+    /// A `preserve` decision is illegal for this pair: the base and candidate
+    /// storage sizes differ, so the old bytes cannot be reinterpreted.
+    PreserveSizeMismatch { uid: u64 },
+    /// A decision map entry names a UID that is not a shared variable or
+    /// field whose storage class changed, so there is nothing for it to
+    /// decide.
+    UnknownDecisionUid { uid: u64 },
     /// The active string value does not fit the candidate's maximum length.
     StringShrink {
         current_length: u16,
@@ -199,14 +216,28 @@ impl fmt::Display for MigrationError {
             MigrationError::IncompatibleEntry { uid, reason } => {
                 write!(f, "entity {uid} cannot migrate: {reason}")
             }
-            MigrationError::TypeChangeUnsupported { uid, from, to } => {
-                write!(
-                    f,
-                    "entity {uid} cannot change type from {} to {}: the conversion is outside the migration policy",
-                    type_name(*from),
-                    type_name(*to)
-                )
+            MigrationError::TypeChangeUnsupported { pairs } => {
+                write!(f, "type changes are outside the migration policy:")?;
+                for (index, pair) in pairs.iter().enumerate() {
+                    if index > 0 {
+                        write!(f, ",")?;
+                    }
+                    write!(f, " entity {}", pair.uid)?;
+                    if let Some(name) = &pair.name {
+                        write!(f, " ({name})")?;
+                    }
+                    write!(f, " {} -> {}", type_name(pair.from), type_name(pair.to))?;
+                }
+                Ok(())
             }
+            MigrationError::PreserveSizeMismatch { uid } => write!(
+                f,
+                "entity {uid} cannot preserve its storage: the base and candidate sizes differ"
+            ),
+            MigrationError::UnknownDecisionUid { uid } => write!(
+                f,
+                "migration decision names uid {uid}, which is not a shared entity whose type changed"
+            ),
             MigrationError::StringShrink {
                 current_length,
                 candidate_max_length,
@@ -250,13 +281,31 @@ pub struct StateMigrationPlan {
 impl StateMigrationPlan {
     /// Diffs the active (`base`) and staged (`candidate`) containers by UID.
     ///
-    /// Returns a migration plan when every UID the two containers share names
-    /// the same variable type and layout; otherwise the edit cannot preserve
-    /// those values and is rejected with a typed error. UIDs unique to either
-    /// side produce no action: candidate-only entities are initialized by the
-    /// candidate's init image and base-only entities are discarded with the
-    /// old buffers.
+    /// Equivalent to [`build_with_decisions`](Self::build_with_decisions)
+    /// with an empty decision map: every out-of-policy type change rejects,
+    /// with all offending pairs carried in
+    /// [`MigrationError::TypeChangeUnsupported`].
     pub fn build(base: &Container, candidate: &Container) -> Result<Self, MigrationError> {
+        Self::build_with_decisions(base, candidate, &BTreeMap::new())
+    }
+
+    /// Diffs the active (`base`) and staged (`candidate`) containers by UID,
+    /// resolving storage-class changes with the engineer's `decisions`.
+    ///
+    /// Returns a migration plan when every UID the two containers share names
+    /// the same variable type and layout, or when every storage-class change
+    /// is either admitted by the conversion policy (ADR 0060) or resolved by
+    /// a [`MigrationDecision`] (ADR 0061). `decisions` maps a shared UID to
+    /// its decision; empty behaves exactly like [`build`](Self::build). An
+    /// unknown UID, or `preserve` on a size-mismatched pair, is rejected.
+    /// UIDs unique to either side produce no action: candidate-only entities
+    /// are initialized by the candidate's init image and base-only entities
+    /// are discarded with the old buffers.
+    pub fn build_with_decisions(
+        base: &Container,
+        candidate: &Container,
+        decisions: &BTreeMap<u64, MigrationDecision>,
+    ) -> Result<Self, MigrationError> {
         let base_section = base.type_section.as_ref();
         let candidate_section = candidate.type_section.as_ref();
 
@@ -268,6 +317,7 @@ impl StateMigrationPlan {
         let base_by_uid = index_by_uid(base_stable)?;
         index_by_uid(candidate_stable)?;
 
+        let mut decisions = decision::Decisions::new(decisions);
         let mut actions = Vec::new();
         // Shared-UID instances of user FB types are planned per type below,
         // not by the per-variable classification: their slot's entry can be
@@ -284,18 +334,22 @@ impl StateMigrationPlan {
             let base_var = variable_at(base_variables, from_index)?;
             if base_var != candidate_var {
                 // The entries differ: reconcile the difference against the
-                // conversion policy (ADR 0060) or reject with the typed
-                // error. A conversion plans its own action and skips the
-                // per-variable classification below.
-                actions.push(type_change_action(
-                    entry.uid,
-                    from_index,
-                    to_index,
-                    base_var,
-                    candidate_var,
-                    base_section,
-                    candidate_section,
-                )?);
+                // conversion policy (ADR 0060) and the engineer's decisions
+                // (ADR 0061), or reject with the typed error.
+                decision::plan_type_change(
+                    &mut actions,
+                    &mut decisions,
+                    decision::TypeChange {
+                        uid: entry.uid,
+                        name: decision::debug_name(candidate, to_index),
+                        from_index,
+                        to_index,
+                        base_var,
+                        candidate_var,
+                        base_section,
+                        candidate_section,
+                    },
+                )?;
                 continue;
             }
             if candidate_var.var_type == FieldType::FbInstance
@@ -319,12 +373,14 @@ impl StateMigrationPlan {
 
         fb::plan_fb_instances(
             &mut actions,
+            &mut decisions,
             base,
             candidate,
             base_stable,
             candidate_stable,
             &fb_instances,
         )?;
+        decisions.finish()?;
 
         Ok(StateMigrationPlan { actions })
     }
@@ -381,8 +437,11 @@ impl StateMigrationPlan {
                     to_index,
                     from_field,
                     to_field,
+                    conversion,
                 } => {
-                    copy_fb_field(base, candidate, from_index, to_index, from_field, to_field)?;
+                    copy_fb_field(
+                        base, candidate, from_index, to_index, from_field, to_field, conversion,
+                    )?;
                 }
                 MigrationAction::Convert {
                     from_index,
@@ -442,56 +501,6 @@ fn entry_difference(base: &VarEntry, candidate: &VarEntry) -> &'static str {
     } else {
         "the variable's type details changed"
     }
-}
-
-/// Classifies a shared UID whose base and candidate entries differ.
-///
-/// Three outcomes: the difference is a value conversion the policy admits
-/// (ADR 0060) and the returned action converts it at the swap; the
-/// difference is structural (the layout flags, or the type details with the
-/// type tag unchanged — a STRING maximum length, an FB type ID) and the
-/// candidate rejects with the stage-2 error; or the type pair is outside
-/// the policy and the candidate rejects with the pair named.
-fn type_change_action(
-    uid: u64,
-    from_index: VarIndex,
-    to_index: VarIndex,
-    base_var: &VarEntry,
-    candidate_var: &VarEntry,
-    base_section: Option<&TypeSection>,
-    candidate_section: Option<&TypeSection>,
-) -> Result<MigrationAction, MigrationError> {
-    if base_var.flags != candidate_var.flags || base_var.var_type == candidate_var.var_type {
-        return Err(MigrationError::IncompatibleEntry {
-            uid,
-            reason: entry_difference(base_var, candidate_var),
-        });
-    }
-    let Some(conversion) = conversion::policy(base_var.var_type, candidate_var.var_type) else {
-        return Err(MigrationError::TypeChangeUnsupported {
-            uid,
-            from: base_var.var_type,
-            to: candidate_var.var_type,
-        });
-    };
-    if base_var.flags & VAR_FLAG_IS_ARRAY == 0 {
-        return Ok(MigrationAction::Convert {
-            from_index,
-            to_index,
-            conversion,
-        });
-    }
-    let base_descriptor = array_descriptor(base_section, usize::from(base_var.extra));
-    let candidate_descriptor =
-        array_descriptor(candidate_section, usize::from(candidate_var.extra));
-    array_conversion_action(
-        uid,
-        from_index,
-        to_index,
-        conversion,
-        base_descriptor,
-        candidate_descriptor,
-    )
 }
 
 /// Classifies one shared UID's copy from its (identical) candidate entry.
@@ -581,39 +590,6 @@ fn array_descriptor(
     descriptor_index: usize,
 ) -> Option<&ArrayDescriptor> {
     section.and_then(|section| section.array_descriptors.get(descriptor_index))
-}
-
-/// Sizes a per-element conversion for an array whose element types the
-/// policy admits (ADR 0060). The element count and the per-element size must
-/// match on both sides; the admitted element pairs are non-string, so every
-/// element is one 8-byte slot in both regions.
-fn array_conversion_action(
-    uid: u64,
-    from_index: VarIndex,
-    to_index: VarIndex,
-    conversion: ValueConversion,
-    base_descriptor: Option<&ArrayDescriptor>,
-    candidate_descriptor: Option<&ArrayDescriptor>,
-) -> Result<MigrationAction, MigrationError> {
-    let (Some(base_descriptor), Some(candidate_descriptor)) =
-        (base_descriptor, candidate_descriptor)
-    else {
-        return Err(MigrationError::ArrayDescriptorMismatch { uid });
-    };
-    if base_descriptor.total_elements != candidate_descriptor.total_elements
-        || base_descriptor.element_extra != candidate_descriptor.element_extra
-    {
-        return Err(MigrationError::ArrayDescriptorMismatch { uid });
-    }
-    let byte_size = candidate_descriptor
-        .byte_size()
-        .ok_or(MigrationError::ArrayDescriptorMismatch { uid })?;
-    Ok(MigrationAction::ConvertArray {
-        from_index,
-        to_index,
-        conversion,
-        byte_size,
-    })
 }
 
 /// Copies the 8-byte variable slot at `to_index` from `from_index`.
@@ -726,7 +702,9 @@ fn copy_data_region(
 /// resolves both sides through their own slot and moves the single field
 /// the planner matched by UID. The instance slots themselves are left alone:
 /// the candidate's init image already aimed its slot at the candidate's
-/// field region, which is where the copied bytes land.
+/// field region, which is where the copied bytes land. `conversion` applies
+/// when the rebuilt FB type retyped the field to an admitted pair (ADR
+/// 0060); `None` copies the slot unchanged.
 fn copy_fb_field(
     base: &VmBuffers,
     candidate: &mut VmBuffers,
@@ -734,10 +712,19 @@ fn copy_fb_field(
     to_index: VarIndex,
     from_field: u8,
     to_field: u8,
+    conversion: Option<ValueConversion>,
 ) -> Result<(), MigrationError> {
     let source = field_span(base, from_index, from_field)?;
     let target = field_span(candidate, to_index, to_field)?;
-    candidate.data_region[target].copy_from_slice(&base.data_region[source]);
+    match conversion {
+        Some(conversion) => {
+            let mut bytes = [0u8; ironplc_container::SLOT_BYTES as usize];
+            bytes.copy_from_slice(&base.data_region[source]);
+            let converted = conversion.apply(Slot::from_u64(u64::from_le_bytes(bytes)));
+            candidate.data_region[target].copy_from_slice(&converted.as_u64().to_le_bytes());
+        }
+        None => candidate.data_region[target].copy_from_slice(&base.data_region[source]),
+    }
     Ok(())
 }
 
@@ -803,7 +790,10 @@ fn string_current_length(region: &[u8]) -> u16 {
     u16::from_le_bytes([low, high])
 }
 
+mod decision;
 mod fb;
+
+pub use decision::{MigrationDecision, TypeChangePair};
 
 #[cfg(test)]
 mod tests;

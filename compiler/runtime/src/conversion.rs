@@ -5,8 +5,8 @@
 //!
 //! The policy is a fixed table of `(base, candidate)` storage-class pairs —
 //! widening and same-family conversions only. A pair outside the table is
-//! rejected at stage time with the pair named
-//! ([`MigrationError::TypeChangeUnsupported`](crate::MigrationError));
+//! reported at stage time ([`MigrationError::TypeChangeUnsupported`](crate::MigrationError))
+//! unless the caller resolved it with a `MigrationDecision` (ADR 0061);
 //! an admitted conversion executes at the scan boundary in the migration
 //! planner (ADR 0054), never at stage time.
 //!

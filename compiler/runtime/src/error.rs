@@ -12,7 +12,7 @@ use crate::migration::MigrationError;
 /// [`RuntimeError`]. The command layer maps this enum onto stable user-facing
 /// V-codes ([`CommandError`](crate::CommandError)) from the crate's
 /// `problem-codes.csv`, so this enum stays the whole host vocabulary.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OnlineChangeError {
     /// The candidate changes the variable layout (layout hash, variable
     /// count, or header flags) and cannot share the running application's
