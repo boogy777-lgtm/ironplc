@@ -10,6 +10,7 @@ import {
   HotEditTransport,
   parseResponseLine,
 } from '../../hotEditSession';
+import { rejectWith } from './testHelpers';
 
 /** An in-memory transport: tests feed lines in and record the lines sent out. */
 class MockTransport implements HotEditTransport {
@@ -167,6 +168,20 @@ suite('parseResponseLine', () => {
 
   test('parseResponseLine_when_pair_malformed_then_throws', () => {
     const line = '{"response":"error","vCode":"V4010","message":"type change","pairs":[{"uid":1}]}';
+
+    assert.throws(() => parseResponseLine(line), HotEditProtocolError);
+  });
+
+  test('parseResponseLine_when_pair_uid_not_an_integer_then_throws', () => {
+    const line = '{"response":"error","vCode":"V4010","message":"type change","pairs":['
+      + '{"uid":1.5,"name":"Counter","from":"I32","to":"U32","sizeEqual":true}]}';
+
+    assert.throws(() => parseResponseLine(line), HotEditProtocolError);
+  });
+
+  test('parseResponseLine_when_pair_uid_negative_then_throws', () => {
+    const line = '{"response":"error","vCode":"V4010","message":"type change","pairs":['
+      + '{"uid":-1,"name":"Counter","from":"I32","to":"U32","sizeEqual":true}]}';
 
     assert.throws(() => parseResponseLine(line), HotEditProtocolError);
   });
@@ -406,15 +421,4 @@ async function waitFor(condition: () => boolean): Promise<void> {
     await new Promise(resolve => setTimeout(resolve, 0));
   }
   throw new Error('condition was not met');
-}
-
-/** Awaits a promise expected to reject, returning the rejection reason. */
-async function rejectWith(promise: Promise<unknown>): Promise<unknown> {
-  try {
-    await promise;
-  }
-  catch (err) {
-    return err;
-  }
-  throw new Error('expected the promise to reject');
 }

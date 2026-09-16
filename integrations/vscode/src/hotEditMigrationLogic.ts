@@ -53,17 +53,26 @@ export function migrationPlan(
 }
 
 /** The warning shown before applying an engineer-decided migration (ADR 0061). */
-export function formatMigrationWarning(pairCount: number, preservedCount: number): string {
+export function formatMigrationWarning(
+  pairs: readonly TypeChangePair[],
+  preserved: readonly number[],
+): string {
   const parts = ['Applying the migration is irreversible; values never roll back.'];
-  if (preservedCount > 0) {
+  if (preserved.length > 0) {
     parts.push(
       'Preserve keeps the raw storage bits reinterpreted under the new type,'
       + ' so the value may no longer be valid.',
     );
   }
-  const reinitialized = pairCount - preservedCount;
-  if (reinitialized > 0) {
-    parts.push(`${reinitialized} variable(s) are reinitialized (the default decision).`);
+  const keep = new Set(preserved);
+  const reinitialized = pairs.filter(pair => !keep.has(pair.uid));
+  if (reinitialized.length > 0) {
+    // The warning is the only place the reinitialized variables are named
+    // when no row was checkable (no quick pick is shown then).
+    parts.push(
+      `${reinitialized.length} variable(s) are reinitialized (the default decision): `
+      + `${reinitialized.map(pair => pair.name ?? `uid ${pair.uid}`).join(', ')}.`,
+    );
   }
   return parts.join(' ');
 }

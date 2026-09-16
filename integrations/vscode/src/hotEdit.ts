@@ -315,7 +315,7 @@ export function registerHotEditSupport(
         preserved = picked.map(item => item.pair.uid);
       }
       const choice = await vscode.window.showWarningMessage(
-        formatMigrationWarning(pairs.length, preserved.length),
+        formatMigrationWarning(pairs, preserved),
         { modal: true },
         'Apply Migration',
       );

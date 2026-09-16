@@ -11,6 +11,7 @@ import {
   MigrationDecisionMap,
   TypeChangePair,
 } from '../../hotEditSession';
+import { rejectWith } from './testHelpers';
 
 /**
  * A mocked accept transport: tests script one outcome per `acceptEdits`
@@ -89,18 +90,24 @@ suite('migrationPlan', () => {
 
 suite('formatMigrationWarning', () => {
   test('formatMigrationWarning_when_preserving_then_states_irreversible_and_invalid_value', () => {
-    const warning = formatMigrationWarning(2, 1);
+    const warning = formatMigrationWarning([pair({ uid: 1 }), pair({ uid: 2, name: 'Extra' })], [1]);
 
     assert.ok(warning.includes('irreversible'));
     assert.ok(warning.includes('may no longer be valid'));
     assert.ok(warning.includes('1 variable(s) are reinitialized'));
+    assert.ok(warning.includes('Extra'));
   });
 
-  test('formatMigrationWarning_when_all_reinitialized_then_no_preserve_claim', () => {
-    const warning = formatMigrationWarning(2, 0);
+  test('formatMigrationWarning_when_all_reinitialized_then_no_preserve_claim_and_names_listed', () => {
+    const warning = formatMigrationWarning(
+      [pair({ uid: 1 }), pair({ uid: 2, name: null })],
+      [],
+    );
 
     assert.ok(!warning.includes('may no longer be valid'));
     assert.ok(warning.includes('2 variable(s) are reinitialized'));
+    assert.ok(warning.includes('Counter'));
+    assert.ok(warning.includes('uid 2'));
   });
 });
 
@@ -171,14 +178,3 @@ suite('acceptEditsWithDecisions', () => {
     assert.strictEqual(client.migrations.length, 2);
   });
 });
-
-/** Awaits a promise expected to reject, returning the rejection reason. */
-async function rejectWith(promise: Promise<unknown>): Promise<unknown> {
-  try {
-    await promise;
-  }
-  catch (err) {
-    return err;
-  }
-  throw new Error('expected the promise to reject');
-}

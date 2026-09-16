@@ -3,6 +3,9 @@
  * a thin, unit-testable client for the newline-delimited JSON command session
  * served by `ironplcvm serve` (see `compiler/vm-cli/src/serve.rs`).
  *
+ * The module also owns the ADR-0061 wire shapes: the `migration` decision map
+ * on `acceptEdits` and the `pairs` list a V4010 refusal carries.
+ *
  * One line carries one command; one line carries one response. This module
  * owns no process state — it speaks over an injected [`HotEditTransport`]
  * (line-buffered stdio in the extension glue), mirroring how `RunSession`
@@ -163,6 +166,8 @@ function parsePair(value: unknown): TypeChangePair {
   const { uid, name, from, to, sizeEqual } = value as Record<string, unknown>;
   if (
     typeof uid !== 'number'
+    || !Number.isInteger(uid)
+    || uid < 0
     || (typeof name !== 'string' && name !== null && name !== undefined)
     || typeof from !== 'string'
     || typeof to !== 'string'
