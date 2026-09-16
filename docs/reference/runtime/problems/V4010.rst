@@ -7,29 +7,43 @@ V4010
 Online change refused a schema edit because the state migration planner
 cannot justify carrying the running values into the candidate. The candidate
 and the running application both carry stable variable IDs, but at least one
-ID that exists on both sides is bound to an incompatible entry — a changed
-variable type or layout class, a changed array descriptor, a current string
-value that no longer fits the candidate's maximum length, or a changed
-function-block tail layout. Copying such a value would risk writing it onto
-the wrong entity, so the whole candidate is rejected.
+ID that exists on both sides is bound to an entry the planner cannot migrate:
+a changed variable type outside the conversion policy, a changed array
+descriptor, a current string value that no longer fits the candidate's
+maximum length, a changed function-block tail layout, or a migration decision
+that names nothing or asks to preserve a size-mismatched pair.
+
+For an out-of-policy type change the refusal is decidable per entity: the
+response carries a ``pairs`` array with every offending entity — its stable
+ID, debug name, the two storage classes, and whether their sizes match — and
+the client resubmits the identical container with a ``migration`` map keyed
+by UID. ``"init"`` discards the old value and lets the candidate's initial
+value stand (the fail-closed default); ``"preserve"`` keeps the old storage
+bytes and reinterprets them under the candidate type, is legal only when
+``sizeEqual`` is true, and means the value may no longer be valid.
 
 Example
 -------
 
-A session stages a candidate that retypes a persistent variable while
-keeping its stable ID. The planner cannot migrate the old value into the new
-type and fails the stage:
+A session stages a candidate that retypes a persistent variable ``Counter``
+from ``I32`` to ``U32`` while keeping its stable ID. The planner reports the
+pair and stages nothing:
 
 .. code-block::
 
    {"command":"acceptEdits","program":[...]}
-   {"response":"error","vCode":"V4010","message":"candidate state cannot be migrated: entity 7 cannot migrate: the variable type changed"}
+   {"response":"error","vCode":"V4010","message":"candidate state cannot be migrated: type changes are outside the migration policy: entity 7 (Counter) I32 -> U32","pairs":[{"uid":7,"name":"Counter","from":"I32","to":"U32","sizeEqual":true}]}
 
-The message names the entity's stable ID and the planner's reason.
+The client decides per variable and resubmits the identical container:
 
-To fix this error, keep the edit inside what the planner can justify: renames,
-reorders, and adding or removing variables migrate; a retype, a string
-maximum that shrinks below the current value, or an FB field layout change
-does not. Split the edit so the incompatible declaration changes are applied
-as a cold start, or adjust the candidate so every shared ID keeps its entry.
-See :doc:`V4007` when the candidate lacks the stable IDs a migration needs.
+.. code-block::
+
+   {"command":"acceptEdits","program":[...],"migration":{"7":"preserve"}}
+
+Without decisions, keep the edit inside what the planner can justify: renames,
+reorders, and adding or removing variables migrate; a structural change (a
+string maximum that shrinks below the current value, a changed array
+descriptor, or an FB field layout change) does not. Split the edit so the
+incompatible declaration changes are applied as a cold start, or adjust the
+candidate so every shared ID keeps its entry. See :doc:`V4007` when the
+candidate lacks the stable IDs a migration needs.

@@ -16,7 +16,7 @@
 
 mod common;
 
-use common::{compile_with_ids, container_bytes, counter_host, counter_program};
+use common::{compile_with_ids, container_bytes, counter_host, counter_program, variable_index};
 use ironplc_runtime::{
     execute, parse_command, Command, HostMode, Response, RuntimeHost, StatusPayload,
 };
@@ -41,6 +41,44 @@ fn accept_line(source: &str) -> String {
 fn accept_line_with_ids(source: &str, ids: &[(&str, u64)]) -> String {
     let bytes = container_bytes(&compile_with_ids(source, ids));
     serde_json::json!({"command": "acceptEdits", "program": bytes}).to_string()
+}
+
+/// The `AcceptEdits` line for a compiled source snippet with stable variable
+/// IDs and a per-UID migration decision map (ADR 0061).
+fn accept_line_with_decisions(
+    source: &str,
+    ids: &[(&str, u64)],
+    migration: serde_json::Value,
+) -> String {
+    let bytes = container_bytes(&compile_with_ids(source, ids));
+    serde_json::json!({"command": "acceptEdits", "program": bytes, "migration": migration})
+        .to_string()
+}
+
+/// A `PROGRAM main` whose single `Counter` is retyped and incremented by one.
+fn retyped_counter_program(ty: &str) -> String {
+    format!(
+        "PROGRAM main
+  VAR
+    Counter : {ty};
+  END_VAR
+  Counter := Counter + 1;
+END_PROGRAM
+"
+    )
+}
+
+/// A host whose `Counter : DINT` (UID 1) has counted up to 3.
+fn retype_base_host() -> (RuntimeHost, ironplc_container::VarIndex) {
+    let base = compile_with_ids(
+        &counter_program("Counter := Counter + 1;"),
+        &[("Counter", 1)],
+    );
+    let counter = variable_index(&base, "Counter");
+    let mut host = RuntimeHost::new(base).unwrap();
+    host.run(3, || 0).unwrap();
+    assert_eq!(host.read_variable(counter).unwrap(), 3);
+    (host, counter)
 }
 
 #[test]
@@ -190,6 +228,103 @@ END_PROGRAM
     // The refusal leaves the candidate active and the state untouched.
     host.run(1, || 0).unwrap();
     assert!(host.status().candidate.is_some());
+}
+
+#[test]
+fn accept_edits_when_type_change_without_decision_then_v4010_and_pairs() {
+    let (mut host, _counter) = retype_base_host();
+
+    let response = run_line(
+        &mut host,
+        &accept_line_with_ids(&retyped_counter_program("UDINT"), &[("Counter", 1)]),
+    );
+
+    assert_eq!(response["response"], "error");
+    assert_eq!(response["vCode"], "V4010");
+    assert_eq!(
+        response["pairs"],
+        serde_json::json!([{
+            "uid": 1,
+            "name": "Counter",
+            "from": "I32",
+            "to": "U32",
+            "sizeEqual": true,
+        }])
+    );
+    // Nothing was staged: the engineer can resubmit the same edit with a
+    // decision map.
+    assert!(host.status().candidate.is_none());
+    assert_eq!(host.status().mode, HostMode::Normal);
+}
+
+#[test]
+fn accept_edits_when_preserve_decision_then_old_bits_run_under_the_new_type() {
+    let (mut host, _counter) = retype_base_host();
+    let candidate = compile_with_ids(&retyped_counter_program("UDINT"), &[("Counter", 1)]);
+    let counter = variable_index(&candidate, "Counter");
+
+    let response = run_line(
+        &mut host,
+        &accept_line_with_decisions(
+            &retyped_counter_program("UDINT"),
+            &[("Counter", 1)],
+            serde_json::json!({"1": "preserve"}),
+        ),
+    );
+    assert_eq!(response["response"], "ack");
+    assert!(host.status().migration);
+
+    host.test().unwrap();
+    host.run(1, || 0).unwrap();
+
+    // The DINT 3 (0x3) was preserved bit for bit; the UDINT body added one.
+    assert_eq!(host.read_variable(counter).unwrap(), 4);
+}
+
+#[test]
+fn accept_edits_when_init_decision_then_candidate_initial_value_stands() {
+    let (mut host, _counter) = retype_base_host();
+    let source = "PROGRAM main
+  VAR
+    Counter : UDINT := 100;
+  END_VAR
+  Counter := Counter + 1;
+END_PROGRAM
+";
+    let candidate = compile_with_ids(source, &[("Counter", 1)]);
+    let counter = variable_index(&candidate, "Counter");
+
+    let response = run_line(
+        &mut host,
+        &accept_line_with_decisions(source, &[("Counter", 1)], serde_json::json!({"1": "init"})),
+    );
+    assert_eq!(response["response"], "ack");
+
+    host.test().unwrap();
+    host.run(1, || 0).unwrap();
+
+    // The old 3 was discarded; the candidate's declared 100 initialized the
+    // variable before the candidate body ran.
+    assert_eq!(host.read_variable(counter).unwrap(), 101);
+}
+
+#[test]
+fn accept_edits_when_decision_uid_is_unknown_then_v4010_without_pairs() {
+    let (mut host, _counter) = retype_base_host();
+
+    let response = run_line(
+        &mut host,
+        &accept_line_with_decisions(
+            &retyped_counter_program("UDINT"),
+            &[("Counter", 1)],
+            serde_json::json!({"99": "init"}),
+        ),
+    );
+
+    assert_eq!(response["response"], "error");
+    assert_eq!(response["vCode"], "V4010");
+    assert_eq!(response["pairs"], serde_json::Value::Null);
+    assert!(host.status().candidate.is_none());
 }
 
 #[test]

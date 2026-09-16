@@ -10,13 +10,16 @@
 //! `Trap` codes, which the VM's own CSV owns).
 
 use core::fmt;
+use std::collections::BTreeMap;
 use std::io::Cursor;
 
 use ironplc_container::Container;
 use serde::{Deserialize, Serialize};
 
+use crate::conversion::type_name;
 use crate::error::OnlineChangeError;
 use crate::host::{HostMode, HostStatus, RuntimeHost};
+use crate::migration::{MigrationDecision, MigrationError, TypeChangePair};
 
 // V-code constants are generated from resources/problem-codes.csv by build.rs.
 mod online_change_codes {
@@ -33,6 +36,15 @@ pub enum Command {
     AcceptEdits {
         /// The compiled container in its wire format.
         program: Vec<u8>,
+        /// Per-UID engineer decisions for out-of-policy type changes
+        /// (ADR 0061), keyed by stable variable UID. Empty (the default)
+        /// fails closed with a V4010 naming every problematic pair.
+        #[serde(
+            default,
+            deserialize_with = "deserialize_migration_map",
+            skip_serializing_if = "BTreeMap::is_empty"
+        )]
+        migration: BTreeMap<u64, MigrationDecisionSpec>,
     },
     /// Activates the staged candidate at the next scan boundary.
     TestEdits,
@@ -42,6 +54,79 @@ pub enum Command {
     AssembleEdits,
     /// Discards the staged candidate.
     CancelEdits,
+}
+
+/// The engineer's decision for one storage-class change as it travels on the
+/// wire (ADR 0061): the values of [`Command::AcceptEdits`]'s `migration` map.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MigrationDecisionSpec {
+    /// Discard the old value; the candidate's init image stands.
+    Init,
+    /// Keep the old storage bytes and reinterpret them under the candidate
+    /// type (equal-size pairs only); the value may no longer be valid.
+    Preserve,
+}
+
+impl From<MigrationDecisionSpec> for MigrationDecision {
+    fn from(spec: MigrationDecisionSpec) -> Self {
+        match spec {
+            MigrationDecisionSpec::Init => MigrationDecision::Init,
+            MigrationDecisionSpec::Preserve => MigrationDecision::Preserve,
+        }
+    }
+}
+
+/// Deserializes the `migration` map, whose JSON object keys are UID strings
+/// and become `u64`s. The explicit string round trip is required because an
+/// internally tagged enum (`Command`) buffers its content before the field is
+/// deserialized, and buffered map keys cannot be read as integers; a key that
+/// is not a UID rejects the command line.
+fn deserialize_migration_map<'de, D>(
+    deserializer: D,
+) -> Result<BTreeMap<u64, MigrationDecisionSpec>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let wire = BTreeMap::<String, MigrationDecisionSpec>::deserialize(deserializer)?;
+    wire.into_iter()
+        .map(|(uid, decision)| {
+            uid.parse::<u64>()
+                .map(|uid| (uid, decision))
+                .map_err(serde::de::Error::custom)
+        })
+        .collect()
+}
+
+/// One out-of-policy storage-class change in a [`CommandError`]'s `pairs`
+/// details (ADR 0061): what a client renders as a decision-list row.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TypeChangeDetail {
+    /// The entity's stable UID, the key of the decision map.
+    pub uid: u64,
+    /// The entity's debug name, when the candidate names it.
+    pub name: Option<String>,
+    /// The active artifact's storage class (e.g. `"I32"`).
+    pub from: String,
+    /// The candidate's storage class (e.g. `"U32"`).
+    pub to: String,
+    /// Whether a `preserve` decision is legal for this pair: both sides'
+    /// storage sizes match.
+    pub size_equal: bool,
+}
+
+impl TypeChangeDetail {
+    /// Names one planner pair in the wire vocabulary.
+    fn from_pair(pair: &TypeChangePair) -> Self {
+        TypeChangeDetail {
+            uid: pair.uid,
+            name: pair.name.clone(),
+            from: type_name(pair.from).to_string(),
+            to: type_name(pair.to).to_string(),
+            size_equal: pair.size_equal,
+        }
+    }
 }
 
 /// The payload of [`Response::Status`]: a snapshot of the host's hot-edit
@@ -101,6 +186,11 @@ pub struct CommandError {
     v_code: &'static str,
     /// What failed, in the host's vocabulary.
     message: String,
+    /// The V4010 type changes, one entry per problematic entity, so the
+    /// client can resubmit the same edit with a `migration` decision map
+    /// (ADR 0061). Absent on every other refusal.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pairs: Option<Vec<TypeChangeDetail>>,
 }
 
 impl CommandError {
@@ -114,12 +204,18 @@ impl CommandError {
         &self.message
     }
 
+    /// The V4010 type changes to decide, or `None` for any other refusal.
+    pub fn pairs(&self) -> Option<&[TypeChangeDetail]> {
+        self.pairs.as_deref()
+    }
+
     /// Builds the error for an [`Command::AcceptEdits`] payload that does not
     /// parse as a compiled container.
     fn invalid_container(error: impl fmt::Display) -> Self {
         CommandError {
             v_code: online_change_codes::INVALID_CONTAINER,
             message: format!("accept payload is not a valid compiled container: {error}"),
+            pairs: None,
         }
     }
 }
@@ -132,6 +228,7 @@ impl fmt::Display for CommandError {
 
 impl From<OnlineChangeError> for CommandError {
     fn from(error: OnlineChangeError) -> Self {
+        let pairs = migration_pairs(&error);
         let v_code = match error {
             OnlineChangeError::LayoutIncompatible => online_change_codes::LAYOUT_INCOMPATIBLE,
             OnlineChangeError::ScheduleIncompatible => online_change_codes::SCHEDULE_INCOMPATIBLE,
@@ -152,7 +249,19 @@ impl From<OnlineChangeError> for CommandError {
         CommandError {
             v_code,
             message: error.to_string(),
+            pairs,
         }
+    }
+}
+
+/// The structured pair list a V4010 refusal carries, or `None` for every
+/// other migration failure and every other error.
+fn migration_pairs(error: &OnlineChangeError) -> Option<Vec<TypeChangeDetail>> {
+    match error {
+        OnlineChangeError::MigrationUnsupported(MigrationError::TypeChangeUnsupported {
+            pairs,
+        }) => Some(pairs.iter().map(TypeChangeDetail::from_pair).collect()),
+        _ => None,
     }
 }
 
@@ -175,7 +284,7 @@ pub fn render_response(response: &Response) -> Result<String, serde_json::Error>
 pub fn execute(command: Command, host: &mut RuntimeHost) -> Response {
     match command {
         Command::GetStatus => Response::Status(StatusPayload::from(host.status())),
-        Command::AcceptEdits { program } => accept_edits(host, &program),
+        Command::AcceptEdits { program, migration } => accept_edits(host, &program, &migration),
         Command::TestEdits => ack_or_error(host.test()),
         Command::UntestEdits => ack_or_error(host.untest()),
         Command::AssembleEdits => ack_or_error(host.assemble()),
@@ -183,13 +292,22 @@ pub fn execute(command: Command, host: &mut RuntimeHost) -> Response {
     }
 }
 
-/// Parses the candidate container and stages it against the active artifact.
-fn accept_edits(host: &mut RuntimeHost, program: &[u8]) -> Response {
+/// Parses the candidate container and stages it against the active artifact,
+/// resolving out-of-policy type changes with the engineer's decisions.
+fn accept_edits(
+    host: &mut RuntimeHost,
+    program: &[u8],
+    migration: &BTreeMap<u64, MigrationDecisionSpec>,
+) -> Response {
     let candidate = match Container::read_from(&mut Cursor::new(program)) {
         Ok(candidate) => candidate,
         Err(error) => return Response::Error(CommandError::invalid_container(error)),
     };
-    ack_or_error(host.stage(candidate))
+    let decisions: BTreeMap<u64, MigrationDecision> = migration
+        .iter()
+        .map(|(&uid, &spec)| (uid, MigrationDecision::from(spec)))
+        .collect();
+    ack_or_error(host.stage_with_decisions(candidate, &decisions))
 }
 
 /// Turns a host result into an acknowledgment or the coded error.
@@ -204,6 +322,7 @@ fn ack_or_error(result: Result<(), OnlineChangeError>) -> Response {
 mod tests {
     use super::*;
     use crate::migration::MigrationError;
+    use ironplc_container::FieldType;
     use rstest::rstest;
 
     #[test]
@@ -221,9 +340,45 @@ mod tests {
         assert_eq!(
             command,
             Command::AcceptEdits {
-                program: vec![1, 2, 255]
+                program: vec![1, 2, 255],
+                migration: BTreeMap::new(),
             }
         );
+    }
+
+    #[test]
+    fn parse_command_when_accept_edits_with_migration_then_carries_decisions() {
+        let command = parse_command(
+            r#"{"command":"acceptEdits","program":[1],"migration":{"1":"init","2":"preserve"}}"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            command,
+            Command::AcceptEdits {
+                program: vec![1],
+                migration: BTreeMap::from([
+                    (1, MigrationDecisionSpec::Init),
+                    (2, MigrationDecisionSpec::Preserve),
+                ]),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_command_when_migration_value_is_unknown_then_error() {
+        assert!(parse_command(
+            r#"{"command":"acceptEdits","program":[1],"migration":{"1":"keep"}}"#
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn parse_command_when_migration_uid_is_not_a_number_then_error() {
+        assert!(parse_command(
+            r#"{"command":"acceptEdits","program":[1],"migration":{"counter":"init"}}"#
+        )
+        .is_err());
     }
 
     #[test]
@@ -298,6 +453,40 @@ mod tests {
         assert!(line.starts_with(r#"{"response":"error""#));
         assert!(line.contains(r#""vCode":"V4012""#));
         assert!(line.contains("no candidate is staged"));
+    }
+
+    #[test]
+    fn render_response_when_v4010_type_change_then_line_carries_the_pairs() {
+        let response = Response::Error(CommandError::from(
+            OnlineChangeError::MigrationUnsupported(MigrationError::TypeChangeUnsupported {
+                pairs: vec![TypeChangePair {
+                    uid: 7,
+                    name: Some("Counter".into()),
+                    from: FieldType::I32,
+                    to: FieldType::U32,
+                    size_equal: true,
+                }],
+            }),
+        ));
+
+        let line = render_response(&response).unwrap();
+
+        assert!(line.contains(r#""vCode":"V4010""#));
+        assert!(line.contains(
+            r#""pairs":[{"uid":7,"name":"Counter","from":"I32","to":"U32","sizeEqual":true}]"#
+        ));
+    }
+
+    #[test]
+    fn command_error_pairs_when_decision_is_unknown_then_absent() {
+        // Only the collected type-change refusal carries pairs; the other
+        // V4010 reasons (here a stale decision UID) have nothing to decide.
+        let error = CommandError::from(OnlineChangeError::MigrationUnsupported(
+            MigrationError::UnknownDecisionUid { uid: 9 },
+        ));
+
+        assert_eq!(error.v_code(), "V4010");
+        assert!(error.pairs().is_none());
     }
 
     #[test]

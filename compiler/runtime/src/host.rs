@@ -35,12 +35,14 @@
 //! a pending swap is applied. That is what makes the two-container design
 //! expressible in safe Rust without `unsafe`.
 
+use std::collections::BTreeMap;
+
 use ironplc_container::{Container, VarIndex};
 use ironplc_vm::{Vm, VmBuffers};
 
 use crate::error::{OnlineChangeError, RuntimeError};
 use crate::generation::{ApplicationGeneration, LogicGeneration};
-use crate::migration::StateMigrationPlan;
+use crate::migration::{MigrationDecision, StateMigrationPlan};
 use crate::online_change::{
     has_stable_vars, swap_buffers, validate_candidate, validate_migration_candidate,
 };
@@ -127,14 +129,31 @@ impl RuntimeHost {
 
     /// Stages `candidate` after validating it against the normal artifact.
     ///
+    /// Equivalent to [`stage_with_decisions`](Self::stage_with_decisions)
+    /// with an empty decision map: an out-of-policy type change is refused
+    /// with every offender named.
+    pub fn stage(&mut self, candidate: Container) -> Result<(), OnlineChangeError> {
+        self.stage_with_decisions(candidate, &BTreeMap::new())
+    }
+
+    /// Stages `candidate` after validating it against the normal artifact,
+    /// resolving out-of-policy type changes with the engineer's `decisions`
+    /// (ADR 0061).
+    ///
     /// This is the controller-side `Accept`: the candidate is present and
     /// validated, the normal artifact keeps executing. A candidate whose
     /// layout hash matches is validated as a logic-only change. A candidate
     /// whose hash differs is staged as a migration candidate when both
     /// artifacts carry stable variable IDs and the migration planner can
-    /// justify every copy; otherwise it is rejected and the running
-    /// application is untouched.
-    pub fn stage(&mut self, candidate: Container) -> Result<(), OnlineChangeError> {
+    /// justify every copy — admitted conversions (ADR 0060) or a per-UID
+    /// decision; otherwise it is rejected and the running application is
+    /// untouched. An unknown decision UID, or `preserve` on a size-mismatched
+    /// pair, is rejected by the planner.
+    pub fn stage_with_decisions(
+        &mut self,
+        candidate: Container,
+        decisions: &BTreeMap<u64, MigrationDecision>,
+    ) -> Result<(), OnlineChangeError> {
         if self.candidate.is_some() {
             return Err(OnlineChangeError::CandidateAlreadyStaged);
         }
@@ -148,7 +167,7 @@ impl RuntimeHost {
         } else if has_stable_vars(&self.normal) && has_stable_vars(&candidate) {
             validate_migration_candidate(&self.normal, &candidate)?;
             Some(
-                StateMigrationPlan::build(&self.normal, &candidate)
+                StateMigrationPlan::build_with_decisions(&self.normal, &candidate, decisions)
                     .map_err(OnlineChangeError::MigrationUnsupported)?,
             )
         } else {

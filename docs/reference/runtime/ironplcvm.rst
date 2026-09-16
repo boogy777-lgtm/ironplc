@@ -88,17 +88,21 @@ Commands
    carries protocol lines only, so the session is safe to script.
 
    Commands are the hot-edit protocol commands: ``getStatus``, ``acceptEdits``
-   (the compiled container as a JSON array of byte values), ``testEdits``,
-   ``untestEdits``, ``assembleEdits`` and ``cancelEdits``. Responses are JSON:
-   an acknowledgment, a status payload, or an error carrying a stable
-   ``vCode`` and ``message``. A line that does not parse as a command is
-   answered with an error line whose ``vCode`` is null — codec errors carry
-   no V-code. A ``testEdits``, ``untestEdits`` or ``assembleEdits``
-   acknowledgment records a swap that applies at the next scan boundary:
-   after the acknowledgment, the session drives one scan round at a constant
-   zero uptime, before the response line is written, so the swap has been
-   applied when the line reaches the client. A trap in that round is logged
-   to stderr with the trap's V-code and the session continues.
+   (the compiled container as a JSON array of byte values, plus an optional
+   ``migration`` map of stable-UID decisions — ``"init"`` or ``"preserve"``),
+   ``testEdits``, ``untestEdits``, ``assembleEdits`` and ``cancelEdits``.
+   Responses are JSON: an acknowledgment, a status payload, or an error
+   carrying a stable ``vCode`` and ``message``; a V4010 refusal additionally
+   carries a ``pairs`` array naming every out-of-policy type change, so the
+   client can resubmit the payload with the decisions map. A line that does
+   not parse as a command is answered with an error line whose ``vCode`` is
+   null — codec errors carry no V-code. A ``testEdits``, ``untestEdits`` or
+   ``assembleEdits`` acknowledgment records a swap that applies at the next
+   scan boundary: after the acknowledgment, the session drives one scan round
+   at a constant zero uptime, before the response line is written, so the
+   swap has been applied when the line reaches the client. A trap in that
+   round is logged to stderr with the trap's V-code and the session
+   continues.
 
 Options
 =======
