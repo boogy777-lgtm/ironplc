@@ -77,19 +77,37 @@ Autonomy: full.
   ports, no add-on redundancy module. Port map: 1 = redundancy link
   (crossload/heartbeat/commit replication between the pair), 2 = I/O ring
   side (daisy/ring), 3/4 = engineering, uplink, witness path.
-- **Decided 2026-09-16:** no hardware arbiter. The redundancy layer is a
-  software layer above the runtime; I/O ownership is pinned to the primary
-  (only it opens EtherNet/IP I/O connections). Standby observes the primary
-  on two independent channels: the redundancy link (port 1) and the I/O
-  daisy-chain (port 2, seen from the far side). Standby auto-promotes only
-  when the primary is silent on BOTH channels; a link break between the
-  PLCs destroys the redundant pair (alarm + manual repair), it is never a
-  failover. Fencing is protocol-level I/O ownership; standby monitors the
-  chain without asserting ownership (exclusive EtherNet/IP connections).
-  Cluster clock = logical epochs bumped on promotion/commit, NTP for
-  diagnostics only. No TSN on bridged 10/100.
-- **Still open:** failover timing/heartbeat thresholds, qualification
-  policy, crossload sizing.
+- **Decided 2026-09-16:** no hardware arbiter; redundancy is a software
+  layer above the runtime. Quorum (five layers):
+  1. two-channel observation — the SAME logical heartbeat (pair id, role,
+     epoch, generations, seqs, io_owner_state, crc) on port 1 (pair link)
+     and port 2 (through the whole I/O daisy-chain); it proves runtime and
+     Ethernet-stack life plus chain traversability, not mere PHY link;
+  2. logical epochs for ordering and stale-state rejection (NTP for
+     diagnostics; optional future CIP Sync / IEEE-1588; no TSN needed);
+  3. fencing at the target — silence on BOTH channels only makes the
+     standby a PromotionCandidate; it must acquire Exclusive Owner on ALL
+     required outputs before running the application
+     (CAN_EXECUTE_OUTPUTS = primary && owns_all_required_io); the I/O
+     target is the last fence;
+  4. all-or-nothing ownership barrier — any failed acquisition releases
+     everything, PAIR_DESTROYED; partial ownership never means Primary
+     (no functional split-brain);
+  5. requalification — after restart / pair loss / epoch discontinuity /
+     unclean shutdown a controller boots UNQUALIFIED and qualifies as
+     SECONDARY; zombie-Primary re-entry is forbidden.
+  Connection roles: Primary = Input Only (inputs) + Exclusive Owner
+  (outputs); Secondary = Input Only observer, never Listen Only (it
+  depends on an existing owner). v1 scope: standard Exclusive Owner +
+  Input Only; Rockwell-style Redundant Owner is a v2 reference. Failover
+  is deterministic but not bumpless: T = detection + old-connection
+  timeout + Forward_Open + validation + scan boundary.
+- **Still open:** failover timing/heartbeat thresholds and the detection
+  time budget across N adapters; qualification policy; crossload sizing;
+  epoch persistence in NV storage; verify target firmware allows multiple
+  concurrent Input Only originators; mid-chain break policy (Primary
+  continues with partial I/O, degraded — standby fencing fails, pair
+  destroyed).
 
 Autonomy: design proposals are autonomous; implementation starts only after
 the decisions above.
