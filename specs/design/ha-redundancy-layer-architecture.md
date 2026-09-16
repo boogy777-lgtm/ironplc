@@ -123,17 +123,34 @@ Two planes are separate and must not be conflated:
   stack. When redundancy is enabled, the shell owns startup ordering and
   drives the host; the host never drives the shell.
 
-The admission seam already exists. `RuntimeHost` never starts the
-application by itself: construction (`compiler/runtime/src/host.rs:108`)
-loads and initializes, but scans begin only when the owner calls `run`
-(`compiler/runtime/src/host.rs:289`). "Permission to start the
-application" is therefore the shell withholding `run()` until admission
-completes — no runtime change is needed for admission, and none is made.
+Admission cannot rest on the shell withholding a call. Today `run()` has
+several owners — `ironplcvm run`, the `serve` session's round-driving, the
+MCP dispatch, the DAP host — and the discipline of who may drive scans is
+convention duplicated across callers, not a mechanism. Redundancy must not
+become one more disciplined caller.
+
+The resolution is to promote the owner to a **mechanism inside
+`RuntimeHost`**: the host boots unpermitted, and `run()` without an
+execution permit fails with a V-code instead of executing. Standalone
+binaries call `permit_execution()` immediately at startup — today's
+behavior, as the trivial policy. The redundancy layer grants the permit
+only after admission produces a verdict (Standalone, Primary, or — on
+promotion — a formerly Secondary unit).
+
+This is a clean policy/mechanism split:
+
+- The redundancy crate is the **policy**: when to grant.
+- `RuntimeHost` is the **enforcement point**: the single authority on
+  whether scans execute. Bypass is impossible at the type level, because
+  the host already owns the execution lifecycle (`HostMode`,
+  `compiler/runtime/src/host.rs:53`) and the permit latch extends that
+  single responsibility rather than adding a new one. The dependency
+  direction is unchanged: redundancy → runtime.
 
 ```text
 redundancy off (current behavior):
 
-  client ──► RuntimeHost ──► VM ──► application scans
+  client ──► permit_execution() at startup ──► RuntimeHost ──► VM ──► scans
 
 redundancy on:
 
@@ -147,21 +164,29 @@ redundancy on:
       │
       ▼
   drives RuntimeHost:
-      Standalone / Primary  → run()
-      Secondary             → monitor mode: no run(); the sync pipeline
-                              applies replicated state until promotion
+      Standalone / Primary  → permit_execution(), then run()
+      Secondary             → no permit: run() refuses; the sync
+                              pipeline applies replicated state
+                              until promotion grants the permit
 ```
 
 Process startup ordering is owned by the shell. Binaries — `ironplcvm
 serve` today, a controller daemon later — embed the shell only when
-redundancy is enabled (flag or configuration); otherwise they drive the
-host directly, which is exactly the current behavior. The composition
-decision lives at the binary's entry point, not inside either crate.
+redundancy is enabled (flag or configuration); otherwise they issue the
+permit directly at startup, which is exactly the current behavior. The
+composition decision lives at the binary's entry point, not inside either
+crate.
 
 This satisfies both owner constraints simultaneously: the runtime knows
-nothing about redundancy, and — when redundancy is enabled — the
-application cannot start without the shell's permission, because the only
-call that starts scans sits behind the shell's admission verdict.
+nothing about redundancy (the permit names no role, pair, or epoch), and —
+when redundancy is enabled — the application cannot start without the
+shell's permission, because the enforcement point refuses to scan
+unpermitted.
+
+A side benefit: the scan-driving policy currently duplicated across the
+`serve` session and the MCP dispatch can later funnel through one driver
+without changing the permit model — the permit says nothing about who
+drives, only whether driving may begin.
 
 ## Module Decomposition
 
@@ -223,11 +248,16 @@ existing newtypes.
 
 ## Minimal Seams in ironplc-runtime
 
-The supervisor drives the existing host API; exactly three small
+The supervisor drives the existing host API; exactly four small
 extensions are needed, each an extension of a call that exists today — no
 new abstraction layer inside the runtime.
 
-1. **Scan-commit notification.** `RuntimeHost::run`
+1. **Execution permit latch.** The host boots unpermitted and `run()`
+   refuses without a permit (a V-code); `permit_execution()` grants the
+   latch. This is the enforcement point of the policy/mechanism split in
+   "Shell, Not Runtime +1" — standalone binaries grant it at startup, the
+   redundancy shell grants it on an admission verdict.
+2. **Scan-commit notification.** `RuntimeHost::run`
    (`compiler/runtime/src/host.rs:289`) applies pending swaps at round
    boundaries; `compiler/vm-cli/src/serve.rs:12` already demonstrates
    driving single rounds from outside. The supervisor needs one commit
@@ -235,12 +265,12 @@ new abstraction layer inside the runtime.
    crossload snapshot at the commit point (ADR-0062: the lease is born at
    scan commit, never in the network task). Seam: an optional per-round
    callback on the run loop — one parameter, not a framework.
-2. **State snapshot read access.** The host owns the buffers and exposes
+3. **State snapshot read access.** The host owns the buffers and exposes
    `data_region()` (`compiler/runtime/src/host.rs:400`) and per-index
    `read_variable` (`compiler/runtime/src/host.rs:390`). The crossload
    source needs a bulk read of the persistent regions (`vars` +
    `data_region`). Seam: one read accessor beside the existing ones.
-3. **Crossload apply while not scanning.** Admission and the SYNC chart
+4. **Crossload apply while not scanning.** Admission and the SYNC chart
    require a unit that holds the application and applies replicated state
    without executing — monitor mode. The host today is either running
    rounds or idle with private buffers. Seam: an apply path that writes a
@@ -271,7 +301,7 @@ consequence):
    payload and addressing reuse what exists.
 4. **OwnerLease minting at scan commit.** No epoch type, no lease, no
    commit-time producer. ADR-0062 fixes the producer (the supervisor, at
-   scan commit) — seam 1 above is its only runtime requirement.
+   scan commit) — seam 2 above is its only runtime requirement.
 5. **I/O fencing client.** The runtime has no I/O driver model (explicitly
    out of scope in the execution model); ordered claim, CLAIMED_DISARMED
    verification, ARM, and barrier rollback are new, sitting in `fencing`.
@@ -309,8 +339,9 @@ readiness doc's sequence; design steps precede crate work):
 2. **`hal` + `liveness` + `calibration` trackers** — the two-channel
    ping/pong exchange with per-port measurement from day one, because
    ADR-0062 makes measurement the foundation, not a retrofit.
-3. **`epoch` + `lease` + the runtime seams** — the commit callback is the
-   only change inside `ironplc-runtime`, and it gates OwnerLease minting.
+3. **`epoch` + `lease` + the runtime seams** — the execution permit latch
+   and the commit callback are the enforcement/observation seams inside
+   `ironplc-runtime`; the callback gates OwnerLease minting.
 4. **`admission` + `crossload` + the SYNC chart** — a Secondary that
    syncs to SYNC_READY in monitor mode.
 5. **`fencing` + the CONTROL chart** — the OWNERSHIP_BARRIER and
