@@ -74,7 +74,16 @@ Autonomy: full.
 - **Decided 2026-09-15:** network technology = EtherNet/IP; media topology =
   daisy-chain on embedded 2-port switches, optionally closed as a ring
   (DLR if the ring nodes support it). Owner constraint: 4x 10/100 Ethernet
-  ports, no add-on redundancy module.
+  ports, no add-on redundancy module. Port map: 1 = redundancy link
+  (crossload/heartbeat/commit replication between the pair), 2 = I/O ring
+  side (daisy/ring), 3/4 = engineering, uplink, witness path.
+- **Consequence of "no redundancy module":** the quorum arbiter/witness must
+  live outside the controller pair (a witness process on an always-on
+  network host; the engineering station is not a reliable choice). Two
+  controllers alone cannot break ties: without a witness, failover degrades
+  to manual promotion. Physical fencing degrades to protocol-level I/O
+  ownership: only the active controller opens EtherNet/IP I/O connections,
+  the standby never asserts ownership.
 - **Still open** (the reference documents' open problems): quorum/arbiter
   topology, physical fencing mechanism, cluster clock, TSN/prioritization
   within EtherNet/IP, I/O ownership model.
