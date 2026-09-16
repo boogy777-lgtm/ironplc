@@ -194,6 +194,60 @@ END_PROGRAM
         bytes
     }
 
+    /// [`compile_container`] for a source compiled with engineering-side
+    /// stable variable IDs (ADR 0053), so a declaration edit stages as a
+    /// migration candidate.
+    fn compile_container_with_ids(source: &str, ids: &[(&str, u64)]) -> Container {
+        let options = ironplc_parser::options::CompilerOptions::default();
+        let library =
+            ironplc_parser::parse_program(source, &ironplc_dsl::core::FileId::default(), &options)
+                .unwrap();
+        let (analyzed, context) =
+            ironplc_analyzer::stages::resolve_types(&[&library], &options).unwrap();
+        let codegen_options = ironplc_codegen::CodegenOptions {
+            stable_var_ids: ids
+                .iter()
+                .map(|(name, uid)| (ironplc_dsl::core::Id::from(name), *uid))
+                .collect(),
+            ..ironplc_codegen::CodegenOptions::default()
+        };
+        let container = ironplc_codegen::compile(
+            &analyzed,
+            &context,
+            &codegen_options,
+            &ironplc_codegen::EmptyLookup,
+        )
+        .unwrap();
+
+        let mut bytes = Vec::new();
+        container.write_to(&mut bytes).unwrap();
+        Container::read_from(&mut io::Cursor::new(&bytes)).unwrap()
+    }
+
+    /// The wire-format bytes an `acceptEdits` command carries for `source`
+    /// compiled with stable variable IDs.
+    fn container_bytes_with_ids(source: &str, ids: &[(&str, u64)]) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        compile_container_with_ids(source, ids)
+            .write_to(&mut bytes)
+            .unwrap();
+        bytes
+    }
+
+    /// A `PROGRAM main` whose single `Counter` carries `ty`, incremented by
+    /// one per scan (the retype target of the migration wire tests).
+    fn retyped_counter_source(ty: &str) -> String {
+        format!(
+            "PROGRAM main
+  VAR
+    Counter : {ty};
+  END_VAR
+  Counter := Counter + 1;
+END_PROGRAM
+"
+        )
+    }
+
     /// The wire-format bytes of a candidate whose scan divides by the
     /// zero-initialized `Counter`, so the first driven round traps.
     fn trapping_container_bytes() -> Vec<u8> {
@@ -296,6 +350,102 @@ END_PROGRAM
         // answers the next command.
         assert_eq!(responses[1]["response"], "ack");
         assert_eq!(responses[2]["response"], "status");
+    }
+
+    #[test]
+    fn serve_session_when_type_change_without_decision_then_v4010_with_pairs() {
+        let base = compile_container_with_ids(&counter_source(1), &[("Counter", 1)]);
+        let mut host = RuntimeHost::new(base).unwrap();
+        host.run(3, || 0).unwrap();
+
+        let candidate =
+            container_bytes_with_ids(&retyped_counter_source("UDINT"), &[("Counter", 1)]);
+        let accept =
+            serde_json::json!({"command": "acceptEdits", "program": candidate}).to_string();
+
+        let responses = run_session(&mut host, &[&accept]);
+
+        assert_eq!(responses.len(), 1);
+        assert_eq!(responses[0]["response"], "error");
+        assert_eq!(responses[0]["vCode"], "V4010");
+        assert_eq!(
+            responses[0]["pairs"],
+            serde_json::json!([{
+                "uid": 1,
+                "name": "Counter",
+                "from": "I32",
+                "to": "U32",
+                "sizeEqual": true,
+            }])
+        );
+        // The refusal staged nothing; the engineer can resubmit the same
+        // container bytes with a decision.
+        assert_eq!(host.status().candidate, None);
+    }
+
+    #[test]
+    fn serve_session_when_preserve_decision_then_old_bits_survive_the_retype() {
+        let base = compile_container_with_ids(&counter_source(1), &[("Counter", 1)]);
+        let mut host = RuntimeHost::new(base).unwrap();
+        host.run(3, || 0).unwrap();
+
+        let candidate =
+            container_bytes_with_ids(&retyped_counter_source("UDINT"), &[("Counter", 1)]);
+        let accept = serde_json::json!({
+            "command": "acceptEdits",
+            "program": candidate,
+            "migration": {"1": "preserve"},
+        })
+        .to_string();
+        let lines = [&accept, r#"{"command":"testEdits"}"#];
+
+        let responses = run_session(&mut host, &lines);
+
+        assert_eq!(responses[0]["response"], "ack");
+        assert!(host.status().migration);
+        // The testEdits acknowledgment drove one boundary round: the DINT 3
+        // (0x3) was preserved bit for bit and the UDINT body added one.
+        assert_eq!(responses[1]["response"], "ack");
+        assert_eq!(
+            host.read_variable(ironplc_container::VarIndex::new(0))
+                .unwrap(),
+            4
+        );
+    }
+
+    #[test]
+    fn serve_session_when_init_decision_then_candidate_initial_value_stands() {
+        let base = compile_container_with_ids(&counter_source(1), &[("Counter", 1)]);
+        let mut host = RuntimeHost::new(base).unwrap();
+        host.run(3, || 0).unwrap();
+
+        let source = "PROGRAM main
+  VAR
+    Counter : UDINT := 100;
+  END_VAR
+  Counter := Counter + 1;
+END_PROGRAM
+";
+        let candidate = container_bytes_with_ids(source, &[("Counter", 1)]);
+        let accept = serde_json::json!({
+            "command": "acceptEdits",
+            "program": candidate,
+            "migration": {"1": "init"},
+        })
+        .to_string();
+        let lines = [&accept, r#"{"command":"testEdits"}"#];
+
+        let responses = run_session(&mut host, &lines);
+
+        assert_eq!(responses[0]["response"], "ack");
+        // The old 3 was discarded; the candidate's declared 100 initialized
+        // the variable before the candidate body ran.
+        assert_eq!(responses[1]["response"], "ack");
+        assert_eq!(
+            host.read_variable(ironplc_container::VarIndex::new(0))
+                .unwrap(),
+            101
+        );
     }
 
     #[test]
