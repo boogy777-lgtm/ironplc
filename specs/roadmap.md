@@ -71,9 +71,10 @@ Autonomy: full.
 - Design first: Arbitration Quorum + Commit Certificate + Fencing (HA
   handoff, section 25), then the redundancy layer: role manager, state
   crossload, generation replicator, edit replicator, qualification, takeover.
-- **Blocked on owner decisions** (the reference documents' open problems):
-  quorum/arbiter topology, physical fencing mechanism, cluster clock,
-  network technology (EtherNet/IP + TSN direction), I/O ownership model.
+- **Decided 2026-09-15:** network technology = EtherNet/IP.
+- **Still open** (the reference documents' open problems): quorum/arbiter
+  topology, physical fencing mechanism, cluster clock, TSN/prioritization
+  within EtherNet/IP, I/O ownership model.
 
 Autonomy: design proposals are autonomous; implementation starts only after
 the decisions above.
