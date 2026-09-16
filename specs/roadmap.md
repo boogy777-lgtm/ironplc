@@ -60,6 +60,10 @@ Autonomy: full (the extension follows the extension standards).
 - Load-time verifier consuming the variable table (ADR-0006).
 - Per-POU code artifacts (design first; no user-visible FSM change).
 
+Done 2026-09-15 (ADR-0058..0060, container v6). Follow-up, pending
+implementation: engineer-decided initialize/preserve for out-of-policy type
+changes (ADR-0061).
+
 Autonomy: full.
 
 ### Phase 5 - Redundancy / HA
