@@ -12,6 +12,31 @@ claim/ARM behavior, scan position, and output apply, all of which vary per
 installation and per device. The honest contract is a formula whose terms
 are measured, not a marketing number.
 
+## Paradigm change
+
+This decision replaces the classical supervision paradigm — a pre-set magic
+threshold ("declare the peer dead after N missed heartbeats") — with a
+measured-reality paradigm: **measure → calibrate → qualify → configure a
+budget → continuously verify reality**.
+
+- The pair's timing model is established by a commissioning calibration
+  under realistic worst load (PLC application running, I/O running,
+  crossload running), not on an idle controller: a heartbeat response
+  delayed by a heavy scan is otherwise indistinguishable from a peer
+  failure, so calibration without load is meaningless.
+- Calibration measures the whole chain, in both directions (A→B→A and
+  B→A→B): HA task, driver, NIC/PHY, medium, peer NIC/PHY, driver, peer HA
+  task, and the reply. Scheduler behavior, IRQ affinity, NIC queues, and
+  CPU load differ per direction, so a single-direction number is not
+  evidence.
+- The engineer configures process-reaction times, never protocol
+  counters: a peer-failure confirmation time ("declare peer failed after
+  T ms") and a maximum process-recovery budget. The runtime translates
+  these into supervision protocol parameters; the UI never exposes
+  ping periods or missed-ping counts.
+- A secondary has no right to be takeover-ready until the pair has proven
+  its timing model. Readiness is calibration-gated (see Decision).
+
 ## Decision
 
 - **Failover/takeover time is NEVER promised as a constant.** It is computed
@@ -32,6 +57,23 @@ are measured, not a marketing number.
   images, and claims; it is never the arbiter of who may take over (this
   prevents partition bidding wars). **OwnerLease is generated exclusively by
   the HA supervisor at scan commit** — the network task must never mint it.
+- **Calibration-gated readiness.** The readiness chain is UNQUALIFIED →
+  CALIBRATING → CALIBRATED → SYNCING → SYNC_READY → TAKEOVER_READY: a
+  unit cannot be `TakeoverReady` until the pair's commissioning
+  calibration has produced a valid link profile. A significant change
+  (NIC or medium replaced, link speed changed, topology changed, runtime
+  or HA protocol version changed) invalidates the qualification and
+  requires a new calibration.
+- **Budget validation, not silent acceptance.** The engineering UI checks
+  the configured recovery budget against the calibrated worst case and
+  refuses to silently accept a setting it cannot guarantee; it reports the
+  minimum demonstrated budget instead.
+- **Continuous verification.** After the commissioning baseline, runtime
+  EMA/jitter/max tracking (online adaptation) watches for reality leaving
+  the calibrated envelope: a degraded channel raises
+  `HA_PERFORMANCE_DEGRADED`; a recovery budget that can no longer be met
+  raises `HA_TIMING_GUARANTEE_LOST`. Failover thresholds are not
+  automatically retuned.
 
 ## Consequences
 
@@ -41,6 +83,13 @@ are measured, not a marketing number.
   pays detection plus lease expiry, and both terms are measured.
 - Epoch and OwnerLease have disjoint producers and purposes, so a network
   fault cannot fabricate ownership and a partition cannot escalate epoch.
+- The pair ships no unexplained magic number: every threshold an engineer
+  sees is either measured or validated against measurements, and a
+  configuration the installation cannot honor is rejected at engineering
+  time rather than discovered at failover time.
+- Timing regressions after commissioning (cable aging, added adapters,
+  load growth) surface as degradation alarms while redundancy still works,
+  instead of silently eroding the failover guarantee.
 
 ## Timing formulas
 
@@ -62,6 +111,17 @@ are measured, not a marketing number.
 - Gates: `TakeoverPermission = PeerFailureConfirmed &&
   OldOwnerAuthorityExpired && SyncReady && IoReady`; `TakeoverReady =
   SYNC_READY && IO_READY && RedundancyLinkValid`.
+- Scan safe-point is phase-aware, not a flat scan time: `T_safepoint =
+  T_next-commit - t_takeover`, bounded `0 <= T_safepoint <= T_scan,max`.
+  The online estimator therefore shows two numbers: predicted recovery if
+  the failover happened now, and the calibrated worst case.
+- Budget check: `T_detect + T_claim,max + T_scan,max + T_output,max <=
+  T_recovery-budget`; when the inequality fails, the UI reports the minimum
+  demonstrated budget and does not apply the configuration.
+- Detection and resume terms are measured like every other term:
+  `T_recovery` decomposes as detection (the configured confirmation time),
+  HA-FSM decision, claim, execution-context resume, scan safe-point, and
+  output apply; none is assumed zero.
 
 ## Variables for the engineering UI (Studio tabs)
 
@@ -81,6 +141,21 @@ are measured, not a marketing number.
   its T contribution, the limiting device, worst ownership recovery.
 - IO_READY breakdown: required inputs observable, standby connections
   valid, configs match, epochs valid.
+- HA link profile (commissioning calibration, both directions): RTT fast
+  EMA / slow EMA, RTT min / max / jitter envelope, loss rate, max
+  consecutive loss, per-side processing latency, per-side scan time and
+  scan jitter. Recalibration events and the calibration state of each
+  direction are visible.
+- Per-controller scan statistics feeding the safe-point term: scan EMA10 /
+  EMA100 / max / jitter envelope, plus current scan phase for the
+  predicted-if-now estimate.
+- Configured engineer parameters and their validation: peer-failure
+  confirmation time, maximum process-recovery budget, calculated worst
+  case, predicted-if-now value, and the budget-check result (qualified or
+  minimum demonstrated budget).
+- Timing health alarms: `HA_PERFORMANCE_DEGRADED` (reality left the
+  calibrated envelope) and `HA_TIMING_GUARANTEE_LOST` (recovery budget no
+  longer attainable).
 
 Firmware MUST timestamp each stage and compute the per-module metrics
 locally, reporting them upward (per the philosophy of this ADR: measure
