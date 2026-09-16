@@ -70,12 +70,12 @@ Autonomy: full.
 
 - Design first: Arbitration Quorum + Commit Certificate + Fencing (HA
   handoff, section 25), then the redundancy layer: role manager, state
-  crossload, generation replicator, edit replicator, qualification, takeover.
+  replication, generation replicator, edit replicator, readiness, takeover.
 - **Decided 2026-09-15:** network technology = EtherNet/IP; media topology =
   daisy-chain on embedded 2-port switches, optionally closed as a ring
   (DLR if the ring nodes support it). Owner constraint: 4x 10/100 Ethernet
   ports, no add-on redundancy module. Port map: 1 = redundancy link
-  (crossload/heartbeat/commit replication between the pair), 2 = I/O ring
+  (state replication/heartbeat/commit replication between the pair), 2 = I/O ring
   side (daisy/ring), 3/4 = engineering, uplink, witness path.
 - **Decided 2026-09-16:** no hardware arbiter; redundancy is a software
   layer above the runtime. Quorum (five layers):
@@ -86,28 +86,28 @@ Autonomy: full.
   2. logical epochs for ordering and stale-state rejection (NTP for
      diagnostics; optional future CIP Sync / IEEE-1588; no TSN needed);
   3. fencing at the target — silence on BOTH channels only makes the
-     standby a PromotionCandidate; it must acquire Exclusive Owner on ALL
+     standby to RESERVE_CLAIMING; it must acquire Exclusive Owner on ALL
      required outputs before running the application
-     (CAN_EXECUTE_OUTPUTS = primary && owns_all_required_io); the I/O
+     (CAN_EXECUTE_OUTPUTS = duty && owns_all_required_io); the I/O
      target is the last fence;
   4. all-or-nothing ownership barrier — any failed acquisition releases
-     everything, PAIR_DESTROYED; partial ownership never means Primary
+     everything, REDUNDANCY_LOST; partial ownership never means duty
      (no functional split-brain);
-  5. requalification — after restart / pair loss / epoch discontinuity /
-     unclean shutdown a controller boots UNQUALIFIED and qualifies as
-     SECONDARY; zombie-Primary re-entry is forbidden.
-  Connection roles: Primary = Input Only (inputs) + Exclusive Owner
-  (outputs); Secondary = Input Only observer, never Listen Only (it
+  5. readiness re-establishment — after restart / pair loss / epoch discontinuity /
+     unclean shutdown a controller boots RESERVE_UNSYNCED and becomes ready
+     (RESERVE_READY); zombie-duty re-entry is forbidden.
+  Connection roles: duty = Input Only (inputs) + Exclusive Owner
+  (outputs); reserve = Input Only observer, never Listen Only (it
   depends on an existing owner). v1 scope: standard Exclusive Owner +
   Input Only; Rockwell-style Redundant Owner is a v2 reference. Failover
   is deterministic but not bumpless: T = detection + old-connection
   timeout + Forward_Open + validation + scan boundary.
 - **Still open:** failover timing/heartbeat thresholds and the detection
-  time budget across N adapters; qualification policy; crossload sizing;
+  time budget across N adapters; readiness policy; state replication sizing;
   epoch persistence in NV storage; verify target firmware allows multiple
-  concurrent Input Only originators; mid-chain break policy (Primary
-  continues with partial I/O, degraded — standby fencing fails, pair
-  destroyed).
+  concurrent Input Only originators; mid-chain break policy (duty
+  continues with partial I/O, degraded — standby fencing fails, redundancy
+  lost).
 
 Autonomy: design proposals are autonomous; implementation starts only after
 the decisions above.
