@@ -79,6 +79,20 @@ suite('encodeRequest', () => {
       '{"command":"acceptEdits","program":[]}',
     );
   });
+
+  test('encodeRequest_when_accept_edits_with_migration_then_carries_decisions', () => {
+    assert.strictEqual(
+      encodeRequest('acceptEdits', new Uint8Array([9]), { [1]: 'preserve', [2]: 'init' }),
+      '{"command":"acceptEdits","program":[9],"migration":{"1":"preserve","2":"init"}}',
+    );
+  });
+
+  test('encodeRequest_when_accept_edits_with_empty_migration_then_omits_the_map', () => {
+    assert.strictEqual(
+      encodeRequest('acceptEdits', new Uint8Array([9]), {}),
+      '{"command":"acceptEdits","program":[9]}',
+    );
+  });
 });
 
 suite('parseResponseLine', () => {
@@ -124,6 +138,37 @@ suite('parseResponseLine', () => {
       assert.strictEqual(response.error.vCode, null);
       assert.strictEqual(response.error.message, 'invalid command line: x');
     }
+  });
+
+  test('parseResponseLine_when_error_without_pairs_then_empty_list', () => {
+    const response = parseResponseLine('{"response":"error","vCode":"V4012","message":"no candidate is staged"}');
+
+    assert.strictEqual(response.kind, 'error');
+    if (response.kind === 'error') {
+      assert.deepStrictEqual(response.error.pairs, []);
+    }
+  });
+
+  test('parseResponseLine_when_v4010_then_pairs_parsed', () => {
+    const line = '{"response":"error","vCode":"V4010","message":"type change","pairs":['
+      + '{"uid":1,"name":"Counter","from":"I32","to":"U32","sizeEqual":true},'
+      + '{"uid":2,"name":null,"from":"I32","to":"STRING[4]","sizeEqual":false}]}';
+
+    const response = parseResponseLine(line);
+
+    assert.strictEqual(response.kind, 'error');
+    if (response.kind === 'error') {
+      assert.deepStrictEqual(response.error.pairs, [
+        { uid: 1, name: 'Counter', from: 'I32', to: 'U32', sizeEqual: true },
+        { uid: 2, name: null, from: 'I32', to: 'STRING[4]', sizeEqual: false },
+      ]);
+    }
+  });
+
+  test('parseResponseLine_when_pair_malformed_then_throws', () => {
+    const line = '{"response":"error","vCode":"V4010","message":"type change","pairs":[{"uid":1}]}';
+
+    assert.throws(() => parseResponseLine(line), HotEditProtocolError);
   });
 
   test('parseResponseLine_when_not_json_then_throws', () => {
@@ -221,6 +266,39 @@ suite('HotEditSession', () => {
     await request;
 
     assert.strictEqual(transport.sent[0], '{"command":"acceptEdits","program":[9,8]}');
+  });
+
+  test('acceptEdits_when_migration_then_sends_decision_map', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.acceptEdits(new Uint8Array([9, 8]), { [1]: 'init' });
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('{"response":"ack"}');
+
+    await request;
+
+    assert.strictEqual(
+      transport.sent[0],
+      '{"command":"acceptEdits","program":[9,8],"migration":{"1":"init"}}',
+    );
+  });
+
+  test('acceptEdits_when_v4010_then_error_carries_pairs', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.acceptEdits(new Uint8Array([9]));
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine(
+      '{"response":"error","vCode":"V4010","message":"type change",'
+      + '"pairs":[{"uid":1,"name":"Counter","from":"I32","to":"U32","sizeEqual":true}]}',
+    );
+
+    const err = await rejectWith(request);
+
+    assert.ok(err instanceof HotEditProtocolError);
+    assert.deepStrictEqual(err.pairs, [
+      { uid: 1, name: 'Counter', from: 'I32', to: 'U32', sizeEqual: true },
+    ]);
   });
 
   test('command_when_error_response_then_rejects_with_coded_error', async () => {

@@ -19,7 +19,14 @@ import {
   HotEditProtocolError,
   HotEditSession,
   HotEditTransport,
+  TypeChangePair,
 } from './hotEditSession';
+import {
+  acceptEditsWithDecisions,
+  formatMigrationWarning,
+  MigrationDecisionUi,
+  preservablePairs,
+} from './hotEditMigrationLogic';
 import {
   candidatesOf,
   describeMapping,
@@ -38,11 +45,12 @@ import {
  * `ironplcc refactor sync-uids` / `map-uid` commands (ADR-0053). The
  * sections are glue only — protocol framing and response matching live in
  * the unit-testable `hotEditSession` module, sync parsing and the
- * resolution flow live in the unit-testable `syncUidsLogic` module,
- * compilation reuses the debug adapter's compile path (`compileArgs` +
- * `containerOutputPath`), and program classification reuses
- * `programKind`/`isDebuggableProgram` so "a runnable file" means the same
- * thing everywhere in the extension.
+ * resolution flow live in the unit-testable `syncUidsLogic` module, the
+ * ADR-0061 migration decision planning lives in the unit-testable
+ * `hotEditMigrationLogic` module, compilation reuses the debug adapter's
+ * compile path (`compileArgs` + `containerOutputPath`), and program
+ * classification reuses `programKind`/`isDebuggableProgram` so "a runnable
+ * file" means the same thing everywhere in the extension.
  *
  * Like the run commands, this registers unconditionally so the commands exist
  * even without a compiler (they report a coded problem or warn when the
@@ -181,7 +189,7 @@ export function registerHotEditSupport(
         const compiled = await compileToContainer(compilerPath, editor.document.uri.fsPath);
         bytes = await readFile(compiled);
       }
-      await current.acceptEdits(bytes);
+      await acceptEditsWithDecisions(current, bytes, migrationUi);
       await refreshStatus();
     }
     catch (err) {
@@ -279,6 +287,39 @@ export function registerHotEditSupport(
         'Cancel',
       );
       return choice === 'Map';
+    },
+  };
+
+  /** UI callbacks for the migration decision flow; the flow logic itself is unit-testable. */
+  const migrationUi: MigrationDecisionUi = {
+    async choosePreserved(pairs: readonly TypeChangePair[]): Promise<readonly number[] | undefined> {
+      const preservable = preservablePairs(pairs);
+      let preserved: readonly number[] = [];
+      if (preservable.length > 0) {
+        const picked = await vscode.window.showQuickPick(
+          preservable.map(pair => ({
+            label: pair.name ?? `Variable ${pair.uid}`,
+            description: `${pair.from} -> ${pair.to}`,
+            detail: `uid ${pair.uid}: keep the raw bits; the value may no longer be valid`,
+            pair,
+          })),
+          {
+            title: 'IronPLC Hot Edit: variables whose type changed',
+            placeHolder: 'Checked variables preserve their storage bytes; unchecked variables are reinitialized (the default).',
+            canPickMany: true,
+          },
+        );
+        if (!picked) {
+          return undefined;
+        }
+        preserved = picked.map(item => item.pair.uid);
+      }
+      const choice = await vscode.window.showWarningMessage(
+        formatMigrationWarning(pairs.length, preserved.length),
+        { modal: true },
+        'Apply Migration',
+      );
+      return choice === 'Apply Migration' ? preserved : undefined;
     },
   };
 

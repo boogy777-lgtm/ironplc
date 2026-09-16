@@ -20,6 +20,15 @@ export type HotEditCommand
     | 'assembleEdits'
     | 'cancelEdits';
 
+/** One engineer decision for a shared-UID type change (ADR 0061). */
+export type MigrationDecision = 'init' | 'preserve';
+
+/**
+ * The `acceptEdits` wire `migration` map (ADR 0061): one decision per shared
+ * UID, keyed by the UID's string form, e.g. `{"1":"preserve"}`.
+ */
+export type MigrationDecisionMap = Record<string, MigrationDecision>;
+
 /** A snapshot of the host's hot-edit state (the `status` response payload). */
 export interface HotEditStatus {
   mode: string;
@@ -32,15 +41,34 @@ export interface HotEditStatus {
 }
 
 /**
+ * One out-of-policy storage-class change a V4010 error names (ADR 0061):
+ * what a client renders as a decision-list row.
+ */
+export interface TypeChangePair {
+  /** The entity's stable UID, the key of the decision map. */
+  uid: number;
+  /** The entity's debug name, when the candidate names it. */
+  name: string | null;
+  /** The active artifact's storage class (e.g. `"I32"`). */
+  from: string;
+  /** The candidate's storage class (e.g. `"U32"`). */
+  to: string;
+  /** Whether a `preserve` decision is legal for this pair (storage sizes equal). */
+  sizeEqual: boolean;
+}
+
+/**
  * Why a command failed: the stable V-code when the host supplied one
  * (`null` for transport-level codec errors), plus the host's own message.
  * The user-facing form is always `V#### - message`, or just the message
- * when there is no V-code.
+ * when there is no V-code. A V4010 refusal also carries the `pairs` list
+ * of type changes to decide (ADR 0061); every other error carries none.
  */
 export class HotEditProtocolError extends Error {
   constructor(
     readonly vCode: string | null,
     message: string,
+    readonly pairs: readonly TypeChangePair[] = [],
   ) {
     super(message);
     this.name = 'HotEditProtocolError';
@@ -51,10 +79,22 @@ export class HotEditProtocolError extends Error {
   }
 }
 
-/** Renders one command as a single line of JSON, without a trailing newline. */
-export function encodeRequest(command: HotEditCommand, program?: Uint8Array): string {
+/**
+ * Renders one command as a single line of JSON, without a trailing newline.
+ * The `acceptEdits` line carries the program bytes and, when non-empty, the
+ * ADR-0061 migration decision map.
+ */
+export function encodeRequest(
+  command: HotEditCommand,
+  program?: Uint8Array,
+  migration?: MigrationDecisionMap,
+): string {
   if (command === 'acceptEdits') {
-    return JSON.stringify({ command, program: Array.from(program ?? []) });
+    const request: Record<string, unknown> = { command, program: Array.from(program ?? []) };
+    if (migration && Object.keys(migration).length > 0) {
+      request.migration = migration;
+    }
+    return JSON.stringify(request);
   }
   return JSON.stringify({ command });
 }
@@ -94,9 +134,43 @@ export function parseResponseLine(line: string): HotEditResponse {
   if (record.response === 'error') {
     const vCode = typeof record.vCode === 'string' ? record.vCode : null;
     const message = typeof record.message === 'string' ? record.message : 'unknown error';
-    return { kind: 'error', error: new HotEditProtocolError(vCode, message) };
+    return { kind: 'error', error: new HotEditProtocolError(vCode, message, parsePairs(record.pairs)) };
   }
   throw new HotEditProtocolError(null, `invalid response line: ${line}`);
+}
+
+/**
+ * Builds the [`TypeChangePair`] list from a parsed error response's optional
+ * `pairs` field. Absent or null means "no details"; anything else must match
+ * the wire shape, so a malformed payload surfaces as a protocol error rather
+ * than a misread decision list.
+ */
+function parsePairs(value: unknown): TypeChangePair[] {
+  if (value === undefined || value === null) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throw new HotEditProtocolError(null, 'error response carries a malformed pairs list');
+  }
+  return value.map(parsePair);
+}
+
+/** Builds one [`TypeChangePair`] from a parsed `pairs` entry. */
+function parsePair(value: unknown): TypeChangePair {
+  if (typeof value !== 'object' || value === null) {
+    throw new HotEditProtocolError(null, 'error response carries a malformed pair');
+  }
+  const { uid, name, from, to, sizeEqual } = value as Record<string, unknown>;
+  if (
+    typeof uid !== 'number'
+    || (typeof name !== 'string' && name !== null && name !== undefined)
+    || typeof from !== 'string'
+    || typeof to !== 'string'
+    || typeof sizeEqual !== 'boolean'
+  ) {
+    throw new HotEditProtocolError(null, 'error response carries a malformed pair');
+  }
+  return { uid, name: name ?? null, from, to, sizeEqual };
 }
 
 /** Builds a [`HotEditStatus`] from a parsed `status` response object. */
@@ -202,9 +276,14 @@ export class HotEditSession {
     return response.status;
   }
 
-  /** Stages the compiled container `program` as the edit candidate. */
-  async acceptEdits(program: Uint8Array): Promise<void> {
-    await this.request('acceptEdits', program);
+  /**
+   * Stages the compiled container `program` as the edit candidate, resolving
+   * out-of-policy type changes with the engineer's `migration` decisions
+   * (ADR 0061). Without decisions the host refuses with V4010 and a `pairs`
+   * list on the thrown [`HotEditProtocolError`].
+   */
+  async acceptEdits(program: Uint8Array, migration?: MigrationDecisionMap): Promise<void> {
+    await this.request('acceptEdits', program, migration);
   }
 
   /** Activates the staged candidate at the next scan boundary. */
@@ -232,14 +311,18 @@ export class HotEditSession {
     this.rejectPending(new HotEditProtocolError(null, 'the hot edit session has ended.'));
   }
 
-  private async request(command: HotEditCommand, program?: Uint8Array): Promise<HotEditResponse> {
+  private async request(
+    command: HotEditCommand,
+    program?: Uint8Array,
+    migration?: MigrationDecisionMap,
+  ): Promise<HotEditResponse> {
     if (this.exited) {
       throw new HotEditProtocolError(null, 'the hot edit session has ended.');
     }
     const response = new Promise<HotEditResponse>((resolve, reject) => {
       this.pending.push({ resolve, reject });
     });
-    this.transport.sendLine(encodeRequest(command, program));
+    this.transport.sendLine(encodeRequest(command, program, migration));
     const result = await response;
     if (result.kind === 'error') {
       throw result.error;
