@@ -13,7 +13,7 @@ use std::vec::Vec;
 
 use ironplc_container::{
     Container, FbFieldUidEntry, FbTypeDescriptor, FbTypeId, FieldType, StableVarEntry, TypeSection,
-    UserFbDescriptor, VarEntry, VarIndex,
+    UserFbDescriptor, VarEntry, VarIndex, VAR_FLAG_IS_ARRAY,
 };
 
 use super::decision::{self, Decisions, TypeChangeChoice};
@@ -99,7 +99,12 @@ pub(super) fn plan_fb_instances(
                 // as before.
                 if base_field.flags != candidate_field.flags
                     || base_field.var_type == candidate_field.var_type
+                    || base_field.flags & VAR_FLAG_IS_ARRAY != 0
                 {
+                    // The per-field path copies one 8-byte slot per field, so
+                    // it cannot carry an array field (the slot holds the
+                    // region offset, not the elements): an array-field retype
+                    // fails closed until that path learns region copies.
                     return Err(MigrationError::IncompatibleEntry {
                         uid: field_uid,
                         reason: entry_difference(base_field, candidate_field),

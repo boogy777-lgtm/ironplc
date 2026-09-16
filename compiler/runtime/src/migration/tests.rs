@@ -518,6 +518,56 @@ fn build_when_fb_field_uid_unknown_and_layout_differs_then_fail_closed() {
     assert_eq!(result.unwrap_err(), MigrationError::FbLayoutUnsupported);
 }
 
+#[test]
+fn build_when_fb_array_field_retyped_then_incompatible_entry() {
+    // The per-field path copies one slot per field, and an array field's
+    // slot holds the region offset rather than the elements: a retyped
+    // array field cannot migrate through it, so the planner fails closed
+    // until array-field retype is supported.
+    let mut base_builder = ContainerBuilder::new();
+    base_builder.add_array_descriptor(FieldType::I32 as u8, 2, 0);
+    let base = base_builder
+        .add_user_fb_type(user_fb_at(0x1000, 1, 1))
+        .add_var_entry(fb_entry(0x1000))
+        .add_var_entry(array_entry(0))
+        .add_fb_field_uid(field_uid(0x1000, 0, 101))
+        .add_stable_var(StableVarEntry {
+            var_index: VarIndex::new(0),
+            uid: 7,
+        })
+        .num_variables(2)
+        .build();
+    let mut candidate_builder = ContainerBuilder::new();
+    candidate_builder.add_array_descriptor(FieldType::U32 as u8, 2, 0);
+    let candidate = candidate_builder
+        .add_user_fb_type(user_fb_at(0x1000, 1, 2))
+        .add_var_entry(fb_entry(0x1000))
+        .add_var_entry(VarEntry {
+            var_type: FieldType::U32,
+            flags: VAR_FLAG_IS_ARRAY,
+            extra: 0,
+        })
+        .add_var_entry(i32_entry())
+        .add_fb_field_uid(field_uid(0x1000, 0, 101))
+        .add_fb_field_uid(field_uid(0x1000, 1, 102))
+        .add_stable_var(StableVarEntry {
+            var_index: VarIndex::new(0),
+            uid: 7,
+        })
+        .num_variables(3)
+        .build();
+
+    let result = StateMigrationPlan::build(&base, &candidate);
+
+    assert_eq!(
+        result.unwrap_err(),
+        MigrationError::IncompatibleEntry {
+            uid: 101,
+            reason: "the variable type changed",
+        }
+    );
+}
+
 /// An FB type descriptor for `type_id` with `fields` I32 fields.
 fn fb_type(type_id: u16, fields: usize) -> FbTypeDescriptor {
     FbTypeDescriptor {

@@ -89,11 +89,14 @@ pub struct HotEditAcceptInput {
 ///
 /// [`MigrationDecisionSpec`] comes from the runtime crate and does not
 /// implement `JsonSchema`; this explicit object schema also keeps the field
-/// from rendering as a boolean schema, which some MCP clients reject.
+/// from rendering as a boolean schema, which some MCP clients reject. The
+/// `additionalProperties` enum names the two decision values so clients can
+/// discover them from the tool schema.
 pub fn migration_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
     schemars::json_schema!({
         "type": "object",
-        "description": "Engineer decisions for out-of-policy type changes (ADR 0061): stable variable UID -> \"init\" | \"preserve\"."
+        "description": "Engineer decisions for out-of-policy type changes (ADR 0061): stable variable UID -> \"init\" | \"preserve\".",
+        "additionalProperties": { "type": "string", "enum": ["init", "preserve"] }
     })
 }
 
@@ -762,6 +765,19 @@ END_PROGRAM
                 (7, MigrationDecisionSpec::Init),
                 (9, MigrationDecisionSpec::Preserve),
             ])
+        );
+    }
+
+    #[test]
+    fn migration_schema_when_rendered_then_decision_values_are_discoverable() {
+        let schema = migration_schema(&mut schemars::SchemaGenerator::default());
+
+        let value = serde_json::to_value(&schema).unwrap();
+
+        assert_eq!(value["type"], serde_json::json!("object"));
+        assert_eq!(
+            value["additionalProperties"]["enum"],
+            serde_json::json!(["init", "preserve"])
         );
     }
 
