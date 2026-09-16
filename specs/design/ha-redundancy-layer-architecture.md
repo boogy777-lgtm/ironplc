@@ -112,6 +112,57 @@ ironplc-redundancy → ironplc-runtime → ironplc-vm / ironplc-container
   Each layer keeps its own typed surface; `ironplcvm serve` and the MCP
   server compose both, staying thin.
 
+## Shell, Not Runtime +1
+
+Two planes are separate and must not be conflated:
+
+- **Code placement** — the n+1 verdict above: the redundancy layer is a
+  new crate, and `ironplc-runtime` stays redundancy-free.
+- **Process topology** — the redundancy crate is the **outer shell** of
+  the process: its composition root, not a layer inside the runtime
+  stack. When redundancy is enabled, the shell owns startup ordering and
+  drives the host; the host never drives the shell.
+
+The admission seam already exists. `RuntimeHost` never starts the
+application by itself: construction (`compiler/runtime/src/host.rs:108`)
+loads and initializes, but scans begin only when the owner calls `run`
+(`compiler/runtime/src/host.rs:289`). "Permission to start the
+application" is therefore the shell withholding `run()` until admission
+completes — no runtime change is needed for admission, and none is made.
+
+```text
+redundancy off (current behavior):
+
+  client ──► RuntimeHost ──► VM ──► application scans
+
+redundancy on:
+
+  RedundancyShell
+      │
+      ▼
+  admission:  neighbor discovery (ping/pong) + pair configuration
+      │
+      ▼
+  verdict: Standalone │ Primary │ Secondary
+      │
+      ▼
+  drives RuntimeHost:
+      Standalone / Primary  → run()
+      Secondary             → monitor mode: no run(); the sync pipeline
+                              applies replicated state until promotion
+```
+
+Process startup ordering is owned by the shell. Binaries — `ironplcvm
+serve` today, a controller daemon later — embed the shell only when
+redundancy is enabled (flag or configuration); otherwise they drive the
+host directly, which is exactly the current behavior. The composition
+decision lives at the binary's entry point, not inside either crate.
+
+This satisfies both owner constraints simultaneously: the runtime knows
+nothing about redundancy, and — when redundancy is enabled — the
+application cannot start without the shell's permission, because the only
+call that starts scans sits behind the shell's admission verdict.
+
 ## Module Decomposition
 
 `ironplc-redundancy` follows the workspace conventions: private modules,
