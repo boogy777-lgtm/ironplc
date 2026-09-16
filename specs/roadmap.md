@@ -124,6 +124,22 @@ Autonomy: full.
   concurrent Input Only originators; mid-chain break policy (primary
   continues with partial I/O, degraded — secondary fencing fails,
   redundancy lost).
+- **I/O firmware contract (AUDIT — decide with the I/O firmware spec):**
+  three profiles — GENERIC (Exclusive Owner + observer-if-available;
+  takeover via owner expiry + Forward_Open), REDUNDANT_OWNER (standard CIP
+  dual connections, COO/ROO-style), IRONPLC_HA_IO (own modules: dual
+  persistent connections, OwnerLease, Pending/Committed epoch +
+  epoch_floor, staged CLAIMED_DISARMED, explicit ARM, ownership barrier,
+  autonomous owner watchdog + safe-state policies
+  SAFE_VALUE/HOLD_LAST/RAMP_TO_SAFE, explicit owner state in T->O status,
+  per-module timing metrics EMA, PHY counters, PairId/ConfigHash binding,
+  1 Exclusive Owner + 3 Input Only connection capacity). Invariants to
+  audit: epoch is anti-stale not arbiter; OwnerLease minted only by HA
+  supervisor; partial new ownership => physically DISARMED; ownership
+  atomicity != simultaneous actuation (ARM_AT_TIME reserved); I/O safety
+  never depends on the reserve PLC; generic third-party I/O yields weaker
+  guarantees that Studio must surface. Evaluate rack-level ownership domain
+  (one guard per remote rack) vs per-module.
 
 Autonomy: design proposals are autonomous; implementation starts only after
 the decisions above.
