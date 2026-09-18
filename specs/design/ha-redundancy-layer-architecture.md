@@ -246,6 +246,55 @@ is `VmBuffers`; addressing is the container's stable UID tables;
 engineering transport is the line-codec pattern; generations are the
 existing newtypes.
 
+## Protocol Portability
+
+Can the protocol stack be swapped (EtherNet/IP, EtherCAT, MRP) without
+reopening the architecture? Yes for everything the redundancy layer owns;
+the one genuinely protocol-bound concern is the fencing authority, and it
+binds behind a declared seam rather than leaking into the layer.
+
+**Protocol-independent — unchanged by a swap:** the pair-link application
+protocol (ping/pong exchange, claim and ARM messages, sequences and the
++1000 penalty), epoch handling, state replication over `VmBuffers`, the
+timing/calibration model and its EMA terms, and the engineering UI
+surface. The statechart, the case table, and the readiness gates never
+name a transport.
+
+**Protocol-bound — a per-protocol binding behind the same interface:**
+the fencing authority, i.e. the target-enforced ownership that makes the
+OWNERSHIP_BARRIER real instead of aspirational.
+
+- *EtherNet/IP:* the v1 realization is Exclusive Owner for outputs plus
+  an independent Input Only observer — ownership enforced by the target's
+  connection admission.
+- *EtherCAT:* there is no per-slave ownership by design (a single master
+  owns the process image), so the fencing equivalent must bind elsewhere —
+  master exclusivity and hot-connect behavior — or the guarantee level
+  degrades, and the capability descriptor records that.
+- *MRP:* not an I/O protocol at all — it is L2 ring media redundancy
+  (IEC 62439-2), complementary to ownership fencing, not a replacement
+  for it. It changes the media path the channels traverse, not who may
+  command outputs.
+
+**The seam.** Two interfaces, no more: the transport interface (already
+declared as `NicPort`) and the fencing-client interface, each selected per
+protocol by a binding. A capability descriptor travels with the binding
+and records the guarantee level — minimal fields: ownership mode
+(single-exclusive / redundant-preconnected), observer capability
+(independent Input Only / Listen Only / none), staged claim support,
+explicit ARM support, epoch support, and explicit owner status in the
+cyclic input. The roadmap's I/O firmware contract audit is the natural
+place to extend that descriptor; this design adds no other abstraction,
+because a swap requirement is exactly what justifies a seam and nothing
+more.
+
+**Consequence.** Switching protocols never reopens the FSM. It changes
+the binding and the guarantee level, and the engineering UI must surface
+the difference (the audit list already requires per-module profiles and
+the limiting-device view). A pair may even mix bindings — a preconnected
+module beside a generic one — and the barrier and timing math already
+treat each module's contribution separately.
+
 ## Minimal Seams in ironplc-runtime
 
 The supervisor drives the existing host API; exactly four small
