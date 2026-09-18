@@ -295,6 +295,29 @@ the limiting-device view). A pair may even mix bindings — a preconnected
 module beside a generic one — and the barrier and timing math already
 treat each module's contribution separately.
 
+**Portability is unproven until a second binding exists.** Interfaces
+designed from a single implementation leak: whatever only one binding
+exercises silently becomes "the interface". The mitigation is to build
+the first binding (EtherNet/IP) behind the two seams and ship a
+**simulator binding from the start** — a loopback transport plus
+capability stubs that exercise staged claim, ARM, epoch checks, and
+observer semantics without hardware. The simulator is what makes the
+seams real: it gives the FSM, admission, crossload, and the engineering
+UI CI coverage before any field device is attached, and it turns a
+protocol swap into a binding addition rather than an archaeology
+exercise.
+
+**Cost model of a protocol change.** Unchanged: FSM, epochs, crossload,
+calibration, and the engineering UI surface. Per-protocol work, and only
+this: the fencing/ownership binding, the transport implementation, a
+conformance suite per binding (reusing the existing spec-conformance
+pattern so each binding is held to the same interface contract), and
+protocol-specific V-codes — the last is mechanical through the CSV
+codegen convention. The honest estimate is **weeks of binding work, not
+days**: guarantee levels differ per protocol (see EtherCAT above), so
+each binding's fencing claims must be re-verified rather than assumed
+from the first one.
+
 ## Minimal Seams in ironplc-runtime
 
 The supervisor drives the existing host API; exactly four small
@@ -393,8 +416,11 @@ readiness doc's sequence; design steps precede crate work):
    `ironplc-runtime`; the callback gates OwnerLease minting.
 4. **`admission` + `crossload` + the SYNC chart** — a Secondary that
    syncs to SYNC_READY in monitor mode.
-5. **`fencing` + the CONTROL chart** — the OWNERSHIP_BARRIER and
-   REDUNDANCY_LOST.
+5. **`fencing` + the CONTROL chart + the simulator binding** — the
+   OWNERSHIP_BARRIER and REDUNDANCY_LOST, proven against the loopback
+   binding first. The simulator is a first-class early deliverable, not
+   an afterthought: it is what proves the two seams before the
+   EtherNet/IP binding arrives.
 6. **Calibration pipeline completion** — link profile, budget validation,
    degradation alarms feeding `IO_READY` / `TakeoverReady`.
 7. **Engineering surface** — the redundancy command vocabulary, CSV
