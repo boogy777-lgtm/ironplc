@@ -5,7 +5,9 @@
 //! path as `run` (see [`crate::cli::load_container`]), then answers one line
 //! of JSON per line of stdin until EOF. Stdout is the protocol channel:
 //! startup prints nothing, every response line is flushed as written, and
-//! anything diagnostic goes to stderr through the logger.
+//! anything diagnostic goes to stderr through the logger. The TCP transport
+//! of the engineering connection (ADR-0063) is the same session loop over a
+//! length-prefixed frame — see [`crate::tcp`].
 //!
 //! The FSM-advancing commands (`testEdits`, `untestEdits`, `assembleEdits`)
 //! only *request* a swap; the host applies it at the next scan boundary
@@ -30,11 +32,25 @@ use std::path::Path;
 
 use ironplc_container::Container;
 use ironplc_runtime::{
-    execute, parse_command, render_response, Command, Response, RuntimeError, RuntimeHost,
+    execute, parse_command, render_response, Command, DeviceIdentity, Response, RuntimeError,
+    RuntimeHost,
 };
 
 use crate::error::{self, VmError};
 use crate::slot_store::SlotStore;
+
+/// The device panel `vm-cli` answers the `identity` handshake with
+/// (ADR-0063): the served process is a soft device, so it reports its binary
+/// name and its own version — the one composition point for the
+/// application-supplied block the runtime host does not own.
+pub(crate) fn device_identity() -> DeviceIdentity {
+    DeviceIdentity {
+        name: "ironplcvm".into(),
+        model: "IronPLC SoftPLC".into(),
+        modification: "vm-cli".into(),
+        firmware_version: env!("CARGO_PKG_VERSION").to_string(),
+    }
+}
 
 /// Boots the committed artifact from the A/B slot store beside `path`
 /// (seeding the store from the file on first serve), starts it on the
@@ -46,7 +62,15 @@ pub fn serve(path: &Path) -> Result<(), VmError> {
 
     let stdin = io::stdin();
     let stdout = io::stdout();
-    serve_session(&mut host, stdin.lock(), stdout.lock(), Some(&mut store)).map_err(|err| {
+    let device = device_identity();
+    serve_session(
+        &mut host,
+        stdin.lock(),
+        stdout.lock(),
+        Some(&mut store),
+        &device,
+    )
+    .map_err(|err| {
         VmError::io(
             error::SESSION_IO,
             format!("unable to read or write the command session: {err}"),
@@ -56,7 +80,7 @@ pub fn serve(path: &Path) -> Result<(), VmError> {
 
 /// Creates the runtime host for `container`, mapping init traps to the trap's
 /// V-code exactly like `run` does.
-fn start_host(container: Container) -> Result<RuntimeHost, VmError> {
+pub(crate) fn start_host(container: Container) -> Result<RuntimeHost, VmError> {
     RuntimeHost::new(container).map_err(|err| match err {
         RuntimeError::Trap(context) => {
             VmError::from_trap(&context.trap, context.task_id, context.instance_id)
@@ -77,6 +101,9 @@ fn start_host(container: Container) -> Result<RuntimeHost, VmError> {
 /// `assembleEdits` with a composed `store` also persists the committed wire
 /// bytes before the response line is written (see [`persist_commit`]); a
 /// `None` store serves the honestly RAM-only session (no persistence).
+/// `device` is the application-composed device panel every command mapping
+/// carries (ADR-0063): it answers the `identity` handshake, the first command
+/// on every transport.
 ///
 /// Returns when the reader reaches EOF, or with the first I/O failure.
 pub fn serve_session(
@@ -84,6 +111,7 @@ pub fn serve_session(
     reader: impl BufRead,
     mut writer: impl Write,
     mut store: Option<&mut SlotStore>,
+    device: &DeviceIdentity,
 ) -> io::Result<()> {
     for line in reader.lines() {
         let line = line?;
@@ -91,7 +119,7 @@ pub fn serve_session(
             Ok(command) => {
                 let commits = matches!(command, Command::AssembleEdits);
                 let advances = advances_state(&command);
-                let response = execute(command, host);
+                let response = execute(command, host, device);
                 if advances && matches!(response, Response::Ack) {
                     if let Some(err) = drive_scan_round(host) {
                         log::error!("driven scan round trapped: {err}");
@@ -348,6 +376,7 @@ END_PROGRAM
             io::Cursor::new(input.into_bytes()),
             &mut output,
             store,
+            &device_identity(),
         )
         .unwrap();
         let text = String::from_utf8(output).unwrap();
@@ -402,6 +431,39 @@ END_PROGRAM
         assert_eq!(responses[5]["application"], 2);
         assert_eq!(responses[5]["candidate"], serde_json::Value::Null);
         assert_eq!(responses[5]["rounds"], 2);
+    }
+
+    /// The `identity` handshake (ADR-0063) answers over the stdio session too:
+    /// the device block is the `vm-cli` composition, the application block is
+    /// the same status payload `getStatus` answers with, and no redundancy
+    /// block means standalone.
+    #[test]
+    fn serve_session_when_identity_then_device_panel_and_status_snapshot() {
+        let mut host = counter_host();
+
+        let responses = run_session(
+            &mut host,
+            &[r#"{"command":"identity"}"#, r#"{"command":"getStatus"}"#],
+        );
+
+        assert_eq!(responses.len(), 2);
+        assert_eq!(responses[0]["response"], "identity");
+        assert_eq!(responses[0]["protocol"], 1);
+        assert_eq!(responses[0]["device"]["name"], "ironplcvm");
+        assert_eq!(responses[0]["device"]["model"], "IronPLC SoftPLC");
+        assert_eq!(responses[0]["device"]["modification"], "vm-cli");
+        // The firmware version is the binary's own crate version — the one
+        // composition point for the device panel (ADR-0063).
+        assert_eq!(
+            responses[0]["device"]["firmwareVersion"],
+            env!("CARGO_PKG_VERSION")
+        );
+        // The application block is the StatusPayload vocabulary verbatim —
+        // the same fields getStatus answers with, minus the response tag.
+        let mut status = responses[1].clone();
+        status.as_object_mut().unwrap().remove("response");
+        assert_eq!(responses[0]["application"], status);
+        assert!(responses[0].get("redundancy").is_none());
     }
 
     /// REQ-VC-vm-cli-023: a trap in a driven round does not change the
@@ -612,14 +674,15 @@ END_PROGRAM
     #[test]
     fn drive_scan_round_when_round_traps_then_trap_v_code() {
         let mut host = counter_host();
+        let device = device_identity();
         let accept = parse_command(
             &serde_json::json!({"command": "acceptEdits", "program": trapping_container_bytes()})
                 .to_string(),
         )
         .unwrap();
-        assert!(matches!(execute(accept, &mut host), Response::Ack));
+        assert!(matches!(execute(accept, &mut host, &device), Response::Ack));
         assert!(matches!(
-            execute(Command::TestEdits, &mut host),
+            execute(Command::TestEdits, &mut host, &device),
             Response::Ack
         ));
 
@@ -657,7 +720,14 @@ END_PROGRAM
         let mut host = counter_host();
         let mut output = Vec::new();
 
-        serve_session(&mut host, io::Cursor::new(Vec::new()), &mut output, None).unwrap();
+        serve_session(
+            &mut host,
+            io::Cursor::new(Vec::new()),
+            &mut output,
+            None,
+            &device_identity(),
+        )
+        .unwrap();
 
         assert!(output.is_empty());
     }
@@ -687,7 +757,14 @@ END_PROGRAM
         let mut host = counter_host();
         let mut output = Vec::new();
 
-        let err = serve_session(&mut host, FailingReader, &mut output, None).unwrap_err();
+        let err = serve_session(
+            &mut host,
+            FailingReader,
+            &mut output,
+            None,
+            &device_identity(),
+        )
+        .unwrap_err();
 
         assert_eq!(err.kind(), io::ErrorKind::Other);
         assert!(output.is_empty());
@@ -718,6 +795,7 @@ END_PROGRAM
             io::Cursor::new(b"{\"command\":\"getStatus\"}\n".to_vec()),
             FailingWriter,
             None,
+            &device_identity(),
         )
         .unwrap_err();
 

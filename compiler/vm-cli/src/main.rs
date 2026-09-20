@@ -1,3 +1,4 @@
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -8,6 +9,7 @@ mod error;
 mod logger;
 mod serve;
 mod slot_store;
+mod tcp;
 
 #[cfg(test)]
 mod spec_requirements {
@@ -76,6 +78,12 @@ enum Action {
     Serve {
         /// Path to the bytecode container file (.iplc).
         file: PathBuf,
+
+        /// Listen on the given TCP address (host:port) instead of stdin/stdout:
+        /// the same session protocol, one 4-byte little-endian length-prefixed
+        /// frame per message, one engineering session at a time.
+        #[arg(long, value_name = "ADDR")]
+        listen: Option<SocketAddr>,
     },
 }
 
@@ -97,7 +105,10 @@ pub fn main() -> ExitCode {
             println!("ironplcvm version {VERSION}");
             Ok(())
         }
-        Action::Serve { file } => serve::serve(&file),
+        Action::Serve { file, listen } => match listen {
+            Some(addr) => tcp::serve_tcp(&file, addr),
+            None => serve::serve(&file),
+        },
     });
 
     match result {

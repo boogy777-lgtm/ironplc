@@ -11,3 +11,5 @@ V6009,LaunchNoDebugInfo,Container was compiled without debug information
 V6010,LaunchMultiInstance,Container declares multiple program instances
 V6011,SessionIo,Unable to read or write the command session
 V6012,SlotCommitPersist,Unable to persist the assembled commit to the slot store
+V6013,SessionFraming,A received frame is malformed
+V6014,SessionRefused,The device already serves one engineering session
