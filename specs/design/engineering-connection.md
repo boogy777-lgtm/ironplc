@@ -34,6 +34,9 @@ This spec builds on:
 - **[ADR-0063](../adrs/0063-engineering-connection-transport.md)**: the
   binding decisions — dual transport with one protocol, deferred wire
   authentication, build as reuse
+- **[ADR-0064](../adrs/0064-online-change-on-a-redundant-pair.md)**: the
+  Rockwell-adapted session lifecycle — assemble requires Test, Build &
+  Commit is the finalize-equivalent, and the redundant-pair pipeline
 - **[vm-cli.md](vm-cli.md)**: the `ironplcvm serve` session requirements
   (REQ-VC-vm-cli-018 through REQ-VC-vm-cli-023)
 - **[HA Redundancy FSM](ha-redundancy-fsm.md)**: the epoch and SYNC/CONTROL
@@ -376,24 +379,31 @@ The same compile feeds two build modes:
   `load_container` call (`compiler/vm-cli/src/serve.rs:31-33`), and CI
   consumes the same output. Hot edit does not participate.
 - **Online build.** The same compiled bytes delivered over the session:
-  `acceptEdits` (staging, load-verify, `layout_hash` comparison) then
-  `testEdits` (trial) or `assembleEdits` (promote) — the online build is
-  the hot-edit FSM flow, so no separate deploy command set exists. An
-  initial deploy onto an empty device is the same sequence, as the
-  wiring below notes.
+  `acceptEdits` (staging, load-verify, `layout_hash` comparison), then
+  `testEdits` (the candidate runs at a scan boundary), then
+  `assembleEdits` (promote) — assemble requires the candidate to have run
+  under Test (ADR-0064). The online build is the hot-edit FSM flow, so no
+  separate deploy command set exists. An initial deploy onto an empty
+  device is the same accept → test → assemble sequence — the test at the
+  barrier is trivial for empty state — as the wiring below notes.
 
 The only difference between the modes is the delivery envelope: compile
 and the container bytes are identical (DRY).
 
 ### Trial-run (testEdits) in the build pipeline
 
-The online build has two commit policies over the same upload:
+The online build has two commit policies over the same upload
+(ADR-0064):
 
-- **Build & Commit** — `acceptEdits`, then `assembleEdits` to promote.
-- **Build & Trial** — `acceptEdits`, then `testEdits` to run the
-  candidate and observe it, then resolve it with `assembleEdits`
+- **Build & Commit** — the finalize-equivalent: one action executing
+  `acceptEdits` → `testEdits` → `assembleEdits` automatically; Test is
+  never skipped. Intended for non-safety changes.
+- **Build & Trial** — the full manual sequence with verification
+  checkpoints between the steps: `acceptEdits`, then `testEdits` to run
+  the candidate and observe it, then resolve it with `assembleEdits`
   (promote), `untestEdits` (revert to the normal artifact), or
-  `cancelEdits` (discard while the normal artifact runs).
+  `cancelEdits` (discard while the normal artifact runs). Safety-critical
+  changes use this manual sequence.
 
 Zero new commands: these are exactly the hot-edit FSM commands — `test`,
 `untest`, `assemble`, `cancel` (`compiler/runtime/src/host.rs:188`,
@@ -418,10 +428,16 @@ The design adds only the wiring and the reporting:
 1. **Build button → existing commands.** With the profile in Connected,
    Build runs: compile locally (the shared helper), send the bytes with
    `acceptEdits` (with the ADR-0061 migration decisions when the host
-   answers V4010), then `assembleEdits` to promote — or `testEdits` when
-   the engineer chose trial-run. A full initial deploy onto an empty
-   device is the same `acceptEdits` → `assembleEdits` sequence; the
-   host's staging path makes no distinction that would need new commands.
+   answers V4010), then `testEdits` and `assembleEdits` to promote — as
+   one finalize-equivalent action for Build & Commit, or with
+   verification checkpoints between the steps when the engineer chose
+   trial-run. Assemble requires the candidate to have executed under
+   Test; a host that is asked to assemble from Accepted refuses with the
+   runtime CSV's assemble-without-test code (ADR-0064). A full initial
+   deploy onto an empty device is the same `acceptEdits` → `testEdits` →
+   `assembleEdits` sequence; the host's staging path makes no distinction
+   that would need new commands, and the test at the barrier is trivial
+   for empty state.
 2. **Build status on the device panel.** The panel derives its phases
    from the client's own position in the sequence — compiling (local
    compile running) → uploading (awaiting the `acceptEdits` response) →

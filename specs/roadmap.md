@@ -119,6 +119,16 @@ Autonomy: full.
   cases (commanded swap, proven Primary death per layer 3); a revived
   ex-Primary never re-enters as Primary. Details:
   [HA Redundancy FSM](design/ha-redundancy-fsm.md).
+- **Decided 2026-09-20 (owner):** online change on a redundant pair —
+  design done; implementation pending. Rockwell-adapted session lifecycle
+  (Pending Local → Accept → Test → Untest/Cancel/Assemble), assemble
+  tightened to require the candidate ran under Test (a new
+  assemble-without-test V-code at implementation time, superseding the
+  initial-deploy shortcut), Build & Commit as the finalize-equivalent
+  (accept → test → assemble automatically), and the pair pipeline
+  (staged delivery to both units, takeover during Testing executes the
+  candidate, assemble as one transaction over the HA epoch). Details:
+  [ADR-0064](../adrs/0064-online-change-on-a-redundant-pair.md).
 - **Still open:** failover timing/ping-pong confirmation thresholds and the detection
   time budget across N adapters; readiness policy; state replication sizing;
   epoch persistence in NV storage; verify target firmware allows multiple

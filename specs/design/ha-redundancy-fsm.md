@@ -422,10 +422,20 @@ statechart is parameterized over them and none are decided here:
   Only originators
 - Mid-chain break policy: the ACTIVE unit continues degraded with partial
   I/O; peer fencing then fails and redundancy is lost
-- Online change on a coupled pair (open decision): trial semantics are
-  undefined — either Build & Trial is standalone-only, or an online build
-  on a pair always goes through the redundancy layer (apply on ACTIVE,
-  crossload, assemble on both, pair stays SYNC). Nothing is decided here.
+- Online change on a coupled pair — decided in
+  [ADR-0064](../adrs/0064-online-change-on-a-redundant-pair.md): an online
+  build on a pair goes through the redundancy layer — session verifies
+  PRIMARY/SECONDARY/SYNC and one application generation; Accept stages the
+  candidate on PRIMARY and delivers the same candidate generation to
+  SECONDARY (both exec = Original, pair STAGED/SYNC; a SECONDARY that
+  cannot accept makes the session not redundancy-ready, with an alarm);
+  Test switches PRIMARY's execution selector at a safe barrier while
+  SECONDARY keeps replicating; takeover during Testing executes the
+  CANDIDATE; Untest switches back at a barrier (candidate kept); Cancel
+  drops the candidate on both from exec = Original; Assemble is one
+  transaction across the pair over the HA epoch; session close confirms
+  identical canonical generation and schema version. Implementation is
+  pending (assemble tightening + V-code + the pair pipeline).
 
 ## Out of Scope
 
