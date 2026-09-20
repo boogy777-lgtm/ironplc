@@ -127,8 +127,18 @@ Autonomy: full.
   initial-deploy shortcut), Build & Commit as the finalize-equivalent
   (accept → test → assemble automatically), and the pair pipeline
   (staged delivery to both units, takeover during Testing executes the
-  candidate, assemble as one transaction over the HA epoch). Details:
-  [ADR-0064](../adrs/0064-online-change-on-a-redundant-pair.md).
+   candidate, assemble as one transaction over the HA epoch). Details:
+   [ADR-0064](../adrs/0064-online-change-on-a-redundant-pair.md).
+- **Decided 2026-09-20 (owner), ADR-0064 amendment:** assemble
+  persists to flash via A/B slots — flash slot A = active artifact,
+  slot B = the committed candidate's wire bytes, RAM = the hot-edit
+  workspace; flash is written only at Assemble (temp + fsync →
+  load_verify → rename into the inactive slot → flip the marker), boot
+  adopts the active slot and heals crash windows, and an unassembled
+  (staged/Testing) candidate stays RAM-only and dies on reboot.
+  Accepted implementation item (size S), not debt; both units of the
+  pair persist identical bytes at Assemble. Details:
+  [ADR-0064 Amendment](../adrs/0064-online-change-on-a-redundant-pair.md).
 - **Still open:** failover timing/ping-pong confirmation thresholds and the detection
   time budget across N adapters; readiness policy; state replication sizing;
   epoch persistence in NV storage; verify target firmware allows multiple
@@ -205,7 +215,11 @@ Autonomy: design done autonomously; implementation follows owner review.
   `Option<PendingEditRecord>` field on the runtime host, no persistence
   port or file backend — size S, still Phase 6. The reboot-diagnostics
   case (naming the edit a reboot killed) is consciously dropped; after a
-  reboot the device honestly reports no pending record.
+  reboot the device honestly reports no pending record. (Candidate
+  *bytes* are separate and NOT this debt: they persist only via the
+  assemble commit — flash A/B slots per the
+  [ADR-0064 amendment](adrs/0064-online-change-on-a-redundant-pair.md),
+  same date — which is an accepted Phase 5 implementation item above.)
 - **PLCopen XML / project-file storage of stable variable IDs.** The
   `project` crate already reads PLCopen XML, so it is a candidate for
   carrying UIDs; changing that format is a larger, user-visible commitment.

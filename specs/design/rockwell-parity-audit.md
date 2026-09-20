@@ -376,10 +376,14 @@ posture every existing refusal (V4007–V4016, E0015) already implements.
 > gap: the L1 sketch's `EditTxnId` is deliberately not built — the
 > existing candidate generation plus `acceptedAt` already identifies the
 > record, and a second transaction identity would be a second naming
-> authority. Storage is **RAM-only** by owner decision (2026-09-20): the
-> record is a plain `Option<PendingEditRecord>` field on `RuntimeHost` —
-> no store port, no file backend — and the reboot-diagnostics case is
-> consciously dropped (motivation case 1 below).
+> authority. Record storage is **RAM-only** by owner decision
+> (2026-09-20): the record is a plain `Option<PendingEditRecord>` field
+> on `RuntimeHost` — no store port, no file backend — and the
+> reboot-diagnostics case is consciously dropped (motivation case 1
+> below). This names the pending *record* only: the candidate's *bytes*
+> persist via the assemble commit (flash A/B slots per the ADR-0064
+> amendment, same date), which is accepted implementation work, not
+> this debt.
 
 ### 1. Motivation
 
@@ -391,14 +395,15 @@ first dropped by the RAM-only storage decision:
    (Accepted or Testing) candidate lives in host memory
    (`compiler/runtime/src/host.rs:90`), and a device reboot silently
    discards it; the stale-baseline check (E0015) only helps a client
-   that captured a baseline — it cannot tell a reconnecting tool whether
-   the candidate was assembled, cancelled, or lost in the reboot, and a
-   migration candidate under Test leaves no trace at all. The RAM-only
-   storage decision drops this case: the record does not survive reboot,
-   so after one the device honestly reports *no* pending record, and the
-   E0015 limitation — it cannot distinguish "assembled then rebooted"
-   from "lost then rebooted" — is accepted. Cases 2 and 3 remain the
-   motivation.
+   that captured a baseline, and a migration candidate under Test
+   leaves no trace at all. (The ADR-0064 amendment, same date, closes
+   the candidate-level ambiguity — a reboot after assemble boots the
+   committed artifact from flash, so "assembled" vs "lost" is
+   recoverable from the active baseline; the in-flight unassembled
+   candidate still dies.) The RAM-only record-storage decision drops
+   this case: the record does not survive reboot, so after one the
+   device honestly reports *no* pending record, and that residual gap
+   is accepted. Cases 2 and 3 remain the motivation.
 2. **Device panel and tooling read a named pending state.** `getStatus`
    carries generation counters and the migration flag only
    (`compiler/runtime/src/commands.rs:136-152`). The record lets the
@@ -439,11 +444,16 @@ a pending-edit metadata record, in RAM for the edit's lifetime.**
 
 **Non-scope (explicit):**
 
-- **No edit storage.** The candidate container is not persisted, and
-  neither is the record: a plain `Option<PendingEditRecord>` field on
+- **No edit storage beyond the assemble commit.** The pending *record*
+  is not persisted: a plain `Option<PendingEditRecord>` field on
   `RuntimeHost`, no store port, no file backend, no composition choice.
-  The workstation-side PENDING_LOCAL shadow buffer remains the only
-  pre-Accept store (online-editing-ux.md, Editing Modes).
+  The candidate's *bytes*, by contrast, persist only via the assemble
+  commit — flash A/B slots per the
+  [ADR-0064 amendment](../adrs/0064-online-change-on-a-redundant-pair.md)
+  (2026-09-20): an unassembled (staged/Testing) candidate stays RAM-only
+  and dies on reboot. The workstation-side PENDING_LOCAL shadow buffer
+  remains the only pre-Accept store (online-editing-ux.md, Editing
+  Modes).
 - **No visibility to other sessions.** One engineering session; reading
   the record requires the session, which only one client can hold
   (ADR-0065 decision 2). No observer fields, no push channel, no polling
@@ -498,12 +508,15 @@ record earlier would front-load a status block with no consumer.
 
 ### 5. Decision points still open
 
-1. **Reboot semantics.** Resolved by the RAM-only storage decision
-   (owner, 2026-09-20): neither tombstone nor candidate persistence.
-   Candidate persistence is edit storage — the declared non-scope — and
-   a tombstone is persistence too; with the record in RAM only, the
-   reboot-diagnostics case is dropped and the E0015 limitation accepted
-   (motivation case 1).
+1. **Reboot semantics.** Resolved by the RAM-only record-storage
+   decision (owner, 2026-09-20): neither tombstone nor a persisted
+   pending *record* — a tombstone is persistence too. Candidate *byte*
+   persistence is a separate question, decided the same day by the
+   [ADR-0064 amendment](../adrs/0064-online-change-on-a-redundant-pair.md):
+   the bytes persist only at the assemble commit (flash A/B slots),
+   while an unassembled candidate stays RAM-only. With the record in
+   RAM only, the reboot-diagnostics case is dropped and the E0015
+   limitation accepted (motivation case 1).
 2. **The `origin` field.** Include as optional unauthenticated advisory
    text (recommended; empty by default, documented as not identity) vs
    omit it. Inclusion costs one optional field and serves reconnect
@@ -518,7 +531,10 @@ record earlier would front-load a status block with no consumer.
    alternatives are moot either way: a host-owned port with a vm-cli
    file backend makes persistence a composition choice, and
    shell-managed file I/O around `execute` duplicates the record's
-   lifecycle at a second owner — convention, not mechanism.
+   lifecycle at a second owner — convention, not mechanism. (Candidate
+   *bytes* took the store-port path separately, per the ADR-0064
+   amendment: host owns when, vm-cli composes the A/B `SlotStore`. That
+   decision covers the committed artifact, not this record.)
 
 ### 6. Effort and recommendation
 

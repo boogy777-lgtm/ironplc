@@ -108,6 +108,9 @@ pipeline that keeps the four operations separate.**
    Original; drops the candidate on both. (h) Assemble is one transaction
    across the pair: both sides agree the candidate is canonical (reusing
    the HA epoch); neither side may hold a different canonical generation.
+   Per the Amendment below (2026-09-20), assemble is also the single
+   commit point that persists the canonical artifact to flash on each
+   unit.
    (i) Session close: both confirm identical canonical generation and
    schema version; the pair returns to synchronized redundancy.
 
@@ -115,6 +118,10 @@ pipeline that keeps the four operations separate.**
 
 * Good, because assemble can no longer promote code that never ran: every
   online commit is code that executed under Test, standalone or on a pair.
+* Good, because the committed artifact survives a reboot: assemble is the
+  only flash write, after all checks, so what boots is always the last
+  verified commit — while an unassembled (staged/Testing) candidate stays
+  RAM-only and honestly dies on reboot (see the Amendment below).
 * Good, because the host model needs no restructuring — the tightening is
   one guard on `assemble`, and the pair pipeline reuses the existing
   commands and the HA epoch rather than adding a fused FSM.
@@ -127,6 +134,56 @@ pipeline that keeps the four operations separate.**
 * Bad, because an initial deploy onto an empty device gains a (trivial)
   test step, and the finalize-equivalent is unsuitable for safety-critical
   changes, which must keep the manual checkpoints.
+
+## Amendment — Assemble persists to flash via A/B slots (2026-09-20)
+
+Owner-confirmed 2026-09-20. The decision above left persistence
+unspecified: `assemble` promoted the candidate in RAM
+(`compiler/runtime/src/host.rs:227-246`), and `serve`/`run` loaded the
+container file once at startup (`compiler/vm-cli/src/serve.rs:31-33`),
+so a reboot always returned to whatever file was on disk. This
+amendment decides that **the commit persists to flash**: assemble is
+the single commit point, and the committed artifact survives reboot.
+Commit persistence is an accepted implementation item (Size S), not
+deferred debt.
+
+1. **Three memory areas.** Flash slot A = active artifact (last known
+   good, "what is on disk now"); flash slot B = the packed candidate;
+   RAM = the hot-edit workspace (`RuntimeHost`: normal + candidate +
+   buffers). Slot B contents are exactly the candidate's wire bytes
+   from `acceptEdits` — a serialized container blob, hole-free by
+   construction; the host keeps the wire bytes alongside the parsed
+   `Container` (no re-serialization, no patching).
+2. **Flash is written only at Assemble** — the single commit point,
+   after all checks (stage validation + mandatory Test per this ADR).
+   Test/Untest/Cancel never touch flash. Sequence: write temp file +
+   fsync → verify with the existing load-time verifier
+   (`compiler/container/src/load_verify.rs`) → rename temp into the
+   INACTIVE slot → flip the marker (`app.active`; temp + rename).
+   Honestly noted: `std::fs::rename` does not overwrite on Windows,
+   hence write-to-free-inactive-slot + marker. The previous active
+   slot is kept as rollback anchor.
+3. **Boot-time adoption.** `serve`/`run` boot reads the marker and
+   loads the active slot. Crash windows are healed by adoption: a
+   fully-written, verified inactive slot/temp found at boot is adopted
+   as active — there is never a moment where both slots are invalid,
+   because bytes are only ever written to temp and verified before any
+   rename.
+4. **Authority split (mechanism, not convention).** The host owns WHEN
+   — the commit happens only in `assemble`, and the host exposes the
+   committed wire bytes (e.g. `take_committed_wire`), the same seam
+   style as the scan-commit callback. The shell owns HOW — vm-cli
+   composes an A/B `SlotStore` over `std::fs` now; embedded targets
+   compose a flash driver later.
+5. **Boundary preserved.** An UNASSEMBLED (staged/Testing) candidate
+   remains RAM-only and dies on reboot — only the committed artifact
+   persists. The HA pair: both units persist identical bytes at
+   Assemble, consistent with this ADR's one-transaction commit
+   (Decision Outcome 4(h)).
+
+Size: **S** — host: keep wire bytes + accessor; vm-cli: `SlotStore` +
+boot reads the marker; tests: commit/adoption/interrupt round-trips on
+a temp dir.
 
 ## More Information
 
