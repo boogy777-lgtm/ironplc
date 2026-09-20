@@ -15,6 +15,15 @@
 //! actually switched. A trap in the driven round is the running
 //! application's own fault: it is logged to stderr with the trap's V-code
 //! and the session continues.
+//!
+//! `assembleEdits` is also the single commit point (ADR-0064 amendment): the
+//! session persists the host's committed wire bytes through the A/B
+//! [`SlotStore`] after the driven boundary round, before the response line
+//! is rendered. A persistence failure answers the wire with V6012 instead of
+//! the ack — the RAM promotion stands and the client learns the commit is
+//! live but not durable. Boot adopts the newest verifiable generation from
+//! the store, so a reboot after an acknowledged assemble boots the committed
+//! artifact.
 
 use std::io::{self, BufRead, Write};
 use std::path::Path;
@@ -25,16 +34,19 @@ use ironplc_runtime::{
 };
 
 use crate::error::{self, VmError};
+use crate::slot_store::SlotStore;
 
-/// Loads the container at `path`, starts it on the runtime host, and serves
-/// commands until stdin reaches EOF.
+/// Boots the committed artifact from the A/B slot store beside `path`
+/// (seeding the store from the file on first serve), starts it on the
+/// runtime host, and serves commands until stdin reaches EOF.
 pub fn serve(path: &Path) -> Result<(), VmError> {
-    let container = crate::cli::load_container(path)?;
+    let mut store = SlotStore::beside(path);
+    let container = store.boot()?;
     let mut host = start_host(container)?;
 
     let stdin = io::stdin();
     let stdout = io::stdout();
-    serve_session(&mut host, stdin.lock(), stdout.lock()).map_err(|err| {
+    serve_session(&mut host, stdin.lock(), stdout.lock(), Some(&mut store)).map_err(|err| {
         VmError::io(
             error::SESSION_IO,
             format!("unable to read or write the command session: {err}"),
@@ -61,18 +73,23 @@ fn start_host(container: Container) -> Result<RuntimeHost, VmError> {
 ///
 /// A command that advances the hot-edit FSM (`testEdits`, `untestEdits`,
 /// `assembleEdits`) drives one scan round after its acknowledgment, before
-/// the response line is written (see [`drive_scan_round`]).
+/// the response line is written (see [`drive_scan_round`]). An acknowledged
+/// `assembleEdits` with a composed `store` also persists the committed wire
+/// bytes before the response line is written (see [`persist_commit`]); a
+/// `None` store serves the honestly RAM-only session (no persistence).
 ///
 /// Returns when the reader reaches EOF, or with the first I/O failure.
 pub fn serve_session(
     host: &mut RuntimeHost,
     reader: impl BufRead,
     mut writer: impl Write,
+    mut store: Option<&mut SlotStore>,
 ) -> io::Result<()> {
     for line in reader.lines() {
         let line = line?;
         let response = match parse_command(&line) {
             Ok(command) => {
+                let commits = matches!(command, Command::AssembleEdits);
                 let advances = advances_state(&command);
                 let response = execute(command, host);
                 if advances && matches!(response, Response::Ack) {
@@ -80,8 +97,19 @@ pub fn serve_session(
                         log::error!("driven scan round trapped: {err}");
                     }
                 }
-                render_response(&response)
-                    .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?
+                if commits && matches!(response, Response::Ack) {
+                    // ADR-0064 amendment: persist before the line renders, so
+                    // a failure answers V6012 instead of an ack.
+                    match store.as_deref_mut() {
+                        Some(store) => match persist_commit(host, store) {
+                            Ok(()) => render_line(&response)?,
+                            Err(err) => persist_error_line(&err),
+                        },
+                        None => render_line(&response)?,
+                    }
+                } else {
+                    render_line(&response)?
+                }
             }
             Err(err) => {
                 // A malformed line is a codec error, not an online change
@@ -96,6 +124,43 @@ pub fn serve_session(
         writer.flush()?;
     }
     Ok(())
+}
+
+/// Renders one typed response as the session's single output line.
+fn render_line(response: &Response) -> io::Result<String> {
+    render_response(response).map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))
+}
+
+/// Persists the just-committed wire bytes through the slot store: drains the
+/// host's committed latch (set only by `assemble`) and commits the bytes.
+/// An empty drain is an internal error, never a silent skip — through
+/// `serve` every accepted candidate carries its wire bytes, so an assemble
+/// acknowledgment always has bytes to commit. The error surfaces as V6012 on
+/// the wire.
+fn persist_commit(host: &mut RuntimeHost, store: &mut SlotStore) -> Result<(), VmError> {
+    let wire = host.take_committed_wire().ok_or_else(|| {
+        log::error!("assemble acknowledged but the host holds no committed wire bytes");
+        VmError::io(
+            error::SLOT_COMMIT_PERSIST,
+            "unable to persist the assembled commit to the slot store: \
+             assemble committed no wire bytes to persist"
+                .to_string(),
+        )
+    })?;
+    store.commit(&wire)
+}
+
+/// Renders the V6012 answer that replaces the assemble acknowledgment when
+/// the commit could not be persisted (ADR-0064 amendment). Built directly:
+/// V6012 is a shell code, not one of the runtime command layer's V40xx
+/// codes, so the typed `Response` cannot carry it.
+fn persist_error_line(err: &VmError) -> String {
+    serde_json::json!({
+        "response": "error",
+        "vCode": error::SLOT_COMMIT_PERSIST,
+        "message": err.to_string(),
+    })
+    .to_string()
 }
 
 /// Whether acknowledging `command` advances the hot-edit FSM at a scan
@@ -262,13 +327,24 @@ END_PROGRAM
         )
     }
 
-    /// Runs `lines` through one session, returning the parsed response per
-    /// input line.
+    /// Runs `lines` through one session without a slot store, returning the
+    /// parsed response per input line.
     fn run_session(host: &mut RuntimeHost, lines: &[&str]) -> Vec<serde_json::Value> {
+        run_session_with_store(host, lines, None)
+    }
+
+    /// Runs `lines` through one session, optionally persisting assembles
+    /// through a slot store, returning the parsed response per input line.
+    fn run_session_with_store(
+        host: &mut RuntimeHost,
+        lines: &[&str],
+        mut store: Option<&mut SlotStore>,
+    ) -> Vec<serde_json::Value> {
         let mut input = lines.join("\n");
         input.push('\n');
         let mut output = Vec::new();
-        serve_session(host, io::Cursor::new(input.into_bytes()), &mut output).unwrap();
+        serve_session(host, io::Cursor::new(input.into_bytes()), &mut output, store.as_deref_mut())
+            .unwrap();
         let text = String::from_utf8(output).unwrap();
         text.lines()
             .map(|line| serde_json::from_str(line).unwrap())
@@ -290,7 +366,6 @@ END_PROGRAM
             r#"{"command":"getStatus"}"#,
             &accept,
             r#"{"command":"testEdits"}"#,
-            r#"{"command":"untestEdits"}"#,
             r#"{"command":"assembleEdits"}"#,
             r#"{"command":"cancelEdits"}"#,
             r#"{"command":"getStatus"}"#,
@@ -305,24 +380,23 @@ END_PROGRAM
         assert_eq!(responses[0]["candidate"], serde_json::Value::Null);
         assert_eq!(responses[1]["response"], "ack");
         // Each FSM-advancing command drives one scan round at the boundary,
-        // so the test swap is applied — and the untest revert and the
-        // assemble promotion likewise — by the time its acknowledgment is
-        // written: the whole scripted path is ack.
+        // so the test swap is applied — and the assemble promotion likewise
+        // — by the time its acknowledgment is written: the whole scripted
+        // path is ack. ADR-0064: assemble follows the test, never Accepted.
         assert_eq!(responses[2]["response"], "ack");
         assert_eq!(responses[3]["response"], "ack");
-        assert_eq!(responses[4]["response"], "ack");
         // Assembling left nothing staged, so the final cancel is refused
         // with the protocol's usual V-code.
-        assert_eq!(responses[5]["response"], "error");
-        assert_eq!(responses[5]["vCode"], "V4012");
-        // Three rounds were driven (test, untest, assemble): the candidate
-        // is the promoted, running application.
-        assert_eq!(responses[6]["response"], "status");
-        assert_eq!(responses[6]["mode"], "normal");
-        assert_eq!(responses[6]["normal"], 2);
-        assert_eq!(responses[6]["application"], 2);
-        assert_eq!(responses[6]["candidate"], serde_json::Value::Null);
-        assert_eq!(responses[6]["rounds"], 3);
+        assert_eq!(responses[4]["response"], "error");
+        assert_eq!(responses[4]["vCode"], "V4012");
+        // Two rounds were driven (test, assemble): the candidate is the
+        // promoted, running application.
+        assert_eq!(responses[5]["response"], "status");
+        assert_eq!(responses[5]["mode"], "normal");
+        assert_eq!(responses[5]["normal"], 2);
+        assert_eq!(responses[5]["application"], 2);
+        assert_eq!(responses[5]["candidate"], serde_json::Value::Null);
+        assert_eq!(responses[5]["rounds"], 2);
     }
 
     /// REQ-VC-vm-cli-023: a trap in a driven round does not change the
@@ -350,6 +424,88 @@ END_PROGRAM
         // answers the next command.
         assert_eq!(responses[1]["response"], "ack");
         assert_eq!(responses[2]["response"], "status");
+    }
+
+    /// A slot store booted in a fresh temp dir beside a written counter
+    /// file (the first boot seeds slot A and the marker).
+    fn booted_store(dir: &tempfile::TempDir) -> SlotStore {
+        let file = dir.path().join("app.iplc");
+        std::fs::write(&file, container_bytes(&counter_source(1))).unwrap();
+        let store = SlotStore::beside(&file);
+        store.boot().unwrap();
+        store
+    }
+
+    /// The assemble session: accept a candidate, test it, assemble it.
+    fn accept_test_assemble_lines(edit: Vec<u8>) -> Vec<String> {
+        let accept = serde_json::json!({"command": "acceptEdits", "program": edit}).to_string();
+        vec![
+            accept,
+            r#"{"command":"testEdits"}"#.to_string(),
+            r#"{"command":"assembleEdits"}"#.to_string(),
+        ]
+    }
+
+    #[test]
+    fn serve_session_when_assemble_from_accepted_then_v4017_on_wire() {
+        let mut host = counter_host();
+        let edit = container_bytes(&counter_source(10));
+        let accept = serde_json::json!({"command": "acceptEdits", "program": edit}).to_string();
+        let lines = [&accept, r#"{"command":"assembleEdits"}"#];
+
+        // Assemble before the candidate ever ran under Test refuses with the
+        // ADR-0064 V-code; test+assemble would ack.
+        let responses = run_session(&mut host, &lines);
+
+        assert_eq!(responses[0]["response"], "ack");
+        assert_eq!(responses[1]["response"], "error");
+        assert_eq!(responses[1]["vCode"], "V4017");
+        assert!(host.status().candidate.is_some());
+    }
+
+    #[test]
+    fn serve_session_when_assemble_with_store_then_committed_bytes_land_in_inactive_slot() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let mut store = booted_store(&dir);
+        let edit = container_bytes(&counter_source(10));
+        let lines = accept_test_assemble_lines(edit.clone());
+        let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
+        let mut host = counter_host();
+
+        let responses = run_session_with_store(&mut host, &lines, Some(&mut store));
+
+        assert_eq!(responses[2]["response"], "ack");
+        // Slot contents are exactly the accepted wire bytes — never a
+        // re-serialization (ADR-0064 amendment).
+        let slot_b = std::fs::read(dir.path().join("app.iplc.slot-b")).unwrap();
+        assert_eq!(slot_b, edit);
+        // The marker flipped to the inactive slot at seq 2.
+        let marker = std::fs::read_to_string(dir.path().join("app.iplc.marker")).unwrap();
+        let marker: serde_json::Value = serde_json::from_str(&marker).unwrap();
+        assert_eq!(marker["slot"], "b");
+        assert_eq!(marker["seq"], 2);
+    }
+
+    #[test]
+    fn serve_session_when_persist_fails_then_v6012_on_wire_and_ram_promotion_stands() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let mut store = booted_store(&dir);
+        // Block the commit's tmp write: a directory where the tmp file lands.
+        std::fs::create_dir(dir.path().join("app.iplc.tmp")).unwrap();
+        let lines = accept_test_assemble_lines(container_bytes(&counter_source(10)));
+        let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
+        let mut host = counter_host();
+
+        let responses = run_session_with_store(&mut host, &lines, Some(&mut store));
+
+        // The acknowledgment became a V6012 error line (ADR-0064 amendment);
+        // the host promotion still stands, so a reboot would boot the
+        // previous committed generation.
+        assert_eq!(responses[2]["response"], "error");
+        assert_eq!(responses[2]["vCode"], "V6012");
+        assert_eq!(host.status().normal.raw(), 2);
+        let marker = std::fs::read_to_string(dir.path().join("app.iplc.marker")).unwrap();
+        assert!(marker.contains("\"seq\":1"));
     }
 
     #[test]
@@ -496,7 +652,7 @@ END_PROGRAM
         let mut host = counter_host();
         let mut output = Vec::new();
 
-        serve_session(&mut host, io::Cursor::new(Vec::new()), &mut output).unwrap();
+        serve_session(&mut host, io::Cursor::new(Vec::new()), &mut output, None).unwrap();
 
         assert!(output.is_empty());
     }
@@ -526,7 +682,7 @@ END_PROGRAM
         let mut host = counter_host();
         let mut output = Vec::new();
 
-        let err = serve_session(&mut host, FailingReader, &mut output).unwrap_err();
+        let err = serve_session(&mut host, FailingReader, &mut output, None).unwrap_err();
 
         assert_eq!(err.kind(), io::ErrorKind::Other);
         assert!(output.is_empty());
@@ -556,6 +712,7 @@ END_PROGRAM
             &mut host,
             io::Cursor::new(b"{\"command\":\"getStatus\"}\n".to_vec()),
             FailingWriter,
+            None,
         )
         .unwrap_err();
 

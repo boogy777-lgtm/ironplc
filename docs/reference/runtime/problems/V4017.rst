@@ -1,0 +1,41 @@
+=====
+V4017
+=====
+
+.. problem-summary:: V4017
+
+``assembleEdits`` was requested while the candidate had never run under
+Test. Assemble is the commit point: it promotes the candidate to the
+canonical, running application (ADR-0064). Promoting code that never
+executed would install unverified logic on the controller, so the host
+refuses — the Rockwell reference answers the same request with "Program
+does not have Test Edits".
+
+The refused assemble changes nothing: the original keeps executing, the
+candidate stays staged, and the pending-edit record is kept.
+
+Example
+-------
+
+A session stages an edit and tries to assemble it before testing:
+
+.. code-block::
+
+   {"command":"acceptEdits","program":[...]}
+   {"response":"ack"}
+   {"command":"assembleEdits"}
+   {"response":"error","vCode":"V4017","message":"assemble requires the candidate to have executed under Test"}
+
+To fix this error, run the candidate under Test first — ``testEdits``,
+then one scan round, then ``assembleEdits``:
+
+.. code-block::
+
+   {"command":"testEdits"}
+   {"response":"ack"}
+   {"command":"assembleEdits"}
+   {"response":"ack"}
+
+An initial deploy onto an empty device follows the same sequence; the
+test step is trivial there (ADR-0064 decision 2). Untested candidates
+are still discardable with ``cancelEdits``.

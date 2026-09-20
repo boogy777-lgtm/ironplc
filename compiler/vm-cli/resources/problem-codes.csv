@@ -10,3 +10,4 @@ V6008,LaunchArgumentInvalid,Launch request argument is missing or out of range
 V6009,LaunchNoDebugInfo,Container was compiled without debug information
 V6010,LaunchMultiInstance,Container declares multiple program instances
 V6011,SessionIo,Unable to read or write the command session
+V6012,SlotCommitPersist,Unable to persist the assembled commit to the slot store

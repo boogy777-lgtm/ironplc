@@ -7,6 +7,7 @@ mod cli;
 mod error;
 mod logger;
 mod serve;
+mod slot_store;
 
 #[cfg(test)]
 mod spec_requirements {

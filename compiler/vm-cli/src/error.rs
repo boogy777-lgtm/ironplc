@@ -60,6 +60,14 @@ impl fmt::Display for VmError {
     }
 }
 
+// The user-facing form (`V#### - message`) is also the diagnostic form, so
+// tests and loggers see exactly what a user would report.
+impl fmt::Debug for VmError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
