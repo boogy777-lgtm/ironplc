@@ -53,6 +53,42 @@ if (packageJson.contributes.taskDefinitions) {
   }
 }
 
+// Check declared views are actually provided: a view id contributed in
+// package.json must appear in a source file, and the source must contain at
+// least one view-registration call. A view that ships without a provider
+// renders "no data provider registered" only after activation, which no unit
+// test can catch.
+const views = packageJson.contributes.views ?? {};
+const viewIds: string[] = Object.values(views).flatMap((containerViews: unknown) =>
+  (containerViews as { id: string }[]).map(view => view.id),
+);
+if (viewIds.length > 0) {
+  const sourceContent = findSourceFiles(path.join(__dirname, '..', '..', 'src'))
+    .map(file => fs.readFileSync(file, 'utf-8'))
+    .join('\n');
+  for (const viewId of viewIds) {
+    if (!sourceContent.includes(viewId)) {
+      failures.push(`View '${viewId}' has no provider reference in src`);
+    }
+  }
+  const activationEvents: string[] = packageJson.activationEvents ?? [];
+  for (const viewId of viewIds) {
+    if (!activationEvents.includes(`onView:${viewId}`)) {
+      failures.push(`View '${viewId}' has no 'onView:${viewId}' activation event`);
+    }
+  }
+  const registrationCalls = [
+    'registerTreeDataProvider',
+    'createTreeView',
+    'registerWebviewViewProvider',
+  ];
+  if (!registrationCalls.some(call => sourceContent.includes(call))) {
+    failures.push(
+      `contributes.views declares ${viewIds.length} view(s) but src contains no view-registration call`,
+    );
+  }
+}
+
 if (failures.length > 0) {
   console.error('Test coverage invariant failures:');
   failures.forEach(f => console.error(`  - ${f}`));
@@ -70,6 +106,20 @@ function findTestFiles(dir: string): string[] {
       results.push(...findTestFiles(fullPath));
     }
     else if (entry.name.endsWith('.js')) {
+      results.push(fullPath);
+    }
+  }
+  return results;
+}
+
+function findSourceFiles(dir: string): string[] {
+  const results: string[] = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...findSourceFiles(fullPath));
+    }
+    else if (entry.name.endsWith('.ts')) {
       results.push(fullPath);
     }
   }
