@@ -422,6 +422,10 @@ statechart is parameterized over them and none are decided here:
   Only originators
 - Mid-chain break policy: the ACTIVE unit continues degraded with partial
   I/O; peer fencing then fails and redundancy is lost
+- Online change on a coupled pair (open decision): trial semantics are
+  undefined — either Build & Trial is standalone-only, or an online build
+  on a pair always goes through the redundancy layer (apply on ACTIVE,
+  crossload, assemble on both, pair stays SYNC). Nothing is decided here.
 
 ## Out of Scope
 

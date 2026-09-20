@@ -165,9 +165,9 @@ connection parameters, connected-device panel, status bar):
   with bounded reconnect; V6012+ transport codes. Design done;
   implementation pending.
 - **Start build** — reuse of the existing compile → `acceptEdits` (upload
-  + verify) → test/assemble pipeline; build-status phases on the device
-  panel. The pipeline exists today (hot edit); the Build button wiring is
-  pending.
+  + verify) → test/assemble pipeline (Build & Commit / Build & Trial
+  commit policies); build-status phases on the device panel. The pipeline
+  exists today (hot edit); the Build button wiring is pending.
 
 Details: [Engineering Connection](design/engineering-connection.md).
 Decisions: [ADR-0063](../adrs/0063-engineering-connection-transport.md).

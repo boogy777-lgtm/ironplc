@@ -385,6 +385,34 @@ The same compile feeds two build modes:
 The only difference between the modes is the delivery envelope: compile
 and the container bytes are identical (DRY).
 
+### Trial-run (testEdits) in the build pipeline
+
+The online build has two commit policies over the same upload:
+
+- **Build & Commit** — `acceptEdits`, then `assembleEdits` to promote.
+- **Build & Trial** — `acceptEdits`, then `testEdits` to run the
+  candidate and observe it, then resolve it with `assembleEdits`
+  (promote), `untestEdits` (revert to the normal artifact), or
+  `cancelEdits` (discard while the normal artifact runs).
+
+Zero new commands: these are exactly the hot-edit FSM commands — `test`,
+`untest`, `assemble`, `cancel` (`compiler/runtime/src/host.rs:188`,
+`:208`, `:227`, `:249`) — applied at a scan boundary
+(`compiler/runtime/src/host.rs:289`, `:336`), with the serve session
+driving the boundary round before it acknowledges
+(`compiler/vm-cli/src/serve.rs:78`).
+
+The device panel renders a Testing phase from the reported `mode`, and
+Revert is disabled or rejected when the status reports `migration: true`:
+a migration candidate has no revert path, so `untestEdits` answers V4011
+UntestUnsupported (`compiler/runtime/src/host.rs:208-220`). The panel
+reads the existing `HostStatus.migration` flag
+(`compiler/runtime/src/host.rs:82`) rather than inferring it.
+
+Trial state is host-side: a staged candidate and Testing mode survive a
+session loss, so reconnect reconciliation renders the mode reported by
+`identity` / `getStatus` and never assumes Normal.
+
 The design adds only the wiring and the reporting:
 
 1. **Build button → existing commands.** With the profile in Connected,
