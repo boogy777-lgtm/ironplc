@@ -131,6 +131,23 @@
         }
       ]
     },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ironplc",
+          "title": "IronPLC",
+          "icon": "images/ironplc-activity.svg"
+        }
+      ]
+    },
+    "views": {
+      "ironplc": [
+        {
+          "id": "ironplc.actions",
+          "name": "Commands"
+        }
+      ]
+    },
     "configuration": {
       "title": "IronPLC",
       "properties": {

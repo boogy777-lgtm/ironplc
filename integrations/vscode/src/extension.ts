@@ -21,6 +21,7 @@ import {
 } from './debugAdapter';
 import { registerCustomRequests } from './customRequests';
 import { registerHotEditSupport } from './hotEdit';
+import { registerActionsView } from './iplcViewProvider';
 import { sourceExtensionsFromLanguages } from './debugAdapterLogic';
 
 /**
@@ -145,6 +146,10 @@ export function activate(context: vscode.ExtensionContext) {
   // exist even without a compiler; they report a coded problem when the
   // compiler or the VM is missing.
   registerHotEditSupport(context, result?.path, sourceExtensions, showProblem);
+
+  // The activity-bar Commands view is a static shortcut list over the commands
+  // above; it is always available.
+  registerActionsView(context);
 
   if (!result) {
     vscode.window.showErrorMessage(
