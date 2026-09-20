@@ -33,7 +33,8 @@
     "onLanguage:twincat-gvl",
     "onLanguage:twincat-dut",
     "onLanguage:plcopen-xml",
-    "onDebugResolve:ironplc"
+    "onDebugResolve:ironplc",
+    "onView:ironplc.devicePanel"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -107,6 +108,26 @@
         "command": "ironplc.syncVariableIds",
         "title": "Sync Variable IDs",
         "category": "IronPLC Hot Edit"
+      },
+      {
+        "command": "ironplc.connect",
+        "title": "Connect to Device",
+        "category": "IronPLC"
+      },
+      {
+        "command": "ironplc.disconnect",
+        "title": "Disconnect from Device",
+        "category": "IronPLC"
+      },
+      {
+        "command": "ironplc.build",
+        "title": "Build & Commit",
+        "category": "IronPLC"
+      },
+      {
+        "command": "ironplc.buildTrial",
+        "title": "Build & Trial",
+        "category": "IronPLC"
       }
     ],
     "menus": {
@@ -128,6 +149,14 @@
         {
           "command": "ironplc.stepScan",
           "when": "debugType == 'ironplc'"
+        }
+      ]
+    },
+    "views": {
+      "explorer": [
+        {
+          "id": "ironplc.devicePanel",
+          "name": "IronPLC Device"
         }
       ]
     },
@@ -163,6 +192,56 @@
           "type": "string",
           "default": "",
           "editPresentation": "singlelineText"
+        },
+        "ironplc.connections": {
+          "markdownDescription": "Connection profiles for the engineering connection (ADR-0063). A `stdio` profile spawns a local `ironplcvm serve` session on `program`; a `tcp` profile connects to a device at `address`/`port` (default 49152). `credentialsKey` names an entry in the secret store — never store the credential itself in settings.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Display name; unique within the settings scope."
+              },
+              "transport": {
+                "type": "string",
+                "enum": [
+                  "stdio",
+                  "tcp"
+                ],
+                "description": "stdio spawns a local ironplcvm serve child; tcp opens a socket to a remote device."
+              },
+              "program": {
+                "type": "string",
+                "description": "stdio only: the source file or .iplc container the spawned session loads."
+              },
+              "address": {
+                "type": "string",
+                "description": "tcp only: IPv4 dotted-quad, IPv6 literal, or DNS hostname of the device."
+              },
+              "port": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535,
+                "description": "tcp only: TCP port, 1-65535. Defaults to 49152 when omitted."
+              },
+              "credentialsKey": {
+                "type": "string",
+                "description": "The secret-store key the host resolves a username/password pair from; never the credentials themselves."
+              }
+            },
+            "required": [
+              "name",
+              "transport"
+            ],
+            "additionalProperties": false
+          },
+          "default": []
+        },
+        "ironplc.activeConnection": {
+          "markdownDescription": "The name of the connection profile last connected in this workspace.",
+          "type": "string",
+          "default": ""
         },
         "ironplc.dialect": {
           "markdownDescription": "Language dialect preset. Controls IEC edition and extensions.\n\n- `iec61131-3-ed2`: Strict IEC 61131-3:2003 (Edition 2)\n- `iec61131-3-ed3`: IEC 61131-3:2013 (Edition 3) with `LTIME`, `REF_TO`, and the object-oriented keywords (`EXTENDS`, `INTERFACE`, `METHOD`, etc.)\n- `rusty`: RuSTy-compatible — Edition 2 base with `REF_TO` and the extensions RuSTy accepts\n- `codesys`: CODESYS-compatible — Edition 2 base with `REF_TO` and the CODESYS extensions\n- `twincat`: TwinCAT-compatible — Edition 2 base with the extensions TwinCAT shares with CODESYS (no `REF_TO`; TwinCAT uses `REFERENCE TO`/`POINTER TO`)",

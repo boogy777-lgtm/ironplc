@@ -21,6 +21,9 @@ import {
 } from './debugAdapter';
 import { registerCustomRequests } from './customRequests';
 import { registerHotEditSupport } from './hotEdit';
+import { registerConnectionSupport } from './connection';
+import { registerDevicePanel } from './devicePanel';
+import { registerBuildCommands } from './buildCommands';
 import { sourceExtensionsFromLanguages } from './debugAdapterLogic';
 
 /**
@@ -145,6 +148,13 @@ export function activate(context: vscode.ExtensionContext) {
   // exist even without a compiler; they report a coded problem when the
   // compiler or the VM is missing.
   registerHotEditSupport(context, result?.path, sourceExtensions, showProblem);
+
+  // The engineering connection registers unconditionally as well: connect,
+  // the device panel, and the build commands exist without a compiler and
+  // report coded problems (or refuse) when a profile or tool is missing.
+  const connection = registerConnectionSupport(context, result?.path, sourceExtensions, showProblem);
+  registerDevicePanel(context, connection);
+  registerBuildCommands(context, result?.path, sourceExtensions, connection, showProblem);
 
   if (!result) {
     vscode.window.showErrorMessage(
