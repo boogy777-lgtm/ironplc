@@ -319,21 +319,24 @@ All values are v1 defaults, overridable per profile in the settings schema:
 
 ### Server-side failure codes
 
-New V-codes in `compiler/vm-cli/resources/problem-codes.csv` (next free
-V6012, IO category, exit code 2), following the CSV → codegen lifecycle of
+The real allocation in `compiler/vm-cli/resources/problem-codes.csv` (IO
+category, exit code 2), following the CSV → codegen lifecycle of
 `specs/steering/problem-code-management.md`:
 
 | Code | Name | Message | Raised when |
 |------|------|---------|-------------|
-| V6012 | TcpListen | Unable to listen on the configured TCP address | The device cannot bind the configured address/port |
-| V6013 | SessionFraming | A received frame is malformed | Bad length prefix, a frame over 16 MiB, or non-UTF-8 frame bytes; the connection closes |
+| V6011 | SessionIo | Unable to read or write the command session | The device cannot bind or accept the configured TCP address, or the session stream fails (stdio session I/O) |
+| V6012 | SlotCommitPersist | Unable to persist the assembled commit to the slot store | An acknowledged `assembleEdits` could not be committed to the A/B slot store (the ADR-0064 amendment, which took V6012 before the transport landed) |
+| V6013 | SessionFraming | A received frame is malformed | Bad length prefix, a frame over 16 MiB, a payload that is not one JSON line, non-UTF-8 frame bytes, EOF mid-frame, or the 30 s per-message read timeout; the connection closes |
+| V6014 | SessionRefused | The device already serves one engineering session | A second connection attempt while one engineering session is active (ADR-0065); the attempt receives exactly one refusal line, then the socket closes |
 
 A JSON line inside a well-formed frame that does not parse as a command
 stays a codeless codec error per ADR-0055 — framing and codec are
 different failures: framing breaks the stream (V6013, session ends), codec
 breaks one message (null `vCode` error line, session continues). The
-existing V6011 covers stdio session I/O; V6013 is its TCP-framing
-counterpart.
+existing V6011 covers stdio session I/O and the listener's own failures;
+V6013 is its TCP-framing counterpart, and V6014 is the single-session
+refusal.
 
 New client-side E-codes (this mechanism's share of the table):
 
@@ -521,7 +524,7 @@ Everything reused, with its one authority:
 | Upload | `compiler/runtime/src/commands.rs:36` (`AcceptEdits`) |
 | Verify | `compiler/container/src/load_verify.rs:282`; `compiler/runtime/src/online_change.rs:30` |
 | Run control | `compiler/runtime/src/commands.rs:49`; boundary round `compiler/vm-cli/src/serve.rs:78` |
-| V-code registries | `compiler/vm-cli/resources/problem-codes.csv` (V6012+), `compiler/runtime/resources/problem-codes.csv` (untouched) |
+| V-code registries | `compiler/vm-cli/resources/problem-codes.csv` (V6013/V6014, the transport codes, beside the existing V6011/V6012), `compiler/runtime/resources/problem-codes.csv` (untouched) |
 | E-code registry and rendering | `integrations/vscode/resources/problem-codes.csv` (E0010+), `integrations/vscode/src/problems.ts:30` |
 | Heartbeat | `getStatus` — `compiler/runtime/src/commands.rs:286` |
 | Redundancy block vocabulary | [HA Redundancy FSM](ha-redundancy-fsm.md) (epoch, SYNC/CONTROL) |

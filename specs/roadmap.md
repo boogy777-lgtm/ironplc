@@ -179,11 +179,16 @@ connection parameters, connected-device panel, status bar):
 - **Connection settings** — profile model (name, transport `stdio`/`tcp`,
   address, port, credentials as a secret-store key), settings persistence,
   E0010+ validation codes. Design done; implementation pending.
-- **Establish connection** — one session protocol over stdio (spawned
-  `ironplcvm serve`) and TCP (length-prefixed JSON lines); the `identity`
-  handshake filling the device panel; the client connection state machine
-  with bounded reconnect; V6012+ transport codes. Design done;
-  implementation pending.
+  - **Establish connection** — one session protocol over stdio (spawned
+    `ironplcvm serve`) and TCP (length-prefixed JSON lines); the `identity`
+    handshake filling the device panel; the client connection state machine
+    with bounded reconnect; V6012+ transport codes. Design done;
+    implementation pending.
+  - **Delivered 2026-09-21:** the `identity` handshake (runtime) and the TCP
+    transport — `ironplcvm serve --listen` with V6013 framing drops and the
+    V6014 single-session refusal (ADR-0065), plus the client-side
+    `TcpLineTransport`. Profiles, the connection state machine, and the
+    build wiring remain pending.
 - **Decided 2026-09-20 (owner):** one engineering session at a time — the
   controller accepts exactly one session and refuses further connection
   attempts; single-writer exclusivity comes from session exclusivity, not
