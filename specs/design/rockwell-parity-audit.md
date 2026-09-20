@@ -376,22 +376,29 @@ posture every existing refusal (V4007–V4016, E0015) already implements.
 > gap: the L1 sketch's `EditTxnId` is deliberately not built — the
 > existing candidate generation plus `acceptedAt` already identifies the
 > record, and a second transaction identity would be a second naming
-> authority.
+> authority. Storage is **RAM-only** by owner decision (2026-09-20): the
+> record is a plain `Option<PendingEditRecord>` field on `RuntimeHost` —
+> no store port, no file backend — and the reboot-diagnostics case is
+> consciously dropped (motivation case 1 below).
 
 ### 1. Motivation
 
-Under the one-session model the value is diagnostics and reconciliation,
-not collaboration — no second consumer exists. Three concrete cases:
+Under the one-session model the value is named status and pair staging,
+not collaboration — no second consumer exists. Three concrete cases, the
+first dropped by the RAM-only storage decision:
 
-1. **Reboot during an in-flight edit.** A staged (Accepted or Testing)
-   candidate lives in host memory (`compiler/runtime/src/host.rs:90`), and
-   a device reboot silently discards it. The stale-baseline check (E0015)
-   only helps a client that captured a baseline: it cannot tell a
-   reconnecting tool whether the candidate was assembled, cancelled, or
-   lost in the reboot, and a migration candidate under Test leaves no
-   trace at all. A persisted record makes the loss visible — the device
-   reports *which* edit (name, origin, accepted-at, baseline) died in the
-   reboot.
+1. **Reboot during an in-flight edit. (Consciously dropped.)** A staged
+   (Accepted or Testing) candidate lives in host memory
+   (`compiler/runtime/src/host.rs:90`), and a device reboot silently
+   discards it; the stale-baseline check (E0015) only helps a client
+   that captured a baseline — it cannot tell a reconnecting tool whether
+   the candidate was assembled, cancelled, or lost in the reboot, and a
+   migration candidate under Test leaves no trace at all. The RAM-only
+   storage decision drops this case: the record does not survive reboot,
+   so after one the device honestly reports *no* pending record, and the
+   E0015 limitation — it cannot distinguish "assembled then rebooted"
+   from "lost then rebooted" — is accepted. Cases 2 and 3 remain the
+   motivation.
 2. **Device panel and tooling read a named pending state.** `getStatus`
    carries generation counters and the migration flag only
    (`compiler/runtime/src/commands.rs:136-152`). The record lets the
@@ -403,27 +410,26 @@ not collaboration — no second consumer exists. Three concrete cases:
    the same in-flight edit and a takeover mid-Test reports it unchanged
    on the new primary (ADR-0064, decisions (c) and (e)).
 
-Honest assessment: cases 1 and 3 are real; case 2 is convenience. Nothing
+Honest assessment: case 3 is real; case 2 is convenience; case 1 was
+real but is consciously dropped by the RAM-only decision. Nothing
 here serves a second engineer — by decision there is none.
 
 ### 2. Scope definition
 
 "Controller-side pending" minimally means: **the device holds and reports
-a pending-edit metadata record, and the record survives reboot.**
+a pending-edit metadata record, in RAM for the edit's lifetime.**
 
 - **Record contents:** `name` (client-supplied label), `origin` (optional
   unauthenticated client label — not engineer identity, ADR-0065
-  decision 2), `acceptedAt` (device timestamp at Accept), `baseline` (the
-  normal artifact's identity at Accept: its generation plus
-  `content_hash`, `compiler/container/src/header.rs:45`), and a state
-  discriminator (`staged` | `lost`). The candidate generation is already
-  reported (`compiler/runtime/src/commands.rs:144`) and links the record
-  to the slot.
+  decision 2), `acceptedAt` (device timestamp at Accept), and `baseline`
+  (the normal artifact's identity at Accept: its generation plus
+  `content_hash`, `compiler/container/src/header.rs:45`). The candidate
+  generation is already reported (`compiler/runtime/src/commands.rs:144`)
+  and links the record to the slot.
 - **Lifecycle:** written at Accept, deleted at Assemble and Cancel — the
-  normal exits (`compiler/runtime/src/host.rs:235-244`, `:256-258`). If a
-  record is still present at boot, the device reports `state: lost`:
-  candidate bytes are never persisted, so the honest post-reboot answer
-  is "an edit was in flight and is gone", never "staged".
+  normal exits (`compiler/runtime/src/host.rs:235-244`, `:256-258`). RAM
+  only: a reboot discards the record with the candidate, and the device
+  honestly reports no pending record until the next Accept.
 - **Accept unchanged:** `acceptEdits` still carries the whole compiled
   container as the only byte transfer
   (`compiler/runtime/src/commands.rs:36`); the record rides as small
@@ -433,8 +439,10 @@ a pending-edit metadata record, and the record survives reboot.**
 
 **Non-scope (explicit):**
 
-- **No edit storage.** The candidate container is not persisted; the
-  workstation-side PENDING_LOCAL shadow buffer remains the only
+- **No edit storage.** The candidate container is not persisted, and
+  neither is the record: a plain `Option<PendingEditRecord>` field on
+  `RuntimeHost`, no store port, no file backend, no composition choice.
+  The workstation-side PENDING_LOCAL shadow buffer remains the only
   pre-Accept store (online-editing-ux.md, Editing Modes).
 - **No visibility to other sessions.** One engineering session; reading
   the record requires the session, which only one client can hold
@@ -454,13 +462,12 @@ a pending-edit metadata record, and the record survives reboot.**
 | # | Subsystem | Change (anchors) | Size |
 |---|-----------|------------------|------|
 | 1 | Protocol / status surface | `StatusPayload` gains an optional `pendingEdit` block — the established additive move ("Extensibility is structural", engineering-connection.md:222-228). `identity` reuses the StatusPayload shape (engineering-connection.md:164-217), so the handshake and the device panel inherit the block with no new command. `Command::AcceptEdits` gains optional `edit` name/origin fields (`compiler/runtime/src/commands.rs:36-48`). No new verbs. | S |
-| 2 | Runtime storage | `PendingEditRecord` beside the candidate slot in `RuntimeHost` (`compiler/runtime/src/host.rs:88-100`), written in `stage_with_decisions` (`:152-185`) and cleared exactly where the candidate dies: `assemble` (`:235-244`), `cancel` (`:256-258`). The host stays the single authority — mechanism, not a client-side convention. `HostStatus`/`status()` expose it (`compiler/runtime/src/host.rs:69-85`, `:263-281`). | S |
-| 3 | Persistence | A store port on the host — load plus the three lifecycle mutations, the same one-seam style as the run-loop callback (ha-redundancy-layer-architecture.md:332-339) — with a versioned, fail-soft JSON file backend in vm-cli beside the served container (the sidecar pattern, `compiler/project/src/sidecar.rs:1`). At boot the surviving record loads as the `lost` tombstone. `serve` composes the backend (`compiler/vm-cli/src/serve.rs:31-43`). | M |
-| 4 | VM-CLI session | Unchanged. `serve_session` keeps one response line per command (REQ-VC-vm-cli-019, `compiler/vm-cli/src/serve.rs:67-99`, `:286-326`); only startup gains the store load. | — |
-| 5 | V-codes | None. The record adds no refusal path; V4013 stays the only guard and the pending V4017 (`AssembleWithoutTest`, `compiler/runtime/resources/problem-codes.csv:2-11`) is the unrelated ADR-0064 implementation taking the next free row. A `lost` record is reported, never an error. | — |
-| 6 | Client rendering | `HotEditStatus`/`formatStatusDetail` render the record in the STAGED banner (`integrations/vscode/src/hotEditSession.ts:42`, `:227-249`); a `lost` record renders one advisory line in the device panel, whose reconnect path already re-renders from `identity` (engineering-connection.md:427-429). No new E-codes; E0015 StaleBaseline is untouched. | S |
-| 7 | HA pair | The record rides the ADR-0064(c) candidate delivery at Accept — part of the staged-generation payload, no new pair machinery (ADR-0064, decision (c)). Takeover mid-Test reports the same record on the new primary (decision (e)); both units rebooted mid-pending load the same tombstone. | S |
-| 8 | Tests | Host unit tests (record lifecycle, tombstone-on-boot), command round-trip (pattern at `compiler/runtime/src/commands.rs:415-437`), a scripted serve e2e (pattern at `compiler/vm-cli/src/serve.rs:286-326`), and client unit tests (`integrations/vscode/src/test/unit/hotEditSession.test.ts:46`). | S |
+| 2 | Runtime storage | `PendingEditRecord` as a plain `Option<PendingEditRecord>` field beside the candidate slot in `RuntimeHost` (`compiler/runtime/src/host.rs:88-100`) — no store port, no backends, no composition choice. Written in `stage_with_decisions` (`:152-185`) and cleared exactly where the candidate dies: `assemble` (`:235-244`), `cancel` (`:256-258`). The host stays the single authority — mechanism, not a client-side convention. `HostStatus`/`status()` expose it (`compiler/runtime/src/host.rs:69-85`, `:263-281`). | S |
+| 3 | VM-CLI session | Unchanged. `serve_session` keeps one response line per command (REQ-VC-vm-cli-019, `compiler/vm-cli/src/serve.rs:67-99`, `:286-326`); the RAM-only record needs nothing at startup. | — |
+| 4 | V-codes | None. The record adds no refusal path; V4013 stays the only guard and the pending V4017 (`AssembleWithoutTest`, `compiler/runtime/resources/problem-codes.csv:2-11`) is the unrelated ADR-0064 implementation taking the next free row. | — |
+| 5 | Client rendering | `HotEditStatus`/`formatStatusDetail` render the record in the STAGED banner (`integrations/vscode/src/hotEditSession.ts:42`, `:227-249`). No new E-codes; E0015 StaleBaseline is untouched. | S |
+| 6 | HA pair | The record rides the ADR-0064(c) candidate delivery at Accept — part of the staged-generation payload, no new pair machinery (ADR-0064, decision (c)). Takeover mid-Test reports the same record on the new primary (decision (e)). | S |
+| 7 | Tests | Host unit tests (record lifecycle), command round-trip (pattern at `compiler/runtime/src/commands.rs:415-437`), a scripted serve e2e (pattern at `compiler/vm-cli/src/serve.rs:286-326`), and client unit tests (`integrations/vscode/src/test/unit/hotEditSession.test.ts:46`). | S |
 
 **Dependency check — per-POU code artifacts are not required.** The record
 attaches to the one whole-container candidate slot
@@ -476,7 +483,7 @@ The closure lands in **Phase 6 (Engineering connection)**, after
 Mechanism 2 (the `identity` handshake and session surface) and with the
 Build wiring, because every vehicle it needs — the StatusPayload block,
 the handshake, the device panel — is a Phase 6 deliverable; building the
-record earlier would front-load a store port with no consumer.
+record earlier would front-load a status block with no consumer.
 
 - **No dependency on the ADR-0064 implementation.** The assemble
   tightening (one guard plus V4017) and this record touch disjoint code;
@@ -486,26 +493,31 @@ record earlier would front-load a store port with no consumer.
   added to the ADR-0064(c) payload in the same change — an S delta, not a
   retrofit.
 - **Ordering within Phase 6:** runtime record + status block →
-  persistence → client rendering; the HA delta ships with the pair
+  client rendering; the HA delta ships with the pair
   online-change implementation whenever it lands.
 
 ### 5. Decision points still open
 
-1. **Reboot semantics.** Tombstone-only (recommended) vs persisting the
-   candidate so a reboot resumes `staged`. Candidate persistence is edit
-   storage — the declared non-scope — and reopens mid-Test buffer/image
-   questions. The tombstone answers the diagnostics case honestly.
+1. **Reboot semantics.** Resolved by the RAM-only storage decision
+   (owner, 2026-09-20): neither tombstone nor candidate persistence.
+   Candidate persistence is edit storage — the declared non-scope — and
+   a tombstone is persistence too; with the record in RAM only, the
+   reboot-diagnostics case is dropped and the E0015 limitation accepted
+   (motivation case 1).
 2. **The `origin` field.** Include as optional unauthenticated advisory
    text (recommended; empty by default, documented as not identity) vs
    omit it. Inclusion costs one optional field and serves reconnect
    matching; omission is the stricter KISS reading. Decide when the
    client fields are wired.
-3. **Tombstone clearing.** Overwrite-on-next-Accept only (recommended) vs
-   an explicit dismiss command. Overwrite-only adds no command and no
-   V-code; an undismissed tombstone is honest advisory history.
-4. **Store placement.** Host-owned port with a vm-cli file backend
-   (recommended) vs serve-managed file I/O around `execute`. The host
-   owns the record's lifecycle; shell-managed persistence duplicates that
+3. **Tombstone clearing.** Moot under RAM-only storage: no tombstone
+   exists to clear. The record is written at Accept and cleared at
+   Assemble/Cancel; overwrite-on-next-Accept needs no command and no
+   V-code.
+4. **Store placement.** Resolved — RAM-only field, no store port (owner
+   decision, 2026-09-20): simplicity over reboot diagnostics. The
+   alternatives are moot either way: a host-owned port with a vm-cli
+   file backend makes persistence a composition choice, and
+   shell-managed file I/O around `execute` duplicates the record's
    lifecycle at a second owner — convention, not mechanism.
 
 ### 6. Effort and recommendation
@@ -514,22 +526,20 @@ record earlier would front-load a store port with no consumer.
 |------|------|
 | Protocol / status surface (1) | S |
 | Runtime storage (2) | S |
-| Persistence port + file backend (3) | M |
-| Client rendering (6) | S |
-| HA delta (7) | S |
-| Tests (8) | S |
-| **Total** | **M** — one focused standalone PR plus the client rendering; the HA delta rides the pair work |
+| Client rendering (5) | S |
+| HA delta (6) | S |
+| Tests (7) | S |
+| **Total** | **S** — one focused standalone PR plus the client rendering; the HA delta rides the pair work |
 
 **Recommendation: close later — schedule in Phase 6** with the
 engineering connection implementation, and fold the record into the pair
 online-change change if that lands first.
 
-- **Not now:** the value is thin under one session (diagnostics only),
-  and all of its vehicles are Phase 6 work; closing now builds storage
-  before the surface that reads it.
-- **Not never:** the reboot case is a real honesty gap — today a power
-  cycle silently discards an in-flight edit, and the fail-closed baseline
-  check cannot distinguish "assembled then rebooted" from "lost then
-  rebooted". The HA pipeline also needs the record to stage a *named*
-  candidate on the pair; deferring past the pair implementation would
-  retrofit it there.
+- **Not now:** the value is thin under one session (a named status
+  line plus the HA staging name), and all of its vehicles are Phase 6
+  work; closing now builds the record before the surface that reads it.
+- **Not never:** the device panel, scripts, and the MCP tools still gain
+  the named pending state (case 2), and the HA pipeline needs the record
+  to stage a *named* candidate on the pair (case 3); deferring past the
+  pair implementation would retrofit it there. The reboot honesty gap
+  stays open by the RAM-only decision and is accepted as its limitation.
