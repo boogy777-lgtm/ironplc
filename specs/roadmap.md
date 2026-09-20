@@ -198,6 +198,9 @@ Autonomy: design done autonomously; implementation follows owner review.
   record and its additive status identity are not built now; revisit when
   a driver exists. Decision:
   [ADR-0065](adrs/0065-engineering-session-exclusivity-and-ide-side-pending-edits.md).
+  Closure scope, change map, and sequencing:
+  [Rockwell Online-Editing Parity Audit](design/rockwell-parity-audit.md),
+  "Debt Closure — Controller-Side Pending Edits".
 - **PLCopen XML / project-file storage of stable variable IDs.** The
   `project` crate already reads PLCopen XML, so it is a candidate for
   carrying UIDs; changing that format is a larger, user-visible commitment.
