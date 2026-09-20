@@ -178,17 +178,25 @@ connection parameters, connected-device panel, status bar):
 
 - **Connection settings** — profile model (name, transport `stdio`/`tcp`,
   address, port, credentials as a secret-store key), settings persistence,
-  E0010+ validation codes. Design done; implementation pending.
+  E0010+ validation codes. Design done.
+  - **Delivered 2026-09-21:** the `ironplc.connections` /
+    `ironplc.activeConnection` settings schema, client-side profile
+    validation (E0010–E0012) before any transport opens, and credentials
+    held only in `SecretStorage` keyed by the profile's secret-store key.
   - **Establish connection** — one session protocol over stdio (spawned
     `ironplcvm serve`) and TCP (length-prefixed JSON lines); the `identity`
     handshake filling the device panel; the client connection state machine
-    with bounded reconnect; V6012+ transport codes. Design done;
-    implementation pending.
+    with bounded reconnect; V6012+ transport codes. Design done.
   - **Delivered 2026-09-21:** the `identity` handshake (runtime) and the TCP
     transport — `ironplcvm serve --listen` with V6013 framing drops and the
     V6014 single-session refusal (ADR-0065), plus the client-side
-    `TcpLineTransport`. Profiles, the connection state machine, and the
-    build wiring remain pending.
+    `TcpLineTransport`.
+  - **Delivered 2026-09-21:** the client connection state machine
+    (Disconnected → Connecting → Connected → Reconnecting, bounded retries
+    with backoff+jitter, heartbeat via `getStatus`) behind `ironplc.connect`
+    / `ironplc.disconnect`, the `IronPLC Device` panel, E0013 ConnectFailed
+    / E0014 ConnectionLost, and the fail-closed baseline check (E0015
+    StaleBaseline) against the last verified-equal state.
 - **Decided 2026-09-20 (owner):** one engineering session at a time — the
   controller accepts exactly one session and refuses further connection
   attempts; single-writer exclusivity comes from session exclusivity, not
@@ -198,7 +206,12 @@ connection parameters, connected-device panel, status bar):
 - **Start build** — reuse of the existing compile → `acceptEdits` (upload
   + verify) → test/assemble pipeline (Build & Commit / Build & Trial
   commit policies); build-status phases on the device panel. The pipeline
-  exists today (hot edit); the Build button wiring is pending.
+  exists today (hot edit).
+  - **Delivered 2026-09-21:** `ironplc.build` (Build & Commit) and
+    `ironplc.buildTrial` (Build & Trial with the assemble/untest/cancel
+    exits) driving the existing session commands with the ADR-0064 edit
+    identity and mandatory Test; phases compiling → uploading → verifying →
+    running render on the device panel.
 
 Details: [Engineering Connection](design/engineering-connection.md).
 Decisions: [ADR-0063](../adrs/0063-engineering-connection-transport.md).
