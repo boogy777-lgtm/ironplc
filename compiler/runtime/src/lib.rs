@@ -25,8 +25,9 @@ mod migration;
 mod online_change;
 
 pub use commands::{
-    execute, parse_command, render_response, Command, CommandError, EditSpec,
-    MigrationDecisionSpec, Response, StatusPayload, TypeChangeDetail,
+    execute, parse_command, render_response, Command, CommandError, DeviceIdentity, EditSpec,
+    IdentityPayload, MigrationDecisionSpec, RedundancyIdentity, Response, StatusPayload,
+    TypeChangeDetail, SESSION_PROTOCOL_VERSION,
 };
 pub use error::{OnlineChangeError, RuntimeError};
 pub use generation::{ApplicationGeneration, LogicGeneration};

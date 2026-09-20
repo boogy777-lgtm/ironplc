@@ -45,8 +45,8 @@ use ironplc_dsl::core::SourceSpan;
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
 use ironplc_problems::Problem;
 use ironplc_runtime::{
-    execute, Command, CommandError, MigrationDecisionSpec, Response, RuntimeError, RuntimeHost,
-    StatusPayload, TypeChangeDetail,
+    execute, Command, CommandError, DeviceIdentity, MigrationDecisionSpec, Response, RuntimeError,
+    RuntimeHost, StatusPayload, TypeChangeDetail,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -229,7 +229,7 @@ fn dispatch(command: Command, session: &mut HotEditSession, drive_scan: bool) ->
         );
     };
 
-    match execute(command, host) {
+    match execute(command, host, &mcp_device_identity()) {
         Response::Status(status) => HotEditResponse::ok("ack", status),
         Response::Ack => {
             if drive_scan {
@@ -240,6 +240,24 @@ fn dispatch(command: Command, session: &mut HotEditSession, drive_scan: bool) ->
             HotEditResponse::ok("ack", StatusPayload::from(host.status()))
         }
         Response::Error(error) => HotEditResponse::command_error(&error),
+        // Unreachable from the MCP tools (they never send `identity`, the
+        // engineering-connection handshake of ADR-0063): the session has no
+        // device panel to answer with.
+        Response::Identity(_) => {
+            internal_failure("identity is not available on the MCP hot edit session".to_string())
+        }
+    }
+}
+
+/// The device panel the MCP server answers protocol handshakes with: the MCP
+/// host is a soft device of its own, so it reports its own binary identity
+/// the way `vm-cli` does.
+fn mcp_device_identity() -> DeviceIdentity {
+    DeviceIdentity {
+        name: "ironplcmcp".into(),
+        model: "IronPLC SoftPLC".into(),
+        modification: "mcp".into(),
+        firmware_version: env!("CARGO_PKG_VERSION").to_string(),
     }
 }
 
@@ -729,6 +747,7 @@ END_PROGRAM
                     migration: BTreeMap::new(),
                 },
                 guard.host.as_mut().unwrap(),
+                &mcp_device_identity(),
             )
         };
         assert!(matches!(staged, Response::Ack));

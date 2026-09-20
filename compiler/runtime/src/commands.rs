@@ -30,6 +30,10 @@ mod online_change_codes {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "command", rename_all = "camelCase")]
 pub enum Command {
+    /// Returns the device panel and the application-state snapshot: the
+    /// handshake of the engineering connection (ADR-0063), the first command
+    /// on every (re)opened transport.
+    Identity,
     /// Returns the host's hot-edit status.
     GetStatus,
     /// Stages the compiled container `program` as the edit candidate.
@@ -192,10 +196,80 @@ impl From<HostStatus> for StatusPayload {
     }
 }
 
+/// The session protocol version this server speaks (ADR-0063): `1` for the
+/// version the engineering connection spec defines. A client refuses a
+/// higher number; an older server answers every command it does not know —
+/// including `identity` — with the codeless codec error, which is the
+/// version negotiation.
+pub const SESSION_PROTOCOL_VERSION: u32 = 1;
+
+/// The device panel block of an [`IdentityPayload`] (ADR-0063): the static
+/// device description the application composes — a soft device reports its
+/// binary name and version (`vm-cli` builds it from `env!("CARGO_PKG_VERSION")`),
+/// a hardware target reports its catalog values.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceIdentity {
+    /// The device name (e.g. `"ironplcvm"`).
+    pub name: String,
+    /// The device model (e.g. `"IronPLC SoftPLC"`).
+    pub model: String,
+    /// The device modification (e.g. `"vm-cli"`).
+    pub modification: String,
+    /// The firmware version (e.g. `"0.13.0"`).
+    pub firmware_version: String,
+}
+
+/// The optional redundancy block of an [`IdentityPayload`] (ADR-0063):
+/// `pairId`, configured `role`, ownership `epoch`, and the SYNC/CONTROL
+/// substates of the HA redundancy FSM. Absent on the wire means standalone.
+///
+/// Shape only today: no server loads the redundancy layer, so `identity`
+/// always answers without this block. It exists so the field set grows
+/// structurally — servers add the block, clients ignore fields they do not
+/// know — instead of by a negotiated schema.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RedundancyIdentity {
+    /// The redundancy pair's identifier.
+    pub pair_id: String,
+    /// The configured role (e.g. `"primary"`).
+    pub role: String,
+    /// The ownership epoch.
+    pub epoch: u32,
+    /// The SYNC substate (e.g. `"syncReady"`).
+    pub sync: String,
+    /// The CONTROL substate (e.g. `"active"`).
+    pub control: String,
+}
+
+/// The payload of [`Response::Identity`]: the device panel fields, the live
+/// application-state snapshot, and the optional redundancy block (ADR-0063).
+/// The `application` block reuses the [`StatusPayload`] vocabulary verbatim,
+/// additive optional fields included, so a client renders one shape for both
+/// `identity` and `getStatus`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IdentityPayload {
+    /// The session protocol version; see [`SESSION_PROTOCOL_VERSION`].
+    pub protocol: u32,
+    /// The device panel block.
+    pub device: DeviceIdentity,
+    /// The live hot-edit status snapshot, the same fields `getStatus` returns.
+    pub application: StatusPayload,
+    /// The redundancy block; absent on the wire when standalone.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub redundancy: Option<RedundancyIdentity>,
+}
+
 /// The answer to one [`Command`].
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "response", rename_all = "camelCase")]
 pub enum Response {
+    /// The device panel and application snapshot (the answer to
+    /// [`Command::Identity`]). Boxed: the payload is four strings plus a
+    /// status snapshot, and the response enum travels one at a time.
+    Identity(Box<IdentityPayload>),
     /// The host's status (the answer to [`Command::GetStatus`]).
     Status(StatusPayload),
     /// The command succeeded; there is nothing further to report.
@@ -307,10 +381,19 @@ pub fn render_response(response: &Response) -> Result<String, serde_json::Error>
 /// Executes `command` against `host` and returns the response to send.
 ///
 /// This is the whole command mapping: each variant delegates to the matching
-/// [`RuntimeHost`] method, so the host's controller FSM remains the only
-/// protocol state (ADR-0052).
-pub fn execute(command: Command, host: &mut RuntimeHost) -> Response {
+/// [`RuntimeHost`] call, so the host's controller FSM remains the only
+/// protocol state (ADR-0052). `device` is the application-composed device
+/// panel (ADR-0063): the only block the host does not own, so the identity
+/// handshake takes it as a parameter — the type system requires a device
+/// block wherever commands execute.
+pub fn execute(command: Command, host: &mut RuntimeHost, device: &DeviceIdentity) -> Response {
     match command {
+        Command::Identity => Response::Identity(Box::new(IdentityPayload {
+            protocol: SESSION_PROTOCOL_VERSION,
+            device: device.clone(),
+            application: StatusPayload::from(host.status()),
+            redundancy: None,
+        })),
         Command::GetStatus => Response::Status(StatusPayload::from(host.status())),
         Command::AcceptEdits {
             program,
@@ -372,6 +455,14 @@ mod tests {
     use crate::migration::MigrationError;
     use ironplc_container::FieldType;
     use rstest::rstest;
+
+    #[test]
+    fn parse_command_when_identity_then_identity() {
+        assert_eq!(
+            parse_command(r#"{"command":"identity"}"#).unwrap(),
+            Command::Identity
+        );
+    }
 
     #[test]
     fn parse_command_when_get_status_then_get_status() {
@@ -468,6 +559,87 @@ mod tests {
         assert_eq!(
             parse_command(r#"{"command":"cancelEdits"}"#).unwrap(),
             Command::CancelEdits
+        );
+    }
+
+    /// The device block the wire-shape tests compose; the values mirror the
+    /// design spec's example (a soft device reports its binary name and
+    /// version).
+    fn test_device() -> DeviceIdentity {
+        DeviceIdentity {
+            name: "ironplcvm".into(),
+            model: "IronPLC SoftPLC".into(),
+            modification: "vm-cli".into(),
+            firmware_version: "0.13.0".into(),
+        }
+    }
+
+    /// The identity response over one status snapshot, the `execute` shape.
+    fn identity_response(redundancy: Option<RedundancyIdentity>) -> Response {
+        Response::Identity(Box::new(IdentityPayload {
+            protocol: SESSION_PROTOCOL_VERSION,
+            device: test_device(),
+            application: StatusPayload {
+                mode: HostMode::Normal,
+                active: 1,
+                normal: 1,
+                candidate: None,
+                application: 1,
+                migration: false,
+                rounds: 0,
+                pending_edit: None,
+            },
+            redundancy,
+        }))
+    }
+
+    #[test]
+    fn render_response_when_identity_then_serializes_every_block() {
+        let line = render_response(&identity_response(None)).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+
+        assert_eq!(value["response"], "identity");
+        assert_eq!(value["protocol"], 1);
+        assert_eq!(
+            value["device"],
+            serde_json::json!({
+                "name": "ironplcvm",
+                "model": "IronPLC SoftPLC",
+                "modification": "vm-cli",
+                "firmwareVersion": "0.13.0",
+            })
+        );
+        // The application block is the StatusPayload vocabulary verbatim...
+        assert_eq!(value["application"]["mode"], "normal");
+        assert_eq!(value["application"]["active"], 1);
+        assert_eq!(value["application"]["candidate"], serde_json::Value::Null);
+        assert_eq!(value["application"]["rounds"], 0);
+        // ...and the standalone server answers without the redundancy block.
+        assert!(value.get("redundancy").is_none());
+    }
+
+    #[test]
+    fn render_response_when_identity_with_redundancy_then_block_serializes() {
+        let response = identity_response(Some(RedundancyIdentity {
+            pair_id: "7f3a9c".into(),
+            role: "primary".into(),
+            epoch: 12,
+            sync: "syncReady".into(),
+            control: "active".into(),
+        }));
+
+        let line = render_response(&response).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+
+        assert_eq!(
+            value["redundancy"],
+            serde_json::json!({
+                "pairId": "7f3a9c",
+                "role": "primary",
+                "epoch": 12,
+                "sync": "syncReady",
+                "control": "active",
+            })
         );
     }
 

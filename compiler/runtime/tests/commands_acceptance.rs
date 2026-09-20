@@ -18,14 +18,26 @@ mod common;
 
 use common::{compile_with_ids, container_bytes, counter_host, counter_program, variable_index};
 use ironplc_runtime::{
-    execute, parse_command, Command, HostMode, Response, RuntimeHost, StatusPayload,
+    execute, parse_command, Command, DeviceIdentity, HostMode, IdentityPayload, Response,
+    RuntimeHost, StatusPayload, SESSION_PROTOCOL_VERSION,
 };
+
+/// The device block composed for the acceptance tests' soft device.
+fn test_device() -> DeviceIdentity {
+    DeviceIdentity {
+        name: "ironplcvm".into(),
+        model: "IronPLC SoftPLC".into(),
+        modification: "vm-cli".into(),
+        firmware_version: "0.13.0".into(),
+    }
+}
 
 /// Runs one command line through the codec and the command layer, returning
 /// the rendered response as a JSON value.
 fn run_line(host: &mut RuntimeHost, line: &str) -> serde_json::Value {
     let command = parse_command(line).unwrap();
-    let rendered = ironplc_runtime::render_response(&execute(command, host)).unwrap();
+    let rendered =
+        ironplc_runtime::render_response(&execute(command, host, &test_device())).unwrap();
     serde_json::from_str(&rendered).unwrap()
 }
 
@@ -421,7 +433,7 @@ fn cancel_edits_when_candidate_staged_then_pending_edit_block_gone() {
 fn get_status_when_fresh_host_then_normal_generation_one_and_no_candidate() {
     let (mut host, _counter) = counter_host(1);
 
-    let response = execute(Command::GetStatus, &mut host);
+    let response = execute(Command::GetStatus, &mut host, &test_device());
 
     assert_eq!(
         response,
@@ -448,7 +460,7 @@ fn status_payload_when_test_applied_then_mode_testing_and_generations_move() {
     run_line(&mut host, r#"{"command":"testEdits"}"#);
     host.run(3, || 0).unwrap();
 
-    let response = execute(Command::GetStatus, &mut host);
+    let response = execute(Command::GetStatus, &mut host, &test_device());
 
     assert!(
         matches!(response, Response::Status(_)),
@@ -531,4 +543,30 @@ fn cancel_edits_while_testing_then_v4015() {
 
     assert_eq!(response["response"], "error");
     assert_eq!(response["vCode"], "V4015");
+}
+
+#[test]
+fn identity_when_fresh_host_then_device_panel_and_live_status_snapshot() {
+    let (mut host, _counter) = counter_host(1);
+
+    let response = execute(Command::Identity, &mut host, &test_device());
+
+    assert_eq!(
+        response,
+        Response::Identity(Box::new(IdentityPayload {
+            protocol: SESSION_PROTOCOL_VERSION,
+            device: test_device(),
+            application: StatusPayload {
+                mode: HostMode::Normal,
+                active: 1,
+                normal: 1,
+                candidate: None,
+                application: 1,
+                migration: false,
+                rounds: 0,
+                pending_edit: None,
+            },
+            redundancy: None,
+        }))
+    );
 }
