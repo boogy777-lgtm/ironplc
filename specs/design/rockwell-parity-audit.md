@@ -74,10 +74,12 @@ of Scope); `getStatus` reports generations, mode, and migration
 The accepted baseline froze "Pending exists only in the engineering
 environment" (`ironplc_hot_edit_redundancy_architecture.md`, §10.1 and
 frozen decision 12) and ADR-0064 kept it ("PENDING_LOCAL (IDE-only edits;
-the controller never sees them)"). Parity levels L2 and L3 below therefore
-amend that decision locally — controller-side pending *state* — while
-keeping the rest of the lifecycle (Accept → Test → Assemble, Untest,
-Cancel) exactly as ADR-0064 froze it.
+the controller never sees them)"). The owner decision of 2026-09-20
+([ADR-0065](../adrs/0065-engineering-session-exclusivity-and-ide-side-pending-edits.md))
+kept it for parity: the L1 controller-side record is deferred as debt, the
+L2 observer/lock design below is superseded by the one-session model, and
+L3 is excluded. The rest of the lifecycle (Accept → Test → Assemble,
+Untest, Cancel) stays exactly as ADR-0064 froze it.
 
 ## Feature Table
 
@@ -105,6 +107,14 @@ ADR-0064 tightening. No controller-side pending state, no second user, no
 locks.
 
 ### L1 — Single-user controller-side pending + status visibility
+
+> **Deferred by
+> [ADR-0065](../adrs/0065-engineering-session-exclusivity-and-ide-side-pending-edits.md)
+> (2026-09-20):** pending stays IDE-side; the controller-side pending
+> record this section describes is a named debt item in the
+> [roadmap](../roadmap.md). The ADR-0064 assemble tightening (assemble
+> requires Test; V4017) is unaffected and remains the target
+> implementation.
 
 **Goal.** What Rockwell gives *one* engineer: pending work lives on the
 controller, is named, is visible in status, and assemble requires Test.
@@ -139,6 +149,14 @@ the ADR-0055 enum + CSV codegen pattern; the serve boundary-round drive
 ADR-0064 implementation plus one additive status record.
 
 ### L2 — Multi-user READ visibility
+
+> **Superseded by
+> [ADR-0065](../adrs/0065-engineering-session-exclusivity-and-ide-side-pending-edits.md)
+> (2026-09-20):** L2 is exactly one engineering session. No observer
+> sessions exist; further connection attempts are refused, and
+> single-writer exclusivity comes from session exclusivity, not from the
+> `EditSessionToken`/lock design below. The design below is kept as the
+> record of what a multi-user L2 would have required.
 
 **Goal.** Other online engineers see pending edits in progress; exactly
 one editor exists at any moment.
@@ -180,6 +198,13 @@ because L1 leaves the `EditTxnId` seam.
 
 ### L3 — Full parity
 
+> **Excluded by
+> [ADR-0065](../adrs/0065-engineering-session-exclusivity-and-ide-side-pending-edits.md)
+> (2026-09-20):** concurrent zones and editors cannot exist under the L2
+> one-session model, so none of this is pursued for parity.
+> [Per-POU Code Artifacts](per-pou-code-artifacts.md) remains independent
+> work, not a parity path.
+
 **Goal.** Multi-user edit zones, per-zone locks, granular edits,
 conflict prevention by construction.
 
@@ -219,32 +244,36 @@ L2 lock authority. **Size: XL** — it stands on per-POU artifacts shipped
 
 ## Recommendation
 
-**Target L1 now.** It is the already-accepted ADR-0064 implementation
-(assemble guard + V4017) plus one additive status record: no new session
-machinery, no new storage model, no protocol verbs. It converts a frozen
-hole into a small mechanism and names the candidate — the identity every
-later level builds on. KISS: nothing here is reopened.
+**Decided 2026-09-20 by the owner
+([ADR-0065](../adrs/0065-engineering-session-exclusivity-and-ide-side-pending-edits.md));
+this section replaces the audit's original "target L1, design L2, defer
+L3" recommendation.**
 
-**Design L2 next; implement it when the TCP transport lands.** L2's core
-is one mechanism promotion, and the repo doctrine demands it be made
-deliberately: today "one editor" is a *convention* enforced by client
-configuration (one workspace, one connection). The moment N sessions
-exist, no client discipline can enforce it, so the single-writer
-invariant belongs at the one authority that owns the candidate slot and
-the boundary swap — `RuntimeHost` — behind a token the command layer
-checks. That is the execution-permit latch's shape applied to editing,
-not a new abstraction layer: the host gains a latch, the redundancy
-crate pattern shows where session policy lives. Everything else in L2
-(observer sessions, visibility fields) is additive surface on existing
-registries.
+**Target: the ADR-0064 implementation only.** Pending stays in the IDE —
+PENDING_LOCAL is the shadow buffer of
+[Online Editing UX](online-editing-ux.md) today, and the controller learns
+of an edit only at Accept. The L1 controller-side pending record and its
+status identity are not built now: controller-side pending edits are
+deferred as a named debt item in the [roadmap](../roadmap.md). The
+assemble tightening from
+[ADR-0064](../adrs/0064-online-change-on-a-redundant-pair.md) (assemble
+requires Test; one guard plus V4017) is unaffected and is the parity work
+that remains.
 
-**Defer L3.** It requires per-POU runtime candidates (today a stated
-non-goal) and an ActiveManifest in the runtime; both are Phase-4+/P2
-work in their own right. L3 also buys the least per unit of risk: our
-editors are textual ST, where whole-POU zones are the honest granularity,
-and the single-writer L2 model already covers the overwhelmingly common
-case — one engineer editing, others watching. Revisit when per-POU
-artifacts have shipped and the manifest swap has a real driver.
+**L2 is exactly one engineering session, not multi-user read visibility.**
+The controller accepts one engineering session and refuses further
+connection attempts. Single-writer exclusivity is therefore a consequence
+of session exclusivity, enforced by the one authority that accepts
+sessions — no client discipline, no `EditSessionToken`, no observer
+sessions, no lock lifetime, no visibility polling. Authentication and
+engineer identity are a future option, not v1 scope. The spawned stdio
+child is inherently single-client and stays as-is.
+
+**L3 is excluded.** Concurrent zones and editors cannot exist under the
+one-session model, so per-POU zones, per-zone locks, and the manifest swap
+are not pursued for parity;
+[Per-POU Code Artifacts](per-pou-code-artifacts.md) remains independent
+work, not a parity path.
 
 **Never build:** merge or conflict-*resolution* machinery. Rockwell
 prevents conflicts with locks; the audit found no parity pressure that
@@ -257,35 +286,71 @@ posture every existing refusal (V4007–V4016, E0015) already implements.
    our candidate is validated at staging. Is controller-side pending a
    pre-validation store, or is "staged and visible" our honest pending
    state? The answer decides whether L1 needs new verbs or none.
+   **Resolved by
+   [ADR-0065](../adrs/0065-engineering-session-exclusivity-and-ide-side-pending-edits.md):**
+   neither is built now — pending stays IDE-side (PENDING_LOCAL/shadow
+   buffer) and the controller knows nothing until Accept; the
+   controller-side record is deferred as roadmap debt.
 2. **Identity without wire auth.** ADR-0063 defers transport
    authentication. Can L2 attribute a lock to an *engineer*, or only to
    an anonymous session token — and is the latter acceptable for the
    visibility display?
+   **Resolved by
+   [ADR-0065](../adrs/0065-engineering-session-exclusivity-and-ide-side-pending-edits.md):**
+   no engineer identity in v1; the single session owns every edit, so
+   there is no lock to attribute. Authentication stays a future option.
 3. **Lock lifetime across disconnect.** Rockwell pending edits survive a
    workstation loss. Does the L2 lock release on transport death
    (fail-open) or persist (fail-closed), and who may force-release it?
    The connection state machine's Reconnecting path interacts with this.
+   **Resolved by
+   [ADR-0065](../adrs/0065-engineering-session-exclusivity-and-ide-side-pending-edits.md):**
+   no lock exists; exclusivity is session exclusivity, which ends with the
+   session. There is nothing to release or force-release.
 4. **Zone granularity in ST.** The POU body is the natural zone. Is
    sub-POU (statement-range) addressing ever worth the wire and
    debug-map cost, or is POU the terminal granularity?
+   **Resolved by
+   [ADR-0065](../adrs/0065-engineering-session-exclusivity-and-ide-side-pending-edits.md):**
+   moot under L2 — L3 is excluded, so no zones exist; per-POU artifacts
+   remain independent work ([Per-POU Code Artifacts](per-pou-code-artifacts.md)).
 5. **stdio transport ceiling.** A spawned child is inherently
    single-client. Is L2 TCP-only, leaving the stdio session permanently
    at L1?
+   **Resolved by
+   [ADR-0065](../adrs/0065-engineering-session-exclusivity-and-ide-side-pending-edits.md):**
+   the stdio child is inherently single-client and stays as-is; TCP
+   enforces the same one-session rule by refusing further connections.
 6. **Poll cadence.** Is the 5 s `getStatus` heartbeat sufficient for
    edit-visibility, or does L2 force the deferred push-channel decision
    both connection and HA specs currently avoid?
+   **Resolved by
+   [ADR-0065](../adrs/0065-engineering-session-exclusivity-and-ide-side-pending-edits.md):**
+   no observers means nothing to poll for; the heartbeat stays an
+   idle-liveness check and the push channel stays deferred.
 7. **Migration candidates under multi-user.** A schema-changing zone
    forbids untest (V4011). If two in-flight zones exist at L3 and one is
    a migration candidate, do they assemble as one manifest transaction or
    serialize — and what does untest mean for the mixed pair?
+   **Resolved by
+   [ADR-0065](../adrs/0065-engineering-session-exclusivity-and-ide-side-pending-edits.md):**
+   moot under L2 — L3 is excluded and only the one session's candidate
+   exists; the V4011 untest refusal is unchanged.
 8. **Pair scope of pending visibility.** Is pending state replicated to
    SECONDARY immediately (both units show it) or only at Accept per
    ADR-0064(c), and what happens to attached observer sessions on a
    takeover mid-Test?
+   **Resolved by
+   [ADR-0065](../adrs/0065-engineering-session-exclusivity-and-ide-side-pending-edits.md):**
+   pending reaches the pair only at Accept (ADR-0064(c) unchanged); no
+   observer sessions exist to handle on a takeover.
 9. **Observer capacity.** How many concurrent observer sessions must a
    controller target support? This is the same connection-table sizing
    question the I/O firmware notes pose for Input Only connections, and
    belongs in the resource model.
+   **Resolved by
+   [ADR-0065](../adrs/0065-engineering-session-exclusivity-and-ide-side-pending-edits.md):**
+   no observer sessions by decision; there is no capacity to size.
 
 ## Out of Scope
 

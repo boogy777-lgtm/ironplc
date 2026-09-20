@@ -174,6 +174,12 @@ connection parameters, connected-device panel, status bar):
   handshake filling the device panel; the client connection state machine
   with bounded reconnect; V6012+ transport codes. Design done;
   implementation pending.
+- **Decided 2026-09-20 (owner):** one engineering session at a time — the
+  controller accepts exactly one session and refuses further connection
+  attempts; single-writer exclusivity comes from session exclusivity, not
+  from a lock token. Authentication and engineer identity are a future
+  option, not v1. Decision:
+  [ADR-0065](adrs/0065-engineering-session-exclusivity-and-ide-side-pending-edits.md).
 - **Start build** — reuse of the existing compile → `acceptEdits` (upload
   + verify) → test/assemble pipeline (Build & Commit / Build & Trial
   commit policies); build-status phases on the device panel. The pipeline
@@ -186,6 +192,12 @@ Autonomy: design done autonomously; implementation follows owner review.
 
 ## Deferred
 
+- **Debt — controller-side pending edits (parity L1), deferred by owner
+  decision 2026-09-20.** Pending stays IDE-side (PENDING_LOCAL shadow
+  buffer); the controller learns of an edit only at Accept. The L1 pending
+  record and its additive status identity are not built now; revisit when
+  a driver exists. Decision:
+  [ADR-0065](adrs/0065-engineering-session-exclusivity-and-ide-side-pending-edits.md).
 - **PLCopen XML / project-file storage of stable variable IDs.** The
   `project` crate already reads PLCopen XML, so it is a candidate for
   carrying UIDs; changing that format is a larger, user-visible commitment.
