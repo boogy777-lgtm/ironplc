@@ -412,6 +412,195 @@ suite('HotEditSession', () => {
   });
 });
 
+const IDENTITY_LINE = '{"response":"identity","protocol":1,'
+  + '"device":{"name":"ironplcvm","model":"IronPLC SoftPLC","modification":"vm-cli","firmwareVersion":"0.13.0"},'
+  + '"application":{"mode":"normal","active":1,"normal":1,"candidate":null,"application":1,"migration":false,"rounds":0}}';
+
+suite('encodeRequest identity and edit identity', () => {
+  test('encodeRequest_when_identity_then_tag_only_line', () => {
+    assert.strictEqual(encodeRequest('identity'), '{"command":"identity"}');
+  });
+
+  test('encodeRequest_when_accept_edits_with_edit_then_carries_edit_identity', () => {
+    assert.strictEqual(
+      encodeRequest('acceptEdits', new Uint8Array([1, 2, 255]), undefined, { name: 'main.st', origin: 'ironplc-vscode' }),
+      '{"command":"acceptEdits","program":[1,2,255],"edit":{"name":"main.st","origin":"ironplc-vscode"}}',
+    );
+  });
+
+  test('encodeRequest_when_accept_edits_with_partial_edit_then_carries_only_set_fields', () => {
+    assert.strictEqual(
+      encodeRequest('acceptEdits', new Uint8Array([1]), undefined, { name: 'main.st' }),
+      '{"command":"acceptEdits","program":[1],"edit":{"name":"main.st"}}',
+    );
+  });
+
+  test('encodeRequest_when_accept_edits_with_empty_edit_then_omits_the_block', () => {
+    assert.strictEqual(
+      encodeRequest('acceptEdits', new Uint8Array([1]), undefined, {}),
+      '{"command":"acceptEdits","program":[1]}',
+    );
+  });
+});
+
+suite('parseResponseLine identity', () => {
+  test('parseResponseLine_when_identity_then_device_application_and_no_redundancy', () => {
+    const response = parseResponseLine(IDENTITY_LINE);
+
+    assert.deepStrictEqual(response, {
+      kind: 'identity',
+      identity: {
+        protocol: 1,
+        device: {
+          name: 'ironplcvm',
+          model: 'IronPLC SoftPLC',
+          modification: 'vm-cli',
+          firmwareVersion: '0.13.0',
+        },
+        application: createStatus(),
+        redundancy: undefined,
+      },
+    });
+  });
+
+  test('parseResponseLine_when_identity_with_redundancy_then_block_parsed', () => {
+    const line = IDENTITY_LINE.slice(0, -1)
+      + ',"redundancy":{"pairId":"7f3a9c","role":"primary","epoch":12,"sync":"syncReady","control":"active"}}';
+
+    const response = parseResponseLine(line);
+
+    assert.strictEqual(response.kind, 'identity');
+    if (response.kind === 'identity') {
+      assert.deepStrictEqual(response.identity.redundancy, {
+        pairId: '7f3a9c',
+        role: 'primary',
+        epoch: 12,
+        sync: 'syncReady',
+        control: 'active',
+      });
+    }
+  });
+
+  test('parseResponseLine_when_identity_protocol_higher_than_supported_then_throws', () => {
+    const line = IDENTITY_LINE.replace('"protocol":1', '"protocol":2');
+
+    assert.throws(() => parseResponseLine(line), /session protocol 2/);
+  });
+
+  test('parseResponseLine_when_identity_missing_device_then_throws', () => {
+    const line = '{"response":"identity","protocol":1,"application":{}}';
+
+    assert.throws(() => parseResponseLine(line), HotEditProtocolError);
+  });
+
+  test('parseResponseLine_when_identity_missing_application_then_throws', () => {
+    const line = '{"response":"identity","protocol":1,"device":{"name":"x","model":"x","modification":"x","firmwareVersion":"x"}}';
+
+    assert.throws(() => parseResponseLine(line), HotEditProtocolError);
+  });
+
+  test('parseResponseLine_when_identity_redundancy_malformed_then_throws', () => {
+    const line = IDENTITY_LINE.slice(0, -1) + ',"redundancy":"nope"}';
+
+    assert.throws(() => parseResponseLine(line), HotEditProtocolError);
+  });
+});
+
+suite('parseResponseLine pendingEdit', () => {
+  test('parseResponseLine_when_status_with_pending_edit_then_record_parsed', () => {
+    const line = STATUS_LINE.slice(0, -1)
+      + ',"pendingEdit":{"name":"main.st","origin":"ironplc-vscode","acceptedAt":1720000000000,'
+      + '"baseline":{"normalGeneration":1,"contentHash":[1,2,3]}}}';
+
+    const response = parseResponseLine(line);
+
+    assert.deepStrictEqual(response, {
+      kind: 'status',
+      status: createStatus({
+        rounds: 42,
+        pendingEdit: {
+          name: 'main.st',
+          origin: 'ironplc-vscode',
+          acceptedAt: 1720000000000,
+          baseline: { normalGeneration: 1, contentHash: [1, 2, 3] },
+        },
+      }),
+    });
+  });
+
+  test('parseResponseLine_when_pending_edit_omits_optional_labels_then_nulls', () => {
+    const line = STATUS_LINE.slice(0, -1)
+      + ',"pendingEdit":{"acceptedAt":5,"baseline":{"normalGeneration":1,"contentHash":[]}}}';
+
+    const response = parseResponseLine(line);
+
+    assert.strictEqual(response.kind, 'status');
+    if (response.kind === 'status') {
+      assert.strictEqual(response.status.pendingEdit!.name, null);
+      assert.strictEqual(response.status.pendingEdit!.origin, null);
+    }
+  });
+
+  test('parseResponseLine_when_pending_edit_missing_baseline_then_throws', () => {
+    const line = STATUS_LINE.slice(0, -1) + ',"pendingEdit":{"acceptedAt":5}}';
+
+    assert.throws(() => parseResponseLine(line), HotEditProtocolError);
+  });
+});
+
+suite('HotEditSession identity', () => {
+  test('identity_when_response_ok_then_resolves_identity_info', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const pending = session.identity();
+    await waitFor(() => transport.sent.length === 1);
+
+    assert.strictEqual(transport.sent[0], '{"command":"identity"}');
+    transport.emitLine(IDENTITY_LINE);
+
+    const info = await pending;
+    assert.strictEqual(info.device.name, 'ironplcvm');
+    assert.strictEqual(info.application.active, 1);
+    assert.strictEqual(info.redundancy, undefined);
+  });
+
+  test('identity_when_coded_refusal_then_rejects_with_vcode', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const pending = session.identity();
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('{"response":"error","vCode":"V6014","message":"one engineering session"}');
+
+    const err = await rejectWith(pending);
+    assert.ok(err instanceof HotEditProtocolError);
+    assert.strictEqual(err.vCode, 'V6014');
+  });
+
+  test('identity_when_status_answer_then_rejects_as_unexpected', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const pending = session.identity();
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine(STATUS_LINE);
+
+    await assert.rejects(pending, /unexpected status response to identity/);
+  });
+
+  test('acceptEdits_when_edit_identity_then_line_carries_edit_block', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const pending = session.acceptEdits(new Uint8Array([9]), undefined, { name: 'main.st', origin: 'ironplc-vscode' });
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('{"response":"ack"}');
+
+    await pending;
+    assert.strictEqual(
+      transport.sent[0],
+      '{"command":"acceptEdits","program":[9],"edit":{"name":"main.st","origin":"ironplc-vscode"}}',
+    );
+  });
+});
+
 /** Resolves once `condition` holds, polling on the macrotask queue. */
 async function waitFor(condition: () => boolean): Promise<void> {
   for (let i = 0; i < 100; i++) {

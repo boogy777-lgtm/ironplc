@@ -16,7 +16,8 @@
 
 /** The commands of the hot-edit protocol, one per `command` tag on the wire. */
 export type HotEditCommand
-  = | 'getStatus'
+  = | 'identity'
+    | 'getStatus'
     | 'acceptEdits'
     | 'testEdits'
     | 'untestEdits'
@@ -27,10 +28,30 @@ export type HotEditCommand
 export type MigrationDecision = 'init' | 'preserve';
 
 /**
- * The `acceptEdits` wire `migration` map (ADR 0061): one decision per shared
+ * The wire map for `pairs`: one decision per shared
  * UID, keyed by the UID's string form, e.g. `{"1":"preserve"}`.
  */
 export type MigrationDecisionMap = Record<string, MigrationDecision>;
+
+/**
+ * The session protocol version this client speaks (ADR-0063): `1` for the
+ * version the engineering connection spec defines. A client refuses a
+ * higher number; an older server answers `identity` with the codeless codec
+ * error, which the connection state machine reads as a failed handshake.
+ */
+export const SUPPORTED_SESSION_PROTOCOL = 1;
+
+/**
+ * The optional `edit` identity block of `acceptEdits` (ADR-0064): the
+ * advisory client labels the pending-edit record reports while the candidate
+ * is staged. Both fields are optional.
+ */
+export interface EditIdentity {
+  /** The client-supplied edit label (e.g. the source file name). */
+  name?: string;
+  /** The unauthenticated advisory client label (e.g. the editor name). */
+  origin?: string;
+}
 
 /** A snapshot of the host's hot-edit state (the `status` response payload). */
 export interface HotEditStatus {
@@ -41,6 +62,55 @@ export interface HotEditStatus {
   application: number;
   migration: boolean;
   rounds: number;
+  /** The pending-edit record written at Accept, when a candidate is staged. */
+  pendingEdit?: PendingEditRecord;
+}
+
+/** The baseline block of the pending-edit record (the normal artifact at Accept). */
+export interface EditBaseline {
+  normalGeneration: number;
+  contentHash: readonly number[];
+}
+
+/**
+ * The controller-side pending-edit record (ADR-0064): metadata written at
+ * Accept beside the candidate, cleared exactly where the candidate dies
+ * (Assemble, Cancel).
+ */
+export interface PendingEditRecord {
+  name: string | null;
+  origin: string | null;
+  acceptedAt: number;
+  baseline: EditBaseline;
+}
+
+/** The device panel block of an `identity` response (ADR-0063). */
+export interface DeviceIdentity {
+  name: string;
+  model: string;
+  modification: string;
+  firmwareVersion: string;
+}
+
+/** The optional redundancy block of an `identity` response (ADR-0063). */
+export interface RedundancyIdentity {
+  pairId: string;
+  role: string;
+  epoch: number;
+  sync: string;
+  control: string;
+}
+
+/**
+ * The payload of an `identity` response: the session protocol version, the
+ * device panel fields, the live application-state snapshot (the same fields
+ * `getStatus` returns), and the optional redundancy block.
+ */
+export interface IdentityInfo {
+  protocol: number;
+  device: DeviceIdentity;
+  application: HotEditStatus;
+  redundancy?: RedundancyIdentity;
 }
 
 /**
@@ -85,15 +155,19 @@ export class HotEditProtocolError extends Error {
 /**
  * Renders one command as a single line of JSON, without a trailing newline.
  * The `acceptEdits` line carries the program bytes and, when non-empty, the
- * ADR-0061 migration decision map.
+ * ADR-0061 migration decision map and the ADR-0064 edit identity.
  */
 export function encodeRequest(
   command: HotEditCommand,
   program?: Uint8Array,
   migration?: MigrationDecisionMap,
+  edit?: EditIdentity,
 ): string {
   if (command === 'acceptEdits') {
     const request: Record<string, unknown> = { command, program: Array.from(program ?? []) };
+    if (edit && (edit.name !== undefined || edit.origin !== undefined)) {
+      request.edit = edit;
+    }
     if (migration && Object.keys(migration).length > 0) {
       request.migration = migration;
     }
@@ -103,11 +177,12 @@ export function encodeRequest(
 }
 
 type StatusResponse = { kind: 'status'; status: HotEditStatus };
+type IdentityResponse = { kind: 'identity'; identity: IdentityInfo };
 type AckResponse = { kind: 'ack' };
 type ErrorResponse = { kind: 'error'; error: HotEditProtocolError };
 
 /** The parsed answer to one command, before command-specific matching. */
-export type HotEditResponse = StatusResponse | AckResponse | ErrorResponse;
+export type HotEditResponse = StatusResponse | IdentityResponse | AckResponse | ErrorResponse;
 
 /**
  * Parses one response line (a single JSON value without its trailing
@@ -128,6 +203,9 @@ export function parseResponseLine(line: string): HotEditResponse {
   }
 
   const record = value as Record<string, unknown>;
+  if (record.response === 'identity') {
+    return { kind: 'identity', identity: parseIdentity(record) };
+  }
   if (record.response === 'status') {
     return { kind: 'status', status: parseStatus(record) };
   }
@@ -183,6 +261,7 @@ function parseStatus(record: Record<string, unknown>): HotEditStatus {
   if (typeof record.mode !== 'string') {
     throw new HotEditProtocolError(null, 'status response is missing the mode');
   }
+  const pendingEdit = parsePendingEdit(record.pendingEdit);
   return {
     mode: record.mode,
     active: numberField(record, 'active'),
@@ -191,6 +270,7 @@ function parseStatus(record: Record<string, unknown>): HotEditStatus {
     application: numberField(record, 'application'),
     migration: record.migration === true,
     rounds: numberField(record, 'rounds'),
+    ...(pendingEdit !== undefined ? { pendingEdit } : {}),
   };
 }
 
@@ -200,6 +280,103 @@ function numberField(record: Record<string, unknown>, key: string): number {
     throw new HotEditProtocolError(null, `status response is missing ${key}`);
   }
   return record[key] as number;
+}
+
+/**
+ * Builds an [`IdentityInfo`] from a parsed `identity` response object: the
+ * protocol version (a higher number than this client speaks is refused, the
+ * version negotiation the engineering connection specifies), the device
+ * panel block, the application snapshot (the [`parseStatus`] vocabulary),
+ * and the optional redundancy block. Unknown top-level blocks are ignored —
+ * the field set grows by adding optional fields.
+ */
+function parseIdentity(record: Record<string, unknown>): IdentityInfo {
+  if (typeof record.protocol !== 'number' || !Number.isInteger(record.protocol)) {
+    throw new HotEditProtocolError(null, 'identity response is missing the protocol version');
+  }
+  if (record.protocol > SUPPORTED_SESSION_PROTOCOL) {
+    throw new HotEditProtocolError(
+      null,
+      `device speaks session protocol ${record.protocol}, this client supports up to ${SUPPORTED_SESSION_PROTOCOL}`,
+    );
+  }
+  const device = record.device;
+  if (typeof device !== 'object' || device === null) {
+    throw new HotEditProtocolError(null, 'identity response is missing the device block');
+  }
+  const deviceRecord = device as Record<string, unknown>;
+  const application = record.application;
+  if (typeof application !== 'object' || application === null) {
+    throw new HotEditProtocolError(null, 'identity response is missing the application block');
+  }
+  return {
+    protocol: record.protocol,
+    device: {
+      name: stringField(deviceRecord, 'name'),
+      model: stringField(deviceRecord, 'model'),
+      modification: stringField(deviceRecord, 'modification'),
+      firmwareVersion: stringField(deviceRecord, 'firmwareVersion'),
+    },
+    application: parseStatus(application as Record<string, unknown>),
+    redundancy: parseRedundancy(record.redundancy),
+  };
+}
+
+/** Reads a string field, refusing a malformed block. */
+function stringField(record: Record<string, unknown>, key: string): string {
+  if (typeof record[key] !== 'string') {
+    throw new HotEditProtocolError(null, `response block is missing ${key}`);
+  }
+  return record[key] as string;
+}
+
+/** Builds the optional redundancy block; absent means standalone. */
+function parseRedundancy(value: unknown): RedundancyIdentity | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== 'object') {
+    throw new HotEditProtocolError(null, 'identity response carries a malformed redundancy block');
+  }
+  const record = value as Record<string, unknown>;
+  return {
+    pairId: stringField(record, 'pairId'),
+    role: stringField(record, 'role'),
+    epoch: numberField(record, 'epoch'),
+    sync: stringField(record, 'sync'),
+    control: stringField(record, 'control'),
+  };
+}
+
+/** Builds the optional pending-edit record of a `status` payload. */
+function parsePendingEdit(value: unknown): PendingEditRecord | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== 'object') {
+    throw new HotEditProtocolError(null, 'status response carries a malformed pendingEdit record');
+  }
+  const record = value as Record<string, unknown>;
+  const name = record.name === undefined ? null : stringField(record, 'name');
+  const origin = record.origin === undefined ? null : stringField(record, 'origin');
+  const baseline = record.baseline;
+  if (typeof baseline !== 'object' || baseline === null) {
+    throw new HotEditProtocolError(null, 'pendingEdit record is missing the baseline block');
+  }
+  const baselineRecord = baseline as Record<string, unknown>;
+  const contentHash = baselineRecord.contentHash;
+  if (!Array.isArray(contentHash) || !contentHash.every(item => typeof item === 'number')) {
+    throw new HotEditProtocolError(null, 'pendingEdit baseline carries a malformed content hash');
+  }
+  return {
+    name,
+    origin,
+    acceptedAt: numberField(record, 'acceptedAt'),
+    baseline: {
+      normalGeneration: numberField(baselineRecord, 'normalGeneration'),
+      contentHash,
+    },
+  };
 }
 
 /** "Normal", "Testing" — the wire mode with a display-ready capital. */
@@ -272,6 +449,19 @@ export class HotEditSession {
     return !this.exited;
   }
 
+  /**
+   * The engineering-connection handshake (ADR-0063): the first command on
+   * every (re)opened transport. Fills the device panel and carries the
+   * application-state snapshot the baseline check compares.
+   */
+  async identity(): Promise<IdentityInfo> {
+    const response = await this.request('identity');
+    if (response.kind !== 'identity') {
+      throw new HotEditProtocolError(null, `unexpected ${response.kind} response to identity`);
+    }
+    return response.identity;
+  }
+
   /** Asks the host for its hot-edit status. */
   async getStatus(): Promise<HotEditStatus> {
     const response = await this.request('getStatus');
@@ -285,10 +475,11 @@ export class HotEditSession {
    * Stages the compiled container `program` as the edit candidate, resolving
    * out-of-policy type changes with the engineer's `migration` decisions
    * (ADR 0061). Without decisions the host refuses with V4010 and a `pairs`
-   * list on the thrown [`HotEditProtocolError`].
+   * list on the thrown [`HotEditProtocolError`]. The optional `edit`
+   * identity (ADR-0064) labels the pending-edit record the status reports.
    */
-  async acceptEdits(program: Uint8Array, migration?: MigrationDecisionMap): Promise<void> {
-    await this.request('acceptEdits', program, migration);
+  async acceptEdits(program: Uint8Array, migration?: MigrationDecisionMap, edit?: EditIdentity): Promise<void> {
+    await this.request('acceptEdits', program, migration, edit);
   }
 
   /** Activates the staged candidate at the next scan boundary. */
@@ -320,6 +511,7 @@ export class HotEditSession {
     command: HotEditCommand,
     program?: Uint8Array,
     migration?: MigrationDecisionMap,
+    edit?: EditIdentity,
   ): Promise<HotEditResponse> {
     if (this.exited) {
       throw new HotEditProtocolError(null, 'the hot edit session has ended.');
@@ -327,7 +519,7 @@ export class HotEditSession {
     const response = new Promise<HotEditResponse>((resolve, reject) => {
       this.pending.push({ resolve, reject });
     });
-    this.transport.sendLine(encodeRequest(command, program, migration));
+    this.transport.sendLine(encodeRequest(command, program, migration, edit));
     const result = await response;
     if (result.kind === 'error') {
       throw result.error;

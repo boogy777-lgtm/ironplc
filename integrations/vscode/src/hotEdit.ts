@@ -1,13 +1,10 @@
 import * as vscode from 'vscode';
-import * as os from 'os';
 import * as path from 'path';
-import { execFile, spawn, ChildProcessWithoutNullStreams } from 'child_process';
+import { spawn, ChildProcessWithoutNullStreams } from 'child_process';
 import { readFile } from 'fs/promises';
 import { existsSync } from 'fs';
-import { compileArgs } from './taskProviderLogic';
+import { compileSourceToContainer, runCompiler } from './taskProviderLogic';
 import {
-  containerOutputPath,
-  firstLine,
   isDebuggableProgram,
   programKind,
 } from './debugAdapterLogic';
@@ -47,8 +44,9 @@ import {
  * the unit-testable `hotEditSession` module, sync parsing and the
  * resolution flow live in the unit-testable `syncUidsLogic` module, the
  * ADR-0061 migration decision planning lives in the unit-testable
- * `hotEditMigrationLogic` module, compilation reuses the debug adapter's
- * compile path (`compileArgs` + `containerOutputPath`), and program
+ * `hotEditMigrationLogic` module, compilation reuses the shared compile
+ * path (`compileSourceToContainer`, the `compileArgs` helper plus the
+ * debug adapter's `containerOutputPath`), and program
  * classification reuses `programKind`/`isDebuggableProgram` so "a runnable
  * file" means the same thing everywhere in the extension.
  *
@@ -241,7 +239,7 @@ export function registerHotEditSupport(
     }
 
     try {
-      const report = await syncVariableIds(compilerPath, selected, runCompiler, resolutionUi);
+      const report = await syncVariableIds(compilerPath, selected, runCompile, resolutionUi);
       if (candidatesOf(report).length > 0) {
         void vscode.window.showWarningMessage(
           `IronPLC Hot Edit: Sync Variable IDs: ${formatSyncSummary(report)}. `
@@ -291,37 +289,7 @@ export function registerHotEditSupport(
   };
 
   /** UI callbacks for the migration decision flow; the flow logic itself is unit-testable. */
-  const migrationUi: MigrationDecisionUi = {
-    async choosePreserved(pairs: readonly TypeChangePair[]): Promise<readonly number[] | undefined> {
-      const preservable = preservablePairs(pairs);
-      let preserved: readonly number[] = [];
-      if (preservable.length > 0) {
-        const picked = await vscode.window.showQuickPick(
-          preservable.map(pair => ({
-            label: pair.name ?? `Variable ${pair.uid}`,
-            description: `${pair.from} -> ${pair.to}`,
-            detail: `uid ${pair.uid}: keep the raw bits; the value may no longer be valid`,
-            pair,
-          })),
-          {
-            title: 'IronPLC Hot Edit: variables whose type changed',
-            placeHolder: 'Checked variables preserve their storage bytes; unchecked variables are reinitialized (the default).',
-            canPickMany: true,
-          },
-        );
-        if (!picked) {
-          return undefined;
-        }
-        preserved = picked.map(item => item.pair.uid);
-      }
-      const choice = await vscode.window.showWarningMessage(
-        formatMigrationWarning(pairs, preserved),
-        { modal: true },
-        'Apply Migration',
-      );
-      return choice === 'Apply Migration' ? preserved : undefined;
-    },
-  };
+  const migrationUi: MigrationDecisionUi = createMigrationDecisionUi();
 
   function requireSession(): HotEditSession | undefined {
     if (!session) {
@@ -355,34 +323,16 @@ export function registerHotEditSupport(
 
   /** The serve session loads a compiled container; a source program must be compiled first. */
   function compileToContainer(compiler: string, source: string): Promise<string> {
-    const output = containerOutputPath(source, os.tmpdir());
-    const args = compileArgs(source, output);
-    return runCompiler(compiler, args).then(() => output);
+    return compileSourceToContainer(compiler, source, text => outputChannel.append(text));
   }
 
   /**
    * Runs one compiler invocation, echoing the command and its output to the
    * output channel; rejects with the first diagnostic line on failure. The
-   * single transport every compiler-spawning command in this section shares.
+   * shared runner lives in `taskProviderLogic`.
    */
-  function runCompiler(compiler: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
-    outputChannel.appendLine(`$ ${compiler} ${args.join(' ')}`);
-    return new Promise((resolve, reject) => {
-      execFile(compiler, args, (error, stdout, stderr) => {
-        if (stdout) {
-          outputChannel.append(stdout);
-        }
-        if (stderr) {
-          outputChannel.append(stderr);
-        }
-        if (error) {
-          const detail = firstLine(stderr) || firstLine(stdout) || String(error);
-          reject(new Error(detail));
-          return;
-        }
-        resolve({ stdout, stderr });
-      });
-    });
+  function runCompile(compiler: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
+    return runCompiler(compiler, args, text => outputChannel.append(text));
   }
 
   function reportCompileFailure(source: string, err: unknown): void {
@@ -426,11 +376,51 @@ export function registerHotEditSupport(
 }
 
 /**
+ * The vscode callbacks of the ADR-0061 migration decision flow, shared by
+ * the hot-edit Accept Edits command and the engineering-connection build:
+ * one checkbox row per preservable type change, then the irreversible-action
+ * confirmation. The flow planning itself lives in `hotEditMigrationLogic`.
+ */
+export function createMigrationDecisionUi(): MigrationDecisionUi {
+  return {
+    async choosePreserved(pairs: readonly TypeChangePair[]): Promise<readonly number[] | undefined> {
+      const preservable = preservablePairs(pairs);
+      let preserved: readonly number[] = [];
+      if (preservable.length > 0) {
+        const picked = await vscode.window.showQuickPick(
+          preservable.map(pair => ({
+            label: pair.name ?? `Variable ${pair.uid}`,
+            description: `${pair.from} -> ${pair.to}`,
+            detail: `uid ${pair.uid}: keep the raw bits; the value may no longer be valid`,
+            pair,
+          })),
+          {
+            title: 'IronPLC Hot Edit: variables whose type changed',
+            placeHolder: 'Checked variables preserve their storage bytes; unchecked variables are reinitialized (the default).',
+            canPickMany: true,
+          },
+        );
+        if (!picked) {
+          return undefined;
+        }
+        preserved = picked.map(item => item.pair.uid);
+      }
+      const choice = await vscode.window.showWarningMessage(
+        formatMigrationWarning(pairs, preserved),
+        { modal: true },
+        'Apply Migration',
+      );
+      return choice === 'Apply Migration' ? preserved : undefined;
+    },
+  };
+}
+
+/**
  * Shared "active editor, else open dialog" resolution for the commands that
  * operate on one project path: returns the active editor's path when it
  * satisfies `accept`, otherwise asks the user to pick a file.
  */
-async function resolvePathInteractive(
+export async function resolvePathInteractive(
   title: string,
   accept: (path: string) => boolean,
   filterName: string,
@@ -447,17 +437,19 @@ async function resolvePathInteractive(
   return picked && picked.length > 0 ? picked[0].fsPath : undefined;
 }
 
-/** The VM executable name on `platform` (`.exe` on Windows). */
-function vmFileName(platform: string): string {
+/** The VM executable name on `platform` (`.exe` on Windows). Exported for the engineering connection's stdio profile. */
+export function vmFileName(platform: string): string {
   return platform === 'win32' ? 'ironplcvm.exe' : 'ironplcvm';
 }
 
 /**
  * Line-buffers the child process's stdio into [`HotEditTransport`]: stdout is
  * the protocol channel (split into lines, carriage returns trimmed), stdin
- * carries one JSON command per line.
+ * carries one JSON command per line. Exported for the engineering
+ * connection's stdio profile, which spawns the same `ironplcvm serve`
+ * session over the same framing.
  */
-class StdioLineTransport implements HotEditTransport {
+export class StdioLineTransport implements HotEditTransport {
   private readonly lineListeners: ((line: string) => void)[] = [];
   private readonly exitListeners: (() => void)[] = [];
   private exited = false;

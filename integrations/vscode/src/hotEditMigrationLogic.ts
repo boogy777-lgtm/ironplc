@@ -13,6 +13,7 @@
  */
 
 import {
+  EditIdentity,
   HotEditProtocolError,
   HotEditSession,
   MigrationDecisionMap,
@@ -80,17 +81,20 @@ export function formatMigrationWarning(
 /**
  * Stages `program` as the edit candidate, driving the decision flow on a
  * V4010 refusal that carries pairs: ask which variables preserve, build the
- * map (unchecked = init), and resubmit the identical payload once. A refusal
- * without pairs, an engineer cancel, or any resubmit failure propagates to
- * the caller, which surfaces the coded protocol error as before.
+ * map (unchecked = init), and resubmit the identical payload once. The
+ * optional `edit` identity (ADR-0064) labels the pending-edit record on both
+ * attempts. A refusal without pairs, an engineer cancel, or any resubmit
+ * failure propagates to the caller, which surfaces the coded protocol error
+ * as before.
  */
 export async function acceptEditsWithDecisions(
   client: Pick<HotEditSession, 'acceptEdits'>,
   program: Uint8Array,
   ui: MigrationDecisionUi,
+  edit?: EditIdentity,
 ): Promise<void> {
   try {
-    await client.acceptEdits(program);
+    await client.acceptEdits(program, undefined, edit);
     return;
   }
   catch (err) {
@@ -102,6 +106,6 @@ export async function acceptEditsWithDecisions(
     if (preserved === undefined) {
       throw err;
     }
-    await client.acceptEdits(program, migrationPlan(pairs, preserved));
+    await client.acceptEdits(program, migrationPlan(pairs, preserved), edit);
   }
 }
