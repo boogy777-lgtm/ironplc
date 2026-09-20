@@ -290,6 +290,11 @@ a coded error response is a protocol answer, never a reconnect trigger
 user disconnect from any state lands in Disconnected and cancels nothing else
 ```
 
+Connected also drives the editor surface: while the state machine is in
+Connected the editor is monitoring-first, and every edit enters through
+the explicit PENDING_LOCAL gate of
+[Online Editing UX](online-editing-ux.md).
+
 ### Reconnect policy
 
 Bounded retries with exponential backoff and full jitter:

@@ -241,6 +241,9 @@ redundancy crate's layer; neither crate depends on the other.
   the tabs are data contracts, not widgets.
 - No push/streaming transport: v1 is request/response; a notification
   channel is a follow-up decision if polling proves insufficient.
+- No editor monitoring/edit-mode gating while connected: that gate is
+  owned by [Online Editing UX](online-editing-ux.md); this contract only
+  supplies the HA state the monitoring overlays render.
 - No new authentication/authorization model for the engineering surface.
 - No changes to the runtime's hot-edit command vocabulary or V-codes.
 
