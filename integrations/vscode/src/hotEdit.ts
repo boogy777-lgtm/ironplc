@@ -70,12 +70,13 @@ export function registerHotEditSupport(
 
   const statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 98);
   context.subscriptions.push(statusItem);
-  applyStatusBar(undefined);
 
   let session: HotEditSession | undefined;
   let child: ChildProcessWithoutNullStreams | undefined;
   let program: string | undefined;
   let stopping = false;
+
+  applyStatusBar(undefined);
 
   context.subscriptions.push({ dispose: () => stopSession() });
 

@@ -7,6 +7,23 @@ suite('Extension Test Suite', () => {
 
   teardown(closeActiveWindows);
 
+  // Regression: activating the contribution host must not throw. A crash in
+  // activate() (for example a temporal-dead-zone access) leaves the extension
+  // inactive and every view data provider unregistered, which the unit tests
+  // cannot observe because they never run activate().
+  test('activates when the IronPLC view is opened', async () => {
+    const extension = vscode.extensions.all.find(candidate => candidate.packageJSON.name === 'ironplc');
+    assert.ok(extension, 'IronPLC extension not found in the extension host');
+
+    await vscode.commands.executeCommand('workbench.view.extension.ironplc');
+
+    const deadline = Date.now() + 10000;
+    while (!extension!.isActive && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    assert.ok(extension!.isActive, 'IronPLC extension did not activate when its view opened');
+  });
+
   test('ironplc.reateNewStructuredTextFile sets 61131-3-st as language ID', async () => {
     await vscode.commands.executeCommand('ironplc.createNewStructuredTextFile');
     const stFile = vscode.window.activeTextEditor!.document as any | undefined;

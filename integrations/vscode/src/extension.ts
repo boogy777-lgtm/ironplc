@@ -110,9 +110,8 @@ export function activate(context: vscode.ExtensionContext) {
   extensionVersion = context.extension.packageJSON?.version ?? '';
 
   context.subscriptions.push(vscode.commands.registerCommand('ironplc.createNewStructuredTextFile', async () => {
-    await vscode.workspace.openTextDocument({ language: '61131-3-st' }).then((newFile) => {
-      vscode.window.showTextDocument(newFile);
-    });
+    const newFile = await vscode.workspace.openTextDocument({ language: '61131-3-st' });
+    await vscode.window.showTextDocument(newFile);
   }));
 
   // Register run commands unconditionally so they exist even without a
