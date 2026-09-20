@@ -151,6 +151,29 @@ Autonomy: full.
 Autonomy: design proposals are autonomous; implementation starts only after
 the decisions above.
 
+### Phase 6 - Engineering connection
+
+The desktop IDE connection workflow (Owen Logic reference UI: auth block,
+connection parameters, connected-device panel, status bar):
+
+- **Connection settings** — profile model (name, transport `stdio`/`tcp`,
+  address, port, credentials as a secret-store key), settings persistence,
+  E0010+ validation codes. Design done; implementation pending.
+- **Establish connection** — one session protocol over stdio (spawned
+  `ironplcvm serve`) and TCP (length-prefixed JSON lines); the `identity`
+  handshake filling the device panel; the client connection state machine
+  with bounded reconnect; V6012+ transport codes. Design done;
+  implementation pending.
+- **Start build** — reuse of the existing compile → `acceptEdits` (upload
+  + verify) → test/assemble pipeline; build-status phases on the device
+  panel. The pipeline exists today (hot edit); the Build button wiring is
+  pending.
+
+Details: [Engineering Connection](design/engineering-connection.md).
+Decisions: [ADR-0063](../adrs/0063-engineering-connection-transport.md).
+
+Autonomy: design done autonomously; implementation follows owner review.
+
 ## Deferred
 
 - **PLCopen XML / project-file storage of stable variable IDs.** The
