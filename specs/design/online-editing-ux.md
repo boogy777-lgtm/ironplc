@@ -41,8 +41,8 @@ separate toggle the engineer must remember to set:
 | Mode | When | Editing |
 |------|------|---------|
 | Offline | Any state other than Connected (Disconnected, Connecting, Reconnecting) | Free editing, no confirmations |
-| Monitoring | Connected, no pending local edits | Read-only |
-| Pending Local | Connected, after explicit entry | Local edits; the controller is unchanged until Accept |
+| Monitoring | Connected, no net code diff | Code read-only; prospective edits held in a shadow buffer |
+| Pending Local | Connected, after confirmed net diff or Start Pending Edits | Local edits; the controller is unchanged until Accept |
 
 ### Monitoring-first
 
@@ -59,24 +59,31 @@ While Connected, the editor is a monitoring surface:
   block is present.
 
 Mouse interaction is navigation only: clicks move the cursor and change
-the selection. Typing is blocked. **A click is never a code change.**
+the selection. Typing is captured in a shadow buffer, not in the code.
+**A click is never a code change.**
 
-### Explicit edit-mode entry
+### Diff-triggered edit-mode entry
 
-Any modification attempt while Connected — a keystroke, a paste, a
-refactor command — does **not** change code. It opens a diff-backed
-confirmation over the change the attempt would have produced:
+While Connected, the editor holds prospective edits in a shadow buffer;
+the code and the online baseline stay untouched. The client computes a
+diff of the shadow buffer against that baseline. The confirmation appears
+at the moment the first **net code diff** is detected, showing that diff:
 
 > **Enter code-change mode?** Changes stay local (Pending Local) until
 > Accept.
 
-- **Yes** → the editor enters PENDING_LOCAL; the attempted change applies
-  as the first local edit.
-- **No** → the input is discarded; the editor stays in monitoring.
+- **Yes** → the editor enters PENDING_LOCAL; the diff applies as the first
+  local edit.
+- **No** → the shadow buffer is discarded; the editor stays in monitoring.
+
+If the buffer ends up identical to the baseline — an edit reverted, a
+no-op keystroke — there is no diff to confirm: no dialog appears and the
+editor stays in monitoring. No other trigger ever prompts; clicks, cursor
+moves, and commands that change nothing are not diffs.
 
 The deliberate path is an explicit toolbar / status-bar command **Start
-Pending Edits**, which enters PENDING_LOCAL directly — the same gate, used
-before rather than at the first keystroke.
+Pending Edits**, which enters PENDING_LOCAL directly, without waiting for
+a diff.
 
 Offline (not Connected) there is no gate: editing is free and no
 confirmation ever appears, because there is no live equipment to protect.
@@ -88,7 +95,7 @@ read whether the controller is running edited code:
 
 | Lifecycle state | Entered when | Visual affordances |
 |-----------------|--------------|--------------------|
-| MONITORING (clean) | Connected, no local edits | Live overlays; status bar shows the connection and the running generation; no edit affordances |
+| MONITORING (clean) | Connected, no net code diff | Live overlays; status bar shows the connection and the running generation; no edit affordances |
 | PENDING LOCAL | Confirmation "Yes" or Start Pending Edits | Banner "edits are local, controller unchanged"; gutter markers on changed blocks; status-bar Pending Local indicator |
 | STAGED | Accept delivered and validated the candidate | Banner shows the candidate is staged; the controller still runs the original; the pending markers stay |
 | TESTING | The candidate executes under Test | Status-bar Testing indicator; live values are the candidate's values; the banner shows the exits (untest / cancel / assemble) |
@@ -102,18 +109,21 @@ device, returning to MONITORING.
 ## Safety Property
 
 In online mode there is exactly one path from input to code change: the
-confirmation. The Connected state of the Mechanism 2 state machine is the
-latch — modification attempts are intercepted before they reach the
-buffer, so "typing is blocked" is enforced by the mode, not by reviewer
-discipline. The confirmation is the only bridge into PENDING_LOCAL, and
-PENDING_LOCAL is the only state in which edits accumulate.
+confirmation, and it opens only on a net code diff. The Connected state
+of the Mechanism 2 state machine is the latch — keystrokes land in a
+shadow buffer, the diff of that buffer against the online baseline is the
+only trigger that can prompt, and PENDING_LOCAL is the only state in
+which edits accumulate. Start Pending Edits opens PENDING_LOCAL with a
+clean buffer and carries no change across the gate. The gate is enforced
+by the mode, not by reviewer discipline.
 
 ## Client Mapping
 
 The VS Code extension is the reference client:
 
-- The read-only monitoring surface follows the thin-client pattern of
-  `specs/steering/extension-standards.md`: the gate decision lives in
+- The monitoring surface follows the thin-client pattern of
+  `specs/steering/extension-standards.md`: the shadow buffer's diff
+  against the online baseline and the gate decision live in
   unit-testable, vscode-free logic; the editor only renders it.
 - The confirmation, the Start Pending Edits command, and the PENDING LOCAL
   banner are extension UI over that decision; they hold no session logic.
