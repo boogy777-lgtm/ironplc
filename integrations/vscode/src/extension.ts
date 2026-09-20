@@ -21,8 +21,6 @@ import {
 } from './debugAdapter';
 import { registerCustomRequests } from './customRequests';
 import { registerHotEditSupport } from './hotEdit';
-import { registerActionsView } from './iplcViewProvider';
-import { registerRedundantPairDashboard } from './redundantPairDashboard';
 import { sourceExtensionsFromLanguages } from './debugAdapterLogic';
 
 /**
@@ -110,8 +108,9 @@ export function activate(context: vscode.ExtensionContext) {
   extensionVersion = context.extension.packageJSON?.version ?? '';
 
   context.subscriptions.push(vscode.commands.registerCommand('ironplc.createNewStructuredTextFile', async () => {
-    const newFile = await vscode.workspace.openTextDocument({ language: '61131-3-st' });
-    await vscode.window.showTextDocument(newFile);
+    await vscode.workspace.openTextDocument({ language: '61131-3-st' }).then((newFile) => {
+      vscode.window.showTextDocument(newFile);
+    });
   }));
 
   // Register run commands unconditionally so they exist even without a
@@ -130,7 +129,6 @@ export function activate(context: vscode.ExtensionContext) {
   };
 
   const result = findCompilerPath(env);
-  void vscode.commands.executeCommand('setContext', 'ironplc.hasCompiler', result !== undefined);
   if (result) {
     console.debug(
       'Extension "ironplc" found compiler at "' + result.path
@@ -147,14 +145,6 @@ export function activate(context: vscode.ExtensionContext) {
   // exist even without a compiler; they report a coded problem when the
   // compiler or the VM is missing.
   registerHotEditSupport(context, result?.path, sourceExtensions, showProblem);
-
-  // The activity-bar Commands view is a static shortcut list over the commands
-  // above; it is always available.
-  registerActionsView(context);
-
-  // The Redundant Pair Dashboard is the HA engineering surface: real data when
-  // a pair is connected, otherwise an honest empty state plus demo mode.
-  registerRedundantPairDashboard(context);
 
   if (!result) {
     vscode.window.showErrorMessage(

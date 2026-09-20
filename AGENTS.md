@@ -24,6 +24,8 @@ pre_pr  := cd compiler && just   # compile + coverage(>=85% lines) + clippy + fm
 fix     := cd compiler && just format; single crate: cargo test -p <crate>
 no_just := cargo build && cargo test --quiet --workspace && cargo clippy --all-targets && cargo fmt --all -- --check
 specs   := cd specs && just   # adr-numbers + adr-front-matter + plan-citations
+           # windows: recipe broken (just+cygpath path mangling) -> run the bash
+           # recipes via Git Bash: sh.exe <recipe-body> with cd /f/IronPLC
 ```
 
 ## LLM fences (build-enforced, DO NOT weaken)
