@@ -92,20 +92,23 @@ fn accept_edits_when_compiled_container_then_ack_and_status_lists_candidate() {
     );
     assert_eq!(response["response"], "ack");
 
+    // The staged candidate carries the pending-edit record (ADR-0064): the
+    // accept named no edit, so the block is present but unnamed; its
+    // acceptedAt timestamp is device-side and asserted only for presence.
     let response = run_line(&mut host, r#"{"command":"getStatus"}"#);
-    assert_eq!(
-        response,
-        serde_json::json!({
-            "response": "status",
-            "mode": "normal",
-            "active": 1,
-            "normal": 1,
-            "candidate": 2,
-            "application": 1,
-            "migration": false,
-            "rounds": 5,
-        })
-    );
+    assert_eq!(response["response"], "status");
+    assert_eq!(response["mode"], "normal");
+    assert_eq!(response["active"], 1);
+    assert_eq!(response["normal"], 1);
+    assert_eq!(response["candidate"], 2);
+    assert_eq!(response["application"], 1);
+    assert_eq!(response["migration"], false);
+    assert_eq!(response["rounds"], 5);
+    let pending = &response["pendingEdit"];
+    assert_eq!(pending["name"], serde_json::Value::Null);
+    assert_eq!(pending["origin"], serde_json::Value::Null);
+    assert!(pending["acceptedAt"].as_u64().unwrap() > 0);
+    assert_eq!(pending["baseline"]["normalGeneration"], 1);
 }
 
 #[test]
@@ -145,6 +148,26 @@ fn untest_edits_when_logic_only_test_then_ack_and_code_reverts_state_stays() {
 }
 
 #[test]
+fn assemble_edits_when_candidate_accepted_then_v4017_and_candidate_kept() {
+    let (mut host, counter) = counter_host(1);
+    host.run(5, || 0).unwrap();
+    run_line(
+        &mut host,
+        &accept_line(&counter_program("Counter := Counter + 10;")),
+    );
+
+    // ADR-0064: assemble straight from Accepted refuses; the wire carries
+    // the stable V-code and the candidate stays staged.
+    let response = run_line(&mut host, r#"{"command":"assembleEdits"}"#);
+    assert_eq!(response["response"], "error");
+    assert_eq!(response["vCode"], "V4017");
+    assert!(host.status().candidate.is_some());
+
+    host.run(1, || 0).unwrap();
+    assert_eq!(host.read_variable(counter).unwrap(), 6);
+}
+
+#[test]
 fn assemble_edits_when_candidate_staged_then_candidate_becomes_normal() {
     let (mut host, counter) = counter_host(1);
     host.run(5, || 0).unwrap();
@@ -153,6 +176,9 @@ fn assemble_edits_when_candidate_staged_then_candidate_becomes_normal() {
         &accept_line(&counter_program("Counter := Counter + 10;")),
     );
 
+    // ADR-0064: the candidate must execute under Test before it assembles.
+    run_line(&mut host, r#"{"command":"testEdits"}"#);
+    host.run(1, || 0).unwrap();
     let response = run_line(&mut host, r#"{"command":"assembleEdits"}"#);
     assert_eq!(response["response"], "ack");
 
@@ -161,8 +187,10 @@ fn assemble_edits_when_candidate_staged_then_candidate_becomes_normal() {
     assert_eq!(response["normal"], 2);
     assert_eq!(response["application"], 2);
 
+    // The test round ran the candidate once (5 -> 15); the round after the
+    // assemble runs the promoted application once more (15 -> 25).
     host.run(1, || 0).unwrap();
-    assert_eq!(host.read_variable(counter).unwrap(), 15);
+    assert_eq!(host.read_variable(counter).unwrap(), 25);
 }
 
 #[test]
@@ -328,6 +356,65 @@ fn accept_edits_when_decision_uid_is_unknown_then_v4010_without_pairs() {
 }
 
 #[test]
+fn accept_edits_with_edit_then_status_carries_pending_edit_until_assemble() {
+    let (mut host, _counter) = counter_host(1);
+    host.run(2, || 0).unwrap();
+    let bytes = container_bytes(&common::compile_source(&counter_program(
+        "Counter := Counter + 10;",
+    )));
+    let accept = serde_json::json!({
+        "command": "acceptEdits",
+        "program": bytes,
+        "edit": {"name": "hotfix", "origin": "bench-2"},
+    })
+    .to_string();
+
+    let response = run_line(&mut host, &accept);
+    assert_eq!(response["response"], "ack");
+
+    let response = run_line(&mut host, r#"{"command":"getStatus"}"#);
+    let pending = &response["pendingEdit"];
+    assert_eq!(pending["name"], "hotfix");
+    assert_eq!(pending["origin"], "bench-2");
+    assert!(pending["acceptedAt"].as_u64().unwrap() > 0);
+    assert_eq!(pending["baseline"]["normalGeneration"], 1);
+    assert_eq!(pending["baseline"]["contentHash"].as_array().unwrap().len(), 32);
+
+    run_line(&mut host, r#"{"command":"testEdits"}"#);
+    host.run(1, || 0).unwrap();
+    let response = run_line(&mut host, r#"{"command":"assembleEdits"}"#);
+    assert_eq!(response["response"], "ack");
+
+    // Assemble cleared the record with the candidate: the block is absent.
+    let response = run_line(&mut host, r#"{"command":"getStatus"}"#);
+    assert_eq!(response["pendingEdit"], serde_json::Value::Null);
+    assert_eq!(response["candidate"], serde_json::Value::Null);
+}
+
+#[test]
+fn cancel_edits_when_candidate_staged_then_pending_edit_block_gone() {
+    let (mut host, _counter) = counter_host(1);
+    let bytes = container_bytes(&common::compile_source(&counter_program(
+        "Counter := Counter + 10;",
+    )));
+    let accept = serde_json::json!({
+        "command": "acceptEdits",
+        "program": bytes,
+        "edit": {"name": "hotfix"},
+    })
+    .to_string();
+    run_line(&mut host, &accept);
+    let response = run_line(&mut host, r#"{"command":"getStatus"}"#);
+    assert_eq!(response["pendingEdit"]["name"], "hotfix");
+
+    let response = run_line(&mut host, r#"{"command":"cancelEdits"}"#);
+    assert_eq!(response["response"], "ack");
+
+    let response = run_line(&mut host, r#"{"command":"getStatus"}"#);
+    assert_eq!(response["pendingEdit"], serde_json::Value::Null);
+}
+
+#[test]
 fn get_status_when_fresh_host_then_normal_generation_one_and_no_candidate() {
     let (mut host, _counter) = counter_host(1);
 
@@ -343,6 +430,7 @@ fn get_status_when_fresh_host_then_normal_generation_one_and_no_candidate() {
             application: 1,
             migration: false,
             rounds: 0,
+            pending_edit: None,
         })
     );
 }
@@ -359,18 +447,19 @@ fn status_payload_when_test_applied_then_mode_testing_and_generations_move() {
 
     let response = execute(Command::GetStatus, &mut host);
 
-    assert_eq!(
-        response,
-        Response::Status(StatusPayload {
-            mode: HostMode::Testing,
-            active: 2,
-            normal: 1,
-            candidate: Some(2),
-            application: 1,
-            migration: false,
-            rounds: 3,
-        })
+    assert!(
+        matches!(response, Response::Status(_)),
+        "expected a status response: {response:?}"
     );
+    if let Response::Status(status) = response {
+        assert_eq!(status.mode, HostMode::Testing);
+        assert_eq!(status.active, 2);
+        assert_eq!(status.normal, 1);
+        assert_eq!(status.candidate, Some(2));
+        assert_eq!(status.application, 1);
+        assert!(!status.migration);
+        assert_eq!(status.rounds, 3);
+    }
 }
 
 #[test]

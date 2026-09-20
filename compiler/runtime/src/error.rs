@@ -41,6 +41,10 @@ pub enum OnlineChangeError {
     /// The operation is not allowed in the current hot-edit phase, e.g.
     /// staging another candidate while testing.
     NotAllowedInThisMode,
+    /// `assemble` was requested while the original (not the candidate) is
+    /// active: the candidate never ran under Test, and promoting it would
+    /// install code that never executed (ADR-0064).
+    AssembleWithoutTest,
 }
 
 impl fmt::Display for OnlineChangeError {
@@ -73,6 +77,10 @@ impl fmt::Display for OnlineChangeError {
             OnlineChangeError::NotAllowedInThisMode => {
                 write!(f, "operation not allowed in the current hot-edit phase")
             }
+            OnlineChangeError::AssembleWithoutTest => write!(
+                f,
+                "assemble requires the candidate to have executed under Test"
+            ),
         }
     }
 }
@@ -153,6 +161,10 @@ mod tests {
         assert_eq!(
             OnlineChangeError::NotAllowedInThisMode.to_string(),
             "operation not allowed in the current hot-edit phase"
+        );
+        assert_eq!(
+            OnlineChangeError::AssembleWithoutTest.to_string(),
+            "assemble requires the candidate to have executed under Test"
         );
     }
 

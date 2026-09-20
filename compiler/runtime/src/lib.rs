@@ -25,10 +25,10 @@ mod migration;
 mod online_change;
 
 pub use commands::{
-    execute, parse_command, render_response, Command, CommandError, MigrationDecisionSpec,
-    Response, StatusPayload, TypeChangeDetail,
+    execute, parse_command, render_response, Command, CommandError, EditSpec,
+    MigrationDecisionSpec, Response, StatusPayload, TypeChangeDetail,
 };
 pub use error::{OnlineChangeError, RuntimeError};
 pub use generation::{ApplicationGeneration, LogicGeneration};
-pub use host::{HostMode, HostStatus, RuntimeHost};
+pub use host::{AcceptedEdit, EditBaseline, HostMode, HostStatus, PendingEditRecord, RuntimeHost};
 pub use migration::{MigrationDecision, MigrationError, StateMigrationPlan, TypeChangePair};

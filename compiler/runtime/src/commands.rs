@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::conversion::type_name;
 use crate::error::OnlineChangeError;
-use crate::host::{HostMode, HostStatus, RuntimeHost};
+use crate::host::{AcceptedEdit, HostMode, HostStatus, PendingEditRecord, RuntimeHost};
 use crate::migration::{MigrationDecision, MigrationError, TypeChangePair};
 
 // V-code constants are generated from resources/problem-codes.csv by build.rs.
@@ -36,6 +36,11 @@ pub enum Command {
     AcceptEdits {
         /// The compiled container in its wire format.
         program: Vec<u8>,
+        /// The optional edit identity (ADR-0064 debt closure): labels that
+        /// become the pending-edit record reported in the status payload.
+        /// Absent (the default) stages the candidate with an unnamed record.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        edit: Option<EditSpec>,
         /// Per-UID engineer decisions for out-of-policy type changes
         /// (ADR 0061), keyed by stable variable UID. Empty (the default)
         /// fails closed with a V4010 naming every problematic pair.
@@ -54,6 +59,22 @@ pub enum Command {
     AssembleEdits,
     /// Discards the staged candidate.
     CancelEdits,
+}
+
+/// The optional `edit` identity block of [`Command::AcceptEdits`]
+/// (ADR-0064 debt closure): what the pending-edit record reports while the
+/// candidate is staged. Both fields are optional; `origin` is an
+/// unauthenticated advisory client label, not engineer identity (ADR-0065
+/// decision 2).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditSpec {
+    /// The client-supplied edit label.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// The unauthenticated advisory client label.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<String>,
 }
 
 /// The engineer's decision for one storage-class change as it travels on the
@@ -131,7 +152,7 @@ impl TypeChangeDetail {
 
 /// The payload of [`Response::Status`]: a snapshot of the host's hot-edit
 /// state, mirroring [`HostStatus`] with generation counters as plain numbers.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StatusPayload {
     /// Which artifact is executing.
@@ -149,6 +170,11 @@ pub struct StatusPayload {
     pub migration: bool,
     /// Completed scan rounds since the host was created.
     pub rounds: u64,
+    /// The pending-edit record written at Accept, if a candidate is staged
+    /// (ADR-0064 debt closure). Absent on the wire when there is none — the
+    /// additive block shape the engineering connection specifies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending_edit: Option<PendingEditRecord>,
 }
 
 impl From<HostStatus> for StatusPayload {
@@ -161,6 +187,7 @@ impl From<HostStatus> for StatusPayload {
             application: status.application.raw(),
             migration: status.migration,
             rounds: status.rounds,
+            pending_edit: status.pending_edit,
         }
     }
 }
@@ -245,6 +272,9 @@ impl From<OnlineChangeError> for CommandError {
             OnlineChangeError::NotAllowedInThisMode => {
                 online_change_codes::NOT_ALLOWED_IN_THIS_MODE
             }
+            OnlineChangeError::AssembleWithoutTest => {
+                online_change_codes::ASSEMBLE_WITHOUT_TEST
+            }
         };
         CommandError {
             v_code,
@@ -284,7 +314,11 @@ pub fn render_response(response: &Response) -> Result<String, serde_json::Error>
 pub fn execute(command: Command, host: &mut RuntimeHost) -> Response {
     match command {
         Command::GetStatus => Response::Status(StatusPayload::from(host.status())),
-        Command::AcceptEdits { program, migration } => accept_edits(host, &program, &migration),
+        Command::AcceptEdits {
+            program,
+            edit,
+            migration,
+        } => accept_edits(host, &program, edit, &migration),
         Command::TestEdits => ack_or_error(host.test()),
         Command::UntestEdits => ack_or_error(host.untest()),
         Command::AssembleEdits => ack_or_error(host.assemble()),
@@ -293,21 +327,37 @@ pub fn execute(command: Command, host: &mut RuntimeHost) -> Response {
 }
 
 /// Parses the candidate container and stages it against the active artifact,
-/// resolving out-of-policy type changes with the engineer's decisions.
+/// resolving out-of-policy type changes with the engineer's decisions. The
+/// program's exact wire bytes and the optional `edit` identity ride along as
+/// the accept-supplied extras (ADR-0064): the bytes for the assemble commit,
+/// the labels for the pending-edit record.
 fn accept_edits(
     host: &mut RuntimeHost,
     program: &[u8],
+    edit: Option<EditSpec>,
     migration: &BTreeMap<u64, MigrationDecisionSpec>,
 ) -> Response {
     let candidate = match Container::read_from(&mut Cursor::new(program)) {
         Ok(candidate) => candidate,
         Err(error) => return Response::Error(CommandError::invalid_container(error)),
     };
+    let (name, origin) = match edit {
+        Some(edit) => (edit.name, edit.origin),
+        None => (None, None),
+    };
     let decisions: BTreeMap<u64, MigrationDecision> = migration
         .iter()
         .map(|(&uid, &spec)| (uid, MigrationDecision::from(spec)))
         .collect();
-    ack_or_error(host.stage_with_decisions(candidate, &decisions))
+    ack_or_error(host.stage_with_decisions(
+        candidate,
+        &decisions,
+        Some(AcceptedEdit {
+            wire: program.to_vec(),
+            name,
+            origin,
+        }),
+    ))
 }
 
 /// Turns a host result into an acknowledgment or the coded error.
@@ -341,6 +391,7 @@ mod tests {
             command,
             Command::AcceptEdits {
                 program: vec![1, 2, 255],
+                edit: None,
                 migration: BTreeMap::new(),
             }
         );
@@ -357,10 +408,31 @@ mod tests {
             command,
             Command::AcceptEdits {
                 program: vec![1],
+                edit: None,
                 migration: BTreeMap::from([
                     (1, MigrationDecisionSpec::Init),
                     (2, MigrationDecisionSpec::Preserve),
                 ]),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_command_when_accept_edits_with_edit_then_carries_identity() {
+        let command = parse_command(
+            r#"{"command":"acceptEdits","program":[1],"edit":{"name":"rung-4","origin":"ws-9"}}"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            command,
+            Command::AcceptEdits {
+                program: vec![1],
+                edit: Some(EditSpec {
+                    name: Some("rung-4".into()),
+                    origin: Some("ws-9".into()),
+                }),
+                migration: BTreeMap::new(),
             }
         );
     }
@@ -421,6 +493,7 @@ mod tests {
             application: 1,
             migration: true,
             rounds: 42,
+            pending_edit: None,
         });
 
         let line = render_response(&response).unwrap();
@@ -511,6 +584,7 @@ mod tests {
     #[case::already_staged(OnlineChangeError::CandidateAlreadyStaged, "V4013")]
     #[case::no_test(OnlineChangeError::NoTestInProgress, "V4014")]
     #[case::wrong_mode(OnlineChangeError::NotAllowedInThisMode, "V4015")]
+    #[case::without_test(OnlineChangeError::AssembleWithoutTest, "V4017")]
     fn command_error_v_code_when_online_change_error_then_stable_code(
         #[case] error: OnlineChangeError,
         #[case] expected: &'static str,

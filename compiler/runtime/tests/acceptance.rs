@@ -19,9 +19,11 @@
 
 mod common;
 
-use common::{compile_source, counter_host, counter_program, variable_index};
+use std::collections::BTreeMap;
+
+use common::{compile_source, container_bytes, counter_host, counter_program, variable_index};
 use ironplc_container::VarIndex;
-use ironplc_runtime::{HostMode, OnlineChangeError, RuntimeHost};
+use ironplc_runtime::{AcceptedEdit, HostMode, OnlineChangeError, RuntimeHost};
 
 #[test]
 fn run_when_logic_only_edit_then_counter_continues_without_reset() {
@@ -203,27 +205,27 @@ END_PROGRAM
 }
 
 #[test]
-fn assemble_when_candidate_accepted_then_candidate_becomes_normal() {
+fn assemble_when_candidate_accepted_then_assemble_without_test_error() {
     let (mut host, counter) = counter_host(1);
     host.run(5, || 0).unwrap();
 
     let candidate = compile_source(&counter_program("Counter := Counter + 10;"));
     host.stage(candidate).unwrap();
-    host.assemble().unwrap();
 
-    let status = host.status();
-    assert_eq!(status.mode, HostMode::Normal);
-    assert_eq!(status.candidate, None);
-    assert_eq!(status.normal.raw(), 2);
-    assert_eq!(status.active.raw(), 2);
-    assert_eq!(status.application.raw(), 2);
-
-    host.run(1, || 0).unwrap();
-    assert_eq!(host.read_variable(counter).unwrap(), 15);
+    // ADR-0064: a candidate that never ran under Test cannot be promoted.
     assert!(matches!(
         host.assemble(),
-        Err(OnlineChangeError::NoCandidateStaged)
+        Err(OnlineChangeError::AssembleWithoutTest)
     ));
+
+    // The refusal leaves the original running and the candidate staged.
+    let status = host.status();
+    assert_eq!(status.mode, HostMode::Normal);
+    assert_eq!(status.normal.raw(), 1);
+    assert!(status.candidate.is_some());
+
+    host.run(1, || 0).unwrap();
+    assert_eq!(host.read_variable(counter).unwrap(), 6);
 }
 
 #[test]
@@ -244,6 +246,91 @@ fn assemble_when_testing_then_candidate_becomes_normal() {
 
     host.run(1, || 0).unwrap();
     assert_eq!(host.read_variable(counter).unwrap(), 25);
+}
+
+#[test]
+fn stage_with_decisions_when_edit_then_record_and_wire_follow_the_candidate() {
+    let base = compile_source(&counter_program("Counter := Counter + 1;"));
+    let base_hash = base.header.content_hash;
+    let mut host = RuntimeHost::new(base).unwrap();
+
+    let candidate = compile_source(&counter_program("Counter := Counter + 10;"));
+    let wire = container_bytes(&candidate);
+    host.stage_with_decisions(
+        candidate,
+        &BTreeMap::new(),
+        Some(AcceptedEdit {
+            wire: wire.clone(),
+            name: Some("edit-1".into()),
+            origin: Some("bench".into()),
+        }),
+    )
+    .unwrap();
+
+    let record = host.status().pending_edit.unwrap();
+    assert_eq!(record.name.as_deref(), Some("edit-1"));
+    assert_eq!(record.origin.as_deref(), Some("bench"));
+    assert!(record.accepted_at > 0);
+    assert_eq!(record.baseline.normal_generation, 1);
+    assert_eq!(record.baseline.content_hash, base_hash);
+
+    // Untest keeps the candidate, the record, and the retained wire bytes.
+    host.test().unwrap();
+    host.run(1, || 0).unwrap();
+    host.untest().unwrap();
+    host.run(1, || 0).unwrap();
+    assert!(host.status().pending_edit.is_some());
+
+    // Assemble clears the record and moves the exact wire bytes to the
+    // committed latch, drained once by the shell-side commit.
+    host.test().unwrap();
+    host.run(1, || 0).unwrap();
+    host.assemble().unwrap();
+    assert!(host.status().pending_edit.is_none());
+    assert_eq!(host.take_committed_wire().unwrap(), wire);
+    assert!(host.take_committed_wire().is_none());
+}
+
+#[test]
+fn cancel_when_candidate_staged_then_record_and_wire_dropped() {
+    let (mut host, _counter) = counter_host(1);
+    let candidate = compile_source(&counter_program("Counter := Counter + 10;"));
+    let wire = container_bytes(&candidate);
+    host.stage_with_decisions(
+        candidate,
+        &BTreeMap::new(),
+        Some(AcceptedEdit {
+            wire,
+            name: None,
+            origin: None,
+        }),
+    )
+    .unwrap();
+    assert!(host.status().pending_edit.is_some());
+
+    host.cancel().unwrap();
+
+    assert!(host.status().pending_edit.is_none());
+    // Nothing committed: the latch stays empty.
+    assert!(host.take_committed_wire().is_none());
+}
+
+#[test]
+fn stage_without_edit_then_unnamed_record_written_and_no_wire_retained() {
+    let (mut host, _counter) = counter_host(1);
+    host.stage(compile_source(&counter_program("Counter := Counter + 10;")))
+        .unwrap();
+
+    // The record is written unnamed; without wire bytes nothing can commit.
+    let record = host.status().pending_edit.unwrap();
+    assert!(record.name.is_none());
+    assert!(record.origin.is_none());
+    assert!(record.accepted_at > 0);
+
+    host.test().unwrap();
+    host.run(1, || 0).unwrap();
+    host.assemble().unwrap();
+    assert!(host.take_committed_wire().is_none());
 }
 
 #[test]

@@ -320,6 +320,7 @@ pub fn build_accept_response_with_decisions(
     dispatch(
         Command::AcceptEdits {
             program,
+            edit: None,
             migration: migration.clone(),
         },
         &mut guard,
@@ -724,6 +725,7 @@ END_PROGRAM
             execute(
                 Command::AcceptEdits {
                     program: bytes,
+                    edit: None,
                     migration: BTreeMap::new(),
                 },
                 guard.host.as_mut().unwrap(),
@@ -826,6 +828,7 @@ END_PROGRAM
         let resp = dispatch(
             Command::AcceptEdits {
                 program: bytes,
+                edit: None,
                 migration: BTreeMap::new(),
             },
             &mut guard,
@@ -884,6 +887,7 @@ END_PROGRAM
         let staged = dispatch(
             Command::AcceptEdits {
                 program: bytes,
+                edit: None,
                 migration: BTreeMap::from([(1, MigrationDecisionSpec::Preserve)]),
             },
             &mut guard,
@@ -939,6 +943,7 @@ END_PROGRAM
         let staged = dispatch(
             Command::AcceptEdits {
                 program: bytes,
+                edit: None,
                 migration: BTreeMap::from([(1, MigrationDecisionSpec::Init)]),
             },
             &mut guard,
@@ -962,6 +967,9 @@ END_PROGRAM
     fn build_assemble_response_when_candidate_staged_then_candidate_becomes_normal() {
         let (cache, session) = make_state();
         session_with_staged_candidate(&cache, &session, "Counter := Counter + 10;");
+        // ADR-0064: assemble requires the candidate to have run under Test.
+        let tested = build_test_response(&session);
+        assert!(tested.ok);
 
         let resp = build_assemble_response(&session);
 
@@ -971,13 +979,14 @@ END_PROGRAM
         assert_eq!(status.normal, 2);
         assert_eq!(status.application, 2);
         assert_eq!(status.candidate, None);
-        // The promoted candidate is what runs now (0 -> 10 in the driven round).
+        // The promoted candidate is what runs now: the test and assemble
+        // responses each drove one round (0 -> 10 -> 20).
         let guard = session.lock().unwrap();
         let container = compile_container(&counter_variant("Counter := Counter + 10;"));
         let index = variable_index(&container, "Counter");
         assert_eq!(
             guard.host.as_ref().unwrap().read_variable(index).unwrap(),
-            10
+            20
         );
     }
 
@@ -1071,6 +1080,7 @@ END_PROGRAM
         let resp = dispatch(
             Command::AcceptEdits {
                 program: vec![1, 2, 3],
+                edit: None,
                 migration: BTreeMap::new(),
             },
             &mut guard,

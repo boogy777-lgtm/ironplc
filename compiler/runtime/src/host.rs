@@ -64,8 +64,51 @@ enum PendingSwap {
     Untest,
 }
 
+/// The accept-supplied extras of one `AcceptEdits` command (ADR-0064): the
+/// candidate's exact wire bytes — kept for the assemble commit, never
+/// re-serialized — and the optional edit identity for the pending record.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AcceptedEdit {
+    /// The candidate's wire bytes exactly as the client sent them.
+    pub wire: Vec<u8>,
+    /// The client-supplied edit label, when the accept named one.
+    pub name: Option<String>,
+    /// An unauthenticated advisory client label; not engineer identity
+    /// (ADR-0065 decision 2).
+    pub origin: Option<String>,
+}
+
+/// The baseline an accepted edit staged against (ADR-0064 debt closure): the
+/// normal artifact's identity at Accept.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditBaseline {
+    /// The normal artifact's generation at Accept.
+    pub normal_generation: u32,
+    /// The normal artifact's content hash at Accept.
+    pub content_hash: [u8; 32],
+}
+
+/// The controller-side pending-edit record (ADR-0064 debt closure): RAM-only
+/// metadata written at Accept beside the candidate, cleared exactly where the
+/// candidate dies (Assemble, Cancel). A reboot discards it with the candidate.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingEditRecord {
+    /// The client-supplied edit label, when the accept named one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// The unauthenticated advisory client label, when the accept carried one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<String>,
+    /// Device timestamp (milliseconds since the Unix epoch) at Accept.
+    pub accepted_at: u64,
+    /// The normal artifact's identity at Accept.
+    pub baseline: EditBaseline,
+}
+
 /// Snapshot of the host's hot-edit state.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HostStatus {
     /// Generation of the artifact currently executing.
     pub active: LogicGeneration,
@@ -82,12 +125,17 @@ pub struct HostStatus {
     pub migration: bool,
     /// Completed scan rounds since the host was created.
     pub rounds: u64,
+    /// The pending-edit record written at Accept, if a candidate is staged.
+    pub pending_edit: Option<PendingEditRecord>,
 }
 
 /// Owns the active artifact, a staged candidate, and the VM's state.
 pub struct RuntimeHost {
     normal: Container,
     candidate: Option<Container>,
+    candidate_wire: Option<Vec<u8>>,
+    committed_wire: Option<Vec<u8>>,
+    pending_edit: Option<PendingEditRecord>,
     active_is_candidate: bool,
     buffers: VmBuffers,
     rounds: u64,
@@ -115,6 +163,9 @@ impl RuntimeHost {
         Ok(RuntimeHost {
             normal: container,
             candidate: None,
+            candidate_wire: None,
+            committed_wire: None,
+            pending_edit: None,
             active_is_candidate: false,
             buffers,
             rounds: 0,
@@ -133,7 +184,7 @@ impl RuntimeHost {
     /// with an empty decision map: an out-of-policy type change is refused
     /// with every offender named.
     pub fn stage(&mut self, candidate: Container) -> Result<(), OnlineChangeError> {
-        self.stage_with_decisions(candidate, &BTreeMap::new())
+        self.stage_with_decisions(candidate, &BTreeMap::new(), None)
     }
 
     /// Stages `candidate` after validating it against the normal artifact,
@@ -149,10 +200,17 @@ impl RuntimeHost {
     /// decision; otherwise it is rejected and the running application is
     /// untouched. An unknown decision UID, or `preserve` on a size-mismatched
     /// pair, is rejected by the planner.
+    ///
+    /// `edit` carries the accept-supplied extras (ADR-0064): the candidate's
+    /// exact wire bytes are kept beside the parsed `Container` for the
+    /// assemble commit, and the optional identity labels become the
+    /// pending-edit record. Pass `None` to stage without an edit provenance
+    /// (no wire bytes retained, no record written).
     pub fn stage_with_decisions(
         &mut self,
         candidate: Container,
         decisions: &BTreeMap<u64, MigrationDecision>,
+        edit: Option<AcceptedEdit>,
     ) -> Result<(), OnlineChangeError> {
         if self.candidate.is_some() {
             return Err(OnlineChangeError::CandidateAlreadyStaged);
@@ -178,9 +236,23 @@ impl RuntimeHost {
 
         let generation = LogicGeneration::new(self.next_logic_generation);
         self.next_logic_generation = self.next_logic_generation.saturating_add(1);
+        let (wire, name, origin) = match edit {
+            Some(edit) => (Some(edit.wire), edit.name, edit.origin),
+            None => (None, None, None),
+        };
         self.candidate = Some(candidate);
+        self.candidate_wire = wire;
         self.candidate_generation = Some(generation);
         self.migration = migration;
+        self.pending_edit = Some(PendingEditRecord {
+            name,
+            origin,
+            accepted_at: now_millis(),
+            baseline: EditBaseline {
+                normal_generation: self.normal_generation.raw(),
+                content_hash: self.normal.header.content_hash,
+            },
+        });
         Ok(())
     }
 
@@ -221,9 +293,15 @@ impl RuntimeHost {
 
     /// Promotes the candidate to the normal artifact and drops the old one.
     ///
-    /// Allowed from `Accepted` (the candidate never ran) and from `Testing`
-    /// (the candidate is running and simply stops being optional). The
-    /// buffers are not rebuilt: the layout is compatible by construction.
+    /// Allowed only from `Testing`: the candidate must have executed under
+    /// Test before it can become canonical (ADR-0064). Assembling from
+    /// mere `Accepted` is refused with [`OnlineChangeError::AssembleWithoutTest`]
+    /// — a commit that never ran is unverified code promoted to canonical.
+    /// The buffers are not rebuilt: the layout is compatible by construction.
+    ///
+    /// The promotion also moves the candidate's retained wire bytes to the
+    /// committed latch for the shell to persist (see
+    /// [`take_committed_wire`](Self::take_committed_wire)).
     pub fn assemble(&mut self) -> Result<(), OnlineChangeError> {
         if self.candidate.is_none() {
             return Err(OnlineChangeError::NoCandidateStaged);
@@ -231,9 +309,14 @@ impl RuntimeHost {
         if self.pending.is_some() {
             return Err(OnlineChangeError::NotAllowedInThisMode);
         }
+        if !self.active_is_candidate {
+            return Err(OnlineChangeError::AssembleWithoutTest);
+        }
 
         if let Some(next) = self.candidate.take() {
             self.normal = next;
+            self.committed_wire = self.candidate_wire.take();
+            self.pending_edit = None;
             if let Some(generation) = self.candidate_generation.take() {
                 self.normal_generation = generation;
             }
@@ -254,6 +337,8 @@ impl RuntimeHost {
             return Err(OnlineChangeError::NotAllowedInThisMode);
         }
         self.candidate = None;
+        self.candidate_wire = None;
+        self.pending_edit = None;
         self.candidate_generation = None;
         self.migration = None;
         Ok(())
@@ -277,7 +362,16 @@ impl RuntimeHost {
             },
             migration: self.migration.is_some(),
             rounds: self.rounds,
+            pending_edit: self.pending_edit.clone(),
         }
+    }
+
+    /// Drains the committed-wire latch (ADR-0064 amendment): the exact bytes
+    /// the client sent for the candidate, moved here by `assemble`. Returns
+    /// `None` when nothing committed since the last drain. The host owns WHEN
+    /// commit bytes exist; the shell owns HOW they persist.
+    pub fn take_committed_wire(&mut self) -> Option<Vec<u8>> {
+        self.committed_wire.take()
     }
 
     /// Drives up to `rounds` scan rounds, applying a pending swap first.
@@ -400,4 +494,14 @@ impl RuntimeHost {
     pub fn data_region(&self) -> &[u8] {
         &self.buffers.data_region
     }
+}
+
+/// The device timestamp in milliseconds since the Unix epoch, for the
+/// pending-edit record's `accepted_at` (ADR-0064 debt closure). A clock set
+/// before the epoch yields 0 rather than failing the accept.
+fn now_millis() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0)
 }
