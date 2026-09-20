@@ -459,6 +459,47 @@ HA Engineering UI Contract already defers push channels the same way, and
 ADR-0055 records the 3.3x JSON-bytes size note that would motivate
 chunking.
 
+### Offline edits, online deploy (baseline check)
+
+The owner scenario: the engineer connects, verifies the project equals the
+controller's code, disconnects, edits offline, builds offline, and
+reconnects to deploy. The deploy is the online build above; the only
+addition is a pre-send baseline check.
+
+1. **Baseline capture, comparison on (re)connect.** The client captures the
+   baseline at the moment the project is verified equal to the device: the
+   application/logic generation counters from `identity` / `getStatus`
+   (`compiler/runtime/src/commands.rs:136`), the active artifact's hash, and
+   the UID-sidecar state (`compiler/project/src/sidecar.rs`, the stable-UID
+   store the migration plan is compiled against). On every (re)connect,
+   before any bytes are sent, the client compares the device's active
+   artifact identity against that baseline. The hash is the authority, not
+   the generation counters: session generations restart on a device reboot,
+   while the container hash is recomputed and verified at every load —
+   `verify_load` (`compiler/container/src/load_verify.rs:288`) and the
+   content-hash check (`compiler/container/src/load_verify.rs:453`) — so a
+   hash comparison means the same thing before and after a reboot.
+2. **Match → the normal online change.** The baseline matches: the build
+   proceeds as above — `acceptEdits` (answering V4010 with the ADR-0061
+   migration decisions), `testEdits` (mandatory per ADR-0064), observe,
+   `assembleEdits`. When the candidate is a migration candidate, the panel
+   surfaces early that untest is unavailable (V4011) — commit or cancel are
+   the only exits.
+3. **Mismatch → coded refusal.** Another engineer edited the device, the
+   device rebooted into a different generation, or the hash simply differs:
+   the baseline is stale and the client refuses with a new E-code in the
+   existing registry (`integrations/vscode/resources/problem-codes.csv`,
+   next free E0015 StaleBaseline). The remedy is to re-sync the project
+   from the device and rebuild. There is no silent deploy over unknown
+   state — fail-closed, the same pattern as the V4007–V4010 staging
+   refusals.
+4. **Empty device → initial deploy.** No baseline exists and none is
+   needed: the same accept → test → assemble sequence runs, the test at
+   the barrier trivial for empty state (ADR-0064).
+
+Offline edits change only the pre-send check; the deploy itself is always
+the same online-change flow.
+
 ## Integration Map
 
 Everything reused, with its one authority:
@@ -479,6 +520,7 @@ Everything reused, with its one authority:
 | E-code registry and rendering | `integrations/vscode/resources/problem-codes.csv` (E0010+), `integrations/vscode/src/problems.ts:30` |
 | Heartbeat | `getStatus` — `compiler/runtime/src/commands.rs:286` |
 | Redundancy block vocabulary | [HA Redundancy FSM](ha-redundancy-fsm.md) (epoch, SYNC/CONTROL) |
+| Baseline identity (artifact hash, UID sidecar) | `compiler/container/src/load_verify.rs:288`; `compiler/project/src/sidecar.rs` |
 
 ## Out of Scope
 
