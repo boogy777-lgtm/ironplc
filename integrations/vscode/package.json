@@ -107,6 +107,12 @@
         "command": "ironplc.syncVariableIds",
         "title": "Sync Variable IDs",
         "category": "IronPLC Hot Edit"
+      },
+      {
+        "command": "ironplc.openRedundantPairDashboard",
+        "title": "Open Redundant Pair Dashboard",
+        "category": "IronPLC",
+        "icon": "$(server-process)"
       }
     ],
     "menus": {
@@ -128,6 +134,86 @@
         {
           "command": "ironplc.stepScan",
           "when": "debugType == 'ironplc'"
+        },
+        {
+          "command": "ironplc.startHotEditSession",
+          "when": "ironplc.hasCompiler"
+        },
+        {
+          "command": "ironplc.syncVariableIds",
+          "when": "ironplc.hasCompiler"
+        },
+        {
+          "command": "ironplc.acceptEdits",
+          "when": "ironplc.hotEditSessionActive"
+        },
+        {
+          "command": "ironplc.testEdits",
+          "when": "ironplc.hotEditSessionActive"
+        },
+        {
+          "command": "ironplc.untestEdits",
+          "when": "ironplc.hotEditSessionActive"
+        },
+        {
+          "command": "ironplc.assembleEdits",
+          "when": "ironplc.hotEditSessionActive"
+        },
+        {
+          "command": "ironplc.cancelEdits",
+          "when": "ironplc.hotEditSessionActive"
+        },
+        {
+          "command": "ironplc.showHotEditStatus",
+          "when": "ironplc.hotEditSessionActive"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "ironplc.openRedundantPairDashboard",
+          "when": "view == ironplc.actions",
+          "group": "navigation@1"
+        },
+        {
+          "command": "ironplc.showHotEditStatus",
+          "when": "view == ironplc.actions && ironplc.hotEditSessionActive",
+          "group": "navigation@2"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "ironplc.runProgram",
+          "when": "resourceLangId == 61131-3-st || resourceLangId == twincat-pou",
+          "group": "ironplc@1"
+        },
+        {
+          "command": "ironplc.startHotEditSession",
+          "when": "resourceLangId == 61131-3-st || resourceLangId == twincat-pou",
+          "group": "ironplc@2"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "ironplc.runProgram",
+          "when": "resourceLangId == 61131-3-st || resourceLangId == twincat-pou",
+          "group": "navigation@10"
+        },
+        {
+          "command": "ironplc.startHotEditSession",
+          "when": "resourceLangId == 61131-3-st || resourceLangId == twincat-pou",
+          "group": "navigation@11"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "ironplc.runProgram",
+          "when": "resourceExtname == .st",
+          "group": "ironplc@1"
+        },
+        {
+          "command": "ironplc.startHotEditSession",
+          "when": "resourceExtname == .st",
+          "group": "ironplc@2"
         }
       ]
     },

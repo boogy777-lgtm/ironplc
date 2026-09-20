@@ -15,12 +15,13 @@ import { ReportProblem } from './debugAdapter';
 import { ProblemCode } from './problems';
 import {
   formatStatusDetail,
-  formatStatusText,
   HotEditProtocolError,
   HotEditSession,
+  HotEditStatus,
   HotEditTransport,
   TypeChangePair,
 } from './hotEditSession';
+import { hotEditStatusBar } from './hotEditStatusBarLogic';
 import {
   acceptEditsWithDecisions,
   formatMigrationWarning,
@@ -68,9 +69,8 @@ export function registerHotEditSupport(
   context.subscriptions.push(outputChannel);
 
   const statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 98);
-  statusItem.command = 'ironplc.showHotEditStatus';
-  statusItem.tooltip = 'IronPLC hot edit status';
   context.subscriptions.push(statusItem);
+  applyStatusBar(undefined);
 
   let session: HotEditSession | undefined;
   let child: ChildProcessWithoutNullStreams | undefined;
@@ -140,7 +140,7 @@ export function registerHotEditSupport(
       session = undefined;
       child = undefined;
       program = undefined;
-      statusItem.hide();
+      applyStatusBar(undefined);
       if (!expected) {
         void vscode.window.showErrorMessage(
           'IronPLC Hot Edit: the ironplcvm process exited unexpectedly. See the "IronPLC Hot Edit" output for details.',
@@ -148,6 +148,7 @@ export function registerHotEditSupport(
       }
     });
     program = selected;
+    void vscode.commands.executeCommand('setContext', 'ironplc.hotEditSessionActive', true);
 
     try {
       await refreshStatus();
@@ -334,10 +335,26 @@ export function registerHotEditSupport(
   }
 
   async function refreshStatus(): Promise<void> {
-    const status = await session!.getStatus();
-    statusItem.text = `$(sync) Hot Edit: ${formatStatusText(status)}`;
-    statusItem.tooltip = formatStatusDetail(status);
-    statusItem.show();
+    applyStatusBar(await session!.getStatus());
+  }
+
+  /** Maps the pure status-bar state onto the item, including the theme-safe warning color. */
+  function applyStatusBar(status: HotEditStatus | undefined): void {
+    const state = hotEditStatusBar(status);
+    statusItem.text = state.text;
+    statusItem.tooltip = state.tooltip;
+    statusItem.command = state.command;
+    statusItem.backgroundColor = state.warning
+      ? new vscode.ThemeColor('statusBarItem.warningBackground')
+      : undefined;
+    const active = session !== undefined;
+    void vscode.commands.executeCommand('setContext', 'ironplc.hotEditSessionActive', active);
+    if (state.visible) {
+      statusItem.show();
+    }
+    else {
+      statusItem.hide();
+    }
   }
 
   function stopSession(): void {
@@ -350,7 +367,7 @@ export function registerHotEditSupport(
     child?.kill();
     child = undefined;
     program = undefined;
-    statusItem.hide();
+    applyStatusBar(undefined);
   }
 
   /** The serve session loads a compiled container; a source program must be compiled first. */
