@@ -22,6 +22,15 @@ suite('ProblemCode', () => {
     assert.strictEqual(ProblemCode.VmNotFound, 'E0008');
   });
 
+  test('ProblemCode_when_connection_codes_accessed_then_returns_expected_codes', () => {
+    assert.strictEqual(ProblemCode.ConnectionProfileInvalid, 'E0010');
+    assert.strictEqual(ProblemCode.ConnectionAddressInvalid, 'E0011');
+    assert.strictEqual(ProblemCode.ConnectionPortInvalid, 'E0012');
+    assert.strictEqual(ProblemCode.ConnectFailed, 'E0013');
+    assert.strictEqual(ProblemCode.ConnectionLost, 'E0014');
+    assert.strictEqual(ProblemCode.StaleBaseline, 'E0015');
+  });
+
   test('PROBLEM_MESSAGES_when_debug_server_not_found_then_names_the_binary', () => {
     // problem-codes.csv is not TypeScript and cannot import the constant, so
     // this is what keeps the generated message in step with the binary name.

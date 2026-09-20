@@ -1,0 +1,26 @@
+=====
+E0013
+=====
+
+.. problem-summary:: E0013
+
+The extension could not open the connection or complete the ``identity``
+handshake with the device (the Connecting state failed). The transport
+refused the connection, the connect timeout fired, the device does not
+answer the ``identity`` command (for example an older ironplcvm that
+predates the engineering connection), or the device refused the session.
+When the device reported a coded refusal, its ``V####`` code is included.
+
+**Solutions**:
+
+1. **Check the target**: for ``tcp``, verify the device address and port and
+   that the device is listening; for ``stdio``, verify the ``program`` path
+   and that ``ironplcvm`` sits next to the compiler.
+
+2. **Read the V-code**: a ``V6014`` refusal means the device already serves
+   one engineering session (ADR-0065 exclusivity) — disconnect the other
+   session first.
+
+3. **Update the device**: an older ironplcvm answers ``identity`` with a
+   codec error; upgrade the runtime to a version with the engineering
+   connection support.

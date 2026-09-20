@@ -8,3 +8,9 @@ E0006,CompileFailed,Failed to compile the program
 E0007,DebugServerNotFound,IronPLC debug server (ironplcvmd) not found
 E0008,VmNotFound,IronPLC virtual machine (ironplcvm) not found next to the compiler
 E0009,MapUidFailed,Failed to record the variable ID mapping
+E0010,ConnectionProfileInvalid,Connection profile is invalid
+E0011,ConnectionAddressInvalid,Connection address is invalid
+E0012,ConnectionPortInvalid,Connection port is invalid
+E0013,ConnectFailed,Failed to connect to the device
+E0014,ConnectionLost,Connection to the device was lost
+E0015,StaleBaseline,The device no longer matches the last verified project baseline

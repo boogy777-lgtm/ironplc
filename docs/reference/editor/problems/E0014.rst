@@ -1,0 +1,22 @@
+=====
+E0014
+=====
+
+.. problem-summary:: E0014
+
+The connection to the device was lost and could not be restored: the
+reconnect sequence (five attempts under exponential backoff) was exhausted
+for a TCP connection, or the spawned ``ironplcvm serve`` child exited for a
+stdio connection (a stdio session is never respawned).
+
+**Solutions**:
+
+1. **Check the device and the network**: power, cabling, and the address and
+   port in the connection profile.
+
+2. **Read the device log**: for ``stdio``, the ``IronPLC Connection`` output
+   channel shows why the child exited; for ``tcp``, the device log shows
+   framing (V6013) or session (V6011/V6014) failures.
+
+3. **Connect again** once the device answers; the device panel and the
+   baseline check refresh on the next connection.

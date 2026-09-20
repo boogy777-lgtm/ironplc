@@ -1,0 +1,20 @@
+=====
+E0015
+=====
+
+.. problem-summary:: E0015
+
+The device no longer matches the project baseline this workspace was last
+verified equal against: another engineer edited the device, or the device
+rebooted into a different state. Deploying local edits over unknown device
+state is refused (fail-closed).
+
+**Solutions**:
+
+1. **Re-sync the project from the device**, rebuild, and connect again —
+   the baseline is refreshed the moment your build is verified on the
+   device.
+
+2. **Review before building**: while the baseline is stale the connection
+   stays up for monitoring, but Build is refused until the project matches
+   the device again.
