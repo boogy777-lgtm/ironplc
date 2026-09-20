@@ -366,6 +366,25 @@ What exists today:
   (`compiler/vm-cli/src/serve.rs:78`, REQ-VC-vm-cli-023). `getStatus`
   reads back the running generation.
 
+### Two build modes
+
+The same compile feeds two build modes:
+
+- **Offline build.** `ironplcc compile` writes the container artifact
+  (`compiler/ironplc-cli/src/cli.rs:95`) with no connection; the local
+  `run`/`serve <FILE>` path loads that artifact through the same
+  `load_container` call (`compiler/vm-cli/src/serve.rs:31-33`), and CI
+  consumes the same output. Hot edit does not participate.
+- **Online build.** The same compiled bytes delivered over the session:
+  `acceptEdits` (staging, load-verify, `layout_hash` comparison) then
+  `testEdits` (trial) or `assembleEdits` (promote) — the online build is
+  the hot-edit FSM flow, so no separate deploy command set exists. An
+  initial deploy onto an empty device is the same sequence, as the
+  wiring below notes.
+
+The only difference between the modes is the delivery envelope: compile
+and the container bytes are identical (DRY).
+
 The design adds only the wiring and the reporting:
 
 1. **Build button → existing commands.** With the profile in Connected,

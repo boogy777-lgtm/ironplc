@@ -85,6 +85,9 @@ the host secret store, an `identity` handshake, and build as pure reuse.
   (upload) → host-side verify → `assembleEdits`/`testEdits` (run control)
   and renders the phases client-side; the only recorded gap is
   incremental upload progress, deferred with the push-channel decision.
+  One compile serves both build modes — offline (the artifact for local
+  run and CI) and online (the same bytes over the session); only the
+  delivery envelope differs.
 
 ### Consequences
 
