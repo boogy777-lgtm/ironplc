@@ -338,13 +338,18 @@ END_PROGRAM
     fn run_session_with_store(
         host: &mut RuntimeHost,
         lines: &[&str],
-        mut store: Option<&mut SlotStore>,
+        store: Option<&mut SlotStore>,
     ) -> Vec<serde_json::Value> {
         let mut input = lines.join("\n");
         input.push('\n');
         let mut output = Vec::new();
-        serve_session(host, io::Cursor::new(input.into_bytes()), &mut output, store.as_deref_mut())
-            .unwrap();
+        serve_session(
+            host,
+            io::Cursor::new(input.into_bytes()),
+            &mut output,
+            store,
+        )
+        .unwrap();
         let text = String::from_utf8(output).unwrap();
         text.lines()
             .map(|line| serde_json::from_str(line).unwrap())

@@ -378,7 +378,10 @@ fn accept_edits_with_edit_then_status_carries_pending_edit_until_assemble() {
     assert_eq!(pending["origin"], "bench-2");
     assert!(pending["acceptedAt"].as_u64().unwrap() > 0);
     assert_eq!(pending["baseline"]["normalGeneration"], 1);
-    assert_eq!(pending["baseline"]["contentHash"].as_array().unwrap().len(), 32);
+    assert_eq!(
+        pending["baseline"]["contentHash"].as_array().unwrap().len(),
+        32
+    );
 
     run_line(&mut host, r#"{"command":"testEdits"}"#);
     host.run(1, || 0).unwrap();

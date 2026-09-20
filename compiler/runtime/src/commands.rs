@@ -272,9 +272,7 @@ impl From<OnlineChangeError> for CommandError {
             OnlineChangeError::NotAllowedInThisMode => {
                 online_change_codes::NOT_ALLOWED_IN_THIS_MODE
             }
-            OnlineChangeError::AssembleWithoutTest => {
-                online_change_codes::ASSEMBLE_WITHOUT_TEST
-            }
+            OnlineChangeError::AssembleWithoutTest => online_change_codes::ASSEMBLE_WITHOUT_TEST,
         };
         CommandError {
             v_code,

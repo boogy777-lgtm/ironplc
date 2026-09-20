@@ -917,8 +917,7 @@ fn serve_with_stdin(path: &Path, stdin: &str) -> std::process::Output {
 
 /// The marker JSON of the store file `name` beside `counter.iplc`.
 fn marker_value(dir: &TempDir, name: &str) -> serde_json::Value {
-    let text =
-        std::fs::read_to_string(dir.path().join(format!("counter.iplc.{name}"))).unwrap();
+    let text = std::fs::read_to_string(dir.path().join(format!("counter.iplc.{name}"))).unwrap();
     serde_json::from_str(&text).unwrap()
 }
 
@@ -941,8 +940,9 @@ fn commit_stdin(edit: &[u8]) -> String {
 /// BOOTED artifact. When the committed trapper booted, that round faults
 /// with V4001 on stderr; the clean counter rounds stay silent.
 fn probe_stdin() -> String {
-    let accept = serde_json::json!({"command": "acceptEdits", "program": compiled_bytes(COUNTER_PROGRAM)})
-        .to_string();
+    let accept =
+        serde_json::json!({"command": "acceptEdits", "program": compiled_bytes(COUNTER_PROGRAM)})
+            .to_string();
     format!("{accept}\n{{\"command\":\"testEdits\"}}\n{{\"command\":\"untestEdits\"}}\n")
 }
 
@@ -971,7 +971,10 @@ fn serve_when_assemble_then_reboot_loads_the_committed_artifact(
 
     // The commit landed: slot B holds the wire bytes verbatim (never a
     // re-serialization) and the marker flipped to the new slot.
-    assert_eq!(std::fs::read(dir.path().join("counter.iplc.slot-b"))?, trapper);
+    assert_eq!(
+        std::fs::read(dir.path().join("counter.iplc.slot-b"))?,
+        trapper
+    );
     assert_eq!(
         marker_value(&dir, "marker"),
         serde_json::json!({"slot": "b", "seq": 2})
@@ -1045,7 +1048,11 @@ fn serve_when_marker_missing_then_reboot_adopts_the_residue_and_heals(
     // Recreate the flip window: marker deleted, residue names the committed
     // slot.
     std::fs::remove_file(dir.path().join("counter.iplc.marker"))?;
-    write_marker_value(&dir, "marker.tmp", serde_json::json!({"slot": "b", "seq": 2}));
+    write_marker_value(
+        &dir,
+        "marker.tmp",
+        serde_json::json!({"slot": "b", "seq": 2}),
+    );
 
     let output = serve_with_stdin(&container_path, &probe_stdin());
     let stderr = String::from_utf8(output.stderr)?;
@@ -1075,7 +1082,11 @@ fn serve_when_stale_marker_then_reboot_boots_the_newest_verifiable(
     // Stale state: the marker names the old active slot at the old seq while
     // the residue names the committed slot at the newer seq.
     write_marker_value(&dir, "marker", serde_json::json!({"slot": "a", "seq": 1}));
-    write_marker_value(&dir, "marker.tmp", serde_json::json!({"slot": "b", "seq": 2}));
+    write_marker_value(
+        &dir,
+        "marker.tmp",
+        serde_json::json!({"slot": "b", "seq": 2}),
+    );
 
     let output = serve_with_stdin(&container_path, &probe_stdin());
     let stderr = String::from_utf8(output.stderr)?;
@@ -1094,8 +1105,8 @@ fn serve_when_stale_marker_then_reboot_boots_the_newest_verifiable(
 /// assemble line with V6012 instead of an ack; the RAM promotion stands and
 /// the store is unchanged, so a reboot would boot the previous generation.
 #[test]
-fn serve_when_persist_fails_then_assemble_answers_v6012(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn serve_when_persist_fails_then_assemble_answers_v6012() -> Result<(), Box<dyn std::error::Error>>
+{
     let dir = TempDir::new()?;
     let container_path = dir.path().join("counter.iplc");
     write_compiled_container(&container_path, COUNTER_PROGRAM);

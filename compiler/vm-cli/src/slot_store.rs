@@ -120,7 +120,7 @@ impl SlotStore {
         .into_iter()
         .flatten()
         .collect();
-        records.sort_by(|left, right| right.seq.cmp(&left.seq));
+        records.sort_by_key(|record| std::cmp::Reverse(record.seq));
 
         // Highest-seq record whose slot verifies; heal the marker afterwards
         // and discard the tmp residue (see [`SlotStore::discard_tmp`]).
@@ -178,7 +178,13 @@ impl SlotStore {
             )
         })?;
         self.write_fsync(&self.slot_a, &bytes)?;
-        self.write_fsync(&self.marker, &marker_json(&Marker { slot: Slot::A, seq: 1 }))?;
+        self.write_fsync(
+            &self.marker,
+            &marker_json(&Marker {
+                slot: Slot::A,
+                seq: 1,
+            }),
+        )?;
         Ok(container)
     }
 
@@ -212,13 +218,17 @@ impl SlotStore {
         // first. The marker-named slot is never the delete target.
         self.delete_if_present(&self.slot_path(next.slot))?;
         fs::rename(&self.tmp, self.slot_path(next.slot)).map_err(|err| {
-            persist_error(format!("unable to rename tmp into the inactive slot: {err}"))
+            persist_error(format!(
+                "unable to rename tmp into the inactive slot: {err}"
+            ))
         })?;
 
         // Flip the marker under the same delete-before-rename constraint.
         self.delete_if_present(&self.marker)?;
         fs::rename(&self.marker_tmp, &self.marker).map_err(|err| {
-            persist_error(format!("unable to rename the marker residue into place: {err}"))
+            persist_error(format!(
+                "unable to rename the marker residue into place: {err}"
+            ))
         })?;
         Ok(())
     }
@@ -255,10 +265,7 @@ impl SlotStore {
     /// failure: `None`, and the adoption algorithm decides.
     fn read_marker(&self, path: &Path) -> Option<Marker> {
         let mut text = String::new();
-        File::open(path)
-            .ok()?
-            .read_to_string(&mut text)
-            .ok()?;
+        File::open(path).ok()?.read_to_string(&mut text).ok()?;
         serde_json::from_str(&text).ok()
     }
 
@@ -279,18 +286,14 @@ impl SlotStore {
     /// durability has no portable std API and stays the residual risk the
     /// adoption algorithm exists to heal.
     fn write_fsync(&self, path: &Path, bytes: &[u8]) -> Result<(), VmError> {
-        let mut file = File::create(path).map_err(|err| {
-            persist_error(format!("unable to create {}: {err}", path.display()))
-        })?;
-        file.write_all(bytes).map_err(|err| {
-            persist_error(format!("unable to write {}: {err}", path.display()))
-        })?;
-        file.flush().map_err(|err| {
-            persist_error(format!("unable to flush {}: {err}", path.display()))
-        })?;
-        file.sync_all().map_err(|err| {
-            persist_error(format!("unable to fsync {}: {err}", path.display()))
-        })?;
+        let mut file = File::create(path)
+            .map_err(|err| persist_error(format!("unable to create {}: {err}", path.display())))?;
+        file.write_all(bytes)
+            .map_err(|err| persist_error(format!("unable to write {}: {err}", path.display())))?;
+        file.flush()
+            .map_err(|err| persist_error(format!("unable to flush {}: {err}", path.display())))?;
+        file.sync_all()
+            .map_err(|err| persist_error(format!("unable to fsync {}: {err}", path.display())))?;
         Ok(())
     }
 
@@ -398,7 +401,10 @@ mod tests {
         // The served bytes boot and become the rollback anchor.
         assert_eq!(container_bytes(&booted), artifact(1));
         assert_eq!(std::fs::read(slot(&dir, "slot-a")).unwrap(), artifact(1));
-        assert_eq!(marker_of(&dir, "marker"), serde_json::json!({"slot": "a", "seq": 1}));
+        assert_eq!(
+            marker_of(&dir, "marker"),
+            serde_json::json!({"slot": "a", "seq": 1})
+        );
     }
 
     #[test]
@@ -423,12 +429,18 @@ mod tests {
 
         // Slot contents are exactly the committed wire bytes.
         assert_eq!(std::fs::read(slot(&dir, "slot-b")).unwrap(), artifact(2));
-        assert_eq!(marker_of(&dir, "marker"), serde_json::json!({"slot": "b", "seq": 2}));
+        assert_eq!(
+            marker_of(&dir, "marker"),
+            serde_json::json!({"slot": "b", "seq": 2})
+        );
 
         // The next commit alternates back to slot A at seq 3.
         store.commit(&artifact(3)).unwrap();
         assert_eq!(std::fs::read(slot(&dir, "slot-a")).unwrap(), artifact(3));
-        assert_eq!(marker_of(&dir, "marker"), serde_json::json!({"slot": "a", "seq": 3}));
+        assert_eq!(
+            marker_of(&dir, "marker"),
+            serde_json::json!({"slot": "a", "seq": 3})
+        );
     }
 
     /// Crash during tmp write/verify: unverified tmp, marker and active
@@ -459,7 +471,10 @@ mod tests {
         let booted = store.boot().unwrap();
 
         assert_eq!(container_bytes(&booted), artifact(1));
-        assert_eq!(marker_of(&dir, "marker"), serde_json::json!({"slot": "a", "seq": 1}));
+        assert_eq!(
+            marker_of(&dir, "marker"),
+            serde_json::json!({"slot": "a", "seq": 1})
+        );
     }
 
     /// Crash after the slot swap, before the marker flip: the verified new
@@ -478,7 +493,10 @@ mod tests {
         assert_eq!(container_bytes(&booted), artifact(2));
         // The flip is healed: the marker names the adopted slot; the
         // residue is gone.
-        assert_eq!(marker_of(&dir, "marker"), serde_json::json!({"slot": "b", "seq": 2}));
+        assert_eq!(
+            marker_of(&dir, "marker"),
+            serde_json::json!({"slot": "b", "seq": 2})
+        );
         assert!(!slot(&dir, "marker.tmp").exists());
     }
 
@@ -496,7 +514,10 @@ mod tests {
         let booted = store.boot().unwrap();
 
         assert_eq!(container_bytes(&booted), artifact(2));
-        assert_eq!(marker_of(&dir, "marker"), serde_json::json!({"slot": "b", "seq": 2}));
+        assert_eq!(
+            marker_of(&dir, "marker"),
+            serde_json::json!({"slot": "b", "seq": 2})
+        );
         assert!(!slot(&dir, "marker.tmp").exists());
     }
 
@@ -513,7 +534,10 @@ mod tests {
         let booted = store.boot().unwrap();
 
         assert_eq!(container_bytes(&booted), artifact(3));
-        assert_eq!(marker_of(&dir, "marker"), serde_json::json!({"slot": "a", "seq": 3}));
+        assert_eq!(
+            marker_of(&dir, "marker"),
+            serde_json::json!({"slot": "a", "seq": 3})
+        );
     }
 
     /// Stale marker: the record names an unverifiable slot → boot the
@@ -529,7 +553,45 @@ mod tests {
         let booted = store.boot().unwrap();
 
         assert_eq!(container_bytes(&booted), artifact(2));
-        assert_eq!(marker_of(&dir, "marker"), serde_json::json!({"slot": "b", "seq": 1}));
+        assert_eq!(
+            marker_of(&dir, "marker"),
+            serde_json::json!({"slot": "b", "seq": 1})
+        );
+    }
+
+    /// Boot with no verifiable slot and a verifying tmp (residue of a
+    /// pre-rename crash whose marker residue is gone): adopt the tmp bytes.
+    #[test]
+    fn boot_when_no_record_verifies_and_tmp_verifies_then_adopts_tmp() {
+        let dir = TempDir::new().unwrap();
+        let store = store_in(&dir);
+        store.boot().unwrap();
+        std::fs::write(slot(&dir, "slot-a"), "corrupt").unwrap();
+        std::fs::write(slot(&dir, "marker"), "corrupt").unwrap();
+        std::fs::write(slot(&dir, "tmp"), artifact(2)).unwrap();
+
+        let booted = store.boot().unwrap();
+
+        assert_eq!(container_bytes(&booted), artifact(2));
+    }
+
+    /// A blocked inactive slot (a directory where the slot file belongs)
+    /// refuses the delete-before-rename step with V6012; the store is
+    /// unchanged.
+    #[test]
+    fn commit_when_inactive_slot_path_blocked_then_v6012_and_store_unchanged() {
+        let dir = TempDir::new().unwrap();
+        let store = store_in(&dir);
+        store.boot().unwrap();
+        std::fs::create_dir(slot(&dir, "slot-b")).unwrap();
+
+        let err = store.commit(&artifact(2)).unwrap_err();
+
+        assert!(err.to_string().starts_with("V6012"));
+        assert_eq!(
+            marker_of(&dir, "marker"),
+            serde_json::json!({"slot": "a", "seq": 1})
+        );
     }
 
     /// Residue but nothing verifies → refuse rather than boot unverified
@@ -569,6 +631,9 @@ mod tests {
 
         assert!(err.to_string().starts_with("V6012"));
         assert!(!slot(&dir, "slot-b").exists());
-        assert_eq!(marker_of(&dir, "marker"), serde_json::json!({"slot": "a", "seq": 1}));
+        assert_eq!(
+            marker_of(&dir, "marker"),
+            serde_json::json!({"slot": "a", "seq": 1})
+        );
     }
 }
