@@ -8,3 +8,5 @@ V4106,OwnerConflict,A claim was rejected: a live owner still holds the module's 
 V4107,OwnershipBarrierFailed,The ownership barrier failed: an acquisition or verification failure released everything acquired; redundancy is lost
 V4108,SwapRefused,The commanded role swap was refused: the pair is not in SYNC_READY
 V4109,DegradedChannel,Ping/pong is lost on both channels but the peer demonstrably owns I/O: degraded-channel alarm; never claim
+V4110,PerformanceDegraded,The measured pair-link timing left the calibrated envelope: HA_PERFORMANCE_DEGRADED; investigate the link and recalibrate the pair
+V4111,TimingGuaranteeLost,The measured takeover recovery time exceeds the configured budget: HA_TIMING_GUARANTEE_LOST; the timing guarantee is invalid until recalibration

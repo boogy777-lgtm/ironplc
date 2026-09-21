@@ -174,18 +174,31 @@ Autonomy: full.
   owner-conflict rejection → release-all → REDUNDANCY_LOST, zero partial
   ownership), and the V4106–V4109 alarm path. Details:
   [HA Redundancy FSM](design/ha-redundancy-fsm.md).
+- **Delivered 2026-09-21 (Phase 5 slice 5):** the calibration engine —
+  ADR-0062's measured timing model: typed T-contribution trackers
+  (current / EMA10 / EMA100 / max / count) for detection, per-module
+  claim/ARM/output-apply, and scan; the deterministic commissioning
+  calibration run over the loopback/simulator pair (both directions,
+  detection drills validating the configured confirmation time,
+  firmware-reported module delays); the takeover budget per the ADR's
+  formulas with the limiting device and the minimum-demonstrated
+  verdict; calibration-gated TakeoverReady; and the continuous
+  verification alarms HA_PERFORMANCE_DEGRADED (V4110) and
+  HA_TIMING_GUARANTEE_LOST (V4111). Details:
+  [ADR-0062](adrs/0062-measured-failover-timing-and-network-calibration.md).
 - **Still open:** failover timing/ping-pong confirmation thresholds and the detection
   time budget across N adapters; readiness policy; state replication sizing;
   epoch persistence in NV storage; verify target firmware allows multiple
   concurrent Input Only originators; mid-chain break policy (primary
   continues with partial I/O, degraded — secondary fencing fails,
-  redundancy lost); **per-port NIC drivers + calibration metrics** — the
-  `NicPort` seam and the loopback simulator binding exist (slice 2);
-  target-side per-port drivers (EtherNet/IP) and the per-port EMA
-  calibration collection of ADR-0062 remain;
-  **engineering UI backend + tabs** — backend surface (pair status,
-  SYNC/CONTROL state, per-channel calibration EMA metrics, ownership
-  barrier, takeover readiness) and Studio tab structure are undesigned.
+  redundancy lost); **per-port NIC drivers** — the `NicPort` seam and
+  the loopback simulator binding exist (slice 2) and the calibration
+  engine measures over them (slice 5); target-side per-port drivers
+  (EtherNet/IP) remain;
+  **engineering UI backend + tabs** — the calibration/budget backend
+  values exist (slice 5) and the Studio tab contract is designed
+  (ha-engineering-ui.md); the typed command vocabulary and the vscode
+  tabs remain.
 - **I/O firmware contract (AUDIT — decide with the I/O firmware spec):**
   three profiles — GENERIC (Exclusive Owner + observer-if-available;
   takeover via owner expiry + Forward_Open), REDUNDANT_OWNER (standard CIP

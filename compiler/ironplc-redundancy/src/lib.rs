@@ -24,18 +24,25 @@
 //! simulator binding as a module registry with target-enforced
 //! exclusivity ([`simulator`]), the OwnerLease minted at the scan-commit
 //! seam ([`lease`]), and the CONTROL chart with the guard table, the
-//! detection case table, and the coded alarms (V4106–V4109). The permit
-//! itself is enforced inside
-//! [`RuntimeHost`] — the host boots unpermitted and `run` refuses without
-//! the permit (V4018) — and epochs and leases are minted at the host's
-//! scan-commit callback; this crate is the policy authority that composes
-//! both.
+//! detection case table, and the coded alarms (V4106–V4109). Slice 5
+//! (calibration) carries ADR-0062's measured-reality paradigm: the typed
+//! T-contribution trackers ([`timing`]), the calibration engine with the
+//! readiness chain, the takeover budget per the ADR's formulas, and the
+//! guarantee monitors ([`calibration`]), the deterministic commissioning
+//! run over the loopback/simulator pair ([`calibration_run`]), and the
+//! timing-health alarms (V4110–V4111). The permit itself is enforced
+//! inside [`RuntimeHost`] — the host boots unpermitted and `run` refuses
+//! without the permit (V4018) — and epochs and leases are minted at the
+//! host's scan-commit callback; this crate is the policy authority that
+//! composes both.
 //!
 //! Not here (later slices, per the architecture's module decomposition):
-//! calibration and the engineering command vocabulary — the V-codes
-//! registered so far are V4101–V4109.
+//! the engineering command vocabulary — the V-codes registered so far
+//! are V4101–V4111.
 
 mod admission;
+mod calibration;
+mod calibration_run;
 mod config;
 mod crossload;
 mod epoch;
@@ -46,6 +53,7 @@ mod liveness;
 mod loopback;
 mod simulator;
 mod statechart;
+mod timing;
 
 // V-code constants are generated from resources/problem-codes.csv by build.rs.
 mod problem_codes {
@@ -55,6 +63,11 @@ mod problem_codes {
 pub use admission::{
     admit, classify, permit_for, AdmissionRefusal, AdmissionVerdict, Discovery, Neighbor,
 };
+pub use calibration::{
+    BudgetVerdict, Calibration, CalibrationState, CalibrationStatus, Direction, InvalidationReason,
+    TakeoverBudget, TimingAlarm,
+};
+pub use calibration_run::run_calibration;
 pub use config::{ConfiguredRole, PairId, RedundancyConfig};
 pub use crossload::{
     accept_offer, decode, encode, package_offer, CrossloadMessage, CrossloadOffer,
@@ -70,8 +83,9 @@ pub use hal::{IngressTimestamp, NicPort, PhyCounters, PortCapabilities, PortErro
 pub use lease::OwnerLease;
 pub use liveness::{Liveness, LivenessEvent, Packet, PairRole, FRAME_LEN};
 pub use loopback::{loopback_pair, LoopbackPort};
-pub use simulator::{ModuleRegistry, RegistryClient};
+pub use simulator::{ModuleRegistry, ModuleTiming, RegistryClient};
 pub use statechart::{
     claim_barrier, detect, ClaimBarrier, ControlAlarm, ControlChart, ControlEvent, ControlState,
     CrossloadReadiness, DeSyncReason, DetectionAction, SyncChart, SyncEvent, SyncState,
 };
+pub use timing::{DirectionProfile, ModuleContribution, TermStats};

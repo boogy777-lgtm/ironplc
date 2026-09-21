@@ -1,0 +1,30 @@
+=====
+V4111
+=====
+
+.. problem-summary:: V4111
+
+The pair's measured takeover recovery time can no longer meet the
+configured process-recovery budget: the ADR-0062 budget check
+`T_detect + T_claim,max + T_scan,max + T_output,max <=
+T_recovery-budget` fails against the live term maxima
+(HA_TIMING_GUARANTEE_LOST). The timing guarantee is invalid until the
+pair is recalibrated: the unit is not TakeoverReady while this alarm
+stands, and the engineering surface reports the minimum demonstrated
+budget instead of the configured one.
+
+Example
+-------
+
+A pair calibrated against a 17-tick budget sees its scans slow from 1
+to 20 ticks, so the worst case grows past the budget:
+
+.. code-block::
+
+   Error: V4111 - timing guarantee lost: the measured takeover recovery time exceeds the configured budget: HA_TIMING_GUARANTEE_LOST; the timing guarantee is invalid until recalibration
+
+To fix this alarm, remove the cause of the timing growth (a degraded
+link, a slower scan, a slower I/O module) or configure an honest
+recovery budget the installation can demonstrate, then run a new
+commissioning calibration — only a completed recalibration restores
+the guarantee.

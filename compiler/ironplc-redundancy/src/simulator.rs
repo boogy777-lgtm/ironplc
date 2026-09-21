@@ -45,6 +45,10 @@ struct Module {
     last_commit: Option<u64>,
     /// A faulted module owns nothing and rejects every operation.
     online: bool,
+    /// The firmware-reported timing of this device (claim, ARM,
+    /// output-apply delays): ADR-0062 — "I/O firmware instruments its
+    /// own delays and reports them; the PLC measures peer-detection".
+    timing: ModuleTiming,
 }
 
 impl Module {
@@ -53,8 +57,34 @@ impl Module {
             state: ModuleState::Unowned,
             last_commit: None,
             online: true,
+            timing: ModuleTiming::ZERO,
         }
     }
+}
+
+/// A module's firmware-reported delays in abstract clock ticks
+/// (ADR-0062: the I/O firmware instruments its own delays and reports
+/// them upward; the calibration run samples them into the per-module
+/// T-contributions). The simulator's device property standing in for
+/// that firmware instrumentation.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ModuleTiming {
+    /// The claim processing delay (`T_claim,i`).
+    pub claim_ticks: u64,
+    /// The ARM-to-output delay (`T_arm,i`).
+    pub arm_ticks: u64,
+    /// The output-apply delay (`T_output-apply,i`).
+    pub output_apply_ticks: u64,
+}
+
+impl ModuleTiming {
+    /// A device whose operations complete within the abstract step
+    /// (no reported delay).
+    pub const ZERO: Self = Self {
+        claim_ticks: 0,
+        arm_ticks: 0,
+        output_apply_ticks: 0,
+    };
 }
 
 /// The shared state behind [`ModuleRegistry`] and its client handles.
@@ -103,6 +133,36 @@ impl ModuleRegistry {
     /// `T_old-connection-timeout` term.
     pub fn with_connection_timeout(self, timeout: u64) -> Self {
         self.inner.borrow_mut().connection_timeout = timeout;
+        self
+    }
+
+    /// The target's old-connection timeout in abstract ticks
+    /// (`u64::MAX` when never set): the I/O owner-lease expiry of
+    /// ADR-0062's claim-start rule, `T_claim-start =
+    /// max(T_plc-peer-detection, T_io-owner-lease-expiry)`.
+    pub fn connection_timeout(&self) -> u64 {
+        self.inner.borrow().connection_timeout
+    }
+
+    /// Reports this module's firmware-instrumented delays (ADR-0062):
+    /// the device property the calibration run samples into the
+    /// per-module T-contributions. A module identity outside the
+    /// registry is unknown hardware: `None`.
+    pub fn module_timing(&self, module: ModuleId) -> Option<ModuleTiming> {
+        self.inner
+            .borrow()
+            .modules
+            .get(&module)
+            .map(|entry| entry.timing)
+    }
+
+    /// Sets the firmware-reported delays of one module (the simulator's
+    /// stand-in for the I/O firmware's own instrumentation). An unknown
+    /// module identity is ignored, mirroring [`yank`](Self::yank).
+    pub fn with_module_timing(self, module: ModuleId, timing: ModuleTiming) -> Self {
+        if let Some(entry) = self.inner.borrow_mut().modules.get_mut(&module) {
+            entry.timing = timing;
+        }
         self
     }
 
@@ -442,5 +502,39 @@ mod tests {
         registry.commit_outputs(OWNER);
 
         assert!(!registry.outputs_changing(OWNER, 100));
+    }
+
+    #[test]
+    fn module_timing_when_configured_then_reports_firmware_delays() {
+        let timing = ModuleTiming {
+            claim_ticks: 3,
+            arm_ticks: 1,
+            output_apply_ticks: 2,
+        };
+        let registry = ModuleRegistry::new(2).with_module_timing(ModuleId::new(1), timing);
+
+        assert_eq!(registry.module_timing(ModuleId::new(1)), Some(timing));
+        // Unconfigured modules report zero delay; unknown identities
+        // report nothing.
+        assert_eq!(
+            registry.module_timing(ModuleId::new(0)),
+            Some(ModuleTiming::ZERO)
+        );
+        assert_eq!(registry.module_timing(ModuleId::new(99)), None);
+    }
+
+    #[test]
+    fn module_timing_when_unknown_module_then_ignored() {
+        let registry =
+            ModuleRegistry::new(1).with_module_timing(ModuleId::new(99), ModuleTiming::ZERO);
+
+        assert_eq!(registry.module_timing(ModuleId::new(99)), None);
+    }
+
+    #[test]
+    fn connection_timeout_when_never_set_then_never_ages() {
+        let registry = ModuleRegistry::new(1);
+
+        assert_eq!(registry.connection_timeout(), u64::MAX);
     }
 }
