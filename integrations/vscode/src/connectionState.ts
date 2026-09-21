@@ -278,19 +278,23 @@ export class ConnectionManager {
     }
   }
 
-  /** Connected → Reconnecting: stop the heartbeat, drop the session, schedule the retries. */
+  /** Connected → Reconnecting for tcp; a stdio fault lands straight on E0014. */
   private enterReconnecting(gen: number): void {
     this.stopHeartbeat?.();
     this.stopHeartbeat = undefined;
     this.teardownSession();
+    // stdio children are never respawned: the fault goes straight to
+    // E0014 without passing through Reconnecting.
+    if (this.profile?.transport !== 'tcp') {
+      this.landDisconnected(ProblemCode.ConnectionLost, this.lastError);
+      return;
+    }
     this.setState('reconnecting');
     void this.runReconnects(gen);
   }
 
   private async runReconnects(gen: number): Promise<void> {
-    // stdio children are never respawned: a fault goes straight to E0014.
-    const attempts = this.profile?.transport === 'tcp' ? this.policy.maxReconnectAttempts : 0;
-    for (let attempt = 1; attempt <= attempts; attempt++) {
+    for (let attempt = 1; attempt <= this.policy.maxReconnectAttempts; attempt++) {
       if (gen !== this.generation) {
         return;
       }

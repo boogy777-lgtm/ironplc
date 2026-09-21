@@ -124,7 +124,7 @@ export function connectTcpLineTransport(
       clearTimeout(timer);
       resolve(new TcpLineTransport(socket));
     });
-    socket.on('error', err => {
+    socket.on('error', (err) => {
       clearTimeout(timer);
       reject(err);
     });

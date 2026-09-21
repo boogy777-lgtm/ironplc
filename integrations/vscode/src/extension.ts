@@ -53,11 +53,13 @@ class RunProgramCodeLensProvider implements vscode.CodeLensProvider {
         new vscode.Position(lens.range.start.line, lens.range.start.character),
         new vscode.Position(lens.range.end.line, lens.range.end.character),
       );
-      return new vscode.CodeLens(range, lens.command ? {
-        title: lens.command.title,
-        command: lens.command.command,
-        arguments: lens.command.arguments as unknown[] | undefined,
-      } : undefined);
+      return new vscode.CodeLens(range, lens.command
+        ? {
+            title: lens.command.title,
+            command: lens.command.command,
+            arguments: lens.command.arguments as unknown[] | undefined,
+          }
+        : undefined);
     });
   }
 
@@ -213,12 +215,14 @@ function registerRunSupport(context: vscode.ExtensionContext) {
       pauseItem.tooltip = 'Pause program execution';
       pauseItem.show();
       stopItem.show();
-    } else if (state === 'paused') {
+    }
+    else if (state === 'paused') {
       pauseItem.text = '$(debug-continue) Resume';
       pauseItem.tooltip = 'Resume program execution';
       pauseItem.show();
       stopItem.show();
-    } else {
+    }
+    else {
       pauseItem.hide();
       stopItem.hide();
     }
@@ -296,7 +300,8 @@ function registerRunSupport(context: vscode.ExtensionContext) {
       }
       if (runSession.getState() === 'running') {
         runSession.pause();
-      } else if (runSession.getState() === 'paused') {
+      }
+      else if (runSession.getState() === 'paused') {
         runSession.resume();
       }
     }),

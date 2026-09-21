@@ -39,10 +39,8 @@ import {
   captureBaseline,
   checkBaseline,
 } from './baselineLogic';
-import {
-  BuildPhase,
-  DevicePanelModel,
-} from './devicePanelLogic';
+import { BuildPhase } from './buildLogic';
+import { DevicePanelModel } from './devicePanelLogic';
 import { StdioLineTransport, vmFileName } from './hotEdit';
 import { connectTcpLineTransport } from './tcpTransport';
 

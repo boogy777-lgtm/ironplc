@@ -86,7 +86,6 @@ export function validateProfiles(raw: unknown): {
       errors.push(error(ProblemCode.ConnectionProfileInvalid, name, `the profile name "${name}" is used more than once`));
       return;
     }
-    seen.add(name);
 
     if (record.transport !== 'stdio' && record.transport !== 'tcp') {
       errors.push(error(ProblemCode.ConnectionProfileInvalid, name, `the transport must be "stdio" or "tcp", not ${JSON.stringify(record.transport)}`));
@@ -149,6 +148,9 @@ export function validateProfiles(raw: unknown): {
       port: transport === 'tcp' ? port ?? DEFAULT_TCP_PORT : undefined,
       credentialsKey,
     });
+    // Only accepted profiles claim their name: an invalid profile must not
+    // poison duplicate detection for a later valid one of the same name.
+    seen.add(name);
   });
   return { profiles, errors };
 }
@@ -171,7 +173,9 @@ function optionalString(value: unknown): string | undefined {
 /**
  * An address is an IPv4 dotted-quad, an IPv6 literal, or an RFC 1123
  * hostname: letters, digits, and hyphens, one-to-63-character labels that do
- * not start or end with a hyphen, at most 253 characters overall.
+ * not start or end with a hyphen, at most 253 characters overall. A dotted
+ * name whose labels are all digits is treated as a mistyped IPv4 literal and
+ * rejected when an octet is out of range (so '999.1.1.1' is not a hostname).
  */
 export function isValidAddress(address: string): boolean {
   const host = address.trim();
@@ -181,7 +185,14 @@ export function isValidAddress(address: string): boolean {
   if (isIpv4Address(host) || isIpv6Address(host)) {
     return true;
   }
-  return host.split('.').every(label => /^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/.test(label));
+  const labels = host.split('.');
+  // An all-numeric dotted name is a mistyped IPv4 literal, not a hostname:
+  // '999.1.1.1' must be rejected rather than pass as an RFC 1123 hostname
+  // whose labels happen to be all digits.
+  if (labels.every(label => /^[0-9]+$/.test(label))) {
+    return false;
+  }
+  return labels.every(label => /^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/.test(label));
 }
 
 /** Four decimal octets in 0-255. */

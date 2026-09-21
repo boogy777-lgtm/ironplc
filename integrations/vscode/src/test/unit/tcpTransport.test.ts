@@ -17,7 +17,7 @@ function frame(line: string): Buffer {
 
 /** The lines a test server received, parsed out of the frames on `socket`. */
 function listenForLines(socket: Socket, onLine: (line: string) => void): void {
-  let buffer = Buffer.alloc(0);
+  let buffer: Buffer = Buffer.alloc(0);
   socket.on('data', (chunk: Buffer) => {
     buffer = buffer.length === 0 ? chunk : Buffer.concat([buffer, chunk]);
     for (;;) {
@@ -84,7 +84,7 @@ suite('TcpLineTransport', () => {
   });
 
   test('onLine_when_server_sends_frame_then_line_delivered', async () => {
-    const { server, port } = await withServer(socket => {
+    const { server, port } = await withServer((socket) => {
       socket.write(frame('{"response":"ack"}'));
     });
     const transport = await connectTcpLineTransport('127.0.0.1', port);
@@ -99,7 +99,7 @@ suite('TcpLineTransport', () => {
 
   test('onLine_when_frame_splits_across_chunks_then_line_assembled_once', async () => {
     const payload = frame('{"command":"getStatus"}');
-    const { server, port } = await withServer(socket => {
+    const { server, port } = await withServer((socket) => {
       socket.write(payload.subarray(0, 2));
       setTimeout(() => socket.write(payload.subarray(2, 7)), 10);
       setTimeout(() => socket.write(payload.subarray(7)), 20);
@@ -115,7 +115,7 @@ suite('TcpLineTransport', () => {
   });
 
   test('onLine_when_two_frames_share_a_chunk_then_lines_delivered_in_order', async () => {
-    const { server, port } = await withServer(socket => {
+    const { server, port } = await withServer((socket) => {
       socket.write(Buffer.concat([frame('{"a":1}'), frame('{"b":2}')]));
     });
     const transport = await connectTcpLineTransport('127.0.0.1', port);
@@ -132,7 +132,7 @@ suite('TcpLineTransport', () => {
     // The single-session refusal (V6014): one coded error line, then the
     // socket closes — the transport surfaces the line first, then exit.
     const refusal = '{"response":"error","vCode":"V6014","message":"one session only"}';
-    const { server, port } = await withServer(socket => {
+    const { server, port } = await withServer((socket) => {
       socket.write(frame(refusal));
       socket.end();
     });
@@ -151,7 +151,7 @@ suite('TcpLineTransport', () => {
   test('onExit_when_length_exceeds_cap_then_transport_faults', async () => {
     const header = Buffer.alloc(4);
     header.writeUInt32LE(MAX_FRAME_LENGTH + 1, 0);
-    const { server, port } = await withServer(socket => {
+    const { server, port } = await withServer((socket) => {
       socket.write(header);
     });
     const transport = await connectTcpLineTransport('127.0.0.1', port);
@@ -188,7 +188,7 @@ suite('TcpLineTransport', () => {
   test('connect_when_custom_transport_constructed_then_frame_round_trip', async () => {
     // The socket-injection seam: later slices reuse an already-connected
     // socket (e.g. from a profile's validated address).
-    const { server, port } = await withServer(socket => {
+    const { server, port } = await withServer((socket) => {
       listenForLines(socket, line => socket.write(frame(line)));
     });
     const socket = createConnection({ host: '127.0.0.1', port });
