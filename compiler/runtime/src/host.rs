@@ -145,14 +145,18 @@ pub struct RuntimeHost {
     application_generation: ApplicationGeneration,
     pending: Option<PendingSwap>,
     migration: Option<StateMigrationPlan>,
+    execution_permitted: bool,
 }
 
 impl RuntimeHost {
     /// Creates a host for `container` and runs its init functions once.
     ///
-    /// The returned host is ready for scans: the VM is loaded, initialized,
-    /// and dropped, so every initialized variable lives in the host's
-    /// buffers. Later scans resume without re-running init.
+    /// The returned host is ready for scans once permitted: the VM is
+    /// loaded, initialized, and dropped, so every initialized variable
+    /// lives in the host's buffers. Later scans resume without re-running
+    /// init. The host boots without the execution permit — the composition
+    /// root grants it via [`permit_execution`](Self::permit_execution)
+    /// before the first `run`.
     pub fn new(container: Container) -> Result<Self, RuntimeError> {
         let mut buffers = VmBuffers::from_container(&container);
         Vm::new()
@@ -175,7 +179,27 @@ impl RuntimeHost {
             application_generation: ApplicationGeneration::new(1),
             pending: None,
             migration: None,
+            execution_permitted: false,
         })
+    }
+
+    /// Grants the execution permit: the host may drive scan rounds.
+    ///
+    /// This is the grant half of the execution permit latch (the HA
+    /// redundancy architecture, "Minimal Seams" 1): the host boots
+    /// unpermitted and `run` refuses to scan without the permit, so the
+    /// composition root owns the policy of *when* execution may begin —
+    /// standalone binaries grant immediately at startup, the redundancy
+    /// shell grants on an admission verdict. Granting is idempotent.
+    pub fn permit_execution(&mut self) {
+        self.execution_permitted = true;
+    }
+
+    /// Revokes the execution permit: further `run` requests refuse, and a
+    /// pending swap requested before the revocation is cancelled at the
+    /// boundary instead of being applied.
+    pub fn revoke_execution_permit(&mut self) {
+        self.execution_permitted = false;
     }
 
     /// Stages `candidate` after validating it against the normal artifact.
@@ -380,11 +404,20 @@ impl RuntimeHost {
     /// request taken at entry is applied at the boundary before the first
     /// round; if a request appears between rounds, the session stops at the
     /// next boundary and the outer loop applies it before continuing.
+    ///
+    /// Scans execute only while the host holds the execution permit. The
+    /// boundary application of a pending swap is the single re-check point
+    /// (external FSM review, takeaway 1): a permit revoked between the
+    /// request and the boundary cancels the operation terminally — the
+    /// pending swap is consumed there and never applied.
     pub fn run(&mut self, rounds: u64, mut clock: impl FnMut() -> u64) -> Result<(), RuntimeError> {
         let mut remaining = rounds;
         while remaining > 0 {
             if self.pending.is_some() {
                 self.apply_pending_swap()?;
+            }
+            if !self.execution_permitted {
+                return Err(RuntimeError::NotPermitted);
             }
             remaining = self.run_session(remaining, &mut clock)?;
         }
@@ -427,10 +460,20 @@ impl RuntimeHost {
     }
 
     /// Applies a pending swap at a scan boundary.
+    ///
+    /// Re-validates the execution permit before applying: a permit revoked
+    /// between the request and the boundary cancels the operation with a
+    /// terminal result — the pending swap is consumed above and never
+    /// applied (external FSM review, scenario T07).
     fn apply_pending_swap(&mut self) -> Result<(), RuntimeError> {
-        match self.pending.take() {
-            None => Ok(()),
-            Some(PendingSwap::Test) => {
+        let Some(swap) = self.pending.take() else {
+            return Ok(());
+        };
+        if !self.execution_permitted {
+            return Err(RuntimeError::NotPermitted);
+        }
+        match swap {
+            PendingSwap::Test => {
                 if self.migration.is_some() {
                     self.apply_migration_swap()?;
                 } else {
@@ -444,7 +487,7 @@ impl RuntimeHost {
                 self.active_is_candidate = true;
                 Ok(())
             }
-            Some(PendingSwap::Untest) => {
+            PendingSwap::Untest => {
                 swap_buffers(&self.normal, &mut self.buffers, self.rounds);
                 self.active_is_candidate = false;
                 Ok(())

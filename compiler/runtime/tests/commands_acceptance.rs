@@ -88,6 +88,7 @@ fn retype_base_host() -> (RuntimeHost, ironplc_container::VarIndex) {
     );
     let counter = variable_index(&base, "Counter");
     let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
     host.run(3, || 0).unwrap();
     assert_eq!(host.read_variable(counter).unwrap(), 3);
     (host, counter)
@@ -238,6 +239,7 @@ END_PROGRAM
         &[("Counter", 1)],
     );
     let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
     host.run(5, || 0).unwrap();
 
     // Adding a variable is a declaration edit: the candidate carries a state

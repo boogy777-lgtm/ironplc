@@ -20,11 +20,7 @@ use crate::conversion::type_name;
 use crate::error::OnlineChangeError;
 use crate::host::{AcceptedEdit, HostMode, HostStatus, PendingEditRecord, RuntimeHost};
 use crate::migration::{MigrationDecision, MigrationError, TypeChangePair};
-
-// V-code constants are generated from resources/problem-codes.csv by build.rs.
-mod online_change_codes {
-    include!(concat!(env!("OUT_DIR"), "/online_change_codes.rs"));
-}
+use crate::problem_codes;
 
 /// A command in the hot-edit protocol.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -314,7 +310,7 @@ impl CommandError {
     /// parse as a compiled container.
     fn invalid_container(error: impl fmt::Display) -> Self {
         CommandError {
-            v_code: online_change_codes::INVALID_CONTAINER,
+            v_code: problem_codes::INVALID_CONTAINER,
             message: format!("accept payload is not a valid compiled container: {error}"),
             pairs: None,
         }
@@ -331,22 +327,16 @@ impl From<OnlineChangeError> for CommandError {
     fn from(error: OnlineChangeError) -> Self {
         let pairs = migration_pairs(&error);
         let v_code = match error {
-            OnlineChangeError::LayoutIncompatible => online_change_codes::LAYOUT_INCOMPATIBLE,
-            OnlineChangeError::ScheduleIncompatible => online_change_codes::SCHEDULE_INCOMPATIBLE,
-            OnlineChangeError::IoIncompatible => online_change_codes::IO_INCOMPATIBLE,
-            OnlineChangeError::MigrationUnsupported(_) => {
-                online_change_codes::MIGRATION_UNSUPPORTED
-            }
-            OnlineChangeError::UntestUnsupported => online_change_codes::UNTEST_UNSUPPORTED,
-            OnlineChangeError::NoCandidateStaged => online_change_codes::NO_CANDIDATE_STAGED,
-            OnlineChangeError::CandidateAlreadyStaged => {
-                online_change_codes::CANDIDATE_ALREADY_STAGED
-            }
-            OnlineChangeError::NoTestInProgress => online_change_codes::NO_TEST_IN_PROGRESS,
-            OnlineChangeError::NotAllowedInThisMode => {
-                online_change_codes::NOT_ALLOWED_IN_THIS_MODE
-            }
-            OnlineChangeError::AssembleWithoutTest => online_change_codes::ASSEMBLE_WITHOUT_TEST,
+            OnlineChangeError::LayoutIncompatible => problem_codes::LAYOUT_INCOMPATIBLE,
+            OnlineChangeError::ScheduleIncompatible => problem_codes::SCHEDULE_INCOMPATIBLE,
+            OnlineChangeError::IoIncompatible => problem_codes::IO_INCOMPATIBLE,
+            OnlineChangeError::MigrationUnsupported(_) => problem_codes::MIGRATION_UNSUPPORTED,
+            OnlineChangeError::UntestUnsupported => problem_codes::UNTEST_UNSUPPORTED,
+            OnlineChangeError::NoCandidateStaged => problem_codes::NO_CANDIDATE_STAGED,
+            OnlineChangeError::CandidateAlreadyStaged => problem_codes::CANDIDATE_ALREADY_STAGED,
+            OnlineChangeError::NoTestInProgress => problem_codes::NO_TEST_IN_PROGRESS,
+            OnlineChangeError::NotAllowedInThisMode => problem_codes::NOT_ALLOWED_IN_THIS_MODE,
+            OnlineChangeError::AssembleWithoutTest => problem_codes::ASSEMBLE_WITHOUT_TEST,
         };
         CommandError {
             v_code,

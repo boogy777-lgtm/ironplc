@@ -1,0 +1,36 @@
+=====
+V4018
+=====
+
+.. problem-summary:: V4018
+
+The runtime host was asked to drive scan rounds while it holds no
+execution permit. The host boots unpermitted (the HA redundancy
+architecture, "Minimal Seams" 1): scans execute only after the
+composition root — the shell that owns the process — grants the permit.
+A standalone shell grants at startup, immediately after constructing
+the host; a redundant unit is granted by its admission verdict
+(Standalone or Primary). A Secondary unit is admitted without the
+permit, and its scan requests refuse until a promotion grants it.
+
+This refusal does not answer an engineering command; it surfaces when
+the shell itself drives ``run``. An unpermitted scan never executes,
+and a permit revoked between a swap request and the scan boundary
+cancels the swap terminally — the candidate stays staged and the swap
+is never applied.
+
+Example
+-------
+
+A host driven before its shell granted the permit:
+
+.. code-block::
+
+   Error: V4018 - scan execution refused: the host holds no execution permit
+
+To fix this error, grant the permit before driving scans. Standalone
+shells (``ironplcvm serve``, the MCP hot-edit session) call
+``permit_execution`` at startup; a redundancy shell grants only on an
+admission verdict that admits execution. When the error appears after a
+demotion (the permit was revoked with a staged edit request), the
+cancelled swap must be requested again after the permit is re-granted.

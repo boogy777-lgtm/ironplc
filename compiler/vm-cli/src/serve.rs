@@ -80,16 +80,27 @@ pub fn serve(path: &Path) -> Result<(), VmError> {
 
 /// Creates the runtime host for `container`, mapping init traps to the trap's
 /// V-code exactly like `run` does.
+///
+/// The host boots without the execution permit (the HA redundancy
+/// architecture, "Minimal Seams" 1); `serve` is a standalone shell, so it
+/// grants the permit immediately — today's standalone behavior, the trivial
+/// grant policy.
 pub(crate) fn start_host(container: Container) -> Result<RuntimeHost, VmError> {
-    RuntimeHost::new(container).map_err(|err| match err {
+    let mut host = RuntimeHost::new(container).map_err(|err| match err {
         RuntimeError::Trap(context) => {
             VmError::from_trap(&context.trap, context.task_id, context.instance_id)
         }
+        RuntimeError::NotPermitted => VmError::io(
+            error::SESSION_IO,
+            "runtime host refused to start: no execution permit".to_string(),
+        ),
         RuntimeError::Internal { reason } => VmError::io(
             error::SESSION_IO,
             format!("runtime host failed to start: {reason}"),
         ),
-    })
+    })?;
+    host.permit_execution();
+    Ok(host)
 }
 
 /// Serves one command session: reads one line per command from `reader`,
@@ -218,6 +229,13 @@ fn drive_scan_round(host: &mut RuntimeHost) -> Option<VmError> {
             context.task_id,
             context.instance_id,
         )),
+        Err(RuntimeError::NotPermitted) => {
+            // `serve` grants at startup, so a refusal here means the
+            // composition is broken, not the user's program: log it like an
+            // invariant violation; the acknowledgment already stands.
+            log::error!("driven scan round refused: the host holds no execution permit");
+            None
+        }
         Err(RuntimeError::Internal { reason }) => {
             log::error!("runtime host invariant violated during a driven scan round: {reason}");
             None
@@ -386,7 +404,10 @@ END_PROGRAM
     }
 
     fn counter_host() -> RuntimeHost {
-        RuntimeHost::new(compile_container(&counter_source(1))).unwrap()
+        // Test hosts model the standalone shell: granted at startup.
+        let mut host = RuntimeHost::new(compile_container(&counter_source(1))).unwrap();
+        host.permit_execution();
+        host
     }
 
     /// REQ-VC-vm-cli-019: every command line gets exactly one response line,
@@ -579,6 +600,7 @@ END_PROGRAM
     fn serve_session_when_type_change_without_decision_then_v4010_with_pairs() {
         let base = compile_container_with_ids(&counter_source(1), &[("Counter", 1)]);
         let mut host = RuntimeHost::new(base).unwrap();
+        host.permit_execution();
         host.run(3, || 0).unwrap();
 
         let candidate =
@@ -610,6 +632,7 @@ END_PROGRAM
     fn serve_session_when_preserve_decision_then_old_bits_survive_the_retype() {
         let base = compile_container_with_ids(&counter_source(1), &[("Counter", 1)]);
         let mut host = RuntimeHost::new(base).unwrap();
+        host.permit_execution();
         host.run(3, || 0).unwrap();
 
         let candidate =
@@ -640,6 +663,7 @@ END_PROGRAM
     fn serve_session_when_init_decision_then_candidate_initial_value_stands() {
         let base = compile_container_with_ids(&counter_source(1), &[("Counter", 1)]);
         let mut host = RuntimeHost::new(base).unwrap();
+        host.permit_execution();
         host.run(3, || 0).unwrap();
 
         let source = "PROGRAM main

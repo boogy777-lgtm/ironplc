@@ -5,6 +5,7 @@ use core::fmt;
 use ironplc_vm::FaultContext;
 
 use crate::migration::MigrationError;
+use crate::problem_codes;
 
 /// Why a candidate was rejected or an online change request was refused.
 ///
@@ -90,6 +91,12 @@ impl fmt::Display for OnlineChangeError {
 pub enum RuntimeError {
     /// The VM trapped during init or a scan round.
     Trap(FaultContext),
+    /// `run` was requested while the host holds no execution permit. The
+    /// host boots unpermitted and executes only after its composition root
+    /// grants the permit — standalone shells at startup, a redundant unit
+    /// on its admission verdict (V4018, the permit latch of the HA
+    /// redundancy architecture).
+    NotPermitted,
     /// A host invariant was violated. No input can reach this; it exists so
     /// the host can answer without panicking.
     Internal { reason: &'static str },
@@ -100,6 +107,15 @@ impl RuntimeError {
     pub(crate) const fn internal(reason: &'static str) -> Self {
         RuntimeError::Internal { reason }
     }
+
+    /// The stable V-code surfacing this error, when it has one.
+    pub fn v_code(&self) -> Option<&'static str> {
+        match self {
+            RuntimeError::Trap(context) => Some(context.trap.v_code()),
+            RuntimeError::NotPermitted => Some(problem_codes::EXECUTION_NOT_PERMITTED),
+            RuntimeError::Internal { .. } => None,
+        }
+    }
 }
 
 impl fmt::Display for RuntimeError {
@@ -109,6 +125,10 @@ impl fmt::Display for RuntimeError {
                 f,
                 "trap in task {} instance {}: {}",
                 context.task_id, context.instance_id, context.trap
+            ),
+            RuntimeError::NotPermitted => write!(
+                f,
+                "scan execution refused: the host holds no execution permit"
             ),
             RuntimeError::Internal { reason } => {
                 write!(f, "runtime host invariant violated: {reason}")
@@ -180,6 +200,24 @@ mod tests {
             error.to_string(),
             "trap in task 0 instance 0: divide by zero"
         );
+    }
+
+    #[test]
+    fn runtime_error_display_when_not_permitted_then_names_the_missing_permit() {
+        assert_eq!(
+            RuntimeError::NotPermitted.to_string(),
+            "scan execution refused: the host holds no execution permit"
+        );
+    }
+
+    #[test]
+    fn runtime_error_v_code_when_not_permitted_then_v4018() {
+        assert_eq!(RuntimeError::NotPermitted.v_code(), Some("V4018"));
+    }
+
+    #[test]
+    fn runtime_error_v_code_when_internal_then_none() {
+        assert_eq!(RuntimeError::internal("candidate missing").v_code(), None);
     }
 
     #[test]

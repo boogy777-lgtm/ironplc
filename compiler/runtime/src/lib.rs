@@ -24,6 +24,11 @@ mod host;
 mod migration;
 mod online_change;
 
+// V-code constants are generated from resources/problem-codes.csv by build.rs.
+mod problem_codes {
+    include!(concat!(env!("OUT_DIR"), "/problem_codes.rs"));
+}
+
 pub use commands::{
     execute, parse_command, render_response, Command, CommandError, DeviceIdentity, EditSpec,
     IdentityPayload, MigrationDecisionSpec, RedundancyIdentity, Response, StatusPayload,

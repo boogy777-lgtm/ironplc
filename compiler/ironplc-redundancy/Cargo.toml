@@ -1,0 +1,17 @@
+[package]
+name = "ironplc-redundancy"
+description = "HA redundancy shell above the runtime host: admission owns the execution permit policy for a standalone unit or a redundant pair"
+version = "0.242.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ironplc-runtime = { path = "../runtime", version = "0.242.0" }
+
+[dev-dependencies]
+ironplc-container = { path = "../container", version = "0.242.0" }
+
+[lints]
+workspace = true

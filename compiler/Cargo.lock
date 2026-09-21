@@ -1138,6 +1138,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ironplc-redundancy"
+version = "0.242.0"
+dependencies = [
+ "ironplc-container",
+ "ironplc-runtime",
+]
+
+[[package]]
 name = "ironplc-runtime"
 version = "0.242.0"
 dependencies = [

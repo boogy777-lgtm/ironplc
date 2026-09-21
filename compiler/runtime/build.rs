@@ -1,5 +1,8 @@
-//! Generates V-code constants for the online change command layer from
+//! Generates V-code constants for the runtime crate from
 //! `resources/problem-codes.csv`, mirroring the vm-cli `io_codes` build.
+//! The codes cover the online change command layer and the host-level
+//! refusals (e.g. the execution permit latch); the VM's own trap codes
+//! stay in the vm crate's CSV.
 
 use std::{
     env,
@@ -10,7 +13,7 @@ use std::{
     process,
 };
 
-fn generate_online_change_codes() -> Result<(), Box<dyn Error>> {
+fn generate_problem_codes() -> Result<(), Box<dyn Error>> {
     println!("cargo:rerun-if-changed=resources/problem-codes.csv");
 
     let mut src_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -21,7 +24,7 @@ fn generate_online_change_codes() -> Result<(), Box<dyn Error>> {
         .map_err(|e| format!("Unable to read 'problem-codes.csv': {e}"))?;
     let src = src.as_bytes();
 
-    let out_path = PathBuf::from(env::var("OUT_DIR")?).join("online_change_codes.rs");
+    let out_path = PathBuf::from(env::var("OUT_DIR")?).join("problem_codes.rs");
     let mut out = File::create(out_path)?;
 
     let mut rdr = csv::Reader::from_reader(src);
@@ -62,8 +65,8 @@ fn pascal_to_screaming_snake(s: &str) -> String {
 }
 
 fn main() {
-    if let Err(err) = generate_online_change_codes() {
-        eprintln!("problem generating online_change_codes.rs: {err}");
+    if let Err(err) = generate_problem_codes() {
+        eprintln!("problem generating problem_codes.rs: {err}");
         process::exit(1);
     }
 }

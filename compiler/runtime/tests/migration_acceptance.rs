@@ -38,6 +38,7 @@ END_PROGRAM
     );
     let a = variable_index(&base, "A");
     let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
     host.run(9, || 0).unwrap();
     assert_eq!(host.read_variable(a).unwrap(), 9);
 
@@ -81,6 +82,7 @@ END_PROGRAM
     let a_dint = variable_index(&base, "A");
     let scaled_before = variable_index(&base, "Scaled");
     let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
     host.run(4, || 0).unwrap();
     assert_eq!(host.read_variable(a_dint).unwrap(), 4);
     assert_eq!(host.read_variable(scaled_before).unwrap(), 20);
@@ -132,6 +134,7 @@ END_PROGRAM
         &[("A", 1), ("B", 2), ("BView", 3)],
     );
     let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
     host.run(3, || 0).unwrap();
 
     let candidate = compile_with_ids(
@@ -176,6 +179,7 @@ END_PROGRAM
     );
     let counter_before = variable_index(&base, "Counter");
     let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
     host.run(5, || 0).unwrap();
     assert_eq!(host.read_variable(counter_before).unwrap(), 5);
 
@@ -217,6 +221,7 @@ END_PROGRAM
         &[("Counter", 1), ("Removed", 2)],
     );
     let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
     host.run(4, || 0).unwrap();
 
     let candidate = compile_with_ids(
@@ -253,6 +258,7 @@ END_PROGRAM
         &[("A", 1), ("B", 2)],
     );
     let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
     host.run(7, || 0).unwrap();
 
     let candidate = compile_with_ids(
@@ -291,6 +297,7 @@ END_PROGRAM
         &[("Text", 1), ("Length", 2)],
     );
     let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
     host.run(1, || 0).unwrap();
 
     let candidate = compile_with_ids(
@@ -335,6 +342,7 @@ END_PROGRAM
     );
     let counter = variable_index(&base, "Counter");
     let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
     host.run(3, || 0).unwrap();
 
     let candidate = compile_with_ids(
@@ -389,6 +397,7 @@ END_PROGRAM
     );
     let counter = variable_index(&base, "Counter");
     let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
     host.run(3, || 0).unwrap();
 
     let candidate = compile_with_ids(
@@ -441,6 +450,7 @@ END_PROGRAM
         &[("Counter", 1)],
     );
     let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
     host.run(4, || 0).unwrap();
 
     let candidate = compile_with_ids(
@@ -482,6 +492,7 @@ END_PROGRAM
         &[("Counter", 1)],
     );
     let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
     host.run(4, || 0).unwrap();
 
     let candidate = compile_with_ids(
@@ -520,6 +531,7 @@ END_PROGRAM
         &[("Vals", 1)],
     );
     let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
     host.run(1, || 0).unwrap();
 
     let candidate = compile_with_ids(
@@ -569,6 +581,7 @@ END_PROGRAM
         &[("Vals", 1), ("Peek", 2)],
     );
     let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
     host.run(2, || 0).unwrap();
 
     let candidate = compile_with_ids(
@@ -612,6 +625,7 @@ END_PROGRAM
     );
     let length = variable_index(&base, "Length");
     let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
     host.run(1, || 0).unwrap();
 
     let candidate = compile_with_ids(
@@ -662,6 +676,7 @@ END_PROGRAM
     );
     let total = variable_index(&base, "total");
     let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
     host.run(2, || 0).unwrap();
 
     let candidate = compile_with_ids(
@@ -730,6 +745,7 @@ END_PROGRAM
     );
     let total = variable_index(&base, "total");
     let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
     host.run(2, || 0).unwrap();
     assert_eq!(host.read_variable(total).unwrap(), 2);
 
@@ -807,6 +823,7 @@ END_PROGRAM
     );
     let total = variable_index(&base, "total");
     let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
     host.run(2, || 0).unwrap();
 
     let candidate = compile_with_uid_keys(
@@ -863,6 +880,7 @@ END_PROGRAM
         &[("Counter", 1)],
     );
     let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
     host.run(5, || 0).unwrap();
 
     let candidate = compile_with_ids(

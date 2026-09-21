@@ -23,7 +23,63 @@ use std::collections::BTreeMap;
 
 use common::{compile_source, container_bytes, counter_host, counter_program, variable_index};
 use ironplc_container::VarIndex;
-use ironplc_runtime::{AcceptedEdit, HostMode, OnlineChangeError, RuntimeHost};
+use ironplc_runtime::{AcceptedEdit, HostMode, OnlineChangeError, RuntimeError, RuntimeHost};
+
+#[test]
+fn run_when_no_execution_permit_then_refused_with_v4018_and_no_rounds_execute() {
+    // A fresh host boots unpermitted (the HA redundancy architecture,
+    // "Minimal Seams" 1): scans refuse until the composition root grants.
+    let base = compile_source(&counter_program("Counter := Counter + 1;"));
+    let mut host = RuntimeHost::new(base).unwrap();
+
+    let error = host.run(1, || 0).unwrap_err();
+
+    assert!(matches!(error, RuntimeError::NotPermitted));
+    assert_eq!(error.v_code(), Some("V4018"));
+    assert_eq!(host.status().rounds, 0);
+}
+
+#[test]
+fn run_when_permit_granted_then_rounds_execute() {
+    let base = compile_source(&counter_program("Counter := Counter + 1;"));
+    let counter = variable_index(&base, "Counter");
+    let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
+
+    host.run(3, || 0).unwrap();
+
+    assert_eq!(host.status().rounds, 3);
+    assert_eq!(host.read_variable(counter).unwrap(), 3);
+}
+
+#[test]
+fn run_when_permit_revoked_before_boundary_then_pending_swap_cancelled_terminally() {
+    // External FSM review, scenario T07: a permit revoked between the
+    // request and the boundary cancels the operation with a terminal
+    // result — the pending swap is consumed and never applied.
+    let (mut host, counter) = counter_host(1);
+    host.stage(compile_source(&counter_program("Counter := Counter + 10;")))
+        .unwrap();
+    host.test().unwrap();
+    host.revoke_execution_permit();
+
+    let error = host.run(1, || 0).unwrap_err();
+
+    assert!(matches!(error, RuntimeError::NotPermitted));
+    assert_eq!(error.v_code(), Some("V4018"));
+    // Terminal: the pending swap is gone, the candidate stays staged, and
+    // no round ran.
+    let status = host.status();
+    assert_eq!(status.mode, HostMode::Normal);
+    assert!(status.candidate.is_some());
+    assert_eq!(status.rounds, 0);
+
+    // A re-grant drives scans but does not resurrect the cancelled swap.
+    host.permit_execution();
+    host.run(1, || 0).unwrap();
+    assert_eq!(host.status().mode, HostMode::Normal);
+    assert_eq!(host.read_variable(counter).unwrap(), 1);
+}
 
 #[test]
 fn run_when_logic_only_edit_then_counter_continues_without_reset() {
@@ -87,6 +143,7 @@ END_PROGRAM
     let total = variable_index(&base, "total");
     let result = variable_index(&base, "result");
     let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
 
     host.run(5, || 0).unwrap();
     assert_eq!(host.read_variable(total).unwrap(), 5);
@@ -182,6 +239,7 @@ END_PROGRAM
     );
     let length = variable_index(&base, "Length");
     let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
     host.run(3, || 0).unwrap();
     assert_eq!(host.read_variable(length).unwrap(), 5);
     let region_bytes_before = host.data_region().len();
@@ -253,6 +311,7 @@ fn stage_with_decisions_when_edit_then_record_and_wire_follow_the_candidate() {
     let base = compile_source(&counter_program("Counter := Counter + 1;"));
     let base_hash = base.header.content_hash;
     let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
 
     let candidate = compile_source(&counter_program("Counter := Counter + 10;"));
     let wire = container_bytes(&candidate);
@@ -407,6 +466,7 @@ fn stage_when_io_image_sizes_change_then_io_incompatible_error() {
     let mut candidate = compile_source(&counter_program("Counter := Counter + 10;"));
     candidate.header.input_image_bytes += 1;
     let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
 
     assert!(matches!(
         host.stage(candidate),
@@ -420,6 +480,7 @@ fn stage_when_task_table_changes_then_schedule_incompatible_error() {
     let mut candidate = compile_source(&counter_program("Counter := Counter + 10;"));
     candidate.task_table.tasks[0].priority += 1;
     let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
 
     assert!(matches!(
         host.stage(candidate),
@@ -433,6 +494,7 @@ fn stage_when_header_flags_change_then_layout_incompatible_error() {
     let mut candidate = compile_source(&counter_program("Counter := Counter + 10;"));
     candidate.header.flags |= 0x80;
     let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
 
     assert!(matches!(
         host.stage(candidate),

@@ -178,6 +178,21 @@ impl HotEditResponse {
             RuntimeError::Internal { reason } => {
                 internal_failure(format!("runtime host invariant violated: {reason}"))
             }
+            RuntimeError::NotPermitted => {
+                // The session grants at establish, so a refusal here means
+                // a broken composition, not the user's program: surface the
+                // stable code and the host's message.
+                let error = RuntimeError::NotPermitted;
+                HotEditResponse {
+                    ok: false,
+                    result: None,
+                    status: None,
+                    v_code: error.v_code().map(str::to_string),
+                    message: Some(error.to_string()),
+                    pairs: None,
+                    diagnostics: vec![],
+                }
+            }
         }
     }
 }
@@ -365,7 +380,13 @@ fn establish(program: Vec<u8>, session: &mut HotEditSession) -> HotEditResponse 
         }
     };
     let host = match RuntimeHost::new(container) {
-        Ok(host) => host,
+        Ok(mut host) => {
+            // Standalone RAM-only session: the MCP server is the
+            // composition root and grants the execution permit at startup
+            // (the HA redundancy architecture, "Minimal Seams" 1).
+            host.permit_execution();
+            host
+        }
         Err(error) => return HotEditResponse::runtime_error(error),
     };
     let status = StatusPayload::from(host.status());
@@ -734,7 +755,9 @@ END_PROGRAM
         );
         {
             let mut guard = session.lock().unwrap();
-            guard.host = Some(RuntimeHost::new(base).unwrap());
+            let mut host = RuntimeHost::new(base).unwrap();
+            host.permit_execution();
+            guard.host = Some(host);
         }
         let staged = {
             let mut guard = session.lock().unwrap();
@@ -828,7 +851,9 @@ END_PROGRAM
         );
         {
             let mut guard = session.lock().unwrap();
-            guard.host = Some(RuntimeHost::new(base).unwrap());
+            let mut host = RuntimeHost::new(base).unwrap();
+            host.permit_execution();
+            guard.host = Some(host);
         }
         let candidate = compile_container_with_ids(
             "PROGRAM main
@@ -885,7 +910,9 @@ END_PROGRAM
         );
         {
             let mut guard = session.lock().unwrap();
-            guard.host = Some(RuntimeHost::new(base).unwrap());
+            let mut host = RuntimeHost::new(base).unwrap();
+            host.permit_execution();
+            guard.host = Some(host);
             guard.host.as_mut().unwrap().run(3, || 0).unwrap();
         }
         let candidate = compile_container_with_ids(
@@ -941,7 +968,9 @@ END_PROGRAM
         );
         {
             let mut guard = session.lock().unwrap();
-            guard.host = Some(RuntimeHost::new(base).unwrap());
+            let mut host = RuntimeHost::new(base).unwrap();
+            host.permit_execution();
+            guard.host = Some(host);
             guard.host.as_mut().unwrap().run(3, || 0).unwrap();
         }
         let candidate = compile_container_with_ids(
@@ -1092,7 +1121,9 @@ END_PROGRAM
         let (_cache, session) = make_state();
         {
             let mut guard = session.lock().unwrap();
-            guard.host = Some(RuntimeHost::new(compile_container(COUNTER_PROGRAM)).unwrap());
+            let mut host = RuntimeHost::new(compile_container(COUNTER_PROGRAM)).unwrap();
+            host.permit_execution();
+            guard.host = Some(host);
         }
 
         let mut guard = session.lock().unwrap();

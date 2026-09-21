@@ -139,6 +139,13 @@ Autonomy: full.
   Accepted implementation item (size S), not debt; both units of the
   pair persist identical bytes at Assemble. Details:
   [ADR-0064 Amendment](../adrs/0064-online-change-on-a-redundant-pair.md).
+- **Delivered 2026-09-21 (Phase 5 slice 1):** the execution permit latch
+  (runtime seam 1) and the `ironplc-redundancy` crate skeleton — the host
+  boots unpermitted and `run()` refuses with V4018, standalone composition
+  roots grant at startup, the boundary re-validates a revoked permit and
+  cancels the pending swap terminally, and the shell's admission verdict
+  (Standalone/Primary/Secondary) owns the grant policy. Details:
+  [HA Redundancy Layer Architecture](design/ha-redundancy-layer-architecture.md).
 - **Still open:** failover timing/ping-pong confirmation thresholds and the detection
   time budget across N adapters; readiness policy; state replication sizing;
   epoch persistence in NV storage; verify target firmware allows multiple

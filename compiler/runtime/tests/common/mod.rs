@@ -112,8 +112,14 @@ END_PROGRAM
 }
 
 /// A host whose program increments `Counter` by one per scan.
+///
+/// The host is granted the execution permit: fixtures model the standalone
+/// composition roots, which grant at startup (the HA redundancy
+/// architecture, "Minimal Seams" 1).
 pub fn counter_host(step: i32) -> (RuntimeHost, VarIndex) {
     let base = compile_source(&counter_program(&format!("Counter := Counter + {step};")));
     let counter = variable_index(&base, "Counter");
-    (RuntimeHost::new(base).unwrap(), counter)
+    let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
+    (host, counter)
 }
