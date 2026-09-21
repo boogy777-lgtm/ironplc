@@ -330,6 +330,45 @@ mod tests {
         (registry.client(), registry.client(), registry)
     }
 
+    /// A client whose barrier participation always fails: the test
+    /// vehicle for the barrier helper's all-or-nothing retreat around
+    /// `barrier_participate`.
+    struct FailingBarrierClient {
+        inner: RegistryClient,
+    }
+
+    impl FencingClient for FailingBarrierClient {
+        fn capabilities(&self) -> FencingCapabilities {
+            self.inner.capabilities()
+        }
+
+        fn claim(
+            &mut self,
+            module: ModuleId,
+            owner: OwnerId,
+            epoch: Epoch,
+        ) -> Result<(), FencingError> {
+            self.inner.claim(module, owner, epoch)
+        }
+
+        fn release(&mut self, module: ModuleId, owner: OwnerId) -> Result<(), FencingError> {
+            self.inner.release(module, owner)
+        }
+
+        fn owners(&self) -> Vec<ModuleOwnership> {
+            self.inner.owners()
+        }
+
+        fn barrier_participate(
+            &mut self,
+            _owner: OwnerId,
+            _modules: &[ModuleId],
+            _epoch: Epoch,
+        ) -> Result<(), FencingError> {
+            Err(FencingError::Unavailable)
+        }
+    }
+
     #[test]
     fn claim_when_free_then_claimed_disarmed_with_owner_and_epoch() {
         let (mut a, _, _) = registry();
@@ -481,6 +520,27 @@ mod tests {
             .owners()
             .iter()
             .all(|entry| entry.state.owner() != Some(OWNER_A)));
+    }
+
+    #[test]
+    fn ownership_barrier_when_participation_fails_then_releases_acquired() {
+        // The barrier helper's own all-or-nothing retreat: a client
+        // whose participation fails releases everything the ordered
+        // claim acquired before the error returns.
+        let registry = ModuleRegistry::new(2);
+        let mut client = FailingBarrierClient {
+            inner: registry.client(),
+        };
+        let modules = [ModuleId::new(0), ModuleId::new(1)];
+
+        let error = ownership_barrier(&mut client, OWNER_A, &modules, EPOCH).unwrap_err();
+
+        assert_eq!(error, FencingError::Unavailable);
+        assert!(client
+            .inner
+            .owners()
+            .iter()
+            .all(|entry| entry.state == ModuleState::Unowned));
     }
 
     #[test]

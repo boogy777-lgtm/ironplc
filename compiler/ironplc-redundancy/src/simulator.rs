@@ -357,6 +357,35 @@ mod tests {
     }
 
     #[test]
+    fn operations_when_module_out_of_range_then_unavailable() {
+        // The registry knows identities `0..count`; a foreign module
+        // identity is unknown hardware, refused fail-closed.
+        let mut registry = ModuleRegistry::new(2);
+        let mut client = registry.client();
+        let foreign = ModuleId::new(99);
+
+        assert_eq!(
+            client.claim(foreign, OWNER, EPOCH).unwrap_err(),
+            FencingError::Unavailable
+        );
+        assert_eq!(
+            client.release(foreign, OWNER).unwrap_err(),
+            FencingError::Unavailable
+        );
+        assert_eq!(
+            client
+                .barrier_participate(OWNER, &[foreign], EPOCH)
+                .unwrap_err(),
+            FencingError::Unavailable
+        );
+        registry.yank(foreign);
+        assert!(registry
+            .owners()
+            .iter()
+            .all(|entry| entry.module != foreign));
+    }
+
+    #[test]
     fn release_when_faulted_after_claim_then_unavailable_and_unowned() {
         let mut registry = ModuleRegistry::new(2);
         let mut client = registry.client();

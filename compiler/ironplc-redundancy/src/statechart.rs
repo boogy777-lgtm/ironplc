@@ -232,6 +232,13 @@ mod tests {
 
         assert_eq!(chart.state(), SyncState::DeSync);
         assert_eq!(chart.reason(), DeSyncReason::EpochDiscontinuity);
+
+        // The same discontinuity while synchronizing: same landing.
+        let mut syncing = SyncChart::new();
+        syncing.apply(SyncEvent::Paired);
+        syncing.apply(SyncEvent::EpochDiscontinuity);
+        assert_eq!(syncing.state(), SyncState::DeSync);
+        assert_eq!(syncing.reason(), DeSyncReason::EpochDiscontinuity);
     }
 
     #[test]
