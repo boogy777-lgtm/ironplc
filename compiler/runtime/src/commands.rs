@@ -337,6 +337,7 @@ impl From<OnlineChangeError> for CommandError {
             OnlineChangeError::NoTestInProgress => problem_codes::NO_TEST_IN_PROGRESS,
             OnlineChangeError::NotAllowedInThisMode => problem_codes::NOT_ALLOWED_IN_THIS_MODE,
             OnlineChangeError::AssembleWithoutTest => problem_codes::ASSEMBLE_WITHOUT_TEST,
+            OnlineChangeError::SnapshotCorrupt => problem_codes::SNAPSHOT_CORRUPT,
         };
         CommandError {
             v_code,
@@ -745,6 +746,7 @@ mod tests {
     #[case::no_test(OnlineChangeError::NoTestInProgress, "V4014")]
     #[case::wrong_mode(OnlineChangeError::NotAllowedInThisMode, "V4015")]
     #[case::without_test(OnlineChangeError::AssembleWithoutTest, "V4017")]
+    #[case::snapshot_corrupt(OnlineChangeError::SnapshotCorrupt, "V4019")]
     fn command_error_v_code_when_online_change_error_then_stable_code(
         #[case] error: OnlineChangeError,
         #[case] expected: &'static str,

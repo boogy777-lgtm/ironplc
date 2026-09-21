@@ -1,0 +1,27 @@
+=====
+V4103
+=====
+
+.. problem-summary:: V4103
+
+The peer refused a replicated state snapshot: the image's layout did
+not name a layout the receiving unit holds, or the payload was
+internally inconsistent. The apply is fail-closed — a mismatched image
+is refused, never guessed, and not one byte is written. The pair's
+process state cannot silently diverge.
+
+Example
+-------
+
+A crossload update names a layout the receiving unit does not hold
+(for example, the pair's edit lifecycle diverged before the transfer):
+
+.. code-block::
+
+   Error: V4103 - crossload snapshot rejected: the peer refused the replicated state snapshot: layout incompatible or payload corrupt
+
+To fix this error, re-establish synchronization: the receiving unit
+drops to deSYNC and the sync pipeline re-runs, and the edit lifecycle
+is reconciled from the authoritative status. If the code persists,
+check that both units run identical runtime versions — the snapshot
+layout vocabulary is versioned by the container format.

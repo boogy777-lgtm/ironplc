@@ -1,0 +1,28 @@
+=====
+V4105
+=====
+
+.. problem-summary:: V4105
+
+The peer's offered candidate generation does not match the generation
+this unit stages for the same candidate: the pair does not hold one
+application generation, which ADR-0064(c) makes the admission contract
+of the pair's online change. The offer is refused and the half-staged
+candidate rolls back to the clean pre-offer base — the pair must never
+disagree on the canonical generation.
+
+Example
+-------
+
+Two units whose application histories diverged attempt an online
+change; the staged candidate generations differ:
+
+.. code-block::
+
+   Error: V4105 - crossload generation mismatch: the peer's candidate generation does not match the staged generation on this unit; the pair does not hold one application generation
+
+To fix this error, re-establish one application generation on the pair
+(re-download the committed artifact to the laggard unit), then re-issue
+the Accept. The pair admits exactly one application generation; an
+online change on a diverged pair is refused, never reconciled by the
+edit.

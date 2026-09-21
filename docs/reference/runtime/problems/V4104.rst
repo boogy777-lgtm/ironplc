@@ -1,0 +1,27 @@
+=====
+V4104
+=====
+
+.. problem-summary:: V4104
+
+The crossload transfer was interrupted or carried garbled frames: a
+frame that fails the integrity check is dropped, never acted on, and
+the transfer as a whole is reported with this code. The refusing unit
+stays deSYNC — it never pretends redundancy-ready — latches the alarm,
+and answers the coded refusal so the primary learns the pair is not
+redundancy-ready.
+
+Example
+-------
+
+A link error corrupts one frame of a multi-field crossload offer; the
+receiving unit drops the frame and reports the interrupted transfer:
+
+.. code-block::
+
+   Error: V4104 - crossload interrupted: the crossload transfer was interrupted or carried garbled frames; the unit stays deSYNC
+
+To fix this error, check the pair link (wiring, port 1 on both units,
+segment health) and re-run the sync pipeline once the link is clean.
+A transfer that cannot be verified is re-established, never resumed
+mid-frame.

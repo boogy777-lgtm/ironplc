@@ -139,8 +139,9 @@ impl Packet {
 }
 
 /// CRC-32 (IEEE 802.3, reflected, polynomial 0xEDB88320) over the frame
-/// prefix — integrity over all fields, bitwise with no table.
-fn crc32(bytes: &[u8]) -> u32 {
+/// prefix — integrity over all fields, bitwise with no table. Shared
+/// with the crossload codec: one pair-link integrity function, not two.
+pub(crate) fn crc32(bytes: &[u8]) -> u32 {
     let mut crc = 0xFFFF_FFFFu32;
     for byte in bytes {
         crc ^= u32::from(*byte);

@@ -38,7 +38,7 @@
 use std::collections::BTreeMap;
 
 use ironplc_container::{Container, VarIndex};
-use ironplc_vm::{Vm, VmBuffers};
+use ironplc_vm::{Slot, Vm, VmBuffers};
 
 use crate::error::{OnlineChangeError, RuntimeError};
 use crate::generation::{ApplicationGeneration, LogicGeneration};
@@ -46,6 +46,7 @@ use crate::migration::{MigrationDecision, StateMigrationPlan};
 use crate::online_change::{
     has_stable_vars, swap_buffers, validate_candidate, validate_migration_candidate,
 };
+use crate::snapshot::StateSnapshot;
 
 /// Which artifact is executing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -415,6 +416,180 @@ impl RuntimeHost {
         self.committed_wire.take()
     }
 
+    /// Exports the persistent state as a typed snapshot (the HA
+    /// redundancy architecture, "Minimal Seams" 3): the bulk read beside
+    /// `data_region` and `read_variable`, in the carry-over vocabulary of
+    /// `swap_buffers` — the whole `vars` table and the whole data region,
+    /// stamped with the active artifact's layout identity.
+    pub fn state_snapshot(&self) -> StateSnapshot {
+        let container = if self.active_is_candidate {
+            self.candidate.as_ref().unwrap_or(&self.normal)
+        } else {
+            &self.normal
+        };
+        StateSnapshot {
+            layout_hash: container.header.layout_hash,
+            num_variables: container.header.num_variables,
+            data_region_bytes: container.header.data_region_bytes,
+            vars: self.buffers.vars.iter().map(|slot| slot.as_u64()).collect(),
+            data_region: self.buffers.data_region.clone(),
+        }
+    }
+
+    /// Applies a replicated snapshot to this host while it drives no
+    /// scans (the HA redundancy architecture, "Minimal Seams" 4): the
+    /// mirror of `apply_migration_swap` with a replicated image in the
+    /// migration plan's place. The host is the single authority; every
+    /// refusal is coded and fail-closed — a mismatched image is refused,
+    /// never guessed:
+    ///
+    /// - a snapshot whose byte lengths do not match its declared layout
+    ///   is corrupt ([`OnlineChangeError::SnapshotCorrupt`]);
+    /// - a snapshot of the layout currently executing copies both
+    ///   persistent regions wholesale — the steady-state replication a
+    ///   monitoring peer applies;
+    /// - a snapshot of the staged candidate's layout while the original
+    ///   is active is the pair's Test of a migration candidate arriving
+    ///   over replication: the buffers are rebuilt from the candidate's
+    ///   init image (exactly `apply_migration_swap`'s first half), every
+    ///   persistent byte is overwritten with the replicated image, and
+    ///   the selector flips to the candidate. The migration marker stays
+    ///   set — untest stays refused (V4011) and the replicated image is
+    ///   authoritative over a local plan application;
+    /// - a snapshot of the normal layout while the candidate is active
+    ///   is the pair's Untest: refused on a migration candidate
+    ///   ([`OnlineChangeError::UntestUnsupported`]), otherwise the
+    ///   selector flips back with the carried state (ADR-0064(f): the
+    ///   candidate is kept, process state is not rolled back);
+    /// - anything else names a layout this host does not hold:
+    ///   [`OnlineChangeError::LayoutIncompatible`].
+    ///
+    /// "Idle" is a borrow-checker property: this method takes
+    /// `&mut self`, so no scan session can be live across it.
+    pub fn apply_state_snapshot(
+        &mut self,
+        snapshot: &StateSnapshot,
+    ) -> Result<(), OnlineChangeError> {
+        if !snapshot.is_consistent() {
+            return Err(OnlineChangeError::SnapshotCorrupt);
+        }
+        if self.pending.is_some() {
+            // A boundary operation is in flight; no replica may land
+            // until it completes.
+            return Err(OnlineChangeError::NotAllowedInThisMode);
+        }
+
+        let active = if self.active_is_candidate {
+            self.candidate.as_ref().unwrap_or(&self.normal)
+        } else {
+            &self.normal
+        };
+        if snapshot.layout_matches(active) {
+            Self::copy_persistent(snapshot, &mut self.buffers);
+            return Ok(());
+        }
+
+        if !self.active_is_candidate
+            && self
+                .candidate
+                .as_ref()
+                .is_some_and(|candidate| snapshot.layout_matches(candidate))
+        {
+            return self.apply_advance(snapshot);
+        }
+
+        if self.active_is_candidate && snapshot.layout_matches(&self.normal) {
+            if self.migration.is_some() {
+                // Untest after a schema-changing test is forbidden
+                // (V4011); a retreat image names exactly that.
+                return Err(OnlineChangeError::UntestUnsupported);
+            }
+            Self::copy_persistent(snapshot, &mut self.buffers);
+            self.active_is_candidate = false;
+            return Ok(());
+        }
+
+        Err(OnlineChangeError::LayoutIncompatible)
+    }
+
+    /// Flips the execution selector to the staged candidate without a
+    /// boundary state swap — the takeover-during-Testing path of
+    /// ADR-0064(e): the standby takes over executing the CANDIDATE,
+    /// because the state has already moved under the candidate and
+    /// reverting to the original would be an untest, which migration
+    /// candidates forbid. The caller certifies the replicated state
+    /// moved: a migration candidate whose image has not advanced on this
+    /// host is refused, never executed over unmigrated state
+    /// ([`OnlineChangeError::NotAllowedInThisMode`]). Idempotent once
+    /// the candidate is active.
+    pub fn takeover_testing(&mut self) -> Result<(), OnlineChangeError> {
+        if self.candidate.is_none() {
+            return Err(OnlineChangeError::NoCandidateStaged);
+        }
+        if self.active_is_candidate {
+            return Ok(());
+        }
+        if self.pending.is_some() {
+            return Err(OnlineChangeError::NotAllowedInThisMode);
+        }
+        if self.migration.is_some() {
+            return Err(OnlineChangeError::NotAllowedInThisMode);
+        }
+        self.active_is_candidate = true;
+        Ok(())
+    }
+
+    /// Applies a pending `test`/`untest` at a boundary without driving
+    /// scan rounds. The monitor-mode host of a redundant pair drives no
+    /// scans — its composition root keeps it idle — so its boundary is
+    /// wherever the root chooses; this is how the Secondary mirrors the
+    /// pair's Untest for a layout-preserving candidate (both layouts hash
+    /// identically, so the retreat never appears in the replication
+    /// stream). The execution permit is not re-validated here: this path
+    /// drives no scans, and refusing the mirror would leave the pair's
+    /// edit lifecycle diverged. Shells that drive rounds never need this:
+    /// `run` applies pending swaps at round boundaries with the permit
+    /// re-check (scenario T07).
+    pub fn apply_pending_at_boundary(&mut self) -> Result<(), RuntimeError> {
+        self.apply_pending_swap(false)
+    }
+
+    /// Overwrites both persistent regions of `buffers` with the
+    /// snapshot's bytes; the caller has already proven the layout
+    /// identity, so the lengths match by construction.
+    fn copy_persistent(snapshot: &StateSnapshot, buffers: &mut VmBuffers) {
+        for (slot, raw) in buffers.vars.iter_mut().zip(snapshot.vars.iter()) {
+            *slot = Slot::from_u64(*raw);
+        }
+        buffers.data_region.copy_from_slice(&snapshot.data_region);
+    }
+
+    /// The replicated Test advance of a migration candidate: rebuild the
+    /// buffers from the candidate's init image (its declared initial
+    /// values), then let the replicated image overwrite every persistent
+    /// byte — the candidate-only entities keep the init values the
+    /// primary's post-migration image carries, the shared entities carry
+    /// the replicated values. An init image that traps here — when the
+    /// identical container initialized on the peer — means the replica
+    /// is divergent, so it is refused as corrupt.
+    fn apply_advance(&mut self, snapshot: &StateSnapshot) -> Result<(), OnlineChangeError> {
+        let mut advanced = {
+            let Some(candidate) = self.candidate.as_ref() else {
+                return Err(OnlineChangeError::NoCandidateStaged);
+            };
+            let mut advanced = VmBuffers::from_container(candidate);
+            Vm::new()
+                .load(candidate, &mut advanced)
+                .start()
+                .map_err(|_| OnlineChangeError::SnapshotCorrupt)?;
+            advanced
+        };
+        Self::copy_persistent(snapshot, &mut advanced);
+        self.buffers = advanced;
+        self.active_is_candidate = true;
+        Ok(())
+    }
+
     /// Drives up to `rounds` scan rounds, applying a pending swap first.
     ///
     /// Each round is one `run_round(clock())`. A pending `test`/`untest`
@@ -450,7 +625,7 @@ impl RuntimeHost {
         let mut remaining = rounds;
         while remaining > 0 {
             if self.pending.is_some() {
-                self.apply_pending_swap()?;
+                self.apply_pending_swap(true)?;
             }
             if !self.execution_permitted {
                 return Err(RuntimeError::NotPermitted);
@@ -515,15 +690,19 @@ impl RuntimeHost {
 
     /// Applies a pending swap at a scan boundary.
     ///
-    /// Re-validates the execution permit before applying: a permit revoked
-    /// between the request and the boundary cancels the operation with a
-    /// terminal result — the pending swap is consumed above and never
-    /// applied (external FSM review, scenario T07).
-    fn apply_pending_swap(&mut self) -> Result<(), RuntimeError> {
+    /// Re-validates the execution permit before applying when the boundary
+    /// is a scan boundary (`revalidate_permit`): a permit revoked between
+    /// the request and the boundary cancels the operation with a terminal
+    /// result — the pending swap is consumed above and never applied
+    /// (external FSM review, scenario T07). An idle boundary passes
+    /// `false`: it drives no scans, the permit governs scan execution
+    /// only, and a monitor-mode unit must still mirror the pair's edit
+    /// lifecycle to stay aligned.
+    fn apply_pending_swap(&mut self, revalidate_permit: bool) -> Result<(), RuntimeError> {
         let Some(swap) = self.pending.take() else {
             return Ok(());
         };
-        if !self.execution_permitted {
+        if revalidate_permit && !self.execution_permitted {
             return Err(RuntimeError::NotPermitted);
         }
         match swap {

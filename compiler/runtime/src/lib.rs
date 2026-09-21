@@ -23,6 +23,7 @@ mod generation;
 mod host;
 mod migration;
 mod online_change;
+mod snapshot;
 
 // V-code constants are generated from resources/problem-codes.csv by build.rs.
 mod problem_codes {
@@ -40,3 +41,4 @@ pub use host::{
     AcceptedEdit, EditBaseline, HostMode, HostStatus, PendingEditRecord, RuntimeHost, ScanCommit,
 };
 pub use migration::{MigrationDecision, MigrationError, StateMigrationPlan, TypeChangePair};
+pub use snapshot::StateSnapshot;

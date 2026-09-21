@@ -154,6 +154,16 @@ Autonomy: full.
   deSYNC → SYNCING → SYNC_READY chart with admission's zombie fence and
   the V4101 foreign-pair refusal. Details:
   [HA Redundancy FSM](design/ha-redundancy-fsm.md).
+- **Delivered 2026-09-21 (Phase 5 slice 3):** crossload — runtime seam 3
+  (the typed `StateSnapshot` bulk read of the persistent regions) and
+  seam 4 (the fail-closed apply-while-idle, mirroring
+  `apply_migration_swap`), the ADR-0064 pair pipeline (the Primary's
+  Accept packages candidate wire bytes + snapshot + candidate generation
+  + epoch; the Secondary validates, stages, applies while idle, and
+  rises to SYNC_READY; one application generation is the admission
+  contract, V4105), takeover during Testing executing the CANDIDATE
+  (V4011 intact), and the V4102–V4105 refusal/alarm path. Details:
+  [ADR-0064](adrs/0064-online-change-on-a-redundant-pair.md).
 - **Still open:** failover timing/ping-pong confirmation thresholds and the detection
   time budget across N adapters; readiness policy; state replication sizing;
   epoch persistence in NV storage; verify target firmware allows multiple

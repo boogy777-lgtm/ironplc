@@ -1,2 +1,6 @@
 Code,Name,Message
 V4101,PairIdentityMismatch,The peer discovered on the pair link belongs to a different redundant pair
+V4102,CrossloadCandidateRejected,The peer refused the crossloaded candidate: staging validation failed on the peer
+V4103,CrossloadSnapshotRejected,The peer refused the replicated state snapshot: layout incompatible or payload corrupt
+V4104,CrossloadInterrupted,The crossload transfer was interrupted or carried garbled frames; the unit stays deSYNC
+V4105,CrossloadGenerationMismatch,The peer's candidate generation does not match the staged generation on this unit; the pair does not hold one application generation

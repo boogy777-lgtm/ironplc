@@ -11,3 +11,4 @@ V4015,NotAllowedInThisMode,The operation is not allowed in the current hot-edit 
 V4016,InvalidContainer,AcceptEdits payload is not a valid compiled container
 V4017,AssembleWithoutTest,Assemble requires the candidate to have executed under Test
 V4018,ExecutionNotPermitted,Scan execution refused because the host holds no execution permit
+V4019,SnapshotCorrupt,Replicated state snapshot is internally inconsistent

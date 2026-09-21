@@ -46,6 +46,10 @@ pub enum OnlineChangeError {
     /// active: the candidate never ran under Test, and promoting it would
     /// install code that never executed (ADR-0064).
     AssembleWithoutTest,
+    /// A replicated state snapshot's byte lengths do not match its
+    /// declared layout: the payload is internally inconsistent, so the
+    /// apply refused without touching a byte (the crossload seam).
+    SnapshotCorrupt,
 }
 
 impl fmt::Display for OnlineChangeError {
@@ -81,6 +85,10 @@ impl fmt::Display for OnlineChangeError {
             OnlineChangeError::AssembleWithoutTest => write!(
                 f,
                 "assemble requires the candidate to have executed under Test"
+            ),
+            OnlineChangeError::SnapshotCorrupt => write!(
+                f,
+                "replicated state snapshot is internally inconsistent: lengths do not match the declared layout"
             ),
         }
     }
@@ -185,6 +193,10 @@ mod tests {
         assert_eq!(
             OnlineChangeError::AssembleWithoutTest.to_string(),
             "assemble requires the candidate to have executed under Test"
+        );
+        assert_eq!(
+            OnlineChangeError::SnapshotCorrupt.to_string(),
+            "replicated state snapshot is internally inconsistent: lengths do not match the declared layout"
         );
     }
 
