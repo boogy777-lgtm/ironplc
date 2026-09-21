@@ -118,6 +118,21 @@ two timing-health alarms. A bounded ring, read on poll.
 - `haSetTimingBudget` — sets the peer-failure confirmation time and the
   recovery budget; the response carries the budget-check verdict, and a
   failing budget is reported, never silently applied (ADR-0062)
+- `haRunCalibration` — runs the commissioning/recalibration run
+  (ADR-0062); on the demo binding the run is synchronous, so the
+  acknowledgment renders after the run state it acknowledges has changed
+
+### Standalone presentation
+
+When no pair is configured, the queries answer the honest standalone
+shape — `haStatus` carries `standalone: true` with the chart-state
+fields absent, and the other payloads carry empty profiles and zero
+counters — and the engineer actions refuse with V4112 (`PairRequired`)
+instead of acknowledging a no-op. `ironplcvm serve` composes this
+standalone shell by default; `--ha-simulated-peer` composes the
+loopback peer (the simulator binding) so every HA state is exercisable
+end-to-end through the session, with the session's command cadence as
+the simulation clock.
 
 ### Error codes
 
@@ -127,7 +142,10 @@ convention (`compiler/runtime/build.rs:1`, mirroring
 `compiler/runtime/resources/problem-codes.csv`). A V41xx block is
 proposed; allocation and the docs lifecycle follow
 `specs/steering/problem-code-management.md`. A codec error (a line that
-does not parse) keeps no code, matching the existing layer.
+does not parse) keeps no code, matching the existing layer. The
+registered surface so far: V4101–V4111 from the FSM, fencing, and
+calibration slices, plus V4112 (`PairRequired`) for the standalone
+refusal above.
 
 ### Refresh model
 

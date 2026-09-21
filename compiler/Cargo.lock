@@ -1148,6 +1148,8 @@ dependencies = [
  "ironplc-parser",
  "ironplc-project",
  "ironplc-runtime",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1224,6 +1226,7 @@ dependencies = [
  "ironplc-container",
  "ironplc-dsl",
  "ironplc-parser",
+ "ironplc-redundancy",
  "ironplc-runtime",
  "ironplc-spec-requirements-gen",
  "ironplc-vm",

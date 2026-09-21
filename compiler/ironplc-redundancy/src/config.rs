@@ -24,6 +24,17 @@ pub enum ConfiguredRole {
     Secondary,
 }
 
+impl ConfiguredRole {
+    /// The wire discriminant of the engineering surface
+    /// (ha-engineering-ui.md): the configured role in camelCase.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            ConfiguredRole::Primary => "primary",
+            ConfiguredRole::Secondary => "secondary",
+        }
+    }
+}
+
 /// Identity of a redundant pair (the domain identity carried in every
 /// ping/pong packet). Permanent: it never changes for the lifetime of the
 /// pair.

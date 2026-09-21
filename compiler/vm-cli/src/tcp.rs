@@ -30,10 +30,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use ironplc_redundancy::Shell;
 use ironplc_runtime::{DeviceIdentity, RuntimeHost};
 
 use crate::error::{self, VmError};
-use crate::serve::{device_identity, serve_session, start_host};
+use crate::serve::{compose_host, device_identity, serve_session};
 use crate::slot_store::SlotStore;
 
 /// The largest frame the transport accepts: 16 MiB, the container-upload
@@ -256,6 +257,7 @@ fn write_error_frame(stream: &mut TcpStream, v_code: &str, message: &str) -> io:
 /// with the caller so a failed session can still receive its V6013 line.
 fn serve_connection(
     host: &mut RuntimeHost,
+    shell: &mut Shell,
     device: &DeviceIdentity,
     store: &mut SlotStore,
     stream: &mut TcpStream,
@@ -263,7 +265,7 @@ fn serve_connection(
     stream.set_read_timeout(Some(READ_TIMEOUT))?;
     let reader = FrameReader::new(stream.try_clone()?);
     let writer = FrameWriter::new(stream.try_clone()?);
-    serve_session(host, reader, writer, Some(store), device)
+    serve_session(host, reader, writer, Some(store), device, Some(shell))
 }
 
 /// Serves one accepted connection to its end, then releases the occupied
@@ -271,6 +273,7 @@ fn serve_connection(
 fn serve_accepted(
     occupied: Arc<AtomicBool>,
     host: Arc<Mutex<RuntimeHost>>,
+    shell: Arc<Mutex<Shell>>,
     device: DeviceIdentity,
     store: Arc<Mutex<SlotStore>>,
     mut stream: TcpStream,
@@ -282,8 +285,9 @@ fn serve_accepted(
         // must not wedge the device either, so it is recovered like the
         // MCP session's mutex (`mcp/src/tools/hot_edit.rs`).
         let mut host = host.lock().unwrap_or_else(|err| err.into_inner());
+        let mut shell = shell.lock().unwrap_or_else(|err| err.into_inner());
         let mut store = store.lock().unwrap_or_else(|err| err.into_inner());
-        serve_connection(&mut host, &device, &mut store, &mut stream)
+        serve_connection(&mut host, &mut shell, &device, &mut store, &mut stream)
     };
     match result {
         Ok(()) => log::info!("session with {peer} ended"),
@@ -307,10 +311,14 @@ fn serve_accepted(
 /// Connection-level failures — a framing violation, an idle client, a reset
 /// peer — never end the listener; only an accept error or a store/boot
 /// failure ends `serve` with the usual V-code.
-pub fn serve_tcp(path: &Path, addr: SocketAddr) -> Result<(), VmError> {
+///
+/// The HA shell is composed exactly like the stdio session — standalone by
+/// default, the simulated pair under `ha_simulated_peer` — and lives as
+/// long as the host: sequential sessions resume the same pair state.
+pub fn serve_tcp(path: &Path, addr: SocketAddr, ha_simulated_peer: bool) -> Result<(), VmError> {
     let store = SlotStore::beside(path);
     let container = store.boot()?;
-    let host = start_host(container)?;
+    let (host, shell) = compose_host(container, ha_simulated_peer)?;
     let device = device_identity();
 
     let listener = TcpListener::bind(addr).map_err(|err| {
@@ -323,6 +331,7 @@ pub fn serve_tcp(path: &Path, addr: SocketAddr) -> Result<(), VmError> {
 
     let occupied = Arc::new(AtomicBool::new(false));
     let host = Arc::new(Mutex::new(host));
+    let shell = Arc::new(Mutex::new(shell));
     let store = Arc::new(Mutex::new(store));
     loop {
         let (mut stream, peer) = listener.accept().map_err(|err| {
@@ -344,6 +353,7 @@ pub fn serve_tcp(path: &Path, addr: SocketAddr) -> Result<(), VmError> {
         }
         let session_occupied = Arc::clone(&occupied);
         let session_host = Arc::clone(&host);
+        let session_shell = Arc::clone(&shell);
         let session_device = device.clone();
         let session_store = Arc::clone(&store);
         std::thread::Builder::new()
@@ -352,6 +362,7 @@ pub fn serve_tcp(path: &Path, addr: SocketAddr) -> Result<(), VmError> {
                 serve_accepted(
                     session_occupied,
                     session_host,
+                    session_shell,
                     session_device,
                     session_store,
                     stream,

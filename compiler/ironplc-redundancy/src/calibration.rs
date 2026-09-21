@@ -72,6 +72,18 @@ pub enum CalibrationState {
     Calibrated,
 }
 
+impl CalibrationState {
+    /// The wire discriminant of the engineering surface
+    /// (ha-engineering-ui.md): the calibration run state in camelCase.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            CalibrationState::Unqualified => "unqualified",
+            CalibrationState::Calibrating => "calibrating",
+            CalibrationState::Calibrated => "calibrated",
+        }
+    }
+}
+
 /// The direction of one ping/pong measurement. ADR-0062 ("Paradigm
 /// change") requires calibration in both directions: scheduler
 /// behavior, IRQ affinity, NIC queues, and CPU load differ per
@@ -97,6 +109,19 @@ pub enum InvalidationReason {
     TopologyChanged,
     /// The runtime or the HA protocol version changed.
     ProtocolVersionChanged,
+}
+
+impl InvalidationReason {
+    /// The wire discriminant of the engineering surface: the last
+    /// recalibration trigger in camelCase (the Calibration tab's
+    /// invalidation reason).
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            InvalidationReason::LinkChanged => "linkChanged",
+            InvalidationReason::TopologyChanged => "topologyChanged",
+            InvalidationReason::ProtocolVersionChanged => "protocolVersionChanged",
+        }
+    }
 }
 
 /// The timing-health alarms of ADR-0062 ("Continuous verification"),
@@ -261,6 +286,11 @@ pub struct CalibrationStatus {
     modules: Vec<ModuleContribution>,
     limiting_device: Option<ModuleId>,
     budget: Option<TakeoverBudget>,
+    /// The frozen commissioning envelope: the RTT max at completion,
+    /// the degradation reference (the Calibration tab's
+    /// "commissioning baseline"). `None` until the first completion
+    /// and after any `begin`/`invalidate`.
+    envelope_rtt_max: Option<u64>,
     degraded: bool,
     guarantee_lost: bool,
     recalibrations: u64,
@@ -341,6 +371,14 @@ impl CalibrationStatus {
         self.budget.as_ref()
     }
 
+    /// The commissioning baseline: the RTT max frozen at completion,
+    /// the reference the degradation monitor compares live reality
+    /// against. `None` while no valid commissioning calibration
+    /// exists.
+    pub const fn baseline_rtt_max(&self) -> Option<u64> {
+        self.envelope_rtt_max
+    }
+
     /// The `HA_PERFORMANCE_DEGRADED` flag (V4110): reality left the
     /// calibrated envelope.
     pub const fn degraded(&self) -> bool {
@@ -416,6 +454,24 @@ impl Calibration {
         self.state
     }
 
+    /// The engineer-configured maximum process-recovery budget (ticks)
+    /// the verdicts check against.
+    pub const fn configured_budget(&self) -> u64 {
+        self.configured_budget
+    }
+
+    /// The `HA_PERFORMANCE_DEGRADED` latch without the verdict inputs —
+    /// the flag the shell's alarm-transition watch consumes.
+    pub const fn degraded(&self) -> bool {
+        self.degraded
+    }
+
+    /// The `HA_TIMING_GUARANTEE_LOST` latch without the verdict inputs —
+    /// the flag the shell's alarm-transition watch consumes.
+    pub const fn guarantee_lost(&self) -> bool {
+        self.guarantee_lost
+    }
+
     /// Begins a calibration run. Any previous guarantee is invalid the
     /// moment a recalibration starts (ADR-0062: readiness is
     /// calibration-gated) — the link profile stays invalid until
@@ -429,6 +485,16 @@ impl Calibration {
         self.state = CalibrationState::Calibrating;
         self.degraded = false;
         self.guarantee_lost = false;
+    }
+
+    /// Records that a completed calibration run was a recalibration:
+    /// the commissioning run constructs a fresh engine (count 0), and
+    /// the shell's recalibration path — which replaces the engine with
+    /// a new commissioning run — notes that this run followed an
+    /// earlier baseline. The counter is the engine's own; this is the
+    /// one write the run-replacement composition needs.
+    pub fn note_recalibration(&mut self) {
+        self.recalibrations += 1;
     }
 
     /// Invalidates the qualification: a significant change (ADR-0062's
@@ -454,10 +520,28 @@ impl Calibration {
         self.evaluate();
     }
 
+    /// Records the engineer-configured maximum process-recovery budget
+    /// (ticks) the verdicts check against. Re-evaluates the guarantee
+    /// monitors immediately: the engineer parameter the budget
+    /// inequality consumes changed, so a setting the live measurements
+    /// cannot honor surfaces at once (ADR-0062: validated, never
+    /// silently accepted).
+    pub fn set_budget(&mut self, configured_budget: u64) {
+        self.configured_budget = configured_budget;
+        self.evaluate();
+    }
+
     /// Records one ping/pong round-trip sample on a direction.
     pub fn record_rtt(&mut self, direction: Direction, sample: u64) {
         self.profile_mut(direction).record_rtt(sample);
         self.evaluate();
+    }
+
+    /// Records one per-side processing sample on a direction (ticks
+    /// from the confirming PONG to the next emitted PING — ADR-0062's
+    /// "per-side processing latency").
+    pub fn record_processing(&mut self, direction: Direction, sample: u64) {
+        self.profile_mut(direction).record_processing(sample);
     }
 
     /// Notes one PING emitted on a direction.
@@ -563,6 +647,7 @@ impl Calibration {
             } else {
                 None
             },
+            envelope_rtt_max: self.envelope_rtt_max,
             degraded: self.degraded,
             guarantee_lost: self.guarantee_lost,
             recalibrations: self.recalibrations,
@@ -665,6 +750,16 @@ mod tests {
         calibration.record_rtt(Direction::BToA, 2);
         calibration.complete();
         calibration
+    }
+
+    /// The configured budget of the engine's live status snapshot.
+    fn status_configured_budget(calibration: &Calibration) -> u64 {
+        calibration
+            .status(true, true)
+            .budget()
+            .copied()
+            .unwrap()
+            .configured_budget()
     }
 
     #[test]
@@ -878,5 +973,52 @@ mod tests {
     fn timing_alarm_v_codes_when_surfaced_then_stable_codes() {
         assert_eq!(TimingAlarm::PerformanceDegraded.v_code(), "V4110");
         assert_eq!(TimingAlarm::GuaranteeLost.v_code(), "V4111");
+    }
+
+    #[test]
+    fn set_budget_when_raised_then_guarantee_latch_holds_until_recalibration() {
+        let mut calibration = vector(16);
+        assert!(calibration.status(true, true).guarantee_lost());
+
+        calibration.set_budget(100);
+        // The latch is designed behavior: only a completed
+        // recalibration restores the guarantee, never a parameter
+        // edit (ADR-0062: alarms, not silent adjustment).
+        assert!(calibration.status(true, true).guarantee_lost());
+
+        calibration.begin();
+        calibration.complete();
+
+        assert!(!calibration.status(true, true).guarantee_lost());
+        assert_eq!(status_configured_budget(&calibration), 100);
+    }
+
+    #[test]
+    fn set_budget_when_lowered_then_guarantee_lost_at_once() {
+        let mut calibration = vector(100);
+        assert!(!calibration.status(true, true).guarantee_lost());
+
+        // A setting the live measurements cannot honor surfaces
+        // immediately, never at the next sample.
+        calibration.set_budget(1);
+
+        assert!(calibration.status(true, true).guarantee_lost());
+    }
+
+    #[test]
+    fn baseline_rtt_max_when_calibrated_then_frozen_envelope() {
+        let calibration = vector(100);
+
+        // The hand vector's link samples are 2 per direction: the
+        // commissioning baseline is the frozen RTT max (2).
+        assert_eq!(calibration.status(true, true).baseline_rtt_max(), Some(2));
+    }
+
+    #[test]
+    fn baseline_rtt_max_when_unqualified_then_absent() {
+        let mut calibration = Calibration::new(100);
+        calibration.begin();
+
+        assert_eq!(calibration.status(true, true).baseline_rtt_max(), None);
     }
 }

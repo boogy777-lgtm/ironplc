@@ -601,6 +601,145 @@ suite('HotEditSession identity', () => {
   });
 });
 
+suite('HotEditSession HA methods', () => {
+  test('haStatus_when_response_then_returns_status', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.haStatus();
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine(
+      '{"response":"haStatus","standalone":false,"pairId":"7",'
+      + '"local":{"role":"primary","controllerId":1,"sync":"syncReady","control":"active","epoch":2},'
+      + '"applicationGeneration":1,"stateGeneration":0,"takeoverReady":true,"syncReady":true,'
+      + '"ioReady":true,"linkValid":true,'
+      + '"alarms":{"performanceDegraded":false,"timingGuaranteeLost":false,"redundancyLost":false}}',
+    );
+
+    const status = await request;
+
+    assert.strictEqual(status.pairId, '7');
+    assert.strictEqual(status.local.control, 'active');
+    assert.strictEqual(status.takeoverReady, true);
+    assert.strictEqual(transport.sent[0], '{"command":"haStatus"}');
+  });
+
+  test('haCommandedSwap_when_ack_then_resolves', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.haCommandedSwap();
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('{"response":"ack"}');
+
+    await request;
+
+    assert.strictEqual(transport.sent[0], '{"command":"haCommandedSwap"}');
+  });
+
+  test('haCommandedSwap_when_v4108_then_rejects_with_coded_error', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.haCommandedSwap();
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine(
+      '{"response":"error","vCode":"V4108","message":"the commanded role swap was refused: the pair is not in SYNC_READY"}',
+    );
+
+    const err = await rejectWith(request);
+
+    assert.ok(err instanceof HotEditProtocolError);
+    assert.strictEqual(err.vCode, 'V4108');
+  });
+
+  test('haSetTimingBudget_when_line_then_carries_parameters', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.haSetTimingBudget(4, 100);
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('{"response":"ack"}');
+
+    await request;
+
+    assert.strictEqual(
+      transport.sent[0],
+      '{"command":"haSetTimingBudget","peerFailureConfirmation":4,"recoveryBudget":100}',
+    );
+  });
+
+  test('haSetTimingBudget_when_v4111_then_rejects_and_message_names_minimum', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.haSetTimingBudget(2, 10);
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine(
+      '{"response":"error","vCode":"V4111",'
+      + '"message":"the configured recovery budget cannot be honored: the minimum demonstrated budget is 15 ticks",'
+      + '"minimumDemonstrated":15}',
+    );
+
+    const err = await rejectWith(request);
+
+    assert.ok(err instanceof HotEditProtocolError);
+    assert.strictEqual(err.vCode, 'V4111');
+    assert.ok(err.message.includes('minimum demonstrated budget is 15 ticks'));
+  });
+
+  test('haEvents_when_response_then_returns_ring', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.haEvents();
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('{"response":"haEvents","count":2,"events":[{"tick":0,"kind":"ownerAccepted"}]}');
+
+    const events = await request;
+
+    assert.strictEqual(events.count, 2);
+    assert.strictEqual(events.events[0].kind, 'ownerAccepted');
+  });
+
+  test('haRequest_when_wrong_kind_then_rejects_as_unexpected', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.haStatus();
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('{"response":"ack"}');
+
+    await assert.rejects(request, /unexpected ack response to haStatus/);
+  });
+
+  test('haRequest_when_malformed_line_then_rejects_but_session_stays_active', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.haCalibration();
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('garbage');
+
+    await assert.rejects(request, HotEditProtocolError);
+    assert.strictEqual(session.isActive, true);
+  });
+
+  test('haMethods_when_pipelined_then_lines_match_in_order', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const first = session.haIoReady();
+    await waitFor(() => transport.sent.length === 1);
+    const second = session.haCommandedSwap();
+    await waitFor(() => transport.sent.length === 2);
+    transport.emitLine(
+      '{"response":"haIoReady","requiredInputsObservable":true,"standbyConnectionsValid":true,'
+      + '"configsMatch":true,"epochsValid":true}',
+    );
+    transport.emitLine('{"response":"ack"}');
+
+    const ioReady = await first;
+    await second;
+    assert.strictEqual(ioReady.epochsValid, true);
+    assert.deepStrictEqual(transport.sent, [
+      '{"command":"haIoReady"}',
+      '{"command":"haCommandedSwap"}',
+    ]);
+  });
+});
+
 /** Resolves once `condition` holds, polling on the macrotask queue. */
 async function waitFor(condition: () => boolean): Promise<void> {
   for (let i = 0; i < 100; i++) {

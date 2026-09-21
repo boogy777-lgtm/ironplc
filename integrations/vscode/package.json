@@ -34,7 +34,8 @@
     "onLanguage:twincat-dut",
     "onLanguage:plcopen-xml",
     "onDebugResolve:ironplc",
-    "onView:ironplc.devicePanel"
+    "onView:ironplc.devicePanel",
+    "onView:ironplc.haPanel"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -128,6 +129,27 @@
         "command": "ironplc.buildTrial",
         "title": "Build & Trial",
         "category": "IronPLC"
+      },
+      {
+        "command": "ironplc.haRefresh",
+        "title": "Refresh HA Status",
+        "category": "IronPLC HA",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "ironplc.haCommandedSwap",
+        "title": "Command Role Swap",
+        "category": "IronPLC HA"
+      },
+      {
+        "command": "ironplc.haRunCalibration",
+        "title": "Run Calibration",
+        "category": "IronPLC HA"
+      },
+      {
+        "command": "ironplc.haSetTimingBudget",
+        "title": "Set Timing Budget",
+        "category": "IronPLC HA"
       }
     ],
     "menus": {
@@ -150,6 +172,13 @@
           "command": "ironplc.stepScan",
           "when": "debugType == 'ironplc'"
         }
+      ],
+      "view/title": [
+        {
+          "command": "ironplc.haRefresh",
+          "when": "view == ironplc.haPanel",
+          "group": "navigation"
+        }
       ]
     },
     "views": {
@@ -157,6 +186,10 @@
         {
           "id": "ironplc.devicePanel",
           "name": "IronPLC Device"
+        },
+        {
+          "id": "ironplc.haPanel",
+          "name": "IronPLC HA"
         }
       ]
     },

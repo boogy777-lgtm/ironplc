@@ -30,19 +30,27 @@
 //! readiness chain, the takeover budget per the ADR's formulas, and the
 //! guarantee monitors ([`calibration`]), the deterministic commissioning
 //! run over the loopback/simulator pair ([`calibration_run`]), and the
-//! timing-health alarms (V4110–V4111). The permit itself is enforced
-//! inside [`RuntimeHost`] — the host boots unpermitted and `run` refuses
-//! without the permit (V4018) — and epochs and leases are minted at the
-//! host's scan-commit callback; this crate is the policy authority that
-//! composes both.
+//! timing-health alarms (V4110–V4111). Slice 6 (the engineering UI
+//! surface) carries the HA engineering UI contract
+//! (`specs/design/ha-engineering-ui.md`): the redundancy shell one
+//! served process composes — the unit's charts, the pair link over the
+//! loopback binding plus the simulated peer, the fencing state, the
+//! epoch, and the timestamped event ring ([`shell`]) — and the typed
+//! engineering command vocabulary + line codec the session and the
+//! Studio clients speak ([`commands`]), V4101–V4112. The permit itself
+//! is enforced inside [`RuntimeHost`] — the host boots unpermitted and
+//! `run` refuses without the permit (V4018) — and epochs and leases are
+//! minted at the host's scan-commit callback; this crate is the policy
+//! authority that composes both.
 //!
 //! Not here (later slices, per the architecture's module decomposition):
-//! the engineering command vocabulary — the V-codes registered so far
-//! are V4101–V4111.
+//! the real pair-link driver over two processes and the live crossload
+//! pipeline; the EtherNet/IP fencing binding.
 
 mod admission;
 mod calibration;
 mod calibration_run;
+mod commands;
 mod config;
 mod crossload;
 mod epoch;
@@ -51,9 +59,15 @@ mod hal;
 mod lease;
 mod liveness;
 mod loopback;
+mod shell;
 mod simulator;
 mod statechart;
 mod timing;
+
+#[cfg(test)]
+mod commands_tests;
+#[cfg(test)]
+mod shell_tests;
 
 // V-code constants are generated from resources/problem-codes.csv by build.rs.
 mod problem_codes {
@@ -68,6 +82,10 @@ pub use calibration::{
     TakeoverBudget, TimingAlarm,
 };
 pub use calibration_run::run_calibration;
+pub use commands::{
+    execute as execute_ha, parse_ha_command, render_ha_response, HaCommand, HaCommandError,
+    HaResponse,
+};
 pub use config::{ConfiguredRole, PairId, RedundancyConfig};
 pub use crossload::{
     accept_offer, decode, encode, package_offer, CrossloadMessage, CrossloadOffer,
@@ -83,6 +101,7 @@ pub use hal::{IngressTimestamp, NicPort, PhyCounters, PortCapabilities, PortErro
 pub use lease::OwnerLease;
 pub use liveness::{Liveness, LivenessEvent, Packet, PairRole, FRAME_LEN};
 pub use loopback::{loopback_pair, LoopbackPort};
+pub use shell::{HaEvent, HaEventKind, IoReadyView, Refusal, Shell, Side, SwapOutcome, UnitView};
 pub use simulator::{ModuleRegistry, ModuleTiming, RegistryClient};
 pub use statechart::{
     claim_barrier, detect, ClaimBarrier, ControlAlarm, ControlChart, ControlEvent, ControlState,

@@ -111,6 +111,28 @@ pub enum ModuleState {
 }
 
 impl ModuleState {
+    /// The wire discriminant of the engineering surface (the ownership
+    /// status view of ha-engineering-ui.md): the ownership state in
+    /// camelCase.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            ModuleState::Unowned => "unowned",
+            ModuleState::ClaimedDisarmed { .. } => "claimedDisarmed",
+            ModuleState::Armed { .. } => "armed",
+        }
+    }
+
+    /// The ownership epoch stamped on the module, if an originator
+    /// holds it.
+    pub const fn epoch(self) -> Option<Epoch> {
+        match self {
+            ModuleState::Unowned => None,
+            ModuleState::ClaimedDisarmed { epoch, .. } | ModuleState::Armed { epoch, .. } => {
+                Some(epoch)
+            }
+        }
+    }
+
     /// The owning originator, if any originator holds the module.
     pub const fn owner(self) -> Option<OwnerId> {
         match self {
@@ -206,6 +228,19 @@ pub enum OwnershipMode {
     /// target arbitrates between them (dual-owner vendor modules; out of
     /// v1 scope, recorded so a binding can declare it).
     RedundantPair,
+}
+
+impl OwnershipMode {
+    /// The per-module profile name of the engineering surface
+    /// (ha-engineering-ui.md's barrier view): how a module's ownership
+    /// connects on the takeover path — a fresh exclusive connection per
+    /// takeover, or a preconnected redundant owner class.
+    pub const fn as_profile_str(self) -> &'static str {
+        match self {
+            OwnershipMode::SingleExclusive => "reconnect",
+            OwnershipMode::RedundantPair => "preconnected",
+        }
+    }
 }
 
 /// What a non-ACTIVE unit can observe without owning.

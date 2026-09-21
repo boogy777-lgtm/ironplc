@@ -186,7 +186,20 @@ Autonomy: full.
   verification alarms HA_PERFORMANCE_DEGRADED (V4110) and
   HA_TIMING_GUARANTEE_LOST (V4111). Details:
   [ADR-0062](adrs/0062-measured-failover-timing-and-network-calibration.md).
-- **Still open:** failover timing/ping-pong confirmation thresholds and the detection
+- **Delivered 2026-09-21 (Phase 5 slice 6):** the engineering UI surface -
+  the HA engineering UI contract implemented end-to-end: the redundancy
+  crate's typed command vocabulary + line codec (haStatus/haCalibration/
+  haBarrier/haIoReady/haTimingBudget/haEvents, haCommandedSwap/
+  haRunCalibration/haSetTimingBudget, V4112 for the standalone refusal);
+  `ironplcvm serve` composes the shell (standalone by default, the
+  `--ha-simulated-peer` loopback pair as the demo binding, permit
+  reconciliation and the scan-commit mint wired); the VS Code HA panel
+  renders the five Studio tabs over the single engineering session with
+  the ADR-0064/0065 action gating. Details:
+  [HA Engineering UI Contract](design/ha-engineering-ui.md).
+- **Still open:** the real EtherNet/IP binding and the real two-process
+  UDP pair (the loopback simulator remains the test vehicle); failover
+  timing/ping-pong confirmation thresholds and the detection
   time budget across N adapters; readiness policy; state replication sizing;
   epoch persistence in NV storage; verify target firmware allows multiple
   concurrent Input Only originators; mid-chain break policy (primary
@@ -195,10 +208,10 @@ Autonomy: full.
   the loopback simulator binding exist (slice 2) and the calibration
   engine measures over them (slice 5); target-side per-port drivers
   (EtherNet/IP) remain;
-  **engineering UI backend + tabs** — the calibration/budget backend
-  values exist (slice 5) and the Studio tab contract is designed
-  (ha-engineering-ui.md); the typed command vocabulary and the vscode
-  tabs remain.
+  **engineering UI backend + tabs** — delivered (slice 6): the typed
+  command vocabulary, the `serve` shell composition, and the VS Code HA
+  panel all exist; the real pair-link transport behind them remains the
+  EtherNet/IP-binding item above.
 - **I/O firmware contract (AUDIT — decide with the I/O firmware spec):**
   three profiles — GENERIC (Exclusive Owner + observer-if-available;
   takeover via owner expiry + Forward_Open), REDUNDANT_OWNER (standard CIP

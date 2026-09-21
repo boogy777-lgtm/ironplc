@@ -1,5 +1,6 @@
 //! The `ironplcvm serve` command: a newline-delimited JSON command session
-//! over the runtime host's hot-edit protocol.
+//! over the runtime host's hot-edit protocol, composed with the HA
+//! redundancy shell's engineering surface.
 //!
 //! [`serve`] loads and starts a compiled program through the same container
 //! path as `run` (see [`crate::cli::load_container`]), then answers one line
@@ -8,6 +9,14 @@
 //! anything diagnostic goes to stderr through the logger. The TCP transport
 //! of the engineering connection (ADR-0063) is the same session loop over a
 //! length-prefixed frame — see [`crate::tcp`].
+//!
+//! The session composes both command layers (the HA engineering UI
+//! contract, `ironplcvm serve`'s client mapping): every line first parses
+//! against the runtime's hot-edit [`Command`], then against the
+//! redundancy crate's [`HaCommand`] — disjoint vocabularies, so neither
+//! layer's FSM nor the one-line-in/one-line-out ordering is disturbed. A
+//! line that parses against neither is the codeless codec error, exactly
+//! like a malformed hot-edit line today.
 //!
 //! The FSM-advancing commands (`testEdits`, `untestEdits`, `assembleEdits`)
 //! only *request* a swap; the host applies it at the next scan boundary
@@ -26,14 +35,32 @@
 //! live but not durable. Boot adopts the newest verifiable generation from
 //! the store, so a reboot after an acknowledged assemble boots the committed
 //! artifact.
+//!
+//! The HA composition (the redundancy architecture's "Shell, Not Runtime
+//! +1"): [`compose_shell`] builds the shell the composition root serves —
+//! the honest standalone shell by default, or the demo binding's simulated
+//! loopback pair under `--ha-simulated-peer`, so every HA state is
+//! exercisable end-to-end through the session. The host boots unpermitted;
+//! the shell's admission bring-up decides the verdict and
+//! [`permit_for`](ironplc_redundancy::permit_for) applies it to the host's
+//! latch. In simulated mode the shell's [`Shell::tick`] runs once per
+//! command line — the command cadence is the simulation clock — and the
+//! session reconciles the permit latch with the shell's verdict after every
+//! command (a commanded swap demotes this unit: its scans refuse at the
+//! latch from the next line on). The driven round's scan-commit callback
+//! feeds [`Shell::on_scan_commit`], the supervisor's mint seam.
 
 use std::io::{self, BufRead, Write};
 use std::path::Path;
 
 use ironplc_container::Container;
+use ironplc_redundancy::{
+    execute_ha, parse_ha_command, permit_for, render_ha_response, AdmissionVerdict, ConfiguredRole,
+    HaResponse, ModuleId, ModuleRegistry, ModuleTiming, PairId, RedundancyConfig, Shell, Side,
+};
 use ironplc_runtime::{
-    execute, parse_command, render_response, Command, DeviceIdentity, Response, RuntimeError,
-    RuntimeHost,
+    execute, parse_command, render_response, Command, DeviceIdentity, RedundancyIdentity, Response,
+    RuntimeError, RuntimeHost,
 };
 
 use crate::error::{self, VmError};
@@ -53,12 +80,14 @@ pub(crate) fn device_identity() -> DeviceIdentity {
 }
 
 /// Boots the committed artifact from the A/B slot store beside `path`
-/// (seeding the store from the file on first serve), starts it on the
-/// runtime host, and serves commands until stdin reaches EOF.
-pub fn serve(path: &Path) -> Result<(), VmError> {
+/// (seeding the store from the file on first serve), composes the runtime
+/// host with the HA shell (standalone by default; the simulated loopback
+/// pair under `ha_simulated_peer`), and serves commands until stdin reaches
+/// EOF.
+pub fn serve(path: &Path, ha_simulated_peer: bool) -> Result<(), VmError> {
     let mut store = SlotStore::beside(path);
     let container = store.boot()?;
-    let mut host = start_host(container)?;
+    let (mut host, mut shell) = compose_host(container, ha_simulated_peer)?;
 
     let stdin = io::stdin();
     let stdout = io::stdout();
@@ -69,6 +98,7 @@ pub fn serve(path: &Path) -> Result<(), VmError> {
         stdout.lock(),
         Some(&mut store),
         &device,
+        Some(&mut shell),
     )
     .map_err(|err| {
         VmError::io(
@@ -78,14 +108,21 @@ pub fn serve(path: &Path) -> Result<(), VmError> {
     })
 }
 
-/// Creates the runtime host for `container`, mapping init traps to the trap's
-/// V-code exactly like `run` does.
+/// Creates the runtime host for `container` and composes the HA shell,
+/// mapping init traps to the trap's V-code exactly like `run` does.
 ///
 /// The host boots without the execution permit (the HA redundancy
-/// architecture, "Minimal Seams" 1); `serve` is a standalone shell, so it
-/// grants the permit immediately — today's standalone behavior, the trivial
-/// grant policy.
-pub(crate) fn start_host(container: Container) -> Result<RuntimeHost, VmError> {
+/// architecture, "Minimal Seams" 1); the shell's admission bring-up owns the
+/// grant policy: the standalone shell admits immediately (today's standalone
+/// behavior), the simulated pair admits on the pair verdict — Primary grants,
+/// Secondary refuses. `permit_for` is the existing verdict→permit mapping;
+/// the session reconciles the latch with the shell's live verdict from then
+/// on (a commanded swap or a fencing loss can demote the unit between
+/// commands).
+pub(crate) fn compose_host(
+    container: Container,
+    ha_simulated_peer: bool,
+) -> Result<(RuntimeHost, Shell), VmError> {
     let mut host = RuntimeHost::new(container).map_err(|err| match err {
         RuntimeError::Trap(context) => {
             VmError::from_trap(&context.trap, context.task_id, context.instance_id)
@@ -99,8 +136,44 @@ pub(crate) fn start_host(container: Container) -> Result<RuntimeHost, VmError> {
             format!("runtime host failed to start: {reason}"),
         ),
     })?;
-    host.permit_execution();
-    Ok(host)
+    let mut shell = compose_shell(ha_simulated_peer);
+    shell.note_application_generation(host.status().application.raw());
+    let verdict = shell.start_up();
+    permit_for(&mut host, verdict);
+    Ok((host, shell))
+}
+
+/// Composes the shell of one served process: the honest standalone shell by
+/// default, or the demo binding's simulated pair — the loopback link, the
+/// simulator registry with two firmware-instrumented modules, and the fixed
+/// required set — under `--ha-simulated-peer`. The demo values are the
+/// composition root's stand-ins, exactly the class of the simulator
+/// binding's device properties: they exist so every HA state is exercisable
+/// end-to-end before the EtherNet/IP binding and the I/O configuration do.
+fn compose_shell(ha_simulated_peer: bool) -> Shell {
+    if !ha_simulated_peer {
+        return Shell::standalone();
+    }
+    let config = RedundancyConfig::pair(PairId::new(7), ConfiguredRole::Primary);
+    let registry = ModuleRegistry::new(2)
+        .with_connection_timeout(3)
+        .with_module_timing(
+            ModuleId::new(0),
+            ModuleTiming {
+                claim_ticks: 2,
+                arm_ticks: 1,
+                output_apply_ticks: 1,
+            },
+        )
+        .with_module_timing(
+            ModuleId::new(1),
+            ModuleTiming {
+                claim_ticks: 5,
+                arm_ticks: 2,
+                output_apply_ticks: 1,
+            },
+        );
+    Shell::simulated(config, registry, vec![ModuleId::new(0), ModuleId::new(1)])
 }
 
 /// Serves one command session: reads one line per command from `reader`,
@@ -116,6 +189,12 @@ pub(crate) fn start_host(container: Container) -> Result<RuntimeHost, VmError> {
 /// carries (ADR-0063): it answers the `identity` handshake, the first command
 /// on every transport.
 ///
+/// `ha` is the composed redundancy shell (always `Some` from [`serve`]; a
+/// `None` serves the honestly HA-free session the tests of the hot-edit path
+/// use). In simulated mode the shell advances one tick per command line —
+/// the command cadence is the simulation clock — and the permit latch is
+/// reconciled with the shell's verdict after every command.
+///
 /// Returns when the reader reaches EOF, or with the first I/O failure.
 pub fn serve_session(
     host: &mut RuntimeHost,
@@ -123,16 +202,31 @@ pub fn serve_session(
     mut writer: impl Write,
     mut store: Option<&mut SlotStore>,
     device: &DeviceIdentity,
+    mut ha: Option<&mut Shell>,
 ) -> io::Result<()> {
     for line in reader.lines() {
         let line = line?;
+        // The simulated pair's clock: one tick per command line, whatever
+        // the command — the hot-edit keepalive advances the pair too.
+        if let Some(shell) = ha.as_deref_mut() {
+            if shell.has_pair() {
+                shell.tick();
+            }
+        }
         let response = match parse_command(&line) {
             Ok(command) => {
                 let commits = matches!(command, Command::AssembleEdits);
                 let advances = advances_state(&command);
-                let response = execute(command, host, device);
+                let mut response = execute(command, host, device);
+                // The ADR-0063 identity handshake answers the redundancy
+                // block from the composed shell: present exactly when a
+                // pair is configured, absent standalone — the field the
+                // runtime layer leaves for the server that composes one.
+                if let (Some(shell), Response::Identity(payload)) = (ha.as_deref(), &mut response) {
+                    payload.redundancy = identity_block(shell);
+                }
                 if advances && matches!(response, Response::Ack) {
-                    if let Some(err) = drive_scan_round(host) {
+                    if let Some(err) = drive_scan_round(host, ha.as_deref_mut()) {
                         log::error!("driven scan round trapped: {err}");
                     }
                 }
@@ -150,14 +244,34 @@ pub fn serve_session(
                     render_line(&response)?
                 }
             }
-            Err(err) => {
-                // A malformed line is a codec error, not an online change
-                // refusal: it has no V-code (ADR-0055). The transport answers
-                // with one error line so the wire stays aligned — one line
-                // in, one line out — and the session continues.
-                log::warn!("ignoring malformed command line: {err}");
-                codec_error_line(&err)
-            }
+            Err(command_err) => match parse_ha_command(&line) {
+                Ok(ha_command) => match ha.as_deref_mut() {
+                    Some(shell) => {
+                        let response = execute_ha(ha_command, shell);
+                        apply_ha_permit(host, shell);
+                        render_ha_line(&response)?
+                    }
+                    // The session always composes a shell; a None here is a
+                    // test of the hot-edit path alone, which answers the HA
+                    // vocabulary like the codec layer it shares: one error
+                    // line, no V-code, and the session continues.
+                    None => codec_error_line(&command_err),
+                },
+                Err(ha_err) => {
+                    // A malformed line is a codec error, not a refusal: it
+                    // has no V-code (ADR-0055). The transport answers with
+                    // one error line so the wire stays aligned — one line
+                    // in, one line out — and the session continues. The
+                    // message comes from the vocabulary the line named.
+                    let err = if line_names_ha_command(&line) {
+                        ha_err
+                    } else {
+                        command_err
+                    };
+                    log::warn!("ignoring malformed command line: {err}");
+                    codec_error_line(&err)
+                }
+            },
         };
         writeln!(writer, "{response}")?;
         writer.flush()?;
@@ -165,9 +279,63 @@ pub fn serve_session(
     Ok(())
 }
 
+/// Whether a malformed line named the HA vocabulary on its `command` tag:
+/// the error message then comes from the HA parser, so a scripted HA client
+/// sees why its line failed.
+fn line_names_ha_command(line: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(line)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("command")
+                .and_then(|tag| tag.as_str())
+                .map(str::to_owned)
+        })
+        .is_some_and(|tag| tag.starts_with("ha"))
+}
+
+/// The ADR-0063 identity redundancy block, filled from the composed
+/// shell: present exactly when a pair is configured (absent means
+/// standalone), the same additive-block shape the runtime layer defines.
+fn identity_block(shell: &Shell) -> Option<RedundancyIdentity> {
+    if !shell.has_pair() {
+        return None;
+    }
+    let local = shell.unit_view(Side::Local)?;
+    Some(RedundancyIdentity {
+        pair_id: shell
+            .config()
+            .pair_id
+            .map(|id| id.to_string())
+            .unwrap_or_default(),
+        role: local.role.as_str().to_string(),
+        epoch: shell.epoch().raw(),
+        sync: local.sync.as_str().to_string(),
+        control: local.control.as_str().to_string(),
+    })
+}
+
+/// Applies the shell's permit verdict to the host latch (the redundancy
+/// architecture's policy/mechanism split): the shell owns the policy of
+/// when this unit may execute, the host owns the enforcement. A standalone
+/// or output-controlling unit is granted; anything else — a Secondary after
+/// a commanded swap, a unit that lost the barrier — is revoked, so its next
+/// driven round refuses at the latch (V4018) instead of executing.
+fn apply_ha_permit(host: &mut RuntimeHost, shell: &Shell) {
+    match shell.local_verdict() {
+        AdmissionVerdict::Secondary => host.revoke_execution_permit(),
+        AdmissionVerdict::Standalone | AdmissionVerdict::Primary => host.permit_execution(),
+    }
+}
+
 /// Renders one typed response as the session's single output line.
 fn render_line(response: &Response) -> io::Result<String> {
     render_response(response).map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))
+}
+
+/// Renders one typed HA response as the session's single output line.
+fn render_ha_line(response: &HaResponse) -> io::Result<String> {
+    render_ha_response(response).map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))
 }
 
 /// Persists the just-committed wire bytes through the slot store: drains the
@@ -217,19 +385,26 @@ fn advances_state(command: &Command) -> bool {
 /// ready immediately after a (re)load, so the boundary round runs each task
 /// exactly once).
 ///
+/// With a composed shell, the driven boundary reports through the
+/// scan-commit seam ([`Shell::on_scan_commit`]): the epoch mint, the lease
+/// renewal, and the output-commit stamping are the supervisor's answer to
+/// the boundary. Without one, the standalone composition only observes the
+/// boundary identity, as it always has.
+///
 /// Returns the trap as a [`VmError`] — its V-code is the trap's own — so the
 /// caller can surface it; a trapped round does not end the session. A
 /// violated host invariant keeps no V-code of its own (ADR-0055): it is
 /// logged here and reported as `None`.
-fn drive_scan_round(host: &mut RuntimeHost) -> Option<VmError> {
+pub(crate) fn drive_scan_round(
+    host: &mut RuntimeHost,
+    mut ha: Option<&mut Shell>,
+) -> Option<VmError> {
     match host.run_with_commit(
         1,
         || 0,
-        |commit| {
-            // The standalone shell's scan-commit composition (the HA redundancy
-            // architecture, "Minimal Seams" 2): observe the boundary identity;
-            // a redundancy shell mints the epoch here instead.
-            log::debug!("scan boundary committed: {commit:?}");
+        |commit| match ha.as_deref_mut() {
+            Some(shell) => shell.on_scan_commit(commit),
+            None => log::debug!("scan boundary committed: {commit:?}"),
         },
     ) {
         Ok(()) => None,
@@ -239,9 +414,11 @@ fn drive_scan_round(host: &mut RuntimeHost) -> Option<VmError> {
             context.instance_id,
         )),
         Err(RuntimeError::NotPermitted) => {
-            // `serve` grants at startup, so a refusal here means the
-            // composition is broken, not the user's program: log it like an
-            // invariant violation; the acknowledgment already stands.
+            // The HA shell demoted this unit (a commanded swap made it the
+            // Secondary, or the barrier was lost): the boundary refuses at
+            // the permit latch — the composition is working, not broken.
+            // The acknowledgment already stands; the rounds counter the
+            // client reads back simply stops advancing.
             log::error!("driven scan round refused: the host holds no execution permit");
             None
         }
@@ -261,577 +438,4 @@ fn codec_error_line(err: &serde_json::Error) -> String {
         "message": format!("invalid command line: {err}"),
     })
     .to_string()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use spec_test_macro::spec_test;
-
-    /// A `PROGRAM main` with one DINT `Counter` incremented by `step` per
-    /// scan; same declarations for every step, so two compiles differ only
-    /// in scan logic and share a layout.
-    fn counter_source(step: i32) -> String {
-        format!(
-            "PROGRAM main
-  VAR
-    Counter : DINT;
-  END_VAR
-  Counter := Counter + {step};
-END_PROGRAM
-"
-        )
-    }
-
-    /// Compiles `source` through the real pipeline and round-trips the
-    /// container through the wire format, mirroring
-    /// `tests/cli.rs::write_compiled_container` and the runtime test fixtures,
-    /// so `header.layout_hash` is the value a deployed artifact carries.
-    fn compile_container(source: &str) -> Container {
-        let options = ironplc_parser::options::CompilerOptions::default();
-        let library =
-            ironplc_parser::parse_program(source, &ironplc_dsl::core::FileId::default(), &options)
-                .unwrap();
-        let (analyzed, context) =
-            ironplc_analyzer::stages::resolve_types(&[&library], &options).unwrap();
-        let container = ironplc_codegen::compile(
-            &analyzed,
-            &context,
-            &ironplc_codegen::CodegenOptions::default(),
-            &ironplc_codegen::EmptyLookup,
-        )
-        .unwrap();
-
-        let mut bytes = Vec::new();
-        container.write_to(&mut bytes).unwrap();
-        Container::read_from(&mut io::Cursor::new(&bytes)).unwrap()
-    }
-
-    /// The wire-format bytes an `acceptEdits` command carries for `source`.
-    fn container_bytes(source: &str) -> Vec<u8> {
-        let mut bytes = Vec::new();
-        compile_container(source).write_to(&mut bytes).unwrap();
-        bytes
-    }
-
-    /// [`compile_container`] for a source compiled with engineering-side
-    /// stable variable IDs (ADR 0053), so a declaration edit stages as a
-    /// migration candidate.
-    fn compile_container_with_ids(source: &str, ids: &[(&str, u64)]) -> Container {
-        let options = ironplc_parser::options::CompilerOptions::default();
-        let library =
-            ironplc_parser::parse_program(source, &ironplc_dsl::core::FileId::default(), &options)
-                .unwrap();
-        let (analyzed, context) =
-            ironplc_analyzer::stages::resolve_types(&[&library], &options).unwrap();
-        let codegen_options = ironplc_codegen::CodegenOptions {
-            stable_var_ids: ids
-                .iter()
-                .map(|(name, uid)| (ironplc_dsl::core::Id::from(name), *uid))
-                .collect(),
-            ..ironplc_codegen::CodegenOptions::default()
-        };
-        let container = ironplc_codegen::compile(
-            &analyzed,
-            &context,
-            &codegen_options,
-            &ironplc_codegen::EmptyLookup,
-        )
-        .unwrap();
-
-        let mut bytes = Vec::new();
-        container.write_to(&mut bytes).unwrap();
-        Container::read_from(&mut io::Cursor::new(&bytes)).unwrap()
-    }
-
-    /// The wire-format bytes an `acceptEdits` command carries for `source`
-    /// compiled with stable variable IDs.
-    fn container_bytes_with_ids(source: &str, ids: &[(&str, u64)]) -> Vec<u8> {
-        let mut bytes = Vec::new();
-        compile_container_with_ids(source, ids)
-            .write_to(&mut bytes)
-            .unwrap();
-        bytes
-    }
-
-    /// A `PROGRAM main` whose single `Counter` carries `ty`, incremented by
-    /// one per scan (the retype target of the migration wire tests).
-    fn retyped_counter_source(ty: &str) -> String {
-        format!(
-            "PROGRAM main
-  VAR
-    Counter : {ty};
-  END_VAR
-  Counter := Counter + 1;
-END_PROGRAM
-"
-        )
-    }
-
-    /// The wire-format bytes of a candidate whose scan divides by the
-    /// zero-initialized `Counter`, so the first driven round traps.
-    fn trapping_container_bytes() -> Vec<u8> {
-        container_bytes(
-            "PROGRAM main
-  VAR
-    Counter : DINT;
-  END_VAR
-  Counter := 1 / Counter;
-END_PROGRAM
-",
-        )
-    }
-
-    /// Runs `lines` through one session without a slot store, returning the
-    /// parsed response per input line.
-    fn run_session(host: &mut RuntimeHost, lines: &[&str]) -> Vec<serde_json::Value> {
-        run_session_with_store(host, lines, None)
-    }
-
-    /// Runs `lines` through one session, optionally persisting assembles
-    /// through a slot store, returning the parsed response per input line.
-    fn run_session_with_store(
-        host: &mut RuntimeHost,
-        lines: &[&str],
-        store: Option<&mut SlotStore>,
-    ) -> Vec<serde_json::Value> {
-        let mut input = lines.join("\n");
-        input.push('\n');
-        let mut output = Vec::new();
-        serve_session(
-            host,
-            io::Cursor::new(input.into_bytes()),
-            &mut output,
-            store,
-            &device_identity(),
-        )
-        .unwrap();
-        let text = String::from_utf8(output).unwrap();
-        text.lines()
-            .map(|line| serde_json::from_str(line).unwrap())
-            .collect()
-    }
-
-    fn counter_host() -> RuntimeHost {
-        // Test hosts model the standalone shell: granted at startup.
-        let mut host = RuntimeHost::new(compile_container(&counter_source(1))).unwrap();
-        host.permit_execution();
-        host
-    }
-
-    /// REQ-VC-vm-cli-019: every command line gets exactly one response line,
-    /// so a scripted session stays aligned line for line.
-    #[spec_test(REQ_VC_vm_cli_019)]
-    #[test]
-    fn serve_session_when_scripted_sequence_then_one_response_line_per_command() {
-        let edit = container_bytes(&counter_source(10));
-        let accept = serde_json::json!({"command": "acceptEdits", "program": edit}).to_string();
-        let lines = [
-            r#"{"command":"getStatus"}"#,
-            &accept,
-            r#"{"command":"testEdits"}"#,
-            r#"{"command":"assembleEdits"}"#,
-            r#"{"command":"cancelEdits"}"#,
-            r#"{"command":"getStatus"}"#,
-        ];
-        let mut host = counter_host();
-
-        let responses = run_session(&mut host, &lines);
-
-        assert_eq!(responses.len(), lines.len());
-        assert_eq!(responses[0]["response"], "status");
-        assert_eq!(responses[0]["mode"], "normal");
-        assert_eq!(responses[0]["candidate"], serde_json::Value::Null);
-        assert_eq!(responses[1]["response"], "ack");
-        // Each FSM-advancing command drives one scan round at the boundary,
-        // so the test swap is applied — and the assemble promotion likewise
-        // — by the time its acknowledgment is written: the whole scripted
-        // path is ack. ADR-0064: assemble follows the test, never Accepted.
-        assert_eq!(responses[2]["response"], "ack");
-        assert_eq!(responses[3]["response"], "ack");
-        // Assembling left nothing staged, so the final cancel is refused
-        // with the protocol's usual V-code.
-        assert_eq!(responses[4]["response"], "error");
-        assert_eq!(responses[4]["vCode"], "V4012");
-        // Two rounds were driven (test, assemble): the candidate is the
-        // promoted, running application.
-        assert_eq!(responses[5]["response"], "status");
-        assert_eq!(responses[5]["mode"], "normal");
-        assert_eq!(responses[5]["normal"], 2);
-        assert_eq!(responses[5]["application"], 2);
-        assert_eq!(responses[5]["candidate"], serde_json::Value::Null);
-        assert_eq!(responses[5]["rounds"], 2);
-    }
-
-    /// The `identity` handshake (ADR-0063) answers over the stdio session too:
-    /// the device block is the `vm-cli` composition, the application block is
-    /// the same status payload `getStatus` answers with, and no redundancy
-    /// block means standalone.
-    #[test]
-    fn serve_session_when_identity_then_device_panel_and_status_snapshot() {
-        let mut host = counter_host();
-
-        let responses = run_session(
-            &mut host,
-            &[r#"{"command":"identity"}"#, r#"{"command":"getStatus"}"#],
-        );
-
-        assert_eq!(responses.len(), 2);
-        assert_eq!(responses[0]["response"], "identity");
-        assert_eq!(responses[0]["protocol"], 1);
-        assert_eq!(responses[0]["device"]["name"], "ironplcvm");
-        assert_eq!(responses[0]["device"]["model"], "IronPLC SoftPLC");
-        assert_eq!(responses[0]["device"]["modification"], "vm-cli");
-        // The firmware version is the binary's own crate version — the one
-        // composition point for the device panel (ADR-0063).
-        assert_eq!(
-            responses[0]["device"]["firmwareVersion"],
-            env!("CARGO_PKG_VERSION")
-        );
-        // The application block is the StatusPayload vocabulary verbatim —
-        // the same fields getStatus answers with, minus the response tag.
-        let mut status = responses[1].clone();
-        status.as_object_mut().unwrap().remove("response");
-        assert_eq!(responses[0]["application"], status);
-        assert!(responses[0].get("redundancy").is_none());
-    }
-
-    /// REQ-VC-vm-cli-023: a trap in a driven round does not change the
-    /// protocol answer (the swap was recorded, so the wire carries the ack);
-    /// the trap surfaces with its V-code and the session keeps serving.
-    #[spec_test(REQ_VC_vm_cli_023)]
-    #[test]
-    fn serve_session_when_driven_round_traps_then_ack_on_wire_and_session_continues() {
-        let accept =
-            serde_json::json!({"command": "acceptEdits", "program": trapping_container_bytes()})
-                .to_string();
-        let lines = [
-            &accept,
-            r#"{"command":"testEdits"}"#,
-            r#"{"command":"getStatus"}"#,
-        ];
-        let mut host = counter_host();
-
-        let responses = run_session(&mut host, &lines);
-
-        assert_eq!(responses.len(), lines.len());
-        assert_eq!(responses[0]["response"], "ack");
-        // The driven boundary round trapped (divide by zero, V4001, logged
-        // to stderr); the acknowledgment still stands and the session
-        // answers the next command.
-        assert_eq!(responses[1]["response"], "ack");
-        assert_eq!(responses[2]["response"], "status");
-    }
-
-    /// A slot store booted in a fresh temp dir beside a written counter
-    /// file (the first boot seeds slot A and the marker).
-    fn booted_store(dir: &tempfile::TempDir) -> SlotStore {
-        let file = dir.path().join("app.iplc");
-        std::fs::write(&file, container_bytes(&counter_source(1))).unwrap();
-        let store = SlotStore::beside(&file);
-        store.boot().unwrap();
-        store
-    }
-
-    /// The assemble session: accept a candidate, test it, assemble it.
-    fn accept_test_assemble_lines(edit: Vec<u8>) -> Vec<String> {
-        let accept = serde_json::json!({"command": "acceptEdits", "program": edit}).to_string();
-        vec![
-            accept,
-            r#"{"command":"testEdits"}"#.to_string(),
-            r#"{"command":"assembleEdits"}"#.to_string(),
-        ]
-    }
-
-    #[test]
-    fn serve_session_when_assemble_from_accepted_then_v4017_on_wire() {
-        let mut host = counter_host();
-        let edit = container_bytes(&counter_source(10));
-        let accept = serde_json::json!({"command": "acceptEdits", "program": edit}).to_string();
-        let lines = [&accept, r#"{"command":"assembleEdits"}"#];
-
-        // Assemble before the candidate ever ran under Test refuses with the
-        // ADR-0064 V-code; test+assemble would ack.
-        let responses = run_session(&mut host, &lines);
-
-        assert_eq!(responses[0]["response"], "ack");
-        assert_eq!(responses[1]["response"], "error");
-        assert_eq!(responses[1]["vCode"], "V4017");
-        assert!(host.status().candidate.is_some());
-    }
-
-    #[test]
-    fn serve_session_when_assemble_with_store_then_committed_bytes_land_in_inactive_slot() {
-        let dir = tempfile::TempDir::new().unwrap();
-        let mut store = booted_store(&dir);
-        let edit = container_bytes(&counter_source(10));
-        let lines = accept_test_assemble_lines(edit.clone());
-        let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
-        let mut host = counter_host();
-
-        let responses = run_session_with_store(&mut host, &lines, Some(&mut store));
-
-        assert_eq!(responses[2]["response"], "ack");
-        // Slot contents are exactly the accepted wire bytes — never a
-        // re-serialization (ADR-0064 amendment).
-        let slot_b = std::fs::read(dir.path().join("app.iplc.slot-b")).unwrap();
-        assert_eq!(slot_b, edit);
-        // The marker flipped to the inactive slot at seq 2.
-        let marker = std::fs::read_to_string(dir.path().join("app.iplc.marker")).unwrap();
-        let marker: serde_json::Value = serde_json::from_str(&marker).unwrap();
-        assert_eq!(marker["slot"], "b");
-        assert_eq!(marker["seq"], 2);
-    }
-
-    #[test]
-    fn serve_session_when_persist_fails_then_v6012_on_wire_and_ram_promotion_stands() {
-        let dir = tempfile::TempDir::new().unwrap();
-        let mut store = booted_store(&dir);
-        // Block the commit's tmp write: a directory where the tmp file lands.
-        std::fs::create_dir(dir.path().join("app.iplc.tmp")).unwrap();
-        let lines = accept_test_assemble_lines(container_bytes(&counter_source(10)));
-        let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
-        let mut host = counter_host();
-
-        let responses = run_session_with_store(&mut host, &lines, Some(&mut store));
-
-        // The acknowledgment became a V6012 error line (ADR-0064 amendment);
-        // the host promotion still stands, so a reboot would boot the
-        // previous committed generation.
-        assert_eq!(responses[2]["response"], "error");
-        assert_eq!(responses[2]["vCode"], "V6012");
-        assert_eq!(host.status().normal.raw(), 2);
-        let marker = std::fs::read_to_string(dir.path().join("app.iplc.marker")).unwrap();
-        assert!(marker.contains("\"seq\":1"));
-    }
-
-    #[test]
-    fn serve_session_when_type_change_without_decision_then_v4010_with_pairs() {
-        let base = compile_container_with_ids(&counter_source(1), &[("Counter", 1)]);
-        let mut host = RuntimeHost::new(base).unwrap();
-        host.permit_execution();
-        host.run(3, || 0).unwrap();
-
-        let candidate =
-            container_bytes_with_ids(&retyped_counter_source("UDINT"), &[("Counter", 1)]);
-        let accept =
-            serde_json::json!({"command": "acceptEdits", "program": candidate}).to_string();
-
-        let responses = run_session(&mut host, &[&accept]);
-
-        assert_eq!(responses.len(), 1);
-        assert_eq!(responses[0]["response"], "error");
-        assert_eq!(responses[0]["vCode"], "V4010");
-        assert_eq!(
-            responses[0]["pairs"],
-            serde_json::json!([{
-                "uid": 1,
-                "name": "Counter",
-                "from": "I32",
-                "to": "U32",
-                "sizeEqual": true,
-            }])
-        );
-        // The refusal staged nothing; the engineer can resubmit the same
-        // container bytes with a decision.
-        assert_eq!(host.status().candidate, None);
-    }
-
-    #[test]
-    fn serve_session_when_preserve_decision_then_old_bits_survive_the_retype() {
-        let base = compile_container_with_ids(&counter_source(1), &[("Counter", 1)]);
-        let mut host = RuntimeHost::new(base).unwrap();
-        host.permit_execution();
-        host.run(3, || 0).unwrap();
-
-        let candidate =
-            container_bytes_with_ids(&retyped_counter_source("UDINT"), &[("Counter", 1)]);
-        let accept = serde_json::json!({
-            "command": "acceptEdits",
-            "program": candidate,
-            "migration": {"1": "preserve"},
-        })
-        .to_string();
-        let lines = [&accept, r#"{"command":"testEdits"}"#];
-
-        let responses = run_session(&mut host, &lines);
-
-        assert_eq!(responses[0]["response"], "ack");
-        assert!(host.status().migration);
-        // The testEdits acknowledgment drove one boundary round: the DINT 3
-        // (0x3) was preserved bit for bit and the UDINT body added one.
-        assert_eq!(responses[1]["response"], "ack");
-        assert_eq!(
-            host.read_variable(ironplc_container::VarIndex::new(0))
-                .unwrap(),
-            4
-        );
-    }
-
-    #[test]
-    fn serve_session_when_init_decision_then_candidate_initial_value_stands() {
-        let base = compile_container_with_ids(&counter_source(1), &[("Counter", 1)]);
-        let mut host = RuntimeHost::new(base).unwrap();
-        host.permit_execution();
-        host.run(3, || 0).unwrap();
-
-        let source = "PROGRAM main
-  VAR
-    Counter : UDINT := 100;
-  END_VAR
-  Counter := Counter + 1;
-END_PROGRAM
-";
-        let candidate = container_bytes_with_ids(source, &[("Counter", 1)]);
-        let accept = serde_json::json!({
-            "command": "acceptEdits",
-            "program": candidate,
-            "migration": {"1": "init"},
-        })
-        .to_string();
-        let lines = [&accept, r#"{"command":"testEdits"}"#];
-
-        let responses = run_session(&mut host, &lines);
-
-        assert_eq!(responses[0]["response"], "ack");
-        // The old 3 was discarded; the candidate's declared 100 initialized
-        // the variable before the candidate body ran.
-        assert_eq!(responses[1]["response"], "ack");
-        assert_eq!(
-            host.read_variable(ironplc_container::VarIndex::new(0))
-                .unwrap(),
-            101
-        );
-    }
-
-    #[test]
-    fn drive_scan_round_when_round_traps_then_trap_v_code() {
-        let mut host = counter_host();
-        let device = device_identity();
-        let accept = parse_command(
-            &serde_json::json!({"command": "acceptEdits", "program": trapping_container_bytes()})
-                .to_string(),
-        )
-        .unwrap();
-        assert!(matches!(execute(accept, &mut host, &device), Response::Ack));
-        assert!(matches!(
-            execute(Command::TestEdits, &mut host, &device),
-            Response::Ack
-        ));
-
-        let err = drive_scan_round(&mut host).unwrap();
-
-        assert!(err
-            .to_string()
-            .starts_with("V4001 - runtime error: divide by zero"));
-    }
-
-    /// REQ-VC-vm-cli-020: a malformed line is a codec error — no V-code — so
-    /// the answer carries a null vCode and the session keeps serving.
-    #[spec_test(REQ_VC_vm_cli_020)]
-    #[test]
-    fn serve_session_when_malformed_line_then_null_vcode_error_and_session_continues() {
-        let mut host = counter_host();
-
-        let responses = run_session(&mut host, &["not json", r#"{"command":"getStatus"}"#]);
-
-        assert_eq!(responses.len(), 2);
-        assert_eq!(responses[0]["response"], "error");
-        assert_eq!(responses[0]["vCode"], serde_json::Value::Null);
-        assert!(responses[0]["message"]
-            .as_str()
-            .unwrap()
-            .starts_with("invalid command line:"));
-        assert_eq!(responses[1]["response"], "status");
-    }
-
-    /// REQ-VC-vm-cli-021: EOF ends the session cleanly, with no output when
-    /// no commands were sent.
-    #[spec_test(REQ_VC_vm_cli_021)]
-    #[test]
-    fn serve_session_when_eof_immediately_then_ok_and_silent() {
-        let mut host = counter_host();
-        let mut output = Vec::new();
-
-        serve_session(
-            &mut host,
-            io::Cursor::new(Vec::new()),
-            &mut output,
-            None,
-            &device_identity(),
-        )
-        .unwrap();
-
-        assert!(output.is_empty());
-    }
-
-    /// A BufRead whose first read fails.
-    struct FailingReader;
-
-    impl io::Read for FailingReader {
-        fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
-            Err(io::Error::other("simulated read failure"))
-        }
-    }
-
-    impl BufRead for FailingReader {
-        fn fill_buf(&mut self) -> io::Result<&[u8]> {
-            Err(io::Error::other("simulated read failure"))
-        }
-
-        fn consume(&mut self, _amt: usize) {}
-    }
-
-    /// REQ-VC-vm-cli-022: a stdin read failure surfaces as the session's I/O
-    /// error, which the command maps to V6011.
-    #[spec_test(REQ_VC_vm_cli_022)]
-    #[test]
-    fn serve_session_when_stdin_read_fails_then_io_error() {
-        let mut host = counter_host();
-        let mut output = Vec::new();
-
-        let err = serve_session(
-            &mut host,
-            FailingReader,
-            &mut output,
-            None,
-            &device_identity(),
-        )
-        .unwrap_err();
-
-        assert_eq!(err.kind(), io::ErrorKind::Other);
-        assert!(output.is_empty());
-    }
-
-    /// A Write impl that always fails, used to cover the write-error path.
-    struct FailingWriter;
-
-    impl Write for FailingWriter {
-        fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
-            Err(io::Error::other("simulated write failure"))
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
-
-    /// REQ-VC-vm-cli-022: a stdout write failure surfaces as the session's
-    /// I/O error, which the command maps to V6011.
-    #[spec_test(REQ_VC_vm_cli_022)]
-    #[test]
-    fn serve_session_when_stdout_write_fails_then_io_error() {
-        let mut host = counter_host();
-
-        let err = serve_session(
-            &mut host,
-            io::Cursor::new(b"{\"command\":\"getStatus\"}\n".to_vec()),
-            FailingWriter,
-            None,
-            &device_identity(),
-        )
-        .unwrap_err();
-
-        assert_eq!(err.kind(), io::ErrorKind::Other);
-    }
 }

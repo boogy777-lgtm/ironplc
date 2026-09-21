@@ -25,9 +25,8 @@
 //! owner that stopped renewing its presence loses its connections without
 //! a release ever arriving — the honest model of a dead owner's modules.
 
-use std::cell::RefCell;
 use std::collections::BTreeMap;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 use crate::epoch::Epoch;
 use crate::fencing::{
@@ -104,7 +103,7 @@ struct RegistryInner {
 /// drives its claims through its own [`RegistryClient`] handle.
 #[derive(Clone, Debug)]
 pub struct ModuleRegistry {
-    inner: Rc<RefCell<RegistryInner>>,
+    inner: Arc<Mutex<RegistryInner>>,
 }
 
 impl ModuleRegistry {
@@ -118,7 +117,7 @@ impl ModuleRegistry {
             .map(|id| (id, Module::new()))
             .collect();
         Self {
-            inner: Rc::new(RefCell::new(RegistryInner {
+            inner: Arc::new(Mutex::new(RegistryInner {
                 modules,
                 now: 0,
                 connection_timeout: u64::MAX,
@@ -132,7 +131,10 @@ impl ModuleRegistry {
     /// the autonomous target behavior behind the failover formula's
     /// `T_old-connection-timeout` term.
     pub fn with_connection_timeout(self, timeout: u64) -> Self {
-        self.inner.borrow_mut().connection_timeout = timeout;
+        self.inner
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+            .connection_timeout = timeout;
         self
     }
 
@@ -141,7 +143,10 @@ impl ModuleRegistry {
     /// ADR-0062's claim-start rule, `T_claim-start =
     /// max(T_plc-peer-detection, T_io-owner-lease-expiry)`.
     pub fn connection_timeout(&self) -> u64 {
-        self.inner.borrow().connection_timeout
+        self.inner
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+            .connection_timeout
     }
 
     /// Reports this module's firmware-instrumented delays (ADR-0062):
@@ -150,7 +155,8 @@ impl ModuleRegistry {
     /// registry is unknown hardware: `None`.
     pub fn module_timing(&self, module: ModuleId) -> Option<ModuleTiming> {
         self.inner
-            .borrow()
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
             .modules
             .get(&module)
             .map(|entry| entry.timing)
@@ -160,7 +166,13 @@ impl ModuleRegistry {
     /// stand-in for the I/O firmware's own instrumentation). An unknown
     /// module identity is ignored, mirroring [`yank`](Self::yank).
     pub fn with_module_timing(self, module: ModuleId, timing: ModuleTiming) -> Self {
-        if let Some(entry) = self.inner.borrow_mut().modules.get_mut(&module) {
+        if let Some(entry) = self
+            .inner
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+            .modules
+            .get_mut(&module)
+        {
             entry.timing = timing;
         }
         self
@@ -170,7 +182,7 @@ impl ModuleRegistry {
     /// queries flow through it tagged with the unit's [`OwnerId`].
     pub fn client(&self) -> RegistryClient {
         RegistryClient {
-            inner: Rc::clone(&self.inner),
+            inner: Arc::clone(&self.inner),
         }
     }
 
@@ -179,7 +191,7 @@ impl ModuleRegistry {
     /// owner committed nothing within the connection timeout — the
     /// target's autonomous old-connection timeout.
     pub fn tick(&mut self, now: u64) {
-        let mut inner = self.inner.borrow_mut();
+        let mut inner = self.inner.lock().unwrap_or_else(|err| err.into_inner());
         inner.now = now;
         let timeout = inner.connection_timeout;
         for module in inner.modules.values_mut() {
@@ -198,7 +210,7 @@ impl ModuleRegistry {
     /// keeping its outputs "changing" for its peer's Input Only
     /// observation.
     pub fn commit_outputs(&mut self, owner: OwnerId) {
-        let mut inner = self.inner.borrow_mut();
+        let mut inner = self.inner.lock().unwrap_or_else(|err| err.into_inner());
         let now = inner.now;
         for module in inner.modules.values_mut() {
             let armed_by_owner = matches!(
@@ -215,7 +227,7 @@ impl ModuleRegistry {
     /// within the last `window` clock ticks — the `I` signal's
     /// "input data keeps changing".
     pub fn outputs_changing(&self, owner: OwnerId, window: u64) -> bool {
-        let inner = self.inner.borrow();
+        let inner = self.inner.lock().unwrap_or_else(|err| err.into_inner());
         inner.modules.values().any(|module| {
             module.state.owner() == Some(owner)
                 && module
@@ -227,7 +239,8 @@ impl ModuleRegistry {
     /// The query-owners view of every module, in identity order.
     pub fn owners(&self) -> Vec<ModuleOwnership> {
         self.inner
-            .borrow()
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
             .modules
             .iter()
             .map(|(&module, entry)| ModuleOwnership {
@@ -237,12 +250,31 @@ impl ModuleRegistry {
             .collect()
     }
 
+    /// Whether a module is powered and communicating. A faulted module
+    /// is offline: it owns nothing and rejects every operation — the
+    /// observation behind the IO_READY "required inputs observable"
+    /// input and the driver's fencing-loss detection.
+    pub fn is_online(&self, module: ModuleId) -> bool {
+        self.inner
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+            .modules
+            .get(&module)
+            .is_some_and(|entry| entry.online)
+    }
+
     /// Models the target's old-connection timeout for a dead owner:
     /// every module `owner` holds becomes unowned without a release
     /// arriving — what the fencing target does while the failover formula
     /// pays `T_old-connection-timeout`.
     pub fn age_out(&mut self, owner: OwnerId) {
-        for module in self.inner.borrow_mut().modules.values_mut() {
+        for module in self
+            .inner
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+            .modules
+            .values_mut()
+        {
             if module.state.owner() == Some(owner) {
                 module.state = ModuleState::Unowned;
                 module.last_commit = None;
@@ -253,7 +285,7 @@ impl ModuleRegistry {
     /// Faults a module offline: it owns nothing afterwards and rejects
     /// every operation (the barrier verification failure path).
     pub fn yank(&mut self, module: ModuleId) {
-        let mut inner = self.inner.borrow_mut();
+        let mut inner = self.inner.lock().unwrap_or_else(|err| err.into_inner());
         let Some(entry) = inner.modules.get_mut(&module) else {
             return;
         };
@@ -267,7 +299,7 @@ impl ModuleRegistry {
 /// [`FencingClient`] the CONTROL chart drives.
 #[derive(Clone, Debug)]
 pub struct RegistryClient {
-    inner: Rc<RefCell<RegistryInner>>,
+    inner: Arc<Mutex<RegistryInner>>,
 }
 
 impl FencingClient for RegistryClient {
@@ -292,7 +324,7 @@ impl FencingClient for RegistryClient {
         owner: OwnerId,
         epoch: Epoch,
     ) -> Result<(), FencingError> {
-        let mut inner = self.inner.borrow_mut();
+        let mut inner = self.inner.lock().unwrap_or_else(|err| err.into_inner());
         let Some(entry) = inner.modules.get_mut(&module) else {
             return Err(FencingError::Unavailable);
         };
@@ -317,7 +349,7 @@ impl FencingClient for RegistryClient {
     }
 
     fn release(&mut self, module: ModuleId, owner: OwnerId) -> Result<(), FencingError> {
-        let mut inner = self.inner.borrow_mut();
+        let mut inner = self.inner.lock().unwrap_or_else(|err| err.into_inner());
         let Some(entry) = inner.modules.get_mut(&module) else {
             return Err(FencingError::Unavailable);
         };
@@ -341,7 +373,8 @@ impl FencingClient for RegistryClient {
 
     fn owners(&self) -> Vec<ModuleOwnership> {
         self.inner
-            .borrow()
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
             .modules
             .iter()
             .map(|(&module, entry)| ModuleOwnership {
@@ -357,7 +390,7 @@ impl FencingClient for RegistryClient {
         modules: &[ModuleId],
         epoch: Epoch,
     ) -> Result<(), FencingError> {
-        let mut inner = self.inner.borrow_mut();
+        let mut inner = self.inner.lock().unwrap_or_else(|err| err.into_inner());
         // Verify first, ARM second — all or nothing: any mismatch leaves
         // every module in its pre-barrier state.
         for &module in modules {
@@ -536,5 +569,17 @@ mod tests {
         let registry = ModuleRegistry::new(1);
 
         assert_eq!(registry.connection_timeout(), u64::MAX);
+    }
+
+    #[test]
+    fn is_online_when_faulted_then_false() {
+        let mut registry = ModuleRegistry::new(2);
+        registry.yank(ModuleId::new(1));
+
+        assert!(registry.is_online(ModuleId::new(0)));
+        assert!(!registry.is_online(ModuleId::new(1)));
+        // An unknown module identity is unknown hardware: fail-closed
+        // offline, exactly like the operation refusals.
+        assert!(!registry.is_online(ModuleId::new(99)));
     }
 }

@@ -17,16 +17,22 @@
 //! 2/(N+1), computed in fixed-point milli-units (no floats, so the
 //! values are bit-deterministic across platforms and hand-computable in
 //! tests), seeded with the first sample: an EMA that started at zero
-//! would under-report the first samples of a commissioning run.
+//! would under-report the first samples of a commissioning run. Every
+//! tracker also records the running minimum beside the maximum: the
+//! jitter envelopes ADR-0062's link profile reports (RTT min / max,
+//! scan jitter) are the measured range, never a derived constant.
 
 use crate::fencing::ModuleId;
 
-/// One timing term's tracker: current / EMA10 / EMA100 / max / count
-/// (ADR-0062, "Decision"). All values are abstract clock ticks supplied
+/// One timing term's tracker: current / min / EMA10 / EMA100 / max /
+/// count (ADR-0062, "Decision" names the current / EMA10 / EMA100 /
+/// max / count; the min completes the jitter envelope the link
+/// profile reports). All values are abstract clock ticks supplied
 /// by the composition root.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct TermStats {
     current: u64,
+    min: u64,
     ema10_milli: u64,
     ema100_milli: u64,
     max: u64,
@@ -42,6 +48,7 @@ impl TermStats {
     pub const fn new() -> Self {
         Self {
             current: 0,
+            min: 0,
             ema10_milli: 0,
             ema100_milli: 0,
             max: 0,
@@ -49,17 +56,20 @@ impl TermStats {
         }
     }
 
-    /// Records one sample: updates current, the running max, the count,
-    /// and both EMAs.
+    /// Records one sample: updates current, the running min and max,
+    /// the count, and both EMAs.
     pub fn record(&mut self, sample: u64) {
         self.count += 1;
         self.current = sample;
-        self.max = self.max.max(sample);
         if self.count == 1 {
+            self.min = sample;
+            self.max = sample;
             self.ema10_milli = sample.saturating_mul(1000);
             self.ema100_milli = self.ema10_milli;
             return;
         }
+        self.min = self.min.min(sample);
+        self.max = self.max.max(sample);
         self.ema10_milli = Self::ema_next(self.ema10_milli, sample, Self::EMA10_PERIOD);
         self.ema100_milli = Self::ema_next(self.ema100_milli, sample, Self::EMA100_PERIOD);
     }
@@ -80,6 +90,12 @@ impl TermStats {
     /// The most recent sample (0 before the first).
     pub const fn current(&self) -> u64 {
         self.current
+    }
+
+    /// The smallest observed sample — the low edge of the jitter
+    /// envelope (0 before the first sample).
+    pub const fn min(&self) -> u64 {
+        self.min
     }
 
     /// The fast EMA (EMA10), rounded to ticks.
@@ -106,15 +122,20 @@ impl TermStats {
 
 /// The per-direction link profile of ADR-0062's HA link profile
 /// ("Variables for the engineering UI"): ping/pong round-trip latency as
-/// current / EMA10 / EMA100 / max / count, the RTT min / max jitter
-/// envelope, the loss rate, and the max consecutive loss — per direction
-/// (A→B→A and B→A→B), because scheduler behavior and NIC queues differ
-/// per direction and a single-direction number is not evidence
-/// (ADR-0062, "Paradigm change").
+/// current / EMA10 / EMA100 / max / count, the per-side processing
+/// latency, the RTT min / max jitter envelope, the loss rate, and the
+/// max consecutive loss — per direction (A→B→A and B→A→B), because
+/// scheduler behavior and NIC queues differ per direction and a
+/// single-direction number is not evidence (ADR-0062, "Paradigm
+/// change").
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct DirectionProfile {
     rtt: TermStats,
-    rtt_min: u64,
+    /// The measuring side's processing latency: ticks from the
+    /// confirming PONG to the next emitted PING (the firmware/IRQ
+    /// delay a real binding reports; measured, 0 on the in-process
+    /// loopback binding whose receive and transmit share a step).
+    processing: TermStats,
     pings_sent: u64,
     pongs_received: u64,
     misses: u64,
@@ -127,7 +148,7 @@ impl DirectionProfile {
     pub const fn new() -> Self {
         Self {
             rtt: TermStats::new(),
-            rtt_min: 0,
+            processing: TermStats::new(),
             pings_sent: 0,
             pongs_received: 0,
             misses: 0,
@@ -139,12 +160,13 @@ impl DirectionProfile {
     /// Records one round-trip sample (ticks from the PING send to the
     /// confirming PONG increment).
     pub fn record_rtt(&mut self, sample: u64) {
-        if self.rtt.count() == 0 {
-            self.rtt_min = sample;
-        } else {
-            self.rtt_min = self.rtt_min.min(sample);
-        }
         self.rtt.record(sample);
+    }
+
+    /// Records one per-side processing sample (ticks from the
+    /// confirming PONG to the next emitted PING).
+    pub fn record_processing(&mut self, sample: u64) {
+        self.processing.record(sample);
     }
 
     /// Notes one PING emitted on this direction.
@@ -174,15 +196,21 @@ impl DirectionProfile {
         &self.rtt
     }
 
+    /// The per-side processing latency tracker (ticks from the
+    /// confirming PONG to the next emitted PING).
+    pub const fn processing(&self) -> &TermStats {
+        &self.processing
+    }
+
     /// The smallest observed round trip — the low edge of the jitter
-    /// envelope.
+    /// envelope (delegates to the tracker's minimum).
     pub const fn rtt_min(&self) -> u64 {
-        self.rtt_min
+        self.rtt.min()
     }
 
     /// The jitter envelope: smallest..=largest observed round trip.
     pub fn jitter_envelope(&self) -> core::ops::RangeInclusive<u64> {
-        self.rtt_min..=self.rtt.max()
+        self.rtt.min()..=self.rtt.max()
     }
 
     /// PINGs emitted on this direction.
@@ -284,6 +312,7 @@ mod tests {
         stats.record(10);
 
         assert_eq!(stats.current(), 10);
+        assert_eq!(stats.min(), 10);
         assert_eq!(stats.ema10(), 10);
         assert_eq!(stats.ema100(), 10);
         assert_eq!(stats.max(), 10);
@@ -312,6 +341,7 @@ mod tests {
 
         assert_eq!(stats.ema10(), 15);
         assert_eq!(stats.ema100(), 11);
+        assert_eq!(stats.min(), 10);
         assert_eq!(stats.max(), 30);
         assert_eq!(stats.count(), 3);
     }
@@ -325,6 +355,7 @@ mod tests {
         // 100000 - 100000*2/11 = 81818 -> 82 (EMA10 lags the drop).
         assert_eq!(stats.ema10(), 82);
         assert_eq!(stats.current(), 0);
+        assert_eq!(stats.min(), 0);
         assert_eq!(stats.max(), 100);
     }
 
@@ -333,10 +364,24 @@ mod tests {
         let stats = TermStats::new();
 
         assert_eq!(stats.current(), 0);
+        assert_eq!(stats.min(), 0);
         assert_eq!(stats.ema10(), 0);
         assert_eq!(stats.ema100(), 0);
         assert_eq!(stats.max(), 0);
         assert_eq!(stats.count(), 0);
+    }
+
+    #[test]
+    fn direction_profile_when_processing_sampled_then_tracks_per_side_latency() {
+        let mut profile = DirectionProfile::new();
+
+        for _ in 0..3 {
+            profile.record_processing(0);
+        }
+
+        assert_eq!(profile.processing().count(), 3);
+        assert_eq!(profile.processing().current(), 0);
+        assert_eq!(profile.processing().max(), 0);
     }
 
     #[test]

@@ -4,24 +4,29 @@
 //! The architecture doc mandates this binding as a first-class early
 //! deliverable ("Portability is unproven until a second binding exists"):
 //! it gives the FSM, admission, and the ping/pong exchange CI coverage
-//! before any field device is attached. The binding is single-threaded —
-//! the two ends share their queues through `Rc`, matching the host's
-//! single-threaded scan loop; a driver steps both ends in one thread.
+//! before any field device is attached. The usage model stays
+//! single-threaded — one driver steps both ends, matching the host's
+//! single-threaded scan loop — but the queues are `Arc<Mutex<..>>` so a
+//! composition root that serves sessions from more than one thread (the
+//! TCP listener) may hold the binding across those threads; the driver
+//! discipline is the composition's, not the binding's.
 //!
 //! `set_partitioned` models a link cut: the partitioned end discards its
 //! outbound frames and delivers no inbound frames, so its peer sees
 //! silence — the peer-death and loss scenarios inject failure here.
 
-use std::cell::RefCell;
 use std::collections::VecDeque;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 use crate::hal::{IngressTimestamp, NicPort, PhyCounters, PortCapabilities, PortError};
 
+/// The shared queue behind one direction of the link.
+type Queue = Arc<Mutex<VecDeque<Vec<u8>>>>;
+
 /// Creates the two ends of one in-process pair link.
 pub fn loopback_pair() -> (LoopbackPort, LoopbackPort) {
-    let a_to_b: Rc<RefCell<VecDeque<Vec<u8>>>> = Rc::new(RefCell::new(VecDeque::new()));
-    let b_to_a: Rc<RefCell<VecDeque<Vec<u8>>>> = Rc::new(RefCell::new(VecDeque::new()));
+    let a_to_b: Queue = Arc::new(Mutex::new(VecDeque::new()));
+    let b_to_a: Queue = Arc::new(Mutex::new(VecDeque::new()));
     (
         LoopbackPort {
             outbound: a_to_b.clone(),
@@ -40,8 +45,8 @@ pub fn loopback_pair() -> (LoopbackPort, LoopbackPort) {
 
 /// One end of an in-process pair link (the simulator's NIC port).
 pub struct LoopbackPort {
-    outbound: Rc<RefCell<VecDeque<Vec<u8>>>>,
-    inbound: Rc<RefCell<VecDeque<Vec<u8>>>>,
+    outbound: Queue,
+    inbound: Queue,
     partitioned: bool,
     counters: PhyCounters,
 }
@@ -77,16 +82,26 @@ impl NicPort for LoopbackPort {
             return Ok(());
         }
         self.counters.frames_sent += 1;
-        self.outbound.borrow_mut().push_back(frame.to_vec());
+        self.outbound
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+            .push_back(frame.to_vec());
         Ok(())
     }
 
     fn poll(&mut self) -> Option<(IngressTimestamp, Vec<u8>)> {
         if self.partitioned {
-            self.inbound.borrow_mut().clear();
+            self.inbound
+                .lock()
+                .unwrap_or_else(|err| err.into_inner())
+                .clear();
             return None;
         }
-        let frame = self.inbound.borrow_mut().pop_front()?;
+        let frame = self
+            .inbound
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+            .pop_front()?;
         self.counters.frames_received += 1;
         // No clock on a memory link.
         Some((IngressTimestamp::NONE, frame))

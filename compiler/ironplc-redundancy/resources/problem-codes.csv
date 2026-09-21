@@ -10,3 +10,4 @@ V4108,SwapRefused,The commanded role swap was refused: the pair is not in SYNC_R
 V4109,DegradedChannel,Ping/pong is lost on both channels but the peer demonstrably owns I/O: degraded-channel alarm; never claim
 V4110,PerformanceDegraded,The measured pair-link timing left the calibrated envelope: HA_PERFORMANCE_DEGRADED; investigate the link and recalibrate the pair
 V4111,TimingGuaranteeLost,The measured takeover recovery time exceeds the configured budget: HA_TIMING_GUARANTEE_LOST; the timing guarantee is invalid until recalibration
+V4112,PairRequired,The HA operation requires a configured redundant pair; this unit is standalone

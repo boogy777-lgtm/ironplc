@@ -23,6 +23,7 @@ import { registerCustomRequests } from './customRequests';
 import { registerHotEditSupport } from './hotEdit';
 import { registerConnectionSupport } from './connection';
 import { registerDevicePanel } from './devicePanel';
+import { registerHaPanel } from './haPanel';
 import { registerBuildCommands } from './buildCommands';
 import { sourceExtensionsFromLanguages } from './debugAdapterLogic';
 
@@ -156,6 +157,7 @@ export function activate(context: vscode.ExtensionContext) {
   // report coded problems (or refuse) when a profile or tool is missing.
   const connection = registerConnectionSupport(context, result?.path, sourceExtensions, showProblem);
   registerDevicePanel(context, connection);
+  registerHaPanel(context, connection);
   registerBuildCommands(context, result?.path, sourceExtensions, connection, showProblem);
 
   if (!result) {

@@ -52,6 +52,19 @@ pub enum SyncState {
     SyncReady,
 }
 
+impl SyncState {
+    /// The wire discriminant of the engineering surface
+    /// (ha-engineering-ui.md): the substate name in camelCase, exactly
+    /// like `RedundancyIdentity`'s `sync` field.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            SyncState::DeSync => "deSync",
+            SyncState::Syncing => "syncing",
+            SyncState::SyncReady => "syncReady",
+        }
+    }
+}
+
 /// Why the chart is in `deSYNC`; recorded for diagnostics.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum DeSyncReason {
@@ -67,6 +80,19 @@ pub enum DeSyncReason {
     /// The peer stopped answering: peer death confirmed by the liveness
     /// exchange (pair loss).
     PeerDeath,
+}
+
+impl DeSyncReason {
+    /// The wire discriminant of the engineering surface (the
+    /// guard-relevant reason the Pair Overview tab renders).
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            DeSyncReason::Boot => "boot",
+            DeSyncReason::SyncLoss => "syncLoss",
+            DeSyncReason::EpochDiscontinuity => "epochDiscontinuity",
+            DeSyncReason::PeerDeath => "peerDeath",
+        }
+    }
 }
 
 /// Events the driver feeds the chart, mapped from what the link and the
@@ -328,6 +354,28 @@ pub enum ControlState {
     RedundancyLost,
 }
 
+impl ControlState {
+    /// The wire discriminant of the engineering surface
+    /// (ha-engineering-ui.md): the substate name in camelCase, exactly
+    /// like `RedundancyIdentity`'s `control` field.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            ControlState::Idle => "idle",
+            ControlState::Claiming => "claiming",
+            ControlState::Active => "active",
+            ControlState::ActiveDegraded => "activeDegraded",
+            ControlState::RedundancyLost => "redundancyLost",
+        }
+    }
+
+    /// Whether the unit commands outputs under this state (`ACTIVE` or
+    /// `ACTIVE_DEGRADED`): the permit policy and the output-commit
+    /// stamping both consume this.
+    pub const fn is_output_controlling(self) -> bool {
+        matches!(self, ControlState::Active | ControlState::ActiveDegraded)
+    }
+}
+
 /// The three ways into `CLAIMING` — the guard table's only role-dependent
 /// transitions (the FSM spec, "Guard table").
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -462,6 +510,17 @@ pub enum ControlAlarm {
 }
 
 impl ControlAlarm {
+    /// The wire discriminant of the engineering surface: the alarm name
+    /// in camelCase (the coded surface raises the `v_code`).
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            ControlAlarm::OwnerConflict => "ownerConflict",
+            ControlAlarm::OwnershipBarrierFailed => "ownershipBarrierFailed",
+            ControlAlarm::SwapRefused => "swapRefused",
+            ControlAlarm::DegradedChannel => "degradedChannel",
+        }
+    }
+
     /// The stable V-code surfacing this alarm on the HA command surface
     /// (the crate-local CSV).
     pub const fn v_code(self) -> &'static str {

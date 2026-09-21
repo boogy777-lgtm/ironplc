@@ -8,6 +8,8 @@ mod cli;
 mod error;
 mod logger;
 mod serve;
+#[cfg(test)]
+mod serve_tests;
 mod slot_store;
 mod tcp;
 
@@ -84,6 +86,12 @@ enum Action {
         /// frame per message, one engineering session at a time.
         #[arg(long, value_name = "ADDR")]
         listen: Option<SocketAddr>,
+
+        /// Compose the HA redundancy shell with a simulated loopback peer
+        /// (the demo binding) so every HA state is exercisable through the
+        /// session; default is the honest standalone HA state.
+        #[arg(long)]
+        ha_simulated_peer: bool,
     },
 }
 
@@ -105,9 +113,13 @@ pub fn main() -> ExitCode {
             println!("ironplcvm version {VERSION}");
             Ok(())
         }
-        Action::Serve { file, listen } => match listen {
-            Some(addr) => tcp::serve_tcp(&file, addr),
-            None => serve::serve(&file),
+        Action::Serve {
+            file,
+            listen,
+            ha_simulated_peer,
+        } => match listen {
+            Some(addr) => tcp::serve_tcp(&file, addr, ha_simulated_peer),
+            None => serve::serve(&file, ha_simulated_peer),
         },
     });
 

@@ -26,6 +26,7 @@ path = "src/dap_main.rs"
 ironplc-vm = { path = "../vm", version = "0.242.0" }
 ironplc-container = { path = "../container", version = "0.242.0" }
 ironplc-runtime = { path = "../runtime", version = "0.242.0" }
+ironplc-redundancy = { path = "../ironplc-redundancy", version = "0.242.0" }
 ironplc-cli-support = { path = "../cli-support", version = "0.242.0" }
 clap = { version = "4.6", features = ["derive", "wrap_help"] }
 ctrlc = "3"

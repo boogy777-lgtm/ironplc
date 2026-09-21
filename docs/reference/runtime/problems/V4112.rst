@@ -1,0 +1,27 @@
+=====
+V4112
+=====
+
+.. problem-summary:: V4112
+
+An HA engineer action arrived on a standalone unit: no redundancy pair
+is configured, so the statechart does not run and the action has no
+pair to act on. The engineering surface refuses the command fail-closed
+with this code instead of acknowledging a no-op — a standalone
+controller must not pretend redundancy semantics. Queries stay answered
+with the honest standalone state (no pair, nothing measured); only
+actions refuse.
+
+Example
+-------
+
+A scripted client sends a commanded swap to a device that boots without
+a pair configured:
+
+.. code-block::
+
+   Error: V4112 - pair required: the HA operation requires a configured redundant pair; this unit is standalone
+
+To fix this error, connect to a device that has redundancy configured
+(a pair identity and a configured role), or compose the simulated peer
+(`ironplcvm serve --ha-simulated-peer`) for the demo binding.

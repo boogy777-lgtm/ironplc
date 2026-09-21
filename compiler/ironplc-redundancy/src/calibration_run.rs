@@ -79,6 +79,9 @@ struct Exchange {
     in_flight: VecDeque<u64>,
     last_pong_seq: u64,
     last_pong_tick: u64,
+    /// Whether a PONG increment arrived since the last transmit: the
+    /// next transmit measures the per-side processing latency from it.
+    pong_pending: bool,
 }
 
 impl Exchange {
@@ -92,6 +95,7 @@ impl Exchange {
             in_flight: VecDeque::new(),
             last_pong_seq: 0,
             last_pong_tick: 0,
+            pong_pending: false,
         }
     }
 
@@ -115,6 +119,7 @@ impl Exchange {
             if packet.pong_seq > self.last_pong_seq {
                 self.last_pong_seq = packet.pong_seq;
                 self.last_pong_tick = now;
+                self.pong_pending = true;
                 if feed {
                     calibration.note_pong(direction);
                     if let Some(sent) = self.in_flight.pop_front() {
@@ -149,7 +154,15 @@ impl Exchange {
             // it), and keeping it would inflate the post-revival
             // samples matched against it.
             self.in_flight.push_back(now);
+            if self.pong_pending {
+                // The per-side processing latency: the confirming PONG
+                // to this PING. The run's receive and transmit share
+                // one step, so the loopback binding measures 0 ticks —
+                // the honest value for an in-process link.
+                calibration.record_processing(direction, now - self.last_pong_tick);
+            }
         }
+        self.pong_pending = false;
         let packet = Packet {
             pair_id: self.pair_id,
             role: self.role,
@@ -378,6 +391,10 @@ mod tests {
         assert_eq!(status.claim_start(), 4);
         // The scan cadence is one committed round per tick.
         assert_eq!(status.scan().max(), 1);
+        // The per-side processing latency is measured on the loopback
+        // binding: 0 ticks, sampled once per answered exchange.
+        assert_eq!(status.rtt_ab().processing().current(), 0);
+        assert!(status.rtt_ab().processing().count() > 0);
         // Module 1's claim (5) dominates module 0's (2).
         assert_eq!(status.limiting_device(), Some(ModuleId::new(1)));
         assert!(status.link_valid());

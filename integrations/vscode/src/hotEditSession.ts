@@ -14,6 +14,19 @@
  * without a real `ironplcvm` child process.
  */
 
+import {
+  encodeHaCommand,
+  HaBarrier,
+  HaCalibration,
+  HaCommandName,
+  HaEvents,
+  HaIoReady,
+  HaResponse,
+  HaStatus,
+  HaTimingBudget,
+  parseHaResponseLine,
+} from './haProtocol';
+
 /** The commands of the hot-edit protocol, one per `command` tag on the wire. */
 export type HotEditCommand
   = | 'identity'
@@ -275,7 +288,7 @@ function parseStatus(record: Record<string, unknown>): HotEditStatus {
 }
 
 /** Reads a numeric field, refusing a malformed status payload. */
-function numberField(record: Record<string, unknown>, key: string): number {
+export function numberField(record: Record<string, unknown>, key: string): number {
   if (typeof record[key] !== 'number') {
     throw new HotEditProtocolError(null, `status response is missing ${key}`);
   }
@@ -323,7 +336,7 @@ function parseIdentity(record: Record<string, unknown>): IdentityInfo {
 }
 
 /** Reads a string field, refusing a malformed block. */
-function stringField(record: Record<string, unknown>, key: string): string {
+export function stringField(record: Record<string, unknown>, key: string): string {
   if (typeof record[key] !== 'string') {
     throw new HotEditProtocolError(null, `response block is missing ${key}`);
   }
@@ -422,7 +435,7 @@ export interface HotEditTransport {
 }
 
 interface PendingRequest {
-  resolve(response: HotEditResponse): void;
+  resolve(line: string): void;
   reject(reason: Error): void;
 }
 
@@ -430,7 +443,11 @@ interface PendingRequest {
  * A client session over one `ironplcvm serve` process. Requests are matched
  * to responses in order: the serve session answers every command line with
  * exactly one response line, so a FIFO of pending requests is sufficient and
- * pipelined callers stay correct.
+ * pipelined callers stay correct. The FIFO resolves the raw response line
+ * and each caller parses it — the hot-edit commands through
+ * `parseResponseLine`, the HA engineering commands through
+ * `parseHaResponseLine` — so both vocabularies ride one session without a
+ * per-layer dispatch.
  */
 export class HotEditSession {
   private readonly pending: PendingRequest[] = [];
@@ -502,9 +519,100 @@ export class HotEditSession {
     await this.request('cancelEdits');
   }
 
+  /** The HA pair overview (haStatus): both units' chart states, the
+   * TakeoverReady verdict with its inputs, and the active alarm flags. */
+  async haStatus(): Promise<HaStatus> {
+    const response = await this.haRequest('haStatus', 'haStatus');
+    return response.status;
+  }
+
+  /** The HA calibration state (haCalibration). */
+  async haCalibration(): Promise<HaCalibration> {
+    const response = await this.haRequest('haCalibration', 'haCalibration');
+    return response.calibration;
+  }
+
+  /** The HA ownership barrier view (haBarrier). */
+  async haBarrier(): Promise<HaBarrier> {
+    const response = await this.haRequest('haBarrier', 'haBarrier');
+    return response.barrier;
+  }
+
+  /** The HA IO_READY breakdown (haIoReady). */
+  async haIoReady(): Promise<HaIoReady> {
+    const response = await this.haRequest('haIoReady', 'haIoReady');
+    return response.ioReady;
+  }
+
+  /** The HA timing budget (haTimingBudget). */
+  async haTimingBudget(): Promise<HaTimingBudget> {
+    const response = await this.haRequest('haTimingBudget', 'haTimingBudget');
+    return response.budget;
+  }
+
+  /** The HA event ring (haEvents). */
+  async haEvents(): Promise<HaEvents> {
+    const response = await this.haRequest('haEvents', 'haEvents');
+    return response.events;
+  }
+
+  /**
+   * The commanded Primary↔Secondary swap (haCommandedSwap). The host
+   * refuses outside SYNC_READY with V4108; the refusal (and the V4107
+   * barrier failure) surfaces as a coded `HotEditProtocolError`.
+   */
+  async haCommandedSwap(): Promise<void> {
+    await this.haRequest('haCommandedSwap', 'ack');
+  }
+
+  /** Runs a calibration run (haRunCalibration). */
+  async haRunCalibration(): Promise<void> {
+    await this.haRequest('haRunCalibration', 'ack');
+  }
+
+  /**
+   * Sets the peer-failure confirmation time and the recovery budget
+   * (haSetTimingBudget). A budget the installation cannot honor is
+   * refused with V4111; the refusal message names the minimum
+   * demonstrated budget the installation can honor.
+   */
+  async haSetTimingBudget(peerFailureConfirmation: number, recoveryBudget: number): Promise<void> {
+    await this.haRequest('haSetTimingBudget', 'ack', { peerFailureConfirmation, recoveryBudget });
+  }
+
   /** Rejects pending requests; the transport itself is owned by the glue. */
   dispose(): void {
     this.rejectPending(new HotEditProtocolError(null, 'the hot edit session has ended.'));
+  }
+
+  /**
+   * Sends one HA command and matches the answer's kind: a coded refusal
+   * throws `HotEditProtocolError` with the server's V-code, and an
+   * answer of the wrong kind is the same "unexpected response" error the
+   * hot-edit methods raise.
+   */
+  private async haRequest<K extends HaResponse['kind']>(
+    command: HaCommandName,
+    kind: K,
+    params?: { peerFailureConfirmation: number; recoveryBudget: number },
+  ): Promise<Extract<HaResponse, { kind: K }>> {
+    const line = await this.requestRaw(encodeHaCommand(command, params));
+    let response: HaResponse;
+    try {
+      response = parseHaResponseLine(line);
+    }
+    catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.rejectPending(error);
+      throw error;
+    }
+    if (response.kind === 'error') {
+      throw new HotEditProtocolError(response.error.vCode, response.error.message);
+    }
+    if (response.kind !== kind) {
+      throw new HotEditProtocolError(null, `unexpected ${response.kind} response to ${command}`);
+    }
+    return response as Extract<HaResponse, { kind: K }>;
   }
 
   private async request(
@@ -513,36 +621,42 @@ export class HotEditSession {
     migration?: MigrationDecisionMap,
     edit?: EditIdentity,
   ): Promise<HotEditResponse> {
-    if (this.exited) {
-      throw new HotEditProtocolError(null, 'the hot edit session has ended.');
-    }
-    const response = new Promise<HotEditResponse>((resolve, reject) => {
-      this.pending.push({ resolve, reject });
-    });
-    this.transport.sendLine(encodeRequest(command, program, migration, edit));
-    const result = await response;
-    if (result.kind === 'error') {
-      throw result.error;
-    }
-    return result;
-  }
-
-  private handleLine(line: string): void {
-    let response: HotEditResponse;
+    const line = await this.requestRaw(encodeRequest(command, program, migration, edit));
+    let parsed: HotEditResponse;
     try {
-      response = parseResponseLine(line);
+      parsed = parseResponseLine(line);
     }
     catch (err) {
       // The wire desynced: no pending request can be matched reliably.
-      this.rejectPending(err instanceof Error ? err : new Error(String(err)));
-      return;
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.rejectPending(error);
+      throw error;
     }
+    if (parsed.kind === 'error') {
+      throw parsed.error;
+    }
+    return parsed;
+  }
+
+  /** Sends one line and resolves with the raw response line, in order. */
+  private async requestRaw(line: string): Promise<string> {
+    if (this.exited) {
+      throw new HotEditProtocolError(null, 'the hot edit session has ended.');
+    }
+    const response = new Promise<string>((resolve, reject) => {
+      this.pending.push({ resolve, reject });
+    });
+    this.transport.sendLine(line);
+    return response;
+  }
+
+  private handleLine(line: string): void {
     const pending = this.pending.shift();
     if (!pending) {
       // The serve session sends nothing unasked; drop the line defensively.
       return;
     }
-    pending.resolve(response);
+    pending.resolve(line);
   }
 
   private handleExit(): void {
