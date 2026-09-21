@@ -82,6 +82,61 @@ fn run_when_permit_revoked_before_boundary_then_pending_swap_cancelled_terminall
 }
 
 #[test]
+fn run_with_commit_when_rounds_execute_then_one_notification_per_committed_round() {
+    // The scan-commit seam (the HA redundancy architecture, "Minimal
+    // Seams" 2): one notification per completed round, carrying the
+    // boundary identity the redundancy shell mints the epoch from.
+    let (mut host, _) = counter_host(1);
+    let mut commits = Vec::new();
+
+    host.run_with_commit(3, || 0, |commit| commits.push(commit))
+        .unwrap();
+
+    assert_eq!(commits.len(), 3);
+    assert_eq!(commits[0].rounds, 1);
+    assert_eq!(commits[1].rounds, 2);
+    assert_eq!(commits[2].rounds, 3);
+    assert_eq!(commits[2].mode, HostMode::Normal);
+    assert_eq!(commits[2].generation, host.status().active);
+    assert_eq!(commits[2].application, host.status().application);
+}
+
+#[test]
+fn run_with_commit_when_test_swap_applied_then_notification_carries_testing_identity() {
+    // The boundary the swap committed at is auditable: the first round
+    // under the candidate reports the candidate's identity.
+    let (mut host, _) = counter_host(1);
+    host.stage(compile_source(&counter_program("Counter := Counter + 10;")))
+        .unwrap();
+    host.test().unwrap();
+    let mut commits = Vec::new();
+
+    host.run_with_commit(1, || 0, |commit| commits.push(commit))
+        .unwrap();
+
+    assert_eq!(commits.len(), 1);
+    assert_eq!(commits[0].mode, HostMode::Testing);
+    assert_eq!(commits[0].generation.raw(), 2);
+}
+
+#[test]
+fn run_with_commit_when_run_refused_then_no_notification_and_no_round_committed() {
+    // A round that commits nothing notifies nothing: the callback is the
+    // commit point's observer, not the refusal path's.
+    let base = compile_source(&counter_program("Counter := Counter + 1;"));
+    let mut host = RuntimeHost::new(base).unwrap();
+    let mut commits = Vec::new();
+
+    let error = host
+        .run_with_commit(1, || 0, |commit| commits.push(commit))
+        .unwrap_err();
+
+    assert!(matches!(error, RuntimeError::NotPermitted));
+    assert!(commits.is_empty());
+    assert_eq!(host.status().rounds, 0);
+}
+
+#[test]
 fn run_when_logic_only_edit_then_counter_continues_without_reset() {
     let (mut host, counter) = counter_host(1);
     host.run(12_537, || 0).unwrap();

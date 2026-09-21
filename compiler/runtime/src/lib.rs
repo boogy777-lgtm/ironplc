@@ -36,5 +36,7 @@ pub use commands::{
 };
 pub use error::{OnlineChangeError, RuntimeError};
 pub use generation::{ApplicationGeneration, LogicGeneration};
-pub use host::{AcceptedEdit, EditBaseline, HostMode, HostStatus, PendingEditRecord, RuntimeHost};
+pub use host::{
+    AcceptedEdit, EditBaseline, HostMode, HostStatus, PendingEditRecord, RuntimeHost, ScanCommit,
+};
 pub use migration::{MigrationDecision, MigrationError, StateMigrationPlan, TypeChangePair};

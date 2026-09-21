@@ -107,6 +107,23 @@ pub struct PendingEditRecord {
     pub baseline: EditBaseline,
 }
 
+/// Identity of one committed scan boundary, handed to the scan-commit
+/// callback (the HA redundancy architecture, "Minimal Seams" 2; the
+/// OwnerLease minting point of ADR-0062 — the lease is born at scan
+/// commit, never in the network task).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ScanCommit {
+    /// Completed scan rounds since the host was created — the boundary
+    /// identity the redundancy layer stamps into what it mints here.
+    pub rounds: u64,
+    /// Which artifact executed the committed round.
+    pub mode: HostMode,
+    /// Generation of the artifact that executed the round.
+    pub generation: LogicGeneration,
+    /// Generation of the active application manifest.
+    pub application: ApplicationGeneration,
+}
+
 /// Snapshot of the host's hot-edit state.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HostStatus {
@@ -410,7 +427,26 @@ impl RuntimeHost {
     /// (external FSM review, takeaway 1): a permit revoked between the
     /// request and the boundary cancels the operation terminally — the
     /// pending swap is consumed there and never applied.
-    pub fn run(&mut self, rounds: u64, mut clock: impl FnMut() -> u64) -> Result<(), RuntimeError> {
+    pub fn run(&mut self, rounds: u64, clock: impl FnMut() -> u64) -> Result<(), RuntimeError> {
+        self.run_with_commit(rounds, clock, |_| {})
+    }
+
+    /// Drives rounds like [`run`](Self::run) and invokes `on_commit` once
+    /// per completed scan boundary, with that boundary's identity.
+    ///
+    /// This is the scan-commit notification seam (the HA redundancy
+    /// architecture, "Minimal Seams" 2): the composition root composes what
+    /// a committed boundary means — standalone shells pass no-op, the
+    /// redundancy shell mints the epoch (and later the OwnerLease) here,
+    /// never in a network task (ADR-0062). One notification per committed
+    /// round, after the round's state is committed; a round that traps
+    /// notifies nothing.
+    pub fn run_with_commit(
+        &mut self,
+        rounds: u64,
+        mut clock: impl FnMut() -> u64,
+        mut on_commit: impl FnMut(ScanCommit),
+    ) -> Result<(), RuntimeError> {
         let mut remaining = rounds;
         while remaining > 0 {
             if self.pending.is_some() {
@@ -419,7 +455,7 @@ impl RuntimeHost {
             if !self.execution_permitted {
                 return Err(RuntimeError::NotPermitted);
             }
-            remaining = self.run_session(remaining, &mut clock)?;
+            remaining = self.run_session(remaining, &mut clock, &mut on_commit)?;
         }
         Ok(())
     }
@@ -429,33 +465,51 @@ impl RuntimeHost {
     /// The [`VmRunning`](ironplc_vm::VmRunning) borrow lives only inside
     /// this method, so it can never overlap a container or buffer mutation
     /// in the host. Returns the rounds not yet executed.
+    ///
+    /// The boundary identity is captured before the VM borrow and the
+    /// rounds counter advances in a local: the callback runs while the VM
+    /// holds `buffers`, so no `&self` method may run inside the loop.
     fn run_session(
         &mut self,
         mut remaining: u64,
         clock: &mut impl FnMut() -> u64,
+        on_commit: &mut impl FnMut(ScanCommit),
     ) -> Result<u64, RuntimeError> {
-        let container: &Container = if self.active_is_candidate {
+        let (container, mode, generation) = if self.active_is_candidate {
             let Some(candidate) = self.candidate.as_ref() else {
                 return Err(RuntimeError::internal(
                     "candidate active without a staged candidate",
                 ));
             };
-            candidate
+            (
+                candidate,
+                HostMode::Testing,
+                self.candidate_generation.unwrap_or(self.normal_generation),
+            )
         } else {
-            &self.normal
+            (&self.normal, HostMode::Normal, self.normal_generation)
         };
+        let application = self.application_generation;
 
+        let mut completed = self.rounds;
         let mut vm = Vm::new()
             .load(container, &mut self.buffers)
-            .resume(self.rounds);
+            .resume(completed);
         while remaining > 0 {
             vm.run_round(clock()).map_err(RuntimeError::Trap)?;
             remaining -= 1;
-            self.rounds += 1;
+            completed += 1;
+            on_commit(ScanCommit {
+                rounds: completed,
+                mode,
+                generation,
+                application,
+            });
             if self.pending.is_some() {
                 break;
             }
         }
+        self.rounds = completed;
         Ok(remaining)
     }
 

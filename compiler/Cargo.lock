@@ -1141,6 +1141,7 @@ dependencies = [
 name = "ironplc-redundancy"
 version = "0.242.0"
 dependencies = [
+ "csv",
  "ironplc-container",
  "ironplc-runtime",
 ]

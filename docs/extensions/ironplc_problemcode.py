@@ -31,6 +31,7 @@ definitions = [
     join('..', 'compiler', 'vm', 'resources', 'problem-codes.csv'),
     join('..', 'compiler', 'vm-cli', 'resources', 'problem-codes.csv'),
     join('..', 'compiler', 'runtime', 'resources', 'problem-codes.csv'),
+    join('..', 'compiler', 'ironplc-redundancy', 'resources', 'problem-codes.csv'),
 ]
 
 for definition in definitions:

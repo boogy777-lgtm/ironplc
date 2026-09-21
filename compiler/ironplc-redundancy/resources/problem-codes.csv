@@ -1,0 +1,2 @@
+Code,Name,Message
+V4101,PairIdentityMismatch,The peer discovered on the pair link belongs to a different redundant pair

@@ -222,7 +222,16 @@ fn advances_state(command: &Command) -> bool {
 /// violated host invariant keeps no V-code of its own (ADR-0055): it is
 /// logged here and reported as `None`.
 fn drive_scan_round(host: &mut RuntimeHost) -> Option<VmError> {
-    match host.run(1, || 0) {
+    match host.run_with_commit(
+        1,
+        || 0,
+        |commit| {
+            // The standalone shell's scan-commit composition (the HA redundancy
+            // architecture, "Minimal Seams" 2): observe the boundary identity;
+            // a redundancy shell mints the epoch here instead.
+            log::debug!("scan boundary committed: {commit:?}");
+        },
+    ) {
         Ok(()) => None,
         Err(RuntimeError::Trap(context)) => Some(VmError::from_trap(
             &context.trap,

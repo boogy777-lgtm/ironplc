@@ -10,6 +10,9 @@ repository.workspace = true
 [dependencies]
 ironplc-runtime = { path = "../runtime", version = "0.242.0" }
 
+[build-dependencies]
+csv = "1"
+
 [dev-dependencies]
 ironplc-container = { path = "../container", version = "0.242.0" }
 

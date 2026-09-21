@@ -146,15 +146,23 @@ Autonomy: full.
   cancels the pending swap terminally, and the shell's admission verdict
   (Standalone/Primary/Secondary) owns the grant policy. Details:
   [HA Redundancy Layer Architecture](design/ha-redundancy-layer-architecture.md).
+- **Delivered 2026-09-21 (Phase 5 slice 2):** the pair link and SYNC
+  subchart — the scan-commit callback on `RuntimeHost::run` (the epoch
+  mint point), the `NicPort` transport seam with the loopback simulator
+  binding, the ping/pong exchange (+1/+1000 penalty, missing-increment
+  silence, restart and peer-death inputs), the anti-stale epoch, and the
+  deSYNC → SYNCING → SYNC_READY chart with admission's zombie fence and
+  the V4101 foreign-pair refusal. Details:
+  [HA Redundancy FSM](design/ha-redundancy-fsm.md).
 - **Still open:** failover timing/ping-pong confirmation thresholds and the detection
   time budget across N adapters; readiness policy; state replication sizing;
   epoch persistence in NV storage; verify target firmware allows multiple
   concurrent Input Only originators; mid-chain break policy (primary
   continues with partial I/O, degraded — secondary fencing fails,
-  redundancy lost); **network HAL abstraction** — the redundancy layer
-  sits above a NIC abstraction (per-port drivers may differ, e.g. pair
-  link vs I/O chain; timestamp/IRQ/DMA capability advertised per port,
-  calibration metrics collected per port, PHY counters exposed uniformly);
+  redundancy lost); **per-port NIC drivers + calibration metrics** — the
+  `NicPort` seam and the loopback simulator binding exist (slice 2);
+  target-side per-port drivers (EtherNet/IP) and the per-port EMA
+  calibration collection of ADR-0062 remain;
   **engineering UI backend + tabs** — backend surface (pair status,
   SYNC/CONTROL state, per-channel calibration EMA metrics, ownership
   barrier, takeover readiness) and Studio tab structure are undesigned.
