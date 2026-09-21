@@ -63,8 +63,8 @@ pub use crossload::{
 pub use epoch::{Epoch, EpochAdoption};
 pub use fencing::{
     claim_in_order, ownership_barrier, release_all, FencingCapabilities, FencingClient,
-    FencingError, ModuleId, ModuleOwnership, ModuleState, ObserverCapability, OwnershipMode,
-    OwnerId,
+    FencingError, ModuleId, ModuleOwnership, ModuleState, ObserverCapability, OwnerId,
+    OwnershipMode,
 };
 pub use hal::{IngressTimestamp, NicPort, PhyCounters, PortCapabilities, PortError};
 pub use lease::OwnerLease;
@@ -72,6 +72,6 @@ pub use liveness::{Liveness, LivenessEvent, Packet, PairRole, FRAME_LEN};
 pub use loopback::{loopback_pair, LoopbackPort};
 pub use simulator::{ModuleRegistry, RegistryClient};
 pub use statechart::{
-    ClaimBarrier, ControlAlarm, ControlChart, ControlEvent, ControlState, CrossloadReadiness,
-    DeSyncReason, DetectionAction, SyncChart, SyncEvent, SyncState, claim_barrier, detect,
+    claim_barrier, detect, ClaimBarrier, ControlAlarm, ControlChart, ControlEvent, ControlState,
+    CrossloadReadiness, DeSyncReason, DetectionAction, SyncChart, SyncEvent, SyncState,
 };

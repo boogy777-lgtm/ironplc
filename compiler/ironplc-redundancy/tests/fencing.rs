@@ -41,11 +41,11 @@
 
 use ironplc_container::{ContainerBuilder, FunctionId};
 use ironplc_redundancy::{
-    ClaimBarrier, ConfiguredRole, ControlAlarm, ControlChart, ControlEvent, ControlState,
-    DeSyncReason, DetectionAction, Epoch, Liveness, LivenessEvent, LoopbackPort, ModuleId,
+    claim_barrier, detect, loopback_pair, ownership_barrier, release_all, ClaimBarrier,
+    ConfiguredRole, ControlAlarm, ControlChart, ControlEvent, ControlState, DeSyncReason,
+    DetectionAction, Epoch, FencingClient, Liveness, LivenessEvent, LoopbackPort, ModuleId,
     ModuleOwnership, ModuleRegistry, ModuleState, NicPort, OwnerId, OwnerLease, Packet, PairId,
-    PairRole,     RedundancyConfig, RegistryClient, SyncChart, SyncEvent, SyncState, claim_barrier, detect,
-    loopback_pair, ownership_barrier, release_all, FencingClient,
+    PairRole, RedundancyConfig, RegistryClient, SyncChart, SyncEvent, SyncState,
 };
 use ironplc_runtime::{RuntimeError, RuntimeHost};
 
@@ -362,10 +362,16 @@ impl Node {
         }
         if self.permitted {
             let mut epoch = self.epoch;
-            self.host.run_with_commit(1, || now, |commit| {
-                epoch = epoch.next();
-                let _ = commit;
-            }).unwrap();
+            self.host
+                .run_with_commit(
+                    1,
+                    || now,
+                    |commit| {
+                        epoch = epoch.next();
+                        let _ = commit;
+                    },
+                )
+                .unwrap();
             self.epoch = epoch;
             self.lease = Some(OwnerLease::mint(self.epoch, now, self.config.lease_ttl));
             registry.commit_outputs(self.owner);
@@ -497,7 +503,10 @@ fn fencing_when_swap_commanded_at_sync_ready_then_ownership_exchanges() {
         .iter()
         .all(|entry| entry.state.owner() != Some(owner_a)));
     assert_eq!(a.control.state(), ControlState::Idle);
-    assert!(matches!(a.host.run(1, || now), Err(RuntimeError::NotPermitted)));
+    assert!(matches!(
+        a.host.run(1, || now),
+        Err(RuntimeError::NotPermitted)
+    ));
     assert!(!a.permitted);
     // CLAIM → CLAIMED_DISARMED → BARRIER → ARM: the new Primary holds
     // every module, armed under the promotion epoch.
@@ -671,7 +680,10 @@ fn fencing_when_partial_io_loss_while_peer_live_then_degraded_owner_and_no_promo
         Some(ControlAlarm::OwnershipBarrierFailed)
     );
     assert!(!a.permitted);
-    assert!(matches!(a.host.run(1, || 13), Err(RuntimeError::NotPermitted)));
+    assert!(matches!(
+        a.host.run(1, || 13),
+        Err(RuntimeError::NotPermitted)
+    ));
 }
 
 #[test]

@@ -32,7 +32,7 @@ use std::rc::Rc;
 use crate::epoch::Epoch;
 use crate::fencing::{
     FencingCapabilities, FencingClient, FencingError, ModuleId, ModuleOwnership, ModuleState,
-    ObserverCapability, OwnershipMode, OwnerId,
+    ObserverCapability, OwnerId, OwnershipMode,
 };
 
 /// One module of the registry: the ownership truth plus the observation
@@ -83,7 +83,10 @@ impl ModuleRegistry {
     /// [`with_connection_timeout`](Self::with_connection_timeout) sets
     /// the target's old-connection timeout.
     pub fn new(count: u16) -> Self {
-        let modules = (0..count).map(ModuleId::new).map(|id| (id, Module::new())).collect();
+        let modules = (0..count)
+            .map(ModuleId::new)
+            .map(|id| (id, Module::new()))
+            .collect();
         Self {
             inner: Rc::new(RefCell::new(RegistryInner {
                 modules,
@@ -262,16 +265,17 @@ impl FencingClient for RegistryClient {
             return Err(FencingError::Unavailable);
         }
         match entry.state {
-            ModuleState::ClaimedDisarmed { owner: held, .. } | ModuleState::Armed { owner: held, .. }
+            ModuleState::ClaimedDisarmed { owner: held, .. }
+            | ModuleState::Armed { owner: held, .. }
                 if held == owner =>
             {
                 entry.state = ModuleState::Unowned;
                 entry.last_commit = None;
                 Ok(())
             }
-            ModuleState::Unowned | ModuleState::ClaimedDisarmed { .. } | ModuleState::Armed { .. } => {
-                Err(FencingError::NotOwned)
-            }
+            ModuleState::Unowned
+            | ModuleState::ClaimedDisarmed { .. }
+            | ModuleState::Armed { .. } => Err(FencingError::NotOwned),
         }
     }
 

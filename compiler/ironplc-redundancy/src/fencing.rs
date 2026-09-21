@@ -101,7 +101,7 @@ pub enum ModuleState {
         epoch: Epoch,
     },
     /// Exclusive owner armed: the holder commands the module's outputs
-        /// under the stamped epoch.
+    /// under the stamped epoch.
     Armed {
         /// The originator commanding the outputs.
         owner: OwnerId,
@@ -236,12 +236,8 @@ pub trait FencingClient {
     /// the module is claimed-disarmed; a conflicting live owner rejects
     /// the claim with [`FencingError::OwnerConflict`]. Re-claiming a
     /// module this originator already holds refreshes the claim.
-    fn claim(
-        &mut self,
-        module: ModuleId,
-        owner: OwnerId,
-        epoch: Epoch,
-    ) -> Result<(), FencingError>;
+    fn claim(&mut self, module: ModuleId, owner: OwnerId, epoch: Epoch)
+        -> Result<(), FencingError>;
 
     /// Releases one module held by `owner` back to unowned.
     fn release(&mut self, module: ModuleId, owner: OwnerId) -> Result<(), FencingError>;
@@ -362,7 +358,10 @@ mod tests {
         assert_eq!(error, FencingError::OwnerConflict);
         assert_eq!(error.v_code(), "V4106");
         // The rejected claimant holds nothing.
-        assert!(b.owners().iter().all(|entry| entry.state.owner() != Some(OWNER_B)));
+        assert!(b
+            .owners()
+            .iter()
+            .all(|entry| entry.state.owner() != Some(OWNER_B)));
     }
 
     #[test]
@@ -450,7 +449,10 @@ mod tests {
         assert_eq!(error, FencingError::OwnerConflict);
         // Safe retreat: the claimant holds nothing, the conflicting
         // owner is untouched — zero partial ownership.
-        assert!(a.owners().iter().all(|entry| entry.state.owner() != Some(OWNER_A)));
+        assert!(a
+            .owners()
+            .iter()
+            .all(|entry| entry.state.owner() != Some(OWNER_A)));
         assert_eq!(
             a.owners()[1].state,
             ModuleState::ClaimedDisarmed {
@@ -488,7 +490,10 @@ mod tests {
         let capabilities = a.capabilities();
 
         assert_eq!(capabilities.ownership_mode, OwnershipMode::SingleExclusive);
-        assert_eq!(capabilities.observer, ObserverCapability::IndependentInputOnly);
+        assert_eq!(
+            capabilities.observer,
+            ObserverCapability::IndependentInputOnly
+        );
         assert!(capabilities.staged_claim);
         assert!(capabilities.explicit_arm);
         assert!(capabilities.epoch_support);

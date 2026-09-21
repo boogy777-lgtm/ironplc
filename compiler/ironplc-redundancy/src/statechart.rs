@@ -400,7 +400,8 @@ impl ControlChart {
             }
             (ControlState::Claiming, ControlEvent::BarrierFailed) => {
                 self.state = ControlState::RedundancyLost;
-                self.alarm.get_or_insert(ControlAlarm::OwnershipBarrierFailed);
+                self.alarm
+                    .get_or_insert(ControlAlarm::OwnershipBarrierFailed);
             }
             (ControlState::Active, ControlEvent::ReleaseOwner) => {
                 self.state = ControlState::Idle;
@@ -411,7 +412,8 @@ impl ControlChart {
             (ControlState::Active, ControlEvent::IoLossFull)
             | (ControlState::ActiveDegraded, ControlEvent::IoLossFull) => {
                 self.state = ControlState::RedundancyLost;
-                self.alarm.get_or_insert(ControlAlarm::OwnershipBarrierFailed);
+                self.alarm
+                    .get_or_insert(ControlAlarm::OwnershipBarrierFailed);
             }
             (ControlState::RedundancyLost, ControlEvent::Repaired) => {
                 self.state = ControlState::Idle;
@@ -458,9 +460,7 @@ impl ControlAlarm {
     pub const fn v_code(self) -> &'static str {
         match self {
             ControlAlarm::OwnerConflict => problem_codes::OWNER_CONFLICT,
-            ControlAlarm::OwnershipBarrierFailed => {
-                problem_codes::OWNERSHIP_BARRIER_FAILED
-            }
+            ControlAlarm::OwnershipBarrierFailed => problem_codes::OWNERSHIP_BARRIER_FAILED,
             ControlAlarm::SwapRefused => problem_codes::SWAP_REFUSED,
             ControlAlarm::DegradedChannel => problem_codes::DEGRADED_CHANNEL,
         }
@@ -507,9 +507,7 @@ pub fn claim_barrier(
 ) -> Option<ClaimBarrier> {
     if swap_commanded {
         return match (configured, sync) {
-            (ConfiguredRole::Secondary, SyncState::SyncReady) => {
-                Some(ClaimBarrier::CommandedSwap)
-            }
+            (ConfiguredRole::Secondary, SyncState::SyncReady) => Some(ClaimBarrier::CommandedSwap),
             _ => None,
         };
     }
@@ -841,7 +839,10 @@ mod control_tests {
 
     #[test]
     fn detect_when_silent_without_evidence_and_ready_then_candidacy() {
-        assert_eq!(detect(false, false, true), DetectionAction::PromotionCandidate);
+        assert_eq!(
+            detect(false, false, true),
+            DetectionAction::PromotionCandidate
+        );
     }
 
     #[test]
