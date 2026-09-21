@@ -59,6 +59,13 @@ pub const DEFAULT_CONFIRMATION_EXCHANGES: u32 = 2;
 /// [`DEFAULT_CONFIRMATION_EXCHANGES`]).
 pub const DEFAULT_MISSED_EXCHANGES: u32 = 3;
 
+/// Default placeholder for the owner-lease TTL in abstract clock ticks:
+/// how long a silent owner's authority outlives its last confirmed scan
+/// commit before its death is proven. An open parameter of ADR-0062
+/// (`T_io-owner-lease-expiry`); the calibration pipeline replaces the
+/// tick count with the engineer-configured owner-lease expiry time.
+pub const DEFAULT_LEASE_TTL: u64 = 4;
+
 /// Static redundancy configuration for one unit, decided before the
 /// application starts.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -74,6 +81,9 @@ pub struct RedundancyConfig {
     pub confirmation_exchanges: u32,
     /// How many consecutive missing exchanges confirm peer death.
     pub missed_exchanges: u32,
+    /// How many abstract clock ticks a silent owner's authority outlives
+    /// its last confirmed scan commit (the OwnerLease TTL).
+    pub lease_ttl: u64,
 }
 
 impl RedundancyConfig {
@@ -85,6 +95,7 @@ impl RedundancyConfig {
             role: ConfiguredRole::Secondary,
             confirmation_exchanges: DEFAULT_CONFIRMATION_EXCHANGES,
             missed_exchanges: DEFAULT_MISSED_EXCHANGES,
+            lease_ttl: DEFAULT_LEASE_TTL,
         }
     }
 
@@ -96,6 +107,7 @@ impl RedundancyConfig {
             role,
             confirmation_exchanges: DEFAULT_CONFIRMATION_EXCHANGES,
             missed_exchanges: DEFAULT_MISSED_EXCHANGES,
+            lease_ttl: DEFAULT_LEASE_TTL,
         }
     }
 
@@ -110,6 +122,13 @@ impl RedundancyConfig {
     /// calibration hook for an open parameter.
     pub fn with_missed_exchanges(mut self, exchanges: u32) -> Self {
         self.missed_exchanges = exchanges;
+        self
+    }
+
+    /// Overrides the owner-lease TTL (abstract clock ticks). Test and
+    /// calibration hook for an open parameter of ADR-0062.
+    pub fn with_lease_ttl(mut self, ttl: u64) -> Self {
+        self.lease_ttl = ttl;
         self
     }
 }
@@ -128,6 +147,7 @@ mod tests {
             DEFAULT_CONFIRMATION_EXCHANGES
         );
         assert_eq!(config.missed_exchanges, DEFAULT_MISSED_EXCHANGES);
+        assert_eq!(config.lease_ttl, DEFAULT_LEASE_TTL);
     }
 
     #[test]
@@ -147,10 +167,12 @@ mod tests {
     fn with_link_timing_when_overridden_then_placeholders_replaced() {
         let config = RedundancyConfig::pair(PairId::new(7), ConfiguredRole::Secondary)
             .with_confirmation_exchanges(1)
-            .with_missed_exchanges(2);
+            .with_missed_exchanges(2)
+            .with_lease_ttl(9);
 
         assert_eq!(config.confirmation_exchanges, 1);
         assert_eq!(config.missed_exchanges, 2);
+        assert_eq!(config.lease_ttl, 9);
     }
 
     #[test]

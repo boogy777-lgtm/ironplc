@@ -164,6 +164,16 @@ Autonomy: full.
   contract, V4105), takeover during Testing executing the CANDIDATE
   (V4011 intact), and the V4102–V4105 refusal/alarm path. Details:
   [ADR-0064](adrs/0064-online-change-on-a-redundant-pair.md).
+- **Delivered 2026-09-21 (Phase 5 slice 4):** fencing + the CONTROL
+  subchart — the fencing-client seam with the capability descriptor and
+  the simulator binding as a module registry with target-enforced
+  exclusivity, the OwnerLease minted at the scan-commit seam (expiry
+  proves death together with peer-detection), the CONTROL chart with the
+  guard table's three barriers and the P/I/S detection case table
+  (commanded swap and proven-death promotion exactly; partition →
+  owner-conflict rejection → release-all → REDUNDANCY_LOST, zero partial
+  ownership), and the V4106–V4109 alarm path. Details:
+  [HA Redundancy FSM](design/ha-redundancy-fsm.md).
 - **Still open:** failover timing/ping-pong confirmation thresholds and the detection
   time budget across N adapters; readiness policy; state replication sizing;
   epoch persistence in NV storage; verify target firmware allows multiple

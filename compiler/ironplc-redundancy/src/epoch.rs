@@ -6,11 +6,13 @@
 //! epoch is **anti-stale protection only**: it rejects stale packets,
 //! images, and claims, and it is never the arbiter of who may take over —
 //! that prevents partition bidding wars. Minting is owned by the HA
-//! supervisor at scan commit (the runtime's scan-commit callback), never
-//! by the network task; this module carries the type and the adoption
-//! rule, not the minting policy. Epoch persistence across power loss is a
-//! roadmap open parameter (the `EpochStore` port decides it later); the
-//! value is volatile in this slice.
+//! supervisor and only at its two authority points: the scan-commit
+//! callback (the runtime's seam, one epoch per committed round) and the
+//! promotion barrier passed in the scan loop (the fencing slice) — never
+//! by the network task (ADR-0062's producer rule is about *who* mints).
+//! Epoch persistence across power loss is a roadmap open parameter (the
+//! `EpochStore` port decides it later); the value is volatile in this
+//! slice.
 
 use core::fmt;
 

@@ -1,0 +1,30 @@
+=====
+V4109
+=====
+
+.. problem-summary:: V4109
+
+Ping/pong is lost on both pair-link channels, but the peer demonstrably
+owns I/O: the unit's Input Only connections still show output data
+changing in a way attributable to the peer's ownership. The peer is
+alive behind a link failure, so this unit must never claim — the
+degraded-channel alarm is raised, the unit stays IDLE, and redundancy
+degrades to simplex operation until the link is repaired. Loss of only
+one ping/pong channel is degraded transport, not this alarm.
+
+Example
+-------
+
+The pair link is cut while the primary keeps scanning and commanding
+outputs; the secondary sees silence on both channels but the inputs keep
+moving:
+
+.. code-block::
+
+   Error: V4109 - degraded channel: ping/pong is lost on both channels but the peer demonstrably owns I/O: degraded-channel alarm; never claim
+
+To fix this error, repair the pair link (port 1 wiring, and the port 2
+path through the I/O daisy-chain) and let the unit re-synchronize. While
+the peer owns the outputs, claiming is forbidden — silence makes a
+claimant, never an owner, and the peer's live ownership is the proof
+that this silence is a link failure, not a death.
