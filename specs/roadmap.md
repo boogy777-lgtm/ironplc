@@ -197,6 +197,14 @@ Autonomy: full.
   renders the five Studio tabs over the single engineering session with
   the ADR-0064/0065 action gating. Details:
   [HA Engineering UI Contract](design/ha-engineering-ui.md).
+- **Decided 2026-09-22 (owner), ADR-0066:** the controller profile targets
+  Linux (N+1 protocol testing on Linux; execution-profile qualification per
+  the DCS task §8.3 still required), the pair epoch is one global pair-wide
+  epoch minted only by the HA supervisor, and per-port network drivers are
+  the sanctioned N+1 growth of the `NicPort` seam; the redundancy transport
+  (dedicated optical sync links vs single Ethernet vs the decided port map)
+  stays open — see the audit addendum. Details:
+  [ADR-0066](adrs/0066-linux-execution-platform-and-global-epoch.md).
 - **Still open:** the real EtherNet/IP binding and the real two-process
   UDP pair (the loopback simulator remains the test vehicle); failover
   timing/ping-pong confirmation thresholds and the detection

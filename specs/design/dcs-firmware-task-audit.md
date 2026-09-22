@@ -305,3 +305,229 @@ target-side port, per D11.
   owner, not resolved here.
 - The reference corpus in `docs/reference/Rnd_Rockwell/`, which this audit
   does not touch.
+
+## Addendum: Re-audit with owner decisions (2026-09-22)
+
+On 2026-09-22 the owner ruled on five open items seeded by this audit. This
+addendum records the decisions with code/doc evidence, evaluates the
+redundancy-transport options against the task's §2.8/§13.2, verifies the
+actual epoch semantics behind "one global epoch" against the code,
+re-classifies exactly what the decisions change, and updates the conflict
+list. Everything else in this audit stands as written.
+
+### 1. Decision record
+
+**D1. Platform = Linux for the controller profile.** No OS port exists
+today: the host is `std` on a desktop OS
+[specs/design/external-fsm-review.md:13-23]; only the container/VM kernel is
+`no_std` [compiler/container/src/lib.rs:1, ADR-0010]. The decision names the
+target of the previously deferred §8/§19 rows and of D11. Qualification per
+[Task §8.3] remains a release-gate obligation — kernel/config, scheduling
+policy, thread/IRQ priorities, memory locking/prefault, CPU/power policy,
+I/O interference, no unqualified virtualization; PREEMPT_RT changes
+preemption/locking/interrupt handling and is not proof of a concrete delay on
+a chosen board. N+1 protocols will be tested on Linux, the task's §23
+FreeRTOS→Linux same-class row: domain rules unchanged, timing requalified,
+never inherited.
+
+**D2. One global epoch — verified semantics.** "Global" means one epoch per
+redundant pair — not per unit, not system-wide. The type is documented as
+"the ownership/fencing epoch of a redundant pair"
+[compiler/ironplc-redundancy/src/epoch.rs:19]; the peer adopts the owner's
+mint under a newer-replaces-local anti-stale rule
+[compiler/ironplc-redundancy/src/epoch.rs:55-64],
+[compiler/ironplc-redundancy/src/shell/mod.rs:673-676,832-835];
+`SYNC_READY` requires the peer epoch agreed
+[compiler/ironplc-redundancy/src/statechart.rs:106] and `IO_READY` requires
+the pair's epochs aligned
+[compiler/ironplc-redundancy/src/shell/mod.rs:395-397]. Minting is owned
+exclusively by the HA supervisor at exactly two authority points: the
+scan-commit callback (one epoch per committed round,
+[compiler/ironplc-redundancy/src/shell/mod.rs:655-683]) and the promotion
+barrier in the scan loop (epoch bumped, barrier run in that epoch,
+`OwnerLease` minted under it,
+[compiler/ironplc-redundancy/src/shell/mod.rs:809-835]) — never by the
+network task [compiler/ironplc-redundancy/src/epoch.rs:1-15],
+[compiler/ironplc-redundancy/src/lease.rs:1-28, ADR-0062]. The runtime names
+no epoch (the permit latch carries none,
+[compiler/runtime/src/host.rs:204-221]). The value is volatile in this
+slice; `EpochStore` declares the NV port and the backend is a roadmap open
+parameter [compiler/ironplc-redundancy/src/epoch.rs:13-15]. ADR-0062's rule
+"epoch is anti-stale protection only, never the arbiter of takeover" is
+unchanged.
+
+**D3. Redundancy transport options — dual fiber or single Ethernet.**
+Evaluated in §2 below; the choice itself is NOT made here — it is an open
+item in ADR-0066 pointing to this addendum.
+
+**D4. The network-stack driver work is the N+1 driver in ironplc.** The
+task's own N+1 table sanctions "one → N network interfaces" as a same-class
+extension: what may change is resource instances and routing/config; what
+must survive is the domain contracts of identified resources [Task §23]. The
+seam exists: `NicPort` with per-port `PortCapabilities` and uniform counters
+[compiler/ironplc-redundancy/src/hal.rs:17-54]; a binding is one
+implementation per port end
+([compiler/ironplc-redundancy/src/loopback.rs:68-92] is the simulator
+binding); the decided two-channel design already runs two port instances.
+Target-side per-port drivers (EtherNet/IP) remain the named open item
+[specs/roadmap.md, Phase 5 "Still open"]. Driver work therefore adds
+instances behind the existing seam — no new mechanism — and stays
+N+1-sound only while no new network guarantee class is claimed (the
+same-class test ends the moment a binding claims one, per [Task §23]'s own
+caveat).
+
+**D5. An I/O abstraction is laid down — verified.** Verified against code;
+what it covers and what it does not, in §3 below.
+
+### 2. Topology evaluation: dual fiber vs single Ethernet vs the current
+port map
+
+Against [Task §2.8] (two dedicated optical sync links, separate from
+engineering, SCADA, and process I/O), [Task §13.2] (`L1`/`L2` as independent
+channels; INV06; T13/T14):
+
+| Option | Satisfies | Violates |
+|---|---|---|
+| Dual fiber — two dedicated optical sync links | §2.8 verbatim; §13.2's L1/L2 failure independence — one link's loss leaves the other, so 1/0 is degraded transport and 0/0 is a genuine dual failure; INV06/T13/T14 keep their designed meaning | The decided port map (4× 10/100 Ethernet ports [specs/roadmap.md:74-79]) needs optical PHYs or a revised hardware constraint; channel 2 no longer proves I/O-chain traversability (recoverable as a separate health signal, not a sync channel) |
+| Single Ethernet — one link carrying the sync traffic | Cheap; one driver instance | §2.8's MUST — there are not two links. §13.2's independence premise does not exist: L1 and L2 share one medium and one fate; a single cut produces 0/0 at once, the T13 degraded case cannot exist, and T14's trade-off becomes the common case instead of the rare one. Plainly: single Ethernet does not provide two independent sync channels |
+| Current decided map — port 1 pair link; port 2 the same logical packet through the I/O daisy-chain | Chain-traversability proof; the decided 4-port hardware constraint; the T13 degraded case exists | §2.8 "dedicated … separate from process I/O" — channel 2 shares fate with I/O traffic; the task's failure-independence argument for L1/L2 does not hold (one chain/switch failure can kill channel 2 or both) — audit §3(c) |
+
+**Recommendation: dual fiber.** It is the only option that satisfies the
+task's L1/L2 mandate (§2.8, §13.2, INV06's intent, T13/T14 semantics as
+designed); the recommendation feeds the owner's ruling on conflict §3(c).
+Honest caveats: it reopens the port map (optical PHYs, or a revised owner
+hardware constraint) and abandons the traversability proof on channel 2 —
+recoverable, but as a separate chain-health signal, not a sync channel. The
+transport choice is NOT decided by this addendum; ADR-0066 records it as an
+open item pointing here.
+
+### 3. What the I/O abstraction covers — and what it does not
+(decision D5 vs [Task §12])
+
+Verified in code:
+
+- **Transport seam:** `NicPort` + `PortCapabilities`
+  [compiler/ironplc-redundancy/src/hal.rs:17-54]; loopback binding
+  [compiler/ironplc-redundancy/src/loopback.rs:68-92].
+- **Fencing seam:** `FencingClient` (claim / release / query-owners /
+  barrier-participate) + the `FencingCapabilities` capability descriptor
+  [compiler/ironplc-redundancy/src/fencing.rs:199-218,266-297]; the
+  OWNERSHIP_BARRIER helper with release-all retreat
+  [compiler/ironplc-redundancy/src/fencing.rs:303-351]; epoch-stamped
+  ownership truth (`ModuleState::{ClaimedDisarmed, Armed}{owner, epoch}`,
+  [compiler/ironplc-redundancy/src/fencing.rs:92-111]); the simulator
+  binding is a registry with target-enforced exclusivity — a conflicting
+  claim is rejected with `OwnerConflict`
+  [compiler/ironplc-redundancy/src/fencing.rs:426-439].
+- **Runtime seams:** the permit latch
+  ([compiler/runtime/src/host.rs:204-221]; a permit revoked between request
+  and boundary cancels the swap terminally,
+  [compiler/runtime/src/host.rs:701-707]); the scan-commit notification
+  ([compiler/runtime/src/host.rs:116,623-677]); the snapshot bulk read of
+  the persistent regions
+  ([compiler/runtime/src/host.rs:421-435,760,770]); apply-while-idle
+  ([compiler/runtime/src/host.rs:469-498]).
+
+The task's §12 enforcement boundary, however, is the *target side*: the
+physical write boundary that admits or rejects output frames under a
+per-group policy, with a reaction path independent of the CPU/OS. A client
+side seam is not that boundary, and an in-memory simulator registry is not a
+target. Exact row verdicts:
+
+- §12.2 **output-groups policy** (the per-reason table PROGRAM/TEST/fault/
+  loss/HA handover/firmware/force; output-frame identity and invalidation;
+  input quality and age): **stays ABSENT** — the fencing model has the
+  all-or-nothing `required` module set, not per-group policies keyed by
+  reason.
+- §12.3 **hardware watchdog/inhibit** independent of the CPU/OS path:
+  **stays ABSENT** — the IRONPLC_HA_IO autonomous watchdog remains a
+  roadmap audit item; nothing independent of the software path exists.
+- **Real module binding** (EtherNet/IP target-enforced exclusivity on real
+  modules): **stays ABSENT** — one seam, one simulator binding; the real
+  binding is the named open item [specs/roadmap.md, Phase 5 "Still open"].
+
+Net: no §12 row moves ABSENT → PARTIAL; the §12 row stays PARTIAL with its
+evidence now pinned to file:line. The abstraction changes the landing zone
+for the ADOPT disposition in §4, not the verdicts — an abstraction seam is
+not an enforcement boundary.
+
+### 4. Re-classifications changed by these decisions
+
+| Row | Was | Now | Why |
+|---|---|---|---|
+| D11 | OOS-DEC | PARTIAL | Platform chosen (Linux, D1); [Task §8.3] qualification pending; no port code exists [specs/design/external-fsm-review.md:13-23] |
+| §8/§19 rows | ABSENT (OOS-DEC) | ABSENT (in-scope by decision) | The port target is named but no mechanism exists; the OOS-DEC label must not be misread as "never" |
+| §12 enforcement rows | ABSENT | ABSENT | §3 above: seam ≠ enforcement boundary |
+| §2.8/§13.2 topology row | CONFLICT | CONFLICT (evaluation delivered) | §2 above; owner ruling pending |
+| §13.3 epoch/fencing (G02 open item) | PARTIAL | PARTIAL | §5 below: intent satisfied in simulation; production authority questions land in the pending arbitration/quorum design |
+
+Tally delta for D01–D24: **D11 moves OOS-DEC → PARTIAL** (tally: 9 ALIGNED,
+11 PARTIAL, 3 ABSENT, 1 CONFLICT, 0 OOS-DEC). Everything else unchanged.
+
+### 5. Global epoch against [Task §13.3]
+
+§13.3 demands a fencing issuer/authority, reboot identity, replay
+protection, handover, and partial-acquire recovery — or the production HA
+profile is not accepted.
+
+- **Issuer/authority:** the issuer is the HA supervisor (D2); the fencing
+  authority is the target behind the per-protocol binding, the guarantee
+  level recorded in `FencingCapabilities`
+  [compiler/ironplc-redundancy/src/fencing.rs:193-218]. The epoch is not a
+  purely local per-unit counter: the non-owner adopts the owner's mint, and
+  the barrier verifies every module is "claimed-disarmed by this owner in
+  exactly `epoch`" before ARM
+  [compiler/ironplc-redundancy/src/fencing.rs:286-296] — a stale-epoch claim
+  cannot pass.
+- **Replay protection:** fixed 38-byte frames, CRC32, length/role
+  validation, per-channel +1 sequences, epoch anti-stale adoption,
+  foreign-pair refusal [compiler/ironplc-redundancy/src/liveness.rs:85-138].
+- **Handover:** commanded swap and takeover mint at the promotion barrier;
+  the peer adopts the new epoch at completion
+  [compiler/ironplc-redundancy/src/shell/mod.rs:818-835].
+- **Partial-acquire recovery:** any acquisition or verification failure
+  releases everything acquired before the error returns
+  [compiler/ironplc-redundancy/src/fencing.rs:303-351],
+  [compiler/ironplc-redundancy/src/shell/mod.rs:856-869].
+- **Reboot identity — the honest gap:** there is no persistent boot
+  identity. A rebooted peer is inferred from epoch regression against the
+  observed high-water [compiler/ironplc-redundancy/src/shell/unit.rs:75-79,151-161]
+  and lands in deSYNC; the epoch itself is volatile (the `EpochStore` NV
+  backend is open). And none of this is proven on a real wire yet: the only
+  binding that enforces exclusivity today is the in-memory simulator
+  registry.
+
+Verdict: the global-epoch semantics satisfy §13.3's fencing/replay *intent*
+for the simulated pair; the production requirements (an authoritative issuer
+on a real binding, persistent reboot identity, replay rejection at the real
+target) remain PARTIAL and land in the arbitration/quorum + epoch-authority
+design the roadmap already sequences first [specs/roadmap.md, Phase 5 step
+1]; audit §6 action 2.
+
+### 6. Gates delta
+
+- **G03** gains a concrete target profile: the Linux qualification list of
+  [Task §8.3] defines exactly what must be measured (kernel/config,
+  scheduling policy, priorities, memory locking, CPU/power policy, I/O
+  interference). Still PARTIAL — the blocker is redefined from "no target
+  exists" to "profile qualification not yet performed".
+- **G04** still UNMET: the Linux decision and the verified I/O seams create
+  no independent physical path; protection still depends on a live Runtime
+  task (the task's disqualifier), and §12.3 stays ABSENT.
+- **G06** still PARTIAL: fencing, the 0/0 rule, and REDUNDANCY_LOST are
+  proven against the simulator binding; the real EtherNet/IP binding,
+  fault-coverage evidence, and the owner-accepted 0/0 availability model
+  remain open — the latter now also waiting on the transport ruling (§2).
+
+### 7. Updated conflict list
+
+| Conflict (audit §3) | State after 2026-09-22 |
+|---|---|
+| (c) Topology | **Partially resolved** — options evaluated, dual fiber recommended (§2); owner ruling still required; open item recorded in ADR-0066 |
+| (d)/(e) Operating modes PROGRAM/TEST/RUN + TEST vs Test Edits | **Open** — no ruling this round; still gates the I/O enforcement build |
+| (f) Crossload journal vs snapshot+offer | **Open** — no ruling this round |
+| D22/§17 Security | **Open** — unchanged (deferred by ADR-0063/0065) |
+
+Owner rulings still needed: the transport choice (§2), the operating-mode
+axis ((d)/(e)), the crossload transport scope (f), and the security profile
+(D22).
