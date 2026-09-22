@@ -197,6 +197,19 @@ Autonomy: full.
   renders the five Studio tabs over the single engineering session with
   the ADR-0064/0065 action gating. Details:
   [HA Engineering UI Contract](design/ha-engineering-ui.md).
+- **Delivered 2026-09-22 (Phase 5 slice 7):** the real two-process pair
+  link — the production per-unit `PairLink` (liveness, admission
+  discovery, the SYNC chart, the epoch, the crossload receiver, the
+  ADR-0064 outbound pipeline, the takeover policy) over the `NicPort`
+  seam with the std-only `UdpPort` binding, composed by
+  `ironplcvm serve --ha-peer-bind/--ha-peer-peer/--ha-role`; the
+  loopback scenarios re-based onto the `PairLink` (the test-support
+  compositions retire); the `AssembleCandidate` crossload notice
+  completes ADR-0064(h); and the two-process integration test
+  (`compiler/vm-cli/tests/ha_pair.rs`) proves hot-edit synchronization
+  and the takeover mid-Test across two real processes. Details:
+  [ADR-0064](adrs/0064-online-change-on-a-redundant-pair.md),
+  [HA Redundancy Layer Architecture](design/ha-redundancy-layer-architecture.md).
 - **Decided 2026-09-22 (owner), ADR-0066:** the controller profile targets
   Linux (N+1 protocol testing on Linux; execution-profile qualification per
   the DCS task §8.3 still required), the pair epoch is one global pair-wide
@@ -205,8 +218,7 @@ Autonomy: full.
   (dedicated optical sync links vs single Ethernet vs the decided port map)
   stays open — see the audit addendum. Details:
   [ADR-0066](adrs/0066-linux-execution-platform-and-global-epoch.md).
-- **Still open:** the real EtherNet/IP binding and the real two-process
-  UDP pair (the loopback simulator remains the test vehicle); failover
+- **Still open:** the real EtherNet/IP binding; failover
   timing/ping-pong confirmation thresholds and the detection
   time budget across N adapters; readiness policy; state replication sizing;
   epoch persistence in NV storage; verify target firmware allows multiple

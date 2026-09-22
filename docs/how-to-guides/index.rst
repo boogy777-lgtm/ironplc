@@ -51,5 +51,6 @@ you are coming from.
    Coming from Beremiz <beremiz/index>
    Coming from TwinCAT <twincat/index>
    Using AI Agents <ai-agents/index>
+   Run a Redundant Pair of Runtimes <run-a-redundant-pair>
    Update IronPLC on your computer <update>
    Troubleshoot the Editor Extension <troubleshoot-editor>
