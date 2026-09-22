@@ -16,7 +16,11 @@
 //! redundancy crate's [`HaCommand`] — disjoint vocabularies, so neither
 //! layer's FSM nor the one-line-in/one-line-out ordering is disturbed. A
 //! line that parses against neither is the codeless codec error, exactly
-//! like a malformed hot-edit line today.
+//! like a malformed hot-edit line today. In pair mode (the real UDP pair
+//! link, [`crate::ha_pair`]) the HA layer answers the pair overview
+//! ([`HaCommand::HaStatus`]) from the link's status; the simulator
+//! binding's surfaces have no binding there and answer the codec error,
+//! the same shape a vocabulary the session does not speak answers.
 //!
 //! The FSM-advancing commands (`testEdits`, `untestEdits`, `assembleEdits`)
 //! only *request* a swap; the host applies it at the next scan boundary
@@ -48,15 +52,23 @@
 //! session reconciles the permit latch with the shell's verdict after every
 //! command (a commanded swap demotes this unit: its scans refuse at the
 //! latch from the next line on). The driven round's scan-commit callback
-//! feeds [`Shell::on_scan_commit`], the supervisor's mint seam.
+//! feeds the HA backend's scan-commit seam, the supervisor's mint seam.
+//!
+//! The dispatch itself ([`handle_line`]) is shared with pair mode, whose
+//! pump loop ([`crate::ha_pair`]) calls it per line and per pump tick: one
+//! code path answers the runtime vocabulary, the driven rounds, the slot
+//! persistence, and — in pair mode — the ADR-0064 crossload hooks (the
+//! offer at Accept, the state update at Test, the cancel/untest/assemble
+//! notices) through the [`Ha`] backend enum.
 
 use std::io::{self, BufRead, Write};
 use std::path::Path;
 
 use ironplc_container::Container;
 use ironplc_redundancy::{
-    execute_ha, parse_ha_command, permit_for, render_ha_response, AdmissionVerdict, ConfiguredRole,
-    HaResponse, ModuleId, ModuleRegistry, ModuleTiming, PairId, RedundancyConfig, Shell, Side,
+    execute_ha, package_offer, pair_link_status, parse_ha_command, permit_for, render_ha_response,
+    AdmissionVerdict, ConfiguredRole, CrossloadMessage, HaCommand, HaResponse, ModuleId,
+    ModuleRegistry, ModuleTiming, PairId, PairLink, RedundancyConfig, Shell, Side, UdpPort,
 };
 use ironplc_runtime::{
     execute, parse_command, render_response, Command, DeviceIdentity, RedundancyIdentity, Response,
@@ -65,6 +77,17 @@ use ironplc_runtime::{
 
 use crate::error::{self, VmError};
 use crate::slot_store::SlotStore;
+
+/// The HA backend one session serves: the demo binding's simulator shell,
+/// or the real pair link over the UDP binding (the two-process pair).
+/// Both own the permit *policy* the session reconciles with the host's
+/// latch; the enum is the session's one dispatch shape, not a layer.
+pub(crate) enum Ha<'a> {
+    /// The simulated loopback pair (the `--ha-simulated-peer` demo).
+    Shell(&'a mut Shell),
+    /// The real pair link over UDP (the `--ha-peer-bind` composition).
+    Pair(&'a mut PairLink<UdpPort>),
+}
 
 /// The device panel `vm-cli` answers the `identity` handshake with
 /// (ADR-0063): the served process is a soft device, so it reports its binary
@@ -108,22 +131,12 @@ pub fn serve(path: &Path, ha_simulated_peer: bool) -> Result<(), VmError> {
     })
 }
 
-/// Creates the runtime host for `container` and composes the HA shell,
-/// mapping init traps to the trap's V-code exactly like `run` does.
-///
-/// The host boots without the execution permit (the HA redundancy
-/// architecture, "Minimal Seams" 1); the shell's admission bring-up owns the
-/// grant policy: the standalone shell admits immediately (today's standalone
-/// behavior), the simulated pair admits on the pair verdict — Primary grants,
-/// Secondary refuses. `permit_for` is the existing verdict→permit mapping;
-/// the session reconciles the latch with the shell's live verdict from then
-/// on (a commanded swap or a fencing loss can demote the unit between
-/// commands).
-pub(crate) fn compose_host(
-    container: Container,
-    ha_simulated_peer: bool,
-) -> Result<(RuntimeHost, Shell), VmError> {
-    let mut host = RuntimeHost::new(container).map_err(|err| match err {
+/// Boots the runtime host for `container`, mapping init traps to the
+/// trap's V-code exactly like `run` does. The host boots without the
+/// execution permit (the HA redundancy architecture, "Minimal Seams" 1);
+/// the HA composition the root serves owns the grant policy.
+pub(crate) fn boot_host(container: Container) -> Result<RuntimeHost, VmError> {
+    RuntimeHost::new(container).map_err(|err| match err {
         RuntimeError::Trap(context) => {
             VmError::from_trap(&context.trap, context.task_id, context.instance_id)
         }
@@ -135,7 +148,24 @@ pub(crate) fn compose_host(
             error::SESSION_IO,
             format!("runtime host failed to start: {reason}"),
         ),
-    })?;
+    })
+}
+
+/// Creates the runtime host for `container` and composes the HA shell,
+/// mapping init traps to the trap's V-code exactly like `run` does.
+///
+/// The host boots without the execution permit; the shell's admission
+/// bring-up owns the grant policy: the standalone shell admits immediately
+/// (today's standalone behavior), the simulated pair admits on the pair
+/// verdict — Primary grants, Secondary refuses. `permit_for` is the
+/// existing verdict→permit mapping; the session reconciles the latch with
+/// the shell's live verdict from then on (a commanded swap or a fencing
+/// loss can demote the unit between commands).
+pub(crate) fn compose_host(
+    container: Container,
+    ha_simulated_peer: bool,
+) -> Result<(RuntimeHost, Shell), VmError> {
+    let mut host = boot_host(container)?;
     let mut shell = compose_shell(ha_simulated_peer);
     shell.note_application_generation(host.status().application.raw());
     let verdict = shell.start_up();
@@ -179,21 +209,11 @@ fn compose_shell(ha_simulated_peer: bool) -> Shell {
 /// Serves one command session: reads one line per command from `reader`,
 /// writes one line per response to `writer`, flushing after every line.
 ///
-/// A command that advances the hot-edit FSM (`testEdits`, `untestEdits`,
-/// `assembleEdits`) drives one scan round after its acknowledgment, before
-/// the response line is written (see [`drive_scan_round`]). An acknowledged
-/// `assembleEdits` with a composed `store` also persists the committed wire
-/// bytes before the response line is written (see [`persist_commit`]); a
-/// `None` store serves the honestly RAM-only session (no persistence).
-/// `device` is the application-composed device panel every command mapping
-/// carries (ADR-0063): it answers the `identity` handshake, the first command
-/// on every transport.
-///
-/// `ha` is the composed redundancy shell (always `Some` from [`serve`]; a
-/// `None` serves the honestly HA-free session the tests of the hot-edit path
-/// use). In simulated mode the shell advances one tick per command line —
-/// the command cadence is the simulation clock — and the permit latch is
-/// reconciled with the shell's verdict after every command.
+/// The HA-advancing tick is this loop's own: the simulator shell advances
+/// one tick per command line (the command cadence is its simulation
+/// clock), while pair mode pumps on its own cadence — see
+/// [`crate::ha_pair`]. Everything after the tick is the shared
+/// [`handle_line`] dispatch.
 ///
 /// Returns when the reader reaches EOF, or with the first I/O failure.
 pub fn serve_session(
@@ -213,70 +233,211 @@ pub fn serve_session(
                 shell.tick();
             }
         }
-        let response = match parse_command(&line) {
-            Ok(command) => {
-                let commits = matches!(command, Command::AssembleEdits);
-                let advances = advances_state(&command);
-                let mut response = execute(command, host, device);
-                // The ADR-0063 identity handshake answers the redundancy
-                // block from the composed shell: present exactly when a
-                // pair is configured, absent standalone — the field the
-                // runtime layer leaves for the server that composes one.
-                if let (Some(shell), Response::Identity(payload)) = (ha.as_deref(), &mut response) {
-                    payload.redundancy = identity_block(shell);
-                }
-                if advances && matches!(response, Response::Ack) {
-                    if let Some(err) = drive_scan_round(host, ha.as_deref_mut()) {
-                        log::error!("driven scan round trapped: {err}");
-                    }
-                }
-                if commits && matches!(response, Response::Ack) {
-                    // ADR-0064 amendment: persist before the line renders, so
-                    // a failure answers V6012 instead of an ack.
-                    match store.as_deref_mut() {
-                        Some(store) => match persist_commit(host, store) {
-                            Ok(()) => render_line(&response)?,
-                            Err(err) => persist_error_line(&err),
-                        },
-                        None => render_line(&response)?,
-                    }
-                } else {
-                    render_line(&response)?
-                }
-            }
-            Err(command_err) => match parse_ha_command(&line) {
-                Ok(ha_command) => match ha.as_deref_mut() {
-                    Some(shell) => {
-                        let response = execute_ha(ha_command, shell);
-                        apply_ha_permit(host, shell);
-                        render_ha_line(&response)?
-                    }
-                    // The session always composes a shell; a None here is a
-                    // test of the hot-edit path alone, which answers the HA
-                    // vocabulary like the codec layer it shares: one error
-                    // line, no V-code, and the session continues.
-                    None => codec_error_line(&command_err),
-                },
-                Err(ha_err) => {
-                    // A malformed line is a codec error, not a refusal: it
-                    // has no V-code (ADR-0055). The transport answers with
-                    // one error line so the wire stays aligned — one line
-                    // in, one line out — and the session continues. The
-                    // message comes from the vocabulary the line named.
-                    let err = if line_names_ha_command(&line) {
-                        ha_err
-                    } else {
-                        command_err
-                    };
-                    log::warn!("ignoring malformed command line: {err}");
-                    codec_error_line(&err)
-                }
-            },
-        };
+        // The HA backend for this line: the shell behind one enum the
+        // shared dispatch understands (pair mode passes its own).
+        let mut backend = ha.as_mut().map(|shell| Ha::Shell(shell));
+        let response = handle_line(host, store.as_deref_mut(), device, backend.as_mut(), &line)?;
         writeln!(writer, "{response}")?;
         writer.flush()?;
     }
     Ok(())
+}
+
+/// The pair-lifecycle notice one acknowledged hot-edit command owes the
+/// pair link (ADR-0064): what the session enqueues after the local state
+/// committed, so the peer mirrors the lifecycle.
+enum PairNotice {
+    /// `acceptEdits`: the offer carries the candidate's exact wire bytes.
+    Accept(Vec<u8>),
+    /// `testEdits`/`untestEdits`/`assembleEdits`/`cancelEdits`: notices
+    /// without a payload; the state update snapshots the driven boundary.
+    Test,
+    Untest,
+    Assemble,
+    Cancel,
+}
+
+/// The notice `command` owes the pair link when acknowledged, if any.
+fn pair_notice_for(command: &Command) -> Option<PairNotice> {
+    match command {
+        Command::AcceptEdits { program, .. } => Some(PairNotice::Accept(program.clone())),
+        Command::TestEdits => Some(PairNotice::Test),
+        Command::UntestEdits => Some(PairNotice::Untest),
+        Command::AssembleEdits => Some(PairNotice::Assemble),
+        Command::CancelEdits => Some(PairNotice::Cancel),
+        _ => None,
+    }
+}
+
+/// Answers one command line with the session's single response line.
+///
+/// A command that advances the hot-edit FSM (`testEdits`, `untestEdits`,
+/// `assembleEdits`) drives one scan round after its acknowledgment, before
+/// the response line is written (see [`drive_scan_round`]). An acknowledged
+/// `assembleEdits` with a `store` also persists the committed wire bytes
+/// before the response line is written (see [`persist_commit`]); a
+/// `None` store serves the honestly RAM-only session (no persistence).
+/// `device` is the application-composed device panel every command mapping
+/// carries (ADR-0063): it answers the `identity` handshake, the first
+/// command on every transport. In pair mode, an acknowledged hot-edit
+/// command also owes the pair its ADR-0064 notice (see [`PairNotice`]).
+pub(crate) fn handle_line(
+    host: &mut RuntimeHost,
+    store: Option<&mut SlotStore>,
+    device: &DeviceIdentity,
+    mut ha: Option<&mut Ha>,
+    line: &str,
+) -> io::Result<String> {
+    match parse_command(line) {
+        Ok(command) => {
+            let commits = matches!(command, Command::AssembleEdits);
+            let advances = advances_state(&command);
+            let pair_notice = pair_notice_for(&command);
+            let mut response = execute(command, host, device);
+            // The ADR-0063 identity handshake answers the redundancy
+            // block from the composed HA backend: present exactly when a
+            // pair is configured, absent standalone — the field the
+            // runtime layer leaves for the server that composes one.
+            if let (Some(backend), Response::Identity(payload)) = (ha.as_mut(), &mut response) {
+                payload.redundancy = ha_identity_block(backend);
+            }
+            let acked = matches!(response, Response::Ack);
+            if acked && advances {
+                if let Some(err) = drive_scan_round(host, ha.as_deref_mut()) {
+                    log::error!("driven scan round trapped: {err}");
+                }
+            }
+            let mut rendered: Option<String> = None;
+            if acked && commits {
+                // ADR-0064 amendment: persist before the line renders, so
+                // a failure answers V6012 instead of an ack.
+                if let Some(store) = store {
+                    if let Err(err) = persist_commit(host, store) {
+                        log::error!("assemble persistence failed: {err}");
+                        rendered = Some(persist_error_line(&err));
+                    }
+                }
+            }
+            // The pair hears about a committed lifecycle only after the
+            // local commit stands (a V6012 answer owes the peer nothing).
+            if acked && rendered.is_none() {
+                pair_post_command(ha.as_deref_mut(), pair_notice, host);
+            }
+            match rendered {
+                Some(line) => Ok(line),
+                None => render_line(&response),
+            }
+        }
+        Err(command_err) => Ok(match parse_ha_command(line) {
+            Ok(ha_command) => match ha.as_mut() {
+                Some(backend) => match &mut **backend {
+                    Ha::Shell(shell) => {
+                        let response = execute_ha(ha_command, shell);
+                        apply_ha_permit(host, shell);
+                        render_ha_line(&response)?
+                    }
+                    // The pair-link session speaks the pair overview only; the
+                    // simulator binding's surfaces (calibration, barrier, ...)
+                    // have no binding here and answer the codec error — the
+                    // same shape a vocabulary the session does not speak
+                    // answers.
+                    Ha::Pair(link) => match ha_command {
+                        HaCommand::HaStatus => render_ha_line(&HaResponse::HaStatus(Box::new(
+                            pair_link_status(&link.status()),
+                        )))?,
+                        other => pair_unavailable_line(&other),
+                    },
+                },
+                // The session always composes an HA backend; a None here is a
+                // test of the hot-edit path alone, which answers the HA
+                // vocabulary like the codec layer it shares: one error
+                // line, no V-code, and the session continues.
+                None => codec_error_line(&command_err),
+            },
+            Err(ha_err) => {
+                // A malformed line is a codec error, not a refusal: it
+                // has no V-code (ADR-0055). The transport answers with
+                // one error line so the wire stays aligned — one line
+                // in, one line out — and the session continues. The
+                // message comes from the vocabulary the line named.
+                let err = if line_names_ha_command(line) {
+                    ha_err
+                } else {
+                    command_err
+                };
+                log::warn!("ignoring malformed command line: {err}");
+                codec_error_line(&err)
+            }
+        }),
+    }
+}
+
+/// Enqueues the pair-lifecycle notice an acknowledged command owes (the
+/// ADR-0064 outbound pipeline): the offer packages the staged candidate
+/// with the session's wire bytes at Accept; the Test snapshot rides the
+/// just-driven boundary; the remaining notices carry no payload.
+fn pair_post_command(ha: Option<&mut Ha>, notice: Option<PairNotice>, host: &mut RuntimeHost) {
+    let (Some(Ha::Pair(link)), Some(notice)) = (ha, notice) else {
+        return;
+    };
+    match notice {
+        PairNotice::Accept(wire) => {
+            // A packaging request with nothing staged is the caller's
+            // sequencing error, not an offer of nothing — the host
+            // acked the accept, so the candidate is there.
+            match package_offer(link.pair_id(), link.epoch(), host, wire) {
+                Some(offer) => link.enqueue(CrossloadMessage::Offer(offer)),
+                None => {
+                    log::error!("accept acknowledged but no candidate is staged for the pair offer")
+                }
+            }
+        }
+        PairNotice::Test => link.enqueue(CrossloadMessage::StateUpdate(host.state_snapshot())),
+        PairNotice::Untest => link.enqueue(CrossloadMessage::UntestCandidate),
+        PairNotice::Assemble => link.enqueue(CrossloadMessage::AssembleCandidate),
+        PairNotice::Cancel => link.enqueue(CrossloadMessage::CancelCandidate),
+    }
+}
+
+/// The ADR-0063 identity redundancy block, filled from the composed HA
+/// backend: present exactly when a pair is configured (absent means
+/// standalone), the same additive-block shape the runtime layer defines.
+fn ha_identity_block(ha: &Ha) -> Option<RedundancyIdentity> {
+    match ha {
+        Ha::Shell(shell) => identity_block(shell),
+        Ha::Pair(link) => pair_identity_block(link),
+    }
+}
+
+/// The identity redundancy block of the real pair link: the SYNC state
+/// and the epoch are the link's own; the CONTROL substate is the
+/// permit-based stand-in — `active` while this unit executes, `idle`
+/// otherwise — until the fencing slice owns the CONTROL chart.
+fn pair_identity_block(link: &PairLink<UdpPort>) -> Option<RedundancyIdentity> {
+    let status = link.status();
+    let control = match status.admitted {
+        Some(AdmissionVerdict::Primary) | Some(AdmissionVerdict::Standalone) => "active",
+        _ => "idle",
+    };
+    Some(RedundancyIdentity {
+        pair_id: status.pair_id.to_string(),
+        role: status.role.as_str().to_string(),
+        epoch: status.epoch.raw(),
+        sync: status.sync.as_str().to_string(),
+        control: control.to_string(),
+    })
+}
+
+/// The transport-level error for a valid HA command the pair-link
+/// session does not speak. Codec errors carry no V-code, so `vCode` is
+/// null — the same shape a malformed line answers.
+fn pair_unavailable_line(command: &HaCommand) -> String {
+    serde_json::json!({
+        "response": "error",
+        "vCode": null,
+        "message": format!("the pair-link session does not serve {command:?}"),
+    })
+    .to_string()
 }
 
 /// Whether a malformed line named the HA vocabulary on its `command` tag:
@@ -344,7 +505,7 @@ fn render_ha_line(response: &HaResponse) -> io::Result<String> {
 /// `serve` every accepted candidate carries its wire bytes, so an assemble
 /// acknowledgment always has bytes to commit. The error surfaces as V6012 on
 /// the wire.
-fn persist_commit(host: &mut RuntimeHost, store: &mut SlotStore) -> Result<(), VmError> {
+pub(crate) fn persist_commit(host: &mut RuntimeHost, store: &mut SlotStore) -> Result<(), VmError> {
     let wire = host.take_committed_wire().ok_or_else(|| {
         log::error!("assemble acknowledged but the host holds no committed wire bytes");
         VmError::io(
@@ -385,25 +546,22 @@ fn advances_state(command: &Command) -> bool {
 /// ready immediately after a (re)load, so the boundary round runs each task
 /// exactly once).
 ///
-/// With a composed shell, the driven boundary reports through the
-/// scan-commit seam ([`Shell::on_scan_commit`]): the epoch mint, the lease
-/// renewal, and the output-commit stamping are the supervisor's answer to
-/// the boundary. Without one, the standalone composition only observes the
-/// boundary identity, as it always has.
+/// With a composed HA backend, the driven boundary reports through the
+/// scan-commit seam: the epoch mint and the generations are the
+/// supervisor's answer to the boundary. Without one, the standalone
+/// composition only observes the boundary identity, as it always has.
 ///
 /// Returns the trap as a [`VmError`] — its V-code is the trap's own — so the
 /// caller can surface it; a trapped round does not end the session. A
 /// violated host invariant keeps no V-code of its own (ADR-0055): it is
 /// logged here and reported as `None`.
-pub(crate) fn drive_scan_round(
-    host: &mut RuntimeHost,
-    mut ha: Option<&mut Shell>,
-) -> Option<VmError> {
+pub(crate) fn drive_scan_round(host: &mut RuntimeHost, mut ha: Option<&mut Ha>) -> Option<VmError> {
     match host.run_with_commit(
         1,
         || 0,
         |commit| match ha.as_deref_mut() {
-            Some(shell) => shell.on_scan_commit(commit),
+            Some(Ha::Shell(shell)) => shell.on_scan_commit(commit),
+            Some(Ha::Pair(link)) => link.on_scan_commit(commit),
             None => log::debug!("scan boundary committed: {commit:?}"),
         },
     ) {
