@@ -531,3 +531,27 @@ design the roadmap already sequences first [specs/roadmap.md, Phase 5 step
 Owner rulings still needed: the transport choice (§2), the operating-mode
 axis ((d)/(e)), the crossload transport scope (f), and the security profile
 (D22).
+
+## Addendum: v2.2 delta review (2026-09-22)
+
+The owner task reference advanced v2.0 → v2.2
+(`docs/reference/dcs-firmware-task-v2.2-ru.md`): Part A gains D25–D36,
+Part B gains the normative state model S01–S12 (§4.10–4.16), the
+layer/behaviour/deployment views (§4.4–4.9, §19.5), the State Inventory
+(§4.14), and Part C gains T29–T44 and INV15–INV18. This addendum
+re-classifies exactly the rows whose verdict the new framing changes
+against code evidence; everything else stands as written. The Linux
+adaptation of the layer view lives in
+[Linux Controller Layer Architecture](linux-controller-architecture.md).
+
+| Row | Was | Now | Why |
+|---|---|---|---|
+| D25 (layers ≠ FSM hierarchy) | new in v2.2 | ALIGNED | Layers never became managing FSMs here; the only state machines are the runtime edit FSM (`compiler/runtime/src/host.rs:9-15`) and the HA SYNC/CONTROL charts (`compiler/ironplc-redundancy/src/statechart.rs:41,332`) — both justified lifecycles per S03 |
+| D26 (no mega-`OsPort`; consumer-narrow ports) | new in v2.2 | PARTIAL | No mega-port exists: transport (`compiler/ironplc-redundancy/src/hal.rs:17-29`), clock as composition-root injection (`compiler/runtime/src/host.rs:605-636`), epoch persistence as a declared port (`compiler/ironplc-redundancy/src/epoch.rs:13-15`). The full §8.2 port set (watchdog, power, cyclic execution) is not declared yet — the named gap, now mapped in the design doc §3 |
+| §8 OS / Platform row | ABSENT (in-scope by decision) | PARTIAL | The D26 port discipline exists in code on three edges — transport (`hal.rs:17-29`, the `UdpPort` binding `compiler/ironplc-redundancy/src/udp.rs:39-109`), clock (`host.rs:605-636`), storage (the A/B `SlotStore`, `compiler/vm-cli/src/slot_store.rs:1-33`). Remaining §8.2 ports and any OS lifecycle model are still absent |
+| D27 (no hidden host dependency for continuous control) | new in v2.2 | PARTIAL | Autonomous execution exists by construction: the pair pump runs with no client connected (`compiler/vm-cli/src/ha_pair.rs:41-80`) and standalone shells grant the permit at startup (`compiler/vm-cli/src/serve.rs:110-125`). Missing: engineering-plane trace/debug budgets and the absent-service policy (task §4.8/§8.4) |
+| D28 (layer/process/image ≠ update unit) | new in v2.2 | PARTIAL | Update-unit discipline exists for the application layer (A/B slots, one commit point, ADR-0064 amendment); BSP/kernel/middleware image membership and update units are undefined (task §14.4 rows stay ABSENT) |
+| S01–S12 | new in v2.2 | no row moves | The requirements codify disciplines largely ALIGNED via existing mechanisms: single-owner latches, epoch/lease producer separation (ADR-0062), snapshot/crossload state scope (`host.rs:419-513`), typed fail-closed refusals. The State Inventory as a registry artifact and the §5.2 per-contract field lists remain to be written (design doc §4.2 maps the registry onto existing mechanisms) |
+
+Tally delta: D25–D28 are new IDs (no D01–D24 tally change); the Part B §8
+row moves ABSENT → PARTIAL. No other verdict changes.
