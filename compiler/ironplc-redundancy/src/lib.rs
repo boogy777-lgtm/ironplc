@@ -43,9 +43,18 @@
 //! minted at the host's scan-commit callback; this crate is the policy
 //! authority that composes both.
 //!
+//! Slice 7 (the real pair link) closes the deferred two-process driver:
+//! the production per-unit pair link over any transport binding
+//! ([`pair_link`]) — liveness, admission discovery, the SYNC chart, the
+//! epoch, the crossload receiver, the ADR-0064 outbound pipeline, and
+//! the takeover policy — with the UDP socket binding behind the existing
+//! `NicPort` seam ([`udp`]), so two `ironplcvm serve` processes form a
+//! pair over 127.0.0.1. The loopback binding remains the test vehicle.
+//!
 //! Not here (later slices, per the architecture's module decomposition):
-//! the real pair-link driver over two processes and the live crossload
-//! pipeline; the EtherNet/IP fencing binding.
+//! the EtherNet/IP fencing binding; the fencing-enforced promotion
+//! barrier (the takeover policy is modeled at the verdict/policy layer,
+//! exactly like the loopback scenarios).
 
 mod admission;
 mod calibration;
@@ -59,10 +68,12 @@ mod hal;
 mod lease;
 mod liveness;
 mod loopback;
+mod pair_link;
 mod shell;
 mod simulator;
 mod statechart;
 mod timing;
+mod udp;
 
 #[cfg(test)]
 mod commands_tests;
@@ -83,8 +94,8 @@ pub use calibration::{
 };
 pub use calibration_run::run_calibration;
 pub use commands::{
-    execute as execute_ha, parse_ha_command, render_ha_response, HaCommand, HaCommandError,
-    HaResponse,
+    execute as execute_ha, pair_link_status, parse_ha_command, render_ha_response, HaCommand,
+    HaCommandError, HaResponse,
 };
 pub use config::{ConfiguredRole, PairId, RedundancyConfig};
 pub use crossload::{
@@ -101,6 +112,7 @@ pub use hal::{IngressTimestamp, NicPort, PhyCounters, PortCapabilities, PortErro
 pub use lease::OwnerLease;
 pub use liveness::{Liveness, LivenessEvent, Packet, PairRole, FRAME_LEN};
 pub use loopback::{loopback_pair, LoopbackPort};
+pub use pair_link::{PairLink, PairLinkStatus, PairPeerStatus, PairTick};
 pub use shell::{HaEvent, HaEventKind, IoReadyView, Refusal, Shell, Side, SwapOutcome, UnitView};
 pub use simulator::{ModuleRegistry, ModuleTiming, RegistryClient};
 pub use statechart::{
@@ -108,3 +120,4 @@ pub use statechart::{
     CrossloadReadiness, DeSyncReason, DetectionAction, SyncChart, SyncEvent, SyncState,
 };
 pub use timing::{DirectionProfile, ModuleContribution, TermStats};
+pub use udp::UdpPort;

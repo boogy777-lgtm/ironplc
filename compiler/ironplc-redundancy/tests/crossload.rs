@@ -1,20 +1,23 @@
-//! Two-instance loopback scenarios for the crossload pipeline.
+//! Two-instance loopback scenarios for the crossload pipeline, over the
+//! production [`PairLink`].
 //!
-//! Both units of one pair run their per-unit composition over the
-//! loopback simulator binding: link port, ping/pong liveness, SYNC
-//! chart, epoch, the runtime host, and the crossload receiver. The node
-//! is test support — it composes the crate's modules the way the
-//! redundancy shell will, and the real shell replaces it when a binary
-//! embeds the layer.
+//! Both units of one pair run their per-unit composition — the pair link
+//! over the loopback simulator binding beside a real [`RuntimeHost`] —
+//! the same composition `ironplcvm serve` runs in pair mode, minus the
+//! session. The test driver owns the hosts, drives the owner's scan
+//! rounds through the scan-commit seam, and enqueues the pair-lifecycle
+//! notices the session enqueues in production (offer at Accept,
+//! state update at Test, cancel/untest/assemble notices).
 //!
 //! The scenarios are the ADR-0064 pair pipeline: Accept crossloads the
 //! candidate and the state snapshot to the Secondary, which reaches
 //! SYNC_READY with the identical candidate generation and snapshot
 //! bytes; a takeover during Testing executes the CANDIDATE (never a
 //! revert to Original — that is an untest, which migration candidates
-//! forbid, V4011); a garbled transfer keeps the Secondary unsynchronized
-//! with a latched alarm while the Primary learns the coded refusal;
-//! cancel and untest mirror across the pair.
+//! forbid, V4011); Assemble is the one commit transaction across the
+//! pair; a garbled transfer keeps the Secondary unsynchronized with a
+//! latched alarm while the Primary learns the coded refusal; cancel and
+//! untest mirror across the pair.
 
 // Test-target boundary: the workspace denies panicking constructs in
 // production code; tests assert by panicking, so they are exempt here.
@@ -33,10 +36,9 @@ use ironplc_dsl::core::FileId;
 use ironplc_parser::options::CompilerOptions;
 use ironplc_project::{compile, MemoryBackedProject, SidecarKey};
 use ironplc_redundancy::{
-    admit, decode, encode, loopback_pair, package_offer, permit_for, AdmissionVerdict,
-    ConfiguredRole, CrossloadMessage, CrossloadReadiness, CrossloadReceiver, CrossloadRefusal,
-    Discovery, Epoch, Liveness, LivenessEvent, LoopbackPort, NicPort, Packet, PairId, PairRole,
-    RedundancyConfig, SyncChart, SyncEvent, SyncState, FRAME_LEN, FRAME_MAGIC,
+    encode, loopback_pair, package_offer, permit_for, AdmissionVerdict, ConfiguredRole,
+    CrossloadMessage, CrossloadReadiness, CrossloadRefusal, LoopbackPort, NicPort, PairId,
+    PairLink, RedundancyConfig, SyncState,
 };
 use ironplc_runtime::{AcceptedEdit, HostMode, OnlineChangeError, RuntimeHost};
 
@@ -81,7 +83,7 @@ fn compile_container(source: &str, ids: &[(SidecarKey, u64)]) -> Container {
 }
 
 /// Serializes a container to its wire-format bytes, the form an
-/// `AcceptEdits` command and a crossload offer carry.
+/// `acceptEdits` command and a crossload offer carry.
 fn container_bytes(container: &Container) -> Vec<u8> {
     let mut bytes = Vec::new();
     container.write_to(&mut bytes).unwrap();
@@ -134,207 +136,88 @@ const MIGRATION_CANDIDATE: &str = "PROGRAM main
 END_PROGRAM
 ";
 
-/// One unit of a pair under test: the per-unit composition of link
-/// port, liveness exchange, epoch, SYNC chart, runtime host, and the
-/// crossload receiver. Admission is fixed from the configured role — the
-/// scenarios start from admitted units; discovery is the pair-link
-/// suite's territory.
-struct Node {
-    config: RedundancyConfig,
-    port: LoopbackPort,
-    liveness: Liveness,
-    chart: SyncChart,
-    epoch: Epoch,
+/// One unit of a pair under test: the production pair link over the
+/// loopback binding beside its runtime host. Admission is discovered
+/// over the wire; the driver owns the host and its scan rounds.
+struct Unit {
+    link: PairLink<LoopbackPort>,
     host: RuntimeHost,
-    receiver: CrossloadReceiver,
-    /// Crossload messages awaiting the next transmit.
-    outbound: Vec<CrossloadMessage>,
-    /// The refusal this unit was notified with, if any (the Primary's
-    /// "peer refused" surface).
-    notified: Option<CrossloadRefusal>,
-    /// A valid peer frame has been observed since the last peer death.
-    paired: bool,
-    /// The peer epoch is agreed while synchronizing.
-    epoch_agreed: bool,
-    /// Whether this unit drives scans (the Primary verdict).
-    permitted: bool,
-    /// Whether the scan driver runs this round — pausing the Primary
-    /// freezes its state while a replication image is in flight, so the
-    /// scenarios assert byte equality against a stable producer.
+    /// Whether the scan driver runs this unit's rounds — pausing the
+    /// Primary freezes its state while a replication image is in flight,
+    /// so the scenarios assert byte equality against a stable producer.
     drive_scans: bool,
 }
 
-impl Node {
-    /// Boots one admitted unit over its link port: deSYNC with the boot
-    /// reason, the host permitted exactly when the role is Primary.
+impl Unit {
+    /// Boots one unit of the configured pair over its link port.
     fn boot(config: RedundancyConfig, port: LoopbackPort, host: RuntimeHost) -> Self {
-        let permitted = matches!(
-            admit(config.role, Discovery::NoPeer),
-            Ok(AdmissionVerdict::Primary)
-        );
-        let mut host = host;
-        if permitted {
-            permit_for(&mut host, AdmissionVerdict::Primary);
-        }
         Self {
-            liveness: Liveness::new(&config),
-            port,
-            config,
-            chart: SyncChart::new(),
-            epoch: Epoch::new(0),
+            link: PairLink::new(config, port),
             host,
-            receiver: CrossloadReceiver::new(),
-            outbound: Vec::new(),
-            notified: None,
-            paired: false,
-            epoch_agreed: false,
-            permitted,
             drive_scans: true,
         }
     }
 
     fn pair_id(&self) -> PairId {
-        self.config.pair_id.unwrap()
+        self.link.pair_id()
     }
 
-    /// The pair role this unit presents on the wire: the admitted
-    /// ownership truth.
-    fn pair_role(&self) -> PairRole {
-        if self.permitted {
-            PairRole::Primary
-        } else {
-            PairRole::Secondary
-        }
+    /// Whether the unit promoted itself (the takeover policy fired on a
+    /// confirmed peer death).
+    fn promoted(&self) -> bool {
+        self.link.local_verdict() == Some(AdmissionVerdict::Primary)
+            && self.link.config().role == ConfiguredRole::Secondary
     }
+}
 
-    fn generation(&self) -> u32 {
-        self.host.status().application.raw()
-    }
-
-    /// Queues one crossload message for the next transmit.
-    fn send(&mut self, message: CrossloadMessage) {
-        self.outbound.push(message);
-    }
-
-    /// Models the promotion verdict of a takeover (the promotion
-    /// mechanism — fencing, barrier — is a later slice): the survivor
-    /// gains the permit through the same policy call admission uses.
-    fn promote(&mut self) {
-        self.permitted = true;
-        permit_for(&mut self.host, AdmissionVerdict::Primary);
-    }
-
-    /// Drains the inbound link: crossload frames demux by magic, the
-    /// fixed-size ping/pong frames feed liveness and the epoch.
-    fn receive(&mut self) {
-        while let Some((_, frame)) = self.port.poll() {
-            if frame.starts_with(&FRAME_MAGIC) {
-                self.receive_crossload(&frame);
-                continue;
-            }
-            if frame.len() != FRAME_LEN {
-                continue;
-            }
-            let Some(packet) = Packet::decode(&frame) else {
-                continue;
-            };
-            self.paired = true;
-            if let Some(LivenessEvent::PeerRestarted) = self.liveness.note_received(&packet) {
-                // The peer rebooted and lost its epoch memory: an epoch
-                // discontinuity (T13), the chart drops to deSYNC.
-                self.chart.apply(SyncEvent::EpochDiscontinuity);
-                self.epoch_agreed = false;
-            } else {
-                self.epoch.adopt(packet.epoch);
-                if self.chart.state() == SyncState::Syncing {
-                    self.epoch_agreed = true;
-                }
-            }
-        }
-    }
-
-    /// The supervisor's deterministic reaction to one decoded crossload
-    /// message; the coded answer is queued for the peer and a refused
-    /// transfer drops the SYNC chart (readiness lost ⇒ deSYNC, the FSM
-    /// spec's "SYNC_READY lost ⇒ deSYNC").
-    fn receive_crossload(&mut self, frame: &[u8]) {
-        let Some(message) = decode(frame) else {
-            // A garbled transfer is dropped, never acted on; the latch
-            // records the interruption and answers the coded refusal.
-            let response = self.receiver.note_interrupted();
-            self.chart.apply(SyncEvent::SyncLoss);
-            self.outbound.push(response);
-            return;
-        };
-        let pair_id = self.pair_id();
-        let response = match message {
-            CrossloadMessage::Offer(offer) => self.receiver.accept(pair_id, &mut self.host, &offer),
-            CrossloadMessage::StateUpdate(snapshot) => {
-                self.receiver.apply_update(&mut self.host, &snapshot)
-            }
-            CrossloadMessage::CancelCandidate => self.receiver.cancel_candidate(&mut self.host),
-            CrossloadMessage::UntestCandidate => self.receiver.untest_candidate(&mut self.host),
-            CrossloadMessage::Refused(refusal) => {
-                self.notified = Some(refusal);
-                return;
-            }
-            CrossloadMessage::Accepted => return,
-        };
-        if matches!(response, CrossloadMessage::Refused(_)) {
-            self.chart.apply(SyncEvent::SyncLoss);
-        }
-        self.outbound.push(response);
-    }
-
-    /// Advances one ping/pong exchange and sends the outbound frames.
-    fn transmit(&mut self) {
-        let (ping_seq, pong_seq, event) = self.liveness.begin_exchange();
-        if let Some(LivenessEvent::PeerDied) = event {
-            self.chart.apply(SyncEvent::PeerDied);
-            self.paired = false;
-            self.epoch_agreed = false;
-        }
-        let packet = Packet {
-            pair_id: self.pair_id(),
-            role: self.pair_role(),
-            epoch: self.epoch,
-            generation: self.generation(),
-            ping_seq,
-            pong_seq,
-        };
-        self.port.send(&packet.encode()).unwrap();
-        for message in self.outbound.drain(..) {
-            self.port.send(&encode(&message)).unwrap();
-        }
-    }
-
-    /// Feeds the chart's guards and — when the verdict permits and the
-    /// driver is not paused — drives one scan round whose committed
-    /// boundary mints the next epoch.
-    fn advance(&mut self) {
-        if self.chart.state() == SyncState::DeSync && self.paired {
-            self.chart.apply(SyncEvent::Paired);
-        }
-        if self.chart.state() == SyncState::Syncing
-            && self.epoch_agreed
-            && self.receiver.readiness() == CrossloadReadiness::Complete
-        {
-            self.chart.apply(SyncEvent::ReplicationComplete);
-        }
-        if self.permitted && self.drive_scans {
-            let mut epoch = self.epoch;
-            self.host
-                .run_with_commit(
-                    1,
-                    || 0,
-                    |_| {
-                        epoch = epoch.next();
-                    },
-                )
+/// Reconciles the host's permit with the link's verdict and drives one
+/// owner round through the scan-commit seam — exactly what the serve
+/// session does after each pair tick and command.
+fn drive_owner_round(unit: &mut Unit) {
+    if let Some(verdict) = unit.link.local_verdict() {
+        permit_for(&mut unit.host, verdict);
+        if verdict.permits_execution() && unit.drive_scans {
+            unit.host
+                .run_with_commit(1, || 0, |commit| unit.link.on_scan_commit(commit))
                 .unwrap();
-            self.epoch = epoch;
         }
     }
+}
+
+/// Steps both units with their receive phases together, then drives the
+/// owners' rounds.
+fn step_pair(a: &mut Unit, b: &mut Unit) {
+    a.link.tick(&mut a.host);
+    b.link.tick(&mut b.host);
+    drive_owner_round(a);
+    drive_owner_round(b);
+}
+
+/// Steps both units without driving any scan round (the driver pauses
+/// both producers while a replication image is in flight).
+fn step_pair_idle(a: &mut Unit, b: &mut Unit) {
+    let a_drive = a.drive_scans;
+    let b_drive = b.drive_scans;
+    a.drive_scans = false;
+    b.drive_scans = false;
+    step_pair(a, b);
+    a.drive_scans = a_drive;
+    b.drive_scans = b_drive;
+}
+
+/// Steps until the predicate holds or the step budget runs out (peer
+/// death confirmation and promotion detection are exchange-count
+/// events; the budget bounds them).
+fn step_pair_until(a: &mut Unit, b: &mut Unit, mut predicate: impl FnMut(&Unit, &Unit) -> bool) {
+    let mut satisfied = predicate(a, b);
+    for _ in 0..12 {
+        if satisfied {
+            return;
+        }
+        step_pair_idle(a, b);
+        satisfied = predicate(a, b);
+    }
+    assert!(satisfied, "predicate did not hold within the step budget");
 }
 
 fn pair_config(role: ConfiguredRole) -> RedundancyConfig {
@@ -343,35 +226,32 @@ fn pair_config(role: ConfiguredRole) -> RedundancyConfig {
         .with_missed_exchanges(2)
 }
 
-/// Boots an admitted pair over a loopback link, both over the same base
-/// application.
-fn boot_pair(base: &Container) -> (Node, Node) {
+/// Boots a pair over a loopback link, both over the same base
+/// application, and converges it: the owner's boot replication stream
+/// carries the initial image, and both units reach SYNC_READY — the
+/// owner after four driven rounds.
+fn boot_pair(base: &Container) -> (Unit, Unit) {
     let boot_host = || {
         let mut bytes = Vec::new();
         base.write_to(&mut bytes).unwrap();
         RuntimeHost::new(Container::read_from(&mut Cursor::new(&bytes)).unwrap()).unwrap()
     };
     let (port_a, port_b) = loopback_pair();
-    let a = Node::boot(pair_config(ConfiguredRole::Primary), port_a, boot_host());
-    let b = Node::boot(pair_config(ConfiguredRole::Secondary), port_b, boot_host());
+    let mut a = Unit::boot(pair_config(ConfiguredRole::Primary), port_a, boot_host());
+    let mut b = Unit::boot(pair_config(ConfiguredRole::Secondary), port_b, boot_host());
+    // Six exchanges: the verdict lands on the third and the owner drives
+    // four rounds (steps 3..=6); the boot replication image has crossed
+    // and both units are SYNC_READY.
+    for _ in 0..6 {
+        step_pair(&mut a, &mut b);
+    }
     (a, b)
-}
-
-/// Steps both units with their receive phases together, so each round
-/// both see the previous round's frames — symmetric exchanges.
-fn step_pair(a: &mut Node, b: &mut Node) {
-    a.receive();
-    b.receive();
-    a.transmit();
-    b.transmit();
-    a.advance();
-    b.advance();
 }
 
 /// Stages `candidate` on the Primary and crossloads it to the Secondary,
 /// driving the pair until the acceptance answer returns. Returns the
 /// offered generation.
-fn crossload_candidate(a: &mut Node, b: &mut Node, candidate: Container) -> u32 {
+fn crossload_candidate(a: &mut Unit, b: &mut Unit, candidate: Container) -> u32 {
     let wire = container_bytes(&candidate);
     a.host
         .stage_with_decisions(
@@ -384,9 +264,9 @@ fn crossload_candidate(a: &mut Node, b: &mut Node, candidate: Container) -> u32 
             }),
         )
         .unwrap();
-    let offer = package_offer(a.pair_id(), a.epoch, &a.host, wire).unwrap();
+    let offer = package_offer(a.pair_id(), a.link.epoch(), &a.host, wire).unwrap();
     let generation = offer.generation.raw();
-    a.send(CrossloadMessage::Offer(offer));
+    a.link.enqueue(CrossloadMessage::Offer(offer));
     for _ in 0..3 {
         step_pair(a, b);
     }
@@ -397,16 +277,16 @@ fn crossload_candidate(a: &mut Node, b: &mut Node, candidate: Container) -> u32 
 fn crossload_when_primary_accepts_then_secondary_holds_identical_generation_and_state() {
     let base = compile_source(&counter_program("Counter := Counter + 1;"));
     let (mut a, mut b) = boot_pair(&base);
-    // The Secondary pairs and synchronizes but cannot report ready: no
-    // replication has completed.
-    for _ in 0..4 {
-        step_pair(&mut a, &mut b);
-    }
-    assert_eq!(b.chart.state(), SyncState::Syncing);
-    assert_eq!(b.receiver.readiness(), CrossloadReadiness::InProgress);
+    // The boot replication is real: the Secondary applied the owner's
+    // initial image and both units report SYNC_READY. (The monitor's
+    // image is necessarily one exchange behind the executing owner; the
+    // byte-equality contract is asserted on the frozen offer below.)
+    assert_eq!(b.link.chart().state(), SyncState::SyncReady);
+    assert_eq!(b.link.receiver().readiness(), CrossloadReadiness::Complete);
 
     // Accept on the Primary: the offer carries the candidate wire
     // bytes, the snapshot, the candidate generation, and the epoch.
+    a.drive_scans = false;
     let candidate = compile_source(&counter_program("Counter := Counter + 2;"));
     let wire = container_bytes(&candidate);
     a.host
@@ -420,9 +300,9 @@ fn crossload_when_primary_accepts_then_secondary_holds_identical_generation_and_
             }),
         )
         .unwrap();
-    let offer = package_offer(a.pair_id(), a.epoch, &a.host, wire).unwrap();
+    let offer = package_offer(a.pair_id(), a.link.epoch(), &a.host, wire).unwrap();
     let generation = offer.generation;
-    a.send(CrossloadMessage::Offer(offer.clone()));
+    a.link.enqueue(CrossloadMessage::Offer(offer.clone()));
     for _ in 0..3 {
         step_pair(&mut a, &mut b);
     }
@@ -430,9 +310,9 @@ fn crossload_when_primary_accepts_then_secondary_holds_identical_generation_and_
     // ADR-0064(c): the same candidate generation on both units, the
     // replicated snapshot applied byte-identically, and the pair
     // reports SYNC — the Secondary is redundancy-ready.
-    assert_eq!(b.receiver.readiness(), CrossloadReadiness::Complete);
-    assert_eq!(b.receiver.alarm(), None);
-    assert_eq!(b.chart.state(), SyncState::SyncReady);
+    assert_eq!(b.link.receiver().readiness(), CrossloadReadiness::Complete);
+    assert_eq!(b.link.receiver().alarm(), None);
+    assert_eq!(b.link.chart().state(), SyncState::SyncReady);
     assert_eq!(b.host.status().candidate, Some(generation));
     assert_eq!(b.host.state_snapshot(), offer.snapshot);
 }
@@ -448,15 +328,12 @@ fn crossload_when_takeover_during_testing_of_migration_candidate_then_survivor_e
     let candidate = compile_with_ids(MIGRATION_CANDIDATE, &[("A", 1), ("B", 2)]);
     let a_index = variable_index(&base, "A");
     let (mut a, mut b) = boot_pair(&base);
-    for _ in 0..4 {
-        step_pair(&mut a, &mut b);
-    }
     // Freeze the producer's state so the replicated image is asserted
     // byte-for-byte.
     a.drive_scans = false;
 
     crossload_candidate(&mut a, &mut b, candidate);
-    assert_eq!(b.chart.state(), SyncState::SyncReady);
+    assert_eq!(b.link.chart().state(), SyncState::SyncReady);
     assert_eq!(b.host.status().mode, HostMode::Normal);
     assert_eq!(b.host.read_variable(a_index).unwrap(), 4);
 
@@ -465,7 +342,8 @@ fn crossload_when_takeover_during_testing_of_migration_candidate_then_survivor_e
     // carries the candidate-layout image to the Secondary.
     a.host.test().unwrap();
     a.host.run(1, || 0).unwrap();
-    a.send(CrossloadMessage::StateUpdate(a.host.state_snapshot()));
+    a.link
+        .enqueue(CrossloadMessage::StateUpdate(a.host.state_snapshot()));
     for _ in 0..3 {
         step_pair(&mut a, &mut b);
     }
@@ -478,22 +356,18 @@ fn crossload_when_takeover_during_testing_of_migration_candidate_then_survivor_e
         Err(OnlineChangeError::UntestUnsupported)
     ));
 
-    // The Primary dies; the survivor promotes (modeled at the
-    // verdict/policy layer — fencing is a later slice) and takes over
+    // The Primary dies; the survivor detects the death and takes over
     // executing the CANDIDATE, already under Test.
-    a.port.set_partitioned(true);
-    for _ in 0..4 {
-        step_pair(&mut a, &mut b);
-    }
-    assert!(b.liveness.is_dead());
-    assert!(matches!(
-        b.chart.state(),
-        SyncState::DeSync | SyncState::Syncing
-    ));
+    a.link.port_mut().set_partitioned(true);
+    step_pair_until(&mut a, &mut b, |_, b| {
+        b.link.liveness().is_dead() && b.promoted()
+    });
+    assert_eq!(b.link.chart().state(), SyncState::DeSync);
 
-    b.promote();
+    // The promoted survivor executes the candidate: one driven round
+    // advances A once more under the candidate layout.
+    drive_owner_round(&mut b);
     assert_eq!(b.host.status().mode, HostMode::Testing);
-    b.host.run(1, || 0).unwrap();
     assert_eq!(b.host.read_variable(a_index).unwrap(), 6);
     // The pair remains in Testing until assemble or cancel: the
     // candidate is kept and untest stays refused.
@@ -514,16 +388,14 @@ fn crossload_when_takeover_during_testing_of_exact_match_candidate_then_survivor
     let counter = variable_index(&base, "Counter");
     let candidate = compile_source(&counter_program("Counter := Counter + 10;"));
     let (mut a, mut b) = boot_pair(&base);
-    for _ in 0..4 {
-        step_pair(&mut a, &mut b);
-    }
     a.drive_scans = false;
 
     crossload_candidate(&mut a, &mut b, candidate);
     assert_eq!(b.host.read_variable(counter).unwrap(), 4);
     a.host.test().unwrap();
     a.host.run(1, || 0).unwrap();
-    a.send(CrossloadMessage::StateUpdate(a.host.state_snapshot()));
+    a.link
+        .enqueue(CrossloadMessage::StateUpdate(a.host.state_snapshot()));
     for _ in 0..3 {
         step_pair(&mut a, &mut b);
     }
@@ -531,44 +403,82 @@ fn crossload_when_takeover_during_testing_of_exact_match_candidate_then_survivor
     assert_eq!(b.host.read_variable(counter).unwrap(), 14);
     assert_eq!(b.host.status().mode, HostMode::Normal);
 
-    a.port.set_partitioned(true);
-    for _ in 0..4 {
-        step_pair(&mut a, &mut b);
-    }
-    assert!(b.liveness.is_dead());
-
-    b.promote();
-    // The takeover flips the selector to the CANDIDATE without a swap:
-    // the state has moved under the candidate on the pair, and the
-    // survivor's replicated image is current.
-    b.host.takeover_testing().unwrap();
+    a.link.port_mut().set_partitioned(true);
+    step_pair_until(&mut a, &mut b, |_, b| b.promoted());
+    // The takeover flipped the selector to the CANDIDATE without a
+    // swap: the state has moved under the candidate on the pair, and
+    // the survivor's replicated image is current.
     assert_eq!(b.host.status().mode, HostMode::Testing);
-    b.host.run(1, || 0).unwrap();
+    drive_owner_round(&mut b);
     // 14 (replicated) + 10 (the candidate's step), never + 1.
     assert_eq!(b.host.read_variable(counter).unwrap(), 24);
+}
+
+#[test]
+fn crossload_when_pair_assembles_then_both_promote_one_generation() {
+    // ADR-0064(h): Assemble is one transaction across the pair — the
+    // owner's commit carries the AssembleCandidate notice and the
+    // standby promotes the candidate in the same generation step, so
+    // neither unit holds a different canonical generation.
+    let base = compile_source(&counter_program("Counter := Counter + 1;"));
+    let candidate = compile_source(&counter_program("Counter := Counter + 2;"));
+    let (mut a, mut b) = boot_pair(&base);
+    a.drive_scans = false;
+
+    crossload_candidate(&mut a, &mut b, candidate);
+    assert_eq!(b.host.status().candidate, a.host.status().candidate);
+
+    // The pair's Test: the owner runs the candidate under Test. The
+    // layout-preserving Test is invisible on the replication stream, so
+    // the Secondary's selector stays Original until the commit notice.
+    a.host.test().unwrap();
+    a.host.run(1, || 0).unwrap();
+    a.link
+        .enqueue(CrossloadMessage::StateUpdate(a.host.state_snapshot()));
+    for _ in 0..3 {
+        step_pair(&mut a, &mut b);
+    }
+    assert_eq!(a.host.status().mode, HostMode::Testing);
+    assert_eq!(b.host.status().mode, HostMode::Normal);
+
+    // The commit: the owner assembles, then the notice promotes the
+    // standby. Both hold the same canonical application generation, the
+    // staged candidate is gone, and the pair stays synchronized.
+    a.host.assemble().unwrap();
+    a.link.enqueue(CrossloadMessage::AssembleCandidate);
+    for _ in 0..3 {
+        step_pair(&mut a, &mut b);
+    }
+    assert_eq!(a.host.status().mode, HostMode::Normal);
+    assert_eq!(b.host.status().mode, HostMode::Normal);
+    assert!(a.host.status().candidate.is_none());
+    assert!(b.host.status().candidate.is_none());
+    assert_eq!(a.host.status().application, b.host.status().application);
+    assert_eq!(b.link.receiver().readiness(), CrossloadReadiness::Complete);
+    assert_eq!(b.link.receiver().alarm(), None);
+    assert_eq!(b.link.chart().state(), SyncState::SyncReady);
+    // The owner learned nothing refused: the notice was accepted.
+    assert_eq!(a.link.notified(), None);
 }
 
 #[test]
 fn crossload_when_transfer_garbled_then_secondary_stays_unsynced_and_primary_notified() {
     let base = compile_source(&counter_program("Counter := Counter + 1;"));
     let (mut a, mut b) = boot_pair(&base);
-    for _ in 0..4 {
-        step_pair(&mut a, &mut b);
-    }
     // One edit synchronizes normally: the pair is redundancy-ready.
+    a.drive_scans = false;
     let first = compile_source(&counter_program("Counter := Counter + 2;"));
     crossload_candidate(&mut a, &mut b, first);
-    assert_eq!(b.chart.state(), SyncState::SyncReady);
-    a.drive_scans = false;
+    assert_eq!(b.link.chart().state(), SyncState::SyncReady);
 
     // The next edit's offer crosses garbled: the CRC fails mid-payload.
     // Cancel the first candidate so the Primary may stage the next.
     a.host.cancel().unwrap();
-    a.send(CrossloadMessage::CancelCandidate);
+    a.link.enqueue(CrossloadMessage::CancelCandidate);
     for _ in 0..3 {
         step_pair(&mut a, &mut b);
     }
-    assert_eq!(b.chart.state(), SyncState::SyncReady);
+    assert_eq!(b.link.chart().state(), SyncState::SyncReady);
 
     let second = compile_source(&counter_program("Counter := Counter + 3;"));
     let wire = container_bytes(&second);
@@ -583,11 +493,11 @@ fn crossload_when_transfer_garbled_then_secondary_stays_unsynced_and_primary_not
             }),
         )
         .unwrap();
-    let offer = package_offer(a.pair_id(), a.epoch, &a.host, wire).unwrap();
+    let offer = package_offer(a.pair_id(), a.link.epoch(), &a.host, wire).unwrap();
     let mut frame = encode(&CrossloadMessage::Offer(offer));
     let middle = frame.len() / 2;
     frame[middle] ^= 0xFF;
-    a.port.send(&frame).unwrap();
+    a.link.port_mut().send(&frame).unwrap();
     for _ in 0..3 {
         step_pair(&mut a, &mut b);
     }
@@ -596,21 +506,24 @@ fn crossload_when_transfer_garbled_then_secondary_stays_unsynced_and_primary_not
     // down, the chart drops out of SYNC_READY and re-enters SYNCING per
     // the readiness policy, the alarm latches with the coded refusal,
     // and the pair link answers it — the Primary is notified.
-    assert_eq!(b.receiver.readiness(), CrossloadReadiness::InProgress);
-    assert_eq!(b.receiver.alarm(), Some(CrossloadRefusal::Interrupted));
-    assert_eq!(b.receiver.alarm().unwrap().v_code(), "V4104");
-    assert_eq!(b.chart.state(), SyncState::Syncing);
+    assert_eq!(
+        b.link.receiver().readiness(),
+        CrossloadReadiness::InProgress
+    );
+    assert_eq!(
+        b.link.receiver().alarm(),
+        Some(CrossloadRefusal::Interrupted)
+    );
+    assert_eq!(b.link.receiver().alarm().unwrap().v_code(), "V4104");
+    assert_eq!(b.link.chart().state(), SyncState::Syncing);
     assert!(b.host.status().candidate.is_none());
-    assert_eq!(a.notified, Some(CrossloadRefusal::Interrupted));
+    assert_eq!(a.link.notified(), Some(CrossloadRefusal::Interrupted));
 }
 
 #[test]
 fn crossload_when_pair_cancels_then_both_drop_the_candidate() {
     let base = compile_source(&counter_program("Counter := Counter + 1;"));
     let (mut a, mut b) = boot_pair(&base);
-    for _ in 0..4 {
-        step_pair(&mut a, &mut b);
-    }
     a.drive_scans = false;
 
     let candidate = compile_source(&counter_program("Counter := Counter + 2;"));
@@ -621,14 +534,14 @@ fn crossload_when_pair_cancels_then_both_drop_the_candidate() {
     // ADR-0064(g): Cancel drops the candidate on both units from
     // exec = Original.
     a.host.cancel().unwrap();
-    a.send(CrossloadMessage::CancelCandidate);
+    a.link.enqueue(CrossloadMessage::CancelCandidate);
     for _ in 0..3 {
         step_pair(&mut a, &mut b);
     }
 
     assert!(a.host.status().candidate.is_none());
     assert!(b.host.status().candidate.is_none());
-    assert_eq!(b.receiver.alarm(), None);
+    assert_eq!(b.link.receiver().alarm(), None);
 }
 
 #[test]
@@ -637,9 +550,6 @@ fn crossload_when_pair_untests_then_selector_returns_and_candidate_is_kept() {
     let counter = variable_index(&base, "Counter");
     let candidate = compile_source(&counter_program("Counter := Counter + 10;"));
     let (mut a, mut b) = boot_pair(&base);
-    for _ in 0..4 {
-        step_pair(&mut a, &mut b);
-    }
     a.drive_scans = false;
 
     crossload_candidate(&mut a, &mut b, candidate);
@@ -649,7 +559,8 @@ fn crossload_when_pair_untests_then_selector_returns_and_candidate_is_kept() {
     // replication stream, so the Secondary's selector stays Original.
     a.host.test().unwrap();
     a.host.run(1, || 0).unwrap();
-    a.send(CrossloadMessage::StateUpdate(a.host.state_snapshot()));
+    a.link
+        .enqueue(CrossloadMessage::StateUpdate(a.host.state_snapshot()));
     for _ in 0..3 {
         step_pair(&mut a, &mut b);
     }
@@ -660,7 +571,7 @@ fn crossload_when_pair_untests_then_selector_returns_and_candidate_is_kept() {
     // ADR-0064(f): Untest switches the selector back on both units; the
     // candidate is kept. The Secondary never mirrored the Test, so the
     // notice is a no-op there — but it answers, and the pair agrees.
-    a.send(CrossloadMessage::UntestCandidate);
+    a.link.enqueue(CrossloadMessage::UntestCandidate);
     for _ in 0..3 {
         step_pair(&mut a, &mut b);
     }
@@ -675,5 +586,5 @@ fn crossload_when_pair_untests_then_selector_returns_and_candidate_is_kept() {
     // original after the boundary.
     assert_eq!(b.host.read_variable(counter).unwrap(), 14);
     assert_eq!(a.host.read_variable(counter).unwrap(), 15);
-    assert_eq!(b.receiver.alarm(), None);
+    assert_eq!(b.link.receiver().alarm(), None);
 }

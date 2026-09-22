@@ -36,11 +36,13 @@
 //! boundaries in; the epoch mint, the lease renewal, and the
 //! output-commit stamping answer out.
 //!
-//! What is deliberately not here (later slices): the real pair-link
-//! driver over two processes, the crossload pipeline of the live sync,
-//! and the promotion/takeover path — the standby never self-promotes in
-//! this slice, and the liveness exchange's peer-death input lands the
-//! charts in deSYNC, nowhere else.
+//! What is deliberately not here (later slices): the fencing-bound
+//! promotion barrier — the standby's takeover policy is modeled at the
+//! verdict layer, exactly like the loopback scenarios — and the
+//! EtherNet/IP fencing binding. The real two-process pair link itself
+//! is not this module's: it lives in [`crate::pair_link`], driven by a
+//! composition root per process (`ironplcvm serve` in pair mode), with
+//! the loopback binding remaining the test vehicle.
 
 use ironplc_runtime::ScanCommit;
 

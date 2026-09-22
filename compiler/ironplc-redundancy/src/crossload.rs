@@ -1,5 +1,5 @@
 //! Crossload: the online-change payload pipeline of the pair link
-//! (ADR-0064(c)–(g)).
+//! (ADR-0064(c)–(h)).
 //!
 //! At Accept the Primary's supervisor packages
 //! `{candidate wire bytes + state snapshot + CandidateGenerationId +
@@ -53,6 +53,7 @@ const KIND_REFUSED: u8 = 2;
 const KIND_CANCEL: u8 = 3;
 const KIND_UNTEST: u8 = 4;
 const KIND_STATE_UPDATE: u8 = 5;
+const KIND_ASSEMBLE: u8 = 6;
 
 /// One crossload message on the pair link: the offer/response pipeline
 /// plus the pair-lifecycle notices that carry no payload.
@@ -74,6 +75,11 @@ pub enum CrossloadMessage {
     /// ADR-0064(f) pair notice: switch the execution selector back at a
     /// boundary, keeping the candidate.
     UntestCandidate,
+    /// ADR-0064(h) pair notice: the pair's one commit transaction —
+    /// the candidate becomes canonical on the owner and the notice
+    /// promotes it on the standby (the owner already persisted before
+    /// the acknowledgment rendered; the standby persists on apply).
+    AssembleCandidate,
     /// The steady-state replication of a monitoring peer (ADR-0064(d)
     /// "keeps replicating"): one state image, no candidate payload — the
     /// candidate rides an [`CrossloadMessage::Offer`]. A monitoring peer
@@ -231,6 +237,7 @@ pub fn encode(message: &CrossloadMessage) -> Vec<u8> {
         }
         CrossloadMessage::CancelCandidate => frame.push(KIND_CANCEL),
         CrossloadMessage::UntestCandidate => frame.push(KIND_UNTEST),
+        CrossloadMessage::AssembleCandidate => frame.push(KIND_ASSEMBLE),
         CrossloadMessage::StateUpdate(snapshot) => {
             frame.push(KIND_STATE_UPDATE);
             push_snapshot_prefix(&mut frame, snapshot);
@@ -265,6 +272,7 @@ pub fn decode(frame: &[u8]) -> Option<CrossloadMessage> {
         }
         KIND_CANCEL if body.is_empty() => Some(CrossloadMessage::CancelCandidate),
         KIND_UNTEST if body.is_empty() => Some(CrossloadMessage::UntestCandidate),
+        KIND_ASSEMBLE if body.is_empty() => Some(CrossloadMessage::AssembleCandidate),
         KIND_STATE_UPDATE => decode_state_update(body),
         _ => None,
     }
@@ -487,6 +495,36 @@ impl CrossloadReceiver {
         }
     }
 
+    /// Mirrors the pair's Assemble (ADR-0064(h)): the candidate becomes
+    /// canonical — the pair's one commit transaction, never one unit
+    /// holding a different canonical generation. A migration candidate
+    /// already moved the standby's state under Test (the selector is on
+    /// the candidate); a layout-preserving Test never appeared on the
+    /// replication stream, so the mirror flips the selector first — the
+    /// same [`RuntimeHost::takeover_testing`] path the takeover policy
+    /// uses, certified by the pair's Test on the owner. A candidate whose
+    /// state never moved is refused, never promoted over unmigrated
+    /// state.
+    pub fn assemble_candidate(&mut self, host: &mut RuntimeHost) -> CrossloadMessage {
+        match host.status().mode {
+            HostMode::Testing => {}
+            HostMode::Normal if !host.status().migration => {
+                if host.takeover_testing().is_err() {
+                    return self.refused(CrossloadRefusal::CandidateRejected);
+                }
+            }
+            HostMode::Normal => return self.refused(CrossloadRefusal::CandidateRejected),
+        }
+        match host.assemble() {
+            Ok(()) => {
+                self.readiness = CrossloadReadiness::Complete;
+                self.alarm = None;
+                CrossloadMessage::Accepted
+            }
+            Err(_) => self.refused(CrossloadRefusal::CandidateRejected),
+        }
+    }
+
     fn refused(&mut self, refusal: CrossloadRefusal) -> CrossloadMessage {
         self.readiness = CrossloadReadiness::InProgress;
         self.alarm = Some(refusal);
@@ -562,6 +600,7 @@ mod tests {
         }
         assert_round_trip(&CrossloadMessage::CancelCandidate);
         assert_round_trip(&CrossloadMessage::UntestCandidate);
+        assert_round_trip(&CrossloadMessage::AssembleCandidate);
         assert_round_trip(&CrossloadMessage::StateUpdate(offer().snapshot));
     }
 
@@ -695,5 +734,47 @@ mod tests {
         );
         assert_eq!(receiver.readiness(), CrossloadReadiness::InProgress);
         assert_eq!(receiver.alarm(), Some(CrossloadRefusal::Interrupted));
+    }
+
+    #[test]
+    fn receiver_when_assemble_under_testing_then_promotes_and_answers_accepted() {
+        let mut receiver = CrossloadReceiver::new();
+        let mut host = shell_host();
+        let offer = CrossloadOffer {
+            candidate_wire: shell_wire(),
+            snapshot: host.state_snapshot(),
+            ..offer()
+        };
+        assert_eq!(
+            receiver.accept(PairId::new(7), &mut host, &offer),
+            CrossloadMessage::Accepted
+        );
+        // The pair's Test of this like-layout candidate is invisible on
+        // the replication stream, so the mirror flips the selector (the
+        // `takeover_testing` path) and assembles.
+        assert_eq!(
+            receiver.assemble_candidate(&mut host),
+            CrossloadMessage::Accepted
+        );
+        assert_eq!(host.status().mode, HostMode::Normal);
+        assert!(host.status().candidate.is_none());
+        assert_eq!(host.status().application.raw(), 2);
+        assert_eq!(receiver.readiness(), CrossloadReadiness::Complete);
+        assert_eq!(receiver.alarm(), None);
+    }
+
+    #[test]
+    fn receiver_when_assemble_without_candidate_then_refused() {
+        let mut receiver = CrossloadReceiver::new();
+        let mut host = shell_host();
+
+        let response = receiver.assemble_candidate(&mut host);
+
+        assert_eq!(
+            response,
+            CrossloadMessage::Refused(CrossloadRefusal::CandidateRejected)
+        );
+        assert_eq!(receiver.readiness(), CrossloadReadiness::InProgress);
+        assert_eq!(receiver.alarm(), Some(CrossloadRefusal::CandidateRejected));
     }
 }

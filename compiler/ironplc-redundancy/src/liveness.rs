@@ -42,6 +42,15 @@ pub enum PairRole {
 }
 
 impl PairRole {
+    /// The wire discriminant of the engineering surface
+    /// (ha-engineering-ui.md): the role in camelCase.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            PairRole::Primary => "primary",
+            PairRole::Secondary => "secondary",
+        }
+    }
+
     /// The wire discriminant for this role.
     const fn as_byte(self) -> u8 {
         match self {

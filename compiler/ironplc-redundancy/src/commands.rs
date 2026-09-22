@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::calibration::BudgetVerdict;
 use crate::fencing::ModuleState;
+use crate::pair_link::PairLinkStatus;
 use crate::problem_codes;
 use crate::shell::{HaEvent, Refusal, Shell, Side, SwapOutcome};
 use crate::statechart::SyncState;
@@ -588,6 +589,55 @@ fn status_payload(shell: &Shell) -> HaStatusPayload {
             performance_degraded,
             timing_guarantee_lost,
             redundancy_lost,
+        },
+    }
+}
+
+/// The pair overview payload from the production pair link's status view
+/// (the real two-process composition; the engineering session of
+/// `ironplcvm serve` in pair mode renders this for `haStatus`).
+///
+/// What the link slice answers honestly: the SYNC chart, the epoch, the
+/// wire generation counters, the peer as observed on the wire, and link
+/// validity. What it does not model — the fencing/CONTROL charts and the
+/// calibration/IO_READY chain are the simulator binding's surface — it
+/// renders absent or `false`, never guessed: `takeoverReady` stays false
+/// without the qualification machinery, and the peer's internal chart
+/// states are not on the wire.
+pub fn pair_link_status(status: &PairLinkStatus) -> HaStatusPayload {
+    let peer = status.peer.map(|view| UnitPayload {
+        role: Some(view.role.as_str()),
+        controller_id: 0,
+        sync: None,
+        sync_reason: None,
+        control: None,
+        alarm: None,
+        epoch: view.epoch.raw(),
+    });
+    HaStatusPayload {
+        standalone: false,
+        pair_id: Some(status.pair_id.to_string()),
+        local: UnitPayload {
+            role: Some(status.configured_role.as_str()),
+            controller_id: 0,
+            sync: Some(status.sync.as_str()),
+            sync_reason: Some(status.sync_reason.as_str()),
+            control: None,
+            alarm: None,
+            epoch: status.epoch.raw(),
+        },
+        peer,
+        epoch: Some(status.epoch.raw()),
+        application_generation: status.application_generation,
+        state_generation: status.state_generation,
+        takeover_ready: false,
+        sync_ready: status.sync == SyncState::SyncReady,
+        io_ready: false,
+        link_valid: status.link_valid,
+        alarms: AlarmFlagsPayload {
+            performance_degraded: false,
+            timing_guarantee_lost: false,
+            redundancy_lost: false,
         },
     }
 }
