@@ -45,6 +45,10 @@ This spec builds on:
   statechart, and Protocol Portability this design ports
 - **[DCS Firmware Task Audit](dcs-firmware-task-audit.md)** — the verdicts
   this spec re-classifies in its v2.2 addendum
+- **[Controller OS Portability Review](controller-os-portability-review.md)**
+  — devil's-advocate review of this design against Zephyr / RT-Thread:
+  the layer/contract/port design survives an OS swap; bindings, Rust
+  toolchain, and isolation guarantees do not (F1 is a P0 owner decision)
 
 ## 1. Layer Boundary Placement (Task §4.5 Adapted to Linux)
 
