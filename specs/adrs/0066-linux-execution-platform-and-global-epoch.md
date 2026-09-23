@@ -147,7 +147,7 @@ the availability model and the EtherNet/IP binding.
   descriptor the addendum verifies.
 * [Roadmap](../roadmap.md), Phase 5 — the real EtherNet/IP binding and
   target-side per-port drivers remain the named open items.
-* Owner task reference: `docs/reference/dcs-firmware-task-v2-ru.md`
+* Owner task reference: [historical owner task](https://github.com/boogy777-lgtm/ironplc/blob/8a7f6d0d09b00436daebfd669babd39f2e0f2e13/docs/reference/dcs-firmware-task-v2-ru.md)
   (§2.8 topology, §8.3 execution profile, §13.3 split-brain/epoch, §23
   N+1 acceptance).
 

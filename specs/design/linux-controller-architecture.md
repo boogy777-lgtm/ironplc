@@ -1,5 +1,7 @@
 # Spec: Linux Controller Layer Architecture
 
+> Current platform requirements: [DCS PLC Production Platform v3.0](dcs-plc-production-platform-spec-ru.md). References to v2.2 below describe the historical basis of this design; reconciliation with v3.0 is tracked in [the cleanup inventory](dcs-plc-document-cleanup-ru.md).
+
 ## Overview
 
 This spec answers the owner's question: *if the controller bases on Linux
@@ -30,7 +32,7 @@ and the checklist (ADR-0066), not a completed port.
 This spec builds on:
 
 - **DCS Firmware Task v2.2**
-  (`docs/reference/dcs-firmware-task-v2.2-ru.md`, owner-provided)
+  ([historical owner task](https://github.com/boogy777-lgtm/ironplc/blob/8a7f6d0d09b00436daebfd669babd39f2e0f2e13/docs/reference/dcs-firmware-task-v2.2-ru.md), owner-provided)
   — the requirements source: §4.4–4.9 (layer view), §4.10–4.16 (S01–S12,
   State Inventory), §8 (ports, execution profile), §12 (I/O enforcement),
   §14.4 (update units), §16 (timing budgets), §19.3/19.4/19.5 (Linux
