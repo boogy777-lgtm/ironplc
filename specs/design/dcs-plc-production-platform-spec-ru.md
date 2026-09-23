@@ -346,6 +346,8 @@ sequenceDiagram
 
 ### 10.2. Единый lifecycle
 
+Референс инженерной последовательности — Rockwell Studio 5000 [R20], [R21]. Наш Stage соответствует передаче без переключения исполнения. Rockwell Finalize All может сразу принять и собрать правки; наш Finalize имеет описанный ниже собственный transaction/durability contract. Полное соответствие команд не заявляется.
+
 Операция имеет существенные фазы RECEIVING → VERIFIED → PREPARED → APPLIED_TRIAL → FINALIZING → FINALIZED; альтернативы FAILED/CANCELLED/RECONCILING и REVERTING имеют определённые исходы. Не вся операция обязана пройти trial: cold download может активировать подготовленную generation по объявленному варианту. Видимость состояния принадлежит transaction owner, не копируется в enum каждой службы.
 
 | Команда | Семантика и линейная граница |
@@ -460,6 +462,8 @@ Checkpoint содержит ApplicationGeneration, activation lineage, StateSche
 
 ### 11.5. Failover и hot edit вместе
 
+Сравнение с Rockwell [R22], [R23]: standard-task trial по умолчанию не сохраняется при switchover. Здесь выбран иной контракт: после новых effects восстановление продолжает согласованную новую generation. Это различие явно отражается в engineering UI/documentation; автоматический untest не выводится из слова redundancy. Сохранение trial не защищает от повторения общего программного fault на SECONDARY.
+
 Новая generation MUST находиться и пройти проверку на SECONDARY до её first-effect publication в qualified HA operation. Общий DeploymentCoordinator подготавливает тот же manifest/plan; ReplicationEngine переносит артефакт через Catalog и новый state checkpoint, без второго HAApplicationManager.
 
 Порядок: stage обоих participants → source-revision reservation → local barrier/prepare new state → replica принимает new-generation checkpoint и readiness record → PRIMARY получает ACK → authority durable-подтверждает RecoveryAdmission новой generation → разрешается первый batch новой generation. Local Applied может предшествовать ACK/authority receipt; в промежутке новые effects закрыты. Publication старых prepared batches после смены binding исключается. Для неидемпотентных outstanding effects сначала требуется outcome reconciliation.
@@ -545,6 +549,8 @@ ApplicationGeneration activation не используется для обнов
 
 ### 13.3. Firmware update transaction
 
+Промышленный референс — M580 firmware installation и ограничения HA upgrade [R28], [R29]. Они показывают необходимость проверки исходной/целевой firmware, bootloader и состояния обновляемого CPU. Остановка одного CPU и остановка всего процесса — разные условия; ни single, ни rolling путь не допускается без своей compatibility procedure.
+
 Stage signed image в неактивный slot → verify target/layout/dependencies/security policy → зафиксировать recoverable update intent → controlled stop/handover → request trial boot → self-tests/health envelope → confirm либо revert/recovery. Power cut проверяется на каждом erase/write/marker step. Bootloader, application A/B и application RAM banks имеют разные metadata и не разделяют один «active bank» flag.
 
 Anti-rollback counter и маркетинговая firmware version различны. Повышение security floor не должно преждевременно запрещать единственную допустимую recovery image; порядок повышения и confirmation доказывается для конкретного bootloader/storage. MCUboot демонстрирует разделение trial/confirm/revert и security counter [R04], но не назначается автоматически всем OS targets и не гарантирует свойства любой его конфигурации.
@@ -587,6 +593,8 @@ Telemetry: task releases/duration/max/overruns/missed cycles, input/output ages,
 ## 15. Engineering API, режимы и security
 
 ### 15.1. Режим и ключ не являются runtime typestate
+
+Референсы Schneider разделяют CPU operating states и Hot Standby roles [R24], [R25]; Control Expert отдельно описывает engineering workflow и структуру программы [R26], [R27]. Это основание для сравнения независимых осей, не требование скопировать vendor FSM или заменить наши PROGRAM/TEST/RUN состояниями M580. Сопоставление и ограничения источников — §24.1.
 
 ModePolicy хранит желаемый PROGRAM/TEST/RUN и принятый intent; RuntimeHost хранит фактическое stopped/running/faulted execution и выбранную code generation. HostMode Normal/Testing остаётся внутренней edit-selection semantics, пока проводится рефакторинг. Тип VM typestate описывает доступные локальные API. Эти три пространства не соединяются в гигантский enum.
 
@@ -1018,6 +1026,8 @@ Disabled feature указывается как not supported и техничес
 
 Решения A01–A10, contracts и требуемые guarantees — проектный синтез для IronPLC, а не приписанные производителям рекомендации. Источники подтверждают отдельные исходные факты/механизмы. Ни один источник не подтверждает готовность нашего изделия или всей предложенной композиции. Новые web sources прочитаны 2026-09-23; OS sources повторно используются из проверки 2026-09-22/23.
 
+**Приоритетные промышленные референсы:** Rockwell ControlLogix / Studio 5000 — online edit и redundancy; Schneider Electric Modicon M580 / EcoStruxure Control Expert — controller lifecycle/FSM, инженерная среда и firmware lifecycle. Их механизмы сопоставляются с нашими контрактами в §24.1. Выбор референсов не означает бинарную, протокольную или поведенческую совместимость с этими продуктами.
+
 | Ref | Первичный источник | Что подтверждает; чего из него не следует |
 |---|---|---|
 | R01 | [Phoenix Contact: PLCnext Technology](https://engineer.plcnext.help/latest/PLCnext_Intro.htm) | Разделение GDS, ESM и fieldbus integration полезно как industrial reference; не требуется копировать PLCnext API/язык/реализацию |
@@ -1039,6 +1049,17 @@ Disabled feature указывается как not supported и техничес
 | R17 | [Ariel OS multithreading](https://ariel-os.github.io/ariel-os/dev/docs/book/multithreading.html) | Есть preemptive multithreading alongside async; ошибочно считать платформу только cooperative |
 | R18 | [Ariel OS networking](https://ariel-os.github.io/ariel-os/dev/docs/book/networking.html) | На момент проверки штатный stack ограничен одним network interface; два независимых sync paths требуют иного qualified adapter/config |
 | R19 | [Ariel OS storage](https://ariel-os.github.io/ariel-os/dev/docs/book/storage.html) | Flash storage placement/layout необходимо учитывать при firmware evolution; KV repair не доказывает любой multi-record transaction |
+| R20 | [Rockwell: Studio 5000, Edit ladder logic in run mode (38.01)](https://www.rockwellautomation.com/en-us/docs/studio-5000-logix-designer/38-01/contents-ditamap/studio-5000-logix-designer/ladder-editor/enter-logic/edit-ladder-elements/edit-ladder-logic-in-run-mode.html) | Accept переносит правку в controller без её исполнения; Test выбирает изменённую логику; Assemble закрепляет её; отмена до Assemble включает Untest/Cancel. Референс staged/trial workflow §10; rung-level реализация не предписывается IronPLC |
+| R21 | [Rockwell: Studio 5000, Finalize all edits in a program (37.00)](https://www.rockwellautomation.com/en-us/docs/studio-5000-logix-designer/37-00/contents-ditamap/finalize_all_edits_in_a_program.html) | Finalize All принимает pending и собирает accepted edits; отдельный Test не обязателен. Команда необратима в пределах этого edit workflow; fault может затронуть оба PLC. Наш Finalize после trial и durable boot commit — собственный контракт §10, не буквальная копия |
+| R22 | [Rockwell: Configure Advanced Redundancy Configuration options (37.00)](https://www.rockwellautomation.com/en-fi/docs/studio-5000-logix-designer/37-00/contents-ditamap/studio-5000-logix-designer/controller-properties/configure-advanced-redundancy-configuration-option.html) | Для standard tasks Retain Test Edits on Switchover по умолчанию выключен; возврат к исходной логике снижает риск повторного fault. Сохранение trial может повторить fault на новом PRIMARY. Safety tasks имеют другое правило и не входят в наш BPCS baseline |
+| R23 | [Rockwell: Redundancy Systems User Manual, 1756-UM015](https://literature.rockwellautomation.com/idc/groups/literature/documents/um/1756-um015_-en-p.pdf) | Основной reference manual для redundancy. В проверенном индексированном фрагменте редакции M (09/2025), гл. 9, стр. 103: Assemble удаляет исходную программу и выполняется на обоих PLC. Полный PDF при этой проверке не извлечён из-за ограничения размера; публичный URL обновляется издателем. Не является доказательством нашего StateChangeTracker, fencing или RTO |
+| R24 | [Schneider: Modicon M580 Hardware, EIO0000001578](https://www.se.com/be/en/download/document/EIO0000001578/) | Каталог на дату проверки: v19, 07/2026. Перечень CPU states проверен по официальному фрагменту редакции 02/2017, стр. 31 (см. §24.1); это reference для lifecycle, не подтверждение неизменности всей FSM в v19 и не требование единого enum |
+| R25 | [Schneider: Modicon M580 Hot Standby, NHA58880](https://www.se.com/ca/en/download/document/NHA58880/) | Карточка v10, 07/2026: primary обновляет standby в начале scan; различаются primary/standby/wait. Это референс HA roles и scan-related synchronization. Заявление производителя о takeover в пределах scan относится к его системе; оно не задаёт RTO нашего изделия |
+| R26 | [Schneider: EcoStruxure Control Expert — Operating Modes, 33003101K01000](https://www.se.com/us/en/download/document/33003101K01000/) | Карточка v31, 06/2026: IDE workflow, интерфейс, project management и программирование Modicon на IEC 61131-3. Используется как reference engineering lifecycle §15, не как спецификация внутреннего устройства нашей IDE |
+| R27 | [Schneider: Control Expert — Program Languages and Structure, 35006144K01000](https://www.se.com/us/en/download/document/35006144K01000/) | Карточка v27, 07/2026: tasks, program units, sections, data types, execution и configuration. Референс предметной модели IDE; наличие в дереве проекта не делает объект самостоятельным runtime owner |
+| R28 | [Schneider: Modicon M580 Controller Firmware — Installation Guide, EIO0000004992](https://www.se.com/us/en/download/document/EIO0000004992/) | Карточка v03, 07/2026: EADM, STOP/NO CONF для обновляемого controller; переход к bootloader 4.x требует специальных upgrade/downgrade procedures. Firmware lifecycle включает совместимость bootloader и maintenance admission, а не только новую логику runtime |
+| R29 | [Schneider: M580 Hot-Standby upgrade from version ≤ 2.7, FAQ000223321](https://www.se.com/au/en/faqs/FAQ000223321/) | FAQ, обновлён 11.12.2025: переход с OS ≤2.7 на более новую требует STOP обоих CPU и восстановления приложения/данных по процедуре. HA не означает безостановочное обновление любой пары версий |
+| R30 | [Schneider: M580 non-Safety — Offline Application Modification with Allowed Application Mismatch, FAQ000282184](https://www.se.com/mk/en/faqs/FAQ000282184/) | FAQ, обновлён 16.06.2026: процедура для firmware ≥2.80, Unity Pro ≥V12 / Control Expert; применима к изменениям, допускающим Build Changes. Rebuild All может потребовать остановки. Это ограниченный reference, не разрешение произвольного generation/schema mismatch в §11 |
 
 Репозиторные primary sources, pinned к проверенному commit:
 
@@ -1047,6 +1068,20 @@ Disabled feature указывается как not supported и техничес
 - [ADR-0052: online change performed by runtime host](https://github.com/boogy777-lgtm/ironplc/blob/8a7f6d0d09b00436daebfd669babd39f2e0f2e13/specs/adrs/0052-online-change-performed-by-the-runtime-host.md) и [ADR-0064: online change on a redundant pair](https://github.com/boogy777-lgtm/ironplc/blob/8a7f6d0d09b00436daebfd669babd39f2e0f2e13/specs/adrs/0064-online-change-on-a-redundant-pair.md). Сохраняются полезные execution contracts; orchestration и authority пересматриваются этой целевой спецификацией, но ADR-файлы не изменены.
 - [ADR-0010: no_std VM](https://github.com/boogy777-lgtm/ironplc/blob/8a7f6d0d09b00436daebfd669babd39f2e0f2e13/specs/adrs/0010-no-std-vm-for-embedded-targets.md), [ADR-0060: migration policies](https://github.com/boogy777-lgtm/ironplc/blob/8a7f6d0d09b00436daebfd669babd39f2e0f2e13/specs/adrs/0060-type-changing-migration-policies.md), [ADR-0061: out-of-policy changes](https://github.com/boogy777-lgtm/ironplc/blob/8a7f6d0d09b00436daebfd669babd39f2e0f2e13/specs/adrs/0061-engineer-decided-migration-for-out-of-policy-type-changes.md).
 - Source checks: [runtime/host.rs](https://github.com/boogy777-lgtm/ironplc/blob/8a7f6d0d09b00436daebfd669babd39f2e0f2e13/compiler/runtime/src/host.rs), [vm.rs](https://github.com/boogy777-lgtm/ironplc/blob/8a7f6d0d09b00436daebfd669babd39f2e0f2e13/compiler/vm/src/vm.rs), [HA hal.rs](https://github.com/boogy777-lgtm/ironplc/blob/8a7f6d0d09b00436daebfd669babd39f2e0f2e13/compiler/ironplc-redundancy/src/hal.rs), [epoch.rs](https://github.com/boogy777-lgtm/ironplc/blob/8a7f6d0d09b00436daebfd669babd39f2e0f2e13/compiler/ironplc-redundancy/src/epoch.rs), [slot_store.rs](https://github.com/boogy777-lgtm/ironplc/blob/8a7f6d0d09b00436daebfd669babd39f2e0f2e13/compiler/vm-cli/src/slot_store.rs). Полный inventory и ограничения чтения — отдельный Markdown audit.
+
+### 24.1. Rockwell и Schneider: переносимые механизмы и различия
+
+Это сопоставление поясняет существующие требования; оно не вводит новые FSM, владельцев или гарантии. Дата проверки ссылок — 2026-09-23. Для R20–R22 прочитана online help; для R25–R28 — описания и версии на официальных карточках; для R29–R30 — текст FAQ. Для R23/R24 ограничения извлечения указаны явно. Перед реализацией конкретного vendor-compatible поведения требуется зафиксировать полную редакцию документа и модель/firmware продукта.
+
+| Область | Подтверждённый vendor reference | Применение в IronPLC / граница переноса |
+|---|---|---|
+| Online edit | Rockwell разделяет передачу, пробное исполнение и закрепление правок [R20], [R21] | §10.2: Stage → Activate/Test → Finalize; Untest/Revert и Discard имеют разные эффекты. Pending остаётся инженерной рабочей правкой до передачи. Наш deployment unit — ApplicationGeneration, не rung; Finalize также имеет собственный durable contract |
+| Redundancy + trial | Rockwell даёт выбор сохранения Test Edits при switchover; для standard tasks рекомендует выключенный вариант [R22], [R23] | **Осознанное расхождение §11.5:** после первых новых effects требуется совместимая новая generation/checkpoint, а не автоматический untest. HA не устраняет общий программный дефект. Возврат старого кода — проверенный Revert с текущим совместимым state/обратной migration; буквальная Rockwell policy потребовала бы отдельного пересмотра RecoveryAdmission |
+| Controller FSM | [Официальный фрагмент EIO0000001578, 02/2017, стр. 31](https://ckm-content.se.com/ckmContent/sfc/servlet.shepherd/document/download/0698V00000kW2UtQAK) различает AUTOTEST, NOCONF, STOP, HALT, RUN, WAIT, ERROR, OS DOWNLOAD. HA roles отдельно описаны в NHA58880 [R24], [R25] | §4/6/13/14/15: различать boot, отсутствие валидного приложения, управляемую остановку, fault, execution, maintenance и HA role. Это наши независимые owners и StatusProjection; не копировать всё в единый ControllerState. WAIT в приведённой standalone CPU таблице относится к power-down, его нельзя автоматически отождествлять с HA wait |
+| IDE | Control Expert описывает инженерные операции и структуру tasks/program units/sections [R26], [R27]; M580 имеет ограниченную процедуру application mismatch [R30] | §15: дерево проекта, конфигурация и команды опираются на предметную модель; операция показывает target, проверенные предусловия и результат через controller API. Online/offline IDE, RUN/STOP исполнения и SYNC_* — разные факты. Успешная сборка сама по себе не разрешает activation |
+| Firmware | EADM installation guide учитывает CPU state, исходную/целевую firmware и bootloader; FAQ фиксирует случай обязательной остановки обоих CPU [R28], [R29] | §13.1/13.3/23: application, platform firmware, bootloader и I/O firmware имеют отдельные артефакты/условия установки. Rolling update допускается только для квалифицированного пути; несовместимый переход требует maintenance/STOP. Нельзя обещать бесшовное обновление по одному факту наличия SECONDARY |
+
+Rockwell и Schneider задают практические ориентиры инженерного поведения. Immutable generations, StateSchema, O(1) exact binding switch, bounded migration, OutputAuthority и разложение на owners остаются нашим архитектурным синтезом; перечисленные документы не доказывают, что вендоры используют такую же внутреннюю реализацию.
 
 ## 25. Покрытие handoff и смена нормативной базы
 
@@ -1093,3 +1128,15 @@ INV01–INV22, S01–S12, 16 REQ-PORT и T01–T68 сохранены как т�
 [R17]: https://ariel-os.github.io/ariel-os/dev/docs/book/multithreading.html
 [R18]: https://ariel-os.github.io/ariel-os/dev/docs/book/networking.html
 [R19]: https://ariel-os.github.io/ariel-os/dev/docs/book/storage.html
+
+[R20]: https://www.rockwellautomation.com/en-us/docs/studio-5000-logix-designer/38-01/contents-ditamap/studio-5000-logix-designer/ladder-editor/enter-logic/edit-ladder-elements/edit-ladder-logic-in-run-mode.html
+[R21]: https://www.rockwellautomation.com/en-us/docs/studio-5000-logix-designer/37-00/contents-ditamap/finalize_all_edits_in_a_program.html
+[R22]: https://www.rockwellautomation.com/en-fi/docs/studio-5000-logix-designer/37-00/contents-ditamap/studio-5000-logix-designer/controller-properties/configure-advanced-redundancy-configuration-option.html
+[R23]: https://literature.rockwellautomation.com/idc/groups/literature/documents/um/1756-um015_-en-p.pdf
+[R24]: https://www.se.com/be/en/download/document/EIO0000001578/
+[R25]: https://www.se.com/ca/en/download/document/NHA58880/
+[R26]: https://www.se.com/us/en/download/document/33003101K01000/
+[R27]: https://www.se.com/us/en/download/document/35006144K01000/
+[R28]: https://www.se.com/us/en/download/document/EIO0000004992/
+[R29]: https://www.se.com/au/en/faqs/FAQ000223321/
+[R30]: https://www.se.com/mk/en/faqs/FAQ000282184/
