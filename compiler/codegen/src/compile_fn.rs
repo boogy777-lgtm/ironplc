@@ -11,15 +11,15 @@ use ironplc_dsl::common::{
     VarDecl, VariableType,
 };
 use ironplc_dsl::core::{Id, Located};
-use ironplc_dsl::diagnostic::{Diagnostic, Label};
+use ironplc_dsl::diagnostic::Diagnostic;
 
 use ironplc_analyzer::{FunctionEnvironment, TypeEnvironment};
 
 use super::compile::{
     char_width_for_string_type, finalize_function, string_region_size, CompileContext,
     CompiledFunction, CurrentFunctionReturn, OpType, OpWidth, SavedFbScope, Signedness,
-    StringParamInfo, StringReturnInfo, StringVarInfo, UserFunctionInfo, VarTypeInfo,
-    DEFAULT_OP_TYPE, NARROW_CHAR_WIDTH, WIDE_CHAR_WIDTH,
+    StringParamInfo, StringReturnInfo, StringVarInfo, UserFunctionInfo, DEFAULT_OP_TYPE,
+    NARROW_CHAR_WIDTH, WIDE_CHAR_WIDTH,
 };
 use super::compile_expr::emit_load_var;
 use super::compile_setup::{
@@ -147,17 +147,9 @@ pub(crate) fn compile_user_function(
                     let max_length = resolve_string_max_length(string_init)?;
                     let char_width = char_width_for_string_type(&string_init.width);
 
-                    let data_offset = ctx.data_region_offset;
                     let total_bytes = string_region_size(max_length, char_width);
-                    ctx.data_region_offset = ctx
-                        .data_region_offset
-                        .checked_add(total_bytes)
-                        .ok_or_else(|| {
-                            Diagnostic::not_implemented(Label::span(
-                                string_init.span(),
-                                "Data region overflow",
-                            ))
-                        })?;
+                    let data_offset =
+                        crate::data_region::reserve(ctx, total_bytes, &string_init.span())?;
 
                     if max_length > ctx.max_string_capacity {
                         ctx.max_string_capacity = max_length;
@@ -173,17 +165,10 @@ pub(crate) fn compile_user_function(
                     );
                 }
                 InitialValueAssignmentKind::Reference(ref_init) => {
-                    ctx.var_types.insert(
-                        id.clone(),
-                        VarTypeInfo {
-                            op_width: OpWidth::W64,
-                            signedness: Signedness::Unsigned,
-                            storage_bits: 64,
-                        },
-                    );
-                    crate::compile_array::register_ref_to_array_metadata(
+                    crate::compile_reference::register_reference_variable(
                         ctx,
                         builder,
+                        types,
                         id,
                         current_index,
                         ref_init,
@@ -215,17 +200,9 @@ pub(crate) fn compile_user_function(
                     let max_length = resolve_string_max_length(string_init)?;
                     let char_width = char_width_for_string_type(&string_init.width);
 
-                    let data_offset = ctx.data_region_offset;
                     let total_bytes = string_region_size(max_length, char_width);
-                    ctx.data_region_offset = ctx
-                        .data_region_offset
-                        .checked_add(total_bytes)
-                        .ok_or_else(|| {
-                            Diagnostic::not_implemented(Label::span(
-                                string_init.span(),
-                                "Data region overflow",
-                            ))
-                        })?;
+                    let data_offset =
+                        crate::data_region::reserve(ctx, total_bytes, &string_init.span())?;
 
                     if max_length > ctx.max_string_capacity {
                         ctx.max_string_capacity = max_length;
@@ -241,17 +218,10 @@ pub(crate) fn compile_user_function(
                     );
                 }
                 InitialValueAssignmentKind::Reference(ref_init) => {
-                    ctx.var_types.insert(
-                        id.clone(),
-                        VarTypeInfo {
-                            op_width: OpWidth::W64,
-                            signedness: Signedness::Unsigned,
-                            storage_bits: 64,
-                        },
-                    );
-                    crate::compile_array::register_ref_to_array_metadata(
+                    crate::compile_reference::register_reference_variable(
                         ctx,
                         builder,
+                        types,
                         id,
                         current_index,
                         ref_init,
@@ -292,12 +262,8 @@ pub(crate) fn compile_user_function(
                 _ => NARROW_CHAR_WIDTH,
             };
 
-            let data_offset = ctx.data_region_offset;
             let total_bytes = string_region_size(max_length, char_width);
-            ctx.data_region_offset = ctx
-                .data_region_offset
-                .checked_add(total_bytes)
-                .ok_or_else(|| Diagnostic::todo())?;
+            let data_offset = crate::data_region::reserve(ctx, total_bytes, &spec.keyword_span)?;
 
             if max_length > ctx.max_string_capacity {
                 ctx.max_string_capacity = max_length;
@@ -407,7 +373,6 @@ pub(crate) fn compile_user_function(
     if let Some(ref str_info) = return_string_info {
         // For STRING return: load the return string from the data region into
         // a temp buffer, leaving buf_idx on the stack for the caller.
-        ctx.num_temp_bufs += 1;
         func_emitter.emit_str_load_var(str_info.data_offset);
     } else {
         emit_load_var(&mut func_emitter, return_var_index, return_op_type);
@@ -497,6 +462,7 @@ pub(crate) fn compile_user_function(
         function_id,
         bytecode: finalized.bytecode,
         max_stack_depth: finalized.max_stack_depth,
+        max_temp_depth: finalized.max_temp_depth,
         num_locals,
         num_params,
         name: func_name.to_string(),
@@ -518,7 +484,7 @@ pub(crate) fn compile_user_function_block(
     var_offset: u16,
     ctx: &mut CompileContext,
     builder: &mut ContainerBuilder,
-    _types: &TypeEnvironment,
+    types: &TypeEnvironment,
     num_globals: u16,
 ) -> Result<(CompiledFunction, SavedFbScope), Diagnostic> {
     let fb_name = fb_decl.name.name.to_string().to_uppercase();
@@ -603,17 +569,10 @@ pub(crate) fn compile_user_function_block(
                     }
                 }
                 InitialValueAssignmentKind::Reference(ref_init) => {
-                    ctx.var_types.insert(
-                        id.clone(),
-                        VarTypeInfo {
-                            op_width: OpWidth::W64,
-                            signedness: Signedness::Unsigned,
-                            storage_bits: 64,
-                        },
-                    );
-                    crate::compile_array::register_ref_to_array_metadata(
+                    crate::compile_reference::register_reference_variable(
                         ctx,
                         builder,
+                        types,
                         id,
                         current_index,
                         ref_init,
@@ -623,17 +582,9 @@ pub(crate) fn compile_user_function_block(
                     let max_length = resolve_string_max_length(string_init)?;
                     let char_width = char_width_for_string_type(&string_init.width);
 
-                    let data_offset = ctx.data_region_offset;
                     let total_bytes = string_region_size(max_length, char_width);
-                    ctx.data_region_offset = ctx
-                        .data_region_offset
-                        .checked_add(total_bytes)
-                        .ok_or_else(|| {
-                            Diagnostic::not_implemented(Label::span(
-                                string_init.span(),
-                                "Data region overflow",
-                            ))
-                        })?;
+                    let data_offset =
+                        crate::data_region::reserve(ctx, total_bytes, &string_init.span())?;
 
                     if max_length > ctx.max_string_capacity {
                         ctx.max_string_capacity = max_length;
@@ -665,7 +616,7 @@ pub(crate) fn compile_user_function_block(
     ctx.current_function_id = Some(function_id);
 
     let mut fb_emitter = Emitter::new();
-    compile_body(&mut fb_emitter, ctx, &fb_decl.body)?;
+    compile_body(&mut fb_emitter, ctx, &fb_decl.body, &fb_decl.name.span())?;
     fb_emitter.emit_ret_void();
 
     ctx.current_function_id = saved_current_fn;
@@ -694,6 +645,7 @@ pub(crate) fn compile_user_function_block(
             function_id,
             bytecode: finalized.bytecode,
             max_stack_depth: finalized.max_stack_depth,
+            max_temp_depth: finalized.max_temp_depth,
             num_locals,
             num_params: 0,
             name: fb_name,

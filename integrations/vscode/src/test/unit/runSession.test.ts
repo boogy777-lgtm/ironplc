@@ -36,9 +36,9 @@ function createTrackingCallbacks(): { callbacks: RunSessionCallbacks; states: Ru
   const states: RunState[] = [];
   const errors: string[] = [];
   const callbacks: RunSessionCallbacks = {
-    onStateChange: (state) => states.push(state),
+    onStateChange: state => states.push(state),
     onVariablesUpdate: () => {},
-    onError: (msg) => errors.push(msg),
+    onError: msg => errors.push(msg),
   };
   return { callbacks, states, errors };
 }

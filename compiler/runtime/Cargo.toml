@@ -1,15 +1,15 @@
 [package]
 name = "ironplc-runtime"
 description = "Runtime host that drives the IronPLC VM and performs online change at a scan boundary"
-version = "0.242.0"
+version = "0.246.0"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
 
 [dependencies]
-ironplc-container = { path = "../container", version = "0.242.0" }
-ironplc-vm = { path = "../vm", version = "0.242.0" }
+ironplc-container = { path = "../container", version = "0.246.0" }
+ironplc-vm = { path = "../vm", version = "0.246.0" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
@@ -17,10 +17,10 @@ serde_json = "1.0"
 csv = "1"
 
 [dev-dependencies]
-ironplc-codegen = { path = "../codegen", version = "0.242.0" }
-ironplc-dsl = { path = "../dsl", version = "0.242.0" }
-ironplc-parser = { path = "../parser", version = "0.242.0" }
-ironplc-project = { path = "../project", version = "0.242.0" }
+ironplc-codegen = { path = "../codegen", version = "0.246.0" }
+ironplc-dsl = { path = "../dsl", version = "0.246.0" }
+ironplc-parser = { path = "../parser", version = "0.246.0" }
+ironplc-project = { path = "../project", version = "0.246.0" }
 rstest = "0.27"
 
 [lints]

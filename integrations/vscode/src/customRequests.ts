@@ -27,7 +27,8 @@ export function registerCustomRequests(context: vscode.ExtensionContext): void {
       }
       try {
         await session.customRequest('ironplc/stepScan');
-      } catch {
+      }
+      catch {
         // The server refuses the request outside a live pause (a terminated or
         // faulted session still shows the toolbar), which rejects the promise.
         // Report it rather than letting the rejection escape as an unhandled
