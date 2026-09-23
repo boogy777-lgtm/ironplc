@@ -6,7 +6,7 @@ date: 2026-09-22
 ## Context and Problem Statement
 
 The DCS firmware task audit
-([DCS Firmware Task Audit](../design/dcs-firmware-task-audit.md)) recorded
+([DCS Firmware Task Audit](https://github.com/boogy777-lgtm/ironplc/blob/8a7f6d0d09b00436daebfd669babd39f2e0f2e13/specs/design/dcs-firmware-task-audit.md)) recorded
 D11 (an RTOS→Linux port is not automatic real-time equivalence) as
 out-of-scope-by-decision, listed the task's topology mandate (§2.8: two
 dedicated optical sync links) as a conflict with the decided port map
@@ -74,7 +74,7 @@ seam.**
    remains a release-gate obligation and is not implied by the choice:
    identical domain traces, independently proven timing bounds, no
    unqualified virtualization. No port code exists today
-   ([External FSM Review](../design/external-fsm-review.md): the host is
+   ([External FSM Review](https://github.com/boogy777-lgtm/ironplc/blob/8a7f6d0d09b00436daebfd669babd39f2e0f2e13/specs/design/external-fsm-review.md): the host is
    `std`, no OS supervisor); this decision names the target and the
    checklist, not a completed port. D11 moves from out-of-scope-by-decision
    to PARTIAL (platform chosen, qualification pending).
@@ -108,7 +108,7 @@ the current pair-link + I/O-chain port map is NOT decided by this ADR. The
 evaluation (dual fiber recommended: it alone satisfies the task's L1/L2
 mandate; single Ethernet provides no two independent sync channels) lives
 in the audit addendum
-([DCS Firmware Task Audit](../design/dcs-firmware-task-audit.md),
+([DCS Firmware Task Audit](https://github.com/boogy777-lgtm/ironplc/blob/8a7f6d0d09b00436daebfd669babd39f2e0f2e13/specs/design/dcs-firmware-task-audit.md),
 "Re-audit with owner decisions (2026-09-22)", §2); the owner ruling gates
 the availability model and the EtherNet/IP binding.
 
@@ -134,7 +134,7 @@ the availability model and the EtherNet/IP binding.
 
 ## More Information
 
-* [DCS Firmware Task Audit](../design/dcs-firmware-task-audit.md) — the
+* [DCS Firmware Task Audit](https://github.com/boogy777-lgtm/ironplc/blob/8a7f6d0d09b00436daebfd669babd39f2e0f2e13/specs/design/dcs-firmware-task-audit.md) — the
   first audit; this ADR's addendum ("Re-audit with owner decisions
   (2026-09-22)") carries the evidence, the topology evaluation, and the
   updated conflict list.
@@ -150,3 +150,4 @@ the availability model and the EtherNet/IP binding.
 * Owner task reference: `docs/reference/dcs-firmware-task-v2-ru.md`
   (§2.8 topology, §8.3 execution profile, §13.3 split-brain/epoch, §23
   N+1 acceptance).
+

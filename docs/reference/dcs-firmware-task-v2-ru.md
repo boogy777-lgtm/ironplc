@@ -1,7 +1,7 @@
 # IronPLC / RegulBUS: задание на архитектуру firmware DCS
 
 > Owner-provided reference document (v2.0, 2026-09-21). Preserved verbatim for audit:
-> specs/design/dcs-firmware-task-audit.md. Not a project spec — a requirements task
+> [historical audit](https://github.com/boogy777-lgtm/ironplc/blob/8a7f6d0d09b00436daebfd669babd39f2e0f2e13/specs/design/dcs-firmware-task-audit.md). Not a project spec — a requirements task
 > against which the project architecture is audited.
 
 Версия: 2.0 — после проверки «адвокатом дьявола».
@@ -957,3 +957,4 @@ LLM должна продолжить проектирование с явно �
 - опасные противоречия закрыты решением либо отмечены как блокеры, а не скрыты словом «production-ready».
 
 **Главный проверочный вопрос:** это механизм с определённым владельцем, контрактом, пределом времени и тестом — или заплатка, работающая только пока все участники исправны?
+

@@ -15,7 +15,7 @@ directly:
 
 This spec builds on:
 
-- **[HA Architecture Readiness](ha-architecture-readiness.md)**: the
+- **[HA Architecture Readiness](https://github.com/boogy777-lgtm/ironplc/blob/8a7f6d0d09b00436daebfd669babd39f2e0f2e13/specs/design/ha-architecture-readiness.md)**: the
   readiness verdict and the reuse/gap inventory this design deepens
 - **[HA Redundancy FSM](ha-redundancy-fsm.md)**: the SYNC/CONTROL
   statechart, admission, and the ping/pong liveness contract this layer
@@ -106,7 +106,7 @@ ironplc-redundancy → ironplc-runtime → ironplc-vm / ironplc-container
 - The engineering command vocabulary for redundancy lives in the new
   crate, following the ADR-0055 pattern (typed enums, line codec, CSV
   V-codes). This refines the placement suggested in
-  [HA Architecture Readiness](ha-architecture-readiness.md): the readiness
+  [HA Architecture Readiness](https://github.com/boogy777-lgtm/ironplc/blob/8a7f6d0d09b00436daebfd669babd39f2e0f2e13/specs/design/ha-architecture-readiness.md): the readiness
   doc proposed extending the runtime's `Command` enum, but that would put
   redundancy vocabulary into the crate that must stay redundancy-free.
   Each layer keeps its own typed surface; `ironplcvm serve` and the MCP
@@ -436,3 +436,4 @@ readiness doc's sequence; design steps precede crate work):
 - Distributed hot change, edit replication, and external-protocol replay
   semantics (roadmap deferred follow-ups).
 - Driver implementations for any specific NIC or NV device.
+
