@@ -243,6 +243,10 @@ not a claim that all components are implemented or qualified.
 | Authority term | Ordering token for output authority; distinct from checkpoint sequence and activation revision. |
 | Checkpoint sequence | Ordering of replication checkpoints; does not imply authority transfer or durable storage. |
 | Activation revision | Revision of activation state; distinct from application identity and output authority term. |
+| Platform module | A responsibility and visibility boundary with an explicit owner and contract. It need not be a separate crate, thread, process, actor or update unit. |
+| Platform plugin | An implementation, descriptor/policy package, IEC library or external client connected through a defined extension point. This term does not imply dynamic loading of native executable code into the real-time path. |
+| Composition root | Target-specific construction and wiring of owners, providers and resources. It does not duplicate the operational authority of those owners. |
+| PlatformProfile | A versioned target, resource and capability description tied to its qualification evidence. Missing or unqualified capabilities block their corresponding operations or release claims. |
 
 A controller control policy is distinct from the compiler **behavior policy**
 defined above. Neither is a synonym for the other.

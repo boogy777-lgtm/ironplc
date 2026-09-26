@@ -1208,6 +1208,8 @@ INV01–INV22, S01–S12, 16 REQ-PORT и T01–T68 сохранены как т�
 
 Следующий инженерный результат — работающий и измеряемый PLC-SINGLE vertical slice по P1/P2, затем deployment/recovery и HA на тех же owners/contracts. Архитектура считается реализованной по evidence; статус production присваивается только прошедшему gates конкретному профилю.
 
+Декомпозиция реализации: [модульный каркас и 44 задания для LLM](../implementation/dcs-platform/README.md). Комплект связывает владельцев, зависимости, границы изменений и доказательства приёмки с требованиями этой спецификации; наличие заданий не означает, что соответствующие функции реализованы или квалифицированы.
+
 [R01]: https://engineer.plcnext.help/latest/PLCnext_Intro.htm
 [R02]: https://www.odva.org/wp-content/uploads/2020/05/PUB00213R0_EtherNetIP_Developers_Guide.pdf
 [R03]: https://content.helpme-codesys.com/en/CODESYS%20Development%20System/_cds_cmd_online_change.html
