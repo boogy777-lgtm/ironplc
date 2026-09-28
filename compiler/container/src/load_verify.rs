@@ -635,7 +635,7 @@ mod tests {
     fn verify_load_when_duplicate_user_fb_type_id_then_violation() {
         let mut container = consistent_container();
         let ts = container.type_section.as_mut().unwrap();
-        ts.user_fb_types.push(ts.user_fb_types[0].clone());
+        ts.user_fb_types.push(ts.user_fb_types[0]);
         let result = verify_load(&container);
         assert!(matches!(
             result,
