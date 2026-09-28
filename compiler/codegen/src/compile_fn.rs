@@ -29,7 +29,7 @@ use super::compile_stmt::{
     compile_body, compile_statements, resolve_string_max_length, resolve_string_spec_max_length,
 };
 use super::compile_var_table::{record_decl_var_entry, record_return_var_entry};
-use super::type_info::resolve_type_name;
+use super::type_info::{decl_type_info, resolve_type_name};
 use crate::emit::Emitter;
 
 /// Records a debug [`VarNameEntry`] for a function- or FB-local variable
@@ -139,8 +139,8 @@ pub(crate) fn compile_user_function(
             ctx.variables.insert(id.clone(), current_index);
             push_local_var_name(ctx, current_index, function_id, decl, id, types);
             match &decl.initializer {
-                InitialValueAssignmentKind::Simple(simple) => {
-                    if let Some(type_info) = resolve_type_name(&simple.type_name.name) {
+                InitialValueAssignmentKind::Simple(_) => {
+                    if let Some(type_info) = decl_type_info(ctx, decl) {
                         ctx.var_types.insert(id.clone(), type_info);
                     }
                 }
@@ -192,8 +192,8 @@ pub(crate) fn compile_user_function(
             ctx.variables.insert(id.clone(), current_index);
             push_local_var_name(ctx, current_index, function_id, decl, id, types);
             match &decl.initializer {
-                InitialValueAssignmentKind::Simple(simple) => {
-                    if let Some(type_info) = resolve_type_name(&simple.type_name.name) {
+                InitialValueAssignmentKind::Simple(_) => {
+                    if let Some(type_info) = decl_type_info(ctx, decl) {
                         ctx.var_types.insert(id.clone(), type_info);
                     }
                 }
@@ -564,8 +564,8 @@ pub(crate) fn compile_user_function_block(
             ctx.variables.insert(id.clone(), current_index);
             push_local_var_name(ctx, current_index, function_id, decl, id, types);
             match &decl.initializer {
-                InitialValueAssignmentKind::Simple(simple) => {
-                    if let Some(vti) = resolve_type_name(&simple.type_name.name) {
+                InitialValueAssignmentKind::Simple(_) => {
+                    if let Some(vti) = decl_type_info(ctx, decl) {
                         ctx.var_types.insert(id.clone(), vti);
                     }
                 }
