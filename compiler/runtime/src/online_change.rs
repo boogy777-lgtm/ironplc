@@ -180,7 +180,7 @@ pub(crate) fn swap_buffers(next: &Container, buffers: &mut VmBuffers, rounds: u6
     // continuing scan count. `resume` never runs init functions: the code
     // reverts or advances, the process state does not.
     let ready = Vm::new().load(next, buffers);
-    let _running = ready.resume(rounds);
+    let _running = ready.map(|ready| ready.resume(rounds));
 }
 
 #[cfg(test)]

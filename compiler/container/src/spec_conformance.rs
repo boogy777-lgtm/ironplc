@@ -25,11 +25,12 @@ use crate::header::{
     FORMAT_VERSION, HEADER_SIZE, MAGIC,
 };
 use crate::id_types::{FbTypeId, FunctionId, VarIndex};
+use crate::test_support::with_tampered_header;
 use crate::type_section::{
     ArrayDescriptor, FbFieldUidEntry, FbTypeDescriptor, FieldEntry, FieldType, StableVarEntry,
     TypeSection, UserFbDescriptor, VarEntry,
 };
-use crate::{opcode, ConstType, ContainerError};
+use crate::{integrity, opcode, ConstType, Container, ContainerError, ContainerRef};
 
 // ---------------------------------------------------------------------------
 // Meta-test: completeness check
@@ -67,10 +68,10 @@ fn container_spec_req_cf_002_magic_is_iplc() {
     assert_eq!(bytes, [0x43, 0x4C, 0x50, 0x49]);
 }
 
-/// REQ-CF-container-003: Format version is 6.
+/// REQ-CF-container-003: Format version is 7.
 #[spec_test(REQ_CF_container_003)]
-fn container_spec_req_cf_003_format_version_is_6() {
-    assert_eq!(FORMAT_VERSION, 6);
+fn container_spec_req_cf_003_format_version_is_7() {
+    assert_eq!(FORMAT_VERSION, 7);
 }
 
 /// REQ-CF-container-004: All multi-byte values in the header are little-endian.
@@ -166,6 +167,11 @@ fn full_container_bytes() -> (Vec<u8>, FileHeader) {
     builder.add_array_descriptor(0, 4, 0);
     let container = builder
         .num_variables(1)
+        .add_var_entry(VarEntry {
+            var_type: FieldType::I32,
+            flags: 0,
+            extra: 0,
+        })
         .add_i32_constant(1)
         .add_function(FunctionId::INIT, &[opcode::RET_VOID], 1, 1, 0)
         .add_func_name(FuncNameEntry {
@@ -296,6 +302,186 @@ fn container_spec_req_cf_016_signature_directory_entries_are_zero() {
 }
 
 // ---------------------------------------------------------------------------
+// Container Format — Content and Debug Hashes (REQ-CF-container-028 through
+// REQ-CF-container-034)
+// ---------------------------------------------------------------------------
+
+/// The bytes of one section, as the header's directory locates it.
+fn section(buf: &[u8], offset: u32, size: u32) -> &[u8] {
+    &buf[offset as usize..(offset + size) as usize]
+}
+
+/// The file index of the last byte of a section.
+fn last_byte_of(offset: u32, size: u32) -> usize {
+    (offset + size - 1) as usize
+}
+
+/// Asserts that both readers reject `buf` with `ContentHashMismatch` once
+/// the byte at `index` is flipped.
+fn assert_flipped_byte_is_rejected(buf: &[u8], index: usize) {
+    let mut tampered = buf.to_vec();
+    tampered[index] ^= 0xFF;
+    assert!(matches!(
+        Container::read_from(&mut Cursor::new(&tampered)),
+        Err(ContainerError::ContentHashMismatch)
+    ));
+    let mut offsets = vec![0u32; 4];
+    assert!(matches!(
+        ContainerRef::from_slice(&tampered, &mut offsets),
+        Err(ContainerError::ContentHashMismatch)
+    ));
+}
+
+/// The header image the content hash covers, recomputed from the spec's
+/// description rather than from `integrity::masked_header`.
+fn spec_masked_header(buf: &[u8]) -> Vec<u8> {
+    let mut image = buf[..HEADER_SIZE].to_vec();
+    image[7] &= !FLAG_HAS_DEBUG_SECTION;
+    image[8..40].fill(0);
+    image[72..104].fill(0);
+    image[136..192].fill(0);
+    image
+}
+
+/// BLAKE3 over the masked header followed by each section in file order,
+/// each located by the header's directory.
+fn spec_content_hash(buf: &[u8], h: &FileHeader) -> [u8; 32] {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(&spec_masked_header(buf));
+    hasher.update(section(buf, h.task_section_offset, h.task_section_size));
+    hasher.update(section(buf, h.type_section_offset, h.type_section_size));
+    hasher.update(section(buf, h.const_section_offset, h.const_section_size));
+    hasher.update(section(buf, h.code_section_offset, h.code_section_size));
+    *hasher.finalize().as_bytes()
+}
+
+/// REQ-CF-container-035: content_hash is BLAKE3 over the masked header, task
+/// table, type section, constant pool and code section in file order; an
+/// absent type section contributes nothing.
+#[spec_test(REQ_CF_container_035)]
+fn container_spec_req_cf_035_content_hash_covers_header_task_type_const_and_code() {
+    let (buf, h) = full_container_bytes();
+    assert_eq!(h.content_hash, spec_content_hash(&buf, &h));
+    assert_ne!(h.content_hash, integrity::NO_HASH);
+
+    let (buf, h) = minimal_container_bytes();
+    assert_eq!(h.type_section_size, 0);
+    assert_eq!(h.content_hash, spec_content_hash(&buf, &h));
+}
+
+/// REQ-CF-container-034: the hashed header image zeroes exactly
+/// content_hash, debug_hash and the section directory, and clears the debug
+/// flag bit; every other header byte is covered.
+#[spec_test(REQ_CF_container_034)]
+fn container_spec_req_cf_034_header_image_masks_hashes_directory_and_debug_flag() {
+    let (buf, _) = full_container_bytes();
+    let header: [u8; HEADER_SIZE] = buf[..HEADER_SIZE].try_into().unwrap();
+    let image = integrity::masked_header(&header);
+    assert_eq!(image.to_vec(), spec_masked_header(&buf));
+
+    // The masked bytes carry nothing; the rest carries the header verbatim.
+    assert_eq!(image[7] & FLAG_HAS_DEBUG_SECTION, 0);
+    assert_eq!(&image[8..40], &[0u8; 32]);
+    assert_eq!(&image[72..104], &[0u8; 32]);
+    assert_eq!(&image[136..192], &[0u8; 56]);
+    assert_eq!(&image[0..7], &header[0..7]);
+    assert_eq!(&image[40..72], &header[40..72]);
+    assert_eq!(&image[104..136], &header[104..136]);
+    assert_eq!(&image[192..256], &header[192..256]);
+}
+
+/// REQ-CF-container-036: debug_hash is BLAKE3 over the debug section bytes,
+/// and all zeros when there is no debug section.
+#[spec_test(REQ_CF_container_036)]
+fn container_spec_req_cf_036_debug_hash_covers_debug_section() {
+    let (buf, h) = full_container_bytes();
+    let debug = section(&buf, h.debug_section_offset, h.debug_section_size);
+    assert_eq!(h.debug_hash, *blake3::hash(debug).as_bytes());
+
+    let (_, h) = minimal_container_bytes();
+    assert_eq!(h.debug_hash, integrity::NO_HASH);
+}
+
+/// REQ-CF-container-037: a byte changed in the covered header bytes or in
+/// any hashed section is rejected with ContentHashMismatch by both readers.
+#[spec_test(REQ_CF_container_037)]
+fn container_spec_req_cf_037_modified_hashed_content_is_rejected() {
+    let (buf, h) = full_container_bytes();
+    // Header: `profile` (byte 6) and `data_region_bytes` (bytes 198–201)
+    // are covered and not otherwise validated by the reader.
+    assert_flipped_byte_is_rejected(&buf, 6);
+    assert_flipped_byte_is_rejected(&buf, 198);
+    assert_flipped_byte_is_rejected(
+        &buf,
+        last_byte_of(h.task_section_offset, h.task_section_size),
+    );
+    assert_flipped_byte_is_rejected(
+        &buf,
+        last_byte_of(h.type_section_offset, h.type_section_size),
+    );
+    assert_flipped_byte_is_rejected(
+        &buf,
+        last_byte_of(h.const_section_offset, h.const_section_size),
+    );
+    assert_flipped_byte_is_rejected(
+        &buf,
+        last_byte_of(h.code_section_offset, h.code_section_size),
+    );
+}
+
+/// REQ-CF-container-031: an all-zero content_hash is not checked, so a
+/// container that would otherwise be rejected loads.
+#[spec_test(REQ_CF_container_031)]
+fn container_spec_req_cf_031_zero_content_hash_is_not_checked() {
+    let (buf, h) = full_container_bytes();
+    let mut unhashed = with_tampered_header(&buf, |h| h.content_hash = integrity::NO_HASH);
+    unhashed[last_byte_of(h.code_section_offset, h.code_section_size)] ^= 0xFF;
+
+    assert!(Container::read_from(&mut Cursor::new(&unhashed)).is_ok());
+    let mut offsets = vec![0u32; 4];
+    assert!(ContainerRef::from_slice(&unhashed, &mut offsets).is_ok());
+}
+
+/// REQ-CF-container-032: a debug section that does not reproduce a nonzero
+/// debug_hash is discarded; the container still loads.
+#[spec_test(REQ_CF_container_032)]
+fn container_spec_req_cf_032_debug_hash_mismatch_discards_debug_section() {
+    let (mut buf, h) = full_container_bytes();
+    // Change a byte the parser accepts either way: the function name.
+    let debug = section(&buf, h.debug_section_offset, h.debug_section_size);
+    let name_at = debug.windows(4).position(|w| w == b"MAIN").unwrap();
+    buf[h.debug_section_offset as usize + name_at] = b'X';
+
+    let container = Container::read_from(&mut Cursor::new(&buf)).unwrap();
+    assert!(container.debug_section.is_none());
+    assert_eq!(container.code.functions.len(), 1);
+
+    // The same bytes parse once the hash says nothing about them, so it was
+    // the hash check that discarded the section, not the parser.
+    let unhashed = with_tampered_header(&buf, |h| h.debug_hash = integrity::NO_HASH);
+    let container = Container::read_from(&mut Cursor::new(&unhashed)).unwrap();
+    assert!(container.debug_section.is_some());
+}
+
+/// REQ-CF-container-033: stripping the debug section leaves content_hash
+/// valid, so the stripped container loads unchanged.
+#[spec_test(REQ_CF_container_033)]
+fn container_spec_req_cf_033_stripped_debug_section_keeps_content_hash_valid() {
+    let (buf, h) = full_container_bytes();
+    let stripped = with_tampered_header(&buf[..h.debug_section_offset as usize], |h| {
+        h.debug_section_offset = 0;
+        h.debug_section_size = 0;
+        h.debug_hash = integrity::NO_HASH;
+        h.flags &= !FLAG_HAS_DEBUG_SECTION;
+    });
+
+    let container = Container::read_from(&mut Cursor::new(&stripped)).unwrap();
+    assert_eq!(container.header.content_hash, h.content_hash);
+    assert!(container.debug_section.is_none());
+    assert_eq!(container.code.functions.len(), 1);
+}
+
+// ---------------------------------------------------------------------------
 // Container Format — Type Section (REQ-CF-container-008 through REQ-CF-container-009,
 // REQ-CF-container-018 through REQ-CF-container-021)
 // ---------------------------------------------------------------------------
@@ -319,11 +505,7 @@ fn container_spec_req_cf_018_type_section_sub_table_order() {
                 field_extra: 0,
             }],
         }],
-        array_descriptors: vec![ArrayDescriptor {
-            element_type: FieldType::F64 as u8,
-            total_elements: 3,
-            element_extra: 0,
-        }],
+        array_descriptors: vec![ArrayDescriptor::new(FieldType::F64 as u8, 3, 0)],
         user_fb_types: vec![UserFbDescriptor {
             type_id: FbTypeId::new(0x0B),
             function_id: FunctionId::new(2),
@@ -347,30 +529,29 @@ fn container_spec_req_cf_018_type_section_sub_table_order() {
     };
     let buf = write_type_section(&section);
     // fb count(2) + fb header(4) + one field(4) = 10, then array count(2) +
-    // descriptor(8) = 20, then user count(2) + descriptor(8) = 30, then
-    // variable count(2) + entry(4) = 36, then stable var count(2) +
-    // entry(10) = 48, then FB field UID count(2) + entry(11) = 61.
-    assert_eq!(buf.len(), 61);
+    // descriptor(12) = 24, then user count(2) + descriptor(8) = 34, then
+    // variable count(2) + entry(4) = 40, then stable var count(2) +
+    // entry(10) = 52, then FB field UID count(2) + entry(11) = 65.
+    assert_eq!(buf.len(), 65);
     assert_eq!(&buf[0..2], &1u16.to_le_bytes());
     assert_eq!(&buf[2..4], &0x0Au16.to_le_bytes());
     assert_eq!(&buf[10..12], &1u16.to_le_bytes());
     assert_eq!(buf[12], FieldType::F64 as u8);
-    assert_eq!(&buf[20..22], &1u16.to_le_bytes());
-    assert_eq!(&buf[22..24], &0x0Bu16.to_le_bytes());
-    assert_eq!(&buf[30..32], &1u16.to_le_bytes());
-    assert_eq!(&buf[32..36], &[FieldType::Time as u8, 0, 0, 0]);
-    assert_eq!(&buf[36..38], &1u16.to_le_bytes());
-    assert_eq!(&buf[38..40], &7u16.to_le_bytes());
-    assert_eq!(&buf[40..48], &0x0102_0304_0506_0708u64.to_le_bytes());
-    assert_eq!(&buf[48..50], &1u16.to_le_bytes());
-    assert_eq!(&buf[50..52], &0x0Bu16.to_le_bytes());
-    assert_eq!(buf[52], 0);
+    assert_eq!(&buf[24..26], &1u16.to_le_bytes());
+    assert_eq!(&buf[26..28], &0x0Bu16.to_le_bytes());
+    assert_eq!(&buf[34..36], &1u16.to_le_bytes());
+    assert_eq!(&buf[36..40], &[FieldType::Time as u8, 0, 0, 0]);
+    assert_eq!(&buf[40..42], &1u16.to_le_bytes());
+    assert_eq!(&buf[42..44], &7u16.to_le_bytes());
+    assert_eq!(&buf[44..52], &0x0102_0304_0506_0708u64.to_le_bytes());
+    assert_eq!(&buf[52..54], &1u16.to_le_bytes());
+    assert_eq!(&buf[54..56], &0x0Bu16.to_le_bytes());
+    assert_eq!(buf[56], 0);
     assert_eq!(
-        &buf[53..61],
+        &buf[57..65],
         &[0x18, 0x17, 0x16, 0x15, 0x14, 0x13, 0x12, 0x11]
     );
 }
-
 /// REQ-CF-container-028: The stable variable ID table is a u16 count followed
 /// by 10-byte `var_index`/`uid` entries in ascending `var_index` order.
 #[spec_test(REQ_CF_container_028)]
@@ -441,23 +622,24 @@ fn container_spec_req_cf_030_fb_field_uid_table_layout() {
 }
 
 /// REQ-CF-container-019: An ArrayDescriptor is element_type u8, reserved u8,
-/// total_elements u32, element_extra u16 — 8 bytes.
+/// total_elements u32, element_extra u16, element_stride u32 — 12 bytes.
 #[spec_test(REQ_CF_container_019)]
-fn container_spec_req_cf_019_array_descriptor_is_8_bytes() {
+fn container_spec_req_cf_019_array_descriptor_is_12_bytes() {
     let section = TypeSection {
         array_descriptors: vec![ArrayDescriptor {
             element_type: FieldType::String as u8,
             total_elements: 0x0102_0304,
             element_extra: 0x0506,
+            element_stride: 0x0708_090A,
         }],
         ..Default::default()
     };
     let buf = write_type_section(&section);
-    // fb count(2) + array count(2) + descriptor(8) + user count(2)
+    // fb count(2) + array count(2) + descriptor(12) + user count(2)
     //   + variable count(2) + stable var count(2) + FB field UID count(2)
-    assert_eq!(buf.len(), 20);
+    assert_eq!(buf.len(), 24);
     assert_eq!(
-        &buf[4..12],
+        &buf[4..16],
         &[
             FieldType::String as u8,
             0,
@@ -466,7 +648,11 @@ fn container_spec_req_cf_019_array_descriptor_is_8_bytes() {
             0x02,
             0x01,
             0x06,
-            0x05
+            0x05,
+            0x0A,
+            0x09,
+            0x08,
+            0x07
         ]
     );
 }
@@ -663,7 +849,7 @@ fn container_spec_req_cf_027_unsupported_version_is_rejected() {
 /// `ContainerError::VerificationFailed`.
 #[spec_test(REQ_CF_container_029)]
 fn container_spec_req_cf_029_load_time_verification() {
-    use crate::{verify_load, LoadViolation};
+    use crate::verify_load;
 
     // A consistent container round-trips and verifies.
     let consistent = crate::test_support::steel_thread_single_function_container();
@@ -680,9 +866,7 @@ fn container_spec_req_cf_029_load_time_verification() {
     buf[code_end - 1] = buf[code_end - 1].wrapping_add(1);
     assert!(matches!(
         crate::Container::read_from(&mut Cursor::new(&buf)),
-        Err(ContainerError::VerificationFailed(
-            LoadViolation::ContentHashMismatch
-        ))
+        Err(ContainerError::ContentHashMismatch)
     ));
 
     // A zeroed content hash marks the bytes as legacy and is accepted.

@@ -2,6 +2,7 @@ use crate::const_type::ConstType;
 use crate::error::ContainerError;
 use crate::header::{FileHeader, FLAG_HAS_TYPE_SECTION, HEADER_SIZE};
 use crate::id_types::{ConstantIndex, FunctionId, InstanceId, TaskId, VarIndex};
+use crate::integrity;
 use crate::task_type::TaskType;
 
 /// Size of a single function directory entry in bytes.
@@ -20,7 +21,7 @@ const PROGRAM_ENTRY_SIZE: usize = 16;
 const FIELD_ENTRY_SIZE: usize = 4;
 
 /// Size of a single array descriptor in bytes.
-const ARRAY_DESCRIPTOR_SIZE: usize = 8;
+const ARRAY_DESCRIPTOR_SIZE: usize = 12;
 
 /// Size of a single user FB descriptor in bytes.
 const USER_FB_DESCRIPTOR_SIZE: usize = 8;
@@ -131,7 +132,7 @@ fn type_section_tables(type_section: &[u8]) -> Result<(&[u8], &[u8]), ContainerE
         }
     }
 
-    // Array descriptors: count + 8 bytes each.
+    // Array descriptors: count + 12 bytes each.
     let num_arrays = read_u16(type_section, pos)? as usize;
     pos += 2 + num_arrays * ARRAY_DESCRIPTOR_SIZE;
     if pos > type_section.len() {
@@ -279,7 +280,33 @@ impl<'a> ContainerRef<'a> {
             return Err(ContainerError::SectionSizeMismatch);
         }
 
-        // 6. Locate the variable table and stable variable ID table (the
+        // 6. Check the content hash. The type section is not otherwise used
+        // here, so it is sliced only for this, and only when there is a hash
+        // to check.
+        if header.content_hash != integrity::NO_HASH {
+            let type_start = header.type_section_offset as usize;
+            let type_end = type_start + header.type_section_size as usize;
+            if type_end > data.len() {
+                return Err(ContainerError::SectionSizeMismatch);
+            }
+            let type_section = if header.type_section_size == 0 {
+                &data[0..0]
+            } else {
+                &data[type_start..type_end]
+            };
+            integrity::check_content_hash(
+                &header.content_hash,
+                &integrity::Content {
+                    header: header_bytes,
+                    task_table: task_table_bytes,
+                    type_section,
+                    const_section,
+                    code_section,
+                },
+            )?;
+        }
+
+        // 7. Locate the variable table and stable variable ID table (the
         //    type section's fourth and fifth sub-tables)
         let (variable_table_bytes, stable_var_bytes) =
             if (header.flags & FLAG_HAS_TYPE_SECTION) != 0 && header.type_section_size > 0 {
@@ -496,13 +523,15 @@ mod tests {
     use std::vec::Vec;
 
     use crate::id_types::FbTypeId;
-    use crate::opcode;
-    use crate::test_support::{container_bytes, steel_thread_single_function_container};
+    use crate::test_support::{
+        container_bytes, steel_thread_single_function_container, with_tampered_header,
+    };
     use crate::type_section::{
         FbTypeDescriptor, FieldEntry, FieldType, StableVarEntry, UserFbDescriptor, VarEntry,
         VAR_FLAG_IS_ARRAY,
     };
     use crate::ContainerBuilder;
+    use crate::{integrity, opcode};
 
     fn steel_thread_bytes() -> Vec<u8> {
         container_bytes(&steel_thread_single_function_container())
@@ -562,6 +591,14 @@ mod tests {
     )]
     #[case::task_section_smaller_than_header(
         (|data: Vec<u8>| with_tampered_header(&data, |h| h.task_section_size = 3)) as fn(Vec<u8>) -> Vec<u8>,
+        (|e: &ContainerError| matches!(e, ContainerError::SectionSizeMismatch)) as fn(&ContainerError) -> bool
+    )]
+    #[case::code_byte_modified(
+        (|mut data: Vec<u8>| { let n = data.len(); data[n - 1] ^= 0xFF; data }) as fn(Vec<u8>) -> Vec<u8>,
+        (|e: &ContainerError| matches!(e, ContainerError::ContentHashMismatch)) as fn(&ContainerError) -> bool
+    )]
+    #[case::type_section_offset_past_end(
+        (|data: Vec<u8>| { let n = data.len() as u32; with_tampered_header(&data, |h| { h.type_section_offset = n; h.type_section_size = 1 }) }) as fn(Vec<u8>) -> Vec<u8>,
         (|e: &ContainerError| matches!(e, ContainerError::SectionSizeMismatch)) as fn(&ContainerError) -> bool
     )]
     #[case::const_entry_value_size_bytes_corrupted(
@@ -738,7 +775,9 @@ mod tests {
             FileHeader::read_from(&mut std::io::Cursor::new(&base[..HEADER_SIZE])).unwrap();
         let code_start = header.code_section_offset as usize;
 
-        let mut data = base.clone();
+        // Rewriting the directory changes the hashed bytes; this test is
+        // about the per-entry bounds check, so make it an unhashed container.
+        let mut data = with_tampered_header(&base, |h| h.content_hash = integrity::NO_HASH);
         // Function directory entry layout (16 bytes):
         //   function_id(2) + code_offset(4, at bytes 2..6)
         //   + code_length(4, at bytes 6..10) + ...
@@ -785,17 +824,6 @@ mod tests {
         ));
     }
 
-    /// Rewrites the header of `data` with `tamper` applied.
-    fn with_tampered_header(data: &[u8], tamper: impl FnOnce(&mut FileHeader)) -> Vec<u8> {
-        let mut header =
-            FileHeader::read_from(&mut std::io::Cursor::new(&data[..HEADER_SIZE])).unwrap();
-        tamper(&mut header);
-        let mut tampered = Vec::with_capacity(data.len());
-        header.write_to(&mut tampered).unwrap();
-        tampered.extend_from_slice(&data[HEADER_SIZE..]);
-        tampered
-    }
-
     #[test]
     fn container_ref_const_count_when_const_section_size_is_zero_then_returns_zero() {
         // Tamper the header to set const_section_size = 0 so the early-exit
@@ -808,8 +836,11 @@ mod tests {
 
     #[test]
     fn container_ref_from_slice_when_const_section_size_is_zero_then_succeeds_with_empty_pool() {
+        // Shrinking the pool changes the hashed bytes, so this is only
+        // loadable as an unhashed container.
         let data = with_tampered_header(&steel_thread_bytes(), |h| {
             h.const_section_size = 0;
+            h.content_hash = integrity::NO_HASH;
         });
         let mut offsets = vec![0u32; 0];
         let cref = ContainerRef::from_slice(&data, &mut offsets).unwrap();
@@ -953,8 +984,11 @@ mod tests {
         // When task_section_size is 0, from_slice accepts the container and
         // the runtime accessors fall back to zero rather than indexing an
         // empty slice.
+        // Dropping the task table changes the hashed bytes, so this is only
+        // loadable as an unhashed container.
         let data = with_tampered_header(&steel_thread_bytes(), |h| {
             h.task_section_size = 0;
+            h.content_hash = integrity::NO_HASH;
         });
         let mut offsets = vec![0u32; 4];
         let cref = ContainerRef::from_slice(&data, &mut offsets).unwrap();

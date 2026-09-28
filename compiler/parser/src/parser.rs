@@ -240,14 +240,58 @@ fn span_of_tokens(tokens: &[Token], start: usize, end: usize) -> SourceSpan {
     }
 }
 
-/// Returns the characters of a character-string token without its two
-/// delimiting quotes. The token text is the source as written: `$` escapes
-/// are not decoded.
-fn unquote(text: &str) -> Vec<char> {
-    let mut chars = text.chars();
-    chars.next();
-    chars.next_back();
-    chars.collect()
+/// Returns the characters a character-string token denotes: the text
+/// between its two delimiting quotes with its `$` escapes decoded. An
+/// invalid escape is kept as written; `rule_token_string_escape` reports it.
+fn unquote(text: &str, width: &StringType) -> Vec<char> {
+    let inner = text
+        .get(1..text.len().saturating_sub(1))
+        .unwrap_or_default();
+    dsl::string_escape::decode(inner, width).chars
+}
+
+/// A unit of a duration literal part, smallest first so that the derived
+/// order is the order of magnitude.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum DurationUnit {
+    Milliseconds,
+    Seconds,
+    Minutes,
+    Hours,
+    Days,
+}
+
+/// Sums the parts of a duration literal (REQ-TL-021): the units must be in
+/// strictly descending magnitude, which also rules out a repeated unit, and
+/// only the last part may have a fractional value.
+fn combine_interval_parts(
+    first: (FixedPoint, DurationUnit),
+    rest: Vec<(FixedPoint, DurationUnit)>,
+) -> Result<DurationLiteral, &'static str> {
+    let last = rest.len();
+    let mut total: Option<DurationLiteral> = None;
+    let mut previous: Option<DurationUnit> = None;
+    for (index, (value, unit)) in std::iter::once(first).chain(rest).enumerate() {
+        if previous.is_some_and(|p| unit >= p) {
+            return Err("duration units in descending order");
+        }
+        if index < last && value.femptos != 0 {
+            return Err("an integer before the last duration unit");
+        }
+        previous = Some(unit);
+        let part = match unit {
+            DurationUnit::Days => DurationLiteral::days(value),
+            DurationUnit::Hours => DurationLiteral::hours(value),
+            DurationUnit::Minutes => DurationLiteral::minutes(value),
+            DurationUnit::Seconds => DurationLiteral::seconds(value),
+            DurationUnit::Milliseconds => DurationLiteral::milliseconds(value),
+        };
+        total = Some(match total {
+            None => part,
+            Some(sum) => sum.plus(part),
+        });
+    }
+    total.ok_or("a duration")
 }
 
 /// The default implementation of the parsing traits for `[T]` expects `T` to be
@@ -422,16 +466,20 @@ parser! {
     rule octal_integer() -> Integer = n:tok(TokenType::OctDigits) {? Integer::try_octal(n.text.as_str()) }
     rule hex_integer() -> Integer = n:tok(TokenType::HexDigits) {? Integer::try_hex(n.text.as_str()) }
     // real_literal_type is used specifically for real literals (returns RealTypeName)
-    rule real_literal_type() -> RealTypeName =
-      tok(TokenType::Real) { RealTypeName::REAL }
-      / tok(TokenType::Lreal) { RealTypeName::LREAL }
-    rule real_literal() -> RealLiteral = tn:(t:real_literal_type() tok(TokenType::Hash) {t})? sign:(tok(TokenType::Minus) { -1.0 }/ tok(TokenType::Plus) { 1.0 })? literal:(fp:tok(TokenType::FloatingPoint) {fp.text.as_str()} / fp:tok(TokenType::FixedPoint) {fp.text.as_str()} ){?
-      let sign = sign.unwrap_or(1.0);
-      RealLiteral::try_parse(literal, tn).map(|node| {
+    rule real_literal_type() -> (RealTypeName, &'input Token) =
+      t:tok(TokenType::Real) { (RealTypeName::REAL, t) }
+      / t:tok(TokenType::Lreal) { (RealTypeName::LREAL, t) }
+    rule real_literal() -> RealLiteral = tn:(t:real_literal_type() tok(TokenType::Hash) {t})? sign:(s:tok(TokenType::Minus) { (-1.0, s) }/ s:tok(TokenType::Plus) { (1.0, s) })? fp:(fp:tok(TokenType::FloatingPoint) {fp} / fp:tok(TokenType::FixedPoint) {fp} ){?
+      // The span runs from the first token of the literal -- its type prefix,
+      // else its sign, else its digits -- to the end of the digits.
+      let first = tn.as_ref().map(|(_, t)| *t).or(sign.map(|(_, s)| s)).unwrap_or(fp);
+      let span = SourceSpan::join(&first.span, &fp.span);
+      let sign = sign.map_or(1.0, |(v, _)| v);
+      RealLiteral::try_parse(fp.text.as_str(), tn.map(|(t, _)| t)).map(|node| {
         RealLiteral {
           value: node.value * sign,
           data_type: node.data_type,
-          span: node.span,
+          span,
         }
       })
     }
@@ -469,14 +517,14 @@ parser! {
     rule character_string_literal() -> CharacterStringLiteral = single_byte_character_string() / double_byte_character_string()
     rule single_byte_character_string() -> CharacterStringLiteral = start:position!() (tok(TokenType::String) tok(TokenType::Hash))? t:tok(TokenType::SingleByteString) end:position!() {
       CharacterStringLiteral {
-        value: unquote(&t.text),
+        value: unquote(&t.text, &StringType::String),
         width: StringType::String,
         span: span_of_tokens(tokens, start, end),
       }
     }
     rule double_byte_character_string() -> CharacterStringLiteral = start:position!() (tok(TokenType::WString) tok(TokenType::Hash))? t:tok(TokenType::DoubleByteString) end:position!() {
       CharacterStringLiteral {
-        value: unquote(&t.text),
+        value: unquote(&t.text, &StringType::WString),
         width: StringType::WString,
         span: span_of_tokens(tokens, start, end),
       }
@@ -490,7 +538,7 @@ parser! {
     // See specs/design/time-literals.md — REQ-TL-011.
     rule dt_sep(val: &str) -> &'input Token = [t if t.token_type == TokenType::Identifier && t.text.eq_ignore_ascii_case(val)]
 
-    pub rule duration() -> DurationLiteral = start:position!() (tok(TokenType::Time) / tok(TokenType::Ltime) / dt_sep("T")) tok(TokenType::Hash) s:(tok(TokenType::Minus))? i:interval() end:position!() {
+    pub rule duration() -> DurationLiteral = start:position!() width:duration_prefix() tok(TokenType::Hash) s:(tok(TokenType::Minus))? i:interval() end:position!() {
       let span = span_of_tokens(tokens, start, end);
       let interval = match s {
         Some(sign) => i.interval * -1,
@@ -499,15 +547,28 @@ parser! {
       DurationLiteral {
         span,
         interval,
+        width,
       }
     }
-    // milliseconds must come first because the "m" in "ms" would match the minutes rule
-    rule interval() -> DurationLiteral = ms:milliseconds() { ms }
-      / d:days() { d }
-      / h:hours() { h }
-      / m:minutes() { m }
-      / s:seconds() { s }
-    rule days() -> DurationLiteral = days:fixed_point() dt_sep("d") { DurationLiteral::days(days) } / days:integer() dt_sep("d") dt_sep("_")? hours:hours() { hours.plus(DurationLiteral::days(days.into())) }
+    // The prefix names the type: `LTIME#` is an LTIME, `TIME#` and `T#` a
+    // TIME. `dt_sep("T")` matches a bare identifier, so it comes last and
+    // cannot shadow the keyword forms.
+    rule duration_prefix() -> TemporalWidth = tok(TokenType::Time) { TemporalWidth::Short } / tok(TokenType::Ltime) { TemporalWidth::Long } / dt_sep("T") { TemporalWidth::Short }
+    // One or more `number unit` parts, with an optional `_` between parts
+    // (REQ-TL-020 to 022); `combine_interval_parts` checks their order. The
+    // token transform `xform_split_duration_units` has already split a unit
+    // from the digits the lexer glued to it (`m30s`).
+    rule interval() -> DurationLiteral = first:interval_part() rest:(dt_sep("_")? p:interval_part() { p })* {?
+      combine_interval_parts(first, rest)
+    }
+    rule interval_part() -> (FixedPoint, DurationUnit) = n:fixed_point() u:duration_unit() { (n, u) }
+    // `ms` must come before `m`, or `100ms` would read as minutes.
+    rule duration_unit() -> DurationUnit =
+      dt_sep("ms") { DurationUnit::Milliseconds }
+      / dt_sep("d") { DurationUnit::Days }
+      / dt_sep("h") { DurationUnit::Hours }
+      / dt_sep("m") { DurationUnit::Minutes }
+      / dt_sep("s") { DurationUnit::Seconds }
     rule fixed_point() -> FixedPoint =
       fp:tok(TokenType::FixedPoint) {?
         FixedPoint::parse(fp.text.as_str())
@@ -515,20 +576,18 @@ parser! {
       / i:integer() {?
         Ok(i.into())
     }
-    rule hours() -> DurationLiteral = hours:fixed_point() dt_sep("h") { DurationLiteral::hours(hours) } / hours:integer() dt_sep("h") dt_sep("_")? min:minutes() { min.plus(DurationLiteral::hours(hours.into())) }
-    rule minutes() -> DurationLiteral = min:fixed_point() dt_sep("m") { DurationLiteral::minutes(min) } / mins:integer() dt_sep("m") dt_sep("_")? sec:seconds() { sec.plus(DurationLiteral::minutes(mins.into())) }
-    rule seconds() -> DurationLiteral = secs:fixed_point() dt_sep("s") { DurationLiteral::seconds(secs) } / sec:integer() dt_sep("s") dt_sep("_")? ms:milliseconds() { ms.plus(DurationLiteral::seconds(sec.into())) }
-    rule milliseconds() -> DurationLiteral = ms:fixed_point() dt_sep("ms") { DurationLiteral::milliseconds(ms) }
 
     // 1.2.3.2 Time of day and date
-    rule time_of_day() -> TimeOfDayLiteral = (tok(TokenType::TimeOfDay) / tok(TokenType::Ltod)) tok(TokenType::Hash) d:daytime() { TimeOfDayLiteral::new(d) }
+    rule time_of_day() -> TimeOfDayLiteral = width:time_of_day_prefix() tok(TokenType::Hash) d:daytime() { TimeOfDayLiteral::new(d).with_width(width) }
+    rule time_of_day_prefix() -> TemporalWidth = tok(TokenType::TimeOfDay) { TemporalWidth::Short } / tok(TokenType::Ltod) { TemporalWidth::Long }
     rule daytime() -> Time = h:day_hour() tok(TokenType::Colon) m:day_minute() tok(TokenType::Colon) s:day_second() {?
       Time::from_hms(h.try_into().map_err(|e| "hour")?, m.try_into().map_err(|e| "min")?, s.whole as u8).map_err(|e| "time")
     }
     rule day_hour() -> Integer = integer()
     rule day_minute() -> Integer = integer()
     rule day_second() -> FixedPoint = fixed_point()
-    rule date() -> DateLiteral = (tok(TokenType::Date) / tok(TokenType::Ldate) / dt_sep("D")) tok(TokenType::Hash) d:date_literal() { DateLiteral::new(d) }
+    rule date() -> DateLiteral = width:date_prefix() tok(TokenType::Hash) d:date_literal() { DateLiteral::new(d).with_width(width) }
+    rule date_prefix() -> TemporalWidth = tok(TokenType::Date) { TemporalWidth::Short } / tok(TokenType::Ldate) { TemporalWidth::Long } / dt_sep("D") { TemporalWidth::Short }
     rule date_literal() -> Date = y:year() tok(TokenType::Minus) m:month() tok(TokenType::Minus) d:day() {?
       let y = y.value;
       let m = Month::try_from(<dsl::common::Integer as TryInto<u8>>::try_into(m).map_err(|e| "month")?).map_err(|e| "month")?;
@@ -538,7 +597,8 @@ parser! {
     rule year() -> Integer = i:integer() { i }
     rule month() -> Integer = i:integer() { i }
     rule day() -> Integer = i:integer() { i }
-    rule date_and_time() -> DateAndTimeLiteral = (tok(TokenType::DateAndTime) / tok(TokenType::Ldt)) tok(TokenType::Hash) d:date_literal() tok(TokenType::Minus) t:daytime() { DateAndTimeLiteral::new(PrimitiveDateTime::new(d, t)) }
+    rule date_and_time() -> DateAndTimeLiteral = width:date_and_time_prefix() tok(TokenType::Hash) d:date_literal() tok(TokenType::Minus) t:daytime() { DateAndTimeLiteral::new(PrimitiveDateTime::new(d, t)).with_width(width) }
+    rule date_and_time_prefix() -> TemporalWidth = tok(TokenType::DateAndTime) { TemporalWidth::Short } / tok(TokenType::Ldt) { TemporalWidth::Long }
 
     // B.1.3 Data types
     // This should match generic_type_name, but that's unnecessary because
@@ -594,6 +654,10 @@ parser! {
           syntax,
         })
       }
+      // A simple type without an initializer whose base is an elementary
+      // type. The base is a keyword, so unlike `identifier : identifier`
+      // below this is not ambiguous.
+      / simple:simple_type_declaration__without_value() { DataTypeDeclarationKind::Simple(simple) }
       // The remaining are structure, enumerated and simple without an initializer
       // These all have the general form of
       //    `identifier : identifier`
@@ -612,6 +676,15 @@ parser! {
       SimpleDeclaration {
         type_name,
         spec_and_init,
+      }
+    }
+    rule simple_type_declaration__without_value() -> SimpleDeclaration = type_name:simple_type_name() _ tok(TokenType::Colon) _ base:elementary_type_name() {
+      SimpleDeclaration {
+        type_name,
+        spec_and_init: InitialValueAssignmentKind::Simple(SimpleInitializer {
+          type_name: base.into(),
+          initial_value: None,
+        }),
       }
     }
     rule simple_spec_init() -> InitialValueAssignmentKind = type_name:simple_specification() _ tok(TokenType::Assignment) _ e:expression() {
@@ -1246,6 +1319,7 @@ parser! {
         qualifier: DeclarationQualifier::Unspecified,
         initializer,
         block: next_block_id(),
+        type_id: None,
       }
     }
     // We use the same type as in other places for VarInit, but the external always omits the initializer
@@ -1272,6 +1346,7 @@ parser! {
         qualifier: DeclarationQualifier::Unspecified,
         initializer: spec,
         block: next_block_id(),
+        type_id: None,
       }
     }
     rule global_var_name() -> Id = i:identifier() { i }
@@ -1297,6 +1372,7 @@ parser! {
           // TODO this is clearly wrong
           initializer: init,
           block: next_block_id(),
+          type_id: None,
         }
       }).collect()
      }

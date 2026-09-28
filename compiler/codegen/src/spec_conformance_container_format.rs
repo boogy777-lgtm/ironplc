@@ -9,20 +9,23 @@
 
 use std::io::Cursor;
 
-use ironplc_container::Container;
+use ironplc_container::{integrity, Container, FileHeader, HEADER_SIZE};
 use ironplc_dsl::core::FileId;
 use ironplc_parser::options::CompilerOptions;
 use spec_test_macro::spec_test;
 
-/// Compiles `source` and parses the container back out of the serialized
-/// bytes, so the assertions are about what reaches the file.
-fn compiled_container(source: &str) -> Container {
-    compiled_container_with_fb_uids(source, &[])
+/// Compiles `source` and returns the serialized bytes with the header parsed
+/// back out of them, so every assertion is about what reaches the file.
+fn compiled(source: &str) -> (Vec<u8>, FileHeader) {
+    compiled_with_fb_uids(source, &[])
 }
 
-/// [`compiled_container`] with an engineering-side FB field UID table
-/// (ADR 0059) supplied to codegen.
-fn compiled_container_with_fb_uids(source: &str, fb_field_uids: &[(&str, &str, u64)]) -> Container {
+/// [`compiled`] with an engineering-side FB field UID table (ADR 0059)
+/// supplied to codegen.
+fn compiled_with_fb_uids(
+    source: &str,
+    fb_field_uids: &[(&str, &str, u64)],
+) -> (Vec<u8>, FileHeader) {
     let options = CompilerOptions::default();
     let library = ironplc_parser::parse_program(source, &FileId::default(), &options).unwrap();
     let (analyzed, ctx) = ironplc_analyzer::stages::resolve_types(&[&library], &options).unwrap();
@@ -34,34 +37,64 @@ fn compiled_container_with_fb_uids(source: &str, fb_field_uids: &[(&str, &str, u
     let container = crate::compile(&analyzed, &ctx, &codegen_options, &crate::EmptyLookup).unwrap();
     let mut buf = Vec::new();
     container.write_to(&mut buf).unwrap();
+    let header = FileHeader::read_from(&mut Cursor::new(&buf[..HEADER_SIZE])).unwrap();
+    (buf, header)
+}
+
+/// [`compiled_container`] with an engineering-side FB field UID table
+/// (ADR 0059) supplied to codegen.
+fn compiled_container_with_fb_uids(source: &str, fb_field_uids: &[(&str, &str, u64)]) -> Container {
+    let (buf, _) = compiled_with_fb_uids(source, fb_field_uids);
     Container::read_from(&mut Cursor::new(&buf)).unwrap()
 }
 
-/// REQ-CF-codegen-025: `layout_hash`, `content_hash` and `debug_hash` are
-/// computed when the container is written; the reader verifies the nonzero
-/// hashes at load time, so a successful round-trip is itself proof the
-/// hashes match the serialized sections.
-#[spec_test(REQ_CF_codegen_025)]
-fn container_spec_req_cf_025_header_hashes_are_computed() {
-    let container = compiled_container(
-        "PROGRAM main
+const ASSIGNMENT_PROGRAM: &str = "PROGRAM main
          VAR
              x : DINT;
          END_VAR
              x := 1;
-         END_PROGRAM",
-    );
-    assert_ne!(container.header.content_hash, [0u8; 32]);
-    assert_ne!(container.header.layout_hash, [0u8; 32]);
-    if container.header.debug_section_size > 0 {
-        assert_ne!(container.header.debug_hash, [0u8; 32]);
+         END_PROGRAM";
+
+/// The bytes of one section, as the header's directory locates it.
+fn section(buf: &[u8], offset: u32, size: u32) -> &[u8] {
+    &buf[offset as usize..(offset + size) as usize]
+}
+
+/// REQ-CF-codegen-025: `layout_hash`, `content_hash` and `debug_hash` are
+/// computed when the container is written; `content_hash` and `debug_hash`
+/// reproduce from the written section bytes (the content hash covers the
+/// masked header, task table, type, constant and code sections; see
+/// [ADR-0007](../adrs/0007-dual-signature-integrity-model.md)). The reader
+/// verifies the nonzero hashes at load time, so a successful round-trip is
+/// itself proof the hashes match the serialized sections.
+#[spec_test(REQ_CF_codegen_025)]
+fn container_spec_req_cf_025_header_hashes_are_computed() {
+    let (buf, header) = compiled(ASSIGNMENT_PROGRAM);
+
+    assert_ne!(header.content_hash, integrity::NO_HASH);
+    assert_ne!(header.layout_hash, [0u8; 32]);
+    if header.debug_section_size > 0 {
+        assert_ne!(header.debug_hash, integrity::NO_HASH);
     } else {
-        assert_eq!(container.header.debug_hash, [0u8; 32]);
+        assert_eq!(header.debug_hash, integrity::NO_HASH);
     }
-    assert_eq!(
-        container.header.layout_hash,
-        container.compute_layout_hash()
-    );
+
+    let expected_content = integrity::content_hash(&integrity::Content {
+        header: buf[..HEADER_SIZE].try_into().unwrap(),
+        task_table: section(&buf, header.task_section_offset, header.task_section_size),
+        type_section: section(&buf, header.type_section_offset, header.type_section_size),
+        const_section: section(&buf, header.const_section_offset, header.const_section_size),
+        code_section: section(&buf, header.code_section_offset, header.code_section_size),
+    });
+    assert_eq!(header.content_hash, expected_content);
+
+    let debug = section(&buf, header.debug_section_offset, header.debug_section_size);
+    if header.debug_section_size > 0 {
+        assert_eq!(header.debug_hash, integrity::debug_hash(debug));
+    }
+
+    let container = Container::read_from(&mut Cursor::new(&buf)).unwrap();
+    assert_eq!(header.layout_hash, container.compute_layout_hash());
 }
 
 const FB_PROGRAM: &str = "FUNCTION_BLOCK Accumulator

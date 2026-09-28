@@ -21,13 +21,13 @@ use super::compile::{
 use super::compile_arith::compile_arith_fold;
 use super::compile_expr::{
     compile_expr, emit_compare_op, emit_mod, emit_mul, emit_not, emit_sub, emit_truncation,
-    op_type, storage_bits, unresolved_expr_type,
+    op_type, op_type_from_expr, storage_bits,
 };
 use super::compile_string::{
     compile_concat, compile_delete, compile_find, compile_insert, compile_left, compile_len,
     compile_mid, compile_replace, compile_right, resolve_string_arg,
 };
-use super::compile_time_arith::{compile_time_arith, time_arith_for};
+use super::compile_time_arith::{compile_time_arith, time_arith_for, Operand};
 use super::type_info::resolve_type_name;
 use crate::emit::Emitter;
 
@@ -183,9 +183,9 @@ pub(crate) fn compile_function_call(
     }
     // A typed time or date function (ADD_TIME, SUB_DATE_DATE, ...) compiles
     // as the instruction sequence for the units of its operands.
-    if let Some(arith) = time_arith_for(name.as_str()) {
+    if let Some((arith, width)) = time_arith_for(name.as_str()) {
         let (in1, in2) = extract_two_positional_args(func)?;
-        return compile_time_arith(emitter, ctx, arith, in1, in2);
+        return compile_time_arith(emitter, ctx, arith, width, Operand::Expr(in1), in2);
     }
     match name.as_str() {
         "shl" | "shr" | "rol" | "ror" => {
@@ -277,11 +277,7 @@ fn compile_user_function_call(
             // When implicit integer widening crosses OpWidth boundaries
             // (e.g. INT [W32] -> LINT [W64]), compile the argument at its
             // natural width and then emit a conversion opcode.
-            let arg_natural = arg
-                .resolved_type
-                .as_ref()
-                .and_then(|t| resolve_type_name(&t.name))
-                .map(|info| (info.op_width, info.signedness));
+            let arg_natural = op_type_from_expr(ctx, arg);
 
             if let Some(arg_op) = arg_natural {
                 if arg_op.0 != param_op_type.0 {
@@ -393,7 +389,7 @@ fn compile_operator_form(
                 return Err(Diagnostic::todo_with_span(func.name.span()));
             };
             compile_expr(emitter, ctx, term, op_type)?;
-            emit_not(emitter, op_type, term)
+            emit_not(emitter, ctx, op_type, term)
         }
     }
 }
@@ -532,7 +528,7 @@ fn compile_trunc(
     }
 
     // Determine the argument's float type from its resolved type.
-    let arg_op_type = op_type(args[0])?;
+    let arg_op_type = op_type(ctx, args[0])?;
     compile_expr(emitter, ctx, args[0], arg_op_type)?;
 
     // Build VarTypeInfo for source (float) and target (integer) to reuse
@@ -585,10 +581,10 @@ fn compile_sizeof(
                 let elem_bytes = array_info.element_var_type_info.storage_bits as u32 / 8;
                 array_info.total_elements * elem_bytes
             } else {
-                sizeof_from_resolved_type(args[0])?
+                sizeof_from_expr_type(ctx, args[0])?
             }
         } else {
-            sizeof_from_resolved_type(args[0])?
+            sizeof_from_expr_type(ctx, args[0])?
         };
 
     let pool_index = ctx.add_i32_constant(size as i32);
@@ -596,15 +592,11 @@ fn compile_sizeof(
     Ok(())
 }
 
-/// Returns the size in bytes from an expression's resolved type annotation.
-fn sizeof_from_resolved_type(expr: &Expr) -> Result<u32, Diagnostic> {
-    let resolved = expr
-        .resolved_type
-        .as_ref()
-        .ok_or_else(|| unresolved_expr_type(expr))?;
-    let info = resolve_type_name(&resolved.name).ok_or_else(|| unresolved_expr_type(expr))?;
+/// Returns the size in bytes of an expression's value, from its `expr_type`.
+fn sizeof_from_expr_type(ctx: &CompileContext, expr: &Expr) -> Result<u32, Diagnostic> {
+    let bits = storage_bits(ctx, expr)?;
     // Ceiling division: types like BOOL (1 bit) still occupy 1 byte.
-    Ok((info.storage_bits as u32).div_ceil(8))
+    Ok((bits as u32).div_ceil(8))
 }
 
 /// Compiles BCD_TO_INT(IN) — converts a BCD-encoded bit string to an integer.
@@ -623,8 +615,8 @@ fn compile_bcd_to_int(
         return Err(Diagnostic::todo_with_span(func.name.span()));
     }
 
-    let arg_op_type = op_type(args[0])?;
-    let bits = storage_bits(args[0])?;
+    let arg_op_type = op_type(ctx, args[0])?;
+    let bits = storage_bits(ctx, args[0])?;
     compile_expr(emitter, ctx, args[0], arg_op_type)?;
 
     let func_id = match bits {
@@ -654,8 +646,8 @@ fn compile_int_to_bcd(
         return Err(Diagnostic::todo_with_span(func.name.span()));
     }
 
-    let arg_op_type = op_type(args[0])?;
-    let bits = storage_bits(args[0])?;
+    let arg_op_type = op_type(ctx, args[0])?;
+    let bits = storage_bits(ctx, args[0])?;
     compile_expr(emitter, ctx, args[0], arg_op_type)?;
 
     let func_id = match (arg_op_type.0, bits) {
@@ -864,7 +856,7 @@ fn compile_shift_rotate(
     compile_expr(emitter, ctx, args[1], n_op_type)?;
 
     // Determine storage bits for narrow-type ROL/ROR selection
-    let bits = storage_bits(args[0])?;
+    let bits = storage_bits(ctx, args[0])?;
 
     let func_id = match (name, op_type.0) {
         ("shl", OpWidth::W64) => opcode::builtin::SHL_I64,

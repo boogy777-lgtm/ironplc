@@ -48,6 +48,10 @@ unsafe_code = "deny"
 # constructors opt back in with `#[allow(deprecated)]`.
 deprecated = "deny"
 
+# Fail on any warning (including clippy), matching CI's `-D warnings`. To make
+# warnings non-fatal while iterating: `RUSTFLAGS=--cap-lints=warn cargo build`.
+warnings = "deny"
+
 # LLM fence: panicking constructs are compile errors in non-test code, not a
 # prose rule. Tests keep unwrap/expect via clippy.toml (allow-*-in-tests).
 [workspace.lints.clippy]

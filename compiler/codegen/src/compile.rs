@@ -65,7 +65,7 @@ use ironplc_parser::options::{CompilerOptions, StringToNumFailure, StringToNumNo
 use ironplc_problems::Problem;
 
 use ironplc_analyzer::system_globals::SYSTEM_UPTIME_GLOBALS;
-use ironplc_analyzer::{FunctionEnvironment, SemanticContext, TypeEnvironment};
+use ironplc_analyzer::{FunctionEnvironment, IntermediateType, SemanticContext, TypeEnvironment};
 
 use crate::emit::Emitter;
 
@@ -353,6 +353,7 @@ pub fn compile(
         context.types(),
         enum_map,
         options,
+        *context.compiler_options(),
         sources,
     )?;
 
@@ -754,6 +755,7 @@ fn compile_program_with_functions(
     types: &TypeEnvironment,
     enum_map: crate::compile_enum::EnumOrdinalMap,
     options: &CodegenOptions,
+    compiler_options: CompilerOptions,
     sources: &dyn crate::source_lookup::SourceLookup,
 ) -> Result<Container, Diagnostic> {
     let ProgramInputs {
@@ -764,7 +766,9 @@ fn compile_program_with_functions(
     } = inputs;
     let mut ctx = CompileContext::new();
     ctx.enum_map = enum_map;
+    ctx.types = crate::type_info::type_representations(types);
     ctx.string_to_num = options.string_to_num;
+    ctx.compiler_options = compiler_options;
     let mut builder = ContainerBuilder::new();
 
     // Register every top-level POU's source file with the debug
@@ -1450,9 +1454,16 @@ pub(crate) struct CompileContext {
     pub(crate) struct_array_vars: HashMap<Id, crate::compile_array_struct::StructArrayVarInfo>,
     /// Pre-computed ordinal mappings for named enumeration types.
     pub(crate) enum_map: crate::compile_enum::EnumOrdinalMap,
+    /// What every type is, by the id an expression's `expr_type` carries.
+    /// See [`crate::type_info::expr_type_info`].
+    pub(crate) types: HashMap<ironplc_dsl::type_id::TypeId, IntermediateType>,
     /// The behavior policies `STRING_TO_<numeric>` calls select their
     /// builtin by (ADR-0049).
     pub(crate) string_to_num: StringToNumPolicies,
+    /// The options the analyzer ran with. Codegen asks the arithmetic
+    /// overload resolver the analyzer asked, with the same options, for the
+    /// result type of each step of an arithmetic call.
+    pub(crate) compiler_options: CompilerOptions,
     /// Next available byte offset in the data region.
     pub(crate) data_region_offset: u32,
     /// Maximum string capacity across all STRING variables (for temp buffer sizing).
@@ -1552,7 +1563,9 @@ impl CompileContext {
             user_fb_types: HashMap::new(),
             next_user_fb_type_id: 0x1000,
             enum_map: crate::compile_enum::EnumOrdinalMap::default(),
+            types: HashMap::new(),
             string_to_num: StringToNumPolicies::default(),
+            compiler_options: CompilerOptions::default(),
             current_function_return: None,
             current_function_id: None,
             call_graph: HashMap::new(),

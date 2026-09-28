@@ -37,8 +37,8 @@
 
 use std::collections::BTreeMap;
 
-use ironplc_container::{Container, VarIndex};
-use ironplc_vm::{Slot, Vm, VmBuffers};
+use ironplc_container::{Container, InstanceId, TaskId, VarIndex};
+use ironplc_vm::{FaultContext, Slot, Vm, VmBuffers};
 
 use crate::error::{OnlineChangeError, RuntimeError};
 use crate::generation::{ApplicationGeneration, LogicGeneration};
@@ -179,6 +179,7 @@ impl RuntimeHost {
         let mut buffers = VmBuffers::from_container(&container);
         Vm::new()
             .load(&container, &mut buffers)
+            .map_err(load_trap)?
             .start()
             .map_err(RuntimeError::Trap)?;
 
@@ -580,6 +581,7 @@ impl RuntimeHost {
             let mut advanced = VmBuffers::from_container(candidate);
             Vm::new()
                 .load(candidate, &mut advanced)
+                .map_err(|_| OnlineChangeError::SnapshotCorrupt)?
                 .start()
                 .map_err(|_| OnlineChangeError::SnapshotCorrupt)?;
             advanced
@@ -669,6 +671,7 @@ impl RuntimeHost {
         let mut completed = self.rounds;
         let mut vm = Vm::new()
             .load(container, &mut self.buffers)
+            .map_err(load_trap)?
             .resume(completed);
         while remaining > 0 {
             vm.run_round(clock()).map_err(RuntimeError::Trap)?;
@@ -746,6 +749,7 @@ impl RuntimeHost {
         let mut migrated = VmBuffers::from_container(candidate);
         Vm::new()
             .load(candidate, &mut migrated)
+            .map_err(load_trap)?
             .start()
             .map_err(RuntimeError::Trap)?;
 
@@ -770,6 +774,17 @@ impl RuntimeHost {
     pub fn data_region(&self) -> &[u8] {
         &self.buffers.data_region
     }
+}
+
+/// Wraps a trap raised by `Vm::load` — which validates the container before
+/// any task or program instance exists — in the host's error type. A load
+/// trap carries no task context, so it reports the DEFAULT task and instance.
+fn load_trap(trap: ironplc_vm::error::Trap) -> RuntimeError {
+    RuntimeError::Trap(FaultContext {
+        trap,
+        task_id: TaskId::DEFAULT,
+        instance_id: InstanceId::DEFAULT,
+    })
 }
 
 /// The device timestamp in milliseconds since the Unix epoch, for the

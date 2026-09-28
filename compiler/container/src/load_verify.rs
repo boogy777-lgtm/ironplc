@@ -21,25 +21,22 @@
 //! | FB field UIDs name an existing user FB type and a field inside it, ascending | [`LoadViolation::FbFieldUidUnknownType`] / [`LoadViolation::FbFieldUidFieldOutOfBounds`] / [`LoadViolation::FbFieldUidsOutOfOrder`] |
 //! | `layout_hash` recomputes over the type section | [`LoadViolation::LayoutHashMismatch`] |
 //!
-//! Integrity hashes are verified separately, against the raw section bytes:
-//! [`verify_content_hash`] rejects a mismatch (ADR-0006: no unverified
-//! bytecode reaches the interpreter), while [`verify_debug_hash`] follows the
-//! loading sequence's step 13 — a debug-hash mismatch discards the debug
-//! section rather than the container, because debug info is optional and
-//! strippable. A hash field of all zeros is a container written before this
-//! verification existed and is accepted as-is (legacy accept).
-//!
 //! Note what is deliberately *not* checked: an `FbInstance` variable's
 //! `extra` type ID is not matched against the descriptor tables, because the
 //! ID may name a standard-library FB (TON, TOF, ...) whose descriptor the
 //! container does not carry.
+//!
+//! Integrity hashes are *not* this module's job: [`crate::integrity`]
+//! (ADR-0007) defines and checks `content_hash` and `debug_hash` against the
+//! raw bytes in both the `std` reader ([`Container::read_from`]) and the
+//! `no_std` reader ([`crate::ContainerRef`]). This module starts from an
+//! already-parsed container.
 
 use std::vec::Vec;
 
-use crate::header::{FileHeader, HEADER_SIZE};
 use crate::id_types::{FbTypeId, FunctionId, VarIndex};
 use crate::type_section::{FieldType, TypeSection, VAR_FLAG_IS_ARRAY};
-use crate::{Container, ContainerError};
+use crate::Container;
 
 /// A violation of the load-time container invariants (ADR-0006).
 ///
@@ -442,88 +439,15 @@ fn verify_type_section(
     Ok(())
 }
 
-/// Verifies `header.content_hash` against the raw bytes following the header
-/// (`rest`). The hash covers the type, constant and code sections in file
-/// order, which are contiguous, so the covered range runs from the type
-/// section (or the constant pool when no type section is present) through the
-/// end of the code section.
-///
-/// A zero `content_hash` is a legacy container and is accepted without
-/// checking. A declared range that does not fit the file is a size mismatch.
-pub(crate) fn verify_content_hash(header: &FileHeader, rest: &[u8]) -> Result<(), ContainerError> {
-    if header.content_hash == [0u8; 32] {
-        return Ok(());
-    }
-    let (start, end) = content_range(header).ok_or(ContainerError::SectionSizeMismatch)?;
-    let bytes = rest
-        .get(start..end)
-        .ok_or(ContainerError::SectionSizeMismatch)?;
-    if blake3::hash(bytes).as_bytes() != &header.content_hash {
-        return Err(ContainerError::VerificationFailed(
-            LoadViolation::ContentHashMismatch,
-        ));
-    }
-    Ok(())
-}
-
-/// Verifies `header.debug_hash` against the raw debug section bytes. A zero
-/// hash is a legacy container and is accepted. The caller decides how to
-/// treat a mismatch: the loading sequence treats invalid debug info as
-/// non-fatal and discards it.
-pub(crate) fn verify_debug_hash(header: &FileHeader, rest: &[u8]) -> Result<(), LoadViolation> {
-    if header.debug_hash == [0u8; 32] {
-        return Ok(());
-    }
-    let bytes = section_bytes(header.debug_section_offset, header.debug_section_size, rest)
-        .ok_or(LoadViolation::DebugHashMismatch)?;
-    if blake3::hash(bytes).as_bytes() != &header.debug_hash {
-        return Err(LoadViolation::DebugHashMismatch);
-    }
-    Ok(())
-}
-
-/// Returns the `(start, end)` offsets of the content-hash range within
-/// `rest`, or `None` if the directory entries are inconsistent.
-fn content_range(header: &FileHeader) -> Option<(usize, usize)> {
-    let base = HEADER_SIZE as u32;
-    let first_content_offset = if header.type_section_size > 0 {
-        header.type_section_offset
-    } else {
-        header.const_section_offset
-    };
-    let end = header
-        .code_section_offset
-        .checked_add(header.code_section_size)?;
-    if first_content_offset < base || end < first_content_offset {
-        return None;
-    }
-    Some((
-        (first_content_offset - base) as usize,
-        (end - base) as usize,
-    ))
-}
-
-/// Slices the `rest` bytes for a section declared at a file offset, returning
-/// `None` when the declared range does not fit the file.
-fn section_bytes(offset: u32, size: u32, rest: &[u8]) -> Option<&[u8]> {
-    let base = HEADER_SIZE as u32;
-    let end = offset.checked_add(size)?;
-    if offset < base || end < offset {
-        return None;
-    }
-    rest.get((offset - base) as usize..(end - base) as usize)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::id_types::{FbTypeId, FunctionId, VarIndex};
-    use crate::test_support::{container_bytes, round_trip};
+    use crate::test_support::round_trip;
     use crate::type_section::{
         FbTypeDescriptor, FieldEntry, StableVarEntry, UserFbDescriptor, VarEntry,
     };
     use crate::ContainerBuilder;
-    use std::io::Cursor;
     use std::vec;
 
     /// A container whose type section exercises every check: two variables
@@ -577,16 +501,6 @@ mod tests {
                 num_fields: 1,
             })
             .build()
-    }
-
-    /// `consistent_container` with its wire-format bytes.
-    fn consistent_bytes() -> Vec<u8> {
-        container_bytes(&consistent_container())
-    }
-
-    /// Reads the header back out of wire-format bytes.
-    fn header_of(bytes: &[u8]) -> FileHeader {
-        FileHeader::read_from(&mut Cursor::new(&bytes[..HEADER_SIZE])).unwrap()
     }
 
     #[test]
@@ -844,109 +758,5 @@ mod tests {
         container.header.layout_hash = [0xFF; 32];
         let result = verify_load(&container);
         assert!(matches!(result, Err(LoadViolation::LayoutHashMismatch)));
-    }
-
-    #[test]
-    fn verify_content_hash_when_matching_then_ok() {
-        let bytes = consistent_bytes();
-        let header = header_of(&bytes);
-        assert!(verify_content_hash(&header, &bytes[HEADER_SIZE..]).is_ok());
-    }
-
-    #[test]
-    fn verify_content_hash_when_mismatched_then_violation() {
-        let mut bytes = consistent_bytes();
-        // Corrupt a constant-pool byte without updating the header hash.
-        // Offsets in the directory are file offsets; `rest` begins after
-        // the fixed-size header.
-        let header = header_of(&bytes);
-        let rest = &mut bytes[HEADER_SIZE..];
-        let constant_start = (header.const_section_offset - HEADER_SIZE as u32) as usize + 2;
-        rest[constant_start] = rest[constant_start].wrapping_add(1);
-        let header = header_of(&bytes);
-        let result = verify_content_hash(&header, &bytes[HEADER_SIZE..]);
-        assert!(matches!(
-            result,
-            Err(ContainerError::VerificationFailed(
-                LoadViolation::ContentHashMismatch
-            ))
-        ));
-    }
-
-    #[test]
-    fn verify_content_hash_when_zero_then_legacy_accept() {
-        let bytes = consistent_bytes();
-        let mut header = header_of(&bytes);
-        header.content_hash = [0u8; 32];
-        assert!(verify_content_hash(&header, &bytes[HEADER_SIZE..]).is_ok());
-    }
-
-    #[test]
-    fn verify_content_hash_when_range_out_of_bounds_then_size_mismatch() {
-        let bytes = consistent_bytes();
-        let mut header = header_of(&bytes);
-        header.code_section_size = bytes.len() as u32 * 2;
-        let result = verify_content_hash(&header, &bytes[HEADER_SIZE..]);
-        assert!(matches!(result, Err(ContainerError::SectionSizeMismatch)));
-    }
-
-    #[test]
-    fn verify_debug_hash_when_matching_then_ok() {
-        let bytes = consistent_bytes();
-        let header = header_of(&bytes);
-        assert_eq!(verify_debug_hash(&header, &bytes[HEADER_SIZE..]), Ok(()));
-    }
-
-    #[test]
-    fn verify_debug_hash_when_zero_then_legacy_accept() {
-        let bytes = consistent_bytes();
-        let mut header = header_of(&bytes);
-        header.debug_hash = [0u8; 32];
-        assert_eq!(verify_debug_hash(&header, &bytes[HEADER_SIZE..]), Ok(()));
-    }
-
-    #[test]
-    fn verify_debug_hash_when_mismatched_then_violation() {
-        let container = crate::ContainerBuilder::new()
-            .num_variables(0)
-            .add_i32_constant(1)
-            .add_function(FunctionId::INIT, &[0x8C], 1, 0, 0)
-            .add_var_name(crate::debug_section::VarNameEntry {
-                var_index: VarIndex::new(0),
-                function_id: FunctionId::GLOBAL_SCOPE,
-                var_section: crate::debug_section::var_section::VAR,
-                iec_type_tag: crate::debug_section::iec_type_tag::DINT,
-                name: "x".into(),
-                type_name: "DINT".into(),
-            })
-            .build();
-        let mut bytes = container_bytes(&container);
-        // Corrupt a debug byte: the last byte of the file is debug payload.
-        let last = bytes.len() - 1;
-        bytes[last] = bytes[last].wrapping_add(1);
-        let header = header_of(&bytes);
-        let result = verify_debug_hash(&header, &bytes[HEADER_SIZE..]);
-        assert!(matches!(result, Err(LoadViolation::DebugHashMismatch)));
-    }
-
-    /// The content hash is defined as BLAKE3 over type || constant || code
-    /// section bytes in file order; recompute it manually from the directory.
-    #[test]
-    fn verify_content_hash_when_recomputed_from_sections_then_matches_header() {
-        let bytes = consistent_bytes();
-        let header = header_of(&bytes);
-        let rest = &bytes[HEADER_SIZE..];
-        let start = if header.type_section_size > 0 {
-            header.type_section_offset
-        } else {
-            header.const_section_offset
-        };
-        let content = &rest[(start - HEADER_SIZE as u32) as usize
-            ..(header.code_section_offset + header.code_section_size - HEADER_SIZE as u32)
-                as usize];
-        let mut hasher = blake3::Hasher::new();
-        hasher.update(content);
-        assert_eq!(header.content_hash, *hasher.finalize().as_bytes());
-        assert_ne!(header.content_hash, [0u8; 32]);
     }
 }

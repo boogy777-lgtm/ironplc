@@ -32,11 +32,11 @@ mod rule_bit_and_partial_access_range;
 mod rule_case_bit_string_label;
 mod rule_case_selector_type;
 mod rule_constant_range;
-mod rule_date_literal_range;
 mod rule_decl_struct_element_unique_names;
 mod rule_enum_base_type_allowed;
 mod rule_enum_explicit_value_allowed;
 mod rule_enumeration_values_unique;
+mod rule_exit_inside_loop;
 mod rule_extends_field_duplicated;
 mod rule_function_block_call_unsupported;
 mod rule_function_block_invocation;
@@ -50,13 +50,16 @@ mod rule_pou_hierarchy;
 mod rule_program_task_definition_exists;
 mod rule_program_var_hides_global;
 mod rule_range_limits;
+mod rule_real_literal_range;
 mod rule_ref_to;
 mod rule_stdlib_type_redefinition;
 mod rule_string_encoding_compat;
+mod rule_string_length_range;
 mod rule_string_literal_char_range;
 mod rule_struct_initializer_expression_allowed;
 mod rule_support;
 mod rule_task_names_unique;
+mod rule_temporal_literal_range;
 mod rule_unsupported_extension;
 mod rule_use_declared_enumerated_value;
 mod rule_use_declared_symbolic_var;
@@ -74,8 +77,10 @@ mod type_attributes;
 mod type_category;
 mod type_compat;
 mod type_environment;
+pub mod type_id;
 mod type_table;
 pub mod value_range;
+mod value_type;
 mod variable_type;
 mod xform_fold_constant_expressions;
 mod xform_fold_initializer_expressions;
@@ -85,6 +90,7 @@ mod xform_mark_unwritten_constants;
 mod xform_named_to_positional_args;
 mod xform_resolve_adr;
 mod xform_resolve_constant_expressions;
+mod xform_resolve_decl_types;
 mod xform_resolve_expr_types;
 mod xform_resolve_late_bound_expr_kind;
 mod xform_resolve_late_bound_type_initializer;
@@ -103,6 +109,9 @@ pub use function_environment::{
     FunctionEnvironment, FunctionEnvironmentBuilder, FunctionSignature,
 };
 pub use intermediate_type::IntermediateType;
+pub use intermediates::arithmetic_overload::{
+    resolve_arithmetic_fold, resolve_arithmetic_overload, typed_overload, FoldFailure, Overload,
+};
 pub use intermediates::enumeration::resolve_ordinal_values;
 pub use intermediates::operator_function_form::{
     operator_function_form, FormOf, OperatorFunctionForm,
@@ -126,6 +135,8 @@ mod spec_requirements {
 mod spec_conformance;
 #[cfg(test)]
 mod spec_conformance_adr;
+#[cfg(test)]
+mod spec_conformance_arithmetic_operator_overloads;
 #[cfg(test)]
 mod spec_conformance_constant_inference;
 #[cfg(test)]

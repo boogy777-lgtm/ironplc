@@ -58,13 +58,12 @@ struct LibraryRenderer {
     indents: usize,
 }
 
-/// The spelling of a character string: its characters as written, inside
-/// the delimiter `width` selects. The characters are not re-encoded; see
-/// `visit_character_string_literal` for why.
+/// The spelling of a character string: its characters, `$`-escaped where
+/// they cannot appear as themselves, inside the delimiter `width` selects.
 fn character_string_text(width: &StringType, value: &[char]) -> String {
     let delimiter = width.delimiter();
     let mut val = String::from(delimiter);
-    val.extend(value.iter());
+    val.push_str(&ironplc_dsl::string_escape::encode(value, width));
     val.push(delimiter);
     val
 }
@@ -238,35 +237,28 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         node: &CharacterStringLiteral,
     ) -> Result<Self::Value, Diagnostic> {
         // Single quotes delimit a STRING, double quotes a WSTRING, per
-        // IEC 61131-3 section 2.2.2.
-        //
-        // The value is written out exactly as it was read in, because
-        // `node.value` holds the source characters *as written* -- the parser
-        // does not decode `$` escapes on the way in. Every re-encoding here is
-        // therefore a corruption:
-        //
-        //   - `$` is already an escape introducer, so escaping it turned the
-        //     one line feed `$L` into the two characters `$` and `L`, and
-        //     compounded on each pass (`$L`, `$$L`, `$$$$L`).
-        //   - a raw tab, which the lexer does admit inside a literal, has no
-        //     `$T` in the source to correspond to, so emitting one turned that
-        //     one tab into the two characters `$` and `T`.
-        //
-        // Both directions changed the value; a raw control character passed
-        // through verbatim merely looks unusual, and re-parses as itself.
-        // Escaping can only become correct once the parser decodes escapes and
-        // `value` holds decoded characters -- see the character-string arm of
-        // the round-trip tests.
+        // IEC 61131-3 section 2.2.2. `node.value` holds the decoded
+        // characters, so they are escaped on the way out.
         self.write_ws(&character_string_text(&node.width, &node.value));
         Ok(())
     }
+
+    // Every temporal literal is written with the prefix of the type it names,
+    // taken from the literal itself. Writing the 32-bit prefix for all of them
+    // narrowed the type on round trip -- `LTIME#30d` came back as
+    // `TIME#2592000000ms`, which is a different type and, since that count does
+    // not fit a `TIME`, no longer compiles.
 
     fn visit_duration_literal(
         &mut self,
         node: &DurationLiteral,
     ) -> Result<Self::Value, Diagnostic> {
         // Always write out as milliseconds. The largest unit is allowed to be "out of range"
-        let val = format!("TIME#{}ms", node.interval.whole_milliseconds());
+        let val = format!(
+            "{}#{}ms",
+            node.type_name(),
+            node.interval.whole_milliseconds()
+        );
         self.write_ws(val.as_str());
         Ok(())
     }
@@ -276,13 +268,19 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         node: &TimeOfDayLiteral,
     ) -> Result<Self::Value, Diagnostic> {
         let (hr, min, sec, milli) = node.hmsm();
-        self.write_ws(format!("TIME_OF_DAY#{hr:0>2}:{min:0>2}:{sec:0>2}.{milli:0>2}").as_str());
+        self.write_ws(
+            format!(
+                "{}#{hr:0>2}:{min:0>2}:{sec:0>2}.{milli:0>2}",
+                node.type_name()
+            )
+            .as_str(),
+        );
         Ok(())
     }
 
     fn visit_date_literal(&mut self, node: &DateLiteral) -> Result<Self::Value, Diagnostic> {
         let (year, month, day) = node.ymd();
-        self.write_ws(format!("DATE#{year:0>4}-{month:0>2}-{day:0>2}").as_str());
+        self.write_ws(format!("{}#{year:0>4}-{month:0>2}-{day:0>2}", node.type_name()).as_str());
         Ok(())
     }
 
@@ -294,7 +292,8 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         let (year, month, day) = node.ymd();
         self.write_ws(
             format!(
-                "DATE_AND_TIME#{year:0>4}-{month:0>2}-{day:0>2}-{hr:0>2}:{min:0>2}:{sec:0>2}.{milli:0>2}"
+                "{}#{year:0>4}-{month:0>2}-{day:0>2}-{hr:0>2}:{min:0>2}:{sec:0>2}.{milli:0>2}",
+                node.type_name()
             )
             .as_str(),
         );
@@ -344,6 +343,17 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         self.write_ws(":");
 
         self.visit_type_name(&node.base_type_name)
+    }
+
+    fn visit_simple_declaration(
+        &mut self,
+        node: &SimpleDeclaration,
+    ) -> Result<Self::Value, Diagnostic> {
+        self.visit_type_name(&node.type_name)?;
+
+        self.write_ws(":");
+
+        self.visit_initial_value_assignment_kind(&node.spec_and_init)
     }
 
     fn visit_enumeration_declaration(
