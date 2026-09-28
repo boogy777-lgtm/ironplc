@@ -355,6 +355,12 @@ fn spec_content_hash(buf: &[u8], h: &FileHeader) -> [u8; 32] {
     *hasher.finalize().as_bytes()
 }
 
+// REQ-CF-container-035 through -037 carry upstream's hash requirements under
+// numbers upstream added as 028-030: the fork had already taken 028 (stable
+// var layout), 029 (load-time verification) and 030 (FB field UID layout),
+// so the merge renumbered the newer side. Keep the numbers in sync with
+// `specs/design/bytecode-container-format.md`.
+
 /// REQ-CF-container-035: content_hash is BLAKE3 over the masked header, task
 /// table, type section, constant pool and code section in file order; an
 /// absent type section contributes nothing.

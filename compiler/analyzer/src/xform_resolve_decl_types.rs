@@ -178,6 +178,10 @@ END_PROGRAM
         let id = declared_ids(&library)["a"].unwrap();
 
         assert_eq!(context.types().name_of(id), None);
+        // Fence style: the workspace denies `panic` even in src-level tests
+        // (see compiler/Cargo.toml [workspace.lints.clippy]), so the
+        // match-or-fail arm is an assert! with the value in the message
+        // rather than a panic!.
         let representation = &context.types().get_by_id(id).unwrap().representation;
         assert!(
             matches!(representation, IntermediateType::Array { .. }),

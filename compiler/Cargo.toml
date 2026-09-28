@@ -52,6 +52,10 @@ deprecated = "deny"
 # warnings non-fatal while iterating: `RUSTFLAGS=--cap-lints=warn cargo build`.
 warnings = "deny"
 
+# The two deny tables are complementary, not redundant — keep both in syncs:
+# `warnings = "deny"` (upstream) makes every rustc/clippy warning a build
+# error; this table (fork fence) elevates the five panicking constructs to
+# errors even in crates and configurations where they would only warn.
 # LLM fence: panicking constructs are compile errors in non-test code, not a
 # prose rule. Tests keep unwrap/expect via clippy.toml (allow-*-in-tests).
 [workspace.lints.clippy]

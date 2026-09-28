@@ -749,6 +749,13 @@ struct ProgramInputs<'a> {
 /// When no initial values exist, the init function is a single RET_VOID.
 // Internal codegen helper split out from `compile()` purely for
 // readability of the public function; called from exactly one site.
+//
+// `options` and `compiler_options` are both kept on purpose: the former is
+// the front-end-facing policy bundle (including the fork's UID tables), the
+// latter is the analyzer's own option set. Codegen must ask the arithmetic
+// overload resolver the *same* question the analyzer asked — same flags —
+// or an expression accepted in analysis is rejected (or compiled
+// differently) in codegen.
 fn compile_program_with_functions(
     inputs: ProgramInputs<'_>,
     functions: &FunctionEnvironment,

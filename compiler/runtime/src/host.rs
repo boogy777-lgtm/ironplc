@@ -629,6 +629,10 @@ impl RuntimeHost {
             if self.pending.is_some() {
                 self.apply_pending_swap(true)?;
             }
+            // Fail-closed admission: a unit that boots without the permit
+            // (a redundancy shell whose peer holds ownership, a standalone
+            // unit before startup completes) must never drive a scan — the
+            // refusal surfaces to clients as V4018 (permit latch, ADR-0065).
             if !self.execution_permitted {
                 return Err(RuntimeError::NotPermitted);
             }

@@ -127,6 +127,13 @@ impl Container {
         // The layout hash is computed from the type section before the
         // header is serialized for hashing: the content hash covers the
         // masked header, and the mask does not blank `layout_hash`.
+        //
+        // It is kept alongside the ADR-0007 integrity hashes on purpose: the
+        // integrity scope covers *execution* (any byte that changes behavior),
+        // while `layout_hash` is the *online-change gate* (ADR-0052/0058) and
+        // deliberately narrower — code, constants and debug info are excluded
+        // so a logic-only edit keeps the hash equal and can swap at a scan
+        // boundary without a restart. Neither can do the other's job.
         header.layout_hash = self.compute_layout_hash();
 
         // The header is part of the hashed content (masked), so it is

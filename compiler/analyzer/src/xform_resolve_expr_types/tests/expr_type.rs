@@ -54,6 +54,10 @@ fn first_assigned_type(library: &Library) -> Option<ExprType> {
     first.0.flatten()
 }
 
+// Fence style: the workspace denies `panic` even in src-level tests (see
+// compiler/Cargo.toml [workspace.lints.clippy]); `cast!` panics inside the
+// ironplc-test macro, which is the sanctioned extractor for match-or-fail
+// in tests.
 fn concrete(expr_type: Option<ExprType>) -> ironplc_dsl::type_id::TypeId {
     *cast!(cast!(&expr_type, Option::Some), ExprType::Concrete)
 }
