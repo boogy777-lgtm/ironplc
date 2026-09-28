@@ -219,3 +219,30 @@ These are externally-defined identifiers, not IronPLC vocabulary.
   bare word is ambiguous); describe it by the syntax it adds and record which
   dialects enable it in the dialect table. See
   [Syntax Support Guide](syntax-support-guide.md).
+
+
+## DCS PLC platform architecture terms
+
+These terms describe the target architecture in
+[DCS PLC Production Platform v3.0](../design/dcs-plc-production-platform-spec-ru.md),
+not a claim that all components are implemented or qualified.
+
+| Term | Definition |
+|---|---|
+| ControllerPlatform | Controller-level services around the PLC runtime, including deployment, I/O, persistence, modes and redundancy. |
+| RuntimeHost | Owner of a local runtime binding and its semantic state; performs the local activation operation under platform contracts. |
+| DeploymentCoordinator | Orchestrates preparation, validation, activation and outcome reconciliation for deployment, including hot edit. |
+| ApplicationGeneration | An identified application generation with immutable code and the metadata required for compatible binding and recovery. |
+| PreparedBinding | Validated candidate binding prepared before activation, with the resources and state compatibility needed for bounded commit. |
+| NativeIoBinding | Binding for a logical native I/O relation with explicit timing, quality and output ownership contracts. |
+| ExternalDataBinding | Binding for an external data relation; subscription alone grants no physical output ownership. |
+| ReplicationEngine | Replicates the defined semantic state and reports checkpoint readiness; does not independently grant output authority. |
+| RoleCoordinator | Coordinates redundancy roles and admission to role changes; role designation alone does not authorize physical outputs. |
+| OutputAuthority | Independently enforced authorization for physical effects in an ownership scope, outside both execution failure domains. |
+| RecoveryAdmission | Persisted recovery admission record covering required application generation, control policy, membership revision and recovery/start permission. |
+| Authority term | Ordering token for output authority; distinct from checkpoint sequence and activation revision. |
+| Checkpoint sequence | Ordering of replication checkpoints; does not imply authority transfer or durable storage. |
+| Activation revision | Revision of activation state; distinct from application identity and output authority term. |
+
+A controller control policy is distinct from the compiler **behavior policy**
+defined above. Neither is a synonym for the other.

@@ -1,5 +1,7 @@
 # Spec: Linux Controller Layer Architecture
 
+> Current platform requirements: [DCS PLC Production Platform v3.0](dcs-plc-production-platform-spec-ru.md). References to v2.2 below describe the historical basis of this design; reconciliation with v3.0 is tracked in [the cleanup inventory](dcs-plc-document-cleanup-ru.md).
+
 ## Overview
 
 This spec answers the owner's question: *if the controller bases on Linux
@@ -30,7 +32,7 @@ and the checklist (ADR-0066), not a completed port.
 This spec builds on:
 
 - **DCS Firmware Task v2.2**
-  (`docs/reference/dcs-firmware-task-v2.2-ru.md`, owner-provided)
+  ([historical owner task](https://github.com/boogy777-lgtm/ironplc/blob/8a7f6d0d09b00436daebfd669babd39f2e0f2e13/docs/reference/dcs-firmware-task-v2.2-ru.md), owner-provided)
   — the requirements source: §4.4–4.9 (layer view), §4.10–4.16 (S01–S12,
   State Inventory), §8 (ports, execution profile), §12 (I/O enforcement),
   §14.4 (update units), §16 (timing budgets), §19.3/19.4/19.5 (Linux
@@ -43,9 +45,9 @@ This spec builds on:
 - **[HA Redundancy Layer Architecture](ha-redundancy-layer-architecture.md)**
   and **[HA Redundancy FSM](ha-redundancy-fsm.md)** — the seams, the
   statechart, and Protocol Portability this design ports
-- **[DCS Firmware Task Audit](dcs-firmware-task-audit.md)** — the verdicts
+- **[DCS Firmware Task Audit](https://github.com/boogy777-lgtm/ironplc/blob/8a7f6d0d09b00436daebfd669babd39f2e0f2e13/specs/design/dcs-firmware-task-audit.md)** — the verdicts
   this spec re-classifies in its v2.2 addendum
-- **[Controller OS Portability Review](controller-os-portability-review.md)**
+- **[Controller OS Portability Review](https://github.com/boogy777-lgtm/ironplc/blob/8a7f6d0d09b00436daebfd669babd39f2e0f2e13/specs/design/controller-os-portability-review.md)**
   — devil's-advocate review of this design against Zephyr / RT-Thread:
   the layer/contract/port design survives an OS swap; bindings, Rust
   toolchain, and isolation guarantees do not (F1 is a P0 owner decision)
@@ -309,3 +311,4 @@ In the roadmap's own voice, one line each:
   adapter — contract-feasibility reference only (task §19.4).
 - Security posture (task §17): unchanged, still deferred by ADR-0063/0065
   and still conflicting; the owner ruling gates it.
+
