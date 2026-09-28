@@ -1,0 +1,64 @@
+=====
+P4058
+=====
+
+.. problem-summary:: P4058
+
+This error occurs when a function call passes something other than a variable
+to a ``VAR_IN_OUT`` parameter. A ``VAR_IN_OUT`` parameter is passed by
+reference: the function reads and writes the caller's variable, so the
+argument must be a variable. A literal or an expression has no storage the
+function could write to.
+
+Example
+-------
+
+The following code will generate error P4058:
+
+.. code-block::
+
+   FUNCTION Increment : DINT
+       VAR_IN_OUT
+           counter : DINT;
+       END_VAR
+       counter := counter + 1;
+       Increment := counter;
+   END_FUNCTION
+
+   PROGRAM main
+       VAR
+           total : DINT;
+           result : DINT;
+       END_VAR
+       result := Increment(total + 1);   (* Error: not a variable *)
+   END_PROGRAM
+
+To fix this error, pass a variable:
+
+.. code-block::
+
+   result := Increment(total);
+
+If the function should not change the caller's value, declare the parameter
+in ``VAR_INPUT`` instead, which accepts any expression.
+
+.. note::
+
+   Semantic analysis and code generation do not cover the same parameter
+   types yet. The analyzer accepts an argument of any type that matches the
+   parameter exactly, but code generation currently supports only an
+   elementary parameter passed a named variable (or a forwarded
+   ``VAR_IN_OUT``). A call that passes a string, array, structure or
+   function block instance passes analysis and is then refused by code
+   generation as not yet implemented (P9999).
+
+See Also
+--------
+
+- :doc:`/reference/language/pous/function` — ``FUNCTION`` declaration syntax
+- :doc:`P4059` — a ``VAR_IN_OUT`` argument of the wrong type
+
+References
+----------
+
+* IEC 61131-3 §2.5.1.1 (Edition 2), §6.6.1.2 (Edition 3)

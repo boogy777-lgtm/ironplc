@@ -98,6 +98,15 @@ pub(crate) fn record_return_var_entry(
 /// maps the allocation sites already populate, so it cannot disagree with the
 /// layout those sites chose.
 fn registered_entry(ctx: &CompileContext, id: &Id) -> Option<VarEntry> {
+    // A VAR_IN_OUT parameter's slot holds the caller's variable index, not a
+    // value -- the same shape as a REF_TO ARRAY slot below.
+    if ctx.in_out_params.contains(id) {
+        return Some(VarEntry {
+            var_type: FieldType::U64,
+            flags: 0,
+            extra: 0,
+        });
+    }
     if let Some(info) = ctx.string_vars.get(id) {
         return Some(VarEntry {
             var_type: string_field_type(info.char_width),
