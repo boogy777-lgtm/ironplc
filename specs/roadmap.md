@@ -299,6 +299,24 @@ Decisions: [ADR-0063](../adrs/0063-engineering-connection-transport.md).
 
 Autonomy: design done autonomously; implementation follows owner review.
 
+### Phase 7 - Process image and located variables
+
+- **Decided 2026-09-29 (owner):** the `%I`/`%Q`/`%M` process image is
+  adapted from the upstream compiler-side design (commit `93a40ce4e`) with
+  IoCycle ownership — the IoCycle owner owns the images, the VM borrows
+  scan-scoped views, output flush passes the EffectGate (a trial run cannot
+  flush by construction), and `%M` joins the persistent swap/migration/HA
+  state. Located offsets derive from hardware addresses, so logic-only edits
+  stay bit-stable; region growth is one class in the existing migration
+  planner. Details:
+  [ADR-0071](adrs/0071-iocycle-owned-process-image-with-effect-gated-output-flush.md),
+  [Process Image and Hot Update](design/process-image-and-hot-update.md).
+  Implementation slices S1–S5 are in the design; the DCS work package is
+  [W11](implementation/dcs-platform/tasks/W11-process-image.md).
+
+Autonomy: design approved by owner; implementation follows the W11
+dependencies (W05, W10).
+
 ## Deferred
 
 - **Debt — controller-side pending edits (parity L1), deferred by owner

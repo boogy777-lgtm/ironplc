@@ -5,7 +5,7 @@
 | Статус реализации | NOT_STARTED — это задание, не отчёт о готовности |
 | Этап | P2 |
 | Зависимости до интеграции | [W05](W05-execution-session.md), [W10](W10-binding.md) |
-| Основание | [Спецификация v3.0](../../../design/dcs-plc-production-platform-spec-ru.md), §7, §8 |
+| Основание | [Спецификация v3.0](../../../design/dcs-plc-production-platform-spec-ru.md), §7, §8; [ADR-0071](../../../adrs/0071-iocycle-owned-process-image-with-effect-gated-output-flush.md); [Process Image and Hot Update](../../../design/process-image-and-hot-update.md) |
 | Сценарии участия | T62, T71 |
 | Primary evidence owner | T62, T71 |
 
