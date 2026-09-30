@@ -9,10 +9,64 @@
 
 ---
 
+## ЗАДАНИЕ ДЛЯ НОВОЙ LLM-СЕССИИ (читай первым)
+
+**Цель:**
+
+- **(а)** Довести наш Rust-лексер/парсер (`F:\IronPLC\compiler\parser`) до **100 % покрытия
+  синтаксиса ST** по таблицам CODESYS 3.5.22.10, собранным в этом каталоге.
+- **(б)** Изучить и применять **систему кодов SYNTAX-ошибок CODESYS** и наш порядок оформления
+  `P####`-кодов (`compiler/problems`: CSV + docs + code + test).
+
+> **Внимание:** syntax-ошибки (scanner/parser) **≠** build/компиляционные **≠** семантические.
+> Границы классов — [`ERROR-CODES-STUDY.md`](ERROR-CODES-STUDY.md) §2 («Границы класса SYNTAX»).
+
+**Порядок чтения (ровно этот, не грепать всё подряд):**
+
+1. **этот README** — целиком;
+2. [`LEXER-GAP-ANALYSIS.md`](LEXER-GAP-ANALYSIS.md) — **что чинить**: сводная таблица (§1)
+   и приоритетный P0-бэклог (§13); доказательства `file:line` уже внутри;
+3. [`ERROR-CODES-STUDY.md`](ERROR-CODES-STUDY.md) — **как оформлять ошибки**: `MessageId`-механика
+   (§1–§3) + маппинг на наши `P####` (§4);
+4. только потом точечно: [`docs/01_LEXER_PARSER.md`](docs/01_LEXER_PARSER.md),
+   [`grammar/ST_GRAMMAR.ebnf`](grammar/ST_GRAMMAR.ebnf), конкретные таблицы из
+   [§0 ниже](#0-маршрутизация-по-задачам-начни-отсюда).
+
+**Где работать:**
+
+| Что | Где |
+|---|---|
+| Репозиторий / ветка | `F:\IronPLC`, ветка `lint-fences` |
+| Лексер: токены, опции | `compiler/parser/src/lexer.rs`, `token.rs`, `options.rs` |
+| Парсер и правила | `compiler/parser/src/parser.rs`, `rule_token_*.rs` |
+| Тесты | `compiler/parser/src/tests/*.rs`, `spec_conformance*.rs` |
+| Правила проекта | skill `ironplc-dev`: safe Rust; **no `unwrap/expect/panic` в prod**; dialect gating через `CompilerOptions`; P-код = CSV + docs + code + test (4-tuple) |
+| Гейты | `cargo test -p ironplc-parser`; `cd compiler && just`; доки — `cd specs && just` (см. `AGENTS.md`) |
+
+**План по фазам** (детали и порядок P0 — в [`LEXER-GAP-ANALYSIS.md`](LEXER-GAP-ANALYSIS.md) §13):
+
+- **Ф1. Keywords/tokens:** 15 отсутствующих ST-слов + 7 OO (`CONTINUE`, `PROPERTY`, `UNION`, `VAR_STAT/INST/GENERIC`, `PARAMS`, `NAMESPACE`, модификаторы доступа/`OVERRIDE`).
+- **Ф2. Literals:** `$U`+8 hex, typed `__XSTRING#`/`UTF8#`/`UCHAR#`, `10#`, `us/ns`, `BOOL#1`, `LT#/LD#`, `TOD#hh:mm`.
+- **Ф3. Operators/символы:** `|`, stdlib-операторы (`LOWER_BOUND`…`TRUNC_INT`), `__*`-спецоператоры (TRY, `__NEW`…).
+- **Ф4. Parser-level:** `CONTINUE`, `ARRAY[*]`, `PROPERTY`/OO, `UNION`.
+- **Ф5. Syntax-коды ошибок:** по [`ERROR-CODES-STUDY.md`](ERROR-CODES-STUDY.md) §4.
+
+**Ритм фазы:** таблица → тесты → реализация → spec conformance.
+**Закрытие фазы:** тесты зелёные + `cd compiler && just` зелёный.
+
+**Definition of Done:**
+
+1. Все **P0-пункты** [`LEXER-GAP-ANALYSIS.md`](LEXER-GAP-ANALYSIS.md) §13 закрыты тестами.
+2. Новые `P####`-коды оформлены по [`ERROR-CODES-STUDY.md`](ERROR-CODES-STUDY.md) §4.
+3. LLM-фенсы не нарушены (no `unwrap/expect/panic` в prod; warnings = deny; `just` зелёный).
+
+---
+
 ## 0. Маршрутизация по задачам (начни отсюда)
 
 | Твоя задача | Куда смотреть |
 |---|---|
+| **Задание на усиление лексера** | [`LEXER-GAP-ANALYSIS.md`](LEXER-GAP-ANALYSIS.md) + [`ERROR-CODES-STUDY.md`](ERROR-CODES-STUDY.md) |
 | Лексер/токены ST | [`docs/01_LEXER_PARSER.md`](docs/01_LEXER_PARSER.md) → [`grammar/ST_GRAMMAR.ebnf`](grammar/ST_GRAMMAR.ebnf) → [`tables/st_keywords.csv`](tables/st_keywords.csv), [`tables/operators.csv`](tables/operators.csv), [`tables/token_types.csv`](tables/token_types.csv) |
 | Строковые литералы/escape | [`docs/15_STRING_LITERALS.md`](docs/15_STRING_LITERALS.md) → [`grammar/STRING_LITERALS.ebnf`](grammar/STRING_LITERALS.ebnf) → [`tables/string_escapes.csv`](tables/string_escapes.csv) |
 | Парсинг → AST (green/red) | [`docs/06_AST_BUILDER_MAP.md`](docs/06_AST_BUILDER_MAP.md) → [`docs/07_AST_RED_TREE_CONSTRUCTION.md`](docs/07_AST_RED_TREE_CONSTRUCTION.md) → [`docs/08_AST_CONCRETE_NODES.md`](docs/08_AST_CONCRETE_NODES.md) → [`tables/ast_nodes.csv`](tables/ast_nodes.csv) |
@@ -34,6 +88,9 @@
 
 | Путь | Что |
 |---|---|
+| [`README.md`](README.md) | это оглавление + [задание для LLM](#задание-для-новой-llm-сессии-читай-первым) |
+| [`LEXER-GAP-ANALYSIS.md`](LEXER-GAP-ANALYSIS.md) | дыры CODESYS ↔ IronPLC: сводка, evidence `file:line`, P0-бэклог |
+| [`ERROR-CODES-STUDY.md`](ERROR-CODES-STUDY.md) | SYNTAX-коды CODESYS и маппинг на наши `P####` |
 | [`docs/`](docs/) | 20 отчётов RE (`01…20`) + под-индекс |
 | [`tables/`](tables/) | 35 лексических/семантических таблиц (CSV/TXT) + `errors/` |
 | [`grammar/`](grammar/) | EBNF грамматики ST и строк + привязка к AST |
@@ -69,6 +126,13 @@
 | 18 | [`18_COMPILED_POUS_ORDER.md`](docs/18_COMPILED_POUS_ORDER.md) | базовый порядок `m_alCompiledPOUs` |
 | 19 | [`19_MESSAGE_AGGREGATION.md`](docs/19_MESSAGE_AGGREGATION.md) | порядок агрегации сообщений, дедуп |
 | 20 | [`20_OPERATOR_TYPE_RESOLUTION.md`](docs/20_OPERATOR_TYPE_RESOLUTION.md) | алгоритм типизации оператора |
+
+### Анализ для нашей реализации (корень `Codesys/`)
+
+| Файл | О чём |
+|---|---|
+| [`LEXER-GAP-ANALYSIS.md`](LEXER-GAP-ANALYSIS.md) | сводная таблица покрытия (§1), дыры по классам (§2–§11), вне-лексерное (§12), P0-бэклог (§13), верификация (§14), журнал эмпирики (§15) |
+| [`ERROR-CODES-STUDY.md`](ERROR-CODES-STUDY.md) | `MessageId`-механика (§1), границы класса SYNTAX (§2), 48 кодов `Parser35220` (§3), наши `P####` + маппинг (§4), routing (§5) |
 
 ---
 
