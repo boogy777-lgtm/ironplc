@@ -1,0 +1,1405 @@
+{
+"_3S.CoDeSys.Compiler35220.Resources.CompilerStrings.fr.resources":{
+"AffectionCopied":"Ancienne valeur copiée"
+,
+"AffectionInitialized":"Initialisé"
+,
+"AffectionInitNewVariables":"Nouvelles variables initialisées"
+,
+"AffectionLocationChanged":"Position modifiée"
+,
+"AffectionVFTableInitialized":"Tableau virtuel de fonctions initialisé"
+,
+"And_Text":"et"
+,
+"Area_Output_Checked":"Taille requise pour {0} : {1} octets (taille disponible : {2} octets)"
+,
+"Area_Output_Checked_Exceeded":"Taille dépassée pour {0} : {1} octets (taille disponible : {2} octets)"
+,
+"Area_Output_Info":"La plage mémoire {0} contient {1} : taille : {2} octets, adresse la plus élevée utilisée : {3}, le plus grand espace continu et inutilisé : {4} octets ({5} %)"
+,
+"Area_Output_Info_Simple":"Plage mémoire {0} contient {1} : la plus grande zone de mémoire continue : {2} ({3} %)"
+,
+"Area_Output_Info_Simple_2":"La plage mémoire {0} contient {1} : {2} octets, le plus grand espace mémoire contigu et inutilisé : {3} octets ({4} %)"
+,
+"AttributeHasNoEffect":"(L'attribut n'a aucun effet)"
+,
+"Build":"Compiler"
+,
+"BuildCompleteErrors":"La compilation est terminée -- {0} erreurs, {1} avertissements : aucun téléchargement possible"
+,
+"BuildCompleteOK":"La compilation est terminée -- {0} erreurs, {1} avertissements : prêt pour téléchargement"
+,
+"BuildStarted":"------ Processus de compilation entamé : application : {0} -------"
+,
+"Code_Text":"Code"
+,
+"CodeNoChange":"Le code n’a pas changé. Pas de changement en ligne requis."
+,
+"CodeSizeOutput":"Taille du code créé : {0} octets"
+,
+"Constant":"Constante"
+,
+"Data_Text":"Données"
+,
+"DataSizeOutput":"Taille des données globales : {0} octets"
+,
+"DoCodeTypification":"Affecter un type à un code"
+,
+"DoLocation":"Trouver des données globales"
+,
+"DoTypification":"Typifier"
+,
+"Err_NoCodegeneratorDetailed":"Échec de la création d’un générateur de code. L’add-on '{0}' requis n’est pas installé"
+,
+"Err_NoMemoryAllocationCallbackDetailed":"Échec de la création d’un allocateur de mémoire : l’add-on '{0}' requis n’est pas installé"
+,
+"ErrNoApplication":"Application pas trouvée"
+,
+"Error_Check_ImplicitParameter_MissingDefault":"Le paramètre implicite nécessite une valeur par défaut pour l'entrée."
+,
+"Error_Check_ImplicitParameter_UnknownKind":"Type inconnu du paramètre implicite '{0}', doit être l'un des suivants : [{1}]."
+,
+"Error_Check_ImplicitParameter_WrongPouType":"Le paramètre implicite ne peut être appliqué qu'aux entrées des fonctions et des méthodes."
+,
+"Error_Check_ImplicitParameter_WrongVarKind":"Le paramètre implicite ne peut être appliqué qu'aux variables VAR_INPUT."
+,
+"Error_Check_ImplicitParameter_WrongVarType":"Le paramètre implicite ne peut être appliqué qu'aux variables de type STRING ou POINTER TO STRING."
+,
+"ErrorLimitExceeded":"Plus de {0} erreurs survenues : tous les autres messages d’erreur sont omis"
+,
+"Except_Boot_Project_Error":"Pas de projet d'initialisation possible dans cet état. Mémoire insuffisante pour l’application. Exécuter d’abord le téléchargement complet"
+,
+"Except_Boot_Project_Error_Error_In_Compile":"Pas de projet d'initialisation possible dans cet état. Erreur lors de la création des informations sur le projet d'initialisation. Voyez fenêtre de message."
+,
+"GenerateCode":"Créer le code pour {0}..."
+,
+"GenerateCodeInit":"Créer des initialisations de code..."
+,
+"GenerateCodeProgress":"Le code est créé..."
+,
+"GenerateGlobalInit":"Créer des initialisations globales..."
+,
+"GenerateRelocations":"Créer des repositionnements..."
+,
+"GeneratingCode":"Création de code..."
+,
+"GlobalInitErrorPrefix":"Erreur dans le code d’initialisation implicite :"
+,
+"Input_Text":"Entrée"
+,
+"InterfaceReferencesAffected":"Les références d’interface suivantes sont contrôlées quant à la redirection :"
+,
+"InterfacesChanged":"Les interfaces de POU suivantes ont été modifiées :"
+,
+"Literal":"Littéral"
+,
+"Memory_Text":"Mémoire"
+,
+"NonSafety_Text":"Données non sures"
+,
+"NumInterfacesChanged":"{0} interfaces POU modifiées"
+,
+"NumInterfacesToTest":"{0} références d’interface contrôlées quant à la redirection"
+,
+"NumPOUsDownloaded":"{0} POU ont modifié leur code"
+,
+"NumVariablesAffected":"{0} variables concernées par le changement en ligne, {1} position modifiée, {2} initialisé, {3} copié, {4} tableau de fonction initialisé"
+,
+"Output_Text":"Sortie"
+,
+"Persistent_Text":"Données persistantes"
+,
+"PersistenVariablesChanged":"Les variables persistantes ont changé ! Voulez-vous initialiser en utilisant la liste actuelle ?"
+,
+"POUsDownloaded":"Le code des modules suivants est chargé."
+,
+"POUUnit":"Modules"
+,
+"ProjectUpToDate":"L’application est actuelle"
+,
+"Retain_Text":"Données rémanentes"
+,
+"StoppingPrecompileChecks":"Arrêt des contrôles de précompilation..."
+,
+"TooLongStringLiteralHint":"...({0} caractères supplémentaires)..."
+,
+"TotalMemorySizeCodeAndData":"Taille totale de mémoire allouée aux codes et données : {0} octets"
+,
+"TypifyAll":"Affecter un type à un code..."
+,
+"UnknownMacroText":"Inconnu"
+,
+"VariablesAffected":"Les variables suivantes sont concernées par le changement en ligne :"
+,
+"WaitForDownloadInfoSaving":"Attendre la fin de l’écriture du fichier compileinfo"
+,
+"WarningLimitExceeded":"Plus de {0} erreurs survenues : Tous les autres messages d’erreur sont omis"
+}
+,
+"_3S.CoDeSys.Compiler35220.Resources.ErrorMessages.fr.resources":{
+"Err_AbstractAndFinalNotPossible":"Une méthode ou un bloc fonctionnel ne peuvent pas être ABSTRACT ni FINAL"
+,
+"Err_AbstractAndPrivateNotPossible":"Une méthode PRIVATE ne peut pas être ABSTRACT"
+,
+"Err_AbstractFunctionBlockAssigned":"Le bloc fonctionnel {0} est ABSTRACT et ne peut pas servir de cible pour une attribution"
+,
+"Err_AbstractFunctionBlockInstance":"Un bloc fonctionnel {0} est ABSTRACT et ne peut pas être instancié"
+,
+"Err_AbstractMethodMustNotContainAnyStatements":"La méthode ABSTRACT {0}.{1} ne peut pas contenir d’instructions"
+,
+"Err_AbstractMethodNotImplemented":"Aucune implémentation pour la méthode ABSTRACT '{0}' définie dans le bloc fonctionnel '{1}'"
+,
+"Err_AbstractMethodOnlyInAbstractFunctionblock":"La méthode ABSTRACT {0} exige que le bloc fonctionnel {1} soit ABSTRACT également"
+,
+"Err_AbstractMethodStaticCall":"La méthode ABSTRACT '{0}' ne peut pas être appelée par un appel statique"
+,
+"Err_AbstractOnFunctionBlocksAndMethodsOnly":"ABSTRACT ne peut être appliqué que sur des méthodes et des blocs fonctionnels"
+,
+"Err_AbstractPropertyNotImplemented":"Aucune implémentation pour {0} de la propriété ABSTRACT '{1}' définie dans le bloc fonctionnel '{2}'"
+,
+"Err_AbstractPropertyStaticCall":"Accès statique à la propriété ABSTRACT '{0}' impossible"
+,
+"Err_AbstractWrongVarInMethod":"Seules les entrées, les sorties et les E/S sont autorisées dans les méthodes ABSTRACT"
+,
+"Err_AccessOutsideOfCall":"Impossible d’accéder à l’entrée '{0}' de '{1}' en dehors de l’appel"
+,
+"Err_AccessToInternalObject":"Pas d’accès à l’objet interne {0} de la bibliothèque {1}"
+,
+"Err_AccessToInternalProperty":"Pas d’accès à la propriété interne {0} de la bibliothèque {1}"
+,
+"Err_AccessToInternalVariable":"Pas d’accès à la variable interne {0} de la bibliothèque {1}"
+,
+"Err_AccessVarInstFromOutsideTheDeclaringMethod":"Accès à VAR_INST '{0}' de '{1}' impossible en dehors de la méthode de déclaration"
+,
+"Err_AddressExpected":"Adresse directe après 'AT' attendue à la place de '{0}'"
+,
+"Err_AddressMisaligned":"L’adresse {0} est incorrectement alignée sur le type de données {1}"
+,
+"Err_AddressOfNonInstanceVar":"Une instance est requise au lieu d'un nom de type dans l'adresse de l'expression '{0}'"
+,
+"Err_AddressOutOfRange":"Adresse '{0}' en dehors de la plage admissible : Décalage calculé : {1} octets, taille : {2} octets"
+,
+"Err_AddressSourceIsAddressDest":"La variable '{0}' était située sur l'adresse '{1}'. Cette adresse accueille maintenant la variable '{2}'. Ce changement n'est pas possible via un changement en ligne."
+,
+"Err_Ambiguity":"Utilisation ambiguë du nom '{0}'"
+,
+"Err_AnyTypeOnlyInFunction":"Les variables de type '{0}' ne sont autorisées que comme entrée de fonctions"
+,
+"Err_ApplicationConflict":"Il existe deux applications avec le même nom '{0}' sur l’appareil '{1}'"
+,
+"Err_ArrayBorderIsNoConstant":"La limite de zone de tableau '{0}' n’est pas une valeur constante"
+,
+"Err_ArrayBorderNoValidSignedInteger":"L'évaluation d'une bordure de tableau {0} ne donne pas une constante de nombre entier signée et valide"
+,
+"Err_ArrayIndexNumWrong":"Le tableau exige exactement {0} indices"
+,
+"Err_ArrayInitialisationCountNoConstant":"Le numéro '{0}' de l’initialisation de tableau n’est pas une valeur constante"
+,
+"Err_ArrayInitialisationNotPossible":"Une initialisation de tableau n’est pas possible en tant que paramètre d’appel de fonction Init. Utilisez à la place une variable"
+,
+"Err_ArrayInitializationExpected":"Initialisation de tableau attendue"
+,
+"Err_ATDeclarationNotAllowed":"Une déclaration AT n'est autorisée qu'à l'intérieur d'une section VAR"
+,
+"Err_AtLeastOneExpected":"Au moins une instruction est attendue"
+,
+"Err_AttributeNameExpected":"Pour une valeur d’attribut, une chaîne de caractères à un seul octet est attendue à la place de {0}"
+,
+"Err_AttributeNotAllowedFor":"Attribut '{0}' pas autorisé pour '{1}'"
+,
+"Err_AttributeNotValidForNonExternalPOU":"L'attribut '{0}' n'est pas autorisé pour les POU externes"
+,
+"Err_BaseClassNotFound":"Pas de définition trouvée pour la base '{0}'"
+,
+"Err_BaseNotAllowed":"L’expression 'SUPER' n’est pas autorisée dans ce contexte"
+,
+"Err_Bitaccessnoconst":"L’accès binaire nécessite un libellé ou une constante symbolique de type entier"
+,
+"Err_BitAccessOnlyOnInt":"L'accès binaire n'est possible qu'à des types entiers."
+,
+"Err_BitAdrOnOperation":"L'opérateur BITADR n'est autorisé que pour les variables, pas pour les opérateurs"
+,
+"Err_BitNrOverflow":"'{0}' n’est pas un numéro de bit valide pour '{1}'"
+,
+"Err_BitsForStructureOnly":"Seuls les structures et les blocs fonctionnels peuvent contenir des variables de type BIT."
+,
+"Err_BitsWrongScope":"Les variables de type BIT doivent être définies dans un bloc VAR_INPUT, VAR_OUTPUT ou VAR."
+,
+"Err_BlobInitError":"Valeur constante attendue à la place de '{0}'"
+,
+"Err_CalcNeedsCall":"Le deuxième paramètre d’un appel conditionnel doit être une instruction d’appel valide"
+,
+"Err_CallAfterInitHasInputs":"Une méthode marquée de '{0}' ne peut pas avoir d'entrées."
+,
+"Err_CalleeInvalidType":"Nom de programme, fonction ou instance de bloc fonctionnel attendu à la place de '{0}'"
+,
+"Err_CallOfPrivateMethod":"Pas d’accès à la méthode privée {0}.{1}"
+,
+"Err_CallOfPrivateProperty":"Pas d’accès à la propriété privée {0}.{1}"
+,
+"Err_CallOfProtectedMethod":"Pas d’accès à la méthode protégée {0}.{1}"
+,
+"Err_CallOfProtectedProperty":"Pas d’accès à la propriété protégée {0}.{1}"
+,
+"Err_CallRecursion":"Récursion d’appel : {0}"
+,
+"Err_CancelledByUser":"Compilation annulée par l’utilisateur"
+,
+"Err_CannotAddMultipleTime":"Plusieurs opérandes de type '{0}' ne peuvent pas être additionnés"
+,
+"Err_CannotMultiplyMultipleTime":"Plusieurs opérandes de type '{0}' ne peuvent pas être multipliés"
+,
+"Err_CantHaveBaseClass":"Le mot-clé EXTENDS ne peut pas être utilisé avec le type {0}"
+,
+"Err_CaseLabelDuplicate":"Étiquette 'CASE' double"
+,
+"Err_CaseLabelInCaseRange":"L’étiquette CASE {0} est également contenue dans la zone {1} .. {2}"
+,
+"Err_CaseLabelNoConstant":"L’étiquette CASE nécessite un libellé ou une constante symbolique du type entier"
+,
+"Err_CaseLabelOutsideOfCase":"L’étiquette CASE est en dehors de l’instruction CASE"
+,
+"Err_CaseRangesOverlapping":"CASE contient des zones chevauchées {0} .. {1} et {2} .. {3}"
+,
+"Err_CheckLicenseNeedsSysTarget":"Les bibliothèques SysTarget et 3S License sont requises pour l'opérateur __CHECKLICENSE"
+,
+"Err_CompareNotPossible1":"Comparaison impossible pour les objets de type '{0}'"
+,
+"Err_CompareNotPossible2":"Comparaison impossible pour les objets de type '{0}' ou '{1}'"
+,
+"Err_ComparisonOperatorExpected":"Opérateur de comparaison attendu au lieu de '{0}'"
+,
+"Err_CompilerVersionError":"La version de compilateur {0} a été retirée. Veuillez utiliser à la place une version de compilateur plus élevée."
+,
+"Err_CompoAccessNoStruct":"'{0}' n’est pas une variable structurée"
+,
+"Err_ConditionExpected":"Condition attendue"
+,
+"Err_ConstantIndexOutOfRange":"L’indice de constante '{0}' est en dehors de la plage de '{1}' à '{2}'"
+,
+"Err_ConstantOverflow":"La constante '{0}' est trop grande pour le type '{1}'"
+,
+"Err_ContainsNoDefinition":"'{0}' ne contient pas de définition pour '{1}'"
+,
+"Err_CounterStartExpected":"Initialisation de variable de comptage attendue"
+,
+"Err_DataRecursion":"Récursion de données : {0}"
+,
+"Err_DeclarationKeywordNotAllowed":"'{0}' n’est pas autorisé à cet endroit"
+,
+"Err_DefineValueExpected":"Valeur Define attendue à la place de '{0}'"
+,
+"Err_DeleteNeedsPointer":"L’opérande de __DELETE doit être un pointeur."
+,
+"Err_DerefNoPointer":"Le déréférencement nécessite un pointeur"
+,
+"Err_DeviceNameNoIdent":"Nom d'appareil '{0}' non autorisé. Doit être un identificateur CEI 61131-3 valide"
+,
+"Err_DeviceNotInstalled":"L'appareil n'est pas disponible dans l'installation. Aucune génération de code possible."
+,
+"Err_DivisionByZero":"Division par zéro"
+,
+"Err_DuplicateElseInCaseStatement":"Double définition ELSE dans une instruction CASE"
+,
+"Err_DuplicateLabelDefinition":"Étiquette '{0}' définie plusieurs fois"
+,
+"Err_DuplicateVarConfig":"Dupliquer VAR_CONFIG pour '{0}'"
+,
+"Err_DynamicMemoryNotSupported":"Mémoire insuffisante pour la création dynamique d’objets n’est définie pour l’application '{0}'."
+,
+"Err_ExplicitTransitionAssignMissing":"Le code de transition contient des instructions multiples. L’attribution explicite à la variable de sortie de transition est requise."
+,
+"Err_ExpressionExpectedInstead":"Expression attendue à la place de '{0}'"
+,
+"Err_ExprNoConstantError":"Valeur constante attendue à la place de '{0}'"
+,
+"Err_FCallExpectedPointerAsSecondArgument":"Le deuxième argument de FCall doit être un pointeur vers une fonction."
+,
+"Err_FCallWrongCallPatternSignature":"Le premier argument de FCall doit être un type de signature utilisé comme modèle pour l’appel."
+,
+"Err_FCallWrongNumberOfArguments":"FCall exige précisément 2+{0} arguments."
+,
+"Err_FeatureNotImplemented":"La propriété '{0}' n’est pas implémentée"
+,
+"Err_FinalOnFunctionBlocksAndMethodsOnly":"FINAL ne peut être appliqué que sur des méthodes et des blocs fonctionnels."
+,
+"Err_FunctionBlockNeedsInstance":"Le bloc fonctionnel '{0}' doit être instancié pour permettre l’accès"
+,
+"Err_FunctionBlockNoLongerValid":"Le mot-clé FUNCTIONBLOCK n'est plus pris en charge. Veuillez utiliser à la place FUNCTION_BLOCK"
+,
+"Err_FunctionCallMixedStyle":"Dans les appels de fonction, soit tous, soit aucun paramètre formel ne doit être attribué explicitement"
+,
+"Err_FunNeedsAtLeastNInputs":"La fonction '{0}' nécessite au moins '{1}' et maximum '{2}' entrées"
+,
+"Err_FunNeedsNInputs":"La fonction '{0}' nécessite exactement '{1}' entrées"
+,
+"Err_GeneratingVarInitializations":"Une ou plusieurs valeurs d'initialisation pour des variables sont non valides"
+,
+"Err_GenericDeclarationProducesErrorInGeneratedCode":"Le type de déclaration '{0}' entraîne des erreurs dans le code de Bloc fonctionnel générique"
+,
+"Err_GenericNoInitialValueSupported":"Aucune valeur d'initialisation prise en charge pour la déclaration de génériques Constant"
+,
+"Err_GenericNoInteger":"Seuls les types entiers sont autorisés pour les génériques Constant"
+,
+"Err_GenericNotConstant":"La définition '{0}' pour le générique Constant '{1}' n’est pas une valeur constante"
+,
+"Err_GenericOnlyConst":"Seuls les génériques CONSTANT sont pris en charge dans la déclaration VAR_GENERIC"
+,
+"Err_GenericOnWrongPosition":"La déclaration VAR_GENERIC n’est autorisée dans les blocs fonctionnels qu’après le nom du bloc fonctionnel"
+,
+"Err_GenericParamMissing":"Initialisation manquante pour la variable générique '{0}'"
+,
+"Err_GenericParamsAllExplicitOrNone":"Toutes les variables génériques doivent être explicitement assignées ou aucune ne doit l'être"
+,
+"Err_GenericParamUnknown":"'{0}' n'est pas une constante générique déclarée du bloc fonctionnel '{1}'"
+,
+"Err_GenericWrongNumberOfInitializer":"Le bloc fonctionnel générique '{0}' exige précisément '{1}' nombre de définitions de génériques Constant"
+,
+"Err_GlobalVariableListExpected":"VAR_GLOBAL de VAR_CONFIG attendu à la place de {0}"
+,
+"Err_IdentifierExpected":"Identificateur attendu à la place de '{0}'"
+,
+"Err_IdentNotDefined":"Identificateur '{0}' non défini"
+,
+"Err_IllegalOperator":"'{0}' n’est pas un opérateur ST valide"
+,
+"Err_ImplicitEnumerationTypeNotExpected":"Un type d'énumération implicite n'est pas attendu ici"
+,
+"Err_ImplicitMethodImplementationNotPublic":"Bloc fonctionnel '{0}' : l'accès aux méthodes \"FB_Init\", \"FB_Exit\" et \"FB_ReInit\" doit être PUBLIC"
+,
+"Err_ImplicitMethodNameForVariable":"{0} est le nom pour une méthode créée implicitement et n’est pas autorisé pour des variables au sein de blocs fonctionnels"
+,
+"Err_ImplicitReferenceTypeDeclNotAllowed":"Aucune déclaration d'un type de référence implicite n'est possible ici"
+,
+"Err_ImplicitReferenceTypeOnlChangeError":"Il est impossible d'ajouter un type local de référence implicite via un changement en ligne"
+,
+"Err_ImplicitRefTypeAllClassesNeedAttrib":"Le bloc fonctionnel héritier se distingue par son utilisation de l'attribut '{0}'"
+,
+"Err_ImplicitRefTypeDeclarationNotAllowed":"Le type de référence implicite '{0}' ne peut pas être déclaré dans ce type"
+,
+"Err_ImplicitRefTypeIsnotAllowedAsBase":"Les types de référence implicites ne peuvent pas être un type de base de références, de pointeurs ou de tableaux"
+,
+"Err_ImplicitRefTypeSignNotSupported":"Seuls les blocs fonctionnels et les structures peuvent être caractérisés comme types de référence implicites"
+,
+"Err_IncompletePOUDeclaration":"La déclaration POU est incomplète sans nom"
+,
+"Err_InconsistentInheritanceOfCPPCompatibility":"Héritage incohérent de compatibilité C++. Attribut pour '{0}' manque."
+,
+"Err_InconsistentUseOfCPPCompatibility":"Utilisation incohérente de compatibilité C++. Attribut pour '{0}' manque."
+,
+"Err_InconsistentUseOfCPPCompatibility_MissingParent":"Utilisation incohérente de compatibilité C++. Attribut pour pou parent '{0}' manque."
+,
+"Err_IndexingInvalid":"L’indexation avec '[]' ne peut pas être appliquée sur une expression avec le type '{0}'"
+,
+"Err_IndexNumWrong":"La variable de type '{0}' nécessite exactement un indice"
+,
+"Err_IndexOfNotSupported":"L'opérateur INDEXOF n'est plus pris en charge. utilisez à la place ADR. Si ADR est appliqué sur un nom de POU, un pointeur sur le code POU est retourné."
+,
+"Err_InheritanceError":"L’héritage est autorisé uniquement dans des blocs fonctionnels, des interfaces et des structures"
+,
+"Err_IniNeedsUserdefType":"L’opérateur INI a besoin d’une instance de bloc fonctionnel ou d’une instance DUT"
+,
+"Err_InOutAccessOutside":"Accès externe au paramètre VAR_IN_OUT '{0}' de '{1}'."
+,
+"Err_InOutAssignedInActionCall":"VAR_IN_OUT {0} ne peut pas être mappé dans l’appel d’action local '{1}'"
+,
+"Err_InOutNotAssigned":"VAR_IN_OUT '{0}' doit être attribué à l’appel de '{1}'"
+,
+"Err_InOutParamNotEqual":"Le type '{0}' ne correspond pas au type '{1}' de VAR_IN_OUT '{2}' ou REFERENCE"
+,
+"Err_InputMissing":"L’attribution d’entrée est manquante pour le paramètre '{0}' à l’appel de '{1}'"
+,
+"Err_InstanceNotAllowedInRetain":"Les instances de '{0}' ne sont pas autorisées dans les données rémanentes"
+,
+"Err_IntegerLiteralExpected":"Libellé entier attendu à la place de {0}"
+,
+"Err_InterfaceChanged":"L’interface de la méthode surchargée '{0}' de l’interface '{1}' ne concorde pas avec la déclaration"
+,
+"Err_InterfaceChanged_NumberOfInputsOutputsDifferent":"Le nombre d’entrées/sorties de la méthode '{0}' ne correspond pas à l’interface '{1}'."
+,
+"Err_InterfaceChanged_VariableDifferent":"La variable '{0}' de la méthode '{1}' ne correspond pas à l’interface '{2}'."
+,
+"Err_InterfaceChangedBase":"L’interface de la méthode surchargée '{0}' de la base '{1}' ne concorde pas avec la déclaration"
+,
+"Err_InterfaceImplementationError":"Les interfaces ne peuvent être implémentées que par des blocs fonctionnels"
+,
+"Err_InterfaceMethodImplementationNotPublic":"L’implémentation de la méthode d’interface '{0}' du bloc fonctionnel '{1}' doit être PUBLIC"
+,
+"Err_InterfaceNeedsInstance":"L’interface '{0}' doit être instanciée pour qu’il soit possible d’y accéder"
+,
+"Err_InterfaceNotFound":"Aucune définition trouvée pour l’interface '{0}'"
+,
+"Err_InternalErrorProhibitingOnlineChange":"Une erreur interne {0} empêche tout changement en ligne ! Nettoyage et téléchargement de l'application requis."
+,
+"Err_InvalidAccessPathForNamespaceAccess":"'{0}' n’est pas un chemin d'accès valide"
+,
+"Err_InvalidBaseForGlobalScopeExpression":"L’opérateur de domaine global '.' ne peut pas être utilisé sur l’expression '{0}'"
+,
+"Err_InvalidEnumBaseType":"Seuls les types entiers sont pris en charge comme type de base enum"
+,
+"Err_InvalidEnumDefaultValue":"Seuls les composants locaux d'énumération peuvent être utilisés en tant que valeurs d'initialisation par défaut d'une énumération"
+,
+"Err_InvalidInitialisationForArray":"{0} est une initialisation non valide pour la constante {1}. Les valeurs d'initialisation des constantes doivent être des constantes."
+,
+"Err_InvalidInitialisationForVarInst":"La valeur initiale pour une variable VAR_INST ne peut pas utiliser de variables locales."
+,
+"Err_InvalidJumpDestination":"Destination non valide {0} pour JMP"
+,
+"Err_InvalidLoopIncrement":"Incrément de boucle non valide"
+,
+"Err_InvalidNamespaceForNamespaceAccess":"'{0}' n’est pas un espace de noms valide"
+,
+"Err_InvalidSignatureName":"Le nom '{0}' n’est pas un identificateur valide"
+,
+"Err_IsNoInput":"'{0}' n’est pas une entrée de '{1}'"
+,
+"Err_IsNoLValue":"'{0}' n’est pas une destination d’attribution valide"
+,
+"Err_IsNoOutput":"'{0}' n’est pas une sortie de '{1}'"
+,
+"Err_IsValidRefNeedsReference":"L'opérande pour __ISVALIDREF doit être de type REFERENCE"
+,
+"Err_LibNamespaceConflict":"L'espace de noms local '{0}' de la bibliothèque '{1}' masque l'espace de noms de la bibliothèque '{2}'"
+,
+"Err_LibraryConflict":"Espace de noms pas univoque '{0}' défini par la bibliothèque '{1}'"
+,
+"Err_LibraryNamespaceNotValid":"L'espace de noms {0} de la bibliothèque {1} n'est pas un identificateur valide"
+,
+"Err_LibraryWithUnicodeIdentifiers":"La bibliothèque '{0}' a été enregistrée à l’aide d’identificateurs Unicode et ne peut être utilisée que si le projet prend également en charge les identificateurs Unicode (voir les options de compilation)."
+,
+"Err_LibSupports32BitOnly":"La bibliothèque '{0}' n'est prise en charge que dans les applications 32 bit"
+,
+"Err_LiteralExpected":"Libellé attendu à la place de '{0}'"
+,
+"Err_LowerGreaterUpperBorder":"La limite inférieure doit être inférieure à la valeur limite supérieure."
+,
+"Err_LowerUpperBoundOnVariableLengthArrayOnly":"Les opérateurs LOWER_BOUND et UPPER_BOUND ne sont pris en charge que pour les tableaux"
+,
+"Err_LowerUpperBoundOperandNotExactly":"La valeur du 2e opérande de l'opérateur {0} doit être 1 dans ce cas"
+,
+"Err_LowerUpperBoundOperandNotInRange":"La valeur du 2e opérande de l'opérateur {0} doit être entre 1 et {1} dans ce cas"
+,
+"Err_LValueForAnyVar":"Le paramètre ANY '{0}' de '{1}' nécessite une variable avec accès en écriture comme entrée"
+,
+"Err_LValueForReference":"L’attribution de référence nécessite une variable avec accès en écriture"
+,
+"Err_LValueForVarinout":"Le paramètre VAR_IN_OUT ou REFERENCE '{0}' de '{1}' nécessite une variable avec accès en écriture comme entrée"
+,
+"Err_LValueForVarinoutStrings":"Le paramètre VAR_IN_OUT ou REFERENCE '{0}' de '{1}' nécessite une variable avec accès en écriture comme entrée"
+,
+"Err_LValueNoRefType":"L’attribution de référence est autorisée uniquement pour des variables de types de référence"
+,
+"Err_MalformedAddress":"Adresse directe '{0}' incorrectement représentée"
+,
+"Err_MappedVarWrittenInDiffTasks":"La variable {0} mappée sur l'adresse {1} est écrite dans différentes tâches"
+,
+"Err_MaxArraySizeExceeded":"Taille maximale de tableau dépassée. Augmentez la limite inférieure ou réduisez la limite supérieure."
+,
+"Err_MaxNestingDepthExceeded":"Profondeur maximale d'imbrication dépassée. "
+,
+"Err_MissingImplementationTerminator":"Impossible de trouver le terminateur '{0}' pour le bloc d'implémentation."
+,
+"Err_MissingInstancePathForPersistent":"Aucun chemin d'instance adéquat trouvé pour la variable {0} dans la liste VAR_PERSISTENT. Utilisez la commande \"Ajouter tous les chemins d'instance\" pour ajouter tous les chemins d'instance à la liste VAR_PERSISTENT. (voir l'aide pour davantage de détails)"
+,
+"Err_MissingObjectForPersistent":"Aucune liste VAR_PERSISTENT disponible pour l’application, permettant d’entrer le chemin d'instance pour la variable {0}"
+,
+"Err_MissingParameterList":"{0} '{1}' référencé sans parenthèses '()'"
+,
+"Err_ModNotReal":"MOD n’est pas défini pour REAL"
+,
+"Err_Multiassigninfor":"Exactement une variable de comptage attendue pour l’instruction FOR"
+,
+"Err_MultipleAssignmentsNotAllowedForOperator":"Les attributions multiples ne sont pas autorisées pour l’opérateur '{0}'."
+,
+"Err_MultipleAssignmentsToInterfaceVariables":"Les attributions multiples aux variables d'interface ne sont pas autorisées"
+,
+"Err_MultipleAssignmentWithChangingValueTypes":"Les attributions multiples de types de valeur avec des transtypages implicites ne sont pas autorisées"
+,
+"Err_MultipleAssignmentWithProperty":"Les propriétés ne peuvent pas être utilisées au centre d’attributions multiples."
+,
+"Err_MultipleAssignmentWithReferences":"Les attributions multiples de références à des blocs fonctionnels ou des structures de données ne sont pas autorisées"
+,
+"Err_MultipleAssignsToSameInputInCall":"Attribution multiple d'entrée pour le paramètre '{0}'"
+,
+"Err_NamesNotEqual":"Le nom utilisé dans l'interface n'est pas identique au nom de l'objet"
+,
+"Err_NewArrayOnUserdefNotAllowed":"La création d’un tableau avec __NEW n’est pas autorisée pour les types définis par l'utilisateur"
+,
+"Err_NewNeedsType":"Une définition de type est attendue comme opérande pour __NEW"
+,
+"Err_NewOnInterfaceNotPossible":"__NEW n’est pas possible pour des interfaces"
+,
+"Err_NewOnlyWithAttribute":"Un bloc fonctionnel ou une structure a besoin de l’attribut '{{attribute 'enable_dynamic_creation'}}' pour être créé avec __NEW."
+,
+"Err_NewPositionNotOK":"Le résultat de __NEW doit être attribué"
+,
+"Err_NoArrayOfBit":"BIT n’est pas autorisé comme type de base d’un tableau"
+,
+"Err_NoAssign":"Attribution non autorisée pour type {0}"
+,
+"Err_NoBitAccessOnFunctionCall":"L’accès binaire à un appel de fonction n’est pas admis."
+,
+"Err_NoBitTypeOnBitAddress":"Le type {0} n’est pas possible sur l’adresse binaire {1}"
+,
+"Err_NoBranchOutOfFinally":"Branche à partir du bloc __FINALLY n’est pas autorisé"
+,
+"Err_NoBytesInRetain":"Un type de données structuré se trouvant dans la zone de fichiers rémanente ne peut pas contenir de BYTE, SINT ni USINT"
+,
+"Err_NoCallInInstancePath":"Il est impossible d'exécuter un accès de composant '.', un accès d'index '[]' ou un appel '()' sur le résultat d'un appel de fonction. Assignez tout d'abord le résultat à une variable."
+,
+"Err_NoCallInInterfaceComparison":"Il est impossible de comparer une interface qui est la valeur renvoyée d'un appel. Assignez-la tout d'abord à une variable."
+,
+"Err_NoCaseLabelFound":"Pas d’étiquette CASE trouvée"
+,
+"Err_NoChangeOnAccessModifier":"La méthode {0}.{1} ne peut pas changer le modificateur d’accès ''{2}'' si elle écrit par dessus la méthode {3}.{1}"
+,
+"Err_NoCodegenerator":"Échec de la création d’un générateur de code. Le plug-in requis n'est pas installé"
+,
+"Err_NoComponentOf":"'{0}' n’est pas un composant de '{1}'"
+,
+"Err_NoConstantInitialisationForValue":"Constante '{0}' pas initialisée avec une valeur constante."
+,
+"Err_NoCopyCodeAllowed":"Le déplacement de ce module à une nouvelle position n'est pas autorisé pendant un changement en ligne"
+,
+"Err_NoCopyCodeForVariableAtDirectAddress":"une variable à une adresse directe ne peut pas changer son type lors d'un changement en ligne"
+,
+"Err_NoDirectAddressInSubsequentVarDecl":"La déclaration de variable '{0}' avec une attribution d'adresse ne peut pas être utilisée dans un PRG ou une liste de variables globales avec l'attribut 'subsequent'."
+,
+"Err_NoEnclosingLoopExit":"Aucune instruction de boucle enveloppante ne peut être utilisée sur le {0}"
+,
+"Err_NoExitOrContinueOutOfCatch":"Quitter ou Continuer à partir du bloc __CATCH n’est pas autorisé"
+,
+"Err_NoExitOrContinueOutOfTry":"Quitter ou Continuer à partir du bloc __TRY n’est pas autorisé"
+,
+"Err_NoExplicitCall":"Pas d’appels explicites autorisés pour '{0}'. {1}. "
+,
+"Err_NoFormalParamsCallsForExtensibleFunction":"Aucune attribution d'entrée explicite possible pour l'appel de la fonction extensible {0}"
+,
+"Err_NoGenericInstanceInVarConst":"Les instances d’un Bloc fonctionnel générique ne peuvent pas être déclarées constantes"
+,
+"Err_NoGlobalDefine":"Définition globale pour '{0}' pas disponible"
+,
+"Err_NoIndirectPropertyCallOnStringWithSize":"L’accès indirect à l’appel de propriété de type {0} n’est pas possible car seuls les types avec longueur explicitement spécifiée sont pris en charge."
+,
+"Err_NoInheritanceOnFinalType":"'{0}' avec l’attribut FINAL ne peut pas être utilisé comme base"
+,
+"Err_NoInitialForExternal":"Pour VAR_EXTERNAL {0}, aucune valeur initiale n'est autorisée."
+,
+"Err_NoInitialForInoutConstant":"Aucune valeur initiale n'est autorisée pour VAR_INOUT CONSTANT {0}."
+,
+"Err_NoInputMemory":"Aucune mémoire d’entrée n’a été réservée"
+,
+"Err_NoInputsWithSlotAttributes":"Pas d'entrées autorisées dans la signature '{0}' avec l'attribut '{1}'"
+,
+"Err_NoInstanceObject":"'{0}' est de type {1} et ne peut pas être instancié"
+,
+"Err_NoInstancePath":"Aucun VAR_CONFIG pour '{0}'"
+,
+"Err_NoLocalEnum":"Les énumérations locales ne sont plus prises en charge. Veuillez utiliser à la place une définition DUT."
+,
+"Err_NoMatchingInitMethodFound":"Aucune méthode 'FB_Init' correspondante trouvée pour l’instanciation de {0}"
+,
+"Err_NoMatchingOverload":"Aucune surcharge correspondante trouvée pour la méthode '{0}'"
+,
+"Err_NoMemoryAllocationCallback":"Échec de la création d’un allocateur de mémoire : le plug-in requis n’est pas installé"
+,
+"Err_NoMemoryMemory":"Aucune mémoire n’a été réservée"
+,
+"Err_NoMemoryReserveForExternal":"L'utilisation d'une réserve de mémoire pour les blocs fonctionnels externes n'est pas prise en charge"
+,
+"Err_NoMethodImplementation":"Aucune implémentation pour la méthode '{0}' de l’interface '{1}'"
+,
+"Err_NoMixExternalIECInheritance":"Une POU d'extension doit être implémentée de la même manière que sa base (externe ou sous CEI)."
+,
+"Err_NoMultipleInheritance":"Un seul bloc fonctionnel de base peut être défini dans la liste EXTENDS"
+,
+"Err_NoNamespace":"'{0}' n’indique pas un espace de noms"
+,
+"Err_NoNewAssignmentInOtherExpression":"Il n'est pas possible d'utiliser une expression d'affectation avec l'opérateur __NEW dans une autre expression. Utilisez plutôt la variable de pointeur."
+,
+"Err_NoOnlineChangeOnDynamicObjects":"Impossible d’effectuer un changement en ligne qui modifie la taille d’un type créé de manière dynamique."
+,
+"Err_NoOnlineChangeOnGenericConstantBaseType":"Dans la déclaration de BaseType {0}, la valeur de la constante {1} est passée de {2} à {3} : tout changement en ligne est impossible !"
+,
+"Err_NoOnlineChangeOnGenericConstantType":"Dans la déclaration de Variable {0}, la valeur de la constante {1} est passée de {2} à {3} : tout changement en ligne est impossible !"
+,
+"Err_NoOnlineChangePossible":"Aucun changement en ligne possible. Effectuez un téléchargement complet "
+,
+"Err_NoOutputMemory":"Aucune mémoire de sortie n’a été réservée"
+,
+"Err_NoOutsideAccessToGenericVariable":"Aucun accès externe au générique Constant '{0}' du bloc fonctionnel '{1}'"
+,
+"Err_NoOverrideOnFinalMethod":"Bloc fonctionnel '{0}' : impossible de redéfinir la méthode {1}.{2} avec le modificateur d'accès FINAL"
+,
+"Err_NoOverrideOnInternalMethod":"Bloc fonctionnel '{0}' : impossible de redéfinir la méthode {1}.{2} dans la bibliothèque {3} avec le modificateur d'accès INTERNAL"
+,
+"Err_NoOverrideOnPrivateMethod":"Bloc fonctionnel '{0}' : impossible de redéfinir la méthode {1}.{2} avec le modificateur d'accès PRIVATE"
+,
+"Err_NoPointerToBit":"POINTER TO BIT n’est pas autorisé"
+,
+"Err_NoPropertiesInOutAssignment":"Une propriété ne peut pas être assignée dans une attribution de sortie d'un appel. Utilisez à la place une variable temporaire."
+,
+"Err_NoPropertyForVarInout":"Impossible d’attribuer des propriétés à VAR_IN_OUT."
+,
+"Err_NoReadAccessToProperty":"La propriété '{0}' ne peut pas être utilisée dans ce contexte car elle ne possède pas d’accesseur Get"
+,
+"Err_NoReferenceToBits":"Les références à des bits ne sont pas possibles."
+,
+"Err_NoReferenceToOutput":"Les sorties ne peuvent pas être du type REFERENCE TO"
+,
+"Err_NoResolutionForLazyVariable":"Impossible de résoudre le type de la variable typée Lazy '{0}'"
+,
+"Err_NoResolutionForSomeLazyVariables":"Le type des variables lazy dans cette signature n'a pas pu être déduit."
+,
+"Err_NoStaticVariableInitialisationForValue":"Initialisation de la variable statique '{0}' pas constante ou constantes remplacées désactivées"
+,
+"Err_NoSuchLabel":"Étiquette '{0}' dans la plage de l’instruction 'JMP' non définie."
+,
+"Err_NoSystemDefine":"Aucune définition de système n’existe pour '{0}'"
+,
+"Err_NotAllowedInContainerLib":"'{0}' n’est pas autorisé dans la bibliothèque de conteneur"
+,
+"Err_NotAllowedInInterfaceLib":"'{0}' n’est pas autorisé dans la bibliothèque d’interface"
+,
+"Err_NotAllowedInTaskLocalVariables":"Liste de variables locales Tâche '{0}' : '{1}' n’est pas autorisé"
+,
+"Err_NotAnInstanceOf":"'{0}' n’est pas une instance de '{1}'"
+,
+"Err_NotEnoughMemoryForCompactDownload":"Mémoire insuffisante pour téléchargement compact dans la première zone de code. Impossible d'allouer '{0}' octets"
+,
+"Err_NotEnoughMemoryForVariableInit":"Mémoire insuffisante pour l’initialisation de la variable '{0}'. '{1}' octets requis"
+,
+"Err_NotSupportedInInterface":"Ce code n’est pas pris en charge dans la partie déclaration"
+,
+"Err_NoValidCondition":"'{0}' n’est pas une condition valide"
+,
+"Err_NoValidConditionforPragma":"'{0}' n’est pas une condition pragma valide"
+,
+"Err_NoValidEnumInit":"{0} n’est pas une initialisation valide pour une énumération"
+,
+"Err_NoValidInstancePath":"'{0}' n’est pas un chemin d'instance valide"
+,
+"Err_NoValidOperand":"'{0}' n’est pas un opérande valide"
+,
+"Err_NoValidOperandforPragma":"'{0}' n’est pas un opérande de pragma valide"
+,
+"Err_NoValidStatement":"'{0}' n’est pas une instruction valide"
+,
+"Err_NoValuePassingForCPPExternal":"Les fonctions compatibles CPP ne peuvent pas contenir d’entrées ni de sorties de type STRING, ARRAY ou structuré. Utilisez POINTER ou REFEFRENCE à ce type à la place."
+,
+"Err_NoVarConfigInMethodOrFunction":"Les adresses incomplètes ne sont pas autorisées dans les méthodes et les fonctions"
+,
+"Err_NoVarForExternal":"Pas de définition globale trouvée pour VAR_EXTERNAL {0}"
+,
+"Err_NoVarInputInPropertyAccessors":"Il est interdit de définir des variables d'entrée dans les accesseurs de propriété : {0} : {1}"
+,
+"Err_NoVarsinInterface":"Les déclarations de variables ne sont pas autorisées dans les définitions d’interface"
+,
+"Err_NoVarTempInSubsequentPrograms":"VAR_TEMP n’est pas possible dans les programmes ayant l’attribut ''subsequent''"
+,
+"Err_NumOfInitializersDoNotMatch":"Le nombre d'initialiseurs FB_Init ({0}) ne correspond pas au nombre d'éléments de tableau ({1})"
+,
+"Err_OneAccessorRequired":"La propriété '{0}' nécessite au moins un accesseur"
+,
+"Err_OnlyMethodsOverride":"Impossible de surcharger {0} {1} de {2} : seules les méthodes peuvent être surchargées"
+,
+"Err_OperationNotPossibleOnType":"L’opérateur '{0}' ne peut pas être utilisé sur le type '{1}'"
+,
+"Err_Operator1of2Expected":"'{0}' ou '{1}' attendu à la place de '{2}'"
+,
+"Err_Operator1of3Expected":"'{0}', '{1}' ou '{2}' attendu à la place de '{3}'"
+,
+"Err_Operator1of3ExpectedInsteadofEOF":"Fin de fichier inattendue trouvée : '{0}', '{1}' ou '{2}' attendu"
+,
+"Err_Operator1of4Expected":"'{0}', '{1}', '{2}' ou '{3}' attendu à la place de '{4}'"
+,
+"Err_OperatorExpected":"'{0}' attendu à la place de '{1}'"
+,
+"Err_OperatorExpectedInsteadofEOF":"Fin de fichier inattendue trouvée : '{0}' attendu"
+,
+"Err_OperatorNotAllowedAtPosition":"L'utilisation de l'opérateur '{0}' n'est pas autorisée dans cette instruction"
+,
+"Err_OperatorNotSupported":"Opérateur '{0}' pas pris en charge"
+,
+"Err_OperatorNotSupportedVersion":"L’opérateur {0} n'est pas pris en charge sur votre appareil cible actuel. Le système d'exécution doit au minimum être de la version {1}."
+,
+"Err_OperatorNoValidVariableName":"L'opérateur '{0}' n'est pas un nom valide pour une variable"
+,
+"Err_OpNeedsAtLeastInputs":"'{0}' nécessite au moins {1} opérandes"
+,
+"Err_OpNeedsExactInputs":"'{0}' nécessite exactement '{1}' opérandes"
+,
+"Err_OpTakesAtMostInputs":"'{0}' nécessite au plus '{1}' opérandes"
+,
+"Err_OutOfCodeMemory":"Mémoire de programme insuffisante : POU {0}, {1} octets. (Une compilation incrémentale peut provoquer la fragmentation de la mémoire. Exécuter ''Compiler'' ''Nettoyer'' afin de forcer la nouvelle allocation de toutes les données et des codes.)"
+,
+"Err_OutOfMemory":"Mémoire globale des données insuffisante : variable {0}, {1} octets. (Une compilation incrémentale peut provoquer la fragmentation de la mémoire. Exécuter ''Créer'' ''Nettoyer'' afin de forcer la nouvelle allocation de toutes les données et des codes.)"
+,
+"Err_OutOfMemoryFunctionPointer":"Plus de mémoire globale de données disponible : impossible d’affecter le pointeur de fonction pour la fonction '{0}'"
+,
+"Err_OutOfMemoryWithWholeSize":"Mémoire de données globale insuffisante : variable '{0}', {1} octets (plus grand espace mémoire contigu {2}). Une compilation incrémentale ou l'ajout de variables aux listes des variables persistantes peut provoquer la fragmentation de la mémoire. Exécutez la commande ''Déclarations, Trier à nouveau la liste et nettoyer les espaces vides'' afin de compacter la liste des variables persistantes, ou ''Compiler, Nettoyer'' afin de forcer la nouvelle allocation pour d’autres données et codes."
+,
+"Err_OutOfPersistentMemoryExplicit":"Mémoire persistante insuffisante : Variable '{0}', {1} octets (le plus grand espace mémoire contigu {2}). La modification de la liste de variables persistantes peut provoquer la fragmentation de la mémoire. Exécutez la commande « Déclarations, Trier à nouveau la liste et nettoyer les espaces vides » afin de comprimer la liste des variables persistantes. {3}"
+,
+"Err_OutOfPersistentMemoryImplicit":"Mémoire persistante insuffisante {0}"
+,
+"Err_OutOfRetainMemory":"En dehors de la mémoire rémanente : variable {0}, {1} octets. (Une compilation incrémentale peut provoquer la fragmentation de la mémoire. Exécuter ''Créer'' ''Nettoyer'' afin de forcer la nouvelle allocation de toutes les données et des codes.)"
+,
+"Err_OutOfRetainMemoryWithWholeSize":"En dehors de la mémoire rémanente : variable {0}, {1} octets. (Taille totale disponible {2}) (Une compilation incrémentale peut provoquer la fragmentation de la mémoire. Exécuter ''Créer'' 'Nettoyer' afin de forcer la nouvelle allocation de toutes les données et des codes.)"
+,
+"Err_OutParamNotEqual":"Le type '{0}' ne correspond pas au type '{1}' de VAR_OUTPUT '{2}'"
+,
+"Err_OutputByteWrittenFromDifferentTasks":"Le même octet dans la mémoire de sortie est écrit dans différentes tâches."
+,
+"Err_OverflowInAddress":"Dépassement de constante à l’adresse '{0}'"
+,
+"Err_OverloadNeedsAttribute":"Il existe une autre méthode nommée '{0}'. Utilisez l'attribut {{attribute 'overloaded'}} si vous souhaitez définir des méthodes surchargées."
+,
+"Err_OverloadWithSameInputs":"Il existe une autre surcharge pour '{0}' avec les mêmes types d'entrée."
+,
+"Err_ParameterlistNotConst":"Une liste de paramètres doit être déclarée comme constante."
+,
+"Err_ParamsNotAllowed":"Un paramètre 'PARAMS' doit être la dernière entrée d’une fonction ou méthode"
+,
+"Err_PartialAccess_NotAValidComponent":"'%{1}{2}' n’est pas un composant partiel valide de '{0}'"
+,
+"Err_PartialAccess_OnlyOnBitTypes":"L’accès partiel n’est pris en charge que sur les types ANY_BIT et non pas sur '{0}'"
+,
+"Err_PersistentNoAddress":"Une déclaration d’adresse directe n’est pas possible dans des listes de variables persistantes"
+,
+"Err_PersistentVariablesChangeMessageText":"Variables persistantes modifiées.Téléchargement annulé par l'utilisateur."
+,
+"Err_PersistentWrongVariable":"Toutes les variables dans la liste persistante doivent être du type VAR_GLOBAL PERSISTENT ou VAR_GLOBAL PERSISTENT RETAIN"
+,
+"Err_POUCalledFromDifferentTasks":"Le module {0} écrit sur sortie {1} et est appelé dans plusieurs tâches"
+,
+"Err_PrivateOnMethodsOnly":"PRIVATE et PROTECTED ne peuvent être appliqués que sur des méthodes et des blocs fonctionnels"
+,
+"Err_ProjectDefinedNotSupportedFor":"La condition 'project_defined' n’est pas prise en charge pour cette syntaxe car elle risque affecter l’interface publique de '{0}'."
+,
+"Err_QueryInterfaceErrorP1":"Le premier opérande de __QueryInterface doit être une référence d'interface ou l’instance d'un bloc fonctionnel"
+,
+"Err_QueryInterfaceErrorP2":"Le deuxième opérande de __QueryInterface doit être une référence interface."
+,
+"Err_QueryInterfaceP1NoIQuery":"L'interface {0} n'étend pas {1}"
+,
+"Err_QueryPointerErrorP1":"Le premier opérande de __QueryPointer doit être une référence d'interface ou une instance d'un bloc fonctionnel."
+,
+"Err_QueryPointerErrorP2":"Le deuxième opérande de __QueryInterface doit être un pointeur"
+,
+"Err_RecursiveConstantInitialisation":"Définition récursive de valeur constante"
+,
+"Err_RefAssignNeedsLValue":"Une attribution de référence nécessite comme source d'attribution une variable avec accès en écriture"
+,
+"Err_RefAssignOnlyForReferenceTypes":"L'initialisation avec REF= n'est autorisée que pour les variables de type REFERENCE TO"
+,
+"Err_ReferenceNotAllowed":"Un type de référence ne peut pas être utilisé comme type de base d’un tableau, d’un pointeur ou d’une référence"
+,
+"Err_ReferenceNotAllowedForVarInOut":"Un type de référence n’est pas autorisé comme type d'une VAR_IN_OUT"
+,
+"Err_ReferenceToInput":"L'attribution de référence n'est pas possible sur une variable qui est mappée sur une adresse d'entrée"
+,
+"Err_RelatedPositionInterface":"Position associée : méthode d’interface '{0} de l’interface {1}'."
+,
+"Err_RelatedPositionTaskX":"Position associée : accès à la tâche {0}"
+,
+"Err_RetainNotAccessiblePOU":"Le module {0} masque le nom de bibliothèque, l’accès aux éléments de bibliothèque n’est pas possible. Aucun code implicite n’est généré pour l’enregistrement des variables rémanentes {1}."
+,
+"Err_RetainNotAccessibleVariable":"La variable {0} masque le nom de bibliothèque, l’accès aux éléments de bibliothèque n’est pas possible. Aucun code implicite n’est généré pour l’enregistrement des variables rémanentes {1}."
+,
+"Err_RetainOrPersistentNotAllowed":"'RETAIN' ou 'PERSISTENT' ne sont pas autorisés en cet endroit"
+,
+"Err_RetainsNotSupported":"Les données rémanentes ne sont pas prises en charge sur cet appareil"
+,
+"Err_ReturnTypeForNonFunction":"Le type de retour est autorisé uniquement pour les fonctions et les méthodes"
+,
+"Err_RValueRequired":"L’attribution ne possède aucune source valide"
+,
+"Err_SelfInheritance":"Récursion dans l’interface : {0}"
+,
+"Err_SelfInheritanceBase":"Récursion dans la liste de bloc fonctionnel de base : {0}"
+,
+"Err_SelMuxOnlyEqualUserDefTypes":"Tous les types définis par l'utilisateur utilisés dans SEL ou MUX doivent être égaux"
+,
+"Err_SemicolonExpected":"';' attendu à la place de '{0}'"
+,
+"Err_SemicolonExpectedInsteadOfEnd":"';' attendu à la place de la fin de POU"
+,
+"Err_SlotFunctionAmbiguousName":"Le module {0} avec attribut d’emplacement {1} n’a pas de nom univoque."
+,
+"Err_SlotFunctionHiddenByVariable":"Impossible d’appeler le module {0} avec attribut d’emplacement {1} car il est masqué par la variable '{2}'."
+,
+"Err_SomethingOverridingMethod":"{0} '{1}' surcharge la méthode d’interface '{2}'"
+,
+"Err_SomethingOverridingMethodBase":"{0} '{1}' surcharge la méthode de base '{2}'"
+,
+"Err_SpecialTypeExpected":"Une expression du type '{0}' est attendue ici"
+,
+"Err_StackOverflowDetected":"Dépassement de pile détecté dans la tâche {0}. Taille maximum de pile : {1} octets. Taille de pile calculée : {2} octets. Appel hiérarchie :"
+,
+"Err_StaticNotAllowed":"La déclaration 'VAR_STAT' n’est pas autorisée à cet endroit"
+,
+"Err_StrictEnumNoArithmeticAllowed":"Les opérations mathématiques ne sont pas autorisées sur le type strict ENUM '{0}'"
+,
+"Err_StrictEnumNotAMember":"'{0}' n'est pas une valeur valide pour le type strict ENUM '{1}'"
+,
+"Err_StringLengthIsNoConstant":"La longueur de chaîne '{0}' n’est pas une valeur constante"
+,
+"Err_StringLiteralExpected":"Littéral de chaîne attendu à la place de '{0}'"
+,
+"Err_StringSizeExpected":"Longueur de la chaîne attendue après '('"
+,
+"Err_StringTooShortForVarInOut":"Variable de chaîne '{0}' trop courte pour les paramètres VAR_IN_OUT '{1}' de '{2}'"
+,
+"Err_StructInitOnlyInput":"'{0}' n’est pas une entrée de '{1}'"
+,
+"Err_StructuredValueTypeInExternalCall":"Le type structuré '{0}' n’est pas autorisé dans un appel de fonction externe"
+,
+"Err_StructureInitialisationNotPossible":"Une initialisation de structure n’est pas possible en tant que paramètre d’appel de fonction Init. Utilisez à la place une variable."
+,
+"Err_StructureInitializationExpected":"Liste d'initialisation pour {0} attendue"
+,
+"Err_StructureNotAllowed":"La déclaration 'STRUCT' est autorisée uniquement dans la définition DUT"
+,
+"Err_SummarizedLibraryErrors":"{0} erreur(s) interne(s) dans la bibliothèque {1}"
+,
+"Err_SystemOutOfMemory":"L'environnement de développement n'a pas suffisamment de mémoire pour exécuter le changement en ligne. Veuillez redémarrer l'application avant de poursuivre le développement."
+,
+"Err_TaskLocalVariablesAccessNotAllowed":"Liste de variables locales Tâche '{0}' : accès en écriture autorisé uniquement dans la tâche '{1}'"
+,
+"Err_TaskLocalVariablesNoOnlineChangePossible":"Liste de variables locales Tâche '{0}' modifiée. Aucun changement en ligne possible."
+,
+"Err_TaskLocalVariablesWriterTaskNotDefined":"Liste de variables locales Tâche '{0}' : tâche Écriture pas définie"
+,
+"Err_ThisNotAllowed":"L’utilisation de THIS n’est pas autorisée dans ce contexte"
+,
+"Err_TooFewParametersForExtensibleFunction":"La fonction extensible {0} nécessite au moins {1} entrées pour le paramètre {2}"
+,
+"Err_TooManyInitializer":"Trop d’initialiseurs pour le champ de données"
+,
+"Err_TooManyParametersForExtensibleFunction":"La fonction extensible {0} accepte maximum {1} entrées pour le paramètre {2}"
+,
+"Err_TryCatchNotSupported":"Traitement structuré des exceptions pas encore pris en charge"
+,
+"Err_TryCatchNotSupportedCodegenerator":"Le générateur de code pour l'appareil actuel ne prend pas en charge le traitement structuré des exceptions"
+,
+"Err_TryCatchNotSupportedVersion":"Le traitement structuré des exceptions n'est pas pris en charge sur votre appareil cible actuel. Le système d'exécution doit au minimum être de la version 3.5.6.0."
+,
+"Err_TypeExpected":"Définition de type attendue à la place de '{0}'"
+,
+"Err_TypeIsNotGeneric":"'{0}' n’est pas un bloc fonctionnel générique."
+,
+"Err_TypeMismatch":"Le type '{0}' ne peut pas être converti en type '{1}'"
+,
+"Err_TypesNotComparable":"Le type '{0}' ne peut pas être comparé avec le type '{1}'"
+,
+"Err_UnexpectedArrayInitialisation":"Initialisation de tableau inattendue"
+,
+"Err_UnexpectedOperandForCallInitFunction":"Opérande inattendu '{0}' trouvé dans '{1}'. Une liste de variables globales ou un PRG doivent être transmis comme paramètres."
+,
+"Err_UnexpectedOperandForIndexOf":"Opérande inattendu '{0}' trouvé dans '{1}'"
+,
+"Err_UnexpectedPragmaif":"Pragma inattendu : '{0}' trouvé sans 'if' afférent"
+,
+"Err_UnexpectedStatement":"Instruction inattendue"
+,
+"Err_UnexpectedStructureInitialisation":"Initialisation de structure inattendue"
+,
+"Err_UnexpectedTokenFound":"Jeton inattendu '{0}' trouvé"
+,
+"Err_UnexpectedTypeName":"Désignation de type '{0}' non attendue à cet endroit"
+,
+"Err_UninitialisedVariableUsedInInitialisation":"La variable non initialisée {0} est utilisée pour l'initialisation de {1}. Utilisez l'attribut 'global_init_slot', pour modifier l'ordre de l'initialisation."
+,
+"Err_UnionNotAllowed":"La déclaration UNION est uniquement autorisée dans la définition DUT"
+,
+"Err_UnknownCompilerVersionInCompiledLib":"La version de compilateur \"{1}\" avec laquelle la bibliothèque compilée \"{0}\" a été créée est plus récente que la version de compilateur du projet ou est inconnue."
+,
+"Err_UnknownEmbeddedLanguageType":"Type de langage incorporé inconnu '{0}'."
+,
+"Err_UnknownMaxStackSize":"L'accès aux informations sur la tâche en cours d'exécution nécessite de connaître la taille maximale de la pile prise en charge sur le système cible"
+,
+"Err_UnknownType":"Type inconnu : '{0}'"
+,
+"Err_UnsupportedFeature":"La fonctionnalité de compilateur '{0}' est uniquement prise en charge avec la version {1} ou une version plus récente du compilateur"
+,
+"Err_UnsupportedType":"Type non pris en charge : '{0}'"
+,
+"Err_UpperBoundExpected":"L’instruction FOR nécessite une limite supérieure"
+,
+"Err_UserCheckFunctionsNotSupported":"Les fonctions de vérification définies par l'utilisateur ne sont pas prises en charge"
+,
+"Err_VarAccessNotSupported":"VAR_ACCESS n’est pas pris en charge"
+,
+"Err_VarConfigNotAllowed":"La déclaration VAR_CONFIG est autorisée uniquement dans la liste VAR_CONFIG"
+,
+"Err_VarGlobalNotAllowed":"La déclaration 'VAR_GLOBAL' est autorisée uniquement dans des listes de variables globales"
+,
+"Err_VariableDeclarationExpected":"Une déclaration de variables attendue à la place de {0}"
+,
+"Err_VariableDuplicate":"Une variable locale avec le nom '{0}' est déjà définie dans '{1}'."
+,
+"Err_VariableForVarinoutConstant":"Le paramètre VAR_IN_OUT CONSTANT '{0}' de '{1}' nécessite une variable comme entrée"
+,
+"Err_VariableListExpected":"VAR, VAR_INPUT, VAR_OUTPUT ou VAR_IN_OUT attendus à la place de {0}"
+,
+"Err_VariableOverride":"Définition multiple de la variable '{0}' dans le bloc fonctionnel '{1}' et dans la base '{2}'"
+,
+"Err_VarInstOnlyInMethods":"La déclaration 'VAR_INST' n’est pas autorisée à cet endroit"
+,
+"Err_VarLengthArrayInOut":"Les tableaux de longueur variable ne sont autorisés qu'en tant que VAR_IN_OUT de blocs fonctionnels ou en tant que VAR_IN_OUT et VAR_INPUT de méthodes et fonctions"
+,
+"Err_VarLengthArrayTopLevel":"Un type d'un tableau de longueur variable doit se trouver à la position la plus élevée d'une déclaration de type"
+,
+"Err_VarTempNotAllowed":"La déclaration 'VAR_TEMP' n’est pas autorisée à cet endroit"
+,
+"Err_VarTooBig":"La variable '{0}' est trop grande. (taille de variable : {1}, taille de segment: {2})"
+,
+"Err_VectorBaseMustBeRealType":"Le type de base d'un vecteur doit être REAL ou LREAL."
+,
+"Err_VectorNoPersistentRetain":"Un vecteur ne peut être déclaré persistant ou rémanent"
+,
+"Err_VectorSizeIsNoConstant":"La taille d'un vecteur doit être une constante"
+,
+"Err_VectorSizeNotValid":"La taille d'un vecteur doit être un entier supérieur à 0 et inférieur à 9"
+,
+"Err_VectorTypeCantBePlacedInUnion":"Les types de vecteurs ne peuvent pas être placés dans des unions"
+,
+"Err_VectorTypesNotCompatible":"Les types de vecteur {0} et {1} ne sont pas compatibles"
+,
+"Err_VersionInvalidFormat":"Le jeton {0} n’est pas une version valide"
+,
+"Err_VersionOverflow":"Au moins une partie de la version'{0}' a une valeur trop grande"
+,
+"Err_VersionPartNegative":"Au moins une partie de la version'{0}' a une valeur négative"
+,
+"Err_WrongCallAfterGlobalInitSlotSignature":"Une signature décorée de l’attribut 'call_after_global_init_slot' ne peut avoir aucun argument ou une seule entrée dénommée 'bInitRetains'."
+,
+"Err_WrongConstructor":"La méthode FB_Init d’un bloc fonctionnel ou d’une structure nécessite deux entrées 'bInitRetains' et 'bInCopyCode' de type BOOL"
+,
+"Err_WrongDestructor":"La méthode FB_Exit d’un bloc fonctionnel ou d’une structure doit avoir une seule entrée 'bInCopyCode' de type BOOL et une valeur renvoyée de type BOOL."
+,
+"Err_WrongFormalParameter":"Paramètre formel incorrect : '{0}' est attendu à cet endroit"
+,
+"Err_WrongObjectType":"L’objet de type '{0}' ne peut pas être appelé"
+,
+"Err_WrongReInit":"La méthode FB_ReInit d’un bloc fonctionnel ou d’une structure ne doit avoir aucune entrée et une valeur renvoyée de type BOOL. Le FB_ReInit ne sera pas calculé automatiquement !"
+,
+"Err_WrongTypeForAdr":"'{0}' n’est pas autorisé comme opérande pour 'ADR'"
+,
+"Err_WrongTypeForExternal":"Erreur de définition de type pour VAR_EXTERNAL {0}"
+,
+"Err_WrongVarInInterfaceMethod":"Dans les méthodes d’interface, seuls VAR_INPUT, VAR_OUTPUT et VAR_IN_OUT sont autorisés"
+,
+"Inf_RelatedPosition":"Position apparentée"
+,
+"Inf_RelatedPositionRecursion":"'{0}' appelé."
+,
+"Inf_RelatedPositionStackoverflow":"'{0}' utilisant {1} octets de pile."
+,
+"Inf_UseXSizeOfOperator":"Utilisez l’opérateur XSIZEOF pour les grands types "
+,
+"Info_PersistentMemoryConfiguration":"Vous pouvez modifier la taille de la mémoire persistante dans la configuration ad hoc."
+,
+"PublishSymbolsMustBeSet":"'Afficher tous les symboles CEI dans le projet' doit être activé"
+,
+"Txt_ParentContextNotUpToDate":"''Contexte père pas actuel''."
+,
+"Wrn_AbstractKeywordMissing":"Le mot-clé ABSTRACT manque"
+,
+"Wrn_AccessToInternalObject":"Ne devrait pas accéder à l’objet interne {0} de la bibliothèque {1}"
+,
+"Wrn_AccessToInternalProperty":"Ne devrait pas accéder à la propriété interne {0} de la bibliothèque {1}"
+,
+"Wrn_AccessToInternalVariable":"Ne devrait pas accéder à la variable interne {0} de la bibliothèque {1}"
+,
+"Wrn_AmbiguousCheckfunctionInLibrary":"La fonction implicite de contrôle {0} est masquée par une autre fonction de vérification implicite {1}. Les contrôles ne sont pas effectués ! Résolvez le conflit et nettoyez l’application pour utiliser la fonction de contrôle."
+,
+"Wrn_AtLeastOneExpected":"Au moins une instruction est attendue"
+,
+"Wrn_AttributeCheck":"Échec de la vérification des attributs"
+,
+"Wrn_BoolNotAtBitAddress":"Adresse binaire attendue pour le type de données BOOL"
+,
+"Wrn_CallOfPrivateProperty":"Ne devrait pas accéder à la propriété privée {0}.{1}"
+,
+"Wrn_CallOfProtectedProperty":"Ne devrait pas accéder à la propriété protégée {0}.{1}"
+,
+"Wrn_CallRecursion":"Récursion d’appel : {0}"
+,
+"Wrn_ChangeOfAccessModifier":"La méthode {0}.{1} modifie le modificateur d'accès « {2} » si elle redéfinit la méthode {3}.{1}"
+,
+"Wrn_ComplexExpression":"La POU contient une expression très complexe. Envisagez l'utilisation de résultats intermédiaires."
+,
+"Wrn_ConcurrentAccessOfBitInSameByte":"Accès simultané au bit '{0}' dans le même octet"
+,
+"Wrn_ConstantInStructDeclaration":"Le mot-clé CONSTANT a été ignoré dans la déclaration d’une structure ou d’union"
+,
+"Wrn_DefaultValueNotConstant":"La valeur par défaut n’est pas constante"
+,
+"Wrn_DefaultValueTopLevel":"L’entrée n’est optionnelle que lorsque cette fonction est appelée à partir du code CEI"
+,
+"Wrn_DeviceNotInstalledForSimulation":"L'appareil n'est pas installé. La simulation utilise les paramétrages par défaut."
+,
+"Wrn_EnumComparison":"Comparaison d'un type d'énumération ({0}) avec un autre ({1})"
+,
+"Wrn_EnumValueDuplicate":"La constante {0} est attribuée à plus d’une énumération"
+,
+"Wrn_ExitForRetainInstances":"Le FB_EXIT d’instances dans VAR_RETAIN est également appelé lors de la réinitialisation à chaud, mais pas FB_INIT. Éviter la déclaration rémanente de blocs fonctionnels avec FB_EXIT !"
+,
+"Wrn_ExtendsForInterfaces":"Utiliser le mot-clé EXTENDS pour l'héritage d'interfaces au lieu de IMPLEMENTS"
+,
+"Wrn_ExternalReferenceIgnored":"Les références externes ne sont autorisées que pour les blocs fonctionnels, les méthodes, les fonctions et les listes de variables globales constantes. La référence externe {0} est ignorée pour '{1}'."
+,
+"Wrn_GlobalInitSlotNotForVariables":"L’attribut 'global_init_slot' agit toujours sur la liste des variables complète et ne peut pas être appliqué à des variables isolées"
+,
+"Wrn_GranularityMismatchForDirectVariable":"La variable '{0}' a une granularité de {1} mais se situe à l'adresse directe {2} qui n'est pas adaptée pour {1} octets"
+,
+"Wrn_ImplicitCheckFunctionShadowed":"La fonction implicite de contrôle '{0}' est masquée par une autre variable ou fonction. Les contrôles ne sont pas effectués ! Résoudre le conflit et nettoyer l’application pour utiliser la fonction de contrôle."
+,
+"Wrn_ImplicitEnumConversion":"Conversion implicite d’un type d’énumération ({0}) à un autre ({1})"
+,
+"Wrn_ImplicitIntToReal":"Conversion implicite de '{0}' vers '{1}' : perte de données possible"
+,
+"Wrn_ImplicitSignedToUnsigned":"Conversion implicite de type de données signé '{0}' vers un type de données non signé '{1}' : modification de signe possible"
+,
+"Wrn_ImplicitUnsignedToSigned":"Conversion implicite de type de données signé '{0}' vers un type de données non signé '{1}' : perte de signe possible"
+,
+"Wrn_InterfaceChangedBase":"L’interface de la méthode redéfinie '{0}' de la base '{1}' ne concorde pas avec la déclaration"
+,
+"Wrn_InvalidDefaultValue":"Le type {0} ne peut pas avoir de valeur par défaut dans ce contexte"
+,
+"Wrn_InvalidStringSize":"La taille d'une chaîne ne peut pas être négative ('{0}')"
+,
+"Wrn_LabelNoReference":"L’étiquette '{0}' n’est pas référencée"
+,
+"Wrn_LibraryNotInstalled":"La bibliothèque {0} n'a pas été ajoutée au gestionnaire de bibliothèque, ou aucune licence valide n'a été trouvée"
+,
+"Wrn_LibWithStringInVarInOut":"Envisagez de déclarer la variable de chaîne VAR_IN_OUT '{0}' dans '{1}' en tant que VAR_IN_OUT CONSTANT, cela afin que l'appelant puisse transmettre des libellés ou une constante."
+,
+"Wrn_LoopExitConditionConstant":"La condition de sortie de boucle '{0} {1} {2}' est constamment FALSE. Boucle sans fin possible."
+,
+"Wrn_LValueForVarinoutStrings":"Le paramètre VAR_IN_OUT '{0}' ou REFERENCE de '{1}' nécessite une variable avec accès en écriture comme entrée. Ceci entraîne une erreur de compilation dans les versions futures !"
+,
+"Wrn_MethodAlreadyCalledImplicitly":"La méthode '{0}' est déjà appelée implicitement"
+,
+"Wrn_MissingAttributeNoAssign":"Attribut 'no_assign' manque pour la POU '{0}' ? Le type de la variable '{1}' est attribué avec 'no_assign'."
+,
+"Wrn_MissingInstancePathForPersistent":"Aucun chemin d'instance adéquat trouvé pour la variable {0} dans la liste VAR_PERSISTENT. Utilisez la commande \"Ajouter tous les chemins d'instance\" pour ajouter tous les chemins d'instance à la liste VAR_PERSISTENT. (voir l'aide pour davantage de détails)"
+,
+"Wrn_NoInheritanceForUnions":"L’héritage n’est pas prévu pour le type de données \"UNION\" : {0}"
+,
+"Wrn_NoInitialValueForConstant":"Pas de valeur initiale pour la variable constante '{0}'"
+,
+"Wrn_NonAsciiStringLiteral":"Le littéral de chaîne '{0}...' contient des caractères non-représentables. L’option de projet 'Codage UTF-8 pour STRING' peut être utilisée."
+,
+"Wrn_NonLocalAccessToVarInOut":"Accès à VAR_IN_OUT '{0}' déclaré dans '{1}' depuis un contexte externe '{2}'."
+,
+"Wrn_NoPointerToBit":"Un bit isolé ne peut pas être référencé. Une référence à l'octet complet est enregistrée."
+,
+"Wrn_NotAllowedInInterfaceLib":"'{0}' n’est pas autorisé dans la bibliothèque d’interface"
+,
+"Wrn_Obsolete":"La POU '{0}' est marquée obsolète : {1}"
+,
+"Wrn_ObsoleteOutputInAbstractMethod":"La valeur par défaut pour une VAR_OUTPUT n’est pas utilisée dans des méthodes abstraites ou d’interface"
+,
+"Wrn_OnlyConstantInitialValueForMappedPersistentVar":"Seules les constantes remplacées peuvent être appliquées comme valeur initiale pour une variable persistante mappée"
+,
+"Wrn_PersistentVariableOnStack":"Les variables persistantes dans les instances de bloc fonctionnel situées sur la pile ne sont pas prises en charge : {0}"
+,
+"Wrn_PointerMisatch":"Le type '{0}' n’est peut-être pas convertible au type '{1}'"
+,
+"Wrn_Pragma":"Avertissement défini par l'utilisateur créé par un pragma d'avertissement"
+,
+"Wrn_ReferenceToUninitializedVariable":"Une référence à la variable non initialisée {0} est utilisée pour l'initialisation de {1}. L'accès à la variable non initialisée peut entraîner un comportement inattendu."
+,
+"Wrn_ReservedUnusedKeyword":"Le nom '{0}' est un mot-clé réservé au sein de la norme CEI61131-3. Une erreur sera signalée dans les versions futures."
+,
+"Wrn_ShiftExceedsTypeSize":"Un déplacement de {0} dépasse la taille de type de {1}"
+,
+"Wrn_StackCheckIncompleteDueToRecursion":"Le calcul de la consommation de pile est incomplet en raison d’appels récursifs, à partir de '{0}' :"
+,
+"Wrn_StatementNoEffect":"Le code '{0}' n'a aucun effet. Est-ce délibéré ?"
+,
+"Wrn_StringConstantTooLong":"La constante de chaîne '{0}' est trop longue pour le type cible '{1}'"
+,
+"Wrn_StruturedTypePropertyNotMonitorable":"L'attribut Monitoring est ignoré pour la propriété '{0}', laquelle retourne un type structuré"
+,
+"Wrn_TooManyApplications":"Vous avez défini {0} application(s) pour l'appareil {1}. Le nombre maximal est {2}. Par conséquent, vous ne pourrez pas télécharger toutes les applications."
+,
+"Wrn_UninitialisedVariableUsedInInitialisation":"La variable non initialisée {0} est utilisée pour l'initialisation de {1}. Utilisez l'attribut 'global_init_slot', pour modifier l'ordre de l'initialisation."
+,
+"Wrn_ValueAssignViaPointerMayChangeVFTable":"L'instance sur laquelle {0} pointe est réinitialisée pour des appels de fonction virtuels. Veillez à ce que {0} ne pointe pas sur un type provenant de {1}."
+,
+"Wrn_VarInOutUnitializedInInitialValue":"Accès à variable non initialisée VAR_IN_OUT"
+,
+"Wrn_WrongDestructor":"La méthode FB_Exit d’un bloc fonctionnel ou d’une structure doit avoir une seule entrée 'bInCopyCode' de type BOOL et une valeur renvoyée de type BOOL."
+,
+"Wrn_WrongReInit":"La méthode FB_ReInit d’un bloc fonctionnel ou d’une structure ne doit avoir aucune entrée et une valeur renvoyée de type BOOL. Le FB_ReInit ne sera pas calculé automatiquement !"
+}
+,
+"_3S.CoDeSys.Compiler35220.Resources.Strings.fr.resources":{
+"AffectionCopied":"Ancienne valeur copiée"
+,
+"AffectionInitialized":"Initialisé"
+,
+"AffectionLocationChanged":"Position modifiée"
+,
+"AffectionVFTableInitialized":"Tableau virtuel de fonctions initialisé"
+,
+"And_Text":"et"
+,
+"Area_Output_Checked":"Taille requise pour {0} : {1} octets (taille disponible : {2} octets)"
+,
+"Area_Output_Checked_Exceeded":"Taille dépassée pour {0} : {1} octets (taille disponible : {2} octets)"
+,
+"Area_Output_Info":"La plage mémoire {0} contient {1} : taille : {2} octets, adresse la plus élevée utilisée : {3}, le plus grand espace continu et inutilisé : {4} octets ({5} %)"
+,
+"Area_Output_Info_Simple":"Plage mémoire {0} contient {1} : la plus grande zone de mémoire continue : {2} ({3} %)"
+,
+"AttributeAlreadyRegistered":"L'attribut {0} a déjà été enregistré par un autre plug-in"
+,
+"AttributeInvalidRange":"{0} n'est pas une valeur valide pour l'attribut '{1}'. Attendu : une valeur comprise dans la plage [{2}..{3}]."
+,
+"AttributeInvalidTypeInteger":"La valeur '{0}' pour l'attribut '{1}' est non valide. Attendu : un nombre entier, entouré de guillemets simples (p.ex. '42')."
+,
+"AttributeMustBeEmpty":"Valeur inattendue '{0}' affectée à l'attribut '{0}'."
+,
+"AttributeMustNotBeEmpty":"Valeur attendue affectée à l'attribut '{0}'."
+,
+"AttributeNotInFunctionFBOrMethod":"L'attribut '{0}' n'est évalué que pour des POU de type fonction, bloc fonctionnel ou méthode"
+,
+"AttributeNotInMethod":"L'attribut '{0}' n'est évalué que pour des POU de type METHOD"
+,
+"AttributeNotSupportedWithCompilerVersion":"L'attribut '{0}' n'est interprété que pour la version de compilateur {1} ou plus. La version actuelle de compilateur est {2}."
+,
+"AttributeStrictDesc":"L'étiquetage de déclarations de type ENUM avec l'attribut 'strict' force les seules attributions constantes de composants ENUM valides lors de la compilation"
+,
+"AttributeStrictNoValidSignature":"L'attribut 'strict' n'est évalué que pour les déclarations de type ENUM"
+,
+"AttributeToStringFunctionWrongPOUType":"L'attribut {0} n'est valide que pour les déclarations de type et les blocs fonctionnels"
+,
+"AttributeToStringWrongType":"L'attribut {0} n'est valide que pour les énumérations"
+,
+"AttributeUnknown":"L'attribut {0} est inconnu et est ignoré par le compilateur"
+,
+"AttributeValueMustBeOneOf":"La valeur non valide '{0}' pour l'attribut '{1}' doit être une des suivantes : {2}"
+,
+"AttributeWrongScopeSigns":"L’attribut '{0}' ne peut être ajouté qu’à des déclarations de variable. Il est ignoré ici."
+,
+"AttributeWrongScopeVars":"L'attribut '{0}' a été ajouté à une variable, mais n'agit toutefois que sur les POU. L'attribut est ignoré."
+,
+"Build":"Compiler"
+,
+"BuildCompleteErrors":"La compilation est terminée -- {0} erreurs, {1} avertissements : aucun téléchargement possible"
+,
+"BuildCompleteOK":"La compilation est terminée -- {0} erreurs, {1} avertissements : prêt pour téléchargement"
+,
+"BuildStarted":"------ Processus de compilation entamé : application : {0} -------"
+,
+"C138ErrMsgCheckSyntax":"Vérifier la syntaxe '{0} : {1}({2})'"
+,
+"C138ErrMsgRequiresNInputs":"La méthode 'FB_Init' spécifiée exige précisément {0} entrées."
+,
+"Change_AttributesChanged":"Attributs modifiés"
+,
+"Change_CodeChanged":"Implémentation modifiée"
+,
+"Change_DefineChanged":"Defines modifiés"
+,
+"Change_GlobalErrors":"Erreur globale dans le projet"
+,
+"Change_InterfaceAdded":"inséré"
+,
+"Change_InterfaceChange_Explicitly":"déclaration modifiée, explicitement invalidée"
+,
+"Change_InterfaceChanged":"Déclaration modifiée"
+,
+"Change_InterfaceDeleted":"Supprimé"
+,
+"Change_NumOfSubSignaturesChanged":"nombre de méthodes ou d'actions modifié"
+,
+"Change_ParameterTablesChanged":"Tableau des paramètres de bibliothèque modifié"
+,
+"Change_ReferencedLibrariesChanged":"Bibliothèques référencées modifiées"
+,
+"Change_VariableChanged":"Variable {0} modifiée"
+,
+"Change_VariableDeleted":"Variable {0} supprimée"
+,
+"Change_VariableInserted":"variable {0} insérée"
+,
+"ClearDownloadContext":"Supprimer le contexte de téléchargement"
+,
+"Code_Text":"Code"
+,
+"CodeNoChange":"Le code n’a pas changé. Pas de changement en ligne requis."
+,
+"CompileCompleteErrors":"La compilation est terminée -- {0} erreurs, {1} avertissements"
+,
+"CompileCompleteOK":"La compilation est terminée -- {0} erreurs, {1} avertissements"
+,
+"Data_Text":"Données"
+,
+"DoCodeTypification":"Affecter un type à un code"
+,
+"DoLocation":"Trouver des données globales"
+,
+"DoTypification":"Recherche de la zone de travail"
+,
+"DownloadInfoSaveException":"Le téléchargement du fichier d'information n'a pas pu être sauvegardé sur {0}.\r\nOuverture de session sur l’appareil plus possible après un nouveau chargement du projet.\r\nCause :\r\n{1}"
+,
+"Err_CompilerVersionError":"La version de compilateur {0} a été retirée. Veuillez utiliser une version plus récente du compilateur"
+,
+"ErrExpressionContainsNoAppName":"L'expression ne contient pas de nom d'application"
+,
+"ErrExpressionContainsNoResource":"L'expression ne contient pas de nom de ressource"
+,
+"ErrInvalidExpression":"Expression non valide"
+,
+"ErrMultipleAreasWithMappedSegmentAccess":"Plusieurs plages trouvées pour lesquelles le drapeau 'MappedSegmentAccessOnly' est défini"
+,
+"ErrNoApplication":"Application pas trouvée"
+,
+"ErrNoAreaWithMappedSegmentAccess":"Segments mappés trouvés, mais aucune plage n'est marquée avec 'MappedSegmentAccessOnly'"
+,
+"ErrorLimitExceeded":"Plus de {0} erreurs survenues : tous les autres messages d’erreur sont omis"
+,
+"ErrSignatureNotFound":"Signature pas trouvée"
+,
+"Except_Boot_Project_Error":"Pas de projet d'initialisation possible dans cet état. Mémoire insuffisante pour l’application. Exécuter d’abord le téléchargement complet"
+,
+"Except_Boot_Project_Error_CompileContext_Not_UpToDate":"Pas de projet d'initialisation possible dans cet état : erreur interne"
+,
+"Except_Boot_Project_Error_Error_In_Compile":"Pas de projet d'initialisation possible dans cet état. Erreur lors de la création des informations sur le projet d'initialisation. Voyez fenêtre de message."
+,
+"FeatureGroup_Description":"Fonctionnalités relatives au langage CEI 61131-3"
+,
+"FeatureGroup_Name":"Langage CEI 61131-3"
+,
+"GenerateCode":"Créer le code pour {0}..."
+,
+"GenerateCodeInit":"Créer des initialisations de code..."
+,
+"GenerateCodeProgress":"Le code est créé..."
+,
+"GenerateGlobalInit":"Créer des initialisations globales..."
+,
+"GenerateRelocations":"Créer des repositionnements..."
+,
+"GeneratingCode":"Création de code..."
+,
+"Getter":"Accesseur"
+,
+"GlobalInitErrorPrefix":"Erreur dans le code d’initialisation implicite :"
+,
+"GVLChanged":"Liste des variables globales '{0}' modifiée"
+,
+"GVLRenamedOrDeleted":"Liste de variables globales '{0}' renommée ou supprimée"
+,
+"HiddenPousPlaceholder":"<Hidden POUs>"
+,
+"Input_Text":"Entrée"
+,
+"InterfaceChanged":"Interface '{0}' modifiée"
+,
+"InterfaceReferencesAffected":"Les références d’interface suivantes sont contrôlées quant à la redirection :"
+,
+"InterfacesChanged":"Les interfaces de POU suivantes ont été modifiées :"
+,
+"InvalidBooleanValue":"Valeur non valide"
+,
+"LanguageModelMngrOptionConditionalShowSymbols_Description":"Utilisé pour masquer les variables des bibliothèques aux utilisateurs finaux"
+,
+"Libraries":"Bibliothèques"
+,
+"LibrariesChanged":"Bibliothèques modifiées"
+,
+"LoadCompileContext":"Charger l’information de compilation"
+,
+"LoadingLibraries":"Chargement des bibliothèques..."
+,
+"Memory_Text":"Mémoire"
+,
+"MethodAdded":"Méthode '{0}' de {1} '{2}' ajoutée"
+,
+"MethodChanged":"Méthode '{0}' de {1} '{2}' modifiée"
+,
+"MethodRenamedOrDeleted":"Méthode '{0}' de {1} '{2}' renommée ou modifiée"
+,
+"NumInterfacesChanged":"{0} interfaces POU modifiées"
+,
+"NumInterfacesToTest":"{0} références d’interface contrôlées quant à la redirection"
+,
+"NumPOUsDownloaded":"{0} POU ont modifié leur code"
+,
+"NumVariablesAffected":"{0} variables concernées par le changement en ligne, {1} position modifiée, {2} initialisé, {3} copié, {4} tableau de fonction initialisé"
+,
+"OnlineChangeRelinkCodegenProgress":"Génération de code pour relier les interfaces"
+,
+"OnlineChangeRelinkProgress":"Vérification des variables pour références d'interface possibles"
+,
+"OR":"ou"
+,
+"Output_Text":"Sortie"
+,
+"ParamsArray_Comment":"'arrParams' est un tableau sur base 1 qui contient les valeurs transmises à cette fonction. Toute valeur au-delà de 'nCount' n'est pas attribuée ni initialisée et ne peut pas être utilisée."
+,
+"ParamsCount_Comment":"Count définit le nombre de paramètres formels transmis à cette fonction"
+,
+"Persistent_Text":"Données persistantes"
+,
+"PersistenVariablesChanged":"Les variables persistantes ont changé ! Voulez-vous initialiser en utilisant la liste actuelle ?"
+,
+"POUChanged":"{0} '{1}' modifiés"
+,
+"POURenamedOrDeleted":"{0} '{1}' renommés ou supprimés"
+,
+"POUsDownloaded":"Le code des modules suivants est chargé."
+,
+"POUUnit":"Modules"
+,
+"Precompile":"Précompilation"
+,
+"ProjectUpToDate":"L’application est actuelle"
+,
+"Retain_Text":"Données rémanentes"
+,
+"Scanner_Initialize_char_array_must_end_with_null_value":"Le tableau Char doit se terminer par une valeur nulle"
+,
+"Setter":"Mutateur"
+,
+"String1":"La version de compilateur définie dans ce projet est obsolète. Le projet peut toujours être compilé mais il est toutefois recommandé d'actualiser le compilateur à une version plus récente. Veuillez noter qu'après l'actualisation de la version de compilateur, l'ancienne version ne sera plus disponible pour le projet."
+,
+"SupportExtendedProgrammingFeatureSettingProvider_Description":"Si cette option est activée, les fonctionnalités avancées de programmation comme p.ex. la programmation orientée objets ou les attributs dans l’interface utilisateur sont pris en charge. Remarque : ceci n’exerce aucune influence sur la possibilité d’ouvrir ou de compiler des projets qui contiennent les éléments correspondants."
+,
+"SupportExtendedProgrammingFeatureSettingProvider_Name":"Supporter les fonctionnalités avancées de programmation"
+,
+"TextContains":"Contient"
+,
+"TypeChanged":"Type '{0}' modifié"
+,
+"TypeRenamedOrDeleted":"Type '{0}' renommé ou supprimé"
+,
+"TypifyAll":"Affecter un type à un code..."
+,
+"UnexpectedExpression":"'Expression inattendue {0}'"
+,
+"UnresolvedVariable":"Variable non résolue {0}"
+,
+"UpdatingCompilerVersion":"La version de compilateur est actualisée"
+,
+"VariableDeclarationChanged":"Déclaration des variables '{0}' modifiée dans '{1}'"
+,
+"VariableRenamedOrDeleted":"Variable '{0}' dans '{1}' renommée ou supprimée"
+,
+"VariablesAffected":"Les variables suivantes sont concernées par le changement en ligne :"
+,
+"WarningLimitExceeded":"Plus de {0} erreurs survenues : tous les autres messages d’erreur sont omis"
+,
+"Warnings":"Avertissements"
+,
+"WritingCompileInformationProgressText":"Écriture des informations de compilation se termine..."
+}
+}

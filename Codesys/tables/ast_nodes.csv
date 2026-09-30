@@ -1,0 +1,787 @@
+kind,base_type,full_name,key_fields,builder_interface,concrete_impl,red_factory_method,producer,green_impl,note
+other,,_3S.CoDeSys.Core.LanguageModel.IHasAttributes,Attributes,,,,,,"неоднозначно: Signature, Variable"
+other,,_3S.CoDeSys.Core.LanguageModel.IAttribute,Name,,,,,,"неоднозначно: GenericAttribute, GenericCheckedAttribute"
+other,,_3S.CoDeSys.Core.LanguageModel.IAttributeProvider,ProvidedAttributes,,,,,,"неоднозначно: FBVisuCreatorAttributeProvider, LMMAttributeProvider"
+other,IAttribute,_3S.CoDeSys.Core.LanguageModel.ICheckedAttribute,Description|RequiredCompilerVersion|Scope,,_3S.CoDeSys.LanguageModelManager.GenericCheckedAttribute,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IBreakpoint,Offset|Position|Successors|StepInSuccessors|AssemblySuccessors,,_3S.CoDeSys.LanguageModelManager.Breakpoint,CreateBreakpoint,,,абстрактный/сервисный интерфейс (без producer)
+other,IBreakpoint,_3S.CoDeSys.Core.LanguageModel.IBreakpoint2,AreaGPRegister|OffsetGPRegister,,_3S.CoDeSys.LanguageModelManager.Breakpoint,CreateBreakpoint,,,абстрактный/сервисный интерфейс (без producer)
+other,IBreakpoint2,_3S.CoDeSys.Core.LanguageModel.IBreakpoint3,ExceptionHandlingSuccessor,,_3S.CoDeSys.LanguageModelManager.Breakpoint,CreateBreakpoint,,,абстрактный/сервисный интерфейс (без producer)
+other,IBreakpoint3,_3S.CoDeSys.Core.LanguageModel.IBreakpoint4,TryCatchId,,_3S.CoDeSys.LanguageModelManager.Breakpoint,CreateBreakpoint,,,абстрактный/сервисный интерфейс (без producer)
+other,IBreakpointList2,_3S.CoDeSys.Core.LanguageModel.IBreakpointCollection,,,,,,,"неоднозначно: BreakpointList, LittleBreakpointList"
+other,,_3S.CoDeSys.Core.LanguageModel.IBreakpointList,Item,,_3S.CoDeSys.LanguageModelManager.BreakpointList,CreateBreakpointList,,,абстрактный/сервисный интерфейс (без producer)
+other,IBreakpointList,_3S.CoDeSys.Core.LanguageModel.IBreakpointList2,First,,_3S.CoDeSys.LanguageModelManager.BreakpointList,CreateBreakpointList,,,абстрактный/сервисный интерфейс (без producer)
+other,,_3S.CoDeSys.Core.LanguageModel.ICodeAdapter,CurrentPOU|CurrentExpression|DataManager|TargetSettings,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ICodeAdapter,_3S.CoDeSys.Core.LanguageModel.ICodeAdapter2,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ICodeAdapter2,_3S.CoDeSys.Core.LanguageModel.ICodeAdapter3,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ICodeAdapter3,_3S.CoDeSys.Core.LanguageModel.ICodeAdapter4,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ICodeAdapter4,_3S.CoDeSys.Core.LanguageModel.ICodeAdapter5,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ICodeAdapter5,_3S.CoDeSys.Core.LanguageModel.ICodeAdapter6,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ICodegenerator,MotorolaByteOrder|StackDisplacement|ParameterDisplacement|FunctionsToLinkAlways,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ICodegenerator,_3S.CoDeSys.Core.LanguageModel.ICodegenerator2,SupportSetNextStatement,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ICodegenerator2,_3S.CoDeSys.Core.LanguageModel.ICodegenerator3,RegisterSize,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ICodegenerator3,_3S.CoDeSys.Core.LanguageModel.ICodegenerator4,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ICodegenerator4,_3S.CoDeSys.Core.LanguageModel.ICodegenerator5,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ICodegenerator5,_3S.CoDeSys.Core.LanguageModel.ICodegenerator6,FPUSupport,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ICodegenerator6,_3S.CoDeSys.Core.LanguageModel.ICodegenerator7,SupportsTryCatch,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ICodegenerator7,_3S.CoDeSys.Core.LanguageModel.ICodegenerator8,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ICodegenerator8,_3S.CoDeSys.Core.LanguageModel.ICodegenerator9,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ICodegenerator9,_3S.CoDeSys.Core.LanguageModel.ICodegenerator10,FloatingGPRegister,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ICodegenerator10,_3S.CoDeSys.Core.LanguageModel.ICodegenerator11,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ICodegenerator11,_3S.CoDeSys.Core.LanguageModel.ICodegenerator12,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ICodeRelocater,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ICodeRelocater,_3S.CoDeSys.Core.LanguageModel.ICodeRelocater2,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ICodeRelocator64,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ICompiledCode,RelocationList|Location|CodeSize,,_3S.CoDeSys.LanguageModelManager.CompiledCode,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ICompiledCode,_3S.CoDeSys.Core.LanguageModel.ICompiledCode2,,,_3S.CoDeSys.LanguageModelManager.CompiledCode,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ICompiledCode2,_3S.CoDeSys.Core.LanguageModel.ICompiledCode3,,,_3S.CoDeSys.LanguageModelManager.CompiledCode,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ICompiledCode3,_3S.CoDeSys.Core.LanguageModel.ICompiledCode4,,,_3S.CoDeSys.LanguageModelManager.CompiledCode,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ICompiledCode4,_3S.CoDeSys.Core.LanguageModel.ICompiledCode5,,,_3S.CoDeSys.LanguageModelManager.CompiledCode,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ICompiledCode5,_3S.CoDeSys.Core.LanguageModel.ICompiledCode6,,,_3S.CoDeSys.LanguageModelManager.CompiledCode,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ICompiledPOU,ParseTree|BreakpointList|Name|CompiledCode|SignatureId|ScratchSize|MaxParamSize|TimeStamp|ImplicitReturnPosition,,_3S.CoDeSys.LanguageModelManager.CompiledPOU,CreateCompiledPOU,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompiledPOU,_3S.CoDeSys.Core.LanguageModel.ICompiledPOU2,,,_3S.CoDeSys.LanguageModelManager.CompiledPOU,CreateCompiledPOU,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompiledPOU,_3S.CoDeSys.Core.LanguageModel.ICompiledPOU3,Checksum,,_3S.CoDeSys.LanguageModelManager.CompiledPOU,CreateCompiledPOU,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompiledPOU3,_3S.CoDeSys.Core.LanguageModel.ICompiledPOU4,ObjectGuid,,_3S.CoDeSys.LanguageModelManager.CompiledPOU,CreateCompiledPOU,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompiledPOU4,_3S.CoDeSys.Core.LanguageModel.ICompiledPOU5,CodeGeneratorStackSize,,_3S.CoDeSys.LanguageModelManager.CompiledPOU,CreateCompiledPOU,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompiledPOU5,_3S.CoDeSys.Core.LanguageModel.ICompiledPOU6,MessageGuid,,_3S.CoDeSys.LanguageModelManager.CompiledPOU,CreateCompiledPOU,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompiledPOU6,_3S.CoDeSys.Core.LanguageModel.ICompiledPOU7,,,_3S.CoDeSys.LanguageModelManager.CompiledPOU,CreateCompiledPOU,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompiledPOU6,_3S.CoDeSys.Core.LanguageModel.ICompiledPOU8,NoAccess,,_3S.CoDeSys.LanguageModelManager.CompiledPOU,CreateCompiledPOU,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompiledPOU8,_3S.CoDeSys.Core.LanguageModel.ICompiledPOU9,,,_3S.CoDeSys.LanguageModelManager.CompiledPOU,CreateCompiledPOU,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompiledPOU9,_3S.CoDeSys.Core.LanguageModel.ICompiledPOU10,,,_3S.CoDeSys.LanguageModelManager.CompiledPOU,CreateCompiledPOU,,,абстрактный/сервисный интерфейс (без producer)
+type,IType,_3S.CoDeSys.Core.LanguageModel.ICompiledType,IsInteger|BaseType|DeRefType,,_3S.CoDeSys.LanguageModelManager.IECType,,нет (декларация/типизация),,нет factory (NotImplementedException в RedTreeBuilder)
+type,ICompiledType,_3S.CoDeSys.Core.LanguageModel.ICompiledType2,,,_3S.CoDeSys.LanguageModelManager.IECType,,нет (декларация/типизация),,нет factory (NotImplementedException в RedTreeBuilder)
+type,ICompiledType2,_3S.CoDeSys.Core.LanguageModel.ICompiledType3,EffectiveType,,_3S.CoDeSys.LanguageModelManager.IECType,,нет (декларация/типизация),,нет factory (NotImplementedException в RedTreeBuilder)
+type,ICompiledType3,_3S.CoDeSys.Core.LanguageModel.ICompiledType4,,,_3S.CoDeSys.LanguageModelManager.IECType,,нет (декларация/типизация),,нет factory (NotImplementedException в RedTreeBuilder)
+type,ICompiledType4,_3S.CoDeSys.Core.LanguageModel.ICompiledType5,,,_3S.CoDeSys.LanguageModelManager.IECType,,нет (декларация/типизация),,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ICPPCompatibleCodegenerator,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IDataManager,AreaCount|FirstArea,,_3S.CoDeSys.LanguageModelManager.DataManager,CreateDataManager,,,абстрактный/сервисный интерфейс (без producer)
+other,IDataManager,_3S.CoDeSys.Core.LanguageModel.IDataManager2,Areas,,_3S.CoDeSys.LanguageModelManager.DataManager,CreateDataManager,,,абстрактный/сервисный интерфейс (без producer)
+other,IDataManager2,_3S.CoDeSys.Core.LanguageModel.IDataManager3,,,_3S.CoDeSys.LanguageModelManager.DataManager,CreateDataManager,,,абстрактный/сервисный интерфейс (без producer)
+other,IDataManager3,_3S.CoDeSys.Core.LanguageModel.IDataManager4,DataSegments,,_3S.CoDeSys.LanguageModelManager.DataManager,CreateDataManager,,,абстрактный/сервисный интерфейс (без producer)
+other,IRelocation,_3S.CoDeSys.Core.LanguageModel.IDirectCallRelocation,SignatureToCallId,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IDisassembler,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IDisassembler,_3S.CoDeSys.Core.LanguageModel.IDisassembler2,GenerateDisassembleCode,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IDisassembler2,_3S.CoDeSys.Core.LanguageModel.IDisassembler3,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IVarRef2,_3S.CoDeSys.Core.LanguageModel.IFlowVarRef,Breakpoint|BreakpointsValue|BreakpointsReached|CompiledPOU|InstancePath|Reached|ReadAccess,,_3S.CoDeSys.LanguageModelManager.Flowposition,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IIntermediateValueLocation,ValueLocation,,_3S.CoDeSys.LanguageModelManager.IntermediateValueLocation,CreateIntermediateValueLocation,,,абстрактный/сервисный интерфейс (без producer)
+other,,_3S.CoDeSys.Core.LanguageModel.IJumpTable,Start|End|Count|Item,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IMemorySettings,PackMode|MinSize|StackAlignment|ByteAddressing|BitByteAddressing|RetainInOwnSegment|DataSegmentSize|CodeSegmentSize|CodeSegmentPrologSize|GlobalDataSize|CodeSize|MemoryDataSize|InputDataSize|OutputDataSize|RetainDataSize|MaxDataSize|MaxCodeSize|Areas,,_3S.CoDeSys.LanguageModelManager.MemorySettings,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IMemorySettings,_3S.CoDeSys.Core.LanguageModel.IMemorySettings2,,,_3S.CoDeSys.LanguageModelManager.MemorySettings,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IMemorySettings2,_3S.CoDeSys.Core.LanguageModel.IMemorySettings3,BitWordAddressing,,_3S.CoDeSys.LanguageModelManager.MemorySettings,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IMemorySettingsProvider,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IRelocation,Offset,,_3S.CoDeSys.LanguageModelManager.Relocation,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IRelocationAreaList,Area|Relocations,,_3S.CoDeSys.LanguageModelManager.RelocationArea,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IRelocationAreaList,_3S.CoDeSys.Core.LanguageModel.IRelocationAreaList2,RelocationsEx,,_3S.CoDeSys.LanguageModelManager.RelocationArea,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IRelocationEntry,Offset,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IRelocationList,Empty|RelocationAreaLists,,_3S.CoDeSys.LanguageModelManager.RelocationList,CreateRelocationList,,,абстрактный/сервисный интерфейс (без producer)
+other,IRelocationList,_3S.CoDeSys.Core.LanguageModel.IRelocationList2,RelocationAreaListsEx,,_3S.CoDeSys.LanguageModelManager.RelocationList,CreateRelocationList,,,абстрактный/сервисный интерфейс (без producer)
+type,,_3S.CoDeSys.Core.LanguageModel.ISafetyType,,,,,нет (декларация/типизация),,маркерный интерфейс: реализуют 16 классов
+other,,_3S.CoDeSys.Core.LanguageModel.IStepInPosition,SignatureId|KindOfCall|StepOutBreakpoint,,_3S.CoDeSys.LanguageModelManager.StepInPosition,CreateStepInPosition,,,абстрактный/сервисный интерфейс (без producer)
+other,IStepInPosition,_3S.CoDeSys.Core.LanguageModel.IStepInPosition2,StepInBreakpoint,,_3S.CoDeSys.LanguageModelManager.StepInPosition,CreateStepInPosition,,,абстрактный/сервисный интерфейс (без producer)
+other,,_3S.CoDeSys.Core.LanguageModel.ISubroutineCodegenerator,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IAddressCalculatorUnittestSupport,HasByteSupport,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+statement,_3S.CoDeSys.LanguageModelManager.InternalInterfaces._IStatement,_3S.CoDeSys.Core.LanguageModel._IEmbeddedLanguageStatement,Kind|RawSegment,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.EmbeddedLanguageStatement,CreateEmbeddedLanguageStatement,\Statements\ImplementationBlockParser.cs:31 ParseImplementationBlock (caller StatementParser.cs:724),,
+other,,_3S.CoDeSys.Core.LanguageModel.IPOUSyntax,Declaration|Implementation|SubPOUs,_ILanguageModelBuilder7,,CreateSequenceStatement,\Declaration\POUSyntaxParser.cs:56 NextTopLevelPOUSyntax,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ITaskStackSizeProvider,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMNameManglingService,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMTransitionUserCodeAnalyzerService,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ITransitionUserCodeAnalyzationResult,StringForAnalyzation|HasExplicitTransitionAssignment|SingleExpression|CountStatements,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IAddressInfo,_3S.CoDeSys.Core.LanguageModel.IParameterAddressInfo,ModuleType|ModuleInstance|ParameterId|BitOffset|BitSize|Type|CompiledType,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.IHasConstantTypeExpression,Constant|ConstantTypeReplaced,,_3S.CoDeSys.LanguageModelManager.HasConstantTypeExpression,CreateHasConstantTypeExpression,\Pragmas\HasConstantValueOrTypePragmaParser.cs:167,_3S.CoDeSys.LanguageModelManager.GreenTrees.HasConstantTypeExpression_Green,
+expression,IExpression6,_3S.CoDeSys.Core.LanguageModel.IPartialAccessExpression,Left|PartSize|PartOffset,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.PartialAccessExpression,CreatePartialAccessExpression,\Expressions\OperandParser.cs:189,_3S.CoDeSys.LanguageModelManager.GreenTrees.PartialAccessExpression_Green,
+other,,_3S.CoDeSys.Core.LanguageModel.ILicensedSoftwareMetricInformationProvider,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILicensedSoftwareMetricInformationProvider,_3S.CoDeSys.Core.LanguageModel.ILicensedSoftwareMetricInformationProvider2,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ILicensedSoftwareMetricCheckableByGeneratedCode,ProductCode|Value|ConversionFactor,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILicensedSoftwareMetricCheckableByGeneratedCode,_3S.CoDeSys.Core.LanguageModel.IVersionedLicensedSoftwareMetricCheckableByGeneratedCode,Version|Flags,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IAddressCalculation,,,_3S.CoDeSys.LanguageModelManager.AddressCalculation,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IAddressCalculator,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IAuxiliaryCompileInformation,Id|Type|Content,,_3S.CoDeSys.LanguageModelManager.AuxiliaryInformation,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IAuxiliaryCompileInformationList,Item,,_3S.CoDeSys.LanguageModelManager.AuxiliaryInformationList,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ICompileContextCommon,_3S.CoDeSys.Core.LanguageModel.ICompileContext,Codegenerator|AllTasks|TimeStampContext|TimeStampPool,,_3S.CoDeSys.LanguageModelManager.CompileContext,CreateCompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompileContext,_3S.CoDeSys.Core.LanguageModel.ICompileContext2,,,_3S.CoDeSys.LanguageModelManager.CompileContext,CreateCompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompileContext2,_3S.CoDeSys.Core.LanguageModel.ICompileContext3,AuxiliaryCompileInformationList,,_3S.CoDeSys.LanguageModelManager.CompileContext,CreateCompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompileContext3,_3S.CoDeSys.Core.LanguageModel.ICompileContext4,,,_3S.CoDeSys.LanguageModelManager.CompileContext,CreateCompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompileContext4,_3S.CoDeSys.Core.LanguageModel.ICompileContext5,,,_3S.CoDeSys.LanguageModelManager.CompileContext,CreateCompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompileContext5,_3S.CoDeSys.Core.LanguageModel.ICompileContext6,,,_3S.CoDeSys.LanguageModelManager.CompileContext,CreateCompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompileContext6,_3S.CoDeSys.Core.LanguageModel.ICompileContext7,,,_3S.CoDeSys.LanguageModelManager.CompileContext,CreateCompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompileContext7,_3S.CoDeSys.Core.LanguageModel.ICompileContext8,,,_3S.CoDeSys.LanguageModelManager.CompileContext,CreateCompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompileContext8,_3S.CoDeSys.Core.LanguageModel.ICompileContext9,CheckSumCode|CheckSumData,,_3S.CoDeSys.LanguageModelManager.CompileContext,CreateCompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompileContext9,_3S.CoDeSys.Core.LanguageModel.ICompileContext10,PointerSize,,_3S.CoDeSys.LanguageModelManager.CompileContext,CreateCompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompileContext10,_3S.CoDeSys.Core.LanguageModel.ICompileContext11,,,_3S.CoDeSys.LanguageModelManager.CompileContext,CreateCompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompileContext11,_3S.CoDeSys.Core.LanguageModel.ICompileContext12,,,_3S.CoDeSys.LanguageModelManager.CompileContext,CreateCompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompileContext12,_3S.CoDeSys.Core.LanguageModel.ICompileContext13,,,_3S.CoDeSys.LanguageModelManager.CompileContext,CreateCompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompileContext13,_3S.CoDeSys.Core.LanguageModel.ICompileContext14,ContainsOnlineChangeCode,,_3S.CoDeSys.LanguageModelManager.CompileContext,CreateCompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompileContext14,_3S.CoDeSys.Core.LanguageModel.ICompileContext15,,,_3S.CoDeSys.LanguageModelManager.CompileContext,CreateCompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompileContext15,_3S.CoDeSys.Core.LanguageModel.ICompileContext16,LibraryTable,,_3S.CoDeSys.LanguageModelManager.CompileContext,CreateCompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompileContext16,_3S.CoDeSys.Core.LanguageModel.ICompileContext17,ParentContext,,_3S.CoDeSys.LanguageModelManager.CompileContext,CreateCompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompileContext17,_3S.CoDeSys.Core.LanguageModel.ICompileContext18,,,_3S.CoDeSys.LanguageModelManager.CompileContext,CreateCompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompileContext18,_3S.CoDeSys.Core.LanguageModel.ICompileContext19,bFastOnlineChange,,_3S.CoDeSys.LanguageModelManager.CompileContext,CreateCompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompileContext19,_3S.CoDeSys.Core.LanguageModel.ICompileContext20,,,_3S.CoDeSys.LanguageModelManager.CompileContext,CreateCompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompileContext20,_3S.CoDeSys.Core.LanguageModel.ICompileContext21,VectorBlockSize|VectorAlignment,,_3S.CoDeSys.LanguageModelManager.CompileContext,CreateCompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,,_3S.CoDeSys.Core.LanguageModel.ICompileContextCommon,ApplicationGuid|GVLSignatures|AllSignatures|LibraryContexts,,,,,,"неоднозначно: CompileContext, PreCompileContext"
+other,,_3S.CoDeSys.Core.LanguageModel.IExpressionInfo,Expression|Type,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IIdentifierInfo,Name|Comment|Flags|Type|Variable|Signature|Scope,,_3S.CoDeSys.LanguageModelManager.IdentifierInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IIdentifierInfo,_3S.CoDeSys.Core.LanguageModel.IIdentifierInfo2,ContainingSignature,,_3S.CoDeSys.LanguageModelManager.IdentifierInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IInstancePathInfo,InstancePath|VarInstance|DeclaringSignature,,_3S.CoDeSys.LanguageModelManager.InstancePathInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IInstancePathInfo,_3S.CoDeSys.Core.LanguageModel.IInstancePathInfoWithAttribute,AttributeValue,,_3S.CoDeSys.LanguageModelManager.InstancePathInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILibraryPlaceholder,Name|Namespace|DefaultLibraryId|PublishSymbols|Resolver,,_3S.CoDeSys.LanguageModelManager.LibraryPlaceholder,CreateLibraryPlaceholder,,,абстрактный/сервисный интерфейс (без producer)
+other,ILibraryPlaceholder,_3S.CoDeSys.Core.LanguageModel.ILibraryPlaceholder2,QualifiedOnlyLocal,,_3S.CoDeSys.LanguageModelManager.LibraryPlaceholder,CreateLibraryPlaceholder,,,абстрактный/сервисный интерфейс (без producer)
+other,ILibraryPlaceholder2,_3S.CoDeSys.Core.LanguageModel.ILibraryPlaceholder3,Optional,,_3S.CoDeSys.LanguageModelManager.LibraryPlaceholder,CreateLibraryPlaceholder,,,абстрактный/сервисный интерфейс (без producer)
+other,,_3S.CoDeSys.Core.LanguageModel.ILibraryTable,,,,,,,"неоднозначно: LibraryTableExtern, LibraryTableWithPlaceholders, LibraryTableWithoutPlaceholders"
+other,ILibraryTable,_3S.CoDeSys.Core.LanguageModel.ILibraryTable2,,,,,,,"неоднозначно: LibraryTableExtern, LibraryTableWithoutPlaceholders"
+other,ILibraryTable2,_3S.CoDeSys.Core.LanguageModel.ILibraryTable3,,,_3S.CoDeSys.LanguageModelManager.LibraryTableExtern,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILibraryTable3,_3S.CoDeSys.Core.LanguageModel.ILibraryTable4,,,_3S.CoDeSys.LanguageModelManager.LibraryTableExtern,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IMemoryAllocationCallback,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IMemoryAllocationCallbackEmbedded,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IMemoryManager,Size|SizeAllocated,,_3S.CoDeSys.LanguageModelManager.MemMan,CreateMemMan,,,абстрактный/сервисный интерфейс (без producer)
+other,ICompileContextCommon,_3S.CoDeSys.Core.LanguageModel.IPreCompileContext,Namespace|LibraryPath,,_3S.CoDeSys.LanguageModelManager.PreCompileContext,CreatePrecompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,IPreCompileContext,_3S.CoDeSys.Core.LanguageModel.IPreCompileContext2,AllTasks,,_3S.CoDeSys.LanguageModelManager.PreCompileContext,CreatePrecompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,IPreCompileContext2,_3S.CoDeSys.Core.LanguageModel.IPreCompileContext3,AuxiliaryCompileInformationList,,_3S.CoDeSys.LanguageModelManager.PreCompileContext,CreatePrecompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,IPreCompileContext3,_3S.CoDeSys.Core.LanguageModel.IPreCompileContext4,SystemApplication|SystemApplicationName|SupportSystemApplication|ReferencedLibraries|ReferencedPlaceholders,,_3S.CoDeSys.LanguageModelManager.PreCompileContext,CreatePrecompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,IPreCompileContext4,_3S.CoDeSys.Core.LanguageModel.IPreCompileContext5,,,_3S.CoDeSys.LanguageModelManager.PreCompileContext,CreatePrecompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,IPreCompileContext5,_3S.CoDeSys.Core.LanguageModel.IPreCompileContext6,,,_3S.CoDeSys.LanguageModelManager.PreCompileContext,CreatePrecompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,IPreCompileContext6,_3S.CoDeSys.Core.LanguageModel.IPreCompileContext7,QualifiedAccessOnly,,_3S.CoDeSys.LanguageModelManager.PreCompileContext,CreatePrecompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,IPreCompileContext7,_3S.CoDeSys.Core.LanguageModel.IPreCompileContext8,,,_3S.CoDeSys.LanguageModelManager.PreCompileContext,CreatePrecompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,IPreCompileContext8,_3S.CoDeSys.Core.LanguageModel.IPreCompileContext9,LibraryTable,,_3S.CoDeSys.LanguageModelManager.PreCompileContext,CreatePrecompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,IPreCompileContext9,_3S.CoDeSys.Core.LanguageModel.IPreCompileContext10,Support32BitOnly,,_3S.CoDeSys.LanguageModelManager.PreCompileContext,CreatePrecompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,IPreCompileContext10,_3S.CoDeSys.Core.LanguageModel.IPreCompileContext11,DeviceApplication,,_3S.CoDeSys.LanguageModelManager.PreCompileContext,CreatePrecompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,IPreCompileContext11,_3S.CoDeSys.Core.LanguageModel.IPreCompileContext12,,,_3S.CoDeSys.LanguageModelManager.PreCompileContext,CreatePrecompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,IPreCompileContext12,_3S.CoDeSys.Core.LanguageModel.IPreCompileContext13,,,_3S.CoDeSys.LanguageModelManager.PreCompileContext,CreatePrecompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,IPreCompileContext13,_3S.CoDeSys.Core.LanguageModel.IPreCompileContext14,,,_3S.CoDeSys.LanguageModelManager.PreCompileContext,CreatePrecompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,,_3S.CoDeSys.Core.LanguageModel.IPrecompileLibInfo,Identification|Namespace|PublishSymbols,,_3S.CoDeSys.LanguageModelManager.PrecompileLibInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IPrecompileScope,LocalSignature,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IPrecompileScope,_3S.CoDeSys.Core.LanguageModel.IPrecompileScope2,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IPrecompileScope2,_3S.CoDeSys.Core.LanguageModel.IPrecompileScope3,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IPrecompileScope3,_3S.CoDeSys.Core.LanguageModel.IPrecompileScope4,ApplicationGuid,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IPrecompileScope4,_3S.CoDeSys.Core.LanguageModel.IPrecompileScope5,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IPrecompileScope5,_3S.CoDeSys.Core.LanguageModel.IPrecompileScope6,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IPrecompileScope6,_3S.CoDeSys.Core.LanguageModel.IPrecompileScope7,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IPrecompileScope7,_3S.CoDeSys.Core.LanguageModel.IPrecompileScope8,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IPrecompileScopeWithAliasService,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IVarConfigCodeGenerator,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ICompilerVersionManager,AvailableCompilerVersions,,_3S.CoDeSys.LanguageModelManager.CompilerVersionManager,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ICompilerVersionManager,_3S.CoDeSys.Core.LanguageModel.ICompilerVersionManager2,UseNewestVersion,,_3S.CoDeSys.LanguageModelManager.CompilerVersionManager,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ICompilerVersionManager2,_3S.CoDeSys.Core.LanguageModel.ICompilerVersionManager3,AvailableCompilerVersionsOEMFiltered,,_3S.CoDeSys.LanguageModelManager.CompilerVersionManager,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ICompilerVersionManager3,_3S.CoDeSys.Core.LanguageModel.ICompilerVersionManager4,,,_3S.CoDeSys.LanguageModelManager.CompilerVersionManager,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ICompilerVersionManager4,_3S.CoDeSys.Core.LanguageModel.ICompilerVersionManager5,AvailableCompilerVersionsOEMFilteredNotReplaced,,_3S.CoDeSys.LanguageModelManager.CompilerVersionManager,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ICompilerVersionManager5,_3S.CoDeSys.Core.LanguageModel.ICompilerVersionManager6,,,_3S.CoDeSys.LanguageModelManager.CompilerVersionManager,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ICompilerVersionManager6,_3S.CoDeSys.Core.LanguageModel.ICompilerVersionManager7,,,_3S.CoDeSys.LanguageModelManager.CompilerVersionManager,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IConverterFromIEC,,,_3S.CoDeSys.LanguageModelManager.ConvertFromIEC,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IConverterFromIEC,_3S.CoDeSys.Core.LanguageModel.IConverterFromIEC2,,,_3S.CoDeSys.LanguageModelManager.ConvertFromIEC,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IConverterFromIEC2,_3S.CoDeSys.Core.LanguageModel.IConverterFromIEC3,,,_3S.CoDeSys.LanguageModelManager.ConvertFromIEC,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IConverterToIEC,,,_3S.CoDeSys.LanguageModelManager.ConvertToIEC,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IConverterToIEC,_3S.CoDeSys.Core.LanguageModel.IConverterToIEC2,,,_3S.CoDeSys.LanguageModelManager.ConvertToIEC,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IConverterToIEC2,_3S.CoDeSys.Core.LanguageModel.IConverterToIEC3,,,_3S.CoDeSys.LanguageModelManager.ConvertToIEC,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IConverterToIEC3,_3S.CoDeSys.Core.LanguageModel.IConverterToIEC4,,,_3S.CoDeSys.LanguageModelManager.ConvertToIEC,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IConverterToIEC4,_3S.CoDeSys.Core.LanguageModel.IConverterToIEC5,,,_3S.CoDeSys.LanguageModelManager.ConvertToIEC,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILanguageModelList,,,_3S.CoDeSys.LanguageModelManager.LanguageModelList,CreateLanguageModelList,,,абстрактный/сервисный интерфейс (без producer)
+other,,_3S.CoDeSys.Core.LanguageModel.ILateCompileContext,,,_3S.CoDeSys.LanguageModelManager.LateCompileContext,CreateLateCompileContext,,,абстрактный/сервисный интерфейс (без producer)
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.IAddressExpression,DirectAddress,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.AddressExpression,CreateAddressExpression,\Expressions\OperandParser.cs:454,_3S.CoDeSys.LanguageModelManager.GreenTrees.AddressExpression_Green,
+expression,IExpression,_3S.CoDeSys.Core.LanguageModel.IArrayInitialization,InitValues,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.ArrayInitialisation,CreateArrayInitialisation,\Expressions\ArrayInitializationParser.cs:111,_3S.CoDeSys.LanguageModelManager.GreenTrees.ArrayInitialisation_Green,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.IAssignmentExpression,LValue|RValue|KindOf,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.AssignmentExpression,CreateAssignmentExpression,\Expressions\ExpressionParser.cs:124,_3S.CoDeSys.LanguageModelManager.GreenTrees.AssignmentExpression_Green,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.IBaseExpression,,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.BaseExpression,CreateThisExpression,\Expressions\ThisAndBaseExpressionParser.cs:62,_3S.CoDeSys.LanguageModelManager.GreenTrees.BaseExpression_Green,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.IBitAccess,BitNr|Base,,_3S.CoDeSys.LanguageModelManager.BitAccess,CreateBitAccess,нет (декларация/типизация),,
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.IBreakPointStatement,BPPosition|SuccessorPosition,,_3S.CoDeSys.LanguageModelManager.BreakPointStatement,CreateBreakPointStatement,\Pragmas\PragmaStatementParser.cs:239,,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.ICallExpression,Callee|Condition|InputAssigns|OutputAssigns,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.CallExpression,CreateExpressionStatement,\Expressions\FunctionCallParser.cs:84,_3S.CoDeSys.LanguageModelManager.GreenTrees.CallExpression_Green,
+expression,ICallExpression,_3S.CoDeSys.Core.LanguageModel.ICallExpression2,CallBreakpoint,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.CallExpression,CreateExpressionStatement,\Statements\ConditionalCallParser.cs:94 ParseConditionalCall (caller StatementParser.cs:604),_3S.CoDeSys.LanguageModelManager.GreenTrees.CallExpression_Green,
+expression,ICallExpression2,_3S.CoDeSys.Core.LanguageModel.ICallExpression3,KindOfCall,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.CallExpression,CreateExpressionStatement,\Statements\ConditionalCallParser.cs:94 ParseConditionalCall (caller StatementParser.cs:604),_3S.CoDeSys.LanguageModelManager.GreenTrees.CallExpression_Green,
+expression,ICallExpression3,_3S.CoDeSys.Core.LanguageModel.ICallExpression4,BeforeCallBreakpoint,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.CallExpression,CreateExpressionStatement,\Statements\ConditionalCallParser.cs:94 ParseConditionalCall (caller StatementParser.cs:604),_3S.CoDeSys.LanguageModelManager.GreenTrees.CallExpression_Green,
+expression,IExpression,_3S.CoDeSys.Core.LanguageModel.ICallInstanceExpression,WriteAccess|IntermediateValueLocation,,_3S.CoDeSys.LanguageModelManager.CallInstanceExpression,CreateCallInstanceExpression,нет (декларация/типизация),,
+other,,_3S.CoDeSys.Core.LanguageModel.ICase,Label|Controlled,,_3S.CoDeSys.LanguageModelManager.Case,CreateCase,\Statements\CaseStatementParser.cs:195,_3S.CoDeSys.LanguageModelManager.GreenTrees.Case_Green,
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.ICaseLabelStatement,cases,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.CaseLabelStatement,CreateExpressionStatement,\Statements\CaseStatementParser.cs:256,_3S.CoDeSys.LanguageModelManager.GreenTrees.CaseLabelStatement_Green,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.ICaseRangeExpression,Low|High,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.CaseRangeExpression,CreateCaseRangeExpression,\Statements\CaseStatementParser.cs:400,_3S.CoDeSys.LanguageModelManager.GreenTrees.CaseRangeExpression_Green,
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.ICaseStatement,Switch|Cases|Else,ICaseBuilder,_3S.CoDeSys.LanguageModelManager.CaseStatement,CreateCase,\Statements\CaseStatementParser.cs:155,_3S.CoDeSys.LanguageModelManager.GreenTrees.CaseStatement_Green,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.ICastExpression,ExprWithType|Base|ExplicitelySpecifiedType,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.CastExpression,CreateCastExpression,\Expressions\ImplicitCastOperatorParser.cs:97,_3S.CoDeSys.LanguageModelManager.GreenTrees.CastExpression_Green,
+other,,_3S.CoDeSys.Core.LanguageModel.ICodeGeneratorAttributes,OverwriteAM,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.ICommentStatement,Text,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.CommentStatement,CreateCommentStatement,\Statements\StatementParser.cs:254,_3S.CoDeSys.LanguageModelManager.GreenTrees.CommentStatement_Green,
+expression,,_3S.CoDeSys.Core.LanguageModel.ICompilerVersionExpression,VersionToTest|OpComparison,,_3S.CoDeSys.LanguageModelManager.CompilerVersionExpression,CreateCompilerVersionExpression,\Pragmas\PragmaOperandParser.cs:156,_3S.CoDeSys.LanguageModelManager.GreenTrees.CompilerVersionExpression_Green,
+expression,ICompilerVersionExpression,_3S.CoDeSys.Core.LanguageModel.ICompilerVersionExpression2,,,_3S.CoDeSys.LanguageModelManager.CompilerVersionExpression,CreateCompilerVersionExpression,нет (декларация/типизация),_3S.CoDeSys.LanguageModelManager.GreenTrees.CompilerVersionExpression_Green,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.ICompoAccessExpression,Left|Right,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.CompoAccessExpression,CreateCompoAccessExpression,\Expressions\OperandParser.cs:160,_3S.CoDeSys.LanguageModelManager.GreenTrees.CompoAccessExpression_Green,
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.IContinueStatement,,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.ContinueStatement,CreateContinueStatement,\Statements\StatementParser.cs:549,_3S.CoDeSys.LanguageModelManager.GreenTrees.ContinueStatement_Green,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.IConversionExpression,From|To|Exp|Implicit,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.ConversionExpression,CreateConversionExpression,\Expressions\ConversionExpressionParser.cs:113,_3S.CoDeSys.LanguageModelManager.GreenTrees.ConversionExpression_Green,
+expression,IExpression5,_3S.CoDeSys.Core.LanguageModel.ICurrentTaskExpression,Base,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.CurrentTaskExpression,CreateCurrentTaskExpression,\Expressions\CurrentTaskExpressionParser.cs:62,_3S.CoDeSys.LanguageModelManager.GreenTrees.CurrentTaskExpression_Green,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.IDefinedExpression,ReferencedItem,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.DefinedExpression,CreateDefinedExpression,\Pragmas\DefinedPragmaOperandParser.cs:91,_3S.CoDeSys.LanguageModelManager.GreenTrees.DefinedExpression_Green,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.IDefineReference,Define,,_3S.CoDeSys.LanguageModelManager.DefineReference,CreateDefineReference,\Pragmas\DefinedPragmaOperandParser.cs:137,_3S.CoDeSys.LanguageModelManager.GreenTrees.DefineReference_Green,
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.IDefineStatement,Define|Ident|Value,,_3S.CoDeSys.LanguageModelManager.DefineStatement,CreateDefineStatement,\Pragmas\PragmaStatementParser.cs:251,_3S.CoDeSys.LanguageModelManager.GreenTrees.DefineStatement_Green,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.IDeRefAccessExpression,Base,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.DeRefAccessExpression,CreateDeRefAccessExpression,\Expressions\OperandParser.cs:268,_3S.CoDeSys.LanguageModelManager.GreenTrees.DeRefAccessExpression_Green,
+statement,,_3S.CoDeSys.Core.LanguageModel.IElseIf,Condition|Controlled,IElseIfBuilder,_3S.CoDeSys.LanguageModelManager.ElseIf,CreateElseIf,\Statements\IfStatementParser.cs:196,_3S.CoDeSys.LanguageModelManager.GreenTrees.ElseIf_Green,
+statement,IElseIf,_3S.CoDeSys.Core.LanguageModel.IElseIf2,,IElseIfBuilder,_3S.CoDeSys.LanguageModelManager.ElseIf,CreateElseIf,\Statements\IfStatementParser.cs:196 HandleElseAndElseIf,_3S.CoDeSys.LanguageModelManager.GreenTrees.ElseIf_Green,
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.IEmptyStatement,,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.EmptyStatement,CreateEmptyStatement,\Pragmas\ErrorPragmaParser.cs:82,_3S.CoDeSys.LanguageModelManager.GreenTrees.EmptyStatement_Green,
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.IEnumDeclarationListStatement,Enumerations|BaseType,IEnumDeclarationListBuilder,_3S.CoDeSys.LanguageModelManager.EnumDeclarationListStatement,CreateEnumDeclarationListStatement,\Declaration\EnumListParser.cs:111,,
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.IEnumDeclarationStatement,Value|Name,,_3S.CoDeSys.LanguageModelManager.EnumDeclarationStatement,CreateEnumDeclarationStatement,нет (декларация/типизация),,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.IErrorExpression,,,_3S.CoDeSys.LanguageModelManager.ErrorExpression,CreateErrorExpression,\Expressions\MinMaxOperatorParser.cs:186,_3S.CoDeSys.LanguageModelManager.GreenTrees.ErrorExpression_Green,
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.IErrorStatement,,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.ErrorStatement,CreateErrorStatement,\InternalParser.cs:205,_3S.CoDeSys.LanguageModelManager.GreenTrees.ErrorStatement_Green,
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.IExitStatement,,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.ExitStatement,CreateExitStatement,\Statements\StatementParser.cs:547,_3S.CoDeSys.LanguageModelManager.GreenTrees.ExitStatement_Green,
+expression,,_3S.CoDeSys.Core.LanguageModel.IExprement,Position|Breakpoint|CGAttributes,,_3S.CoDeSys.LanguageModelManager.Exprement,,нет (декларация/типизация),_3S.CoDeSys.LanguageModelManager.GreenTrees.Exprement_Green,нет factory (NotImplementedException в RedTreeBuilder)
+expression,IExprement,_3S.CoDeSys.Core.LanguageModel.IExprement2,,,_3S.CoDeSys.LanguageModelManager.Exprement,,нет (декларация/типизация),_3S.CoDeSys.LanguageModelManager.GreenTrees.Exprement_Green,нет factory (NotImplementedException в RedTreeBuilder)
+expression,IExprement2,_3S.CoDeSys.Core.LanguageModel.IExprement3,VisitorAttribute,,_3S.CoDeSys.LanguageModelManager.Exprement,,нет (декларация/типизация),_3S.CoDeSys.LanguageModelManager.GreenTrees.Exprement_Green,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IExprementPosition,Position|PositionOffset,,_3S.CoDeSys.LanguageModelManager.ExprementPosition,CreateExprementPosition,,,абстрактный/сервисный интерфейс (без producer)
+expression,IExprement,_3S.CoDeSys.Core.LanguageModel.IExpression,Type|ScratchOffset|IsStatement|IsLiteral,,_3S.CoDeSys.LanguageModelManager.Expression,,нет (декларация/типизация),_3S.CoDeSys.LanguageModelManager.GreenTrees.Expression_Green,нет factory (NotImplementedException в RedTreeBuilder)
+expression,IExpression,_3S.CoDeSys.Core.LanguageModel.IExpression2,,,_3S.CoDeSys.LanguageModelManager.Expression,,нет (декларация/типизация),_3S.CoDeSys.LanguageModelManager.GreenTrees.Expression_Green,нет factory (NotImplementedException в RedTreeBuilder)
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.IExpression3,,,_3S.CoDeSys.LanguageModelManager.Expression,,нет (декларация/типизация),_3S.CoDeSys.LanguageModelManager.GreenTrees.Expression_Green,нет factory (NotImplementedException в RedTreeBuilder)
+expression,IExpression3,_3S.CoDeSys.Core.LanguageModel.IExpression4,,,_3S.CoDeSys.LanguageModelManager.Expression,,нет (декларация/типизация),_3S.CoDeSys.LanguageModelManager.GreenTrees.Expression_Green,нет factory (NotImplementedException в RedTreeBuilder)
+expression,IExpression4,_3S.CoDeSys.Core.LanguageModel.IExpression5,,,_3S.CoDeSys.LanguageModelManager.Expression,,нет (декларация/типизация),_3S.CoDeSys.LanguageModelManager.GreenTrees.Expression_Green,нет factory (NotImplementedException в RedTreeBuilder)
+expression,IExpression5,_3S.CoDeSys.Core.LanguageModel.IExpression6,IdentifierInfo|PrecompileVariableId|PrecompileSignatureId,,_3S.CoDeSys.LanguageModelManager.Expression,,нет (декларация/типизация),_3S.CoDeSys.LanguageModelManager.GreenTrees.Expression_Green,нет factory (NotImplementedException в RedTreeBuilder)
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.IExpressionStatement,Expr,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.ExpressionStatement,CreateExpressionStatement,\Statements\ConditionalCallParser.cs:134,_3S.CoDeSys.LanguageModelManager.GreenTrees.ExpressionStatement_Green,
+other,,_3S.CoDeSys.Core.LanguageModel.IExprVisitor,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IExprVisitor,_3S.CoDeSys.Core.LanguageModel.IExprVisitor2,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IExprVisitor2,_3S.CoDeSys.Core.LanguageModel.IExprVisitor3,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IExprVisitor3,_3S.CoDeSys.Core.LanguageModel.IExprVisitor4,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IExprVisitor4,_3S.CoDeSys.Core.LanguageModel.IExprVisitor5,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IExprVisitor5,_3S.CoDeSys.Core.LanguageModel.IExprVisitor6,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IExprVisitor6,_3S.CoDeSys.Core.LanguageModel.IExprVisitor7,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IExprVisitor7,_3S.CoDeSys.Core.LanguageModel.IExprVisitor8,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IExprVisitor8,_3S.CoDeSys.Core.LanguageModel.IExprVisitor9,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.IForStatement,CounterStart|UpperBound|By|Condition|Controlled|Counter,IForBuilder,_3S.CoDeSys.LanguageModelManager.ForStatement,CreateForStatement,\Statements\ForStatementParser.cs:118,_3S.CoDeSys.LanguageModelManager.GreenTrees.ForStatement_Green,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.IGlobalScopeExpression,Base,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.GlobalScopeExpression,CreateSystemScopeExpression,\Expressions\ScopeExpressionParser.cs:151,_3S.CoDeSys.LanguageModelManager.GreenTrees.GlobalScopeExpression_Green,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.IHasAttributeExpression,ReferencedItem|Attribute,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.HasAttributeExpression,CreateHasAttributeExpression,\Pragmas\HasAttributePragmaParser.cs:84,_3S.CoDeSys.LanguageModelManager.GreenTrees.HasAttributeExpression_Green,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.IHasConstantValueExpression,Constant|ConstantValue,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.HasConstantValueExpression,CreateHasConstantValueExpression,\Pragmas\HasConstantValueOrTypePragmaParser.cs:106,_3S.CoDeSys.LanguageModelManager.GreenTrees.HasConstantValueExpression_Green,
+expression,IHasConstantValueExpression,_3S.CoDeSys.Core.LanguageModel.IHasConstantValueExpression2,OpComparison,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.HasConstantValueExpression,CreateHasConstantValueExpression,\Pragmas\HasConstantValueOrTypePragmaParser.cs:20\27,_3S.CoDeSys.LanguageModelManager.GreenTrees.HasConstantValueExpression_Green,
+expression,IHasConstantValueExpression2,_3S.CoDeSys.Core.LanguageModel.IHasConstantValueExpression3,ConstantValueExpression,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.HasConstantValueExpression,CreateHasConstantValueExpression,\Pragmas\HasConstantValueOrTypePragmaParser.cs:20\27,_3S.CoDeSys.LanguageModelManager.GreenTrees.HasConstantValueExpression_Green,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.IHasTypeExpression,Instance|ReferencedType,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.HasTypeExpression,CreateHasTypeExpression,\Pragmas\HasTypePragmaParser.cs:105,_3S.CoDeSys.LanguageModelManager.GreenTrees.HasTypeExpression_Green,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.IHasValueExpression,Define|DefineValue,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.HasValueExpression,CreateHasValueExpression,\Pragmas\HasValuePragmaParser.cs:78,_3S.CoDeSys.LanguageModelManager.GreenTrees.HasValueExpression_Green,
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.IIfStatement,Condition|IfThen|IfElse|ElseIf,IIfBuilder,_3S.CoDeSys.LanguageModelManager.IfStatement,CreateIfStatement,\Statements\IfStatementParser.cs:110,_3S.CoDeSys.LanguageModelManager.GreenTrees.IfStatement_Green,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.IIndexAccessExpression,Var|Accesses,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.IndexAccessExpression,CreateIndexAccessExpression,\Expressions\OperandParser.cs:91,_3S.CoDeSys.LanguageModelManager.GreenTrees.IndexAccessExpression_Green,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.IIsEnumTypeExpression,ReferencedType,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.IsEnumTypeExpression,CreateHasTypeExpression,\Pragmas\HasTypePragmaParser.cs:183,_3S.CoDeSys.LanguageModelManager.GreenTrees.IsEnumTypeExpression_Green,
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.IJumpStatement,Condition|Label,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.JumpStatement,CreateJumpStatement,\Statements\JumpStatementParser.cs:98,_3S.CoDeSys.LanguageModelManager.GreenTrees.JumpStatement_Green,
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.ILabelStatement,Text,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.LabelStatement,CreateLabelStatement,\Statements\StatementParser.cs:929,_3S.CoDeSys.LanguageModelManager.GreenTrees.LabelStatement_Green,
+statement,ILabelStatement,_3S.CoDeSys.Core.LanguageModel.ILabelStatement2,OrgText,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.LabelStatement,CreateLabelStatement,\Statements\StatementParser.cs:908 TryParseDeclarationOrLabel,_3S.CoDeSys.LanguageModelManager.GreenTrees.LabelStatement_Green,
+other,,_3S.CoDeSys.Core.LanguageModel.ILanguageModel,ApplicationGuid|DeviceGuid|LanguageModelObject|LibraryId|LMDevice|LMApplication|LMTaskList|LMLibraryList|Pous|GlobalVariableLists|DataTypes,,_3S.CoDeSys.LanguageModelManager.LanguageModel,CreateLanguageModel,,,абстрактный/сервисный интерфейс (без producer)
+other,ILanguageModel,_3S.CoDeSys.Core.LanguageModel.ILanguageModel2,StaticMemorySegments,,_3S.CoDeSys.LanguageModelManager.LanguageModel,CreateLanguageModel,,,абстрактный/сервисный интерфейс (без producer)
+other,ILanguageModel2,_3S.CoDeSys.Core.LanguageModel.ILanguageModel3,LMLibraryList2,,_3S.CoDeSys.LanguageModelManager.LanguageModel,CreateLanguageModel,,,абстрактный/сервисный интерфейс (без producer)
+other,,_3S.CoDeSys.Core.LanguageModel.ILanguageModelBuilder,,,_3S.CoDeSys.LanguageModelManager.LanguageModelBuilder,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILanguageModelBuilder,_3S.CoDeSys.Core.LanguageModel.ILanguageModelBuilder2,,,_3S.CoDeSys.LanguageModelManager.LanguageModelBuilder,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILanguageModelBuilder2,_3S.CoDeSys.Core.LanguageModel.ILanguageModelBuilder3,,,_3S.CoDeSys.LanguageModelManager.LanguageModelBuilder,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILanguageModelBuilder3,_3S.CoDeSys.Core.LanguageModel.ILanguageModelBuilder4,,,_3S.CoDeSys.LanguageModelManager.LanguageModelBuilder,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILanguageModelBuilder4,_3S.CoDeSys.Core.LanguageModel.ILanguageModelBuilder5,,,_3S.CoDeSys.LanguageModelManager.LanguageModelBuilder,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILanguageModelBuilder5,_3S.CoDeSys.Core.LanguageModel.ILanguageModelBuilder6,,,_3S.CoDeSys.LanguageModelManager.LanguageModelBuilder,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILanguageModelBuilder6,_3S.CoDeSys.Core.LanguageModel.ILanguageModelBuilder7,,,_3S.CoDeSys.LanguageModelManager.LanguageModelBuilder,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILanguageModelBuilder7,_3S.CoDeSys.Core.LanguageModel.ILanguageModelBuilder8,,,_3S.CoDeSys.LanguageModelManager.LanguageModelBuilder,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILanguageModelBuilder8,_3S.CoDeSys.Core.LanguageModel.ILanguageModelBuilder9,,,_3S.CoDeSys.LanguageModelManager.LanguageModelBuilder,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILanguageModelBuilder9,_3S.CoDeSys.Core.LanguageModel.ILanguageModelBuilder10,,,_3S.CoDeSys.LanguageModelManager.LanguageModelBuilder,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILanguageModelBuilder10,_3S.CoDeSys.Core.LanguageModel.ILanguageModelBuilder11,,,_3S.CoDeSys.LanguageModelManager.LanguageModelBuilder,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILanguageModelBuilder11,_3S.CoDeSys.Core.LanguageModel.ILanguageModelBuilder12,,,_3S.CoDeSys.LanguageModelManager.LanguageModelBuilder,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILibParameterTable,ParameterTable,,_3S.CoDeSys.LanguageModelManager.LibParameterTable,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILibParameterTable,_3S.CoDeSys.Core.LanguageModel.ILibParameterTable2,,,_3S.CoDeSys.LanguageModelManager.LibParameterTable,,,,нет factory (NotImplementedException в RedTreeBuilder)
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.ILiteralExpression,LongValue|ULongValue|StringValue|RealValue|Negative|ConstantType|LiteralValue,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.LiteralExpression,CreateLiteralExpression,\Expressions\NewExpressionParser.cs:134,_3S.CoDeSys.LanguageModelManager.GreenTrees.LiteralExpression_Green,
+expression,ILiteralExpression,_3S.CoDeSys.Core.LanguageModel.ILiteralExpression2,OriginalType,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.LiteralExpression,CreateOperatorExpression,\Expressions\UnaryPlusMinusParser.cs:77 ParseUnaryPlusMinusOperator,_3S.CoDeSys.LanguageModelManager.GreenTrees.LiteralExpression_Green,
+other,,_3S.CoDeSys.Core.LanguageModel.ILMApplication,ParentApp|MemorySettingsProvider|DeviceName|ApplicationName|SimulationApplicationName|DeviceIdentification|DynamicMemorySize,,_3S.CoDeSys.LanguageModelManager.LMApplication,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMApplication,_3S.CoDeSys.Core.LanguageModel.ILMApplication2,TargetOutputSize|TargetInputSize|TargetMemorySize,,_3S.CoDeSys.LanguageModelManager.LMApplication,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMApplication2,_3S.CoDeSys.Core.LanguageModel.ILMApplication3,DeviceApplication|GenerateContent,,_3S.CoDeSys.LanguageModelManager.LMApplication,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMApplication3,_3S.CoDeSys.Core.LanguageModel.ILMApplication4,TargetStaticSize,,_3S.CoDeSys.LanguageModelManager.LMApplication,,,,нет factory (NotImplementedException в RedTreeBuilder)
+type,,_3S.CoDeSys.Core.LanguageModel.ILMDataType,Name|Interface|DUTGuid|InhibitOnlineChange|ObjectGuid,_ILanguageModelBuilder8,_3S.CoDeSys.LanguageModelManager.LMDataType,CreatePou,LanguageModelOfRawST.cs:34 CreateLanguageModelOfPOUSyntax,,
+other,,_3S.CoDeSys.Core.LanguageModel.ILMDevice,Name|DeviceIdentification,,_3S.CoDeSys.LanguageModelManager.LMDevice,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMGlobVarlist,Name|Interface|GVLGuid|InhibitOnlineChange|ObjectGuid,_ILanguageModelBuilder8,_3S.CoDeSys.LanguageModelManager.LMGlobVarlist,CreatePou,LanguageModelOfRawST.cs:34 CreateLanguageModelOfPOUSyntax,,
+other,,_3S.CoDeSys.Core.LanguageModel.ILMLibraryInfo,Identification|Namespace|PublishSymbols|SystemLibrary|DefaultNamespace|LinkAllContent|LinkInSimulation|QualifiedOnly|SystemApplication|ParamTable,,_3S.CoDeSys.LanguageModelManager.LMLibraryInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMLibraryInfo,_3S.CoDeSys.Core.LanguageModel.ILMLibraryInfo2,QualifiedOnlyLocal,,_3S.CoDeSys.LanguageModelManager.LMLibraryInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMLibraryInfo2,_3S.CoDeSys.Core.LanguageModel.ILMLibraryInfo3,OnlineChangeable,,_3S.CoDeSys.LanguageModelManager.LMLibraryInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMLibraryInfo3,_3S.CoDeSys.Core.LanguageModel.ILMLibraryInfo4,Optional,,_3S.CoDeSys.LanguageModelManager.LMLibraryInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMLibraryInfo4,_3S.CoDeSys.Core.LanguageModel.ILMLibraryInfo5,PoolLibrary|UnresolvedReference,,_3S.CoDeSys.LanguageModelManager.LMLibraryInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMLibraryList,LibManGuid|Libraries|Placeholders|ObjectGuid,,_3S.CoDeSys.LanguageModelManager.LMLibraryList,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMLibraryList,_3S.CoDeSys.Core.LanguageModel.ILMLibraryList2,LibraryId,,_3S.CoDeSys.LanguageModelManager.LMLibraryList,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMPlaceholderInfo,PlaceholderInfo|ParamTable,,_3S.CoDeSys.LanguageModelManager.LMPlaceholderInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMPOU,Slot|TaskReference|DownloadSlot|OnlineChangeSlot|Name|Interface|Body|POUGuid|ParentObjectGuid|MessageGuid|Action|External|EnableSystemCall|InhibitOnlineChange|ObjectGuid,_ILanguageModelBuilder8,_3S.CoDeSys.LanguageModelManager.LMPOU,CreatePou,LanguageModelOfRawST.cs:34 CreateLanguageModelOfPOUSyntax,,
+other,,_3S.CoDeSys.Core.LanguageModel.ILMTaskList,TaskConfigGuid|Tasks|ObjectGuid,,_3S.CoDeSys.LanguageModelManager.LMTaskList,,,,нет factory (NotImplementedException в RedTreeBuilder)
+expression,IExpression,_3S.CoDeSys.Core.LanguageModel.IMultipleIndexInitialization,Number|Value,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.MultipleIndexInitialisation,CreateMultipleIndexInitialization,\Expressions\ArrayInitializationParser.cs:164,_3S.CoDeSys.LanguageModelManager.GreenTrees.MultipleIndexInitialisation_Green,
+expression,IExpression,_3S.CoDeSys.Core.LanguageModel.INamespaceAccessExpression,Namespace|Access,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.NamespaceAccessExpression,CreateNamespaceAccessExpression,\Expressions\OperandParser.cs:134,_3S.CoDeSys.LanguageModelManager.GreenTrees.NamespaceAccessExpression_Green,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.INewExpression,TypeToCreate|Count,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.NewExpression,CreateNewExpression,\Expressions\NewExpressionParser.cs:103,_3S.CoDeSys.LanguageModelManager.GreenTrees.NewExpression_Green,
+expression,INewExpression,_3S.CoDeSys.Core.LanguageModel.INewExpression2,FBInitParams,_ILanguageModelBuilder6,,CreateNewExpression,\Expressions\NewExpressionParser.cs:99 ParseNewOperator,,нет red-класса в LMM
+expression,IExpression,_3S.CoDeSys.Core.LanguageModel.INullExpression,,,_3S.CoDeSys.LanguageModelManager.NullExpression,CreateNullExpression,\Expressions\OperandParser.cs:145,_3S.CoDeSys.LanguageModelManager.GreenTrees.NullExpression_Green,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.IOperatorExpression,Code|Operands,IOperatorBuilder,_3S.CoDeSys.LanguageModelManager.OperatorExpression,CreateOperatorExpression,\Expressions\MinMaxOperatorParser.cs:161,_3S.CoDeSys.LanguageModelManager.GreenTrees.OperatorExpression_Green,
+expression,IExpression5,_3S.CoDeSys.Core.LanguageModel.IPoolScopeExpression,Base,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.PoolScopeExpression,CreateSystemScopeExpression,\Declaration\TypeParser.cs:353,_3S.CoDeSys.LanguageModelManager.GreenTrees.PoolScopeExpression_Green,
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.IPOUDeclarationStatement,Class|Access|Name|ExtendsList|ImplementsList|ReturnType|DeclarationLists,IPouDeclarationBuilder,_3S.CoDeSys.LanguageModelManager.POUDeclarationStatement,CreateErrorStatement,\Declaration\POUDeclarationParser.cs:25,,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.IPouReference,Instance,,_3S.CoDeSys.LanguageModelManager.PouReference,CreatePouReference,\Pragmas\ItemReferenceParser.cs:170,_3S.CoDeSys.LanguageModelManager.GreenTrees.PouReference_Green,
+expression,IPouReference,_3S.CoDeSys.Core.LanguageModel.IPouReference2,InstanceExpression,,_3S.CoDeSys.LanguageModelManager.PouReference,CreatePouReference,нет (декларация/типизация),_3S.CoDeSys.LanguageModelManager.GreenTrees.PouReference_Green,
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.IPragmaAssertion,ConditionExpression|ErrorOutput,,_3S.CoDeSys.LanguageModelManager.PragmaAssertion,CreatePragmaAssertion,\Pragmas\PragmaStatementParser.cs:312,_3S.CoDeSys.LanguageModelManager.GreenTrees.PragmaAssertion_Green,
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.IPragmaIfStatement,ConditionExpression|IfThenStatement|IfElseStatement|ElseIfs,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.PragmaIfStatement,CreatePragmaIfStatement,\Pragmas\PragmaIfStatementParser.cs:17,_3S.CoDeSys.LanguageModelManager.GreenTrees.PragmaIfStatement_Green,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.IPragmaOperatorExpression,Operator|AllOperands,,_3S.CoDeSys.LanguageModelManager.PragmaOperatorExpression,CreatePragmaOperatorExpression,\Pragmas\PragmaOperandParser.cs:163,_3S.CoDeSys.LanguageModelManager.GreenTrees.PragmaOperatorExpression_Green,
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.IPragmaStatement,Text,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.PragmaStatement,CreatePragmaStatement,\Pragmas\PragmaStatementParser.cs:101,_3S.CoDeSys.LanguageModelManager.GreenTrees.PragmaStatement_Green,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.IQualifiedNameExpression,Name|Namespace|SignatureId,,_3S.CoDeSys.LanguageModelManager.QualifiedNameExpression,,нет (декларация/типизация),,нет factory (NotImplementedException в RedTreeBuilder)
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.IRepeatStatement,Condition|Controlled,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.RepeatStatement,CreateRepeatStatement,\Statements\RepeatStatementParser.cs:150,_3S.CoDeSys.LanguageModelManager.GreenTrees.RepeatStatement_Green,
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.IReturnStatement,Condition,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.ReturnStatement,CreateReturnStatement,\Statements\ReturnStatementParser.cs:74,_3S.CoDeSys.LanguageModelManager.GreenTrees.ReturnStatement_Green,
+expression,IExpression,_3S.CoDeSys.Core.LanguageModel.IRuntimeVersionExpression,VersionToTest|OpComparison,,_3S.CoDeSys.LanguageModelManager.RuntimeVersionExpression,CreateRuntimeVersionExpression,\Pragmas\PragmaOperandParser.cs:174,_3S.CoDeSys.LanguageModelManager.GreenTrees.RuntimeVersionExpression_Green,
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.ISequenceStatement,Statements,_ILanguageModelBuilder7,_3S.CoDeSys.LanguageModelManager.SequenceStatement,CreateSequenceStatement,\InternalParser.cs:179,_3S.CoDeSys.LanguageModelManager.GreenTrees.SequenceStatement_Green,
+statement,ISequenceStatement,_3S.CoDeSys.Core.LanguageModel.ISequenceStatement2,,_ILanguageModelBuilder7,_3S.CoDeSys.LanguageModelManager.SequenceStatement,CreateSequenceStatement,InternalParser.cs:177 ParseST(bool),_3S.CoDeSys.LanguageModelManager.GreenTrees.SequenceStatement_Green,
+statement,ISequenceStatement2,_3S.CoDeSys.Core.LanguageModel.ISequenceStatement3,StatementList,_ILanguageModelBuilder7,_3S.CoDeSys.LanguageModelManager.SequenceStatement,CreateSequenceStatement,InternalParser.cs:177 ParseST(bool),_3S.CoDeSys.LanguageModelManager.GreenTrees.SequenceStatement_Green,
+statement,IExprement,_3S.CoDeSys.Core.LanguageModel.IStatement,,,_3S.CoDeSys.LanguageModelManager.Statement,,нет (декларация/типизация),_3S.CoDeSys.LanguageModelManager.GreenTrees.Statement_Green,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IStaticMemorySegment,SubApplicationGuid|Offset|Size,,_3S.CoDeSys.LanguageModelManager.StaticMemorySegment,CreateStaticMemorySegment,,,абстрактный/сервисный интерфейс (без producer)
+expression,IExpression,_3S.CoDeSys.Core.LanguageModel.IStructureInitialization,CompoInits,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.StructureInitialisation,CreateStructureInitialisation,\Expressions\StructureInitializationParser.cs:106,_3S.CoDeSys.LanguageModelManager.GreenTrees.StructureInitialisation_Green,
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.ISubroutineStatement,,,_3S.CoDeSys.LanguageModelManager.SubRoutineStatement,CreateSubRoutineStatement,нет (декларация/типизация),,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.ISystemScopeExpression,Base,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.SystemScopeExpression,CreateSystemScopeExpression,\Declaration\TypeParser.cs:348,_3S.CoDeSys.LanguageModelManager.GreenTrees.SystemScopeExpression_Green,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.IThisExpression,,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.ThisExpression,CreateThisExpression,\Expressions\ThisAndBaseExpressionParser.cs:70,_3S.CoDeSys.LanguageModelManager.GreenTrees.ThisExpression_Green,
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.ITypeDeclarationStatement,AliasType|Name|BaseType|InitialValue|StructDeclarationList|EnumDeclarationList|Flags,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.TypeDeclarationStatement,CreateTypeDeclarationStatement,\Declaration\TypeDeclarationParser.cs:17,,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.ITypeExpression,ExpressionType,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.TypeExpression,CreateTypeExpression,\Declaration\POUDeclarationParser.cs:259,_3S.CoDeSys.LanguageModelManager.GreenTrees.TypeExpression_Green,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.ITypeReference,Instance,,_3S.CoDeSys.LanguageModelManager.TypeReference,CreateTypeReference,\Pragmas\ItemReferenceParser.cs:187,_3S.CoDeSys.LanguageModelManager.GreenTrees.TypeReference_Green,
+expression,ITypeReference,_3S.CoDeSys.Core.LanguageModel.ITypeReference2,InstanceExpression,,_3S.CoDeSys.LanguageModelManager.TypeReference,CreateTypeReference,нет (декларация/типизация),_3S.CoDeSys.LanguageModelManager.GreenTrees.TypeReference_Green,
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.IVariableDeclarationListStatement,Flags|Declarations,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.VariableDeclarationListStatement,CreateVariableDeclarationListStatement,\Declaration\VariableListParser.cs:91,,
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.IVariableDeclarationStatement,VariableNames|DeclaredType|InitializationExpression|AddressLocation,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.VariableDeclarationStatement,CreateLabelStatement,\Declaration\VariableDeclarationParser.cs:18,,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.IVariableExpression,Name|VariableId|SignatureId|ScopeId,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.VariableExpression,CreateVariableExpression,\Declaration\POUDeclarationParser.cs:190,_3S.CoDeSys.LanguageModelManager.GreenTrees.VariableExpression_Green,
+expression,IVariableExpression,_3S.CoDeSys.Core.LanguageModel.IVariableExpression2,,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.VariableExpression,CreateVariableExpression,\Expressions\OperandParser.cs:465 ParseSTOperandHelp,_3S.CoDeSys.LanguageModelManager.GreenTrees.VariableExpression_Green,
+expression,IVariableExpression2,_3S.CoDeSys.Core.LanguageModel.IVariableExpression3,PrecompileVariableId|PrecompileSignatureId,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.VariableExpression,CreateVariableExpression,\Expressions\OperandParser.cs:465 ParseSTOperandHelp,_3S.CoDeSys.LanguageModelManager.GreenTrees.VariableExpression_Green,
+expression,IExpression2,_3S.CoDeSys.Core.LanguageModel.IVariableReference,Instance,,_3S.CoDeSys.LanguageModelManager.VariableReference,CreateVariableReference,\Pragmas\ItemReferenceParser.cs:204,_3S.CoDeSys.LanguageModelManager.GreenTrees.VariableReference_Green,
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.IWarningDisableRestorePragmaStatement,Restore|Id,,_3S.CoDeSys.LanguageModelManager.WarningDisableRestorePragmaStatement,CreateWarningDisableRestorePragmaStatement,\Pragmas\ErrorPragmaParser.cs:156,_3S.CoDeSys.LanguageModelManager.GreenTrees.WarningDisableRestorePragmaStatement_Green,
+statement,IStatement,_3S.CoDeSys.Core.LanguageModel.IWhileStatement,Condition|Controlled,IWhileBuilder,_3S.CoDeSys.LanguageModelManager.WhileStatement,CreateWhileStatement,\Statements\StatementParser.cs:859,_3S.CoDeSys.LanguageModelManager.GreenTrees.WhileStatement_Green,
+other,IExternalPluginFoundIssue,_3S.CoDeSys.Core.LanguageModel.IContainerLibIssue,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IContainerLibraryChecker,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IDisplayNameParser,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IExternalPluginFoundIssue,Position|Severity,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IContainerLibIssue,_3S.CoDeSys.Core.LanguageModel.IMissingPublishSymbolsInContainerIssue,Library,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.INamespaceConflictChecker,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IExternalPluginFoundIssue,_3S.CoDeSys.Core.LanguageModel.INamespaceConflictIssue,Namespace|Library,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IContainerLibIssue,_3S.CoDeSys.Core.LanguageModel.INotAllowedSignatureInContainerLibIssue,Signature,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IParseTreeStreamProvider,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IPrecompilePrecondition,IsDone,,_3S.CoDeSys.LanguageModelManager.ProjectLoadedPrecompileCondition,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IDownloadHelperService,,,_3S.CoDeSys.LanguageModelManager.DownloadHelperService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMCachingService,,,_3S.CoDeSys.LanguageModelManager.CommandService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMCommandService,,,_3S.CoDeSys.LanguageModelManager.CommandService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMCommandService,_3S.CoDeSys.Core.LanguageModel.ILMCommandService2,,,_3S.CoDeSys.LanguageModelManager.CommandService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMCommandService2,_3S.CoDeSys.Core.LanguageModel.ILMCommandService3,,,_3S.CoDeSys.LanguageModelManager.CommandService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMCommandService3,_3S.CoDeSys.Core.LanguageModel.ILMCommandService4,,,_3S.CoDeSys.LanguageModelManager.CommandService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMSaveCompatibleLibraryService,,,_3S.CoDeSys.LanguageModelManager.CommandService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMItemSaver,,,_3S.CoDeSys.LanguageModelManager.POUSaver,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IArchiveAuxiliaryWriter,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMCallTreeService,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMStringEncodingService,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMTypeService,BoolSize|BitSize|ByteSize|WordSize|DWordSize|LWordSize|SIntSize|IntSize|DIntSize|LIntSize|USIntSize|UIntSize|UDIntSize|ULIntSize|RealSize|LRealSize|TimeSize|LTimeSize|DateSize|DateAndTimeSize|TimeOfDaySize,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ISingleByteStringEncodingService,,,_3S.CoDeSys.LanguageModelManager.DefaultStringEncodingService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMQualifierService,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ITaskLMService,GeneratedTaskConfigStruct,,_3S.CoDeSys.LanguageModelManager.TaskLMService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMCompileService,CompiledApplicationSets,,_3S.CoDeSys.LanguageModelManager.CompileService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMCompileService,_3S.CoDeSys.Core.LanguageModel.ILMCompileService2,,,_3S.CoDeSys.LanguageModelManager.CompileService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMCompileService2,_3S.CoDeSys.Core.LanguageModel.ILMCompileService3,,,_3S.CoDeSys.LanguageModelManager.CompileService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMConfigurationService,RegisteredAttributes|WarningConfiguration|CompileOptions|LibraryDevelopmentOptions,,_3S.CoDeSys.LanguageModelManager.ConfigurationService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMCreatorService,TypeInfo,,_3S.CoDeSys.LanguageModelManager.CreatorService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMCreatorService,_3S.CoDeSys.Core.LanguageModel.ILMCreatorService2,,,_3S.CoDeSys.LanguageModelManager.CreatorService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMCreatorService2,_3S.CoDeSys.Core.LanguageModel.ILMCreatorService3,,,_3S.CoDeSys.LanguageModelManager.CreatorService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMDownloadedApplicationService,CompiledApplicationSets,,_3S.CoDeSys.LanguageModelManager.DownloadedApplicationService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMDownloadedApplicationService,_3S.CoDeSys.Core.LanguageModel.ILMDownloadedApplicationService2,,,_3S.CoDeSys.LanguageModelManager.DownloadedApplicationService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMFlowMonitoringService,,,_3S.CoDeSys.LanguageModelManager.FlowMonitoringService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMMonitoringService,,,_3S.CoDeSys.LanguageModelManager.MonitoringService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMObsoleteService,,,_3S.CoDeSys.LanguageModelManager.ObsoleteService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMObsoleteService,_3S.CoDeSys.Core.LanguageModel.ILMObsoleteService2,,,_3S.CoDeSys.LanguageModelManager.ObsoleteService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMPreCompileCrossReferenceService,PrecompileInformationUpToDate,,_3S.CoDeSys.LanguageModelManager.PreCompileCrossReferenceService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMPreCompileService,SystemSet|PrecompileSets|LibrarySets,,_3S.CoDeSys.LanguageModelManager.PreCompileService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMPreCompileService,_3S.CoDeSys.Core.LanguageModel.ILMPreCompileService2,,,_3S.CoDeSys.LanguageModelManager.PreCompileService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMPreCompileService2,_3S.CoDeSys.Core.LanguageModel.ILMPreCompileService3,,,_3S.CoDeSys.LanguageModelManager.PreCompileService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMPreCompileService3,_3S.CoDeSys.Core.LanguageModel.ILMPreCompileService4,,,_3S.CoDeSys.LanguageModelManager.PreCompileService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMPreCompileService4,_3S.CoDeSys.Core.LanguageModel.ILMPreCompileService5,,,_3S.CoDeSys.LanguageModelManager.PreCompileService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMPreCompileCheckerService,PrecompileChecksDone,,_3S.CoDeSys.LanguageModelManager.PreCompileService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMPreCompileCheckerService,_3S.CoDeSys.Core.LanguageModel.ILMPreCompileCheckerService2,,,_3S.CoDeSys.LanguageModelManager.PreCompileService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMPreCompileTypifier,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILMPreCompileTypifier,_3S.CoDeSys.Core.LanguageModel.ILMPreCompileTypifier2,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMPreCompileSmartCodingService,,,_3S.CoDeSys.LanguageModelManager.PreCompileSmartCodingService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMPreCompileSmartCodingService,_3S.CoDeSys.Core.LanguageModel.ILMPreCompileSmartCodingService2,,,_3S.CoDeSys.LanguageModelManager.PreCompileSmartCodingService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMPreCompileSmartCodingService2,_3S.CoDeSys.Core.LanguageModel.ILMPreCompileSmartCodingService3,,,_3S.CoDeSys.LanguageModelManager.PreCompileSmartCodingService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMPreCompileSmartCodingService3,_3S.CoDeSys.Core.LanguageModel.ILMPreCompileSmartCodingService4,,,_3S.CoDeSys.LanguageModelManager.PreCompileSmartCodingService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMPreCompileSmartCodingService4,_3S.CoDeSys.Core.LanguageModel.ILMPreCompileSmartCodingService5,,,_3S.CoDeSys.LanguageModelManager.PreCompileSmartCodingService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMPreCompileStorageSizeEstimatorService,,,_3S.CoDeSys.LanguageModelManager.PreCompileStorageSizeEstimatorService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMProviderService,PendingLibrariesInLoadQueue|DelayedLoaderWorking,,_3S.CoDeSys.LanguageModelManager.LanguageModelProviderService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMProviderService,_3S.CoDeSys.Core.LanguageModel.ILMProviderService2,,,_3S.CoDeSys.LanguageModelManager.LanguageModelProviderService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMServiceProvider,CommandService|ConfigurationService|CreatorService|LanguageModelProviderService|CompileService|DownloadedApplicationService|PreCompileService|PreCompileCrossReferenceService|PreCompileSmartCodingService|PreCompileStorageSizeEstimatorService|MonitoringService|FlowMonitoringService|ObsoleteService,,_3S.CoDeSys.LanguageModelManager.ServiceProvider,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMServiceProvider,_3S.CoDeSys.Core.LanguageModel.ILMServiceProvider2,LMPouSetPersistenceService|CachingService,,_3S.CoDeSys.LanguageModelManager.ServiceProvider,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMServiceProvider2,_3S.CoDeSys.Core.LanguageModel.ILMServiceProvider3,TaskLMService|SingleByteStringEncodingService,,_3S.CoDeSys.LanguageModelManager.ServiceProvider,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMServiceProvider3,_3S.CoDeSys.Core.LanguageModel.ILMServiceProvider4,CallTreeService,,_3S.CoDeSys.LanguageModelManager.ServiceProvider,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMServiceProvider4,_3S.CoDeSys.Core.LanguageModel.ILMServiceProvider5,NameManglingService|TransitionUserCodeAnalyzerService,,_3S.CoDeSys.LanguageModelManager.ServiceProvider,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IAddressInfo,_3S.CoDeSys.Core.LanguageModel.IAbsoluteAddressInfo,Area|Offset|BitOffset,,_3S.CoDeSys.LanguageModelManager.AbsoluteAddressInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IAccessInfo,Position|Access,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IAccessInfo,_3S.CoDeSys.Core.LanguageModel.IAccessInfo2,ApplicationGuid|MessageGuid,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IAddressInfo,_3S.CoDeSys.Core.LanguageModel.IAddressAddressInfo,Address,,_3S.CoDeSys.LanguageModelManager.AddressAddressInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IAddressAddressInfo,_3S.CoDeSys.Core.LanguageModel.IAddressAddressInfo2,Area|Offset,,_3S.CoDeSys.LanguageModelManager.AddressAddressInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IAddressCodePosition,EditorPosition|PositionOffset|Access|TypeSize,,_3S.CoDeSys.LanguageModelManager.AddressCodePosition,CreateAddressCodePosition,,,абстрактный/сервисный интерфейс (без producer)
+other,,_3S.CoDeSys.Core.LanguageModel.IAddressCrossReference,Positions|CodeId,,_3S.CoDeSys.LanguageModelManager.AddressCrossReference,CreateAddressCrossReference,,,абстрактный/сервисный интерфейс (без producer)
+other,,_3S.CoDeSys.Core.LanguageModel.IAddressInfo,Size,,,,,,маркерный интерфейс: реализуют 16 классов
+other,IAddressInfo,_3S.CoDeSys.Core.LanguageModel.IAddressInfo2,VariableID|SignatureID,,,,,,маркерный интерфейс: реализуют 15 классов
+other,IAddressInfo2,_3S.CoDeSys.Core.LanguageModel.IAddressInfo3,Type,,,,,,маркерный интерфейс: реализуют 15 классов
+other,IAddressInfo3,_3S.CoDeSys.Core.LanguageModel.IAddressInfo4,ContainsStackRelativeAddress,,,,,,маркерный интерфейс: реализуют 15 классов
+other,,_3S.CoDeSys.Core.LanguageModel.IAddressInfoFactory,,,_3S.CoDeSys.LanguageModelManager.AddressInfoFactory,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IApplicationContent,POUs|DUTs|GVLs|FBs|Methods|Libs,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IApplicationContent,_3S.CoDeSys.Core.LanguageModel.IApplicationContent2,POUMethods,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IArea,Index|Size|StartAddress|Automatic|Flags,,_3S.CoDeSys.LanguageModelManager.Area,CreateArea,,,абстрактный/сервисный интерфейс (без producer)
+other,IArea,_3S.CoDeSys.Core.LanguageModel.IArea2,Checksum,,_3S.CoDeSys.LanguageModelManager.Area,CreateArea,,,абстрактный/сервисный интерфейс (без producer)
+other,IArea2,_3S.CoDeSys.Core.LanguageModel.IArea3,OnlineChangeArea,,_3S.CoDeSys.LanguageModelManager.Area,CreateArea,,,абстрактный/сервисный интерфейс (без producer)
+other,IArea3,_3S.CoDeSys.Core.LanguageModel.IArea4,MinimalAreaSize|MaximalAreaSize,,_3S.CoDeSys.LanguageModelManager.Area,CreateArea,,,абстрактный/сервисный интерфейс (без producer)
+other,IAddressInfo,_3S.CoDeSys.Core.LanguageModel.IArrayAccessAddressInfo,Base|Indexes|Bounds,,_3S.CoDeSys.LanguageModelManager.VariableArrayAccessAddressInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IArrayAccessAddressInfo,_3S.CoDeSys.Core.LanguageModel.IArrayAccessAddressInfo2,BaseSize,,_3S.CoDeSys.LanguageModelManager.VariableArrayAccessAddressInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IArrayBounds,LowerBound|UpperBound,,_3S.CoDeSys.LanguageModelManager.ArrayAccessBounds,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IArrayDimension,LowerBorder|UpperBorder,,_3S.CoDeSys.LanguageModelManager.ArrayDim,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IArrayDimension,_3S.CoDeSys.Core.LanguageModel.IArrayDimension2,,,_3S.CoDeSys.LanguageModelManager.ArrayDim,,,,нет factory (NotImplementedException в RedTreeBuilder)
+type,IType,_3S.CoDeSys.Core.LanguageModel.IArrayType,Base|Dimensions,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.ArrayType,CreateArrayType,\Declaration\TypeParser.cs:614,,
+type,IArrayType,_3S.CoDeSys.Core.LanguageModel.IArrayType2,,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.ArrayType,CreateArrayType,\Declaration\TypeParser.cs:572 ParseArrayType,,
+other,IAddressInfo,_3S.CoDeSys.Core.LanguageModel.IBitAddressInfo,Base|BitOffset,,_3S.CoDeSys.LanguageModelManager.BitAddressInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IBitAddressInfo,_3S.CoDeSys.Core.LanguageModel.IBitAddressInfo2,AccessedElementSize,,_3S.CoDeSys.LanguageModelManager.BitAddressInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IBreakPointTable,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ICodePiece,Destination|Code,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ICodePiece,_3S.CoDeSys.Core.LanguageModel.ICodePiece2,Length,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ICodePiece2,_3S.CoDeSys.Core.LanguageModel.ICodePiece3,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ICodePosition,EditorPosition|PositionOffset|Access,,_3S.CoDeSys.LanguageModelManager.CodePosition,CreateCodePosition,,,абстрактный/сервисный интерфейс (без producer)
+other,ICodePosition,_3S.CoDeSys.Core.LanguageModel.ICodePosition2,,,_3S.CoDeSys.LanguageModelManager.CodePosition,CreateCodePosition,,,абстрактный/сервисный интерфейс (без producer)
+other,,_3S.CoDeSys.Core.LanguageModel.ICodeVarRef,Position|AddressInfo,,_3S.CoDeSys.LanguageModelManager.CodeVarRef,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ICompiledElementInfoStruct,Name,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IAddressInfo,_3S.CoDeSys.Core.LanguageModel.ICompoAddressInfo,Base|Offset,,_3S.CoDeSys.LanguageModelManager.CompoAddressInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IAddressInfo,_3S.CoDeSys.Core.LanguageModel.IConversionAddressInfo,From|To|Base|Implicit,,_3S.CoDeSys.LanguageModelManager.ConversionAddressInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ICrossReference,Positions|CodeId,,_3S.CoDeSys.LanguageModelManager.CrossReference,CreateCrossReference,,,абстрактный/сервисный интерфейс (без producer)
+other,,_3S.CoDeSys.Core.LanguageModel.IDataLocation,IsRelativ|IsBitLocation|Area|Offset|BitNr|HasRetainLocation|AreaRetain|OffsetRetain,,_3S.CoDeSys.LanguageModelManager.DataLocation,CreateDataLocation,,,абстрактный/сервисный интерфейс (без producer)
+other,IDataLocation,_3S.CoDeSys.Core.LanguageModel.IDataLocation2,,,_3S.CoDeSys.LanguageModelManager.DataLocation,CreateDataLocation,,,абстрактный/сервисный интерфейс (без producer)
+other,,_3S.CoDeSys.Core.LanguageModel.IDataLocationInformation,CompiledPOU|Breakpoint|SourcePosition|InstancePath|EditorInstancePath|VarRef,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IDataLocationInformation,_3S.CoDeSys.Core.LanguageModel.IDataLocationInformation2,InstancePathAvailableImmediate,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IDataLocationInformation2,_3S.CoDeSys.Core.LanguageModel.IDataLocationInformation3,ApplicationGuid,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IDataSegment,Flags|SizeAllocated|MaxContiguosMemory|Area|Address|Size|Gaps,,_3S.CoDeSys.LanguageModelManager.DataSegment,CreateDataSegment,,,абстрактный/сервисный интерфейс (без producer)
+other,,_3S.CoDeSys.Core.LanguageModel.IDeclarationInfo,Name|DerivedType|Access|ObjectGuid|VarFlag|LibraryPath,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IDeclarationInfo,_3S.CoDeSys.Core.LanguageModel.IDeclarationInfo2,Namespace,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IDeclarationInfo2,_3S.CoDeSys.Core.LanguageModel.IDeclarationInfo3,GVLGuid,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IDeclarationInfo3,_3S.CoDeSys.Core.LanguageModel.IDeclarationInfo4,Position,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IDeferrableLanguageModelProvider,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IDeferrableLanguageModelProvider,_3S.CoDeSys.Core.LanguageModel.IDeferrableLanguageModelProvider2,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IAddressInfo,_3S.CoDeSys.Core.LanguageModel.IDeRefAccessInfo,Base,,_3S.CoDeSys.LanguageModelManager.DeRefAccessInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IDeRefAccessInfo,_3S.CoDeSys.Core.LanguageModel.IDeRefAccessInfo2,Offset,,_3S.CoDeSys.LanguageModelManager.DeRefAccessInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IDeRefAccessInfo2,_3S.CoDeSys.Core.LanguageModel.IDeRefAccessInfo3,,,_3S.CoDeSys.LanguageModelManager.DeRefAccessInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IDirectVariable,Location|Size|Components|Incomplete,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.DirectVariable,CreateAddressExpression,\Declaration\VariableDeclarationParser.cs:240,,
+other,,_3S.CoDeSys.Core.LanguageModel.IDirectVariableAccess,DirectVariable|AccessInfo,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.DirectVariableAccess,CreateAddressExpression,\Expressions\OperandParser.cs:447 ParseSTOperandHelp,,
+other,,_3S.CoDeSys.Core.LanguageModel.IDirectVariableCrossRefTable,AllDirectVariables,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.DirectVariableCrossRefTable,CreateAddressExpression,\Expressions\OperandParser.cs:447 ParseSTOperandHelp,,
+other,IDirectVariableCrossRefTable,_3S.CoDeSys.Core.LanguageModel.IDirectVariableCrossRefTable2,,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.DirectVariableCrossRefTable,CreateAddressExpression,\Expressions\OperandParser.cs:447 ParseSTOperandHelp,,
+other,,_3S.CoDeSys.Core.LanguageModel.IDownloadInfo,Areas|CodePieces|ExternalReferences|GlobalInitPointerLocation|GlobalExitPointerLocation|DownloadPOUPointerLocation|CodeInitLocation|RelocCodeLocation|CodeId|DataId,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IDownloadInfo,_3S.CoDeSys.Core.LanguageModel.IDownloadInfo2,TargetInformationLocation,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IDownloadInfo2,_3S.CoDeSys.Core.LanguageModel.IDownloadInfo3,FunctionReferenceResolutionLocation|SystemApplicationReferences,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IDownloadInfo3,_3S.CoDeSys.Core.LanguageModel.IDownloadInfo4,SegmentInfoLocation,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IDownloadInfo4,_3S.CoDeSys.Core.LanguageModel.IDownloadInfo5,OnlineChange1Concurrent|OnlineChange2Repeatable,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IDownloadInfo5,_3S.CoDeSys.Core.LanguageModel.IDownloadInfo6,ApplicationInfoLocation,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IDownloadInfo6,_3S.CoDeSys.Core.LanguageModel.IDownloadInfo7,OnlineChangeConcurrentBefore|OnlineChangeConcurrentAfter|CodeLocationInfo,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IDownloadInfo7,_3S.CoDeSys.Core.LanguageModel.IDownloadInfo8,PersistentInitOnlyNewVariablesLocation,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ICompiledElementInfoStruct,_3S.CoDeSys.Core.LanguageModel.IDUTInfoStruct,CRCInterface,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+type,IType,_3S.CoDeSys.Core.LanguageModel.IEnumType,Name,,_3S.CoDeSys.LanguageModelManager.EnumType,CreateEnumType,нет (декларация/типизация),,
+type,IEnumType,_3S.CoDeSys.Core.LanguageModel.IEnumType2,SignatureId|BaseType,,_3S.CoDeSys.LanguageModelManager.EnumType,CreateEnumType,нет (декларация/типизация),,
+other,,_3S.CoDeSys.Core.LanguageModel.IErrorMessagesService,,,_3S.CoDeSys.LanguageModelManager.ErrorMessagesService,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IExplicitExpressionAtSourcePositionProvider,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IExternalReference,Name|PointerLocation,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IExternalReference,_3S.CoDeSys.Core.LanguageModel.IExternalReference2,Signature|CRC,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IPOUInfoStruct,_3S.CoDeSys.Core.LanguageModel.IFBInfoStruct,CRCVFTable|AreaVFTableLocation|OffsetVFTableLocation,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IAddressInfo,_3S.CoDeSys.Core.LanguageModel.IFunctionAddressInfo,FunctionPointerArea|FunctionPointerOffset|ResultSize|ResultOffset|ResultCompiledType|SignatureSize|ImplementationStyle|InputParameterCount|InputParameterOffsets|InputParameterAddressInfos,,_3S.CoDeSys.LanguageModelManager.FunctionAddressInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ICompiledElementInfoStruct,_3S.CoDeSys.Core.LanguageModel.IGVLInfoStruct,CRCInterface,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IImplicitDeclarationSnippetProvider,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ILanguageModelBuildPropertiesControl,ShowPropertiesDialog|ExcludeFromBuildEnabled|ExternalEnabled|EnableSystemCallEnabled|LinkAlwaysEnabled|CompilerDefinesEnabled,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager,PrecompileContexts|LibraryContexts|CompileContexts|ReferenceContexts,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager2,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager2,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager3,TypeInfo,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager3,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager4,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager4,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager5,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager5,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager6,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager6,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager7,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager7,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager8,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager8,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager9,PendingLibrariesInLoadQueue,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager9,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager10,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager10,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager11,DelayedLoaderWorking,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager11,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager12,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager12,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager13,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager13,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager14,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager14,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager15,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager15,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager16,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager16,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager17,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager17,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager18,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager18,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager19,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager19,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager20,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager21,PrecompileContexts|LibraryContexts|CompileContexts|ReferenceContexts|TypeInfo|PendingLibrariesInLoadQueue|DelayedLoaderWorking,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager21,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager22,SystemContext|RegisteredAttributes,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager22,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager23,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager23,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager24,PrecompileInformationUpToDate,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager24,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager25,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager25,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager26,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager26,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager27,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager27,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager28,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager28,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager29,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelManager29,_3S.CoDeSys.Core.LanguageModel.ILanguageModelManager30,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ILanguageModelProvider,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelProvider,_3S.CoDeSys.Core.LanguageModel.ILanguageModelProvider2,NeedsContextForLanguageModelProvision,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelProvider2,_3S.CoDeSys.Core.LanguageModel.ILanguageModelProvider3,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelProvider,_3S.CoDeSys.Core.LanguageModel.ILanguageModelProviderBuildPropertiesControl,ShowPropertiesDialog|ExcludeFromBuildEnabled|ExternalEnabled|EnableSystemCallEnabled|LinkAlwaysEnabled|CompilerDefinesEnabled,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILanguageModelProviderBuildPropertiesControl,_3S.CoDeSys.Core.LanguageModel.ILanguageModelProviderBuildPropertiesControl2,UndefinesEnabled,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ILanguageModelProviderWithDependencies,ObjectsToUpdate,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ILanguageModelSnippetProvider,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ILibraryPlaceholderResolution,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILibraryPlaceholderResolution,_3S.CoDeSys.Core.LanguageModel.ILibraryPlaceholderResolution2,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILibraryPlaceholderResolution2,_3S.CoDeSys.Core.LanguageModel.ILibraryPlaceholderResolution3,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILibraryPlaceholderResolution3,_3S.CoDeSys.Core.LanguageModel.ILibraryPlaceholderResolution4,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ILibraryPlaceholderResolutionEx,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILibraryPlaceholderResolutionEx,_3S.CoDeSys.Core.LanguageModel.ILibraryPlaceholderResolutionEx2,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILibraryPlaceholderResolutionEx2,_3S.CoDeSys.Core.LanguageModel.ILibraryPlaceholderResolutionEx3,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IAddressInfo,_3S.CoDeSys.Core.LanguageModel.ILiteralAddressInfo,Value|Type,,_3S.CoDeSys.LanguageModelManager.LiteralAddressInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILiteralValue,KindOf|Float|SignedLong|UnsignedLong|String|Bool,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ILiteralValue,_3S.CoDeSys.Core.LanguageModel.ILiteralValue2,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IMemManGap,Offset|Size,,_3S.CoDeSys.LanguageModelManager.MemManGap,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IMethodInfoStruct,_3S.CoDeSys.Core.LanguageModel.IPOUMethodInfoStruct,ParentPOUType,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IPOUInfoStruct,_3S.CoDeSys.Core.LanguageModel.IMethodInfoStruct,ParentPOUIndex,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IOnlineChangeDetails,InterfaceChanged|CodeChanged|VariablesAffected,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IOnlineChangeDetails,_3S.CoDeSys.Core.LanguageModel.IOnlineChangeDetails2,InterfacesToTest,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IOnlineChangeDetails2,_3S.CoDeSys.Core.LanguageModel.IOnlineChangeDetails3,InterfacesToRelink|InstancesToMove|TotalNumberOfRelinkTests,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IAddressInfo,_3S.CoDeSys.Core.LanguageModel.IOperatorAddressInfo,Operands|Operator,,_3S.CoDeSys.LanguageModelManager.OperatorAddressInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IArea,_3S.CoDeSys.Core.LanguageModel.IPersistentArea,Checksum,,_3S.CoDeSys.LanguageModelManager.AreaPersistent,CreateAreaPersistent,,,абстрактный/сервисный интерфейс (без producer)
+type,IType,_3S.CoDeSys.Core.LanguageModel.IPointerType,Base,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.PointerType,CreatePointerType,\Declaration\TypeParser.cs:681,,
+other,ICompiledElementInfoStruct,_3S.CoDeSys.Core.LanguageModel.IPOUInfoStruct,CRCCode|CRCInterface|AreaCodeLocation|AreaFPPointerLocation|OffsetCodeLocation|OffsetFPPointerLocation,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IPrecompilePositionInfo,CodePosition|ReferencingPrecompileSignatureId|Name,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IPrecompilePositionInfo,_3S.CoDeSys.Core.LanguageModel.IPrecompilePositionInfo2,Length,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IPrecompilePositionInfo2,_3S.CoDeSys.Core.LanguageModel.IPrecompilePositionInfo3,VariableIDAtCodePosition,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IPrecompilePositionInfo3,_3S.CoDeSys.Core.LanguageModel.IPrecompilePositionInfo4,MessageGuid,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IPrecompilePositionInfo4,_3S.CoDeSys.Core.LanguageModel.IPrecompilePositionInfo5,SignatureIDAtCodePosition,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IProcessImageLocation,DataLocation|Size|Access|AddressLocation,,_3S.CoDeSys.LanguageModelManager.ProcessImageLocation,CreateProcessImageLocation,,,абстрактный/сервисный интерфейс (без producer)
+other,IAddressInfo,_3S.CoDeSys.Core.LanguageModel.IPropertyAddressInfo,AreaProperty|OffsetGet|OffsetSet|AreaInstance|OffsetInstance,,_3S.CoDeSys.LanguageModelManager.PropertyAddressInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IAddressInfo,_3S.CoDeSys.Core.LanguageModel.IPropertyAddressInfoAdditional,IsReferenceType,,_3S.CoDeSys.LanguageModelManager.PropertyAddressInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IAddressInfo,_3S.CoDeSys.Core.LanguageModel.IPropertyAddressInfoExtended,InfoInstance|InterfaceCall|VFTableOffsetGet|VFTableOffsetSet,,_3S.CoDeSys.LanguageModelManager.PropertyAddressInfoExtended,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IPropertyAdressInfoWithOffset,OffsetValueGetter|OffsetValueSetter,,,,,,"неоднозначно: PropertyAddressInfo, PropertyAddressInfoExtended"
+other,,_3S.CoDeSys.Core.LanguageModel.IReferenceCompileContextService,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+type,IType,_3S.CoDeSys.Core.LanguageModel.IReferenceType,Base,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.ReferenceType,CreateReferenceType,\Declaration\TypeParser.cs:656,,
+type,IReferenceType,_3S.CoDeSys.Core.LanguageModel.IReferenceType2,OriginalBase,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.ReferenceType,CreateReferenceType,\Declaration\TypeParser.cs:650 ParseReferenceType,,
+other,,_3S.CoDeSys.Core.LanguageModel.IScope,Item|All|GlobalScope|LocalSignature|Id|Name,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IScope,_3S.CoDeSys.Core.LanguageModel.IScope2,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IScope2,_3S.CoDeSys.Core.LanguageModel.IScope3,PointerSize,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IScope3,_3S.CoDeSys.Core.LanguageModel.IScope4,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IScope4,_3S.CoDeSys.Core.LanguageModel.IScope5,Item|CopyScope|Codegenerator|SystemScope|ApplicationContext|MostLocalSignatureId|MethodSignature|LocalSignature|Name|DisplayName|LocalScope|FindListBeforeVariable,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ISecondLevelPlaceholderResolution,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ISecondLevelPlaceholderResolution,_3S.CoDeSys.Core.LanguageModel.ISecondLevelPlaceholderResolution2,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ISignature,Name|OrgName|QualifiedName|LibraryPath|POUType|Id|ParentSignatureId|ObjectGuid|MessageGuid|Messages|Item|Item|Locals|Inputs|Outputs|InOuts|Externals|Temps|Statics|Constant|AllInputs|AllOutputs|SubSignatures|All|ParentObjectGuid|Size|CalleeSize|Attributes|BaseSignature|BaseSignatureId|Interfaces|InterfaceIds|VirtualFunctionTable|FPDataLocation|TimeStamp|DeclarerIds|CallerIds|CalleeIds|TaskReferenceList,,_3S.CoDeSys.LanguageModelManager.Signature,CreateSignature,,,абстрактный/сервисный интерфейс (без producer)
+other,ISignature,_3S.CoDeSys.Core.LanguageModel.ISignature2,NameExpression|BaseExpression|InterfaceExpressions,,_3S.CoDeSys.LanguageModelManager.Signature,CreateSignature,,,абстрактный/сервисный интерфейс (без producer)
+other,ISignature2,_3S.CoDeSys.Core.LanguageModel.ISignature3,Checksum|ChecksumNoInit|Comment,,_3S.CoDeSys.LanguageModelManager.Signature,CreateSignature,,,абстрактный/сервисный интерфейс (без producer)
+other,ISignature3,_3S.CoDeSys.Core.LanguageModel.ISignature4,PackMode,,_3S.CoDeSys.LanguageModelManager.Signature,CreateSignature,,,абстрактный/сервисный интерфейс (без producer)
+other,ISignature4,_3S.CoDeSys.Core.LanguageModel.ISignature5,InstanceLocals,,_3S.CoDeSys.LanguageModelManager.Signature,CreateSignature,,,абстрактный/сервисный интерфейс (без producer)
+other,ISignature5,_3S.CoDeSys.Core.LanguageModel.ISignature6,IsCompiledLibraryObject|PrecompileId|PrecompileParentId|PrecompileBaseSignatureId|PrecompileDeclarerIds|PrecompileCallerIds|PrecompileCalleeIds|PrecompileInterfaceSignatureIds,,_3S.CoDeSys.LanguageModelManager.Signature,CreateSignature,,,абстрактный/сервисный интерфейс (без producer)
+other,ISignature6,_3S.CoDeSys.Core.LanguageModel.ISignature7,RemainingSizeOfMemoryReserve,,_3S.CoDeSys.LanguageModelManager.Signature,CreateSignature,,,абстрактный/сервисный интерфейс (без producer)
+other,,_3S.CoDeSys.Core.LanguageModel.ISignatureWithOptionalInputs,ChecksumOptionalInputs,,_3S.CoDeSys.LanguageModelManager.Signature,CreateSignature,,,абстрактный/сервисный интерфейс (без producer)
+other,,_3S.CoDeSys.Core.LanguageModel.ISignatureAttribute,SignatureAttributes,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IAddressInfo,_3S.CoDeSys.Core.LanguageModel.ISignedConstantAddressInfo,Value,,_3S.CoDeSys.LanguageModelManager.SignedConstantAddressInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ISourcePosition,ProjectHandle|ObjectGuid|Position|PositionOffset|PositionCombination|Length,,_3S.CoDeSys.LanguageModelManager.SourcePosition,CreateSourcePosition,,,абстрактный/сервисный интерфейс (без producer)
+other,IAddressInfo,_3S.CoDeSys.Core.LanguageModel.IStackRelativeAddressInfo,Offset|BitOffset|AreaCode|OffsetCode|SizeCode,,_3S.CoDeSys.LanguageModelManager.StackRelativeAddressInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IStackRelativeAddressInfo,_3S.CoDeSys.Core.LanguageModel.IStackRelativeAddressInfo2,StackRelative,,_3S.CoDeSys.LanguageModelManager.StackRelativeAddressInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IStackRelativeAddressInfo2,_3S.CoDeSys.Core.LanguageModel.IStackRelativeAddressInfo3,BasePointer,,_3S.CoDeSys.LanguageModelManager.StackRelativeAddressInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+type,IType,_3S.CoDeSys.Core.LanguageModel.IStringType,LengthExpression,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.StringType,CreateStringType,\Declaration\TypeParser.cs:544,,
+other,,_3S.CoDeSys.Core.LanguageModel.IStructuredImplicitDeclarationSnippetProvider,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IStructuredLanguageModelProvider,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IStructuredLanguageModelProviderDelayedSupport,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IStructuredLanguageModelSnippetProvider,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+type,IType,_3S.CoDeSys.Core.LanguageModel.ISubrangeType,LowerBorder|UpperBorder,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.SubrangeType,CreateSubrangeType,\Declaration\TypeParser.cs:140,,
+type,ISubrangeType,_3S.CoDeSys.Core.LanguageModel.ISubrangeType2,BaseType,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.SubrangeType,CreateSubrangeType,\Declaration\TypeParser.cs:123 ParseSubrangeType,,
+other,,_3S.CoDeSys.Core.LanguageModel.IStackUsage,Entries|MaxStackSize|MaxStackSizeForExternalCalls|Scope|StackOverflow,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IStackUsageEntry,SignCalled|SignImplemented|StackSize|IsHiddenSignature|SourcePosition,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ITaskCrossref,TaskId|CrossRef|SignatureId,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ITaskInfo,ObjectGuid|TaskGuid|TaskName,,_3S.CoDeSys.LanguageModelManager.TaskInfo,CreateTaskInfo,,,абстрактный/сервисный интерфейс (без producer)
+other,ITaskInfo,_3S.CoDeSys.Core.LanguageModel.ITaskInfo2,ParentTaskName,,_3S.CoDeSys.LanguageModelManager.TaskInfo,CreateTaskInfo,,,абстрактный/сервисный интерфейс (без producer)
+type,_3S.CoDeSys.Core.Objects.IArchivable,_3S.CoDeSys.Core.LanguageModel.IType,Class,,_3S.CoDeSys.LanguageModelManager.IECType,,нет (декларация/типизация),,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ITypeInfo,,,_3S.CoDeSys.LanguageModelManager.TypeHelper,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ITypeInfo,_3S.CoDeSys.Core.LanguageModel.ITypeInfo2,,,_3S.CoDeSys.LanguageModelManager.TypeHelper,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ITypeInfo2,_3S.CoDeSys.Core.LanguageModel.ITypeInfo3,,,_3S.CoDeSys.LanguageModelManager.TypeHelper,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ITypeInfo3,_3S.CoDeSys.Core.LanguageModel.ITypeInfo4,,,_3S.CoDeSys.LanguageModelManager.TypeHelper,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IVarLenArrayTypeInfo,,,_3S.CoDeSys.LanguageModelManager.TypeHelper,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IVarLenArrayTypeInfo,_3S.CoDeSys.Core.LanguageModel.IVarLenArrayTypeInfo2,,,_3S.CoDeSys.LanguageModelManager.TypeHelper,,,,нет factory (NotImplementedException в RedTreeBuilder)
+type,IType,_3S.CoDeSys.Core.LanguageModel.IUserdefType,Name|SignatureId,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.UserdefType,CreateUserdefType,\Declaration\TypeParser.cs:357,,
+type,IUserdefType,_3S.CoDeSys.Core.LanguageModel.IUserdefType2,NameExpression,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.UserdefType,CreateUserdefType,\Declaration\TypeParser.cs:393 ParseUserdefType,,
+other,,_3S.CoDeSys.Core.LanguageModel.IVariable,Type|Id|CompiledType|OriginalType|Initial|Name|OrgName|Address|Attributes|DataLocation|CrossReferences|Comment|SourcePosition,,_3S.CoDeSys.LanguageModelManager.Variable,CreateVariable,,,абстрактный/сервисный интерфейс (без producer)
+other,IVariable,_3S.CoDeSys.Core.LanguageModel.IVariable2,,,_3S.CoDeSys.LanguageModelManager.Variable,CreateVariable,,,абстрактный/сервисный интерфейс (без producer)
+other,IVariable2,_3S.CoDeSys.Core.LanguageModel.IVariable3,InputAssignments,,_3S.CoDeSys.LanguageModelManager.Variable,CreateVariable,,,абстрактный/сервисный интерфейс (без producer)
+other,IVariable3,_3S.CoDeSys.Core.LanguageModel.IVariable4,PrecompileId|PrecompileCrossReferences,,_3S.CoDeSys.LanguageModelManager.Variable,CreateVariable,,,абстрактный/сервисный интерфейс (без producer)
+other,IVariable4,_3S.CoDeSys.Core.LanguageModel.IVariable5,MessageGuid,,_3S.CoDeSys.LanguageModelManager.Variable,CreateVariable,,,абстрактный/сервисный интерфейс (без producer)
+other,,_3S.CoDeSys.Core.LanguageModel.IVariableInfo,VariableId|SignatureId|Flags,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IVarRef,ApplicationGuid|WatchExpression|Position|AddressInfo|ConstantValue,,_3S.CoDeSys.LanguageModelManager.VarRef,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IVarRef,_3S.CoDeSys.Core.LanguageModel.IVarRef2,SignatureId,,_3S.CoDeSys.LanguageModelManager.VarRef,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IVarRef2,_3S.CoDeSys.Core.LanguageModel.IVarRef3,InstancePathExpression,,_3S.CoDeSys.LanguageModelManager.VarRef,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IVarRef3,_3S.CoDeSys.Core.LanguageModel.IVarRef4,DisplayExpression,,_3S.CoDeSys.LanguageModelManager.VarRef,,,,нет factory (NotImplementedException в RedTreeBuilder)
+type,IType,_3S.CoDeSys.Core.LanguageModel.IVectorType,Base|Dimension,,_3S.CoDeSys.LanguageModelManager.VectorType,CreateVectorType,\Declaration\TypeParser.cs:476,,
+other,,_3S.CoDeSys.Core.LanguageModel.IVFTableEntry,Name,,,,,,"неоднозначно: FunctionPointerEntry, InterfaceOffsetEntry"
+other,IVFTableEntry,_3S.CoDeSys.Core.LanguageModel.IVFTableEntry2,IsFunctionPointerEntry|Id,,,,,,"неоднозначно: FunctionPointerEntry, InterfaceOffsetEntry"
+other,,_3S.CoDeSys.Core.LanguageModel.IVirtualFunctionTable,Size|DataLocation|Entries,,_3S.CoDeSys.LanguageModelManager.VFTable,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IVirtualFunctionTable,_3S.CoDeSys.Core.LanguageModel.IVirtualFunctionTable2,,,_3S.CoDeSys.LanguageModelManager.VFTable,,,,нет factory (NotImplementedException в RedTreeBuilder)
+type,IType,_3S.CoDeSys.Core.LanguageModel.IWStringType,LengthExpression,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.WStringType,CreateWStringType,\Declaration\TypeParser.cs:514,,
+other,,_3S.CoDeSys.Core.LanguageModel.ISignatureMemberHierachyInfo,MemberName|Signature|Level|Tag|EmptyLevel,,_3S.CoDeSys.LanguageModelManager.SignatureMemberHierachyInfo,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IChangedLMObject,Name|POUType|Description|Change|OnlineChangePossible,,_3S.CoDeSys.LanguageModelManager.ChangedLMObject,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IChangedLMObject,_3S.CoDeSys.Core.LanguageModel.IChangedLMObject2,ChildName,,_3S.CoDeSys.LanguageModelManager.ChangedLMObject,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMCompiledApplicationContentDumper,,,_3S.CoDeSys.LanguageModelManager.CompiledApplicationContentDumper,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMCompiledApplicationDebugging,,,_3S.CoDeSys.LanguageModelManager.CompiledApplicationDebugging,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMCompiledApplicationDebugging,_3S.CoDeSys.Core.LanguageModel.ILMCompiledApplicationDebugging2,,,_3S.CoDeSys.LanguageModelManager.CompiledApplicationDebugging,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMCompiledApplicationQuery,DataManager|Codegenerator|PointerSize|ApplicationContent,,_3S.CoDeSys.LanguageModelManager.CompiledApplicationQuery,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMCompiledApplicationQuery,_3S.CoDeSys.Core.LanguageModel.ILMCompiledApplicationQuery2,,,_3S.CoDeSys.LanguageModelManager.CompiledApplicationQuery,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMCompiledApplicationQuery2,_3S.CoDeSys.Core.LanguageModel.ILMCompiledApplicationQuery3,,,_3S.CoDeSys.LanguageModelManager.CompiledApplicationQuery,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMCompiledApplicationQuery3,_3S.CoDeSys.Core.LanguageModel.ILMCompiledApplicationQuery4,,,_3S.CoDeSys.LanguageModelManager.CompiledApplicationQuery,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMCompiledApplicationQuery4,_3S.CoDeSys.Core.LanguageModel.ILMCompiledApplicationQuery5,,,_3S.CoDeSys.LanguageModelManager.CompiledApplicationQuery,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMPouSet,_3S.CoDeSys.Core.LanguageModel.ILMCompiledApplicationSet,AllPOUs|POUsToCompile|AllSignaturesFlat|DirectVariableTable|TimeStamp|CheckSumCode|CheckSumData|ContainsOnlineChangeCode|FastOnlineChange|ParentSet|LibraryTable,,_3S.CoDeSys.LanguageModelManager.CompileContext,CreateCompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMCompiledParseTreeService,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMCompiledApplicationSetForInstrumentation,CompiledParseTreeService,,_3S.CoDeSys.LanguageModelManager.CompileContext,CreateCompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMCompiledApplicationTypification,,,_3S.CoDeSys.LanguageModelManager.CompiledApplicationTypification,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMPouSet,ApplicationGuid|GVLSignatureSet|SignatureSet|TaskSet|MemorySettings,,,,,,"неоднозначно: CompileContext, PreCompileContext"
+other,ILMPouSet,_3S.CoDeSys.Core.LanguageModel.ILMPreCompileSet,Namespace|LibraryPath|QualifiedAccessOnly|Support32BitOnly|DeviceApplication|AllSignaturesFlat,,_3S.CoDeSys.LanguageModelManager.PreCompileContext,CreatePrecompileContext,,,абстрактный/сервисный интерфейс (без producer)
+other,,_3S.CoDeSys.Core.LanguageModel.IC541MessageDecoratorInfoProvider,PlugInGuids,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IAccessMode,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,_3S.CoDeSys.Core.Objects.IObjectProperty,_3S.CoDeSys.Core.LanguageModel.IBuildProperty,ExcludeFromBuild|External|EnableSystemCall|CompilerDefines,,_3S.CoDeSys.LanguageModelManager.BuildProperty,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IBuildProperty,_3S.CoDeSys.Core.LanguageModel.IBuildProperty2,LinkAlways,,_3S.CoDeSys.LanguageModelManager.BuildProperty,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IBuildProperty2,_3S.CoDeSys.Core.LanguageModel.IBuildProperty3,ExcludeFromBuildLocal,,_3S.CoDeSys.LanguageModelManager.BuildProperty,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IBuildProperty3,_3S.CoDeSys.Core.LanguageModel.IBuildProperty4,Undefines,,_3S.CoDeSys.LanguageModelManager.BuildProperty,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IBuildProperty4,_3S.CoDeSys.Core.LanguageModel.IBuildProperty5,MemoryReserveForOnlineChange,,_3S.CoDeSys.LanguageModelManager.BuildProperty,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,IBuildProperty5,_3S.CoDeSys.Core.LanguageModel.IBuildProperty6,Undefines,,_3S.CoDeSys.LanguageModelManager.BuildProperty,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ICheckAllPoolObjectsConfigurationProvider,DeviceSpecificProperties,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IDeviceSpecificProperties,PointerSize,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IMemoryStatisticsOutputProvider,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IIndexInfo,IndexExpression|BaseSize,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMCompileOptions,ReplaceConstants|UnicodeIdentifiers|MaxCompilerWarnings|EnableBreakpointLogging,,_3S.CoDeSys.LanguageModelManager.CompileOptions,CreateCompileOptions,,,абстрактный/сервисный интерфейс (без producer)
+other,ILMCompileOptions,_3S.CoDeSys.Core.LanguageModel.ILMCompileOptions2,UTF8Encoding,,_3S.CoDeSys.LanguageModelManager.CompileOptions,CreateCompileOptions,,,абстрактный/сервисный интерфейс (без producer)
+other,_3S.CoDeSys.LanguageModelManager.InternalInterfaces._ICompileOptions2,_3S.CoDeSys.Core.LanguageModel.ILMCompileOptions3,ProjectDefines|ReportCompiledPousDuringIncrementalCompile,,_3S.CoDeSys.LanguageModelManager.CompileOptions,CreateCompileOptions,,,абстрактный/сервисный интерфейс (без producer)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMLibraryDevelopmentOptions,CompilerDefinesToUse,,_3S.CoDeSys.LanguageModelManager.LibraryDevelopmentOptions,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMLibraryDevelopmentOptions,_3S.CoDeSys.Core.LanguageModel.ILMLibraryDevelopmentOptions2,CheckAllPoolObjectsTargetPointerSize,,_3S.CoDeSys.LanguageModelManager.LibraryDevelopmentOptions,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILMWarningConfiguration,WarningsSet|DisabledWarningsSet,,_3S.CoDeSys.LanguageModelManager.WarningHelper,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,ILMWarningConfiguration,_3S.CoDeSys.Core.LanguageModel.ILMWarningConfiguration2,WarningAsErrorSet,,_3S.CoDeSys.LanguageModelManager.WarningHelper,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IAtomicLoadStore64BackEnd,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ICPPCompatibleBackEnd,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IRegister,Type|Num|Usage|EverUsed|PartnerReg,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IRegister,_3S.CoDeSys.Core.LanguageModel.IRegister2,EverUsed,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IRegisterManager,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IRegisterManager,_3S.CoDeSys.Core.LanguageModel.IRegisterManager2,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IRegisterManager2,_3S.CoDeSys.Core.LanguageModel.IRegisterManager3,NextRegister,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IRiscBackEnd,Options|FunctionsToLinkAlways|StackDisplacement|ParameterDisplacement|MotorolaByteOrder|InstancePointer|StackPointer|FramePointer,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IRiscBackEnd,_3S.CoDeSys.Core.LanguageModel.IRiscBackEnd2,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IRiscBackEnd2,_3S.CoDeSys.Core.LanguageModel.IRiscBackEnd3,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IRiscBackEnd3,_3S.CoDeSys.Core.LanguageModel.IRiscBackEnd4,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IRiscBackEnd4,_3S.CoDeSys.Core.LanguageModel.IRiscBackEnd5,StringConstantAlignment,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IRiscBackEnd5,_3S.CoDeSys.Core.LanguageModel.IRiscBackEnd6,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IRiscBackEnd6,_3S.CoDeSys.Core.LanguageModel.IRiscBackEnd7,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IRiscBackEnd7,_3S.CoDeSys.Core.LanguageModel.IRiscBackEnd8,FPUSupport,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IRiscBackEnd8,_3S.CoDeSys.Core.LanguageModel.IRiscBackEnd9,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IRiscBackEnd9,_3S.CoDeSys.Core.LanguageModel.IRiscBackEnd10,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IRiscBackEnd10,_3S.CoDeSys.Core.LanguageModel.IRiscBackEnd11,SupportSetNextStatement|FloatingGPRegister,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IRiscBackEnd11,_3S.CoDeSys.Core.LanguageModel.IRiscBackEnd12,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IRiscBackEnd12,_3S.CoDeSys.Core.LanguageModel.IRiscBackEnd13,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IRiscBackEndDirectCall,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IRiscBackEndDisassembler,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IRiscBackEndExceptionInfo,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IRiscBackEndMisalignedAccess,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IRiscBackEndVectorUnit,VectorRegisterSize|VectorAlignment,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IRiscBackEndWithMemoryOperands,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IRiscBackEndWithMemoryOperands,_3S.CoDeSys.Core.LanguageModel.IRiscBackEndWithMemoryOperands2,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,ICompiledCode,_3S.CoDeSys.Core.LanguageModel.IRiscCompiledCode,CurrentOffset|Instructions|Labels,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IRiscCompiledCode,_3S.CoDeSys.Core.LanguageModel.IRiscCompiledCode2,InstructionList|LabelTable,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IRiscCompiledCode2,_3S.CoDeSys.Core.LanguageModel.IRiscCompiledCode3,CodeStream,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IRiscCompiledCode3,_3S.CoDeSys.Core.LanguageModel.IRiscCompiledCode4,PendingBreakpoint,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IRiscCompiledCode4,_3S.CoDeSys.Core.LanguageModel.IRiscCompiledCode5,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IRiscCompiledCodeEntry,CodeSize|Breakpoint|ErrorMessage,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IRiscFrontEnd,CurrentPOU|CurrentExpression,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IRiscFrontEnd,_3S.CoDeSys.Core.LanguageModel.IRiscFrontEnd2,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IRiscFrontEnd2,_3S.CoDeSys.Core.LanguageModel.IRiscFrontEnd3,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IRiscJumpTable,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IRiscLabel,InstructionIndex|Defined|LabelString|Usages,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IRiscOptions,MotorolaByteOrder,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IRelocationList,_3S.CoDeSys.Core.LanguageModel.IRiscRelocationList,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IRiscRelocationList,_3S.CoDeSys.Core.LanguageModel.IRiscRelocationList2,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ITryCatchBackEnd,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IExpressionTypifier,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IExpressionTypifier,_3S.CoDeSys.Core.LanguageModel.IExpressionTypifier2,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IExpressionTypifier2,_3S.CoDeSys.Core.LanguageModel.IExpressionTypifier3,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IExpressionTypifier3,_3S.CoDeSys.Core.LanguageModel.IExpressionTypifier4,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IExpressionTypifier4,_3S.CoDeSys.Core.LanguageModel.IExpressionTypifier5,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IExpressionTypifier5,_3S.CoDeSys.Core.LanguageModel.IExpressionTypifier6,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.ILineScanner,,,_3S.CoDeSys.LanguageModelManager.LineScanner,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.ILineScannerContext,IncompleteTokenType|Depth,,_3S.CoDeSys.LanguageModelManager.LineScannerContext,,,,нет factory (NotImplementedException в RedTreeBuilder)
+token,,_3S.CoDeSys.Core.LanguageModel.ILineScannerToken,Type|LineOffset|Length,,_3S.CoDeSys.LanguageModelManager.LineScannerToken,,,,нет factory (NotImplementedException в RedTreeBuilder)
+other,,_3S.CoDeSys.Core.LanguageModel.IParser,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IParser,_3S.CoDeSys.Core.LanguageModel.IParser2,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IParser2,_3S.CoDeSys.Core.LanguageModel.IParser3,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IParser3,_3S.CoDeSys.Core.LanguageModel.IParser4,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IParser4,_3S.CoDeSys.Core.LanguageModel.IParser5,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IPragmaNotifier,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IPredefinedCalleeTypeProvider,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,,_3S.CoDeSys.Core.LanguageModel.IScanner,IncludeComments|IncludePragmas|IncludeWhitespaces|IncludeEndOfLines|IgnoreCase|AllowNestedComments|AllowMultipleUnderlines|SourceOffset|CurrentToken,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IScanner,_3S.CoDeSys.Core.LanguageModel.IScanner2,IncludePositionPragmas,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IScanner2,_3S.CoDeSys.Core.LanguageModel.IScanner3,SupportUnicodeIdentifiers,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IScanner3,_3S.CoDeSys.Core.LanguageModel.IScanner4,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IScanner4,_3S.CoDeSys.Core.LanguageModel.IScanner5,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IScanner5,_3S.CoDeSys.Core.LanguageModel.IScanner6,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IScanner6,_3S.CoDeSys.Core.LanguageModel.IScanner7,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IScanner7,_3S.CoDeSys.Core.LanguageModel.IScanner8,,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+other,IScanner8,_3S.CoDeSys.Core.LanguageModel.IScanner9,AutoIncrementPositionOnLineBreaks,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+token,,_3S.CoDeSys.Core.LanguageModel.IToken,Type|SourceOffset|Position|PositionOffset|Length|SourceLine|SourceColumn,,,,,,сервисный интерфейс (реализация вне LMM / Core)
+type,,_3S.CoDeSys.Core.LanguageModel._IAliasType,,,_3S.CoDeSys.LanguageModelManager.AliasType,CreateAliasType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IAnyBitButBoolIsPreferred,,,_3S.CoDeSys.LanguageModelManager.AnyBitButBoolIsPreferred,CreateAnyBitButBoolIsPreferred,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IAnyBitType,,,_3S.CoDeSys.LanguageModelManager.AnyBitType,CreateAnyBitType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IAnyDateType,,,_3S.CoDeSys.LanguageModelManager.AnyDateType,CreateAnyDateType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IAnyIntType,,,_3S.CoDeSys.LanguageModelManager.AnyIntType,CreateAnyIntType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IAnyNumType,,,_3S.CoDeSys.LanguageModelManager.AnyNumType,CreateAnyNumType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IAnyRealType,,,_3S.CoDeSys.LanguageModelManager.AnyRealType,CreateAnyRealType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IAnyStringType,,,_3S.CoDeSys.LanguageModelManager.AnyStringType,CreateAnyStringType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IAnyType,,,_3S.CoDeSys.LanguageModelManager.AnyType,CreateAnyType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IBitConstType,,,_3S.CoDeSys.LanguageModelManager.BitConstType,CreateBitConstType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IBitType,,,_3S.CoDeSys.LanguageModelManager.BitType,CreateBitType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IBool16Type,,,_3S.CoDeSys.LanguageModelManager.Bool16Type,CreateBool16Type,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IBoolType,,,_3S.CoDeSys.LanguageModelManager.BoolType,CreateBoolType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IByteType,,,_3S.CoDeSys.LanguageModelManager.ByteType,CreateByteType,нет (декларация/типизация),,
+expression,,_3S.CoDeSys.Core.LanguageModel._ICopyScopeExpression,,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.CopyScopeExpression,CreateSystemScopeExpression,\Expressions\ScopeExpressionParser.cs:76 Parse,,
+type,,_3S.CoDeSys.Core.LanguageModel._IDIntType,,,_3S.CoDeSys.LanguageModelManager.DIntType,CreateDIntType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IDWordType,,,_3S.CoDeSys.LanguageModelManager.DWordType,CreateDWordType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IDateAndTimeType,,,_3S.CoDeSys.LanguageModelManager.DateAndTimeType,CreateDateAndTimeType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IDateType,,,_3S.CoDeSys.LanguageModelManager.DateType,CreateDateType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IDirectAddressBitType,,,_3S.CoDeSys.LanguageModelManager.DirectAdressBitType,,нет (декларация/типизация),,нет factory (NotImplementedException в RedTreeBuilder)
+expression,,_3S.CoDeSys.Core.LanguageModel._IFloatLiteralExpression,,,_3S.CoDeSys.LanguageModelManager.FloatLiteralExpression,CreateFloatLiteralExpression,нет (декларация/типизация),_3S.CoDeSys.LanguageModelManager.GreenTrees.FloatLiteralExpression_Green,
+expression,,_3S.CoDeSys.Core.LanguageModel._IFramePointerExpression,,,_3S.CoDeSys.LanguageModelManager.FramePointerExpression,CreateFramePointerExpression,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IGenericUserdefType,,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.GenericUserdefType,CreateGenericUserdefType,\Declaration\TypeParser.cs:408 ParseGenericUserdefType,,
+expression,,_3S.CoDeSys.Core.LanguageModel._IHasCompatibleTypeExpression,,,_3S.CoDeSys.LanguageModelManager.HasCompatibleTypeExpression,CreateHasCompatibleTypeExpression,нет (декларация/типизация),_3S.CoDeSys.LanguageModelManager.GreenTrees.HasCompatibleTypeExpression_Green,
+expression,,_3S.CoDeSys.Core.LanguageModel._IImplicitConversionExpression,,,_3S.CoDeSys.LanguageModelManager.ImplicitConversionExpression,CreateImplicitConversionExpression,нет (декларация/типизация),,
+expression,,_3S.CoDeSys.Core.LanguageModel._IImplicitDeRefAccessExpression,,,_3S.CoDeSys.LanguageModelManager.ImplicitDeRefAccessExpression,CreateImplicitDeRefAccessExpression,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IImplicitEnumerationType,,,_3S.CoDeSys.LanguageModelManager.ImplicitEnumerationType,CreateImplicitEnumerationType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IImplicitReferenceType,,,_3S.CoDeSys.LanguageModelManager.ImplicitReferenceType,CreateImplicitReferenceType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IInOutReferenceType,,,_3S.CoDeSys.LanguageModelManager.InOutReferenceType,CreateInOutReferenceType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IIntType,,,_3S.CoDeSys.LanguageModelManager.IntType,CreateIntType,нет (декларация/типизация),,
+expression,,_3S.CoDeSys.Core.LanguageModel._IIntegerLiteralExpression,,,_3S.CoDeSys.LanguageModelManager.IntegerLiteralExpression,CreateIntegerLiteralExpression,нет (декларация/типизация),_3S.CoDeSys.LanguageModelManager.GreenTrees.IntegerLiteralExpression_Green,
+type,,_3S.CoDeSys.Core.LanguageModel._ILDateAndTimeType,,,_3S.CoDeSys.LanguageModelManager.LDateAndTimeType,CreateLDateAndTimeType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._ILDateType,,,_3S.CoDeSys.LanguageModelManager.LDateType,CreateLDateType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._ILIntType,,,_3S.CoDeSys.LanguageModelManager.LIntType,CreateLIntType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._ILRealType,,,_3S.CoDeSys.LanguageModelManager.LRealType,CreateLRealType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._ILTimeOfDayType,,,_3S.CoDeSys.LanguageModelManager.LTimeOfDayType,CreateLTimeOfDayType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._ILTimeType,,,_3S.CoDeSys.LanguageModelManager.LTimeType,CreateLTimeType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._ILWordType,,,_3S.CoDeSys.LanguageModelManager.LWordType,CreateLWordType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._ILazyType,,,_3S.CoDeSys.LanguageModelManager.LazyType,CreateLazyType,нет (декларация/типизация),,
+statement,,_3S.CoDeSys.Core.LanguageModel._ILocalSignatureIdPragma,,,_3S.CoDeSys.LanguageModelManager.LocalSignatureIdPragma,CreateLocalSignatureIdPragma,нет (декларация/типизация),,
+statement,,_3S.CoDeSys.Core.LanguageModel._IMessageGuidPragmaStatement,,,_3S.CoDeSys.LanguageModelManager.MessageGuidPragmaStatement,CreateMessageGuidPragmaStatement,нет (декларация/типизация),_3S.CoDeSys.LanguageModelManager.GreenTrees.MessageGuidPragmaStatement_Green,
+statement,,_3S.CoDeSys.Core.LanguageModel._IMethodDeclarationStatement,,IPouDeclarationBuilder,_3S.CoDeSys.LanguageModelManager.MethodDeclarationStatement,CreateMethodDeclarationStatement,\Declaration\POUDeclarationParser.cs:22 ctor(op=118),,
+statement,,_3S.CoDeSys.Core.LanguageModel._INullStatement,,,_3S.CoDeSys.LanguageModelManager.NullStatement,CreateNullStatement,нет (декларация/типизация),_3S.CoDeSys.LanguageModelManager.GreenTrees.NullStatement_Green,
+type,,_3S.CoDeSys.Core.LanguageModel._IParamsType,,,_3S.CoDeSys.LanguageModelManager.ParamsType,CreateParamsType,нет (декларация/типизация),,
+expression,,_3S.CoDeSys.Core.LanguageModel._IProgramCounterExpression,,,_3S.CoDeSys.LanguageModelManager.ProgramCounterExpression,CreateProgramCounterExpression,нет (декларация/типизация),,
+expression,,_3S.CoDeSys.Core.LanguageModel._IProjectDefinedExpression,,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.ProjectDefinedExpression,CreateDefinedExpression,\Pragmas\DefinedPragmaOperandParser.cs:19\26,_3S.CoDeSys.LanguageModelManager.GreenTrees.ProjectDefinedExpression_Green,
+type,,_3S.CoDeSys.Core.LanguageModel._IRangeAwareAnyIntType,,,_3S.CoDeSys.LanguageModelManager.RangeAwareAnyIntType,CreateRangeAwareAnyIntType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IRealType,,,_3S.CoDeSys.LanguageModelManager.RealType,CreateRealType,нет (декларация/типизация),,
+expression,,_3S.CoDeSys.Core.LanguageModel._IResourceReference,,,_3S.CoDeSys.LanguageModelManager.ResourceReference,CreateResourceReference,нет (декларация/типизация),_3S.CoDeSys.LanguageModelManager.GreenTrees.ResourceReference_Green,
+type,,_3S.CoDeSys.Core.LanguageModel._IRetainBoolType,,,_3S.CoDeSys.LanguageModelManager.RetainBoolType,CreateRetainBoolType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IRetainByteType,,,_3S.CoDeSys.LanguageModelManager.RetainByteType,CreateRetainByteType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IRetainSIntType,,,_3S.CoDeSys.LanguageModelManager.RetainSIntType,CreateRetainSIntType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IRetainUSIntType,,,_3S.CoDeSys.LanguageModelManager.RetainUSIntType,CreateRetainUSIntType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._ISIntType,,,_3S.CoDeSys.LanguageModelManager.SIntType,CreateSIntType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._ISafeBoolType,,,_3S.CoDeSys.LanguageModelManager.SafeBoolType,CreateSafeBoolType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._ISafeByteType,,,_3S.CoDeSys.LanguageModelManager.SafeByteType,CreateSafeByteType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._ISafeDIntType,,,_3S.CoDeSys.LanguageModelManager.SafeDIntType,CreateSafeDIntType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._ISafeDWordType,,,_3S.CoDeSys.LanguageModelManager.SafeDWordType,CreateSafeDWordType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._ISafeIntType,,,_3S.CoDeSys.LanguageModelManager.SafeIntType,CreateSafeIntType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._ISafeLIntType,,,_3S.CoDeSys.LanguageModelManager.SafeLIntType,CreateSafeLIntType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._ISafeLRealType,,,_3S.CoDeSys.LanguageModelManager.SafeLRealType,CreateSafeLRealType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._ISafeLWordType,,,_3S.CoDeSys.LanguageModelManager.SafeLWordType,CreateSafeLWordType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._ISafeRealType,,,_3S.CoDeSys.LanguageModelManager.SafeRealType,CreateSafeRealType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._ISafeSIntType,,,_3S.CoDeSys.LanguageModelManager.SafeSIntType,CreateSafeSIntType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._ISafeTimeType,,,_3S.CoDeSys.LanguageModelManager.SafeTimeType,CreateSafeTimeType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._ISafeUDIntType,,,_3S.CoDeSys.LanguageModelManager.SafeUDIntType,CreateSafeUDIntType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._ISafeUIntType,,,_3S.CoDeSys.LanguageModelManager.SafeUIntType,CreateSafeUIntType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._ISafeULIntType,,,_3S.CoDeSys.LanguageModelManager.SafeULIntType,CreateSafeULIntType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._ISafeUSIntType,,,_3S.CoDeSys.LanguageModelManager.SafeUSIntType,CreateSafeUSIntType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._ISafeWordType,,,_3S.CoDeSys.LanguageModelManager.SafeWordType,CreateSafeWordType,нет (декларация/типизация),,
+expression,,_3S.CoDeSys.Core.LanguageModel._IStringLiteralExpression,,,_3S.CoDeSys.LanguageModelManager.StringLiteralExpression,CreateStringLiteralExpression,нет (декларация/типизация),_3S.CoDeSys.LanguageModelManager.GreenTrees.StringLiteralExpression_Green,
+statement,,_3S.CoDeSys.Core.LanguageModel._ISubRoutineStatement,,,_3S.CoDeSys.LanguageModelManager.SubRoutineStatement,CreateSubRoutineStatement,нет (декларация/типизация),,
+expression,,_3S.CoDeSys.Core.LanguageModel._IOnlineExpression,,,_3S.CoDeSys.LanguageModelManager.TaskLocalVariableOnlineExpression,,нет (декларация/типизация),,нет factory (NotImplementedException в RedTreeBuilder)
+expression,,_3S.CoDeSys.Core.LanguageModel._ITaskReference,,,_3S.CoDeSys.LanguageModelManager.TaskReference,CreateTaskReference,нет (декларация/типизация),_3S.CoDeSys.LanguageModelManager.GreenTrees.TaskReference_Green,
+type,,_3S.CoDeSys.Core.LanguageModel._ITimeOfDayType,,,_3S.CoDeSys.LanguageModelManager.TimeOfDayType,CreateTimeOfDayType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._ITimeType,,,_3S.CoDeSys.LanguageModelManager.TimeType,CreateTimeType,нет (декларация/типизация),,
+statement,,_3S.CoDeSys.Core.LanguageModel._ITryCatchStatement,,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.TryCatchStatement,CreateTryCatchStatement,\Statements\TryCatchStatementParser.cs:93 ParseTryCatchStatement (caller StatementParser.cs:675),_3S.CoDeSys.LanguageModelManager.GreenTrees.TryCatchStatement_Green,
+type,,_3S.CoDeSys.Core.LanguageModel._IUDIntType,,,_3S.CoDeSys.LanguageModelManager.UDIntType,CreateUDIntType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IUIntType,,,_3S.CoDeSys.LanguageModelManager.UIntType,CreateUIntType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IULIntType,,,_3S.CoDeSys.LanguageModelManager.ULIntType,CreateULIntType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IUSIntType,,,_3S.CoDeSys.LanguageModelManager.USIntType,CreateUSIntType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IUXIntType,,,_3S.CoDeSys.LanguageModelManager.UXIntType,CreateUXIntType,нет (декларация/типизация),,
+statement,,_3S.CoDeSys.Core.LanguageModel._IVarInitialEmptyStatement,,,_3S.CoDeSys.LanguageModelManager.VarInitialEmptyStatement,CreateVarInitialEmptyStatement,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IVariableLengthArrayType,,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.VariableLengthArrayType,CreateArrayType,\Declaration\TypeParser.cs:572 ParseArrayType,,
+type,,_3S.CoDeSys.Core.LanguageModel._IWordType,,,_3S.CoDeSys.LanguageModelManager.WordType,CreateWordType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IXDIntType,,,_3S.CoDeSys.LanguageModelManager.XDIntType,CreateXDIntType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IXDWordType,,,_3S.CoDeSys.LanguageModelManager.XDWordType,CreateXDWordType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IXIntType,,,_3S.CoDeSys.LanguageModelManager.XIntType,CreateXIntType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IXLIntType,,,_3S.CoDeSys.LanguageModelManager.XLIntType,CreateXLIntType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IXLWordType,,,_3S.CoDeSys.LanguageModelManager.XLWordType,CreateXLWordType,нет (декларация/типизация),,
+expression,,_3S.CoDeSys.Core.LanguageModel._IXRefExpression,,,_3S.CoDeSys.LanguageModelManager.XRefExpression,CreateXRefExpression,нет (декларация/типизация),_3S.CoDeSys.LanguageModelManager.GreenTrees.XRefExpression_Green,
+type,,_3S.CoDeSys.Core.LanguageModel._IXStringType,,_ILanguageModelBuilder6,_3S.CoDeSys.LanguageModelManager.XStringType,CreateXStringtype,\Declaration\TypeParser.cs:480 ParseXStringType,,
+type,,_3S.CoDeSys.Core.LanguageModel._IXUDIntType,,,_3S.CoDeSys.LanguageModelManager.XUDIntType,CreateXUDIntType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IXULIntType,,,_3S.CoDeSys.LanguageModelManager.XULIntType,CreateXULIntType,нет (декларация/типизация),,
+type,,_3S.CoDeSys.Core.LanguageModel._IXWordType,,,_3S.CoDeSys.LanguageModelManager.XWordType,CreateXWordType,нет (декларация/типизация),,

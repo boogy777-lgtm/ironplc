@@ -1,0 +1,1405 @@
+{
+"_3S.CoDeSys.Compiler35220.Resources.CompilerStrings.ja.resources":{
+"AffectionCopied":"古い値がコピーされました"
+,
+"AffectionInitialized":"初期化"
+,
+"AffectionInitNewVariables":"初期化された新規変数"
+,
+"AffectionLocationChanged":"場所が変更されました"
+,
+"AffectionVFTableInitialized":"仮想関数テーブルが初期化されました"
+,
+"And_Text":"および"
+,
+"Area_Output_Checked":"{0} に必要なメモリ：{1} バイト (使用可能サイズ：{2} バイト)"
+,
+"Area_Output_Checked_Exceeded":"{0} のサイズ超過：{1} バイト (使用可能サイズ：{2} バイト)"
+,
+"Area_Output_Info":"メモリ領域 {0} は {1} を含んでいます：サイズ：{2} バイト、最も多く使用されているアドレス：{3}、連続したメモリの最大ギャップ：{4} バイト ({5} %)"
+,
+"Area_Output_Info_Simple":"メモリ領域 {0} は {1} を含んでいます：最大の連続したメモリのギャップ：{2} バイト ({3} %)"
+,
+"Area_Output_Info_Simple_2":"メモリ領域 {0} は {1} を含んでいます：サイズ：{2} バイト、連続したメモリの最大ギャップ：{3} バイト ({4} %)"
+,
+"AttributeHasNoEffect":"(属性は効果がありません)"
+,
+"Build":"ビルド"
+,
+"BuildCompleteErrors":"ビルド完了 -- {0} 個のエラー、{1} 個の警告：ダウンロードできません"
+,
+"BuildCompleteOK":"ビルド完了 -- {0} 個のエラー、{1} 個の警告：ダウンロードの準備完了"
+,
+"BuildStarted":"------ ビルドを開始します：アプリケーション：{0} -------"
+,
+"Code_Text":"コード"
+,
+"CodeNoChange":"コードは変更されませんでした。オンライン変更は必要ではありません。"
+,
+"CodeSizeOutput":"生成されたコードのサイズ：{0} バイト"
+,
+"Constant":"定数"
+,
+"Data_Text":"データ"
+,
+"DataSizeOutput":"グローバル データのサイズ：{0} バイト"
+,
+"DoCodeTypification":"コードに型を割り当て"
+,
+"DoLocation":"グローバル データの検索"
+,
+"DoTypification":"型指定"
+,
+"Err_NoCodegeneratorDetailed":"コード ジェネレーターの作成に失敗しました:必須アドオン「{0}」がインストールされていません"
+,
+"Err_NoMemoryAllocationCallbackDetailed":"メモリアロケータの作成に失敗しました:必須アドオン「{0}」がインストールされていません"
+,
+"ErrNoApplication":"アプリケーションが見つかりません"
+,
+"Error_Check_ImplicitParameter_MissingDefault":"implicit-parameter には入力のデフォルト値が必要です。"
+,
+"Error_Check_ImplicitParameter_UnknownKind":"implicit-parameter 「{0}」の種類が不明です。[{1}] のいずれかでなければなりません。"
+,
+"Error_Check_ImplicitParameter_WrongPouType":"implicit-parameter は関数およびメソッドの入力にのみ適用できます。"
+,
+"Error_Check_ImplicitParameter_WrongVarKind":"implicit-parameter は VAR_INPUT 変数にのみ適用できます。"
+,
+"Error_Check_ImplicitParameter_WrongVarType":"implicit-parameter は STRING 型または POINTER TO STRING 型の変数にのみ適用できます。"
+,
+"ErrorLimitExceeded":"{0} 個を超えるエラーが発生しました：以降のすべてのエラー メッセージをスキップします"
+,
+"Except_Boot_Project_Error":"この状態ではブート プロジェクトは使用できません: アプリケーションはメモリが不足しています。完全なダウンロードを先に実行してください。"
+,
+"Except_Boot_Project_Error_Error_In_Compile":"この状態ではブート プロジェクトは使用できません:ブート プロジェクト情報の作成エラー。メッセージ ウィンドウを参照してください。"
+,
+"GenerateCode":"{0} のコードの生成..."
+,
+"GenerateCodeInit":"コード初期化を生成..."
+,
+"GenerateCodeProgress":"コード生成中..."
+,
+"GenerateGlobalInit":"グローバル初期化を生成..."
+,
+"GenerateRelocations":"再配置を生成..."
+,
+"GeneratingCode":"コードを生成..."
+,
+"GlobalInitErrorPrefix":"暗黙的初期化コードにエラー： "
+,
+"Input_Text":"入力"
+,
+"InterfaceReferencesAffected":"以下のインターフェイス参照が、リダイレクトのテストをされます："
+,
+"InterfacesChanged":"以下のPOU-インターフェイスが変更されました："
+,
+"Literal":"リテラル"
+,
+"Memory_Text":"メモリ"
+,
+"NonSafety_Text":"非安全データ"
+,
+"NumInterfacesChanged":"{0} 個の POU インターフェイスが変更されました。"
+,
+"NumInterfacesToTest":"{0} 個のインターフェイス参照が、リダイレクトのテストをされます"
+,
+"NumPOUsDownloaded":"{0} POU がコードを変更しました"
+,
+"NumVariablesAffected":"{0} 個の変数がオンライン変更による影響を受け、{1} 個が場所を変更され、{2} 個が初期化され、{3} 個がコピーされ、{4} 個が仮想関数テーブルを初期化しました"
+,
+"Output_Text":"出力"
+,
+"Persistent_Text":"持続データ"
+,
+"PersistenVariablesChanged":"持続変数が変更されました。現在のリストで初期化しますか？\r\n\r\nはい: 現在のリストが初期化され、既存の持続値はオーバーライドされます\r\nいいえ: 既存の持続値が維持され、現在のリストはそれらの値を使用します。\r\n     警告:値はユーザーの持続変数と一致しない場合があります。手動で値を確認する必要があります。\r\n     例: リストの始めに変数を追加すると、値はすべて不正になります。\r\n\r\nキャンセル: ダウンロードまたはオンライン変更をキャンセルします"
+,
+"POUsDownloaded":"以下の POU のコードがダウンロードされます"
+,
+"POUUnit":"POU"
+,
+"ProjectUpToDate":"アプリケーションは最新です"
+,
+"Retain_Text":"保持データ"
+,
+"StoppingPrecompileChecks":"プリコンパイルの確認を停止しています..."
+,
+"TooLongStringLiteralHint":"...({0} 文字数多い)..."
+,
+"TotalMemorySizeCodeAndData":"コードおよびデータの割り付け済みメモリサイズ合計：{0} バイト"
+,
+"TypifyAll":"コードに型を割り当て..."
+,
+"UnknownMacroText":"不明"
+,
+"VariablesAffected":"以下の変数がオンライン変更の影響を受けます："
+,
+"WaitForDownloadInfoSaving":"コンパイル情報ファイル書き込み完了まで待機"
+,
+"WarningLimitExceeded":"{0} 個を超える警告が発生しました：以降のすべての警告メッセージをスキップします"
+}
+,
+"_3S.CoDeSys.Compiler35220.Resources.ErrorMessages.ja.resources":{
+"Err_AbstractAndFinalNotPossible":"メソッドまたはファンクション ブロックは ABSTRACT や FINAL を設定できません"
+,
+"Err_AbstractAndPrivateNotPossible":"PRIVATE メソッドは ABSTRACT を設定できません"
+,
+"Err_AbstractFunctionBlockAssigned":"ファンクション ブロック {0} は ABSTRACT であり、割り当てのターゲットとして使えません"
+,
+"Err_AbstractFunctionBlockInstance":"ファンクション ブロック「{0}」は ABSTRACT であるため、インスタンス化できません"
+,
+"Err_AbstractMethodMustNotContainAnyStatements":"ABSTRACT メソッド {0}.{1} に文を含めることはできません"
+,
+"Err_AbstractMethodNotImplemented":"ファンクション ブロック「{1}」で定義されている ABSTRACT メソッド「{0}」の実装がされていません"
+,
+"Err_AbstractMethodOnlyInAbstractFunctionblock":"ABSTRACT メソッド {0} は、ファンクション ブロック {1} も ABSTRACT であることを求めます"
+,
+"Err_AbstractMethodStaticCall":"ABSTRACT メソッド「{0}」を静的呼び出しできません"
+,
+"Err_AbstractOnFunctionBlocksAndMethodsOnly":"ABSTRACT はメソッドおよびファンクション ブロックにのみ使用することができます"
+,
+"Err_AbstractPropertyNotImplemented":"ファンクション ブロック「{2}」で定義されている ABSTRACT プロパティ「{1}」の {0} に対する実装がされていません"
+,
+"Err_AbstractPropertyStaticCall":"ABSTRACT プロパティ「{0}」に静的にアクセスすることはできません"
+,
+"Err_AbstractWrongVarInMethod":"ABSTRACT メソッドで許可されているのは入力、出力および入出力だけです"
+,
+"Err_AccessOutsideOfCall":"「{1}」の「{0}」は、呼び出しの外からはアクセスできません"
+,
+"Err_AccessToInternalObject":"ライブラリ {1} の内部オブジェクト {0} にアクセスできません"
+,
+"Err_AccessToInternalProperty":"ライブラリ {1} の内部プロパティ {0} にアクセスできません"
+,
+"Err_AccessToInternalVariable":"ライブラリ {1} の内部変数 {0} にアクセスできません"
+,
+"Err_AccessVarInstFromOutsideTheDeclaringMethod":"宣言しているメソッドの外から「{1}」の VAR_INST「{0}」にアクセスすることはできません"
+,
+"Err_AddressExpected":"{0} ではなく「AT」の後に必要な直接アドレス"
+,
+"Err_AddressMisaligned":"アドレス {0} はデータ型 {1} 用に正常に調整されていません"
+,
+"Err_AddressOfNonInstanceVar":"式「{0}」のアドレスでは型名ではなくインスタンスが必要です"
+,
+"Err_AddressOutOfRange":"アドレス「{0}」は範囲外です:計算されたオフセット: {1} バイト、割り当てられたサイズ: {2} バイト"
+,
+"Err_AddressSourceIsAddressDest":"変数「{0}」はアドレス「{1}」に位置していました。今このアドレスには変数「{2}」が位置しています。この変更はオンライン変更ではできません。"
+,
+"Err_Ambiguity":"名前「{0}」の曖昧な使用"
+,
+"Err_AnyTypeOnlyInFunction":"型「{0}」の変数は関数の入力としてのみ許可されています"
+,
+"Err_ApplicationConflict":"デバイス「{1}」には同じ名前「{0}」のアプリケーションが 2 つあります"
+,
+"Err_ArrayBorderIsNoConstant":"配列の境界「{0}」は定数値ではありません"
+,
+"Err_ArrayBorderNoValidSignedInteger":"配列境界 {0} を評価しても有効な符号付き整数定数になりません"
+,
+"Err_ArrayIndexNumWrong":"配列にはちょうど {0} 個のインデックスが必要です"
+,
+"Err_ArrayInitialisationCountNoConstant":"配列初期化の数値「{0}」は定数値ではありません"
+,
+"Err_ArrayInitialisationNotPossible":"Init 関数呼び出しのパラメーターとしての配列初期化はできません。代わりに変数を使用してください"
+,
+"Err_ArrayInitializationExpected":"配列の初期化が必要です"
+,
+"Err_ATDeclarationNotAllowed":"AT 宣言はVAR セクション内でのみ許可されています"
+,
+"Err_AtLeastOneExpected":"最低 1 つの文が必要です"
+,
+"Err_AttributeNameExpected":"属性値には「{0}」ではなくシングル バイト文字列が必要です"
+,
+"Err_AttributeNotAllowedFor":"属性「{0}」は「{1}」には許可されていません"
+,
+"Err_AttributeNotValidForNonExternalPOU":"属性「{0}」は非外部 POU に有効ではありません"
+,
+"Err_BaseClassNotFound":"ベース クラス「{0}」の定義が見つかりません"
+,
+"Err_BaseNotAllowed":"式 SUPER はこのコンテキストでは許可されていません"
+,
+"Err_Bitaccessnoconst":"ビットアクセスはリテラルまたはシンボリックの整数定数を必要とします"
+,
+"Err_BitAccessOnlyOnInt":"ビットアクセスは整数型でのみ使用可能です"
+,
+"Err_BitAdrOnOperation":"演算子 BITADR は変数でのみ使用でき、演算では使用できません"
+,
+"Err_BitNrOverflow":"「{0}」は「{1}」に対して有効なビット番号ではありません"
+,
+"Err_BitsForStructureOnly":"構造体およびファンクション ブロックのみがビット型 BIT の変数を含めることができます。"
+,
+"Err_BitsWrongScope":"BIT 型の変数はVAR_INPUT ブロック、VAR_OUTPUT ブロックまたは VAR ブロックで宣言する必要があります"
+,
+"Err_BlobInitError":"「{0}」ではなく定数値 が必要です"
+,
+"Err_CalcNeedsCall":"条件呼び出しの第2パラメーターは有効な呼び出し文である必要があります"
+,
+"Err_CallAfterInitHasInputs":"「{0}」でマーク付けされたメソッドは入力を有していません"
+,
+"Err_CalleeInvalidType":"「{0}」ではなくプログラム名、関数、またはファンクション ブロック インスタンスが必要です"
+,
+"Err_CallOfPrivateMethod":"プライベート メソッド {0}.{1} にアクセスできません"
+,
+"Err_CallOfPrivateProperty":"プライベート プロパティ {0}.{1} にアクセスできません"
+,
+"Err_CallOfProtectedMethod":"保護されたメソッド {0}.{1} にアクセスできません"
+,
+"Err_CallOfProtectedProperty":"保護されたプロパティ {0}.{1} にアクセスできません"
+,
+"Err_CallRecursion":"呼び出し再帰：{0}"
+,
+"Err_CancelledByUser":"コンパイルはユーザーによってキャンセルされました"
+,
+"Err_CannotAddMultipleTime":"「{0}」の複数のオペランドを追加することはできません"
+,
+"Err_CannotMultiplyMultipleTime":"「{0}」の複数のオペランドを乗算することはできません"
+,
+"Err_CantHaveBaseClass":"キーワード EXTENDS は型 {0} には使用できません"
+,
+"Err_CaseLabelDuplicate":"CASE ラベルが重複"
+,
+"Err_CaseLabelInCaseRange":"CASE ラベル {0} は範囲 {1} ～ {2} 内にも含まれます"
+,
+"Err_CaseLabelNoConstant":"CASE ラベルはリテラルまたはシンボリックの整数定数を必要とします"
+,
+"Err_CaseLabelOutsideOfCase":"CASE ラベルはCASE 文の一部ではありません"
+,
+"Err_CaseRangesOverlapping":"CASEは重複した範囲 {0} ～ {1} および {2} ～ {3} を含みます"
+,
+"Err_CheckLicenseNeedsSysTarget":"__CHECKLICENSE 演算子には SysTarget ライブラリおよび 3S License ライブラリが必要です"
+,
+"Err_CompareNotPossible1":"型「{0}」のオブジェクトは比較できません"
+,
+"Err_CompareNotPossible2":"型が「{0}」または「{1}」のオブジェクトは比較できません"
+,
+"Err_ComparisonOperatorExpected":"「{0}」ではなく比較演算子が必要です"
+,
+"Err_CompilerVersionError":"コンパイラ バージョン {0} は取り消されました。代わりに、より新しいコンパイラ バージョンを使用してください。"
+,
+"Err_CompoAccessNoStruct":"「{0}」は構造化された変数ではありません"
+,
+"Err_ConditionExpected":"条件が必要"
+,
+"Err_ConstantIndexOutOfRange":"定数インデックス「{0}」は「{1}」～「{2}」の範囲内にありません"
+,
+"Err_ConstantOverflow":"定数「{0}」は型「{1}」には大きすぎます"
+,
+"Err_ContainsNoDefinition":"「{0}」には「{1}」の定義が含まれていません"
+,
+"Err_CounterStartExpected":"カウンターの初期化が必要です"
+,
+"Err_DataRecursion":"データ再帰：{0}"
+,
+"Err_DeclarationKeywordNotAllowed":"「{0}」はこの場所では許可されていません"
+,
+"Err_DefineValueExpected":"「{0}」ではなく必要な値を定義します"
+,
+"Err_DeleteNeedsPointer":"__DELETE のオペランドはポインタである必要があります"
+,
+"Err_DerefNoPointer":"逆参照はポインタを必要とします"
+,
+"Err_DeviceNameNoIdent":"デバイス名「{0}」が無効です。有効な IEC 61131-3-識別子でなければなりません"
+,
+"Err_DeviceNotInstalled":"デバイスはシステムにインストールされていません。コード生成はできません。"
+,
+"Err_DivisionByZero":"ゼロ除算"
+,
+"Err_DuplicateElseInCaseStatement":"CASE 文中で ELSE の定義が重複"
+,
+"Err_DuplicateLabelDefinition":"ラベル「{0}」が重複"
+,
+"Err_DuplicateVarConfig":"「{0}」のための VAR_CONFIG が重複"
+,
+"Err_DynamicMemoryNotSupported":"アプリケーション「{0}」に定義された動的オブジェクト作成のメモリがありません"
+,
+"Err_ExplicitTransitionAssignMissing":"トランジションのコードには複数のステートメントが含まれています。トランジション出力変数への明示的割り当てが必要です。"
+,
+"Err_ExpressionExpectedInstead":"「{0}」ではなく式が必要です"
+,
+"Err_ExprNoConstantError":"「{0}」ではなく定数値 が必要です"
+,
+"Err_FCallExpectedPointerAsSecondArgument":"FCall の 2 番目の引数は関数へのポインターでなければなりません。"
+,
+"Err_FCallWrongCallPatternSignature":"FCall の最初の引数は呼び出しのパターンとして使用される署名型でなければなりません。"
+,
+"Err_FCallWrongNumberOfArguments":"FCall が要求するのは 2+{0} 個の引数です。"
+,
+"Err_FeatureNotImplemented":"機能「{0}」は実装されていません。"
+,
+"Err_FinalOnFunctionBlocksAndMethodsOnly":"FINAL はメソッドおよびファンクション ブロックにのみ使用することができます"
+,
+"Err_FunctionBlockNeedsInstance":"ファンクション ブロック「{0}」にアクセスするには、それをインスタンス化する必要があります"
+,
+"Err_FunctionBlockNoLongerValid":"キーワード FUNCTIONBLOCK のサポートは終了しました。代わりに FUNCTION_BLOCK を使用してください。"
+,
+"Err_FunctionCallMixedStyle":"仮パラメーターを関数呼び出しにおいてすべて表す、または全く表さない必要があります"
+,
+"Err_FunNeedsAtLeastNInputs":"ファンクション「{0}」には、最小「{1}」個、最大「{2}」個の入力が必要です"
+,
+"Err_FunNeedsNInputs":"関数「{0}」は「{1}」個の入力のみを必要とします"
+,
+"Err_GeneratingVarInitializations":"1 つ以上の変数の初期値が無効です"
+,
+"Err_GenericDeclarationProducesErrorInGeneratedCode":"型宣言「{0}」はジェネリック ファンクションブロック コードではエラーとなります"
+,
+"Err_GenericNoInitialValueSupported":"ジェネリック定数宣言では初期値はサポートされていません"
+,
+"Err_GenericNoInteger":"整数型のみがジェネリック定数に許可されています"
+,
+"Err_GenericNotConstant":"ジェネリック定数「{1}」の定義「{0}」は定数値ではありません"
+,
+"Err_GenericOnlyConst":"VAR_GENERIC 宣言では 直後にCONSTANTの記述が必要です"
+,
+"Err_GenericOnWrongPosition":"VAR_GENERIC 宣言は、ファンクションブロック 内でかつ、ファンクションブロック名の直後での記述のみが許可されています"
+,
+"Err_GenericParamMissing":"汎用変数「{0}」の初期化が見つかりません"
+,
+"Err_GenericParamsAllExplicitOrNone":"全ての汎用変数に明示的に割り当てるか、一切割り当てないかのいずれかにしてください"
+,
+"Err_GenericParamUnknown":"「{0}」はファンクションブロック「{1}」の宣言された汎用定数ではありません"
+,
+"Err_GenericWrongNumberOfInitializer":"ジェネリック ファンクションブロック「{0}」が要求するのは「{1}」個のジェネリック定数定義です"
+,
+"Err_GlobalVariableListExpected":"{0} ではなく VAR_GLOBAL または VAR_CONFIG が必要です"
+,
+"Err_IdentifierExpected":"「{0}」の代わりに必要な識別子"
+,
+"Err_IdentNotDefined":"識別子「{0}」が定義されていません"
+,
+"Err_IllegalOperator":"「{0}」は有効な ST 演算子ではありません"
+,
+"Err_ImplicitEnumerationTypeNotExpected":"暗黙的列挙型はこの場所では許可されていません"
+,
+"Err_ImplicitMethodImplementationNotPublic":"ファンクション ブロック「{0}」：メソッド「FB_Init」、「FB_Exit」、および「FB_ReInit」へのアクセスは PUBLIC でなければなりません"
+,
+"Err_ImplicitMethodNameForVariable":"{0} は暗黙的に生成されたメソッドの名前でファンクション ブロック内の変数には無効です"
+,
+"Err_ImplicitReferenceTypeDeclNotAllowed":"暗黙的参照型の宣言はこの場所ではできません"
+,
+"Err_ImplicitReferenceTypeOnlChangeError":"オンライン変更でローカル暗黙的参照型を追加することはできません"
+,
+"Err_ImplicitRefTypeAllClassesNeedAttrib":"ファンクション ブロックの継承が属性「{0}」の使用方法と異なります"
+,
+"Err_ImplicitRefTypeDeclarationNotAllowed":"この型に暗黙的参照型「{0}」を宣言することはできません"
+,
+"Err_ImplicitRefTypeIsnotAllowedAsBase":"暗黙的参照型を参照、ポインタ、および配列のベース型にすることはできません"
+,
+"Err_ImplicitRefTypeSignNotSupported":"ファンクション ブロックおよび構造体のみ暗黙的参照型としてマーク付けすることができます"
+,
+"Err_IncompletePOUDeclaration":"POU 宣言は名前なしでは不完全です"
+,
+"Err_InconsistentInheritanceOfCPPCompatibility":"C++-互換性の矛盾する継承。「{0}」の属性が見つかりません。"
+,
+"Err_InconsistentUseOfCPPCompatibility":"C++-互換性の矛盾する使用法。「{0}」の属性が見つかりません。"
+,
+"Err_InconsistentUseOfCPPCompatibility_MissingParent":"C++ 互換性の一貫性のない使用です。親 POU「{0}」の属性がありません。"
+,
+"Err_IndexingInvalid":"「{0}」の式では [] を使用してインデックスを使用することはできません"
+,
+"Err_IndexNumWrong":"型「{0}」の変数は厳密に 1 インデックスを必要とします"
+,
+"Err_IndexOfNotSupported":"演算子 INDEXOF のサポートは終了しました。代わりに ADR を使用してください。POU 名での ADR はファンクション コードへのポインタへのポインタを返します。"
+,
+"Err_InheritanceError":"継承はファンクション ブロック、インターフェイス、および構造体でのみ許可されています"
+,
+"Err_IniNeedsUserdefType":"INI 演算子はファンクション ブロック インスタンスまたはデータ ユニット タイプ インスタンスを必要とします"
+,
+"Err_InOutAccessOutside":"「{1}」の VAR_IN_OUT パラメーター「{0}」への外部アクセスなし。"
+,
+"Err_InOutAssignedInActionCall":"VAR_IN_OUT {0} はローカル アクション呼び出し「{1}」に割り当てられません"
+,
+"Err_InOutNotAssigned":"「{1}」の呼び出しでは VAR_IN_OUT「{0}」を割り当てる必要があります"
+,
+"Err_InOutParamNotEqual":"型「{0}」は VAR_IN_OUT または参照「{2}」の型「{1}」と等しくありません"
+,
+"Err_InputMissing":"「{1}」の呼び出し内のパラメーター「{0}」に関して不明な入力への割り当て"
+,
+"Err_InstanceNotAllowedInRetain":"「{0}」のインスタンスは保持データでは許可されていません"
+,
+"Err_IntegerLiteralExpected":"{0} ではなく整数リテラルが必要です"
+,
+"Err_InterfaceChanged":"インターフェイス「{1}」のオーバーライドされたメソッドのインターフェイス「{0}」は宣言と一致しません"
+,
+"Err_InterfaceChanged_NumberOfInputsOutputsDifferent":"メソッド「{0}」の入出力の個数がインターフェイス「{1}」に対応していません。"
+,
+"Err_InterfaceChanged_VariableDifferent":"メソッド「{1}」の変数「{0}」がインターフェイス「{2}」に対応していません。"
+,
+"Err_InterfaceChangedBase":"インターフェイス「{1}」のオーバーライドされたメソッドのベース「{0}」は宣言と一致しません"
+,
+"Err_InterfaceImplementationError":"インターフェイスはファンクション ブロックによってのみ実装することができます"
+,
+"Err_InterfaceMethodImplementationNotPublic":"ファンクション ブロック「{1}」のインターフェイス メソッド「{0}」の実装は PUBLIC でなければなりません"
+,
+"Err_InterfaceNeedsInstance":"インターフェイス「{0}」にアクセスするには、それをインスタンス化する必要があります"
+,
+"Err_InterfaceNotFound":"インターフェイス「{0}」の定義が見つかりません"
+,
+"Err_InternalErrorProhibitingOnlineChange":"オンライン変更ができない内部エラー {0}。アプリケーションのクリーンおよびダウンロードが必要です。"
+,
+"Err_InvalidAccessPathForNamespaceAccess":"「{0}」は無効なアクセス パス です"
+,
+"Err_InvalidBaseForGlobalScopeExpression":"グローバル範囲演算「.」は式「{0}」では無効です"
+,
+"Err_InvalidEnumBaseType":"整数型のみが列挙型ベース型としてサポートされています"
+,
+"Err_InvalidEnumDefaultValue":"ローカル列挙メンバーのみデフォルト初期値として列挙に使用することができます"
+,
+"Err_InvalidInitialisationForArray":"{0} は定数 {1} に関して無効な初期化です。定数の初期値は定数でなければなりません"
+,
+"Err_InvalidInitialisationForVarInst":"VAR_INST 変数の初期値にローカル変数を使えません。"
+,
+"Err_InvalidJumpDestination":"JMP の行先 {0} が無効です"
+,
+"Err_InvalidLoopIncrement":"ループ増分が無効です"
+,
+"Err_InvalidNamespaceForNamespaceAccess":"「{0}」は有効な名前空間アクセスではありません"
+,
+"Err_InvalidSignatureName":"名前「{0}」は有効な識別子ではありません"
+,
+"Err_IsNoInput":"「{0}」は「{1}」の入力ではありません"
+,
+"Err_IsNoLValue":"「{0}」は有効な割り当て先ではありません"
+,
+"Err_IsNoOutput":"「{0}」は「{1}」の出力ではありません"
+,
+"Err_IsValidRefNeedsReference":"__ISVALIDREF のオペランドは参照型 REFERENCE のものでなければなりません"
+,
+"Err_LibNamespaceConflict":"ライブラリ「{1}」のローカル名前空間「{0}」はライブラリ「{2}」の名前空間を非表示にします"
+,
+"Err_LibraryConflict":"ライブラリ「{1}」によって定義された曖昧な名前空間「{0}」"
+,
+"Err_LibraryNamespaceNotValid":"ライブラリ {1} の名前空間 {0} は有効な識別子ではありません"
+,
+"Err_LibraryWithUnicodeIdentifiers":"ライブラリ「{0}」は Unicode 識別子のサポートと一緒に保存されました。このライブラリはプロジェクトもUnicode 識別子をサポートする場合にのみ使用することができます (コンパイル オプションを参照)。"
+,
+"Err_LibSupports32BitOnly":"ライブラリ「{0}」は32 ビット アプリケーションでのみサポートされます"
+,
+"Err_LiteralExpected":"「{0}」ではなくリテラルが必要です"
+,
+"Err_LowerGreaterUpperBorder":"下限は上限より下でなければなりません"
+,
+"Err_LowerUpperBoundOnVariableLengthArrayOnly":"演算子 LOWER_BOUND および UPPER_BOUND は配列でのみサポートされています"
+,
+"Err_LowerUpperBoundOperandNotExactly":"{0} 演算子の第 2 オペランドの値はこの場合 1 でなければなりません"
+,
+"Err_LowerUpperBoundOperandNotInRange":"{0} 演算子の第 2 オペランドの値はこの場合 1 から {1} の間の値でなければなりません"
+,
+"Err_LValueForAnyVar":"「{1}」の ANY パラメーター「{0}」は入力として書き込みアクセスのある変数を必要とします"
+,
+"Err_LValueForReference":"参照割り当ては書き込みアクセスのある変数を必要とします"
+,
+"Err_LValueForVarinout":"VAR_IN_OUT または「{1}」の参照パラメーター「{0}」には、入力として書き込みアクセスのある変数が必要です"
+,
+"Err_LValueForVarinoutStrings":"VAR_IN_OUT または「{1}」の参照パラメーター「{0}」には、入力として書き込みアクセスのある変数が必要です"
+,
+"Err_LValueNoRefType":"参照割り当ては参照型の変数にのみ許可されています"
+,
+"Err_MalformedAddress":"直接アドレス「{0}」は無効です"
+,
+"Err_MappedVarWrittenInDiffTasks":"アドレス {1} にマッピングされている変数 {0} は別のタスクに書き込まれています"
+,
+"Err_MaxArraySizeExceeded":"最大配列サイズを超過しています。下限を増やすまたは上限を減らしてください。"
+,
+"Err_MaxNestingDepthExceeded":"最大の入れ子の深さを超えています。 "
+,
+"Err_MissingImplementationTerminator":"実装ブロックのターミネータ「{0}」が見つかりませんでした。"
+,
+"Err_MissingInstancePathForPersistent":"変数 {0} に関して VAR_PERSISTENT-リスト内に一致するインスタンス パスがありません。コマンド「すべてのインスタンスパスを追加」を使用して、すべてのインスタンスパスを VAR_PERSISTENT リストに追加します。(詳細についてはヘルプを参照)。"
+,
+"Err_MissingObjectForPersistent":"インスタンス パスを変数 {0} に入力するための VAR_PERSISTENT リストがアプリケーションの一部にありません"
+,
+"Err_MissingParameterList":"{0}「{1}」は括弧「()」なしで参照されました"
+,
+"Err_ModNotReal":"MOD は REAL に定義されていません"
+,
+"Err_Multiassigninfor":"FORループには 1 つのカウンターが必要です"
+,
+"Err_MultipleAssignmentsNotAllowedForOperator":"演算子「{0}」への複数割り当ては許可されていません。"
+,
+"Err_MultipleAssignmentsToInterfaceVariables":"インターフェイス変数への複数割り当ては許可されていません"
+,
+"Err_MultipleAssignmentWithChangingValueTypes":"暗黙的なキャストでの値の型の複数割り当ては許可されていません"
+,
+"Err_MultipleAssignmentWithProperty":"プロパティは複数割り当ての途中では使えません。"
+,
+"Err_MultipleAssignmentWithReferences":"ファンクション ブロックまたはデータ構造への参照の複数割り当ては許可されていません"
+,
+"Err_MultipleAssignsToSameInputInCall":"パラメーター「{0}」への複数入力割り当て"
+,
+"Err_NamesNotEqual":"インターフェイスで使用されている名前はオブジェクトの名前と等しくありません"
+,
+"Err_NewArrayOnUserdefNotAllowed":"__NEW を含む配列の作成はユーザーが定義した型では許可されていません"
+,
+"Err_NewNeedsType":"__NEW のオペランドとして型の定義必要です"
+,
+"Err_NewOnInterfaceNotPossible":"__NEW はインターフェイスでは使用できません"
+,
+"Err_NewOnlyWithAttribute":"ファンクション ブロックまたは構造体は __NEW と作成するために属性「{{attribute 'enable_dynamic_creation'}}」を必要とします"
+,
+"Err_NewPositionNotOK":"__NEW の結果を割り当てる必要があります"
+,
+"Err_NoArrayOfBit":"BIT は配列のベース型として許可されていません"
+,
+"Err_NoAssign":"型 {0} への割り当ては許可されていません"
+,
+"Err_NoBitAccessOnFunctionCall":"関数呼び出しでのビットアクセスは許可されていません"
+,
+"Err_NoBitTypeOnBitAddress":"型 {0} はビット アドレス {1} では使用できません"
+,
+"Err_NoBranchOutOfFinally":"__FINALLY ブロックの外への分岐は許可されていません。"
+,
+"Err_NoBytesInRetain":"保持データにある構造化型には BYTE、SINT または USINT を含めることはできません"
+,
+"Err_NoCallInInstancePath":"コンポーネント アクセス「.」、インデックス アクセス「[]」または呼び出し「()」を関数呼び出しの結果で実行することはできません。先にヘルプ変数に割り当てます。"
+,
+"Err_NoCallInInterfaceComparison":"呼び出しの戻り値であるインターフェイスを比較することはできません。先に変数に割り当てます。"
+,
+"Err_NoCaseLabelFound":"CASE ラベルが見つかりません"
+,
+"Err_NoChangeOnAccessModifier":"メソッド{3}.{1} のオーバーライド時にメソッド {0}.{1} はアクセス修飾子「{2}」を変更できません"
+,
+"Err_NoCodegenerator":"コードジェネレーターの作成に失敗しました：必要なプラグインがインストールされていません"
+,
+"Err_NoComponentOf":"「{0}」は「{1}」のコンポーネントではありません。"
+,
+"Err_NoConstantInitialisationForValue":"定数変数「{0}」の初期化は定数ではありません"
+,
+"Err_NoCopyCodeAllowed":"オンライン変更中に新規の場所へのこの POU の移動は許可されていません"
+,
+"Err_NoCopyCodeForVariableAtDirectAddress":"直接アドレスの変数はオンライン変更中に型を変更できません"
+,
+"Err_NoDirectAddressInSubsequentVarDecl":"アドレス割り当てを伴う変数「{0}」の宣言は属性「subsequent」を伴う プログラム または グローバル変数リスト では使用できません。"
+,
+"Err_NoEnclosingLoopExit":"{0} できるループがありません。ループが閉じていません。"
+,
+"Err_NoExitOrContinueOutOfCatch":"__CATCH ブロックの外への Exit、または Continue は許可されていません。"
+,
+"Err_NoExitOrContinueOutOfTry":"__TRY ブロックの外への Exit、または Continue は許可されていません。"
+,
+"Err_NoExplicitCall":"「{0}」に明示的な呼び出しがありません。{1}。 "
+,
+"Err_NoFormalParamsCallsForExtensibleFunction":"明示的入力割り当ては拡張可能関数 {0} の呼び出しには使用できません"
+,
+"Err_NoGenericInstanceInVarConst":"ジェネリック ファンクションブロックのインスタンスは定数として宣言できません"
+,
+"Err_NoGlobalDefine":"「{0}」のグローバル定義がありません"
+,
+"Err_NoIndirectPropertyCallOnStringWithSize":"型 {0} のあるプロパティの間接呼び出しは明示的に指定された長さのない型のみサポートされているため使用できません"
+,
+"Err_NoInheritanceOnFinalType":"属性 FINAL のある「{0}」は基準として使用することはできません"
+,
+"Err_NoInitialForExternal":"VAR_EXTERNAL {0} に許可されている初期値はありません"
+,
+"Err_NoInitialForInoutConstant":"VAR_INOUT CONSTANT {0} に許可されている初期値はありません"
+,
+"Err_NoInputMemory":"予約された入力メモリがありません"
+,
+"Err_NoInputsWithSlotAttributes":"属性「{1}」のシグネチャ「{0}」に入力は許可されていません。"
+,
+"Err_NoInstanceObject":"「{0}」は {1} 型であるため、インスタンス化できません"
+,
+"Err_NoInstancePath":"「{0}」のための VAR_CONFIG がありません"
+,
+"Err_NoLocalEnum":"ローカル定義列挙のサポートは終了しました。代わりにDataType 定義を使用してください。"
+,
+"Err_NoMatchingInitMethodFound":"{0} のインストールに一致する「FB_Init」メソッドが見つかりません"
+,
+"Err_NoMatchingOverload":"メソッド「{0}」に対応するオーバーロードが見つかりませんでした"
+,
+"Err_NoMemoryAllocationCallback":"メモリアロケータ の作成に失敗しました：必要なプラグインがインストールされていません"
+,
+"Err_NoMemoryMemory":"予約されたメモリがありません"
+,
+"Err_NoMemoryReserveForExternal":"外部ファンクション ブロックのためのメモリ確保には対応していません"
+,
+"Err_NoMethodImplementation":"インターフェイス「{1}」に定義されているメソッド「{0}」の実装がされていません"
+,
+"Err_NoMixExternalIECInheritance":"POU の拡張はそのベース (外部または IEC 内) と同じ方法で実装する必要があります。"
+,
+"Err_NoMultipleInheritance":"EXTENDS リストに定義することができるのは 1 つのベース ファンクション ブロックのみです"
+,
+"Err_NoNamespace":"「{0}」が名前空間を参照していません"
+,
+"Err_NoNewAssignmentInOtherExpression":"__NEW 演算子のある割り当て式を別の式で使用することはできません。代わりにポインター変数を使用してください。"
+,
+"Err_NoOnlineChangeOnDynamicObjects":"動的に作成されるタイプのサイズを変更するオンライン変更は実行できません。"
+,
+"Err_NoOnlineChangeOnGenericConstantBaseType":"ベース型 {0} の宣言で、定数 {1} の値が {2} から {3} に変更されました。オンライン変更はできません。"
+,
+"Err_NoOnlineChangeOnGenericConstantType":"変数 {0} の宣言で、定数 {1} の値が {2} から {3} に変更されました。オンライン変更はできません。"
+,
+"Err_NoOnlineChangePossible":"オンライン変更はできません。完全ダウンロードを実行してください"
+,
+"Err_NoOutputMemory":"予約された出力メモリがありません"
+,
+"Err_NoOutsideAccessToGenericVariable":"ファンクションブロック「{1}」のジェネリック定数「{0}」への外部アクセスがありません"
+,
+"Err_NoOverrideOnFinalMethod":"ファンクションブロック「{0}」：アクセス指定子 FINAL のあるメソッド {1}.{2} にオーバーライドすることはできません"
+,
+"Err_NoOverrideOnInternalMethod":"ファンクションブロック「{0}」：アクセス指定子 INTERNAL のあるライブラリ {3} のメソッド {1}.{2} にオーバーライドすることはできません"
+,
+"Err_NoOverrideOnPrivateMethod":"ファンクション ブロック「{0}」：アクセス指定子 PRIVATE のあるメソッド {1}.{2} にオーバーライドすることはできません"
+,
+"Err_NoPointerToBit":"POINTER TO BIT は許可されていません"
+,
+"Err_NoPropertiesInOutAssignment":"プロパティは呼び出しの出力割り当てに割り当てることはできません。代わりに一時変数を使用してください。"
+,
+"Err_NoPropertyForVarInout":"VAR_IN_OUT にプロパティを割り付けできません。"
+,
+"Err_NoReadAccessToProperty":"プロパティ「{0}」は get アクセサーが不足しているためこのコンテキストでは使用できません"
+,
+"Err_NoReferenceToBits":"ビットへの参照はできません"
+,
+"Err_NoReferenceToOutput":"出力は型 REFERENCE TO にできません"
+,
+"Err_NoResolutionForLazyVariable":"レイジー型変数「{0}」を解決できませんでした"
+,
+"Err_NoResolutionForSomeLazyVariables":"この署名内のレイジー型変数を推定できませんでした。"
+,
+"Err_NoStaticVariableInitialisationForValue":"静的変数「{0}」の初期化が定数ではないか、置き換えられた定数が無効です"
+,
+"Err_NoSuchLabel":"JMP 文の範囲内に「{0}」というラベルはありません"
+,
+"Err_NoSystemDefine":"「{0}」のシステム定義がありません"
+,
+"Err_NotAllowedInContainerLib":"「{0}」はコンテナー ライブラリでは許可されていません"
+,
+"Err_NotAllowedInInterfaceLib":"「{0}」はインターフェイス ライブラリでは許可されていません"
+,
+"Err_NotAllowedInTaskLocalVariables":"タスク ローカル変数リスト「{0}」：「{1}」は許可されていません"
+,
+"Err_NotAnInstanceOf":"「{0}」は「{1}」のインスタンスではありません"
+,
+"Err_NotEnoughMemoryForCompactDownload":"第一コード領域のコンパクト ダウンロードのために残されたメモリが十分ではありません。「{0}」バイトを割り当てられませんでした"
+,
+"Err_NotEnoughMemoryForVariableInit":"変数「{0}」の初期化に必要なメモリが不足しています。{1} バイト必要です"
+,
+"Err_NotSupportedInInterface":"このコードは宣言部ではサポートされていません"
+,
+"Err_NoValidCondition":"{0} は有効な条件 ではありません"
+,
+"Err_NoValidConditionforPragma":"「{0}」はプラグマに有効な条件ではありません"
+,
+"Err_NoValidEnumInit":"「{0}」は列挙に有効な初期化ではありません"
+,
+"Err_NoValidInstancePath":"「{0}」は有効なインスタンス パスではありません"
+,
+"Err_NoValidOperand":"「{0}」は有効なオペランド ではありません"
+,
+"Err_NoValidOperandforPragma":"「{0}」はプラグマに有効なオペランド ではありません"
+,
+"Err_NoValidStatement":"「{0}」は有効な文 ではありません"
+,
+"Err_NoValuePassingForCPPExternal":"CPP 互換の関数には、STRING 型、ARRAY 型、または構造化型の入力または出力を含めることができません。この型には POINTER または REFEFRENCE を使用してください。"
+,
+"Err_NoVarConfigInMethodOrFunction":"不完全なアドレスはメソッドや関数では許可されていません"
+,
+"Err_NoVarForExternal":"VAR_EXTERNAL {0} のグローバル定義が見つかりません"
+,
+"Err_NoVarInputInPropertyAccessors":"プロパティ アクセサー内での入力変数の定義は許可されていません：{0}：{1}"
+,
+"Err_NoVarsinInterface":"変数宣言はインターフェイスでは許可されていません"
+,
+"Err_NoVarTempInSubsequentPrograms":"VAR_TEMP は属性「subsequent」のあるプログラムでは使用できません"
+,
+"Err_NumOfInitializersDoNotMatch":"「FB_Init」初期化子 ({0}) の数は配列要素 ({1}) の数と一致しません"
+,
+"Err_OneAccessorRequired":"プロパティ「{0}」には最低 1 つのアクセサーが必要です"
+,
+"Err_OnlyMethodsOverride":"{2} の {0} {1} をオーバーライドすることはできません：メソッドのみがオーバーライドを許可されています"
+,
+"Err_OperationNotPossibleOnType":"演算「{0}」は型「{1}」では使用できません"
+,
+"Err_Operator1of2Expected":"「{2}」の代わりに必要な「{0}」または「{1}」"
+,
+"Err_Operator1of3Expected":"「{3}」ではなく「{0}」、「{1}」、または「{2}」が必要です"
+,
+"Err_Operator1of3ExpectedInsteadofEOF":"予期しないファイルの終わりが見つかりました：「{0}」、「{1}」、または「{2}」が必要です"
+,
+"Err_Operator1of4Expected":"「{4}」ではなく「{0}」、「{1}」、「{2}」、または「{3}」が必要です"
+,
+"Err_OperatorExpected":"「{1}」ではなく「{0}」が必要です"
+,
+"Err_OperatorExpectedInsteadofEOF":"予期しないファイルの終わりが見つかりました：「{0}」が必要です"
+,
+"Err_OperatorNotAllowedAtPosition":"演算子「{0}」の使用はこの文では許可されていません"
+,
+"Err_OperatorNotSupported":"演算子「{0}」はサポートされていません"
+,
+"Err_OperatorNotSupportedVersion":"現在のターゲットは演算子「{0}」をサポートしていません。少なくともランタイム システムのバージョン {1} が必要です。"
+,
+"Err_OperatorNoValidVariableName":"演算子「{0}」は変数に有効な名前ではありません"
+,
+"Err_OpNeedsAtLeastInputs":"「{0}」には最低「{1}」個のオペランドが必要です"
+,
+"Err_OpNeedsExactInputs":"「{0}」は「{1}」個のオペランドのみを必要とします"
+,
+"Err_OpTakesAtMostInputs":"「{0}」は最大「{1}」オペランドを取ります"
+,
+"Err_OutOfCodeMemory":"コード メモリ不足：POU「{0}」、{1} バイト。(インクリメンタル コンパイルを実行すると、メモリの断片化が起こる可能性があります。「ビルド、クリーン」を実行してすべてのデータとコードの再割り当てを強制してください。)"
+,
+"Err_OutOfMemory":"グローバル データ メモリ不足：変数「{0}」、{1} バイト。(インクリメンタル コンパイルを実行すると、メモリの断片化が起こる可能性があります。「ビルド、クリーン」を実行してすべてのデータとコードの再割り当てを強制してください。)"
+,
+"Err_OutOfMemoryFunctionPointer":"グローバル データ メモリ不足：関数「{0}」の関数ポインタは割り当てできませんでした"
+,
+"Err_OutOfMemoryWithWholeSize":"グローバル データ メモリ不足：変数「{0}」、{1} バイト(連続したメモリの最大ギャップ {2})。(インクリメンタル コンパイルまたは持続変数リストへの変数の追加により、メモリの断片化が起こる可能性があります。「宣言、リストの並べ替えおよびギャップの削除」を実行して持続変数リストを最適化するか、「ビルド、クリーン」を実行してすべてのデータとコードの再割り当てを強制してください。"
+,
+"Err_OutOfPersistentMemoryExplicit":"持続メモリ不足：変数「{0}」、{1} バイト(連続したメモリの最大ギャップ {2})。持続変数リストの編集によりメモリの断片化が起こる可能性があります。「宣言、リストの並べ替えおよびギャップの削除」を実行して持続変数リストを最適化してください。{3}"
+,
+"Err_OutOfPersistentMemoryImplicit":"持続メモリが十分ではありません {0}"
+,
+"Err_OutOfRetainMemory":"保持メモリ不足：変数「{0}」、{1} バイト (インクリメンタル コンパイルを実行すると、メモリの断片化が起こる可能性があります。「ビルド、クリーン」を実行してすべてのデータとコードの再割り当てを強制してください。)"
+,
+"Err_OutOfRetainMemoryWithWholeSize":"保持メモリ不足：変数「{0}」、{1} バイト(連続したメモリの最大ギャップ {2}) (インクリメンタル コンパイルを実行すると、メモリの断片化が起こる可能性があります。「ビルド、クリーン」を実行してすべてのデータとコードの再割り当てを強制してください。)"
+,
+"Err_OutParamNotEqual":"型「{0}」は VAR_IN_OUTPUT「{2}」の型「{1}」と等しくありません"
+,
+"Err_OutputByteWrittenFromDifferentTasks":"出力メモリ内の同じバイトが異なるタスクに書き込まれています"
+,
+"Err_OverflowInAddress":"アドレス「{0}」内で定数オーバーフロー"
+,
+"Err_OverloadNeedsAttribute":"「{0}」という名前の別のメソッドが存在します。オーバーロードのメソッドを定義するには、属性 {{attribute 'overloaded'}} を使用してください。"
+,
+"Err_OverloadWithSameInputs":"同じ入力タイプの「{0}」に別のオーバーロードが存在します。"
+,
+"Err_ParameterlistNotConst":"パラメーターリストは定数として宣言される必要があります"
+,
+"Err_ParamsNotAllowed":"PARAMS パラメーターは関数またはメソッドの最後の入力パラメーターでなければなりません"
+,
+"Err_PartialAccess_NotAValidComponent":"「%{1}{2}」は「{0}」の有効な部分的コンポーネントではありません"
+,
+"Err_PartialAccess_OnlyOnBitTypes":"部分的なアクセスは ANY_BIT 型でのみ対応し、「{0}」では対応していません。"
+,
+"Err_PersistentNoAddress":"直接アドレス宣言は持続リスト内ではできません"
+,
+"Err_PersistentVariablesChangeMessageText":"持続変数が変更されました。ダウンロードはユーザーによってキャンセルされました。"
+,
+"Err_PersistentWrongVariable":"持続リスト内の変数はすべて VAR_GLOBAL PERSISTENT または VAR_GLOBAL PERSISTENT RETAIN でなければなりません"
+,
+"Err_POUCalledFromDifferentTasks":"POU {0} は出力 {1} に書き込み、いくつかのタスクで呼び出されます"
+,
+"Err_PrivateOnMethodsOnly":"PRIVATE および PROTECTED はファンクション ブロックのメソッドにのみ使用することができます"
+,
+"Err_ProjectDefinedNotSupportedFor":"「{0}」のパブリック インターフェイスに影響を及ぼす可能性があるため、この構文では条件「project_defined」はサポートされていません。"
+,
+"Err_QueryInterfaceErrorP1":"__QueryInterface の第 1 オペランドはインターフェイス参照またはファンクション ブロックのインスタンスである必要があります"
+,
+"Err_QueryInterfaceErrorP2":"__QueryInterface の第 2 オペランドはインターフェイス参照である必要があります"
+,
+"Err_QueryInterfaceP1NoIQuery":"インターフェイス {0} は {1} を拡張しません"
+,
+"Err_QueryPointerErrorP1":"__QueryPointer の第 1 オペランドはインターフェイス参照またはファンクション ブロックのインスタンスである必要があります"
+,
+"Err_QueryPointerErrorP2":"__QueryInterface の第 2 オペランドはポインタである必要があります"
+,
+"Err_RecursiveConstantInitialisation":"定数値の再帰定義。"
+,
+"Err_RefAssignNeedsLValue":"参照割り当てはソース式として書き込みアクセスを伴う変数を必要とします"
+,
+"Err_RefAssignOnlyForReferenceTypes":"REF= を伴う初期化は型 REFERENCE TO の変数にのみ許可されています"
+,
+"Err_ReferenceNotAllowed":"参照型は配列、ポインタ、または参照のベース型として許可されていません"
+,
+"Err_ReferenceNotAllowedForVarInOut":"参照型は VAR_IN_OUT の型として許可されていません"
+,
+"Err_ReferenceToInput":"参照割り当ては入力アドレスにマッピングされている変数には使用できません"
+,
+"Err_RelatedPositionInterface":"関連位置：インターフェイス メソッド「インターフェイス {1} の {0}」。"
+,
+"Err_RelatedPositionTaskX":"関連位置:タスク {0} 内のアクセス"
+,
+"Err_RetainNotAccessiblePOU":"POU {0} はライブラリ名を非表示にします。ライブラリ要素へのアクセスはできません。保持変数 {1} を保存するための暗黙的コードが生成されます。"
+,
+"Err_RetainNotAccessibleVariable":"変数 {0} はライブラリ名を非表示にし、ライブラリ要素へのアクセスはできません。保持変数 {1} を保存するための暗黙的コードが生成されます。"
+,
+"Err_RetainOrPersistentNotAllowed":"「RETAIN」または「PERSISTENT」はこの場所では許可されていません"
+,
+"Err_RetainsNotSupported":"保持データはこのデバイス上ではサポートされていません"
+,
+"Err_ReturnTypeForNonFunction":"戻り値の型は関数型 FUNCTION およびメソッド型 METHOD の POU にのみ使用できます"
+,
+"Err_RValueRequired":"割り当てに有効なソースがありません"
+,
+"Err_SelfInheritance":"インターフェイス内の再帰：{0}"
+,
+"Err_SelfInheritanceBase":"ベース ファンクション ブロック リスト内の再帰：{0}"
+,
+"Err_SelMuxOnlyEqualUserDefTypes":"SEL または MUX で使用されているすべてのユーザー定義型は等しい必要があります"
+,
+"Err_SemicolonExpected":"「{0}」ではなく「;」が必要です"
+,
+"Err_SemicolonExpectedInsteadOfEnd":"POU の終わりではなく「;」が必要です"
+,
+"Err_SlotFunctionAmbiguousName":"スロット属性 {1} のある POU {0} に曖昧な名前があります"
+,
+"Err_SlotFunctionHiddenByVariable":"スロット属性 {1} のある POU {0} は変数「{2}」によって非表示にされているので呼び出しできません"
+,
+"Err_SomethingOverridingMethod":"{0}「{1}」はインターフェイス「{2}」のメソッドをオーバーライドします"
+,
+"Err_SomethingOverridingMethodBase":"{0}「{1}」はベース「{2}」のメソッドをオーバーライドします"
+,
+"Err_SpecialTypeExpected":"この場所には型「{0}」の式が必要です"
+,
+"Err_StackOverflowDetected":"スタックオーバーフローがタスク {0} で検出されました 。最大スタック サイズ: {1} バイト。計算されたスタック サイズ: {2} バイト。呼び出し階層:"
+,
+"Err_StaticNotAllowed":"「VAR_STAT」宣言はこの場所では許可されていません"
+,
+"Err_StrictEnumNoArithmeticAllowed":"算術演算は strict ENUM 型「{0}」では許可されていません"
+,
+"Err_StrictEnumNotAMember":"「{0}」は 厳格な 列挙型「{1}」に対して有効な値ではありません"
+,
+"Err_StringLengthIsNoConstant":"文字列の長さ「{0}」は定数値ではありません"
+,
+"Err_StringLiteralExpected":"「{0}」ではなく文字列リテラルが必要です"
+,
+"Err_StringSizeExpected":"「(」の後には文字列サイズが必要です"
+,
+"Err_StringTooShortForVarInOut":"文字列変数「{0}」は「{2}」のVAR_IN_OUT パラメーター「{1}」には短すぎます"
+,
+"Err_StructInitOnlyInput":"「{0}」は「{1}」の入力ではありません"
+,
+"Err_StructuredValueTypeInExternalCall":"構造化型「{0}」は外部関数呼び出しで許可されていません"
+,
+"Err_StructureInitialisationNotPossible":"Init 関数呼び出しのパラメーターとしての構造体初期化はできません。代わりに変数を使用してください。"
+,
+"Err_StructureInitializationExpected":"{0} の初期化リストが必要です"
+,
+"Err_StructureNotAllowed":"「STRUCT」宣言はデータ ユニット型でのみ許可されています"
+,
+"Err_SummarizedLibraryErrors":"ライブラリ {1} 内で {0} 個の内部エラー"
+,
+"Err_SystemOutOfMemory":"開発システムはオンライン変更を処理するのに十分なメモリがありません。開発を続ける前にアプリケーションを再開してください。"
+,
+"Err_TaskLocalVariablesAccessNotAllowed":"タスク ローカル変数リスト「{0}」：書き込みアクセスはタスク「{1}」でのみ許可されています"
+,
+"Err_TaskLocalVariablesNoOnlineChangePossible":"タスク ローカル変数リスト「{0}」が変更されました。オンライン変更はできません。"
+,
+"Err_TaskLocalVariablesWriterTaskNotDefined":"タスク ローカル変数リスト「{0}」：書き込みタスクが定義されていません"
+,
+"Err_ThisNotAllowed":"式THIS はこのコンテキストでは許可されていません"
+,
+"Err_TooFewParametersForExtensibleFunction":"拡張可能関数 {0} はパラメーター {2} に最低 {1} の入力が必要です"
+,
+"Err_TooManyInitializer":"配列の初期化子が多すぎます"
+,
+"Err_TooManyParametersForExtensibleFunction":"拡張可能関数 {0} はパラメーター {2} に最大 {1} の入力を受け入れます"
+,
+"Err_TryCatchNotSupported":"構造化例外処理は現在サポートされていません"
+,
+"Err_TryCatchNotSupportedCodegenerator":"現在のデバイスのコード ジェネレーターは構造化例外処理をサポートしていません"
+,
+"Err_TryCatchNotSupportedVersion":"構造化例外処理は現在のターゲットによってサポートされていません。ランタイム システムのバージョンは最低 3.5.6.0 必要です。"
+,
+"Err_TypeExpected":"「{0}」ではなく型の定義が必要です"
+,
+"Err_TypeIsNotGeneric":"「{0}」はジェネリック ファンクションブロックではありません。"
+,
+"Err_TypeMismatch":"型「{0}」は型「{1}」に変換できません"
+,
+"Err_TypesNotComparable":"型「{0}」と型「{1}」は比較できません"
+,
+"Err_UnexpectedArrayInitialisation":"予期しない配列初期化"
+,
+"Err_UnexpectedOperandForCallInitFunction":"予期しないオペランド「{0}」が「{1}」内で見つかりました。グローバル変数リスト または プログラム はパラメーターとして渡される必要があります。"
+,
+"Err_UnexpectedOperandForIndexOf":"予期しないオペランド「{0}」が「{1}」内で見つかりました"
+,
+"Err_UnexpectedPragmaif":"予期しないプラグマ：「if」に一致しない「{0}」が見つかりました"
+,
+"Err_UnexpectedStatement":"予期せぬステートメント"
+,
+"Err_UnexpectedStructureInitialisation":"予期しない構造体初期化"
+,
+"Err_UnexpectedTokenFound":"予期しないトークン「{0}」が見つかりました"
+,
+"Err_UnexpectedTypeName":"型名「{0}」はこの場所では許可されていません"
+,
+"Err_UninitialisedVariableUsedInInitialisation":"未初期化変数 {0} が {1} の初期化に使用されています。初期化の順番を変更するには属性「global_init_slot」を使用します。"
+,
+"Err_UnionNotAllowed":"UNION 宣言はデータ ユニット型でのみ許可されています"
+,
+"Err_UnknownCompilerVersionInCompiledLib":"コンパイル済みライブラリ「{0}」の作成に使用されたコンパイラバージョン「{1}」は、プロジェクトのコンパイラバージョンより新しいまたは不明です。"
+,
+"Err_UnknownEmbeddedLanguageType":"「{0}」は不明な埋め込み言語タイプです。"
+,
+"Err_UnknownMaxStackSize":"現在実行中のタスクに関する情報にアクセスするには、ターゲット システムでサポートされている最大スタック サイズを知っている必要があります"
+,
+"Err_UnknownType":"不明な型：「{0}」"
+,
+"Err_UnsupportedFeature":"コンパイラ機能「{0}」はコンパイラ バージョン {1} 以降でのみ対応しています"
+,
+"Err_UnsupportedType":"サポートされていない型：「{0}」"
+,
+"Err_UpperBoundExpected":"FOR ループの上限が必要です"
+,
+"Err_UserCheckFunctionsNotSupported":"ユーザー定義の確認機能はサポートされていません"
+,
+"Err_VarAccessNotSupported":"VAR_ACCESS はサポートされていません。"
+,
+"Err_VarConfigNotAllowed":"VAR_CONFIG 宣言は VAR_CONFIG リストでのみ許可されています"
+,
+"Err_VarGlobalNotAllowed":"「VAR_GLOBAL」宣言は グローバル変数リストでのみ許可されています"
+,
+"Err_VariableDeclarationExpected":"{0} ではなく変数宣言が必要です"
+,
+"Err_VariableDuplicate":"「{0}」という名前のローカル変数が、すでに「{1}」で定義されています"
+,
+"Err_VariableForVarinoutConstant":"「{1}」の VAR_IN_OUT CONSTANT パラメーター「{0}」は入力として変数を必要とします"
+,
+"Err_VariableListExpected":"{0} ではなく VAR、VAR_INPUT、VAR_OUTPUT、または VAR_IN_OUTが必要です"
+,
+"Err_VariableOverride":"ファンクション ブロック「{1}」およびベース「{2}」で、変数「{0}」の定義が重複"
+,
+"Err_VarInstOnlyInMethods":"「VAR_INST」宣言はこの場所では許可されていません"
+,
+"Err_VarLengthArrayInOut":"可変長配列は ファンクションブロックの VAR_IN_OUT として、またはメソッドや関数の VAR_IN_OUT や VAR_INPUT としてのみ使用可能です"
+,
+"Err_VarLengthArrayTopLevel":"可変長配列型は型宣言の最上レベル位置でなければなりません"
+,
+"Err_VarTempNotAllowed":"「VAR_TEMP」宣言はこの場所では許可されていません"
+,
+"Err_VarTooBig":"変数「{0}」は大きすぎます。(変数サイズ：{1}、セグメント サイズ: {2})"
+,
+"Err_VectorBaseMustBeRealType":"ベクトルのベース型は REAL か LREAL のいずれかでなければなりません。"
+,
+"Err_VectorNoPersistentRetain":"ベクトルを持続的と宣言すること、また維持することはできません"
+,
+"Err_VectorSizeIsNoConstant":"ベクトルのサイズは定数でなければなりません"
+,
+"Err_VectorSizeNotValid":"ベクトルのサイズは 0 より大きく 9 より小さい整数でなければなりません"
+,
+"Err_VectorTypeCantBePlacedInUnion":"ベクトル型を共用体に配置することはできません"
+,
+"Err_VectorTypesNotCompatible":"ベクトル型 {0} と {1} は互換性がありません"
+,
+"Err_VersionInvalidFormat":"トークン「{0}」は有効なバージョンではありません"
+,
+"Err_VersionOverflow":"少なくともバージョン「{0}」の一部が大きすぎる値を持っています"
+,
+"Err_VersionPartNegative":"少なくともバージョン「{0}」の一部が負の値を持っています"
+,
+"Err_WrongCallAfterGlobalInitSlotSignature":"「call_after_global_init_slot」属性で装飾された署名には、引数がないか、あるいは「bInitRetains」という入力が一つなければなりません。"
+,
+"Err_WrongConstructor":"ファンクションブロックまたは 構造体の FB_Init メソッドはブール型「BOOL」の 2 つの入力「bInitRetains」および「bInCopyCode」を必要とします"
+,
+"Err_WrongDestructor":"ファンクション ブロック、あるいは構造体の FB_Exit メソッドには、BOOL 型の単一の入力「bInCopyCode」、および BOOL 型の戻り値がなければなりません。"
+,
+"Err_WrongFormalParameter":"仮パラメーターが不正です：この場所には「{0}」が必要です"
+,
+"Err_WrongObjectType":"型「{0}」のオブジェクトは呼び出せません"
+,
+"Err_WrongReInit":"ファンクション ブロック、あるいは構造体のFB_ReInit メソッドには入力がなく、BOOL 型の戻り値がなければなりません。FB_Reinit は自動的に呼び出されません！"
+,
+"Err_WrongTypeForAdr":"「{0}」は ADR のオペランドとして許可されていません"
+,
+"Err_WrongTypeForExternal":"VAR_EXTERNAL {0} に関する型の不正な定義"
+,
+"Err_WrongVarInInterfaceMethod":"入力、出力および入出力のみがインターフェイス メソッドで許可されています"
+,
+"Inf_RelatedPosition":"関連位置"
+,
+"Inf_RelatedPositionRecursion":"「{0}」を呼び出しました。"
+,
+"Inf_RelatedPositionStackoverflow":"「{0}」がスタックの {1} バイトを使用中です。"
+,
+"Inf_UseXSizeOfOperator":"大きい型には XSIZEOF 演算子を使用してください"
+,
+"Info_PersistentMemoryConfiguration":"持続メモリ 構成で持続メモリのサイズを編集することができます。"
+,
+"PublishSymbolsMustBeSet":"「すべての IEC シンボルを発行」は必ず設定する必要があります"
+,
+"Txt_ParentContextNotUpToDate":"親コンテキストが最新ではありません"
+,
+"Wrn_AbstractKeywordMissing":"ABSTRACT キーワードが見つかりません"
+,
+"Wrn_AccessToInternalObject":"ライブラリ {1} の内部オブジェクト {0} へのアクセスは禁止されています"
+,
+"Wrn_AccessToInternalProperty":"ライブラリ {1} の内部プロパティ {0} へのアクセスは禁止されています"
+,
+"Wrn_AccessToInternalVariable":"ライブラリ {1} の内部変数 {0} へのアクセスは禁止されています"
+,
+"Wrn_AmbiguousCheckfunctionInLibrary":"暗黙的なチェック機能 {0} が、別の暗黙的なチェック機能 {1} で隠されています。確認は実行されません。チェック機能を使用するには、競合を解決し、アプリケーションをクリアしてください。"
+,
+"Wrn_AtLeastOneExpected":"最低 1 つの文が必要です"
+,
+"Wrn_AttributeCheck":"属性の確認に失敗しました"
+,
+"Wrn_BoolNotAtBitAddress":"ビット アクセスはデータブール型「BOOL」に必要です"
+,
+"Wrn_CallOfPrivateProperty":"プライベート プロパティ {0}.{1} へのアクセスは禁止されています"
+,
+"Wrn_CallOfProtectedProperty":"保護されたプロパティ {0}.{1} へのアクセスは禁止されています"
+,
+"Wrn_CallRecursion":"呼び出し再帰：{0}"
+,
+"Wrn_ChangeOfAccessModifier":"メソッド {3}.{1} のオーバーライド時にメソッド {0}.{1} がアクセス修飾子「{2}」を変更します。"
+,
+"Wrn_ComplexExpression":"POU は非常に複雑な式を含みます。中間結果の使用を検討してください。"
+,
+"Wrn_ConcurrentAccessOfBitInSameByte":"同じバイト内のビット「{0}」の同時アクセス"
+,
+"Wrn_ConstantInStructDeclaration":"キーワード CONSTANT は、構造体または共用体の宣言では無視されます"
+,
+"Wrn_DefaultValueNotConstant":"デフォルト値が定数ではありません。"
+,
+"Wrn_DefaultValueTopLevel":"入力は、このファンクションが IEC コードから呼び出されたときにのみ使用できます。"
+,
+"Wrn_DeviceNotInstalledForSimulation":"デバイスはシステムにインストールされていません。シミュレーションはデフォルト設定を使用します。"
+,
+"Wrn_EnumComparison":"1 つの列挙型 ({0}) ともう 1 つの列挙型 ({1}) との比較"
+,
+"Wrn_EnumValueDuplicate":"定数 {0} は複数の列挙に割り当てられています"
+,
+"Wrn_ExitForRetainInstances":"ウォーム リセット中、VAR_RETAIN のインスタンスの FB_EXIT は呼び出されますが、FB_INIT は呼び出されません。FB_EXIT を持つファンクションブロックの保持宣言は避けてください。"
+,
+"Wrn_ExtendsForInterfaces":"インターフェイスの継承にはキーワード IMPLEMENTS の代わりに EXTENDS を使用してください"
+,
+"Wrn_ExternalReferenceIgnored":"外部参照はファンクション ブロック、メソッド、関数および定数グローバル変数リストでのみ使用可能です。{0} への外部参照「{1}」は無視されます。"
+,
+"Wrn_GlobalInitSlotNotForVariables":"属性「global_init_slot」は常に変数リスト全体に影響します。個々の変数に使用すべきではありません"
+,
+"Wrn_GranularityMismatchForDirectVariable":"変数「{0}」の粒度は {1} ですが、{1} バイトに揃えられていない直接アドレス {2} に存在します"
+,
+"Wrn_ImplicitCheckFunctionShadowed":"自動確認用POU「{0}」が、別の変数あるいはPOUにより見つかりません。確認は実行されません。自動確認を有効化するには、競合を解決しクリア・再ビルドを実行してください。"
+,
+"Wrn_ImplicitEnumConversion":"1 つの列挙型 ({0}) から他 ({1}) への暗黙的な変換"
+,
+"Wrn_ImplicitIntToReal":"「{0}」から「{1}」への暗黙的な変換：情報が失われる可能性があります"
+,
+"Wrn_ImplicitSignedToUnsigned":"符号付きの型「{0}」から符号なしの型「{1}」への暗黙的な変換：符号が変わる可能性があります"
+,
+"Wrn_ImplicitUnsignedToSigned":"符号なしの型「{0}」から符号付きの型「{1}」への暗黙的な変換：符号が変わる可能性があります"
+,
+"Wrn_InterfaceChangedBase":"インターフェイス「{1}」のオーバーライドされた基底となるメソッド「{0}」は宣言と一致しません"
+,
+"Wrn_InvalidDefaultValue":"タイプ {0} は、このコンテキストではデフォルト値を保持できません"
+,
+"Wrn_InvalidStringSize":"文字列のサイズを負数 (「{0}」) にすることはできません"
+,
+"Wrn_LabelNoReference":"ラベル「{0}」は参照されていません"
+,
+"Wrn_LibraryNotInstalled":"ライブラリ {0} がライブラリ マネージャーに追加されていない、または有効なライセンスが見つかりません"
+,
+"Wrn_LibWithStringInVarInOut":"呼び出し元がリテラルまたは定数を渡すことを許可するために「{1}」内のVAR_IN_OUT 文字列変数「{0}」を VAR_IN_OUT CONSTANT として宣言することを考慮してください"
+,
+"Wrn_LoopExitConditionConstant":"ループ終了条件「{0} {1} {2}」は常に FALSEです。無限ループになる可能性があります"
+,
+"Wrn_LValueForVarinoutStrings":"VAR_IN_OUT または「{1}」の参照パラメーター「{0}」には、入力として書き込みアクセスのある変数が必要です"
+,
+"Wrn_MethodAlreadyCalledImplicitly":"メソッド「{0}」はすでに暗黙的に呼び出されています"
+,
+"Wrn_MissingAttributeNoAssign":"POU「{0}」に属性「no_assign」が不足していませんか？変数「{1}」の型は「no_assign」の属性です。"
+,
+"Wrn_MissingInstancePathForPersistent":"変数 {0} に関して VAR_PERSISTENT-リスト内に一致するインスタンス パスがありません。コマンド「すべてのインスタンスパスを追加」を使用して、すべてのインスタンスパスを VAR_PERSISTENT リストに追加します。(詳細についてはヘルプを参照)。"
+,
+"Wrn_NoInheritanceForUnions":"データ型「UNION」は継承できません：{0}"
+,
+"Wrn_NoInitialValueForConstant":"定数変数「{0}」の初期値がありません"
+,
+"Wrn_NonAsciiStringLiteral":"文字列リテラル「{0}...」は表現できない文字を含んでいます。プロジェクト オプション「UTF-8 エンコーディングの文字列」を使用してみてください。"
+,
+"Wrn_NonLocalAccessToVarInOut":"外部コンテキスト「{2}」から「{1}」で宣言された VAR_IN_OUT「{0}」へのアクセス。"
+,
+"Wrn_NoPointerToBit":"シングル ビットは参照できません。完全バイトへの参照は保存されます。"
+,
+"Wrn_NotAllowedInInterfaceLib":"「{0}」はインターフェイス ライブラリでは許可されていません"
+,
+"Wrn_Obsolete":"POU「{0}」は現在未使用としてマーク付けされました：{1}"
+,
+"Wrn_ObsoleteOutputInAbstractMethod":"VAR_OUTPUT のデフォルト値は、抽象メソッドやインターフェイス メソッドでは使用しません"
+,
+"Wrn_OnlyConstantInitialValueForMappedPersistentVar":"置き換えられた定数のみが、マッピングされる持続変数の初期値として使用可能です。"
+,
+"Wrn_PersistentVariableOnStack":"スタックに置かれたファンクション ブロック インスタンス中の持続変数はサポートされていません：{0}"
+,
+"Wrn_PointerMisatch":"型「{0}」は型「{1}」に変換できない可能性があります"
+,
+"Wrn_Pragma":"警告プラグマによって生成されたユーザー定義の警告"
+,
+"Wrn_ReferenceToUninitializedVariable":"未初期化変数 {0} への参照が {1} の初期化に使用されています。未初期化変数にアクセスすると、予期せぬ動作につながる可能性があります。"
+,
+"Wrn_ReservedUnusedKeyword":"名称「{0}」は IEC61131-3 規格の予約語です。将来のバージョンでエラーになります。"
+,
+"Wrn_ShiftExceedsTypeSize":"{0} による シフトが {1} の型サイズを超えています"
+,
+"Wrn_StackCheckIncompleteDueToRecursion":"「{0}」で始まる再帰呼び出しのためスタック使用量の計算が不完全です："
+,
+"Wrn_StatementNoEffect":"コード「{0}」は何もしません。これは意図したものですか？"
+,
+"Wrn_StringConstantTooLong":"文字列定数「{0}」は行先の型「{1}」に対して長すぎます"
+,
+"Wrn_StruturedTypePropertyNotMonitorable":"監視属性は構造化型を返すプロパティ「{0}」に対して無視されます"
+,
+"Wrn_TooManyApplications":"デバイス {1} に {0} 個のアプリケーションを定義しました。最大数は {2} です。したがって、一部のアプリケーションはダウンロードできません。"
+,
+"Wrn_UninitialisedVariableUsedInInitialisation":"未初期化変数 {0} が {1} の初期化に使用されています。初期化の順番を変更するには属性「global_init_slot」を使用します。"
+,
+"Wrn_ValueAssignViaPointerMayChangeVFTable":"インスタンス {0} ポイントは仮想関数呼び出しのために再初期化されます。{0} が {1} から派生した型にポイントしていないことを確認してください "
+,
+"Wrn_VarInOutUnitializedInInitialValue":"未初期化変数 VAR_IN_OUT へのアクセス"
+,
+"Wrn_WrongDestructor":"ファンクションブロック、あるいは構造体の FB_Exit メソッドには、BOOL 型の単一の入力「bInCopyCode」、および BOOL 型の戻り値がなければなりません。"
+,
+"Wrn_WrongReInit":"ファンクションブロック、あるいは構造体のFB_ReInit メソッドには入力がなく、BOOL 型の戻り値がなければなりません。FB_Reinit は自動的に呼び出されません！"
+}
+,
+"_3S.CoDeSys.Compiler35220.Resources.Strings.ja.resources":{
+"AffectionCopied":"古い値がコピーされました"
+,
+"AffectionInitialized":"初期化"
+,
+"AffectionLocationChanged":"場所が変更されました"
+,
+"AffectionVFTableInitialized":"仮想関数テーブルが初期化されました"
+,
+"And_Text":"および"
+,
+"Area_Output_Checked":"{0} に必要なメモリ：{1} バイト (使用可能サイズ：{2} バイト)"
+,
+"Area_Output_Checked_Exceeded":"{0} のサイズ超過：{1} バイト (使用可能サイズ：{2} バイト)"
+,
+"Area_Output_Info":"メモリ領域 {0} は {1} を含んでいます：サイズ：{2} バイト、最も多く使用されているアドレス：{3}、連続したメモリの最大ギャップ：{4} バイト ({5} %)"
+,
+"Area_Output_Info_Simple":"メモリ領域 {0} は {1} を含んでいます：最大の連続したメモリのギャップ：{2} バイト ({3} %)"
+,
+"AttributeAlreadyRegistered":"属性 {0} はすでに他のプラグインによって登録されています"
+,
+"AttributeInvalidRange":"{0} は属性「{1}」に対して有効な値ではありません。範囲 [{2} ～ {3}] の値が必要です。"
+,
+"AttributeInvalidTypeInteger":"属性「{1}」の値「{0}」は無効です。一重引用符で囲まれた整数値が必要です (例：「42」)"
+,
+"AttributeMustBeEmpty":"予期しない値「{0}」が属性「{0}」に割り当てられました。"
+,
+"AttributeMustNotBeEmpty":"属性「{0}」に値を割り当てる必要があります。"
+,
+"AttributeNotInFunctionFBOrMethod":"属性「{0}」は、型が Function、FunctionBlock、または Method の POU に関してのみ評価されます"
+,
+"AttributeNotInMethod":"属性「{0}」は、「メソッド」型の POU に関してのみ評価されます"
+,
+"AttributeNotSupportedWithCompilerVersion":"属性「{0}」はコンパイラ バージョン {1} またはそれ以上でのみ解釈されます。現在のコンパイラ バージョンは {2} です。"
+,
+"AttributeStrictDesc":"「strict」属性で列挙型宣言を修飾すると、コンパイル中、有効な列挙メンバーの定数割り当てのみが強制的に使用されます"
+,
+"AttributeStrictNoValidSignature":"属性「strict」はENUM 型宣言のみに関して評価されます"
+,
+"AttributeToStringFunctionWrongPOUType":"属性 {0} は型宣言およびファンクション ブロックにのみ有効です"
+,
+"AttributeToStringWrongType":"属性 {0} は列挙にのみ有効です"
+,
+"AttributeUnknown":"属性 {0} は不明なため、コンパイラにより無視されます"
+,
+"AttributeValueMustBeOneOf":"属性「{1}」の値「{0}」は無効です。以下のいずれかでなければなりません：{2}"
+,
+"AttributeWrongScopeSigns":"属性「{0}」は変数宣言にのみ追加可能です。ここでは無視されます。"
+,
+"AttributeWrongScopeVars":"属性「{0}」が変数に追加されましたが、POUにのみ影響します。この属性は無視されます。"
+,
+"Build":"ビルド"
+,
+"BuildCompleteErrors":"ビルド完了 -- {0} 個のエラー、{1} 個の警告：ダウンロードできません"
+,
+"BuildCompleteOK":"ビルド完了 -- {0} 個のエラー、{1} 個の警告：ダウンロードの準備完了"
+,
+"BuildStarted":"------ ビルドを開始します：アプリケーション：{0} -------"
+,
+"C138ErrMsgCheckSyntax":"構文「{0} : {1}({2})」を確認"
+,
+"C138ErrMsgRequiresNInputs":"指定された「FB_init」メソッドは {0} 個の入力を必要とします。"
+,
+"Change_AttributesChanged":"属性が変更されました"
+,
+"Change_CodeChanged":"実装が変更されました"
+,
+"Change_DefineChanged":"定義が変更されました"
+,
+"Change_GlobalErrors":"プロジェクト内のグローバル エラー"
+,
+"Change_InterfaceAdded":"{挿入されました"
+,
+"Change_InterfaceChange_Explicitly":"宣言が変更されました。明示的に無効にされました"
+,
+"Change_InterfaceChanged":"宣言が変更されました"
+,
+"Change_InterfaceDeleted":"削除されました"
+,
+"Change_NumOfSubSignaturesChanged":"メソッドまたはアクションの数が変更されました"
+,
+"Change_ParameterTablesChanged":"ライブラリ パラメーター テーブルが変更されました"
+,
+"Change_ReferencedLibrariesChanged":"参照ライブラリが変更されました"
+,
+"Change_VariableChanged":"変数 {0} が変更されました"
+,
+"Change_VariableDeleted":"変数 {0} が削除されました"
+,
+"Change_VariableInserted":"変数 {0} が挿入されました"
+,
+"ClearDownloadContext":"ダウンロード コンテキストのクリア"
+,
+"Code_Text":"コード"
+,
+"CodeNoChange":"コードは変更されませんでした。オンライン変更は必要ではありません。"
+,
+"CompileCompleteErrors":"コンパイル完了 -- {0} 個のエラー、{1} 個の警告"
+,
+"CompileCompleteOK":"コンパイル完了 -- {0} 個のエラー、{1} 個の警告"
+,
+"Data_Text":"データ"
+,
+"DoCodeTypification":"コードに型を割り当て"
+,
+"DoLocation":"グローバル データの検索"
+,
+"DoTypification":"ワーキング セットの取得中"
+,
+"DownloadInfoSaveException":"ダウンロード情報ファイルを {0} に保存できませんでした。\r\nプロジェクトのリロード後はデバイスへのログインはできなくなります。\r\n理由：\r\n{1}"
+,
+"Err_CompilerVersionError":"コンパイラ バージョン {0} は取り消されました。代わりに、より新しいコンパイラ バージョンを使用してください。"
+,
+"ErrExpressionContainsNoAppName":"式にはアプリケーション名が含まれていません"
+,
+"ErrExpressionContainsNoResource":"式にはリソース名が含まれていません"
+,
+"ErrInvalidExpression":"無効な式"
+,
+"ErrMultipleAreasWithMappedSegmentAccess":"「MappedSegmentAccessOnly」フラグがセットされている領域が複数存在します"
+,
+"ErrNoApplication":"アプリケーションが見つかりません"
+,
+"ErrNoAreaWithMappedSegmentAccess":"マッピングされたセグメントが見つかりましたが、MappedSegmentAccessOnly でマークされた領域はありません。#"
+,
+"ErrorLimitExceeded":"{0} 個を超えるエラーが発生しました：以降のすべてのエラー メッセージをスキップします"
+,
+"ErrSignatureNotFound":"署名が見つかりません"
+,
+"Except_Boot_Project_Error":"この状態ではブート プロジェクトは使用できません: アプリケーションはメモリが不足しています。完全なダウンロードを先に実行してください。"
+,
+"Except_Boot_Project_Error_CompileContext_Not_UpToDate":"この状態ではブート プロジェクトは使用できません:内部エラー"
+,
+"Except_Boot_Project_Error_Error_In_Compile":"この状態ではブート プロジェクトは使用できません:ブート プロジェクト情報の作成エラー。メッセージ ウィンドウを参照してください。"
+,
+"FeatureGroup_Description":"IEC 61131-3 言語に関連した機能"
+,
+"FeatureGroup_Name":"IEC 61131-3 言語"
+,
+"GenerateCode":"{0} のコードの生成..."
+,
+"GenerateCodeInit":"コード初期化を生成..."
+,
+"GenerateCodeProgress":"コード生成中..."
+,
+"GenerateGlobalInit":"グローバル初期化を生成..."
+,
+"GenerateRelocations":"再配置を生成..."
+,
+"GeneratingCode":"コードを生成..."
+,
+"Getter":"ゲッター"
+,
+"GlobalInitErrorPrefix":"暗黙的初期化コードにエラー： "
+,
+"GVLChanged":"グローバル変数リスト「{0}」が変更されました"
+,
+"GVLRenamedOrDeleted":"グローバル変数リスト「{0}」は、名前が変更されたか、削除されました"
+,
+"HiddenPousPlaceholder":"<非表示のPOU>"
+,
+"Input_Text":"入力"
+,
+"InterfaceChanged":"インターフェイス「{0}」が変更されました"
+,
+"InterfaceReferencesAffected":"以下のインターフェイス参照が、リダイレクトのテストをされます："
+,
+"InterfacesChanged":"以下のPOU-インターフェイスが変更されました："
+,
+"InvalidBooleanValue":"無効な値"
+,
+"LanguageModelMngrOptionConditionalShowSymbols_Description":"ライブラリ内の変数をエンド ユーザーに対して非表示にするために使用されます"
+,
+"Libraries":"ライブラリ"
+,
+"LibrariesChanged":"ライブラリが変更されました"
+,
+"LoadCompileContext":"コンパイル情報のロード"
+,
+"LoadingLibraries":"ライブラリのロード中..."
+,
+"Memory_Text":"メモリ"
+,
+"MethodAdded":"{1} の メソッド「{0}」「{2}」が追加されました"
+,
+"MethodChanged":"{1} の メソッド「{0}」「{2}」が変更されました"
+,
+"MethodRenamedOrDeleted":"{1} の メソッド「{0}」「{2}」は、名前が変更されたか、削除されました"
+,
+"NumInterfacesChanged":"{0} 個の POU インターフェイスが変更されました。"
+,
+"NumInterfacesToTest":"{0} 個のインターフェイス参照が、リダイレクトのテストをされます"
+,
+"NumPOUsDownloaded":"{0} POU がコードを変更しました"
+,
+"NumVariablesAffected":"{0} 個の変数がオンライン変更による影響を受け、{1} 個が場所を変更され、{2} 個が初期化され、{3} 個がコピーされ、{4} 個が仮想関数テーブルを初期化しました"
+,
+"OnlineChangeRelinkCodegenProgress":"インターフェイスを再リンクするコードを生成しています"
+,
+"OnlineChangeRelinkProgress":"可能なインターフェイス参照に対する変数を確認しています"
+,
+"OR":"または"
+,
+"Output_Text":"出力"
+,
+"ParamsArray_Comment":"「arrParams」はこの関数に渡される実際の値を保持する 1 オリジンの配列です。nCount を超える値はすべて、割り当ても初期化もされませんので、使用しないでください。"
+,
+"ParamsCount_Comment":"カウントはこの関数に渡される仮パラメーターの数を定義します"
+,
+"Persistent_Text":"持続データ"
+,
+"PersistenVariablesChanged":"持続変数が変更されました。現在のリストで初期化しますか？\r\n\r\nはい: 現在のリストが初期化され、既存の持続値はオーバーライドされます\r\nいいえ: 既存の持続値が維持され、現在のリストはそれらの値を使用します。\r\n     警告:値はユーザーの持続変数と一致しない場合があります。手動で値を確認する必要があります。\r\n     例: リストの始めに変数を追加すると、値はすべて不正になります。\r\n\r\nキャンセル: ダウンロードまたはオンライン変更をキャンセルします"
+,
+"POUChanged":"{0}「{1}」は変更されました"
+,
+"POURenamedOrDeleted":"{0}「{1}」は、名前が変更されたか、削除されました"
+,
+"POUsDownloaded":"以下の POU のコードがダウンロードされます"
+,
+"POUUnit":"POU"
+,
+"Precompile":"プリコンパイル"
+,
+"ProjectUpToDate":"アプリケーションは最新です"
+,
+"Retain_Text":"保持データ"
+,
+"Scanner_Initialize_char_array_must_end_with_null_value":"Char 配列は Null 値で終了する必要があります"
+,
+"Setter":"セッター"
+,
+"String1":"このプロジェクトに指定されているコンパイラ バージョンは非推奨です。このままでもプロジェクトをコンパイルすることは可能ですが、コンパイラ バージョンを最新に更新するようお勧めします。コンパイラ バージョンの更新後はこのプロジェクトに古いバージョンを使用することはできないことに注意してください。"
+,
+"SupportExtendedProgrammingFeatureSettingProvider_Description":"有効化すると、オブジェクト指向プログラミングや属性などの拡張プログラミング機能がユーザー インターフェイス上でサポートされます。注:これは、そのような要素を持つ既存のプロジェクトを開いたりコンパイルしたりする機能に影響を与えません。"
+,
+"SupportExtendedProgrammingFeatureSettingProvider_Name":"拡張プログラミング機能をサポート"
+,
+"TextContains":"次が含まれている"
+,
+"TypeChanged":"型「{0}」は変更されました"
+,
+"TypeRenamedOrDeleted":"型「{0}」は、名前が変更されたか、削除されました"
+,
+"TypifyAll":"コードに型を割り当て..."
+,
+"UnexpectedExpression":"「予期せぬ式 {0}」"
+,
+"UnresolvedVariable":"未解決の変数 {0}"
+,
+"UpdatingCompilerVersion":"コンパイラ バージョンの更新中"
+,
+"VariableDeclarationChanged":"「{1}」の変数「{0}」の宣言は変更されました"
+,
+"VariableRenamedOrDeleted":"「{1}」の変数「{0}」は、名前が変更されたか、削除されました"
+,
+"VariablesAffected":"以下の変数がオンライン変更の影響を受けます："
+,
+"WarningLimitExceeded":"{0} 個を超える警告が発生しました：以降のすべての警告メッセージをスキップします"
+,
+"Warnings":"警告"
+,
+"WritingCompileInformationProgressText":"コンパイル情報の書き込みを終了..."
+}
+}

@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+	<language-model>
+		<pou id="{09818148-288B-4E68-AAAC-88D3699E851B}" name = "__CheckedInterfaceAssign">
+			<interface>
+				{implicit on}
+				{attribute 'hide'}
+				{attribute 'qualified_only'}
+				{attribute 'linkalways'}
+
+				FUNCTION __CheckedInterfaceAssign : __XWORD
+				VAR_INPUT
+				InterfaceInput : __XWORD;
+				correction : DINT;
+				END_VAR
+				{implicit off}
+			</interface>
+			<body>
+				<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		IF (InterfaceInput = 0) THEN
+			__CheckedInterfaceAssign := 0;
+		ELSE
+			__CheckedInterfaceAssign := InterfaceInput + correction;
+		END_IF
+		{implicit off}
+		]]>
+
+			</body>
+		</pou>
+	</language-model>

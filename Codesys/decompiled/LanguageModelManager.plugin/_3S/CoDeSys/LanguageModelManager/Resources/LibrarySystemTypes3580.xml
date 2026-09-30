@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+	<language-model>
+		<data-type id = "{C2D24AA9-2FC9-4F89-80AC-14D9F558122A}" name = "__ARRAY__DIM__INFO">
+			<interface>
+				{implicit on}
+				TYPE __ARRAY__DIM__INFO :
+				STRUCT
+					diLower : DINT;
+					diUpper : DINT;
+				END_STRUCT
+				END_TYPE
+				{implicit off}
+			</interface>
+		</data-type>
+	</language-model>

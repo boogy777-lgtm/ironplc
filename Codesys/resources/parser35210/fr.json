@@ -1,0 +1,21 @@
+{
+"CODESYS.Parser35210.Resources.Strings.fr.resources":{
+"CompilerFeature_GenericConstantVariable":"Valeur constante générique"
+,
+"CompilerFeature_PartialVariableAccess":"Accès partiel aux variables"
+,
+"CompilerFeature_ProjectDefines":"Définitions de projet"
+,
+"CompilerFeature_UChar_Literals":"Littérals UCHAR"
+,
+"CompilerFeature_UTF8_Strings":"Chaînes UTF8"
+,
+"Constant":"Constante"
+,
+"Literal":"Literal"
+,
+"OR":"ou"
+,
+"Scanner_Initialize_char_array_must_end_with_null_value":"Le tableau Char doit se terminer par une valeur nulle"
+}
+}

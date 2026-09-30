@@ -1,0 +1,54 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+	<language-model>
+		<pou id="{FDB186EC-1BB3-428F-BD1C-2A07C8F62AF9}" name = "trycatch"  external = "true">
+			<interface>
+				{attribute 'm4export_hide'}
+				FUNCTION trycatch : UDINT
+				VAR_INPUT
+				pFun : POINTER TO BYTE;
+				pParam : POINTER TO BYTE;
+				dwFlags : DWORD;
+				END_VAR
+				VAR_INPUT
+				ExceptionCode : POINTER TO UDINT;
+				END_VAR
+			</interface>
+		</pou>
+
+		<pou id="{D3DF2306-1C85-4582-9840-D91EC47927AA}" name = "throwex"  external = "true">
+			<interface>
+				{attribute 'm4export_hide'}
+				FUNCTION throwex
+				VAR_INPUT
+				ExceptionCode : UDINT;
+				END_VAR
+			</interface>
+		</pou>
+
+    <global-interface id = "{4E6B58D5-7A7D-4D43-B710-AF56F2531E62}" name = "__AllocatedImplicitReferenceTypes">
+      <interface>
+        {attribute 'qualified_only'}
+        {attribute 'linkalways'}
+        {implicit on}
+        VAR_GLOBAL
+        END_VAR
+        {implicit off}
+      </interface>
+    </global-interface>
+    <pou id="{270C4366-521B-4273-856A-24CAD42924C9}" name = "__ImplicitReferenceTypesInit"  external = "false">
+      <interface>
+        {attribute 'linkalways'}
+        {implicit on}
+        FUNCTION __ImplicitReferenceTypesInit
+        {implicit off}
+        VAR_INPUT
+        END_VAR
+      </interface>
+      <body>
+        <![CDATA[
+		    {implicit on}
+        {implicit off}
+		    ]]>
+      </body>
+    </pou>
+	</language-model>

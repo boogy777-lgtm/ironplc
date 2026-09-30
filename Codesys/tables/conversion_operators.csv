@@ -1,0 +1,6 @@
+﻿"text_prefix","operator_ordinal","flags","flags_decoded","language","dynamic","source_method","name_template"
+"_TO_","184","-65534","Operator|AllLanguages","All","true","AddConversionOperators","_TO_<T>"
+"ANY_NUM_TO_","184","-65534","Operator|AllLanguages","All","true","AddConversionOperators","ANY_NUM_TO_<T>"
+"ANY_TO_","184","-65534","Operator|AllLanguages","All","true","AddConversionOperators","ANY_TO_<T>"
+"TO_","184","-65534","Operator|AllLanguages","All","true","AddOverloadedConversions","TO_<T>"
+"_TO_","184","-65534","Operator|AllLanguages","All","true","AddOverloadedConversions","<T>_TO_<U>"

@@ -1,0 +1,975 @@
+{
+"_3S.CoDeSys.Compiler35220.Resources.CompilerStrings.ru.resources":{
+"AffectionCopied":"Старое значение скопировано"
+,
+"AffectionInitialized":"Инициализировано"
+,
+"AffectionLocationChanged":"Расположение изменено"
+,
+"AffectionVFTableInitialized":"Таблица виртуальных функций инициализирована"
+,
+"And_Text":"и"
+,
+"Area_Output_Checked":"Размер, требуемый для {0}: {1} байт (Допустимый размер: {2} байт)"
+,
+"Area_Output_Checked_Exceeded":"Превышен размер для {0}: {1} байт (допустимый размер: {2} байт)"
+,
+"Area_Output_Info_Simple":"Область памяти {0} содержит {1}: наибольший непрерывный промежуток памяти: {2} байт ({3} %)"
+,
+"Build":"Компиляция"
+,
+"BuildCompleteErrors":"Компиляция завершена -- {0} ошибок, {1} предупреждений : загрузка невозможна"
+,
+"BuildCompleteOK":"Компиляция завершена -- {0} ошибок, {1} предупреждений: готово к загрузке"
+,
+"BuildStarted":"------ Компиляция : Приложение: {0} -------"
+,
+"Code_Text":"Код"
+,
+"CodeNoChange":"Код не изменился. Онлайн-замена не требуется."
+,
+"Data_Text":"Данные"
+,
+"DoCodeTypification":"Типизировать код"
+,
+"DoLocation":"локализовать глобальные данные"
+,
+"DoTypification":"Восстановление рабочего набора"
+,
+"ErrNoApplication":"Приложение не найдено"
+,
+"ErrorLimitExceeded":"Произошло более {0} ошибок: все последующие сообщения проигнорированы"
+,
+"Except_Boot_Project_Error":"Загрузочный проект невозможен: приложению не хватает памяти. Сначала выполните полную загрузку."
+,
+"Except_Boot_Project_Error_Error_In_Compile":"Загрузочный проект недопустим в данном состоянии: ошибка при создании информации загрузочного проекта. См. окно сообщений."
+,
+"GenerateCode":"генерировать код для {0} ..."
+,
+"GenerateCodeInit":"генерировать код инициализации..."
+,
+"GenerateCodeProgress":"Генерация кода..."
+,
+"GenerateGlobalInit":"генерировать глобальные инициализации ..."
+,
+"GenerateRelocations":"генерация перемещений..."
+,
+"GeneratingCode":"генерировать код..."
+,
+"GlobalInitErrorPrefix":"Ошибка в неявном коде инициализации"
+,
+"Input_Text":"Вход"
+,
+"InterfaceReferencesAffected":"Следующие ссылки интерфейса протестированы на перенаправление:"
+,
+"InterfacesChanged":"Следующие POU-интерфейсы были изменены:"
+,
+"Memory_Text":"Память"
+,
+"NumInterfacesChanged":"{0} интерфейсов POU изменилось"
+,
+"NumInterfacesToTest":"{0} ссылок интерфейса протестировано для перенаправления"
+,
+"NumPOUsDownloaded":"{0} POU изменили свой код"
+,
+"NumVariablesAffected":"{0} переменных затронуто онлайн-изменением, {1} изменили расположение, {2} инициализировано, {3} скопировано, {4} инициализировали таблицу виртуальных функций"
+,
+"Output_Text":"Выход"
+,
+"Persistent_Text":"Persistent-данные"
+,
+"PersistenVariablesChanged":"Persistent-переменные изменились! Инициализировать с текущим списком?\r\n\t\t\r\nДа: текущий список будет инициализирован, существующие persistent-значения будут заменены\r\nНет: существующие persistent-значения будут сохранены, они будут использованы в текущем списке.\r\n     ПРЕДУПРЕЖДЕНИЕ: Значения могут не совпадать с вашими persistent-переменными. Необходимо проверить значения самостоятельно!\r\n     Например: если вы добавите переменную в начале списка, все значения будут неверны!\r\n\r\nОтмена: отмена загрузки или онлайн-изменения"
+,
+"POUsDownloaded":"Код следующих POU будет загружен"
+,
+"POUUnit":"POU"
+,
+"ProjectUpToDate":"Приложение актуально"
+,
+"Retain_Text":"Энергонезависимые данные"
+,
+"TypifyAll":"типизировать код..."
+,
+"VariablesAffected":"Следующие переменные затрагиваются онлайн-изменением:"
+,
+"WarningLimitExceeded":"Более {0} предупреждений: все последующие сообщения проигнорированы"
+}
+,
+"_3S.CoDeSys.Compiler35220.Resources.ErrorMessages.ru.resources":{
+"Err_AccessOutsideOfCall":"К выходу '{0}' из '{1}' нельзя обратиться из-за пределов вызова"
+,
+"Err_AccessToInternalObject":"Не удается получить доступ к внутреннему объекту {0} библиотеки {1}"
+,
+"Err_AccessToInternalProperty":"Обращение к внутреннему свойству {0} библиотеки {1} невозможно"
+,
+"Err_AccessToInternalVariable":"Невозможно получить доступ к внутренней переменной {0} библиотеки {1}"
+,
+"Err_AddressExpected":"После \"AT\" вместо {0} требуется прямой адрес"
+,
+"Err_AddressMisaligned":"Адрес {0} некорректен для типа данных {1}"
+,
+"Err_AddressOutOfRange":"Адрес '{0}' вне диапазона: Pассчитанный сдвиг: {1}, выделенный размер: {2}"
+,
+"Err_Ambiguity":"неоднозначное использование имени '{0}' "
+,
+"Err_AnyTypeOnlyInFunction":"Переменные типа '{0}' допустимы только в качестве входов функции."
+,
+"Err_ApplicationConflict":"Существуют два приложения с одинаковым именем '{0}' на устройстве '{1}'"
+,
+"Err_ArrayBorderIsNoConstant":"Граница '{0}' массива не является постоянным значением"
+,
+"Err_ArrayIndexNumWrong":"Для массива требуется ровно {0} индексов"
+,
+"Err_ArrayInitialisationCountNoConstant":"Число '{0}' инициализаций массива не является постоянным значением"
+,
+"Err_ArrayInitialisationNotPossible":"Инициализация массива недопустима в качестве параметра вызова Init-функции. Используйте переменную"
+,
+"Err_ArrayInitializationExpected":"Требуется инициализация массива"
+,
+"Err_AtLeastOneExpected":"Требуется не менее одного оператора"
+,
+"Err_AttributeNameExpected":"Для значения атрибута вместо '{0}' требуется однобайтовая строка"
+,
+"Err_AttributeNotValidForNonExternalPOU":"Атрибут '{0}' не подходит для невнешнего POU"
+,
+"Err_BaseClassNotFound":"Для базового класса '{0}' отсутствует определение"
+,
+"Err_BaseNotAllowed":"Выражение SUPER недопустимо в данном контексте"
+,
+"Err_Bitaccessnoconst":"Для битового доступа требуется литерал или символьная целочисленная константа"
+,
+"Err_BitAccessOnlyOnInt":"Битовый доступ возможен только для целочисленных типов."
+,
+"Err_BitAdrOnOperation":"Оператор 'BITADR' возможен только для переменных (не для oперация)"
+,
+"Err_BitNrOverflow":"'{0}' не является корректным битовым номером для '{1}'"
+,
+"Err_BitsForStructureOnly":"Только структуры и функциональные блоки могу содержать переменные типа BIT."
+,
+"Err_BitsWrongScope":"Переменные типа BIT должны объявляться в разделе VAR_INPUT, VAR_OUTPUT или VAR-block"
+,
+"Err_BlobInitError":"Вместо '{0}' требуется константное значение"
+,
+"Err_CalcNeedsCall":"Второй параметр условного вызова должен соответствующим оператором вызова"
+,
+"Err_CallAfterInitHasInputs":"Метод с отметкой '{0}' не может иметь входы."
+,
+"Err_CalleeInvalidType":"Вместо '{0}' требуется имя программы, функция или экземпляр функционального блока"
+,
+"Err_CallOfPrivateMethod":"Не удается получить доступ к частному методу {0}.{1}"
+,
+"Err_CallOfPrivateProperty":"Обращение к частному свойству {0}.{1} невозможно"
+,
+"Err_CallOfProtectedMethod":"Невозможно получить доступ к методу {0}.{1}"
+,
+"Err_CallOfProtectedProperty":"Невозможно обратиться к защищенному свойству {0}.{1}"
+,
+"Err_CallRecursion":"Рекурсия вызова: {0}"
+,
+"Err_CancelledByUser":"Компиляция отменена пользователем"
+,
+"Err_CannotAddMultipleTime":"Невозможно сложить несколько операндов типа '{0}'"
+,
+"Err_CannotMultiplyMultipleTime":"Нельзя перемножить несколько операндов типа '{0}'"
+,
+"Err_CantHaveBaseClass":"Ключевое слово EXTENDS не применимо к типу {0}"
+,
+"Err_CaseLabelDuplicate":"Повторяющаяся метка case"
+,
+"Err_CaseLabelInCaseRange":"Метка Case {0} также содержится в диапазоне {1} .. {2}"
+,
+"Err_CaseLabelNoConstant":"Для метки сase требуется литерал или символьная целочисленная константа"
+,
+"Err_CaseLabelOutsideOfCase":"Метка case не является частью выражения case"
+,
+"Err_CaseRangesOverlapping":"Блок содержит пересекающиеся диапазоны {0} .. {1} и {2} .. {3}"
+,
+"Err_CheckLicenseNeedsSysTarget":"Для оператора __CHECKLICENSE требуются библиотеки SysTarget и 3S License"
+,
+"Err_CompareNotPossible1":"Сравнение невозможно для объектов типа '{0}'"
+,
+"Err_CompareNotPossible2":"Сравнение невозможно для объектов типа '{0}' или '{1}'"
+,
+"Err_CompilerVersionError":"Версия компилятора {0} отозвана. Используйте более новую версию."
+,
+"Err_CompoAccessNoStruct":"'{0}' не является структурированной переменной"
+,
+"Err_ConditionExpected":"Требуется условие"
+,
+"Err_ConstantIndexOutOfRange":"Константый индекс '{0}' находится вне диапазона от '{1}' до '{2}'"
+,
+"Err_ConstantOverflow":"Константа '{0}' слишком велика для типа '{1}'"
+,
+"Err_ContainsNoDefinition":"'{0}' не содержит определения для '{1}'"
+,
+"Err_CounterStartExpected":"Требуется начальное значение счетчика"
+,
+"Err_DataRecursion":"Рекурсия данных: {0}"
+,
+"Err_DeclarationKeywordNotAllowed":"'{0}' здесь недопустимо"
+,
+"Err_DefineValueExpected":"Значение требуется вместо '{0}'"
+,
+"Err_DeleteNeedsPointer":"Операнд __DELETE должен быть указателем"
+,
+"Err_DerefNoPointer":"Для разыменования требуется указатель"
+,
+"Err_DeviceNameNoIdent":"Имя устройства '{0}' некорректно. Требуется корректный МЭК-идентификатор"
+,
+"Err_DeviceNotInstalled":"Устройство не установлено в систему. Генерация кода невозможна."
+,
+"Err_DuplicateElseInCaseStatement":"Повторное определение блока CASE"
+,
+"Err_DuplicateLabelDefinition":"Метка '{0}' не уникальна"
+,
+"Err_DuplicateVarConfig":"Копировать VAR_CONFIG для '{0}'"
+,
+"Err_DynamicMemoryNotSupported":"Для приложения '{0}' не задано памяти для создания динамического объекта"
+,
+"Err_ExpressionExpectedInstead":"Вместо '{0}' требуется выражение"
+,
+"Err_ExprNoConstantError":"Вместо '{0}' требуется константное значение"
+,
+"Err_FeatureNotImplemented":"Функция '{0}' не реализована."
+,
+"Err_FinalOnFunctionBlocksAndMethodsOnly":"FINAL можно применять только к методам и функциональным блокам"
+,
+"Err_FunctionBlockNeedsInstance":"Функциональный блок '{0}' должен иметь экземпляр"
+,
+"Err_FunctionBlockNoLongerValid":"Ключевое слово FUNCTIONBLOCK больше не поддерживается. Используйте FUNCTION_BLOCK"
+,
+"Err_FunctionCallMixedStyle":"В вызове функции должны быть отмечены либо все, либо никакие формальные параметры"
+,
+"Err_FunNeedsNInputs":"Для функции '{0}' требуется ровно '{1}' входов"
+,
+"Err_GeneratingVarInitializations":"Некорректные нач. значения переменных"
+,
+"Err_GlobalVariableListExpected":"VAR_GLOBAL или VAR_CONFIG требуется вместо {0}"
+,
+"Err_IdentifierExpected":"Вместо '{0}' требуется идентификатор"
+,
+"Err_IdentNotDefined":"Идентификатор '{0}' не задан"
+,
+"Err_IllegalOperator":"'{0}' не является корректным ST-оператором"
+,
+"Err_ImplicitEnumerationTypeNotExpected":"Здесь требуется неявное перечисление"
+,
+"Err_ImplicitMethodNameForVariable":"{0} - это имя неявно сгенерированного метода, и оно не подходит для переменных в функциональном блоке"
+,
+"Err_IndexingInvalid":"Невозможно применить индексацию с [] к выражению типа '{0}'"
+,
+"Err_IndexNumWrong":"Переменная '{0}' требует хотя бы 1 индекса"
+,
+"Err_IndexOfNotSupported":"Оператор INDEXOF больше не поддерживается. Используйте вместо него ADR."
+,
+"Err_InheritanceError":"Наследование возможно только в функциональных блоках, интерфейсах и структурах"
+,
+"Err_IniNeedsUserdefType":"Для оператора INI необходим экземпляр функционального блока или DUT-экземпляр"
+,
+"Err_InOutAccessOutside":"Невозможен внешний доступ к параметру VAR_IN_OUT '{0}' из '{1}'.\""
+,
+"Err_InOutAssignedInActionCall":"VAR_IN_OUT {0} нельзя присваивать в локальном вызове действия '{1}'"
+,
+"Err_InOutNotAssigned":"VAR_IN_OUT '{0}' должен присваиваться в вызове '{1}'"
+,
+"Err_InOutParamNotEqual":"Тип '{0}' не совпадает с типом '{1}' VAR_IN_OUT '{2}'"
+,
+"Err_InputMissing":"Присваивание для входа отсутствует для параметра '{0}' в вызове '{1}'"
+,
+"Err_InstanceNotAllowedInRetain":"Экземпляры '{0}' недопустимы в энергонезависимых данных"
+,
+"Err_InterfaceChanged":"Интерфейс перезаписанного метода '{0}' интерфейса '{1}' не соответствует объявлению"
+,
+"Err_InterfaceChangedBase":"Интерфейс перезаписанного метода '{0}' основы '{1}' не соответствует объявлению"
+,
+"Err_InterfaceImplementationError":"Интерфейсы могут реализовываться только функциональными блоками"
+,
+"Err_InterfaceMethodImplementationNotPublic":"Реализация интерфейсного метода '{0}' функционального блока '{1}' должна быть PUBLIC"
+,
+"Err_InterfaceNeedsInstance":"Для доступа к интерфейсу '{0}' требуется его экземпляр"
+,
+"Err_InterfaceNotFound":"Не найдено определения для интерфейса '{0}'"
+,
+"Err_InternalErrorProhibitingOnlineChange":"Внутренняя ошибка {0}, исключающая онлайн-замену! Требуется очистка приложения и загрузка."
+,
+"Err_InvalidBaseForGlobalScopeExpression":"Операция глобальной области '.' некорректна над выражением '{0}'"
+,
+"Err_InvalidInitialisationForArray":"{0} не является корректной инициализацией для константы {1}. Начальное значение константы должно быть постоянным."
+,
+"Err_InvalidJumpDestination":"Некорректная цель {0} для JMP"
+,
+"Err_InvalidLoopIncrement":"Некорректный инкремент цикла"
+,
+"Err_InvalidSignatureName":"Имя '{0}' не является корректным идентификатором"
+,
+"Err_IsNoInput":"'{0}'не является входом '{1}'"
+,
+"Err_IsNoLValue":"'{0}' не является корректным объектом присваивания"
+,
+"Err_IsNoOutput":"'{0}' не является выходом '{1}'"
+,
+"Err_LibNamespaceConflict":"Локальное пространство имен '{0}' библиотеки '{1}' скрывает пространство имен библиотеки '{2}'"
+,
+"Err_LibraryConflict":"Неоднозначное пространство имен '{0}' задано библиотекой '{1}'"
+,
+"Err_LibraryWithUnicodeIdentifiers":"Библиотека '{0}' была сохранена с поддержкой идентификаторов unicode и может быть, таким образом, использована только при поддержке идентификаторов unicode (см. опции компиляции)."
+,
+"Err_LibSupports32BitOnly":"Библиотека '{0}' поддерживается только 32-битными приложениями"
+,
+"Err_LiteralExpected":"Вместо '{0}' требуется литерал"
+,
+"Err_LowerGreaterUpperBorder":"Нижняя граница должна быть ниже верхней границы"
+,
+"Err_LValueForAnyVar":"Параметр ANY '{0}' из '{1}' требует переменную с доступом записи в качестве входа"
+,
+"Err_LValueForReference":"Требуется переменная с доступом для записи"
+,
+"Err_LValueForVarinout":"VAR_IN_OUT-параметр '{0}' из '{1}' требует переменной с доступом записи в качестве входа"
+,
+"Err_LValueForVarinoutStrings":"VAR_IN_OUT-параметр '{0}' из '{1}' требует переменной с доступом записи в качестве входа"
+,
+"Err_LValueNoRefType":"Присвоение ссылки возможно только для переменных типа Reference "
+,
+"Err_MalformedAddress":"Прямой адрес '{0}' поврежден"
+,
+"Err_MappedVarWrittenInDiffTasks":"Переменная {0}, соотнесенная с адресом {1}, записывается в разных задачах"
+,
+"Err_MaxArraySizeExceeded":"Достигнут максимальный размер массива. Либо увеличьте нижнюю границу, либо уменьшите верхнюю."
+,
+"Err_MissingObjectForPersistent":"Приложение не содержит VAR_PERSISTENT-списка для ввода экземпляра пути для переменной {0}"
+,
+"Err_MissingParameterList":"{0} '{1}' указано без круглых скобок '()'"
+,
+"Err_ModNotReal":"MOD не задан для REAL "
+,
+"Err_Multiassigninfor":"Для цикла требуется ровно один счетчик"
+,
+"Err_NamesNotEqual":"Имя, используемое в интерфейсе, не совпадает с именем объекта"
+,
+"Err_NewArrayOnUserdefNotAllowed":"Создание массива с помощью __NEW невозможно для пользовательских типов"
+,
+"Err_NewNeedsType":"Определение типа требуется в качестве операнда для __NEW"
+,
+"Err_NewOnlyWithAttribute":"Для функционального блока или структуры требуется атрибут '{{attribute 'enable_dynamic_creation'}}' для создания с помощью __NEW"
+,
+"Err_NewPositionNotOK":"Должен быть присвоен результат __NEW"
+,
+"Err_NoArrayOfBit":"BIT недопустим в качестве базового типа массива"
+,
+"Err_NoAssign":"Присваивание недоступно для типа {0}"
+,
+"Err_NoBitAccessOnFunctionCall":"Битовый доступ к вызову функции невозможен"
+,
+"Err_NoBitTypeOnBitAddress":"Тип {0} недопустим для битового адреса {1}"
+,
+"Err_NoBytesInRetain":"Структурированный тип, расположенный в энергонезависимых данных, не может содержать BYTE, SINT или USINT"
+,
+"Err_NoCallInInstancePath":"Невозможно применить компонентный доступ '.', индексный доступ '[]', или вызов '()' к результату вызова функции. Сначала присвойте результат help-переменной."
+,
+"Err_NoCallInInterfaceComparison":"Невозможно выполнить сравнение интерфейса, который является возвращаемым значением вызова. Сначала выполните присвоение переменнной"
+,
+"Err_NoCaseLabelFound":"Метка не найдена"
+,
+"Err_NoChangeOnAccessModifier":"Метод {0}.{1} не может изменять модификатор доступа \"{2}\" при перезаписи метода {3}.{1}"
+,
+"Err_NoCodegenerator":"Не удалось создать генератор кода: нужный плагин не установлен"
+,
+"Err_NoComponentOf":"'{0}' не является компонентом '{1}'"
+,
+"Err_NoConstantInitialisationForValue":"Начальное значение константной переменной '{0}' не является константой"
+,
+"Err_NoCopyCodeAllowed":"Перемещение этого POU при онлайн-замене невозможно"
+,
+"Err_NoDirectAddressInSubsequentVarDecl":"Объявление переменной '{0}' с присваиванием адреса не может быть использовано в PRG или GVL с атрибутом 'subsequent'"
+,
+"Err_NoEnclosingLoopExit":"Отсутствует замкнутый цикл, на который можно применить {0}"
+,
+"Err_NoGlobalDefine":"Отсутствует глобальне определение для '{0}'"
+,
+"Err_NoIndirectPropertyCallOnStringWithSize":"Косвенный вызов свойства с типом {0} невозможен, поскольку поддержваются только типы без явно заданной длины"
+,
+"Err_NoInheritanceOnFinalType":"'{0}' с атрибутом FINAL не может использоваться в качестве основы"
+,
+"Err_NoInitialForExternal":"Для VAR_EXTERNAL {0} начальное значение недопустимо"
+,
+"Err_NoInitialForInoutConstant":"Для VAR_INOUT CONSTANT {0} начальное значение недопустимо"
+,
+"Err_NoInputMemory":"Нет зарезервированной входной памяти"
+,
+"Err_NoInstanceObject":"'{0}' имеет тип {1} и не может иметь экземпляры"
+,
+"Err_NoInstancePath":"Отсутствует VAR_CONFIG для '{0}'"
+,
+"Err_NoLocalEnum":"Локально заданное перечисление больше не поддерживается. Вместо этого используйте определение типа данных."
+,
+"Err_NoMatchingInitMethodFound":"Для создания экземпляра {0} не найдено подходящего метода 'FB_Init'"
+,
+"Err_NoMemoryMemory":"Нет зарезервированной памяти"
+,
+"Err_NoMethodImplementation":"Отсутствует реализация для метода '{0}', заданного в интерфейсе '{1}'"
+,
+"Err_NoMultipleInheritance":"В списке EXTENDS (расширение) можно задать только один функциональный блок"
+,
+"Err_NoOnlineChangeOnDynamicObjects":"Динамически создаваемые типы недопустимы для онлайн-замен"
+,
+"Err_NoOnlineChangePossible":"Онлайн-замена невозможна, выполните полную загрузку"
+,
+"Err_NoOutputMemory":"Выходной памяти не зарезервировано"
+,
+"Err_NoPointerToBit":"POINTER TO BIT недопустим"
+,
+"Err_NoPropertiesInOutAssignment":"Свойство не может быть задано в выходном присваивании вызова. Используйте временную переменную."
+,
+"Err_NoReadAccessToProperty":"Свойство '{0}' не может использоваться в этом контексте, поскольку отсутствует средство доступа get"
+,
+"Err_NoReferenceToBits":"Ссылки на биты недопустимы"
+,
+"Err_NoReferenceToOutput":"Выходы не могут быть типа REFERENCE TO"
+,
+"Err_NoSuchLabel":"Отсутствует метка '{0}' в области выражения JMP."
+,
+"Err_NoSystemDefine":"Отсутствует системное определение для '{0}'"
+,
+"Err_NotAllowedInContainerLib":"'{0}' недопустимо в контейнерной библиотеке"
+,
+"Err_NotAllowedInInterfaceLib":"'{0}' недопустим в интерфейсной библиотеке"
+,
+"Err_NotAnInstanceOf":"'{0}' не является экземпляром '{1}'"
+,
+"Err_NotEnoughMemoryForVariableInit":"Недостаточно памяти для инициализации переменной '{0}'. Требуется {1} байт"
+,
+"Err_NotSupportedInInterface":"Такой код недопутим в разделе объявления"
+,
+"Err_NoValidCondition":"'{0}' не является корректным условием"
+,
+"Err_NoValidConditionforPragma":"'{0}' не является подходящим условием для директивы"
+,
+"Err_NoValidEnumInit":"{0} не является подходящим значением для перечисления"
+,
+"Err_NoValidInstancePath":"'{0}' не является корректным путем экземпляра"
+,
+"Err_NoValidOperand":"'{0}' не является корректным операндом"
+,
+"Err_NoValidOperandforPragma":"'{0}' не является подходящим операндом для директивы"
+,
+"Err_NoValidStatement":"'{0}' не является корректным заявлением"
+,
+"Err_NoVarConfigInMethodOrFunction":"Неполные адреса недопустимы в методах и функциях"
+,
+"Err_NoVarForExternal":"Не найдено глобального определения для VAR_EXTERNAL {0}"
+,
+"Err_NoVarsinInterface":"Объявления переменных недопустимы в интерфейсах"
+,
+"Err_NoVarTempInSubsequentPrograms":"Раздел VAR_TEMP недопустим в программах с атрибутом 'subsequent'"
+,
+"Err_OneAccessorRequired":"Для свойства '{0}' требуется хотя бы одно средство доступа"
+,
+"Err_OnlyMethodsOverride":"Невозможно заменить {0} {1} из {2}: только методы допустимы для перезаписи"
+,
+"Err_OperationNotPossibleOnType":"Операция '{0}' невозможна над типом '{1}'"
+,
+"Err_Operator1of2Expected":"'{0}' или '{1}' требуется вместо '{2}'"
+,
+"Err_Operator1of3Expected":"'{0}', '{1}' или '{2}' требуется вместо '{3}'"
+,
+"Err_Operator1of3ExpectedInsteadofEOF":"Недопустимый End-of-file: требуется '{0}', '{1}' или '{2}'"
+,
+"Err_Operator1of4Expected":"'{0}', '{1}',  '{2}' или '{3}' требуется вместо '{4}'"
+,
+"Err_OperatorExpected":"'{0}' требуется вместо '{1}'"
+,
+"Err_OperatorExpectedInsteadofEOF":"Недопустимый End-of-file: требуется '{0}'"
+,
+"Err_OperatorNotAllowedAtPosition":"Использование оператора '{0}' недопустимо в данном выражении"
+,
+"Err_OperatorNotSupported":"Оператор '{0}' не поддерживается"
+,
+"Err_OpNeedsAtLeastInputs":"Для '{0}' необходимо как минимум '{1}' операндов"
+,
+"Err_OpNeedsExactInputs":"Для '{0}' требуется ровно '{1}' операндов"
+,
+"Err_OpTakesAtMostInputs":"Для '{0}' требуется не более '{1}' операндов"
+,
+"Err_OutOfCodeMemory":"Недостаточно кодовой памяти: POU '{0}', {1} байт. (Инкрементная компиляция может привести к фрагментации памяти. Выполните команду \"Компилировать, Очистить\" для принудительного перераспределения данных и кода.)"
+,
+"Err_OutOfMemory":"Недостаточно памяти глобольных данных: Переменная '{0}', {1} байт. (Инкрементная компиляция может привести к фрагментации памяти. Выполните команду \"Компилировать, Очистить\" для принудительного перераспределения данных и кода.)"
+,
+"Err_OutOfMemoryFunctionPointer":"Недостаточно памяти глобальных данных: указатель функции для '{0}' не может быть выделен"
+,
+"Err_OutOfMemoryWithWholeSize":"Недостаточно памяти глобальных данных: переменная '{0}', {1} байт (Наибольший промежуток в памяти - {2})  (Инкрементная компиляция или добавление переменных в persistent-список может привести к фрагментации памяти. Выполните команду \"Объявления, переупорядочить список и очистить промежутки\" или \"Компилировать, Очистить\" для принудительного перераспределения прочих данных и кода.)"
+,
+"Err_OutOfRetainMemory":"Недостаточно энергонезависимой памяти: Переменная '{0}', {1} байт (Инкрементная компиляция может привести к фрагментации памяти. Выполните команду \"Компиляция, очистка\" для принудительного распределения всех данных и кода.)"
+,
+"Err_OutOfRetainMemoryWithWholeSize":"Недостаточно энергонезависимой памяти: Переменная '{0}', {1} байт (Наибольший промежуток в памяти - {2})  (Инкрементная компиляция может привести к фрагментации памяти. Выполните команду \"Компилировать, Очистить\" для принудительного перераспределения данных и кода.)"
+,
+"Err_OutputByteWrittenFromDifferentTasks":"В нескольких задачах записывается один и тот же байт выходной памяти"
+,
+"Err_OverflowInAddress":"Постоянное переполнение по адресу '{0}'"
+,
+"Err_ParameterlistNotConst":"Список параметров должен быть задан как константа"
+,
+"Err_ParamsNotAllowed":"Параметр PARAMS должен быть последним входным параметром функции или метода"
+,
+"Err_PersistentNoAddress":"Прямое объявление адреса невозможно в Persistent-списке"
+,
+"Err_PersistentVariablesChangeMessageText":"Persistent-переменные изменились. Загрузка отменена пользователем."
+,
+"Err_PersistentWrongVariable":"Переменные в списке Persistent должны быть либо VAR_GLOBAL PERSISTENT, либо VAR_GLOBAL PERSISTENT RETAIN"
+,
+"Err_POUCalledFromDifferentTasks":"POU {0} выполняет запись в выход {1} и вызывается в нескольких задачах"
+,
+"Err_PrivateOnMethodsOnly":"PRIVATE и PROTECTED можно применять только к методам и функциональным блокам"
+,
+"Err_QueryInterfaceErrorP1":"Первый операнд __QueryInterface должен быть указателем интерфейса или экземпляром функционального блока"
+,
+"Err_QueryInterfaceErrorP2":"Второй операнд __QueryInterface должен быть указателем интерфейса"
+,
+"Err_QueryInterfaceP1NoIQuery":"Интерфейс {0} не является расширением для {1}"
+,
+"Err_QueryPointerErrorP1":"Первый операнд __QueryPointer должен быть ссылкой интерфейса или экземпляром функционального блока"
+,
+"Err_QueryPointerErrorP2":"Второй операнд __QueryInterface должен быть указателем"
+,
+"Err_RecursiveConstantInitialisation":"Рекурсивное определение константного значения."
+,
+"Err_RefAssignNeedsLValue":"Для присваивания ссылки в качестве исходного выражения требуется переменная с доступом для записи"
+,
+"Err_ReferenceNotAllowed":"Ссылочный тип недопустим в качестве базового типа массива, указателя или ссылки"
+,
+"Err_ReferenceNotAllowedForVarInOut":"Тип ссылки является недопустим как тип VAR_IN_OUT"
+,
+"Err_ReferenceToInput":"Присваивание ссылки невозможно для переменной, соотнесенной с входным адресом."
+,
+"Err_RetainNotAccessiblePOU":"POU {0} скрывает имя библиотеки, доступ к элементам библиотеки невозможен. Неявного кода для сохранения энергонезависимой переменной {1} сгенерировано не будет."
+,
+"Err_RetainNotAccessibleVariable":"Переменная {0} скрывает имя библиотеки. Доступ к библиотечному элементу невозможен. Код для сохранения энергонезависимой переменной {1} сгенерирован не будет."
+,
+"Err_RetainOrPersistentNotAllowed":"'RETAIN' и 'PERSISTENT' здесь недопустимо"
+,
+"Err_RetainsNotSupported":"Использование энергонезависимых данных невозможно на этом устройстве"
+,
+"Err_ReturnTypeForNonFunction":"Возвращаемый тип допустим только для POU типа FUNCTION и METHOD"
+,
+"Err_RValueRequired":"Присваиваие не имеет корректного источника"
+,
+"Err_SelfInheritance":"Рекурсия в интерфейсах: {0}"
+,
+"Err_SelfInheritanceBase":"Рекурсия в списке базовых функциональных блоков: {0}"
+,
+"Err_SemicolonExpected":"';' требуется вместо '{0}'"
+,
+"Err_SemicolonExpectedInsteadOfEnd":"Вместо конца POU требуется ';'"
+,
+"Err_SlotFunctionAmbiguousName":"POU {0} с атрибутом слота {1} имеет неоднозначное имя"
+,
+"Err_SlotFunctionHiddenByVariable":"POU {0} с атрибутом слота {1} не может быть вызван, поскольку он скрыт переменной '{2}'"
+,
+"Err_SomethingOverridingMethod":"{0} '{1}' перезаписывает метод интерфейса '{2}'"
+,
+"Err_SpecialTypeExpected":"Здесь требуется выражение типа '{0}'"
+,
+"Err_StaticNotAllowed":"Объявление 'VAR_STAT' здесь недопустимо"
+,
+"Err_StrictEnumNoArithmeticAllowed":"Арифметические действия недопустимы для строгих перечислений '{0}'"
+,
+"Err_StrictEnumNotAMember":"'{0}' - неподходящее значение для типа ENUM '{1}'"
+,
+"Err_StringSizeExpected":"После \"(\" требуется размер строки"
+,
+"Err_StringTooShortForVarInOut":"Строковая переменная '{0}' слишком коротка для VAR_IN_OUT-параметра '{1}' из '{2}'"
+,
+"Err_StructInitOnlyInput":"'{0}'не является входом '{1}'"
+,
+"Err_StructuredValueTypeInExternalCall":"Структурированный тип '{0}' недопустим во внешнем вызове функции"
+,
+"Err_StructureInitialisationNotPossible":"Инициализация структуры недопустима в качестве параметра вызова Init-функции. Используйте переменную."
+,
+"Err_StructureInitializationExpected":"Для {0} требуется список инициализации"
+,
+"Err_StructureNotAllowed":"Объявление 'STRUCT' допустимо только в DUT"
+,
+"Err_SummarizedLibraryErrors":"{0} внутренних ошибок в библиотеке {1}"
+,
+"Err_SystemOutOfMemory":"Система разработки не располагает достаточной памятью для онлайн-замены. Перезапустите приложение."
+,
+"Err_ThisNotAllowed":"Выражение THIS недопустимо в этом контексте"
+,
+"Err_TooManyInitializer":"Слишком много инициализаторов для массива"
+,
+"Err_TryCatchNotSupported":"Структурная обработка исключений пока не поддерживается"
+,
+"Err_TryCatchNotSupportedCodegenerator":"Генератор кода для текущего устройства не поддерживает структурную обработку исключений"
+,
+"Err_TryCatchNotSupportedVersion":"Структурная обработка исключений не поддерживается вашим текущим таргетом. Требуется система исполнения версии не ниже 3.5.6.0."
+,
+"Err_TypeExpected":"Вместо '{0}' требуется определение типа"
+,
+"Err_TypeMismatch":"Невозможно конвертировать тип '{0}' в тип '{1}'"
+,
+"Err_TypesNotComparable":"Невозможно сравнить тип '{0}' с типом '{1}'"
+,
+"Err_UnexpectedArrayInitialisation":"Недопустимая инициализация массива"
+,
+"Err_UnexpectedOperandForCallInitFunction":"Неуместный операнд '{0}' в '{1}'. GVL или PRG должны передаваться как параметр."
+,
+"Err_UnexpectedOperandForIndexOf":"Недопустимый операнд '{0}' в '{1}'"
+,
+"Err_UnexpectedPragmaif":"Недопустимая директива: '{0}' обнаружено без соответствующего 'if'"
+,
+"Err_UnexpectedStructureInitialisation":"Недопустимая инициализация структуры"
+,
+"Err_UnexpectedTokenFound":"Обнаружен недопустимый символ '{0}'"
+,
+"Err_UnexpectedTypeName":"Имя типа '{0}' здесь неуместно"
+,
+"Err_UninitialisedVariableUsedInInitialisation":"Неинициализированная переменная {0} используется для инициализации {1}. Чтобы изменить порядок инициализации, используйте атрибут 'global_init_slot'."
+,
+"Err_UnionNotAllowed":"Объявление UNION допустимо только в DUT"
+,
+"Err_UnknownType":"Неизвестный тип: '{0}'"
+,
+"Err_UnsupportedType":"Неподдерживаемый тип: '{0}'"
+,
+"Err_UpperBoundExpected":"Требуется верхняя граница для FOR-цикла"
+,
+"Err_UserCheckFunctionsNotSupported":"Функции, заданные пользователем, не поддерживаются"
+,
+"Err_VarAccessNotSupported":"VAR_ACCESS не поддерживается"
+,
+"Err_VarConfigNotAllowed":"Объявление VAR_CONFIG допустимо только в списке VAR_CONFIG"
+,
+"Err_VarGlobalNotAllowed":"Объявление в 'VAR_GLOBAL' допустимо только в списке глобальных переменных"
+,
+"Err_VariableDeclarationExpected":"Вместо {0} требуется объявление переменной"
+,
+"Err_VariableDuplicate":"Локальная переменная с именем '{0}' уже задана в '{1}'"
+,
+"Err_VariableForVarinoutConstant":"Параметр VAR_IN_OUT CONSTANT '{0}' из '{1}' требует переменной в качестве входа"
+,
+"Err_VariableListExpected":"VAR, VAR_INPUT, VAR_OUTPUT или VAR_INOUT требуется вместо {0}"
+,
+"Err_VariableOverride":"Повторяющееся определение переменной '{0}' в функциональном блоке '{1}' и в основе '{2}'"
+,
+"Err_VarInstOnlyInMethods":"Объявление 'VAR_INST' недопустимо в этом месте"
+,
+"Err_VarTempNotAllowed":"Объявление 'VAR_TEMP' здесь недопустимо"
+,
+"Err_VarTooBig":"Переменная '{0}' слишком велика. (Размер переменной: {1}, Размер сегмента: {2})"
+,
+"Err_WrongFormalParameter":"Неверный формальный параметр: '{0}' требуется здесь"
+,
+"Err_WrongObjectType":"Невозможно вызвать объект типа '{0}'"
+,
+"Err_WrongTypeForAdr":"'{0}' недопустим в качестве операнда для ADR"
+,
+"Err_WrongTypeForExternal":"Неверное определение типа для VAR_EXTERNAL {0}"
+,
+"Err_WrongVarInInterfaceMethod":"В методах интрефейсов допустимы только входы, выходы и Inout-объекты"
+,
+"Inf_RelatedPosition":"Относительная позиция"
+,
+"PublishSymbolsMustBeSet":"Должна быть включена опция 'Публиковать все символы'"
+,
+"Txt_ParentContextNotUpToDate":"\"Контекст неактуален\"."
+,
+"Wrn_AtLeastOneExpected":"Требуется не менее одного оператора"
+,
+"Wrn_AttributeCheck":"Неизвестный атрибут или некорректное значение"
+,
+"Wrn_BoolNotAtBitAddress":"Для типа данных BOOL требуется битовый адрес"
+,
+"Wrn_ComplexExpression":"POU содержит очень сложное выражение. Попробуйте использовать промежуточные результаты."
+,
+"Wrn_ConcurrentAccessOfBitInSameByte":"Одновременный доступ к биту '{0}' в одном и том же байте"
+,
+"Wrn_DeviceNotInstalledForSimulation":"Устройство не устанолвено в систему. При эмуляции будут использованы настройки по умолчанию."
+,
+"Wrn_EnumComparison":"Сравнение одного типа перечисления ({0}) с другим ({1})"
+,
+"Wrn_EnumValueDuplicate":"Константа {0} присвоена нескольким перечислениям"
+,
+"Wrn_ExternalReferenceIgnored":"Внешние ссылки допустимы только для функциональных блоков, методов и функций. Внешняя ссылка для {0} '{1}' проигнорирована."
+,
+"Wrn_GlobalInitSlotNotForVariables":"Атрибут 'global_init_slot' всегда относится ко всему списку переменных и не должен применяться к отдельным переменным."
+,
+"Wrn_ImplicitEnumConversion":"Неявная конверсия из одного типа перечисления ({0}) в другой ({1})"
+,
+"Wrn_ImplicitIntToReal":"Неявная конверсия из '{0}' в '{1}': возможна потеря информации"
+,
+"Wrn_ImplicitSignedToUnsigned":"Неявная конверсия типа со знаком '{0}' в тип без знака '{1}': возможно изменение знака"
+,
+"Wrn_ImplicitUnsignedToSigned":"Неявная конверсия из типа без знака '{0}' в тип со знаком '{1}': возможно изменение знака"
+,
+"Wrn_InvalidStringSize":"Размер строки не может быть отрицательным ('{0}')"
+,
+"Wrn_LabelNoReference":"Метка '{0}' не используется"
+,
+"Wrn_LibraryNotInstalled":"Библиотека {0} не добавлена в Менеджер библиотек, либо не найдено корректной лицензии"
+,
+"Wrn_LoopExitConditionConstant":"Условие выхода цикла '{0} {1} {2}' является константой FALSE. Возможен бесконечный цикл."
+,
+"Wrn_LValueForVarinoutStrings":"Для параметра VAR_IN_OUT '{0}' из '{1}' в качестве входа требуется переменная с доступом записи. В последующих версиях это будет ошибкой компиляции!"
+,
+"Wrn_MethodAlreadyCalledImplicitly":"Метод '{0}' уже вызван неявно"
+,
+"Wrn_NoInitialValueForConstant":"Отсутствует начальное значение для константной переменной '{0}'"
+,
+"Wrn_NonLocalAccessToVarInOut":"Обращение к VAR_IN_OUT '{0}', объявленной в '{1}', из внешнего контекста '{2}'."
+,
+"Wrn_NoPointerToBit":"Ссылка на один бит невозможна. Будет сохранена ссылка на весь байт."
+,
+"Wrn_Obsolete":"POU '{0}' отмечен как устаревший: {1}"
+,
+"Wrn_PointerMisatch":"Тип '{0}', вероятно, не конвертируется в тип '{1}'"
+,
+"Wrn_Pragma":"Пользовательское предупреждение, сгенерированное прагмой"
+,
+"Wrn_ShiftExceedsTypeSize":"Сдвиг на {0} превышает размер типа {1}"
+,
+"Wrn_StatementNoEffect":"Код '{0}' не имеет действия. Это сделано намеренно?"
+,
+"Wrn_StringConstantTooLong":"Строковая константа '{0}' слишком велика для типа цели '{1}'"
+,
+"Wrn_StruturedTypePropertyNotMonitorable":"Атрибут monitoring игнорируется для свойства '{0}', возвращающего структурированный тип"
+,
+"Wrn_TooManyApplications":"Вы задали {0} приложений дя устройства {1}. Максимальное количество - {2}. Вы не сможете загрузить все приложения."
+,
+"Wrn_ValueAssignViaPointerMayChangeVFTable":"Для экземпляра, на который указывает {0}, будет выполнена переинициализация для виртуальных вызовов функции. Убедитесь, что {0} не указывает на тип, полученный из {1}"
+}
+,
+"_3S.CoDeSys.Compiler35220.Resources.Strings.ru.resources":{
+"AffectionCopied":"Старое значение скопировано"
+,
+"AffectionInitialized":"Инициализировано"
+,
+"AffectionLocationChanged":"Расположение изменено"
+,
+"AffectionVFTableInitialized":"Таблица виртуальных функций инициализирована"
+,
+"And_Text":"и"
+,
+"Area_Output_Checked":"Размер, требуемый для {0}: {1} байт (Допустимый размер: {2} байт)"
+,
+"Area_Output_Checked_Exceeded":"Превышен размер для {0}: {1} байт (допустимый размер: {2} байт)"
+,
+"Area_Output_Info":"Область памяти {0} содержит {1}: размер: {2} байт, высший используемый адрес: {3}, самый большой промежуток памяти: {4}  байт ({5} %)"
+,
+"Area_Output_Info_Simple":"Область памяти {0} содержит {1}: наибольший непрерывный промежуток памяти: {2} байт ({3} %)"
+,
+"AttributeAlreadyRegistered":"Атрибут {0} уже зарегистрирован другим плагином"
+,
+"AttributeInvalidRange":"{0} - некорректное значение для атрибута '{1}'. Требуется значение в диапазоне [{2}..{3}]."
+,
+"AttributeInvalidTypeInteger":"Значение '{0}' для атрибута '{1}' некорректно. Требуется целочисленное значение, заключенное в одинарные кавычки (например, '42')."
+,
+"AttributeMustBeEmpty":"Некорректное значение '{0}' для атрибута '{0}'."
+,
+"AttributeMustNotBeEmpty":"Требуется значение присвоенное атрибуту '{0}'."
+,
+"AttributeNotInFunctionFBOrMethod":"Атрибут '{0}' вычисляется только для POU типа Функция, Функциональный блок или Метод"
+,
+"AttributeNotInMethod":"Атрибут '{0}' вычисляется только для POU типа METHOD"
+,
+"AttributeNotSupportedWithCompilerVersion":"Атрибут '{0}' действует только с компилятором версии не ниже {1}. Текущая версия компилятора: {2}."
+,
+"AttributeStrictNoValidSignature":"Атрибут 'strict' учитывается только для объявлений типа ENUM"
+,
+"AttributeToStringFunctionWrongPOUType":"Атрибут {0} действителен только для объявлений типов и функциональных блоков"
+,
+"AttributeToStringWrongType":"Атрибут {0} действителен только для перечислений"
+,
+"AttributeUnknown":"Атрибут {0} неизвестен и будет проигнорирован компилятором"
+,
+"AttributeValueMustBeOneOf":"Некорректное значение '{0}' для атрибута '{1}' должно быть одним из: {2}"
+,
+"AttributeWrongScopeSigns":"Атрибут '{0}' добавлен в POU, но влияет только на переменные. Атрибут будет проигнорирован."
+,
+"AttributeWrongScopeVars":"Атрибут '{0}' добавлен переменной, но влияет только на POU. Атрибут будет проигнорирован."
+,
+"Build":"Компиляция"
+,
+"BuildCompleteErrors":"Компиляция завершена -- {0} ошибок, {1} предупреждений : загрузка невозможна"
+,
+"BuildCompleteOK":"Компиляция завершена -- {0} ошибок, {1} предупреждений: готово к загрузке"
+,
+"BuildStarted":"------ Компиляция : Приложение: {0} -------"
+,
+"Change_CodeChanged":"Pеализация изменена"
+,
+"Change_DefineChanged":"Директивы изменены"
+,
+"Change_GlobalErrors":"Глобальные ошибки в проекте"
+,
+"Change_InterfaceAdded":"вставлено"
+,
+"Change_InterfaceChange_Explicitly":"объявление изменено, отключено"
+,
+"Change_InterfaceChanged":"Oбъявление изменено"
+,
+"Change_InterfaceDeleted":"удалено"
+,
+"Change_NumOfSubSignaturesChanged":"изменилось число методов или действий"
+,
+"Change_ParameterTablesChanged":"Изменились таблицы библиотечных параметров"
+,
+"Change_ReferencedLibrariesChanged":"Используемые библиотеки изменились"
+,
+"Change_VariableChanged":"переменная {0} изменена"
+,
+"Change_VariableDeleted":"переменная {0} удалена"
+,
+"Change_VariableInserted":"переменная {0} вставлена"
+,
+"ClearDownloadContext":"Очистить контекст загрузки"
+,
+"Code_Text":"Код"
+,
+"CodeNoChange":"Код не изменился. Онлайн-замена не требуется."
+,
+"CompileCompleteErrors":"Компиляция завершена -- {0} ошибок, {1} предупреждений"
+,
+"CompileCompleteOK":"Компиляция завершена -- {0} ошибок, {1} предупреждений"
+,
+"Data_Text":"Данные"
+,
+"DoCodeTypification":"Типизировать код"
+,
+"DoLocation":"локализовать глобальные данные"
+,
+"DoTypification":"Восстановление рабочего набора"
+,
+"DownloadInfoSaveException":"Файл информации загрузки не может быть сохранён в {0}.\r\nЛогин к устройству будет невозможен после перезагрузки проекта.\r\nПричина:\r\n{1}"
+,
+"Err_CompilerVersionError":"Версия компилятора {0} отозвана. Используйте более новую версию."
+,
+"ErrExpressionContainsNoAppName":"Выражение не содержит имени приложения"
+,
+"ErrExpressionContainsNoResource":"Выражение не содержит имени ресурса"
+,
+"ErrInvalidExpression":"Некорректное выражение"
+,
+"ErrNoApplication":"Приложение не найдено"
+,
+"ErrorLimitExceeded":"Произошло более {0} ошибок: все последующие сообщения проигнорированы"
+,
+"ErrSignatureNotFound":"Сигнатура не найдена"
+,
+"Except_Boot_Project_Error":"Загрузочный проект невозможен: приложению не хватает памяти. Сначала выполните полную загрузку."
+,
+"Except_Boot_Project_Error_CompileContext_Not_UpToDate":"В данном состоянии загрузочный проект недопустим: внутренняя ошибка"
+,
+"Except_Boot_Project_Error_Error_In_Compile":"Загрузочный проект недопустим в данном состоянии: ошибка при создании информации загрузочного проекта. См. окно сообщений."
+,
+"FeatureGroup_Description":"Свойства, касающиеся языка МЭК 61131-3"
+,
+"FeatureGroup_Name":"Язык МЭК 61131-3"
+,
+"GenerateCode":"генерировать код для {0} ..."
+,
+"GenerateCodeInit":"генерировать код инициализации..."
+,
+"GenerateCodeProgress":"Генерация кода..."
+,
+"GenerateGlobalInit":"генерировать глобальные инициализации..."
+,
+"GenerateRelocations":"генерация перемещений..."
+,
+"GeneratingCode":"генерировать код..."
+,
+"GlobalInitErrorPrefix":"Ошибка в неявном коде инициализации"
+,
+"GVLChanged":"Список глобальных переменных '{0}' изменен"
+,
+"GVLRenamedOrDeleted":"Список глобальных переменных '{0}' переименован или удален"
+,
+"Input_Text":"Вход"
+,
+"InterfaceChanged":"Интерфейс '{0}' изменен"
+,
+"InterfaceReferencesAffected":"Следующие ссылки интерфейса протестированы на перенаправление:"
+,
+"InterfacesChanged":"Следующие POU-интерфейсы были изменены:"
+,
+"InvalidBooleanValue":"Неверное значение"
+,
+"LanguageModelMngrOptionConditionalShowSymbols_Description":"Используется для скрытия переменных в библиотеках от конечного пользователя"
+,
+"Libraries":"библиотеки"
+,
+"LibrariesChanged":"Библиотеки изменились"
+,
+"LoadCompileContext":"Загрузить информацию компиляции"
+,
+"LoadingLibraries":"Загрузка библиотек..."
+,
+"Memory_Text":"Память"
+,
+"MethodAdded":"Метод '{0}' из {1} '{2}' добавлен"
+,
+"MethodChanged":"Метод '{0}' из {1} '{2}' изменен"
+,
+"MethodRenamedOrDeleted":"Метод '{0}' из {1} '{2}' переименован или удален"
+,
+"NumInterfacesChanged":"{0} интерфейсов POU изменилось"
+,
+"NumInterfacesToTest":"{0} ссылок интерфейса протестировано для перенаправления"
+,
+"NumPOUsDownloaded":"{0} POU изменили свой код"
+,
+"NumVariablesAffected":"{0} переменных затронуто онлайн-изменением, {1} изменили расположение, {2} инициализировано, {3} скопировано, {4} инициализировали таблицу виртуальных функций"
+,
+"OR":"или"
+,
+"Output_Text":"Выход"
+,
+"ParamsArray_Comment":"'arrParams' это одномерный массив, содержащий фактические значения, переданные в эту функцию. Значения за пределами 'nCount' не присваиваются, не инициализируются и не будут использоваться."
+,
+"ParamsCount_Comment":"Count определяет количество формальных параметров, передаваемых в эту функцию"
+,
+"Persistent_Text":"Persistent-данные"
+,
+"PersistenVariablesChanged":"Persistent-переменные изменились! Инициализировать с текущим списком?\r\n\t\t\r\nДа: текущий список будет инициализирован, существующие persistent-значения будут заменены\r\nНет: существующие persistent-значения будут сохранены, они будут использованы в текущем списке.\r\n     ПРЕДУПРЕЖДЕНИЕ: Значения могут не совпадать с вашими persistent-переменными. Необходимо проверить значения самостоятельно!\r\n     Например: если вы добавите переменную в начале списка, все значения будут неверны!\r\n\r\nОтмена: отмена загрузки или онлайн-изменения"
+,
+"POUChanged":"{0} '{1}' изменено"
+,
+"POURenamedOrDeleted":"{0} '{1}' переименовано или удалено"
+,
+"POUsDownloaded":"Код следующих POU будет загружен"
+,
+"POUUnit":"POU"
+,
+"Precompile":"Предкомпиляция"
+,
+"ProjectUpToDate":"Приложение актуально"
+,
+"Retain_Text":"Энергонезависимые данные"
+,
+"String1":"Версия компилятора, заданная в проекте, нежелательна. Хоть проект и может быть откомпилирован, рекомендуется обновить версию компилятора. Учтите, что после обновления компилятора старая версия больше не будет доступна в проекте."
+,
+"SupportExtendedProgrammingFeatureSettingProvider_Description":"Когда опция активирована, пользовательский интерфейс поддерживает дополнительные возможности, такие как ООП или атрибуты. Замечание: не влияет на возможность открывать и компилировать существующие проекты, содержащие такие элементы."
+,
+"SupportExtendedProgrammingFeatureSettingProvider_Name":"Поддержка расширенных функций программирования"
+,
+"TypeChanged":"Тип '{0}' изменился"
+,
+"TypeRenamedOrDeleted":"Тип '{0}' переименован или удален"
+,
+"TypifyAll":"типизировать код..."
+,
+"UnresolvedVariable":"Неразрешенная переменная {0}"
+,
+"UpdatingCompilerVersion":"Обновление версии компилятора"
+,
+"VariableDeclarationChanged":"Объявление переменной '{0}' в '{1}' изменилось"
+,
+"VariableRenamedOrDeleted":"Переменная '{0}' в '{1}' переименована или удалена"
+,
+"VariablesAffected":"Следующие переменные затрагиваются онлайн-изменением:"
+,
+"WarningLimitExceeded":"Более {0} предупреждений: все последующие сообщения проигнорированы"
+,
+"Warnings":"Предупреждения"
+,
+"WritingCompileInformationProgressText":"Завершение составления информации компиляции..."
+}
+}

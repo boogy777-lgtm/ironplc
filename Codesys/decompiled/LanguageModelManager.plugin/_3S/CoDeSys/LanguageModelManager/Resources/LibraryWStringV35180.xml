@@ -1,0 +1,2320 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<!--
+Attention!
+When making any changes in one of the following functions 
+- wstring__to__any32	
+- wstring__to__any64	
+- any32__to__wstring	
+- any64__to__wstring	
+- wstring__to__real64	
+- wstring__to__real32
+- real32__to__wstring	
+- real64__to__wstring
+please consider to make the modification also in the library ConversionFunctions.library
+(svn://server04/AutomationPlatform/branches/Staff/Compilertechnology/ConversionFunctions/ConversionFunctions.library )
+-->
+<language-model>
+	<pou id = "19A99E06-DFD5-4402-8F83-521389A0DC1C" name = "__SkipWhiteSpaceW">
+		<interface>
+		{implicit on}
+		FUNCTION __SkipWhiteSpaceW : BOOL
+		VAR_INPUT
+			ppstr : POINTER TO POINTER TO WORD;
+		END_VAR
+		VAR
+			pstr : POINTER TO WORD := ppstr^;
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		WHILE (pstr[0] = 16#0020 OR pstr[0] = 16#0009) DO
+			pstr := pstr + SIZEOF(WORD);
+		END_WHILE
+		ppstr^ := pstr;	
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "7BF449D7-156F-4dc3-885E-A6DA7640CD90" name = "__LEFTW">
+		<interface>
+		{implicit on}
+		FUNCTION __LEFTW : WSTRING(255)
+		VAR_INPUT
+			STR: WSTRING(255);
+			SIZE: INT;
+		END_VAR
+		VAR
+			p1, pResult : POINTER TO WORD;
+			index : INT;
+		END_VAR		
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		p1 := ADR(STR);
+		pResult := ADR(__LEFTW);
+
+		FOR index := 0 TO SIZE - 1 DO
+			pResult^ := p1^;
+			IF (pResult^ = 0) THEN
+				EXIT;
+			END_IF
+			pResult := pResult + SIZEOF(WORD);
+			p1 := p1 + SIZEOF(WORD);
+		END_FOR
+		pResult^:= 0;
+		{implicit off}
+		]]>
+		</body>
+	</pou>	
+	<pou id = "95F63B9B-1365-4b41-AD25-D7A78A50547E" name = "__HelpConvertW">
+		<interface>
+		{implicit on}
+		FUNCTION __HelpConvertW : BOOL
+		VAR_INPUT
+			in : UDINT;
+			ppstr : POINTER TO POINTER TO WORD;
+			nWidth : DINT;
+		END_VAR
+		VAR
+			ulDiv : UDINT := 1000000000;
+			bFirst : BOOL;
+			pstr : POINTER TO WORD := ppstr^;
+			nDigits : DINT := 10;
+			ulDig : UDINT;
+			count: UDINT;
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		WHILE (ulDiv > 0) DO
+			ulDig := in / ulDiv;
+			IF ((NOT bFirst AND ulDig <> 0) OR (nDigits <= nWidth)) THEN
+				bFirst := TRUE;
+			END_IF
+			IF (bFirst) THEN
+				pstr[0] := UDINT_TO_WORD(ulDig + 16#30); (*'0'*)
+				pstr := pstr + SIZEOF(WORD); 
+				in := in MOD ulDiv;
+				count := count + 1;
+			END_IF
+			ulDiv := ulDiv / 10;
+			nDigits := nDigits-1;
+		END_WHILE
+
+		pstr[0] := 0; (*'\0'*)
+		ppstr^ := pstr;
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "F00A1AA9-5A5C-4c14-BAA3-0F7ED88039C9" name = "__HelpConvertDateW">
+		<interface>
+		{implicit on}
+		FUNCTION __HelpConvertDateW : BOOL
+		VAR_INPUT
+			in : UDINT;
+			ppstr : POINTER TO POINTER TO WORD;
+		END_VAR
+		VAR
+			nYear : UDINT;
+			nMonth : UDINT;
+			nDay : UDINT;
+			{IF COMPILERVERSION(>=, '3.4.0.0')}				
+				DayOfMonthTable : ARRAY [0..11] OF WORD := [31,28,31,30,31,30,31,31,30,31,30,31];
+			{ELSE}
+				DayOfMonthTable : ARRAY [0..11] OF BYTE := [31,28,31,30,31,30,31,31,30,31,30,31];
+			{END_IF}				
+			pstr : POINTER TO WORD := ppstr^;
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		in := in / (UDINT#24 * UDINT#3600);
+		
+		{IF COMPILERVERSION(>=, '3.4.1.0')}
+		IF (in >= 47541) THEN
+			in := in + 1; // add a "virtual" 29 of February 2100 and calculate as if there was one
+		END_IF
+	  {END_IF}		
+		
+		nYear := 4 * (in / UDINT#1461) + UDINT#1970;
+		in := in MOD 1461;
+		IF (in < UDINT#2 * UDINT#365) THEN
+			nYear := nYear + (in / 365);
+			in := in MOD 365;
+			DayOfMonthTable[1] := 28;
+		ELSIF (in < UDINT#2 * UDINT#365 + UDINT#366) THEN
+			DayOfMonthTable[1] := 29;
+			nYear := nYear + 2;
+			in := in - UDINT#2 * UDINT#365;
+		ELSE
+			nYear := nYear + 3;
+			DayOfMonthTable[1] := 28;
+			{IF COMPILERVERSION(>=, '3.4.1.0')}
+			in := in - (UDINT#2 * UDINT#365 + UDINT#366);
+			{ELSE}
+			in := in - UDINT#2 * UDINT#365 + UDINT#366;
+			{END_IF}
+		END_IF
+
+		WHILE (in >= DayOfMonthTable[nMonth]) DO
+			in := in - DayOfMonthTable[nMonth];
+			nMonth := nMonth + 1;
+		END_WHILE
+
+		nMonth := nMonth + 1;
+		nDay := in + 1;  (* nYear, nMonth, nDay are complete *)
+		__HelpConvertW(nYear, ADR(pstr),4);
+		pstr[0] := WORD#16#002d; (*'-'*)
+		pstr := pstr + SIZEOF(WORD);
+		__HelpConvertW(nMonth,ADR(pstr), 2);
+		pstr[0] := WORD#16#002d; (*'-'*)
+		pstr := pstr + SIZEOF(WORD);
+		__HelpConvertW(nDay,ADR(pstr), 2);
+		ppstr^ := pstr;
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "A23E7F2F-7C7F-4ab8-B259-2BF314FDA9C3" name = "__HelpConvertTimeW">
+		<interface>
+		{implicit on}
+		FUNCTION __HelpConvertTimeW : BOOL
+		VAR_INPUT
+			in : UDINT;
+			ppstr : POINTER TO POINTER TO WORD;
+		END_VAR
+		VAR
+			dwHour : UDINT;
+			dwMinute : UDINT;
+			dwSecond : UDINT;
+			dwMilliSecond : UDINT;
+			pstr : POINTER TO WORD := ppstr^;
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		dwHour := in / 3600000;
+		in := in MOD 3600000;
+		dwMinute := in / 60000;
+		in := in MOD 60000;
+		dwSecond := in / 1000; 
+		dwMilliSecond := in MOD 1000;
+
+		__HelpConvertW(dwHour,ADR(pstr), 2);
+		pstr[0] := 16#003A; (*':'*)
+		pstr := pstr + SIZEOF(WORD);
+		__HelpConvertW(dwMinute,ADR(pstr), 2);
+		pstr[0] := 16#003A; (*':'*)
+		pstr := pstr + SIZEOF(WORD);
+		__HelpConvertW(dwSecond,ADR(pstr), 2);
+
+		IF (dwMilliSecond <> 0) THEN
+			pstr[0] := 16#002E; (*'.'*)
+			pstr := pstr + SIZEOF(WORD);
+			__HelpConvertW(dwMilliSecond, ADR(pstr), 3);
+		END_IF
+    
+    {IF COMPILERVERSION(>=, '3.5.16.0')}    
+        IF (dwMilliSecond = 0) THEN
+          ppstr^ := pstr;
+        END_IF
+    {END_IF}
+        
+		{implicit off}
+		]]>
+		</body>
+	</pou>		
+	<pou id = "DA52BB11-B3EE-4e17-9ECE-AAAC0B30420B" name = "__HelpConvertTimeWithUnitW">
+		<interface>
+		{implicit on}
+		FUNCTION __HelpConvertTimeWithUnitW : BOOL
+		VAR_INPUT
+			in : UDINT;
+			ppstr : POINTER TO POINTER TO WORD;
+		END_VAR
+		VAR
+      {IF COMPILERVERSION(>=, '3.5.11.0')}
+        dwDay: UDINT;
+        dwHour: UDINT;
+      {END_IF}
+    
+			dwMinute : UDINT;
+			dwSecond : UDINT;
+			dwMilliSecond : UDINT;
+			pstr : POINTER TO WORD := ppstr^;
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		pstr[0] := 16#0054; (*'T'*)
+		pstr[1] := 16#0023; (*'#'*)
+		pstr := pstr + (2 * SIZEOF(WORD));
+
+		IF (in = 0) THEN
+			pstr[0] := 16#0030; (*'0'*)
+			pstr[1] := 16#006D; (*'m'*)
+			pstr[2] := 16#0073; (*'s'*)
+			pstr[3] := 16#000;  (*'\0'*)
+			pstr := pstr + (3 * SIZEOF(WORD));
+		ELSE
+    
+      {IF COMPILERVERSION(>=, '3.5.11.0')}
+	      dwDay := in / 86400000;
+	      in := in MOD 86400000;
+	      dwHour := in / 3600000;
+	      in := in MOD 3600000; 
+      {END_IF}
+        
+			dwMinute := in / 60000;
+			in := in MOD 60000;
+			dwSecond := in / 1000; 
+			dwMilliSecond := in MOD 1000;
+      
+      {IF COMPILERVERSION(>=, '3.5.11.0')}
+	      IF (dwDay <> 0) THEN
+		      __HelpConvertW(dwDay,ADR(pstr), 1);
+		      pstr[0] := 16#0064; (*'d'*)
+		      pstr := pstr + SIZEOF(WORD);		
+	      END_IF
+	      IF (dwHour <> 0) THEN
+		      __HelpConvertW(dwHour,ADR(pstr), 1);
+		      pstr[0] := 16#0068; (*'h'*)
+		      pstr := pstr + SIZEOF(WORD);		
+	      END_IF      
+      {END_IF}      
+      
+			IF (dwMinute <> 0) THEN
+				__HelpConvertW(dwMinute,ADR(pstr), 1);
+				pstr[0] := 16#006D; (*'m'*)
+				pstr := pstr + SIZEOF(WORD);
+			END_IF
+			IF (dwSecond <> 0) THEN
+				__HelpConvertW(dwSecond,ADR(pstr), 1);
+				pstr[0] := 16#0073; (*'s'*)
+				pstr := pstr + SIZEOF(WORD);
+			END_IF
+			IF (dwMilliSecond <> 0) THEN
+				__HelpConvertW(dwMilliSecond, ADR(pstr), 1);
+				pstr[0] := 16#006D; (*'m'*)
+				pstr[1] := 16#0073; (*'s'*)
+				pstr := pstr + (2 * SIZEOF(WORD));
+			END_IF
+			pstr[0] := 0; (*'\0'*)
+		END_IF
+
+		ppstr^ := pstr;	
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "CE02C656-4033-46a9-B5F1-BECDEDEB9055" name = "__HelpConvertStringW">
+		<interface>
+		{implicit on}
+		FUNCTION __HelpConvertStringW : UDINT
+		VAR_INPUT
+			pstr : POINTER TO WORD;
+			nWidth : UDINT;
+		END_VAR
+		VAR
+			i : UDINT;
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		{IF COMPILERVERSION(>=, '3.5.2.0')}
+		  IF (nWidth = 0) THEN
+        __HelpConvertStringW := 0;
+        RETURN;
+      END_IF
+		{END_IF}                              
+		FOR (i := 0) TO nWidth - 1 DO
+			__HelpConvertStringW := __HelpConvertStringW * 10 + pstr[0] - 16#0030 (*'0'*);
+			pstr := pstr + SIZEOF(WORD);
+		END_FOR
+		{implicit off}
+		]]>
+		</body>
+	</pou>	
+	<pou id = "CA024F07-11DC-4600-9F6F-069DB29AC898" name = "__HelpConvertFromDateW">
+		<interface>
+		{implicit on}
+		FUNCTION __HelpConvertFromDateW : UDINT
+		VAR_INPUT
+			ppstr : POINTER TO POINTER TO WORD;
+		END_VAR
+		VAR
+			pstr : POINTER TO WORD := ppstr^;
+			nYear : UDINT;
+			nMonth : UDINT;
+			nDay : UDINT;
+			nDiffYear : UDINT;
+			nDiffYearDiv : UDINT;
+			nDiffYearMod : UDINT;
+			nCount : UDINT;
+			ulTime : UDINT;
+			pstrHelpYear : POINTER TO WORD := pstr;
+			pstrHelpMonth : POINTER TO WORD;
+			pstrHelpDay : POINTER TO WORD;
+			i : DINT;
+			{IF COMPILERVERSION(>=, '3.4.0.0')}
+				DayOfMonthTable : ARRAY [0..11] OF WORD := [31,28,31,30,31,30,31,31,30,31,30,31];
+			{ELSE}
+				DayOfMonthTable : ARRAY [0..11] OF BYTE := [31,28,31,30,31,30,31,31,30,31,30,31];
+			{END_IF}
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		
+	{IF COMPILERVERSION(>=, '3.5.20.0')}		
+		WHILE(pstrHelpYear[0] <> WORD#16#0 AND  pstrHelpYear[0] <> WORD#16#002d (*'-'*)) DO
+			pstrHelpYear := pstrHelpYear + SIZEOF(WORD);
+		END_WHILE	
+	{ELSE}
+		WHILE(pstrHelpYear[0] <> WORD#16#002d (*'-'*)) DO
+			pstrHelpYear := pstrHelpYear + SIZEOF(WORD);
+		END_WHILE
+	{END_IF}		
+		
+		i := (UDINT_TO_DINT(pstrHelpYear - pstr)) / SIZEOF(WORD);
+
+		IF (i = 4) THEN
+			nYear := __HelpConvertStringW(pstr,4);
+		ELSE
+			RETURN;
+		END_IF
+
+    {IF COMPILERVERSION(>=, '3.5.20.0')}
+		IF (pstrHelpYear[0] = WORD#0) THEN
+			RETURN;
+		END_IF
+	{END_IF}
+
+		pstrHelpYear := pstrHelpYear + SIZEOF(WORD);
+		pstrHelpMonth := pstrHelpYear;
+		
+	{IF COMPILERVERSION(>=, '3.5.20.0')}
+		WHILE(pstrHelpMonth[0] <> WORD#16#0 AND pstrHelpMonth[0] <> WORD#16#002d (*'-'*)) DO
+			pstrHelpMonth := pstrHelpMonth + SIZEOF(WORD);
+		END_WHILE	
+	{ELSE}
+		WHILE(pstrHelpMonth[0] <> WORD#16#002d (*'-'*)) DO
+			pstrHelpMonth := pstrHelpMonth + SIZEOF(WORD);
+		END_WHILE
+	{END_IF}	
+		
+		i := (UDINT_TO_DINT(pstrHelpMonth - pstrHelpYear)) / SIZEOF(WORD);
+		IF (i = 1 OR i = 2) THEN
+			nMonth := __HelpConvertStringW(pstrHelpYear,DINT_TO_UDINT(i));
+		ELSE
+			RETURN;
+		END_IF
+
+    {IF COMPILERVERSION(>=, '3.5.20.0')}
+		IF (pstrHelpMonth[0] = WORD#0) THEN
+			RETURN;
+		END_IF
+	{END_IF}
+
+		pstrHelpMonth := pstrHelpMonth + SIZEOF(WORD);
+		pstrHelpDay := pstrHelpMonth;
+		WHILE(pstrHelpDay[0] <> 0 AND pstrHelpDay[0] <> WORD#16#002d (*'-'*)) DO
+			pstrHelpDay := pstrHelpDay + SIZEOF(WORD);
+		END_WHILE
+
+		i := (UDINT_TO_DINT(pstrHelpDay - pstrHelpMonth)) / SIZEOF(WORD);
+		IF (i = 1 OR i = 2) THEN
+			nDay := __HelpConvertStringW(pstrHelpMonth,DINT_TO_UDINT(i));
+		ELSE 
+			RETURN;
+		END_IF
+
+		ppstr^ := pstrHelpDay;
+
+		nDiffYear := nYear - 1970;
+		nDiffYearDiv := nDiffYear / 4;
+		nDiffYearMod := nDiffYear MOD 4;
+
+		CASE (nDiffYearMod) OF
+			0,1:
+				nCount := nDiffYearDiv;
+			2:
+				IF (nMonth < 3) THEN
+					nCount := nDiffYearDiv;
+				ELSE
+					nCount := nDiffYearDiv + 1;
+				END_IF
+			3:
+				nCount := nDiffYearDiv + 1;
+		END_CASE
+
+		{IF COMPILERVERSION(>=, '3.4.1.0')}
+		IF (nYear > 2100 OR (nYear = 2100 AND nMonth >= 3)) THEN
+			nCount := nCount - 1; // one day less because there is no 29.2.2100
+		END_IF
+		{END_IF}
+
+		ulTime := (nDiffYear * UDINT#365 + nCount) * UDINT#24 * UDINT#3600;
+		FOR i := 0 TO UDINT_TO_DINT(nMonth - 2) DO
+			ulTime := ulTime + (DayOfMonthTable[i] * UDINT#24 * UDINT#3600);
+		END_FOR
+		ulTime := ulTime + ((nDay-1) * UDINT#24 * UDINT#3600);
+
+		__HelpConvertFromDateW := ulTime;
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "0E53BE5F-BDA6-46ff-8A1F-7994AD076B55" name = "__HelpConvertFromTimeW">
+		<interface>
+		{implicit on}
+		FUNCTION __HelpConvertFromTimeW : UDINT
+		VAR_INPUT
+			ppstr : POINTER TO POINTER TO WORD;
+		END_VAR
+		VAR
+			pstr : POINTER TO WORD := ppstr^;
+			nHour : UDINT;
+			nMinutes : UDINT;
+			nSeconds : UDINT;
+			nMilliseconds : UDINT;
+			pstrHelpHour : POINTER TO WORD;
+			pstrHelpMinute : POINTER TO WORD;
+			pstrHelpSecond : POINTER TO WORD;
+			pstrHelpMilliSecond : POINTER TO WORD;
+			i : UDINT;
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		pstrHelpHour := pstr;
+		WHILE(pstrHelpHour[0] <> 16#003A(*':'*)) AND (pstrHelpHour[0] <> 0) DO
+			pstrHelpHour := pstrHelpHour + SIZEOF(WORD);
+		END_WHILE
+		i := (pstrHelpHour - pstr) / SIZEOF(WORD);
+		IF (i = 1 OR i = 2) THEN
+			nHour := __HelpConvertStringW(pstr,i);
+		ELSE
+			RETURN;
+		END_IF
+
+		IF (pstrHelpHour[0] = 0) THEN
+			__HelpConvertFromTimeW := ((nHour * UDINT#3600) * UDINT#1000);
+			RETURN;
+		END_IF 
+				
+		pstrHelpHour := pstrHelpHour + SIZEOF(WORD);
+		pstrHelpMinute := pstrHelpHour;
+
+		WHILE(pstrHelpMinute[0] <> 16#003A(*':'*)) AND (pstrHelpMinute[0] <> 0) DO
+			pstrHelpMinute := pstrHelpMinute + SIZEOF(WORD);
+		END_WHILE
+		i := (pstrHelpMinute - pstrHelpHour) / SIZEOF(WORD);
+		IF (i = 1 OR i = 2) THEN
+			nMinutes := __HelpConvertStringW(pstrHelpHour,i);
+		ELSE
+			RETURN;
+		END_IF
+		
+		IF (pstrHelpMinute[0] = 0) THEN
+			__HelpConvertFromTimeW := ((nHour * UDINT#3600 + nMinutes * UDINT#60) * UDINT#1000);
+			RETURN;
+		END_IF 
+		
+		pstrHelpMinute := pstrHelpMinute + SIZEOF(WORD);
+		pstrHelpSecond := pstrHelpMinute;
+
+		WHILE(pstrHelpSecond[0] <> 16#002E(*'.'*)) AND (pstrHelpSecond[0] <> 0)DO
+			pstrHelpSecond := pstrHelpSecond + SIZEOF(WORD);
+		END_WHILE
+		i := (pstrHelpSecond - pstrHelpMinute) / SIZEOF(WORD);
+
+		IF ((i = 1 OR i = 2) AND pstrHelpSecond[0] = 0 ) THEN
+			nSeconds := __HelpConvertStringW(pstrHelpMinute,i);
+			ppstr^ := pstrHelpSecond;
+			__HelpConvertFromTimeW := ((nHour * UDINT#3600 + nMinutes * UDINT#60 + nSeconds) * UDINT#1000); 
+			RETURN;
+		ELSIF ((i = 1 OR i = 2) AND pstrHelpSecond[0] = 16#002E(*'.'*)) THEN
+			nSeconds := __HelpConvertStringW(pstrHelpMinute,i);
+			pstrHelpSecond := pstrHelpSecond + SIZEOF(WORD);
+			pstrHelpMilliSecond := pstrHelpSecond;
+			WHILE(pstrHelpMilliSecond[0] <> 0) DO
+				pstrHelpMilliSecond := pstrHelpMilliSecond + SIZEOF(WORD);
+			END_WHILE
+			i := (pstrHelpMilliSecond - pstrHelpSecond) / SIZEOF(WORD);
+			IF (i = 1 OR i = 2 OR i = 3) THEN
+				nMilliSeconds := REAL_TO_UDINT(__HelpConvertStringW(pstrHelpSecond,i) * EXPT(10,3 - i));
+			ELSE
+				RETURN;
+			END_IF
+			ppstr^ := pstrHelpMilliSecond;
+			__HelpConvertFromTimeW := (((nHour * UDINT#3600 + nMinutes * UDINT#60 + nSeconds) * UDINT#1000) + nMilliSeconds);
+		ELSE
+			__HelpConvertFromTimeW := ((nHour * UDINT#3600+ nMinutes * UDINT#60) * UDINT#1000); 
+		END_IF
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "2E715801-9991-42f1-A152-4AE20BCFF540" name = "__HelpConvertStringBaseW">
+		<interface>
+		{implicit on}
+		FUNCTION __HelpConvertStringBaseW : UDINT
+		VAR_INPUT
+			pstr : POINTER TO WORD;
+			nBase : INT;
+		END_VAR
+		VAR
+			nNext : INT;
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		WHILE(pstr[0] <> 0) DO
+			IF (pstr[0] = 16#005f) THEN (*'_'*)
+				pstr := pstr + SIZEOF(WORD);
+			ELSE
+				IF ((nBase = 2 AND pstr[0] >= 16#0030 (*'0'*) AND pstr[0] <= 16#0031 (*'1'*)) 
+					OR (nBase = 8 AND pstr[0] >= 16#0030 (*'0'*) AND pstr[0] <= 16#0037 (*'7'*))
+					OR (nBase = 10 AND pstr[0] >= 16#0030 (*'0'*) AND pstr[0] <= 16#0039 (*'9'*))
+					OR (nBase = 16 AND pstr[0] >= 16#0030 (*'0'*) AND pstr[0] <= 16#0039 (*'9'*)))
+				THEN
+					nNext := UINT_TO_INT(pstr[0] - 16#0030);
+				ELSIF (nBase = 16 AND pstr[0] >= 16#0041 (*'A'*) AND pstr[0] <= 16#0046 (*'F'*)) THEN
+					nNext := UINT_TO_INT(pstr[0] - 16#0041 + 10);
+				ELSIF (nBase = 16 AND pstr[0] >= 16#0061 (*'a'*) AND pstr[0] <= 16#0066 (*'f'*)) THEN
+					{IF COMPILERVERSION(>=, '3.5.4.0')}
+						nNext := UINT_TO_INT(pstr[0] - 16#0061 + 10);
+					{ELSE}
+						nNext := UINT_TO_INT(pstr[0] - 16#0046 + 10);
+					{END_IF}                    
+				ELSE
+					EXIT;
+				END_IF
+				__HelpConvertStringBaseW := DINT_TO_UDINT(UDINT_TO_DINT(__HelpConvertStringBaseW) * nBase + nNext);
+				pstr := pstr + SIZEOF(WORD);
+			END_IF
+		END_WHILE
+		IF (pstr[0] <> 0 AND pstr[0] <> 16#002e(*'.'*)) THEN
+			__HelpConvertStringBaseW := 0; 
+		END_IF
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "095FD00C-3C36-4c3c-9F44-495013154180" name = "__HelpConvertTimeUnitsW">
+		<interface>
+		{implicit on}
+		FUNCTION __HelpConvertTimeUnitsW : UDINT
+		VAR_INPUT
+			ppstr : POINTER TO POINTER TO WORD;	
+		END_VAR
+		VAR
+			pstr : POINTER TO WORD := ppstr^;
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		CASE (pstr[0]) OF
+		16#0068: (*'h'*)
+			__HelpConvertTimeUnitsW := 3600000;
+		16#0073: (*'s'*)
+			__HelpConvertTimeUnitsW  := 1000;
+		16#006D: (*'m'*)
+			IF (pstr[1] = 16#0073) THEN
+				pstr := pstr + SIZEOF(WORD);
+				__HelpConvertTimeUnitsW  := 1;
+			ELSE
+				__HelpConvertTimeUnitsW  := 60000;
+			END_IF
+		ELSE 
+			__HelpConvertTimeUnitsW :=  0;
+			{IF COMPILERVERSION(>=, '3.5.2.0')}
+        IF (pstr[0] = 16#0000) THEN
+			    RETURN;
+        END_IF
+			{END_IF}                      
+		END_CASE
+		pstr := pstr + SIZEOF(WORD);
+		ppstr^ := pstr;
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "77FA4CBE-BADC-4fcd-8F5D-C6CB079B41AA" name = "__HelpLConvertW">
+		<interface>
+			{implicit on}
+			FUNCTION __HelpLConvertW : BOOL
+			VAR_INPUT
+				in : ULINT;
+				ppstr : POINTER TO POINTER TO WORD;
+				nWidth : DINT;
+			END_VAR
+			VAR
+				ulDiv : ULINT := 10000000000000000000;
+				bFirst : BOOL;
+				pstr : POINTER TO WORD := ppstr^;
+				nDigits : DINT := 20;
+				ulDig : ULINT;
+				count: UDINT;
+			END_VAR
+			{implicit off}
+		</interface>
+		<body>
+			<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		WHILE (ulDiv > 0) DO
+			ulDig := in / ulDiv;
+			IF ((NOT bFirst AND ulDig <> 0) OR (nDigits <= nWidth)) THEN
+				bFirst := TRUE;
+			END_IF
+			IF (bFirst) THEN
+				pstr[0] := ULINT_TO_WORD(ulDig + 16#0030); (*'0'*)
+				pstr := pstr + SIZEOF(WORD); 
+				in := in MOD ulDiv;
+				count := count + 1;
+			END_IF
+			ulDiv := ulDiv / 10;
+			nDigits := nDigits-1;
+		END_WHILE
+
+		pstr[0] := 0; (*'\0'*)
+		ppstr^ := pstr;
+
+		{implicit off}
+		]]>
+		</body>
+	</pou>	
+	<pou id = "9C3251E0-2217-408f-A01C-0734012A0930" name = "__HelpConvertLTimeWithUnitW">
+		<interface>
+		{implicit on}
+		FUNCTION __HelpConvertLTimeWithUnitW : BOOL
+		VAR_INPUT
+			in : ULINT;
+			ppstr : POINTER TO POINTER TO WORD;
+		END_VAR
+		VAR
+			lwDay : ULINT;
+			lwHour : ULINT;
+			lwMinute : ULINT;
+			lwSecond : ULINT;
+			lwMilliSecond : ULINT;
+			lwMicroSecond : ULINT;
+			lwNanoSecond : ULINT;
+			pstr : POINTER TO WORD := ppstr^;
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+			<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		pstr[0] := 16#004C; (*'L'*)
+		pstr[1] := 16#0054; (*'T'*)
+		pstr[2] := 16#0049; (*'I'*)
+		pstr[3] := 16#004D; (*'M'*)
+		pstr[4] := 16#0045; (*'E'*)
+		pstr[5] := 16#0023; (*'#'*)
+		pstr := pstr + (6 * SIZEOF(WORD));
+
+		IF (in = 0) THEN
+			pstr[0] := 16#0030; (*'0'*)
+			pstr[1] := 16#006E; (*'n'*)
+			pstr[2] := 16#0073; (*'s'*)
+			pstr[3] := 16#0000;  (*'\0'*)
+			pstr := pstr + (3 * SIZEOF(WORD));
+		ELSE
+			lwDay := in / 86400000000000;
+			IF (lwDay <> 0) THEN
+				__HelpLConvertW(lwDay,ADR(pstr), 1);
+				pstr[0] := 16#0064; (*'d'*)
+				pstr := pstr + SIZEOF(WORD);
+				in := in MOD 86400000000000;
+			END_IF
+
+			lwHour := in / 3600000000000;
+			IF (lwHour <> 0) THEN
+				__HelpLConvertW(lwHour,ADR(pstr), 1);
+				pstr[0] := 16#0068; (*'h'*)
+				pstr := pstr + SIZEOF(WORD);
+				in := in MOD 3600000000000;
+			END_IF
+
+			lwMinute := in / 60000000000;
+			IF (lwMinute <> 0) THEN
+				__HelpLConvertW(lwMinute,ADR(pstr), 1);
+				pstr[0] := 16#006D; (*'m'*)
+				pstr := pstr + SIZEOF(WORD);
+				in := in MOD 60000000000;
+			END_IF
+
+			lwSecond := in / 1000000000;
+			IF (lwSecond <> 0) THEN
+				__HelpLConvertW(lwSecond,ADR(pstr), 1);
+				pstr[0] := 16#0073; (*'s'*)
+				pstr := pstr + SIZEOF(WORD);
+				in := in MOD 1000000000;
+			END_IF
+
+			lwMilliSecond := in / 1000000;
+			IF (lwMilliSecond <> 0) THEN
+				__HelpLConvertW(lwMilliSecond,ADR(pstr), 1);
+				pstr[0] := 16#006D; (*'m'*)
+				pstr[1] := 16#0073; (*'s'*)
+				pstr := pstr + (2 * SIZEOF(WORD));
+				in := in MOD 1000000;
+			END_IF
+
+			lwMicroSecond := in / 1000;
+			IF (lwMicroSecond <> 0) THEN
+				__HelpLConvertW(lwMicroSecond,ADR(pstr), 1);
+				pstr[0] := 16#0075; (*'u'*)
+				pstr[1] := 16#0073; (*'s'*)
+				pstr := pstr + (2 * SIZEOF(WORD));
+				in := in MOD 1000;
+			END_IF
+
+			IF (in <> 0) THEN
+				__HelpLConvertW(in,ADR(pstr), 1);
+				pstr[0] := 16#006E; (*'n'*)
+				pstr[1] := 16#0073; (*'s'*)
+				pstr := pstr + (2 * SIZEOF(WORD));			
+			END_IF
+
+			pstr[0] := 0; (*'\0'*)
+		END_IF
+
+		ppstr^ := pstr;	
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "3B4AE181-2D77-4a11-8709-D7385F2094BA" name = "__HelpConvertStringBase64W">
+		<interface>
+		{implicit on}
+		FUNCTION __HelpConvertStringBase64W : LWORD
+		VAR_INPUT
+			pstr : POINTER TO WORD;
+			nBase : INT;
+		END_VAR
+		VAR
+			nNext : INT;
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		WHILE(pstr[0] <> 0) DO
+			IF (pstr[0] = 16#005f) THEN (*'_'*)
+				pstr := pstr + SIZEOF(WORD);
+			ELSE
+				IF ((nBase = 2 AND pstr[0] >= 16#0030 (*'0'*) AND pstr[0] <= 16#0031 (*'1'*)) 
+					OR (nBase = 8 AND pstr[0] >= 16#0030 (*'0'*) AND pstr[0] <= 16#0037 (*'7'*))
+					OR (nBase = 10 AND pstr[0] >= 16#0030 (*'0'*) AND pstr[0] <= 16#0039 (*'9'*))
+					OR (nBase = 16 AND pstr[0] >= 16#0030 (*'0'*) AND pstr[0] <= 16#0039 (*'9'*)))
+				THEN
+					nNext := UINT_TO_INT(pstr[0] - 16#0030);
+				ELSIF (nBase = 16 AND pstr[0] >= 16#0041 (*'A'*) AND pstr[0] <= 16#0046 (*'F'*)) THEN
+					nNext := UINT_TO_INT(pstr[0] - 16#0041 + 10);
+				ELSIF (nBase = 16 AND pstr[0] >= 16#0061 (*'a'*) AND pstr[0] <= 16#0066 (*'f'*)) THEN
+					nNext := UINT_TO_INT(pstr[0] - 16#0046 + 10);
+				ELSE
+					EXIT;
+				END_IF
+				__HelpConvertStringBase64W := LINT_TO_LWORD(LWORD_TO_LINT(__HelpConvertStringBase64W) * nBase + nNext);
+				pstr := pstr + SIZEOF(WORD);
+			END_IF
+		END_WHILE
+		IF (pstr[0] <> 0 AND pstr[0] <> 16#002e(*'.'*)) THEN
+			__HelpConvertStringBase64W := 0; 
+		END_IF
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "7E0EA004-A391-4ef9-8ABA-4797D6ABEF1C" name = "__HelpConvertLTimeUnitsW">
+		<interface>
+		{implicit on}
+		FUNCTION __HelpConvertLTimeUnitsW : ULINT
+		VAR_INPUT
+			ppstr : POINTER TO POINTER TO WORD;
+		END_VAR
+		VAR
+			pstr : POINTER TO WORD := ppstr^;
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+			<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		CASE (pstr[0]) OF
+			16#0064: (*'d'*)
+				__HelpConvertLTimeUnitsW := 86400000000000;		
+			16#0068: (*'h'*)
+				__HelpConvertLTimeUnitsW := 3600000000000;
+			16#0073: (*'s'*)
+				__HelpConvertLTimeUnitsW := 1000000000;
+			16#006D: (*'m'*)
+				IF (pstr[1] = 16#0073) THEN
+					pstr := pstr + SIZEOF(WORD);
+					__HelpConvertLTimeUnitsW := 1000000;
+				ELSE
+					__HelpConvertLTimeUnitsW := 60000000000;
+				END_IF
+			16#0075: (*'us'*)
+				IF (pstr[1] = 16#0073) THEN
+					pstr := pstr + SIZEOF(WORD);
+					__HelpConvertLTimeUnitsW := 1000;
+				ELSE
+					__HelpConvertLTimeUnitsW := 0;
+				END_IF				
+			16#006E: (*'ns'*)
+				IF (pstr[1] = 16#0073) THEN
+					pstr := pstr + SIZEOF(WORD);
+					__HelpConvertLTimeUnitsW  := 1;
+				ELSE
+					__HelpConvertLTimeUnitsW := 0;
+				END_IF				
+			ELSE 
+				__HelpConvertLTimeUnitsW :=  0;
+			  {IF COMPILERVERSION(>=, '3.5.2.0')}        
+        IF (pstr[0] = 16#0000) THEN
+			    RETURN;
+        END_IF             
+			  {END_IF}                
+		END_CASE
+		pstr := pstr + SIZEOF(WORD);
+		ppstr^ := pstr;
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "B6997D1D-9D82-4124-BDC8-5C9AD8E80B65" name = "__HelpReal32ConvertW">
+		<interface>
+			{implicit on}
+			FUNCTION __HelpReal32ConvertW : BOOL
+			VAR_INPUT
+				in : REAL;
+				ppstr : POINTER TO POINTER TO WORD;
+				pnBegin : POINTER TO DINT;
+			END_VAR
+			VAR
+				bFirst : BOOL := FALSE;
+				pstr : POINTER TO WORD := ppstr^;
+				nDigits : DINT := 309;
+				nDig : UDINT;
+				i : DINT;
+				dBegin : REAL;
+				dDiv : REAL;
+				bNeg : BOOL;
+				nHelpBegin : DINT;
+				dDiff : REAL;
+				j: INT;
+			END_VAR
+			{implicit off}
+		</interface>
+		<body>
+			<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		dBegin := LOG(in);
+		bNeg := FALSE;
+		IF (dBegin < 0) THEN
+			nHelpBegin := TRUNC(dBegin);
+			IF (DINT_TO_REAL(nHelpBegin) <> dBegin) THEN
+				bNeg := 1;
+				dBegin := -dBegin + 1.0; //-dBegin;
+			ELSE
+				bNeg := 1;
+				dBegin := -dBegin;
+			END_IF
+		END_IF
+		pnBegin^ := TRUNC(dBegin);
+		IF(bNeg) THEN
+			pnBegin^ := -(pnBegin^);
+		END_IF
+		
+		dDiv := EXPT(10,pnBegin^);
+		in := in + 5 * dDiv / 1e15;
+		
+		{IF COMPILERVERSION(>=, '3.3.0.10')}	
+		WHILE (dDiv > REAL#0.0 AND i < 6) DO
+			nDig := DINT_TO_UDINT(TRUNC((in / dDiv) + 5e-14));
+			IF (nDig > 9 AND bFirst) THEN
+				nDig := 0;
+			ELSIF (nDig > 9 AND NOT bFirst) THEN
+				pstr[0] := 16#0031;//'1';
+				pstr[1] := 16#0030;//'0';
+				pstr[2] := 16#0030;//'0';
+				pstr := pstr + (3 * SIZEOF(WORD));
+				pnBegin^  := pnBegin^ + 1;
+				EXIT;
+			END_IF
+			
+			IF (NOT bFirst AND (nDig <> 0)) THEN
+				bFirst := 1;
+			END_IF
+			IF (bFirst AND i < 6) THEN
+				pstr[0] := UDINT_TO_WORD(nDig) + 16#0030; //'0';
+				pstr := pstr + SIZEOF(WORD);
+				dDiff := UDINT_TO_REAL(nDig) * dDiv;
+				in := in - dDiff;
+				i := i + 1;
+			END_IF
+			dDiv := dDiv / 10.0;
+			nDigits := nDigits-1;
+		END_WHILE
+	{ELSE}
+		WHILE (dDiv >= REAL#1e-40 AND i < 6) DO
+			nDig := DINT_TO_UDINT(TRUNC((in / dDiv) + 5e-14));
+			IF (nDig > 9 AND bFirst) THEN
+				nDig := 0;
+			ELSIF (nDig > 9 AND NOT bFirst) THEN
+				pstr[0] := 16#0031;//'1';
+				pstr[1] := 16#0030;//'0';
+				pstr[2] := 16#0030;//'0';
+				pstr := pstr + (3 * SIZEOF(WORD));
+				pnBegin^  := pnBegin^ + 1;
+				EXIT;
+			END_IF
+			
+			IF (NOT bFirst AND (nDig <> 0)) THEN
+				bFirst := 1;
+			END_IF
+			IF (bFirst AND i < 6) THEN
+				pstr[0] := UDINT_TO_WORD(nDig) + 16#0030; //'0';
+				pstr := pstr + SIZEOF(WORD);
+				dDiff := UDINT_TO_REAL(nDig) * dDiv;
+				in := in - dDiff;
+				i := i + 1;
+			END_IF
+			dDiv := dDiv / 10.0;
+			nDigits := nDigits-1;
+		END_WHILE
+	{END_IF}
+		
+		
+		pstr[0] := 0;
+		ppstr^ := pstr;
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+
+	<pou id = "9E79F897-D5D3-46c7-9038-97AD046758C0" name = "__HelpRealConvertW">
+		<interface>
+		{implicit on}
+		FUNCTION __HelpRealConvertW : BOOL
+		VAR_INPUT
+			in : LREAL;
+			ppstr : POINTER TO POINTER TO WORD;
+			pnBegin : POINTER TO DINT;
+		END_VAR
+		VAR
+			bFirst : BOOL := FALSE;
+			pstr : POINTER TO WORD := ppstr^;
+			nDigits : DINT := 309;
+			nDig : UDINT;
+			i : DINT;
+			dBegin : LREAL;
+			dDiv : LREAL;
+			bNeg : BOOL;
+			nHelpBegin : DINT;
+			dDiff : LREAL;
+			j: DINT;
+		    lrTemp: LREAL;
+			bBegin: BOOL;
+			k: DINT;
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		{IF hasvalue(Platform,'CodeTI')}
+		  //CDS-80939: TI_DSP return wrong results for TO_WSTRING
+		  //LOG of TI_DSP is inaccurate!
+		  lrTemp := 1;
+		  IF (in > 1) THEN
+			FOR k := 1 TO 15 DO  //The largest consecutive integer in IEEE double precision 2^53.
+				IF (lrTemp > in) THEN 
+					lrTemp := EXPT(10, k-1);
+					dBegin := LOG(lrTemp) - 1;
+					bBegin := TRUE;	
+					EXIT;
+				END_IF	
+				lrTemp := lrTemp * 10.0; 
+			END_FOR
+		  END_IF
+		{END_IF}
+
+		IF (NOT bBegin) THEN
+			dBegin := LOG(in);
+		END_IF
+
+		bNeg := FALSE;
+		IF (dBegin < 0) THEN
+			nHelpBegin := TRUNC(dBegin);
+			IF (nHelpBegin <> dBegin) THEN
+				bNeg := 1;
+				dBegin := -dBegin + 1.0; //-dBegin;
+			ELSE
+				bNeg := 1;
+				dBegin := -dBegin;
+			END_IF
+		END_IF
+		pnBegin^ := TRUNC(dBegin);
+		IF(bNeg) THEN
+			pnBegin^ := -(pnBegin^);
+		END_IF
+		
+		dDiv := EXPT(10,pnBegin^);
+		in := in + 5 * (dDiv / 1e15);
+	
+		WHILE (dDiv > 0.0 AND i < 15) DO
+			nDig := DINT_TO_UDINT(TRUNC((in / dDiv) + 5e-14));
+			IF (nDig > 9 AND bFirst) THEN
+				nDig := 0;
+			ELSIF (nDig > 9 AND NOT bFirst) THEN
+				(* We enter this case when the uprounding above for nDig 
+				 * overfows into the next exponent. We just print that rounded number and exit.
+				 * Example 999 -> 1000 
+				 * For exponents larger 14 the display mode is switched to e notation.
+				 * Writing "10" into the buffer is sufficient in that case.*)
+				IF pnBegin^ < 14 THEN
+					pstr[0] := 16#0031;//'1';
+					pstr := pstr + SIZEOF(WORD);
+					FOR j:=0 TO pnBegin^ DO
+						pstr[0] := 16#0030;//'0';
+						pstr := pstr + SIZEOF(WORD);
+					END_FOR
+					pnBegin^ := pnBegin^ + j + 1;
+				ELSE
+					pstr[0] := 16#0031; //'1';
+					pstr[1] := 16#0030; //'0';
+					pstr := pstr + (2 * SIZEOF(WORD));
+					pnBegin^  := pnBegin^ + 1;
+				END_IF
+				EXIT;
+			END_IF
+			
+			IF (NOT bFirst AND (nDig <> 0)) THEN
+				bFirst := 1;
+			END_IF
+			IF (bFirst AND i < 15) THEN
+				pstr[0] := UDINT_TO_WORD(nDig) + 16#0030; //'0';
+				pstr := pstr + SIZEOF(WORD);
+				dDiff := nDig * dDiv;
+				in := in - dDiff;
+				i := i + 1;
+			END_IF
+			dDiv := dDiv / 10.0;
+			nDigits := nDigits-1;
+		END_WHILE
+
+		pstr[0] := 0;
+		ppstr^ := pstr;
+		{implicit off}
+		]]>
+		</body>
+	</pou>	
+	<pou id = "D7D42225-63E5-489a-8FFC-DA13C32E2888" name = "wstring__to__real32">
+		<interface>
+			{implicit on}
+			FUNCTION wstring__to__real32 : REAL
+			VAR_INPUT
+			in: WSTRING(255);
+			END_VAR
+			VAR
+			d : REAL := 1;
+			dRealVal : REAL := 0;
+			iExp : DINT := 0;
+			nSign : DINT := 1;
+			pstr : POINTER TO WORD := ADR(in);
+			iSign: INT;
+			{IF COMPILERVERSION(>=, '3.5.5.0')}
+			pdwHelp : POINTER TO DWORD := ADR(wstring__to__real32);
+			{END_IF}
+			END_VAR
+			{implicit off}
+		</interface>
+		<body>
+			<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		__SkipWhiteSpaceW(ADR(pstr));
+
+		IF (pstr[0] = WORD#16#002d) (*'-'*) THEN
+			nSign := -1;
+			pstr := pstr + SIZEOF(WORD);
+		ELSIF (pstr[0] = 16#002b (*'+'*)) THEN
+			pstr := pstr + SIZEOF(WORD);
+		END_IF
+		
+{IF COMPILERVERSION(>=, '3.5.5.0')}
+IF pstr[0] =  16#0023 (*''#*)THEN
+	IF pstr[1] = 16#004E (*N*)
+		AND pstr[2] = 16#0061 (*a*)
+		AND pstr[3] = 16#004E (*N*)
+	THEN
+		pdwHelp^ := __CONVERSION_CONSTANTS.NAN_REAL;
+		RETURN;
+	END_IF
+	IF pstr[1] = 16#0049 (*I*)
+		AND pstr[2] = 16#006E (*n*)
+		AND pstr[3] = 16#0066 (*f*)
+	THEN
+		IF nSign = -1 THEN
+			pdwHelp^ := __CONVERSION_CONSTANTS.NINF_REAL;
+		ELSE
+			pdwHelp^ := __CONVERSION_CONSTANTS.PINF_REAL;
+		END_IF
+		RETURN;
+	END_IF
+END_IF
+{END_IF}
+		
+
+		WHILE ((pstr[0] >= 16#0030 (*'0'*) AND pstr[0] <= 16#0039 (*'9'*)) OR pstr[0] = 16#005f (*'_'*))
+		DO
+			IF (pstr[0] <> 16#005f) THEN
+				dRealVal := dRealVal * 10 + pstr[0] - 16#0030;
+			END_IF
+			pstr := pstr + SIZEOF(WORD);
+		END_WHILE
+
+		IF (pstr[0] = 16#002e (*'.'*)) THEN
+			pstr := pstr + SIZEOF(WORD);
+			WHILE ((pstr[0] >= 16#0030 (*'0'*) AND pstr[0] <= 16#0039 (*'9'*)) OR pstr[0] = 16#005f (*'_'*))
+			DO 
+				IF (pstr[0] <> 16#005f) THEN
+					d := d / 10.0;
+					dRealVal := dRealVal + (pstr[0] - 16#0030) * d;
+				END_IF
+				pstr := pstr + SIZEOF(WORD);
+			END_WHILE
+		END_IF
+
+		IF (pstr[0] = 16#0065 (*'e'*) OR pstr[0] = 16#0045 (*'E'*)) THEN
+			iSign := 1;
+			pstr := pstr + SIZEOF(WORD);
+			IF (pstr[0] = 16#002d(*'-'*)) THEN
+				iSign := -1;
+				pstr := pstr + SIZEOF(WORD);
+			ELSIF (pstr[0] = 16#002b (*'+'*)) THEN
+				pstr := pstr + SIZEOF(WORD);
+			END_IF
+
+			WHILE ((pstr[0] >= 16#0030 (*'0'*) AND pstr[0] <= 16#0039 (*'9'*)) OR pstr[0] = 16#005f (*'_'*))
+			DO
+				IF (pstr[0] <> 16#005f) THEN
+					iExp := iExp * 10 + pstr[0] - 16#0030;
+				END_IF
+				pstr := pstr + SIZEOF(WORD);
+			END_WHILE
+			dRealVal := dRealVal * EXPT(10.0, iExp * iSign);
+		END_IF
+		wstring__to__real32 := DINT_TO_REAL(nSign) * dRealVal;		
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+
+	<pou id = "2E99850F-3FD7-43F6-915C-5908AB79D5D4" name = "new__real32__to__wstring">
+		<interface>
+			{implicit on}
+			FUNCTION new__real32__to__wstring: WSTRING(25)
+			VAR_INPUT
+			in : REAL;
+			dwType: DWORD;
+			END_VAR
+			VAR
+			index: INT;
+			pdw : POINTER TO DWORD;
+			dw : DWORD;
+
+			bSign : BOOL;
+			decexponent: INT;
+			binexponent: INT;
+			binmantissa: DINT;
+			decmantissa: DINT;
+			strMantissaRaw: WSTRING(12);
+			strMantissa: WSTRING(15);
+			pstrMantissa: POINTER TO WORD;
+			nLen: INT;
+			i: INT;
+			bFirstChar: BOOL;
+			nNewExponent: INT;
+			nPointPosition: INT;
+			nIndexMantissaNew : INT;
+			bNan, bInf : BOOL;
+
+			Exponent : ARRAY [0..1] OF WORD;
+			bNegExponent : BOOL;
+			nTens: WORD;
+			nOnes: WORD;
+
+			PF : POINTER TO REAL := ADR(__CONVERSION_CONSTANTS.F);
+			END_VAR
+			VAR CONSTANT
+			CHAR_0 : WORD := 16#30;
+			CHAR_POINT : WORD := 16#2E;
+			CHAR_MINUS : WORD := 16#2D;
+			CHAR_E : WORD := 16#45;
+			END_VAR
+
+			{implicit off}
+		</interface>
+		<body>
+			<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+pdw := ADR(in);
+dw := pdw^;
+
+// special case of 0
+IF dw = 0 THEN
+	new__real32__to__wstring := "0";
+	RETURN;
+END_IF
+
+__ExtractReal(f := in, bS => bSign, iE => binexponent, diM => binmantissa, xNan => bNan, xInf => bInf);
+
+IF bNan THEN
+	new__real32__to__wstring := "#NaN";
+	RETURN;
+END_IF
+
+IF bInf THEN
+	new__real32__to__wstring  := "#Inf";
+{IF COMPILERVERSION(>=, '3.5.5.0')}
+	IF (bSign) THEN
+		new__real32__to__wstring := "-#Inf";
+	END_IF
+{END_IF}
+	RETURN;
+END_IF
+
+index := binexponent + 126;
+decexponent := __CONVERSION_CONSTANTS.E[index];
+decmantissa := REAL_TO_DINT(PF[index]*DINT_TO_REAL(binmantissa));
+strMantissaRaw := DINT_TO_WSTRING(decmantissa);
+
+nLen := 0;
+
+FOR i := 0 TO 12 DO
+	IF strMantissaRaw[i] = 0 THEN
+		nLen := i;
+		EXIT;
+	END_IF
+END_FOR
+
+IF nLen > 12 THEN
+	// should never happen! maximal length is 8!
+	nLen := 12;
+END_IF
+bFirstChar := FALSE;
+nNewExponent := decexponent+nLen-1;
+nPointPosition := 1;
+
+// exponents between -4 and 8 are not displayed using E10
+IF (nNewExponent >= -4) AND (nNewExponent < 8) THEN
+	nPointPosition := nPointPosition + nNewExponent;
+	nNewExponent := 0;
+END_IF
+
+// fill result mantissa with end of string
+// so we don't have to care about correct ending
+FOR i := 0 TO 13 DO
+	strMantissa[i] := 0; 
+END_FOR
+
+pstrMantissa := ADR(strMantissa);
+
+IF (bSign) THEN
+	pstrMantissa[0] := CHAR_MINUS;
+	pstrMantissa := pstrMantissa + 2;
+END_IF
+
+FOR i := nPointPosition-1 TO nLen-1 BY -1 DO
+	bFirstChar := TRUE;
+	pstrMantissa[i] := CHAR_0;	
+END_FOR
+
+nIndexMantissaNew := nLen-1;
+IF nPointPosition <= 0 THEN
+	nIndexMantissaNew := nIndexMantissaNew - nPointPosition + 2;
+ELSIF nPointPosition <= nLen-1 THEN
+	nIndexMantissaNew := nIndexMantissaNew + 1;
+END_IF
+
+
+FOR i := nLen-1 TO 0 BY -1 DO
+	// Skip trailing zeros
+	IF (nIndexMantissaNew = nPointPosition) THEN
+		IF (bFirstChar) THEN
+			pstrMantissa[nIndexMantissaNew] := CHAR_POINT; 
+		END_IF
+		nIndexMantissaNew := nIndexMantissaNew - 1;
+		bFirstChar := TRUE; // no more skipping after decimal point			
+	END_IF
+	
+	IF (NOT(bFirstChar) AND strMantissaRaw[i] = CHAR_0) THEN
+		nIndexMantissaNew := nIndexMantissaNew - 1;	
+		CONTINUE;
+	END_IF
+	bFirstChar := TRUE;
+	pstrMantissa[nIndexMantissaNew] := strMantissaRaw[i];
+	nIndexMantissaNew := nIndexMantissaNew - 1;
+END_FOR
+
+WHILE nIndexMantissaNew > 1 DO
+	pstrMantissa[nIndexMantissaNew] := CHAR_0;
+	nIndexMantissaNew := nIndexMantissaNew - 1;
+END_WHILE
+IF nIndexMantissaNew = 1 THEN
+	pstrMantissa[1] := CHAR_POINT;	
+	pstrMantissa[0] := CHAR_0;	
+END_IF
+
+IF nNewExponent <> 0 THEN
+
+	IF nNewExponent < 0 THEN
+		bNegExponent := TRUE;
+		nNewExponent := 0 - nNewExponent;
+	END_IF
+
+	nTens := INT_TO_WORD(nNewExponent) / 10;
+	nOnes := INT_TO_WORD(nNewExponent) MOD 10;
+	FOR i := 0 TO 12 DO
+		IF strMantissa[i] = 0 THEN
+			strMantissa[i] := CHAR_E; 
+			i := i + 1;
+			IF (bNegExponent) THEN
+				strMantissa[i] := CHAR_MINUS;
+				i := i + 1;
+			END_IF
+			strMantissa[i] := CHAR_0 + nTens;
+			strMantissa[i+1] := CHAR_0 + nOnes;
+			strMantissa[i+2] := 0;
+			EXIT;
+		END_IF
+	END_FOR
+END_IF
+
+new__real32__to__wstring := strMantissa;
+		
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+
+
+	<pou id = "D0117DD7-073C-4a9f-B9EC-8D276F7AE3B7" name = "real32__to__wstring">
+		<interface>
+		{implicit on}
+		FUNCTION real32__to__wstring : WSTRING(255)
+		VAR_INPUT
+			in: REAL;
+			dwType: DWORD;
+		END_VAR
+		VAR
+			sz : WSTRING;
+			pszHelp : POINTER TO WORD;
+			pszSource : POINTER TO WORD;
+			pszHelpSource : POINTER TO WORD;
+			pszDest : POINTER TO WORD;
+			nSign : DINT := 1;
+			i : DINT;
+			iExp10 : DINT;
+			nExpSign : DINT := 1;
+		END_VAR		
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		pszDest := ADR(real32__to__wstring);
+		pszHelp := ADR(sz);
+		
+		// If dwType REAL just use first 6 Numbers
+		IF (dwType = __TypeClass.TYPE_REAL) THEN
+			IF (in < 0) THEN
+				i := TRUNC(LOG(-in));
+			ELSIF (in >0) THEN
+				i := TRUNC(LOG(in));
+			ELSE
+				i := 0;
+			END_IF
+
+			{IF COMPILERVERSION(>=, '3.4.4.0')}				
+			  IF (in >= 0) THEN
+				  in := in * TRUNC(EXPT(10,6-i)) + 0.5;
+			  ELSE
+				  in := in * TRUNC(EXPT(10,6-i)) - 0.5;
+			  END_IF      
+			  in := DINT_TO_REAL(TRUNC(in)) / TRUNC(EXPT(10,6-i));
+			{ELSE}
+			  IF (in >= 0) THEN
+				  in := in * EXPT(10,6-i) + 0.5;
+			  ELSE
+				  in := in * EXPT(10,6-i) - 0.5;
+			  END_IF      
+			  in := DINT_TO_REAL(TRUNC(in)) / EXPT(10,6-i);
+			{END_IF}
+      
+			i := 0;
+		END_IF
+		// Emit sign
+		IF (in < 0) THEN
+			pszDest[0] := WORD#16#002d;
+			pszDest := pszDest + SIZEOF(WORD);
+			nSign := -1;
+		END_IF	
+		IF (in = 0) THEN
+			pszDest[0] := 16#0030; //'0';
+			pszDest[1] := 16#002e;//'.';
+			pszDest[2] := 16#0030;
+			pszDest[3] := 0;//'\0';
+		ELSE
+			__HelpReal32ConvertW(DINT_TO_REAL(nSign) * in,ADR(pszHelp),ADR(iExp10));
+			pszSource := ADR(sz);
+			IF(iExp10 >= 0 AND iExp10 < 14) THEN
+				FOR(i := 0) TO iExp10 DO
+					pszDest[i] := pszSource[i];
+				END_FOR
+				pszDest[i] := 16#002e;//'.';
+				pszDest := pszDest + SIZEOF(WORD)*i + SIZEOF(WORD);
+				pszSource := pszSource + SIZEOF(WORD)*i;
+				WHILE (pszSource[0] <> 0) DO
+					pszDest[0] := pszSource[0];
+					pszDest := pszDest + SIZEOF(WORD);
+					pszSource := pszSource + SIZEOF(WORD);
+					IF(pszSource[0] = 16#0030) THEN //'0'
+						pszHelpSource := pszSource;
+						WHILE (pszHelpSource[0] = 16#0030) DO
+							pszHelpSource := pszHelpSource + SIZEOF(WORD);
+						END_WHILE
+						IF (pszHelpSource[0] = 0) THEN
+							EXIT;
+						END_IF
+					END_IF
+				END_WHILE
+				pszDest[0] := 0;//'\0';
+			ELSIF (iExp10 >= 14 OR iExp10 <0) THEN
+				pszDest[0] := pszSource[0];
+				pszDest[1] := 16#002e;//'.';
+				pszDest := pszDest + (2 * SIZEOF(WORD));
+				pszSource := pszSource + SIZEOF(WORD);
+				WHILE (pszSource[0] <> 0) DO
+					pszDest[0] := pszSource[0];
+					pszDest := pszDest + SIZEOF(WORD);
+					pszSource := pszSource + SIZEOF(WORD);
+					IF(pszSource[0] = 16#0030) THEN //'0'
+						pszHelpSource := pszSource;
+						WHILE (pszHelpSource[0] = 16#0030) DO
+							pszHelpSource := pszHelpSource + SIZEOF(WORD);
+						END_WHILE
+						IF (pszHelpSource[0] = 0) THEN
+							EXIT;
+						END_IF
+					END_IF
+				END_WHILE
+				pszDest[0] := 16#0065; //'e';
+				pszDest := pszDest + SIZEOF(WORD);
+				IF (iExp10 < 0) THEN
+					pszDest[0] := WORD#16#002d;
+					pszDest := pszDest + SIZEOF(WORD);
+					nExpSign := -1;
+				END_IF
+				__HelpConvertW(DINT_TO_UDINT((nExpSign) * iExp10),ADR(pszDest),1);
+				pszDest[0] := 0;
+			END_IF
+		END_IF
+		{implicit off}
+		]]>
+		</body>
+	</pou>	
+	<pou id = "103e7c1c-c83d-4719-a2c6-923bc1ee8bfc" name = "any32__to__wstring">
+		<interface>
+		{implicit on}
+		FUNCTION any32__to__wstring : WSTRING(255)
+		VAR_INPUT
+			in: DWORD;
+			dwType: DWORD;
+		END_VAR
+		VAR
+			diExponent : DINT;
+			dwMant : UDINT;
+			diExp10 : DINT;
+			pstr: POINTER TO WORD;
+			diAfterKomma: DINT;
+			udPow : UDINT;
+			dwTOD : DWORD;
+			dwDate: DWORD;
+			pszHelp: WSTRING(INT#1);
+		END_VAR		
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		pstr := ADR(any32__to__wstring);
+		IF (dwType = __TypeClass.TYPE_DATE) THEN
+			pstr[0] := 16#0044; (*'D'*)
+			pstr[1] := 16#0023; (*'#'*)
+			pstr := pstr + (2 * SIZEOF(WORD)); 
+			__HelpConvertDateW(in, ADR(pstr));
+			RETURN;
+		END_IF
+		IF (dwType = __TypeClass.TYPE_TIMEOFDAY) THEN
+			pstr[0] := 16#0054; (*'T'*)
+			pstr[1] := 16#004f; (*'O'*)
+			pstr[2] := 16#0044; (*'D'*)
+			pstr[3] := 16#0023; (*'#'*)
+			pstr := pstr + (4 * SIZEOF(WORD));
+			__HelpConvertTimeW(in, ADR(pstr));
+			RETURN;
+		END_IF
+		IF (dwType = __TypeClass.TYPE_DATEANDTIME) THEN
+			dwTOD := in MOD (DWORD#24 * DWORD#3600);
+			dwDate := in - dwTOD;
+			pstr[0] := 16#0044; (*'D'*)
+			pstr[1] := 16#0054; (*'T'*)
+			pstr[2] := 16#0023; (*'#'*)
+			pstr := pstr + (3 * SIZEOF(WORD));
+			__HelpConvertDateW(dwDate, ADR(pstr));
+			pstr[0] := WORD#16#002d; (*'-'*)
+			pstr := pstr + SIZEOF(WORD);
+			__HelpConvertTimeW(dwTOD * 1000, ADR(pstr));
+			RETURN;
+		END_IF
+		IF (dwType = __TypeClass.TYPE_TIME) THEN
+			__HelpConvertTimeWithUnitW(in,ADR(pstr));
+			RETURN;
+		END_IF
+		IF (dwType = __TypeClass.TYPE_BOOL) THEN  
+			IF (in <> 0) THEN
+				any32__to__wstring := "TRUE";
+			ELSE
+				any32__to__wstring := "FALSE";
+			END_IF
+			RETURN;
+		END_IF
+		(*Numbers*)
+		IF ((dwType = __TypeClass.TYPE_SINT OR dwType = __TypeClass.TYPE_INT OR dwType = __TypeClass.TYPE_DINT) 
+			AND in > DWORD#16#7FFFFFFF) THEN
+			(* Sign of result *)
+			in := DINT_TO_DWORD(-(DWORD_TO_DINT(in)));
+			pstr[0] := WORD#16#002d; (*'-'*)
+			pstr[1] := 00; (*'\0'*)
+			pstr := pstr + SIZEOF(WORD);
+		ELSE
+			pstr[0] := 00; (*'\0'*)
+		END_IF
+		IF (dwType = __TypeClass.TYPE_BYTE OR dwType = __TypeClass.TYPE_WORD OR dwType = __TypeClass.TYPE_DWORD
+			OR dwType = __TypeClass.TYPE_USINT OR dwType = __TypeClass.TYPE_UINT OR dwType = __TypeClass.TYPE_UDINT) THEN
+				pstr[0] := 00; (*'\0'*)
+		END_IF
+		__HelpConvertW(in, ADR(pstr),1);
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "3493b04f-9f38-4061-af85-90cd238a240a" name = "wstring__to__any32">
+		<interface>
+		{implicit on}
+		FUNCTION wstring__to__any32 : DWORD
+		VAR_INPUT
+			in: WSTRING(255);
+			dwType: DWORD;
+		END_VAR
+		VAR
+			pstr : POINTER TO WSTRING := ADR(in);
+			ulHelpDt: UDINT;
+			strHelp : WSTRING(4);
+			pstrHelp : POINTER TO WORD; 
+		END_VAR		
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		__SkipWhiteSpaceW(ADR(pstr));
+
+		IF (dwType = __TypeClass.TYPE_DATE) THEN
+			IF (__LEFTW(pstr^, 2) <> "d#") AND (__LEFTW(pstr^, 2) <> "D#")
+				AND (__LEFTW(pstr^, 5) <> "DATE#") AND (__LEFTW(pstr^, 5) <> "date#") THEN
+					wstring__to__any32 := 0;
+					RETURN;
+			END_IF
+			WHILE (pstr^[0] <> 16#0023) (*'#'*) DO
+				pstr := pstr + SIZEOF(WORD);
+			END_WHILE
+			pstr := pstr + SIZEOF(WORD);
+			wstring__to__any32 := __HelpConvertFromDateW(ADR(pstr)); 
+			RETURN;
+		END_IF
+		IF (dwType = __TypeClass.TYPE_TIMEOFDAY) THEN
+			IF (__LEFTW(pstr^, 4) <> "tod#") AND (__LEFTW(pstr^, 4) <> "TOD#") 
+				AND (__LEFTW(pstr^, 12) <> "TIME_OF_DAY#")
+				AND (__LEFTW(pstr^, 12) <> "time_of_day#") THEN
+				wstring__to__any32 := 0;
+				RETURN;
+			END_IF
+			WHILE (pstr^[0] <> 16#0023) (*'#'*) DO
+				pstr := pstr + SIZEOF(WORD);
+			END_WHILE
+			pstr := pstr + SIZEOF(WORD);
+			wstring__to__any32 := __HelpConvertFromTimeW(ADR(pstr));
+			RETURN; 
+		END_IF
+		IF (dwType = __TypeClass.TYPE_DATEANDTIME) THEN
+			IF (__LEFTW(pstr^, 3) <> "dt#") AND (__LEFTW(pstr^, 3) <> "DT#") 
+				AND (__LEFTW(pstr^, 14) <> "DATE_AND_TIME#")
+				AND (__LEFTW(pstr^, 14) <> "date_and_time#") THEN
+				wstring__to__any32 := 0;
+				RETURN;
+			END_IF
+			WHILE (pstr^[0] <> 16#0023) (*'#'*) DO
+				pstr := pstr + SIZEOF(WORD);
+			END_WHILE
+			pstr := pstr + SIZEOF(WORD);
+			ulHelpDt := __HelpConvertFromDateW(ADR(pstr));
+			pstr := pstr + SIZEOF(WORD);
+			wstring__to__any32 := ulHelpDt + __HelpConvertFromTimeW(ADR(pstr)) / 1000;
+			RETURN;
+		END_IF
+		(* TODO : __TypeClass.TYPE_REAL not necessary for FPU *)
+		IF (dwType = __TypeClass.TYPE_SINT OR dwType = __TypeClass.TYPE_INT OR dwType = __TypeClass.TYPE_DINT
+					OR dwType = __TypeClass.TYPE_BYTE OR dwType = __TypeClass.TYPE_WORD OR dwType = __TypeClass.TYPE_DWORD
+					OR dwType = __TypeClass.TYPE_USINT OR dwType = __TypeClass.TYPE_UINT OR dwType = __TypeClass.TYPE_UDINT)
+		THEN
+			IF pstr^[0] = 0 (*'\0'*) THEN
+				wstring__to__any32 := 0;
+				RETURN;
+			END_IF
+			IF (__LEFTW(pstr^, 3) = "16#") THEN
+				wstring__to__any32 := __HelpConvertStringBaseW(pstr + (3 * SIZEOF(WORD)), 16);
+				RETURN;
+			ELSIF (__LEFTW(pstr^, 2) = "2#")THEN
+				wstring__to__any32 := __HelpConvertStringBaseW(pstr + (2 * SIZEOF(WORD)), 2);
+				RETURN;
+			ELSIF  (__LEFTW(pstr^, 2) = "8#") THEN
+				wstring__to__any32 := __HelpConvertStringBaseW(pstr + (2 * SIZEOF(WORD)), 8);
+				RETURN;
+			ELSE 
+				IF (pstr^[0] = WORD#16#002d (*'-'*) AND (dwType = __TypeClass.TYPE_SINT OR dwType = __TypeClass.TYPE_INT OR 
+						dwType = __TypeClass.TYPE_DINT))
+				THEN
+					pstr := pstr + SIZEOF(WORD);
+					wstring__to__any32 := DINT_TO_UDINT(- UDINT_TO_DINT(__HelpConvertStringBaseW(pstr,10)));
+					RETURN;
+				ELSE
+					IF (pstr^[0] = WORD#16#002b (*'+'*)) THEN
+						pstr := pstr + SIZEOF(WORD);
+					END_IF
+					wstring__to__any32 := __HelpConvertStringBaseW(pstr,10);
+					RETURN;
+				END_IF
+			END_IF
+			wstring__to__any32 := 0;
+			RETURN; 
+		END_IF
+
+		IF (dwType = __TypeClass.TYPE_BOOL) THEN
+			IF (__LEFTW(pstr^,4) = "TRUE") OR (__LEFTW(pstr^,4) = "true") THEN
+				wstring__to__any32 := 1;
+			ELSE 
+				wstring__to__any32 := 0;
+			END_IF
+			RETURN;
+		END_IF
+
+		IF (dwType = __TypeClass.TYPE_TIME) THEN
+			IF (__LEFTW(pstr^, 2) <> "t#") AND (__LEFTW(pstr^, 2) <> "T#") 
+				AND (__LEFTW(pstr^, 5) <> "TIME#") AND (__LEFTW(pstr^, 5) <> "time#") THEN
+					wstring__to__any32 := 67;
+					RETURN;
+			END_IF
+			WHILE (pstr^[0] <> 16#0023) (*'#'*) DO
+				pstr := pstr + SIZEOF(WORD);
+			END_WHILE
+			pstr := pstr + SIZEOF(WORD);
+
+			WHILE (pstr^[0] <> 0 (*'\0'*)) DO
+				pstrHelp := ADR(strHelp);
+				WHILE((pstr^[0] >= 16#0030(*'0'*) AND pstr^[0] <= 16#0039(*'9'*)) OR pstr^[0] = 16#005f (*'_'*)) DO
+					IF (pstr^[0] = 16#005f (*'_'*)) THEN
+						pstr := pstr + SIZEOF(WORD);
+					ELSE
+						pstrHelp[0] := pstr^[0];
+						pstrHelp := pstrHelp + SIZEOF(WORD);
+						pstr := pstr + SIZEOF(WORD);
+					END_IF
+				END_WHILE
+				wstring__to__any32 := wstring__to__any32  + __HelpConvertStringW(ADR(strHelp),(pstrHelp-ADR(strHelp))/SIZEOF(WORD)) * __HelpConvertTimeUnitsW(ADR(pstr));
+			END_WHILE
+			RETURN;
+		END_IF
+		
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "fdeae835-342b-4f09-9e28-287167c2d05c" name = "any64__to__wstring">
+		<interface>
+		{implicit on}
+		FUNCTION any64__to__wstring : WSTRING(255)
+		VAR_INPUT
+			in: LWORD;
+			dwType: DWORD;
+		END_VAR
+		VAR
+			dintHigh: DINT;
+			udintLow: UDINT;
+			udintHigh: UDINT;
+			pstr: POINTER TO WORD;
+			ulDiv: LWORD := 10000000000000000000;
+			ulDig: LWORD;
+			bFirst: BOOL;
+			nDigits: INT := 20;
+			nWidth: INT := 1;
+			count: INT := 0;
+      
+      {IF COMPILERVERSION(>=, '3.5.16.0')}
+        lwTOD: ULINT;
+        lwDATE: ULINT;
+      {END_IF}
+      
+		END_VAR		
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		pstr := ADR(any64__to__wstring);
+		
+      {IF COMPILERVERSION(>=, '3.5.16.0')}
+
+          IF (dwType = __TypeClass.TYPE_LDATE) THEN
+	          pstr[0] := 16#004C; (*'L'*)
+			      pstr[1] := 16#0044; (*'D'*)
+			      pstr[2] := 16#0023; (*'#'*)
+            pstr := pstr + (3 * SIZEOF(WORD)); 
+	          __HelpConvertLDateW(in, ADR(pstr));
+	          RETURN;
+          END_IF
+          IF (dwType = __TypeClass.TYPE_LTIMEOFDAY) THEN
+	          pstr[0] := 16#004C; (*'L'*)
+			      pstr[1] := 16#0054; (*'T'*)
+			      pstr[2] := 16#004f; (*'O'*)
+			      pstr[3] := 16#0044; (*'D'*)
+			      pstr[4] := 16#0023; (*'#'*)
+            pstr := pstr + (5 * SIZEOF(WORD));
+	          __HelpConvertLTimeW(in, ADR(pstr));
+	          RETURN;
+          END_IF
+          IF (dwType = __TypeClass.TYPE_LDATEANDTIME) THEN
+	          lwTOD := in MOD (LWORD#24 * LWORD#3600 * LWORD#1_000_000_000);
+	          lwDATE := in - lwTOD;
+	          pstr[0] := 16#004C; (*'L'*)
+			      pstr[1] := 16#0044; (*'D'*)
+			      pstr[2] := 16#0054; (*'T'*)
+			      pstr[3] := 16#0023; (*'#'*)
+            pstr := pstr + (4 * SIZEOF(WORD));
+	          __HelpConvertLDateW(lwDate, ADR(pstr));
+	          pstr[0] := BYTE#16#2d; (*'-'*)
+            pstr := pstr + SIZEOF(WORD);
+	          __HelpConvertLTimeW(lwTOD, ADR(pstr));
+	          RETURN;
+          END_IF
+
+      {END_IF}        
+    
+		IF (dwType = __TypeClass.TYPE_LTIME) THEN
+			__HelpConvertLTimeWithUnitW(in,ADR(pstr));
+			RETURN;
+		END_IF		
+		IF (dwType = __TypeClass.TYPE_LINT	AND in > ULINT#16#7FFFFFFFFFFFFFFF) THEN
+			(* Sign of result *)
+			in := LINT_TO_LWORD(-(LWORD_TO_LINT(in)));
+			pstr[0] := WORD#16#002d; (*'-'*)
+			pstr[1] := 0; (*'\0'*)
+			pstr := pstr + SIZEOF(WORD);
+		ELSE
+			pstr[0] := 0; (*'\0'*)
+		END_IF
+		WHILE (ulDiv > 0) DO
+			ulDig := in / ulDiv;
+			IF ((NOT bFirst AND ulDig <> 0) OR (nDigits <= nWidth)) THEN
+				bFirst := TRUE;
+			END_IF
+			IF (bFirst) THEN
+				pstr[0] := LWORD_TO_WORD(ulDig + 16#0030); (*'0'*)
+				pstr := pstr + SIZEOF(WORD); 
+				in := in MOD ulDiv;
+				count := count + 1;
+			END_IF
+			ulDiv := ulDiv / ULINT#10;
+			nDigits := nDigits-1;
+		END_WHILE
+		pstr[0] := 0; (*'\0'*)		
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "c63e18fa-6b1a-452f-9bcc-080e5f54a487" name = "wstring__to__any64">
+		<interface>
+		{implicit on}
+		FUNCTION wstring__to__any64 : LWORD
+		VAR_INPUT
+			in: WSTRING(255);
+			dwType: DWORD;
+		END_VAR
+		VAR
+			pstr : POINTER TO WSTRING := ADR(in);
+			strHelp : WSTRING(4);
+			pstrHelp : POINTER TO WORD;
+      
+      {IF COMPILERVERSION(>=, '3.5.16.0')}
+        ulHelpLdt: ULINT;
+      {END_IF}
+      
+		END_VAR		
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		__SkipWhiteSpaceW(ADR(pstr));
+
+    {IF COMPILERVERSION(>=, '3.5.16.0')}
+		    IF (dwType = __TypeClass.TYPE_LDATE) THEN
+			    IF (__LEFTW(pstr^, 3) <> "ld#") AND (__LEFTW(pstr^, 3) <> "LD#")
+				    AND (__LEFTW(pstr^, 6) <> "LDATE#") AND (__LEFTW(pstr^, 6) <> "ldate#") THEN
+					    wstring__to__any64 := 0;
+					    RETURN;
+			    END_IF
+			    WHILE (pstr^[0] <> 16#0023) (*'#'*) DO
+            pstr := pstr + SIZEOF(WORD);
+			    END_WHILE
+          pstr := pstr + SIZEOF(WORD);
+			    wstring__to__any64 := __HelpConvertFromLDateW(ADR(pstr));
+			    RETURN;
+        END_IF
+        
+		    IF (dwType = __TypeClass.TYPE_LTIMEOFDAY) THEN
+			    IF (__LEFTW(pstr^, 5) <> "ltod#") AND (__LEFTW(pstr^, 5) <> "LTOD#") 
+				    AND (__LEFTW(pstr^, 13) <> "LTIME_OF_DAY#")
+				    AND (__LEFTW(pstr^, 13) <> "ltime_of_day#") THEN
+				    wstring__to__any64 := 0;
+				    RETURN;
+			    END_IF
+			    WHILE (pstr^[0] <> 16#0023) (*'#'*) DO
+            pstr := pstr + SIZEOF(WORD);
+			    END_WHILE
+          pstr := pstr + SIZEOF(WORD);
+      
+          wstring__to__any64 := __HelpConvertFromLTimeW(ADR(pstr));
+			    RETURN; 
+		    END_IF
+        
+		    IF (dwType = __TypeClass.TYPE_LDATEANDTIME) THEN
+			    IF (__LEFTW(pstr^, 4) <> "ldt#") AND (__LEFTW(pstr^, 4) <> "LDT#") 
+				    AND (__LEFTW(pstr^, 15) <> "LDATE_AND_TIME#")
+				    AND (__LEFTW(pstr^, 15) <> "ldate_and_time#") THEN
+				    wstring__to__any64 := 0;
+				    RETURN;
+			    END_IF
+			    WHILE (pstr^[0] <> 16#0023) (*'#'*) DO
+            pstr := pstr + SIZEOF(WORD);
+			    END_WHILE
+          pstr := pstr + SIZEOF(WORD);
+                                      
+			    ulHelpLdt := __HelpConvertFromLDateW(ADR(pstr));
+          pstr := pstr + SIZEOF(WORD);
+			    wstring__to__any64 := ulHelpLdt + __HelpConvertFromLTimeW(ADR(pstr));
+			    RETURN;
+		    END_IF
+        
+    {END_IF}    
+
+		IF (dwType = __TypeClass.TYPE_LTIME) THEN
+			IF (__LEFTW(pstr^, 6) <> "LTIME#") AND (__LEFTW(pstr^, 6) <> "ltime#") THEN
+				wstring__to__any64 := 0;
+				RETURN;
+			END_IF
+			WHILE (pstr^[0] <> 16#0023) (*'#'*) DO
+				pstr := pstr + SIZEOF(WORD);
+			END_WHILE
+			pstr := pstr + SIZEOF(WORD);
+
+			WHILE (pstr^[0] <> 0 (*'\0'*)) DO
+				pstrHelp := ADR(strHelp);
+				WHILE((pstr^[0] >= 16#0030(*'0'*) AND pstr^[0] <= 16#0039(*'9'*)) OR pstr^[0] = 16#005f (*'_'*)) DO
+					IF (pstr^[0] = 16#005f (*'_'*)) THEN
+						pstr := pstr + SIZEOF(WORD);
+					ELSE
+						pstrHelp[0] := pstr^[0];
+						pstrHelp := pstrHelp + SIZEOF(WORD);
+						pstr := pstr + SIZEOF(WORD);
+					END_IF
+				END_WHILE
+				wstring__to__any64 := wstring__to__any64  + __HelpConvertStringW(ADR(strHelp),(pstrHelp-ADR(strHelp))/SIZEOF(WORD)) * __HelpConvertLTimeUnitsW(ADR(pstr));
+			END_WHILE
+			RETURN;
+		END_IF
+		
+		IF (dwType = __TypeClass.TYPE_LINT OR dwType = __TypeClass.TYPE_LWORD OR dwType = __TypeClass.TYPE_ULINT)
+		THEN
+			IF pstr^[0] = 0 (*'\0'*) THEN
+				wstring__to__any64 := 0;
+				RETURN;
+			END_IF
+			IF (__LEFTW(pstr^, 3) = "16#") THEN
+				wstring__to__any64 := __HelpConvertStringBase64W(pstr + (3 * SIZEOF(WORD)), 16);
+				RETURN;
+			ELSIF (__LEFTW(pstr^, 2) = "2#")THEN
+				wstring__to__any64 := __HelpConvertStringBase64W(pstr + (2 * SIZEOF(WORD)), 2);
+				RETURN;
+			ELSIF  (__LEFTW(pstr^, 2) = "8#") THEN
+				wstring__to__any64 := __HelpConvertStringBase64W(pstr + (2 * SIZEOF(WORD)), 8);
+				RETURN;
+			ELSE 
+				IF (pstr^[0] = WORD#16#002d (*'-'*) AND dwType = __TypeClass.TYPE_LINT)
+				THEN
+					pstr := pstr + SIZEOF(WORD);
+					wstring__to__any64 := LINT_TO_ULINT(-ULINT_TO_LINT(__HelpConvertStringBase64W(pstr,10)));
+					RETURN;
+				ELSE
+					IF (pstr^[0] = WORD#16#002b (*'+'*)) THEN
+						pstr := pstr + SIZEOF(WORD);
+					END_IF
+					wstring__to__any64 := __HelpConvertStringBase64W(pstr,10);
+					RETURN;
+				END_IF
+			END_IF
+			wstring__to__any64 := 0;
+			RETURN; 
+		END_IF		
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "86a06adf-8294-4d01-8a63-1ec0342be49b" name = "real64__to__wstring">
+		<interface>
+			{implicit on}
+			FUNCTION real64__to__wstring : WSTRING(255)
+			VAR_INPUT
+			in: LREAL;
+			dwType: DWORD;
+			END_VAR
+			VAR
+			sz : WSTRING;
+			pszHelp : POINTER TO WORD;
+			pszSource : POINTER TO WORD;
+			pszHelpSource : POINTER TO WORD;
+			pszDest : POINTER TO WORD;
+			nSign : DINT := 1;
+			i : DINT;
+			iExp10 : DINT;
+			nExpSign : DINT := 1;
+
+			{IF COMPILERVERSION(>=, '3.5.5.0')}
+			bS: BOOL;
+			diE: DINT;
+			liM: LINT;
+			xNan: BOOL;
+			xInf: BOOL;
+			bNan: BOOL;
+			{END_IF}
+
+			END_VAR
+			{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		
+{IF COMPILERVERSION(>=, '3.5.5.0')}
+__ExtractLReal(in, bS => bS, diE => diE, liM => liM, xNan => xNan, xInf => xInf);
+IF XNan THEN
+	real64__to__wstring := "#NaN";
+	RETURN;
+END_IF
+
+IF xInf THEN
+	IF (bS) THEN
+		real64__to__wstring := "-#Inf";
+	ELSE
+		real64__to__wstring := "#Inf";
+	END_IF
+	RETURN;
+END_IF
+{END_IF}
+	
+		
+		pszDest := ADR(real64__to__wstring);
+		pszHelp := ADR(sz);
+		
+		// If dwType REAL just use first 6 Numbers
+		IF (dwType = __TypeClass.TYPE_REAL) THEN
+			IF (in < 0) THEN
+				i := TRUNC(LOG(-in));
+			ELSIF (in >0) THEN
+				i := TRUNC(LOG(in));
+			ELSE
+				i := 0;
+			END_IF
+			IF (in >= 0) THEN
+				in := in * EXPT(10,6-i) + 0.5;
+			ELSE
+				in := in * EXPT(10,6-i) - 0.5;
+			END_IF
+			in := DINT_TO_LREAL(TRUNC(in)) / EXPT(10,6-i);
+			i := 0;
+		END_IF
+
+		// Emit sign
+		IF (in < 0) THEN
+			pszDest[0] := WORD#16#002d;
+			pszDest := pszDest + SIZEOF(WORD);
+			nSign := -1;
+		END_IF	
+		IF (in = 0) THEN
+			pszDest[0] := 16#0030; //'0';
+			pszDest[1] := 16#002e;//'.';
+			pszDest[2] := 16#0030;
+			pszDest[3] := 0;//'\0';
+		ELSE
+			__HelpRealConvertW(DINT_TO_LREAL(nSign) * in,ADR(pszHelp),ADR(iExp10));
+			pszSource := ADR(sz);
+			IF(iExp10 >= 0 AND iExp10 < 14) THEN
+				FOR(i := 0) TO iExp10 DO
+					pszDest[i] := pszSource[i];
+				END_FOR
+				pszDest[i] := 16#002e;//'.';
+				pszDest := pszDest + SIZEOF(WORD)*i + SIZEOF(WORD);
+				pszSource := pszSource + SIZEOF(WORD)*i;
+				WHILE (pszSource[0] <> 0) DO
+					pszDest[0] := pszSource[0];
+					pszDest := pszDest + SIZEOF(WORD);
+					pszSource := pszSource + SIZEOF(WORD);
+					IF(pszSource[0] = 16#0030) THEN //'0'
+						pszHelpSource := pszSource;
+						WHILE (pszHelpSource[0] = 16#0030) DO
+							pszHelpSource := pszHelpSource + SIZEOF(WORD);
+						END_WHILE
+						IF (pszHelpSource[0] = 0) THEN
+							EXIT;
+						END_IF
+					END_IF
+				END_WHILE
+				pszDest[0] := 0;//'\0';
+			ELSIF (iExp10 >= 14 OR iExp10 <0) THEN
+				pszDest[0] := pszSource[0];
+				pszDest[1] := 16#002e;//'.';
+				pszDest := pszDest + (2 * SIZEOF(WORD));
+				pszSource := pszSource + SIZEOF(WORD);
+				WHILE (pszSource[0] <> 0) DO
+					pszDest[0] := pszSource[0];
+					pszDest := pszDest + SIZEOF(WORD);
+					pszSource := pszSource + SIZEOF(WORD);
+					IF(pszSource[0] = 16#0030) THEN //'0'
+						pszHelpSource := pszSource;
+						WHILE (pszHelpSource[0] = 16#0030) DO
+							pszHelpSource := pszHelpSource + SIZEOF(WORD);
+						END_WHILE
+						IF (pszHelpSource[0] = 0) THEN
+							EXIT;
+						END_IF
+					END_IF
+				END_WHILE
+				pszDest[0] := 16#0065; //'e';
+				pszDest := pszDest + SIZEOF(WORD);
+				IF (iExp10 < 0) THEN
+					pszDest[0] := WORD#16#002d;
+					pszDest := pszDest + SIZEOF(WORD);
+					nExpSign := -1;
+				END_IF
+				__HelpConvertW(DINT_TO_UDINT((nExpSign) * iExp10),ADR(pszDest),1);
+				pszDest[0] := 0;
+			END_IF
+		END_IF
+		{implicit off}
+		]]>
+		</body>
+	</pou>	
+	<pou id = "c8fb5eda-6b2b-4b6b-bcc1-566c08910a30" name = "wstring__to__real64">
+		<interface>
+			{implicit on}
+			FUNCTION wstring__to__real64 : LREAL
+			VAR_INPUT
+			in: WSTRING(255);
+			END_VAR
+			VAR
+			d : LREAL := 1;
+			dRealVal : LREAL := 0;
+			iExp : DINT := 0;
+			nSign : DINT := 1;
+			pstr : POINTER TO WORD := ADR(in);
+			iSign: INT;
+			{IF COMPILERVERSION(>=, '3.5.5.0')}
+			plwHelp : POINTER TO LWORD := ADR(wstring__to__real64);
+			{END_IF}
+			END_VAR
+			{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		__SkipWhiteSpaceW(ADR(pstr));
+
+		IF (pstr[0] = WORD#16#002d) (*'-'*) THEN
+			nSign := -1;
+			pstr := pstr + SIZEOF(WORD);
+		ELSIF (pstr[0] = 16#002b (*'+'*)) THEN
+			pstr := pstr + SIZEOF(WORD);
+		END_IF
+
+{IF COMPILERVERSION(>=, '3.5.5.0')}
+IF pstr[0] =  16#0023 (*''#*)THEN
+	IF pstr[1] = 16#004E (*N*)
+		AND pstr[2] = 16#0061 (*a*)
+		AND pstr[3] = 16#004E (*N*)
+	THEN
+		plwHelp^ := __LCONVERSION_CONSTANTS.NAN_LREAL;
+		RETURN;
+	END_IF
+	IF pstr[1] = 16#0049 (*I*)
+		AND pstr[2] = 16#006E (*n*)
+		AND pstr[3] = 16#0066 (*f*)
+	THEN
+		IF nSign = -1 THEN
+			plwHelp^ := __LCONVERSION_CONSTANTS.NINF_LREAL;
+		ELSE
+			plwHelp^ := __LCONVERSION_CONSTANTS.PINF_LREAL;
+		END_IF
+		RETURN;
+	END_IF
+END_IF
+{END_IF}
+
+		WHILE ((pstr[0] >= 16#0030 (*'0'*) AND pstr[0] <= 16#0039 (*'9'*)) OR pstr[0] = 16#005f (*'_'*))
+		DO
+			IF (pstr[0] <> 16#005f) THEN
+				dRealVal := dRealVal * 10 + pstr[0] - 16#0030;
+			END_IF
+			pstr := pstr + SIZEOF(WORD);
+		END_WHILE
+
+		IF (pstr[0] = 16#002e (*'.'*)) THEN
+			pstr := pstr + SIZEOF(WORD);
+			WHILE ((pstr[0] >= 16#0030 (*'0'*) AND pstr[0] <= 16#0039 (*'9'*)) OR pstr[0] = 16#005f (*'_'*))
+			DO 
+				IF (pstr[0] <> 16#005f) THEN
+					d := d / 10.0;
+					dRealVal := dRealVal + (pstr[0] - 16#0030) * d;
+				END_IF
+				pstr := pstr + SIZEOF(WORD);
+			END_WHILE
+		END_IF
+
+		IF (pstr[0] = 16#0065 (*'e'*) OR pstr[0] = 16#0045 (*'E'*)) THEN
+			iSign := 1;
+			pstr := pstr + SIZEOF(WORD);
+			IF (pstr[0] = 16#002d(*'-'*)) THEN
+				iSign := -1;
+				pstr := pstr + SIZEOF(WORD);
+			ELSIF (pstr[0] = 16#002b (*'+'*)) THEN
+				pstr := pstr + SIZEOF(WORD);
+			END_IF
+
+			WHILE ((pstr[0] >= 16#0030 (*'0'*) AND pstr[0] <= 16#0039 (*'9'*)) OR pstr[0] = 16#005f (*'_'*))
+			DO
+				IF (pstr[0] <> 16#005f) THEN
+					iExp := iExp * 10 + pstr[0] - 16#0030;
+				END_IF
+				pstr := pstr + SIZEOF(WORD);
+			END_WHILE
+			dRealVal := dRealVal * EXPT(10.0, iExp * iSign);
+		END_IF
+		wstring__to__real64 := DINT_TO_LREAL(nSign) * dRealVal;		
+		{implicit off}
+		]]>
+		</body>
+	</pou>	
+</language-model>

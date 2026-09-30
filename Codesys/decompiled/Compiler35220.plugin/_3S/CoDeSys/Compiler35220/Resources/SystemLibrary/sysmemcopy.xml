@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<language-model>
+  <pou id = "9D234CAB-298B-4F80-8B06-238A4ECBDBF1" name = "__memcopy" external = "true">
+    <interface>
+      {implicit on}
+      {attribute 'DoLink'}
+      FUNCTION __memcopy : POINTER TO BYTE
+      VAR_INPUT
+      pDest: POINTER TO BYTE;
+      pSrc: POINTER TO BYTE;
+      dwSize: DWORD;
+      END_VAR
+      {implicit off}
+    </interface>
+  </pou>
+</language-model>

@@ -1,0 +1,78 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<language-model>
+	<pou id="{77777777-2e57-42c9-a59e-f1e44ab083c0}" name = "__ValidateLicenseMetrics">
+		<!-- The body of this function in this xml file will be replaced at a late stage of
+		     the codegeneration by the effective implementation. We provide this function in
+			 this xml file here to ensure that the function is present and will be considered
+			 in every step of the compilation/codegeneration.
+		-->
+		<interface>
+			{implicit on}
+			{attribute 'hide'}
+			{attribute 'linkalways'}
+			{attribute 'call_after_global_init_slot' := '200'}
+			FUNCTION __ValidateLicenseMetrics
+			{implicit off}
+		</interface>
+		<body>
+			<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+			{IF RUNTIMEVERSION(>=, '3.5.19.0')}
+				___ValidateLicenseMetrics(4, 0);
+			{END_IF}		
+		{implicit off}
+		]]>
+
+		</body>
+	</pou>
+	<pou id="{A4D6CF95-0837-40E1-AF36-98DEDCC9196F}" name = "__ValidateLicenseMetricsAfterOnlineChange">
+		<!-- The body of this function in this xml file will be replaced at a late stage of
+		     the codegeneration by the effective implementation. We provide this function in
+			 this xml file here to ensure that the function is present and will be considered
+			 in every step of the compilation/codegeneration.
+		-->
+		<interface>
+			{implicit on}
+			{attribute 'hide'}
+			{attribute 'linkalways'}
+			{attribute 'call_after_online_change_slot' := '99999999'}
+			FUNCTION __ValidateLicenseMetricsAfterOnlineChange
+			{implicit off}
+		</interface>
+		<body>
+			<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+			{IF RUNTIMEVERSION(>=, '3.5.19.0')}
+				___ValidateLicenseMetrics(4, 0);
+			{END_IF}		
+		{implicit off}
+		]]>
+
+		</body>
+	</pou>
+	<!-- ___ValidateLicenseMetrics has no 'linkalways' attribute, because this external function does not exist in
+	     older runtime versions. In this case this function will not be called by function __ValidateLicenseMetrics
+	-->
+	<pou id="{88888888-d1e8-4c26-8e49-44071a555aa9}" name = "___ValidateLicenseMetrics">
+		<interface>
+			{implicit on}
+			{attribute 'hide'}
+			{attribute 'signature_flag':='16'} // = SignatureFlag.External
+			FUNCTION ___ValidateLicenseMetrics : BOOL
+			VAR_INPUT
+				validationType : UDINT;
+				validationValue : UDINT;
+			END_VAR
+			{implicit off}
+		</interface>
+		<body>
+			<![CDATA[
+		]]>
+
+		</body>
+	</pou>
+</language-model>

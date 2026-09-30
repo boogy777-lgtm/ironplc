@@ -1,0 +1,36 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<language-model>
+  <pou id = "A39E5468-86FA-4E6D-AFFE-3E2E51DB2150" name = "exchange__and__add" external = "true">
+    <interface>
+      {implicit on}
+      FUNCTION exchange__and__add : DINT
+      VAR_INPUT
+      in1: POINTER TO DINT;
+      in2: DINT;
+      END_VAR
+      {implicit off}
+    </interface>
+  </pou>
+  <pou id = "78879EF1-A378-4991-B06F-4F6324E3955F" name = "test__and__set" external = "true">
+    <interface>
+      {implicit on}
+      FUNCTION test__and__set : DWORD
+      VAR_INPUT
+        in1: POINTER TO WORD;
+      END_VAR
+      {implicit off}
+    </interface>
+  </pou>
+  <pou id = "84B9DE1A-938D-454B-A526-1C5121467A99" name = "compare__and__swap" external = "true">
+    <interface>
+      {implicit on}
+      FUNCTION compare__and__swap : BOOL
+      VAR_INPUT
+        pAddress: POINTER TO __XWORD;
+        xwExpectedValue: __XWORD;
+        xwNewValue: __XWORD;
+      END_VAR
+      {implicit off}
+    </interface>
+  </pou>
+</language-model>

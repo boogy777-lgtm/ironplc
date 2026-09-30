@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+	<language-model>
+    <data-type id ="{5F3AF15B-046D-4359-9FB1-4011C841EBB0}" name = "__TaskSpecificInfo">
+      <interface>
+        {implicit on}
+        {attribute 'linkalways'}
+        TYPE __TaskSpecificInfo:
+        STRUCT
+        TaskIndex : INT;
+        pTaskInfo: POINTER TO BYTE;
+        END_STRUCT
+        END_TYPE
+        {implicit off}
+      </interface>
+    </data-type>
+  </language-model>

@@ -1,0 +1,533 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+Attention!
+When making any changes in one of the following functions 
+- real64__to__string		
+- string__to__real64
+please consider to make the modification also in the library ConversionFunctions.library
+(svn://server04/AutomationPlatform/branches/Staff/Compilertechnology/ConversionFunctions/ConversionFunctions.library )
+-->
+<language-model>
+	<pou id = "e6a8a736-c389-4a55-8363-2e30c26fed79" name = "__HelpRealConvert">
+		<interface>
+		{implicit on}
+		FUNCTION __HelpRealConvert : BOOL
+		VAR_INPUT
+			in : LREAL;
+			ppstr : POINTER TO POINTER TO BYTE;
+			pnBegin : POINTER TO DINT;
+		END_VAR
+		VAR
+			bFirst : BOOL := FALSE;
+			pstr : POINTER TO BYTE := ppstr^;
+			nDigits : DINT := 309;
+			nDig : UDINT;
+			i : DINT;
+			dBegin : LREAL;
+			dDiv : LREAL;
+			bNeg : BOOL;
+			nHelpBegin : DINT;
+			dDiff : LREAL;
+		{IF COMPILERVERSION(>=, '3.5.18.0')}
+			j: DINT;
+		{ELSE}
+			j: INT;
+		{END_IF}
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		dBegin := LOG(in);
+		bNeg := FALSE;
+		IF (dBegin < 0) THEN
+			nHelpBegin := TRUNC(dBegin);
+			IF (DINT_TO_LREAL(nHelpBegin) <> dBegin) THEN
+				bNeg := 1;
+				dBegin := -dBegin + 1.0; //-dBegin;
+			ELSE
+				bNeg := 1;
+				dBegin := -dBegin;
+			END_IF
+		END_IF
+		pnBegin^ := TRUNC(dBegin);
+		IF(bNeg) THEN
+			pnBegin^ := -(pnBegin^);
+		END_IF
+		
+		dDiv := EXPT(10,pnBegin^);
+		
+{IF COMPILERVERSION(>=, '3.5.18.0')}		
+		in := in + 5 * (dDiv / 1e15);
+{ELSE}	
+		in := in + 5 * dDiv / 1e15;
+{END_IF}	
+
+{IF COMPILERVERSION(>=, '3.3.0.10')}
+		WHILE (dDiv > 0.0 AND i < 15) DO
+	  {IF COMPILERVERSION(>=, '3.5.15.0')}
+          //CDS-65829: Compiler: LREAL_TO_STRING returns '100' instead of '1000' for certain values close to 1000
+          nDig := DINT_TO_UDINT(TRUNC((in / dDiv) + 1e-15));      
+      {ELSIF COMPILERVERSION(>=, '3.5.14.0')}
+          //CDS-60278: Compiler: LREAL_TO_STRING returns '100' instead of '1000'
+          //It's been that way since the beginning. I don't know why 5e-14 and the EXIT in the ELSIF case
+          nDig := DINT_TO_UDINT(TRUNC((in / dDiv) + 1e-14));
+      {ELSE}
+		  nDig := DINT_TO_UDINT(TRUNC((in / dDiv) + 5e-14));
+      {END_IF}
+
+			IF (nDig > 9 AND bFirst) THEN
+				nDig := 0;
+			ELSIF (nDig > 9 AND NOT bFirst) THEN
+			    (* We enter this case when the uprounding above for nDig 
+				 * overflows into the next exponent. We just print that rounded number and exit.
+				 * Example 999 -> 1000 *)
+			{IF COMPILERVERSION(>=, '3.5.18.0')}
+			    // For exponents larger 14 the display mode is switched to e notation.
+				// Writing "10" into the buffer is sufficient in that case.
+				IF pnBegin^ < 14 THEN 
+					pstr[0] := 16#31;//'1';
+					pstr := pstr + 1;
+					FOR j:=0 TO pnBegin^ DO
+						pstr[0] := 16#30;//'0';
+						pstr := pstr + 1;
+					END_FOR
+					pnBegin^ := pnBegin^ + j + 1;
+				ELSE
+					pstr[0] := 16#31;//'1';
+					pstr[1] := 16#30;//'0';
+					pstr := pstr + 2;
+					pnBegin^ := pnBegin^ + 1;
+				END_IF
+			{ELSE}
+				pstr[0] := 16#31;//'1';
+				pstr[1] := 16#30;//'0';
+				pstr[2] := 16#30;//'0';
+				pstr := pstr + 3;
+				pnBegin^  := pnBegin^ + 1;
+			{END_IF}
+				EXIT;
+			END_IF
+			
+			IF (NOT bFirst AND (nDig <> 0)) THEN
+				bFirst := 1;
+			END_IF
+			IF (bFirst AND i < 15) THEN
+				pstr[0] := UDINT_TO_BYTE(nDig) + 16#30; //'0';
+				pstr := pstr + 1;
+				dDiff := UDINT_TO_LREAL(nDig) * dDiv;
+				in := in - dDiff;
+				i := i+1;
+			END_IF
+			dDiv := dDiv / 10.0;
+			nDigits := nDigits-1;
+		END_WHILE
+{ELSE}
+		WHILE (dDiv >= 1e-308 AND i < 15) DO
+			nDig := DINT_TO_UDINT(TRUNC((in / dDiv) + 5e-14));
+			IF (nDig > 9 AND bFirst) THEN
+				nDig := 0;
+			ELSIF (nDig > 9 AND NOT bFirst) THEN
+				pstr[0] := 16#31;//'1';
+				pstr[1] := 16#30;//'0';
+				pstr[2] := 16#30;//'0';
+				pstr := pstr + 3;
+				pnBegin^  := pnBegin^ + 1;
+				EXIT;
+			END_IF
+			
+			IF (NOT bFirst AND (nDig <> 0)) THEN
+				bFirst := 1;
+			END_IF
+			IF (bFirst AND i < 15) THEN
+				pstr[0] := UDINT_TO_BYTE(nDig) + 16#30; //'0';
+				pstr := pstr + 1;
+				dDiff := UDINT_TO_LREAL(nDig) * dDiv;
+				in := in - dDiff;
+				i := i+1;
+			END_IF
+			dDiv := dDiv / 10.0;
+			nDigits := nDigits-1;
+		END_WHILE
+{END_IF}
+		
+		pstr[0] := 0;
+		ppstr^ := pstr;
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "2a265c59-789e-4c94-a95e-f5f70529f084" name = "real64__to__string">
+		<interface>
+			{implicit on}
+			FUNCTION real64__to__string : STRING(255)
+			VAR_INPUT
+			in: LREAL;
+			dwType: DWORD;
+			END_VAR
+			VAR
+			sz : STRING;
+			pszHelp : POINTER TO BYTE;
+			pszSource : POINTER TO BYTE;
+			pszHelpSource : POINTER TO BYTE;
+			pszDest : POINTER TO BYTE;
+			nSign : DINT := 1;
+			i : DINT;
+			iExp10 : DINT;
+			nExpSign : DINT := 1;
+
+			{IF COMPILERVERSION(>=, '3.5.5.0')}
+			bS: BOOL;
+			diE: DINT;
+			liM: LINT;
+			xNan: BOOL;
+			xInf: BOOL;
+			bNan: BOOL;
+			{END_IF}
+
+			END_VAR
+			{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+
+{IF COMPILERVERSION(>=, '3.5.5.0')}
+__ExtractLReal(in, bS => bS, diE => diE, liM => liM, xNan => xNan, xInf => xInf);
+IF XNan THEN
+	real64__to__string := '#NaN';
+	RETURN;
+END_IF
+
+IF xInf THEN
+	IF (bS) THEN
+		real64__to__string := '-#Inf';
+	ELSE
+		real64__to__string := '#Inf';
+	END_IF
+	RETURN;
+END_IF
+{END_IF}
+		
+		pszDest := ADR(real64__to__string);
+		pszHelp := ADR(sz);
+		
+		// If dwType REAL just use first 6 Numbers
+		IF (dwType = __TypeClass.TYPE_REAL) THEN
+			IF (in < 0) THEN
+				i := TRUNC(LOG(-in));
+			ELSIF (in >0) THEN
+				i := TRUNC(LOG(in));
+			ELSE
+				i := 0;
+			END_IF
+			IF (in >= 0) THEN
+				in := in * EXPT(10,6-i) + 0.5;
+			ELSE
+				in := in * EXPT(10,6-i) - 0.5;
+			END_IF
+			in := DINT_TO_LREAL(TRUNC(in)) / EXPT(10,6-i);
+			i := 0;
+		END_IF
+
+		// Emit sign
+		IF (in < 0) THEN
+			pszDest[0] := BYTE#16#2d;
+			pszDest := pszDest + 1;
+			nSign := -1;
+		END_IF	
+		IF (in = 0) THEN
+			pszDest[0] := 16#30; //'0';
+			pszDest[1] := 16#2e;//'.';
+			pszDest[2] := 16#30;
+			pszDest[3] := 0;//'\0';
+		ELSE
+			__HelpRealConvert(DINT_TO_LREAL(nSign) * in,ADR(pszHelp),ADR(iExp10));
+			pszSource := ADR(sz);
+			IF(iExp10 >= 0 AND iExp10 < 14) THEN
+				FOR(i := 0) TO iExp10 DO
+					pszDest[i] := pszSource[i];
+				END_FOR
+				pszDest[i] := 16#2e;//'.';
+				pszDest := pszDest + i + 1;
+				pszSource := pszSource + i;
+				WHILE (pszSource[0] <> 0) DO
+					pszDest[0] := pszSource[0];
+					pszDest := pszDest + 1;
+					pszSource := pszSource + 1;
+					IF(pszSource[0] = 16#30) THEN //'0'
+						pszHelpSource := pszSource;
+						WHILE (pszHelpSource[0] = 16#30) DO
+							pszHelpSource := pszHelpSource + 1;
+						END_WHILE
+						IF (pszHelpSource[0] = 0) THEN
+							EXIT;
+						END_IF
+					END_IF
+				END_WHILE
+				pszDest[0] := 0;//'\0';
+			ELSIF (iExp10 >= 14 OR iExp10 <0) THEN
+				pszDest[0] := pszSource[0];
+				pszDest[1] := 16#2e;//'.';
+				pszDest := pszDest + 2;
+				pszSource := pszSource + 1;
+				WHILE (pszSource[0] <> 0) DO
+					pszDest[0] := pszSource[0];
+					pszDest := pszDest + 1;
+					pszSource := pszSource + 1;
+					IF(pszSource[0] = 16#30) THEN //'0'
+						pszHelpSource := pszSource;
+						WHILE (pszHelpSource[0] = 16#30) DO
+							pszHelpSource := pszHelpSource+1;
+						END_WHILE
+						IF (pszHelpSource[0] = 0) THEN
+							EXIT;
+						END_IF
+					END_IF
+				END_WHILE
+				pszDest[0] := 16#65; //'e';
+				pszDest := pszDest + 1;
+				IF (iExp10 < 0) THEN
+					pszDest[0] := BYTE#16#2d;
+					pszDest := pszDest + 1;
+					nExpSign := -1;
+				END_IF
+				__HelpConvert(DINT_TO_UDINT((nExpSign) * iExp10),ADR(pszDest),1);
+				pszDest[0] := 0;
+			END_IF
+		END_IF
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "0ea1b145-4f18-4d61-a208-3c5f2005fc47" name = "string__to__real64">
+		<interface>
+			{implicit on}
+			FUNCTION string__to__real64 : LREAL
+			VAR_INPUT
+			in: STRING(255);
+			END_VAR
+			VAR
+			d : LREAL := 1;
+			dRealVal : LREAL := 0;
+			iExp : DINT := 0;
+			nSign : DINT := 1;
+			pstr : POINTER TO BYTE := ADR(in);
+			iSign: INT;
+			{IF COMPILERVERSION(>=, '3.5.5.0')}
+			plwHelp : POINTER TO LWORD := ADR(string__to__real64);
+			{END_IF}
+			END_VAR
+			{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		__SkipWhiteSpace(ADR(pstr));
+
+		IF (pstr[0] = BYTE#16#2d) (*'-'*) THEN
+			nSign := -1;
+			pstr := pstr+1;
+		ELSIF (pstr[0] = 16#2b (*'+'*)) THEN
+			pstr := pstr+1;
+		END_IF
+		
+{IF COMPILERVERSION(>=, '3.5.5.0')}
+IF pstr[0] =  16#23 (*''#*)THEN
+	IF pstr[1] = 16#4E (*N*)
+		AND pstr[2] = 16#61 (*a*)
+		AND pstr[3] = 16#4E (*N*)
+	THEN
+		plwHelp^ := __LCONVERSION_CONSTANTS.NAN_LREAL;
+		RETURN;
+	END_IF
+	IF pstr[1] = 16#49 (*I*)
+		AND pstr[2] = 16#6E (*n*)
+		AND pstr[3] = 16#66 (*f*)
+	THEN
+		IF nSign = -1 THEN
+			plwHelp^ := __LCONVERSION_CONSTANTS.NINF_LREAL;
+		ELSE
+			plwHelp^ := __LCONVERSION_CONSTANTS.PINF_LREAL;
+		END_IF
+		RETURN;
+	END_IF
+END_IF
+{END_IF}
+		
+
+		WHILE ((pstr[0] >= 16#30 (*'0'*) AND pstr[0] <= 16#39 (*'9'*)) OR pstr[0] = 16#5f (*'_'*))
+		DO
+			IF (pstr[0] <> 16#5f) THEN
+				dRealVal := dRealVal * 10 + pstr[0] - 16#30;
+			END_IF
+			pstr := pstr+1;
+		END_WHILE
+
+		IF (pstr[0] = 16#2e (*'.'*)) THEN
+			pstr := pstr+1;
+			WHILE ((pstr[0] >= 16#30 (*'0'*) AND pstr[0] <= 16#39 (*'9'*)) OR pstr[0] = 16#5f (*'_'*))
+			DO 
+				IF (pstr[0] <> 16#5f) THEN
+					d := d / 10.0;
+					dRealVal := dRealVal + (pstr[0] - 16#30) * d;
+				END_IF
+				pstr := pstr+1;
+			END_WHILE
+		END_IF
+
+		IF (pstr[0] = 16#65 (*'e'*) OR pstr[0] = 16#45 (*'E'*)) THEN
+			iSign := 1;
+			pstr := pstr+1;
+			IF (pstr[0] = 16#2d(*'-'*)) THEN
+				iSign := -1;
+				pstr := pstr+1;
+			ELSIF (pstr[0] = 16#2b (*'+'*)) THEN
+				pstr := pstr+1;
+			END_IF
+
+			WHILE ((pstr[0] >= 16#30 (*'0'*) AND pstr[0] <= 16#39 (*'9'*)) OR pstr[0] = 16#5f (*'_'*))
+			DO
+				IF (pstr[0] <> 16#5f) THEN
+					iExp := iExp * 10 + pstr[0] - 16#30;
+				END_IF
+				pstr := pstr+1;
+			END_WHILE
+			dRealVal := dRealVal * EXPT(10.0, iExp * iSign);
+		END_IF
+		string__to__real64 := DINT_TO_LREAL(nSign) * dRealVal;
+
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+
+
+	<pou id = "0FFC8285-5CF0-4854-BFBF-CFCA06799935" name = "__ExtractLReal">
+		<interface>
+			{attribute 'hide'}
+			{implicit on}
+			FUNCTION __ExtractLReal : BOOL
+			VAR_INPUT
+			d : LREAL ;    // The floating point number to extract.
+			END_VAR
+			VAR_OUTPUT
+			bS   : BOOL ;
+			diE  : DINT ;        // The  exponent
+			liM : LINT ;       // The mantissa
+			xNaN : BOOL ;      // True iff f is NaN, iE and diM are 0 in this case
+			xInf : BOOL ;      // True iff f is infinity, diM = 1 for +Infinity and -1 for -Infinity, iE is 0
+			END_VAR
+			VAR
+			udiE  : UDINT ;
+			uliM : ULINT ;
+			END_VAR
+			{implicit off}
+		</interface>
+		<body>
+			<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+xNaN := FALSE ;
+xInf := FALSE ;
+  
+__ExtractLRealRaw(d:=d, bs=>bs, udiE=>udiE, uliM=>uliM) ;
+IF udiE = 0 THEN
+ IF uliM = 0 THEN // zero
+  diE  := 0 ;
+  liM := 0 ;
+ ELSE // subnormal 
+   diE  := 1-(__LCONVERSION_CONSTANTS.EXP_BIAS_LREAL(*+__LCONVERSION_CONSTANTS.EXP_OFFSET_LREAL*)) ;
+   liM := ULINT_TO_LINT(uliM) ;
+ END_IF
+ELSIF udiE = __LCONVERSION_CONSTANTS.RES_EXP_LREAL THEN // NaN or Infinity
+ diE := 0 ;
+ IF uliM = 0 THEN
+  liM  := SEL(bS, 1, -1) ;
+  xInf := TRUE ;
+ ELSE
+  liM  := 0 ;
+  xNaN := TRUE ;
+ END_IF
+ELSE
+ diE  := UDINT_TO_DINT(udiE) - (__LCONVERSION_CONSTANTS.EXP_BIAS_LREAL (*+ __LCONVERSION_CONSTANTS.EXP_OFFSET_REAL*)) ;
+ liM := ULINT_TO_LINT(uliM OR SHL(ULINT#1,__LCONVERSION_CONSTANTS.EXP_OFFSET_LREAL)) ;
+END_IF
+	
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+
+	<pou id = "E543E1FD-2BB8-4AC1-A749-EBAD37D711FC" name = "__ExtractLRealRaw">
+		<interface>
+			{attribute 'hide'}
+			{implicit on}
+			/// Extracts the components of a REAL floating point number without
+			/// interpreting them.
+			/// Extracts the sign, (biased) exponent, and mantissa of a REAL value.
+			/// We assume the IEEE 754 binary32 format.
+			/// All values, including NaN and Infinity are supported.
+			/// See http://en.wikipedia.org/wiki/Single_precision_floating-point_format
+			FUNCTION __ExtractLRealRaw : BOOL
+			VAR_INPUT
+			d : LREAL ;    // The floating point number to extract.
+			END_VAR
+			VAR_OUTPUT
+			bS   : BOOL ;  // The sign bit
+			udiE  : UDINT ;  // The (biased) exponent
+			uliM : ULINT ; // The mantissa as stored in the REAL, without the leading bit 24 set
+			END_VAR
+			VAR
+			puli : POINTER TO ULINT ;
+			uli : ULINT ;
+			END_VAR
+			{implicit off}
+		</interface>
+		<body>
+			<![CDATA[
+		{implicit on}
+		{nobp}
+puli := ADR(d) ;
+uli  := puli^ ;
+bS   := SHR(uli, 63) <> 0 ;
+udiE  := ULINT_TO_UDINT(SHR(uli AND __LCONVERSION_CONSTANTS.EXP_MASK_LREAL, __LCONVERSION_CONSTANTS.EXP_OFFSET_LREAL)) ;
+uliM := uli AND __LCONVERSION_CONSTANTS.MANT_MASK_LREAL ;
+		{noflow}
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+
+
+	<global-interface id = "7B8AD65D-EE2E-4A1E-8258-DADDEE07B488" name = "__LCONVERSION_CONSTANTS">
+		<interface>
+			{attribute 'hide'}
+			{implicit on}
+			{attribute 'qualified_only'}
+			VAR_GLOBAL CONSTANT
+			EXP_MASK_LREAL   : ULINT  := 16#7FF0000000000000 ;
+			EXP_OFFSET_LREAL : INT    := 52 ;
+			MANT_MASK_LREAL  : ULINT  := 16#000FFFFF_FFFFFFFF ;
+			RES_EXP_LREAL    : UINT   := 16#7FF ;
+			EXP_BIAS_LREAL   : INT    := 1028 ;
+
+			{IF COMPILERVERSION(>=, '3.5.5.0')}
+			NAN_LREAL : LWORD := 16#FFF8_0000_0000_0000;
+			PINF_LREAL : LWORD := 16#7FF0_0000_0000_0000;
+			NINF_LREAL : LWORD := 16#FFF0_0000_0000_0000;
+			{END_IF}
+			END_VAR
+		</interface>
+	</global-interface>
+
+</language-model>	
+

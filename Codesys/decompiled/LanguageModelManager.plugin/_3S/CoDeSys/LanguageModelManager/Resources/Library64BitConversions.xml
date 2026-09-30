@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<language-model>
+	<pou id = "d8153915-f13d-4be5-963e-2e0db8de9f44" name = "real64__to__any64" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__to__any64 : LWORD
+		VAR_INPUT
+			in: LREAL;
+			dwType: DWORD;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "97dc91e6-edb3-4c35-be5d-6e444884a6ee" name = "any64__to__real64" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION any64__to__real64 : LREAL
+		VAR_INPUT
+			in: LWORD;
+			dwType: DWORD;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>	
+</language-model>

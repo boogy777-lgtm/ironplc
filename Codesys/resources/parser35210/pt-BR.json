@@ -1,0 +1,21 @@
+{
+"CODESYS.Parser35210.Resources.Strings.pt-BR.resources":{
+"CompilerFeature_GenericConstantVariable":"Variável genérica constante"
+,
+"CompilerFeature_PartialVariableAccess":"Acesso parcial a variáveis"
+,
+"CompilerFeature_ProjectDefines":"Definiçãos do projeto"
+,
+"CompilerFeature_UChar_Literals":"Literal UCHAR"
+,
+"CompilerFeature_UTF8_Strings":"Cadeias UTF8"
+,
+"Constant":"Constante"
+,
+"Literal":"Literal"
+,
+"OR":"ou"
+,
+"Scanner_Initialize_char_array_must_end_with_null_value":"O arranjo de gráfico deve terminar com um valor nulo"
+}
+}

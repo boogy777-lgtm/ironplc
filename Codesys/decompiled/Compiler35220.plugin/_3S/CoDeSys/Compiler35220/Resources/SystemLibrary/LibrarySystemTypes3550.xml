@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+	<language-model>
+    <data-type id ="{BB81851C-8557-43FD-AD66-2F0071E45F53}" name = "__CodeLocationInfoStruct">
+      <interface>
+        {implicit on}
+        {attribute 'linkalways'}
+        TYPE __CodeLocationStruct:
+        STRUCT
+        usiAreaCodeLocation: UINT;
+        udiOffsetCodeLocation: UDINT;
+        udiCodeSize : UDINT;
+        END_STRUCT
+        END_TYPE
+        {implicit off}
+      </interface>
+    </data-type>
+	<!--end of types for data segment information-->
+	<global-interface id = "{E4086481-B65B-4BFC-821C-C1F278B8711D}" name = "__WatchVars">
+		<interface>
+			{attribute 'qualified_only'}
+			{attribute 'linkalways'}
+			{implicit on}
+			VAR_GLOBAL
+			END_VAR
+			{implicit off}
+		</interface>
+	</global-interface>
+</language-model>

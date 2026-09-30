@@ -1,0 +1,379 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+	<language-model>
+  <data-type id ="04bdff5c-e859-4983-80cd-36bbdbce9f28" name = "MEMORY_AREA">
+    <interface>
+			{attribute 'qualified_only'}
+			{IF COMPILERVERSION(>=, '3.5.2.0')}
+			{attribute 'm4export_hide'}
+			{END_IF}
+			TYPE MEMORY_AREA :
+			(
+			MEM_UNKNOWN := -1,
+			MEM_MEMORY,
+			MEM_INPUT,
+			MEM_OUTPUT,
+			MEM_RETAIN,
+			MEM_GLOBAL,
+			MEM_LOCAL
+			)INT;
+			END_TYPE
+		</interface>
+  </data-type>
+  <data-type id = "365c4d7d-256c-4416-945b-832d41d631b2" name = "VAR_INFO">
+		<interface>
+			TYPE VAR_INFO :
+			STRUCT
+			{p 0}(*Address of variable: for bits, address of byte which bit is accessed *)
+			{IF COMPILERVERSION(>=, '3.5.1.0')}
+			{p 1}ByteAddress : __XWORD;
+			{ELSE}
+			{p 1}ByteAddress : DWORD;
+			{END_IF}
+			{p 2}(* Offset in Bytes.
+			If variable is global, the offset denotes a global offset in the specified area
+			If variable is local, the offset denotes a local offset in the scope (fb or function)*)
+			{p 5}ByteOffset : DINT;
+			{p 6}(* Number of Area.
+			Number of the area in runtime system. With AppGetAreaAddress you can get the real address of the area.
+			If variable is local, value is -1*)
+			{p 7}Area : INT;
+			{p 8}(* number of Bit in Bytes. For non-Bit Types this value is -1 *)
+			{p 9}BitNr : INT;
+			{p 10}(* size of variable in Bits *)
+			{p 11}BitSize : UDINT;
+			{p 12}(* bitaddress of variable (if variable is at %M/I/Q location) otherwise undefined*)
+			{p 13}BitAdress : UDINT;
+			{p 14}(* type class of variable *)
+			{p 15}TypeClass : __SYSTEM.TYPE_CLASS;
+			{p 16}(* type name (for userdeftypes : name of function block or type definition) *)
+			{IF COMPILERVERSION(>=, '3.5.1.0')}
+			{p 17}TypeName : STRING(79);
+			{ELSE}
+			{p 17}TypeName : STRING(39);
+			{END_IF}
+			{p 18}(* for arrays : number of base elements *)
+			{p 19}NumElements : UDINT;
+			{p 20}(* for arrays : type class of base type *)
+			{p 21}BaseTypeClass : __SYSTEM.TYPE_CLASS;
+			{p 22}(* for arrays : bit size of base element *)
+			{p 23}ElemBitSize : UDINT;
+			{p 24}(* area information : memory, input, output, retain, global, local *)
+			{p 25}MemoryArea : __SYSTEM.MEMORY_AREA;
+			{p 26}(* symbol name : input of operator as string: up to 39 characters*)
+			{p 27}Symbol : STRING(39);
+			{p 28}(* comment of variable *)
+			{p 29}Comment : STRING(79);
+			END_STRUCT
+			END_TYPE
+		</interface>
+	</data-type>
+	<pou id = "{7495BAFC-E9DE-41f4-8422-4FA3DE13A1FE}" name = "IQueryInterface">
+		<interface>
+			{implicit on}
+			INTERFACE IQueryInterface
+			{implicit off}
+		</interface>
+	</pou>
+	<method id ="{50EC1707-5731-45b1-885B-40907FD79C2D}" name = "__GetInterfaceReference" pou-id="{7495BAFC-E9DE-41f4-8422-4FA3DE13A1FE}">
+		<interface>
+			{implicit on}
+			METHOD __GetInterfaceReference : BOOL
+			VAR_INPUT
+				nInterfaceId : DINT;
+				pRef : POINTER TO POINTER TO DWORD;
+			END_VAR
+			{implicit off}
+		</interface>
+	</method>
+		<method id ="{926F7604-3BB3-4ac2-A2B2-C74509742AF8}" name = "__GetInterfacePointer" pou-id="{7495BAFC-E9DE-41f4-8422-4FA3DE13A1FE}">
+			<interface>
+				{implicit on}
+				METHOD __GetInterfacePointer : BOOL
+				VAR_INPUT
+					pRef : POINTER TO POINTER TO DWORD;
+				END_VAR
+				{implicit off}
+			</interface>
+		</method>
+		<pou id="{6C7B0B40-3393-4ac8-8272-F7E492C63AA3}" name = "__CheckedInterfaceCast">
+			<interface>
+				{implicit on}
+				{attribute 'hide'}
+				FUNCTION __CheckedInterfaceCast : BOOL
+				VAR_INPUT
+				nInterfaceId : DINT;
+				pRef : POINTER TO POINTER TO DWORD;
+				queryInterface : IQueryInterface;
+				END_VAR
+				{implicit off}
+			</interface>
+			<body>
+				<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		IF (queryInterface = 0) THEN
+			__CheckedInterfaceCast := FALSE;
+			pRef^ := 0;
+		ELSE
+			__CheckedInterfaceCast := queryInterface.__GetInterfaceReference(nInterfaceId, pRef);
+		END_IF
+		{implicit off}
+		]]>
+
+			</body>
+		</pou>
+		<pou id="{2720D84F-E738-47fc-9606-476EB9A419C8}" name = "__CheckedPointerCast">
+			<interface>
+				{implicit on}
+				{attribute 'hide'}
+				FUNCTION __CheckedPointerCast : BOOL
+				VAR_INPUT
+					pRef : POINTER TO POINTER TO DWORD;
+					queryPointer : IQueryInterface;
+				END_VAR
+				{implicit off}
+			</interface>
+			<body>
+				<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		IF (queryPointer = 0) THEN
+			__CheckedPointerCast := FALSE;
+			pRef^ := 0;
+		ELSE
+			__CheckedPointerCast := queryPointer.__GetInterfacePointer(pRef);
+		END_IF
+		{implicit off}
+		]]>
+
+			</body>
+		</pou>
+
+		<pou id="{89F9F17E-DFB1-4753-A04A-0E04DEFB54EE}" name = "__CompareInterfaces">
+			<interface>
+        {implicit on}
+        {attribute 'hide'}
+        FUNCTION __CompareInterfaces : BOOL
+        VAR_INPUT
+        ppi1 : POINTER TO POINTER TO ARRAY [0..0] OF POINTER TO POINTER TO DWORD;
+        ppi2 : POINTER TO POINTER TO ARRAY [0..0] OF POINTER TO POINTER TO DWORD;
+        END_VAR
+        VAR
+        pthis1 : POINTER TO POINTER TO ARRAY [0..0] OF POINTER TO POINTER TO DWORD;
+        pthis2 : POINTER TO POINTER TO ARRAY [0..0] OF POINTER TO POINTER TO DWORD;
+        {IF COMPILERVERSION(>=, '3.5.0.0')}
+        dwOffset1 : __XWORD;
+        dwOffset2 : __XWORD;
+        {END_IF}
+        END_VAR
+        {implicit off}
+      </interface>
+			<body>
+				<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+IF (ppi1 = 0 AND ppi2 = 0) THEN
+	__CompareInterfaces := TRUE;
+ELSIF (ppi1 = 0 OR ppi2 = 0) THEN
+	__CompareInterfaces := FALSE;
+ELSE
+{IF COMPILERVERSION(>=, '3.5.0.0')}
+  {IF hasvalue(AddrSize, '8')}
+    dwOffset1 := ppi1^^[0];
+    dwOffset2 := ppi2^^[0];
+    pthis1 := ppi1 - dwOffset1;
+	  pthis2 := ppi2 - dwOffset2;
+  {ELSE}
+	  pthis1 := ppi1 - ppi1^^[0];
+	  pthis2 := ppi2 - ppi2^^[0];
+  {END_IF}
+{ELSE}
+	pthis1 := ppi1 - ppi1^^[0];
+	pthis2 := ppi2 - ppi2^^[0];
+{END_IF}
+	
+	__CompareInterfaces := pthis1 = pthis2;
+END_IF
+		{implicit off}
+		]]>
+
+			</body>
+		</pou>
+
+		<!--types for data segment information-->		
+		<data-type id ="{36B719E5-3A34-450b-B806-362248C6FC69}" name = "__DataSegmentFlags">
+			<interface>
+				{implicit on}
+				{attribute 'qualified_only'}
+				{attribute 'linkalways'}
+				TYPE __DataSegmentFlags :
+				(
+				DA_Data 		:= 16#1,
+				DA_Constant 	:= 16#2,
+				DA_Input 		:= 16#4,
+				DA_Output 		:= 16#8,
+				DA_Memory 		:= 16#10,
+				DA_Retain 		:= 16#20,
+				DA_Code 		:= 16#40,
+				DA_Area 		:= 16#80,		// special flag to indicate an area segment
+				DA_Persistent 	:= 16#100
+				)UINT;
+				END_TYPE
+				{implicit off}
+			</interface>
+		</data-type>
+		<data-type id ="{6D5EE79A-0165-410b-9A03-2DCB86D77084}" name = "__DataSegments">
+			<interface>
+				{implicit on}
+				{attribute 'linkalways'}
+				TYPE __DataSegments :
+				STRUCT
+				nNumOfSegments : DINT;
+				pDataSegments : POINTER TO __SegmentInfo;
+				END_STRUCT
+				END_TYPE
+				{implicit off}
+			</interface>
+		</data-type>
+
+		<data-type id ="{86A3BD70-F6AF-446c-A3CA-D70C9D74CEFB}" name = "__SegmentInfo">
+			<interface>
+				{implicit on}
+				{attribute 'linkalways'}
+				TYPE __SegmentInfo :
+				STRUCT
+				{IF COMPILERVERSION(>=, '3.5.2.0')}
+				{attribute 'displaymode':='hex'}
+				{END_IF}
+				dsKindOf    : __DataSegmentFlags;
+				uiArea      : UINT;
+				udOffset 	: UDINT;
+				udSize 		: UDINT;
+				udHighestUsedAddress : UDINT;
+				END_STRUCT
+				END_TYPE
+				{implicit off}
+			</interface>
+		</data-type>
+		<!--end of types for data segment information-->
+
+		<!--types for structured exception handling -->
+		<data-type id ="{A241205C-3E8B-4F58-AF39-21F166F9A7D2}" name = "ExceptionCode">
+			<interface>
+        {attribute 'm4export_hide'}
+        {attribute 'qualified_only'}
+
+        {IF COMPILERVERSION(>=, '3.5.16.0')}
+        {attribute 'to_string'}
+        {END_IF}
+
+        TYPE ExceptionCode :
+        (
+        RTSEXCPT_UNKNOWN  := 16#FFFFFFFF,
+        RTSEXCPT_NOEXCEPTION  := 16#00000000,
+        RTSEXCPT_WATCHDOG  := 16#00000010,
+        RTSEXCPT_HARDWAREWATCHDOG  := 16#00000011,
+        RTSEXCPT_IO_CONFIG_ERROR  := 16#00000012,
+        RTSEXCPT_PROGRAMCHECKSUM  := 16#00000013,
+        RTSEXCPT_FIELDBUS_ERROR  := 16#00000014,
+        RTSEXCPT_IOUPDATE_ERROR  := 16#00000015,
+        RTSEXCPT_CYCLE_TIME_EXCEED  := 16#00000016,
+        RTSEXCPT_ONLCHANGE_PROGRAM_EXCEEDED  := 16#00000017,
+        RTSEXCPT_UNRESOLVED_EXTREFS   := 16#00000018,
+        RTSEXCPT_DOWNLOAD_REJECTED			    := 16#00000019,
+        RTSEXCPT_BOOTPROJECT_REJECTED_DUE_RETAIN_ERROR	    := 16#0000001A,
+        RTSEXCPT_LOADBOOTPROJECT_FAILED		    := 16#0000001B,
+        RTSEXCPT_OUT_OF_MEMORY				    := 16#0000001C,
+        RTSEXCPT_RETAIN_MEMORY_ERROR		    := 16#0000001D,
+        RTSEXCPT_BOOTPROJECT_CRASH			    := 16#0000001E,
+        RTSEXCPT_BOOTPROJECTTARGETMISMATCH	    := 16#00000021,
+        RTSEXCPT_SCHEDULEERROR				    := 16#00000022,
+        RTSEXCPT_FILE_CHECKSUM_ERR			    := 16#00000023,
+        RTSEXCPT_RETAIN_IDENTITY_MISMATCH	    := 16#00000024,
+        RTSEXCPT_IEC_TASK_CONFIG_ERROR		    := 16#00000025,
+        RTSEXCPT_APP_TARGET_MISMATCH		    := 16#00000026,
+        RTSEXCPT_ILLEGAL_INSTRUCTION		    := 16#00000050,
+        RTSEXCPT_ACCESS_VIOLATION			    := 16#00000051,
+        RTSEXCPT_PRIV_INSTRUCTION			    := 16#00000052,
+        RTSEXCPT_IN_PAGE_ERROR				    := 16#00000053,
+        RTSEXCPT_STACK_OVERFLOW				    := 16#00000054,
+        RTSEXCPT_INVALID_DISPOSITION		    := 16#00000055,
+        RTSEXCPT_INVALID_HANDLE				    := 16#00000056,
+        RTSEXCPT_GUARD_PAGE					    := 16#00000057,
+        RTSEXCPT_DOUBLE_FAULT				    := 16#00000058,
+        RTSEXCPT_INVALID_OPCODE				    := 16#00000059,
+        RTSEXCPT_MISALIGNMENT				    := 16#00000100,
+        RTSEXCPT_ARRAYBOUNDS				    := 16#00000101,
+        RTSEXCPT_DIVIDEBYZERO				    := 16#00000102,
+        RTSEXCPT_OVERFLOW					    := 16#00000103,
+        RTSEXCPT_NONCONTINUABLE				    := 16#00000104,
+        RTSEXCPT_PROCESSORLOAD_WATCHDOG		    := 16#00000105,
+        RTSEXCPT_FPU_ERROR					    := 16#00000150,
+        RTSEXCPT_FPU_DENORMAL_OPERAND		    := 16#00000151,
+        RTSEXCPT_FPU_DIVIDEBYZERO			    := 16#00000152,
+        RTSEXCPT_FPU_INEXACT_RESULT			    := 16#00000153,
+        RTSEXCPT_FPU_INVALID_OPERATION		    := 16#00000154,
+        RTSEXCPT_FPU_OVERFLOW				    := 16#00000155,
+        RTSEXCPT_FPU_STACK_CHECK			    := 16#00000156,
+        RTSEXCPT_FPU_UNDERFLOW				    := 16#00000157,
+        RTSEXCPT_VENDOR_EXCEPTION_BASE		    := 16#00002000,
+        RTSEXCPT_USER_EXCEPTION_BASE					:= 16#00010000
+        ) UDINT ;
+        END_TYPE
+      </interface>
+		</data-type>
+		<data-type id ="{DC964AA2-AEF0-4805-92DE-9B8BED089E6C}" name = "ExceptionContext">
+			<interface>
+				{attribute 'm4export_hide'}
+				TYPE ExceptionContext :
+				STRUCT
+				IP   :  __XWORD;
+				BP :  __XWORD;
+				SP :   __XWORD;
+				END_STRUCT
+				END_TYPE
+			</interface>
+		</data-type>
+
+		<pou id="{FDB186EC-1BB3-428F-BD1C-2A07C8F62AF9}" name = "trycatch"  external = "true">
+			<interface>
+				{attribute 'm4export_hide'}
+				FUNCTION trycatch : UDINT
+				VAR_INPUT
+				pFun : POINTER TO BYTE;
+				pParam : POINTER TO BYTE;
+				dwFlags : DWORD;
+				END_VAR
+				VAR_INPUT
+				ExceptionCode : POINTER TO UDINT;
+				END_VAR
+			</interface>
+		</pou>
+
+		<pou id="{D3DF2306-1C85-4582-9840-D91EC47927AA}" name = "throwex"  external = "true">
+			<interface>
+				{attribute 'm4export_hide'}
+				FUNCTION throwex
+				VAR_INPUT
+				ExceptionCode : UDINT;
+				END_VAR
+			</interface>
+		</pou>
+		<global-interface id = "{13116516-29A3-4CAB-A26F-D2F27FC21758}" name = "ExceptionFlags">
+			<interface>
+				{attribute 'qualified_only'}
+				{implicit on}
+				VAR_GLOBAL CONSTANT
+					EX_DEBUG : DWORD := 16#0001;
+				END_VAR
+				VAR_GLOBAL
+					g_dwExFlags : DWORD := 0;
+				END_VAR
+				{implicit off}
+			</interface>
+		</global-interface>
+		<!--end of types for structured exception handling -->
+	</language-model>

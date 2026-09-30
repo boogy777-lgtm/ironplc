@@ -1,0 +1,815 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{37FF906C-271D-40C4-9A05-4DCC9F4FEA0A}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>LanguageModelManager.plugin</RootNamespace>
+    <AssemblyName>LanguageModelManager.plugin</AssemblyName>
+    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
+    <FileAlignment>4096</FileAlignment>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="ApplicationObject">
+      <HintPath>..\..\..\Program Files\CODESYS 3.5.22.10\CODESYS\Common\ApplicationObject.dll</HintPath>
+    </Reference>
+    <Reference Include="Commands">
+      <HintPath>..\..\..\Program Files\CODESYS 3.5.22.10\CODESYS\Common\Commands.dll</HintPath>
+    </Reference>
+    <Reference Include="Compiler">
+      <HintPath>..\..\..\Program Files\CODESYS 3.5.22.10\CODESYS\Common\Compiler.dll</HintPath>
+    </Reference>
+    <Reference Include="ComponentModel">
+      <HintPath>..\..\..\Program Files\CODESYS 3.5.22.10\CODESYS\Common\ComponentModel.dll</HintPath>
+    </Reference>
+    <Reference Include="DeviceIdentification">
+      <HintPath>..\..\..\Program Files\CODESYS 3.5.22.10\CODESYS\Common\DeviceIdentification.dll</HintPath>
+    </Reference>
+    <Reference Include="DeviceObject">
+      <HintPath>..\..\..\Program Files\CODESYS 3.5.22.10\CODESYS\Common\DeviceObject.dll</HintPath>
+    </Reference>
+    <Reference Include="Engine">
+      <HintPath>..\..\..\Program Files\CODESYS 3.5.22.10\CODESYS\Common\Engine.dll</HintPath>
+    </Reference>
+    <Reference Include="EngineWin">
+      <HintPath>..\..\..\Program Files\CODESYS 3.5.22.10\CODESYS\Common\EngineWin.dll</HintPath>
+    </Reference>
+    <Reference Include="LibManObject">
+      <HintPath>..\..\..\Program Files\CODESYS 3.5.22.10\CODESYS\Common\LibManObject.dll</HintPath>
+    </Reference>
+    <Reference Include="MessageService">
+      <HintPath>..\..\..\Program Files\CODESYS 3.5.22.10\CODESYS\Common\MessageService.dll</HintPath>
+    </Reference>
+    <Reference Include="MessageStorage">
+      <HintPath>..\..\..\Program Files\CODESYS 3.5.22.10\CODESYS\Common\MessageStorage.dll</HintPath>
+    </Reference>
+    <Reference Include="Objects">
+      <HintPath>..\..\..\Program Files\CODESYS 3.5.22.10\CODESYS\Common\Objects.dll</HintPath>
+    </Reference>
+    <Reference Include="ObjectsWin">
+      <HintPath>..\..\..\Program Files\CODESYS 3.5.22.10\CODESYS\Common\ObjectsWin.dll</HintPath>
+    </Reference>
+    <Reference Include="Online">
+      <HintPath>..\..\..\Program Files\CODESYS 3.5.22.10\CODESYS\Common\Online.dll</HintPath>
+    </Reference>
+    <Reference Include="OnlineExpressionInterpreter">
+      <HintPath>..\..\..\Program Files\CODESYS 3.5.22.10\CODESYS\Common\OnlineExpressionInterpreter.dll</HintPath>
+    </Reference>
+    <Reference Include="OnlineWin">
+      <HintPath>..\..\..\Program Files\CODESYS 3.5.22.10\CODESYS\Common\OnlineWin.dll</HintPath>
+    </Reference>
+    <Reference Include="OptionStorage">
+      <HintPath>..\..\..\Program Files\CODESYS 3.5.22.10\CODESYS\Common\OptionStorage.dll</HintPath>
+    </Reference>
+    <Reference Include="OptionStorageWin">
+      <HintPath>..\..\..\Program Files\CODESYS 3.5.22.10\CODESYS\Common\OptionStorageWin.dll</HintPath>
+    </Reference>
+    <Reference Include="ProjectFormat">
+      <HintPath>..\..\..\Program Files\CODESYS 3.5.22.10\CODESYS\Common\ProjectFormat.dll</HintPath>
+    </Reference>
+    <Reference Include="ProjectInfoObject">
+      <HintPath>..\..\..\Program Files\CODESYS 3.5.22.10\CODESYS\Common\ProjectInfoObject.dll</HintPath>
+    </Reference>
+    <Reference Include="ProjectLanguageModelProvider">
+      <HintPath>..\..\..\Program Files\CODESYS 3.5.22.10\CODESYS\Common\ProjectLanguageModelProvider.dll</HintPath>
+    </Reference>
+    <Reference Include="Simulation">
+      <HintPath>..\..\..\Program Files\CODESYS 3.5.22.10\CODESYS\Common\Simulation.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
+    <Reference Include="TargetSettings">
+      <HintPath>..\..\..\Program Files\CODESYS 3.5.22.10\CODESYS\Common\TargetSettings.dll</HintPath>
+    </Reference>
+    <Reference Include="UndoManager">
+      <HintPath>..\..\..\Program Files\CODESYS 3.5.22.10\CODESYS\Common\UndoManager.dll</HintPath>
+    </Reference>
+    <Reference Include="Utilities" />
+  </ItemGroup>
+  <ItemGroup>
+    <AppDesigner Include="Properties\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="CodeAccessSecurity.cs" />
+    <Compile Include="Microsoft\CodeAnalysis\EmbeddedAttribute.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="SmartAssembly\Attributes\DoNotCaptureAttribute.cs" />
+    <Compile Include="SmartAssembly\Attributes\DoNotCaptureVariablesAttribute.cs" />
+    <Compile Include="SmartAssembly\Attributes\DoNotEncodeStringsAttribute.cs" />
+    <Compile Include="SmartAssembly\Attributes\DoNotMoveAttribute.cs" />
+    <Compile Include="SmartAssembly\Attributes\DoNotMoveMethodsAttribute.cs" />
+    <Compile Include="SmartAssembly\Attributes\DoNotObfuscateAttribute.cs" />
+    <Compile Include="SmartAssembly\Attributes\DoNotObfuscateControlFlowAttribute.cs" />
+    <Compile Include="SmartAssembly\Attributes\DoNotObfuscateTypeAttribute.cs" />
+    <Compile Include="SmartAssembly\Attributes\DoNotPruneAttribute.cs" />
+    <Compile Include="SmartAssembly\Attributes\DoNotPruneTypeAttribute.cs" />
+    <Compile Include="SmartAssembly\Attributes\DoNotSealTypeAttribute.cs" />
+    <Compile Include="SmartAssembly\Attributes\EncodeStringsAttribute.cs" />
+    <Compile Include="SmartAssembly\Attributes\ExcludeFromMemberRefsProxyAttribute.cs" />
+    <Compile Include="SmartAssembly\Attributes\ObfuscateControlFlowAttribute.cs" />
+    <Compile Include="SmartAssembly\Attributes\ObfuscateNamespaceToAttribute.cs" />
+    <Compile Include="SmartAssembly\Attributes\ObfuscateToAttribute.cs" />
+    <Compile Include="SmartAssembly\Attributes\ReportExceptionAttribute.cs" />
+    <Compile Include="SmartAssembly\Attributes\ReportUsageAttribute.cs" />
+    <Compile Include="SmartAssembly\Attributes\StayPublicAttribute.cs" />
+    <Compile Include="System\Runtime\CompilerServices\IsReadOnlyAttribute.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\AbsoluteAddressInfo.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\AddressAddressInfo.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\AddressCalculation.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\AddressCodePosition.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\AddressCrossReference.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\AddressCrossReferenceComparer.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\AddressExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\AddressInfoBase.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\AddressInfoBuilderBase.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\AddressInfoCollector.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\AddressInfoFactory.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\AliasType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\AllFlowPosVisitor.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\AnyBitButBoolIsPreferred.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\AnyBitType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\AnyDateType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\AnyIntType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\AnyNumType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\AnyRealType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\AnyStringType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\AnyType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\APEnvironment.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\APEnvironmentFacade.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\APEnvironmentFacadeDesktop.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ApplicationDeviceTable.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ArchiveStorageConfig.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ArchiveStorageFormat.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ArchiveStorageFormatFactory.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Area.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\AreaPersistent.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ArrayAccessBounds.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ArrayDim.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ArrayInitialisation.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ArrayType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\AssignmentExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\AsyncLogger.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\AttributeManagerX.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\AuxiliaryInformation.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\AuxiliaryInformationList.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\BasedIntegerLiteralExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\BaseExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\BitAccess.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\BitAddressInfo.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\BitConstType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\BitType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Bool16Type.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\BoolType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Breakpoint.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\BreakpointList.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\BreakPointStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\BuildProperty.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ByteType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CallExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CallInstanceExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Case.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CaseInsensitiveDictionary.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CaseInsensitiveHashtable.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CaseLabelStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CaseRangeExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CaseStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CastExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CheckedPrecompileSignatureManager.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CheckForTaskLocalVariable.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CheckFunctionAttributes.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CodePosition.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CodeVarRef.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CommentStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Common.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CommonCompilerData\BitWriteAccess.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CommonCompilerData\CompiledCodeData.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CommonCompilerData\CompiledCodeDataPlaceholder.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CommonCompilerData\CompiledCodeDataReloc.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CommonCompilerData\CompilerAttribute.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CommonCompilerData\Debug.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CommonCompilerData\InvalidStateCompilerException.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CommonCompilerData\LateCompileErrorException.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CommonCompilerData\LineScanner.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CommonCompilerData\LineScannerContext.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CommonCompilerData\LineScannerToken.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CommonCompilerData\LocalTargetSettings.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CommonCompilerData\LocalTargetSettingsObject.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CommonCompilerData\PerformanceTimer.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CommonCompilerData\RelocationList.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CommonCompilerData\Token.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CompatibleCompiledLibraryPreparer.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CompileContext.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CompileContextMessage.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CompileContextMessageCategory.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CompiledCode.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CompiledLibraryStorageFormat.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CompiledPOU.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CompileInfoStorageFormat.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CompileOptions.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CompileOptionsSerializable.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CompilerMessage.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CompilerMessageCategory.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CompilerMessageExtensions.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CompilerProxy.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CompilerSettings.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CompilerVersionExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CompilerVersionManager.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ComplexAddressInfo.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CompoAccessExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CompoAddressInfo.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ContinueStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ConversionAddressInfo.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ConversionExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ConvertFromIEC.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ConvertToIEC.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CopyScopeExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CRCSum.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CrossReference.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CrossReferenceComparer.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\CurrentTaskExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\DataManager.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\DataSegment.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\DateAndTimeType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\DateType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\DefaultExprementWriter.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\DefaultParseTreeService.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\DefaultStringEncodingService.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\DefinedExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\DefineReference.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\DefineStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\DelayedLibraryLoadItem.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\DelayedLoader.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\DependencyBag.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\DeRefAccessExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\DeRefAccessInfo.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\DeviceIdentification.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\DIntType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\DirectAdressBitType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\DirectLocationInfo.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\DirectVariable.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\DirectVariableCrossRefTable.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\DirectVariableWrapper.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\DirVarLocationTable.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\DWordType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ElseIf.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\EmbeddedLanguageStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\EmptyStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\EmptyVisitor.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\EnumDeclarationListStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\EnumDeclarationStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\EnumType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ErrorExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ErrorMessagesService.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ErrorStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ExactVersionConstraintToSave.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\EXCStackContent.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ExitStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Exprement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ExprementPosition.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ExprementPreparer.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Expression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ExpressionComparer.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ExpressionStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\FBVisuCreatorAttributeProvider.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\FeatureGroupProvider.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Features\GuidClass.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Features\GuidClassEx.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Features\PreCompCrossReferences.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Features\SharedGuidTable.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Features\TextualPreCompCrossReferenceSerializable.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Features\TextualPreCompCrossReferencesSerializable.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Features\VarLenArray.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\FileSystemFacadeAuthFile.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\FixedSourcePosition.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\FloatLiteralExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Flowposition.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\FlowPosVisitor.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\FlowVarRefCreateArguments.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\FlowVarRefCreateArgumentsFactory.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\FlowVarRefProvider.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\FlowVarRefProvider2.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ForStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\FramePointerExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\FunctionAddressInfo.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GenericUserdefType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GlobalScopeExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GranularityCalculator.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\AbstractGreenVariable.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\AddressExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\ArrayInitialisation_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\AssignmentExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\BasedIntegerLiteralExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\BaseExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\BreakpointStatement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\CallExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\CallExpression_Green_WithEmptyAssigns.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\CaseLabelStatement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\CaseRangeExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\CaseStatement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\Case_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\CastExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\CommentStatement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\CompactedCompiledParseTreeInformation.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\CompactedParseTreeInformation.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\CompactedPrecompileParseTreeInformation.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\CompilerVersionExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\CompoAccessExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\ContinueStatement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\ConversionExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\CurrentTaskExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\DefinedExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\DefineReference_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\DefineStatement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\DeRefAccessExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\ElseIf_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\EmptyStatement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\ErrorExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\ErrorStatement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\ExitStatement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\Exprement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\ExpressionStatement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\ExpressionWithCompactedInformation.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\Expression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\FloatLiteralExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\ForStatement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\GlobalScopeExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\GreenTreeContext.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\GreenTreeFactory.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\GreenTreeTables.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\GreenVariableFactory.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\GreenVariableFull.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\GreenVariableMinimal.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\GreenVariableProperies.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\GreenVariableWithComment.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\GreenVariableWithInitValue.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\GreenVariableWithInitValueAndComment.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\GreenVariableWithInitValueAndCommentAndAttributes.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\GreenVariableWithInitValueAndCommentAndFlags.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\HasAttributeExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\HasCompatibleTypeExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\HasConstantTypeExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\HasConstantValueExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\HasTypeExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\HasValueExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\IfStatement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\ImplicitCodeSectionPragmaStatement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\IndexAccessExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\IntegerLiteralExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\IsEnumTypeExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\ItemReference_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\JumpStatement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\LabelStatement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\LiteralExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\LocalSignatureIdPragmaStatement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\MessageGuidPragmaStatement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\MultipleIndexInitialisation_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\NamespaceAccessExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\NewExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\NullExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\NullStatement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\OperandList.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\OperatorExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\PartialAccessExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\PoolScopeExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\PouReference_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\PragmaAssertion_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\PragmaElseIf_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\PragmaExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\PragmaIfStatement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\PragmaOperatorExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\PragmaStatement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\ProjectDefinedExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\RedTreeFactory.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\RepeatStatement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\ResourceReference_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\ReturnStatement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\RuntimeVersionExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\SequenceStatement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\Statement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\StringLiteralExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\StructureInitialisation_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\SystemScopeExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\TaskReference_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\ThisExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\TryCatchStatement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\TypeExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\TypeReference_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\VariableExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\VariableReference_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\WarningDisableRestorePragmaStatement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\WhileStatement_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\GreenTrees\XRefExpression_Green.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\HasAttributeExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\HasCompatibleTypeExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\HasConstantTypeExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\HasConstantValueExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\HashtableReadOnlyDictionaryWrapper.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\HasTypeExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\HasValueExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Help.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\IAPEnvironmentFacade.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\IAPEnvironmentFacadeEx.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\IdentifierInfo.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\IdMan.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\IECType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\IFileSystemFacade.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\IfStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\IHasEnumerableComponents.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ImplicitCodeSectionPragmaStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ImplicitConversionExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ImplicitDeRefAccessExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ImplicitEnumerationType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ImplicitReferenceType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\IMyAddressInfo.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\IMyPropertyAddressInfo.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\IndexAccessAddressInfoCalculator.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\IndexAccessExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\InOutReferenceType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\InstancePathHelper.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\IntegerLiteralExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\IntegerUnion.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Interfaces\IDelayedLoadItem.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Interfaces\ILMCompiledSetArchiveStorageFormat.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Interfaces\ILMCompiledSetArchiveStorageFormatFactory.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Interfaces\ILMCompiledSetStorage.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Interfaces\_ILMServiceProvider3.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\IntermediateValueLocation.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\InternalStatementProperties.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\IntType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\IsEnumTypeExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\IsUpToDateCheck.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ItemReference.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\IVarReferenceGenerator.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\IVarReferenceGeneratorExtensions.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\IVersionConstraintToSave.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\JumpStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LabelStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LanguageModel.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LanguageModelBuilder.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LanguageModelHandling.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LanguageModelList.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LanguageModelManagerConsolidated.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LateCompileContext.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LazyType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LDateAndTimeType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LDateType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Legacy\ChangedLMObject.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Legacy\CompileContextCreator.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Legacy\ConstantFolding.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Legacy\DetailedIsUpToDateStrategy.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Legacy\FastIsUpToDateStrategy.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Legacy\GenericAttribute.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Legacy\GenericCheckedAttribute.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Legacy\GenericEnumAttribute.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Legacy\GenericIntegerAttribute.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Legacy\GranularityCalculator.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Legacy\IsUpToDateCheck.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Legacy\LMMAttributeProvider.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Legacy\PreCompileSizeCalculator.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Legacy\SignatureSizeCalculator.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Legacy\SizeCalculatorHelpFunctions.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Legacy\TypeSizeCalculator.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LibInfo.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LibInfoNew.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LibParameterTable.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LibraryDevelopmentOptions.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LibraryHelper.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LibraryInfo.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LibraryList.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LibraryPlaceholder.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LibraryPlaceholdersLegacy.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LibraryTableCache.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LibraryTableExtern.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LibraryTableWithoutPlaceholders.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LibraryTableWithPlaceholders.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LibraryTable\IVisibleLibrariesCollector.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LibraryTable\IVisibleLibrariesCollectorBeforeV351500.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LibraryTable\VisibleLibrariesCollector.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LIntType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LiteralAddressInfo.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LiteralExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LiteralValue.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LittleBreakpointList.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LMApplication.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LMCompiledSetOperations\CompiledSetStorage.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LMCompiledSetOperations\DelayedReferenceContextLoadItem.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LMCompiledSetOperations\LMCompiledSetPersistence.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LMCompiledSetOperations\MyArchiveReporter.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LMCompiledSetOperations\MySimpleRefContextSaver.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LMDataType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LMDevice.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LMEntity.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LMGlobVarlist.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LMLibraryInfo.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LMLibraryList.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LMMAttributeProvider.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LMPlaceholderInfo.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LMPOU.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LMSets\CompiledApplicationContentDumper.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LMSets\CompiledApplicationDebugging.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LMSets\CompiledApplicationQuery.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LMSets\CompiledApplicationTypification.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LMTaskList.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LoadAndSaveOptionsHelper.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LocalSignatureIdPragma.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LRealType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LTimeOfDayType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LTimeType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\LWordType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\MemMan.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\MemManGap.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\MemorySentinel.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\MemorySettings.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\MemorySettingsHelperX.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\MessageGuidPragmaStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\MethodDeclarationStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\MinimalPosition.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\MinimalPositionBase.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\MultipleIndexInitialisation.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\MyIdMan.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\MySortedListWrapper.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\NamespaceAccessExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\NewestVersionConstraintToSave.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\NewExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\NullExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\NullStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ObjectIdentification.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\OnlineExpressionProxy.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\OperatorAddressInfo.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\OperatorExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\OptionsHelper.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ParameterlessEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ParamsType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\PartialAccessConstantFolder.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\PartialAccessExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\PointerToFBVarRefCreator.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\PointerType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\PoolScopeExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\PositionExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\PositionStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\POUDeclarationStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\PouReference.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\POUSaver.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\PragmaAssertion.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\PragmaElseIf.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\PragmaExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\PragmaIfStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\PragmaOperatorExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\PragmaStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\PreCompileContext.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\PreCompileErrors.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\PreCompileIDManager.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\PrecompileLibInfo.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\PreCompileMessageCategory.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\PreCompileSizeCalculator.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ProgramCounterExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ProgressX.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ProjectDefinedExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ProjectInfoObjectEvaluator.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\PropertyAddressInfo.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\PropertyAddressInfoExtended.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\PropertyCallCommon.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\PropertyCallerSearcher.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\PropertyFlowpositionCreator.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\QualifiedNameExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\RangeAwareAnyIntType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ReadOnlyCastedCollection.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\RealType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\RecursionGuard.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\RedTrees\Builder\Expressions\CallBuilder.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\RedTrees\Builder\Expressions\OperatorBuilder.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\RedTrees\Builder\ListExtensions.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\RedTrees\Builder\OperatorExpressionExtensions.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\RedTrees\Builder\RedTreeBuilderFactory.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\RedTrees\Builder\Statements\CaseBuilder.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\RedTrees\Builder\Statements\ElseIfBuilder.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\RedTrees\Builder\Statements\EnumDeclarationListBuilder.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\RedTrees\Builder\Statements\ForBuilder.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\RedTrees\Builder\Statements\IfBuilder.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\RedTrees\Builder\Statements\PouDeclarationBuilder.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\RedTrees\Builder\Statements\TypeDeclarationBuilder.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\RedTrees\Builder\Statements\VariableDeclarationListBuilder.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\RedTrees\Builder\Statements\WhileBuilder.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ReferenceType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\RelatedObjectTable.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\RepeatStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ResourceReference.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\RetainBoolType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\RetainByteType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\RetainSIntType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\RetainUSIntType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ReturnStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\RuntimeVersionExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SafeBoolType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SafeByteType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SafeDIntType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SafeDWordType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SafeIntType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SafeLIntType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SafeLRealType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SafeLWordType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SafeRealType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SafeSIntType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SafeTimeType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SafeUDIntType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SafeUIntType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SafeULIntType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SafeUSIntType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SafeWordType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ScannerParserProvider.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SequenceStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Services\CommandService.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Services\CompileService.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Services\ConfigurationService.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Services\CreatorService.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Services\DownloadedApplicationService.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Services\DownloadHelperService.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Services\FlowMonitoringService.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Services\LanguageModelProviderService.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Services\LibraryCompatibilityCheck.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Services\MonitoringService.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Services\ObsoleteService.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Services\PreCompileCrossReferenceService.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Services\PreCompileService.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Services\PreCompileSmartCodingService.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Services\PreCompileStorageSizeEstimatorService.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Services\ProjectLoadedPrecompileCondition.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Services\ServiceProvider.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Services\SignatureComparer.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Services\TaskLMService.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SideCarEntryHelper.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SignatureConstant.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SignatureMemberHierachyInfo.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Signature\BitDataLocation.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Signature\CompiledSignatureCreator.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Signature\CompiledSignatureInformation.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Signature\DataLocation.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Signature\FunctionBlockCompiledInformation.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Signature\FunctionBlockInformation.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Signature\FunctionPointerEntry.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Signature\InterfaceOffsetEntry.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Signature\NullGuid.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Signature\ProcessImageLocation.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Signature\RelativeBitLocation.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Signature\RelativeLocation.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Signature\Signature.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Signature\SignatureComparer.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Signature\SubSignatureTable.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Signature\TypeReplacer.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Signature\VFTable.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SignedConstantAddressInfo.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SIntType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SlotPOUList.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SmartCodingOptionsHelper.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SourceInformationSynchronizer.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SourcePosition.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SpecialCompilerMessage.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\StackRelativeAddressInfo.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\StandardParseTreeProvider.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Statement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\StatementAttributeVisitor.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\StaticMemorySegment.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\StepInPosition.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\StringLiteralExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Strings.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\stringtuple.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\StringType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\StructureInitialisation.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SubrangeType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SubRoutineStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SubSignatureTable.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SupportExtendedProgrammingFeatureSettingProvider.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\SystemScopeExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\TaskInfo.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\TaskList.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\TaskLocalVariableGenerator.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\TaskLocalVariableOnlineExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\TaskReference.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ThisExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\TimeOfDayType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\TimeType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\TryCatchBreakpoint.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\TryCatchStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\TypeComparerProxy.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\TypeDeclarationStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\TypeExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\TypeHelper.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\TypeReference.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\TypeTable.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\UDIntType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\UIntType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\ULIntType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\UnitTesting\UnitTestingCompilerFactory.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\UserdefType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\USIntType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\UXIntType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\VarExpCompiledInfo.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\VariableArrayAccessAddressInfo.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\VariableDeclarationListStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\VariableDeclarationStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\VariableExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\VariableLengthArrayHelper.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\VariableLengthArrayType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\VariableReference.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Variable\ImplicitReferenceVariable.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Variable\RarelyUsed.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Variable\Variable.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\Variable\VariableCompiledInfo.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\VarInitialEmptyStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\VarRef.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\VarReferenceCollector.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\VarReferenceCreator.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\VarReferenceVisitor.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\VectorType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\VersionedCompilerFactory.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\WarningDisableRestorePragmaStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\WarningHelper.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\WhileStatement.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\WordType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\WStringType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\XDIntType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\XDWordType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\XIntType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\XLIntType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\XLWordType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\XRefExpression.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\XStringType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\XUDIntType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\XULIntType.cs" />
+    <Compile Include="_3S\CoDeSys\LanguageModelManager\XWordType.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\AtomicOperators.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\BuildSmall.ico" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\Library32.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\Library32External.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\Library64BitConversions.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\LibraryDateTime64.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\LibraryInt64.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\LibraryInt64External.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\LibraryReal64.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\LibraryReal64External.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\LibraryStringToWStringConversions.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\LibraryStringToWStringConversionsUTF8.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\LibrarySystemTypes.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\LibrarySystemTypes3410.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\LibrarySystemTypes3500.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\LibrarySystemTypes3510.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\LibrarySystemTypes35110.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\LibrarySystemTypes351300.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\LibrarySystemTypes351400.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\LibrarySystemTypes351600.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\LibrarySystemTypes351900.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\LibrarySystemTypes351920.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\LibrarySystemTypes352000.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\LibrarySystemTypes3550.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\LibrarySystemTypes3570.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\LibrarySystemTypes3580.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\LibrarySystemTypes3590.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\LibraryWString.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\LibraryWStringV34000.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\LibraryWStringV35180.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\OperatorCurrentTaskInfo.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\SysAppLinkerFunction.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\syslibs.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\syslibsOpt.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\syslibsOptV35000.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\syslibsV35000.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\syslibs_external_string_real_conversion.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\syslibs_without_byte.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\sysmemcopy.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\sysmemset.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\sysstringcompare.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\SystemNamespaceForced.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\TypeClassEnum.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\TypeClassEnumIntern.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\TypeClassEnumIntern_V351600.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Resources\TypeClassEnum_V351600.xml" />
+    <EmbeddedResource Include="_3S\CoDeSys\LanguageModelManager\Strings.resources" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

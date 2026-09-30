@@ -1,0 +1,21 @@
+{
+"CODESYS.Parser35210.Resources.Strings.en.resources":{
+"CompilerFeature_GenericConstantVariable":"Generic Constant Variable"
+,
+"CompilerFeature_PartialVariableAccess":"Partial Variable Access"
+,
+"CompilerFeature_ProjectDefines":"Project Defines"
+,
+"CompilerFeature_UChar_Literals":"UCHAR Literals"
+,
+"CompilerFeature_UTF8_Strings":"UTF8 Strings"
+,
+"Constant":"Constant"
+,
+"Literal":"Literal"
+,
+"OR":"or"
+,
+"Scanner_Initialize_char_array_must_end_with_null_value":"Char array must end with null value"
+}
+}

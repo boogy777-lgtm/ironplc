@@ -1,0 +1,12 @@
+﻿FILE	C:\Program Files\CODESYS 3.5.22.10\CODESYS\Common\WhiteParseTrees.dll
+ASM	WhiteParseTrees, Version=3.5.22.10, Culture=neutral, PublicKeyToken=null
+MODULE	WhiteParseTrees.dll
+REF	mscorlib	2.0.0.0
+REF	ComponentModel	3.5.22.10
+REF	Compiler	3.5.22.10
+TYPECOUNT	583
+NAMESPACE	
+NAMESPACE	CODESYS.WhiteParseTrees
+NAMESPACE	CODESYS.WhiteParseTrees.Factories
+NAMESPACE	Microsoft.CodeAnalysis
+NAMESPACE	System.Runtime.CompilerServices

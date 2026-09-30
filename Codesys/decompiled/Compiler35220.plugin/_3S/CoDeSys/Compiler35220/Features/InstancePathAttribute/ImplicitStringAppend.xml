@@ -1,0 +1,322 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<language-model>
+  <pou id = "B5E4AE08-CE64-4F29-A664-A78859EA7F88" name = "__StringAppend" external ="false">
+    <interface>
+      {implicit on}
+      FUNCTION __StringAppend
+      VAR_INPUT
+      // the buffer to append the new string at the end
+      STR1: POINTER TO STRING(1024);
+      // string to append
+      STR2:STRING(255);
+      maxbuffersize : DINT;
+      END_VAR
+      VAR
+      index1 : DINT;
+      indexRet : DINT;
+      END_VAR      {implicit off}
+    </interface>
+    <body>
+      index1 := 0;
+      indexRet := 0;
+      // search for final 0
+      FOR index1 := 0 TO maxbuffersize DO
+      IF (STR1^[index1] = 0 OR indexRet > maxbuffersize-1) THEN
+      EXIT;
+      END_IF
+      indexRet := indexRet + 1;
+      END_FOR
+
+      // copy str2 to buffer
+      FOR index1 := 0 TO maxbuffersize DO
+      IF (STR2[index1] = 0 OR indexRet > maxbuffersize-1) THEN
+      STR1^[indexRet] := 0;
+      EXIT;
+      END_IF
+      STR1^[indexRet] := STR2[index1];
+      indexRet := indexRet + 1;
+      END_FOR
+    </body>
+  </pou>
+  <pou id = "7A8C8F68-910B-4A57-8487-30DA25617DE6" name = "__ReflectionInitialisationForOnlineChange" external ="false">
+    <interface>
+      {implicit on}
+      FUNCTION __ReflectionInitialisationForOnlineChange
+      VAR
+      END_VAR
+      {implicit off}
+    </interface>
+    <body>
+      // code is generated
+    </body>
+  </pou>
+
+  <pou id = "C585A820-2459-45A4-B0C9-6B24AE575D30" name = "__ReflectionInitialisation" external ="false">
+    <interface>
+      {implicit on}
+      FUNCTION __ReflectionInitialisation
+      VAR
+      END_VAR
+      {implicit off}
+    </interface>
+    <body>
+      // code is generated      
+    </body>
+  </pou>
+  <pou id = "767D3DB7-3E96-4AF0-A2C2-FCF93D21CFD0" name = "__WStringAppend" external ="false">
+    <interface>
+      {implicit on}
+      FUNCTION __WStringAppend
+      VAR_INPUT
+      // the buffer to append the new string at the end
+      STR1: POINTER TO WSTRING(1024);
+      // string to append
+      STR2:WSTRING(255);
+      maxbuffersize: DINT;
+      END_VAR
+      VAR
+      index1 : DINT;
+      indexRet : DINT;
+      END_VAR      {implicit off}
+    </interface>
+    <body>
+      index1 := 0;
+      indexRet := 0;
+      // search for final 0
+      FOR index1 := 0 TO maxbuffersize DO
+      IF (STR1^[index1] = 0 OR indexRet > maxbuffersize-1) THEN
+      EXIT;
+      END_IF
+      indexRet := indexRet + 1;
+      END_FOR
+
+      // copy str2 to buffer
+      FOR index1 := 0 TO maxbuffersize DO
+      IF (STR2[index1] = 0 OR indexRet > maxbuffersize-1) THEN
+      STR1^[indexRet] := 0;
+      EXIT;
+      END_IF
+      STR1^[indexRet] := STR2[index1];
+      indexRet := indexRet + 1;
+      END_FOR
+    </body>
+  </pou>
+
+  <pou id = "48A32AD4-B9FC-4E38-BAEE-5C80A28E67C4" name = "__APPEND_INT_TO_STRING" external ="false">
+    <interface>
+      {implicit on}
+      FUNCTION __APPEND_INT_TO_STRING
+      VAR_INPUT
+      pSTR : POINTER TO BYTE;
+      di : DINT;
+      maxbuffersize : DINT;
+      END_VAR
+      VAR
+      test, i : DINT;
+      ncountdigits : DINT;
+      digits : ARRAY[0..100] OF BYTE;
+      pStart : POINTER TO BYTE;
+      nIndex : DINT;
+      END_VAR
+    </interface>
+    <body>
+      <![CDATA[
+          test := 0;
+          i := 0;
+          ncountdigits := 0;
+          pStart := pSTR;
+          nIndex := 0;
+          // search end of source
+          WHILE (pStart[nIndex] <> 0) DO
+	          nIndex := nIndex + 1;
+	          IF (nIndex >= maxbuffersize) THEN
+		          RETURN; // no size for integer
+	          END_IF
+          END_WHILE
+          // first handle sign
+          test := di;
+          IF (test < 0) THEN
+	          pStart[nIndex] := 16#2D; // -
+	          nIndex := nIndex + 1;
+	          test := 0 - di;
+          END_IF
+          // handle special case 0: other than 0 we do not want leading 0
+          IF test = 0 THEN
+	          digits[0] := 0; // 0
+	          ncountdigits := 1;	
+          END_IF
+          // fill digits in reverse order
+          WHILE test > 0 DO
+	          digits[ncountdigits] := TO_BYTE(test MOD 10);
+	          ncountdigits := ncountdigits + 1; 	
+	          test := test / 10;
+          END_WHILE
+          // number does not fit in buffer
+          IF nIndex + ncountdigits > maxbuffersize THEN
+	          RETURN;
+          END_IF
+          // write to destination string in correct order
+          FOR i := ncountdigits - 1 TO 0 BY -1 DO
+	          pStart[nIndex] := digits[i] + 16#30;
+	          nIndex := nIndex + 1;
+          END_FOR
+          // add zero to end string
+          pStart[nIndex] := 0;
+		  ]]>      
+    </body>
+  </pou>
+
+  <pou id = "F8D1F7C7-00AA-49A6-ADE3-472E798D82CD" name = "__APPEND_INT_TO_WSTRING" external ="false">
+    <interface>
+      {implicit on}
+      FUNCTION __APPEND_INT_TO_WSTRING
+      VAR_INPUT
+      pSTR : POINTER TO WORD;
+      di : DINT;
+      maxbuffersize : DINT;
+      END_VAR
+      VAR
+      test, i : DINT;
+      ncountdigits : DINT;
+      digits : ARRAY[0..100] OF BYTE;
+      pStart : POINTER TO WORD;
+      nIndex : DINT;
+      END_VAR
+    </interface>
+    <body>
+      <![CDATA[
+      pStart := pSTR;
+      nIndex := 0;
+      ncountdigits := 0;
+      test := 0;
+      i := 0;
+      
+      // search end of source
+      WHILE (pStart[nIndex] <> 0) DO
+	      nIndex := nIndex + 1;
+	      IF (nIndex >= maxbuffersize) THEN
+		      RETURN; // no size for integer
+	      END_IF
+      END_WHILE
+      // first handle sign
+      test := di;
+      IF (test < 0) THEN
+	      pStart[nIndex] := 16#2D; // -
+	      nIndex := nIndex + 1;	
+	      test := 0 - di;
+      END_IF
+      // handle special case 0: other than 0 we do not want leading 0
+      IF test = 0 THEN
+	      digits[0] := 0; // 0
+	      ncountdigits := 1;	
+      END_IF
+      // fill digits in reverse order
+      WHILE test > 0 DO
+	      digits[ncountdigits] := TO_BYTE(test MOD 10);
+	      ncountdigits := ncountdigits + 1; 	
+	      test := test / 10;
+      END_WHILE
+      // number does not fit in buffer
+      IF nIndex + ncountdigits > maxbuffersize THEN
+	      RETURN;
+      END_IF
+      // write to destination string in correct order
+      FOR i := ncountdigits - 1 TO 0 BY -1 DO
+	      pStart[nIndex] := digits[i] + 16#30;
+	      nIndex := nIndex + 1;
+      END_FOR
+      // add zero to end string
+      pStart[nIndex] := 0;
+		  ]]>
+    </body>
+  </pou>
+
+
+  <pou id = "2D31684F-17CF-4318-8968-B57CED719EE6" name = "__StringCopyChecked" external ="false">
+    <interface>
+      {implicit on}
+      FUNCTION __StringCopyChecked
+      VAR_INPUT
+        pSource : POINTER TO BYTE;
+        pDest	: POINTER TO BYTE;
+        nCharacterLimit : DINT;
+        maxbuffersize : DINT;
+      END_VAR
+      VAR
+        nLenSource : DINT;
+        i : DINT;
+        pHelp : POINTER TO BYTE;
+      END_VAR
+      {implicit off}
+    </interface>
+    <body>
+      <![CDATA[
+      nLenSource := 0;
+      i := 0;
+      pHelp := pSource;
+      // search end of source
+      WHILE (pHelp^ <> 0 AND nLenSource < maxbuffersize) DO
+      	nLenSource := nLenSource + 1;
+	      pHelp := pHelp + 1;
+      END_WHILE
+
+      IF (nLenSource <= nCharacterLimit) THEN
+        FOR i := 0 TO nLenSource DO   // '0' is also copied !
+          pDest[i] := pSource[i];
+        END_FOR
+      ELSE
+        pDest[0] := 46; //'.'
+        pDest[1] := 46; //'.'
+        pSource := pSource + TO_UDINT(nLenSource - nCharacterLimit) + 2;
+        FOR i := 2 TO nCharacterLimit DO   // '0' is also copied !
+          pDest[i] := pSource[i-2];
+        END_FOR
+      END_IF
+		]]>
+    </body>
+  </pou>
+
+  <pou id = "50EFC19A-A838-47D3-81C7-39FA0F718C45" name = "__WStringCopyChecked" external ="false">
+    <interface>
+      {implicit on}
+      FUNCTION __WStringCopyChecked
+      VAR_INPUT
+        pSource : POINTER TO WORD;
+        pDest	: POINTER TO WORD;
+        nCharacterLimit : DINT;
+        maxbuffersize: DINT;
+      END_VAR
+      VAR
+        nLenSource : DINT;
+        i : DINT;
+        pHelp : POINTER TO WORD;
+      END_VAR
+      {implicit off}
+    </interface>
+    <body>
+      <![CDATA[
+      i := 0;
+      nLenSource := 0;
+      pHelp := pSource;
+      // search end of source
+      WHILE (pHelp^ <> 0 AND nLenSource < maxbuffersize) DO
+      	nLenSource := nLenSource + 1;
+	      pHelp := pHelp + 2;
+      END_WHILE
+
+      IF (nLenSource <= nCharacterLimit) THEN
+        FOR i := 0 TO nLenSource DO   // '0' is also copied !
+          pDest[i] := pSource[i];
+        END_FOR
+      ELSE
+        pDest[0] := 46; //'.'
+        pDest[1] := 46; //'.'
+        pSource := pSource + 2* (TO_UDINT(nLenSource - nCharacterLimit) + 2);
+        FOR i := 2 TO nCharacterLimit DO   // '0' is also copied !
+          pDest[i] := pSource[i-2];
+        END_FOR
+      END_IF
+		]]>
+    </body>
+  </pou>
+</language-model>

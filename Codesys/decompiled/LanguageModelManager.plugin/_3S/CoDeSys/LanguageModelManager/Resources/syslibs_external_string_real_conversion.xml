@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<language-model>
+	<pou id = "AC95EE30-0FDA-492A-B1A8-A8E189FD1EE7" name = "string__to__real32__ext" external ="true">
+		<interface>
+			{implicit on}
+			FUNCTION string__to__real32__ext : REAL
+			VAR_INPUT
+			in1 : STRING(255);
+			END_VAR
+			{implicit off}
+		</interface>
+	</pou>
+	<pou id = "F19518F5-22C4-417A-BC1F-2BA684AD1F92" name = "wstring__to__real32__ext" external ="true">
+		<interface>
+			{implicit on}
+			FUNCTION wstring__to__real32__ext : REAL
+			VAR_INPUT
+			in1 : WSTRING(255);
+			END_VAR
+			{implicit off}
+		</interface>
+	</pou>
+	<pou id = "620E9083-1C28-480E-B856-80D21D2B7C40" name = "real32__to__string__ext" external ="true">
+		<interface>
+			{implicit on}
+			FUNCTION real32__to__string__ext : STRING(255)
+			VAR_INPUT
+			in1 : REAL;
+			END_VAR
+			{implicit off}
+		</interface>
+	</pou>
+	<pou id = "07509D63-499B-4AC5-95DD-712ACAC1E93A" name = "real32__to__wstring__ext" external ="true">
+		<interface>
+			{implicit on}
+			FUNCTION real32__to__wstring__ext : WSTRING(255)
+			VAR_INPUT
+			in1 : REAL;
+			END_VAR
+			{implicit off}
+		</interface>
+	</pou>
+	
+	<pou id = "A61DBEFF-40FE-469A-A7D7-140945956599" name = "string__to__real64__ext" external ="true">
+		<interface>
+			{implicit on}
+			FUNCTION string__to__real64__ext : LREAL
+			VAR_INPUT
+			in1 : STRING(255);
+			END_VAR
+			{implicit off}
+		</interface>
+	</pou>
+	<pou id = "BDB05F10-D990-42EE-A5E1-6819535B17FA" name = "wstring__to__real64__ext" external ="true">
+		<interface>
+			{implicit on}
+			FUNCTION wstring__to__real64__ext : LREAL
+			VAR_INPUT
+			in1 : WSTRING(255);
+			END_VAR
+			{implicit off}
+		</interface>
+	</pou>
+	<pou id = "94B9638E-D844-4954-B174-474759797C6C" name = "real64__to__string__ext" external ="true">
+		<interface>
+			{implicit on}
+			FUNCTION real64__to__string__ext : STRING(255)
+			VAR_INPUT
+			in1 : LREAL;
+			END_VAR
+			{implicit off}
+		</interface>
+	</pou>
+	<pou id = "A00EC470-15AA-4745-A083-374D8A9DD6E5" name = "real64__to__wstring__ext" external ="true">
+		<interface>
+			{implicit on}
+			FUNCTION real64__to__wstring__ext : WSTRING(255)
+			VAR_INPUT
+			in1 : LREAL;
+			END_VAR
+			{implicit off}
+		</interface>
+	</pou>
+</language-model>

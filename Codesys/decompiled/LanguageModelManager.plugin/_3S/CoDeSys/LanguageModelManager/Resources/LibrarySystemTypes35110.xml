@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+	<language-model>
+		<global-interface id = "DB173C48-0431-4EE2-8080-D72C759A68E3" name = "__COMPILE_CONSTANTS">
+			<interface>
+				{attribute 'qualified_only'}
+				{attribute 'linkalways'}
+				{implicit on}
+				VAR_GLOBAL CONSTANT
+				{attribute 'system_variable'}
+				__CONTAINS_COPY_CODE : BOOL := FALSE;
+				END_VAR
+				{implicit off}
+			</interface>
+		</global-interface>
+	</language-model>

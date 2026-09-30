@@ -1,0 +1,85 @@
+type_class,base_class,st_syntax,key_fields,interface,source_file:line
+IECType,GenericObject2,(abstract),"IsCompiled;EffectiveType;Size/SizeChecked;IsEqual;IsCompatible=>TypeComparerProxy;ConvertRaw/ConvertToRaw abstract",_IType;ICompiledType..ICompiledType5;IType;IArchivable,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\IECType.cs:14
+BoolType,IECType,BOOL,Class=TypeClass.Bool,_IBoolType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\BoolType.cs:13
+BitType,IECType,BIT,Class=TypeClass.Bit,_IBitType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\BitType.cs:13
+BitConstType,BitType,BOOL#1/BOOL#0 (bit literal),Class=TypeClass.BitConst,_IBitConstType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\BitConstType.cs:13
+ByteType,IECType,BYTE,Class=TypeClass.Byte,_IByteType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\ByteType.cs:13
+WordType,IECType,WORD,Class=TypeClass.Word,_IWordType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\WordType.cs:14
+DWordType,IECType,DWORD,Class=TypeClass.DWord,_IDWordType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\DWordType.cs:14
+LWordType,IECType,LWORD,Class=TypeClass.LWord,_ILWordType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\LWordType.cs:14
+SIntType,IECType,SINT,Class=TypeClass.SInt,_ISIntType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\SIntType.cs:13
+IntType,IECType,INT,Class=TypeClass.Int,_IIntType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\IntType.cs:14
+DIntType,IECType,DINT,Class=TypeClass.DInt,_IDIntType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\DIntType.cs:14
+LIntType,IECType,LINT,Class=TypeClass.LInt,_ILIntType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\LIntType.cs:14
+USIntType,IECType,USINT,Class=TypeClass.USInt,_IUSIntType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\USIntType.cs:13
+UIntType,IECType,UINT,Class=TypeClass.UInt,_IUIntType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\UIntType.cs:14
+UDIntType,IECType,UDINT,Class=TypeClass.UDInt,_IUDIntType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\UDIntType.cs:14
+ULIntType,IECType,ULINT,Class=TypeClass.ULInt,_IULIntType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\ULIntType.cs:14
+RealType,IECType,REAL,Class=TypeClass.Real,_IRealType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\RealType.cs:14
+LRealType,IECType,LREAL,Class=TypeClass.LReal,_ILRealType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\LRealType.cs:14
+TimeType,IECType,TIME,Class=TypeClass.Time,_ITimeType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\TimeType.cs:15
+LTimeType,IECType,LTIME,Class=TypeClass.LTime,_ILTimeType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\LTimeType.cs:15
+DateType,IECType,DATE,Class=TypeClass.Date,_IDateType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\DateType.cs:15
+LDateType,IECType,LDATE,Class=TypeClass.LDate,_ILDateType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\LDateType.cs:15
+DateAndTimeType,IECType,DATE_AND_TIME (DT),Class=TypeClass.DateAndTime,_IDateAndTimeType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\DateAndTimeType.cs:15
+LDateAndTimeType,IECType,LDATE_AND_TIME (LDT),Class=TypeClass.LDateAndTime,_ILDateAndTimeType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\LDateAndTimeType.cs:15
+TimeOfDayType,IECType,TIME_OF_DAY (TOD),Class=TypeClass.TimeOfDay,_ITimeOfDayType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\TimeOfDayType.cs:15
+LTimeOfDayType,IECType,LTIME_OF_DAY (LTOD),Class=TypeClass.LTimeOfDay,_ILTimeOfDayType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\LTimeOfDayType.cs:15
+StringType,IECType,STRING(n),m_expSize (Length; default 80);Class=TypeClass.String,_IStringType;ITypeWithRecursiveTypeCheck,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\StringType.cs:14
+WStringType,IECType,WSTRING(n),m_expSize (Length; default 80);Class=TypeClass.WString,_IWStringType;ITypeWithRecursiveTypeCheck,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\WStringType.cs:14
+XStringType,IECType,XSTRING(n)/XWSTRING(n) (__XSTRING),m_expSize (Length);Class=TypeClass.XString;both narrow+wide string ifaces,_IXStringType;_IStringType;_IWStringType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\XStringType.cs:14
+Bool16Type,RetainBoolType,BOOL16,Class=TypeClass.Bool (inherited);16-bit retain bool,_IBool16Type,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\Bool16Type.cs:13
+DirectAdressBitType,BoolType,BOOL (direct address AT %..X),Class=TypeClass.Bool;direct-address bit,_IDirectAddressBitType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\DirectAdressBitType.cs:13
+RetainBoolType,BoolType,BOOL (RETAIN),CodegeneratorType=Word;CompatibilitySize=BoolSize;Size=>Word,_IRetainBoolType;ISpecialSizeType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\RetainBoolType.cs:13
+RetainByteType,ByteType,BYTE (RETAIN),CodegeneratorType;CompatibilitySize;Size,_IRetainByteType;ISpecialSizeType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\RetainByteType.cs:14
+RetainSIntType,SIntType,SINT (RETAIN),CodegeneratorType;CompatibilitySize;Size,_IRetainSIntType;ISpecialSizeType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\RetainSIntType.cs:14
+RetainUSIntType,USIntType,USINT (RETAIN),CodegeneratorType;CompatibilitySize;Size,_IRetainUSIntType;ISpecialSizeType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\RetainUSIntType.cs:14
+SafeBoolType,BoolType,SAFEBOOL,ToString=Operator.SafeBool;ISafetyType,_ISafeBoolType;ISafetyType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\SafeBoolType.cs:13
+SafeByteType,ByteType,SAFEBYTE,ToString=Operator.SafeByte;ISafetyType,_ISafeByteType;ISafetyType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\SafeByteType.cs:13
+SafeSIntType,SIntType,SAFESINT,ToString=Operator.SafeSInt;ISafetyType,_ISafeSIntType;ISafetyType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\SafeSIntType.cs:13
+SafeUSIntType,USIntType,SAFEUSINT,ToString=Operator.SafeUSInt;ISafetyType,_ISafeUSIntType;ISafetyType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\SafeUSIntType.cs:13
+SafeWordType,WordType,SAFEWORD,ToString=Operator.SafeWord;ISafetyType,_ISafeWordType;ISafetyType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\SafeWordType.cs:13
+SafeIntType,IntType,SAFEINT,ToString=Operator.SafeInt;ISafetyType,_ISafeIntType;ISafetyType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\SafeIntType.cs:13
+SafeUIntType,UIntType,SAFEUINT,ToString=Operator.SafeUInt;ISafetyType,_ISafeUIntType;ISafetyType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\SafeUIntType.cs:13
+SafeDWordType,DWordType,SAFEDWORD,ToString=Operator.SafeDWord;ISafetyType,_ISafeDWordType;ISafetyType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\SafeDWordType.cs:13
+SafeDIntType,DIntType,SAFEDINT,ToString=Operator.SafeDInt;ISafetyType,_ISafeDIntType;ISafetyType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\SafeDIntType.cs:13
+SafeUDIntType,UDIntType,SAFEUDINT,ToString=Operator.SafeUDInt;ISafetyType,_ISafeUDIntType;ISafetyType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\SafeUDIntType.cs:13
+SafeLWordType,LWordType,SAFELWORD,ToString=Operator.SafeLWord;ISafetyType,_ISafeLWordType;ISafetyType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\SafeLWordType.cs:13
+SafeLIntType,LIntType,SAFELINT,ToString=Operator.SafeLInt;ISafetyType,_ISafeLIntType;ISafetyType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\SafeLIntType.cs:13
+SafeULIntType,ULIntType,SAFEULINT,ToString=Operator.SafeULInt;ISafetyType,_ISafeULIntType;ISafetyType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\SafeULIntType.cs:13
+SafeTimeType,TimeType,SAFETIME,ToString=Operator.SafeTime;ISafetyType,_ISafeTimeType;ISafetyType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\SafeTimeType.cs:13
+SafeRealType,RealType,SAFEREAL,ToString=Operator.SafeReal;ISafetyType,_ISafeRealType;ISafetyType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\SafeRealType.cs:13
+SafeLRealType,LRealType,SAFELREAL,ToString=Operator.SafeLReal;ISafetyType,_ISafeLRealType;ISafetyType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\SafeLRealType.cs:13
+UXIntType,IECType,__UXINT,Class=TypeClass.UXInt;resolved by pointer size,_IUXIntType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\UXIntType.cs:13
+XWordType,IECType,__XWORD,Class=TypeClass.XWord,_IXWordType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\XWordType.cs:13
+XIntType,IECType,__XINT,Class=TypeClass.XInt,_IXIntType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\XIntType.cs:13
+XDIntType,DIntType,__XDINT,Class inherited DInt;ToString=__XDINT,_IXDIntType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\XDIntType.cs:13
+XDWordType,DWordType,__XDWORD,Class inherited DWord,_IXDWordType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\XDWordType.cs:13
+XLIntType,LIntType,__XLINT,Class inherited LInt,_IXLIntType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\XLIntType.cs:13
+XLWordType,LWordType,__XLWORD,Class inherited LWord,_IXLWordType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\XLWordType.cs:13
+XUDIntType,UDIntType,__XUDINT,Class inherited UDInt,_IXUDIntType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\XUDIntType.cs:13
+XULIntType,ULIntType,__XULINT,Class inherited ULInt,_IXULIntType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\XULIntType.cs:13
+AnyType,IECType,ANY,Class=TypeClass.Any,_IAnyType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\AnyType.cs:13
+AnyBitType,IECType,ANY_BIT,Class=TypeClass.AnyBit,_IAnyBitType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\AnyBitType.cs:13
+AnyBitButBoolIsPreferred,AnyBitType,ANY_BIT (BOOL preferred),Class=TypeClass.AnyBit (inherited),_IAnyBitButBoolIsPreferred,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\AnyBitButBoolIsPreferred.cs:13
+AnyDateType,IECType,ANY_DATE,Class=TypeClass.AnyDate,_IAnyDateType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\AnyDateType.cs:13
+AnyIntType,IECType,ANY_INT,Class=TypeClass.AnyInt,_IAnyIntType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\AnyIntType.cs:13
+RangeAwareAnyIntType,AnyIntType,ANY_INT (range-aware),MaxValue;MinValue;_integerTypes;ResolveIntegerType();Class=AnyInt,_IRangeAwareAnyIntType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\RangeAwareAnyIntType.cs:15
+AnyNumType,IECType,ANY_NUM,Class=TypeClass.AnyNum,_IAnyNumType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\AnyNumType.cs:13
+AnyRealType,IECType,ANY_REAL,Class=TypeClass.AnyReal,_IAnyRealType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\AnyRealType.cs:13
+AnyStringType,IECType,ANY_STRING,Class=TypeClass.AnyString,_IAnyStringType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\AnyStringType.cs:13
+ArrayType,IECType,ARRAY[a..b; c..d] OF base,m_typeBase;nIndicesLow/High;Indices;Dimensions;_Base;Class=Array,_IArrayType;_IArrayType2;IArrayType2;ITypeWithRecursiveTypeCheck;IHasEnumerableComponents,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\ArrayType.cs:19
+VariableLengthArrayType,IECType,ARRAY[*] OF base,m_typeBase;m_nDimensions;Dimensions;_Base;Class=VarLenArray,_IVariableLengthArrayType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\VariableLengthArrayType.cs:15
+PointerType,IECType,POINTER TO base,m_typeBase;_Base;BaseType;OriginalBase;Class=Pointer,_IPointerType;_IPointerType2,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\PointerType.cs:16
+ReferenceType,IECType,REFERENCE TO base,m_typeBase;_Base;BaseType;DeRefType;Class=Reference,_IReferenceType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\ReferenceType.cs:14
+ImplicitReferenceType,ReferenceType,(implicit REFERENCE TO base),inherits ReferenceType fields;Class=Reference,_IImplicitReferenceType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\ImplicitReferenceType.cs:13
+InOutReferenceType,ReferenceType,(implicit VAR_IN_OUT reference),inherits ReferenceType fields;Class=Reference,_IInOutReferenceType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\InOutReferenceType.cs:13
+SubrangeType,IECType,base(low..high),m_expLowerBorder;m_expUpperBorder;m_typeBase;LowerBorder;UpperBorder;_Base;Class=Subrange,_ISubrangeType;_ISubrangeType2,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\SubrangeType.cs:14
+VectorType,IECType,__VECTOR[n] OF base,m_Dimension;m_typeBase;Dimension;_Base;Class=__Vector,_IVectorType;ITypeWithRecursiveTypeCheck,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\VectorType.cs:14
+ParamsType,IECType,__PARAMS(n) OF base (ARRAY[*] OF),m_typeBase;_expCount;Count;ImplicitStructName;Class=Params,_IParamsType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\ParamsType.cs:15
+LazyType,IECType,__LAZY base (deferred),Class=TypeClass.Lazy,_ILazyType,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\LazyType.cs:13
+EnumType,IECType,TYPE name : (m1; m2; ...); name,m_idSignature;m_stName;m_typeBase (default Int);m_defaultValue;SignatureId;Class=Enum,_IEnumType;_IEnumType2;IEnumTypeSerializable,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\EnumType.cs:15
+ImplicitEnumerationType,IECType,(m1; m2; ...) inline enum,_edeclliststatement;Enumerations;_stImplicitName;SignatureId;_Base;DefaultValue;Class=Enum,IImplicitEnumerationType;_IEnumType;_IEnumType2,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\ImplicitEnumerationType.cs:13
+UserdefType,IECType,name / STRUCT..END_STRUCT / FUNCTION_BLOCK / INTERFACE / UNION,m_qneTypeDef;NameExpression;m_iSignatureId;SignatureId;m_iScopeId;ScopeId;Class=Userdef,_IUserdefType;IUserdefType2,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\UserdefType.cs:19
+GenericUserdefType,UserdefType,name<generic args>,Initializations;OriginalDeclaration;GetNonGenericBaseType();Class=Userdef,IGenericUserdefType;IGenericUserdefType2,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\GenericUserdefType.cs:17
+AliasType,UserdefType,ALIAS base,m_orgType;m_defaultValue;_DefaultValue;EffectiveType;Class=Userdef,_IAliasType;IAliasTypeSerializable,decompiled\LanguageModelManager.plugin\_3S\CoDeSys\LanguageModelManager\AliasType.cs:15

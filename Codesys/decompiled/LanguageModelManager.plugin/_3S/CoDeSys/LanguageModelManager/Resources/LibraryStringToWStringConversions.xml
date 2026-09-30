@@ -1,0 +1,56 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<language-model>
+	<pou id = "9248ff97-fbbc-448e-ae9b-2fb2646b8bf7" name = "string__to__wstring">
+		<interface>
+		{implicit on}
+		FUNCTION string__to__wstring : WSTRING(255)
+		VAR_INPUT
+			in: STRING(255);
+		END_VAR
+		VAR
+			i : INT := 0;
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		WHILE (in[i] <> 0 AND i < 255) DO
+			string__to__wstring[i] := in[i];
+			i := i+1;
+		END_WHILE
+		string__to__wstring[i] := 0;		
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "3951380b-30c9-4ec4-92e7-a4707aca12e8" name = "wstring__to__string">
+		<interface>
+		{implicit on}
+		FUNCTION wstring__to__string : STRING(255)
+		VAR_INPUT
+			in: WSTRING(255);
+		END_VAR
+		VAR
+			i : INT := 0;
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		WHILE (in[i] <> 0 AND i < 255) DO
+			wstring__to__string[i] := WORD_TO_BYTE(in[i]);
+			i := i+1;
+		END_WHILE
+
+		wstring__to__string[i] := 0;		
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+</language-model>

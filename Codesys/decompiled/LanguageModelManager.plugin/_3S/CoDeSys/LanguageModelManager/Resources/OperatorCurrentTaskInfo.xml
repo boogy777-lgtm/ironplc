@@ -1,0 +1,49 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+	<language-model>
+		<global-interface id="{{90165385-435D-46CE-BD91-03A9CC5300C5}}" name = "__TaskSpecificInfoGVL">
+			<interface>
+        {{attribute 'qualified_only'}}
+        {{attribute 'linkalways'}}
+        {{implicit on}}
+        VAR_GLOBAL
+        taskSpecificInfos : ARRAY[0..({0}-1)] OF __SYSTEM.__TaskSpecificInfo;
+			  taskEntryAddress : ARRAY[0..({0}-1)] OF POINTER TO BYTE;
+        taskInfoInvalid : __SYSTEM.__TaskSpecificInfo := (TaskIndex := -1, pTaskInfo := 0);
+        END_VAR
+        VAR_GLOBAL CONSTANT
+        NUM_TASKS : UDINT := {0};
+        MAX_STACK_SIZE : UDINT := {1};
+        END_VAR
+        {{implicit off}}
+      </interface>
+		</global-interface>
+
+    <pou id = "{{16E0ACE9-ADB7-41F9-BD1C-CB81BBE43190}}" name = "__CurrentTaskDetection">
+      <interface>
+        {{implicit on}}
+        {{attribute 'hide'}}
+        FUNCTION __CurrentTaskDetection : POINTER TO __TaskSpecificInfo
+        VAR_INPUT
+        END_VAR
+        VAR
+        index : USINT;
+        pbyStack : POINTER TO BYTE;
+        END_VAR
+        {{implicit off}}
+      </interface>
+      <body>
+        <![CDATA[
+{{implicit on}}
+pbyStack := ADR(index);
+FOR index := 0 TO TO_USINT(__TaskSpecificInfoGVL.NUM_TASKS) DO
+IF (({2} - {3}) < __TaskSpecificInfoGVL.MAX_STACK_SIZE) THEN 
+__CurrentTaskDetection := ADR(__TaskSpecificInfoGVL.taskSpecificInfos[index]);
+RETURN;
+END_IF
+END_FOR
+__CurrentTaskDetection := ADR(__TaskSpecificInfoGVL.taskInfoInvalid);
+{{implicit off}}
+		]]>
+      </body>
+    </pou>
+  </language-model>

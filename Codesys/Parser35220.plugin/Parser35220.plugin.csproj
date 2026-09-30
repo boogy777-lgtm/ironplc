@@ -1,0 +1,145 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{EB94AAB5-A82A-414D-A950-85D3A181BB7F}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>Parser35220.plugin</RootNamespace>
+    <AssemblyName>Parser35220.plugin</AssemblyName>
+    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Compiler" />
+    <Reference Include="ComponentModel" />
+    <Reference Include="MessageStorage" />
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.ValueTuple" />
+    <Reference Include="Utilities" />
+  </ItemGroup>
+  <ItemGroup>
+    <AppDesigner Include="Properties\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="CODESYS\Parser35220\APEnvironment.cs" />
+    <Compile Include="CODESYS\Parser35220\Declaration\ContextualOperatorHandler.cs" />
+    <Compile Include="CODESYS\Parser35220\Declaration\DeclarationParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Declaration\DeclarationStatementDetector.cs" />
+    <Compile Include="CODESYS\Parser35220\Declaration\EndOfPOUElement.cs" />
+    <Compile Include="CODESYS\Parser35220\Declaration\EnumListParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Declaration\IStatementVisitor.cs" />
+    <Compile Include="CODESYS\Parser35220\Declaration\POUDeclarationParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Declaration\POUSyntax.cs" />
+    <Compile Include="CODESYS\Parser35220\Declaration\POUSyntaxParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Declaration\StatementElement.cs" />
+    <Compile Include="CODESYS\Parser35220\Declaration\StatementExtensions.cs" />
+    <Compile Include="CODESYS\Parser35220\Declaration\SyntaxElement.cs" />
+    <Compile Include="CODESYS\Parser35220\Declaration\SyntaxElementParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Declaration\TypeDeclarationParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Declaration\TypeParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Declaration\VariableDeclarationParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Declaration\VariableListParser.cs" />
+    <Compile Include="CODESYS\Parser35220\DependencyBag.cs" />
+    <Compile Include="CODESYS\Parser35220\Expressions\ArrayInitializationParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Expressions\ConversionExpressionParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Expressions\CurrentTaskExpressionParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Expressions\ExpressionParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Expressions\FunctionCallParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Expressions\ImplicitCastOperatorParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Expressions\InfixOperationParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Expressions\InitializationParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Expressions\MinMaxOperatorParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Expressions\NewExpressionParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Expressions\OperandParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Expressions\ParenthesizedExpressionParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Expressions\PrefixedOperatorParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Expressions\ScopeExpressionParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Expressions\StructureInitializationParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Expressions\ThisAndBaseExpressionParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Expressions\UnaryNotParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Expressions\UnaryPlusMinusParser.cs" />
+    <Compile Include="CODESYS\Parser35220\ForLoopExtender.cs" />
+    <Compile Include="CODESYS\Parser35220\InternalParser.cs" />
+    <Compile Include="CODESYS\Parser35220\LanguageModelOfRawST.cs" />
+    <Compile Include="CODESYS\Parser35220\ParserService.cs" />
+    <Compile Include="CODESYS\Parser35220\PragmaScanner\PragmaScanner.cs" />
+    <Compile Include="CODESYS\Parser35220\PragmaScanner\PragmaToken.cs" />
+    <Compile Include="CODESYS\Parser35220\Pragmas\DefinedPragmaOperandParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Pragmas\ErrorPragmaParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Pragmas\HasAttributePragmaParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Pragmas\HasConstantValueOrTypePragmaParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Pragmas\HasTypePragmaParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Pragmas\HasValuePragmaParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Pragmas\ItemReferenceParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Pragmas\PragmaIfStatementParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Pragmas\PragmaOperandParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Pragmas\PragmaStatementParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Pragmas\PragmaVersionOperandParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Pragmas\XRefPragmaOperandParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Resources\Strings.cs" />
+    <Compile Include="CODESYS\Parser35220\ScannerService.cs" />
+    <Compile Include="CODESYS\Parser35220\Scanner\InternalScanner.cs" />
+    <Compile Include="CODESYS\Parser35220\Scanner\MultiStringScanner.cs" />
+    <Compile Include="CODESYS\Parser35220\Scanner\OperatorDesc.cs" />
+    <Compile Include="CODESYS\Parser35220\Scanner\OperatorFlags.cs" />
+    <Compile Include="CODESYS\Parser35220\Scanner\OperatorNode.cs" />
+    <Compile Include="CODESYS\Parser35220\Scanner\OperatorTable.cs" />
+    <Compile Include="CODESYS\Parser35220\Scanner\QuickStringBuilder.cs" />
+    <Compile Include="CODESYS\Parser35220\Scanner\ReservedUnusedKeywords.cs" />
+    <Compile Include="CODESYS\Parser35220\Scanner\Token.cs" />
+    <Compile Include="CODESYS\Parser35220\Scanner\TokenFactoryClass.cs" />
+    <Compile Include="CODESYS\Parser35220\Statements\CaseStatementParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Statements\CodeStatementChecker.cs" />
+    <Compile Include="CODESYS\Parser35220\Statements\ConditionalCallParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Statements\DeclarationStatementChecker.cs" />
+    <Compile Include="CODESYS\Parser35220\Statements\DummyBaseClass.cs" />
+    <Compile Include="CODESYS\Parser35220\Statements\ForStatementParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Statements\IfStatementParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Statements\ImplementationBlockParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Statements\JumpStatementParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Statements\RepeatStatementParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Statements\ReturnStatementParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Statements\StatementParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Statements\TryCatchStatementParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Statements\WhileStatementParser.cs" />
+    <Compile Include="CODESYS\Parser35220\Tools\Debug.cs" />
+    <Compile Include="CODESYS\Parser35220\Tools\EmptyVisitor.cs" />
+    <Compile Include="CODESYS\Parser35220\Tools\StandardTraverser.cs" />
+    <Compile Include="CODESYS\Parser35220\Utilities\FactoryExtension.cs" />
+    <Compile Include="CODESYS\Parser35220\Utilities\Helper.cs" />
+    <Compile Include="CODESYS\Parser35220\Utilities\MaximumNestingDepthExceededException.cs" />
+    <Compile Include="CODESYS\Parser35220\Utilities\ParserContext.cs" />
+    <Compile Include="CODESYS\Parser35220\Utilities\PragmaSourcePositionAdjuster.cs" />
+    <Compile Include="CODESYS\Parser35220\Utilities\ResynchronizerTables.cs" />
+    <Compile Include="CODESYS\Parser35220\Utilities\ScannerExtensions.cs" />
+    <Compile Include="Microsoft\CodeAnalysis\EmbeddedAttribute.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="System\Runtime\CompilerServices\IsReadOnlyAttribute.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="CODESYS\Parser35220\Resources\Strings.resources" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

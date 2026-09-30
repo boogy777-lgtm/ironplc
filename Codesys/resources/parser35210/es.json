@@ -1,0 +1,21 @@
+{
+"CODESYS.Parser35210.Resources.Strings.es.resources":{
+"CompilerFeature_GenericConstantVariable":"Variable constante genérica"
+,
+"CompilerFeature_PartialVariableAccess":"Acceso variable parcial"
+,
+"CompilerFeature_ProjectDefines":"Defines del proyecto"
+,
+"CompilerFeature_UChar_Literals":"UCHAR Cadenas"
+,
+"CompilerFeature_UTF8_Strings":"UTF8 Strings"
+,
+"Constant":"Constante"
+,
+"Literal":"Literal"
+,
+"OR":"o"
+,
+"Scanner_Initialize_char_array_must_end_with_null_value":"La matriz de caracteres debe terminar con un valor nulo"
+}
+}

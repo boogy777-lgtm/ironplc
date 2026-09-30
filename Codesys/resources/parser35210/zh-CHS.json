@@ -1,0 +1,21 @@
+{
+"CODESYS.Parser35210.Resources.Strings.zh-CHS.resources":{
+"CompilerFeature_GenericConstantVariable":"通用常量变量"
+,
+"CompilerFeature_PartialVariableAccess":"部分变量访问"
+,
+"CompilerFeature_ProjectDefines":"技术定义"
+,
+"CompilerFeature_UChar_Literals":"UCHAR 字面"
+,
+"CompilerFeature_UTF8_Strings":"UTF8 字符串"
+,
+"Constant":"常量"
+,
+"Literal":"字面的"
+,
+"OR":"或"
+,
+"Scanner_Initialize_char_array_must_end_with_null_value":"字符数组必须以空值结束"
+}
+}

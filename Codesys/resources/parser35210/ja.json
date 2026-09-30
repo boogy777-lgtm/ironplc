@@ -1,0 +1,21 @@
+{
+"CODESYS.Parser35210.Resources.Strings.ja.resources":{
+"CompilerFeature_GenericConstantVariable":"汎用定数変数"
+,
+"CompilerFeature_PartialVariableAccess":"部分変数アクセス"
+,
+"CompilerFeature_ProjectDefines":"プロジェクトの定義"
+,
+"CompilerFeature_UChar_Literals":"UTF-8 リテラル"
+,
+"CompilerFeature_UTF8_Strings":"UTF-8 文字列"
+,
+"Constant":"定数"
+,
+"Literal":"リテラル"
+,
+"OR":"または"
+,
+"Scanner_Initialize_char_array_must_end_with_null_value":"Char 配列は Null 値で終了する必要があります"
+}
+}

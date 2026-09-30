@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<language-model>
+	<pou id = "1230B333-5D6B-46b8-A973-900B5373DB72" name = "__sys__rts__cycle__2" external = "true">
+		<interface>
+			{implicit on}
+			FUNCTION __sys__rts__cycle__2 : BOOL
+			VAR_INPUT
+			slotLower : DINT;
+			slotUpper : DINT;
+			hTaskinfo : DWORD;
+			END_VAR
+			{implicit off}
+		</interface>
+	</pou>
+</language-model>
