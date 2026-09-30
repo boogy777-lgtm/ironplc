@@ -1,4 +1,4 @@
-# CODESYS ST — база для 100% реверс-инжиниринга (цель: идентичный лексер/парсер на Rust)
+# CODESYS ST — база совместимости синтаксиса и архитектурных исследований
 
 Источник: **CODESYS Development System 3.5.22.10**. Всё получено статически (декомпиляция +
 извлечение ресурсов/таблиц); Program Files не изменялся.
@@ -15,24 +15,42 @@
 
 - **(а)** Довести наш Rust-лексер/парсер (`F:\IronPLC\compiler\parser`) до **100 % покрытия
   синтаксиса ST** по таблицам CODESYS 3.5.22.10, собранным в этом каталоге.
-- **(б)** Изучить и применять **систему кодов SYNTAX-ошибок CODESYS** и наш порядок оформления
+- **(б)** Построить **одно полное CST + единую семантическую модель + отслеживание
+  зависимостей** по утверждённой архитектуре ниже. CST использует rowan: green —
+  неизменяемое хранилище, red — представление того же синтаксиса.
+- **(в)** Изучить и применять **систему кодов SYNTAX-ошибок CODESYS** и наш порядок оформления
   `P####`-кодов (`compiler/problems`: CSV + docs + code + test).
 
 > **Внимание:** syntax-ошибки (scanner/parser) **≠** build/компиляционные **≠** семантические.
 > Границы классов — [`ERROR-CODES-STUDY.md`](ERROR-CODES-STUDY.md) §2 («Границы класса SYNTAX»).
 
-**Границы порта:** red/green/white tree **не портируем сейчас** — цель = поверхность
-синтаксиса (лексер/парсер); эволюционный путь заложен (слои включаются по триггерам):
-[`specs/design/parse-tree-architecture.md`](../specs/design/parse-tree-architecture.md) (§5 «Evolution steps»).
+**Архитектурное решение владельца, 2026-10-01:** развиваем фронтенд IronPLC:
+одно lossless CST на rowan, lowering в существующий `dsl` AST, существующий analyzer
+как единственный владелец семантики и один механизм кешированных запросов с
+отслеживанием зависимостей. Salsa — предпочтительный кандидат для эксперимента S0.
+**Это утверждённый план, не реализованная возможность.** Подробные границы,
+доказательства из исходников CODESYS и этапы S0–S5 — в
+[`Parse-Tree Architecture`](../specs/design/parse-tree-architecture.md).
+
+**Границы заимствования:** не копировать три дерева CODESYS и не подключать truST
+HIR/IDE/LSP как второй семантический backend. Green/red rowan — хранилище и навигация
+одного CST. Сначала проверить CST/recovery на существующей PEG-грамматике;
+замена парсера (в том числе scoped reuse `trust-syntax`) требует сравнения в S0,
+а не запуска второго production-парсера. Сохраняем исходный текст **до**
+препроцессора и token transforms. Полный разбор файла допустим на первом этапе;
+локальный reparse — отдельная измеряемая оптимизация S5. Ни CST, ни кеширование
+семантики сами по себе не доказывают инкрементальный парсинг.
 
 **Порядок чтения (ровно этот, не грепать всё подряд):**
 
 1. **этот README** — целиком;
-2. [`LEXER-GAP-ANALYSIS.md`](LEXER-GAP-ANALYSIS.md) — **что чинить**: сводная таблица (§1)
+2. [`Parse-Tree Architecture`](../specs/design/parse-tree-architecture.md) — целиком:
+   текущий/целевой фронтенд, один semantic owner, evidence CODESYS и этапы §5;
+3. [`LEXER-GAP-ANALYSIS.md`](LEXER-GAP-ANALYSIS.md) — **что чинить**: сводная таблица (§1)
    и приоритетный P0-бэклог (§13); доказательства `file:line` уже внутри;
-3. [`ERROR-CODES-STUDY.md`](ERROR-CODES-STUDY.md) — **как оформлять ошибки**: `MessageId`-механика
+4. [`ERROR-CODES-STUDY.md`](ERROR-CODES-STUDY.md) — **как оформлять ошибки**: `MessageId`-механика
    (§1–§3) + маппинг на наши `P####` (§4);
-4. только потом точечно: [`docs/01_LEXER_PARSER.md`](docs/01_LEXER_PARSER.md),
+5. только потом точечно: [`docs/01_LEXER_PARSER.md`](docs/01_LEXER_PARSER.md),
    [`grammar/ST_GRAMMAR.ebnf`](grammar/ST_GRAMMAR.ebnf), конкретные таблицы из
    [§0 ниже](#0-маршрутизация-по-задачам-начни-отсюда).
 
@@ -47,7 +65,17 @@
 | Правила проекта | skill `ironplc-dev`: safe Rust; **no `unwrap/expect/panic` в prod**; dialect gating через `CompilerOptions`; P-код = CSV + docs + code + test (4-tuple) |
 | Гейты | `cargo test -p ironplc-parser`; `cd compiler && just`; доки — `cd specs && just` (см. `AGENTS.md`) |
 
-**План по фазам** (детали и порядок P0 — в [`LEXER-GAP-ANALYSIS.md`](LEXER-GAP-ANALYSIS.md) §13):
+**Порядок развития фронтенда:** S0 — сравнение интеграционных вариантов и baseline;
+S1 — полное CST и recovery; S2 — lowering CST → `dsl`; S3 — анализ деклараций/тел POU
+с отслеживанием зависимостей; S4 — общий API snapshots для CLI/LSP/MCP/build и
+редакторских изменений. S5 — локальный reparse только при доказанной необходимости.
+Выходные критерии и владельцы — в единственном
+[архитектурном плане, §5](../specs/design/parse-tree-architecture.md#5-evolution-steps).
+W32 потребляет этот фронтенд, но не владеет им и не блокирует его начало.
+
+**Синтаксический бэклог Ф1–Ф5** продолжается в рамках одной выбранной грамматики;
+S0 фиксирует seam до расширения фронтенда. Детали и порядок P0 — в
+[`LEXER-GAP-ANALYSIS.md`](LEXER-GAP-ANALYSIS.md) §13:
 
 - **Ф1. Keywords/tokens:** 15 отсутствующих ST-слов + 7 OO (`CONTINUE`, `PROPERTY`, `UNION`, `VAR_STAT/INST/GENERIC`, `PARAMS`, `NAMESPACE`, модификаторы доступа/`OVERRIDE`).
 - **Ф2. Literals:** `$U`+8 hex, typed `__XSTRING#`/`UTF8#`/`UCHAR#`, `10#`, `us/ns`, `BOOL#1`, `LT#/LD#`, `TOD#hh:mm`.
@@ -58,11 +86,25 @@
 **Ритм фазы:** таблица → тесты → реализация → spec conformance.
 **Закрытие фазы:** тесты зелёные + `cd compiler && just` зелёный.
 
-**Definition of Done:**
+**Definition of Done для синтаксического бэклога:**
 
 1. Все **P0-пункты** [`LEXER-GAP-ANALYSIS.md`](LEXER-GAP-ANALYSIS.md) §13 закрыты тестами.
 2. Новые `P####`-коды оформлены по [`ERROR-CODES-STUDY.md`](ERROR-CODES-STUDY.md) §4.
 3. LLM-фенсы не нарушены (no `unwrap/expect/panic` в prod; warnings = deny; `just` зелёный).
+
+Закрытие P0 не означает доказанные «100 %» всего CODESYS ST: scope, исключения и
+покрытие фиксируются по корпусу и таблицам. Принятый синтаксис не означает готовую
+семантику или выполнение.
+
+**Закрытие архитектурных этапов:** точное восстановление исходного ST-текста,
+включая ошибочный ввод и trivia; lowering без изменения существующей семантики;
+единственный analyzer для всех клиентов; после каждого edit результаты tracked
+analysis совпадают с чистым пересчётом того же snapshot. Счётчики выполнения
+запросов показывают reuse незатронутых POU и пересчёт затронутых зависимостей.
+Позиции/диагностика привязаны к revision; проверяются изменения сигнатур, тел,
+типов, отсутствующих имён, настроек диалекта, библиотек и target. Требования и
+conformance-тесты добавляются вместе с реализацией этапа, без пустых заглушек.
+Канонический `plc2plc` round-trip и lossless CST round-trip — отдельные контракты.
 
 ---
 
@@ -70,10 +112,11 @@
 
 | Твоя задача | Куда смотреть |
 |---|---|
+| **Архитектура CST и tracked analysis** | [`Parse-Tree Architecture`](../specs/design/parse-tree-architecture.md) — целевая архитектура, evidence CODESYS и этапы S0–S5 |
 | **Задание на усиление лексера** | [`LEXER-GAP-ANALYSIS.md`](LEXER-GAP-ANALYSIS.md) + [`ERROR-CODES-STUDY.md`](ERROR-CODES-STUDY.md) |
 | Лексер/токены ST | [`docs/01_LEXER_PARSER.md`](docs/01_LEXER_PARSER.md) → [`grammar/ST_GRAMMAR.ebnf`](grammar/ST_GRAMMAR.ebnf) → [`tables/st_keywords.csv`](tables/st_keywords.csv), [`tables/operators.csv`](tables/operators.csv), [`tables/token_types.csv`](tables/token_types.csv) |
 | Строковые литералы/escape | [`docs/15_STRING_LITERALS.md`](docs/15_STRING_LITERALS.md) → [`grammar/STRING_LITERALS.ebnf`](grammar/STRING_LITERALS.ebnf) → [`tables/string_escapes.csv`](tables/string_escapes.csv) |
-| Парсинг → AST (green/red) | [`docs/06_AST_BUILDER_MAP.md`](docs/06_AST_BUILDER_MAP.md) → [`docs/07_AST_RED_TREE_CONSTRUCTION.md`](docs/07_AST_RED_TREE_CONSTRUCTION.md) → [`docs/08_AST_CONCRETE_NODES.md`](docs/08_AST_CONCRETE_NODES.md) → [`tables/ast_nodes.csv`](tables/ast_nodes.csv) |
+| Исследование CODESYS: парсинг → AST (green/red) | [`docs/06_AST_BUILDER_MAP.md`](docs/06_AST_BUILDER_MAP.md) → [`docs/07_AST_RED_TREE_CONSTRUCTION.md`](docs/07_AST_RED_TREE_CONSTRUCTION.md) → [`docs/08_AST_CONCRETE_NODES.md`](docs/08_AST_CONCRETE_NODES.md) → [`tables/ast_nodes.csv`](tables/ast_nodes.csv); границы нашей реализации — в [`Parse-Tree Architecture`](../specs/design/parse-tree-architecture.md) |
 | Система типов и scopes | [`docs/05_TYPE_SYSTEM_SCOPES.md`](docs/05_TYPE_SYSTEM_SCOPES.md) → [`tables/iec_types.csv`](tables/iec_types.csv), [`tables/type_system.csv`](tables/type_system.csv), [`tables/scopes.csv`](tables/scopes.csv) |
 | X-типы (`__XINT` …) | [`docs/10_X_TYPES.md`](docs/10_X_TYPES.md) → [`docs/11_X_TYPES_USAGE.md`](docs/11_X_TYPES_USAGE.md) → [`docs/12_X_TYPES_GAPS.md`](docs/12_X_TYPES_GAPS.md) → [`tables/x_types.csv`](tables/x_types.csv) |
 | Типизация оператора | [`docs/20_OPERATOR_TYPE_RESOLUTION.md`](docs/20_OPERATOR_TYPE_RESOLUTION.md) → [`tables/operator_type_rules.csv`](tables/operator_type_rules.csv) |
@@ -193,7 +236,7 @@
 ## 7. Остаточные пробелы (не критичные для порта)
 
 1. `ScannerOptionsService.GetScanningOptions` — реализация в `decompiled/Compiler35220.plugin/.../PreCompile/ScannerOptionsService.cs`.
-2. Языковая модель (`ITypeTable`/`ILanguageModelBuilder7`/`ParserContext`) — портировать или строить свою AST.
+2. Языковая модель (`ITypeTable`/`ILanguageModelBuilder7`/`ParserContext`) — исследовать поведение; наша реализация по утверждённому плану понижает CST в существующий `dsl` AST и использует существующий analyzer.
 3. Динамические конверсии (`TO_<T>`, `ANY_TO_<T>`) — восстановить отбор по `OperatorFlags`/`GetTextOfOperator`.
 4. `GetNextInternal` декомпилирован в goto-граф — восстановить `switch` по IL.
 5. 15 `MessageId` без текста; 9 orphan-ключей; порядок под-POU (`Hashtable`); порядок `LDictionary.Keys` при суммаризации.

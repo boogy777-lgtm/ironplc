@@ -1,8 +1,8 @@
 # IronPLC Roadmap
 
-Status as of 2026-09-15. This is the durable counterpart to the transient work
-plans: decisions that outlive a branch live here or in an ADR, not in a plan
-file.
+Updated 2026-10-01; delivered work retains its dated entries below.
+This is the durable counterpart to transient work plans: decisions that
+outlive a branch live here or in an ADR, not in a plan file.
 
 ## Done
 
@@ -294,12 +294,10 @@ connection parameters, connected-device panel, status bar):
     identity and mandatory Test; phases compiling → uploading → verifying →
     running render on the device panel.
 
-- **Future (trigger-gated, not this phase):** in-process incremental and
-  format-preserving editing. The parse-tree evolution path (white/CST → red
-  view → green sharing) is recorded in
-  [Parse-Tree Architecture](design/parse-tree-architecture.md); layers land
-  one stage at a time, each only when its obligation appears — never as a
-  batch.
+- **Frontend dependency:** format-preserving editing and shared semantic
+  analysis use the approved CST/query architecture in Phase 8 below.
+  W32 and the engineering connection consume that service; they do not own
+  its parser or gate the start of compiler-side work.
 
 Details: [Engineering Connection](design/engineering-connection.md).
 Decisions: [ADR-0063](../adrs/0063-engineering-connection-transport.md).
@@ -323,6 +321,36 @@ Autonomy: design done autonomously; implementation follows owner review.
 
 Autonomy: design approved by owner; implementation follows the W11
 dependencies (W05, W10).
+
+### Phase 8 - Lossless syntax and dependency-tracked analysis
+
+- **Decided 2026-10-01 (owner):** one complete lossless CST using rowan
+  green storage/red views; lowering to the existing dsl AST; one semantic
+  authority in the analyzer; one mechanism for tracked result reuse.
+  This replaces the deferred white → red → green staircase.
+- **Approved, not implemented:** S0–S4 establish the frontend. S0 assesses
+  PEG extension versus scoped parser replacement, provenance and query
+  integration (Salsa preferred candidate); S1 adds CST/recovery; S2 lowers
+  to dsl; S3 separates tracked declaration/body results; S4 supplies one
+  snapshot service to CLI/LSP/MCP/build and editing.
+- **Conditional optimization:** S5 adds local reparse only when workload
+  measurements justify it. Full-file parsing and semantic incrementality
+  are separate contracts.
+- **Verification:** incremental results equal clean analysis after edits;
+  instrumentation proves reuse and dependency invalidation; lossless CST
+  reconstruction remains separate from canonical plc2plc rendering.
+  Dialect/library/target changes and source revisions participate in
+  tracking. Runtime admission, stable IDs and deployment units retain
+  their existing contracts.
+
+Detailed ownership, CODESYS source evidence and stage exit criteria:
+[Parse-Tree Architecture](design/parse-tree-architecture.md).
+Syntax coverage continues through [the CODESYS routing README](../Codesys/README.md)
+and its existing backlog against one production grammar. Phase numbering
+does not make this frontend work wait for the controller/IDE phases.
+
+Autonomy: documentation updated by owner request; implementation follows
+the scoped development workflow and the stage evidence contracts.
 
 ## Deferred
 

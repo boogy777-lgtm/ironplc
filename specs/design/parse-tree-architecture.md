@@ -1,294 +1,276 @@
-# Design: Parse-Tree Architecture — Current Model and Future White/Green/Red Layers
+# Design: Lossless CST and Dependency-Tracked Semantic Analysis
 
 status: approved
-date: 2026-09-30
+date: 2026-10-01
 
 ## Overview
 
-This document records two things: the parse/semantic pipeline IronPLC has
-today, and the owner-decided evolution path toward a CODESYS/Roslyn-style
-multi-tree architecture. The path is documented and bounded, but it is **not
-built now**. `status: approved` records that the direction is decided; it
-schedules no work. Section 5 gates each future layer on the obligation that
-justifies it, and this document's first rule is negative: do not build a
-layer ahead of its obligation.
+The target frontend has one lossless concrete syntax tree (CST), one
+semantic authority, and one mechanism for dependency-tracked computation.
+The owner approved this direction after reviewing CODESYS's editor tree,
+precompile model and selective compilation. This replaces the previous
+white/CST → red → green staircase. The architecture is approved; the CST
+and tracked analysis are **not implemented** by this documentation change.
 
-The trigger era is in-process, incremental editing in the IDE
-([W32](../implementation/dcs-platform/tasks/W32-ide.md)): format-preserving
-edits, incremental reparse, and multi-consumer mutations. Until that
-obligation is real, one typed AST with source spans is complete and minimal —
-the prior analysis: M = 1 now is elegant, and a tree ported ahead of its
-obligation is a crutch.
+Use rowan for the CST's immutable green storage and derived red navigation
+views. Green and red represent the same syntax, not separate grammars or
+semantic models. The existing dsl AST and analyzer remain the semantic
+authority. Derive their input from the CST and adapt analysis into tracked
+results progressively; do not add a second type checker.
 
-This design builds on:
+Full-file parsing is the initial correctness baseline. Dependency-tracked
+semantic recomputation is a separate milestone. Local subtree reparsing is
+a later optimization justified by measurements. Neither rowan nor a query
+cache makes the parser incremental automatically.
 
-- [Spec Conformance Testing](spec-conformance-testing.md) — how each future
-  stage earns requirement IDs and conformance tests when its work lands
-- [Online Editing UX](online-editing-ux.md) — the editor contract in which
-  the incremental-editing trigger appears
-- [W32](../implementation/dcs-platform/tasks/W32-ide.md) — the IDE work
-  package of the trigger era
+Section 5 records future stage acceptance criteria. Implementation changes
+add requirement IDs and real conformance tests together, following
+[Spec Conformance Testing](spec-conformance-testing.md). This approved
+design does not claim those future criteria already pass.
 
 ## Design Goals
 
-1. **One semantic authority.** The `dsl` AST remains the only model the
-   analyzer, codegen, VM and `plc2plc` consume. Tree layers are presentation
-   and editing; they carry no types, no resolved names, no runtime meaning.
-2. **One grammar authority.** A CST, when it exists, is emitted by the same
-   parser that emits the AST — never by a second, independently drifting ST
-   parser (the liability CODESYS carries; see Section 2).
-3. **Append-only seams.** Adding a layer must not rewrite the passes below
-   it: `parser → CST → AST` derivation is additive, and when the AST is
-   unchanged the analyzer, codegen and renderer tests stay untouched.
-4. **Evidence before layers.** Each stage in Section 5 names the trigger that
-   justifies it and the evidence that closes it. A layer with no obligation
-   is a crutch, not architecture.
+1. **One grammar authority.** The production parser constructs one CST;
+   semantic AST construction lowers it rather than parsing ST again.
+2. **One semantic authority.** Reuse dsl and analyzer rules for CLI, LSP,
+   MCP and compilation. Syntax views have no resolved types or names.
+3. **One tracking mechanism.** Consumers request results from one analysis
+   service, without private symbol databases or invalidation engines.
+4. **Correctness before optimization.** Incremental results equal a clean
+   rebuild of the same snapshot. Full recomputation remains available when
+   dependencies cannot be established safely.
+5. **Bounded evolution.** Preserve existing language behavior, diagnostics
+   and backend contracts while replacing the frontend seam in stages.
 
 ## 1. Current Architecture
 
-One pass, no intermediate tree:
+At baseline bfa5d9fd7cb30a2f7ec83fc10bbaf95121fa0d2e, IronPLC uses:
 
-```
-source text
-  → preprocess()          comments → whitespace; {IF} pragma trivia stays opaque
-                          compiler/parser/src/preprocessor.rs
-  → tokenize() + xforms   logos lexer; the token stream KEEPS trivia:
-                          Newline, Whitespace, Comment and the collapsed Pragma
-                          compiler/parser/src/lexer.rs, compiler/parser/src/token.rs:63
-                          xform_collapse_pragmas, xform_split_duration_units,
-                          insert_keyword_statement_terminators, xform_demote_keywords,
-                          rule_token_* checks
-                          compiler/parser/src/lib.rs:62
-  → parse_library()       PEG grammar; rules map 1:1 to IEC 61131-3 Appendix B
-                          compiler/parser/src/parser.rs:11, rule `_` at :373
-  → dsl AST (Library)     typed; every node carries SourceSpan / Located
-                          compiler/dsl/src
-  → xform passes          resolve, fold, toposort, … (16 passes)
-                          compiler/analyzer/src/xform_*.rs
-  → consumers             analyzer rules → codegen → VM; plc2plc renderer
-```
+- **compiler/parser/src/lib.rs:** tokenize_program preprocesses text, runs
+  the logos lexer, applies token transforms/checks, then parse_program calls
+  the PEG parse_library grammar.
+- **compiler/parser/src/preprocessor.rs:** OSCAT ranged-comment contents
+  become whitespace. This semantic-input transformation is not lossless
+  storage of the original text.
+- **compiler/parser/src/token.rs and parser.rs:** tokens include trivia;
+  the PEG grammar skips trivia and constructs the dsl Library AST.
+- **compiler/analyzer/src/:** named transformation passes and semantic
+  rules resolve the program using existing environments and context.
+- **compiler/plc2plc/:** AST rendering produces canonical text. Existing
+  round trips prove AST equivalence and formatting fixed points, not
+  recovery of original source bytes.
 
-The seams that matter for this document:
+The AST is a Rust data model, not evidence that all names and types are
+resolved immediately after parsing. Codegen consumes analyzed program data;
+the VM consumes compiled artifacts, not the CST or AST. Existing spans
+provide provenance. This design does not assume every AST node has a span
+or that current token transforms preserve original text.
 
-- **Token tables** — `TokenType` (`compiler/parser/src/token.rs`) already
-  produces the trivia tokens; the PEG rule `_`
-  (`compiler/parser/src/parser.rs:373`) skips them, and the token-level
-  xforms collapse and annotate tokens before parsing. The raw material for a
-  CST is therefore present in the stream; no model retains it.
-- **PEG grammar** — `parser.rs` rules generally map 1:1 to the formal
-  specification (Appendix B), with the two documented naming exceptions
-  (`compiler/parser/src/parser.rs:11-15`). Grammar identity is held by a
-  single source of truth, and
-  [`grammar/AST_MAPPING.md`](../../Codesys/grammar/AST_MAPPING.md) keeps that
-  grammar aligned with the CODESYS syntax surface.
-- **`dsl` AST** — the single semantic authority: one typed tree for the whole
-  pipeline; all mutation is confined to the named xform passes.
-- **Positions** — `SourceSpan` on every token and AST node; diagnostics, LSP
-  and the debug pipeline read spans, not a separate position map.
-- **`plc2plc` printer + round-trip tests** — the formatting contract (Section
-  1.1).
+## 2. What the CODESYS Sources Establish
 
-### 1.1 The formatting contract today
+The reference is static decompilation of CODESYS 3.5.22.10 in Codesys/.
+These mechanisms are visible in source; performance and complete editor
+behavior have not been measured.
 
-Formatting is canonicalization, not preservation: `plc2plc` renders the AST
-to text with its own layout, and tests prove the rendering is valid input for
-the same dialect:
-
-- `assert_round_trips` — parse → render → re-parse, same AST
-  (`compiler/plc2plc/src/tests/common.rs:69`),
-- `assert_round_trips_idempotently` — renderings that deliberately normalize
-  to a different spelling must be fixed points (`…/common.rs:101`),
-- `assert_resource_renders_to` — the same round trip pinned against a golden
-  file (`…/common.rs:130`).
-
-Consequently trivia is not part of any model: comments and the original
-whitespace are consumed by the parser and lost. A text-to-text round trip
-(`text → tree → text`, byte-identical) does not exist, and no consumer needs
-one today.
-
-## 2. Deliberate Differences from CODESYS
-
-CODESYS is the reference implementation for the syntax surface, but its
-three-tree organization is not the target of our current model:
-
-| Aspect | CODESYS | IronPLC today (deliberate) |
+| Mechanism | Evidence | Consequence for IronPLC |
 |---|---|---|
-| Parsers | Two independent ST parsers: green (`Parser35220`) and white (`WhiteTreeParser`), with grammar and operator precedence duplicated | One PEG grammar (`compiler/parser/src/parser.rs`), rules 1:1 Appendix B |
-| Green/red split | Parser emits green `_IExprement`; `RedTreeBuilder` visits green to build the mutable typed red tree, transferring positions and duplicating types | No intermediate tree: the parser emits the typed `dsl` AST directly; types and resolution live in analyzer xform passes |
-| White tree | Independent editor service with its own parser, `Leading`/`Trailing` trivia chains, `SourcePositionMap` and a formatter; not an input to the compiler | No CST; trivia is skipped by PEG `_`; positions come from spans; formatting is canonical print + AST-equality round trip |
-| Consequence | White tree needed only for editor services: format preservation, round-trip, caret↔offset maps (docs 16 §8) | None of those obligations existed, so the layer was deferred (Section 5) |
+| Editor retains comments, whitespace, line endings, pragmas and erroneous tokens | TokenStream options and WhiteTreeParser recovery | Preserve original text and incomplete input |
+| Compiler and editor have distinct parsers | Parser35220 and WhiteTreeParser | Borrow syntax behavior; keep one production grammar |
+| Compact compiler trees expand to working red ASTs on demand; weak red cache | StandardParseTreeProvider and GreenTreeContext | Materialize derived data on demand; CODESYS red AST is not a rowan view |
+| Precompile model stores signatures and POU bodies, compares checksums and emits changes | PreCompileContext | Separate declaration and body results |
+| Selective typification follows caller/referencer/declarer relationships; compilation has its own selection | ObjectsToTypifyDetector and ObjectsToCompileDetector | Track semantic dependencies, beyond syntax reuse |
+| Background workers check queued signatures and POU code | PrecompileChecksWindows | Schedule analysis outside the UI |
+| Old/new expressions map breakpoint positions | ExpressionComparer and SourceInformationSynchronizer | Separate locations from semantic and executable identity |
 
-Sources: [`07_AST_RED_TREE_CONSTRUCTION.md`](../../Codesys/docs/07_AST_RED_TREE_CONSTRUCTION.md)
-(the three-tree model; green→red via `RedTreeBuilder`; the white tree's
-editor-only role) and
-[`16_WHITE_PARSE_TREES.md`](../../Codesys/docs/16_WHITE_PARSE_TREES.md)
-(the white tree is a standalone editor service, shares the lexer but not the
-parser, and is not required for a syntax/AST port). We inherit CODESYS's
-grammar, not its tree topology: one parser parses the surface once, and any
-future CST must be emitted by that parser rather than by a second one.
+WhiteTreeParser's ParseStImplementation and ParsePOUSyntax create fresh
+token streams for the supplied text. These entries do not establish local
+subtree reparsing. ObjectsToTypifyDetector selects full typification outside
+its eligible Online Change path and for several project-wide changes.
+Do not generalize these paths into an always-minimal editor guarantee.
+The visible implementation uses explicit dependencies and invalidation;
+it is not evidence of a Salsa-like framework.
 
-Scope note: [`LEXER-GAP-ANALYSIS.md`](../../Codesys/LEXER-GAP-ANALYSIS.md)
-§12 keeps non-lexical gaps in a register outside the token/grammar backlog,
-and §13 marks out-of-scope work "ВНЕ SCOPE (зафиксировать в README/доке)" —
-durable documentation, not parked code. This document is that durable record
-for the tree architecture.
+### 2.1 Direct Source References
 
-## 3. Future: Three Layers, Three Invariants, Three Mechanisms
+- [TokenStream](../../Codesys/decompiled/WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Parser/TokenStream.cs)
+  and [WhiteTreeParser](../../Codesys/decompiled/WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Parser/WhiteTreeParser.cs)
+- [InfixOperationParser](../../Codesys/Parser35220.plugin/CODESYS/Parser35220/Expressions/InfixOperationParser.cs)
+  — recursive descent through operator-precedence levels
+- [StandardParseTreeProvider](../../Codesys/decompiled/LanguageModelManager.plugin/_3S/CoDeSys/LanguageModelManager/StandardParseTreeProvider.cs)
+  and [GreenTreeContext](../../Codesys/decompiled/LanguageModelManager.plugin/_3S/CoDeSys/LanguageModelManager/GreenTrees/GreenTreeContext.cs)
+- [PreCompileContext](../../Codesys/decompiled/LanguageModelManager.plugin/_3S/CoDeSys/LanguageModelManager/PreCompileContext.cs)
+  and [PrecompileChecksWindows](../../Codesys/decompiled/Compiler35220.plugin/_3S/CoDeSys/Compiler35220/PreCompile/PrecompileChecksWindows.cs)
+- [ObjectsToTypifyDetector](../../Codesys/decompiled/Compiler35220.plugin/_3S/CoDeSys/Compiler35220/Phase1_Typification/ObjectsToTypifyDetector.cs)
+  and [ObjectsToCompileDetector](../../Codesys/decompiled/Compiler35220.plugin/_3S/CoDeSys/Compiler35220/Phase2_AfterTypification/ObjectsToCompileDetector.cs)
+- [ExpressionComparer](../../Codesys/decompiled/LanguageModelManager.plugin/_3S/CoDeSys/LanguageModelManager/ExpressionComparer.cs)
+  and [SourceInformationSynchronizer](../../Codesys/decompiled/LanguageModelManager.plugin/_3S/CoDeSys/LanguageModelManager/SourceInformationSynchronizer.cs)
 
-A layer is justified only when a *distinct invariant* appears that no
-existing mechanism can carry. The three candidate layers each own one:
+Reports [07](../../Codesys/docs/07_AST_RED_TREE_CONSTRUCTION.md) and
+[16](../../Codesys/docs/16_WHITE_PARSE_TREES.md) remain CODESYS research.
+Their tree-port suggestions are not the IronPLC implementation contract;
+this design owns that contract.
 
-| Layer | Invariant it alone guarantees | Obligation it serves |
+## 3. Target Architecture and Ownership
+
+| Part | Owns | Does not own |
 |---|---|---|
-| White tree (CST) | Lossless text: trivia retained in the tree; `text → CST → text` byte-identical | Editing, formatting, incremental reparse |
-| Green tree | Immutability without positions, so structurally shared versions stay valid | Many versions/consumers alive at once (measured scale) |
-| Red view | Derived-view consistency: parent links, absolute offsets, caches and mutations always agree with the layer beneath | Consumers that navigate parents or mutate the tree |
+| Source snapshot | Original text, source identity, revision and effective configuration | Resolved meaning or runtime state |
+| Parser and rowan CST | Tokens, trivia, syntax, recovery; green storage and red views | Name resolution, types or deployment identity |
+| CST-to-dsl lowering | Semantic AST input and original-source provenance | Another grammar or type checker |
+| Analyzer and tracked results | Scopes, resolution, types, validation and result dependencies | UI policy, controller admission or migration |
+| CLI/LSP/MCP/build | Requests and projections for a chosen snapshot | Private parsers, resolvers or invalidation rules |
+| Codegen/runtime | Existing artifact and execution contracts | Persistent state identity derived from CST pointers |
 
-### 3.1 White tree (CST) — the lossless layer
+### 3.1 Lossless CST
 
-**Invariant.** Every byte of the source is recoverable from the tree: trivia
-(whitespace, newlines, comments, pragma trivia) is attached to nodes/tokens
-rather than skipped. The established shape is a non-syntactic token chain —
-CODESYS `Leading`/`Trailing`
-([`16_WHITE_PARSE_TREES.md`](../../Codesys/docs/16_WHITE_PARSE_TREES.md) §3.2)
-— or Roslyn-style syntax trivia; either way the syntax nodes hold only
-syntactic tokens plus children.
+Parse the original decoded ST text before destructive preprocessing. Every
+byte of that UTF-8 text belongs to a token or error region. Retain comments,
+CRLF/LF spelling, tabs, pragmas, inactive regions and malformed fragments.
+Synthetic recovery tokens have no source text and do not alter reconstruction.
+Container decoding/XML escaping remain source-adapter concerns; CST
+fidelity concerns the extracted ST text.
 
-**Obligations it serves.** Format-preserving edits (change one region without
-reflowing the rest); incremental reparse (reuse the unaffected regions);
-format-preserving merge/undo; caret↔offset mapping read from the tree rather
-than recomputed.
+Audit provenance for OSCAT processing, collapsed pragmas, split duration
+tokens, demoted keywords and inserted terminators. Semantic preprocessing
+selects or interprets original syntax; it must not overwrite stored source.
+Transforms must lower correctly without inventing or losing source bytes.
 
-**Trigger.** The first real format-preserving editing obligation — the IDE
-W32 era. An editor (or formatter) that must not rewrite untouched text is the
-evidence; "we might have an IDE one day" is not.
+Use rowan green storage from the first CST stage. Red navigation and typed
+syntax wrappers are views over it. Edits create new snapshots. Views and
+shared nodes add no semantic authority. Effective structural reuse is
+measured independently; it does not justify another bespoke tree.
 
-**Why not now.** The current contract is canonicalization plus AST equality
-(Section 1.1); no consumer reads trivia, and no requirement can validate the
-invariant without the consumer that needs it.
+Keep plc2plc's canonical AST-rendering contract. CST reconstruction has
+separate byte-equality tests. Format-preserving edits prove untouched text
+unchanged; a canonical formatter need not reproduce the original file.
 
-### 3.2 Green tree — immutable, position-free structural data
+### 3.2 One Semantic Model
 
-**Invariant.** Immutable, position-free nodes, compared and shared by
-structure, so many versions of the same program coexist cheaply. CODESYS's
-green tree is the analogous raw immutable layer
-([`07_AST_RED_TREE_CONSTRUCTION.md`](../../Codesys/docs/07_AST_RED_TREE_CONSTRUCTION.md)),
-though it exists to feed red construction rather than for structural sharing.
+Lower valid CST constructs to the existing dsl AST and reuse analyzer rules
+and backend interfaces. Error nodes support editor services and diagnostics;
+invalid or incomplete programs cannot reach executable code generation as
+though valid.
 
-**Obligations it serves.** Version-heavy consumers: incremental reparse that
-keeps many revisions alive, stable node identity across edits, structural
-sharing at measured scale.
+Immutable source/analysis snapshots isolate readers. Cache owned, versioned
+results; analyzer transformations must not mutate AST data shared with a
+different snapshot. Initially a query may wrap whole-project analysis.
+Split it as dependency boundaries become explicit and tested. A cached
+result is a product of the same analyzer, not another HIR/resolver.
 
-**Trigger.** A measured pressure point — per-keystroke reparse/retention
-showing memory or allocation cost that a CST plus a red view cannot meet, or
-multiple consumers each keeping an independent parse. The trigger is numbers,
-not anticipation.
+### 3.3 Dependency-Tracked Computation
 
-**Why it is last.** A red view can be built directly over the CST. Green
-earns its existence only when sharing scale demands a position-free immutable
-substrate, which is why the staged order is CST → red → green (Section 5).
+Use one query mechanism. Salsa is the preferred candidate for S0's
+integration experiment, which records a version and checks snapshots,
+cancellation, cycle handling and compatibility with the analyzer. Do not
+combine copied CODESYS dirty flags with a second independent query graph.
+No SQL or disk database is required.
 
-### 3.3 Red view — consumer view over the tree
+Inputs include source text, effective CompilerOptions/dialect, project
+membership, imports/library interfaces, and target settings that affect
+types or codegen. Results depend on every input that affects them.
+Lookup depends on a relevant scope even when the name is absent, so a new
+declaration invalidates an earlier unresolved lookup.
 
-**Invariant.** Derived-view consistency: parent links, absolute offsets,
-caches and any mutation the tree exposes never disagree with the structure
-beneath. Precedent: CODESYS builds the unit of statement/expression nodes on
-which consumers navigate
-([`07_AST_RED_TREE_CONSTRUCTION.md`](../../Codesys/docs/07_AST_RED_TREE_CONSTRUCTION.md) §1).
+Start with declaration/interface summaries, POU bodies, scopes and type
+dependencies. Separate body-derived meaning from current source locations.
+Text edits refresh syntax and location projections; equal meaning-bearing
+results stop propagation to consumers that do not read the changed text.
+Pragmas, documentation attributes and other observable metadata retain their
+dependencies; never discard all trivia as semantically irrelevant.
 
-**Obligations it serves.** Consumer navigation (parent, enclosing node),
-mutations expressed against a stable tree (editor refactors), position
-queries without rescanning.
+| Change | Expected dependency behavior |
+|---|---|
+| Ordinary whitespace/non-semantic comment | Refresh syntax and locations; equal semantic summaries stop propagation |
+| Body with unchanged declaration | Recheck body and its consumers; declaration-only callers can reuse results |
+| Signature/exported name/declaration | Refresh dependent resolution/typing, including missing-name lookups |
+| Type structure/constant/initializer/codegen attribute | Invalidate readers of the affected value, layout or behavior |
+| Dialect/target/library/project membership | Invalidate dependent results; full recomputation if tracking is incomplete |
 
-**Trigger.** The first consumer that needs parenting or mutation — the
-Roslyn rationale: red exists because editors navigate upward and mutate; a
-compiler that only walks downward does not need it. A workaround growing in
-a consumer (hand-built parent maps, offset recomputation) is the signal.
+These are future acceptance criteria. Body-only edits may affect inlining
+or other body-reading consumers, which must record that dependency.
+Queries have no controller/UI side effects. Recursive dependencies use an
+explicit cycle/SCC policy that preserves supported recursion and reports
+forbidden cycles through existing diagnostics, not stale results or panics.
 
-**Why not first.** The AST already supports downward traversal with spans,
-and parent links are derivable. Building red now would add a second way to
-reach the same nodes with no consumer to exercise it.
+Result equality accounts for every observable property. Hashes may speed
+comparison; define a collision policy that cannot silently authorize stale
+reuse. Syntax identity and checksums do not prove StableStateId equality
+or bumpless hot edit. Runtime admission and migration keep their owners.
 
-**Relationship to `dsl`.** Red is a *view* — never the semantic authority.
-Resolved types, names and environments stay in the AST and analyzer state.
+### 3.4 N+1 Check
 
-### 3.4 N+1: when does M grow?
+Count independent mechanisms, not representations or Rust structs.
+Green storage, red navigation and syntax wrappers implement one syntax
+mechanism. Lossless syntax and semantic analysis have different invariants;
+the analyzer remains a separate authority. Tracking manages result reuse,
+not language meaning.
 
-Today M = 1: one mechanism (the typed `dsl` AST, with trivia skipped and
-spans carried) covers every obligation the compiler and the IDE have. The
-three candidate layers are not refinements of that obligation — each is a
-*genuinely different invariant*, which is exactly why each qualifies as a new
-mechanism at all:
-
-- a CST is required only by the lossless-text invariant, which the AST cannot
-  carry without duplicating semantics;
-- a red view is required only by the parenting/mutation invariant, which the
-  AST deliberately does not offer;
-- green sharing is required only by the structural-sharing invariant at
-  scale.
-
-The order is a staircase, not a batch: **M grows 1→2→3 with matching
-obligations** — CST first, red view when a consumer exists, green only at
-measured scale. If an obligation never arrives, its stage never lands and
-nothing is missing; a shorter staircase is success, not debt. Building ahead
-of the obligation is the anti-pattern this document exists to prevent: an
-unexercised tree is a crutch, and its invariant cannot be validated without
-the consumer that needs it.
+A new language extension adds grammar/lowering/rules within these owners.
+An editor consumer reads the same syntax and analysis service. A tracked
+result uses the same query mechanism. If any introduces another parser,
+resolver or invalidation engine, reconsider the abstraction first.
 
 ## 4. Boundaries and Constraints
 
-- **`dsl` AST remains THE semantic authority.** Analyzer, codegen, VM and
-  `plc2plc` keep consuming it. Tree layers are presentation/editing only:
-  text fidelity, syntactic structure, positions, mutation. No semantic
-  duplication.
-- **Append-only parser evolution.** When S1 lands, the parser emits the CST
-  first and the AST derives from it (or the two are dual-emitted from one
-  parse). Existing parses and tests stay valid; no downstream pass is
-  rewritten. Failures in one view must not change the meaning of the other.
-- **One grammar authority.** Never introduce a second ST parser to feed a
-  second tree (Section 2).
-- **Positions stay derived.** `SourceSpan` remains the canonical provenance;
-  tree offsets are derived and must agree with it.
-- **No layer without its Section 5 trigger**, and no port of a foreign tree
-  framework (CODESYS assemblies, Roslyn) as a shortcut to having one.
-- **Requirements come with the work.** Each stage, when it lands, adds
-  requirement IDs and conformance tests per
-  [Spec Conformance Testing](spec-conformance-testing.md); this document
-  advances to `partially implemented` naming the stages that exist, and to
-  `implemented` only when it describes what the compiler actually does.
+- **Evidence-driven parser choice.** Assess extending the IronPLC PEG seam
+  for CST emission/recovery. A recursive-descent/Pratt replacement, including
+  scoped trust-syntax reuse, is an alternative experiment, not a parallel
+  production parser. Compare coverage, provenance, recovery, maintenance,
+  licensing and API cost.
+- **No wholesale truST transplant.** Do not attach truST HIR/IDE/LSP as
+  another semantic backend. Reused syntax feeds the same CST and analyzer.
+  The CODESYS syntax-gap backlog remains applicable.
+- **Behavior-preserving migration.** Keep accepted syntax, dialect gating,
+  AST meaning, diagnostics and backend behavior except specified fixes.
+  Temporary comparison paths are test-only and removed at cutover.
+- **Snapshot-bound positions.** Derive spans from CST provenance and source
+  mappings. Publish diagnostics only for the requested revision. Syntax
+  pointers are not durable IDs; retain the existing UID/refactor contract.
+- **Engineering-side tracking.** POU analysis does not change deployment
+  units, container format, hot-edit FSM or runtime authority. Executable
+  artifact reuse per POU is separate backend work.
+- **W32 is a consumer.** Its command/session work proceeds independently.
+  The compiler frontend does not wait for a controller connection or an
+  in-process IDE compiler.
 
 ## 5. Evolution Steps
 
-Each stage lands only on its trigger, in its own change, with the exit
-evidence below; a stage without evidence does not start. Until then the
-architecture is the one in Section 1.
+The approved foundation is S0–S4; none is delivered by this document.
+S5 is conditional optimization. Syntax-gap work continues against one
+grammar; S0 settles that seam before a new frontend path is introduced.
 
-| Stage | Trigger (appears when…) | Work | Exit evidence |
-|---|---|---|---|
-| **S1 — white/CST** | An editor/formatter must preserve untouched text (W32-era incremental editing), or `text → tree → text` must be byte-identical | Parser emits a trivia-preserving tree from the same single grammar; AST derives from it (or dual-emit); trivia attached (Leading/Trailing shape); position map if the editor needs caret↔offset | A real-file corpus round-trips byte-identically, including unusual indentation and comments; current parser tests pass unchanged; `plc2plc` golden tests gain the text-preservation assertion while keeping AST equality; the `dsl` AST shape and all xform/analyzer/codegen tests are untouched |
-| **S2 — red view** | A consumer needs parent navigation, mutation through the tree, or cached offsets (Roslyn rationale); a consumer is building parent/offset workarounds | Derived view over the CST: parent links, absolute offsets, caches, mutation facade | Parent/offset/view-consistency invariants property-tested; the consumer moves to the view and its workaround disappears; AST and consumers below it unchanged |
-| **S3 — green** | Measured structural-sharing pressure (many live revisions per edit session, memory/alloc budgets) that CST + red cannot meet | Position-free immutable layer under the view, structurally shared | The measured metric (memory/allocations/reuse across versions) improves under the incremental workload; CST and view APIs unchanged for consumers |
+| Stage | Work and boundary | Exit evidence |
+|---|---|---|
+| **S0 — integration experiment** | Audit preprocessing/provenance; assess PEG extension versus scoped replacement; validate rowan/Salsa adapter; record prefactoring | Standard/CODESYS/malformed corpus, OSCAT/Unicode/pragmas; parser choice, dependency versions, file map and benchmark baseline; no dual production parser |
+| **S1 — CST and recovery** | Original-text CST with rowan green storage/red views; full-file parsing and syntax diagnostics | Byte-identical valid/malformed reconstruction; CRLF/tabs/Unicode/comments/pragmas; complete ranges, recovery progress/termination; existing dialect tests preserved |
+| **S2 — CST-to-dsl lowering** | Replace semantic parse entry with lowering; retain preprocessing meaning through provenance; reuse analyzer/codegen | Legacy/new AST/diagnostic comparison; canonical plc2plc and analyzer/codegen regressions pass; one production parse path; losslessness retained |
+| **S3 — tracked analysis** | Wrap analyzer, then split declaration summaries/body analysis/locations; track all inputs and missing lookups | After each edit, equality with clean rebuild; execution counters prove unaffected reuse and affected recomputation; deletion/rename/body/signature/type/cycle/dialect/library/target cases |
+| **S4 — shared consumers and editing** | CLI/LSP/MCP/build use one snapshot API; syntax edits; bound cache/snapshot retention | Same-snapshot diagnostics agree; revision/cancellation exclude stale publication; untouched text preserved; measured cold/warm latency and memory limits; no private resolver/query graph |
+| **S5 — measured local reparse** | Safe boundaries and full-file fallback; reuse unaffected syntax | Local/full trees and diagnostics agree after edit sequences, including delimiter/comment/pragma changes; measured latency/allocation improvement |
 
-Stopping early is allowed by design: if S2 or S3's obligation never appears,
-the pipeline stays at the previous stage, and this document records why the
-next stage was never needed — the path is bounded, not a backlog.
+Measure cold full analysis separately from warm no-change requests, body,
+interface and configuration edits. Record corpus size/POU count, hardware,
+toolchain, latency distribution, allocations/retained memory, query
+executions and cache reuse. S0 sets numeric budgets from the workload.
+Do not claim universal speed superiority from rowan or Salsa.
+
+Implementation stages register requirement IDs and assertions in the actual
+owning crates as they land. Do not add placeholder tests or empty crates
+to claim a future stage is implemented. Advance the status to **partially
+implemented** with named delivered stages, then **implemented** when S1–S4
+describe the working frontend. S5 may remain unnecessary.
 
 ## 6. References
 
-- [`07_AST_RED_TREE_CONSTRUCTION.md`](../../Codesys/docs/07_AST_RED_TREE_CONSTRUCTION.md)
-  — CODESYS three-tree model, green→red building via `RedTreeBuilder`
-- [`16_WHITE_PARSE_TREES.md`](../../Codesys/docs/16_WHITE_PARSE_TREES.md)
-  — CODESYS white tree/CST: independent editor service, trivia chains,
-  position map, when it is (not) needed
-- [`grammar/AST_MAPPING.md`](../../Codesys/grammar/AST_MAPPING.md) — EBNF
-  rule → parser → builder → AST node mapping that keeps one grammar aligned
-  with the CODESYS syntax surface
-- [`LEXER-GAP-ANALYSIS.md`](../../Codesys/LEXER-GAP-ANALYSIS.md) §12–§13 —
-  the non-lexical gap register and the "record in durable docs" rule this
-  document satisfies
-- Code seams: `compiler/parser/src/lexer.rs`, `token.rs`, `parser.rs`,
-  `compiler/dsl/src/`, `compiler/analyzer/src/xform_*.rs`,
-  `compiler/plc2plc/src/tests/common.rs`
+- [rowan](https://github.com/rust-analyzer/rowan) and
+  [rust-analyzer syntax architecture](https://rust-analyzer.github.io/book/contributing/syntax.html)
+- [Salsa](https://github.com/salsa-rs/salsa) — memoized computation with
+  tracked inputs/dependencies; integration version selected in S0
+- [CODESYS source evidence](#21-direct-source-references)
+- [Syntax gaps](../../Codesys/LEXER-GAP-ANALYSIS.md) and
+  [syntax/AST mapping](../../Codesys/grammar/AST_MAPPING.md)
 - [Spec Conformance Testing](spec-conformance-testing.md),
   [Online Editing UX](online-editing-ux.md),
   [W32](../implementation/dcs-platform/tasks/W32-ide.md)
+- [Stable variable IDs](../adrs/0053-stable-variable-ids-for-declaration-level-hot-edit.md)
+  and [IDE-side UID persistence](../roadmap.md#phase-3---ide-side-uid-persistence)
