@@ -21,6 +21,10 @@
 > **Внимание:** syntax-ошибки (scanner/parser) **≠** build/компиляционные **≠** семантические.
 > Границы классов — [`ERROR-CODES-STUDY.md`](ERROR-CODES-STUDY.md) §2 («Границы класса SYNTAX»).
 
+**Границы порта:** red/green/white tree **не портируем сейчас** — цель = поверхность
+синтаксиса (лексер/парсер); эволюционный путь заложен (слои включаются по триггерам):
+[`specs/design/parse-tree-architecture.md`](../specs/design/parse-tree-architecture.md) (§5 «Evolution steps»).
+
 **Порядок чтения (ровно этот, не грепать всё подряд):**
 
 1. **этот README** — целиком;

@@ -294,6 +294,13 @@ connection parameters, connected-device panel, status bar):
     identity and mandatory Test; phases compiling → uploading → verifying →
     running render on the device panel.
 
+- **Future (trigger-gated, not this phase):** in-process incremental and
+  format-preserving editing. The parse-tree evolution path (white/CST → red
+  view → green sharing) is recorded in
+  [Parse-Tree Architecture](design/parse-tree-architecture.md); layers land
+  one stage at a time, each only when its obligation appears — never as a
+  batch.
+
 Details: [Engineering Connection](design/engineering-connection.md).
 Decisions: [ADR-0063](../adrs/0063-engineering-connection-transport.md).
 
