@@ -14,34 +14,11 @@ use parity::compare::{assert_clean, compare, summarize, Item};
 use parity::legacy::presets;
 use parity::tables::FILE_EXCEPTIONS;
 use parity::{Kind, Oracle};
-use std::path::{Path, PathBuf};
-
-/// The files compared, named by their path from the crate manifest's
-/// directory (`../resources/test/oop.st`, `tests/fixtures/codesys/x.st`),
-/// each with its CRLF and tab-indented spellings (`name (CRLF)`,
-/// `name (tabs)`).
-fn files() -> Vec<(String, String)> {
-    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut paths: Vec<PathBuf> = common::st_files("../resources/test");
-    paths.extend(common::st_files("tests/fixtures"));
-    let mut files = Vec::new();
-    for path in paths {
-        let text = std::fs::read_to_string(&path).unwrap_or_default();
-        let name = path
-            .strip_prefix(manifest)
-            .unwrap_or(&path)
-            .to_string_lossy()
-            .replace('\\', "/");
-        files.push((format!("{name} (CRLF)"), text.replace('\n', "\r\n")));
-        files.push((format!("{name} (tabs)"), text.replace("    ", "\t")));
-        files.push((name, text));
-    }
-    files
-}
+use std::path::Path;
 
 #[test]
 fn parity_when_whole_files_then_differences_are_exactly_the_exceptions() {
-    let files = files();
+    let files = common::file_variants();
     assert!(files.len() > 180, "only {} files", files.len());
     let items: Vec<Item> = files
         .iter()

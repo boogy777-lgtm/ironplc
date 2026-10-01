@@ -66,3 +66,18 @@ pub fn accepts_in_program(body: &str, options: &CompilerOptions) -> bool {
 pub fn accepts_file(source: &str, options: &CompilerOptions) -> bool {
     ironplc_parser::parse_program(source, &FileId::default(), options).is_ok()
 }
+
+/// The problem code of the diagnostic the legacy parser reports for `source`
+/// as a whole file, with its byte range. `None` when the file is accepted.
+/// The legacy parser reports one diagnostic: the first one found.
+pub fn rejection(source: &str, options: &CompilerOptions) -> Option<(String, usize, usize)> {
+    ironplc_parser::parse_program(source, &FileId::default(), options)
+        .err()
+        .map(|diagnostic| {
+            (
+                diagnostic.code.clone(),
+                diagnostic.primary.location.start,
+                diagnostic.primary.location.end,
+            )
+        })
+}

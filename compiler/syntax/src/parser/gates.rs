@@ -20,7 +20,7 @@
 
 use super::options::ParseOptions;
 use super::recovery::VAR_OPENERS;
-use crate::error::SyntaxError;
+use crate::error::{ErrorKind, SyntaxError};
 use crate::lexer::escapes::invalid_escapes;
 use crate::lexer::Token;
 use crate::syntax_kind::SyntaxKind;
@@ -54,6 +54,8 @@ struct Gate {
     find: fn(&Site) -> Vec<TextRange>,
     /// True when the dialect enables the form.
     enabled: fn(&ParseOptions) -> bool,
+    /// The kind of error, which decides its problem code.
+    kind: ErrorKind,
     message: &'static str,
 }
 
@@ -181,51 +183,61 @@ const GATES: &[Gate] = &[
     Gate {
         find: |site| on_token(site, is_c_style_comment),
         enabled: |options| options.allow_c_style_comments,
+        kind: ErrorKind::CStyleComment,
         message: "C-style comments are not enabled in this dialect",
     },
     Gate {
         find: |site| on_token(site, |token| token.kind == SyntaxKind::Pragma),
         enabled: |options| options.allow_pragmas,
+        kind: ErrorKind::Syntax,
         message: "pragmas are not enabled in this dialect",
     },
     Gate {
         find: |site| on_token(site, is_partial_access),
         enabled: |options| options.allow_partial_access_syntax,
+        kind: ErrorKind::PartialAccessSyntaxDisabled,
         message: "partial-access syntax is not enabled in this dialect",
     },
     Gate {
         find: |site| on_token(site, |token| token.kind == SyntaxKind::EscapedIdent),
         enabled: |options| options.allow_escaped_identifiers,
+        kind: ErrorKind::EscapedIdentifierNotAllowed,
         message: "escaped identifiers are not enabled in this dialect",
     },
     Gate {
         find: |site| on_token(site, is_non_ascii_identifier),
         enabled: |options| options.allow_unicode_identifiers,
+        kind: ErrorKind::UnicodeIdentifierNotAllowed,
         message: "identifiers with letters outside ASCII are not enabled in this dialect",
     },
     Gate {
         find: |site| on_token(site, has_repeated_underscores),
         enabled: |options| options.allow_multiple_underscores,
+        kind: ErrorKind::MultipleUnderscoresNotAllowed,
         message: "consecutive underscores in an identifier are not enabled in this dialect",
     },
     Gate {
         find: empty_var_block,
         enabled: |options| options.allow_empty_var_blocks,
+        kind: ErrorKind::EmptyVarBlock,
         message: "empty variable blocks are not enabled in this dialect",
     },
     Gate {
         find: paren_string_length,
         enabled: |options| options.allow_paren_string_length,
+        kind: ErrorKind::ParenStringLengthNotAllowed,
         message: "a string length in parentheses is not enabled in this dialect",
     },
     Gate {
         find: incomplete_array,
         enabled: |options| options.allow_incomplete_array,
+        kind: ErrorKind::IncompleteArrayNotAllowed,
         message: "incomplete array bounds are not enabled in this dialect",
     },
     Gate {
         find: invalid_string_escapes,
         enabled: |_| false,
+        kind: ErrorKind::InvalidStringEscape,
         message: "this `$` escape is not defined for character strings",
     },
 ];
@@ -244,7 +256,7 @@ pub(crate) fn gate_errors(tokens: &[Token<'_>], options: &ParseOptions) -> Vec<S
             errors.extend(
                 (gate.find)(&site)
                     .into_iter()
-                    .map(|range| SyntaxError::new(gate.message, range)),
+                    .map(|range| SyntaxError::new(gate.message, range).with_kind(gate.kind)),
             );
         }
     }

@@ -17,11 +17,17 @@ Preprocessing/provenance audit and the evidence list this experiment answers:
 
 | Deliverable | Location |
 |---|---|
-| Spike crate (rowan CST + Salsa adapter + baseline harness) | `compiler/s0-spike/` |
+| Spike crate (rowan CST + Salsa adapter + baseline harness) | `compiler/s0-spike/` (removed at the S1 cutover; see below) |
 | Performance baseline numbers | Section 3 of this document |
 | Parser recommendation | Section 2 of this document |
 
-Commands (from `compiler/`):
+The spike crate was removed at the S1 cutover. The results recorded below
+stay as measured. The CST it validated lives on in `compiler/syntax`, the
+parse baseline is reproduced by `cargo bench -p ironplc-benchmarks --bench
+parse_baseline` (section 3.4), and the five CODESYS fixtures moved to
+`compiler/syntax/tests/fixtures/codesys/`.
+
+Commands as they ran at S0 (from `compiler/`):
 
 ```
 cargo test -p ironplc-s0-spike                                    # 30 tests
@@ -424,8 +430,12 @@ preset.
 
 ```
 cd compiler
-cargo run --release -p ironplc-s0-spike --bin parse_baseline -- 50 > baseline.txt
+cargo bench -p ironplc-benchmarks --bench parse_baseline > baseline.txt
 ```
+
+At S0 this ran as `cargo run --release -p ironplc-s0-spike --bin
+parse_baseline -- 50`; the benchmark above is its successor and measures the
+48-file shared corpus.
 
 `dialect_acceptance` in the same binary prints the per-dialect counts shown
 in 3.2 (also asserted by a unit test).
@@ -564,4 +574,4 @@ deleted at cutover.
 - truST: `johannesPettersson80/trust-platform` (shallow clone,
   `be8d81a4a7ab16ca7554b8be0f4723161ec1a47b`); crates.io `trust-syntax`
   0.2.2 is an unrelated Rust-dialect project
-- Spike crate: `compiler/s0-spike/`
+- Spike crate: `compiler/s0-spike/` (removed at the S1 cutover)

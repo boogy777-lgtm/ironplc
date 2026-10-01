@@ -16,7 +16,6 @@ members = [
     "parser",
     "problems",
     "runtime",
-    "s0-spike",
     "sources",
     "syntax",
     "spec_requirements_gen",

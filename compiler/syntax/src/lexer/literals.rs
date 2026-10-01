@@ -7,7 +7,7 @@
 //! parts are separate tokens.
 
 use super::cursor::Cursor;
-use super::{error, Scan};
+use super::{error, unexpected_character, Scan};
 use crate::syntax_kind::SyntaxKind;
 
 /// How a quoted token is delimited.
@@ -155,6 +155,6 @@ pub(super) fn scan_percent(cursor: &mut Cursor<'_>) -> Scan {
             cursor.eat_while(|byte| byte.is_ascii_digit());
             (SyntaxKind::PartialAccess, None)
         }
-        _ => error("unexpected character"),
+        _ => unexpected_character(),
     }
 }
