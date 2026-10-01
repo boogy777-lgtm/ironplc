@@ -293,6 +293,40 @@ struct FileArgs {
     #[arg(long)]
     allow_continue: bool,
 
+    /// Allow UNION ... END_UNION type declarations inside a TYPE block.
+    /// Standardized in IEC 61131-3:2013, so not part of Edition 2.
+    #[arg(long)]
+    allow_union_type: bool,
+
+    /// Allow VAR_STAT variable sections, whose declarations keep their value
+    /// between calls of the POU. This is a dialect extension not part of the
+    /// IEC 61131-3 standard.
+    #[arg(long)]
+    allow_var_stat: bool,
+
+    /// Allow VAR_INST variable sections in a method, whose declarations
+    /// belong to the method's instance. This is a dialect extension not part
+    /// of the IEC 61131-3 standard.
+    #[arg(long)]
+    allow_var_inst: bool,
+
+    /// Allow VAR_GENERIC variable sections directly after a function block
+    /// name, declaring the function block's generic constants. This is a
+    /// dialect extension not part of the IEC 61131-3 standard.
+    #[arg(long)]
+    allow_var_generic: bool,
+
+    /// Allow NAMESPACE ... END_NAMESPACE grouping of declarations. This is a
+    /// dialect extension not part of the IEC 61131-3 standard.
+    #[arg(long)]
+    allow_namespace: bool,
+
+    /// Allow the __BEGIN_IMPLEMENTATION marker that begins a POU's
+    /// implementation section in a CODESYS textual export. This is a dialect
+    /// extension not part of the IEC 61131-3 standard.
+    #[arg(long)]
+    allow_begin_implementation: bool,
+
     /// What STRING_TO_<numeric> treats as convertible when the string has
     /// non-numeric characters. A behavior policy: the dialect selects an
     /// alternative and this flag replaces it.
@@ -353,6 +387,12 @@ impl FileArgs {
         options.allow_enum_explicit_values |= self.allow_enum_explicit_values;
         options.allow_enum_base_type |= self.allow_enum_base_type;
         options.allow_continue |= self.allow_continue;
+        options.allow_union_type |= self.allow_union_type;
+        options.allow_var_stat |= self.allow_var_stat;
+        options.allow_var_inst |= self.allow_var_inst;
+        options.allow_var_generic |= self.allow_var_generic;
+        options.allow_namespace |= self.allow_namespace;
+        options.allow_begin_implementation |= self.allow_begin_implementation;
         options
     }
 }

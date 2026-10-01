@@ -33,7 +33,7 @@
 //! END_FUNCTION_BLOCK
 //! ```
 use ironplc_dsl::{
-    common::{FunctionBlockDeclaration, MethodDeclaration},
+    common::{FunctionBlockDeclaration, MethodDeclaration, PropertyDeclaration},
     diagnostic::{Diagnostic, Label},
     member_qualifier::{AccessSpecifier, MemberQualifier, MemberQualifierKind, MemberQualifiers},
     visitor::Visitor,
@@ -131,6 +131,7 @@ impl RuleMemberQualifierInvalid {
                 MemberQualifierKind::Access(AccessSpecifier::Private)
                     | MemberQualifierKind::Access(AccessSpecifier::Protected)
                     | MemberQualifierKind::Override
+                    | MemberQualifierKind::Overload
             ) {
                 self.report(
                     qualifier,
@@ -142,6 +143,15 @@ impl RuleMemberQualifierInvalid {
                 );
             }
         }
+    }
+
+    /// Properties take the same qualifier words as methods (`PROPERTY PUBLIC
+    /// Value : INT`), so the combination checks apply unchanged. The
+    /// `ABSTRACT`-method checks do not: a property always has at least one
+    /// accessor, and whether an accessor may be abstract is a CODESYS rule
+    /// this design does not model.
+    fn check_property(&mut self, node: &PropertyDeclaration) {
+        self.check_combination(&node.qualifiers, &node.name.to_string());
     }
 
     fn check_method(
@@ -201,6 +211,9 @@ impl Visitor<Infallible> for RuleMemberQualifierInvalid {
         self.check_function_block(node);
         for method in &node.methods {
             self.check_method(method, node);
+        }
+        for property in &node.properties {
+            self.check_property(property);
         }
         node.recurse_visit(self)
     }
@@ -264,6 +277,10 @@ mod tests {
         "FUNCTION_BLOCK OVERRIDE FB_Motor",
         "OVERRIDE is not allowed on a function block"
     )]
+    #[case::overload(
+        "FUNCTION_BLOCK OVERLOAD FB_Motor",
+        "OVERLOAD is not allowed on a function block"
+    )]
     #[case::abstract_final(
         "FUNCTION_BLOCK ABSTRACT FINAL FB_Motor",
         "FINAL cannot be combined with ABSTRACT"
@@ -300,6 +317,14 @@ mod tests {
     #[case::override_(
         "FUNCTION_BLOCK FB_Motor",
         "METHOD PUBLIC OVERRIDE M\n    x := 1;\nEND_METHOD"
+    )]
+    #[case::overload(
+        "FUNCTION_BLOCK FB_Motor",
+        "METHOD OVERLOAD M\n    x := 1;\nEND_METHOD"
+    )]
+    #[case::public_overload(
+        "FUNCTION_BLOCK FB_Motor",
+        "METHOD PUBLIC OVERLOAD M\n    x := 1;\nEND_METHOD"
     )]
     // A body with only an empty statement is empty.
     #[case::abstract_with_empty_statement(

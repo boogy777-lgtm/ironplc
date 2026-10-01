@@ -1,7 +1,10 @@
-//! OOP extensions: EXTENDS/IMPLEMENTS/INTERFACE.
-//! See specs/design/beckhoff-twincat-dialect.md §1.3-1.4.
+//! OOP extensions: EXTENDS/IMPLEMENTS/INTERFACE and the qualifier words.
+//! See specs/design/beckhoff-twincat-dialect.md §1.3-1.4 and
+//! specs/design/st-declaration-extensions.md (OVERLOAD).
 
 use super::common::*;
+use dsl::member_qualifier::{AccessSpecifier, MemberQualifierKind};
+use spec_test_macro::spec_test;
 
 /// Proves that EXTENDS/IMPLEMENTS/INTERFACE/END_INTERFACE remain valid
 /// identifiers in standard IEC 61131-3 mode. If keyword demotion for the
@@ -247,4 +250,73 @@ fn parse_when_edition3_dialect_then_oop_syntax_parses(#[case] source: &str) {
         "the Edition 3 dialect must parse object-oriented syntax: {:?}",
         result.err()
     );
+}
+
+// ---------------------------------------------------------------------
+// `OVERLOAD` — the remaining OO qualifier word. It is not a token: like
+// `PUBLIC`/`FINAL`/`OVERRIDE` it is matched by text, only in the qualifier
+// slot between `METHOD` and the name, and stays an identifier everywhere
+// else. See specs/design/st-declaration-extensions.md.
+// ---------------------------------------------------------------------
+
+/// REQ-STX-parser-007: `OVERLOAD` is recognized as a member qualifier on a
+/// method and kept, in source order, as `MemberQualifierKind::Overload`; a
+/// word is a qualifier only when the method name still follows it.
+#[spec_test(REQ_STX_parser_007)]
+#[rstest]
+#[case::overload_only(
+    "METHOD OVERLOAD Reset\n    x := 0;\nEND_METHOD",
+    "Reset",
+    vec![MemberQualifierKind::Overload]
+)]
+#[case::lower_case(
+    "METHOD overload Reset\n    x := 0;\nEND_METHOD",
+    "Reset",
+    vec![MemberQualifierKind::Overload]
+)]
+#[case::public_then_overload(
+    "METHOD PUBLIC OVERLOAD Reset : BOOL\n    x := 0;\nEND_METHOD",
+    "Reset",
+    vec![
+        MemberQualifierKind::Access(AccessSpecifier::Public),
+        MemberQualifierKind::Overload,
+    ]
+)]
+#[case::overload_then_override(
+    "METHOD OVERLOAD OVERRIDE Reset\n    x := 0;\nEND_METHOD",
+    "Reset",
+    vec![MemberQualifierKind::Overload, MemberQualifierKind::Override]
+)]
+#[case::overload_is_the_method_name(
+    "METHOD Overload : BOOL\n    x := 0;\nEND_METHOD",
+    "Overload",
+    vec![]
+)]
+#[case::overload_is_the_method_name_with_body(
+    "METHOD Overload x := 1;\nEND_METHOD",
+    "Overload",
+    vec![]
+)]
+fn parser_spec_req_stx_007_overload_is_a_member_qualifier(
+    #[case] method: &str,
+    #[case] expected_name: &str,
+    #[case] expected_kinds: Vec<MemberQualifierKind>,
+) {
+    let source = format!(
+        "
+FUNCTION_BLOCK ABSTRACT FB_Motor
+VAR
+    x : INT;
+END_VAR
+{method}
+END_FUNCTION_BLOCK"
+    );
+    let library = parse_program(&source, &FileId::default(), &opts_with_fb_inheritance())
+        .unwrap_or_else(|e| panic!("Source did not parse: {e:?}\n{source}"));
+    let fb = extract_fb(&library);
+    assert_eq!(fb.methods.len(), 1);
+    let parsed = &fb.methods[0];
+    assert_eq!(parsed.name, Id::from(expected_name));
+    let kinds: Vec<MemberQualifierKind> = parsed.qualifiers.iter().map(|q| q.kind).collect();
+    assert_eq!(kinds, expected_kinds);
 }

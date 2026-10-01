@@ -12,5 +12,8 @@ fn main() {
         "partial-access-bit-syntax.md",
         // Character string literals (`REQ-SL-plc2plc-*`): escaped rendering.
         "string-literals.md",
+        // ST declaration extensions (`REQ-STX-plc2plc-*`): round-trip
+        // rendering of UNION, the extra variable sections and NAMESPACE.
+        "st-declaration-extensions.md",
     ]);
 }

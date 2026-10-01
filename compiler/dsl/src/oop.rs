@@ -82,6 +82,11 @@ impl FunctionBlockDeclaration {
 /// body, with no property-specific case. See ADR-0041 Phase 1.
 #[derive(Clone, Debug, PartialEq, Recurse, Located)]
 pub struct PropertyDeclaration {
+    /// Qualifiers between `PROPERTY` and the name, in source order, such as
+    /// `PUBLIC` or `FINAL`. Same words as on a method (`PROPERTY PUBLIC
+    /// Value : INT`); metadata only (ADR-0041).
+    #[recurse(ignore)]
+    pub qualifiers: MemberQualifiers,
     pub name: Id,
     pub property_type: FunctionReturnType,
     pub get: Option<MethodDeclaration>,

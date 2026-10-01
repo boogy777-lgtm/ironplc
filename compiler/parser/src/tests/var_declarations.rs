@@ -1,7 +1,11 @@
-//! VAR_TEMP and mixed located / non-located variable blocks.
+//! VAR_TEMP and mixed located / non-located variable blocks, plus the
+//! CODESYS/TwinCAT sections VAR_STAT, VAR_INST and VAR_GENERIC
+//! (specs/design/st-declaration-extensions.md).
 
 use super::common::*;
+use crate::token::TokenType;
 use dsl::core::Located;
+use spec_test_macro::spec_test;
 
 #[test]
 fn parse_when_function_with_var_temp_then_succeeds() {
@@ -408,4 +412,203 @@ END_FUNCTION_BLOCK";
         &fb.variables[0].initializer,
         InitialValueAssignmentKind::FunctionBlockCall(_)
     ));
+}
+
+// ---------------------------------------------------------------------
+// CODESYS/TwinCAT additional variable sections.
+// See specs/design/st-declaration-extensions.md.
+// ---------------------------------------------------------------------
+
+fn token_types(source: &str, options: &CompilerOptions) -> Vec<TokenType> {
+    let (tokens, _) = crate::tokenize_program(source, &FileId::default(), options, 0, 0);
+    tokens.iter().map(|t| t.token_type.clone()).collect()
+}
+
+/// Where a section's declarations are read from in a test case.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum POUKind {
+    Function,
+    FunctionBlock,
+    Program,
+    Method,
+}
+
+/// REQ-STX-parser-002: `VAR_STAT` lexes as `VarStat` and demotes to
+/// `Identifier` unless `allow_var_stat` is set.
+#[spec_test(REQ_STX_parser_002)]
+fn lexer_spec_req_stx_002_var_stat_token_and_demotion() {
+    let enabled = token_types("VAR_STAT", &opts_with_var_stat());
+    assert!(enabled.contains(&TokenType::VarStat), "{enabled:?}");
+    assert!(!enabled.contains(&TokenType::Identifier));
+
+    let disabled = token_types("VAR_STAT", &CompilerOptions::default());
+    assert!(disabled.contains(&TokenType::Identifier), "{disabled:?}");
+    assert!(!disabled.contains(&TokenType::VarStat));
+}
+
+/// REQ-STX-parser-003: `VAR_INST` lexes as `VarInst` and demotes to
+/// `Identifier` unless `allow_var_inst` is set.
+#[spec_test(REQ_STX_parser_003)]
+fn lexer_spec_req_stx_003_var_inst_token_and_demotion() {
+    let enabled = token_types("VAR_INST", &opts_with_var_inst());
+    assert!(enabled.contains(&TokenType::VarInst), "{enabled:?}");
+    assert!(!enabled.contains(&TokenType::Identifier));
+
+    let disabled = token_types("VAR_INST", &CompilerOptions::default());
+    assert!(disabled.contains(&TokenType::Identifier), "{disabled:?}");
+    assert!(!disabled.contains(&TokenType::VarInst));
+}
+
+/// REQ-STX-parser-004: `VAR_GENERIC` lexes as `VarGeneric` and demotes to
+/// `Identifier` unless `allow_var_generic` is set.
+#[spec_test(REQ_STX_parser_004)]
+fn lexer_spec_req_stx_004_var_generic_token_and_demotion() {
+    let enabled = token_types("VAR_GENERIC", &opts_with_var_generic());
+    assert!(enabled.contains(&TokenType::VarGeneric), "{enabled:?}");
+    assert!(!enabled.contains(&TokenType::Identifier));
+
+    let disabled = token_types("VAR_GENERIC", &CompilerOptions::default());
+    assert!(disabled.contains(&TokenType::Identifier), "{disabled:?}");
+    assert!(!disabled.contains(&TokenType::VarGeneric));
+}
+
+/// REQ-STX-parser-012: `VAR_STAT` sections are accepted in a function, a
+/// function block and a program, and `VAR_INST` in a method; each produces
+/// declarations tagged with its own `VariableType`.
+#[spec_test(REQ_STX_parser_012)]
+#[rstest]
+#[case::function_var_stat(
+    "FUNCTION my_func : DINT
+VAR_STAT
+    calls : DINT;
+END_VAR
+    calls := calls + 1;
+    my_func := calls;
+END_FUNCTION",
+    opts_with_var_stat,
+    POUKind::Function,
+    VariableType::VarStat
+)]
+#[case::function_block_var_stat(
+    "FUNCTION_BLOCK FB_Counter
+VAR_STAT
+    count : DINT;
+END_VAR
+    count := count + 1;
+END_FUNCTION_BLOCK",
+    opts_with_var_stat,
+    POUKind::FunctionBlock,
+    VariableType::VarStat
+)]
+#[case::program_var_stat(
+    "PROGRAM main
+VAR_STAT
+    scans : DINT;
+END_VAR
+    scans := scans + 1;
+END_PROGRAM",
+    opts_with_var_stat,
+    POUKind::Program,
+    VariableType::VarStat
+)]
+#[case::method_var_inst(
+    "FUNCTION_BLOCK FB_Motor
+VAR
+    speed : INT;
+END_VAR
+METHOD DoWork : BOOL
+VAR_INST
+    callCount : INT;
+END_VAR
+    callCount := callCount + 1;
+    DoWork := TRUE;
+END_METHOD
+END_FUNCTION_BLOCK",
+    opts_with_var_inst,
+    POUKind::Method,
+    VariableType::VarInst
+)]
+fn parser_spec_req_stx_012_var_stat_and_var_inst_sections(
+    #[case] source: &str,
+    #[case] options: fn() -> CompilerOptions,
+    #[case] pou: POUKind,
+    #[case] expected: VariableType,
+) {
+    let library = parse_program(source, &FileId::default(), &options())
+        .unwrap_or_else(|e| panic!("Source did not parse: {e:?}\n{source}"));
+    let variables = match pou {
+        POUKind::Function => {
+            let f = cast!(
+                &library.elements[0],
+                LibraryElementKind::FunctionDeclaration
+            );
+            f.variables.clone()
+        }
+        POUKind::FunctionBlock => extract_fb(&library).variables.clone(),
+        POUKind::Program => {
+            let p = cast!(&library.elements[0], LibraryElementKind::ProgramDeclaration);
+            p.variables.clone()
+        }
+        POUKind::Method => extract_fb(&library).methods[0].variables.clone(),
+    };
+    assert_eq!(variables.len(), 1, "{variables:?}");
+    assert_eq!(variables[0].var_type, expected);
+    assert!(variables[0].identifier.symbolic_id().is_some());
+}
+
+/// REQ-STX-parser-013: `VAR_GENERIC` is only accepted directly after a
+/// function block's name -- before `EXTENDS` and the other sections -- and
+/// nowhere else.
+#[spec_test(REQ_STX_parser_013)]
+fn parser_spec_req_stx_013_var_generic_only_after_function_block_name() {
+    let source = "FUNCTION_BLOCK FB_Scale
+VAR_GENERIC CONSTANT
+    maxValue : INT := 100;
+END_VAR
+EXTENDS FB_Base
+VAR
+    value : INT;
+END_VAR
+END_FUNCTION_BLOCK";
+    let options = CompilerOptions {
+        allow_union_type: false,
+        ..opts_with_var_generic()
+    };
+    let library = parse_program(source, &FileId::default(), &options).unwrap();
+    let fb = extract_fb(&library);
+    assert_eq!(fb.variables.len(), 2);
+    assert_eq!(fb.variables[0].var_type, VariableType::VarGeneric);
+    assert_eq!(fb.variables[0].qualifier, DeclarationQualifier::Constant);
+    assert_eq!(
+        fb.variables[0].identifier.symbolic_id(),
+        Some(&Id::from("maxValue"))
+    );
+    assert_eq!(fb.variables[1].var_type, VariableType::Var);
+    assert!(fb.oop.as_ref().is_some_and(|oop| oop.base.is_some()));
+
+    // After another section the keyword is not a section opener, so the
+    // declaration is a syntax error.
+    let late = "FUNCTION_BLOCK FB_Scale
+VAR
+    value : INT;
+END_VAR
+VAR_GENERIC
+    maxValue : INT := 100;
+END_VAR
+END_FUNCTION_BLOCK";
+    assert!(
+        parse_program(late, &FileId::default(), &opts_with_var_generic()).is_err(),
+        "VAR_GENERIC after a VAR section must not parse"
+    );
+
+    // And not in a program, where there is no function block to parameterize.
+    let in_program = "PROGRAM main
+VAR_GENERIC
+    g : INT;
+END_VAR
+END_PROGRAM";
+    assert!(
+        parse_program(in_program, &FileId::default(), &opts_with_var_generic()).is_err(),
+        "VAR_GENERIC outside a function block must not parse"
+    );
 }

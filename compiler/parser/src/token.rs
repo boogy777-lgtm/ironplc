@@ -274,6 +274,17 @@ pub enum TokenType {
     #[token("END_PROGRAM", ignore(case))]
     EndProgram,
 
+    // `NAMESPACE ... END_NAMESPACE` grouping and the
+    // `__BEGIN_IMPLEMENTATION` marker. Demoted to ordinary identifiers
+    // unless their flag is set -- see xform_demote_keywords.rs and
+    // specs/design/st-declaration-extensions.md.
+    #[token("NAMESPACE", ignore(case))]
+    Namespace,
+    #[token("END_NAMESPACE", ignore(case))]
+    EndNamespace,
+    #[token("__BEGIN_IMPLEMENTATION", ignore(case))]
+    BeginImplementation,
+
     #[token("R_EDGE", ignore(case))]
     REdge,
 
@@ -313,6 +324,13 @@ pub enum TokenType {
     Struct,
     #[token("END_STRUCT", ignore(case))]
     EndStruct,
+    // `UNION ... END_UNION` type declaration. Demoted to ordinary
+    // identifiers unless `allow_union_type` is set -- see
+    // xform_demote_keywords.rs and specs/design/st-declaration-extensions.md.
+    #[token("UNION", ignore(case))]
+    Union,
+    #[token("END_UNION", ignore(case))]
+    EndUnion,
 
     #[token("TASK", ignore(case))]
     Task,
@@ -354,6 +372,16 @@ pub enum TokenType {
     VarConfig,
     #[token("VAR_GLOBAL", ignore(case))]
     VarGlobal,
+    // CODESYS/Siemens sections. Demoted to ordinary identifiers unless the
+    // matching flag is set ("static variables", "method instance
+    // variables", "function block generic constants") -- see
+    // xform_demote_keywords.rs and specs/design/st-declaration-extensions.md.
+    #[token("VAR_STAT", ignore(case))]
+    VarStat,
+    #[token("VAR_INST", ignore(case))]
+    VarInst,
+    #[token("VAR_GENERIC", ignore(case))]
+    VarGeneric,
 
     #[token("WHILE", ignore(case))]
     While,
@@ -611,6 +639,9 @@ impl TokenType {
             TokenType::Program => "'PROGRAM'",
             TokenType::With => "'WITH'",
             TokenType::EndProgram => "'END_PROGRAM'",
+            TokenType::Namespace => "'NAMESPACE'",
+            TokenType::EndNamespace => "'END_NAMESPACE'",
+            TokenType::BeginImplementation => "'__BEGIN_IMPLEMENTATION'",
             TokenType::REdge => "'R_EDGE'",
             TokenType::ReadOnly => "'READ_ONLY'",
             TokenType::ReadWrite => "'READ_WRITE'",
@@ -627,6 +658,8 @@ impl TokenType {
             TokenType::Step => "'STEP'",
             TokenType::Struct => "'STRUCT'",
             TokenType::EndStruct => "'END_STRUCT'",
+            TokenType::Union => "'UNION'",
+            TokenType::EndUnion => "'END_UNION'",
             TokenType::Task => "'TASK'",
             TokenType::EndTask => "'END_TASK'",
             TokenType::Transition => "'TRANSITION'",
@@ -645,6 +678,9 @@ impl TokenType {
             TokenType::VarAccess => "'VAR_ACCESS'",
             TokenType::VarConfig => "'VAR_CONFIG'",
             TokenType::VarGlobal => "'VAR_GLOBAL'",
+            TokenType::VarStat => "'VAR_STAT'",
+            TokenType::VarInst => "'VAR_INST'",
+            TokenType::VarGeneric => "'VAR_GENERIC'",
             TokenType::While => "'WHILE'",
             TokenType::EndWhile => "'END_WHILE'",
             TokenType::Bool => "'BOOL'",

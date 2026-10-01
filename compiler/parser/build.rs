@@ -10,5 +10,9 @@ fn main() {
         "behavior-policies.md",
         // Character string literals (`REQ-SL-parser-*`): `$` escapes.
         "string-literals.md",
+        // ST declaration extensions (`REQ-STX-parser-*`): UNION,
+        // VAR_STAT/VAR_INST/VAR_GENERIC, NAMESPACE, __BEGIN_IMPLEMENTATION
+        // and the OVERLOAD qualifier.
+        "st-declaration-extensions.md",
     ]);
 }

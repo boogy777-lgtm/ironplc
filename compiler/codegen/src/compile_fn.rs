@@ -530,7 +530,7 @@ pub(crate) fn compile_user_function_block(
         }
     }
     for decl in &fb_decl.variables {
-        if decl.var_type == VariableType::Var {
+        if decl.var_type.is_pou_storage() {
             field_decls.push(decl);
         }
     }

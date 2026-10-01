@@ -24,6 +24,7 @@ pub enum MemberQualifierKind {
     Abstract,
     Final,
     Override,
+    Overload,
 }
 
 impl MemberQualifierKind {
@@ -37,6 +38,7 @@ impl MemberQualifierKind {
             MemberQualifierKind::Abstract => "ABSTRACT",
             MemberQualifierKind::Final => "FINAL",
             MemberQualifierKind::Override => "OVERRIDE",
+            MemberQualifierKind::Overload => "OVERLOAD",
         }
     }
 }
@@ -87,6 +89,10 @@ impl MemberQualifiers {
 
     pub fn is_override(&self) -> bool {
         self.has(MemberQualifierKind::Override)
+    }
+
+    pub fn is_overload(&self) -> bool {
+        self.has(MemberQualifierKind::Overload)
     }
 
     fn has(&self, kind: MemberQualifierKind) -> bool {
@@ -140,6 +146,18 @@ mod tests {
         assert!(q.is_final());
         assert!(q.is_override());
         assert!(!q.is_abstract());
+    }
+
+    #[test]
+    fn is_overload_when_overload_present_then_true() {
+        let q = qualifiers(&[MemberQualifierKind::Overload]);
+        assert!(q.is_overload());
+        assert!(!q.is_override());
+    }
+
+    #[test]
+    fn keyword_when_overload_then_upper_case_word() {
+        assert_eq!(MemberQualifierKind::Overload.keyword(), "OVERLOAD");
     }
 
     #[test]

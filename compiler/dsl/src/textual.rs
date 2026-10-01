@@ -886,6 +886,11 @@ pub enum StmtKind {
     // Continue statement.
     #[recurse(ignore)]
     Continue(SourceSpan),
+    /// `__BEGIN_IMPLEMENTATION` (CODESYS): the marker that begins a POU's
+    /// implementation section in a textual export. It carries no behavior:
+    /// the statements after it follow it in the same list.
+    #[recurse(ignore)]
+    BeginImplementation(SourceSpan),
 }
 
 impl Located for StmtKind {
@@ -902,6 +907,7 @@ impl Located for StmtKind {
             StmtKind::Return => SourceSpan::default(),
             StmtKind::Exit(s) => s.clone(),
             StmtKind::Continue(s) => s.clone(),
+            StmtKind::BeginImplementation(s) => s.clone(),
         }
     }
 }

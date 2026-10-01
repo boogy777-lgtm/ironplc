@@ -224,3 +224,51 @@ pub(crate) fn extract_fb(library: &Library) -> &FunctionBlockDeclaration {
         .unwrap();
     cast!(element, LibraryElementKind::FunctionBlockDeclaration)
 }
+
+// ---------------------------------------------------------------------
+// ST declaration extensions: UNION, VAR_STAT/VAR_INST/VAR_GENERIC,
+// NAMESPACE and __BEGIN_IMPLEMENTATION.
+// See specs/design/st-declaration-extensions.md.
+// ---------------------------------------------------------------------
+
+pub(crate) fn opts_with_union() -> CompilerOptions {
+    CompilerOptions {
+        allow_union_type: true,
+        ..CompilerOptions::default()
+    }
+}
+
+pub(crate) fn opts_with_var_stat() -> CompilerOptions {
+    CompilerOptions {
+        allow_var_stat: true,
+        ..CompilerOptions::default()
+    }
+}
+
+pub(crate) fn opts_with_var_inst() -> CompilerOptions {
+    CompilerOptions {
+        allow_var_inst: true,
+        ..opts_with_fb_inheritance()
+    }
+}
+
+pub(crate) fn opts_with_var_generic() -> CompilerOptions {
+    CompilerOptions {
+        allow_var_generic: true,
+        ..opts_with_fb_inheritance()
+    }
+}
+
+pub(crate) fn opts_with_namespace() -> CompilerOptions {
+    CompilerOptions {
+        allow_namespace: true,
+        ..CompilerOptions::default()
+    }
+}
+
+pub(crate) fn opts_with_begin_implementation() -> CompilerOptions {
+    CompilerOptions {
+        allow_begin_implementation: true,
+        ..CompilerOptions::default()
+    }
+}

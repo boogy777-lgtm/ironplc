@@ -1,6 +1,7 @@
 //! `--allow-*` dialect flags (missing semicolon, empty VAR blocks).
 
 use super::common::*;
+use spec_test_macro::spec_test;
 
 /// Dialect-flag acceptance tests.
 ///
@@ -201,4 +202,34 @@ END_FUNCTION"
 fn parse_without_dialect_flag_then_err(#[case] source: &str) {
     let result = parse_program(source, &FileId::default(), &CompilerOptions::default());
     assert!(result.is_err());
+}
+
+/// REQ-STX-parser-014: with the flags off, the ST declaration extension
+/// keywords are ordinary identifiers, so an Edition 2 program may keep
+/// using them as names (UNION, VAR_STAT, VAR_INST, VAR_GENERIC, NAMESPACE,
+/// END_NAMESPACE, __BEGIN_IMPLEMENTATION).
+#[spec_test(REQ_STX_parser_014)]
+fn parser_spec_req_stx_014_demoted_keywords_are_identifiers() {
+    let source = "PROGRAM main
+VAR
+    UNION : INT;
+    VAR_STAT : INT;
+    VAR_INST : INT;
+    VAR_GENERIC : INT;
+    NAMESPACE : INT;
+    END_NAMESPACE : INT;
+    __BEGIN_IMPLEMENTATION : INT;
+END_VAR
+    UNION := 1;
+    VAR_STAT := 2;
+    VAR_INST := 3;
+    VAR_GENERIC := 4;
+    NAMESPACE := 5;
+    END_NAMESPACE := 6;
+    __BEGIN_IMPLEMENTATION := 7;
+END_PROGRAM";
+    let library = parse_program(source, &FileId::default(), &CompilerOptions::default())
+        .unwrap_or_else(|e| panic!("demoted keywords must be identifiers: {e:?}"));
+    let program = cast!(&library.elements[0], LibraryElementKind::ProgramDeclaration);
+    assert_eq!(program.variables.len(), 7);
 }

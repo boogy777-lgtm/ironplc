@@ -136,6 +136,9 @@ impl Writable {
         let section = match node.var_type {
             VariableType::Var
             | VariableType::VarTemp
+            | VariableType::VarStat
+            | VariableType::VarInst
+            | VariableType::VarGeneric
             | VariableType::Output
             | VariableType::InOut
             | VariableType::External

@@ -55,6 +55,7 @@ fn ed3_dialect_enables_edition3_descriptors() {
             "allow_fb_inheritance",
             "allow_enum_explicit_values",
             "allow_continue",
+            "allow_union_type",
         ],
     );
 }
@@ -96,6 +97,7 @@ fn rusty_dialect_enables_exactly_these_flags() {
             "allow_enum_explicit_values",
             "allow_enum_base_type",
             "allow_continue",
+            "allow_union_type",
         ],
     );
 }
@@ -145,6 +147,12 @@ fn codesys_dialect_enables_exactly_these_flags() {
             "allow_enum_explicit_values",
             "allow_enum_base_type",
             "allow_continue",
+            "allow_union_type",
+            "allow_var_stat",
+            "allow_var_inst",
+            "allow_var_generic",
+            "allow_namespace",
+            "allow_begin_implementation",
         ],
     );
 }
@@ -194,6 +202,11 @@ fn twincat_dialect_enables_exactly_these_flags() {
             "allow_enum_explicit_values",
             "allow_enum_base_type",
             "allow_continue",
+            "allow_union_type",
+            "allow_var_stat",
+            "allow_var_inst",
+            "allow_var_generic",
+            "allow_namespace",
         ],
     );
 }
@@ -221,6 +234,48 @@ fn options_spec_req_pab_052_ed3_dialect_enables_partial_access_syntax() {
 fn options_spec_req_pab_141_vendor_dialects_enable_partial_access_syntax(#[case] dialect: Dialect) {
     let options = CompilerOptions::from_dialect(dialect);
     assert!(options.allow_partial_access_syntax);
+}
+
+/// REQ-STX-parser-008: The `codesys` and `twincat` dialect presets enable
+/// all six ST declaration extension flags; IEC 61131-3 Ed. 3 and RuSTy
+/// enable `allow_union_type` (UNION is standardized in the 2013 edition).
+#[spec_test(REQ_STX_parser_008)]
+#[rstest]
+#[case::codesys(
+    Dialect::Codesys,
+    &[
+        "allow_union_type",
+        "allow_var_stat",
+        "allow_var_inst",
+        "allow_var_generic",
+        "allow_namespace",
+        "allow_begin_implementation",
+    ]
+)]
+#[case::twincat(
+    Dialect::TwinCat,
+    &[
+        "allow_union_type",
+        "allow_var_stat",
+        "allow_var_inst",
+        "allow_var_generic",
+        "allow_namespace",
+    ]
+)]
+#[case::ed3(Dialect::Iec61131_3Ed3, &["allow_union_type"])]
+#[case::rusty(Dialect::Rusty, &["allow_union_type"])]
+fn options_spec_req_stx_008_dialect_presets_enable_the_flags(
+    #[case] dialect: Dialect,
+    #[case] expected: &[&str],
+) {
+    let options = CompilerOptions::from_dialect(dialect);
+    for flag in expected {
+        assert_eq!(
+            options.get_flag_by_key(flag),
+            Some(true),
+            "dialect {dialect} must enable {flag}"
+        );
+    }
 }
 
 /// Assert that a dialect selects exactly the given policy alternatives,
