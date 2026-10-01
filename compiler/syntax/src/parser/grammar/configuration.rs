@@ -9,8 +9,8 @@
 //! variables and of instance initialisations, in that order.
 
 use super::common::{
-    close, declaration_stops, declared_name, item_terminator, skip_declaration, skip_stray, Order,
-    NameClass, Part,
+    close, declaration_stops, declared_name, item_terminator, skip_declaration, skip_stray,
+    NameClass, Order, Part,
 };
 use super::expressions::{close_group, name_ref, type_ref, variable};
 use super::initializers::{connection_source, value};
@@ -115,12 +115,7 @@ fn resource(p: &mut Parser) {
             order.enter(p, PROGRAMS);
             program_configuration(p);
         } else {
-            skip_stray(
-                p,
-                K::EndResource,
-                &owns,
-                "expected a task or a program",
-            );
+            skip_stray(p, K::EndResource, &owns, "expected a task or a program");
         }
         if p.position() == before {
             p.bump_as_error("unexpected input");

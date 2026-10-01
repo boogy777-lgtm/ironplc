@@ -287,6 +287,20 @@ impl<'t, 's> Parser<'t, 's> {
             .map_or_else(|| TextRange::empty(self.end), |token| token.range)
     }
 
+    /// Records an error where the previous token ends, as an empty range: for
+    /// something missing after it, such as the closing keyword of a declaration
+    /// that ends where the next one begins.
+    pub(crate) fn error_after_previous(&mut self, message: &str) {
+        let end = self
+            .pos
+            .checked_sub(1)
+            .and_then(|previous| self.significant.get(previous))
+            .and_then(|index| self.tokens.get(*index))
+            .map_or_else(|| TextSize::from(0), |token| token.range.end());
+        self.errors
+            .push(SyntaxError::new(message, TextRange::empty(end)));
+    }
+
     /// Records an error at the next token. A lexical error token already has
     /// its own error, so none is added for it.
     pub(crate) fn error(&mut self, message: &str) {

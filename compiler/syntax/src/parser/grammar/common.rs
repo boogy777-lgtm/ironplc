@@ -73,7 +73,7 @@ pub(super) fn integer_ref(p: &mut Parser) {
 /// next one still sees whatever stopped the body.
 pub(super) fn close(p: &mut Parser, closer: K, what: &str) {
     if !p.eat(closer) {
-        p.error(&format!("expected {what}"));
+        p.error_after_previous(&format!("expected {what}"));
     }
 }
 

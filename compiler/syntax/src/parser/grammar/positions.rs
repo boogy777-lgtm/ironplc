@@ -216,6 +216,8 @@ mod tests {
     #[test]
     fn accepts_when_elementary_then_wherever_names_are() {
         assert!(EXTERNAL.accepts(Spec::Elementary));
-        assert!(!VARIABLES.located(&[S::Enumeration]).accepts(Spec::Elementary));
+        assert!(!VARIABLES
+            .located(&[S::Enumeration])
+            .accepts(Spec::Elementary));
     }
 }

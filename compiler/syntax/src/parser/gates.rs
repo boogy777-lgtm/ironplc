@@ -365,10 +365,7 @@ mod tests {
 
     #[test]
     fn gate_errors_when_string_escape_undefined_then_error_on_the_escape_in_every_dialect() {
-        assert_eq!(
-            ranges("x := 'a$Qb';", &ParseOptions::all()),
-            vec![(7, 9)]
-        );
+        assert_eq!(ranges("x := 'a$Qb';", &ParseOptions::all()), vec![(7, 9)]);
         assert_eq!(
             ranges("x := \"a$D800\";", &ParseOptions::all()),
             vec![(7, 9)]

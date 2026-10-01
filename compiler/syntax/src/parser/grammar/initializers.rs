@@ -121,11 +121,7 @@ fn struct_initializer_ahead(p: &Parser) -> bool {
 /// literal (`T#5s`, `INT#5`) also has a name before the `#`, but a number, a
 /// sign or a string after it; a name after the `#` is an enumeration value.
 fn qualified_value_ahead(p: &Parser) -> bool {
-    p.name_at(0)
-        && p.nth_at(1, K::Hash)
-        && p.adjacent(0)
-        && p.adjacent(1)
-        && p.variable_name_at(2)
+    p.name_at(0) && p.nth_at(1, K::Hash) && p.adjacent(0) && p.adjacent(1) && p.variable_name_at(2)
 }
 
 fn qualified_value(p: &mut Parser) {

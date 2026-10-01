@@ -6,9 +6,7 @@
 //! rules. The qualifier words other than `ABSTRACT` are contextual: ordinary
 //! names everywhere but between a declaration's keyword and its name.
 
-use super::common::{
-    close, declaration_stops, declared_name, skip_stray, Order, NameClass, Part,
-};
+use super::common::{close, declaration_stops, declared_name, skip_stray, NameClass, Order, Part};
 use super::expressions::type_ref;
 use super::pou::{sections, Body, Layout};
 use super::types::return_type;

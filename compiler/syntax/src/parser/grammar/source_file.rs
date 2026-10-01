@@ -75,8 +75,7 @@ fn skip_to_declaration(p: &mut Parser, until: Option<K>) {
     p.error("expected a declaration");
     let node = p.start();
     p.bump();
-    while !p.at_eof() && !p.at_any(DECLARATION_START) && !until.is_some_and(|closer| p.at(closer))
-    {
+    while !p.at_eof() && !p.at_any(DECLARATION_START) && !until.is_some_and(|closer| p.at(closer)) {
         p.bump();
     }
     p.complete(node, K::ErrorNode);

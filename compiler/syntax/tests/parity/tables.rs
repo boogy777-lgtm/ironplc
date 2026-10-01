@@ -672,11 +672,19 @@ pub const BODY_EXCEPTIONS: &[Exception] = &[
 ];
 
 /// Differences on whole files, against the legacy parser.
-pub const FILE_EXCEPTIONS: &[Exception] = &[accepted_file(
-    "../resources/test/oscat.st",
-    true,
-    OSCAT_RANGED_COMMENT,
-)];
+pub const FILE_EXCEPTIONS: &[Exception] = &[
+    accepted_file("../resources/test/oscat.st", true, OSCAT_RANGED_COMMENT),
+    accepted_file(
+        "../resources/test/oscat.st (CRLF)",
+        true,
+        OSCAT_RANGED_COMMENT,
+    ),
+    accepted_file(
+        "../resources/test/oscat.st (tabs)",
+        true,
+        OSCAT_RANGED_COMMENT,
+    ),
+];
 
 /// The legacy parser accepts the file `name` and the new one rejects it, on
 /// purpose.
@@ -690,7 +698,6 @@ const fn accepted_file(name: &'static str, legacy: bool, reason: &'static str) -
         reason,
     }
 }
-
 
 /// Differences in the declarations lifted from the legacy parser tests.
 pub const LEGACY_DECLARATION_EXCEPTIONS: &[Exception] = &[

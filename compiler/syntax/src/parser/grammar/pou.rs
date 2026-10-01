@@ -13,9 +13,7 @@
 //! other construct is wrapped in an error node. A unit that is missing its
 //! closer ends where the next declaration begins.
 
-use super::common::{
-    close, declaration_stops, declared_name, name_ahead, Order, NameClass, Part,
-};
+use super::common::{close, declaration_stops, declared_name, name_ahead, NameClass, Order, Part};
 use super::expressions::type_ref;
 use super::oop::{self, member};
 use super::sfc;
@@ -121,9 +119,7 @@ pub(super) fn function(p: &mut Parser) {
     let node = p.start();
     p.bump();
     // `FUNCTION TIME` names a function where the dialect allows it.
-    if name_ahead(p, NameClass::Plain)
-        || (p.options.allow_time_as_function_name && p.at(K::Time))
-    {
+    if name_ahead(p, NameClass::Plain) || (p.options.allow_time_as_function_name && p.at(K::Time)) {
         let name = p.start();
         p.bump();
         p.complete(name, K::Name);

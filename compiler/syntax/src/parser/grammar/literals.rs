@@ -100,8 +100,7 @@ fn typed_class(p: &Parser) -> Option<Class> {
 /// True when a character string literal starts at the cursor: a quoted string,
 /// or a typed one (`STRING#'a'`).
 pub(super) fn string_literal_ahead(p: &Parser) -> bool {
-    p.at_any(&[K::StringLit, K::WStringLit])
-        || matches!(typed_class(p), Some(Class::String { .. }))
+    p.at_any(&[K::StringLit, K::WStringLit]) || matches!(typed_class(p), Some(Class::String { .. }))
 }
 
 /// True when a duration literal (`T#5s`, `TIME#5s`, `LTIME#5s`) starts at the

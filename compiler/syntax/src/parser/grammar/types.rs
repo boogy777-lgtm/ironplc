@@ -22,9 +22,7 @@ use super::control::{bound, bound_ahead};
 use super::expressions::{arg_list, close_group, type_ref};
 use super::initializers::initializer;
 use super::literals::literal;
-use super::positions::{
-    Context, Spec, COUNTED, DECLARED, ELEMENT, MEMBER, TARGET,
-};
+use super::positions::{Context, Spec, COUNTED, DECLARED, ELEMENT, MEMBER, TARGET};
 use crate::parser::recovery::BLOCK_END;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;

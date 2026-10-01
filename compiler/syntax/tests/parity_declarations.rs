@@ -11,14 +11,17 @@
 mod parity;
 
 use parity::compare::{assert_clean, compare, summarize, Item};
-use parity::legacy::presets;
 use parity::declaration_table::DECLARATIONS;
+use parity::legacy::presets;
 use parity::tables::{DECLARATION_EXCEPTIONS, LEGACY_DECLARATION_EXCEPTIONS};
 use parity::{extract, Kind, Oracle};
 
 #[test]
 fn parity_when_declaration_table_then_differences_are_exactly_the_exceptions() {
-    let items: Vec<Item> = DECLARATIONS.iter().map(|text| Item::snippet(text)).collect();
+    let items: Vec<Item> = DECLARATIONS
+        .iter()
+        .map(|text| Item::snippet(text))
+        .collect();
     let report = compare(
         Kind::Declarations,
         Oracle::Program,

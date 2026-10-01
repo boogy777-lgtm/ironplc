@@ -255,7 +255,7 @@ pub(super) fn var_block(p: &mut Parser, scope: Scope) {
         Instance => items(p, true, instance_initialization),
     }
     if !p.eat(K::EndVar) {
-        p.error("expected `END_VAR`");
+        p.error_after_previous("expected `END_VAR`");
     }
     p.complete(node, K::VarBlock);
 }
@@ -315,10 +315,8 @@ fn declaration(p: &mut Parser, shape: Shape) {
         };
         let is_bool = p.at(K::Bool);
         let spec = type_spec(p, &context);
-        let edge = shape.edge
-            && is_bool
-            && spec == Spec::Elementary
-            && p.at_any(&[K::REdge, K::FEdge]);
+        let edge =
+            shape.edge && is_bool && spec == Spec::Elementary && p.at_any(&[K::REdge, K::FEdge]);
         if edge {
             let edge = p.start();
             p.bump();

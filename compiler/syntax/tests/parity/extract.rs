@@ -228,35 +228,6 @@ pub fn legacy_test_bodies() -> Vec<String> {
     bodies
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn string_literals_when_mixed_forms_then_decoded() {
-        let source = "let a = \"x\\n\\\"y\\\"\"; let b = r#\"raw \"q\"\"#; let c = '\"'; // \"no\"\nlet d = \"tail\";";
-        assert_eq!(
-            string_literals(source),
-            vec!["x\n\"y\"", "raw \"q\"", "tail"]
-        );
-    }
-
-    #[test]
-    fn pou_body_when_program_with_vars_then_text_between_end_var_and_end_program() {
-        let body = pou_body("PROGRAM p VAR x : INT; END_VAR x := 1; END_PROGRAM");
-        assert_eq!(body.as_deref(), Some(" x := 1; "));
-    }
-
-    #[test]
-    fn pou_body_when_two_pous_or_headed_function_without_vars_then_none() {
-        assert_eq!(
-            pou_body("PROGRAM a END_PROGRAM PROGRAM b END_PROGRAM"),
-            None
-        );
-        assert_eq!(pou_body("FUNCTION f : INT f := 1; END_FUNCTION"), None);
-    }
-}
-
 /// Every Rust source file of the legacy parser crate, tests included.
 pub fn legacy_all_sources() -> Vec<(PathBuf, String)> {
     fn collect(dir: &std::path::Path, files: &mut Vec<PathBuf>) {
@@ -317,4 +288,33 @@ pub fn legacy_declaration_snippets() -> Vec<String> {
     snippets.sort();
     snippets.dedup();
     snippets
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn string_literals_when_mixed_forms_then_decoded() {
+        let source = "let a = \"x\\n\\\"y\\\"\"; let b = r#\"raw \"q\"\"#; let c = '\"'; // \"no\"\nlet d = \"tail\";";
+        assert_eq!(
+            string_literals(source),
+            vec!["x\n\"y\"", "raw \"q\"", "tail"]
+        );
+    }
+
+    #[test]
+    fn pou_body_when_program_with_vars_then_text_between_end_var_and_end_program() {
+        let body = pou_body("PROGRAM p VAR x : INT; END_VAR x := 1; END_PROGRAM");
+        assert_eq!(body.as_deref(), Some(" x := 1; "));
+    }
+
+    #[test]
+    fn pou_body_when_two_pous_or_headed_function_without_vars_then_none() {
+        assert_eq!(
+            pou_body("PROGRAM a END_PROGRAM PROGRAM b END_PROGRAM"),
+            None
+        );
+        assert_eq!(pou_body("FUNCTION f : INT f := 1; END_FUNCTION"), None);
+    }
 }

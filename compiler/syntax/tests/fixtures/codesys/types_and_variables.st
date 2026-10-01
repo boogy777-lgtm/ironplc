@@ -12,7 +12,7 @@ TYPE
         label : STRING[8];
     END_STRUCT;
     Overlay : UNION
-        word : WORD;
+        whole : WORD;
         bytes : ARRAY[0..1] OF BYTE;
     END_UNION;
     Pen : Point := (x := 3, y := 4);
@@ -28,7 +28,7 @@ END_VAR
 
 VAR_GLOBAL RETAIN
     counter : DINT;
-    flag AT %MX0.0 : BOOL;
+    flag : BOOL;
 END_VAR
 
 PROGRAM Variables
@@ -49,13 +49,10 @@ VAR
     pen : Point := (x := 1, y := 2);
     motor : Fb(enable := TRUE);
     ptr : POINTER TO INT;
-    ref : REF_TO INT := REF(total);
+    target_ref : REF_TO INT := REF(total);
 END_VAR
 VAR_EXTERNAL CONSTANT
     Limit : INT;
-END_VAR
-VAR_TEMP
-    scratch : INT;
 END_VAR
 VAR_STAT
     calls : INT;
