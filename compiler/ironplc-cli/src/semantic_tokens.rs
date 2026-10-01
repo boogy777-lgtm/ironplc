@@ -218,6 +218,7 @@ impl From<LspTokenType> for Vec<SemanticToken> {
             TokenType::VarAccess => Some(KEYWORD_INDEX),
             TokenType::VarConfig => Some(KEYWORD_INDEX),
             TokenType::Bool => Some(KEYWORD_INDEX),
+            TokenType::Bit => Some(KEYWORD_INDEX),
             TokenType::Sint => Some(KEYWORD_INDEX),
             TokenType::Int => Some(KEYWORD_INDEX),
             TokenType::Dint => Some(KEYWORD_INDEX),

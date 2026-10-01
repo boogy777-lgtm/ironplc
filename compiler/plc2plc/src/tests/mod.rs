@@ -9,6 +9,7 @@ pub(crate) use common::unwrap_parse;
 
 mod adr;
 mod case;
+mod codesys_literals;
 mod constant_initializers;
 mod continue_statement;
 mod corpus;
@@ -33,4 +34,5 @@ mod tc2_math_calls;
 mod tc2_utilities_calls;
 mod this_super;
 mod time_and_sizeof;
+mod time_literals;
 mod union;

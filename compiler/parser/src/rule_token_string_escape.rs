@@ -46,10 +46,10 @@ pub fn apply(tokens: &[Token], _options: &CompilerOptions) -> Result<(), Vec<Dia
                 .with_context("escape", &escape.to_string())
                 .with_help(match width {
                     StringType::String => {
-                        "Use $$, $', $L, $N, $P, $R, $T, or $ followed by two hex digits."
+                        "Use $$, $', $L, $N, $P, $R, $T, $ followed by two hex digits, or $U followed by eight hex digits."
                     }
                     StringType::WString => {
-                        "Use $$, $\", $L, $N, $P, $R, $T, or $ followed by four hex digits."
+                        "Use $$, $\", $L, $N, $P, $R, $T, $ followed by four hex digits, or $U followed by eight hex digits."
                     }
                 }),
             );
@@ -94,5 +94,22 @@ mod test {
     #[test]
     fn apply_when_two_hex_digits_in_wide_string_then_error() {
         assert_eq!(vec![(6, 8)], escape_errors("x := \"$41\";"));
+    }
+
+    #[test]
+    fn apply_when_unicode_escape_then_ok() {
+        // `$U` and eight hex digits is a character in either width.
+        assert!(escape_errors("x := 'a$U00000041b'; y := \"$U000020AC\";").is_empty());
+    }
+
+    #[test]
+    fn apply_when_unicode_escape_has_four_hex_digits_then_error_on_escape() {
+        // `x := '$U0041';`: the escape runs from byte 6 to byte 12.
+        assert_eq!(vec![(6, 12)], escape_errors("x := '$U0041';"));
+    }
+
+    #[test]
+    fn apply_when_unicode_escape_is_a_surrogate_then_error_on_escape() {
+        assert_eq!(vec![(6, 16)], escape_errors("x := '$U0000D800';"));
     }
 }

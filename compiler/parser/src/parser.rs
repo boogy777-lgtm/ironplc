@@ -264,6 +264,8 @@ fn unquote(text: &str, width: &StringType) -> Vec<char> {
 /// order is the order of magnitude.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum DurationUnit {
+    Nanoseconds,
+    Microseconds,
     Milliseconds,
     Seconds,
     Minutes,
@@ -290,6 +292,8 @@ fn combine_interval_parts(
         }
         previous = Some(unit);
         let part = match unit {
+            DurationUnit::Nanoseconds => DurationLiteral::nanoseconds(value),
+            DurationUnit::Microseconds => DurationLiteral::microseconds(value),
             DurationUnit::Days => DurationLiteral::days(value),
             DurationUnit::Hours => DurationLiteral::hours(value),
             DurationUnit::Minutes => DurationLiteral::minutes(value),
@@ -489,7 +493,12 @@ parser! {
       / tok(TokenType::Uint) { IntegerTypeName::UINT }
       / tok(TokenType::Udint) { IntegerTypeName::UDINT }
       / tok(TokenType::Ulint) { IntegerTypeName::ULINT }
-    rule integer_literal() -> IntegerLiteral = data_type:(t:integer_literal_type() tok(TokenType::Hash) {t})? value:(bi:binary_integer() { bi.into() } / oi:octal_integer() { oi.into() } / hi:hex_integer() { hi.into() } / si:signed_integer() { si }) { IntegerLiteral { value, data_type } }
+    rule integer_literal() -> IntegerLiteral = data_type:(t:integer_literal_type() tok(TokenType::Hash) {t})? value:(bi:binary_integer() { bi.into() } / oi:octal_integer() { oi.into() } / hi:hex_integer() { hi.into() } / di:decimal_integer() { di.into() } / si:signed_integer() { si }) { IntegerLiteral { value, data_type } }
+    // A based integer in base 10 (`10#123`). The lexer reads it as the digits
+    // `10`, `#` and the digits of the value, so the rule recognizes the
+    // three adjacent tokens; the base adds nothing to the value. See
+    // specs/design/numeric-literals.md, REQ-NL-parser-010.
+    rule decimal_integer() -> Integer = prefix:tok_eq(TokenType::Digits, "10") tok(TokenType::Hash) digits:tok(TokenType::Digits) {? Integer::new(digits.text.as_str(), SourceSpan::join(&prefix.span, &digits.span)) }
     rule signed_integer__positive() -> SignedInteger = tok(TokenType::Plus)? digits:tok(TokenType::Digits) {? SignedInteger::positive(digits.text.as_str(), digits.span.clone()) }
     rule signed_integer__negative() -> SignedInteger = sign:tok(TokenType::Minus) digits:tok(TokenType::Digits) {? SignedInteger::negative(digits.text.as_str(), SourceSpan::join(&sign.span, &digits.span)) }
     rule signed_integer() -> SignedInteger = signed_integer__positive() / signed_integer__negative()
@@ -533,13 +542,18 @@ parser! {
     // The specification says unsigned_integer, but there is no such rule.
     rule bit_string_literal() -> BitStringLiteral = data_type:(t:bit_string_literal_type() tok(TokenType::Hash) {t})? value:(bi:binary_integer() { bi }/ oi:octal_integer() { oi } / hi:hex_integer() { hi } / ui:integer() { ui } ) { BitStringLiteral { value, data_type } }
     rule boolean_literal() -> BooleanLiteral =
-      // 1 and 0 can be a Boolean, but only with the prefix is it definitely a Boolean
-      tok(TokenType::Bool) tok(TokenType::Hash) id_eq("1") { BooleanLiteral::new(Boolean::True) }
-      / tok(TokenType::Bool) tok(TokenType::Hash) id_eq("0") { BooleanLiteral::new(Boolean::False) }
+      // 1 and 0 can be a Boolean, but only with the prefix is it definitely a Boolean.
+      // They lex as digits, not as identifiers, so they are matched as digits.
+      tok(TokenType::Bool) tok(TokenType::Hash) tok_eq(TokenType::Digits, "1") { BooleanLiteral::new(Boolean::True) }
+      / tok(TokenType::Bool) tok(TokenType::Hash) tok_eq(TokenType::Digits, "0") { BooleanLiteral::new(Boolean::False) }
       / tok(TokenType::Bool) tok(TokenType::Hash) tok(TokenType::True)  { BooleanLiteral::new(Boolean::True) }
       / tok(TokenType::True) { BooleanLiteral::new(Boolean::True) }
       / tok(TokenType::Bool) tok(TokenType::Hash) tok(TokenType::False) { BooleanLiteral::new(Boolean::False) }
       / tok(TokenType::False) { BooleanLiteral::new(Boolean::False) }
+      // The BIT type's literals are the same two digits (`BIT#1`, `BIT#0`);
+      // the token is only a keyword while `allow_bit_type` is set.
+      / tok(TokenType::Bit) tok(TokenType::Hash) tok_eq(TokenType::Digits, "1") { BooleanLiteral::new(Boolean::True) }
+      / tok(TokenType::Bit) tok(TokenType::Hash) tok_eq(TokenType::Digits, "0") { BooleanLiteral::new(Boolean::False) }
 
     // B.1.2.2 Character strings
     // The literal keeps which of the two spellings the source used. A
@@ -549,14 +563,22 @@ parser! {
     // the same range `constant()` assigns, so a literal's span means one
     // thing wherever the literal appears.
     rule character_string_literal() -> CharacterStringLiteral = single_byte_character_string() / double_byte_character_string()
-    rule single_byte_character_string() -> CharacterStringLiteral = start:position!() (tok(TokenType::String) tok(TokenType::Hash))? t:tok(TokenType::SingleByteString) end:position!() {
+    // A typed string literal names a string type and then, adjacent to it,
+    // spells the literal. `UTF8#` and `UCHAR#` take a single-quoted literal
+    // and `__XSTRING#` a double-quoted one; the delimiter still selects the
+    // width, exactly as it does for `STRING#` and `WSTRING#` (see
+    // `specs/design/string-literals.md`, REQ-SL-parser-021 and 022). Every
+    // prefix is case-insensitive, like every other keyword.
+    rule unicode_string_prefix() -> () = (contextual_keyword("UTF8") / contextual_keyword("UCHAR")) tok(TokenType::Hash) ()
+    rule xstring_prefix() -> () = contextual_keyword("__XSTRING") tok(TokenType::Hash) ()
+    rule single_byte_character_string() -> CharacterStringLiteral = start:position!() (tok(TokenType::String) tok(TokenType::Hash) / unicode_string_prefix())? t:tok(TokenType::SingleByteString) end:position!() {
       CharacterStringLiteral {
         value: unquote(&t.text, &StringType::String),
         width: StringType::String,
         span: span_of_tokens(tokens, start, end),
       }
     }
-    rule double_byte_character_string() -> CharacterStringLiteral = start:position!() (tok(TokenType::WString) tok(TokenType::Hash))? t:tok(TokenType::DoubleByteString) end:position!() {
+    rule double_byte_character_string() -> CharacterStringLiteral = start:position!() (tok(TokenType::WString) tok(TokenType::Hash) / xstring_prefix())? t:tok(TokenType::DoubleByteString) end:position!() {
       CharacterStringLiteral {
         value: unquote(&t.text, &StringType::WString),
         width: StringType::WString,
@@ -584,9 +606,10 @@ parser! {
       }
     }
     // The prefix names the type: `LTIME#` is an LTIME, `TIME#` and `T#` a
-    // TIME. `contextual_keyword("T")` matches a bare identifier, so it comes
-    // last and cannot shadow the keyword forms.
-    rule duration_prefix() -> TemporalWidth = tok(TokenType::Time) { TemporalWidth::Short } / tok(TokenType::Ltime) { TemporalWidth::Long } / contextual_keyword("T") { TemporalWidth::Short }
+    // TIME, and the vendor abbreviation `LT#` another LTIME. The abbreviated
+    // spellings match a bare identifier, so the keyword forms come first and
+    // cannot be shadowed. See specs/design/time-literals.md — REQ-TL-004.
+    rule duration_prefix() -> TemporalWidth = tok(TokenType::Time) { TemporalWidth::Short } / tok(TokenType::Ltime) { TemporalWidth::Long } / contextual_keyword("LT") { TemporalWidth::Long } / contextual_keyword("T") { TemporalWidth::Short }
     // One or more `number unit` parts, with an optional `_` between parts
     // (REQ-TL-020 to 022); `combine_interval_parts` checks their order. The
     // token transform `xform_split_duration_units` has already split a unit
@@ -595,9 +618,12 @@ parser! {
       combine_interval_parts(first, rest)
     }
     rule interval_part() -> (FixedPoint, DurationUnit) = n:fixed_point() u:duration_unit() { (n, u) }
-    // `ms` must come before `m`, or `100ms` would read as minutes.
+    // `ms` must come before `m`, or `100ms` would read as minutes. `us` and
+    // `ns` (REQ-TL-010) conflict with no other unit, so they sit after `ms`.
     rule duration_unit() -> DurationUnit =
       contextual_keyword("ms") { DurationUnit::Milliseconds }
+      / contextual_keyword("us") { DurationUnit::Microseconds }
+      / contextual_keyword("ns") { DurationUnit::Nanoseconds }
       / contextual_keyword("d") { DurationUnit::Days }
       / contextual_keyword("h") { DurationUnit::Hours }
       / contextual_keyword("m") { DurationUnit::Minutes }
@@ -617,19 +643,30 @@ parser! {
     // `TOD#10:00:00.250` is 250 ms past ten. `Time` holds nanoseconds, so a
     // fraction finer than that is truncated; the stored count truncates
     // further, to the type's own unit (ADR-0025).
-    rule daytime() -> Time = h:day_hour() tok(TokenType::Colon) m:day_minute() tok(TokenType::Colon) s:day_second() {?
+    // The seconds are optional (REQ-TL-024): `TOD#10:00` is ten in the
+    // morning with zero seconds, as CODESYS accepts.
+    rule daytime() -> Time = h:day_hour() tok(TokenType::Colon) m:day_minute() s:(tok(TokenType::Colon) s:day_second() { s })? {?
+      let (second, nanoseconds) = match s {
+        Some(s) => (
+          u8::try_from(s.whole).map_err(|e| "second")?,
+          s.nanoseconds(),
+        ),
+        None => (0, 0),
+      };
       Time::from_hms_nano(
         h.try_into().map_err(|e| "hour")?,
         m.try_into().map_err(|e| "min")?,
-        u8::try_from(s.whole).map_err(|e| "second")?,
-        s.nanoseconds(),
+        second,
+        nanoseconds,
       ).map_err(|e| "time")
     }
     rule day_hour() -> Integer = integer()
     rule day_minute() -> Integer = integer()
     rule day_second() -> FixedPoint = fixed_point()
     rule date() -> DateLiteral = width:date_prefix() tok(TokenType::Hash) d:date_literal() { DateLiteral::new(d).with_width(width) }
-    rule date_prefix() -> TemporalWidth = tok(TokenType::Date) { TemporalWidth::Short } / tok(TokenType::Ldate) { TemporalWidth::Long } / contextual_keyword("D") { TemporalWidth::Short }
+    // `LD` is the vendor abbreviation of the LDATE prefix (REQ-TL-005), and
+    // like `LT` it comes after the keyword forms.
+    rule date_prefix() -> TemporalWidth = tok(TokenType::Date) { TemporalWidth::Short } / tok(TokenType::Ldate) { TemporalWidth::Long } / contextual_keyword("LD") { TemporalWidth::Long } / contextual_keyword("D") { TemporalWidth::Short }
     rule date_literal() -> Date = y:year() tok(TokenType::Minus) m:month() tok(TokenType::Minus) d:day() {?
       let y = y.value;
       let m = Month::try_from(<dsl::common::Integer as TryInto<u8>>::try_into(m).map_err(|e| "month")?).map_err(|e| "month")?;
@@ -653,6 +690,7 @@ parser! {
       numeric_type_name()
       / date_type_name()
       / bit_string_type_name()
+      / one_bit_type_name()
       / tok(TokenType::String) { ElementaryTypeName::STRING }
       / tok(TokenType::WString) { ElementaryTypeName::WSTRING }
       / tok(TokenType::Time) { ElementaryTypeName::TIME }
@@ -664,6 +702,9 @@ parser! {
     rule real_type_name() -> ElementaryTypeName = tok(TokenType::Real) { ElementaryTypeName::REAL } / tok(TokenType::Lreal) { ElementaryTypeName::LREAL }
     rule date_type_name() -> ElementaryTypeName = tok(TokenType::Date) { ElementaryTypeName::DATE } / tok(TokenType::Ldate) { ElementaryTypeName::LDATE } / tok(TokenType::TimeOfDay) { ElementaryTypeName::TimeOfDay } / tok(TokenType::Ltod) { ElementaryTypeName::LTimeOfDay } / tok(TokenType::DateAndTime) { ElementaryTypeName::DateAndTime } / tok(TokenType::Ldt) { ElementaryTypeName::LDateAndTime }
     rule bit_string_type_name() -> ElementaryTypeName = tok(TokenType::Bool) { ElementaryTypeName::BOOL } / tok(TokenType::Byte) { ElementaryTypeName::BYTE } / tok(TokenType::Word) { ElementaryTypeName::WORD } / tok(TokenType::Dword) { ElementaryTypeName::DWORD } / tok(TokenType::Lword) { ElementaryTypeName::LWORD }
+    // The BIT type is not IEC 61131-3; the token exists only while
+    // `allow_bit_type` is set, and is an ordinary identifier otherwise.
+    rule one_bit_type_name() -> ElementaryTypeName = tok(TokenType::Bit) { ElementaryTypeName::BIT }
 
     // B.1.3.2 - Generic type names are implemented above in generic_type_name() rule
 

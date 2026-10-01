@@ -19,9 +19,12 @@ Duration value representing an interval of time.
      - Supported
 
 Supported units: days (``d``), hours (``h``), minutes (``m``),
-seconds (``s``), milliseconds (``ms``). Units are case-insensitive,
-so ``T#5S`` and ``T#5s`` are equivalent. The prefix ``T#`` (or
-``TIME#``) is likewise case-insensitive.
+seconds (``s``), milliseconds (``ms``), microseconds (``us``) and
+nanoseconds (``ns``). Units are case-insensitive, so ``T#5S`` and ``T#5s``
+are equivalent. The prefix ``T#`` (or ``TIME#``; ``LT#`` for the 64-bit
+:doc:`ltime`) is likewise case-insensitive. A duration literal keeps its
+value in full — ``T#1us`` is a thousand nanoseconds — and a sub-millisecond
+part of the value is truncated only when it is stored in a ``TIME``.
 
 A duration is stored as a signed count of milliseconds, so a ``TIME`` holds
 about ±24.8 days; a literal outside that is reported as
@@ -37,6 +40,7 @@ Literals
    T#2s
    T#-500ms
    TIME#5S
+   T#500us
 
 Example
 -------

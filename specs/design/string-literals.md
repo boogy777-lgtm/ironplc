@@ -27,13 +27,46 @@ and every renderer that writes a literal back as source encodes with it.
 | **REQ-SL-parser-006** | `$T`, `$t` | both | tab, U+0009 |
 | **REQ-SL-parser-007** | `$'` | both | `'` |
 | **REQ-SL-parser-008** | `$"` | both | `"` |
-| **REQ-SL-parser-009** | `$` and two hex digits | `STRING` | the character with that code, U+0000 to U+00FF |
-| **REQ-SL-parser-010** | `$` and four hex digits | `WSTRING` | the character with that code, except a surrogate |
+| **REQ-SL-parser-009** | `$` and two hex digits | `STRING` | the character with that code, U+0000 to U+00FF (REQ-SL-parser-012) |
+| **REQ-SL-parser-010** | `$` and four hex digits | `WSTRING` | the character with that code, except a surrogate (REQ-SL-parser-012) |
+| **REQ-SL-parser-011** | `$U` and exactly eight hex digits | both | the Unicode character with that code, except a surrogate |
+| **REQ-SL-parser-012** | a numeric escape whose value is 0x80 to 0xFF | both | the character Windows-1252 gives that byte |
 
 The standard leaves the newline character to the implementation; `$N` is a
 line feed, like `$L`. The standard defines `$'` only for `STRING` and `$"`
 only for `WSTRING`; the other delimiter escaped stands for itself, because
 several toolchains accept it and nothing else could be meant.
+
+`$U` (REQ-SL-parser-011) and the Windows-1252 reading of the 0x80–0xFF band
+(REQ-SL-parser-012) are the spellings CODESYS gives those characters, and
+this compiler accepts them in every dialect: an escape's meaning belongs to
+the one escape table, and recognising the code point cannot change what any
+program that used a defined escape denotes. Values 0xA0 to 0xFF are the same
+in Windows-1252 and Latin-1; the 0x80 to 0x9F band is where the two differ,
+and there `$80` is `€` (U+20AC), not U+0080. The `U` is upper case, as
+CODESYS spells it; the hex digits are not case sensitive. A ninth hex digit
+is not part of the escape: `$U000000421` is `B` followed by `1`.
+
+**REQ-SL-parser-021** A single-quoted literal may carry the prefix `UTF8#`
+or `UCHAR#`, case-insensitively and adjacent to the opening quote
+(`UTF8#'…'`, `uchar#'…'`). The prefix names the encoding the vendor
+toolchains give the literal; the literal's characters are the decoded
+contents of the quoted text, and its width is `STRING`, the one the
+delimiter spells.
+
+**REQ-SL-parser-022** A double-quoted literal may carry the prefix
+`__XSTRING#`, case-insensitively and adjacent to the opening quote
+(`__XSTRING#"…"`). Its width is `WSTRING`. A single-quoted `__XSTRING#'…'`
+is not a literal, and neither is `UTF8#` or `UCHAR#` before a double-quoted
+literal.
+
+The prefixes of REQ-SL-parser-021 and 022 name a type in CODESYS:
+`__XSTRING` resolves to `STRING` or `WSTRING` by a compile define, and a
+one-character `UCHAR#` literal is the character code as a `UDINT`. IronPLC
+does not model those distinctions: the literal denotes the decoded
+characters of its quoted text and the width its delimiter spells, and the
+AST records no encoding, exactly as it records none for the `STRING#` and
+`WSTRING#` prefixes.
 
 **REQ-SL-parser-020** Any other `$` sequence -- `$` followed by a character
 that is not listed above, too few hex digits for the width, a surrogate
@@ -45,8 +78,10 @@ keeps the sequence as written, so that parsing continues.
 **REQ-SL-plc2plc-001** A rendered literal re-parses to the same characters:
 `$` as `$$`, the literal's own delimiter as `$'` or `$"`, line feed, carriage
 return, form feed and tab as `$L`, `$R`, `$P` and `$T`, any other control
-character as a hex escape of the literal's width, and every other character
-as itself.
+character as a hex escape of the literal's width — or, when the literal's
+width has no numeric escape that reads back as that character (the
+Windows-1252 band of REQ-SL-parser-012), as `$U` and eight hex digits — and
+every other character as itself.
 
 ## Values
 

@@ -19,5 +19,8 @@ fn main() {
         // ST declaration extensions (`REQ-STX-analyzer-*`): namespace
         // flattening during declaration toposort.
         "st-declaration-extensions.md",
+        // Numeric and boolean literals (`REQ-NL-analyzer-*`): what a BIT
+        // declaration resolves to.
+        "numeric-literals.md",
     ]);
 }

@@ -50,6 +50,8 @@ use crate::{
 /// * **`NAMESPACE`, `END_NAMESPACE`** — demoted unless `allow_namespace`.
 /// * **`__BEGIN_IMPLEMENTATION`** — demoted unless
 ///   `allow_begin_implementation`.
+/// * **`BIT`** — demoted unless `allow_bit_type` (CODESYS/TwinCAT one-bit
+///   type; `bit` is a legal variable name elsewhere).
 ///
 /// The context-sensitive `TIME` keyword is handled by [`apply_time`].
 pub fn apply(tokens: &mut [Token], options: &CompilerOptions) {
@@ -68,6 +70,7 @@ pub fn apply(tokens: &mut [Token], options: &CompilerOptions) {
     let demote_var_generic = !options.allow_var_generic;
     let demote_namespace = !options.allow_namespace;
     let demote_begin_implementation = !options.allow_begin_implementation;
+    let demote_bit = !options.allow_bit_type;
 
     for tok in tokens.iter_mut() {
         let demote = match tok.token_type {
@@ -99,6 +102,7 @@ pub fn apply(tokens: &mut [Token], options: &CompilerOptions) {
             TokenType::VarGeneric => demote_var_generic,
             TokenType::Namespace | TokenType::EndNamespace => demote_namespace,
             TokenType::BeginImplementation => demote_begin_implementation,
+            TokenType::Bit => demote_bit,
             _ => false,
         };
         if demote {

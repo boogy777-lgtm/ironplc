@@ -287,6 +287,12 @@ struct FileArgs {
     #[arg(long)]
     allow_enum_base_type: bool,
 
+    /// Allow the BIT one-bit type and its literals BIT#0 and BIT#1. This is
+    /// a dialect extension not part of the IEC 61131-3 standard; with the
+    /// flag off, `bit` is an ordinary identifier.
+    #[arg(long)]
+    allow_bit_type: bool,
+
     /// Allow the CONTINUE statement, which goes on with the next iteration
     /// of the innermost loop. Standardized in IEC 61131-3:2013, so not part
     /// of Edition 2.
@@ -386,6 +392,7 @@ impl FileArgs {
         options.allow_fb_inheritance |= self.allow_fb_inheritance;
         options.allow_enum_explicit_values |= self.allow_enum_explicit_values;
         options.allow_enum_base_type |= self.allow_enum_base_type;
+        options.allow_bit_type |= self.allow_bit_type;
         options.allow_continue |= self.allow_continue;
         options.allow_union_type |= self.allow_union_type;
         options.allow_var_stat |= self.allow_var_stat;

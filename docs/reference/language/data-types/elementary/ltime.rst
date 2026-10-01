@@ -47,11 +47,13 @@ Literals
    LTIME#5s
    LTIME#2h
    ltime#-500ms
+   LT#1500us
 
 Supported units: days (``d``), hours (``h``), minutes (``m``),
-seconds (``s``), milliseconds (``ms``). Units are case-insensitive,
-so ``LTIME#5S`` and ``LTIME#5s`` are equivalent. The prefix is likewise
-case-insensitive.
+seconds (``s``), milliseconds (``ms``), microseconds (``us``) and
+nanoseconds (``ns``). Units are case-insensitive, so ``LTIME#5S`` and
+``LTIME#5s`` are equivalent. The prefix is likewise case-insensitive, and
+``LT#`` is its abbreviation: ``LT#5s`` is ``LTIME#5s``.
 
 See Also
 --------

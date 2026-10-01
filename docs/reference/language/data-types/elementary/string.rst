@@ -26,6 +26,16 @@ Literals
    STRING#'typed literal'
    '$41$42 costs $$5'
 
+A literal may also carry the prefix ``UTF8#`` or ``UCHAR#``, which vendor
+toolchains use to name the encoding of the characters::
+
+   UTF8#'a$41b'   (* aAb *)
+   UCHAR#'A'      (* A *)
+
+The prefix names an encoding, not a different set of characters: the literal
+denotes the decoded characters of its quoted text, exactly as the same literal
+without the prefix does.
+
 .. include:: ../../../../includes/string-escapes.rst
 
 The maximum length can be specified in the declaration:

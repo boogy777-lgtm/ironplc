@@ -14,5 +14,11 @@ fn main() {
         // VAR_STAT/VAR_INST/VAR_GENERIC, NAMESPACE, __BEGIN_IMPLEMENTATION
         // and the OVERLOAD qualifier.
         "st-declaration-extensions.md",
+        // Numeric and boolean literals (`REQ-NL-parser-*`): base-10 based
+        // integers, typed boolean digits, and the BIT type.
+        "numeric-literals.md",
+        // Time literals (`REQ-TL-parser-*`): duration units and prefixes,
+        // the abbreviated LT/LD prefixes, optional seconds.
+        "time-literals.md",
     ]);
 }

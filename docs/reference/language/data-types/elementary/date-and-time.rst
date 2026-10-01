@@ -25,7 +25,8 @@ outside ``DT#1970-01-01-00:00:00`` to ``DT#2106-02-07-06:28:15`` is reported as
 The seconds of a literal may have a fraction, as in
 ``DT#2024-01-15-14:30:00.5``. A ``DATE_AND_TIME`` counts whole seconds, so the
 fraction is truncated: that literal holds the same value as
-``DT#2024-01-15-14:30:00``.
+``DT#2024-01-15-14:30:00``. The seconds may also be left out, as in
+``DT#2024-01-15-14:30``, which is the same value with zero seconds.
 
 Example
 -------

@@ -254,11 +254,65 @@ impl DurationLiteral {
         )
     }
 
+    /// Create a new `DurationLiteral` with the given number of microseconds.
+    ///
+    /// ```rust
+    /// use ironplc_dsl::common::FixedPoint;
+    /// use ironplc_dsl::time::DurationLiteral;
+    /// use time::Duration;
+    /// assert_eq!(DurationLiteral::microseconds(FixedPoint::parse("1.5").unwrap()).interval, Duration::microseconds(1) + Duration::nanoseconds(500));
+    /// ```
+    pub fn microseconds(micros: FixedPoint) -> Self {
+        let whole = Duration::microseconds(micros.whole as i64);
+        // The fraction of a microsecond as whole nanoseconds: `femptos` is
+        // the fraction in 10^-15 seconds, so `femptos * 10^-6` is nanoseconds.
+        let fraction = Duration::nanoseconds((micros.femptos / 1_000_000_000_000) as i64);
+        Self::new(micros.span, whole + fraction)
+    }
+
+    /// Create a new `DurationLiteral` with the given number of nanoseconds.
+    ///
+    /// ```rust
+    /// use ironplc_dsl::common::FixedPoint;
+    /// use ironplc_dsl::time::DurationLiteral;
+    /// use time::Duration;
+    /// assert_eq!(DurationLiteral::nanoseconds(FixedPoint::parse("500").unwrap()).interval, Duration::nanoseconds(500));
+    /// ```
+    pub fn nanoseconds(nanos: FixedPoint) -> Self {
+        // A fraction finer than a nanosecond truncates: `nanos` measures
+        // nanoseconds, so its fractional digits are below the unit.
+        Self::new(nanos.span, Duration::nanoseconds(nanos.whole as i64))
+    }
+
     pub fn plus(&self, other: DurationLiteral) -> Self {
         Self::new(
             SourceSpan::join(&self.span, &other.span),
             self.interval + other.interval,
         )
+    }
+
+    /// The `number unit` text of this literal, in the largest unit that
+    /// loses no precision: milliseconds when the interval is a whole number
+    /// of them, microseconds when whole microseconds, else nanoseconds.
+    ///
+    /// A literal keeps its value down to the nanosecond (REQ-TL-parser-030),
+    /// so writing every interval in milliseconds would change a literal that
+    /// has a sub-millisecond part: `TIME#1us` is not `TIME#0ms`.
+    ///
+    /// ```rust
+    /// use ironplc_dsl::common::FixedPoint;
+    /// use ironplc_dsl::time::DurationLiteral;
+    /// assert_eq!("1500us", DurationLiteral::milliseconds(FixedPoint::parse("1.5").unwrap()).unit_text());
+    /// ```
+    pub fn unit_text(&self) -> String {
+        let nanoseconds = self.interval.whole_nanoseconds();
+        if nanoseconds % 1_000_000 == 0 {
+            format!("{}ms", self.interval.whole_milliseconds())
+        } else if nanoseconds % 1_000 == 0 {
+            format!("{}us", nanoseconds / 1_000)
+        } else {
+            format!("{nanoseconds}ns")
+        }
     }
 }
 

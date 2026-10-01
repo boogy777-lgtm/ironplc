@@ -69,3 +69,21 @@ END_PROGRAM
         "it's $5"
     );
 }
+
+// `$U` and eight hex digits is one character in either width, and the
+// Windows-1252 band decodes to the character that encoding gives the byte:
+// in a WSTRING `$0080` is the euro sign, still one character.
+e2e_i32!(
+    end_to_end_when_len_of_unicode_escape_then_one_character,
+    "
+PROGRAM main
+  VAR
+    w : WSTRING;
+    n : INT;
+  END_VAR
+  w := \"$U000020AC$0080\";
+  n := LEN(w);
+END_PROGRAM
+",
+    &[(1, 2)],
+);

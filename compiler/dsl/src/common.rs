@@ -832,6 +832,10 @@ impl fmt::Display for BitStringTypeName {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ElementaryTypeName {
     BOOL,
+    /// The one-bit type some vendor toolchains add to the standard
+    /// elementary types. IronPLC stores it as [`BOOL`](Self::BOOL) (see
+    /// `specs/design/numeric-literals.md`, REQ-NL-parser-020).
+    BIT,
     SINT,
     INT,
     DINT,
@@ -871,6 +875,7 @@ impl ElementaryTypeName {
     pub fn as_id(&self) -> Id {
         match self {
             ElementaryTypeName::BOOL => Id::from("BOOL"),
+            ElementaryTypeName::BIT => Id::from("BIT"),
             ElementaryTypeName::SINT => Id::from("SINT"),
             ElementaryTypeName::INT => Id::from("INT"),
             ElementaryTypeName::DINT => Id::from("DINT"),
@@ -1053,6 +1058,7 @@ impl From<ElementaryTypeName> for Id {
     fn from(value: ElementaryTypeName) -> Id {
         match value {
             ElementaryTypeName::BOOL => Id::from("BOOL"),
+            ElementaryTypeName::BIT => Id::from("BIT"),
             ElementaryTypeName::SINT => Id::from("SINT"),
             ElementaryTypeName::INT => Id::from("INT"),
             ElementaryTypeName::DINT => Id::from("DINT"),
@@ -1085,6 +1091,7 @@ impl From<ElementaryTypeName> for TypeName {
     fn from(value: ElementaryTypeName) -> TypeName {
         match value {
             ElementaryTypeName::BOOL => TypeName::from("BOOL"),
+            ElementaryTypeName::BIT => TypeName::from("BIT"),
             ElementaryTypeName::SINT => TypeName::from("SINT"),
             ElementaryTypeName::INT => TypeName::from("INT"),
             ElementaryTypeName::DINT => TypeName::from("DINT"),
@@ -1118,6 +1125,7 @@ impl TryFrom<&Id> for ElementaryTypeName {
     fn try_from(id: &Id) -> Result<Self, ()> {
         match id.lower_case().as_str() {
             "bool" => Ok(ElementaryTypeName::BOOL),
+            "bit" => Ok(ElementaryTypeName::BIT),
             "sint" => Ok(ElementaryTypeName::SINT),
             "int" => Ok(ElementaryTypeName::INT),
             "dint" => Ok(ElementaryTypeName::DINT),

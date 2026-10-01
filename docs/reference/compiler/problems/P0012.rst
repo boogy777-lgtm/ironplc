@@ -16,7 +16,8 @@ it.
 The defined escapes are ``$$``, ``$L``, ``$N``, ``$P``, ``$R`` and ``$T`` (in
 either case), ``$'`` and ``$"``, and a character code: ``$`` and two hex
 digits in a ``STRING`` literal, ``$`` and four hex digits in a ``WSTRING``
-literal.
+literal, and ``$U`` and eight hex digits in either. A code from ``$80`` to
+``$FF`` is the character Windows-1252 gives that byte, so ``$80`` is ``€``.
 
 Example
 -------

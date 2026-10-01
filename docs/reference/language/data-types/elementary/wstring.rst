@@ -29,6 +29,14 @@ Literals
    WSTRING#"typed literal"
    "$20AC$L"
 
+A literal may also carry the prefix ``__XSTRING#``, the vendor toolchains'
+wide-character string prefix::
+
+   __XSTRING#"a$0041b"   (* aAb *)
+
+The prefix names the wide X-string type; the literal denotes the decoded
+characters of its quoted text, exactly as ``WSTRING#"abc"`` does.
+
 .. include:: ../../../../includes/string-escapes.rst
 
 The maximum length can be specified in the declaration:
