@@ -194,14 +194,13 @@ fn parse_when_incomplete_array_and_flag_off_then_requires_flag() {
     // token-stream rule, so the error is P4070 rather than a syntax error.
     let source = "TYPE MyArr : ARRAY[*] OF INT; END_TYPE";
     let result = parse_program(source, &FileId::default(), &CompilerOptions::default());
-    match result {
-        Ok(_) => panic!("expected error, got Ok"),
-        Err(d) => assert_eq!(
-            d.code,
-            "P4070",
-            "expected P4070 IncompleteArrayNotAllowed, got {}: {}",
-            d.code,
-            d.description(),
-        ),
-    }
+    assert!(result.is_err(), "expected error, got Ok");
+    let d = result.unwrap_err();
+    assert_eq!(
+        d.code,
+        "P4070",
+        "expected P4070 IncompleteArrayNotAllowed, got {}: {}",
+        d.code,
+        d.description(),
+    );
 }

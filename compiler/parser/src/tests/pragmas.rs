@@ -13,20 +13,15 @@ fn assignments(library: &Library) -> Vec<(String, String)> {
     let body = cast!(&prog.body, FunctionBlockBodyKind::Statements);
     body.body
         .iter()
-        .map(|stmt| match stmt {
-            StmtKind::Assignment(assignment) => {
-                (assignment.target.to_string(), assignment.value.to_string())
-            }
-            other => panic!("expected an assignment, got {other:?}"),
+        .map(|stmt| {
+            let assignment = cast!(stmt, StmtKind::Assignment);
+            (assignment.target.to_string(), assignment.value.to_string())
         })
         .collect()
 }
 
 fn parse_with_pragma_if(source: &str) -> Library {
-    match parse_program(source, &FileId::default(), &opts_with_pragma_if()) {
-        Ok(library) => library,
-        Err(e) => panic!("parse failed: {e:?}"),
-    }
+    parse_program(source, &FileId::default(), &opts_with_pragma_if()).expect("parse failed")
 }
 
 /// REQ-JMP-parser-030: only the taken branch reaches the parser. Without a

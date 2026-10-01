@@ -250,7 +250,7 @@ END_VAR
     __BEGIN_IMPLEMENTATION := 7;
 END_PROGRAM";
     let library = parse_program(source, &FileId::default(), &CompilerOptions::default())
-        .unwrap_or_else(|e| panic!("demoted keywords must be identifiers: {e:?}"));
+        .expect("demoted keywords must be identifiers");
     let program = cast!(&library.elements[0], LibraryElementKind::ProgramDeclaration);
     assert_eq!(program.variables.len(), 7);
 }

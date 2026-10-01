@@ -22,10 +22,7 @@ fn program_with_body(body: &str) -> String {
 /// Returns the try/catch statement of a single-statement program body.
 fn try_catch_of(source: &str) -> TryCatch {
     let library = parse_with_try_catch(&program_with_body(source));
-    match only_statement(&library) {
-        StmtKind::TryCatch(t) => t.clone(),
-        other => panic!("expected a try/catch statement, got {other:?}"),
-    }
+    cast!(only_statement(&library), StmtKind::TryCatch).clone()
 }
 
 /// REQ-TC-parser-001: the five words lex as their own token types.
@@ -192,20 +189,14 @@ fn try_catch_when_nested_then_inner_statement_is_in_the_outer_body() {
 #[spec_test(REQ_TC_parser_014)]
 fn throw_when_value_written_then_statement_carries_it() {
     let library = parse_with_try_catch(&program_with_body("__THROW(5);"));
-    match only_statement(&library) {
-        StmtKind::Throw(throw) => {
-            assert!(
-                matches!(throw.value, Some(Expr { ref kind, .. }) if matches!(kind, ExprKind::Const(_)))
-            );
-        }
-        other => panic!("expected a throw statement, got {other:?}"),
-    }
+    let throw = cast!(only_statement(&library), StmtKind::Throw);
+    assert!(
+        matches!(throw.value, Some(Expr { ref kind, .. }) if matches!(kind, ExprKind::Const(_)))
+    );
 
     let library = parse_with_try_catch(&program_with_body("__THROW;"));
-    match only_statement(&library) {
-        StmtKind::Throw(throw) => assert!(throw.value.is_none()),
-        other => panic!("expected a throw statement, got {other:?}"),
-    }
+    let throw = cast!(only_statement(&library), StmtKind::Throw);
+    assert!(throw.value.is_none());
 }
 
 /// REQ-TC-parser-020: the three clause vectors are reachable from the

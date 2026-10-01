@@ -88,7 +88,7 @@ mod tests {
     use crate::intermediate_type::{ArrayDimension, ByteSized, IntermediateType};
     use crate::type_environment::TypeEnvironmentBuilder;
     use ironplc_dsl::core::SourceSpan;
-    use ironplc_test::cast;
+    use ironplc_test::{cast, cast_struct};
 
     /// REQ-CS-analyzer-002: A PARAMS declaration resolves to the array
     /// `ARRAY[0 .. n-1]` of its element type.
@@ -110,13 +110,13 @@ mod tests {
         let result = try_from(&TypeName::from("MyParams"), &spec, &env).unwrap();
 
         let attrs = cast!(result, array::IntermediateResult::Type);
-        let IntermediateType::Array {
-            element_type,
-            dimensions,
-        } = attrs.representation
-        else {
-            panic!("expected an array type");
-        };
+        let (element_type, dimensions) = cast_struct!(
+            attrs.representation,
+            IntermediateType::Array {
+                element_type,
+                dimensions
+            }
+        );
         assert_eq!(dimensions, vec![ArrayDimension { lower: 0, upper: 2 }]);
         assert_eq!(
             *element_type,

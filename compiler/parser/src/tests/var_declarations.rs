@@ -534,8 +534,8 @@ fn parser_spec_req_stx_012_var_stat_and_var_inst_sections(
     #[case] pou: POUKind,
     #[case] expected: VariableType,
 ) {
-    let library = parse_program(source, &FileId::default(), &options())
-        .unwrap_or_else(|e| panic!("Source did not parse: {e:?}\n{source}"));
+    let library =
+        parse_program(source, &FileId::default(), &options()).expect("Source did not parse");
     let variables = match pou {
         POUKind::Function => {
             let f = cast!(

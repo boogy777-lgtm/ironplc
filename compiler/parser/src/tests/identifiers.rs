@@ -27,10 +27,10 @@ fn opts_with_multiple_underscores() -> CompilerOptions {
 
 /// Asserts the source is rejected with exactly `code`.
 fn assert_problem_code(source: &str, options: &CompilerOptions, code: &str) {
-    match parse_program(source, &FileId::default(), options) {
-        Ok(_) => panic!("expected error {code}, got Ok"),
-        Err(d) => assert_eq!(d.code, code, "got {}: {}", d.code, d.description()),
-    }
+    let result = parse_program(source, &FileId::default(), options);
+    assert!(result.is_err(), "expected error {code}, got Ok");
+    let d = result.unwrap_err();
+    assert_eq!(d.code, code, "got {}: {}", d.code, d.description());
 }
 
 // ---------------------------------------------------------------------

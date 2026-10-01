@@ -108,13 +108,9 @@ END_PROGRAM",
     );
 
     let stmts = statements(&library);
-    match &stmts[1] {
-        StmtKind::Jump(jump) => {
-            assert!(jump.condition.is_none());
-            assert_eq!(jump.label.to_string(), "done");
-        }
-        other => panic!("expected a jump statement, got {other:?}"),
-    }
+    let jump = cast!(&stmts[1], StmtKind::Jump);
+    assert!(jump.condition.is_none());
+    assert_eq!(jump.label.to_string(), "done");
     assert!(matches!(stmts[2], StmtKind::Label(_)), "stmts = {stmts:?}");
 }
 
@@ -132,10 +128,8 @@ END_PROGRAM",
         &opts_with_jump(),
     );
 
-    match &statements(&library)[1] {
-        StmtKind::Jump(jump) => assert!(jump.condition.is_some(), "{jump:?}"),
-        other => panic!("expected a jump statement, got {other:?}"),
-    }
+    let jump = cast!(&statements(&library)[1], StmtKind::Jump);
+    assert!(jump.condition.is_some(), "{jump:?}");
 }
 
 /// REQ-JMP-parser-003: a label is `name:` in statement position, and the
@@ -153,10 +147,8 @@ END_PROGRAM",
 
     let stmts = statements(&library);
     assert_eq!(stmts.len(), 2, "{stmts:?}");
-    match &stmts[0] {
-        StmtKind::Label(label) => assert_eq!(label.name.to_string(), "start"),
-        other => panic!("expected a label statement, got {other:?}"),
-    }
+    let label = cast!(&stmts[0], StmtKind::Label);
+    assert_eq!(label.name.to_string(), "start");
 }
 
 /// REQ-JMP-parser-003: a label nested in a statement body (`IF`, loop, TRY)
@@ -175,13 +167,9 @@ END_PROGRAM",
     );
 
     let stmts = statements(&library);
-    match &stmts[0] {
-        StmtKind::If(if_stmt) => match &if_stmt.body[0] {
-            StmtKind::Label(label) => assert_eq!(label.name.to_string(), "inner"),
-            other => panic!("expected a label statement, got {other:?}"),
-        },
-        other => panic!("expected an IF statement, got {other:?}"),
-    }
+    let if_stmt = cast!(&stmts[0], StmtKind::If);
+    let label = cast!(&if_stmt.body[0], StmtKind::Label);
+    assert_eq!(label.name.to_string(), "inner");
 }
 
 /// REQ-JMP-parser-003: declarations, POU headers and `CASE` selectors keep
@@ -223,14 +211,12 @@ END_PROGRAM";
         })
         .expect("program element");
     let body = cast!(&prog.body, FunctionBlockBodyKind::Statements);
-    match &body.body[0] {
-        StmtKind::Case(case) => assert_eq!(
-            case.statement_groups.len(),
-            2,
-            "the case selectors must not become labels: {case:?}"
-        ),
-        other => panic!("expected a CASE statement, got {other:?}"),
-    }
+    let case = cast!(&body.body[0], StmtKind::Case);
+    assert_eq!(
+        case.statement_groups.len(),
+        2,
+        "the case selectors must not become labels: {case:?}"
+    );
 }
 
 /// REQ-JMP-parser-003: without the gate a `name:` statement is still a syntax
@@ -262,13 +248,9 @@ END_PROGRAM",
         &opts_with_calc(),
     );
 
-    match &statements(&library)[1] {
-        StmtKind::ConditionalCall(call) => {
-            assert_eq!(call.call.var_name.to_string(), "Fb");
-            assert_eq!(call.call.params.len(), 1);
-        }
-        other => panic!("expected a conditional call, got {other:?}"),
-    }
+    let call = cast!(&statements(&library)[1], StmtKind::ConditionalCall);
+    assert_eq!(call.call.var_name.to_string(), "Fb");
+    assert_eq!(call.call.params.len(), 1);
 }
 
 /// REQ-JMP-parser-004: with the gate off `CALC(...)` is an ordinary function
@@ -284,10 +266,8 @@ END_PROGRAM",
         &CompilerOptions::default(),
     );
 
-    match &statements(&library)[0] {
-        StmtKind::FbCall(call) => assert_eq!(call.var_name.to_string(), "CALC"),
-        other => panic!("expected an fb call, got {other:?}"),
-    }
+    let call = cast!(&statements(&library)[0], StmtKind::FbCall);
+    assert_eq!(call.var_name.to_string(), "CALC");
 }
 
 /// REQ-JMP-parser-005: `__WAIT;` and `__WAIT(condition);` both parse.
@@ -303,13 +283,10 @@ END_PROGRAM",
     );
 
     let stmts = statements(&library);
-    match (&stmts[0], &stmts[1]) {
-        (StmtKind::Wait(first), StmtKind::Wait(second)) => {
-            assert!(first.condition.is_none());
-            assert!(second.condition.is_some());
-        }
-        other => panic!("expected wait statements, got {other:?}"),
-    }
+    let first = cast!(&stmts[0], StmtKind::Wait);
+    let second = cast!(&stmts[1], StmtKind::Wait);
+    assert!(first.condition.is_none());
+    assert!(second.condition.is_some());
 }
 
 /// REQ-JMP-parser-001: with the gates off the statements are syntax errors,

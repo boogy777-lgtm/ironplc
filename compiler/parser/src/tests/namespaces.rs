@@ -174,7 +174,7 @@ fn parse_when_marker_spelled_variously_then_marker_is_first_statement(
         &FileId::default(),
         &opts_with_begin_implementation(),
     )
-    .unwrap_or_else(|e| panic!("Source did not parse: {e:?}\n{source}"));
+    .expect("Source did not parse");
     let program = cast!(&library.elements[0], LibraryElementKind::ProgramDeclaration);
     let statements = cast!(&program.body, FunctionBlockBodyKind::Statements);
     assert_eq!(statements.body.len(), count);

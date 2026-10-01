@@ -5,9 +5,10 @@
 //! suite. The global allocator mirrors the binary, so allocation counts are
 //! live here too.
 
-use ironplc_s0_spike::baseline::{report, run};
+use ironplc_s0_spike::baseline::{corpus_files, report, run};
 use stats_alloc::{StatsAlloc, INSTRUMENTED_SYSTEM};
 use std::alloc::System;
+use std::path::Path;
 
 #[global_allocator]
 static GLOBAL: &StatsAlloc<System> = &INSTRUMENTED_SYSTEM;
@@ -15,7 +16,13 @@ static GLOBAL: &StatsAlloc<System> = &INSTRUMENTED_SYSTEM;
 #[test]
 fn baseline_when_one_repeat_then_reports_every_corpus_file() {
     let run = run(GLOBAL, 1).expect("baseline run");
-    assert_eq!(run.files.len(), 53, "48 standard + 5 codesys fixtures");
+    // The expected size is the enumeration the harness itself walks, so the
+    // corpus growing (standard resources, CODESYS fixtures) does not fail
+    // this test against a stale hard-coded count.
+    let expected = corpus_files(Path::new(env!("CARGO_MANIFEST_DIR")))
+        .expect("corpus enumeration")
+        .len();
+    assert_eq!(run.files.len(), expected);
     assert_eq!(run.acceptance.len(), 5, "one acceptance count per dialect");
 
     let text = report(&run);

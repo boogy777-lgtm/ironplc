@@ -394,7 +394,19 @@ mod tests {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
         let acceptance = dialect_acceptance(manifest_dir).unwrap();
         assert_eq!(acceptance.len(), Dialect::ALL.len());
-        assert!(acceptance.iter().all(|(_, _, total)| *total == 48));
+        // The expected total comes from the same enumeration the acceptance
+        // loop runs over, so a corpus that grows is still counted in full
+        // instead of being compared against a stale hard-coded size.
+        let standard = corpus_files(manifest_dir)
+            .unwrap()
+            .iter()
+            .filter(|file| file.label.starts_with("std/"))
+            .count();
+        assert!(standard > 0);
+        assert!(
+            acceptance.iter().all(|(_, _, total)| *total == standard),
+            "acceptance = {acceptance:?}, standard = {standard}"
+        );
         assert!(acceptance.iter().any(|(_, accepted, _)| *accepted > 0));
     }
 }

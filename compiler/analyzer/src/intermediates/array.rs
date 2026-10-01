@@ -343,13 +343,13 @@ mod tests {
         let result = try_from(&TypeName::from("OPEN_ARRAY"), &spec, &env).unwrap();
 
         let attrs = cast!(result, IntermediateResult::Type);
-        let IntermediateType::Array {
-            element_type,
-            dimensions,
-        } = attrs.representation
-        else {
-            panic!("expected an array type");
-        };
+        let (element_type, dimensions) = cast_struct!(
+            attrs.representation,
+            IntermediateType::Array {
+                element_type,
+                dimensions
+            }
+        );
         // The incomplete form has no bounds: the intermediate model's empty
         // dimension list is an array whose size is not known here.
         assert!(dimensions.is_empty());

@@ -165,12 +165,10 @@ END_PROPERTY",
     );
 
     let set = fb.properties[0].set.as_ref().unwrap();
-    let InitialValueAssignmentKind::String(string) = &set.variables[0].initializer else {
-        panic!(
-            "expected a STRING input, got {:?}",
-            set.variables[0].initializer
-        );
-    };
+    let string = cast!(
+        &set.variables[0].initializer,
+        InitialValueAssignmentKind::String
+    );
     assert_eq!(string.width, StringType::String);
     assert!(string.length.is_some());
 }

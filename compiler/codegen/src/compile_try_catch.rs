@@ -57,8 +57,7 @@ pub(crate) fn compile_try_catch(
     // skips the handler.
     let finally_label = emitter.create_label();
 
-    if let Some(label) = catch_label {
-        let catch = node.catch.as_ref().expect("label implies a clause");
+    if let (Some(catch), Some(label)) = (node.catch.as_ref(), catch_label) {
         ctx.try_handlers.push(TryHandler {
             catch: label,
             exception: catch
@@ -74,10 +73,9 @@ pub(crate) fn compile_try_catch(
     }
     body?;
 
-    if let Some(label) = catch_label {
+    if let (Some(catch), Some(label)) = (node.catch.as_ref(), catch_label) {
         emitter.emit_jmp(finally_label);
         emitter.bind_label(label);
-        let catch = node.catch.as_ref().expect("label implies a clause");
         compile_catch_clause(emitter, ctx, catch)?;
     }
 
