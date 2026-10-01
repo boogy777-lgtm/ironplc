@@ -16,5 +16,8 @@ fn main() {
         // Constant variable inference (`REQ-CVI-analyzer-*`): which
         // never-written declarations become CONSTANT.
         "constant-variable-inference.md",
+        // ST declaration extensions (`REQ-STX-analyzer-*`): namespace
+        // flattening during declaration toposort.
+        "st-declaration-extensions.md",
     ]);
 }
