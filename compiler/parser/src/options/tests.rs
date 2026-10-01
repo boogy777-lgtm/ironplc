@@ -168,6 +168,7 @@ fn codesys_dialect_enables_exactly_these_flags() {
             "allow_params_of",
             "allow_incomplete_array",
             "allow_escaped_identifiers",
+            "allow_special_operators",
         ],
     );
 }
@@ -548,4 +549,18 @@ fn dialect_display_name_when_ed2_then_human_readable() {
 #[test]
 fn dialect_description_when_ed2_then_contains_edition_2() {
     assert!(Dialect::Iec61131_3Ed2.description().contains("Edition 2"));
+}
+
+/// REQ-CS-parser-010: The `codesys` dialect preset enables the special
+/// operators; no other preset does.
+#[spec_test(REQ_CS_parser_010)]
+fn options_spec_req_cs_010_only_codesys_dialect_enables_special_operators() {
+    for dialect in Dialect::ALL {
+        let options = CompilerOptions::from_dialect(*dialect);
+        assert_eq!(
+            options.allow_special_operators,
+            *dialect == Dialect::Codesys,
+            "{dialect:?}"
+        );
+    }
 }

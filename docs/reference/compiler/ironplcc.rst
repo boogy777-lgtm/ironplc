@@ -414,6 +414,16 @@ Options
    allowed. Produces :doc:`P4069 </reference/compiler/problems/P4069>` when
    used without this flag.
 
+``--allow-special-operators``
+   Allow the CODESYS special operators ``__NEW``, ``__DELETE``, ``__TYPEOF``
+   and ``__XADD``. They are typed, but a program that uses them cannot be
+   compiled (:doc:`P9999 </reference/compiler/problems/P9999>`). With the flag
+   on, ``__CURRENTTASK``, ``__SYSTEM`` and ``__POOL`` are recognised and
+   reported as unsupported (:doc:`P4074 </reference/compiler/problems/P4074>`),
+   and a call that does not fit an operator is
+   :doc:`P4073 </reference/compiler/problems/P4073>`. See
+   :doc:`/reference/extension-library/functions/special-operators`.
+
 ``--allow-jump-statement``
    Allow the ``JMP`` statement and the ``label:`` statement labels it
    targets, in the style of a low-level jump instruction. A label names a

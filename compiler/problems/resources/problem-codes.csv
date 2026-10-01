@@ -144,3 +144,5 @@ P4067,EscapedIdentifierNotAllowed,Escaped (backtick) identifier requires choosin
 P4068,UnicodeIdentifierNotAllowed,Identifier with non-ASCII letters requires choosing a dialect or --allow-unicode-identifiers flag
 P4069,MultipleUnderscoresNotAllowed,Identifier with consecutive underscores requires choosing a dialect or --allow-multiple-underscores flag
 P4070,IncompleteArrayNotAllowed,Incomplete array type ARRAY[*] requires choosing a dialect or --allow-incomplete-array flag
+P4073,SpecialOperatorOperandInvalid,Operands of a CODESYS special operator do not fit the operator
+P4074,SpecialOperatorNotSupported,CODESYS special operator is recognised but not supported

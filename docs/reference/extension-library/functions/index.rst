@@ -17,6 +17,8 @@ IEC 61131-3 standard but are widely supported across PLC environments.
      - Size in bytes of a variable or type (requires ``--allow-sizeof``)
    * - :doc:`__ISVALIDREF <isvalidref>`
      - Whether a ``REFERENCE TO`` variable is bound (requires ``--allow-reference-to``)
+   * - :doc:`__NEW, __DELETE, __TYPEOF, __XADD, __CURRENTTASK, __SYSTEM, __POOL <special-operators>`
+     - CODESYS special operators: typed, not executable (requires ``--allow-special-operators``)
 
 .. toctree::
    :maxdepth: 1
@@ -25,3 +27,4 @@ IEC 61131-3 standard but are widely supported across PLC environments.
    adr
    sizeof
    isvalidref
+   special-operators

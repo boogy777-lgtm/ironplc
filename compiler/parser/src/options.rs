@@ -589,6 +589,11 @@ define_compiler_options! {
     [Iec61131_3Ed3, Rusty],
     allow_multiple_underscores,
 
+    "Allow the CODESYS special operators __NEW, __DELETE, __TYPEOF and __XADD (typed, not executable), and report __CURRENTTASK, __SYSTEM and __POOL as recognised but unsupported",
+    "--allow-special-operators",
+    [Codesys],
+    allow_special_operators,
+
     policies {
         "What STRING_TO_<numeric> treats as convertible when the string has non-numeric characters",
         "--policy-string-to-num-non-numeric",

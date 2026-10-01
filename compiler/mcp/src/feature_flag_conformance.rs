@@ -386,6 +386,19 @@ const FLAG_FIXTURES: &[FlagFixture] = &[
         prereqs: &[],
         source: "PROGRAM main\nVAR\n`my var` : INT;\nEND_VAR\nEND_PROGRAM",
     },
+    // The CODESYS special operators. With the flag off `__XADD` is an
+    // undeclared function (P4017); with it on it resolves.
+    FlagFixture {
+        key: "allow_special_operators",
+        prereqs: &["allow_pointer_to"],
+        source: "PROGRAM main
+VAR
+v : DINT;
+p : POINTER TO DINT;
+END_VAR
+v := __XADD(p, 1);
+END_PROGRAM",
+    },
     // CODESYS Unicode identifiers. The lexer accepts the letter in every
     // dialect; the flag is what allows it (P4068 when off).
     FlagFixture {

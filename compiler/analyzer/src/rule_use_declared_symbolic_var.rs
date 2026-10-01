@@ -46,27 +46,34 @@ use ironplc_dsl::{
     core::{Id, Located},
     diagnostic::{Diagnostic, Label},
     scope::ScopeNode,
+    textual::*,
     visitor::Visitor,
 };
 use ironplc_problems::Problem;
 
 use crate::{
-    intermediates::inherited_fields::collect_inherited_fields,
+    intermediates::{
+        inherited_fields::collect_inherited_fields,
+        special_operator::{unsupported_name, SpecialOperator, TypeArgument},
+    },
     result::SemanticResult,
     rule_support::{run_rule, DiagnosticVisitor},
     scoped_table::{self, Key, ScopedTable, Value},
     semantic_context::SemanticContext,
     string_similarity::find_closest_match,
     system_globals::SYSTEM_UPTIME_GLOBALS,
+    type_environment::TypeEnvironment,
 };
 use ironplc_parser::options::CompilerOptions;
 
 pub fn apply(
     lib: &Library,
-    _context: &SemanticContext,
+    context: &SemanticContext,
     options: &CompilerOptions,
 ) -> SemanticResult {
     let mut checker = SymbolScopeChecker {
+        types: context.types(),
+        options: *options,
         table: scoped_table::ScopedTable::new(),
         inherited_fields: collect_inherited_fields(lib),
         enclosing_properties: Vec::new(),
@@ -95,6 +102,8 @@ impl Key for TypeName {}
 /// function block's own scope also includes fields declared only on its
 /// ancestor chain.
 struct SymbolScopeChecker<'a> {
+    types: &'a TypeEnvironment,
+    options: CompilerOptions,
     table: ScopedTable<'a, Id, DummyNode>,
     inherited_fields: HashMap<TypeName, Vec<VarDecl>>,
     /// One entry per open scope: the property names of the function block
@@ -107,6 +116,33 @@ struct SymbolScopeChecker<'a> {
 }
 
 impl SymbolScopeChecker<'_> {
+    /// Whether the first argument of `call` is a type, not a variable, so
+    /// that it is not a reference to be resolved: the type argument of
+    /// `__NEW`, or of `__TYPEOF` when the name is a type. (`__NEW`'s argument
+    /// that is not a type is reported by `rule_special_operator`.)
+    fn has_type_argument(&self, call: &Function) -> bool {
+        let Some(operator) = SpecialOperator::of_call(&call.name, &self.options) else {
+            return false;
+        };
+        let Some(ParamAssignmentKind::PositionalInput(first)) = call.param_assignment.first()
+        else {
+            return false;
+        };
+        match operator.type_argument() {
+            TypeArgument::No => false,
+            TypeArgument::Required => true,
+            TypeArgument::TypeOrExpression => {
+                let ExprKind::Variable(Variable::Symbolic(SymbolicVariableKind::Named(named))) =
+                    &first.expr.kind
+                else {
+                    return false;
+                };
+                self.types.id_of(&TypeName::from_id(&named.name)).is_some()
+                    && self.table.find(&named.name).is_none()
+            }
+        }
+    }
+
     fn is_enclosing_property(&self, name: &Id) -> bool {
         self.enclosing_properties
             .iter()
@@ -193,12 +229,36 @@ impl Visitor<Infallible> for SymbolScopeChecker<'_> {
         node.recurse_visit(self)
     }
 
+    fn visit_function(&mut self, node: &Function) -> Result<Self::Value, Infallible> {
+        if self.has_type_argument(node) {
+            // The type argument names no variable; the rest are ordinary.
+            for param in node.param_assignment.iter().skip(1) {
+                self.visit_param_assignment_kind(param)?;
+            }
+            return Ok(());
+        }
+        node.recurse_visit(self)
+    }
+
     fn visit_named_variable(
         &mut self,
         node: &ironplc_dsl::textual::NamedVariable,
     ) -> Result<(), Infallible> {
         if self.table.find(&node.name).is_some() {
             // We found the variable being referred to
+            return Ok(());
+        }
+
+        // A special-operator name the dialect recognises is not an undefined
+        // variable: it is a value or scope this compiler does not support.
+        if let Some(operator) = unsupported_name(&node.name, &self.options) {
+            self.diagnostics.push(
+                Diagnostic::problem(
+                    Problem::SpecialOperatorNotSupported,
+                    Label::span(node.name.span(), "Unsupported special operator"),
+                )
+                .with_context("operator", &operator.to_string()),
+            );
             return Ok(());
         }
 

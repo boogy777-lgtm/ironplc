@@ -1,7 +1,7 @@
 # CODESYS ST Surface Syntax
 
-> **Status:** implemented for the syntax; the semantics named "not implemented"
-> below stay open.
+> **Status:** implemented; the special operators are typed by the analyzer and
+> refused by code generation (see "Semantic resolution" and "Code generation").
 > **Date:** 2026-10-01
 
 ## Overview
@@ -161,10 +161,8 @@ Grammar and AST:
   is already the ordinary structured variable `__SYSTEM` with field `x`, so
   they stay identifiers and need no token.
 
-The semantics of every one of these operators (allocation, deletion, atomic
-exchange, task lookup) are **not implemented**: a call to one of them is an
-undeclared function to the analyzer today. Only the surface syntax is in
-scope here, as `LEXER-GAP-ANALYSIS.md` records for P0-16.
+Semantic resolution is described in the next section; this section is the
+surface syntax only.
 
 **REQ-CS-parser-008** `__NEW(T)` and `__TYPEOF(T)` parse as a call named
 after the operator with the type argument recorded; `__DELETE(x)`,
@@ -175,3 +173,83 @@ and an identifier that merely contains an operator name (`__NEW_ITEM`,
 `__XADD2`) stays an identifier.
 **REQ-CS-plc2plc-004** The special operators render in the spelling they were
 written with and re-parse to the same AST.
+
+`__NEW(T, n)` also parses: the type is followed by the element count of the
+array to create, recorded as a second positional argument.
+
+**REQ-CS-parser-009** `__NEW(T, n)` parses as a call named `__NEW` with the type
+argument followed by the count expression; `__TYPEOF(T, n)` does not parse.
+
+### Dialect gating
+
+The operators are recognised by the analyzer only where the dialect enables
+`--allow-special-operators`. Their surface syntax parses everywhere.
+
+**REQ-CS-parser-010** The `codesys` dialect preset enables `allow_special_operators`;
+no other preset does.
+
+### Semantic resolution
+
+With `allow_special_operators` on, `__NEW`, `__DELETE`, `__TYPEOF` and `__XADD`
+are registered in the function environment like `SIZEOF`, so the declared-call
+(P4017), argument-count (P4018) and argument-type (P4026) rules apply to them.
+What a signature cannot say is checked by `rule_special_operator`, and reported
+as P4073. The typing is that of the reference compiler
+(`Codesys/decompiled/Compiler35220.plugin`, `NewExpression`,
+`SimpleTypeChecker`, `TypeCheckerVisitor`):
+
+| Operator | Operands | Type of the call |
+|---|---|---|
+| `__NEW(T)` / `__NEW(T, n)` | `T` a type; `n` an integer, and `T` elementary when `n` is given; the call is the value of an assignment | `POINTER TO T` |
+| `__DELETE(p)` | `p` a pointer | `BOOL` |
+| `__TYPEOF(x)` | a type, or an expression | `INT` |
+| `__XADD(p, v)` | `p : POINTER TO DINT`, `v` an integer | `DINT` |
+
+Assigning the value of `__NEW(T)` to a reference whose target is not `T` is
+P2032, as for `REF(x)`, and is suppressed by the same
+`allow_ref_type_punning` (which the `codesys` preset enables).
+
+**REQ-CS-analyzer-003** With `allow_special_operators` on, `__NEW(T)` and
+`__NEW(T, n)` have the type `POINTER TO T`, so `p := __NEW(INT)` is accepted for
+`p : POINTER TO INT` and assigning it to a variable that is not a reference is
+P2032.
+
+**REQ-CS-analyzer-004** `__NEW` is rejected with P4073 when its first operand is
+not a type, when its count is not an integer, when a count is given for a
+user-defined type, or when its result is not the value of an assignment.
+
+**REQ-CS-analyzer-005** `__DELETE(p)` has the type `BOOL` and is rejected with
+P4073 when `p` is not a pointer.
+
+**REQ-CS-analyzer-006** `__TYPEOF(x)` has the type `INT` and accepts a type name
+or an expression.
+
+**REQ-CS-analyzer-007** `__XADD(p, v)` has the type `DINT` and is rejected with
+P4073 when `p` is not a `POINTER TO DINT`.
+
+`__CURRENTTASK` is a `POINTER TO __SYSTEM.__TaskSpecificInfo`, and `__SYSTEM.x`
+and `__POOL.x` look `x` up in the target's system library and global pool. That
+structure and library are not in the reference material available here and are
+not provided by this compiler, so typing them would be a guess. They are
+recognised and rejected, never reported as undeclared.
+
+**REQ-CS-analyzer-008** With `allow_special_operators` on, `__CURRENTTASK`,
+`__SYSTEM` and `__POOL` (including `__SYSTEM.x` and `__POOL.x`) are rejected
+with P4074, not P4007.
+
+**REQ-CS-analyzer-009** With `allow_special_operators` off, `__NEW`,
+`__DELETE`, `__TYPEOF` and `__XADD` are undeclared functions (P4017) and
+`__CURRENTTASK`, `__SYSTEM` and `__POOL` are undefined variables (P4007).
+
+`__ISVALIDREF` is unchanged: it is lowered to `r <> NULL` under
+`allow_reference_to` (reference-to-twincat.md).
+
+### Code generation
+
+The four operators have no runtime behaviour in this compiler: there is no heap
+for `__NEW` and `__DELETE`, no type-class values for `__TYPEOF`, and no atomic
+memory access for `__XADD`. Code generation refuses a call to any of them with
+P9999 (not implemented) at the operator and emits no code for it.
+
+**REQ-CS-codegen-002** Compiling a program that calls `__NEW`, `__DELETE`,
+`__TYPEOF` or `__XADD` fails with P9999 located at the operator name.

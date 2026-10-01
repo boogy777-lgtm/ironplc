@@ -110,8 +110,8 @@ Supported Dialects
    ``--allow-try-catch``, ``--allow-params-of``,
    ``--allow-incomplete-array``, ``--allow-escaped-identifiers``,
    ``--allow-jump-statement``, ``--allow-calc-statement``,
-   ``--allow-wait-statement``, ``--allow-nested-comments``, and
-   ``--allow-pragma-if``.
+   ``--allow-wait-statement``, ``--allow-nested-comments``,
+   ``--allow-pragma-if``, and ``--allow-special-operators``.
 
    **Selects:** ``--policy-string-to-num-non-numeric ignore-trailing`` and
    ``--policy-string-to-num-failure zero`` — CODESYS stops parsing at the
@@ -588,6 +588,19 @@ which flags a dialect already enables by default, see `Supported Dialects`_.
    reserved namespace (``__SYSTEM_UP_TIME``, ``__TRUNC``, ``__NEW``) and is
    always allowed. Without this flag an inner double underscore produces
    :doc:`P4069 </reference/compiler/problems/P4069>`.
+
+``--allow-special-operators``
+   Allow the CODESYS special operators ``__NEW``, ``__DELETE``, ``__TYPEOF``
+   and ``__XADD``, which the analyzer types as CODESYS does. They have no
+   runtime behaviour in IronPLC, so a program that uses them passes
+   ``check`` but is refused by ``compile`` with
+   :doc:`P9999 </reference/compiler/problems/P9999>`. With this flag
+   ``__CURRENTTASK``, ``__SYSTEM`` and ``__POOL`` are recognised and
+   reported as unsupported (:doc:`P4074 </reference/compiler/problems/P4074>`)
+   instead of as undefined variables. A call that does not fit its operator
+   produces :doc:`P4073 </reference/compiler/problems/P4073>`. Only the
+   ``codesys`` dialect enables it. See
+   :doc:`/reference/extension-library/functions/special-operators`.
 
 Pass the flag when running :program:`ironplcc`:
 

@@ -12,6 +12,7 @@ use log::debug;
 
 use crate::{
     function_environment::FunctionEnvironmentBuilder,
+    intermediates::special_operator::special_operator_signatures,
     ironplc_dsl::common::Library,
     result::SemanticResult,
     rule_abstract_not_instantiated, rule_assignment_aggregate_type_compat,
@@ -25,11 +26,11 @@ use crate::{
     rule_method_call_declared, rule_mixed_located_var_declarations, rule_no_top_level_var_global,
     rule_operator_operand_type_check, rule_pou_hierarchy, rule_program_task_definition_exists,
     rule_program_var_hides_global, rule_range_limits, rule_real_literal_range, rule_ref_to,
-    rule_stdlib_type_redefinition, rule_string_encoding_compat, rule_string_length_range,
-    rule_string_literal_char_range, rule_struct_initializer_expression_allowed,
-    rule_task_names_unique, rule_temporal_literal_range, rule_unsupported_extension,
-    rule_use_declared_enumerated_value, rule_use_declared_symbolic_var,
-    rule_var_decl_const_initialized, rule_var_decl_const_not_fb,
+    rule_special_operator, rule_stdlib_type_redefinition, rule_string_encoding_compat,
+    rule_string_length_range, rule_string_literal_char_range,
+    rule_struct_initializer_expression_allowed, rule_task_names_unique,
+    rule_temporal_literal_range, rule_unsupported_extension, rule_use_declared_enumerated_value,
+    rule_use_declared_symbolic_var, rule_var_decl_const_initialized, rule_var_decl_const_not_fb,
     rule_var_decl_global_const_requires_external_const, rule_var_decl_initializer_type_compat,
     semantic_context::SemanticContext,
     symbol_environment::{ScopeKind, SymbolEnvironment, SymbolKind},
@@ -170,6 +171,13 @@ pub fn resolve_types(
         function_environment
             .insert(get_sizeof_function())
             .map_err(|d| vec![d])?;
+    }
+    if options.allow_special_operators {
+        for signature in special_operator_signatures() {
+            function_environment
+                .insert(signature)
+                .map_err(|d| vec![d])?;
+        }
     }
 
     let mut symbol_environment = SymbolEnvironment::new();
@@ -391,6 +399,7 @@ pub(crate) fn semantic(
         rule_condition_type::apply,
         rule_constant_range::apply,
         rule_ref_to::apply,
+        rule_special_operator::apply,
     ];
 
     let mut all_diagnostics = vec![];

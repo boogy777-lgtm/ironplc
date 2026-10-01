@@ -1,0 +1,41 @@
+=====
+P4074
+=====
+
+.. problem-summary:: P4074
+
+This error occurs when a program uses a CODESYS special operator that the
+compiler recognises but does not support: ``__CURRENTTASK``, or the
+``__SYSTEM`` and ``__POOL`` scope prefixes.
+
+In CODESYS, ``__CURRENTTASK`` is a pointer to a structure the target's system
+library defines, ``__SYSTEM.x`` names ``x`` in that system library, and
+``__POOL.x`` names ``x`` in the global pool. IronPLC has neither the structure
+nor the library, so it cannot give these names a type. It reports them with
+this error rather than as an undefined variable, because the names are not
+mistakes.
+
+Example
+-------
+
+The following code will generate error P4074:
+
+.. code-block::
+
+   FUNCTION_BLOCK FB_Example
+   VAR
+       index : INT;
+   END_VAR
+       index := __CURRENTTASK.TaskIndex;
+   END_FUNCTION_BLOCK
+
+To fix this error, do not use the operator. Where the program needs to know
+which task runs it, pass the value in from the task configuration, for example
+as an input of the program.
+
+A name that a program declares itself is an ordinary variable: with
+``__SYSTEM : MyStruct;`` declared, ``__SYSTEM.field`` is not reported.
+
+The names are recognised when the CODESYS dialect, or
+``--allow-special-operators``, is selected. Otherwise they are undefined
+variables (:doc:`P4007 <P4007>`).

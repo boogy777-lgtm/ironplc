@@ -17,6 +17,7 @@ use std::convert::Infallible;
 use ironplc_parser::options::CompilerOptions;
 
 use crate::{
+    intermediates::special_operator::{ResultType, SpecialOperator},
     result::SemanticResult,
     rule_support::{run_rule, DiagnosticVisitor},
     semantic_context::SemanticContext,
@@ -38,6 +39,7 @@ pub fn apply(
             diagnostics: Vec::new(),
             allow_ref_stack_variables: options.allow_ref_stack_variables,
             allow_ref_type_punning: options.allow_ref_type_punning,
+            options: *options,
         },
         lib,
     )
@@ -65,6 +67,8 @@ struct RuleRefTo<'a> {
     allow_ref_stack_variables: bool,
     /// When true, suppress P2032 type mismatch for REF_TO type punning.
     allow_ref_type_punning: bool,
+    /// Needed to recognise the special operators that produce a pointer.
+    options: CompilerOptions,
 }
 
 impl DiagnosticVisitor for RuleRefTo<'_> {
@@ -303,9 +307,36 @@ impl RuleRefTo<'_> {
     }
 
     /// P2032: Reference type mismatch in assignment
+    /// The pointer `value` is when it is one that an assignment binds to a
+    /// reference: its span, and the type it points at when that is known.
+    /// `REF(x)` points at `x`'s type; `__NEW(T[, n])` points at `T`.
+    fn pointer_source(&self, value: &Expr) -> Option<(SourceSpan, Option<TypeName>)> {
+        match &value.kind {
+            ExprKind::Ref(var) => Some((variable_span(var), self.variable_type_name(var))),
+            ExprKind::Function(call)
+                if SpecialOperator::of_call(&call.name, &self.options)
+                    .is_some_and(|op| op.result() == ResultType::PointerToTypeArgument) =>
+            {
+                // An argument that names no type is `rule_special_operator`'s
+                // to report, so it has no pointee to compare here.
+                let pointee = match call.param_assignment.first() {
+                    Some(ParamAssignmentKind::PositionalInput(first)) => match &first.expr.kind {
+                        ExprKind::Variable(Variable::Symbolic(SymbolicVariableKind::Named(
+                            named,
+                        ))) => Some(TypeName::from_id(&named.name)),
+                        _ => None,
+                    },
+                    _ => None,
+                }
+                .filter(|name| self.type_environment.id_of(name).is_some());
+                Some((call.name.span(), pointee))
+            }
+            _ => None,
+        }
+    }
+
     fn check_ref_assignment(&mut self, target: &Variable, value: &Expr) {
-        if let ExprKind::Ref(ref_var) = &value.kind {
-            let ref_span = variable_span(ref_var);
+        if let Some((ref_span, operand_type)) = self.pointer_source(value) {
             if !self.is_variable_reference(target) {
                 self.diagnostics.push(Diagnostic::problem(
                     Problem::ReferenceTypeMismatch,
@@ -316,7 +347,6 @@ impl RuleRefTo<'_> {
                 // Suppressed when allow_ref_type_punning is enabled — OSCAT
                 // uses REF() to reinterpret a REAL's bits as DWORD.
                 let target_ref_type = self.get_reference_target_type(target);
-                let operand_type = self.variable_type_name(ref_var);
                 if let (Some(target_type), Some(operand_type)) = (target_ref_type, operand_type) {
                     if target_type != operand_type {
                         self.diagnostics.push(Diagnostic::problem(

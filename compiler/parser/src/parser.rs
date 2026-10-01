@@ -143,6 +143,34 @@ fn resolve_initializer_expr(type_name: TypeName, e: Expr) -> InitialValueAssignm
 /// Builds the syntax-error diagnostic for a failed parse. `token_index`
 /// points past the offending token; an empty token stream gets a span-less
 /// message instead of a panic.
+/// The call node for `__NEW(T[, n])` or `__TYPEOF(T)`: the type name is
+/// recorded as a variable reference, followed by the element count when there
+/// is one.
+fn special_operator_type_call(
+    start: &Token,
+    type_name: Id,
+    count: Option<Expr>,
+    end: &Token,
+) -> Expr {
+    let name = Id::from(start.text.as_str()).with_position(start.span.clone());
+    let span = SourceSpan::join(&start.span, &end.span);
+    let mut param_assignment = vec![ParamAssignmentKind::positional(ExprKind::Variable(
+        Variable::Symbolic(SymbolicVariableKind::Named(NamedVariable {
+            name: type_name,
+        })),
+    ))];
+    if let Some(count) = count {
+        param_assignment.push(ParamAssignmentKind::PositionalInput(PositionalInput {
+            expr: count,
+        }));
+    }
+    Expr::new(ExprKind::Function(Function {
+        name,
+        param_assignment,
+    }))
+    .with_span(span)
+}
+
 fn syntax_error(tokens: &[Token], token_index: usize, expected: String) -> Diagnostic {
     let Some(actual) = tokens.get(token_index.saturating_sub(1)) else {
         return Diagnostic::problem(
@@ -2254,16 +2282,14 @@ parser! {
         param_assignment: params
       })).with_span(span)
     }
+    // `__NEW(T, n)` also takes the element count of the array it creates
+    // (`NewExpressionParser`); `__TYPEOF(T)` takes the type alone.
     rule special_operator_type_expression() -> Expr =
       start:special_operator_type_name() _ tok(TokenType::LeftParen) _ t:data_type_name() _ end:tok(TokenType::RightParen) {
-        let name = Id::from(start.text.as_str()).with_position(start.span.clone());
-        let span = SourceSpan::join(&start.span, &end.span);
-        Expr::new(ExprKind::Function(Function {
-          name,
-          param_assignment: vec![ParamAssignmentKind::positional(ExprKind::Variable(
-            Variable::Symbolic(SymbolicVariableKind::Named(NamedVariable { name: t.name })),
-          ))],
-        })).with_span(span)
+        special_operator_type_call(start, t.name, None, end)
+      }
+      / start:tok(TokenType::SpecialNew) _ tok(TokenType::LeftParen) _ t:data_type_name() _ tok(TokenType::Comma) _ count:expression() _ end:tok(TokenType::RightParen) {
+        special_operator_type_call(start, t.name, Some(count), end)
       }
     rule special_operator_type_name() -> &'input Token = tok(TokenType::SpecialNew) / tok(TokenType::SpecialTypeOf)
 

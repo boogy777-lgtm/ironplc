@@ -22,6 +22,7 @@ use crate::intermediates::arithmetic_overload::{
 };
 use crate::intermediates::inherited_fields::collect_inherited_fields;
 use crate::intermediates::operator_function_form::{operator_function_form, FormOf};
+use crate::intermediates::special_operator::{ResultType, SpecialOperator};
 use crate::system_globals::SYSTEM_UPTIME_GLOBALS;
 use crate::type_environment::TypeEnvironment;
 use crate::value_type::operand_type_name;
@@ -352,6 +353,11 @@ impl ExprTypeResolver<'_> {
                 | CompareOp::GtEq => self.expr_type_named(TypeName::from("BOOL")),
             },
             ExprKind::Function(f) => {
+                // The result of a special operator that is a pointer to its
+                // type argument is not a function signature's return type.
+                if let Some(pointer) = self.resolve_pointer_to_type_argument(f) {
+                    return Some(pointer);
+                }
                 if let Some(result) = self.resolve_overloaded_call(f) {
                     return self.expr_type_named(result);
                 }
@@ -439,6 +445,33 @@ impl ExprTypeResolver<'_> {
     /// The name the name-based relations know `expr`'s value by.
     fn operand_name(&self, expr: &Expr) -> Option<TypeName> {
         operand_type_name(self.type_environment, expr.expr_type.as_ref()?)
+    }
+
+    /// The type of a call to a special operator whose result is a pointer to
+    /// the type its first argument names (`__NEW(T)` is `POINTER TO T`).
+    ///
+    /// `None` for any other call, and when the argument names no type; the
+    /// call is then typed from its signature, and `rule_special_operator`
+    /// reports the argument.
+    fn resolve_pointer_to_type_argument(&mut self, f: &Function) -> Option<ExprType> {
+        let operator = SpecialOperator::of_call(&f.name, &self.options)?;
+        if operator.result() != ResultType::PointerToTypeArgument {
+            return None;
+        }
+        let ParamAssignmentKind::PositionalInput(first) = f.param_assignment.first()? else {
+            return None;
+        };
+        let ExprKind::Variable(Variable::Symbolic(SymbolicVariableKind::Named(named))) =
+            &first.expr.kind
+        else {
+            return None;
+        };
+        let target = self
+            .type_environment
+            .id_of(&TypeName::from_id(&named.name))?;
+        self.type_environment
+            .reference_to(target)
+            .map(ExprType::Concrete)
     }
 
     /// Returns the result type of a call to `ADD`, `SUB`, `MUL` or `DIV`, the
