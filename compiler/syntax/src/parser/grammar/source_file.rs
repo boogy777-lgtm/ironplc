@@ -1,69 +1,83 @@
-//! The top level of a file.
+//! The top level of a file: a sequence of declarations.
 //!
-//! Declarations (POUs, types, configurations) are not parsed yet. Each
-//! top-level declaration is kept as one [`SyntaxKind::UnparsedDeclaration`]
-//! node holding its tokens, from the opening keyword through its matching
-//! `END_*` keyword, so the tree stays lossless and the declarations can be
-//! given structure without changing what surrounds them. The contents of such
-//! a node are not validated.
+//! A file holds programs, functions, function blocks, `TYPE` blocks,
+//! configurations, interfaces, namespaces and global variable blocks. A
+//! namespace holds the same declarations again, so the rule that reads a
+//! sequence of them serves both. Input that starts no declaration is wrapped
+//! in an error node up to the next one, so a malformed declaration costs the
+//! rest of that declaration and no more.
 
+use super::common::{close, declared_name, NameClass};
+use super::configuration::configuration;
+use super::oop::interface;
+use super::pou::{function, function_block, program};
+use super::types::type_block;
+use super::var_blocks::{var_block, Scope};
+use crate::parser::recovery::DECLARATION_START;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
 
-/// Top-level declaration openers and the keyword that closes each.
-const DECLARATIONS: &[(K, K)] = &[
-    (K::Program, K::EndProgram),
-    (K::Function, K::EndFunction),
-    (K::FunctionBlock, K::EndFunctionBlock),
-    (K::Type, K::EndType),
-    (K::Configuration, K::EndConfiguration),
-    (K::Interface, K::EndInterface),
-    (K::Namespace, K::EndNamespace),
-    (K::VarGlobal, K::EndVar),
-];
-
-fn declaration_closer(p: &Parser) -> Option<(K, K)> {
-    DECLARATIONS
-        .iter()
-        .find(|(opener, _)| p.at(*opener))
-        .copied()
+pub(in crate::parser) fn source_file(p: &mut Parser) {
+    declarations(p, None);
 }
 
-pub(in crate::parser) fn source_file(p: &mut Parser) {
-    while !p.at_eof() {
-        match declaration_closer(p) {
-            Some((opener, closer)) => unparsed_declaration(p, opener, closer),
-            None => skip_to_declaration(p),
+/// Declarations up to the end of the input, or up to `until` (not consumed).
+fn declarations(p: &mut Parser, until: Option<K>) {
+    while !p.at_eof() && !until.is_some_and(|closer| p.at(closer)) {
+        let before = p.position();
+        if p.at_any(DECLARATION_START) {
+            declaration(p);
+        } else {
+            skip_to_declaration(p, until);
+        }
+        if p.position() == before {
+            p.bump_as_error("unexpected input");
         }
     }
 }
 
-/// Wraps tokens that start no declaration, up to the next declaration.
-fn skip_to_declaration(p: &mut Parser) {
+fn declaration(p: &mut Parser) {
+    match p.nth(0) {
+        Some(K::Program) => program(p),
+        Some(K::Function) => function(p),
+        Some(K::FunctionBlock) => function_block(p),
+        Some(K::Type) => type_block(p),
+        Some(K::Configuration) => configuration(p),
+        Some(K::Interface) => interface(p),
+        Some(K::Namespace) => namespace(p),
+        Some(K::VarGlobal) => var_block(p, Scope::Global),
+        _ => {}
+    }
+}
+
+/// `NAMESPACE name {declaration} END_NAMESPACE`
+fn namespace(p: &mut Parser) {
+    p.guarded(
+        |p| {
+            let node = p.start();
+            p.bump();
+            declared_name(p, NameClass::Plain);
+            declarations(p, Some(K::EndNamespace));
+            close(p, K::EndNamespace, "`END_NAMESPACE`");
+            p.complete(node, K::NamespaceDecl);
+        },
+        |p| {
+            let node = p.start();
+            p.bump();
+            p.complete(node, K::ErrorNode);
+        },
+    );
+}
+
+/// Wraps tokens that start no declaration, up to the next declaration or the
+/// closer of the enclosing namespace.
+fn skip_to_declaration(p: &mut Parser, until: Option<K>) {
     p.error("expected a declaration");
     let node = p.start();
     p.bump();
-    while !p.at_eof() && declaration_closer(p).is_none() {
+    while !p.at_eof() && !p.at_any(DECLARATION_START) && !until.is_some_and(|closer| p.at(closer))
+    {
         p.bump();
     }
     p.complete(node, K::ErrorNode);
-}
-
-fn unparsed_declaration(p: &mut Parser, opener: K, closer: K) {
-    let node = p.start();
-    let mut depth = 0usize;
-    while !p.at_eof() {
-        if p.at(opener) {
-            depth += 1;
-        } else if p.at(closer) {
-            depth = depth.saturating_sub(1);
-        }
-        p.bump();
-        if depth == 0 {
-            p.complete(node, K::UnparsedDeclaration);
-            return;
-        }
-    }
-    p.error("the declaration is not closed");
-    p.complete(node, K::UnparsedDeclaration);
 }

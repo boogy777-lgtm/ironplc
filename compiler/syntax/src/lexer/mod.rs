@@ -12,6 +12,7 @@
 //! reservation is the parser's concern.
 
 mod cursor;
+pub(crate) mod escapes;
 mod literals;
 mod trivia;
 

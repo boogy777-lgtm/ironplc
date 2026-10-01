@@ -174,7 +174,7 @@ fn case_label(p: &mut Parser) -> bool {
 }
 
 /// A range bound: a signed integer or a constant name.
-fn bound_ahead(p: &Parser) -> bool {
+pub(super) fn bound_ahead(p: &Parser) -> bool {
     match p.nth(0) {
         Some(K::IntegerLit) => true,
         Some(K::Plus | K::Minus) => p.adjacent(0) && p.nth(1) == Some(K::IntegerLit),
@@ -182,7 +182,7 @@ fn bound_ahead(p: &Parser) -> bool {
     }
 }
 
-fn bound(p: &mut Parser) {
+pub(super) fn bound(p: &mut Parser) {
     if p.name_at(0) {
         name_ref(p);
         return;

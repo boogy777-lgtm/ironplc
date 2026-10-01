@@ -569,8 +569,6 @@ const NEEDS_ONE_ITEM: &str = "the legacy statement_list rule needs one item, so 
 const NO_TERMINATOR_AT_END: &str = "the legacy pipeline inserts the missing `;` only before a following token, so one missing at the very end of the fragment is rejected; inside a POU a token follows";
 const SECOND_END_KEYWORD: &str = "the legacy terminator insertion handles an END_* keyword that directly follows another END_* keyword without re-arming itself, so the second one gets no `;` when the source omits it; the new parser makes the `;` optional after every END_* keyword";
 const MARKER_AFTER_STATEMENT: &str = "the legacy grammar accepts __BEGIN_IMPLEMENTATION only where the previous list item left no trivia unconsumed, so a marker after a statement and a space is rejected; the new parser accepts the marker as a list item anywhere";
-const STRING_ESCAPE_DEFERRED: &str =
-    "an invalid string escape is a token-check rule that moves to CST diagnostics in a later slice";
 const LONE_CR: &str = "a lone CR is a line break in the lossless lexer (old Mac line endings); the legacy lexer reports it as an unexpected token";
 const PRAGMA_IF: &str = "conditional-compilation pragmas ({IF}, {END_IF}) are evaluated by a separate legacy pass that drops untaken branches and reports unbalanced or malformed ones; the CST keeps every pragma as trivia and does not evaluate it";
 
@@ -632,11 +630,6 @@ pub const STATEMENT_EXCEPTIONS: &[Exception] = &[
         NO_TERMINATOR_AT_END,
     ),
     fragment_entry("lbl: IF a THEN b := 1; END_IF", NO_TERMINATOR_AT_END),
-    accepted_on_purpose(
-        Kind::Statements,
-        "x := 'bad $Q escape';",
-        STRING_ESCAPE_DEFERRED,
-    ),
     accepted_on_purpose(
         Kind::Statements,
         "x := 1; __BEGIN_IMPLEMENTATION y := 2;",
