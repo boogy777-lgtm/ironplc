@@ -140,6 +140,7 @@ END_FUNCTION";
     assert_eq!(res, expected);
 }
 
+#[spec_test(REQ_TL_parser_020)]
 #[test]
 fn parse_program_when_fixed_point_duration_then_ok() {
     let program = "

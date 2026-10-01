@@ -31,3 +31,4 @@ mod tc2_math_calls;
 mod tc2_utilities_calls;
 mod this_super;
 mod time_and_sizeof;
+mod time_literals;

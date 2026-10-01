@@ -260,6 +260,8 @@ fn unquote(text: &str, width: &StringType) -> Vec<char> {
 /// order is the order of magnitude.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum DurationUnit {
+    Nanoseconds,
+    Microseconds,
     Milliseconds,
     Seconds,
     Minutes,
@@ -286,6 +288,8 @@ fn combine_interval_parts(
         }
         previous = Some(unit);
         let part = match unit {
+            DurationUnit::Nanoseconds => DurationLiteral::nanoseconds(value),
+            DurationUnit::Microseconds => DurationLiteral::microseconds(value),
             DurationUnit::Days => DurationLiteral::days(value),
             DurationUnit::Hours => DurationLiteral::hours(value),
             DurationUnit::Minutes => DurationLiteral::minutes(value),
@@ -585,9 +589,10 @@ parser! {
       }
     }
     // The prefix names the type: `LTIME#` is an LTIME, `TIME#` and `T#` a
-    // TIME. `contextual_keyword("T")` matches a bare identifier, so it comes
-    // last and cannot shadow the keyword forms.
-    rule duration_prefix() -> TemporalWidth = tok(TokenType::Time) { TemporalWidth::Short } / tok(TokenType::Ltime) { TemporalWidth::Long } / contextual_keyword("T") { TemporalWidth::Short }
+    // TIME, and the vendor abbreviation `LT#` another LTIME. The abbreviated
+    // spellings match a bare identifier, so the keyword forms come first and
+    // cannot be shadowed. See specs/design/time-literals.md — REQ-TL-004.
+    rule duration_prefix() -> TemporalWidth = tok(TokenType::Time) { TemporalWidth::Short } / tok(TokenType::Ltime) { TemporalWidth::Long } / contextual_keyword("LT") { TemporalWidth::Long } / contextual_keyword("T") { TemporalWidth::Short }
     // One or more `number unit` parts, with an optional `_` between parts
     // (REQ-TL-020 to 022); `combine_interval_parts` checks their order. The
     // token transform `xform_split_duration_units` has already split a unit
@@ -596,9 +601,12 @@ parser! {
       combine_interval_parts(first, rest)
     }
     rule interval_part() -> (FixedPoint, DurationUnit) = n:fixed_point() u:duration_unit() { (n, u) }
-    // `ms` must come before `m`, or `100ms` would read as minutes.
+    // `ms` must come before `m`, or `100ms` would read as minutes. `us` and
+    // `ns` (REQ-TL-010) conflict with no other unit, so they sit after `ms`.
     rule duration_unit() -> DurationUnit =
       contextual_keyword("ms") { DurationUnit::Milliseconds }
+      / contextual_keyword("us") { DurationUnit::Microseconds }
+      / contextual_keyword("ns") { DurationUnit::Nanoseconds }
       / contextual_keyword("d") { DurationUnit::Days }
       / contextual_keyword("h") { DurationUnit::Hours }
       / contextual_keyword("m") { DurationUnit::Minutes }
@@ -618,19 +626,30 @@ parser! {
     // `TOD#10:00:00.250` is 250 ms past ten. `Time` holds nanoseconds, so a
     // fraction finer than that is truncated; the stored count truncates
     // further, to the type's own unit (ADR-0025).
-    rule daytime() -> Time = h:day_hour() tok(TokenType::Colon) m:day_minute() tok(TokenType::Colon) s:day_second() {?
+    // The seconds are optional (REQ-TL-024): `TOD#10:00` is ten in the
+    // morning with zero seconds, as CODESYS accepts.
+    rule daytime() -> Time = h:day_hour() tok(TokenType::Colon) m:day_minute() s:(tok(TokenType::Colon) s:day_second() { s })? {?
+      let (second, nanoseconds) = match s {
+        Some(s) => (
+          u8::try_from(s.whole).map_err(|e| "second")?,
+          s.nanoseconds(),
+        ),
+        None => (0, 0),
+      };
       Time::from_hms_nano(
         h.try_into().map_err(|e| "hour")?,
         m.try_into().map_err(|e| "min")?,
-        u8::try_from(s.whole).map_err(|e| "second")?,
-        s.nanoseconds(),
+        second,
+        nanoseconds,
       ).map_err(|e| "time")
     }
     rule day_hour() -> Integer = integer()
     rule day_minute() -> Integer = integer()
     rule day_second() -> FixedPoint = fixed_point()
     rule date() -> DateLiteral = width:date_prefix() tok(TokenType::Hash) d:date_literal() { DateLiteral::new(d).with_width(width) }
-    rule date_prefix() -> TemporalWidth = tok(TokenType::Date) { TemporalWidth::Short } / tok(TokenType::Ldate) { TemporalWidth::Long } / contextual_keyword("D") { TemporalWidth::Short }
+    // `LD` is the vendor abbreviation of the LDATE prefix (REQ-TL-005), and
+    // like `LT` it comes after the keyword forms.
+    rule date_prefix() -> TemporalWidth = tok(TokenType::Date) { TemporalWidth::Short } / tok(TokenType::Ldate) { TemporalWidth::Long } / contextual_keyword("LD") { TemporalWidth::Long } / contextual_keyword("D") { TemporalWidth::Short }
     rule date_literal() -> Date = y:year() tok(TokenType::Minus) m:month() tok(TokenType::Minus) d:day() {?
       let y = y.value;
       let m = Month::try_from(<dsl::common::Integer as TryInto<u8>>::try_into(m).map_err(|e| "month")?).map_err(|e| "month")?;

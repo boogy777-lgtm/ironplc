@@ -386,6 +386,12 @@ fn parse_when_gap_filled_then_same_ast(
     CompilerOptions::default
 )]
 #[case::based_integer_base("v := 10·#123;", in_program, CompilerOptions::default)]
+#[case::duration_unit("TYPE T3 : TIME := T#1·us; END_TYPE", verbatim, CompilerOptions::default)]
+#[case::time_of_day_seconds(
+    "TYPE T4 : TOD := TOD#10:00·:·00; END_TYPE",
+    verbatim,
+    CompilerOptions::default
+)]
 #[case::typed_boolean_prefix("r := BOOL·#1;", in_program, CompilerOptions::default)]
 #[case::bit_prefix("r := BIT·#1;", in_program, with_bit_type)]
 fn parse_when_gap_filled_then_rejected(

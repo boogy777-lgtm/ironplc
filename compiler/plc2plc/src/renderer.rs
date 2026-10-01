@@ -302,12 +302,11 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         &mut self,
         node: &DurationLiteral,
     ) -> Result<Self::Value, Diagnostic> {
-        // Always write out as milliseconds. The largest unit is allowed to be "out of range"
-        let val = format!(
-            "{}#{}ms",
-            node.type_name(),
-            node.interval.whole_milliseconds()
-        );
+        // The unit spelling is the literal's own (`unit_text`), so a literal
+        // with a sub-millisecond part (`T#1us`, `T#1.5ms`) re-parses to the
+        // same value instead of being written as a whole number of
+        // milliseconds.
+        let val = format!("{}#{}", node.type_name(), node.unit_text());
         self.write_ws(val.as_str());
         Ok(())
     }
