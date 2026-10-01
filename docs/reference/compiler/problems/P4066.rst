@@ -1,0 +1,63 @@
+=====
+P4066
+=====
+
+.. problem-summary:: P4066
+
+This error occurs when a ``__THROW`` statement is not inside a ``__TRY``
+statement that has a ``__CATCH`` clause. ``__THROW`` hands the thrown value to
+the innermost enclosing ``__CATCH``; with no such clause in the same body the
+compiler has nothing to hand it to, so it reports the statement instead of
+silently discarding the throw.
+
+Example
+-------
+
+The following code will generate error P4066:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       x : INT;
+   END_VAR
+       __THROW(1);   (* Error: no enclosing __TRY with a __CATCH *)
+   END_PROGRAM
+
+A ``__TRY`` without a ``__CATCH`` clause does not accept a throw either — the
+``__FINALLY`` body runs, but no handler receives the value:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       x : INT;
+   END_VAR
+       __TRY
+           __THROW(1);   (* Error: the __TRY has no __CATCH *)
+       __FINALLY
+           x := 0;
+       __ENDTRY;
+   END_PROGRAM
+
+To fix this error, add a ``__CATCH`` clause to the enclosing ``__TRY`` (a
+``__CATCH`` is enough; it does not have to name a variable), or remove the
+``__THROW``:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       e : INT;
+       x : INT;
+   END_VAR
+       __TRY
+           x := 1;
+           __THROW(7);
+       __CATCH (e)
+           x := e;    (* runs with e = 7 *)
+       __ENDTRY;
+   END_PROGRAM
+
+The statement is gated behind ``--allow-try-catch``; see
+:doc:`/reference/compiler/ironplcc` for the flag.

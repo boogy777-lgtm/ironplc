@@ -314,6 +314,14 @@ Options
    in IEC 61131-3:2013 (Edition 3); without this flag it is an ordinary
    identifier.
 
+``--allow-try-catch``
+   Allow the CODESYS exception handling statements ``__TRY``, ``__CATCH``,
+   ``__FINALLY``, ``__ENDTRY`` and ``__THROW``. This is an extension not part
+   of the IEC 61131-3 standard; without the flag the five words are ordinary
+   identifiers. A ``__THROW`` with no enclosing ``__TRY`` that has a
+   ``__CATCH`` clause produces
+   :doc:`P4066 </reference/compiler/problems/P4066>`.
+
 ``--policy-string-to-num-non-numeric`` *ALTERNATIVE*
    Select what ``STRING_TO_<numeric>`` treats as convertible when the string
    has non-numeric characters: ``reject`` (the whole string must be a

@@ -306,6 +306,13 @@ const FLAG_FIXTURES: &[FlagFixture] = &[
         prereqs: &[],
         source: "PROGRAM main\nVAR i : INT; END_VAR\nFOR i := 1 TO 3 DO\nCONTINUE;\nEND_FOR;\nEND_PROGRAM",
     },
+    // CODESYS exception handling. With the flag off, `__TRY` is an ordinary
+    // identifier and the statement does not parse.
+    FlagFixture {
+        key: "allow_try_catch",
+        prereqs: &[],
+        source: "PROGRAM main\nVAR e : INT; x : INT; END_VAR\n__TRY\nx := 1;\n__CATCH (e)\nx := e;\n__ENDTRY;\nEND_PROGRAM",
+    },
 ];
 
 /// Builds an ed2 options object with the given flags enabled.

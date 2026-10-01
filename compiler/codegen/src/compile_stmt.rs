@@ -30,6 +30,7 @@ use super::compile_expr::{
 use super::compile_fb_init::{compile_fb_field_store, resolve_fb_field_op_type};
 use super::compile_loop::{compile_for, compile_repeat, compile_while};
 use super::compile_method::compile_method_call_statement;
+use super::compile_try_catch::{compile_throw, compile_try_catch};
 use crate::emit::Emitter;
 use crate::string_width::compile_string_value;
 
@@ -468,6 +469,8 @@ fn compile_statement(
             emitter.emit_jmp(label);
             Ok(())
         }
+        StmtKind::TryCatch(try_catch) => compile_try_catch(emitter, ctx, try_catch),
+        StmtKind::Throw(throw) => compile_throw(emitter, ctx, throw),
     }
 }
 

@@ -12,5 +12,8 @@ fn main() {
         "partial-access-bit-syntax.md",
         // Character string literals (`REQ-SL-plc2plc-*`): escaped rendering.
         "string-literals.md",
+        // CODESYS exception handling (`REQ-TC-plc2plc-*`): round-trip
+        // rendering.
+        "codesys-try-catch.md",
     ]);
 }

@@ -101,7 +101,8 @@ Supported Dialects
    ``--allow-bit-string-case-labels``, ``--allow-paren-string-length``,
    ``--allow-struct-initializer-expressions``,
    ``--allow-fb-inheritance``, ``--allow-enum-explicit-values``,
-   ``--allow-enum-base-type``, and ``--allow-continue``.
+   ``--allow-enum-base-type``, ``--allow-continue``, and
+   ``--allow-try-catch``.
 
    **Selects:** ``--policy-string-to-num-non-numeric ignore-trailing`` and
    ``--policy-string-to-num-failure zero`` — CODESYS stops parsing at the
@@ -144,7 +145,8 @@ Supported Dialects
    ``--allow-bit-string-case-labels``, ``--allow-paren-string-length``,
    ``--allow-struct-initializer-expressions``,
    ``--allow-fb-inheritance``, ``--allow-enum-explicit-values``,
-   ``--allow-enum-base-type``, and ``--allow-continue``.
+   ``--allow-enum-base-type``, ``--allow-continue``, and
+   ``--allow-try-catch``.
 
    **Selects:** ``--policy-string-to-num-non-numeric ignore-trailing`` and
    ``--policy-string-to-num-failure zero``, as ``codesys``.
@@ -495,6 +497,15 @@ which flags a dialect already enables by default, see `Supported Dialects`_.
    ``CONTINUE`` was added in Edition 3. Without this flag, ``CONTINUE`` is an
    ordinary identifier, so a ``CONTINUE;`` statement is a syntax error and a
    variable may be named ``continue``.
+
+``--allow-try-catch``
+   Allow the CODESYS exception handling statements ``__TRY``, ``__CATCH``,
+   ``__FINALLY``, ``__ENDTRY`` and ``__THROW``. The five words are keywords
+   only while the flag is set; without it they are ordinary identifiers, so a
+   standard program may use ``__TRY`` as a variable name. A ``__THROW``
+   stores its value in the innermost enclosing ``__CATCH (e)`` variable and
+   jumps to that clause; one with no enclosing ``__CATCH`` in the same body
+   produces :doc:`P4066 </reference/compiler/problems/P4066>`.
 
 Pass the flag when running :program:`ironplcc`:
 

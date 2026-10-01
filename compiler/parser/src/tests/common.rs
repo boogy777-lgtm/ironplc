@@ -93,6 +93,15 @@ pub(crate) fn parse_text_paren_string_length(source: &str) -> Library {
     result.unwrap()
 }
 
+/// Options enabling `allow_try_catch` (the CODESYS `__TRY`/`__CATCH`/
+/// `__FINALLY`/`__ENDTRY`/`__THROW` exception handling statements).
+pub(crate) fn opts_with_try_catch() -> CompilerOptions {
+    CompilerOptions {
+        allow_try_catch: true,
+        ..CompilerOptions::default()
+    }
+}
+
 /// The single (non-FB-call) statement in a program body.
 pub(crate) fn only_statement(lib: &Library) -> &StmtKind {
     let prog = cast!(&lib.elements[0], LibraryElementKind::ProgramDeclaration);

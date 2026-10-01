@@ -131,6 +131,7 @@ pub fn insert_keyword_statement_terminators(
                     | TokenType::EndFor
                     | TokenType::EndCase
                     | TokenType::EndRepeat
+                    | TokenType::EndTry
             )
         {
             in_end_statement = true;

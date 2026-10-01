@@ -177,6 +177,7 @@ mod end_to_end_time_function;
 mod end_to_end_time_functions;
 mod end_to_end_trig;
 mod end_to_end_trunc;
+mod end_to_end_try_catch;
 mod end_to_end_type_alias;
 mod end_to_end_types;
 mod end_to_end_user_fb;

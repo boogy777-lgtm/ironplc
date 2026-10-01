@@ -10,5 +10,8 @@ fn main() {
         "behavior-policies.md",
         // Character string literals (`REQ-SL-parser-*`): `$` escapes.
         "string-literals.md",
+        // CODESYS exception handling (`REQ-TC-parser-*`): tokens, grammar and
+        // gating.
+        "codesys-try-catch.md",
     ]);
 }

@@ -293,6 +293,12 @@ struct FileArgs {
     #[arg(long)]
     allow_continue: bool,
 
+    /// Allow the __TRY/__CATCH/__FINALLY/__ENDTRY exception handling
+    /// statements and the __THROW statement.
+    /// This is an extension not part of the IEC 61131-3 standard.
+    #[arg(long)]
+    allow_try_catch: bool,
+
     /// What STRING_TO_<numeric> treats as convertible when the string has
     /// non-numeric characters. A behavior policy: the dialect selects an
     /// alternative and this flag replaces it.
@@ -353,6 +359,7 @@ impl FileArgs {
         options.allow_enum_explicit_values |= self.allow_enum_explicit_values;
         options.allow_enum_base_type |= self.allow_enum_base_type;
         options.allow_continue |= self.allow_continue;
+        options.allow_try_catch |= self.allow_try_catch;
         options
     }
 }

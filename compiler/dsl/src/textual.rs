@@ -882,6 +882,9 @@ pub enum StmtKind {
     // Continue statement.
     #[recurse(ignore)]
     Continue(SourceSpan),
+    // CODESYS exception handling.
+    TryCatch(TryCatch),
+    Throw(Throw),
 }
 
 impl Located for StmtKind {
@@ -898,6 +901,8 @@ impl Located for StmtKind {
             StmtKind::Return => SourceSpan::default(),
             StmtKind::Exit(s) => s.clone(),
             StmtKind::Continue(s) => s.clone(),
+            StmtKind::TryCatch(t) => t.span(),
+            StmtKind::Throw(t) => t.span(),
         }
     }
 }
@@ -1123,6 +1128,46 @@ pub struct While {
 pub struct Repeat {
     pub until: Expr,
     pub body: Vec<StmtKind>,
+    #[located(position)]
+    pub span: SourceSpan,
+}
+
+/// The `__TRY ... __CATCH ... __FINALLY ... __ENDTRY` exception handling
+/// statement (CODESYS Structured Text extension).
+///
+/// See `Codesys/grammar/ST_GRAMMAR.ebnf` (tryCatchStatement).
+#[derive(Debug, PartialEq, Clone, Recurse, Located)]
+pub struct TryCatch {
+    /// The protected statements between `__TRY` and the first handler.
+    pub body: Vec<StmtKind>,
+    /// The `__CATCH` clause, when the statement has one.
+    pub catch: Option<CatchClause>,
+    /// The statements of the `__FINALLY` clause; empty when absent.
+    pub finally_body: Vec<StmtKind>,
+    #[located(position)]
+    pub span: SourceSpan,
+}
+
+/// The `__CATCH [(e)]` clause of a [`TryCatch`] statement.
+#[derive(Debug, PartialEq, Clone, Recurse, Located)]
+pub struct CatchClause {
+    /// The variable the thrown value is stored into, when the `(e)` form is
+    /// written. `None` for a bare `__CATCH` or an empty `__CATCH ()`.
+    pub exception: Option<Variable>,
+    pub body: Vec<StmtKind>,
+    #[located(position)]
+    pub span: SourceSpan,
+}
+
+/// The `__THROW [(expression)]` statement (CODESYS Structured Text
+/// extension).
+///
+/// The reference parses `__THROW` as a prefixed operator, so the value is
+/// written in parentheses; a bare `__THROW` raises without a value.
+#[derive(Debug, PartialEq, Clone, Recurse, Located)]
+pub struct Throw {
+    /// The thrown value, when written. `None` for a bare `__THROW`.
+    pub value: Option<Expr>,
     #[located(position)]
     pub span: SourceSpan,
 }

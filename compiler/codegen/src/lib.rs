@@ -49,6 +49,7 @@ mod compile_string;
 mod compile_struct;
 mod compile_struct_init;
 mod compile_time_arith;
+mod compile_try_catch;
 mod data_region;
 mod emit;
 mod optimize;

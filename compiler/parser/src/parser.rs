@@ -2099,7 +2099,7 @@ parser! {
       flatten_statements(items)
     }
     rule statements_or_empty() -> StatementsOrEmpty = _ tok(TokenType::Semicolon) _ { StatementsOrEmpty::Empty() } / s:semisep(<statement()>) { StatementsOrEmpty::Statements(s)}
-    rule statement() -> StmtKind = assignment_statement() / selection_statement() / iteration_statement() / subprogram_control_statement()
+    rule statement() -> StmtKind = assignment_statement() / selection_statement() / iteration_statement() / subprogram_control_statement() / try_catch_statement() / throw_statement()
 
     // B.3.2.1 Assignment statements
     pub rule assignment_statement() -> StmtKind =
@@ -2288,5 +2288,40 @@ parser! {
     }
     rule exit_statement() -> StmtKind = t:tok(TokenType::Exit) { StmtKind::Exit(t.span.clone()) }
     rule continue_statement() -> StmtKind = t:tok(TokenType::Continue) { StmtKind::Continue(t.span.clone()) }
+
+    // CODESYS Structured Text exception handling. The tokens only exist when
+    // `allow_try_catch` is set (xform_demote_keywords demotes them to
+    // identifiers otherwise), so the rules need no further gate.
+    // See ST_GRAMMAR.ebnf (tryCatchStatement) and
+    // Codesys/Parser35210/Statements/TryCatchStatementParser.cs.
+    rule try_catch_statement() -> StmtKind = start:tok(TokenType::Try) _ body:statement_list()? _ catch:catch_clause()? _ finally_body:finally_clause()? _ end:tok(TokenType::EndTry) {
+      StmtKind::TryCatch(TryCatch {
+        body: body.unwrap_or_default(),
+        catch,
+        finally_body: finally_body.unwrap_or_default(),
+        span: SourceSpan::join(&start.span, &end.span),
+      })
+    }
+    // `__CATCH`, `__CATCH (e)`, and `__CATCH ()` are all accepted; the
+    // parenthesized form names the variable the thrown value is stored into.
+    rule catch_clause() -> CatchClause = start:tok(TokenType::Catch) _ exception:(tok(TokenType::LeftParen) _ e:variable()? _ tok(TokenType::RightParen) { e })? _ body:statement_list()? {
+      CatchClause {
+        // `__CATCH`, `__CATCH ()` and `__CATCH (e)` all reach here; only the
+        // last names a variable.
+        exception: exception.flatten(),
+        body: body.unwrap_or_default(),
+        span: start.span.clone(),
+      }
+    }
+    rule finally_clause() -> Vec<StmtKind> = tok(TokenType::Finally) _ body:statement_list()? { body.unwrap_or_default() }
+    // The reference parses `__THROW` as a prefixed operator, so the value is
+    // parenthesized: `__THROW(5)` raises the value, a bare `__THROW` raises
+    // without one.
+    rule throw_statement() -> StmtKind = start:tok(TokenType::Throw) _ value:(tok(TokenType::LeftParen) _ e:expression() _ tok(TokenType::RightParen) { e })? {
+      StmtKind::Throw(Throw {
+        value,
+        span: start.span.clone(),
+      })
+    }
   }
 }

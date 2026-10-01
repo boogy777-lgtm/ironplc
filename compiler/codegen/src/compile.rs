@@ -1352,6 +1352,10 @@ pub(crate) struct CompileContext {
     /// statement compilation. Each loop pushes its labels; EXIT and CONTINUE
     /// jump to those of the top.
     pub(crate) loop_labels: Vec<crate::compile_loop::LoopLabels>,
+    /// Stack of the handlers of the enclosing `__TRY` statements, for
+    /// `__THROW` compilation. Only a `__TRY` that has a `__CATCH` clause
+    /// pushes one, so a throw with no handler on the stack is refused.
+    pub(crate) try_handlers: Vec<crate::compile_try_catch::TryHandler>,
     /// Maps STRING variable identifiers to their data region metadata.
     pub(crate) string_vars: HashMap<Id, StringVarInfo>,
     /// Maps FB instance variable identifiers to their metadata.
@@ -1449,6 +1453,7 @@ impl CompileContext {
             var_types: HashMap::new(),
             constants: Vec::new(),
             loop_labels: Vec::new(),
+            try_handlers: Vec::new(),
             string_vars: HashMap::new(),
             fb_instances: HashMap::new(),
             array_vars: HashMap::new(),

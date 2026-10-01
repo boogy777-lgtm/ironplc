@@ -18,5 +18,8 @@ fn main() {
         "bytecode-container-format.md",
         // The post-emission peephole optimizer (`REQ-PEEP-codegen-*`).
         "bytecode-peephole-optimizer.md",
+        // CODESYS exception handling (`REQ-TC-codegen-*`): control flow for
+        // __THROW/__CATCH/__FINALLY.
+        "codesys-try-catch.md",
     ]);
 }

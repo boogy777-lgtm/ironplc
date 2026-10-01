@@ -318,6 +318,16 @@ END_CONFIGURATION"
     in_sfc,
     CompilerOptions::default
 )]
+// ---------------------------------------------------------------------
+// CODESYS exception handling: the `_` after each `__TRY`-family keyword and
+// around the `__THROW` operand.
+// ---------------------------------------------------------------------
+#[case::try_catch_clauses(
+    "__TRY·;·__CATCH·(·e·)·;·__FINALLY·;·__ENDTRY·;",
+    in_program,
+    opts_with_try_catch
+)]
+#[case::throw_value("__THROW·(·v·)·;", in_program, opts_with_try_catch)]
 fn parse_when_gap_filled_then_same_ast(
     #[case] template: &'static str,
     #[case] wrap: fn(&str) -> String,

@@ -188,6 +188,22 @@ pub enum TokenType {
     #[token("CONTINUE", ignore(case))]
     Continue,
 
+    // CODESYS Structured Text exception handling: `__TRY ... __CATCH ...
+    // __FINALLY ... __ENDTRY` and the `__THROW` operator
+    // (`Codesys/tables/special_operators.csv`, `ST_GRAMMAR.ebnf`). These are
+    // keywords only while `allow_try_catch` is set; otherwise they demote to
+    // identifiers -- see xform_demote_keywords.rs.
+    #[token("__TRY", ignore(case))]
+    Try,
+    #[token("__ENDTRY", ignore(case))]
+    EndTry,
+    #[token("__CATCH", ignore(case))]
+    Catch,
+    #[token("__FINALLY", ignore(case))]
+    Finally,
+    #[token("__THROW", ignore(case))]
+    Throw,
+
     #[token("FALSE", ignore(case))]
     False,
 
@@ -578,6 +594,11 @@ impl TokenType {
             TokenType::Eno => "'ENO'",
             TokenType::Exit => "'EXIT'",
             TokenType::Continue => "'CONTINUE'",
+            TokenType::Try => "'__TRY'",
+            TokenType::EndTry => "'__ENDTRY'",
+            TokenType::Catch => "'__CATCH'",
+            TokenType::Finally => "'__FINALLY'",
+            TokenType::Throw => "'__THROW'",
             TokenType::False => "'FALSE'",
             TokenType::FEdge => "'F_EDGE'",
             TokenType::For => "'FOR'",

@@ -494,6 +494,11 @@ define_compiler_options! {
     [Rusty, Iec61131_3Ed3, Codesys, TwinCat],
     allow_continue,
 
+    "Allow the __TRY/__CATCH/__FINALLY/__ENDTRY exception handling statements and the __THROW statement",
+    "--allow-try-catch",
+    [Codesys, TwinCat],
+    allow_try_catch,
+
     "Allow the base-type suffix on an enumeration declaration, e.g. (A, B) WORD, naming the elementary type the members are stored in",
     "--allow-enum-base-type",
     [Rusty, Codesys, TwinCat],
