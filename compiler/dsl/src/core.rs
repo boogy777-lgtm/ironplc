@@ -91,17 +91,22 @@ impl fmt::Display for FileId {
 
 /// Location in a file of a language element instance.
 ///
-/// The location is defined by indices in the source file.
+/// The location is a half-open range of UTF-8 byte offsets into the source
+/// text, so `&source[span.start..span.end]` is the spanned text. Offsets are
+/// not character counts: a non-ASCII character occupies two to four offsets.
+/// Line and column positions are a separate coordinate system carried by the
+/// lexer's tokens, where columns count UTF-16 code units.
 #[derive(Debug, Clone)]
 pub struct SourceSpan {
-    /// The position of the starting character (0-indexed).
+    /// The byte offset of the first byte of the span (0-indexed).
     pub start: usize,
-    /// The position one past the last character (0-indexed, exclusive).
+    /// The byte offset one past the last byte of the span (0-indexed,
+    /// exclusive).
     ///
-    /// Equals `start + 1` for a length of 1 character. The range is
+    /// Equals `start + 1` for a length of 1 byte. The range is
     /// half-open: the lexer emits exclusive-end spans and the diagnostic
     /// renderer reads them that way, so a span built as though `end` were
-    /// the last character underlines one character too few.
+    /// the last byte underlines one byte too few.
     pub end: usize,
     pub file_id: FileId,
 }
