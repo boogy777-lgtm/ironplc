@@ -14,7 +14,7 @@
 //!   memoization, recomputation on input change, and backdating of equal
 //!   summaries so consumers are not re-executed (design section 3.3).
 //!   **Withdrawn by the owner on 2026-10-01**: Salsa and query tracking are
-//!   no longer part of the plan (design §3.3/§5 S3). Kept as the experiment
+//!   no longer part of the design (§3.3/§5 S3). Kept as the experiment
 //!   record only; the crate is deleted at the S1 cutover.
 //!
 //! The `parse_baseline` bin measures the **current production** parse path
