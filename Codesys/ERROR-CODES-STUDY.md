@@ -460,7 +460,7 @@ scanner-условие.
 Диапазон: `MessageId` 0–506 (507 слотов: 423 привязанных + 84 незанятых) и `InternalErrorIds` 0–6.
 Значения 507–591 в этот прогон не входили.
 
-**Итог: 514 проверено — 415 verified, 2 fixed, 97 gap.**
+**Итог: 514 проверено — 412 verified, 2 fixed, 100 gap.**
 
 ### Исправлено (2)
 
@@ -474,22 +474,28 @@ scanner-условие.
 orphan-строки `Err_MissingObjectForPersistent`/`Wrn_InvalidStringSize` привязаны к id 245/362.
 `message_ids.csv` не менялся: отчёты подтвердили все проверенные id/имена.
 
-### Оставшиеся пробелы (97)
+### Оставшиеся пробелы (100)
 
 1. Незанятые значения enum — 84: 29, 54–60, 67, 79, 121, 123, 133–134, 137, 147–148, 151–160,
    166, 251–260, 267, 271, 305, 457–499. Члена в enum нет, текста нет нигде — пропуск в снимке верен.
 2. `InternalErrorIds` 1–6 — 6: ErrInBlobLink, ErrInFindObjectsToTypify, ErrCodeDataLocationConflict,
    ErrReLinkError, ErrInRelocation, ErrInVirtualFunctionCall. Внутренние id, не локализуются;
    их номера пересекаются с `MessageId` 1–6, текст MessageId нельзя мапить на InternalErrorIds.
-3. `MessageId` без текста в 3.5.22.10 — 7: 315 Wrn_StringTooShortForVarInOut, 349 Wrn_InterfaceInVarInOut,
+3. `MessageId` без текста в 3.5.22.10 — 10: 200 Wrn_PlaceholderNotResolved, 210 Wrn_InsertSpecialPersistent,
+   223 Wrn_CompoRefAssignCompatibilityWarning, 315 Wrn_StringTooShortForVarInOut, 349 Wrn_InterfaceInVarInOut,
    350 Wrn_ReferenceToInterface, 370 Wrn_InstanceCalledMoreThenOnce, 394 Wrn_FBExitCalledForStackInstance,
    404 Wrn_CompilerVersionDeprecated, 410 Wrn_CompatibilityProblemForRefProperty. Ни в одной из 10
    локалей 3.5.22.10 текста нет, raise-site/привязки в декомпиле нет; RU — только harvest из
    Compiler35200 (DLL нет в репозитории — не верифицируемо). У 315 RU совпадает с текстом id 418,
    у 394 удвоенные плейсхолдеры `{{0}}`/`{{1}}`, у 410 RU-текст английский.
+   Триада 200/210/223 перепроверена (enum — `MessageId.cs:352,372,398`; привязки в
+   `-/-.353.cs` нет; ключей нет ни в 10 сателлитах, ни в нейтральном `Compiler35220.plugin.dll` —
+   сверено в UTF-16 и UTF-8; в harvest `resources/compiler35220/*` сходятся все 500 ключей
+   `ErrorMessages`, спорных трёх среди них нет) — перенесены из verified в пробелы.
 
 Сверка с прежним списком «15 без текста» (`docs/03_ERROR_CATALOG.md` §f): 2 исправлены (245, 362),
-3 подтверждены как harvest-only (200, 210, 223), 7 остались пробелом (список выше),
+10 — без текста в 3.5.22.10 и отнесены к пробелам (список выше; 200, 210, 223 добавлены повторной
+проверкой — harvest RU из Compiler35200, официальных текстов нет, raise-site/привязки нет),
 3 (508, 510, 523) вне диапазона этого прогона.
 
 ### Orphan-ключи (9 → 7)
