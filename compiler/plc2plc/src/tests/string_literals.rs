@@ -68,7 +68,10 @@ fn write_to_string_when_typed_string_literals_then_prefix_is_not_rendered() {
     let source = read_shared_resource("typed_string_literals.st");
     let rendered = assert_round_trips(&source, &CompilerOptions::default());
 
-    assert!(rendered.contains("narrow := 'aAb'"), "rendered:\n{rendered}");
+    assert!(
+        rendered.contains("narrow := 'aAb'"),
+        "rendered:\n{rendered}"
+    );
     assert!(
         rendered.contains("wide := \"aAb\""),
         "rendered:\n{rendered}"

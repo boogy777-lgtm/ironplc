@@ -18,7 +18,10 @@ fn write_to_string_when_time_literals_then_value_is_not_truncated() {
     // either; it is written as microseconds.
     assert!(rendered.contains("TIME#1500us"), "rendered:\n{rendered}");
     // The abbreviated prefixes render as the type they name.
-    assert!(rendered.contains("LDATE#2024-01-20"), "rendered:\n{rendered}");
+    assert!(
+        rendered.contains("LDATE#2024-01-20"),
+        "rendered:\n{rendered}"
+    );
     assert!(
         rendered.contains("TIME_OF_DAY#10:00:00"),
         "rendered:\n{rendered}"

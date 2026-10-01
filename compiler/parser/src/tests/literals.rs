@@ -275,10 +275,7 @@ END_PROGRAM";
 #[case::one("BIT#1", Boolean::True)]
 #[case::zero("BIT#0", Boolean::False)]
 #[case::lower_case_prefix("bit#0", Boolean::False)]
-fn parse_program_when_bit_literal_then_boolean(
-    #[case] literal: &str,
-    #[case] expected: Boolean,
-) {
+fn parse_program_when_bit_literal_then_boolean(#[case] literal: &str, #[case] expected: Boolean) {
     let constant = assigned_value(literal, &opts_with_bit_type());
     let parsed = cast!(constant, ConstantKind::Boolean);
     assert_eq!(parsed.value, expected);
@@ -297,7 +294,10 @@ bit := TRUE;
 END_PROGRAM";
     let library = parse_text(source);
     let prog = cast!(&library.elements[0], LibraryElementKind::ProgramDeclaration);
-    assert_eq!(prog.variables[0].identifier, VariableIdentifier::new_symbol("bit"));
+    assert_eq!(
+        prog.variables[0].identifier,
+        VariableIdentifier::new_symbol("bit")
+    );
 }
 
 #[test]

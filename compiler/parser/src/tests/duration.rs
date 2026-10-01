@@ -196,7 +196,10 @@ fn duration_spec_req_tl_001_prefixes(#[case] literal: &str) {
 fn duration_spec_req_tl_003_ltime_requires_flag() {
     let source = duration_program("LTIME#5s");
     let rejected = parse_program(&source, &FileId::default(), &CompilerOptions::default());
-    assert!(rejected.is_err(), "LTIME# is gated by allow_long_time_types");
+    assert!(
+        rejected.is_err(),
+        "LTIME# is gated by allow_long_time_types"
+    );
 
     let options = CompilerOptions::from_dialect(Dialect::Iec61131_3Ed3);
     let accepted = parse_program(&source, &FileId::default(), &options);
@@ -267,11 +270,13 @@ END_FUNCTION";
 /// The initial value of a one-variable program whose declaration is
 /// `declaration`.
 fn initial_value(declaration: &str) -> ConstantKind {
-    let program = format!("PROGRAM main
+    let program = format!(
+        "PROGRAM main
 VAR
 {declaration}
 END_VAR
-END_PROGRAM");
+END_PROGRAM"
+    );
     let lib = parse_text_edition3(&program);
     let prog = cast!(&lib.elements[0], LibraryElementKind::ProgramDeclaration);
     let init = cast!(
@@ -297,9 +302,7 @@ fn duration_spec_req_tl_024_seconds_optional(#[case] declaration: &str) {
 #[rstest]
 #[case::dt("d : DATE_AND_TIME := DT#2024-01-02-10:00;")]
 #[case::ldt("d : LDATE_AND_TIME := LDT#2024-01-02-10:00;")]
-fn parse_program_when_date_and_time_omits_seconds_then_zero(
-    #[case] declaration: &str,
-) {
+fn parse_program_when_date_and_time_omits_seconds_then_zero(#[case] declaration: &str) {
     let constant = initial_value(declaration);
     let literal = cast!(constant, ConstantKind::DateAndTime);
     assert_eq!(literal.hmsm(), (10, 0, 0, 0));

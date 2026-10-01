@@ -219,10 +219,7 @@ mod test {
     #[test]
     fn apply_when_lt_abbreviation_then_units_split() {
         // `LT#` is the abbreviated LTIME prefix (REQ-TL-004).
-        assert_eq!(
-            vec!["LT", "#", "1", "m", "30", "s"],
-            texts("LT#1m30s")
-        );
+        assert_eq!(vec!["LT", "#", "1", "m", "30", "s"], texts("LT#1m30s"));
     }
 
     #[test]

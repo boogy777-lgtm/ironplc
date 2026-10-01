@@ -20,7 +20,10 @@ fn write_to_string_when_based_literals_then_renders_the_plain_value() {
     // A boolean literal renders as the typed `BOOL#` spelling in a statement
     // body, whatever prefix the source used.
     assert!(rendered.contains("b := BOOL#TRUE"), "rendered:\n{rendered}");
-    assert!(rendered.contains("one := BOOL#TRUE"), "rendered:\n{rendered}");
+    assert!(
+        rendered.contains("one := BOOL#TRUE"),
+        "rendered:\n{rendered}"
+    );
     // The BIT declaration keeps its type name; it is not normalized to BOOL.
     assert!(rendered.contains("one : BIT"), "rendered:\n{rendered}");
 }
