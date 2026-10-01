@@ -55,7 +55,8 @@
 | **ВНЕ SCOPE** | признано нецелевым для IronPLC (обосновано) |
 
 **Эмпирика.** Все спорные случаи прогнаны через уже собранный
-`compiler/target/debug/ironplcc.exe check --dialect codesys <snippet>` (версия 0.246.0).
+`compiler/target/debug/ironplcc.exe check --dialect codesys <snippet>` (прогон 1 — 0.246.0,
+прогон 2 — 0.247.0).
 Журнал — [§15](#15-журнал-эмпирических-проверок). Прогоны подтверждают FAIL/OK ниже;
 там, где в тексте «принято, но семантики нет», в журнале стоит P9999/P4017, а не P0002.
 
@@ -65,16 +66,16 @@
 
 | # | Класс | CODESYS | Наш результат | Статус | Ключевые дыры (детали в §) |
 |---|---|---|---|---|---|
-| 1 | Ключевые слова ST (`st_keywords.csv`) | 77 | 62 токена (11 из них флаго-зависимы) | **ЧАСТИЧНО** | 15 отсутствуют: `PROPERTY/END_PROPERTY/PROPERTY_GET/PROPERTY_SET`, `UNION/END_UNION`, `CONTINUE`, `PARAMS`, `VAR_STAT`, `VAR_INST`, `VAR_GENERIC`, `__VECTOR`, `NAMESPACE/END_NAMESPACE`, `__BEGIN_IMPLEMENTATION` [§2](#2-класс-1-ключевые-слова-и-резерв) |
+| 1 | Ключевые слова ST (`st_keywords.csv`) | 77 | **74** токена (метод §0; было 62; 12 новых — флаго-зависимые, §2.5) | **ЧАСТИЧНО** | 3 отсутствуют: `__VECTOR` (вне scope), `PROPERTY_GET`/`PROPERTY_SET` (в CODESYS `Internal`; у нас доступоры — контекстные `GET`/`SET`, токены `END_GET`/`END_SET`). `VAR_STAT`/`VAR_INST`/`VAR_GENERIC` в кодесийном диалекте падают P0002 — конфликт с метками JMP (§13, §15) [§2](#2-класс-1-ключевые-слова-и-резерв) |
 | 2 | OO-ключевые слова (`oo_keywords.csv`) | 8 | 1 (`ABSTRACT`) | **ЧАСТИЧНО** | `PUBLIC PRIVATE PROTECTED INTERNAL FINAL OVERRIDE OVERLOAD` [§2.3](#23-oo-ключевые-слова) |
-| 3 | Символы операторов (`operator_symbols.csv`) | 30 | 25 лексем + 3 парсерных (`S=/R=/REF=`) | **ЧАСТИЧНО** | `\|` не лексируется; `=:` — internal (не нужен) [§3.1](#31-символы-operator_symbols30) |
+| 3 | Символы операторов (`operator_symbols.csv`) | 30 | **26** лексем + 3 парсерных (`S=/R=/REF=`) | **ПОЛНОСТЬЮ** | `=:` — internal (не нужен) [§3.1](#31-символы-operator_symbols30) |
 | 4 | Стандартные операторы-функции (`standard_operators.csv`) | 40 | 31 в stdlib (2 из них под флагом) | **ЧАСТИЧНО** | `LOWER_BOUND UPPER_BOUND BITADR INDEXOF XSIZEOF INI TRUNC_INT` (+`ANDN/ORN` — IL) [§3.2](#32-стандартные-операторы-функции-standard_operators40) |
-| 5 | Special `__*` (`special_operators.csv`) | 42 | 2 (`AND_THEN`, `OR_ELSE`) | **ОТСУТСТВУЕТ** | TRY-семейство (5), ST-visible (`__NEW`, `__DELETE`, `__ISVALIDREF`, `__SYSTEM`, `__POOL`, …) 15, internal ~20 [§3.3](#33-special-operators42) |
+| 5 | Special `__*` (`special_operators.csv`) | 42 | 8 токенов (`AND_THEN`, `OR_ELSE`, TRY-семейство ×5, `__WAIT`) + 6 промоутируемых (`__NEW`/`__DELETE`/`__ISVALIDREF`/`__TYPEOF`/`__CURRENTTASK`/`__XADD`, `xform_promote_special_operators.rs`) | **ЧАСТИЧНО** | промоутируемые не резолвятся анализатором (P4017/P4007, §15); `__QUERYINTERFACE`/`__QUERYPOINTER`/`__COMPARE_AND_SWAP`/`__MEMORYBARRIER`/`__CHECKLICENSE*` — обычные вызовы; `__SYSTEM`/`__POOL` — qualified names; internal ~20 — вне scope [§3.3](#33-special-operators42) |
 | 6 | ILO-операторы (`ilo_operators.csv`) | 26 | 5 ST-релевантных (`XOR NOT AND OR MOD`) | **ЧАСТИЧНО** (IL — вне scope) | `TEST_AND_SET`; IL как язык отсутствует целиком [§3.4](#34-ilo-операторы26) |
 | 7 | Vector-операторы (`vector_operators.csv`) | 13 | 0 | **ВНЕ SCOPE** | `__VC*` + `__VECTOR` [§3.5](#35-vector-операторы13--вне-scope) |
 | 8 | Конверсии (`conversion_operators.csv`) | 5 динамических префиксов | префиксы лексятся как Identifier; stdlib частичен | **ЧАСТИЧНО** (analyzer-уровень) | полнота каталога `X_TO_Y` [§3.6](#36-конверсии-conversion_operators5) |
-| 9 | Имена типов (`datatype_names.csv`) | 57 | 36 | **ЧАСТИЧНО** | `BIT`, 16×`SAFE*`, `__XINT/__XWORD/__UXINT/__XSTRING` [§4](#4-класс-2-имена-типов-datatype_names57) |
-| 10 | Модель токенов (`token_types.csv`) | 28 | 23 эквивалента | **ЧАСТИЧНО** | реальные дыры: `XByteString`, `DocComment` (остальные — иная модель: `Error`→P0003, `End/Unused/None` n/a) [§5](#5-класс-3-модель-токенов-token_types28) |
+| 9 | Имена типов (`datatype_names.csv`) | 57 | **37** | **ПОЛНОСТЬЮ** (кроме ВНЕ SCOPE) | 16×`SAFE*` и `__XINT/__XWORD/__UXINT/__XSTRING` — ВНЕ SCOPE [§4](#4-класс-2-имена-типов-datatype_names57) |
+| 10 | Модель токенов (`token_types.csv`) | 28 | **24** эквивалента | **ЧАСТИЧНО** | реальная дыра: `XByteString` (литерал `__XSTRING#…` парсится как WString); `DocComment` добавлен (`token.rs:84-89`); остальные — иная модель: `Error`→P0003, `End/Unused/None` n/a [§5](#5-класс-3-модель-токенов-token_types28) |
 | 11 | Литералы | — | числа/строки/время/дата частично | **ЧАСТИЧНО** | `10#`, `BOOL#1/0`, `BIT#`, `__XSTRING#`/`UTF8#`/`UCHAR#`, `$U`+8hex, `us/ns`, `LT#/LD#`, `TOD#hh:mm` без секунд [§6](#6-класс-4-литералы) |
 | 12 | Direct variables `%I/%Q/%M` | — | лексер+парсер полные | **ПОЛНОСТЬЮ** | partial-access `%X/%B/%W/%D/%L` — под `--allow-partial-access-syntax` [§7](#7-класс-5-direct-variables-iqm) |
 | 13 | Прагмы и комментарии | — | прагмы — opaque trivia, C-style под флагом | **ЧАСТИЧНО** | нет вложенных комментариев, `DocComment`, вычисления `{IF}`, position-прагм [§8](#8-класс-6-прагмы-и-комментарии) |
@@ -85,6 +86,12 @@
 
 Базовые числовые ориентиры: `TokenType` у нас — 172 варианта против 28 категорий CODESYS
 (у CODESYS один `Operator(15)`, у нас — конкретные типы; это не дыра, а иная модель).
+
+**Прогон 2 (2026-10-01, 0.247.0, `d8ddf54f5`).** Счётчики «Наш результат» пересчитаны по методу §0
+(скрипт по `tables/*.csv` × `token.rs`; для special-операторов — плюс таблица промоушена
+`xform_promote_special_operators.rs`): ключевые слова 62→74, типы 36→37, символы 25→26, модель
+токенов 23→24, special 2→8+6. Строки 11 и 13–16 таблицы и разделы §2–§12 сохраняют исторический
+срез 0.246.0 (до P0-работ); актуальные статусы закрытия — §13, эмпирика — §15.
 
 ---
 
@@ -135,14 +142,20 @@ ANY_CHAR CHAR_TO TO_CHAR WCHAR_TO TO_WCHAR ATAN2 USING CLASS NAMESPACE`.
 запрещает (`CLASS`, `CHAR`, `USING`, `ATAN2`, …). Это расхождение в «разрешающую» сторону;
 для 1:1 нужен separate reserved-set (validation на Identifier), а не токены. Приоритет P2.
 
-### 2.5 Флаго-зависимые ключевые слова (11 из 62 присутствующих)
+### 2.5 Флаго-зависимые ключевые слова (11 из прежних 62 + 12 новых прогона 2)
 
 `PERSISTENT` (`allow_persistent_var`, `options.rs:387-390`), `REFERENCE` (`allow_reference_to`,
 `:372-375`), `POINTER` (`allow_pointer_to`, `:377-380`),
 `EXTENDS IMPLEMENTS INTERFACE END_INTERFACE ABSTRACT METHOD END_METHOD THIS SUPER`
 (`allow_fb_inheritance`, `:482-485`). Демоция — `xform_demote_keywords.rs:57-76`.
 
-Под `--dialect codesys` активны все 11 (эмпирика: `ref_bind`, `reference_to`, `pointer_to`,
+Новые флаго-зависимые (прогон 2; все активны в `--dialect codesys`/`twincat`): `CONTINUE`
+(`allow_continue`), `PROPERTY`/`END_PROPERTY` (`allow_fb_inheritance`), `UNION`/`END_UNION`
+(`allow_union_type`), `PARAMS` (`allow_params_of`), `VAR_STAT`/`VAR_INST`/`VAR_GENERIC`
+(`allow_var_stat/inst/generic`), `NAMESPACE`/`END_NAMESPACE` (`allow_namespace`),
+`__BEGIN_IMPLEMENTATION` (`allow_begin_implementation`).
+
+Под `--dialect codesys` активны все перечисленные (эмпирика: `ref_bind`, `reference_to`, `pointer_to`,
 `long_dt_types` — OK). Сверх `st_keywords.csv` у нас есть «настоящие» IEC-ключевые слова
 конфигурации/SFC, которых нет в таблице CODESYS-ST: `CONFIGURATION/END_CONFIGURATION`,
 `RESOURCE/END_RESOURCE`, `TASK/END_TASK`, `ON`, `WITH`, `EN`, `ENO`, `STEP/INITIAL_STEP/END_STEP`,
@@ -446,27 +459,28 @@ CODESYS, а не ST-поверхность общего назначения).
 
 | ID | Пункт | Уровень | Статус | Метод проверки |
 |---|---|---|---|---|
-| P0-1 | `CONTINUE` (statement + codegen) | lexer+parser+AST+codegen | закрыт на ветке после merge `main` (#1898) — перепроверить тестами | новый `tests/continue.rs` (AST-форма) + `codegen/tests/it/end_to_end_continue.rs` (rounds) |
-| P0-2 | `PROPERTY`/`PROPERTY_GET`/`PROPERTY_SET`/`END_PROPERTY` + AST | lexer+parser+AST | закрыт на ветке после merge `main` (#1871) — перепроверить тестами | `tests/properties.rs` + plc2plc round-trip resource |
-| P0-3 | `UNION`/`END_UNION` + AST | lexer+parser+AST | открыт | `tests/union.rs` + resource |
-| P0-4 | `VAR_STAT` / `VAR_INST` / `VAR_GENERIC` блоки | lexer+parser+AST | открыт | `tests/var_declarations.rs` (расширить) |
-| P0-5 | `PARAMS(n) OF T` | lexer+parser+AST | открыт | `tests/types_and_returns.rs` |
-| P0-6 | `ARRAY[*]` | parser+AST | открыт | `tests/arrays.rs` |
-| P0-7 | `NAMESPACE`/`END_NAMESPACE` + `__BEGIN_IMPLEMENTATION` | lexer+parser+AST | открыт | `tests/namespaces.rs` |
-| P0-8 | модификаторы доступа + `OVERRIDE`/`OVERLOAD` | lexer+parser+AST | частично: на ветке после merge `main` (#1899 — qualifiers на FB/METHOD); `OVERLOAD` и остальное открыто | `tests/fb_inheritance.rs` |
-| P0-9 | `__XSTRING#"…"` → `XByteString`; `UTF8#'…'`; `UCHAR#'…'` | lexer+parser+AST | открыт | `tests/literals.rs` (кейсы) + `spec_conformance_string_literals.rs`; эталон — `tables/string_escapes.csv`, `docs/15` |
-| P0-10 | escape `$U`+8 hex (+ cp1252-таблица `$80-$FF`) | dsl+lexer-валидация | открыт | `dsl/src/string_escape.rs` unit-кейсы + `rule_token_string_escape.rs` |
-| P0-11 | `10#`, `BOOL#1/0`, `BIT`-тип, `BIT#` | lexer+parser | открыт | `tests/literals.rs` |
-| P0-12 | `us`/`ns`, `LT#`, `LD#`, `TOD#hh:mm` | parser | открыт; на ветке после merge — #1940 (дробные секунды TOD/DT) — перепроверить | `tests/duration.rs`, `tests/literals.rs`; обновить `specs/design/time-literals.md` (REQ-TL-010/012) |
-| P0-13 | `\|` как OR | lexer+parser | открыт | `tests/whitespace.rs`/`tests/types_and_returns.rs` |
-| P0-14 | escape-идентификаторы `` `…` `` + unicode-идентификаторы + правило «несколько `_` подряд» | lexer+parser | открыт | `tests/comments_and_errors.rs`/новый `tests/identifiers.rs`; CODESYS-источник — `ST_GRAMMAR.ebnf:49-54` |
-| P0-15 | `__TRY/__CATCH/__FINALLY/__ENDTRY/__THROW` | lexer+parser+AST+codegen | открыт | `tests/try_catch.rs` + e2e |
-| P0-16 | ST-visible special (`__NEW`, `__DELETE`, `__ISVALIDREF`, `__SYSTEM`, `__POOL`, `__TYPEOF`, `__CURRENTTASK`, `__XADD`, …) | lexer+parser+analyzer | открыт | `tests/special_operators.rs`; внутренние `__*` — не трогать |
-| P0-17 | `JMP`+метки, `CALC`, `__WAIT`, вложенные комментарии, `DocComment`, pragma-`{IF}` | lexer+parser | открыт | `tests/jumps.rs`, `tests/pragmas.rs` (расширить), `tests/comments_and_errors.rs` |
+| P0-1 | `CONTINUE` (statement + codegen) | lexer+parser+AST+codegen | закрыт (d8ddf54f5) | новый `tests/continue.rs` (AST-форма) + `codegen/tests/it/end_to_end_continue.rs` (rounds) |
+| P0-2 | `PROPERTY`/`PROPERTY_GET`/`PROPERTY_SET`/`END_PROPERTY` + AST | lexer+parser+AST | закрыт (d8ddf54f5) | `tests/properties.rs` + plc2plc round-trip resource |
+| P0-3 | `UNION`/`END_UNION` + AST | lexer+parser+AST | закрыт (d8ddf54f5) | `tests/union.rs` + resource |
+| P0-4 | `VAR_STAT` / `VAR_INST` / `VAR_GENERIC` блоки | lexer+parser+AST | открыт: под флагом парсится (`tests/var_declarations.rs`), но в `--dialect codesys` — P0002: имя переменной лексится как метка (конфликт с JMP, §15) | `tests/var_declarations.rs` (расширить) |
+| P0-5 | `PARAMS(n) OF T` | lexer+parser+AST | закрыт (d8ddf54f5) | `tests/types_and_returns.rs` |
+| P0-6 | `ARRAY[*]` | parser+AST | закрыт (d8ddf54f5) | `tests/arrays.rs` |
+| P0-7 | `NAMESPACE`/`END_NAMESPACE` + `__BEGIN_IMPLEMENTATION` | lexer+parser+AST | закрыт (d8ddf54f5) | `tests/namespaces.rs` |
+| P0-8 | модификаторы доступа + `OVERRIDE`/`OVERLOAD` | lexer+parser+AST | частично (d8ddf54f5): квалификаторы, `OVERLOAD` и `OVERRIDE` парсятся; `METHOD PUBLIC m : T` в codesys — P0002 (тот же конфликт с метками, §15) | `tests/fb_inheritance.rs` |
+| P0-9 | `__XSTRING#"…"` → `XByteString`; `UTF8#'…'`; `UCHAR#'…'` | lexer+parser+AST | закрыт (d8ddf54f5) | `tests/literals.rs` (кейсы) + `spec_conformance_string_literals.rs`; эталон — `tables/string_escapes.csv`, `docs/15` |
+| P0-10 | escape `$U`+8 hex (+ cp1252-таблица `$80-$FF`) | dsl+lexer-валидация | закрыт (d8ddf54f5) | `dsl/src/string_escape.rs` unit-кейсы + `rule_token_string_escape.rs` |
+| P0-11 | `10#`, `BOOL#1/0`, `BIT`-тип, `BIT#` | lexer+parser | закрыт (d8ddf54f5) | `tests/literals.rs` |
+| P0-12 | `us`/`ns`, `LT#`, `LD#`, `TOD#hh:mm` | parser | закрыт (d8ddf54f5) | `tests/duration.rs`, `tests/literals.rs`; обновить `specs/design/time-literals.md` (REQ-TL-010/012) |
+| P0-13 | `\|` как OR | lexer+parser | закрыт (d8ddf54f5) | `tests/whitespace.rs`/`tests/types_and_returns.rs` |
+| P0-14 | escape-идентификаторы `` `…` `` + unicode-идентификаторы + правило «несколько `_` подряд» | lexer+parser | закрыт (d8ddf54f5); unicode — только под `--allow-unicode-identifiers`; `_`-политика: codesys запрещает (`my__var` → P4069), ed3/rusty разрешают | `tests/comments_and_errors.rs`/новый `tests/identifiers.rs`; CODESYS-источник — `ST_GRAMMAR.ebnf:49-54` |
+| P0-15 | `__TRY/__CATCH/__FINALLY/__ENDTRY/__THROW` | lexer+parser+AST+codegen | закрыт (d8ddf54f5) | `tests/try_catch.rs` + e2e |
+| P0-16 | ST-visible special (`__NEW`, `__DELETE`, `__ISVALIDREF`, `__SYSTEM`, `__POOL`, `__TYPEOF`, `__CURRENTTASK`, `__XADD`, …) | lexer+parser+analyzer | частично (d8ddf54f5): лексер/парсер принимают весь ST-visible набор; анализатор не резолвит (`__NEW`/`__DELETE`/`__TYPEOF`/`__XADD` → P4017, `__CURRENTTASK`/`__SYSTEM`/`__POOL` → P4007; `__ISVALIDREF` — OK) — P1 | `tests/special_operators.rs`; внутренние `__*` — не трогать |
+| P0-17 | `JMP`+метки, `CALC`, `__WAIT`, вложенные комментарии, `DocComment`, pragma-`{IF}` | lexer+parser | закрыт (d8ddf54f5) | `tests/jumps.rs`, `tests/pragmas.rs` (расширить), `tests/comments_and_errors.rs` |
 
-Статусы проверены 2026-10-01; `main` слит в `lint-fences` (03d1f2982).
-«Открыт» = нет в токенах/правилах ветки; пункты, закрытые upstream (#1898/#1871/#1899/#1940),
-отмечены «на ветке после merge» — перед началом работы прогнать их сниппеты из §15.
+Статусы проверены 2026-10-01 прогоном 2 (`check --dialect codesys`, 0.247.0, `d8ddf54f5`);
+сниппеты — §15. «Закрыт» = сниппет проходит `check` без P0002/P0003. Остаются открытыми:
+P0-4 и P0-8 — конфликт с метками JMP (`xform_statement_labels.rs`, §15); P0-16 — резолвинг
+ST-visible операторов на анализаторе (P1).
 
 **P1 — семантика для уже принятого синтаксиса.** `THIS^/SUPER^` (P9999), члены `INTERFACE`,
 codegen SFC, `PROPERTY`-доступ, `VAR_STAT/INST/GENERIC`-размещение, `UNION`-память, `PARAMS`,
@@ -537,7 +551,7 @@ cd specs && just    # запускать recipe-тела через Git Bash: cd
 
 ## 15. Журнал эмпирических проверок
 
-Команда: `ironplcc.exe check --dialect codesys <file>` (0.246.0, debug build).
+**Прогон 1 — до P0-работ (0.246.0, debug build).** Команда: `ironplcc.exe check --dialect codesys <file>`.
 
 | Сниппет | Результат | Классификация |
 |---|---|---|
@@ -584,6 +598,90 @@ cd specs && just    # запускать recipe-тела через Git Bash: cd
 | `16#FF:` как CASE-метка | OK | — |
 | `TYPE E : (A := 1, B := 2) DINT;` | OK | — |
 | `my__var` (двойное `_`) | OK у нас | у CODESYS по умолчанию запрещено (`` AllowMultipleUnderlines=false ``, `ST_GRAMMAR.ebnf:51`) |
+
+### Прогон 2 — после P0-работ (0.247.0, `d8ddf54f5`, 2026-10-01)
+
+Команда та же: `check --dialect codesys <file>`; бинарь собран `cargo build -p ironplc-cli`,
+файлы — во временном каталоге вне репозитория (`%TEMP%\ironplc-journal-d8ddf54f5…`), каждый
+сниппет обёрнут в минимальный `PROGRAM`/`FUNCTION_BLOCK`. «OK» = `check` завершился с кодом 0.
+
+| Сниппет (как в прогоне 1) | Результат | Δ | Классификация |
+|---|---|---|---|
+| `x := BOOL#1;` | OK | FAIL P0002 → OK | закрыт P0-11 |
+| `x := 10#123;` | OK | FAIL P0002 → OK | закрыт P0-11 |
+| `TYPE T : ARRAY[*] OF INT;` | OK | FAIL P0002 → OK | закрыт P0-6 |
+| `VAR_STAT x : INT;` | FAIL P0002 | без изменений | дефект взаимодействия с метками (§15.1) — P0-4 открыт |
+| `VAR_INST x : INT;` | FAIL P0002 | без изменений | тот же дефект — P0-4 открыт |
+| `VAR_GENERIC g : INT;` | FAIL P0002 | без изменений | тот же дефект — P0-4 открыт |
+| `FOR i := 0 TO 10 DO CONTINUE; END_FOR` | OK | FAIL P0002 → OK | закрыт P0-1 |
+| `TYPE U : UNION … END_UNION` | OK | FAIL P0002 → OK | закрыт P0-3 |
+| `x : PARAMS(3) OF INT` (в `VAR`) | OK | FAIL P0002 → OK | закрыт P0-5 |
+| `JMP lbl; lbl: ;` | OK | FAIL P0002 → OK | закрыт P0-17 |
+| `t := T#1us;`, `t := T#1ns;` | OK (оба) | FAIL P0002 → OK | закрыт P0-12 |
+| `t := LT#5s;` | OK | FAIL P0002 → OK | закрыт P0-12 |
+| `d := LD#2024-01-01;` | OK | FAIL P0002 → OK | закрыт P0-12 |
+| `t := TOD#12:30;` | OK | FAIL P0002 → OK | закрыт P0-12 |
+| `s := __XSTRING#"abc";` | OK | FAIL P0002 → OK | закрыт P0-9 (литерал — wide) |
+| `s := UTF8#'abc';` | OK | FAIL P0002 → OK | закрыт P0-9 |
+| `s := UCHAR#'a';` | OK | FAIL P0002 → OK | закрыт P0-9 |
+| `(* a (* b *) c *)` | OK | FAIL P0002 → OK | закрыт P0-17 |
+| `PROPERTY p : INT … END_PROPERTY` | OK | FAIL P0002 → OK | закрыт P0-2 |
+| `PUBLIC METHOD m : INT …` | FAIL P0002 | всё ещё FAIL | форма `PUBLIC METHOD` не поддерживается (порядок CODESYS — `METHOD PUBLIC`); `METHOD PUBLIC m : T` падает из-за дефекта меток (§15.1); `METHOD PUBLIC m` без `: T` — OK |
+| ``VAR `my var` : INT;`` | OK | FAIL P0003 → OK | закрыт P0-14 |
+| `INTERFACE i` (члены) | FAIL P0002 | без изменений | члены INTERFACE по-прежнему только заголовок (§9); в §13 не входит |
+| `NAMESPACE ns … END_NAMESPACE` | OK | FAIL P0002 → OK | закрыт P0-7 |
+| `__BEGIN_IMPLEMENTATION` | OK | FAIL P0002 → OK | закрыт P0-7 |
+| `__VECTOR[4] OF REAL` | FAIL P0002 | без изменений | вне scope (§3.5) |
+| `a := a \| b;` | OK | FAIL P0003 → OK | закрыт P0-13 |
+| `THIS^.x := 1;` | FAIL P9999 | без изменений | анализатор; P1 (§13) |
+| `t := TIME();` | FAIL P4017 | без изменений | stdlib; P1 (§12) |
+| `s : STRING; s := WSTRING#"abc";` | FAIL P4035 | без изменений | семантика; расхождение с CODESYS сохранено |
+| `ARRAY[1..3, 0..2] OF INT` | OK | OK | — |
+| `a := a & b;` | OK | OK | — |
+| `x := 2 ** 3;` | OK | OK | — |
+| `{attribute 'qualified_only'}` | OK (trivia) | OK | — |
+| `{IF defined(FOO)} … {END_IF}` | OK (trivia) | OK | — |
+| `x AT %Q* : BOOL;` | OK | OK | — |
+| `S=`, `REF=` | OK (оба) | OK | — |
+| `POINTER TO`, `REFERENCE TO`, `REF_TO`, `NULL` | OK | OK | — |
+| `SIZEOF(x)`, `ADR(x)` | OK | OK | — |
+| `INT#-5`, `WORD#16#FF` | OK | OK | — |
+| `String(10)` под флагом | OK | OK | — |
+| `16#FF:` как CASE-метка (селектор DINT) | OK | OK | — |
+| `TYPE E : (A := 1, B := 2) DINT;` | OK | OK | — |
+| `my__var` (двойное `_`) | FAIL P4069 | OK → FAIL P4069 | политика диалекта: в codesys запрещено (как у CODESYS); в `rusty`/`iec61131-3-ed3` — OK |
+
+### Дополнительные пробы прогона 2 (P0-пункты без своей строки в прогоне 1)
+
+| Проба | Результат | Классификация |
+|---|---|---|
+| `s := 'a$U00000041b';` | OK | P0-10 закрыт (+ cp1252-таблица — unit-тесты `dsl/src/string_escape.rs`) |
+| `x : BIT;`, `x := BIT#1;` | OK | P0-11 закрыт |
+| `__TRY … __CATCH … __FINALLY … __ENDTRY`, `__THROW(x)` | OK | P0-15 закрыт |
+| `METHOD OVERLOAD m`, `METHOD OVERRIDE m` | OK | P0-8 — базовые формы без возвратного типа |
+| `café : INT` (+ `--allow-unicode-identifiers`) | OK | P0-14 (в диалектах флаг не включён — как и в CODESYS по умолчанию) |
+| `obj := __NEW(INT);`, `info := __TYPEOF(INT);` | FAIL P4017+P4007 | P0-16: парсер OK, анализатор — P1 |
+| `result := __DELETE(obj);`, `__XADD(1, 2)` | FAIL P4017 | P0-16: анализатор — P1 |
+| `result := __ISVALIDREF(obj);` | OK | P0-16: лоуэрится в `obj <> NULL` |
+| `current := __CURRENTTASK;` | FAIL P4007 | P0-16: анализатор — P1 |
+| `a := __SYSTEM.some_global;`, `b := __POOL.other;` | FAIL P4007 | P0-16: scope-префиксы не резолвятся — P1 |
+| `CALC(b, fbi(a := 1));`, `__WAIT; __WAIT(b);` | OK | P0-17 закрыт |
+| `/// doc` (DocComment) | OK | P0-17 закрыт |
+
+### 15.1 Найденный дефект взаимодействия (прогон 2)
+
+При включённом `allow_jump_statement` (диалекты codesys/twincat) трансформ
+`compiler/parser/src/xform_statement_labels.rs:112-118` помечает `имя :` как метку всюду, где не
+видит declaration-региона или имени, введённого ключевым словом:
+
+* секции `VAR_STAT`/`VAR_INST`/`VAR_GENERIC` отсутствуют в `region_closer` (`:45-59`) →
+  `VAR_STAT x : INT;` → P0002;
+* слово-квалификатор (`PUBLIC`) перед именем метода прячет `METHOD` от проверки
+  `introduces_declared_name` (`:65-79`) → `METHOD PUBLIC m : INT` → P0002.
+
+Обходные формы (проверено): `--allow-var-stat` без JMP → OK; `--allow-fb-inheritance` без JMP → OK;
+`METHOD PUBLIC m` без возвратного типа в codesys → OK. Следствие для §13: **P0-4 и P0-8 остаются
+открытыми** (нужен фикс `region_closer` + проверки по имени с учётом квалификаторов).
 
 ---
 
