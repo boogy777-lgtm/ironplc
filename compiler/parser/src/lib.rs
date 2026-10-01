@@ -16,7 +16,10 @@ mod vars;
 mod xform_assign_file_id;
 mod xform_collapse_pragmas;
 mod xform_demote_keywords;
+mod xform_nested_comments;
+mod xform_pragma_if;
 mod xform_split_duration_units;
+mod xform_statement_labels;
 mod xform_tokens;
 
 use crate::parser::{parse_library, parse_statements};
@@ -70,14 +73,20 @@ pub fn tokenize_program(
     let (tokens, mut errors) = tokenize(&source, file_id, line_offset, col_offset);
 
     let tokens = xform_collapse_pragmas::apply(tokens, options);
+    // Conditional pragmas drop the branches that are not taken, so they run
+    // first: nothing below has to know a branch was ever there.
+    let (tokens, mut pragma_errors) = xform_pragma_if::apply(tokens, options);
+    let tokens = xform_nested_comments::apply(tokens, options);
     let tokens = xform_split_duration_units::apply(tokens);
     let mut tokens = insert_keyword_statement_terminators(tokens, file_id, options);
+    xform_statement_labels::apply(&mut tokens, options);
     xform_demote_keywords::apply(&mut tokens, options);
     let result = check_tokens(&tokens, options);
     match result {
         Ok(_) => {}
         Err(mut diagnostics) => errors.append(&mut diagnostics),
     }
+    errors.append(&mut pragma_errors);
 
     (tokens, errors)
 }

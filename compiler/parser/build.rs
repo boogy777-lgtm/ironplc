@@ -13,5 +13,8 @@ fn main() {
         // CODESYS exception handling (`REQ-TC-parser-*`): tokens, grammar and
         // gating.
         "codesys-try-catch.md",
+        // CODESYS jump statements, comments and conditional pragmas
+        // (`REQ-JMP-parser-*`).
+        "codesys-jump-and-pragmas.md",
     ]);
 }

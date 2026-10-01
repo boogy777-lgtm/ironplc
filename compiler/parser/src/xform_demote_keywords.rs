@@ -45,6 +45,9 @@ use crate::{
 ///   IEC 61131-3:2013).
 /// * **`__TRY`/`__ENDTRY`/`__CATCH`/`__FINALLY`/`__THROW`** — demoted unless
 ///   `allow_try_catch` (CODESYS exception handling).
+/// * **`JMP`, `CALC`, `__WAIT`** — demoted unless `allow_jump_statement`,
+///   `allow_calc_statement` and `allow_wait_statement` respectively (CODESYS
+///   Instruction-List-derived statements in Structured Text).
 ///
 /// The context-sensitive `TIME` keyword is handled by [`apply_time`].
 pub fn apply(tokens: &mut [Token], options: &CompilerOptions) {
@@ -58,6 +61,9 @@ pub fn apply(tokens: &mut [Token], options: &CompilerOptions) {
     let demote_persistent = !options.allow_persistent_var;
     let demote_continue = !options.allow_continue;
     let demote_try_catch = !options.allow_try_catch;
+    let demote_jump = !options.allow_jump_statement;
+    let demote_calc = !options.allow_calc_statement;
+    let demote_wait = !options.allow_wait_statement;
 
     for tok in tokens.iter_mut() {
         let demote = match tok.token_type {
@@ -88,6 +94,9 @@ pub fn apply(tokens: &mut [Token], options: &CompilerOptions) {
             | TokenType::Catch
             | TokenType::Finally
             | TokenType::Throw => demote_try_catch,
+            TokenType::Jmp => demote_jump,
+            TokenType::Calc => demote_calc,
+            TokenType::Wait => demote_wait,
             _ => false,
         };
         if demote {

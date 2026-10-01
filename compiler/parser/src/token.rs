@@ -81,6 +81,13 @@ pub enum TokenType {
     #[regex(r"/\*(?:[^*]|\*[^/])*\*/", priority = 0)]
     Comment,
 
+    /// A `///` documentation comment (CODESYS `DocComment`). Skipped as trivia
+    /// exactly like a `Comment`, but its own token type so tooling can tell a
+    /// documentation comment apart; the reference scanner picks it out the
+    /// same way (`ScanSingleLineComment` checks for the third `/`).
+    #[regex(r"///[^\r\n]*", priority = 1, allow_greedy = true)]
+    DocComment,
+
     // Grouping and other markers
     #[token("(", priority = 1)]
     LeftParen,
@@ -203,6 +210,23 @@ pub enum TokenType {
     Finally,
     #[token("__THROW", ignore(case))]
     Throw,
+
+    // CODESYS statements written with Instruction List mnemonics that are
+    // legal in Structured Text: `JMP` with `label:` statement labels, and the
+    // `CALC` conditional call. `__WAIT` is a Structured Text statement of its
+    // own. Each is a keyword only while its flag is set -- see
+    // xform_demote_keywords.rs.
+    #[token("JMP", ignore(case))]
+    Jmp,
+    #[token("CALC", ignore(case))]
+    Calc,
+    #[token("__WAIT", ignore(case))]
+    Wait,
+
+    // Not produced by the lexer: `xform_statement_labels` re-types the
+    // identifier a statement label starts with, so the grammar accepts
+    // `label:` only where the dialect enables jump statements.
+    Label,
 
     #[token("FALSE", ignore(case))]
     False,
@@ -594,6 +618,11 @@ impl TokenType {
             TokenType::Eno => "'ENO'",
             TokenType::Exit => "'EXIT'",
             TokenType::Continue => "'CONTINUE'",
+            TokenType::DocComment => "'///' (documentation comment)",
+            TokenType::Jmp => "'JMP'",
+            TokenType::Calc => "'CALC'",
+            TokenType::Wait => "'__WAIT'",
+            TokenType::Label => "(statement label)",
             TokenType::Try => "'__TRY'",
             TokenType::EndTry => "'__ENDTRY'",
             TokenType::Catch => "'__CATCH'",

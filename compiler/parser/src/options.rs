@@ -499,6 +499,31 @@ define_compiler_options! {
     [Codesys, TwinCat],
     allow_try_catch,
 
+    "Allow the JMP statement and `label:` statement labels",
+    "--allow-jump-statement",
+    [Codesys, TwinCat],
+    allow_jump_statement,
+
+    "Allow the CALC conditional call statement",
+    "--allow-calc-statement",
+    [Codesys, TwinCat],
+    allow_calc_statement,
+
+    "Allow the __WAIT wait statement",
+    "--allow-wait-statement",
+    [Codesys, TwinCat],
+    allow_wait_statement,
+
+    "Allow nested (* *) block comments",
+    "--allow-nested-comments",
+    [Codesys, TwinCat],
+    allow_nested_comments,
+
+    "Allow conditional-compilation pragmas ({IF}/{ELSIF}/{ELSE}/{END_IF}, {DEFINE}, {UNDEFINE})",
+    "--allow-pragma-if",
+    [Codesys, TwinCat],
+    allow_pragma_if,
+
     "Allow the base-type suffix on an enumeration declaration, e.g. (A, B) WORD, naming the elementary type the members are stored in",
     "--allow-enum-base-type",
     [Rusty, Codesys, TwinCat],

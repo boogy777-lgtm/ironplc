@@ -299,6 +299,32 @@ struct FileArgs {
     #[arg(long)]
     allow_try_catch: bool,
 
+    /// Allow the JMP statement and `label:` statement labels.
+    /// This is an extension not part of the IEC 61131-3 standard.
+    #[arg(long)]
+    allow_jump_statement: bool,
+
+    /// Allow the CALC conditional call statement (`CALC(cond, call)`).
+    /// This is an extension not part of the IEC 61131-3 standard.
+    #[arg(long)]
+    allow_calc_statement: bool,
+
+    /// Allow the __WAIT wait statement.
+    /// This is an extension not part of the IEC 61131-3 standard.
+    #[arg(long)]
+    allow_wait_statement: bool,
+
+    /// Allow nested block comments (`(* a (* b *) c *)`).
+    /// This is an extension not part of the IEC 61131-3 standard.
+    #[arg(long)]
+    allow_nested_comments: bool,
+
+    /// Allow the conditional-compilation pragmas `{IF}`/`{ELSIF}`/`{ELSE}`/
+    /// `{END_IF}` together with `{DEFINE}` and `{UNDEFINE}`.
+    /// This is an extension not part of the IEC 61131-3 standard.
+    #[arg(long)]
+    allow_pragma_if: bool,
+
     /// What STRING_TO_<numeric> treats as convertible when the string has
     /// non-numeric characters. A behavior policy: the dialect selects an
     /// alternative and this flag replaces it.
@@ -360,6 +386,11 @@ impl FileArgs {
         options.allow_enum_base_type |= self.allow_enum_base_type;
         options.allow_continue |= self.allow_continue;
         options.allow_try_catch |= self.allow_try_catch;
+        options.allow_jump_statement |= self.allow_jump_statement;
+        options.allow_calc_statement |= self.allow_calc_statement;
+        options.allow_wait_statement |= self.allow_wait_statement;
+        options.allow_nested_comments |= self.allow_nested_comments;
+        options.allow_pragma_if |= self.allow_pragma_if;
         options
     }
 }

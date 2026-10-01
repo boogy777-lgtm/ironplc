@@ -15,5 +15,7 @@ fn main() {
         // CODESYS exception handling (`REQ-TC-plc2plc-*`): round-trip
         // rendering.
         "codesys-try-catch.md",
+        // The CODESYS jump statements (`REQ-JMP-plc2plc-*`): round trip.
+        "codesys-jump-and-pragmas.md",
     ]);
 }

@@ -102,6 +102,25 @@ pub(crate) fn opts_with_try_catch() -> CompilerOptions {
     }
 }
 
+/// Options enabling the conditional-compilation pragmas: `allow_pragmas`
+/// collapses `{ ... }` into one token, and `allow_pragma_if` evaluates the
+/// `{IF}` family over it.
+pub(crate) fn opts_with_pragma_if() -> CompilerOptions {
+    CompilerOptions {
+        allow_pragmas: true,
+        allow_pragma_if: true,
+        ..CompilerOptions::default()
+    }
+}
+
+/// Options enabling `allow_nested_comments`.
+pub(crate) fn opts_with_nested_comments() -> CompilerOptions {
+    CompilerOptions {
+        allow_nested_comments: true,
+        ..CompilerOptions::default()
+    }
+}
+
 /// The single (non-FB-call) statement in a program body.
 pub(crate) fn only_statement(lib: &Library) -> &StmtKind {
     let prog = cast!(&lib.elements[0], LibraryElementKind::ProgramDeclaration);

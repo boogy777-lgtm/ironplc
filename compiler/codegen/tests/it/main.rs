@@ -108,6 +108,7 @@ mod end_to_end_func_forms;
 mod end_to_end_func_forms_extensible;
 mod end_to_end_global;
 mod end_to_end_if;
+mod end_to_end_jumps;
 mod end_to_end_implicit_widening;
 mod end_to_end_insert;
 mod end_to_end_ldate;

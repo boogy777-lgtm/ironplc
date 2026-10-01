@@ -1356,6 +1356,11 @@ pub(crate) struct CompileContext {
     /// `__THROW` compilation. Only a `__TRY` that has a `__CATCH` clause
     /// pushes one, so a throw with no handler on the stack is refused.
     pub(crate) try_handlers: Vec<crate::compile_try_catch::TryHandler>,
+    /// The emitter label of every statement label in the POU body being
+    /// emitted, for `JMP` compilation and for binding `label:` statements.
+    /// Set by [`crate::compile_stmt::compile_statements`] for the duration of
+    /// one body.
+    pub(crate) jump_labels: crate::compile_jump::JumpLabels,
     /// Maps STRING variable identifiers to their data region metadata.
     pub(crate) string_vars: HashMap<Id, StringVarInfo>,
     /// Maps FB instance variable identifiers to their metadata.
@@ -1454,6 +1459,7 @@ impl CompileContext {
             constants: Vec::new(),
             loop_labels: Vec::new(),
             try_handlers: Vec::new(),
+            jump_labels: crate::compile_jump::JumpLabels::new(),
             string_vars: HashMap::new(),
             fb_instances: HashMap::new(),
             array_vars: HashMap::new(),

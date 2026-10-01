@@ -146,6 +146,11 @@ fn codesys_dialect_enables_exactly_these_flags() {
             "allow_enum_base_type",
             "allow_continue",
             "allow_try_catch",
+            "allow_jump_statement",
+            "allow_calc_statement",
+            "allow_wait_statement",
+            "allow_nested_comments",
+            "allow_pragma_if",
         ],
     );
 }
@@ -196,6 +201,11 @@ fn twincat_dialect_enables_exactly_these_flags() {
             "allow_enum_base_type",
             "allow_continue",
             "allow_try_catch",
+            "allow_jump_statement",
+            "allow_calc_statement",
+            "allow_wait_statement",
+            "allow_nested_comments",
+            "allow_pragma_if",
         ],
     );
 }

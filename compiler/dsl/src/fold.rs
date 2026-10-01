@@ -398,6 +398,14 @@ pub trait Fold<E> {
 
     dispatch!(Throw);
 
+    dispatch!(Jump);
+
+    dispatch!(LabelStatement);
+
+    dispatch!(ConditionalCall);
+
+    dispatch!(Wait);
+
     dispatch!(NamedVariable);
 
     dispatch!(ArrayVariable);

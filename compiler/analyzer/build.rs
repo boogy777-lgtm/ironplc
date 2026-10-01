@@ -16,5 +16,7 @@ fn main() {
         // Constant variable inference (`REQ-CVI-analyzer-*`): which
         // never-written declarations become CONSTANT.
         "constant-variable-inference.md",
+        // CODESYS jump statements (`REQ-JMP-analyzer-*`): label scope rules.
+        "codesys-jump-and-pragmas.md",
     ]);
 }
