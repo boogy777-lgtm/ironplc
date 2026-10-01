@@ -265,4 +265,4 @@ conformance-тесты добавляются вместе с реализаци
 2. Языковая модель (`ITypeTable`/`ILanguageModelBuilder7`/`ParserContext`) — исследовать поведение; наша реализация по утверждённому плану понижает CST в существующий `dsl` AST и использует существующий analyzer.
 3. Динамические конверсии (`TO_<T>`, `ANY_TO_<T>`) — восстановить отбор по `OperatorFlags`/`GetTextOfOperator`.
 4. `GetNextInternal` декомпилирован в goto-граф — восстановить `switch` по IL.
-5. 15 `MessageId` без текста; 9 orphan-ключей; порядок под-POU (`Hashtable`); порядок `LDictionary.Keys` при суммаризации.
+5. 7 `MessageId` без текста в 3.5.22.10 (315, 349, 350, 370, 394, 404, 410; RU — только harvest Compiler35200); 508/510/523 вне диапазона верификации; 7 orphan-ключей (2 из 9 развязаны: `Err_MissingObjectForPersistent`→id 245, `Wrn_InvalidStringSize`→id 362 — см. `ERROR-CODES-STUDY.md` §6); порядок под-POU (`Hashtable`); порядок `LDictionary.Keys` при суммаризации.

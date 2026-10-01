@@ -448,3 +448,59 @@ scanner-условие.
 ```markdown
 | Ошибки: SYNTAX-коды CODESYS и маппинг на наши P-коды | [`ERROR-CODES-STUDY.md`](ERROR-CODES-STUDY.md) |
 ```
+
+---
+
+## 6. Верификация каталога (2026-10-01)
+
+Батч-верификация всех записей каталога против декомпила и сырых ресурсов 3.5.22.10
+(первичные отчёты `verify-reports/*.json` удалены после консолидации; результаты сведены ниже
+и в таблицы).
+
+Диапазон: `MessageId` 0–506 (507 слотов: 423 привязанных + 84 незанятых) и `InternalErrorIds` 0–6.
+Значения 507–591 в этот прогон не входили.
+
+**Итог: 514 проверено — 415 verified, 2 fixed, 97 gap.**
+
+### Исправлено (2)
+
+| Id | Key | Коррекция |
+|---|---|---|
+| 245 | Wrn_MissingObjectForPersistent | Был EN=null и «authored» RU. Декомпил (`Compiler35220.plugin/-/-.353.cs:300`) привязывает член к ресурсному ключу `Err_MissingObjectForPersistent`; RU/EN + 8 локалей взяты из `resources/compiler35220/*.json` (подтверждено в satellite-DLL). |
+| 362 | Err_InvalidStringSize | Был EN=null и «authored» RU. Привязка — ключ `Wrn_InvalidStringSize` (`-/-.353.cs:216`); официальный текст есть во всех 10 локалях. |
+
+Обновлены `tables/errors/error_messages.json` (ru/en/otherLocales) и CSV: `error_messages_ru.csv`,
+`error_messages_ru_provenance.csv` (source → `native_35220.ru`), а в 8 per-locale CSV
+orphan-строки `Err_MissingObjectForPersistent`/`Wrn_InvalidStringSize` привязаны к id 245/362.
+`message_ids.csv` не менялся: отчёты подтвердили все проверенные id/имена.
+
+### Оставшиеся пробелы (97)
+
+1. Незанятые значения enum — 84: 29, 54–60, 67, 79, 121, 123, 133–134, 137, 147–148, 151–160,
+   166, 251–260, 267, 271, 305, 457–499. Члена в enum нет, текста нет нигде — пропуск в снимке верен.
+2. `InternalErrorIds` 1–6 — 6: ErrInBlobLink, ErrInFindObjectsToTypify, ErrCodeDataLocationConflict,
+   ErrReLinkError, ErrInRelocation, ErrInVirtualFunctionCall. Внутренние id, не локализуются;
+   их номера пересекаются с `MessageId` 1–6, текст MessageId нельзя мапить на InternalErrorIds.
+3. `MessageId` без текста в 3.5.22.10 — 7: 315 Wrn_StringTooShortForVarInOut, 349 Wrn_InterfaceInVarInOut,
+   350 Wrn_ReferenceToInterface, 370 Wrn_InstanceCalledMoreThenOnce, 394 Wrn_FBExitCalledForStackInstance,
+   404 Wrn_CompilerVersionDeprecated, 410 Wrn_CompatibilityProblemForRefProperty. Ни в одной из 10
+   локалей 3.5.22.10 текста нет, raise-site/привязки в декомпиле нет; RU — только harvest из
+   Compiler35200 (DLL нет в репозитории — не верифицируемо). У 315 RU совпадает с текстом id 418,
+   у 394 удвоенные плейсхолдеры `{{0}}`/`{{1}}`, у 410 RU-текст английский.
+
+Сверка с прежним списком «15 без текста» (`docs/03_ERROR_CATALOG.md` §f): 2 исправлены (245, 362),
+3 подтверждены как harvest-only (200, 210, 223), 7 остались пробелом (список выше),
+3 (508, 510, 523) вне диапазона этого прогона.
+
+### Orphan-ключи (9 → 7)
+
+Из 9 ключей ресурса вне enum `MessageId` два развязаны отчётами:
+`Err_MissingObjectForPersistent` → id 245, `Wrn_InvalidStringSize` → id 362 (см. «Исправлено»).
+Остаются 7 orphan-ключей без enum-id: Err_GenericNoInitialValueSupported,
+Err_InconsistentUseOfCPPCompatibility_MissingParent, Err_RelatedPositionInterface,
+Inf_RelatedPositionRecursion, Inf_RelatedPositionStackoverflow, Info_PersistentMemoryConfiguration,
+PublishSymbolsMustBeSet.
+
+Причина обеих «потерь» одна: каталог собран по именам enum-членов, а код привязывает id к
+ресурсному ключу с другой приставкой (`Err_` ↔ `Wrn_`), поэтому реальные ключи попали в
+orphan-строки CSV с пустым id.
