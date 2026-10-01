@@ -310,7 +310,7 @@ External facts (checked 2026-10-01; to be re-verified in S0):
 | OSCAT | Present, ASCII-only: `oscat.st` plus preprocessor unit tests; no non-ASCII ranged-comment case | `preprocessor.rs:68-142` |
 | Unicode | Partial: `strings.st`; UTF-16 column tests | `lexer.rs:166-179` |
 | Pragmas | Present: 4 tests | `parser/src/tests/pragmas.rs` |
-| Parser choice | Open: this section supplies the evidence list; no decision recorded | - |
+| Parser choice | Decided after this audit: Option B — in-tree recursive-descent/Pratt replacement producing the rowan CST; `trust-syntax` not adopted (S0 experiment §2.5) | [Parse-Tree S0 Experiment](parse-tree-s0-experiment.md) |
 | Dependency versions | peg 0.8.6 (`Cargo.lock:1530-1533`), logos 0.16.1; `rowan`, `salsa`, `text-size`, `drop_bomb` absent from `compiler/Cargo.lock` (checked) | `compiler/Cargo.lock` |
 | File map | Section 1 | this document |
 | Benchmark baseline | Partial: compile -> VM benchmarks only, no tokenize/parse-only measurement | `compiler/benchmarks/src/lib.rs:15-36`, `benches/st_benchmark.rs` |
@@ -335,10 +335,11 @@ External facts (checked 2026-10-01; to be re-verified in S0):
 ## 8. Scope note
 
 This audit covers preprocessing/provenance and parser-choice evidence only. The S0
-integration experiment still to run: rowan/Salsa adapter validation, dependency
-selection, and the parse/tokenize benchmark baseline (design section 6 references).
+integration experiment has since run: rowan/Salsa adapter validation, dependency
+selection, and the parse/tokenize benchmark baseline are recorded in
+[Parse-Tree S0 Experiment](parse-tree-s0-experiment.md).
 
-Repo note, outside this audit's scope and untouched here: the `specs` plan-citation
-check currently fails on `Codesys/README.md:90`, which names `specs/plans/`. That
-failure predates this report (the file is unchanged by it) and blocks `cd specs && just`
-until the Codesys routing document is corrected.
+Repo note (history): the `specs` plan-citation check failed on `Codesys/README.md`,
+which named the implementation-plan directory; the S0 close-out corrected the Codesys
+routing document, and the check no longer hits it. Close-out amendment, 2026-10-01:
+the §6 parser-choice row and this note.

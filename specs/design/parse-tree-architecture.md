@@ -1,6 +1,6 @@
 # Design: Lossless CST and Dependency-Tracked Semantic Analysis
 
-status: approved
+status: partially implemented
 date: 2026-10-01
 
 ## Overview
@@ -9,8 +9,11 @@ The target frontend has one lossless concrete syntax tree (CST), one
 semantic authority, and one mechanism for dependency-tracked computation.
 The owner approved this direction after reviewing CODESYS's editor tree,
 precompile model and selective compilation. This replaces the previous
-white/CST → red → green staircase. The architecture is approved; the CST
-and tracked analysis are **not implemented** by this documentation change.
+white/CST → red → green staircase. The status is **partially implemented**:
+S0 is delivered — the preprocessing/provenance [audit](parse-tree-s0-audit.md),
+the rowan/Salsa [experiment](parse-tree-s0-experiment.md) with the parser
+choice and dependency versions, and the parse benchmark baseline. S1–S4 are
+**not implemented**, and the production frontend remains the PEG path.
 
 Use rowan for the CST's immutable green storage and derived red navigation
 views. Green and red represent the same syntax, not separate grammars or
@@ -235,9 +238,11 @@ resolver or invalidation engine, reconsider the abstraction first.
 
 ## 5. Evolution Steps
 
-The approved foundation is S0–S4; none is delivered by this document.
-S5 is conditional optimization. Syntax-gap work continues against one
-grammar; S0 settles that seam before a new frontend path is introduced.
+The approved foundation is S0–S4; only S0's evidence is delivered so far
+(audit, experiment, baseline — linked above), and S1–S4 remain not
+implemented. S5 is conditional optimization. Syntax-gap work continues
+against one grammar; S0 settled that seam before a new frontend path is
+introduced.
 
 | Stage | Work and boundary | Exit evidence |
 |---|---|---|

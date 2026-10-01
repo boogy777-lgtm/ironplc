@@ -28,8 +28,9 @@
 
 - **Исследование CODESYS завершено** — доки, таблицы, грамматики, декомпил собраны.
   Эти файлы — **эталон**: не переделывать и не править под нашу реализацию.
-- **Архитектура утверждена, код не написан.** Сейчас фронтенд — logos-лексер + PEG
-  (`compiler/parser`); этапы S0–S5 существуют только на бумаге.
+- **Архитектура утверждена; S0 выполнен, S1–S5 не реализованы.** Сейчас фронтенд —
+  logos-лексер + PEG (`compiler/parser`); S0 закрыт аудитом, экспериментом и baseline —
+  см. [`parse-tree-s0-experiment.md`](../specs/design/parse-tree-s0-experiment.md).
 - **P0-бэклог открыт** — 17 пунктов; статус каждого — в
   [`LEXER-GAP-ANALYSIS.md` §13](LEXER-GAP-ANALYSIS.md) (столбец «Статус»).
   Baseline-прогон 0.246.0 — журнал §15.
@@ -41,8 +42,9 @@
 **Архитектурное решение владельца, 2026-10-01:** развиваем фронтенд IronPLC:
 одно lossless CST на rowan, lowering в существующий `dsl` AST, существующий analyzer
 как единственный владелец семантики и один механизм кешированных запросов с
-отслеживанием зависимостей. Salsa — предпочтительный кандидат для эксперимента S0.
-**Это утверждённый план, не реализованная возможность.** Подробные границы,
+отслеживанием зависимостей. Salsa выбрана и проверена в S0 (0.28.5).
+**Это утверждённый план: S0 — evidence, CST и tracked analysis не реализованы.**
+Подробные границы,
 доказательства из исходников CODESYS и этапы S0–S5 — в
 [`Parse-Tree Architecture`](../specs/design/parse-tree-architecture.md).
 
@@ -86,17 +88,24 @@ HIR/IDE/LSP как второй семантический backend. Green/red ro
 2. Задача по умолчанию — **синтаксический бэклог**: следующий открытый P0-пункт §13,
    ритм «таблица → тесты → реализация → spec conformance» по
    [`syntax-support-guide`](../specs/steering/syntax-support-guide.md), тестовая пирамида — §14.3.
-3. **Архитектура (S0+)** — отдельная задача: сначала issue (по фронтенду открытых нет)
-   и план в `specs/plans/` (CLAUDE.md), предрефакторинг первым коммитом; S1 не начинать до S0.
+3. **Архитектура (S0 выполнен, S1 следующий)** — issue
+   [#1978](https://github.com/ironplc/ironplc/issues/1978) открыт; порядок — plan PR,
+   предрефакторинг отдельными PR, затем core change
+   ([development-standards.md](../specs/steering/development-standards.md)).
    **SYNTAX-коды (Ф5)** — по [`ERROR-CODES-STUDY.md` §4](ERROR-CODES-STUDY.md).
 4. Каждая задача — своя ветка от `main` + PR; перед PR — `cd compiler && just` зелёный.
 
-**Порядок развития фронтенда:** S0 — сравнение интеграционных вариантов и baseline;
-S1 — полное CST и recovery; S2 — lowering CST → `dsl`; S3 — анализ деклараций/тел POU
-с отслеживанием зависимостей; S4 — общий API snapshots для CLI/LSP/MCP/build и
-редакторских изменений. S5 — локальный reparse только при доказанной необходимости.
-Выходные критерии и владельцы — в единственном
-[архитектурном плане, §5](../specs/design/parse-tree-architecture.md#5-evolution-steps).
+**Порядок развития фронтенда:** S0 — **выполнен**: аудит preprocessing/provenance
+([S0 Audit](../specs/design/parse-tree-s0-audit.md)), rowan/Salsa-эксперимент,
+выбор парсера (in-tree RD/Pratt на rowan) и baseline
+([S0 Experiment](../specs/design/parse-tree-s0-experiment.md));
+S1 — **следующий**: полное lossless CST и recovery, задача
+[#1978](https://github.com/ironplc/ironplc/issues/1978); S2 — lowering CST → `dsl`;
+S3 — анализ деклараций/тел POU с отслеживанием зависимостей; S4 — общий API snapshots
+для CLI/LSP/MCP/build и редакторских изменений. S5 — локальный reparse только при
+доказанной необходимости. Выходные критерии и владельцы — в единственном
+[архитектурном плане, §5](../specs/design/parse-tree-architecture.md#5-evolution-steps)
+(статус — `partially implemented`: поставлен S0).
 W32 потребляет этот фронтенд, но не владеет им и не блокирует его начало.
 
 **Синтаксический бэклог Ф1–Ф5** продолжается в рамках одной выбранной грамматики;

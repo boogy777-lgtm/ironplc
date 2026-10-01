@@ -1,8 +1,7 @@
 # S0 Experiment: rowan/Salsa Spike, Parser Choice, Parse Baseline
 
-status: experiment complete (S0 evidence)
 date: 2026-10-01
-branch: `lint-fences`
+branch: `lint-fences` (S0 evidence complete)
 
 S0 of the approved [Parse-Tree Architecture](parse-tree-architecture.md)
 ("integration experiment"). This document records what was built, what was
