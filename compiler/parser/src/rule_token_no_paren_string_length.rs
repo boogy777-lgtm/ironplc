@@ -32,7 +32,11 @@ use crate::{
 fn is_trivia(t: &TokenType) -> bool {
     matches!(
         t,
-        TokenType::Whitespace | TokenType::Newline | TokenType::Comment | TokenType::Pragma
+        TokenType::Whitespace
+            | TokenType::Newline
+            | TokenType::Comment
+            | TokenType::DocComment
+            | TokenType::Pragma
     )
 }
 

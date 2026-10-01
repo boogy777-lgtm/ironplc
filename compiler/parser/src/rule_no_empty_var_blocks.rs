@@ -40,7 +40,7 @@ fn is_qualifier(tt: &TokenType) -> bool {
 fn is_ignorable(tt: &TokenType) -> bool {
     matches!(
         tt,
-        TokenType::Whitespace | TokenType::Newline | TokenType::Comment
+        TokenType::Whitespace | TokenType::Newline | TokenType::Comment | TokenType::DocComment
     )
 }
 

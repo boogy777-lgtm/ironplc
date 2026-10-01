@@ -3,6 +3,16 @@
 use super::common::*;
 use spec_test_macro::spec_test;
 
+/// `__ENDTRY` is terminated by an inserted semicolon like the other keyword
+/// statements, so the row needs the try/catch gate as well.
+fn with_missing_semicolon_and_try_catch() -> CompilerOptions {
+    CompilerOptions {
+        allow_missing_semicolon: true,
+        allow_try_catch: true,
+        ..CompilerOptions::default()
+    }
+}
+
 /// Dialect-flag acceptance tests.
 ///
 /// Each case: given a program that the default dialect rejects, parsing
@@ -83,6 +93,17 @@ END_VAR
     END_REPEAT
 END_PROGRAM",
     with_missing_semicolon_flag
+)]
+#[case::end_try_without_semicolon(
+    "PROGRAM main
+VAR
+    x : INT;
+END_VAR
+    __TRY
+        x := 1;
+    __ENDTRY
+END_PROGRAM",
+    with_missing_semicolon_and_try_catch
 )]
 #[case::function_end_if_without_semicolon(
     "FUNCTION MY_FUNC : REAL

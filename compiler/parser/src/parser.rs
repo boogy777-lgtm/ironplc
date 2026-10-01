@@ -393,7 +393,7 @@ parser! {
     rule comma() -> () = tok(TokenType::Comma) ()
     rule whitespace() -> () = tok(TokenType::Whitespace) {} / tok(TokenType::Newline) {}
 
-    rule comment() -> () = tok(TokenType::Comment) ()
+    rule comment() -> () = tok(TokenType::Comment) () / tok(TokenType::DocComment) ()
     rule pragma() -> () = tok(TokenType::Pragma) ()
     rule _ = (whitespace() / comment() / pragma())*
 
@@ -2211,13 +2211,20 @@ parser! {
     // them with `?`: an optional part inside this repeated choice makes the
     // parser stop after the marker and reject the statement that follows
     // it.
+    // A statement label (`name:`) is a statement with no terminator of its
+    // own: the labelled statement follows it, and the list's separator rules
+    // do not apply between the two. The `Label` token exists only when
+    // `xform_statement_labels` promoted the name (the `allow_jump_statement`
+    // gate), so no other dialect accepts a label. See
+    // `Codesys/grammar/ST_GRAMMAR.ebnf` (label).
     rule statements_or_empty() -> StatementsOrEmpty =
       _ tok(TokenType::Semicolon) _ { StatementsOrEmpty::Empty() }
       / m:implementation_marker_statement() _ tok(TokenType::Semicolon) _ s:semisep(<statement()>) { let mut v = vec![m]; v.extend(s); StatementsOrEmpty::Statements(v) }
       / m:implementation_marker_statement() _ s:semisep(<statement()>) { let mut v = vec![m]; v.extend(s); StatementsOrEmpty::Statements(v) }
       / m:implementation_marker_statement() { StatementsOrEmpty::Statements(vec![m]) }
       / s:semisep(<statement()>) { StatementsOrEmpty::Statements(s)}
-    rule statement() -> StmtKind = assignment_statement() / selection_statement() / iteration_statement() / subprogram_control_statement()
+      / _ l:label_statement() { StatementsOrEmpty::Statements(vec![l]) }
+    rule statement() -> StmtKind = assignment_statement() / selection_statement() / iteration_statement() / subprogram_control_statement() / try_catch_statement() / throw_statement() / jump_statement() / calc_statement() / wait_statement()
 
     // B.3.2.1 Assignment statements
     pub rule assignment_statement() -> StmtKind =
@@ -2286,13 +2293,16 @@ parser! {
 
     // B.3.2.2 Subprogram control statements
     rule subprogram_control_statement() -> StmtKind = m:method_invocation() { m } / fb:fb_invocation() { fb } / tok(TokenType::Return) { StmtKind::Return }
-    rule fb_invocation() -> StmtKind = name:fb_name() _ tok(TokenType::LeftParen) _ params:param_assignment() ** (_ tok(TokenType::Comma) _) _ end:tok(TokenType::RightParen) {
+    rule fb_invocation() -> StmtKind = call:fb_invocation_body() { StmtKind::FbCall(call) }
+    // `name(args)`, shared by the statement form above and the call operand of
+    // `CALC(cond, call)`.
+    rule fb_invocation_body() -> FbCall = name:fb_name() _ tok(TokenType::LeftParen) _ params:param_assignment() ** (_ tok(TokenType::Comma) _) _ end:tok(TokenType::RightParen) {
       let span = SourceSpan::join(&name.span, &end.span);
-      StmtKind::FbCall(FbCall {
+      FbCall {
         var_name: name,
         params,
         position: span,
-      })
+      }
     }
     // OOP extension: `instance.MethodName(args);` (ADR-0041 Phase 1).
     // Statement position only; a previously-syntax-error shape
@@ -2416,5 +2426,88 @@ parser! {
     // list. Keyword demoted to an identifier unless
     // `allow_begin_implementation`.
     rule implementation_marker_statement() -> StmtKind = t:tok(TokenType::BeginImplementation) _ tok(TokenType::Semicolon)? { StmtKind::BeginImplementation(t.span.clone()) }
+
+    // CODESYS Instruction-List-derived statements in Structured Text. The
+    // `JMP`/`CALC`/`__WAIT` tokens exist only when their flags are set (see
+    // xform_demote_keywords), so these rules need no further gate.
+    // See ST_GRAMMAR.ebnf (jumpStatement, conditionalCall, waitStatement) and
+    // Codesys/.../Statements/{JumpStatementParser,ConditionalCallParser}.cs.
+    //
+    // `JMP label;` jumps unconditionally; the reference's `JMP (cond) label;`
+    // form jumps only when the condition is TRUE.
+    // The target is an ordinary identifier: only the label *definition*
+    // (`name:`) is promoted to a `Label` token.
+    // The trailing `;` belongs to the statement list's separator, like every
+    // other statement, so the rules here do not consume it.
+    rule jump_statement() -> StmtKind = start:tok(TokenType::Jmp) _ condition:(tok(TokenType::LeftParen) _ e:expression() _ tok(TokenType::RightParen) { e })? _ label:identifier() {
+      StmtKind::Jump(Jump {
+        condition,
+        span: SourceSpan::join(&start.span, &label.span),
+        label,
+      })
+    }
+    // The name of a statement label, promoted by xform_statement_labels.
+    rule label_name() -> (Id, SourceSpan) = t:tok(TokenType::Label) { (Id::from(t.text.as_str()), t.span.clone()) }
+    // The trailing `_` matters: a label has no terminator of its own, so the
+    // trivia between it and the statement that follows would otherwise sit
+    // between two list items, where the list's separator rules do not look
+    // for it. (`rules` for the statement separator consume the trivia on the
+    // far side of a `;`, and a label has none.)
+    rule label_statement() -> StmtKind = name:label_name() _ tok(TokenType::Colon) _ {
+      StmtKind::Label(LabelStatement {
+        name: name.0,
+        span: name.1,
+      })
+    }
+    // `CALC(condition, call)`: the reference's third argument (an expected
+    // result type) is not modelled.
+    rule calc_statement() -> StmtKind = start:tok(TokenType::Calc) _ tok(TokenType::LeftParen) _ condition:expression() _ tok(TokenType::Comma) _ call:fb_invocation_body() _ end:tok(TokenType::RightParen) {
+      StmtKind::ConditionalCall(ConditionalCall {
+        condition,
+        call,
+        span: SourceSpan::join(&start.span, &end.span),
+      })
+    }
+    rule wait_statement() -> StmtKind = start:tok(TokenType::Wait) _ condition:(tok(TokenType::LeftParen) _ e:expression() _ tok(TokenType::RightParen) { e })? {
+      StmtKind::Wait(Wait {
+        condition,
+        span: start.span.clone(),
+      })
+    }
+
+    // CODESYS Structured Text exception handling. The tokens only exist when
+    // `allow_try_catch` is set (xform_demote_keywords demotes them to
+    // identifiers otherwise), so the rules need no further gate.
+    // See ST_GRAMMAR.ebnf (tryCatchStatement) and
+    // Codesys/Parser35210/Statements/TryCatchStatementParser.cs.
+    rule try_catch_statement() -> StmtKind = start:tok(TokenType::Try) _ body:statement_list()? _ catch:catch_clause()? _ finally_body:finally_clause()? _ end:tok(TokenType::EndTry) {
+      StmtKind::TryCatch(TryCatch {
+        body: body.unwrap_or_default(),
+        catch,
+        finally_body: finally_body.unwrap_or_default(),
+        span: SourceSpan::join(&start.span, &end.span),
+      })
+    }
+    // `__CATCH`, `__CATCH (e)`, and `__CATCH ()` are all accepted; the
+    // parenthesized form names the variable the thrown value is stored into.
+    rule catch_clause() -> CatchClause = start:tok(TokenType::Catch) _ exception:(tok(TokenType::LeftParen) _ e:variable()? _ tok(TokenType::RightParen) { e })? _ body:statement_list()? {
+      CatchClause {
+        // `__CATCH`, `__CATCH ()` and `__CATCH (e)` all reach here; only the
+        // last names a variable.
+        exception: exception.flatten(),
+        body: body.unwrap_or_default(),
+        span: start.span.clone(),
+      }
+    }
+    rule finally_clause() -> Vec<StmtKind> = tok(TokenType::Finally) _ body:statement_list()? { body.unwrap_or_default() }
+    // The reference parses `__THROW` as a prefixed operator, so the value is
+    // parenthesized: `__THROW(5)` raises the value, a bare `__THROW` raises
+    // without one.
+    rule throw_statement() -> StmtKind = start:tok(TokenType::Throw) _ value:(tok(TokenType::LeftParen) _ e:expression() _ tok(TokenType::RightParen) { e })? {
+      StmtKind::Throw(Throw {
+        value,
+        span: start.span.clone(),
+      })
+    }
   }
 }

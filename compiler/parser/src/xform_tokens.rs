@@ -131,6 +131,7 @@ pub fn insert_keyword_statement_terminators(
                     | TokenType::EndFor
                     | TokenType::EndCase
                     | TokenType::EndRepeat
+                    | TokenType::EndTry
             )
         {
             in_end_statement = true;
@@ -139,6 +140,7 @@ pub fn insert_keyword_statement_terminators(
             in_end_statement = false;
         } else if in_end_statement
             && tok.token_type != TokenType::Comment
+            && tok.token_type != TokenType::DocComment
             && tok.token_type != TokenType::Whitespace
         {
             // TODO remove the span and line/col

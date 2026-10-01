@@ -1723,6 +1723,136 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         Ok(())
     }
 
+    // CODESYS exception handling. The `__TRY`-family keywords are not in
+    // `StmtKind` themselves, so the statement is written here.
+    fn visit_try_catch(
+        &mut self,
+        node: &dsl::textual::TryCatch,
+    ) -> Result<Self::Value, Diagnostic> {
+        self.write_ws("__TRY");
+        self.newline();
+
+        self.indent();
+        for item in node.body.iter() {
+            self.visit_stmt_kind(item)?;
+        }
+        self.outdent();
+
+        if let Some(catch) = &node.catch {
+            self.visit_catch_clause(catch)?;
+        }
+
+        if !node.finally_body.is_empty() {
+            self.write_ws("__FINALLY");
+            self.newline();
+
+            self.indent();
+            for item in node.finally_body.iter() {
+                self.visit_stmt_kind(item)?;
+            }
+            self.outdent();
+        }
+
+        self.write_ws("__ENDTRY");
+        self.write_ws(";");
+        self.newline();
+        self.newline();
+
+        Ok(())
+    }
+
+    fn visit_catch_clause(
+        &mut self,
+        node: &dsl::textual::CatchClause,
+    ) -> Result<Self::Value, Diagnostic> {
+        self.write_ws("__CATCH");
+        if let Some(exception) = &node.exception {
+            self.write("(");
+            self.visit_variable(exception)?;
+            self.write(")");
+        }
+        self.newline();
+
+        self.indent();
+        for item in node.body.iter() {
+            self.visit_stmt_kind(item)?;
+        }
+        self.outdent();
+
+        Ok(())
+    }
+
+    // `JMP` / `label:` / `CALC` / `__WAIT`, the CODESYS jump statements.
+    fn visit_jump(&mut self, node: &dsl::textual::Jump) -> Result<Self::Value, Diagnostic> {
+        self.write_ws("JMP");
+        if let Some(condition) = &node.condition {
+            self.write("(");
+            self.visit_expr(condition)?;
+            self.write(")");
+        }
+        self.write_ws(node.label.original().as_str());
+        self.write_ws(";");
+        self.newline();
+
+        Ok(())
+    }
+
+    fn visit_label_statement(
+        &mut self,
+        node: &dsl::textual::LabelStatement,
+    ) -> Result<Self::Value, Diagnostic> {
+        self.visit_id(&node.name)?;
+        self.write(":");
+        self.newline();
+
+        Ok(())
+    }
+
+    fn visit_conditional_call(
+        &mut self,
+        node: &dsl::textual::ConditionalCall,
+    ) -> Result<Self::Value, Diagnostic> {
+        self.write_ws("CALC");
+        self.write("(");
+        self.visit_expr(&node.condition)?;
+        self.write(",");
+        self.visit_id(&node.call.var_name)?;
+        self.write("(");
+        visit_comma_separated!(self, node.call.params.iter(), ParamAssignmentKind);
+        self.write(")");
+        self.write(")");
+        self.write_ws(";");
+        self.newline();
+
+        Ok(())
+    }
+
+    fn visit_wait(&mut self, node: &dsl::textual::Wait) -> Result<Self::Value, Diagnostic> {
+        self.write_ws("__WAIT");
+        if let Some(condition) = &node.condition {
+            self.write("(");
+            self.visit_expr(condition)?;
+            self.write(")");
+        }
+        self.write_ws(";");
+        self.newline();
+
+        Ok(())
+    }
+
+    fn visit_throw(&mut self, node: &dsl::textual::Throw) -> Result<Self::Value, Diagnostic> {
+        self.write_ws("__THROW");
+        if let Some(value) = &node.value {
+            self.write("(");
+            self.visit_expr(value)?;
+            self.write(")");
+        }
+        self.write_ws(";");
+        self.newline();
+
+        Ok(())
+    }
+
     fn visit_if(&mut self, node: &dsl::textual::If) -> Result<Self::Value, Diagnostic> {
         self.write_ws("IF");
         self.visit_expr(&node.expr)?;

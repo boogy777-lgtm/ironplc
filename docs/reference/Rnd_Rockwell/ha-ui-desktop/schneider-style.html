@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HA Redundancy — panes + data grids + operator screen</title>
+<style>
+  /* Composition: selection-driven. Project browser left; center = data grids
+     (Modules / Channels) with multi-select and bulk toolbar actions; plus an
+     Operator view with status lamps and one takeover button. */
+  :root { --bg:#eef1f4; --chrome:#e2e7ec; --panel:#f7f9fb; --white:#ffffff; --border:#c3ccd4; --line:#d7dee5;
+    --text:#1d2731; --muted:#5d6b78; --dim:#93a0ab; --accent:#0072ce; --accent-dark:#00579e;
+    --sel:#d6eafb; --ok:#217a3c; --warn:#a8720a; --alarm:#c0392b; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; background:#9aa6b1; color:var(--text); font:12.5px/1.45 "Segoe UI", Tahoma, sans-serif; }
+  .mono, .ha-num, .ha-formula, .ha-t, .v { font-family:Consolas, "Courier New", monospace; }
+  .ha-app { position:absolute; inset:6px; display:flex; flex-direction:column; background:var(--bg);
+    border:1px solid #7d8994; box-shadow:0 10px 34px rgba(0,0,0,.4); }
+  .ha-titlebar { display:flex; align-items:center; height:32px; padding:0 4px 0 10px; background:var(--chrome); border-bottom:1px solid var(--border); }
+  .ha-appicon { width:16px; height:16px; margin-right:8px; background:var(--accent); border-radius:50%; color:#fff;
+    text-align:center; line-height:16px; font-size:10px; }
+  .ha-titletext { flex:1; color:#22303c; }
+  .ha-winbtn { width:34px; height:22px; background:transparent; border:none; color:#55636f; font-size:11px; border-radius:3px; }
+  .ha-winbtn:hover { background:#d3dae1; } .ha-winbtn.close:hover { background:var(--alarm); color:#fff; }
+  .ha-menubar { display:flex; background:#dfe5ea; border-bottom:1px solid var(--border); }
+  .ha-menu { padding:5px 12px; color:#22303c; cursor:default; border-bottom:2px solid transparent; }
+  .ha-menu:hover, .ha-menu:focus { border-bottom-color:var(--accent); outline:none; }
+  .ha-cmdbar { display:flex; gap:6px; align-items:center; padding:5px 10px; background:#e7ecf0; border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .ha-cmdbar .ha-tag { font-size:10px; color:var(--dim); text-transform:uppercase; letter-spacing:.8px; }
+  .ha-body { flex:1; display:flex; min-height:0; }
+  .ha-left { width:236px; background:var(--panel); border-right:1px solid var(--border); overflow:auto; padding:8px 0; }
+  .ha-left .browser-title { padding:4px 12px 8px 12px; font-size:10.5px; text-transform:uppercase; letter-spacing:.7px; color:var(--muted); }
+  .ha-bitem { display:flex; align-items:center; gap:8px; padding:7px 12px; cursor:pointer; border-left:3px solid transparent; }
+  .ha-bitem:hover { background:#e9f2fb; } .ha-bitem:focus-visible { outline:2px solid var(--accent); }
+  .ha-bitem.sel { background:var(--sel); border-left-color:var(--accent); font-weight:600; }
+  .ha-bitem .g { color:var(--accent); width:16px; }
+  .ha-center { flex:1; display:flex; flex-direction:column; min-width:0; background:var(--white); }
+  .ha-gridbar { display:flex; gap:8px; align-items:center; padding:7px 12px; background:#f2f6f9; border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .ha-gridbar .sep { width:1px; height:20px; background:var(--line); }
+  .ha-gridview { flex:1; overflow:auto; padding:12px; background:#f5f8fa; }
+  .ha-card { background:#fff; border:1px solid var(--border); border-radius:4px; padding:12px; }
+  .ha-card h3 { margin:0 0 9px 0; font-size:11.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--accent-dark);
+    border-left:3px solid var(--accent); padding-left:8px; }
+  .ha-kv { display:grid; grid-template-columns:180px 1fr; gap:3px 10px; }
+  .ha-kv .k { color:var(--muted); } .ha-kv .v { color:#1d2731; }
+  .ha-chips { display:flex; flex-wrap:wrap; gap:5px; margin-top:7px; }
+  .ha-chip { font-size:10.5px; padding:2px 8px; border-radius:3px; border:1px solid var(--border); background:#f2f5f8;
+    color:#98a5b0; font-family:Consolas, monospace; }
+  .ha-chip.on { background:#d6eafb; border-color:var(--accent); color:var(--accent-dark); }
+  .ha-chip.on.ok { background:#ddf0e2; border-color:var(--ok); color:#175c2c; }
+  .ha-chip.on.warn { background:#faeecb; border-color:#dfb64b; color:#7a5200; }
+  .ha-chip.on.alarm { background:#f9dedb; border-color:#d9998f; color:#8f2318; }
+  .ha-pill { display:inline-flex; gap:6px; align-items:center; border:1px solid var(--border); background:#fff;
+    border-radius:4px; padding:3px 10px; color:var(--muted); font-size:11px; }
+  .ha-pill b { color:var(--text); }
+  .ha-pill.ok { border-color:var(--ok); color:var(--ok); } .ha-pill.ok b { color:var(--ok); }
+  .ha-pill.warn { border-color:#dfb64b; color:var(--warn); } .ha-pill.warn b { color:var(--warn); }
+  .ha-pill.alarm { border-color:#d9998f; color:var(--alarm); } .ha-pill.alarm b { color:var(--alarm); }
+  .ha-dot { width:7px; height:7px; border-radius:50%; background:currentColor; display:inline-block; }
+  .ha-table { width:100%; border-collapse:collapse; }
+  .ha-table th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:#5d6b78;
+    padding:5px 7px; border-bottom:2px solid var(--accent); background:#fbfdff; }
+  .ha-table td { padding:4px 7px; border-bottom:1px solid #e4eaf0; font-family:Consolas, monospace; }
+  .ha-table tr.limit td { background:#fdf6e2; color:#7a5200; }
+  .ha-table tr.limit td:first-child::after { content:" ← limiting"; font-size:9.5px; color:var(--warn); }
+  .ha-table tbody tr:hover td { background:#eaf4fd; cursor:pointer; }
+  .ha-table tbody tr.picked td { background:#d6eafb; }
+  .ha-num { text-align:right; }
+  .ha-check { width:15px; height:15px; accent-color:var(--accent); }
+  .ha-btn { background:#fff; color:#22303c; border:1px solid var(--border); border-radius:3px; padding:4px 11px; font:inherit; cursor:pointer; }
+  .ha-btn:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); }
+  .ha-btn:focus-visible { outline:2px solid var(--accent); } .ha-btn:disabled { opacity:.5; cursor:not-allowed; }
+  .ha-btn.primary { background:var(--accent); border-color:var(--accent-dark); color:#fff; }
+  .ha-btn.primary:hover:not(:disabled) { background:var(--accent-dark); color:#fff; }
+  .ha-btn.warn { background:#fdf3dc; border-color:#dfb64b; color:#7a5200; }
+  .ha-btn.danger { background:#fbe9e7; border-color:#d9998f; color:#8f2318; }
+  .ha-btn.arm { background:#e2f2e7; border-color:#7dbb8c; color:#175c2c; }
+  .ha-select, .ha-input { background:#fff; color:var(--text); border:1px solid var(--border); border-radius:3px;
+    padding:3px 7px; font:inherit; min-width:112px; }
+  .ha-input[type="number"] { min-width:78px; }
+  .ha-lamprow { display:flex; gap:26px; align-items:center; flex-wrap:wrap; }
+  .ha-lamp { display:flex; flex-direction:column; align-items:center; gap:5px; min-width:92px; }
+  .ha-lamp .bulb { width:44px; height:44px; border-radius:50%; border:3px solid #cfd8df; background:#e4eaef;
+    box-shadow:inset 0 2px 6px rgba(0,0,0,.15); }
+  .ha-lamp.ok .bulb { background:radial-gradient(circle at 35% 30%, #7fe39a, #217a3c); border-color:#9fd3ac; }
+  .ha-lamp.warn .bulb { background:radial-gradient(circle at 35% 30%, #ffdd8a, #a8720a); border-color:#e3c780; }
+  .ha-lamp.alarm .bulb { background:radial-gradient(circle at 35% 30%, #ff9b8f, #c0392b); border-color:#e0a49c; }
+  .ha-lamp .cap { font-size:11px; color:var(--muted); text-align:center; }
+  .ha-bigtakeover { font-size:16px; padding:16px 34px; border-radius:6px; }
+  .ha-progress { height:10px; background:#e4eaf0; border:1px solid var(--border); border-radius:5px; overflow:hidden; margin-top:8px; }
+  .ha-bar { height:100%; background:var(--accent); width:0; transition:width .2s; }
+  .ha-bar.ok { background:var(--ok); } .ha-bar.warn { background:#dfb64b; }
+  .ha-formula { background:#eaf4fd; border:1px solid #bcd8f2; border-radius:4px; padding:10px 12px; color:var(--accent-dark); }
+  .ha-verdict { display:inline-flex; gap:8px; align-items:center; border-radius:4px; padding:7px 12px; border:1px solid; font-weight:600; }
+  .ha-verdict.ok { border-color:var(--ok); color:var(--ok); background:#e7f5ec; }
+  .ha-verdict.alarm { border-color:var(--alarm); color:var(--alarm); background:#fbe9e7; }
+  .ha-log { max-height:420px; overflow:auto; border:1px solid var(--border); border-radius:4px; background:#fff; }
+  .ha-lrow { display:grid; grid-template-columns:108px 60px 1fr; gap:8px; padding:4px 10px; border-bottom:1px solid #edf1f5; }
+  .ha-lrow:nth-child(even) { background:#f7fafc; }
+  .ha-t { color:var(--dim); font-size:11px; }
+  .ha-sev { font-size:10px; text-transform:uppercase; letter-spacing:.5px; font-weight:700; }
+  .ha-sev.info { color:var(--accent); } .ha-sev.warn { color:var(--warn); } .ha-sev.alarm { color:var(--alarm); }
+  .ha-msg { color:#22303c; }
+  .ha-note { color:var(--muted); font-size:11.5px; margin:7px 0 0 0; }
+  .ha-hint { color:var(--dim); font-size:11px; }
+  .ha-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .ha-statusbar { display:flex; gap:9px; align-items:center; height:24px; padding:0 14px; background:var(--chrome);
+    border-top:1px solid var(--border); color:#3c4b58; font-size:11.5px; }
+  .ha-statusbar .latest { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ha-sep { color:#aab5bf; }
+  .ha-ok { color:var(--ok); } .ha-warn { color:var(--warn); } .ha-alarm { color:var(--alarm); } .ha-muted { color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="ha-app">
+  <div class="ha-titlebar">
+    <span class="ha-appicon">&#9679;</span><span class="ha-titletext">IronPLC Engineering — Redundant pair (PAIR-RB-0417)</span>
+    <span><button class="ha-winbtn" tabindex="-1">&#9472;</button><button class="ha-winbtn" tabindex="-1">&#9723;</button><button class="ha-winbtn close" tabindex="-1">&#10005;</button></span>
+  </div>
+  <div class="ha-menubar">
+    <span class="ha-menu" tabindex="0">File</span><span class="ha-menu" tabindex="0">Edit</span>
+    <span class="ha-menu" tabindex="0">View</span><span class="ha-menu" tabindex="0">Online</span>
+    <span class="ha-menu" tabindex="0">Diagnostics</span><span class="ha-menu" tabindex="0">Help</span>
+  </div>
+  <div class="ha-cmdbar" id="cmdbar"></div>
+  <div class="ha-body">
+    <div class="ha-left" id="browser"></div>
+    <div class="ha-center">
+      <div class="ha-gridbar" id="gridbar"></div>
+      <div class="ha-gridview" id="view"></div>
+    </div>
+  </div>
+  <div class="ha-statusbar" id="status"></div>
+</div>
+
+<script src="mockup-core.js"></script>
+<script>
+(function () {
+  'use strict';
+  var ui = { view: 'modules', confirmTakeover: false };
+  function el(id) { return document.getElementById(id); }
+  function esc(s) { return HA.esc(s); }
+  var S = HA.getState;
+
+  HA.mount({ surface: 'classic', inspector: false });
+
+  function renderCmdbar() {
+    var st = S();
+    var C = HA.derive.can;
+    el('cmdbar').innerHTML = '<span class="ha-tag">Commands</span>' +
+      '<button class="ha-btn primary" ' + (C('swap') ? '' : 'disabled') + ' onclick="HA.act(\'swap\')">Manual swap</button>' +
+      '<button class="ha-btn warn" ' + (C('degrade') ? '' : 'disabled') + ' onclick="HA.act(\'degrade\')">' + (st.degraded ? 'Restore EMA' : 'Degrade EMA') + '</button>' +
+      '<button class="ha-btn" ' + (C('calibrate') ? '' : 'disabled') + ' onclick="HA.act(\'calibrate\')">Run calibration</button>' +
+      '<button class="ha-btn" ' + (C('invalidate-topo') ? '' : 'disabled') + ' onclick="HA.act(\'invalidate-topo\')">Invalidate qualification</button>' +
+      '<span class="sep"></span>' +
+      '<button class="ha-btn" ' + (C('kill-p') ? '' : 'disabled') + ' onclick="HA.act(\'kill-p\')">Kill P</button>' +
+      '<button class="ha-btn" ' + (C('kill-i') ? '' : 'disabled') + ' onclick="HA.act(\'kill-i\')">Kill I</button>' +
+      '<button class="ha-btn" ' + (C('restore-channels') ? '' : 'disabled') + ' onclick="HA.act(\'restore-channels\')">Restore</button>' +
+      '<span class="sep"></span>' +
+      '<button class="ha-btn danger" ' + (C('death') ? '' : 'disabled') + ' onclick="HA.act(\'death\')">Primary death</button>' +
+      '<button class="ha-btn danger" ' + (C('death-secondary') ? '' : 'disabled') + ' onclick="HA.act(\'death-secondary\')">Secondary death</button>' +
+      '<button class="ha-btn" ' + (C('resurrect-primary') ? '' : 'disabled') + ' onclick="HA.act(\'resurrect-primary\')">Resurrect primary</button>' +
+      '<button class="ha-btn" ' + (C('resurrect-secondary') ? '' : 'disabled') + ' onclick="HA.act(\'resurrect-secondary\')">Resurrect secondary</button>' +
+      '<button class="ha-btn warn" ' + (C('partition') ? '' : 'disabled') + ' onclick="HA.act(\'partition\')">Partition claim</button>' +
+      '<span class="sep"></span>' +
+      '<button class="ha-btn" ' + (st.busy ? 'disabled' : '') + ' onclick="HA.act(\'reset\')">Reset</button>' +
+      '<span class="ha-hint">' + (st.mode === 'redundant' ? 'Redundant pair' : 'Standalone') + '</span>';
+  }
+
+  function renderBrowser() {
+    var st = S();
+    var items = [['modules', 'Modules', '\u25A6'], ['channels', 'Channels', '\u2261'], ['calibration', 'Calibration', '\u223F'], ['program', 'Program', '\u25A4'], ['operator', 'Operator', '\u25CF'], ['alarms', 'Alarms', '\u2315']];
+    var h = '<div class="browser-title">Project browser</div>';
+    items.forEach(function (it) {
+      h += '<div class="ha-bitem' + (ui.view === it[0] ? ' sel' : '') + '" tabindex="0" onclick="app.view(\'' + it[0] + '\')">' +
+        '<span class="g">' + it[2] + '</span>' + it[1] + '</div>';
+    });
+    var linkTone = st.link.ch1 === 'OK' && st.link.ch2 === 'OK' ? 'ok' : 'warn';
+    h += '<div style="padding:12px">' +
+      HA.frag.pill(st.mode === 'redundant' ? 'PAIR LINK' : 'MODE', st.mode === 'redundant' ? (linkTone === 'ok' ? 'HEALTHY' : 'DEGRADED') : 'STANDALONE', linkTone) + '<br><br>' +
+      HA.frag.pill('PERMIT', st.permitOwner || 'WITHHELD', st.permitOwner ? 'ok' : 'alarm') + '<br><br>' +
+      HA.frag.pill('EPOCH', String(st.epoch), '') +
+      '</div>';
+    el('browser').innerHTML = h;
+  }
+
+  function renderGridbar() {
+    if (ui.view === 'modules') {
+      var sel = HA.select.modules();
+      el('gridbar').innerHTML = '<span class="ha-tag">Grid: Modules</span>' +
+        '<button class="ha-btn" onclick="HA.select.all(true)">Select all</button>' +
+        '<button class="ha-btn" onclick="HA.select.all(false)">Clear</button>' +
+        '<span class="sep"></span>' +
+        '<button class="ha-btn primary" ' + (sel.length ? '' : 'disabled') + ' onclick="HA.bulk(\'claim\')">Claim selected</button>' +
+        '<button class="ha-btn warn" ' + (sel.length ? '' : 'disabled') + ' onclick="HA.bulk(\'release\')">Release selected</button>' +
+        '<button class="ha-btn arm" ' + (sel.length ? '' : 'disabled') + ' onclick="HA.bulk(\'arm\')">ARM selected</button>' +
+        '<button class="ha-btn" ' + (sel.length ? '' : 'disabled') + ' onclick="HA.bulk(\'calibrate\')">Calibrate selected</button>' +
+        '<span class="ha-hint">' + sel.length + ' of ' + S().modules.length + ' selected</span>';
+    } else if (ui.view === 'calibration') {
+      el('gridbar').innerHTML = '<span class="ha-tag">Grid: Calibration</span>' +
+        '<button class="ha-btn primary" ' + (S().busy ? 'disabled' : '') + ' onclick="HA.act(\'calibrate\')">Run calibration</button>' +
+        '<span class="ha-hint">worst-load run, both directions</span>';
+    } else {
+      el('gridbar').innerHTML = '<span class="ha-tag">' + esc(ui.view) + '</span>';
+    }
+  }
+
+  function gridModules() {
+    var b = HA.data.barrier();
+    var rows = b.modules.map(function (m) {
+      var tone = m.ownerState === 'ARMED' ? 'ha-ok' : (m.ownerState === 'CLAIMED_DISARMED' ? 'ha-warn' : 'ha-alarm');
+      var picked = b.selection.indexOf(m.id) >= 0;
+      return '<tr class="' + (m.limiting ? 'limit ' : '') + (picked ? 'picked' : '') + '">' +
+        '<td><input type="checkbox" class="ha-check" ' + (picked ? 'checked' : '') +
+        ' onclick="event.stopPropagation()" onchange="app.toggleRow(\'' + m.id + '\')"></td>' +
+        '<td>' + m.id + '</td><td>' + m.profile + '</td><td>' + esc(m.owner) + '</td>' +
+        '<td class="' + tone + '">' + m.ownerState + '</td>' +
+        '<td class="ha-num">' + m.ownerEpoch + '</td><td class="ha-num">' + HA.f2(m.claim) + '</td>' +
+        '<td class="ha-num">' + HA.f2(m.claimMax) + '</td>' +
+        '<td class="ha-num">' + (m.armed ? 'ARMED' : 'DISARMED') + '</td>' +
+        '<td class="ha-num ha-muted">' + m.packetAgeUs + '</td></tr>';
+    }).join('');
+    return '<div class="ha-card"><h3>Modules — row per required output module</h3>' +
+      '<table class="ha-table"><thead><tr><th></th><th>module</th><th>profile</th><th>owner</th><th>owner state</th>' +
+      '<th>epoch</th><th>claim ms</th><th>T ms</th><th>armed</th><th>age µs</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<div class="ha-row" style="margin-top:10px">' +
+      (b.passed ? '<span class="ha-pill ok"><span class="ha-dot"></span>BARRIER PASSED — ' + b.claimed + '/' + b.total + '</span>'
+        : '<span class="ha-pill warn"><span class="ha-dot"></span>BARRIER IN PROGRESS — ' + b.claimed + '/' + b.total + '</span>') +
+      '<span class="ha-pill">LIMITING <b>' + b.limitingId + '</b></span>' +
+      '<span class="ha-pill">WORST Σ <b>' + HA.f2(b.seqMax) + ' ms</b></span></div>' +
+      '<p class="ha-note">Select rows, then act on the selection. Claim → CLAIMED_DISARMED only; ARM is separate; partial ownership never means ACTIVE.</p></div>';
+  }
+
+  function gridChannels() {
+    var st = S(), c = HA.data.calibration();
+    var dirs = HA.frag.table(['direction', 'current', 'EMA10', 'EMA100', 'max', 'count'], c.directions.map(function (r) {
+      return { cells: [r.dir, HA.f2(r.cur), HA.f2(r.e10), HA.f2(r.e100), HA.f2(r.max), r.count.toLocaleString()] };
+    }));
+    function counters(name, cc, state) {
+      var tone = state === 'DEGRADED' ? 'ha-warn' : (state === 'LOST' ? 'ha-alarm' : 'ha-ok');
+      return '<h3 style="margin-top:10px">' + esc(name) + ' — <span class="' + tone + '">' + state + '</span></h3>' +
+        HA.frag.table(['', 'value', 'step'], [
+          { cells: ['ping_seq', cc.ping.toLocaleString(), '+1'] },
+          { cells: ['pong_seq', cc.pong.toLocaleString(), '+1'] },
+          { cells: ['missing exchange', String(cc.missing), '+1000'] },
+          { cells: ['penalty', cc.penalty.toLocaleString(), '—'] }
+        ]);
+    }
+    return '<div class="ha-card"><h3>Channels — metrics grid</h3>' + dirs +
+      HA.frag.kv([['Jitter envelope', HA.f2(c.jitter) + ' ms'], ['Loss rate', (c.loss * 100).toFixed(4) + ' %'],
+        ['Max consecutive loss', c.consec + ' exchange(s)']]) +
+      counters('CH1 pair link', st.counters.ch1, st.link.ch1) +
+      counters('CH2 I/O chain', st.counters.ch2, st.link.ch2) + '</div>' +
+      '<div class="ha-card" style="margin-top:10px"><h3>Per-side scan statistics</h3>' +
+      HA.frag.kv(c.sides.map(function (s) {
+        return [s.side, s.max !== undefined ? HA.f2(s.v) + ' / ' + HA.f2(s.max) + ' / ' + HA.f2(s.jitter) + ' ms' : HA.f2(s.v) + ' ms'];
+      })) + '<p class="ha-note">Silence detection = missing expected +1, not a bare packet timeout; +1000 is an operational penalty weight.</p></div>';
+  }
+
+  function gridCalibration() {
+    var c = HA.data.calibration();
+    var h = '<div class="ha-card"><h3>Calibration grid</h3>' +
+      HA.frag.table(['direction', 'current', 'EMA10', 'EMA100', 'max', 'count'], c.directions.map(function (r) {
+        return { cells: [r.dir, HA.f2(r.cur), HA.f2(r.e10), HA.f2(r.e100), HA.f2(r.max), r.count.toLocaleString()] };
+      })) +
+      HA.frag.kv([['Run state', esc(c.cal.state), c.cal.state === 'CALIBRATED' ? 'ha-ok' : 'ha-warn'],
+        ['Baseline', esc(c.cal.baseline)], ['Trigger', esc(c.cal.trigger)]]) +
+      (c.cal.state === 'CALIBRATING' ? '<div class="ha-progress"><div class="ha-bar" style="width:' + c.cal.progress + '%"></div></div>' : '') +
+      '<p class="ha-note">Invalidate qualification from the command bar when topology, NIC, or medium changes.</p></div>';
+    return h;
+  }
+
+  function operatorView() {
+    var st = S(), d = HA.data.overview();
+    function lamp(label, tone) { return '<div class="ha-lamp ' + tone + '"><div class="bulb"></div><div class="cap">' + esc(label) + '</div></div>'; }
+    function unitLamp(u) {
+      var tone = !u.online ? 'alarm' : (u.control === 'ACTIVE' ? (st.degraded ? 'warn' : 'ok') : (u.control === 'ACTIVE_DEGRADED' ? 'warn' : ''));
+      return lamp(u.name + ' · ' + u.control, tone);
+    }
+    var h = '<div class="ha-card"><h3>Operator screen</h3><div class="ha-lamprow">' +
+      unitLamp(d.units[0]) + unitLamp(d.units[1]) +
+      lamp('PERMIT ' + (st.permitOwner || '—'), st.permitOwner ? 'ok' : 'alarm') +
+      lamp('PAIR LINK ' + (st.link.ch1 === 'OK' && st.link.ch2 === 'OK' ? '2/2' : (HA.derive.linkValid() ? '1/2' : '0/2')),
+        st.link.ch1 === 'OK' && st.link.ch2 === 'OK' ? 'ok' : (HA.derive.linkValid() ? 'warn' : 'alarm')) +
+      lamp('TAKEOVER READY', d.takeoverReady ? 'ok' : 'warn') +
+      lamp('ALARMS', HA.derive.alarmsActive() ? 'alarm' : 'ok') +
+      '</div>' +
+      '<div class="ha-row" style="margin-top:16px">' +
+      '<button class="ha-btn ' + (ui.confirmTakeover ? 'danger' : 'primary') + ' ha-bigtakeover" ' + (HA.derive.can('swap') ? '' : 'disabled') +
+      ' onclick="app.takeover()">' + (ui.confirmTakeover ? 'CONFIRM TAKEOVER — click again' : 'TAKE OVER') + '</button>' +
+      '<span class="ha-hint">' + (ui.confirmTakeover ? 'Takeover transfers ownership of all required outputs after the barrier.' : 'Two-step action: first click arms the button.') + '</span>' +
+      '</div>' +
+      '<div class="ha-row" style="margin-top:10px">' +
+      '<button class="ha-btn danger" ' + (HA.derive.can('death') ? '' : 'disabled') + ' onclick="HA.act(\'death\')">Simulate primary death</button>' +
+      '<button class="ha-btn danger" ' + (HA.derive.can('death-secondary') ? '' : 'disabled') + ' onclick="HA.act(\'death-secondary\')">Simulate secondary death</button>' +
+      '<button class="ha-btn" ' + (HA.derive.can('resurrect-primary') ? '' : 'disabled') + ' onclick="HA.act(\'resurrect-primary\')">Resurrect primary</button>' +
+      '<button class="ha-btn" ' + (HA.derive.can('resurrect-secondary') ? '' : 'disabled') + ' onclick="HA.act(\'resurrect-secondary\')">Resurrect secondary</button>' +
+      '<button class="ha-btn warn" ' + (HA.derive.can('partition') ? '' : 'disabled') + ' onclick="HA.act(\'partition\')">Partition claim (owner alive)</button>' +
+      '</div>' +
+      '<p class="ha-note">Operator view: lamps are derived from haStatus; takeover runs the commanded swap path (SYNC_READY required).</p></div>';
+    h += '<div class="ha-card" style="margin-top:10px"><h3>Pair status lamps detail</h3><div class="ha-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px">' +
+      d.units.map(function (u) {
+        return '<div>' + HA.frag.kv([
+          [u.name, esc(u.role) + ' — ' + esc(u.ip)],
+          ['CONTROL', u.control, u.control === 'ACTIVE' ? 'ha-ok' : 'ha-muted'],
+          ['TakeoverReady', u.takeoverReady ? 'TRUE' : 'false', u.takeoverReady ? 'ha-ok' : 'ha-muted']
+        ]) + '</div>';
+      }).join('') + '</div></div>';
+    return h;
+  }
+
+  function alarmsView() {
+    var rows = HA.data.events('all');
+    return '<div class="ha-card"><h3>Alarms &amp; events</h3><div class="ha-log">' +
+      rows.map(function (e) {
+        return '<div class="ha-lrow"><span class="ha-t">' + esc(e.t) + '</span><span class="ha-sev ' + e.sev + '">' + e.sev + '</span><span class="ha-msg">' + esc(e.msg) + '</span></div>';
+      }).join('') + '</div></div>';
+  }
+
+  function renderView() {
+    var st = S();
+    if (ui.view === 'modules') el('view').innerHTML = gridModules();
+    else if (ui.view === 'channels') el('view').innerHTML = gridChannels();
+    else if (ui.view === 'calibration') el('view').innerHTML = gridCalibration();
+    else if (ui.view === 'program') el('view').innerHTML = '<div class="ha-card"><h3>Program — monitoring / online edit</h3>' + HA.edit.sectionHtml() + '</div>';
+    else if (ui.view === 'operator') el('view').innerHTML = operatorView();
+    else el('view').innerHTML = alarmsView();
+  }
+
+  function renderStatus() {
+    var st = S();
+    var last = HA.data.events('all')[0];
+    var n = HA.derive.alarmsActive();
+    el('status').innerHTML = '<span>MODE ' + (st.mode === 'redundant' ? 'Redundant' : 'Standalone') + '</span><span class="ha-sep">|</span>' +
+      '<span>EPOCH ' + st.epoch + '</span><span class="ha-sep">|</span>' +
+      '<span>PERMIT ' + esc(st.permitOwner || 'WITHHELD') + '</span><span class="ha-sep">|</span>' +
+      '<span class="' + (n ? 'ha-alarm' : 'ha-ok') + '">ALARMS ' + (n || 'none') + '</span><span class="ha-sep">|</span>' +
+      '<span class="ha-sep">|</span><span>' + HA.edit.statusText() + '</span><span class="ha-sep">|</span>' +
+      '<span class="latest">' + (last ? esc(last.msg) : '') + '</span>';
+  }
+
+  function render(tick) {
+    if (tick && document.activeElement && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
+    renderCmdbar(); renderBrowser(); renderGridbar(); renderView(); renderStatus();
+  }
+
+  window.app = {
+    view: function (v) { ui.view = v; render(false); },
+    toggleRow: function (id) { HA.select.toggle(id); render(false); },
+    takeover: function () {
+      var st = S();
+      if (!ui.confirmTakeover) { ui.confirmTakeover = true; render(false); return; }
+      ui.confirmTakeover = false;
+      HA.act('swap');
+      render(false);
+    }
+  };
+
+  HA.subscribe(function (tick) { render(tick); });
+  render(false);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HA Redundancy — topology diagram first</title>
+<style>
+  /* Composition: the diagram IS the UI. Click a controller, link, or module
+     block to open its context panel beside the diagram. Lists are secondary. */
+  :root { --chrome:#e8ecf0; --panel:#f6f8fa; --canvas:#eef2f6; --border:#c2ccd4; --line:#d8e0e6;
+    --text:#1b2831; --muted:#5b6b77; --dim:#92a1ad; --accent:#1668b3; --accent2:#3b8fd4;
+    --ok:#1e7c3c; --warn:#a06e00; --alarm:#bf3527; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; background:#98a4ae; color:var(--text); font:12.5px/1.45 "Segoe UI", Tahoma, sans-serif; }
+  .mono, .ha-num, .ha-formula, .ha-t, .v { font-family:Consolas, "Courier New", monospace; }
+  .ha-app { position:absolute; inset:6px; display:flex; flex-direction:column; background:var(--chrome);
+    border:1px solid #76828c; box-shadow:0 10px 34px rgba(0,0,0,.4); }
+  .ha-titlebar { display:flex; align-items:center; height:30px; padding:0 4px 0 10px; background:linear-gradient(#f8fafb,#e2e8ed); border-bottom:1px solid var(--border); }
+  .ha-appicon { width:17px; height:17px; margin-right:8px; background:var(--accent); border-radius:3px; color:#fff; text-align:center; line-height:17px; font-size:10px; }
+  .ha-titletext { flex:1; }
+  .ha-winbtn { width:40px; height:22px; background:transparent; border:none; color:#55636f; font-size:11px; }
+  .ha-winbtn:hover { background:#d3dae1; } .ha-winbtn.close:hover { background:var(--alarm); color:#fff; }
+  .ha-menubar { display:flex; background:#eef1f4; border-bottom:1px solid var(--border); }
+  .ha-menu { padding:5px 12px; cursor:default; } .ha-menu:hover, .ha-menu:focus { background:#d7e6f2; outline:none; }
+  .ha-toolbar { display:flex; align-items:center; gap:4px; background:#e9edf1; border-bottom:1px solid var(--border); padding:5px 8px; flex-wrap:wrap; }
+  .ha-tgroup { display:flex; align-items:center; gap:3px; padding:0 8px; border-right:1px solid #cdd6dd; }
+  .ha-tb { display:flex; align-items:center; gap:5px; padding:4px 9px; background:transparent; border:1px solid transparent; border-radius:3px; color:#2b3b48; font:inherit; cursor:pointer; }
+  .ha-tb:hover:not(:disabled) { background:#fff; border-color:var(--border); color:var(--accent); }
+  .ha-tb:disabled { color:#9fabb6; cursor:not-allowed; }
+  .ha-body { flex:1; display:flex; min-height:0; }
+  .diagram { flex:1; overflow:auto; padding:22px; background:var(--canvas);
+    background-image:radial-gradient(#c8d3db 1px, transparent 1px); background-size:22px 22px; }
+  .ctx { width:330px; background:var(--panel); border-left:1px solid var(--border); overflow:auto; padding:12px; }
+  .ctx h3 { margin:0 0 9px 0; font-size:11.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--accent);
+    border-bottom:2px solid var(--accent); display:inline-block; padding-bottom:4px; }
+  .row2 { display:grid; grid-template-columns:1fr 96px 1fr; gap:14px; align-items:stretch; }
+  .block { background:#fff; border:2px solid var(--border); border-radius:8px; padding:12px; cursor:pointer; text-align:center;
+    box-shadow:0 2px 6px rgba(30,45,60,.08); transition:box-shadow .15s; }
+  .block:hover { box-shadow:0 4px 14px rgba(30,45,60,.18); border-color:var(--accent2); }
+  .block.sel { outline:3px solid #b7d6ef; }
+  .block.active { border-color:var(--ok); background:#f0faf3; }
+  .block.standby { border-color:var(--accent2); background:#f1f8fe; }
+  .block.off { border-color:#d99a90; background:#fdf1ef; }
+  .block .name { font-weight:700; font-size:14px; }
+  .block .sub { color:var(--muted); font-size:11px; }
+  .block .state { margin-top:6px; font-family:Consolas, monospace; font-size:12px; }
+  .linkcol { display:flex; flex-direction:column; justify-content:center; gap:10px; }
+  .linkbox { cursor:pointer; padding:6px 4px; border:1px dashed #9fb3c2; border-radius:6px; background:#f6fafd; text-align:center; }
+  .linkbox:hover { border-color:var(--accent); }
+  .linkbox.sel { outline:2px solid #b7d6ef; }
+  .wire { height:4px; border-radius:2px; background:var(--ok); margin:5px 0; }
+  .wire.warn { background:#d8a825; } .wire.alarm { background:var(--alarm); }
+  .buszone { margin-top:18px; display:grid; grid-template-columns:1fr 96px 1fr; gap:14px; }
+  .busline { border-left:2px dashed #9fb3c2; height:26px; margin:0 auto; width:0; }
+  .iochain { grid-column:1 / -1; border:2px dashed #a9bccc; border-radius:10px; padding:12px; background:rgba(255,255,255,.7); }
+  .iochain:hover { border-color:var(--accent2); }
+  .iochain.sel { outline:3px solid #b7d6ef; }
+  .machines { display:flex; gap:10px; align-items:flex-start; }
+  .ioports { display:grid; grid-template-columns:repeat(auto-fit, minmax(92px,1fr)); gap:8px; margin-top:10px; }
+  .port { padding:8px 4px; text-align:center; border:1px solid var(--border); border-radius:6px; background:#fff;
+    font-family:Consolas, monospace; font-size:11px; cursor:pointer; }
+  .port:hover { border-color:var(--accent2); }
+  .port.sel { outline:2px solid #b7d6ef; }
+  .port.armed { border-color:var(--ok); background:#eaf7ee; color:#145c27; }
+  .port.disarmed { border-color:#d8a825; background:#fdf6dd; color:#6b5300; }
+  .port.safe { border-color:#d99a90; background:#fdf1ef; color:#7e1d15; }
+  .legend { display:flex; gap:14px; margin-top:16px; color:var(--muted); font-size:11px; flex-wrap:wrap; }
+  .legend .sw { display:inline-block; width:12px; height:12px; border-radius:3px; border:2px solid; margin-right:5px; vertical-align:-2px; }
+  .ha-card { background:#fff; border:1px solid var(--border); border-radius:4px; padding:11px; margin-bottom:10px; }
+  .ha-kv { display:grid; grid-template-columns:150px 1fr; gap:3px 8px; }
+  .ha-kv .k { color:var(--muted); } .ha-kv .v { color:#1b2831; }
+  .ha-pill { display:inline-flex; gap:6px; align-items:center; border:1px solid var(--border); background:#fff;
+    border-radius:10px; padding:2px 9px; color:var(--muted); font-size:11px; }
+  .ha-pill b { color:var(--text); }
+  .ha-pill.ok { border-color:var(--ok); color:var(--ok); } .ha-pill.ok b { color:var(--ok); }
+  .ha-pill.warn { border-color:#d8a825; color:var(--warn); } .ha-pill.warn b { color:var(--warn); }
+  .ha-pill.alarm { border-color:#d99a90; color:var(--alarm); } .ha-pill.alarm b { color:var(--alarm); }
+  .ha-dot { width:7px; height:7px; border-radius:50%; background:currentColor; display:inline-block; }
+  .ha-table { width:100%; border-collapse:collapse; }
+  .ha-table th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); padding:4px 6px; border-bottom:2px solid #d6dce0; background:#f6f8f9; }
+  .ha-table td { padding:3px 6px; border-bottom:1px solid #e6eaed; font-family:Consolas, monospace; }
+  .ha-table tr.limit td { background:#fdf6dd; color:#6b5300; }
+  .ha-table tr.limit td:first-child::after { content:" ← limiting"; font-size:9.5px; color:var(--warn); }
+  .ha-num { text-align:right; }
+  .ha-btn { background:linear-gradient(#fdfdfd,#e8ecef); color:#26313b; border:1px solid #a9b2ba; border-radius:3px; padding:5px 11px; font:inherit; cursor:pointer; }
+  .ha-btn:hover:not(:disabled) { border-color:var(--accent2); color:var(--accent); }
+  .ha-btn:disabled { opacity:.5; cursor:not-allowed; }
+  .ha-btn.primary { background:linear-gradient(#4a90d9,#1668b3); border-color:#12578f; color:#fff; }
+  .ha-btn.warn { background:linear-gradient(#fdf3d9,#f0dfae); border-color:#cfa93f; color:#6b5300; }
+  .ha-btn.danger { background:linear-gradient(#fde3e1,#f3c6c2); border-color:#c88a84; color:#7e1d15; }
+  .ha-progress { height:9px; background:#e8ecef; border:1px solid var(--border); border-radius:5px; overflow:hidden; margin-top:8px; }
+  .ha-bar { height:100%; background:var(--accent2); width:0; }
+  .ha-bar.ok { background:var(--ok); } .ha-bar.warn { background:#d8a825; }
+  .ha-verdict { display:inline-flex; gap:8px; align-items:center; border-radius:3px; padding:6px 10px; border:1px solid; font-weight:600; }
+  .ha-verdict.ok { border-color:var(--ok); color:var(--ok); background:#e7f6ea; }
+  .ha-verdict.alarm { border-color:var(--alarm); color:var(--alarm); background:#fbe9e7; }
+  .ha-note { color:var(--muted); font-size:11px; margin:6px 0 0 0; }
+  .ha-hint { color:var(--dim); font-size:11px; }
+  .ha-row { display:flex; gap:7px; align-items:center; flex-wrap:wrap; }
+  .ha-input { background:#fff; border:1px solid var(--border); border-radius:3px; padding:3px 6px; font:inherit; min-width:76px; }
+  .ha-log { max-height:200px; overflow:auto; }
+  .ha-lrow { display:grid; grid-template-columns:96px 52px 1fr; gap:7px; padding:3px 6px; border-bottom:1px solid #edf0f2; font-size:11px; }
+  .ha-t { color:var(--dim); font-size:10.5px; }
+  .ha-sev { font-size:9.5px; text-transform:uppercase; font-weight:700; }
+  .ha-sev.info { color:var(--accent); } .ha-sev.warn { color:var(--warn); } .ha-sev.alarm { color:var(--alarm); }
+  .ha-msg { color:#26313b; }
+  .ha-statusbar { display:flex; gap:9px; align-items:center; height:24px; padding:0 12px; background:linear-gradient(#fdfdfd,#e3e8ec);
+    border-top:1px solid var(--border); color:#44505c; font-size:11.5px; }
+  .ha-sep { color:#b0b8bf; }
+  .ha-ok { color:var(--ok); } .ha-warn { color:var(--warn); } .ha-alarm { color:var(--alarm); } .ha-muted { color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="ha-app">
+  <div class="ha-titlebar"><span class="ha-appicon">&#9635;</span><span class="ha-titletext">IronPLC Engineering — PAIR-RB-0417 · topology</span>
+    <span><button class="ha-winbtn" tabindex="-1">&#9472;</button><button class="ha-winbtn" tabindex="-1">&#9723;</button><button class="ha-winbtn close" tabindex="-1">&#10005;</button></span></div>
+  <div class="ha-menubar">
+    <span class="ha-menu" tabindex="0">File</span><span class="ha-menu" tabindex="0">Edit</span><span class="ha-menu" tabindex="0">View</span>
+    <span class="ha-menu" tabindex="0">Online</span><span class="ha-menu" tabindex="0">Diagnostics</span><span class="ha-menu" tabindex="0">Help</span>
+  </div>
+  <div class="ha-toolbar" id="toolbar"></div>
+  <div class="ha-body">
+    <div class="diagram" id="diagram"></div>
+    <div class="ctx" id="ctx"></div>
+  </div>
+  <div class="ha-statusbar" id="status"></div>
+</div>
+
+<script src="mockup-core.js"></script>
+<script>
+(function () {
+  'use strict';
+  var ui = { sel: { type: 'pair' } };
+  function el(id) { return document.getElementById(id); }
+  function esc(s) { return HA.esc(s); }
+  var S = HA.getState;
+
+  HA.mount({ surface: 'classic', inspector: false });
+
+  function renderToolbar() {
+    var st = S();
+    var b = st.busy ? 'disabled' : '';
+    el('toolbar').innerHTML =
+      '<div class="ha-tgroup"><button class="ha-tb" ' + b + ' onclick="HA.setMode(\'' + (st.mode === 'redundant' ? 'standalone' : 'redundant') + '\')">' +
+      (st.mode === 'redundant' ? 'Stop pair' : 'Start pair') + '</button>' +
+      '<button class="ha-tb" ' + b + ' onclick="HA.act(\'swap\')">&#8646; Takeover</button>' +
+      '<button class="ha-tb" ' + b + ' onclick="HA.act(\'death\')">&#9760; Death sim</button></div>' +
+      '<div class="ha-tgroup"><button class="ha-tb" ' + b + ' onclick="HA.act(\'calibrate\')">&#9654; Calibrate</button>' +
+      '<button class="ha-tb" ' + b + ' onclick="HA.act(\'invalidate-topo\')">&#10006; Invalidate</button>' +
+      '<button class="ha-tb" ' + b + ' onclick="HA.act(\'reset\')">&#8634; Reset</button></div>' +
+      '<span class="ha-hint" style="margin-left:auto">click any block, link, or module for its context panel</span>';
+  }
+
+  function unitBlock(u, idx) {
+    var sel = ui.sel.type === 'unit' && ui.sel.idx === idx;
+    var cls = !u.online ? 'off' : (u.control === 'ACTIVE' ? 'active' : 'standby');
+    return '<div class="block ' + cls + (sel ? ' sel' : '') + '" tabindex="0" onclick="app.sel(\'unit\',' + idx + ')">' +
+      '<div class="name">' + u.name + '</div><div class="sub">' + esc(u.role) + ' · ' + esc(u.ip) + '</div>' +
+      '<div class="state">' + u.control + (u.permit ? ' · PERMIT' : '') + '</div>' +
+      '<div class="state ha-muted" style="font-size:10.5px">' + HA.frag.syncChips(u.name) + '</div></div>';
+  }
+
+  function linkBox(id, label, state, sel) {
+    var cls = state === 'OK' ? '' : (state === 'DEGRADED' ? 'warn' : 'alarm');
+    return '<div class="linkbox' + (sel ? ' sel' : '') + '" tabindex="0" onclick="app.sel(\'link\',\'' + id + '\')">' +
+      '<b>' + label + '</b> <span class="mono" style="font-size:10.5px">' + state + '</span>' +
+      '<div class="wire ' + cls + '"></div></div>';
+  }
+
+  function renderDiagram() {
+    var st = S(), d = HA.data.overview();
+    var linkSel = ui.sel.type === 'link';
+    var h = '<div class="row2">' + unitBlock(d.units[0], 0) +
+      '<div class="linkcol">' + linkBox('ch1', 'CH1 pair link', st.link.ch1, linkSel && ui.sel.id === 'ch1') +
+      linkBox('ch2', 'CH2 I/O chain', st.link.ch2, linkSel && ui.sel.id === 'ch2') + '</div>' +
+      unitBlock(d.units[1], 1) + '</div>';
+    h += '<div class="buszone"><div class="busline"></div><div class="busline"></div><div></div>';
+    var chainSel = ui.sel.type === 'chain';
+    h += '<div class="iochain' + (chainSel ? ' sel' : '') + '" tabindex="0" onclick="app.sel(\'chain\')">' +
+      '<div class="ha-row"><b>I/O chain</b>' + HA.frag.pill('BARRIER', HA.data.barrier().passed ? 'PASSED' : 'IN PROGRESS', HA.data.barrier().passed ? 'ok' : 'warn') +
+      HA.frag.pill('OWNED', HA.data.barrier().claimed + '/' + HA.data.barrier().total, '') + '</div>' +
+      '<div class="ioports">' + st.modules.map(function (m) {
+        var cls = m.ownerState === 'ARMED' ? 'armed' : (m.ownerState === 'CLAIMED_DISARMED' ? 'disarmed' : (m.ownerState === 'SAFE' || m.ownerState === 'FAILSAFE' ? 'safe' : ''));
+        var sel = ui.sel.type === 'module' && ui.sel.id === m.id;
+        return '<div class="port ' + cls + (sel ? ' sel' : '') + '" tabindex="0" onclick="event.stopPropagation();app.sel(\'module\',null,\'' + m.id + '\')">' +
+          m.id + '<br>' + m.ownerState + '<br><span class="ha-muted">' + m.profile + '</span></div>';
+      }).join('') + '</div>' +
+      '<div class="legend"><span><span class="sw" style="border-color:var(--ok);background:#eaf7ee"></span>ARMED</span>' +
+      '<span><span class="sw" style="border-color:#d8a825;background:#fdf6dd"></span>CLAIMED_DISARMED</span>' +
+      '<span><span class="sw" style="border-color:#d99a90;background:#fdf1ef"></span>SAFE / FAILSAFE</span>' +
+      '<span class="ha-hint">partial ownership never means ACTIVE</span></div></div>' +
+      '<div class="block' + (ui.sel.type === 'program' ? ' sel' : '') + '" tabindex="0" style="margin-top:14px" onclick="app.sel(\'program\')">' +
+      '<div class="name">Main — routine</div><div class="sub">monitoring / online edit</div>' +
+      '<div class="state">' + HA.edit.statusText() + '</div></div></div>';
+    el('diagram').innerHTML = h;
+  }
+
+  function ctxUnit(idx) {
+    var st = S();
+    var u = HA.data.overview().units[idx];
+    var name = u.name;
+    var kind = HA.getState().deadInfo[name];
+    var h = '<h3>' + name + ' — context</h3><div class="ha-card">' + HA.frag.kv([
+      ['Configured role', esc(u.role)], ['IP', esc(u.ip)], ['CONTROL', u.control, u.control === 'ACTIVE' ? 'ha-ok' : (u.control === 'DEAD' ? 'ha-alarm' : 'ha-muted')],
+      ['Execution permit', u.permit ? 'GRANTED' : '—'], ['TakeoverReady', u.takeoverReady ? 'TRUE' : 'false', u.takeoverReady ? 'ha-ok' : 'ha-muted']
+    ]) + '</div>';
+    if (HA.getState().dead[u.name]) {
+      h += '<div class="ha-card"><b>' + esc(u.name) + ' is DEAD.</b><p class="ha-note">Boot must go through deSYNC (UNQUALIFIED) and rejoin as SECONDARY — the zombie rule forbids re-entering as Primary.</p>' +
+        '<div class="ha-row" style="margin-top:8px"><button class="ha-btn primary" ' + (HA.derive.can(kind === 'owner' ? 'resurrect-primary' : 'resurrect-secondary') ? '' : 'disabled') +
+        ' onclick="HA.act(\'' + (kind === 'owner' ? 'resurrect-primary' : 'resurrect-secondary') + '\')">Resurrect ' + esc(u.name) + '</button></div></div>';
+    } else if (u.control === 'ACTIVE' || u.control === 'ACTIVE_DEGRADED') {
+      h += '<div class="ha-card"><b>This unit is ACTIVE.</b><p class="ha-note">Commands here affect the running owner.</p>' +
+        '<div class="ha-row" style="margin-top:8px"><button class="ha-btn primary" ' + (HA.derive.can('swap') ? '' : 'disabled') + ' onclick="HA.act(\'swap\')">Commanded swap</button>' +
+        '<button class="ha-btn danger" ' + (HA.derive.can('death') ? '' : 'disabled') + ' onclick="HA.act(\'death\')">Primary death (P=false, I=false)</button>' +
+        (HA.derive.can('partition') ? '<button class="ha-btn warn" onclick="HA.act(\'partition\')">Partition claim (owner alive)</button>' : '') + '</div></div>';
+    } else {
+      h += '<div class="ha-card"><b>This unit is standby.</b><p class="ha-note">It takes over only through the commanded swap or proven death of the active unit — both need SYNC_READY.</p>' +
+        '<div class="ha-row" style="margin-top:8px"><button class="ha-btn primary" ' + (HA.derive.takeoverReady(name) && !st.busy ? '' : 'disabled') + ' onclick="HA.act(\'swap\')">Take over (commanded swap)</button>' +
+        '<button class="ha-btn danger" ' + (HA.derive.can('death-secondary') ? '' : 'disabled') + ' onclick="HA.act(\'death-secondary\')">Secondary death</button></div></div>';
+    }
+    return h;
+  }
+
+  function ctxLink(id) {
+    var st = S();
+    var c = id === 'ch1' ? st.counters.ch1 : st.counters.ch2;
+    var state = id === 'ch1' ? st.link.ch1 : st.link.ch2;
+    var killAct = id === 'ch1' ? 'kill-p' : 'kill-i';
+    var killLabel = id === 'ch1' ? 'Kill pair link (P)' : 'Kill I/O path (I)';
+    var h = '<h3>' + (id === 'ch1' ? 'CH1 pair link' : 'CH2 I/O chain') + ' — context</h3><div class="ha-card">' +
+      HA.frag.kv([['State', state, state === 'OK' ? 'ha-ok' : 'ha-warn'], ['ping_seq', c.ping.toLocaleString() + ' (+1)'],
+        ['pong_seq', c.pong.toLocaleString() + ' (+1)'], ['missing (×1000)', c.missing + ' → ' + c.penalty.toLocaleString()]]) + '</div>' +
+      '<div class="ha-card"><p class="ha-note">Truth table: !P && I → REDUNDANCY_LOST on the observer, no promotion; P && !I → degraded, no promotion; !P && !I → promotion path only (a live owner rejects the claim).</p>' +
+      '<div class="ha-row" style="margin-top:8px">' +
+      (state !== 'LOST'
+        ? '<button class="ha-btn danger" ' + (HA.derive.can(killAct) ? '' : 'disabled') + ' onclick="HA.act(\'' + killAct + '\')">' + killLabel + '</button>'
+        : '<button class="ha-btn primary" ' + (HA.derive.can('restore-channels') ? '' : 'disabled') + ' onclick="HA.act(\'restore-channels\')">Restore channels</button>') +
+      '<button class="ha-btn warn" ' + (HA.derive.can('degrade') ? '' : 'disabled') + ' onclick="HA.act(\'degrade\')">' +
+      (st.degraded ? 'Restore EMA' : 'Degrade EMA (performance)') + '</button></div></div>';
+    return h;
+  }
+
+  function ctxModule(id) {
+    var st = S(), b = HA.data.barrier();
+    var m = null; b.modules.forEach(function (x) { if (x.id === id) m = x; });
+    if (!m) return '<h3>Module</h3>';
+    var tone = m.ownerState === 'ARMED' ? 'ha-ok' : (m.ownerState === 'CLAIMED_DISARMED' ? 'ha-warn' : 'ha-alarm');
+    return '<h3>' + m.id + ' — context</h3><div class="ha-card">' + HA.frag.kv([
+      ['Profile', m.profile], ['Owner', esc(m.owner)], ['OwnerState', '<span class="' + tone + '">' + m.ownerState + '</span>'],
+      ['OwnerEpoch', String(m.ownerEpoch)], ['ClaimLatency', HA.f2(m.claim) + ' ms'], ['T contribution', HA.f2(m.claimMax) + ' ms']
+    ]) + '</div><div class="ha-card"><div class="ha-row">' +
+      '<button class="ha-btn" ' + (st.busy ? 'disabled' : '') + ' onclick="app.mod(\'' + m.id + '\',\'claim\')">Claim</button>' +
+      '<button class="ha-btn warn" ' + (st.busy ? 'disabled' : '') + ' onclick="app.mod(\'' + m.id + '\',\'release\')">Release</button>' +
+      '<button class="ha-btn" ' + (st.busy ? 'disabled' : '') + ' onclick="app.mod(\'' + m.id + '\',\'arm\')">ARM</button></div>' +
+      '<p class="ha-note">Acquisition → CLAIMED_DISARMED; ARM is separate and only after the barrier.</p></div>';
+  }
+
+  function ctxChain() {
+    var st = S(), b = HA.data.barrier();
+    var pct = Math.round(100 * b.claimed / b.total);
+    return '<h3>I/O chain — context</h3><div class="ha-card">' + HA.frag.kv([
+      ['Modules claimed', b.claimed + ' / ' + b.total], ['Barrier', b.passed ? 'PASSED' : 'IN PROGRESS', b.passed ? 'ha-ok' : 'ha-warn'],
+      ['Limiting device', b.limitingId, 'ha-warn'], ['Worst Σ MaxQualified', HA.f2(b.seqMax) + ' ms'],
+      ['Measured EMA', HA.f2(b.seqEma) + ' ms']
+    ]) + '<div class="ha-progress"><div class="ha-bar ' + (b.passed ? 'ok' : 'warn') + '" style="width:' + pct + '%"></div></div>' +
+      '<div class="ha-row" style="margin-top:9px">' +
+      (HA.derive.can('partition') ? '<button class="ha-btn warn" onclick="HA.act(\'partition\')">Attempt promotion (live owner → claim rejected)</button>' : '') +
+      (HA.derive.can('death-secondary') ? '<button class="ha-btn danger" onclick="HA.act(\'death-secondary\')">Secondary death</button>' : '') +
+      '</div></div>';
+  }
+
+  function ctxPair() {
+    var st = S(), d = HA.data.overview();
+    return '<h3>Pair — context</h3><div class="ha-card">' + HA.frag.kv([
+      ['PairId', d.pairId], ['Epoch', String(d.epoch)], ['Permit', esc(d.permit || 'WITHHELD'), d.permit ? 'ha-ok' : 'ha-alarm'],
+      ['TakeoverReady', d.takeoverReady ? 'TRUE' : 'false', d.takeoverReady ? 'ha-ok' : 'ha-muted'],
+      ['Calibration', esc(d.calibration), d.calibration === 'CALIBRATED' ? 'ha-ok' : 'ha-warn']
+    ]) + '<div class="ha-row" style="margin-top:9px">' + (d.takeoverReady
+      ? '<span class="ha-verdict ok"><span class="ha-dot"></span>TAKEOVER READY</span>'
+      : '<span class="ha-verdict alarm"><span class="ha-dot"></span>NOT READY</span>') + '</div></div>' +
+      '<div class="ha-card"><h3>Events</h3><div class="ha-log">' + HA.data.events('all').slice(0, 12).map(function (e) {
+        return '<div class="ha-lrow"><span class="ha-t">' + esc(e.t) + '</span><span class="ha-sev ' + e.sev + '">' + e.sev + '</span><span class="ha-msg">' + esc(e.msg) + '</span></div>';
+      }).join('') + '</div></div>';
+  }
+
+  function ctxProgram() {
+    return '<h3>Main — routine context</h3>' +
+      '<div class="ha-card"><h3>Monitoring / online edit</h3>' + HA.edit.sectionHtml() + '</div>' +
+      '<div class="ha-card"><p class="ha-note">Monitoring is the default while connected: clicks select, typing is intercepted and opens the confirmation.</p></div>';
+  }
+
+  function renderCtx() {
+    var h;
+    if (ui.sel.type === 'pair') h = ctxPair();
+    else if (ui.sel.type === 'program') h = ctxProgram();
+    else if (ui.sel.type === 'unit') h = ctxUnit(ui.sel.idx);
+    else if (ui.sel.type === 'link') h = ctxLink(ui.sel.id);
+    else if (ui.sel.type === 'module') h = ctxModule(ui.sel.id);
+    else h = ctxChain();
+    el('ctx').innerHTML = h;
+  }
+
+  function renderStatus() {
+    var st = S();
+    var n = HA.derive.alarmsActive();
+    el('status').innerHTML = '<span>PAIR-RB-0417 · port 3 engineering</span><span class="ha-sep">|</span>' +
+      '<span>MODE ' + (st.mode === 'redundant' ? 'Redundant' : 'Standalone') + '</span><span class="ha-sep">|</span>' +
+      '<span>EPOCH ' + st.epoch + '</span><span class="ha-sep">|</span>' +
+      '<span>PERMIT ' + esc(st.permitOwner || 'WITHHELD') + '</span><span class="ha-sep">|</span>' +
+      '<span class="' + (n ? 'ha-alarm' : 'ha-ok') + '">ALARMS ' + (n || 'none') + '</span><span class="ha-sep">|</span>' +
+      '<span>' + HA.edit.statusText() + '</span>';
+  }
+
+  function render(tick) {
+    if (tick && document.activeElement && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
+    renderToolbar(); renderDiagram(); renderCtx(); renderStatus();
+  }
+
+  window.app = {
+    sel: function (type, idx, id) {
+      ui.sel = { type: type, idx: idx, id: id !== undefined ? id : (type === 'unit' ? undefined : idx) };
+      if (type === 'unit') ui.sel = { type: 'unit', idx: idx };
+      if (type === 'module') ui.sel = { type: 'module', id: id };
+      if (type === 'link') ui.sel = { type: 'link', id: id };
+      if (type === 'chain') ui.sel = { type: 'chain' };
+      render(false);
+    },
+    mod: function (id, action) { HA.select.all(false); HA.select.toggle(id); HA.bulk(action); render(false); }
+  };
+
+  HA.subscribe(function (tick) { render(tick); });
+  render(false);
+})();
+</script>
+</body>
+</html>

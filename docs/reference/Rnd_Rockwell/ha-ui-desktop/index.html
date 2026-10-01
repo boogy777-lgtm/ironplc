@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HA Redundancy UI — nine control-composition philosophies</title>
+<style>
+  :root { --bg:#10151b; --panel:#171f28; --border:#2a3642; --text:#d7dee6; --muted:#8b98a6;
+    --accent:#58a6ff; --ok:#3fb950; --warn:#d29922; --alarm:#f85149; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 "Segoe UI", system-ui, sans-serif; }
+  .wrap { max-width:1500px; margin:0 auto; padding:28px 20px 60px 20px; }
+  h1 { margin:0 0 4px 0; font-size:21px; font-weight:600; }
+  .sub { color:var(--muted); margin-bottom:22px; }
+  .sub code { background:var(--panel); border:1px solid var(--border); border-radius:4px; padding:1px 6px; font-size:12px; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(285px, 1fr)); gap:14px; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:15px; display:flex; flex-direction:column; gap:7px; }
+  .card h2 { margin:0; font-size:14.5px; font-weight:600; }
+  .card p { margin:0; color:var(--muted); font-size:12px; }
+  .swatches { display:flex; gap:5px; }
+  .sw { width:16px; height:16px; border-radius:4px; border:1px solid rgba(255,255,255,.15); }
+  .open { margin-top:auto; padding-top:6px; }
+  a.btn { display:inline-block; background:#1f3b58; border:1px solid #2f5f8e; color:#9ecbff; text-decoration:none;
+    border-radius:6px; padding:6px 13px; font-size:12.5px; }
+  a.btn:hover { border-color:var(--accent); }
+  h2.section { font-size:15px; margin:30px 0 12px 0; font-weight:600; }
+  table.matrix { width:100%; border-collapse:collapse; font-size:12.5px; }
+  table.matrix th { text-align:left; color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase;
+    letter-spacing:.6px; padding:8px 10px; border-bottom:1px solid var(--border); }
+  table.matrix td { padding:9px 10px; border-bottom:1px solid #1d2733; vertical-align:top; }
+  table.matrix td:first-child { color:var(--accent); font-weight:600; white-space:nowrap; }
+  table.matrix tr:hover td { background:#131b24; }
+  .toolbar { display:flex; gap:10px; align-items:center; margin:22px 0 12px 0; flex-wrap:wrap; }
+  button { background:#22303d; color:var(--text); border:1px solid var(--border); border-radius:6px;
+    padding:8px 15px; font:inherit; cursor:pointer; }
+  button:hover { border-color:var(--accent); color:var(--accent); }
+  .side { display:none; grid-template-columns:repeat(3, 1fr); gap:8px; }
+  .side.on { display:grid; }
+  .side figure { margin:0; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:#000; }
+  .side figcaption { font-size:11.5px; color:var(--muted); padding:5px 9px; background:var(--panel); border-bottom:1px solid var(--border); }
+  .side iframe { width:100%; height:430px; border:0; display:block; background:#fff; }
+  .note { color:var(--muted); font-size:12px; margin-top:22px; line-height:1.6; }
+  .note b { color:var(--text); }
+  @media (max-width:1100px) { .side.on { grid-template-columns:1fr 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>HA Redundancy UI — nine control-composition philosophies</h1>
+  <div class="sub">Same semantics and demo behavior, one shared core (<code>mockup-core.js</code>): every variant shows the same HA data and exposes
+    swap / death / degrade / calibrate / invalidate / reset, ping/pong +1 / +1000, TakeoverReady and budget badges. The difference is
+    <b>how controls are composed</b>. Vendor names are neutral comparison labels only; no assets or logos.</div>
+
+  <h2 class="section">Variants</h2>
+  <div class="cards">
+    <div class="card">
+      <h2>1 · IDE / Docks</h2>
+      <div class="swatches"><span class="sw" style="background:#2b2b2b"></span><span class="sw" style="background:#3c3f41"></span><span class="sw" style="background:#214283"></span></div>
+      <p>Device tree; HA areas as document tabs; docked Events + Inspector; row context menus; property-grid Apply.</p>
+      <div class="open"><a class="btn" href="codesys-style.html">Open</a></div>
+    </div>
+    <div class="card">
+      <h2>2 · Hierarchy + Modal Dialogs</h2>
+      <div class="swatches"><span class="sw" style="background:#f4f6f7"></span><span class="sw" style="background:#1f5fa9"></span><span class="sw" style="background:#cfe3f7"></span></div>
+      <p>Organizer tree → properties page; dangerous actions gated by modal dialogs with OK / Cancel / Apply; ribbon.</p>
+      <div class="open"><a class="btn" href="rockwell-style.html">Open</a></div>
+    </div>
+    <div class="card">
+      <h2>3 · Panes + Grids + Operator</h2>
+      <div class="swatches"><span class="sw" style="background:#eef1f4"></span><span class="sw" style="background:#0072ce"></span><span class="sw" style="background:#d6eafb"></span></div>
+      <p>Data grids with multi-select bulk actions; operator lamp screen with one big takeover button.</p>
+      <div class="open"><a class="btn" href="schneider-style.html">Open</a></div>
+    </div>
+    <div class="card">
+      <h2>4 · Task Portal + Wizard</h2>
+      <div class="swatches"><span class="sw" style="background:#f2f4f7"></span><span class="sw" style="background:#0066b3"></span><span class="sw" style="background:#e8edf2"></span></div>
+      <p>Task checklist navigation (Overview → Admission → Calibration → Qualification → Takeover → Events); takeover wizard.</p>
+      <div class="open"><a class="btn" href="siemens-style.html">Open</a></div>
+    </div>
+    <div class="card">
+      <h2>5 · Dual View (physical / logical)</h2>
+      <div class="swatches"><span class="sw" style="background:#f5f7f9"></span><span class="sw" style="background:#0f5f9e"></span><span class="sw" style="background:#cfe4f4"></span></div>
+      <p>One dataset, two projections: hardware tree vs function tree; editors and message dock stay docked.</p>
+      <div class="open"><a class="btn" href="b-and-r-style.html">Open</a></div>
+    </div>
+    <div class="card">
+      <h2>6 · Basic / Advanced Disclosure</h2>
+      <div class="swatches"><span class="sw" style="background:#f4f6f8"></span><span class="sw" style="background:#0b7a75"></span><span class="sw" style="background:#e0f2f1"></span></div>
+      <p>Simple mode: lamps + big one-click actions. Advanced reveals grids, timing terms, event ledger, risky commands.</p>
+      <div class="open"><a class="btn" href="delta-style.html">Open</a></div>
+    </div>
+    <div class="card">
+      <h2>7 · Topology Diagram First</h2>
+      <div class="swatches"><span class="sw" style="background:#eef2f6"></span><span class="sw" style="background:#1668b3"></span><span class="sw" style="background:#fdf6dd"></span></div>
+      <p>The diagram is the UI: click a controller, link, or module block; its context panel opens beside the topology.</p>
+      <div class="open"><a class="btn" href="mitsubishi-style.html">Open</a></div>
+    </div>
+    <div class="card">
+      <h2>8 · Solution Shell</h2>
+      <div class="swatches"><span class="sw" style="background:#f5f6f7"></span><span class="sw" style="background:#007acc"></span><span class="sw" style="background:#1e1e1e"></span></div>
+      <p>Solution explorer, tabbed documents, docked Properties + Error List, Output / State monitor; error list drives attention.</p>
+      <div class="open"><a class="btn" href="beckhoff-style.html">Open</a></div>
+    </div>
+    <div class="card">
+      <h2>9 · Dashboard + Drawers</h2>
+      <div class="swatches"><span class="sw" style="background:#f5f7f8"></span><span class="sw" style="background:#0d5c8c"></span><span class="sw" style="background:#e3eef6"></span></div>
+      <p>Icon rail navigation, KPI cards per HA area, slide-over drawers with detail and actions; touch-sized targets.</p>
+      <div class="open"><a class="btn" href="bosch-rexroth-style.html">Open</a></div>
+    </div>
+  </div>
+
+  <h2 class="section">Comparison matrix</h2>
+  <table class="matrix">
+    <thead>
+      <tr><th>Variant</th><th>Navigation model</th><th>Control composition</th><th>Primary interaction</th><th>Best for</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1 · IDE / Docks</td><td>Device tree → document tabs</td><td>Toolbar + docked tool windows + context menus + property grid</td><td>Open a document, edit properties, Apply</td><td>Engineering &amp; diagnostics — dense parallel information</td></tr>
+      <tr><td>2 · Hierarchy + Modal Dialogs</td><td>Organizer tree → node properties page</td><td>Ribbon groups; modal confirmations with OK / Cancel / Apply</td><td>Navigate hierarchy; confirm a dialog; commit</td><td>Configuration — deliberate, gated changes</td></tr>
+      <tr><td>3 · Panes + Grids + Operator</td><td>Project browser → grid view</td><td>Multi-select grids with bulk toolbar actions; operator lamps</td><td>Select rows; act on the selection; watch lamps</td><td>Operations — fleet actions, at-a-glance state</td></tr>
+      <tr><td>4 · Task Portal + Wizard</td><td>Task steps with status icons</td><td>One task page at a time; wizard with Next / Back and progress</td><td>Follow the commissioning sequence; execute at the end</td><td>Commissioning — ordered, checklisted bring-up</td></tr>
+      <tr><td>5 · Dual View</td><td>Projection toggle (physical ↔ logical tree)</td><td>Same data re-projected; editors and message dock docked</td><td>Switch projection; inspect the same pair from either side</td><td>Engineering review — hardware vs function diagnosis</td></tr>
+      <tr><td>6 · Basic / Advanced</td><td>Mode toggle (simple ↔ advanced)</td><td>Lamps + big primary actions; depth revealed on demand</td><td>One-click common tasks; dive deeper when needed</td><td>Operators &amp; mixed audiences — minimal first screen</td></tr>
+      <tr><td>7 · Topology Diagram First</td><td>Diagram blocks and links</td><td>Clickable topology; context panel per node/link</td><td>Click the thing you mean; act in its panel</td><td>Diagnosis &amp; training — spatial understanding of the pair</td></tr>
+      <tr><td>8 · Solution Shell</td><td>Solution explorer → tabbed documents</td><td>Menu + toolbars; docked Properties / Error List / Output / State monitor</td><td>Work in documents; attention driven by the error list</td><td>Developer-grade engineering — IDE familiarity</td></tr>
+      <tr><td>9 · Dashboard + Drawers</td><td>Icon rail; KPI card grid</td><td>Cards summarize; slide-over drawers hold detail and actions</td><td>Tap a card; act from the drawer</td><td>Operations &amp; management — glanceable KPIs, touch use</td></tr>
+    </tbody>
+  </table>
+
+  <div class="toolbar">
+    <button onclick="toggleSide()">Open all nine side by side</button>
+    <span class="sub" style="margin:0">Plain HTML/CSS/JS over file:// — no build step.</span>
+  </div>
+  <div class="side" id="sideView">
+    <figure><figcaption>IDE / Docks</figcaption><iframe title="IDE" src="codesys-style.html"></iframe></figure>
+    <figure><figcaption>Hierarchy + Modal Dialogs</figcaption><iframe title="Dialogs" src="rockwell-style.html"></iframe></figure>
+    <figure><figcaption>Panes + Grids + Operator</figcaption><iframe title="Grids" src="schneider-style.html"></iframe></figure>
+    <figure><figcaption>Task Portal + Wizard</figcaption><iframe title="Portal" src="siemens-style.html"></iframe></figure>
+    <figure><figcaption>Dual View</figcaption><iframe title="Dual view" src="b-and-r-style.html"></iframe></figure>
+    <figure><figcaption>Basic / Advanced</figcaption><iframe title="Basic/advanced" src="delta-style.html"></iframe></figure>
+    <figure><figcaption>Topology Diagram First</figcaption><iframe title="Topology" src="mitsubishi-style.html"></iframe></figure>
+    <figure><figcaption>Solution Shell</figcaption><iframe title="Solution shell" src="beckhoff-style.html"></iframe></figure>
+    <figure><figcaption>Dashboard + Drawers</figcaption><iframe title="Dashboard" src="bosch-rexroth-style.html"></iframe></figure>
+  </div>
+
+  <div class="note">
+    <b>Online edit mode (all nine):</b> while connected the editor is a read-only monitoring surface (live values, click selects);
+    a modification attempt opens a confirmation — Yes enters Pending Local, No stays in monitoring — then Accept → Staged,
+    Test → Testing, Assemble → Clean at the new generation; Discard/Cancel return to monitoring. Offline = free editing, no confirmation.<br>
+    <b>Identical semantics in all nine:</b> role/IP config, standalone/redundant toggle, admission/permit indicator, Manual swap,
+    Simulate primary death, Degrade/Restore link, Run calibration, qualification invalidation, Reset; ping/pong +1 / +1000 counters;
+    epoch/generations; TakeoverReady and budget verdicts; per-module owner/ARM state, T contributions, limiting device.<br>
+    <b>Contract:</b> specs/design/ha-engineering-ui.md. Local R&amp;D mockup; not part of the build.
+  </div>
+</div>
+
+<script>
+  function toggleSide() {
+    var el = document.getElementById('sideView');
+    el.classList.toggle('on');
+    if (el.classList.contains('on')) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+</script>
+</body>
+</html>

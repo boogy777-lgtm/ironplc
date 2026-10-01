@@ -155,6 +155,12 @@ fn codesys_dialect_enables_exactly_these_flags() {
             "allow_var_generic",
             "allow_namespace",
             "allow_begin_implementation",
+            "allow_try_catch",
+            "allow_jump_statement",
+            "allow_calc_statement",
+            "allow_wait_statement",
+            "allow_nested_comments",
+            "allow_pragma_if",
         ],
     );
 }
@@ -210,6 +216,12 @@ fn twincat_dialect_enables_exactly_these_flags() {
             "allow_var_inst",
             "allow_var_generic",
             "allow_namespace",
+            "allow_try_catch",
+            "allow_jump_statement",
+            "allow_calc_statement",
+            "allow_wait_statement",
+            "allow_nested_comments",
+            "allow_pragma_if",
         ],
     );
 }

@@ -105,7 +105,8 @@ Supported Dialects
    ``--allow-enum-base-type``, ``--allow-continue``,
    ``--allow-union-type``, ``--allow-var-stat``, ``--allow-var-inst``,
    ``--allow-var-generic``, ``--allow-namespace``,
-   ``--allow-begin-implementation``, and ``--allow-bit-type``.
+   ``--allow-begin-implementation``, ``--allow-bit-type``, and
+   ``--allow-try-catch``.
 
    **Selects:** ``--policy-string-to-num-non-numeric ignore-trailing`` and
    ``--policy-string-to-num-failure zero`` — CODESYS stops parsing at the
@@ -150,8 +151,8 @@ Supported Dialects
    ``--allow-fb-inheritance``, ``--allow-enum-explicit-values``,
    ``--allow-enum-base-type``, ``--allow-continue``,
    ``--allow-union-type``, ``--allow-var-stat``, ``--allow-var-inst``,
-   ``--allow-var-generic``, ``--allow-namespace``, and
-   ``--allow-bit-type``.
+   ``--allow-var-generic``, ``--allow-namespace``, ``--allow-bit-type``, and
+   ``--allow-try-catch``.
 
    **Selects:** ``--policy-string-to-num-non-numeric ignore-trailing`` and
    ``--policy-string-to-num-failure zero``, as ``codesys``.
@@ -537,6 +538,15 @@ which flags a dialect already enables by default, see `Supported Dialects`_.
    Allow the ``__BEGIN_IMPLEMENTATION`` marker that begins a POU's
    implementation section in a CODESYS textual export. The marker carries no
    behavior. Without this flag it is an ordinary identifier.
+
+``--allow-try-catch``
+   Allow the CODESYS exception handling statements ``__TRY``, ``__CATCH``,
+   ``__FINALLY``, ``__ENDTRY`` and ``__THROW``. The five words are keywords
+   only while the flag is set; without it they are ordinary identifiers, so a
+   standard program may use ``__TRY`` as a variable name. A ``__THROW``
+   stores its value in the innermost enclosing ``__CATCH (e)`` variable and
+   jumps to that clause; one with no enclosing ``__CATCH`` in the same body
+   produces :doc:`P4066 </reference/compiler/problems/P4066>`.
 
 Pass the flag when running :program:`ironplcc`:
 

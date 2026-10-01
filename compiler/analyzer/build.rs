@@ -22,5 +22,7 @@ fn main() {
         // Numeric and boolean literals (`REQ-NL-analyzer-*`): what a BIT
         // declaration resolves to.
         "numeric-literals.md",
+        // CODESYS jump statements (`REQ-JMP-analyzer-*`): label scope rules.
+        "codesys-jump-and-pragmas.md",
     ]);
 }

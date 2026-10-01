@@ -191,6 +191,16 @@ impl From<LspTokenType> for Vec<SemanticToken> {
             TokenType::EndRepeat => Some(KEYWORD_INDEX),
             TokenType::Exit => Some(KEYWORD_INDEX),
             TokenType::Continue => Some(KEYWORD_INDEX),
+            TokenType::Try
+            | TokenType::EndTry
+            | TokenType::Catch
+            | TokenType::Finally
+            | TokenType::Throw => Some(KEYWORD_INDEX),
+            TokenType::DocComment => Some(COMMENT_INDEX),
+            // A promoted statement label is the same name the identifier
+            // would have been, so it keeps the identifier's colour.
+            TokenType::Label => Some(VARIABLE_INDEX),
+            TokenType::Jmp | TokenType::Calc | TokenType::Wait => Some(KEYWORD_INDEX),
             TokenType::Action => Some(KEYWORD_INDEX),
             TokenType::EndAction => Some(KEYWORD_INDEX),
             TokenType::En => Some(KEYWORD_INDEX),

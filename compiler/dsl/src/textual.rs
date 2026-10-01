@@ -891,6 +891,14 @@ pub enum StmtKind {
     /// the statements after it follow it in the same list.
     #[recurse(ignore)]
     BeginImplementation(SourceSpan),
+    // CODESYS exception handling.
+    TryCatch(TryCatch),
+    Throw(Throw),
+    // CODESYS jump, conditional call and wait statements.
+    Jump(Jump),
+    Label(LabelStatement),
+    ConditionalCall(ConditionalCall),
+    Wait(Wait),
 }
 
 impl Located for StmtKind {
@@ -908,6 +916,12 @@ impl Located for StmtKind {
             StmtKind::Exit(s) => s.clone(),
             StmtKind::Continue(s) => s.clone(),
             StmtKind::BeginImplementation(s) => s.clone(),
+            StmtKind::TryCatch(t) => t.span(),
+            StmtKind::Throw(t) => t.span(),
+            StmtKind::Jump(j) => j.span(),
+            StmtKind::Label(l) => l.span(),
+            StmtKind::ConditionalCall(c) => c.span(),
+            StmtKind::Wait(w) => w.span(),
         }
     }
 }
@@ -1133,6 +1147,92 @@ pub struct While {
 pub struct Repeat {
     pub until: Expr,
     pub body: Vec<StmtKind>,
+    #[located(position)]
+    pub span: SourceSpan,
+}
+
+/// The `__TRY ... __CATCH ... __FINALLY ... __ENDTRY` exception handling
+/// statement (CODESYS Structured Text extension).
+///
+/// See `Codesys/grammar/ST_GRAMMAR.ebnf` (tryCatchStatement).
+#[derive(Debug, PartialEq, Clone, Recurse, Located)]
+pub struct TryCatch {
+    /// The protected statements between `__TRY` and the first handler.
+    pub body: Vec<StmtKind>,
+    /// The `__CATCH` clause, when the statement has one.
+    pub catch: Option<CatchClause>,
+    /// The statements of the `__FINALLY` clause; empty when absent.
+    pub finally_body: Vec<StmtKind>,
+    #[located(position)]
+    pub span: SourceSpan,
+}
+
+/// The `__CATCH [(e)]` clause of a [`TryCatch`] statement.
+#[derive(Debug, PartialEq, Clone, Recurse, Located)]
+pub struct CatchClause {
+    /// The variable the thrown value is stored into, when the `(e)` form is
+    /// written. `None` for a bare `__CATCH` or an empty `__CATCH ()`.
+    pub exception: Option<Variable>,
+    pub body: Vec<StmtKind>,
+    #[located(position)]
+    pub span: SourceSpan,
+}
+
+/// The `JMP [(condition)] label;` statement (CODESYS Structured Text
+/// extension, the Instruction List `JMP`/`JMPC` mnemonics).
+///
+/// See `Codesys/grammar/ST_GRAMMAR.ebnf` (jumpStatement).
+#[derive(Debug, PartialEq, Clone, Recurse, Located)]
+pub struct Jump {
+    /// The `(condition)` form, which jumps only when the condition is TRUE;
+    /// `None` jumps unconditionally.
+    pub condition: Option<Expr>,
+    /// The name of the [`LabelStatement`] to jump to.
+    pub label: Id,
+    #[located(position)]
+    pub span: SourceSpan,
+}
+
+/// A statement label (`name:`), the target of a [`Jump`].
+#[derive(Debug, PartialEq, Clone, Recurse, Located)]
+pub struct LabelStatement {
+    pub name: Id,
+    #[located(position)]
+    pub span: SourceSpan,
+}
+
+/// The `CALC(condition, call);` conditional call statement (CODESYS
+/// Structured Text extension, the Instruction List `CALC` mnemonic).
+///
+/// The call runs only when the condition is TRUE.
+#[derive(Debug, PartialEq, Clone, Recurse, Located)]
+pub struct ConditionalCall {
+    pub condition: Expr,
+    /// The function block invocation that runs when the condition holds.
+    pub call: FbCall,
+    #[located(position)]
+    pub span: SourceSpan,
+}
+
+/// The `__WAIT [(condition)];` wait statement (CODESYS Structured Text
+/// extension): goes on only once the condition holds.
+#[derive(Debug, PartialEq, Clone, Recurse, Located)]
+pub struct Wait {
+    /// The condition waited for; `None` for the bare `__WAIT;` form.
+    pub condition: Option<Expr>,
+    #[located(position)]
+    pub span: SourceSpan,
+}
+
+/// The `__THROW [(expression)]` statement (CODESYS Structured Text
+/// extension).
+///
+/// The reference parses `__THROW` as a prefixed operator, so the value is
+/// written in parentheses; a bare `__THROW` raises without a value.
+#[derive(Debug, PartialEq, Clone, Recurse, Located)]
+pub struct Throw {
+    /// The thrown value, when written. `None` for a bare `__THROW`.
+    pub value: Option<Expr>,
     #[located(position)]
     pub span: SourceSpan,
 }

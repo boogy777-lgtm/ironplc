@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HA Redundancy — task portal + guided workflow</title>
+<style>
+  /* Composition: commissioning-centric task portal. Left navigation is a
+     sequence of task STEPS with status icons; the work area is one task page;
+     the Takeover task is a guided wizard (confirm → claim → barrier → ARM). */
+  :root { --bg:#f2f4f7; --chrome:#ffffff; --nav:#e8edf2; --card:#ffffff; --border:#d3dae1; --line:#e4e9ee;
+    --text:#1a2733; --muted:#5e6d7a; --dim:#93a1ad; --accent:#0066b3; --accent-soft:#e3f0fa;
+    --sel:#cfe6f7; --ok:#1f7a3d; --warn:#a06b00; --alarm:#c0392b; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; background:#c4ccd3; color:var(--text); font:12.5px/1.45 "Segoe UI", Tahoma, sans-serif; }
+  .mono, .ha-num, .ha-formula, .ha-t, .v { font-family:Consolas, "Courier New", monospace; }
+  .ha-app { position:absolute; inset:6px; display:flex; flex-direction:column; background:var(--bg);
+    border:1px solid #9ba7b1; box-shadow:0 10px 34px rgba(0,0,0,.38); }
+  .ha-titlebar { display:flex; align-items:center; height:34px; padding:0 4px 0 12px; background:var(--chrome); border-bottom:1px solid var(--border); }
+  .ha-appicon { width:20px; height:20px; margin-right:9px; background:var(--accent); border-radius:2px; color:#fff;
+    text-align:center; line-height:20px; font-size:11px; }
+  .ha-titletext { flex:1; color:#24333f; }
+  .ha-winbtn { width:40px; height:24px; background:transparent; border:none; color:#5e6d7a; font-size:11px; }
+  .ha-winbtn:hover { background:#e4e9ee; } .ha-winbtn.close:hover { background:var(--alarm); color:#fff; }
+  .ha-menubar { display:flex; background:var(--chrome); border-bottom:1px solid var(--border); }
+  .ha-menu { padding:6px 13px; color:#24333f; cursor:default; }
+  .ha-menu:hover, .ha-menu:focus { color:var(--accent); outline:none; box-shadow:inset 0 -2px 0 var(--accent); }
+  .ha-toolbar { display:flex; align-items:center; background:#fbfcfd; border-bottom:1px solid var(--line); padding:4px 8px; min-height:38px; flex-wrap:wrap; gap:4px; }
+  .ha-tgroup { display:flex; align-items:center; padding:0 9px; border-right:1px solid var(--line); }
+  .ha-tbtn { display:flex; align-items:center; gap:5px; padding:4px 10px; background:transparent; border:1px solid transparent;
+    border-radius:2px; color:#2b3b48; cursor:pointer; font:inherit; font-size:11.5px; }
+  .ha-tbtn:hover:not(:disabled) { background:var(--accent-soft); color:var(--accent); }
+  .ha-tbtn:focus-visible { outline:2px solid var(--accent); } .ha-tbtn:disabled { color:#9fabb6; cursor:not-allowed; }
+  .ha-body { flex:1; display:flex; min-height:0; }
+  .ha-left { width:252px; background:var(--nav); border-right:1px solid var(--border); overflow:auto; padding:10px 0; }
+  .ha-left .nav-title { padding:2px 16px 8px 16px; font-size:10.5px; text-transform:uppercase; letter-spacing:.7px; color:var(--muted); }
+  .ha-step { display:flex; align-items:center; gap:10px; padding:9px 16px; cursor:pointer; border-left:3px solid transparent;
+    color:#33424f; font-size:13px; }
+  .ha-step:hover { background:#dde6ee; } .ha-step:focus-visible { outline:2px solid var(--accent); }
+  .ha-step.sel { background:var(--sel); border-left-color:var(--accent); font-weight:600; }
+  .ha-step .ico { width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-size:11px; border:2px solid #a9b6c1; color:#7c8b98; background:#fff; flex:none; }
+  .ha-step.done .ico { border-color:var(--ok); color:#fff; background:var(--ok); }
+  .ha-step.warn .ico { border-color:var(--warn); color:#fff; background:var(--warn); }
+  .ha-step .sub { display:block; font-size:10.5px; color:var(--muted); font-weight:400; }
+  .ha-center { flex:1; display:flex; flex-direction:column; min-width:0; background:var(--bg); }
+  .ha-head { padding:12px 18px 0 18px; }
+  .ha-head h2 { margin:0 0 2px 0; font-size:16px; color:#1a2733; }
+  .ha-head p { margin:0; color:var(--muted); font-size:12px; }
+  .ha-view { flex:1; overflow:auto; padding:12px 18px 16px 18px; }
+  .ha-right { width:290px; background:var(--card); border-left:1px solid var(--border); padding:12px; overflow:auto; }
+  .ha-right h3 { margin:0 0 9px 0; font-size:11px; text-transform:uppercase; letter-spacing:.7px; color:var(--accent); }
+  .ha-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:12px; }
+  .ha-card { background:var(--card); border:1px solid var(--border); border-radius:2px; padding:14px; }
+  .ha-card h3 { margin:0 0 10px 0; font-size:11.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--accent);
+    border-bottom:1px solid var(--line); padding-bottom:6px; }
+  .ha-kv { display:grid; grid-template-columns:180px 1fr; gap:3px 10px; }
+  .ha-kv .k { color:var(--muted); } .ha-kv .v { color:#1a2733; }
+  .ha-chips { display:flex; flex-wrap:wrap; gap:5px; margin-top:7px; }
+  .ha-chip { font-size:10.5px; padding:2px 8px; border-radius:10px; border:1px solid var(--border); background:#f0f3f6;
+    color:#98a5b0; font-family:Consolas, monospace; }
+  .ha-chip.on { background:var(--accent-soft); border-color:var(--accent); color:#004f8a; }
+  .ha-chip.on.ok { background:#e2f2e7; border-color:var(--ok); color:#155c2d; }
+  .ha-chip.on.warn { background:#faf0cf; border-color:#dcb24a; color:#7a5200; }
+  .ha-chip.on.alarm { background:#f9e0dd; border-color:#d99a90; color:#8f2318; }
+  .ha-pill { display:inline-flex; gap:6px; align-items:center; border:1px solid var(--border); background:#fff;
+    border-radius:10px; padding:3px 10px; color:var(--muted); font-size:11px; }
+  .ha-pill b { color:var(--text); }
+  .ha-pill.ok { border-color:var(--ok); color:var(--ok); } .ha-pill.ok b { color:var(--ok); }
+  .ha-pill.warn { border-color:#dcb24a; color:var(--warn); } .ha-pill.warn b { color:var(--warn); }
+  .ha-pill.alarm { border-color:#d99a90; color:var(--alarm); } .ha-pill.alarm b { color:var(--alarm); }
+  .ha-dot { width:7px; height:7px; border-radius:50%; background:currentColor; display:inline-block; }
+  .ha-table { width:100%; border-collapse:collapse; }
+  .ha-table th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:#5e6d7a;
+    padding:5px 7px; border-bottom:2px solid var(--accent); background:#fbfdff; }
+  .ha-table td { padding:4px 7px; border-bottom:1px solid #e9eef3; font-family:Consolas, monospace; }
+  .ha-table tr.limit td { background:#fdf6e2; color:#7a5200; }
+  .ha-table tr.limit td:first-child::after { content:" ← limiting"; font-size:9.5px; color:var(--warn); }
+  .ha-table tbody tr:hover td { background:#eaf4fd; cursor:pointer; }
+  .ha-num { text-align:right; }
+  .ha-btn { background:#fff; color:#22303c; border:1px solid var(--border); border-radius:2px; padding:5px 13px; font:inherit; cursor:pointer; }
+  .ha-btn:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); }
+  .ha-btn:focus-visible { outline:2px solid var(--accent); } .ha-btn:disabled { opacity:.5; cursor:not-allowed; }
+  .ha-btn.primary { background:var(--accent); border-color:#004f8a; color:#fff; }
+  .ha-btn.primary:hover:not(:disabled) { background:#004f8a; color:#fff; }
+  .ha-btn.warn { background:#fdf4db; border-color:#dcb24a; color:#7a5200; }
+  .ha-btn.danger { background:#fbeae8; border-color:#d99a90; color:#8f2318; }
+  .ha-select, .ha-input { background:#fff; color:var(--text); border:1px solid var(--border); border-radius:2px;
+    padding:4px 7px; font:inherit; min-width:112px; }
+  .ha-input[type="number"] { min-width:78px; }
+  .ha-progress { height:10px; background:#e4e9ee; border:1px solid var(--border); border-radius:5px; overflow:hidden; margin-top:8px; }
+  .ha-bar { height:100%; background:var(--accent); width:0; transition:width .2s; }
+  .ha-bar.ok { background:var(--ok); } .ha-bar.warn { background:#dcb24a; }
+  .ha-formula { background:var(--accent-soft); border:1px solid #bcd8f2; border-radius:2px; padding:10px 12px; color:#004f8a; }
+  .ha-verdict { display:inline-flex; gap:8px; align-items:center; border-radius:2px; padding:7px 12px; border:1px solid; font-weight:600; }
+  .ha-verdict.ok { border-color:var(--ok); color:var(--ok); background:#e7f5ec; }
+  .ha-verdict.alarm { border-color:var(--alarm); color:var(--alarm); background:#fbe9e7; }
+  .ha-log { max-height:430px; overflow:auto; border:1px solid var(--border); background:#fff; }
+  .ha-lrow { display:grid; grid-template-columns:108px 60px 1fr; gap:8px; padding:4px 10px; border-bottom:1px solid #edf1f5; }
+  .ha-lrow:nth-child(even) { background:#f7fafc; }
+  .ha-t { color:var(--dim); font-size:11px; }
+  .ha-sev { font-size:10px; text-transform:uppercase; letter-spacing:.5px; font-weight:700; }
+  .ha-sev.info { color:var(--accent); } .ha-sev.warn { color:var(--warn); } .ha-sev.alarm { color:var(--alarm); }
+  .ha-msg { color:#22303c; }
+  .ha-note { color:var(--muted); font-size:11.5px; margin:7px 0 0 0; }
+  .ha-hint { color:var(--dim); font-size:11px; }
+  .ha-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .ha-wizsteps { display:flex; gap:0; margin:4px 0 14px 0; }
+  .ha-wizstep { flex:1; display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--border);
+    background:#fff; color:var(--muted); }
+  .ha-wizstep + .ha-wizstep { border-left:none; }
+  .ha-wizstep .n { width:22px; height:22px; border-radius:50%; border:2px solid #a9b6c1; display:flex; align-items:center;
+    justify-content:center; font-size:11px; color:#7c8b98; background:#fff; flex:none; }
+  .ha-wizstep.cur { background:var(--accent-soft); color:var(--accent); font-weight:600; }
+  .ha-wizstep.cur .n { border-color:var(--accent); color:var(--accent); }
+  .ha-wizstep.done .n { border-color:var(--ok); background:var(--ok); color:#fff; }
+  .ha-statusbar { display:flex; gap:9px; align-items:center; height:26px; padding:0 16px; background:var(--chrome);
+    border-top:1px solid var(--border); color:#3c4b58; font-size:11.5px; }
+  .ha-sep { color:#b3bdc6; }
+  .ha-ok { color:var(--ok); } .ha-warn { color:var(--warn); } .ha-alarm { color:var(--alarm); } .ha-muted { color:var(--muted); }
+  .ha-check { width:15px; height:15px; accent-color:var(--accent); }
+</style>
+</head>
+<body>
+<div class="ha-app">
+  <div class="ha-titlebar">
+    <span class="ha-appicon">&#9670;</span><span class="ha-titletext">IronPLC Engineering — Redundant pair (PAIR-RB-0417)</span>
+    <span><button class="ha-winbtn" tabindex="-1">&#9472;</button><button class="ha-winbtn" tabindex="-1">&#9723;</button><button class="ha-winbtn close" tabindex="-1">&#10005;</button></span>
+  </div>
+  <div class="ha-menubar">
+    <span class="ha-menu" tabindex="0">File</span><span class="ha-menu" tabindex="0">Edit</span>
+    <span class="ha-menu" tabindex="0">View</span><span class="ha-menu" tabindex="0">Online</span>
+    <span class="ha-menu" tabindex="0">Diagnostics</span><span class="ha-menu" tabindex="0">Help</span>
+  </div>
+  <div class="ha-toolbar" id="toolbar"></div>
+  <div class="ha-body">
+    <div class="ha-left" id="nav"></div>
+    <div class="ha-center">
+      <div class="ha-head" id="head"></div>
+      <div class="ha-view" id="view"></div>
+    </div>
+    <div class="ha-right" id="inspector"></div>
+  </div>
+  <div class="ha-statusbar" id="status"></div>
+</div>
+
+<script src="mockup-core.js"></script>
+<script>
+(function () {
+  'use strict';
+  var ui = { step: 'overview', wiz: 0, intent: 'commanded', confirmed: false };
+  function el(id) { return document.getElementById(id); }
+  function esc(s) { return HA.esc(s); }
+  var S = HA.getState;
+
+  HA.mount({ surface: 'portal', inspector: false });
+
+  /* Step status derivation: the portal's navigation is a task checklist. */
+  function steps() {
+    var st = S(), b = HA.derive.budgetCheck(), d = HA.data.overview();
+    return [
+      { id: 'overview', label: 'Overview', sub: 'pair at a glance', status: 'done' },
+      { id: 'program', label: 'Program', sub: 'monitoring / online edit', status: HA.edit.connected() ? (st.edit.mode === 'monitoring' ? 'done' : 'warn') : 'warn' },
+      { id: 'admission', label: 'Admission', sub: 'permit and roles',
+        status: st.mode === 'standalone' ? 'done' : (st.admission === 'ADMITTED' ? 'done' : (st.admission === 'CALIBRATING' ? 'warn' : 'warn')) },
+      { id: 'calibration', label: 'Calibration', sub: 'link profile',
+        status: st.calibration === 'CALIBRATED' ? 'done' : (st.calibration === 'CALIBRATING' ? 'warn' : 'warn') },
+      { id: 'qualification', label: 'Qualification', sub: 'timing budget',
+        status: (st.calibration === 'CALIBRATED' && b.ok) ? 'done' : (st.degraded ? 'warn' : (st.calibration !== 'CALIBRATED' ? 'warn' : 'warn')) },
+      { id: 'takeover', label: 'Takeover', sub: d.takeoverReady ? 'takeover ready' : 'not ready',
+        status: d.takeoverReady ? 'done' : 'warn' },
+      { id: 'events', label: 'Events', sub: 'alarm ledger',
+        status: HA.derive.alarmsActive() ? 'warn' : 'done' }
+    ];
+  }
+
+  function renderToolbar() {
+    var st = S();
+    var busy = st.busy ? 'disabled' : '';
+    el('toolbar').innerHTML =
+      '<div class="ha-tgroup"><button class="ha-tbtn" ' + busy + ' onclick="HA.act(\'swap\')">&#8646; Manual swap</button>' +
+      '<button class="ha-tbtn" ' + busy + ' onclick="HA.act(\'death\')">&#9760; Simulate primary death</button></div>' +
+      '<div class="ha-tgroup"><button class="ha-tbtn" ' + busy + ' onclick="HA.act(\'degrade\')">&#9888; ' + (st.degraded ? 'Restore link' : 'Degrade link') + '</button>' +
+      '<button class="ha-tbtn" ' + busy + ' onclick="HA.act(\'calibrate\')">&#9654; Run calibration</button>' +
+      '<button class="ha-tbtn" ' + busy + ' onclick="HA.act(\'invalidate-topo\')">&#10006; Invalidate qualification</button></div>' +
+      '<div class="ha-tgroup"><button class="ha-tbtn" ' + busy + ' onclick="HA.act(\'reset\')">&#8634; Reset</button></div>';
+  }
+
+  function renderNav() {
+    var h = '<div class="nav-title">Commissioning tasks</div>';
+    steps().forEach(function (s) {
+      var icon = s.status === 'done' ? '&#10003;' : (s.status === 'warn' ? '!' : '&#9679;');
+      h += '<div class="ha-step ' + s.status + (ui.step === s.id ? ' sel' : '') + '" tabindex="0" ' +
+        'onclick="app.step(\'' + s.id + '\')" onkeydown="app.stepKey(event,\'' + s.id + '\')">' +
+        '<span class="ico">' + icon + '</span><span>' + esc(s.label) + '<span class="sub">' + esc(s.sub) + '</span></span></div>';
+    });
+    el('nav').innerHTML = h;
+  }
+
+  function pageHead(title, sub) {
+    el('head').innerHTML = '<h2>' + esc(title) + '</h2><p>' + esc(sub) + '</p>';
+  }
+
+  function renderView() {
+    var st = S();
+    if (st.mode === 'standalone' && (ui.step === 'takeover')) {
+      pageHead('Takeover', 'Unavailable in standalone mode.');
+      el('view').innerHTML = '<div class="ha-card"><p class="ha-note">Standalone admission grants the permit at startup; there is no peer to take over from. Switch to Redundant pair in the Admission task.</p></div>';
+      return;
+    }
+    if (ui.step === 'overview') return pageOverview();
+    if (ui.step === 'program') return pageProgram();
+    if (ui.step === 'admission') return pageAdmission();
+    if (ui.step === 'calibration') return pageCalibration();
+    if (ui.step === 'qualification') return pageQualification();
+    if (ui.step === 'takeover') return pageTakeover();
+    return pageEvents();
+  }
+
+  function pageProgram() {
+    pageHead('Program', 'Monitoring is the default while connected; edits are gated by the confirmation.');
+    el('view').innerHTML = '<div class="ha-card"><h3>Main — monitoring / online edit</h3>' + HA.edit.sectionHtml() + '</div>';
+  }
+
+  function pageOverview() {
+    pageHead('Overview', 'Pair health, generations, and liveness counters.');
+    var d = HA.data.overview();
+    var h = '<div class="ha-grid">' + d.units.map(function (u) {
+      return '<div class="ha-card"><h3>' + u.name + ' — ' + esc(u.role) + '</h3>' + HA.frag.kv([
+        ['IP', esc(u.ip)], ['Unit state', u.online ? 'online' : 'OFFLINE (no ping/pong)'],
+        ['CONTROL', u.control, u.control === 'ACTIVE' ? 'ha-ok' : 'ha-muted'],
+        ['Execution permit', u.permit ? 'GRANTED' : '—'],
+        ['TakeoverReady', u.takeoverReady ? 'TRUE' : 'false', u.takeoverReady ? 'ha-ok' : 'ha-muted']
+      ]) + '<div class="ha-chips">' + HA.frag.syncChips(u.name) + '</div></div>';
+    }).join('') + '</div>';
+    h += '<div class="ha-grid" style="margin-top:12px"><div class="ha-card"><h3>Pair generations</h3>' + HA.frag.kv([
+      ['PairId', d.pairId], ['Epoch', String(d.epoch)], ['Application generation', String(d.appGen)],
+      ['Committed state generation', String(d.stateGen)]
+    ]) + '</div>' +
+      '<div class="ha-card"><h3>Ping/Pong counters</h3>' + counters('CH1 pair link', d.counters.ch1, d.link.ch1) +
+      counters('CH2 I/O chain', d.counters.ch2, d.link.ch2) + '<p class="ha-note">+1 per exchange, +1000 per missed exchange (diagnostics only).</p></div></div>';
+    el('view').innerHTML = h;
+  }
+
+  function counters(name, c, state) {
+    var tone = state === 'DEGRADED' ? 'ha-warn' : (state === 'LOST' ? 'ha-alarm' : 'ha-ok');
+    return '<div style="margin-top:8px"><b>' + esc(name) + '</b> — <span class="' + tone + '">' + state + '</span>' +
+      HA.frag.table(['', 'value', 'step'], [
+        { cells: ['ping_seq', c.ping.toLocaleString(), '+1'] },
+        { cells: ['pong_seq', c.pong.toLocaleString(), '+1'] },
+        { cells: ['missing exchange', String(c.missing), '+1000'] },
+        { cells: ['penalty', c.penalty.toLocaleString(), '—'] }
+      ]) + '</div>';
+  }
+
+  function pageAdmission() {
+    pageHead('Admission', 'Mode, configured roles, and the execution permit decision.');
+    var st = S();
+    var h = '<div class="ha-card"><h3>Configuration</h3><div class="ha-row">' +
+      '<label class="ha-hint">Mode</label><select class="ha-select" onchange="HA.setMode(this.value)">' +
+      '<option value="redundant"' + (st.mode === 'redundant' ? ' selected' : '') + '>Redundant pair</option>' +
+      '<option value="standalone"' + (st.mode === 'standalone' ? ' selected' : '') + '>Standalone</option></select>' +
+      '<label class="ha-hint">PLC-1</label><select class="ha-select" onchange="HA.setRole(1,this.value)">' +
+      '<option' + (st.plc[1].role === 'Primary' ? ' selected' : '') + '>Primary</option><option' + (st.plc[1].role === 'Secondary' ? ' selected' : '') + '>Secondary</option></select>' +
+      '<input class="ha-input" value="' + esc(st.plc[1].ip) + '" onchange="HA.setIp(1,this.value)">' +
+      '<label class="ha-hint">PLC-2</label><select class="ha-select" onchange="HA.setRole(2,this.value)">' +
+      '<option' + (st.plc[2].role === 'Primary' ? ' selected' : '') + '>Primary</option><option' + (st.plc[2].role === 'Secondary' ? ' selected' : '') + '>Secondary</option></select>' +
+      '<input class="ha-input" value="' + esc(st.plc[2].ip) + '" onchange="HA.setIp(2,this.value)">' +
+      '</div></div>';
+    h += '<div class="ha-grid" style="margin-top:12px"><div class="ha-card"><h3>Permit decision</h3>' + HA.frag.kv([
+      ['Admission', st.admission, st.admission === 'ADMITTED' ? 'ha-ok' : 'ha-warn'],
+      ['Execution permit', st.permitOwner || 'WITHHELD', st.permitOwner ? 'ha-ok' : 'ha-alarm'],
+      ['Statechart', st.mode === 'redundant' ? 'running' : 'not running (standalone)']
+    ]) + '<p class="ha-note">The shell withholds the permit until admission yields a verdict: Standalone, Primary, or Secondary. Standalone grants it at startup — the trivial policy.</p></div>' +
+      '<div class="ha-card"><h3>Discovery</h3><p class="ha-note">Neighbor discovery runs on port 1 via the ping/pong exchange; a live Primary neighbor makes this unit the Secondary and starts the sync pipeline. A live owner always wins over configuration.</p></div></div>';
+    h += '<div class="ha-card" style="margin-top:12px"><h3>Failure &amp; recovery (task controls)</h3>' +
+      '<div class="ha-row"><span class="ha-hint">Channels:</span>' +
+      '<button class="ha-btn danger" ' + (HA.derive.can('kill-p') ? '' : 'disabled') + ' onclick="HA.act(\'kill-p\')">Kill P (pair link)</button>' +
+      '<button class="ha-btn danger" ' + (HA.derive.can('kill-i') ? '' : 'disabled') + ' onclick="HA.act(\'kill-i\')">Kill I (I/O path)</button>' +
+      '<button class="ha-btn" ' + (HA.derive.can('restore-channels') ? '' : 'disabled') + ' onclick="HA.act(\'restore-channels\')">Restore channels</button></div>' +
+      '<div class="ha-row" style="margin-top:8px"><span class="ha-hint">Units:</span>' +
+      '<button class="ha-btn danger" ' + (HA.derive.can('death-secondary') ? '' : 'disabled') + ' onclick="HA.act(\'death-secondary\')">Secondary death</button>' +
+      '<button class="ha-btn" ' + (HA.derive.can('resurrect-primary') ? '' : 'disabled') + ' onclick="HA.act(\'resurrect-primary\')">Resurrect primary (deSYNC → Secondary)</button>' +
+      '<button class="ha-btn" ' + (HA.derive.can('resurrect-secondary') ? '' : 'disabled') + ' onclick="HA.act(\'resurrect-secondary\')">Resurrect secondary</button></div>' +
+      '<p class="ha-note">Truth table: !P && I → REDUNDANCY_LOST, no promotion; P && !I → degraded, no promotion; !P && !I → the Takeover task may attempt promotion, but a live owner rejects the claim.</p></div>';
+    el('view').innerHTML = h;
+  }
+
+  function pageCalibration() {
+    pageHead('Calibration', 'Commissioning calibration under realistic worst load — both directions.');
+    var st = S(), c = HA.data.calibration();
+    var h = '<div class="ha-grid"><div class="ha-card"><h3>HA link profile</h3>' +
+      HA.frag.table(['direction', 'current', 'EMA10', 'EMA100', 'max', 'count'], c.directions.map(function (r) {
+        return { cells: [r.dir, HA.f2(r.cur), HA.f2(r.e10), HA.f2(r.e100), HA.f2(r.max), r.count.toLocaleString()] };
+      })) + HA.frag.kv([['Jitter envelope', HA.f2(c.jitter) + ' ms'], ['Loss rate', (c.loss * 100).toFixed(4) + ' %'],
+        ['Max consecutive loss', c.consec + ' exchange(s)']]) + '</div>' +
+      '<div class="ha-card"><h3>Run calibration</h3>' + HA.frag.kv([
+        ['State', esc(c.cal.state), c.cal.state === 'CALIBRATED' ? 'ha-ok' : 'ha-warn'],
+        ['Baseline', esc(c.cal.baseline)], ['Trigger', esc(c.cal.trigger)]
+      ]) + (c.cal.state === 'CALIBRATING' ? '<div class="ha-progress"><div class="ha-bar" style="width:' + c.cal.progress + '%"></div></div>' : '') +
+      '<div class="ha-row" style="margin-top:10px"><button class="ha-btn primary" ' + (st.busy ? 'disabled' : '') + ' onclick="HA.act(\'calibrate\')">Run calibration</button>' +
+      '<span class="ha-hint">worst-load: app + I/O + crossload running</span></div></div></div>';
+    h += '<div class="ha-card" style="margin-top:12px"><h3>Per-side processing &amp; scan</h3>' +
+      HA.frag.kv(c.sides.map(function (s) {
+        return [s.side, s.max !== undefined ? HA.f2(s.v) + ' / ' + HA.f2(s.max) + ' / ' + HA.f2(s.jitter) + ' ms' : HA.f2(s.v) + ' ms'];
+      })) + '</div>';
+    el('view').innerHTML = h;
+  }
+
+  function pageQualification() {
+    pageHead('Qualification', 'Timing budget: measured terms, configured requirement, verdict.');
+    var st = S(), t = HA.data.timing();
+    var h = '<div class="ha-formula">T_recovery = T_peer-detect + T_claim + T_arm + T_scan-safe-point + T_output-apply</div>';
+    h += '<div class="ha-grid" style="margin-top:12px"><div class="ha-card"><h3>Terms — measured vs bound</h3>' +
+      HA.frag.table(['term', 'measured', 'bound', 'note'], t.terms.map(function (r) {
+        return { cells: [r.name, HA.f2(r.measured), HA.f2(r.bound), '<span class="ha-muted">' + r.note + '</span>'] };
+      })) + '</div>' +
+      '<div class="ha-card"><h3>Requirement (haSetTimingBudget)</h3><div class="ha-row">' +
+      '<label class="ha-hint">Confirmation ms</label><input class="ha-input" type="number" step="0.5" id="haConfInp" value="' + t.confirmation + '">' +
+      '<label class="ha-hint">Budget ms</label><input class="ha-input" type="number" step="1" id="haBudgetInp" value="' + t.budget + '">' +
+      '<button class="ha-btn primary" onclick="HA.act(\'apply-budget\')">Apply</button></div>' +
+      HA.frag.kv([['Calculated worst case', HA.f2(t.worst) + ' ms', t.ok ? 'ha-ok' : 'ha-alarm'],
+        ['Predicted if failover now', HA.f2(t.predicted) + ' ms'], ['Scan phase', Math.round(t.scanPhase * 100) + ' %']]) +
+      '<div style="margin-top:9px">' + (t.ok ? '<span class="ha-verdict ok"><span class="ha-dot"></span>QUALIFIED</span>'
+        : '<span class="ha-verdict alarm"><span class="ha-dot"></span>MINIMUM DEMONSTRATED BUDGET ' + HA.f2(t.worst) + ' ms</span>') + '</div>' +
+      '<div class="ha-row" style="margin-top:10px"><button class="ha-btn warn" ' + (st.busy ? 'disabled' : '') +
+      ' onclick="HA.act(\'invalidate-nic\')">Invalidate (NIC)</button>' +
+      '<button class="ha-btn warn" ' + (st.busy ? 'disabled' : '') + ' onclick="HA.act(\'invalidate-topo\')">Invalidate (topology)</button></div>' +
+      '<p class="ha-note">A failing budget is reported, never silently accepted.</p></div></div>';
+    el('view').innerHTML = h;
+  }
+
+  function pageTakeover() {
+    pageHead('Takeover', 'Guided takeover: confirm the path, claim all outputs, pass the barrier, ARM.');
+    var st = S(), b = HA.data.barrier();
+    var names = ['1. Confirm', '2. Claim all', '3. Barrier', '4. ARM & ACTIVE'];
+    var wizbar = '<div class="ha-wizsteps">' + names.map(function (n, i) {
+      return '<div class="ha-wizstep' + (i === ui.wiz ? ' cur' : (i < ui.wiz ? ' done' : '')) + '">' +
+        '<span class="n">' + (i < ui.wiz ? '&#10003;' : (i + 1)) + '</span>' + n + '</div>';
+    }).join('') + '</div>';
+    var body = '';
+    if (ui.wiz === 0) {
+      body = '<div class="ha-card"><h3>Step 1 — choose and confirm the takeover path</h3>' +
+        '<div class="ha-row"><label><input type="radio" name="intent" ' + (ui.intent === 'commanded' ? 'checked' : '') +
+        ' onchange="app.intent(\'commanded\')"> Commanded swap (controlled; peer alive, SYNC_READY)</label>' +
+        '<label><input type="radio" name="intent" ' + (ui.intent === 'fault' ? 'checked' : '') +
+        ' onchange="app.intent(\'fault\')"> Simulated primary death (uncontrolled; lease expiry)</label>' +
+        '<label><input type="radio" name="intent" ' + (ui.intent === 'partition' ? 'checked' : '') +
+        ' onchange="app.intent(\'partition\')"> Partition claim (P=false &amp;&amp; I=false, owner ALIVE — expected REJECT)</label></div>' +
+        '<label class="ha-row" style="margin-top:12px"><input type="checkbox" class="ha-check" ' + (ui.confirmed ? 'checked' : '') +
+        ' onchange="app.confirm(this.checked)"> I understand ownership transfers after the barrier; partial ownership never means ACTIVE.</label>' +
+        '<p class="ha-note">' + (ui.intent === 'commanded'
+          ? 'Preconditions: pair SYNC_READY and calibrated. Old owner releases; new owner claims all, barrier, epoch bump, ARM.'
+          : (ui.intent === 'fault'
+            ? 'The active unit stops responding; its lease expires; the standby claims all, barrier, epoch bump, ARM. No automatic failback.'
+            : 'Both channels are lost but the owner is alive: the claim is rejected (OWNERSHIP_CONFLICT), everything acquired is released, and the pair lands in REDUNDANCY_LOST — manual repair.')) + '</p></div>';
+    } else if (ui.wiz === 1) {
+      body = '<div class="ha-card"><h3>Step 2 — claim all required outputs (CLAIMED_DISARMED)</h3>' +
+        HA.frag.table(['module', 'profile', 'owner', 'state', 'claim ms', 'T ms'], b.modules.map(function (m) {
+          var tone = m.ownerState === 'ARMED' ? 'ha-ok' : (m.ownerState === 'CLAIMED_DISARMED' ? 'ha-warn' : 'ha-alarm');
+          return { cls: m.limiting ? 'limit' : '', attrs: 'onclick="HA.selectModule(\'' + m.id + '\')"',
+            cells: [m.id, m.profile, esc(m.owner), '<span class="' + tone + '">' + m.ownerState + '</span>', HA.f2(m.claim), HA.f2(m.claimMax)] };
+        })) + '<p class="ha-note">Fixed configured order; each module must verify ownership. No ARM has been sent.</p></div>';
+    } else if (ui.wiz === 2) {
+      var pct = Math.round(100 * b.claimed / b.total);
+      body = '<div class="ha-card"><h3>Step 3 — OWNERSHIP_BARRIER</h3>' + HA.frag.kv([
+        ['CLAIMED_DISARMED', b.claimed + ' / ' + b.total],
+        ['Barrier', b.passed ? 'PASSED' : 'IN PROGRESS', b.passed ? 'ha-ok' : 'ha-warn']
+      ]) + '<div class="ha-progress"><div class="ha-bar ' + (b.passed ? 'ok' : 'warn') + '" style="width:' + pct + '%"></div></div>' +
+        '<p class="ha-note">All-or-nothing: any failure releases everything and lands in REDUNDANCY_LOST. The I/O target is the last fence.</p></div>';
+    } else {
+      body = '<div class="ha-card"><h3>Step 4 — ARM and become ACTIVE</h3>' + HA.frag.kv([
+        ['Epoch', String(st.epoch)], ['Permit', esc(st.permitOwner || 'WITHHELD')],
+        ['CONTROL', st.control[HA.derive.activeUnit() || 'PLC-1'], 'ha-ok'],
+        ['Armed modules', b.modules.filter(function (m) { return m.armed; }).length + ' / ' + b.total]
+      ]) + '<div class="ha-row" style="margin-top:12px">' +
+        '<button class="ha-btn ' + (ui.intent === 'commanded' ? 'primary' : 'danger') + '" ' + (st.busy ? 'disabled' : '') +
+        ' onclick="app.execute()">' + (ui.intent === 'commanded' ? 'Execute commanded swap' : (ui.intent === 'fault' ? 'Execute simulated death takeover' : 'Execute partition claim (expected reject)')) + '</button>' +
+        '<span class="ha-hint">Runs the full sequence; progress is visible in the claim list and event ring.</span></div>' +
+        '<p class="ha-note">Result: epoch ' + (st.epoch + 1) + ', outputs ARMED, permit transferred, failed/old owner returns to deSYNC → SYNCING → SYNC_READY.</p></div>';
+    }
+    var nav = '<div class="ha-row" style="margin-top:12px">' +
+      '<button class="ha-btn" ' + (ui.wiz === 0 ? 'disabled' : '') + ' onclick="app.wiz(-1)">&#8592; Back</button>' +
+      '<button class="ha-btn primary" ' + (ui.wiz === 3 || !wizCanNext() ? 'disabled' : '') + ' onclick="app.wiz(1)">Next &#8594;</button></div>';
+    el('view').innerHTML = wizbar + body + nav;
+  }
+
+  function wizCanNext() {
+    if (ui.wiz === 0) return ui.confirmed;
+    return true;
+  }
+
+  function pageEvents() {
+    pageHead('Events', 'Timestamped ledger — appended, never rewritten.');
+    var rows = HA.data.events(ui.filter);
+    el('view').innerHTML = '<div class="ha-card"><div class="ha-row" style="margin-bottom:8px">' +
+      '<label class="ha-hint">Filter</label><select class="ha-select" onchange="app.filter(this.value)">' +
+      ['all', 'info', 'warn', 'alarm'].map(function (s) { return '<option value="' + s + '"' + (ui.filter === s ? ' selected' : '') + '>' + s.toUpperCase() + '</option>'; }).join('') +
+      '</select></div><div class="ha-log">' +
+      rows.map(function (e) {
+        return '<div class="ha-lrow"><span class="ha-t">' + esc(e.t) + '</span><span class="ha-sev ' + e.sev + '">' + e.sev + '</span><span class="ha-msg">' + esc(e.msg) + '</span></div>';
+      }).join('') + '</div></div>';
+  }
+
+  function renderInspector() {
+    var st = S();
+    var b = HA.data.barrier();
+    var m = null;
+    b.modules.forEach(function (x) { if (x.id === st.selectedModule) m = x; });
+    if (!m) m = b.modules[0];
+    el('inspector').innerHTML = '<div class="ha-card"><h3>Inspector — ' + m.id + '</h3>' + HA.frag.kv([
+      ['Profile', m.profile], ['Owner', esc(m.owner)],
+      ['OwnerState', m.ownerState, m.ownerState === 'ARMED' ? 'ha-ok' : (m.ownerState === 'CLAIMED_DISARMED' ? 'ha-warn' : 'ha-alarm')],
+      ['OwnerEpoch', String(m.ownerEpoch)], ['ClaimLatency', HA.f2(m.claim) + ' ms'], ['MaxQualified', HA.f2(m.claimMax) + ' ms']
+    ]) + '</div>' +
+      '<div class="ha-card" style="margin-top:10px"><h3>Selected task</h3>' +
+      HA.frag.kv([['Step', esc(ui.step)], ['State', st.busy ? 'running' : 'idle']]) + '</div>';
+  }
+
+  function renderStatus() {
+    var st = S();
+    var n = HA.derive.alarmsActive();
+    el('status').innerHTML = '<span>PAIR-RB-0417</span><span class="ha-sep">|</span>' +
+      '<span>' + (st.mode === 'redundant' ? 'Redundant' : 'Standalone') + '</span><span class="ha-sep">|</span>' +
+      '<span>EPOCH ' + st.epoch + '</span><span class="ha-sep">|</span>' +
+      '<span>PERMIT ' + esc(st.permitOwner || 'WITHHELD') + '</span><span class="ha-sep">|</span>' +
+      '<span class="' + (n ? 'ha-alarm' : 'ha-ok') + '">ALARMS ' + (n || 'none') + '</span><span class="ha-sep">|</span>' +
+      '<span>' + HA.edit.statusText() + '</span>';
+  }
+
+  function render(tick) {
+    if (tick && document.activeElement && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
+    renderToolbar(); renderNav(); renderView(); renderInspector(); renderStatus();
+  }
+
+  window.app = {
+    step: function (s) { ui.step = s; render(false); },
+    stepKey: function (ev, s) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); app.step(s); } },
+    wiz: function (d) { ui.wiz = Math.max(0, Math.min(3, ui.wiz + d)); render(false); },
+    intent: function (i) { ui.intent = i; render(false); },
+    confirm: function (v) { ui.confirmed = v; render(false); },
+    execute: function () {
+      ui.confirmed = false;
+      HA.act(ui.intent === 'commanded' ? 'swap' : (ui.intent === 'fault' ? 'death' : 'partition'));
+      render(false);
+    },
+    filter: function (f) { ui.filter = f; render(false); }
+  };
+  ui.filter = 'all';
+
+  HA.subscribe(function (tick) { render(tick); });
+  render(false);
+})();
+</script>
+</body>
+</html>

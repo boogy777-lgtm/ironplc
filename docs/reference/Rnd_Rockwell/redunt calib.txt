@@ -1,0 +1,1898 @@
+Да. Я бы здесь заложил фундамент так, чтобы потом не пришлось переписывать прошивку I/O при развитии redundancy.
+
+Ключевой принцип:
+
+PLC redundancy layer решает, кто имеет право попытаться стать Active. I/O firmware решает, имеет ли конкретный PLC право физически воздействовать на выходы.
+
+То есть I/O — последний fencing layer, но не election/quorum node.
+
+Это продолжает уже принятую модель: ACTIVE имеет Exclusive Owner, не-ACTIVE наблюдает через Input Only; причём Input Only принципиально лучше Listen Only, потому что не зависит от существования owner. Такой подход соответствует EtherNet/IP: output-модуль допускает только одного owner, и именно firmware модуля обязана это обеспечить.
+
+1. Граница ответственности
+
+Я бы жёстко разделил:
+
+Функция	PLC HA runtime	I/O firmware
+DUTY / RESERVE	✓	не знает
+PING/PONG между PLC	✓	нет
+Link calibration пары	✓	предоставляет метрики
+SYNC_READY	✓	не знает
+Решение о takeover	✓	нет
+Epoch generation	✓	проверяет
+Exclusive ownership	запрашивает	enforces
+All-I/O barrier	координирует	подтверждает локальный claim
+Output arm	командует	enforces
+Owner timeout	наблюдает	детектирует локально
+Safe state	задаёт policy	исполняет аппаратно
+Фактический output	формирует	последнее решение
+
+Главное следствие:
+
+RESERVE никогда не говорит I/O:
+
+"Primary умер, поверь мне".
+
+Он говорит:
+
+"I request ownership
+ for Pair X
+ Controller B
+ candidate Epoch 42"
+
+А модуль сам решает:
+
+current owner exists?    → reject
+epoch invalid?           → reject
+config incompatible?     → reject
+faulted?                 → reject
+
+otherwise                → claim accepted
+2. Самое важное изменение относительно нынешней LLM-спеки
+
+Сейчас сигнал I определяется косвенно: резерв видит изменения input data, которые якобы свидетельствуют, что peer владеет I/O.
+
+Раз мы сами проектируем firmware I/O, не надо ничего угадывать.
+
+Output-модуль должен явно публиковать:
+
+OwnerState
+OwnerControllerId
+OwnerEpoch
+OwnerConnectionAge
+OwnerOutputSeq
+OwnerArmed
+
+Оба PLC получают это через независимое Input Only.
+
+Тогда вместо:
+
+"I think Primary probably owns this rack"
+
+получаем:
+
+DO-01:
+Owner      = Controller A
+Epoch      = 184
+State      = ARMED
+LastOutput = 417 µs ago
+Connection = VALID
+
+Это гораздо сильнее.
+
+3. Common I/O Core
+
+Независимо от DI/DO/AI/AO я бы сделал одинаковый firmware foundation:
+
+┌───────────────────────────────────────────────┐
+│               Application I/O                │
+│       DI / DO / AI / AO specific logic       │
+├───────────────────────────────────────────────┤
+│             Process Image Core               │
+│ input sample │ output shadow │ output commit │
+├───────────────────────────────────────────────┤
+│                 HA I/O Guard                  │
+│ ownership │ epoch │ arm │ fencing │ safe-state│
+├───────────────────────────────────────────────┤
+│        EtherNet/IP Adapter / CIP Core         │
+│ Class1 │ Assemblies │ ConnMgr │ InputOnly     │
+├───────────────────────────────────────────────┤
+│             Timing / Diagnostics              │
+│ counters │ timestamps │ EMA │ events │ WCET   │
+├───────────────────────────────────────────────┤
+│               Network Driver                  │
+│ PHY IRQ │ MAC │ DMA │ port status │ counters │
+├───────────────────────────────────────────────┤
+│                  Hardware                     │
+└───────────────────────────────────────────────┘
+
+HA I/O Guard должен быть общей частью firmware всех output-capable модулей.
+
+DI/AI используют тот же framework, но ownership gate физических выходов им просто не нужен.
+
+4. State machine output-модуля
+
+Я бы не ограничивался OWNED / NOT OWNED.
+
+Нужно:
+
+                    boot/reset
+                        │
+                        ▼
+                 ┌────────────┐
+                 │ SAFE/NOOWNER│
+                 └──────┬─────┘
+                        │ valid Exclusive Owner
+                        ▼
+              ┌──────────────────┐
+              │ CLAIMED_DISARMED │
+              └────────┬─────────┘
+                       │ global barrier succeeded
+                       │ ARM
+                       ▼
+                  ┌─────────┐
+                  │  ARMED  │
+                  └────┬────┘
+                       │ owner timeout /
+                       │ connection loss
+                       ▼
+                  ┌─────────┐
+                  │FAILSAFE │
+                  └────┬────┘
+                       │
+                       ▼
+                   NOOWNER
+
+Именно CLAIMED_DISARMED — очень важное новое состояние.
+
+5. Почему CLAIMED_DISARMED нам нужен
+
+Пусть Secondary должен получить пять output-модулей:
+
+DO1 ✓
+DO2 ✓
+DO3 ✓
+DO4 ✗
+DO5 ?
+
+Если DO1–DO3 уже начали физически применять output нового PLC, мы получили частичный takeover.
+
+А наш инвариант говорит:
+
+partial ownership != ACTIVE
+
+Поэтому acquisition означает только:
+
+Exclusive Owner acquired
+        ↓
+CLAIMED_DISARMED
+
+Физические выходы всё ещё:
+
+SAFE / HOLD / configured takeover state
+
+Контроллер получает ownership всех required modules:
+
+DO1 CLAIMED_DISARMED ✓
+DO2 CLAIMED_DISARMED ✓
+DO3 CLAIMED_DISARMED ✓
+DO4 CLAIMED_DISARMED ✓
+DO5 CLAIMED_DISARMED ✓
+
+Только тогда:
+
+OWNERSHIP_BARRIER = PASSED
+
+и начинается отдельная фаза:
+
+ARM
+
+Это превращает нынешний all-or-nothing barrier из логического правила в реальное свойство firmware I/O.
+
+6. Это фактически двухфазный takeover
+
+Получаем:
+
+PHASE 1 — ACQUIRE
+
+Secondary
+   ↓
+Exclusive Owner
+   ↓
+I/O CLAIMED_DISARMED
+   ↓
+verify ALL modules
+
+
+PHASE 2 — COMMIT
+
+bump/commit epoch
+   ↓
+ARM outputs
+   ↓
+ACTIVE
+
+Если acquisition одного модуля провалился:
+
+release acquired modules
+
+но они и так никогда не воздействовали на процесс.
+
+Это очень сильный фундамент.
+
+7. Epoch тоже нужно провести до I/O
+
+Я бы сделал:
+
+CommittedEpoch
+PendingEpoch
+
+Например сейчас:
+
+CommittedEpoch = 41
+
+Secondary начинает claim:
+
+CandidateEpoch = 42
+
+Модуль принимает:
+
+PendingEpoch = 42
+State = CLAIMED_DISARMED
+
+Но ещё не делает:
+
+CommittedEpoch = 42
+
+После глобального barrier:
+
+COMMIT / ARM epoch 42
+
+и только тогда:
+
+CommittedEpoch = 42
+PendingEpoch   = none
+OwnerArmed     = true
+
+Если barrier развалился:
+
+PendingEpoch = discarded
+
+Это идеально сочетается с нашим правилом:
+
+epoch dominates generation
+
+8. Нужен Epoch Floor
+
+Я бы сразу заложил интерфейс:
+
+epoch_floor
+
+Модуль не принимает:
+
+CandidateEpoch < epoch_floor
+
+или уже committed epoch.
+
+Причём persistence сделать abstraction:
+
+EpochStore
+    volatile
+    persistent
+
+Для первой версии можно решить policy позже.
+
+Но firmware API уже должен позволять перейти на FRAM/MRAM/journalled flash без изменения HA architecture.
+
+Это связано с уже открытым в текущей спецификации вопросом persistence epoch после power loss.
+
+9. Normal Class 1 traffic не должен использовать management commands
+
+Реальное управление:
+
+ARM
+epoch
+output sequence
+commit id
+outputs
+
+должно идти внутри deterministic Class 1 O→T assembly.
+
+Не так:
+
+CIP explicit message:
+"please arm outputs"
+
+потому что explicit messaging — control plane.
+
+Разделение:
+
+CIP Explicit / vendor HA object
+        ↓
+configuration
+diagnostics
+maintenance
+metrics
+
+Class 1 cyclic connection
+        ↓
+real-time ownership execution
+output arm
+output image
+10. Предлагаемый output assembly
+
+В HA mode:
+
+HA_OUTPUT_HEADER
+
+ProtocolVersion
+Epoch
+CommitId
+OutputSequence
+
+Flags:
+    ARM
+    VALID
+
+OutputData[]
+
+PairId и ControllerId необязательно таскать каждый RPI.
+
+Они устанавливаются при connection/claim:
+
+OwnerContext:
+    PairId
+    ControllerId
+    CandidateEpoch
+    ConfigHash
+
+А cyclic packet уже маленький.
+
+11. Input/status assembly
+
+Вот его я бы сделал очень богатым:
+
+HA_INPUT_STATUS
+
+SampleSequence
+SampleTimestamp
+
+OwnerState
+OwnerControllerId
+OwnerEpoch
+OwnerArmed
+OwnerOutputSequence
+
+OwnerPacketAge
+
+ModuleState
+FaultCode
+
+Port1State
+Port2State
+
+InputData[]
+
+Таким образом Reserve получает одновременно процесс и доказательство ownership.
+
+Именно поэтому нам нужен Input Only: стандарт EtherNet/IP допускает несколько независимых Input Only connections; ODVA рекомендует Adapter поддерживать комбинацию Exclusive Owner + Input Only одновременно.
+
+12. Connection capacity
+
+Для наших собственных модулей я бы сразу проектировал не минимальные 2 Class 1 connections, а минимум:
+
+1 × Exclusive Owner
+3 × Input Only
+
+Почему архитектурно:
+
+DUTY observer/owner
+RESERVE observer
+engineering/diagnostic observer
+future service
+
+Не обязательно все использовать одновременно, но firmware table connections лучше сразу размерить с запасом.
+
+13. Никакого Listen Only в HA
+
+Это уже правильно заложено в текущей спецификации: Listen Only зависит от существующего owner; Input Only — самостоятельный.
+
+То есть:
+
+ACTIVE:
+    Exclusive Owner
+    + input consumption
+
+RESERVE:
+    Input Only
+
+after Primary death:
+    RESERVE Input Only continues
+
+и Reserve продолжает видеть:
+
+OwnerState = LOST
+
+даже после исчезновения старого owner.
+
+14. Local owner watchdog
+
+У output firmware должен быть собственный аппаратно/RT ограниченный watchdog O→T connection.
+
+Пример состояния:
+
+last_valid_output_rx
+owner_connection_timeout
+owner_age
+
+Если:
+
+owner_age >= effective_connection_timeout
+
+модуль самостоятельно:
+
+OwnerArmed = FALSE
+apply FaultAction
+release owner when CIP connection declared timed-out
+
+Secondary здесь вообще не участвует.
+
+Очень важный принцип:
+
+I/O safety никогда не зависит от того, успел ли резервный PLC принять решение.
+
+15. Fault output policy
+
+Для каждого output channel уже в common core надо заложить policy abstraction.
+
+Rockwell, например, позволяет output-модулю при потере owner перейти к заданному fault value, удерживать значение и для analog output применять ramp.
+
+Нам нужны как минимум режимы:
+
+Policy	Поведение
+SAFE_VALUE	немедленно заданное fault value
+HOLD_LAST	удержание последнего
+RAMP_TO_SAFE	AO плавно к safe value
+CHANNEL_POLICY	специализированная логика модуля
+
+Для HA default я бы оставил SAFE_VALUE.
+
+HOLD_LAST — сознательная engineering policy, не скрытое поведение redundancy.
+
+16. Самая важная часть для нашей новой timing-парадигмы
+
+I/O firmware должна быть инструментирована с первого дня.
+
+Она должна timestamp'ить:
+
+ForwardOpen received
+Owner accepted
+Claim verification available
+ARM received
+Output physically committed
+
+Last owner packet
+Owner timeout detected
+Safe output commanded
+Safe output physically applied
+
+И сама вычислять:
+
+ClaimLatency
+ArmToOutputLatency
+OwnerLossDetectionLatency
+FaultApplyLatency
+InputSampleJitter
+OutputCommitJitter
+
+Для каждого:
+
+current
+EMA10
+EMA100
+max
+count
+
+Тогда наш PLC не предполагает:
+
+Forward_Open ≈ 3 ms
+
+Он знает:
+
+DO-01 claim:
+EMA100 = 1.18 ms
+MAX    = 1.74 ms
+
+DO-07 claim:
+EMA100 = 1.41 ms
+MAX    = 2.06 ms
+17. Тогда ownership-barrier тоже становится формулой реальности
+
+Для последовательного v1:
+
+$$ T_{claim} = \sum_{i=1}^{N} T_{claim,i} $$
+
+Но Studio сможет иметь:
+
+$$ \hat T_{claim} = \sum EMA_{claim,i} $$
+
+и qualification bound:
+
+$$ T_{claim,max} = \sum MaxQualified_{claim,i} $$
+
+Если позднее разрешим parallel Forward_Open:
+
+$$ T_{claim} \approx \max_i(T_{claim,i}) $$
+
+Прошивку I/O при этом менять практически не потребуется.
+
+18. Полная формула failover теперь получает реальные I/O члены
+$$ T_{process-recovery} = T_{peer-detect} + T_{claim} + T_{arm} + T_{scan-safe-point} + T_{output-apply} $$
+
+Причём:
+
+T_peer_detect
+    измеряют PLC
+
+T_claim
+    PLC + реальные I/O metrics
+
+T_arm
+    реальные I/O metrics
+
+T_scan-safe-point
+    runtime PLC
+
+T_output-apply
+    реальные I/O metrics
+
+Это ровно философия, которую мы сейчас приняли:
+
+formula
++
+qualification
++
+actual installation measurements
++
+continuous EMA
+19. PHY diagnostics I/O-модуля
+
+Если модуль имеет два Ethernet ports, common core должен дать для каждого:
+
+PHY_UP
+speed
+duplex
+
+rx_packets
+tx_packets
+
+rx_errors
+fcs_errors
+symbol_errors
+
+link_down_count
+last_link_change
+
+RX/TX sequence statistics
+
+Если PHY/NIC предоставляет hardware timestamp/interrupt timestamps — сохраняем.
+
+Это не используется модулем для решения «сменить PLC», но чрезвычайно полезно системе для диагностики:
+
+HA channel latency degraded because
+Backplate-7 Port2 started accumulating RX errors
+20. Config Signature
+
+Нам обязательно нужен:
+
+ConfigGeneration
+ConfigHash
+
+Оба PLC должны обращаться к модулю с одной конфигурацией.
+
+При несовпадении:
+
+CONFIG_MISMATCH
+
+и owner claim запрещён.
+
+У Rockwell multiple-owner input connections тоже требуют идентичной конфигурации, иначе соединение отвергается.
+
+Это пригодится нам и для hot edit/configuration deployment.
+
+21. Binding I/O к redundancy domain
+
+В HA mode я бы заложил:
+
+PairId
+
+в configuration.
+
+То есть модуль знает:
+
+I belong to redundancy domain ABCD…
+
+Но не знает:
+
+A = DUTY
+B = RESERVE
+
+Внутри pair:
+
+ControllerId A
+ControllerId B
+
+могут использоваться для диагностики.
+
+Попытка третьего PLC:
+
+PairId != configured PairId
+
+получает отказ ownership.
+
+При обычном non-redundant режиме binding можно отключить.
+
+22. Что происходит при takeover
+
+Итоговая последовательность получается очень чистой:
+
+PRIMARY A                     I/O                    SECONDARY B
+    │                          │                          │
+    │ Exclusive Owner         │                          │
+    │ ARM=1                   │                          │
+    │────────────────────────►│                          │
+    │                          │◄──── Input Only ────────│
+    │                          │                          │
+    X                          │                          │
+                               │
+                         owner watchdog
+                               │
+                         FAULT / SAFE
+                               │
+                         OWNER = NONE
+                               │
+                               │◄──── claim epoch 42 ────│
+                               │
+                         CLAIMED_DISARMED
+                               │──── status=claimed ────►│
+                               │                         │
+                                  ... ALL I/O claimed ...
+                                                         │
+                                               barrier passed
+                                                         │
+                               │◄── COMMIT/ARM epoch42 ──│
+                               │
+                           outputs active
+                               │
+                               │──── ARMED epoch42 ─────►│
+
+И только после этого:
+
+PLC B CONTROL → ACTIVE
+23. Если хоть один I/O остался у старого Primary
+
+Например:
+
+DO1 → free
+DO2 → free
+DO3 → still owner A
+DO4 → free
+
+B получает:
+
+DO1 CLAIMED_DISARMED
+DO2 CLAIMED_DISARMED
+DO3 REJECT: OWNERSHIP_CONFLICT
+
+После чего:
+
+DO1 release
+DO2 release
+
+NO ARM WAS EVER SENT
+
+и:
+
+CONTROL → REDUNDANCY_LOST
+
+Это реализует буквально правило текущей спецификации: при одном failed acquisition всё уже захваченное освобождается, partial ownership никогда не становится ACTIVE.
+
+24. Что делать при потере одного I/O во время ACTIVE
+
+Модуль сам:
+
+owner lost
+→ local configured safe state
+
+PLC видит:
+
+connection lost
+
+и глобальная FSM решает:
+
+ACTIVE
+    ↓
+DUTY_DEGRADED
+
+или:
+
+REDUNDANCY_LOST
+
+Firmware отдельного DO-модуля не принимает глобального решения.
+
+Это правильное разделение ответственности.
+
+25. Очень полезный future hook: scheduled ARM
+
+Для v1:
+
+ARM_NOW
+
+И реальная разница активации модулей просто входит в:
+
+T_output_apply
+
+Но уже сейчас зарезервировать:
+
+ARM_AT_TIME
+ActivationTimestamp
+
+Если позже включим PTP/CIP Sync:
+
+all output modules:
+
+CommitId = 872
+ActivateAt = TAI 123456789
+
+и они физически применят новый image практически одновременно.
+
+Это позволит эволюционировать:
+
+all-or-nothing ownership
+
+в сторону:
+
+time-coherent output activation
+
+без смены базовой архитектуры.
+
+26. И ещё один future hook — Redundant Owner v2
+
+Rockwell уже имеет интересный референс: некоторые output-модули допускают двух redundant owners A/B одновременно, с OwnerClaim, OwnerReady, OwnerActive, OwnerID; сам модуль арбитрирует, какой набор output реально применяется.
+
+Но наш текущий документ сознательно оставляет dual-owner output modules за пределами v1.
+
+Я бы это не включал в v1, но заложил interface:
+
+OwnershipCapability:
+
+SINGLE_EXCLUSIVE
+REDUNDANT_PAIR
+
+V1:
+
+SINGLE_EXCLUSIVE
+
+Будущий v2 сможет добавить:
+
+REDUNDANT_PAIR
+
+без переписывания Process Image, Timing, Epoch и Diagnostics layers.
+
+27. Минимальный firmware contract, который я считаю фундаментом
+Capability	V1
+Standard EtherNet/IP Adapter	MUST
+Exclusive Owner outputs	MUST
+Multiple Input Only	MUST
+Listen Only для HA	не используется
+PairId binding	MUST
+ControllerId	MUST
+ConfigHash	MUST
+Epoch validation	MUST
+Pending/Committed Epoch	MUST
+CLAIMED_DISARMED	MUST
+Explicit ARM	MUST
+Local owner watchdog	MUST
+Safe output policy	MUST
+Explicit Owner status in T→O data	MUST
+Input sample sequence/timestamp	MUST
+Claim/apply timing metrics	MUST
+EMA10 / EMA100 / max	MUST
+PHY/link counters	MUST
+Event ring buffer	MUST
+Persistent epoch abstraction	MUST, backend may initially be volatile
+ARM_AT_TIME	reserve protocol field
+Dual redundant owner	capability reserved, v2
+Cryptographic owner authentication	extension point
+
+И выделенные MUST — я бы считал теми решениями, которые надо принять сейчас, пока firmware architecture ещё свободна.
+
+Самое важное из всего этого — три решения: I/O явно сообщает ownership вместо косвенного I; приобретение ownership отделено от физического ARM; каждый модуль измеряет собственные реальные задержки и отдаёт их в общую HA timing model.
+
+Тогда redundancy перестаёт быть только логикой двух PLC. Получается цельная система:
+
+           PLC REDUNDANCY
+     decision / sync / calibration
+                 │
+                 │ claim / epoch / arm
+                 ▼
+          I/O FENCING LAYER
+     ownership / timing / safe state
+                 │
+                 ▼
+          PROCESS IMAGE CORE
+                 │
+                 ▼
+            PHYSICAL I/O
+
+И именно I/O Fencing Layer становится единым неизменным архитектурным компонентом всех будущих RegulBUS/IronPLC DI/DO/AI/AO-модулей.
+
+Ethernet ip поддерживает постоянное соединение или нужно его поднимать во время перехода ? Этот edge case должен архитектурно закрыт
+
+Да. Этот edge case критичный, и его надо закрыть двумя режимами I/O ownership, потому что стандартный EtherNet/IP и «настоящий preconnected HA» ведут себя по-разному.
+
+В обычном EtherNet/IP Class 1 I/O-соединение после Forward_Open является постоянным циклическим соединением: контроллер и адаптер обмениваются implicit I/O по RPI, пока connection жив. Но для стандартного output-модуля разрешён только один Exclusive Owner; попытка второго контроллера открыть ещё один owner connection должна быть отвергнута firmware модуля.
+
+Поэтому стандартный сценарий выглядит так:
+
+PRIMARY A                           I/O
+   │
+   │  Forward_Open Exclusive Owner
+   ├──────────────────────────────►│
+   │                               │
+   │   cyclic O→T / T→O @ RPI      │
+   │◄══════════════════════════════►│
+   │                               │
+SECONDARY B                        │
+   │                               │
+   │  Forward_Open Input Only      │
+   ├──────────────────────────────►│
+   │◄════ cyclic T→O observer ═════│
+
+Secondary может всё время быть подключён к I/O, но как Input Only. Такие соединения независимы, и несколько originator'ов могут держать их одновременно.
+
+А вот второе Exclusive Owner стандартный output-модуль заранее держать не может.
+
+Что происходит при отказе Primary
+
+Если A просто умер, его Exclusive Owner connection не исчезает в ту же наносекунду:
+
+A DEAD
+
+I/O:
+Owner = A
+connection watchdog still counting...
+
+Модуль должен сначала установить, что connection A истёк.
+
+До этого:
+
+B → Forward_Open Exclusive Owner
+                 ↓
+             REJECT
+       ownership conflict
+
+Rockwell прямо документирует такой rejection как ownership conflict: output module уже принадлежит другому controller.
+
+Когда старое соединение действительно timed out:
+
+Owner A connection timeout
+        ↓
+outputs → configured fault/safe policy
+        ↓
+Owner = NONE
+
+тогда B может успешно выполнить:
+
+Forward_Open Exclusive Owner
+        ↓
+CLAIMED_DISARMED
+        ↓
+verify
+        ↓
+ARM
+
+Поэтому старая формула из нашей спецификации была по сути правильной:
+
+$$ T_{takeover} = T_{detect} + T_{old-owner-release} + T_{ForwardOpen} + T_{validation} + T_{scan} $$
+
+В загруженной спецификации этот old-connection timeout + Forward_Open уже был включён в takeover time.
+
+И вот T_old-owner-release нельзя забывать. В некоторых конфигурациях именно он может стать крупнейшей частью failover.
+
+Но для наших собственных I/O мы можем сделать лучше
+
+Rockwell уже показывает второй путь: существуют output-модули с режимом Redundant Owner, где два controllers могут иметь заранее установленные redundant connections, а в выходных данных существуют OwnerClaim и OwnerReady. Модуль сам выбирает, чьи outputs применять.
+
+Это принципиально другая архитектура:
+
+PLC A                         I/O                         PLC B
+  │                            │                            │
+  ├════ Owner A connection ═══►│◄═══ Owner B connection ══┤
+  │                            │                            │
+  │ OwnerReady=1               │               OwnerReady=1│
+  │ OwnerClaim=1               │               OwnerClaim=0│
+  │                            │                            │
+  │                         ACTIVE=A                       │
+
+То есть оба connections уже подняты до аварии.
+
+При отказе A:
+
+Owner A stops
+        │
+        ▼
+B already has connection
+        │
+OwnerClaim B
+        ▼
+I/O arbitration
+        ▼
+ACTIVE=B
+
+Нет критического:
+
+new TCP connection
+Forward_Open
+wait for configuration
+create Class1 connection
+
+на пути takeover.
+
+Это именно тот architectural hook, который нам надо заложить сейчас.
+
+Я бы поэтому ввёл capability I/O-модуля
+
+Не просто:
+
+OwnershipCapability:
+    SINGLE_EXCLUSIVE
+    REDUNDANT_PAIR
+
+как я предложил выше, а сделал это фундаментальным contract.
+
+Mode 1 — SINGLE_EXCLUSIVE
+
+Совместимость с обычным EtherNet/IP I/O:
+
+PRIMARY:
+    Exclusive Owner = persistent
+
+SECONDARY:
+    Input Only = persistent
+
+При takeover:
+
+PEER_FAILED
+    ↓
+wait/verify old owner released
+    ↓
+Forward_Open Exclusive Owner
+    ↓
+CLAIMED_DISARMED
+    ↓
+global barrier
+    ↓
+ARM
+
+Формула:
+
+$$ T_{claim}^{single} = T_{owner-release} + T_{ForwardOpen} + T_{verify} $$
+
+Это позволяет IronPLC работать с чужими стандартными EtherNet/IP output-модулями.
+
+Mode 2 — REDUNDANT_PAIR
+
+Для наших RegulBUS/IronPLC I/O.
+
+Оба PLC устанавливают connections при qualification пары, а не во время аварии:
+
+              I/O
+
+PLC A ───── OwnerChannel A ─────┐
+                                ├── Redundant Owner Guard
+PLC B ───── OwnerChannel B ─────┘
+
+У каждого:
+
+PairId
+ControllerId
+Epoch
+OwnerReady
+OwnerClaim
+OutputSeq
+CommitId
+OutputData
+
+Но физически применяется только один:
+
+AppliedOwner = A XOR B
+
+И firmware обеспечивает:
+
+never:
+    AppliedOwner=A && AppliedOwner=B
+
+Тогда takeover уже:
+
+$$ T_{claim}^{redundant} \neq T_{ForwardOpen} $$
+
+Потому что connection уже существует.
+
+Вместо этого:
+
+$$ T_{claim}^{redundant} = T_{owner-failure-confirm} + T_{arbitration} + T_{ARM} $$
+
+И это потенциально намного быстрее и, главное, намного детерминированнее.
+
+Но я бы не позволял самому I/O решать, что Primary умер
+
+Здесь тонкий момент.
+
+Rockwell Redundant Owner допускает arbitration непосредственно в модуле. Нам для нашей модели лучше сохранить separation:
+
+I/O knows:
+
+connection A alive/dead
+connection B alive/dead
+epoch A/B
+OwnerReady A/B
+OwnerClaim A/B
+
+Но право на переход должно требовать корректный claim Secondary.
+
+То есть нельзя:
+
+connection A timeout
+        ↓
+автоматически применить B outputs
+
+Только:
+
+A unavailable
+        +
+B connection valid
+        +
+B OwnerReady
+        +
+valid newer epoch/claim
+        ↓
+B may become armed
+
+Так I/O остаётся fencing authority, а не полноценным HA election node.
+
+Я бы ещё разделил CONNECTED и ARMED
+
+Это теперь особенно важно.
+
+Для нашего модуля:
+
+ConnectionState:
+
+DISCONNECTED
+CONNECTED_OBSERVER
+CONNECTED_OWNER_STANDBY
+CONNECTED_OWNER_ACTIVE
+
+Отдельно:
+
+OutputState:
+
+DISARMED
+ARMED
+FAILSAFE
+
+Получается нормальная redundancy pair:
+
+PLC A:
+connection = OWNER
+ready      = true
+claim      = true
+
+PLC B:
+connection = REDUNDANT_OWNER
+ready      = true
+claim      = false
+
+I/O:
+AppliedOwner = A
+
+При controlled switchover:
+
+A claim 1 → 0
+
+B:
+epoch 42
+claim 0 → 1
+
+и только после проверки:
+
+AppliedOwner = B
+
+Connections при этом вообще не меняются.
+
+Это закрывает ещё один опасный edge case
+
+Представим сеть загружена именно во время аварии.
+
+В standard mode:
+
+Primary dies
+    ↓
+Secondary needs Forward_Open
+    ↓
+explicit-message path congested
+    ↓
+connection establishment delayed
+
+То есть:
+
+$$ T_{ForwardOpen} $$
+
+имеет существенный network/scheduler jitter.
+
+В preconnected mode:
+
+Class 1 B already running
+
+Мы всё время измеряем:
+
+B→I/O latency
+packet loss
+sequence
+jitter
+
+до аварии.
+
+Поэтому наша calibration philosophy начинает работать даже лучше:
+
+Owner A connection quality
+Owner B connection quality
+
+известны постоянно.
+
+Перед тем как дать:
+
+TakeoverReady = TRUE
+
+мы можем потребовать:
+
+all required I/O:
+
+OwnerAConnection == VALID
+OwnerBConnection == VALID
+SecondaryPathCalibrated/qualified
+
+Это очень сильный invariant.
+
+Я бы изменил readiness именно так
+
+Сейчас:
+
+SYNC_READY
+
+ещё недостаточно.
+
+Добавляем:
+
+IO_READY
+
+где:
+
+IO_READY =
+    all_required_inputs_observable
+ && all_required_outputs_standby_connected
+ && all_configs_match
+ && all_epochs_valid
+
+Для generic I/O SINGLE_EXCLUSIVE:
+
+standby_connected =
+    InputOnly connection valid
+
+Для нашего REDUNDANT_PAIR:
+
+standby_connected =
+    RedundantOwner-B connection valid
+ && OwnerReady-B
+
+И:
+
+$$ TakeoverReady = SYNC\_READY \land IO\_READY \land RedundancyLinkValid $$
+
+Это существенно сильнее текущей модели.
+
+Как capability должен выглядеть в firmware
+
+Я бы предусмотрел примерно такой descriptor:
+
+OwnershipCapabilities
+{
+    SINGLE_EXCLUSIVE_OWNER,
+    REDUNDANT_PRECONNECTED_OWNER
+}
+
+MaxOwnerConnections
+MaxInputOnlyConnections
+
+SupportsStagedClaim
+SupportsExplicitArm
+SupportsEpoch
+SupportsScheduledArm
+
+Для стороннего generic EtherNet/IP:
+
+SINGLE_EXCLUSIVE_OWNER
+
+Для нашего output module v1 я теперь серьёзно рассматривал бы сразу:
+
+REDUNDANT_PRECONNECTED_OWNER
+
+а не откладывал его обязательно на v2.
+
+Потому что это не косметическая optimization. Оно меняет фундаментальный член:
+
+$$ T_{old-owner-release}+T_{ForwardOpen} $$
+
+в takeover path.
+
+Но поддержку SINGLE_EXCLUSIVE всё равно оставляем обязательно
+
+Потому что IronPLC должен уметь резервироваться с обычным EtherNet/IP I/O.
+
+Тогда runtime заранее рассчитывает разные recovery models:
+
+Module DO-1
+mode = REDUNDANT_PRECONNECTED
+
+Ttakeover contribution:
+0.72 ms measured
+
+
+Module DO-2
+mode = SINGLE_EXCLUSIVE
+
+Ttakeover contribution:
+owner timeout  + Forward_Open + verify
+= 8.4 ms measured
+
+И Studio честно покажет:
+
+HA ownership barrier:
+
+DO-1   preconnected     0.72 ms
+DO-2   reconnect        8.40 ms  ← limiting device
+DO-3   preconnected     0.81 ms
+
+Worst ownership recovery = ...
+
+Это идеально совпадает с нашей новой парадигмой «не обещаем время — измеряем реальный topology и вычисляем время перехода».
+
+Поэтому архитектурное решение я бы зафиксировал так
+
+EtherNet/IP connection к I/O должен быть постоянным всегда. Secondary никогда не сидит полностью disconnected.
+
+Для стандартного устройства:
+
+Primary   = persistent Exclusive Owner
+Secondary = persistent Input Only
+
+takeover requires new Exclusive Owner Forward_Open
+
+Для нашего HA-aware устройства:
+
+Primary   = persistent Owner-A
+Secondary = persistent Owner-B standby
+
+takeover does NOT require a new connection
+
+Rockwell показывает, что оба подхода практически реализуемы: обычные output modules firmware-ограничены одним owner, а специальные Redundant Owner modules позволяют двум owner connections существовать одновременно и используют OwnerClaim/OwnerReady для arbitration.
+
+Именно поддержку обоих режимов я бы заложил в I/O contract сейчас. Тогда ни EtherNet/IP timeout/Forward_Open, ни будущий быстрый preconnected takeover уже не потребуют ломать архитектуру.
+
+Давай проверим твои выводы про io адвокатом дьявола
+
+Проверка «адвокатом дьявола» изменила мой вывод в одном важном месте: основа правильная, но я слишком рано назвал per-module ownership достаточным fencing-механизмом. Он гарантирует «два PLC не управляют одним физическим каналом одновременно», но сам по себе ещё не гарантирует согласованный takeover всего I/O-набора.
+
+Атака	Вердикт	Что меняем
+Exclusive Owner как последний fence	✅ оставить	Для generic EtherNet/IP это правильный последний барьер
+Постоянное соединение Secondary	✅ оставить	Но тип зависит от capability устройства
+Preconnected Redundant Owner	✅ оставить как capability	Это стандартизованный CIP-механизм, но плохо распространён в EtherNet/IP
+Input Only для любого output	❌ слишком сильное утверждение	Нужен capability discovery: Input Only / Listen Only / Redundant Owner
+Epoch определяет победителя	❌ опасно	Epoch только anti-stale; он не является доказательством права takeover
+CLAIMED_DISARMED → ARM	✅ очень сильная идея	Но это наш HA extension, не generic EtherNet/IP
+Каждый I/O независимо выбирает owner	⚠ главный изъян	Нужен owner-lease + staged takeover; для generic I/O гарантии слабее
+1. Первое исправление: Redundant Owner — не наша выдумка
+
+Здесь мой предыдущий вывод был слишком осторожным. CIP действительно стандартизует Redundant Owner: несколько controllers могут иметь redundant-owner connections, используя COO — Claim Output Ownership — и ROO — Ready for Ownership. Но ODVA отдельно отмечает, что этот механизм не закрывает всю системную HA-задачу и в EtherNet/IP распространён значительно меньше, чем был в ControlNet; поэтому производители построили собственные системные решения поверх него.
+
+Rockwell реализует буквально:
+
+Owner A connection ──┐
+                     ├── Output module
+Owner B connection ──┘
+
+OwnerClaim
+OwnerReady
+OwnerActive
+OwnerID
+
+и обе owner connections могут существовать одновременно.
+
+Schneider M580 делает ещё интереснее: оба PAC постоянно поддерживают independent redundant owner connection к каждому RIO drop, поэтому при switchover новый Primary продолжает работать через уже существующее соединение. Schneider прямо связывает это с bumpless RIO switchover.
+
+Значит фундамент:
+
+GENERIC_EIP
+HA_REDUNDANT_OWNER
+
+правильный.
+
+Но HA_REDUNDANT_OWNER не надо считать гарантированной возможностью любого EtherNet/IP устройства.
+
+2. Наше утверждение про Input Only оказалось слишком оптимистичным
+
+Текущая спецификация говорит, что non-ACTIVE использует Input Only, а не Listen Only, именно потому что Listen Only зависит от owner.
+
+Логика правильная. Но generic EtherNet/IP output module не обязан предоставлять нам независимый Input Only connection именно в том виде, который нам нужен.
+
+Например стандартные Rockwell output-модули широко используют Listen Only. И документация прямо говорит: если owner connection исчезает, Listen Only тоже прекращает получать данные.
+
+ODVA interoperability tests тоже допускают:
+
+Exclusive Owner
++
+Input Only OR Listen Only
+
+в зависимости от возможностей конкретного target.
+
+Поэтому правильный descriptor:
+
+ObserverCapability =
+    INDEPENDENT_INPUT_ONLY
+    LISTEN_ONLY
+    NONE
+
+а не hardcoded:
+
+Secondary = Input Only
+
+Для наших собственных I/O мы, конечно, реализуем независимый observer.
+
+3. Самая серьёзная атака: независимые output-модули могут выбрать разных владельцев
+
+Представим:
+
+DO1     A → B
+DO2     A → B
+DO3     A → B
+DO4     A → B
+
+B начинает takeover.
+
+Из-за разных задержек:
+
+t1:
+
+DO1 owner = B
+DO2 owner = B
+DO3 owner = A
+DO4 owner = A
+
+Каждый отдельный модуль соблюдает:
+
+only one owner
+
+Но система в целом уже:
+
+PLC-A controls part of process
+PLC-B controls another part
+
+Это functional split across the I/O set.
+
+Особенно интересно, что стандартный Rockwell Redundant Owner сам по себе этого глобально не решает. Если оба owners имеют OwnerClaim=1, активным становится тот, чей переход 0→1 конкретный модуль получил последним.
+
+Для одного модуля это прекрасно.
+
+Для 50 независимых модулей порядок прихода пакетов может различаться.
+
+Это не обвинение Rockwell — их системная redundancy архитектура имеет дополнительные координационные слои. Но нам нельзя копировать только COO/ROO и считать задачу решённой.
+
+4. И вот здесь CLAIMED_DISARMED неожиданно становится ещё важнее
+
+Наше расширение решает большую часть этой проблемы.
+
+Пусть B получает ownership:
+
+DO1 = B / DISARMED
+DO2 = B / DISARMED
+DO3 = A / ACTIVE
+DO4 = A / ACTIVE
+
+B ещё ничего не выводит.
+
+При захвате DO1 старое A перестаёт воздействовать именно на DO1, а DO1 переходит в configured transition state:
+
+HOLD_LAST
+или
+SAFE_VALUE
+
+Затем:
+
+DO1 B/DISARMED
+DO2 B/DISARMED
+DO3 B/DISARMED
+DO4 B/DISARMED
+
+Только после этого:
+
+ALL_REQUIRED_OWNED = TRUE
+
+и разрешается:
+
+ARM
+
+Получаем гораздо более сильный invariant:
+
+partial new ownership
+        =>
+new owner outputs physically DISARMED
+
+А существующая спецификация уже требует, чтобы partial ownership никогда не означал ACTIVE.
+
+То есть CLAIMED_DISARMED я после атаки не выбрасываю, а наоборот повышаю до фундаментального требования наших HA-aware I/O.
+
+5. Но появляется ещё более неприятная атака на Epoch
+
+Раньше мы рассуждали:
+
+A epoch = 41
+B takeover → epoch = 42
+
+и I/O принимает 42.
+
+На первый взгляд отлично.
+
+Но при partition:
+
+A: "я хочу epoch 42"
+
+B: "я тоже хочу epoch 42"
+
+или ещё хуже:
+
+A sees 42 → creates 43
+B sees 43 → creates 44
+
+Если I/O использует правило:
+
+higher epoch wins
+
+мы создали distributed bidding war.
+
+Поэтому:
+
+Epoch не является fencing authority.
+
+Он нужен для:
+
+reject stale packets
+reject stale reconnect
+reject old output image
+detect replay
+identify ownership generation
+
+но не для ответа:
+
+«имеет ли B право выкинуть живого A?»
+
+Текущая спецификация правильно говорит epoch dominates generation, но из этого нельзя выводить largest epoch automatically owns.
+
+6. Нужен ещё один фундаментальный механизм: Owner Lease
+
+Вот чего не хватало в предыдущем проектировании.
+
+У нашего HA-aware I/O должен быть не просто:
+
+connection alive
+
+а:
+
+active-owner authority alive
+
+Я бы назвал это:
+
+OWNER_LEASE
+
+Active PLC постоянно продлевает его вместе с deterministic O→T traffic:
+
+Controller A
+
+HA supervisor
+    ↓
+LeaseSeq = 18401
+    ↓
+Output packet
+    ↓
+I/O
+
+LeaseSeq = 18402
+LeaseSeq = 18403
+...
+
+I/O измеряет локально:
+
+last_new_lease_seq_age
+
+Если sequence перестал обновляться:
+
+LeaseSeq 18403
+LeaseSeq 18403
+LeaseSeq 18403
+
+то даже если:
+
+EtherNet/IP connection = ESTABLISHED
+PHY = UP
+packets = still arriving
+
+модуль понимает:
+
+OWNER_AUTHORITY_EXPIRED
+
+Это закрывает очень неприятный отказ:
+
+PLC application / HA runtime frozen
+Ethernet communications task still alive
+NIC keeps sending last output image
+
+Обычный CIP connection watchdog такой случай может вообще не увидеть.
+
+7. И Lease нельзя генерировать network task'ом
+
+Это важно.
+
+Если transport layer сама делает:
+
+LeaseSeq++
+
+то при зависшем runtime она продолжит доказывать жизнь мёртвого контроллера.
+
+Lease должен рождаться только из:
+
+HA Supervisor
+
+или из контролируемого execution commit:
+
+scan commit
+→ HA authority tick
+→ new lease generation
+
+То есть:
+
+Application scan
+      │
+      ▼
+HA safe point
+      │
+      ▼
+OwnerLease generation
+      │
+      ▼
+EtherNet/IP transport
+
+Network layer может только доставить lease.
+
+Не создавать его.
+
+8. Тогда fencing для наших I/O становится намного сильнее
+
+Нормально:
+
+A:
+connection valid
+lease valid
+owner active
+
+B:
+connection valid
+ready
+not active
+
+B считает A отказавшим.
+
+Он не может просто сказать:
+
+"I claim output"
+
+I/O проверяет:
+
+OldOwnerLease valid?
+
+Если:
+
+YES
+
+получаем:
+
+CLAIM_REJECTED:
+CURRENT_OWNER_AUTHORITY_VALID
+
+Даже если B ошибся в своих PING/PONG.
+
+Вот это великолепный второй независимый fence.
+
+9. Теперь split-brain становится гораздо сложнее получить
+
+Представим ложный peer failure:
+
+B считает A DEAD
+
+но A реально жив
+
+A продолжает:
+
+LeaseSeq++
+
+I/O видит:
+
+A lease VALID
+
+Поэтому:
+
+B takeover request → REJECT
+
+И вся пара:
+
+REDUNDANCY_LOST / takeover failed
+
+а не два владельца.
+
+Это прямо соответствует исходной философии документа:
+
+silence makes a claimant, never an owner; I/O target is the last fence.
+
+Только теперь этот fence становится явным протоколом, а не просто надеждой на CIP connection timeout.
+
+10. Controlled switchover становится ещё красивее
+
+При штатном swap не ждём expiration:
+
+A
+│
+├─ RELEASE_OWNER(epoch 41)
+│
+▼
+
+I/O
+OwnerLease A = RELEASED
+outputs = transition/hold
+
+B
+│
+├─ PREPARE epoch 42
+│
+├─ claim all
+│
+└─ ARM
+
+То есть:
+
+$$ T_{old-owner-timeout}=0 $$
+
+для controlled switchover.
+
+А аварийный:
+
+A died
+   ↓
+OwnerLease expires
+   ↓
+B claim permitted
+
+Тогда реальная формула:
+
+$$ T_{claim-start} = \max ( T_{PLC-peer-detection}, T_{IO-owner-lease-expiry} ) $$
+
+Это очень сильная архитектурная формула.
+
+Переход не произойдёт раньше, чем оба независимых доказательства согласны:
+
+PLC side:
+peer failed
+
+I/O side:
+old owner authority expired
+11. Generic EtherNet/IP, конечно, этого не умеет
+
+И это принципиально.
+
+У стороннего стандартного output:
+
+OWNER_LEASE
+CLAIMED_DISARMED
+EPOCH
+ARM
+
+скорее всего отсутствуют.
+
+Там остаётся:
+
+Exclusive Owner connection A
+          ↓
+connection timeout
+          ↓
+owner released
+          ↓
+B Forward_Open
+
+Rockwell, например, позволяет на connection fault выбирать Hold Last State либо user-defined fault value — то есть поведение после потери owner является конфигурационной политикой самого output module.
+
+Поэтому IronPLC должен иметь два разных уровня гарантий, а не пытаться притвориться, что они одинаковы.
+
+12. Я бы теперь определил три I/O HA profiles
+GENERIC
+    Exclusive Owner
+    observer if available
+    takeover via owner expiration + Forward_Open
+
+REDUNDANT_OWNER
+    two persistent CIP Redundant Owner connections
+    COO / ROO style arbitration
+
+IRONPLC_HA_IO
+    persistent dual connections
+    OwnerLease
+    Epoch
+    staged claim
+    CLAIMED_DISARMED
+    global ownership barrier
+    explicit ARM
+    timing telemetry
+
+Первый обеспечивает interoperability.
+
+Второй использует стандартную CIP redundancy capability.
+
+Третий обеспечивает наши сильные HA invariants.
+
+ODVA сама признаёт, что существующие CIP redundancy primitives не покрывают всю системную HA-задачу и поэтому vendor-specific solutions остаются необходимыми.
+
+13. Ещё одна атака: ARM не делает все outputs атомарными
+
+Допустим ownership всех 50 модулей уже B:
+
+DO1 B/DISARMED
+...
+DO50 B/DISARMED
+
+Посылаем:
+
+ARM
+
+Пакеты приходят:
+
+DO1  t=0.1ms
+DO2  t=0.3ms
+...
+DO50 t=1.8ms
+
+То есть физические outputs не включатся одновременно.
+
+Это не split-brain: все уже принадлежат B.
+
+Но это не:
+
+atomic physical output transition
+
+И эти понятия нельзя смешивать.
+
+Наш обязательный инвариант:
+
+ownership atomicity
+
+можно выполнить.
+
+Но:
+
+simultaneous physical actuation
+
+— отдельная feature.
+
+Для неё нужен:
+
+ARM_AT_TIME
++
+CIP Sync/PTP
+
+или локальный rack/drop coordinator.
+
+Rockwell уже имеет scheduled output modes с CIP Sync timestamps для некоторых output modules, что подтверждает саму модель scheduled actuation.
+
+Но я бы не включал это в обязательный HA v1.
+
+14. Ещё один сильный вывод даёт Schneider
+
+У Schneider redundant ownership организован не обязательно вокруг каждого отдельного конечного канала — оба CPU имеют redundant-owner connection к RIO drop.
+
+Это заставляет серьёзно подумать об архитектуре наших I/O:
+
+PLC
+ ↓
+I/O ownership domain / adapter
+ ↓
+local modules
+
+вместо:
+
+PLC
+ ├─ ownership DO1
+ ├─ ownership DO2
+ ├─ ownership AO1
+ ├─ ownership DO3
+ └─ ownership DO4
+
+Чем крупнее ownership domain, тем проще сильное fencing.
+
+Например один remote rack:
+
+HA Adapter
+    │
+    ├── DI
+    ├── AI
+    ├── DO
+    └── AO
+
+имеет один:
+
+Owner A / Owner B
+Epoch
+Lease
+Claim
+Arm
+
+и уже локально распространяет authority по backplane.
+
+Это потенциально намного сильнее и проще, чем distributed transaction между 30 независимыми Ethernet targets.
+
+Итог аудита
+
+После атаки я бы архитектуру не откатывал. Наоборот, направление подтвердилось, но фундамент надо сделать строже:
+
+                  PLC HA SUPERVISOR
+                         │
+              peer detection / sync
+                         │
+                         ▼
+               TAKEOVER CANDIDATE
+                         │
+                         ▼
+          ┌──── I/O FENCING AUTHORITY ────┐
+          │                                │
+          │ old OwnerLease expired?       │
+          │ candidate valid?              │
+          │ epoch not stale?              │
+          │ config matches?               │
+          │                               │
+          └──────────────┬─────────────────┘
+                         │
+                         ▼
+                CLAIMED_DISARMED
+                         │
+             all required I/O claimed
+                         │
+                         ▼
+                OWNERSHIP BARRIER
+                         │
+                         ▼
+                        ARM
+                         │
+                         ▼
+                      ACTIVE
+
+И я бы теперь жёстко зафиксировал одну новую формулу:
+
+$$ \boxed{ TakeoverPermission = PeerFailureConfirmed \land OldOwnerAuthorityExpired \land SyncReady \land IoReady } $$
+
+а Epoch убрать из роли арбитра и оставить как защиту от устаревшей authority.
+
+Самое ценное, что обнаружил «адвокат дьявола»: наш собственный I/O должен fencing делать не на уровне “есть ли Ethernet connection”, а на уровне “жив ли Owner Authority, порождённый HA supervisor”. Именно OwnerLease + CLAIMED_DISARMED превращает наши I/O из обычного EtherNet/IP output в действительно HA-aware output.

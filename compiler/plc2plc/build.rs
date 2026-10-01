@@ -15,5 +15,10 @@ fn main() {
         // ST declaration extensions (`REQ-STX-plc2plc-*`): round-trip
         // rendering of UNION, the extra variable sections and NAMESPACE.
         "st-declaration-extensions.md",
+        // CODESYS exception handling (`REQ-TC-plc2plc-*`): round-trip
+        // rendering.
+        "codesys-try-catch.md",
+        // The CODESYS jump statements (`REQ-JMP-plc2plc-*`): round trip.
+        "codesys-jump-and-pragmas.md",
     ]);
 }

@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HA Redundancy — solution shell</title>
+<style>
+  /* Composition: developer shell. Solution explorer left; tabbed documents in
+     the center; docked Properties and Error List right; Output / State monitor
+     bottom. The Error List drives attention; documents are the workspace. */
+  :root { --chrome:#f5f6f7; --panel:#f0f2f4; --white:#ffffff; --border:#d4d7da; --line:#e6e8ea;
+    --text:#1f2326; --muted:#5c646c; --dim:#909aa2; --accent:#007acc; --accent-dark:#005f9e; --sel:#cce8ff;
+    --ok:#16822f; --warn:#a86a00; --alarm:#c2271b; --tabbar:#e6e9ec; --out:#1e1e1e; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; background:#9aa3ab; color:var(--text); font:12px/1.45 "Segoe UI", Tahoma, sans-serif; }
+  .mono, .ha-num, .ha-formula, .ha-t, .v, .out { font-family:Consolas, "Courier New", monospace; }
+  .ha-app { position:absolute; inset:6px; display:flex; flex-direction:column; background:var(--chrome);
+    border:1px solid #79838b; box-shadow:0 10px 34px rgba(0,0,0,.4); }
+  .ha-titlebar { display:flex; align-items:center; height:30px; padding:0 4px 0 10px; background:var(--chrome); border-bottom:1px solid var(--border); }
+  .ha-appicon { width:17px; height:17px; margin-right:8px; background:var(--accent); border-radius:3px; color:#fff; text-align:center; line-height:17px; font-size:10px; }
+  .ha-titletext { flex:1; }
+  .ha-winbtn { width:40px; height:22px; background:transparent; border:none; color:#55636f; font-size:11px; }
+  .ha-winbtn:hover { background:#e0e4e8; } .ha-winbtn.close:hover { background:var(--alarm); color:#fff; }
+  .ha-menubar { display:flex; background:var(--chrome); border-bottom:1px solid var(--border); }
+  .ha-menu { padding:5px 11px; cursor:default; } .ha-menu:hover, .ha-menu:focus { background:var(--sel); outline:none; }
+  .ha-toolbar { display:flex; align-items:center; gap:3px; background:var(--panel); border-bottom:1px solid var(--border); padding:3px 6px; flex-wrap:wrap; }
+  .ha-tb { display:flex; align-items:center; gap:5px; padding:4px 9px; background:transparent; border:1px solid transparent; border-radius:3px; color:#2c333a; font:inherit; cursor:pointer; }
+  .ha-tb:hover:not(:disabled) { background:#e1effa; border-color:#b8d8f0; color:var(--accent-dark); }
+  .ha-tb:disabled { color:#a3abb2; cursor:not-allowed; }
+  .ha-tb .g { color:var(--accent); font-size:13px; }
+  .ha-sep2 { width:1px; height:20px; background:var(--border); margin:0 4px; }
+  .ha-body { flex:1; display:flex; min-height:0; }
+  .sol { width:256px; background:var(--panel); border-right:1px solid var(--border); overflow:auto; padding:6px 0; }
+  .sol .title { padding:4px 12px 7px 12px; font-size:10.5px; text-transform:uppercase; letter-spacing:.7px; color:var(--muted); }
+  .ha-node { padding:3px 8px 3px calc(8px + var(--d,0) * 14px); cursor:pointer; white-space:nowrap; border:1px solid transparent; }
+  .ha-node:hover { background:#e1effa; } .ha-node:focus-visible { outline:1px solid var(--accent); }
+  .ha-node.sel { background:var(--sel); border-color:#a8cdec; }
+  .ha-glyph { display:inline-block; width:15px; color:#6d7883; }
+  .center { flex:1; display:flex; flex-direction:column; min-width:0; background:var(--white); }
+  .docbar { display:flex; background:var(--tabbar); border-bottom:1px solid var(--border); padding:3px 6px 0 6px; overflow:auto; }
+  .doc { padding:6px 14px; background:#d9dde1; border:1px solid var(--border); border-bottom:none; margin-right:2px;
+    font:inherit; cursor:pointer; color:#48505a; border-radius:3px 3px 0 0; white-space:nowrap; }
+  .doc.active { background:var(--white); color:var(--accent-dark); font-weight:600; }
+  .doc .badge { background:var(--alarm); color:#fff; border-radius:8px; padding:0 5px; margin-left:6px; font-size:10px; }
+  .docview { flex:1; overflow:auto; padding:14px; background:#fbfcfd; }
+  .right { width:300px; display:flex; flex-direction:column; min-height:0; background:var(--panel); border-left:1px solid var(--border); }
+  .pane { display:flex; flex-direction:column; min-height:0; }
+  .pane.prop { flex:1; border-bottom:1px solid var(--border); }
+  .pane.err { flex:1; }
+  .pane .cap { padding:5px 10px; background:#e8ebee; border-bottom:1px solid var(--border); font-size:10.5px;
+    text-transform:uppercase; letter-spacing:.6px; color:var(--muted); display:flex; align-items:center; gap:8px; }
+  .pane .cap .badge { background:var(--alarm); color:#fff; border-radius:8px; padding:0 6px; font-size:10px; }
+  .pane .body { overflow:auto; padding:9px; background:var(--white); flex:1; }
+  .bottom { height:172px; display:flex; flex-direction:column; border-top:1px solid var(--border); background:var(--out); }
+  .bottombar { display:flex; background:#2d2d2d; border-bottom:1px solid #111; }
+  .btab { padding:5px 13px; background:transparent; border:none; color:#b0b6bc; font:inherit; cursor:pointer; }
+  .btab.active { background:var(--out); color:#fff; border-top:2px solid var(--accent); }
+  .bottom .pane { flex:1; overflow:auto; }
+  .out { color:#d4d4d4; font-size:11.5px; padding:4px 10px; }
+  .out .row { padding:2px 0; border-bottom:1px solid #2a2a2a; display:grid; grid-template-columns:96px 52px 1fr; gap:8px; }
+  .out .t { color:#7d858d; font-size:10.5px; }
+  .errrow { display:grid; grid-template-columns:18px 90px 1fr; gap:7px; padding:4px 6px; border-bottom:1px solid var(--line); cursor:pointer; font-size:11.5px; }
+  .errrow:hover { background:#f2f7fb; }
+  .errrow .ico { text-align:center; }
+  .errrow.warn .ico { color:var(--warn); } .errrow.alarm .ico { color:var(--alarm); } .errrow.info .ico { color:var(--accent); }
+  .errrow .code { color:var(--muted); font-family:Consolas, monospace; font-size:10.5px; overflow:hidden; text-overflow:ellipsis; }
+  .ha-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:10px; }
+  .ha-card { background:#fff; border:1px solid var(--border); border-radius:3px; padding:12px; }
+  .ha-card h3 { margin:0 0 9px 0; font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--accent-dark);
+    border-bottom:1px solid var(--line); padding-bottom:5px; }
+  .ha-kv { display:grid; grid-template-columns:174px 1fr; gap:3px 10px; }
+  .ha-kv .k { color:var(--muted); } .ha-kv .v { color:#1f2326; }
+  .ha-chips { display:flex; flex-wrap:wrap; gap:4px; margin-top:7px; }
+  .ha-chip { font-size:10.5px; padding:2px 8px; border-radius:9px; border:1px solid var(--border); background:#f3f5f6; color:#9aa3ab; font-family:Consolas, monospace; }
+  .ha-chip.on { background:#dceefc; border-color:var(--accent); color:#0b4a78; }
+  .ha-chip.on.ok { background:#def1e2; border-color:var(--ok); color:#145c27; }
+  .ha-chip.on.warn { background:#f8eecf; border-color:#cfa93f; color:#6b5300; }
+  .ha-chip.on.alarm { background:#f9dddb; border-color:var(--alarm); color:#7e1d15; }
+  .ha-pill { display:inline-flex; gap:6px; align-items:center; border:1px solid var(--border); background:#fff;
+    border-radius:10px; padding:2px 10px; color:var(--muted); font-size:11px; }
+  .ha-pill b { color:var(--text); }
+  .ha-pill.ok { border-color:var(--ok); color:var(--ok); } .ha-pill.ok b { color:var(--ok); }
+  .ha-pill.warn { border-color:#cfa93f; color:var(--warn); } .ha-pill.warn b { color:var(--warn); }
+  .ha-pill.alarm { border-color:var(--alarm); color:var(--alarm); } .ha-pill.alarm b { color:var(--alarm); }
+  .ha-dot { width:7px; height:7px; border-radius:50%; background:currentColor; display:inline-block; }
+  .ha-table { width:100%; border-collapse:collapse; }
+  .ha-table th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); padding:4px 6px; border-bottom:2px solid #d6dce0; background:#f6f8f9; }
+  .ha-table td { padding:4px 6px; border-bottom:1px solid #e6eaed; font-family:Consolas, monospace; }
+  .ha-table tr.limit td { background:#fdf6dd; color:#6b5300; }
+  .ha-table tr.limit td:first-child::after { content:" ← limiting"; font-size:9.5px; color:var(--warn); }
+  .ha-table tbody tr:hover td { background:#eef4fa; cursor:pointer; }
+  .ha-table tbody tr.picked td { background:#dceefc; }
+  .ha-num { text-align:right; }
+  .ha-check { width:14px; height:14px; accent-color:var(--accent); }
+  .ha-progress { height:9px; background:#e8ecef; border:1px solid var(--border); border-radius:5px; overflow:hidden; margin-top:8px; }
+  .ha-bar { height:100%; background:var(--accent); width:0; }
+  .ha-bar.ok { background:var(--ok); } .ha-bar.warn { background:#cfa93f; }
+  .ha-formula { background:#eef7fe; border:1px solid #bfe0f7; border-radius:3px; padding:9px 11px; color:#0b4a78; }
+  .ha-verdict { display:inline-flex; gap:8px; align-items:center; border-radius:3px; padding:6px 11px; border:1px solid; font-weight:600; }
+  .ha-verdict.ok { border-color:var(--ok); color:var(--ok); background:#e7f6ea; }
+  .ha-verdict.alarm { border-color:var(--alarm); color:var(--alarm); background:#fbe9e7; }
+  .ha-note { color:var(--muted); font-size:11.5px; margin:7px 0 0 0; }
+  .ha-hint { color:var(--dim); font-size:11px; }
+  .ha-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .ha-btn { background:#fff; border:1px solid var(--border); border-radius:3px; padding:4px 11px; font:inherit; cursor:pointer; }
+  .ha-btn:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); }
+  .ha-btn:disabled { opacity:.5; cursor:not-allowed; }
+  .ha-btn.primary { background:var(--accent); border-color:var(--accent-dark); color:#fff; }
+  .ha-btn.warn { background:#fdf6e3; border-color:#cfa93f; color:#6b5300; }
+  .ha-btn.danger { background:#fdeeec; border-color:#c88a84; color:#7e1d15; }
+  .ha-input { background:#fff; border:1px solid var(--border); border-radius:3px; padding:3px 6px; font:inherit; min-width:78px; }
+  .ha-statusbar { display:flex; gap:9px; align-items:center; height:23px; padding:0 12px; background:var(--accent); color:#fff; font-size:11.5px; }
+  .ha-statusbar .ha-sep { color:#8ec8ee; }
+  .ha-ok { color:var(--ok); } .ha-warn { color:var(--warn); } .ha-alarm { color:var(--alarm); } .ha-muted { color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="ha-app">
+  <div class="ha-titlebar"><span class="ha-appicon">&#9635;</span><span class="ha-titletext">IronPLC Engineering — Solution 'RedundantPair' (PAIR-RB-0417)</span>
+    <span><button class="ha-winbtn" tabindex="-1">&#9472;</button><button class="ha-winbtn" tabindex="-1">&#9723;</button><button class="ha-winbtn close" tabindex="-1">&#10005;</button></span></div>
+  <div class="ha-menubar">
+    <span class="ha-menu" tabindex="0">File</span><span class="ha-menu" tabindex="0">Edit</span><span class="ha-menu" tabindex="0">View</span>
+    <span class="ha-menu" tabindex="0">Online</span><span class="ha-menu" tabindex="0">Diagnostics</span><span class="ha-menu" tabindex="0">Help</span>
+  </div>
+  <div class="ha-toolbar" id="toolbar"></div>
+  <div class="ha-body">
+    <div class="sol"><div class="title">Solution Explorer</div><div id="tree"></div></div>
+    <div class="center">
+      <div class="docbar" id="docbar"></div>
+      <div class="docview" id="docview"></div>
+      <div class="bottom">
+        <div class="bottombar" id="bottombar"></div>
+        <div class="pane"><div id="bottompane"></div></div>
+      </div>
+    </div>
+    <div class="right">
+      <div class="pane prop"><div class="cap">Properties <span class="ha-hint" id="propFor"></span></div><div class="body" id="props"></div></div>
+      <div class="pane err"><div class="cap">Error List <span class="badge" id="errBadge" style="display:none">0</span></div><div class="body" id="errlist"></div></div>
+    </div>
+  </div>
+  <div class="ha-statusbar" id="status"></div>
+</div>
+
+<script src="mockup-core.js"></script>
+<script>
+(function () {
+  'use strict';
+  var ui = { doc: 'overview', bottom: 'output', event: null };
+  function el(id) { return document.getElementById(id); }
+  function esc(s) { return HA.esc(s); }
+  var S = HA.getState;
+
+  HA.mount({ surface: 'classic', inspector: false });
+
+  function renderToolbar() {
+    var st = S();
+    var C = HA.derive.can;
+    el('toolbar').innerHTML =
+      '<button class="ha-tb" ' + (st.busy ? 'disabled' : '') + ' onclick="HA.setMode(\'' + (st.mode === 'redundant' ? 'standalone' : 'redundant') + '\')"><span class="g">&#9211;</span>' +
+      (st.mode === 'redundant' ? 'Stop pair' : 'Start pair') + '</button><span class="ha-sep2"></span>' +
+      '<button class="ha-tb" ' + (C('swap') ? '' : 'disabled') + ' onclick="HA.act(\'swap\')"><span class="g">&#8646;</span>Takeover</button>' +
+      '<button class="ha-tb" ' + (C('degrade') ? '' : 'disabled') + ' onclick="HA.act(\'degrade\')"><span class="g">&#9888;</span>' + (st.degraded ? 'Restore EMA' : 'Degrade EMA') + '</button>' +
+      '<button class="ha-tb" ' + (C('calibrate') ? '' : 'disabled') + ' onclick="HA.act(\'calibrate\')"><span class="g">&#9654;</span>Calibrate</button><span class="ha-sep2"></span>' +
+      '<button class="ha-tb" ' + (C('kill-p') ? '' : 'disabled') + ' onclick="HA.act(\'kill-p\')"><span class="g">&#10007;</span>Kill P</button>' +
+      '<button class="ha-tb" ' + (C('kill-i') ? '' : 'disabled') + ' onclick="HA.act(\'kill-i\')"><span class="g">&#10007;</span>Kill I</button>' +
+      '<button class="ha-tb" ' + (C('restore-channels') ? '' : 'disabled') + ' onclick="HA.act(\'restore-channels\')"><span class="g">&#10003;</span>Restore</button><span class="ha-sep2"></span>' +
+      '<button class="ha-tb" ' + (C('death') ? '' : 'disabled') + ' onclick="HA.act(\'death\')"><span class="g">&#9760;</span>Primary death</button>' +
+      '<button class="ha-tb" ' + (C('death-secondary') ? '' : 'disabled') + ' onclick="HA.act(\'death-secondary\')"><span class="g">&#9760;</span>Secondary death</button>' +
+      '<button class="ha-tb" ' + (C('resurrect-primary') ? '' : 'disabled') + ' onclick="HA.act(\'resurrect-primary\')"><span class="g">&#8635;</span>Resurrect primary</button>' +
+      '<button class="ha-tb" ' + (C('resurrect-secondary') ? '' : 'disabled') + ' onclick="HA.act(\'resurrect-secondary\')"><span class="g">&#8635;</span>Resurrect secondary</button>' +
+      '<button class="ha-tb" ' + (C('partition') ? '' : 'disabled') + ' onclick="HA.act(\'partition\')"><span class="g">&#9888;</span>Partition claim</button><span class="ha-sep2"></span>' +
+      '<button class="ha-tb" ' + (C('invalidate-nic') ? '' : 'disabled') + ' onclick="HA.act(\'invalidate-nic\')"><span class="g">&#10006;</span>Invalidate NIC</button>' +
+      '<button class="ha-tb" ' + (st.busy ? 'disabled' : '') + ' onclick="HA.act(\'reset\')"><span class="g">&#8634;</span>Reset</button>';
+  }
+
+  function treeNode(id, label, glyph, d) {
+    return '<div class="ha-node' + (ui.treeFocus === id ? ' sel' : '') + '" style="--d:' + d + '" tabindex="0" ' +
+      'onclick="app.tree(\'' + id + '\')" onkeydown="app.treeKey(event,\'' + id + '\')">' +
+      '<span class="ha-glyph">' + glyph + '</span>' + esc(label) + '</div>';
+  }
+  function renderTree() {
+    var st = S();
+    var h = '';
+    h += treeNode('root', 'RedundantPair', '\u25A3', 0);
+    h += treeNode('doc-overview', 'Overview.ha', '\u25A4', 1);
+    h += treeNode('doc-main-st', 'Main.st', '\u25A4', 1);
+    h += treeNode('doc-calibration', 'Calibration.ha', '\u223F', 1);
+    h += treeNode('doc-barrier', 'Ownership.ha', '\u25A6', 1);
+    h += treeNode('doc-timing', 'Timing.ha', '\u03A3', 1);
+    h += treeNode('doc-events', 'Events.ha', '\u2315', 1);
+    h += treeNode('devices', 'Devices', '\u25A5', 0);
+    h += treeNode('plc1', 'PLC-A (' + st.plc[1].role + ')', '\u25A4', 1);
+    h += treeNode('plc2', 'PLC-B (' + st.plc[2].role + ')', '\u25A4', 1);
+    h += treeNode('io', 'I/O chain (8 modules)', '\u25A6', 1);
+    st.modules.forEach(function (m) {
+      h += treeNode('mod-' + m.id, m.id, '\u25CB', 2);
+    });
+    el('tree').innerHTML = h;
+  }
+
+  function docs() {
+    var list = [['overview', 'Overview.ha'], ['calibration', 'Calibration.ha'], ['barrier', 'Ownership.ha'], ['timing', 'Timing.ha'], ['events', 'Events.ha'], ['main-st', 'Main.st']];
+    var n = HA.derive.alarmsActive();
+    el('docbar').innerHTML = list.map(function (d) {
+      var badge = (d[0] === 'events' && n) ? '<span class="badge">' + n + '</span>' : '';
+      return '<button class="doc' + (ui.doc === d[0] ? ' active' : '') + '" onclick="app.doc(\'' + d[0] + '\')">' + d[1] + badge + '</button>';
+    }).join('');
+  }
+
+  function docOverview() {
+    var st = S(), d = HA.data.overview();
+    var h = '<div class="ha-grid">' + d.units.map(function (u) {
+      return '<div class="ha-card"><h3>' + u.name + ' — ' + esc(u.role) + '</h3>' + HA.frag.kv([
+        ['IP', esc(u.ip)], ['Unit state', u.online ? 'online' : 'OFFLINE'],
+        ['CONTROL', u.control, u.control === 'ACTIVE' ? 'ha-ok' : 'ha-muted'],
+        ['Execution permit', u.permit ? 'GRANTED' : '—'], ['TakeoverReady', u.takeoverReady ? 'TRUE' : 'false', u.takeoverReady ? 'ha-ok' : 'ha-muted']
+      ]) + '<div class="ha-chips">' + HA.frag.syncChips(u.name) + '</div></div>';
+    }).join('') + '</div>';
+    h += '<div class="ha-grid" style="margin-top:10px"><div class="ha-card"><h3>Pair</h3>' + HA.frag.kv([
+      ['PairId', d.pairId], ['Epoch', String(d.epoch)], ['Application generation', String(d.appGen)],
+      ['Committed state generation', String(d.stateGen)], ['Permit', esc(d.permit || 'WITHHELD')]
+    ]) + '</div><div class="ha-card"><h3>Ping/Pong</h3>' + countersTable() + '</div></div>';
+    return h;
+  }
+
+  function countersTable() {
+    var st = S();
+    function rows(name, c) {
+      return { cells: [name, c.ping.toLocaleString() + ' / ' + c.pong.toLocaleString(), c.missing + ' (+1000)', c.penalty.toLocaleString()] };
+    }
+    return HA.frag.table(['channel', 'ping / pong (+1)', 'missing', 'penalty'], [rows('CH1 pair link', st.counters.ch1), rows('CH2 I/O chain', st.counters.ch2)]);
+  }
+
+  function docCalibration() {
+    var c = HA.data.calibration(), st = S();
+    return '<div class="ha-grid"><div class="ha-card"><h3>HA link profile</h3>' +
+      HA.frag.table(['direction', 'current', 'EMA10', 'EMA100', 'max', 'count'], c.directions.map(function (r) {
+        return { cells: [r.dir, HA.f2(r.cur), HA.f2(r.e10), HA.f2(r.e100), HA.f2(r.max), r.count.toLocaleString()] };
+      })) + HA.frag.kv([['Jitter', HA.f2(c.jitter) + ' ms'], ['Loss', (c.loss * 100).toFixed(4) + ' %']]) +
+      '<div class="ha-row" style="margin-top:9px"><button class="ha-btn primary" ' + (st.busy ? 'disabled' : '') + ' onclick="HA.act(\'calibrate\')">Run calibration</button>' +
+      (c.cal.state === 'CALIBRATING' ? '<div class="ha-progress" style="flex:1"><div class="ha-bar" style="width:' + c.cal.progress + '%"></div></div>' : '') + '</div></div>' +
+      '<div class="ha-card"><h3>State</h3>' + HA.frag.kv([['Run state', esc(c.cal.state), c.cal.state === 'CALIBRATED' ? 'ha-ok' : 'ha-warn'],
+        ['Baseline', esc(c.cal.baseline)], ['Trigger', esc(c.cal.trigger)]]) + '</div></div>';
+  }
+
+  function docBarrier() {
+    var b = HA.data.barrier();
+    var h = '<div class="ha-card"><h3>Ownership &amp; Barrier</h3><table class="ha-table"><thead><tr><th></th><th>module</th><th>profile</th><th>owner</th><th>state</th><th>claim ms</th><th>T ms</th><th>armed</th></tr></thead><tbody>';
+    b.modules.forEach(function (m) {
+      var tone = m.ownerState === 'ARMED' ? 'ha-ok' : (m.ownerState === 'CLAIMED_DISARMED' ? 'ha-warn' : 'ha-alarm');
+      var picked = b.selection.indexOf(m.id) >= 0;
+      h += '<tr class="' + (m.limiting ? 'limit ' : '') + (picked ? 'picked' : '') + '">' +
+        '<td><input type="checkbox" class="ha-check" ' + (picked ? 'checked' : '') + ' onclick="event.stopPropagation()" onchange="app.row(\'' + m.id + '\')"></td>' +
+        '<td onclick="HA.selectModule(\'' + m.id + '\')">' + m.id + '</td><td>' + m.profile + '</td><td>' + esc(m.owner) + '</td>' +
+        '<td class="' + tone + '">' + m.ownerState + '</td><td class="ha-num">' + HA.f2(m.claim) + '</td>' +
+        '<td class="ha-num">' + HA.f2(m.claimMax) + '</td><td class="ha-num">' + (m.armed ? 'ARMED' : 'DISARMED') + '</td></tr>';
+    });
+    h += '</tbody></table><div class="ha-row" style="margin-top:9px">' +
+      (b.passed ? HA.frag.pill('BARRIER PASSED', b.claimed + '/' + b.total, 'ok') : HA.frag.pill('IN PROGRESS', b.claimed + '/' + b.total, 'warn')) +
+      HA.frag.pill('LIMITING', b.limitingId, 'warn') + '</div></div>';
+    return h;
+  }
+
+  function docTiming() {
+    var t = HA.data.timing();
+    return '<div class="ha-formula">T_recovery = T_peer-detect + T_claim + T_arm + T_scan-safe-point + T_output-apply</div>' +
+      '<div class="ha-grid" style="margin-top:10px"><div class="ha-card"><h3>Terms</h3>' +
+      HA.frag.table(['term', 'measured', 'bound'], t.terms.map(function (r) { return { cells: [r.name, HA.f2(r.measured), HA.f2(r.bound)] }; })) + '</div>' +
+      '<div class="ha-card"><h3>Budget</h3>' + HA.frag.kv([['Worst case', HA.f2(t.worst) + ' ms', t.ok ? 'ha-ok' : 'ha-alarm'],
+        ['Predicted now', HA.f2(t.predicted) + ' ms'], ['Budget', HA.f2(t.budget) + ' ms']]) +
+      (t.ok ? '<div style="margin-top:9px"><span class="ha-verdict ok"><span class="ha-dot"></span>QUALIFIED</span></div>'
+        : '<div style="margin-top:9px"><span class="ha-verdict alarm"><span class="ha-dot"></span>MIN BUDGET ' + HA.f2(t.worst) + ' ms</span></div>') +
+      '<div class="ha-row" style="margin-top:9px"><input class="ha-input" type="number" step="0.5" id="haConfInp" value="' + t.confirmation + '">' +
+      '<input class="ha-input" type="number" step="1" id="haBudgetInp" value="' + t.budget + '">' +
+      '<button class="ha-btn primary" onclick="HA.act(\'apply-budget\')">Apply</button></div></div></div>';
+  }
+
+  function docEvents() {
+    return '<div class="ha-card"><h3>Event ring (Output also shows the full stream)</h3>' + eventsHtml(400) + '</div>';
+  }
+
+  function eventsHtml(maxH) {
+    return '<div style="max-height:' + maxH + 'px;overflow:auto">' + HA.data.events('all').map(function (e) {
+      return '<div class="ha-lrow" style="display:grid;grid-template-columns:104px 56px 1fr;gap:8px;padding:3px 6px;border-bottom:1px solid #edf0f2;font-size:11.5px">' +
+        '<span class="ha-t">' + esc(e.t) + '</span><span class="ha-sev ' + e.sev + '">' + e.sev + '</span><span class="ha-msg">' + esc(e.msg) + '</span></div>';
+    }).join('') + '</div>';
+  }
+
+  function renderDoc() {
+    if (ui.doc === 'overview') el('docview').innerHTML = docOverview();
+    else if (ui.doc === 'main-st') el('docview').innerHTML = '<div class="ha-card"><h3>Main.st — monitoring / online edit</h3>' + HA.edit.sectionHtml() + '</div>';
+    else if (ui.doc === 'calibration') el('docview').innerHTML = docCalibration();
+    else if (ui.doc === 'barrier') el('docview').innerHTML = docBarrier();
+    else if (ui.doc === 'timing') el('docview').innerHTML = docTiming();
+    else el('docview').innerHTML = docEvents();
+  }
+
+  function renderBottom() {
+    el('bottombar').innerHTML =
+      '<button class="btab' + (ui.bottom === 'output' ? ' active' : '') + '" onclick="app.bottom(\'output\')">Output</button>' +
+      '<button class="btab' + (ui.bottom === 'state' ? ' active' : '') + '" onclick="app.bottom(\'state\')">State monitor</button>';
+    if (ui.bottom === 'output') {
+      el('bottompane').innerHTML = '<div class="out">' + HA.data.events('all').map(function (e) {
+        return '<div class="row"><span class="t">' + esc(e.t) + '</span><span class="ha-sev ' + e.sev + '" style="font-size:10px">' + e.sev + '</span><span>' + esc(e.msg) + '</span></div>';
+      }).join('') + '</div>';
+    } else {
+      var st = S();
+      el('bottompane').innerHTML = '<div class="out"><div class="row"><span class="t">epoch</span><span></span><span>' + st.epoch + '</span></div>' +
+        '<div class="row"><span class="t">permit</span><span></span><span>' + esc(st.permitOwner || 'WITHHELD') + '</span></div>' +
+        '<div class="row"><span class="t">CH1</span><span></span><span>' + st.link.ch1 + ' · ping ' + st.counters.ch1.ping.toLocaleString() + ' · miss ' + st.counters.ch1.missing + '</span></div>' +
+        '<div class="row"><span class="t">CH2</span><span></span><span>' + st.link.ch2 + ' · ping ' + st.counters.ch2.ping.toLocaleString() + ' · miss ' + st.counters.ch2.missing + '</span></div>' +
+        '<div class="row"><span class="t">scan</span><span></span><span>EMA10 ' + HA.f2(st.scan.ema10) + ' / max ' + HA.f2(st.scan.max) + ' ms</span></div></div>';
+    }
+  }
+
+  function renderProps() {
+    var st = S(), b = HA.data.barrier();
+    var m = null; b.modules.forEach(function (x) { if (x.id === st.selectedModule) m = x; });
+    if (!m) m = b.modules[0];
+    el('propFor').textContent = '— ' + m.id;
+    el('props').innerHTML = HA.frag.kv([
+      ['Profile', m.profile], ['Owner', esc(m.owner)],
+      ['OwnerState', m.ownerState, m.ownerState === 'ARMED' ? 'ha-ok' : (m.ownerState === 'CLAIMED_DISARMED' ? 'ha-warn' : 'ha-alarm')],
+      ['OwnerEpoch', String(m.ownerEpoch)], ['ClaimLatency', HA.f2(m.claim) + ' ms'], ['MaxQualified', HA.f2(m.claimMax) + ' ms']
+    ]);
+  }
+
+  function alarmCode(msg) {
+    var m = /^(HA_[A-Z_]+|REDUNDANCY_LOST)/.exec(msg);
+    return m ? m[1] : 'HA-EVT';
+  }
+  function renderErrList() {
+    var rows = HA.data.events('all').filter(function (e) { return e.sev !== 'info'; });
+    var n = rows.length;
+    var badge = el('errBadge');
+    badge.style.display = n ? 'inline-block' : 'none';
+    badge.textContent = n;
+    el('errlist').innerHTML = rows.length ? rows.map(function (e) {
+      var icon = e.sev === 'alarm' ? '&#10006;' : '&#9888;';
+      return '<div class="errrow ' + e.sev + '" onclick="app.event(\'' + esc(e.t) + '\')">' +
+        '<span class="ico">' + icon + '</span><span class="code">' + alarmCode(e.msg) + '</span><span>' + esc(e.msg) + '</span></div>';
+    }).join('') : '<p class="ha-hint" style="padding:6px">No warnings or alarms.</p>';
+  }
+
+  function renderStatus() {
+    var st = S();
+    var n = HA.derive.alarmsActive();
+    el('status').innerHTML = '<span>Online</span><span class="ha-sep">|</span>' +
+      '<span>' + (st.mode === 'redundant' ? 'Redundant pair' : 'Standalone') + '</span><span class="ha-sep">|</span>' +
+      '<span>epoch ' + st.epoch + '</span><span class="ha-sep">|</span><span>permit ' + esc(st.permitOwner || 'WITHHELD') + '</span><span class="ha-sep">|</span>' +
+      '<span>' + (n ? n + ' alarm(s)' : 'no alarms') + '</span><span class="ha-sep">|</span><span>PAIR-RB-0417</span>' +
+      '<span class="ha-sep">|</span><span>' + HA.edit.statusText() + '</span>';
+  }
+
+  function render(tick) {
+    if (tick && document.activeElement && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
+    renderToolbar(); renderTree(); docs(); renderDoc(); renderBottom(); renderProps(); renderErrList(); renderStatus();
+  }
+
+  window.app = {
+    doc: function (d) { ui.doc = d; render(false); },
+    bottom: function (b) { ui.bottom = b; render(false); },
+    tree: function (id) {
+      ui.treeFocus = id;
+      if (id.indexOf('doc-') === 0) ui.doc = id.slice(4);
+      if (id.indexOf('mod-') === 0) HA.selectModule(id.slice(4));
+      render(false);
+    },
+    treeKey: function (ev, id) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); app.tree(id); } },
+    row: function (id) { HA.select.toggle(id); render(false); },
+    event: function (t) { ui.event = t; ui.doc = 'events'; render(false); }
+  };
+
+  HA.subscribe(function (tick) { render(tick); });
+  render(false);
+})();
+</script>
+</body>
+</html>

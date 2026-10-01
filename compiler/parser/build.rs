@@ -20,5 +20,11 @@ fn main() {
         // Time literals (`REQ-TL-parser-*`): duration units and prefixes,
         // the abbreviated LT/LD prefixes, optional seconds.
         "time-literals.md",
+        // CODESYS exception handling (`REQ-TC-parser-*`): tokens, grammar and
+        // gating.
+        "codesys-try-catch.md",
+        // CODESYS jump statements, comments and conditional pragmas
+        // (`REQ-JMP-parser-*`).
+        "codesys-jump-and-pragmas.md",
     ]);
 }
