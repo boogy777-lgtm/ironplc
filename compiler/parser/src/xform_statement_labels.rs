@@ -52,7 +52,10 @@ fn region_closer(tt: &TokenType) -> Option<TokenType> {
         | TokenType::VarExternal
         | TokenType::VarAccess
         | TokenType::VarConfig
-        | TokenType::VarGlobal => Some(TokenType::EndVar),
+        | TokenType::VarGlobal
+        | TokenType::VarStat
+        | TokenType::VarInst
+        | TokenType::VarGeneric => Some(TokenType::EndVar),
         TokenType::Type => Some(TokenType::EndType),
         TokenType::Struct => Some(TokenType::EndStruct),
         _ => None,
@@ -78,6 +81,25 @@ fn introduces_declared_name(tt: &TokenType) -> bool {
     )
 }
 
+/// Contextual qualifier words that may sit between a declaration introducer
+/// and the declared name (`METHOD PUBLIC FINAL m : INT`). The grammar reads
+/// them via `contextual_keyword`, so they stay `Identifier` tokens; a
+/// case-insensitive spelling match mirrors that rule.
+const QUALIFIER_WORDS: [&str; 8] = [
+    "PUBLIC",
+    "PRIVATE",
+    "PROTECTED",
+    "INTERNAL",
+    "FINAL",
+    "ABSTRACT",
+    "OVERRIDE",
+    "OVERLOAD",
+];
+
+fn is_qualifier_word(text: &str) -> bool {
+    QUALIFIER_WORDS.iter().any(|w| text.eq_ignore_ascii_case(w))
+}
+
 /// Marks every statement label in the token stream as [`TokenType::Label`].
 ///
 /// Only runs when `options.allow_jump_statement` is set; otherwise the stream
@@ -91,9 +113,10 @@ pub fn apply(tokens: &mut [Token], options: &CompilerOptions) {
     // The `END_*` keyword that closes each open declaration region.
     let mut regions: Vec<TokenType> = Vec::new();
     let mut case_depth: u32 = 0;
-    // The nearest preceding token that carries meaning, for the
-    // declaration-introducer check.
-    let mut previous: Option<TokenType> = None;
+    // Whether the preceding significant tokens are a declaration introducer
+    // followed only by qualifier words — then the next identifier is the
+    // declared name, not a statement label.
+    let mut after_decl_introducer = false;
 
     for index in 0..tokens.len() {
         let token_type = tokens[index].token_type.clone();
@@ -109,17 +132,23 @@ pub fn apply(tokens: &mut [Token], options: &CompilerOptions) {
             _ => {}
         }
 
+        let is_qualifier =
+            token_type == TokenType::Identifier && is_qualifier_word(&tokens[index].text);
+
         if token_type == TokenType::Identifier
+            && !is_qualifier
             && regions.is_empty()
             && case_depth == 0
-            && !previous.as_ref().is_some_and(introduces_declared_name)
+            && !after_decl_introducer
             && followed_by_colon(tokens, index)
         {
             tokens[index].token_type = TokenType::Label;
         }
 
-        if !is_trivia(&token_type) {
-            previous = Some(token_type);
+        if introduces_declared_name(&token_type) {
+            after_decl_introducer = true;
+        } else if !is_trivia(&token_type) && !is_qualifier {
+            after_decl_introducer = false;
         }
     }
 }
@@ -203,6 +232,33 @@ mod tests {
             .collect();
         // Only `lbl` is a label; `x` and `y` are declarations.
         assert_eq!(labels.len(), 1, "{types:?}");
+    }
+
+    #[test]
+    fn apply_when_declaration_in_var_stat_block_then_not_a_label() {
+        for block in ["VAR_STAT", "VAR_INST", "VAR_GENERIC"] {
+            let types = types(
+                &format!("PROGRAM p {block} x : INT; END_VAR lbl: x := 1; END_PROGRAM"),
+                &opts(),
+            );
+            let labels: Vec<usize> = types
+                .iter()
+                .enumerate()
+                .filter(|(_, t)| **t == TokenType::Label)
+                .map(|(i, _)| i)
+                .collect();
+            // Only `lbl` is a label; `x` is a declaration.
+            assert_eq!(labels.len(), 1, "{types:?}");
+        }
+    }
+
+    #[test]
+    fn apply_when_qualified_method_header_then_not_a_label() {
+        let types = types(
+            "FUNCTION_BLOCK fb METHOD PUBLIC FINAL m : INT m := 1; END_METHOD END_FUNCTION_BLOCK",
+            &opts(),
+        );
+        assert!(!types.contains(&TokenType::Label), "{types:?}");
     }
 
     #[test]
