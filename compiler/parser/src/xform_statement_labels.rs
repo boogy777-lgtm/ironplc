@@ -13,7 +13,10 @@
 //! that rule over tokens:
 //!
 //! * inside a declaration region (`VAR`-family ... `END_VAR`, `TYPE ...
-//!   END_TYPE`, `STRUCT ... END_STRUCT`) the run is a declaration;
+//!   END_TYPE`, `STRUCT ... END_STRUCT`, `CONFIGURATION ...
+//!   END_CONFIGURATION`) the run is a declaration. A configuration holds no
+//!   statements, so its program instances (`PROGRAM inst WITH task : type`),
+//!   tasks and instance initializations are all declarations;
 //! * inside a `CASE` statement it is a case label, the next branch's selector;
 //! * directly after a declaration's introducing keyword (`FUNCTION f : INT`)
 //!   it is the declared name.
@@ -58,6 +61,7 @@ fn region_closer(tt: &TokenType) -> Option<TokenType> {
         | TokenType::VarGeneric => Some(TokenType::EndVar),
         TokenType::Type => Some(TokenType::EndType),
         TokenType::Struct => Some(TokenType::EndStruct),
+        TokenType::Configuration => Some(TokenType::EndConfiguration),
         _ => None,
     }
 }
@@ -306,6 +310,76 @@ mod tests {
             &opts(),
         );
         assert!(types.contains(&TokenType::Label), "{types:?}");
+    }
+
+    /// The number of labels in `source`.
+    fn label_count(source: &str) -> usize {
+        types(source, &opts())
+            .iter()
+            .filter(|t| **t == TokenType::Label)
+            .count()
+    }
+
+    #[test]
+    fn apply_when_program_instance_with_task_in_configuration_then_not_a_label() {
+        let types = types(
+            "CONFIGURATION c RESOURCE r ON PLC TASK t(PRIORITY := 1); PROGRAM inst WITH t : main; END_RESOURCE END_CONFIGURATION",
+            &opts(),
+        );
+        assert!(!types.contains(&TokenType::Label), "{types:?}");
+    }
+
+    #[test]
+    fn apply_when_program_instance_has_storage_qualifier_in_configuration_then_not_a_label() {
+        for qualifier in ["RETAIN", "NON_RETAIN"] {
+            for task in ["", "WITH t"] {
+                let source = format!(
+                    "CONFIGURATION c RESOURCE r ON PLC PROGRAM {qualifier} inst {task} : main; END_RESOURCE END_CONFIGURATION"
+                );
+                assert_eq!(label_count(&source), 0, "{source}");
+            }
+        }
+    }
+
+    #[test]
+    fn apply_when_program_instance_without_task_in_configuration_then_not_a_label() {
+        assert_eq!(
+            label_count(
+                "CONFIGURATION c RESOURCE r ON PLC PROGRAM inst : main; END_RESOURCE END_CONFIGURATION"
+            ),
+            0
+        );
+    }
+
+    #[test]
+    fn apply_when_access_and_config_declarations_in_configuration_then_not_labels() {
+        assert_eq!(
+            label_count(
+                "CONFIGURATION c VAR_ACCESS acc : r.inst.x : INT READ_ONLY; END_VAR RESOURCE r ON PLC PROGRAM inst : main; END_RESOURCE VAR_CONFIG r.inst.fb.x : INT; END_VAR END_CONFIGURATION"
+            ),
+            0
+        );
+    }
+
+    #[test]
+    fn apply_when_label_follows_configuration_then_promoted() {
+        // The region closes at `END_CONFIGURATION`; later POUs are unaffected.
+        assert_eq!(
+            label_count(
+                "CONFIGURATION c RESOURCE r ON PLC PROGRAM inst WITH t : main; END_RESOURCE END_CONFIGURATION PROGRAM p lbl: x := 1; END_PROGRAM"
+            ),
+            1
+        );
+    }
+
+    #[test]
+    fn apply_when_label_precedes_configuration_then_promoted() {
+        assert_eq!(
+            label_count(
+                "PROGRAM p lbl: x := 1; END_PROGRAM CONFIGURATION c RESOURCE r ON PLC PROGRAM inst WITH t : main; END_RESOURCE END_CONFIGURATION"
+            ),
+            1
+        );
     }
 
     #[test]
