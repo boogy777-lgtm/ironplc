@@ -1272,6 +1272,13 @@ name = "ironplc-spec-requirements-gen"
 version = "0.247.0"
 
 [[package]]
+name = "ironplc-syntax"
+version = "0.247.0"
+dependencies = [
+ "rowan",
+]
+
+[[package]]
 name = "ironplc-test"
 version = "0.247.0"
 
