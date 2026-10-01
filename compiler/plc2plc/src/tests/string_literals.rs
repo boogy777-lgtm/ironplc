@@ -140,6 +140,19 @@ fn write_to_string_when_wide_literal_contains_escaped_quote_then_round_trips() {
 #[case::other_delimiter_escaped("STRING[20]", "'say $\"hi$\"'", "v := 'say \"hi\"'")]
 #[case::control_narrow("STRING[20]", "'$01'", "v := '$01'")]
 #[case::control_wide("WSTRING[20]", "\"$0001\"", "v := \"$0001\"")]
+// `$80` is the Windows-1252 euro sign, and it renders as itself.
+#[case::cp1252_euro_narrow("STRING[20]", "'a$80b'", "v := 'a€b'")]
+#[case::cp1252_euro_wide("WSTRING[20]", "\"a$0080b\"", "v := \"a€b\"")]
+// 0x81 is undefined in Windows-1252, so `$81` is U+0081 and renders as the
+// same escape.
+#[case::cp1252_undefined("STRING[20]", "'$81'", "v := '$81'")]
+#[case::cp1252_undefined_wide("WSTRING[20]", "\"$0081\"", "v := \"$0081\"")]
+// U+0082 is a control character whose byte 0x82 Windows-1252 gives to `‚`,
+// so no numeric escape denotes it and it renders as a Unicode escape.
+#[case::cp1252_control("STRING[20]", "'$U00000082'", "v := '$U00000082'")]
+#[case::cp1252_control_wide("WSTRING[20]", "\"$U00000082\"", "v := \"$U00000082\"")]
+#[case::unicode_escape_narrow("STRING[20]", "'$U000020AC'", "v := '€'")]
+#[case::unicode_escape_wide("WSTRING[20]", "\"$U000020AC\"", "v := \"€\"")]
 fn write_to_string_when_literal_has_escape_then_renders_canonical_spelling(
     #[case] declaration: &str,
     #[case] literal: &str,

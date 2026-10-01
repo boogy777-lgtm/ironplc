@@ -115,12 +115,33 @@ fn parser_spec_req_sl_010_four_hex_digits() {
     assert_eq!("A€", value_of("\"$0041$20AC\""));
 }
 
+/// REQ-SL-parser-011: `$U` and exactly eight hex digits, in either width.
+#[spec_test(REQ_SL_parser_011)]
+fn parser_spec_req_sl_011_unicode_escape() {
+    assert_eq!("a€b", value_of("'a$U000020ACb'"));
+    assert_eq!("a€b", value_of("\"a$U000020ACb\""));
+    // The ninth hex digit is not part of the escape.
+    assert_eq!("B1", value_of("'$U000000421'"));
+}
+
+/// REQ-SL-parser-012: a numeric escape from 0x80 to 0xFF is the Windows-1252
+/// character for that byte, in either width.
+#[spec_test(REQ_SL_parser_012)]
+fn parser_spec_req_sl_012_windows_1252_band() {
+    assert_eq!("€", value_of("'$80'"));
+    assert_eq!("€", value_of("\"$0080\""));
+    assert_eq!("ÿ", value_of("'$FF'"));
+    // 0x81 is undefined in Windows-1252 and decodes to its own code point.
+    assert_eq!("\u{81}", value_of("'$81'"));
+}
+
 /// REQ-SL-parser-020: Any other `$` sequence is P0012.
 #[rstest]
 #[case::unknown_letter("'$q'")]
 #[case::one_hex_digit("'$4'")]
 #[case::two_hex_digits_in_wide("\"$41\"")]
 #[case::surrogate("\"$D800\"")]
+#[case::unicode_with_four_hex_digits("'$U0041'")]
 #[spec_test(REQ_SL_parser_020)]
 fn parser_spec_req_sl_020_undefined_escape_is_p0012(#[case] literal: &str) {
     let source = format!("PROGRAM main VAR s : WSTRING; END_VAR s := {literal}; END_PROGRAM");
