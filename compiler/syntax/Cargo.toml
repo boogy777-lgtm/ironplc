@@ -12,12 +12,13 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 rowan = "0.16.1"
+ironplc-dsl = { path = "../dsl", version = "0.247.0" }
+ironplc-problems = { path = "../problems", version = "0.247.0" }
 
 [lints]
 workspace = true
 
 [dev-dependencies]
 # Test-only: the parity tests compare against the legacy PEG parser and read
-# its dialect options. Neither is a production dependency of this crate.
-ironplc-dsl = { path = "../dsl", version = "0.247.0" }
+# its dialect options. It is not a production dependency of this crate.
 ironplc-parser = { path = "../parser", version = "0.247.0" }

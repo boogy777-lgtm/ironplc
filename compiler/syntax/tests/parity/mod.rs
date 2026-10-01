@@ -15,6 +15,7 @@
 
 pub mod compare;
 pub mod declaration_table;
+pub mod diagnostics;
 pub mod extract;
 pub mod legacy;
 pub mod tables;

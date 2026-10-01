@@ -16,7 +16,7 @@ pub(crate) mod escapes;
 mod literals;
 mod trivia;
 
-use crate::error::SyntaxError;
+use crate::error::{ErrorKind, SyntaxError};
 use crate::syntax_kind::SyntaxKind;
 use cursor::Cursor;
 use literals::{scan_number, scan_percent, scan_quoted, Quoted};
@@ -32,11 +32,20 @@ pub struct Token<'src> {
 }
 
 /// What one scanner consumed: the token kind and, when the token is an error
-/// token, the message of its syntax error.
-type Scan = (SyntaxKind, Option<&'static str>);
+/// token, the kind and message of its syntax error.
+type Scan = (SyntaxKind, Option<(ErrorKind, &'static str)>);
 
+/// An error token for a malformed construct.
 fn error(message: &'static str) -> Scan {
-    (SyntaxKind::ErrorToken, Some(message))
+    (SyntaxKind::ErrorToken, Some((ErrorKind::Syntax, message)))
+}
+
+/// An error token for bytes that match no token.
+fn unexpected_character() -> Scan {
+    (
+        SyntaxKind::ErrorToken,
+        Some((ErrorKind::UnexpectedCharacter, "unexpected character")),
+    )
 }
 
 const SINGLE_QUOTED: Quoted = Quoted {
@@ -98,11 +107,11 @@ pub fn lex_with(source: &str, options: LexOptions) -> (Vec<Token<'_>>, Vec<Synta
         if cursor.pos() == start {
             // Unreachable by construction; guarantees progress regardless.
             cursor.bump_char();
-            (kind, message) = error("unexpected character");
+            (kind, message) = unexpected_character();
         }
         let range = range_of(start, cursor.pos());
-        if let Some(message) = message {
-            errors.push(SyntaxError::new(message, range));
+        if let Some((error_kind, message)) = message {
+            errors.push(SyntaxError::new(message, range).with_kind(error_kind));
         }
         tokens.push(Token {
             kind,
@@ -169,7 +178,7 @@ fn scan_name_or_punctuation(cursor: &mut Cursor<'_>, byte: u8) -> Scan {
         }
         None => {
             cursor.bump();
-            error("unexpected character")
+            unexpected_character()
         }
     }
 }
@@ -184,7 +193,7 @@ fn scan_identifier(cursor: &mut Cursor<'_>) -> Scan {
         .is_some_and(|c| c.is_alphabetic() || c == '_');
     if !starts_name {
         cursor.bump_char();
-        return error("unexpected character");
+        return unexpected_character();
     }
     while let Some(c) = cursor.peek_char() {
         if c.is_alphabetic() || c.is_numeric() || c == '_' {
