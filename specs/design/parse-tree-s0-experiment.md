@@ -89,6 +89,11 @@ language.
 
 ### 1.3 Salsa adapter evidence (design section 3.3)
 
+**Withdrawn by the owner on 2026-10-01.** Salsa and query-based tracking
+are no longer part of the plan (design §3.3, §5 S3 — recompute per
+snapshot; reuse follows the CODESYS style). This section is retained as
+the experiment record only.
+
 Version exercised: **salsa 0.28.5** (Apache-2.0 OR MIT, MSRV 1.88;
 selected and locked by this experiment). One input (`SourceFile { text }`),
 one tracked query `declaration_summary` (lexes the text with the spike
@@ -121,9 +126,10 @@ API facts recorded for S1 (from the pinned 0.28.5 sources):
 | Snapshots | No `Snapshot` type in 0.28.5: isolation is the immutable `&db` borrow plus `Storage: Clone` for keeping a second handle |
 | Custom values | A tracked function returning a custom struct needs `salsa::SalsaValue` (derive) and `PartialEq`; the spike's summary derives it |
 
-The spike does not exercise cancellation or cycle recovery; S1's acceptance
-criteria (cycles, deletion/rename, cancellation of stale revisions)
-still need tests when the analyzer is wrapped.
+The spike does not exercise cancellation or cycle recovery; those
+Salsa-specific behaviors are no longer plan criteria (S3 withdrawn, design
+§5). The CODESYS-style reuse path has its own acceptance criteria when a
+measured stage lands.
 
 ### 1.4 What the spike does not establish
 

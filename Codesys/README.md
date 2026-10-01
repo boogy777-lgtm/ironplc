@@ -35,9 +35,11 @@
   лексер/парсер закрыты, резолвинг `__*` — P1.
   Статус каждого — [`LEXER-GAP-ANALYSIS.md` §13](LEXER-GAP-ANALYSIS.md)
   (столбец «Статус»); прогон 2 (0.247.0, `d8ddf54f5`) — журнал §15.
-- **Архитектура утверждена; S0 выполнен, S1 в работе (запланирован), S2–S5 не
-  реализованы.** Сейчас фронтенд — logos-лексер + PEG (`compiler/parser`); S0
-  закрыт аудитом, экспериментом и baseline — см.
+- **Архитектура утверждена; S0 выполнен, S1 в работе (запланирован), S2 и
+  S4–S5 не реализованы, S3 отменён владельцем (2026-10-01) — без Salsa:
+  пересчёт снапшота, целевая эволюция в стиле CODESYS.** Сейчас фронтенд —
+  logos-лексер + PEG (`compiler/parser`); S0 закрыт аудитом, экспериментом и
+  baseline — см.
   [`parse-tree-s0-experiment.md`](../specs/design/parse-tree-s0-experiment.md).
   Следующий этап — S1 (lossless CST и recovery), задача
   [#2](https://github.com/boogy777-lgtm/ironplc/issues/2).
@@ -46,9 +48,9 @@
 
 **Архитектурное решение владельца, 2026-10-01:** развиваем фронтенд IronPLC:
 одно lossless CST на rowan, lowering в существующий `dsl` AST, существующий analyzer
-как единственный владелец семантики и один механизм кешированных запросов с
-отслеживанием зависимостей. Salsa выбрана и проверена в S0 (0.28.5).
-**Это утверждённый план: S0 — evidence, CST и tracked analysis не реализованы.**
+как единственный владелец семантики. Кешированные запросы (Salsa) — **отменены тем же
+решением**: пересчёт снапшота, целевая эволюция в стиле CODESYS.
+**Это утверждённый план: S0 — evidence, CST не реализован.**
 Подробные границы,
 доказательства из исходников CODESYS и этапы S0–S5 — в
 [`Parse-Tree Architecture`](../specs/design/parse-tree-architecture.md).
@@ -103,13 +105,16 @@ HIR/IDE/LSP как второй семантический backend. Green/red ro
 4. Каждая задача — своя ветка от `main` + PR; перед PR — `cd compiler && just` зелёный.
 
 **Порядок развития фронтенда:** S0 — **выполнен**: аудит preprocessing/provenance
-([S0 Audit](../specs/design/parse-tree-s0-audit.md)), rowan/Salsa-эксперимент,
+([S0 Audit](../specs/design/parse-tree-s0-audit.md)), rowan-эксперимент (его Salsa-часть
+отменена владельцем — см. док),
 выбор парсера (in-tree RD/Pratt на rowan) и baseline
 ([S0 Experiment](../specs/design/parse-tree-s0-experiment.md));
 S1 — **в работе (запланирован)**: полное lossless CST и recovery, задача
 [#2](https://github.com/boogy777-lgtm/ironplc/issues/2) открыта, core change
 ещё не начат; S2 — lowering CST → `dsl`;
-S3 — анализ деклараций/тел POU с отслеживанием зависимостей; S4 — общий API snapshots
+S3 — **отменён владельцем (2026-10-01)**: отказ от Salsa/query-трекинга, семантика
+пересчитывается на снапшот, целевая эволюция — в стиле CODESYS (precompile-модель,
+selective typification, явная инвалидация — док §3.3); S4 — общий API snapshots
 для CLI/LSP/MCP/build и редакторских изменений. S5 — локальный reparse только при
 доказанной необходимости. Выходные критерии и владельцы — в единственном
 [архитектурном плане, §5](../specs/design/parse-tree-architecture.md#5-evolution-steps)

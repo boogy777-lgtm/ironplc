@@ -64,6 +64,9 @@
 - [`Parse-Tree S0 Experiment`](../specs/design/parse-tree-s0-experiment.md)
   (`3fa7db8b9`) — rowan/Salsa-спайк (Salsa 0.28.5), выбор парсера (in-tree
   recursive descent + Pratt на rowan) и baseline производительности.
+  **Решение владельца (2026-10-01): Salsa и query-трекинг отменены** —
+  пересчёт снапшота, целевая эволюция в стиле CODESYS (precompile-модель,
+  selective typification, явная инвалидация; док §3.3, §5 S3 withdrawn).
 - Спайк-крейт `compiler/s0-spike` — test-only, без production-зависимостей,
   удаляется на cutover S1.
 - Issue S1: [#2](https://github.com/boogy777-lgtm/ironplc/issues/2)
@@ -95,6 +98,6 @@
 - Каталог: 100 задокументированных пробелов (§6), 7 orphan-ключей,
   id 508/510/523 вне диапазона верификации.
 - Архитектура: S1 — lossless CST и recovery (issue [#2](https://github.com/boogy777-lgtm/ironplc/issues/2)), затем S2 (lowering
-  CST → `dsl`), S3 (tracked analysis), S4 (API snapshots), S5 (локальный
-  reparse при доказанной необходимости).
+  CST → `dsl`), S4 (API snapshots), S5 (локальный reparse при доказанной
+  необходимости); S3 (tracked analysis) отменён владельцем 2026-10-01.
 - Docs: полная Sphinx-сборка в этом окружении не прогонялась.

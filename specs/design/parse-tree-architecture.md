@@ -1,30 +1,38 @@
-# Design: Lossless CST and Dependency-Tracked Semantic Analysis
+# Design: Lossless CST and Recomputing Semantic Analysis
 
 status: partially implemented
 date: 2026-10-01
 
 ## Overview
 
-The target frontend has one lossless concrete syntax tree (CST), one
-semantic authority, and one mechanism for dependency-tracked computation.
-The owner approved this direction after reviewing CODESYS's editor tree,
-precompile model and selective compilation. This replaces the previous
-white/CST → red → green staircase. The status is **partially implemented**:
-S0 is delivered — the preprocessing/provenance [audit](parse-tree-s0-audit.md),
-the rowan/Salsa [experiment](parse-tree-s0-experiment.md) with the parser
-choice and dependency versions, and the parse benchmark baseline. S1–S4 are
+The target frontend has one lossless concrete syntax tree (CST) and one
+semantic authority, the existing analyzer. The owner approved this direction
+after reviewing CODESYS's editor tree, precompile model and selective
+compilation. This replaces the previous white/CST → red → green staircase.
+The status is **partially implemented**: S0 is delivered — the
+preprocessing/provenance [audit](parse-tree-s0-audit.md), the rowan/Salsa
+[experiment](parse-tree-s0-experiment.md) with the parser choice and
+dependency versions, and the parse benchmark baseline. S1–S4 are
 **not implemented**, and the production frontend remains the PEG path.
+
+On 2026-10-01 the owner **withdrew the query-based tracking mechanism**:
+Salsa and dependency-tracked query caches are not part of the plan. Semantic
+results are produced by the existing analyzer **recomputing the requested
+snapshot**; the baseline is a full recomputation, always available. Reuse
+optimizations, if ever justified by measurements, follow the **CODESYS style**
+recorded in section 2 — a precompile model of declaration and body summaries
+with checksums, selective typification along caller/referencer/declarer
+dependencies, and explicit invalidation — never a query framework.
 
 Use rowan for the CST's immutable green storage and derived red navigation
 views. Green and red represent the same syntax, not separate grammars or
 semantic models. The existing dsl AST and analyzer remain the semantic
-authority. Derive their input from the CST and adapt analysis into tracked
-results progressively; do not add a second type checker.
+authority. Derive their input from the CST; do not add a second type checker.
 
-Full-file parsing is the initial correctness baseline. Dependency-tracked
-semantic recomputation is a separate milestone. Local subtree reparsing is
-a later optimization justified by measurements. Neither rowan nor a query
-cache makes the parser incremental automatically.
+Full-file parsing is the initial correctness baseline. Incremental reuse is
+a later, measured optimization in the CODESYS style. Local subtree reparsing
+is a later optimization justified by measurements. Neither rowan nor a cache
+makes the parser incremental automatically.
 
 Section 5 records future stage acceptance criteria. Implementation changes
 add requirement IDs and real conformance tests together, following
@@ -37,8 +45,10 @@ design does not claim those future criteria already pass.
    semantic AST construction lowers it rather than parsing ST again.
 2. **One semantic authority.** Reuse dsl and analyzer rules for CLI, LSP,
    MCP and compilation. Syntax views have no resolved types or names.
-3. **One tracking mechanism.** Consumers request results from one analysis
-   service, without private symbol databases or invalidation engines.
+3. **One recomputation baseline.** Consumers request results for a chosen
+   snapshot from one analysis service; the analyzer recomputes it. Reuse
+   optimizations, measured before adoption, follow the CODESYS style of
+   explicit dependencies and invalidation, without private query graphs.
 4. **Correctness before optimization.** Incremental results equal a clean
    rebuild of the same snapshot. Full recomputation remains available when
    dependencies cannot be established safely.
@@ -120,7 +130,7 @@ this design owns that contract.
 | Source snapshot | Original text, source identity, revision and effective configuration | Resolved meaning or runtime state |
 | Parser and rowan CST | Tokens, trivia, syntax, recovery; green storage and red views | Name resolution, types or deployment identity |
 | CST-to-dsl lowering | Semantic AST input and original-source provenance | Another grammar or type checker |
-| Analyzer and tracked results | Scopes, resolution, types, validation and result dependencies | UI policy, controller admission or migration |
+| Analyzer and computed results | Scopes, resolution, types, validation and result dependencies | UI policy, controller admission or migration |
 | CLI/LSP/MCP/build | Requests and projections for a chosen snapshot | Private parsers, resolvers or invalidation rules |
 | Codegen/runtime | Existing artifact and execution contracts | Persistent state identity derived from CST pointers |
 
@@ -156,62 +166,53 @@ though valid.
 
 Immutable source/analysis snapshots isolate readers. Cache owned, versioned
 results; analyzer transformations must not mutate AST data shared with a
-different snapshot. Initially a query may wrap whole-project analysis.
-Split it as dependency boundaries become explicit and tested. A cached
-result is a product of the same analyzer, not another HIR/resolver.
+different snapshot. Initially one analysis entry point may cover the whole
+project; split it as reuse stages land and their boundaries are tested. A
+cached result is a product of the same analyzer, not another HIR/resolver.
 
-### 3.3 Dependency-Tracked Computation
+### 3.3 Semantic Recomputation
 
-Use one query mechanism. Salsa is the preferred candidate for S0's
-integration experiment, which records a version and checks snapshots,
-cancellation, cycle handling and compatibility with the analyzer. Do not
-combine copied CODESYS dirty flags with a second independent query graph.
-No SQL or disk database is required.
+The baseline mechanism is a full recomputation: consumers request analysis
+for a chosen source snapshot, and the existing analyzer produces every
+result from the CST, the effective `CompilerOptions`/dialect, project
+membership, imports/library interfaces and target settings. No query
+framework, no Salsa: the owner withdrew that mechanism on 2026-10-01, after
+the S0 experiment showed the CODESYS sources build reuse from explicit
+dependencies and invalidation instead (section 2).
 
-Inputs include source text, effective CompilerOptions/dialect, project
-membership, imports/library interfaces, and target settings that affect
-types or codegen. Results depend on every input that affects them.
-Lookup depends on a relevant scope even when the name is absent, so a new
-declaration invalidates an earlier unresolved lookup.
+Reuse optimizations, if measurements ever justify them, follow the CODESYS
+style, each landing as its own measured stage:
 
-Start with declaration/interface summaries, POU bodies, scopes and type
-dependencies. Separate body-derived meaning from current source locations.
-Text edits refresh syntax and location projections; equal meaning-bearing
-results stop propagation to consumers that do not read the changed text.
-Pragmas, documentation attributes and other observable metadata retain their
-dependencies; never discard all trivia as semantically irrelevant.
+- **Precompile model.** Separate declaration/interface summaries and POU
+  bodies with checksums, compared before re-analysis — the role
+  `PreCompileContext` plays in CODESYS — so an unchanged signature reuses
+  its declaration results.
+- **Selective typification.** Follow caller/referencer/declarer dependencies
+  (`ObjectsToTypifyDetector`) to re-analyze affected POU bodies only; a
+  missing-name lookup still depends on its scope, so a new declaration
+  invalidates earlier unresolved lookups.
+- **Explicit invalidation.** Inputs and summaries are invalidated by named
+  dependencies (source text, dialect, library interfaces, target settings);
+  never a second query graph, never copied dirty flags mixed with one.
 
-| Change | Expected dependency behavior |
-|---|---|
-| Ordinary whitespace/non-semantic comment | Refresh syntax and locations; equal semantic summaries stop propagation |
-| Body with unchanged declaration | Recheck body and its consumers; declaration-only callers can reuse results |
-| Signature/exported name/declaration | Refresh dependent resolution/typing, including missing-name lookups |
-| Type structure/constant/initializer/codegen attribute | Invalidate readers of the affected value, layout or behavior |
-| Dialect/target/library/project membership | Invalidate dependent results; full recomputation if tracking is incomplete |
-
-These are future acceptance criteria. Body-only edits may affect inlining
-or other body-reading consumers, which must record that dependency.
-Queries have no controller/UI side effects. Recursive dependencies use an
-explicit cycle/SCC policy that preserves supported recursion and reports
-forbidden cycles through existing diagnostics, not stale results or panics.
-
-Result equality accounts for every observable property. Hashes may speed
-comparison; define a collision policy that cannot silently authorize stale
-reuse. Syntax identity and checksums do not prove StableStateId equality
-or bumpless hot edit. Runtime admission and migration keep their owners.
+Until such a stage lands, the recompute baseline is the only behavior:
+correctness before optimization, and a clean rebuild of the same snapshot
+stays available even where dependencies cannot be established safely.
+Result reuse never changes diagnostics or backend contracts; runtime
+admission and migration keep their owners.
 
 ### 3.4 N+1 Check
 
 Count independent mechanisms, not representations or Rust structs.
 Green storage, red navigation and syntax wrappers implement one syntax
 mechanism. Lossless syntax and semantic analysis have different invariants;
-the analyzer remains a separate authority. Tracking manages result reuse,
-not language meaning.
+the analyzer remains a separate authority. Reuse optimizations manage result
+reuse, not language meaning.
 
 A new language extension adds grammar/lowering/rules within these owners.
-An editor consumer reads the same syntax and analysis service. A tracked
-result uses the same query mechanism. If any introduces another parser,
-resolver or invalidation engine, reconsider the abstraction first.
+An editor consumer reads the same syntax and analysis service. A reuse
+optimization extends the same recompute baseline. If any introduces another
+parser, resolver or invalidation engine, reconsider the abstraction first.
 
 ## 4. Boundaries and Constraints
 
@@ -239,38 +240,36 @@ resolver or invalidation engine, reconsider the abstraction first.
 ## 5. Evolution Steps
 
 The approved foundation is S0–S4; only S0's evidence is delivered so far
-(audit, experiment, baseline — linked above), and S1–S4 remain not
-implemented. S5 is conditional optimization. Syntax-gap work continues
-against one grammar; S0 settled that seam before a new frontend path is
-introduced.
+(audit, experiment, baseline — linked above), and S1, S2 and S4 remain not
+implemented. S3 is withdrawn (owner decision, 2026-10-01 — see §3.3). S5 is
+conditional optimization. Syntax-gap work continues against one grammar; S0
+settled that seam before a new frontend path is introduced.
 
 | Stage | Work and boundary | Exit evidence |
 |---|---|---|
-| **S0 — integration experiment** | Audit preprocessing/provenance; assess PEG extension versus scoped replacement; validate rowan/Salsa adapter; record prefactoring | Standard/CODESYS/malformed corpus, OSCAT/Unicode/pragmas; parser choice, dependency versions, file map and benchmark baseline; no dual production parser |
+| **S0 — integration experiment** | Audit preprocessing/provenance; assess PEG extension versus scoped replacement; validate the rowan adapter (the Salsa part of the spike was withdrawn afterwards, §3.3); record prefactoring | Standard/CODESYS/malformed corpus, OSCAT/Unicode/pragmas; parser choice, dependency versions, file map and benchmark baseline; no dual production parser |
 | **S1 — CST and recovery** | Original-text CST with rowan green storage/red views; full-file parsing and syntax diagnostics | Byte-identical valid/malformed reconstruction; CRLF/tabs/Unicode/comments/pragmas; complete ranges, recovery progress/termination; existing dialect tests preserved |
 | **S2 — CST-to-dsl lowering** | Replace semantic parse entry with lowering; retain preprocessing meaning through provenance; reuse analyzer/codegen | Legacy/new AST/diagnostic comparison; canonical plc2plc and analyzer/codegen regressions pass; one production parse path; losslessness retained |
-| **S3 — tracked analysis** | Wrap analyzer, then split declaration summaries/body analysis/locations; track all inputs and missing lookups | After each edit, equality with clean rebuild; execution counters prove unaffected reuse and affected recomputation; deletion/rename/body/signature/type/cycle/dialect/library/target cases |
+| **S3 — tracked analysis** | **Withdrawn (2026-10-01, owner decision):** recompute per snapshot; reuse in the CODESYS style (precompile model, selective typification, explicit invalidation) only as measured stages, §3.3 | — |
 | **S4 — shared consumers and editing** | CLI/LSP/MCP/build use one snapshot API; syntax edits; bound cache/snapshot retention | Same-snapshot diagnostics agree; revision/cancellation exclude stale publication; untouched text preserved; measured cold/warm latency and memory limits; no private resolver/query graph |
 | **S5 — measured local reparse** | Safe boundaries and full-file fallback; reuse unaffected syntax | Local/full trees and diagnostics agree after edit sequences, including delimiter/comment/pragma changes; measured latency/allocation improvement |
 
 Measure cold full analysis separately from warm no-change requests, body,
 interface and configuration edits. Record corpus size/POU count, hardware,
-toolchain, latency distribution, allocations/retained memory, query
-executions and cache reuse. S0 sets numeric budgets from the workload.
-Do not claim universal speed superiority from rowan or Salsa.
+toolchain, latency distribution, allocations/retained memory, and reuse
+counters for any measured reuse stage. S0 sets numeric budgets from the
+workload. Do not claim universal speed superiority from rowan or any cache.
 
 Implementation stages register requirement IDs and assertions in the actual
 owning crates as they land. Do not add placeholder tests or empty crates
 to claim a future stage is implemented. Advance the status to **partially
-implemented** with named delivered stages, then **implemented** when S1–S4
-describe the working frontend. S5 may remain unnecessary.
+implemented** with named delivered stages, then **implemented** when S1, S2
+and S4 describe the working frontend. S5 may remain unnecessary.
 
 ## 6. References
 
 - [rowan](https://github.com/rust-analyzer/rowan) and
   [rust-analyzer syntax architecture](https://rust-analyzer.github.io/book/contributing/syntax.html)
-- [Salsa](https://github.com/salsa-rs/salsa) — memoized computation with
-  tracked inputs/dependencies; integration version selected in S0
 - [CODESYS source evidence](#21-direct-source-references)
 - [Syntax gaps](../../Codesys/LEXER-GAP-ANALYSIS.md) and
   [syntax/AST mapping](../../Codesys/grammar/AST_MAPPING.md)

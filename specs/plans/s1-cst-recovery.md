@@ -190,8 +190,9 @@ Core change PRs:
 ## Non-goals
 
 - No CST-to-dsl lowering and no change to the semantic parse entry (S2).
-- No Salsa queries or tracked analysis (S3); salsa 0.28.5 stays locked by the
-  spike until then.
+- No query mechanism: semantics recompute per snapshot (owner decision
+  2026-10-01, design §3.3); the Salsa demo in the spike is withdrawn and the
+  spike crate is deleted at cutover.
 - No snapshot API or consumer wiring (S4); no LSP/CLI/MCP integration.
 - No local subtree reparsing (S5); full-file parsing is the S1 correctness
   baseline.
