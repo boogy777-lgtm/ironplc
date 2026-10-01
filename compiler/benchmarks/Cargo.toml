@@ -19,16 +19,26 @@ ironplc-dsl = { path = "../dsl", version = "0.247.0" }
 ironplc-parser = { path = "../parser", version = "0.247.0" }
 ironplc-vm = { path = "../vm", version = "0.247.0", features = ["test-support"] }
 
-# criterion is only used by `benches/st_benchmark.rs`, so it belongs in
+# criterion is only used by the `benches/*_benchmark.rs` targets, so it belongs in
 # dev-dependencies rather than dependencies. Keeping it as a normal
 # dependency pulled it (and its transitive `alloca` build-dependency) into
 # the release build graph, which broke the musl cross-compile in the
 # packaging step because `alloca`'s build script requires a musl C compiler.
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }
+# Allocation counting for `benches/parse_baseline.rs` (global allocator).
+stats_alloc = "0.1.10"
 
 [[bench]]
 name = "st_benchmark"
+harness = false
+
+[[bench]]
+name = "parse_benchmark"
+harness = false
+
+[[bench]]
+name = "parse_baseline"
 harness = false
 
 [lints]

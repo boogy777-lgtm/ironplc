@@ -3,6 +3,7 @@
 //! Hosts utilities used by both the Criterion benchmarks under `benches/`
 //! and the integration tests under `tests/`.
 
+pub mod corpus;
 pub mod programs;
 
 use ironplc_codegen::compile;

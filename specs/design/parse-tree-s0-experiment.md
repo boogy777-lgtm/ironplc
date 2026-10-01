@@ -430,6 +430,63 @@ cargo run --release -p ironplc-s0-spike --bin parse_baseline -- 50 > baseline.tx
 `dialect_acceptance` in the same binary prints the per-dialect counts shown
 in 3.2 (also asserted by a unit test).
 
+### 3.5 S1 baseline (2026-10-01)
+
+The permanent parse-only benchmark now lives in `compiler/benchmarks` and no
+longer depends on the spike. It measures the production entry points
+`ironplc_parser::tokenize_program` and `parse_program` over the 60 files of
+`compiler/resources/test/` (26,203 bytes) under `CompilerOptions::default()`.
+The five CODESYS fixtures stay spike-only, so the corpus differs from 3.1 (60
+files instead of 53) and the figures below are not comparable file-for-file
+with 3.2.
+
+- **Environment:** same machine as 3.1 (Intel Core i5-9300H, Windows 11 Pro
+  10.0.26200), rustc 1.98.1 (48a229cea, 2026-09-01), release (`bench`)
+  profile, base commit `c1fe7f981` plus the benchmark change.
+- **Warm timings (Criterion):** `parse_benchmark` registers
+  `parse_tokenize/<file>` and `parse_full/<file>` per file.
+- **Cold/warm timings and allocations:** `parse_baseline` prints cold (first
+  call for the file) and warm-median (50 repeats) microseconds plus
+  `stats_alloc` allocation counts for both entry points.
+
+Three consecutive `parse_baseline` runs:
+
+| quantity | run 1 | run 2 | run 3 |
+|---|---|---|---|
+| parse, cold, one corpus pass (ms) | 4.822 | 4.776 | 4.962 |
+| parse, warm-median sum (ms) | 4.649 | 4.696 | 4.678 |
+| parse, cold allocations (one pass) | 31,213 | 31,213 | 31,213 |
+| parse, cold KiB allocated (one pass) | 4,419.3 | 4,419.3 | 4,419.3 |
+
+Allocation counts are identical across runs and per file; microseconds vary a
+few percent in the warm sums and roughly 5-10 % for cold passes, and
+individual cold calls are noisier (desktop, no pinning). Tokenize alone
+accounts for 9,289 allocations and about 1.0 ms warm-median over the corpus,
+so the PEG parse is about four fifths of the parse time. Representative rows
+(run 3): `first_steps.st` (2,719 bytes) 557.0 us cold / 588.9 us warm / 3,255
+allocations, tokenize 153.9 / 140.7 us; `var_decl.st` 228.4 / 182.7 us / 1,389
+allocations; `strings.st` (53 bytes) 6.1 / 5.6 us / 36 allocations.
+
+**One-time init cost (section 4.2).** It does land inside a measured call, and
+it is input-dependent rather than "the first parse": the first
+`parse_program` of a program with located variables (`AT %IX0.0`) allocates
+989 more than any later call (1,094 vs 105 allocations on the probe input, and
+roughly 570-780 us vs 32 us), because the direct-variable address regexes in
+`ironplc-dsl` are compiled lazily on first use. A plain program and
+`tokenize_program` carry no init (30 vs 30 and 119 vs 119 allocations). The
+benchmark therefore measures the init explicitly, on tiny inputs before the
+corpus loop, and prints it as its own table (`one-time init`); the per-file
+cold figures exclude it. Production parser code is unchanged.
+
+Reproduce:
+
+```
+cd compiler
+cargo bench -p ironplc-benchmarks --bench parse_baseline          # tables above
+cargo bench -p ironplc-benchmarks --bench parse_baseline -- 100   # 100 warm repeats
+cargo bench -p ironplc-benchmarks --bench parse_benchmark         # Criterion warm timings
+```
+
 ## 4. Prefactoring candidates (observed while spiking)
 
 1. **Lossless token source (new, blocking for S1).** `ironplc-parser`
