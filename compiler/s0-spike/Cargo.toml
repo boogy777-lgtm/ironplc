@@ -1,0 +1,23 @@
+[package]
+name = "ironplc-s0-spike"
+description = "S0 integration spike: rowan CST and Salsa adapter validation (test-only; deleted at S1 cutover)"
+version = "0.0.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+# S0 benchmark baseline drives the current production parse path.
+ironplc-dsl = { path = "../dsl", version = "0.247.0" }
+ironplc-parser = { path = "../parser", version = "0.247.0" }
+# S0 adapter validation only. Versions recorded in
+# specs/design/parse-tree-s0-experiment.md; production selection is S1 work.
+rowan = "0.16.1"
+salsa = "0.28.5"
+# Allocation counting for the parse baseline (bin target only).
+stats_alloc = "0.1.10"
+
+[lints]
+workspace = true
