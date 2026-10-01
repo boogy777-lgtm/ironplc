@@ -66,7 +66,7 @@
   recursive descent + Pratt на rowan) и baseline производительности.
 - Спайк-крейт `compiler/s0-spike` — test-only, без production-зависимостей,
   удаляется на cutover S1.
-- Issue S1: [#1978](https://github.com/ironplc/ironplc/issues/1978)
+- Issue S1: [#2](https://github.com/boogy777-lgtm/ironplc/issues/2)
   (`7b5c12aa5`); статус архитектуры — `partially implemented`.
 
 ## 4. Гейты
@@ -94,7 +94,7 @@
   P0-16 на анализаторе (P1); далее P1/P2 из §13.
 - Каталог: 100 задокументированных пробелов (§6), 7 orphan-ключей,
   id 508/510/523 вне диапазона верификации.
-- Архитектура: S1 — lossless CST и recovery (issue #1978), затем S2 (lowering
+- Архитектура: S1 — lossless CST и recovery (issue [#2](https://github.com/boogy777-lgtm/ironplc/issues/2)), затем S2 (lowering
   CST → `dsl`), S3 (tracked analysis), S4 (API snapshots), S5 (локальный
   reparse при доказанной необходимости).
 - Docs: полная Sphinx-сборка в этом окружении не прогонялась.

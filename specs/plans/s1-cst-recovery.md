@@ -1,6 +1,6 @@
 # S1: Lossless rowan CST with Recovery
 
-**Issue:** [#1978](https://github.com/ironplc/ironplc/issues/1978)
+**Issue:** [#2](https://github.com/boogy777-lgtm/ironplc/issues/2)
 
 Implements stage S1 ("CST and recovery") of
 [Parse-Tree Architecture](../design/parse-tree-architecture.md) §5, using the
@@ -8,7 +8,7 @@ S0 decisions recorded in [Parse-Tree S0 Experiment](../design/parse-tree-s0-expe
 (parser choice, dependency versions, benchmark baseline) and
 [Parse-Tree S0 Audit](../design/parse-tree-s0-audit.md) (preprocessing and
 provenance findings F1–F11, prefactoring candidates). S0 is closed; this plan
-covers S1 only. The work spans multiple PRs and is tracked by issue #1978;
+covers S1 only. The work spans multiple PRs and is tracked by issue [#2](https://github.com/boogy777-lgtm/ironplc/issues/2);
 this plan is a plan PR that is never merged, per the development standards.
 
 ## Goal
@@ -144,7 +144,7 @@ Deleted:
 
 Plan (this PR, never merged):
 
-- [ ] Issue #1978 and this plan reviewed and approved.
+- [ ] Issue [#2](https://github.com/boogy777-lgtm/ironplc/issues/2) and this plan reviewed and approved.
 
 Prefactor PRs — each behavior-preserving, branched from `main`:
 

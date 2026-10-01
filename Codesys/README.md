@@ -40,7 +40,7 @@
   закрыт аудитом, экспериментом и baseline — см.
   [`parse-tree-s0-experiment.md`](../specs/design/parse-tree-s0-experiment.md).
   Следующий этап — S1 (lossless CST и recovery), задача
-  [#1978](https://github.com/ironplc/ironplc/issues/1978).
+  [#2](https://github.com/boogy777-lgtm/ironplc/issues/2).
 - **Гейты**: `cd compiler && just` зелёный; полный итог воркспейса —
   [`SWARM-REPORT-2026-10-01.md`](SWARM-REPORT-2026-10-01.md).
 
@@ -96,7 +96,7 @@ HIR/IDE/LSP как второй семантический backend. Green/red ro
    ритм «таблица → тесты → реализация → spec conformance» по
    [`syntax-support-guide`](../specs/steering/syntax-support-guide.md), тестовая пирамида — §14.3.
 3. **Архитектура (S0 выполнен, S1 в работе)** — issue
-   [#1978](https://github.com/ironplc/ironplc/issues/1978) открыт; порядок — plan PR,
+   [#2](https://github.com/boogy777-lgtm/ironplc/issues/2) открыт; порядок — plan PR,
    предрефакторинг отдельными PR, затем core change
    ([development-standards.md](../specs/steering/development-standards.md)).
    **SYNTAX-коды (Ф5)** — по [`ERROR-CODES-STUDY.md` §4](ERROR-CODES-STUDY.md).
@@ -107,7 +107,7 @@ HIR/IDE/LSP как второй семантический backend. Green/red ro
 выбор парсера (in-tree RD/Pratt на rowan) и baseline
 ([S0 Experiment](../specs/design/parse-tree-s0-experiment.md));
 S1 — **в работе (запланирован)**: полное lossless CST и recovery, задача
-[#1978](https://github.com/ironplc/ironplc/issues/1978) открыта, core change
+[#2](https://github.com/boogy777-lgtm/ironplc/issues/2) открыта, core change
 ещё не начат; S2 — lowering CST → `dsl`;
 S3 — анализ деклараций/тел POU с отслеживанием зависимостей; S4 — общий API snapshots
 для CLI/LSP/MCP/build и редакторских изменений. S5 — локальный reparse только при
