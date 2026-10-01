@@ -1275,6 +1275,8 @@ version = "0.247.0"
 name = "ironplc-syntax"
 version = "0.247.0"
 dependencies = [
+ "ironplc-dsl",
+ "ironplc-parser",
  "rowan",
 ]
 

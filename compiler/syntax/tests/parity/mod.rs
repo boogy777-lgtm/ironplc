@@ -1,0 +1,123 @@
+//! Test-only comparison of the new parser against the legacy PEG parser.
+//!
+//! The new parser is not wired into any production consumer; these tests
+//! are how its accepted language is held to the legacy one until the legacy
+//! path is replaced. The oracle is `parse_st_statements`, the fragment entry
+//! the legacy crate exposes for ST bodies. That entry has artifacts of its
+//! own (it rejects a trailing comment or pragma, and a block statement that
+//! ends the input without a `;`), so each snippet is also run inside a
+//! minimal `PROGRAM`, where the legacy parser behaves as it does on real
+//! files; an exception that blames the fragment entry must be confirmed by
+//! that second verdict.
+
+pub mod extract;
+pub mod legacy;
+pub mod tables;
+
+use ironplc_syntax::{parse_expression, parse_statements, ParseOptions};
+use legacy::Preset;
+
+/// Which kind of snippet a table holds.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Kind {
+    /// A statement list.
+    Statements,
+    /// One expression; the legacy side wraps it as `x := <expr>;`.
+    Expression,
+}
+
+/// What each parser says about one snippet under one preset.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Verdict {
+    /// The legacy fragment entry.
+    pub legacy: bool,
+    /// The legacy parser on the snippet inside a `PROGRAM`.
+    pub program: bool,
+    /// The new parser.
+    pub new: bool,
+}
+
+pub fn new_accepts(kind: Kind, snippet: &str, options: &ParseOptions) -> bool {
+    match kind {
+        Kind::Statements => parse_statements(snippet, options).is_ok(),
+        Kind::Expression => parse_expression(snippet, options).is_ok(),
+    }
+}
+
+pub fn verdict(kind: Kind, snippet: &str, preset: &Preset) -> Verdict {
+    let body = match kind {
+        Kind::Statements => snippet.to_string(),
+        Kind::Expression => format!("x := {snippet};"),
+    };
+    Verdict {
+        legacy: legacy::accepts(&body, &preset.legacy),
+        program: legacy::accepts_in_program(&body, &preset.legacy),
+        new: new_accepts(kind, snippet, &preset.new),
+    }
+}
+
+/// Which legacy entry is the reference for a table.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Oracle {
+    /// The legacy fragment entry, `parse_st_statements`.
+    Fragment,
+    /// The legacy parser on the snippet inside a `PROGRAM`.
+    Program,
+}
+
+impl Verdict {
+    /// The legacy verdict of the chosen oracle.
+    pub fn legacy_for(&self, oracle: Oracle) -> bool {
+        match oracle {
+            Oracle::Fragment => self.legacy,
+            Oracle::Program => self.program,
+        }
+    }
+}
+
+/// Why a difference exists.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Basis {
+    /// The legacy fragment entry is wrong for the snippet: the legacy
+    /// parser inside a `PROGRAM` agrees with the new parser.
+    FragmentEntry,
+    /// The new parser deliberately differs from the legacy one.
+    Deliberate,
+}
+
+/// A documented difference: for `snippet`, under `preset` (or every preset
+/// when `None`), the legacy fragment parser says `legacy` and the new one
+/// says the opposite, for `reason`.
+pub struct Exception {
+    pub kind: Kind,
+    pub snippet: &'static str,
+    pub preset: Option<&'static str>,
+    pub legacy: bool,
+    pub basis: Basis,
+    pub reason: &'static str,
+}
+
+impl Exception {
+    pub fn covers(
+        &self,
+        kind: Kind,
+        snippet: &str,
+        preset: &str,
+        oracle: Oracle,
+        verdict: &Verdict,
+    ) -> bool {
+        self.kind == kind
+            && self.snippet == snippet
+            && self.preset.is_none_or(|name| name == preset)
+            && self.legacy == verdict.legacy_for(oracle)
+            && self.legacy != verdict.new
+    }
+
+    /// True when the exception's claim about its basis holds for `verdict`.
+    pub fn basis_holds(&self, verdict: &Verdict) -> bool {
+        match self.basis {
+            Basis::FragmentEntry => verdict.program == verdict.new,
+            Basis::Deliberate => true,
+        }
+    }
+}

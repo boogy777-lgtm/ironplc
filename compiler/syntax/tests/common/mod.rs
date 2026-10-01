@@ -69,3 +69,38 @@ pub fn significant(source: &str) -> Vec<(SyntaxKind, &str)> {
         .filter(|(kind, _)| !kind.is_trivia())
         .collect()
 }
+
+/// Renders `node` as nested text with trivia left out: a node is
+/// `Kind(child child ...)`, a token is its source text. Shape tests compare
+/// against this so they assert the tree's structure, not only success.
+pub fn render(node: &ironplc_syntax::SyntaxNode) -> String {
+    let parts: Vec<String> = node
+        .children_with_tokens()
+        .filter_map(|element| match element {
+            ironplc_syntax::SyntaxElement::Node(child) => Some(render(&child)),
+            ironplc_syntax::SyntaxElement::Token(token) if token.kind().is_trivia() => None,
+            ironplc_syntax::SyntaxElement::Token(token) => Some(token.text().to_string()),
+        })
+        .collect();
+    format!("{:?}({})", node.kind(), parts.join(" "))
+}
+
+/// The rendering of the tree of one statement list, without the file root.
+pub fn statements(source: &str, options: &ironplc_syntax::ParseOptions) -> String {
+    let parsed = ironplc_syntax::parse_statements(source, options);
+    parsed
+        .root
+        .first_child()
+        .map(|list| render(&list))
+        .unwrap_or_default()
+}
+
+/// The rendering of the tree of one expression.
+pub fn expression(source: &str, options: &ironplc_syntax::ParseOptions) -> String {
+    let parsed = ironplc_syntax::parse_expression(source, options);
+    parsed
+        .root
+        .first_child()
+        .map(|node| render(&node))
+        .unwrap_or_default()
+}
