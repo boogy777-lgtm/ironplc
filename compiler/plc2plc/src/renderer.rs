@@ -523,6 +523,32 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         Ok(())
     }
 
+    // CODESYS `UNION ... END_UNION`. The members reuse the structure
+    // element rendering; only the enclosing keywords differ.
+    fn visit_union_declaration(
+        &mut self,
+        node: &UnionDeclaration,
+    ) -> Result<Self::Value, Diagnostic> {
+        self.visit_type_name(&node.type_name)?;
+
+        self.write_ws(":");
+
+        self.write_ws("UNION");
+
+        self.indent();
+        self.newline();
+        for item in node.elements.iter() {
+            self.visit_structure_element_declaration(item)?;
+            self.write_ws(";");
+            self.newline();
+        }
+        self.outdent();
+
+        self.write_ws("END_UNION");
+
+        Ok(())
+    }
+
     fn visit_structure_element_declaration(
         &mut self,
         node: &StructureElementDeclaration,
@@ -715,6 +741,9 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         let var_type = match node.var_type {
             VariableType::Var => "VAR",
             VariableType::VarTemp => "VAR_TEMP",
+            VariableType::VarStat => "VAR_STAT",
+            VariableType::VarInst => "VAR_INST",
+            VariableType::VarGeneric => "VAR_GENERIC",
             VariableType::Input => "VAR_INPUT",
             VariableType::Output => "VAR_OUTPUT",
             VariableType::InOut => "VAR_IN_OUT",
@@ -1029,6 +1058,18 @@ impl Visitor<Diagnostic> for LibraryRenderer {
             self.write_qualifiers(&oop.qualifiers);
         }
         self.visit_id(&node.name.name)?;
+        // `VAR_GENERIC` sections belong directly after the name, before
+        // `EXTENDS`/`IMPLEMENTS` (CODESYS error 544), so they are written
+        // first and the remaining sections after the header.
+        self.indent();
+        for var in node
+            .variables
+            .iter()
+            .filter(|var| var.var_type == VariableType::VarGeneric)
+        {
+            self.visit_var_decl(var)?;
+        }
+        self.outdent();
         if let Some(oop) = &node.oop {
             if let Some(base) = &oop.base {
                 self.write_ws("EXTENDS");
@@ -1047,7 +1088,11 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         self.newline();
 
         self.indent();
-        for var in node.variables.iter() {
+        for var in node
+            .variables
+            .iter()
+            .filter(|var| var.var_type != VariableType::VarGeneric)
+        {
             self.visit_var_decl(var)?;
         }
         self.outdent();
@@ -1134,6 +1179,25 @@ impl Visitor<Diagnostic> for LibraryRenderer {
     // OOP extension: INTERFACE ... END_INTERFACE. Only the
     // header renders — method/property signatures are not yet parsed (see
     // specs/design/beckhoff-twincat-dialect.md §1.3).
+    // CODESYS/TwinCAT `NAMESPACE ... END_NAMESPACE`: the nested declarations
+    // are written back inside the namespace, one level deeper.
+    fn visit_namespace_declaration(
+        &mut self,
+        node: &NamespaceDeclaration,
+    ) -> Result<Self::Value, Diagnostic> {
+        self.write_ws("NAMESPACE");
+        self.visit_id(&node.name)?;
+        self.newline();
+        self.indent();
+        for element in node.elements.iter() {
+            element.recurse_visit(self)?;
+        }
+        self.outdent();
+        self.write_ws("END_NAMESPACE");
+        self.newline();
+        Ok(())
+    }
+
     fn visit_interface_declaration(
         &mut self,
         node: &InterfaceDeclaration,
@@ -1507,6 +1571,14 @@ impl Visitor<Diagnostic> for LibraryRenderer {
             }
             dsl::textual::StmtKind::Return => self.write_keyword_statement("RETURN"),
             dsl::textual::StmtKind::Exit(_) => self.write_keyword_statement("EXIT"),
+            // The marker carries no statement terminator of its own: the
+            // reference grammar's `implementationBlock` is the marker
+            // followed by the statements, with no `;` in between.
+            dsl::textual::StmtKind::BeginImplementation(_) => {
+                self.write_ws("__BEGIN_IMPLEMENTATION");
+                self.newline();
+                Ok(())
+            }
             dsl::textual::StmtKind::Continue(_) => self.write_keyword_statement("CONTINUE"),
             _ => node.recurse_visit(self),
         }

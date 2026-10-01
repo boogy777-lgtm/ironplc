@@ -52,6 +52,13 @@ use petgraph::{
 use std::collections::{HashMap, HashSet, VecDeque};
 
 pub fn apply(lib: Library) -> Result<(Library, HashSet<Id>), Vec<Diagnostic>> {
+    // A `NAMESPACE` only groups declarations; the semantic model is flat, so
+    // its contents are spliced in at the position of the namespace before
+    // anything else looks at the library. Namespaces nest, so this recurses.
+    let lib = Library {
+        elements: flatten_namespaces(lib.elements),
+    };
+
     // Walk to build a graph of types, POUs and their relationships
     let mut data_type_visitor = RuleGraphReferenceableElements::new();
     data_type_visitor.walk(&lib).map_err(|e| vec![e])?;
@@ -119,6 +126,10 @@ pub fn apply(lib: Library) -> Result<(Library, HashSet<Id>), Vec<Diagnostic>> {
                     .or_default()
                     .push(LibraryElementKind::InterfaceDeclaration(decl));
             }
+            LibraryElementKind::NamespaceDeclaration(_) => {
+                // `flatten_namespaces` spliced every namespace out before
+                // this loop, so a namespace element cannot reach it.
+            }
         }
     }
 
@@ -145,6 +156,22 @@ pub fn apply(lib: Library) -> Result<(Library, HashSet<Id>), Vec<Diagnostic>> {
     Ok((Library { elements }, reachable))
 }
 
+/// Replaces each `NAMESPACE` element by its contents, in source order.
+/// Namespaces have no semantic model of their own yet (qualified access is
+/// P1), so a declaration inside one becomes an ordinary library element.
+fn flatten_namespaces(elements: Vec<LibraryElementKind>) -> Vec<LibraryElementKind> {
+    let mut flattened = Vec::with_capacity(elements.len());
+    for element in elements {
+        match element {
+            LibraryElementKind::NamespaceDeclaration(namespace) => {
+                flattened.extend(flatten_namespaces(namespace.elements));
+            }
+            other => flattened.push(other),
+        }
+    }
+    flattened
+}
+
 /// The declared name of a data type declaration.
 fn data_type_name(decl: &DataTypeDeclarationKind) -> Id {
     match decl {
@@ -153,6 +180,7 @@ fn data_type_name(decl: &DataTypeDeclarationKind) -> Id {
         DataTypeDeclarationKind::Simple(d) => d.type_name.name.clone(),
         DataTypeDeclarationKind::Array(d) => d.type_name.name.clone(),
         DataTypeDeclarationKind::Structure(d) => d.type_name.name.clone(),
+        DataTypeDeclarationKind::Union(d) => d.type_name.name.clone(),
         DataTypeDeclarationKind::StructureInitialization(d) => d.type_name.name.clone(),
         DataTypeDeclarationKind::String(d) => d.type_name.name.clone(),
         DataTypeDeclarationKind::Reference(d) => d.type_name.name.clone(),

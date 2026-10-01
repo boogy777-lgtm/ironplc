@@ -43,6 +43,13 @@ use crate::{
 ///   (Beckhoff TwinCAT/CODESYS extension).
 /// * **`CONTINUE`** — demoted unless `allow_continue` (standardized in
 ///   IEC 61131-3:2013).
+/// * **`UNION`, `END_UNION`** — demoted unless `allow_union_type`
+///   (standardized in IEC 61131-3:2013).
+/// * **`VAR_STAT`, `VAR_INST`, `VAR_GENERIC`** — each demoted unless its own
+///   `allow_var_*` flag.
+/// * **`NAMESPACE`, `END_NAMESPACE`** — demoted unless `allow_namespace`.
+/// * **`__BEGIN_IMPLEMENTATION`** — demoted unless
+///   `allow_begin_implementation`.
 ///
 /// The context-sensitive `TIME` keyword is handled by [`apply_time`].
 pub fn apply(tokens: &mut [Token], options: &CompilerOptions) {
@@ -55,6 +62,12 @@ pub fn apply(tokens: &mut [Token], options: &CompilerOptions) {
     let demote_short_circuit = !options.allow_short_circuit_operators;
     let demote_persistent = !options.allow_persistent_var;
     let demote_continue = !options.allow_continue;
+    let demote_union = !options.allow_union_type;
+    let demote_var_stat = !options.allow_var_stat;
+    let demote_var_inst = !options.allow_var_inst;
+    let demote_var_generic = !options.allow_var_generic;
+    let demote_namespace = !options.allow_namespace;
+    let demote_begin_implementation = !options.allow_begin_implementation;
 
     for tok in tokens.iter_mut() {
         let demote = match tok.token_type {
@@ -80,6 +93,12 @@ pub fn apply(tokens: &mut [Token], options: &CompilerOptions) {
             TokenType::AndThen | TokenType::OrElse => demote_short_circuit,
             TokenType::Persistent => demote_persistent,
             TokenType::Continue => demote_continue,
+            TokenType::Union | TokenType::EndUnion => demote_union,
+            TokenType::VarStat => demote_var_stat,
+            TokenType::VarInst => demote_var_inst,
+            TokenType::VarGeneric => demote_var_generic,
+            TokenType::Namespace | TokenType::EndNamespace => demote_namespace,
+            TokenType::BeginImplementation => demote_begin_implementation,
             _ => false,
         };
         if demote {

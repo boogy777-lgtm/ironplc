@@ -274,6 +274,29 @@ END_CONFIGURATION"
     verbatim,
     opts_with_fb_inheritance
 )]
+// The ST declaration extensions (`UNION`, `VAR_STAT`/`VAR_INST`/
+// `VAR_GENERIC`, `NAMESPACE`, `__BEGIN_IMPLEMENTATION`) place their keywords
+// directly before a name, and a `GAP` marker there cannot be used: removing
+// it merges the keyword with the name into one different token, so the tight
+// spelling is not the same program. These rows therefore pin the gaps the
+// rules do have -- inside a member or declaration they introduce -- and the
+// keyword-adjacent spellings are asserted with real newlines in
+// `union.rs`, `var_declarations.rs` and `namespaces.rs`.
+#[case::union_member(
+    "TYPE U : UNION intVal·:·INT·:=·1; realVal : REAL; END_UNION; END_TYPE",
+    verbatim,
+    opts_with_union
+)]
+#[case::var_stat_declaration(
+    "PROGRAM main VAR_STAT count·:·INT·:=·1; END_VAR count := 2; END_PROGRAM",
+    verbatim,
+    opts_with_var_stat
+)]
+#[case::begin_implementation_terminator(
+    "PROGRAM main __BEGIN_IMPLEMENTATION x := 1;·END_PROGRAM",
+    verbatim,
+    opts_with_begin_implementation
+)]
 // ---------------------------------------------------------------------
 // Gaps issue #1437 reported as rejected. Each row is a spelling that
 // returned P0002 before the grammar was widened.

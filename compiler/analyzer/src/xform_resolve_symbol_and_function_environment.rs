@@ -321,6 +321,9 @@ impl<'a> Visitor<Infallible> for EnvironmentResolver<'a> {
             ironplc_dsl::common::DataTypeDeclarationKind::Structure(decl) => {
                 self.declare_global(&decl.type_name.name, SymbolKind::Type);
             }
+            ironplc_dsl::common::DataTypeDeclarationKind::Union(decl) => {
+                self.declare_global(&decl.type_name.name, SymbolKind::Type);
+            }
             ironplc_dsl::common::DataTypeDeclarationKind::Enumeration(_) => {
                 // Declared by `visit_enumeration_declaration`, which the
                 // recursion below reaches and which also records the values.

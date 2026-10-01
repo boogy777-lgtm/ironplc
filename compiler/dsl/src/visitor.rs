@@ -216,6 +216,12 @@ pub trait Visitor<E> {
     // 2.3.3.1
     dispatch!(StructureDeclaration);
 
+    // UNION ... END_UNION (IEC 61131-3:2013 / CODESYS)
+    dispatch!(UnionDeclaration);
+
+    // NAMESPACE ... END_NAMESPACE (CODESYS/TwinCAT)
+    dispatch!(NamespaceDeclaration);
+
     // 2.3.3.1
     dispatch!(StructureElementDeclaration);
 

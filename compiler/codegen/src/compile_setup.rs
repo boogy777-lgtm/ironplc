@@ -286,6 +286,12 @@ pub(crate) fn assign_variables(
 pub(crate) fn map_var_section(vt: &VariableType) -> u8 {
     match vt {
         VariableType::Var => var_section::VAR,
+        // The debug section has no encoding for the additional sections
+        // (VAR_STAT/VAR_INST/VAR_GENERIC), which are stored like VAR until
+        // their placement rules are implemented.
+        VariableType::VarStat | VariableType::VarInst | VariableType::VarGeneric => {
+            var_section::VAR
+        }
         VariableType::VarTemp => var_section::VAR_TEMP,
         VariableType::Input => var_section::VAR_INPUT,
         VariableType::Output => var_section::VAR_OUTPUT,

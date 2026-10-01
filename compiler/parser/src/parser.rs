@@ -416,6 +416,19 @@ parser! {
       / cd:configuration_declaration() { vec![LibraryElementKind::ConfigurationDeclaration(cd)] }
       / gv:global_var_declarations() { vec![LibraryElementKind::GlobalVarDeclarations(gv)] }
       / id:interface_declaration() { vec![LibraryElementKind::InterfaceDeclaration(id)] }
+      / ns:namespace_declaration() { vec![LibraryElementKind::NamespaceDeclaration(ns)] }
+
+    // CODESYS/TwinCAT `NAMESPACE name ... END_NAMESPACE`: a grouping
+    // declaration whose elements are the same declarations a library
+    // accepts, so namespaces nest. The keyword demotes to an identifier
+    // unless `allow_namespace` -- see xform_demote_keywords.rs.
+    rule namespace_declaration() -> NamespaceDeclaration = start:tok(TokenType::Namespace) _ name:identifier() _ elements:library_element_declaration() ** _ _ end:tok(TokenType::EndNamespace) {
+      NamespaceDeclaration {
+        name,
+        elements: elements.into_iter().flatten().collect(),
+        span: SourceSpan::join(&start.span, &end.span),
+      }
+    }
 
     // B.1.1 Letters, digits and identifier
     rule identifier() -> Id = i:tok(TokenType::Identifier) {
@@ -670,6 +683,7 @@ parser! {
       / a:array_type_declaration() { DataTypeDeclarationKind::Array(a) }
       / subrange:subrange_type_declaration__with_range() { DataTypeDeclarationKind::Subrange(subrange) }
       / structure_type_declaration__with_constant()
+      / union:union_type_declaration__with_constant() { DataTypeDeclarationKind::Union(union) }
       / enumerated:enumerated_type_declaration__with_value() { DataTypeDeclarationKind::Enumeration(enumerated) }
       / simple:simple_type_declaration__with_constant() { DataTypeDeclarationKind::Simple(simple )}
       / type_name:type_name() _ tok(TokenType::Colon) _ syntax:ref_to_keyword() _ ref_target:ref_to_target() {
@@ -874,6 +888,23 @@ parser! {
     }
     rule structure_declaration() -> StructureDeclaration = tok(TokenType::Struct) _ elements:semisep_oneplus(<structure_element_declaration()>) _ tok(TokenType::EndStruct) {
       StructureDeclaration {
+        // Requires a value but we don't know the name until one level up
+        type_name: TypeName::from(""),
+        elements,
+      }
+    }
+    // CODESYS `UNION ... END_UNION`: the same member grammar as a
+    // structure, with the members overlaid in memory. Keyword demoted to an
+    // identifier unless `allow_union_type` -- see xform_demote_keywords.rs.
+    rule union_type_declaration__with_constant() -> UnionDeclaration =
+      type_name:structure_type_name() _ tok(TokenType::Colon) _ decl:union_declaration() {
+        UnionDeclaration {
+          type_name,
+          elements: decl.elements,
+        }
+      }
+    rule union_declaration() -> UnionDeclaration = tok(TokenType::Union) _ elements:semisep_oneplus(<structure_element_declaration()>) _ tok(TokenType::EndUnion) {
+      UnionDeclaration {
         // Requires a value but we don't know the name until one level up
         type_name: TypeName::from(""),
         elements,
@@ -1500,7 +1531,7 @@ parser! {
       / tok:tok(TokenType::WString) length:(_ l:string_length_spec() { l })? { FunctionReturnType::WString(StringSpecification{ width: StringType::WString, length, keyword_span: tok.span.clone(), }) }
       / et:elementary_type_name() { FunctionReturnType::Named(et.into()) }
       / dt:derived_type_name() { FunctionReturnType::Named(dt) }
-    rule function_declaration() -> FunctionDeclaration = tok(TokenType::Function) _  name:derived_function_name() _ tok(TokenType::Colon) _ rt:function_return_type() _ var_decls:(io:io_var_declarations() / func:function_var_decls() { vec![ func ] } / temp:temp_var_decls() { vec![ temp ] }) ** _ _ body:function_body() _ tok(TokenType::EndFunction) {
+    rule function_declaration() -> FunctionDeclaration = tok(TokenType::Function) _  name:derived_function_name() _ tok(TokenType::Colon) _ rt:function_return_type() _ var_decls:(io:io_var_declarations() / func:function_var_decls() { vec![ func ] } / temp:temp_var_decls() { vec![ temp ] } / stat:var_stat_declarations() { vec![ stat ] }) ** _ _ body:function_body() _ tok(TokenType::EndFunction) {
       let var_decls = VarDeclarations::flatten(var_decls);
       let (variables, remainder) = VarDeclarations::drain_var_decl(var_decls);
       let (edge_variables, remainder) = VarDeclarations::drain_edge_decl(remainder);
@@ -1567,7 +1598,7 @@ parser! {
 
     // Unlike a function, a method may have an empty body: an `ABSTRACT`
     // method has none, and TwinCAT writes a do-nothing method that way.
-    rule method_declaration() -> MethodDeclaration = start:tok(TokenType::Method) _ qualifiers:member_qualifiers() _ name:identifier() _ rt:(tok(TokenType::Colon) _ rt:function_return_type() {rt})? _ decls:(io:io_var_declarations() { io } / other:other_var_declarations() { vec![other] } / temp:temp_var_decls() { vec![temp] }) ** _ _ body:function_body()? _ end:tok(TokenType::EndMethod) {
+    rule method_declaration() -> MethodDeclaration = start:tok(TokenType::Method) _ qualifiers:member_qualifiers() _ name:identifier() _ rt:(tok(TokenType::Colon) _ rt:function_return_type() {rt})? _ decls:(io:io_var_declarations() { io } / other:other_var_declarations() { vec![other] } / temp:temp_var_decls() { vec![temp] } / inst:var_inst_declarations() { vec![inst] }) ** _ _ body:function_body()? _ end:tok(TokenType::EndMethod) {
       let decls = VarDeclarations::flatten(decls);
       let (variables, remainder) = VarDeclarations::drain_var_decl(decls);
       let (edge_variables, _) = VarDeclarations::drain_edge_decl(remainder);
@@ -1588,7 +1619,7 @@ parser! {
     // form stores a `<Property>` element with `<Get>`/`<Set>` children;
     // `ironplc-sources` rebuilds this textual form from it. Each accessor
     // becomes a `MethodDeclaration`, see `PropertyDeclaration`.
-    rule property_accessor_parts() -> (Vec<VarDecl>, Vec<EdgeVarDecl>, Vec<StmtKind>) = decls:(io:io_var_declarations() { io } / other:other_var_declarations() { vec![other] } / temp:temp_var_decls() { vec![temp] }) ** _ _ body:function_body()? {
+    rule property_accessor_parts() -> (Vec<VarDecl>, Vec<EdgeVarDecl>, Vec<StmtKind>) = decls:(io:io_var_declarations() { io } / other:other_var_declarations() { vec![other] } / temp:temp_var_decls() { vec![temp] } / inst:var_inst_declarations() { vec![inst] }) ** _ _ body:function_body()? {
       let decls = VarDeclarations::flatten(decls);
       let (variables, remainder) = VarDeclarations::drain_var_decl(decls);
       let (edge_variables, _) = VarDeclarations::drain_edge_decl(remainder);
@@ -1613,7 +1644,11 @@ parser! {
 
     rule function_block_member() -> FunctionBlockMember = m:method_declaration() { FunctionBlockMember::Method(Box::new(m)) } / p:property_declaration() { FunctionBlockMember::Property(Box::new(p)) }
 
-    rule function_block_declaration() -> FunctionBlockDeclaration = start:tok(TokenType::FunctionBlock) _ qualifiers:member_qualifiers() _ name:derived_function_block_name() _ extends:(e:tok(TokenType::Extends) _ t:type_name() {(e, t)})? _ implements:(i:tok(TokenType::Implements) _ names:type_name_list() {(i, names)})? _ decls:(io:io_var_declarations() { io } / other:other_var_declarations() { vec![other] } / temp:temp_var_decls() { vec![temp] }) ** _ _ body:function_block_body() _ members:(_ m:function_block_member() {m}) ** _ _ end:tok(TokenType::EndFunctionBlock) {
+    // `VAR_GENERIC` sections, when present, come directly after the
+    // function block's name and before EXTENDS/IMPLEMENTS and the other
+    // variable sections (CODESYS error 544: "VAR_GENERIC declaration only
+    // allowed in Functionblocks after the function block name").
+    rule function_block_declaration() -> FunctionBlockDeclaration = start:tok(TokenType::FunctionBlock) _ qualifiers:member_qualifiers() _ name:derived_function_block_name() _ generic:(g:var_generic_declarations() { g })* _ extends:(e:tok(TokenType::Extends) _ t:type_name() {(e, t)})? _ implements:(i:tok(TokenType::Implements) _ names:type_name_list() {(i, names)})? _ decls:(io:io_var_declarations() { io } / other:other_var_declarations() { vec![other] } / temp:temp_var_decls() { vec![temp] }) ** _ _ body:function_block_body() _ members:(_ m:function_block_member() {m}) ** _ _ end:tok(TokenType::EndFunctionBlock) {
       let mut methods = Vec::new();
       let mut properties = Vec::new();
       for member in members {
@@ -1623,8 +1658,11 @@ parser! {
         }
       }
 
-      let decls = VarDeclarations::flatten(decls);
-      let (variables, remainder) = VarDeclarations::drain_var_decl(decls);
+      // The generic declarations are written before the other sections, so
+      // they keep that order among the function block's fields.
+      let mut all_decls = generic;
+      all_decls.extend(VarDeclarations::flatten(decls));
+      let (variables, remainder) = VarDeclarations::drain_var_decl(all_decls);
       let (edge_variables, _) = VarDeclarations::drain_edge_decl(remainder);
 
       let base = extends.as_ref().map(|(_, t)| t.clone());
@@ -1678,9 +1716,28 @@ parser! {
       }
     }
 
-    rule other_var_declarations() -> VarDeclarations = external_var_declarations() / var_declarations() / retentive_var_declarations() / non_retentive_var_declarations() / persistent_var_declarations() / incompl_located_var_declarations()
+    rule other_var_declarations() -> VarDeclarations = external_var_declarations() / var_declarations() / retentive_var_declarations() / non_retentive_var_declarations() / persistent_var_declarations() / incompl_located_var_declarations() / var_stat_declarations()
     rule temp_var_decls() -> VarDeclarations = tok(TokenType::VarTemp) _ declarations:semisep_or_empty(<var2_init_decl()>) _ tok(TokenType::EndVar) {
       VarDeclarations::Var(VarDeclarations::flat_map(declarations, VariableType::VarTemp, None))
+    }
+    // CODESYS/TwinCAT `VAR_STAT ... END_VAR`: declarations that keep their
+    // value between calls. Stored like VAR until placement is implemented;
+    // the keyword demotes to an identifier unless `allow_var_stat` -- see
+    // xform_demote_keywords.rs.
+    rule var_stat_declarations() -> VarDeclarations = tok(TokenType::VarStat) _ qualifier:(tok(TokenType::Constant) {DeclarationQualifier::Constant})? _ declarations:semisep_or_empty(<var2_init_decl()>) _ tok(TokenType::EndVar) {
+      VarDeclarations::Var(VarDeclarations::flat_map(declarations, VariableType::VarStat, qualifier))
+    }
+    // CODESYS/TwinCAT `VAR_INST ... END_VAR`: a method's instance variables.
+    // Keyword demoted unless `allow_var_inst`.
+    rule var_inst_declarations() -> VarDeclarations = tok(TokenType::VarInst) _ qualifier:(tok(TokenType::Constant) {DeclarationQualifier::Constant})? _ declarations:semisep_or_empty(<var2_init_decl()>) _ tok(TokenType::EndVar) {
+      VarDeclarations::Var(VarDeclarations::flat_map(declarations, VariableType::VarInst, qualifier))
+    }
+    // CODESYS/TwinCAT `VAR_GENERIC ... END_VAR`: a function block's generic
+    // constants, declared directly after the function block name. Only
+    // CONSTANT is accepted as a qualifier (CODESYS error 545). Keyword
+    // demoted unless `allow_var_generic`.
+    rule var_generic_declarations() -> VarDeclarations = tok(TokenType::VarGeneric) _ qualifier:(tok(TokenType::Constant) {DeclarationQualifier::Constant})? _ declarations:semisep_or_empty(<var2_init_decl()>) _ tok(TokenType::EndVar) {
+      VarDeclarations::Var(VarDeclarations::flat_map(declarations, VariableType::VarGeneric, qualifier))
     }
     rule non_retentive_var_declarations() -> VarDeclarations = tok(TokenType::Var) _ tok(TokenType::NonRetain) _ declarations:semisep_or_empty(<var_init_decl()>) _ tok(TokenType::EndVar) {
       let qualifier = Option::Some(DeclarationQualifier::NonRetain);
@@ -2100,7 +2157,21 @@ parser! {
     pub rule statement_list() -> Vec<StmtKind> = items:statements_or_empty()+ {
       flatten_statements(items)
     }
-    rule statements_or_empty() -> StatementsOrEmpty = _ tok(TokenType::Semicolon) _ { StatementsOrEmpty::Empty() } / s:semisep(<statement()>) { StatementsOrEmpty::Statements(s)}
+    // A CODESYS textual export opens a POU's implementation with
+    // `__BEGIN_IMPLEMENTATION` and no terminator of its own, so the marker
+    // is accepted at the start of a statement list, not as a `;`-terminated
+    // statement: `marker { statements }` is the reference grammar's
+    // `implementationBlock`. The alternatives spell out each accepted
+    // spelling (with a `;`, without one, or alone) rather than composing
+    // them with `?`: an optional part inside this repeated choice makes the
+    // parser stop after the marker and reject the statement that follows
+    // it.
+    rule statements_or_empty() -> StatementsOrEmpty =
+      _ tok(TokenType::Semicolon) _ { StatementsOrEmpty::Empty() }
+      / m:implementation_marker_statement() _ tok(TokenType::Semicolon) _ s:semisep(<statement()>) { let mut v = vec![m]; v.extend(s); StatementsOrEmpty::Statements(v) }
+      / m:implementation_marker_statement() _ s:semisep(<statement()>) { let mut v = vec![m]; v.extend(s); StatementsOrEmpty::Statements(v) }
+      / m:implementation_marker_statement() { StatementsOrEmpty::Statements(vec![m]) }
+      / s:semisep(<statement()>) { StatementsOrEmpty::Statements(s)}
     rule statement() -> StmtKind = assignment_statement() / selection_statement() / iteration_statement() / subprogram_control_statement()
 
     // B.3.2.1 Assignment statements
@@ -2290,5 +2361,15 @@ parser! {
     }
     rule exit_statement() -> StmtKind = t:tok(TokenType::Exit) { StmtKind::Exit(t.span.clone()) }
     rule continue_statement() -> StmtKind = t:tok(TokenType::Continue) { StmtKind::Continue(t.span.clone()) }
+    // CODESYS `__BEGIN_IMPLEMENTATION`: the marker that a POU's
+    // implementation follows. It is not a statement: the marker opens the
+    // implementation and carries no statement terminator of its own (the
+    // grammar's `implementationBlock` is `marker, { statement }`), so a
+    // `;` that follows it -- the spelling the renderer writes -- belongs to
+    // the marker, not to a statement. Its own list segment (see
+    // `statements_or_empty`) keeps the following statements in the same
+    // list. Keyword demoted to an identifier unless
+    // `allow_begin_implementation`.
+    rule implementation_marker_statement() -> StmtKind = t:tok(TokenType::BeginImplementation) _ tok(TokenType::Semicolon)? { StmtKind::BeginImplementation(t.span.clone()) }
   }
 }

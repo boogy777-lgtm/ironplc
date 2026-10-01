@@ -48,6 +48,60 @@ fn analyze_codes(program: &str, options: &CompilerOptions) -> Vec<String> {
         .collect()
 }
 
+fn namespace_options() -> CompilerOptions {
+    CompilerOptions {
+        allow_namespace: true,
+        ..CompilerOptions::default()
+    }
+}
+
+/// REQ-STX-analyzer-030: declaration toposort flattens namespaces -- the
+/// declarations a namespace contains become ordinary library elements, so a
+/// program or type declared inside one is analyzed like a top-level one.
+#[spec_test(REQ_STX_analyzer_030)]
+fn analyzer_spec_req_stx_030_namespaces_flatten_during_toposort() {
+    let source = "NAMESPACE Motor
+TYPE
+Speed : INT;
+END_TYPE
+
+PROGRAM main
+VAR
+    x : Speed;
+END_VAR
+    x := 10;
+END_PROGRAM
+END_NAMESPACE";
+    let library = parse_program(source, &FileId::default(), &namespace_options()).unwrap();
+    assert!(matches!(
+        library.elements[0],
+        LibraryElementKind::NamespaceDeclaration(_)
+    ));
+
+    let (resolved, context) = analyze(&[&library], &namespace_options()).unwrap();
+    assert!(
+        context.diagnostics().is_empty(),
+        "expected clean analysis, got {:?}",
+        context.diagnostics()
+    );
+    assert!(
+        resolved
+            .elements
+            .iter()
+            .all(|e| !matches!(e, LibraryElementKind::NamespaceDeclaration(_))),
+        "the namespace must not survive toposort: {:?}",
+        resolved.elements
+    );
+    assert!(resolved
+        .elements
+        .iter()
+        .any(|e| matches!(e, LibraryElementKind::ProgramDeclaration(_))));
+    assert!(resolved
+        .elements
+        .iter()
+        .any(|e| matches!(e, LibraryElementKind::DataTypeDeclaration(_))));
+}
+
 /// REQ-RTO-analyzer-300: `REFERENCE TO T` resolves to a reference type — a
 /// `REFERENCE TO` variable can be bound and dereferenced without any
 /// "deref requires a reference type" (P2031) diagnostic, proving it resolved to

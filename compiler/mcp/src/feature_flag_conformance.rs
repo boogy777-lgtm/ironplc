@@ -306,6 +306,48 @@ const FLAG_FIXTURES: &[FlagFixture] = &[
         prereqs: &[],
         source: "PROGRAM main\nVAR i : INT; END_VAR\nFOR i := 1 TO 3 DO\nCONTINUE;\nEND_FOR;\nEND_PROGRAM",
     },
+    // The IEC 61131-3:2013 UNION type declaration. With the flag off, both
+    // words demote to identifiers and the TYPE body does not parse.
+    FlagFixture {
+        key: "allow_union_type",
+        prereqs: &[],
+        source: "TYPE U_Data :\nUNION\n    intVal : INT;\n    realVal : REAL;\nEND_UNION;\nEND_TYPE\nPROGRAM main\nEND_PROGRAM",
+    },
+    // The CODESYS/TwinCAT VAR_STAT section. With the flag off, VAR_STAT is
+    // a plain identifier and the declaration does not parse.
+    FlagFixture {
+        key: "allow_var_stat",
+        prereqs: &[],
+        source: "FUNCTION CountUp : DINT\nVAR_STAT\n    calls : DINT;\nEND_VAR\n    calls := calls + 1;\n    CountUp := calls;\nEND_FUNCTION\nPROGRAM main\nEND_PROGRAM",
+    },
+    // The CODESYS/TwinCAT VAR_INST section. It only appears in a method, so
+    // METHOD/END_METHOD must be enabled to reach it.
+    FlagFixture {
+        key: "allow_var_inst",
+        prereqs: &["allow_fb_inheritance"],
+        source: "FUNCTION_BLOCK FB_Motor\nVAR\n    speed : INT;\nEND_VAR\nMETHOD DoWork : BOOL\nVAR_INST\n    callCount : INT;\nEND_VAR\n    callCount := callCount + 1;\n    DoWork := TRUE;\nEND_METHOD\nEND_FUNCTION_BLOCK\nPROGRAM main\nEND_PROGRAM",
+    },
+    // The CODESYS/TwinCAT VAR_GENERIC section, which belongs directly after
+    // a function block's name.
+    FlagFixture {
+        key: "allow_var_generic",
+        prereqs: &[],
+        source: "FUNCTION_BLOCK FB_Scale\nVAR_GENERIC CONSTANT\n    maxValue : INT := 100;\nEND_VAR\nVAR\n    value : INT;\nEND_VAR\n    value := maxValue;\nEND_FUNCTION_BLOCK\nPROGRAM main\nEND_PROGRAM",
+    },
+    // The CODESYS/TwinCAT NAMESPACE grouping. With the flag off, NAMESPACE
+    // is a plain identifier and the library does not parse.
+    FlagFixture {
+        key: "allow_namespace",
+        prereqs: &[],
+        source: "NAMESPACE Motor\nPROGRAM main\nEND_PROGRAM\nEND_NAMESPACE",
+    },
+    // The CODESYS __BEGIN_IMPLEMENTATION marker. With the flag off it is a
+    // plain identifier, and an identifier alone is not a statement.
+    FlagFixture {
+        key: "allow_begin_implementation",
+        prereqs: &[],
+        source: "PROGRAM main\nVAR\n    x : INT;\nEND_VAR\n__BEGIN_IMPLEMENTATION\nx := 1;\nEND_PROGRAM",
+    },
 ];
 
 /// Builds an ed2 options object with the given flags enabled.

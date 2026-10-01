@@ -318,7 +318,10 @@ mod tests {
         "FUNCTION_BLOCK FB_Motor",
         "METHOD PUBLIC OVERRIDE M\n    x := 1;\nEND_METHOD"
     )]
-    #[case::overload("FUNCTION_BLOCK FB_Motor", "METHOD OVERLOAD M\n    x := 1;\nEND_METHOD")]
+    #[case::overload(
+        "FUNCTION_BLOCK FB_Motor",
+        "METHOD OVERLOAD M\n    x := 1;\nEND_METHOD"
+    )]
     #[case::public_overload(
         "FUNCTION_BLOCK FB_Motor",
         "METHOD PUBLIC OVERLOAD M\n    x := 1;\nEND_METHOD"

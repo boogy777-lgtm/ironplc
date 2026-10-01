@@ -413,6 +413,9 @@ fn compile_statement(
             }
             Ok(())
         }
+        // `__BEGIN_IMPLEMENTATION` is a marker, not an operation: the
+        // statements that follow it in the same list compile on their own.
+        StmtKind::BeginImplementation(_) => Ok(()),
         StmtKind::FbCall(fb_call) => compile_fb_call(emitter, ctx, fb_call),
         StmtKind::MethodCall(method_call) => {
             compile_method_call_statement(emitter, ctx, method_call)

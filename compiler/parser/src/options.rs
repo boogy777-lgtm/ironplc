@@ -499,6 +499,36 @@ define_compiler_options! {
     [Rusty, Codesys, TwinCat],
     allow_enum_base_type,
 
+    "Allow UNION ... END_UNION type declarations in a TYPE block (standardized in IEC 61131-3:2013)",
+    "--allow-union-type",
+    [Rusty, Iec61131_3Ed3, Codesys, TwinCat],
+    allow_union_type,
+
+    "Allow VAR_STAT variable sections, whose declarations keep their value between calls of the POU",
+    "--allow-var-stat",
+    [Codesys, TwinCat],
+    allow_var_stat,
+
+    "Allow VAR_INST variable sections in a method, whose declarations belong to the method's instance",
+    "--allow-var-inst",
+    [Codesys, TwinCat],
+    allow_var_inst,
+
+    "Allow VAR_GENERIC variable sections directly after a function block name, declaring the function block's generic constants",
+    "--allow-var-generic",
+    [Codesys, TwinCat],
+    allow_var_generic,
+
+    "Allow NAMESPACE ... END_NAMESPACE grouping of declarations",
+    "--allow-namespace",
+    [Codesys, TwinCat],
+    allow_namespace,
+
+    "Allow the __BEGIN_IMPLEMENTATION marker that begins a POU's implementation section",
+    "--allow-begin-implementation",
+    [Codesys],
+    allow_begin_implementation,
+
     policies {
         "What STRING_TO_<numeric> treats as convertible when the string has non-numeric characters",
         "--policy-string-to-num-non-numeric",

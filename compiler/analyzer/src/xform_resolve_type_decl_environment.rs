@@ -310,6 +310,17 @@ impl Fold<Diagnostic> for TypeEnvironment {
         Ok(node)
     }
 
+    fn fold_union_declaration(
+        &mut self,
+        node: UnionDeclaration,
+    ) -> Result<UnionDeclaration, Diagnostic> {
+        // A union is registered with the members' structure layout for now;
+        // overlaying them at offset 0 is not implemented yet.
+        let attrs = crate::intermediates::structure::from_union(&node.type_name, &node, self)?;
+        self.insert_type(&node.type_name, attrs);
+        Ok(node)
+    }
+
     fn fold_subrange_declaration(
         &mut self,
         node: SubrangeDeclaration,
@@ -378,7 +389,13 @@ impl Fold<Diagnostic> for TypeEnvironment {
                 VariableType::Input => Some(FunctionBlockVarType::Input),
                 VariableType::Output => Some(FunctionBlockVarType::Output),
                 VariableType::InOut => Some(FunctionBlockVarType::InOut),
-                VariableType::Var => Some(FunctionBlockVarType::Internal),
+                // VAR_STAT/VAR_INST/VAR_GENERIC are stored like VAR until
+                // their placement rules are implemented, so they are FB
+                // fields too. See `VariableType::is_pou_storage`.
+                VariableType::Var
+                | VariableType::VarStat
+                | VariableType::VarInst
+                | VariableType::VarGeneric => Some(FunctionBlockVarType::Internal),
                 _ => None,
             };
             let var_type = match var_type {

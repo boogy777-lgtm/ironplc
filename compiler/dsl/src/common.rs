@@ -1401,6 +1401,8 @@ pub enum DataTypeDeclarationKind {
     /// Derived data type that specifies required storage space for each instance.
     Array(ArrayDeclaration),
     Structure(StructureDeclaration),
+    /// `UNION ... END_UNION` declaration (IEC 61131-3:2013 / CODESYS).
+    Union(UnionDeclaration),
     StructureInitialization(StructureInitializationDeclaration),
     String(StringDeclaration),
     /// Reference type declaration (REF_TO).
@@ -1764,6 +1766,22 @@ pub struct StructureDeclaration {
     /// The name of the structure.
     pub type_name: TypeName,
     /// The elements (components) of the structure declaration.
+    pub elements: Vec<StructureElementDeclaration>,
+}
+
+/// `UNION ... END_UNION` declaration: the members are located at the same
+/// position in memory, so writing one changes all of them (CODESYS
+/// `UNION`, standardized in IEC 61131-3:2013).
+///
+/// Members reuse [`StructureElementDeclaration`]; only the storage rule
+/// differs. Recognizing a union type makes it usable as a declared type
+/// name; overlaying the members at offset 0 is not implemented yet (P1 in
+/// `Codesys/LEXER-GAP-ANALYSIS.md`).
+#[derive(Clone, Debug, PartialEq, Recurse)]
+pub struct UnionDeclaration {
+    /// The name of the union.
+    pub type_name: TypeName,
+    /// The elements (components) of the union declaration.
     pub elements: Vec<StructureElementDeclaration>,
 }
 
@@ -2282,6 +2300,25 @@ pub enum VariableType {
     /// Local to a POU. Does not need to be maintained
     /// between calls to a POU.
     VarTemp,
+    /// `VAR_STAT` (CODESYS/TwinCAT, Siemens SCL): a variable that keeps
+    /// its value between calls of the POU.
+    ///
+    /// Recognized and represented, but stored like [`Var`](Self::Var): the
+    /// "initialize once, then persist" placement is not implemented yet
+    /// (P1 in `Codesys/LEXER-GAP-ANALYSIS.md`).
+    VarStat,
+    /// `VAR_INST` (CODESYS/TwinCAT): a variable of a method that belongs to
+    /// the method's instance rather than to a single call.
+    ///
+    /// Stored like [`Var`](Self::Var); the instance placement is not
+    /// implemented yet.
+    VarInst,
+    /// `VAR_GENERIC` (CODESYS/TwinCAT): the generic constants of a function
+    /// block, declared directly after its name.
+    ///
+    /// Stored like [`Var`](Self::Var); compile-time substitution of the
+    /// generic constants is not implemented yet.
+    VarGeneric,
     /// Variable that is visible to a calling POU as an input.
     Input,
     /// Variable that is visible to calling POU and can only
@@ -2309,9 +2346,32 @@ impl VariableType {
         matches!(self, VariableType::Input | VariableType::InOut)
     }
 
-    /// Returns true if this is a local variable (VAR or VAR_TEMP).
+    /// Returns true if this is a local variable (VAR, VAR_TEMP and the
+    /// additional local sections VAR_STAT/VAR_INST/VAR_GENERIC).
     pub fn is_local(&self) -> bool {
-        matches!(self, VariableType::Var | VariableType::VarTemp)
+        matches!(
+            self,
+            VariableType::Var
+                | VariableType::VarTemp
+                | VariableType::VarStat
+                | VariableType::VarInst
+                | VariableType::VarGeneric
+        )
+    }
+
+    /// Returns true for the sections that hold POU instance storage: the
+    /// declarations a function block keeps in its instance data. This is
+    /// `VAR` plus the additional sections, which are stored the same way
+    /// until their placement rules are implemented (see each variant's
+    /// documentation). `VAR_TEMP` is excluded: it is call-scoped.
+    pub fn is_pou_storage(&self) -> bool {
+        matches!(
+            self,
+            VariableType::Var
+                | VariableType::VarStat
+                | VariableType::VarInst
+                | VariableType::VarGeneric
+        )
     }
 
     /// Returns true if this is any kind of parameter visible to a caller
@@ -2942,6 +3002,30 @@ pub enum LibraryElementKind {
     /// `INTERFACE ... END_INTERFACE` (extension). See
     /// `InterfaceDeclaration`.
     InterfaceDeclaration(InterfaceDeclaration),
+    /// `NAMESPACE ... END_NAMESPACE` (CODESYS/TwinCAT). A grouping
+    /// declaration: it contains other library elements, including further
+    /// namespaces. See [`NamespaceDeclaration`].
+    NamespaceDeclaration(NamespaceDeclaration),
+}
+
+/// `NAMESPACE name { element } END_NAMESPACE` (CODESYS/TwinCAT).
+///
+/// The declarations a namespace contains are ordinary declarations; the
+/// namespace groups them and qualifies their names. IronPLC keeps the
+/// nesting in the AST so the source renders back unchanged, and flattens it
+/// during declaration toposort so analysis and code generation see the same
+/// top-level declarations as before
+/// (`analyzer/src/xform_toposort_declarations.rs`). Resolving qualified
+/// access (`ns#name`) is not implemented yet (P1 in
+/// `Codesys/LEXER-GAP-ANALYSIS.md`).
+#[derive(Clone, Debug, PartialEq, Recurse, Located)]
+pub struct NamespaceDeclaration {
+    /// The namespace name, as written.
+    pub name: Id,
+    /// The declarations this namespace contains, in source order.
+    pub elements: Vec<LibraryElementKind>,
+    #[located(position)]
+    pub span: SourceSpan,
 }
 
 /// Return type for a function declaration.

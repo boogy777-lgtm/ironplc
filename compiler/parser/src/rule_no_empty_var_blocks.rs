@@ -19,6 +19,9 @@ fn is_var_keyword(tt: &TokenType) -> bool {
             | TokenType::VarTemp
             | TokenType::VarAccess
             | TokenType::VarConfig
+            | TokenType::VarStat
+            | TokenType::VarInst
+            | TokenType::VarGeneric
     )
 }
 

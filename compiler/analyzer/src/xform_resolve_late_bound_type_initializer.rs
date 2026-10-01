@@ -28,6 +28,9 @@ enum TypeDefinitionKind {
     Simple,
     Array,
     Structure,
+    /// `UNION ... END_UNION`. Resolved like a structure; the members are
+    /// not overlaid yet (see `UnionDeclaration`).
+    Union,
     StructureInitialization,
     String(StringType, IntegerRef),
     FunctionBlock,
@@ -103,6 +106,9 @@ impl Visitor<Diagnostic> for ScopedTable<'_, TypeName, TypeDefinitionKind> {
             DataTypeDeclarationKind::Structure(node) => {
                 self.add_if_new(&node.type_name, TypeDefinitionKind::Structure)
             }
+            DataTypeDeclarationKind::Union(node) => {
+                self.add_if_new(&node.type_name, TypeDefinitionKind::Union)
+            }
             DataTypeDeclarationKind::StructureInitialization(node) => {
                 self.add_if_new(&node.type_name, TypeDefinitionKind::StructureInitialization)
             }
@@ -159,9 +165,9 @@ impl TypeResolver<'_> {
         }
         self.types.find(name).map(|kind| match kind {
             TypeDefinitionKind::FunctionBlock => ResolvedKind::FunctionBlock,
-            TypeDefinitionKind::Structure | TypeDefinitionKind::StructureInitialization => {
-                ResolvedKind::Structure
-            }
+            TypeDefinitionKind::Structure
+            | TypeDefinitionKind::Union
+            | TypeDefinitionKind::StructureInitialization => ResolvedKind::Structure,
             TypeDefinitionKind::Enumeration => ResolvedKind::Enumeration,
             _ => ResolvedKind::Other,
         })
@@ -293,12 +299,14 @@ impl Fold<Diagnostic> for TypeResolver<'_> {
                                 },
                             ))
                         }
-                        TypeDefinitionKind::Structure => Ok(InitialValueAssignmentKind::Structure(
-                            StructureInitializationDeclaration {
-                                type_name: name,
-                                elements_init: vec![],
-                            },
-                        )),
+                        TypeDefinitionKind::Structure | TypeDefinitionKind::Union => {
+                            Ok(InitialValueAssignmentKind::Structure(
+                                StructureInitializationDeclaration {
+                                    type_name: name,
+                                    elements_init: vec![],
+                                },
+                            ))
+                        }
                         TypeDefinitionKind::String(width, length) => {
                             Ok(InitialValueAssignmentKind::String(StringInitializer {
                                 length: Some(length.clone()),

@@ -314,6 +314,38 @@ Options
    in IEC 61131-3:2013 (Edition 3); without this flag it is an ordinary
    identifier.
 
+``--allow-union-type``
+   Allow ``UNION ... END_UNION`` type declarations inside a ``TYPE`` block:
+   the members share one storage location instead of each getting its own.
+   ``UNION`` was standardized in IEC 61131-3:2013 (Edition 3); without this
+   flag both words are ordinary identifiers.
+
+``--allow-var-stat``
+   Allow ``VAR_STAT ... END_VAR`` variable sections, whose declarations keep
+   their value between calls of the program, function, or function block
+   they are declared in. Without this flag ``VAR_STAT`` is an ordinary
+   identifier.
+
+``--allow-var-inst``
+   Allow ``VAR_INST ... END_VAR`` variable sections in a method, whose
+   declarations belong to the method's instance rather than to one call.
+   Without this flag ``VAR_INST`` is an ordinary identifier.
+
+``--allow-var-generic``
+   Allow ``VAR_GENERIC ... END_VAR`` variable sections directly after a
+   function block's name, declaring the function block's generic constants.
+   Without this flag ``VAR_GENERIC`` is an ordinary identifier.
+
+``--allow-namespace``
+   Allow ``NAMESPACE name ... END_NAMESPACE``, which groups the declarations
+   it contains. Without this flag ``NAMESPACE`` and ``END_NAMESPACE`` are
+   ordinary identifiers.
+
+``--allow-begin-implementation``
+   Allow the ``__BEGIN_IMPLEMENTATION`` marker that begins a POU's
+   implementation section in a CODESYS textual export. The marker carries no
+   behavior; without this flag it is an ordinary identifier.
+
 ``--policy-string-to-num-non-numeric`` *ALTERNATIVE*
    Select what ``STRING_TO_<numeric>`` treats as convertible when the string
    has non-numeric characters: ``reject`` (the whole string must be a
