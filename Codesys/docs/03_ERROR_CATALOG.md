@@ -14,8 +14,8 @@
 | Ключей в каждой locale | en/de/es/fr/it/ja/pt-BR/tr = 500; zh-CHS = 499; **ru = 507 (расширено до 100%; штатно было 320)** |
 | Объединение ключей (union) | 500 |
 | Префиксы в union | Err_ = 427, Wrn_ = 66, Inf_ = 4, Txt_ = 1 |
-| MessageId без текста ни в одной локали | 16 (вкл. `None`/id 0) → 15 реальных |
-| Ключей ресурса, отсутствующих в enum | 9 |
+| MessageId без текста в 3.5.22.10 (диапазон 0–506) | 10 реальных (+`None`/id 0); id 508/510/523 — вне диапазона верификации |
+| Ключей ресурса, отсутствующих в enum | 7 (2 развязаны: 245, 362) |
 | Ключей, отсутствующих в штатном RU (fallback EN) | 180 (в расширенном RU — 0) |
 
 ## (a) Сборки-источники
@@ -1161,39 +1161,39 @@ $t.GetFields("Public,Static,NonPublic") | % { $_.Name + " = " + $_.GetRawConstan
 | 584 | Err_MaxNestingDepthExceeded | — | Maximum nesting depth exceeded.  |
 | 588 | Err_MissingImplementationTerminator | — | Could not find the terminator '{0}' for the implementation block. |
 
-## (f) Пробелы (до расширения RU): MessageId без текста ни в одной официальной локали (15)
+## (f) Пробелы (до расширения RU): MessageId без текста в 3.5.22.10 (10)
 
 | MessageId | Key |
 |---|---|
 | 200 | Wrn_PlaceholderNotResolved |
 | 210 | Wrn_InsertSpecialPersistent |
 | 223 | Wrn_CompoRefAssignCompatibilityWarning |
-| 245 | Wrn_MissingObjectForPersistent |
 | 315 | Wrn_StringTooShortForVarInOut |
 | 349 | Wrn_InterfaceInVarInOut |
 | 350 | Wrn_ReferenceToInterface |
-| 362 | Err_InvalidStringSize |
 | 370 | Wrn_InstanceCalledMoreThenOnce |
 | 394 | Wrn_FBExitCalledForStackInstance |
 | 404 | Wrn_CompilerVersionDeprecated |
 | 410 | Wrn_CompatibilityProblemForRefProperty |
-| 508 | Wrn_Ambiguity |
-| 510 | Err_ConfiguredCompilerVersionNotAvailable |
-| 523 | Err_InconsistentUseOfCPPCompatibilityMissingParent |
 
-Эти 15 `MessageId` не имеют текста **ни в одной** локали, включая нейтральный встроенный ресурс main-плагина `_3S.CoDeSys.Compiler35220.Resources.ErrorMessages.resources` (ровно 500 записей). Тексты для них отсутствуют в поставке ⇒ при генерации такого сообщения доступно только имя/код, локализованного текста нет.
+Эти 10 `MessageId` не имеют текста **ни в одной** локали 3.5.22.10, включая нейтральный встроенный ресурс main-плагина `_3S.CoDeSys.Compiler35220.Resources.ErrorMessages.resources` (ровно 500 записей); raise-site/привязки в декомпиле нет (перепроверено верификацией 2026-10-01, `ERROR-CODES-STUDY.md` §6). Два прежних кандидата развязаны той же верификацией: id **245** привязан к ресурсному ключу `Err_MissingObjectForPersistent`, id **362** — к `Wrn_InvalidStringSize`; официальный текст есть во всех 10 локалях. Ещё 3 id (508, 510, 523) — вне диапазона батч-верификации 0–506.
 
-### Ключи ресурса, отсутствующие в enum `MessageId` (9)
+### Ключи ресурса, отсутствующие в enum `MessageId` (9 → 7)
+
+Два ключа развязаны верификацией 2026-10-01 (код привязывает id к ресурсному ключу с другой приставкой, чем имя enum-члена):
+
+- `Err_MissingObjectForPersistent` → id 245 (`Wrn_MissingObjectForPersistent`)
+- `Wrn_InvalidStringSize` → id 362 (`Err_InvalidStringSize`)
+
+Остаются 7 ключей без enum-id:
 
 - Err_GenericNoInitialValueSupported
 - Err_InconsistentUseOfCPPCompatibility_MissingParent
-- Err_MissingObjectForPersistent
 - Err_RelatedPositionInterface
 - Inf_RelatedPositionRecursion
 - Inf_RelatedPositionStackoverflow
 - Info_PersistentMemoryConfiguration
 - PublishSymbolsMustBeSet
-- Wrn_InvalidStringSize
 
 ### WhiteParseTrees (EN, не локализованы, 10 сообщений)
 

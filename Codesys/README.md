@@ -28,16 +28,21 @@
 
 - **Исследование CODESYS завершено** — доки, таблицы, грамматики, декомпил собраны.
   Эти файлы — **эталон**: не переделывать и не править под нашу реализацию.
-- **Архитектура утверждена; S0 выполнен, S1–S5 не реализованы.** Сейчас фронтенд —
-  logos-лексер + PEG (`compiler/parser`); S0 закрыт аудитом, экспериментом и baseline —
-  см. [`parse-tree-s0-experiment.md`](../specs/design/parse-tree-s0-experiment.md).
-- **P0-бэклог открыт** — 17 пунктов; статус каждого — в
-  [`LEXER-GAP-ANALYSIS.md` §13](LEXER-GAP-ANALYSIS.md) (столбец «Статус»).
-  Baseline-прогон 0.246.0 — журнал §15.
-- ⚠ **Ветка `lint-fences` отстаёт от `main`**: на `main` уже есть `CONTINUE` (#1898),
-  `PROPERTY` (#1871), qualifiers на FB/METHOD (#1899), дробные секунды TOD/DT (#1940),
-  CASE-метки по radix (#1922). **Первый шаг сессии — слить `main` в `lint-fences`
-  и перепроверить статусы P0-1/P0-2/P0-8/P0-12** — журнал §15 для них устарел.
+  Каталог `MessageId` верифицирован целиком: **514/514** (412 verified, 2 fixed,
+  пробелы задокументированы) — [`ERROR-CODES-STUDY.md` §6](ERROR-CODES-STUDY.md).
+- **P0-бэклог закрыт на 14/17 пунктов** — P0-1…P0-3, P0-5…P0-7, P0-9…P0-15 и P0-17
+  закрыты тестами. Остаются P0-4/P0-8 (задокументированный дефект взаимодействия
+  с метками JMP, §15.1) и P0-16 (лексер/парсер закрыты, резолвинг `__*` — P1).
+  Статус каждого — [`LEXER-GAP-ANALYSIS.md` §13](LEXER-GAP-ANALYSIS.md)
+  (столбец «Статус»); прогон 2 (0.247.0, `d8ddf54f5`) — журнал §15.
+- **Архитектура утверждена; S0 выполнен, S1 в работе (запланирован), S2–S5 не
+  реализованы.** Сейчас фронтенд — logos-лексер + PEG (`compiler/parser`); S0
+  закрыт аудитом, экспериментом и baseline — см.
+  [`parse-tree-s0-experiment.md`](../specs/design/parse-tree-s0-experiment.md).
+  Следующий этап — S1 (lossless CST и recovery), задача
+  [#1978](https://github.com/ironplc/ironplc/issues/1978).
+- **Гейты**: `cd compiler && just` зелёный; полный итог воркспейса —
+  [`SWARM-REPORT-2026-10-01.md`](SWARM-REPORT-2026-10-01.md).
 
 **Архитектурное решение владельца, 2026-10-01:** развиваем фронтенд IronPLC:
 одно lossless CST на rowan, lowering в существующий `dsl` AST, существующий analyzer
@@ -83,12 +88,14 @@ HIR/IDE/LSP как второй семантический backend. Green/red ro
 
 **Первый рабочий шаг (после обязательного чтения выше):**
 
-1. Слить `main` в `lint-fences`, прогнать `cargo test -p ironplc-parser`;
-   перепроверить P0-1/P0-2/P0-8/P0-12 по журналу §15 и обновить их статус в §13.
+1. `main` слит в `lint-fences`; P0-статусы перепроверены прогоном 2 (журнал §15)
+   и обновлены в §13. Открытый остаток — P0-4/P0-8: сначала фикс взаимодействия
+   с метками JMP (§15.1: `region_closer` и проверка имён с квалификаторами),
+   затем включение в `--dialect codesys`.
 2. Задача по умолчанию — **синтаксический бэклог**: следующий открытый P0-пункт §13,
    ритм «таблица → тесты → реализация → spec conformance» по
    [`syntax-support-guide`](../specs/steering/syntax-support-guide.md), тестовая пирамида — §14.3.
-3. **Архитектура (S0 выполнен, S1 следующий)** — issue
+3. **Архитектура (S0 выполнен, S1 в работе)** — issue
    [#1978](https://github.com/ironplc/ironplc/issues/1978) открыт; порядок — plan PR,
    предрефакторинг отдельными PR, затем core change
    ([development-standards.md](../specs/steering/development-standards.md)).
@@ -99,13 +106,14 @@ HIR/IDE/LSP как второй семантический backend. Green/red ro
 ([S0 Audit](../specs/design/parse-tree-s0-audit.md)), rowan/Salsa-эксперимент,
 выбор парсера (in-tree RD/Pratt на rowan) и baseline
 ([S0 Experiment](../specs/design/parse-tree-s0-experiment.md));
-S1 — **следующий**: полное lossless CST и recovery, задача
-[#1978](https://github.com/ironplc/ironplc/issues/1978); S2 — lowering CST → `dsl`;
+S1 — **в работе (запланирован)**: полное lossless CST и recovery, задача
+[#1978](https://github.com/ironplc/ironplc/issues/1978) открыта, core change
+ещё не начат; S2 — lowering CST → `dsl`;
 S3 — анализ деклараций/тел POU с отслеживанием зависимостей; S4 — общий API snapshots
 для CLI/LSP/MCP/build и редакторских изменений. S5 — локальный reparse только при
 доказанной необходимости. Выходные критерии и владельцы — в единственном
 [архитектурном плане, §5](../specs/design/parse-tree-architecture.md#5-evolution-steps)
-(статус — `partially implemented`: поставлен S0).
+(статус — `partially implemented`: S0 поставлен, S1 запланирован).
 W32 потребляет этот фронтенд, но не владеет им и не блокирует его начало.
 
 **Синтаксический бэклог Ф1–Ф5** продолжается в рамках одной выбранной грамматики;
@@ -121,11 +129,17 @@ S0 фиксирует seam до расширения фронтенда. Дет�
 **Ритм фазы:** слить `main` → таблица → тесты → реализация → spec conformance → обновить статус пункта в §13 и журнал §15.
 **Закрытие фазы:** тесты зелёные + `cd compiler && just` зелёный.
 
-**Definition of Done для синтаксического бэклога:**
+**Definition of Done для синтаксического бэклога (состояние 2026-10-01):**
 
-1. Все **P0-пункты** [`LEXER-GAP-ANALYSIS.md`](LEXER-GAP-ANALYSIS.md) §13 закрыты тестами.
-2. Новые `P####`-коды оформлены по [`ERROR-CODES-STUDY.md`](ERROR-CODES-STUDY.md) §4.
-3. LLM-фенсы не нарушены (no `unwrap/expect/panic` в prod; warnings = deny; `just` зелёный).
+1. **Выполнено для 14/17 пунктов**: P0-1…P0-3, P0-5…P0-7, P0-9…P0-15 и P0-17
+   закрыты тестами (§13); P0-4/P0-8 остаются открытыми (дефект меток JMP, §15.1),
+   у P0-16 закрыты лексер/парсер, резолвинг `__*` на анализаторе вынесен в P1.
+2. **Выполнено**: новые коды P0023/P0024/P0027/P0042 и P4066…P4070 оформлены
+   4-tuple (CSV + страница [`docs/reference/compiler/problems/`](../../docs/reference/compiler/problems/) +
+   код + тест) по [`ERROR-CODES-STUDY.md`](ERROR-CODES-STUDY.md) §4; флаги P0-17
+   описаны в `ironplcc.rst` и в диалектных списках.
+3. **Выполнено**: фенсы не нарушены — no `unwrap/expect/panic` в prod; warnings = deny;
+   `cd compiler && just` зелёный (compile + coverage 93.60 % + clippy + fmt + dupes).
 
 Закрытие P0 не означает доказанные «100 %» всего CODESYS ST: scope, исключения и
 покрытие фиксируются по корпусу и таблицам. Принятый синтаксис не означает готовую
