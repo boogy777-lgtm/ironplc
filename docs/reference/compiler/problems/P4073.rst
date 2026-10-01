@@ -1,0 +1,53 @@
+=====
+P4073
+=====
+
+.. problem-summary:: P4073
+
+This error occurs when the operands of a CODESYS special operator do not fit
+the operator. The operators are ``__NEW``, ``__DELETE``, ``__TYPEOF`` and
+``__XADD``; see :doc:`/reference/extension-library/functions/special-operators`.
+
+The operator is named in the message. What is wrong depends on the operator:
+
+* ``__NEW(T)`` and ``__NEW(T, n)`` take a type as the first operand, an
+  integer as the element count, and are valid only as the value of an
+  assignment. A count is allowed only for an elementary type.
+* ``__DELETE(p)`` takes a pointer.
+* ``__XADD(p, v)`` takes a ``POINTER TO DINT`` as the first operand.
+
+Example
+-------
+
+The following code will generate error P4073:
+
+.. code-block::
+
+   FUNCTION_BLOCK FB_Example
+   VAR
+       count : INT;
+       freed : BOOL;
+   END_VAR
+       freed := __DELETE(count);
+   END_FUNCTION_BLOCK
+
+``count`` is an ``INT``, but ``__DELETE`` frees what a pointer points to.
+
+To fix this error, pass a pointer:
+
+.. code-block::
+
+   FUNCTION_BLOCK FB_Example
+   VAR
+       item : POINTER TO INT;
+       freed : BOOL;
+   END_VAR
+       item := __NEW(INT);
+       freed := __DELETE(item);
+   END_FUNCTION_BLOCK
+
+A call that is accepted here still cannot be compiled to a program:
+``ironplcc compile`` reports :doc:`P9999 <P9999>` for it, because the
+operators have no runtime behaviour yet.
+
+The operators are available when the CODESYS dialect, or ``--allow-special-operators``, is selected.

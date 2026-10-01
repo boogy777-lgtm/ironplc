@@ -189,10 +189,12 @@ pub(crate) fn check(
 /// same shape is, as a whole-aggregate assignment is (P2037): an inline
 /// `ARRAY[1..2] OF DINT` passes for a parameter declared with a named array
 /// type of that shape. An enumeration or a function block instance is only
-/// ever its own type. No composite is accepted for a generic category.
+/// ever its own type. Of the generic categories only `ANY` accepts a
+/// composite, since only it is not limited to elementary types; `SIZEOF(s)`
+/// and `__TYPEOF(s)` take a structure variable.
 fn composite_accepted(types: &TypeEnvironment, expected: &TypeName, id: TypeId) -> bool {
-    if GenericTypeName::try_from(&expected.name).is_ok() {
-        return false;
+    if let Ok(generic) = GenericTypeName::try_from(&expected.name) {
+        return generic == GenericTypeName::Any;
     }
     let (Some(expected), Some(actual)) = (types.get(expected), types.get_by_id(id)) else {
         return false;

@@ -57,6 +57,7 @@ mod rule_program_var_hides_global;
 mod rule_range_limits;
 mod rule_real_literal_range;
 mod rule_ref_to;
+mod rule_special_operator;
 mod rule_stdlib_type_redefinition;
 mod rule_string_encoding_compat;
 mod rule_string_length_range;
@@ -122,6 +123,7 @@ pub use intermediates::enumeration::resolve_ordinal_values;
 pub use intermediates::operator_function_form::{
     operator_function_form, FormOf, OperatorFunctionForm,
 };
+pub use intermediates::special_operator::SpecialOperator;
 pub use semantic_context::{SemanticContext, SemanticContextBuilder};
 pub use type_attributes::TypeAttributes;
 pub use type_category::TypeCategory;
@@ -151,3 +153,5 @@ mod spec_conformance_keyword_function_forms;
 mod spec_conformance_numeric_literals;
 #[cfg(test)]
 mod spec_conformance_pointer_to;
+#[cfg(test)]
+mod spec_conformance_special_operators;

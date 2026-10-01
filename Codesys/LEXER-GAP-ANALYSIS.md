@@ -474,7 +474,7 @@ CODESYS, а не ST-поверхность общего назначения).
 | P0-13 | `\|` как OR | lexer+parser | закрыт (d8ddf54f5) | `tests/whitespace.rs`/`tests/types_and_returns.rs` |
 | P0-14 | escape-идентификаторы `` `…` `` + unicode-идентификаторы + правило «несколько `_` подряд» | lexer+parser | закрыт (d8ddf54f5); unicode — только под `--allow-unicode-identifiers`; `_`-политика: codesys запрещает (`my__var` → P4069), ed3/rusty разрешают | `tests/comments_and_errors.rs`/новый `tests/identifiers.rs`; CODESYS-источник — `ST_GRAMMAR.ebnf:49-54` |
 | P0-15 | `__TRY/__CATCH/__FINALLY/__ENDTRY/__THROW` | lexer+parser+AST+codegen | закрыт (d8ddf54f5) | `tests/try_catch.rs` + e2e |
-| P0-16 | ST-visible special (`__NEW`, `__DELETE`, `__ISVALIDREF`, `__SYSTEM`, `__POOL`, `__TYPEOF`, `__CURRENTTASK`, `__XADD`, …) | lexer+parser+analyzer | частично (d8ddf54f5): лексер/парсер принимают весь ST-visible набор; анализатор не резолвит (`__NEW`/`__DELETE`/`__TYPEOF`/`__XADD` → P4017, `__CURRENTTASK`/`__SYSTEM`/`__POOL` → P4007; `__ISVALIDREF` — OK) — P1 | `tests/special_operators.rs`; внутренние `__*` — не трогать |
+| P0-16 | ST-visible special (`__NEW`, `__DELETE`, `__ISVALIDREF`, `__SYSTEM`, `__POOL`, `__TYPEOF`, `__CURRENTTASK`, `__XADD`, …) | lexer+parser+analyzer+codegen | закрыт (флаг `--allow-special-operators`, диалект codesys; §15 прогон 3): лексер/парсер принимают весь ST-visible набор (`__NEW(T, n)` — тоже); анализатор типизирует `__NEW(T[, n])` → `POINTER TO T`, `__DELETE(p)` → `BOOL`, `__TYPEOF(x)` → `INT`, `__XADD(p, v)` → `DINT`, неверные операнды → P4073; `__CURRENTTASK`/`__SYSTEM`/`__POOL` распознаны и отклонены P4074 (тип приходит из системной библиотеки таргета — в референсе её нет); кодоген отказывает P9999 на `__NEW`/`__DELETE`/`__TYPEOF`/`__XADD` (рантайма нет); `__ISVALIDREF` — OK (лоуэрится в `obj <> NULL`) | `tests/special_operators.rs`, `spec_conformance_special_operators.rs`, `compile_special_operators.rs`; внутренние `__*` — не трогать |
 | P0-17 | `JMP`+метки, `CALC`, `__WAIT`, вложенные комментарии, `DocComment`, pragma-`{IF}` | lexer+parser | закрыт (d8ddf54f5) | `tests/jumps.rs`, `tests/pragmas.rs` (расширить), `tests/comments_and_errors.rs` |
 
 Статусы проверены 2026-10-01 прогоном 2 (`check --dialect codesys`, 0.247.0, `d8ddf54f5`);
@@ -482,9 +482,12 @@ CODESYS, а не ST-поверхность общего назначения).
 P0-4 и P0-8 — конфликт с метками JMP (`xform_statement_labels.rs`, §15); P0-16 — резолвинг
 ST-visible операторов на анализаторе (P1).
 
+Обновление (прогон 3, §15): P0-16 закрыт — анализатор типизирует `__NEW`/`__DELETE`/`__TYPEOF`/
+`__XADD` и отклоняет `__CURRENTTASK`/`__SYSTEM`/`__POOL` явной диагностикой P4074; открытых P0-пунктов нет.
+
 **P1 — семантика для уже принятого синтаксиса.** `THIS^/SUPER^` (P9999), члены `INTERFACE`,
 codegen SFC, `PROPERTY`-доступ, `VAR_STAT/INST/GENERIC`-размещение, `UNION`-память, `PARAMS`,
-`__NEW`-аллокация, TRY-кодоген, `TIME()` и отсутствующие stdlib-операторы, полнота конверсий,
+`__NEW`-аллокация (рантайм; тип уже резолвится), TRY-кодоген, `TIME()` и отсутствующие stdlib-операторы, полнота конверсий,
 namespace-резолвинг.
 
 **P2 — редкое/внутреннее.** position-прагмы, `DocComment`-модель для LSP, READ_ONLY/READ_WRITE
@@ -667,6 +670,35 @@ cd specs && just    # запускать recipe-тела через Git Bash: cd
 | `a := __SYSTEM.some_global;`, `b := __POOL.other;` | FAIL P4007 | P0-16: scope-префиксы не резолвятся — P1 |
 | `CALC(b, fbi(a := 1));`, `__WAIT; __WAIT(b);` | OK | P0-17 закрыт |
 | `/// doc` (DocComment) | OK | P0-17 закрыт |
+
+### 15.0 Прогон 3 (2026-10-01): резолвинг ST-visible операторов (P0-16)
+
+`ironplcc check --dialect codesys`, 0.247.0, после изменения (флаг `--allow-special-operators`
+включён диалектом codesys). Каждый сниппет — `FUNCTION_BLOCK FB_Example` с указанным `VAR` и
+одной строкой тела. Сравнение с прогоном 2 — предпоследний столбец.
+
+| Сниппет (VAR → тело) | Прогон 2 | Прогон 3 | Комментарий |
+|---|---|---|---|
+| `obj : INT` → `obj := __NEW(INT);` | FAIL P4017+P4007 | FAIL P2032 | `__NEW` — указатель; присвоить его `INT` нельзя (верно) |
+| `obj : POINTER TO INT` → `obj := __NEW(INT);` | — | OK | `POINTER TO INT` |
+| `obj : POINTER TO INT` → `obj := __NEW(INT, 4);` | — | OK | форма с количеством элементов |
+| `info : INT` → `info := __TYPEOF(INT);` | FAIL P4017+P4007 | OK | `INT` (референс: `SimpleTypeChecker`) |
+| `result : INT; obj : INT` → `result := __DELETE(obj);` | FAIL P4017 | FAIL P4027+P4073 | `__DELETE` — `BOOL`, операнд не указатель (верно) |
+| `result : BOOL; obj : POINTER TO INT` → `result := __DELETE(obj);` | — | OK | |
+| `result : DINT` → `result := __XADD(1, 2);` | FAIL P4017 | FAIL P4073 | первый операнд должен быть `POINTER TO DINT` (референс: `TypeCheckerVisitor`) |
+| `result : DINT; p : POINTER TO DINT` → `result := __XADD(p, 2);` | — | OK | `DINT` |
+| `result : BOOL; obj : REFERENCE TO INT` → `result := __ISVALIDREF(obj);` | OK | OK | без изменений |
+| `current : INT` → `current := __CURRENTTASK;` | FAIL P4007 | FAIL P4074 | распознан, не поддержан |
+| `a : INT` → `a := __SYSTEM.some_global;` | FAIL P4007 | FAIL P4074 | распознан, не поддержан |
+| `b : INT` → `b := __POOL.other;` | FAIL P4007 | FAIL P4074 | распознан, не поддержан |
+
+Вне диалекта: `ironplcc check --dialect twincat` на `__XADD(p, 2)` — P4017 (операторы не
+включены). `ironplcc compile` на программе с `__NEW(INT)` — P9999 на имени оператора.
+
+Источники типов: `NewExpression._CompiledType` (`POINTER TO T`), `SimpleTypeChecker` (`__DELETE` —
+`BOOL`, `__TYPEOF` — `INT`), `TypeCheckerVisitor` (`__XADD`: `POINTER TO DINT`, `DINT`),
+`TypifierAndCrossReferenceCollector` (`__CURRENTTASK`: `POINTER TO __TaskSpecificInfo` из системной
+библиотеки; поля структуры и сама библиотека `__SYSTEM` в референсе отсутствуют → P4074).
 
 ### 15.1 Найденный дефект взаимодействия (прогон 2) — исправлен 344dc4c82
 

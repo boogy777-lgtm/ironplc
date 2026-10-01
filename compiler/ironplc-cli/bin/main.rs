@@ -382,6 +382,13 @@ struct FileArgs {
     #[arg(long)]
     allow_escaped_identifiers: bool,
 
+    /// Allow the CODESYS special operators `__NEW`, `__DELETE`, `__TYPEOF`
+    /// and `__XADD`. They are typed but not executable; `__CURRENTTASK`,
+    /// `__SYSTEM` and `__POOL` are recognised and reported as unsupported.
+    /// A CODESYS extension, not part of the IEC 61131-3 standard.
+    #[arg(long)]
+    allow_special_operators: bool,
+
     /// Allow identifiers with letters outside the ASCII range. An extension
     /// (a CODESYS scanner option, off there by default too).
     #[arg(long)]
@@ -469,6 +476,7 @@ impl FileArgs {
         options.allow_params_of |= self.allow_params_of;
         options.allow_incomplete_array |= self.allow_incomplete_array;
         options.allow_escaped_identifiers |= self.allow_escaped_identifiers;
+        options.allow_special_operators |= self.allow_special_operators;
         options.allow_unicode_identifiers |= self.allow_unicode_identifiers;
         options.allow_multiple_underscores |= self.allow_multiple_underscores;
         options

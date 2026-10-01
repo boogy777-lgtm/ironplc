@@ -199,3 +199,43 @@ END_FUNCTION_BLOCK";
     let lower_lib = parse_program(lower, &FileId::default(), &options).unwrap();
     assert_eq!(upper_lib, lower_lib);
 }
+
+/// REQ-CS-parser-009: `__NEW(T, n)` parses as a call named `__NEW` with the
+/// type argument followed by the count; `__TYPEOF(T, n)` does not parse.
+#[spec_test(REQ_CS_parser_009)]
+fn parse_when_special_new_with_type_and_count_then_two_arguments() {
+    let value = parse_assigned_expression(
+        "
+FUNCTION_BLOCK FB_Example
+VAR
+    obj : INT;
+END_VAR
+obj := __NEW(INT, 4);
+END_FUNCTION_BLOCK",
+    );
+    let function = cast!(&value.kind, ExprKind::Function);
+    assert_eq!(function.name, Id::from("__NEW"));
+    assert_eq!(function.param_assignment.len(), 2);
+    let count = cast!(
+        &function.param_assignment[1],
+        ParamAssignmentKind::PositionalInput
+    );
+    let constant = cast!(&count.expr.kind, ExprKind::Const);
+    assert!(matches!(constant, ConstantKind::IntegerLiteral(_)));
+}
+
+#[test]
+fn parse_when_special_typeof_with_count_then_syntax_error() {
+    let result = parse_program(
+        "
+FUNCTION_BLOCK FB_Example
+VAR
+    info : INT;
+END_VAR
+info := __TYPEOF(INT, 4);
+END_FUNCTION_BLOCK",
+        &FileId::default(),
+        &CompilerOptions::default(),
+    );
+    assert!(result.is_err());
+}

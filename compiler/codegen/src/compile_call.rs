@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 
-use ironplc_analyzer::{operator_function_form, FormOf};
+use ironplc_analyzer::{operator_function_form, FormOf, SpecialOperator};
 use ironplc_container::opcode;
 use ironplc_dsl::core::{Id, Located};
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
@@ -218,6 +218,16 @@ pub(crate) fn compile_function_call(
             // Check user-defined functions first.
             if let Some(func_info) = ctx.user_functions.get(name.as_str()).cloned() {
                 compile_user_function_call(emitter, ctx, func, &func_info)
+            } else if let Some(operator) = SpecialOperator::named(&func.name) {
+                // `__NEW`, `__DELETE`, `__TYPEOF` and `__XADD` are typed by
+                // the analyzer but have no runtime behaviour here (heap
+                // allocation, type classes, atomic memory access). Refuse
+                // rather than emit code that only looks like them.
+                Err(Diagnostic::not_implemented(Label::span(
+                    func.name.span(),
+                    "CODESYS special operator has no runtime behaviour",
+                ))
+                .with_context("operator", &operator.name().to_string()))
             } else if let Some(conv) = parse_string_conversion(name) {
                 compile_string_conversion(emitter, ctx, func, conv)
             } else if let Some((source, target)) = parse_type_conversion(name) {
