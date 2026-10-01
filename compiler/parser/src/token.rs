@@ -362,6 +362,11 @@ pub enum TokenType {
 
     #[token("BOOL", ignore(case))]
     Bool,
+    // The one-bit type of the CODESYS/TwinCAT dialects
+    // (`--allow-bit-type`). Demoted to Identifier when the flag is off
+    // because `bit` is a legal variable name in IEC 61131-3.
+    #[token("BIT", ignore(case))]
+    Bit,
     #[token("SINT", ignore(case))]
     Sint,
     #[token("INT", ignore(case))]
@@ -648,6 +653,7 @@ impl TokenType {
             TokenType::While => "'WHILE'",
             TokenType::EndWhile => "'END_WHILE'",
             TokenType::Bool => "'BOOL'",
+            TokenType::Bit => "'BIT'",
             TokenType::Sint => "'SINT'",
             TokenType::Int => "'INT'",
             TokenType::Dint => "'DINT'",
@@ -881,6 +887,7 @@ mod tests {
             (While, "WHILE"),
             (EndWhile, "END_WHILE"),
             (Bool, "BOOL"),
+            (Bit, "BIT"),
             (Sint, "SINT"),
             (Int, "INT"),
             (Dint, "DINT"),

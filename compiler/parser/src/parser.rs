@@ -472,7 +472,12 @@ parser! {
       / tok(TokenType::Uint) { IntegerTypeName::UINT }
       / tok(TokenType::Udint) { IntegerTypeName::UDINT }
       / tok(TokenType::Ulint) { IntegerTypeName::ULINT }
-    rule integer_literal() -> IntegerLiteral = data_type:(t:integer_literal_type() tok(TokenType::Hash) {t})? value:(bi:binary_integer() { bi.into() } / oi:octal_integer() { oi.into() } / hi:hex_integer() { hi.into() } / si:signed_integer() { si }) { IntegerLiteral { value, data_type } }
+    rule integer_literal() -> IntegerLiteral = data_type:(t:integer_literal_type() tok(TokenType::Hash) {t})? value:(bi:binary_integer() { bi.into() } / oi:octal_integer() { oi.into() } / hi:hex_integer() { hi.into() } / di:decimal_integer() { di.into() } / si:signed_integer() { si }) { IntegerLiteral { value, data_type } }
+    // A based integer in base 10 (`10#123`). The lexer reads it as the digits
+    // `10`, `#` and the digits of the value, so the rule recognizes the
+    // three adjacent tokens; the base adds nothing to the value. See
+    // specs/design/numeric-literals.md, REQ-NL-parser-010.
+    rule decimal_integer() -> Integer = prefix:tok_eq(TokenType::Digits, "10") tok(TokenType::Hash) digits:tok(TokenType::Digits) {? Integer::new(digits.text.as_str(), SourceSpan::join(&prefix.span, &digits.span)) }
     rule signed_integer__positive() -> SignedInteger = tok(TokenType::Plus)? digits:tok(TokenType::Digits) {? SignedInteger::positive(digits.text.as_str(), digits.span.clone()) }
     rule signed_integer__negative() -> SignedInteger = sign:tok(TokenType::Minus) digits:tok(TokenType::Digits) {? SignedInteger::negative(digits.text.as_str(), SourceSpan::join(&sign.span, &digits.span)) }
     rule signed_integer() -> SignedInteger = signed_integer__positive() / signed_integer__negative()
@@ -516,13 +521,18 @@ parser! {
     // The specification says unsigned_integer, but there is no such rule.
     rule bit_string_literal() -> BitStringLiteral = data_type:(t:bit_string_literal_type() tok(TokenType::Hash) {t})? value:(bi:binary_integer() { bi }/ oi:octal_integer() { oi } / hi:hex_integer() { hi } / ui:integer() { ui } ) { BitStringLiteral { value, data_type } }
     rule boolean_literal() -> BooleanLiteral =
-      // 1 and 0 can be a Boolean, but only with the prefix is it definitely a Boolean
-      tok(TokenType::Bool) tok(TokenType::Hash) id_eq("1") { BooleanLiteral::new(Boolean::True) }
-      / tok(TokenType::Bool) tok(TokenType::Hash) id_eq("0") { BooleanLiteral::new(Boolean::False) }
+      // 1 and 0 can be a Boolean, but only with the prefix is it definitely a Boolean.
+      // They lex as digits, not as identifiers, so they are matched as digits.
+      tok(TokenType::Bool) tok(TokenType::Hash) tok_eq(TokenType::Digits, "1") { BooleanLiteral::new(Boolean::True) }
+      / tok(TokenType::Bool) tok(TokenType::Hash) tok_eq(TokenType::Digits, "0") { BooleanLiteral::new(Boolean::False) }
       / tok(TokenType::Bool) tok(TokenType::Hash) tok(TokenType::True)  { BooleanLiteral::new(Boolean::True) }
       / tok(TokenType::True) { BooleanLiteral::new(Boolean::True) }
       / tok(TokenType::Bool) tok(TokenType::Hash) tok(TokenType::False) { BooleanLiteral::new(Boolean::False) }
       / tok(TokenType::False) { BooleanLiteral::new(Boolean::False) }
+      // The BIT type's literals are the same two digits (`BIT#1`, `BIT#0`);
+      // the token is only a keyword while `allow_bit_type` is set.
+      / tok(TokenType::Bit) tok(TokenType::Hash) tok_eq(TokenType::Digits, "1") { BooleanLiteral::new(Boolean::True) }
+      / tok(TokenType::Bit) tok(TokenType::Hash) tok_eq(TokenType::Digits, "0") { BooleanLiteral::new(Boolean::False) }
 
     // B.1.2.2 Character strings
     // The literal keeps which of the two spellings the source used. A
@@ -644,6 +654,7 @@ parser! {
       numeric_type_name()
       / date_type_name()
       / bit_string_type_name()
+      / one_bit_type_name()
       / tok(TokenType::String) { ElementaryTypeName::STRING }
       / tok(TokenType::WString) { ElementaryTypeName::WSTRING }
       / tok(TokenType::Time) { ElementaryTypeName::TIME }
@@ -655,6 +666,9 @@ parser! {
     rule real_type_name() -> ElementaryTypeName = tok(TokenType::Real) { ElementaryTypeName::REAL } / tok(TokenType::Lreal) { ElementaryTypeName::LREAL }
     rule date_type_name() -> ElementaryTypeName = tok(TokenType::Date) { ElementaryTypeName::DATE } / tok(TokenType::Ldate) { ElementaryTypeName::LDATE } / tok(TokenType::TimeOfDay) { ElementaryTypeName::TimeOfDay } / tok(TokenType::Ltod) { ElementaryTypeName::LTimeOfDay } / tok(TokenType::DateAndTime) { ElementaryTypeName::DateAndTime } / tok(TokenType::Ldt) { ElementaryTypeName::LDateAndTime }
     rule bit_string_type_name() -> ElementaryTypeName = tok(TokenType::Bool) { ElementaryTypeName::BOOL } / tok(TokenType::Byte) { ElementaryTypeName::BYTE } / tok(TokenType::Word) { ElementaryTypeName::WORD } / tok(TokenType::Dword) { ElementaryTypeName::DWORD } / tok(TokenType::Lword) { ElementaryTypeName::LWORD }
+    // The BIT type is not IEC 61131-3; the token exists only while
+    // `allow_bit_type` is set, and is an ordinary identifier otherwise.
+    rule one_bit_type_name() -> ElementaryTypeName = tok(TokenType::Bit) { ElementaryTypeName::BIT }
 
     // B.1.3.2 - Generic type names are implemented above in generic_type_name() rule
 

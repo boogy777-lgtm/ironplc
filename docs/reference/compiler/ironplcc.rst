@@ -314,6 +314,13 @@ Options
    in IEC 61131-3:2013 (Edition 3); without this flag it is an ordinary
    identifier.
 
+``--allow-bit-type``
+   Allow the ``BIT`` one-bit type, as a declaration type (``b : BIT;``) and as
+   a literal prefix (``BIT#0``, ``BIT#1``). IEC 61131-3 has no one-bit
+   elementary type; the compiler stores a ``BIT`` as a ``BOOL``. Without this
+   flag ``bit`` is an ordinary identifier, so a program may use it as a
+   variable name.
+
 ``--policy-string-to-num-non-numeric`` *ALTERNATIVE*
    Select what ``STRING_TO_<numeric>`` treats as convertible when the string
    has non-numeric characters: ``reject`` (the whole string must be a

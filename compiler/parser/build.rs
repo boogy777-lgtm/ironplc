@@ -10,5 +10,8 @@ fn main() {
         "behavior-policies.md",
         // Character string literals (`REQ-SL-parser-*`): `$` escapes.
         "string-literals.md",
+        // Numeric and boolean literals (`REQ-NL-parser-*`): base-10 based
+        // integers, typed boolean digits, and the BIT type.
+        "numeric-literals.md",
     ]);
 }

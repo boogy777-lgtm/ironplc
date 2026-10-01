@@ -2,6 +2,7 @@
 
 use super::common::*;
 use dsl::core::Located;
+use spec_test_macro::spec_test;
 
 #[test]
 fn parse_program_when_complex_bit_string_then_ok() {
@@ -176,6 +177,138 @@ END_FUNCTION";
         },
     ));
     assert_eq!(actual, expected);
+}
+
+/// Options enabling the `BIT` type and its literals (the CODESYS/TwinCAT
+/// one-bit type). The default dialect keeps `bit` an ordinary identifier.
+fn opts_with_bit_type() -> CompilerOptions {
+    CompilerOptions {
+        allow_bit_type: true,
+        ..CompilerOptions::default()
+    }
+}
+
+/// Returns the value of the literal `literal` assigned to a variable.
+fn assigned_value(literal: &str, options: &CompilerOptions) -> ConstantKind {
+    let source = format!(
+        "FUNCTION_BLOCK fb
+VAR
+    x : BOOL;
+END_VAR
+x := {literal};
+END_FUNCTION_BLOCK"
+    );
+    let library = parse_program(&source, &FileId::default(), options).unwrap();
+    let value = extract_assignment_value(&library);
+    let constant = cast!(&value.kind, ExprKind::Const);
+    constant.clone()
+}
+
+/// A based integer in base 10 carries its value in decimal: `10#123` is 123.
+#[spec_test(REQ_NL_parser_010)]
+#[rstest]
+#[case::plain("10#123", 123)]
+#[case::underscore("10#1_000", 1000)]
+#[case::leading_zero("10#007", 7)]
+fn parse_program_when_decimal_based_literal_then_value(
+    #[case] literal: &str,
+    #[case] expected: i128,
+) {
+    let constant = assigned_value(literal, &CompilerOptions::default());
+    let parsed = cast!(constant, ConstantKind::IntegerLiteral);
+    assert_eq!(parsed.value.value.value, expected as u128);
+    assert_eq!(parsed.data_type, None);
+}
+
+#[test]
+fn parse_program_when_decimal_base_and_digits_separated_then_error() {
+    // The base, the `#` and the digits are one lexical unit: a space breaks it.
+    let source = "FUNCTION_BLOCK fb
+VAR
+    x : BOOL;
+END_VAR
+x := 10 #123;
+END_FUNCTION_BLOCK";
+    let result = parse_program(source, &FileId::default(), &CompilerOptions::default());
+    assert!(result.is_err());
+}
+
+/// `BOOL#1` and `BOOL#0` are the typed boolean literals. The digits lex as
+/// digits, not as identifiers, so the rule matches them as digits.
+#[spec_test(REQ_NL_parser_020)]
+#[rstest]
+#[case::one("BOOL#1", Boolean::True)]
+#[case::zero("BOOL#0", Boolean::False)]
+#[case::one_lower_case_prefix("bool#1", Boolean::True)]
+fn parse_program_when_typed_boolean_digit_then_value(
+    #[case] literal: &str,
+    #[case] expected: Boolean,
+) {
+    let constant = assigned_value(literal, &CompilerOptions::default());
+    let parsed = cast!(constant, ConstantKind::Boolean);
+    assert_eq!(parsed.value, expected);
+}
+
+/// The `BIT` type name is only a keyword under `--allow-bit-type`; with the
+/// flag off `bit` stays an ordinary identifier, so it is a legal variable
+/// and type name.
+#[spec_test(REQ_NL_parser_031)]
+#[test]
+fn parse_program_when_bit_type_flag_on_then_elementary_type_name_bit() {
+    let source = "PROGRAM main
+VAR
+    b : BIT;
+END_VAR
+END_PROGRAM";
+    let library = parse_program(source, &FileId::default(), &opts_with_bit_type()).unwrap();
+    let prog = cast!(&library.elements[0], LibraryElementKind::ProgramDeclaration);
+    let init = cast!(
+        &prog.variables[0].initializer,
+        InitialValueAssignmentKind::Simple
+    );
+    assert_eq!(init.type_name, TypeName::from("BIT"));
+}
+
+#[spec_test(REQ_NL_parser_030)]
+#[rstest]
+#[case::one("BIT#1", Boolean::True)]
+#[case::zero("BIT#0", Boolean::False)]
+#[case::lower_case_prefix("bit#0", Boolean::False)]
+fn parse_program_when_bit_literal_then_boolean(
+    #[case] literal: &str,
+    #[case] expected: Boolean,
+) {
+    let constant = assigned_value(literal, &opts_with_bit_type());
+    let parsed = cast!(constant, ConstantKind::Boolean);
+    assert_eq!(parsed.value, expected);
+}
+
+#[spec_test(REQ_NL_parser_031)]
+#[test]
+fn parse_program_when_bit_type_flag_off_then_bit_is_an_identifier() {
+    // A variable may be named `bit` in IEC 61131-3; the default dialect
+    // demotes the keyword so that program keeps parsing.
+    let source = "PROGRAM main
+VAR
+    bit : BOOL;
+END_VAR
+bit := TRUE;
+END_PROGRAM";
+    let library = parse_text(source);
+    let prog = cast!(&library.elements[0], LibraryElementKind::ProgramDeclaration);
+    assert_eq!(prog.variables[0].identifier, VariableIdentifier::new_symbol("bit"));
+}
+
+#[test]
+fn parse_program_when_bit_literal_flag_off_then_error() {
+    let source = "FUNCTION_BLOCK fb
+VAR
+    x : BOOL;
+END_VAR
+x := BIT#1;
+END_FUNCTION_BLOCK";
+    let result = parse_program(source, &FileId::default(), &CompilerOptions::default());
+    assert!(result.is_err());
 }
 
 #[test]

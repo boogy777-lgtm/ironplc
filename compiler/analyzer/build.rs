@@ -16,5 +16,8 @@ fn main() {
         // Constant variable inference (`REQ-CVI-analyzer-*`): which
         // never-written declarations become CONSTANT.
         "constant-variable-inference.md",
+        // Numeric and boolean literals (`REQ-NL-analyzer-*`): what a BIT
+        // declaration resolves to.
+        "numeric-literals.md",
     ]);
 }

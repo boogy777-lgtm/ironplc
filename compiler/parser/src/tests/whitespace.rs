@@ -151,6 +151,14 @@ fn in_program(body: &str) -> String {
     wrap_program(body)
 }
 
+/// Options enabling the `BIT` type and its literals.
+fn with_bit_type() -> CompilerOptions {
+    CompilerOptions {
+        allow_bit_type: true,
+        ..CompilerOptions::default()
+    }
+}
+
 /// A statement in a method body, where `THIS^`/`SUPER^` are meaningful. Same
 /// shape as `parse_in_method` in `this_super.rs`.
 fn in_method(body: &str) -> String {
@@ -377,6 +385,9 @@ fn parse_when_gap_filled_then_same_ast(
     verbatim,
     CompilerOptions::default
 )]
+#[case::based_integer_base("v := 10·#123;", in_program, CompilerOptions::default)]
+#[case::typed_boolean_prefix("r := BOOL·#1;", in_program, CompilerOptions::default)]
+#[case::bit_prefix("r := BIT·#1;", in_program, with_bit_type)]
 fn parse_when_gap_filled_then_rejected(
     #[case] template: &'static str,
     #[case] wrap: fn(&str) -> String,

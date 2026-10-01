@@ -1,5 +1,6 @@
 pub(crate) use dsl::common::{
-    next_block_id, ArrayElementType, CharacterStringLiteral, ConstantKind, DataTypeDeclarationKind,
+    next_block_id, ArrayElementType, Boolean, CharacterStringLiteral, ConstantKind,
+    DataTypeDeclarationKind,
     DeclarationQualifier, EnumeratedSpecificationInit, EnumerationDeclaration,
     FunctionBlockBodyKind, FunctionBlockDeclaration, FunctionDeclaration, FunctionReturnType,
     InitialValueAssignmentKind, LateResolvedInitialValue, LateResolvedInitializer, Library,

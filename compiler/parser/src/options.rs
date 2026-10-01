@@ -499,6 +499,11 @@ define_compiler_options! {
     [Rusty, Codesys, TwinCat],
     allow_enum_base_type,
 
+    "Allow the BIT one-bit type and its typed literals BIT#0 and BIT#1 (CODESYS/TwinCAT extension)",
+    "--allow-bit-type",
+    [Rusty, Codesys, TwinCat],
+    allow_bit_type,
+
     policies {
         "What STRING_TO_<numeric> treats as convertible when the string has non-numeric characters",
         "--policy-string-to-num-non-numeric",

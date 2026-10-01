@@ -66,7 +66,8 @@ Supported Dialects
    ``--allow-bit-string-case-labels``, ``--allow-paren-string-length``,
    ``--allow-struct-initializer-expressions``,
    ``--allow-fb-inheritance``, ``--allow-enum-explicit-values``,
-   ``--allow-enum-base-type``, and ``--allow-continue``.
+   ``--allow-enum-base-type``, ``--allow-continue``, and
+   ``--allow-bit-type``.
 
    **Selects:** ``--policy-string-to-num-non-numeric reject`` and
    ``--policy-string-to-num-failure zero`` — RuSTy rejects a string with
@@ -101,7 +102,8 @@ Supported Dialects
    ``--allow-bit-string-case-labels``, ``--allow-paren-string-length``,
    ``--allow-struct-initializer-expressions``,
    ``--allow-fb-inheritance``, ``--allow-enum-explicit-values``,
-   ``--allow-enum-base-type``, and ``--allow-continue``.
+   ``--allow-enum-base-type``, ``--allow-continue``, and
+   ``--allow-bit-type``.
 
    **Selects:** ``--policy-string-to-num-non-numeric ignore-trailing`` and
    ``--policy-string-to-num-failure zero`` — CODESYS stops parsing at the
@@ -144,7 +146,8 @@ Supported Dialects
    ``--allow-bit-string-case-labels``, ``--allow-paren-string-length``,
    ``--allow-struct-initializer-expressions``,
    ``--allow-fb-inheritance``, ``--allow-enum-explicit-values``,
-   ``--allow-enum-base-type``, and ``--allow-continue``.
+   ``--allow-enum-base-type``, ``--allow-continue``, and
+   ``--allow-bit-type``.
 
    **Selects:** ``--policy-string-to-num-non-numeric ignore-trailing`` and
    ``--policy-string-to-num-failure zero``, as ``codesys``.

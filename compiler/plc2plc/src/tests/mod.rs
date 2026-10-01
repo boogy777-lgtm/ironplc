@@ -7,6 +7,7 @@ mod common;
 
 mod adr;
 mod case;
+mod codesys_literals;
 mod constant_initializers;
 mod continue_statement;
 mod corpus;

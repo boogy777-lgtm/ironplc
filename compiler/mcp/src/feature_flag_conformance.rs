@@ -306,6 +306,14 @@ const FLAG_FIXTURES: &[FlagFixture] = &[
         prereqs: &[],
         source: "PROGRAM main\nVAR i : INT; END_VAR\nFOR i := 1 TO 3 DO\nCONTINUE;\nEND_FOR;\nEND_PROGRAM",
     },
+    // The one-bit BIT type and its literals. With the flag off, BIT demotes
+    // to a plain identifier, so `b : BIT` names an undeclared type; with the
+    // flag on the type resolves (to BOOL) and `BIT#1` is a literal.
+    FlagFixture {
+        key: "allow_bit_type",
+        prereqs: &[],
+        source: "PROGRAM main\nVAR b : BIT; END_VAR\nb := BIT#1;\nEND_PROGRAM",
+    },
 ];
 
 /// Builds an ed2 options object with the given flags enabled.
