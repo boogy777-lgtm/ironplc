@@ -111,7 +111,7 @@ fn action(p: &mut Parser) {
     p.bump();
     declared_name(p, NameClass::Plain);
     p.expect(K::Colon, "`:`");
-    body(p);
+    body(p, true);
     close(p, K::EndAction, "`END_ACTION`");
     p.complete(node, K::ActionDecl);
 }

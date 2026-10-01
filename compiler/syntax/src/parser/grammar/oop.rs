@@ -106,6 +106,7 @@ fn method(p: &mut Parser) {
             closer: K::EndMethod,
             members: false,
             body: Body::Optional,
+            chart: false,
         },
     );
     close(p, K::EndMethod, "`END_METHOD`");
@@ -160,6 +161,7 @@ fn accessor(p: &mut Parser, node_kind: K, closer: K) {
             closer,
             members: false,
             body: Body::Optional,
+            chart: false,
         },
     );
     close(p, closer, "the end of the accessor");

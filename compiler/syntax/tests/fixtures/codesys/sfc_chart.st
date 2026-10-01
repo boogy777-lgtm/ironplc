@@ -1,0 +1,15 @@
+FUNCTION_BLOCK Sequence
+VAR_INPUT go : BOOL; END_VAR
+INITIAL_STEP Idle:
+    Light(N);
+END_STEP
+STEP Running:
+    Light(N, lit);
+    Pulse(SD, T#2s);
+END_STEP
+TRANSITION Start (PRIORITY := 1) FROM Idle TO Running := go; END_TRANSITION
+TRANSITION FROM Running TO Idle := NOT go; END_TRANSITION
+ACTION Light:
+    lit := TRUE;
+END_ACTION
+END_FUNCTION_BLOCK

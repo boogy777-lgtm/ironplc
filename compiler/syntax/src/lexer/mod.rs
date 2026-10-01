@@ -63,15 +63,38 @@ const BACKTICK_QUOTED: Quoted = Quoted {
     unterminated: "unterminated escaped identifier",
 };
 
-/// Tokenizes `source` completely: the returned tokens tile `[0, len)`.
+/// The lexer settings that change which bytes a token covers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LexOptions {
+    /// A `(* *)` comment ends at the `*)` that matches its own `(*`, so an
+    /// inner `(*` needs its own `*)`. Without it the comment ends at the first
+    /// `*)`. A `/* */` comment never nests.
+    pub nested_comments: bool,
+}
+
+impl Default for LexOptions {
+    fn default() -> Self {
+        LexOptions {
+            nested_comments: true,
+        }
+    }
+}
+
+/// Tokenizes `source` completely: the returned tokens tile `[0, len)`. Block
+/// comments nest, which is the reading that never splits a comment.
 pub fn lex(source: &str) -> (Vec<Token<'_>>, Vec<SyntaxError>) {
+    lex_with(source, LexOptions::default())
+}
+
+/// Like [`lex`], with the dialect's lexical settings.
+pub fn lex_with(source: &str, options: LexOptions) -> (Vec<Token<'_>>, Vec<SyntaxError>) {
     let mut cursor = Cursor::new(source);
     let mut tokens = Vec::new();
     let mut errors = Vec::new();
 
     while !cursor.is_at_end() {
         let start = cursor.pos();
-        let (mut kind, mut message) = scan_token(&mut cursor);
+        let (mut kind, mut message) = scan_token(&mut cursor, options);
         if cursor.pos() == start {
             // Unreachable by construction; guarantees progress regardless.
             cursor.bump_char();
@@ -97,7 +120,7 @@ fn range_of(start: usize, end: usize) -> TextRange {
 }
 
 /// Scans exactly one token at the cursor.
-fn scan_token(cursor: &mut Cursor<'_>) -> Scan {
+fn scan_token(cursor: &mut Cursor<'_>, options: LexOptions) -> Scan {
     let Some(byte) = cursor.peek() else {
         return error("unexpected end of input");
     };
@@ -109,14 +132,14 @@ fn scan_token(cursor: &mut Cursor<'_>) -> Scan {
             cursor,
             SyntaxKind::BlockComment,
             ("/*", "*/"),
-            true,
+            false,
             "unterminated block comment",
         ),
         b'(' if cursor.peek_at(1) == Some(b'*') => scan_delimited(
             cursor,
             SyntaxKind::BlockComment,
             ("(*", "*)"),
-            true,
+            options.nested_comments,
             "unterminated block comment",
         ),
         b'{' => scan_delimited(

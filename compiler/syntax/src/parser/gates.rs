@@ -74,21 +74,6 @@ fn is_c_style_comment(token: &Token<'_>) -> bool {
     }
 }
 
-/// A `(* *)` comment that holds an inner `(*`. The lexer always nests; a
-/// dialect without nesting ends the comment at the first `*)`.
-fn is_nested_comment(token: &Token<'_>) -> bool {
-    token.kind == SyntaxKind::BlockComment
-        && token.text.starts_with("(*")
-        && token.text.get(2..).is_some_and(|rest| rest.contains("(*"))
-}
-
-/// A `/* */` comment that holds an inner `/*`. No dialect nests these.
-fn is_nested_c_comment(token: &Token<'_>) -> bool {
-    token.kind == SyntaxKind::BlockComment
-        && token.text.starts_with("/*")
-        && token.text.get(2..).is_some_and(|rest| rest.contains("/*"))
-}
-
 fn is_partial_access(token: &Token<'_>) -> bool {
     token.kind == SyntaxKind::PartialAccess
 }
@@ -199,16 +184,6 @@ const GATES: &[Gate] = &[
         message: "C-style comments are not enabled in this dialect",
     },
     Gate {
-        find: |site| on_token(site, is_nested_comment),
-        enabled: |options| options.allow_nested_comments,
-        message: "nested comments are not enabled in this dialect",
-    },
-    Gate {
-        find: |site| on_token(site, is_nested_c_comment),
-        enabled: |_| false,
-        message: "`/* */` comments do not nest",
-    },
-    Gate {
         find: |site| on_token(site, |token| token.kind == SyntaxKind::Pragma),
         enabled: |options| options.allow_pragmas,
         message: "pragmas are not enabled in this dialect",
@@ -316,20 +291,8 @@ mod tests {
     }
 
     #[test]
-    fn gate_errors_when_nested_block_comment_then_only_without_the_nesting_flag() {
-        let source = "(* a (* b *) c *)";
-        assert_eq!(messages(source, &ParseOptions::default()).len(), 1);
-        assert!(messages(source, &ParseOptions::all()).is_empty());
-    }
-
-    #[test]
     fn gate_errors_when_plain_block_comment_then_no_error() {
         assert!(messages("(* a *)", &ParseOptions::default()).is_empty());
-    }
-
-    #[test]
-    fn gate_errors_when_nested_c_comment_then_error_in_every_dialect() {
-        assert_eq!(messages("/* a /* b */ c */", &ParseOptions::all()).len(), 1);
     }
 
     #[test]

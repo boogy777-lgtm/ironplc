@@ -21,7 +21,7 @@ use self::options::ParseOptions;
 use self::state::Parser;
 use crate::cst::build_green;
 use crate::error::SyntaxError;
-use crate::lexer::lex;
+use crate::lexer::{lex_with, LexOptions};
 use crate::syntax_kind::{SyntaxKind, SyntaxNode};
 
 /// The result of a parse: the tree and every syntax error found.
@@ -69,7 +69,10 @@ pub fn parse_source_file(source: &str, options: &ParseOptions) -> Parse {
 }
 
 fn parse_with(source: &str, options: &ParseOptions, entry: impl FnOnce(&mut Parser)) -> Parse {
-    let (tokens, mut errors) = lex(source);
+    let lexing = LexOptions {
+        nested_comments: options.allow_nested_comments,
+    };
+    let (tokens, mut errors) = lex_with(source, lexing);
     errors.extend(gates::gate_errors(&tokens, options));
 
     let mut parser = Parser::new(&tokens, *options);

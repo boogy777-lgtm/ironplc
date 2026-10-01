@@ -213,8 +213,18 @@ fn lex_when_unterminated_block_comment_then_error_token_covers_rest() {
 }
 
 #[test]
-fn lex_when_unterminated_nested_comment_then_error_token() {
+fn lex_when_unbalanced_nested_comment_then_it_ends_at_the_first_close() {
+    // The inner opener never closes, so the comment ends at the first `*)`,
+    // as the legacy pipeline reads it, and the rest is ordinary tokens.
     let (tokens, errors) = lex("(* a (* b *) c");
+    assert_eq!(tokens[0].kind, K::BlockComment);
+    assert_eq!(tokens[0].text, "(* a (* b *)");
+    assert_eq!(errors, vec![]);
+}
+
+#[test]
+fn lex_when_nested_comment_has_no_close_at_all_then_error_token() {
+    let (tokens, errors) = lex("(* a (* b c");
     assert_eq!(tokens.len(), 1);
     assert_eq!(tokens[0].kind, K::ErrorToken);
     assert_eq!(errors.len(), 1);
@@ -448,4 +458,29 @@ fn parse_source_file_when_malformed_input_then_root_text_still_equals_source() {
     let parsed = parse_source_file(source, &ParseOptions::default());
     assert_eq!(parsed.root.text().to_string(), source);
     assert!(parsed.errors.len() >= 2, "{:?}", parsed.errors);
+}
+
+#[test]
+fn lex_with_when_nesting_off_then_comment_ends_at_first_close() {
+    use ironplc_syntax::lexer::{lex_with, LexOptions};
+    let (tokens, errors) = lex_with(
+        "(* a (* b *) c *)",
+        LexOptions {
+            nested_comments: false,
+        },
+    );
+    assert_eq!(tokens[0].kind, K::BlockComment);
+    assert_eq!(tokens[0].text, "(* a (* b *)");
+    assert_eq!(errors, vec![]);
+    // The rest is ordinary tokens: the name `c`, then `*` and `)`.
+    assert!(tokens.iter().any(|token| token.text == "c"));
+    let joined: String = tokens.iter().map(|token| token.text).collect();
+    assert_eq!(joined, "(* a (* b *) c *)");
+}
+
+#[test]
+fn lex_with_when_c_style_comment_holds_an_opener_then_it_never_nests() {
+    let (tokens, errors) = lex("/* a /* b */ c");
+    assert_eq!(tokens[0].text, "/* a /* b */");
+    assert_eq!(errors, vec![]);
 }

@@ -56,12 +56,15 @@ pub(super) struct Layout {
     /// `METHOD` and `PROPERTY` may follow the body.
     pub members: bool,
     pub body: Body,
+    /// The body may be a sequential function chart: a program, a function
+    /// block or an action, not a function, a method or an accessor.
+    pub chart: bool,
 }
 
 /// A body: a sequential function chart if it starts with `INITIAL_STEP`,
 /// otherwise a statement list.
-pub(super) fn body(p: &mut Parser) {
-    if p.at(K::InitialStep) {
+pub(super) fn body(p: &mut Parser, chart: bool) {
+    if chart && p.at(K::InitialStep) {
         sfc::chart(p);
     } else {
         statement_list(p, ListEnd::Block, false);
@@ -83,7 +86,7 @@ pub(super) fn sections(p: &mut Parser, layout: &Layout) {
             p.bump_as_error("this keyword does not belong here");
         } else {
             order.enter(p, BODY);
-            body(p);
+            body(p, layout.chart);
         }
         if p.position() == before {
             p.bump_as_error("unexpected input");
@@ -106,6 +109,7 @@ pub(super) fn program(p: &mut Parser) {
             closer: K::EndProgram,
             members: false,
             body: Body::Optional,
+            chart: true,
         },
     );
     close(p, K::EndProgram, "`END_PROGRAM`");
@@ -136,6 +140,7 @@ pub(super) fn function(p: &mut Parser) {
             closer: K::EndFunction,
             members: false,
             body: Body::Required,
+            chart: false,
         },
     );
     close(p, K::EndFunction, "`END_FUNCTION`");
@@ -168,6 +173,7 @@ pub(super) fn function_block(p: &mut Parser) {
             closer: K::EndFunctionBlock,
             members: true,
             body: Body::Optional,
+            chart: true,
         },
     );
     close(p, K::EndFunctionBlock, "`END_FUNCTION_BLOCK`");

@@ -21,6 +21,7 @@ mod expressions;
 mod initializers;
 mod literals;
 mod oop;
+mod positions;
 mod pou;
 mod sfc;
 mod source_file;

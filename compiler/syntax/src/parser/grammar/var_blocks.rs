@@ -10,13 +10,15 @@
 //! A block's declarations are `names [AT address] : type [:= value] ;`. What
 //! differs between blocks is a [`Shape`]: whether the names may be the
 //! contextual words, a location, an edge qualifier or an initial value is
-//! allowed. The access and instance-initialisation blocks of a configuration
-//! have their own forms.
+//! allowed, and which kinds of type the block accepts (the position table in
+//! `positions`). The access and instance-initialisation blocks of a
+//! configuration have their own forms.
 
 use super::common::{declared_name, item_terminator, name_list, skip_declaration, NameClass};
 use super::expressions::{type_ref, variable};
 use super::initializers::initializer;
-use super::types::{type_spec, VARIABLE};
+use super::positions::{self, Context, Spec, COMPLETE_ADDRESS, INCOMPLETE_ADDRESS};
+use super::types::type_spec;
 use crate::parser::recovery::{BLOCK_END, VAR_OPENERS};
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
@@ -33,35 +35,44 @@ pub(super) struct Shape {
     initial: bool,
     /// The declaration may stop after the `:`.
     optional_type: bool,
+    /// The block declares one variable at a time.
+    single: bool,
+    /// The kinds of type the block accepts.
+    context: Context,
 }
 
-const fn shape(names: NameClass, located: bool, initial: bool) -> Shape {
+const fn shape(names: NameClass, located: bool, initial: bool, context: Context) -> Shape {
     Shape {
         names,
         located,
         edge: false,
         initial,
         optional_type: false,
+        single: false,
+        context,
     }
 }
 
 /// `VAR_INPUT`: variables, a location, and edge detection.
 const INPUT: Shape = Shape {
     edge: true,
-    ..shape(NameClass::Variable, true, true)
+    ..shape(NameClass::Variable, true, true, positions::VARIABLES)
 };
 /// `VAR`, `VAR_OUTPUT`: variables with a location and a value.
-const LOCATED: Shape = shape(NameClass::Variable, true, true);
+const LOCATED: Shape = shape(NameClass::Variable, true, true, positions::VARIABLES);
 /// `VAR_TEMP` and the other blocks without a location.
-const PLAIN: Shape = shape(NameClass::Variable, false, true);
+const PLAIN: Shape = shape(NameClass::Variable, false, true, positions::TEMPORARIES);
 /// `VAR_IN_OUT`: the variable is another's, so it has no value.
-const BORROWED: Shape = shape(NameClass::Variable, false, false);
+const BORROWED: Shape = shape(NameClass::Variable, false, false, positions::BORROWED);
 /// `VAR_EXTERNAL`: a global declared again, so it has no value.
-const EXTERNAL: Shape = shape(NameClass::Plain, false, false);
+const EXTERNAL: Shape = Shape {
+    single: true,
+    ..shape(NameClass::Plain, false, false, positions::EXTERNAL)
+};
 /// `VAR_GLOBAL`: a name or a location alone, and the type may be left out.
 const GLOBAL: Shape = Shape {
     optional_type: true,
-    ..shape(NameClass::Plain, true, true)
+    ..shape(NameClass::Plain, true, true, positions::GLOBAL)
 };
 
 /// How a block's items are written.
@@ -218,9 +229,7 @@ pub(super) fn var_block(p: &mut Parser, scope: Scope) {
         return;
     };
     let allowed = scope.rules().iter().find(|rule| rule.opener == opener);
-    let Some(rule) = allowed
-        .or_else(|| ANY.iter().find(|rule| rule.opener == opener))
-    else {
+    let Some(rule) = allowed.or_else(|| ANY.iter().find(|rule| rule.opener == opener)) else {
         return;
     };
     let node = p.start();
@@ -231,7 +240,10 @@ pub(super) fn var_block(p: &mut Parser, scope: Scope) {
         ));
     }
     p.bump();
-    if let Some(qualifier) = p.nth(0).filter(|kind| p.at(*kind) && QUALIFIERS.contains(kind)) {
+    if let Some(qualifier) = p
+        .nth(0)
+        .filter(|kind| p.at(*kind) && QUALIFIERS.contains(kind))
+    {
         if !rule.qualifiers.contains(&qualifier) {
             p.error("this qualifier is not allowed on this variable block");
         }
@@ -273,42 +285,78 @@ fn items(p: &mut Parser, at_least_one: bool, mut item: impl FnMut(&mut Parser)) 
 fn declaration(p: &mut Parser, shape: Shape) {
     let node = p.start();
     let no_name = shape.located && p.at(K::At);
-    if !no_name && !name_list(p, shape.names) {
-        skip_declaration(p);
-        p.abandon(node);
-        return;
+    let mut names = 0usize;
+    if !no_name {
+        match name_list(p, shape.names) {
+            Some(count) => names = count,
+            None => {
+                skip_declaration(p);
+                p.abandon(node);
+                return;
+            }
+        }
     }
-    if shape.located && p.at(K::At) {
-        location(p);
+    let located = shape.located && p.at(K::At);
+    let mut address = None;
+    if located {
+        if names > 1 {
+            p.error("a located variable has one name");
+        }
+        address = Some(location(p));
+    }
+    if shape.single && names > 1 {
+        p.error("this variable block declares one variable at a time");
     }
     if p.expect(K::Colon, "`:`") && !(shape.optional_type && p.at(K::Semicolon)) {
-        type_spec(p, VARIABLE);
-        if shape.edge && p.at_any(&[K::REdge, K::FEdge]) {
+        let context = match address {
+            Some(Address::Incomplete) => shape.context.located(INCOMPLETE_ADDRESS),
+            Some(Address::Complete) => shape.context.located(COMPLETE_ADDRESS),
+            None => shape.context,
+        };
+        let is_bool = p.at(K::Bool);
+        let spec = type_spec(p, &context);
+        let edge = shape.edge
+            && is_bool
+            && spec == Spec::Elementary
+            && p.at_any(&[K::REdge, K::FEdge]);
+        if edge {
             let edge = p.start();
             p.bump();
             p.complete(edge, K::EdgeSpec);
-        }
-        if p.at(K::Assignment) {
+        } else if p.at(K::Assignment) {
             if !shape.initial {
                 p.error("an initial value is not allowed on this variable block");
             }
-            initializer(p);
+            initializer(p, context.initial(spec));
         }
     }
     p.complete(node, K::VarDecl);
     item_terminator(p);
 }
 
+/// A location: a complete address or one the program completes (`%I*`).
+#[derive(Clone, Copy)]
+enum Address {
+    Complete,
+    Incomplete,
+}
+
 /// `AT %address`, a complete address or an incomplete one (`%I*`).
-fn location(p: &mut Parser) {
+fn location(p: &mut Parser) -> Address {
     let node = p.start();
     p.bump();
+    let address = if p.at(K::DirectAddressIncomplete) {
+        Address::Incomplete
+    } else {
+        Address::Complete
+    };
     if p.at(K::DirectAddress) || p.at(K::DirectAddressIncomplete) {
         p.bump();
     } else {
         p.error("expected a direct address");
     }
     p.complete(node, K::Location);
+    address
 }
 
 /// `name : path : type [READ_ONLY | READ_WRITE] ;`
@@ -320,7 +368,12 @@ fn access_declaration(p: &mut Parser) {
         return;
     }
     if p.expect(K::Colon, "`:`") {
-        access_path(p);
+        if p.at(K::DirectAddress) {
+            p.error("a path starts with a name");
+        }
+        if variable(p).is_none() {
+            p.error("expected the path of a variable");
+        }
         if p.expect(K::Colon, "`:`") {
             type_ref(p);
             if p.at_any(&[K::ReadOnly, K::ReadWrite]) {
@@ -332,22 +385,19 @@ fn access_declaration(p: &mut Parser) {
     item_terminator(p);
 }
 
-/// A path to a variable: `a.b.c`, `%IX0.1`, or `resource.%IX0.1`.
-fn access_path(p: &mut Parser) {
-    if p.name_at(0) && p.nth_at(1, K::Period) && p.nth_at(2, K::DirectAddress) {
-        let node = p.start();
-        p.bump_n(3);
-        p.complete(node, K::DirectAddressExpr);
-    } else if variable(p).is_none() {
-        p.error("expected a variable path");
-    }
-}
-
 /// `resource.program.path [AT address] : type [:= value] ;`
 fn instance_initialization(p: &mut Parser) {
     let node = p.start();
+    // A resource, a program and at least one more name.
+    let path = p.name_at(0)
+        && p.nth_at(1, K::Period)
+        && p.name_at(2)
+        && p.nth_at(3, K::Period)
+        && p.name_at(4);
+    if !path {
+        p.error("expected the path `resource.program.variable`");
+    }
     if variable(p).is_none() {
-        p.error("expected the path of an instance");
         skip_declaration(p);
         p.abandon(node);
         return;
@@ -356,9 +406,9 @@ fn instance_initialization(p: &mut Parser) {
         location(p);
     }
     if p.expect(K::Colon, "`:`") {
-        type_spec(p, VARIABLE);
+        let spec = type_spec(p, &positions::INSTANCE);
         if p.at(K::Assignment) {
-            initializer(p);
+            initializer(p, positions::INSTANCE.initial(spec));
         }
     }
     p.complete(node, K::InstanceInit);

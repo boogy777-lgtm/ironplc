@@ -36,8 +36,10 @@ pub(super) fn scan_line_comment(cursor: &mut Cursor<'_>) -> Scan {
 }
 
 /// A construct between `open` and `close`. With `nested`, an inner `open`
-/// needs its own `close`. Unterminated input becomes an error token covering
-/// the rest of the source.
+/// needs its own `close`. A nested construct that never balances ends at its
+/// first `close` instead, as the legacy pipeline reads it, so one unbalanced
+/// inner opener does not swallow the rest of the source. Unterminated input
+/// becomes an error token covering the rest of the source.
 pub(super) fn scan_delimited(
     cursor: &mut Cursor<'_>,
     kind: SyntaxKind,
@@ -45,12 +47,15 @@ pub(super) fn scan_delimited(
     nested: bool,
     unterminated: &'static str,
 ) -> Scan {
+    let start = cursor.pos();
     cursor.bump_n(open.len());
     let mut depth = 1usize;
+    let mut inner_opened = false;
     while !cursor.is_at_end() {
         if nested && cursor.starts_with(open) {
             cursor.bump_n(open.len());
             depth += 1;
+            inner_opened = true;
         } else if cursor.starts_with(close) {
             cursor.bump_n(close.len());
             depth -= 1;
@@ -60,6 +65,10 @@ pub(super) fn scan_delimited(
         } else {
             cursor.bump();
         }
+    }
+    if nested && inner_opened {
+        cursor.set_pos(start);
+        return scan_delimited(cursor, kind, (open, close), false, unterminated);
     }
     error(unterminated)
 }

@@ -38,18 +38,21 @@ pub(super) fn declared_name(p: &mut Parser, class: NameClass) -> bool {
     true
 }
 
-/// `name {, name}`. Returns false when the first name is missing.
-pub(super) fn name_list(p: &mut Parser, class: NameClass) -> bool {
+/// `name {, name}`. Returns how many names there are, or `None` when the first
+/// one is missing.
+pub(super) fn name_list(p: &mut Parser, class: NameClass) -> Option<usize> {
     if !declared_name(p, class) {
-        return false;
+        return None;
     }
+    let mut count = 1;
     while p.at(K::Comma) {
         p.bump();
         if !declared_name(p, class) {
             break;
         }
+        count += 1;
     }
-    true
+    Some(count)
 }
 
 /// A count or length: an integer, or the name of a constant.
@@ -107,6 +110,17 @@ pub(super) fn skip_declaration(p: &mut Parser) {
 /// The `;` that ends an item of a declaration list. When it is missing the
 /// item's remainder is skipped.
 pub(super) fn item_terminator(p: &mut Parser) {
+    terminator(p, false);
+}
+
+/// Like [`item_terminator`], for an item that may omit its `;` where the
+/// dialect allows missing semicolons: the legacy pipeline inserts one after
+/// `END_STRUCT`, which ends a type declaration.
+pub(super) fn terminator(p: &mut Parser, may_omit: bool) {
+    if may_omit && p.options.allow_missing_semicolon {
+        p.eat(K::Semicolon);
+        return;
+    }
     if !p.eat(K::Semicolon) {
         p.error("expected `;`");
         // The next item starts right here: leave it.

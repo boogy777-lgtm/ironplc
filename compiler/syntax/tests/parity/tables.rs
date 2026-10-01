@@ -570,6 +570,8 @@ const NO_TERMINATOR_AT_END: &str = "the legacy pipeline inserts the missing `;` 
 const SECOND_END_KEYWORD: &str = "the legacy terminator insertion handles an END_* keyword that directly follows another END_* keyword without re-arming itself, so the second one gets no `;` when the source omits it; the new parser makes the `;` optional after every END_* keyword";
 const MARKER_AFTER_STATEMENT: &str = "the legacy grammar accepts __BEGIN_IMPLEMENTATION only where the previous list item left no trivia unconsumed, so a marker after a statement and a space is rejected; the new parser accepts the marker as a list item anywhere";
 const LONE_CR: &str = "a lone CR is a line break in the lossless lexer (old Mac line endings); the legacy lexer reports it as an unexpected token";
+const PRAGMA_CONTENT: &str = "the legacy pipeline tokenises the inside of a pragma and rejects a character it does not know; the CST keeps a pragma as one trivia token and does not examine its text";
+const OSCAT_RANGED_COMMENT: &str = "the legacy preprocessor blanks the text between an OSCAT ranged-comment marker pair `(*@KEY@:NAME*)` and its `END_NAME` marker before lexing; the CST keeps those bytes and does not evaluate them (design: parse-tree S0 audit, finding F1)";
 const PRAGMA_IF: &str = "conditional-compilation pragmas ({IF}, {END_IF}) are evaluated by a separate legacy pass that drops untaken branches and reports unbalanced or malformed ones; the CST keeps every pragma as trivia and does not evaluate it";
 
 const fn exception(
@@ -667,4 +669,131 @@ pub const BODY_EXCEPTIONS: &[Exception] = &[
     ),
     accepted_on_purpose(Kind::Statements, " {IF TRUE} x := 1; ", PRAGMA_IF),
     accepted_on_purpose(Kind::Statements, " {IF} x := 1; {END_IF} ", PRAGMA_IF),
+];
+
+/// Differences on whole files, against the legacy parser.
+pub const FILE_EXCEPTIONS: &[Exception] = &[accepted_file(
+    "../resources/test/oscat.st",
+    true,
+    OSCAT_RANGED_COMMENT,
+)];
+
+/// The legacy parser accepts the file `name` and the new one rejects it, on
+/// purpose.
+const fn accepted_file(name: &'static str, legacy: bool, reason: &'static str) -> Exception {
+    Exception {
+        kind: Kind::File,
+        snippet: name,
+        preset: None,
+        legacy,
+        basis: Basis::Deliberate,
+        reason,
+    }
+}
+
+
+/// Differences in the declarations lifted from the legacy parser tests.
+pub const LEGACY_DECLARATION_EXCEPTIONS: &[Exception] = &[
+    accepted_on_purpose(
+        Kind::Declarations,
+        "PROGRAM p\rVAR x : INT; END_VAR\rx := 1;\rEND_PROGRAM\r",
+        LONE_CR,
+    ),
+    accepted_on_purpose(
+        Kind::Declarations,
+        "PROGRAM main VAR x : INT; END_VAR {END_IF} x := 1; END_PROGRAM",
+        PRAGMA_IF,
+    ),
+    accepted_on_purpose(
+        Kind::Declarations,
+        "PROGRAM main VAR x : INT; END_VAR {IF COMPILERVERSION >= 3.5} x := 1; {END_IF} END_PROGRAM",
+        PRAGMA_IF,
+    ),
+    accepted_on_purpose(
+        Kind::Declarations,
+        "PROGRAM main VAR x : INT; END_VAR {IF TRUE} x := 1; END_PROGRAM",
+        PRAGMA_IF,
+    ),
+    accepted_on_purpose(
+        Kind::Declarations,
+        "PROGRAM main VAR x : INT; END_VAR {IF} x := 1; {END_IF} END_PROGRAM",
+        PRAGMA_IF,
+    ),
+    accepted_on_purpose(
+        Kind::Declarations,
+        "TYPE {a ? b}\n T : INT;\nEND_TYPE\n",
+        PRAGMA_CONTENT,
+    ),
+];
+/// The legacy parser accepts `snippet` and the new one rejects it, on purpose.
+const fn rejected_on_purpose(kind: Kind, snippet: &'static str, reason: &'static str) -> Exception {
+    Exception {
+        kind,
+        snippet,
+        preset: None,
+        legacy: true,
+        basis: Basis::Deliberate,
+        reason,
+    }
+}
+
+const LEGACY_ABSTRACT_LABEL: &str = "the legacy label pass does not count the ABSTRACT keyword as a qualifier word, so after `PROPERTY ABSTRACT` or `METHOD ABSTRACT` it reads the declared name followed by `:` as a statement label and rejects the declaration; the CST reads the name by its position in the declaration";
+const LEGACY_BARE_NAME_INITIAL: &str = "the legacy grammar cannot tell a named constant from an enumeration value after an elementary type, so it rejects `x : INT := name`; the CST accepts any expression and leaves the meaning to analysis";
+const LEGACY_STRING_WIDTH: &str = "the legacy grammar requires a variable's string value to use the declared width's delimiter; the CST accepts either and leaves the width to analysis";
+const LEGACY_EMPTY_LIST: &str = "the legacy grammar accepts an empty parenthesised list or an empty bound list where a type needs at least one value or range; the CST reports it";
+const LEGACY_NAMED_GLOBAL_LOCATION: &str = "the legacy global-variable rule takes the name alone and then fails at `AT`, so a global variable with both a name and a location is rejected; the CST accepts the standard `name AT %address : type`";
+const LEGACY_DEMOTED_REF_TO: &str = "without `REF_TO` as a keyword the legacy grammar reads `REF_TO INT := NULL` as an enumeration type named REF_TO with the base type INT and the default NULL; the CST reads `REF_TO` as a type name and rejects the extra words";
+
+/// Differences in the declaration table.
+pub const DECLARATION_EXCEPTIONS: &[Exception] = &[
+    accepted_on_purpose(
+        Kind::Declarations,
+        "FUNCTION_BLOCK fb PROPERTY ABSTRACT p : STRING[4] END_PROPERTY END_FUNCTION_BLOCK",
+        LEGACY_ABSTRACT_LABEL,
+    ),
+    accepted_on_purpose(
+        Kind::Declarations,
+        "FUNCTION_BLOCK fb PROPERTY ABSTRACT p : INT END_PROPERTY END_FUNCTION_BLOCK",
+        LEGACY_ABSTRACT_LABEL,
+    ),
+    accepted_on_purpose(
+        Kind::Declarations,
+        "FUNCTION_BLOCK fb METHOD ABSTRACT m : INT END_METHOD END_FUNCTION_BLOCK",
+        LEGACY_ABSTRACT_LABEL,
+    ),
+    accepted_on_purpose(
+        Kind::Declarations,
+        "PROGRAM p VAR x : INT := y; END_VAR END_PROGRAM",
+        LEGACY_BARE_NAME_INITIAL,
+    ),
+    accepted_on_purpose(
+        Kind::Declarations,
+        "PROGRAM p VAR x : STRING[10] := \"abc\"; END_VAR END_PROGRAM",
+        LEGACY_STRING_WIDTH,
+    ),
+    rejected_on_purpose(
+        Kind::Declarations,
+        "PROGRAM p VAR x : (); END_VAR END_PROGRAM",
+        LEGACY_EMPTY_LIST,
+    ),
+    rejected_on_purpose(
+        Kind::Declarations,
+        "PROGRAM p VAR x : ARRAY[] OF INT; END_VAR END_PROGRAM",
+        LEGACY_EMPTY_LIST,
+    ),
+    accepted_on_purpose(
+        Kind::Declarations,
+        "VAR_GLOBAL g AT %MW0 : INT; END_VAR",
+        LEGACY_NAMED_GLOBAL_LOCATION,
+    ),
+    accepted_on_purpose(
+        Kind::Declarations,
+        "VAR_GLOBAL g AT %I* : INT; END_VAR",
+        LEGACY_NAMED_GLOBAL_LOCATION,
+    ),
+    rejected_on_purpose(
+        Kind::Declarations,
+        "TYPE t : REF_TO INT := NULL; END_TYPE",
+        LEGACY_DEMOTED_REF_TO,
+    ),
 ];

@@ -1,0 +1,7 @@
+PROGRAM P
+VAR x : INT; END_VAR
+END_VAR
+x := 1;
+IF x > 0 THEN
+    x := 2;
+END_PROGRAM

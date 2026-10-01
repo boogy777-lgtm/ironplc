@@ -9,12 +9,17 @@
 //! minimal `PROGRAM`, where the legacy parser behaves as it does on real
 //! files; an exception that blames the fragment entry must be confirmed by
 //! that second verdict.
+//!
+//! Each test binary uses the part of this module it needs.
+#![allow(dead_code)]
 
+pub mod compare;
+pub mod declaration_table;
 pub mod extract;
 pub mod legacy;
 pub mod tables;
 
-use ironplc_syntax::{parse_expression, parse_statements, ParseOptions};
+use ironplc_syntax::{parse_expression, parse_source_file, parse_statements, ParseOptions};
 use legacy::Preset;
 
 /// Which kind of snippet a table holds.
@@ -24,6 +29,10 @@ pub enum Kind {
     Statements,
     /// One expression; the legacy side wraps it as `x := <expr>;`.
     Expression,
+    /// Whole-file text holding declarations; the oracle is `parse_program`.
+    Declarations,
+    /// A source file, named by its path; the oracle is `parse_program`.
+    File,
 }
 
 /// What each parser says about one snippet under one preset.
@@ -41,18 +50,28 @@ pub fn new_accepts(kind: Kind, snippet: &str, options: &ParseOptions) -> bool {
     match kind {
         Kind::Statements => parse_statements(snippet, options).is_ok(),
         Kind::Expression => parse_expression(snippet, options).is_ok(),
+        Kind::Declarations | Kind::File => parse_source_file(snippet, options).is_ok(),
     }
 }
 
 pub fn verdict(kind: Kind, snippet: &str, preset: &Preset) -> Verdict {
+    let new = new_accepts(kind, snippet, &preset.new);
+    if matches!(kind, Kind::Declarations | Kind::File) {
+        let legacy = legacy::accepts_file(snippet, &preset.legacy);
+        return Verdict {
+            legacy,
+            program: legacy,
+            new,
+        };
+    }
     let body = match kind {
-        Kind::Statements => snippet.to_string(),
         Kind::Expression => format!("x := {snippet};"),
+        _ => snippet.to_string(),
     };
     Verdict {
         legacy: legacy::accepts(&body, &preset.legacy),
         program: legacy::accepts_in_program(&body, &preset.legacy),
-        new: new_accepts(kind, snippet, &preset.new),
+        new,
     }
 }
 

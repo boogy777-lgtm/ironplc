@@ -1,0 +1,11 @@
+PROGRAM Open
+VAR
+    a : INT;
+    b : BOOL;
+x := 1;
+END_PROGRAM
+
+PROGRAM Next
+VAR c : INT; END_VAR
+c := 2;
+END_PROGRAM

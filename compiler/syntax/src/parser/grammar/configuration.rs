@@ -13,7 +13,8 @@ use super::common::{
     NameClass, Part,
 };
 use super::expressions::{close_group, name_ref, type_ref, variable};
-use super::initializers::value;
+use super::initializers::{connection_source, value};
+use super::literals::duration_literal_ahead;
 use super::var_blocks::{block_ahead, var_block, Scope};
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
@@ -148,10 +149,35 @@ const PRIORITY: Part = Part {
     name: "`PRIORITY`",
 };
 
-const TASK_PROPERTIES: [(&str, Part); 3] = [
-    ("SINGLE", SINGLE),
-    ("INTERVAL", INTERVAL),
-    ("PRIORITY", PRIORITY),
+/// A task property: its name, its place in the order, and what its value must
+/// look like. The legacy grammar reads `INTERVAL` as a duration and `PRIORITY`
+/// as an integer; `SINGLE` takes any data source.
+struct Property {
+    word: &'static str,
+    part: Part,
+    value_ahead: fn(&Parser) -> bool,
+    expected: &'static str,
+}
+
+const TASK_PROPERTIES: [Property; 3] = [
+    Property {
+        word: "SINGLE",
+        part: SINGLE,
+        value_ahead: |_| true,
+        expected: "a value",
+    },
+    Property {
+        word: "INTERVAL",
+        part: INTERVAL,
+        value_ahead: duration_literal_ahead,
+        expected: "a duration",
+    },
+    Property {
+        word: "PRIORITY",
+        part: PRIORITY,
+        value_ahead: |p| p.at(K::IntegerLit),
+        expected: "an integer",
+    },
 ];
 
 /// `TASK name ( [SINGLE := s,] [INTERVAL := i,] PRIORITY := n ) ;`
@@ -181,12 +207,11 @@ fn task(p: &mut Parser) {
 fn task_item(p: &mut Parser, order: &mut Order) {
     let node = p.start();
     // The legacy grammar matches these names by their exact upper-case spelling.
-    let part = TASK_PROPERTIES
+    let property = TASK_PROPERTIES
         .iter()
-        .find(|(word, _)| p.nth(0) == Some(K::Ident) && p.nth_text(0) == *word)
-        .map(|(_, part)| *part);
-    match part {
-        Some(part) => order.enter(p, part),
+        .find(|property| p.nth(0) == Some(K::Ident) && p.nth_text(0) == property.word);
+    match property {
+        Some(property) => order.enter(p, property.part),
         None => p.error("expected `SINGLE`, `INTERVAL` or `PRIORITY`"),
     }
     if p.name_at(0) {
@@ -195,6 +220,11 @@ fn task_item(p: &mut Parser, order: &mut Order) {
         p.error("expected a task property");
     }
     if p.expect(K::Assignment, "`:=`") {
+        if let Some(property) = property {
+            if !(property.value_ahead)(p) {
+                p.error(&format!("`{}` takes {}", property.word, property.expected));
+            }
+        }
         value(p);
     }
     p.complete(node, K::TaskInitItem);
@@ -256,7 +286,7 @@ fn connection(p: &mut Parser) {
     }
     if p.at(K::Assignment) {
         p.bump();
-        value(p);
+        connection_source(p);
     } else if p.at(K::RightArrow) {
         p.bump();
         if variable(p).is_none() {

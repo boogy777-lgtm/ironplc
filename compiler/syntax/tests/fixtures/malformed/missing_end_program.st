@@ -1,0 +1,8 @@
+PROGRAM First
+VAR a : INT; END_VAR
+a := 1;
+
+PROGRAM Second
+VAR b : INT; END_VAR
+b := 2;
+END_PROGRAM

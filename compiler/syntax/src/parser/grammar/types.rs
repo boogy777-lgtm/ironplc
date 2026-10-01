@@ -2,54 +2,32 @@
 //!
 //! One rule, [`type_spec`], reads what follows the `:` of a declaration,
 //! wherever it is: a variable, a structure member, a type alias, a function's
-//! return type. Where the legacy grammar writes a separate rule per position,
-//! the position here is a [`Context`]: whether a structure or union may be
-//! declared in place, and whether `TypeName(...)` is the call-style
-//! initialisation of a function block instance.
+//! return type. The legacy grammar writes a separate rule per position; here
+//! the position is a row of the table in `positions`, which says which kinds
+//! of type it accepts and what initial value each takes.
 //!
 //! The forms are `ARRAY [ranges] OF T`, `ARRAY [*] OF T`, `STRING[n]`,
 //! `WSTRING(n)`, `REF_TO T`, `REFERENCE TO T`, `POINTER TO T`,
-//! `PARAMS(n) OF T`, an inline enumeration `(A, B := 2) BYTE`, a subrange
+//! `PARAMS(n) OF T`, an inline enumeration `(A, B)`, in a `TYPE` declaration
+//! also with values and a base type `(A, B := 2) BYTE`, a subrange
 //! `INT(1..10)`, `STRUCT ... END_STRUCT`, `UNION ... END_UNION`, and a type
 //! name. Their gating (`REF_TO`, `PARAMS`, `UNION`, ...) is the keyword table
 //! in `ParseOptions`; whether a form is enabled by a flag that is not about a
 //! keyword (`STRING(n)`, `ARRAY[*]`) is a gate, see `parser::gates`.
 
 use super::common::{
-    declared_name, integer_ref, item_terminator, skip_declaration, NameClass,
+    close, declared_name, integer_ref, item_terminator, skip_declaration, terminator, NameClass,
 };
 use super::control::{bound, bound_ahead};
-use super::expressions::{arg_list, close_group, expression, type_ref};
+use super::expressions::{arg_list, close_group, type_ref};
 use super::initializers::initializer;
+use super::literals::literal;
+use super::positions::{
+    Context, Spec, COUNTED, DECLARED, ELEMENT, MEMBER, TARGET,
+};
 use crate::parser::recovery::BLOCK_END;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
-
-/// Where a type specification is read.
-#[derive(Clone, Copy)]
-pub(super) struct Context {
-    /// `STRUCT` and `UNION` declare a type in place.
-    aggregate: bool,
-    /// A type name followed by `(` is the call-style initialisation of a
-    /// function block instance.
-    call: bool,
-}
-
-/// The type of a variable.
-pub(super) const VARIABLE: Context = Context {
-    aggregate: false,
-    call: true,
-};
-/// The type a `TYPE` declaration defines.
-const DECLARED: Context = Context {
-    aggregate: true,
-    call: false,
-};
-/// The type of a structure member, an array element or a reference target.
-const MEMBER: Context = Context {
-    aggregate: false,
-    call: false,
-};
 
 /// The integer types, which a subrange restricts.
 const INTEGER_TYPES: &[K] = &[
@@ -80,10 +58,13 @@ const ENUM_BASE_TYPES: &[K] = &[
     K::Lword,
 ];
 
-/// A type specification. A malformed one is reported and left in place
-/// where it stops, so the declaration around it can still end.
-pub(super) fn type_spec(p: &mut Parser, context: Context) {
-    p.guarded(
+/// A type specification in the position `context`. A malformed one is
+/// reported and left in place where it stops, so the declaration around it
+/// can still end. A kind of type the position does not accept is parsed and
+/// reported at its first token.
+pub(super) fn type_spec(p: &mut Parser, context: &Context) -> Spec {
+    let start = p.current_range();
+    let spec = p.guarded(
         |p| specification(p, context),
         |p| {
             if !p.at_eof() {
@@ -91,40 +72,85 @@ pub(super) fn type_spec(p: &mut Parser, context: Context) {
                 p.bump();
                 p.complete(node, K::ErrorNode);
             }
+            Spec::Missing
         },
     );
+    if !context.accepts(spec) {
+        p.error_at(start, "this kind of type is not allowed here");
+    }
+    spec
 }
 
-fn specification(p: &mut Parser, context: Context) {
+fn specification(p: &mut Parser, context: &Context) -> Spec {
     let Some(kind) = p.nth(0).filter(|kind| p.at(*kind)) else {
         return named(p, context);
     };
     match kind {
-        K::Array => array_type(p),
-        K::String | K::WString => string_type(p),
-        K::RefTo => reference_type(p, 1),
-        K::Reference | K::Pointer => reference_type(p, 2),
-        K::Params => params_type(p),
-        K::LeftParen => enum_type(p),
-        K::Struct if context.aggregate => aggregate(p, K::StructType, K::EndStruct),
-        K::Union if context.aggregate => aggregate(p, K::UnionType, K::EndUnion),
-        kind if INTEGER_TYPES.contains(&kind) && p.nth_at(1, K::LeftParen) => subrange_type(p),
+        K::Array => {
+            array_type(p);
+            Spec::Array
+        }
+        K::String | K::WString => {
+            if string_type(p) {
+                Spec::String
+            } else {
+                Spec::Elementary
+            }
+        }
+        K::RefTo => {
+            reference_type(p, 1);
+            Spec::Reference
+        }
+        K::Reference | K::Pointer => {
+            reference_type(p, 2);
+            Spec::Reference
+        }
+        K::Params => {
+            params_type(p);
+            Spec::Params
+        }
+        K::LeftParen => {
+            enum_type(p, context.declares);
+            Spec::Enumeration
+        }
+        K::Struct if context.declares => {
+            aggregate(p, K::StructType, K::EndStruct);
+            Spec::Struct
+        }
+        K::Union if context.declares => {
+            aggregate(p, K::UnionType, K::EndUnion);
+            Spec::Union
+        }
+        kind if INTEGER_TYPES.contains(&kind) && p.nth_at(1, K::LeftParen) => {
+            subrange_type(p);
+            Spec::Subrange
+        }
         _ => named(p, context),
     }
 }
 
 /// A type name, and the arguments of a function block instance that follow
 /// it where the position allows them.
-fn named(p: &mut Parser, context: Context) {
-    let call = context.call && p.name_at(0);
-    type_ref(p);
+fn named(p: &mut Parser, context: &Context) -> Spec {
+    let declared = p.name_at(0);
+    let call = context.accepts(Spec::Call) && declared;
+    if !type_ref(p) {
+        return Spec::Missing;
+    }
     if call && p.at(K::LeftParen) {
         arg_list(p);
+        return Spec::Call;
+    }
+    if declared {
+        Spec::Named
+    } else {
+        Spec::Elementary
     }
 }
 
-/// `STRING`, `WSTRING`, optionally with a length in `[ ]` or `( )`.
-pub(super) fn string_type(p: &mut Parser) {
+/// `STRING`, `WSTRING`, optionally with a length in `[ ]` or `( )`. Returns true
+/// when there is a length.
+pub(super) fn string_type(p: &mut Parser) -> bool {
     let node = p.start();
     p.bump();
     let closer = match p.nth(0) {
@@ -132,12 +158,14 @@ pub(super) fn string_type(p: &mut Parser) {
         Some(K::LeftParen) => Some((K::RightParen, "`)`")),
         _ => None,
     };
+    let has_length = closer.is_some();
     if let Some((closer, what)) = closer {
         p.bump();
         integer_ref(p);
         close_group(p, closer, what);
     }
     p.complete(node, K::StringType);
+    has_length
 }
 
 /// `ARRAY [ranges] OF T`, or `ARRAY [*] OF T` for the array whose bounds the
@@ -159,7 +187,7 @@ fn array_type(p: &mut Parser) {
         close_group(p, K::RightBracket, "`]`");
     }
     p.expect(K::Of, "`OF`");
-    type_spec(p, MEMBER);
+    type_spec(p, &ELEMENT);
     p.complete(node, K::ArrayType);
 }
 
@@ -188,7 +216,7 @@ fn reference_type(p: &mut Parser, keyword_tokens: usize) {
     if keyword_tokens == 2 {
         p.expect(K::To, "`TO`");
     }
-    type_spec(p, MEMBER);
+    type_spec(p, &TARGET);
     p.complete(node, K::RefType);
 }
 
@@ -201,7 +229,7 @@ fn params_type(p: &mut Parser) {
         close_group(p, K::RightParen, "`)`");
     }
     p.expect(K::Of, "`OF`");
-    type_spec(p, MEMBER);
+    type_spec(p, &COUNTED);
     p.complete(node, K::ParamsType);
 }
 
@@ -215,34 +243,50 @@ fn subrange_type(p: &mut Parser) {
     p.complete(node, K::SubrangeType);
 }
 
-/// `( A, B := 2, C ) [BYTE]`
-fn enum_type(p: &mut Parser) {
+/// `( A, B, C )`; in a `TYPE` declaration also `( A, B := 2 ) BYTE`.
+fn enum_type(p: &mut Parser, declares: bool) {
     let node = p.start();
     p.bump();
     loop {
-        enum_value(p);
+        enum_value(p, declares);
         if !p.eat(K::Comma) {
             break;
         }
     }
     close_group(p, K::RightParen, "`)`");
     if p.at_any(ENUM_BASE_TYPES) {
+        if !declares {
+            p.error("a base type is part of a type declaration");
+        }
         type_ref(p);
     }
     p.complete(node, K::EnumType);
 }
 
-fn enum_value(p: &mut Parser) {
+fn enum_value(p: &mut Parser, declares: bool) {
     let node = p.start();
-    if !super::common::declared_name(p, NameClass::Variable) {
+    if !declared_name(p, NameClass::Variable) {
         p.abandon(node);
         return;
     }
     if p.at(K::Assignment) {
+        if !declares {
+            p.error("a value is part of a type declaration");
+        }
         p.bump();
-        expression(p);
+        signed_integer(p);
     }
     p.complete(node, K::EnumValue);
+}
+
+/// An integer with an optional sign that touches it.
+fn signed_integer(p: &mut Parser) {
+    let signed = p.at_any(&[K::Plus, K::Minus]) && p.adjacent(0) && p.nth_at(1, K::IntegerLit);
+    if p.at(K::IntegerLit) || signed {
+        literal(p);
+    } else {
+        p.error("expected an integer");
+    }
 }
 
 /// `STRUCT member; ... END_STRUCT` and `UNION member; ... END_UNION`: one or
@@ -276,9 +320,9 @@ fn member(p: &mut Parser) {
         return;
     }
     if p.expect(K::Colon, "`:`") {
-        type_spec(p, MEMBER);
+        let spec = type_spec(p, &MEMBER);
         if p.at(K::Assignment) {
-            initializer(p);
+            initializer(p, MEMBER.initial(spec));
         }
     }
     p.complete(node, K::StructMember);
@@ -307,7 +351,7 @@ pub(super) fn type_block(p: &mut Parser) {
     if declarations == 0 && !lone_terminator {
         p.error("expected a type declaration");
     }
-    super::common::close(p, K::EndType, "`END_TYPE`");
+    close(p, K::EndType, "`END_TYPE`");
     p.complete(node, K::TypeBlock);
 }
 
@@ -318,14 +362,17 @@ fn type_declaration(p: &mut Parser) {
         p.abandon(node);
         return;
     }
+    let mut spec = Spec::Missing;
     if p.expect(K::Colon, "`:`") {
-        type_spec(p, DECLARED);
+        spec = type_spec(p, &DECLARED);
         if p.at(K::Assignment) {
-            initializer(p);
+            initializer(p, DECLARED.initial(spec));
         }
     }
     p.complete(node, K::TypeDecl);
-    item_terminator(p);
+    // The legacy pipeline supplies the `;` after `END_STRUCT` when the dialect
+    // allows missing semicolons.
+    terminator(p, spec == Spec::Struct);
 }
 
 /// The type a function, method or property returns: a string with an
