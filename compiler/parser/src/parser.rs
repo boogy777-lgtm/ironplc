@@ -532,14 +532,22 @@ parser! {
     // the same range `constant()` assigns, so a literal's span means one
     // thing wherever the literal appears.
     rule character_string_literal() -> CharacterStringLiteral = single_byte_character_string() / double_byte_character_string()
-    rule single_byte_character_string() -> CharacterStringLiteral = start:position!() (tok(TokenType::String) tok(TokenType::Hash))? t:tok(TokenType::SingleByteString) end:position!() {
+    // A typed string literal names a string type and then, adjacent to it,
+    // spells the literal. `UTF8#` and `UCHAR#` take a single-quoted literal
+    // and `__XSTRING#` a double-quoted one; the delimiter still selects the
+    // width, exactly as it does for `STRING#` and `WSTRING#` (see
+    // `specs/design/string-literals.md`, REQ-SL-parser-021 and 022). Every
+    // prefix is case-insensitive, like every other keyword.
+    rule unicode_string_prefix() -> () = (contextual_keyword("UTF8") / contextual_keyword("UCHAR")) tok(TokenType::Hash) ()
+    rule xstring_prefix() -> () = contextual_keyword("__XSTRING") tok(TokenType::Hash) ()
+    rule single_byte_character_string() -> CharacterStringLiteral = start:position!() (tok(TokenType::String) tok(TokenType::Hash) / unicode_string_prefix())? t:tok(TokenType::SingleByteString) end:position!() {
       CharacterStringLiteral {
         value: unquote(&t.text, &StringType::String),
         width: StringType::String,
         span: span_of_tokens(tokens, start, end),
       }
     }
-    rule double_byte_character_string() -> CharacterStringLiteral = start:position!() (tok(TokenType::WString) tok(TokenType::Hash))? t:tok(TokenType::DoubleByteString) end:position!() {
+    rule double_byte_character_string() -> CharacterStringLiteral = start:position!() (tok(TokenType::WString) tok(TokenType::Hash) / xstring_prefix())? t:tok(TokenType::DoubleByteString) end:position!() {
       CharacterStringLiteral {
         value: unquote(&t.text, &StringType::WString),
         width: StringType::WString,

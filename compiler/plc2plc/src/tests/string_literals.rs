@@ -60,6 +60,22 @@ END_PROGRAM
     assert!(rendered.contains("\"tail\""), "rendered:\n{rendered}");
 }
 
+// A typed string literal's prefix (`UTF8#`, `UCHAR#`, `__XSTRING#`) names an
+// encoding, not a different set of characters, so the AST keeps only the
+// decoded characters and the width; the rendering is the untyped spelling.
+#[test]
+fn write_to_string_when_typed_string_literals_then_prefix_is_not_rendered() {
+    let source = read_shared_resource("typed_string_literals.st");
+    let rendered = assert_round_trips(&source, &CompilerOptions::default());
+
+    assert!(rendered.contains("narrow := 'aAb'"), "rendered:\n{rendered}");
+    assert!(
+        rendered.contains("wide := \"aAb\""),
+        "rendered:\n{rendered}"
+    );
+    assert!(rendered.contains("code := 'A'"), "rendered:\n{rendered}");
+}
+
 // A literal's `value` holds the decoded characters, so rendering has to
 // escape them again, exactly once. An earlier renderer re-escaped undecoded
 // source text, which compounded on each pass (`$L`, `$$L`, `$$$$L`).

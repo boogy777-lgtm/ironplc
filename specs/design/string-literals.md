@@ -47,6 +47,27 @@ and there `$80` is `€` (U+20AC), not U+0080. The `U` is upper case, as
 CODESYS spells it; the hex digits are not case sensitive. A ninth hex digit
 is not part of the escape: `$U000000421` is `B` followed by `1`.
 
+**REQ-SL-parser-021** A single-quoted literal may carry the prefix `UTF8#`
+or `UCHAR#`, case-insensitively and adjacent to the opening quote
+(`UTF8#'…'`, `uchar#'…'`). The prefix names the encoding the vendor
+toolchains give the literal; the literal's characters are the decoded
+contents of the quoted text, and its width is `STRING`, the one the
+delimiter spells.
+
+**REQ-SL-parser-022** A double-quoted literal may carry the prefix
+`__XSTRING#`, case-insensitively and adjacent to the opening quote
+(`__XSTRING#"…"`). Its width is `WSTRING`. A single-quoted `__XSTRING#'…'`
+is not a literal, and neither is `UTF8#` or `UCHAR#` before a double-quoted
+literal.
+
+The prefixes of REQ-SL-parser-021 and 022 name a type in CODESYS:
+`__XSTRING` resolves to `STRING` or `WSTRING` by a compile define, and a
+one-character `UCHAR#` literal is the character code as a `UDINT`. IronPLC
+does not model those distinctions: the literal denotes the decoded
+characters of its quoted text and the width its delimiter spells, and the
+AST records no encoding, exactly as it records none for the `STRING#` and
+`WSTRING#` prefixes.
+
 **REQ-SL-parser-020** Any other `$` sequence -- `$` followed by a character
 that is not listed above, too few hex digits for the width, a surrogate
 code, or `$` at the end of the literal -- is P0012 at the escape. The literal

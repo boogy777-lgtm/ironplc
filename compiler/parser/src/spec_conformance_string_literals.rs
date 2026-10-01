@@ -135,6 +135,20 @@ fn parser_spec_req_sl_012_windows_1252_band() {
     assert_eq!("\u{81}", value_of("'$81'"));
 }
 
+/// REQ-SL-parser-021: `UTF8#` and `UCHAR#` prefix a single-quoted literal.
+#[spec_test(REQ_SL_parser_021)]
+fn parser_spec_req_sl_021_unicode_string_prefix() {
+    assert_eq!("aAb", value_of("UTF8#'a$41b'"));
+    assert_eq!("aAb", value_of("uchar#'a$41b'"));
+}
+
+/// REQ-SL-parser-022: `__XSTRING#` prefixes a double-quoted literal.
+#[spec_test(REQ_SL_parser_022)]
+fn parser_spec_req_sl_022_xstring_prefix() {
+    assert_eq!("aAb", value_of("__XSTRING#\"a$0041b\""));
+    assert_eq!("aAb", value_of("__xstring#\"a$0041b\""));
+}
+
 /// REQ-SL-parser-020: Any other `$` sequence is P0012.
 #[rstest]
 #[case::unknown_letter("'$q'")]

@@ -289,6 +289,82 @@ END_FUNCTION_BLOCK",
     assert_eq!(literal.width, StringType::WString);
 }
 
+/// Parses a function block whose only statement assigns `literal` in
+/// `source`, with the options given, and returns the parsed literal.
+fn assigned_character_string(source: &str, options: &CompilerOptions) -> CharacterStringLiteral {
+    let library = parse_program(source, &FileId::default(), options).unwrap();
+    let value = extract_assignment_value(&library);
+    let constant = cast!(&value.kind, ExprKind::Const);
+    cast!(constant, ConstantKind::CharacterString).clone()
+}
+
+/// A typed string literal names an encoding in its prefix; the delimiter
+/// still selects the width, and the span covers the prefix as well as the
+/// quoted text.
+#[rstest]
+#[case::utf8("UTF8#'abc'", StringType::String)]
+#[case::utf8_lower_case("utf8#'abc'", StringType::String)]
+#[case::uchar("UCHAR#'abc'", StringType::String)]
+#[case::xstring("__XSTRING#\"abc\"", StringType::WString)]
+#[case::xstring_lower_case("__xstring#\"abc\"", StringType::WString)]
+fn parse_program_when_encoding_string_prefix_then_width_from_delimiter(
+    #[case] literal: &str,
+    #[case] width: StringType,
+) {
+    let source = format!(
+        "FUNCTION_BLOCK fb
+VAR
+    s : STRING[10];
+END_VAR
+s := {literal};
+END_FUNCTION_BLOCK"
+    );
+    let parsed = assigned_character_string(&source, &CompilerOptions::default());
+
+    assert_eq!(parsed.value, vec!['a', 'b', 'c']);
+    assert_eq!(parsed.width, width);
+    assert_eq!(
+        &source[parsed.span.start..parsed.span.end],
+        literal,
+        "the span covers the prefix and the quoted text"
+    );
+}
+
+#[test]
+fn parse_program_when_unicode_string_prefix_with_escapes_then_decoded() {
+    // The characters are the decoded ones, exactly as for an untyped
+    // literal; `UTF8#` does not change the escape table.
+    let source = "FUNCTION_BLOCK fb
+VAR
+    s : STRING[10];
+END_VAR
+s := UTF8#'a$41b';
+END_FUNCTION_BLOCK";
+    let parsed = assigned_character_string(source, &CompilerOptions::default());
+    assert_eq!(parsed.value, vec!['a', 'A', 'b']);
+}
+
+/// A prefix belongs to its own delimiter: `UTF8#` and `UCHAR#` take single
+/// quotes, `__XSTRING#` takes a double quote, and anything else is not a
+/// literal.
+#[rstest]
+#[case::xstring_single_quote("__XSTRING#'abc'")]
+#[case::utf8_double_quote("UTF8#\"abc\"")]
+#[case::uchar_double_quote("UCHAR#\"abc\"")]
+#[case::xstring_with_whitespace("__XSTRING #\"abc\"")]
+fn parse_program_when_typed_string_prefix_with_other_delimiter_then_error(#[case] literal: &str) {
+    let source = format!(
+        "FUNCTION_BLOCK fb
+VAR
+    s : STRING[10];
+END_VAR
+s := {literal};
+END_FUNCTION_BLOCK"
+    );
+    let result = parse_program(&source, &FileId::default(), &CompilerOptions::default());
+    assert!(result.is_err(), "expected a parse error for {literal}");
+}
+
 #[test]
 fn parse_program_when_typed_string_prefix_then_width_from_delimiter() {
     let narrow = parse_assigned_character_string(
