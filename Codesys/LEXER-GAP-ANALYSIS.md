@@ -444,25 +444,29 @@ CODESYS, а не ST-поверхность общего назначения).
 (если может быть идентификатором) + правило грамматики + тест. Рекомендуемый флаг/диалект —
 по правилам `specs/steering/syntax-support-guide.md` §Non-Standard Syntax Gating.
 
-| ID | Пункт | Уровень | Метод проверки |
-|---|---|---|---|
-| P0-1 | `CONTINUE` (statement + codegen) | lexer+parser+AST+codegen | новый `tests/continue.rs` (AST-форма) + `codegen/tests/it/end_to_end_continue.rs` (rounds) |
-| P0-2 | `PROPERTY`/`PROPERTY_GET`/`PROPERTY_SET`/`END_PROPERTY` + AST | lexer+parser+AST | `tests/properties.rs` + plc2plc round-trip resource |
-| P0-3 | `UNION`/`END_UNION` + AST | lexer+parser+AST | `tests/union.rs` + resource |
-| P0-4 | `VAR_STAT` / `VAR_INST` / `VAR_GENERIC` блоки | lexer+parser+AST | `tests/var_declarations.rs` (расширить) |
-| P0-5 | `PARAMS(n) OF T` | lexer+parser+AST | `tests/types_and_returns.rs` |
-| P0-6 | `ARRAY[*]` | parser+AST | `tests/arrays.rs` |
-| P0-7 | `NAMESPACE`/`END_NAMESPACE` + `__BEGIN_IMPLEMENTATION` | lexer+parser+AST | `tests/namespaces.rs` |
-| P0-8 | модификаторы доступа + `OVERRIDE`/`OVERLOAD` | lexer+parser+AST | `tests/fb_inheritance.rs` |
-| P0-9 | `__XSTRING#"…"` → `XByteString`; `UTF8#'…'`; `UCHAR#'…'` | lexer+parser+AST | `tests/literals.rs` (кейсы) + `spec_conformance_string_literals.rs`; эталон — `tables/string_escapes.csv`, `docs/15` |
-| P0-10 | escape `$U`+8 hex (+ cp1252-таблица `$80-$FF`) | dsl+lexer-валидация | `dsl/src/string_escape.rs` unit-кейсы + `rule_token_string_escape.rs` |
-| P0-11 | `10#`, `BOOL#1/0`, `BIT`-тип, `BIT#` | lexer+parser | `tests/literals.rs` |
-| P0-12 | `us`/`ns`, `LT#`, `LD#`, `TOD#hh:mm` | parser | `tests/duration.rs`, `tests/literals.rs`; обновить `specs/design/time-literals.md` (REQ-TL-010/012) |
-| P0-13 | `\|` как OR | lexer+parser | `tests/whitespace.rs`/`tests/types_and_returns.rs` |
-| P0-14 | escape-идентификаторы `` `…` `` + unicode-идентификаторы + правило «несколько `_` подряд» | lexer+parser | `tests/comments_and_errors.rs`/новый `tests/identifiers.rs`; CODESYS-источник — `ST_GRAMMAR.ebnf:49-54` |
-| P0-15 | `__TRY/__CATCH/__FINALLY/__ENDTRY/__THROW` | lexer+parser+AST+codegen | `tests/try_catch.rs` + e2e |
-| P0-16 | ST-visible special (`__NEW`, `__DELETE`, `__ISVALIDREF`, `__SYSTEM`, `__POOL`, `__TYPEOF`, `__CURRENTTASK`, `__XADD`, …) | lexer+parser+analyzer | `tests/special_operators.rs`; внутренние `__*` — не трогать |
-| P0-17 | `JMP`+метки, `CALC`, `__WAIT`, вложенные комментарии, `DocComment`, pragma-`{IF}` | lexer+parser | `tests/jumps.rs`, `tests/pragmas.rs` (расширить), `tests/comments_and_errors.rs` |
+| ID | Пункт | Уровень | Статус | Метод проверки |
+|---|---|---|---|---|
+| P0-1 | `CONTINUE` (statement + codegen) | lexer+parser+AST+codegen | на `main` (#1898); в `lint-fences` нет — перепроверить после merge | новый `tests/continue.rs` (AST-форма) + `codegen/tests/it/end_to_end_continue.rs` (rounds) |
+| P0-2 | `PROPERTY`/`PROPERTY_GET`/`PROPERTY_SET`/`END_PROPERTY` + AST | lexer+parser+AST | на `main` (#1871); в `lint-fences` нет — перепроверить после merge | `tests/properties.rs` + plc2plc round-trip resource |
+| P0-3 | `UNION`/`END_UNION` + AST | lexer+parser+AST | открыт | `tests/union.rs` + resource |
+| P0-4 | `VAR_STAT` / `VAR_INST` / `VAR_GENERIC` блоки | lexer+parser+AST | открыт | `tests/var_declarations.rs` (расширить) |
+| P0-5 | `PARAMS(n) OF T` | lexer+parser+AST | открыт | `tests/types_and_returns.rs` |
+| P0-6 | `ARRAY[*]` | parser+AST | открыт | `tests/arrays.rs` |
+| P0-7 | `NAMESPACE`/`END_NAMESPACE` + `__BEGIN_IMPLEMENTATION` | lexer+parser+AST | открыт | `tests/namespaces.rs` |
+| P0-8 | модификаторы доступа + `OVERRIDE`/`OVERLOAD` | lexer+parser+AST | частично на `main` (#1899 — qualifiers на FB/METHOD); перепроверить после merge | `tests/fb_inheritance.rs` |
+| P0-9 | `__XSTRING#"…"` → `XByteString`; `UTF8#'…'`; `UCHAR#'…'` | lexer+parser+AST | открыт | `tests/literals.rs` (кейсы) + `spec_conformance_string_literals.rs`; эталон — `tables/string_escapes.csv`, `docs/15` |
+| P0-10 | escape `$U`+8 hex (+ cp1252-таблица `$80-$FF`) | dsl+lexer-валидация | открыт | `dsl/src/string_escape.rs` unit-кейсы + `rule_token_string_escape.rs` |
+| P0-11 | `10#`, `BOOL#1/0`, `BIT`-тип, `BIT#` | lexer+parser | открыт | `tests/literals.rs` |
+| P0-12 | `us`/`ns`, `LT#`, `LD#`, `TOD#hh:mm` | parser | открыт; на `main` дополнительно #1940 (дробные секунды TOD/DT) — перепроверить после merge | `tests/duration.rs`, `tests/literals.rs`; обновить `specs/design/time-literals.md` (REQ-TL-010/012) |
+| P0-13 | `\|` как OR | lexer+parser | открыт | `tests/whitespace.rs`/`tests/types_and_returns.rs` |
+| P0-14 | escape-идентификаторы `` `…` `` + unicode-идентификаторы + правило «несколько `_` подряд» | lexer+parser | открыт | `tests/comments_and_errors.rs`/новый `tests/identifiers.rs`; CODESYS-источник — `ST_GRAMMAR.ebnf:49-54` |
+| P0-15 | `__TRY/__CATCH/__FINALLY/__ENDTRY/__THROW` | lexer+parser+AST+codegen | открыт | `tests/try_catch.rs` + e2e |
+| P0-16 | ST-visible special (`__NEW`, `__DELETE`, `__ISVALIDREF`, `__SYSTEM`, `__POOL`, `__TYPEOF`, `__CURRENTTASK`, `__XADD`, …) | lexer+parser+analyzer | открыт | `tests/special_operators.rs`; внутренние `__*` — не трогать |
+| P0-17 | `JMP`+метки, `CALC`, `__WAIT`, вложенные комментарии, `DocComment`, pragma-`{IF}` | lexer+parser | открыт | `tests/jumps.rs`, `tests/pragmas.rs` (расширить), `tests/comments_and_errors.rs` |
+
+Статусы проверены 2026-10-01 по `compiler/parser/src/token.rs` на `lint-fences` и `main`
+(«открыт» = в обеих ветках отсутствует; «на `main`» = закрыт upstream, но не в `lint-fences`).
+После слияния `main` перепроверить отмеченные пункты по журналу §15 и обновить столбец.
 
 **P1 — семантика для уже принятого синтаксиса.** `THIS^/SUPER^` (P9999), члены `INTERFACE`,
 codegen SFC, `PROPERTY`-доступ, `VAR_STAT/INST/GENERIC`-размещение, `UNION`-память, `PARAMS`,

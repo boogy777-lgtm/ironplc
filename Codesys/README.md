@@ -24,6 +24,20 @@
 > **Внимание:** syntax-ошибки (scanner/parser) **≠** build/компиляционные **≠** семантические.
 > Границы классов — [`ERROR-CODES-STUDY.md`](ERROR-CODES-STUDY.md) §2 («Границы класса SYNTAX»).
 
+**Текущее состояние (2026-10-01):**
+
+- **Исследование CODESYS завершено** — доки, таблицы, грамматики, декомпил собраны.
+  Эти файлы — **эталон**: не переделывать и не править под нашу реализацию.
+- **Архитектура утверждена, код не написан.** Сейчас фронтенд — logos-лексер + PEG
+  (`compiler/parser`); этапы S0–S5 существуют только на бумаге.
+- **P0-бэклог открыт** — 17 пунктов; статус каждого — в
+  [`LEXER-GAP-ANALYSIS.md` §13](LEXER-GAP-ANALYSIS.md) (столбец «Статус»).
+  Baseline-прогон 0.246.0 — журнал §15.
+- ⚠ **Ветка `lint-fences` отстаёт от `main`**: на `main` уже есть `CONTINUE` (#1898),
+  `PROPERTY` (#1871), qualifiers на FB/METHOD (#1899), дробные секунды TOD/DT (#1940),
+  CASE-метки по radix (#1922). **Первый шаг сессии — слить `main` в `lint-fences`
+  и перепроверить статусы P0-1/P0-2/P0-8/P0-12** — журнал §15 для них устарел.
+
 **Архитектурное решение владельца, 2026-10-01:** развиваем фронтенд IronPLC:
 одно lossless CST на rowan, lowering в существующий `dsl` AST, существующий analyzer
 как единственный владелец семантики и один механизм кешированных запросов с
@@ -62,8 +76,20 @@ HIR/IDE/LSP как второй семантический backend. Green/red ro
 | Лексер: токены, опции | `compiler/parser/src/lexer.rs`, `token.rs`, `options.rs` |
 | Парсер и правила | `compiler/parser/src/parser.rs`, `rule_token_*.rs` |
 | Тесты | `compiler/parser/src/tests/*.rs`, `spec_conformance*.rs` |
-| Правила проекта | skill `ironplc-dev`: safe Rust; **no `unwrap/expect/panic` в prod**; dialect gating через `CompilerOptions`; P-код = CSV + docs + code + test (4-tuple) |
+| Правила проекта | `specs/steering/`: [`syntax-support-guide.md`](../specs/steering/syntax-support-guide.md), [`compiler-standards.md`](../specs/steering/compiler-standards.md), [`development-standards.md`](../specs/steering/development-standards.md); safe Rust; **no `unwrap/expect/panic` в prod**; dialect gating через `CompilerOptions`; P-код = CSV + docs + code + test (4-tuple) |
 | Гейты | `cargo test -p ironplc-parser`; `cd compiler && just`; доки — `cd specs && just` (см. `AGENTS.md`) |
+
+**Первый рабочий шаг (после обязательного чтения выше):**
+
+1. Слить `main` в `lint-fences`, прогнать `cargo test -p ironplc-parser`;
+   перепроверить P0-1/P0-2/P0-8/P0-12 по журналу §15 и обновить их статус в §13.
+2. Задача по умолчанию — **синтаксический бэклог**: следующий открытый P0-пункт §13,
+   ритм «таблица → тесты → реализация → spec conformance» по
+   [`syntax-support-guide`](../specs/steering/syntax-support-guide.md), тестовая пирамида — §14.3.
+3. **Архитектура (S0+)** — отдельная задача: сначала issue (по фронтенду открытых нет)
+   и план в `specs/plans/` (CLAUDE.md), предрефакторинг первым коммитом; S1 не начинать до S0.
+   **SYNTAX-коды (Ф5)** — по [`ERROR-CODES-STUDY.md` §4](ERROR-CODES-STUDY.md).
+4. Каждая задача — своя ветка от `main` + PR; перед PR — `cd compiler && just` зелёный.
 
 **Порядок развития фронтенда:** S0 — сравнение интеграционных вариантов и baseline;
 S1 — полное CST и recovery; S2 — lowering CST → `dsl`; S3 — анализ деклараций/тел POU
@@ -83,7 +109,7 @@ S0 фиксирует seam до расширения фронтенда. Дет�
 - **Ф4. Parser-level:** `CONTINUE`, `ARRAY[*]`, `PROPERTY`/OO, `UNION`.
 - **Ф5. Syntax-коды ошибок:** по [`ERROR-CODES-STUDY.md`](ERROR-CODES-STUDY.md) §4.
 
-**Ритм фазы:** таблица → тесты → реализация → spec conformance.
+**Ритм фазы:** слить `main` → таблица → тесты → реализация → spec conformance → обновить статус пункта в §13 и журнал §15.
 **Закрытие фазы:** тесты зелёные + `cd compiler && just` зелёный.
 
 **Definition of Done для синтаксического бэклога:**
