@@ -462,11 +462,11 @@ CODESYS, а не ST-поверхность общего назначения).
 | P0-1 | `CONTINUE` (statement + codegen) | lexer+parser+AST+codegen | закрыт (d8ddf54f5) | новый `tests/continue.rs` (AST-форма) + `codegen/tests/it/end_to_end_continue.rs` (rounds) |
 | P0-2 | `PROPERTY`/`PROPERTY_GET`/`PROPERTY_SET`/`END_PROPERTY` + AST | lexer+parser+AST | закрыт (d8ddf54f5) | `tests/properties.rs` + plc2plc round-trip resource |
 | P0-3 | `UNION`/`END_UNION` + AST | lexer+parser+AST | закрыт (d8ddf54f5) | `tests/union.rs` + resource |
-| P0-4 | `VAR_STAT` / `VAR_INST` / `VAR_GENERIC` блоки | lexer+parser+AST | открыт: под флагом парсится (`tests/var_declarations.rs`), но в `--dialect codesys` — P0002: имя переменной лексится как метка (конфликт с JMP, §15) | `tests/var_declarations.rs` (расширить) |
+| P0-4 | `VAR_STAT` / `VAR_INST` / `VAR_GENERIC` блоки | lexer+parser+AST | закрыт (344dc4c82): под флагом парсится; в `--dialect codesys` дефект меток исправлен (§15.1) | `tests/var_declarations.rs` (расширить) |
 | P0-5 | `PARAMS(n) OF T` | lexer+parser+AST | закрыт (d8ddf54f5) | `tests/types_and_returns.rs` |
 | P0-6 | `ARRAY[*]` | parser+AST | закрыт (d8ddf54f5) | `tests/arrays.rs` |
 | P0-7 | `NAMESPACE`/`END_NAMESPACE` + `__BEGIN_IMPLEMENTATION` | lexer+parser+AST | закрыт (d8ddf54f5) | `tests/namespaces.rs` |
-| P0-8 | модификаторы доступа + `OVERRIDE`/`OVERLOAD` | lexer+parser+AST | частично (d8ddf54f5): квалификаторы, `OVERLOAD` и `OVERRIDE` парсятся; `METHOD PUBLIC m : T` в codesys — P0002 (тот же конфликт с метками, §15) | `tests/fb_inheritance.rs` |
+| P0-8 | модификаторы доступа + `OVERRIDE`/`OVERLOAD` | lexer+parser+AST | закрыт (344dc4c82): квалификаторы, `OVERLOAD` и `OVERRIDE` парсятся; `METHOD PUBLIC m : T` в codesys — OK (§15.1) | `tests/fb_inheritance.rs` |
 | P0-9 | `__XSTRING#"…"` → `XByteString`; `UTF8#'…'`; `UCHAR#'…'` | lexer+parser+AST | закрыт (d8ddf54f5) | `tests/literals.rs` (кейсы) + `spec_conformance_string_literals.rs`; эталон — `tables/string_escapes.csv`, `docs/15` |
 | P0-10 | escape `$U`+8 hex (+ cp1252-таблица `$80-$FF`) | dsl+lexer-валидация | закрыт (d8ddf54f5) | `dsl/src/string_escape.rs` unit-кейсы + `rule_token_string_escape.rs` |
 | P0-11 | `10#`, `BOOL#1/0`, `BIT`-тип, `BIT#` | lexer+parser | закрыт (d8ddf54f5) | `tests/literals.rs` |
@@ -610,9 +610,9 @@ cd specs && just    # запускать recipe-тела через Git Bash: cd
 | `x := BOOL#1;` | OK | FAIL P0002 → OK | закрыт P0-11 |
 | `x := 10#123;` | OK | FAIL P0002 → OK | закрыт P0-11 |
 | `TYPE T : ARRAY[*] OF INT;` | OK | FAIL P0002 → OK | закрыт P0-6 |
-| `VAR_STAT x : INT;` | FAIL P0002 | без изменений | дефект взаимодействия с метками (§15.1) — P0-4 открыт |
-| `VAR_INST x : INT;` | FAIL P0002 | без изменений | тот же дефект — P0-4 открыт |
-| `VAR_GENERIC g : INT;` | FAIL P0002 | без изменений | тот же дефект — P0-4 открыт |
+| `VAR_STAT x : INT;` | OK | FAIL P0002 → OK | закрыт P0-4 (344dc4c82) |
+| `VAR_INST x : INT;` | OK | FAIL P0002 → OK | закрыт P0-4 (344dc4c82) |
+| `VAR_GENERIC g : INT;` | OK | FAIL P0002 → OK | закрыт P0-4 (344dc4c82) |
 | `FOR i := 0 TO 10 DO CONTINUE; END_FOR` | OK | FAIL P0002 → OK | закрыт P0-1 |
 | `TYPE U : UNION … END_UNION` | OK | FAIL P0002 → OK | закрыт P0-3 |
 | `x : PARAMS(3) OF INT` (в `VAR`) | OK | FAIL P0002 → OK | закрыт P0-5 |
@@ -626,7 +626,7 @@ cd specs && just    # запускать recipe-тела через Git Bash: cd
 | `s := UCHAR#'a';` | OK | FAIL P0002 → OK | закрыт P0-9 |
 | `(* a (* b *) c *)` | OK | FAIL P0002 → OK | закрыт P0-17 |
 | `PROPERTY p : INT … END_PROPERTY` | OK | FAIL P0002 → OK | закрыт P0-2 |
-| `PUBLIC METHOD m : INT …` | FAIL P0002 | всё ещё FAIL | форма `PUBLIC METHOD` не поддерживается (порядок CODESYS — `METHOD PUBLIC`); `METHOD PUBLIC m : T` падает из-за дефекта меток (§15.1); `METHOD PUBLIC m` без `: T` — OK |
+| `PUBLIC METHOD m : INT …` | FAIL P0002 | всё ещё FAIL | форма `PUBLIC METHOD` не поддерживается (порядок CODESYS — `METHOD PUBLIC`, который теперь OK: 344dc4c82) |
 | ``VAR `my var` : INT;`` | OK | FAIL P0003 → OK | закрыт P0-14 |
 | `INTERFACE i` (члены) | FAIL P0002 | без изменений | члены INTERFACE по-прежнему только заголовок (§9); в §13 не входит |
 | `NAMESPACE ns … END_NAMESPACE` | OK | FAIL P0002 → OK | закрыт P0-7 |
@@ -668,20 +668,25 @@ cd specs && just    # запускать recipe-тела через Git Bash: cd
 | `CALC(b, fbi(a := 1));`, `__WAIT; __WAIT(b);` | OK | P0-17 закрыт |
 | `/// doc` (DocComment) | OK | P0-17 закрыт |
 
-### 15.1 Найденный дефект взаимодействия (прогон 2)
+### 15.1 Найденный дефект взаимодействия (прогон 2) — исправлен 344dc4c82
 
 При включённом `allow_jump_statement` (диалекты codesys/twincat) трансформ
-`compiler/parser/src/xform_statement_labels.rs:112-118` помечает `имя :` как метку всюду, где не
-видит declaration-региона или имени, введённого ключевым словом:
+`compiler/parser/src/xform_statement_labels.rs:112-118` помечал `имя :` как метку всюду, где не
+видел declaration-региона или имени, введённого ключевым словом:
 
-* секции `VAR_STAT`/`VAR_INST`/`VAR_GENERIC` отсутствуют в `region_closer` (`:45-59`) →
+* секции `VAR_STAT`/`VAR_INST`/`VAR_GENERIC` отсутствовали в `region_closer` →
   `VAR_STAT x : INT;` → P0002;
-* слово-квалификатор (`PUBLIC`) перед именем метода прячет `METHOD` от проверки
-  `introduces_declared_name` (`:65-79`) → `METHOD PUBLIC m : INT` → P0002.
+* слово-квалификатор (`PUBLIC`) перед именем метода прятал `METHOD` от проверки
+  `introduces_declared_name` → `METHOD PUBLIC m : INT` → P0002.
 
-Обходные формы (проверено): `--allow-var-stat` без JMP → OK; `--allow-fb-inheritance` без JMP → OK;
-`METHOD PUBLIC m` без возвратного типа в codesys → OK. Следствие для §13: **P0-4 и P0-8 остаются
-открытыми** (нужен фикс `region_closer` + проверки по имени с учётом квалификаторов).
+**Исправлено (344dc4c82):** `region_closer` покрывает `VAR_STAT`/`VAR_INST`/`VAR_GENERIC`
+(`→ END_VAR`); проверка «за introducer'ом» заменена на `after_decl_introducer`, который
+пропускает контекстуальные квалификаторы (`PUBLIC`/`PRIVATE`/`PROTECTED`/`INTERNAL`/`FINAL`/
+`ABSTRACT`/`OVERRIDE`/`OVERLOAD`, регистронезависимо — как `contextual_keyword` в грамматике).
+Регресс-тесты: `apply_when_declaration_in_var_stat_block_then_not_a_label`,
+`apply_when_qualified_method_header_then_not_a_label`; прогон: 860 parser-тестов зелёные,
+сниппеты `VAR_STAT x : INT;` и `METHOD PUBLIC m : INT` → OK через `ironplcc check --dialect codesys`.
+Следствие для §13: **P0-4 и P0-8 закрыты**.
 
 ---
 
