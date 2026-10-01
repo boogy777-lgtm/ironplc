@@ -97,6 +97,18 @@ fn typed_class(p: &Parser) -> Option<Class> {
     keyword_class(kind).filter(|_| p.at(kind))
 }
 
+/// True when a character string literal starts at the cursor: a quoted string,
+/// or a typed one (`STRING#'a'`).
+pub(super) fn string_literal_ahead(p: &Parser) -> bool {
+    p.at_any(&[K::StringLit, K::WStringLit]) || matches!(typed_class(p), Some(Class::String { .. }))
+}
+
+/// True when a duration literal (`T#5s`, `TIME#5s`, `LTIME#5s`) starts at the
+/// cursor.
+pub(super) fn duration_literal_ahead(p: &Parser) -> bool {
+    typed_class(p) == Some(Class::Duration)
+}
+
 /// Consumes `kind` as the next piece of a literal, which must touch the
 /// piece before it.
 pub(super) fn piece(p: &mut Parser, kind: K, what: &str) -> bool {

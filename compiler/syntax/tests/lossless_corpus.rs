@@ -151,3 +151,99 @@ fn parse_when_every_suffix_of_sample_then_text_equals_suffix() {
         }
     }
 }
+
+/// The fixtures that hold every declaration form, for the prefix sweeps.
+const DECLARATION_FIXTURES: [&str; 6] = [
+    include_str!("fixtures/codesys/types_and_variables.st"),
+    include_str!("fixtures/codesys/configuration.st"),
+    include_str!("fixtures/codesys/oop_members.st"),
+    include_str!("fixtures/codesys/sfc_chart.st"),
+    include_str!("fixtures/codesys/namespaces.st"),
+    include_str!("fixtures/lexical/unicode_comments_pragmas.st"),
+];
+
+#[test]
+fn parse_when_every_prefix_of_declaration_fixtures_then_terminates_and_text_equals_prefix() {
+    let mut swept = 0;
+    for fixture in DECLARATION_FIXTURES {
+        let crlf = fixture.replace('\n', "\r\n");
+        for source in [fixture, crlf.as_str()] {
+            for end in 0..=source.len() {
+                if !source.is_char_boundary(end) {
+                    continue;
+                }
+                let prefix = &source[..end];
+                for options in option_sets() {
+                    let parsed = parse_source_file(prefix, &options);
+                    assert_eq!(parsed.root.text().to_string(), prefix, "at {end}");
+                }
+                swept += 1;
+            }
+        }
+    }
+    assert!(swept > 6000, "swept only {swept} prefixes");
+}
+
+#[test]
+fn parse_when_every_suffix_of_declaration_fixtures_then_text_equals_suffix() {
+    for fixture in DECLARATION_FIXTURES {
+        for start in 0..=fixture.len() {
+            if fixture.is_char_boundary(start) {
+                let suffix = &fixture[start..];
+                let parsed = parse_source_file(suffix, &ParseOptions::all());
+                assert_eq!(parsed.root.text().to_string(), suffix, "at {start}");
+            }
+        }
+    }
+}
+
+#[test]
+fn parse_when_declaration_fixtures_are_valid_then_no_errors_with_every_flag_on() {
+    for fixture in DECLARATION_FIXTURES {
+        let parsed = parse_source_file(fixture, &ParseOptions::all());
+        assert_eq!(parsed.errors, vec![], "{fixture}");
+        let crlf = fixture.replace('\n', "\r\n");
+        let parsed = parse_source_file(&crlf, &ParseOptions::all());
+        assert_eq!(parsed.errors, vec![]);
+    }
+}
+
+#[test]
+fn parse_when_crlf_tabs_unicode_comments_and_pragmas_then_all_retained_in_the_tree() {
+    let source = DECLARATION_FIXTURES[5].replace('\n', "\r\n");
+    let parsed = parse_source_file(&source, &ParseOptions::all());
+    assert_eq!(parsed.root.text().to_string(), source);
+    let kinds: Vec<SyntaxKind> = parsed
+        .root
+        .descendants_with_tokens()
+        .filter_map(|element| element.into_token())
+        .map(|token| token.kind())
+        .collect();
+    for kind in [
+        SyntaxKind::Newline,
+        SyntaxKind::Whitespace,
+        SyntaxKind::BlockComment,
+        SyntaxKind::LineComment,
+        SyntaxKind::DocComment,
+        SyntaxKind::Pragma,
+    ] {
+        assert!(kinds.contains(&kind), "{kind:?} missing from the tree");
+    }
+    let newlines: Vec<String> = parsed
+        .root
+        .descendants_with_tokens()
+        .filter_map(|element| element.into_token())
+        .filter(|token| token.kind() == SyntaxKind::Newline)
+        .map(|token| token.text().to_string())
+        .collect();
+    assert!(newlines.iter().all(|text| text == "\r\n"));
+    let names: Vec<String> = parsed
+        .root
+        .descendants_with_tokens()
+        .filter_map(|element| element.into_token())
+        .filter(|token| token.kind() == SyntaxKind::Ident)
+        .map(|token| token.text().to_string())
+        .collect();
+    assert!(names.contains(&"Größe".to_string()), "{names:?}");
+    assert!(source.contains('\t'));
+}

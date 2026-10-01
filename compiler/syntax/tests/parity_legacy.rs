@@ -1,145 +1,24 @@
-//! Parity with the legacy PEG parser, test-only.
+//! Parity with the legacy PEG parser on statements and expressions,
+//! test-only.
 //!
 //! For a table of statement and expression snippets under every dialect
 //! preset, the new parser must report "no syntax errors" exactly when the
 //! legacy statement-fragment parser accepts. A difference must be listed in
 //! the named exception table with its reason; an unlisted difference fails,
-//! and so does a listed one that no longer differs.
+//! and so does a listed one that no longer differs. Declarations and whole
+//! files are compared in `parity_declarations.rs` and `parity_files.rs`.
 
 mod parity;
 
-use parity::legacy::{presets, Preset};
+use parity::compare::{assert_clean, compare, summarize, Item};
+use parity::legacy::presets;
 use parity::tables::{
     BODY_EXCEPTIONS, EXPRESSIONS, EXPRESSION_EXCEPTIONS, STATEMENTS, STATEMENT_EXCEPTIONS,
 };
-use parity::{extract, verdict, Exception, Kind, Oracle, Verdict};
-use std::collections::BTreeMap;
+use parity::{extract, Kind, Oracle};
 
-/// The outcome of comparing a table of snippets.
-struct Report {
-    compared: usize,
-    agreements: usize,
-    both_accept: usize,
-    both_reject: usize,
-    unexplained: Vec<String>,
-    /// Each listed difference with the number of presets it occurred under.
-    explained: BTreeMap<String, usize>,
-    stale: Vec<String>,
-}
-
-fn compare(
-    kind: Kind,
-    oracle: Oracle,
-    snippets: &[&str],
-    presets: &[Preset],
-    exceptions: &[Exception],
-) -> Report {
-    let mut report = Report {
-        compared: 0,
-        agreements: 0,
-        both_accept: 0,
-        both_reject: 0,
-        unexplained: Vec::new(),
-        explained: BTreeMap::new(),
-        stale: Vec::new(),
-    };
-    let mut used = vec![false; exceptions.len()];
-    for snippet in snippets {
-        for preset in presets {
-            let verdict = verdict(kind, snippet, preset);
-            report.compared += 1;
-            if verdict.legacy_for(oracle) == verdict.new {
-                report.agreements += 1;
-                if verdict.new {
-                    report.both_accept += 1;
-                } else {
-                    report.both_reject += 1;
-                }
-                continue;
-            }
-            let covering: Vec<usize> = exceptions
-                .iter()
-                .enumerate()
-                .filter(|(_, exception)| {
-                    exception.covers(kind, snippet, &preset.name, oracle, &verdict)
-                })
-                .map(|(index, _)| index)
-                .collect();
-            for index in &covering {
-                used[*index] = true;
-                let exception = &exceptions[*index];
-                if !exception.basis_holds(&verdict) {
-                    report.unexplained.push(format!(
-                        "{} -- blamed on the fragment entry, but the program-wrapped legacy parser differs from the new parser",
-                        describe(kind, snippet, &preset.name, &verdict)
-                    ));
-                }
-                let key = format!("{kind:?} {snippet:?} -- {}", exception.reason);
-                *report.explained.entry(key).or_insert(0) += 1;
-            }
-            if covering.is_empty() {
-                report
-                    .unexplained
-                    .push(describe(kind, snippet, &preset.name, &verdict));
-            }
-        }
-    }
-    for (index, exception) in exceptions.iter().enumerate() {
-        if exception.kind == kind && !used[index] {
-            report
-                .stale
-                .push(format!("{:?} {:?}", exception.kind, exception.snippet));
-        }
-    }
-    report
-}
-
-fn describe(kind: Kind, snippet: &str, preset: &str, verdict: &Verdict) -> String {
-    format!(
-        "{kind:?} {snippet:?} under {preset}: legacy {} program {} new {}",
-        verdict.legacy, verdict.program, verdict.new
-    )
-}
-
-fn summarize(name: &str, snippets: usize, report: &Report) {
-    println!(
-        "{name}: {snippets} snippets, {} comparisons, {} agree ({} accept, {} reject), {} listed differences",
-        report.compared,
-        report.agreements,
-        report.both_accept,
-        report.both_reject,
-        report.explained.len()
-    );
-    for (difference, presets) in &report.explained {
-        println!("  [{presets} presets] {difference}");
-    }
-}
-
-fn assert_clean(report: &Report) {
-    // A table in which both parsers reject everything, or accept everything,
-    // would agree trivially.
-    assert!(
-        report.both_accept > 100,
-        "{} agreed accepts",
-        report.both_accept
-    );
-    assert!(
-        report.both_reject > 20,
-        "{} agreed rejects",
-        report.both_reject
-    );
-    assert!(
-        report.unexplained.is_empty(),
-        "{} unexplained differences of {} comparisons:\n{}",
-        report.unexplained.len(),
-        report.compared,
-        report.unexplained.join("\n")
-    );
-    assert!(
-        report.stale.is_empty(),
-        "exceptions that no longer differ:\n{}",
-        report.stale.join("\n")
-    );
+fn items<'a>(snippets: &[&'a str]) -> Vec<Item<'a>> {
+    snippets.iter().map(|text| Item::snippet(text)).collect()
 }
 
 #[test]
@@ -170,12 +49,12 @@ fn parity_when_statement_table_then_differences_are_exactly_the_exceptions() {
     let report = compare(
         Kind::Statements,
         Oracle::Fragment,
-        STATEMENTS,
+        &items(STATEMENTS),
         &presets(),
         STATEMENT_EXCEPTIONS,
     );
     summarize("statements", STATEMENTS.len(), &report);
-    assert_clean(&report);
+    assert_clean(&report, 100, 20);
 }
 
 #[test]
@@ -183,12 +62,12 @@ fn parity_when_expression_table_then_differences_are_exactly_the_exceptions() {
     let report = compare(
         Kind::Expression,
         Oracle::Fragment,
-        EXPRESSIONS,
+        &items(EXPRESSIONS),
         &presets(),
         EXPRESSION_EXCEPTIONS,
     );
     summarize("expressions", EXPRESSIONS.len(), &report);
-    assert_clean(&report);
+    assert_clean(&report, 100, 20);
 }
 
 #[test]
@@ -199,10 +78,10 @@ fn parity_when_legacy_test_bodies_then_differences_are_exactly_the_exceptions() 
     let report = compare(
         Kind::Statements,
         Oracle::Program,
-        &snippets,
+        &items(&snippets),
         &presets(),
         BODY_EXCEPTIONS,
     );
     summarize("legacy test bodies", snippets.len(), &report);
-    assert_clean(&report);
+    assert_clean(&report, 100, 20);
 }

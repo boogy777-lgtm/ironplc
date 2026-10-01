@@ -6,9 +6,8 @@
 //! covers the whole input: `tree.text() == source` for any input, valid or
 //! not, and every error range lies inside the source.
 //!
-//! This slice covers expressions and statements. A file's declarations are
-//! kept as unparsed regions until the declaration grammar lands. Nothing here
-//! is wired into a production consumer.
+//! The grammar covers expressions, statements and every declaration of a file.
+//! Nothing here is wired into a production consumer.
 
 pub(crate) mod event;
 mod gates;
@@ -21,7 +20,7 @@ use self::options::ParseOptions;
 use self::state::Parser;
 use crate::cst::build_green;
 use crate::error::SyntaxError;
-use crate::lexer::lex;
+use crate::lexer::{lex_with, LexOptions};
 use crate::syntax_kind::{SyntaxKind, SyntaxNode};
 
 /// The result of a parse: the tree and every syntax error found.
@@ -61,15 +60,19 @@ pub fn parse_expression(source: &str, options: &ParseOptions) -> Parse {
     })
 }
 
-/// Parses a whole file. Declarations are not parsed yet: each top-level
-/// declaration is one unparsed region, so only lexical and dialect-gate
-/// errors, and stray top-level tokens, are reported for it.
+/// Parses a whole file: a sequence of declarations. Input that starts no
+/// declaration is wrapped in an error node up to the next one, and a
+/// declaration that is malformed or not closed reports its errors and ends
+/// where the next declaration begins.
 pub fn parse_source_file(source: &str, options: &ParseOptions) -> Parse {
     parse_with(source, options, grammar::source_file)
 }
 
 fn parse_with(source: &str, options: &ParseOptions, entry: impl FnOnce(&mut Parser)) -> Parse {
-    let (tokens, mut errors) = lex(source);
+    let lexing = LexOptions {
+        nested_comments: options.allow_nested_comments,
+    };
+    let (tokens, mut errors) = lex_with(source, lexing);
     errors.extend(gates::gate_errors(&tokens, options));
 
     let mut parser = Parser::new(&tokens, *options);

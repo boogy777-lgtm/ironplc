@@ -358,25 +358,29 @@ fn parse_when_random_token_soup_then_every_entry_point_terminates_with_a_complet
 }
 
 #[test]
-fn parse_source_file_when_declarations_then_each_is_one_unparsed_region() {
+fn parse_source_file_when_declarations_then_each_is_a_node_of_its_kind() {
     let source = "PROGRAM p\nVAR x : INT; END_VAR\nx := 1;\nEND_PROGRAM\n\nFUNCTION f : INT\nf := 1;\nEND_FUNCTION\nTYPE t : INT; END_TYPE\n";
     let parsed = parse_source_file(source, &ParseOptions::default());
     assert_well_formed(source, &parsed);
-    assert!(parsed.is_ok());
-    let regions = nodes_of(&parsed.root, SyntaxKind::UnparsedDeclaration);
-    assert_eq!(regions.len(), 3);
-    assert!(regions[0].text().to_string().starts_with("PROGRAM p"));
-    assert!(regions[0].text().to_string().ends_with("END_PROGRAM"));
+    assert_eq!(parsed.errors, vec![]);
+    let programs = nodes_of(&parsed.root, SyntaxKind::ProgramDecl);
+    assert_eq!(programs.len(), 1);
+    assert!(programs[0].text().to_string().starts_with("PROGRAM p"));
+    assert!(programs[0].text().to_string().ends_with("END_PROGRAM"));
+    assert_eq!(nodes_of(&parsed.root, SyntaxKind::FunctionDecl).len(), 1);
+    assert_eq!(nodes_of(&parsed.root, SyntaxKind::TypeBlock).len(), 1);
 }
 
 #[test]
-fn parse_source_file_when_namespaces_nest_then_outer_region_spans_them() {
+fn parse_source_file_when_namespaces_nest_then_outer_node_spans_them() {
     let source = "NAMESPACE a NAMESPACE b END_NAMESPACE END_NAMESPACE PROGRAM p END_PROGRAM";
     let parsed = parse_source_file(source, &ParseOptions::all());
     assert_well_formed(source, &parsed);
-    let regions = nodes_of(&parsed.root, SyntaxKind::UnparsedDeclaration);
-    assert_eq!(regions.len(), 2);
-    assert!(regions[0].text().to_string().ends_with("END_NAMESPACE"));
+    assert_eq!(parsed.errors, vec![]);
+    let namespaces = nodes_of(&parsed.root, SyntaxKind::NamespaceDecl);
+    assert_eq!(namespaces.len(), 2);
+    assert!(namespaces[0].text().to_string().ends_with("END_NAMESPACE"));
+    assert_eq!(nodes_of(&parsed.root, SyntaxKind::ProgramDecl).len(), 1);
 }
 
 #[test]

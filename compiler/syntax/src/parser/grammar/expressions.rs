@@ -156,7 +156,7 @@ pub(in crate::parser) fn close_group(p: &mut Parser, closer: K, what: &str) {
     p.eat(closer);
 }
 
-fn ref_expr(p: &mut Parser) -> CompletedMarker {
+pub(in crate::parser) fn ref_expr(p: &mut Parser) -> CompletedMarker {
     let node = p.start();
     p.bump_n(2);
     if variable(p).is_none() {
@@ -223,14 +223,17 @@ const TYPE_KEYWORDS: &[K] = &[
     K::AnyDate,
 ];
 
-/// A type name: an elementary or generic type keyword, or a name.
-pub(in crate::parser) fn type_ref(p: &mut Parser) {
+/// A type name: an elementary or generic type keyword, or a name. Returns
+/// false, having reported an error and consumed nothing, when there is none.
+pub(in crate::parser) fn type_ref(p: &mut Parser) -> bool {
     if p.at_any(TYPE_KEYWORDS) || p.name_at(0) {
         let node = p.start();
         p.bump();
         p.complete(node, K::TypeRef);
+        true
     } else {
         p.error("expected a type name");
+        false
     }
 }
 

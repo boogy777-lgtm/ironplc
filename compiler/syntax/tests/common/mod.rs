@@ -26,10 +26,10 @@ fn collect(dir: &Path, files: &mut Vec<PathBuf>) {
 }
 
 /// The corpus the tiling guarantees are checked against: the shared test
-/// resources and the S0 spike fixtures, read in place.
+/// resources, read in place, and this crate's fixtures.
 pub fn corpus() -> Vec<(PathBuf, String)> {
     let mut files = st_files("../resources/test");
-    files.extend(st_files("../s0-spike/fixtures"));
+    files.extend(st_files("tests/fixtures"));
     assert!(
         files.len() > 40,
         "corpus unexpectedly small: {}",
@@ -103,4 +103,16 @@ pub fn expression(source: &str, options: &ironplc_syntax::ParseOptions) -> Strin
         .first_child()
         .map(|node| render(&node))
         .unwrap_or_default()
+}
+
+/// The rendering of the top-level nodes of a file, trivia left out, joined by
+/// a space.
+pub fn file(source: &str, options: &ironplc_syntax::ParseOptions) -> String {
+    let parsed = ironplc_syntax::parse_source_file(source, options);
+    parsed
+        .root
+        .children()
+        .map(|node| render(&node))
+        .collect::<Vec<_>>()
+        .join(" ")
 }

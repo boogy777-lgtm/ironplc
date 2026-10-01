@@ -119,6 +119,12 @@ parse_options! {
     allow_unicode_identifiers,
     /// Consecutive underscores inside an identifier.
     allow_multiple_underscores,
+    /// `VAR END_VAR` with no declaration.
+    allow_empty_var_blocks,
+    /// `STRING(n)` and `WSTRING(n)`, a length in parentheses.
+    allow_paren_string_length,
+    /// `ARRAY[*] OF T`, the array whose bounds the caller supplies.
+    allow_incomplete_array,
 }
 
 impl ParseOptions {

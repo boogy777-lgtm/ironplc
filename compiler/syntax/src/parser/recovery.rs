@@ -11,9 +11,64 @@ use super::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
 use crate::syntax_kind::SyntaxKind;
 
+/// Keywords that open a variable block.
+pub(crate) const VAR_OPENERS: &[SyntaxKind] = &[
+    K::Var,
+    K::VarInput,
+    K::VarOutput,
+    K::VarInOut,
+    K::VarTemp,
+    K::VarExternal,
+    K::VarAccess,
+    K::VarConfig,
+    K::VarGlobal,
+    K::VarStat,
+    K::VarInst,
+    K::VarGeneric,
+];
+
+/// Keywords that open a declaration at the top of a file, or inside a
+/// namespace.
+pub(crate) const DECLARATION_START: &[SyntaxKind] = &[
+    K::Program,
+    K::Function,
+    K::FunctionBlock,
+    K::Type,
+    K::Configuration,
+    K::Interface,
+    K::Namespace,
+    K::VarGlobal,
+];
+
+/// Keywords that open a member of a function block, after its body.
+pub(crate) const MEMBER_START: &[SyntaxKind] = &[K::Method, K::Property];
+
+/// The `END_*` keywords that close a declaration. A declaration that is
+/// missing its own closer stops at another declaration's closer and leaves it
+/// for the enclosing declaration, instead of consuming it.
+pub(crate) const DECLARATION_END: &[SyntaxKind] = &[
+    K::EndProgram,
+    K::EndFunction,
+    K::EndFunctionBlock,
+    K::EndMethod,
+    K::EndProperty,
+    K::EndGet,
+    K::EndSet,
+    K::EndAction,
+    K::EndTransition,
+    K::EndStep,
+    K::EndType,
+    K::EndConfiguration,
+    K::EndResource,
+    K::EndNamespace,
+    K::EndInterface,
+];
+
 /// Keywords that close or divide a block. A statement list ends at any of
 /// them, and recovery never consumes one on its own: whichever enclosing
-/// construct owns the keyword gets to see it.
+/// construct owns the keyword gets to see it. The keywords that open a
+/// declaration or a variable block are in the set too, so a block left open
+/// before the next declaration ends there instead of swallowing it.
 pub(crate) const BLOCK_END: &[SyntaxKind] = &[
     K::EndIf,
     K::EndCase,
@@ -38,11 +93,33 @@ pub(crate) const BLOCK_END: &[SyntaxKind] = &[
     K::EndVar,
     K::EndType,
     K::EndStruct,
+    K::EndUnion,
     K::EndConfiguration,
     K::EndResource,
     K::EndNamespace,
     K::EndInterface,
     K::EndStep,
+    K::Program,
+    K::Function,
+    K::FunctionBlock,
+    K::Type,
+    K::Configuration,
+    K::Interface,
+    K::Namespace,
+    K::Method,
+    K::Property,
+    K::Var,
+    K::VarInput,
+    K::VarOutput,
+    K::VarInOut,
+    K::VarTemp,
+    K::VarExternal,
+    K::VarAccess,
+    K::VarConfig,
+    K::VarGlobal,
+    K::VarStat,
+    K::VarInst,
+    K::VarGeneric,
 ];
 
 /// Keywords that begin a statement; recovery inside a malformed statement

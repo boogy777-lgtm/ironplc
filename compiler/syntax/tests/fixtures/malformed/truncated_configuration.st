@@ -1,0 +1,4 @@
+CONFIGURATION Cfg
+  RESOURCE Res ON PLC
+    TASK Fast (INTERVAL := T#10ms, PRIORITY := 1);
+    PROGRAM Main WITH Fast : Prog;

@@ -228,6 +228,68 @@ pub fn legacy_test_bodies() -> Vec<String> {
     bodies
 }
 
+/// Every Rust source file of the legacy parser crate, tests included.
+pub fn legacy_all_sources() -> Vec<(PathBuf, String)> {
+    fn collect(dir: &std::path::Path, files: &mut Vec<PathBuf>) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.filter_map(|entry| entry.ok()) {
+            let path = entry.path();
+            if path.is_dir() {
+                collect(&path, files);
+            } else if path.extension().is_some_and(|ext| ext == "rs") {
+                files.push(path);
+            }
+        }
+    }
+    let mut files = Vec::new();
+    collect(
+        &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../parser/src"),
+        &mut files,
+    );
+    files.sort();
+    files
+        .into_iter()
+        .filter_map(|path| std::fs::read_to_string(&path).ok().map(|text| (path, text)))
+        .collect()
+}
+
+/// The keywords that open a top-level declaration.
+fn is_declaration_opener(kind: SyntaxKind) -> bool {
+    matches!(
+        kind,
+        SyntaxKind::Program
+            | SyntaxKind::Function
+            | SyntaxKind::FunctionBlock
+            | SyntaxKind::Type
+            | SyntaxKind::Configuration
+            | SyntaxKind::Interface
+            | SyntaxKind::Namespace
+            | SyntaxKind::VarGlobal
+    )
+}
+
+/// Every distinct string literal in the legacy parser crate whose first
+/// token opens a declaration: the whole-file snippets the legacy authors
+/// wrote, accepted and rejected alike.
+pub fn legacy_declaration_snippets() -> Vec<String> {
+    let mut snippets: Vec<String> = legacy_all_sources()
+        .iter()
+        .flat_map(|(_, text)| string_literals(text))
+        .filter(|literal| {
+            let (tokens, _) = lex(literal);
+            tokens
+                .iter()
+                .find(|token| !token.kind.is_trivia())
+                .is_some_and(|token| is_declaration_opener(token.kind))
+        })
+        .collect();
+    snippets.sort();
+    snippets.dedup();
+    snippets
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

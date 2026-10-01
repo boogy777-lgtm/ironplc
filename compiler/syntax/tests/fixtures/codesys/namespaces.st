@@ -1,0 +1,12 @@
+NAMESPACE Outer
+    TYPE Level : INT; END_TYPE
+    NAMESPACE Inner
+        FUNCTION Twice : INT
+        VAR_INPUT x : INT; END_VAR
+        Twice := x * 2;
+        END_FUNCTION
+    END_NAMESPACE
+END_NAMESPACE
+
+PROGRAM Main
+END_PROGRAM

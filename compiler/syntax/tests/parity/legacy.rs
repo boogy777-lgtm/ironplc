@@ -61,3 +61,8 @@ pub fn accepts_in_program(body: &str, options: &CompilerOptions) -> bool {
     let source = format!("PROGRAM p\n{body}\nEND_PROGRAM\n");
     ironplc_parser::parse_program(&source, &FileId::default(), options).is_ok()
 }
+
+/// True when the legacy parser accepts `source` as a whole file.
+pub fn accepts_file(source: &str, options: &CompilerOptions) -> bool {
+    ironplc_parser::parse_program(source, &FileId::default(), options).is_ok()
+}

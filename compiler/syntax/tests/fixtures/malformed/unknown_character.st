@@ -1,0 +1,3 @@
+PROGRAM P
+x := 1 ? 2;
+END_PROGRAM
