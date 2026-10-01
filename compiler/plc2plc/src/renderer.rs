@@ -1100,6 +1100,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         node: &PropertyDeclaration,
     ) -> Result<Self::Value, Diagnostic> {
         self.write_ws("PROPERTY");
+        self.write_qualifiers(&node.qualifiers);
         self.visit_id(&node.name)?;
         self.write_ws(":");
         self.visit_function_return_type(&node.property_type)?;

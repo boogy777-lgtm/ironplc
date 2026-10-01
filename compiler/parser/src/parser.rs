@@ -1548,6 +1548,7 @@ parser! {
       / t:contextual_keyword("INTERNAL") { MemberQualifier { kind: MemberQualifierKind::Access(AccessSpecifier::Internal), span: t.span.clone() } }
       / t:contextual_keyword("FINAL") { MemberQualifier { kind: MemberQualifierKind::Final, span: t.span.clone() } }
       / t:contextual_keyword("OVERRIDE") { MemberQualifier { kind: MemberQualifierKind::Override, span: t.span.clone() } }
+      / t:contextual_keyword("OVERLOAD") { MemberQualifier { kind: MemberQualifierKind::Overload, span: t.span.clone() } }
     // Qualifiers in source order; their order and combination are checked
     // after parsing. A word is only a qualifier when the declaration's name
     // still follows it, so `METHOD Override : BOOL` is a method named
@@ -1593,7 +1594,7 @@ parser! {
       let (edge_variables, _) = VarDeclarations::drain_edge_decl(remainder);
       (variables, edge_variables, body.unwrap_or_default())
     }
-    rule property_declaration() -> PropertyDeclaration = start:tok(TokenType::Property) _ name:identifier() _ tok(TokenType::Colon) _ property_type:function_return_type() _ get:(g:contextual_keyword("GET") _ parts:property_accessor_parts() _ e:tok(TokenType::EndGet) { (g, parts, e) })? _ set:(s:contextual_keyword("SET") _ parts:property_accessor_parts() _ e:tok(TokenType::EndSet) { (s, parts, e) })? _ end:tok(TokenType::EndProperty) {
+    rule property_declaration() -> PropertyDeclaration = start:tok(TokenType::Property) _ qualifiers:member_qualifiers() _ name:identifier() _ tok(TokenType::Colon) _ property_type:function_return_type() _ get:(g:contextual_keyword("GET") _ parts:property_accessor_parts() _ e:tok(TokenType::EndGet) { (g, parts, e) })? _ set:(s:contextual_keyword("SET") _ parts:property_accessor_parts() _ e:tok(TokenType::EndSet) { (s, parts, e) })? _ end:tok(TokenType::EndProperty) {
       let get = get.map(|(g, (variables, edge_variables, body), e)| {
         PropertyDeclaration::get_accessor(&name, &property_type, variables, edge_variables, body, SourceSpan::join(&g.span, &e.span))
       });
@@ -1601,6 +1602,7 @@ parser! {
         PropertyDeclaration::set_accessor(&name, &property_type, variables, edge_variables, body, SourceSpan::join(&s.span, &e.span))
       });
       PropertyDeclaration {
+        qualifiers,
         name,
         property_type,
         get,
