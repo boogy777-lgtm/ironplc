@@ -1,5 +1,9 @@
 fn main() {
     ironplc_spec_requirements_gen::generate(&[
+        // CODESYS ST surface syntax (`REQ-CS-*`): the `|` operator, the
+        // incomplete array type, `PARAMS(n) OF T`, identifier spellings and
+        // the special operators.
+        "codesys-st-surface-syntax.md",
         "reference-to-twincat.md",
         // plc2plc owns the round-trip requirement (`REQ-CL-plc2plc-001`): user
         // source renders unchanged and injected library declarations are never
@@ -12,5 +16,13 @@ fn main() {
         "partial-access-bit-syntax.md",
         // Character string literals (`REQ-SL-plc2plc-*`): escaped rendering.
         "string-literals.md",
+        // ST declaration extensions (`REQ-STX-plc2plc-*`): round-trip
+        // rendering of UNION, the extra variable sections and NAMESPACE.
+        "st-declaration-extensions.md",
+        // CODESYS exception handling (`REQ-TC-plc2plc-*`): round-trip
+        // rendering.
+        "codesys-try-catch.md",
+        // The CODESYS jump statements (`REQ-JMP-plc2plc-*`): round trip.
+        "codesys-jump-and-pragmas.md",
     ]);
 }

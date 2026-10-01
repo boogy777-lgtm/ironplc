@@ -1,0 +1,1405 @@
+{
+"_3S.CoDeSys.Compiler35220.Resources.CompilerStrings.en.resources":{
+"AffectionCopied":"Old value copied"
+,
+"AffectionInitialized":"Initialized"
+,
+"AffectionInitNewVariables":"Initialized new variables"
+,
+"AffectionLocationChanged":"Location changed"
+,
+"AffectionVFTableInitialized":"Virtual function table initialized"
+,
+"And_Text":"and"
+,
+"Area_Output_Checked":"Size needed for{0}: {1} bytes (available size: {2} bytes)"
+,
+"Area_Output_Checked_Exceeded":"Size exceeded for{0}: {1} bytes (available size: {2} bytes)"
+,
+"Area_Output_Info":"Memory area {0} contains {1}: size: {2} bytes, highest used address: {3}, largest contiguous memory gap: {4} bytes ({5} %)"
+,
+"Area_Output_Info_Simple":"Memory area {0} contains {1}: largest contiguous memory gap: {2} bytes ({3} %)"
+,
+"Area_Output_Info_Simple_2":"Memory area {0} contains {1}: size: {2} bytes, largest contiguous memory gap: {3} bytes ({4} %)"
+,
+"AttributeHasNoEffect":"(Attribute has no effect)"
+,
+"Build":"Build"
+,
+"BuildCompleteErrors":"Build complete -- {0} errors, {1} warnings : No download possible"
+,
+"BuildCompleteOK":"Build complete -- {0} errors, {1} warnings : Ready for download"
+,
+"BuildStarted":"------ Build started: Application: {0} -------"
+,
+"Code_Text":"Code"
+,
+"CodeNoChange":"Code has not changed. No online change necessary."
+,
+"CodeSizeOutput":"Size of generated code: {0} bytes"
+,
+"Constant":"Constant"
+,
+"Data_Text":"Data"
+,
+"DataSizeOutput":"Size of global data: {0} bytes"
+,
+"DoCodeTypification":"Typify code"
+,
+"DoLocation":"Locate global data"
+,
+"DoTypification":"Typifiying"
+,
+"Err_NoCodegeneratorDetailed":"Creating a code generator failed: The require0d add-on '{0}' is not installed"
+,
+"Err_NoMemoryAllocationCallbackDetailed":"Creating the memory allocator failed: The required add-on '{0}' is not installed"
+,
+"ErrNoApplication":"Application not found"
+,
+"Error_Check_ImplicitParameter_MissingDefault":"implicit-parameter requires a default value for the input."
+,
+"Error_Check_ImplicitParameter_UnknownKind":"Unknown kind of implicit-parameter '{0}' , must be one of [{1}]."
+,
+"Error_Check_ImplicitParameter_WrongPouType":"implicit-parameter can only be applied to inputs of functions and methods."
+,
+"Error_Check_ImplicitParameter_WrongVarKind":"implicit-parameter can only be applied to VAR_INPUT variables."
+,
+"Error_Check_ImplicitParameter_WrongVarType":"implicit-parameter can only be applied to variables of type STRING or POINTER TO STRING."
+,
+"ErrorLimitExceeded":"More than {0} errors occured: Skipping all further error messages"
+,
+"Except_Boot_Project_Error":"No boot project possible in this state: Application out of memory. Perform full download first."
+,
+"Except_Boot_Project_Error_Error_In_Compile":"No boot project possible in this state: Error on creating boot project information. See message window."
+,
+"GenerateCode":"Generate code for {0}..."
+,
+"GenerateCodeInit":"Generate code initialization..."
+,
+"GenerateCodeProgress":"Generating code..."
+,
+"GenerateGlobalInit":"Generate global initializations..."
+,
+"GenerateRelocations":"Generate relocations..."
+,
+"GeneratingCode":"Generate code..."
+,
+"GlobalInitErrorPrefix":"Error in implicit initialization code: "
+,
+"Input_Text":"Input"
+,
+"InterfaceReferencesAffected":"The following interface references are tested on redirection:"
+,
+"InterfacesChanged":"The following POU interfaces have been changed:"
+,
+"Literal":"Literal"
+,
+"Memory_Text":"Memory"
+,
+"NonSafety_Text":"Nonsafe data"
+,
+"NumInterfacesChanged":"{0} interfaces of POUs changed"
+,
+"NumInterfacesToTest":"{0} interface references are tested for redirection"
+,
+"NumPOUsDownloaded":"{0} POUs changed their code"
+,
+"NumVariablesAffected":"{0} variables affected by online change, {1} changed location, {2} initialized, {3} copied, {4} initialized virtual function table"
+,
+"Output_Text":"Output"
+,
+"Persistent_Text":"Persistent data"
+,
+"PersistenVariablesChanged":"Persistent variables changed! Do you want to initialize with current list?\r\n\t\t\r\nYes: Current list will be initialized, existing persistent values will be overridden\r\nNo:  Existing persistent values will be kept, current list will use these values\r\n     WARNING: The values may not match to your persistent variables. You have to check the values manually!\r\n     E.g: if you add a variable at the beginning of the list, all of the values are wrong!\r\n\r\nCancel: cancel download or online change"
+,
+"POUsDownloaded":"The code of the following POUs will be downloaded"
+,
+"POUUnit":"POUs"
+,
+"ProjectUpToDate":"The application is up to date"
+,
+"Retain_Text":"Retain data"
+,
+"StoppingPrecompileChecks":"Stopping precompile checks..."
+,
+"TooLongStringLiteralHint":"...({0} more characters)..."
+,
+"TotalMemorySizeCodeAndData":"Total allocated memory size for code and data: {0} bytes"
+,
+"TypifyAll":"Typify code..."
+,
+"UnknownMacroText":"Unknown"
+,
+"VariablesAffected":"The following variables are affected by online change:"
+,
+"WaitForDownloadInfoSaving":"Waiting until the writing of the compileinfo file is completed"
+,
+"WarningLimitExceeded":"More than {0} warnings occured: Skipping all further warning messages"
+}
+,
+"_3S.CoDeSys.Compiler35220.Resources.ErrorMessages.en.resources":{
+"Err_AbstractAndFinalNotPossible":"A method or functionblock cannot be ABSTRACT and FINAL"
+,
+"Err_AbstractAndPrivateNotPossible":"A PRIVATE method cannot be ABSTRACT"
+,
+"Err_AbstractFunctionBlockAssigned":"Function block {0} is ABSTRACT and cannot be used as a target for an assignment"
+,
+"Err_AbstractFunctionBlockInstance":"Function block {0} is ABSTRACT and cannot be instantiated"
+,
+"Err_AbstractMethodMustNotContainAnyStatements":"The ABSTRACT method {0}.{1} must not contain any statements"
+,
+"Err_AbstractMethodNotImplemented":"There is no implementation for ABSTRACT method '{0}' defined in function block '{1}'"
+,
+"Err_AbstractMethodOnlyInAbstractFunctionblock":"The ABSTRACT method {0} requires, that the function block {1} is ABSTRACT too"
+,
+"Err_AbstractMethodStaticCall":"The ABSTRACT method '{0}' cannot be called by a static call"
+,
+"Err_AbstractOnFunctionBlocksAndMethodsOnly":"ABSTRACT may only be applied on methods and function blocks"
+,
+"Err_AbstractPropertyNotImplemented":"There is no implementation for {0} of ABSTRACT property '{1}' defined in function block '{2}'"
+,
+"Err_AbstractPropertyStaticCall":"The ABSTRACT property '{0}' cannot be statically accessed"
+,
+"Err_AbstractWrongVarInMethod":"Only inputs, outputs and inouts allowed in ABSTRACT methods"
+,
+"Err_AccessOutsideOfCall":"Input '{0}' of '{1}' cannot be accessed outside of call"
+,
+"Err_AccessToInternalObject":"Cannot access internal object {0} of library {1}"
+,
+"Err_AccessToInternalProperty":"Cannot access internal property {0} of library {1}"
+,
+"Err_AccessToInternalVariable":"Cannot access internal variable {0} of library {1}"
+,
+"Err_AccessVarInstFromOutsideTheDeclaringMethod":"Cannot access VAR_INST '{0}' of '{1}' from outside the declaring method"
+,
+"Err_AddressExpected":"Direct address expected after AT instead of {0}"
+,
+"Err_AddressMisaligned":"Address {0} misaligned for datatype {1}"
+,
+"Err_AddressOfNonInstanceVar":"Instance required instead of type name in address-of expression '{0}'"
+,
+"Err_AddressOutOfRange":"Address '{0}' out of range: Calculated offset: {1} bytes, allocated size: {2} bytes"
+,
+"Err_AddressSourceIsAddressDest":"Variable '{0}' was located on address '{1}'. At this address variable '{2}' is now located. This change is not possible with online change."
+,
+"Err_Ambiguity":"Ambiguous use of name '{0}'"
+,
+"Err_AnyTypeOnlyInFunction":"Variables of type '{0}' only allowed as input of functions"
+,
+"Err_ApplicationConflict":"There are two applications with the same name '{0}' on device '{1}'"
+,
+"Err_ArrayBorderIsNoConstant":"Border '{0}' of array is no constant value"
+,
+"Err_ArrayBorderNoValidSignedInteger":"Array border {0} does not evaluate to a valid signed integer constant"
+,
+"Err_ArrayIndexNumWrong":"Array requires exactly {0} indexes"
+,
+"Err_ArrayInitialisationCountNoConstant":"Number '{0}' of array initialisations is no constant value"
+,
+"Err_ArrayInitialisationNotPossible":"An array initialisation is not possible as parameter of an initial function call. Use a variable instead"
+,
+"Err_ArrayInitializationExpected":"Array initialisation expected"
+,
+"Err_ATDeclarationNotAllowed":"An AT declaration is only allowed inside a VAR section"
+,
+"Err_AtLeastOneExpected":"At least one statement is expected"
+,
+"Err_AttributeNameExpected":"Single byte string expected for an attribute value instead of '{0}'"
+,
+"Err_AttributeNotAllowedFor":"Attribute '{0}' not allowed for '{1}'"
+,
+"Err_AttributeNotValidForNonExternalPOU":"Attribute '{0}' not valid for non-external POU"
+,
+"Err_BaseClassNotFound":"No definition found for base class '{0}'"
+,
+"Err_BaseNotAllowed":"Expression SUPER is not allowed in this context"
+,
+"Err_Bitaccessnoconst":"Bit access requires literal or symbolic integer constant"
+,
+"Err_BitAccessOnlyOnInt":"Biaccess is only possible on integer types"
+,
+"Err_BitAdrOnOperation":"Operator BITADR is only possible on variables, not on operations"
+,
+"Err_BitNrOverflow":"'{0}' is no valid bit number for '{1}'"
+,
+"Err_BitsForStructureOnly":"Only structures and function blocks can contain variables of type BIT"
+,
+"Err_BitsWrongScope":"Variables of type BIT must be declared within a VAR_INPUT, VAR_OUTPUT, or VAR section"
+,
+"Err_BlobInitError":"Constant value expected instead of '{0}'"
+,
+"Err_CalcNeedsCall":"Second parameter of conditional call must be a valid call statement"
+,
+"Err_CallAfterInitHasInputs":"A method marked with '{0}' cannot have any inputs"
+,
+"Err_CalleeInvalidType":"Program name, function or function block instance expected instead of '{0}'"
+,
+"Err_CallOfPrivateMethod":"Cannot access private method {0}.{1}"
+,
+"Err_CallOfPrivateProperty":"Cannot access private property {0}.{1}"
+,
+"Err_CallOfProtectedMethod":"Cannot access protected method {0}.{1}"
+,
+"Err_CallOfProtectedProperty":"Cannot access protected property {0}.{1}"
+,
+"Err_CallRecursion":"Call recursion: {0}"
+,
+"Err_CancelledByUser":"Compilation cancelled by user"
+,
+"Err_CannotAddMultipleTime":"Cannot add multiple operands of type '{0}'"
+,
+"Err_CannotMultiplyMultipleTime":"Cannot multiply multiple operands of type '{0}'"
+,
+"Err_CantHaveBaseClass":"Keyword EXTENDS not applicable to type {0}"
+,
+"Err_CaseLabelDuplicate":"CASE label duplicate"
+,
+"Err_CaseLabelInCaseRange":"CASE label {0} also contained in range {1} .. {2}"
+,
+"Err_CaseLabelNoConstant":"CASE label requires literal or symbolic integer constant"
+,
+"Err_CaseLabelOutsideOfCase":"CASE label is not part of a CASE statement"
+,
+"Err_CaseRangesOverlapping":"CASE contains overlapping range {0} .. {1} and {2} .. {3}"
+,
+"Err_CheckLicenseNeedsSysTarget":"The 3S License library is required for the __CHECKLICENSE operator"
+,
+"Err_CompareNotPossible1":"Compare not possible on objects of type '{0}'"
+,
+"Err_CompareNotPossible2":"Compare not possible on objects of type '{0}' or '{1}'"
+,
+"Err_ComparisonOperatorExpected":"Comparison operator expected instead of '{0}'"
+,
+"Err_CompilerVersionError":"Compiler version {0} has been withdrawn. Please use a higher compiler version instead."
+,
+"Err_CompoAccessNoStruct":"'{0}' is no structured variable"
+,
+"Err_ConditionExpected":"Condition expected"
+,
+"Err_ConstantIndexOutOfRange":"The constant index '{0}' is not within the range from '{1}' to '{2}'"
+,
+"Err_ConstantOverflow":"Constant '{0}' too large for type '{1}'"
+,
+"Err_ContainsNoDefinition":"'{0}' contains no definition for '{1}'"
+,
+"Err_CounterStartExpected":"Counter initialisation expected"
+,
+"Err_DataRecursion":"Data recursion: {0}"
+,
+"Err_DeclarationKeywordNotAllowed":"'{0}' not allowed in this place"
+,
+"Err_DefineValueExpected":"Define value expected instead of '{0}'"
+,
+"Err_DeleteNeedsPointer":"Operand of __DELETE must be pointer"
+,
+"Err_DerefNoPointer":"Dereference requires a pointer"
+,
+"Err_DeviceNameNoIdent":"Device name '{0}' invalid. Must be a valid IEC 61131-3 identifier"
+,
+"Err_DeviceNotInstalled":"Device not installed to the system. No code generation possible."
+,
+"Err_DivisionByZero":"Division by zero"
+,
+"Err_DuplicateElseInCaseStatement":"Duplicate definition of ELSE in CASE statement"
+,
+"Err_DuplicateLabelDefinition":"The label '{0}' is a duplicate"
+,
+"Err_DuplicateVarConfig":"Duplicate VAR_CONFIG for '{0}'"
+,
+"Err_DynamicMemoryNotSupported":"No memory for dynamic object creation defined for application '{0}'"
+,
+"Err_ExplicitTransitionAssignMissing":"The code of transition contains multiple statements. The explicit assignment to transition output variable is required."
+,
+"Err_ExpressionExpectedInstead":"Expression expected instead of '{0}'"
+,
+"Err_ExprNoConstantError":"Constant value expected instead of '{0}'"
+,
+"Err_FCallExpectedPointerAsSecondArgument":"The second argument of FCall must be a pointer to a function."
+,
+"Err_FCallWrongCallPatternSignature":"The first argument of FCall must be a signature type that is used as pattern for the call."
+,
+"Err_FCallWrongNumberOfArguments":"FCall expects exactly 2+{0} arguments."
+,
+"Err_FeatureNotImplemented":"The feature '{0}' is not implemented."
+,
+"Err_FinalOnFunctionBlocksAndMethodsOnly":"FINAL may only be applied on methods and function blocks"
+,
+"Err_FunctionBlockNeedsInstance":"Function block '{0}' must be instantiated to be accessed"
+,
+"Err_FunctionBlockNoLongerValid":"The keyword FUNCTIONBLOCK is no longer supported. Use FUNCTION_BLOCK instead."
+,
+"Err_FunctionCallMixedStyle":"Either all or none formal parameter have to be denoted in function call"
+,
+"Err_FunNeedsAtLeastNInputs":"Function '{0}' requires at least '{1}' and maximum '{2}' inputs"
+,
+"Err_FunNeedsNInputs":"Function '{0}' requires exactly '{1}' inputs"
+,
+"Err_GeneratingVarInitializations":"One or more inital values for variables are invalid"
+,
+"Err_GenericDeclarationProducesErrorInGeneratedCode":"The type declaration '{0}' leads to errors in the Generic Functionblock code"
+,
+"Err_GenericNoInitialValueSupported":"No initial value supported for Generic Constant declaration"
+,
+"Err_GenericNoInteger":"Only integer types are allowed for Generic Constants"
+,
+"Err_GenericNotConstant":"The definition '{0}' for the Generic Constant '{1}' is no constant value"
+,
+"Err_GenericOnlyConst":"Only CONSTANT generics are supported in VAR_GENERIC declaration"
+,
+"Err_GenericOnWrongPosition":"VAR_GENERIC declaration only allowed in Functionblocks after the function block name"
+,
+"Err_GenericParamMissing":"Missing initialization for generic variable '{0}'"
+,
+"Err_GenericParamsAllExplicitOrNone":"Either all generic variables need to be explicitly assigned or none"
+,
+"Err_GenericParamUnknown":"'{0}' is no declared generic constant of function block '{1}'"
+,
+"Err_GenericWrongNumberOfInitializer":"Generic Functionblock '{0}' expects exactly '{1}' number of Generic Constant Definitions"
+,
+"Err_GlobalVariableListExpected":"VAR_GLOBAL or VAR_CONFIG expected instead of {0}"
+,
+"Err_IdentifierExpected":"Identifier expected instead of '{0}'"
+,
+"Err_IdentNotDefined":"Identifier '{0}' not defined"
+,
+"Err_IllegalOperator":"'{0}' is no valid ST operator"
+,
+"Err_ImplicitEnumerationTypeNotExpected":"Implicit enumeration type not expected in this place"
+,
+"Err_ImplicitMethodImplementationNotPublic":"Function block '{0}': The access to the methods 'FB_Init', 'FB_Exit', and 'FB_ReInit' must be PUBLIC"
+,
+"Err_ImplicitMethodNameForVariable":"{0} is the name of an implicitly generated method and illegal for variables in a function block"
+,
+"Err_ImplicitReferenceTypeDeclNotAllowed":"The declaration of an implicit reference type is not possible at this location"
+,
+"Err_ImplicitReferenceTypeOnlChangeError":"It is not possible to add a local implicit reference type via online change"
+,
+"Err_ImplicitRefTypeAllClassesNeedAttrib":"The inheriting functionblock differs in its usage of the attribute '{0}'"
+,
+"Err_ImplicitRefTypeDeclarationNotAllowed":"The implicit reference type '{0}' cannot be declared in this type"
+,
+"Err_ImplicitRefTypeIsnotAllowedAsBase":"Implicit reference types cannot be a base type of references, pointers, and arrays"
+,
+"Err_ImplicitRefTypeSignNotSupported":"Only function blocks and structures can be marked as an implicit reference type"
+,
+"Err_IncompletePOUDeclaration":"The POU declaration is incomplete without a name"
+,
+"Err_InconsistentInheritanceOfCPPCompatibility":"Inconsistent inheritance of C++-compatibility. Missing attribute for '{0}'."
+,
+"Err_InconsistentUseOfCPPCompatibility":"Inconsistent use of C++ compatibility. Missing attribute for '{0}'."
+,
+"Err_InconsistentUseOfCPPCompatibility_MissingParent":"Inconsistent use of C++ compatibility. Missing attribute for parent pou '{0}'."
+,
+"Err_IndexingInvalid":"Cannot apply indexing with [] to an expression of type '{0}'"
+,
+"Err_IndexNumWrong":"Variable of type '{0}' requires exactly 1 Index"
+,
+"Err_IndexOfNotSupported":"The operator INDEXOF is no longer supported. Use ADR instead. ADR on a POU name returns a pointer to a pointer to the function code."
+,
+"Err_InheritanceError":"Inheritance only allowed in function blocks, interfaces and structures"
+,
+"Err_IniNeedsUserdefType":"INI operator needs function block instance or data unit type instance"
+,
+"Err_InOutAccessOutside":"No external access to VAR_IN_OUT parameter '{0}' of '{1}'.\""
+,
+"Err_InOutAssignedInActionCall":"VAR_IN_OUT {0} can't be assigned in local action call '{1}'"
+,
+"Err_InOutNotAssigned":"VAR_IN_OUT '{0}' must be assigned in call of '{1}'"
+,
+"Err_InOutParamNotEqual":"Type '{0}' is not equal to type '{1}' of VAR_IN_OUT respectively REFERENCE '{2}'"
+,
+"Err_InputMissing":"Assignment to input missing for parameter '{0}' in call of '{1}'"
+,
+"Err_InstanceNotAllowedInRetain":"Instances of '{0}' are not allowed in retain data"
+,
+"Err_IntegerLiteralExpected":"Integer literal expected instead of {0}"
+,
+"Err_InterfaceChanged":"Interface of overridden method '{0}' of interface '{1}' doesn't match declaration"
+,
+"Err_InterfaceChanged_NumberOfInputsOutputsDifferent":"The number of inputs/outputs of the method '{0}' does not correspond to the interface '{1}'."
+,
+"Err_InterfaceChanged_VariableDifferent":"The variable '{0}' of the method '{1}' does not correspond to the interface '{2}'."
+,
+"Err_InterfaceChangedBase":"Interface of overridden method '{0}' of base '{1}' doesn't match declaration"
+,
+"Err_InterfaceImplementationError":"Interfaces can only be implemented by function blocks"
+,
+"Err_InterfaceMethodImplementationNotPublic":"Implementation of interface method '{0}' of function block '{1}' must be PUBLIC"
+,
+"Err_InterfaceNeedsInstance":"Interface '{0}' must be instantiated to be accessed"
+,
+"Err_InterfaceNotFound":"No definition found for interface '{0}'"
+,
+"Err_InternalErrorProhibitingOnlineChange":"Internal error {0} prohibiting online change. Clean application and download necessary."
+,
+"Err_InvalidAccessPathForNamespaceAccess":"'{0}' is no valid access path"
+,
+"Err_InvalidBaseForGlobalScopeExpression":"Global scope operation '.' is not valid on expression '{0}'"
+,
+"Err_InvalidEnumBaseType":"Only integer types are supported as an enum base type"
+,
+"Err_InvalidEnumDefaultValue":"Only local enumeration members can be used as default initialization values for an enumeration"
+,
+"Err_InvalidInitialisationForArray":"{0} is an invalid initialisation for constant {1}. Initial values of constants must be constant."
+,
+"Err_InvalidInitialisationForVarInst":"The initial value for a VAR_INST variable may not use local variables."
+,
+"Err_InvalidJumpDestination":"Invalid destination {0} for JMP"
+,
+"Err_InvalidLoopIncrement":"Loop increment invalid"
+,
+"Err_InvalidNamespaceForNamespaceAccess":"'{0}' is no valid namespace access"
+,
+"Err_InvalidSignatureName":"Name '{0}' is no valid identifier"
+,
+"Err_IsNoInput":"'{0}' is no input of '{1}'"
+,
+"Err_IsNoLValue":"'{0}' is no valid assignment target"
+,
+"Err_IsNoOutput":"'{0}' is no output of '{1}'"
+,
+"Err_IsValidRefNeedsReference":"Operand for __ISVALIDREF must be of type REFERENCE"
+,
+"Err_LibNamespaceConflict":"Local namespace '{0}' of library '{1}' hides namespace of library '{2}'"
+,
+"Err_LibraryConflict":"Ambiguous namespace '{0}' defined by library '{1}'"
+,
+"Err_LibraryNamespaceNotValid":"Namespace {0} of library {1} is no valid identifier"
+,
+"Err_LibraryWithUnicodeIdentifiers":"The library '{0}' was saved with support of unicode identifiers, and can only be used if the project also supports unicode identifiers (see compile options)."
+,
+"Err_LibSupports32BitOnly":"The Library '{0}' is only supported in 32 bit applications"
+,
+"Err_LiteralExpected":"Literal expected instead of '{0}'"
+,
+"Err_LowerGreaterUpperBorder":"Lower border must be lower than upper border"
+,
+"Err_LowerUpperBoundOnVariableLengthArrayOnly":"The operators LOWER_BOUND and UPPER_BOUND are only supported for arrays"
+,
+"Err_LowerUpperBoundOperandNotExactly":"Value of 2nd operand of the {0} operator must be 1 in this case"
+,
+"Err_LowerUpperBoundOperandNotInRange":"Value of 2nd operand of the {0} operator must be between 1 and {1} in this case"
+,
+"Err_LValueForAnyVar":"ANY parameter '{0}' of '{1}' needs variable with write access as input"
+,
+"Err_LValueForReference":"Reference assign needs variable with write access"
+,
+"Err_LValueForVarinout":"VAR_IN_OUT respectively REFERENCE parameter '{0}' of '{1}' needs variable with write access as input"
+,
+"Err_LValueForVarinoutStrings":"VAR_IN_OUT respectively REFERENCE parameter '{0}' of '{1}' needs variable with write access as input"
+,
+"Err_LValueNoRefType":"Reference assign is only allowed to variables of reference type"
+,
+"Err_MalformedAddress":"Direct address '{0}' malformed"
+,
+"Err_MappedVarWrittenInDiffTasks":"Variable {0}, which is mapped on address {1} is written in different tasks"
+,
+"Err_MaxArraySizeExceeded":"Maximum array size exceeded. Either increase the lower border or decrease the upper border."
+,
+"Err_MaxNestingDepthExceeded":"Maximum nesting depth exceeded. "
+,
+"Err_MissingImplementationTerminator":"Could not find the terminator '{0}' for the implementation block."
+,
+"Err_MissingInstancePathForPersistent":"No matching instance path in VAR_PERSISTENT list found for variable {0}. Use the command \"Add all instance paths\" to add all instance paths to the VAR_PERSISTENT list. (See Help for details)"
+,
+"Err_MissingObjectForPersistent":"No VAR_PERSISTENT list is part of the application to enter instance path for variable {0}"
+,
+"Err_MissingParameterList":"{0} '{1}' referenced without parentheses '()'"
+,
+"Err_ModNotReal":"MOD is not defined for REAL"
+,
+"Err_Multiassigninfor":"Exactly one counter expected in FOR loop"
+,
+"Err_MultipleAssignmentsNotAllowedForOperator":"Multiple assignments are not allowed for operator '{0}'."
+,
+"Err_MultipleAssignmentsToInterfaceVariables":"Multiple assignments to interface variables not allowed"
+,
+"Err_MultipleAssignmentWithChangingValueTypes":"Multiple assignments of value types with implicit casts not allowed"
+,
+"Err_MultipleAssignmentWithProperty":"Properties cannot be used in the middle of multiple assignments."
+,
+"Err_MultipleAssignmentWithReferences":"Multiple assignments of references to function blocks or data structures not allowed"
+,
+"Err_MultipleAssignsToSameInputInCall":"Multiple input assignments for parameter '{0}'"
+,
+"Err_NamesNotEqual":"The name used in the signature is not identical to the object name"
+,
+"Err_NewArrayOnUserdefNotAllowed":"Creating an array with __NEW is not allowed on user defined types"
+,
+"Err_NewNeedsType":"Type definition expected as operand for __NEW"
+,
+"Err_NewOnInterfaceNotPossible":"__NEW is not possible on interfaces"
+,
+"Err_NewOnlyWithAttribute":"A function block or structure needs the pragma '{{attribute 'enable_dynamic_creation'}}' to be created with __NEW"
+,
+"Err_NewPositionNotOK":"The result of __NEW must be assigned"
+,
+"Err_NoArrayOfBit":"BIT is not allowed as base type of an array"
+,
+"Err_NoAssign":"Assignment not allowed for type {0}"
+,
+"Err_NoBitAccessOnFunctionCall":"Bit access on function call is not allowed"
+,
+"Err_NoBitTypeOnBitAddress":"Type {0} is not possible on bit adress {1}"
+,
+"Err_NoBranchOutOfFinally":"Branch out of __FINALLY-Block is not allowed"
+,
+"Err_NoBytesInRetain":"A structured type located in retain data may not contain BYTE, SINT, or USINT"
+,
+"Err_NoCallInInstancePath":"It is not possible to perform component access '.', index access '[]' or call '()' on result of function call. Assign result to help variable first."
+,
+"Err_NoCallInInterfaceComparison":"It is not possible to compare interface that is return value of call. Assign to variable first."
+,
+"Err_NoCaseLabelFound":"No CASE label found"
+,
+"Err_NoChangeOnAccessModifier":"Method {0}.{1} cannot change access modifier \"{2}\" when overriding method {3}.{1}"
+,
+"Err_NoCodegenerator":"Creating a code generator failed: The required plug-in is not installed"
+,
+"Err_NoComponentOf":"'{0}' is no component of '{1}'"
+,
+"Err_NoConstantInitialisationForValue":"Initialisation of constant variable '{0}' not constant"
+,
+"Err_NoCopyCodeAllowed":"Moving this POU to a new location during online changes is not allowed"
+,
+"Err_NoCopyCodeForVariableAtDirectAddress":"a variable at a direct address cannot change its type during online change"
+,
+"Err_NoDirectAddressInSubsequentVarDecl":"The declaration of the variable '{0}' with an address assignment cannot be used in a PRG or GVL with the attribute 'subsequent'"
+,
+"Err_NoEnclosingLoopExit":"No enclosing loop of which to {0}"
+,
+"Err_NoExitOrContinueOutOfCatch":"Exit or Continue out of __CATCH-Block is not allowed"
+,
+"Err_NoExitOrContinueOutOfTry":"Exit or Continue out of __TRY-Block is not allowed"
+,
+"Err_NoExplicitCall":"No explicit calls for '{0}' allowed. {1}. "
+,
+"Err_NoFormalParamsCallsForExtensibleFunction":"No explicit input assignments possible for call of extensible function {0}"
+,
+"Err_NoGenericInstanceInVarConst":"Instances of a Generic Functionblock cannot be declared as constant"
+,
+"Err_NoGlobalDefine":"There is no global definition for '{0}'"
+,
+"Err_NoIndirectPropertyCallOnStringWithSize":"Indirect call of property with type {0} not possible because only types without explicitly specified length are supported"
+,
+"Err_NoInheritanceOnFinalType":"'{0}' with attribute FINAL may not be used as base"
+,
+"Err_NoInitialForExternal":"No initial value allowed for VAR_EXTERNAL {0}"
+,
+"Err_NoInitialForInoutConstant":"No initial value allowed for VAR_INOUT CONSTANT {0}"
+,
+"Err_NoInputMemory":"There is no input memory reserved"
+,
+"Err_NoInputsWithSlotAttributes":"No inputs allowed in signature '{0}' with attribute '{1}'"
+,
+"Err_NoInstanceObject":"'{0}' is of type {1} and cannot be instantiated"
+,
+"Err_NoInstancePath":"No VAR_CONFIG for '{0}'"
+,
+"Err_NoLocalEnum":"Local defined enumeration are no longer supported. Use datatype definition instead."
+,
+"Err_NoMatchingInitMethodFound":"No matching 'FB_Init' method found for instantiation of {0}"
+,
+"Err_NoMatchingOverload":"No Matching Overload found for method '{0}'"
+,
+"Err_NoMemoryAllocationCallback":"Creating the memory allocator failed: The required plug-in is not installed"
+,
+"Err_NoMemoryMemory":"There is no memory reserved"
+,
+"Err_NoMemoryReserveForExternal":"Usage of a memory reserve for external function blocks is not supported"
+,
+"Err_NoMethodImplementation":"There is no implementation for method '{0}' defined in interface '{1}'"
+,
+"Err_NoMixExternalIECInheritance":"An extending POU must be implemented the same way as its base (externally or in IEC)"
+,
+"Err_NoMultipleInheritance":"Only one base function block may be defined in EXTENDS list"
+,
+"Err_NoNamespace":"'{0}' does not refer to a namespace"
+,
+"Err_NoNewAssignmentInOtherExpression":"It is not possible to use an assignment expression with the __NEW operator in another expression. Use the pointer variable instead."
+,
+"Err_NoOnlineChangeOnDynamicObjects":"Cannot perform a online change that changes the size of a dynamically created type."
+,
+"Err_NoOnlineChangeOnGenericConstantBaseType":"In declaration of BaseType {0}, the value for the constant {1} changed from {2} to {3}: no online change possible!"
+,
+"Err_NoOnlineChangeOnGenericConstantType":"In declaration of Variable {0}, the value for the constant {1} changed from {2} to {3}: no online change possible!"
+,
+"Err_NoOnlineChangePossible":"No online change possible. Perform full download"
+,
+"Err_NoOutputMemory":"There is no output memory reserved"
+,
+"Err_NoOutsideAccessToGenericVariable":"No external access to Generic Constant '{0}' of Functionblock '{1}'"
+,
+"Err_NoOverrideOnFinalMethod":"Function block '{0}': No override possible on method {1}.{2} with access specifier FINAL"
+,
+"Err_NoOverrideOnInternalMethod":"Function block '{0}': No override possible on method {1}.{2} in library {3} with access specifier INTERNAL"
+,
+"Err_NoOverrideOnPrivateMethod":"Function block '{0}': No override possible on method {1}.{2} with access specifier PRIVATE"
+,
+"Err_NoPointerToBit":"POINTER TO BIT is not allowed"
+,
+"Err_NoPropertiesInOutAssignment":"A property cannot be assigned in an output assignment of a call. Use a temporary variable instead."
+,
+"Err_NoPropertyForVarInout":"Properties can't be assigned to VAR_IN_OUT."
+,
+"Err_NoReadAccessToProperty":"The property '{0}' cannot be used in this context because it lacks the get accessor"
+,
+"Err_NoReferenceToBits":"References to bits are not possible"
+,
+"Err_NoReferenceToOutput":"Outputs can't be of type REFERENCE TO"
+,
+"Err_NoResolutionForLazyVariable":"Type of lazy typed variable '{0}' could not be resolved"
+,
+"Err_NoResolutionForSomeLazyVariables":"Type of lazy variables in this signature could not be inferred."
+,
+"Err_NoStaticVariableInitialisationForValue":"Initialisation of static variable '{0}' not constant or replaced constants is disabled"
+,
+"Err_NoSuchLabel":"No such label '{0}' within the scope of the JMP statement"
+,
+"Err_NoSystemDefine":"There is no system definition for '{0}'"
+,
+"Err_NotAllowedInContainerLib":"'{0}' not allowed in container library"
+,
+"Err_NotAllowedInInterfaceLib":"'{0}' not allowed in interface library"
+,
+"Err_NotAllowedInTaskLocalVariables":"Task local variable list '{0}': '{1}' is not allowed"
+,
+"Err_NotAnInstanceOf":"'{0}' is not an instance of '{1}'"
+,
+"Err_NotEnoughMemoryForCompactDownload":"Not enough memory left for compact download in first code area. '{0}' bytes could not be allocated"
+,
+"Err_NotEnoughMemoryForVariableInit":"Not enough memory for initialisation of variable '{0}'. {1} bytes needed"
+,
+"Err_NotSupportedInInterface":"This code is not supported in declaration part"
+,
+"Err_NoValidCondition":"'{0}' is no valid condition"
+,
+"Err_NoValidConditionforPragma":"'{0}' is no valid condition for pragma"
+,
+"Err_NoValidEnumInit":"{0} is no valid initialisation for an enumeration"
+,
+"Err_NoValidInstancePath":"'{0}' is not a valid instance path"
+,
+"Err_NoValidOperand":"'{0}' is no valid operand"
+,
+"Err_NoValidOperandforPragma":"'{0}' is no valid operand for pragma"
+,
+"Err_NoValidStatement":"'{0}' is no valid statement"
+,
+"Err_NoValuePassingForCPPExternal":"CPP compatible functions can not contain inputs or outputs of Type STRING, ARRAY, or structured types. Use POINTER or REFEFRENCE to this type instead."
+,
+"Err_NoVarConfigInMethodOrFunction":"Incomplete adresses are not allowed in methods and functions"
+,
+"Err_NoVarForExternal":"No global definition found for VAR_EXTERNAL {0}"
+,
+"Err_NoVarInputInPropertyAccessors":"It is not allowed to define input variables in property accessors: {0} : {1}"
+,
+"Err_NoVarsinInterface":"Variable declarations are not allowed in interfaces"
+,
+"Err_NoVarTempInSubsequentPrograms":"VAR_TEMP is not possible in programs with attribute 'subsequent'"
+,
+"Err_NumOfInitializersDoNotMatch":"The number of 'FB_Init' initializers ({0}) does not match the number of array elements ({1})"
+,
+"Err_OneAccessorRequired":"At least one accessor required for property '{0}'"
+,
+"Err_OnlyMethodsOverride":"Not possible to override {0} {1} of {2}: Only methods allowed to override"
+,
+"Err_OperationNotPossibleOnType":"Operation '{0}' is not possible on type '{1}'"
+,
+"Err_Operator1of2Expected":"'{0}' or '{1}' expected instead of '{2}'"
+,
+"Err_Operator1of3Expected":"'{0}', '{1}' or '{2}' expected instead of '{3}'"
+,
+"Err_Operator1of3ExpectedInsteadofEOF":"Unexpected End-of-file found: '{0}', '{1}' or '{2}' expected"
+,
+"Err_Operator1of4Expected":"'{0}', '{1}',  '{2}' or '{3}' expected instead of '{4}'"
+,
+"Err_OperatorExpected":"'{0}' expected instead of '{1}'"
+,
+"Err_OperatorExpectedInsteadofEOF":"Unexpected End-of-file found: '{0}' expected"
+,
+"Err_OperatorNotAllowedAtPosition":"The usage of the operator '{0}' is not allowed in this statement"
+,
+"Err_OperatorNotSupported":"Operator '{0}' not supported"
+,
+"Err_OperatorNotSupportedVersion":"Operator '{0}' is not supported by your current target. At least runtime system version {1} is required."
+,
+"Err_OperatorNoValidVariableName":"The operator '{0}' is not a valid name for a variable"
+,
+"Err_OpNeedsAtLeastInputs":"'{0}' needs at least '{1}' operands"
+,
+"Err_OpNeedsExactInputs":"'{0}' needs exactly '{1}' operands"
+,
+"Err_OpTakesAtMostInputs":"'{0}' takes at most '{1}' operands"
+,
+"Err_OutOfCodeMemory":"Out of code memory: POU '{0}', {1} bytes. (Incremental compilation may produce fragmented memory. Perform \"Build, Clean\" to force a reallocation of all data and code.)"
+,
+"Err_OutOfMemory":"Out of global data memory: Variable '{0}', {1} bytes. (Incremental compilation may produce fragmented memory. Perform \"Build, Clean\" to force a reallocation of all data and code.)"
+,
+"Err_OutOfMemoryFunctionPointer":"Out of global data memory: Function pointer for function '{0}' could not be allocated"
+,
+"Err_OutOfMemoryWithWholeSize":"Out of global data memory: Variable '{0}', {1} bytes (Largest contiguous memory gap {2}). Incremental compilation or adding variables to persistent variable lists may produce fragmented memory. Perform \"Declarations, Reorder list and clear gaps\" to compact persistent variable lists or \"Build, Clean\" to force a reallocation of other data and code."
+,
+"Err_OutOfPersistentMemoryExplicit":"Out of persistent memory: Variable '{0}', {1} bytes (Largest contiguous memory gap {2}). Editing persistent variable lists may produce fragmented memory. Perform \"Declarations, Reorder list and clear gaps\" to compact persistent variable lists. {3}"
+,
+"Err_OutOfPersistentMemoryImplicit":"Not enough persistent memory {0}"
+,
+"Err_OutOfRetainMemory":"Out of retain memory: Variable '{0}', {1} bytes  (Incremental compilation may produce fragmented memory. Perform \"Build, Clean\" to force a reallocation of all data and code.)"
+,
+"Err_OutOfRetainMemoryWithWholeSize":"Out of retain memory: Variable '{0}', {1} bytes (largest contiguous memory gap {2})  (Incremental compilation may produce fragmented memory. Perform \"Build, Clean\" to force a reallocation of all data and code.)"
+,
+"Err_OutParamNotEqual":"Type '{0}' is not equal to type '{1}' of VAR_OUTPUT '{2}'"
+,
+"Err_OutputByteWrittenFromDifferentTasks":"The same byte in output memory is written in different tasks"
+,
+"Err_OverflowInAddress":"Constant overflow in address '{0}'"
+,
+"Err_OverloadNeedsAttribute":"There is another method with the name '{0}'. Use the Attribute {{attribute 'overloaded'}}, if you want to define overloaded methods."
+,
+"Err_OverloadWithSameInputs":"There is another overload for '{0}' with the same input-types."
+,
+"Err_ParameterlistNotConst":"A parameter list must be declared as constant"
+,
+"Err_ParamsNotAllowed":"A PARAMS parameter must be the last input parameter of a function or method"
+,
+"Err_PartialAccess_NotAValidComponent":"'%{1}{2}' is not a valid partial component of '{0}'"
+,
+"Err_PartialAccess_OnlyOnBitTypes":"Partial access is only supported on ANY_BIT types and not on '{0}'"
+,
+"Err_PersistentNoAddress":"Direct address declaration is not possible in persistent list"
+,
+"Err_PersistentVariablesChangeMessageText":"Persistent variables changed. Download cancelled by user."
+,
+"Err_PersistentWrongVariable":"Variables in persistent list must all be either VAR_GLOBAL PERSISTENT or VAR_GLOBAL PERSISTENT RETAIN"
+,
+"Err_POUCalledFromDifferentTasks":"POU {0} writes to output {1} and is called in several tasks"
+,
+"Err_PrivateOnMethodsOnly":"PRIVATE and PROTECTED may only be applied on methods of function blocks"
+,
+"Err_ProjectDefinedNotSupportedFor":"The condition 'project_defined' is not supported for this syntax, since it might affect the public interface of '{0}'."
+,
+"Err_QueryInterfaceErrorP1":"First operand of __QueryInterface must be an interface reference or the instance of a function block"
+,
+"Err_QueryInterfaceErrorP2":"Second operand of __QueryInterface must be an interface reference"
+,
+"Err_QueryInterfaceP1NoIQuery":"Interface {0} does not extend {1}"
+,
+"Err_QueryPointerErrorP1":"First operand of __QueryPointer must be an interface reference or the instance of a function block"
+,
+"Err_QueryPointerErrorP2":"Second operand of __QueryInterface must be a pointer"
+,
+"Err_RecursiveConstantInitialisation":"Recursive definition of constant value"
+,
+"Err_RefAssignNeedsLValue":"A reference assignment requires a variable with write access as the source expression"
+,
+"Err_RefAssignOnlyForReferenceTypes":"Initialisation with REF= is only allowed for variables of type REFERENCE TO"
+,
+"Err_ReferenceNotAllowed":"A reference type is not allowed as base type of an array, pointer, or reference"
+,
+"Err_ReferenceNotAllowedForVarInOut":"A reference type is not allowed as type of a VAR_IN_OUT"
+,
+"Err_ReferenceToInput":"Reference assign is not possible on a variable mapped to an input address"
+,
+"Err_RelatedPositionInterface":"Related position: Interface method '{0} of interface {1}'."
+,
+"Err_RelatedPositionTaskX":"Related position: Access in task {0}"
+,
+"Err_RetainNotAccessiblePOU":"POU {0} hides library name, no access to library elements is possible. No implicit code for saving retain variable {1} will be generated."
+,
+"Err_RetainNotAccessibleVariable":"Variable {0} hides library name. No access to library elements is possible. No implicit code for saving retain variable {1} will be generated."
+,
+"Err_RetainOrPersistentNotAllowed":"RETAIN or PERSISTENT not allowed in this place"
+,
+"Err_RetainsNotSupported":"Retain data is not not supported on this device"
+,
+"Err_ReturnTypeForNonFunction":"Return type is only possible for POUs of type FUNCTION and METHOD"
+,
+"Err_RValueRequired":"Assignment has no valid source"
+,
+"Err_SelfInheritance":"Recursion in interfaces: {0}"
+,
+"Err_SelfInheritanceBase":"Recursion in base function block list: {0}"
+,
+"Err_SelMuxOnlyEqualUserDefTypes":"All user defined types used in SEL or MUX must be equal"
+,
+"Err_SemicolonExpected":"';' expected instead of '{0}'"
+,
+"Err_SemicolonExpectedInsteadOfEnd":"';' expected instead of end of POU"
+,
+"Err_SlotFunctionAmbiguousName":"POU {0} with slot attribute {1} has an ambiguous name"
+,
+"Err_SlotFunctionHiddenByVariable":"POU {0} with slot attribute {1} not callable, because it is hidden by variable '{2}'"
+,
+"Err_SomethingOverridingMethod":"{0} '{1}' overrides method of interface '{2}'"
+,
+"Err_SomethingOverridingMethodBase":"{0} '{1}' overrides method of base '{2}'"
+,
+"Err_SpecialTypeExpected":"Expression of type '{0}' expected in this place"
+,
+"Err_StackOverflowDetected":"Stack overflow detected in Task {0}. Maximal Stack Size: {1} bytes. Calculated Stack Size: {2} bytes. Call Hierarchie:"
+,
+"Err_StaticNotAllowed":"VAR_STAT declaration not allowed in this place"
+,
+"Err_StrictEnumNoArithmeticAllowed":"Arithmetics not allowed on strict ENUM type '{0}'"
+,
+"Err_StrictEnumNotAMember":"'{0}' is not a valid value for strict ENUM type '{1}'"
+,
+"Err_StringLengthIsNoConstant":"String length '{0}' is no constant value"
+,
+"Err_StringLiteralExpected":"String literal expected instead of '{0}'"
+,
+"Err_StringSizeExpected":"size of string expected after \"(\""
+,
+"Err_StringTooShortForVarInOut":"String variable '{0}' too short for the VAR_IN_OUT parameter '{1}' of '{2}'"
+,
+"Err_StructInitOnlyInput":"'{0}' is no input of '{1}'"
+,
+"Err_StructuredValueTypeInExternalCall":"Structured type '{0}' not allowed in external function call"
+,
+"Err_StructureInitialisationNotPossible":"A structure initialisation is not possible as Parameter of an Init-function call. Use a variable instead."
+,
+"Err_StructureInitializationExpected":"Initialisation list for {0} expected"
+,
+"Err_StructureNotAllowed":"STRUCT declaration only allowed in data unit type"
+,
+"Err_SummarizedLibraryErrors":"{0} internal errors in library {1}"
+,
+"Err_SystemOutOfMemory":"The development system has not enough memory to process the online change. Please restart the application before continuing development."
+,
+"Err_TaskLocalVariablesAccessNotAllowed":"Task local variable list '{0}': Write access only allowed in task '{1}'"
+,
+"Err_TaskLocalVariablesNoOnlineChangePossible":"Task local variable list '{0}' changed. No online change possible."
+,
+"Err_TaskLocalVariablesWriterTaskNotDefined":"Task local variable list '{0}': Writer task not defined"
+,
+"Err_ThisNotAllowed":"Expression THIS is not allowed in this context"
+,
+"Err_TooFewParametersForExtensibleFunction":"Extensible function {0} needs at least {1} inputs for parameter {2}"
+,
+"Err_TooManyInitializer":"Too many initializers for array"
+,
+"Err_TooManyParametersForExtensibleFunction":"Extensible function {0} accepts at most {1} inputs for parameter {2}"
+,
+"Err_TryCatchNotSupported":"Structured exception handling is not supported yet"
+,
+"Err_TryCatchNotSupportedCodegenerator":"The code generator for the current device does not support structured exception handling"
+,
+"Err_TryCatchNotSupportedVersion":"Structured exception handling is not supported by your current target. At least runtime system version 3.5.6.0 is required."
+,
+"Err_TypeExpected":"Type definition expected instead of '{0}'"
+,
+"Err_TypeIsNotGeneric":"'{0}' is not a generic functionblock."
+,
+"Err_TypeMismatch":"Cannot convert type '{0}' to type '{1}'"
+,
+"Err_TypesNotComparable":"Cannot compare type '{0}' with type '{1}'"
+,
+"Err_UnexpectedArrayInitialisation":"Unexpected array initialisation"
+,
+"Err_UnexpectedOperandForCallInitFunction":"Unexpected operand '{0}' found in '{1}'. A GVL or PRG must be passed as parameter."
+,
+"Err_UnexpectedOperandForIndexOf":"Unexpected operand '{0}' found in '{1}'"
+,
+"Err_UnexpectedPragmaif":"Unexpected pragma: '{0}' found without matching 'if'"
+,
+"Err_UnexpectedStatement":"Unexpected statement"
+,
+"Err_UnexpectedStructureInitialisation":"Unexpected structure initialisation"
+,
+"Err_UnexpectedTokenFound":"Unexpected token '{0}' found"
+,
+"Err_UnexpectedTypeName":"Type name '{0}' not expected in this place"
+,
+"Err_UninitialisedVariableUsedInInitialisation":"The uninitialized variable {0} is used for initialization of {1}. Use the attribute 'global_init_slot' to change the order of initialisation."
+,
+"Err_UnionNotAllowed":"UNION declaration only allowed in data unit type"
+,
+"Err_UnknownCompilerVersionInCompiledLib":"The compiler version \"{1}\" with which the compiled library \"{0}\" was created is newer than the compiler version of the project or unknown."
+,
+"Err_UnknownEmbeddedLanguageType":"Unknown embedded language type '{0}'."
+,
+"Err_UnknownMaxStackSize":"Accessing information about the currently executed task requires knowledge about the maximal stack size supported on the target system"
+,
+"Err_UnknownType":"Unknown type: '{0}'"
+,
+"Err_UnsupportedFeature":"The compiler feature '{0}' is only supported with compiler version {1} or newer"
+,
+"Err_UnsupportedType":"Unsupported type: '{0}'"
+,
+"Err_UpperBoundExpected":"Upper bound for FOR loop expected"
+,
+"Err_UserCheckFunctionsNotSupported":"User defined check functions are not supported"
+,
+"Err_VarAccessNotSupported":"VAR_ACCESS is not supported"
+,
+"Err_VarConfigNotAllowed":"VAR_CONFIG declaration only allowed in VAR_CONFIG  list"
+,
+"Err_VarGlobalNotAllowed":"VAR_GLOBAL declaration only allowed in global variable list"
+,
+"Err_VariableDeclarationExpected":"Variable declaration expected instead of {0}"
+,
+"Err_VariableDuplicate":"A local variable named '{0}' is already defined in '{1}'"
+,
+"Err_VariableForVarinoutConstant":"VAR_IN_OUT CONSTANT parameter '{0}' of '{1}' needs variable as input"
+,
+"Err_VariableListExpected":"VAR, VAR_INPUT, VAR_OUTPUT or VAR_IN_OUT expected instead of {0}"
+,
+"Err_VariableOverride":"Duplicate definition of variable '{0}' in function block '{1}' and in base '{2}'"
+,
+"Err_VarInstOnlyInMethods":"VAR_INST declaration not allowed in this place"
+,
+"Err_VarLengthArrayInOut":"Variable length arrays are only possible as VAR_IN_OUT of function blocks or as VAR_IN_OUT and VAR_INPUT of methods and functions"
+,
+"Err_VarLengthArrayTopLevel":"A variable length array type has to be on top level position of a type declaration"
+,
+"Err_VarTempNotAllowed":"VAR_TEMP declaration not allowed in this place"
+,
+"Err_VarTooBig":"The variable '{0}' is too large. (variable size: {1}, segment size: {2})"
+,
+"Err_VectorBaseMustBeRealType":"The base type of a vector must be either REAL or LREAL."
+,
+"Err_VectorNoPersistentRetain":"A vector cannot be declared persistent or retained"
+,
+"Err_VectorSizeIsNoConstant":"The size of a vector must be a constant"
+,
+"Err_VectorSizeNotValid":"The size of a vector must be a integer greater than 0 and less than 9"
+,
+"Err_VectorTypeCantBePlacedInUnion":"Vector types cannot be placed in unions"
+,
+"Err_VectorTypesNotCompatible":"The vector types {0} and {1} are not compatible"
+,
+"Err_VersionInvalidFormat":"Token '{0}' is no valid version"
+,
+"Err_VersionOverflow":"At least one part of the version '{0}' has a too big value"
+,
+"Err_VersionPartNegative":"At least one part of the version '{0}' has a negative value"
+,
+"Err_WrongCallAfterGlobalInitSlotSignature":"A signature decorated with the 'call_after_global_init_slot' attribute must either have no arguments or a single input named 'bInitRetains'."
+,
+"Err_WrongConstructor":"The FB_Init method of a function block or struct needs two inputs 'bInitRetains' and 'bInCopyCode' of type BOOL"
+,
+"Err_WrongDestructor":"The FB_Exit method of a function block or struct must have a single input 'bInCopyCode' of type BOOL and a return value of type BOOL."
+,
+"Err_WrongFormalParameter":"Wrong formal parameter: '{0}' expected in this place"
+,
+"Err_WrongObjectType":"Cannot call object of type '{0}'"
+,
+"Err_WrongReInit":"The FB_ReInit method of a function block or struct must have no inputs and a return value of type BOOL. The FB_ReInit will not be called automatically!"
+,
+"Err_WrongTypeForAdr":"'{0}' is not allowed as operand for ADR"
+,
+"Err_WrongTypeForExternal":"Wrong type definition for VAR_EXTERNAL {0}"
+,
+"Err_WrongVarInInterfaceMethod":"Only inputs, outputs, and inouts allowed in interface methods"
+,
+"Inf_RelatedPosition":"Related position"
+,
+"Inf_RelatedPositionRecursion":"Called '{0}'."
+,
+"Inf_RelatedPositionStackoverflow":"'{0}' using {1} bytes of stack."
+,
+"Inf_UseXSizeOfOperator":"Use  the XSIZEOF operator for large types"
+,
+"Info_PersistentMemoryConfiguration":"You can edit the size of persistent memory in the persistent memory configuration."
+,
+"PublishSymbolsMustBeSet":"'Publish all IEC symbols' must be set"
+,
+"Txt_ParentContextNotUpToDate":"Parent context not up to date"
+,
+"Wrn_AbstractKeywordMissing":"The ABSTRACT keyword is missing"
+,
+"Wrn_AccessToInternalObject":"Should not access internal object {0} of library {1}"
+,
+"Wrn_AccessToInternalProperty":"Should not access internal property {0} of library {1}"
+,
+"Wrn_AccessToInternalVariable":"Should not access internal variable {0} of library {1}"
+,
+"Wrn_AmbiguousCheckfunctionInLibrary":"The implicit check function {0} is hidden by another implicit check function {1}. Checks will not be performed! Resolve the conflict and clean the application to use the check function."
+,
+"Wrn_AtLeastOneExpected":"At least one statement is expected"
+,
+"Wrn_AttributeCheck":"Attribute check failed"
+,
+"Wrn_BoolNotAtBitAddress":"Bit address expected for data type BOOL"
+,
+"Wrn_CallOfPrivateProperty":"Should not access private property {0}.{1}"
+,
+"Wrn_CallOfProtectedProperty":"Should not access protected property {0}.{1}"
+,
+"Wrn_CallRecursion":"Call recursion: {0}"
+,
+"Wrn_ChangeOfAccessModifier":"Method {0}.{1} changes access modifier \"{2}\" when overriding method {3}.{1}"
+,
+"Wrn_ComplexExpression":"The POU contains very complex expression. Consider using intermediate results."
+,
+"Wrn_ConcurrentAccessOfBitInSameByte":"Concurrent access of bit '{0}' in same byte"
+,
+"Wrn_ConstantInStructDeclaration":"The keyword CONSTANT is ignored in the declaration of a structure or union"
+,
+"Wrn_DefaultValueNotConstant":"Default value is not constant"
+,
+"Wrn_DefaultValueTopLevel":"The input is only optional when this function is called from IEC code"
+,
+"Wrn_DeviceNotInstalledForSimulation":"Device not installed to the system. Simulation uses default settings."
+,
+"Wrn_EnumComparison":"Comparison of one enumeration type ({0}) with another ({1})"
+,
+"Wrn_EnumValueDuplicate":"The constant {0} is assigned to more than one enumeration"
+,
+"Wrn_ExitForRetainInstances":"FB_EXIT of instances in VAR_RETAIN is also called during Reset warm, but not FB_INIT. Avoid retain declaration of function blocks with FB_EXIT!"
+,
+"Wrn_ExtendsForInterfaces":"Use keyword EXTENDS for inheritance of interfaces instead of IMPLEMENTS"
+,
+"Wrn_ExternalReferenceIgnored":"External references are only possible for function blocks, methods, functions and constant global variable lists. External reference for {0} '{1}' is ignored."
+,
+"Wrn_GlobalInitSlotNotForVariables":"The attribute 'global_init_slot' always affects the whole variable list, and should not be applied on single variables"
+,
+"Wrn_GranularityMismatchForDirectVariable":"Variable '{0}' has a granularity of {1} but is located at direct address {2} which is not aligned to {1} bytes"
+,
+"Wrn_ImplicitCheckFunctionShadowed":"The implicit check function '{0}' is hidden by another variable or function. Checks will not be performed! Resolve the conflict and clean the application to use the check function."
+,
+"Wrn_ImplicitEnumConversion":"Implicit conversion from one enumeration type ({0}) to another ({1})"
+,
+"Wrn_ImplicitIntToReal":"Implicit conversion from '{0}' to '{1}': Possible loss of information"
+,
+"Wrn_ImplicitSignedToUnsigned":"Implicit conversion from signed Type '{0}' to unsigned Type '{1}' : Possible change of sign"
+,
+"Wrn_ImplicitUnsignedToSigned":"Implicit conversion from unsigned Type '{0}' to signed Type '{1}' : Possible change of sign"
+,
+"Wrn_InterfaceChangedBase":"Interface of overridden method '{0}' of base '{1}' doesn't match declaration"
+,
+"Wrn_InvalidDefaultValue":"The type {0} cannot have a default value in this context"
+,
+"Wrn_InvalidStringSize":"The size of a string may not be negative ('{0}')"
+,
+"Wrn_LabelNoReference":"The label '{0}' has not been referenced"
+,
+"Wrn_LibraryNotInstalled":"Library {0} has not been added to the Library Manager, or no valid license could be found"
+,
+"Wrn_LibWithStringInVarInOut":"Consider declaring VAR_IN_OUT string variable '{0}' in '{1}' as VAR_IN_OUT CONSTANT to allow callers to pass literals or constant."
+,
+"Wrn_LoopExitConditionConstant":"Loop exit condition '{0} {1} {2}' is constant FALSE. Possible endless loop."
+,
+"Wrn_LValueForVarinoutStrings":"VAR_IN_OUT respectively REFERENCE parameter '{0}' of '{1}' needs variable with write access as input"
+,
+"Wrn_MethodAlreadyCalledImplicitly":"Method '{0}' already called implicitly"
+,
+"Wrn_MissingAttributeNoAssign":"Attribute 'no_assign' missing for POU '{0}'? The type of the variable '{1}' is attributed with 'no_assign'."
+,
+"Wrn_MissingInstancePathForPersistent":"No matching instance path in VAR_PERSISTENT list found for variable {0}. Use the command \"Add all instance paths\" to add all instance paths to the VAR_PERSISTENT list. (See Help for details)"
+,
+"Wrn_NoInheritanceForUnions":"Inheritance is not intended for data type \"UNION\": {0}"
+,
+"Wrn_NoInitialValueForConstant":"No initial value for constant variable '{0}'"
+,
+"Wrn_NonAsciiStringLiteral":"The string literal '{0}...' contains non-representable characters. The project option 'UTF-8 Encoding for STRING' could be used."
+,
+"Wrn_NonLocalAccessToVarInOut":"Access to VAR_IN_OUT '{0}' declared in '{1}' from external context '{2}'"
+,
+"Wrn_NoPointerToBit":"A single bit cannot be referenced. A reference to the complete byte will be stored."
+,
+"Wrn_NotAllowedInInterfaceLib":"'{0}' not allowed in interface library"
+,
+"Wrn_Obsolete":"POU '{0}' has been marked as obsolete: {1}"
+,
+"Wrn_ObsoleteOutputInAbstractMethod":"The default value for a VAR_OUTPUT is not used in abstract or interface methods"
+,
+"Wrn_OnlyConstantInitialValueForMappedPersistentVar":"Only replaced constants can be applied as initial value for a mapped persistent variable"
+,
+"Wrn_PersistentVariableOnStack":"Persistent variables in function block instances located on the stack are not supported: {0}"
+,
+"Wrn_PointerMisatch":"Type '{0}' possibly not convertible to type '{1}'"
+,
+"Wrn_Pragma":"User defined warning generated by warning pragma"
+,
+"Wrn_ReferenceToUninitializedVariable":"A reference to uninitialized variable {0} is used for initialization of {1}. Accessing the uninitialized variable may result in unexpected behavior."
+,
+"Wrn_ReservedUnusedKeyword":"The name '{0}' is a reserved keyword in the IEC61131-3 standard. An error will be reported in future versions."
+,
+"Wrn_ShiftExceedsTypeSize":"Shift by {0} exceeds type size of {1}"
+,
+"Wrn_StackCheckIncompleteDueToRecursion":"Calculation of stack usage incomplete because of recursive calls, starting at '{0}':"
+,
+"Wrn_StatementNoEffect":"The code '{0}' has no effect. Is this the intent?"
+,
+"Wrn_StringConstantTooLong":"String constant '{0}' too long for destination type '{1}'"
+,
+"Wrn_StruturedTypePropertyNotMonitorable":"The monitoring attribute is not supported for property '{0}' and will be ignored"
+,
+"Wrn_TooManyApplications":"You have defined {0} applications for device {1}. The maximum number is {2}. So you will not be able to download all applications."
+,
+"Wrn_UninitialisedVariableUsedInInitialisation":"The uninitialized variable {0} is used for initialization of {1}. Use the attribute 'global_init_slot' to change the order of initialisation."
+,
+"Wrn_ValueAssignViaPointerMayChangeVFTable":"The instance {0} points to will be reinitialized for virtual function calls. Make sure {0} doesn't point to a type derived from {1} "
+,
+"Wrn_VarInOutUnitializedInInitialValue":"Access to uninitialized VAR_IN_OUT variable"
+,
+"Wrn_WrongDestructor":"The FB_Exit method of a function block or struct must have a single input 'bInCopyCode' of type BOOL and a return value of type BOOL."
+,
+"Wrn_WrongReInit":"The FB_ReInit method of a function block or struct must have no inputs and a return value of type BOOL. The FB_ReInit will not be called automatically!"
+}
+,
+"_3S.CoDeSys.Compiler35220.Resources.Strings.en.resources":{
+"AffectionCopied":"Old value copied X"
+,
+"AffectionInitialized":"Initialized"
+,
+"AffectionLocationChanged":"Location changed"
+,
+"AffectionVFTableInitialized":"Virtual function fable initialized"
+,
+"And_Text":"and"
+,
+"Area_Output_Checked":"Size needed for{0}: {1} bytes (available size: {2} bytes)"
+,
+"Area_Output_Checked_Exceeded":"Size exceeded for{0}: {1} bytes (available size: {2} bytes)"
+,
+"Area_Output_Info":"Memory area {0} contains {1}: size: {2} bytes, highest used address: {3}, largest contiguous memory gap: {4} bytes ({5} %)"
+,
+"Area_Output_Info_Simple":"Memory area {0} contains {1}: largest contiguous memory gap: {2} bytes ({3} %)"
+,
+"AttributeAlreadyRegistered":"The attribute {0} has already been registered by another plug-in"
+,
+"AttributeInvalidRange":"{0} is not a valid value for attribute '{1}'. Expected a value in range [{2}..{3}]."
+,
+"AttributeInvalidTypeInteger":"The value '{0}' for attribute '{1}' is invalid. Expected an integer number enclosed in single quotes (like '42')."
+,
+"AttributeMustBeEmpty":"Unexpected value '{0}' assigned to attribute '{0}'."
+,
+"AttributeMustNotBeEmpty":"Expected a value assigned to attribute '{0}'."
+,
+"AttributeNotInFunctionFBOrMethod":"Attribute '{0}' is only evaluated for POUs of type function, function block or method"
+,
+"AttributeNotInMethod":"Attribute '{0}' is only evaluated for POUs of type METHOD"
+,
+"AttributeNotSupportedWithCompilerVersion":"The attribute '{0}' is only interpreted for compiler version {1} or newer. The current compiler version is {2}."
+,
+"AttributeStrictDesc":"Decorating enum type declarations with the 'strict' attribute enforces only constant assignments of valid enum members during compile"
+,
+"AttributeStrictNoValidSignature":"Attribute 'strict' is only evaluated for ENUM type declarations"
+,
+"AttributeToStringFunctionWrongPOUType":"The attribute {0} is only valid for type declarations and function blocks"
+,
+"AttributeToStringWrongType":"The attribute {0} is only valid for enumerations"
+,
+"AttributeUnknown":"The attribute {0} is unknown and will be ignored by the compiler"
+,
+"AttributeValueMustBeOneOf":"Invalid value '{0}' for attribute '{1}' should be one of: {2}"
+,
+"AttributeWrongScopeSigns":"The attribute '{0}' can only be added to variable declarations. It will be ignored here."
+,
+"AttributeWrongScopeVars":"The attribute '{0}' has been added to a variable but only affects POUs. The attribute will be ignored."
+,
+"Build":"Build"
+,
+"BuildCompleteErrors":"Build complete -- {0} errors, {1} warnings : No download possible"
+,
+"BuildCompleteOK":"Build complete -- {0} errors, {1} warnings : Ready for download"
+,
+"BuildStarted":"------ Build started: Application: {0} -------"
+,
+"C138ErrMsgCheckSyntax":"Check syntax '{0} : {1}({2})'"
+,
+"C138ErrMsgRequiresNInputs":"Specified 'FB_Init' method requires exactly {0} inputs."
+,
+"Change_AttributesChanged":"Attributes changed"
+,
+"Change_CodeChanged":"Implementation changed"
+,
+"Change_DefineChanged":"Defines changed"
+,
+"Change_GlobalErrors":"Global errors in project"
+,
+"Change_InterfaceAdded":"inserted"
+,
+"Change_InterfaceChange_Explicitly":"Declaration changed, explicitly invalidated"
+,
+"Change_InterfaceChanged":"Declaration changed"
+,
+"Change_InterfaceDeleted":"Deleted"
+,
+"Change_NumOfSubSignaturesChanged":"Number of methods or actions changed"
+,
+"Change_ParameterTablesChanged":"Library parameter tables changed"
+,
+"Change_ReferencedLibrariesChanged":"Referenced libraries changed"
+,
+"Change_VariableChanged":"Variable {0} changed"
+,
+"Change_VariableDeleted":"Variable {0} deleted"
+,
+"Change_VariableInserted":"Variable {0} inserted"
+,
+"ClearDownloadContext":"Clear download context"
+,
+"Code_Text":"Code"
+,
+"CodeNoChange":"Code has not changed. No online change necessary."
+,
+"CompileCompleteErrors":"Compile complete -- {0} errors, {1} warnings"
+,
+"CompileCompleteOK":"Compile complete -- {0} errors, {1} warnings"
+,
+"Data_Text":"Data"
+,
+"DoCodeTypification":"Typify code"
+,
+"DoLocation":"Locate global data"
+,
+"DoTypification":"Retrieving working set"
+,
+"DownloadInfoSaveException":"Download information file could not be saved to {0}.\r\nLogin to device will not be possible after reloading the project.\r\nReason:\r\n{1}"
+,
+"Err_CompilerVersionError":"Compiler version {0} has been withdrawn. Please use a higher Compiler version instead."
+,
+"ErrExpressionContainsNoAppName":"Expression contains no application name"
+,
+"ErrExpressionContainsNoResource":"Expression contains no resource name"
+,
+"ErrInvalidExpression":"Invalid expression"
+,
+"ErrMultipleAreasWithMappedSegmentAccess":"Multiple areas found with 'MappedSegmentAccessOnly' flag set"
+,
+"ErrNoApplication":"Application not found"
+,
+"ErrNoAreaWithMappedSegmentAccess":"Mapped segments found but no area has been marked with 'MappedSegmentAccessOnly'"
+,
+"ErrorLimitExceeded":"More than {0} errors occured: Skipping all further error messages"
+,
+"ErrSignatureNotFound":"Signature not found"
+,
+"Except_Boot_Project_Error":"No boot project possible in this state: Application out of memory. Perform full download first."
+,
+"Except_Boot_Project_Error_CompileContext_Not_UpToDate":"No boot application possible in this state: Internal error"
+,
+"Except_Boot_Project_Error_Error_In_Compile":"No boot project possible in this state: Error on creating boot project information. See message window."
+,
+"FeatureGroup_Description":"Features concerning the IEC 61131-3 language"
+,
+"FeatureGroup_Name":"IEC 61131-3 language"
+,
+"GenerateCode":"Generate code for {0}..."
+,
+"GenerateCodeInit":"Generate code initialization..."
+,
+"GenerateCodeProgress":"Generating code..."
+,
+"GenerateGlobalInit":"Generate global initializations..."
+,
+"GenerateRelocations":"Generate relocations..."
+,
+"GeneratingCode":"Generate code..."
+,
+"Getter":"Getter"
+,
+"GlobalInitErrorPrefix":"Error in implicit initialization code: "
+,
+"GVLChanged":"Global variable list '{0}' changed"
+,
+"GVLRenamedOrDeleted":"Global variable list '{0}' renamed or deleted"
+,
+"HiddenPousPlaceholder":"<Hidden POUs>"
+,
+"Input_Text":"Input"
+,
+"InterfaceChanged":"Interface '{0}' changed"
+,
+"InterfaceReferencesAffected":"The following interface references are tested on redirection:"
+,
+"InterfacesChanged":"The following POU interfaces have been changed:"
+,
+"InvalidBooleanValue":"Invalid value"
+,
+"LanguageModelMngrOptionConditionalShowSymbols_Description":"Used to hide variables in libraries from the end user"
+,
+"Libraries":"lLbraries"
+,
+"LibrariesChanged":"Libraries changed"
+,
+"LoadCompileContext":"Load compile information"
+,
+"LoadingLibraries":"Loading libraries..."
+,
+"Memory_Text":"Memory"
+,
+"MethodAdded":"Method '{0}' of {1} '{2}' added"
+,
+"MethodChanged":"Method '{0}' of {1} '{2}' changed"
+,
+"MethodRenamedOrDeleted":"Method '{0}' of {1} '{2}' renamed or deleted"
+,
+"NumInterfacesChanged":"{0} interfaces of POUs changed"
+,
+"NumInterfacesToTest":"{0} interface references are tested for redirection"
+,
+"NumPOUsDownloaded":"{0} POUs changed their code"
+,
+"NumVariablesAffected":"{0} variables affected by online change, {1} changed location, {2} initialized, {3} copied, {4} initialized virtual function table"
+,
+"OnlineChangeRelinkCodegenProgress":"Generating code to relink interfaces"
+,
+"OnlineChangeRelinkProgress":"Checking variables for possible interface references"
+,
+"OR":"or"
+,
+"Output_Text":"Output"
+,
+"ParamsArray_Comment":"'arrParams' is a 1-based Array holding the actual values passed to this function. Any value beyond 'nCoun' is neither assigned nor initialized and shall not be used."
+,
+"ParamsCount_Comment":"Count defines the number of formal params passed to this function"
+,
+"Persistent_Text":"Persistent data"
+,
+"PersistenVariablesChanged":"Persistent variables changed! Do you want to initialize with current list?\r\n\t\t\r\nYes: current list will be initialized, existing persistent values will be overridden\r\nNo:  existing persistent values will be kept, current list will use these values.\r\n     WARNING: The values may not match to your persistent variables. You have to check the values manually!\r\n     E.g: if you add a variable at the beginning of the list, all of the values are wrong!\r\n\r\nCancel: cancel download or online change"
+,
+"POUChanged":"{0} '{1}' changed"
+,
+"POURenamedOrDeleted":"{0} '{1}' renamed or deleted"
+,
+"POUsDownloaded":"The code of the following POUs will be downloaded"
+,
+"POUUnit":"POUs"
+,
+"Precompile":"Precompile"
+,
+"ProjectUpToDate":"The application is up to date"
+,
+"Retain_Text":"Retain data"
+,
+"Scanner_Initialize_char_array_must_end_with_null_value":"Char array must end with null value"
+,
+"Setter":"Setter"
+,
+"String1":"The compiler version specified in this project is deprecated. While the project can still be compiled, it is recommended to update the compiler version to a later one. Please note that after updating the compiler version the old version is no longer available for this project."
+,
+"SupportExtendedProgrammingFeatureSettingProvider_Description":"If enabled, extended programming features such as object oriented programming or attributes are supported on the user interface. Note: This does not influence the capability to open and compile existing projects containing such elements."
+,
+"SupportExtendedProgrammingFeatureSettingProvider_Name":"Support extended programming features"
+,
+"TextContains":"Contains"
+,
+"TypeChanged":"Type '{0}' changed"
+,
+"TypeRenamedOrDeleted":"Type '{0}' renamed or deleted"
+,
+"TypifyAll":"Typify code..."
+,
+"UnexpectedExpression":"'Unexpected Expression {0}'"
+,
+"UnresolvedVariable":"Unresolved variable {0}"
+,
+"UpdatingCompilerVersion":"Updating compiler version"
+,
+"VariableDeclarationChanged":"Declaration of variable '{0}' in '{1}' changed"
+,
+"VariableRenamedOrDeleted":"Variable '{0}' in '{1}' renamed or deleted"
+,
+"VariablesAffected":"The following variables are affected by online change:"
+,
+"WarningLimitExceeded":"More than {0} warnings occured: Skipping all further warning messages"
+,
+"Warnings":"Warnings"
+,
+"WritingCompileInformationProgressText":"Finish writing compile information..."
+}
+}

@@ -407,14 +407,21 @@ pub(crate) fn array_spec_from_inline(
     _span: &ironplc_dsl::core::SourceSpan,
 ) -> Result<ArraySpec, Diagnostic> {
     let dimensions: Vec<(i32, i32)> = subranges
-        .ranges
+        .ranges()
         .iter()
         .map(|range| {
             let lower = super::compile_stmt::signed_integer_to_i32(
-                range.start.as_signed_integer().unwrap(),
+                range
+                    .start
+                    .as_signed_integer()
+                    .ok_or_else(Diagnostic::internal_error)?,
             )?;
-            let upper =
-                super::compile_stmt::signed_integer_to_i32(range.end.as_signed_integer().unwrap())?;
+            let upper = super::compile_stmt::signed_integer_to_i32(
+                range
+                    .end
+                    .as_signed_integer()
+                    .ok_or_else(Diagnostic::internal_error)?,
+            )?;
             Ok((lower, upper))
         })
         .collect::<Result<Vec<_>, Diagnostic>>()?;
@@ -443,6 +450,33 @@ pub(crate) fn array_spec_from_inline(
         ref_to: subranges.ref_to.is_some(),
         string_max_len,
         string_char_width,
+    })
+}
+
+/// Converts a `PARAMS(n) OF T` list into the array it lowers to,
+/// `ARRAY[0 .. n-1] OF T`.
+///
+/// The analyzer resolves the list to that array (see the analyzer's
+/// `intermediates::params`), so the layout, indexing and element access are
+/// the ordinary array ones.
+pub(crate) fn array_spec_from_params(
+    params: &ironplc_dsl::common::ParamsSpecification,
+    span: &ironplc_dsl::core::SourceSpan,
+) -> Result<ArraySpec, Diagnostic> {
+    // The analyzer rejects a count that is not a literal or is zero before
+    // code generation runs, so a count that reaches here is a constant.
+    let count = params
+        .count
+        .as_integer()
+        .and_then(|i| i32::try_from(i.value).ok())
+        .filter(|n| *n > 0)
+        .ok_or_else(|| Diagnostic::not_supported(Label::span(span.clone(), "PARAMS count")))?;
+    Ok(ArraySpec {
+        dimensions: vec![(0, count - 1)],
+        element_type_name: Id::from(&params.type_name.to_string()),
+        ref_to: false,
+        string_max_len: None,
+        string_char_width: None,
     })
 }
 
@@ -794,7 +828,7 @@ pub(crate) fn flatten_array_initial_values(
                     }
                     None => {
                         let zero = ConstantKind::integer_literal("0")
-                            .expect("literal '0' is always valid");
+                            .map_err(|_| Diagnostic::internal_error())?;
                         for _ in 0..count {
                             result.push(zero.clone());
                         }

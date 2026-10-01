@@ -179,6 +179,54 @@ mod test {
     }
 
     #[test]
+    fn tokenize_when_non_ascii_text_then_span_is_utf8_byte_offsets() {
+        use dsl::core::FileId;
+        // `é` is two bytes and `𝄞` is four, so byte offsets diverge from both
+        // character counts and UTF-16 columns.
+        let source = "'é𝄞' y";
+        let (tokens, diagnostics) = super::tokenize(source, &FileId::default(), 0, 0);
+        assert!(
+            diagnostics.is_empty(),
+            "unexpected diagnostics: {diagnostics:?}"
+        );
+
+        let string = tokens.iter().find(|t| t.text == "'é𝄞'").unwrap();
+        assert_eq!((string.span.start, string.span.end), (0, 8));
+        assert_eq!(&source[string.span.start..string.span.end], "'é𝄞'");
+
+        let y = tokens.iter().find(|t| t.text == "y").unwrap();
+        // Byte offset 9, but UTF-16 column 6 (quote, é, surrogate pair, quote,
+        // space).
+        assert_eq!((y.span.start, y.span.end), (9, 10));
+        assert_eq!((y.line, y.col), (0, 6));
+        assert_eq!(&source[y.span.start..y.span.end], "y");
+    }
+
+    #[test]
+    fn tokenize_when_any_input_then_token_spans_slice_to_token_text() {
+        use dsl::core::FileId;
+        let source = "x := 'é'; (* 𝄞 *)\ny := 1;";
+        let (tokens, _) = super::tokenize(source, &FileId::default(), 0, 0);
+
+        assert!(!tokens.is_empty());
+        for token in &tokens {
+            assert_eq!(&source[token.span.start..token.span.end], token.text);
+        }
+    }
+
+    #[test]
+    fn tokenize_when_offsets_given_then_span_stays_source_relative_and_col_is_shifted() {
+        use dsl::core::FileId;
+        let (tokens, _) = super::tokenize("a b", &FileId::default(), 3, 10);
+
+        let b = tokens.iter().find(|t| t.text == "b").unwrap();
+        // Offsets move line/column only; the span stays relative to the text
+        // that was passed in.
+        assert_eq!((b.span.start, b.span.end), (2, 3));
+        assert_eq!((b.line, b.col), (3, 12));
+    }
+
+    #[test]
     fn tokenize_when_line_comment_then_newline_is_its_own_token() {
         use dsl::core::FileId;
         let (tokens, diagnostics) = super::tokenize("// c\nx", &FileId::default(), 0, 0);

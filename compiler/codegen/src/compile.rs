@@ -46,8 +46,8 @@ use ironplc_container::debug_section::{
     EnumDefEntry, FuncNameEntry, StringLayoutEntry, VarNameEntry,
 };
 use ironplc_container::{
-    CharWidth, Container, ContainerBuilder, FbTypeId, FunctionId, TaskType, UserFbDescriptor,
-    VarIndex,
+    CharWidth, Container, ContainerBuilder, FbFieldUidEntry, FbTypeId, FunctionId, StableVarEntry,
+    TaskType, UserFbDescriptor, VarEntry, VarIndex,
 };
 // The string data-region layout lives in `ironplc-container` so the analyzer
 // and codegen size strings the same way. Re-exported here because the rest of
@@ -73,6 +73,7 @@ use crate::emit::Emitter;
 use super::compile_fn::{compile_user_function, compile_user_function_block};
 use super::compile_setup::{assign_variables, emit_initial_values};
 use super::compile_stmt::compile_body;
+use super::compile_var_table::slot_entry;
 
 /// The native operation width used for arithmetic and comparisons.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -203,12 +204,36 @@ pub(crate) fn emit_string_literal_load(
 ///
 /// Returns an error if no program is found or if the program contains
 /// unsupported constructs.
+/// An engineering-side key for a function-block field's stable UID
+/// (ADR 0059): the qualified FB type name and the field name. This is the
+/// UID sidecar's `(scope, name)` key, where an FB field's scope is its type
+/// name; `Id` semantics make both comparisons case-insensitive.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FbFieldUidKey {
+    /// The qualified name of the declaring FB type.
+    pub fb_type: Id,
+    /// The field's declaration name.
+    pub field: Id,
+}
+
+impl FbFieldUidKey {
+    /// Creates a key from an FB type name and a field name.
+    pub fn new(fb_type: &str, field: &str) -> Self {
+        FbFieldUidKey {
+            fb_type: Id::from(fb_type),
+            field: Id::from(field),
+        }
+    }
+}
+
 /// Options that affect code generation.
 ///
 /// Every front end derives this from the project's [`CompilerOptions`] via
 /// [`From`], so the mapping from a compiler option to what codegen does with
-/// it has exactly one definition.
-#[derive(Debug, Default, Clone, Copy)]
+/// it has exactly one definition. Options the project model owns rather than
+/// the parser (the stable variable IDs, ADR 0053, and the FB field UIDs,
+/// ADR 0059) are set on the derived value by the orchestrator.
+#[derive(Debug, Default, Clone)]
 pub struct CodegenOptions {
     /// When `true`, inject `__SYSTEM_UP_TIME` (TIME) and `__SYSTEM_UP_LTIME`
     /// (LTIME) as implicit globals at the start of the variable table.
@@ -216,6 +241,19 @@ pub struct CodegenOptions {
     /// The behavior policies `STRING_TO_<numeric>` calls are compiled under
     /// (ADR-0049). They select the builtin func_id the call emits.
     pub string_to_num: StringToNumPolicies,
+    /// Engineering-side entity UIDs keyed by the current declaration name
+    /// (ADR 0053). Names are matched with [`Id`] semantics, so the
+    /// comparison is case-insensitive; a name no persistent variable has is
+    /// ignored. The project API supplies the table, so the derived
+    /// [`From<&CompilerOptions>`] value leaves it empty.
+    pub stable_var_ids: Vec<(Id, u64)>,
+    /// Engineering-side entity UIDs for user-defined function-block fields
+    /// (ADR 0059), keyed by ([`FbFieldUidKey`], uid). A field the table names
+    /// records an FB field UID entry at its `(fb_type_id, field_index)` in
+    /// the container's type section; fields the table does not name carry no
+    /// entry, and the migration planner treats them as fail-closed when the
+    /// FB layout changes.
+    pub fb_field_uids: Vec<(FbFieldUidKey, u64)>,
 }
 
 /// The two behavior policies of a `STRING_TO_<numeric>` conversion.
@@ -233,6 +271,8 @@ impl From<&CompilerOptions> for CodegenOptions {
                 non_numeric: options.policy_string_to_num_non_numeric,
                 failure: options.policy_string_to_num_failure,
             },
+            stable_var_ids: Vec::new(),
+            fb_field_uids: Vec::new(),
         }
     }
 }
@@ -312,7 +352,7 @@ pub fn compile(
         context.functions(),
         context.types(),
         enum_map,
-        options.string_to_num,
+        options,
         *context.compiler_options(),
         sources,
     )?;
@@ -709,12 +749,19 @@ struct ProgramInputs<'a> {
 /// When no initial values exist, the init function is a single RET_VOID.
 // Internal codegen helper split out from `compile()` purely for
 // readability of the public function; called from exactly one site.
+//
+// `options` and `compiler_options` are both kept on purpose: the former is
+// the front-end-facing policy bundle (including the fork's UID tables), the
+// latter is the analyzer's own option set. Codegen must ask the arithmetic
+// overload resolver the *same* question the analyzer asked — same flags —
+// or an expression accepted in analysis is rejected (or compiled
+// differently) in codegen.
 fn compile_program_with_functions(
     inputs: ProgramInputs<'_>,
     functions: &FunctionEnvironment,
     types: &TypeEnvironment,
     enum_map: crate::compile_enum::EnumOrdinalMap,
-    string_to_num: StringToNumPolicies,
+    options: &CodegenOptions,
     compiler_options: CompilerOptions,
     sources: &dyn crate::source_lookup::SourceLookup,
 ) -> Result<Container, Diagnostic> {
@@ -728,7 +775,7 @@ fn compile_program_with_functions(
     ctx.enum_map = enum_map;
     ctx.types = crate::type_info::type_representations(types);
     ctx.operand_names = crate::type_info::operand_names(types);
-    ctx.string_to_num = string_to_num;
+    ctx.string_to_num = options.string_to_num;
     ctx.compiler_options = compiler_options;
     let mut builder = ContainerBuilder::new();
 
@@ -749,7 +796,13 @@ fn compile_program_with_functions(
     }
 
     // Assign global variable indices first (indices 0..G).
-    assign_variables(&mut ctx, &mut builder, global_vars, types)?;
+    assign_variables(
+        &mut ctx,
+        &mut builder,
+        global_vars,
+        types,
+        &options.stable_var_ids,
+    )?;
     let num_globals = ctx.variables.len() as u16;
 
     // Pre-scan user-defined FB declarations to register type metadata
@@ -764,6 +817,10 @@ fn compile_program_with_functions(
         let mut field_indices: HashMap<String, u8> = HashMap::new();
         let mut field_op_types: HashMap<String, OpType> = HashMap::new();
         let mut field_decls_tmp: Vec<&VarDecl> = Vec::new();
+        // UIDs of this type's fields named by the engineering-side table
+        // (ADR 0059), collected with the pre-scan and recorded once the
+        // type ID is assigned below.
+        let mut field_uids: Vec<(u8, u64)> = Vec::new();
 
         for decl in &fb_decl.variables {
             if decl.var_type == VariableType::Input {
@@ -776,7 +833,7 @@ fn compile_program_with_functions(
             }
         }
         for decl in &fb_decl.variables {
-            if decl.var_type == VariableType::Var {
+            if decl.var_type.is_pou_storage() {
                 field_decls_tmp.push(decl);
             }
         }
@@ -792,6 +849,13 @@ fn compile_program_with_functions(
                     }
                 } else {
                     field_op_types.insert(name, DEFAULT_OP_TYPE);
+                }
+                if let Some((_, uid)) = options
+                    .fb_field_uids
+                    .iter()
+                    .find(|(key, _)| key.fb_type == fb_decl.name.name && key.field == *id)
+                {
+                    field_uids.push((i as u8, *uid));
                 }
             }
         }
@@ -810,6 +874,13 @@ fn compile_program_with_functions(
                 methods: HashMap::new(),
             },
         );
+        for (field_index, uid) in field_uids {
+            ctx.fb_field_uid_entries.push(FbFieldUidEntry {
+                fb_type_id: FbTypeId::new(type_id),
+                field_index,
+                uid,
+            });
+        }
     }
 
     // Pre-scan METHOD declarations (OOP extension, ADR-0041 Phase 1) to
@@ -874,7 +945,17 @@ fn compile_program_with_functions(
 
     // Assign program-local variable indices (indices G..N).
     // This can now resolve user-defined FB instances via ctx.user_fb_types.
-    assign_variables(&mut ctx, &mut builder, &local_vars, types)?;
+    // Globals and program variables are the persistent prefix whose UIDs
+    // may appear in `options.stable_var_ids`; function/FB/method slots are
+    // assigned later by their own compilation paths and never reach the
+    // lookup (ADR 0053).
+    assign_variables(
+        &mut ctx,
+        &mut builder,
+        &local_vars,
+        types,
+        &options.stable_var_ids,
+    )?;
     let program_var_count = ctx.variables.len() as u16;
 
     // Now compile the FB bodies with correct var_offsets.
@@ -914,7 +995,11 @@ fn compile_program_with_functions(
         let field_var_off = var_offset.raw();
 
         // Update the var_offset in the registered type info.
-        ctx.user_fb_types.get_mut(&fb_name).unwrap().var_offset = field_var_off;
+        let Some(fb_type) = ctx.user_fb_types.get_mut(&fb_name) else {
+            // The type was registered when `fb_func_id` was read above.
+            return Err(Diagnostic::internal_error());
+        };
+        fb_type.var_offset = field_var_off;
 
         let (compiled, saved_scope) = compile_user_function_block(
             fb_decl,
@@ -1155,6 +1240,31 @@ fn compile_program_with_functions(
             name: compiled.name.clone(),
         });
     }
+    // Add the type section's variable table, one entry per index
+    // `0..num_variables`. `collect_variable_table` reports an internal error
+    // for an index no allocation site recorded, so a forgotten site fails
+    // the compilation instead of silently corrupting the layout hash. It is
+    // collected before the debug loops below, which move their vectors out
+    // of `ctx`.
+    let variable_table = ctx.collect_variable_table(total_variables.raw())?;
+    for entry in variable_table {
+        builder = builder.add_var_entry(entry);
+    }
+
+    // Add the stable variable ID sub-table (ADR 0053), ascending by
+    // `var_index`. It is excluded from the layout hash, so a rename that
+    // only rebinds a UID keeps the active hash.
+    for entry in ctx.collect_stable_vars()? {
+        builder = builder.add_stable_var(entry);
+    }
+
+    // Add the FB field UID sub-table (ADR 0059), ascending by
+    // `(fb_type_id, field_index)`. Like the stable variable IDs, it is
+    // identity rather than layout and stays out of the layout hash.
+    for entry in ctx.collect_fb_field_uids()? {
+        builder = builder.add_fb_field_uid(entry);
+    }
+
     for entry in ctx.debug_var_names {
         builder = builder.add_var_name(entry);
     }
@@ -1352,6 +1462,15 @@ pub(crate) struct CompileContext {
     /// statement compilation. Each loop pushes its labels; EXIT and CONTINUE
     /// jump to those of the top.
     pub(crate) loop_labels: Vec<crate::compile_loop::LoopLabels>,
+    /// Stack of the handlers of the enclosing `__TRY` statements, for
+    /// `__THROW` compilation. Only a `__TRY` that has a `__CATCH` clause
+    /// pushes one, so a throw with no handler on the stack is refused.
+    pub(crate) try_handlers: Vec<crate::compile_try_catch::TryHandler>,
+    /// The emitter label of every statement label in the POU body being
+    /// emitted, for `JMP` compilation and for binding `label:` statements.
+    /// Set by [`crate::compile_stmt::compile_statements`] for the duration of
+    /// one body.
+    pub(crate) jump_labels: crate::compile_jump::JumpLabels,
     /// Maps STRING variable identifiers to their data region metadata.
     pub(crate) string_vars: HashMap<Id, StringVarInfo>,
     /// Maps FB instance variable identifiers to their metadata.
@@ -1419,6 +1538,27 @@ pub(crate) struct CompileContext {
     ///
     /// [`record_call_edge`]: CompileContext::record_call_edge
     pub(crate) call_graph: HashMap<FunctionId, HashSet<FunctionId>>,
+    /// One entry per compiler-assigned variable index, for the type section's
+    /// variable table (see `compile_var_table`). Unlike the scope-scoped maps
+    /// above, this collection is never saved or restored: an index, once
+    /// assigned, is never reused, so its entry must survive the per-function
+    /// scope swaps. A `None` slot is an index no allocation site claimed,
+    /// which `collect_variable_table` reports as an internal error.
+    pub(crate) var_entries: Vec<Option<VarEntry>>,
+    /// Stable variable IDs (ADR 0053) for the persistent variables whose
+    /// declaration name matched `CodegenOptions::stable_var_ids`, recorded
+    /// when their index was assigned. Function locals, method parameters,
+    /// FB field regions and scratch never reach this collection. Like
+    /// `var_entries`, it is never saved or restored across the per-function
+    /// scope swaps; `collect_stable_vars` sorts it and rejects a duplicate
+    /// `var_index`.
+    pub(crate) stable_var_entries: Vec<StableVarEntry>,
+    /// FB field UIDs (ADR 0059) for the user-defined FB type fields the
+    /// engineering-side table named, recorded during the FB pre-scan. Like
+    /// `var_entries`, it is never saved or restored across the per-function
+    /// scope swaps; `collect_fb_field_uids` sorts it and rejects a duplicate
+    /// `(fb_type_id, field_index)`.
+    pub(crate) fb_field_uid_entries: Vec<FbFieldUidEntry>,
     /// The `VAR_IN_OUT` parameters of the function being compiled. Each
     /// one's slot holds a reference to the caller's variable (a
     /// variable-table index, as `REF_TO` stores) rather than a value, so it
@@ -1449,6 +1589,8 @@ impl CompileContext {
             var_types: HashMap::new(),
             constants: Vec::new(),
             loop_labels: Vec::new(),
+            try_handlers: Vec::new(),
+            jump_labels: crate::compile_jump::JumpLabels::new(),
             string_vars: HashMap::new(),
             fb_instances: HashMap::new(),
             array_vars: HashMap::new(),
@@ -1472,6 +1614,9 @@ impl CompileContext {
             current_function_return: None,
             current_function_id: None,
             call_graph: HashMap::new(),
+            var_entries: Vec::new(),
+            stable_var_entries: Vec::new(),
+            fb_field_uid_entries: Vec::new(),
         }
     }
 
@@ -1554,6 +1699,7 @@ impl CompileContext {
         let idx = VarIndex::new(self.variables.len() as u16);
         self.variables
             .insert(Id::from(&format!("$scratch_{}", suffix)), idx);
+        self.record_var_entry(idx, slot_entry());
         idx
     }
 

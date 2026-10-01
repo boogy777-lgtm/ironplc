@@ -556,7 +556,13 @@ impl Marker {
             return false;
         };
         match decl.var_type {
-            VariableType::Var | VariableType::VarTemp => {
+            // The additional sections are stored like VAR, so a never-written
+            // declaration in one of them is constant-folded the same way.
+            VariableType::Var
+            | VariableType::VarTemp
+            | VariableType::VarStat
+            | VariableType::VarInst
+            | VariableType::VarGeneric => {
                 let scope = match self.scope.first() {
                     None => ScopeKind::Global,
                     Some(_) => ScopeKind::Named(ScopePath::new(self.scope.clone())),

@@ -1,0 +1,27 @@
+=======
+V4107
+=======
+
+.. problem-summary:: V4107
+
+The OWNERSHIP_BARRIER failed: acquiring or verifying Exclusive Owner on
+one of the required outputs did not succeed, so everything the barrier
+had already acquired was released and the unit entered REDUNDANCY_LOST.
+The barrier is all-or-nothing — partial ownership never means ACTIVE —
+so a failed promotion, takeover, or boot claim leaves the unit owning
+nothing and the pair asking a human.
+
+Example
+-------
+
+A promoted unit claims its required outputs in the configured order; a
+module faults between the claim and the barrier's verification:
+
+.. code-block::
+
+   Error: V4107 - ownership barrier failed: the ownership barrier failed: an acquisition or verification failure released everything acquired; redundancy is lost
+
+To fix this error, check the fenced I/O modules named by the
+diagnostics (power, connection, module fault), then requalify the unit
+out of REDUNDANCY_LOST. The claim is retried only from a clean IDLE
+after repair — a barrier that failed once is never resumed mid-claim.

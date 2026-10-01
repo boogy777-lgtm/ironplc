@@ -5,28 +5,41 @@
 
 mod common;
 
+pub(crate) use common::unwrap_parse;
+
 mod adr;
 mod case;
+mod codesys_literals;
 mod constant_initializers;
 mod continue_statement;
 mod corpus;
 mod declarations;
 mod enums;
+mod escaped_identifiers;
 mod exit_return;
 mod fb_inheritance;
+mod incomplete_array;
+mod jumps;
 mod method_call_expression;
 mod methods;
 mod mixed_vars;
+mod namespaces;
+mod params_of;
 mod partial_access;
 mod persistent_var;
+mod pipe_or;
 mod pointer_to;
 mod property;
 mod reference_to;
 mod set_reset_bind;
 mod short_circuit;
+mod special_operators;
 mod string_literals;
 mod struct_init_expressions;
 mod tc2_math_calls;
 mod tc2_utilities_calls;
 mod this_super;
 mod time_and_sizeof;
+mod time_literals;
+mod try_catch;
+mod union;

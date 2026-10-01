@@ -216,6 +216,12 @@ pub trait Visitor<E> {
     // 2.3.3.1
     dispatch!(StructureDeclaration);
 
+    // UNION ... END_UNION (IEC 61131-3:2013 / CODESYS)
+    dispatch!(UnionDeclaration);
+
+    // NAMESPACE ... END_NAMESPACE (CODESYS/TwinCAT)
+    dispatch!(NamespaceDeclaration);
+
     // 2.3.3.1
     dispatch!(StructureElementDeclaration);
 
@@ -233,11 +239,16 @@ pub trait Visitor<E> {
     dispatch!(ReferenceInitializer);
     dispatch!(ReferenceInitialValue);
 
+    dispatch!(ParamsSpecification);
+    dispatch!(ParamsDeclaration);
+
     dispatch!(ArraySpecificationKind);
 
     dispatch!(ArrayElementType);
 
     dispatch!(ArraySubranges);
+
+    dispatch!(ArrayBounds);
 
     // 2.4.2.1
     dispatch!(Subrange);
@@ -448,6 +459,20 @@ pub trait Visitor<E> {
     dispatch!(While);
 
     dispatch!(Repeat);
+
+    dispatch!(TryCatch);
+
+    dispatch!(CatchClause);
+
+    dispatch!(Throw);
+
+    dispatch!(Jump);
+
+    dispatch!(LabelStatement);
+
+    dispatch!(ConditionalCall);
+
+    dispatch!(Wait);
 
     dispatch!(NamedVariable);
 

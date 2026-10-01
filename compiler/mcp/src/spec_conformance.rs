@@ -730,7 +730,11 @@ fn mcp_spec_req_tol_062_list_options_returns_flags() {
                 "enum flag {} must list its allowed values",
                 flag.id
             ),
-            other => panic!("flag {} has unexpected type {other}", flag.id),
+            other => assert!(
+                matches!(other, "bool" | "enum"),
+                "flag {} has unexpected type {other}",
+                flag.id
+            ),
         }
         assert!(
             !flag.description.is_empty(),

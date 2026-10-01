@@ -4,6 +4,7 @@ status: proposed
 date: 2026-02-18
 amended: 2026-05-22 (BLAKE3 throughout; per-file source hashes moved to debug section)
 amended: 2026-09-11 (Implementation Status added; status unchanged)
+amended: 2026-09-15 (layout hash now computed; content_hash/debug_hash remain open)
 amended: 2026-09-19 (Implementation Status updated: content and debug hashes computed and checked; status unchanged)
 amended: 2026-09-26 (postscript: content hash scope widened to the masked header and task table; status unchanged)
 
@@ -69,7 +70,7 @@ Verify by:
 4. Confirming each `SOURCE_FILE_TABLE` entry's hash matches a BLAKE3 computed over the corresponding source file
 5. Attempting to replace any per-file hash in the `SOURCE_FILE_TABLE` and confirming the debug signature rejects it
 
-## Implementation Status (as of 2026-09-19)
+## Implementation Status (as of 2026-09-26)
 
 This ADR is still `proposed`, and that is accurate: all three of its
 cryptographic elements exist, and neither signature does. Recorded here so a
@@ -89,7 +90,7 @@ What landed:
   content hash valid, a changed code byte is rejected, and a changed debug byte
   discards the debug info while the code still loads — each pinned by a
   conformance test in `specs/design/bytecode-container-format.md`
-  (REQ-CF-container-028 through 033). An all-zero `content_hash` is accepted
+  (REQ-CF-container-031 through 033 and 035 through 037). An all-zero `content_hash` is accepted
   unchecked, because without a signature there is nothing to reject an
   unhashed container against; the compiler never writes one.
 
@@ -98,6 +99,12 @@ What landed:
   `codegen::source_lookup` and pinned by tests that recompute `blake3::hash` over
   the same bytes. The "which file drifted" granularity this ADR argued for is
   real and usable today.
+* **The layout hash.** `Container::write_to` computes `layout_hash` over the
+  variable table, FB type descriptors and array descriptors and writes it into
+  the header, as "Layout Hash and Online Change" in
+  [the container spec](../design/bytecode-container-format.md#layout-hash-and-online-change)
+  defines. It is meaningful only once the container is serialized; a header
+  built but never written still carries zeros.
 * BLAKE3 throughout, as the 2026-05-22 amendment recorded.
 * The container *shape* for the rest: the section directory reserves
   `sig_section_offset` / `sig_section_size` and `debug_sig_offset` /
@@ -106,9 +113,6 @@ What landed:
 
 What did not:
 
-* **`layout_hash` is never computed.** It is written as zeros and only
-  `project::disassemble` reads it. It is not part of this ADR's model; it
-  serves online change, and stays open with that feature.
 * **Neither signature exists.** Nothing writes the signature sections and nothing
   reads them; there is no key handling, and no signing crate is a dependency of
   any crate in the workspace. The algorithm question is settled on paper — this

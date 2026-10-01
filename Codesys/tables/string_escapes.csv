@@ -1,0 +1,21 @@
+sequence,kind,target,valid_in,validation,decoded_value,notes
+"$$",literal,STRING/WSTRING/__XSTRING#/UTF8#/UCHAR#,"'...' and \"...\"",next char must be '$',U+0024 '$',Escaped dollar.
+"$'",literal,all,"'...' and \"...\"",next char must be apostrophe,U+0027 apostrophe,Escaped single quote (works in both quote styles).
+"$\"",literal,all,"'...' and \"...\"",next char must be double quote,U+0022 double quote,Escaped double quote.
+$L,control,all,"'...' and \"...\"",letter L/U+000A LF,Alias of $N.
+$l,control,all,"'...' and \"...\"",letter l/U+000A LF,Case-insensitive variant of $L.
+$N,control,all,"'...' and \"...\"",letter N/U+000A LF,New line.
+$n,control,all,"'...' and \"...\"",letter n/U+000A LF,Case-insensitive variant of $N.
+$R,control,all,"'...' and \"...\"",letter R/U+000D CR,Carriage return.
+$r,control,all,"'...' and \"...\"",letter r/U+000D CR,Case-insensitive variant of $R.
+$T,control,all,"'...' and \"...\"",letter T/U+0009 TAB,Horizontal tab.
+$t,control,all,"'...' and \"...\"",letter t/U+0009 TAB,Case-insensitive variant of $T.
+$P,control,all,"'...' and \"...\"",letter P/U+000C FF,Form feed (page break).
+$p,control,all,"'...' and \"...\"",letter p/U+000C FF,Case-insensitive variant of $P.
+$hh,local-codepoint,single-byte,"'...' , UTF8#'...' , UCHAR#'...' , __XSTRING# decode path",exactly 2 hex digits,"0x00-0x7F -> (char)v ; 0x80-0xFF -> Windows-1252 decode","__XSTRING# is validated as double-byte (needs 4 hex) but decoded as single-byte (2 hex) -> inconsistency."
+$hhhh,local-codepoint,double-byte,\"...\" (and __XSTRING# validation),exactly 4 hex digits,"0x0000-0x007F and >=0x0100 -> (char)v ; 0x80-0xFF -> Windows-1252",Example: $0041 -> 'A'.
+$Uxxxxxxxx,unicode-codepoint,all,"'...' and \"...\"",exactly 8 hex digits,UTF-32 codepoint (may expand to 2 UTF-16 chars),Example: $U000020AC -> U+20AC EURO SIGN.
+$M / $O / $Q / $S / any other letter,invalid,all,"'...' and \"...\"",not a known escape and not hex -> ValidateLocalCodepoint fails,Token becomes Error(20)/Compiler error,Also $ followed by any non-hex non-special char.
+$,invalid,all,"'...' and \"...\"",dollar at end of string -> escape char is NUL,Token becomes Error(20),Unterminated escape.
+$U with <8 hex,invalid,all,"'...' and \"...\"",ValidateUnicodeCodepoint requires 8 hex,Token becomes Error(20),$U0041 (4 hex) is an error.
+extra hex after $U,literal,all,"'...' and \"...\"",9th+ hex digit is not consumed by the escape,literal hex char,"$U000000421 -> U+0042 'B' followed by literal '1'."

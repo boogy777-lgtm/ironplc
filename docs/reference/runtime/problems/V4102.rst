@@ -1,0 +1,28 @@
+=====
+V4102
+=====
+
+.. problem-summary:: V4102
+
+The peer refused a crossloaded candidate: the candidate's wire bytes
+failed the load-time verification or the staging validation on the
+secondary unit. The pair does not hold the same candidate generation,
+so the session is not redundancy-ready — the refusal answers the
+primary with this code, the secondary latches it as its alarm, and the
+candidate is rolled back to the clean pre-offer base on the refusing
+unit. Nothing was half-applied.
+
+Example
+-------
+
+A unit accepts an edit whose candidate its peer cannot stage (for
+example, a container that fails the peer's load-time verification):
+
+.. code-block::
+
+   Error: V4102 - crossload candidate rejected: the peer refused the crossloaded candidate: staging validation failed on the peer
+
+To fix this error, check that both units run the identical committed
+application generation (the pair admits exactly one), then re-issue the
+Accept. A candidate the peer cannot stage is refused, never guessed —
+re-establishing one application generation is the recovery.

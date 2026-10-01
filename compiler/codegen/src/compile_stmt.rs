@@ -28,8 +28,11 @@ use super::compile_expr::{
     op_type, resolve_variable, resolve_variable_name, try_classify_cmp, variable_span,
 };
 use super::compile_fb_init::{compile_fb_field_store, resolve_fb_field_op_type};
+use super::compile_jump::{compile_jump, compile_label, compile_wait};
 use super::compile_loop::{compile_for, compile_repeat, compile_while};
 use super::compile_method::compile_method_call_statement;
+use super::compile_try_catch::{compile_throw, compile_try_catch};
+use crate::compile_jump;
 use crate::emit::Emitter;
 use crate::string_width::compile_string_value;
 
@@ -57,15 +60,23 @@ pub(crate) fn compile_body(
 }
 
 /// Compiles a sequence of statements.
+///
+/// This is the entry point for one POU body, so it is also where the body's
+/// statement labels get their emitter labels: a `JMP` may target a label that
+/// appears later in the body, which is only possible when every label is
+/// known before the first statement is emitted.
 pub(crate) fn compile_statements(
     emitter: &mut Emitter,
     ctx: &mut CompileContext,
     statements: &Statements,
 ) -> Result<(), Diagnostic> {
-    for stmt in &statements.body {
-        compile_statement(emitter, ctx, stmt)?;
-    }
-    Ok(())
+    let saved = std::mem::replace(
+        &mut ctx.jump_labels,
+        compile_jump::collect_labels(emitter, &statements.body),
+    );
+    let result = compile_stmts(emitter, ctx, &statements.body);
+    ctx.jump_labels = saved;
+    result
 }
 
 /// Records the statement's source position on the emitter so the
@@ -413,6 +424,9 @@ fn compile_statement(
             }
             Ok(())
         }
+        // `__BEGIN_IMPLEMENTATION` is a marker, not an operation: the
+        // statements that follow it in the same list compile on their own.
+        StmtKind::BeginImplementation(_) => Ok(()),
         StmtKind::FbCall(fb_call) => compile_fb_call(emitter, ctx, fb_call),
         StmtKind::MethodCall(method_call) => {
             compile_method_call_statement(emitter, ctx, method_call)
@@ -468,7 +482,29 @@ fn compile_statement(
             emitter.emit_jmp(label);
             Ok(())
         }
+        StmtKind::TryCatch(try_catch) => compile_try_catch(emitter, ctx, try_catch),
+        StmtKind::Throw(throw) => compile_throw(emitter, ctx, throw),
+        StmtKind::Jump(jump) => compile_jump(emitter, ctx, jump),
+        StmtKind::Label(label) => compile_label(emitter, ctx, label),
+        StmtKind::ConditionalCall(call) => compile_conditional_call(emitter, ctx, call),
+        StmtKind::Wait(wait) => compile_wait(emitter, ctx, wait),
     }
+}
+
+/// Compiles a `CALC(condition, call);` statement: the call runs only when the
+/// condition is TRUE.
+fn compile_conditional_call(
+    emitter: &mut Emitter,
+    ctx: &mut CompileContext,
+    node: &ironplc_dsl::textual::ConditionalCall,
+) -> Result<(), Diagnostic> {
+    let skip = emitter.create_label();
+    let cond_type = condition_op_type(ctx, &node.condition)?;
+    compile_expr(emitter, ctx, &node.condition, cond_type)?;
+    emitter.emit_jmp_if_not(skip);
+    compile_fb_call(emitter, ctx, &node.call)?;
+    emitter.bind_label(skip);
+    Ok(())
 }
 
 /// Compiles a function block invocation: stores inputs, calls FB, reads outputs.
@@ -577,7 +613,11 @@ fn compile_if(
 
     // If there are more branches, jump to end.
     if needs_end_label {
-        emitter.emit_jmp(end_label.unwrap());
+        let Some(end) = end_label else {
+            // needs_end_label implies the label was allocated.
+            return Err(Diagnostic::internal_error());
+        };
+        emitter.emit_jmp(end);
     }
 
     emitter.bind_label(next_label);
@@ -595,7 +635,11 @@ fn compile_if(
 
         compile_stmts(emitter, ctx, &elsif.body)?;
 
-        emitter.emit_jmp(end_label.unwrap());
+        let Some(end) = end_label else {
+            // The ELSIF loop runs only when an end label was allocated.
+            return Err(Diagnostic::internal_error());
+        };
+        emitter.emit_jmp(end);
 
         emitter.bind_label(elsif_next);
     }

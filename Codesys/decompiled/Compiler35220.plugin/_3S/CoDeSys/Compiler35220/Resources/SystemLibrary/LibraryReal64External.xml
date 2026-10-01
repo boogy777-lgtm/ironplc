@@ -1,0 +1,320 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<language-model>
+	<pou id = "9673B4F8-36D6-42ee-B5CA-E06E2602FAB5" name = "real32__to__real64" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__to__real64 : LREAL
+		VAR_INPUT
+			in: REAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "68D11DE2-A882-4f63-8E95-577FBE97DBEF" name = "real64__to__real32" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__to__real32 : REAL
+		VAR_INPUT
+			in: LREAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>	
+	<pou id = "51322543-1fa0-4892-92ab-c1559ce724fa" name = "real64__to__any32" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__to__any32 : DWORD
+		VAR_INPUT
+			in: LREAL;
+			dwType: DWORD;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "48ba7277-d0f9-4a61-8d0a-cfa10c9598a2" name = "any32__to__real64" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION any32__to__real64 : LREAL
+		VAR_INPUT
+			in: DWORD;
+			dwType: DWORD;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "78aea275-8aff-407b-981c-8abf25d34255" name = "real64__trunc" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__trunc : DINT
+		VAR_INPUT
+			in: LREAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>		
+	<pou id = "8ee3c317-6d75-4714-ab7c-ad187c5db2ee" name = "real64__tan" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__tan : LREAL
+		VAR_INPUT
+			in: LREAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "79d8c72b-fe9c-4bd0-8d79-62e93b3d01b9" name = "real64__atan" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__atan : LREAL
+		VAR_INPUT
+			in: LREAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "DF65BFB9-6613-453b-B2B8-4FCB3789D916" name = "real64__sin" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__sin : LREAL
+		VAR_INPUT
+			in: LREAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "dad7794c-0bfd-4662-adbc-f2c4e528d37b" name = "real64__asin" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__asin : LREAL
+		VAR_INPUT
+			in: LREAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "22FBCF03-320C-4e2b-83CE-A942E5631489" name = "real64__cos" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__cos : LREAL
+		VAR_INPUT
+			in: LREAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "a11f5103-2691-4d71-bad3-db29bf365b4b" name = "real64__acos" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__acos : LREAL
+		VAR_INPUT
+			in: LREAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "1c3bb0cc-2170-475c-b9b2-2c991a82ed64" name = "real64__ln" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__ln : LREAL
+		VAR_INPUT
+			in: LREAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "9335cd5c-acb1-4e96-ad18-0076459fc955" name = "real64__log" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__log : LREAL
+		VAR_INPUT
+			in: LREAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>	
+	<pou id = "4ffba013-6cc1-43e2-b6bb-6715ab108128" name = "real64__exp" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__exp : LREAL
+		VAR_INPUT
+			in: LREAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "fdfe2381-2e31-4926-b6d4-4cf674ac1326" name = "real64__expt" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__expt : LREAL
+		VAR_INPUT
+			in1: LREAL;
+			in2: LREAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "4FFD7525-5270-4695-B699-DDBBC4B96FD3" name = "real64__sqrt" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__sqrt : LREAL
+		VAR_INPUT
+			in1: LREAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>	
+	<pou id = "475D8087-1C89-48a4-8923-1690F76C80FD" name = "real64__eq" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__eq : BOOL
+		VAR_INPUT
+			in1: LREAL;
+			in2: LREAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "7229C098-2C5D-434a-9AB4-F35AD2B92202" name = "real64__ne" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__ne : BOOL
+		VAR_INPUT
+			in1: LREAL;
+			in2: LREAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "5DE9E5F2-DD5E-4a6e-B860-18FD191E23EE" name = "real64__lt" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__lt : BOOL
+		VAR_INPUT
+			in1: LREAL;
+			in2: LREAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "7301D2CC-2AA1-4de3-9BEF-548D89987E86" name = "real64__le" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__le : BOOL
+		VAR_INPUT
+			in1: LREAL;
+			in2: LREAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "38F386C3-7170-454b-8528-C10A39021B23" name = "real64__gt" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__gt : BOOL
+		VAR_INPUT
+			in1: LREAL;
+			in2: LREAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "F9510BC1-1227-49ab-9870-64870FD1A5FB" name = "real64__ge" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__ge : BOOL
+		VAR_INPUT
+			in1: LREAL;
+			in2: LREAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "9dc891f0-020c-40ef-b8a7-99b35c1d6808" name = "real64__add" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__add : LREAL
+		VAR_INPUT
+			in1: LREAL;
+			in2: LREAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>	
+	<pou id = "2FD9375A-655D-4573-BD00-1BCC1C494227" name = "real64__sub" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__sub : LREAL
+		VAR_INPUT
+			in1: LREAL;
+			in2: LREAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "E2479120-CB69-43ba-87FA-98E33B5112C2" name = "real64__mul" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__mul : LREAL
+		VAR_INPUT
+			in1: LREAL;
+			in2: LREAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>	
+	<pou id = "A1C7CA2C-F191-46d4-A7F5-1504F1BA9EB8" name = "real64__div" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__div : LREAL
+		VAR_INPUT
+			in1: LREAL;
+			in2: LREAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>			
+	<pou id = "99947BF9-0E45-48b1-AD7F-8EFB60CECD95" name = "real64__abs" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__abs : LREAL
+		VAR_INPUT
+			in1: LREAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>			
+	<pou id = "FB18F571-3F0D-4f1e-9A10-9BF219CAED48" name = "real64__min" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__min : LREAL
+		VAR_INPUT
+			in1: LREAL;
+			in2: LREAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>			
+	<pou id = "7B55E231-072F-4e70-A3F9-B4B1A98C1C66" name = "real64__max" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__max : LREAL
+		VAR_INPUT
+			in1: LREAL;
+			in2: LREAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>			
+	<pou id = "B701090F-8DDE-42e6-B8FE-5F22597768EE" name = "real64__limit" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real64__limit : LREAL
+		VAR_INPUT
+			in1: LREAL;
+			in2: LREAL;
+			in3: LREAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>	
+</language-model>	

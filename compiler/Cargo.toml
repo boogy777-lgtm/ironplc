@@ -7,6 +7,7 @@ members = [
     "container",
     "container_derive",
     "ironplc-cli",
+    "ironplc-redundancy",
     "mcp",
     "project",
     "plc2plc",
@@ -14,6 +15,8 @@ members = [
     "dsl_macro_derive",
     "parser",
     "problems",
+    "runtime",
+    "s0-spike",
     "sources",
     "spec_requirements_gen",
     "test",
@@ -38,7 +41,6 @@ repository = "https://github.com/ironplc/ironplc"
 # IronPLC code must not add `#[allow(unsafe_code)]` to bypass this.
 [workspace.lints.rust]
 unsafe_code = "deny"
-
 # Denying `deprecated` turns any use of a `#[deprecated]` item into a hard
 # compile error. We deprecate the compiler-located problem variants
 # (`Problem::NotImplemented`, `Problem::InternalError`) so that constructing them
@@ -50,6 +52,29 @@ deprecated = "deny"
 # Fail on any warning (including clippy), matching CI's `-D warnings`. To make
 # warnings non-fatal while iterating: `RUSTFLAGS=--cap-lints=warn cargo build`.
 warnings = "deny"
+
+# rustc 1.97-1.98 regression (rust-lang/rust#159133): without an English MSVC
+# language pack, link.exe prints its "Creating library ... and object ..."
+# progress line localized ("Создается библиотека ..."), which rustc's
+# English-only filter classifies as a linker_messages warning — so every
+# cdylib/proc-macro link trips cargo's `build.warnings` deny. The upstream fix
+# (PR rust-lang/rust#160445) reclassifies these code-less lines as
+# linker_info; until it ships, allow the lint. The deny above targets
+# rustc/clippy warnings in workspace code; this is environment chatter.
+linker_messages = "allow"
+
+# The two deny tables are complementary, not redundant — keep both in syncs:
+# `warnings = "deny"` (upstream) makes every rustc/clippy warning a build
+# error; this table (fork fence) elevates the five panicking constructs to
+# errors even in crates and configurations where they would only warn.
+# LLM fence: panicking constructs are compile errors in non-test code, not a
+# prose rule. Tests keep unwrap/expect via clippy.toml (allow-*-in-tests).
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
 
 # Reduce per-binary debug-info size. `line-tables-only` retains the file/line
 # tables that `cargo llvm-cov` needs to map coverage hits to source, but drops

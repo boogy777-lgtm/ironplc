@@ -991,6 +991,10 @@ impl Emitter {
     /// every bound label: a label that is bound but never jumped to
     /// constrains nothing, and protecting its position would needlessly
     /// block a peephole there.
+    #[allow(
+        clippy::expect_used,
+        reason = "labels are bound before the optimizer sees the emitter; this is the pipeline contract"
+    )]
     pub(crate) fn unpatched_code(&self) -> UnpatchedCode<'_> {
         let jump_targets = self
             .patches
@@ -1068,6 +1072,10 @@ impl Emitter {
     }
 
     /// Resolves all pending jump patches by computing relative offsets.
+    #[allow(
+        clippy::expect_used,
+        reason = "labels are bound before patching; this is the pipeline contract"
+    )]
     fn patch_jumps(&mut self) {
         for patch in self.patches.drain(..) {
             let label_pos =

@@ -1,0 +1,1405 @@
+{
+"_3S.CoDeSys.Compiler35220.Resources.CompilerStrings.tr.resources":{
+"AffectionCopied":"Eski Değer Kopyalandı"
+,
+"AffectionInitialized":"Başlatıldı"
+,
+"AffectionInitNewVariables":"Başlatılan yeni değişkenler"
+,
+"AffectionLocationChanged":"Pozisyon değişti"
+,
+"AffectionVFTableInitialized":"Sanal fonksiyon tablosu başlatıldı"
+,
+"And_Text":"ve"
+,
+"Area_Output_Checked":"{0} için gereken boyut: {1} bayt (Kullanılabilir Boyut: {2} bayt)"
+,
+"Area_Output_Checked_Exceeded":"{0} için aşılan boyut: {1} bayt (Kullanılabilir Boyut: {2} bayt)"
+,
+"Area_Output_Info":"Bellek alanı {0} {1} içeriyor: boyut: {2} bayt, en yüksek kullanılan adres: {3}, en büyük bitişik bellek boşluğu: {4} bayt ({5} %)"
+,
+"Area_Output_Info_Simple":"Bellek alanı {0} {1} içeriyor: en büyük bitişik bellek boşluğu: {2} bayt ({3} %)"
+,
+"Area_Output_Info_Simple_2":"Bellek alanı {0} {1} içeriyor: boyut: {2} bayt, en büyük bitişik bellek boşluğu: {3} bayt ({4} %)"
+,
+"AttributeHasNoEffect":"(Özniteliğin etkisi yok)"
+,
+"Build":"Yapı"
+,
+"BuildCompleteErrors":"Oluşturma tamamlandı -- {0} hata: {1} uyarı: indirme mümkün değil!"
+,
+"BuildCompleteOK":"Oluşturma tamamlandı -- {0} hata: {1} uyarı: indirilmeye hazır!"
+,
+"BuildStarted":"------ Oluşturma başlatıldı: Uygulama: {0} -------"
+,
+"Code_Text":"Kod"
+,
+"CodeNoChange":"Kod değişti. Çevrimiçi değişiklik gerekli değil."
+,
+"CodeSizeOutput":"Oluşturulan kodun boyutu: {0} bayt"
+,
+"Constant":"Sabit"
+,
+"Data_Text":"Veri"
+,
+"DataSizeOutput":"Genel verilerin boyutu: {0} bayt"
+,
+"DoCodeTypification":"Simgelenen kod"
+,
+"DoLocation":"genel verileri bul"
+,
+"DoTypification":"Simgeleniyor"
+,
+"Err_NoCodegeneratorDetailed":"Kod oluşturucu oluşturulamadı: Gerekli Eklenti '{0}' yüklü değil"
+,
+"Err_NoMemoryAllocationCallbackDetailed":"Bellek ayırıcı oluşturma başarısız oldu: Gerekli Eklenti '{0}' yüklü değil"
+,
+"ErrNoApplication":"Uygulama bulunamadı"
+,
+"Error_Check_ImplicitParameter_MissingDefault":"örtük parametre girdi için varsayılan bir değer gerektirir."
+,
+"Error_Check_ImplicitParameter_UnknownKind":"Bilinmeyen '{0}' örtük-parametre türü, [{1}] öğesinden biri olmalıdır."
+,
+"Error_Check_ImplicitParameter_WrongPouType":"örtük parametre sadece işlev ve yöntem girdilerine uygulanabilir."
+,
+"Error_Check_ImplicitParameter_WrongVarKind":"örtük parametre sadece VAR_INPUT değişkenlerine uygulanabilir."
+,
+"Error_Check_ImplicitParameter_WrongVarType":"örtük parametre sadece STRING veya POINTER TO STRING türü değişkenlere uygulanabilir."
+,
+"ErrorLimitExceeded":"{0} hatadan fazla hata oluştu: sonraki tüm hata mesajları atlanıyor"
+,
+"Except_Boot_Project_Error":"Bu durumda Önyükleme projesi mümkün değil: uygulama belleği doldu. Önce tam indirme gerçekleştirin."
+,
+"Except_Boot_Project_Error_Error_In_Compile":"Bu durumda Önyükleme projesi mümkün değil: Önyükleme projesi bilgileri oluşturmada hata. Aşağıdaki pencereye bakın."
+,
+"GenerateCode":"{0} için kod oluştur..."
+,
+"GenerateCodeInit":"Kod başlatma oluştur..."
+,
+"GenerateCodeProgress":"Kod oluşturuluyor..."
+,
+"GenerateGlobalInit":"genel başlatmalar oluştur..."
+,
+"GenerateRelocations":"Pozisyon değişiklikleri oluştur..."
+,
+"GeneratingCode":"Kod oluştur..."
+,
+"GlobalInitErrorPrefix":"Kapalı başlatma kodunda hata:"
+,
+"Input_Text":"Giriş"
+,
+"InterfaceReferencesAffected":"Aşağıdaki arayüz başvuruları yeniden yönlendirmede test edildi:"
+,
+"InterfacesChanged":"Aşağıdaki POU arayüzleri değiştirildi:"
+,
+"Literal":"Sabit"
+,
+"Memory_Text":"Bellek"
+,
+"NonSafety_Text":"Güvenli Olmayan Veriler"
+,
+"NumInterfacesChanged":"POU'ların {0} arayüzü değişti"
+,
+"NumInterfacesToTest":"{0} arayüzü başvuruları yeniden yönlendirme için test edildi"
+,
+"NumPOUsDownloaded":"{0} POU kodunu değiştirdi"
+,
+"NumVariablesAffected":"çevrimiçi değişlikten {0} değişken etkilendi, {1} tanesinin pozisyonu değişti, {2} tanesi başlatıldı, {3} tanesi kopyalandı, {4} tanesi sanal fonksiyon tablosunu başlattı"
+,
+"Output_Text":"Çıkış"
+,
+"Persistent_Text":"Kalıcı Veriler"
+,
+"PersistenVariablesChanged":"Kalıcı değişkenler değişti. Geçerli listeyle başlatmak istiyor musunuz?\r\n\r\nEvet: geçerli liste başlatılacak, varolan kalıcı değerler geçersiz kılınacak.\r\nHayır:  varolan kalıcı değerler korunacak, geçerli liste bu değerleri kullanacak.\r\n      UYARI: Değerler kalıcı değişkenlerinizle eşleşmeyebilir. Değerleri el ile kontrol etmeniz gerekir!\r\n      Örn. listenin başına bir değişken eklerseniz, tüm değerler yanlış olur! \r\n\r\nİptal: indirmeyi veya çevrimiçi değiştirmeyi iptal edin"
+,
+"POUsDownloaded":"Aşağıdaki POU'ların kodu indirilecek"
+,
+"POUUnit":"POU'lar"
+,
+"ProjectUpToDate":"Uygulama güncel"
+,
+"Retain_Text":"Saklama Verileri"
+,
+"StoppingPrecompileChecks":"Ön derleme kontrolleri durduruluyor..."
+,
+"TooLongStringLiteralHint":"... ({0} karakter daha) ..."
+,
+"TotalMemorySizeCodeAndData":"Kod ve veri için toplam ayrılan bellek boyutu: {0} bayt"
+,
+"TypifyAll":"simgelenen kod..."
+,
+"UnknownMacroText":"Bilinmeyen"
+,
+"VariablesAffected":"Aşağıdaki değişkenler çevrimiçi değişiklikten etkilenecek:"
+,
+"WaitForDownloadInfoSaving":"Compileinfo dosyasının yazılması tamamlanana kadar bekleniyor"
+,
+"WarningLimitExceeded":"{0} hatadan fazla uyarı oluştu: sonraki tüm uyarı mesajları atlanıyor"
+}
+,
+"_3S.CoDeSys.Compiler35220.Resources.ErrorMessages.tr.resources":{
+"Err_AbstractAndFinalNotPossible":"Bir yöntem veya fonksiyon bloğu ABSTRACT ve FINAL olamaz"
+,
+"Err_AbstractAndPrivateNotPossible":"Bir PRIVATE yöntem ABSTRACT olamaz"
+,
+"Err_AbstractFunctionBlockAssigned":"FUNCTION_BLOCK {0}, ABSTRACT'tir ve ödev için hedef olarak kullanılamaz"
+,
+"Err_AbstractFunctionBlockInstance":"FUNCTION_BLOCK {0}, ABSTRACT ve somutlaştırılamaz"
+,
+"Err_AbstractMethodMustNotContainAnyStatements":"ABSTRACT yöntemi {0}.{1} hiçbir ifade içermemelidir"
+,
+"Err_AbstractMethodNotImplemented":"'{0}' adlı ABSTRACT yöntemi için {1} FUNCTION_BLOCK tanımlı bir uygulama yok"
+,
+"Err_AbstractMethodOnlyInAbstractFunctionblock":"ABSTRACT METHOD {0}, FUNCTION_BLOCK {1} 'in de ABSTRACT olmasını gerektirir"
+,
+"Err_AbstractMethodStaticCall":"ABSTRACT yöntemi '{0}' statik bir çağrı ile çağrılamaz"
+,
+"Err_AbstractOnFunctionBlocksAndMethodsOnly":"ABSTRACT yalnızca yöntemlere ve fonksiyon bloklarına uygulanabilir"
+,
+"Err_AbstractPropertyNotImplemented":"FUNCTION_BLOCK '{2}' içinde tanımlanan '{1}' ABSTRACT PROPERTY {0} için uygulama yok"
+,
+"Err_AbstractPropertyStaticCall":"'{0}' ABSTRACT özelliğine statik olarak erişilemiyor"
+,
+"Err_AbstractWrongVarInMethod":"ABSTRACT Yöntemlerinde yalnızca Girişlere, Çıkışlara ve Giriş/Çıkışlara izin verilir"
+,
+"Err_AccessOutsideOfCall":"{0}' / '{1}' girişine çağrı dışından erişilemiyor"
+,
+"Err_AccessToInternalObject":"{1} kitaplığının {0} dahili Nesnesine erişilemiyor"
+,
+"Err_AccessToInternalProperty":"{1} kitaplığının {0} dahili Özelliğine erişilemiyor"
+,
+"Err_AccessToInternalVariable":"{1} kitaplığının {0} dahili Değişkenine erişilemiyor"
+,
+"Err_AccessVarInstFromOutsideTheDeclaringMethod":"Bildirim yöntemi dışından '{1}' öğesinin VAR_INST '{0}' öğesine erişilemiyor"
+,
+"Err_AddressExpected":"{0} yerine AT'den sonra doğrudan adres bekleniyor"
+,
+"Err_AddressMisaligned":"{0} adresi {1} data türü için yanlış hizalanmış"
+,
+"Err_AddressOfNonInstanceVar":"'{0}' ifadesinin adresinde tür adı yerine gereken örnek."
+,
+"Err_AddressOutOfRange":"'{0}' adresi aralık dışı: Hesaplanan ofset: {1} bayt, ayrılan boyut: {2} bayt"
+,
+"Err_AddressSourceIsAddressDest":"Değişken '{0}' '{1}' Adresinde bulundu. Bu adres değişkeni '{2}' artık bulundu. Çevrimiçi değişiklikle bu değişiklik mümkün değil."
+,
+"Err_Ambiguity":"'{0}' adının belirsiz kullanımı"
+,
+"Err_AnyTypeOnlyInFunction":"{0}' türündeki değişkenlere yalnızca fonksiyonların girişi olarak izin veriliyor."
+,
+"Err_ApplicationConflict":"{1}' aygıtında aynı '{0}' adına sahip iki uygulama var"
+,
+"Err_ArrayBorderIsNoConstant":"Dizinin '{0}' kenarlığı sabit değer değil"
+,
+"Err_ArrayBorderNoValidSignedInteger":"Dizi Kenarlığı {0} geçerli bir imzalanan tamsayı sabitini değerlendirmiyor"
+,
+"Err_ArrayIndexNumWrong":"Dizi tam olarak {0} dizin gerektiriyor"
+,
+"Err_ArrayInitialisationCountNoConstant":"Dizi başlatması sayı '{0}' sabit değer değil"
+,
+"Err_ArrayInitialisationNotPossible":"Başlangıç FUNCTION parametresi olarak bir ARRAY başlatması mümkün değildir. Bunun yerine bir değişken kullanın"
+,
+"Err_ArrayInitializationExpected":"Dize başlatma bekleniyor"
+,
+"Err_ATDeclarationNotAllowed":"AT bildirimine yalnızca VAR bölümünde izin verilir"
+,
+"Err_AtLeastOneExpected":"En az bir deyim bekleniyor"
+,
+"Err_AttributeNameExpected":"Bir öznitelik değeri için '{0}' yerine tek baytlı dize bekleniyor"
+,
+"Err_AttributeNotAllowedFor":"'{1}' için '{0}' özniteliğine izin verilmiyor"
+,
+"Err_AttributeNotValidForNonExternalPOU":"Harici olmayan POU için '{0}' özniteliği geçerli değil"
+,
+"Err_BaseClassNotFound":"{0}' temel sınıfı için hiç tanım bulunamadı"
+,
+"Err_BaseNotAllowed":"Bu bağlamda SUPER ifadesine izin verilmiyor"
+,
+"Err_Bitaccessnoconst":"Bit erişimi, sabit veya sembolik bir tamsayı sabiti gerektirir"
+,
+"Err_BitAccessOnlyOnInt":"Bit erişimi yalnızca tamsayı türlerinde mümkündür"
+,
+"Err_BitAdrOnOperation":"Operatör BITADR sadece değişkenlerde mümkündür, operasyonlarda değil"
+,
+"Err_BitNrOverflow":"'{0}', '{1}' için geçerli bit sayısı değil"
+,
+"Err_BitsForStructureOnly":"Yalnızca Yapılar ve Fonksiyon Blokları BIT türünde değişkenler içerebilir."
+,
+"Err_BitsWrongScope":"BIT türündeki değişkenler VAR_INPUT, VAR_OUTPUT veya VAR bölümünde bildirilmelidir"
+,
+"Err_BlobInitError":"{0}' yerine sabit değer bekleniyor"
+,
+"Err_CalcNeedsCall":"Koşullu aramanın ikinci parametresi geçerli bir arama ifadesi olmalıdır"
+,
+"Err_CallAfterInitHasInputs":"'{0}' ile işaretlenen bir yöntem bir girişe sahip olamaz."
+,
+"Err_CalleeInvalidType":"'{0}' yerine program adı, fonksiyon veya fonksiyon bloğu örneği bekleniyor"
+,
+"Err_CallOfPrivateMethod":"Özel {0}.{1} Yöntemine erişilemiyor"
+,
+"Err_CallOfPrivateProperty":"Özel {0}.{1} Özelliğine erişilemiyor"
+,
+"Err_CallOfProtectedMethod":"Korumalı {0}.{1} Yöntemine erişilemiyor"
+,
+"Err_CallOfProtectedProperty":"Korumalı {0}.{1} Özelliğine erişilemiyor"
+,
+"Err_CallRecursion":"Çağrı Özyinelemesi: {0}"
+,
+"Err_CancelledByUser":"Kullanıcı derlemeyi iptal etti"
+,
+"Err_CannotAddMultipleTime":"{0}' türünde birden fazla işleç eklenemiyor"
+,
+"Err_CannotMultiplyMultipleTime":"{0}' türünde birden fazla işleç çoğaltılamıyor"
+,
+"Err_CantHaveBaseClass":"EXTENDS anahtar sözcüğü {0} türü için uygun değil"
+,
+"Err_CaseLabelDuplicate":"Case etiketi yineleniyor"
+,
+"Err_CaseLabelInCaseRange":"{0} case etiketi ayrıca {1} .. {2} aralığında bulunuyor."
+,
+"Err_CaseLabelNoConstant":"Case etiketi sabit veya sembolik tamsayı sabit gerektiriyor"
+,
+"Err_CaseLabelOutsideOfCase":"Case etiketi durum deyiminin bir parçası değil"
+,
+"Err_CaseRangesOverlapping":"Case {0} .. {1} ve {2} .. {3} çakışan aralığını içeriyor."
+,
+"Err_CheckLicenseNeedsSysTarget":"3S License kütüphanesi __CHECKLICENSE operatörü için gereklidir."
+,
+"Err_CompareNotPossible1":"{0}' türünde nesnelerde karşılaştırma mümkün değil"
+,
+"Err_CompareNotPossible2":"{0}' veya '{1}' türünde nesnelerde karşılaştırma mümkün değil"
+,
+"Err_ComparisonOperatorExpected":"'{0}' yerine karşılaştırma operatörü bekleniyor"
+,
+"Err_CompilerVersionError":"Derleyici sürümü {0} geri çekildi. Lütfen daha yüksek bir Derleyici sürümü kullanın."
+,
+"Err_CompoAccessNoStruct":"'{0}' yapılandırılmış değişken değil"
+,
+"Err_ConditionExpected":"Koşul bekleniyor"
+,
+"Err_ConstantIndexOutOfRange":"{0}' sabit dizini '{1}' ila '{2}' aralığında değil"
+,
+"Err_ConstantOverflow":"{0}' sabiti '{1}' türü için çok büyük"
+,
+"Err_ContainsNoDefinition":"'{0}' '{1}' için hiç tanım içermiyor"
+,
+"Err_CounterStartExpected":"Sayaç başlatma bekleniyor"
+,
+"Err_DataRecursion":"Veri Özyinelemesi: {0}"
+,
+"Err_DeclarationKeywordNotAllowed":"'Bu yerde '{0}' öğesine izin verilmiyor"
+,
+"Err_DefineValueExpected":"{0}' yerine tanımlama değeri bekleniyor"
+,
+"Err_DeleteNeedsPointer":"__DELETE işleneni işaretçi olmalı"
+,
+"Err_DerefNoPointer":"Dereference bir POINTER gerektirir"
+,
+"Err_DeviceNameNoIdent":"'{0}' cihaz adı geçersiz. Geçerli bir IEC 61131-3 tanımlayıcısı olmalıdır"
+,
+"Err_DeviceNotInstalled":"Aygıt sistemde yüklü değil. Kod oluşturma mümkün değil."
+,
+"Err_DivisionByZero":"Sıfıra bölme"
+,
+"Err_DuplicateElseInCaseStatement":"CASE deyiminde ELSE'nin yinelenen tanımı"
+,
+"Err_DuplicateLabelDefinition":"{0}' etiketi yineleniyor"
+,
+"Err_DuplicateVarConfig":"'{0}' için yinelenen VAR_CONFIG"
+,
+"Err_DynamicMemoryNotSupported":"{0}' uygulaması için tanımlanan dinamik nesne oluşturma yok"
+,
+"Err_ExplicitTransitionAssignMissing":"Geçiş kodu çoklu ifadeler içerir. Geçiş çıktı değişkeni için açık atama gereklidir."
+,
+"Err_ExpressionExpectedInstead":"{0}' yerine ifade bekleniyor"
+,
+"Err_ExprNoConstantError":"{0}' yerine sabit değer bekleniyor"
+,
+"Err_FCallExpectedPointerAsSecondArgument":"FCall'ın ikinci bağımsız değişkeni, bir işleve yönelik işaretçi olmalıdır."
+,
+"Err_FCallWrongCallPatternSignature":"FCall'ın ilk bağımsız değişkeni, çağrıya yönelik model olarak kullanılan bir imza türü olmalıdır."
+,
+"Err_FCallWrongNumberOfArguments":"FCall tam olarak 2+{0} bağımsız değişken bekliyor."
+,
+"Err_FeatureNotImplemented":"Özellik '{0}' uygulanmadı."
+,
+"Err_FinalOnFunctionBlocksAndMethodsOnly":"FINAL yalnızca METHOD ve FUNCTION_BLOCK öğelerine uygulanabilir"
+,
+"Err_FunctionBlockNeedsInstance":"Erişilebilmesi için FUNCTION_BLOCK '{0}' somutlaştırılmalıdır"
+,
+"Err_FunctionBlockNoLongerValid":"FUNCTIONBLOCK anahtar sözcüğü artık desteklenmiyor. Bunun yerine FUNCTION_BLOCK kullanın."
+,
+"Err_FunctionCallMixedStyle":"Fonksiyon çağrısında resmi parametrelerin tümünün belirtilmesi veya hiçbirinin belirtilmemesi gerekir"
+,
+"Err_FunNeedsAtLeastNInputs":"'{0}' FUNCTION en az '{1}' ve maksimum '{2}' girişi gerektirir"
+,
+"Err_FunNeedsNInputs":"{0}' fonksiyonu tam '{1}' giriş gerektiriyor"
+,
+"Err_GeneratingVarInitializations":"Değişkenler için bir veya daha fazla başlangıç değeri geçersiz"
+,
+"Err_GenericDeclarationProducesErrorInGeneratedCode":"'{0}' tür bildirimi, Genel Fonksiyon bloku kodunda hatalara neden oluyor"
+,
+"Err_GenericNoInitialValueSupported":"Genel Sabit bildirimi için desteklenen başlangıç ​​değeri yok"
+,
+"Err_GenericNoInteger":"Genel Sabitler için sadece tamsayı türlerine izin verilir"
+,
+"Err_GenericNotConstant":"'{1}' Genel Sabiti için '{0}' tanımı sabit bir değer değil"
+,
+"Err_GenericOnlyConst":"VAR_GENERIC bildiriminde yalnızca CONSTANT genel türleri desteklenir"
+,
+"Err_GenericOnWrongPosition":"VAR_GENERIC bildirimine sadece fonksiyon bloğu adından sonra Fonksiyon bloklarında izin verilir"
+,
+"Err_GenericParamMissing":"'{0}' genel değişkeni için başlatma eksik"
+,
+"Err_GenericParamsAllExplicitOrNone":"Ya tüm genel değişkenler açık şekilde atanmalı ya da hiçbiri atanmamalı"
+,
+"Err_GenericParamUnknown":"'{0}', '{1}' işlev blokunun genel sabiti olarak bildirilmemiştir"
+,
+"Err_GenericWrongNumberOfInitializer":"Genel Fonksiyon Bloku '{0}', tam olarak '{1}' adet Genel Sabit Tanımı bekliyor"
+,
+"Err_GlobalVariableListExpected":"{0} yerine VAR_GLOBAL veya VAR_CONFIG bekleniyor"
+,
+"Err_IdentifierExpected":"{0}' yerine tanımlayıcı bekleniyor"
+,
+"Err_IdentNotDefined":"Tanımlayıcı '{0}' tanımlanmadı"
+,
+"Err_IllegalOperator":"'{0}' geçerli bir ST operatörü değil"
+,
+"Err_ImplicitEnumerationTypeNotExpected":"Kapalı numaralandırma türü bu yerde beklenmiyor."
+,
+"Err_ImplicitMethodImplementationNotPublic":"FUNCTION_BLOCK '{0}': 'FB_Init', 'FB_Exit' ve 'FB_ReInit' METHOD erişim PUBLIC olmalıdır"
+,
+"Err_ImplicitMethodNameForVariable":"{0} kapalı oluşturulan yöntemin adıdır ve fonksiyon bloğundaki değişkenler için geçersizdir"
+,
+"Err_ImplicitReferenceTypeDeclNotAllowed":"Kapalı bir başvuru türünün bildirimi bu konumda mümkün değildir"
+,
+"Err_ImplicitReferenceTypeOnlChangeError":"Çevrimiçi değişiklik yoluyla yerel kapalı başvuru türünü eklemek mümkün değildir"
+,
+"Err_ImplicitRefTypeAllClassesNeedAttrib":"Devralınan fonksiyon bloğu '{0}' özniteliğinin kullanımında farklıdır"
+,
+"Err_ImplicitRefTypeDeclarationNotAllowed":"Kapalı başvuru türü '{0}' bu türde tanımlanamaz."
+,
+"Err_ImplicitRefTypeIsnotAllowedAsBase":"Örtük referans türleri, REFERENCE, POINTER ve ARRAY temel türü olamaz"
+,
+"Err_ImplicitRefTypeSignNotSupported":"Yalnızca Fonksiyon Blokları ve Yapılandırmalar Kapalı Başvuru Türü olarak işaretlenebilir."
+,
+"Err_IncompletePOUDeclaration":"POU bildirimi bir ad olmadan eksik"
+,
+"Err_InconsistentInheritanceOfCPPCompatibility":"C++- Uyumluluğunun tutarsız devralınması. '{0}' için eksik öznitelik."
+,
+"Err_InconsistentUseOfCPPCompatibility":"C ++ uyumluluğunun tutarsız kullanımı. '{0}' için eksik özellik."
+,
+"Err_InconsistentUseOfCPPCompatibility_MissingParent":"C ++ uyumluluğunun tutarsız kullanımı. '{0}' üst POU'su için eksik özellik."
+,
+"Err_IndexingInvalid":"{0}' türünde bir ifadeye [] ile dizinleme uygulanamıyor"
+,
+"Err_IndexNumWrong":"{0}' türündeki değişken tam 1 Dizin gerektiriyor"
+,
+"Err_IndexOfNotSupported":"INDEXOF operatörü artık desteklenmiyor. Bunun yerine ADR'yi kullanın. POU adındaki ADR, POINTER'a bir POINTER işlevini FUNCTION koduna döndürür."
+,
+"Err_InheritanceError":"Devralmaya yalnızca FUNCTION_BLOCK, INTERFACE ve STRUCT için izin verilir"
+,
+"Err_IniNeedsUserdefType":"INI operatörünün FUNCTION_BLOCK örneğine veya veri birimi türünün örneğine ihtiyacı var"
+,
+"Err_InOutAccessOutside":"'{1}' nin '{0}' VAR_IN_OUT parametresine harici erişim yok. \""
+,
+"Err_InOutAssignedInActionCall":"VAR_IN_OUT {0} '{1}' yerel eylem çağrısına atanamaz"
+,
+"Err_InOutNotAssigned":"VAR_IN_OUT '{0}' '{1}' çağrısında atanmış olmalı"
+,
+"Err_InOutParamNotEqual":"{0}' türü VAR_IN_OUT '{2}' '{1}' türüne eşit değil"
+,
+"Err_InputMissing":"{1}' çağrısında '{0}' parametresi için girişe atama eksik"
+,
+"Err_InstanceNotAllowedInRetain":"Saklama verilerinde '{0}' örneklerine izin verilmiyor"
+,
+"Err_IntegerLiteralExpected":"'{0}' yerine Tamsayı Sabit bekleniyor"
+,
+"Err_InterfaceChanged":"{1}' arayüzünün '{0}' geçersiz kılma yönteminin arayüzü bildirimle eşleşmiyor"
+,
+"Err_InterfaceChanged_NumberOfInputsOutputsDifferent":"'{0}' yönteminin giriş/çıkış sayısı, '{1}' arayüzüne karşılık gelmiyor."
+,
+"Err_InterfaceChanged_VariableDifferent":"'{1}' yönteminin '{0}' değişkeni, '{2}' arayüzüne karşılık gelmiyor."
+,
+"Err_InterfaceChangedBase":"{1}' temelinin '{0}' geçersiz kılma yönteminin arayüzü bildirimle eşleşmiyor"
+,
+"Err_InterfaceImplementationError":"INTERFACE yalnızca bir FUNCTION_BLOCK tarafından uygulanabilir"
+,
+"Err_InterfaceMethodImplementationNotPublic":"FUNCTION_BLOCK '{1}' INTERFACE METHOD '{0}' uygulaması PUBLIC olmalıdır"
+,
+"Err_InterfaceNeedsInstance":"{0}' arayüzünün erişilmesi için örneğinin oluşturulması gerekir"
+,
+"Err_InterfaceNotFound":"{0}' arayüzü için hiç tanım bulunamadı"
+,
+"Err_InternalErrorProhibitingOnlineChange":"Dahili hata {0} çevrimiçi değişikliği yasaklıyor. Temiz uygulama ve indirme gerekli."
+,
+"Err_InvalidAccessPathForNamespaceAccess":"'{0}' geçerli bir erişim yolu değil"
+,
+"Err_InvalidBaseForGlobalScopeExpression":"Genel Kapsam işlemi '.' '{0}' ifadesinde geçerli değil"
+,
+"Err_InvalidEnumBaseType":"Numaralandırma tabanı türü olarak yalnızca tamsayı türler desteklenir"
+,
+"Err_InvalidEnumDefaultValue":"Bir ENUM için varsayılan başlatma değerleri olarak yalnızca yerel ENUM üyeleri kullanılabilir"
+,
+"Err_InvalidInitialisationForArray":"{0}, {1} sabiti için geçersiz bir başlatma. Sabitlerin başlangıç değerleri sabit olmalı."
+,
+"Err_InvalidInitialisationForVarInst":"Bir VAR_INST değişkenine yönelik başlangıç ​​değeri, yerel değişkenler kullanmayabilir."
+,
+"Err_InvalidJumpDestination":"JMP için geçersiz hedef {0}"
+,
+"Err_InvalidLoopIncrement":"Döngü artışı geçersiz"
+,
+"Err_InvalidNamespaceForNamespaceAccess":"'{0}' geçerli bir ad alanı erişimi değil"
+,
+"Err_InvalidSignatureName":"{0}' adı geçerli bir tanımlayıcı değil"
+,
+"Err_IsNoInput":"'{0}', '{1}' girişi değil"
+,
+"Err_IsNoLValue":"'{0}' geçerli bir atama hedefi değil"
+,
+"Err_IsNoOutput":"'{0}', '{1}' çıkışı değil"
+,
+"Err_IsValidRefNeedsReference":"__ISVALIDREF işleneni REFERENCE türünde olmalıdır"
+,
+"Err_LibNamespaceConflict":"'{1}' Kitaplığının Yerel Ad Alanı '{0}', '{2}' kitaplığının Ad Alanını gizler"
+,
+"Err_LibraryConflict":"'{1}' kitaplığıyla tanımlanan belirsiz ad alanı '{0}'"
+,
+"Err_LibraryNamespaceNotValid":"{1} Kitaplığının ad alanı {0} geçerli bir tanımlayıcı değil."
+,
+"Err_LibraryWithUnicodeIdentifiers":"{0}' Kitaplığı unicode tanımlayıcılar desteğiyle kaydedildi ve yalnızca unicode tanımlayıcılarını proje de desteklerse kullanılabilir (derleme seçeneklerine bakın)."
+,
+"Err_LibSupports32BitOnly":"Kitaplık '{0}' yalnızca 32 bit uygulamalarda destekleniyor"
+,
+"Err_LiteralExpected":"{0}' yerine sabit bekleniyor"
+,
+"Err_LowerGreaterUpperBorder":"Alt kenarlık üst kenarlıktan düşük olmalı."
+,
+"Err_LowerUpperBoundOnVariableLengthArrayOnly":"LOWER_BOUND ve UPPER_BOUND operatörleri yalnızca diziler için desteklenir"
+,
+"Err_LowerUpperBoundOperandNotExactly":"Bu durumda {0} operatörünün 2. işleneninin değeri 1 olmalıdır"
+,
+"Err_LowerUpperBoundOperandNotInRange":"Bu durumda {0} operatörünün 2. işleneninin değeri 1 ile {1} arasında olmalıdır"
+,
+"Err_LValueForAnyVar":"ANY parametresi '{0}' / '{1}', giriş olarak yazma erişimli değişken gerektirir"
+,
+"Err_LValueForReference":"Başvuru ataması yazma erişimi olan değişken gerektiriyor"
+,
+"Err_LValueForVarinout":"VAR_IN_OUT parametresi '{0}' / '{1}', giriş olarak yazma erişimli değişken gerektirir"
+,
+"Err_LValueForVarinoutStrings":"VAR_IN_OUT parametresi '{0}' / '{1}', giriş olarak yazma erişimli değişken gerektirir"
+,
+"Err_LValueNoRefType":"Yalnızca Referans türündeki değişkenlere başvuru atamasına izin verilir"
+,
+"Err_MalformedAddress":"{0}' Doğrudan Adresi yanlış biçimlendirilmiş"
+,
+"Err_MappedVarWrittenInDiffTasks":"{1} adresine eşlenen değişken {0} farklı görevlerde yazılmış."
+,
+"Err_MaxArraySizeExceeded":"Maksimum dizi boyutu aşıldı. Alt artırın veya üst sınırı azaltın."
+,
+"Err_MaxNestingDepthExceeded":"Maksimum iç içe geçme derinliği aşıldı. "
+,
+"Err_MissingImplementationTerminator":"Uygulama bloku için '{0}' sonlandırıcısı bulunamadı."
+,
+"Err_MissingInstancePathForPersistent":"{0} değişkeni için VAR_PERSISTENT listesinde eşleşen örnek yolu bulunamadı. Tüm örnek yollarını VAR_PERSISTENT listesine eklemek için \"Tüm örnek yollarını ekle\" komutunu kullanın. (Ayrıntılar için yardıma bakın)"
+,
+"Err_MissingObjectForPersistent":"{0} değişkeni için örnek yol girmek üzere uygulamanın hiçbir VAR_PERSISTENT listesi parçası değil"
+,
+"Err_MissingParameterList":"{0} '{1}' öğesine parantezler '()' olmadan başvuruldu"
+,
+"Err_ModNotReal":"MOD, REAL için tanımlanmadı"
+,
+"Err_Multiassigninfor":"FOR döngüsünde tam olarak bir sayaç bekleniyor"
+,
+"Err_MultipleAssignmentsNotAllowedForOperator":"'{0}' operatörü için birden fazla atamaya izin verilmiyor."
+,
+"Err_MultipleAssignmentsToInterfaceVariables":"Arayüz değişkenlerine birden fazla atamaya izin verilmiyor."
+,
+"Err_MultipleAssignmentWithChangingValueTypes":"Kapalı atamalı değer türlerinin birden fazla atamasına izin verilmiyor."
+,
+"Err_MultipleAssignmentWithProperty":"PROPERTY, birden fazla atamanın ortasında kullanılamaz."
+,
+"Err_MultipleAssignmentWithReferences":"Fonksiyon bloklarına veya veri yapılarına birden fazla başvuru atamasına izin verilmiyor."
+,
+"Err_MultipleAssignsToSameInputInCall":"'{0}' parametresi için birden fazla giriş ataması."
+,
+"Err_NamesNotEqual":"İmzada kullanılan ad nesne adıyla aynı değil"
+,
+"Err_NewArrayOnUserdefNotAllowed":"__NEW ile bir Dizi oluşturmaya kullanıcı tanımlı Türlerde izin verilmiyor."
+,
+"Err_NewNeedsType":"__NEW için işlenen olarak tür tanımı bekleniyor"
+,
+"Err_NewOnInterfaceNotPossible":"__NEW arayüzlerde mümkün değil"
+,
+"Err_NewOnlyWithAttribute":"Bir FUNCTION_BLOCK veya STRUCT, __NEW ile oluşturulması için '{{attribute' enable_dynamic_creation '}}' pragmasına ihtiyaç duyuyor"
+,
+"Err_NewPositionNotOK":"__NEW sonucu atanmalıdır."
+,
+"Err_NoArrayOfBit":"Bir dizinin temel türü olarak BIT'e izin verilmez"
+,
+"Err_NoAssign":"{0} türü için atamaya izin verilmedi"
+,
+"Err_NoBitAccessOnFunctionCall":"FUNCTION çağrısında bit erişimine izin verilmiyor"
+,
+"Err_NoBitTypeOnBitAddress":"{1} bit adresinde {0} türü mümkün değil"
+,
+"Err_NoBranchOutOfFinally":"__FINALLY bloğunun dalına izin verilmiyor"
+,
+"Err_NoBytesInRetain":"RETAIN verilerinde bulunan bir STRUCT türü BYTE, SINT veya USINT içeremez"
+,
+"Err_NoCallInInstancePath":"Fonksiyon çağrısının sonucunda bileşen erişimi '.', dizin erişimi '[]' veya çağrı '()' gerçekleştirmek mümkün değildir. Önce değişkene yardımcı olmak için sonuç ata."
+,
+"Err_NoCallInInterfaceComparison":"Çağrının dönüş değeri olan arayüzü karşılaştırmak mümkün değildir. Önce değişkene atayın."
+,
+"Err_NoCaseLabelFound":"Case etiketi bulunamadı"
+,
+"Err_NoChangeOnAccessModifier":"{0}.{1} yöntemi, {3}.{1} Yöntemini geçersiz kılarken \"{2}\" erişim değiştiricisini değiştiremiyor"
+,
+"Err_NoCodegenerator":"Kod oluşturucu oluşturulamadı: Gerekli plugi-in kurulu değil"
+,
+"Err_NoComponentOf":"'{0}', '{1}' bileşeni değil"
+,
+"Err_NoConstantInitialisationForValue":"{0}' sabit değerini başlatma sabit değil"
+,
+"Err_NoCopyCodeAllowed":"Çevrimiçi değişiklikler sırasında bu POU'yu yeni bir konuma taşımaya izin verilmiyor"
+,
+"Err_NoCopyCodeForVariableAtDirectAddress":"Bir doğrudan adresteki bir değişken çevrimiçi değişiklik sırasında türünü değiştiremez"
+,
+"Err_NoDirectAddressInSubsequentVarDecl":"Adres ataması olan '{0}' değişkeninin bildirimi, bir PRG veya GVL'de attribute 'subsequent' ile kullanılamaz"
+,
+"Err_NoEnclosingLoopExit":"{0} öğesine kapsayan döngü yok"
+,
+"Err_NoExitOrContinueOutOfCatch":"__CATCH bloğundan EXIT veya CONTINUE değerine izin verilmiyor"
+,
+"Err_NoExitOrContinueOutOfTry":"__TRY bloğundan EXIT veya CONTINUE değerine izin verilmiyor"
+,
+"Err_NoExplicitCall":"'{0}' için açık çağrılara izin verilmiyor. {1}. "
+,
+"Err_NoFormalParamsCallsForExtensibleFunction":"Genişletilebilir Fonksiyon {0} çağrısı için kapalı giriş ataması mümkün değil"
+,
+"Err_NoGenericInstanceInVarConst":"Genel Fonksiyon Bloku örnekleri sabit olarak bildirilemez"
+,
+"Err_NoGlobalDefine":"{0}' için hiç genel tanım yok"
+,
+"Err_NoIndirectPropertyCallOnStringWithSize":"Yalnızca açıkça belirtilmeyen uzunluktaki türler desteklendiğinden {0} türündeki özelliği dolaylı çağırma mümkün değil"
+,
+"Err_NoInheritanceOnFinalType":"'FINAL özniteliği olan '{0}' temel olarak kullanılamayabilir"
+,
+"Err_NoInitialForExternal":"VAR_EXTERNAL {0} için izin verilen başlangıç değeri yok"
+,
+"Err_NoInitialForInoutConstant":"VAR_INOUT CONSTANT {0} için izin verilen başlangıç değeri yok"
+,
+"Err_NoInputMemory":"Ayrılmış giriş belleği yok"
+,
+"Err_NoInputsWithSlotAttributes":"'{1}' özniteliğiyle '{0}' imzasında hiç girişe izin verilmiyor"
+,
+"Err_NoInstanceObject":"'{0}', {1} türünden ve örneği oluşturulamıyor"
+,
+"Err_NoInstancePath":"'{0}' için VAR_CONFIG yok"
+,
+"Err_NoLocalEnum":"Yerel tanımlanan numaralandırma artık desteklenmiyor. Bunun yerine Data Türü tanımını kullanın."
+,
+"Err_NoMatchingInitMethodFound":"{0} somutlaştırılması için eşleşen 'FB_Init' METHOD bulunamadı"
+,
+"Err_NoMatchingOverload":"'{0}' yöntemi için Eşleşen Aşırı Yükleme bulunamadı"
+,
+"Err_NoMemoryAllocationCallback":"Bellek ayırıcı oluşturma başarısız oldu: Gerekli eklenti kurulu değil"
+,
+"Err_NoMemoryMemory":"Ayrılmış bellek yok"
+,
+"Err_NoMemoryReserveForExternal":"Harici fonksiyon blokları için ayrılmış bellek kullanımı desteklenmiyor"
+,
+"Err_NoMethodImplementation":"{0}' yöntemi için '{1}' arayüzünde tanımlanmış bir uygulama yok"
+,
+"Err_NoMixExternalIECInheritance":"Bir genişletilmiş POU, temeliyle aynı yolla uygulanmalıdır (harici veya IEC'de)."
+,
+"Err_NoMultipleInheritance":"EXTENDS listesinde yalnızca bir temel FUNCTION_BLOCK tanımlanabilir"
+,
+"Err_NoNamespace":"'{0}' bir ad alanına başvurmuyor"
+,
+"Err_NoNewAssignmentInOtherExpression":"Başka bir ifadede __NEW operatörüyle bir atama ifadesi kullanmak mümkün değildir. Bunun yerine imleç değişkenini kullanın."
+,
+"Err_NoOnlineChangeOnDynamicObjects":"Dinamik olarak oluşturulan türün boyutunu değiştiren çevrimiçi bir değişiklik gerçekleştirilemez."
+,
+"Err_NoOnlineChangeOnGenericConstantBaseType":"{0} BaseType bildiriminde {1} sabitinin değeri {2} yerine {3} olarak değiştirildi: çevrimiçi değişiklik mümkün değildir!"
+,
+"Err_NoOnlineChangeOnGenericConstantType":"{0} Değişkeni bildiriminde {1} sabitinin değeri {2} yerine {3} olarak değiştirildi: çevrimiçi değişiklik mümkün değildir!"
+,
+"Err_NoOnlineChangePossible":"Çevrimiçi değişiklik yapılamaz. Tam indirmeyi gerçekleştir"
+,
+"Err_NoOutputMemory":"Ayrılmış çıkış belleği yok"
+,
+"Err_NoOutsideAccessToGenericVariable":"'{1}' Fonksiyon Blokunun '{0}' Genel Sabitine dıştan erişim yok"
+,
+"Err_NoOverrideOnFinalMethod":"FUNCTION_BLOCK '{0}': {1}.{2} METHOD'nde erişim belirteci FINAL ile geçersiz kılma mümkün değil"
+,
+"Err_NoOverrideOnInternalMethod":"FUNCTION_BLOCK '{0}': kitaplığındaki {3} METHOD {1}.{2} için erişim tanımlayıcısı INTERNAL olarak geçersiz kılma mümkün değil"
+,
+"Err_NoOverrideOnPrivateMethod":"FUNCTION_BLOCK '{0}': {1}.{2} METHOD'nde erişim belirteci PRIVATE ile geçersiz kılma mümkün değil"
+,
+"Err_NoPointerToBit":"POINTER TO BIT'e izin verilmez"
+,
+"Err_NoPropertiesInOutAssignment":"Bir özellik çağrının bir çıkış atamasına atanamaz. Yerine geçici bir değişken kullanın."
+,
+"Err_NoPropertyForVarInout":"Özellikler VAR_IN_OUT değişkenine atanamaz."
+,
+"Err_NoReadAccessToProperty":"Alma erişimcisi olmadığından '{0}' özelliği bu bağlamda kullanılamaz"
+,
+"Err_NoReferenceToBits":"Bitlere başvurular mümkün değil"
+,
+"Err_NoReferenceToOutput":"Çıktılar tip olamaz. REFERENCE TO"
+,
+"Err_NoResolutionForLazyVariable":"LAZY değişkeni '{0}' türü çözülemedi"
+,
+"Err_NoResolutionForSomeLazyVariables":"Bu imzadaki tembel değişken türü tahmin edilemedi."
+,
+"Err_NoStaticVariableInitialisationForValue":"'{0}' statik değişkeninin başlatılması sabit değil ya da değiştirilen sabitler devre dışı"
+,
+"Err_NoSuchLabel":"JMP deyiminin kapsamında '{0}' gibi bir etiket yok."
+,
+"Err_NoSystemDefine":"{0}' için hiç sistem tanımı yok"
+,
+"Err_NotAllowedInContainerLib":"'Kapsayıcı kitaplığında '{0}' öğesine izin verilmiyor"
+,
+"Err_NotAllowedInInterfaceLib":"'Arayüz kitaplığında '{0}' öğesine izin verilmiyor"
+,
+"Err_NotAllowedInTaskLocalVariables":"Görev yerel değişken listesi '{0}': '{1}' izin verilmiyor"
+,
+"Err_NotAnInstanceOf":"'{0}', bir '{1}' örneği değil"
+,
+"Err_NotEnoughMemoryForCompactDownload":"İlk kod alanında kompakt indirme için yeterince bellek kalmadı. '{0}' bayt ayrılamadı."
+,
+"Err_NotEnoughMemoryForVariableInit":"{0}' değişkenini başlatma için yeterli bellek yok. {1} bayt gerekiyor."
+,
+"Err_NotSupportedInInterface":"Bu kod Bildirim bölümünde desteklenmiyor"
+,
+"Err_NoValidCondition":"'{0}' geçerli bir koşul değil"
+,
+"Err_NoValidConditionforPragma":"'{0}' pragma için geçerli bir koşul değil"
+,
+"Err_NoValidEnumInit":"{0} bir numaralandırma için geçerli başlatma değil"
+,
+"Err_NoValidInstancePath":"'{0}' geçerli bir örnek yolu değil"
+,
+"Err_NoValidOperand":"'{0}' geçerli bir İşlenen değil"
+,
+"Err_NoValidOperandforPragma":"'{0}' pragma için geçerli bir işlenen değil"
+,
+"Err_NoValidStatement":"'{0}' geçerli bir deyim değil"
+,
+"Err_NoValuePassingForCPPExternal":"CPP uyumlu fonksiyonlar STRING, ARRAY veya STRUCT tipinde girişler veya çıkışlar içeremez. Bunun yerine bu tür için POINTER veya REFERENCE kullanın."
+,
+"Err_NoVarConfigInMethodOrFunction":"Yöntemlerde ve Fonksiyonlarda Eksik Adreslere izin verilmiyor"
+,
+"Err_NoVarForExternal":"VAR_EXTERNAL {0} için genel bir tanım bulunamadı"
+,
+"Err_NoVarInputInPropertyAccessors":"Özellik Aksesuarlarında Giriş Değişkenlerini tanımlamaya izin verilmedi: {0} : {1}"
+,
+"Err_NoVarsinInterface":"Arayüzlerde değişken bildirimlerine izin verilmez"
+,
+"Err_NoVarTempInSubsequentPrograms":"VAR_TEMP, attribute 'subsequent' özellikli PROGRAM'da mümkün değil"
+,
+"Err_NumOfInitializersDoNotMatch":"'FB_Init' öğesinin başlangıç değeri ({0}) ARRAY ({1}) öğesinin sayısıyla eşleşmiyor"
+,
+"Err_OneAccessorRequired":"{0}' özniteliği için en az bir erişimci gerekli"
+,
+"Err_OnlyMethodsOverride":"{0} {1} / {2} geçersiz kılınamadı: yalnızca yöntemlerin geçersiz kılmasına izin verilir."
+,
+"Err_OperationNotPossibleOnType":"'{0}' işlemi '{1}' türünde mümkün değil"
+,
+"Err_Operator1of2Expected":"'{2}' yerine '{0}' veya '{1}' bekleniyor"
+,
+"Err_Operator1of3Expected":"'{3}' yerine '{0}', '{1}' veya '{2}' bekleniyor"
+,
+"Err_Operator1of3ExpectedInsteadofEOF":"Beklenmedik Dosya Sonu bulundu: '{0}', '{1}' veya '{2}' bekleniyor"
+,
+"Err_Operator1of4Expected":"'{4}' yerine '{0}', '{1}',  '{2}' veya '{3}' bekleniyor"
+,
+"Err_OperatorExpected":"'{1}' yerine '{0}' beklendi"
+,
+"Err_OperatorExpectedInsteadofEOF":"Beklenmedik Dosya Sonu bulundu: '{0}' bekleniyor"
+,
+"Err_OperatorNotAllowedAtPosition":"Bu ifadede '{0}' operatörünün kullanımına izin verilmiyor"
+,
+"Err_OperatorNotSupported":"{0} işleçi desteklenmiyor."
+,
+"Err_OperatorNotSupportedVersion":"'{0}' operatörü mevcut hedefiniz tarafından desteklenmiyor. En azından çalışma zamanı sistemi sürümü {1} gerekiyor."
+,
+"Err_OperatorNoValidVariableName":"Operatör '{0}' bir değişken için geçerli bir ad değil"
+,
+"Err_OpNeedsAtLeastInputs":"'{0}' en az '{1}' İşlenen gerektiriyor"
+,
+"Err_OpNeedsExactInputs":"'{0}' tam '{1}' İşlenen gerektiriyor"
+,
+"Err_OpTakesAtMostInputs":"'{0}' en çok '{1}' İşlenen alır"
+,
+"Err_OutOfCodeMemory":"Kod belleği bitti: POU '{0}', {1} bayt. (Artımlı derleme parçalanmış bellek üretebilir. Tüm veri ve kodu yeniden yerleştirmeye zorlamak için \"Oluşturma, Temizleme\" işlemi gerçekleştirin.)"
+,
+"Err_OutOfMemory":"Genel veri belleği dolu: Değişken '{0}', {1} bayt. (Artımlı derleme parçalanmış bellek üretebilir. Tüm veri ve kodu yeniden yerleştirmeye zorlamak için \"Oluşturma, Temizleme\" işlemi gerçekleştirin.)"
+,
+"Err_OutOfMemoryFunctionPointer":"Genel veri belleği dolu: '{0}' fonksiyonu için fonksiyon İşaretçisi ayrılamadı"
+,
+"Err_OutOfMemoryWithWholeSize":"Genel veri belleği dolu: Değişken '{0}', {1} bayt (En büyük bitişik bellek boşluğu {2}). Artışlı derleme veya kalıcı değişken listelerine değişkenler ekleme parçalanmış bellek üretebilir. Kalıcı değişken listelerini sıkıştırmak için \"Bildirimler, Listeyi yeniden sırala ve boşlukları temizle\" işlemi veya diğer veri ve kodu yeniden yerleştirmeye zorlamak için \"Oluştur, Temizle\" işlemini gerçekleştirin."
+,
+"Err_OutOfPersistentMemoryExplicit":"Kalıcı bellek dolu: Değişken '{0}', {1} bayt (En büyük bitişik bellek boşluğu {2}). Kalıcı değişken listesini değiştirme parçalı bellek üretebilir. Kompakt kalıcı değişken listelerine \"Bildirimler, Yeniden sıralama listesi ve boşlukları temizle\" işlemini gerçekleştirin. {3}"
+,
+"Err_OutOfPersistentMemoryImplicit":"Yeterli kalıcı bellek yok {0}"
+,
+"Err_OutOfRetainMemory":"Saklama belleği dolu: Değişken '{0}', {1} bayt (Artımlı derleme parçalanmış bellek üretebilir. Tüm veri ve kodu yeniden yerleştirmeye zorlamak için \"Oluşturma, Temizleme\" işlemi gerçekleştirin.)"
+,
+"Err_OutOfRetainMemoryWithWholeSize":"Saklama belleği dolu: Değişken '{0}', {1} bayt (En büyük bitişik bellek boşluğu {2}) (Artımlı derleme parçalanmış bellek üretebilir. Tüm veri ve kodu yeniden yerleştirmeye zorlamak için \"Oluşturma, Temizleme\" işlemi gerçekleştirin.)"
+,
+"Err_OutParamNotEqual":"'{0}' türü VAR_OUTPUT '{2}' öğesinin '{1}' türüne eşit değil"
+,
+"Err_OutputByteWrittenFromDifferentTasks":"Çıkış belleğindeki aynı bayt farklı görevlerde yazılır"
+,
+"Err_OverflowInAddress":"{0}' adresinde sabit taşması"
+,
+"Err_OverloadNeedsAttribute":"'{0}' adına sahip başka bir yöntem mevcut. Aşırı yüklenen yöntemler tanımlamak istiyorsanız {{attribute 'overloaded'}} Özniteliğini kullanın."
+,
+"Err_OverloadWithSameInputs":"'{0}' için aynı girdi tiplerine sahip başka bir aşırı yükleme mevcut."
+,
+"Err_ParameterlistNotConst":"Bir parametre listesi CONSTANT olarak bildirilmelidir"
+,
+"Err_ParamsNotAllowed":"PARAMS parametresi, bir fonksiyon veya yöntemin son giriş parametresi olmalıdır"
+,
+"Err_PartialAccess_NotAValidComponent":"'%{1}{2}', '{0}' nesnesinin geçerli bir kısmi bileşeni değil"
+,
+"Err_PartialAccess_OnlyOnBitTypes":"Kısmi erişim sadece ANY_BIT türlerinde desteklenir, '{0}' üzerinde desteklenmez"
+,
+"Err_PersistentNoAddress":"Kalıcı bir listede doğrudan adres bildirimi mümkün değildir"
+,
+"Err_PersistentVariablesChangeMessageText":"Kalıcı değişkenler değişti. İndirme işlemi kullanıcı tarafından iptal edildi."
+,
+"Err_PersistentWrongVariable":"Kalıcı listesindeki değişkenlerin tümü VAR_GLOBAL PERSISTENT veya VAR_GLOBAL PERSISTENT RETAIN olmalıdır"
+,
+"Err_POUCalledFromDifferentTasks":"POU {0} {1} Çıkışına yazar ve birçok Görevde çağrılır."
+,
+"Err_PrivateOnMethodsOnly":"PRIVATE ve PROTECTED yalnızca FUNCTION_BLOCK yönteminde uygulanabilir"
+,
+"Err_ProjectDefinedNotSupportedFor":"'{0}' öğesinin herkese açık arayüzünü etkileyebileceği için 'project_defined' durumu bu söz dizimi için desteklenmiyor."
+,
+"Err_QueryInterfaceErrorP1":"__QueryInterface ilk İşleneni bir arayüz referansı veya bir fonksiyon bloğunun örneği olmalı"
+,
+"Err_QueryInterfaceErrorP2":"__QueryInterface ikinci İşleneni bir arayüz referansı olmalıdır"
+,
+"Err_QueryInterfaceP1NoIQuery":"{0} arayüzü {1} öğesini genişletmez"
+,
+"Err_QueryPointerErrorP1":"__QueryPointer ilk İşleneni bir arayüz referansı veya bir fonksiyon bloğunun örneği olmalı"
+,
+"Err_QueryPointerErrorP2":"__QueryInterface öğesinin ikinci işleneni POINTER olmalıdır"
+,
+"Err_RecursiveConstantInitialisation":"Sabit Değerin özyinelemeli tanımı."
+,
+"Err_RefAssignNeedsLValue":"Bir başvuru ataması kaynak ifade olarak yazma erişimli bir değişken gerektirir."
+,
+"Err_RefAssignOnlyForReferenceTypes":"REF= ile başlatmaya yalnızca REFERENCE TO türündeki değişkenler için izin verilir"
+,
+"Err_ReferenceNotAllowed":"REFERENCE türüne, ARRAY, POINTER veya REFERENCE için temel tür olarak izin verilmez"
+,
+"Err_ReferenceNotAllowedForVarInOut":"Bir başvuru türü VAR_IN_OUT türünde izin verilmiyor"
+,
+"Err_ReferenceToInput":"Değişken bir eşlemede bir giriş adresine başvuru atama mümkün değil"
+,
+"Err_RelatedPositionInterface":"İlgili pozisyon: '{1} arayüzünün {0}' arayüz yöntemi."
+,
+"Err_RelatedPositionTaskX":"İlgili konum: {0} görevindeki erişim"
+,
+"Err_RetainNotAccessiblePOU":"{0} POU'su kitaplık adını gizler, kitaplık öğelerine erişim mümkün değil. {1} saklanan değişkenini kaydetmek için hiç kapalı kod oluşturulmayacak."
+,
+"Err_RetainNotAccessibleVariable":"{0} değişkeni kitaplık adını gizler. Kütüphane elemanlarına erişim mümkün değildir. {1} RETAIN değişkenini kaydetmek için örtük kod oluşturulmaz."
+,
+"Err_RetainOrPersistentNotAllowed":"RETAIN veya PERSISTENT adlı yere izin verilmiyor"
+,
+"Err_RetainsNotSupported":"Saklama verileri bu aygıtta desteklenmiyor"
+,
+"Err_ReturnTypeForNonFunction":"Dönüş türü yalnızca FONKSİYON ve YÖNTEM türünde POU'lar için mümkün"
+,
+"Err_RValueRequired":"Atamanın geçerli source'u yok"
+,
+"Err_SelfInheritance":"Arayüzlerde özyineleme: {0}"
+,
+"Err_SelfInheritanceBase":"Temel fonksiyon blok listesinde özyineleme: {0}"
+,
+"Err_SelMuxOnlyEqualUserDefTypes":"SEL veya MUX içinde kullanılan tüm kullanıcı tanımlı türler eşit olmalıdır"
+,
+"Err_SemicolonExpected":"'{0}' yerine ';' bekleniyor"
+,
+"Err_SemicolonExpectedInsteadOfEnd":"'POU sonu yerine ';' bekleniyor"
+,
+"Err_SlotFunctionAmbiguousName":"{1} yuva özniteliğine sahip POU {0} belirsiz ada sahip"
+,
+"Err_SlotFunctionHiddenByVariable":"{2}' değişkeniyle gizli olduğundan {1} özniteliğine sahip POU {0} çağrılamıyor"
+,
+"Err_SomethingOverridingMethod":"{0} '{1}' INTERFACE METHOD'ini geçersiz kılıyor '{2}'"
+,
+"Err_SomethingOverridingMethodBase":"{0} '{1}', '{2}' tabanı METHOD'ini geçersiz kılıyor"
+,
+"Err_SpecialTypeExpected":"Bu yerde '{0}' türünde ifade bekleniyor"
+,
+"Err_StackOverflowDetected":"{0} Görevinde yığın taşması algılandı. Maksimum Yığın Boyutu: {1} bayt. Hesaplanan Yığın Boyutu: {2} bayt. Çağrı Hiyerarşisi:"
+,
+"Err_StaticNotAllowed":"Bu yerde VAR_STAT bildirimine izin verilmiyor"
+,
+"Err_StrictEnumNoArithmeticAllowed":"'{0}' katı ENUM türünde aritmetiklere izin verilmiyor"
+,
+"Err_StrictEnumNotAMember":"'{0}', katı ENUM türü '{1}' için geçerli bir değer değil"
+,
+"Err_StringLengthIsNoConstant":"'{0}' dize uzunluğu sabit değer değil"
+,
+"Err_StringLiteralExpected":"'{0}' yerine bir String dizesi bekleniyor"
+,
+"Err_StringSizeExpected":"\"(\" sonrası dizenin boyutu bekleniyor"
+,
+"Err_StringTooShortForVarInOut":"{0}' dize değişkeni VAR_IN_OUT parametresi '{1}' / '{2}' için çok kısa"
+,
+"Err_StructInitOnlyInput":"'{0}', '{1}' girişi değil"
+,
+"Err_StructuredValueTypeInExternalCall":"Harici fonksiyon çağrısında '{0}' yapılandırılmış türüne izin verilmiyor."
+,
+"Err_StructureInitialisationNotPossible":"Fonksiyon başlatma çağrısının Parametresi olarak bir yapı başlatma mümkün değil. Yerine bir değişken kullanın."
+,
+"Err_StructureInitializationExpected":"{0} için başlatma listesi beklendi"
+,
+"Err_StructureNotAllowed":"STRUCT bildirimine yalnızca veri birimi türünde izin verilir"
+,
+"Err_SummarizedLibraryErrors":"{1} kitaplığında {0} dahili hata"
+,
+"Err_SystemOutOfMemory":"Geliştirme sisteminde çevrimiçi değişikliği işlemek için yeterli bellek yok. Geliştirmeye devam etmeden önce lütfen uygulamayı yeniden başlatın."
+,
+"Err_TaskLocalVariablesAccessNotAllowed":"Görev yerel değişken listesi '{0}': Yazma erişimine yalnızca '{1}' görevinde izin veriliyor"
+,
+"Err_TaskLocalVariablesNoOnlineChangePossible":"Görev yerel değişken listesi '{0}' değişti. Çevrimiçi değişiklik mümkün değil."
+,
+"Err_TaskLocalVariablesWriterTaskNotDefined":"Görev yerel değişken listesi '{0}': Yazar görevi tanımlanmadı."
+,
+"Err_ThisNotAllowed":"Bu bağlamda THIS ifade edilemez"
+,
+"Err_TooFewParametersForExtensibleFunction":"Genişletilebilir Fonksiyon {0}, {2} parametresi için en az {1} giriş gerektirir"
+,
+"Err_TooManyInitializer":"Dizi için çok fazla başlatıcı"
+,
+"Err_TooManyParametersForExtensibleFunction":"Genişletilebilir Fonksiyon {0}, {2} parametresi için en fazla {1} giriş kabul eder"
+,
+"Err_TryCatchNotSupported":"Yapılandırılmış özel durum işleme henüz desteklenmiyor."
+,
+"Err_TryCatchNotSupportedCodegenerator":"Geçerli cihazın kod üreteci yapılandırılmış istisna işlemeyi desteklemiyor"
+,
+"Err_TryCatchNotSupportedVersion":"Yapılandırılmış özel durum işleme geçerli hedefiniz tarafından desteklenmiyor. En azından çalışma zamanı sistem sürümü 3.5.6.0 gerekir."
+,
+"Err_TypeExpected":"{0}' yerine tür tanımı bekleniyor"
+,
+"Err_TypeIsNotGeneric":"'{0}' genel bir fonksiyon bloku değil."
+,
+"Err_TypeMismatch":"{0}' türü '{1}' türüne dönüştürülemiyor"
+,
+"Err_TypesNotComparable":"{0}' türü '{1}' türüyle karşılaştırılamıyor"
+,
+"Err_UnexpectedArrayInitialisation":"Beklenmedik dizi başlatma"
+,
+"Err_UnexpectedOperandForCallInitFunction":"'{1}' içinde beklenmedik İşlenen '{0}' bulundu. Bir GVL veya PRG parametre olarak geçirilmelidir."
+,
+"Err_UnexpectedOperandForIndexOf":"{1}' içinde beklenmedik İşlenen '{0}' bulundu"
+,
+"Err_UnexpectedPragmaif":"Beklenmedik Pragma: 'if' ile eşleşmeden '{0}' bulundu"
+,
+"Err_UnexpectedStatement":"Beklenmedik ifade"
+,
+"Err_UnexpectedStructureInitialisation":"Beklenmedik yapı başlatma"
+,
+"Err_UnexpectedTokenFound":"Beklenmedik Belirteç '{0}' bulundu"
+,
+"Err_UnexpectedTypeName":"Bu yerde '{0}' tür adı beklenmiyor"
+,
+"Err_UninitialisedVariableUsedInInitialisation":"Başlatılmamış değişken {0} {1} öğesinin başlatılması için kullanıldı. Başlatma sırasını değiştirmek için 'global_init_slot' özniteliğini kullanın."
+,
+"Err_UnionNotAllowed":"UNION bildirimine yalnızca veri birimi türünde izin verilir"
+,
+"Err_UnknownCompilerVersionInCompiledLib":"\"{0}\" kitaplığı bilinmeyen derleyici sürümü \"{1}\" ile oluşturuldu."
+,
+"Err_UnknownEmbeddedLanguageType":"Bilinmeyen gömülü '{0}' dil tipi."
+,
+"Err_UnknownMaxStackSize":"Yürütülmekte olan görev hakkındaki bilgilere erişmek, hedef sistemde desteklenen maksimum yığın boyutu hakkında bilgi gerektirir."
+,
+"Err_UnknownType":"Bilinmeyen tür: '{0}'"
+,
+"Err_UnsupportedFeature":"'{0}' derleyici özelliği sadece {1} derleyici sürümü veya daha yenisi ile desteklenir"
+,
+"Err_UnsupportedType":"Desteklenmeyen tür: '{0}'"
+,
+"Err_UpperBoundExpected":"FOR döngüsü için üst sınır bekleniyor"
+,
+"Err_UserCheckFunctionsNotSupported":"Kullanıcı tanımlı kontrol fonksiyonları desteklenmiyor"
+,
+"Err_VarAccessNotSupported":"VAR_ACCESS desteklenmiyor"
+,
+"Err_VarConfigNotAllowed":"VAR_CONFIG bildirimine yalnızca VAR_CONFIG listesinde izin verilir"
+,
+"Err_VarGlobalNotAllowed":"VAR_GLOBAL bildirimine yalnızca genel değişken listesinde izin verilir"
+,
+"Err_VariableDeclarationExpected":"{0}' yerine değişken bildirimi bekleniyor"
+,
+"Err_VariableDuplicate":"{0}' adında yerel bir değişken zaten '{1}' içinde tanımlandı"
+,
+"Err_VariableForVarinoutConstant":"VAR_IN_OUT CONSTANT parametresi '{0}' / '{1}', giriş olarak değişken gerektirir"
+,
+"Err_VariableListExpected":"{0} yerine VAR, VAR_INPUT, VAR_OUTPUT veya VAR_INOUT bekleniyor"
+,
+"Err_VariableOverride":"{1}' fonksiyon bloğunda ve '{2}' temelinde '{0}' değişkeninin yinelenen tanımı"
+,
+"Err_VarInstOnlyInMethods":"Bu yerde VAR_INST bildirimine izin verilmiyor"
+,
+"Err_VarLengthArrayInOut":"Değişken uzunluktaki ARRAY, yalnızca METHOD, FUNCTION ve FUNCTION_BLOCK adlı VAR_IN_OUT olarak mümkündür"
+,
+"Err_VarLengthArrayTopLevel":"Değişken uzunluktaki ARRAY, bir tür bildiriminin en üst düzey konumunda olmalıdır"
+,
+"Err_VarTempNotAllowed":"Bu yerde VAR_TEMP bildirimine izin verilmiyor"
+,
+"Err_VarTooBig":"'{0}' değişkeni çok büyük. (değişken boyut: {1}, segment boyutu: {2})"
+,
+"Err_VectorBaseMustBeRealType":"Bir VECTOR temel türü GERÇEK veya LREAL olmalıdır."
+,
+"Err_VectorNoPersistentRetain":"Bir VECTOR PERSISTENT veya RETAIN olarak ilan edilemez."
+,
+"Err_VectorSizeIsNoConstant":"Bir VECTOR boyutu sabit olmalıdır."
+,
+"Err_VectorSizeNotValid":"Bir VECTOR boyutu 0'dan büyük ve 9'dan küçük bir tamsayı olmalıdır."
+,
+"Err_VectorTypeCantBePlacedInUnion":"Vektör türleri UNION'a yerleştirilemez."
+,
+"Err_VectorTypesNotCompatible":"{0} ve {1} VECTOR tipleri uyumlu değil"
+,
+"Err_VersionInvalidFormat":"'{0}' belirteci geçerli bir sürüm değil"
+,
+"Err_VersionOverflow":"'{0}' sürümünün en az bir bölümünün çok büyük bir değeri var"
+,
+"Err_VersionPartNegative":"'{0}' sürümünün en az bir bölümünün negatif bir değeri var"
+,
+"Err_WrongCallAfterGlobalInitSlotSignature":"Attribute 'call_after_global_init_slot' ile süslenmiş bir imzanın argümanı veya 'bInitRetains' adında tek bir girişi olmamalıdır."
+,
+"Err_WrongConstructor":"FUNCTION_BLOCK veya STRUCT yönteminin 'FB_Init' iki BOOL türünde 'bInitRetains' ve 'bInCopyCode' girişine ihtiyaç duyuyor"
+,
+"Err_WrongDestructor":"'FB_Exit' FUNCTION_BLOCK veya STRUCT yöntemi, BOOL türünde bir 'bInCopyCode' girdisine ihtiyaç duyuyor"
+,
+"Err_WrongFormalParameter":"Yanlış resmi parametre: Bu yerde '{0}' öğesi bekleniyor"
+,
+"Err_WrongObjectType":"{0}' türündeki nesne çağrılamıyor"
+,
+"Err_WrongReInit":"METHOD FB_ReInit bir FUNCTION_BLOCK veya STRUCT öğesinin giriş ve BOOL türünde bir dönüş değeri olmamalıdır. FB_ReInit otomatik olarak çağrılmayacak!"
+,
+"Err_WrongTypeForAdr":"'{0}' öğesine ADR için işlenen olarak izin verilmiyor"
+,
+"Err_WrongTypeForExternal":"VAR_EXTERNAL {0} için yanlış tür tanımı"
+,
+"Err_WrongVarInInterfaceMethod":"INTERFACE METHOD'da yalnızca girişlere, çıkışlara ve giriş/çıkışlara izin verilir"
+,
+"Inf_RelatedPosition":"İlgili Pozisyon"
+,
+"Inf_RelatedPositionRecursion":"Çağrılan '{0}'."
+,
+"Inf_RelatedPositionStackoverflow":"{1} baytlık yığın kullanan '{0}'."
+,
+"Inf_UseXSizeOfOperator":"Bu hatayı önlemek için XSIZEOF operatörünü kullanın"
+,
+"Info_PersistentMemoryConfiguration":"Kalıcı bellek yapılandırmasında kalıcı belleğin boyutunu düzenleyebilirsiniz."
+,
+"PublishSymbolsMustBeSet":"'Tüm IEC sembollerini yayınla' ayarlanmalıdır"
+,
+"Txt_ParentContextNotUpToDate":"Ana içerik güncel değil"
+,
+"Wrn_AbstractKeywordMissing":"ABSTRACT anahtar sözcüğü eksik"
+,
+"Wrn_AccessToInternalObject":"{1} kütüphanesinin {0} dahili nesnesine erişilmemeli"
+,
+"Wrn_AccessToInternalProperty":"{1} kütüphanesinin {0} dahili mülküne erişilmemeli"
+,
+"Wrn_AccessToInternalVariable":"{1} kütüphanesinin dahili {0} değişkenine erişilmemelidir"
+,
+"Wrn_AmbiguousCheckfunctionInLibrary":"Örtük kontrol fonksiyonu {0}, başka bir örtük kontrol fonksiyonu {1} tarafından gizlenmiştir. Kontroller gerçekleştirilmeyecek! Kontrol fonksiyonunu kullanmak için çakışmayı çözümleyin ve uygulamayı temizleyin."
+,
+"Wrn_AtLeastOneExpected":"En az bir deyim bekleniyor"
+,
+"Wrn_AttributeCheck":"Öznitelik kontrolü başarısız"
+,
+"Wrn_BoolNotAtBitAddress":"BOOL veri türü için bit adresi beklendi"
+,
+"Wrn_CallOfPrivateProperty":"PRIVATE PROPERTY {0}.{1} 'e erişilmemelidir"
+,
+"Wrn_CallOfProtectedProperty":"PROTECTED PROPERTY {0}.{1} 'e erişilmemelidir"
+,
+"Wrn_CallRecursion":"Çağrı Özyinelemesi: {0}"
+,
+"Wrn_ChangeOfAccessModifier":"{0}.{1} yöntemi, {3}.{1} yöntemini geçersiz kılarken \"{2}\" erişim değiştiricisini değiştiriyor"
+,
+"Wrn_ComplexExpression":"POU çok kompleks ifade içeriyor. Orta sonuçları kullanmayı düşünün."
+,
+"Wrn_ConcurrentAccessOfBitInSameByte":"Aynı baytta '{0}' bitinin eş zamanlı erişimi"
+,
+"Wrn_ConstantInStructDeclaration":"Yapı veya birleşim bildiriminde CONSTANT anahtar sözcüğü göz ardı edilir"
+,
+"Wrn_DefaultValueNotConstant":"Varsayılan değer CONSTANT değil"
+,
+"Wrn_DefaultValueTopLevel":"Giriş yalnızca IEC kodundan FUNCTION çağrıldığında isteğe bağlıdır"
+,
+"Wrn_DeviceNotInstalledForSimulation":"Aygıt sistemde yüklü değil. Simülasyon varsayılan ayarları kullanıyor."
+,
+"Wrn_EnumComparison":"Bir numaralandırma türü ({0}) ile başka birinin ({1}) karşılaştırması"
+,
+"Wrn_EnumValueDuplicate":"{0} sabiti birden fazla numaralandırmaya atandı"
+,
+"Wrn_ExitForRetainInstances":"Sıcak sıfırlama sırasında VAR_RETAIN içinde örneklerin FB_EXIT öğesi de çağırılır ancak FB_INIT çağırılmaz. FB_EXIT ile fonksiyon bloklarının tutma bildiriminden kaçının!"
+,
+"Wrn_ExtendsForInterfaces":"Arayüzlerin devralması için IMPLEMENTS yerine EXTENDS Anahtar Sözcüğünü kullanın."
+,
+"Wrn_ExternalReferenceIgnored":"Harici referanslar yalnızca FUNCTION_BLOCK, METHOD, FUNCTION ve CONSTANT genel değişken listeleri için mümkündür. {0} '{1}' için harici referans yok sayıldı."
+,
+"Wrn_GlobalInitSlotNotForVariables":"global_init_slot' özniteliği her zaman tam değişken listesini etkiler ve tekli değişkenlere uygulanmamalıdır"
+,
+"Wrn_GranularityMismatchForDirectVariable":"Değişken '{0}' {1} ayrıntı düzeyine sahip, ancak {1} bayta hizalanmayan {2} doğrudan adresinde bulunuyor."
+,
+"Wrn_ImplicitCheckFunctionShadowed":"Üstü kapalı kontrol fonksiyonu '{0}', başka bir değişken ya da fonksiyon tarafından gizlenmiştir. Kontroller gerçekleştirilmeyecek! Kontrol fonksiyonunu kullanmak için çakışmayı çözümleyin ve uygulamayı temizleyin."
+,
+"Wrn_ImplicitEnumConversion":"Bir numaralandırılmış türden ({0}) diğerine ({1}) örtük dönüştürme"
+,
+"Wrn_ImplicitIntToReal":"{0}' öğesinden '{1}' öğesine kapalı dönüştürme: olası bilgi kaybı"
+,
+"Wrn_ImplicitSignedToUnsigned":"İşaretli '{0}' Türünden işaretsiz '{1}' Türüne kapalı dönüştürme: olası işaret değişimi"
+,
+"Wrn_ImplicitUnsignedToSigned":"İşaretsiz '{0}' Türünden işaretli '{1}' Türüne kapalı dönüştürme: olası işaret değişimi"
+,
+"Wrn_InterfaceChangedBase":"{1}' temelinin '{0}' geçersiz kılma yönteminin arayüzü bildirimle eşleşmiyor"
+,
+"Wrn_InvalidDefaultValue":"{0} türünün bu bağlamda varsayılan bir değeri olamaz"
+,
+"Wrn_InvalidStringSize":"Dizenin boyutu negatif olamaz ('{0}')."
+,
+"Wrn_LabelNoReference":"{0}' etiketine başvurulmadı"
+,
+"Wrn_LibraryNotInstalled":"Kitaplık {0} Kitaplık Yöneticisi'ne eklenmedi veya geçerli bir lisans bulunamadı"
+,
+"Wrn_LibWithStringInVarInOut":"Çağıranların sabitleri geçirmeye izin vermesi için '{1}' içinde VAR_IN_OUT dizesi değişkenini '{0}' VAR_IN_OUT CONSTANT olarak tanımlamayı deneyin."
+,
+"Wrn_LoopExitConditionConstant":"Döngü çıkış koşulu '{0} {1} {2}' sabit FALSE değerinde. Olası sonsuz döngü!"
+,
+"Wrn_LValueForVarinoutStrings":"VAR_IN_OUT parametresi '{0}' / '{1}', giriş olarak yazma erişimli değişken gerektirir. Bu, sonraki sürümlerde bir derleme hatası olacaktır!"
+,
+"Wrn_MethodAlreadyCalledImplicitly":"{0}' Yöntemi zaten kapalı çağrıldı"
+,
+"Wrn_MissingAttributeNoAssign":"POU '{0}' için 'no_assign' özniteliği eksik mi? '{1}' değişkeninin türü, 'no_assign' ile ilişkilendirilir."
+,
+"Wrn_MissingInstancePathForPersistent":"{0} değişkeni için VAR_PERSISTENT listesinde eşleşen örnek yolu bulunamadı. Tüm örnek yollarını VAR_PERSISTENT listesine eklemek için \"Tüm örnek yollarını ekle\" komutunu kullanın. (Ayrıntılar için yardıma bakın)"
+,
+"Wrn_NoInheritanceForUnions":"\"UNION\" veri tipi için devralma tasarlanmamış: {0}"
+,
+"Wrn_NoInitialValueForConstant":"{0}' sabit değişkeni için hiç başlangıç değeri yok"
+,
+"Wrn_NonAsciiStringLiteral":"'{0}...' dize sabiti temsil edilemeyen karakterler içeriyor. 'STRING için UTF-8 Kodlaması' proje seçeneği kullanılabilir."
+,
+"Wrn_NonLocalAccessToVarInOut":"'{2}' harici bağlamından '{1}' içinde tanımlanan VAR_IN_OUT '{0}' erişimi."
+,
+"Wrn_NoPointerToBit":"Tek bir bite başvurulamaz. Tam bayta bir başvuru depolanacaktır."
+,
+"Wrn_NotAllowedInInterfaceLib":"'Arayüz kitaplığında '{0}' öğesine izin verilmiyor"
+,
+"Wrn_Obsolete":"POU '{0}' eski olarak işaretlendi: {1}"
+,
+"Wrn_ObsoleteOutputInAbstractMethod":"Bir VAR_OUTPUT için varsayılan değer ABTRACT veya INTERFACE METHOD'da kullanılmaz"
+,
+"Wrn_OnlyConstantInitialValueForMappedPersistentVar":"Eşlenen bir kalıcı değişken için yalnızca değiştirilen sabitler başlangıç değeri olarak uygulanabilir."
+,
+"Wrn_PersistentVariableOnStack":"Yığında bulunan FUNCTION_BLOCK örneklerindeki PERSISTENT değişkenler desteklenmiyor: {0}"
+,
+"Wrn_PointerMisatch":"{0}' türü '{1}' türüne dönüştürülebilir olmayabilir"
+,
+"Wrn_Pragma":"Uyarı pragmasıyla oluşturulan kullanıcı tanımlı uyarı"
+,
+"Wrn_ReferenceToUninitializedVariable":"{1}'in başlatılması için başlatılmamış olan değişkene {0} bir başvuru kullanılır. Başlatılmamış değişkene erişim beklenmeyen davranışlara yol açabilir."
+,
+"Wrn_ReservedUnusedKeyword":"'{0}' adı, IEC61131-3 standardında ayrılmış bir anahtar kelimedir. Sonraki sürümlerde bir hata bildirilecek."
+,
+"Wrn_ShiftExceedsTypeSize":"{0} kadar kaydırma {1} tür boyutunu aşıyor."
+,
+"Wrn_StackCheckIncompleteDueToRecursion":"Özyinelemeli çağrılar nedeniyle yığın kullanımı hesaplama tamamlanmadı: {0}"
+,
+"Wrn_StatementNoEffect":"{0}' kodunun hiç etkisi yok. Amaçlanan bu mu?"
+,
+"Wrn_StringConstantTooLong":"String sabiti '{0}' hedef türü '{1}' için çok uzun"
+,
+"Wrn_StruturedTypePropertyNotMonitorable":"İzleme özelliği '{0}' mülkü için desteklenmiyor ve yok sayılacak"
+,
+"Wrn_TooManyApplications":"{1} aygıtı için {0} uygulama tanımladınız. Maksimum sayı {2}. Bu yüzden tüm uygulamaları indiremeyeceksiniz."
+,
+"Wrn_UninitialisedVariableUsedInInitialisation":"Başlatılmamış değişken {0} {1} öğesinin başlatılması için kullanıldı. Başlatma sırasını değiştirmek için 'global_init_slot' özniteliğini kullanın."
+,
+"Wrn_ValueAssignViaPointerMayChangeVFTable":"{0} öğesinin işaret ettiği örnek sanal fonksiyon çağrıları için tekrar başlatılacak. {0} öğesinin {1} öğesinden türetilen bir türü işaret etmediğinden emin olun "
+,
+"Wrn_VarInOutUnitializedInInitialValue":"Başlatılmamış VAR_IN_OUT değişkenine erişim"
+,
+"Wrn_WrongDestructor":"'FB_Exit' FUNCTION_BLOCK veya STRUCT yöntemi, BOOL türünde bir 'bInCopyCode' girdisine ihtiyaç duyuyor."
+,
+"Wrn_WrongReInit":"METHOD FB_ReInit bir FUNCTION_BLOCK veya STRUCT öğesinin giriş ve BOOL türünde bir dönüş değeri olmamalıdır. FB_ReInit otomatik olarak çağrılmayacak!"
+}
+,
+"_3S.CoDeSys.Compiler35220.Resources.Strings.tr.resources":{
+"AffectionCopied":"Eski değer X'i kopyaladı"
+,
+"AffectionInitialized":"Başlatıldı"
+,
+"AffectionLocationChanged":"Pozisyon değişti"
+,
+"AffectionVFTableInitialized":"Sanal fonksiyon tablosu başlatıldı"
+,
+"And_Text":"ve"
+,
+"Area_Output_Checked":"{0} için gereken boyut: {1} bayt (Kullanılabilir Boyut: {2} bayt)"
+,
+"Area_Output_Checked_Exceeded":"{0} için aşılan boyut: {1} bayt (Kullanılabilir Boyut: {2} bayt)"
+,
+"Area_Output_Info":"Bellek alanı {0} {1} içeriyor: boyut: {2} bayt, en yüksek kullanılan adres: {3}, en büyük bitişik bellek boşluğu: {4} bayt ({5} %)"
+,
+"Area_Output_Info_Simple":"Bellek alanı {0} {1} içeriyor: en büyük bitişik bellek boşluğu: {2} bayt ({3} %)"
+,
+"AttributeAlreadyRegistered":"{0} özelliği başka bir plug-in tarafından zaten kaydedildi"
+,
+"AttributeInvalidRange":"'{1}' özniteliği için {0} geçerli bir değer değil. [{2}..{3}] aralığında bir değer beklendi."
+,
+"AttributeInvalidTypeInteger":"'{1}' özniteliği için '{0}' değeri geçersiz. Tek tırnak içinde bir tamsayı bekleniyor ('42' gibi)."
+,
+"AttributeMustBeEmpty":"Beklenmedik değer '{0}', '{0}' özniteliğine atandı."
+,
+"AttributeMustNotBeEmpty":"'{0}' özniteliğine atanan bir değer beklendi."
+,
+"AttributeNotInFunctionFBOrMethod":"'{0}' özniteliği yalnızca Fonksiyon, Fonksiyon Bloğu veya Yöntem türündeki POU'lar için değerlendirilir."
+,
+"AttributeNotInMethod":"'{0}' özniteliği yalnızca Yöntem türündeki POU'lar için değerlendirilir."
+,
+"AttributeNotSupportedWithCompilerVersion":"'{0}' özniteliği yalnızca derleyici sürümü {1} veya daha yenisi için yorumlanır. Geçerli derleyici sürümü {2}."
+,
+"AttributeStrictDesc":"Numaralandırma türü tanımlarını 'katı' özniteliğiyle donatma, derleme sırasında geçerli numaralandırma türlerinin yalnızca sabit atamalarına zorlar."
+,
+"AttributeStrictNoValidSignature":"'Katı' özniteliği yalnızca ENUM türü tanımlamalar için değerlendirilir."
+,
+"AttributeToStringFunctionWrongPOUType":"{0} özniteliği yalnızca tür bildirimleri ve fonksiyon blokları için geçerli."
+,
+"AttributeToStringWrongType":"{0} özniteliği yalnızca numaralandırma için geçerli."
+,
+"AttributeUnknown":"{0} özniteliği bilinmiyor ve derleyici tarafından yok sayılacak."
+,
+"AttributeValueMustBeOneOf":"'{1}' özniteliği için geçersiz değer '{0}' şunlardan biri olmalıdır: {2}"
+,
+"AttributeWrongScopeSigns":"'{0}' özniteliği yalnızca değişken bildirimlerine eklenebilir. Burada yok sayılacaktır."
+,
+"AttributeWrongScopeVars":"'{0}' özniteliği bir değişkene eklendi, ancak yalnızca POU'ları etkiliyor. Öznitelik yok sayılacak."
+,
+"Build":"Yapı"
+,
+"BuildCompleteErrors":"Oluşturma tamamlandı -- {0} hata: {1} uyarı: indirme mümkün değil!"
+,
+"BuildCompleteOK":"Oluşturma tamamlandı -- {0} hata: {1} uyarı: indirilmeye hazır!"
+,
+"BuildStarted":"------ Oluşturma başlatıldı: Uygulama: {0} -------"
+,
+"C138ErrMsgCheckSyntax":"'{0} : {1}({2})' söz dizimini kontrol edin"
+,
+"C138ErrMsgRequiresNInputs":"Belirtilen 'FB_Init' yöntemi tam olarak {0} girişi gerektiriyor."
+,
+"Change_AttributesChanged":"Öznitelikler değiştirildi"
+,
+"Change_CodeChanged":"uygulama değişti"
+,
+"Change_DefineChanged":"Tanımlar değişti"
+,
+"Change_GlobalErrors":"Projede genel hatalar"
+,
+"Change_InterfaceAdded":"eklendi"
+,
+"Change_InterfaceChange_Explicitly":"bildirim değişti, açık olarak geçersiz kılındı"
+,
+"Change_InterfaceChanged":"bildirim değişti"
+,
+"Change_InterfaceDeleted":"silindi"
+,
+"Change_NumOfSubSignaturesChanged":"yöntem sayısı veya eylemler değişti"
+,
+"Change_ParameterTablesChanged":"Kitaplık parametresi tabloları değişti"
+,
+"Change_ReferencedLibrariesChanged":"Başvurulan kitaplıklar değişti"
+,
+"Change_VariableChanged":"değişken {0} değişti"
+,
+"Change_VariableDeleted":"değişken {0} silindi"
+,
+"Change_VariableInserted":"değişken {0} eklendi"
+,
+"ClearDownloadContext":"İndirme Bağlamını Temizle"
+,
+"Code_Text":"Kod"
+,
+"CodeNoChange":"Kod değişti. Çevrimiçi değişiklik gerekli değil."
+,
+"CompileCompleteErrors":"Derleme tamamlandı -- {0} hata, {1} uyarı"
+,
+"CompileCompleteOK":"Derleme tamamlandı -- {0} hata, {1} uyarı"
+,
+"Data_Text":"Veri"
+,
+"DoCodeTypification":"Simgelenen kod"
+,
+"DoLocation":"genel verileri bul"
+,
+"DoTypification":"Çalışma kümesi alınıyor"
+,
+"DownloadInfoSaveException":"İndirme bilgisi dosyası {0} pozisyonuna kaydedilemedi.\r\nAygıtta oturum açma proje yeniden yüklendikten sonra mümkün olmayacak.\r\nNeden:\r\n{1}"
+,
+"Err_CompilerVersionError":"Derleyici sürümü {0} geri çekildi. Lütfen daha yüksek bir Derleyici sürümü kullanın."
+,
+"ErrExpressionContainsNoAppName":"İfade hiç uygulama adı içermiyor"
+,
+"ErrExpressionContainsNoResource":"İfade hiç kaynak adı içermiyor"
+,
+"ErrInvalidExpression":"Geçersiz ifade"
+,
+"ErrMultipleAreasWithMappedSegmentAccess":"'MappedSegmentAccessOnly' işaret seti ile birden çok alan bulundu"
+,
+"ErrNoApplication":"Uygulama bulunamadı"
+,
+"ErrNoAreaWithMappedSegmentAccess":"Eşlenen segmentler bulundu, ancak 'MappedSegmentAccessOnly' ile hiçbir alan işaretlenmedi"
+,
+"ErrorLimitExceeded":"{0} hatadan fazla hata oluştu: sonraki tüm hata mesajları atlanıyor"
+,
+"ErrSignatureNotFound":"İmza bulunamadı"
+,
+"Except_Boot_Project_Error":"Bu durumda Önyükleme projesi mümkün değil: uygulama belleği doldu. Önce tam indirme gerçekleştirin."
+,
+"Except_Boot_Project_Error_CompileContext_Not_UpToDate":"Bu durumda Önyükleme uygulaması mümkün değil: Dahili hata"
+,
+"Except_Boot_Project_Error_Error_In_Compile":"Bu durumda Önyükleme projesi mümkün değil: Önyükleme projesi bilgileri oluşturmada hata. Aşağıdaki pencereye bakın."
+,
+"FeatureGroup_Description":"IEC 61131-3 diliyle ilgili özellikler"
+,
+"FeatureGroup_Name":"IEC 61131-3 dil"
+,
+"GenerateCode":"{0} için kod oluştur..."
+,
+"GenerateCodeInit":"Kod başlatma oluştur..."
+,
+"GenerateCodeProgress":"Kod oluşturuluyor..."
+,
+"GenerateGlobalInit":"genel başlatmalar oluştur..."
+,
+"GenerateRelocations":"Pozisyon değişiklikleri oluştur..."
+,
+"GeneratingCode":"Kod oluştur..."
+,
+"Getter":"Alıcı"
+,
+"GlobalInitErrorPrefix":"Kapalı başlatma kodunda hata:"
+,
+"GVLChanged":"Global değişken listesi '{0}' değişti"
+,
+"GVLRenamedOrDeleted":"{0}' global değişken listesi yeniden adlandırıldı veya silindi"
+,
+"HiddenPousPlaceholder":"<Gizli POU'lar>"
+,
+"Input_Text":"Giriş"
+,
+"InterfaceChanged":"{0}' arayüzü değişti"
+,
+"InterfaceReferencesAffected":"Aşağıdaki arayüz başvuruları yeniden yönlendirmede test edildi:"
+,
+"InterfacesChanged":"Aşağıdaki POU arayüzleri değiştirildi:"
+,
+"InvalidBooleanValue":"geçersiz değer"
+,
+"LanguageModelMngrOptionConditionalShowSymbols_Description":"Son kullanıcıdan kitaplıktaki değişkenleri gizlemek için kullanılır."
+,
+"Libraries":"Kütüphaneler"
+,
+"LibrariesChanged":"Kitaplıklar değişti"
+,
+"LoadCompileContext":"Derleme bilgisini yükle"
+,
+"LoadingLibraries":"Kitaplıklar yükleniyor..."
+,
+"Memory_Text":"Bellek"
+,
+"MethodAdded":"{1} '{2}' öğesinin '{0}' yöntemi eklendi"
+,
+"MethodChanged":"{1} '{2}' öğesinin '{0}' yöntemi değişti"
+,
+"MethodRenamedOrDeleted":"{1} '{2}' öğesinin '{0}' yöntemi yeniden adlandırıldı veya silindi"
+,
+"NumInterfacesChanged":"POU'ların {0} arayüzü değişti"
+,
+"NumInterfacesToTest":"{0} arayüzü başvuruları yeniden yönlendirme için test edildi"
+,
+"NumPOUsDownloaded":"{0} POU kodunu değiştirdi"
+,
+"NumVariablesAffected":"çevrimiçi değişlikten {0} değişken etkilendi, {1} tanesinin pozisyonu değişti, {2} tanesi başlatıldı, {3} tanesi kopyalandı, {4} tanesi sanal fonksiyon tablosunu başlattı"
+,
+"OnlineChangeRelinkCodegenProgress":"Arabirimleri yeniden bağlamak için kod oluşturma"
+,
+"OnlineChangeRelinkProgress":"Değişkenlerin olası arayüz referansları için kontrol edilmesi"
+,
+"OR":"ya da"
+,
+"Output_Text":"Çıkış"
+,
+"ParamsArray_Comment":"'arrParams', bu FUNCTION öğesine iletilen gerçek değerleri tutan 1 tabanlı bir ARRAY'dir. 'NCoun' değerinin ötesinde herhangi bir değer atanmaz veya başlatılmaz ve kullanılmaz."
+,
+"ParamsCount_Comment":"Sayı, bu fonksiyona geçirilen resmi parametrelerin sayısını tanımlar"
+,
+"Persistent_Text":"Kalıcı Veriler"
+,
+"PersistenVariablesChanged":"Kalıcı değişkenler değişti. Geçerli listeyle başlatmak istiyor musunuz?\r\n\r\nEvet: geçerli liste başlatılacak, varolan kalıcı değerler geçersiz kılınacak.\r\nHayır:  varolan kalıcı değerler korunacak, geçerli liste bu değerleri kullanacak.\r\n      UYARI: Değerler kalıcı değişkenlerinizle eşleşmeyebilir. Değerleri el ile kontrol etmeniz gerekir!\r\n      Örn. listenin başına bir değişken eklerseniz, tüm değerler yanlış olur! \r\n\r\nİptal: indirmeyi veya çevrimiçi değiştirmeyi iptal edin"
+,
+"POUChanged":"{0} '{1}' değişti"
+,
+"POURenamedOrDeleted":"{0} '{1}' yeniden adlandırıldı veya silindi"
+,
+"POUsDownloaded":"Aşağıdaki POU'ların kodu indirilecek"
+,
+"POUUnit":"POU'lar"
+,
+"Precompile":"Ön derleme"
+,
+"ProjectUpToDate":"Uygulama güncel"
+,
+"Retain_Text":"Saklama Verileri"
+,
+"Scanner_Initialize_char_array_must_end_with_null_value":"Char dizisi null değeriyle bitmelidir"
+,
+"Setter":"Kurucu"
+,
+"String1":"Bu projede belirtilen derleyici sürümü onaylanmıyor. Proje derlenebilse de derleyici sürümünü daha sonraki bir sürüme güncellemeniz önerilir. Lütfen derleyici sürümünü güncelledikten sonra eski sürümün bu proje için artık kullanılamayacağını unutmayın."
+,
+"SupportExtendedProgrammingFeatureSettingProvider_Description":"Etkinse, nesne yönlendirmeli programlama gibi genişletilmiş programlama özellikleri veya öznitelikler kullanıcı arayüzünde desteklenir. Not: Bu, bu tür öğeleri içeren varolan projeleri açma ve derleme kapasitesini etkilemez."
+,
+"SupportExtendedProgrammingFeatureSettingProvider_Name":"Genişletilmiş programlama özelliklerini destekle"
+,
+"TextContains":"içeren"
+,
+"TypeChanged":"{0}' türü değişti"
+,
+"TypeRenamedOrDeleted":"{0}' türü yeniden adlandırıldı veya silindi"
+,
+"TypifyAll":"simgelenen kod..."
+,
+"UnexpectedExpression":"'Beklenmeyen İfade {0}'"
+,
+"UnresolvedVariable":"Çözülmemiş değişken {0}"
+,
+"UpdatingCompilerVersion":"Derleyici sürümü güncelleniyor"
+,
+"VariableDeclarationChanged":"{1}' içindeki '{0}' değişkeni bildirimi değişti"
+,
+"VariableRenamedOrDeleted":"{1}' içindeki '{0}' değişkeni yeniden adlandırıldı veya silindi"
+,
+"VariablesAffected":"Aşağıdaki değişkenler çevrimiçi değişiklikten etkilenecek:"
+,
+"WarningLimitExceeded":"{0} hatadan fazla uyarı oluştu: sonraki tüm uyarı mesajları atlanıyor"
+,
+"Warnings":"Uyarılar"
+,
+"WritingCompileInformationProgressText":"Yazma derleme bilgilerini bitir..."
+}
+}

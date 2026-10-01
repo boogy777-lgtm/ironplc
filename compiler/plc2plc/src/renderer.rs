@@ -140,7 +140,7 @@ impl LibraryRenderer {
                 self.write_ws(spec.width.keyword());
                 if let Some(len) = &spec.length {
                     self.write_ws("[");
-                    self.visit_integer(len.as_integer().unwrap())?;
+                    self.visit_integer(len.as_integer().ok_or_else(Diagnostic::internal_error)?)?;
                     self.write_ws("]");
                 }
             }
@@ -302,12 +302,11 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         &mut self,
         node: &DurationLiteral,
     ) -> Result<Self::Value, Diagnostic> {
-        // Always write out as milliseconds. The largest unit is allowed to be "out of range"
-        let val = format!(
-            "{}#{}ms",
-            node.type_name(),
-            node.interval.whole_milliseconds()
-        );
+        // The unit spelling is the literal's own (`unit_text`), so a literal
+        // with a sub-millisecond part (`T#1us`, `T#1.5ms`) re-parses to the
+        // same value instead of being written as a whole number of
+        // milliseconds.
+        let val = format!("{}#{}", node.type_name(), node.unit_text());
         self.write_ws(val.as_str());
         Ok(())
     }
@@ -523,6 +522,32 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         Ok(())
     }
 
+    // CODESYS `UNION ... END_UNION`. The members reuse the structure
+    // element rendering; only the enclosing keywords differ.
+    fn visit_union_declaration(
+        &mut self,
+        node: &UnionDeclaration,
+    ) -> Result<Self::Value, Diagnostic> {
+        self.visit_type_name(&node.type_name)?;
+
+        self.write_ws(":");
+
+        self.write_ws("UNION");
+
+        self.indent();
+        self.newline();
+        for item in node.elements.iter() {
+            self.visit_structure_element_declaration(item)?;
+            self.write_ws(";");
+            self.newline();
+        }
+        self.outdent();
+
+        self.write_ws("END_UNION");
+
+        Ok(())
+    }
+
     fn visit_structure_element_declaration(
         &mut self,
         node: &StructureElementDeclaration,
@@ -601,6 +626,38 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         Ok(())
     }
 
+    /// Renders the CODESYS `PARAMS(n) OF T` type declaration.
+    fn visit_params_declaration(
+        &mut self,
+        node: &ParamsDeclaration,
+    ) -> Result<Self::Value, Diagnostic> {
+        self.visit_type_name(&node.type_name)?;
+
+        self.write_ws(":");
+
+        self.visit_params_specification(&node.spec)?;
+
+        Ok(())
+    }
+
+    /// Renders the CODESYS parameter-list type, `PARAMS(n) OF T`.
+    fn visit_params_specification(
+        &mut self,
+        node: &ParamsSpecification,
+    ) -> Result<Self::Value, Diagnostic> {
+        self.write_ws("PARAMS");
+        self.write_ws("(");
+        match &node.count {
+            IntegerRef::Literal(count) => self.visit_integer(count)?,
+            IntegerRef::Constant(id) => self.visit_id(id)?,
+        }
+        self.write_ws(")");
+        self.write_ws("OF");
+        self.visit_type_name(&node.type_name)?;
+
+        Ok(())
+    }
+
     // 2.3.3.1
     fn visit_string_declaration(
         &mut self,
@@ -613,7 +670,11 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         self.write_ws(node.width.keyword());
 
         self.write_ws("[");
-        self.visit_integer(node.length.as_integer().unwrap())?;
+        self.visit_integer(
+            node.length
+                .as_integer()
+                .ok_or_else(Diagnostic::internal_error)?,
+        )?;
         self.write_ws("]");
 
         if let Some(init) = &node.init {
@@ -642,7 +703,12 @@ impl Visitor<Diagnostic> for LibraryRenderer {
     fn visit_array_subranges(&mut self, node: &ArraySubranges) -> Result<Self::Value, Diagnostic> {
         self.write_ws("ARRAY");
         self.write_ws("[");
-        visit_comma_separated!(self, node.ranges.iter(), Subrange);
+        match &node.bounds {
+            ArrayBounds::Ranges(ranges) => visit_comma_separated!(self, ranges.iter(), Subrange),
+            // The incomplete array type has no range list, so `*` is the
+            // whole extent.
+            ArrayBounds::Incomplete(_) => self.write("*"),
+        }
         self.write_ws("]");
         self.write_ws("OF");
 
@@ -656,7 +722,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
                 self.write_ws(spec.width.keyword());
                 if let Some(len) = &spec.length {
                     self.write_ws("[");
-                    self.visit_integer(len.as_integer().unwrap())?;
+                    self.visit_integer(len.as_integer().ok_or_else(Diagnostic::internal_error)?)?;
                     self.write_ws("]");
                 }
             }
@@ -669,9 +735,17 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         &mut self,
         node: &ironplc_dsl::common::Subrange,
     ) -> Result<Self::Value, Diagnostic> {
-        self.visit_signed_integer(node.start.as_signed_integer().unwrap())?;
+        self.visit_signed_integer(
+            node.start
+                .as_signed_integer()
+                .ok_or_else(Diagnostic::internal_error)?,
+        )?;
         self.write("..");
-        self.visit_signed_integer(node.end.as_signed_integer().unwrap())
+        self.visit_signed_integer(
+            node.end
+                .as_signed_integer()
+                .ok_or_else(Diagnostic::internal_error)?,
+        )
     }
 
     fn visit_program_access_decl(
@@ -715,6 +789,9 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         let var_type = match node.var_type {
             VariableType::Var => "VAR",
             VariableType::VarTemp => "VAR_TEMP",
+            VariableType::VarStat => "VAR_STAT",
+            VariableType::VarInst => "VAR_INST",
+            VariableType::VarGeneric => "VAR_GENERIC",
             VariableType::Input => "VAR_INPUT",
             VariableType::Output => "VAR_OUTPUT",
             VariableType::InOut => "VAR_IN_OUT",
@@ -867,7 +944,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
 
         if let Some(len) = &node.length {
             self.write_ws("[");
-            self.visit_integer(len.as_integer().unwrap())?;
+            self.visit_integer(len.as_integer().ok_or_else(Diagnostic::internal_error)?)?;
             self.write_ws("]");
         }
 
@@ -1029,6 +1106,18 @@ impl Visitor<Diagnostic> for LibraryRenderer {
             self.write_qualifiers(&oop.qualifiers);
         }
         self.visit_id(&node.name.name)?;
+        // `VAR_GENERIC` sections belong directly after the name, before
+        // `EXTENDS`/`IMPLEMENTS` (CODESYS error 544), so they are written
+        // first and the remaining sections after the header.
+        self.indent();
+        for var in node
+            .variables
+            .iter()
+            .filter(|var| var.var_type == VariableType::VarGeneric)
+        {
+            self.visit_var_decl(var)?;
+        }
+        self.outdent();
         if let Some(oop) = &node.oop {
             if let Some(base) = &oop.base {
                 self.write_ws("EXTENDS");
@@ -1047,7 +1136,11 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         self.newline();
 
         self.indent();
-        for var in node.variables.iter() {
+        for var in node
+            .variables
+            .iter()
+            .filter(|var| var.var_type != VariableType::VarGeneric)
+        {
             self.visit_var_decl(var)?;
         }
         self.outdent();
@@ -1100,6 +1193,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         node: &PropertyDeclaration,
     ) -> Result<Self::Value, Diagnostic> {
         self.write_ws("PROPERTY");
+        self.write_qualifiers(&node.qualifiers);
         self.visit_id(&node.name)?;
         self.write_ws(":");
         self.visit_function_return_type(&node.property_type)?;
@@ -1133,6 +1227,25 @@ impl Visitor<Diagnostic> for LibraryRenderer {
     // OOP extension: INTERFACE ... END_INTERFACE. Only the
     // header renders — method/property signatures are not yet parsed (see
     // specs/design/beckhoff-twincat-dialect.md §1.3).
+    // CODESYS/TwinCAT `NAMESPACE ... END_NAMESPACE`: the nested declarations
+    // are written back inside the namespace, one level deeper.
+    fn visit_namespace_declaration(
+        &mut self,
+        node: &NamespaceDeclaration,
+    ) -> Result<Self::Value, Diagnostic> {
+        self.write_ws("NAMESPACE");
+        self.visit_id(&node.name)?;
+        self.newline();
+        self.indent();
+        for element in node.elements.iter() {
+            element.recurse_visit(self)?;
+        }
+        self.outdent();
+        self.write_ws("END_NAMESPACE");
+        self.newline();
+        Ok(())
+    }
+
     fn visit_interface_declaration(
         &mut self,
         node: &InterfaceDeclaration,
@@ -1506,6 +1619,14 @@ impl Visitor<Diagnostic> for LibraryRenderer {
             }
             dsl::textual::StmtKind::Return => self.write_keyword_statement("RETURN"),
             dsl::textual::StmtKind::Exit(_) => self.write_keyword_statement("EXIT"),
+            // The marker carries no statement terminator of its own: the
+            // reference grammar's `implementationBlock` is the marker
+            // followed by the statements, with no `;` in between.
+            dsl::textual::StmtKind::BeginImplementation(_) => {
+                self.write_ws("__BEGIN_IMPLEMENTATION");
+                self.newline();
+                Ok(())
+            }
             dsl::textual::StmtKind::Continue(_) => self.write_keyword_statement("CONTINUE"),
             _ => node.recurse_visit(self),
         }
@@ -1634,6 +1755,136 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         self.write_ws("END_REPEAT");
         self.write_ws(";");
         self.newline();
+        self.newline();
+
+        Ok(())
+    }
+
+    // CODESYS exception handling. The `__TRY`-family keywords are not in
+    // `StmtKind` themselves, so the statement is written here.
+    fn visit_try_catch(
+        &mut self,
+        node: &dsl::textual::TryCatch,
+    ) -> Result<Self::Value, Diagnostic> {
+        self.write_ws("__TRY");
+        self.newline();
+
+        self.indent();
+        for item in node.body.iter() {
+            self.visit_stmt_kind(item)?;
+        }
+        self.outdent();
+
+        if let Some(catch) = &node.catch {
+            self.visit_catch_clause(catch)?;
+        }
+
+        if !node.finally_body.is_empty() {
+            self.write_ws("__FINALLY");
+            self.newline();
+
+            self.indent();
+            for item in node.finally_body.iter() {
+                self.visit_stmt_kind(item)?;
+            }
+            self.outdent();
+        }
+
+        self.write_ws("__ENDTRY");
+        self.write_ws(";");
+        self.newline();
+        self.newline();
+
+        Ok(())
+    }
+
+    fn visit_catch_clause(
+        &mut self,
+        node: &dsl::textual::CatchClause,
+    ) -> Result<Self::Value, Diagnostic> {
+        self.write_ws("__CATCH");
+        if let Some(exception) = &node.exception {
+            self.write("(");
+            self.visit_variable(exception)?;
+            self.write(")");
+        }
+        self.newline();
+
+        self.indent();
+        for item in node.body.iter() {
+            self.visit_stmt_kind(item)?;
+        }
+        self.outdent();
+
+        Ok(())
+    }
+
+    // `JMP` / `label:` / `CALC` / `__WAIT`, the CODESYS jump statements.
+    fn visit_jump(&mut self, node: &dsl::textual::Jump) -> Result<Self::Value, Diagnostic> {
+        self.write_ws("JMP");
+        if let Some(condition) = &node.condition {
+            self.write("(");
+            self.visit_expr(condition)?;
+            self.write(")");
+        }
+        self.write_ws(node.label.original().as_str());
+        self.write_ws(";");
+        self.newline();
+
+        Ok(())
+    }
+
+    fn visit_label_statement(
+        &mut self,
+        node: &dsl::textual::LabelStatement,
+    ) -> Result<Self::Value, Diagnostic> {
+        self.visit_id(&node.name)?;
+        self.write(":");
+        self.newline();
+
+        Ok(())
+    }
+
+    fn visit_conditional_call(
+        &mut self,
+        node: &dsl::textual::ConditionalCall,
+    ) -> Result<Self::Value, Diagnostic> {
+        self.write_ws("CALC");
+        self.write("(");
+        self.visit_expr(&node.condition)?;
+        self.write(",");
+        self.visit_id(&node.call.var_name)?;
+        self.write("(");
+        visit_comma_separated!(self, node.call.params.iter(), ParamAssignmentKind);
+        self.write(")");
+        self.write(")");
+        self.write_ws(";");
+        self.newline();
+
+        Ok(())
+    }
+
+    fn visit_wait(&mut self, node: &dsl::textual::Wait) -> Result<Self::Value, Diagnostic> {
+        self.write_ws("__WAIT");
+        if let Some(condition) = &node.condition {
+            self.write("(");
+            self.visit_expr(condition)?;
+            self.write(")");
+        }
+        self.write_ws(";");
+        self.newline();
+
+        Ok(())
+    }
+
+    fn visit_throw(&mut self, node: &dsl::textual::Throw) -> Result<Self::Value, Diagnostic> {
+        self.write_ws("__THROW");
+        if let Some(value) = &node.value {
+            self.write("(");
+            self.visit_expr(value)?;
+            self.write(")");
+        }
+        self.write_ws(";");
         self.newline();
 
         Ok(())

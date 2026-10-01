@@ -1,0 +1,310 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<language-model>
+	<pou id = "3AEA4B76-9165-46B6-B316-4696A9CD5465" name = "string__to__wstring">
+		<interface>
+      {implicit on}
+      FUNCTION string__to__wstring : WSTRING(255)
+      VAR_INPUT
+      in: STRING(255);
+      END_VAR
+      VAR
+				i : INT := 0;
+				pbyIn : POINTER TO BYTE := ADR(in);
+				dwCodepoint: DWORD;
+				wCodeUnit1: WORD;
+				wCodeUnit2: WORD;
+				bOutsideBMP: BOOL;
+      END_VAR
+      {implicit off}
+    </interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}    
+		WHILE (pbyIn^ <> 0 AND i < 255) DO
+			dwCodepoint := __GetNextCodepointFromUTF8String(ADR(pbyIn));
+			bOutsideBMP := __GetUTF16FromCodepoint(dwCodepoint, wCodeUnit1 => wCodeUnit1, wCodeUnit2 => wCodeUnit2);	
+			{IF NOT defined(IsLittleEndian)}
+				__SwapWChar(ADR(wCodeUnit1));
+			{END_IF}
+	
+			string__to__wstring[i] := wCodeUnit1;
+			i := i + 1;
+		
+			IF (bOutsideBMP AND i < 255) THEN
+				{IF NOT defined(IsLittleEndian)}
+					__SwapWChar(ADR(wCodeUnit2));
+				{END_IF}
+				string__to__wstring[i] := wCodeUnit2;
+				i := i + 1;
+			END_IF	
+		END_WHILE
+		string__to__wstring[i] := 0;		
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+  <pou id = "A2ED1622-FF52-4C21-889A-90E7DD463BB7" name = "__GetNextCodepointFromUTF8String">
+    <interface>
+      {implicit on}
+      FUNCTION __GetNextCodepointFromUTF8String : DWORD
+      VAR_INPUT
+      pszNext: POINTER TO POINTER TO BYTE;
+      END_VAR
+      VAR
+      dwNext1: DWORD;
+      dwNext2: DWORD;
+      dwNext3: DWORD;
+      dwNext4: DWORD;
+      END_VAR
+      {implicit off}
+    </interface>
+    <body>
+      <![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}    
+		dwNext1 := pszNext^^;
+		IF (dwNext1 <= 16#7F) THEN
+			__GetNextCodepointFromUTF8String := dwNext1;
+			pszNext^ := pszNext^ + 1;
+		ELSIF ((dwNext1 AND 16#F0) = 16#F0) THEN
+			pszNext^ := pszNext^ + 1;
+			dwNext2 := pszNext^^;
+			pszNext^ := pszNext^ + 1;	
+			dwNext3 := pszNext^^;
+			pszNext^ := pszNext^ + 1;
+			dwNext4 := pszNext^^;
+			pszNext^ := pszNext^ + 1;
+			dwNext1 := dwNext1 XOR 16#F0;
+			dwNext2 := dwNext2 XOR 16#80;
+			dwNext3 := dwNext3 XOR 16#80;
+			dwNext4 := dwNext4 XOR 16#80;
+			__GetNextCodepointFromUTF8String := SHL(dwNext1, 18) OR SHL(dwNext2, 12) OR SHL(dwNext3, 6) OR dwNext4;	
+		ELSIF ((dwNext1 AND 16#E0) = 16#E0) THEN
+			pszNext^ := pszNext^ + 1;
+			dwNext2 := pszNext^^;
+			pszNext^ := pszNext^ + 1;	
+			dwNext3 := pszNext^^;
+			pszNext^ := pszNext^ + 1;
+			dwNext1 := dwNext1 XOR 16#E0;
+			dwNext2 := dwNext2 XOR 16#80;
+			dwNext3 := dwNext3 XOR 16#80;
+			__GetNextCodepointFromUTF8String := SHL(dwNext1, 12) OR SHL(dwNext2, 6) OR dwNext3;  
+		ELSIF ((dwNext1 AND 16#C0) = 16#C0) THEN
+			pszNext^ := pszNext^ + 1;
+			dwNext2 := pszNext^^;
+			pszNext^ := pszNext^ + 1;	
+			dwNext1 := dwNext1 XOR 16#C0;
+			dwNext2 := dwNext2 XOR 16#80;
+			__GetNextCodepointFromUTF8String := SHL(dwNext1, 6) OR dwNext2;  
+		END_IF
+		{implicit off}
+		]]>
+    </body>
+  </pou>
+  <pou id = "BF32097A-0E24-4D9F-9D22-68FEEBF26BF9" name = "__GetUTF16FromCodepoint">
+    <interface>
+      {implicit on}
+      //Returns TRUE if two code units are decoded
+      FUNCTION __GetUTF16FromCodepoint : BOOL
+      VAR_INPUT
+				dwCodepoint: DWORD;
+      END_VAR
+      VAR_OUTPUT
+				wCodeUnit1: WORD;
+				wCodeUnit2: WORD;
+      END_VAR
+      VAR
+				dwUExt: DWORD;
+				dwBlock1: DWORD;
+				dwBlock2: DWORD;
+      END_VAR
+      {implicit off}
+    </interface>
+    <body>
+      <![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}    
+		IF (dwCodepoint > 16#FFFF) THEN
+			dwUExt := dwCodepoint - 16#10000;
+			wCodeUnit1 := TO_WORD(2#110110_0000000000 OR SHR(dwUExt, 10));
+			wCodeUnit2 := TO_WORD(2#110111_0000000000 OR (dwUExt AND 2#0_1111111111));
+			__GetUTF16FromCodepoint := TRUE;	
+		ELSE
+			wCodeUnit1 := TO_WORD(dwCodepoint);
+			__GetUTF16FromCodepoint := FALSE;
+		END_IF 
+		{implicit off}
+		]]>
+    </body>
+  </pou>
+  <pou id = "8CE27FC2-62BF-419A-A1ED-3E22701C1C88" name = "wstring__to__string">
+		<interface>
+      {implicit on}
+      FUNCTION wstring__to__string : STRING(255)
+      VAR_INPUT
+				in: WSTRING(255);
+      END_VAR
+      VAR
+				i : INT := 0;
+				pwIn : POINTER TO WORD := ADR(in);
+				dwCodepoint: DWORD;
+				bSurrogateUsed: BOOL;
+				nCodeUnits: INT;
+				byCodeUnit1: BYTE;
+				byCodeUnit2: BYTE;
+				byCodeUnit3: BYTE;
+				byCodeUnit4: BYTE;
+      END_VAR
+      {implicit off}
+    </interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}    
+		WHILE (pwIn^ <> 0 AND i < 255) DO
+			dwCodepoint := __GetNextCodepointFromUTF16String(ADR(pwIn));		
+			nCodeUnits := __GetUTF8FromCodepoint(dwCodepoint, byCodeUnit1 => byCodeUnit1, byCodeUnit2 => byCodeUnit2, byCodeUnit3 => byCodeUnit3, byCodeUnit4 => byCodeUnit4);
+			wstring__to__string[i] := byCodeUnit1;
+			i := i + 1;
+			IF (nCodeUnits > 1 AND i < 255) THEN
+				wstring__to__string[i] := byCodeUnit2;
+				i := i + 1;
+				IF (nCodeUnits > 2 AND i < 255) THEN
+					wstring__to__string[i] := byCodeUnit3;
+					i := i + 1;
+					IF (nCodeUnits > 3 AND i < 255) THEN
+						wstring__to__string[i] := byCodeUnit4;
+						i := i + 1;					
+					END_IF
+				END_IF		
+			END_IF				
+		END_WHILE		
+		wstring__to__string[i] := 0;		        
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+  <pou id = "5E31A18E-1412-4A85-9789-C4B3B4ABA766" name = "__GetNextCodepointFromUTF16String">
+    <interface>
+      {implicit on}
+      FUNCTION __GetNextCodepointFromUTF16String : DWORD
+      VAR_INPUT
+				pszNext: POINTER TO POINTER TO WORD;
+      END_VAR
+      VAR
+				wNext1: WORD;
+				wNext2: WORD;
+      END_VAR
+      {implicit off}
+    </interface>
+    <body>
+      <![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}    
+		wNext1 := pszNext^^;
+		{IF NOT defined(IsLittleEndian)}
+			__SwapWChar(ADR(wNext1));
+		{END_IF}
+
+		IF ((wNext1 AND 2#111111_0000000000) = 2#110110_0000000000) THEN
+			//Surrogates are used
+			pszNext^ := pszNext^ + 2;
+			wNext2 := pszNext^^;
+			{IF NOT defined(IsLittleEndian)}
+				__SwapWChar(ADR(wNext2));
+			{END_IF}
+	
+			IF ((wNext2 AND 2#111111_0000000000) = 2#110111_0000000000) THEN
+				pszNext^ := pszNext^ + 2;
+				wNext1 := wNext1 AND 2#000000_1111111111;
+				wNext2 := wNext2 AND 2#000000_1111111111;
+				__GetNextCodepointFromUTF16String := (SHL(wNext1,10) OR wNext2) + 16#10000; 		
+			END_IF
+		ELSE
+			__GetNextCodepointFromUTF16String := wNext1;
+			pszNext^ := pszNext^ + 2;
+		END_IF
+		{implicit off}
+		]]>
+    </body>
+  </pou>
+  <pou id = "D46C7EBD-281B-459F-85B6-001B42275F02" name = "__GetUTF8FromCodepoint">
+    <interface>
+      {implicit on}
+      FUNCTION __GetUTF8FromCodepoint : INT
+      VAR_INPUT
+				dwCodepoint: DWORD;
+      END_VAR
+      VAR_OUTPUT
+				byCodeUnit1: BYTE;
+				byCodeUnit2: BYTE;
+				byCodeUnit3: BYTE;
+				byCodeUnit4: BYTE;
+      END_VAR
+      {implicit off}
+    </interface>
+    <body>
+      <![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}    
+		IF (dwCodepoint < 16#0000_0080) THEN
+			byCodeUnit1 := TO_BYTE(dwCodepoint);
+			__GetUTF8FromCodepoint := 1;
+		ELSIF (dwCodepoint < 16#0000_0800) THEN
+			//110xxxxx 10xxxxxx
+			byCodeUnit1 := TO_BYTE(2#11000000 OR (SHR(dwCodePoint, 6) AND 16#1F));	
+			byCodeUnit2 := TO_BYTE(2#10000000 OR (dwCodePoint AND 2#00111111));
+			__GetUTF8FromCodepoint := 2;
+		ELSIF (dwCodepoint < 16#0001_0000) THEN
+			//1110xxxx 10xxxxxx 10xxxxxx
+			byCodeUnit1 := TO_BYTE(2#11100000 OR (SHR(dwCodePoint, 12) AND 16#0F));
+			byCodeUnit2 := TO_BYTE(2#10000000 OR (SHR(dwCodePoint, 6) AND 16#3F));		
+			byCodeUnit3 := TO_BYTE(2#10000000 OR (dwCodePoint AND 2#00111111));		
+			__GetUTF8FromCodepoint := 3;
+		ELSE
+			//11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+			byCodeUnit1 := TO_BYTE(2#11110000 OR (SHR(dwCodePoint, 18) AND 16#07));
+			byCodeUnit2 := TO_BYTE(2#10000000 OR (SHR(dwCodePoint, 12) AND 16#3F));
+			byCodeUnit3 := TO_BYTE(2#10000000 OR (SHR(dwCodePoint, 6) AND 16#3F));		
+			byCodeUnit4 := TO_BYTE(2#10000000 OR (dwCodePoint AND 2#00111111));			
+			__GetUTF8FromCodepoint := 4;	
+		END_IF
+		{implicit off}
+		]]>
+    </body>
+  </pou>
+  <pou id = "FFC1E5C6-B6AE-406D-A65F-7D4B6F04941A" name = "__SwapWChar">
+    <interface>
+      {implicit on}
+      FUNCTION __SwapWChar : BOOL
+      VAR_INPUT
+	      ptrIn: POINTER TO WORD;
+      END_VAR
+      VAR
+				ptr1: POINTER TO BYTE := ptrIn;
+				ptr2: POINTER TO BYTE := ptrIn + 1;
+				byTemp: BYTE;
+      END_VAR
+
+      {implicit off}
+    </interface>
+    <body>
+      <![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}        
+		byTemp := ptr1^;
+		ptrIn^ := ptr2^;
+		ptr1^ := byTemp;        
+		{implicit off}
+		]]>
+    </body>
+  </pou>
+</language-model>

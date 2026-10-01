@@ -19,6 +19,9 @@ fn is_var_keyword(tt: &TokenType) -> bool {
             | TokenType::VarTemp
             | TokenType::VarAccess
             | TokenType::VarConfig
+            | TokenType::VarStat
+            | TokenType::VarInst
+            | TokenType::VarGeneric
     )
 }
 
@@ -37,7 +40,7 @@ fn is_qualifier(tt: &TokenType) -> bool {
 fn is_ignorable(tt: &TokenType) -> bool {
     matches!(
         tt,
-        TokenType::Whitespace | TokenType::Newline | TokenType::Comment
+        TokenType::Whitespace | TokenType::Newline | TokenType::Comment | TokenType::DocComment
     )
 }
 

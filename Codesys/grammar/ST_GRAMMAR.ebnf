@@ -1,0 +1,401 @@
+(*
+  ST_GRAMMAR.ebnf — грамматика Structured Text (IEC 61131-3) в редакции
+  CODESYS 3.5.22.10, восстановленная из декомпилированного лексера/парсера
+  Parser35220.plugin.dll (скрипт другого агента; исходники см. C:\Codesys\Parser35220.plugin).
+
+  Обозначения:
+    (* ... *)   комментарий
+    =           определение правила
+    ,           конкатенация
+    |           альтернатива
+    [ X ]       необязательно
+    { X }       ноль или более повторений
+    ( ... )     группировка
+    "..."       терминал (литерал)
+    ? ... ?     специальная последовательность (лексика)
+
+  Ссылки на код: <файл>:<строка> — это строки в декомпилированном дереве
+  C:\Codesys\Parser35220.plugin\CODESYS\Parser35220\...
+  (нумерация строк — как в поставляемых .cs-файлах).
+
+  Уровни операторов (приоритет) заданы в ST_GRAMMAR.md; здесь выражения
+  расписаны по уровням так, как их разбирает InfixOperationParser.
+*)
+
+(* ===================================================================== *)
+(* 0. Верхний уровень модуля                                             *)
+(* ===================================================================== *)
+
+(* LanguageModelOfRawST.ParseText / InternalParser *)
+compilationUnit        = { topElement } ;
+
+topElement             = pragma
+                       | comment
+                       | pouUnit
+                       | varSection           (* GVL: VAR_GLOBAL ... END_VAR *)
+                       | typeDeclaration       (* TYPE ... END_TYPE *)
+                       | ";" ;                 (* пустая инструкция 172 *)
+
+(* ===================================================================== *)
+(* 1. Лексика (InternalScanner.GetNextInternal: InternalScanner.cs:3488) *)
+(* ===================================================================== *)
+
+(* TokenType: None0 Boolean1 Comment2 DocComment3 Pragma4 Date5 DateAndTime6
+   DirectVariable7 IncompleteDirectVariable8 DoubleByteString9 Duration10
+   LDuration11 EndOfLine12 Identifier13 Integer14 Operator15 Real16
+   SingleByteString17 TimeOfDay18 Whitespace19 Error20 End21 XByteString22
+   LDate23 LTimeOfDay24 LDateAndTime25 Unused26 PartialAccess27 *)
+
+identifier             = iecIdentifier | escapedIdentifier ;
+(* iecIdentifier: начальный символ — буква/'_'; далее буквы/цифры/'_';
+   несколько '_' подряд запрещены по умолчанию (AllowMultipleUnderlines=false).
+   InternalScanner.cs:2004 IsIdentifierStartCharacter, :2301 ScanIdentifierCharacters *)
+escapedIdentifier      = "`", ? любые символы до '`' ? ;   (* SupportNonCompliantIdentifiers *)
+(* InternalScanner.cs:2319 ScanWeirdIdentifier *)
+
+booleanLiteral         = "TRUE" | "FALSE" ;                  (* :2435 ScanForTrueFalseOrIdentifier *)
+
+integerLiteral         = decInteger | basedInteger ;
+decInteger             = digit, { digit | "_" } ;            (* TokenType.Integer 14; :2478 ScanInteger *)
+basedInteger           = base, "#", basedDigits ;
+base                   = "2" | "8" | "10" | "16" ;           (* :2519 ScanBasedInteger *)
+basedDigits            = { digit | hexLetter | "_" } ;
+realLiteral            = decInteger, ( ".", decInteger, [ exponent ] | exponent ) ;
+exponent               = ( "E" | "e" ), [ "+" | "-" ], decInteger ;   (* :2560 OptionalExponent *)
+
+typedIntegerLiteral    = ( typeNameShort, "#", [ "+" | "-" ], basedOrDec ) ;  (* SINT#.. LWORD#.. *)
+typedRealLiteral       = ( "REAL" | "LREAL", "#", [ "+" | "-" ], decInteger, [ ".", decInteger ] ) ;
+typedBooleanLiteral    = ( "BOOL" | "BIT", "#", ( "0" | "1" ) ) ;
+
+(* строковые литералы: одинарные кавычки = однобайтные (STRING),
+   двойные = двухбайтные (WSTRING). Escape через '$'.
+   InternalScanner.cs:3298 ValidateStringToken, :1380/1401/1446 GetString* *)
+singleByteString       = "'", { stringChar | escape }, "'" ;
+doubleByteString       = '"', { stringChar | escape }, '"' ;
+xByteString            = "__XSTRING", '"', { stringChar | escape }, '"' ;
+unicodeString          = ( "UTF8" | "UCHAR" ), "'", { stringChar | escape }, "'" ;  (* :2624 ScanUnicodeLiteral *)
+escape                 = "$", ( hexDigit, hexDigit | "$" | "'" | '"' | "R" | "N" | "P" | "T" | ... ) ;
+
+durationLiteral        = ( "T" | "TIME" | "LT" | "LTIME" ), "#", durationValue ;   (* TokenType.Duration/LDuration *)
+durationValue          = { ( integer, ( "d" | "h" | "m" | "s" | "ms" | "us" | "ns" ) ) | "-" } ;   (* :3001 ScanTimeLiteral *)
+dateLiteral            = ( "D" | "DATE" | "LD" | "LDATE" ), "#", year, "-", month, "-", day ;
+timeOfDayLiteral       = ( "TOD" | "TIME_OF_DAY" | "LTOD" | "LTIME_OF_DAY" ), "#", hh, ":", mm, [ ":", ss, [ ".", nnn ] ] ;
+dateAndTimeLiteral     = ( "DT" | "DATE_AND_TIME" | "LDT" | "LDATE_AND_TIME" ), "#", datePart, "-", timePart ;
+(* :2784 ScanTypedTimeOfDayLiteral, :2846 ScanTypedDateLiteral, :2933 ScanTypedDateAndTimeLiteral *)
+
+(* direct variables: %<location><size><address>  (InternalScanner.cs:3817 ScanDirectVariable)
+   location: I|Q|M  ; size: X|B|W|D|L  ; address: Int("."Int)*
+   стадия разбора: DirectVariable(7) — полный, IncompleteDirectVariable(8) — неполный *)
+directVariable         = "%", locationPrefix, sizePrefix, address ;
+locationPrefix         = "I" | "Q" | "M" ;                        (* :3912 ScanLocationPrefix *)
+sizePrefix             = "X" | "B" | "W" | "D" | "L" ;           (* :3855 ScanSizePrefix; "*" => incomplete *)
+address                = decInteger, { ".", decInteger } ;
+
+partialAccess          = directVariable, ".", ( decInteger ) ;    (* TokenType.PartialAccess 27; :3934 *)
+
+pragma                 = "{", ? содержимое прагмы ? , "}" ;       (* TokenType.Pragma 4; :2080 ReadScannerPragma *)
+
+comment                = blockComment | lineComment | docComment ;
+blockComment           = "(*", { ? любой символ, поддержка вложенности настраивается ? }, "*)" ;  (* :2230 ScanComment *)
+lineComment            = "//", { ? до конца строки ? } ;
+docComment             = "(*", "**", ... ;  (* DocComment 3; :1668 GetDocComment *)
+
+(* ===================================================================== *)
+(* 2. Объявления POU (POUSyntaxParser.cs)                                *)
+(* ===================================================================== *)
+
+pouUnit                = program | functionBlock | function | method
+                       | property | interface | action | transition | namespace ;
+
+accessModifier         = "PUBLIC" | "PRIVATE" | "PROTECTED" | "INTERNAL"    (* 226/227/228/229 *)
+                       | "FINAL" | "ABSTRACT" | "OVERRIDE" ;                (* 230/224/225 contextual *)
+
+program                = [ accessModifier ], "PROGRAM", identifier,
+                         { varSection }, { pouDeclaration }, body,
+                         "END_PROGRAM" ;
+functionBlock          = [ accessModifier ], "FUNCTION_BLOCK", identifier,
+                         [ "EXTENDS", identifier ] , { "IMPLEMENTS", identifier, { ",", identifier } },
+                         { varSection }, { pouDeclaration }, body,
+                         "END_FUNCTION_BLOCK" ;
+function               = "FUNCTION", identifier, [ ":", returnType ],
+                         { varSection }, body,
+                         "END_FUNCTION" ;
+method                 = [ accessModifier ], "METHOD", identifier, [ ":", returnType ],
+                         { varSection }, body,
+                         "END_METHOD" ;
+property               = "PROPERTY", identifier, [ ":", returnType ],
+                         ( propertyGet | propertySet ) ;
+propertyGet            = "PROPERTY_GET", { varSection }, body, "END_PROPERTY" ;
+propertySet            = "PROPERTY_SET", { varSection }, body, "END_PROPERTY" ;
+interface              = "INTERFACE", identifier, [ "EXTENDS", identifier ],
+                         { method | property },
+                         "END_INTERFACE" ;
+action                 = "ACTION", identifier, body, "END_ACTION" ;
+transition             = [ accessModifier ], "TRANSITION", identifier, body, "END_TRANSITION" ;
+namespace              = "NAMESPACE", identifier, { pouUnit }, "END_NAMESPACE" ;
+(* Допустимые вложенные типы (POUSyntaxParser.cs:502 s_htValidChildPouTypes):
+     NAMESPACE     -> PROPERTY_GET/SET
+     PROGRAM       -> ACTION, METHOD, PROPERTY_GET/SET, TRANSITION
+     FUNCTION_BLOCK-> ACTION, METHOD, PROPERTY_GET/SET, TRANSITION
+     INTERFACE     -> METHOD, PROPERTY_GET/SET
+     FUNCTION/ACTION/TRANSITION -> без вложений *)
+
+pouDeclaration         = program | functionBlock | function | method | property | interface | action | transition
+                       | varSection | typeDeclaration | pragma | comment ;
+
+body                   = { statement } ;    (* реализация: последовательность инструкций ST/IL *)
+
+returnType             = type ;
+(* END-операторы: POUSyntaxParser.GetExpectedEndOfOperator :361 и IsStartEndOperatorMatch :421
+   60 ACTION->70 END_ACTION; 87 FUNCTION->73 END_FUNCTION; 88 FB->74 END_FUNCTION_BLOCK;
+   93 PROGRAM->76 END_PROGRAM; 118 METHOD->281 END_METHOD; 119 INTERFACE->283 END_INTERFACE;
+   284/285 PROPERTY_GET/SET->282 END_PROPERTY; 287 NAMESPACE->288 END_NAMESPACE; 290 TRANSITION->291 *)
+
+(* ===================================================================== *)
+(* 3. Секции переменных (StatementParser.cs:390 _TryParseVariableDeclarationList, *)
+(*    :485 ParseOperatorStatement / IL_2EA; VariableDeclarationParser.cs)   *)
+(* ===================================================================== *)
+
+varSection             = varKeyword, [ varModifier, { varModifier } ],
+                         { variableDeclaration | pragma | comment },
+                         "END_VAR" ;
+varKeyword             = "VAR"            (* 105 *)
+                       | "VAR_INPUT"      (* 110 *)
+                       | "VAR_OUTPUT"     (* 112 *)
+                       | "VAR_IN_OUT"     (* 111 *)
+                       | "VAR_TEMP"       (* 113 *)
+                       | "VAR_STAT"       (* 114 *)
+                       | "VAR_GLOBAL"     (* 109 *)
+                       | "VAR_EXTERNAL"   (* 108 *)
+                       | "VAR_CONFIG"     (* 107 *)
+                       | "VAR_INST"       (* 244 *)
+                       | "VAR_GENERIC" ;  (* 280 *)
+varModifier            = "CONSTANT"       (* 66 *)
+                       | "RETAIN"         (* 97 *)
+                       | "PERSISTENT"     (* 91 *)
+                       | "READ_ONLY"      (* 94 *)
+                       | "READ_WRITE" ;   (* 95 *)
+
+variableDeclaration    = varDeclItem, { ",", varDeclItem } ;
+varDeclItem            = [ "AT", directVariable ], identifierList, ":", type, [ ":=", initializer ] ;
+identifierList         = identifier, { ",", identifier } ;
+(* VariableDeclarationParser.cs:157 — обработка "AT" (operator 63) + direct variable *)
+
+(* VAR_CONFIG: полный путь через точки до переменной *)
+configDeclaration      = qualifiedName, ":", type, ":=", initializer ;
+
+initializer            = expression | arrayInitializer | structInitializer
+                       | enumerationValueList | pragmaInitializer ;
+(* Expressions/ArrayInitializationParser.cs, StructureInitializationParser.cs, InitializationParser.cs *)
+
+(* ===================================================================== *)
+(* 4. Объявления типов (TypeParser.cs, TypeDeclarationParser.cs, EnumListParser.cs) *)
+(* ===================================================================== *)
+
+typeDeclaration        = "TYPE", { typeDefItem }, "END_TYPE" ;
+typeDefItem            = identifier, ":", type, [ ":=", initializer ], ";"   (* alias / subrange / array / struct *)
+
+dataType               = elementaryType | derivedType ;
+elementaryType         = "BOOL" | "BIT" | "BYTE" | "WORD" | "DWORD" | "LWORD"
+                       | "SINT" | "INT" | "DINT" | "LINT"
+                       | "USINT" | "UINT" | "UDINT" | "ULINT"
+                       | "REAL" | "LREAL"
+                       | "TIME" | "LTIME" | "DATE" | "LDATE"
+                       | "TIME_OF_DAY" | "TOD" | "LTIME_OF_DAY" | "LTOD"
+                       | "DATE_AND_TIME" | "DT" | "LDATE_AND_TIME" | "LDT"
+                       | "STRING" | "WSTRING" | "__XSTRING"
+                       | safetyType ;
+safetyType             = "SAFEBOOL" | "SAFEBYTE" | "SAFEWORD" | "SAFEDWORD" | "SAFELWORD"
+                       | "SAFESINT" | "SAFEINT" | "SAFEDINT" | "SAFELINT"
+                       | "SAFEUSINT" | "SAFEUINT" | "SAFEUDINT" | "SAFEULINT"
+                       | "SAFETIME" | "SAFEREAL" | "SAFELREAL" ;
+
+(* TypeParser.cs:191 HandleOperatorCase — диспетчер типов по Operator *)
+derivedType            = userdefType
+                       | subrangeType
+                       | stringType
+                       | wstringType
+                       | xstringType
+                       | arrayType
+                       | pointerType
+                       | referenceType
+                       | enumType
+                       | paramsType
+                       | vectorType
+                       | genericType
+                       | anyType ;
+userdefType            = qualifiedName ;
+qualifiedName          = [ ( "__SYSTEM" | "__POOL" ), "." ], identifier, { ".", identifier } ;
+subrangeType           = integerBaseType, "(", bound, "..", bound, ")" ;   (* TypeParser.cs:123 ParseSubrangeType *)
+bound                  = expression ;
+stringType             = "STRING", [ ( "(", expression, ")" | "[", expression, "]" ) ] ;  (* :540 *)
+wstringType            = "WSTRING", [ "(", expression, ")" ] ;            (* :510 *)
+xstringType            = "__XSTRING", [ "(", expression, ")" ] ;  (* :480 *)
+arrayType              = "ARRAY", "[", ( "*" | indexRange, { ",", indexRange } ), "]", "OF", dataType ;
+indexRange             = expression, "..", expression ;                   (* :572 ParseArrayType *)
+pointerType            = "POINTER", "TO", dataType ;                      (* :675 *)
+referenceType          = "REFERENCE", "TO", dataType ;                    (* :650 *)
+enumType               = "(", enumMember, { ",", enumMember }, ")" ;      (* EnumListParser.cs:111 *)
+enumMember             = identifier, [ ":=", expression ] ;
+paramsType             = "PARAMS", "(", expression, ")", "OF", dataType ; (* :269 *)
+vectorType             = "__VECTOR", "[", expression, "]", "OF", dataType ; (* :450 *)
+genericType            = qualifiedName, "<", typeArg, { ",", typeArg }, ">" ; (* :408 *)
+typeArg                = dataType | expression ;
+anyType                = "ANY" | "ANY_BIT" | "ANY_DATE" | "ANY_INT" | "ANY_NUM" | "ANY_REAL" | "ANY_STRING" ;
+
+structuredType         = "STRUCT", { structMember }, "END_STRUCT" ;
+unionType              = "UNION", { structMember }, "END_UNION" ;
+structMember           = { pragma | comment }, identifierList, ":", dataType, [ ":=", initializer ], ";" ;
+
+(* ===================================================================== *)
+(* 5. Инструкции (StatementParser.cs:242 ParseSTStatementHelp, :485 ParseOperatorStatement) *)
+(* ===================================================================== *)
+
+statement              = assignmentOrCall
+                       | ifStatement
+                       | caseStatement
+                       | forStatement
+                       | whileStatement
+                       | repeatStatement
+                       | jumpStatement
+                       | returnStatement
+                       | exitStatement
+                       | continueStatement
+                       | tryCatchStatement
+                       | conditionalCall
+                       | waitStatement
+                       | implementationBlock
+                       | typeDeclaration
+                       | varSection
+                       | pouDeclaration
+                       | pragmaStatement
+                       | pragmaIf
+                       | comment
+                       | emptyStatement ;
+
+emptyStatement         = ";" ;                                            (* 172 *)
+
+assignment             = lvalue, assignmentOperator, expression, ";" ;
+assignmentOperator     = ":=" (*164*) | "S=" (*165*) | "R=" (*166*)
+                       | "REF=" (*185*) | "=:" (*189, internal*) ;
+lvalue                 = primary, { postfix } ;
+
+ifStatement            = "IF", expression, "THEN", { statement },
+                         { "ELSIF", expression, "THEN", { statement } },
+                         [ "ELSE", { statement } ],
+                         "END_IF" ;                                    (* IfStatementParser.cs:19 *)
+caseStatement          = "CASE", expression, "OF",
+                         { caseLabel, { statement } },
+                         [ "ELSE", { statement } ],
+                         "END_CASE" ;                                  (* CaseStatementParser.cs:21 *)
+caseLabel              = caseLabelRange, { ",", caseLabelRange }, ":" ;
+caseLabelRange         = expression, [ "..", expression ] ;               (* :146 ParseCaseStatement *)
+forStatement           = "FOR", assignment, "TO", expression, [ "BY", expression ],
+                         "DO", { statement }, "END_FOR" ;              (* ForStatementParser.cs:19 *)
+whileStatement         = "WHILE", expression, "DO", { statement }, "END_WHILE" ;  (* WhileStatementParser.cs:19 *)
+repeatStatement        = "REPEAT", { statement }, "UNTIL", expression, "END_REPEAT" ; (* RepeatStatementParser.cs:19 *)
+jumpStatement          = "JMP", label, ";" ;                              (* 143; JumpStatementParser.cs:19 *)
+label                  = identifier ;
+returnStatement        = "RETURN", ";" ;                                  (* 98; ReturnStatementParser.cs:20 *)
+exitStatement          = "EXIT", ";" ;                                    (* 83 *)
+continueStatement      = "CONTINUE", ";" ;                                (* 84 *)
+conditionalCall        = "CALC", ... ;                                    (* 141; ConditionalCallParser.cs:19 *)
+waitStatement          = "__WAIT", ";" ;                                  (* 205 *)
+implementationBlock    = "__BEGIN_IMPLEMENTATION", { statement } ;        (* 286; ImplementationBlockParser.cs:20 *)
+
+(* TRY/CATCH — ключевые слова с двойным подчёркиванием; TryCatchStatementParser.cs:20 *)
+tryCatchStatement      = "__TRY", { statement },
+                         [ "__CATCH", [ "(", expression, ")" ], { statement } ],
+                         [ "__FINALLY", { statement } ],
+                         "__ENDTRY" ;
+throwStatement         = "__THROW", ... ;                                 (* 242 *)
+
+(* ===================================================================== *)
+(* 6. Прагмы и макросы {…} (Pragmas/PragmaStatementParser.cs, PragmaScanner) *)
+(* ===================================================================== *)
+
+pragmaStatement        = "{", pragmaKeyword, { pragmaToken }, "}" ;
+pragmaIf               = "{", "IF", pragmaCondition, "}",
+                         { statement | pragmaElsif | pragmaElse },
+                         "{", "END_IF", "}" ;
+pragmaElsif            = "{", "ELSIF", pragmaCondition, "}" ;
+pragmaElse             = "{", "ELSE", "}" ;
+pragmaCondition        = pragmaOrExp ;
+
+(* Ключевые слова прагм (PragmaScanner.cs:40-88):
+   flow noflow bp nobp bp2 nobp2 p bpdef succ error fatalerror warning info text
+   attribute define undefine include defined project_defined variable type task
+   xref resource implicit allowpaths messageguid on off from pou hastype
+   hasattribute assert hasvalue hasconstantvalue hasconstanttype OR AND NOT
+   show_compile show_precompile isenumtype disable restore COMPILERVERSION RUNTIMEVERSION *)
+pragmaKeyword          = identifier ;
+pragmaToken            = identifier | integerLiteral | operator | singleByteString ;
+
+(* ===================================================================== *)
+(* 7. Выражения — по уровням приоритета (InfixOperationParser.cs)         *)
+(* ===================================================================== *)
+
+expression             = assignmentExpr ;
+(* ExpressionParser.cs:114 ParseAssignment *)
+assignmentExpr         = orExpr, [ assignmentOperator, assignmentExpr ] ;   (* правая ассоциативность *)
+(* InfixOperationParser.cs:192 ParseORExp *)
+orExpr                 = andExpr, { ( "OR" | "OR_ELSE" | "XOR" ), andExpr } ;   (* 129 | 235 | 131 *)
+(* :156 ParseANDExp *)
+andExpr                = compareExpr, { ( "AND" | "AND_THEN" ), compareExpr } ; (* 127 | 234 *)
+(* :126 ParseCompareExp *)
+compareExpr            = addExpr, { ( "=" | "<>" | "<" | "<=" | ">" | ">=" ), addExpr } ; (* 179/180/175/177/176/178 *)
+(* :98 ParseADDExp *)
+addExpr                = mulExpr, { ( "+" | "-" ), mulExpr } ;              (* 157 | 158; + __VCADD/__VCSUB *)
+(* :70 ParseMULExp *)
+mulExpr                = unaryExpr, { ( "*" | "/" | "MOD" ), unaryExpr } ;  (* 159 | 161 | 126; + __VCMUL/__VCDIV/__VCDOT *)
+(* ExpressionParser.cs:164 ParseSTPrefixOperator, OperandParser.cs:420 ParseSTOperandHelp *)
+unaryExpr              = { unaryOperator }, primary, { postfix } ;
+unaryOperator          = "NOT"           (* 133; UnaryNotParser.cs *)
+                       | "+" | "-"       (* 157/158; UnaryPlusMinusParser.cs *) ;
+
+primary                = literal
+                       | directVariable                       (* :447 *)
+                       | identifier                           (* :465 -> ParseVarAccess *)
+                       | "(" , expression, ")"                (* 167; ParenthesizedExpressionParser.cs *)
+                       | prefixedOperator
+                       | conversionOperator                   (* 184; ConversionExpressionParser.cs *)
+                       | newExpression                        (* 200; NewExpressionParser.cs *)
+                       | implicitCastOperator                 (* 202; ImplicitCastOperatorParser.cs *)
+                       | "THIS" | "SUPER"                     (* 120/121; ThisAndBaseExpressionParser.cs *)
+                       | "MIN" | "MAX"                        (* 40/41; MinMaxOperatorParser.cs *)
+                       | currentTaskExpression ;              (* 255 __CURRENTTASK; CurrentTaskExpressionParser.cs *)
+literal                = booleanLiteral | integerLiteral | realLiteral
+                       | typedIntegerLiteral | typedRealLiteral | typedBooleanLiteral
+                       | singleByteString | doubleByteString | xByteString | unicodeString
+                       | durationLiteral | dateLiteral | timeOfDayLiteral | dateAndTimeLiteral ;
+
+(* Префиксные операторы со скобками (PrefixedOperatorParser.cs:102) *)
+prefixedOperator       = prefixFunctionName, "(", [ expression, { ",", expression } ], ")" ;
+prefixFunctionName     = "ADR" | "BITADR" | "SIZEOF" | "XSIZEOF" | "ABS" | "LIMIT"
+                       | "MIN" | "MAX" | "TRUNC" | "TRUNC_INT" | "MUX" | "SEL"
+                       | "ROL" | "ROR" | "SHL" | "SHR" | "EXP" | "EXPT" | "SQRT"
+                       | "LN" | "LOG" | "SIN" | "COS" | "TAN" | "ASIN" | "ACOS"
+                       | "ATAN" | "LOWER_BOUND" | "UPPER_BOUND"
+                       | "__SYSTEM" | "__POOL" | "__CRC" | "__MAXOFFSET" | "__TYPEOF"
+                       | "__VARINFO" | "__ISVALIDREF" | "__QUERYINTERFACE" | "__QUERYPOINTER"
+                       | "__DELETE" | "__REFADR" | "__BITOFFSET" | "__XADD"
+                       | "__COMPARE_AND_SWAP" | "__MEMORYBARRIER" | "__CHECKLICENSE"
+                       | "__CHECKLICENSEBIT" | "__POUNAME" | "__POSITION" ;
+(* SIZEOF/__TYPEOF допускают в качестве аргумента тип (PrefixedOperatorParser.cs:170) *)
+
+conversionOperator     = ( typeNameShort, "_TO_", typeNameShort | "ANY_TO_" , typeNameShort | "TO_", typeNameShort ),
+                         "(", expression, ")" ;        (* 184; напр. INT_TO_REAL, ANY_TO_*) *)
+
+newExpression          = "__NEW", "(", type, ")" ;
+currentTaskExpression  = "__CURRENTTASK" ;
+
+(* Постфиксные операторы; левая ассоциативность, цепочкой (OperandParser.cs:225 ParseVarAccess) *)
+postfix                = ".", ( identifier | integerLiteral | partialAccess )   (* 162: доступ к компоненте *)
+                       | "(", [ expression, { ",", expression } ], ")"           (* 167: вызов функции *)
+                       | "[", expression, { ",", expression }, "]"               (* 169: индекс массива *)
+                       | "^"                                                     (* 183: разыменование указателя *)
+                       | "#", identifier ;                                       (* 271: доступ к пространству имён *)
+
+(* Примечание: оператор "**" (Operator=160) присутствует в таблице сканера как
+   Internal/Declaration, но в грамматике выражений ST не используется —
+   возведение в степень выражается функцией EXPT. *)

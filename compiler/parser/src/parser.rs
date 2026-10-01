@@ -140,25 +140,41 @@ fn resolve_initializer_expr(type_name: TypeName, e: Expr) -> InitialValueAssignm
     }
 }
 
+/// Builds the syntax-error diagnostic for a failed parse. `token_index`
+/// points past the offending token; an empty token stream gets a span-less
+/// message instead of a panic.
+fn syntax_error(tokens: &[Token], token_index: usize, expected: String) -> Diagnostic {
+    let Some(actual) = tokens.get(token_index.saturating_sub(1)) else {
+        return Diagnostic::problem(
+            Problem::SyntaxError,
+            Label::span(
+                SourceSpan::default(),
+                "Expected further input. Found end of input",
+            ),
+        );
+    };
+
+    Diagnostic::problem(
+        Problem::SyntaxError,
+        Label::span(
+            actual.span.clone(),
+            format!(
+                "Expected {}. Found text '{}' that matched token {}",
+                expected,
+                actual.text.replace('\n', "\\n").replace('\r', "\\r"),
+                actual.token_type.describe()
+            ),
+        ),
+    )
+}
+
 /// Parses a IEC 61131-3 library into object form.
 pub fn parse_library(tokens: Vec<Token>) -> Result<Vec<LibraryElementKind>, Diagnostic> {
     plc_parser::library(&SliceByRef(&tokens[..]), &tokens[..]).map_err(|e| {
-        let token_index = e.location;
-
-        let expected = Vec::from_iter(e.expected.tokens()).join(" | ");
-        let actual = tokens.get(token_index - 1).unwrap();
-
-        Diagnostic::problem(
-            Problem::SyntaxError,
-            Label::span(
-                actual.span.clone(),
-                format!(
-                    "Expected {}. Found text '{}' that matched token {}",
-                    expected,
-                    actual.text.replace('\n', "\\n").replace('\r', "\\r"),
-                    actual.token_type.describe()
-                ),
-            ),
+        syntax_error(
+            &tokens,
+            e.location,
+            Vec::from_iter(e.expected.tokens()).join(" | "),
         )
     })
 }
@@ -173,22 +189,10 @@ pub fn parse_statements(tokens: Vec<Token>) -> Result<Vec<StmtKind>, Diagnostic>
     }
 
     plc_parser::statement_list(&SliceByRef(&tokens[..]), &tokens[..]).map_err(|e| {
-        let token_index = e.location;
-
-        let expected = Vec::from_iter(e.expected.tokens()).join(" | ");
-        let actual = tokens.get(token_index.saturating_sub(1)).unwrap();
-
-        Diagnostic::problem(
-            Problem::SyntaxError,
-            Label::span(
-                actual.span.clone(),
-                format!(
-                    "Expected {}. Found text '{}' that matched token {}",
-                    expected,
-                    actual.text.replace('\n', "\\n").replace('\r', "\\r"),
-                    actual.token_type.describe()
-                ),
-            ),
+        syntax_error(
+            &tokens,
+            e.location,
+            Vec::from_iter(e.expected.tokens()).join(" | "),
         )
     })
 }
@@ -260,6 +264,8 @@ fn unquote(text: &str, width: &StringType) -> Vec<char> {
 /// order is the order of magnitude.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum DurationUnit {
+    Nanoseconds,
+    Microseconds,
     Milliseconds,
     Seconds,
     Minutes,
@@ -286,6 +292,8 @@ fn combine_interval_parts(
         }
         previous = Some(unit);
         let part = match unit {
+            DurationUnit::Nanoseconds => DurationLiteral::nanoseconds(value),
+            DurationUnit::Microseconds => DurationLiteral::microseconds(value),
             DurationUnit::Days => DurationLiteral::days(value),
             DurationUnit::Hours => DurationLiteral::hours(value),
             DurationUnit::Minutes => DurationLiteral::minutes(value),
@@ -385,7 +393,7 @@ parser! {
     rule comma() -> () = tok(TokenType::Comma) ()
     rule whitespace() -> () = tok(TokenType::Whitespace) {} / tok(TokenType::Newline) {}
 
-    rule comment() -> () = tok(TokenType::Comment) ()
+    rule comment() -> () = tok(TokenType::Comment) () / tok(TokenType::DocComment) ()
     rule pragma() -> () = tok(TokenType::Pragma) ()
     rule _ = (whitespace() / comment() / pragma())*
 
@@ -416,12 +424,34 @@ parser! {
       / cd:configuration_declaration() { vec![LibraryElementKind::ConfigurationDeclaration(cd)] }
       / gv:global_var_declarations() { vec![LibraryElementKind::GlobalVarDeclarations(gv)] }
       / id:interface_declaration() { vec![LibraryElementKind::InterfaceDeclaration(id)] }
+      / ns:namespace_declaration() { vec![LibraryElementKind::NamespaceDeclaration(ns)] }
+
+    // CODESYS/TwinCAT `NAMESPACE name ... END_NAMESPACE`: a grouping
+    // declaration whose elements are the same declarations a library
+    // accepts, so namespaces nest. The keyword demotes to an identifier
+    // unless `allow_namespace` -- see xform_demote_keywords.rs.
+    rule namespace_declaration() -> NamespaceDeclaration = start:tok(TokenType::Namespace) _ name:identifier() _ elements:library_element_declaration() ** _ _ end:tok(TokenType::EndNamespace) {
+      NamespaceDeclaration {
+        name,
+        elements: elements.into_iter().flatten().collect(),
+        span: SourceSpan::join(&start.span, &end.span),
+      }
+    }
 
     // B.1.1 Letters, digits and identifier
-    rule identifier() -> Id = i:tok(TokenType::Identifier) {
-      Id::from(i.text.as_str())
-        .with_position(i.span.clone())
-    }
+    // An escaped identifier keeps its backticks in the name: the declaration
+    // and every reference spell the name the same way, and the renderer can
+    // write the name back verbatim. Gated by `allow_escaped_identifiers` in
+    // `rule_token_identifier`.
+    rule identifier() -> Id =
+      i:tok(TokenType::Identifier) {
+        Id::from(i.text.as_str())
+          .with_position(i.span.clone())
+      }
+      / e:tok(TokenType::EscapedIdentifier) {
+        Id::from(e.text.as_str())
+          .with_position(e.span.clone())
+      }
     // We want to be more flexible on identifiers for variable names
     // because it is common to use variable names that are reserved names
     rule variable_identifier() -> Id = identifier() / t:tok(TokenType::Step) { Id::from(t.text.as_str()) } / t:tok(TokenType::On) { Id::from(t.text.as_str()) } / t:tok(TokenType::REdge) { Id::from(t.text.as_str()) } / t:tok(TokenType::FEdge) { Id::from(t.text.as_str()) }
@@ -472,7 +502,12 @@ parser! {
       / tok(TokenType::Uint) { IntegerTypeName::UINT }
       / tok(TokenType::Udint) { IntegerTypeName::UDINT }
       / tok(TokenType::Ulint) { IntegerTypeName::ULINT }
-    rule integer_literal() -> IntegerLiteral = data_type:(t:integer_literal_type() tok(TokenType::Hash) {t})? value:(bi:binary_integer() { bi.into() } / oi:octal_integer() { oi.into() } / hi:hex_integer() { hi.into() } / si:signed_integer() { si }) { IntegerLiteral { value, data_type } }
+    rule integer_literal() -> IntegerLiteral = data_type:(t:integer_literal_type() tok(TokenType::Hash) {t})? value:(bi:binary_integer() { bi.into() } / oi:octal_integer() { oi.into() } / hi:hex_integer() { hi.into() } / di:decimal_integer() { di.into() } / si:signed_integer() { si }) { IntegerLiteral { value, data_type } }
+    // A based integer in base 10 (`10#123`). The lexer reads it as the digits
+    // `10`, `#` and the digits of the value, so the rule recognizes the
+    // three adjacent tokens; the base adds nothing to the value. See
+    // specs/design/numeric-literals.md, REQ-NL-parser-010.
+    rule decimal_integer() -> Integer = prefix:tok_eq(TokenType::Digits, "10") tok(TokenType::Hash) digits:tok(TokenType::Digits) {? Integer::new(digits.text.as_str(), SourceSpan::join(&prefix.span, &digits.span)) }
     rule signed_integer__positive() -> SignedInteger = tok(TokenType::Plus)? digits:tok(TokenType::Digits) {? SignedInteger::positive(digits.text.as_str(), digits.span.clone()) }
     rule signed_integer__negative() -> SignedInteger = sign:tok(TokenType::Minus) digits:tok(TokenType::Digits) {? SignedInteger::negative(digits.text.as_str(), SourceSpan::join(&sign.span, &digits.span)) }
     rule signed_integer() -> SignedInteger = signed_integer__positive() / signed_integer__negative()
@@ -516,13 +551,18 @@ parser! {
     // The specification says unsigned_integer, but there is no such rule.
     rule bit_string_literal() -> BitStringLiteral = data_type:(t:bit_string_literal_type() tok(TokenType::Hash) {t})? value:(bi:binary_integer() { bi }/ oi:octal_integer() { oi } / hi:hex_integer() { hi } / ui:integer() { ui } ) { BitStringLiteral { value, data_type } }
     rule boolean_literal() -> BooleanLiteral =
-      // 1 and 0 can be a Boolean, but only with the prefix is it definitely a Boolean
-      tok(TokenType::Bool) tok(TokenType::Hash) id_eq("1") { BooleanLiteral::new(Boolean::True) }
-      / tok(TokenType::Bool) tok(TokenType::Hash) id_eq("0") { BooleanLiteral::new(Boolean::False) }
+      // 1 and 0 can be a Boolean, but only with the prefix is it definitely a Boolean.
+      // They lex as digits, not as identifiers, so they are matched as digits.
+      tok(TokenType::Bool) tok(TokenType::Hash) tok_eq(TokenType::Digits, "1") { BooleanLiteral::new(Boolean::True) }
+      / tok(TokenType::Bool) tok(TokenType::Hash) tok_eq(TokenType::Digits, "0") { BooleanLiteral::new(Boolean::False) }
       / tok(TokenType::Bool) tok(TokenType::Hash) tok(TokenType::True)  { BooleanLiteral::new(Boolean::True) }
       / tok(TokenType::True) { BooleanLiteral::new(Boolean::True) }
       / tok(TokenType::Bool) tok(TokenType::Hash) tok(TokenType::False) { BooleanLiteral::new(Boolean::False) }
       / tok(TokenType::False) { BooleanLiteral::new(Boolean::False) }
+      // The BIT type's literals are the same two digits (`BIT#1`, `BIT#0`);
+      // the token is only a keyword while `allow_bit_type` is set.
+      / tok(TokenType::Bit) tok(TokenType::Hash) tok_eq(TokenType::Digits, "1") { BooleanLiteral::new(Boolean::True) }
+      / tok(TokenType::Bit) tok(TokenType::Hash) tok_eq(TokenType::Digits, "0") { BooleanLiteral::new(Boolean::False) }
 
     // B.1.2.2 Character strings
     // The literal keeps which of the two spellings the source used. A
@@ -532,14 +572,22 @@ parser! {
     // the same range `constant()` assigns, so a literal's span means one
     // thing wherever the literal appears.
     rule character_string_literal() -> CharacterStringLiteral = single_byte_character_string() / double_byte_character_string()
-    rule single_byte_character_string() -> CharacterStringLiteral = start:position!() (tok(TokenType::String) tok(TokenType::Hash))? t:tok(TokenType::SingleByteString) end:position!() {
+    // A typed string literal names a string type and then, adjacent to it,
+    // spells the literal. `UTF8#` and `UCHAR#` take a single-quoted literal
+    // and `__XSTRING#` a double-quoted one; the delimiter still selects the
+    // width, exactly as it does for `STRING#` and `WSTRING#` (see
+    // `specs/design/string-literals.md`, REQ-SL-parser-021 and 022). Every
+    // prefix is case-insensitive, like every other keyword.
+    rule unicode_string_prefix() -> () = (contextual_keyword("UTF8") / contextual_keyword("UCHAR")) tok(TokenType::Hash) ()
+    rule xstring_prefix() -> () = contextual_keyword("__XSTRING") tok(TokenType::Hash) ()
+    rule single_byte_character_string() -> CharacterStringLiteral = start:position!() (tok(TokenType::String) tok(TokenType::Hash) / unicode_string_prefix())? t:tok(TokenType::SingleByteString) end:position!() {
       CharacterStringLiteral {
         value: unquote(&t.text, &StringType::String),
         width: StringType::String,
         span: span_of_tokens(tokens, start, end),
       }
     }
-    rule double_byte_character_string() -> CharacterStringLiteral = start:position!() (tok(TokenType::WString) tok(TokenType::Hash))? t:tok(TokenType::DoubleByteString) end:position!() {
+    rule double_byte_character_string() -> CharacterStringLiteral = start:position!() (tok(TokenType::WString) tok(TokenType::Hash) / xstring_prefix())? t:tok(TokenType::DoubleByteString) end:position!() {
       CharacterStringLiteral {
         value: unquote(&t.text, &StringType::WString),
         width: StringType::WString,
@@ -567,9 +615,10 @@ parser! {
       }
     }
     // The prefix names the type: `LTIME#` is an LTIME, `TIME#` and `T#` a
-    // TIME. `contextual_keyword("T")` matches a bare identifier, so it comes
-    // last and cannot shadow the keyword forms.
-    rule duration_prefix() -> TemporalWidth = tok(TokenType::Time) { TemporalWidth::Short } / tok(TokenType::Ltime) { TemporalWidth::Long } / contextual_keyword("T") { TemporalWidth::Short }
+    // TIME, and the vendor abbreviation `LT#` another LTIME. The abbreviated
+    // spellings match a bare identifier, so the keyword forms come first and
+    // cannot be shadowed. See specs/design/time-literals.md — REQ-TL-004.
+    rule duration_prefix() -> TemporalWidth = tok(TokenType::Time) { TemporalWidth::Short } / tok(TokenType::Ltime) { TemporalWidth::Long } / contextual_keyword("LT") { TemporalWidth::Long } / contextual_keyword("T") { TemporalWidth::Short }
     // One or more `number unit` parts, with an optional `_` between parts
     // (REQ-TL-020 to 022); `combine_interval_parts` checks their order. The
     // token transform `xform_split_duration_units` has already split a unit
@@ -578,9 +627,12 @@ parser! {
       combine_interval_parts(first, rest)
     }
     rule interval_part() -> (FixedPoint, DurationUnit) = n:fixed_point() u:duration_unit() { (n, u) }
-    // `ms` must come before `m`, or `100ms` would read as minutes.
+    // `ms` must come before `m`, or `100ms` would read as minutes. `us` and
+    // `ns` (REQ-TL-010) conflict with no other unit, so they sit after `ms`.
     rule duration_unit() -> DurationUnit =
       contextual_keyword("ms") { DurationUnit::Milliseconds }
+      / contextual_keyword("us") { DurationUnit::Microseconds }
+      / contextual_keyword("ns") { DurationUnit::Nanoseconds }
       / contextual_keyword("d") { DurationUnit::Days }
       / contextual_keyword("h") { DurationUnit::Hours }
       / contextual_keyword("m") { DurationUnit::Minutes }
@@ -600,19 +652,30 @@ parser! {
     // `TOD#10:00:00.250` is 250 ms past ten. `Time` holds nanoseconds, so a
     // fraction finer than that is truncated; the stored count truncates
     // further, to the type's own unit (ADR-0025).
-    rule daytime() -> Time = h:day_hour() tok(TokenType::Colon) m:day_minute() tok(TokenType::Colon) s:day_second() {?
+    // The seconds are optional (REQ-TL-024): `TOD#10:00` is ten in the
+    // morning with zero seconds, as CODESYS accepts.
+    rule daytime() -> Time = h:day_hour() tok(TokenType::Colon) m:day_minute() s:(tok(TokenType::Colon) s:day_second() { s })? {?
+      let (second, nanoseconds) = match s {
+        Some(s) => (
+          u8::try_from(s.whole).map_err(|e| "second")?,
+          s.nanoseconds(),
+        ),
+        None => (0, 0),
+      };
       Time::from_hms_nano(
         h.try_into().map_err(|e| "hour")?,
         m.try_into().map_err(|e| "min")?,
-        u8::try_from(s.whole).map_err(|e| "second")?,
-        s.nanoseconds(),
+        second,
+        nanoseconds,
       ).map_err(|e| "time")
     }
     rule day_hour() -> Integer = integer()
     rule day_minute() -> Integer = integer()
     rule day_second() -> FixedPoint = fixed_point()
     rule date() -> DateLiteral = width:date_prefix() tok(TokenType::Hash) d:date_literal() { DateLiteral::new(d).with_width(width) }
-    rule date_prefix() -> TemporalWidth = tok(TokenType::Date) { TemporalWidth::Short } / tok(TokenType::Ldate) { TemporalWidth::Long } / contextual_keyword("D") { TemporalWidth::Short }
+    // `LD` is the vendor abbreviation of the LDATE prefix (REQ-TL-005), and
+    // like `LT` it comes after the keyword forms.
+    rule date_prefix() -> TemporalWidth = tok(TokenType::Date) { TemporalWidth::Short } / tok(TokenType::Ldate) { TemporalWidth::Long } / contextual_keyword("LD") { TemporalWidth::Long } / contextual_keyword("D") { TemporalWidth::Short }
     rule date_literal() -> Date = y:year() tok(TokenType::Minus) m:month() tok(TokenType::Minus) d:day() {?
       let y = y.value;
       let m = Month::try_from(<dsl::common::Integer as TryInto<u8>>::try_into(m).map_err(|e| "month")?).map_err(|e| "month")?;
@@ -636,6 +699,7 @@ parser! {
       numeric_type_name()
       / date_type_name()
       / bit_string_type_name()
+      / one_bit_type_name()
       / tok(TokenType::String) { ElementaryTypeName::STRING }
       / tok(TokenType::WString) { ElementaryTypeName::WSTRING }
       / tok(TokenType::Time) { ElementaryTypeName::TIME }
@@ -647,6 +711,9 @@ parser! {
     rule real_type_name() -> ElementaryTypeName = tok(TokenType::Real) { ElementaryTypeName::REAL } / tok(TokenType::Lreal) { ElementaryTypeName::LREAL }
     rule date_type_name() -> ElementaryTypeName = tok(TokenType::Date) { ElementaryTypeName::DATE } / tok(TokenType::Ldate) { ElementaryTypeName::LDATE } / tok(TokenType::TimeOfDay) { ElementaryTypeName::TimeOfDay } / tok(TokenType::Ltod) { ElementaryTypeName::LTimeOfDay } / tok(TokenType::DateAndTime) { ElementaryTypeName::DateAndTime } / tok(TokenType::Ldt) { ElementaryTypeName::LDateAndTime }
     rule bit_string_type_name() -> ElementaryTypeName = tok(TokenType::Bool) { ElementaryTypeName::BOOL } / tok(TokenType::Byte) { ElementaryTypeName::BYTE } / tok(TokenType::Word) { ElementaryTypeName::WORD } / tok(TokenType::Dword) { ElementaryTypeName::DWORD } / tok(TokenType::Lword) { ElementaryTypeName::LWORD }
+    // The BIT type is not IEC 61131-3; the token exists only while
+    // `allow_bit_type` is set, and is an ordinary identifier otherwise.
+    rule one_bit_type_name() -> ElementaryTypeName = tok(TokenType::Bit) { ElementaryTypeName::BIT }
 
     // B.1.3.2 - Generic type names are implemented above in generic_type_name() rule
 
@@ -668,8 +735,10 @@ parser! {
       s:string_type_declaration() { DataTypeDeclarationKind::String(s) }
       / s:string_type_declaration__parenthesis() { DataTypeDeclarationKind::String(s) }
       / a:array_type_declaration() { DataTypeDeclarationKind::Array(a) }
+      / p:params_type_declaration() { p }
       / subrange:subrange_type_declaration__with_range() { DataTypeDeclarationKind::Subrange(subrange) }
       / structure_type_declaration__with_constant()
+      / union:union_type_declaration__with_constant() { DataTypeDeclarationKind::Union(union) }
       / enumerated:enumerated_type_declaration__with_value() { DataTypeDeclarationKind::Enumeration(enumerated) }
       / simple:simple_type_declaration__with_constant() { DataTypeDeclarationKind::Simple(simple )}
       / type_name:type_name() _ tok(TokenType::Colon) _ syntax:ref_to_keyword() _ ref_target:ref_to_target() {
@@ -825,10 +894,37 @@ parser! {
         initial_values: init.unwrap_or_default()
       }
     }
-    rule array_specification() -> ArraySpecificationKind = subranges:array_subranges() { SpecificationKind::Inline(subranges) }
-    rule array_subranges() -> ArraySubranges = tok(TokenType::Array) _ tok(TokenType::LeftBracket) _ ranges:subrange() ** (_ tok(TokenType::Comma) _ ) _ tok(TokenType::RightBracket) _ tok(TokenType::Of) _ ref_to:ref_to_keyword()? _ type_name:array_element_type() {
-      ArraySubranges { ranges, type_name, ref_to }
+    // CODESYS parameter-list type: `PARAMS ( expression ) OF dataType`
+    // (`ST_GRAMMAR.ebnf`, `paramsType`). The count is read through the same
+    // `integer_ref` the STRING length and the array bounds use, so a named
+    // constant is accepted wherever a literal is.
+    // The element type is a data type, so both an elementary name (`INT`)
+    // and a user-defined one are accepted.
+    rule params_specification() -> ParamsSpecification = tok(TokenType::Params) _ tok(TokenType::LeftParen) _ count:integer_ref() _ tok(TokenType::RightParen) _ tok(TokenType::Of) _ type_name:data_type_name() {
+      ParamsSpecification { count, type_name }
     }
+    rule params_var_init_decl() -> Vec<UntypedVarDecl> = names:var1_list() _ tok(TokenType::Colon) _ spec:params_specification() {
+      names.into_iter().map(|name| {
+        UntypedVarDecl {
+          location: None,
+          name,
+          initializer: InitialValueAssignmentKind::Params(spec.clone()),
+        }
+      }).collect()
+    }
+    rule params_type_declaration() -> DataTypeDeclarationKind = type_name:type_name() _ tok(TokenType::Colon) _ spec:params_specification() {
+      DataTypeDeclarationKind::Params(ParamsDeclaration { type_name, spec })
+    }
+    rule array_specification() -> ArraySpecificationKind = subranges:array_subranges() { SpecificationKind::Inline(subranges) }
+    // `arrayType = "ARRAY" "[" ("*" | indexRange {"," indexRange}) "]" "OF"
+    // dataType` (CODESYS `ST_GRAMMAR.ebnf`): the `*` form is the incomplete
+    // array type, which has no range list at all.
+    rule array_subranges() -> ArraySubranges = tok(TokenType::Array) _ tok(TokenType::LeftBracket) _ bounds:array_bounds() _ tok(TokenType::RightBracket) _ tok(TokenType::Of) _ ref_to:ref_to_keyword()? _ type_name:array_element_type() {
+      ArraySubranges { bounds, type_name, ref_to }
+    }
+    rule array_bounds() -> ArrayBounds =
+      star:tok(TokenType::Star) { ArrayBounds::Incomplete(star.span.clone()) }
+      / ranges:subrange() ** (_ tok(TokenType::Comma) _ ) { ArrayBounds::Ranges(ranges) }
     // The length delimiter comes from string_length_spec() so that the array
     // element type accepts the same spellings as every other string position
     // -- standard `STRING[n]` brackets and the `STRING(n)` parenthesis
@@ -874,6 +970,23 @@ parser! {
     }
     rule structure_declaration() -> StructureDeclaration = tok(TokenType::Struct) _ elements:semisep_oneplus(<structure_element_declaration()>) _ tok(TokenType::EndStruct) {
       StructureDeclaration {
+        // Requires a value but we don't know the name until one level up
+        type_name: TypeName::from(""),
+        elements,
+      }
+    }
+    // CODESYS `UNION ... END_UNION`: the same member grammar as a
+    // structure, with the members overlaid in memory. Keyword demoted to an
+    // identifier unless `allow_union_type` -- see xform_demote_keywords.rs.
+    rule union_type_declaration__with_constant() -> UnionDeclaration =
+      type_name:structure_type_name() _ tok(TokenType::Colon) _ decl:union_declaration() {
+        UnionDeclaration {
+          type_name,
+          elements: decl.elements,
+        }
+      }
+    rule union_declaration() -> UnionDeclaration = tok(TokenType::Union) _ elements:semisep_oneplus(<structure_element_declaration()>) _ tok(TokenType::EndUnion) {
+      UnionDeclaration {
         // Requires a value but we don't know the name until one level up
         type_name: TypeName::from(""),
         elements,
@@ -1035,6 +1148,11 @@ parser! {
       }
     rule symbolic_variable_head() -> SymbolicVariableKind =
       s:self_ref() { SymbolicVariableKind::SelfRef(s) }
+      // `__CURRENTTASK` reads as a value (the current task's reference), and
+      // may be followed by field access (`__CURRENTTASK^.Index`); recording it
+      // as a named variable keeps the surface syntax in the ordinary
+      // variable-reference AST.
+      / t:tok(TokenType::SpecialCurrentTask) { SymbolicVariableKind::Named(NamedVariable { name: Id::from(t.text.as_str()).with_position(t.span.clone()) }) }
       / name:variable_identifier() { SymbolicVariableKind::Named(NamedVariable { name }) }
     rule symbolic_variable_element() -> Element =
       tok(TokenType::Period) _ n:integer() { Element::Bit(n) }
@@ -1151,7 +1269,7 @@ parser! {
     // the `LateResolvedType` placeholder and
     // `xform_resolve_late_bound_type_initializer` exist -- the ambiguity is
     // deferred to the analyzer on purpose.
-    rule var_init_decl() -> Vec<UntypedVarDecl> = located_var1_init_decl() / structured_var_init_decl__without_ambiguous() / string_var_declaration() / array_var_init_decl() / ref_to_var_init_decl() / fb_call_style_var_decl() / string_var_declaration() / var1_init_decl__with_ambiguous_struct()
+    rule var_init_decl() -> Vec<UntypedVarDecl> = located_var1_init_decl() / structured_var_init_decl__without_ambiguous() / string_var_declaration() / array_var_init_decl() / params_var_init_decl() / ref_to_var_init_decl() / fb_call_style_var_decl() / string_var_declaration() / var1_init_decl__with_ambiguous_struct()
     // Extension: a located variable (complete or
     // incomplete/wildcard address) declared inside an otherwise plain
     // VAR/VAR_INPUT/VAR_OUTPUT block, instead of requiring its own
@@ -1492,7 +1610,12 @@ parser! {
       / id:type_name() { VariableSpecificationKind::Ambiguous(id) }
 
     // B.1.5.1 Functions
-    rule function_name() -> Id = standard_function_name() / derived_function_name() / t:tok(TokenType::Mod) { Id::from(t.text.as_str()).with_position(t.span.clone()) } / t:tok(TokenType::And) { Id::from(t.text.as_str()).with_position(t.span.clone()) } / t:tok(TokenType::Or) { Id::from(t.text.as_str()).with_position(t.span.clone()) } / t:tok(TokenType::Xor) { Id::from(t.text.as_str()).with_position(t.span.clone()) } / t:tok(TokenType::Not) { Id::from(t.text.as_str()).with_position(t.span.clone()) }
+    // The operator-shaped names take their name from the token text, so the
+    // written spelling survives to the renderer and to diagnostics. The
+    // CODESYS special operators that take an ordinary expression list
+    // (`__DELETE`, `__ISVALIDREF`, `__XADD`) are calls like any other; the
+    // ones that take a type (`__NEW`, `__TYPEOF`) have their own rule below.
+    rule function_name() -> Id = standard_function_name() / derived_function_name() / t:tok(TokenType::Mod) { Id::from(t.text.as_str()).with_position(t.span.clone()) } / t:tok(TokenType::And) { Id::from(t.text.as_str()).with_position(t.span.clone()) } / t:tok(TokenType::Or) { Id::from(t.text.as_str()).with_position(t.span.clone()) } / t:tok(TokenType::Xor) { Id::from(t.text.as_str()).with_position(t.span.clone()) } / t:tok(TokenType::Not) { Id::from(t.text.as_str()).with_position(t.span.clone()) } / t:tok(TokenType::SpecialDelete) { Id::from(t.text.as_str()).with_position(t.span.clone()) } / t:tok(TokenType::SpecialIsValidRef) { Id::from(t.text.as_str()).with_position(t.span.clone()) } / t:tok(TokenType::SpecialXAdd) { Id::from(t.text.as_str()).with_position(t.span.clone()) }
     rule standard_function_name() -> Id = identifier()
     rule derived_function_name() -> Id = identifier()
     rule function_return_type() -> FunctionReturnType =
@@ -1500,7 +1623,7 @@ parser! {
       / tok:tok(TokenType::WString) length:(_ l:string_length_spec() { l })? { FunctionReturnType::WString(StringSpecification{ width: StringType::WString, length, keyword_span: tok.span.clone(), }) }
       / et:elementary_type_name() { FunctionReturnType::Named(et.into()) }
       / dt:derived_type_name() { FunctionReturnType::Named(dt) }
-    rule function_declaration() -> FunctionDeclaration = tok(TokenType::Function) _  name:derived_function_name() _ tok(TokenType::Colon) _ rt:function_return_type() _ var_decls:(io:io_var_declarations() / func:function_var_decls() { vec![ func ] } / temp:temp_var_decls() { vec![ temp ] }) ** _ _ body:function_body() _ tok(TokenType::EndFunction) {
+    rule function_declaration() -> FunctionDeclaration = tok(TokenType::Function) _  name:derived_function_name() _ tok(TokenType::Colon) _ rt:function_return_type() _ var_decls:(io:io_var_declarations() / func:function_var_decls() { vec![ func ] } / temp:temp_var_decls() { vec![ temp ] } / stat:var_stat_declarations() { vec![ stat ] }) ** _ _ body:function_body() _ tok(TokenType::EndFunction) {
       let var_decls = VarDeclarations::flatten(var_decls);
       let (variables, remainder) = VarDeclarations::drain_var_decl(var_decls);
       let (edge_variables, remainder) = VarDeclarations::drain_edge_decl(remainder);
@@ -1548,6 +1671,7 @@ parser! {
       / t:contextual_keyword("INTERNAL") { MemberQualifier { kind: MemberQualifierKind::Access(AccessSpecifier::Internal), span: t.span.clone() } }
       / t:contextual_keyword("FINAL") { MemberQualifier { kind: MemberQualifierKind::Final, span: t.span.clone() } }
       / t:contextual_keyword("OVERRIDE") { MemberQualifier { kind: MemberQualifierKind::Override, span: t.span.clone() } }
+      / t:contextual_keyword("OVERLOAD") { MemberQualifier { kind: MemberQualifierKind::Overload, span: t.span.clone() } }
     // Qualifiers in source order; their order and combination are checked
     // after parsing. A word is only a qualifier when the declaration's name
     // still follows it, so `METHOD Override : BOOL` is a method named
@@ -1566,7 +1690,7 @@ parser! {
 
     // Unlike a function, a method may have an empty body: an `ABSTRACT`
     // method has none, and TwinCAT writes a do-nothing method that way.
-    rule method_declaration() -> MethodDeclaration = start:tok(TokenType::Method) _ qualifiers:member_qualifiers() _ name:identifier() _ rt:(tok(TokenType::Colon) _ rt:function_return_type() {rt})? _ decls:(io:io_var_declarations() { io } / other:other_var_declarations() { vec![other] } / temp:temp_var_decls() { vec![temp] }) ** _ _ body:function_body()? _ end:tok(TokenType::EndMethod) {
+    rule method_declaration() -> MethodDeclaration = start:tok(TokenType::Method) _ qualifiers:member_qualifiers() _ name:identifier() _ rt:(tok(TokenType::Colon) _ rt:function_return_type() {rt})? _ decls:(io:io_var_declarations() { io } / other:other_var_declarations() { vec![other] } / temp:temp_var_decls() { vec![temp] } / inst:var_inst_declarations() { vec![inst] }) ** _ _ body:function_body()? _ end:tok(TokenType::EndMethod) {
       let decls = VarDeclarations::flatten(decls);
       let (variables, remainder) = VarDeclarations::drain_var_decl(decls);
       let (edge_variables, _) = VarDeclarations::drain_edge_decl(remainder);
@@ -1587,13 +1711,13 @@ parser! {
     // form stores a `<Property>` element with `<Get>`/`<Set>` children;
     // `ironplc-sources` rebuilds this textual form from it. Each accessor
     // becomes a `MethodDeclaration`, see `PropertyDeclaration`.
-    rule property_accessor_parts() -> (Vec<VarDecl>, Vec<EdgeVarDecl>, Vec<StmtKind>) = decls:(io:io_var_declarations() { io } / other:other_var_declarations() { vec![other] } / temp:temp_var_decls() { vec![temp] }) ** _ _ body:function_body()? {
+    rule property_accessor_parts() -> (Vec<VarDecl>, Vec<EdgeVarDecl>, Vec<StmtKind>) = decls:(io:io_var_declarations() { io } / other:other_var_declarations() { vec![other] } / temp:temp_var_decls() { vec![temp] } / inst:var_inst_declarations() { vec![inst] }) ** _ _ body:function_body()? {
       let decls = VarDeclarations::flatten(decls);
       let (variables, remainder) = VarDeclarations::drain_var_decl(decls);
       let (edge_variables, _) = VarDeclarations::drain_edge_decl(remainder);
       (variables, edge_variables, body.unwrap_or_default())
     }
-    rule property_declaration() -> PropertyDeclaration = start:tok(TokenType::Property) _ name:identifier() _ tok(TokenType::Colon) _ property_type:function_return_type() _ get:(g:contextual_keyword("GET") _ parts:property_accessor_parts() _ e:tok(TokenType::EndGet) { (g, parts, e) })? _ set:(s:contextual_keyword("SET") _ parts:property_accessor_parts() _ e:tok(TokenType::EndSet) { (s, parts, e) })? _ end:tok(TokenType::EndProperty) {
+    rule property_declaration() -> PropertyDeclaration = start:tok(TokenType::Property) _ qualifiers:member_qualifiers() _ name:identifier() _ tok(TokenType::Colon) _ property_type:function_return_type() _ get:(g:contextual_keyword("GET") _ parts:property_accessor_parts() _ e:tok(TokenType::EndGet) { (g, parts, e) })? _ set:(s:contextual_keyword("SET") _ parts:property_accessor_parts() _ e:tok(TokenType::EndSet) { (s, parts, e) })? _ end:tok(TokenType::EndProperty) {
       let get = get.map(|(g, (variables, edge_variables, body), e)| {
         PropertyDeclaration::get_accessor(&name, &property_type, variables, edge_variables, body, SourceSpan::join(&g.span, &e.span))
       });
@@ -1601,6 +1725,7 @@ parser! {
         PropertyDeclaration::set_accessor(&name, &property_type, variables, edge_variables, body, SourceSpan::join(&s.span, &e.span))
       });
       PropertyDeclaration {
+        qualifiers,
         name,
         property_type,
         get,
@@ -1611,7 +1736,11 @@ parser! {
 
     rule function_block_member() -> FunctionBlockMember = m:method_declaration() { FunctionBlockMember::Method(Box::new(m)) } / p:property_declaration() { FunctionBlockMember::Property(Box::new(p)) }
 
-    rule function_block_declaration() -> FunctionBlockDeclaration = start:tok(TokenType::FunctionBlock) _ qualifiers:member_qualifiers() _ name:derived_function_block_name() _ extends:(e:tok(TokenType::Extends) _ t:type_name() {(e, t)})? _ implements:(i:tok(TokenType::Implements) _ names:type_name_list() {(i, names)})? _ decls:(io:io_var_declarations() { io } / other:other_var_declarations() { vec![other] } / temp:temp_var_decls() { vec![temp] }) ** _ _ body:function_block_body() _ members:(_ m:function_block_member() {m}) ** _ _ end:tok(TokenType::EndFunctionBlock) {
+    // `VAR_GENERIC` sections, when present, come directly after the
+    // function block's name and before EXTENDS/IMPLEMENTS and the other
+    // variable sections (CODESYS error 544: "VAR_GENERIC declaration only
+    // allowed in Functionblocks after the function block name").
+    rule function_block_declaration() -> FunctionBlockDeclaration = start:tok(TokenType::FunctionBlock) _ qualifiers:member_qualifiers() _ name:derived_function_block_name() _ generic:(g:var_generic_declarations() { g })* _ extends:(e:tok(TokenType::Extends) _ t:type_name() {(e, t)})? _ implements:(i:tok(TokenType::Implements) _ names:type_name_list() {(i, names)})? _ decls:(io:io_var_declarations() { io } / other:other_var_declarations() { vec![other] } / temp:temp_var_decls() { vec![temp] }) ** _ _ body:function_block_body() _ members:(_ m:function_block_member() {m}) ** _ _ end:tok(TokenType::EndFunctionBlock) {
       let mut methods = Vec::new();
       let mut properties = Vec::new();
       for member in members {
@@ -1621,8 +1750,11 @@ parser! {
         }
       }
 
-      let decls = VarDeclarations::flatten(decls);
-      let (variables, remainder) = VarDeclarations::drain_var_decl(decls);
+      // The generic declarations are written before the other sections, so
+      // they keep that order among the function block's fields.
+      let mut all_decls = generic;
+      all_decls.extend(VarDeclarations::flatten(decls));
+      let (variables, remainder) = VarDeclarations::drain_var_decl(all_decls);
       let (edge_variables, _) = VarDeclarations::drain_edge_decl(remainder);
 
       let base = extends.as_ref().map(|(_, t)| t.clone());
@@ -1642,7 +1774,7 @@ parser! {
         let oop_span = oop_spans
           .into_iter()
           .reduce(|acc, span| SourceSpan::join(&acc, &span))
-          .expect("at least one OOP token present");
+          .unwrap_or_else(|| SourceSpan::join(&start.span, &end.span));
         Some(FunctionBlockOop {
           base,
           implements: implements_list,
@@ -1676,9 +1808,28 @@ parser! {
       }
     }
 
-    rule other_var_declarations() -> VarDeclarations = external_var_declarations() / var_declarations() / retentive_var_declarations() / non_retentive_var_declarations() / persistent_var_declarations() / incompl_located_var_declarations()
+    rule other_var_declarations() -> VarDeclarations = external_var_declarations() / var_declarations() / retentive_var_declarations() / non_retentive_var_declarations() / persistent_var_declarations() / incompl_located_var_declarations() / var_stat_declarations()
     rule temp_var_decls() -> VarDeclarations = tok(TokenType::VarTemp) _ declarations:semisep_or_empty(<var2_init_decl()>) _ tok(TokenType::EndVar) {
       VarDeclarations::Var(VarDeclarations::flat_map(declarations, VariableType::VarTemp, None))
+    }
+    // CODESYS/TwinCAT `VAR_STAT ... END_VAR`: declarations that keep their
+    // value between calls. Stored like VAR until placement is implemented;
+    // the keyword demotes to an identifier unless `allow_var_stat` -- see
+    // xform_demote_keywords.rs.
+    rule var_stat_declarations() -> VarDeclarations = tok(TokenType::VarStat) _ qualifier:(tok(TokenType::Constant) {DeclarationQualifier::Constant})? _ declarations:semisep_or_empty(<var2_init_decl()>) _ tok(TokenType::EndVar) {
+      VarDeclarations::Var(VarDeclarations::flat_map(declarations, VariableType::VarStat, qualifier))
+    }
+    // CODESYS/TwinCAT `VAR_INST ... END_VAR`: a method's instance variables.
+    // Keyword demoted unless `allow_var_inst`.
+    rule var_inst_declarations() -> VarDeclarations = tok(TokenType::VarInst) _ qualifier:(tok(TokenType::Constant) {DeclarationQualifier::Constant})? _ declarations:semisep_or_empty(<var2_init_decl()>) _ tok(TokenType::EndVar) {
+      VarDeclarations::Var(VarDeclarations::flat_map(declarations, VariableType::VarInst, qualifier))
+    }
+    // CODESYS/TwinCAT `VAR_GENERIC ... END_VAR`: a function block's generic
+    // constants, declared directly after the function block name. Only
+    // CONSTANT is accepted as a qualifier (CODESYS error 545). Keyword
+    // demoted unless `allow_var_generic`.
+    rule var_generic_declarations() -> VarDeclarations = tok(TokenType::VarGeneric) _ qualifier:(tok(TokenType::Constant) {DeclarationQualifier::Constant})? _ declarations:semisep_or_empty(<var2_init_decl()>) _ tok(TokenType::EndVar) {
+      VarDeclarations::Var(VarDeclarations::flat_map(declarations, VariableType::VarGeneric, qualifier))
     }
     rule non_retentive_var_declarations() -> VarDeclarations = tok(TokenType::Var) _ tok(TokenType::NonRetain) _ declarations:semisep_or_empty(<var_init_decl()>) _ tok(TokenType::EndVar) {
       let qualifier = Option::Some(DeclarationQualifier::NonRetain);
@@ -2068,6 +2219,16 @@ parser! {
       / t:tok(TokenType::Null) {
           Expr::new(ExprKind::Null(t.span.clone()))
         }
+      // `__NEW(T)` and `__TYPEOF(T)` take a type where the ordinary call
+      // grammar takes an expression (`prefixedOperator`/`newExpression` in
+      // CODESYS's `ST_GRAMMAR.ebnf`). The type name is recorded as a variable
+      // reference so the AST, the renderer and the round trip are the
+      // ordinary call ones; resolving the type is semantic work a later pass
+      // does. Tried before `function_expression` because the type argument
+      // (`INT`) is not an expression.
+      / op:special_operator_type_expression() {
+          op
+        }
       / function:function_expression() {
           function
         }
@@ -2093,13 +2254,46 @@ parser! {
         param_assignment: params
       })).with_span(span)
     }
+    rule special_operator_type_expression() -> Expr =
+      start:special_operator_type_name() _ tok(TokenType::LeftParen) _ t:data_type_name() _ end:tok(TokenType::RightParen) {
+        let name = Id::from(start.text.as_str()).with_position(start.span.clone());
+        let span = SourceSpan::join(&start.span, &end.span);
+        Expr::new(ExprKind::Function(Function {
+          name,
+          param_assignment: vec![ParamAssignmentKind::positional(ExprKind::Variable(
+            Variable::Symbolic(SymbolicVariableKind::Named(NamedVariable { name: t.name })),
+          ))],
+        })).with_span(span)
+      }
+    rule special_operator_type_name() -> &'input Token = tok(TokenType::SpecialNew) / tok(TokenType::SpecialTypeOf)
 
     // B.3.2 Statements
     pub rule statement_list() -> Vec<StmtKind> = items:statements_or_empty()+ {
       flatten_statements(items)
     }
-    rule statements_or_empty() -> StatementsOrEmpty = _ tok(TokenType::Semicolon) _ { StatementsOrEmpty::Empty() } / s:semisep(<statement()>) { StatementsOrEmpty::Statements(s)}
-    rule statement() -> StmtKind = assignment_statement() / selection_statement() / iteration_statement() / subprogram_control_statement()
+    // A CODESYS textual export opens a POU's implementation with
+    // `__BEGIN_IMPLEMENTATION` and no terminator of its own, so the marker
+    // is accepted at the start of a statement list, not as a `;`-terminated
+    // statement: `marker { statements }` is the reference grammar's
+    // `implementationBlock`. The alternatives spell out each accepted
+    // spelling (with a `;`, without one, or alone) rather than composing
+    // them with `?`: an optional part inside this repeated choice makes the
+    // parser stop after the marker and reject the statement that follows
+    // it.
+    // A statement label (`name:`) is a statement with no terminator of its
+    // own: the labelled statement follows it, and the list's separator rules
+    // do not apply between the two. The `Label` token exists only when
+    // `xform_statement_labels` promoted the name (the `allow_jump_statement`
+    // gate), so no other dialect accepts a label. See
+    // `Codesys/grammar/ST_GRAMMAR.ebnf` (label).
+    rule statements_or_empty() -> StatementsOrEmpty =
+      _ tok(TokenType::Semicolon) _ { StatementsOrEmpty::Empty() }
+      / m:implementation_marker_statement() _ tok(TokenType::Semicolon) _ s:semisep(<statement()>) { let mut v = vec![m]; v.extend(s); StatementsOrEmpty::Statements(v) }
+      / m:implementation_marker_statement() _ s:semisep(<statement()>) { let mut v = vec![m]; v.extend(s); StatementsOrEmpty::Statements(v) }
+      / m:implementation_marker_statement() { StatementsOrEmpty::Statements(vec![m]) }
+      / s:semisep(<statement()>) { StatementsOrEmpty::Statements(s)}
+      / _ l:label_statement() { StatementsOrEmpty::Statements(vec![l]) }
+    rule statement() -> StmtKind = assignment_statement() / selection_statement() / iteration_statement() / subprogram_control_statement() / try_catch_statement() / throw_statement() / jump_statement() / calc_statement() / wait_statement()
 
     // B.3.2.1 Assignment statements
     pub rule assignment_statement() -> StmtKind =
@@ -2168,13 +2362,16 @@ parser! {
 
     // B.3.2.2 Subprogram control statements
     rule subprogram_control_statement() -> StmtKind = m:method_invocation() { m } / fb:fb_invocation() { fb } / tok(TokenType::Return) { StmtKind::Return }
-    rule fb_invocation() -> StmtKind = name:fb_name() _ tok(TokenType::LeftParen) _ params:param_assignment() ** (_ tok(TokenType::Comma) _) _ end:tok(TokenType::RightParen) {
+    rule fb_invocation() -> StmtKind = call:fb_invocation_body() { StmtKind::FbCall(call) }
+    // `name(args)`, shared by the statement form above and the call operand of
+    // `CALC(cond, call)`.
+    rule fb_invocation_body() -> FbCall = name:fb_name() _ tok(TokenType::LeftParen) _ params:param_assignment() ** (_ tok(TokenType::Comma) _) _ end:tok(TokenType::RightParen) {
       let span = SourceSpan::join(&name.span, &end.span);
-      StmtKind::FbCall(FbCall {
+      FbCall {
         var_name: name,
         params,
         position: span,
-      })
+      }
     }
     // OOP extension: `instance.MethodName(args);` (ADR-0041 Phase 1).
     // Statement position only; a previously-syntax-error shape
@@ -2288,5 +2485,98 @@ parser! {
     }
     rule exit_statement() -> StmtKind = t:tok(TokenType::Exit) { StmtKind::Exit(t.span.clone()) }
     rule continue_statement() -> StmtKind = t:tok(TokenType::Continue) { StmtKind::Continue(t.span.clone()) }
+    // CODESYS `__BEGIN_IMPLEMENTATION`: the marker that a POU's
+    // implementation follows. It is not a statement: the marker opens the
+    // implementation and carries no statement terminator of its own (the
+    // grammar's `implementationBlock` is `marker, { statement }`), so a
+    // `;` that follows it -- the spelling the renderer writes -- belongs to
+    // the marker, not to a statement. Its own list segment (see
+    // `statements_or_empty`) keeps the following statements in the same
+    // list. Keyword demoted to an identifier unless
+    // `allow_begin_implementation`.
+    rule implementation_marker_statement() -> StmtKind = t:tok(TokenType::BeginImplementation) _ tok(TokenType::Semicolon)? { StmtKind::BeginImplementation(t.span.clone()) }
+
+    // CODESYS Instruction-List-derived statements in Structured Text. The
+    // `JMP`/`CALC`/`__WAIT` tokens exist only when their flags are set (see
+    // xform_demote_keywords), so these rules need no further gate.
+    // See ST_GRAMMAR.ebnf (jumpStatement, conditionalCall, waitStatement) and
+    // Codesys/.../Statements/{JumpStatementParser,ConditionalCallParser}.cs.
+    //
+    // `JMP label;` jumps unconditionally; the reference's `JMP (cond) label;`
+    // form jumps only when the condition is TRUE.
+    // The target is an ordinary identifier: only the label *definition*
+    // (`name:`) is promoted to a `Label` token.
+    // The trailing `;` belongs to the statement list's separator, like every
+    // other statement, so the rules here do not consume it.
+    rule jump_statement() -> StmtKind = start:tok(TokenType::Jmp) _ condition:(tok(TokenType::LeftParen) _ e:expression() _ tok(TokenType::RightParen) { e })? _ label:identifier() {
+      StmtKind::Jump(Jump {
+        condition,
+        span: SourceSpan::join(&start.span, &label.span),
+        label,
+      })
+    }
+    // The name of a statement label, promoted by xform_statement_labels.
+    rule label_name() -> (Id, SourceSpan) = t:tok(TokenType::Label) { (Id::from(t.text.as_str()), t.span.clone()) }
+    // The trailing `_` matters: a label has no terminator of its own, so the
+    // trivia between it and the statement that follows would otherwise sit
+    // between two list items, where the list's separator rules do not look
+    // for it. (`rules` for the statement separator consume the trivia on the
+    // far side of a `;`, and a label has none.)
+    rule label_statement() -> StmtKind = name:label_name() _ tok(TokenType::Colon) _ {
+      StmtKind::Label(LabelStatement {
+        name: name.0,
+        span: name.1,
+      })
+    }
+    // `CALC(condition, call)`: the reference's third argument (an expected
+    // result type) is not modelled.
+    rule calc_statement() -> StmtKind = start:tok(TokenType::Calc) _ tok(TokenType::LeftParen) _ condition:expression() _ tok(TokenType::Comma) _ call:fb_invocation_body() _ end:tok(TokenType::RightParen) {
+      StmtKind::ConditionalCall(ConditionalCall {
+        condition,
+        call,
+        span: SourceSpan::join(&start.span, &end.span),
+      })
+    }
+    rule wait_statement() -> StmtKind = start:tok(TokenType::Wait) _ condition:(tok(TokenType::LeftParen) _ e:expression() _ tok(TokenType::RightParen) { e })? {
+      StmtKind::Wait(Wait {
+        condition,
+        span: start.span.clone(),
+      })
+    }
+
+    // CODESYS Structured Text exception handling. The tokens only exist when
+    // `allow_try_catch` is set (xform_demote_keywords demotes them to
+    // identifiers otherwise), so the rules need no further gate.
+    // See ST_GRAMMAR.ebnf (tryCatchStatement) and
+    // Codesys/Parser35210/Statements/TryCatchStatementParser.cs.
+    rule try_catch_statement() -> StmtKind = start:tok(TokenType::Try) _ body:statement_list()? _ catch:catch_clause()? _ finally_body:finally_clause()? _ end:tok(TokenType::EndTry) {
+      StmtKind::TryCatch(TryCatch {
+        body: body.unwrap_or_default(),
+        catch,
+        finally_body: finally_body.unwrap_or_default(),
+        span: SourceSpan::join(&start.span, &end.span),
+      })
+    }
+    // `__CATCH`, `__CATCH (e)`, and `__CATCH ()` are all accepted; the
+    // parenthesized form names the variable the thrown value is stored into.
+    rule catch_clause() -> CatchClause = start:tok(TokenType::Catch) _ exception:(tok(TokenType::LeftParen) _ e:variable()? _ tok(TokenType::RightParen) { e })? _ body:statement_list()? {
+      CatchClause {
+        // `__CATCH`, `__CATCH ()` and `__CATCH (e)` all reach here; only the
+        // last names a variable.
+        exception: exception.flatten(),
+        body: body.unwrap_or_default(),
+        span: start.span.clone(),
+      }
+    }
+    rule finally_clause() -> Vec<StmtKind> = tok(TokenType::Finally) _ body:statement_list()? { body.unwrap_or_default() }
+    // The reference parses `__THROW` as a prefixed operator, so the value is
+    // parenthesized: `__THROW(5)` raises the value, a bare `__THROW` raises
+    // without one.
+    rule throw_statement() -> StmtKind = start:tok(TokenType::Throw) _ value:(tok(TokenType::LeftParen) _ e:expression() _ tok(TokenType::RightParen) { e })? {
+      StmtKind::Throw(Throw {
+        value,
+        span: start.span.clone(),
+      })
+    }
   }
 }

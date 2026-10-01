@@ -66,7 +66,7 @@ function generateTypeScript(rows) {
   ];
 
   for (const row of rows) {
-    lines.push(`  ${row.name}: "${row.code}",`);
+    lines.push(`  ${row.name}: '${row.code}',`);
   }
 
   lines.push('} as const;');
@@ -75,7 +75,7 @@ function generateTypeScript(rows) {
   lines.push('export const PROBLEM_MESSAGES: Record<ProblemCode, string> = {');
 
   for (const row of rows) {
-    lines.push(`  [ProblemCode.${row.name}]: "${row.message}",`);
+    lines.push(`  [ProblemCode.${row.name}]: '${row.message}',`);
   }
 
   lines.push('};');

@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+	<language-model>
+		<data-type id ="{B60A5C90-AA6C-4C3F-8332-C02981C0BF59}" name = "AnyType">
+			<interface>
+				{implicit on}
+				{attribute 'linkalways'}
+				TYPE AnyType:
+				STRUCT
+				pValue: POINTER TO BYTE;
+				diSize: DINT;
+				TypeClass : __SYSTEM.TYPE_CLASS;
+				END_STRUCT
+				END_TYPE
+				{implicit off}
+			</interface>
+		</data-type>
+	</language-model>

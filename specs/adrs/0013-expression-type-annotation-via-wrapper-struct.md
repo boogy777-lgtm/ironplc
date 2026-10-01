@@ -2,7 +2,8 @@
 
 status: accepted
 date: 2026-03-02
-amended: 2026-09-28 (`resolved_type` replaced by `expr_type`, a `TypeId`; see ADR-0055)
+amended: 2026-09-27 (expressions also carry `expr_type`, a `TypeId`; see ADR-0070)
+amended: 2026-09-28 (`resolved_type` replaced by `expr_type`, a `TypeId`; see ADR-0070)
 
 ## Context and Problem Statement
 
@@ -118,7 +119,7 @@ The late-bound expression resolution pass (`xform_resolve_late_bound_expr_kind`)
 ### Amendment: `expr_type` (2026-09-27)
 
 `Expr` also carries `expr_type: Option<ExprType>`, the type of its value by
-identity (ADR-0055): `Concrete(TypeId)` for a value of one type, or
+identity (ADR-0070): `Concrete(TypeId)` for a value of one type, or
 `Literal(GenericTypeName)` for an untyped literal. Unlike `resolved_type` it
 is set for a type without a name, such as a whole `ARRAY[1..2] OF DINT`
 variable.

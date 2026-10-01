@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<language-model>
+	<!-- Type is used for Method of programs -->
+	<data-type id ="{7B119E7C-B3A1-4872-83B7-DD07F6227ECD}" name = "__POUMethodInfoStruct">
+		<interface>
+			{implicit on}
+			{attribute 'linkalways'}
+			TYPE __POUMethodInfoStruct EXTENDS __MethodInfoStruct:
+			STRUCT
+				udiPOUType: UDINT;
+			END_STRUCT
+			END_TYPE
+			{implicit off}
+		</interface>
+	</data-type>
+</language-model>

@@ -1,0 +1,32 @@
+=====
+V4009
+=====
+
+.. problem-summary:: V4009
+
+Online change refused the candidate because its process-image sizes differ
+from the running application's. The input image, output image, and memory
+image are sized by the hardware configuration, not by the program; a
+candidate that declares different sizes cannot share the process image with
+the active application and is rejected at stage time.
+
+Example
+-------
+
+The candidate was compiled against a configuration that maps more inputs
+than the running application's, so its declared input image is larger. The
+host refuses the edit:
+
+.. code-block::
+
+   {"command":"acceptEdits","program":[...]}
+   {"response":"error","vCode":"V4009","message":"candidate process-image sizes are incompatible with the active application"}
+
+The running application is untouched and continues to scan with the original
+process image.
+
+To fix this error, compile the candidate against the same hardware
+configuration as the running application so the input, output, and memory
+image sizes match exactly. If the process image must grow — new I/O modules,
+for example — that is a deployment change, not an online change: stop the
+runtime and load the candidate as a new application.

@@ -39,7 +39,7 @@ pub enum UsageContext {
     General,
 }
 
-static ELEMENTARY_TYPES_LOWER_CASE: [(&str, ElementaryTypeName, IntermediateType); 29] = [
+static ELEMENTARY_TYPES_LOWER_CASE: [(&str, ElementaryTypeName, IntermediateType); 30] = [
     // signed_integer_type_name
     (
         "sint",
@@ -205,6 +205,11 @@ static ELEMENTARY_TYPES_LOWER_CASE: [(&str, ElementaryTypeName, IntermediateType
     ),
     // bit_string_type_name
     ("bool", ElementaryTypeName::BOOL, IntermediateType::Bool),
+    // The one-bit type the vendor dialects add. IronPLC has no one-bit
+    // storage, so BIT is an alias of BOOL: it gets BOOL's type id and
+    // representation (see `type_id::elementary`). It follows BOOL in this
+    // table so that BOOL stays the canonical name of the representation.
+    ("bit", ElementaryTypeName::BIT, IntermediateType::Bool),
     (
         "byte",
         ElementaryTypeName::BYTE,
@@ -844,7 +849,8 @@ mod tests {
         type_category::TypeCategory,
     };
     use ironplc_dsl::common::{
-        ArrayElementType, ArraySubranges, Integer, SignedInteger, SignedIntegerRef, Subrange,
+        ArrayBounds, ArrayElementType, ArraySubranges, Integer, SignedInteger, SignedIntegerRef,
+        Subrange,
     };
     use ironplc_dsl::core::SourceSpan;
 
@@ -1457,7 +1463,7 @@ mod tests {
     }
     fn subranges(element: &str) -> ArraySubranges {
         ArraySubranges {
-            ranges: vec![Subrange {
+            bounds: ArrayBounds::Ranges(vec![Subrange {
                 start: SignedIntegerRef::Literal(SignedInteger {
                     value: Integer {
                         span: SourceSpan::default(),
@@ -1472,7 +1478,7 @@ mod tests {
                     },
                     is_neg: false,
                 }),
-            }],
+            }]),
             type_name: ArrayElementType::Named(TypeName::from(element)),
             ref_to: None,
         }

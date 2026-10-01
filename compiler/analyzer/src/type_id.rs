@@ -6,7 +6,7 @@
 //! are never used, so no id can be mistaken for an aggregate tag (`STRUCT`,
 //! `ARRAY`, `FB_INSTANCE`) or for `OTHER`. Every other type gets an id from
 //! [`FIRST_ALLOCATED`] up, in the order the environment meets it. See
-//! ADR-0055.
+//! ADR-0070.
 
 use ironplc_container::debug_section::iec_type_tag;
 use ironplc_dsl::common::ElementaryTypeName;
@@ -19,6 +19,10 @@ pub(crate) const FIRST_ALLOCATED: u32 = 256;
 pub(crate) fn elementary(elementary: &ElementaryTypeName) -> TypeId {
     let tag = match elementary {
         ElementaryTypeName::BOOL => iec_type_tag::BOOL,
+        // BIT has no one-bit storage of its own; it is the same type as
+        // BOOL, so it shares BOOL's tag and id (see
+        // `specs/design/numeric-literals.md`, REQ-NL-analyzer-020).
+        ElementaryTypeName::BIT => iec_type_tag::BOOL,
         ElementaryTypeName::SINT => iec_type_tag::SINT,
         ElementaryTypeName::INT => iec_type_tag::INT,
         ElementaryTypeName::DINT => iec_type_tag::DINT,

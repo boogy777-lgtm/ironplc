@@ -306,6 +306,137 @@ const FLAG_FIXTURES: &[FlagFixture] = &[
         prereqs: &[],
         source: "PROGRAM main\nVAR i : INT; END_VAR\nFOR i := 1 TO 3 DO\nCONTINUE;\nEND_FOR;\nEND_PROGRAM",
     },
+    // The IEC 61131-3:2013 UNION type declaration. With the flag off, both
+    // words demote to identifiers and the TYPE body does not parse.
+    FlagFixture {
+        key: "allow_union_type",
+        prereqs: &[],
+        source: "TYPE U_Data :\nUNION\n    intVal : INT;\n    realVal : REAL;\nEND_UNION;\nEND_TYPE\nPROGRAM main\nEND_PROGRAM",
+    },
+    // The CODESYS/TwinCAT VAR_STAT section. With the flag off, VAR_STAT is
+    // a plain identifier and the declaration does not parse.
+    FlagFixture {
+        key: "allow_var_stat",
+        prereqs: &[],
+        source: "FUNCTION CountUp : DINT\nVAR_STAT\n    calls : DINT;\nEND_VAR\n    calls := calls + 1;\n    CountUp := calls;\nEND_FUNCTION\nPROGRAM main\nEND_PROGRAM",
+    },
+    // The CODESYS/TwinCAT VAR_INST section. It only appears in a method, so
+    // METHOD/END_METHOD must be enabled to reach it.
+    FlagFixture {
+        key: "allow_var_inst",
+        prereqs: &["allow_fb_inheritance"],
+        source: "FUNCTION_BLOCK FB_Motor\nVAR\n    speed : INT;\nEND_VAR\nMETHOD DoWork : BOOL\nVAR_INST\n    callCount : INT;\nEND_VAR\n    callCount := callCount + 1;\n    DoWork := TRUE;\nEND_METHOD\nEND_FUNCTION_BLOCK\nPROGRAM main\nEND_PROGRAM",
+    },
+    // The CODESYS/TwinCAT VAR_GENERIC section, which belongs directly after
+    // a function block's name.
+    FlagFixture {
+        key: "allow_var_generic",
+        prereqs: &[],
+        source: "FUNCTION_BLOCK FB_Scale\nVAR_GENERIC CONSTANT\n    maxValue : INT := 100;\nEND_VAR\nVAR\n    value : INT;\nEND_VAR\n    value := maxValue;\nEND_FUNCTION_BLOCK\nPROGRAM main\nEND_PROGRAM",
+    },
+    // The CODESYS/TwinCAT NAMESPACE grouping. With the flag off, NAMESPACE
+    // is a plain identifier and the library does not parse.
+    FlagFixture {
+        key: "allow_namespace",
+        prereqs: &[],
+        source: "NAMESPACE Motor\nPROGRAM main\nEND_PROGRAM\nEND_NAMESPACE",
+    },
+    // The CODESYS __BEGIN_IMPLEMENTATION marker. With the flag off it is a
+    // plain identifier, and an identifier alone is not a statement.
+    FlagFixture {
+        key: "allow_begin_implementation",
+        prereqs: &[],
+        source: "PROGRAM main\nVAR\n    x : INT;\nEND_VAR\n__BEGIN_IMPLEMENTATION\nx := 1;\nEND_PROGRAM",
+    },
+    // The one-bit BIT type and its literals. With the flag off, BIT demotes
+    // to a plain identifier, so `b : BIT` names an undeclared type; with the
+    // flag on the type resolves (to BOOL) and `BIT#1` is a literal.
+    FlagFixture {
+        key: "allow_bit_type",
+        prereqs: &[],
+        source: "PROGRAM main\nVAR b : BIT; END_VAR\nb := BIT#1;\nEND_PROGRAM",
+    },
+    // CODESYS exception handling. With the flag off, `__TRY` is an ordinary
+    // identifier and the statement does not parse.
+    FlagFixture {
+        key: "allow_try_catch",
+        prereqs: &[],
+        source: "PROGRAM main\nVAR e : INT; x : INT; END_VAR\n__TRY\nx := 1;\n__CATCH (e)\nx := e;\n__ENDTRY;\nEND_PROGRAM",
+    },
+    // The CODESYS PARAMS(n) OF T parameter-list type. With the flag off,
+    // PARAMS demotes to an identifier and the declaration fails to parse.
+    FlagFixture {
+        key: "allow_params_of",
+        prereqs: &[],
+        source: "PROGRAM main\nVAR\np : PARAMS(3) OF INT;\nEND_VAR\nEND_PROGRAM",
+    },
+    // The CODESYS incomplete array type ARRAY[*] OF T. The grammar accepts
+    // the star in every dialect, so the flag is what turns it into a
+    // declaration (P4070 when off).
+    FlagFixture {
+        key: "allow_incomplete_array",
+        prereqs: &[],
+        source: "PROGRAM main\nVAR\ndata : ARRAY[*] OF INT;\nEND_VAR\nEND_PROGRAM",
+    },
+    // CODESYS escaped (backtick) identifiers: an ordinary identifier may not
+    // contain a space, so with the flag off the declaration is rejected
+    // (P4067).
+    FlagFixture {
+        key: "allow_escaped_identifiers",
+        prereqs: &[],
+        source: "PROGRAM main\nVAR\n`my var` : INT;\nEND_VAR\nEND_PROGRAM",
+    },
+    // CODESYS Unicode identifiers. The lexer accepts the letter in every
+    // dialect; the flag is what allows it (P4068 when off).
+    FlagFixture {
+        key: "allow_unicode_identifiers",
+        prereqs: &[],
+        source: "PROGRAM main\nVAR\ncaf\u{e9} : INT;\nEND_VAR\nEND_PROGRAM",
+    },
+    // The consecutive-underscore rule (CODESYS AllowMultipleUnderlines=false
+    // by default). The reserved leading `__` prefix is exempt, so the fixture
+    // puts the pair inside the name (P4069 when off).
+    FlagFixture {
+        key: "allow_multiple_underscores",
+        prereqs: &[],
+        source: "PROGRAM main\nVAR\nmy__var : INT;\nEND_VAR\nEND_PROGRAM",
+    },
+    // The CODESYS jump statement and statement labels. With the flag off,
+    // `JMP` is an ordinary identifier and `JMP done;` is not a statement.
+    FlagFixture {
+        key: "allow_jump_statement",
+        prereqs: &[],
+        source: "PROGRAM main\nVAR x : INT; END_VAR\nx := 1;\nJMP done;\ndone:\nx := 2;\nEND_PROGRAM",
+    },
+    // The CODESYS CALC conditional call. With the flag off, `CALC(b, ...)`
+    // names an ordinary (undeclared) function block.
+    FlagFixture {
+        key: "allow_calc_statement",
+        prereqs: &[],
+        source: "FUNCTION_BLOCK Fb\nVAR_INPUT a : INT; END_VAR\nEND_FUNCTION_BLOCK\nPROGRAM main\nVAR b : BOOL; fb : Fb; END_VAR\nCALC(b, fb(a := 1));\nEND_PROGRAM",
+    },
+    // The CODESYS __WAIT statement. With the flag off, `__WAIT(b)` is a call
+    // to an undeclared function block.
+    FlagFixture {
+        key: "allow_wait_statement",
+        prereqs: &[],
+        source: "PROGRAM main\nVAR b : BOOL; END_VAR\nb := TRUE;\n__WAIT(b);\nEND_PROGRAM",
+    },
+    // Nested block comments. With the flag off the comment ends at the first
+    // `*)`, so the rest of the line is not comment text and does not parse.
+    FlagFixture {
+        key: "allow_nested_comments",
+        prereqs: &[],
+        source: "PROGRAM main\nVAR x : INT; END_VAR\n(* a (* b *) c *)\nx := 1;\nEND_PROGRAM",
+    },
+    // Conditional-compilation pragmas. With the flag off the pragmas stay
+    // trivia and the branch that `{IF}` would drop is parsed as source, where
+    // its text is not a statement.
+    FlagFixture {
+        key: "allow_pragma_if",
+        prereqs: &["allow_pragmas"],
+        source: "PROGRAM main\nVAR x : INT; END_VAR\n{IF defined(NEVER)}\nthis is not a statement\n{END_IF}\nx := 1;\nEND_PROGRAM",
+    },
 ];
 
 /// Builds an ed2 options object with the given flags enabled.

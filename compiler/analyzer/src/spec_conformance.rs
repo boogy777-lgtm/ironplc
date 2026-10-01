@@ -17,6 +17,7 @@ use ironplc_dsl::textual::{Assignment, StmtKind};
 use ironplc_parser::options::{CompilerOptions, Dialect};
 use ironplc_parser::parse_program;
 use ironplc_problems::Problem;
+use ironplc_test::cast;
 use spec_test_macro::spec_test;
 
 use crate::stages::analyze;
@@ -46,6 +47,60 @@ fn analyze_codes(program: &str, options: &CompilerOptions) -> Vec<String> {
         .iter()
         .map(|d| d.code.clone())
         .collect()
+}
+
+fn namespace_options() -> CompilerOptions {
+    CompilerOptions {
+        allow_namespace: true,
+        ..CompilerOptions::default()
+    }
+}
+
+/// REQ-STX-analyzer-030: declaration toposort flattens namespaces -- the
+/// declarations a namespace contains become ordinary library elements, so a
+/// program or type declared inside one is analyzed like a top-level one.
+#[spec_test(REQ_STX_analyzer_030)]
+fn analyzer_spec_req_stx_030_namespaces_flatten_during_toposort() {
+    let source = "NAMESPACE Motor
+TYPE
+Speed : INT;
+END_TYPE
+
+PROGRAM main
+VAR
+    x : Speed;
+END_VAR
+    x := 10;
+END_PROGRAM
+END_NAMESPACE";
+    let library = parse_program(source, &FileId::default(), &namespace_options()).unwrap();
+    assert!(matches!(
+        library.elements[0],
+        LibraryElementKind::NamespaceDeclaration(_)
+    ));
+
+    let (resolved, context) = analyze(&[&library], &namespace_options()).unwrap();
+    assert!(
+        context.diagnostics().is_empty(),
+        "expected clean analysis, got {:?}",
+        context.diagnostics()
+    );
+    assert!(
+        resolved
+            .elements
+            .iter()
+            .all(|e| !matches!(e, LibraryElementKind::NamespaceDeclaration(_))),
+        "the namespace must not survive toposort: {:?}",
+        resolved.elements
+    );
+    assert!(resolved
+        .elements
+        .iter()
+        .any(|e| matches!(e, LibraryElementKind::ProgramDeclaration(_))));
+    assert!(resolved
+        .elements
+        .iter()
+        .any(|e| matches!(e, LibraryElementKind::DataTypeDeclaration(_))));
 }
 
 /// REQ-RTO-analyzer-300: `REFERENCE TO T` resolves to a reference type — a
@@ -89,15 +144,16 @@ END_PROGRAM";
 
 /// Returns the statements of the (single) PROGRAM in a library.
 fn program_statements(lib: &Library) -> Vec<StmtKind> {
-    for element in &lib.elements {
-        if let LibraryElementKind::ProgramDeclaration(prog) = element {
-            let FunctionBlockBodyKind::Statements(stmts) = &prog.body else {
-                panic!("program body is not a statement list");
-            };
-            return stmts.body.clone();
-        }
-    }
-    panic!("no program declaration found");
+    let program = lib.elements.iter().find_map(|element| match element {
+        LibraryElementKind::ProgramDeclaration(prog) => Some(prog),
+        _ => None,
+    });
+    cast!(
+        &program.expect("no program declaration found").body,
+        FunctionBlockBodyKind::Statements
+    )
+    .body
+    .clone()
 }
 
 /// REQ-RTO-analyzer-502: The target of a `REF=` binding is not auto-dereferenced

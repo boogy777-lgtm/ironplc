@@ -1,0 +1,752 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+Attention!
+When making any changes in one of the following functions 
+please consider to make the modification also in the library ConversionFunctions.library
+(svn://server04/AutomationPlatform/branches/Staff/Compilertechnology/ConversionFunctions/ConversionFunctions.library )
+-->
+<language-model>
+<pou id="6814408b-0e10-4b3e-a3f7-5409c4b9c4e7" name="__HelpConvertFromLDate2">
+<interface>		
+	{implicit on}
+	{p 168}FUNCTION __HelpConvertFromLDate2 : LDATE
+{p 169}VAR_INPUT
+{p 170}	ppstr : POINTER TO POINTER TO BYTE;
+{p 171}END_VAR
+{p 172}VAR
+{p 173}	pstr : POINTER TO BYTE := ppstr^;
+{p 174}	nYear : LINT;
+{p 175}	nMonth : DINT;
+{p 176}	nDay : LINT;
+{p 177}	nDiffYear : LINT;
+{p 178}	nDiffYearDiv : LINT;
+{p 179}	nDiffYearMod : LINT;
+{p 180}	nCount : LINT;
+{p 181}	ulTime : LINT;
+{p 182}	pstrHelpYear : POINTER TO BYTE := pstr;
+{p 183}	pstrHelpMonth : POINTER TO BYTE;
+{p 184}	pstrHelpDay : POINTER TO BYTE;
+{p 185}	i : DINT;
+{p 186}	DayOfMonthTable : ARRAY [0..11] OF BYTE := [31,28,31,30,31,30,31,31,30,31,30,31];
+{p 187}	
+{p 188}	nLeapDays, nLeapDays1 : LINT;
+{p 189}	nYearHelp : LINT;
+{p 190}	nDays : LINT;
+{p 191}	presult : POINTER TO LDATE := ADR(ulTime);
+{p 197}	
+{p 198}	n400, n100, n4 : LINT;
+{p 226}	thinkagain: BOOL;
+{p 192}END_VAR
+{p 193}VAR CONSTANT
+{p 194}	NSPERDAY : LINT := LINT#86400000000000;
+{p 237}	LEAPDAYSTILL1970 : LINT := 477;
+{p 195}END_VAR
+{p 196}
+
+</interface>
+<body>{ST_IMPLEMENTATION}
+	{implicit on}
+	{p 3}WHILE(pstrHelpYear[0] &lt;&gt; BYTE#0 AND pstrHelpYear[0] &lt;&gt; BYTE#16#2D (*'-'*)) DO
+{p 4}  pstrHelpYear := pstrHelpYear + 1;
+{p 5}END_WHILE      
+{p 11}
+{p 12}i := DWORD_TO_DINT(pstrHelpYear - pstr);
+{p 13}
+{p 14}IF (i = 4) THEN
+{p 15}	nYear := __HelpConvertString(pstr,4);
+{p 16}ELSE
+{p 17}	RETURN;
+{p 18}END_IF
+{p 19}
+{p 20}pstrHelpYear := pstrHelpYear + 1;
+{p 21}pstrHelpMonth := pstrHelpYear;
+{p 22}WHILE(pstrHelpMonth[0] &lt;&gt; BYTE#16#2d (*'-'*)) DO
+{p 23}	pstrHelpMonth := pstrHelpMonth+1;
+{p 24}END_WHILE
+{p 25}i := DWORD_TO_DINT(pstrHelpMonth - pstrHelpYear);
+{p 26}IF (i = 1 OR i = 2) THEN
+{p 27}	nMonth := __HelpConvertString(pstrHelpYear,DINT_TO_UDINT(i));
+{p 28}ELSE
+{p 29}	RETURN;
+{p 30}END_IF
+{p 31}
+{p 32}pstrHelpMonth := pstrHelpMonth+1;
+{p 33}pstrHelpDay := pstrHelpMonth;
+{p 34}WHILE(pstrHelpDay[0] &lt;&gt; 0 AND pstrHelpDay[0] &lt;&gt; BYTE#16#2d (*'-'*)) DO
+{p 35}	pstrHelpDay := pstrHelpDay + 1;
+{p 36}END_WHILE
+{p 37}
+{p 38}i := DWORD_TO_DINT(pstrHelpDay - pstrHelpMonth);
+{p 39}IF (i = 1 OR i = 2) THEN
+{p 40}	nDay := __HelpConvertString(pstrHelpMonth,DINT_TO_UDINT(i));
+{p 41}ELSE 
+{p 42}	RETURN;
+{p 43}END_IF
+{p 44}
+{p 45}ppstr^ := pstrHelpDay;
+{p 46}
+{p 174}n400 := nYear / 400;
+{p 181}n100 := nYear / 100;
+{p 182}n4 := nYear / 4;
+{p 238}
+{p 184}// leap days till calculated date
+{p 186}nLeapDays := n400 + n4 - n100;
+{p 239}
+{p 231}// correct for dates before march
+{p 230}IF (__IsLeapYear(nYear) AND nMonth &lt; 3) THEN
+{p 232}	nLeapDays := nLeapDays - 1;
+{p 233}END_IF
+{p 235}
+{p 234}nLeapDays := ABS(LEAPDAYSTILL1970 - nLeapDays);
+{p 236}
+{p 130}nDiffYear := nYear - 1970;
+{p 151}
+{p 150}IF nDiffYear &lt; 0 THEN
+{p 152}	nDays := (-1-nDiffYear) * 365 + nLeapDays;
+{p 160}	FOR i := 11 TO nMonth BY - 1 DO
+{p 161}		nDays := nDays + DayOfMonthTable[i];
+{p 162}	END_FOR
+{p 163}	nDays := nDays + DayOfMonthTable[nMonth-1] - nDay + 1;
+{p 155}ELSE
+{p 156}	nDays := nDiffYear * 365 + nLeapDays;  
+{p 157}	FOR i := 0 TO nMonth - 2 DO
+{p 158}		nDays := nDays + DayOfMonthTable[i];
+{p 159}	END_FOR
+{p 164}	nDays := nDays + nDay-1;
+{p 153}END_IF
+{p 149} 
+{p 111}// convert to nanoseconds
+{p 70}ulTime := nDays * NSPERDAY;
+{p 165}IF (nDiffYear &lt; 0) THEN
+{p 166}	ulTime := 0 - ulTime;
+{p 167}END_IF
+{p 76}__HelpConvertFromLDate2 := presult^;
+{p 77}
+
+</body>
+</pou>
+<pou id="af4fefe7-03fe-4ab9-9b8b-a054f672b07a" name="__HelpConvertLDateToString">
+<interface>
+	{implicit on}
+	{p 242}FUNCTION __HelpConvertLDateToString : BOOL
+{p 243}VAR_INPUT
+{p 244}	nDays : LINT;
+{p 245}	ppstr : POINTER TO POINTER TO BYTE;
+{p 246}END_VAR
+{p 247}VAR
+{p 248}	nYear : LINT;
+{p 249}	nMonth : DINT;  // some targets have a problem with 64 Bit Index
+{p 250}	nDay : LINT;
+{p 253}	pstr : POINTER TO BYTE := ppstr^;
+{p 254}	help : LINT;
+{p 255}	nRestDays : LINT;
+{p 256}	nDaysInYear : LINT;
+{p 257}	nSeconds : LINT;
+{p 258}	bLeapYear : BOOL;
+{p 261}	nDaysFrom1 : LINT;
+{p 262}	y400,y100, y4, y1 : LINT;
+{p 259}END_VAR
+{p 260}VAR_STAT
+{p 272}	DayOfMonthTable : ARRAY [0..11] OF BYTE := [31,28,31,30,31,30,31,31,30,31,30,31];	
+{p 271}END_VAR
+
+</interface>
+<body>{ST_IMPLEMENTATION}
+	{implicit on}
+{p 213}// input is in days from 1970 positive or negative
+	__GetYearAndDays(nDays := nDays, nYear => nYear);
+{p 272}
+{p 239}IF __IsLeapYear(nYear) THEN
+{p 238}	DayOfMonthTable[1] := 29;
+{p 269}ELSE
+{p 270}	DayOfMonthTable[1] := 28;
+{p 241}END_IF
+{p 271}
+{p 178}
+{p 179}WHILE (nDays &gt;= DayOfMonthTable[nMonth]) DO
+{p 180}	nDays := nDays - DayOfMonthTable[nMonth];
+{p 181}	nMonth := nMonth + 1;
+{p 182}END_WHILE
+{p 183}
+{p 184}nMonth := nMonth + 1;
+{p 185}nDay := nDays + 1;  (* nYear, nMonth, nDay are complete *)
+{p 186}__HelpConvert(TO_DWORD(nYear), ADR(pstr),4);
+{p 187}pstr[0] := BYTE#16#2d; (*'-'*)
+{p 188}pstr := pstr + 1;
+{p 189}__HelpConvert(TO_DWORD(nMonth),ADR(pstr), 2);
+{p 190}pstr[0] := BYTE#16#2d; (*'-'*)
+{p 191}pstr := pstr + 1;
+{p 192}__HelpConvert(TO_DWORD(nDay),ADR(pstr), 2);
+{p 193}ppstr^ := pstr;
+{p 4}
+
+</body>
+</pou>
+<pou id="afd94b46-c270-4b5a-8fc3-567e6ca9645e" name="__IsLeapYear">
+<interface>	{implicit on} {p 2}FUNCTION __IsLeapYear : BOOL
+{p 3}VAR_INPUT
+{p 8}	nYear : LINT;
+{p 4}END_VAR
+{p 5}VAR
+{p 18}	bMod4, bMod100, bMod400 : BOOL;	
+{p 6}END_VAR
+{p 1}
+
+</interface>
+<body>{ST_IMPLEMENTATION}
+	{implicit on}
+{p 14}bMod4 := nYear MOD 4 = 0;  
+{p 15}bMod100 := nYear MOD 100 = 0;
+{p 16}bMod400 := nYear MOD 400 = 0;
+{p 17}		
+{p 7}__IsLeapYear := bMod400 OR (bMod4 AND NOT bMod100);
+
+</body>
+</pou>
+<pou id="cc2cbd96-a82c-4801-b672-ad233d70c7dc" name="__ConvertLDateAndTime_TO_STRING">
+<interface>	{implicit on} {p 69}FUNCTION __ConvertLDateAndTime_TO_STRING : BOOL
+{p 70}VAR_INPUT
+{p 71}	in: LINT; 
+{p 176}	pstr : POINTER TO BYTE;
+{p 73}END_VAR
+{p 244}VAR
+{p 245}	pin : POINTER TO LINT := ADR(in);
+{p 246}	ltimesigned: LINT := pin^;
+{p 247}	lwTOD: LINT;
+{p 248}	puint : POINTER TO ULINT := ADR(in);
+{p 249}	nDays : LINT;
+{p 250}END_VAR
+{p 251}VAR CONSTANT
+{p 252}	NSPERDAY : LINT := (LINT#24 * LINT#3600 * LINT#1_000_000_000);
+{p 243}END_VAR
+{p 91}
+
+</interface>
+<body>{ST_IMPLEMENTATION}
+	{implicit on}
+{p 254}nDays := in  / NSPERDAY;
+{p 255}
+{p 256}IF (ltimesigned &lt; 0) THEN
+{p 257}	  lwTOD := -ltimesigned MOD NSPERDAY;
+{p 258}	  IF (lwTOD &gt; 0) THEN
+{p 259}		  lwTOD := NSPERDAY - lwTOD;
+{p 274}		  nDays := nDays - 1;
+{p 261}	  END_IF	  
+{p 262}ELSE 
+{p 263}	  lwTOD := ltimesigned MOD NSPERDAY;
+{p 264}END_IF
+{p 265}
+{p 266}pstr[0] := 16#4C; (*'L'*)
+{p 267}pstr[1] := 16#44; (*'D'*)
+{p 268}pstr[2] := 16#54; (*'T'*)
+{p 269}pstr[3] := 16#23; (*'#'*)
+{p 270}pstr := pstr + 4;
+{p 271}__HelpConvertLDateToString(nDays, ADR(pstr));
+{p 272}pstr[0] := BYTE#16#2d; (*'-'*)
+{p 273}pstr := pstr + 1;
+{p 109}__HelpConvertLTime(TO_ULINT(lwTOD), ADR(pstr));
+
+</body>
+</pou>
+<pou id="e262b5a1-f64d-4010-bbbd-cb30a42afb04" name="__ConvertSTRING_TO_LDATEANDTIME">
+<interface>	{implicit on} {p 114}FUNCTION __ConvertSTRING_TO_LDATEANDTIME : BOOL
+{p 115}VAR_INPUT
+	pstr: POINTER TO STRING(255);
+	pout : POINTER TO LDATE_AND_TIME;
+{p 118}END_VAR
+{p 119}VAR
+{p 123}	strHelp : STRING;
+{p 129}	ulHelpLdt: LDATE;	
+{p 132}	pstrHelp : POINTER TO BYTE;
+{p 143}	tofday: ULINT;
+{p 133}END_VAR
+{p 148}VAR CONSTANT
+{p 149}	NSPERDAY : LINT := LINT#86400000000000;
+{p 150}END_VAR
+{p 134}
+
+</interface>
+<body>{ST_IMPLEMENTATION}
+	{implicit on}
+{p 2}__SkipWhiteSpace(ADR(pstr));
+{p 34}
+{p 36}IF (__LEFT(pstr^, 4) &lt;&gt; 'ldt#') AND (__LEFT(pstr^, 4) &lt;&gt; 'LDT#') 
+{p 37}	AND (__LEFT(pstr^, 15) &lt;&gt; 'LDATE_AND_TIME#')
+{p 38}	AND (__LEFT(pstr^, 15) &lt;&gt; 'ldate_and_time#') THEN
+{p 39}	pout^ := LDT#1970-01-01-0:0;
+{p 40}	RETURN;
+{p 41}END_IF
+{p 42}WHILE (pstr^[0] &lt;&gt; 16#23) (*'#'*) DO
+{p 43}	pstr := pstr+1;
+{p 44}END_WHILE
+{p 45}pstr := pstr+1;
+{p 46}					  
+{p 47}ulHelpLdt := __HelpConvertFromLDate2(ADR(pstr));
+{p 138}pstr := pstr+1;
+{p 141}tofday := __HelpConvertFromLTime(ADR(pstr));
+{p 144}
+{p 153}pout^ := TO_LDT(TO_LINT(ulHelpLdt) + TO_LINT(tofday));
+{p 113}
+
+</body>
+</pou>
+<pou id="91761c53-5f98-40b2-aa52-b725d67c8228" name="__ConvertLDate_TO_STRING">
+<interface>	{implicit on}
+	{p 291}FUNCTION __ConvertLDate_TO_STRING : BOOL
+{p 292}VAR_INPUT
+{p 293}	in: LINT;
+{p 296}	pstr : POINTER TO BYTE;
+{p 294}END_VAR
+{p 295}VAR
+{p 297}END_VAR
+{p 298}VAR
+{p 299}	pin : POINTER TO LINT := ADR(in);
+{p 300}	ltimesigned: LINT := pin^;
+{p 301}	lwTOD: LINT;
+{p 302}	puint : POINTER TO ULINT := ADR(in);
+{p 303}	nDays : LINT;
+{p 304}END_VAR
+{p 305}VAR CONSTANT
+{p 306}	NSPERDAY : LINT := (LINT#24 * LINT#3600 * LINT#1_000_000_000);
+{p 307}END_VAR
+{p 91}
+
+</interface>
+<body>{ST_IMPLEMENTATION}
+	{implicit on}
+{p 254}nDays := in  / NSPERDAY;
+{p 265}
+{p 266}pstr[0] := 16#4C; (*'L'*)
+{p 267}pstr[1] := 16#44; (*'D'*)
+{p 269}pstr[2] := 16#23; (*'#'*)
+{p 270}pstr := pstr + 3;
+{p 271}__HelpConvertLDateToString(nDays, ADR(pstr));
+{p 109}
+
+</body>
+</pou>
+<pou id="45d5c73d-e25c-4eea-a147-cc1d385eb6d5" name="__ConvertSTRING_TO_LDATE">
+<interface>	{implicit on}
+	{p 114}FUNCTION __ConvertSTRING_TO_LDATE : BOOL
+{p 115}VAR_INPUT
+	pstr: POINTER TO STRING(255);
+	pout : POINTER TO LDATE;
+{p 118}END_VAR
+{p 119}VAR
+{p 123}	strHelp : STRING;	
+{p 132}	pstrHelp : POINTER TO BYTE;
+{p 143}	tofday: ULINT;
+{p 133}END_VAR
+{p 148}VAR CONSTANT
+{p 149}	NSPERDAY : LINT := LINT#86400000000000;
+{p 150}END_VAR
+{p 134}
+
+</interface>
+<body>{ST_IMPLEMENTATION}
+	{implicit on}
+{p 2}__SkipWhiteSpace(ADR(pstr));
+{p 34}
+{p 36}IF (__LEFT(pstr^, 3) &lt;&gt; 'ld#') AND (__LEFT(pstr^, 3) &lt;&gt; 'LD#') 
+{p 37}	AND (__LEFT(pstr^, 6) &lt;&gt; 'LDATE#')
+{p 38}	AND (__LEFT(pstr^, 6) &lt;&gt; 'ldate#') THEN
+{p 39}	pout^ := LDATE#1970-01-01;
+{p 40}	RETURN;
+{p 41}END_IF
+{p 42}WHILE (pstr^[0] &lt;&gt; 16#23) (*'#'*) DO
+{p 43}	pstr := pstr+1;
+{p 44}END_WHILE
+{p 45}pstr := pstr+1;
+{p 46}					  
+{p 47}pout^ := __HelpConvertFromLDate2(ADR(pstr));
+{p 113}
+
+</body>
+</pou>
+	<pou id="81a6de7d-a101-403b-8688-52d7e16fac5a" name="__GetYearAndDays"><interface>
+		{implicit on}
+		{p 39}FUNCTION __GetYearAndDays : INT
+		{p 40}VAR_IN_OUT
+		{p 41}	nDays : LINT;
+		{p 42}END_VAR
+		{p 43}VAR_OUTPUT
+		{p 44}	nYear : LINT;
+		{p 45}END_VAR
+		{p 59}VAR CONSTANT
+		{p 60}	DAYSTO1970 : LINT := 719162;
+		{p 61}	DAYSTO1 : LINT := 365;
+		{p 62}	DAYSTO4 : LINT := 1461;
+		{p 63}	DAYSTO100 : LINT := 36524;
+		{p 64}	DAYSTO400 : LINT := 146097;
+		{p 51}END_VAR
+		{p 65}VAR
+		{p 52}	nDaysFrom1 : LINT;
+		{p 53}	y400 : LINT;
+		{p 54}	y100 : LINT;
+		{p 55}	y4 : LINT;
+		{p 56}	y1 : LINT;
+		{p 57}END_VAR
+		{p 58}
+
+	</interface><body>{ST_IMPLEMENTATION}
+		{implicit on}
+		{p 22}nDaysFrom1 := DAYSTO1970 + nDays;
+		{p 23}
+		{p 24}y400 := nDaysFrom1 / DAYSTO400;
+		{p 25}nDaysFrom1 := nDaysFrom1 - (y400 * DAYSTO400);
+		{p 26}y100 := nDaysFrom1 / DAYSTO100;
+		{p 27}IF (y100 = 4) THEN// The last 100-year is divisble by 400, a leap year. So we have to adjust here.
+		{p 28}    y100 := 3;
+		{p 29}END_IF
+		{p 30}nDaysFrom1 := nDaysFrom1 - y100 * DAYSTO100;
+		{p 31}y4 := nDaysFrom1 / DAYSTO4;
+		{p 32}nDaysFrom1 := nDaysFrom1 - y4 * DAYSTO4;
+		{p 33}y1 := nDaysFrom1 / DAYSTO1;
+		{p 34}IF (y1 = 4) THEN
+		{p 35}	y1 := 3;
+		{p 36}END_IF
+		{p 37}nDays := nDaysFrom1 - y1 * DAYSTO1;
+		{p 38}nYear := y400 * 400 + y100 * 100 + y4 * 4 + y1 + 1;
+		{p 21}
+
+	</body></pou>
+	
+	<pou id="5b8f81f4-3e45-45e3-a731-ee2c2b682529" name="__HelpConvertLDateToWString">
+		<interface>{implicit on}
+			{p 242}FUNCTION __HelpConvertLDateToWString : BOOL
+		{p 243}VAR_INPUT
+		{p 244}	nDays : LINT;
+		{p 245}	ppstr : POINTER TO POINTER TO WORD;
+		{p 246}END_VAR
+		{p 247}VAR
+		{p 248}	nYear : LINT;
+		{p 249}	nMonth : DINT;
+		{p 250}	nDay : LINT;
+		{p 253}	pstr : POINTER TO WORD := ppstr^;
+		{p 254}	help : LINT;
+		{p 255}	nRestDays : LINT;
+		{p 256}	nDaysInYear : LINT;
+		{p 257}	nSeconds : LINT;
+		{p 258}	bLeapYear : BOOL;
+		{p 261}	nDaysFrom1 : LINT;
+		{p 262}	y400,y100, y4, y1 : LINT;
+		{p 259}END_VAR
+		{p 260}VAR_STAT
+		{p 272}	DayOfMonthTable : ARRAY [0..11] OF BYTE := [31,28,31,30,31,30,31,31,30,31,30,31];
+		{p 271}END_VAR
+
+	</interface>
+		<body>{ST_IMPLEMENTATION}
+			{implicit on}
+			// input is in days from 1970 positive or negative
+			__GetYearAndDays(nDays := nDays, nYear => nYear);
+		{p 272}
+		{p 239}IF __IsLeapYear(nYear) THEN
+		{p 238}	DayOfMonthTable[1] := 29;
+		{p 269}ELSE
+		{p 270}	DayOfMonthTable[1] := 28;
+		{p 241}END_IF
+		{p 271}
+		{p 178}
+		{p 179}WHILE (nDays &gt;= DayOfMonthTable[nMonth]) DO
+		{p 180}	nDays := nDays - DayOfMonthTable[nMonth];
+		{p 181}	nMonth := nMonth + 1;
+		{p 182}END_WHILE
+		{p 183}
+		{p 184}nMonth := nMonth + 1;
+		{p 185}nDay := nDays + 1;  (* nYear, nMonth, nDay are complete *)
+		{p 186}__HelpConvertW(TO_DWORD(nYear), ADR(pstr),4);
+		{p 187}pstr[0] := WORD#16#2D; (*'-'*)
+		{p 188}pstr := pstr + 2;
+		{p 189}__HelpConvertW(TO_DWORD(nMonth),ADR(pstr), 2);
+		{p 190}pstr[0] := WORD#16#2D; (*'-'*)
+		{p 191}pstr := pstr + 2;
+		{p 192}__HelpConvertW(TO_DWORD(nDay),ADR(pstr), 2);
+		{p 193}ppstr^ := pstr;
+		{p 4}
+
+	</body>
+	</pou>
+	<pou id="5507cf0b-c06b-43b5-99ef-946330e26edd" name="__ConvertLDateAndTime_TO_WSTRING">
+		<interface>
+			{implicit on}
+			{p 69}FUNCTION __ConvertLDateAndTime_TO_WSTRING : BOOL
+		{p 70}VAR_INPUT
+		{p 71}	in: LINT;
+		{p 176}	pstr : POINTER TO WORD;
+		{p 90}END_VAR
+		{p 244}VAR
+		{p 245}	pin : POINTER TO LINT := ADR(in);
+		{p 246}	ltimesigned: LINT := pin^;
+		{p 247}	lwTOD: LINT;
+		{p 248}	puint : POINTER TO ULINT := ADR(in);
+		{p 249}	nDays : LINT;
+		{p 250}END_VAR
+		{p 251}VAR CONSTANT
+		{p 252}	NSPERDAY : LINT := (LINT#24 * LINT#3600 * LINT#1_000_000_000);
+		{p 243}END_VAR
+		{p 91}
+
+	</interface>
+		<body>{ST_IMPLEMENTATION}
+			{implicit on}
+		{p 254}nDays := in  / NSPERDAY;
+		{p 255}
+		{p 256}IF (ltimesigned &lt; 0) THEN
+		{p 257}	  lwTOD := -ltimesigned MOD NSPERDAY;
+		{p 258}	  IF (lwTOD &gt; 0) THEN
+		{p 259}		  lwTOD := NSPERDAY - lwTOD;
+		{p 274}		  nDays := nDays - 1;
+		{p 261}	  END_IF
+		{p 262}ELSE
+		{p 263}	  lwTOD := ltimesigned MOD NSPERDAY;
+		{p 264}END_IF
+		{p 265}
+		{p 266}pstr[0] := 16#4C; (*'L'*)
+		{p 267}pstr[1] := 16#44; (*'D'*)
+		{p 268}pstr[2] := 16#54; (*'T'*)
+		{p 269}pstr[3] := 16#23; (*'#'*)
+		{p 270}pstr := pstr + 8;
+		{p 271}__HelpConvertLDateToWString(nDays, ADR(pstr));
+		{p 272}pstr[0] := BYTE#16#2d; (*'-'*)
+		{p 273}pstr := pstr + 2;
+		{p 109}__HelpConvertLTimeW(TO_ULINT(lwTOD), ADR(pstr));
+
+	</body>
+	</pou>
+	<pou id="494943f4-fc5c-4433-83c0-e62dc3ee94f6" name="__ConvertLDate_TO_WSTRING">
+		<interface>
+			{implicit on}
+			{p 291}FUNCTION __ConvertLDate_TO_WSTRING : BOOL
+		{p 292}VAR_INPUT
+		{p 293}	in: LINT;
+		{p 310}	pstr : POINTER TO WORD;
+		{p 294}END_VAR
+		{p 298}VAR
+		{p 299}	pin : POINTER TO LINT := ADR(in);
+		{p 300}	ltimesigned: LINT := pin^;
+		{p 301}	lwTOD: LINT;
+		{p 302}	puint : POINTER TO ULINT := ADR(in);
+		{p 303}	nDays : LINT;
+		{p 304}END_VAR
+		{p 305}VAR CONSTANT
+		{p 306}	NSPERDAY : LINT := (LINT#24 * LINT#3600 * LINT#1_000_000_000);
+		{p 307}END_VAR
+		{p 91}
+
+	</interface>
+		<body>{ST_IMPLEMENTATION}
+			{implicit on}
+		{p 254}nDays := in  / NSPERDAY;
+		{p 266}pstr[0] := 16#4C; (*'L'*)
+		{p 267}pstr[1] := 16#44; (*'D'*)
+		{p 269}pstr[2] := 16#23; (*'#'*)
+		{p 270}pstr := pstr + 6;
+		{p 271}__HelpConvertLDateToWString(nDays, ADR(pstr));
+		{p 109}
+
+	</body>
+	</pou>
+	<pou id="db81de61-7ba0-4747-9a9c-37d18ec621d0" name="__HelpConvertToWStringFromLDate">
+		<interface>
+			{implicit on}
+			{p 168}FUNCTION __HelpConvertToWStringFromLDate : LDATE
+		{p 169}VAR_INPUT
+		{p 170}	ppstr : POINTER TO POINTER TO WORD;
+		{p 171}END_VAR
+		{p 172}VAR
+		{p 173}	pstr : POINTER TO WORD := ppstr^;
+		{p 174}	nYear : LINT;
+		{p 175}	nMonth : DINT;
+		{p 176}	nDay : LINT;
+		{p 177}	nDiffYear : LINT;
+		{p 178}	nDiffYearDiv : LINT;
+		{p 179}	nDiffYearMod : LINT;
+		{p 180}	nCount : LINT;
+		{p 181}	ulTime : LINT;
+		{p 182}	pstrHelpYear : POINTER TO WORD := pstr;
+		{p 183}	pstrHelpMonth : POINTER TO WORD;
+		{p 184}	pstrHelpDay : POINTER TO WORD;
+		{p 185}	i : DINT;
+		{p 186}	DayOfMonthTable : ARRAY [0..11] OF BYTE := [31,28,31,30,31,30,31,31,30,31,30,31];
+		{p 187}
+		{p 188}	nLeapDays, nLeapDays1 : LINT;
+		{p 189}	nYearHelp : LINT;
+		{p 190}	nDays : LINT;
+		{p 191}	presult : POINTER TO LDATE := ADR(ulTime);
+		{p 197}
+		{p 198}	n400, n100, n4 : LINT;
+		{p 226}	thinkagain: BOOL;
+		{p 192}END_VAR
+		{p 193}VAR CONSTANT
+		{p 194}	NSPERDAY : LINT := LINT#86400000000000;
+		{p 237}	LEAPDAYSTILL1970 : LINT := 477;
+		{p 195}END_VAR
+		{p 196}
+
+	</interface>
+		<body>{ST_IMPLEMENTATION}
+			{implicit on}
+		{p 3}WHILE(pstrHelpYear[0] &lt;&gt; WORD#0 AND pstrHelpYear[0] &lt;&gt; WORD#16#2D (*'-'*)) DO
+		{p 4}  pstrHelpYear := pstrHelpYear + 2;
+		{p 5}END_WHILE
+		{p 11}
+		{p 12}i := DWORD_TO_DINT(pstrHelpYear - pstr);
+		{p 13}
+		{p 14}IF (i = 8) THEN
+		{p 15}	nYear := __HelpConvertStringW(pstr,4);
+		{p 16}ELSE
+		{p 17}	RETURN;
+		{p 18}END_IF
+		{p 19}
+		{p 20}pstrHelpYear := pstrHelpYear + 2;
+		{p 21}pstrHelpMonth := pstrHelpYear;
+		{p 22}WHILE(pstrHelpMonth[0] &lt;&gt; WORD#16#2D (*'-'*)) DO
+		{p 23}	pstrHelpMonth := pstrHelpMonth+2;
+		{p 24}END_WHILE
+		{p 25}i := DWORD_TO_DINT(pstrHelpMonth - pstrHelpYear);
+		{p 26}IF (i = 2 OR i = 4) THEN
+		{p 27}	nMonth := __HelpConvertStringW(pstrHelpYear,DINT_TO_UDINT(i)/2);
+		{p 28}ELSE
+		{p 29}	RETURN;
+		{p 30}END_IF
+		{p 31}
+		{p 32}pstrHelpMonth := pstrHelpMonth+2;
+		{p 33}pstrHelpDay := pstrHelpMonth;
+		{p 34}WHILE(pstrHelpDay[0] &lt;&gt; 0 AND pstrHelpDay[0] &lt;&gt; WORD#16#2D (*'-'*)) DO
+		{p 35}	pstrHelpDay := pstrHelpDay + 2;
+		{p 36}END_WHILE
+		{p 37}
+		{p 38}i := DWORD_TO_DINT(pstrHelpDay - pstrHelpMonth);
+		{p 39}IF (i = 2 OR i = 4) THEN
+		{p 40}	nDay := __HelpConvertStringW(pstrHelpMonth,DINT_TO_UDINT(i)/2);
+		{p 41}ELSE
+		{p 42}	RETURN;
+		{p 43}END_IF
+		{p 44}
+		{p 45}ppstr^ := pstrHelpDay;
+		{p 46}
+		{p 174}n400 := nYear / 400;
+		{p 181}n100 := nYear / 100;
+		{p 182}n4 := nYear / 4;
+		{p 238}
+		{p 184}// leap days till calculated date
+		{p 186}nLeapDays := n400 + n4 - n100;
+		{p 239}
+		{p 231}// correct for dates before march
+		{p 230}IF (__IsLeapYear(nYear) AND nMonth &lt; 3) THEN
+		{p 232}	nLeapDays := nLeapDays - 1;
+		{p 233}END_IF
+		{p 235}
+		{p 234}nLeapDays := ABS(LEAPDAYSTILL1970 - nLeapDays);
+		{p 236}
+		{p 130}nDiffYear := nYear - 1970;
+		{p 151}
+		{p 150}IF nDiffYear &lt; 0 THEN
+		{p 152}	nDays := (-1-nDiffYear) * 365 + nLeapDays;
+		{p 160}	FOR i := 11 TO nMonth BY - 1 DO
+		{p 161}		nDays := nDays + DayOfMonthTable[i];
+		{p 162}	END_FOR
+		{p 163}	nDays := nDays + DayOfMonthTable[nMonth-1] - nDay + 1;
+		{p 155}ELSE
+		{p 156}	nDays := nDiffYear * 365 + nLeapDays;
+		{p 157}	FOR i := 0 TO nMonth - 2 DO
+		{p 158}		nDays := nDays + DayOfMonthTable[i];
+		{p 159}	END_FOR
+		{p 164}	nDays := nDays + nDay-1;
+		{p 153}END_IF
+		{p 149}
+		{p 111}// convert to nanoseconds
+		{p 70}ulTime := nDays * NSPERDAY;
+		{p 165}IF (nDiffYear &lt; 0) THEN
+		{p 166}	ulTime := 0 - ulTime;
+		{p 167}END_IF
+		{p 76}__HelpConvertToWStringFromLDate := presult^;
+		{p 77}
+
+	</body>
+	</pou>
+	<pou id="b4ea943e-9f59-4dcb-9707-0862c0984a64" name="__ConvertWSTRING_TO_LDATEANDTIME">
+		<interface>
+			{implicit on}
+			{p 114}FUNCTION __ConvertWSTRING_TO_LDATEANDTIME : BOOL
+		{p 115}VAR_INPUT
+		{p 116}	pstr: POINTER TO WSTRING(255);
+		{p 155}	pout : POINTER TO LDATE_AND_TIME;
+		{p 118}END_VAR
+		{p 119}VAR
+		{p 123}	strHelp : WSTRING;
+		{p 129}	ulHelpLdt: LDATE;
+		{p 132}	pstrHelp : POINTER TO WORD;
+		{p 143}	tofday: ULINT;
+		{p 133}END_VAR
+		{p 148}VAR CONSTANT
+		{p 149}	NSPERDAY : LINT := LINT#86400000000000;
+		{p 150}END_VAR
+		{p 134}
+
+	</interface>
+		<body>{ST_IMPLEMENTATION}
+			{implicit on}			
+		{p 2}__SkipWhiteSpaceW(ADR(pstr));
+		{p 34}
+		{p 36}IF (__LEFTW(pstr^, 4) &lt;&gt; "ldt#") AND (__LEFTW(pstr^, 4) &lt;&gt; "LDT#")
+		{p 37}	AND (__LEFTW(pstr^, 15) &lt;&gt; "LDATE_AND_TIME#")
+		{p 38}	AND (__LEFTW(pstr^, 15) &lt;&gt; "ldate_and_time#") THEN
+		{p 39}	pout^ := LDT#1970-01-01-0:0;
+		{p 40}	RETURN;
+		{p 41}END_IF
+		{p 42}WHILE (pstr^[0] &lt;&gt; 16#23) (*'#'*) DO
+		{p 43}	pstr := pstr+2;
+		{p 44}END_WHILE
+		{p 45}pstr := pstr+2;
+		{p 46}
+		{p 47}ulHelpLdt := __HelpConvertToWStringFromLDate(ADR(pstr));
+		{p 138}pstr := pstr+2;
+		{p 141}tofday := __HelpConvertFromLTimeW(ADR(pstr));
+		{p 144}
+		{p 153}pout^ := TO_LDT(TO_LINT(ulHelpLdt) + TO_LINT(tofday));
+		{p 113}
+
+	</body>
+	</pou>
+	<pou id="420adcda-c8cb-4b64-b4c9-ff0d8840bb26" name="__ConvertWSTRING_TO_LDATE">
+		<interface>
+			{implicit on}			
+			{p 114}FUNCTION __ConvertWSTRING_TO_LDATE : BOOL
+		{p 115}VAR_INPUT
+		{p 116}	pstr: POINTER TO WSTRING(255);
+		{p 155}	pout : POINTER TO LDATE;
+		{p 118}END_VAR
+		{p 119}VAR
+		{p 123}	strHelp : STRING;
+		{p 132}	pstrHelp : POINTER TO WORD;
+		{p 143}	tofday: ULINT;
+		{p 133}END_VAR
+		{p 148}VAR CONSTANT
+		{p 149}	NSPERDAY : LINT := LINT#86400000000000;
+		{p 150}END_VAR
+		{p 134}
+
+	</interface>
+		<body>{ST_IMPLEMENTATION}
+			{implicit on}			
+		{p 2}__SkipWhiteSpaceW(ADR(pstr));
+		{p 34}
+		{p 36}IF (__LEFTW(pstr^, 3) &lt;&gt; "ld#") AND (__LEFTW(pstr^, 3) &lt;&gt; "LD#")
+		{p 37}	AND (__LEFTW(pstr^, 6) &lt;&gt; "LDATE#")
+		{p 38}	AND (__LEFTW(pstr^, 6) &lt;&gt; "ldate#") THEN
+		{p 39}	pout^ := LDATE#1970-01-01;
+		{p 40}	RETURN;
+		{p 41}END_IF
+		{p 42}WHILE (pstr^[0] &lt;&gt; 16#23) (*'#'*) DO
+		{p 43}	pstr := pstr+2;
+		{p 44}END_WHILE
+		{p 45}pstr := pstr+2;
+		{p 46}
+		{p 47}pout^ := __HelpConvertToWStringFromLDate(ADR(pstr));
+		{p 113}
+
+	</body>
+	</pou>
+</language-model>

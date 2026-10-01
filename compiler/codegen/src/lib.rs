@@ -39,6 +39,7 @@ mod compile_enum;
 mod compile_expr;
 mod compile_fb_init;
 mod compile_fn;
+mod compile_jump;
 mod compile_loop;
 mod compile_method;
 mod compile_reference;
@@ -49,6 +50,8 @@ mod compile_string;
 mod compile_struct;
 mod compile_struct_init;
 mod compile_time_arith;
+mod compile_try_catch;
+mod compile_var_table;
 mod data_region;
 mod emit;
 mod optimize;
@@ -57,7 +60,7 @@ mod stack_balance;
 mod string_width;
 mod type_info;
 
-pub use compile::{compile, CodegenOptions, StringToNumPolicies};
+pub use compile::{compile, CodegenOptions, FbFieldUidKey, StringToNumPolicies};
 pub use source_lookup::{EmptyLookup, SourceLookup};
 
 // Spec conformance testing infrastructure (test-only)

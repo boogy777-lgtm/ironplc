@@ -31,7 +31,7 @@ pub struct ContainerDropResponse {
 /// Builds the container_drop response.
 pub fn build_response(container_id: &str, cache: &Mutex<ContainerCache>) -> ContainerDropResponse {
     let removed = {
-        let mut guard = cache.lock().unwrap();
+        let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
         guard.remove(container_id)
     };
 

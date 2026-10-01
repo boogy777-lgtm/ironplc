@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<language-model>
+	<pou id = "25F95107-5B2D-49b2-A15D-F8F001D97B61" name = "__sys__rts__cycle" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION __sys__rts__cycle : BOOL
+		VAR_INPUT
+			slotLower : DINT;
+			slotUpper : DINT;
+			stTaskName : WSTRING(49);
+			stApplicationName : WSTRING(49);
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "CEBB123F-0157-42ed-80B6-3C5F0C676600" name = "__sys__register__slot__pou" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION __sys__register__slot__pou : DINT
+		VAR_INPUT
+			stTaskName : WSTRING(49);
+			stApplicationName : WSTRING(49);
+			nSlotNumber : DINT;
+			dwFunctionPointer : DWORD;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "E6E9F2D1-46E1-4697-9011-5E79D1BE2A0A" name = "__sys__unregister__slot__pou" external = "true">
+		<interface>
+			{implicit on}
+			FUNCTION __sys__unregister__slot__pou : DINT
+			VAR_INPUT
+				stTaskName : WSTRING(49);
+				stApplicationName : WSTRING(49);
+				nSlotNumber : DINT;
+				dwFunctionPointer : DWORD;
+			END_VAR
+			{implicit off}
+		</interface>
+	</pou>
+	<pou id = "24F4779C-5FE4-4c09-8EAE-A2A2ECFFA547" name = "SysCpuDebugHandler" external = "true">
+		<interface>
+			{implicit on}
+			FUNCTION SysCpuDebugHandler : BOOL
+			VAR_INPUT
+			END_VAR
+			{implicit off}
+		</interface>
+	</pou>
+	<global-interface id = "D1BD3748-4FA3-4ba2-A940-FD7A223A9695" name = "_Implicit_Target_Info_Variables">
+	<interface>
+		{attribute 'hide'}
+		{implicit on}
+		VAR_GLOBAL
+			__targetInfo : VERSION;
+		END_VAR
+		{implicit off}
+	</interface>
+	</global-interface>
+	<global-interface id = "F9070CD1-47A8-400a-B603-A4A5D74CD8EA" name = "__ApplicationName">
+		<interface>
+			{attribute 'qualified_only'}
+			{implicit on}
+			VAR_GLOBAL
+			{attribute 'no_init'}
+			__ApplicationName : WString(255);
+			{attribute 'no_init'}
+			__ParentApplicationName : WString(255);
+			END_VAR
+			{implicit off}
+		</interface>
+		</global-interface>
+	<data-type id = "92309396-17B9-41f7-904A-9E63F45F200B" name = "_Implicit_Application_Info">
+		<interface>
+			{attribute 'hide'}
+			TYPE _Implicit_Application_Info :
+			STRUCT
+			pParentApplication : POINTER TO _Implicit_Application_Info; // Pointer to parent application
+			pbyRights : POINTER TO WORD;
+			guidCode : ARRAY [0..7] OF WORD;	// GUID for IEC code
+			guidData : ARRAY [0..7] OF WORD;  // GUID for IEC data
+			udState : UDINT;            // State of the application. See definitions above
+			udOpState : UDINT;			// Operating state of the application. See definitions above
+
+			dwDoNotUse_0 : DWORD;			// Handle to bootproject
+			dwDoNotUse_1 : DWORD;			// Handle to debug task
+			dwDoNotUse_2 : DWORD;			// pointer to Global Init Function
+			dwDoNotUse_3 : DWORD;			// pointer to Global Exit Function
+
+			dwDoNotUse_4 : DWORD;			// Handle a pool of session-ids
+			dwDoNotUse_5 : DWORD;			// Handle a pool of force entries
+			dwDoNotUse_6 : DWORD;			// Handle a pool of breakpoints
+
+			bAppendBootproject : DINT;		// Bootproject sections can be appended
+			bPersistentForce : DINT;		// Is persistent force enabled
+
+			stApplicationName : WSTRING(59); // Application name
+			dwPSVersion : DWORD;			// Version number of Programming system (set in download)
+			dwTargetSettingVersion : DWORD;			// Version number of Target settings used by PS (set in download)
+			END_STRUCT
+			END_TYPE
+		</interface>
+	</data-type>
+
+</language-model>

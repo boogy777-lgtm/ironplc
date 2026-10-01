@@ -1,0 +1,293 @@
+op_value,op_name,category,visitor_method,result_rule,result_type,source
+0,None,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+1,__Reloc,special,visitReloc,constant,BOOL,--.143.cs (visitor_method above)
+2,__Copy,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+3,__Lazy,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+4,Any,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+5,AnyBit,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+6,AnyDate,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+7,AnyInt,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+8,AnyNum,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+9,AnyReal,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+10,Bit,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+11,Bool,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+12,Byte,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+13,Word,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+14,DWord,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+15,LWord,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+16,SInt,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+17,Int,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+18,DInt,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+19,LInt,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+20,USInt,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+21,UInt,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+22,UDInt,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+23,ULInt,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+24,Real,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+25,LReal,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+26,String,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+27,WString,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+28,Time,special,visitTime,constant,TIME,--.143.cs (visitor_method above)
+29,LTime,special,visitLTime,constant,LTIME,--.143.cs (visitor_method above)
+30,Date,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+31,DateAndTime,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+32,TimeOfDay,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+33,Adr,special,visitAdr,pointer to operand[0] type; __RefAdr special-cased,pointer,--.143.cs (visitor_method above)
+34,BitAdr,special,visitBitAdr,constant,DWORD,--.143.cs (visitor_method above)
+35,IndexOf,special,visitIndexOf,constant,INT,--.143.cs (visitor_method above)
+36,SizeOf,special,visitSizeOf,size-based USINT/UINT/UDINT; int operand type; POINTER/REAL -> UDINT,USINT/UINT/UDINT,--.143.cs (visitor_method above)
+37,Ini,special,visitIni,constant,BOOL,--.143.cs (visitor_method above)
+38,Abs,special,visitAbs,no operands -> DINT; else operand[0].DeRefType,operand0 / DINT,--.143.cs (visitor_method above)
+39,Limit,selection,visitSelection,LIMIT->operand[1]; MIN/MAX->first TIME/DATE/STRING-ish operand; MUX/SEL->operand-type merge; then generic with startIdx=1 for MUX/SEL,operand type,--.143.cs:1891 (visitSelection)
+40,Min,selection,visitSelection,LIMIT->operand[1]; MIN/MAX->first TIME/DATE/STRING-ish operand; MUX/SEL->operand-type merge; then generic with startIdx=1 for MUX/SEL,operand type,--.143.cs:1891 (visitSelection)
+41,Max,selection,visitSelection,LIMIT->operand[1]; MIN/MAX->first TIME/DATE/STRING-ish operand; MUX/SEL->operand-type merge; then generic with startIdx=1 for MUX/SEL,operand type,--.143.cs:1891 (visitSelection)
+42,Trunc,special,visitTrunc,constant int-domain,DINT,--.143.cs (visitor_method above)
+43,Mux,selection,visitSelection,LIMIT->operand[1]; MIN/MAX->first TIME/DATE/STRING-ish operand; MUX/SEL->operand-type merge; then generic with startIdx=1 for MUX/SEL,operand type,--.143.cs:1891 (visitSelection)
+44,Sel,selection,visitSelection,LIMIT->operand[1]; MIN/MAX->first TIME/DATE/STRING-ish operand; MUX/SEL->operand-type merge; then generic with startIdx=1 for MUX/SEL,operand type,--.143.cs:1891 (visitSelection)
+45,Rol,shift,visitShiftOps,operand[0].DeRefType when non-literal/concrete; literal handling; fallback UDINT,operand0 / UDINT,--.143.cs:1405 (visitShiftOps)
+46,Ror,shift,visitShiftOps,operand[0].DeRefType when non-literal/concrete; literal handling; fallback UDINT,operand0 / UDINT,--.143.cs:1405 (visitShiftOps)
+47,Shl,shift,visitShiftOps,operand[0].DeRefType when non-literal/concrete; literal handling; fallback UDINT,operand0 / UDINT,--.143.cs:1405 (visitShiftOps)
+48,Shr,shift,visitShiftOps,operand[0].DeRefType when non-literal/concrete; literal handling; fallback UDINT,operand0 / UDINT,--.143.cs:1405 (visitShiftOps)
+49,Exp,trig/math,visitTrigonometrics,LReal target/operands -> LREAL else REAL,REAL/LREAL,--.143.cs:1482 (visitTrigonometrics)
+50,Expt,trig/math,visitTrigonometrics,LReal target/operands -> LREAL else REAL,REAL/LREAL,--.143.cs:1482 (visitTrigonometrics)
+51,Sqrt,trig/math,visitTrigonometrics,LReal target/operands -> LREAL else REAL,REAL/LREAL,--.143.cs:1482 (visitTrigonometrics)
+52,Ln,trig/math,visitTrigonometrics,LReal target/operands -> LREAL else REAL,REAL/LREAL,--.143.cs:1482 (visitTrigonometrics)
+53,Log,trig/math,visitTrigonometrics,LReal target/operands -> LREAL else REAL,REAL/LREAL,--.143.cs:1482 (visitTrigonometrics)
+54,Sin,trig/math,visitTrigonometrics,LReal target/operands -> LREAL else REAL,REAL/LREAL,--.143.cs:1482 (visitTrigonometrics)
+55,Cos,trig/math,visitTrigonometrics,LReal target/operands -> LREAL else REAL,REAL/LREAL,--.143.cs:1482 (visitTrigonometrics)
+56,Tan,trig/math,visitTrigonometrics,LReal target/operands -> LREAL else REAL,REAL/LREAL,--.143.cs:1482 (visitTrigonometrics)
+57,ASin,trig/math,visitTrigonometrics,LReal target/operands -> LREAL else REAL,REAL/LREAL,--.143.cs:1482 (visitTrigonometrics)
+58,ACos,trig/math,visitTrigonometrics,LReal target/operands -> LREAL else REAL,REAL/LREAL,--.143.cs:1482 (visitTrigonometrics)
+59,ATan,trig/math,visitTrigonometrics,LReal target/operands -> LREAL else REAL,REAL/LREAL,--.143.cs:1482 (visitTrigonometrics)
+60,Action,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+61,Array,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+62,Params,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+63,At,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+64,By,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+65,Case,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+66,Constant,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+67,Do,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+68,Else,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+69,Elsif,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+70,EndAction,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+71,EndCase,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+72,EndFor,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+73,EndFunction,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+74,EndFunctionBlock,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+75,EndIf,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+76,EndProgram,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+77,EndRepeat,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+78,EndStruct,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+79,EndUnion,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+80,EndType,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+81,EndVar,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+82,EndWhile,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+83,Exit,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+84,Continue,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+85,For,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+86,From,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+87,Function,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+88,FunctionBlock,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+89,If,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+90,Of,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+91,Persistent,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+92,Pointer,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+93,Program,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+94,ReadOnly,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+95,ReadWrite,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+96,Repeat,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+97,Retain,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+98,Return,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+99,Struct,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+100,Union,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+101,Then,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+102,To,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+103,Type,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+104,Until,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+105,Var,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+106,VarAccess,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+107,VarConfig,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+108,VarExternal,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+109,VarGlobal,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+110,VarInput,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+111,VarInOut,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+112,VarOutput,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+113,VarTemp,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+114,VarStat,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+115,While,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+116,Extends,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+117,Implements,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+118,Method,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+119,Interface,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+120,This,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+121,Super,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+122,Add,arithmetic,visitArithmetics,"1) TimeOperationTypeCalculator handles TIME/DATE/LTIME/pointer for +,-,*,/; 2) else generic algorithm; bool flag=false (literal/real promotion enabled)",TIME/LTIME/DATE/DT/TOD or promoted operand type,--.143.cs:1592 (visitArithmetics) + TimeOperationTypeCalculator.cs:187
+123,Sub,arithmetic,visitArithmetics,"1) TimeOperationTypeCalculator handles TIME/DATE/LTIME/pointer for +,-,*,/; 2) else generic algorithm; bool flag=false (literal/real promotion enabled)",TIME/LTIME/DATE/DT/TOD or promoted operand type,--.143.cs:1592 (visitArithmetics) + TimeOperationTypeCalculator.cs:187
+124,Mul,arithmetic,visitArithmetics,"1) TimeOperationTypeCalculator handles TIME/DATE/LTIME/pointer for +,-,*,/; 2) else generic algorithm; bool flag=false (literal/real promotion enabled)",TIME/LTIME/DATE/DT/TOD or promoted operand type,--.143.cs:1592 (visitArithmetics) + TimeOperationTypeCalculator.cs:187
+125,Div,arithmetic,visitArithmetics,"1) TimeOperationTypeCalculator handles TIME/DATE/LTIME/pointer for +,-,*,/; 2) else generic algorithm; bool flag=false (literal/real promotion enabled)",TIME/LTIME/DATE/DT/TOD or promoted operand type,--.143.cs:1592 (visitArithmetics) + TimeOperationTypeCalculator.cs:187
+126,Mod,arithmetic,visitArithmetics,"1) TimeOperationTypeCalculator handles TIME/DATE/LTIME/pointer for +,-,*,/; 2) else generic algorithm; bool flag=false (literal/real promotion enabled)",TIME/LTIME/DATE/DT/TOD or promoted operand type,--.143.cs:1592 (visitArithmetics) + TimeOperationTypeCalculator.cs:187
+127,And,bool/bitwise,visitBoolOps,all operands BOOL/BIT/BitConst -> BOOL if any BOOL else that BIT/BitConst type; else generic with flag=true,BOOL/BIT/BitConst or generic,--.143.cs:1513 (visitBoolOps)
+128,AndN,bool/bitwise,visitBoolOps,all operands BOOL/BIT/BitConst -> BOOL if any BOOL else that BIT/BitConst type; else generic with flag=true,BOOL/BIT/BitConst or generic,--.143.cs:1513 (visitBoolOps)
+129,Or,bool/bitwise,visitBoolOps,all operands BOOL/BIT/BitConst -> BOOL if any BOOL else that BIT/BitConst type; else generic with flag=true,BOOL/BIT/BitConst or generic,--.143.cs:1513 (visitBoolOps)
+130,OrN,bool/bitwise,visitBoolOps,all operands BOOL/BIT/BitConst -> BOOL if any BOOL else that BIT/BitConst type; else generic with flag=true,BOOL/BIT/BitConst or generic,--.143.cs:1513 (visitBoolOps)
+131,Xor,bool/bitwise,visitBoolOps,all operands BOOL/BIT/BitConst -> BOOL if any BOOL else that BIT/BitConst type; else generic with flag=true,BOOL/BIT/BitConst or generic,--.143.cs:1513 (visitBoolOps)
+132,XorN,bool/bitwise,visitBoolOps,all operands BOOL/BIT/BitConst -> BOOL if any BOOL else that BIT/BitConst type; else generic with flag=true,BOOL/BIT/BitConst or generic,--.143.cs:1513 (visitBoolOps)
+133,Not,bool/bitwise,visitBoolOps,all operands BOOL/BIT/BitConst -> BOOL if any BOOL else that BIT/BitConst type; else generic with flag=true,BOOL/BIT/BitConst or generic,--.143.cs:1513 (visitBoolOps)
+134,Eq,comparison,visitComparisons,non-strict: constant BOOL; strict-enum path inside generic yields the _IEnumType,BOOL / enum,--.143.cs:1507 (visitComparisons)
+135,Ne,comparison,visitComparisons,non-strict: constant BOOL; strict-enum path inside generic yields the _IEnumType,BOOL / enum,--.143.cs:1507 (visitComparisons)
+136,Ge,comparison,visitComparisons,non-strict: constant BOOL; strict-enum path inside generic yields the _IEnumType,BOOL / enum,--.143.cs:1507 (visitComparisons)
+137,Gt,comparison,visitComparisons,non-strict: constant BOOL; strict-enum path inside generic yields the _IEnumType,BOOL / enum,--.143.cs:1507 (visitComparisons)
+138,Le,comparison,visitComparisons,non-strict: constant BOOL; strict-enum path inside generic yields the _IEnumType,BOOL / enum,--.143.cs:1507 (visitComparisons)
+139,Lt,comparison,visitComparisons,non-strict: constant BOOL; strict-enum path inside generic yields the _IEnumType,BOOL / enum,--.143.cs:1507 (visitComparisons)
+140,Cal,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+141,CalC,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+142,CalCN,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+143,Jmp,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+144,JmpC,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+145,JmpCN,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+146,Ret,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+147,RetC,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+148,RetCN,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+149,Ld,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+150,LdN,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+151,St,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+152,StN,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+153,Move,special,visitMove,no operands -> BOOL; else operand[0].DeRefType,operand0 / BOOL,--.143.cs (visitor_method above)
+154,TestAndSet,special,visitTestAndSet,constant,DWORD,--.143.cs (visitor_method above)
+155,R,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+156,S,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+157,Plus,arithmetic,visitArithmetics,"1) TimeOperationTypeCalculator handles TIME/DATE/LTIME/pointer for +,-,*,/; 2) else generic algorithm; bool flag=false (literal/real promotion enabled)",TIME/LTIME/DATE/DT/TOD or promoted operand type,--.143.cs:1592 (visitArithmetics) + TimeOperationTypeCalculator.cs:187
+158,Minus,arithmetic,visitArithmetics,"1) TimeOperationTypeCalculator handles TIME/DATE/LTIME/pointer for +,-,*,/; 2) else generic algorithm; bool flag=false (literal/real promotion enabled)",TIME/LTIME/DATE/DT/TOD or promoted operand type,--.143.cs:1592 (visitArithmetics) + TimeOperationTypeCalculator.cs:187
+159,Times,arithmetic,visitArithmetics,"1) TimeOperationTypeCalculator handles TIME/DATE/LTIME/pointer for +,-,*,/; 2) else generic algorithm; bool flag=false (literal/real promotion enabled)",TIME/LTIME/DATE/DT/TOD or promoted operand type,--.143.cs:1592 (visitArithmetics) + TimeOperationTypeCalculator.cs:187
+160,Power,arithmetic,visitArithmetics,"1) TimeOperationTypeCalculator handles TIME/DATE/LTIME/pointer for +,-,*,/; 2) else generic algorithm; bool flag=false (literal/real promotion enabled)",TIME/LTIME/DATE/DT/TOD or promoted operand type,--.143.cs:1592 (visitArithmetics) + TimeOperationTypeCalculator.cs:187
+161,Divide,arithmetic,visitArithmetics,"1) TimeOperationTypeCalculator handles TIME/DATE/LTIME/pointer for +,-,*,/; 2) else generic algorithm; bool flag=false (literal/real promotion enabled)",TIME/LTIME/DATE/DT/TOD or promoted operand type,--.143.cs:1592 (visitArithmetics) + TimeOperationTypeCalculator.cs:187
+162,Period,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+163,Colon,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+164,Assign,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+165,SetAssign,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+166,ResetAssign,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+167,LeftParenthesis,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+168,RightParenthesis,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+169,LeftBracket,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+170,RightBracket,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+171,Comma,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+172,Semicolon,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+173,Range,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+174,AssignOut,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+175,Less,comparison,visitComparisons,non-strict: constant BOOL; strict-enum path inside generic yields the _IEnumType,BOOL / enum,--.143.cs:1507 (visitComparisons)
+176,Greater,comparison,visitComparisons,non-strict: constant BOOL; strict-enum path inside generic yields the _IEnumType,BOOL / enum,--.143.cs:1507 (visitComparisons)
+177,LessEqual,comparison,visitComparisons,non-strict: constant BOOL; strict-enum path inside generic yields the _IEnumType,BOOL / enum,--.143.cs:1507 (visitComparisons)
+178,GreaterEqual,comparison,visitComparisons,non-strict: constant BOOL; strict-enum path inside generic yields the _IEnumType,BOOL / enum,--.143.cs:1507 (visitComparisons)
+179,Equal,comparison,visitComparisons,non-strict: constant BOOL; strict-enum path inside generic yields the _IEnumType,BOOL / enum,--.143.cs:1507 (visitComparisons)
+180,NotEqual,comparison,visitComparisons,non-strict: constant BOOL; strict-enum path inside generic yields the _IEnumType,BOOL / enum,--.143.cs:1507 (visitComparisons)
+181,Ampersand,bool/bitwise,visitBoolOps,all operands BOOL/BIT/BitConst -> BOOL if any BOOL else that BIT/BitConst type; else generic with flag=true,BOOL/BIT/BitConst or generic,--.143.cs:1513 (visitBoolOps)
+182,VerticalLine,bool/bitwise,visitBoolOps,all operands BOOL/BIT/BitConst -> BOOL if any BOOL else that BIT/BitConst type; else generic with flag=true,BOOL/BIT/BitConst or generic,--.143.cs:1513 (visitBoolOps)
+183,DeRef,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+184,Conversion,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+185,RefAssign,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+186,Reference,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+187,Property,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+188,TruncInt,special,visitTruncInt,constant,INT,--.143.cs (visitor_method above)
+189,FupAssign,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+190,__LocalOffset,special,visitLocalOffset,constant,DINT,--.143.cs (visitor_method above)
+191,__VarInfo,special,visitVarInfo,constant,__SYSTEM.VAR_INFO,--.143.cs (visitor_method above)
+192,__SystemScope,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+193,__TypeOf,special,visitTypeOf,constant,__SYSTEM.TYPE_CLASS,--.143.cs (visitor_method above)
+194,__CRC,special,visitCRC,constant,DWORD,--.143.cs (visitor_method above)
+195,__MaxOffset,special,visitMaxOffset,constant,UDINT,--.143.cs (visitor_method above)
+196,__Init,special,visitInit,constant,BOOL,--.143.cs (visitor_method above)
+197,__IsValidRef,special,visitIsValidRef,constant,BOOL,--.143.cs (visitor_method above)
+198,__QueryInterface,special,visitQueryInterface,constant,BOOL,--.143.cs (visitor_method above)
+199,__QueryPointer,special,visitQueryPointer,constant,BOOL,--.143.cs (visitor_method above)
+200,__New,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+201,__Delete,special,visitDelete,constant,BOOL,--.143.cs (visitor_method above)
+202,__Cast,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+203,__AdrInst,special,visitAdrInst,pointer to current signature userdef (FB/STRUCT),pointer to userdef,--.143.cs (visitor_method above)
+204,__RefAdr,special,visitRefAdr,delegates to visitAdr; REFERENCE -> deref pointer,pointer/operand,--.143.cs (visitor_method above)
+205,__Wait,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+206,SafeBool,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+207,SafeByte,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+208,SafeUSInt,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+209,SafeSInt,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+210,SafeWord,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+211,SafeUInt,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+212,SafeInt,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+213,SafeDWord,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+214,SafeUDInt,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+215,SafeTime,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+216,SafeDInt,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+217,SafeLWord,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+218,SafeULInt,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+219,SafeLInt,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+220,__BitOffset,special,visitBitOffset,3 operands -> BOOL else INT,BOOL / INT,--.143.cs (visitor_method above)
+221,__FCall,special,visitFCall,signature output[0] type when callee is a userdef,signature output,--.143.cs (visitor_method above)
+222,__PropertyInfo,special,visitPropertyInfo,constant,BOOL,--.143.cs (visitor_method above)
+223,Class,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+224,Abstract,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+225,Override,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+226,Public,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+227,Private,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+228,Protected,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+229,Internal,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+230,Final,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+231,__XWord,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+232,__UXInt,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+233,__MemorySet,special,visitMemorySet,constant,DWORD,--.143.cs (visitor_method above)
+234,And_Then,bool/bitwise,visitBoolOps,all operands BOOL/BIT/BitConst -> BOOL if any BOOL else that BIT/BitConst type; else generic with flag=true,BOOL/BIT/BitConst or generic,--.143.cs:1513 (visitBoolOps)
+235,Or_Else,bool/bitwise,visitBoolOps,all operands BOOL/BIT/BitConst -> BOOL if any BOOL else that BIT/BitConst type; else generic with flag=true,BOOL/BIT/BitConst or generic,--.143.cs:1513 (visitBoolOps)
+236,__GetLTick,special,visitGetLTick,constant,ULINT,--.143.cs (visitor_method above)
+237,__XInt,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+238,__Try,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+239,__EndTry,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+240,__Catch,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+241,__Finally,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+242,__Throw,special,visitThrow,constant,BOOL,--.143.cs (visitor_method above)
+243,__XString,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+244,VarInst,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+245,__CheckLicense,special,visitCheckLicense,constant,UDINT,--.143.cs (visitor_method above)
+246,__CallInitFunction,special,visitCallInitFunction,constant,BOOL,--.143.cs (visitor_method above)
+247,__LateCompiledExpr,special,visitLateCompiledExpr,constant,BOOL,--.143.cs (visitor_method above)
+248,LowerBound,special,visitLowerUpperBound,constant,DINT,--.143.cs (visitor_method above)
+249,UpperBound,special,visitLowerUpperBound,constant,DINT,--.143.cs (visitor_method above)
+250,AnyString,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+251,__PoolScope,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+252,__CheckLicenseBit,special,visitCheckLicenseBit,constant,INT,--.143.cs (visitor_method above)
+253,__XAdd,special,visitXAdd,constant,DINT,--.143.cs (visitor_method above)
+254,__MemoryBarrier,special,visitMemoryBarrier,constant,BOOL,--.143.cs (visitor_method above)
+255,__CurrentTask,special,visitCurrentTask,constant,BYTE,--.143.cs (visitor_method above)
+256,__CompareAndSwap,special,visitCompareAndSwap,constant,BOOL,--.143.cs (visitor_method above)
+257,__Vector,unhandled,(goto IL_50B),operator-visitor asserts (Debug.Assert(false)); typed elsewhere,n/a,-.143.cs:439
+258,__vcAdd,vector,visitVector,vector operand type / base type / LREAL; Set* -> vector type,__Vector / REAL / LREAL,--.143.cs:1605 (visitVector)
+259,__vcSub,vector,visitVector,vector operand type / base type / LREAL; Set* -> vector type,__Vector / REAL / LREAL,--.143.cs:1605 (visitVector)
+260,__vcMul,vector,visitVector,vector operand type / base type / LREAL; Set* -> vector type,__Vector / REAL / LREAL,--.143.cs:1605 (visitVector)
+261,__vcDiv,vector,visitVector,vector operand type / base type / LREAL; Set* -> vector type,__Vector / REAL / LREAL,--.143.cs:1605 (visitVector)
+262,__vcDot,vector,visitVector,vector operand type / base type / LREAL; Set* -> vector type,__Vector / REAL / LREAL,--.143.cs:1605 (visitVector)
+263,__vcSqrt,vector,visitVector,vector operand type / base type / LREAL; Set* -> vector type,__Vector / REAL / LREAL,--.143.cs:1605 (visitVector)
+264,__vcMin,vector,visitVector,vector operand type / base type / LREAL; Set* -> vector type,__Vector / REAL / LREAL,--.143.cs:1605 (visitVector)
+265,__vcMax,vector,visitVector,vector operand type / base type / LREAL; Set* -> vector type,__Vector / REAL / LREAL,--.143.cs:1605 (visitVector)
+266,__vcSetReal,vector,visitVector,vector operand type / base type / LREAL; Set* -> vector type,__Vector / REAL / LREAL,--.143.cs:1605 (visitVector)
+267,__vcSetLReal,vector,visitVector,vector operand type / base type / LREAL; Set* -> vector type,__Vector / REAL / LREAL,--.143.cs:1605 (visitVector)
+268,__vcLoadReal,vector,visitVector,vector operand type / base type / LREAL; Set* -> vector type,__Vector / REAL / LREAL,--.143.cs:1605 (visitVector)
+269,__vcLoadLReal,vector,visitVector,vector operand type / base type / LREAL; Set* -> vector type,__Vector / REAL / LREAL,--.143.cs:1605 (visitVector)
+270,__vcStore,vector,visitVector,vector operand type / base type / LREAL; Set* -> vector type,__Vector / REAL / LREAL,--.143.cs:1605 (visitVector)
+271,Hash,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+272,SafeReal,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+273,SafeLReal,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+274,LDate,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+275,LDateAndTime,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+276,LTimeOfDay,conversion/type,(not dispatched),"handled as _IConversionExpression/_ICastExpression, NOT by operator-visitor",target type,-
+277,XSizeOf,special,visitXSizeOf,pointer size 8 -> ULINT else UDINT,ULINT/UDINT,--.143.cs (visitor_method above)
+278,__PouName,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+279,__Position,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+280,VarGeneric,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+281,EndMethod,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+282,EndProperty,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+283,EndInterface,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+284,PropertySet,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+285,PropertyGet,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+286,__Begin_Implementation,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+287,Namespace,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+288,EndNamespace,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+289,Overload,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+290,Transition,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-
+291,EndTransition,keyword/IL,(not dispatched),"keyword or IL opcode, never an _IOperatorExpression in ST",n/a,-

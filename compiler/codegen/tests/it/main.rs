@@ -9,6 +9,14 @@
 //! `main.rs` is the crate root — that lets `mod foo;` resolve to `it/foo.rs`
 //! without `#[path]` attributes on every declaration.
 
+// Test-target boundary: the workspace denies panicking constructs in
+// production code; tests assert by panicking, so they are exempt here.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "integration test target: panicking helpers are sanctioned in tests"
+)]
+
 #[macro_use]
 mod common;
 
@@ -65,6 +73,7 @@ mod end_to_end_bitstring;
 mod end_to_end_bool;
 mod end_to_end_case;
 mod end_to_end_cmp;
+mod end_to_end_codesys_literals;
 mod end_to_end_compiler_intrinsics;
 mod end_to_end_concat;
 mod end_to_end_const_trunc;
@@ -110,6 +119,7 @@ mod end_to_end_global;
 mod end_to_end_if;
 mod end_to_end_implicit_widening;
 mod end_to_end_insert;
+mod end_to_end_jumps;
 mod end_to_end_ldate;
 mod end_to_end_left;
 mod end_to_end_len;
@@ -144,7 +154,9 @@ mod end_to_end_mux_lint;
 mod end_to_end_neg;
 mod end_to_end_nested;
 mod end_to_end_numeric_builtin_edges;
+mod end_to_end_params_of;
 mod end_to_end_partial_access;
+mod end_to_end_pipe_or;
 mod end_to_end_pow;
 mod end_to_end_property_declaration;
 mod end_to_end_ref;
@@ -177,7 +189,9 @@ mod end_to_end_time_function;
 mod end_to_end_time_functions;
 mod end_to_end_trig;
 mod end_to_end_trunc;
+mod end_to_end_try_catch;
 mod end_to_end_type_alias;
+mod end_to_end_typed_string_literals;
 mod end_to_end_types;
 mod end_to_end_user_fb;
 mod end_to_end_user_function;
@@ -185,4 +199,6 @@ mod end_to_end_user_function_in_out;
 mod end_to_end_var_temp;
 mod end_to_end_write_variable_raw;
 mod end_to_end_wstring;
+mod layout_hash;
+mod stable_var_ids;
 mod wire_format;

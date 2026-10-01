@@ -1,48 +1,38 @@
+use crate::code_section::FuncEntry;
 use crate::const_type::ConstType;
 use crate::error::ContainerError;
-use crate::header::{FileHeader, HEADER_SIZE};
-use crate::id_types::{ConstantIndex, FunctionId, InstanceId, TaskId, VarIndex};
+use crate::header::{FileHeader, FLAG_HAS_TYPE_SECTION, HEADER_SIZE};
+use crate::id_types::{ConstantIndex, FunctionId, VarIndex};
 use crate::integrity;
-use crate::task_type::TaskType;
+use crate::task_table::{ProgramInstanceEntry, TaskEntry, TASK_TABLE_HEADER_SIZE};
+use crate::type_section::{ArrayDescriptor, FieldEntry, UserFbDescriptor};
 
-/// Size of a single function directory entry in bytes.
-const FUNC_ENTRY_SIZE: usize = 16;
+/// Size of a single variable table entry in bytes.
+const VAR_ENTRY_SIZE: usize = 4;
 
-/// Size of the task table header in bytes (num_tasks + num_programs + shared_globals_size).
-const TASK_TABLE_HEADER_SIZE: usize = 6;
+/// Size of a single stable variable ID entry in bytes.
+const STABLE_VAR_ENTRY_SIZE: usize = 10;
 
-/// Size of a single task entry in bytes.
-const TASK_ENTRY_SIZE: usize = 32;
-
-/// Size of a single program instance entry in bytes.
-const PROGRAM_ENTRY_SIZE: usize = 16;
-
-/// A task entry parsed from a container's task table (no_std-compatible).
-#[derive(Clone, Debug)]
-pub struct TaskEntryRef {
-    pub task_id: TaskId,
-    pub priority: u16,
-    pub task_type: TaskType,
+/// A variable table entry parsed from a container's type section (no_std-compatible).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VarEntryRef {
+    /// Type encoding (same values as the owned path's `FieldType`).
+    pub var_type: u8,
+    /// Bit 0: the variable is an array; bits 1–7 are reserved.
     pub flags: u8,
-    pub interval_us: u64,
-    pub single_var_index: VarIndex,
-    pub watchdog_us: u64,
-    pub input_image_offset: u16,
-    pub output_image_offset: u16,
-    pub reserved: [u8; 4],
+    /// STRING/WSTRING max length, FB_INSTANCE `fb_type_id`, or array
+    /// descriptor index, depending on `var_type`.
+    pub extra: u16,
 }
 
-/// A program instance entry parsed from a container's task table (no_std-compatible).
-#[derive(Clone, Debug)]
-pub struct ProgramEntryRef {
-    pub instance_id: InstanceId,
-    pub task_id: TaskId,
-    pub entry_function_id: FunctionId,
-    pub var_table_offset: u16,
-    pub var_table_count: u16,
-    pub fb_instance_offset: u16,
-    pub fb_instance_count: u16,
-    pub reserved: u16,
+/// A stable variable ID entry parsed from a container's type section
+/// (no_std-compatible).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StableVarEntryRef {
+    /// Compiler-assigned variable table index of the entity.
+    pub var_index: VarIndex,
+    /// Engineering-side entity UID; survives renames.
+    pub uid: u64,
 }
 
 /// Zero-copy, `no_std`-compatible view over a serialized bytecode container.
@@ -58,6 +48,8 @@ pub struct ContainerRef<'a> {
     code_bytes: &'a [u8],
     func_dir: &'a [u8],
     task_table_bytes: &'a [u8],
+    variable_table_bytes: &'a [u8],
+    stable_var_bytes: &'a [u8],
 }
 
 /// Helper to read a little-endian u16 from a byte slice at the given offset.
@@ -68,6 +60,69 @@ fn read_u16(data: &[u8], offset: usize) -> Result<u16, ContainerError> {
         return Err(ContainerError::SectionSizeMismatch);
     }
     Ok(u16::from_le_bytes([data[offset], data[offset + 1]]))
+}
+
+/// Locates the variable table and stable variable ID table — the fourth and
+/// fifth sub-tables of a serialized type section — and returns the slices
+/// holding their entries (each u16 count is skipped). The first three
+/// sub-tables are variable size, so reaching the fourth means walking them.
+///
+/// A type section that ends before a sub-table (a container written before
+/// format v4 for the variable table, v5 for the stable IDs) yields an empty
+/// slice for it.
+fn type_section_tables(type_section: &[u8]) -> Result<(&[u8], &[u8]), ContainerError> {
+    // FB type descriptors: count, then per descriptor a 4-byte header
+    // followed by its 4-byte field entries.
+    let num_fb_types = read_u16(type_section, 0)? as usize;
+    let mut pos: usize = 2;
+    for _ in 0..num_fb_types {
+        let num_fields = *type_section
+            .get(pos + 2)
+            .ok_or(ContainerError::SectionSizeMismatch)? as usize;
+        pos += 4 + num_fields * FieldEntry::SIZE;
+        if pos > type_section.len() {
+            return Err(ContainerError::SectionSizeMismatch);
+        }
+    }
+
+    // Array descriptors: count + 12 bytes each.
+    let num_arrays = read_u16(type_section, pos)? as usize;
+    pos += 2 + num_arrays * ArrayDescriptor::SIZE;
+    if pos > type_section.len() {
+        return Err(ContainerError::SectionSizeMismatch);
+    }
+
+    // User FB descriptors: count + 8 bytes each.
+    let num_user_fb_types = read_u16(type_section, pos)? as usize;
+    pos += 2 + num_user_fb_types * UserFbDescriptor::SIZE;
+    if pos > type_section.len() {
+        return Err(ContainerError::SectionSizeMismatch);
+    }
+
+    // Variable table: count + 4 bytes per entry.
+    if pos + 2 > type_section.len() {
+        return Ok((&type_section[type_section.len()..], &[]));
+    }
+    let count = read_u16(type_section, pos)? as usize;
+    pos += 2;
+    let entries_len = count * VAR_ENTRY_SIZE;
+    if pos + entries_len > type_section.len() {
+        return Err(ContainerError::SectionSizeMismatch);
+    }
+    let variable_table = &type_section[pos..pos + entries_len];
+    pos += entries_len;
+
+    // Stable variable IDs: count + 10 bytes per entry.
+    if pos + 2 > type_section.len() {
+        return Ok((variable_table, &[]));
+    }
+    let count = read_u16(type_section, pos)? as usize;
+    pos += 2;
+    let entries_len = count * STABLE_VAR_ENTRY_SIZE;
+    if pos + entries_len > type_section.len() {
+        return Err(ContainerError::SectionSizeMismatch);
+    }
+    Ok((variable_table, &type_section[pos..pos + entries_len]))
 }
 
 impl<'a> ContainerRef<'a> {
@@ -158,7 +213,7 @@ impl<'a> ContainerRef<'a> {
         }
         let code_section = &data[code_start..code_end];
 
-        let func_dir_size = header.num_functions as usize * FUNC_ENTRY_SIZE;
+        let func_dir_size = header.num_functions as usize * FuncEntry::SIZE;
         if func_dir_size > code_section.len() {
             return Err(ContainerError::SectionSizeMismatch);
         }
@@ -204,6 +259,20 @@ impl<'a> ContainerRef<'a> {
             )?;
         }
 
+        // 7. Locate the variable table and stable variable ID table (the
+        //    type section's fourth and fifth sub-tables)
+        let (variable_table_bytes, stable_var_bytes) =
+            if (header.flags & FLAG_HAS_TYPE_SECTION) != 0 && header.type_section_size > 0 {
+                let ts_start = header.type_section_offset as usize;
+                let ts_end = ts_start + header.type_section_size as usize;
+                if ts_end > data.len() {
+                    return Err(ContainerError::SectionSizeMismatch);
+                }
+                type_section_tables(&data[ts_start..ts_end])?
+            } else {
+                (&data[0..0], &data[0..0])
+            };
+
         Ok(ContainerRef {
             header,
             const_pool_bytes,
@@ -211,6 +280,8 @@ impl<'a> ContainerRef<'a> {
             code_bytes,
             func_dir,
             task_table_bytes,
+            variable_table_bytes,
+            stable_var_bytes,
         })
     }
 
@@ -253,25 +324,24 @@ impl<'a> ContainerRef<'a> {
         ]))
     }
 
-    /// Returns the bytecode slice for the given function ID.
+    /// Returns the function directory entry for the given function ID.
     ///
-    /// Reads the function directory entry at `id * FUNC_ENTRY_SIZE` to get
-    /// the offset and length, then slices the code bytes.
+    /// Function IDs are compiler-assigned sequential indices, so the entry
+    /// sits at `id * FuncEntry::SIZE` in the directory.
+    pub fn function_entry(&self, id: FunctionId) -> Option<FuncEntry> {
+        let entry_offset = id.raw() as usize * FuncEntry::SIZE;
+        let bytes = self
+            .func_dir
+            .get(entry_offset..entry_offset + FuncEntry::SIZE)?;
+        Some(FuncEntry::from_bytes(bytes.try_into().ok()?))
+    }
+
+    /// Returns the bytecode slice for the given function ID.
     pub fn get_function_bytecode(&self, id: FunctionId) -> Option<&'a [u8]> {
-        let entry_offset = id.raw() as usize * FUNC_ENTRY_SIZE;
-        if entry_offset + FUNC_ENTRY_SIZE > self.func_dir.len() {
-            return None;
-        }
-        let entry = &self.func_dir[entry_offset..entry_offset + FUNC_ENTRY_SIZE];
-
-        let code_offset = u32::from_le_bytes([entry[2], entry[3], entry[4], entry[5]]) as usize;
-        let code_length = u32::from_le_bytes([entry[6], entry[7], entry[8], entry[9]]) as usize;
-
-        let end = code_offset + code_length;
-        if end > self.code_bytes.len() {
-            return None;
-        }
-        Some(&self.code_bytes[code_offset..end])
+        let entry = self.function_entry(id)?;
+        let start = entry.code_offset as usize;
+        let end = start.checked_add(entry.code_length as usize)?;
+        self.code_bytes.get(start..end)
     }
 
     /// Returns the number of tasks in the task table.
@@ -299,53 +369,73 @@ impl<'a> ContainerRef<'a> {
     }
 
     /// Parses and returns the task entry at the given index.
-    pub fn task_entry(&self, index: u16) -> Result<TaskEntryRef, ContainerError> {
-        let start = TASK_TABLE_HEADER_SIZE + index as usize * TASK_ENTRY_SIZE;
-        let end = start + TASK_ENTRY_SIZE;
-        if end > self.task_table_bytes.len() {
-            return Err(ContainerError::SectionSizeMismatch);
-        }
-        let buf = &self.task_table_bytes[start..end];
-
-        let task_type = TaskType::from_u8(buf[4])?;
-
-        Ok(TaskEntryRef {
-            task_id: TaskId::new(u16::from_le_bytes([buf[0], buf[1]])),
-            priority: u16::from_le_bytes([buf[2], buf[3]]),
-            task_type,
-            flags: buf[5],
-            interval_us: u64::from_le_bytes([
-                buf[6], buf[7], buf[8], buf[9], buf[10], buf[11], buf[12], buf[13],
-            ]),
-            single_var_index: VarIndex::new(u16::from_le_bytes([buf[14], buf[15]])),
-            watchdog_us: u64::from_le_bytes([
-                buf[16], buf[17], buf[18], buf[19], buf[20], buf[21], buf[22], buf[23],
-            ]),
-            input_image_offset: u16::from_le_bytes([buf[24], buf[25]]),
-            output_image_offset: u16::from_le_bytes([buf[26], buf[27]]),
-            reserved: [buf[28], buf[29], buf[30], buf[31]],
-        })
+    pub fn task_entry(&self, index: u16) -> Result<TaskEntry, ContainerError> {
+        let start = TASK_TABLE_HEADER_SIZE + index as usize * TaskEntry::SIZE;
+        let buf = self.fixed_entry::<{ TaskEntry::SIZE }>(start)?;
+        TaskEntry::from_bytes(&buf)
     }
 
     /// Parses and returns the program instance entry at the given index.
-    pub fn program_entry(&self, index: u16) -> Result<ProgramEntryRef, ContainerError> {
-        let tasks_end = TASK_TABLE_HEADER_SIZE + self.num_tasks() as usize * TASK_ENTRY_SIZE;
-        let start = tasks_end + index as usize * PROGRAM_ENTRY_SIZE;
-        let end = start + PROGRAM_ENTRY_SIZE;
-        if end > self.task_table_bytes.len() {
+    pub fn program_entry(&self, index: u16) -> Result<ProgramInstanceEntry, ContainerError> {
+        let tasks_end = TASK_TABLE_HEADER_SIZE + self.num_tasks() as usize * TaskEntry::SIZE;
+        let start = tasks_end + index as usize * ProgramInstanceEntry::SIZE;
+        let buf = self.fixed_entry::<{ ProgramInstanceEntry::SIZE }>(start)?;
+        Ok(ProgramInstanceEntry::from_bytes(&buf))
+    }
+
+    /// Copies the `N` task-table bytes at `start` into an array, or fails
+    /// with `SectionSizeMismatch` when they run past the section.
+    fn fixed_entry<const N: usize>(&self, start: usize) -> Result<[u8; N], ContainerError> {
+        self.task_table_bytes
+            .get(start..start + N)
+            .and_then(|bytes| bytes.try_into().ok())
+            .ok_or(ContainerError::SectionSizeMismatch)
+    }
+
+    /// Returns the number of entries in the type section's variable table.
+    ///
+    /// Zero when the container carries no type section, or carries one
+    /// written before the variable table existed.
+    pub fn variable_count(&self) -> u16 {
+        (self.variable_table_bytes.len() / VAR_ENTRY_SIZE) as u16
+    }
+
+    /// Parses and returns the variable table entry at the given index.
+    pub fn var_entry(&self, index: VarIndex) -> Result<VarEntryRef, ContainerError> {
+        let offset = index.raw() as usize * VAR_ENTRY_SIZE;
+        if offset + VAR_ENTRY_SIZE > self.variable_table_bytes.len() {
             return Err(ContainerError::SectionSizeMismatch);
         }
-        let buf = &self.task_table_bytes[start..end];
+        let entry = &self.variable_table_bytes[offset..offset + VAR_ENTRY_SIZE];
+        Ok(VarEntryRef {
+            var_type: entry[0],
+            flags: entry[1],
+            extra: u16::from_le_bytes([entry[2], entry[3]]),
+        })
+    }
 
-        Ok(ProgramEntryRef {
-            instance_id: InstanceId::new(u16::from_le_bytes([buf[0], buf[1]])),
-            task_id: TaskId::new(u16::from_le_bytes([buf[2], buf[3]])),
-            entry_function_id: FunctionId::new(u16::from_le_bytes([buf[4], buf[5]])),
-            var_table_offset: u16::from_le_bytes([buf[6], buf[7]]),
-            var_table_count: u16::from_le_bytes([buf[8], buf[9]]),
-            fb_instance_offset: u16::from_le_bytes([buf[10], buf[11]]),
-            fb_instance_count: u16::from_le_bytes([buf[12], buf[13]]),
-            reserved: u16::from_le_bytes([buf[14], buf[15]]),
+    /// Returns the number of entries in the type section's stable variable
+    /// ID table, which is in ascending `var_index` order.
+    ///
+    /// Zero when the container carries no type section, or carries one
+    /// written before the stable variable ID table existed.
+    pub fn stable_var_count(&self) -> u16 {
+        (self.stable_var_bytes.len() / STABLE_VAR_ENTRY_SIZE) as u16
+    }
+
+    /// Parses and returns the stable variable ID entry at the given position
+    /// in the table.
+    pub fn stable_var_entry(&self, position: u16) -> Result<StableVarEntryRef, ContainerError> {
+        let offset = position as usize * STABLE_VAR_ENTRY_SIZE;
+        if offset + STABLE_VAR_ENTRY_SIZE > self.stable_var_bytes.len() {
+            return Err(ContainerError::SectionSizeMismatch);
+        }
+        let entry = &self.stable_var_bytes[offset..offset + STABLE_VAR_ENTRY_SIZE];
+        Ok(StableVarEntryRef {
+            var_index: VarIndex::new(u16::from_le_bytes([entry[0], entry[1]])),
+            uid: u64::from_le_bytes([
+                entry[2], entry[3], entry[4], entry[5], entry[6], entry[7], entry[8], entry[9],
+            ]),
         })
     }
 }
@@ -357,11 +447,16 @@ mod tests {
     use std::vec;
     use std::vec::Vec;
 
+    use crate::id_types::FbTypeId;
     use crate::test_support::{
         container_bytes, steel_thread_single_function_container, with_tampered_header,
     };
-    use crate::ContainerBuilder;
+    use crate::type_section::{
+        FbTypeDescriptor, FieldEntry, FieldType, StableVarEntry, UserFbDescriptor, VarEntry,
+        VAR_FLAG_IS_ARRAY,
+    };
     use crate::{integrity, opcode};
+    use crate::{ContainerBuilder, InstanceId, TaskId, TaskType};
 
     fn steel_thread_bytes() -> Vec<u8> {
         container_bytes(&steel_thread_single_function_container())
@@ -687,6 +782,126 @@ mod tests {
         // The builder synthesizes a single default program with shared_globals_size=0.
         assert_eq!(cref.num_programs(), 1);
         assert_eq!(cref.shared_globals_size(), 0);
+    }
+
+    /// A container whose type section carries all five sub-tables, so the
+    /// variable table and stable variable ID walks have to skip the earlier
+    /// ones.
+    fn type_section_bytes() -> Vec<u8> {
+        let mut builder = ContainerBuilder::new();
+        builder.add_array_descriptor(FieldType::I32 as u8, 4, 0);
+        container_bytes(
+            &builder
+                .num_variables(2)
+                .add_fb_type(FbTypeDescriptor {
+                    type_id: FbTypeId::new(0),
+                    fields: vec![FieldEntry {
+                        field_type: FieldType::I32,
+                        field_extra: 0,
+                    }],
+                })
+                .add_user_fb_type(UserFbDescriptor {
+                    type_id: FbTypeId::new(0),
+                    function_id: FunctionId::new(1),
+                    var_offset: 0,
+                    num_fields: 1,
+                })
+                .add_var_entry(VarEntry {
+                    var_type: FieldType::I32,
+                    flags: 0,
+                    extra: 0,
+                })
+                .add_var_entry(VarEntry {
+                    var_type: FieldType::F64,
+                    flags: VAR_FLAG_IS_ARRAY,
+                    extra: 0,
+                })
+                .add_stable_var(StableVarEntry {
+                    var_index: VarIndex::new(0),
+                    uid: 0x0102_0304_0506_0708,
+                })
+                .add_stable_var(StableVarEntry {
+                    var_index: VarIndex::new(1),
+                    uid: 2,
+                })
+                .add_function(FunctionId::INIT, &[opcode::RET_VOID], 0, 0, 0)
+                .build(),
+        )
+    }
+
+    #[test]
+    fn container_ref_var_entry_when_valid_index_then_returns_fields() {
+        let data = type_section_bytes();
+        let mut offsets = vec![0u32; 0];
+        let cref = ContainerRef::from_slice(&data, &mut offsets).unwrap();
+
+        assert_eq!(cref.variable_count(), 2);
+        let first = cref.var_entry(VarIndex::new(0)).unwrap();
+        assert_eq!(first.var_type, FieldType::I32 as u8);
+        assert_eq!(first.flags, 0);
+        assert_eq!(first.extra, 0);
+        let second = cref.var_entry(VarIndex::new(1)).unwrap();
+        assert_eq!(second.var_type, FieldType::F64 as u8);
+        assert_eq!(second.flags, VAR_FLAG_IS_ARRAY);
+        assert_eq!(second.extra, 0);
+    }
+
+    #[test]
+    fn container_ref_var_entry_when_index_out_of_bounds_then_errors() {
+        let data = type_section_bytes();
+        let mut offsets = vec![0u32; 0];
+        let cref = ContainerRef::from_slice(&data, &mut offsets).unwrap();
+
+        assert!(matches!(
+            cref.var_entry(VarIndex::new(2)),
+            Err(ContainerError::SectionSizeMismatch)
+        ));
+    }
+
+    #[test]
+    fn container_ref_stable_var_entry_when_valid_position_then_returns_fields() {
+        let data = type_section_bytes();
+        let mut offsets = vec![0u32; 0];
+        let cref = ContainerRef::from_slice(&data, &mut offsets).unwrap();
+
+        assert_eq!(cref.stable_var_count(), 2);
+        let first = cref.stable_var_entry(0).unwrap();
+        assert_eq!(first.var_index, VarIndex::new(0));
+        assert_eq!(first.uid, 0x0102_0304_0506_0708);
+        let second = cref.stable_var_entry(1).unwrap();
+        assert_eq!(second.var_index, VarIndex::new(1));
+        assert_eq!(second.uid, 2);
+    }
+
+    #[test]
+    fn container_ref_stable_var_entry_when_position_out_of_bounds_then_errors() {
+        let data = type_section_bytes();
+        let mut offsets = vec![0u32; 0];
+        let cref = ContainerRef::from_slice(&data, &mut offsets).unwrap();
+
+        assert!(matches!(
+            cref.stable_var_entry(2),
+            Err(ContainerError::SectionSizeMismatch)
+        ));
+    }
+
+    #[test]
+    fn container_ref_variable_count_when_no_type_section_then_zero() {
+        let data = steel_thread_bytes();
+        let count = ContainerRef::const_count(&data).unwrap();
+        let mut offsets = vec![0u32; count as usize];
+        let cref = ContainerRef::from_slice(&data, &mut offsets).unwrap();
+
+        assert_eq!(cref.variable_count(), 0);
+        assert_eq!(cref.stable_var_count(), 0);
+        assert!(matches!(
+            cref.var_entry(VarIndex::new(0)),
+            Err(ContainerError::SectionSizeMismatch)
+        ));
+        assert!(matches!(
+            cref.stable_var_entry(0),
+            Err(ContainerError::SectionSizeMismatch)
+        ));
     }
 
     #[test]

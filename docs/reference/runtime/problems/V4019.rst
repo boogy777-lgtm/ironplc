@@ -1,0 +1,29 @@
+=====
+V4019
+=====
+
+.. problem-summary:: V4019
+
+A replicated state snapshot — the bulk state image one redundant unit
+applies from its peer — was internally inconsistent: its byte lengths do
+not match the layout it declares. The apply refused without touching a
+byte. A snapshot whose payload does not match its own declared layout is
+corrupt (a garbled transfer or a bug at the producing unit); applying a
+partial guess would diverge the pair's process state, so the only honest
+answer is the coded refusal.
+
+Example
+-------
+
+A crossload transfer delivers a snapshot whose variable count declares 4
+slots but carries 3:
+
+.. code-block::
+
+   Error: V4019 - snapshot corrupt: replicated state snapshot is internally inconsistent
+
+To fix this error, re-establish synchronization: the receiving unit stays
+deSYNC and the pair re-runs the sync pipeline. If the code persists,
+check the redundancy link (garbled frames point at transport corruption)
+and the producing unit's version — the pair must run identical runtime
+versions to agree on the snapshot layout.

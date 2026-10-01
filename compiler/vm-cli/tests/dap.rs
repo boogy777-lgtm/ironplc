@@ -8,6 +8,14 @@
 //! binary being built at all: it is no longer behind a feature gate, and a
 //! change that stops building it stops this file from running.
 
+// Test-target boundary: the workspace denies panicking constructs in
+// production code; tests assert by panicking, so they are exempt here.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "integration test target: panicking helpers are sanctioned in tests"
+)]
+
 use std::io::{Read, Write};
 use std::process::{Command, Stdio};
 
@@ -356,10 +364,12 @@ fn ironplcvmd_when_task_declares_interval_then_timers_follow_it() {
         "each scan of a 100 ms task is 100 ms of program time"
     );
 
-    let elapsed_at = observed
-        .iter()
-        .position(|(_, _, q)| q == "TRUE")
-        .unwrap_or_else(|| panic!("Q never became TRUE within 8 scans: {observed:?}"));
+    let elapsed_at = observed.iter().position(|(_, _, q)| q == "TRUE");
+    assert!(
+        elapsed_at.is_some(),
+        "Q never became TRUE within 8 scans: {observed:?}"
+    );
+    let elapsed_at = elapsed_at.unwrap();
     assert_eq!(
         observed[elapsed_at].0, 6,
         "PT := T#500ms spans five 100 ms cycles: {observed:?}"

@@ -24,10 +24,11 @@ use crate::header::{
     FileHeader, FLAG_HAS_DEBUG_SECTION, FLAG_HAS_SYSTEM_UPTIME, FLAG_HAS_TYPE_SECTION,
     FORMAT_VERSION, HEADER_SIZE, MAGIC,
 };
-use crate::id_types::{FbTypeId, FunctionId};
+use crate::id_types::{FbTypeId, FunctionId, VarIndex};
 use crate::test_support::with_tampered_header;
 use crate::type_section::{
-    ArrayDescriptor, FbTypeDescriptor, FieldEntry, FieldType, TypeSection, UserFbDescriptor,
+    ArrayDescriptor, FbFieldUidEntry, FbTypeDescriptor, FieldEntry, FieldType, StableVarEntry,
+    TypeSection, UserFbDescriptor, VarEntry,
 };
 use crate::{integrity, opcode, ConstType, Container, ContainerError, ContainerRef};
 
@@ -67,10 +68,10 @@ fn container_spec_req_cf_002_magic_is_iplc() {
     assert_eq!(bytes, [0x43, 0x4C, 0x50, 0x49]);
 }
 
-/// REQ-CF-container-003: Format version is 4.
+/// REQ-CF-container-003: Format version is 7.
 #[spec_test(REQ_CF_container_003)]
-fn container_spec_req_cf_003_format_version_is_4() {
-    assert_eq!(FORMAT_VERSION, 4);
+fn container_spec_req_cf_003_format_version_is_7() {
+    assert_eq!(FORMAT_VERSION, 7);
 }
 
 /// REQ-CF-container-004: All multi-byte values in the header are little-endian.
@@ -83,8 +84,8 @@ fn container_spec_req_cf_004_header_uses_little_endian() {
     // Magic at offset 0: 0x49504C43 in LE is [0x43, 0x4C, 0x50, 0x49]
     assert_eq!(&buf[0..4], &0x49504C43u32.to_le_bytes());
 
-    // Format version at offset 4: 4u16 in LE is [0x04, 0x00]
-    assert_eq!(&buf[4..6], &4u16.to_le_bytes());
+    // Format version at offset 4 (u16 LE)
+    assert_eq!(&buf[4..6], &FORMAT_VERSION.to_le_bytes());
 }
 
 /// REQ-CF-container-005: Header field offsets match the spec table layout, totaling
@@ -166,6 +167,11 @@ fn full_container_bytes() -> (Vec<u8>, FileHeader) {
     builder.add_array_descriptor(0, 4, 0);
     let container = builder
         .num_variables(1)
+        .add_var_entry(VarEntry {
+            var_type: FieldType::I32,
+            flags: 0,
+            extra: 0,
+        })
         .add_i32_constant(1)
         .add_function(FunctionId::INIT, &[opcode::RET_VOID], 1, 1, 0)
         .add_func_name(FuncNameEntry {
@@ -349,11 +355,17 @@ fn spec_content_hash(buf: &[u8], h: &FileHeader) -> [u8; 32] {
     *hasher.finalize().as_bytes()
 }
 
-/// REQ-CF-container-028: content_hash is BLAKE3 over the masked header, task
+// REQ-CF-container-035 through -037 carry upstream's hash requirements under
+// numbers upstream added as 028-030: the fork had already taken 028 (stable
+// var layout), 029 (load-time verification) and 030 (FB field UID layout),
+// so the merge renumbered the newer side. Keep the numbers in sync with
+// `specs/design/bytecode-container-format.md`.
+
+/// REQ-CF-container-035: content_hash is BLAKE3 over the masked header, task
 /// table, type section, constant pool and code section in file order; an
 /// absent type section contributes nothing.
-#[spec_test(REQ_CF_container_028)]
-fn container_spec_req_cf_028_content_hash_covers_header_task_type_const_and_code() {
+#[spec_test(REQ_CF_container_035)]
+fn container_spec_req_cf_035_content_hash_covers_header_task_type_const_and_code() {
     let (buf, h) = full_container_bytes();
     assert_eq!(h.content_hash, spec_content_hash(&buf, &h));
     assert_ne!(h.content_hash, integrity::NO_HASH);
@@ -384,10 +396,10 @@ fn container_spec_req_cf_034_header_image_masks_hashes_directory_and_debug_flag(
     assert_eq!(&image[192..256], &header[192..256]);
 }
 
-/// REQ-CF-container-029: debug_hash is BLAKE3 over the debug section bytes,
+/// REQ-CF-container-036: debug_hash is BLAKE3 over the debug section bytes,
 /// and all zeros when there is no debug section.
-#[spec_test(REQ_CF_container_029)]
-fn container_spec_req_cf_029_debug_hash_covers_debug_section() {
+#[spec_test(REQ_CF_container_036)]
+fn container_spec_req_cf_036_debug_hash_covers_debug_section() {
     let (buf, h) = full_container_bytes();
     let debug = section(&buf, h.debug_section_offset, h.debug_section_size);
     assert_eq!(h.debug_hash, *blake3::hash(debug).as_bytes());
@@ -396,10 +408,10 @@ fn container_spec_req_cf_029_debug_hash_covers_debug_section() {
     assert_eq!(h.debug_hash, integrity::NO_HASH);
 }
 
-/// REQ-CF-container-030: a byte changed in the covered header bytes or in
+/// REQ-CF-container-037: a byte changed in the covered header bytes or in
 /// any hashed section is rejected with ContentHashMismatch by both readers.
-#[spec_test(REQ_CF_container_030)]
-fn container_spec_req_cf_030_modified_hashed_content_is_rejected() {
+#[spec_test(REQ_CF_container_037)]
+fn container_spec_req_cf_037_modified_hashed_content_is_rejected() {
     let (buf, h) = full_container_bytes();
     // Header: `profile` (byte 6) and `data_region_bytes` (bytes 198–201)
     // are covered and not otherwise validated by the reader.
@@ -487,7 +499,8 @@ fn write_type_section(section: &TypeSection) -> Vec<u8> {
 }
 
 /// REQ-CF-container-018: The type section is FB type descriptors, then array
-/// descriptors, then user FB descriptors, each behind a u16 count.
+/// descriptors, then user FB descriptors, then the variable table, then the
+/// stable variable IDs, then the FB field UIDs, each behind a u16 count.
 #[spec_test(REQ_CF_container_018)]
 fn container_spec_req_cf_018_type_section_sub_table_order() {
     let section = TypeSection {
@@ -505,17 +518,113 @@ fn container_spec_req_cf_018_type_section_sub_table_order() {
             var_offset: 5,
             num_fields: 1,
         }],
+        variable_table: vec![VarEntry {
+            var_type: FieldType::Time,
+            flags: 0,
+            extra: 0,
+        }],
+        stable_vars: vec![StableVarEntry {
+            var_index: VarIndex::new(7),
+            uid: 0x0102_0304_0506_0708,
+        }],
+        fb_field_uids: vec![FbFieldUidEntry {
+            fb_type_id: FbTypeId::new(0x0B),
+            field_index: 0,
+            uid: 0x1112_1314_1516_1718,
+        }],
     };
     let buf = write_type_section(&section);
     // fb count(2) + fb header(4) + one field(4) = 10, then array count(2) +
-    // descriptor(12) = 24, then user count(2) + descriptor(8) = 34.
-    assert_eq!(buf.len(), 34);
+    // descriptor(12) = 24, then user count(2) + descriptor(8) = 34, then
+    // variable count(2) + entry(4) = 40, then stable var count(2) +
+    // entry(10) = 52, then FB field UID count(2) + entry(11) = 65.
+    assert_eq!(buf.len(), 65);
     assert_eq!(&buf[0..2], &1u16.to_le_bytes());
     assert_eq!(&buf[2..4], &0x0Au16.to_le_bytes());
     assert_eq!(&buf[10..12], &1u16.to_le_bytes());
     assert_eq!(buf[12], FieldType::F64 as u8);
     assert_eq!(&buf[24..26], &1u16.to_le_bytes());
     assert_eq!(&buf[26..28], &0x0Bu16.to_le_bytes());
+    assert_eq!(&buf[34..36], &1u16.to_le_bytes());
+    assert_eq!(&buf[36..40], &[FieldType::Time as u8, 0, 0, 0]);
+    assert_eq!(&buf[40..42], &1u16.to_le_bytes());
+    assert_eq!(&buf[42..44], &7u16.to_le_bytes());
+    assert_eq!(&buf[44..52], &0x0102_0304_0506_0708u64.to_le_bytes());
+    assert_eq!(&buf[52..54], &1u16.to_le_bytes());
+    assert_eq!(&buf[54..56], &0x0Bu16.to_le_bytes());
+    assert_eq!(buf[56], 0);
+    assert_eq!(
+        &buf[57..65],
+        &[0x18, 0x17, 0x16, 0x15, 0x14, 0x13, 0x12, 0x11]
+    );
+}
+/// REQ-CF-container-028: The stable variable ID table is a u16 count followed
+/// by 10-byte `var_index`/`uid` entries in ascending `var_index` order.
+#[spec_test(REQ_CF_container_028)]
+fn container_spec_req_cf_028_stable_var_table_layout() {
+    let section = TypeSection {
+        stable_vars: vec![
+            StableVarEntry {
+                var_index: VarIndex::new(0x0102),
+                uid: 0x0304_0506_0708_090A,
+            },
+            StableVarEntry {
+                var_index: VarIndex::new(0x0B0C),
+                uid: 0x0D0E_0F10_1112_1314,
+            },
+        ],
+        ..Default::default()
+    };
+    let buf = write_type_section(&section);
+
+    // Six counts(12) + 2 entries * 10 = 32. The stable var count is the
+    // fifth count, at bytes 8..10; entries follow at 10..20 and 20..30.
+    assert_eq!(buf.len(), 32);
+    assert_eq!(&buf[8..10], &2u16.to_le_bytes());
+    assert_eq!(
+        &buf[10..20],
+        &[0x02, 0x01, 0x0A, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03]
+    );
+    assert_eq!(
+        &buf[20..30],
+        &[0x0C, 0x0B, 0x14, 0x13, 0x12, 0x11, 0x10, 0x0F, 0x0E, 0x0D]
+    );
+}
+
+/// REQ-CF-container-030: The FB field UID table is a u16 count followed by
+/// 11-byte entries — fb_type_id (u16 LE), field_index (u8), uid (u64 LE) —
+/// in ascending `(fb_type_id, field_index)` order.
+#[spec_test(REQ_CF_container_030)]
+fn container_spec_req_cf_030_fb_field_uid_table_layout() {
+    let section = TypeSection {
+        fb_field_uids: vec![
+            FbFieldUidEntry {
+                fb_type_id: FbTypeId::new(0x0B0C),
+                field_index: 0x0D,
+                uid: 0x1112_1314_1516_1718,
+            },
+            FbFieldUidEntry {
+                fb_type_id: FbTypeId::new(0x0B0C),
+                field_index: 0x0E,
+                uid: 0x191A_1B1C_1D1E_1F20,
+            },
+        ],
+        ..Default::default()
+    };
+    let buf = write_type_section(&section);
+
+    // Six counts(12) + 2 entries * 11 = 34. The FB field UID count is the
+    // sixth count, at bytes 10..12; entries follow at 12..23 and 23..34.
+    assert_eq!(buf.len(), 34);
+    assert_eq!(&buf[10..12], &2u16.to_le_bytes());
+    assert_eq!(
+        &buf[12..23],
+        &[0x0C, 0x0B, 0x0D, 0x18, 0x17, 0x16, 0x15, 0x14, 0x13, 0x12, 0x11]
+    );
+    assert_eq!(
+        &buf[23..34],
+        &[0x0C, 0x0B, 0x0E, 0x20, 0x1F, 0x1E, 0x1D, 0x1C, 0x1B, 0x1A, 0x19]
+    );
 }
 
 /// REQ-CF-container-019: An ArrayDescriptor is element_type u8, reserved u8,
@@ -533,7 +642,8 @@ fn container_spec_req_cf_019_array_descriptor_is_12_bytes() {
     };
     let buf = write_type_section(&section);
     // fb count(2) + array count(2) + descriptor(12) + user count(2)
-    assert_eq!(buf.len(), 18);
+    //   + variable count(2) + stable var count(2) + FB field UID count(2)
+    assert_eq!(buf.len(), 24);
     assert_eq!(
         &buf[4..16],
         &[
@@ -568,7 +678,8 @@ fn container_spec_req_cf_020_user_fb_descriptor_is_8_bytes() {
     };
     let buf = write_type_section(&section);
     // fb count(2) + array count(2) + user count(2) + descriptor(8)
-    assert_eq!(buf.len(), 14);
+    //   + variable count(2) + stable var count(2) + FB field UID count(2)
+    assert_eq!(buf.len(), 20);
     assert_eq!(&buf[6..14], &[0x02, 0x01, 0x04, 0x03, 0x06, 0x05, 7, 0]);
 }
 
@@ -594,7 +705,8 @@ fn container_spec_req_cf_021_fb_type_descriptor_header_is_4_bytes() {
     };
     let buf = write_type_section(&section);
     // fb count(2) + header(4) + 2 fields(8) + array count(2) + user count(2)
-    assert_eq!(buf.len(), 18);
+    //   + variable count(2) + stable var count(2) + FB field UID count(2)
+    assert_eq!(buf.len(), 24);
     assert_eq!(&buf[2..6], &[0x02, 0x01, 2, 0]);
     assert_eq!(&buf[6..10], &[FieldType::I32 as u8, 0, 0, 0]);
     assert_eq!(&buf[10..14], &[FieldType::String as u8, 0, 0x08, 0x07]);
@@ -733,6 +845,46 @@ fn container_spec_req_cf_027_unsupported_version_is_rejected() {
 }
 
 // ---------------------------------------------------------------------------
+// Container Format — Load-Time Verification (REQ-CF-container-029)
+// ---------------------------------------------------------------------------
+
+/// REQ-CF-container-029: The reader verifies a container at load time: a
+/// nonzero `content_hash` must match the type, constant and code sections,
+/// the type section's tables must be internally consistent, and a zero hash
+/// (a legacy container) is accepted. A violated invariant is rejected with
+/// `ContainerError::VerificationFailed`.
+#[spec_test(REQ_CF_container_029)]
+fn container_spec_req_cf_029_load_time_verification() {
+    use crate::verify_load;
+
+    // A consistent container round-trips and verifies.
+    let consistent = crate::test_support::steel_thread_single_function_container();
+    let mut buf = Vec::new();
+    consistent.write_to(&mut buf).unwrap();
+    let decoded = crate::Container::read_from(&mut Cursor::new(&buf)).unwrap();
+    assert_eq!(verify_load(&decoded), Ok(()));
+
+    // A corrupted code byte fails the content hash.
+    let code_end = {
+        let header = FileHeader::read_from(&mut Cursor::new(&buf[..HEADER_SIZE])).unwrap();
+        (header.code_section_offset + header.code_section_size) as usize
+    };
+    buf[code_end - 1] = buf[code_end - 1].wrapping_add(1);
+    assert!(matches!(
+        crate::Container::read_from(&mut Cursor::new(&buf)),
+        Err(ContainerError::ContentHashMismatch)
+    ));
+
+    // A zeroed content hash marks the bytes as legacy and is accepted.
+    let mut header = FileHeader::read_from(&mut Cursor::new(&buf[..HEADER_SIZE])).unwrap();
+    header.content_hash = [0u8; 32];
+    let mut legacy = Vec::new();
+    header.write_to(&mut legacy).unwrap();
+    legacy.extend_from_slice(&buf[HEADER_SIZE..]);
+    assert!(crate::Container::read_from(&mut Cursor::new(&legacy)).is_ok());
+}
+
+// ---------------------------------------------------------------------------
 // Container Format — Type Section (REQ-CF-container-008 through REQ-CF-container-009)
 // ---------------------------------------------------------------------------
 
@@ -752,9 +904,10 @@ fn container_spec_req_cf_008_field_entry_is_4_bytes() {
     let mut buf = Vec::new();
     section.write_to(&mut buf).unwrap();
     // fb_count(2) + type_id(2) + num_fields(1) + reserved(1) + field(4)
-    //   + array_count(2) + user_fb_count(2) = 14
+    //   + array_count(2) + user_fb_count(2) + variable_count(2)
+    //   + stable_var_count(2) + fb_field_uid_count(2) = 20
     // The single field entry occupies exactly 4 bytes (bytes 6..10).
-    assert_eq!(buf.len(), 14);
+    assert_eq!(buf.len(), 20);
 }
 
 /// REQ-CF-container-009: FieldType/var_type encoding values 0 through 10.

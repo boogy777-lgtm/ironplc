@@ -2,7 +2,7 @@
 //! `MyBay.Devices.MeterQRScanner[i].LastCode` (#1382).
 //!
 //! Each element's copy of the field is one structure apart, so it is reached
-//! through a strided STRING descriptor (ADR-0054), and its header is written
+//! through a strided STRING descriptor (ADR-0069), and its header is written
 //! by one `STR_INIT_ARRAY` per field at initialization.
 //!
 //! STRING values cannot be read as a slot, so `LEN` and comparisons witness

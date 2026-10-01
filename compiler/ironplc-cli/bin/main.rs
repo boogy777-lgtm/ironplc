@@ -287,11 +287,111 @@ struct FileArgs {
     #[arg(long)]
     allow_enum_base_type: bool,
 
+    /// Allow the BIT one-bit type and its literals BIT#0 and BIT#1. This is
+    /// a dialect extension not part of the IEC 61131-3 standard; with the
+    /// flag off, `bit` is an ordinary identifier.
+    #[arg(long)]
+    allow_bit_type: bool,
+
     /// Allow the CONTINUE statement, which goes on with the next iteration
     /// of the innermost loop. Standardized in IEC 61131-3:2013, so not part
     /// of Edition 2.
     #[arg(long)]
     allow_continue: bool,
+
+    /// Allow UNION ... END_UNION type declarations inside a TYPE block.
+    /// Standardized in IEC 61131-3:2013, so not part of Edition 2.
+    #[arg(long)]
+    allow_union_type: bool,
+
+    /// Allow VAR_STAT variable sections, whose declarations keep their value
+    /// between calls of the POU. This is a dialect extension not part of the
+    /// IEC 61131-3 standard.
+    #[arg(long)]
+    allow_var_stat: bool,
+
+    /// Allow VAR_INST variable sections in a method, whose declarations
+    /// belong to the method's instance. This is a dialect extension not part
+    /// of the IEC 61131-3 standard.
+    #[arg(long)]
+    allow_var_inst: bool,
+
+    /// Allow VAR_GENERIC variable sections directly after a function block
+    /// name, declaring the function block's generic constants. This is a
+    /// dialect extension not part of the IEC 61131-3 standard.
+    #[arg(long)]
+    allow_var_generic: bool,
+
+    /// Allow NAMESPACE ... END_NAMESPACE grouping of declarations. This is a
+    /// dialect extension not part of the IEC 61131-3 standard.
+    #[arg(long)]
+    allow_namespace: bool,
+
+    /// Allow the __BEGIN_IMPLEMENTATION marker that begins a POU's
+    /// implementation section in a CODESYS textual export. This is a dialect
+    /// extension not part of the IEC 61131-3 standard.
+    #[arg(long)]
+    allow_begin_implementation: bool,
+
+    /// Allow the __TRY/__CATCH/__FINALLY/__ENDTRY exception handling
+    /// statements and the __THROW statement.
+    /// This is an extension not part of the IEC 61131-3 standard.
+    #[arg(long)]
+    allow_try_catch: bool,
+
+    /// Allow the JMP statement and `label:` statement labels.
+    /// This is an extension not part of the IEC 61131-3 standard.
+    #[arg(long)]
+    allow_jump_statement: bool,
+
+    /// Allow the CALC conditional call statement (`CALC(cond, call)`).
+    /// This is an extension not part of the IEC 61131-3 standard.
+    #[arg(long)]
+    allow_calc_statement: bool,
+
+    /// Allow the __WAIT wait statement.
+    /// This is an extension not part of the IEC 61131-3 standard.
+    #[arg(long)]
+    allow_wait_statement: bool,
+
+    /// Allow nested block comments (`(* a (* b *) c *)`).
+    /// This is an extension not part of the IEC 61131-3 standard.
+    #[arg(long)]
+    allow_nested_comments: bool,
+
+    /// Allow the conditional-compilation pragmas `{IF}`/`{ELSIF}`/`{ELSE}`/
+    /// `{END_IF}` together with `{DEFINE}` and `{UNDEFINE}`.
+    /// This is an extension not part of the IEC 61131-3 standard.
+    #[arg(long)]
+    allow_pragma_if: bool,
+
+    /// Allow the `PARAMS(n) OF T` parameter-list data type. A CODESYS
+    /// extension, not part of the IEC 61131-3 standard.
+    #[arg(long)]
+    allow_params_of: bool,
+
+    /// Allow the incomplete array type `ARRAY[*] OF T`, whose bounds the
+    /// caller supplies. A CODESYS extension, not part of the IEC 61131-3
+    /// standard.
+    #[arg(long)]
+    allow_incomplete_array: bool,
+
+    /// Allow backtick-escaped identifiers such as `` `my name` ``. A CODESYS
+    /// extension (non-compliant identifiers), not part of the IEC 61131-3
+    /// standard.
+    #[arg(long)]
+    allow_escaped_identifiers: bool,
+
+    /// Allow identifiers with letters outside the ASCII range. An extension
+    /// (a CODESYS scanner option, off there by default too).
+    #[arg(long)]
+    allow_unicode_identifiers: bool,
+
+    /// Allow consecutive underscores inside an identifier, e.g. `my__var`.
+    /// CODESYS/TwinCAT reject them; the leading `__` compiler prefix is
+    /// always reserved and always allowed.
+    #[arg(long)]
+    allow_multiple_underscores: bool,
 
     /// What STRING_TO_<numeric> treats as convertible when the string has
     /// non-numeric characters. A behavior policy: the dialect selects an
@@ -352,7 +452,25 @@ impl FileArgs {
         options.allow_fb_inheritance |= self.allow_fb_inheritance;
         options.allow_enum_explicit_values |= self.allow_enum_explicit_values;
         options.allow_enum_base_type |= self.allow_enum_base_type;
+        options.allow_bit_type |= self.allow_bit_type;
         options.allow_continue |= self.allow_continue;
+        options.allow_union_type |= self.allow_union_type;
+        options.allow_var_stat |= self.allow_var_stat;
+        options.allow_var_inst |= self.allow_var_inst;
+        options.allow_var_generic |= self.allow_var_generic;
+        options.allow_namespace |= self.allow_namespace;
+        options.allow_begin_implementation |= self.allow_begin_implementation;
+        options.allow_try_catch |= self.allow_try_catch;
+        options.allow_jump_statement |= self.allow_jump_statement;
+        options.allow_calc_statement |= self.allow_calc_statement;
+        options.allow_wait_statement |= self.allow_wait_statement;
+        options.allow_nested_comments |= self.allow_nested_comments;
+        options.allow_pragma_if |= self.allow_pragma_if;
+        options.allow_params_of |= self.allow_params_of;
+        options.allow_incomplete_array |= self.allow_incomplete_array;
+        options.allow_escaped_identifiers |= self.allow_escaped_identifiers;
+        options.allow_unicode_identifiers |= self.allow_unicode_identifiers;
+        options.allow_multiple_underscores |= self.allow_multiple_underscores;
         options
     }
 }
@@ -418,8 +536,50 @@ enum Action {
     },
     /// Show available dialects and which features each enables.
     Dialects,
+    /// Refactoring commands for maintaining a project's stable variable UID
+    /// sidecar (ADR 0053). The sidecar stores each persistent declaration's
+    /// entity UID next to the project so renames keep variable identity
+    /// across hot edits.
+    Refactor {
+        #[command(subcommand)]
+        command: RefactorAction,
+    },
     /// Prints the version number of the compiler.
     Version,
+}
+
+#[derive(clap::Subcommand, Debug)]
+enum RefactorAction {
+    /// Reconcile the stable variable UID sidecar with the project's
+    /// declarations: new variables are assigned UIDs, removed variables are
+    /// dropped, and rename/swap candidates are reported for the user to
+    /// resolve with `refactor map-uid`. When candidates are reported the
+    /// sidecar is left unchanged so the resolution stays possible; it is
+    /// rewritten only by an unambiguous sync.
+    SyncUids {
+        #[command(flatten)]
+        file_args: FileArgs,
+    },
+    /// Record an explicit rename or swap resolution by moving the UID of the
+    /// old (scope, name) key to the new one. Fails when the old key has no
+    /// UID or the new key already has one.
+    MapUid {
+        /// The project file or directory whose sidecar is updated.
+        project: PathBuf,
+
+        /// Scope path of the existing key (the declaring program's name, or
+        /// `global` for top-level VAR_GLOBAL declarations).
+        old_scope: String,
+
+        /// Name of the existing key.
+        old_name: String,
+
+        /// Scope path the UID moves to.
+        new_scope: String,
+
+        /// Name the UID moves to.
+        new_name: String,
+    },
 }
 
 pub fn main() -> Result<(), String> {
@@ -460,6 +620,18 @@ pub fn main() -> Result<(), String> {
             print!("{}", describe_dialects());
             Ok(())
         }
+        Action::Refactor { command } => match command {
+            RefactorAction::SyncUids { file_args } => {
+                cli::sync_uids(&file_args.files, file_args.compiler_options(), false)
+            }
+            RefactorAction::MapUid {
+                project,
+                old_scope,
+                old_name,
+                new_scope,
+                new_name,
+            } => cli::map_uid(&project, &old_scope, &old_name, &new_scope, &new_name),
+        },
         Action::Version => {
             println!("ironplcc version {VERSION}");
             Ok(())
@@ -493,12 +665,15 @@ mod tests {
         }
 
         for fd in CompilerOptions::FEATURE_DESCRIPTORS {
-            let cli = TestCli::try_parse_from(["ironplcc", fd.cli_flag]).unwrap_or_else(|e| {
-                panic!(
-                    "CLI does not accept `{}` (for CompilerOptions.{}): {e}",
-                    fd.cli_flag, fd.option_key
-                )
-            });
+            let cli = TestCli::try_parse_from(["ironplcc", fd.cli_flag]);
+            assert!(
+                cli.is_ok(),
+                "CLI does not accept `{}` (for CompilerOptions.{}): {:?}",
+                fd.cli_flag,
+                fd.option_key,
+                cli.as_ref().err()
+            );
+            let cli = cli.unwrap();
             let options = cli.file_args.compiler_options();
             assert_eq!(
                 options.get_flag_by_key(fd.option_key),
@@ -527,13 +702,15 @@ mod tests {
                 // `--dialect codesys` selects a non-default alternative for
                 // every policy, so the flag is proven to replace it.
                 let cli =
-                    TestCli::try_parse_from(["ironplcc", "--dialect", "codesys", pd.cli_flag, alt])
-                        .unwrap_or_else(|e| {
-                            panic!(
-                                "CLI does not accept `{} {alt}` (for CompilerOptions.{}): {e}",
-                                pd.cli_flag, pd.option_key
-                            )
-                        });
+                    TestCli::try_parse_from(["ironplcc", "--dialect", "codesys", pd.cli_flag, alt]);
+                assert!(
+                    cli.is_ok(),
+                    "CLI does not accept `{} {alt}` (for CompilerOptions.{}): {:?}",
+                    pd.cli_flag,
+                    pd.option_key,
+                    cli.as_ref().err()
+                );
+                let cli = cli.unwrap();
                 let options = cli.file_args.compiler_options();
                 assert_eq!(
                     options.get_policy_by_key(pd.option_key),
@@ -591,12 +768,15 @@ mod tests {
             env!("CARGO_MANIFEST_DIR"),
             "/../../integrations/vscode/package.json"
         );
-        let text = std::fs::read_to_string(package_json_path).unwrap_or_else(|e| {
-            panic!("failed to read {package_json_path}: {e}");
-        });
-        let package: serde_json::Value = serde_json::from_str(&text).unwrap_or_else(|e| {
-            panic!("failed to parse {package_json_path} as JSON: {e}");
-        });
+        let text = std::fs::read_to_string(package_json_path);
+        assert!(text.is_ok(), "failed to read {package_json_path}");
+        let text = text.unwrap();
+        let parsed = serde_json::from_str::<serde_json::Value>(&text);
+        assert!(
+            parsed.is_ok(),
+            "failed to parse {package_json_path} as JSON"
+        );
+        let package = parsed.unwrap();
 
         let dialect = &package["contributes"]["configuration"]["properties"]["ironplc.dialect"];
         assert!(
@@ -621,10 +801,9 @@ mod tests {
         // The parallel label/description arrays must stay index-aligned with
         // `enum`, so a new dialect cannot leave one array short.
         for key in ["enumItemLabels", "enumDescriptions"] {
-            let len = dialect[key]
-                .as_array()
-                .unwrap_or_else(|| panic!("ironplc.dialect.{key} must be an array"))
-                .len();
+            let arr = dialect[key].as_array();
+            assert!(arr.is_some(), "ironplc.dialect.{key} must be an array");
+            let len = arr.unwrap().len();
             assert_eq!(
                 len,
                 expected_names.len(),

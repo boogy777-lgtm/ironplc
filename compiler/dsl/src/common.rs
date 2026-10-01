@@ -2,7 +2,6 @@
 //!
 //! See section 2.
 use core::str::FromStr;
-use lazy_static::lazy_static;
 use regex::Regex;
 use std::fmt::{self, Display};
 use std::hash::{Hash, Hasher};
@@ -833,6 +832,10 @@ impl fmt::Display for BitStringTypeName {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ElementaryTypeName {
     BOOL,
+    /// The one-bit type some vendor toolchains add to the standard
+    /// elementary types. IronPLC stores it as [`BOOL`](Self::BOOL) (see
+    /// `specs/design/numeric-literals.md`, REQ-NL-parser-020).
+    BIT,
     SINT,
     INT,
     DINT,
@@ -872,6 +875,7 @@ impl ElementaryTypeName {
     pub fn as_id(&self) -> Id {
         match self {
             ElementaryTypeName::BOOL => Id::from("BOOL"),
+            ElementaryTypeName::BIT => Id::from("BIT"),
             ElementaryTypeName::SINT => Id::from("SINT"),
             ElementaryTypeName::INT => Id::from("INT"),
             ElementaryTypeName::DINT => Id::from("DINT"),
@@ -1054,6 +1058,7 @@ impl From<ElementaryTypeName> for Id {
     fn from(value: ElementaryTypeName) -> Id {
         match value {
             ElementaryTypeName::BOOL => Id::from("BOOL"),
+            ElementaryTypeName::BIT => Id::from("BIT"),
             ElementaryTypeName::SINT => Id::from("SINT"),
             ElementaryTypeName::INT => Id::from("INT"),
             ElementaryTypeName::DINT => Id::from("DINT"),
@@ -1086,6 +1091,7 @@ impl From<ElementaryTypeName> for TypeName {
     fn from(value: ElementaryTypeName) -> TypeName {
         match value {
             ElementaryTypeName::BOOL => TypeName::from("BOOL"),
+            ElementaryTypeName::BIT => TypeName::from("BIT"),
             ElementaryTypeName::SINT => TypeName::from("SINT"),
             ElementaryTypeName::INT => TypeName::from("INT"),
             ElementaryTypeName::DINT => TypeName::from("DINT"),
@@ -1119,6 +1125,7 @@ impl TryFrom<&Id> for ElementaryTypeName {
     fn try_from(id: &Id) -> Result<Self, ()> {
         match id.lower_case().as_str() {
             "bool" => Ok(ElementaryTypeName::BOOL),
+            "bit" => Ok(ElementaryTypeName::BIT),
             "sint" => Ok(ElementaryTypeName::SINT),
             "int" => Ok(ElementaryTypeName::INT),
             "dint" => Ok(ElementaryTypeName::DINT),
@@ -1401,10 +1408,14 @@ pub enum DataTypeDeclarationKind {
     /// Derived data type that specifies required storage space for each instance.
     Array(ArrayDeclaration),
     Structure(StructureDeclaration),
+    /// `UNION ... END_UNION` declaration (IEC 61131-3:2013 / CODESYS).
+    Union(UnionDeclaration),
     StructureInitialization(StructureInitializationDeclaration),
     String(StringDeclaration),
     /// Reference type declaration (REF_TO).
     Reference(ReferenceDeclaration),
+    /// CODESYS parameter-list type declaration (`PARAMS(n) OF T`).
+    Params(ParamsDeclaration),
     /// Data declaration that is ambiguous at parse time and must be
     /// resolved to a data type declaration after parsing all types.
     LateBound(LateBoundDeclaration),
@@ -1767,6 +1778,22 @@ pub struct StructureDeclaration {
     pub elements: Vec<StructureElementDeclaration>,
 }
 
+/// `UNION ... END_UNION` declaration: the members are located at the same
+/// position in memory, so writing one changes all of them (CODESYS
+/// `UNION`, standardized in IEC 61131-3:2013).
+///
+/// Members reuse [`StructureElementDeclaration`]; only the storage rule
+/// differs. Recognizing a union type makes it usable as a declared type
+/// name; overlaying the members at offset 0 is not implemented yet (P1 in
+/// `Codesys/LEXER-GAP-ANALYSIS.md`).
+#[derive(Clone, Debug, PartialEq, Recurse)]
+pub struct UnionDeclaration {
+    /// The name of the union.
+    pub type_name: TypeName,
+    /// The elements (components) of the union declaration.
+    pub elements: Vec<StructureElementDeclaration>,
+}
+
 /// Declares an element contained within a structure.
 ///
 /// See section 2.3.3.1.
@@ -1947,6 +1974,37 @@ impl ArraySpecificationKind {
     }
 }
 
+/// The CODESYS parameter-list type `PARAMS(n) OF T`.
+///
+/// The count names how many parameters the list holds and the type is the
+/// type every one of them has. The elements are addressed by index, like an
+/// array, so the type is provisionally lowered to an array with bounds
+/// `0 .. n-1` (see the analyzer's `xform_resolve_decl_types`); the variadic
+/// call-site semantics of a PARAMS parameter are not implemented yet.
+#[derive(Clone, Debug, PartialEq, Recurse)]
+pub struct ParamsSpecification {
+    /// The number of parameters, as an integer literal or a named constant.
+    pub count: IntegerRef,
+    /// The type of every parameter in the list.
+    pub type_name: TypeName,
+}
+
+/// A `PARAMS(n) OF T` type declaration, e.g.
+/// `TYPE MyParams : PARAMS(3) OF INT; END_TYPE`.
+#[derive(Clone, Debug, PartialEq, Recurse)]
+pub struct ParamsDeclaration {
+    /// The type name of this declaration. Other library elements refer to
+    /// this type with this name.
+    pub type_name: TypeName,
+    pub spec: ParamsSpecification,
+}
+
+impl Located for ParamsDeclaration {
+    fn span(&self) -> SourceSpan {
+        SourceSpan::join2(&self.type_name, &self.spec.type_name)
+    }
+}
+
 /// The element type of an array declaration.
 ///
 /// Distinguishes between named types (e.g. `INT`, `MY_TYPE`) and sized string
@@ -1975,15 +2033,58 @@ impl ArrayElementType {
     }
 }
 
+/// The index extent of an array declaration.
+///
+/// CODESYS allows the bounds to be left open with `*` instead of a range list
+/// (`arrayType = "ARRAY" "[" ("*" | indexRange {"," indexRange}) "]" "OF"
+/// dataType`). The two forms are alternatives in the grammar, so they are
+/// alternatives here: an `ARRAY[*]` declaration has *no* range list, which a
+/// `Vec` plus a separate "is incomplete" flag could not state without
+/// inventing an empty list that no source can spell.
+#[derive(Clone, Debug, PartialEq, Recurse)]
+pub enum ArrayBounds {
+    /// One or more explicit index ranges: `ARRAY[1..3, 0..2] OF INT`.
+    /// The list is never empty.
+    Ranges(Vec<Subrange>),
+    /// The incomplete array type `ARRAY[*] OF INT`: the element count is
+    /// supplied by the caller (CODESYS extension). Carries the span of the
+    /// `*` so a later pass can point at the spelling that decided the bounds.
+    Incomplete(SourceSpan),
+}
+
 #[derive(Clone, Debug, PartialEq, Recurse)]
 pub struct ArraySubranges {
-    pub ranges: Vec<Subrange>,
+    pub bounds: ArrayBounds,
     pub type_name: ArrayElementType,
     /// The reference syntax of the element type, if any. `None` for a
     /// non-reference element; `Some(_)` when the element is wrapped in a
     /// reference keyword (`REF_TO` or `REFERENCE TO`), tagged with which one.
     #[recurse(ignore)]
     pub ref_to: Option<RefSyntax>,
+}
+
+impl ArraySubranges {
+    /// The explicit index ranges, or an empty slice for the incomplete form.
+    ///
+    /// Callers that do not care about the difference (bounds validation, code
+    /// generation over a concrete array) read the ranges through here; a
+    /// caller that must treat the incomplete form specially matches on
+    /// [`Self::bounds`].
+    pub fn ranges(&self) -> &[Subrange] {
+        match &self.bounds {
+            ArrayBounds::Ranges(ranges) => ranges,
+            ArrayBounds::Incomplete(_) => &[],
+        }
+    }
+
+    /// The span of the `*` for the incomplete `ARRAY[*]` form, if this is
+    /// that form.
+    pub fn incomplete_span(&self) -> Option<&SourceSpan> {
+        match &self.bounds {
+            ArrayBounds::Ranges(_) => None,
+            ArrayBounds::Incomplete(span) => Some(span),
+        }
+    }
 }
 
 /// Subrange of an array.
@@ -2282,6 +2383,25 @@ pub enum VariableType {
     /// Local to a POU. Does not need to be maintained
     /// between calls to a POU.
     VarTemp,
+    /// `VAR_STAT` (CODESYS/TwinCAT, Siemens SCL): a variable that keeps
+    /// its value between calls of the POU.
+    ///
+    /// Recognized and represented, but stored like [`Var`](Self::Var): the
+    /// "initialize once, then persist" placement is not implemented yet
+    /// (P1 in `Codesys/LEXER-GAP-ANALYSIS.md`).
+    VarStat,
+    /// `VAR_INST` (CODESYS/TwinCAT): a variable of a method that belongs to
+    /// the method's instance rather than to a single call.
+    ///
+    /// Stored like [`Var`](Self::Var); the instance placement is not
+    /// implemented yet.
+    VarInst,
+    /// `VAR_GENERIC` (CODESYS/TwinCAT): the generic constants of a function
+    /// block, declared directly after its name.
+    ///
+    /// Stored like [`Var`](Self::Var); compile-time substitution of the
+    /// generic constants is not implemented yet.
+    VarGeneric,
     /// Variable that is visible to a calling POU as an input.
     Input,
     /// Variable that is visible to calling POU and can only
@@ -2309,9 +2429,32 @@ impl VariableType {
         matches!(self, VariableType::Input | VariableType::InOut)
     }
 
-    /// Returns true if this is a local variable (VAR or VAR_TEMP).
+    /// Returns true if this is a local variable (VAR, VAR_TEMP and the
+    /// additional local sections VAR_STAT/VAR_INST/VAR_GENERIC).
     pub fn is_local(&self) -> bool {
-        matches!(self, VariableType::Var | VariableType::VarTemp)
+        matches!(
+            self,
+            VariableType::Var
+                | VariableType::VarTemp
+                | VariableType::VarStat
+                | VariableType::VarInst
+                | VariableType::VarGeneric
+        )
+    }
+
+    /// Returns true for the sections that hold POU instance storage: the
+    /// declarations a function block keeps in its instance data. This is
+    /// `VAR` plus the additional sections, which are stored the same way
+    /// until their placement rules are implemented (see each variant's
+    /// documentation). `VAR_TEMP` is excluded: it is call-scoped.
+    pub fn is_pou_storage(&self) -> bool {
+        matches!(
+            self,
+            VariableType::Var
+                | VariableType::VarStat
+                | VariableType::VarInst
+                | VariableType::VarGeneric
+        )
     }
 
     /// Returns true if this is any kind of parameter visible to a caller
@@ -2479,16 +2622,31 @@ impl AddressAssignment {
     }
 }
 
-lazy_static! {
-    static ref DIRECT_ADDRESS_UNASSIGNED: Regex = Regex::new(r"%([IQM])\*").unwrap();
-    static ref DIRECT_ADDRESS: Regex = Regex::new(r"%([IQM])([XBWDL])?(\d(\.\d)*)").unwrap();
+#[allow(
+    clippy::unwrap_used,
+    reason = "static regex literals are compile-time-validated patterns; regex has no const constructor"
+)]
+fn direct_address_unassigned_re() -> &'static Regex {
+    static RE: std::sync::LazyLock<Regex> =
+        std::sync::LazyLock::new(|| Regex::new(r"%([IQM])\*").unwrap());
+    &RE
+}
+
+#[allow(
+    clippy::unwrap_used,
+    reason = "static regex literals are compile-time-validated patterns; regex has no const constructor"
+)]
+fn direct_address_re() -> &'static Regex {
+    static RE: std::sync::LazyLock<Regex> =
+        std::sync::LazyLock::new(|| Regex::new(r"%([IQM])([XBWDL])?(\d(\.\d)*)").unwrap());
+    &RE
 }
 
 impl TryFrom<&str> for AddressAssignment {
     type Error = &'static str;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        if let Some(cap) = DIRECT_ADDRESS_UNASSIGNED.captures(value) {
+        if let Some(cap) = direct_address_unassigned_re().captures(value) {
             let location_prefix = LocationPrefix::try_from(&cap[1])?;
             return Ok(AddressAssignment {
                 location: location_prefix,
@@ -2498,13 +2656,14 @@ impl TryFrom<&str> for AddressAssignment {
             });
         }
 
-        if let Some(cap) = DIRECT_ADDRESS.captures(value) {
+        if let Some(cap) = direct_address_re().captures(value) {
             let location_prefix = LocationPrefix::try_from(&cap[1])?;
             let size_prefix = SizePrefix::try_from(&cap[2])?;
             let pos: Vec<u32> = cap[3]
                 .split('.')
-                .map(|v| v.parse::<u32>().unwrap())
-                .collect();
+                .map(|v| v.parse::<u32>())
+                .collect::<Result<_, _>>()
+                .map_err(|_| "address component is not a number")?;
 
             return Ok(AddressAssignment {
                 location: location_prefix,
@@ -2569,6 +2728,9 @@ pub enum InitialValueAssignmentKind {
     Subrange(SubrangeSpecificationKind),
     Structure(StructureInitializationDeclaration),
     Array(ArrayInitialValueAssignment),
+    /// CODESYS parameter-list type (`PARAMS(n) OF T`); see
+    /// [`ParamsSpecification`].
+    Params(ParamsSpecification),
     /// Reference type initializer (REF_TO).
     Reference(ReferenceInitializer),
     /// A declaration whose type is a user-defined name the parser cannot
@@ -2656,6 +2818,7 @@ impl InitialValueAssignmentKind {
                 }
             }
             InitialValueAssignmentKind::Reference(_) => TypeReference::Inline,
+            InitialValueAssignmentKind::Params(_) => TypeReference::Inline,
             InitialValueAssignmentKind::LateResolvedType(late) => {
                 TypeReference::Named(late.type_name.clone())
             }
@@ -2683,6 +2846,7 @@ impl InitialValueAssignmentKind {
             | InitialValueAssignmentKind::FunctionBlock(_)
             | InitialValueAssignmentKind::FunctionBlockCall(_)
             | InitialValueAssignmentKind::Subrange(_)
+            | InitialValueAssignmentKind::Params(_)
             | InitialValueAssignmentKind::LateResolvedType(_)
             | InitialValueAssignmentKind::SimpleExpr(_) => false,
         }
@@ -2942,6 +3106,30 @@ pub enum LibraryElementKind {
     /// `INTERFACE ... END_INTERFACE` (extension). See
     /// `InterfaceDeclaration`.
     InterfaceDeclaration(InterfaceDeclaration),
+    /// `NAMESPACE ... END_NAMESPACE` (CODESYS/TwinCAT). A grouping
+    /// declaration: it contains other library elements, including further
+    /// namespaces. See [`NamespaceDeclaration`].
+    NamespaceDeclaration(NamespaceDeclaration),
+}
+
+/// `NAMESPACE name { element } END_NAMESPACE` (CODESYS/TwinCAT).
+///
+/// The declarations a namespace contains are ordinary declarations; the
+/// namespace groups them and qualifies their names. IronPLC keeps the
+/// nesting in the AST so the source renders back unchanged, and flattens it
+/// during declaration toposort so analysis and code generation see the same
+/// top-level declarations as before
+/// (`analyzer/src/xform_toposort_declarations.rs`). Resolving qualified
+/// access (`ns#name`) is not implemented yet (P1 in
+/// `Codesys/LEXER-GAP-ANALYSIS.md`).
+#[derive(Clone, Debug, PartialEq, Recurse, Located)]
+pub struct NamespaceDeclaration {
+    /// The namespace name, as written.
+    pub name: Id,
+    /// The declarations this namespace contains, in source order.
+    pub elements: Vec<LibraryElementKind>,
+    #[located(position)]
+    pub span: SourceSpan,
 }
 
 /// Return type for a function declaration.

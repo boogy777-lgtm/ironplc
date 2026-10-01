@@ -88,8 +88,15 @@ pub fn compile(
     };
 
     // Generate bytecode, skipping user-defined functions not reachable from
-    // the PROGRAM root to reduce container size.
-    let codegen_options = CodegenOptions::from(compiler_options);
+    // the PROGRAM root to reduce container size. The stable variable IDs are
+    // the project model's, not the parser's, so they are set on the derived
+    // options here (ADR 0053). The keyed table covers both persistent
+    // program/global declarations and FB fields; the library decides which
+    // is which, and codegen receives the two tables separately (ADR 0059).
+    let split = crate::sidecar::split_var_uids(project.stable_var_ids(), library);
+    let mut codegen_options = CodegenOptions::from(compiler_options);
+    codegen_options.stable_var_ids = split.vars;
+    codegen_options.fb_field_uids = split.fields;
 
     match ironplc_codegen::compile(library, context, &codegen_options, source_lookup) {
         Ok(container) => CompileOutput {
@@ -109,13 +116,14 @@ pub fn compile(
 #[cfg(test)]
 mod tests {
     use ironplc_codegen::EmptyLookup;
+    use ironplc_container::StableVarEntry;
     use ironplc_dsl::core::{FileId, SourceSpan};
     use ironplc_dsl::diagnostic::{Diagnostic, Label};
     use ironplc_parser::options::CompilerOptions;
     use ironplc_problems::Problem;
 
     use super::compile;
-    use crate::project::{MemoryBackedProject, Project};
+    use crate::project::{FileBackedProject, MemoryBackedProject, Project};
 
     /// Stands in for a problem the caller found before the pipeline ran, the
     /// way project discovery does for the CLI.
@@ -157,6 +165,202 @@ END_PROGRAM
             output.diagnostics
         );
         assert!(output.container.is_some());
+    }
+
+    /// The project model owns the stable variable IDs (ADR 0053); the
+    /// pipeline must forward them to codegen without touching the parser
+    /// options that `CodegenOptions::from` reads.
+    #[test]
+    fn compile_when_project_has_stable_var_ids_then_container_carries_them() {
+        let mut project = project_with(VALID_PROGRAM);
+        project.set_stable_var_ids(vec![(crate::sidecar::SidecarKey::new("main", "x"), 42)]);
+
+        let output = compile(
+            &mut project,
+            &CompilerOptions::default(),
+            &EmptyLookup,
+            vec![],
+        );
+        let container = output.container.expect("valid program must compile");
+        let type_section = container
+            .type_section
+            .as_ref()
+            .expect("the variable table implies a type section");
+        let index = container
+            .debug_section
+            .as_ref()
+            .expect("named variables imply a debug section")
+            .var_names
+            .iter()
+            .find(|entry| entry.name.eq_ignore_ascii_case("x"))
+            .expect("the program declares x")
+            .var_index;
+
+        assert_eq!(
+            type_section.stable_vars.as_slice(),
+            [StableVarEntry {
+                var_index: index,
+                uid: 42,
+            }]
+        );
+    }
+
+    /// Phase 3: `FileBackedProject` auto-loads the UID sidecar at
+    /// initialization (ADR 0053), so compiling a project whose sidecar holds
+    /// UIDs produces a container whose `stable_vars` table carries them.
+    #[test]
+    fn compile_when_file_backed_project_with_sidecar_then_container_carries_uids() {
+        use crate::sidecar::sidecar_path_for;
+
+        let temp = tempfile::tempdir().unwrap();
+        let project_dir = temp.path().join("proj");
+        std::fs::create_dir(&project_dir).unwrap();
+        std::fs::write(project_dir.join("main.st"), VALID_PROGRAM).unwrap();
+        std::fs::write(
+            sidecar_path_for(&project_dir).unwrap(),
+            r#"{"version": 1, "variables": [{"scope": "main", "name": "x", "uid": 42}]}"#,
+        )
+        .unwrap();
+
+        let mut project = FileBackedProject::default();
+        let diagnostics = project.initialize(&project_dir);
+        assert!(
+            diagnostics.is_empty(),
+            "unexpected initialization diagnostics: {diagnostics:?}"
+        );
+
+        let output = compile(
+            &mut project,
+            &CompilerOptions::default(),
+            &EmptyLookup,
+            vec![],
+        );
+        assert!(
+            output.diagnostics.is_empty(),
+            "expected a clean compile, got: {:?}",
+            output.diagnostics
+        );
+        let container = output.container.expect("valid program must compile");
+        let index = container
+            .debug_section
+            .as_ref()
+            .expect("named variables imply a debug section")
+            .var_names
+            .iter()
+            .find(|entry| entry.name.eq_ignore_ascii_case("x"))
+            .expect("the program declares x")
+            .var_index;
+
+        assert_eq!(
+            container
+                .type_section
+                .as_ref()
+                .expect("the variable table implies a type section")
+                .stable_vars
+                .as_slice(),
+            [StableVarEntry {
+                var_index: index,
+                uid: 42,
+            }]
+        );
+    }
+
+    /// The sidecar keys an FB field as (FB type name, field) without a
+    /// sidecar format change (ADR 0059); the pipeline must split the keyed
+    /// table with the library so the field UID reaches the container's
+    /// `fb_field_uids` table and program variables keep reaching
+    /// `stable_vars`.
+    #[test]
+    fn compile_when_sidecar_keys_fb_field_then_container_carries_field_uid() {
+        const FB_PROGRAM: &str = r#"
+FUNCTION_BLOCK Accumulator
+VAR_INPUT
+  step : INT;
+END_VAR
+VAR
+  total : INT;
+END_VAR
+  total := total + step;
+END_FUNCTION_BLOCK
+PROGRAM Main
+VAR
+  x : INT;
+  acc : Accumulator;
+END_VAR
+  acc(step := x);
+END_PROGRAM
+"#;
+
+        let mut project = project_with(FB_PROGRAM);
+        project.set_stable_var_ids(vec![
+            (crate::sidecar::SidecarKey::new("main", "x"), 42),
+            (crate::sidecar::SidecarKey::new("Accumulator", "total"), 102),
+        ]);
+
+        let output = compile(
+            &mut project,
+            &CompilerOptions::default(),
+            &EmptyLookup,
+            vec![],
+        );
+        assert!(
+            output.diagnostics.is_empty(),
+            "expected a clean compile, got: {:?}",
+            output.diagnostics
+        );
+        let container = output.container.expect("valid program must compile");
+        let type_section = container
+            .type_section
+            .as_ref()
+            .expect("the variable table implies a type section");
+
+        // The program variable lands in `stable_vars` as before.
+        let x_index = container
+            .debug_section
+            .as_ref()
+            .expect("named variables imply a debug section")
+            .var_names
+            .iter()
+            .find(|entry| entry.name.eq_ignore_ascii_case("x"))
+            .expect("the program declares x")
+            .var_index;
+        assert_eq!(
+            type_section.stable_vars.as_slice(),
+            [StableVarEntry {
+                var_index: x_index,
+                uid: 42,
+            }]
+        );
+
+        // The FB field lands in `fb_field_uids` under the type's ID at the
+        // field's ordinal (VAR_INPUT step = 0, VAR total = 1).
+        assert_eq!(
+            type_section.fb_field_uids.as_slice(),
+            [ironplc_container::FbFieldUidEntry {
+                fb_type_id: type_section.user_fb_types[0].type_id,
+                field_index: 1,
+                uid: 102,
+            }]
+        );
+    }
+
+    #[test]
+    fn compile_when_project_has_no_stable_var_ids_then_table_empty() {
+        let mut project = project_with(VALID_PROGRAM);
+        let output = compile(
+            &mut project,
+            &CompilerOptions::default(),
+            &EmptyLookup,
+            vec![],
+        );
+
+        let container = output.container.expect("valid program must compile");
+        assert!(container
+            .type_section
+            .as_ref()
+            .expect("the variable table implies a type section")
+            .stable_vars
+            .is_empty());
     }
 
     #[test]

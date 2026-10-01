@@ -37,10 +37,9 @@ fn load_when_container_declares_call_depth_exceeding_buffer_then_returns_program
     assert_eq!(b.frames.len(), 8, "buffer sized from the small container");
 
     let deep = empty_init_container_with_depth(64);
-    let trap = match Vm::new().load(&deep, &mut b) {
-        Ok(_) => panic!("load should reject over-deep container"),
-        Err(t) => t,
-    };
+    let result = Vm::new().load(&deep, &mut b);
+    assert!(result.is_err(), "load should reject over-deep container");
+    let trap = result.err().unwrap();
     assert_eq!(
         trap,
         Trap::ProgramExceedsCallDepth {
@@ -74,10 +73,12 @@ fn load_when_container_declares_zero_call_depth_then_rejected() {
     // or hand-built container) and is rejected at load.
     let c = empty_init_container_with_depth(0);
     let mut b = VmBuffers::from_container(&c);
-    let trap = match Vm::new().load(&c, &mut b) {
-        Ok(_) => panic!("load should reject a zero-call-depth container"),
-        Err(t) => t,
-    };
+    let result = Vm::new().load(&c, &mut b);
+    assert!(
+        result.is_err(),
+        "load should reject a zero-call-depth container"
+    );
+    let trap = result.err().unwrap();
     assert_eq!(trap, Trap::ZeroCallDepth);
 }
 

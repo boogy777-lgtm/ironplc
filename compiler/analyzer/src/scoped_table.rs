@@ -59,15 +59,14 @@ impl<'a, K: Key, V: 'a + Value> Scope<'a, K, V> {
     /// If the scope does have this name, then value is not updated. The
     /// existing key and value are returned.
     fn try_add(&mut self, name: &K, value: V) -> Option<(&K, &V)> {
-        // We want the map to be unmodified if the key already exists, so we
-        // must first test if the key exists.
-        if !self.table.contains_key(name) {
-            self.table.insert(name.clone(), value);
-            None
-        } else {
-            let existing = self.table.get_key_value(name).unwrap();
-            Some(existing)
+        // The map stays unmodified when the key already exists; the existing
+        // pair is returned. `get_key_value` already yields exactly the
+        // `(key, value)` pair, so no unwrap is needed.
+        if self.table.contains_key(name) {
+            return self.table.get_key_value(name);
         }
+        self.table.insert(name.clone(), value);
+        None
     }
 
     fn find(&self, name: &K) -> Option<&V> {

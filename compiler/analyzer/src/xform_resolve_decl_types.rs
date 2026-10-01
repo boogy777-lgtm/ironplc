@@ -16,7 +16,7 @@
 //! ```
 //!
 //! Each such declaration declares a type of its own, so two declarations
-//! that spell the same shape get two ids (ADR-0055).
+//! that spell the same shape get two ids (ADR-0070).
 //!
 //! A declaration whose type cannot be resolved keeps `type_id: None`. The
 //! rules that check declarations report why; this pass stays silent.
@@ -75,6 +75,14 @@ impl DeclTypeResolver<'_> {
             }
             InitialValueAssignmentKind::Array(a) => {
                 match array::try_from(name, &a.spec, env).ok()? {
+                    array::IntermediateResult::Type(attributes) => attributes,
+                    array::IntermediateResult::Alias(alias) => return env.id_of(&alias),
+                }
+            }
+            // A PARAMS list is lowered to the array of the same element type
+            // (see `intermediates::params`).
+            InitialValueAssignmentKind::Params(p) => {
+                match crate::intermediates::params::try_from(name, p, env).ok()? {
                     array::IntermediateResult::Type(attributes) => attributes,
                     array::IntermediateResult::Alias(alias) => return env.id_of(&alias),
                 }
@@ -184,9 +192,17 @@ END_PROGRAM
         let id = declared_ids(&library)["a"].unwrap();
 
         assert_eq!(context.types().name_of(id), None);
-        match &context.types().get_by_id(id).unwrap().representation {
-            IntermediateType::Array { dimensions, .. } => assert_eq!(dimensions.len(), 1),
-            other => panic!("expected an array, got {other:?}"),
+        // Fence style: the workspace denies `panic` even in src-level tests
+        // (see compiler/Cargo.toml [workspace.lints.clippy]), so the
+        // match-or-fail arm is an assert! with the value in the message
+        // rather than a panic!.
+        let representation = &context.types().get_by_id(id).unwrap().representation;
+        assert!(
+            matches!(representation, IntermediateType::Array { .. }),
+            "expected an array, got {representation:?}"
+        );
+        if let IntermediateType::Array { dimensions, .. } = representation {
+            assert_eq!(dimensions.len(), 1);
         }
     }
 

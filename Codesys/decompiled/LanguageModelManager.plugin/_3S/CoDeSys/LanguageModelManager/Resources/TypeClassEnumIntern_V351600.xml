@@ -1,0 +1,63 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+	<language-model>
+    <data-type id = "93b6cd3f-8269-4c38-ace2-cca38ff00963" name = "__TypeClass">
+      <interface>
+        {attribute 'qualified_only'}
+        {implicit on}
+        TYPE __TypeClass :
+        (
+        TYPE_BOOL,
+        TYPE_BIT,
+        TYPE_BYTE,
+        TYPE_WORD,
+        TYPE_DWORD,
+        TYPE_LWORD,
+        TYPE_SINT,
+        TYPE_INT,
+        TYPE_DINT,
+        TYPE_LINT,
+        TYPE_USINT,
+        TYPE_UINT,
+        TYPE_UDINT,
+        TYPE_ULINT,
+        TYPE_REAL,
+        TYPE_LREAL,
+        TYPE_STRING,
+        TYPE_WSTRING,
+        TYPE_TIME,
+        TYPE_DATE,
+        TYPE_DATEANDTIME,
+        TYPE_TIMEOFDAY,
+        TYPE_POINTER,
+        TYPE_REFERENCE,
+        TYPE_SUBRANGE,
+        TYPE_ENUM,
+        TYPE_ARRAY,
+        TYPE_PARAMS,
+        TYPE_USERDEF,
+        TYPE_NONE,
+        TYPE_ANY,
+        TYPE_ANYBIT,
+        TYPE_ANYDATE,
+        TYPE_ANYINT,
+        TYPE_ANYNUM,
+        TYPE_ANYREAL,
+        TYPE_LAZY,
+        TYPE_LTIME,
+        TYPE_BITCONST,
+        TYPE_UXINT,
+        TYPE_XWORD,
+        TYPE_XINT,
+        TYPE_XSTRING,
+        TYPE_VARLENARRAY,
+        TYPE_ANYSTRING,
+        TYPE_VECTOR,
+        TYPE_LDATE,
+        TYPE_LDATEANDTIME,
+        TYPE_LTIMEOFDAY
+        )DWORD;
+        END_TYPE
+        {implicit off}
+      </interface>
+    </data-type>
+  </language-model>

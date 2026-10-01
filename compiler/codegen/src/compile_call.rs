@@ -306,8 +306,9 @@ fn compile_user_function_call(
 /// When the argument is itself a `VAR_IN_OUT` parameter of the function
 /// being compiled, its slot already holds a reference to the caller's
 /// variable, and that reference is passed on. The analyzer has checked the
-/// argument is a variable of the parameter's type (P4058, P4059); only a
-/// named elementary variable, which occupies one slot, is supported.
+/// argument is a provably writable variable of the parameter's type
+/// (P4058, P4059, P4060); only a named elementary variable, which occupies
+/// one slot, is supported.
 fn compile_reference_arg(
     emitter: &mut Emitter,
     ctx: &mut CompileContext,

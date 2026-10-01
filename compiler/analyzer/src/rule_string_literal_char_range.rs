@@ -19,9 +19,10 @@
 //! width on the literal.
 //!
 //! The parser decodes `$` escapes, so a literal's characters are the ones
-//! it denotes. An escape always decodes to a character the type can hold
-//! (`$XX` at most U+00FF, `$XXXX` at most U+FFFF), so only a character
-//! written as itself can be out of range.
+//! it denotes. A numeric escape can decode above the width a local codepoint
+//! suggests: `$80` to `$FF` is the Windows-1252 character of that byte
+//! (`$80` is `€`, U+20AC), so `'$80'` in a STRING is out of range the same
+//! way the euro sign written as itself is.
 //!
 //! ## Fails
 //!

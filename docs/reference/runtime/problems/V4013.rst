@@ -1,0 +1,30 @@
+=====
+V4013
+=====
+
+.. problem-summary:: V4013
+
+``acceptEdits`` arrived while a candidate is already staged. The P0 protocol
+stages at most one candidate per running application, and staging is not
+implicitly replaced: the earlier edit stays staged exactly as it was, and the
+new payload is refused without touching either the candidate or the running
+application.
+
+Example
+-------
+
+A session accepts one edit and immediately tries to accept another:
+
+.. code-block::
+
+   {"command":"acceptEdits","program":[...]}
+   {"response":"ack"}
+   {"command":"acceptEdits","program":[...]}
+   {"response":"error","vCode":"V4013","message":"a candidate is already staged"}
+
+To fix this error, decide the fate of the staged candidate first. Send
+``cancelEdits`` to discard it while the original artifact is active, or
+``assembleEdits`` to commit it — and note that neither is available once the
+candidate is under test, when only ``assembleEdits`` remains. Then send the
+new ``acceptEdits`` again; the second edit is refused again until the staged
+one is resolved.

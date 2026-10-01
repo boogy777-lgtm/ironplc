@@ -1,0 +1,197 @@
+//! Parse-only baseline: cold and warm timings plus allocation counts.
+//!
+//! Drives `tokenize_program` and `parse_program` from `ironplc-parser` over
+//! the shared corpus (`ironplc_benchmarks::corpus`) and prints a Markdown
+//! report. Allocation counts come from `stats_alloc` installed as this
+//! binary's global allocator, which is why this is a separate bench target
+//! from the Criterion `parse_benchmark`.
+//!
+//! The first parse of a program with a located variable (`AT %IX0.0`) in a
+//! process pays a one-time initialization cost: the direct-variable address
+//! regexes in `ironplc-dsl` are compiled lazily (experiment section 4.2). A
+//! corpus file that needs it would otherwise carry it in its cold figures, so
+//! it is measured first, on tiny inputs, and reported on its own; the per-file
+//! cold figures then describe the per-file path, not process start-up.
+//!
+//! Run with: `cargo bench --package ironplc-benchmarks --bench parse_baseline`
+//! (optionally `-- <warm-repeats>`, default 50).
+
+// Benchmark-target boundary: a corpus that cannot be read is a
+// benchmark-authoring bug, not user input.
+#![allow(
+    clippy::unwrap_used,
+    clippy::result_large_err,
+    reason = "benchmark target: panicking helpers are sanctioned in benchmarks; the large Err type is parse_program's public signature"
+)]
+
+use ironplc_benchmarks::corpus::{corpus_dir, load_corpus};
+use ironplc_dsl::core::FileId;
+use ironplc_parser::options::CompilerOptions;
+use ironplc_parser::{parse_program, tokenize_program};
+use stats_alloc::{Region, StatsAlloc, INSTRUMENTED_SYSTEM};
+use std::alloc::System;
+use std::hint::black_box;
+use std::time::Instant;
+
+#[global_allocator]
+static GLOBAL: &StatsAlloc<System> = &INSTRUMENTED_SYSTEM;
+
+const DEFAULT_REPEATS: usize = 50;
+
+/// A tiny input without any located variable: the baseline for the init probe.
+const PLAIN_SOURCE: &str = "PROGRAM main
+VAR
+  x : INT;
+END_VAR
+  x := 1;
+END_PROGRAM
+";
+
+/// A tiny input with located variables: triggers the lazy address regexes.
+const LOCATED_SOURCE: &str = "PROGRAM main
+VAR
+  i AT %IX0.0 : BOOL;
+  o AT %QW1 : WORD;
+END_VAR
+  o := 16#00FF;
+END_PROGRAM
+";
+
+#[derive(Debug, Clone, Copy)]
+struct Measurement {
+    micros: f64,
+    allocations: usize,
+    bytes: usize,
+}
+
+/// Times `call` and counts allocations made inside it. The result is dropped
+/// after the counters are read so the measurement covers the call, not the
+/// caller's retention.
+fn measure<T>(call: impl FnOnce() -> T) -> Measurement {
+    let region = Region::new(GLOBAL);
+    let start = Instant::now();
+    let result = call();
+    let elapsed = start.elapsed();
+    let stats = region.change();
+    drop(black_box(result));
+    Measurement {
+        micros: elapsed.as_secs_f64() * 1e6,
+        allocations: stats.allocations,
+        bytes: stats.bytes_allocated,
+    }
+}
+
+fn median<T: PartialOrd + Copy + Default>(values: &[T]) -> T {
+    let mut sorted = values.to_vec();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    sorted.get(sorted.len() / 2).copied().unwrap_or_default()
+}
+
+/// Cold (first call for this file) plus warm medians for one entry point.
+struct Row {
+    cold: Measurement,
+    warm_micros: f64,
+    warm_allocations: usize,
+}
+
+fn measure_row<T>(repeats: usize, mut call: impl FnMut() -> T) -> Row {
+    let cold = measure(&mut call);
+    let warm: Vec<Measurement> = (0..repeats).map(|_| measure(&mut call)).collect();
+    Row {
+        cold,
+        warm_micros: median(&warm.iter().map(|m| m.micros).collect::<Vec<_>>()),
+        warm_allocations: median(&warm.iter().map(|m| m.allocations).collect::<Vec<_>>()),
+    }
+}
+
+fn main() {
+    let repeats = std::env::args()
+        .filter_map(|argument| argument.parse::<usize>().ok())
+        .next_back()
+        .unwrap_or(DEFAULT_REPEATS);
+    let options = CompilerOptions::default();
+    let file_id = FileId::default();
+
+    // One-time init: each call is made twice; the difference in allocations
+    // between the first and second call is the init cost. Plain input first,
+    // so the located-variable row isolates what that input kind adds.
+    let probes = [
+        ("tokenize_program, plain", PLAIN_SOURCE, true),
+        ("parse_program, plain", PLAIN_SOURCE, false),
+        ("parse_program, located variables", LOCATED_SOURCE, false),
+    ];
+    println!("one-time init (tiny inputs, before the corpus loop):");
+    println!("| call | first us | first allocs | second us | second allocs | init allocs |");
+    println!("|---|---|---|---|---|---|");
+    for (name, source, tokenize_only) in probes {
+        let call = || {
+            if tokenize_only {
+                black_box(tokenize_program(source, &file_id, &options, 0, 0).0.len());
+            } else {
+                black_box(parse_program(source, &file_id, &options).is_ok());
+            }
+        };
+        let first = measure(call);
+        let second = measure(call);
+        println!(
+            "| {name} | {:.1} | {} | {:.1} | {} | {} |",
+            first.micros,
+            first.allocations,
+            second.micros,
+            second.allocations,
+            first.allocations.saturating_sub(second.allocations),
+        );
+    }
+    println!();
+
+    let files = load_corpus(&corpus_dir()).unwrap();
+    let total_bytes: usize = files.iter().map(|file| file.source.len()).sum();
+    println!(
+        "files: {}, bytes: {total_bytes}, warm repeats per file: {repeats}",
+        files.len()
+    );
+
+    let mut rows = Vec::new();
+    for file in &files {
+        let tokens = tokenize_program(&file.source, &file_id, &options, 0, 0)
+            .0
+            .len();
+        let status = match parse_program(&file.source, &file_id, &options) {
+            Ok(_) => "ok".to_string(),
+            Err(diagnostic) => format!("err[{}]", diagnostic.code.as_str()),
+        };
+        let tokenize = measure_row(repeats, || {
+            tokenize_program(&file.source, &file_id, &options, 0, 0)
+        });
+        let parse = measure_row(repeats, || parse_program(&file.source, &file_id, &options));
+        rows.push((file, tokens, status, tokenize, parse));
+    }
+
+    let cold_micros: f64 = rows.iter().map(|row| row.4.cold.micros).sum();
+    let cold_allocations: usize = rows.iter().map(|row| row.4.cold.allocations).sum();
+    let cold_kib: f64 = rows.iter().map(|row| row.4.cold.bytes as f64).sum::<f64>() / 1024.0;
+    let warm_micros: f64 = rows.iter().map(|row| row.4.warm_micros).sum();
+    println!(
+        "totals (parse, one pass): cold {:.3} ms, warm-median sum {:.3} ms, {cold_allocations} cold allocations, {cold_kib:.1} KiB allocated cold",
+        cold_micros / 1000.0,
+        warm_micros / 1000.0,
+    );
+    println!();
+    println!("| file | bytes | tokens | tok cold us | tok cold allocs | tok warm med us | parse cold us | parse cold allocs | parse cold KiB | parse warm med us | parse warm allocs | status |");
+    println!("|---|---|---|---|---|---|---|---|---|---|---|---|");
+    for (file, tokens, status, tokenize, parse) in &rows {
+        println!(
+            "| {} | {} | {tokens} | {:.1} | {} | {:.1} | {:.1} | {} | {:.1} | {:.1} | {} | {status} |",
+            file.name,
+            file.source.len(),
+            tokenize.cold.micros,
+            tokenize.cold.allocations,
+            tokenize.warm_micros,
+            parse.cold.micros,
+            parse.cold.allocations,
+            parse.cold.bytes as f64 / 1024.0,
+            parse.warm_micros,
+            parse.warm_allocations,
+        );
+    }
+}

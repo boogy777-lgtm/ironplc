@@ -1,4 +1,16 @@
+// Test-target boundary: the workspace denies panicking constructs in
+// production code; tests assert by panicking, so they are exempt here.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "integration test target: panicking helpers are sanctioned in tests"
+)]
+
+use std::io::{self, Read, Write};
+use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::time::Duration;
 
 use assert_cmd::cargo;
 use assert_cmd::prelude::*;
@@ -12,7 +24,6 @@ use ironplc_container::{
 };
 use predicates::prelude::*;
 use spec_test_macro::spec_test;
-use std::process::Command;
 use tempfile::TempDir;
 
 /// Spec-conformance requirements generated from `specs/design/vm-cli.md`.
@@ -37,17 +48,24 @@ fn all_spec_requirements_have_tests() {
 /// One-time generator for golden test files. Run with:
 /// cargo test -p ironplc-vm-cli --test cli generate_golden -- --ignored --nocapture
 ///
-/// `steel_thread.iplc` is intentionally **not** regenerated here — it
-/// is a frozen artifact that exercises the container reader end-to-end.
+/// Both goldens are frozen artifacts that exercise the container reader
+/// end-to-end, and both must be refreshed whenever `FORMAT_VERSION` bumps:
+/// the reader only accepts the current version. Last refreshed for the
+/// format version 6 -> 7 array-descriptor stride bump (ADR-0069), which
+/// changed only the version field because the file has no type section, and
+/// for the population of the header integrity hashes (`content_hash`,
+/// `debug_hash`, `layout_hash`), so a golden load also exercises the
+/// ADR-0006 load-time verifier (REQ-CF-container-029).
 /// Adding a new entry to this generator is fine; if you ever need to
-/// refresh the steel-thread golden, do it from a throwaway script with
-/// full awareness of what the format change is. It was last refreshed for
-/// the format_version 3 -> 4 array-descriptor stride bump (ADR-0054), which
-/// changed only the version field because the file has no type section;
-/// the reader only accepts the current `FORMAT_VERSION`.
+/// refresh a golden, do it from a throwaway script with full awareness of
+/// what the format change is.
 #[test]
 #[ignore]
 fn generate_golden_files() {
+    let steel_thread_path = path_to_golden_resource("steel_thread.iplc");
+    write_steel_thread_container(&steel_thread_path);
+    eprintln!("Generated golden file: {}", steel_thread_path.display());
+
     let path = path_to_golden_resource("debug_source_file_table.iplc");
     write_debug_source_file_table_container(&path);
     eprintln!("Generated golden file: {}", path.display());
@@ -247,12 +265,12 @@ fn run_when_golden_container_file_then_ok() -> Result<(), Box<dyn std::error::Er
     cmd.assert().success();
 
     let contents = std::fs::read_to_string(&dump_path)?;
-    // Golden file pre-dates several header revisions; the fact that it
-    // still loads and runs is itself the backwards-compatibility check —
-    // bytes 40-71 (formerly `source_hash`) are silently accepted by the
-    // new reader as `reserved_hash_slot`, and every other field offset is
-    // unchanged. Its `max_call_depth` field (offset 194) was bumped 0 -> 1
-    // when zero call depth became invalid; every other byte is preserved.
+    // The golden is a frozen artifact written by the current container
+    // writer: loading it succeeds only because its nonzero integrity hashes
+    // verify against its sections — the golden load is itself the
+    // end-to-end check of the ADR-0006 load-time verifier. Containers with
+    // zero hashes (written before the hashes were populated) stay loadable
+    // and are covered by the container crate's legacy-accept tests.
     assert_eq!(contents, "x: 10\ny: 42\n");
 
     Ok(())
@@ -383,6 +401,85 @@ fn version_then_ok() -> Result<(), Box<dyn std::error::Error>> {
     cmd.assert()
         .success()
         .stdout(predicate::str::starts_with("ironplcvm version "));
+
+    Ok(())
+}
+
+#[test]
+fn serve_help_then_ok() -> Result<(), Box<dyn std::error::Error>> {
+    let mut cmd = Command::new(cargo::cargo_bin!("ironplcvm"));
+    cmd.arg("serve").arg("--help");
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("Usage"))
+        .stdout(predicate::str::contains(".iplc"));
+
+    Ok(())
+}
+
+/// REQ-VC-vm-cli-018: `serve` loads the container exactly like `run` — a
+/// missing file exits 2 with V6001.
+#[spec_test(REQ_VC_vm_cli_018)]
+#[test]
+fn serve_when_file_not_found_then_exit_2_and_v6001() -> Result<(), Box<dyn std::error::Error>> {
+    let mut cmd = Command::new(cargo::cargo_bin!("ironplcvm"));
+    cmd.arg("serve").arg("test/file/doesnt/exist.iplc");
+    cmd.assert()
+        .code(2)
+        .stderr(predicate::str::contains("V6001"));
+
+    Ok(())
+}
+
+/// REQ-VC-vm-cli-018: bytes that are not a container exit 2 with V6002.
+#[spec_test(REQ_VC_vm_cli_018)]
+#[test]
+fn serve_when_invalid_file_then_exit_2_and_v6002() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = TempDir::new()?;
+    let bad_path = dir.path().join("bad.iplc");
+    std::fs::write(&bad_path, "this is not a container file")?;
+
+    let mut cmd = Command::new(cargo::cargo_bin!("ironplcvm"));
+    cmd.arg("serve").arg(&bad_path);
+    cmd.assert()
+        .code(2)
+        .stderr(predicate::str::contains("V6002"));
+
+    Ok(())
+}
+
+/// REQ-VC-vm-cli-019: one command line on stdin yields exactly one flushed
+/// response line on stdout, and EOF ends the session with exit 0.
+#[spec_test(REQ_VC_vm_cli_019)]
+#[test]
+fn serve_when_get_status_then_one_status_line_and_exit_0() -> Result<(), Box<dyn std::error::Error>>
+{
+    let dir = TempDir::new()?;
+    let container_path = dir.path().join("counter.iplc");
+    write_compiled_container(
+        &container_path,
+        "
+PROGRAM main
+  VAR
+    Counter : DINT;
+  END_VAR
+  Counter := Counter + 1;
+END_PROGRAM
+",
+    );
+
+    let mut cmd = assert_cmd::Command::new(cargo::cargo_bin!("ironplcvm"));
+    cmd.arg("serve").arg(&container_path);
+    cmd.write_stdin("{\"command\":\"getStatus\"}\n");
+    let output = cmd.assert().success().get_output().stdout.clone();
+
+    let text = String::from_utf8(output)?;
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines.len(), 1);
+    let response: serde_json::Value = serde_json::from_str(lines[0])?;
+    assert_eq!(response["response"], "status");
+    assert_eq!(response["mode"], "normal");
+    assert_eq!(response["candidate"], serde_json::Value::Null);
 
     Ok(())
 }
@@ -790,14 +887,8 @@ fn run_without_scans_then_stops_on_sigint() -> Result<(), Box<dyn std::error::Er
     Ok(())
 }
 
-/// Compiles IEC 61131-3 source and writes the container to `path`.
-///
-/// The hand-built containers above pin the CLI's own behaviour, but they only
-/// ever carried `BOOL` and `DINT` variables — which is why a `STRING` printing
-/// as its unused slot (issue #1558) went unnoticed. Rendering a real compiled
-/// program is the leg that covers the type tags and the data-region layout
-/// codegen actually emits.
-fn write_compiled_container(path: &Path, source: &str) {
+/// Compiles IEC 61131-3 source to its wire-format bytes.
+fn compiled_bytes(source: &str) -> Vec<u8> {
     let options = ironplc_parser::options::CompilerOptions::default();
     let library =
         ironplc_parser::parse_program(source, &ironplc_dsl::core::FileId::default(), &options)
@@ -814,7 +905,266 @@ fn write_compiled_container(path: &Path, source: &str) {
 
     let mut buf = Vec::new();
     container.write_to(&mut buf).unwrap();
-    std::fs::write(path, &buf).unwrap();
+    buf
+}
+
+/// Compiles IEC 61131-3 source and writes the container to `path`.
+///
+/// The hand-built containers above pin the CLI's own behaviour, but they only
+/// ever carried `BOOL` and `DINT` variables — which is why a `STRING` printing
+/// as its unused slot (issue #1558) went unnoticed. Rendering a real compiled
+/// program is the leg that covers the type tags and the data-region layout
+/// codegen actually emits.
+fn write_compiled_container(path: &Path, source: &str) {
+    std::fs::write(path, compiled_bytes(source)).unwrap();
+}
+
+/// A `PROGRAM main` with one DINT `Counter` counting up by one per scan.
+const COUNTER_PROGRAM: &str = "
+PROGRAM main
+  VAR
+    Counter : DINT;
+  END_VAR
+  Counter := Counter + 1;
+END_PROGRAM
+";
+
+/// A logic-only edit of [`COUNTER_PROGRAM`] that divides by zero on every
+/// scan (`x - x` is always 0). Stages against the counter, so it can be
+/// committed and then recognized after a reboot: the driven round of the
+/// running trapper faults with V4001 on stderr.
+const TRAPPER_PROGRAM: &str = "
+PROGRAM main
+  VAR
+    Counter : DINT;
+  END_VAR
+  Counter := 1 / (Counter - Counter);
+END_PROGRAM
+";
+
+/// One `ironplcvm serve` process fed `stdin`, asserted to exit 0.
+fn serve_with_stdin(path: &Path, stdin: &str) -> std::process::Output {
+    let mut cmd = assert_cmd::Command::new(cargo::cargo_bin!("ironplcvm"));
+    cmd.arg("serve").arg(path).write_stdin(stdin);
+    cmd.assert().success().get_output().clone()
+}
+
+/// The marker JSON of the store file `name` beside `counter.iplc`.
+fn marker_value(dir: &TempDir, name: &str) -> serde_json::Value {
+    let text = std::fs::read_to_string(dir.path().join(format!("counter.iplc.{name}"))).unwrap();
+    serde_json::from_str(&text).unwrap()
+}
+
+fn write_marker_value(dir: &TempDir, name: &str, value: serde_json::Value) {
+    std::fs::write(
+        dir.path().join(format!("counter.iplc.{name}")),
+        value.to_string(),
+    )
+    .unwrap();
+}
+
+/// The accept/test/assemble lines that commit `edit` in one session.
+fn commit_stdin(edit: &[u8]) -> String {
+    let accept = serde_json::json!({"command": "acceptEdits", "program": edit}).to_string();
+    format!("{accept}\n{{\"command\":\"testEdits\"}}\n{{\"command\":\"assembleEdits\"}}\n")
+}
+
+/// A probe session that reveals which artifact booted: accept the clean
+/// counter edit, test it, then untest — the untest's driven round runs the
+/// BOOTED artifact. When the committed trapper booted, that round faults
+/// with V4001 on stderr; the clean counter rounds stay silent.
+fn probe_stdin() -> String {
+    let accept =
+        serde_json::json!({"command": "acceptEdits", "program": compiled_bytes(COUNTER_PROGRAM)})
+            .to_string();
+    format!("{accept}\n{{\"command\":\"testEdits\"}}\n{{\"command\":\"untestEdits\"}}\n")
+}
+
+/// ADR-0064 amendment: accept → test → assemble commits the candidate's exact
+/// wire bytes beside the served container, and a reboot (a new serve process)
+/// boots the committed artifact from the store.
+#[test]
+fn serve_when_assemble_then_reboot_loads_the_committed_artifact(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = TempDir::new()?;
+    let container_path = dir.path().join("counter.iplc");
+    write_compiled_container(&container_path, COUNTER_PROGRAM);
+
+    // Session 1: accept the trapper, run it under Test, assemble it. The
+    // driven boundary rounds trap (the candidate divides by zero) — that is
+    // the program's own fault, logged to stderr, and does not change the
+    // wire answers or the commit.
+    let trapper = compiled_bytes(TRAPPER_PROGRAM);
+    let output = serve_with_stdin(&container_path, &commit_stdin(&trapper));
+    let lines: Vec<&str> = std::str::from_utf8(&output.stdout)?.lines().collect();
+    assert_eq!(lines.len(), 3);
+    for line in lines {
+        let response: serde_json::Value = serde_json::from_str(line)?;
+        assert_eq!(response["response"], "ack");
+    }
+
+    // The commit landed: slot B holds the wire bytes verbatim (never a
+    // re-serialization) and the marker flipped to the new slot.
+    assert_eq!(
+        std::fs::read(dir.path().join("counter.iplc.slot-b"))?,
+        trapper
+    );
+    assert_eq!(
+        marker_value(&dir, "marker"),
+        serde_json::json!({"slot": "b", "seq": 2})
+    );
+
+    // Session 2, the simulated reboot: the probe's untest round runs the
+    // booted artifact — the committed trapper faults, proving the identity.
+    let output = serve_with_stdin(&container_path, &probe_stdin());
+    let stderr = String::from_utf8(output.stderr)?;
+    assert!(
+        stderr.contains("V4001"),
+        "expected the committed trapper to boot and fault the probe round, stderr:\n{stderr}"
+    );
+    Ok(())
+}
+
+/// No assemble, no commit: a reboot boots the originally served artifact.
+#[test]
+fn serve_without_assemble_then_reboot_loads_the_original_artifact(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = TempDir::new()?;
+    let container_path = dir.path().join("counter.iplc");
+    write_compiled_container(&container_path, COUNTER_PROGRAM);
+
+    // Session 1 only seeds the store (first serve); nothing commits.
+    serve_with_stdin(&container_path, "{\"command\":\"getStatus\"}\n");
+
+    let output = serve_with_stdin(&container_path, &probe_stdin());
+    let stderr = String::from_utf8(output.stderr)?;
+    assert!(
+        !stderr.contains("V4001"),
+        "expected the clean counter to boot, stderr:\n{stderr}"
+    );
+    Ok(())
+}
+
+/// Crash residue of a tmp write (partial, unverified) with the marker and
+/// the active slot intact: boot the marker's generation; discard the tmp.
+#[test]
+fn serve_when_tmp_residue_present_then_reboot_boots_the_marker_generation(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = TempDir::new()?;
+    let container_path = dir.path().join("counter.iplc");
+    write_compiled_container(&container_path, COUNTER_PROGRAM);
+
+    // Session 1 seeds the store; then simulate a crash during a tmp write.
+    serve_with_stdin(&container_path, "{\"command\":\"getStatus\"}\n");
+    std::fs::write(dir.path().join("counter.iplc.tmp"), "partial write")?;
+
+    let output = serve_with_stdin(&container_path, &probe_stdin());
+    let stderr = String::from_utf8(output.stderr)?;
+    assert!(
+        !stderr.contains("V4001"),
+        "expected the marker's generation (the clean counter), stderr:\n{stderr}"
+    );
+    assert!(!dir.path().join("counter.iplc.tmp").exists());
+    Ok(())
+}
+
+/// Crash during the marker flip: the marker is missing but the residue names
+/// a verified slot — boot it and heal the marker.
+#[test]
+fn serve_when_marker_missing_then_reboot_adopts_the_residue_and_heals(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = TempDir::new()?;
+    let container_path = dir.path().join("counter.iplc");
+    write_compiled_container(&container_path, COUNTER_PROGRAM);
+    let trapper = compiled_bytes(TRAPPER_PROGRAM);
+    serve_with_stdin(&container_path, &commit_stdin(&trapper));
+
+    // Recreate the flip window: marker deleted, residue names the committed
+    // slot.
+    std::fs::remove_file(dir.path().join("counter.iplc.marker"))?;
+    write_marker_value(
+        &dir,
+        "marker.tmp",
+        serde_json::json!({"slot": "b", "seq": 2}),
+    );
+
+    let output = serve_with_stdin(&container_path, &probe_stdin());
+    let stderr = String::from_utf8(output.stderr)?;
+    assert!(
+        stderr.contains("V4001"),
+        "expected the residue-named trapper to boot, stderr:\n{stderr}"
+    );
+    assert_eq!(
+        marker_value(&dir, "marker"),
+        serde_json::json!({"slot": "b", "seq": 2})
+    );
+    assert!(!dir.path().join("counter.iplc.marker.tmp").exists());
+    Ok(())
+}
+
+/// Stale marker: the old marker was restored while the residue names the
+/// newer verified slot — the highest-seq verifiable record wins.
+#[test]
+fn serve_when_stale_marker_then_reboot_boots_the_newest_verifiable(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = TempDir::new()?;
+    let container_path = dir.path().join("counter.iplc");
+    write_compiled_container(&container_path, COUNTER_PROGRAM);
+    let trapper = compiled_bytes(TRAPPER_PROGRAM);
+    serve_with_stdin(&container_path, &commit_stdin(&trapper));
+
+    // Stale state: the marker names the old active slot at the old seq while
+    // the residue names the committed slot at the newer seq.
+    write_marker_value(&dir, "marker", serde_json::json!({"slot": "a", "seq": 1}));
+    write_marker_value(
+        &dir,
+        "marker.tmp",
+        serde_json::json!({"slot": "b", "seq": 2}),
+    );
+
+    let output = serve_with_stdin(&container_path, &probe_stdin());
+    let stderr = String::from_utf8(output.stderr)?;
+    assert!(
+        stderr.contains("V4001"),
+        "expected the newest verifiable generation (the trapper) to boot, stderr:\n{stderr}"
+    );
+    assert_eq!(
+        marker_value(&dir, "marker"),
+        serde_json::json!({"slot": "b", "seq": 2})
+    );
+    Ok(())
+}
+
+/// ADR-0064 amendment wire honesty: a persistence failure answers the
+/// assemble line with V6012 instead of an ack; the RAM promotion stands and
+/// the store is unchanged, so a reboot would boot the previous generation.
+#[test]
+fn serve_when_persist_fails_then_assemble_answers_v6012() -> Result<(), Box<dyn std::error::Error>>
+{
+    let dir = TempDir::new()?;
+    let container_path = dir.path().join("counter.iplc");
+    write_compiled_container(&container_path, COUNTER_PROGRAM);
+
+    // Session 1 seeds the store; then block the commit's tmp write with a
+    // directory where the tmp file must land.
+    serve_with_stdin(&container_path, "{\"command\":\"getStatus\"}\n");
+    std::fs::create_dir(dir.path().join("counter.iplc.tmp"))?;
+
+    let trapper = compiled_bytes(TRAPPER_PROGRAM);
+    let output = serve_with_stdin(&container_path, &commit_stdin(&trapper));
+    let lines: Vec<&str> = std::str::from_utf8(&output.stdout)?.lines().collect();
+    assert_eq!(lines.len(), 3);
+    let assembled: serde_json::Value = serde_json::from_str(lines[2])?;
+    assert_eq!(assembled["response"], "error");
+    assert_eq!(assembled["vCode"], "V6012");
+
+    // The store still names the seeded generation.
+    assert_eq!(
+        marker_value(&dir, "marker"),
+        serde_json::json!({"slot": "a", "seq": 1})
+    );
+    assert!(!dir.path().join("counter.iplc.slot-b").exists());
+    Ok(())
 }
 
 /// A `STRING_TO_UDINT` compiled under the strict default (reject, trap)
@@ -1057,6 +1407,144 @@ END_PROGRAM
     let dump = String::from_utf8(out.get_output().stdout.clone())?;
 
     assert!(dump.contains("lvl: 75\n"), "dump was:\n{dump}");
+
+    Ok(())
+}
+
+/// One ADR-0063 frame: 4-byte little-endian length, then the line bytes.
+fn tcp_frame(line: &str) -> Vec<u8> {
+    let mut bytes = (line.len() as u32).to_le_bytes().to_vec();
+    bytes.extend_from_slice(line.as_bytes());
+    bytes
+}
+
+/// Reads exactly one frame from `stream`, returning the line bytes.
+fn read_frame(stream: &mut TcpStream) -> io::Result<String> {
+    let mut header = [0u8; 4];
+    stream.read_exact(&mut header)?;
+    let len = u32::from_le_bytes(header) as usize;
+    let mut payload = vec![0u8; len];
+    stream.read_exact(&mut payload)?;
+    String::from_utf8(payload).map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))
+}
+
+/// Connects a frame client to `addr` with a read timeout, so a hang fails
+/// instead of blocking the suite.
+fn connect_frame_client(addr: std::net::SocketAddr) -> io::Result<TcpStream> {
+    let stream = TcpStream::connect(addr)?;
+    stream.set_read_timeout(Some(Duration::from_secs(15)))?;
+    Ok(stream)
+}
+
+/// The `vCode` of the next frame answer, parsed.
+fn next_frame_v_code(stream: &mut TcpStream) -> io::Result<String> {
+    let line = read_frame(stream)?;
+    let value: serde_json::Value = serde_json::from_str(&line)
+        .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+    value["vCode"]
+        .as_str()
+        .map(str::to_string)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "answer carries no vCode"))
+}
+
+/// ADR-0063/0065: the TCP transport serves the same session protocol one
+/// frame per message — the `identity` handshake, the edit FSM at one session
+/// at a time (a second session is refused with one V6014 line), a framing
+/// violation answered with V6013 and dropped, and the listener surviving it
+/// all for a fresh session.
+#[test]
+fn serve_tcp_when_scripted_then_identity_refusal_framing_drop_and_reconnect(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = TempDir::new()?;
+    let container_path = dir.path().join("counter.iplc");
+    write_compiled_container(&container_path, COUNTER_PROGRAM);
+
+    // Reserve the port the way a dialing client would; the server binds it next.
+    let probe = TcpListener::bind("127.0.0.1:0")?;
+    let addr = probe.local_addr()?;
+    drop(probe);
+
+    let mut cmd = Command::new(cargo::cargo_bin!("ironplcvm"));
+    cmd.arg("serve")
+        .arg("--listen")
+        .arg(addr.to_string())
+        .arg(&container_path);
+    let mut server = cmd.spawn()?;
+
+    // Session 1: the scripted flow, framed — identity first (ADR-0063), then
+    // accept → test → assemble (ADR-0064), each answered in one frame.
+    let mut client = connect_frame_client(addr)?;
+    client.write_all(&tcp_frame(r#"{"command":"identity"}"#))?;
+    let identity: serde_json::Value = serde_json::from_str(&read_frame(&mut client)?)?;
+    assert_eq!(identity["response"], "identity");
+    assert_eq!(identity["protocol"], 1);
+    assert_eq!(identity["device"]["name"], "ironplcvm");
+    assert!(identity["device"]["firmwareVersion"]
+        .as_str()
+        .unwrap()
+        .split('.')
+        .next()
+        .unwrap()
+        .parse::<u64>()
+        .is_ok());
+    assert_eq!(identity["application"]["mode"], "normal");
+    assert_eq!(
+        identity["application"]["candidate"],
+        serde_json::Value::Null
+    );
+    assert!(identity.get("redundancy").is_none());
+
+    let edit = compiled_bytes(COUNTER_PROGRAM);
+    let accept = serde_json::json!({"command": "acceptEdits", "program": edit}).to_string();
+    for command in [
+        &accept,
+        r#"{"command":"testEdits"}"#,
+        r#"{"command":"assembleEdits"}"#,
+    ] {
+        client.write_all(&tcp_frame(command))?;
+        let line = read_frame(&mut client)?;
+        let value: serde_json::Value = serde_json::from_str(&line)?;
+        assert_eq!(value["response"], "ack");
+    }
+
+    // A second session while the first holds the device: exactly one V6014
+    // refusal line, then the socket closes — and the first session is
+    // unaffected (ADR-0065).
+    let mut second = connect_frame_client(addr)?;
+    let refusal: serde_json::Value = serde_json::from_str(&read_frame(&mut second)?)?;
+    assert_eq!(refusal["response"], "error");
+    assert_eq!(refusal["vCode"], "V6014");
+    assert!(refusal["message"]
+        .as_str()
+        .unwrap()
+        .contains("one engineering session"));
+    let mut leftover = Vec::new();
+    second.read_to_end(&mut leftover)?;
+    assert!(leftover.is_empty());
+
+    client.write_all(&tcp_frame(r#"{"command":"getStatus"}"#))?;
+    let status: serde_json::Value = serde_json::from_str(&read_frame(&mut client)?)?;
+    assert_eq!(status["response"], "status");
+    assert_eq!(status["normal"], 2);
+
+    // Framing garbage on the active session: V6013 on the wire, then the
+    // connection drops — the listener survives.
+    client.write_all(&[0xff, 0xff, 0xff, 0xff])?;
+    assert_eq!(next_frame_v_code(&mut client)?, "V6013");
+    let mut leftover = Vec::new();
+    client.read_to_end(&mut leftover)?;
+    assert!(leftover.is_empty());
+
+    // A reconnect lands a fresh session: the assembled promotion stands in
+    // the host (normal generation 2).
+    let mut third = connect_frame_client(addr)?;
+    third.write_all(&tcp_frame(r#"{"command":"identity"}"#))?;
+    let identity: serde_json::Value = serde_json::from_str(&read_frame(&mut third)?)?;
+    assert_eq!(identity["response"], "identity");
+    assert_eq!(identity["application"]["normal"], 2);
+
+    drop(third);
+    server.kill()?;
 
     Ok(())
 }

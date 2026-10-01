@@ -167,7 +167,7 @@ Each `Point` element occupies 2 slots (stride = 2). For `points[2].y`:
 
 A STRING field has no single-slot load or store, so Option A does not apply to
 it. It is addressed with the string-array opcodes instead, through a
-**strided STRING descriptor** ([ADR-0054](../adrs/0054-explicit-element-stride-in-array-descriptors.md)):
+**strided STRING descriptor** ([ADR-0069](../adrs/0069-explicit-element-stride-in-array-descriptors.md)):
 
 - `total_elements` is the number of structures (not slots), and
   `element_stride` is the size of one structure (`struct_slots * 8`), so

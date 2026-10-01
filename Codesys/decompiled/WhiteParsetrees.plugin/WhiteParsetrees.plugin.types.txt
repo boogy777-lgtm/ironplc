@@ -1,0 +1,27 @@
+﻿FILE	C:\Program Files\CODESYS 3.5.22.10\CODESYS\PlugIns\977d3b32-f34f-4f5b-864c-b843b44550dd\3.5.22.10\WhiteParsetrees.plugin.dll
+ASM	WhiteParsetrees.plugin, Version=3.5.22.10, Culture=neutral, PublicKeyToken=null
+MODULE	WhiteParsetrees.plugin.dll
+REF	mscorlib	4.0.0.0
+REF	ComponentModel	3.5.22.10
+REF	System	4.0.0.0
+REF	Compiler	3.5.22.10
+REF	WhiteParseTrees	3.5.22.10
+REF	System.Core	4.0.0.0
+TYPECOUNT	643
+NAMESPACE	
+NAMESPACE	CODESYS.WhiteParseTrees
+NAMESPACE	CODESYS.WhiteParseTrees.Nodes
+NAMESPACE	CODESYS.WhiteParseTrees.Nodes.Expressions
+NAMESPACE	CODESYS.WhiteParseTrees.Nodes.Factories
+NAMESPACE	CODESYS.WhiteParseTrees.Nodes.Factories.Builder
+NAMESPACE	CODESYS.WhiteParseTrees.Nodes.Statements
+NAMESPACE	CODESYS.WhiteParseTrees.Nodes.Tokens
+NAMESPACE	CODESYS.WhiteParseTrees.Parser
+NAMESPACE	CODESYS.WhiteParseTrees.Services
+NAMESPACE	CODESYS.WhiteParseTrees.Services.Formatter
+NAMESPACE	CODESYS.WhiteParseTrees.Services.Formatter.Passes
+NAMESPACE	CODESYS.WhiteParseTrees.WhiteParseTrees.Extensions
+NAMESPACE	CODESYS.WhiteParseTrees.WhiteParseTrees.Resources
+NAMESPACE	Microsoft.CodeAnalysis
+NAMESPACE	System.Diagnostics.CodeAnalysis
+NAMESPACE	System.Runtime.CompilerServices

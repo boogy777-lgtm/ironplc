@@ -180,6 +180,12 @@ impl Fold<Diagnostic> for TypeEnvironment {
             InitialValueAssignmentKind::EnumeratedType(_enumerated_initial_value_assignment) => {
                 // I don't think this is needed because this should refer to a declared type, not declare a type.
             }
+            InitialValueAssignmentKind::Params(_) => {
+                // A PARAMS type declaration is a `DataTypeDeclarationKind::Params`,
+                // folded by `fold_params_declaration`; it never reaches the
+                // `TYPE Name : <spec>` form this fold handles.
+                return Err(Diagnostic::internal_error());
+            }
             InitialValueAssignmentKind::FunctionBlock(fb_init) => {
                 // Handle function block type aliases like: TYPE MyFBAlias : ExistingFB := (input := 10); END_TYPE
                 // This creates an alias to an existing function block type
@@ -310,6 +316,17 @@ impl Fold<Diagnostic> for TypeEnvironment {
         Ok(node)
     }
 
+    fn fold_union_declaration(
+        &mut self,
+        node: UnionDeclaration,
+    ) -> Result<UnionDeclaration, Diagnostic> {
+        // A union is registered with the members' structure layout for now;
+        // overlaying them at offset 0 is not implemented yet.
+        let attrs = crate::intermediates::structure::from_union(&node.type_name, &node, self)?;
+        self.insert_type(&node.type_name, attrs);
+        Ok(node)
+    }
+
     fn fold_subrange_declaration(
         &mut self,
         node: SubrangeDeclaration,
@@ -336,6 +353,24 @@ impl Fold<Diagnostic> for TypeEnvironment {
         let result = array::try_from(&node.type_name, &node.spec, self)?;
 
         match result {
+            array::IntermediateResult::Type(attributes) => {
+                self.insert_type(&node.type_name, attributes);
+            }
+            array::IntermediateResult::Alias(base_type_name) => {
+                self.insert_alias(&node.type_name, &base_type_name)?;
+            }
+        }
+
+        Ok(node)
+    }
+
+    fn fold_params_declaration(
+        &mut self,
+        node: ParamsDeclaration,
+    ) -> Result<ParamsDeclaration, Diagnostic> {
+        // A PARAMS type is the array its bounds are derived from (see
+        // `intermediates::params`), so it resolves through the array module.
+        match crate::intermediates::params::try_from(&node.type_name, &node.spec, self)? {
             array::IntermediateResult::Type(attributes) => {
                 self.insert_type(&node.type_name, attributes);
             }
@@ -378,7 +413,13 @@ impl Fold<Diagnostic> for TypeEnvironment {
                 VariableType::Input => Some(FunctionBlockVarType::Input),
                 VariableType::Output => Some(FunctionBlockVarType::Output),
                 VariableType::InOut => Some(FunctionBlockVarType::InOut),
-                VariableType::Var => Some(FunctionBlockVarType::Internal),
+                // VAR_STAT/VAR_INST/VAR_GENERIC are stored like VAR until
+                // their placement rules are implemented, so they are FB
+                // fields too. See `VariableType::is_pou_storage`.
+                VariableType::Var
+                | VariableType::VarStat
+                | VariableType::VarInst
+                | VariableType::VarGeneric => Some(FunctionBlockVarType::Internal),
                 _ => None,
             };
             let var_type = match var_type {

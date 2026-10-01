@@ -1,3 +1,8 @@
+# LLM fence: any rustc/clippy warning in workspace code is a hard build error.
+# cargo >= 1.97 required; older cargo warns about the unknown key but builds.
+[build]
+warnings = "deny"
+
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-Ctarget-feature=+crt-static"]
 

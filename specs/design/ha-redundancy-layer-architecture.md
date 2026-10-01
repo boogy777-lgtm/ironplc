@@ -1,0 +1,439 @@
+# Spec: HA Redundancy Layer Architecture
+
+## Overview
+
+This spec designs the Phase 5 redundancy layer: where it lives, how it
+decomposes, which existing architectural patterns it reuses, and the
+minimal seams it needs from `ironplc-runtime`. It answers two questions
+directly:
+
+1. **Should the redundancy layer be an n+1 module?** Yes — and this spec
+   proves the workspace actually supports that move, with evidence.
+2. **Where may new abstractions appear?** Only where no architectural
+   groundwork for redundancy exists; each such gap is stated with the
+   reason no existing call covers it.
+
+This spec builds on:
+
+- **[HA Architecture Readiness](https://github.com/boogy777-lgtm/ironplc/blob/8a7f6d0d09b00436daebfd669babd39f2e0f2e13/specs/design/ha-architecture-readiness.md)**: the
+  readiness verdict and the reuse/gap inventory this design deepens
+- **[HA Redundancy FSM](ha-redundancy-fsm.md)**: the SYNC/CONTROL
+  statechart, admission, and the ping/pong liveness contract this layer
+  implements
+- **[ADR-0062](../adrs/0062-measured-failover-timing-and-network-calibration.md)**:
+  measured timing, calibration-gated readiness, and the OwnerLease minting
+  rule the seams below serve
+- **[Roadmap, Phase 5](../roadmap.md)**: the binding media, port-map, and
+  quorum decisions
+
+## Design Goals
+
+1. **The runtime stays redundancy-free** — `ironplc-runtime` never names a
+   pair, a role, an epoch, or a network; the dependency direction is
+   one-way, redundancy → runtime
+2. **Reuse before invention** — every mechanism that already has an
+   architectural home is called, not wrapped; new abstractions exist only
+   where the gap list proves no home exists
+3. **A standalone controller ships zero redundancy** — the layer is a
+   separate crate a deployment includes or omits
+4. **Measurement from day one** — calibration and EMA tracking are part of
+   the first runnable increment, per ADR-0062, not a retrofit
+
+## Is the Architecture Modular? The n+1 Verdict
+
+**Yes.** The workspace is genuinely modular, and the redundancy layer is
+the same kind of addition `ironplc-runtime` already was: an n+1 crate
+above the existing core, consumed by thin clients. Evidence:
+
+- **Crate-per-concern workspace.** `compiler/Cargo.toml` lists 22 members,
+   each owning one concern: `dsl`, `parser`, `analyzer`, `codegen`,
+   `container`, `vm`, `plc2plc`, `project`, `runtime`, `mcp`,
+   `cli-support`, `vm-cli`, plus tooling crates. No crate absorbs a
+   neighbor's responsibility.
+- **The runtime was itself added as n+1.** `compiler/runtime/Cargo.toml`
+   depends on `ironplc-container`, `ironplc-vm`, and serde only: the
+   online-change host was layered above the VM without modifying the VM's
+   execution kernel (ADR-0052). The move this spec makes is the same move,
+   one level higher.
+- **Thin clients share one core.** `compiler/vm-cli/Cargo.toml:26-29`
+   consumes `ironplc-vm` + `ironplc-container` + `ironplc-runtime`;
+   `compiler/mcp/Cargo.toml:21` consumes the same `ironplc-runtime`; the
+   VS Code extension drives the same command layer. Three clients, one
+   protocol authority — the pattern a redundancy engineering surface
+   joins.
+- **Feature surfaces stay aligned by construction.**
+   `compiler/mcp/src/feature_flag_conformance.rs:295` fails the build when
+   a feature flag lacks a fixture or fails to gate its example — the
+   workspace polices surface drift with conformance tests, not
+   conventions.
+- **Curated crate boundaries.** `compiler/runtime/src/lib.rs:19-34` is
+   private modules plus a curated `pub use` — the shape the new crate
+   adopts.
+
+## Pattern Reuse Map
+
+Each entry names the pattern, proves where it lives, and states what the
+redundancy layer reuses it for. These are pattern reuses — the new crate
+follows them; it does not wrap the existing code.
+
+| Existing pattern | Proof | Reused for |
+|---|---|---|
+| Typed command enums + line-delimited JSON codec | `compiler/runtime/src/commands.rs:32`, `compiler/runtime/src/commands.rs:284` | The engineering-facing redundancy commands (pair status, commanded swap): one serde-tagged vocabulary, thin transports, no per-client dialects |
+| V-codes from CSV via build.rs codegen | `compiler/runtime/build.rs:1` (mirrors the vm-cli `io_codes` build); `compiler/runtime/resources/problem-codes.csv` | HA runtime codes: a new crate-local CSV generating constants the same way, leaving the VM's trap table and the runtime's hot-edit codes untouched |
+| State-gated single-threaded session loop | `compiler/vm-cli/src/dap/server.rs:1` (requests gated through a legality table), framing in `compiler/vm-cli/src/dap/framing.rs:1` | The pair-link session: a framed transport driving a statechart-gated loop; the ping/pong exchange and admission are gated by SYNC/CONTROL state, not by transport callbacks |
+| Versioned, fail-soft JSON persistence | `compiler/project/src/sidecar.rs:1`; auto-load wiring `compiler/project/src/project.rs:281` | Engineering-side pair configuration (`REDUNDANCY_ENABLED`, configured role, pair addressing): deterministic file, missing/malformed loads as empty, explicit update flows |
+| Newtype generation counters | `compiler/runtime/src/generation.rs:15`, `compiler/runtime/src/generation.rs:37` | `Epoch`: the ownership/fencing counter follows the same opaque-newtype shape; no framework, one type |
+| Caller-owned state buffers | `compiler/vm/src/buffers.rs:18` | The crossload payload: `VmBuffers`' persistent regions are the replication unit's memory image, enumerable and sized from the container |
+| Append-only sub-tables with tolerant readers | ADR-0053/ADR-0059; `compiler/container/src/type_section.rs:189`, `compiler/container/src/type_section.rs:209` | The rule that any future container-carried HA metadata is a new sub-table a pre-existing reader tolerates; v1 keeps redundancy configuration project-side and does not touch the container |
+| Clap subcommand conventions | `compiler/vm-cli/src/main.rs:43` | Any redundancy CLI growth is a new subcommand on the existing binaries, not a new binary |
+| REQ traceability from specs to tests | `compiler/vm-cli/build.rs:74` (`spec_requirements_gen::generate`), `#[spec_test]` via `spec_test_macro` | The new crate's spec-conformance machinery: requirements live in this and later HA specs, enforced by the same generator |
+
+## Crate Placement and Dependency Direction
+
+The redundancy layer is a **new workspace crate, `ironplc-redundancy`**,
+with the dependency chain:
+
+```text
+ironplc-redundancy → ironplc-runtime → ironplc-vm / ironplc-container
+```
+
+- It is not a module of `ironplc-runtime`: the runtime is the hot-edit
+  protocol authority present on every standalone controller, and it must
+  never name pair semantics. Folding redundancy in would break the
+  dependency-direction rule that keeps the runtime core deployable alone.
+- It is not in the VM: excluded by ADR-0010 and by the readiness
+  verdict's conditions.
+- The engineering command vocabulary for redundancy lives in the new
+  crate, following the ADR-0055 pattern (typed enums, line codec, CSV
+  V-codes). This refines the placement suggested in
+  [HA Architecture Readiness](https://github.com/boogy777-lgtm/ironplc/blob/8a7f6d0d09b00436daebfd669babd39f2e0f2e13/specs/design/ha-architecture-readiness.md): the readiness
+  doc proposed extending the runtime's `Command` enum, but that would put
+  redundancy vocabulary into the crate that must stay redundancy-free.
+  Each layer keeps its own typed surface; `ironplcvm serve` and the MCP
+  server compose both, staying thin.
+
+## Shell, Not Runtime +1
+
+Two planes are separate and must not be conflated:
+
+- **Code placement** — the n+1 verdict above: the redundancy layer is a
+  new crate, and `ironplc-runtime` stays redundancy-free.
+- **Process topology** — the redundancy crate is the **outer shell** of
+  the process: its composition root, not a layer inside the runtime
+  stack. When redundancy is enabled, the shell owns startup ordering and
+  drives the host; the host never drives the shell.
+
+Admission cannot rest on the shell withholding a call. Today `run()` has
+several owners — `ironplcvm run`, the `serve` session's round-driving, the
+MCP dispatch, the DAP host — and the discipline of who may drive scans is
+convention duplicated across callers, not a mechanism. Redundancy must not
+become one more disciplined caller.
+
+The resolution is to promote the owner to a **mechanism inside
+`RuntimeHost`**: the host boots unpermitted, and `run()` without an
+execution permit fails with a V-code instead of executing. Standalone
+binaries call `permit_execution()` immediately at startup — today's
+behavior, as the trivial policy. The redundancy layer grants the permit
+only after admission produces a verdict (Standalone, Primary, or — on
+promotion — a formerly Secondary unit).
+
+This is a clean policy/mechanism split:
+
+- The redundancy crate is the **policy**: when to grant.
+- `RuntimeHost` is the **enforcement point**: the single authority on
+  whether scans execute. Bypass is impossible at the type level, because
+  the host already owns the execution lifecycle (`HostMode`,
+  `compiler/runtime/src/host.rs:53`) and the permit latch extends that
+  single responsibility rather than adding a new one. The dependency
+  direction is unchanged: redundancy → runtime.
+
+```text
+redundancy off (current behavior):
+
+  client ──► permit_execution() at startup ──► RuntimeHost ──► VM ──► scans
+
+redundancy on:
+
+  RedundancyShell
+      │
+      ▼
+  admission:  neighbor discovery (ping/pong) + pair configuration
+      │
+      ▼
+  verdict: Standalone │ Primary │ Secondary
+      │
+      ▼
+  drives RuntimeHost:
+      Standalone / Primary  → permit_execution(), then run()
+      Secondary             → no permit: run() refuses; the sync
+                              pipeline applies replicated state
+                              until promotion grants the permit
+```
+
+Process startup ordering is owned by the shell. Binaries — `ironplcvm
+serve` today, a controller daemon later — embed the shell only when
+redundancy is enabled (flag or configuration); otherwise they issue the
+permit directly at startup, which is exactly the current behavior. The
+composition decision lives at the binary's entry point, not inside either
+crate.
+
+This satisfies both owner constraints simultaneously: the runtime knows
+nothing about redundancy (the permit names no role, pair, or epoch), and —
+when redundancy is enabled — the application cannot start without the
+shell's permission, because the enforcement point refuses to scan
+unpermitted.
+
+A side benefit: the scan-driving policy currently duplicated across the
+`serve` session and the MCP dispatch can later funnel through one driver
+without changing the permit model — the permit says nothing about who
+drives, only whether driving may begin.
+
+## Module Decomposition
+
+`ironplc-redundancy` follows the workspace conventions: private modules,
+curated re-exports, each module under 1000 lines with one responsibility.
+
+```text
+ironplc-redundancy
+├── statechart    — the SYNC and CONTROL superstates, guards, case table
+├── admission     — neighbor discovery outcome → standalone / secondary /
+│                   initial-owner decision before the application starts
+├── liveness      — ping/pong codec, per-channel sequences, two-channel
+│                   cross-check, peer-failure confirmation timing
+├── crossload     — state replication: segmentation of the host's
+│                   persistent buffers, stable-UID addressing, peer apply
+├── fencing       — I/O fencing authority client: ordered claim,
+│                   CLAIMED_DISARMED verification, ARM, barrier rollback
+├── calibration   — EMA10/EMA100/max/count trackers, link profile,
+│                   budget validation, degradation alarms (ADR-0062)
+├── epoch         — the Epoch newtype and the EpochStore persistence port
+│                   (volatile backend first, NV backend per target)
+├── lease         — OwnerLease minting, fed by the host's scan-commit seam
+│                   (never by the network task — ADR-0062)
+├── hal           — the NIC port abstraction (below); drivers live outside
+└── commands      — the typed engineering vocabulary + line codec + CSV
+                    codes, following the ADR-0055 pattern
+```
+
+The statechart module owns the only FSMs; every other module is a service
+it drives. There is no registry, no event bus, no plugin point.
+
+## Interfaces
+
+The interfaces below are the only new abstractions this design introduces.
+Each exists because the gap list shows nothing in the workspace covers it.
+
+```rust
+/// One network port as the redundancy layer sees it. Implementations are
+/// target-side drivers; the layer never touches registers.
+trait NicPort {
+    fn capabilities(&self) -> PortCapabilities; // timestamp/IRQ/DMA per port
+    fn counters(&self) -> PhyCounters;          // uniform PHY/error counters
+    fn send(&mut self, frame: &[u8]) -> Result<(), PortError>;
+    fn poll(&mut self) -> Option<(IngressTimestamp, Frame)>;
+}
+
+/// Epoch persistence across power loss. Volatile backend first; an NV
+/// backend (FRAM/journalled flash) plugs in without architecture change.
+trait EpochStore {
+    fn load(&self) -> Option<Epoch>;
+    fn store(&mut self, epoch: Epoch) -> Result<(), PersistError>;
+}
+```
+
+Everything else is composition over existing APIs: the crossload payload
+is `VmBuffers`; addressing is the container's stable UID tables;
+engineering transport is the line-codec pattern; generations are the
+existing newtypes.
+
+## Protocol Portability
+
+Can the protocol stack be swapped (EtherNet/IP, EtherCAT, MRP) without
+reopening the architecture? Yes for everything the redundancy layer owns;
+the one genuinely protocol-bound concern is the fencing authority, and it
+binds behind a declared seam rather than leaking into the layer.
+
+**Protocol-independent — unchanged by a swap:** the pair-link application
+protocol (ping/pong exchange, claim and ARM messages, sequences and the
++1000 penalty), epoch handling, state replication over `VmBuffers`, the
+timing/calibration model and its EMA terms, and the engineering UI
+surface. The statechart, the case table, and the readiness gates never
+name a transport.
+
+**Protocol-bound — a per-protocol binding behind the same interface:**
+the fencing authority, i.e. the target-enforced ownership that makes the
+OWNERSHIP_BARRIER real instead of aspirational.
+
+- *EtherNet/IP:* the v1 realization is Exclusive Owner for outputs plus
+  an independent Input Only observer — ownership enforced by the target's
+  connection admission.
+- *EtherCAT:* there is no per-slave ownership by design (a single master
+  owns the process image), so the fencing equivalent must bind elsewhere —
+  master exclusivity and hot-connect behavior — or the guarantee level
+  degrades, and the capability descriptor records that.
+- *MRP:* not an I/O protocol at all — it is L2 ring media redundancy
+  (IEC 62439-2), complementary to ownership fencing, not a replacement
+  for it. It changes the media path the channels traverse, not who may
+  command outputs.
+
+**The seam.** Two interfaces, no more: the transport interface (already
+declared as `NicPort`) and the fencing-client interface, each selected per
+protocol by a binding. A capability descriptor travels with the binding
+and records the guarantee level — minimal fields: ownership mode
+(single-exclusive / redundant-preconnected), observer capability
+(independent Input Only / Listen Only / none), staged claim support,
+explicit ARM support, epoch support, and explicit owner status in the
+cyclic input. The roadmap's I/O firmware contract audit is the natural
+place to extend that descriptor; this design adds no other abstraction,
+because a swap requirement is exactly what justifies a seam and nothing
+more.
+
+**Consequence.** Switching protocols never reopens the FSM. It changes
+the binding and the guarantee level, and the engineering UI must surface
+the difference (the audit list already requires per-module profiles and
+the limiting-device view). A pair may even mix bindings — a preconnected
+module beside a generic one — and the barrier and timing math already
+treat each module's contribution separately.
+
+**Portability is unproven until a second binding exists.** Interfaces
+designed from a single implementation leak: whatever only one binding
+exercises silently becomes "the interface". The mitigation is to build
+the first binding (EtherNet/IP) behind the two seams and ship a
+**simulator binding from the start** — a loopback transport plus
+capability stubs that exercise staged claim, ARM, epoch checks, and
+observer semantics without hardware. The simulator is what makes the
+seams real: it gives the FSM, admission, crossload, and the engineering
+UI CI coverage before any field device is attached, and it turns a
+protocol swap into a binding addition rather than an archaeology
+exercise.
+
+**Cost model of a protocol change.** Unchanged: FSM, epochs, crossload,
+calibration, and the engineering UI surface. Per-protocol work, and only
+this: the fencing/ownership binding, the transport implementation, a
+conformance suite per binding (reusing the existing spec-conformance
+pattern so each binding is held to the same interface contract), and
+protocol-specific V-codes — the last is mechanical through the CSV
+codegen convention. The honest estimate is **weeks of binding work, not
+days**: guarantee levels differ per protocol (see EtherCAT above), so
+each binding's fencing claims must be re-verified rather than assumed
+from the first one.
+
+## Minimal Seams in ironplc-runtime
+
+The supervisor drives the existing host API; exactly four small
+extensions are needed, each an extension of a call that exists today — no
+new abstraction layer inside the runtime.
+
+1. **Execution permit latch.** The host boots unpermitted and `run()`
+   refuses without a permit (a V-code); `permit_execution()` grants the
+   latch. This is the enforcement point of the policy/mechanism split in
+   "Shell, Not Runtime +1" — standalone binaries grant it at startup, the
+   redundancy shell grants it on an admission verdict.
+2. **Scan-commit notification.** `RuntimeHost::run`
+   (`compiler/runtime/src/host.rs:289`) applies pending swaps at round
+   boundaries; `compiler/vm-cli/src/serve.rs:12` already demonstrates
+   driving single rounds from outside. The supervisor needs one commit
+   notification per completed round to mint the OwnerLease and take the
+   crossload snapshot at the commit point (ADR-0062: the lease is born at
+   scan commit, never in the network task). Seam: an optional per-round
+   callback on the run loop — one parameter, not a framework.
+3. **State snapshot read access.** The host owns the buffers and exposes
+   `data_region()` (`compiler/runtime/src/host.rs:400`) and per-index
+   `read_variable` (`compiler/runtime/src/host.rs:390`). The crossload
+   source needs a bulk read of the persistent regions (`vars` +
+   `data_region`). Seam: one read accessor beside the existing ones.
+4. **Crossload apply while not scanning.** Admission and the SYNC chart
+   require a unit that holds the application and applies replicated state
+   without executing — monitor mode. The host today is either running
+   rounds or idle with private buffers. Seam: an apply path that writes a
+   replicated snapshot into the buffers while the host drives no rounds,
+   mirroring what `apply_migration_swap`
+   (`compiler/runtime/src/host.rs:368`) already does from a migration
+   plan — same buffers, different source.
+
+No other runtime change: the swap machinery, validation tuple, and command
+layer are reused unchanged.
+
+## Gaps With No Existing Groundwork
+
+Each gap below requires new code because nothing in the workspace performs
+the function at all (the readiness doc's gap list, now with the design
+consequence):
+
+1. **NIC HAL.** No networking exists anywhere; the runtime's dependencies
+   are the VM, the container, and serde. The roadmap requires per-port
+   drivers with advertised capabilities and uniform counters — hence
+   `NicPort`, the smallest trait that carries the decided requirements.
+2. **Pair discovery and admission.** No code discovers a neighbor or
+   decides standalone vs. redundant; `RuntimeHost::new` is ready to scan
+   immediately. Admission is a new module driving the host, gated by
+   discovery.
+3. **Crossload channel.** `VmBuffers` is the payload, not a transport; no
+   segmentation, dirty tracking, or peer apply exists. New module; the
+   payload and addressing reuse what exists.
+4. **OwnerLease minting at scan commit.** No epoch type, no lease, no
+   commit-time producer. ADR-0062 fixes the producer (the supervisor, at
+   scan commit) — seam 2 above is its only runtime requirement.
+5. **I/O fencing client.** The runtime has no I/O driver model (explicitly
+   out of scope in the execution model); ordered claim, CLAIMED_DISARMED
+   verification, ARM, and barrier rollback are new, sitting in `fencing`.
+6. **Calibration metrics pipeline and Studio surface.** No EMA collection,
+   no link profile, no budget check. `ironplcvm benchmark` is offline
+   measurement only. New module; the engineering surface follows the
+   command-layer pattern.
+7. **Epoch NV persistence.** The sidecar is engineering-workstation
+   storage; controller-side persistence across power loss has no home —
+   hence `EpochStore`, the smallest port that keeps the policy open.
+
+## Deliberately Not Built
+
+- No generic service framework, registry, or event bus — modules call
+  each other directly; the statechart drives services.
+- No VM changes, no preemptive executor, no per-task contexts, no cluster
+  time — roadmap-deferred.
+- No new wire framework: the pair link reuses the typed-enum + thin-codec
+  pattern; the binary cyclic encoding is a codec detail inside
+  `liveness`/`crossload`, not a framework.
+- No container format change in v1: redundancy configuration is project
+  data (sidecar pattern); the container stays an execution artifact.
+- No dual-owner output modules, no scheduled ARM, no witness hardware —
+  out of v1 scope per the FSM spec and roadmap.
+- No automatic retuning of failover thresholds (ADR-0062: alarms, not
+  silent adjustment).
+
+## Implementation Sequencing
+
+The phase-5 order, mapped onto the modules above (consistent with the
+readiness doc's sequence; design steps precede crate work):
+
+1. **Arbitration / fencing / epoch design** (specs + ADRs first): quorum
+   participants, epoch authority, lease lifecycle, failure matrix.
+2. **`hal` + `liveness` + `calibration` trackers** — the two-channel
+   ping/pong exchange with per-port measurement from day one, because
+   ADR-0062 makes measurement the foundation, not a retrofit.
+3. **`epoch` + `lease` + the runtime seams** — the execution permit latch
+   and the commit callback are the enforcement/observation seams inside
+   `ironplc-runtime`; the callback gates OwnerLease minting.
+4. **`admission` + `crossload` + the SYNC chart** — a Secondary that
+   syncs to SYNC_READY in monitor mode.
+5. **`fencing` + the CONTROL chart + the simulator binding** — the
+   OWNERSHIP_BARRIER and REDUNDANCY_LOST, proven against the loopback
+   binding first. The simulator is a first-class early deliverable, not
+   an afterthought: it is what proves the two seams before the
+   EtherNet/IP binding arrives.
+6. **Calibration pipeline completion** — link profile, budget validation,
+   degradation alarms feeding `IO_READY` / `TakeoverReady`.
+7. **Engineering surface** — the redundancy command vocabulary, CSV
+   V-codes, and thin growth of `ironplcvm serve` and the MCP tools;
+   Studio tabs consume them.
+
+## Out of Scope
+
+- Quorum/commit-certificate wire formats and protocol internals (step 1
+  above is their home).
+- I/O firmware internals behind the three roadmap profiles; this spec is
+  the client of the fencing authority, not its implementation.
+- Distributed hot change, edit replication, and external-protocol replay
+  semantics (roadmap deferred follow-ups).
+- Driver implementations for any specific NIC or NV device.
+

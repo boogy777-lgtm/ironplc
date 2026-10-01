@@ -9,6 +9,17 @@ import { LanguageClientLike, STATE_RUNNING, STATE_STOPPED } from '../../iplcEdit
 // Re-export state constants for test use.
 export { STATE_RUNNING, STATE_STOPPED };
 
+/** Awaits a promise expected to reject, returning the rejection reason. */
+export async function rejectWith(promise: Promise<unknown>): Promise<unknown> {
+  try {
+    await promise;
+  }
+  catch (err) {
+    return err;
+  }
+  throw new Error('expected the promise to reject');
+}
+
 export function createMockClient(overrides?: Partial<LanguageClientLike>): LanguageClientLike {
   return {
     isRunning: () => true,

@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<language-model>
+	<pou id = "8f58c4c2-6bd5-47c7-a149-8588821180e6" name = "__sys__rts__cycle" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION __sys__rts__cycle : BOOL
+		VAR_INPUT
+			slotLower : DINT;
+			slotUpper : DINT;
+			stTaskName : STRING(49);
+			stApplicationName : STRING(49);
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "70da5b5d-fcb8-48d4-ac57-7c4cb04e2caa" name = "__sys__register__slot__pou" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION __sys__register__slot__pou : DINT
+		VAR_INPUT
+			stTaskName : STRING(49);
+			stApplicationName : STRING(49);
+			nSlotNumber : DINT;
+			dwFunctionPointer : DWORD;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "9e4827e4-6b50-4e6a-bc7b-adeb6c4dd526" name = "__sys__unregister__slot__pou" external = "true">
+		<interface>
+			{implicit on}
+			FUNCTION __sys__unregister__slot__pou : DINT
+			VAR_INPUT
+				stTaskName : STRING(49);
+				stApplicationName : STRING(49);
+				nSlotNumber : DINT;
+				dwFunctionPointer : DWORD;
+			END_VAR
+			{implicit off}
+		</interface>
+	</pou>
+	<pou id = "D6A84056-F4D9-45ca-9A49-A66CEC23E145" name = "SysCpuDebugHandler" external = "true">
+		<interface>
+			{implicit on}
+			FUNCTION SysCpuDebugHandler : BOOL
+			VAR_INPUT
+			END_VAR
+			{implicit off}
+		</interface>
+	</pou>
+	<global-interface id = "0de9e5f1-f2f0-4550-99b9-b0c9c5d532d1" name = "_Implicit_Target_Info_Variables">
+	<interface>
+		{attribute 'hide'}
+		{implicit on}
+		VAR_GLOBAL
+			__targetInfo : VERSION;
+		END_VAR
+		{implicit off}
+	</interface>
+	</global-interface>
+	<global-interface id = "7E624F9D-69D6-42d1-923C-54726D605EE6" name = "__ApplicationName">
+		<interface>
+			{attribute 'qualified_only'}
+			{implicit on}
+			VAR_GLOBAL
+			{attribute 'no_init'}
+			__ApplicationName : String(255);
+			{attribute 'no_init'}
+			__ParentApplicationName : String(255);
+			END_VAR
+			{implicit off}
+		</interface>
+		</global-interface>
+	<data-type id = "ff589828-12c2-4e6a-9f0d-1d6dbb3264b6" name = "_Implicit_Application_Info">
+		<interface>
+			{attribute 'hide'}
+			TYPE _Implicit_Application_Info :
+			STRUCT
+				pParentApplication : POINTER TO _Implicit_Application_Info; // Pointer to parent application
+				pbyRights : POINTER TO BYTE;
+				guidCode : ARRAY [0..15] OF BYTE;	// GUID for IEC code
+				guidData : ARRAY [0..15] OF BYTE;  // GUID for IEC data	
+				udState : UDINT;            // State of the application. See definitions above
+				udOpState : UDINT;			// Operating state of the application. See definitions above
+				
+				dwDoNotUse_0 : DWORD;			// Handle to bootproject
+				dwDoNotUse_1 : DWORD;			// Handle to debug task
+				dwDoNotUse_2 : DWORD;			// pointer to Global Init Function 
+				dwDoNotUse_3 : DWORD;			// pointer to Global Exit Function 
+
+				dwDoNotUse_4 : DWORD;			// Handle a pool of session-ids
+				dwDoNotUse_5 : DWORD;			// Handle a pool of force entries
+				dwDoNotUse_6 : DWORD;			// Handle a pool of breakpoints
+
+				bAppendBootproject : DINT;		// Bootproject sections can be appended
+				bPersistentForce : DINT;		// Is persistent force enabled
+		
+				stApplicationName : STRING(59); // Application name
+				dwPSVersion : DWORD;			// Version number of Programming system (set in download)
+				dwTargetSettingVersion : DWORD;			// Version number of Target settings used by PS (set in download)
+	(*			
+				rest of runtime info DO NOT USE !	
+				pcArea : ARRAY [0..APPL_NUM_OF_STATIC_AREAS-1] OF POINTER TO BYTE //Pointer to data areas of this application
+				unsigned short ausAreaType[APPL_NUM_OF_STATIC_AREAS];	/* Area type */
+				unsigned long aulAreaSize[APPL_NUM_OF_STATIC_AREAS];	/* Area size */
+				unsigned char StaticSessionIdPool[MEM_GET_STATIC_LEN_(APPL_NUM_OF_STATIC_SESSIONIDS, sizeof(unsigned long))];
+				unsigned char StaticForcePool[MEM_GET_STATIC_LEN(APPL_STATIC_FORCE_ENTRIES, ForceVarDesc)];
+				unsigned char StaticBPPool[MEM_GET_STATIC_LEN(APP_STATIC_BP_ENTRIES, Breakpoint)];
+	*)				
+			END_STRUCT
+			END_TYPE
+		</interface>
+	</data-type>
+
+</language-model>

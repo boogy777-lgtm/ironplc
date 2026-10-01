@@ -78,6 +78,10 @@ impl UriKey {
     /// notifications. The key only ever holds a string that was
     /// previously produced by a valid `Uri`, so parsing must
     /// succeed.
+    #[allow(
+        clippy::expect_used,
+        reason = "UriKey was constructed from a valid Uri, so parsing must succeed"
+    )]
     pub(crate) fn to_uri(&self) -> Uri {
         Uri::from_str(&self.0).expect("UriKey was constructed from a valid Uri")
     }
@@ -794,9 +798,11 @@ mod test {
                 token.token_type
             );
 
-            let source_line = lines
-                .get(line as usize)
-                .unwrap_or_else(|| panic!("token at line {line} is past the end of the file"));
+            assert!(
+                (line as usize) < lines.len(),
+                "token at line {line} is past the end of the file"
+            );
+            let source_line = &lines[line as usize];
             let chars: Vec<char> = source_line.chars().collect();
             let end = col as usize + token.length as usize;
             assert!(

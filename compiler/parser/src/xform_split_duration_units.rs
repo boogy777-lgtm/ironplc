@@ -85,7 +85,11 @@ fn fixed_point(whole: Token, period: &Token, fraction: Token) -> Token {
 fn is_duration_prefix(tok: &Token) -> bool {
     match tok.token_type {
         TokenType::Time | TokenType::Ltime => true,
-        TokenType::Identifier => tok.text.eq_ignore_ascii_case("T"),
+        // `T` and `LT` are ordinary identifiers (`LT#` is the abbreviated
+        // LTIME prefix, see specs/design/time-literals.md REQ-TL-004).
+        TokenType::Identifier => {
+            tok.text.eq_ignore_ascii_case("T") || tok.text.eq_ignore_ascii_case("LT")
+        }
         _ => false,
     }
 }
@@ -210,6 +214,12 @@ mod test {
     #[test]
     fn apply_when_fixed_point_after_unit_then_one_fixed_point_token() {
         assert_eq!(vec!["T", "#", "1", "m", "1.5", "s"], texts("T#1m1.5s"));
+    }
+
+    #[test]
+    fn apply_when_lt_abbreviation_then_units_split() {
+        // `LT#` is the abbreviated LTIME prefix (REQ-TL-004).
+        assert_eq!(vec!["LT", "#", "1", "m", "30", "s"], texts("LT#1m30s"));
     }
 
     #[test]

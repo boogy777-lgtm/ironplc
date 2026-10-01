@@ -18,13 +18,34 @@ pub fn try_from(
     spec: &StructureDeclaration,
     type_environment: &TypeEnvironment,
 ) -> Result<TypeAttributes, Diagnostic> {
+    from_elements(node_name, &spec.elements, type_environment)
+}
+
+/// Same member processing for a union's members. A union is resolved as a
+/// structure for now: its members are not overlaid at offset 0 yet, so it
+/// takes the size of the sum of its members instead of the largest (P1 in
+/// `Codesys/LEXER-GAP-ANALYSIS.md`).
+pub fn from_union(
+    node_name: &TypeName,
+    spec: &UnionDeclaration,
+    type_environment: &TypeEnvironment,
+) -> Result<TypeAttributes, Diagnostic> {
+    from_elements(node_name, &spec.elements, type_environment)
+}
+
+/// Builds the field list and memory layout shared by structures and unions.
+fn from_elements(
+    node_name: &TypeName,
+    elements: &[StructureElementDeclaration],
+    type_environment: &TypeEnvironment,
+) -> Result<TypeAttributes, Diagnostic> {
     // Note: Field name uniqueness is validated by semantic rules, not here
 
     // Resolve field types and calculate offsets
     let mut fields = Vec::new();
     let mut current_offset = 0u32;
 
-    for element in &spec.elements {
+    for element in elements {
         // Resolve the field type from the initial value assignment
         let field_type = resolve_field_type(element, type_environment)?;
 
@@ -88,6 +109,8 @@ fn field_has_default(
             nested_structure_has_all_defaults(&simple_init.type_name, type_environment)
         }
         InitialValueAssignmentKind::String(string_init) => string_init.initial_value.is_some(),
+        // A PARAMS list declares no value of its own.
+        InitialValueAssignmentKind::Params(_) => false,
         InitialValueAssignmentKind::EnumeratedValues(enum_init) => {
             enum_init.initial_value.is_some()
         }

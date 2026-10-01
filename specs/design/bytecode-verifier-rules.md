@@ -172,7 +172,7 @@ container header's `num_temp_bufs`.
 Temp buffers form a stack: a string-producing instruction takes the next
 slot, and `STR_STORE_VAR` / `STR_STORE_ARRAY_ELEM` hand a slot back once
 they have copied its contents into the data region
-([ADR-0052](../adrs/0052-temp-string-buffers-released-on-consume.md)). The
+([ADR-0067](../adrs/0067-temp-string-buffers-released-on-consume.md)). The
 verifier tracks the depth of that stack on all paths, exactly as R0203
 tracks the operand stack, and checks the maximum against the declared pool.
 

@@ -81,6 +81,13 @@ pub enum TokenType {
     #[regex(r"/\*(?:[^*]|\*[^/])*\*/", priority = 0)]
     Comment,
 
+    /// A `///` documentation comment (CODESYS `DocComment`). Skipped as trivia
+    /// exactly like a `Comment`, but its own token type so tooling can tell a
+    /// documentation comment apart; the reference scanner picks it out the
+    /// same way (`ScanSingleLineComment` checks for the third `/`).
+    #[regex(r"///[^\r\n]*", priority = 1, allow_greedy = true)]
+    DocComment,
+
     // Grouping and other markers
     #[token("(", priority = 1)]
     LeftParen,
@@ -125,9 +132,22 @@ pub enum TokenType {
     DoubleByteString,
 
     // B.1.1 Letters, digits and identifier
-    // Lower priority than any keyword.
-    #[regex(r"[A-Za-z_][A-Za-z0-9_]*", priority = 1)]
+    // Lower priority than any keyword. Letters outside ASCII are accepted by
+    // the lexer in every dialect and rejected by `rule_token_identifier`
+    // unless `allow_unicode_identifiers` is set -- the same
+    // recognize-then-gate pattern the partial-access syntax uses. `\p{L}` is
+    // the Unicode letter category, the closest match to the reference
+    // scanner's `char.IsLetter`.
+    #[regex(r"[\p{L}_][\p{L}\p{Nd}_]*", priority = 1)]
     Identifier,
+
+    // CODESYS escaped (non-compliant) identifier: a backtick-delimited name
+    // that may contain characters an ordinary identifier cannot, e.g.
+    // `my var`. Gated by `allow_escaped_identifiers` via
+    // `rule_token_identifier`; the backticks stay part of the token text, so
+    // the declaration and every reference spell the name the same way.
+    #[regex(r"`[^`\r\n]*`")]
+    EscapedIdentifier,
 
     // B.1.2 Constants
     #[regex(r"16#[0-9A-F][0-9A-F_]*")]
@@ -159,6 +179,12 @@ pub enum TokenType {
     #[token("OF", ignore(case))]
     Of,
 
+    // CODESYS parameter-list type `PARAMS(n) OF T`. `params` is a common
+    // variable name, so the token is demoted to Identifier unless
+    // `allow_params_of` -- see xform_demote_keywords.rs.
+    #[token("PARAMS", ignore(case))]
+    Params,
+
     #[token("AT", ignore(case))]
     At,
 
@@ -187,6 +213,39 @@ pub enum TokenType {
 
     #[token("CONTINUE", ignore(case))]
     Continue,
+
+    // CODESYS Structured Text exception handling: `__TRY ... __CATCH ...
+    // __FINALLY ... __ENDTRY` and the `__THROW` operator
+    // (`Codesys/tables/special_operators.csv`, `ST_GRAMMAR.ebnf`). These are
+    // keywords only while `allow_try_catch` is set; otherwise they demote to
+    // identifiers -- see xform_demote_keywords.rs.
+    #[token("__TRY", ignore(case))]
+    Try,
+    #[token("__ENDTRY", ignore(case))]
+    EndTry,
+    #[token("__CATCH", ignore(case))]
+    Catch,
+    #[token("__FINALLY", ignore(case))]
+    Finally,
+    #[token("__THROW", ignore(case))]
+    Throw,
+
+    // CODESYS statements written with Instruction List mnemonics that are
+    // legal in Structured Text: `JMP` with `label:` statement labels, and the
+    // `CALC` conditional call. `__WAIT` is a Structured Text statement of its
+    // own. Each is a keyword only while its flag is set -- see
+    // xform_demote_keywords.rs.
+    #[token("JMP", ignore(case))]
+    Jmp,
+    #[token("CALC", ignore(case))]
+    Calc,
+    #[token("__WAIT", ignore(case))]
+    Wait,
+
+    // Not produced by the lexer: `xform_statement_labels` re-types the
+    // identifier a statement label starts with, so the grammar accepts
+    // `label:` only where the dialect enables jump statements.
+    Label,
 
     #[token("FALSE", ignore(case))]
     False,
@@ -274,6 +333,17 @@ pub enum TokenType {
     #[token("END_PROGRAM", ignore(case))]
     EndProgram,
 
+    // `NAMESPACE ... END_NAMESPACE` grouping and the
+    // `__BEGIN_IMPLEMENTATION` marker. Demoted to ordinary identifiers
+    // unless their flag is set -- see xform_demote_keywords.rs and
+    // specs/design/st-declaration-extensions.md.
+    #[token("NAMESPACE", ignore(case))]
+    Namespace,
+    #[token("END_NAMESPACE", ignore(case))]
+    EndNamespace,
+    #[token("__BEGIN_IMPLEMENTATION", ignore(case))]
+    BeginImplementation,
+
     #[token("R_EDGE", ignore(case))]
     REdge,
 
@@ -313,6 +383,13 @@ pub enum TokenType {
     Struct,
     #[token("END_STRUCT", ignore(case))]
     EndStruct,
+    // `UNION ... END_UNION` type declaration. Demoted to ordinary
+    // identifiers unless `allow_union_type` is set -- see
+    // xform_demote_keywords.rs and specs/design/st-declaration-extensions.md.
+    #[token("UNION", ignore(case))]
+    Union,
+    #[token("END_UNION", ignore(case))]
+    EndUnion,
 
     #[token("TASK", ignore(case))]
     Task,
@@ -354,6 +431,16 @@ pub enum TokenType {
     VarConfig,
     #[token("VAR_GLOBAL", ignore(case))]
     VarGlobal,
+    // CODESYS/Siemens sections. Demoted to ordinary identifiers unless the
+    // matching flag is set ("static variables", "method instance
+    // variables", "function block generic constants") -- see
+    // xform_demote_keywords.rs and specs/design/st-declaration-extensions.md.
+    #[token("VAR_STAT", ignore(case))]
+    VarStat,
+    #[token("VAR_INST", ignore(case))]
+    VarInst,
+    #[token("VAR_GENERIC", ignore(case))]
+    VarGeneric,
 
     #[token("WHILE", ignore(case))]
     While,
@@ -362,6 +449,11 @@ pub enum TokenType {
 
     #[token("BOOL", ignore(case))]
     Bool,
+    // The one-bit type of the CODESYS/TwinCAT dialects
+    // (`--allow-bit-type`). Demoted to Identifier when the flag is off
+    // because `bit` is a legal variable name in IEC 61131-3.
+    #[token("BIT", ignore(case))]
+    Bit,
     #[token("SINT", ignore(case))]
     Sint,
     #[token("INT", ignore(case))]
@@ -485,7 +577,12 @@ pub enum TokenType {
     PartialAccessLWord,
 
     // Expressions
+    // `|` is the CODESYS/TwinCAT symbol spelling of OR, as `&` is of AND
+    // (both appear in `tables/operator_symbols.csv` with the StructuredText
+    // flag). Like `&`, it needs no dialect gate: it cannot be confused with
+    // an identifier or any other token.
     #[token("OR", ignore(case))]
+    #[token("|")]
     Or,
     #[token("XOR", ignore(case))]
     Xor,
@@ -499,6 +596,25 @@ pub enum TokenType {
     AndThen,
     #[token("OR_ELSE", ignore(case))]
     OrElse,
+
+    // The ST-visible CODESYS special operators (`tables/special_operators.csv`,
+    // flags `Operator|AllLanguages`). The lexer never produces these: the
+    // reference scanner reads a whole identifier first and only then looks it
+    // up in its operator table, so `__XADD_2` stays an ordinary identifier.
+    // `xform_promote_special_operators` reproduces that lookup between lexing
+    // and parsing, which is why these variants carry no logos pattern.
+    //
+    // The remaining ST-visible names are not tokens: `__SYSTEM` and `__POOL`
+    // already parse as qualified names (`__SYSTEM.x` is a structured
+    // variable), and `__QUERYINTERFACE` / `__QUERYPOINTER` /
+    // `__COMPARE_AND_SWAP` / `__MEMORYBARRIER` / `__CHECKLICENSE*` are named
+    // calls with no dedicated syntax, so they parse as ordinary calls.
+    SpecialNew,
+    SpecialDelete,
+    SpecialIsValidRef,
+    SpecialTypeOf,
+    SpecialCurrentTask,
+    SpecialXAdd,
     #[token("=")]
     Equal,
     #[token("<>")]
@@ -557,6 +673,7 @@ impl TokenType {
             TokenType::SingleByteString => "'...' (single byte string)",
             TokenType::DoubleByteString => "\"...\" (double byte string)",
             TokenType::Identifier => "(identifier)",
+            TokenType::EscapedIdentifier => "'`...`' (escaped identifier)",
             TokenType::HexDigits => "16#[0-9A-F][0-9A-F_]* (hexadecimal bit string)",
             TokenType::OctDigits => "8#[0-7][0-7]* (octal bit string)",
             TokenType::BinDigits => "2#[0-1][0-1]* (binary bit string)",
@@ -567,6 +684,7 @@ impl TokenType {
             TokenType::EndAction => "'END_ACTION'",
             TokenType::Array => "'ARRAY'",
             TokenType::Of => "'OF'",
+            TokenType::Params => "'PARAMS'",
             TokenType::At => "'AT'",
             TokenType::Case => "'CASE'",
             TokenType::Else => "'ELSE'",
@@ -578,6 +696,16 @@ impl TokenType {
             TokenType::Eno => "'ENO'",
             TokenType::Exit => "'EXIT'",
             TokenType::Continue => "'CONTINUE'",
+            TokenType::DocComment => "'///' (documentation comment)",
+            TokenType::Jmp => "'JMP'",
+            TokenType::Calc => "'CALC'",
+            TokenType::Wait => "'__WAIT'",
+            TokenType::Label => "(statement label)",
+            TokenType::Try => "'__TRY'",
+            TokenType::EndTry => "'__ENDTRY'",
+            TokenType::Catch => "'__CATCH'",
+            TokenType::Finally => "'__FINALLY'",
+            TokenType::Throw => "'__THROW'",
             TokenType::False => "'FALSE'",
             TokenType::FEdge => "'F_EDGE'",
             TokenType::For => "'FOR'",
@@ -611,6 +739,9 @@ impl TokenType {
             TokenType::Program => "'PROGRAM'",
             TokenType::With => "'WITH'",
             TokenType::EndProgram => "'END_PROGRAM'",
+            TokenType::Namespace => "'NAMESPACE'",
+            TokenType::EndNamespace => "'END_NAMESPACE'",
+            TokenType::BeginImplementation => "'__BEGIN_IMPLEMENTATION'",
             TokenType::REdge => "'R_EDGE'",
             TokenType::ReadOnly => "'READ_ONLY'",
             TokenType::ReadWrite => "'READ_WRITE'",
@@ -627,6 +758,8 @@ impl TokenType {
             TokenType::Step => "'STEP'",
             TokenType::Struct => "'STRUCT'",
             TokenType::EndStruct => "'END_STRUCT'",
+            TokenType::Union => "'UNION'",
+            TokenType::EndUnion => "'END_UNION'",
             TokenType::Task => "'TASK'",
             TokenType::EndTask => "'END_TASK'",
             TokenType::Transition => "'TRANSITION'",
@@ -645,9 +778,13 @@ impl TokenType {
             TokenType::VarAccess => "'VAR_ACCESS'",
             TokenType::VarConfig => "'VAR_CONFIG'",
             TokenType::VarGlobal => "'VAR_GLOBAL'",
+            TokenType::VarStat => "'VAR_STAT'",
+            TokenType::VarInst => "'VAR_INST'",
+            TokenType::VarGeneric => "'VAR_GENERIC'",
             TokenType::While => "'WHILE'",
             TokenType::EndWhile => "'END_WHILE'",
             TokenType::Bool => "'BOOL'",
+            TokenType::Bit => "'BIT'",
             TokenType::Sint => "'SINT'",
             TokenType::Int => "'INT'",
             TokenType::Dint => "'DINT'",
@@ -694,11 +831,17 @@ impl TokenType {
             TokenType::PartialAccessWord => "'%W<n>' (partial-access word selector)",
             TokenType::PartialAccessDWord => "'%D<n>' (partial-access dword selector)",
             TokenType::PartialAccessLWord => "'%L<n>' (partial-access lword selector)",
-            TokenType::Or => "'OR'",
+            TokenType::Or => "'OR' | '|'",
             TokenType::Xor => "'XOR'",
             TokenType::And => "'AND' | '&'",
             TokenType::AndThen => "'AND_THEN'",
             TokenType::OrElse => "'OR_ELSE'",
+            TokenType::SpecialNew => "'__NEW'",
+            TokenType::SpecialDelete => "'__DELETE'",
+            TokenType::SpecialIsValidRef => "'__ISVALIDREF'",
+            TokenType::SpecialTypeOf => "'__TYPEOF'",
+            TokenType::SpecialCurrentTask => "'__CURRENTTASK'",
+            TokenType::SpecialXAdd => "'__XADD'",
             TokenType::Equal => "'='",
             TokenType::NotEqual => "'<>'",
             TokenType::Less => "'<'",
@@ -790,6 +933,7 @@ mod tests {
             (SingleByteString, "'abc'"),
             (DoubleByteString, "\"abc\""),
             (Identifier, "ident"),
+            (EscapedIdentifier, "`my var`"),
             (HexDigits, "16#A1"),
             (OctDigits, "8#77"),
             (BinDigits, "2#01"),
@@ -800,6 +944,7 @@ mod tests {
             (EndAction, "END_ACTION"),
             (Array, "ARRAY"),
             (Of, "OF"),
+            (Params, "PARAMS"),
             (At, "AT"),
             (Case, "CASE"),
             (Else, "ELSE"),
@@ -881,6 +1026,7 @@ mod tests {
             (While, "WHILE"),
             (EndWhile, "END_WHILE"),
             (Bool, "BOOL"),
+            (Bit, "BIT"),
             (Sint, "SINT"),
             (Int, "INT"),
             (Dint, "DINT"),
@@ -919,10 +1065,17 @@ mod tests {
             (DirectAddress, "%I0.0"),
             (PartialAccessBit, "%X0"),
             (Or, "OR"),
+            (Or, "|"),
             (Xor, "XOR"),
             (And, "AND"),
             (AndThen, "AND_THEN"),
             (OrElse, "OR_ELSE"),
+            (SpecialNew, "__NEW"),
+            (SpecialDelete, "__DELETE"),
+            (SpecialIsValidRef, "__ISVALIDREF"),
+            (SpecialTypeOf, "__TYPEOF"),
+            (SpecialCurrentTask, "__CURRENTTASK"),
+            (SpecialXAdd, "__XADD"),
             (Equal, "="),
             (NotEqual, "<>"),
             (Less, "<"),

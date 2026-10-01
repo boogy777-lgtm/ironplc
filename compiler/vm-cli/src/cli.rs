@@ -16,13 +16,12 @@ use crate::error::{self, VmError};
 
 const BUILD_OPT_LEVEL: &str = env!("BUILD_OPT_LEVEL");
 
-/// Loads a container file and executes it.
+/// Opens `path` and reads the bytecode container, mapping failures to the
+/// established V6xxx codes.
 ///
-/// When `scans` is `Some(n)`, runs exactly `n` scheduling rounds.
-/// When `scans` is `None`, runs continuously until Ctrl+C.
-/// When `dump_vars` is `Some(path)`, writes variable values after stopping.
-/// A path of "-" writes to stdout; any other path writes to a file.
-pub fn run(path: &Path, dump_vars: Option<&Path>, scans: Option<u64>) -> Result<(), VmError> {
+/// This is the one program-loading path every command shares: `run`,
+/// `benchmark` and `serve` all compile + start from this container.
+pub(crate) fn load_container(path: &Path) -> Result<Container, VmError> {
     let mut file = File::open(path).map_err(|e| {
         VmError::io(
             error::FILE_OPEN,
@@ -30,12 +29,22 @@ pub fn run(path: &Path, dump_vars: Option<&Path>, scans: Option<u64>) -> Result<
         )
     })?;
 
-    let container = ironplc_container::Container::read_from(&mut file).map_err(|e| {
+    ironplc_container::Container::read_from(&mut file).map_err(|e| {
         VmError::io(
             error::CONTAINER_READ,
             format!("Unable to read container {}: {e}", path.display()),
         )
-    })?;
+    })
+}
+
+/// Loads a container file and executes it.
+///
+/// When `scans` is `Some(n)`, runs exactly `n` scheduling rounds.
+/// When `scans` is `None`, runs continuously until Ctrl+C.
+/// When `dump_vars` is `Some(path)`, writes variable values after stopping.
+/// A path of "-" writes to stdout; any other path writes to a file.
+pub fn run(path: &Path, dump_vars: Option<&Path>, scans: Option<u64>) -> Result<(), VmError> {
+    let container = load_container(path)?;
 
     let mut bufs = VmBuffers::from_container(&container);
 
@@ -104,19 +113,7 @@ pub fn run(path: &Path, dump_vars: Option<&Path>, scans: Option<u64>) -> Result<
 /// Benchmarks a bytecode container by running it for `cycles` scan rounds,
 /// preceded by `warmup` unmeasured rounds, then prints JSON timing statistics.
 pub fn benchmark(path: &Path, cycles: u64, warmup: u64) -> Result<(), VmError> {
-    let mut file = File::open(path).map_err(|e| {
-        VmError::io(
-            error::FILE_OPEN,
-            format!("Unable to open {}: {}", path.display(), e),
-        )
-    })?;
-
-    let container = ironplc_container::Container::read_from(&mut file).map_err(|e| {
-        VmError::io(
-            error::CONTAINER_READ,
-            format!("Unable to read container {}: {e}", path.display()),
-        )
-    })?;
+    let container = load_container(path)?;
 
     let mut bufs = VmBuffers::from_container(&container);
 
@@ -161,7 +158,7 @@ pub fn benchmark(path: &Path, cycles: u64, warmup: u64) -> Result<(), VmError> {
     running.stop();
 
     // Compute statistics
-    durations_us.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    durations_us.sort_by(|a, b| a.total_cmp(b));
     let count = durations_us.len() as f64;
     let mean = durations_us.iter().sum::<f64>() / count;
     let variance = durations_us.iter().map(|d| (d - mean).powi(2)).sum::<f64>() / count;

@@ -15,6 +15,7 @@ use ironplc_dsl::textual::{ExprKind, StmtKind};
 use ironplc_parser::options::CompilerOptions;
 use ironplc_parser::parse_program;
 use ironplc_problems::Problem;
+use ironplc_test::cast;
 use spec_test_macro::spec_test;
 
 use crate::stages::analyze;
@@ -43,15 +44,16 @@ fn analyze_codes(program: &str, options: &CompilerOptions) -> Vec<String> {
 
 /// Returns the statements of the (single) PROGRAM in a library.
 fn program_statements(lib: &Library) -> Vec<StmtKind> {
-    for element in &lib.elements {
-        if let LibraryElementKind::ProgramDeclaration(prog) = element {
-            let FunctionBlockBodyKind::Statements(stmts) = &prog.body else {
-                panic!("program body is not a statement list");
-            };
-            return stmts.body.clone();
-        }
-    }
-    panic!("no program declaration found");
+    let program = lib.elements.iter().find_map(|element| match element {
+        LibraryElementKind::ProgramDeclaration(prog) => Some(prog),
+        _ => None,
+    });
+    cast!(
+        &program.expect("no program declaration found").body,
+        FunctionBlockBodyKind::Statements
+    )
+    .body
+    .clone()
 }
 
 /// REQ-PTR-analyzer-300: Reading through an explicit dereference of a
@@ -96,18 +98,14 @@ END_PROGRAM";
     let library = parse_program(source, &FileId::default(), &options).unwrap();
     let (analyzed, _context) = analyze(&[&library], &options).unwrap();
     let statements = program_statements(&analyzed);
-    let StmtKind::Assignment(pointer_read) = &statements[0] else {
-        panic!("expected assignment");
-    };
+    let pointer_read = cast!(&statements[0], StmtKind::Assignment);
     assert!(
         matches!(pointer_read.value.kind, ExprKind::Variable(_)),
         "a bare read of a POINTER TO variable must stay un-dereferenced, got {:?}",
         pointer_read.value.kind
     );
     // Control: the REFERENCE TO variable in the same program *is* wrapped.
-    let StmtKind::Assignment(reference_read) = &statements[1] else {
-        panic!("expected assignment");
-    };
+    let reference_read = cast!(&statements[1], StmtKind::Assignment);
     assert!(
         matches!(reference_read.value.kind, ExprKind::Deref(_)),
         "a bare read of a REFERENCE TO variable must be auto-dereferenced"

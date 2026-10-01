@@ -65,7 +65,7 @@ against its single row.
   implicit widening rules (integer-to-integer, lossless integer-to-real,
   bit-string-to-bit-string). The numeric overload applies these between its
   two operands.
-- **[ADR-0053](../adrs/0053-bit-string-arithmetic-behind-its-own-flag.md)** —
+- **[ADR-0068](../adrs/0068-bit-string-arithmetic-behind-its-own-flag.md)** —
   arithmetic on bit strings is a vendor extension and gets its own flag.
 
 ## What the standard defines
@@ -225,7 +225,7 @@ widened by its own signedness: a `TIME` is sign-extended, and a `DATE`,
 `TIME_OF_DAY` or `DATE_AND_TIME`, which are stored unsigned, is
 zero-extended.
 
-With `--allow-bit-string-arithmetic` (ADR-0053), step 2 additionally judges a
+With `--allow-bit-string-arithmetic` (ADR-0068), step 2 additionally judges a
 `BYTE`, `WORD`, `DWORD` or `LWORD` operand (not `BOOL`) as the unsigned
 integer of its width. Two bit-string operands give the wider bit-string type;
 a bit-string operand and an integer operand give what the widening picks with

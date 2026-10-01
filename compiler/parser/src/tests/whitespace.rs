@@ -151,6 +151,14 @@ fn in_program(body: &str) -> String {
     wrap_program(body)
 }
 
+/// Options enabling the `BIT` type and its literals.
+fn with_bit_type() -> CompilerOptions {
+    CompilerOptions {
+        allow_bit_type: true,
+        ..CompilerOptions::default()
+    }
+}
+
 /// A statement in a method body, where `THIS^`/`SUPER^` are meaningful. Same
 /// shape as `parse_in_method` in `this_super.rs`.
 fn in_method(body: &str) -> String {
@@ -227,6 +235,19 @@ END_CONFIGURATION"
     verbatim,
     opts_with_paren_string_length
 )]
+// The CODESYS surface syntax (`REQ-CS-*`): the `PARAMS(n) OF T` spec and the
+// incomplete `ARRAY[*]` form introduce `_` gaps of their own, so each earns a
+// row here as the guide asks.
+#[case::params_of(
+    "TYPE A·:·PARAMS·(·3·)·OF INT; END_TYPE",
+    verbatim,
+    opts_with_params_of
+)]
+#[case::incomplete_array(
+    "TYPE A·:·ARRAY·[·*·]·OF INT; END_TYPE",
+    verbatim,
+    opts_with_incomplete_array
+)]
 #[case::enumeration_values(
     "TYPE E : (·RED·,·GREEN·); END_TYPE",
     verbatim,
@@ -274,6 +295,29 @@ END_CONFIGURATION"
     verbatim,
     opts_with_fb_inheritance
 )]
+// The ST declaration extensions (`UNION`, `VAR_STAT`/`VAR_INST`/
+// `VAR_GENERIC`, `NAMESPACE`, `__BEGIN_IMPLEMENTATION`) place their keywords
+// directly before a name, and a `GAP` marker there cannot be used: removing
+// it merges the keyword with the name into one different token, so the tight
+// spelling is not the same program. These rows therefore pin the gaps the
+// rules do have -- inside a member or declaration they introduce -- and the
+// keyword-adjacent spellings are asserted with real newlines in
+// `union.rs`, `var_declarations.rs` and `namespaces.rs`.
+#[case::union_member(
+    "TYPE U : UNION intVal·:·INT·:=·1; realVal : REAL; END_UNION; END_TYPE",
+    verbatim,
+    opts_with_union
+)]
+#[case::var_stat_declaration(
+    "PROGRAM main VAR_STAT count·:·INT·:=·1; END_VAR count := 2; END_PROGRAM",
+    verbatim,
+    opts_with_var_stat
+)]
+#[case::begin_implementation_terminator(
+    "PROGRAM main __BEGIN_IMPLEMENTATION x := 1;·END_PROGRAM",
+    verbatim,
+    opts_with_begin_implementation
+)]
 // ---------------------------------------------------------------------
 // Gaps issue #1437 reported as rejected. Each row is a spelling that
 // returned P0002 before the grammar was widened.
@@ -318,6 +362,16 @@ END_CONFIGURATION"
     in_sfc,
     CompilerOptions::default
 )]
+// ---------------------------------------------------------------------
+// CODESYS exception handling: the `_` after each `__TRY`-family keyword and
+// around the `__THROW` operand.
+// ---------------------------------------------------------------------
+#[case::try_catch_clauses(
+    "__TRY·;·__CATCH·(·e·)·;·__FINALLY·;·__ENDTRY·;",
+    in_program,
+    opts_with_try_catch
+)]
+#[case::throw_value("__THROW·(·v·)·;", in_program, opts_with_try_catch)]
 fn parse_when_gap_filled_then_same_ast(
     #[case] template: &'static str,
     #[case] wrap: fn(&str) -> String,
@@ -377,6 +431,19 @@ fn parse_when_gap_filled_then_same_ast(
     verbatim,
     CompilerOptions::default
 )]
+#[case::based_integer_base("v := 10·#123;", in_program, CompilerOptions::default)]
+#[case::duration_unit(
+    "TYPE T3 : TIME := T#1·us; END_TYPE",
+    verbatim,
+    CompilerOptions::default
+)]
+#[case::time_of_day_seconds(
+    "TYPE T4 : TOD := TOD#10:00·:·00; END_TYPE",
+    verbatim,
+    CompilerOptions::default
+)]
+#[case::typed_boolean_prefix("r := BOOL·#1;", in_program, CompilerOptions::default)]
+#[case::bit_prefix("r := BIT·#1;", in_program, with_bit_type)]
 fn parse_when_gap_filled_then_rejected(
     #[case] template: &'static str,
     #[case] wrap: fn(&str) -> String,

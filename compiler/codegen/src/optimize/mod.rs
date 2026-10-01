@@ -150,6 +150,10 @@ impl Pipeline {
 /// (or just past) the original bytecode — including the emitter's own labels
 /// and pending jump patches. If no patterns are found, the output bytes equal
 /// the input and the map is the identity over instruction boundaries.
+#[allow(
+    clippy::expect_used,
+    reason = "map is set by pipeline.run on the first pass; at least one pass always runs"
+)]
 pub(crate) fn optimize(
     code: UnpatchedCode<'_>,
     constants: &mut Vec<PoolConstant>,

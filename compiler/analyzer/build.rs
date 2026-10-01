@@ -1,5 +1,9 @@
 fn main() {
     ironplc_spec_requirements_gen::generate(&[
+        // CODESYS ST surface syntax (`REQ-CS-*`): the `|` operator, the
+        // incomplete array type, `PARAMS(n) OF T`, identifier spellings and
+        // the special operators.
+        "codesys-st-surface-syntax.md",
         "reference-to-twincat.md",
         // The analyzer owns the resolution/scoping requirements
         // (`REQ-CL-analyzer-*`) for activated compatibility libraries.
@@ -16,5 +20,13 @@ fn main() {
         // Constant variable inference (`REQ-CVI-analyzer-*`): which
         // never-written declarations become CONSTANT.
         "constant-variable-inference.md",
+        // ST declaration extensions (`REQ-STX-analyzer-*`): namespace
+        // flattening during declaration toposort.
+        "st-declaration-extensions.md",
+        // Numeric and boolean literals (`REQ-NL-analyzer-*`): what a BIT
+        // declaration resolves to.
+        "numeric-literals.md",
+        // CODESYS jump statements (`REQ-JMP-analyzer-*`): label scope rules.
+        "codesys-jump-and-pragmas.md",
     ]);
 }

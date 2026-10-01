@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<language-model>
+  <pou id = "F33FD424-860A-468a-B75F-2713FDAC091E" name = "__implicit__link__functions">
+    <interface>
+      {implicit on}
+      {attribute 'signature_flag' := '1073741824'}
+      {attribute 'hide'}
+      {attribute 'implicit_code'}
+      FUNCTION __implicit__link__functions : DWORD
+      VAR_INPUT
+      dwId : DWORD;
+      END_VAR
+      {implicit off}
+    </interface>
+    <body>
+      <![CDATA[
+      ; // will be implicitly filled
+		]]>
+    </body>
+  </pou>
+</language-model>

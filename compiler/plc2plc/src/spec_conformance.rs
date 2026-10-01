@@ -31,8 +31,11 @@ fn render(source: &str, options: &CompilerOptions) -> String {
 
     // Rendering is only half the requirement: what comes out has to be valid
     // input, so every conformance render re-parses.
-    let reparsed = parse_program(&rendered, &FileId::default(), options)
-        .unwrap_or_else(|e| panic!("Rendered output did not re-parse: {e:?}\n{rendered}"));
+    let reparsed = crate::tests::unwrap_parse(
+        parse_program(&rendered, &FileId::default(), options),
+        "Rendered output did not re-parse",
+        &rendered,
+    );
     assert_eq!(
         library, reparsed,
         "Round trip changed the AST. Rendered:\n{rendered}"

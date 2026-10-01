@@ -1,0 +1,464 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<language-model>
+	<pou id = "adb07db6-6cb2-4889-b206-007b85f53578" name = "real32__to__any32" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__to__any32 : DWORD
+		VAR_INPUT
+			in: REAL;
+			dwType: DWORD;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "bc57a7e2-ed11-422f-976f-8be4fc5666bf" name = "any32__to__real32" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION any32__to__real32 : REAL
+		VAR_INPUT
+			in: DWORD;
+			dwType: DWORD;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "79084732-5D65-4953-878B-B9D1570AB3C3" name = "real32__eq" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__eq : BOOL
+		VAR_INPUT
+			in1: REAL;
+			in2: REAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "26C1B838-F805-4f80-B547-7A6B4EFBBBB5" name = "real32__ne" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__ne : BOOL
+		VAR_INPUT
+			in1: REAL;
+			in2: REAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "8897F859-01DB-4c48-85CD-8862AD90C271" name = "real32__lt" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__lt : BOOL
+		VAR_INPUT
+			in1: REAL;
+			in2: REAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "06045A98-B196-40fe-BBF3-CC6B9CD04FA6" name = "real32__le" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__le : BOOL
+		VAR_INPUT
+			in1: REAL;
+			in2: REAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "57DC0EC0-25CF-4c02-9DDE-C27A20A79806" name = "real32__gt" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__gt : BOOL
+		VAR_INPUT
+			in1: REAL;
+			in2: REAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "27EA9CCF-CA7D-4bbb-8A0B-76D96B1B096B" name = "real32__ge" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__ge : BOOL
+		VAR_INPUT
+			in1: REAL;
+			in2: REAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "4001E5C9-2959-421b-A1EA-3192B559210F" name = "real32__add" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__add : REAL
+		VAR_INPUT
+			in1: REAL;
+			in2: REAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>	
+	<pou id = "7AF69FF9-2D09-4573-9668-4ABFB8238C6B" name = "real32__sub" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__sub : REAL
+		VAR_INPUT
+			in1: REAL;
+			in2: REAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "07FDCF4D-2F32-4026-BA50-865A9A4CAC44" name = "real32__mul" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__mul : REAL
+		VAR_INPUT
+			in1: REAL;
+			in2: REAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>	
+	<pou id = "7433AAFB-0867-4fb3-B51C-62AEDC81235F" name = "real32__div" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__div : REAL
+		VAR_INPUT
+			in1: REAL;
+			in2: REAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>			
+	<pou id = "A891677E-9887-4115-BAF6-5BC18C14F21F" name = "real32__abs" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__abs : REAL
+		VAR_INPUT
+			in1: REAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>			
+	<pou id = "7F040799-FEDA-40a7-B376-EE0DB6E12ABF" name = "real32__min" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__min : REAL
+		VAR_INPUT
+			in1: REAL;
+			in2: REAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>			
+	<pou id = "C46BE4AE-B278-40fc-8552-9CDB664B8607" name = "real32__max" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__max : REAL
+		VAR_INPUT
+			in1: REAL;
+			in2: REAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>			
+	<pou id = "6049606A-24C9-4d04-8810-FD7A837DC535" name = "real32__limit" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__limit : REAL
+		VAR_INPUT
+			in1: REAL;
+			in2: REAL;
+			in3: REAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>													
+	<pou id = "EF945A32-7190-4712-AF4E-686069FEBA9E" name = "real32__trunc" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__trunc : DINT
+		VAR_INPUT
+			in: REAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>		
+	<pou id = "84ACC91C-76A8-41d8-8957-1617354730FC" name = "real32__tan" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__tan : REAL
+		VAR_INPUT
+			in: REAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "4E10F990-4CF5-4424-ABD6-16195B2C1947" name = "real32__atan" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__atan : REAL
+		VAR_INPUT
+			in: REAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "B59097E9-0C6C-4edf-A18E-D34DA5F674DE" name = "real32__sin" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__sin : REAL
+		VAR_INPUT
+			in: REAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "12BAF47B-573E-437a-B3EB-06F4C4745CCF" name = "real32__asin" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__asin : REAL
+		VAR_INPUT
+			in: REAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "21313F85-D945-4d56-BAB3-9C0D70303453" name = "real32__cos" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__cos : REAL
+		VAR_INPUT
+			in: REAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "29048F1C-76FF-4555-A36D-61013B9112E7" name = "real32__acos" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__acos : REAL
+		VAR_INPUT
+			in: REAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "412735D8-6E6F-49d1-8D62-AAD6E08F4198" name = "real32__ln" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__ln : REAL
+		VAR_INPUT
+			in: REAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "BAC2AA4E-FB73-4beb-BEE8-1CBE13A49551" name = "real32__log" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__log : REAL
+		VAR_INPUT
+			in: REAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>	
+	<pou id = "F127665C-C7D1-4290-B6BE-8DB37FC1DF1A" name = "real32__exp" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__exp : REAL
+		VAR_INPUT
+			in: REAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "BBBDF0CF-B7CE-4f53-AF3F-DF8A531C4D5D" name = "real32__expt" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__expt : REAL
+		VAR_INPUT
+			in1: REAL;
+			in2: REAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "CF137188-D4B3-4d76-B1F6-87AFE6EE2148" name = "real32__sqrt" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__sqrt : REAL
+		VAR_INPUT
+			in1: REAL;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "16597B72-E6CA-4e3e-B487-0FAB4F60F55D" name = "int32__div" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION int32__div : DINT
+		VAR_INPUT
+			in1: DINT;
+			in2: DINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>				
+	<pou id = "1ACF0B76-2778-4975-844A-6EC15F762B2E" name = "uint32__div" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint32__div : UDINT
+		VAR_INPUT
+			in1: UDINT;
+			in2: UDINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>				
+	<pou id = "32F74310-0500-40a8-BCDC-38E3A235C1A5" name = "int32__mod" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION int32__mod : DINT
+		VAR_INPUT
+			in1: DINT;
+			in2: DINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>				
+	<pou id = "CD4339D7-CB4C-4660-B471-EE4A5C114AD0" name = "uint32__mod" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint32__mod : UDINT
+		VAR_INPUT
+			in1: UDINT;
+			in2: UDINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "62876995-1A07-4244-A3F0-8C8F63EEC49C" name = "int32__abs" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION int32__abs : DINT
+		VAR_INPUT
+			in1: DINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>			
+	<pou id = "79DD4EBA-D759-4918-8C09-9BA7CEDB378C" name = "int32__limit" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION int32__limit : DINT
+		VAR_INPUT
+			in1: DINT;
+			in2: DINT;
+			in3: DINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>			
+	<pou id = "46A8A0A1-A4C6-464a-A53C-87329443B190" name = "uint32__limit" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint32__limit : UDINT
+		VAR_INPUT
+			in1: UDINT;
+			in2: UDINT;
+			in3: UDINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>			
+	<pou id = "3330A6C6-0B50-4a3c-91F0-5AD24D44FBF5" name = "int32__mul" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION int32__mul : DINT
+		VAR_INPUT
+			in1: DINT;
+			in2: DINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>			
+	<pou id = "47A65ED1-25F8-43b6-85A3-DEE72D9A73CD" name = "uint32__mul" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint32__mul : UDINT
+		VAR_INPUT
+			in1: UDINT;
+			in2: UDINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>			
+	<pou id = "1128C6EF-4D56-40a2-A91F-4F5DC0185D98" name = "int32__shr" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION int32__shr : DINT
+		VAR_INPUT
+			in1: DINT;
+			in2: INT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>			
+	<pou id = "C1F5D873-AAF1-4f92-B314-C17C78644B9D" name = "uint32__shr" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint32__shr : UDINT
+		VAR_INPUT
+			in1: UDINT;
+			in2: INT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>			
+	<pou id = "1393B595-1C79-4a79-A17F-DB4B5FDA7A44" name = "uint32__shl" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint32__shl : UDINT
+		VAR_INPUT
+			in1: UDINT;
+			in2: INT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>			
+	<pou id = "AF9CBC04-84B4-409b-8830-F18C8ED3A6EC" name = "uint32__rol" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint32__rol : UDINT
+		VAR_INPUT
+			in1: UDINT;
+			in2: INT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>			
+	<pou id = "181EF5EE-7190-4ce0-ADA3-CCA4FD45A289" name = "uint32__ror" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint32__ror : UDINT
+		VAR_INPUT
+			in1: UDINT;
+			in2: INT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>			
+	<pou id = "79ad9f0e-3a56-4c79-af55-c1dafc05b5e6" name = "get__time" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION get__time : TIME
+		VAR_INPUT
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>		
+</language-model>

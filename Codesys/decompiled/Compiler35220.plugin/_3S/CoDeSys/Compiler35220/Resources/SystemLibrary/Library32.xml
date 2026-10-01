@@ -1,0 +1,2505 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+Attention!
+When making any changes in one of the following functions 
+- string__to__any32
+- any32__to__string
+- new__real32__to__string
+- string__to__real32
+please consider to make the modification also in the library ConversionFunctions.library
+(svn://server04/AutomationPlatform/branches/Staff/Compilertechnology/ConversionFunctions/ConversionFunctions.library )
+-->
+<language-model>
+	<pou id = "1c137676-f66f-428c-af12-54699e1772b8" name = "__HelpConvertDate">
+		<interface>
+		{implicit on}
+		FUNCTION __HelpConvertDate : BOOL
+		VAR_INPUT
+			in : UDINT;
+			ppstr : POINTER TO POINTER TO BYTE;
+		END_VAR
+		VAR
+			nYear : UDINT;
+			nMonth : UDINT;
+			nDay : UDINT;
+			DayOfMonthTable : ARRAY [0..11] OF BYTE := [31,28,31,30,31,30,31,31,30,31,30,31];
+			pstr : POINTER TO BYTE := ppstr^;
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		in := in / (UDINT#24 * UDINT#3600);
+		
+		{IF COMPILERVERSION(>=, '3.2.1.20')}
+		IF (in >= 47541) THEN
+			in := in + 1; // add a "virtual" 29 of February 2100 and calculate as if there was one
+		END_IF
+	  {END_IF}		
+		
+		nYear := 4 * (in / UDINT#1461) + UDINT#1970;
+		in := in MOD 1461;
+		IF (in < UDINT#2 * UDINT#365) THEN
+			nYear := nYear + (in / 365);
+			in := in MOD 365;
+			DayOfMonthTable[1] := 28;
+		ELSIF (in < UDINT#2 * UDINT#365 + UDINT#366) THEN
+			DayOfMonthTable[1] := 29;
+			nYear := nYear + 2;
+			in := in - UDINT#2 * UDINT#365;
+		ELSE
+			nYear := nYear + 3;
+			DayOfMonthTable[1] := 28;
+			{IF COMPILERVERSION(>=, '3.2.1.20')}
+			in := in - (UDINT#2 * UDINT#365 + UDINT#366);
+			{ELSE}
+			in := in - UDINT#2 * UDINT#365 + UDINT#366;
+			{END_IF}
+		END_IF
+
+		WHILE (in >= DayOfMonthTable[nMonth]) DO
+			in := in - DayOfMonthTable[nMonth];
+			nMonth := nMonth + 1;
+		END_WHILE
+
+		nMonth := nMonth + 1;
+		nDay := in + 1;  (* nYear, nMonth, nDay are complete *)
+		__HelpConvert(nYear, ADR(pstr),4);
+		pstr[0] := BYTE#16#2d; (*'-'*)
+		pstr := pstr + 1;
+		__HelpConvert(nMonth,ADR(pstr), 2);
+		pstr[0] := BYTE#16#2d; (*'-'*)
+		pstr := pstr + 1;
+		__HelpConvert(nDay,ADR(pstr), 2);
+		ppstr^ := pstr;
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "e3e2dee5-80c7-4e97-ab64-7b5e39ea535b" name = "__HelpConvertString">
+		<interface>
+		{implicit on}
+		FUNCTION __HelpConvertString : UDINT
+		VAR_INPUT
+			pstr : POINTER TO BYTE;
+			nWidth : UDINT;
+		END_VAR
+		VAR
+			i : UDINT;
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}    
+		{IF COMPILERVERSION(>=, '3.5.2.0')}
+		  IF (nWidth = 0) THEN
+        __HelpConvertString := 0;
+        RETURN;
+      END_IF
+		{END_IF}                              
+		FOR (i := 0) TO nWidth - 1 DO
+			__HelpConvertString := __HelpConvertString * 10 + pstr[0] - 16#30 (*'0'*);
+			pstr := pstr+1;
+		END_FOR
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "1ac273b6-a01b-4295-88c5-ff4e218b6071" name = "__LEFT">
+		<interface>
+		{implicit on}
+		FUNCTION __LEFT : STRING(255)
+		VAR_INPUT
+			STR:STRING(255);
+			SIZE:INT;
+		END_VAR
+		VAR
+			p1, pResult : POINTER TO BYTE;
+			index : INT;
+		END_VAR		
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		p1 := ADR (STR);
+		pResult := ADR(__LEFT);
+
+		FOR index := 0 TO SIZE - 1 DO
+			pResult^ := p1^;
+			IF (pResult^ = 0) THEN
+				EXIT;
+			END_IF
+			pResult := pResult + 1;
+			p1 := p1 + 1;
+		END_FOR
+		pResult^:= 0;
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "882a2370-bae2-4085-93e5-0932a060bdfc" name = "__SkipWhiteSpace">
+		<interface>
+		{implicit on}
+		FUNCTION __SkipWhiteSpace : BOOL
+		VAR_INPUT
+			ppstr : POINTER TO POINTER TO BYTE;
+		END_VAR
+		VAR
+			pstr : POINTER TO BYTE := ppstr^;
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		WHILE (pstr[0] = 16#20 OR pstr[0] = 16#09) DO
+			pstr := pstr + 1;
+		END_WHILE
+		ppstr^ := pstr;	
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "fdd0113a-d0f8-4f19-bc73-fa6acf9ecc59" name = "__HelpConvert">
+		<interface>
+		{implicit on}
+		FUNCTION __HelpConvert : BOOL
+		VAR_INPUT
+			in : UDINT;
+			ppstr : POINTER TO POINTER TO BYTE;
+			nWidth : DINT;
+		END_VAR
+		VAR
+			ulDiv : UDINT := 1000000000;
+			bFirst : BOOL;
+			pstr : POINTER TO BYTE := ppstr^;
+			nDigits : DINT := 10;
+			ulDig : UDINT;
+			count: UDINT;
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		WHILE (ulDiv > 0) DO
+			ulDig := in / ulDiv;
+			IF ((NOT bFirst AND ulDig <> 0) OR (nDigits <= nWidth)) THEN
+				bFirst := TRUE;
+			END_IF
+			IF (bFirst) THEN
+				pstr[0] := UDINT_TO_BYTE(ulDig + 16#30); (*'0'*)
+				pstr := pstr + 1; 
+				in := in MOD ulDiv;
+				count := count + 1;
+			END_IF
+			ulDiv := ulDiv / 10;
+			nDigits := nDigits-1;
+		END_WHILE
+
+		pstr[0] := 0; (*'\0'*)
+		ppstr^ := pstr;
+
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "13c0f538-7207-41d3-8311-a322a7c20a0e" name = "__HelpConvertTime">
+		<interface>
+		{implicit on}
+		FUNCTION __HelpConvertTime : BOOL
+		VAR_INPUT
+			in : UDINT;
+			ppstr : POINTER TO POINTER TO BYTE;
+		END_VAR
+		VAR
+			dwHour : UDINT;
+			dwMinute : UDINT;
+			dwSecond : UDINT;
+			dwMilliSecond : UDINT;
+			pstr : POINTER TO BYTE := ppstr^;
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		dwHour := in / 3600000;
+		in := in MOD 3600000;
+		dwMinute := in / 60000;
+		in := in MOD 60000;
+		dwSecond := in / 1000; 
+		dwMilliSecond := in MOD 1000;
+
+		__HelpConvert(dwHour,ADR(pstr), 2);
+		pstr[0] := 16#3A; (*':'*)
+		pstr := pstr + 1;
+		__HelpConvert(dwMinute,ADR(pstr), 2);
+		pstr[0] := 16#3A; (*':'*)
+		pstr := pstr + 1;
+		__HelpConvert(dwSecond,ADR(pstr), 2);
+
+		IF (dwMilliSecond <> 0) THEN
+			pstr[0] := 16#2E; (*'.'*)
+			pstr := pstr + 1;
+			__HelpConvert(dwMilliSecond, ADR(pstr), 3);
+		END_IF
+    
+    {IF COMPILERVERSION(>=, '3.5.16.0')}    
+        IF (dwMilliSecond = 0) THEN
+          ppstr^ := pstr;
+        END_IF
+    {END_IF}
+      
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "183c332f-7773-4f5f-805c-178b91efab72" name = "__HelpConvertTimeUnits">
+		<interface>
+		{implicit on}
+		FUNCTION __HelpConvertTimeUnits : UDINT
+		VAR_INPUT
+			ppstr : POINTER TO POINTER TO BYTE;	
+		END_VAR
+		VAR
+			pstr : POINTER TO BYTE := ppstr^;
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+	{IF COMPILERVERSION(>=, '3.5.21.0')}		    
+	  CASE (pstr[0]) OF
+			16#64,16#44: (*'d','D'*)
+				__HelpConvertTimeUnits := 86400000;      
+		    16#68,16#48: (*'h','H'*)
+			    __HelpConvertTimeUnits := 3600000;
+		    16#73,16#53: (*'s','S'*)
+			    __HelpConvertTimeUnits  := 1000;
+		    16#6D,16#4D: (*'m','M'*)
+			    IF (pstr[1] = 16#73 OR pstr[1] = 16#53) THEN
+				    pstr := pstr+1;
+				    __HelpConvertTimeUnits  := 1;
+			    ELSE
+				    __HelpConvertTimeUnits  := 60000;
+			    END_IF
+		    ELSE 
+			    __HelpConvertTimeUnits  :=  0;
+				IF (pstr[0] = 16#00) THEN
+						RETURN;
+				END_IF     
+		    END_CASE    		
+    {ELSIF COMPILERVERSION(>=, '3.5.13.0')}		    
+	  CASE (pstr[0]) OF
+        16#64: (*'d'*)
+          __HelpConvertTimeUnits := 86400000;      
+		    16#68: (*'h'*)
+			    __HelpConvertTimeUnits := 3600000;
+		    16#73: (*'s'*)
+			    __HelpConvertTimeUnits  := 1000;
+		    16#6D: (*'m'*)
+			    IF (pstr[1] = 16#73) THEN
+				    pstr := pstr+1;
+				    __HelpConvertTimeUnits  := 1;
+			    ELSE
+				    __HelpConvertTimeUnits  := 60000;
+			    END_IF
+		    ELSE 
+			    __HelpConvertTimeUnits  :=  0;
+			    {IF COMPILERVERSION(>=, '3.5.2.0')}
+            IF (pstr[0] = 16#00) THEN
+			        RETURN;
+            END_IF     
+			    {END_IF}
+		    END_CASE    
+    {ELSE}
+		    CASE (pstr[0]) OF
+		    16#68: (*'h'*)
+			    __HelpConvertTimeUnits := 3600000;
+		    16#73: (*'s'*)
+			    __HelpConvertTimeUnits  := 1000;
+		    16#6D: (*'m'*)
+			    IF (pstr[1] = 16#73) THEN
+				    pstr := pstr+1;
+				    __HelpConvertTimeUnits  := 1;
+			    ELSE
+				    __HelpConvertTimeUnits  := 60000;
+			    END_IF
+		    ELSE 
+			    __HelpConvertTimeUnits  :=  0;
+			    {IF COMPILERVERSION(>=, '3.5.2.0')}
+            IF (pstr[0] = 16#00) THEN
+			        RETURN;
+            END_IF     
+			    {END_IF}
+		    END_CASE
+    {END_IF}
+		pstr := pstr+1;
+		ppstr^ := pstr;
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "020b085d-1351-401a-b6c0-1e0475de8a9f" name = "__HelpConvertFromTime">
+		<interface>
+		{implicit on}
+		FUNCTION __HelpConvertFromTime : UDINT
+		VAR_INPUT
+			ppstr : POINTER TO POINTER TO BYTE;
+		END_VAR
+		VAR
+			pstr : POINTER TO BYTE := ppstr^;
+			nHour : UDINT;
+			nMinutes : UDINT;
+			nSeconds : UDINT;
+			nMilliseconds : UDINT;
+			pstrHelpHour : POINTER TO BYTE;
+			pstrHelpMinute : POINTER TO BYTE;
+			pstrHelpSecond : POINTER TO BYTE;
+			pstrHelpMilliSecond : POINTER TO BYTE;
+			i : UDINT;
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		pstrHelpHour := pstr;
+		WHILE(pstrHelpHour[0] <> 16#3A(*':'*)) AND (pstrHelpHour[0] <> 0) DO
+			pstrHelpHour := pstrHelpHour + 1;
+		END_WHILE
+		i := pstrHelpHour - pstr;
+		IF (i = 1 OR i = 2) THEN
+			nHour := __HelpConvertString(pstr,i);
+		ELSE
+			RETURN;
+		END_IF
+
+		IF (pstrHelpHour[0] = 0) THEN
+			__HelpConvertFromTime := ((nHour * UDINT#3600) * UDINT#1000);
+			RETURN;
+		END_IF 
+				
+		pstrHelpHour := pstrHelpHour + 1;
+		pstrHelpMinute := pstrHelpHour;
+
+		WHILE(pstrHelpMinute[0] <> 16#3A(*':'*)) AND (pstrHelpMinute[0] <> 0) DO
+			pstrHelpMinute := pstrHelpMinute + 1;
+		END_WHILE
+		i := pstrHelpMinute - pstrHelpHour;
+		IF (i = 1 OR i = 2) THEN
+			nMinutes := __HelpConvertString(pstrHelpHour,i);
+		ELSE
+			RETURN;
+		END_IF
+		
+		IF (pstrHelpMinute[0] = 0) THEN
+			__HelpConvertFromTime := ((nHour * UDINT#3600 + nMinutes * UDINT#60) * UDINT#1000);
+			RETURN;
+		END_IF 
+		
+		pstrHelpMinute := pstrHelpMinute + 1;
+		pstrHelpSecond := pstrHelpMinute;
+
+		WHILE(pstrHelpSecond[0] <> 16#2E(*'.'*)) AND (pstrHelpSecond[0] <> 0)DO
+			pstrHelpSecond := pstrHelpSecond + 1;
+		END_WHILE
+		i := pstrHelpSecond - pstrHelpMinute;
+
+		IF ((i = 1 OR i = 2) AND pstrHelpSecond[0] = 0 ) THEN
+			nSeconds := __HelpConvertString(pstrHelpMinute,i);
+			ppstr^ := pstrHelpSecond;
+			__HelpConvertFromTime := ((nHour * UDINT#3600 + nMinutes * UDINT#60 + nSeconds) * UDINT#1000); 
+			RETURN;
+		ELSIF ((i = 1 OR i = 2) AND pstrHelpSecond[0] = 16#2E(*'.'*)) THEN
+			nSeconds := __HelpConvertString(pstrHelpMinute,i);
+			pstrHelpSecond := pstrHelpSecond+1;
+			pstrHelpMilliSecond := pstrHelpSecond;
+			WHILE(pstrHelpMilliSecond[0] <> 0) DO
+				pstrHelpMilliSecond := pstrHelpMilliSecond+1;
+			END_WHILE
+			i := pstrHelpMilliSecond - pstrHelpSecond;
+			IF (i = 1 OR i = 2 OR i = 3) THEN
+				nMilliSeconds := REAL_TO_UDINT(__HelpConvertString(pstrHelpSecond,i) * EXPT(10,3 - i));
+			ELSE
+				RETURN;
+			END_IF
+			ppstr^ := pstrHelpMilliSecond;
+			__HelpConvertFromTime := (((nHour * UDINT#3600 + nMinutes * UDINT#60 + nSeconds) * UDINT#1000) + nMilliSeconds);
+		ELSE
+			__HelpConvertFromTime := ((nHour * UDINT#3600+ nMinutes * UDINT#60) * UDINT#1000); 
+		END_IF
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "d6948954-0bf4-4d3f-ae69-e82fdade476c" name = "__HelpConvertStringBase">
+		<interface>
+		{implicit on}
+		FUNCTION __HelpConvertStringBase : UDINT
+		VAR_INPUT
+			pstr : POINTER TO BYTE;
+			nBase : INT;
+		END_VAR
+		VAR
+			nNext : INT;
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		WHILE(pstr[0] <> 0) DO
+			IF (pstr[0] = 16#5f) THEN (*'_'*)
+				pstr := pstr + 1;
+			ELSE
+				IF ((nBase = 2 AND pstr[0] >= 16#30 (*'0'*) AND pstr[0] <= 16#31 (*'1'*)) 
+					OR (nBase = 8 AND pstr[0] >= 16#30 (*'0'*) AND pstr[0] <= 16#37 (*'7'*))
+					OR (nBase = 10 AND pstr[0] >= 16#30 (*'0'*) AND pstr[0] <= 16#39 (*'9'*))
+					OR (nBase = 16 AND pstr[0] >= 16#30 (*'0'*) AND pstr[0] <= 16#39 (*'9'*)))
+				THEN
+					nNext := pstr[0] - 16#30;
+				ELSIF (nBase = 16 AND pstr[0] >= 16#41 (*'A'*) AND pstr[0] <= 16#46 (*'F'*)) THEN
+					nNext := pstr[0] - 16#41 + 10;
+				ELSIF (nBase = 16 AND pstr[0] >= 16#61 (*'a'*) AND pstr[0] <= 16#66 (*'f'*)) THEN
+					{IF COMPILERVERSION(>=, '3.4.0.0')}
+						nNext := pstr[0] - 16#61 + 10;
+					{ELSE}
+						nNext := pstr[0] - 16#46 + 10;
+					{END_IF}
+				ELSE
+					EXIT;
+				END_IF
+				__HelpConvertStringBase := DINT_TO_UDINT(UDINT_TO_DINT(__HelpConvertStringBase) * nBase + nNext);
+				pstr := pstr + 1;
+			END_IF
+		END_WHILE
+		{IF COMPILERVERSION(<, '3.5.0.0')}
+			IF (pstr[0] <> 0 AND pstr[0] <> 16#2e(*'.'*)) THEN
+				__HelpConvertStringBase := 0; 
+			END_IF
+		{END_IF}
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "cee86ba7-461c-4d5d-b68e-c4f154c509d1" name = "__HelpConvertFromDate">
+		<interface>
+		{implicit on}
+		FUNCTION __HelpConvertFromDate : UDINT
+		VAR_INPUT
+			ppstr : POINTER TO POINTER TO BYTE;
+		END_VAR
+		VAR
+			pstr : POINTER TO BYTE := ppstr^;
+			nYear : UDINT;
+			nMonth : UDINT;
+			nDay : UDINT;
+			nDiffYear : UDINT;
+			nDiffYearDiv : UDINT;
+			nDiffYearMod : UDINT;
+			nCount : UDINT;
+			ulTime : UDINT;
+			pstrHelpYear : POINTER TO BYTE := pstr;
+			pstrHelpMonth : POINTER TO BYTE;
+			pstrHelpDay : POINTER TO BYTE;
+			i : DINT;
+			DayOfMonthTable : ARRAY [0..11] OF BYTE := [31,28,31,30,31,30,31,31,30,31,30,31];
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+    {IF COMPILERVERSION(>=, '3.5.14.0')}
+		  WHILE(pstrHelpYear[0] <> BYTE#0 AND pstrHelpYear[0] <> BYTE#16#2d (*'-'*)) DO
+			  pstrHelpYear := pstrHelpYear + 1;
+		  END_WHILE      
+    {ELSE}
+		  WHILE(pstrHelpYear[0] <> BYTE#16#2d (*'-'*)) DO
+			  pstrHelpYear := pstrHelpYear + 1;
+		  END_WHILE      
+    {END_IF}
+        
+		i := DWORD_TO_DINT(pstrHelpYear - pstr);
+
+		IF (i = 4) THEN
+			nYear := __HelpConvertString(pstr,4);
+		ELSE
+			RETURN;
+		END_IF
+
+    {IF COMPILERVERSION(>=, '3.5.20.0')}
+		IF (pstrHelpYear[0] = BYTE#0) THEN
+			RETURN;
+		END_IF
+	{END_IF}
+
+		pstrHelpYear := pstrHelpYear + 1;
+		pstrHelpMonth := pstrHelpYear;
+		
+	{IF COMPILERVERSION(>=, '3.5.20.0')}
+		WHILE(pstrHelpMonth[0] <> BYTE#0 AND pstrHelpMonth[0] <> BYTE#16#2d (*'-'*)) DO
+			pstrHelpMonth := pstrHelpMonth+1;
+		END_WHILE
+	{ELSE}
+		WHILE(pstrHelpMonth[0] <> BYTE#16#2d (*'-'*)) DO
+			pstrHelpMonth := pstrHelpMonth+1;
+		END_WHILE
+	{END_IF}		
+		
+		i := DWORD_TO_DINT(pstrHelpMonth - pstrHelpYear);
+		IF (i = 1 OR i = 2) THEN
+			nMonth := __HelpConvertString(pstrHelpYear,DINT_TO_UDINT(i));
+		ELSE
+			RETURN;
+		END_IF
+
+    {IF COMPILERVERSION(>=, '3.5.20.0')}
+		IF (pstrHelpMonth[0] = BYTE#0) THEN
+			RETURN;
+		END_IF
+	{END_IF}
+
+		pstrHelpMonth := pstrHelpMonth+1;
+		pstrHelpDay := pstrHelpMonth;
+		WHILE(pstrHelpDay[0] <> 0 AND pstrHelpDay[0] <> BYTE#16#2d (*'-'*)) DO
+			pstrHelpDay := pstrHelpDay + 1;
+		END_WHILE
+
+		i := DWORD_TO_DINT(pstrHelpDay - pstrHelpMonth);
+		IF (i = 1 OR i = 2) THEN
+			nDay := __HelpConvertString(pstrHelpMonth,DINT_TO_UDINT(i));
+		ELSE 
+			RETURN;
+		END_IF
+
+		ppstr^ := pstrHelpDay;
+
+		nDiffYear := nYear - 1970;
+		nDiffYearDiv := nDiffYear / 4;
+		nDiffYearMod := nDiffYear MOD 4;
+
+		CASE (nDiffYearMod) OF
+			0,1:
+				nCount := nDiffYearDiv;
+			2:
+				IF (nMonth < 3) THEN
+					nCount := nDiffYearDiv;
+				ELSE
+					nCount := nDiffYearDiv + 1;
+				END_IF
+			3:
+				nCount := nDiffYearDiv + 1;
+		END_CASE
+
+		{IF COMPILERVERSION(>=, '3.2.1.20')}
+		IF (nYear > 2100 OR (nYear = 2100 AND nMonth >= 3)) THEN
+			nCount := nCount - 1; // one day less because there is no 29.2.2100
+		END_IF
+		{END_IF}
+
+		ulTime := (nDiffYear * UDINT#365 + nCount) * UDINT#24 * UDINT#3600;
+		FOR i := 0 TO UDINT_TO_DINT(nMonth - 2) DO
+			ulTime := ulTime + (DayOfMonthTable[i] * UDINT#24 * UDINT#3600);
+		END_FOR
+		ulTime := ulTime + ((nDay-1) * UDINT#24 * UDINT#3600);
+
+		__HelpConvertFromDate := ulTime;
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "50f01a4a-c350-4e6e-9dfa-0c242ec58ce8" name = "__HelpConvertTimeWithUnit">
+		<interface>
+      {implicit on}
+      FUNCTION __HelpConvertTimeWithUnit : BOOL
+      VAR_INPUT
+      in : UDINT;
+      ppstr : POINTER TO POINTER TO BYTE;
+      END_VAR
+      VAR
+      {IF COMPILERVERSION(>=, '3.5.11.0')}
+        dwDay: UDINT;
+        dwHour: UDINT;
+      {END_IF}
+      dwMinute : UDINT;
+      dwSecond : UDINT;
+      dwMilliSecond : UDINT;
+      pstr : POINTER TO BYTE := ppstr^;
+      END_VAR
+      {implicit off}
+    </interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		pstr[0] := 16#54; (*'T'*)
+		pstr[1] := 16#23; (*'#'*)
+		pstr := pstr + 2;
+
+		IF (in = 0) THEN
+			pstr[0] := 16#30; (*'0'*)
+			pstr[1] := 16#6D; (*'m'*)
+			pstr[2] := 16#73; (*'s'*)
+			pstr[3] := 16#0;  (*'\0'*)
+			pstr := pstr + 3;
+		ELSE
+    
+      {IF COMPILERVERSION(>=, '3.5.11.0')}
+	      dwDay := in / 86400000;
+	      in := in MOD 86400000;
+	      dwHour := in / 3600000;
+	      in := in MOD 3600000; 
+      {END_IF}
+        
+			dwMinute := in / 60000;
+			in := in MOD 60000;
+			dwSecond := in / 1000; 
+			dwMilliSecond := in MOD 1000;
+      
+      {IF COMPILERVERSION(>=, '3.5.11.0')}
+	      IF (dwDay <> 0) THEN
+		      __HelpConvert(dwDay,ADR(pstr), 1);
+		      pstr[0] := 16#64; (*'d'*)
+		      pstr := pstr + 1;		
+	      END_IF
+	      IF (dwHour <> 0) THEN
+		      __HelpConvert(dwHour,ADR(pstr), 1);
+		      pstr[0] := 16#68; (*'h'*)
+		      pstr := pstr + 1;		
+	      END_IF      
+      {END_IF}
+      
+			IF (dwMinute <> 0) THEN
+				__HelpConvert(dwMinute,ADR(pstr), 1);
+				pstr[0] := 16#6D; (*'m'*)
+				pstr := pstr + 1;
+			END_IF
+			IF (dwSecond <> 0) THEN
+				__HelpConvert(dwSecond,ADR(pstr), 1);
+				pstr[0] := 16#73; (*'s'*)
+				pstr := pstr + 1;
+			END_IF
+			IF (dwMilliSecond <> 0) THEN
+				__HelpConvert(dwMilliSecond, ADR(pstr), 1);
+				pstr[0] := 16#6D; (*'m'*)
+				pstr[1] := 16#73; (*'s'*)
+				pstr := pstr + 2;
+			END_IF
+			pstr[0] := 0; (*'\0'*)
+		END_IF
+
+		ppstr^ := pstr;	
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "52f276ac-71ea-475d-be1d-c34d7442869e" name = "any32__to__string">
+		<interface>
+		{implicit on}
+		FUNCTION any32__to__string : STRING(255)
+		VAR_INPUT
+			in: DWORD;
+			dwType: DWORD;
+		END_VAR
+		VAR
+			diExponent : DINT;
+			dwMant : UDINT;
+			diExp10 : DINT;
+			pstr: POINTER TO BYTE;
+			diAfterKomma: DINT;
+			udPow : UDINT;
+			dwTOD : DWORD;
+			dwDate: DWORD;
+			pszHelp: STRING(INT#1);
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		pstr := ADR(any32__to__string);
+		IF (dwType = __TypeClass.TYPE_DATE) THEN
+			pstr[0] := 16#44; (*'D'*)
+			pstr[1] := 16#23; (*'#'*)
+			pstr := pstr + 2; 
+			__HelpConvertDate(in, ADR(pstr));
+			RETURN;
+		END_IF
+		IF (dwType = __TypeClass.TYPE_TIMEOFDAY) THEN
+			pstr[0] := 16#54; (*'T'*)
+			pstr[1] := 16#4f; (*'O'*)
+			pstr[2] := 16#44; (*'D'*)
+			pstr[3] := 16#23; (*'#'*)
+			pstr := pstr + 4;
+			__HelpConvertTime(in, ADR(pstr));
+			RETURN;
+		END_IF
+		IF (dwType = __TypeClass.TYPE_DATEANDTIME) THEN
+			dwTOD := in MOD (DWORD#24 * DWORD#3600);
+			dwDate := in - dwTOD;
+			pstr[0] := 16#44; (*'D'*)
+			pstr[1] := 16#54; (*'T'*)
+			pstr[2] := 16#23; (*'#'*)
+			pstr := pstr + 3;
+			__HelpConvertDate(dwDate, ADR(pstr));
+			pstr[0] := BYTE#16#2d; (*'-'*)
+			pstr := pstr + 1;
+			__HelpConvertTime(dwTOD * 1000, ADR(pstr));
+			RETURN;
+		END_IF
+		IF (dwType = __TypeClass.TYPE_TIME) THEN
+			__HelpConvertTimeWithUnit(in,ADR(pstr));
+			RETURN;
+		END_IF
+		IF (dwType = __TypeClass.TYPE_REAL) THEN  
+			IF (in = 0) THEN
+				any32__to__string := '0';
+				RETURN;
+			END_IF
+			(* between 0 and 255, 127 => exponent is zero *)
+			diExponent := DWORD_TO_DINT(SHR(in AND DWORD#16#7FFFFFFF, 23));
+			dwMant := ((in AND DWORD#16#7FFFFF) OR DWORD#16#800000);
+			(* Consider the mantissa as a integer *)
+			diExponent := diExponent-23;
+			(* Convert base 2 exponent to base 10 exponent for positive exponents *)
+			WHILE (diExponent > 127) DO
+				dwMant := SHL(dwMant, 1);
+				diExponent := diExponent - 1;
+				IF (dwMant > 16#7FFFFFFF) THEN
+					dwMant := dwMant / 10;
+					diExp10 := diExp10 + 1;
+				END_IF
+			END_WHILE
+			(* Convert base 2 exponent to base 10 exponent for negative exponents *)
+			WHILE (diExponent < 127) DO
+				WHILE (dwMant < DWORD#16#FFFFFFFF / DWORD#10) DO
+					dwMant := dwMant*10;
+					diExp10 := diExp10-1;
+				END_WHILE
+				dwMant  := SHR(dwMant, 1);
+				diExponent := diExponent+1;
+			END_WHILE
+			(* Normalize to standard accuracy *)
+			WHILE (dwMant >= 1000000) DO
+				dwMant := (dwMant + 5) / 10;
+				diExp10 := diExp10+1;
+			END_WHILE
+			(* Emit sign *)
+			IF (DWORD_TO_DINT(in) < 0) THEN
+				pstr^ := BYTE#16#2d; (*'-'*)
+				pstr := pstr + 1;
+			END_IF
+			IF (diExp10 <= 0 AND diExp10 >= -5) THEN
+			(* No exponent required *)
+				udPow := 1;
+				diAfterKomma := 0;
+				WHILE (diExp10 <> -diAfterKomma) DO
+					udPow := udPow * 10;
+					diAfterKomma := diAfterKomma+1;
+				END_WHILE
+			ELSE
+				udPow := 100000;
+				diAfterKomma := 5;
+			END_IF
+			__HelpConvert(dwMant / udPow, ADR(pstr), 6 - diAfterKomma);
+			pstr^ := BYTE#16#2e; (*'.';*)
+			pstr := pstr + 1;
+			__HelpConvert(dwMant MOD udPow, ADR(pstr), diAfterKomma);
+			diExp10 := diExp10 + diAfterKomma;
+			IF (diExp10 <> 0) THEN
+				pstr^ := 16#65; (*e*)
+				pstr := pstr + 1;
+				IF (diExp10 < 0) THEN
+					pstr^ := BYTE#16#2d; (*'-'*)
+					pstr := pstr + 1;
+					__HelpConvert(DINT_TO_DWORD(-diExp10), ADR(pstr), 2);
+				ELSE
+					__HelpConvert(DINT_TO_DWORD(diExp10), ADR(pstr), 2);
+				END_IF
+			END_IF
+			RETURN;
+		END_IF
+		IF (dwType = __TypeClass.TYPE_BOOL) THEN  
+			IF (in <> 0) THEN
+				any32__to__string := 'TRUE';
+			ELSE
+				any32__to__string := 'FALSE';
+			END_IF
+			RETURN;
+		END_IF
+
+		(*Numbers*)
+		IF ((dwType = __TypeClass.TYPE_SINT OR dwType = __TypeClass.TYPE_INT OR dwType = __TypeClass.TYPE_DINT) 
+			AND in > DWORD#16#7FFFFFFF) THEN
+			(* Sign of result *)
+			in := DINT_TO_DWORD(-(DWORD_TO_DINT(in)));
+			pstr[0] := BYTE#16#2d; (*'-'*)
+			pstr[1] := 0; (*'\0'*)
+			pstr := pstr + 1;
+		ELSE
+			pstr[0] := 0; (*'\0'*)
+		END_IF
+		IF (dwType = __TypeClass.TYPE_BYTE OR dwType = __TypeClass.TYPE_WORD OR dwType = __TypeClass.TYPE_DWORD
+			OR dwType = __TypeClass.TYPE_USINT OR dwType = __TypeClass.TYPE_UINT OR dwType = __TypeClass.TYPE_UDINT) THEN
+				pstr[0] := 0; (*'\0'*)
+		END_IF
+		__HelpConvert(in, ADR(pstr),1);
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "2aee5633-6b5b-4b6e-9cbc-79dd1000b70f" name = "string__to__any32">
+		<interface>
+		{implicit on}
+		FUNCTION string__to__any32 : DWORD
+		VAR_INPUT
+			in: STRING(255);
+			dwType: DWORD;
+		END_VAR
+		VAR
+			pstr : POINTER TO STRING := ADR(in);
+			ulHelpDt: UDINT;
+			strHelp : STRING(4);
+			pstrHelp : POINTER TO BYTE; 
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		__SkipWhiteSpace(ADR(pstr));
+
+		IF (dwType = __TypeClass.TYPE_DATE) THEN
+			IF (__LEFT(pstr^, 2) <> 'd#') AND (__LEFT(pstr^, 2) <> 'D#')
+				AND (__LEFT(pstr^, 5) <> 'DATE#') AND (__LEFT(pstr^, 5) <> 'date#') THEN
+					string__to__any32 := 0;
+					RETURN;
+			END_IF
+			WHILE (pstr^[0] <> 16#23) (*'#'*) DO
+				pstr := pstr+1;
+			END_WHILE
+			pstr := pstr+1;
+			string__to__any32 := __HelpConvertFromDate(ADR(pstr)); 
+			RETURN;
+		END_IF
+		IF (dwType = __TypeClass.TYPE_TIMEOFDAY) THEN
+			IF (__LEFT(pstr^, 4) <> 'tod#') AND (__LEFT(pstr^, 4) <> 'TOD#') 
+				AND (__LEFT(pstr^, 12) <> 'TIME_OF_DAY#')
+				AND (__LEFT(pstr^, 12) <> 'time_of_day#') THEN
+				string__to__any32 := 0;
+				RETURN;
+			END_IF
+			WHILE (pstr^[0] <> 16#23) (*'#'*) DO
+				pstr := pstr+1;
+			END_WHILE
+			pstr := pstr+1;
+			string__to__any32 := __HelpConvertFromTime(ADR(pstr));
+			RETURN; 
+		END_IF
+		IF (dwType = __TypeClass.TYPE_DATEANDTIME) THEN
+			IF (__LEFT(pstr^, 3) <> 'dt#') AND (__LEFT(pstr^, 3) <> 'DT#') 
+				AND (__LEFT(pstr^, 14) <> 'DATE_AND_TIME#')
+				AND (__LEFT(pstr^, 14) <> 'date_and_time#') THEN
+				string__to__any32 := 0;
+				RETURN;
+			END_IF
+			WHILE (pstr^[0] <> 16#23) (*'#'*) DO
+				pstr := pstr+1;
+			END_WHILE
+			pstr := pstr+1;
+			ulHelpDt := __HelpConvertFromDate(ADR(pstr));
+			pstr := pstr+1;
+			string__to__any32 := ulHelpDt + __HelpConvertFromTime(ADR(pstr)) / 1000;
+			RETURN;
+		END_IF
+		(* TODO : __TypeClass.TYPE_REAL not necessary for FPU *)
+		IF (dwType = __TypeClass.TYPE_SINT OR dwType = __TypeClass.TYPE_INT OR dwType = __TypeClass.TYPE_DINT
+					OR dwType = __TypeClass.TYPE_BYTE OR dwType = __TypeClass.TYPE_WORD OR dwType = __TypeClass.TYPE_DWORD
+					OR dwType = __TypeClass.TYPE_USINT OR dwType = __TypeClass.TYPE_UINT OR dwType = __TypeClass.TYPE_UDINT)
+		THEN
+			IF pstr^[0] = 0 (*'\0'*) THEN
+				string__to__any32 := 0;
+				RETURN;
+			END_IF
+			IF (__LEFT(pstr^, 3) = '16#') THEN
+				string__to__any32 := __HelpConvertStringBase(pstr + 3,16);
+				RETURN;
+			ELSIF (__LEFT(pstr^, 2) = '2#')THEN
+				string__to__any32 := __HelpConvertStringBase(pstr + 2,2);
+				RETURN;
+			ELSIF  (__LEFT(pstr^, 2) = '8#') THEN
+				string__to__any32 := __HelpConvertStringBase(pstr + 2,8);
+				RETURN;
+			ELSE 
+				IF (pstr^[0] = BYTE#16#2d (*'-'*) AND (dwType = __TypeClass.TYPE_SINT OR dwType = __TypeClass.TYPE_INT OR 
+						dwType = __TypeClass.TYPE_DINT))
+				THEN
+					pstr := pstr+1;
+					string__to__any32 := DINT_TO_UDINT(-UDINT_TO_DINT(__HelpConvertStringBase(pstr,10)));
+					RETURN;
+				ELSE
+					IF (pstr^[0] = BYTE#16#2b (*'+'*)) THEN
+						pstr := pstr+1;
+					END_IF
+					string__to__any32 := __HelpConvertStringBase(pstr,10);
+					RETURN;
+				END_IF
+			END_IF
+			string__to__any32 := 0;
+			RETURN; 
+		END_IF
+
+		IF (dwType = __TypeClass.TYPE_BOOL) THEN
+			IF (__LEFT(pstr^,4) = 'TRUE') OR (__LEFT(pstr^,4) = 'true') THEN
+				string__to__any32 := 1;
+			ELSE 
+				string__to__any32 := 0;
+			END_IF
+			RETURN;
+		END_IF
+
+		IF (dwType = __TypeClass.TYPE_TIME) THEN
+			IF (__LEFT(pstr^, 2) <> 't#') AND (__LEFT(pstr^, 2) <> 'T#') 
+				AND (__LEFT(pstr^, 5) <> 'TIME#') AND (__LEFT(pstr^, 5) <> 'time#') THEN
+					string__to__any32 := 67;
+					RETURN;
+			END_IF
+			WHILE (pstr^[0] <> 16#23) (*'#'*) DO
+				pstr := pstr+1;
+			END_WHILE
+			pstr := pstr+1;
+
+			WHILE (pstr^[0] <> 0 (*'\0'*)) DO
+				pstrHelp := ADR(strHelp);
+				WHILE((pstr^[0] >= 16#30(*'0'*) AND pstr^[0] <= 16#39(*'9'*)) OR pstr^[0] = 16#5f (*'_'*)) DO
+					IF (pstr^[0] = 16#5f (*'_'*)) THEN
+						pstr := pstr + 1;
+					ELSE
+						pstrHelp[0] := pstr^[0];
+						pstrHelp := pstrHelp+1;
+						pstr := pstr+1;
+					END_IF
+				END_WHILE
+				string__to__any32 := string__to__any32  + __HelpConvertString(ADR(strHelp),pstrHelp-ADR(strHelp)) * __HelpConvertTimeUnits(ADR(pstr));
+			END_WHILE
+			RETURN;
+		END_IF
+		
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+	<pou id = "D623FA64-302C-47ab-9727-E08D1BBEB2B4" name = "__HelpReal32Convert">
+		<interface>
+			{implicit on}
+			FUNCTION __HelpReal32Convert : BOOL
+			VAR_INPUT
+			in : REAL;
+			ppstr : POINTER TO POINTER TO BYTE;
+			pnBegin : POINTER TO DINT;
+			END_VAR
+			VAR
+			bFirst : BOOL := FALSE;
+			pstr : POINTER TO BYTE := ppstr^;
+			nDigits : DINT := 309;
+			nDig : UDINT;
+			i : DINT;
+			dBegin : REAL;
+			dDiv : REAL;
+			bNeg : BOOL;
+			nHelpBegin : DINT;
+			dDiff : REAL;
+			j: INT;
+			END_VAR
+			{implicit off}
+		</interface>
+		<body>
+			<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		dBegin := LOG(in);
+		bNeg := FALSE;
+		IF (dBegin < 0) THEN
+			nHelpBegin := TRUNC(dBegin);
+			IF (DINT_TO_REAL(nHelpBegin) <> dBegin) THEN
+				bNeg := 1;
+				dBegin := -dBegin + 1.0; //-dBegin;
+			ELSE
+				bNeg := 1;
+				dBegin := -dBegin;
+			END_IF
+		END_IF
+		pnBegin^ := TRUNC(dBegin);
+		IF(bNeg) THEN
+			pnBegin^ := -(pnBegin^);
+		END_IF
+		
+		dDiv := EXPT(10,pnBegin^);
+		in := in + 5 * dDiv / 1e15;
+
+{IF COMPILERVERSION(>=, '3.3.0.10')}
+		WHILE (dDiv > 0.0 AND i < 6) DO
+			nDig := DINT_TO_UDINT(TRUNC((in / dDiv) + 5e-14));
+			IF (nDig > 9 AND bFirst) THEN
+				nDig := 0;
+			ELSIF (nDig > 9 AND NOT bFirst) THEN
+				pstr[0] := 16#31;//'1';
+				pstr[1] := 16#30;//'0';
+				pstr[2] := 16#30;//'0';
+				pstr := pstr + 3;
+				pnBegin^  := pnBegin^ + 1;
+				EXIT;
+			END_IF
+			
+			IF (NOT bFirst AND (nDig <> 0)) THEN
+				bFirst := 1;
+			END_IF
+			IF (bFirst AND i < 6) THEN
+				pstr[0] := UDINT_TO_BYTE(nDig) + 16#30; //'0';
+				pstr := pstr + 1;
+				dDiff := UDINT_TO_REAL(nDig) * dDiv;
+				in := in - dDiff;
+				i := i+1;
+			END_IF
+			dDiv := dDiv / 10.0;
+			nDigits := nDigits-1;
+		END_WHILE
+{ELSE}		
+		WHILE (dDiv >= REAL#1e-40 AND i < 6) DO
+			nDig := DINT_TO_UDINT(TRUNC((in / dDiv) + 5e-14));
+			IF (nDig > 9 AND bFirst) THEN
+				nDig := 0;
+			ELSIF (nDig > 9 AND NOT bFirst) THEN
+				pstr[0] := 16#31;//'1';
+				pstr[1] := 16#30;//'0';
+				pstr[2] := 16#30;//'0';
+				pstr := pstr + 3;
+				pnBegin^  := pnBegin^ + 1;
+				EXIT;
+			END_IF
+			
+			IF (NOT bFirst AND (nDig <> 0)) THEN
+				bFirst := 1;
+			END_IF
+			IF (bFirst AND i < 6) THEN
+				pstr[0] := UDINT_TO_BYTE(nDig) + 16#30; //'0';
+				pstr := pstr + 1;
+				dDiff := UDINT_TO_REAL(nDig) * dDiv;
+				in := in - dDiff;
+				i := i+1;
+			END_IF
+			dDiv := dDiv / 10.0;
+			nDigits := nDigits-1;
+		END_WHILE
+{END_IF}
+
+		pstr[0] := 0;
+		ppstr^ := pstr;
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+
+	<global-interface id = "8282E63E-5BDC-4A17-9C51-C6019A0FC9EB" name = "__CONVERSION_CONSTANTS">
+		<interface>
+			{attribute 'hide'}
+			{implicit on}
+			{attribute 'qualified_only'}
+			VAR_GLOBAL
+			{attribute 'blobinitconst'}
+			E : ARRAY [0..254] OF INT :=
+			[
+			-44,
+			-44,
+			-44,
+			-43,
+			-43,
+			-43,
+			-43,
+			-42,
+			-42,
+			-42,
+			-41,
+			-41,
+			-41,
+			-40,
+			-40,
+			-40,
+			-40,
+			-39,
+			-39,
+			-39,
+			-38,
+			-38,
+			-38,
+			-37,
+			-37,
+			-37,
+			-37,
+			-36,
+			-36,
+			-36,
+			-35,
+			-35,
+			-35,
+			-34,
+			-34,
+			-34,
+			-34,
+			-33,
+			-33,
+			-33,
+			-32,
+			-32,
+			-32,
+			-31,
+			-31,
+			-31,
+			-31,
+			-30,
+			-30,
+			-30,
+			-29,
+			-29,
+			-29,
+			-28,
+			-28,
+			-28,
+			-27,
+			-27,
+			-27,
+			-27,
+			-26,
+			-26,
+			-26,
+			-25,
+			-25,
+			-25,
+			-24,
+			-24,
+			-24,
+			-24,
+			-23,
+			-23,
+			-23,
+			-22,
+			-22,
+			-22,
+			-21,
+			-21,
+			-21,
+			-21,
+			-20,
+			-20,
+			-20,
+			-19,
+			-19,
+			-19,
+			-18,
+			-18,
+			-18,
+			-18,
+			-17,
+			-17,
+			-17,
+			-16,
+			-16,
+			-16,
+			-15,
+			-15,
+			-15,
+			-15,
+			-14,
+			-14,
+			-14,
+			-13,
+			-13,
+			-13,
+			-12,
+			-12,
+			-12,
+			-12,
+			-11,
+			-11,
+			-11,
+			-10,
+			-10,
+			-10,
+			-09,
+			-09,
+			-09,
+			-09,
+			-08,
+			-08,
+			-08,
+			-07,
+			-07,
+			-07,
+			-06,
+			-06,
+			-06,
+			-06,
+			-05,
+			-05,
+			-05,
+			-04,
+			-04,
+			-04,
+			-03,
+			-03,
+			-03,
+			-03,
+			-02,
+			-02,
+			-02,
+			-01,
+			-01,
+			-01,
+			00,
+			00,
+			00,
+			00,
+			01,
+			01,
+			01,
+			02,
+			02,
+			02,
+			03,
+			03,
+			03,
+			04,
+			04,
+			04,
+			04,
+			05,
+			05,
+			05,
+			06,
+			06,
+			06,
+			07,
+			07,
+			07,
+			07,
+			08,
+			08,
+			08,
+			09,
+			09,
+			09,
+			10,
+			10,
+			10,
+			10,
+			11,
+			11,
+			11,
+			12,
+			12,
+			12,
+			13,
+			13,
+			13,
+			13,
+			14,
+			14,
+			14,
+			15,
+			15,
+			15,
+			16,
+			16,
+			16,
+			16,
+			17,
+			17,
+			17,
+			18,
+			18,
+			18,
+			19,
+			19,
+			19,
+			19,
+			20,
+			20,
+			20,
+			21,
+			21,
+			21,
+			22,
+			22,
+			22,
+			22,
+			23,
+			23,
+			23,
+			24,
+			24,
+			24,
+			25,
+			25,
+			25,
+			25,
+			26,
+			26,
+			26,
+			27,
+			27,
+			27,
+			28,
+			28,
+			28,
+			28,
+			29,
+			29,
+			29,
+			30,
+			30,
+			30,
+			31,
+			31,
+			31,
+			32,
+			32
+			];
+
+			{attribute 'blobinitconst'}
+			F : ARRAY [0..254] OF DWORD :=
+			[
+			16#3E0F7E33,
+			16#3E8F7E33,
+			16#3F0F7E33,
+			16#3DE596B8,
+			16#3E6596B8,
+			16#3EE596B8,
+			16#3F6596B8,
+			16#3E37ABC6,
+			16#3EB7ABC6,
+			16#3F37ABC6,
+			16#3E12EFD2,
+			16#3E92EFD2,
+			16#3F12EFD2,
+			16#3DEB1950,
+			16#3E6B1950,
+			16#3EEB1950,
+			16#3F6B1950,
+			16#3E3C1440,
+			16#3EBC1440,
+			16#3F3C1440,
+			16#3E167699,
+			16#3E967699,
+			16#3F167699,
+			16#3DF0BDC2,
+			16#3E70BDC2,
+			16#3EF0BDC2,
+			16#3F70BDC2,
+			16#3E4097CE,
+			16#3EC097CE,
+			16#3F4097CE,
+			16#3E1A130C,
+			16#3E9A130C,
+			16#3F1A130C,
+			16#3DF684DF,
+			16#3E7684DF,
+			16#3EF684DF,
+			16#3F7684DF,
+			16#3E453719,
+			16#3EC53719,
+			16#3F453719,
+			16#3E1DC5AE,
+			16#3E9DC5AE,
+			16#3F1DC5AE,
+			16#3DFC6F7C,
+			16#3E7C6F7C,
+			16#3EFC6F7C,
+			16#3F7C6F7C,
+			16#3E49F2CA,
+			16#3EC9F2CA,
+			16#3F49F2CA,
+			16#3E218F08,
+			16#3EA18F08,
+			16#3F218F08,
+			16#3E013F39,
+			16#3E813F39,
+			16#3F013F39,
+			16#3DCECB8F,
+			16#3E4ECB8F,
+			16#3ECECB8F,
+			16#3F4ECB8F,
+			16#3E256FA6,
+			16#3EA56FA6,
+			16#3F256FA6,
+			16#3E045951,
+			16#3E845951,
+			16#3F045951,
+			16#3DD3C21C,
+			16#3E53C21C,
+			16#3ED3C21C,
+			16#3F53C21C,
+			16#3E296816,
+			16#3EA96816,
+			16#3F296816,
+			16#3E078678,
+			16#3E878678,
+			16#3F078678,
+			16#3DD8D727,
+			16#3E58D727,
+			16#3ED8D727,
+			16#3F58D727,
+			16#3E2D78EC,
+			16#3EAD78EC,
+			16#3F2D78EC,
+			16#3E0AC723,
+			16#3E8AC723,
+			16#3F0AC723,
+			16#3DDE0B6B,
+			16#3E5E0B6B,
+			16#3EDE0B6B,
+			16#3F5E0B6B,
+			16#3E31A2BC,
+			16#3EB1A2BC,
+			16#3F31A2BC,
+			16#3E0E1BCA,
+			16#3E8E1BCA,
+			16#3F0E1BCA,
+			16#3DE35FA9,
+			16#3E635FA9,
+			16#3EE35FA9,
+			16#3F635FA9,
+			16#3E35E621,
+			16#3EB5E621,
+			16#3F35E621,
+			16#3E1184E7,
+			16#3E9184E7,
+			16#3F1184E7,
+			16#3DE8D4A5,
+			16#3E68D4A5,
+			16#3EE8D4A5,
+			16#3F68D4A5,
+			16#3E3A43B7,
+			16#3EBA43B7,
+			16#3F3A43B7,
+			16#3E1502F9,
+			16#3E9502F9,
+			16#3F1502F9,
+			16#3DEE6B28,
+			16#3E6E6B28,
+			16#3EEE6B28,
+			16#3F6E6B28,
+			16#3E3EBC20,
+			16#3EBEBC20,
+			16#3F3EBC20,
+			16#3E189680,
+			16#3E989680,
+			16#3F189680,
+			16#3DF42400,
+			16#3E742400,
+			16#3EF42400,
+			16#3F742400,
+			16#3E435000,
+			16#3EC35000,
+			16#3F435000,
+			16#3E1C4000,
+			16#3E9C4000,
+			16#3F1C4000,
+			16#3DFA0000,
+			16#3E7A0000,
+			16#3EFA0000,
+			16#3F7A0000,
+			16#3E480000,
+			16#3EC80000,
+			16#3F480000,
+			16#3E200000,
+			16#3EA00000,
+			16#3F200000,
+			16#3E000000,
+			16#3E800000,
+			16#3F000000,
+			16#3F800000,
+			16#3E4CCCCD,
+			16#3ECCCCCD,
+			16#3F4CCCCD,
+			16#3E23D70A,
+			16#3EA3D70A,
+			16#3F23D70A,
+			16#3E03126F,
+			16#3E83126F,
+			16#3F03126F,
+			16#3DD1B717,
+			16#3E51B717,
+			16#3ED1B717,
+			16#3F51B717,
+			16#3E27C5AC,
+			16#3EA7C5AC,
+			16#3F27C5AC,
+			16#3E0637BD,
+			16#3E8637BD,
+			16#3F0637BD,
+			16#3DD6BF95,
+			16#3E56BF95,
+			16#3ED6BF95,
+			16#3F56BF95,
+			16#3E2BCC77,
+			16#3EABCC77,
+			16#3F2BCC77,
+			16#3E09705F,
+			16#3E89705F,
+			16#3F09705F,
+			16#3DDBE6FF,
+			16#3E5BE6FF,
+			16#3EDBE6FF,
+			16#3F5BE6FF,
+			16#3E2FEBFF,
+			16#3EAFEBFF,
+			16#3F2FEBFF,
+			16#3E0CBCCC,
+			16#3E8CBCCC,
+			16#3F0CBCCC,
+			16#3DE12E13,
+			16#3E612E13,
+			16#3EE12E13,
+			16#3F612E13,
+			16#3E3424DC,
+			16#3EB424DC,
+			16#3F3424DC,
+			16#3E101D7D,
+			16#3E901D7D,
+			16#3F101D7D,
+			16#3DE69595,
+			16#3E669595,
+			16#3EE69595,
+			16#3F669595,
+			16#3E3877AA,
+			16#3EB877AA,
+			16#3F3877AA,
+			16#3E1392EF,
+			16#3E9392EF,
+			16#3F1392EF,
+			16#3DEC1E4A,
+			16#3E6C1E4A,
+			16#3EEC1E4A,
+			16#3F6C1E4A,
+			16#3E3CE508,
+			16#3EBCE508,
+			16#3F3CE508,
+			16#3E171DA0,
+			16#3E971DA0,
+			16#3F171DA0,
+			16#3DF1C901,
+			16#3E71C901,
+			16#3EF1C901,
+			16#3F71C901,
+			16#3E416D9A,
+			16#3EC16D9A,
+			16#3F416D9A,
+			16#3E1ABE15,
+			16#3E9ABE15,
+			16#3F1ABE15,
+			16#3DF79688,
+			16#3E779688,
+			16#3EF79688,
+			16#3F779688,
+			16#3E461206,
+			16#3EC61206,
+			16#3F461206,
+			16#3E1E74D2,
+			16#3E9E74D2,
+			16#3F1E74D2,
+			16#3DFD87B6,
+			16#3E7D87B6,
+			16#3EFD87B6,
+			16#3F7D87B6,
+			16#3E4AD2F8,
+			16#3ECAD2F8,
+			16#3F4AD2F8,
+			16#3E224260,
+			16#3EA24260,
+			16#3F224260,
+			16#3E01CEB3,
+			16#3E81CEB3,
+			16#3F01CEB3,
+			16#3DCFB11F,
+			16#3E4FB11F
+			];
+
+			FDEZ : ARRAY [0..254] OF DINT :=
+			[
+			1401298,
+			2802597,
+			5605194,
+			1121039,
+			2242078,
+			4484155,
+			8968310,
+			1793662,
+			3587324,
+			7174648,
+			1434930,
+			2869859,
+			5739719,
+			1147944,
+			2295887,
+			4591775,
+			9183550,
+			1836710,
+			3673420,
+			7346840,
+			1469368,
+			2938736,
+			5877472,
+			1175494,
+			2350989,
+			4701977,
+			9403955,
+			1880791,
+			3761582,
+			7523164,
+			1504633,
+			3009266,
+			6018531,
+			1203706,
+			2407412,
+			4814825,
+			9629650,
+			1925930,
+			3851860,
+			7703720,
+			1540744,
+			3081488,
+			6162976,
+			1232595,
+			2465190,
+			4930381,
+			9860761,
+			1972152,
+			3944305,
+			7888609,
+			1577722,
+			3155444,
+			6310887,
+			1262177,
+			2524355,
+			5048710,
+			1009742,
+			2019484,
+			4038968,
+			8077936,
+			1615587,
+			3231174,
+			6462349,
+			1292470,
+			2584939,
+			5169879,
+			1033976,
+			2067952,
+			4135903,
+			8271806,
+			1654361,
+			3308722,
+			6617445,
+			1323489,
+			2646978,
+			5293956,
+			1058791,
+			2117582,
+			4235165,
+			8470330,
+			1694066,
+			3388132,
+			6776264,
+			1355253,
+			2710505,
+			5421011,
+			1084202,
+			2168404,
+			4336809,
+			8673617,
+			1734723,
+			3469447,
+			6938894,
+			1387779,
+			2775558,
+			5551115,
+			1110223,
+			2220446,
+			4440892,
+			8881784,
+			1776357,
+			3552714,
+			7105427,
+			1421085,
+			2842171,
+			5684342,
+			1136868,
+			2273737,
+			4547473,
+			9094947,
+			1818989,
+			3637979,
+			7275957,
+			1455192,
+			2910383,
+			5820766,
+			1164153,
+			2328306,
+			4656613,
+			9313226,
+			1862645,
+			3725290,
+			7450581,
+			1490116,
+			2980232,
+			5960464,
+			1192093,
+			2384186,
+			4768372,
+			9536743,
+			1907349,
+			3814697,
+			7629395,
+			1525879,
+			3051758,
+			6103516,
+			1220703,
+			2441406,
+			4882813,
+			9765625,
+			1953125,
+			3906250,
+			7812500,
+			1562500,
+			3125000,
+			6250000,
+			1250000,
+			2500000,
+			5000000,
+			10000000,
+			2000000,
+			4000000,
+			8000000,
+			1600000,
+			3200000,
+			6400000,
+			1280000,
+			2560000,
+			5120000,
+			1024000,
+			2048000,
+			4096000,
+			8192000,
+			1638400,
+			3276800,
+			6553600,
+			1310720,
+			2621440,
+			5242880,
+			1048576,
+			2097152,
+			4194304,
+			8388608,
+			1677722,
+			3355443,
+			6710886,
+			1342177,
+			2684354,
+			5368709,
+			1073742,
+			2147484,
+			4294967,
+			8589935,
+			1717987,
+			3435974,
+			6871948,
+			1374390,
+			2748779,
+			5497558,
+			1099512,
+			2199023,
+			4398046,
+			8796093,
+			1759219,
+			3518437,
+			7036874,
+			1407375,
+			2814750,
+			5629500,
+			1125900,
+			2251800,
+			4503600,
+			9007199,
+			1801440,
+			3602880,
+			7205759,
+			1441152,
+			2882304,
+			5764608,
+			1152921,
+			2305843,
+			4611686,
+			9223372,
+			1844674,
+			3689349,
+			7378697,
+			1475739,
+			2951479,
+			5902958,
+			1180592,
+			2361183,
+			4722367,
+			9444733,
+			1888947,
+			3777893,
+			7555786,
+			1511157,
+			3022315,
+			6044629,
+			1208926,
+			2417852,
+			4835703,
+			9671407,
+			1934281,
+			3868563,
+			7737125,
+			1547425,
+			3094850,
+			6189700,
+			1237940,
+			2475880,
+			4951760,
+			9903520,
+			1980704,
+			3961408,
+			7922816,
+			1584563,
+			3169127,
+			6338253,
+			1267651,
+			2535301,
+			5070602,
+			1014121,
+			2028241
+			];
+
+			END_VAR
+
+			VAR_GLOBAL CONSTANT
+			EXP_MASK_REAL   : UDINT  := 16#7F800000 ;
+			EXP_OFFSET_REAL : INT    := 23 ;
+			MANT_MASK_REAL  : UDINT  := 16#007FFFFF ;
+			RES_EXP_REAL    : UINT   := 16#FF ;
+			EXP_BIAS_REAL   : INT    := 127 ;
+
+			{IF COMPILERVERSION(>=, '3.5.5.0')}
+			NAN_REAL : DWORD := 16#FFC00000;
+			PINF_REAL : DWORD := 16#7F800000;
+			NINF_REAL : DWORD := 16#FF800000;
+			{END_IF}
+			END_VAR
+
+			{implicit off}
+		</interface>
+	</global-interface>
+
+
+	<pou id = "A891EECE-CA29-4DB8-B9CF-C1A855C9FEAC" name = "new__real32__to__string">
+		<interface>
+			{attribute 'hide'}
+			// new and better way to convert single precision float values to string
+			{implicit on}
+			FUNCTION new__real32__to__string: STRING(25)(* Area: 0, Offset: 0x1760 (5984)*)
+			VAR_INPUT
+			in : REAL;(* Area: 65535, Offset: 0x0 (0)*)
+			dwType: DWORD;
+			END_VAR
+			VAR
+			index: INT;
+			pdw : POINTER TO DWORD;
+			dw : DWORD;
+
+			bSign : BOOL;
+			decexponent: INT;
+			binexponent: INT;
+			binmantissa: DINT;
+			decmantissa: DINT;
+			strMantissaRaw: STRING(12);
+			strMantissa: STRING(15);
+			pstrMantissa: POINTER TO BYTE;
+			nLen: INT;
+			i: INT;
+			bFirstChar: BOOL;
+			nNewExponent: INT;
+			nPointPosition: INT;
+			nIndexMantissaNew : INT;
+			bNan, bInf : BOOL;
+
+			Exponent : ARRAY [0..1] OF BYTE;
+			bNegExponent : BOOL;
+			nTens: BYTE;
+			nOnes: BYTE;
+
+			PF : POINTER TO REAL := ADR(__CONVERSION_CONSTANTS.F);
+
+			bContainsPoint : BOOL := FALSE;
+
+			END_VAR
+			VAR CONSTANT
+			CHAR_0 : BYTE := 16#30;
+			CHAR_POINT : BYTE := 16#2E;
+			CHAR_MINUS : BYTE := 16#2D;
+			CHAR_E : BYTE := 16#45;
+			END_VAR
+			{implicit off}
+		</interface>
+		<body>
+			<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+pdw := ADR(in);
+dw := pdw^;
+
+// special case of 0
+IF dw = 0 OR dw = 16#80000000 THEN
+	new__real32__to__string := '0.0';
+	RETURN;
+END_IF
+
+__ExtractReal(f := in, bS => bSign, iE => binexponent, diM => binmantissa, xNan => bNan, xInf => bInf);
+
+IF bNan THEN
+	new__real32__to__string := '#NaN';
+	RETURN;
+END_IF
+
+IF bInf THEN
+	new__real32__to__string := '#Inf';
+
+{IF COMPILERVERSION(>=, '3.5.5.0')}
+	IF (bSign) THEN
+		new__real32__to__string := '-#Inf';
+	END_IF
+{END_IF}
+
+	RETURN;
+END_IF
+
+index := binexponent + 126;
+decexponent := __CONVERSION_CONSTANTS.E[index];
+decmantissa := REAL_TO_DINT(PF[index]*DINT_TO_REAL(binmantissa));
+strMantissaRaw := DINT_TO_STRING(decmantissa);
+
+nLen := 0;
+
+FOR i := 0 TO 12 DO
+	IF strMantissaRaw[i] = 0 THEN
+		nLen := i;
+		EXIT;
+	END_IF
+END_FOR
+
+IF nLen > 12 THEN
+	// should never happen! maximal length is 8!
+	nLen := 12;
+END_IF
+bFirstChar := FALSE;
+nNewExponent := decexponent+nLen-1;
+nPointPosition := 1;
+
+// exponents between -4 and 8 are not displayed using E10
+IF (nNewExponent >= -4) AND (nNewExponent < 8) THEN
+	nPointPosition := nPointPosition + nNewExponent;
+	nNewExponent := 0;
+END_IF
+
+// fill result mantissa with end of string
+// so we don't have to care about correct ending
+{IF COMPILERVERSION(>=, '3.5.11.0')}
+FOR i := 0 TO sizeof(strMantissa)-1 DO
+	strMantissa[i] := 0; 
+END_FOR
+{ELSE}
+FOR i := 0 TO 13 DO
+	strMantissa[i] := 0; 
+END_FOR
+{END_IF}
+
+
+
+
+pstrMantissa := ADR(strMantissa);
+
+IF (bSign) THEN
+	pstrMantissa[0] := CHAR_MINUS;
+	pstrMantissa := pstrMantissa + 1;
+END_IF
+
+FOR i := nPointPosition-1 TO nLen-1 BY -1 DO
+	bFirstChar := TRUE;
+	pstrMantissa[i] := CHAR_0;	
+END_FOR
+
+nIndexMantissaNew := nLen-1;
+IF nPointPosition <= 0 THEN
+	nIndexMantissaNew := nIndexMantissaNew - nPointPosition + 2;
+ELSIF nPointPosition <= nLen-1 THEN
+	nIndexMantissaNew := nIndexMantissaNew + 1;
+END_IF
+
+
+FOR i := nLen-1 TO 0 BY -1 DO
+	// Skip trailing zeros
+	IF (nIndexMantissaNew = nPointPosition) THEN
+		IF (bFirstChar) THEN
+			pstrMantissa[nIndexMantissaNew] := CHAR_POINT; 
+			bContainsPoint := TRUE; 
+		END_IF
+		nIndexMantissaNew := nIndexMantissaNew - 1;
+		bFirstChar := TRUE; // no more skipping after decimal point			
+	END_IF
+	
+	IF (NOT(bFirstChar) AND strMantissaRaw[i] = CHAR_0) THEN
+		nIndexMantissaNew := nIndexMantissaNew - 1;	
+		CONTINUE;
+	END_IF
+	bFirstChar := TRUE;
+	pstrMantissa[nIndexMantissaNew] := strMantissaRaw[i];
+	nIndexMantissaNew := nIndexMantissaNew - 1;
+END_FOR
+
+WHILE nIndexMantissaNew > 1 DO
+	pstrMantissa[nIndexMantissaNew] := CHAR_0;
+	nIndexMantissaNew := nIndexMantissaNew - 1;
+END_WHILE
+IF nIndexMantissaNew = 1 THEN
+	pstrMantissa[1] := CHAR_POINT;	
+	pstrMantissa[0] := CHAR_0;	
+	bContainsPoint := TRUE; 
+END_IF
+
+IF nNewExponent <> 0 THEN
+
+	IF nNewExponent < 0 THEN
+		bNegExponent := TRUE;
+		nNewExponent := 0 - nNewExponent;
+	END_IF
+
+	nTens := INT_TO_BYTE(nNewExponent) / 10;
+	nOnes := INT_TO_BYTE(nNewExponent) MOD 10;
+	FOR i := 0 TO 12 DO
+		IF strMantissa[i] = 0 THEN
+			strMantissa[i] := CHAR_E; 
+			i := i + 1;
+			IF (bNegExponent) THEN
+				strMantissa[i] := CHAR_MINUS;
+				i := i + 1;
+			END_IF
+			strMantissa[i] := CHAR_0 + nTens;
+			strMantissa[i+1] := CHAR_0 + nOnes;
+			strMantissa[i+2] := 0;
+			EXIT;
+		END_IF
+	END_FOR
+ELSIF NOT(bContainsPoint) THEN
+	(*special code for whole numbers, some want to have trailing .0*)
+	FOR i := 0 TO 12 DO
+		IF strMantissa[i] = 0 THEN
+			strMantissa[i] := CHAR_POINT; 
+			strMantissa[i+1] := CHAR_0; 
+			strMantissa[i+2] := 0;
+			EXIT;
+		END_IF
+	END_FOR	
+END_IF
+
+new__real32__to__string := strMantissa;
+	
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+
+	<pou id = "B4FBE026-742B-4541-9A4B-A710DE7D376C" name = "__ExtractReal">
+		<interface>
+			{attribute 'hide'}
+			{implicit on}
+			FUNCTION __ExtractReal : BOOL
+			VAR_INPUT
+			f : REAL ;    // The floating point number to extract.
+			END_VAR
+			VAR_OUTPUT
+			bS   : BOOL ;
+			iE  : INT ;        // The  exponent
+			diM : DINT ;       // The mantissa
+			xNaN : BOOL ;      // True iff f is NaN, iE and diM are 0 in this case
+			xInf : BOOL ;      // True iff f is infinity, diM = 1 for +Infinity and -1 for -Infinity, iE is 0
+			END_VAR
+			VAR
+			uiE  : UINT ;
+			udiM : UDINT ;
+			END_VAR
+			{implicit off}
+		</interface>
+		<body>
+			<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+xNaN := FALSE ;
+xInf := FALSE ;
+  
+__ExtractRealRaw(f:=f, bs=>bs, uiE=>uiE, udiM=>udiM) ;
+IF uiE = 0 THEN
+ IF udiM = 0 THEN // zero
+  iE  := 0 ;
+  diM := 0 ;
+ ELSE // subnormal
+  iE  := 1-(__CONVERSION_CONSTANTS.EXP_BIAS_REAL(*+__CONVERSION_CONSTANTS.EXP_OFFSET_REAL*)) ;
+  diM := UDINT_TO_DINT(udiM) ;
+ END_IF
+ELSIF uiE = __CONVERSION_CONSTANTS.RES_EXP_REAL THEN // NaN or Infinity
+ iE := 0 ;
+ IF udiM = 0 THEN
+  diM  := SEL(bS, 1, -1) ;
+  xInf := TRUE ;
+ ELSE
+  diM  := 0 ;
+  xNaN := TRUE ;
+ END_IF
+ELSE
+ iE  := UINT_TO_INT(uiE) - (__CONVERSION_CONSTANTS.EXP_BIAS_REAL (*+ __CONVERSION_CONSTANTS.EXP_OFFSET_REAL*)) ;
+ diM := UDINT_TO_DINT(udiM OR SHL(UDINT#1,__CONVERSION_CONSTANTS.EXP_OFFSET_REAL)) ;
+END_IF
+	
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+
+	<pou id = "3D3AA07E-B7EC-4780-AF79-D77E0E2CB50F" name = "__ExtractRealRaw">
+		<interface>
+			{attribute 'hide'}
+			{implicit on}
+			/// Extracts the components of a REAL floating point number without
+			/// interpreting them.
+			/// Extracts the sign, (biased) exponent, and mantissa of a REAL value.
+			/// We assume the IEEE 754 binary32 format.
+			/// All values, including NaN and Infinity are supported.
+			/// See http://en.wikipedia.org/wiki/Single_precision_floating-point_format
+			FUNCTION __ExtractRealRaw : BOOL
+			VAR_INPUT
+			f : REAL ;    // The floating point number to extract.
+			END_VAR
+			VAR_OUTPUT
+			bS   : BOOL ;  // The sign bit
+			uiE  : UINT ;  // The (biased) exponent
+			udiM : UDINT ; // The mantissa as stored in the REAL, without the leading bit 24 set
+			END_VAR
+			VAR
+			pudi : POINTER TO UDINT ;
+			udi : UDINT ;
+			END_VAR
+			{implicit off}
+		</interface>
+		<body>
+			<![CDATA[
+		{implicit on}
+		{nobp}
+pudi := ADR(f) ;
+udi  := pudi^ ;
+bS   := SHR(udi, 31) <> 0 ;
+uiE  := UDINT_TO_UINT(SHR(udi AND __CONVERSION_CONSTANTS.EXP_MASK_REAL, __CONVERSION_CONSTANTS.EXP_OFFSET_REAL)) ;
+udiM := udi AND __CONVERSION_CONSTANTS.MANT_MASK_REAL ;
+		{noflow}
+		{implicit off}
+		]]>
+		</body>
+	</pou>
+
+	<pou id = "6E654C8D-212D-4593-9F3A-0ADD0687319C" name = "real32__to__string">
+		<interface>
+		{implicit on}
+		FUNCTION real32__to__string : STRING(255)
+		VAR_INPUT
+			in: REAL;		
+			dwType: DWORD;
+		END_VAR
+		VAR
+			sz : STRING;
+			pszHelp : POINTER TO BYTE;
+			pszSource : POINTER TO BYTE;
+			pszHelpSource : POINTER TO BYTE;
+			pszDest : POINTER TO BYTE;
+			nSign : DINT := 1;
+			i : DINT;
+			iExp10 : DINT;
+			nExpSign : DINT := 1;
+		END_VAR
+		{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		pszDest := ADR(real32__to__string);
+		pszHelp := ADR(sz);
+
+		// If dwType REAL just use first 6 Numbers
+		IF (dwType = __TypeClass.TYPE_REAL) THEN
+			IF (in < 0) THEN
+				i := TRUNC(LOG(-in));
+			ELSIF (in >0) THEN
+				i := TRUNC(LOG(in));
+			ELSE
+				i := 0;
+			END_IF      
+      {IF COMPILERVERSION(>=, '3.4.4.0')}
+			  IF (in >= 0) THEN
+				  in := in * TRUNC(EXPT(10,6-i)) + 0.5;
+			  ELSE
+				  in := in * TRUNC(EXPT(10,6-i)) - 0.5;
+			  END_IF			
+			 {IF COMPILERVERSION(>=, '3.4.5.70')}	 
+					IF (i > 6) THEN
+						in := DINT_TO_REAL(TRUNC(in)) / EXPT(10,6-i);
+					ELSE
+						in := DINT_TO_REAL(TRUNC(in)) / TRUNC(EXPT(10,6-i));
+					END_IF      
+				{ELSE}      
+  					in := DINT_TO_REAL(TRUNC(in)) / TRUNC(EXPT(10,6-i));      
+				{END_IF}
+      {ELSE}      
+			  IF (in >= 0) THEN
+				  in := in * EXPT(10,6-i) + 0.5;
+			  ELSE
+				  in := in * EXPT(10,6-i) - 0.5;
+			  END_IF
+			  in := DINT_TO_REAL(TRUNC(in)) / EXPT(10,6-i);
+      {END_IF}      
+			i := 0;
+		END_IF
+		// Emit sign
+		IF (in < 0) THEN
+			pszDest[0] := BYTE#16#2d;
+			pszDest := pszDest + 1;
+			nSign := -1;
+		END_IF	
+		IF (in = 0) THEN
+			pszDest[0] := 16#30; //'0';
+			pszDest[1] := 16#2e;//'.';
+			pszDest[2] := 16#30;
+			pszDest[3] := 0;//'\0';
+		ELSE
+			__HelpReal32Convert(DINT_TO_REAL(nSign) * in,ADR(pszHelp),ADR(iExp10));
+			pszSource := ADR(sz);
+			IF(iExp10 >= 0 AND iExp10 < 14) THEN
+				FOR(i := 0) TO iExp10 DO
+					pszDest[i] := pszSource[i];
+				END_FOR
+				pszDest[i] := 16#2e;//'.';
+				pszDest := pszDest + i + 1;
+				pszSource := pszSource + i;
+				WHILE (pszSource[0] <> 0) DO
+					pszDest[0] := pszSource[0];
+					pszDest := pszDest + 1;
+					pszSource := pszSource + 1;
+					IF(pszSource[0] = 16#30) THEN //'0'
+						pszHelpSource := pszSource;
+						WHILE (pszHelpSource[0] = 16#30) DO
+							pszHelpSource := pszHelpSource + 1;
+						END_WHILE
+						IF (pszHelpSource[0] = 0) THEN
+							EXIT;
+						END_IF
+					END_IF
+				END_WHILE
+				pszDest[0] := 0;//'\0';
+			ELSIF (iExp10 >= 14 OR iExp10 <0) THEN
+				pszDest[0] := pszSource[0];
+				pszDest[1] := 16#2e;//'.';
+				pszDest := pszDest + 2;
+				pszSource := pszSource + 1;
+				WHILE (pszSource[0] <> 0) DO
+					pszDest[0] := pszSource[0];
+					pszDest := pszDest + 1;
+					pszSource := pszSource + 1;
+					IF(pszSource[0] = 16#30) THEN //'0'
+						pszHelpSource := pszSource;
+						WHILE (pszHelpSource[0] = 16#30) DO
+							pszHelpSource := pszHelpSource+1;
+						END_WHILE
+						IF (pszHelpSource[0] = 0) THEN
+							EXIT;
+						END_IF
+					END_IF
+				END_WHILE
+				pszDest[0] := 16#65; //'e';
+				pszDest := pszDest + 1;
+				IF (iExp10 < 0) THEN
+					pszDest[0] := BYTE#16#2d;
+					pszDest := pszDest + 1;
+					nExpSign := -1;
+				END_IF
+				__HelpConvert(DINT_TO_UDINT((nExpSign) * iExp10),ADR(pszDest),1);
+				pszDest[0] := 0;
+			END_IF
+		END_IF
+		{implicit off}
+		]]>		
+		</body>
+	</pou>	
+	<pou id = "3FDAD988-BFC9-4de5-969F-FAF6F3C2A2E7" name = "string__to__real32">
+		<interface>
+			{implicit on}
+			FUNCTION string__to__real32 : REAL
+			VAR_INPUT
+			in: STRING(255);
+			END_VAR
+			VAR
+			d : REAL := 1;
+			dRealVal : REAL := 0;
+			iExp : DINT := 0;
+			nSign : DINT := 1;
+			pstr : POINTER TO BYTE := ADR(in);
+			iSign: INT;
+			{IF COMPILERVERSION(>=, '3.5.5.0')}
+			pdwHelp : POINTER TO DWORD := ADR(string__to__real32);
+			{END_IF}
+
+			END_VAR
+			{implicit off}
+		</interface>
+		<body>
+		<![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+		__SkipWhiteSpace(ADR(pstr));
+
+		IF (pstr[0] = BYTE#16#2d) (*'-'*) THEN
+			nSign := -1;
+			pstr := pstr+1;
+		ELSIF (pstr[0] = 16#2b (*'+'*)) THEN
+			pstr := pstr+1;
+		END_IF
+			
+{IF COMPILERVERSION(>=, '3.5.5.0')}
+IF pstr[0] =  16#23 (*''#*)THEN
+	IF pstr[1] = 16#4E (*N*)
+		AND pstr[2] = 16#61 (*a*)
+		AND pstr[3] = 16#4E (*N*)
+	THEN
+		pdwHelp^ := __CONVERSION_CONSTANTS.NAN_REAL;
+		RETURN;
+	END_IF
+	IF pstr[1] = 16#49 (*I*)
+		AND pstr[2] = 16#6E (*n*)
+		AND pstr[3] = 16#66 (*f*)
+	THEN
+		IF nSign = -1 THEN
+			pdwHelp^ := __CONVERSION_CONSTANTS.NINF_REAL;
+		ELSE
+			pdwHelp^ := __CONVERSION_CONSTANTS.PINF_REAL;
+		END_IF
+		RETURN;
+	END_IF
+END_IF
+{END_IF}
+	
+		WHILE ((pstr[0] >= 16#30 (*'0'*) AND pstr[0] <= 16#39 (*'9'*)) OR pstr[0] = 16#5f (*'_'*))
+		DO
+			IF (pstr[0] <> 16#5f) THEN
+				dRealVal := dRealVal * 10 + pstr[0] - 16#30;
+			END_IF
+			pstr := pstr+1;
+		END_WHILE
+
+		IF (pstr[0] = 16#2e (*'.'*)) THEN
+			pstr := pstr+1;
+			WHILE ((pstr[0] >= 16#30 (*'0'*) AND pstr[0] <= 16#39 (*'9'*)) OR pstr[0] = 16#5f (*'_'*))
+			DO 
+				IF (pstr[0] <> 16#5f) THEN
+					d := d / 10.0;
+					dRealVal := dRealVal + (pstr[0] - 16#30) * d;
+				END_IF
+				pstr := pstr+1;
+			END_WHILE
+		END_IF
+
+		IF (pstr[0] = 16#65 (*'e'*) OR pstr[0] = 16#45 (*'E'*)) THEN
+			iSign := 1;
+			pstr := pstr+1;
+			IF (pstr[0] = 16#2d(*'-'*)) THEN
+				iSign := -1;
+				pstr := pstr+1;
+			ELSIF (pstr[0] = 16#2b (*'+'*)) THEN
+				pstr := pstr+1;
+			END_IF
+
+			WHILE ((pstr[0] >= 16#30 (*'0'*) AND pstr[0] <= 16#39 (*'9'*)) OR pstr[0] = 16#5f (*'_'*))
+			DO
+				IF (pstr[0] <> 16#5f) THEN
+					iExp := iExp * 10 + pstr[0] - 16#30;
+				END_IF
+				pstr := pstr+1;
+			END_WHILE
+			dRealVal := dRealVal * EXPT(10.0, iExp * iSign);
+		END_IF
+		string__to__real32 := DINT_TO_REAL(nSign) * dRealVal;
+		{implicit off}
+		]]>		
+		</body>
+	</pou>
+	<data-type id = "5181460B-9464-4c0f-82F2-1F9633A4C34E" name = "VERSION">
+		<interface>
+			/// A structure representing the version information of a software or firmware component. 
+			TYPE VERSION :
+			STRUCT
+			/// The major version number. This is typically incremented for significant releases that may include major new features or changes.
+			uiMajor : UINT;
+			/// The minor version number. This is incremented for releases that add smaller features or improvements and may include significant fixes.
+			uiMinor : UINT;
+			/// The service pack number. This is used to indicate updates that usually include bug fixes, performance improvements, and minor feature enhancements.
+			uiServicePack : UINT;
+			/// The patch number. This is incremented for very small changes or bug fixes that do not significantly alter the functionality.
+			uiPatch : UINT;
+			END_STRUCT
+			END_TYPE
+		</interface>
+	</data-type>
+</language-model>

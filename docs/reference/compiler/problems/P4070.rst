@@ -1,0 +1,34 @@
+=====
+P4070
+=====
+
+.. problem-summary:: P4070
+
+This error occurs when a source uses the incomplete array type
+``ARRAY[*] OF T`` without enabling it. IEC 61131-3 declares an array as one
+or more index ranges (``ARRAY [ 1..3 ] OF INT``); CODESYS adds the ``*``
+form, whose element count is supplied by the caller of the POU, so it is
+gated behind ``--allow-incomplete-array``.
+
+Example
+-------
+
+The following code will generate error P4070:
+
+.. code-block::
+
+   TYPE DataBuffer : ARRAY[*] OF INT; END_TYPE
+
+The parser accepts ``*`` in every dialect — the grammar cannot see the
+flag — so this token-stream rule is what reports the error.
+
+To fix this error, declare the index range the array uses:
+
+.. code-block::
+
+   TYPE DataBuffer : ARRAY[0..9] OF INT; END_TYPE
+
+Or enable the incomplete form:
+
+.. |flag| replace:: ``--allow-incomplete-array``
+.. include:: /includes/enabled-by-flag.rst

@@ -1,0 +1,26 @@
+=====
+V4012
+=====
+
+.. problem-summary:: V4012
+
+A command that requires a staged candidate — ``testEdits``, ``assembleEdits``,
+or ``cancelEdits`` — arrived while no candidate is staged. The runtime stages
+nothing implicitly: ``acceptEdits`` must succeed first, and its refusal codes
+(V4007 through V4016) leave no candidate behind.
+
+Example
+-------
+
+A session asks to test before anything has been accepted:
+
+.. code-block::
+
+   {"command":"testEdits"}
+   {"response":"error","vCode":"V4012","message":"no candidate is staged"}
+
+To fix this error, send ``acceptEdits`` with the compiled candidate container
+first and check that it answers ``ack`` — then repeat the refused command. If
+an earlier ``acceptEdits`` answered with an error, resolve that code first;
+the stage never partially applies. See :doc:`V4013` when a candidate is
+already staged and the new edit must replace it.

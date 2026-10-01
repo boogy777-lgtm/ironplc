@@ -29,7 +29,7 @@
 //!
 //! Temp buffers form a stack. An allocating instruction takes the next
 //! slot; `STR_STORE_VAR` and `STR_STORE_ARRAY_ELEM` hand a slot back once
-//! they have copied its contents into the data region (ADR-0052). So the
+//! they have copied its contents into the data region (ADR-0067). So the
 //! question "does the pool overflow" is "how deep does that stack get",
 //! which is a path property, decided here by abstract interpretation over
 //! each function's control-flow graph — over the bytecode in the container,
@@ -218,7 +218,9 @@ fn walk_function(
     work.push_back(0);
 
     while let Some(pc) = work.pop_front() {
-        let depth = depth_at[pc].expect("queued offsets always carry a depth");
+        let Some(depth) = depth_at[pc] else {
+            continue;
+        };
         if pc == len {
             continue;
         }

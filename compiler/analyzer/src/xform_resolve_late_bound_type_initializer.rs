@@ -27,7 +27,13 @@ enum TypeDefinitionKind {
     Subrange,
     Simple,
     Array,
+    /// A `PARAMS(n) OF T` list, carrying the count and the element type it
+    /// was declared with so a variable of the named type keeps the spelling.
+    Params(IntegerRef, TypeName),
     Structure,
+    /// `UNION ... END_UNION`. Resolved like a structure; the members are
+    /// not overlaid yet (see `UnionDeclaration`).
+    Union,
     StructureInitialization,
     String(StringType, IntegerRef),
     FunctionBlock,
@@ -100,8 +106,15 @@ impl Visitor<Diagnostic> for ScopedTable<'_, TypeName, TypeDefinitionKind> {
             DataTypeDeclarationKind::Array(node) => {
                 self.add_if_new(&node.type_name, TypeDefinitionKind::Array)
             }
+            DataTypeDeclarationKind::Params(node) => self.add_if_new(
+                &node.type_name,
+                TypeDefinitionKind::Params(node.spec.count.clone(), node.spec.type_name.clone()),
+            ),
             DataTypeDeclarationKind::Structure(node) => {
                 self.add_if_new(&node.type_name, TypeDefinitionKind::Structure)
+            }
+            DataTypeDeclarationKind::Union(node) => {
+                self.add_if_new(&node.type_name, TypeDefinitionKind::Union)
             }
             DataTypeDeclarationKind::StructureInitialization(node) => {
                 self.add_if_new(&node.type_name, TypeDefinitionKind::StructureInitialization)
@@ -159,9 +172,9 @@ impl TypeResolver<'_> {
         }
         self.types.find(name).map(|kind| match kind {
             TypeDefinitionKind::FunctionBlock => ResolvedKind::FunctionBlock,
-            TypeDefinitionKind::Structure | TypeDefinitionKind::StructureInitialization => {
-                ResolvedKind::Structure
-            }
+            TypeDefinitionKind::Structure
+            | TypeDefinitionKind::Union
+            | TypeDefinitionKind::StructureInitialization => ResolvedKind::Structure,
             TypeDefinitionKind::Enumeration => ResolvedKind::Enumeration,
             _ => ResolvedKind::Other,
         })
@@ -293,12 +306,14 @@ impl Fold<Diagnostic> for TypeResolver<'_> {
                                 },
                             ))
                         }
-                        TypeDefinitionKind::Structure => Ok(InitialValueAssignmentKind::Structure(
-                            StructureInitializationDeclaration {
-                                type_name: name,
-                                elements_init: vec![],
-                            },
-                        )),
+                        TypeDefinitionKind::Structure | TypeDefinitionKind::Union => {
+                            Ok(InitialValueAssignmentKind::Structure(
+                                StructureInitializationDeclaration {
+                                    type_name: name,
+                                    elements_init: vec![],
+                                },
+                            ))
+                        }
                         TypeDefinitionKind::String(width, length) => {
                             Ok(InitialValueAssignmentKind::String(StringInitializer {
                                 length: Some(length.clone()),
@@ -316,6 +331,15 @@ impl Fold<Diagnostic> for TypeResolver<'_> {
                                 initial_values: vec![],
                             },
                         )),
+                        // Like an array alias, a variable declared against a
+                        // named PARAMS type keeps the spelling it declared
+                        // with; the type resolver lowers it the same way.
+                        TypeDefinitionKind::Params(count, element) => {
+                            Ok(InitialValueAssignmentKind::Params(ParamsSpecification {
+                                count: count.clone(),
+                                type_name: element.clone(),
+                            }))
+                        }
                         TypeDefinitionKind::Reference(ref_target) => Ok(
                             InitialValueAssignmentKind::Reference(ReferenceInitializer {
                                 target: ref_target.clone(),

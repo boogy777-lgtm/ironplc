@@ -1,0 +1,25 @@
+=====
+V6011
+=====
+
+.. problem-summary:: V6011
+
+``ironplcvm serve`` could not read a command line from stdin or write a
+response line to stdout — the stream was closed mid-session, the disk filled,
+or the underlying I/O failed. The command session ends immediately and the
+process exits.
+
+The session itself keeps no state on disk: every command was answered before
+the failure, and restarting ``serve`` loads the container from its file
+again, with the staged-candidate state of the previous session gone with the
+process.
+
+Solutions
+---------
+
+1. Keep stdin open for the lifetime of the session; close it only when the
+   commands are complete (EOF ends the session cleanly with exit code 0)
+2. When scripting, send one command line per line and read one response line
+   per command — a response arrives before the next command is processed
+3. Check that stdout is not redirected to a full disk or a closed pipe
+4. Retry the session; the container file on disk is unchanged

@@ -76,6 +76,26 @@ Informational Commands
 :program:`ironplcc version`
    Print the version number of the compiler.
 
+Refactor Commands
+-----------------
+
+:program:`ironplcc refactor sync-uids` [*FILES*...]
+   Reconcile the project's stable variable UID sidecar (``<stem>.uids.json``)
+   with the declarations in the source files. Unchanged variables keep their
+   UID, new variables are assigned the next UID monotonically, and removed
+   variables are dropped. The command prints a report of preserved, assigned,
+   and removed variables, plus rename candidates (exactly one removed and one
+   added variable) and swap candidates (exactly two of each); the candidates
+   are heuristics for the user to resolve, never applied automatically. A
+   project that does not analyze cleanly leaves the sidecar untouched.
+
+:program:`ironplcc refactor map-uid` *PROJECT* *OLD-SCOPE* *OLD-NAME* *NEW-SCOPE* *NEW-NAME*
+   Record an explicit rename or swap resolution in the project's stable
+   variable UID sidecar by moving the UID of the old ``(scope, name)`` key to
+   the new one. The scope of a program variable is the program's name; the
+   scope of a top-level ``VAR_GLOBAL`` declaration is ``global``. The command
+   fails when the old key has no UID or the new key already has one.
+
 Other Commands
 --------------
 
@@ -313,6 +333,126 @@ Options
    the innermost ``FOR``, ``WHILE``, or ``REPEAT`` loop. ``CONTINUE`` was added
    in IEC 61131-3:2013 (Edition 3); without this flag it is an ordinary
    identifier.
+
+``--allow-union-type``
+   Allow ``UNION ... END_UNION`` type declarations inside a ``TYPE`` block:
+   the members share one storage location instead of each getting its own.
+   ``UNION`` was standardized in IEC 61131-3:2013 (Edition 3); without this
+   flag both words are ordinary identifiers.
+
+``--allow-var-stat``
+   Allow ``VAR_STAT ... END_VAR`` variable sections, whose declarations keep
+   their value between calls of the program, function, or function block
+   they are declared in. Without this flag ``VAR_STAT`` is an ordinary
+   identifier.
+
+``--allow-var-inst``
+   Allow ``VAR_INST ... END_VAR`` variable sections in a method, whose
+   declarations belong to the method's instance rather than to one call.
+   Without this flag ``VAR_INST`` is an ordinary identifier.
+
+``--allow-var-generic``
+   Allow ``VAR_GENERIC ... END_VAR`` variable sections directly after a
+   function block's name, declaring the function block's generic constants.
+   Without this flag ``VAR_GENERIC`` is an ordinary identifier.
+
+``--allow-namespace``
+   Allow ``NAMESPACE name ... END_NAMESPACE``, which groups the declarations
+   it contains. Without this flag ``NAMESPACE`` and ``END_NAMESPACE`` are
+   ordinary identifiers.
+
+``--allow-begin-implementation``
+   Allow the ``__BEGIN_IMPLEMENTATION`` marker that begins a POU's
+   implementation section in a CODESYS textual export. The marker carries no
+   behavior; without this flag it is an ordinary identifier.
+
+``--allow-bit-type``
+   Allow the ``BIT`` one-bit type, as a declaration type (``b : BIT;``) and as
+   a literal prefix (``BIT#0``, ``BIT#1``). IEC 61131-3 has no one-bit
+   elementary type; the compiler stores a ``BIT`` as a ``BOOL``. Without this
+   flag ``bit`` is an ordinary identifier, so a program may use it as a
+   variable name.
+
+``--allow-try-catch``
+   Allow the CODESYS exception handling statements ``__TRY``, ``__CATCH``,
+   ``__FINALLY``, ``__ENDTRY`` and ``__THROW``. This is an extension not part
+   of the IEC 61131-3 standard; without the flag the five words are ordinary
+   identifiers. A ``__THROW`` with no enclosing ``__TRY`` that has a
+   ``__CATCH`` clause produces
+   :doc:`P4066 </reference/compiler/problems/P4066>`.
+
+``--allow-params-of``
+   Allow the CODESYS parameter-list data type ``PARAMS(n) OF T``, a list of
+   ``n`` parameters of type ``T`` whose elements are addressed by index like
+   an array. Without this flag ``PARAMS`` is an ordinary identifier, so
+   ``params`` remains usable as a variable name.
+
+``--allow-incomplete-array``
+   Allow the CODESYS incomplete array type ``ARRAY[*] OF T``, whose bounds
+   the caller of the POU supplies. Produces
+   :doc:`P4070 </reference/compiler/problems/P4070>` when used without this
+   flag.
+
+``--allow-escaped-identifiers``
+   Allow escaped (backtick) identifiers such as ``\`my name\```, which may
+   contain characters an ordinary identifier cannot. A CODESYS extension
+   (non-compliant identifiers). Produces
+   :doc:`P4067 </reference/compiler/problems/P4067>` when used without this
+   flag.
+
+``--allow-unicode-identifiers``
+   Allow identifiers with letters outside the ASCII range. A CODESYS scanner
+   option that is off there by default as well, so no dialect enables it.
+   Produces :doc:`P4068 </reference/compiler/problems/P4068>` when used
+   without this flag.
+
+``--allow-multiple-underscores``
+   Allow consecutive underscores inside an identifier, e.g. ``my__var``.
+   CODESYS and TwinCAT reject them by default
+   (``AllowMultipleUnderlines=false``). The leading ``__`` is the compiler's
+   reserved namespace (``__SYSTEM_UP_TIME``, ``__TRUNC``) and is always
+   allowed. Produces :doc:`P4069 </reference/compiler/problems/P4069>` when
+   used without this flag.
+
+``--allow-jump-statement``
+   Allow the ``JMP`` statement and the ``label:`` statement labels it
+   targets, in the style of a low-level jump instruction. A label names a
+   statement in the same POU body; a ``JMP`` to a name no label defines
+   produces :doc:`P0027 </reference/compiler/problems/P0027>`, and defining
+   the same label name twice produces
+   :doc:`P0042 </reference/compiler/problems/P0042>`. This is a CODESYS
+   statement extension; without this flag a ``JMP`` statement is a syntax
+   error.
+
+``--allow-calc-statement``
+   Allow the CODESYS ``CALC`` conditional call statement,
+   ``CALC(condition, instance call);``, which calls the function block
+   instance only when the condition is true. Without this flag the same text
+   is an ordinary function block invocation of a POU named ``CALC``.
+
+``--allow-wait-statement``
+   Allow the CODESYS ``__WAIT`` wait statement, bare (``__WAIT;``) and with a
+   condition (``__WAIT(b);``). This is a CODESYS statement extension; without
+   this flag ``__WAIT;`` is a syntax error.
+
+``--allow-nested-comments``
+   Allow ``(* ... *)`` block comments to nest, so an inner comment opens and
+   closes inside an outer one: ``(* a (* b *) c *)``. IEC 61131-3 block
+   comments do not nest; without this flag the first ``*)`` ends the comment
+   and the remaining text is parsed as code.
+
+``--allow-pragma-if``
+   Allow the conditional-compilation pragmas ``{IF}``, ``{ELSIF}``,
+   ``{ELSE}``, ``{END_IF}``, ``{DEFINE}`` and ``{UNDEFINE}``. ``{DEFINE name}``
+   and ``{UNDEFINE name}`` change the names in effect for the conditions that
+   follow them; a condition may combine ``defined(name)``, ``TRUE``,
+   ``FALSE``, ``NOT``, ``AND``, ``OR`` and parentheses, and only the taken
+   branch reaches the parser. An ``{IF}`` with no matching ``{END_IF}`` (or a
+   stray branch pragma) produces
+   :doc:`P0023 </reference/compiler/problems/P0023>`; a missing or
+   unevaluable condition produces
+   :doc:`P0024 </reference/compiler/problems/P0024>`. Without this flag the
+   pragmas stay trivia and both branches reach the parser.
 
 ``--policy-string-to-num-non-numeric`` *ALTERNATIVE*
    Select what ``STRING_TO_<numeric>`` treats as convertible when the string

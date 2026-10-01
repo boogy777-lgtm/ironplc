@@ -43,6 +43,22 @@ use crate::{
 ///   (Beckhoff TwinCAT/CODESYS extension).
 /// * **`CONTINUE`** — demoted unless `allow_continue` (standardized in
 ///   IEC 61131-3:2013).
+/// * **`UNION`, `END_UNION`** — demoted unless `allow_union_type`
+///   (standardized in IEC 61131-3:2013).
+/// * **`VAR_STAT`, `VAR_INST`, `VAR_GENERIC`** — each demoted unless its own
+///   `allow_var_*` flag.
+/// * **`NAMESPACE`, `END_NAMESPACE`** — demoted unless `allow_namespace`.
+/// * **`__BEGIN_IMPLEMENTATION`** — demoted unless
+///   `allow_begin_implementation`.
+/// * **`BIT`** — demoted unless `allow_bit_type` (CODESYS/TwinCAT one-bit
+///   type; `bit` is a legal variable name elsewhere).
+/// * **`__TRY`/`__ENDTRY`/`__CATCH`/`__FINALLY`/`__THROW`** — demoted unless
+///   `allow_try_catch` (CODESYS exception handling).
+/// * **`JMP`, `CALC`, `__WAIT`** — demoted unless `allow_jump_statement`,
+///   `allow_calc_statement` and `allow_wait_statement` respectively (CODESYS
+///   Instruction-List-derived statements in Structured Text).
+/// * **`PARAMS`** — demoted unless `allow_params_of` (CODESYS parameter-list
+///   type `PARAMS(n) OF T`; `params` is a common variable name).
 ///
 /// The context-sensitive `TIME` keyword is handled by [`apply_time`].
 pub fn apply(tokens: &mut [Token], options: &CompilerOptions) {
@@ -55,6 +71,18 @@ pub fn apply(tokens: &mut [Token], options: &CompilerOptions) {
     let demote_short_circuit = !options.allow_short_circuit_operators;
     let demote_persistent = !options.allow_persistent_var;
     let demote_continue = !options.allow_continue;
+    let demote_union = !options.allow_union_type;
+    let demote_var_stat = !options.allow_var_stat;
+    let demote_var_inst = !options.allow_var_inst;
+    let demote_var_generic = !options.allow_var_generic;
+    let demote_namespace = !options.allow_namespace;
+    let demote_begin_implementation = !options.allow_begin_implementation;
+    let demote_bit = !options.allow_bit_type;
+    let demote_try_catch = !options.allow_try_catch;
+    let demote_jump = !options.allow_jump_statement;
+    let demote_calc = !options.allow_calc_statement;
+    let demote_wait = !options.allow_wait_statement;
+    let demote_params = !options.allow_params_of;
 
     for tok in tokens.iter_mut() {
         let demote = match tok.token_type {
@@ -80,6 +108,22 @@ pub fn apply(tokens: &mut [Token], options: &CompilerOptions) {
             TokenType::AndThen | TokenType::OrElse => demote_short_circuit,
             TokenType::Persistent => demote_persistent,
             TokenType::Continue => demote_continue,
+            TokenType::Union | TokenType::EndUnion => demote_union,
+            TokenType::VarStat => demote_var_stat,
+            TokenType::VarInst => demote_var_inst,
+            TokenType::VarGeneric => demote_var_generic,
+            TokenType::Namespace | TokenType::EndNamespace => demote_namespace,
+            TokenType::BeginImplementation => demote_begin_implementation,
+            TokenType::Bit => demote_bit,
+            TokenType::Try
+            | TokenType::EndTry
+            | TokenType::Catch
+            | TokenType::Finally
+            | TokenType::Throw => demote_try_catch,
+            TokenType::Jmp => demote_jump,
+            TokenType::Calc => demote_calc,
+            TokenType::Wait => demote_wait,
+            TokenType::Params => demote_params,
             _ => false,
         };
         if demote {

@@ -1,0 +1,401 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{A9F0D486-8CEF-4720-ADC2-4EA9701E401F}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>Objects</RootNamespace>
+    <AssemblyName>Objects</AssemblyName>
+    <TargetFrameworkVersion>v2.0</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="ComponentModel">
+      <HintPath>..\..\..\Program Files\CODESYS 3.5.22.10\CODESYS\Common\ComponentModel.dll</HintPath>
+    </Reference>
+    <Reference Include="MessageStorage">
+      <HintPath>..\..\..\Program Files\CODESYS 3.5.22.10\CODESYS\Common\MessageStorage.dll</HintPath>
+    </Reference>
+    <Reference Include="OptionStorage">
+      <HintPath>..\..\..\Program Files\CODESYS 3.5.22.10\CODESYS\Common\OptionStorage.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+  </ItemGroup>
+  <ItemGroup>
+    <AppDesigner Include="Properties\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="CODESYS\Objects\Attributes\StorageIgnoreDataSkippedAttribute.cs" />
+    <Compile Include="CODESYS\Objects\Project\IProjectRecoveryInformation.cs" />
+    <Compile Include="CODESYS\Objects\Project\IProjectRecoveryService.cs" />
+    <Compile Include="CODESYS\Objects\Project\ProjectRecoveryFiles.cs" />
+    <Compile Include="CODESYS\Objects\Properties\Resources.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="_3S\CoDeSys\Core\IEditorFactoryManager.cs" />
+    <Compile Include="_3S\CoDeSys\Core\IEditorManager.cs" />
+    <Compile Include="_3S\CoDeSys\Core\IProject.cs" />
+    <Compile Include="_3S\CoDeSys\Core\IProject2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\IProject3.cs" />
+    <Compile Include="_3S\CoDeSys\Core\IProject4.cs" />
+    <Compile Include="_3S\CoDeSys\Core\IProject5.cs" />
+    <Compile Include="_3S\CoDeSys\Core\IProject6.cs" />
+    <Compile Include="_3S\CoDeSys\Core\IProject7.cs" />
+    <Compile Include="_3S\CoDeSys\Core\IProject8.cs" />
+    <Compile Include="_3S\CoDeSys\Core\IProject9.cs" />
+    <Compile Include="_3S\CoDeSys\Core\IProjects.cs" />
+    <Compile Include="_3S\CoDeSys\Core\IProjects2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\IProjects3.cs" />
+    <Compile Include="_3S\CoDeSys\Core\IProjects4.cs" />
+    <Compile Include="_3S\CoDeSys\Core\IProjects5.cs" />
+    <Compile Include="_3S\CoDeSys\Core\MissingTypeInformation2ListFormatter.cs" />
+    <Compile Include="_3S\CoDeSys\Core\MissingTypeInformationListFormatter.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ActionContext.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\AddObjectConstraintException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\AuxiliaryFileException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ChildObjectIsAncestorException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\DefaultDuplicationAttribute.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\DefaultSerializationAttribute.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\DeleteObjectConstraintException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\DongleRequiredException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\DuplicationMethod.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\FindChangesFlags.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\GenericCollectionSerializationMode.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\GenericObject.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\GenericObject2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\HiddenObjectAdornerContext.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\HiddenObjectAdornerParameters.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IArchivable.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IArchivable2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IArchivable3.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IArchivable4.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IArchivable5.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IArchivable6.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IArchiveReader.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IArchiveReader2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IArchiveReader3.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IArchiveReporter.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IArchiveReporter2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IArchiveVersionInfo.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IArchiveWriter.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IArchiveWriter2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IArchiveWriter3.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IArchiveWriter4.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ICompiledLibraryAmendableMetaObject.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IContextBasedSelection.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IDocumentationProperty.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IDongleEncryption.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IEarlyObjectManagerEvents.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IEarlyStructuredViewEvents.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IEditor.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IEditorBasedFindReplace.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IEditorFactory.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IEmbeddedObject.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IFindReplace.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IFindReplace2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IFindReplace3.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IFolderObject.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IFreezableSelection.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IGenerateableObject.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IGeneratedObjectProtector.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IGenericObject.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IGenericObjectService.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IGenericObjectServiceFactory.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IHasDocumentation.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IHasLocalizedDisplayName.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IHiddenObject.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IHiddenObjectAdorner.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IHiddenObjectAdorner2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IIncompleteDeserializationInfo.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IKnowMyOrderedSubObjectsInAdvance.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IMergeableObject.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IMetaObject.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IMetaObject2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IMetaObject3.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IMetaObject4.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IMetaObject5.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IMetaObject6.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IMetaObject7.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IMetaObject8.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IMetaObject9.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IMetaObjectStub.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IMetaObjectStub2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IMetaObjectStub3.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IMetaObjectStub4.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IMetaObjectStub5.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IMetaObjectStub6.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\INotifyAfterFindReplaceEndAction.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\InvalidObjectGuidException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\InvalidProjectHandleException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IObject.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IObject2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IObjectAccessProperty.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IObjectAccessProperty2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IObjectMerger.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IObjectNameConflictChecker.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IObjectNameConflictChecker2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IObjectProperty.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IObjectRelationshipCheckProvider.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IObjectWithCustomEditHandling.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IObjectWithStructureExtension.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IOnlineUsedTransientObject.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IOrderedSubObjects.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IOrderedSubObjects2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IParentInfo.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IPastedObject.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IPastedObject2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IPastedObject3.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IProjectAddOnInformation.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IProjectConverter.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IProjectConverterFactory.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IProjectConverterFactoryManager.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IProjectConverterFactoryManager2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IProjectConverterListener.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IProjectInspectionReporter.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IProjectPlugInInformation.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IProjectSource.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IProjectSourceNode.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IProjectStructure.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IProjectStructure2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IProjectStructure3.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IProjectStructure4.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IProjectStructure5.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IProjectStructure6.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IProjectStructure7.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IProjectStructure8.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IProjectStructure9.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IProjectWizard.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IProjectWizard2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IPSAdd.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IPSChange.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IPSModify.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IPSMove.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IPSNode.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IPSNode2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IPSNode3.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IPSObjectStream.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IPSObjectStream2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IPSObjectStreamEntry.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IPSRemove.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IPSRename.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ISharedDataStorage.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ISharedDataStorage2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IStructuredView.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IStructuredView2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IStructuredView3.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IStructuredView4.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IStructuredView5.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IStructuredView6.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IStructuredView7.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ISVFoldersProperty.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ISVNode.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ISVNode2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ISVObjectStream.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ISVObjectStreamEntry.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ISVObjectStreamEntry2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ITransientObject.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IUniqueIdGenerator.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IUnknownObject.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IUnknownObject2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IVirtualPSNode.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IVirtualPSNode2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IVirtualPSNodeAdditionResult.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\IVirtualPSRoot.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\LegacyCloneableMemberAccess.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\LegacyDelegateFactory.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\LegacyGenericObjectService.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\LegacyGenericObjectServiceFactory.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\LegacyGetterDelegate.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\LegacySerializableMemberAccess.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\LegacySetterDelegate.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\LegacyTypeAccess.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\LossOfDataWarningEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\LossOfDataWarningEventArgs2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\MetaObjectCancelEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\MissingTypeGuidException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\MissingTypeInformation.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\MissingTypeInformation2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\MoveObjectConstraintException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\MultiDimensionalArraysNotSupportedException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\NonZeroLowerBoundNotSupportedException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectAddedEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectAddedEventArgs2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectAddingEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectAddingEventArgs2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectAddingEventArgs3.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectAddingEventArgs4.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectAddingEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectAdditionProgressHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectAdditionProgressType.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectAlreadyHasParentException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectAlreadyInUseException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectCancelEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectCancelEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectLoadException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectManagerAlreadyExistsException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectManagerException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectModifiedEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectModifiedEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectMovedEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectMovedEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectMovingEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectMovingEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectNameInvalidException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectNameNotUniqueException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectNameNotUniqueException2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectNotSerializableException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectPropertyCancelEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectPropertyEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectPropertyModifiedEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectPropertyModifyingEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectReadOnlyException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectRemovedEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectRemovedEventArgs2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectRemovedEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectRemovingEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectRemovingEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectRenamedEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectRenamedEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectRenamingEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectRenamingEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectSaveException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectSetEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectSetEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectTakeOverRequiredEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ObjectWasAddedHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\PasteConflict.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\PasteFolderHandling.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectAfterImportEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectAfterImportEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectBeforeImportEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectBeforeImportEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectClosedEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectClosedEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectClosingEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectClosingEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectConversionFailedException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectConversionResult.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectCreatedEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectCreatedEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectCreatingEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectCreatingEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectDirtyChangedEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectDirtyChangedEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectImportEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectIntegrityException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectLoadedEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectLoadedEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectLoadException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectLoadFinishedEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectLoadFinishedEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectLoadingEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectLoadingEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectNamingConventionDelegate.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectSavedEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectSavedEventArgs2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectSavedEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectSaveException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectSavingEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectSavingEventArgs2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectSavingEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectSourceFlags.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\ProjectType.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\PromptEncryptionPasswordEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\PromptEncryptionPasswordEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\PSAbortEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\PSChangeAction.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\PSChangedEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\PSChangedEventArgs2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\PSChangedEventArgs3.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\PSNodeEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\PSPasteConflict.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\PSPasteConflictEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\PSPasteEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\PSPasteSkipEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\PSQueryRollbackEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\PSStartEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\PSStartEventArgs2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\SearchableTextBlock.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\SelectionContext.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\SilentOperationCancelledException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\StructuredViewCopyNodeEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\StructuredViewCopyNodeEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\StructuredViewPasteConflictEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\StructuredViewPasteConflictEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\StructuredViewPasteNodeEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\StructuredViewPasteNodeEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\StructuredViewPasteSkipEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\StructuredViewPasteSkipEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\SVNodeAddingEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\SVNodeAddingEventArgs2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\SVNodeEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\SVNodeEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\SVNodeModifiedEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\SVNodeModifiedEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\SVNodeMovedEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\SVNodeMovedEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\SVNodePropertyModifiedEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\SVNodePropertyModifiedEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\SVNodeRenamedEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\SVNodeRenamedEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\SVNodesCopyingEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\SVNodesPastingEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\SVNodesPastingInterceptionHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\SVNodesRemovingEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\SVNodesRemovingInterceptionHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\TransactionContext.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\TypeNotSerializableException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\UndoSetObjectNotificationHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\UnknownDataWarning2EventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\UnknownDataWarningEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\UnserializableDataErrorEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\UnserializableDataErrorEventArgs2.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\WrongEncryptionPasswordException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\Objects\WrongPasswordException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\PrimaryProjectSwitchedEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\ProjectAttributes.cs" />
+    <Compile Include="_3S\CoDeSys\Core\ProjectChangedEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\ProjectConcurrentlyInUseException.cs" />
+    <Compile Include="_3S\CoDeSys\Core\ProjectImportedEventHandler.cs" />
+    <Compile Include="_3S\CoDeSys\Core\ProjectWriteProtectionMode.cs" />
+    <Compile Include="_3S\CoDeSys\Core\QueryProjectConcurrentlyUsedEventArgs.cs" />
+    <Compile Include="_3S\CoDeSys\Core\StorageDefaultValueAttribute.cs" />
+    <Compile Include="_3S\CoDeSys\Core\StorageDefaultValueBaseAttribute.cs" />
+    <Compile Include="_3S\CoDeSys\Core\StorageDefaultValueEmptyCollectionAttribute.cs" />
+    <Compile Include="_3S\CoDeSys\Core\StorageIgnorableAttribute.cs" />
+    <Compile Include="_3S\CoDeSys\Core\StorageSaveAsArrayAttribute.cs" />
+    <Compile Include="_3S\CoDeSys\Core\StorageSaveAsLegacyGenericCollectionAttribute.cs" />
+    <Compile Include="_3S\CoDeSys\Core\StorageSaveAsNonGenericCollectionAttribute.cs" />
+    <Compile Include="_3S\CoDeSys\Core\StorageVersionAttribute.cs" />
+    <Compile Include="_3S\CoDeSys\Core\VersionRange.cs" />
+    <Compile Include="_3S\CoDeSys\Core\VersionRangeList.cs" />
+    <Compile Include="_3S\CoDeSys\ObjectManager\IStructuredViewDeterminationProvider.cs" />
+    <Compile Include="_3S\CoDeSys\ObjectManager\IStructuredViewDeterminator.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="CODESYS\Objects\Properties\Resources.resources" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

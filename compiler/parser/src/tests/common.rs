@@ -1,11 +1,11 @@
 pub(crate) use dsl::common::{
-    next_block_id, ArrayElementType, CharacterStringLiteral, ConstantKind, DataTypeDeclarationKind,
-    DeclarationQualifier, EnumeratedSpecificationInit, EnumerationDeclaration,
-    FunctionBlockBodyKind, FunctionBlockDeclaration, FunctionDeclaration, FunctionReturnType,
-    InitialValueAssignmentKind, LateResolvedInitialValue, LateResolvedInitializer, Library,
-    LibraryElementKind, ProgramDeclaration, RealLiteral, ReferenceTarget, SimpleInitializer,
-    SpecificationKind, StringType, TypeName, TypeReference, VarDecl, VariableIdentifier,
-    VariableType,
+    next_block_id, ArrayBounds, ArrayElementType, Boolean, CharacterStringLiteral, ConstantKind,
+    DataTypeDeclarationKind, DeclarationQualifier, EnumeratedSpecificationInit,
+    EnumerationDeclaration, FunctionBlockBodyKind, FunctionBlockDeclaration, FunctionDeclaration,
+    FunctionReturnType, InitialValueAssignmentKind, LateResolvedInitialValue,
+    LateResolvedInitializer, Library, LibraryElementKind, ProgramDeclaration, RealLiteral,
+    ReferenceTarget, SimpleInitializer, SpecificationKind, StringType, TypeName, TypeReference,
+    VarDecl, VariableIdentifier, VariableType,
 };
 pub(crate) use dsl::configuration::{
     ConfigurationDeclaration, DataSourceKind, ProgramConfiguration, ResourceDeclaration,
@@ -91,6 +91,53 @@ pub(crate) fn parse_text_paren_string_length(source: &str) -> Library {
     let result = parse_program(source, &FileId::default(), &options);
     assert!(result.is_ok(), "Parse failed: {:?}", result.err());
     result.unwrap()
+}
+
+/// Options enabling `allow_try_catch` (the CODESYS `__TRY`/`__CATCH`/
+/// `__FINALLY`/`__ENDTRY`/`__THROW` exception handling statements).
+pub(crate) fn opts_with_try_catch() -> CompilerOptions {
+    CompilerOptions {
+        allow_try_catch: true,
+        ..CompilerOptions::default()
+    }
+}
+
+// ---------------------------------------------------------------------
+// CODESYS ST surface syntax (`REQ-CS-*`).
+// See specs/design/codesys-st-surface-syntax.md.
+// ---------------------------------------------------------------------
+
+pub(crate) fn opts_with_params_of() -> CompilerOptions {
+    CompilerOptions {
+        allow_params_of: true,
+        ..CompilerOptions::default()
+    }
+}
+
+/// Options enabling the conditional-compilation pragmas: `allow_pragmas`
+/// collapses `{ ... }` into one token, and `allow_pragma_if` evaluates the
+/// `{IF}` family over it.
+pub(crate) fn opts_with_pragma_if() -> CompilerOptions {
+    CompilerOptions {
+        allow_pragmas: true,
+        allow_pragma_if: true,
+        ..CompilerOptions::default()
+    }
+}
+
+/// Options enabling `allow_nested_comments`.
+pub(crate) fn opts_with_nested_comments() -> CompilerOptions {
+    CompilerOptions {
+        allow_nested_comments: true,
+        ..CompilerOptions::default()
+    }
+}
+
+pub(crate) fn opts_with_incomplete_array() -> CompilerOptions {
+    CompilerOptions {
+        allow_incomplete_array: true,
+        ..CompilerOptions::default()
+    }
 }
 
 /// The single (non-FB-call) statement in a program body.
@@ -223,4 +270,52 @@ pub(crate) fn extract_fb(library: &Library) -> &FunctionBlockDeclaration {
         .find(|e| matches!(e, LibraryElementKind::FunctionBlockDeclaration(_)))
         .unwrap();
     cast!(element, LibraryElementKind::FunctionBlockDeclaration)
+}
+
+// ---------------------------------------------------------------------
+// ST declaration extensions: UNION, VAR_STAT/VAR_INST/VAR_GENERIC,
+// NAMESPACE and __BEGIN_IMPLEMENTATION.
+// See specs/design/st-declaration-extensions.md.
+// ---------------------------------------------------------------------
+
+pub(crate) fn opts_with_union() -> CompilerOptions {
+    CompilerOptions {
+        allow_union_type: true,
+        ..CompilerOptions::default()
+    }
+}
+
+pub(crate) fn opts_with_var_stat() -> CompilerOptions {
+    CompilerOptions {
+        allow_var_stat: true,
+        ..CompilerOptions::default()
+    }
+}
+
+pub(crate) fn opts_with_var_inst() -> CompilerOptions {
+    CompilerOptions {
+        allow_var_inst: true,
+        ..opts_with_fb_inheritance()
+    }
+}
+
+pub(crate) fn opts_with_var_generic() -> CompilerOptions {
+    CompilerOptions {
+        allow_var_generic: true,
+        ..opts_with_fb_inheritance()
+    }
+}
+
+pub(crate) fn opts_with_namespace() -> CompilerOptions {
+    CompilerOptions {
+        allow_namespace: true,
+        ..CompilerOptions::default()
+    }
+}
+
+pub(crate) fn opts_with_begin_implementation() -> CompilerOptions {
+    CompilerOptions {
+        allow_begin_implementation: true,
+        ..CompilerOptions::default()
+    }
 }

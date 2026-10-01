@@ -36,6 +36,7 @@ Literals
 
    LDATE#2024-01-15
    LDATE#2024-12-31
+   LD#2024-01-15
 
 Example
 -------

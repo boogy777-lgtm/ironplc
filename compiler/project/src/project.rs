@@ -16,6 +16,8 @@ use ironplc_problems::Problem;
 use ironplc_sources::{FileType, LibraryName, Source, SourceProject};
 use log::{debug, trace};
 
+use crate::sidecar::{sidecar_path_for, Sidecar, SidecarKey};
+
 /// Runs semantic analysis on the given source project and compiler options.
 ///
 /// This is the shared implementation used by both [`FileBackedProject`] and
@@ -147,6 +149,17 @@ pub trait Project {
     /// `semantic_context()` and `analyzed_library()`.
     fn semantic(&mut self) -> Vec<Diagnostic>;
 
+    /// Engineering-side stable variable IDs, mapping a persistent
+    /// declaration's or FB field's `(scope, name)` to its entity UID (ADR
+    /// 0053; an FB field's scope is its qualified FB type name, ADR 0059),
+    /// or an empty slice when the caller has none.
+    /// [`crate::compile::compile`] splits the table with the library's
+    /// declarations and passes both parts through to codegen, which emits
+    /// the container's `stable_vars` and `fb_field_uids` tables.
+    fn stable_var_ids(&self) -> &[(SidecarKey, u64)] {
+        &[]
+    }
+
     /// Gets the semantic context from the last analysis.
     ///
     /// Returns `Some` when the last call to `semantic()` succeeded in building
@@ -180,6 +193,12 @@ pub struct FileBackedProject {
     semantic_context: Option<SemanticContext>,
     /// Cached analyzed library from the last successful analysis
     analyzed_library: Option<Library>,
+    /// Engineering-side stable variable IDs (ADR 0053); the keys also cover
+    /// FB fields, whose scope is the qualified FB type name (ADR 0059).
+    stable_var_ids: Vec<(SidecarKey, u64)>,
+    /// The UID sidecar auto-loaded at initialization, when the
+    /// initialization path yields one.
+    sidecar_path: Option<std::path::PathBuf>,
 }
 
 impl Default for FileBackedProject {
@@ -195,6 +214,8 @@ impl FileBackedProject {
             compiler_options: CompilerOptions::default(),
             semantic_context: None,
             analyzed_library: None,
+            stable_var_ids: Vec::new(),
+            sidecar_path: None,
         }
     }
 
@@ -204,6 +225,8 @@ impl FileBackedProject {
             compiler_options,
             semantic_context: None,
             analyzed_library: None,
+            stable_var_ids: Vec::new(),
+            sidecar_path: None,
         }
     }
 
@@ -230,18 +253,63 @@ impl FileBackedProject {
     pub fn load_activated_libraries(&self) -> (Vec<Library>, Vec<Diagnostic>) {
         self.source_project.load_activated_libraries()
     }
+
+    /// Sets the engineering-side stable variable IDs, mapping each
+    /// persistent declaration's or FB field's `(scope, name)` to its entity
+    /// UID (ADR 0053, ADR 0059). Replaces any previous table.
+    pub fn set_stable_var_ids(&mut self, stable_var_ids: Vec<(SidecarKey, u64)>) {
+        self.stable_var_ids = stable_var_ids;
+    }
+
+    /// The UID sidecar auto-loaded at initialization, when the
+    /// initialization path yielded one.
+    pub fn sidecar_path(&self) -> Option<&Path> {
+        self.sidecar_path.as_deref()
+    }
+
+    /// Loads the stable variable UID sidecar at `path` into the project,
+    /// replacing the current stable variable IDs; an empty or malformed
+    /// sidecar clears them. [`Project::initialize`] calls this automatically
+    /// for the sidecar derived from the initialization path; callers that
+    /// build the project by pushing individual files (the CLI) call this
+    /// explicitly.
+    pub fn load_uid_sidecar(&mut self, path: &Path) -> Result<(), Diagnostic> {
+        let sidecar = Sidecar::load(path)?;
+        self.sidecar_path = Some(path.to_path_buf());
+        self.set_stable_var_ids(sidecar.keyed_entries());
+        Ok(())
+    }
+
+    /// Loads the UID sidecar derived from an initialization path. A missing
+    /// or malformed sidecar is an empty table, so only a genuine I/O failure
+    /// surfaces as a diagnostic.
+    fn auto_load_uid_sidecar(&mut self, project_path: &Path) -> Vec<Diagnostic> {
+        let Some(path) = sidecar_path_for(project_path) else {
+            return vec![];
+        };
+        match self.load_uid_sidecar(&path) {
+            Ok(()) => vec![],
+            Err(diagnostic) => vec![diagnostic],
+        }
+    }
 }
 
 impl Project for FileBackedProject {
     /// Create a new project from the files in the specified directory.
     fn initialize(&mut self, dir: &Path) -> Vec<Diagnostic> {
-        self.source_project.initialize_from_directory(dir)
+        let mut diagnostics = self.source_project.initialize_from_directory(dir);
+        diagnostics.extend(self.auto_load_uid_sidecar(dir));
+        diagnostics
     }
 
     /// Create a new project from the files in multiple directories,
     /// merged into one compilation unit.
     fn initialize_many(&mut self, dirs: &[&Path]) -> Vec<Diagnostic> {
-        self.source_project.initialize_from_directories(dirs)
+        let mut diagnostics = self.source_project.initialize_from_directories(dirs);
+        if let Some(first) = dirs.first() {
+            diagnostics.extend(self.auto_load_uid_sidecar(first));
+        }
+        diagnostics
     }
 
     fn change_text_document(&mut self, file_id: &FileId, content: String) {
@@ -291,6 +359,10 @@ impl Project for FileBackedProject {
         self.analyzed_library.as_ref()
     }
 
+    fn stable_var_ids(&self) -> &[(SidecarKey, u64)] {
+        &self.stable_var_ids
+    }
+
     fn sources(&self) -> Vec<&Source> {
         self.source_project.sources()
     }
@@ -320,6 +392,8 @@ pub struct MemoryBackedProject {
     /// Compatibility libraries the caller parsed itself, injected ahead of
     /// user source alongside any the bundled registry loads.
     preparsed_libraries: Vec<Library>,
+    /// Engineering-side stable variable IDs (ADR 0053).
+    stable_var_ids: Vec<(SidecarKey, u64)>,
 }
 
 impl MemoryBackedProject {
@@ -331,6 +405,7 @@ impl MemoryBackedProject {
             semantic_context: None,
             analyzed_library: None,
             preparsed_libraries: Vec::new(),
+            stable_var_ids: Vec::new(),
         }
     }
 
@@ -373,6 +448,13 @@ impl MemoryBackedProject {
     /// injected ahead of user source, registry-loaded first.
     pub fn set_preparsed_libraries(&mut self, libraries: Vec<Library>) {
         self.preparsed_libraries = libraries;
+    }
+
+    /// Sets the engineering-side stable variable IDs, mapping each
+    /// persistent declaration's or FB field's `(scope, name)` to its entity
+    /// UID (ADR 0053, ADR 0059). Replaces any previous table.
+    pub fn set_stable_var_ids(&mut self, stable_var_ids: Vec<(SidecarKey, u64)>) {
+        self.stable_var_ids = stable_var_ids;
     }
 }
 
@@ -425,6 +507,10 @@ impl Project for MemoryBackedProject {
 
     fn analyzed_library(&self) -> Option<&Library> {
         self.analyzed_library.as_ref()
+    }
+
+    fn stable_var_ids(&self) -> &[(SidecarKey, u64)] {
+        &self.stable_var_ids
     }
 
     fn sources(&self) -> Vec<&Source> {
@@ -858,9 +944,15 @@ mod test {
             library
                 .elements
                 .iter()
-                .map(|element| match element {
-                    LibraryElementKind::FunctionBlockDeclaration(fb) => fb.name.to_string(),
-                    other => panic!("unexpected element: {other:?}"),
+                .map(|element| {
+                    assert!(
+                        matches!(element, LibraryElementKind::FunctionBlockDeclaration(_)),
+                        "unexpected element: {element:?}"
+                    );
+                    let LibraryElementKind::FunctionBlockDeclaration(fb) = element else {
+                        return String::new();
+                    };
+                    fb.name.to_string()
                 })
                 .collect()
         }
@@ -1035,6 +1127,105 @@ END_CONFIGURATION
             project.initialize_many(&[Path::new("/some/dir"), Path::new("/other/dir")]);
 
         assert!(!diagnostics.is_empty());
+    }
+
+    // -----------------------------------------------------------------
+    // UID sidecar auto-load (ADR 0053).
+    // -----------------------------------------------------------------
+
+    /// A program with two variables, used by the sidecar auto-load tests.
+    const TWO_VAR_PROGRAM: &str = "PROGRAM main VAR x : INT; y : INT; END_VAR END_PROGRAM";
+
+    /// A sidecar holding UIDs for the two variables of TWO_VAR_PROGRAM.
+    const TWO_VAR_SIDECAR: &str = r#"{
+  "version": 1,
+  "variables": [
+    { "scope": "main", "name": "x", "uid": 42 },
+    { "scope": "main", "name": "y", "uid": 43 }
+  ]
+}"#;
+
+    /// Creates `name` as a subdirectory of a temporary directory holding
+    /// `TWO_VAR_PROGRAM` as main.st, returning both.
+    fn project_dir_with_program(temp: &tempfile::TempDir, name: &str) -> std::path::PathBuf {
+        let dir = temp.path().join(name);
+        std::fs::create_dir(&dir).unwrap();
+        std::fs::write(dir.join("main.st"), TWO_VAR_PROGRAM).unwrap();
+        dir
+    }
+
+    #[test]
+    fn initialize_when_sidecar_present_then_stable_var_ids_loaded() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let dir = project_dir_with_program(&temp, "proj");
+        std::fs::write(
+            crate::sidecar::sidecar_path_for(&dir).unwrap(),
+            TWO_VAR_SIDECAR,
+        )
+        .unwrap();
+
+        let mut project = FileBackedProject::default();
+        let diagnostics = project.initialize(&dir);
+
+        assert!(
+            diagnostics.is_empty(),
+            "unexpected diagnostics: {diagnostics:?}"
+        );
+        assert_eq!(
+            project.stable_var_ids(),
+            [
+                (crate::sidecar::SidecarKey::new("main", "x"), 42),
+                (crate::sidecar::SidecarKey::new("main", "y"), 43)
+            ]
+        );
+    }
+
+    #[test]
+    fn initialize_when_sidecar_present_then_sidecar_path_exposed() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let dir = project_dir_with_program(&temp, "proj");
+        let sidecar_path = crate::sidecar::sidecar_path_for(&dir).unwrap();
+        std::fs::write(&sidecar_path, TWO_VAR_SIDECAR).unwrap();
+
+        let mut project = FileBackedProject::default();
+        project.initialize(&dir);
+
+        assert_eq!(project.sidecar_path(), Some(sidecar_path.as_path()));
+    }
+
+    #[test]
+    fn initialize_when_sidecar_missing_then_stable_var_ids_empty() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let dir = project_dir_with_program(&temp, "proj");
+
+        let mut project = FileBackedProject::default();
+        let diagnostics = project.initialize(&dir);
+
+        assert!(
+            diagnostics.is_empty(),
+            "unexpected diagnostics: {diagnostics:?}"
+        );
+        assert!(project.stable_var_ids().is_empty());
+    }
+
+    #[test]
+    fn initialize_when_sidecar_malformed_then_stable_var_ids_empty() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let dir = project_dir_with_program(&temp, "proj");
+        std::fs::write(
+            crate::sidecar::sidecar_path_for(&dir).unwrap(),
+            "this is not a sidecar",
+        )
+        .unwrap();
+
+        let mut project = FileBackedProject::default();
+        let diagnostics = project.initialize(&dir);
+
+        assert!(
+            diagnostics.is_empty(),
+            "unexpected diagnostics: {diagnostics:?}"
+        );
+        assert!(project.stable_var_ids().is_empty());
     }
 
     #[test]

@@ -1,0 +1,279 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<language-model>
+  <pou id = "{F712BEB2-EA8E-4BAE-A78E-EF7B34185C8F}" name = "__HelpConvertLDate">
+    <interface>
+      {implicit on}
+      FUNCTION __HelpConvertLDate : BOOL
+      VAR_INPUT
+        in : ULINT;
+        ppstr : POINTER TO POINTER TO BYTE;
+      END_VAR
+      VAR
+        nSeconds: UDINT;
+      END_VAR
+      {implicit off}
+    </interface>
+    <body>
+      <![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+
+    nSeconds := ULINT_TO_UDINT(in / ULINT#1_000_000_000);
+    __HelpConvertDate(nSeconds, ppstr);
+
+		{implicit off}
+		]]>
+    </body>
+  </pou>
+  <pou id = "{3BA3C775-59AF-4571-88B3-9823FFA3E1D7}" name = "__HelpConvertLTime">
+    <interface>
+      {implicit on}
+      FUNCTION __HelpConvertLTime : BOOL
+      VAR_INPUT
+        in : ULINT;
+        ppstr : POINTER TO POINTER TO BYTE;
+      END_VAR
+      VAR
+        nNanoseconds: UDINT;
+        nSeconds: UDINT;
+        nMilliseconds: UDINT;
+        pstr: POINTER TO BYTE;
+      END_VAR
+      {implicit off}
+    </interface>
+    <body>
+      <![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+
+    nSeconds := ULINT_TO_UDINT(in / ULINT#1_000_000_000);
+    nMilliseconds := nSeconds * UDINT#1_000;
+    __HelpConvertTime(nMilliseconds, ppstr);
+
+    nNanoseconds := ULINT_TO_UDINT(in MOD ULINT#1_000_000_000);
+    IF (nNanoseconds <> 0) THEN	
+	    pstr := ppstr^;
+	    pstr[0] := 16#2E; (*'.'*)
+	    pstr := pstr + 1;
+	    __HelpConvert(nNanoseconds, ADR(pstr), 9);
+    END_IF
+
+    ppstr^ := pstr;
+
+		{implicit off}
+		]]>
+    </body>
+  </pou>
+  <pou id = "{ED8C969E-BE5E-4B4F-BE7F-28AA12987477}" name = "__HelpConvertLDateW">
+    <interface>
+      {implicit on}
+      FUNCTION __HelpConvertLDateW : BOOL
+      VAR_INPUT
+        in : ULINT;
+        ppstr : POINTER TO POINTER TO WORD;
+      END_VAR
+      VAR
+        nSeconds: UDINT;
+      END_VAR
+      {implicit off}
+    </interface>
+    <body>
+      <![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+
+    nSeconds := ULINT_TO_UDINT(in / ULINT#1_000_000_000);
+    __HelpConvertDateW(nSeconds, ppstr);
+
+		{implicit off}
+		]]>
+    </body>
+  </pou>
+  <pou id = "{A5A3BF95-6E0C-48AA-9EFA-E7721211814C}" name = "__HelpConvertLTimeW">
+    <interface>
+      {implicit on}
+      FUNCTION __HelpConvertLTimeW : BOOL
+      VAR_INPUT
+        in : ULINT;
+        ppstr : POINTER TO POINTER TO WORD;
+      END_VAR
+      VAR
+        nNanoseconds: UDINT;
+        nSeconds: UDINT;
+        nMilliseconds: UDINT;
+        pstr: POINTER TO WORD;
+      END_VAR
+      {implicit off}
+    </interface>
+    <body>
+      <![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+
+    nSeconds := ULINT_TO_UDINT(in / ULINT#1_000_000_000);
+    nMilliseconds := nSeconds * UDINT#1_000;
+    __HelpConvertTimeW(nMilliseconds, ppstr);
+
+    nNanoseconds := ULINT_TO_UDINT(in MOD ULINT#1_000_000_000);
+    IF (nNanoseconds <> 0) THEN	
+	    pstr := ppstr^;
+	    pstr[0] := 16#002E; (*'.'*)
+      pstr := pstr + SIZEOF(WORD);
+	    __HelpConvertW(nNanoseconds, ADR(pstr), 9);
+    END_IF
+
+    ppstr^ := pstr;
+
+		{implicit off}
+		]]>
+    </body>
+  </pou>
+  <pou id = "{DAE5EB1B-DA87-4DE9-8C03-C8CE18362CFC}" name = "__HelpConvertFromLTime">
+    <interface>
+      {implicit on}
+      FUNCTION __HelpConvertFromLTime : ULINT
+      VAR_INPUT
+        ppstr : POINTER TO POINTER TO BYTE;
+      END_VAR
+      VAR
+        pstr : POINTER TO BYTE := ppstr^;
+        pszNanoseconds: POINTER TO BYTE;
+        pszTemp: POINTER TO BYTE;
+        ulNanoseconds: ULINT;
+        udiNanosecondsLength: DWORD;
+        ulHelpLdt: ULINT;        
+      END_VAR
+      {implicit off}
+    </interface>
+    <body>
+      <![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+    
+			pszTemp := pstr;
+      WHILE (pszTemp[0] <> 16#0) DO
+        IF (pszTemp^ = 16#2E (*'.'*) AND pszNanoseconds = 16#0) THEN
+          pszNanoseconds := pszTemp;
+          pszNanoseconds^ := 16#0;
+          pszNanoseconds := pszNanoseconds + 1;              
+        END_IF
+              
+				pszTemp := pszTemp+1;
+			END_WHILE
+      
+			__HelpConvertFromLTime := UDINT_TO_ULINT(__HelpConvertFromTime(ADR(pstr))) * ULINT#1_000_000;
+                    
+      IF (pszNanoseconds <> 16#0) THEN
+          udiNanosecondsLength := TO_UDINT(pszTemp - pszNanoseconds);
+          ulNanoseconds := LREAL_TO_ULINT(ULINT_TO_LREAL(__HelpConvertString(pszNanoseconds,udiNanosecondsLength)) * EXPT(10,9 - udiNanosecondsLength));                    
+          __HelpConvertFromLTime := __HelpConvertFromLTime + ulNanoseconds;
+      END_IF       
+          
+		{implicit off}
+		]]>
+    </body>
+  </pou>
+  <pou id = "{B2D00286-4BB7-4272-904B-1AA39603C1E1}" name = "__HelpConvertFromLDate">
+    <interface>
+      {implicit on}
+      FUNCTION __HelpConvertFromLDate : ULINT
+      VAR_INPUT
+        ppstr : POINTER TO POINTER TO BYTE;
+      END_VAR
+      VAR
+      END_VAR
+      {implicit off}
+    </interface>
+    <body>
+      <![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+    
+    __HelpConvertFromLDate := UDINT_TO_ULINT(__HelpConvertFromDate(ppstr)) * ULINT#1_000_000_000;     
+          
+		{implicit off}
+		]]>
+    </body>
+  </pou>
+  
+  
+  
+  <pou id = "{DD31291D-9E08-4E10-AFD2-9E815096446F}" name = "__HelpConvertFromLTimeW">
+    <interface>
+      {implicit on}
+      FUNCTION __HelpConvertFromLTimeW : ULINT
+      VAR_INPUT
+        ppstr : POINTER TO POINTER TO WORD;
+      END_VAR
+      VAR
+        pstr : POINTER TO WORD := ppstr^;
+        pszNanoseconds: POINTER TO WORD;
+        pszTemp: POINTER TO WORD;
+        ulNanoseconds: ULINT;
+        udiNanosecondsLength: DWORD;
+        ulHelpLdt: ULINT;        
+      END_VAR
+      {implicit off}
+    </interface>
+    <body>
+      <![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+
+			pszTemp := pstr;
+      WHILE (pszTemp[0] <> 16#0) DO
+        IF (pszTemp^ = 16#002E (*'.'*) AND pszNanoseconds = 16#0) THEN
+          pszNanoseconds := pszTemp;
+          pszNanoseconds^ := 16#0;
+          pszNanoseconds := pszNanoseconds + SIZEOF(WORD);              
+        END_IF
+              
+				pszTemp := pszTemp + SIZEOF(WORD);
+			END_WHILE
+      
+			__HelpConvertFromLTimeW := UDINT_TO_ULINT(__HelpConvertFromTimeW(ADR(pstr))) * ULINT#1_000_000;
+                    
+      IF (pszNanoseconds <> 16#0) THEN
+          udiNanosecondsLength := TO_UDINT((pszTemp - pszNanoseconds) / 2);
+          ulNanoseconds := LREAL_TO_ULINT(ULINT_TO_LREAL(__HelpConvertStringW(pszNanoseconds,udiNanosecondsLength)) * EXPT(10,9 - udiNanosecondsLength));                    
+          __HelpConvertFromLTimeW := __HelpConvertFromLTimeW + ulNanoseconds;
+      END_IF       
+
+		{implicit off}
+		]]>
+    </body>
+  </pou>
+  <pou id = "{ED31B00A-C2E5-4AF6-9F09-2495AB178C57}" name = "__HelpConvertFromLDateW">
+    <interface>
+      {implicit on}
+      FUNCTION __HelpConvertFromLDateW : ULINT
+      VAR_INPUT
+        ppstr : POINTER TO POINTER TO WORD;
+      END_VAR
+      VAR
+      END_VAR
+      {implicit off}
+    </interface>
+    <body>
+      <![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+    
+    __HelpConvertFromLDateW := UDINT_TO_ULINT(__HelpConvertFromDateW(ppstr)) * ULINT#1_000_000_000;     
+          
+		{implicit off}
+		]]>
+    </body>
+  </pou>
+  
+  
+</language-model>	
+

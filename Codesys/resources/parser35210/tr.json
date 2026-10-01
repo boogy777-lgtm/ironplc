@@ -1,0 +1,21 @@
+{
+"CODESYS.Parser35210.Resources.Strings.tr.resources":{
+"CompilerFeature_GenericConstantVariable":"Jenerik sabit değişken"
+,
+"CompilerFeature_PartialVariableAccess":"Değişkenlere kısmi erişim"
+,
+"CompilerFeature_ProjectDefines":"Proje tanımları"
+,
+"CompilerFeature_UChar_Literals":"UCHAR tanımlayıcı"
+,
+"CompilerFeature_UTF8_Strings":"UTF8 dizeleri"
+,
+"Constant":"Sabit"
+,
+"Literal":"Sabit"
+,
+"OR":"veya"
+,
+"Scanner_Initialize_char_array_must_end_with_null_value":"Char dizisi null değeriyle bitmelidir"
+}
+}

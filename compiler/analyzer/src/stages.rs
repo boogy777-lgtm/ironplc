@@ -20,7 +20,7 @@ use crate::{
     rule_enum_base_type_allowed, rule_enum_explicit_value_allowed, rule_enumeration_values_unique,
     rule_extends_field_duplicated, rule_function_block_call_unsupported,
     rule_function_block_invocation, rule_function_call_declared,
-    rule_function_call_in_out_argument, rule_function_call_type_check,
+    rule_function_call_in_out_argument, rule_function_call_type_check, rule_jump_target,
     rule_loop_control_inside_loop, rule_member_qualifier_allowed, rule_member_qualifier_invalid,
     rule_method_call_declared, rule_mixed_located_var_declarations, rule_no_top_level_var_global,
     rule_operator_operand_type_check, rule_pou_hierarchy, rule_program_task_definition_exists,
@@ -169,7 +169,7 @@ pub fn resolve_types(
         use crate::intermediates::stdlib_function::get_sizeof_function;
         function_environment
             .insert(get_sizeof_function())
-            .expect("SIZEOF should not conflict with stdlib");
+            .map_err(|d| vec![d])?;
     }
 
     let mut symbol_environment = SymbolEnvironment::new();
@@ -355,6 +355,7 @@ pub(crate) fn semantic(
         rule_enum_explicit_value_allowed::apply,
         rule_enumeration_values_unique::apply,
         rule_loop_control_inside_loop::apply,
+        rule_jump_target::apply,
         rule_extends_field_duplicated::apply,
         rule_function_block_call_unsupported::apply,
         rule_function_block_invocation::apply,

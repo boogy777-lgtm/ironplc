@@ -56,7 +56,7 @@ pub(crate) struct StructArrayVarInfo {
 /// A STRING field of each element of an array of structures.
 ///
 /// The field repeats once per element, one structure apart, so every copy is
-/// reached through a single strided STRING descriptor (ADR-0054). Registered
+/// reached through a single strided STRING descriptor (ADR-0069). Registered
 /// when the variable holding the array is declared, so that both the
 /// initialization and each access use the same descriptor.
 #[derive(Clone)]

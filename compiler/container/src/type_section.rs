@@ -1,6 +1,10 @@
+#[cfg(feature = "std")]
 use std::io::{Read, Write};
+#[cfg(feature = "std")]
 use std::vec::Vec;
 
+#[cfg(feature = "std")]
+use crate::id_types::VarIndex;
 use crate::id_types::{FbTypeId, FunctionId};
 use crate::ContainerError;
 
@@ -56,12 +60,20 @@ pub struct FieldEntry {
     pub field_extra: u16,
 }
 
-/// Size of a single field entry on disk in bytes.
-const FIELD_ENTRY_SIZE: usize = 4;
+impl FieldEntry {
+    /// Serialized size of one field entry in bytes.
+    pub const SIZE: usize = 4;
+}
+
+/// Serialized size of the fixed part of an FB type descriptor: `type_id`
+/// (u16), `num_fields` (u8) and one reserved byte. Field entries follow.
+#[cfg(feature = "std")]
+pub(crate) const FB_TYPE_DESCRIPTOR_HEADER_SIZE: usize = 4;
 
 /// An FB type descriptor in the type section.
 ///
 /// On disk: type_id (u16 LE), num_fields (u8), reserved (u8), then field entries.
+#[cfg(feature = "std")]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FbTypeDescriptor {
     pub type_id: FbTypeId,
@@ -76,7 +88,7 @@ pub struct FbTypeDescriptor {
 ///
 /// On disk this is 12 bytes:
 /// `[element_type: u8] [reserved: u8] [total_elements: u32 LE] [element_extra: u16 LE] [element_stride: u32 LE]`
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ArrayDescriptor {
     /// Element type tag using the same encoding as [`FieldType`]
     /// (I32=0, U32=1, I64=2, U64=3, F32=4, F64=5, etc.).
@@ -91,7 +103,7 @@ pub struct ArrayDescriptor {
     /// Usually the element's own size ([`ArrayDescriptor::natural_stride`]).
     /// It is larger when the elements are fields of consecutive structures,
     /// such as the STRING field of each element of an array of structures,
-    /// where it is the size of one structure (ADR-0054).
+    /// where it is the size of one structure (ADR-0069).
     pub element_stride: u32,
 }
 
@@ -123,6 +135,33 @@ impl ArrayDescriptor {
         } else {
             SLOT_BYTES
         }
+    }
+
+    /// Serialized size of one descriptor in bytes.
+    pub const SIZE: usize = 12;
+
+    /// Decodes a descriptor from its serialized bytes. The element type is
+    /// kept as the raw tag and the stride is not checked, so any 12 bytes
+    /// decode; a reader that must reject an impossible stride calls
+    /// [`validate`](Self::validate) on the result.
+    pub fn from_bytes(buf: &[u8; Self::SIZE]) -> Self {
+        ArrayDescriptor {
+            element_type: buf[0],
+            // buf[1] is reserved
+            total_elements: u32::from_le_bytes([buf[2], buf[3], buf[4], buf[5]]),
+            element_extra: u16::from_le_bytes([buf[6], buf[7]]),
+            element_stride: u32::from_le_bytes([buf[8], buf[9], buf[10], buf[11]]),
+        }
+    }
+
+    /// Encodes the descriptor into its serialized bytes.
+    pub fn to_bytes(&self) -> [u8; Self::SIZE] {
+        let mut buf = [0u8; Self::SIZE];
+        buf[0] = self.element_type;
+        buf[2..6].copy_from_slice(&self.total_elements.to_le_bytes());
+        buf[6..8].copy_from_slice(&self.element_extra.to_le_bytes());
+        buf[8..12].copy_from_slice(&self.element_stride.to_le_bytes());
+        buf
     }
 
     /// Returns the per-code-unit [`CharWidth`] for a STRING/WSTRING element
@@ -188,9 +227,6 @@ impl ArrayDescriptor {
 /// Bytes occupied by a single data-region slot.
 pub const SLOT_BYTES: u32 = 8;
 
-/// Size of a single array descriptor on disk in bytes.
-const ARRAY_DESCRIPTOR_SIZE: usize = 12;
-
 /// A user-defined function block descriptor in the type section.
 ///
 /// Maps a user-defined FB type ID to the compiled function that implements
@@ -199,7 +235,7 @@ const ARRAY_DESCRIPTOR_SIZE: usize = 12;
 ///
 /// On disk: type_id (u16 LE), function_id (u16 LE), var_offset (u16 LE),
 /// num_fields (u8), reserved (u8).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct UserFbDescriptor {
     pub type_id: FbTypeId,
     pub function_id: FunctionId,
@@ -207,38 +243,152 @@ pub struct UserFbDescriptor {
     pub num_fields: u8,
 }
 
-/// Size of a single user FB descriptor on disk in bytes.
-const USER_FB_DESCRIPTOR_SIZE: usize = 8;
+impl UserFbDescriptor {
+    /// Serialized size of one descriptor in bytes.
+    pub const SIZE: usize = 8;
+
+    /// Decodes a descriptor from its serialized bytes. Every field is a
+    /// plain integer, so any 8 bytes decode.
+    pub fn from_bytes(buf: &[u8; Self::SIZE]) -> Self {
+        UserFbDescriptor {
+            type_id: FbTypeId::new(u16::from_le_bytes([buf[0], buf[1]])),
+            function_id: FunctionId::new(u16::from_le_bytes([buf[2], buf[3]])),
+            var_offset: u16::from_le_bytes([buf[4], buf[5]]),
+            num_fields: buf[6],
+            // buf[7] is reserved
+        }
+    }
+
+    /// Encodes the descriptor into its serialized bytes.
+    pub fn to_bytes(&self) -> [u8; Self::SIZE] {
+        let mut buf = [0u8; Self::SIZE];
+        buf[0..2].copy_from_slice(&self.type_id.to_le_bytes());
+        buf[2..4].copy_from_slice(&self.function_id.to_le_bytes());
+        buf[4..6].copy_from_slice(&self.var_offset.to_le_bytes());
+        buf[6] = self.num_fields;
+        buf
+    }
+}
+
+/// `VarEntry.flags` bit 0: the variable is an array, and `extra` is the
+/// index of its descriptor in the array-descriptor sub-table.
+#[cfg(feature = "std")]
+pub const VAR_FLAG_IS_ARRAY: u8 = 0x01;
+
+/// A single variable table entry in the type section.
+///
+/// On disk this is 4 bytes: var_type (u8), flags (u8), extra (u16 LE).
+/// `extra` carries the STRING/WSTRING maximum length, the FB_INSTANCE
+/// `fb_type_id`, or the array descriptor index, depending on `var_type`.
+#[cfg(feature = "std")]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VarEntry {
+    pub var_type: FieldType,
+    pub flags: u8,
+    pub extra: u16,
+}
+
+/// Size of a single variable table entry on disk in bytes.
+#[cfg(feature = "std")]
+const VAR_ENTRY_SIZE: usize = 4;
+
+/// A stable variable ID entry in the type section.
+///
+/// Maps a persistent variable's compiler-assigned index to the
+/// engineering-side entity UID. The UID identifies the declaration, not its
+/// name: a rename keeps the UID, so the variable's type and value stay with
+/// the entity. Transient slots (function locals, scratch) have no entry.
+///
+/// On disk this is 10 bytes: var_index (u16 LE), uid (u64 LE).
+#[cfg(feature = "std")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StableVarEntry {
+    pub var_index: VarIndex,
+    pub uid: u64,
+}
+
+/// Size of a single stable variable ID entry on disk in bytes.
+#[cfg(feature = "std")]
+const STABLE_VAR_ENTRY_SIZE: usize = 10;
+
+/// A stable function-block field UID entry in the type section.
+///
+/// Maps one field of a user-defined FB type to the engineering-side entity
+/// UID of the field declaration (ADR 0059). The UID identifies the field, not
+/// its position: inserting a field into the FB type shifts the field
+/// ordinals, but a field's UID (and therefore its value) stays with it. Only
+/// user-defined FB types carry entries; standard-library FBs (TON, ...)
+/// have fixed, VM-owned layouts and none.
+///
+/// On disk this is 11 bytes: fb_type_id (u16 LE), field_index (u8),
+/// uid (u64 LE). Entries ascend by `(fb_type_id, field_index)`.
+#[cfg(feature = "std")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FbFieldUidEntry {
+    pub fb_type_id: FbTypeId,
+    /// Ordinal position of the field within the type's field list
+    /// (the same ordering the user FB descriptor's `num_fields` counts).
+    pub field_index: u8,
+    pub uid: u64,
+}
+
+/// Size of a single FB field UID entry on disk in bytes.
+#[cfg(feature = "std")]
+const FB_FIELD_UID_ENTRY_SIZE: usize = 11;
 
 /// The type section of a bytecode container.
 ///
-/// Contains FB type descriptors and array descriptors used by the verifier
-/// and VM for type safety checking.
+/// Contains FB type descriptors, array descriptors, user FB descriptors, the
+/// variable table used by the verifier and VM for type safety checking, the
+/// stable variable ID table used by online change for per-variable
+/// migration, and the FB field UID table used for per-field FB instance
+/// migration.
+#[cfg(feature = "std")]
 #[derive(Clone, Debug, Default)]
 pub struct TypeSection {
     pub fb_types: Vec<FbTypeDescriptor>,
     pub array_descriptors: Vec<ArrayDescriptor>,
     pub user_fb_types: Vec<UserFbDescriptor>,
+    pub variable_table: Vec<VarEntry>,
+    /// Stable variable IDs in ascending `var_index` order. Callers (codegen)
+    /// own the ordering contract; the writer preserves the given order.
+    pub stable_vars: Vec<StableVarEntry>,
+    /// FB field UIDs in ascending `(fb_type_id, field_index)` order.
+    /// Callers (codegen) own the ordering contract; the writer preserves
+    /// the given order.
+    pub fb_field_uids: Vec<FbFieldUidEntry>,
 }
 
+#[cfg(feature = "std")]
 impl TypeSection {
     /// Returns the total serialized size of this section in bytes.
     pub fn section_size(&self) -> u32 {
         // FB types: count(2) + sum of (header(4) + fields * 4)
         let mut size: u32 = 2;
         for desc in &self.fb_types {
-            size += 4 + desc.fields.len() as u32 * FIELD_ENTRY_SIZE as u32;
+            size += FB_TYPE_DESCRIPTOR_HEADER_SIZE as u32
+                + desc.fields.len() as u32 * FieldEntry::SIZE as u32;
         }
         // Array descriptors: count(2) + descriptors * 12
-        size += 2 + self.array_descriptors.len() as u32 * ARRAY_DESCRIPTOR_SIZE as u32;
+        size += 2 + self.array_descriptors.len() as u32 * ArrayDescriptor::SIZE as u32;
         // User FB descriptors: count(2) + descriptors * 8
-        size += 2 + self.user_fb_types.len() as u32 * USER_FB_DESCRIPTOR_SIZE as u32;
+        size += 2 + self.user_fb_types.len() as u32 * UserFbDescriptor::SIZE as u32;
+        // Variable table: count(2) + entries * 4
+        size += 2 + self.variable_table.len() as u32 * VAR_ENTRY_SIZE as u32;
+        // Stable variable IDs: count(2) + entries * 10
+        size += 2 + self.stable_vars.len() as u32 * STABLE_VAR_ENTRY_SIZE as u32;
+        // FB field UIDs: count(2) + entries * 11
+        size += 2 + self.fb_field_uids.len() as u32 * FB_FIELD_UID_ENTRY_SIZE as u32;
         size
     }
 
     /// Writes the type section to the given writer.
     ///
-    /// Format: FB count (u16 LE), FB descriptors, array count (u16 LE), array descriptors.
+    /// Format: FB count (u16 LE), FB descriptors, array count (u16 LE), array
+    /// descriptors, user FB count (u16 LE), user FB descriptors, variable
+    /// table count (u16 LE), variable entries, stable variable ID count
+    /// (u16 LE), stable variable ID entries, FB field UID count (u16 LE),
+    /// FB field UID entries.
     pub fn write_to(&self, w: &mut impl Write) -> Result<(), ContainerError> {
         // FB type descriptors
         w.write_all(&(self.fb_types.len() as u16).to_le_bytes())?;
@@ -256,21 +406,37 @@ impl TypeSection {
         // Array descriptors
         w.write_all(&(self.array_descriptors.len() as u16).to_le_bytes())?;
         for desc in &self.array_descriptors {
-            w.write_all(&[desc.element_type])?;
-            w.write_all(&[0u8])?; // reserved
-            w.write_all(&desc.total_elements.to_le_bytes())?;
-            w.write_all(&desc.element_extra.to_le_bytes())?;
-            w.write_all(&desc.element_stride.to_le_bytes())?;
+            w.write_all(&desc.to_bytes())?;
         }
 
         // User FB descriptors
         w.write_all(&(self.user_fb_types.len() as u16).to_le_bytes())?;
         for desc in &self.user_fb_types {
-            w.write_all(&desc.type_id.to_le_bytes())?;
-            w.write_all(&desc.function_id.to_le_bytes())?;
-            w.write_all(&desc.var_offset.to_le_bytes())?;
-            w.write_all(&[desc.num_fields])?;
-            w.write_all(&[0u8])?; // reserved
+            w.write_all(&desc.to_bytes())?;
+        }
+
+        // Variable table (fourth sub-table)
+        w.write_all(&(self.variable_table.len() as u16).to_le_bytes())?;
+        for entry in &self.variable_table {
+            w.write_all(&[entry.var_type as u8, entry.flags])?;
+            w.write_all(&entry.extra.to_le_bytes())?;
+        }
+
+        // Stable variable IDs (fifth sub-table), in the caller's
+        // ascending var_index order.
+        w.write_all(&(self.stable_vars.len() as u16).to_le_bytes())?;
+        for entry in &self.stable_vars {
+            w.write_all(&entry.var_index.to_le_bytes())?;
+            w.write_all(&entry.uid.to_le_bytes())?;
+        }
+
+        // FB field UIDs (sixth and last sub-table), in the caller's
+        // ascending (fb_type_id, field_index) order.
+        w.write_all(&(self.fb_field_uids.len() as u16).to_le_bytes())?;
+        for entry in &self.fb_field_uids {
+            w.write_all(&entry.fb_type_id.to_le_bytes())?;
+            w.write_all(&[entry.field_index])?;
+            w.write_all(&entry.uid.to_le_bytes())?;
         }
         Ok(())
     }
@@ -291,7 +457,7 @@ impl TypeSection {
 
             let mut fields = Vec::with_capacity(num_fields);
             for _ in 0..num_fields {
-                let mut entry_buf = [0u8; FIELD_ENTRY_SIZE];
+                let mut entry_buf = [0u8; FieldEntry::SIZE];
                 r.read_exact(&mut entry_buf)?;
                 let field_type = FieldType::from_u8(entry_buf[0])?;
                 // entry_buf[1] is reserved
@@ -312,21 +478,9 @@ impl TypeSection {
 
         let mut array_descriptors = Vec::with_capacity(array_count);
         for _ in 0..array_count {
-            let mut desc_buf = [0u8; ARRAY_DESCRIPTOR_SIZE];
+            let mut desc_buf = [0u8; ArrayDescriptor::SIZE];
             r.read_exact(&mut desc_buf)?;
-            let element_type = desc_buf[0];
-            // desc_buf[1] is reserved
-            let total_elements =
-                u32::from_le_bytes([desc_buf[2], desc_buf[3], desc_buf[4], desc_buf[5]]);
-            let element_extra = u16::from_le_bytes([desc_buf[6], desc_buf[7]]);
-            let element_stride =
-                u32::from_le_bytes([desc_buf[8], desc_buf[9], desc_buf[10], desc_buf[11]]);
-            let desc = ArrayDescriptor {
-                element_type,
-                total_elements,
-                element_extra,
-                element_stride,
-            };
+            let desc = ArrayDescriptor::from_bytes(&desc_buf);
             desc.validate()?;
             array_descriptors.push(desc);
         }
@@ -341,18 +495,90 @@ impl TypeSection {
 
         let mut user_fb_types = Vec::with_capacity(user_fb_count);
         for _ in 0..user_fb_count {
-            let mut desc_buf = [0u8; USER_FB_DESCRIPTOR_SIZE];
+            let mut desc_buf = [0u8; UserFbDescriptor::SIZE];
             r.read_exact(&mut desc_buf)?;
-            let type_id = FbTypeId::new(u16::from_le_bytes([desc_buf[0], desc_buf[1]]));
-            let function_id = FunctionId::new(u16::from_le_bytes([desc_buf[2], desc_buf[3]]));
-            let var_offset = u16::from_le_bytes([desc_buf[4], desc_buf[5]]);
-            let num_fields = desc_buf[6];
-            // desc_buf[7] is reserved
-            user_fb_types.push(UserFbDescriptor {
-                type_id,
-                function_id,
-                var_offset,
-                num_fields,
+            user_fb_types.push(UserFbDescriptor::from_bytes(&desc_buf));
+        }
+
+        // Variable table (fourth sub-table). A type section that ends
+        // before it (a container written before format v4) reads as
+        // zero entries, matching the user-FB handling above.
+        let mut buf2 = [0u8; 2];
+        let var_count = if r.read_exact(&mut buf2).is_ok() {
+            u16::from_le_bytes(buf2) as usize
+        } else {
+            0
+        };
+
+        let mut variable_table = Vec::with_capacity(var_count);
+        for _ in 0..var_count {
+            let mut entry_buf = [0u8; VAR_ENTRY_SIZE];
+            r.read_exact(&mut entry_buf)?;
+            let var_type = FieldType::from_u8(entry_buf[0])?;
+            let extra = u16::from_le_bytes([entry_buf[2], entry_buf[3]]);
+            variable_table.push(VarEntry {
+                var_type,
+                flags: entry_buf[1],
+                extra,
+            });
+        }
+
+        // Stable variable IDs (fifth and last sub-table). A type section
+        // that ends before it (a container written before format v5) reads
+        // as zero entries.
+        let mut buf2 = [0u8; 2];
+        let stable_var_count = if r.read_exact(&mut buf2).is_ok() {
+            u16::from_le_bytes(buf2) as usize
+        } else {
+            0
+        };
+
+        let mut stable_vars = Vec::with_capacity(stable_var_count);
+        for _ in 0..stable_var_count {
+            let mut entry_buf = [0u8; STABLE_VAR_ENTRY_SIZE];
+            r.read_exact(&mut entry_buf)?;
+            stable_vars.push(StableVarEntry {
+                var_index: VarIndex::new(u16::from_le_bytes([entry_buf[0], entry_buf[1]])),
+                uid: u64::from_le_bytes([
+                    entry_buf[2],
+                    entry_buf[3],
+                    entry_buf[4],
+                    entry_buf[5],
+                    entry_buf[6],
+                    entry_buf[7],
+                    entry_buf[8],
+                    entry_buf[9],
+                ]),
+            });
+        }
+
+        // FB field UIDs (sixth and last sub-table). A type section that ends
+        // before it (a container written before format v6) reads as zero
+        // entries.
+        let mut buf2 = [0u8; 2];
+        let fb_field_uid_count = if r.read_exact(&mut buf2).is_ok() {
+            u16::from_le_bytes(buf2) as usize
+        } else {
+            0
+        };
+
+        let mut fb_field_uids = Vec::with_capacity(fb_field_uid_count);
+        for _ in 0..fb_field_uid_count {
+            let mut entry_buf = [0u8; FB_FIELD_UID_ENTRY_SIZE];
+            r.read_exact(&mut entry_buf)?;
+            fb_field_uids.push(FbFieldUidEntry {
+                fb_type_id: FbTypeId::new(u16::from_le_bytes([entry_buf[0], entry_buf[1]])),
+                field_index: entry_buf[2],
+                uid: u64::from_le_bytes([
+                    entry_buf[3],
+                    entry_buf[4],
+                    entry_buf[5],
+                    entry_buf[6],
+                    entry_buf[7],
+                    entry_buf[8],
+                    entry_buf[9],
+                    entry_buf[10],
+                ]),
             });
         }
 
@@ -360,6 +586,9 @@ impl TypeSection {
             fb_types,
             array_descriptors,
             user_fb_types,
+            variable_table,
+            stable_vars,
+            fb_field_uids,
         })
     }
 }
@@ -383,6 +612,9 @@ mod tests {
 
         assert!(decoded.fb_types.is_empty());
         assert!(decoded.array_descriptors.is_empty());
+        assert!(decoded.variable_table.is_empty());
+        assert!(decoded.stable_vars.is_empty());
+        assert!(decoded.fb_field_uids.is_empty());
     }
 
     #[test]
@@ -419,6 +651,9 @@ mod tests {
             }],
             array_descriptors: vec![],
             user_fb_types: vec![],
+            variable_table: vec![],
+            stable_vars: vec![],
+            fb_field_uids: vec![],
         };
 
         let mut buf = Vec::new();
@@ -448,6 +683,9 @@ mod tests {
                 ArrayDescriptor::new(FieldType::F64 as u8, 32768, 0),
             ],
             user_fb_types: vec![],
+            variable_table: vec![],
+            stable_vars: vec![],
+            fb_field_uids: vec![],
         };
 
         let mut buf = Vec::new();
@@ -482,6 +720,9 @@ mod tests {
             }],
             array_descriptors: vec![ArrayDescriptor::new(FieldType::U32 as u8, 100, 0)],
             user_fb_types: vec![],
+            variable_table: vec![],
+            stable_vars: vec![],
+            fb_field_uids: vec![],
         };
 
         let mut buf = Vec::new();
@@ -503,8 +744,8 @@ mod tests {
     #[test]
     fn section_size_when_empty_then_returns_header_counts_only() {
         let section = TypeSection::default();
-        // 2 bytes for FB count + 2 bytes for array count + 2 bytes for user FB count
-        assert_eq!(section.section_size(), 6);
+        // 2 bytes for each of the six sub-table counts
+        assert_eq!(section.section_size(), 12);
     }
 
     #[test]
@@ -516,9 +757,12 @@ mod tests {
                 ArrayDescriptor::new(4, 20, 0),
             ],
             user_fb_types: vec![],
+            variable_table: vec![],
+            stable_vars: vec![],
+            fb_field_uids: vec![],
         };
-        // 2 (FB count) + 2 (array count) + 2 * 12 (descriptors) + 2 (user FB count) = 30
-        assert_eq!(section.section_size(), 30);
+        // 6 counts(12) + 2 * 12 (descriptors) = 36
+        assert_eq!(section.section_size(), 36);
     }
 
     fn read_single_descriptor(desc: ArrayDescriptor) -> Result<TypeSection, ContainerError> {
@@ -559,7 +803,7 @@ mod tests {
             element_extra: 50,
             element_stride: 80,
         };
-        let decoded = read_single_descriptor(desc.clone()).unwrap();
+        let decoded = read_single_descriptor(desc).unwrap();
         assert_eq!(decoded.array_descriptors, vec![desc]);
     }
 
@@ -616,6 +860,9 @@ mod tests {
                     num_fields: 5,
                 },
             ],
+            variable_table: vec![],
+            stable_vars: vec![],
+            fb_field_uids: vec![],
         };
 
         let mut buf = Vec::new();
@@ -633,6 +880,246 @@ mod tests {
         assert_eq!(decoded.user_fb_types[1].function_id, FunctionId::new(3));
         assert_eq!(decoded.user_fb_types[1].var_offset, 7);
         assert_eq!(decoded.user_fb_types[1].num_fields, 5);
+    }
+
+    #[test]
+    fn type_section_write_read_when_variable_table_then_roundtrips() {
+        let entries = vec![
+            VarEntry {
+                var_type: FieldType::I32,
+                flags: 0,
+                extra: 0,
+            },
+            VarEntry {
+                var_type: FieldType::String,
+                flags: 0,
+                extra: 80,
+            },
+            VarEntry {
+                var_type: FieldType::FbInstance,
+                flags: 0,
+                extra: 7,
+            },
+            VarEntry {
+                var_type: FieldType::F64,
+                flags: VAR_FLAG_IS_ARRAY,
+                extra: 2,
+            },
+        ];
+        let section = TypeSection {
+            variable_table: entries.clone(),
+            ..Default::default()
+        };
+
+        let mut buf = Vec::new();
+        section.write_to(&mut buf).unwrap();
+
+        let mut cursor = Cursor::new(&buf);
+        let decoded = TypeSection::read_from(&mut cursor).unwrap();
+
+        assert_eq!(decoded.variable_table, entries);
+    }
+
+    #[test]
+    fn section_size_when_variable_table_then_includes_entry_bytes() {
+        let section = TypeSection {
+            variable_table: vec![
+                VarEntry {
+                    var_type: FieldType::I32,
+                    flags: 0,
+                    extra: 0,
+                },
+                VarEntry {
+                    var_type: FieldType::F64,
+                    flags: VAR_FLAG_IS_ARRAY,
+                    extra: 3,
+                },
+            ],
+            ..Default::default()
+        };
+        // 6 counts(12) + 2 entries * 4 = 20
+        assert_eq!(section.section_size(), 20);
+    }
+
+    #[test]
+    fn type_section_write_read_when_stable_vars_then_roundtrips_in_order() {
+        let entries = vec![
+            StableVarEntry {
+                var_index: VarIndex::new(0),
+                uid: 0x0102_0304_0506_0708,
+            },
+            StableVarEntry {
+                var_index: VarIndex::new(2),
+                uid: 1,
+            },
+            StableVarEntry {
+                var_index: VarIndex::new(7),
+                uid: u64::MAX,
+            },
+        ];
+        let section = TypeSection {
+            stable_vars: entries.clone(),
+            ..Default::default()
+        };
+
+        let mut buf = Vec::new();
+        section.write_to(&mut buf).unwrap();
+
+        let mut cursor = Cursor::new(&buf);
+        let decoded = TypeSection::read_from(&mut cursor).unwrap();
+
+        assert_eq!(decoded.stable_vars, entries);
+        assert_eq!(
+            decoded
+                .stable_vars
+                .iter()
+                .map(|e| e.var_index)
+                .collect::<Vec<_>>(),
+            vec![VarIndex::new(0), VarIndex::new(2), VarIndex::new(7)]
+        );
+    }
+
+    #[test]
+    fn section_size_when_stable_vars_then_includes_entry_bytes() {
+        let section = TypeSection {
+            stable_vars: vec![
+                StableVarEntry {
+                    var_index: VarIndex::new(0),
+                    uid: 1,
+                },
+                StableVarEntry {
+                    var_index: VarIndex::new(1),
+                    uid: 2,
+                },
+            ],
+            ..Default::default()
+        };
+        // 6 counts(12) + 2 entries * 10 = 32
+        assert_eq!(section.section_size(), 32);
+    }
+
+    #[test]
+    fn type_section_read_from_when_no_stable_vars_then_empty() {
+        // Build a type section payload that stops after the variable table,
+        // simulating a container written before format v5. The reader should
+        // treat the missing stable variable ID sub-table as zero entries.
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&0u16.to_le_bytes()); // FB count = 0
+        buf.extend_from_slice(&0u16.to_le_bytes()); // array count = 0
+        buf.extend_from_slice(&0u16.to_le_bytes()); // user FB count = 0
+        buf.extend_from_slice(&0u16.to_le_bytes()); // variable count = 0
+
+        let mut cursor = Cursor::new(&buf);
+        let decoded = TypeSection::read_from(&mut cursor).unwrap();
+
+        assert!(decoded.variable_table.is_empty());
+        assert!(decoded.stable_vars.is_empty());
+    }
+
+    #[test]
+    fn type_section_read_from_when_no_fb_field_uids_then_empty() {
+        // Build a type section payload that stops after the stable variable
+        // IDs, simulating a container written before format v6. The reader
+        // should treat the missing FB field UID sub-table as zero entries.
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&0u16.to_le_bytes()); // FB count = 0
+        buf.extend_from_slice(&0u16.to_le_bytes()); // array count = 0
+        buf.extend_from_slice(&0u16.to_le_bytes()); // user FB count = 0
+        buf.extend_from_slice(&0u16.to_le_bytes()); // variable count = 0
+        buf.extend_from_slice(&0u16.to_le_bytes()); // stable var count = 0
+
+        let mut cursor = Cursor::new(&buf);
+        let decoded = TypeSection::read_from(&mut cursor).unwrap();
+
+        assert!(decoded.stable_vars.is_empty());
+        assert!(decoded.fb_field_uids.is_empty());
+    }
+
+    #[test]
+    fn type_section_write_read_when_fb_field_uids_then_roundtrips_in_order() {
+        let entries = vec![
+            FbFieldUidEntry {
+                fb_type_id: FbTypeId::new(0x1000),
+                field_index: 0,
+                uid: 0x0102_0304_0506_0708,
+            },
+            FbFieldUidEntry {
+                fb_type_id: FbTypeId::new(0x1000),
+                field_index: 2,
+                uid: 1,
+            },
+            FbFieldUidEntry {
+                fb_type_id: FbTypeId::new(0x1001),
+                field_index: 0,
+                uid: u64::MAX,
+            },
+        ];
+        let section = TypeSection {
+            fb_field_uids: entries.clone(),
+            ..Default::default()
+        };
+
+        let mut buf = Vec::new();
+        section.write_to(&mut buf).unwrap();
+
+        let mut cursor = Cursor::new(&buf);
+        let decoded = TypeSection::read_from(&mut cursor).unwrap();
+
+        assert_eq!(decoded.fb_field_uids, entries);
+    }
+
+    #[test]
+    fn section_size_when_fb_field_uids_then_includes_entry_bytes() {
+        let section = TypeSection {
+            fb_field_uids: vec![
+                FbFieldUidEntry {
+                    fb_type_id: FbTypeId::new(0x1000),
+                    field_index: 0,
+                    uid: 1,
+                },
+                FbFieldUidEntry {
+                    fb_type_id: FbTypeId::new(0x1000),
+                    field_index: 1,
+                    uid: 2,
+                },
+            ],
+            ..Default::default()
+        };
+        // 6 counts(12) + 2 entries * 11 = 34
+        assert_eq!(section.section_size(), 34);
+    }
+
+    #[test]
+    fn type_section_read_from_when_stable_var_entry_truncated_then_error() {
+        // A count of one entry with no entry bytes must fail, not silently
+        // read a partial entry.
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&0u16.to_le_bytes()); // FB count = 0
+        buf.extend_from_slice(&0u16.to_le_bytes()); // array count = 0
+        buf.extend_from_slice(&0u16.to_le_bytes()); // user FB count = 0
+        buf.extend_from_slice(&0u16.to_le_bytes()); // variable count = 0
+        buf.extend_from_slice(&1u16.to_le_bytes()); // stable var count = 1
+
+        let mut cursor = Cursor::new(&buf);
+        let result = TypeSection::read_from(&mut cursor);
+
+        assert!(matches!(result, Err(ContainerError::Io(_))));
+    }
+
+    #[test]
+    fn type_section_read_from_when_no_variable_table_then_empty_variable_table() {
+        // Build a type section payload that stops after the user FB count,
+        // simulating a legacy container without the variable table sub-table.
+        // The reader should treat the missing data as zero entries.
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&0u16.to_le_bytes()); // FB count = 0
+        buf.extend_from_slice(&0u16.to_le_bytes()); // array count = 0
+        buf.extend_from_slice(&0u16.to_le_bytes()); // user FB count = 0
+
+        let mut cursor = Cursor::new(&buf);
+        let decoded = TypeSection::read_from(&mut cursor).unwrap();
+
+        assert!(decoded.variable_table.is_empty());
     }
 
     #[test]
@@ -665,12 +1152,15 @@ mod tests {
             }],
             array_descriptors: vec![],
             user_fb_types: vec![],
+            variable_table: vec![],
+            stable_vars: vec![],
+            fb_field_uids: vec![],
         };
 
-        // Header: 2 (FB count) + 2 (array count) + 2 (user FB count) = 6
+        // Header: 6 counts * 2 = 12
         // Per descriptor: 4 (header) + 3 fields * 4 = 16
-        // Total: 6 + 16 = 22
-        assert_eq!(section.section_size(), 22);
+        // Total: 12 + 16 = 28
+        assert_eq!(section.section_size(), 28);
 
         let mut buf = Vec::new();
         section.write_to(&mut buf).unwrap();
@@ -693,5 +1183,6 @@ mod tests {
         assert!(decoded.fb_types.is_empty());
         assert!(decoded.array_descriptors.is_empty());
         assert!(decoded.user_fb_types.is_empty());
+        assert!(decoded.variable_table.is_empty());
     }
 }

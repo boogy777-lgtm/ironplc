@@ -43,7 +43,9 @@ fn ed2_dialect_enables_no_flags() {
 /// reference keywords, partial-access syntax, explicit enumeration member
 /// values, the `CONTINUE` statement, and the object-oriented syntax
 /// (`allow_fb_inheritance`) that is the headline addition of the 2013
-/// edition.
+/// edition. `allow_multiple_underscores` lifts the CODESYS/TwinCAT
+/// restriction on consecutive underscores, which the edition itself does not
+/// impose.
 #[test]
 fn ed3_dialect_enables_edition3_descriptors() {
     assert_enabled_flags(
@@ -55,6 +57,8 @@ fn ed3_dialect_enables_edition3_descriptors() {
             "allow_fb_inheritance",
             "allow_enum_explicit_values",
             "allow_continue",
+            "allow_union_type",
+            "allow_multiple_underscores",
         ],
     );
 }
@@ -84,6 +88,7 @@ fn rusty_dialect_enables_exactly_these_flags() {
             "allow_cross_family_conversion",
             "allow_int_literal_to_bit_string",
             "allow_bit_string_arithmetic",
+            "allow_bit_type",
             "allow_partial_access_syntax",
             "allow_pragmas",
             "allow_short_circuit_operators",
@@ -96,6 +101,8 @@ fn rusty_dialect_enables_exactly_these_flags() {
             "allow_enum_explicit_values",
             "allow_enum_base_type",
             "allow_continue",
+            "allow_union_type",
+            "allow_multiple_underscores",
         ],
     );
 }
@@ -133,6 +140,7 @@ fn codesys_dialect_enables_exactly_these_flags() {
             "allow_cross_family_conversion",
             "allow_int_literal_to_bit_string",
             "allow_bit_string_arithmetic",
+            "allow_bit_type",
             "allow_partial_access_syntax",
             "allow_pragmas",
             "allow_short_circuit_operators",
@@ -145,6 +153,21 @@ fn codesys_dialect_enables_exactly_these_flags() {
             "allow_enum_explicit_values",
             "allow_enum_base_type",
             "allow_continue",
+            "allow_union_type",
+            "allow_var_stat",
+            "allow_var_inst",
+            "allow_var_generic",
+            "allow_namespace",
+            "allow_begin_implementation",
+            "allow_try_catch",
+            "allow_jump_statement",
+            "allow_calc_statement",
+            "allow_wait_statement",
+            "allow_nested_comments",
+            "allow_pragma_if",
+            "allow_params_of",
+            "allow_incomplete_array",
+            "allow_escaped_identifiers",
         ],
     );
 }
@@ -182,6 +205,7 @@ fn twincat_dialect_enables_exactly_these_flags() {
             "allow_cross_family_conversion",
             "allow_int_literal_to_bit_string",
             "allow_bit_string_arithmetic",
+            "allow_bit_type",
             "allow_partial_access_syntax",
             "allow_pragmas",
             "allow_short_circuit_operators",
@@ -194,6 +218,20 @@ fn twincat_dialect_enables_exactly_these_flags() {
             "allow_enum_explicit_values",
             "allow_enum_base_type",
             "allow_continue",
+            "allow_union_type",
+            "allow_var_stat",
+            "allow_var_inst",
+            "allow_var_generic",
+            "allow_namespace",
+            "allow_try_catch",
+            "allow_jump_statement",
+            "allow_calc_statement",
+            "allow_wait_statement",
+            "allow_nested_comments",
+            "allow_pragma_if",
+            "allow_params_of",
+            "allow_incomplete_array",
+            "allow_escaped_identifiers",
         ],
     );
 }
@@ -221,6 +259,48 @@ fn options_spec_req_pab_052_ed3_dialect_enables_partial_access_syntax() {
 fn options_spec_req_pab_141_vendor_dialects_enable_partial_access_syntax(#[case] dialect: Dialect) {
     let options = CompilerOptions::from_dialect(dialect);
     assert!(options.allow_partial_access_syntax);
+}
+
+/// REQ-STX-parser-008: The `codesys` and `twincat` dialect presets enable
+/// all six ST declaration extension flags; IEC 61131-3 Ed. 3 and RuSTy
+/// enable `allow_union_type` (UNION is standardized in the 2013 edition).
+#[spec_test(REQ_STX_parser_008)]
+#[rstest]
+#[case::codesys(
+    Dialect::Codesys,
+    &[
+        "allow_union_type",
+        "allow_var_stat",
+        "allow_var_inst",
+        "allow_var_generic",
+        "allow_namespace",
+        "allow_begin_implementation",
+    ]
+)]
+#[case::twincat(
+    Dialect::TwinCat,
+    &[
+        "allow_union_type",
+        "allow_var_stat",
+        "allow_var_inst",
+        "allow_var_generic",
+        "allow_namespace",
+    ]
+)]
+#[case::ed3(Dialect::Iec61131_3Ed3, &["allow_union_type"])]
+#[case::rusty(Dialect::Rusty, &["allow_union_type"])]
+fn options_spec_req_stx_008_dialect_presets_enable_the_flags(
+    #[case] dialect: Dialect,
+    #[case] expected: &[&str],
+) {
+    let options = CompilerOptions::from_dialect(dialect);
+    for flag in expected {
+        assert_eq!(
+            options.get_flag_by_key(flag),
+            Some(true),
+            "dialect {dialect} must enable {flag}"
+        );
+    }
 }
 
 /// Assert that a dialect selects exactly the given policy alternatives,

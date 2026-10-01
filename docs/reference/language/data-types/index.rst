@@ -24,6 +24,9 @@ Elementary Types
    * - :doc:`BOOL <elementary/bool>`
      - 1 bit
      - Boolean
+   * - :doc:`BIT <elementary/bit>`
+     - 1 bit
+     - One-bit value (dialect extension, stored as ``BOOL``)
    * - :doc:`SINT <elementary/sint>`
      - 8 bits
      - Signed short integer
@@ -123,6 +126,7 @@ Derived Types
    :caption: Elementary Types
 
    elementary/bool
+   elementary/bit
    elementary/sint
    elementary/int
    elementary/dint

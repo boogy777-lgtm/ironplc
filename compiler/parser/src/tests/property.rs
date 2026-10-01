@@ -3,6 +3,7 @@
 //! `PropertyDeclaration`.
 
 use super::common::*;
+use dsl::member_qualifier::{AccessSpecifier, MemberQualifierKind};
 
 fn parse_fb_with(members: &str, options: &CompilerOptions) -> FunctionBlockDeclaration {
     let source = format!(
@@ -164,12 +165,10 @@ END_PROPERTY",
     );
 
     let set = fb.properties[0].set.as_ref().unwrap();
-    let InitialValueAssignmentKind::String(string) = &set.variables[0].initializer else {
-        panic!(
-            "expected a STRING input, got {:?}",
-            set.variables[0].initializer
-        );
-    };
+    let string = cast!(
+        &set.variables[0].initializer,
+        InitialValueAssignmentKind::String
+    );
     assert_eq!(string.width, StringType::String);
     assert!(string.length.is_some());
 }
@@ -221,6 +220,38 @@ END_PROPERTY",
     let properties: Vec<_> = fb.properties.iter().map(|p| p.name.to_string()).collect();
     assert_eq!(methods, ["Start", "Stop"]);
     assert_eq!(properties, ["Speed", "Running"]);
+}
+
+/// A property takes the same qualifier words as a method (`PROPERTY PUBLIC
+/// Speed : REAL`), kept in source order. A qualifier word is only a qualifier
+/// when the property name still follows it, so `PROPERTY Override : BOOL` is
+/// a property named `Override`.
+#[rstest]
+#[case::public_(
+    "PROPERTY PUBLIC Speed : REAL\nGET\n    Speed := _speed;\nEND_GET\nEND_PROPERTY",
+    "Speed",
+    vec![MemberQualifierKind::Access(AccessSpecifier::Public)]
+)]
+#[case::final_override(
+    "PROPERTY FINAL OVERRIDE Speed : REAL\nGET\n    Speed := _speed;\nEND_GET\nEND_PROPERTY",
+    "Speed",
+    vec![MemberQualifierKind::Final, MemberQualifierKind::Override]
+)]
+#[case::qualifier_word_as_name(
+    "PROPERTY Override : REAL\nGET\n    Override := _speed;\nEND_GET\nEND_PROPERTY",
+    "Override",
+    vec![]
+)]
+fn parse_when_property_has_qualifiers_then_kept_in_source_order(
+    #[case] member: &str,
+    #[case] expected_name: &str,
+    #[case] expected_kinds: Vec<MemberQualifierKind>,
+) {
+    let fb = parse_fb_with(member, &opts_with_fb_inheritance());
+    let property = &fb.properties[0];
+    assert_eq!(property.name, Id::from(expected_name));
+    let kinds: Vec<MemberQualifierKind> = property.qualifiers.iter().map(|q| q.kind).collect();
+    assert_eq!(kinds, expected_kinds);
 }
 
 /// `GET`/`SET` are keywords only right after a property header. Under the

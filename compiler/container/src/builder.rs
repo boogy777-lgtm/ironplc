@@ -14,7 +14,10 @@ use crate::header::FileHeader;
 use crate::id_types::{FunctionId, InstanceId, TaskId, VarIndex};
 use crate::task_table::{ProgramInstanceEntry, TaskEntry, TaskTable};
 use crate::task_type::TaskType;
-use crate::type_section::{ArrayDescriptor, FbTypeDescriptor, TypeSection, UserFbDescriptor};
+use crate::type_section::{
+    ArrayDescriptor, FbFieldUidEntry, FbTypeDescriptor, StableVarEntry, TypeSection,
+    UserFbDescriptor, VarEntry,
+};
 
 /// Deduplication key for array descriptors: every field of an
 /// [`ArrayDescriptor`].
@@ -40,6 +43,9 @@ pub struct ContainerBuilder {
     array_descriptors: Vec<ArrayDescriptor>,
     array_descriptor_cache: HashMap<ArrayDescriptorKey, u16>,
     user_fb_types: Vec<UserFbDescriptor>,
+    variable_table: Vec<VarEntry>,
+    stable_vars: Vec<StableVarEntry>,
+    fb_field_uids: Vec<FbFieldUidEntry>,
     debug_var_names: Vec<VarNameEntry>,
     debug_func_names: Vec<FuncNameEntry>,
     debug_line_map: Vec<LineMapEntry>,
@@ -69,6 +75,9 @@ impl ContainerBuilder {
             array_descriptors: Vec::new(),
             array_descriptor_cache: HashMap::new(),
             user_fb_types: Vec::new(),
+            variable_table: Vec::new(),
+            stable_vars: Vec::new(),
+            fb_field_uids: Vec::new(),
             debug_var_names: Vec::new(),
             debug_func_names: Vec::new(),
             debug_line_map: Vec::new(),
@@ -283,6 +292,33 @@ impl ContainerBuilder {
         self
     }
 
+    /// Adds a variable table entry to the type section. Entries are stored
+    /// in call order, which is the variable index order.
+    pub fn add_var_entry(mut self, entry: VarEntry) -> Self {
+        self.variable_table.push(entry);
+        self
+    }
+
+    /// Adds a stable variable ID entry to the type section, mapping a
+    /// persistent variable's index to its engineering-side entity UID.
+    ///
+    /// Callers add entries in ascending `var_index` order; the writer
+    /// preserves the given order.
+    pub fn add_stable_var(mut self, entry: StableVarEntry) -> Self {
+        self.stable_vars.push(entry);
+        self
+    }
+
+    /// Adds an FB field UID entry to the type section, mapping one field of
+    /// a user-defined FB type to its engineering-side entity UID (ADR 0059).
+    ///
+    /// Callers add entries in ascending `(fb_type_id, field_index)` order;
+    /// the writer preserves the given order.
+    pub fn add_fb_field_uid(mut self, entry: FbFieldUidEntry) -> Self {
+        self.fb_field_uids.push(entry);
+        self
+    }
+
     /// Adds an array descriptor to the type section, deduplicating
     /// identical descriptors.
     ///
@@ -306,7 +342,7 @@ impl ContainerBuilder {
     /// `element_stride` bytes apart, deduplicating identical descriptors.
     ///
     /// Used for a STRING field of each element of an array of structures,
-    /// where `element_stride` is the size of one structure (ADR-0054). It
+    /// where `element_stride` is the size of one structure (ADR-0069). It
     /// must be at least the size of one string element.
     pub fn add_strided_array_descriptor(
         &mut self,
@@ -351,16 +387,24 @@ impl ContainerBuilder {
             functions: self.functions,
             bytecode: self.bytecode,
         };
+        let num_fb_types = self.fb_types.len() as u16;
 
-        // Build type section if there are any type descriptors.
+        // Build type section if there are any type descriptors, variable
+        // table entries, stable variable IDs or FB field UIDs.
         let type_section = if !self.fb_types.is_empty()
             || !self.array_descriptors.is_empty()
             || !self.user_fb_types.is_empty()
+            || !self.variable_table.is_empty()
+            || !self.stable_vars.is_empty()
+            || !self.fb_field_uids.is_empty()
         {
             Some(TypeSection {
                 fb_types: self.fb_types,
                 array_descriptors: self.array_descriptors,
                 user_fb_types: self.user_fb_types,
+                variable_table: self.variable_table,
+                stable_vars: self.stable_vars,
+                fb_field_uids: self.fb_field_uids,
             })
         } else {
             None
@@ -432,6 +476,7 @@ impl ContainerBuilder {
             num_temp_bufs: self.num_temp_bufs,
             max_temp_buf_bytes: self.max_temp_buf_bytes,
             num_functions: code.functions.len() as u16,
+            num_fb_types,
             ..FileHeader::default()
         };
 
@@ -738,6 +783,65 @@ mod tests {
         let ts = container.type_section.unwrap();
         assert_eq!(ts.fb_types.len(), 1);
         assert_eq!(ts.fb_types[0], desc);
+    }
+
+    #[test]
+    fn builder_when_add_var_entry_then_included_in_type_section() {
+        use crate::type_section::FieldType;
+
+        let entry = VarEntry {
+            var_type: FieldType::FbInstance,
+            flags: 0,
+            extra: 9,
+        };
+
+        let container = ContainerBuilder::new()
+            .num_variables(1)
+            .add_var_entry(entry.clone())
+            .build();
+
+        let ts = container.type_section.unwrap();
+        assert_eq!(ts.variable_table.len(), 1);
+        assert_eq!(ts.variable_table[0], entry);
+    }
+
+    #[test]
+    fn builder_when_add_stable_var_then_included_in_type_section() {
+        use crate::type_section::StableVarEntry;
+
+        let entry = StableVarEntry {
+            var_index: VarIndex::new(3),
+            uid: 0xDEAD_BEEF,
+        };
+
+        let container = ContainerBuilder::new()
+            .num_variables(4)
+            .add_stable_var(entry)
+            .build();
+
+        let ts = container.type_section.unwrap();
+        assert_eq!(ts.stable_vars.len(), 1);
+        assert_eq!(ts.stable_vars[0], entry);
+    }
+
+    #[test]
+    fn builder_when_add_fb_field_uid_then_included_in_type_section() {
+        use crate::type_section::FbFieldUidEntry;
+
+        let entry = FbFieldUidEntry {
+            fb_type_id: crate::id_types::FbTypeId::new(0x1000),
+            field_index: 2,
+            uid: 0xDEAD_BEEF,
+        };
+
+        let container = ContainerBuilder::new()
+            .num_variables(0)
+            .add_fb_field_uid(entry)
+            .build();
+
+        let ts = container.type_section.unwrap();
+        assert_eq!(ts.fb_field_uids.len(), 1);
+        assert_eq!(ts.fb_field_uids[0], entry);
     }
 
     #[test]

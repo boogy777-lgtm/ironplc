@@ -42,9 +42,9 @@ fn convert_to(
     let bytecode = convert_bytecode(func_id, 1);
     let c = container(&bytecode, Some(input), None);
     let mut b = VmBuffers::from_container(&c);
-    let mut vm = crate::common::load_and_start(&c, &mut b).unwrap();
+    let mut vm = crate::common::load_and_start(&c, &mut b).map_err(|fault| fault.trap)?;
     vm.run_round(0).map_err(|fault| fault.trap)?;
-    Ok(vm.read_variable(VarIndex::new(0)).unwrap())
+    vm.read_variable(VarIndex::new(0))
 }
 
 /// As [`convert_to`] for a 64-bit target: the result is stored and read as
@@ -57,16 +57,17 @@ fn convert_to_i64(
 ) -> Result<i64, Trap> {
     let func_id = str_to_num::func_id(target, non_numeric, failure);
     let mut bytecode = convert_bytecode(func_id, 1);
-    let store = bytecode
-        .iter()
-        .position(|b| *b == opcode::STORE_VAR_I32)
-        .unwrap();
+    let Some(store) = bytecode.iter().position(|b| *b == opcode::STORE_VAR_I32) else {
+        // The fixture builder always emits STORE_VAR_I32; absence means the
+        // fixture broke, which we report as an instruction error.
+        return Err(Trap::InvalidInstruction(opcode::STORE_VAR_I32));
+    };
     bytecode[store] = opcode::STORE_VAR_I64;
     let c = container(&bytecode, Some(input), None);
     let mut b = VmBuffers::from_container(&c);
-    let mut vm = crate::common::load_and_start(&c, &mut b).unwrap();
+    let mut vm = crate::common::load_and_start(&c, &mut b).map_err(|fault| fault.trap)?;
     vm.run_round(0).map_err(|fault| fault.trap)?;
-    Ok(vm.read_variable_i64(VarIndex::new(0)).unwrap())
+    vm.read_variable_i64(VarIndex::new(0))
 }
 
 fn not_convertible(input: &[u8]) -> Trap {
@@ -254,19 +255,20 @@ fn convert_to_real(
 ) -> Result<u64, Trap> {
     let func_id = str_to_num::func_id(target, non_numeric, failure);
     let mut bytecode = convert_bytecode(func_id, 1);
-    let store = bytecode
-        .iter()
-        .position(|b| *b == opcode::STORE_VAR_I32)
-        .unwrap();
+    let Some(store) = bytecode.iter().position(|b| *b == opcode::STORE_VAR_I32) else {
+        // The fixture builder always emits STORE_VAR_I32; absence means the
+        // fixture broke, which we report as an instruction error.
+        return Err(Trap::InvalidInstruction(opcode::STORE_VAR_I32));
+    };
     bytecode[store] = match target {
         Target::F32 => opcode::STORE_VAR_F32,
         _ => opcode::STORE_VAR_F64,
     };
     let c = container(&bytecode, Some(input), None);
     let mut b = VmBuffers::from_container(&c);
-    let mut vm = crate::common::load_and_start(&c, &mut b).unwrap();
+    let mut vm = crate::common::load_and_start(&c, &mut b).map_err(|fault| fault.trap)?;
     vm.run_round(0).map_err(|fault| fault.trap)?;
-    Ok(vm.read_variable_raw(VarIndex::new(0)).unwrap())
+    vm.read_variable_raw(VarIndex::new(0))
 }
 
 fn real_f32(input: &[u8], non_numeric: StringToNumNonNumeric) -> Result<f32, Trap> {

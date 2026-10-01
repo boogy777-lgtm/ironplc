@@ -6,6 +6,7 @@ use crate::constant_pool::ConstantPool;
 use crate::debug_section::DebugSection;
 use crate::header::{FileHeader, FLAG_HAS_DEBUG_SECTION, FLAG_HAS_TYPE_SECTION, HEADER_SIZE};
 use crate::integrity;
+use crate::load_verify::verify_load;
 use crate::task_table::TaskTable;
 use crate::type_section::TypeSection;
 use crate::ContainerError;
@@ -24,13 +25,56 @@ pub struct Container {
 }
 
 impl Container {
+    /// Computes the layout hash for online change: BLAKE3 over the variable
+    /// table, FB type descriptors and array descriptors, as defined by the
+    /// Layout Hash and Online Change formula
+    /// (`specs/design/bytecode-container-format.md`). Code, constants and
+    /// debug info are excluded, so a logic-only edit yields the same hash
+    /// and can be swapped in without restarting.
+    ///
+    /// [`write_to`](Self::write_to) stores this value in
+    /// `header.layout_hash`, along with `content_hash` and `debug_hash`;
+    /// the in-memory header keeps zeros until serialized (ADR-0052's hash
+    /// contract).
+    pub fn compute_layout_hash(&self) -> [u8; 32] {
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(&self.header.num_variables.to_le_bytes());
+
+        let empty_type_section = TypeSection::default();
+        let type_section = self.type_section.as_ref().unwrap_or(&empty_type_section);
+
+        for entry in &type_section.variable_table {
+            hasher.update(&[entry.var_type as u8, entry.flags]);
+            hasher.update(&entry.extra.to_le_bytes());
+        }
+
+        hasher.update(&(type_section.fb_types.len() as u16).to_le_bytes());
+        for desc in &type_section.fb_types {
+            hasher.update(&[desc.fields.len() as u8]);
+            for field in &desc.fields {
+                hasher.update(&[field.field_type as u8]);
+                hasher.update(&field.field_extra.to_le_bytes());
+            }
+        }
+
+        hasher.update(&(type_section.array_descriptors.len() as u16).to_le_bytes());
+        for desc in &type_section.array_descriptors {
+            hasher.update(&[desc.element_type]);
+            hasher.update(&desc.total_elements.to_le_bytes());
+            hasher.update(&desc.element_extra.to_le_bytes());
+        }
+
+        *hasher.finalize().as_bytes()
+    }
+
     /// Writes the container to the given writer.
     ///
     /// Each section is serialized to a buffer first, so the header is
     /// derived from the bytes that actually reach the file — the section
     /// directory from their lengths, `content_hash` and `debug_hash` from
-    /// their contents — before anything is written. Whatever `self.header`
-    /// carries in those fields is replaced.
+    /// their contents, and `layout_hash` (see [`compute_layout_hash`](Self::compute_layout_hash))
+    /// from the type section — before anything is written. Whatever
+    /// `self.header` carries in those fields is replaced.
     pub fn write_to(&self, w: &mut impl Write) -> Result<(), ContainerError> {
         let task_bytes = serialize(|buf| self.task_table.write_to(buf))?;
         let type_bytes = match &self.type_section {
@@ -79,6 +123,19 @@ impl Container {
         } else {
             integrity::NO_HASH
         };
+
+        // The layout hash is computed from the type section before the
+        // header is serialized for hashing: the content hash covers the
+        // masked header, and the mask does not blank `layout_hash`.
+        //
+        // It is kept alongside the ADR-0007 integrity hashes on purpose: the
+        // integrity scope covers *execution* (any byte that changes behavior),
+        // while `layout_hash` is the *online-change gate* (ADR-0052/0058) and
+        // deliberately narrower — code, constants and debug info are excluded
+        // so a logic-only edit keeps the hash equal and can swap at a scan
+        // boundary without a restart. Neither can do the other's job.
+        header.layout_hash = self.compute_layout_hash();
+
         // The header is part of the hashed content (masked), so it is
         // serialized once to hash and again to write with the hash in it.
         header.content_hash = integrity::content_hash(&integrity::Content {
@@ -103,10 +160,13 @@ impl Container {
     ///
     /// Rejects the container with [`ContainerError::ContentHashMismatch`]
     /// when the header carries a content hash that the header, task table,
-    /// type, constant and code sections do not reproduce. A debug section whose bytes do not
+    /// type, constant and code sections do not reproduce; a zero hash is a
+    /// legacy container and is accepted. A debug section whose bytes do not
     /// reproduce a carried `debug_hash` is discarded, not fatal, so a
-    /// modified or stale debug section cannot stop a program from running
-    /// — that is the separation ADR-0007 asks for.
+    /// modified or stale debug section cannot stop a program from running —
+    /// that is the separation ADR-0007 asks for. The structural load-time
+    /// checks ([`verify_load`](crate::load_verify)) then validate the type
+    /// section, including a recomputed `layout_hash`, per ADR-0006.
     pub fn read_from(r: &mut impl Read) -> Result<Self, ContainerError> {
         let mut header_bytes = [0u8; HEADER_SIZE];
         r.read_exact(&mut header_bytes)?;
@@ -190,14 +250,18 @@ impl Container {
             None
         };
 
-        Ok(Container {
+        let container = Container {
             header,
             task_table,
             type_section,
             constant_pool,
             code,
             debug_section,
-        })
+        };
+
+        verify_load(&container).map_err(ContainerError::VerificationFailed)?;
+
+        Ok(container)
     }
 }
 
@@ -241,11 +305,12 @@ mod tests {
     use crate::debug_section::{
         function_id, iec_type_tag, var_section, FuncNameEntry, VarNameEntry,
     };
-    use crate::id_types::{ConstantIndex, FunctionId, InstanceId, TaskId, VarIndex};
+    use crate::id_types::{ConstantIndex, FbTypeId, FunctionId, InstanceId, TaskId, VarIndex};
     use crate::test_support::{
         container_bytes, round_trip, steel_thread_bytecode, steel_thread_single_function_container,
         with_tampered_header,
     };
+    use crate::type_section::{FbTypeDescriptor, FieldEntry, FieldType, StableVarEntry, VarEntry};
     use crate::ContainerBuilder;
 
     #[test]
@@ -356,6 +421,11 @@ mod tests {
 
         let container = builder
             .num_variables(1)
+            .add_var_entry(VarEntry {
+                var_type: FieldType::I32,
+                flags: 0,
+                extra: 0,
+            })
             .add_i32_constant(42)
             .add_function(FunctionId::INIT, &bytecode, 1, 1, 0)
             .build();
@@ -385,6 +455,10 @@ mod tests {
         assert_eq!(decoded.code.functions.len(), 1);
     }
 
+    /// An inflated type-section size makes the section fall outside the
+    /// file, so the lenient parse treats it as absent. Clearing both hashes
+    /// selects the legacy path: no integrity check and, per ADR-0052's hash
+    /// contract, no layout-hash recompute.
     #[test]
     fn container_read_from_when_type_section_truncated_then_type_section_is_none() {
         #[rustfmt::skip]
@@ -407,17 +481,23 @@ mod tests {
 
         // Inflate the declared type_section_size so ts_end exceeds available
         // bytes, forcing the bounds check in read_from to return None. The
-        // lenient path is for unhashed containers, so drop the hash too.
+        // lenient path is for unhashed containers, so drop the hashes too
+        // (a zero layout_hash means "never serialized" per ADR-0052's hash
+        // contract and skips the recompute).
         let n = buf.len() as u32;
         let tampered = with_tampered_header(&buf, |h| {
             h.type_section_size = n * 2;
             h.content_hash = integrity::NO_HASH;
+            h.layout_hash = [0u8; 32];
         });
 
         let decoded = Container::read_from(&mut Cursor::new(&tampered)).unwrap();
         assert!(decoded.type_section.is_none());
     }
 
+    /// An inflated debug-section size leaves no debug bytes to verify, so
+    /// the debug section loads as absent — discarded, non-fatally, exactly
+    /// like a malformed debug section.
     #[test]
     fn container_read_from_when_debug_section_truncated_then_debug_section_is_none() {
         #[rustfmt::skip]
@@ -446,6 +526,276 @@ mod tests {
         let tampered = with_tampered_header(&buf, |h| h.debug_section_size = n * 2);
 
         let decoded = Container::read_from(&mut Cursor::new(&tampered)).unwrap();
+        assert!(decoded.debug_section.is_none());
+    }
+
+    /// A container exercising every input of the layout hash: a variable
+    /// table, an FB type with two fields, an array descriptor and the stable
+    /// variable IDs (which are deliberately not part of the hash).
+    fn layout_hash_container() -> Container {
+        let mut builder = ContainerBuilder::new();
+        builder.add_array_descriptor(FieldType::I32 as u8, 4, 0);
+        builder
+            .num_variables(2)
+            .add_var_entry(VarEntry {
+                var_type: FieldType::I32,
+                flags: 0,
+                extra: 0,
+            })
+            .add_var_entry(VarEntry {
+                var_type: FieldType::String,
+                flags: 0,
+                extra: 80,
+            })
+            .add_stable_var(StableVarEntry {
+                var_index: VarIndex::new(0),
+                uid: 0x1000,
+            })
+            .add_stable_var(StableVarEntry {
+                var_index: VarIndex::new(1),
+                uid: 0x2000,
+            })
+            .add_fb_type(FbTypeDescriptor {
+                type_id: FbTypeId::new(0),
+                fields: vec![
+                    FieldEntry {
+                        field_type: FieldType::I32,
+                        field_extra: 0,
+                    },
+                    FieldEntry {
+                        field_type: FieldType::Time,
+                        field_extra: 0,
+                    },
+                ],
+            })
+            .add_function(FunctionId::INIT, &[0x8C], 0, 0, 0)
+            .build()
+    }
+
+    #[test]
+    fn container_write_read_when_variable_table_then_roundtrips() {
+        let container = layout_hash_container();
+
+        let decoded = round_trip(&container);
+
+        let ts = decoded.type_section.unwrap();
+        assert_eq!(ts.variable_table.len(), 2);
+        assert_eq!(ts.variable_table[0].var_type, FieldType::I32);
+        assert_eq!(ts.variable_table[0].flags, 0);
+        assert_eq!(ts.variable_table[0].extra, 0);
+        assert_eq!(ts.variable_table[1].var_type, FieldType::String);
+        assert_eq!(ts.variable_table[1].extra, 80);
+    }
+
+    #[test]
+    fn container_write_read_when_stable_vars_then_roundtrips() {
+        let container = layout_hash_container();
+
+        let decoded = round_trip(&container);
+
+        let ts = decoded.type_section.unwrap();
+        assert_eq!(
+            ts.stable_vars,
+            vec![
+                StableVarEntry {
+                    var_index: VarIndex::new(0),
+                    uid: 0x1000,
+                },
+                StableVarEntry {
+                    var_index: VarIndex::new(1),
+                    uid: 0x2000,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn compute_layout_hash_when_same_inputs_then_equal() {
+        let first = layout_hash_container();
+        let second = layout_hash_container();
+
+        assert_eq!(first.compute_layout_hash(), second.compute_layout_hash());
+    }
+
+    #[test]
+    fn compute_layout_hash_when_only_stable_var_uids_change_then_equal() {
+        // A rename (a new UID binding for the same variable index, or new
+        // UIDs for the same entities) must not look like a layout change:
+        // migration compatibility is the migration planner's decision, not
+        // this hash's.
+        let first = layout_hash_container();
+        let mut second = layout_hash_container();
+        {
+            let stable_vars = &mut second.type_section.as_mut().unwrap().stable_vars;
+            stable_vars[0].uid = 0xFFFF_FFFF_FFFF_FFFF;
+            stable_vars[1].uid = 0;
+        }
+
+        assert_eq!(first.compute_layout_hash(), second.compute_layout_hash());
+    }
+
+    #[test]
+    fn compute_layout_hash_when_only_fb_field_uids_change_then_equal() {
+        // FB field UIDs (ADR 0059) are identity, not layout: assigning or
+        // changing them must not look like a layout change.
+        let first = layout_hash_container();
+        let mut second = layout_hash_container();
+        second.type_section.as_mut().unwrap().fb_field_uids.push(
+            crate::type_section::FbFieldUidEntry {
+                fb_type_id: FbTypeId::new(0x1000),
+                field_index: 0,
+                uid: 0xBEEF,
+            },
+        );
+
+        assert_eq!(first.compute_layout_hash(), second.compute_layout_hash());
+    }
+
+    #[test]
+    fn compute_layout_hash_when_variable_entry_changes_then_differs() {
+        let first = layout_hash_container();
+        let mut second = layout_hash_container();
+        second.type_section.as_mut().unwrap().variable_table[0].extra = 1;
+
+        assert_ne!(first.compute_layout_hash(), second.compute_layout_hash());
+    }
+
+    #[test]
+    fn compute_layout_hash_when_fb_field_changes_then_differs() {
+        let first = layout_hash_container();
+        let mut second = layout_hash_container();
+        second.type_section.as_mut().unwrap().fb_types[0].fields[0].field_extra = 1;
+
+        assert_ne!(first.compute_layout_hash(), second.compute_layout_hash());
+    }
+
+    #[test]
+    fn compute_layout_hash_when_array_descriptor_changes_then_differs() {
+        let first = layout_hash_container();
+        let mut second = layout_hash_container();
+        second.type_section.as_mut().unwrap().array_descriptors[0].total_elements = 5;
+
+        assert_ne!(first.compute_layout_hash(), second.compute_layout_hash());
+    }
+
+    #[test]
+    fn write_to_when_called_then_header_hashes_match_computation() {
+        let container = layout_hash_container();
+        let mut buf = Vec::new();
+        container.write_to(&mut buf).unwrap();
+
+        let decoded = Container::read_from(&mut Cursor::new(&buf)).unwrap();
+
+        assert_eq!(decoded.header.layout_hash, decoded.compute_layout_hash());
+        assert_ne!(decoded.header.layout_hash, [0u8; 32]);
+        // The integrity hashes are populated on the wire; the in-memory
+        // header keeps zeros until serialized (ADR-0052's hash contract).
+        // This container has no debug section, so `debug_hash` is zero on
+        // the wire per the Content Hash Scope.
+        assert_ne!(decoded.header.content_hash, [0u8; 32]);
+        assert_eq!(decoded.header.debug_hash, [0u8; 32]);
+        assert_eq!(container.header.content_hash, [0u8; 32]);
+        assert_eq!(container.header.debug_hash, [0u8; 32]);
+        assert_eq!(container.header.layout_hash, [0u8; 32]);
+    }
+
+    /// Corrupting a code byte invalidates the content hash, and the reader
+    /// rejects the container before any section is used.
+    #[test]
+    fn read_from_when_code_byte_tampered_then_content_hash_rejected() {
+        let container = layout_hash_container();
+        let mut buf = Vec::new();
+        container.write_to(&mut buf).unwrap();
+
+        let header = FileHeader::read_from(&mut Cursor::new(&buf[..HEADER_SIZE])).unwrap();
+        let code_end = (header.code_section_offset + header.code_section_size) as usize;
+        buf[code_end - 1] = buf[code_end - 1].wrapping_add(1);
+
+        let result = Container::read_from(&mut Cursor::new(&buf));
+        assert!(matches!(result, Err(ContainerError::ContentHashMismatch)));
+    }
+
+    /// Zeroing the content hash marks the container as legacy, and the
+    /// reader accepts it without checking — even when a type-section
+    /// invariant is violated, which the structural verifier still catches.
+    #[test]
+    fn read_from_when_content_hash_zeroed_then_legacy_accept() {
+        let container = layout_hash_container();
+        let buf = container_bytes(&container);
+        let tampered = with_tampered_header(&buf, |h| h.content_hash = [0u8; 32]);
+
+        let decoded = Container::read_from(&mut Cursor::new(&tampered)).unwrap();
+        assert_eq!(decoded.header.content_hash, [0u8; 32]);
+    }
+
+    /// The structural verifier runs even when the integrity hashes are zero:
+    /// a reserved variable flag bit is rejected with the specific violation.
+    #[test]
+    fn read_from_when_reserved_var_flags_and_zero_hashes_then_verification_failed() {
+        let mut container = layout_hash_container();
+        container.type_section.as_mut().unwrap().variable_table[0].flags = 0x80;
+        let buf = container_bytes(&container);
+        let tampered = with_tampered_header(&buf, |h| {
+            h.content_hash = [0u8; 32];
+            h.debug_hash = [0u8; 32];
+            h.layout_hash = [0u8; 32];
+        });
+
+        let result = Container::read_from(&mut Cursor::new(&tampered));
+        assert!(matches!(
+            result,
+            Err(ContainerError::VerificationFailed(
+                crate::LoadViolation::ReservedVariableFlags { flags: 0x80, .. }
+            ))
+        ));
+    }
+
+    /// A layout hash that does not recompute over the type section is
+    /// rejected: a candidate declaring the wrong layout must not reach the
+    /// online-change comparison. The content hash is cleared so the
+    /// structural verifier, not the integrity check, is what fires (the
+    /// masked header the content hash covers includes `layout_hash`).
+    #[test]
+    fn read_from_when_layout_hash_tampered_then_verification_failed() {
+        let container = layout_hash_container();
+        let buf = container_bytes(&container);
+        let tampered = with_tampered_header(&buf, |h| {
+            h.layout_hash = [0xFF; 32];
+            h.content_hash = [0u8; 32];
+        });
+
+        let result = Container::read_from(&mut Cursor::new(&tampered));
+        assert!(matches!(
+            result,
+            Err(ContainerError::VerificationFailed(
+                crate::LoadViolation::LayoutHashMismatch
+            ))
+        ));
+    }
+
+    /// A debug byte corruption invalidates the debug hash; the debug
+    /// section is discarded (non-fatal) and the container still loads.
+    #[test]
+    fn read_from_when_debug_byte_tampered_then_debug_section_discarded() {
+        let mut container = layout_hash_container();
+        container.debug_section = Some(crate::debug_section::DebugSection {
+            var_names: vec![],
+            func_names: vec![crate::debug_section::FuncNameEntry {
+                function_id: FunctionId::INIT,
+                name: "MAIN".into(),
+            }],
+            line_map: vec![],
+            string_layouts: vec![],
+            source_files: vec![],
+            enum_defs: vec![],
+        });
+        let mut buf = Vec::new();
+        container.write_to(&mut buf).unwrap();
+        assert_ne!(buf.len(), 0);
+        let last = buf.len() - 1;
+        buf[last] = buf[last].wrapping_add(1);
+
+        let decoded = Container::read_from(&mut Cursor::new(&buf)).unwrap();
         assert!(decoded.debug_section.is_none());
     }
 

@@ -73,13 +73,13 @@ Per-file source integrity lives in the debug section's `SOURCE_FILE_TABLE` (tag 
 | Requirement | Offset | Field | Type | Description |
 |-------------|--------|-------|------|-------------|
 | **REQ-CF-container-002** | 0 | magic | u32 | `0x49504C43` ("IPLC" in ASCII) |
-| **REQ-CF-container-003** | 4 | format_version | u16 | Container format version (currently 4; bumped to 2 from 1 by ADR-0033 opcode-encoding migration, then to 3 by ADR-0035 WSTRING string-header/constant-pool encoding tags, then to 4 by ADR-0054 explicit array element stride) |
+| **REQ-CF-container-003** | 4 | format_version | u16 | Container format version (currently 7; bumped to 2 from 1 by ADR-0033 opcode-encoding migration, to 3 by ADR-0035 WSTRING string-header/constant-pool encoding tags, to 4 by the variable table added to the type section, to 5 by the stable variable IDs added to the type section, to 6 by the FB field UIDs added to the type section, and to 7 by ADR-0069's explicit array element stride) |
 | | 6 | profile | u8 | Reserved for future VM profile definitions; must be zero |
 | **REQ-CF-container-007** | 7 | flags | u8 | Bit 0: has system uptime variables (`FLAG_HAS_SYSTEM_UPTIME`); Bit 1: has debug section (`FLAG_HAS_DEBUG_SECTION`); Bit 2: has type section (`FLAG_HAS_TYPE_SECTION`); bits 3–7 reserved. No bit indicates a signature section (see below) |
-| | 8 | content_hash | [u8; 32] | BLAKE3 over the masked header, task table, type section, constant pool and code section (see Content Hash Scope). All zeros means no hash was computed |
+| | 8 | content_hash | [u8; 32] | BLAKE3 over the masked header, task table, type section, constant pool and code section (see Content Hash Scope). Computed and written by the container writer; the reader verifies a nonzero value against the section bytes, and a zero value (a container written before this hash was populated) is accepted as legacy |
 | | 40 | reserved_hash_slot | [u8; 32] | Reserved (formerly `source_hash`); must be zero. Per-file source integrity is now in the debug section's `SOURCE_FILE_TABLE` (tag 6). |
-| | 72 | debug_hash | [u8; 32] | BLAKE3 over debug section (all zeros if no debug section, or if no hash was computed) |
-| | 104 | layout_hash | [u8; 32] | BLAKE3 over the memory layout signature (see Layout Hash and Online Change). **Planned** — currently written as all zeros |
+| | 72 | debug_hash | [u8; 32] | BLAKE3 over the debug section (all zeros if no debug section, or if no hash was computed). The reader verifies a nonzero value against the debug bytes and discards the debug section (non-fatal) on mismatch, matching step 13 of the Loading Sequence |
+| | 104 | layout_hash | [u8; 32] | BLAKE3 over the memory layout signature (see Layout Hash and Online Change). Computed and written by the container writer; all-zero only in a header that was never serialized |
 | | 136 | sig_section_offset | u32 | Offset of content signature section (0 if absent) |
 | | 140 | sig_section_size | u32 | Size of content signature section |
 | | 144 | debug_sig_offset | u32 | Offset of debug signature section (0 if absent) |
@@ -115,9 +115,9 @@ Per-file source integrity lives in the debug section's `SOURCE_FILE_TABLE` (tag 
 
 **REQ-CF-container-016** A container with no signature sections has `sig_section_offset`, `sig_section_size`, `debug_sig_offset` and `debug_sig_size` all zero.
 
-**REQ-CF-codegen-025** The compiler does not yet compute `layout_hash`; it writes it as zeros, and a reader must not validate it. Tracked by the Implementation Status in [ADR-0007](../adrs/0007-dual-signature-integrity-model.md) and [issue #1583](https://github.com/ironplc/ironplc/issues/1583).
+**REQ-CF-codegen-025** The compiler computes `layout_hash` (see [Layout Hash and Online Change](#layout-hash-and-online-change)) and writes it into the header when the container is serialized. It also computes `content_hash` (BLAKE3 over the masked header, task table, type section, constant pool and code section — see [Content Hash Scope](#content-hash-scope)) and `debug_hash` (BLAKE3 over the debug section, zero when absent), each reproducible from the section bytes the compiler wrote, and writes them into the header; the reader verifies nonzero hashes at load (see [Loading Sequence](#loading-sequence) and REQ-CF-container-029), and a zero hash is accepted as a legacy container. The signature sections remain unimplemented: `sig_section_offset` and `sig_section_size` stay zero, and no reader validates a signature. Content and debug signatures are tracked by the Implementation Status in [ADR-0007](../adrs/0007-dual-signature-integrity-model.md) and [issue #1583](https://github.com/ironplc/ironplc/issues/1583).
 
-**REQ-CF-codegen-026** Every container the compiler writes carries a nonzero `content_hash` and, when it has a debug section, a nonzero `debug_hash`, each reproducible from the section bytes the compiler wrote (see [Content Hash Scope](#content-hash-scope)).
+**REQ-CF-codegen-026** The compiler records the type section's FB field UID table from the engineering-side `(qualified FB type name, field name) → uid` input (ADR-0059): each user-defined `FUNCTION_BLOCK` field the input names gets an entry mapping the type's `fb_type_id` and the field's ordinal to that uid, emitted in ascending `(fb_type_id, field_index)` order. Fields the input does not name carry no entry. The table is excluded from `layout_hash`.
 
 ### Resource Budget Calculation
 
@@ -164,9 +164,9 @@ Present when `debug_sig_offset` is nonzero, which requires a debug section (`fla
 
 Present when `flags` bit 2 is set. Required for on-device verification (ADR-0006). May be stripped for constrained targets using the signature fallback.
 
-The type section describes the aggregate types a program uses. The interpreter reads the array descriptors (element stride and bounds) and the user FB descriptors (body dispatch) at runtime; the FB type descriptors are for the verifier.
+The type section describes the aggregate types a program uses. The interpreter reads the array descriptors (element stride and bounds) and the user FB descriptors (body dispatch) at runtime; the FB type descriptors are for the verifier; the stable variable IDs are for the online-change migration planner ([ADR-0053](../adrs/0053-stable-variable-ids-for-declaration-level-hot-edit.md)), and the interpreter ignores them; the FB field UIDs are for per-field FB instance migration ([ADR-0059](../adrs/0059-fb-field-stable-ids.md)), and the interpreter ignores them too.
 
-**REQ-CF-container-018** The type section is three sub-tables in this order, each prefixed by a u16 count: FB type descriptors, array descriptors, user FB descriptors.
+**REQ-CF-container-018** The type section is six sub-tables in this order, each prefixed by a u16 count: FB type descriptors, array descriptors, user FB descriptors, variable table, stable variable IDs, FB field UIDs.
 
 | Offset | Field | Type | Description |
 |--------|-------|------|-------------|
@@ -176,6 +176,12 @@ The type section describes the aggregate types a program uses. The interpreter r
 | varies | arrays | [ArrayDescriptor; num_arrays] | 12 bytes each |
 | varies | num_user_fb_types | u16 | Number of user FB descriptors |
 | varies | user_fb_types | [UserFbDescriptor; num_user_fb_types] | 8 bytes each |
+| varies | num_variables | u16 | Number of variable table entries (must match header `num_variables`) |
+| varies | variables | [VarEntry; num_variables] | 4 bytes each (see below) |
+| varies | num_stable_vars | u16 | Number of stable variable ID entries |
+| varies | stable_vars | [StableVarEntry; num_stable_vars] | 10 bytes each (see below) |
+| varies | num_fb_field_uids | u16 | Number of FB field UID entries |
+| varies | fb_field_uids | [FbFieldUidEntry; num_fb_field_uids] | 11 bytes each (see below) |
 
 ### FB Type Descriptors
 
@@ -214,7 +220,7 @@ Each array descriptor defines the element type, total element count and element 
 | 1 | reserved | u8 | Reserved; must be zero |
 | 2 | total_elements | u32 | Total number of elements across all dimensions |
 | 6 | element_extra | u16 | For STRING/WSTRING elements: max length. For FB elements: fb_type_id. |
-| 8 | element_stride | u32 | Byte distance between the starts of consecutive elements (ADR-0054) |
+| 8 | element_stride | u32 | Byte distance between the starts of consecutive elements (ADR-0069) |
 
 `element_stride` is the element's own size, except for a STRING/WSTRING field of each element of an array of structures, where it is the size of one structure. The reader rejects a STRING/WSTRING stride smaller than one element (elements would overlap) and, for every other element type, any stride other than one 8-byte slot, because `LOAD_ARRAY`/`STORE_ARRAY` always step by one slot.
 
@@ -236,11 +242,9 @@ Each user FB descriptor maps a user-defined `FUNCTION_BLOCK` type to the compile
 | 6 | num_fields | u8 | Number of data-region fields in an instance |
 | 7 | reserved | u8 | Reserved; must be zero |
 
-### Variable Table (planned, not emitted)
+### Variable Table
 
-> **Status.** The type section carries no variable table today: the load-time verifier that would consume it (ADR-0006) does not exist, and the interpreter uses compiler-assigned indices directly. The layout below is retained because [Layout Hash and Online Change](#layout-hash-and-online-change) is defined over it.
-
-The variable table describes the type of each variable slot. The verifier uses types to check that LOAD_VAR/STORE_VAR opcodes use the correct typed variant.
+The variable table is the fourth sub-table of the type section ([REQ-CF-container-018](#type-section)), emitted by the compiler with one entry per compiler-assigned variable index. It describes the type of each variable slot, and it is the primary input to [Layout Hash and Online Change](#layout-hash-and-online-change). The load-time verifier that would check LOAD_VAR/STORE_VAR opcodes against it (ADR-0006) is still planned, so the interpreter continues to use the compiler-assigned indices directly.
 
 | Offset | Field | Type | Description |
 |--------|-------|------|-------------|
@@ -252,12 +256,59 @@ Each VarEntry (4 bytes, fixed size):
 | Offset | Field | Type | Description |
 |--------|-------|------|-------------|
 | 0 | var_type | u8 | Type encoding (see below) |
-| 1 | flags | u8 | Bit 0: is array (see array descriptors) |
+| 1 | flags | u8 | Bit 0: is array (see array descriptors); bits 1–7 reserved, written as zero |
 | 2 | extra | u16 | For STRING/WSTRING: max length. For FB_INSTANCE: fb_type_id. For arrays: array descriptor index. |
 
 **REQ-CF-container-009** The `var_type` / `field_type` encoding is: 0=I32, 1=U32, 2=I64, 3=U64, 4=F32, 5=F64, 6=STRING, 7=WSTRING, 8=FB_INSTANCE, 9=TIME, 10=SLOT. The SLOT type represents a heterogeneous structure field slot (8-byte slot for flattened struct layouts).
 
 Variable indices are compiler-assigned. The compiler must produce deterministic indices across compilations using the ordering rules in [Deterministic Ordering](#deterministic-ordering) to ensure that the same source program (with only logic changes) produces compatible bytecode.
+
+### Stable Variable IDs
+
+The stable variable ID table is the fifth sub-table of the type section ([REQ-CF-container-018](#type-section)). It maps a persistent variable's compiler-assigned index to the engineering-side entity UID: the identity of the declaration, assigned when the declaration is created and surviving every rename. The name is only a binding to that identity, and the container carries no names (they belong in the debug section).
+
+The table exists for declaration-level hot edit ([ADR-0053](../adrs/0053-stable-variable-ids-for-declaration-level-hot-edit.md)): a rename — including a name swap between two variables — keeps each entity's UID, so the variable's type and value stay with the entity and the rename moves no data. The runtime migration planner consumes this `var_index` → `uid` mapping to carry each surviving entity's value across declaration-level edits — deciding which values are copied, initialised or dropped — and it decides migration compatibility, not the `layout_hash` ([ADR-0054](../adrs/0054-state-migration-across-declaration-level-edits.md)). The table is therefore excluded from [`layout_hash`](#layout-hash-and-online-change): a change that touches only UIDs and names keeps the hash identical, so it is not mistaken for a layout change.
+
+The table is emitted always, with a count of zero when it is empty (containers written before format v5 end after the variable table). Entries are stored in ascending `var_index` order; the UIDs come from the engineering project model (a rename or swap refactor keeps them) and are supplied through the compiler API for now, while project-model plumbing follows. Transient slots (function locals, scratch) have no entry.
+
+| Offset | Field | Type | Description |
+|--------|-------|------|-------------|
+| 0 | count | u16 | Number of stable variable ID entries |
+| 2 | entries | [StableVarEntry; count] | Stable variable ID descriptors |
+
+Each StableVarEntry (10 bytes, fixed size):
+
+| Offset | Field | Type | Description |
+|--------|-------|------|-------------|
+| 0 | var_index | u16 | Variable table index of the entity; entries ascend |
+| 2 | uid | u64 | Engineering-side entity UID; survives renames |
+
+**REQ-CF-container-028** The stable variable ID table is emitted with a u16 count, followed by that many 10-byte entries in ascending `var_index` order; each entry maps a persistent variable's `var_index` to its u64 entity UID.
+
+### FB Field UIDs
+
+The FB field UID table is the sixth and last sub-table of the type section ([REQ-CF-container-018](#type-section)). It maps one field of a user-defined FB type — identified by the type's `type_id` and the field's ordinal within the type's field list — to the engineering-side entity UID of the field declaration (ADR-0059). The UID identifies the field, not its position: inserting a field into the type shifts the ordinals of the following fields, but a field's UID (and therefore its migrated value) stays with the field. Only user-defined FB types carry entries; standard-library FBs (TON, ...) have fixed, VM-owned layouts and none.
+
+The table exists for per-field FB instance migration: the runtime migration planner matches the active and candidate containers' fields of one FB type by UID and copies each surviving field's value into its new ordinal position, initialises fields whose UID is new, and drops fields whose UID disappeared ([ADR-0059](../adrs/0059-fb-field-stable-ids.md)). Like the stable variable IDs, the table is identity, not layout, and is excluded from [`layout_hash`](#layout-hash-and-online-change).
+
+The table is emitted always, with a count of zero when it is empty (containers written before format v6 end after the stable variable IDs). Entries are stored in ascending `(fb_type_id, field_index)` order; the UIDs come from the same engineering project model as the stable variable IDs — the UID sidecar keys an FB field as `(scope = qualified FB type name, name = field)`, so no sidecar format change was needed.
+
+| Offset | Field | Type | Description |
+|--------|-------|------|-------------|
+| 0 | count | u16 | Number of FB field UID entries |
+| 2 | entries | [FbFieldUidEntry; count] | FB field UID descriptors |
+
+Each FbFieldUidEntry (11 bytes, fixed size):
+
+| Offset | Field | Type | Description |
+|--------|-------|------|-------------|
+| 0 | fb_type_id | u16 | User FB type ID (matches a user FB descriptor) |
+| 2 | field_index | u8 | Ordinal of the field within the type's field list |
+| 3 | uid | u64 | Engineering-side entity UID of the field declaration; survives renames and reorderings |
+
+**REQ-CF-container-030** The FB field UID table is emitted with a u16 count, followed by that many 11-byte entries in ascending `(fb_type_id, field_index)` order; each entry maps a user FB type's `(fb_type_id, field_index)` to its u64 field UID.
+
+**REQ-CF-container-029** The container reader verifies a container at load time (ADR-0006). When `content_hash` is nonzero it must equal the digest defined in [Content Hash Scope](#content-hash-scope) (checked by `ironplc_container::integrity` before any section is parsed, REQ-CF-container-037); when `layout_hash` is nonzero it must recompute over the variable table, FB type descriptors and array descriptors; and the type section's tables must be internally consistent — the variable table count matches `num_variables`, variable entries set no reserved flag bits, array variables reference an existing array descriptor, FB type IDs and stable variable IDs are distinct (stable IDs ascending and within `num_variables`), user FB descriptors reference an existing function and a field range within the variable table, array descriptor element types are defined tags, and FB field UIDs name an existing user FB descriptor and a field ordinal within its `num_fields` (entries ascending). A violated invariant is rejected with `ContainerError::VerificationFailed` carrying the specific violation; a hash field of all zeros is a container written before this verification existed and is accepted as legacy. When `debug_hash` is nonzero but does not match the debug section, the debug section is discarded (non-fatal), per step 13 of the Loading Sequence. Implemented by `ironplc_container::verify_load` and the hash checks in `Container::read_from` (ADR-0058).
 
 ### Function Signatures (planned, not emitted)
 
@@ -573,7 +624,7 @@ See [Debugger Support](debugger-support.md) for the full debugger architecture i
 
 ## Loading Sequence
 
-> **Status.** Of the sequence below, steps 1–3 are implemented by the container reader, steps 7–9 and 13b–13d by `Container::read_from` (steps 8–9 also by `ContainerRef::from_slice`), and step 12 by `VmBuffers::from_container`; the VM additionally rejects a zero `max_call_depth` with trap `V9017` at start. Steps 4–6, 10–11 and 13a are planned: there is no signature to verify, so an all-zero `content_hash` is accepted unchecked and the VM loads any container whose hash, if present, matches. See the Implementation Status in [ADR-0006](../adrs/0006-bytecode-verification-requirement.md) and [ADR-0007](../adrs/0007-dual-signature-integrity-model.md), tracked by [issue #1582](https://github.com/ironplc/ironplc/issues/1582) and [issue #1583](https://github.com/ironplc/ironplc/issues/1583).
+> **Status.** Of the sequence below, steps 1–3 are implemented by the container reader, steps 7–9 and 13b–13d by `Container::read_from` (steps 8–9 also by `ContainerRef::from_slice`), step 9's hash comparison and the type-section consistency checks of step 10 by `ironplc_container::verify_load` (REQ-CF-container-029, ADR-0058), and step 12 by `VmBuffers::from_container`; the VM additionally rejects a zero `max_call_depth` with trap `V9017` at start. Steps 4–6, the bytecode-level half of step 10 (opcode operands checked against the tables), 11 and 13a are planned: there is no signature to verify, so an all-zero `content_hash` is accepted unchecked, and a debug-hash mismatch discards the debug section non-fatally instead of triggering step 13a's debug-signature verification. See the Implementation Status in [ADR-0006](../adrs/0006-bytecode-verification-requirement.md) and [ADR-0007](../adrs/0007-dual-signature-integrity-model.md), tracked by [issue #1582](https://github.com/ironplc/ironplc/issues/1582) and [issue #1583](https://github.com/ironplc/ironplc/issues/1583).
 
 **REQ-CF-container-026** A header whose magic is not `0x49504C43` is rejected with `ContainerError::InvalidMagic`.
 
@@ -625,13 +676,13 @@ Per-file source integrity lives in the debug section's `SOURCE_FILE_TABLE` (tag 
 
 Note: The content signature signs the content_hash value, and the VM verifies that the content_hash in the header matches the actual hash of the content (step 9 in the loading sequence). To make the binding explicit: `content_hash = BLAKE3(masked_header || task_table_bytes || type_section_bytes || const_section_bytes || code_section_bytes)`.
 
-**REQ-CF-container-028** `content_hash` is the BLAKE3 digest of the masked header image followed by the task table, type section, constant pool and code section bytes in file order, each section located by its directory entry; an absent type section contributes no bytes.
+**REQ-CF-container-035** `content_hash` is the BLAKE3 digest of the masked header image followed by the task table, type section, constant pool and code section bytes in file order, each section located by its directory entry; an absent type section contributes no bytes.
 
 **REQ-CF-container-034** The masked header image is the 256 header bytes with `content_hash`, `debug_hash` and the section directory (bytes 136–191) zeroed and `FLAG_HAS_DEBUG_SECTION` cleared; every other header byte is covered as written.
 
-**REQ-CF-container-029** `debug_hash` is the BLAKE3 digest of the debug section bytes, and all zeros when the container has no debug section.
+**REQ-CF-container-036** `debug_hash` is the BLAKE3 digest of the debug section bytes, and all zeros when the container has no debug section.
 
-**REQ-CF-container-030** A reader recomputes the content hash over the header and the sections it located and rejects a container whose nonzero `content_hash` differs with `ContainerError::ContentHashMismatch`, before parsing any section.
+**REQ-CF-container-037** A reader recomputes the content hash over the header and the sections it located and rejects a container whose nonzero `content_hash` differs with `ContainerError::ContentHashMismatch`, before parsing any section.
 
 **REQ-CF-container-031** An all-zero `content_hash` means no hash was computed; a reader accepts such a container without a content hash check.
 
@@ -639,7 +690,7 @@ Note: The content signature signs the content_hash value, and the VM verifies th
 
 **REQ-CF-container-033** Removing the debug section (truncating the file at its offset and zeroing its directory entry, `debug_hash` and flag bit) leaves `content_hash` valid.
 
-The all-zero form exists for containers assembled without a writer that hashes — hand-built test fixtures and files that predate hashing. The compiler never writes it (REQ-CF-codegen-026). Until the content signature exists, an unhashed container is indistinguishable from an unsigned one and is accepted for the same reason: there is no trust anchor to reject it against. Once signatures land, the all-zero form will fail signature verification like any other unsigned container.
+The all-zero form exists for containers assembled without a writer that hashes — hand-built test fixtures and files that predate hashing. The compiler never writes it (REQ-CF-codegen-025). Until the content signature exists, an unhashed container is indistinguishable from an unsigned one and is accepted for the same reason: there is no trust anchor to reject it against. Once signatures land, the all-zero form will fail signature verification like any other unsigned container.
 
 ## Deterministic Ordering
 
@@ -696,7 +747,10 @@ The hash covers all information that determines memory layout. It excludes code,
 
 ### Online change protocol
 
-When the VM receives new bytecode while running:
+A runtime host performs the online change, not the VM: the VM is a pure
+execution kernel that borrows a container and caller-owned buffers for the
+duration of a scan session. When the host receives new bytecode while the
+application runs:
 
 ```
 1. Read new file header
@@ -704,7 +758,8 @@ When the VM receives new bytecode while running:
 3. If hashes match:
    a. Verify new bytecode (signature + optional verifier)
    b. At the end of the current scan cycle (after OUTPUT_FLUSH):
-      - Swap code section to new bytecode
+      - Reload the VM from the new container on the host's buffers
+        (`Vm::load(...).resume(...)`)
       - Keep all variable, FB instance, and process image memory intact
       - Resume execution with new code on next scan cycle
 4. If hashes differ:
@@ -712,22 +767,24 @@ When the VM receives new bytecode while running:
    b. The operator must perform a full stop-load-start sequence
 ```
 
-The swap occurs at a safe point (between scan cycles) to ensure the program never executes a mix of old and new code within a single scan.
+The swap occurs at a safe point (between scan cycles) to ensure the program never executes a mix of old and new code within a single scan. The host rebuilds the buffers for the destination container and carries the persistent bytes over, which accommodates a candidate that grows the data region. See [ADR-0052](../adrs/0052-online-change-performed-by-the-runtime-host.md) for the host-level decision and the typed validation errors.
 
 ### Why compiler-determined ordering is sufficient
 
 This design relies on the compiler producing deterministic output rather than embedding names in the container for runtime matching. This is the right trade-off because:
 
 - **Logic-only changes are the common case** — most PLC online changes modify function bodies while keeping the same variables and FB types
-- **All-or-nothing is simple and safe** — if any declaration changes, the hash changes, and the VM requires a full restart; there is no partial migration that could silently corrupt data
+- **All-or-nothing is safe by default** — if any declaration changes, the hash changes, and the host requires a full restart unless a migration planner can prove per-variable compatibility from the stable variable IDs; there is no unverified partial migration that could silently corrupt data
 - **Smaller container format** — no variable names, type names, or field names in the type section; names belong in the debug section
 - **Simpler runtime** — one 32-byte hash comparison replaces O(n) name matching and per-item layout checking
 
-Per-variable migration (adding a variable while preserving others) is an advanced feature that can be added later if needed by extending the type section with optional name metadata.
+Per-variable migration is the successor feature: the type section's stable variable ID table (see [Stable Variable IDs](#stable-variable-ids)) carries a UID per persistent variable, and the runtime migration planner compares the active and candidate tables to decide which values are copied, which are initialised, and which are dropped — a shared UID whose entry differs is reconciled per the migration rules below (conversion policy, or a collected decision), and anything else rejects the whole candidate. The table is deliberately excluded from `layout_hash`: a rename changes UIDs and names only, the hash stays equal, and the planner — not a single hash — decides compatibility ([ADR-0053](../adrs/0053-stable-variable-ids-for-declaration-level-hot-edit.md), [ADR-0054](../adrs/0054-state-migration-across-declaration-level-edits.md)). FB instance fields are covered the same way by the FB field UID table (see [FB Field UIDs](#fb-field-uids)): the planner matches a shared instance's fields by UID and copies, initialises or drops each field individually, and rejects a layout-changing edit whose fields carry no UIDs ([ADR-0059](../adrs/0059-fb-field-stable-ids.md)).
+
+Type-changing migration is policy-gated ([ADR-0060](../adrs/0060-type-changing-migration-policies.md)) and engineer-decided where the policy rejects ([ADR-0061](../adrs/0061-engineer-decided-migration-for-out-of-policy-type-changes.md)): when a shared UID's variable-table entry differs only in `var_type`, the planner consults a fixed table of admitted storage-class conversions — integer widening within the signed and unsigned families (`I32` -> `I64`, `U32` -> `U64`), signed integer to real (`I32` -> `F32`, `I32` -> `F64`, `I64` -> `F64`), and real widening (`F32` -> `F64`). An admitted scalar plans a conversion that executes at the scan boundary; an admitted array element pair converts element-wise, but only when the element count and the per-element size are equal. Every out-of-policy pair is collected rather than rejected on the first offender: without decisions the stage fails with `MigrationUnsupported` (V4010) carrying all of them (UID, debug name, from/to class, and whether the sizes match), and the engineering client resubmits the staged edit with a per-UID decision map (`init` or `preserve`). `init` plans no action, so the candidate's init image initializes the value; `preserve` keeps the old storage bytes under the candidate type and is legal only when both sides' sizes match (scalars: the same numeric width family; arrays: equal element width and element count). A decision may also override an admitted pair (`init` or `preserve` instead of convert); the automatic conversion stays the default, and an unknown UID or a `preserve` on a size-mismatched pair is rejected. Strings migrate only within the same width and maximum length (a same-size copy); structural differences — narrowing, signedness changes, `TIME`, strings of a different size, FB instance entries themselves — still reject at stage time through the V4010 path. FB instance field retypes follow the same decision path through their field UIDs. Within-class widenings such as `INT` -> `DINT` change no `VarEntry` at all (both encode as `I32`), so the hash stays equal and no migration is involved.
 
 ## Versioning
 
-The `format_version` field allows future changes to the container format. The VM must reject versions it does not support. The current version is 3 (`FORMAT_VERSION`; see the header table for the history), and the reader rejects any other value.
+The `format_version` field allows future changes to the container format. The VM must reject versions it does not support. The current version is 6 (`FORMAT_VERSION`; see the header table for the history), and the reader rejects any other value.
 
 Rules for version increments:
 - Adding new optional sections → minor version (backward compatible)

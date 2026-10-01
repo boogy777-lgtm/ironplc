@@ -1,0 +1,53 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+	<language-model>
+    
+		<global-interface id = "{C912F995-F4B5-48BD-9416-F36B0846C0E1}" name = "Constants">
+			<interface>
+        {attribute 'qualified_only'}
+        {attribute 'linkalways'}
+        {implicit on}
+        {p0}VAR_GLOBAL CONSTANT
+        {p1}// Like x86, ARM etc
+        {p2}bLittleEndian : BOOL := TRUE;
+        {p3}// the runtime version number as defined by the device description.
+        {p4}RuntimeVersion : VERSION := (uiMajor := 3, uiMinor := 0, uiServicePack := 0, uiPatch := 0);
+        {p5}// the compiler version as defined in the build options (not OEM Customized Version!)
+        {p6}CompilerVersion : VERSION := (uiMajor := 3, uiMinor := 0, uiServicePack := 0, uiPatch := 0);
+        {p7}// TRUE if project is running in simulation mode
+        {p8}bSimulationMode : BOOL := FALSE;
+        {p9}// Number of Bits per Register. Possible values: 16 (c16x, 186), 32 (x86, ARM, PPC ...), 64 (x86-64Bit)
+        {p10}nRegisterSize : WORD := 32;
+        {p11}// the pack mode as defined in the device description. Should match to the pack mode of the runtime
+        {p12}nPackMode : UINT := 8;
+        {p13}// Does the target support an FPU
+        {p14}bFPUSupport : BOOL := FALSE;
+        {p15}{IF COMPILERVERSION(>=, '3.5.7.0')}
+        {p16}// the runtime version coded in the nibbles of a DWORD
+        {p17}RuntimeVersionNumeric : DWORD := 16#03000000;
+        {p18}//	the compiler version coded in the nibbles of a DWORD
+        {p19}CompilerVersionNumeric : DWORD := 16#03000000;
+        {p20}{END_IF}
+        {p21}{IF COMPILERVERSION(>=, '3.5.12.0')}
+        {p22}// Does the target support multiple cores?
+        {p23}bMulticoreSupport : BOOL := FALSE;
+        {p24}{END_IF}
+        {p25}{IF COMPILERVERSION(>=, '3.5.14.0')}
+        {p26}// The optimal vector size for a vector of lreals, or 1 if no vectors are available.
+        {p27}vcOptimalLREAL : INT := 1;
+        {p28}// The optimal vector size for a vector of reals, or 1 if no vectors are available.
+        {p29}vcOptimalREAL : INT := 1;
+        {p30}{END_IF}
+        {p31}{IF COMPILERVERSION(>=, '3.5.15.0')}
+        {p32}// The value of IDeviceIdentification.Type
+        {p33}nRuntimeDeviceType : UINT := 0;
+        {p34}{END_IF}
+        {p35}{IF COMPILERVERSION(>=, '3.5.18.0')}
+        {p36}// The value of IDeviceIdentification.Type
+        {p37}bUTF8Encoding : BOOL := FALSE;
+        {p38}{END_IF}
+        {p39}END_VAR
+        {implicit off}
+      </interface>
+		</global-interface>
+    
+	</language-model>

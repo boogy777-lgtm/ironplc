@@ -1,0 +1,54 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+	<language-model>
+    <data-type id ="f4fafa0b-0199-4a4a-82c6-354c2db388c0" name = "TYPE_CLASS">
+      <interface>
+        {attribute 'qualified_only'}
+        {IF COMPILERVERSION(>=, '3.5.2.0')}
+        {attribute 'm4export_hide'}
+        {END_IF}
+        TYPE TYPE_CLASS :
+        (
+        TYPE_BOOL,
+        TYPE_BIT,
+        TYPE_BYTE,
+        TYPE_WORD,
+        TYPE_DWORD,
+        TYPE_LWORD,
+        TYPE_SINT,
+        TYPE_INT,
+        TYPE_DINT,
+        TYPE_LINT,
+        TYPE_USINT,
+        TYPE_UINT,
+        TYPE_UDINT,
+        TYPE_ULINT,
+        TYPE_REAL,
+        TYPE_LREAL,
+        TYPE_STRING,
+        TYPE_WSTRING,
+        TYPE_TIME,
+        TYPE_DATE,
+        TYPE_DATEANDTIME,
+        TYPE_TIMEOFDAY,
+        TYPE_POINTER,
+        TYPE_REFERENCE,
+        TYPE_SUBRANGE,
+        TYPE_ENUM,
+        TYPE_ARRAY,
+        TYPE_PARAMS,
+        TYPE_USERDEF,
+        TYPE_NONE,
+        TYPE_ANY,
+        TYPE_ANYBIT,
+        TYPE_ANYDATE,
+        TYPE_ANYINT,
+        TYPE_ANYNUM,
+        TYPE_ANYREAL,
+        TYPE_LAZY,
+        TYPE_LTIME,
+        TYPE_BITCONST
+        )DWORD;
+        END_TYPE
+      </interface>
+    </data-type>
+  </language-model>

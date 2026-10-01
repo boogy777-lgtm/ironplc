@@ -460,7 +460,7 @@ fn hex_string(bytes: &[u8]) -> String {
 mod tests {
     use super::*;
     use ironplc_container::test_support::{round_trip, steel_thread_single_function_container};
-    use ironplc_container::{ContainerBuilder, FunctionId};
+    use ironplc_container::{ContainerBuilder, FieldType, FunctionId, VarEntry, VAR_FLAG_IS_ARRAY};
     use rstest::rstest;
     use std::io::Write;
     use tempfile::NamedTempFile;
@@ -483,6 +483,16 @@ mod tests {
         builder.add_array_descriptor(2, 2, 0);
         round_trip(
             &builder
+                .add_var_entry(VarEntry {
+                    var_type: FieldType::I32,
+                    flags: VAR_FLAG_IS_ARRAY,
+                    extra: 0,
+                })
+                .add_var_entry(VarEntry {
+                    var_type: FieldType::I32,
+                    flags: 0,
+                    extra: 0,
+                })
                 .add_function(FunctionId::new(0), &bytecode, 2, 2, 0)
                 .build(),
         )
@@ -554,7 +564,7 @@ mod tests {
     fn disassemble_when_steel_thread_then_header_has_format_version() {
         let container = steel_thread_container();
         let result = disassemble(&container);
-        assert_eq!(result["header"]["formatVersion"], 4);
+        assert_eq!(result["header"]["formatVersion"], 7);
     }
 
     #[test]
@@ -733,7 +743,7 @@ mod tests {
         tmp.flush().unwrap();
 
         let result = disassemble_file(tmp.path());
-        assert_eq!(result["header"]["formatVersion"], 4);
+        assert_eq!(result["header"]["formatVersion"], 7);
         assert_eq!(result["header"]["numVariables"], 2);
     }
 

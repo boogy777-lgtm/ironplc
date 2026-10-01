@@ -8,6 +8,7 @@ use ironplc_dsl::common::{GenericTypeName, Library, TypeName};
 use ironplc_dsl::textual::{Assignment, ExprType};
 use ironplc_dsl::visitor::Visitor;
 use ironplc_parser::options::{CompilerOptions, Dialect};
+use ironplc_test::cast;
 use std::convert::Infallible;
 
 /// Resolves `body` inside a program declaring one variable of each kind the
@@ -53,11 +54,12 @@ fn first_assigned_type(library: &Library) -> Option<ExprType> {
     first.0.flatten()
 }
 
+// Fence style: the workspace denies `panic` even in src-level tests (see
+// compiler/Cargo.toml [workspace.lints.clippy]); `cast!` panics inside the
+// ironplc-test macro, which is the sanctioned extractor for match-or-fail
+// in tests.
 fn concrete(expr_type: Option<ExprType>) -> ironplc_dsl::type_id::TypeId {
-    match expr_type {
-        Some(ExprType::Concrete(id)) => id,
-        other => panic!("expected a concrete type, got {other:?}"),
-    }
+    *cast!(cast!(&expr_type, Option::Some), ExprType::Concrete)
 }
 
 #[test]

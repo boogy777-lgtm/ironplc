@@ -1,0 +1,752 @@
+import * as assert from 'assert';
+import {
+  displayMode,
+  encodeRequest,
+  formatStatusDetail,
+  formatStatusText,
+  HotEditProtocolError,
+  HotEditSession,
+  HotEditStatus,
+  HotEditTransport,
+  parseResponseLine,
+} from '../../hotEditSession';
+import { rejectWith } from './testHelpers';
+
+/** An in-memory transport: tests feed lines in and record the lines sent out. */
+class MockTransport implements HotEditTransport {
+  readonly sent: string[] = [];
+  private readonly lineListeners: ((line: string) => void)[] = [];
+  private readonly exitListeners: (() => void)[] = [];
+
+  sendLine(line: string): void {
+    this.sent.push(line);
+  }
+
+  onLine(listener: (line: string) => void): void {
+    this.lineListeners.push(listener);
+  }
+
+  onExit(listener: () => void): void {
+    this.exitListeners.push(listener);
+  }
+
+  emitLine(line: string): void {
+    for (const listener of this.lineListeners) {
+      listener(line);
+    }
+  }
+
+  emitExit(): void {
+    for (const listener of this.exitListeners) {
+      listener();
+    }
+  }
+}
+
+const STATUS_LINE = '{"response":"status","mode":"normal","active":1,"normal":1,"candidate":null,"application":1,"migration":false,"rounds":42}';
+
+function createStatus(overrides?: Partial<HotEditStatus>): HotEditStatus {
+  return {
+    mode: 'normal',
+    active: 1,
+    normal: 1,
+    candidate: null,
+    application: 1,
+    migration: false,
+    rounds: 0,
+    ...overrides,
+  };
+}
+
+suite('encodeRequest', () => {
+  test('encodeRequest_when_simple_command_then_tag_only_line', () => {
+    assert.strictEqual(encodeRequest('getStatus'), '{"command":"getStatus"}');
+    assert.strictEqual(encodeRequest('testEdits'), '{"command":"testEdits"}');
+    assert.strictEqual(encodeRequest('untestEdits'), '{"command":"untestEdits"}');
+    assert.strictEqual(encodeRequest('assembleEdits'), '{"command":"assembleEdits"}');
+    assert.strictEqual(encodeRequest('cancelEdits'), '{"command":"cancelEdits"}');
+  });
+
+  test('encodeRequest_when_accept_edits_then_carries_program_bytes', () => {
+    assert.strictEqual(
+      encodeRequest('acceptEdits', new Uint8Array([1, 2, 255])),
+      '{"command":"acceptEdits","program":[1,2,255]}',
+    );
+  });
+
+  test('encodeRequest_when_accept_edits_without_program_then_empty_array', () => {
+    assert.strictEqual(
+      encodeRequest('acceptEdits'),
+      '{"command":"acceptEdits","program":[]}',
+    );
+  });
+
+  test('encodeRequest_when_accept_edits_with_migration_then_carries_decisions', () => {
+    assert.strictEqual(
+      encodeRequest('acceptEdits', new Uint8Array([9]), { [1]: 'preserve', [2]: 'init' }),
+      '{"command":"acceptEdits","program":[9],"migration":{"1":"preserve","2":"init"}}',
+    );
+  });
+
+  test('encodeRequest_when_accept_edits_with_empty_migration_then_omits_the_map', () => {
+    assert.strictEqual(
+      encodeRequest('acceptEdits', new Uint8Array([9]), {}),
+      '{"command":"acceptEdits","program":[9]}',
+    );
+  });
+});
+
+suite('parseResponseLine', () => {
+  test('parseResponseLine_when_status_then_every_field', () => {
+    const response = parseResponseLine(STATUS_LINE);
+
+    assert.deepStrictEqual(response, {
+      kind: 'status',
+      status: createStatus({ rounds: 42 }),
+    });
+  });
+
+  test('parseResponseLine_when_testing_with_candidate_then_candidate_present', () => {
+    const line = '{"response":"status","mode":"testing","active":2,"normal":1,"candidate":2,"application":1,"migration":true,"rounds":7}';
+
+    const response = parseResponseLine(line);
+
+    assert.deepStrictEqual(response, {
+      kind: 'status',
+      status: createStatus({ mode: 'testing', active: 2, candidate: 2, migration: true, rounds: 7 }),
+    });
+  });
+
+  test('parseResponseLine_when_ack_then_ack', () => {
+    assert.deepStrictEqual(parseResponseLine('{"response":"ack"}'), { kind: 'ack' });
+  });
+
+  test('parseResponseLine_when_error_then_coded_error', () => {
+    const response = parseResponseLine('{"response":"error","vCode":"V4012","message":"no candidate is staged"}');
+
+    assert.strictEqual(response.kind, 'error');
+    if (response.kind === 'error') {
+      assert.strictEqual(response.error.vCode, 'V4012');
+      assert.strictEqual(response.error.message, 'no candidate is staged');
+    }
+  });
+
+  test('parseResponseLine_when_codec_error_then_null_vcode', () => {
+    const response = parseResponseLine('{"response":"error","vCode":null,"message":"invalid command line: x"}');
+
+    assert.strictEqual(response.kind, 'error');
+    if (response.kind === 'error') {
+      assert.strictEqual(response.error.vCode, null);
+      assert.strictEqual(response.error.message, 'invalid command line: x');
+    }
+  });
+
+  test('parseResponseLine_when_error_without_pairs_then_empty_list', () => {
+    const response = parseResponseLine('{"response":"error","vCode":"V4012","message":"no candidate is staged"}');
+
+    assert.strictEqual(response.kind, 'error');
+    if (response.kind === 'error') {
+      assert.deepStrictEqual(response.error.pairs, []);
+    }
+  });
+
+  test('parseResponseLine_when_v4010_then_pairs_parsed', () => {
+    const line = '{"response":"error","vCode":"V4010","message":"type change","pairs":['
+      + '{"uid":1,"name":"Counter","from":"I32","to":"U32","sizeEqual":true},'
+      + '{"uid":2,"name":null,"from":"I32","to":"STRING[4]","sizeEqual":false}]}';
+
+    const response = parseResponseLine(line);
+
+    assert.strictEqual(response.kind, 'error');
+    if (response.kind === 'error') {
+      assert.deepStrictEqual(response.error.pairs, [
+        { uid: 1, name: 'Counter', from: 'I32', to: 'U32', sizeEqual: true },
+        { uid: 2, name: null, from: 'I32', to: 'STRING[4]', sizeEqual: false },
+      ]);
+    }
+  });
+
+  test('parseResponseLine_when_pair_malformed_then_throws', () => {
+    const line = '{"response":"error","vCode":"V4010","message":"type change","pairs":[{"uid":1}]}';
+
+    assert.throws(() => parseResponseLine(line), HotEditProtocolError);
+  });
+
+  test('parseResponseLine_when_pair_uid_not_an_integer_then_throws', () => {
+    const line = '{"response":"error","vCode":"V4010","message":"type change","pairs":['
+      + '{"uid":1.5,"name":"Counter","from":"I32","to":"U32","sizeEqual":true}]}';
+
+    assert.throws(() => parseResponseLine(line), HotEditProtocolError);
+  });
+
+  test('parseResponseLine_when_pair_uid_negative_then_throws', () => {
+    const line = '{"response":"error","vCode":"V4010","message":"type change","pairs":['
+      + '{"uid":-1,"name":"Counter","from":"I32","to":"U32","sizeEqual":true}]}';
+
+    assert.throws(() => parseResponseLine(line), HotEditProtocolError);
+  });
+
+  test('parseResponseLine_when_not_json_then_throws', () => {
+    assert.throws(() => parseResponseLine('not json'), HotEditProtocolError);
+  });
+
+  test('parseResponseLine_when_unknown_response_then_throws', () => {
+    assert.throws(() => parseResponseLine('{"response":"huh"}'), HotEditProtocolError);
+  });
+
+  test('parseResponseLine_when_status_missing_mode_then_throws', () => {
+    assert.throws(() => parseResponseLine('{"response":"status","active":1}'), HotEditProtocolError);
+  });
+});
+
+suite('HotEditProtocolError', () => {
+  test('toString_when_vcode_then_code_dash_message', () => {
+    assert.strictEqual(
+      new HotEditProtocolError('V4012', 'no candidate is staged').toString(),
+      'V4012 - no candidate is staged',
+    );
+  });
+
+  test('toString_when_no_vcode_then_message_only', () => {
+    assert.strictEqual(
+      new HotEditProtocolError(null, 'invalid response line: x').toString(),
+      'invalid response line: x',
+    );
+  });
+});
+
+suite('status formatting', () => {
+  test('displayMode_when_normal_then_capitalized', () => {
+    assert.strictEqual(displayMode('normal'), 'Normal');
+    assert.strictEqual(displayMode('testing'), 'Testing');
+  });
+
+  test('formatStatusText_when_normal_then_mode_and_generation', () => {
+    assert.strictEqual(formatStatusText(createStatus()), 'Normal (gen 1)');
+  });
+
+  test('formatStatusDetail_when_no_candidate_then_omits_candidate_and_migration', () => {
+    const detail = formatStatusDetail(createStatus({ rounds: 42 }));
+
+    assert.ok(detail.includes('Mode: Normal'));
+    assert.ok(detail.includes('Active generation: 1'));
+    assert.ok(detail.includes('Normal generation: 1'));
+    assert.ok(detail.includes('Application generation: 1'));
+    assert.ok(detail.includes('Rounds: 42'));
+    assert.ok(!detail.includes('Candidate'));
+  });
+
+  test('formatStatusDetail_when_candidate_then_includes_candidate_and_migration', () => {
+    const detail = formatStatusDetail(createStatus({ mode: 'testing', active: 2, candidate: 2, migration: true }));
+
+    assert.ok(detail.includes('Mode: Testing'));
+    assert.ok(detail.includes('Candidate generation: 2'));
+    assert.ok(detail.includes('schema'));
+  });
+});
+
+suite('HotEditSession', () => {
+  test('getStatus_when_response_then_returns_status', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.getStatus();
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine(STATUS_LINE);
+
+    const status = await request;
+
+    assert.deepStrictEqual(status, createStatus({ rounds: 42 }));
+    assert.strictEqual(transport.sent[0], '{"command":"getStatus"}');
+  });
+
+  test('testEdits_when_ack_then_resolves', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.testEdits();
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('{"response":"ack"}');
+
+    await request;
+
+    assert.strictEqual(transport.sent[0], '{"command":"testEdits"}');
+  });
+
+  test('acceptEdits_when_bytes_then_sends_array_line', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.acceptEdits(new Uint8Array([9, 8]));
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('{"response":"ack"}');
+
+    await request;
+
+    assert.strictEqual(transport.sent[0], '{"command":"acceptEdits","program":[9,8]}');
+  });
+
+  test('acceptEdits_when_migration_then_sends_decision_map', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.acceptEdits(new Uint8Array([9, 8]), { [1]: 'init' });
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('{"response":"ack"}');
+
+    await request;
+
+    assert.strictEqual(
+      transport.sent[0],
+      '{"command":"acceptEdits","program":[9,8],"migration":{"1":"init"}}',
+    );
+  });
+
+  test('acceptEdits_when_v4010_then_error_carries_pairs', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.acceptEdits(new Uint8Array([9]));
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine(
+      '{"response":"error","vCode":"V4010","message":"type change",'
+      + '"pairs":[{"uid":1,"name":"Counter","from":"I32","to":"U32","sizeEqual":true}]}',
+    );
+
+    const err = await rejectWith(request);
+
+    assert.ok(err instanceof HotEditProtocolError);
+    assert.deepStrictEqual(err.pairs, [
+      { uid: 1, name: 'Counter', from: 'I32', to: 'U32', sizeEqual: true },
+    ]);
+  });
+
+  test('command_when_error_response_then_rejects_with_coded_error', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.assembleEdits();
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('{"response":"error","vCode":"V4015","message":"not allowed in this mode"}');
+
+    const err = await rejectWith(request);
+
+    assert.ok(err instanceof HotEditProtocolError);
+    assert.strictEqual(err.vCode, 'V4015');
+    assert.strictEqual(err.toString(), 'V4015 - not allowed in this mode');
+  });
+
+  test('getStatus_when_error_response_then_rejects', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.getStatus();
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('{"response":"error","vCode":null,"message":"invalid command line: x"}');
+
+    await assert.rejects(request, /invalid command line: x/);
+  });
+
+  test('request_when_malformed_line_then_rejects_but_session_stays_active', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.getStatus();
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('garbage');
+
+    await assert.rejects(request, HotEditProtocolError);
+    assert.strictEqual(session.isActive, true);
+  });
+
+  test('request_when_second_command_then_lines_match_in_order', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const first = session.testEdits();
+    await waitFor(() => transport.sent.length === 1);
+    const second = session.cancelEdits();
+    await waitFor(() => transport.sent.length === 2);
+    transport.emitLine('{"response":"ack"}');
+    transport.emitLine('{"response":"ack"}');
+
+    await first;
+    await second;
+    assert.deepStrictEqual(transport.sent, [
+      '{"command":"testEdits"}',
+      '{"command":"cancelEdits"}',
+    ]);
+  });
+
+  test('request_when_exit_then_rejects_pending_and_reports_exit_once', async () => {
+    const transport = new MockTransport();
+    let exits = 0;
+    const session = new HotEditSession(transport, () => exits++);
+    const pending = session.getStatus();
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitExit();
+    transport.emitExit();
+
+    await assert.rejects(pending, /exited/);
+    assert.strictEqual(session.isActive, false);
+    assert.strictEqual(exits, 1);
+  });
+
+  test('request_after_exit_then_rejects_without_sending', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    transport.emitExit();
+
+    await assert.rejects(session.testEdits(), /session has ended/);
+    assert.strictEqual(transport.sent.length, 0);
+  });
+
+  test('dispose_when_pending_then_rejects_pending', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const pending = session.getStatus();
+    await waitFor(() => transport.sent.length === 1);
+
+    session.dispose();
+
+    await assert.rejects(pending, /ended/);
+  });
+
+  test('handleLine_when_unsolicited_line_then_drops_silently', async () => {
+    const transport = new MockTransport();
+    new HotEditSession(transport);
+
+    transport.emitLine(STATUS_LINE);
+    // No pending request: nothing throws, nothing resolves.
+  });
+});
+
+const IDENTITY_LINE = '{"response":"identity","protocol":1,'
+  + '"device":{"name":"ironplcvm","model":"IronPLC SoftPLC","modification":"vm-cli","firmwareVersion":"0.13.0"},'
+  + '"application":{"mode":"normal","active":1,"normal":1,"candidate":null,"application":1,"migration":false,"rounds":0}}';
+
+suite('encodeRequest identity and edit identity', () => {
+  test('encodeRequest_when_identity_then_tag_only_line', () => {
+    assert.strictEqual(encodeRequest('identity'), '{"command":"identity"}');
+  });
+
+  test('encodeRequest_when_accept_edits_with_edit_then_carries_edit_identity', () => {
+    assert.strictEqual(
+      encodeRequest('acceptEdits', new Uint8Array([1, 2, 255]), undefined, { name: 'main.st', origin: 'ironplc-vscode' }),
+      '{"command":"acceptEdits","program":[1,2,255],"edit":{"name":"main.st","origin":"ironplc-vscode"}}',
+    );
+  });
+
+  test('encodeRequest_when_accept_edits_with_partial_edit_then_carries_only_set_fields', () => {
+    assert.strictEqual(
+      encodeRequest('acceptEdits', new Uint8Array([1]), undefined, { name: 'main.st' }),
+      '{"command":"acceptEdits","program":[1],"edit":{"name":"main.st"}}',
+    );
+  });
+
+  test('encodeRequest_when_accept_edits_with_empty_edit_then_omits_the_block', () => {
+    assert.strictEqual(
+      encodeRequest('acceptEdits', new Uint8Array([1]), undefined, {}),
+      '{"command":"acceptEdits","program":[1]}',
+    );
+  });
+});
+
+suite('parseResponseLine identity', () => {
+  test('parseResponseLine_when_identity_then_device_application_and_no_redundancy', () => {
+    const response = parseResponseLine(IDENTITY_LINE);
+
+    assert.deepStrictEqual(response, {
+      kind: 'identity',
+      identity: {
+        protocol: 1,
+        device: {
+          name: 'ironplcvm',
+          model: 'IronPLC SoftPLC',
+          modification: 'vm-cli',
+          firmwareVersion: '0.13.0',
+        },
+        application: createStatus(),
+        redundancy: undefined,
+      },
+    });
+  });
+
+  test('parseResponseLine_when_identity_with_redundancy_then_block_parsed', () => {
+    const line = IDENTITY_LINE.slice(0, -1)
+      + ',"redundancy":{"pairId":"7f3a9c","role":"primary","epoch":12,"sync":"syncReady","control":"active"}}';
+
+    const response = parseResponseLine(line);
+
+    assert.strictEqual(response.kind, 'identity');
+    if (response.kind === 'identity') {
+      assert.deepStrictEqual(response.identity.redundancy, {
+        pairId: '7f3a9c',
+        role: 'primary',
+        epoch: 12,
+        sync: 'syncReady',
+        control: 'active',
+      });
+    }
+  });
+
+  test('parseResponseLine_when_identity_protocol_higher_than_supported_then_throws', () => {
+    const line = IDENTITY_LINE.replace('"protocol":1', '"protocol":2');
+
+    assert.throws(() => parseResponseLine(line), /session protocol 2/);
+  });
+
+  test('parseResponseLine_when_identity_missing_device_then_throws', () => {
+    const line = '{"response":"identity","protocol":1,"application":{}}';
+
+    assert.throws(() => parseResponseLine(line), HotEditProtocolError);
+  });
+
+  test('parseResponseLine_when_identity_missing_application_then_throws', () => {
+    const line = '{"response":"identity","protocol":1,"device":{"name":"x","model":"x","modification":"x","firmwareVersion":"x"}}';
+
+    assert.throws(() => parseResponseLine(line), HotEditProtocolError);
+  });
+
+  test('parseResponseLine_when_identity_redundancy_malformed_then_throws', () => {
+    const line = IDENTITY_LINE.slice(0, -1) + ',"redundancy":"nope"}';
+
+    assert.throws(() => parseResponseLine(line), HotEditProtocolError);
+  });
+});
+
+suite('parseResponseLine pendingEdit', () => {
+  test('parseResponseLine_when_status_with_pending_edit_then_record_parsed', () => {
+    const line = STATUS_LINE.slice(0, -1)
+      + ',"pendingEdit":{"name":"main.st","origin":"ironplc-vscode","acceptedAt":1720000000000,'
+      + '"baseline":{"normalGeneration":1,"contentHash":[1,2,3]}}}';
+
+    const response = parseResponseLine(line);
+
+    assert.deepStrictEqual(response, {
+      kind: 'status',
+      status: createStatus({
+        rounds: 42,
+        pendingEdit: {
+          name: 'main.st',
+          origin: 'ironplc-vscode',
+          acceptedAt: 1720000000000,
+          baseline: { normalGeneration: 1, contentHash: [1, 2, 3] },
+        },
+      }),
+    });
+  });
+
+  test('parseResponseLine_when_pending_edit_omits_optional_labels_then_nulls', () => {
+    const line = STATUS_LINE.slice(0, -1)
+      + ',"pendingEdit":{"acceptedAt":5,"baseline":{"normalGeneration":1,"contentHash":[]}}}';
+
+    const response = parseResponseLine(line);
+
+    assert.strictEqual(response.kind, 'status');
+    if (response.kind === 'status') {
+      assert.strictEqual(response.status.pendingEdit!.name, null);
+      assert.strictEqual(response.status.pendingEdit!.origin, null);
+    }
+  });
+
+  test('parseResponseLine_when_pending_edit_missing_baseline_then_throws', () => {
+    const line = STATUS_LINE.slice(0, -1) + ',"pendingEdit":{"acceptedAt":5}}';
+
+    assert.throws(() => parseResponseLine(line), HotEditProtocolError);
+  });
+});
+
+suite('HotEditSession identity', () => {
+  test('identity_when_response_ok_then_resolves_identity_info', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const pending = session.identity();
+    await waitFor(() => transport.sent.length === 1);
+
+    assert.strictEqual(transport.sent[0], '{"command":"identity"}');
+    transport.emitLine(IDENTITY_LINE);
+
+    const info = await pending;
+    assert.strictEqual(info.device.name, 'ironplcvm');
+    assert.strictEqual(info.application.active, 1);
+    assert.strictEqual(info.redundancy, undefined);
+  });
+
+  test('identity_when_coded_refusal_then_rejects_with_vcode', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const pending = session.identity();
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('{"response":"error","vCode":"V6014","message":"one engineering session"}');
+
+    const err = await rejectWith(pending);
+    assert.ok(err instanceof HotEditProtocolError);
+    assert.strictEqual(err.vCode, 'V6014');
+  });
+
+  test('identity_when_status_answer_then_rejects_as_unexpected', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const pending = session.identity();
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine(STATUS_LINE);
+
+    await assert.rejects(pending, /unexpected status response to identity/);
+  });
+
+  test('acceptEdits_when_edit_identity_then_line_carries_edit_block', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const pending = session.acceptEdits(new Uint8Array([9]), undefined, { name: 'main.st', origin: 'ironplc-vscode' });
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('{"response":"ack"}');
+
+    await pending;
+    assert.strictEqual(
+      transport.sent[0],
+      '{"command":"acceptEdits","program":[9],"edit":{"name":"main.st","origin":"ironplc-vscode"}}',
+    );
+  });
+});
+
+suite('HotEditSession HA methods', () => {
+  test('haStatus_when_response_then_returns_status', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.haStatus();
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine(
+      '{"response":"haStatus","standalone":false,"pairId":"7",'
+      + '"local":{"role":"primary","controllerId":1,"sync":"syncReady","control":"active","epoch":2},'
+      + '"applicationGeneration":1,"stateGeneration":0,"takeoverReady":true,"syncReady":true,'
+      + '"ioReady":true,"linkValid":true,'
+      + '"alarms":{"performanceDegraded":false,"timingGuaranteeLost":false,"redundancyLost":false}}',
+    );
+
+    const status = await request;
+
+    assert.strictEqual(status.pairId, '7');
+    assert.strictEqual(status.local.control, 'active');
+    assert.strictEqual(status.takeoverReady, true);
+    assert.strictEqual(transport.sent[0], '{"command":"haStatus"}');
+  });
+
+  test('haCommandedSwap_when_ack_then_resolves', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.haCommandedSwap();
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('{"response":"ack"}');
+
+    await request;
+
+    assert.strictEqual(transport.sent[0], '{"command":"haCommandedSwap"}');
+  });
+
+  test('haCommandedSwap_when_v4108_then_rejects_with_coded_error', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.haCommandedSwap();
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine(
+      '{"response":"error","vCode":"V4108","message":"the commanded role swap was refused: the pair is not in SYNC_READY"}',
+    );
+
+    const err = await rejectWith(request);
+
+    assert.ok(err instanceof HotEditProtocolError);
+    assert.strictEqual(err.vCode, 'V4108');
+  });
+
+  test('haSetTimingBudget_when_line_then_carries_parameters', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.haSetTimingBudget(4, 100);
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('{"response":"ack"}');
+
+    await request;
+
+    assert.strictEqual(
+      transport.sent[0],
+      '{"command":"haSetTimingBudget","peerFailureConfirmation":4,"recoveryBudget":100}',
+    );
+  });
+
+  test('haSetTimingBudget_when_v4111_then_rejects_and_message_names_minimum', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.haSetTimingBudget(2, 10);
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine(
+      '{"response":"error","vCode":"V4111",'
+      + '"message":"the configured recovery budget cannot be honored: the minimum demonstrated budget is 15 ticks",'
+      + '"minimumDemonstrated":15}',
+    );
+
+    const err = await rejectWith(request);
+
+    assert.ok(err instanceof HotEditProtocolError);
+    assert.strictEqual(err.vCode, 'V4111');
+    assert.ok(err.message.includes('minimum demonstrated budget is 15 ticks'));
+  });
+
+  test('haEvents_when_response_then_returns_ring', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.haEvents();
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('{"response":"haEvents","count":2,"events":[{"tick":0,"kind":"ownerAccepted"}]}');
+
+    const events = await request;
+
+    assert.strictEqual(events.count, 2);
+    assert.strictEqual(events.events[0].kind, 'ownerAccepted');
+  });
+
+  test('haRequest_when_wrong_kind_then_rejects_as_unexpected', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.haStatus();
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('{"response":"ack"}');
+
+    await assert.rejects(request, /unexpected ack response to haStatus/);
+  });
+
+  test('haRequest_when_malformed_line_then_rejects_but_session_stays_active', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const request = session.haCalibration();
+    await waitFor(() => transport.sent.length === 1);
+    transport.emitLine('garbage');
+
+    await assert.rejects(request, HotEditProtocolError);
+    assert.strictEqual(session.isActive, true);
+  });
+
+  test('haMethods_when_pipelined_then_lines_match_in_order', async () => {
+    const transport = new MockTransport();
+    const session = new HotEditSession(transport);
+    const first = session.haIoReady();
+    await waitFor(() => transport.sent.length === 1);
+    const second = session.haCommandedSwap();
+    await waitFor(() => transport.sent.length === 2);
+    transport.emitLine(
+      '{"response":"haIoReady","requiredInputsObservable":true,"standbyConnectionsValid":true,'
+      + '"configsMatch":true,"epochsValid":true}',
+    );
+    transport.emitLine('{"response":"ack"}');
+
+    const ioReady = await first;
+    await second;
+    assert.strictEqual(ioReady.epochsValid, true);
+    assert.deepStrictEqual(transport.sent, [
+      '{"command":"haIoReady"}',
+      '{"command":"haCommandedSwap"}',
+    ]);
+  });
+});
+
+/** Resolves once `condition` holds, polling on the macrotask queue. */
+async function waitFor(condition: () => boolean): Promise<void> {
+  for (let i = 0; i < 100; i++) {
+    if (condition()) {
+      return;
+    }
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
+  throw new Error('condition was not met');
+}

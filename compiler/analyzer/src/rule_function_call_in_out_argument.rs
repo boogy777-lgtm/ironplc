@@ -3,7 +3,8 @@
 //!
 //! A `VAR_IN_OUT` parameter is passed by reference: the function reads and
 //! writes the caller's variable. So the argument must be a variable
-//! (P4058), and its type must be the parameter's type exactly (P4059). An
+//! (P4058), its type must be the parameter's type exactly (P4059), and it
+//! must be provably writable (P4060). An
 //! implicit conversion that is fine for a `VAR_INPUT` is not fine here: the
 //! function writes values of the parameter's type into the caller's
 //! variable, so a `DINT` parameter bound to an `INT` variable could store a
@@ -50,6 +51,20 @@
 //! PROGRAM main
 //! VAR
 //!     x : INT;
+//!     result : DINT;
+//! END_VAR
+//!     result := INC(x);
+//! END_PROGRAM
+//! ```
+//!
+//! ## Fails (Argument Not Provably Writable)
+//!
+//! ```ignore
+//! PROGRAM main
+//! VAR CONSTANT
+//!     x : DINT := 1;
+//! END_VAR
+//! VAR
 //!     result : DINT;
 //! END_VAR
 //!     result := INC(x);
@@ -121,6 +136,9 @@ impl Writable {
         let section = match node.var_type {
             VariableType::Var
             | VariableType::VarTemp
+            | VariableType::VarStat
+            | VariableType::VarInst
+            | VariableType::VarGeneric
             | VariableType::Output
             | VariableType::InOut
             | VariableType::External
@@ -404,7 +422,7 @@ END_PROGRAM"
     #[case::literal("", "INC(1, 2)")]
     #[case::expression("x : DINT;", "INC(1, x + 1)")]
     #[case::named_literal("", "INC(step := 1, data := 2)")]
-    fn apply_when_in_out_argument_is_not_variable_then_p4057(
+    fn apply_when_in_out_argument_is_not_variable_then_p4058(
         #[case] vars: &str,
         #[case] call: &str,
     ) {
@@ -421,7 +439,7 @@ END_PROGRAM"
     #[case::narrower_integer("x : INT;", "int")]
     #[case::other_category("x : REAL;", "real")]
     #[case::structure("x : Pair;", "Pair")]
-    fn apply_when_in_out_argument_type_differs_then_p4058(
+    fn apply_when_in_out_argument_type_differs_then_p4059(
         #[case] vars: &str,
         #[case] actual: &str,
     ) {
@@ -492,7 +510,7 @@ PROGRAM main VAR fb : Inner; r : DINT; END_VAR r := INC(1, fb.q); END_PROGRAM"
         "FUNCTION_BLOCK Inner VAR l : DINT; END_VAR END_FUNCTION_BLOCK
 PROGRAM main VAR fb : Inner; r : DINT; END_VAR r := INC(1, fb.l); END_PROGRAM"
     )]
-    fn apply_when_in_out_argument_not_provably_writable_then_p4059(#[case] caller: &str) {
+    fn apply_when_in_out_argument_not_provably_writable_then_p4060(#[case] caller: &str) {
         let errors = apply_to_caller(caller).unwrap_err();
         assert_eq!(errors.len(), 1, "{errors:?}");
         assert_eq!(errors[0].code, Problem::InOutArgNotWritable.code());
@@ -500,7 +518,7 @@ PROGRAM main VAR fb : Inner; r : DINT; END_VAR r := INC(1, fb.l); END_PROGRAM"
     }
 
     #[test]
-    fn apply_when_in_out_argument_is_constant_global_then_p4059() {
+    fn apply_when_in_out_argument_is_constant_global_then_p4060() {
         let result = apply_to_caller(
             "PROGRAM main
 VAR_EXTERNAL CONSTANT g : DINT; END_VAR
@@ -549,7 +567,7 @@ END_PROGRAM"
     }
 
     #[test]
-    fn apply_when_in_out_argument_is_bit_access_then_p4057() {
+    fn apply_when_in_out_argument_is_bit_access_then_p4058() {
         let errors = apply_to_caller(
             "FUNCTION TOGGLE : BOOL VAR_IN_OUT b : BOOL; END_VAR TOGGLE := b; END_FUNCTION
 PROGRAM main VAR w : WORD; r : BOOL; END_VAR r := TOGGLE(w.3); END_PROGRAM",

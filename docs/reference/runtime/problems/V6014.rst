@@ -1,0 +1,20 @@
+=====
+V6014
+=====
+
+.. problem-summary:: V6014
+
+The device already serves one engineering session, and a second connection
+attempt was refused (ADR-0065): the controller accepts exactly one
+engineering session, so single-writer exclusivity is the session's own —
+there is no lock token and no observer session to wait for. The refused
+connection receives exactly one coded refusal line, then the socket closes.
+
+Solutions
+---------
+
+1. Finish or close the active session, then reconnect.
+2. If no session should be active, wait out the previous connection's
+   teardown (a dropped session releases the device immediately) and retry.
+3. Coordinate with the engineer holding the session: one workstation edits
+   the device at a time.

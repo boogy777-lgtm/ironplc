@@ -1,0 +1,35 @@
+=====
+V4015
+=====
+
+.. problem-summary:: V4015
+
+A command arrived in a hot-edit phase where the protocol does not allow it —
+for example ``cancelEdits`` while the candidate is under test, ``acceptEdits``
+while a test or untest is pending at the scan boundary, or ``untestEdits``
+while another swap is already queued. The online change controller is a
+small state machine; each phase admits only the commands that cannot corrupt
+its invariants, and the runtime refuses the rest.
+
+Example
+-------
+
+A session tests a candidate and then tries to cancel it instead of assembling
+or untesting:
+
+.. code-block::
+
+   {"command":"testEdits"}
+   {"response":"ack"}
+   {"command":"cancelEdits"}
+   {"response":"error","vCode":"V4015","message":"operation not allowed in the current hot-edit phase"}
+
+The refusal leaves the session exactly where it was: the candidate stays
+active and the state is untouched.
+
+To fix this error, consult ``getStatus`` and take the transition the current
+phase offers. While ``testEdits`` or ``untestEdits`` is pending at the scan
+boundary, wait for the runtime to apply the swap; while the candidate is
+under test, the exits are ``untestEdits`` (logic-only edits) or
+``assembleEdits``. Cancel is only available while the original artifact is
+still active.

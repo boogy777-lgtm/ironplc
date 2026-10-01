@@ -60,12 +60,20 @@ pub fn try_from(
                 }
             };
 
-            // Validate array bounds
-            validate_array_bounds(&array_subranges.ranges, node_name)?;
+            // Validate array bounds. The incomplete form `ARRAY[*]` has no
+            // bounds to validate -- and an empty range list is otherwise
+            // rejected (P2022) -- so the incomplete form skips the check and
+            // resolves to an array with no dimensions, the intermediate
+            // model's existing representation of an array whose size is not
+            // known at declaration time (see `IntermediateType::Array`).
+            let incomplete = array_subranges.incomplete_span().is_some();
+            if !incomplete {
+                validate_array_bounds(array_subranges.ranges(), node_name)?;
+            }
 
             // Build per-dimension bounds
             let dimensions: Vec<ArrayDimension> = array_subranges
-                .ranges
+                .ranges()
                 .iter()
                 .map(|range| {
                     let start = resolve_signed_integer_ref(&range.start, node_name)?;
@@ -316,6 +324,43 @@ mod tests {
         assert_eq!(array.array_total_elements(), Some(11)); // -5 to 5 inclusive = 11 elements
     }
 
+    /// REQ-CS-analyzer-001: An `ARRAY[*] OF T` declaration resolves to an
+    /// array type with no dimensions and the declared element type.
+    #[spec_test_macro::spec_test(REQ_CS_analyzer_001)]
+    fn try_from_when_incomplete_array_then_array_without_dimensions() {
+        let env = TypeEnvironmentBuilder::new()
+            .with_elementary_types()
+            .build()
+            .unwrap();
+
+        let array_subranges = ArraySubranges {
+            bounds: ArrayBounds::Incomplete(SourceSpan::default()),
+            type_name: ArrayElementType::Named(TypeName::from("int")),
+            ref_to: None,
+        };
+
+        let spec = SpecificationKind::Inline(array_subranges);
+        let result = try_from(&TypeName::from("OPEN_ARRAY"), &spec, &env).unwrap();
+
+        let attrs = cast!(result, IntermediateResult::Type);
+        let (element_type, dimensions) = cast_struct!(
+            attrs.representation,
+            IntermediateType::Array {
+                element_type,
+                dimensions
+            }
+        );
+        // The incomplete form has no bounds: the intermediate model's empty
+        // dimension list is an array whose size is not known here.
+        assert!(dimensions.is_empty());
+        assert_eq!(
+            *element_type,
+            IntermediateType::Int {
+                size: ByteSized::B16
+            }
+        );
+    }
+
     #[test]
     fn try_from_with_subranges_specification_then_creates_array_type() {
         let env = TypeEnvironmentBuilder::new()
@@ -324,10 +369,10 @@ mod tests {
             .unwrap();
 
         let array_subranges = ArraySubranges {
-            ranges: vec![Subrange {
+            bounds: ArrayBounds::Ranges(vec![Subrange {
                 start: literal(1, false),
                 end: literal(10, false),
-            }],
+            }]),
             type_name: ArrayElementType::Named(TypeName::from("int")),
             ref_to: None,
         };
@@ -388,10 +433,10 @@ mod tests {
         let env = TypeEnvironment::new(); // Empty environment
 
         let array_subranges = ArraySubranges {
-            ranges: vec![Subrange {
+            bounds: ArrayBounds::Ranges(vec![Subrange {
                 start: literal(1, false),
                 end: literal(10, false),
-            }],
+            }]),
             type_name: ArrayElementType::Named(TypeName::from("MISSING_TYPE")),
             ref_to: None,
         };
@@ -422,7 +467,7 @@ mod tests {
             .unwrap();
 
         let array_subranges = ArraySubranges {
-            ranges: vec![
+            bounds: ArrayBounds::Ranges(vec![
                 Subrange {
                     start: literal(1, false),
                     end: literal(3, false),
@@ -431,7 +476,7 @@ mod tests {
                     start: literal(1, false),
                     end: literal(4, false),
                 },
-            ],
+            ]),
             type_name: ArrayElementType::Named(TypeName::from("bool")),
             ref_to: None,
         };
@@ -467,10 +512,10 @@ mod tests {
             .unwrap();
 
         let array_subranges = ArraySubranges {
-            ranges: vec![Subrange {
+            bounds: ArrayBounds::Ranges(vec![Subrange {
                 start: literal(0, false),
                 end: literal(3, false),
-            }],
+            }]),
             type_name: ArrayElementType::Named(TypeName::from("byte")),
             ref_to: Some(RefSyntax::RefTo),
         };
@@ -507,10 +552,10 @@ mod tests {
             .unwrap();
 
         let array_subranges = ArraySubranges {
-            ranges: vec![Subrange {
+            bounds: ArrayBounds::Ranges(vec![Subrange {
                 start: literal(1, false),
                 end: literal(3, false),
-            }],
+            }]),
             type_name: ArrayElementType::String(StringSpecification {
                 width: StringType::String,
                 length: Some(IntegerRef::Literal(Integer {
@@ -559,10 +604,10 @@ mod tests {
             .unwrap();
 
         let array_subranges = ArraySubranges {
-            ranges: vec![Subrange {
+            bounds: ArrayBounds::Ranges(vec![Subrange {
                 start: literal(1, false),
                 end: literal(3, false),
-            }],
+            }]),
             type_name: ArrayElementType::String(StringSpecification {
                 width: StringType::String,
                 length: None,

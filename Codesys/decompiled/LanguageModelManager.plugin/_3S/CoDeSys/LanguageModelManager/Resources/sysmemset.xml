@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<language-model>
+  <pou id = "3F754FFC-E008-41C0-BA94-06E46588F3A6" name = "__memset" external = "true">
+    <interface>
+    {implicit on}
+    FUNCTION __memset : POINTER TO DWORD
+    VAR_INPUT
+      pDest: POINTER TO DWORD;
+      udiValue: UDINT;
+      udiCount: UDINT;
+    END_VAR
+    {implicit off}
+    </interface>
+  </pou>  
+</language-model>

@@ -20,6 +20,11 @@ import {
   IronplcDebugConfigurationProvider,
 } from './debugAdapter';
 import { registerCustomRequests } from './customRequests';
+import { registerHotEditSupport } from './hotEdit';
+import { registerConnectionSupport } from './connection';
+import { registerDevicePanel } from './devicePanel';
+import { registerHaPanel } from './haPanel';
+import { registerBuildCommands } from './buildCommands';
 import { sourceExtensionsFromLanguages } from './debugAdapterLogic';
 
 /**
@@ -49,11 +54,13 @@ class RunProgramCodeLensProvider implements vscode.CodeLensProvider {
         new vscode.Position(lens.range.start.line, lens.range.start.character),
         new vscode.Position(lens.range.end.line, lens.range.end.character),
       );
-      return new vscode.CodeLens(range, lens.command ? {
-        title: lens.command.title,
-        command: lens.command.command,
-        arguments: lens.command.arguments as unknown[] | undefined,
-      } : undefined);
+      return new vscode.CodeLens(range, lens.command
+        ? {
+            title: lens.command.title,
+            command: lens.command.command,
+            arguments: lens.command.arguments as unknown[] | undefined,
+          }
+        : undefined);
     });
   }
 
@@ -134,6 +141,25 @@ export function activate(context: vscode.ExtensionContext) {
       + '" (source: ' + result.source + ')',
     );
   }
+
+  // Single source of truth for the source extensions: the extension's own
+  // `contributes.languages` declarations, so new dialects need no code change.
+  const languages = context.extension.packageJSON?.contributes?.languages ?? [];
+  const sourceExtensions = sourceExtensionsFromLanguages(languages);
+
+  // Hot-edit commands register unconditionally (like the run commands) so they
+  // exist even without a compiler; they report a coded problem when the
+  // compiler or the VM is missing.
+  registerHotEditSupport(context, result?.path, sourceExtensions, showProblem);
+
+  // The engineering connection registers unconditionally as well: connect,
+  // the device panel, and the build commands exist without a compiler and
+  // report coded problems (or refuse) when a profile or tool is missing.
+  const connection = registerConnectionSupport(context, result?.path, sourceExtensions, showProblem);
+  registerDevicePanel(context, connection);
+  registerHaPanel(context, connection);
+  registerBuildCommands(context, result?.path, sourceExtensions, connection, showProblem);
+
   if (!result) {
     vscode.window.showErrorMessage(
       formatProblem(ProblemCode.NoCompiler, 'IronPLC is not installed or not configured.'),
@@ -151,7 +177,7 @@ export function activate(context: vscode.ExtensionContext) {
     ),
   );
 
-  registerDebugSupport(context, result.path);
+  registerDebugSupport(context, result.path, sourceExtensions);
 
   const config = vscode.workspace.getConfiguration('ironplc');
   client = createClient(result.path, config);
@@ -191,12 +217,14 @@ function registerRunSupport(context: vscode.ExtensionContext) {
       pauseItem.tooltip = 'Pause program execution';
       pauseItem.show();
       stopItem.show();
-    } else if (state === 'paused') {
+    }
+    else if (state === 'paused') {
       pauseItem.text = '$(debug-continue) Resume';
       pauseItem.tooltip = 'Resume program execution';
       pauseItem.show();
       stopItem.show();
-    } else {
+    }
+    else {
       pauseItem.hide();
       stopItem.hide();
     }
@@ -274,7 +302,8 @@ function registerRunSupport(context: vscode.ExtensionContext) {
       }
       if (runSession.getState() === 'running') {
         runSession.pause();
-      } else if (runSession.getState() === 'paused') {
+      }
+      else if (runSession.getState() === 'paused') {
         runSession.resume();
       }
     }),
@@ -296,16 +325,15 @@ function registerRunSupport(context: vscode.ExtensionContext) {
  * that spawns the `ironplcvmd` debug server (resolved from the compiler's
  * directory).
  */
-function registerDebugSupport(context: vscode.ExtensionContext, compilerPath: string) {
+function registerDebugSupport(
+  context: vscode.ExtensionContext,
+  compilerPath: string,
+  sourceExtensions: readonly string[],
+) {
   const compilerDir = path.dirname(compilerPath);
 
   const log = vscode.window.createOutputChannel('IronPLC Debug');
   context.subscriptions.push(log);
-
-  // Single source of truth for the source extensions: the extension's own
-  // `contributes.languages` declarations, so new dialects need no code change.
-  const languages = context.extension.packageJSON?.contributes?.languages ?? [];
-  const sourceExtensions = sourceExtensionsFromLanguages(languages);
 
   context.subscriptions.push(
     vscode.debug.registerDebugConfigurationProvider(

@@ -1,0 +1,17 @@
+kind,name,value,description
+prefix,Err_,,error
+prefix,Wrn_,,warning
+prefix,Inf_,,information
+prefix,Txt_,,text
+prefix,None,,message id 0 / no message
+enum,IgnoreCheckerMessageFlags.Warnings,1,
+enum,IgnoreCheckerMessageFlags.Errors,2,
+enum,IgnoreCheckerMessageFlags.Information,3,
+enum,IgnoreCheckerMessageFlags.All,3,
+enum,MessageHandling.Suppress,0,
+enum,MessageHandling.Ignore,1,
+enum,MessageHandling.Report,2,
+count,Err_,427,distinct keys in union of locales
+count,Wrn_,66,distinct keys in union of locales
+count,Inf_,4,distinct keys in union of locales
+count,Txt_,1,distinct keys in union of locales

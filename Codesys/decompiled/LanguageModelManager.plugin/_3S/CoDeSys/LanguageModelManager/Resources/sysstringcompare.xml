@@ -1,0 +1,27 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<language-model>
+  <pou id = "9F5705DF-D2F0-46B3-8C4D-6A4D6217FAC6" name = "__stringcompare" external = "true">
+    <interface>
+      {implicit on}
+      {attribute 'DoLink'}
+      FUNCTION __stringcompare : DINT
+      VAR_INPUT
+      pStr1: POINTER TO BYTE;
+      pStr2: POINTER TO BYTE;
+      END_VAR
+      {implicit off}
+    </interface>
+  </pou>
+  <pou id = "0BEA6546-230E-4059-A0C6-574C96C9DCC9" name = "__wstringcompare" external = "true">
+    <interface>
+      {implicit on}
+      {attribute 'DoLink'}
+      FUNCTION __wstringcompare : DINT
+      VAR_INPUT
+      pStr1: POINTER TO WORD;
+      pStr2: POINTER TO WORD;
+      END_VAR
+      {implicit off}
+    </interface>
+  </pou>
+</language-model>

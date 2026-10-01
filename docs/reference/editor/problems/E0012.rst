@@ -1,0 +1,20 @@
+=====
+E0012
+=====
+
+.. problem-summary:: E0012
+
+The ``port`` of a ``tcp`` connection profile is not an integer in the range
+1-65535, or a ``port`` was set on a ``stdio`` profile (which spawns a local
+session and has no network target).
+
+**Solutions**:
+
+1. **Fix the port**: use an integer between 1 and 65535. The default device
+   port is 49152.
+
+2. **stdio profiles**: remove the ``port``; the profile only needs the
+   ``program`` the local session loads.
+
+3. **Check for quotes**: a port written as a string (``"49152"``) is
+   rejected; write it as a number.

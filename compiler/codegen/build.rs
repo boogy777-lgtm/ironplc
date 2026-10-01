@@ -1,5 +1,9 @@
 fn main() {
     ironplc_spec_requirements_gen::generate(&[
+        // CODESYS ST surface syntax (`REQ-CS-*`): the `|` operator, the
+        // incomplete array type, `PARAMS(n) OF T`, identifier spellings and
+        // the special operators.
+        "codesys-st-surface-syntax.md",
         "enumeration-codegen.md",
         "reference-to-twincat.md",
         // The codegen crate owns the execution requirements
@@ -18,5 +22,10 @@ fn main() {
         "bytecode-container-format.md",
         // The post-emission peephole optimizer (`REQ-PEEP-codegen-*`).
         "bytecode-peephole-optimizer.md",
+        // CODESYS exception handling (`REQ-TC-codegen-*`): control flow for
+        // __THROW/__CATCH/__FINALLY.
+        "codesys-try-catch.md",
+        // The CODESYS jump statements (`REQ-JMP-codegen-*`).
+        "codesys-jump-and-pragmas.md",
     ]);
 }

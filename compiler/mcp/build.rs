@@ -11,14 +11,27 @@
 
 use std::collections::BTreeMap;
 use std::env;
+use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process;
 
 fn main() {
-    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-
-    generate_problem_docs(&manifest_dir);
+    match run() {
+        Ok(()) => {}
+        Err(err) => {
+            eprintln!("mcp build script failed: {err}");
+            process::exit(1);
+        }
+    }
     ironplc_spec_requirements_gen::generate(&["mcp-server.md"]);
+}
+
+fn run() -> Result<(), Box<dyn Error>> {
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR")?;
+
+    generate_problem_docs(&manifest_dir)?;
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -27,7 +40,7 @@ fn main() {
 
 /// Generates `problem_docs.rs` which embeds every `P####.rst` file at compile
 /// time and provides a lookup function returning `(rst_content, title)`.
-fn generate_problem_docs(manifest_dir: &str) {
+fn generate_problem_docs(manifest_dir: &str) -> Result<(), Box<dyn Error>> {
     let problems_dir = Path::new(manifest_dir).join("../../docs/reference/compiler/problems");
     let csv_path = Path::new(manifest_dir).join("../problems/resources/problem-codes.csv");
 
@@ -53,7 +66,7 @@ fn generate_problem_docs(manifest_dir: &str) {
             let name = entry.file_name().to_string_lossy().to_string();
             if name.starts_with('P') && name.ends_with(".rst") {
                 let code = name.trim_end_matches(".rst").to_string();
-                let abs_path = fs::canonicalize(entry.path()).unwrap();
+                let abs_path = fs::canonicalize(entry.path())?;
                 println!("cargo:rerun-if-changed={}", abs_path.display());
                 entries.insert(code, abs_path);
             }
@@ -61,7 +74,7 @@ fn generate_problem_docs(manifest_dir: &str) {
     }
 
     // Generate the lookup function.
-    let out_dir = env::var("OUT_DIR").unwrap();
+    let out_dir = env::var("OUT_DIR")?;
     let dest = Path::new(&out_dir).join("problem_docs.rs");
 
     let mut code =
@@ -87,5 +100,6 @@ fn generate_problem_docs(manifest_dir: &str) {
     code.push_str("    }\n");
     code.push_str("}\n");
 
-    fs::write(&dest, code).unwrap();
+    fs::write(&dest, code)?;
+    Ok(())
 }

@@ -494,10 +494,100 @@ define_compiler_options! {
     [Rusty, Iec61131_3Ed3, Codesys, TwinCat],
     allow_continue,
 
+    "Allow the __TRY/__CATCH/__FINALLY/__ENDTRY exception handling statements and the __THROW statement",
+    "--allow-try-catch",
+    [Codesys, TwinCat],
+    allow_try_catch,
+
+    "Allow the JMP statement and `label:` statement labels",
+    "--allow-jump-statement",
+    [Codesys, TwinCat],
+    allow_jump_statement,
+
+    "Allow the CALC conditional call statement",
+    "--allow-calc-statement",
+    [Codesys, TwinCat],
+    allow_calc_statement,
+
+    "Allow the __WAIT wait statement",
+    "--allow-wait-statement",
+    [Codesys, TwinCat],
+    allow_wait_statement,
+
+    "Allow nested (* *) block comments",
+    "--allow-nested-comments",
+    [Codesys, TwinCat],
+    allow_nested_comments,
+
+    "Allow conditional-compilation pragmas ({IF}/{ELSIF}/{ELSE}/{END_IF}, {DEFINE}, {UNDEFINE})",
+    "--allow-pragma-if",
+    [Codesys, TwinCat],
+    allow_pragma_if,
+
     "Allow the base-type suffix on an enumeration declaration, e.g. (A, B) WORD, naming the elementary type the members are stored in",
     "--allow-enum-base-type",
     [Rusty, Codesys, TwinCat],
     allow_enum_base_type,
+
+    "Allow UNION ... END_UNION type declarations in a TYPE block (standardized in IEC 61131-3:2013)",
+    "--allow-union-type",
+    [Rusty, Iec61131_3Ed3, Codesys, TwinCat],
+    allow_union_type,
+
+    "Allow VAR_STAT variable sections, whose declarations keep their value between calls of the POU",
+    "--allow-var-stat",
+    [Codesys, TwinCat],
+    allow_var_stat,
+
+    "Allow VAR_INST variable sections in a method, whose declarations belong to the method's instance",
+    "--allow-var-inst",
+    [Codesys, TwinCat],
+    allow_var_inst,
+
+    "Allow VAR_GENERIC variable sections directly after a function block name, declaring the function block's generic constants",
+    "--allow-var-generic",
+    [Codesys, TwinCat],
+    allow_var_generic,
+
+    "Allow NAMESPACE ... END_NAMESPACE grouping of declarations",
+    "--allow-namespace",
+    [Codesys, TwinCat],
+    allow_namespace,
+
+    "Allow the __BEGIN_IMPLEMENTATION marker that begins a POU's implementation section",
+    "--allow-begin-implementation",
+    [Codesys],
+    allow_begin_implementation,
+
+    "Allow the BIT one-bit type and its typed literals BIT#0 and BIT#1 (CODESYS/TwinCAT extension)",
+    "--allow-bit-type",
+    [Rusty, Codesys, TwinCat],
+    allow_bit_type,
+
+    "Allow the PARAMS(n) OF T parameter-list data type (CODESYS extension)",
+    "--allow-params-of",
+    [Codesys, TwinCat],
+    allow_params_of,
+
+    "Allow the incomplete array type ARRAY[*] OF T, whose bounds the caller supplies (CODESYS extension)",
+    "--allow-incomplete-array",
+    [Codesys, TwinCat],
+    allow_incomplete_array,
+
+    "Allow backtick-escaped identifiers such as `my name` (CODESYS non-compliant identifiers)",
+    "--allow-escaped-identifiers",
+    [Codesys, TwinCat],
+    allow_escaped_identifiers,
+
+    "Allow identifiers with letters outside the ASCII range, e.g. cafe with an accent (CODESYS Unicode identifiers option, off by default there too)",
+    "--allow-unicode-identifiers",
+    [],
+    allow_unicode_identifiers,
+
+    "Allow consecutive underscores inside an identifier, e.g. my__var (CODESYS/TwinCAT reject them; the leading __ compiler prefix is always reserved and always allowed)",
+    "--allow-multiple-underscores",
+    [Iec61131_3Ed3, Rusty],
+    allow_multiple_underscores,
 
     policies {
         "What STRING_TO_<numeric> treats as convertible when the string has non-numeric characters",

@@ -1,0 +1,28 @@
+=====
+V4101
+=====
+
+.. problem-summary:: V4101
+
+The redundancy layer's admission discovered a live controller on the
+pair link that belongs to a different redundant pair. The pair identity
+in its ping/pong frames does not match this unit's configured pair, so
+it is not a neighbor: admission refuses with V4101 and the unit keeps
+discovering rather than admitting on top of another pair's traffic.
+Refusing is fail-safe — a misconfigured or cross-wired link must never
+make two pairs admit as one.
+
+Example
+-------
+
+A unit configured for pair 7 hears pair 99 on the redundancy link:
+
+.. code-block::
+
+   Error: V4101 - pair identity mismatch: the peer discovered on the pair link belongs to a different redundant pair
+
+To fix this error, check the pair configuration on both units: the
+pair identity, the link wiring (daisy-chain port 1 on both units), and
+that no foreign controller shares the segment. Once only this pair
+answers on the link, reboot the refusing unit so admission re-runs its
+discovery window.

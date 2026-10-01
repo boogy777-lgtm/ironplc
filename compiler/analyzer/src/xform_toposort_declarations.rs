@@ -52,6 +52,13 @@ use petgraph::{
 use std::collections::{HashMap, HashSet, VecDeque};
 
 pub fn apply(lib: Library) -> Result<(Library, HashSet<Id>), Vec<Diagnostic>> {
+    // A `NAMESPACE` only groups declarations; the semantic model is flat, so
+    // its contents are spliced in at the position of the namespace before
+    // anything else looks at the library. Namespaces nest, so this recurses.
+    let lib = Library {
+        elements: flatten_namespaces(lib.elements),
+    };
+
     // Walk to build a graph of types, POUs and their relationships
     let mut data_type_visitor = RuleGraphReferenceableElements::new();
     data_type_visitor.walk(&lib).map_err(|e| vec![e])?;
@@ -119,6 +126,10 @@ pub fn apply(lib: Library) -> Result<(Library, HashSet<Id>), Vec<Diagnostic>> {
                     .or_default()
                     .push(LibraryElementKind::InterfaceDeclaration(decl));
             }
+            LibraryElementKind::NamespaceDeclaration(_) => {
+                // `flatten_namespaces` spliced every namespace out before
+                // this loop, so a namespace element cannot reach it.
+            }
         }
     }
 
@@ -145,6 +156,22 @@ pub fn apply(lib: Library) -> Result<(Library, HashSet<Id>), Vec<Diagnostic>> {
     Ok((Library { elements }, reachable))
 }
 
+/// Replaces each `NAMESPACE` element by its contents, in source order.
+/// Namespaces have no semantic model of their own yet (qualified access is
+/// P1), so a declaration inside one becomes an ordinary library element.
+fn flatten_namespaces(elements: Vec<LibraryElementKind>) -> Vec<LibraryElementKind> {
+    let mut flattened = Vec::with_capacity(elements.len());
+    for element in elements {
+        match element {
+            LibraryElementKind::NamespaceDeclaration(namespace) => {
+                flattened.extend(flatten_namespaces(namespace.elements));
+            }
+            other => flattened.push(other),
+        }
+    }
+    flattened
+}
+
 /// The declared name of a data type declaration.
 fn data_type_name(decl: &DataTypeDeclarationKind) -> Id {
     match decl {
@@ -152,7 +179,9 @@ fn data_type_name(decl: &DataTypeDeclarationKind) -> Id {
         DataTypeDeclarationKind::Subrange(d) => d.type_name.name.clone(),
         DataTypeDeclarationKind::Simple(d) => d.type_name.name.clone(),
         DataTypeDeclarationKind::Array(d) => d.type_name.name.clone(),
+        DataTypeDeclarationKind::Params(d) => d.type_name.name.clone(),
         DataTypeDeclarationKind::Structure(d) => d.type_name.name.clone(),
+        DataTypeDeclarationKind::Union(d) => d.type_name.name.clone(),
         DataTypeDeclarationKind::StructureInitialization(d) => d.type_name.name.clone(),
         DataTypeDeclarationKind::String(d) => d.type_name.name.clone(),
         DataTypeDeclarationKind::Reference(d) => d.type_name.name.clone(),
@@ -243,10 +272,15 @@ impl DeclarationsGraph {
                 Label::span(span, "Cycle"),
             )
         })?;
-        let sorted_ids: Vec<Id> = sorted_nodes
-            .iter()
-            .map(|node| self.index_to_id.get(node).unwrap().clone())
-            .collect();
+        let mut sorted_ids: Vec<Id> = Vec::with_capacity(sorted_nodes.len());
+        for node in &sorted_nodes {
+            let Some(id) = self.index_to_id.get(node) else {
+                // Toposort emits only nodes that are keys of the graph;
+                // absence is a compiler invariant violation.
+                return Err(Diagnostic::internal_error());
+            };
+            sorted_ids.push(id.clone());
+        }
         Ok(sorted_ids)
     }
 }
@@ -380,6 +414,19 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
                 self.declarations.graph.add_edge(depends_on, this, ());
             }
         }
+
+        node.recurse_visit(self)
+    }
+
+    fn visit_params_declaration(
+        &mut self,
+        node: &ParamsDeclaration,
+    ) -> Result<Self::Value, Diagnostic> {
+        // As for an array declaration: the element type must be ordered
+        // before the PARAMS type that names it.
+        let this = self.declarations.add_node(&node.type_name.name);
+        let depends_on = self.declarations.add_node(&node.spec.type_name.name);
+        self.declarations.graph.add_edge(depends_on, this, ());
 
         node.recurse_visit(self)
     }
@@ -594,6 +641,14 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
                         self.declarations.graph.add_edge(to, from, ());
                     }
                     InitialValueAssignmentKind::Subrange(_) => {}
+                    // A PARAMS list depends on its element type for the same
+                    // reason an array does: the type must be in the
+                    // environment before the list that uses it is resolved.
+                    InitialValueAssignmentKind::Params(params) => {
+                        let from = self.declarations.add_node(from);
+                        let to = self.declarations.add_node(&params.type_name.name);
+                        self.declarations.graph.add_edge(to, from, ());
+                    }
                     InitialValueAssignmentKind::Structure(struct_init) => {
                         // Track dependency on the nested structure type
                         let from = self.declarations.add_node(from);

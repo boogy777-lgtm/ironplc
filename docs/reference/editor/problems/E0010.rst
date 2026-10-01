@@ -1,0 +1,23 @@
+=====
+E0010
+=====
+
+.. problem-summary:: E0010
+
+The connection profile in the ``ironplc.connections`` setting is invalid.
+Every profile needs a unique non-empty ``name`` and a ``transport`` of
+``stdio`` or ``tcp``, plus the fields its transport requires: ``program``
+for ``stdio``, ``address`` for ``tcp``.
+
+**Solutions**:
+
+1. **Open the settings** and check each entry of ``ironplc.connections``:
+   every profile needs a unique non-empty ``name`` and a ``transport`` of
+   ``stdio`` or ``tcp``, plus the fields its transport requires.
+
+2. **Remove duplicates**: two profiles with the same name are rejected;
+   rename one of them.
+
+3. **Check the transport fields**: a ``stdio`` profile must name the
+   ``program`` the spawned session loads; a ``tcp`` profile must name the
+   device ``address``.

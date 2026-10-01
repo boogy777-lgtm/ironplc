@@ -25,14 +25,21 @@ use super::compile::{
 use super::compile_call::resolve_fb_type;
 use super::compile_expr::{compile_constant, emit_store_var, emit_truncation, resolve_variable};
 use super::compile_stmt::resolve_string_max_length;
+use super::compile_var_table::{record_decl_var_entry, record_stable_var_entry};
 use crate::emit::Emitter;
 
 /// Assigns variable table indices and type info for all variable declarations.
+///
+/// `stable_var_ids` is the engineering-side name -> entity UID table
+/// (ADR 0053). A declaration whose name it lists records a stable variable ID
+/// entry at its assigned index; transient slots assigned by other paths
+/// (`compile_fn`, `compile_method`, scratch) are never looked up here.
 pub(crate) fn assign_variables(
     ctx: &mut CompileContext,
     builder: &mut ContainerBuilder,
     declarations: &[VarDecl],
     types: &TypeEnvironment,
+    stable_var_ids: &[(Id, u64)],
 ) -> Result<(), Diagnostic> {
     for decl in declarations {
         if let Some(id) = decl.identifier.symbolic_id() {
@@ -201,6 +208,24 @@ pub(crate) fn assign_variables(
                         )?
                     }
                 }
+                InitialValueAssignmentKind::Params(params) => {
+                    // A PARAMS list is laid out as the array it lowers to:
+                    // `ARRAY[0 .. n-1] OF T` (see the analyzer's
+                    // `intermediates::params`).
+                    let spec = crate::compile_array::array_spec_from_params(
+                        params,
+                        &decl.identifier.span(),
+                    )?;
+                    crate::compile_array::register_array_variable(
+                        ctx,
+                        builder,
+                        id,
+                        index,
+                        &spec,
+                        &decl.identifier.span(),
+                    )?;
+                    (iec_type_tag::ARRAY, "PARAMS".into())
+                }
                 InitialValueAssignmentKind::Reference(ref_init) => {
                     crate::compile_reference::register_reference_variable(
                         ctx, builder, types, id, index, ref_init,
@@ -277,6 +302,9 @@ pub(crate) fn assign_variables(
                 name: id.to_string(),
                 type_name: type_name_str,
             });
+
+            record_decl_var_entry(ctx, decl, id, index);
+            record_stable_var_entry(ctx, stable_var_ids, id, index);
         }
     }
     Ok(())
@@ -286,6 +314,12 @@ pub(crate) fn assign_variables(
 pub(crate) fn map_var_section(vt: &VariableType) -> u8 {
     match vt {
         VariableType::Var => var_section::VAR,
+        // The debug section has no encoding for the additional sections
+        // (VAR_STAT/VAR_INST/VAR_GENERIC), which are stored like VAR until
+        // their placement rules are implemented.
+        VariableType::VarStat | VariableType::VarInst | VariableType::VarGeneric => {
+            var_section::VAR
+        }
         VariableType::VarTemp => var_section::VAR_TEMP,
         VariableType::Input => var_section::VAR_INPUT,
         VariableType::Output => var_section::VAR_OUTPUT,

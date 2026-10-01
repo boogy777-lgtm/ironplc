@@ -1,0 +1,32 @@
+=====
+P6013
+=====
+
+.. problem-summary:: P6013
+
+This error occurs when the compiler is unable to write a file to disk.
+The compiler writes bytecode containers (``.iplc``) and the stable variable
+UID sidecar (``.uids.json``) next to the project.
+
+Example
+-------
+
+This error typically occurs when:
+
+1. You don't have permission to write to the directory
+2. The file is locked by another process
+3. The disk is full
+4. There are hardware or filesystem issues
+
+.. code-block:: bash
+
+   # Examples that would cause this error:
+   ironplcc refactor sync-uids /root/project          # Permission denied
+   ironplcc compile main.st -o locked_dir/main.iplc  # File locked by another process
+
+To fix this error, ensure that:
+
+- You have write permissions for the directory
+- The file is not locked by another application
+- There is enough free space on the disk
+- The filesystem and storage device are functioning correctly

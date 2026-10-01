@@ -18,7 +18,7 @@ END_VAR
 END_FUNCTION_BLOCK"
     );
     let library = parse_program(&source, &FileId::default(), &opts_with_fb_inheritance())
-        .unwrap_or_else(|e| panic!("Source did not parse: {e:?}\n{source}"));
+        .expect("Source did not parse");
     let fb = extract_fb(&library);
     assert_eq!(fb.methods.len(), 1);
     fb.methods[0].clone()
@@ -155,8 +155,8 @@ END_VAR
     x := 0;
 END_FUNCTION_BLOCK"
     );
-    let library = parse_program(&source, &FileId::default(), options)
-        .unwrap_or_else(|e| panic!("Source did not parse: {e:?}\n{source}"));
+    let library =
+        parse_program(&source, &FileId::default(), options).expect("Source did not parse");
     extract_fb(&library).clone()
 }
 

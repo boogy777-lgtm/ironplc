@@ -1,0 +1,474 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<language-model>
+	<pou id = "e8c04d52-7d17-4965-9598-cb38a570750e" name = "int64__to__any32" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION int64__to__any32 : DWORD
+		VAR_INPUT
+			in: LWORD;
+			dwType: DWORD;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "fbd44dd8-302c-4269-9682-4e63f10e32ee" name = "any32__to__int64" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION any32__to__int64 : LWORD
+		VAR_INPUT
+			in: DWORD;
+			dwType: DWORD;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "4996aebf-7b1a-4606-9275-58c6595fe093" name = "real32__to__any64" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION real32__to__any64 : LWORD
+		VAR_INPUT
+			in: REAL;
+			dwType: DWORD;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "fba8c26a-b719-4b40-ab2a-36a9440d345b" name = "any64__to__real32" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION any64__to__real32 : REAL
+		VAR_INPUT
+			in: LWORD;
+			dwType: DWORD;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "5df34150-5072-488a-a457-a82fe4dddcaf" name = "int64__div" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION int64__div : LINT
+		VAR_INPUT
+			in1: LINT;
+			in2: LINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>				
+	<pou id = "c72c0ae2-f6fb-4752-9d81-65e25c2adedd" name = "uint64__div" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint64__div : ULINT
+		VAR_INPUT
+			in1: ULINT;
+			in2: ULINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>				
+	<pou id = "285230dc-fbd4-44eb-96d1-c35d9d1d95a4" name = "int64__mod" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION int64__mod : LINT
+		VAR_INPUT
+			in1: LINT;
+			in2: LINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>				
+	<pou id = "7cf5a04d-a334-4d66-8458-aa41fd3d3cb4" name = "uint64__mod" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint64__mod : LINT
+		VAR_INPUT
+			in1: ULINT;
+			in2: ULINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "bd215293-9d5f-451b-8b34-fbf355380a1f" name = "uint64__add" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint64__add : ULINT
+		VAR_INPUT
+			in1: ULINT;
+			in2: ULINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "f853b3c3-030b-457f-9c6f-904c951d4c1b" name = "int64__add" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION int64__add : LINT
+		VAR_INPUT
+			in1: LINT;
+			in2: LINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>				
+	<pou id = "b74d723c-4571-496b-9991-776c19eac243" name = "int64__sub" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION int64__sub : LINT
+		VAR_INPUT
+			in1: LINT;
+			in2: LINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>				
+	<pou id = "91c29cfe-4ed7-4aaf-862d-2b211eba3727" name = "uint64__sub" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint64__sub : ULINT
+		VAR_INPUT
+			in1: ULINT;
+			in2: ULINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>					
+	<pou id = "56cf99a8-dd26-40fc-bd98-c75e222d12a2" name = "int64__mul" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION int64__mul : LINT
+		VAR_INPUT
+			in1: LINT;
+			in2: LINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>				
+	<pou id = "9f1b41e0-0777-4b76-9af1-a82c5e0d5e37" name = "uint64__mul" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint64__mul : ULINT
+		VAR_INPUT
+			in1: ULINT;
+			in2: ULINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>				
+	<pou id = "938d42a9-f6db-4a23-944c-1eb5ddb2deee" name = "int64__min" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION int64__min : LINT
+		VAR_INPUT
+			in1: LINT;
+			in2: LINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>				
+	<pou id = "f38314a9-aaa0-47b1-8175-b88faad4b296" name = "uint64__min" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint64__min : ULINT
+		VAR_INPUT
+			in1: ULINT;
+			in2: ULINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>				
+	<pou id = "0d9bcbbc-7c0b-403c-afcc-ba79b0a580ab" name = "int64__max" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION int64__max : LINT
+		VAR_INPUT
+			in1: LINT;
+			in2: LINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>				
+	<pou id = "611c06e1-6846-4ba2-82b4-76c65f121ab0" name = "uint64__max" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint64__max : ULINT
+		VAR_INPUT
+			in1: ULINT;
+			in2: ULINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>				
+	<pou id = "367ed89a-2489-42df-ab7c-864d2f1d2f78" name = "uint64__xor" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint64__xor : ULINT
+		VAR_INPUT
+			in1: ULINT;
+			in2: ULINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>				
+	<pou id = "c5a4df4a-a8a2-4c18-a05f-5857c4899a0c" name = "uint64__and" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint64__and : ULINT
+		VAR_INPUT
+			in1: ULINT;
+			in2: ULINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>				
+	<pou id = "32a1c099-4e89-49fc-b341-847a90f50e30" name = "uint64__or" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint64__or : ULINT
+		VAR_INPUT
+			in1: ULINT;
+			in2: ULINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>								
+	<pou id = "b178ef7a-1592-434b-b462-6c46fac2c8a4" name = "uint64__not" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint64__not : ULINT
+		VAR_INPUT
+			in1: ULINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>	
+	<pou id = "cea9db66-1a76-4c47-b9a0-6577ad6e4e74" name = "uint64__eq" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint64__eq : BOOL
+		VAR_INPUT
+			in1: ULINT;
+			in2: ULINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "a5ae5f79-8207-4854-943b-288c0a7d2b9b" name = "uint64__ne" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint64__ne : BOOL
+		VAR_INPUT
+			in1: ULINT;
+			in2: ULINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "2c377459-e121-40b9-9e5a-1118a48f743d" name = "uint64__lt" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint64__lt : BOOL
+		VAR_INPUT
+			in1: ULINT;
+			in2: ULINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>	
+	<pou id = "ae239119-6f5f-4534-a1ee-b390262a39a3" name = "uint64__le" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint64__le : BOOL
+		VAR_INPUT
+			in1: ULINT;
+			in2: ULINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "1450c7da-db41-485f-83a7-d6227fc55a01" name = "uint64__gt" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint64__gt : BOOL
+		VAR_INPUT
+			in1: ULINT;
+			in2: ULINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "20395126-4d3f-43d9-9df8-5b21c66b6dcb" name = "uint64__ge" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint64__ge : BOOL
+		VAR_INPUT
+			in1: ULINT;
+			in2: ULINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "e8ff23a5-d7c7-48b8-805a-b0c01e09cce3" name = "int64__eq" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION int64__eq : BOOL
+		VAR_INPUT
+			in1: LINT;
+			in2: LINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "18d11e8b-afdf-443e-82d2-046d71021018" name = "int64__ne" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION int64__ne : BOOL
+		VAR_INPUT
+			in1: LINT;
+			in2: LINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "35ead342-0197-4bd8-ba6f-d3002ea536e8" name = "int64__lt" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION int64__lt : BOOL
+		VAR_INPUT
+			in1: LINT;
+			in2: LINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>	
+	<pou id = "0a31942a-efba-4ddf-9c0d-7d4e887ec3ca" name = "int64__le" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION int64__le : BOOL
+		VAR_INPUT
+			in1: LINT;
+			in2: LINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "b93d8de7-8cc7-458d-b76b-54805d224bf8" name = "int64__gt" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION int64__gt : BOOL
+		VAR_INPUT
+			in1: LINT;
+			in2: LINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "e3fa00fa-76dc-48d3-b18d-70546f8817d1" name = "int64__ge" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION int64__ge : BOOL
+		VAR_INPUT
+			in1: LINT;
+			in2: LINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "83f47c43-8882-441b-809f-1bf3202ee267" name = "int64__abs" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION int64__abs : LINT
+		VAR_INPUT
+			in1: LINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>													
+	<pou id = "d9ff9b48-8cb1-41b0-92d2-319173b767fc" name = "uint64__rol" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint64__rol : ULINT
+		VAR_INPUT
+			in1: ULINT;
+			in2: INT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "8292f004-04fa-4067-bf44-2dd2c43db842" name = "uint64__ror" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint64__ror : ULINT
+		VAR_INPUT
+			in1: ULINT;
+			in2: INT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>	
+	<pou id = "4f5894be-5a41-4c9b-8659-e81c12575fc4" name = "uint64__shl" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint64__shl : ULINT
+		VAR_INPUT
+			in1: ULINT;
+			in2: INT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>														
+	<pou id = "821a527f-8831-4a09-b5da-58ca3b768f66" name = "uint64__shr" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint64__shr : ULINT
+		VAR_INPUT
+			in1: ULINT;
+			in2: INT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>														
+	<pou id = "26311cc1-5920-4260-9336-be3754cf23cf" name = "uint64__limit" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION uint64__limit : ULINT
+		VAR_INPUT
+			in1: ULINT;
+			in2: ULINT;
+			in3: ULINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>													
+	<pou id = "b3a15fa1-b9b4-4cad-91f6-3fd673edbae6" name = "int64__limit" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION int64__limit : LINT
+		VAR_INPUT
+			in1: LINT;
+			in2: LINT;
+			in3: LINT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "427ca261-109e-4d61-a08b-24f6068e58da" name = "int64__shr" external = "true">
+		<interface>
+		{implicit on}
+		FUNCTION int64__shr : LINT
+		VAR_INPUT
+			in1: LINT;
+			in2: INT;
+		END_VAR
+		{implicit off}
+		</interface>
+	</pou>
+	<pou id = "AEAAF22A-A260-4bac-83D9-18FF949BE644" name = "get__ltime" external = "true">
+		<interface>
+			{implicit on}
+			FUNCTION get__ltime : LTIME
+			VAR_INPUT
+			END_VAR
+			{implicit off}
+		</interface>
+	</pou>
+</language-model>	

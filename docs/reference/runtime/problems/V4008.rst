@@ -1,0 +1,30 @@
+=====
+V4008
+=====
+
+.. problem-summary:: V4008
+
+Online change refused the candidate because its task schedule differs from
+the running application's. The task table — task priorities, task types,
+intervals, watchdogs, and the program instance bindings — is identity, not
+state: the runtime validates it field by field at stage time and treats any
+difference as a schedule change, which is a cold start in the P0 protocol.
+
+Example
+-------
+
+The candidate was compiled from a program whose configuration assigns a
+different priority to the cyclic task. The host answers the staged edit with
+V4008 and the original schedule keeps running:
+
+.. code-block::
+
+   {"command":"acceptEdits","program":[...]}
+   {"response":"error","vCode":"V4008","message":"candidate task schedule is incompatible with the active application"}
+
+To fix this error, keep the candidate's task configuration identical to the
+running application's — priorities, task types, intervals, and watchdog
+times must all match — and change only program logic. When the schedule
+itself must change, stop the runtime and load the candidate as a new
+application; a tested schedule change cannot be untested back because task
+identity is not part of the carried-over state.

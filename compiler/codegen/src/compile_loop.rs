@@ -45,7 +45,12 @@ fn compile_loop_body(
         next_used: false,
     });
     let result = compile_stmts(emitter, ctx, body);
-    let labels = ctx.loop_labels.pop().expect("pushed above");
+    // The push above and this pop are balanced by this function; an empty
+    // stack here is a compiler defect, not a user program error.
+    let labels = ctx
+        .loop_labels
+        .pop()
+        .ok_or_else(Diagnostic::internal_error)?;
     result?;
     Ok(labels.next_used.then_some(labels.next))
 }

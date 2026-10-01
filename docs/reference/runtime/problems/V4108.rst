@@ -1,0 +1,26 @@
+=====
+V4108
+=====
+
+.. problem-summary:: V4108
+
+The engineer's commanded role swap was refused: the pair is not in
+SYNC_READY. A swap is only safe while both units are synchronized, so
+the command is rejected before anything moves — the active owner keeps
+owning and the swap is never half-run. The refusal is latched as the
+alarm on the refusing unit.
+
+Example
+-------
+
+A swap is commanded while the secondary is still synchronizing (the pair
+has not reached SYNC_READY):
+
+.. code-block::
+
+   Error: V4108 - swap refused: the commanded role swap was refused: the pair is not in SYNC_READY
+
+To fix this error, wait for the pair to reach SYNC_READY (both units
+synchronized and epoch-aligned), then re-issue the swap. A swap
+commanded early is refused, never queued — the engineer decides when to
+retry.

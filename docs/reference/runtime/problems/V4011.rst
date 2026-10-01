@@ -1,0 +1,34 @@
+=====
+V4011
+=====
+
+.. problem-summary:: V4011
+
+``untestEdits`` was requested while a schema-changing candidate — a migration
+candidate whose layout hash differs from the running application's — is under
+test. Writes made under the candidate's layout have no reverse mapping for the
+variables the candidate added or removed, so reverting the code would strand
+state that belongs to a layout that no longer executes. The runtime refuses
+the untest and leaves the candidate active with the state untouched.
+
+Example
+-------
+
+A session accepts a candidate that adds a variable, tests it, and then asks
+to revert:
+
+.. code-block::
+
+   {"command":"acceptEdits","program":[...]}
+   {"response":"ack"}
+   {"command":"testEdits"}
+   {"response":"ack"}
+   {"command":"untestEdits"}
+   {"response":"error","vCode":"V4011","message":"untest is not supported after a schema-changing test; assemble or cancel instead"}
+
+To proceed, choose one of the exits the protocol offers for a migration
+candidate. ``assembleEdits`` commits the candidate: the migration is applied,
+the new schema becomes the running application, and the application
+generation advances. ``cancelEdits`` discards the candidate, but only while
+the original artifact is still active — before ``testEdits``. A logic-only
+edit keeps its untest path, as described in the online change protocol.

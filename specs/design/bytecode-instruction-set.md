@@ -113,7 +113,7 @@ The full op-class table (63 of 64 slots used; 0x3F free):
 
 ### Migration status
 
-The encoding migration is complete: every opcode in `opcode.rs` is derived via `encode_opcode(OP_CLASS_*, type_tag)` and matches the byte values in this document. The container `FORMAT_VERSION` is **3**. Tests in `wire_format.rs` assert specific hex bytes to guard against accidental renumbering — any change to an opcode byte requires updating the corresponding test bytes and bumping `FORMAT_VERSION`.
+The encoding migration is complete: every opcode in `opcode.rs` is derived via `encode_opcode(OP_CLASS_*, type_tag)` and matches the byte values in this document. The container `FORMAT_VERSION` is **4**. Tests in `wire_format.rs` assert specific hex bytes to guard against accidental renumbering — any change to an opcode byte requires updating the corresponding test bytes and bumping `FORMAT_VERSION`.
 
 ## Type System
 
@@ -832,7 +832,7 @@ Two storage areas hold strings:
 - **Data region** — string *variables* (and string array elements) live in the unified data region (ADR-0017), addressed by a compile-time-constant `data_offset`. `char_width` is written once at initialization and never changes.
 - **Temp buffer pool** — a pre-allocated pool of fixed-size buffers holding intermediate results. A buffer is addressed by a small `buf_idx`, which is what string-producing operations push onto the stack. The container header declares `num_temp_bufs` and `max_temp_buf_bytes`; codegen sizes them from the program's string expressions. Exhausting the pool traps `V9009 TempBufferExhausted`.
 
-**The pool is a stack, not an arena** ([ADR-0052](../adrs/0052-temp-string-buffers-released-on-consume.md)).
+**The pool is a stack, not an arena** ([ADR-0067](../adrs/0067-temp-string-buffers-released-on-consume.md)).
 A temp buffer is owned by the operand-stack slot holding its `buf_idx` and is
 released by the instruction that consumes that slot — `STR_STORE_VAR` or
 `STR_STORE_ARRAY_ELEM`, once the value has been copied out. Because the

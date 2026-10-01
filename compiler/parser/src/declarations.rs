@@ -93,6 +93,13 @@ fn element_to_summary(element: &LibraryElementKind) -> Option<DeclarationSummary
             })
         }
         LibraryElementKind::GlobalVarDeclarations(_) => None,
+        LibraryElementKind::NamespaceDeclaration(decl) => Some(DeclarationSummary {
+            kind: "namespace",
+            name: Some(decl.name.to_string()),
+            file_id: decl.span.file_id.clone(),
+            start: decl.span.start,
+            end: decl.span.end,
+        }),
         LibraryElementKind::InterfaceDeclaration(decl) => {
             let span = decl.name.span();
             Some(DeclarationSummary {
@@ -113,9 +120,11 @@ fn data_type_name(decl: &DataTypeDeclarationKind) -> Option<String> {
         DataTypeDeclarationKind::Simple(d) => Some(d.type_name.to_string()),
         DataTypeDeclarationKind::Array(d) => Some(d.type_name.to_string()),
         DataTypeDeclarationKind::Structure(d) => Some(d.type_name.to_string()),
+        DataTypeDeclarationKind::Union(d) => Some(d.type_name.to_string()),
         DataTypeDeclarationKind::StructureInitialization(d) => Some(d.type_name.to_string()),
         DataTypeDeclarationKind::String(d) => Some(d.type_name.to_string()),
         DataTypeDeclarationKind::Reference(d) => Some(d.type_name.to_string()),
+        DataTypeDeclarationKind::Params(d) => Some(d.type_name.to_string()),
         DataTypeDeclarationKind::LateBound(d) => Some(d.data_type_name.to_string()),
     }
 }
@@ -127,9 +136,11 @@ fn data_type_span(decl: &DataTypeDeclarationKind) -> SourceSpan {
         DataTypeDeclarationKind::Simple(d) => d.type_name.span(),
         DataTypeDeclarationKind::Array(d) => d.type_name.span(),
         DataTypeDeclarationKind::Structure(d) => d.type_name.span(),
+        DataTypeDeclarationKind::Union(d) => d.type_name.span(),
         DataTypeDeclarationKind::StructureInitialization(d) => d.type_name.span(),
         DataTypeDeclarationKind::String(d) => d.type_name.span(),
         DataTypeDeclarationKind::Reference(d) => d.type_name.span(),
+        DataTypeDeclarationKind::Params(d) => d.type_name.span(),
         DataTypeDeclarationKind::LateBound(d) => d.span(),
     }
 }

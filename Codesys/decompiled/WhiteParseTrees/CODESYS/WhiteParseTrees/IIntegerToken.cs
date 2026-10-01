@@ -1,0 +1,10 @@
+using _3S.CoDeSys.Core.Components;
+
+namespace CODESYS.WhiteParseTrees
+{
+	[ReleasedInterface]
+	public interface IIntegerToken : IWhiteToken, INode
+	{
+		ulong Value { get; }
+	}
+}

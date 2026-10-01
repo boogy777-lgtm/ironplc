@@ -60,6 +60,25 @@ END_PROGRAM
     assert!(rendered.contains("\"tail\""), "rendered:\n{rendered}");
 }
 
+// A typed string literal's prefix (`UTF8#`, `UCHAR#`, `__XSTRING#`) names an
+// encoding, not a different set of characters, so the AST keeps only the
+// decoded characters and the width; the rendering is the untyped spelling.
+#[test]
+fn write_to_string_when_typed_string_literals_then_prefix_is_not_rendered() {
+    let source = read_shared_resource("typed_string_literals.st");
+    let rendered = assert_round_trips(&source, &CompilerOptions::default());
+
+    assert!(
+        rendered.contains("narrow := 'aAb'"),
+        "rendered:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("wide := \"aAb\""),
+        "rendered:\n{rendered}"
+    );
+    assert!(rendered.contains("code := 'A'"), "rendered:\n{rendered}");
+}
+
 // A literal's `value` holds the decoded characters, so rendering has to
 // escape them again, exactly once. An earlier renderer re-escaped undecoded
 // source text, which compounded on each pass (`$L`, `$$L`, `$$$$L`).
@@ -140,6 +159,19 @@ fn write_to_string_when_wide_literal_contains_escaped_quote_then_round_trips() {
 #[case::other_delimiter_escaped("STRING[20]", "'say $\"hi$\"'", "v := 'say \"hi\"'")]
 #[case::control_narrow("STRING[20]", "'$01'", "v := '$01'")]
 #[case::control_wide("WSTRING[20]", "\"$0001\"", "v := \"$0001\"")]
+// `$80` is the Windows-1252 euro sign, and it renders as itself.
+#[case::cp1252_euro_narrow("STRING[20]", "'a$80b'", "v := 'a€b'")]
+#[case::cp1252_euro_wide("WSTRING[20]", "\"a$0080b\"", "v := \"a€b\"")]
+// 0x81 is undefined in Windows-1252, so `$81` is U+0081 and renders as the
+// same escape.
+#[case::cp1252_undefined("STRING[20]", "'$81'", "v := '$81'")]
+#[case::cp1252_undefined_wide("WSTRING[20]", "\"$0081\"", "v := \"$0081\"")]
+// U+0082 is a control character whose byte 0x82 Windows-1252 gives to `‚`,
+// so no numeric escape denotes it and it renders as a Unicode escape.
+#[case::cp1252_control("STRING[20]", "'$U00000082'", "v := '$U00000082'")]
+#[case::cp1252_control_wide("WSTRING[20]", "\"$U00000082\"", "v := \"$U00000082\"")]
+#[case::unicode_escape_narrow("STRING[20]", "'$U000020AC'", "v := '€'")]
+#[case::unicode_escape_wide("WSTRING[20]", "\"$U000020AC\"", "v := \"€\"")]
 fn write_to_string_when_literal_has_escape_then_renders_canonical_spelling(
     #[case] declaration: &str,
     #[case] literal: &str,

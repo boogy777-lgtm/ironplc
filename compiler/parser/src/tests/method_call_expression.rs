@@ -79,9 +79,7 @@ fn parse_when_method_call_is_argument_of_method_call_then_nested() {
     let body = parse_body("v := m.Scaled(m.Factor());");
 
     let outer = method_call(assigned_value(&body[0]));
-    let ParamAssignmentKind::PositionalInput(arg) = &outer.params[0] else {
-        panic!("expected a positional argument, got {:?}", outer.params[0]);
-    };
+    let arg = cast!(&outer.params[0], ParamAssignmentKind::PositionalInput);
     assert_eq!(method_call(&arg.expr).method, Id::from("Factor"));
 }
 

@@ -175,7 +175,7 @@ pub(crate) fn initialize_struct_variable(
 /// array of structures in a variable's data region.
 ///
 /// One `STR_INIT_ARRAY` per field covers every element, through the strided
-/// descriptor registered for the field (ADR-0054). The opcode reads the base
+/// descriptor registered for the field (ADR-0069). The opcode reads the base
 /// address from a variable, so it is first computed into the scratch
 /// variable. Without this, the headers stay zeroed, and a zero `char_width`
 /// traps on first access.

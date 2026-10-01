@@ -1,0 +1,16 @@
+using _3S.CoDeSys.Core.Components;
+using _3S.CoDeSys.Core.LanguageModel;
+using _3S.CoDeSys.Core.Objects;
+
+namespace _3S.CoDeSys.LanguageModelManager.InternalInterfaces
+{
+	[ReleasedInterface]
+	public interface _ISubrangeType : _IType, ICompiledType5, ICompiledType4, ICompiledType3, ICompiledType2, ICompiledType, IType, IArchivable, ISubrangeType2, ISubrangeType
+	{
+		_IType _Base { get; set; }
+
+		_IExpression _LowerBorder { get; set; }
+
+		_IExpression _UpperBorder { get; set; }
+	}
+}

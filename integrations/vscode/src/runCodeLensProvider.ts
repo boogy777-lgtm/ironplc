@@ -68,7 +68,8 @@ export function findProgramLenses(
           command: 'ironplc.stopProgram',
         },
       });
-    } else if (state === 'paused') {
+    }
+    else if (state === 'paused') {
       lenses.push({
         range,
         command: {
@@ -83,7 +84,8 @@ export function findProgramLenses(
           command: 'ironplc.stopProgram',
         },
       });
-    } else if (!hasCompiler) {
+    }
+    else if (!hasCompiler) {
       lenses.push({
         range,
         command: {
@@ -91,7 +93,8 @@ export function findProgramLenses(
           command: 'ironplc.runProgram',
         },
       });
-    } else {
+    }
+    else {
       lenses.push({
         range,
         command: {

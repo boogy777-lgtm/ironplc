@@ -1,0 +1,36 @@
+=====
+V6012
+=====
+
+.. problem-summary:: V6012
+
+``ironplcvm serve`` acknowledged an ``assembleEdits`` — the candidate is
+the running application in memory — but the commit could not be persisted
+to the A/B slot store beside the served container (ADR-0064 amendment).
+The wire answers this error in place of the acknowledgment, so the client
+learns the commit is live but not durable.
+
+Typical causes: the store's directory is read-only or full, a store file
+was replaced by a directory, or the marker record is missing (the store
+was not booted).
+
+What still holds, and what does not:
+
+- The RAM promotion stands: the assembled candidate is the running
+  application of this process.
+- Nothing new reached the store: the slot files and the marker name the
+  previous committed generation, so a reboot boots that previous
+  generation — an honestly recoverable state, never unverified bytes.
+
+Solutions
+---------
+
+1. Check the directory beside the served container (the ``.slot-a``,
+   ``.slot-b``, ``.marker``, and ``.tmp`` files): free disk space, restore
+   write permissions, and remove any directory that shadows a store file.
+2. Retry the download: stage the same edit again (``acceptEdits``,
+   ``testEdits``) and assemble — assemble is the single commit point, so
+   a retried assemble persists the candidate that is already running.
+3. If the error persists across retries, restore the previous committed
+   artifact by restarting ``serve``: it boots the newest verifiable
+   generation from the store.

@@ -1,0 +1,23 @@
+{
+"CODESYS.WhiteParseTrees.WhiteParseTrees.Resources.WhiteParserMessageStrings.resources":{
+"ExpectedOneOf":"{0}. Expected one of: {1}"
+,
+"FailedToParseAssignmentExpression":"Failed to parse assignment expression"
+,
+"FailedToParseDeclaration":"Failed to parse declaration"
+,
+"FailedToParseStatement":"Failed to parse statement"
+,
+"InternalError":"Internal error: {0}"
+,
+"UnexpectedEndOfInput":"Unexpected end of input"
+,
+"UnexpectedOperator":"Unexpected operator: '{0}'"
+,
+"UnexpectedOperatorExpected":"{0}. Expected operator: {1}"
+,
+"UnexpectedToken":"Unexpected token: '{0}'"
+,
+"UnexpectedTokenExpected":"{0}. Expected: {1}"
+}
+}

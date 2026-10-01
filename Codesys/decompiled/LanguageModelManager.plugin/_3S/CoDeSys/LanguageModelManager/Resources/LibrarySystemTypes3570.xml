@@ -1,0 +1,41 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+	<language-model>
+    <pou id = "0AC70C4A-9600-4218-BA11-7D8AD957FB05" name = "__memcmp__iec">
+      <interface>
+        {implicit on}
+        {attribute 'linkalways'}
+        FUNCTION __memcmp__iec : INT
+        VAR_INPUT
+        ptr1: POINTER TO BYTE;
+        ptr2: POINTER TO BYTE;
+        diSize: DINT;
+        END_VAR
+        VAR
+        i: DINT;
+        END_VAR
+        {implicit off}
+      </interface>
+      <body>
+        <![CDATA[
+		{implicit on}
+		{nobp}
+		{noflow}
+    
+    FOR (i := 0) TO diSize - 1 DO              
+      IF ptr1[i] < ptr2[i] THEN
+        __memcmp__iec := -1;
+        RETURN;
+      ELSIF ptr1[i] > ptr2[i] THEN
+        __memcmp__iec := 1;
+        RETURN; 
+      END_IF
+    END_FOR
+    
+    __memcmp__iec := 0;
+    RETURN;
+    
+		{implicit off}
+		]]>
+      </body>
+    </pou>
+  </language-model>

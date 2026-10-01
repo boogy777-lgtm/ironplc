@@ -64,8 +64,8 @@ suite('problemUrls', () => {
         }
         assert.ok(
           problemHelpUrl(code, '0').includes(`/reference/${section}/problems/${code}.html`),
-          `problemHelpUrl(${code}) should point at /reference/${section}/problems/ ` +
-          `(its page lives there); a new code family needs a matching case in sectionForCode`,
+          `problemHelpUrl(${code}) should point at /reference/${section}/problems/ `
+          + `(its page lives there); a new code family needs a matching case in sectionForCode`,
         );
         checked++;
       }

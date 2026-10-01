@@ -45,10 +45,10 @@ END_FUNCTION_BLOCK";
         &fb.variables[1].initializer,
         InitialValueAssignmentKind::LateResolvedType
     );
-    let elements = match &late.initial_value {
-        Some(LateResolvedInitialValue::Members(elements)) => elements,
-        other => panic!("expected a member list, got {other:?}"),
-    };
+    let elements = cast!(
+        late.initial_value.as_ref().unwrap(),
+        LateResolvedInitialValue::Members
+    );
     assert_eq!(elements.len(), 1);
     assert!(matches!(
         elements[0].init,
@@ -154,8 +154,9 @@ fn sole_struct_element_init(library: &Library) -> &StructInitialValueAssignmentK
         &program.variables.last().unwrap().initializer,
         InitialValueAssignmentKind::LateResolvedType
     );
-    match late.initial_value.as_ref().unwrap() {
-        LateResolvedInitialValue::Members(elements) => &elements[0].init,
-        other => panic!("expected a member list, got {other:?}"),
-    }
+    let elements = cast!(
+        late.initial_value.as_ref().unwrap(),
+        LateResolvedInitialValue::Members
+    );
+    &elements[0].init
 }

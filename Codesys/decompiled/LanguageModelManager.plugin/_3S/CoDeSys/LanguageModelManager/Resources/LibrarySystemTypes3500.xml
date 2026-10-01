@@ -1,0 +1,76 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+	<language-model>
+		<data-type id ="{8467172F-0C66-4ACF-9D6B-245B2445DA14}" name = "__POUInfoStruct">
+			<interface>
+				{implicit on}
+				{attribute 'linkalways'}
+				TYPE __POUInfoStruct:
+				STRUCT
+					dwCRCCode: DWORD;
+					dwCRCInterface: DWORD;
+					udiNameStringIndex: UDINT;
+					usiAreaCodeLocation: UINT;
+					usiAreaFPPointerLocation : UINT;
+					udiOffsetCodeLocation: UDINT;
+					udiOffsetFPPointerLocation : UDINT;
+				END_STRUCT
+				END_TYPE
+				{implicit off}
+			</interface>
+		</data-type>
+		<data-type id ="{1964CD27-F960-4298-B539-CF555CB4552C}" name = "__FBInfoStruct">
+			<interface>
+				{implicit on}
+				{attribute 'linkalways'}
+				TYPE __FBInfoStruct EXTENDS __POUInfoStruct:
+				STRUCT
+					dwCRCVFTable: DWORD;
+					udiAreaVFTableLocation : UDINT;
+					udiOffsetVFTableLocation : UDINT;
+				END_STRUCT
+				END_TYPE
+				{implicit off}
+			</interface>
+		</data-type>
+		<data-type id ="{D277C0D4-0A58-4C92-97D1-0453F8828707}" name = "__MethodInfoStruct">
+			<interface>
+				{implicit on}
+				{attribute 'linkalways'}
+				TYPE __MethodInfoStruct EXTENDS __POUInfoStruct:
+				STRUCT
+					udiParentPOUIndex: UDINT;
+				END_STRUCT
+				END_TYPE
+				{implicit off}
+			</interface>
+		</data-type>
+		<data-type id ="{76A1E5D2-9EB5-4A1B-A8E7-BAF1B7EB9716}" name = "__DUTInfoStruct">
+			<interface>
+				{implicit on}
+				{attribute 'linkalways'}
+				TYPE __DUTInfoStruct:
+				STRUCT
+					dwCRCInterface: DWORD;
+					udiNameStringIndex: UDINT;
+				END_STRUCT
+				END_TYPE
+				{implicit off}
+			</interface>
+		</data-type>
+		<data-type id ="{A40CB7C8-28FE-4494-89AC-D9BA39DB98A8}" name = "__GVLInfoStruct">
+			<interface>
+				{implicit on}
+				{attribute 'linkalways'}
+				TYPE __GVLInfoStruct:
+				STRUCT
+					dwCRCInterface: DWORD;
+					udiNameStringIndex: UDINT;
+				END_STRUCT
+				END_TYPE
+				{implicit off}
+			</interface>
+		</data-type>
+
+
+		<!--end of types for data segment information-->
+	</language-model>

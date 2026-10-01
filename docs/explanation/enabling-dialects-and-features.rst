@@ -38,8 +38,9 @@ Supported Dialects
 
    **Enables:** ``--allow-long-time-types``, ``--allow-ref-to`` (the
    Edition 3 keywords), ``--allow-partial-access-syntax``,
-   ``--allow-fb-inheritance``, ``--allow-enum-explicit-values``, and
-   ``--allow-continue``.
+   ``--allow-fb-inheritance``, ``--allow-enum-explicit-values``,
+   ``--allow-continue``, ``--allow-union-type``, and
+   ``--allow-multiple-underscores``.
 
    **Selects:** the default of every behavior policy
    (``--policy-string-to-num-non-numeric reject``,
@@ -66,7 +67,8 @@ Supported Dialects
    ``--allow-bit-string-case-labels``, ``--allow-paren-string-length``,
    ``--allow-struct-initializer-expressions``,
    ``--allow-fb-inheritance``, ``--allow-enum-explicit-values``,
-   ``--allow-enum-base-type``, and ``--allow-continue``.
+   ``--allow-enum-base-type``, ``--allow-continue``, ``--allow-union-type``,
+   ``--allow-bit-type``, and ``--allow-multiple-underscores``.
 
    **Selects:** ``--policy-string-to-num-non-numeric reject`` and
    ``--policy-string-to-num-failure zero`` — RuSTy rejects a string with
@@ -101,7 +103,15 @@ Supported Dialects
    ``--allow-bit-string-case-labels``, ``--allow-paren-string-length``,
    ``--allow-struct-initializer-expressions``,
    ``--allow-fb-inheritance``, ``--allow-enum-explicit-values``,
-   ``--allow-enum-base-type``, and ``--allow-continue``.
+   ``--allow-enum-base-type``, ``--allow-continue``,
+   ``--allow-union-type``, ``--allow-var-stat``, ``--allow-var-inst``,
+   ``--allow-var-generic``, ``--allow-namespace``,
+   ``--allow-begin-implementation``, ``--allow-bit-type``,
+   ``--allow-try-catch``, ``--allow-params-of``,
+   ``--allow-incomplete-array``, ``--allow-escaped-identifiers``,
+   ``--allow-jump-statement``, ``--allow-calc-statement``,
+   ``--allow-wait-statement``, ``--allow-nested-comments``, and
+   ``--allow-pragma-if``.
 
    **Selects:** ``--policy-string-to-num-non-numeric ignore-trailing`` and
    ``--policy-string-to-num-failure zero`` — CODESYS stops parsing at the
@@ -144,7 +154,14 @@ Supported Dialects
    ``--allow-bit-string-case-labels``, ``--allow-paren-string-length``,
    ``--allow-struct-initializer-expressions``,
    ``--allow-fb-inheritance``, ``--allow-enum-explicit-values``,
-   ``--allow-enum-base-type``, and ``--allow-continue``.
+   ``--allow-enum-base-type``, ``--allow-continue``,
+   ``--allow-union-type``, ``--allow-var-stat``, ``--allow-var-inst``,
+   ``--allow-var-generic``, ``--allow-namespace``, ``--allow-bit-type``,
+   ``--allow-try-catch``, ``--allow-params-of``,
+   ``--allow-incomplete-array``, ``--allow-escaped-identifiers``,
+   ``--allow-jump-statement``, ``--allow-calc-statement``,
+   ``--allow-wait-statement``, ``--allow-nested-comments``, and
+   ``--allow-pragma-if``.
 
    **Selects:** ``--policy-string-to-num-non-numeric ignore-trailing`` and
    ``--policy-string-to-num-failure zero``, as ``codesys``.
@@ -495,6 +512,82 @@ which flags a dialect already enables by default, see `Supported Dialects`_.
    ``CONTINUE`` was added in Edition 3. Without this flag, ``CONTINUE`` is an
    ordinary identifier, so a ``CONTINUE;`` statement is a syntax error and a
    variable may be named ``continue``.
+
+``--allow-union-type``
+   Allow a ``UNION ... END_UNION`` type declaration inside a ``TYPE`` block:
+   the members share one storage location. ``UNION`` was standardized in
+   Edition 3. Without this flag, both words are ordinary identifiers, so the
+   declaration is a syntax error and a variable may be named ``union``.
+   Members are currently stored like structure fields rather than overlaid;
+   overlaying them is not implemented yet.
+
+``--allow-var-stat``
+   Allow a ``VAR_STAT ... END_VAR`` variable section, whose declarations keep
+   their value between calls of the POU they are declared in. Without this
+   flag, ``VAR_STAT`` is an ordinary identifier.
+
+``--allow-var-inst``
+   Allow a ``VAR_INST ... END_VAR`` variable section in a method, whose
+   declarations belong to the method's instance rather than to one call.
+   Without this flag, ``VAR_INST`` is an ordinary identifier.
+
+``--allow-var-generic``
+   Allow a ``VAR_GENERIC ... END_VAR`` variable section directly after a
+   function block's name, declaring the function block's generic constants.
+   Without this flag, ``VAR_GENERIC`` is an ordinary identifier.
+
+``--allow-namespace``
+   Allow ``NAMESPACE name ... END_NAMESPACE``, which groups the declarations
+   it contains. The declarations inside are analyzed as ordinary
+   declarations; qualified access (``ns#name``) is not implemented yet.
+   Without this flag, ``NAMESPACE`` and ``END_NAMESPACE`` are ordinary
+   identifiers.
+
+``--allow-begin-implementation``
+   Allow the ``__BEGIN_IMPLEMENTATION`` marker that begins a POU's
+   implementation section in a CODESYS textual export. The marker carries no
+   behavior. Without this flag it is an ordinary identifier.
+
+``--allow-try-catch``
+   Allow the CODESYS exception handling statements ``__TRY``, ``__CATCH``,
+   ``__FINALLY``, ``__ENDTRY`` and ``__THROW``. The five words are keywords
+   only while the flag is set; without it they are ordinary identifiers, so a
+   standard program may use ``__TRY`` as a variable name. A ``__THROW``
+   stores its value in the innermost enclosing ``__CATCH (e)`` variable and
+   jumps to that clause; one with no enclosing ``__CATCH`` in the same body
+   produces :doc:`P4066 </reference/compiler/problems/P4066>`.
+
+``--allow-params-of``
+   Allow the CODESYS parameter-list data type ``PARAMS(n) OF T``, a list of
+   ``n`` parameters of type ``T``. The elements are addressed by index like
+   an array. Without this flag, ``PARAMS`` is an ordinary identifier, so
+   ``params`` remains usable as a variable name.
+
+``--allow-incomplete-array``
+   Allow the CODESYS incomplete array type ``ARRAY[*] OF T``: the ``*``
+   stands in for the index range list and the caller supplies the bounds.
+   IEC 61131-3 declares the range list, so the form is an extension. Without
+   this flag it produces :doc:`P4070 </reference/compiler/problems/P4070>`.
+
+``--allow-escaped-identifiers``
+   Allow escaped (backtick) identifiers — ``\`my name\``` — which may contain
+   characters an ordinary identifier cannot. A CODESYS extension
+   (non-compliant identifiers). Without this flag an escaped identifier
+   produces :doc:`P4067 </reference/compiler/problems/P4067>`.
+
+``--allow-unicode-identifiers``
+   Allow identifiers with letters outside the ASCII range. A CODESYS scanner
+   option that is off there by default as well, so no dialect enables it.
+   Without this flag a non-ASCII letter in an identifier produces
+   :doc:`P4068 </reference/compiler/problems/P4068>`.
+
+``--allow-multiple-underscores``
+   Allow consecutive underscores inside an identifier, e.g. ``my__var``.
+   CODESYS and TwinCAT reject them by default
+   (``AllowMultipleUnderlines=false``). The leading ``__`` is the compiler's
+   reserved namespace (``__SYSTEM_UP_TIME``, ``__TRUNC``, ``__NEW``) and is
+   always allowed. Without this flag an inner double underscore produces
+   :doc:`P4069 </reference/compiler/problems/P4069>`.
 
 Pass the flag when running :program:`ironplcc`:
 

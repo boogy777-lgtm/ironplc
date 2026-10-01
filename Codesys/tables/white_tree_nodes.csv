@@ -1,0 +1,220 @@
+node,kind,base,key_fields,factory/file:line,purpose
+INode,interface,,,WhiteParseTrees/CODESYS/WhiteParseTrees/INode.cs:9,Корневой контракт узла white-tree: обход детей (GetChildren).
+IWhiteToken,interface,INode,Leading|Type|Text,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhiteToken.cs:8,см. IWhiteToken.
+ISToken,interface,IWhitePrefixedOperatorToken,,WhiteParseTrees/CODESYS/WhiteParseTrees/ISToken.cs:6,"Лексема ST-оператора (маркер, без собственных полей)."
+INonSyntacticToken,interface,IWhiteToken,Trailing,WhiteParseTrees/CODESYS/WhiteParseTrees/INonSyntacticToken.cs:8,Несинтаксический токен (пробелы/комментарий/EOL); двусторонняя цепочка Leading/Trailing.
+IWhitespaceToken,interface,INonSyntacticToken,,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhitespaceToken.cs:6,Токен пробелов/табуляции (форматирование).
+ICommentToken,interface,INonSyntacticToken,Comment|IsBlockComment,WhiteParseTrees/CODESYS/WhiteParseTrees/ICommentToken.cs:7,"Токен комментария (// или (* *)), хранит текст и признак блочного."
+IEndOfLineToken,interface,INonSyntacticToken,,WhiteParseTrees/CODESYS/WhiteParseTrees/IEndOfLineToken.cs:6,Токен конца строки (перевод строки).
+IPragmaToken,interface,INonSyntacticToken,Pragma,WhiteParseTrees/CODESYS/WhiteParseTrees/IPragmaToken.cs:7,Токен прагмы ({...}).
+IErrorToken,interface,IWhiteToken,,WhiteParseTrees/CODESYS/WhiteParseTrees/IErrorToken.cs:6,Токен ошибки лексера/парсера (не распознанный ввод).
+IWhiteExprement,interface,INode,,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhiteExprement.cs:6,Общий базовый контракт элемента white-tree (statement|expression): длина текста.
+IWhiteStatement,interface,IWhiteExprement,,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhiteStatement.cs:6,Оператор (statement) white-tree; посетитель IStatementSyntax.
+IWhiteExpression,interface,IWhiteExprement,,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhiteExpression.cs:6,Выражение white-tree; посетитель IExpressionSyntax.
+IWhitePOUSyntax,interface,IWhiteStatement,,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhitePOUSyntax.cs:6,Синтаксический элемент POU (верхний уровень).
+IWhitePOU,interface,IWhitePOUSyntax,BeforeDeclarationStatements|DeclarationStatement|Implementation|SubPOUs|EndPOU,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhitePOU.cs:9,"POU: секции объявлений/реализации, вложенные POU, END-токен."
+IStatementSyntax,interface,,,WhiteParseTrees/CODESYS/WhiteParseTrees/IStatementSyntax.cs:8,Базовый интерфейс посетителя операторов white-tree (IStatementVisitor).
+IExpressionSyntax,interface,,,WhiteParseTrees/CODESYS/WhiteParseTrees/IExpressionSyntax.cs:8,Базовый интерфейс посетителя выражений white-tree (IExpressionVisitor).
+WhiteTokenType,enum,,,WhiteParseTrees/CODESYS/WhiteParseTrees/WhiteTokenType.cs:5,Перечисление типов лексем white-tree (полный набор ST-токенов).
+IWhiteTreeInformation,interface,,RootNode|SourcePositionMap,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhiteTreeInformation.cs:8,Результат парсинга: корневой узел + карта соответствия смещений.
+ISourcePositionMap,interface,,GetPositionOffsetForTextOffset|GetTextOffsetForPositionOffset,WhiteParseTrees/CODESYS/WhiteParseTrees/ISourcePositionMap.cs:6,Двусторонняя карта: текстовое смещение <-> позиция редактора.
+IWhiteParserService,interface,,ParseStImplementation|ParseStImplementationWithSourcePositions|FindExpressionAtTextOffset|FindExpressionAtSourcePosition|FindMatchingWhiteExpressionForRedExpression|GetParseTreeExpressionFactory|GetParseTreeStatementFactory|GetParseTreeBuilderFactory|GetParseTreeFormatter|CreateToken<T>,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhiteParserService.cs:11,"Публичный сервис: парсинг ST/выражений/операторов, поиск по offset, фабрики, форматтер."
+IWhiteParserService2,interface,IWhiteParserService,GetTokenList(string)|GetParseTreeBuilderFactory -> v2,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhiteParserService2.cs:10,Расширение сервиса: список токенов из строки + builder-фабрика v2.
+IWhiteParserService3,interface,IWhiteParserService2,ParsePOUs|CollectErrorStatements,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhiteParserService3.cs:8,Расширение сервиса: ParsePOUs и сбор ошибок.
+IWhiteParseTreeFormatter,interface,,,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhiteParseTreeFormatter.cs:8,Форматтер: удаление пробелов и переформатирование операторов.
+IFormatterSettings,interface,,MaxCalleeParamsBeforeBreak|MaxCalleeParamsCharCountBeforeBreak|KeepLeadingEmptyLine|AlignVariableDeclarationInitializations|AlignVariableDeclarationTrailingComments|AlignVariableDeclarationsToLongestName,WhiteParseTrees/CODESYS/WhiteParseTrees/IFormatterSettings.cs:6,"Настройки форматирования (переносы параметров, выравнивание объявлений)."
+IWhiteCase,interface,,Label|Controlled,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhiteCase.cs:8,"Пара (метка CASE, тело) для CASe-конструкции."
+IWhiteCommentStatement,interface,IWhiteStatement,CommentToken,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhiteCommentStatement.cs:7,Оператор-комментарий на уровне операторов.
+IWhiteSequenceStatement,interface,IWhiteStatement,,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhiteSequenceStatement.cs:8,"Последовательность операторов (реализация/тело), реализует IList."
+IWhiteErrorStatement,interface,IWhiteStatement,TokenList,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhiteErrorStatement.cs:8,Оператор ошибки: хранит список токенов до восстановления.
+IWhiteErrorInformation,interface,,ErrorStatement|CharacterOffset,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhiteErrorInformation.cs:8,Информация об ошибке: оператор ошибки + символьное смещение.
+IWhiteDeclarationStatement,interface,IWhiteStatement,,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhiteDeclarationStatement.cs:6,Объявление POU (заголовок FUNCTION/FB/PROGRAM и т.п.).
+IWhitePouDeclarationStatement,interface,IWhiteStatement,Class|NameExpression|Declarations,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhitePouDeclarationStatement.cs:8,Заголовок POU (v1).
+IWhitePouDeclarationStatement2,interface,IWhitePouDeclarationStatement,,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhitePouDeclarationStatement2.cs:6,Заголовок POU (v2).
+IWhiteTypeDeclarationStatement,interface,IWhiteDeclarationStatement,,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhiteTypeDeclarationStatement.cs:6,Объявление типа (TYPE..END_TYPE).
+IWhiteTypeExpression,interface,IWhiteExpression,Class,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhiteTypeExpression.cs:7,Выражение типа.
+IWhiteTypeToken,interface,IWhiteOperatorToken,,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhiteTypeToken.cs:6,Токен-ключевое слово TYPE.
+IWhiteOperatorToken,interface,IWhiteToken,Operator,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhiteOperatorToken.cs:7,Токен-оператор (общий).
+IWhitePrefixedOperatorToken,interface,IWhiteOperatorToken,,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhitePrefixedOperatorToken.cs:6,"Префиксный оператор (NOT, ADR, ...)."
+IWhiteInfixOperatorToken,interface,IWhiteOperatorToken,,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhiteInfixOperatorToken.cs:6,"Инфиксный оператор (+, AND, ...)."
+IWhiteComparisonOperatorToken,interface,IWhiteInfixOperatorToken,,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhiteComparisonOperatorToken.cs:6,Оператор сравнения.
+IWhiteSimpleTypeExpression,interface,IWhiteTypeExpression,SimpleTypeOperator,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhiteSimpleTypeExpression.cs:7,Выражение простого типа.
+IWhiteScopeToken,interface,IWhiteOperatorToken,,WhiteParseTrees/CODESYS/WhiteParseTrees/IWhiteScopeToken.cs:6,Токен области видимости (VAR..END_VAR-контекст).
+WhiteExprement,class,IWhiteExprement,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteExprement.cs:7,"Абстрактная база всех узлов white-tree: ToString через TokenSerializer, длины текста."
+WhiteStatement,class,WhiteExprement,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteStatement.cs:5,Абстрактная база операторов; требует реализации Accept посетителя.
+WhiteBaseDeclarationStatement,class,WhiteStatement,Class|NameExpression|Declarations,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteBaseDeclarationStatement.cs:7,Абстрактная база операторов-объявлений (ключевые слова/доступ/имя).
+WhiteSequenceStatement,class,"WhiteStatement, IWhiteSequenceStatement",Statements (private List<IWhiteStatement>),WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteSequenceStatement.cs:9,Список операторов (IList<IWhiteStatement>); тело POU/ветки.
+WhiteIfStatement,class,WhiteStatement,If|Condition|Then|ThenStatement|ElseIfStatement|Else|ElseStatement|EndIf,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteIfStatement.cs:8,IF <cond> THEN <seq> [ELSIF..] [ELSE <seq>] END_IF.
+WhiteElseIfStatement,class,WhiteStatement,ElseIf|Condition|Then|ThenStatement,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteElseIfStatement.cs:8,Ветка ELSIF условия внутри IF.
+WhiteCaseStatement,class,WhiteStatement,Case|Switch|Of|Cases|ElseToken|Else|EndCase,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteCaseStatement.cs:8,CASE <expr> OF <метки> END_CASE.
+WhiteCaseLabelStatement,class,WhiteStatement,CaseExpressionList|Colon,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteCaseLabelStatement.cs:8,Метка CASE (список выражений/диапазонов + ':' ).
+WhiteCase,class,IWhiteCase,Label|Controlled,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteCase.cs:7,Пара: метка CASE и управляемый оператор.
+WhiteForStatement,class,WhiteStatement,For|StartExpression|To|UpperBound|By|StepWidth|Do|Controlled,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteForStatement.cs:8,FOR <i> := <from> TO <to> [BY <step>] DO <seq> END_FOR.
+WhiteWhileStatement,class,WhiteStatement,While|Condition|Do|Controlled|EndWhile,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteWhileStatement.cs:8,WHILE <cond> DO <seq> END_WHILE.
+WhiteRepeatStatement,class,WhiteStatement,Repeat|Controlled|Until|Condition|EndRepeat,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteRepeatStatement.cs:8,REPEAT <seq> UNTIL <cond> END_REPEAT.
+WhiteReturnStatement,class,WhiteStatement,Return|Semicolon|Condition,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteReturnStatement.cs:8,RETURN.
+WhiteExitStatement,class,WhiteStatement,Semicolon|Exit,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteExitStatement.cs:8,EXIT (выход из цикла).
+WhiteContinueStatement,class,WhiteStatement,Continue|Semicolon,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteContinueStatement.cs:8,CONTINUE.
+WhiteJumpStatement,class,WhiteStatement,Jump|Semicolon|Condition|LabelToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteJumpStatement.cs:8,JMP <label>.
+WhiteLabelStatement,class,WhiteStatement,LabelToken|Colon,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteLabelStatement.cs:8,Метка оператора <label>:.
+WhiteEmptyStatement,class,WhiteStatement,Semicolon,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteEmptyStatement.cs:8,Пустой оператор ( ';' ).
+WhiteExpressionStatement,class,WhiteStatement,Expr|Semicolon,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteExpressionStatement.cs:8,Оператор-выражение (вызов/присваивание) с ';'.
+WhiteCommentStatement,class,WhiteStatement,CommentToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteCommentStatement.cs:8,"Оператор, состоящий только из комментария."
+WhiteDocuCommentStatement,class,WhiteStatement,DocuCommentToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteDocuCommentStatement.cs:8,Оператор документирующего комментария (/* */).
+WhitePragmaStatement,class,WhiteStatement,PragmaToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhitePragmaStatement.cs:8,Оператор прагмы {...}.
+WhitePragmaIfStatement,class,WhiteStatement,If|ThenStatement|ElseIfStatement|Else|ElseStatement|EndIf,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhitePragmaIfStatement.cs:8,Условная прагма {IF ..}.
+WhitePragmaElseIfStatement,class,WhiteStatement,ElseIf|ThenStatement,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhitePragmaElseIfStatement.cs:8,Ветка условной прагмы {ELSEIF ..}.
+WhiteVariableDeclarationStatement,class,WhiteStatement,VariableNames|At|AddressLocation|Colon|DeclaredType|Assignment|InitializationExpression|Semicolon,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteVariableDeclarationStatement.cs:8,"Объявление переменной (имя, тип, инициализация)."
+WhiteVariableDeclarationListStatement,class,WhiteStatement,BeginVarOp|PersistantRetain|Declarations|EndVarOp,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteVariableDeclarationListStatement.cs:8,Список объявлений в секции VAR.
+WhiteFunctionDeclarationStatement,class,WhiteBaseDeclarationStatement,Access|Colon|ReturnType|ReturnTypeTrailingSemicolon,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteFunctionDeclarationStatement.cs:8,Заголовок FUNCTION.
+WhiteFunctionBlockDeclarationStatement,class,WhiteBaseDeclarationStatement,Access|GenericDeclarations|ExtendsOp|Extends|ImplementsOp|Implements,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteFunctionBlockDeclarationStatement.cs:8,Заголовок FUNCTION_BLOCK (EXTENDS/IMPLEMENTS).
+WhiteMethodDeclarationStatement,class,WhiteBaseDeclarationStatement,Access|Colon|ReturnType,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteMethodDeclarationStatement.cs:6,Заголовок METHOD (доступ/имя/тип возврата).
+WhiteInterfaceDeclarationStatement,class,WhiteBaseDeclarationStatement,Access|ExtendsOp|Extends|ImplementsOp|Implements,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteInterfaceDeclarationStatement.cs:8,Заголовок INTERFACE (EXTENDS/IMPLEMENTS).
+WhiteProgramDeclarationStatement,class,WhiteBaseDeclarationStatement,Access,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteProgramDeclarationStatement.cs:6,Заголовок PROGRAM.
+WhitePropertyDeclarationStatement,class,WhiteStatement,PropertyOp|Access|NameExpression|Colon|ReturnType,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhitePropertyDeclarationStatement.cs:8,Заголовок PROPERTY (тип возврата).
+WhitePropertyAccessorStatement,class,WhiteStatement,BeforeDeclarationStatements|Declaration|Implementation|EndProperty,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhitePropertyAccessorStatement.cs:8,Тело аксессора свойства (GET/SET).
+WhitePropertyAccessorDeclarationStatement,class,WhiteBaseDeclarationStatement,Access|Colon|ReturnType,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhitePropertyAccessorDeclarationStatement.cs:6,Объявление аксессора свойства.
+WhiteStructDeclarationStatement,class,WhiteStatement,TypeOp|Access|NameExpression|ExtendsOp|Extends|Declaration|EndTypeOp|ColonOp,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteStructDeclarationStatement.cs:8,TYPE .. STRUCT .. END_STRUCT.
+WhiteUnionDeclarationStatement,class,WhiteStatement,TypeOp|Access|NameExpression|Declaration|EndTypeOp|ColonOp,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteUnionDeclarationStatement.cs:8,TYPE .. UNION .. END_UNION.
+WhiteEnumDeclarationStatement,class,WhiteStatement,TypeOp|Access|NameExpression|EnumerationTypeExpression|Semicolon|TypeExpression|AssignmentOp|Initialization,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteEnumDeclarationStatement.cs:9,TYPE .. (enum) .. END_TYPE.
+WhiteSubrangeDeclarationStatement,class,WhiteStatement,VariableNames|Colon|SubRangeType|Semicolon,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteSubrangeDeclarationStatement.cs:8,TYPE .. : <low>..<high>.
+WhiteAliasDeclarationStatement,class,WhiteStatement,TypeOp|Access|NameExpression|Type|Semicolon|EndTypeOp|ColonOp,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteAliasDeclarationStatement.cs:8,TYPE <alias> : <type>.
+WhiteNamespaceDeclarationStatement,class,WhiteBaseDeclarationStatement,BeforeDeclarationStatements|SubPOUs|Access|EndNamespace,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteNamespaceDeclarationStatement.cs:8,NAMESPACE .. END_NAMESPACE.
+WhiteActionDeclarationStatement,class,WhiteBaseDeclarationStatement,Access|ExtendsOrImplements,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteActionDeclarationStatement.cs:8,Объявление ACTION.
+WhiteTransitionDeclarationStatement,class,WhiteBaseDeclarationStatement,Access|ExtendsOrImplements,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteTransitionDeclarationStatement.cs:8,Объявление TRANSITION.
+WhiteTryCatchStatement,class,WhiteStatement,__Try|TrySequence|__Catch|ExceptionExpression|CatchSequence|__Finally|FinallySequence|__EndTry,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteTryCatchStatement.cs:8,__TRY .. __CATCH .. __FINALLY .. __ENDTRY.
+WhiteFinalStatement,class,WhiteStatement,FinalToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteFinalStatement.cs:8,Оператор FINAL/абстрактного модификатора (OOP-расширение).
+WhiteDUT,class,WhiteStatement,TypeDeclarationStatement|EndTypeToken|BeforeDeclarationStatements,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteDUT.cs:8,DUT-контейнер: TYPE..END_TYPE как POU.
+WhiteProgram,class,WhitePouHavingSubPous,Declaration|EndPOUToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteProgram.cs:8,POU PROGRAM: заголовок + реализация + вложенные POU.
+WhiteFunction,class,WhiteStatement,BeforeDeclarationStatements|Implementation|Declaration|EndPOUToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteFunction.cs:8,POU FUNCTION: заголовок + реализация.
+WhiteFunctionBlock,class,WhitePouHavingSubPous,Declaration|EndPOUToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteFunctionBlock.cs:8,POU FUNCTION_BLOCK.
+WhiteMethod,class,WhiteStatement,BeforeDeclarationStatements|Declaration|Implementation|EndPOUToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteMethod.cs:8,POU METHOD.
+WhiteInterface,class,WhiteStatement,BeforeDeclarationStatements|Declaration|SubPOUs|EndPOUToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteInterface.cs:8,POU INTERFACE.
+WhiteAction,class,WhiteStatement,BeforeDeclarationStatements|Declaration|Implementation|EndPOUToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteAction.cs:8,POU ACTION.
+WhiteTransition,class,WhiteStatement,BeforeDeclarationStatements|Declaration|Implementation|EndPOUToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteTransition.cs:8,POU TRANSITION.
+WhitePouHavingSubPous,class,WhiteStatement,BeforeDeclarationStatements|Implementation|SubPOUs,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhitePouHavingSubPous.cs:9,Абстрактная база POU с вложенными POU (методы/аксессоры).
+WhiteErrorStatement,class,WhiteStatement,TokenList|ErrorMessage|ErrorToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Statements/WhiteErrorStatement.cs:8,Узел ошибки: список токенов для восстановления парсера.
+WhiteExpression,class,WhiteExprement,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteExpression.cs:6,Абстрактная база выражений white-tree (Accept посетителя).
+WhiteBinaryOperatorExpression,class,WhiteExpression,First|OperatorToken|Second,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteBinaryOperatorExpression.cs:8,Бинарная операция: <first> <op> <second>.
+WhiteUnaryOperatorExpression,class,WhiteExpression,OperatorToken|Operand,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteUnaryOperatorExpression.cs:9,Унарная операция: <op> <operand>.
+WhitePrefixedOperatorExpression,class,WhiteExpression,Operator|LeftParenthesis|Operands|RightParenthesis,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhitePrefixedOperatorExpression.cs:8,"Префиксный оператор (ADR, NOT, ...)."
+WhiteCallExpression,class,WhiteExpression,Callee|LeftParenthesis|Params|RightParenthesis,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteCallExpression.cs:8,Вызов: <callee>(<args>).
+WhiteVariableExpression,class,WhiteExpression,IdentToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteVariableExpression.cs:8,Переменная (идентификатор).
+WhiteDirectVariableExpression,class,WhiteExpression,DirectVariableToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteDirectVariableExpression.cs:9,Direct variable %IX/%QW...
+WhiteIncompleteDirectVariableExpression,class,WhiteExpression,DirectVariableToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteIncompleteDirectVariableExpression.cs:9,Незавершённый direct variable (ошибка).
+WhiteAssignmentExpression,class,WhiteExpression,AssignmentToken|LValue|RValue,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteAssignmentExpression.cs:8,Присваивание: <lvalue> <:=|S=|R=> <rvalue>.
+WhiteIndexAccessExpression,class,WhiteExpression,Base|LeftBracket|Accesses|RightBracket,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteIndexAccessExpression.cs:8,Индексный доступ a[b].
+WhiteBitAccessExpression,class,WhiteExpression,LeftExpression|Period|RightExpression,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteBitAccessExpression.cs:8,Битовый доступ a.%b (bit access).
+WhitePartialAccessExpression,class,WhiteExpression,PartialAccessToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhitePartialAccessExpression.cs:7,Частичный доступ (partial access).
+WhiteCompoAccessExpression,class,WhiteExpression,LeftExpression|Period|RightExpression,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteCompoAccessExpression.cs:8,Компонентный доступ a.b.
+WhiteCompoPartialAccessExpression,class,WhiteExpression,LeftExpression|Period|RightExpression,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteCompoPartialAccessExpression.cs:6,Компонентный доступ с partial.
+WhiteDeRefAccessExpression,class,WhiteExpression,BaseExpression|DeRefToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteDeRefAccessExpression.cs:8,Разыменование указателя ^.
+WhiteNamespaceAccessExpression,class,WhiteExpression,Namespace|HashTag|VariableExpression,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteNamespaceAccessExpression.cs:8,Доступ через namespace::.
+WhiteConversionExpression,class,WhiteExpression,ConversionOperator|LeftParenthesis|Expression|RightParenthesis,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteConversionExpression.cs:9,Преобразование типа <type>(<expr>).
+WhiteParenthesizedExpression,class,WhiteExpression,LeftParenthesis|Expression|RightParenthesis,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteParenthesizedExpression.cs:8,Выражение в скобках ( expr ).
+WhiteRangeExpression,class,WhiteExpression,Low|Range|High,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteRangeExpression.cs:8,Диапазон <low>..<high> (CASE/тип).
+WhiteLeadByCommaExpression,class,WhiteExpression,Comma|Expression,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteLeadByCommaExpression.cs:8,Выражение с ведущей запятой (списки параметров).
+WhiteEmptyExpression,class,WhiteExpression,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteEmptyExpression.cs:6,Пустое выражение (заглушка в списках).
+WhiteArrayInitializationExpression,class,WhiteExpression,LeftBracket|InitValues|RightBracket,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteArrayInitializationExpression.cs:8,Инициализация массива [..].
+WhiteStructureInitializationExpression,class,WhiteExpression,StructOp|LeftParenthesis|CompoInits|RightParenthesis,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteStructureInitializationExpression.cs:8,"Инициализация структуры (name:=value, ...)."
+WhiteMultipleIndexInitialization,class,WhiteExpression,Number|Value,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteMultipleIndexInitialization.cs:8,Множественная индексная инициализация.
+WhiteIntegerLiteralExpression,class,WhiteExpression,Integer,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteIntegerLiteralExpression.cs:8,Целочисленный литерал.
+WhiteRealLiteralExpression,class,WhiteExpression,Real,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteRealLiteralExpression.cs:8,Вещественный литерал.
+WhiteBoolLiteralExpression,class,WhiteExpression,Boolean,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteBoolLiteralExpression.cs:8,Логический литерал TRUE/FALSE.
+WhiteSingleByteStringLiteralExpression,class,WhiteExpression,StringToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteSingleByteStringLiteralExpression.cs:8,Строковый литерал '...'.
+WhiteDoubleByteStringLiteralExpression,class,WhiteExpression,StringToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteDoubleByteStringLiteralExpression.cs:8,"Строковый литерал ""...""."
+WhiteXStringLiteralExpression,class,WhiteExpression,StringToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteXStringLiteralExpression.cs:8,XString-литерал.
+WhiteDateLiteralExpression,class,WhiteExpression,DateToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteDateLiteralExpression.cs:9,Литерал даты D#...
+WhiteLDateLiteralExpression,class,WhiteExpression,LDateToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteLDateLiteralExpression.cs:8,Литерал LDATE#...
+WhiteDateAndTimeLiteralExpression,class,WhiteExpression,DateAndTimeToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteDateAndTimeLiteralExpression.cs:9,Литерал DT#...
+WhiteLDateAndTimeLiteralExpression,class,WhiteExpression,LDateAndTimeToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteLDateAndTimeLiteralExpression.cs:8,Литерал LDT#...
+WhiteTimeOfDayLiteralExpression,class,WhiteExpression,TimeOfDayToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteTimeOfDayLiteralExpression.cs:9,Литерал TOD#...
+WhiteLTimeOfDayLiteralExpression,class,WhiteExpression,LTimeOfDayToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteLTimeOfDayLiteralExpression.cs:8,Литерал LTOD#...
+WhiteDurationLiteralExpression,class,WhiteExpression,Duration,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteDurationLiteralExpression.cs:8,Литерал T#...
+WhiteLDurationLiteralExpression,class,WhiteExpression,LDurationToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteLDurationLiteralExpression.cs:8,Литерал LT#...
+WhiteSizeOfExpression,class,WhiteExpression,SizeOf|LeftParenthesis|TypeExpression|RightParenthesis,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteSizeOfExpression.cs:8,SIZEOF(<expr>).
+WhiteThisExpression,class,WhiteExpression,This,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteThisExpression.cs:8,THIS-выражение.
+WhiteSuperExpression,class,WhiteExpression,Super,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteSuperExpression.cs:8,SUPER-выражение.
+WhiteGlobalScopeExpression,class,WhiteExpression,Period|Right,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteGlobalScopeExpression.cs:8,Глобальный доступ области (::...).
+WhiteSpecialScopeExpression,class,WhiteExpression,Scope|Period|Right,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteSpecialScopeExpression.cs:8,"Специальная область (например, __SYSTEM)."
+WhiteSimpleTypeExpression,class,WhiteTypeExpression,SimpleTypeOperator,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteSimpleTypeExpression.cs:9,Простой тип (BOOL/INT/...).
+WhiteUserDefTypeExpression,class,WhiteTypeExpression,NameExpression,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteUserDefTypeExpression.cs:9,Пользовательский тип (имя типа).
+WhiteArrayTypeExpression,class,WhiteTypeExpression,Array|LeftBracket|Ranges|RightBracket|Of|BaseType,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteArrayTypeExpression.cs:9,Тип ARRAY[...] OF <type>.
+WhiteVariableArrayTypeExpression,class,WhiteTypeExpression,Array|LeftBracket|TimesOp|RightBracket|Of|BaseType,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteVariableArrayTypeExpression.cs:9,ARRAY[*] OF <type> (VAR-array).
+WhitePointerTypeExpression,class,WhiteTypeExpression,Pointer|To|BaseType,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhitePointerTypeExpression.cs:9,Тип POINTER TO <type>.
+WhiteReferenceTypeExpression,class,WhiteTypeExpression,Reference|To|BaseType,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/WhiteReferenceTypeExpression.cs:9,Тип REFERENCE TO <type>.
+StringTypeExpression,class,WhiteTypeExpression,StringSimpleOperator|LeftParenthesis|Length|RightParenthesis,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/StringTypeExpression.cs:9,Тип STRING(n)/WSTRING(n).
+SubRangeTypeExpression,class,WhiteTypeExpression,BaseType|LeftParenthesis|Range|RightParenthesis,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/SubRangeTypeExpression.cs:11,Тип-поддиапазон <low>..<high>.
+VectorTypeExpression,class,WhiteTypeExpression,Vector|LeftBracket|Length|RightBracket|Of|BaseType,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/VectorTypeExpression.cs:11,Векторный тип (__VECTOR).
+EnumerationTypeExpression,class,WhiteTypeExpression,LeftParenthesis|Definitions|RightParenthesis,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Expressions/EnumerationTypeExpression.cs:11,Тип перечисления (список значений).
+WhiteToken,class,IWhiteToken,Type|Leading|Text,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/WhiteToken.cs:10,"Абстрактная база токенов: Type, Text, Leading."
+NonSyntacticToken,class,WhiteToken,Trailing,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/NonSyntacticToken.cs:5,База несинтаксических токенов: добавляет Trailing.
+WhiteOperatorToken,class,WhiteToken,Operator,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/WhiteOperatorToken.cs:6,База токенов-операторов (Operator).
+IdentifierToken,class,WhiteToken,Identifier,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/IdentifierToken.cs:5,Идентификатор.
+IntegerToken,class,WhiteToken,Value,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/IntegerToken.cs:5,Целочисленный литерал.
+RealToken,class,WhiteToken,Overflow|Op|Value,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/RealToken.cs:6,Вещественный литерал.
+BooleanToken,class,WhiteToken,Value,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/BooleanToken.cs:5,TRUE/FALSE.
+WhitespaceToken,class,NonSyntacticToken,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/WhitespaceToken.cs:5,Пробельный токен.
+CommentToken,class,NonSyntacticToken,Comment,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/CommentToken.cs:5,Комментарий.
+DocCommentToken,class,NonSyntacticToken,Comment,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/DocCommentToken.cs:5,Документирующий комментарий.
+EndOfLineToken,class,NonSyntacticToken,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/EndOfLineToken.cs:5,Конец строки.
+WhitePragmaToken,class,NonSyntacticToken,Pragma,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/WhitePragmaToken.cs:5,Прагма.
+ErrorToken,class,WhiteToken,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/ErrorToken.cs:5,Токен ошибки.
+DirectVariableToken,class,WhiteToken,Overflow|Components|Size|Location,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/DirectVariableToken.cs:8,Direct variable %...
+IncompleteDirectVariableToken,class,WhiteToken,Location,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/IncompleteDirectVariableToken.cs:6,Незавершённый direct variable.
+SingleByteStringToken,class,WhiteToken,MyString,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/SingleByteStringToken.cs:5,Строка '...'.
+DoubleByteStringToken,class,WhiteToken,MyString,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/DoubleByteStringToken.cs:5,"Строка ""...""."
+XByteStringToken,class,WhiteToken,MyString,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/XByteStringToken.cs:5,XString-строка.
+DurationToken,class,WhiteToken,Value|Overflow,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/DurationToken.cs:5,T#...
+LDurationToken,class,WhiteToken,Value|Overflow,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/LDurationToken.cs:5,LT#...
+DateToken,class,WhiteToken,Date|Overflow,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/DateToken.cs:6,D#...
+DateAndTimeToken,class,WhiteToken,Date|Overflow,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/DateAndTimeToken.cs:6,DT#...
+TimeOfDayToken,class,WhiteToken,Date|Overflow,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/TimeOfDayToken.cs:6,TOD#...
+LDateToken,class,WhiteToken,Value|Overflow,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/LDateToken.cs:5,LDATE#...
+LDateAndTimeToken,class,WhiteToken,Value|Overflow,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/LDateAndTimeToken.cs:5,LDT#...
+LTimeOfDayToken,class,WhiteToken,Value|Overflow,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/LTimeOfDayToken.cs:5,LTOD#...
+ConversionOperatorToken,class,WhiteOperatorToken,From|To,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/ConversionOperatorToken.cs:6,Оператор конверсии (INT_TO_...).
+ConvOperatorToken,class,WhiteOperatorToken,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/ConvOperatorToken.cs:6,Оператор CONV.
+PartialAccessToken,class,WhiteToken,Overflow|Offset|Size,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Tokens/PartialAccessToken.cs:6,Токен partial access.
+IWhiteParseTreeBuilderFactory,interface,,,WhiteParseTrees/CODESYS/WhiteParseTrees/Factories/IWhiteParseTreeBuilderFactory.cs:8,Фluent-фабрика билдеров операторов (v1).
+IWhiteParseTreeBuilderFactory2,interface,IWhiteParseTreeBuilderFactory,,WhiteParseTrees/CODESYS/WhiteParseTrees/Factories/IWhiteParseTreeBuilderFactory2.cs:7,Фluent-фабрика билдеров операторов (v2).
+IWhiteParseTreeBuilderFactory3,interface,IWhiteParseTreeBuilderFactory2,,WhiteParseTrees/CODESYS/WhiteParseTrees/Factories/IWhiteParseTreeBuilderFactory3.cs:7,"Фluent-фабрика билдеров операторов (v3, текущая)."
+BuilderFactory,class,"IWhiteParseTreeBuilderFactory3, IWhiteParseTreeBuilderFactory2, IWhiteParseTreeBuilderFactory",,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Factories/BuilderFactory.cs:10,Реализация фабрики билдеров (Nodes.Factories.BuilderFactory).
+IWhiteParseTreeExpressionFactory,interface,,,WhiteParseTrees/CODESYS/WhiteParseTrees/Factories/IWhiteParseTreeExpressionFactory.cs:10,Фабрика выражений (CreateWhite*Expression).
+IWhiteParseTreeExpressionFactory2,interface,IWhiteParseTreeExpressionFactory,,WhiteParseTrees/CODESYS/WhiteParseTrees/Factories/IWhiteParseTreeExpressionFactory2.cs:8,Фабрика выражений v2.
+ExpressionFactory,class,"IWhiteParseTreeExpressionFactory2, IWhiteParseTreeExpressionFactory",,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Factories/ExpressionFactory.cs:13,Реализация фабрики выражений.
+IWhiteParseTreeStatementFactory,interface,,,WhiteParseTrees/CODESYS/WhiteParseTrees/Factories/IWhiteParseTreeStatementFactory.cs:9,Фабрика операторов v1.
+IWhiteParseTreeStatementFactory2,interface,IWhiteParseTreeStatementFactory,,WhiteParseTrees/CODESYS/WhiteParseTrees/Factories/IWhiteParseTreeStatementFactory2.cs:8,Фабрика операторов v2.
+IWhiteParseTreeStatementFactory3,interface,IWhiteParseTreeStatementFactory2,,WhiteParseTrees/CODESYS/WhiteParseTrees/Factories/IWhiteParseTreeStatementFactory3.cs:9,Фабрика операторов v3.
+StatementFactory,class,"IWhiteParseTreeStatementFactory3, IWhiteParseTreeStatementFactory2, IWhiteParseTreeStatementFactory",,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Factories/StatementFactory.cs:13,"Реализация фабрики операторов (заголовки POU, объявления)."
+TokenFactory,class,[System.Runtime.CompilerServices.Nullable(1)] IWhiteToken,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Factories/TokenFactory.cs:7,Обобщённая фабрика токена из строки (парсит один токен).
+OperatorTokenFactory,class,,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Factories/OperatorTokenFactory.cs:8,Фабрика токена-оператора по Operator.
+BuilderException,class,Exception,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/Factories/Builder/BuilderException.cs:6,Исключение билдера (не задано обязательное поле).
+WhiteTreeParser,class,,TokenControl (private),WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Parser/WhiteTreeParser.cs:18,Рекурсивный парсер white-tree по потоку токенов (ParseST/ParsePOUs/ParseExpression).
+TokenStream,class,,(static) ReadTokenStream,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Parser/TokenStream.cs:12,Чтение потока токенов через IScanner7 (общий лексер) с привязкой пробелов/комментариев.
+TokenControl,class,,CurrentTokenIndex|TokenList|CurrentToken|StartStatementTokenIndex|StartStatementToken|LastToken,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Parser/TokenControl.cs:12,Курсор по списку токенов (Next/LookAhead).
+ParserService,class,IWhiteParserService3,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Services/ParserService.cs:17,Реализация IWhiteParserService3 (композиция парсера/сервисов).
+SourcePositionMap,class,ISourcePositionMap,PositionTable|PositionOffsets,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Parser/SourcePositionMap.cs:8,Хеш-таблица текст<->позиция редактора (SortedList + Dictionary).
+WhiteTreeInformation,class,IWhiteTreeInformation,RootNode|SourcePositionMap,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Parser/WhiteTreeInformation.cs:7,Реализация IWhiteTreeInformation.
+ExpressionDeterminationService,class,,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Services/ExpressionDeterminationService.cs:10,Поиск выражения/оператора по offset и матчинг white<->red выражения.
+ExpressionMatcher,class,Ignorable,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Services/ExpressionMatcher.cs:10,Сопоставление white- и red-выражений.
+TextLengthCalculator,class,,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Services/TextLengthCalculator.cs:9,Длина текста узла (с учётом/без leading-пробелов).
+TokenSerializer,class,,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Services/TokenSerializer.cs:8,Сериализация узла в плоский список токенов (обход Leading).
+StringConverter,class,,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Services/StringConverter.cs:6,Реконструкция исходного текста из узла (round-trip).
+OffsetCalculator,class,,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Services/OffsetCalculator.cs:6,Карта токен->смещение.
+WhiteOffsetService,class,IWhiteOffsetCalculatorService,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Services/WhiteOffsetService.cs:8,Сервис офсетов.
+WhiteErrorCollector,class,,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Services/WhiteErrorCollector.cs:9,Сбор операторов ошибок в дереве.
+ErrorInformation,struct,IWhiteErrorInformation,ErrorStatement|CharacterOffset,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Services/ErrorInformation.cs:7,Реализация IWhiteErrorInformation.
+WhiteErrorPou,class,WhiteExprement,ErrorStatement,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/WhiteErrorPou.cs:9,POU-обёртка вокруг оператора ошибки.
+Ignorable,class,,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Services/Ignorable.cs:10,Предикат игнорируемых (пробельных) токенов.
+WhiteParseTreeFormatter,class,IWhiteParseTreeFormatter,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Services/Formatter/WhiteParseTreeFormatter.cs:6,Реализация форматтера (RemoveAllWhitespaces/FormatStatements).
+FormatterPipeline,class,,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Services/Formatter/FormatterPipeline.cs:9,Конвейер проходов форматирования.
+WhiteSpaceRemover,class,,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Services/Formatter/Passes/WhiteSpaceRemover.cs:10,Проход удаления пробелов.
+WhiteSpaceFormatter,class,,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Services/Formatter/WhiteSpaceFormatter.cs:11,Проход расстановки пробелов.
+StmtExprFormatterVisitor,class,IStatementSyntax2.IStatementVisitor2<bool,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Services/Formatter/Passes/StmtExprFormatterVisitor.cs:10,Посетитель форматирования операторов/выражений.
+InlineCommentFixer,class,,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Services/Formatter/Passes/InlineCommentFixer.cs:8,Проход выравнивания встроенных комментариев.
+LineCtx,class,,LineLength,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Services/Formatter/Passes/LineCtx.cs:9,Контекст строки для форматтера.
+WhiteTokenExtensions,class,,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/WhiteParseTrees/Extensions/WhiteTokenExtensions.cs:6,Расширения токенов (LeadingTokensRToL).
+WhiteCursor,class,,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Services/WhiteCursor.cs:7,Курсор обхода дерева.
+IWhiteCursor,interface,,Offset|Length|Node|Parent,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Services/IWhiteCursor.cs:6,Контракт курсора.
+TypeTable,class,,,WhiteParsetrees.plugin/CODESYS/WhiteParseTrees/Nodes/TypeTable.cs:5,Таблица типов токенов (сопоставление Operator/WhiteTokenType).

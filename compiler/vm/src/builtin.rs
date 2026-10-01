@@ -570,7 +570,12 @@ pub fn dispatch(func_id: u16, stack: &mut OperandStack) -> Result<(), Trap> {
         }
         // MUX (multiplexer) for all type widths
         id if opcode::builtin::is_mux(id) => {
-            let n = opcode::builtin::mux_info(id).unwrap() as usize;
+            let n = match opcode::builtin::mux_info(id) {
+                Some(n) => n as usize,
+                // Unreachable: the guard proved `id` is a MUX function.
+                // Trap rather than panic to hold the never-panic contract.
+                None => return Err(Trap::InvalidBuiltinFunction(FunctionId::new(func_id))),
+            };
             if id >= opcode::builtin::MUX_F64_BASE {
                 dispatch_mux_f64(n, stack)
             } else if id >= opcode::builtin::MUX_F32_BASE {

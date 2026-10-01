@@ -1,0 +1,210 @@
+(* ===================================================================== *)
+(* STRING_LITERALS.ebnf — полная грамматика строковых литералов CODESYS   *)
+(* Parser35220 (CODESYS 3.5.20 / plugin 3.5.22.10).                       *)
+(* Все факты проверены по декомпилированным исходникам и по живому       *)
+(* сканеру Parser35220.plugin.dll (прогон реального InternalScanner).     *)
+(*                                                                       *)
+(* Основные точки:                                                       *)
+(*   InternalScanner.GetNextInternal            InternalScanner.cs:3488   *)
+(*     ветка кавычек                            InternalScanner.cs:3545   *)
+(*   InternalScanner.ScanIdentifierOrOperator   InternalScanner.cs:2374   *)
+(*     проверка '#' после идентификатора        InternalScanner.cs:2395   *)
+(*   InternalScanner.ScanTypedLiteral           InternalScanner.cs:2640   *)
+(*   InternalScanner.ScanUnicodeLiteral         InternalScanner.cs:2624   *)
+(*   InternalScanner.ValidateStringToken        InternalScanner.cs:3298   *)
+(*   InternalScanner.ValidateEscapeSequence     InternalScanner.cs:3373   *)
+(*   InternalScanner.ValidateLocalCodepoint     InternalScanner.cs:3439   *)
+(*   InternalScanner.ValidateUnicodeCodepoint   InternalScanner.cs:3455   *)
+(*   InternalScanner.UnescapeString_Insecure    InternalScanner.cs:1516   *)
+(*   InternalScanner.GetSingleByteString        InternalScanner.cs:1380   *)
+(*   InternalScanner.GetSingleByteString/enc    InternalScanner.cs:1401   *)
+(*   InternalScanner.GetDoubleByteString        InternalScanner.cs:1446   *)
+(*   InternalScanner.GetXByteString             InternalScanner.cs:1467   *)
+(*   OperatorTable: STRING=26 WSTRING=27        OperatorTable.cs:643-645  *)
+(*                 __XSTRING=243                                         *)
+(*   FactoryExtension (TokenType -> TypeClass)  FactoryExtension.cs:43    *)
+(* ===================================================================== *)
+
+(* --------------------------------------------------------------------- *)
+(* 1. Точка входа: любой строковый литерал                               *)
+(* --------------------------------------------------------------------- *)
+
+stringLiteral          = singleByteString
+                       | doubleByteString
+                       | typedStringLiteral ;
+
+(* Типизированные строковые литералы, реально распознаваемые сканером 35220: *)
+typedStringLiteral     = xStringLiteral            (* __XSTRING#"..."  -> TokenType.XByteString 22 *)
+                       | utf8StringLiteral         (* UTF8#'...'       -> TokenType.SingleByteString 17 *)
+                       | ucharStringLiteral ;      (* UCHAR#'...'      -> TokenType.SingleByteString 17 *)
+
+(* ВАЖНО (проверено на живом сканере, см. docs/15 п.6):
+  конструкции "STRING" "#" ... и "WSTRING" "#" ... сканером как литералы НЕ
+  принимаются. Идентификатор STRING/WSTRING съедает '#' и ScanTypedLiteral
+  для операторов 26/27 не выставляет тип: остаётся TokenType.Error (20).
+  Итог: STRING#'abc' -> [Error "STRING#"] + [SingleByteString "'abc'"].
+  Ниже — как это выглядит как "ошибочный" разбор, а не грамматика литерала:
+     notAStringLiteral  = ( "STRING" | "WSTRING" ), "#" , stringLiteral ;  (* Error(20) + literal *)
+*)
+
+(* --------------------------------------------------------------------- *)
+(* 2. Обычные строки                                                     *)
+(* --------------------------------------------------------------------- *)
+
+(* Одинарные кавычки -> однобайтная строка (TokenType.SingleByteString = 17).
+   Закрывающая кавычка — первая неэкранированная '\''; '"' внутри допустима.
+   Переносы строк '\r'/'\n' ВНУТРИ литерала разрешены (EndOfLine + continue),
+   т.е. строка может быть многострочной уже на уровне сканера. *)
+singleByteString       = "'" , { sbChar | escapeSingle } , "'" ;
+
+(* Двойные кавычки -> двухбайтная строка (TokenType.DoubleByteString = 9).
+   Закрывающая кавычка — первая неэкранированная '"'; '\'' внутри допустима. *)
+doubleByteString       = '"' , { dbChar | escapeDouble } , '"' ;
+
+(* Классы "обычных" символов. '$' всегда начинает escape, соответствующая
+   кавычка завершает литерал; противоположная кавычка — обычный символ. *)
+sbChar                 = ? любой символ, кроме '\'' и '$' (в т.ч. '"', CR, LF) ? ;
+dbChar                 = ? любой символ, кроме '"'  и '$' (в т.ч. '\'', CR, LF) ? ;
+
+(* Пустые строки: ''  и  "" — валидны. *)
+(* Сдвоение кавычек НЕ поддерживается: 'it''s' разбирается как два литерала
+   'it' и 's' (эмпирически подтверждено). Для кавычки внутри строки
+   используется только $-escape ($' или $"). *)
+
+(* --------------------------------------------------------------------- *)
+(* 3. Escape-последовательности ($)                                      *)
+(* --------------------------------------------------------------------- *)
+
+(* bDoubleByte = (первый символ литерала == '"') — задаётся в
+   ValidateStringToken (InternalScanner.cs:3303) и определяет ширину
+   локальной кодовой точки: 2 hex для однобайтных, 4 hex для двухбайтных. *)
+escapeSingle           = "$" , ( escapeSpecial
+                               | localCodepointShort
+                               | unicodeCodepoint ) ;
+escapeDouble           = "$" , ( escapeSpecial
+                               | localCodepointWide
+                               | unicodeCodepoint ) ;
+
+escapeSpecial          = "$"                 (* -> U+0024 '$'   *)
+                       | "'"                 (* -> U+0027 '\''  *)
+                       | '"'                 (* -> U+0022 '"'   *)
+                       | "L" | "l"           (* -> U+000A LF    *)
+                       | "N" | "n"           (* -> U+000A LF    *)
+                       | "R" | "r"           (* -> U+000D CR    *)
+                       | "T" | "t"           (* -> U+0009 TAB   *)
+                       | "P" | "p" ;         (* -> U+000C FF    *)
+
+(* Локальная кодовая точка:
+   - ровно 2 hex-цифры для однобайтной строки;
+   - ровно 4 hex-цифры для двухбайтной строки.
+   Декодирование (EscapeLocalEncodingCodepoint, InternalScanner.cs:1610):
+     v = int(hex); если 128 <= v <= 255 -> Windows-1252 (cp1252) символ;
+     иначе -> (char)v. *)
+localCodepointShort    = hexDigit , hexDigit ;
+localCodepointWide     = hexDigit , hexDigit , hexDigit , hexDigit ;
+
+(* Универсальная кодовая точка: $U / $u + РОВНО 8 hex-цифр (UTF-32).
+   Декодирование (InternalScanner.cs:1629): uint32 -> Encoding.UTF32 -> может
+   дать surrogate pair (2 UTF-16 code units).
+   НЕ путать с C#-подобным \uXXXX (4 hex) — такой формы здесь НЕТ. *)
+unicodeCodepoint       = ( "U" | "u" ) , hexDigit , hexDigit , hexDigit , hexDigit ,
+                         hexDigit , hexDigit , hexDigit , hexDigit ;
+
+(* Ошибки escape (дают TokenType.Error 20, а на стадии компиляции — сообщение):
+   - "$" в конце литерала;
+   - "$" + буква не из {L,N,R,T,P} (регистр не важен), напр. $M $O $Q $S $Z;
+   - "$" + не-hex символ;
+   - "$U"/"$u" с числом hex-цифр != 8. *)
+
+(* --------------------------------------------------------------------- *)
+(* 4. Специальные типизированные префиксы                                *)
+(* --------------------------------------------------------------------- *)
+
+(* 4.1 __XSTRING# — "X-byte string" (TokenType.XByteString = 22).
+   Распознаётся в ScanTypedLiteral как operator 243 (__XSTRING).
+   Допустима ТОЛЬКО двойная кавычка (проверка _input[SourceOffset] == '"',
+   InternalScanner.cs:2769). Одинарная кавычка -> Error(20).
+   ВАЛИДАЦИЯ идёт как для двухбайтной строки (bDoubleByte = true, т.к. '"'),
+   т.е. локальные escape требуют 4 hex; но ДЕКОДИРОВАНИЕ
+   (GetXByteString -> UnescapeString(..., bDoubleByte:false), строка 1482)
+   идёт по однобайтному правилу (2 hex). Это несогласованность — см. docs/15. *)
+xStringLiteral         = "__XSTRING" , "#" , '"' , { dbChar | escapedX }, '"' ;
+escapedX               = "$" , ( escapeSpecial | localCodepointWide | unicodeCodepoint ) ;
+
+(* 4.2 UTF8#'...' — ScanUnicodeLiteral (InternalScanner.cs:2624).
+   Префикс "UTF8" (регистронезависимо) + '#' + ОДИНАРНАЯ кавычка.
+   Токен = SingleByteString(17); GetSingleByteString(...,out enc) выставляет
+   StringEncoding.UTF8 (1); локальные escape — 2 hex. *)
+utf8StringLiteral      = ( "UTF8" | "utf8" ) , "#" , "'" , { sbChar | escapeSingle } , "'" ;
+
+(* 4.3 UCHAR#'...' — тот же ScanUnicodeLiteral.
+   Регистронезависимый префикс "UCHAR" + '#' + одинарная кавычка.
+   Если после unescape длина == 1 -> UChar-литерал (TypeClass.UDInt = 12);
+   иначе (длина != 1) parser получает "сырое" значение с префиксом —
+   фактически мусор (см. docs/15 п.7, проверено эмпирически). *)
+ucharStringLiteral     = ( "UCHAR" | "uchar" ) , "#" , "'" , { sbChar | escapeSingle } , "'" ;
+
+(* 4.4 XSTRING# / WSTRING# / STRING# — НЕ литералы (см. шапку файла). *)
+
+(* --------------------------------------------------------------------- *)
+(* 5. Аналогичные (для сравнения) типизированные НЕстроковые литералы     *)
+(*    — обрабатываются тем же ScanTypedLiteral, полный список случаев.    *)
+(* --------------------------------------------------------------------- *)
+
+typedNonStringLiteral  = typedBool | typedInt | typedReal
+                       | typedTime | typedDate | typedTimeOfDay
+                       | typedDateAndTime | typedLDate | typedLTimeOfDay
+                       | typedLDateAndTime ;
+(* Операторы (OperatorTable.cs:599-657), которые после '<TYPE>#' попадают
+   в ScanTypedLiteral и создают литерал:
+     BIT/BIT#(10,11) -> Boolean(1) [0|1];
+     BYTE..ULINT (12..23) -> Integer(14);
+     REAL(24)/LREAL(25)   -> Real(16);
+     TIME/TIME#(28)/LTIME(29) -> Duration(10)/LDuration(11);
+     DATE(30)/LDATE(274) -> Date(5)/LDate(23);
+     DATE_AND_TIME|DT(31)/LDT(275) -> DateAndTime(6)/LDateAndTime(25);
+     TIME_OF_DAY|TOD(32)/LTOD(276) -> TimeOfDay(18)/LTimeOfDay(24).
+   Случаи 1..9 и 26..27 (в т.ч. STRING=26, WSTRING=27) НЕ выставляют тип
+   (InternalScanner.cs switch:2656-2667). *)
+
+(* --------------------------------------------------------------------- *)
+(* 6. Псевдокод лексирования (для Rust-порта)                            *)
+(* --------------------------------------------------------------------- *)
+(*
+ScanStringOrTyped(quote):
+  if quote == '"'  -> bDoubleByte = true ; terminator = '"'
+  if quote == '\'' -> bDoubleByte = false ; terminator = '\''
+  ScanIdentifierOrOperator prefix "UTF8"/"UCHAR" (ScanUnicodeLiteral):
+      if buffer in {UTF8,UCHAR} and next == '\'':
+          consume '"'" as start of a single-byte string
+          ValidateStringToken()  -> Type 17 (или Error)
+          return
+  On identifier followed by '#':
+      ScanTypedTimeLiteral()      # DATE/DT/TOD/TIME/LDATE/... alias mapping
+      ScanTypedLiteral():
+          ... existing typed literal cases ...
+          case __XSTRING(243): if next=='"' { ValidateStringToken() ; Type 22 }
+  GetNextInternal quote branch (InternalScanner.cs:3545):
+      bError = ValidateStringToken(out flag)
+      if !bError: Type = flag ? DoubleByteString(9) : SingleByteString(17)
+      else:       Type = Error(20)
+
+ValidateStringToken (InternalScanner.cs:3298):
+  bDoubleByte = (first char == '"')
+  loop:
+    c = input[off]
+    if c == '\0'          -> error=true; stop
+    if c == '\n' or '\r'  -> EndOfLine(); continue          # multiline allowed
+    if c == '$'           -> if !ValidateEscapeSequence(bDoubleByte): error=true
+                             continue
+    if c == terminator    -> off++; stop                    # closed
+    else if c == '\'' and !bDoubleByte -> off++; stop       # (single: closes)
+    else if c == '"'  and  bDoubleByte -> off++; stop       # (double: closes)
+    else                  -> off++                          # ordinary (incl. opposite quote)
+
+ValidateEscapeSequence (InternalScanner.cs:3373):
+  c = input[off+1]
+  if c in {'$','\'','"'} or c in {L,l,N,n,R,r,T,t,P,p} -> consume 1, ok
+  if c in {U,u} -> require 8 hex, ok
+  else          -> ValidateLocalCodepoint(bDoubleByte): require 4 hex if double else 2 hex
+*)

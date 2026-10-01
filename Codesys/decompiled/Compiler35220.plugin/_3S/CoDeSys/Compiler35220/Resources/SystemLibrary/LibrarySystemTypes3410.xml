@@ -1,0 +1,30 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+	<language-model>
+		<data-type id ="{31BA9DEC-ACD8-475d-B624-39B6068C7EAF}" name = "__BasePropertyInfo">
+			<interface>
+				{implicit on}
+				{attribute 'linkalways'}
+				TYPE __BasePropertyInfo :
+				STRUCT
+				pVarAdr: POINTER TO BYTE;
+				END_STRUCT
+				END_TYPE
+				{implicit off}
+			</interface>
+		</data-type>
+		<data-type id ="{85B65D0B-A93F-4e02-80E4-FAFD3F54ABC3}" name = "__PropertyInfoStruct">
+			<interface>
+				{implicit on}
+				{attribute 'linkalways'}
+				TYPE __PropertyInfoStruct EXTENDS __BasePropertyInfo :
+				STRUCT
+				pGetter : POINTER TO BYTE;
+				pSetter : POINTER TO BYTE;
+				pInstance : POINTER TO BYTE;
+				END_STRUCT
+				END_TYPE
+				{implicit off}
+			</interface>
+		</data-type>
+		<!--end of types for data segment information-->
+	</language-model>

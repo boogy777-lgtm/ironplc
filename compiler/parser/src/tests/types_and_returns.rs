@@ -1,6 +1,7 @@
 //! Type names, generic/ANY return types and STRING-length forms.
 
 use super::common::*;
+use spec_test_macro::spec_test;
 
 #[test]
 fn parse_when_enumerated_value_is_reserved_keyword_then_parses() {
@@ -458,4 +459,124 @@ fn parse_when_struct_member_with_string_length_then_parses() {
             MY_FUNC := 0;
             END_FUNCTION",
     );
+}
+
+/// REQ-CS-parser-001: The lexer tokenizes `|` as the `Or` token, and
+/// `a | b` parses to a `CompareOp::Or` node.
+#[spec_test(REQ_CS_parser_001)]
+fn parse_when_pipe_operator_then_compare_op_or() {
+    // CODESYS/TwinCAT spell logical OR with the `|` symbol
+    // (`tables/operator_symbols.csv`), exactly as `&` spells AND. An
+    // operator with the same meaning as `OR` must land on the same AST node.
+    let source = "
+FUNCTION_BLOCK FB_Example
+VAR
+    a : BOOL;
+    b : BOOL;
+    result : BOOL;
+END_VAR
+result := a | b;
+END_FUNCTION_BLOCK";
+    let library = parse_text(source);
+    let value = extract_assignment_value(&library);
+    let compare = cast!(&value.kind, ExprKind::Compare);
+    assert_eq!(compare.op, CompareOp::Or);
+}
+
+/// REQ-CS-parser-002: `|` and `&` group by the same precedence as `OR`
+/// and `AND`.
+#[spec_test(REQ_CS_parser_002)]
+fn parse_when_pipe_and_and_symbols_mixed_then_grouping_follows_precedence() {
+    // `&` (AND) binds tighter than `|` (OR), so `a | b & c` groups as
+    // Or(a, And(b, c)) -- the same shape the keyword spellings produce.
+    let source = "
+FUNCTION_BLOCK FB_Example
+VAR
+    a : BOOL;
+    b : BOOL;
+    c : BOOL;
+    result : BOOL;
+END_VAR
+result := a | b & c;
+END_FUNCTION_BLOCK";
+    let library = parse_text(source);
+    let value = extract_assignment_value(&library);
+    let outer = cast!(&value.kind, ExprKind::Compare);
+    assert_eq!(outer.op, CompareOp::Or);
+    let right = cast!(&outer.right.kind, ExprKind::Compare);
+    assert_eq!(right.op, CompareOp::And);
+}
+
+#[test]
+fn parse_when_pipe_and_keyword_spellings_then_same_ast() {
+    let keyword = "
+FUNCTION_BLOCK FB_Example
+VAR
+    a : BOOL;
+    b : BOOL;
+    result : BOOL;
+END_VAR
+result := a OR b;
+END_FUNCTION_BLOCK";
+    let symbol = keyword.replace("OR", "|");
+    let options = CompilerOptions::default();
+    let keyword_lib = parse_program(keyword, &FileId::default(), &options).unwrap();
+    let symbol_lib = parse_program(&symbol, &FileId::default(), &options).unwrap();
+    assert_eq!(keyword_lib, symbol_lib);
+}
+
+fn opts_with_params_of() -> CompilerOptions {
+    CompilerOptions {
+        allow_params_of: true,
+        ..CompilerOptions::default()
+    }
+}
+
+/// REQ-CS-parser-004: `PARAMS(n) OF T` parses to a
+/// `ParamsSpecification` recording the count and the element type.
+#[spec_test(REQ_CS_parser_004)]
+fn parse_when_variable_of_params_type_then_specification_recorded() {
+    // CODESYS parameter-list type: `p : PARAMS(3) OF INT`. The AST keeps the
+    // count and the element type; the array it lowers to is an analyzer
+    // decision, not a parse-time one.
+    let source = "
+PROGRAM main
+VAR
+    p : PARAMS(3) OF INT;
+END_VAR
+END_PROGRAM";
+    let lib = parse_program(source, &FileId::default(), &opts_with_params_of()).unwrap();
+    let prog = cast!(&lib.elements[0], LibraryElementKind::ProgramDeclaration);
+    let params = cast!(
+        &prog.variables[0].initializer,
+        InitialValueAssignmentKind::Params
+    );
+    assert_eq!(params.count.as_integer().map(|i| i.value), Some(3));
+    assert_eq!(params.type_name.to_string(), "INT");
+}
+
+#[test]
+fn parse_when_params_type_declaration_then_declaration_recorded() {
+    let source = "TYPE MyParams : PARAMS(2) OF REAL; END_TYPE";
+    let lib = parse_program(source, &FileId::default(), &opts_with_params_of()).unwrap();
+    let decl = cast!(&lib.elements[0], LibraryElementKind::DataTypeDeclaration);
+    let params = cast!(decl, DataTypeDeclarationKind::Params);
+    assert_eq!(params.type_name.to_string(), "MyParams");
+    assert_eq!(params.spec.count.as_integer().map(|i| i.value), Some(2));
+    assert_eq!(params.spec.type_name.to_string(), "REAL");
+}
+
+#[test]
+fn parse_when_params_of_without_flag_then_parses_as_identifier() {
+    // `params` is a common variable name, so the keyword is demoted when the
+    // flag is off: the declaration parses as a variable named PARAMS typed by
+    // whatever follows, and the syntax that needs the flag fails.
+    let source = "
+PROGRAM main
+VAR
+    p : PARAMS(3) OF INT;
+END_VAR
+END_PROGRAM";
+    let result = parse_program(source, &FileId::default(), &CompilerOptions::default());
+    assert!(result.is_err(), "expected a syntax error, got Ok");
 }

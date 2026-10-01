@@ -1,0 +1,25 @@
+=====
+V6013
+=====
+
+.. problem-summary:: V6013
+
+A TCP session frame was malformed: a bad length prefix, a frame over the
+16 MiB session limit, a payload that is not exactly one JSON line, non-UTF-8
+frame bytes, or the connection closing mid-frame (ADR-0063). Framing breaks
+the stream, so the device answers this error on the wire and closes the
+connection — the codec error, by contrast, breaks one message only and
+leaves the session alive.
+
+An idle client exceeds the same code: no message within the 30 s
+per-message read timeout drops the connection with V6013 on the wire.
+
+Solutions
+---------
+
+1. Speak the session framing: one 4-byte little-endian length prefix
+   followed by exactly that many bytes of one JSON line, both directions.
+2. Keep one message inside one frame and under 16 MiB — a container upload
+   rides a single ``acceptEdits`` frame.
+3. Reconnect: the listener survives every framing violation, and a fresh
+   session answers ``identity`` again.

@@ -91,6 +91,9 @@ impl From<LspTokenType> for Vec<SemanticToken> {
             TokenType::Hash => None,
             TokenType::String => Some(KEYWORD_INDEX),
             TokenType::Identifier => Some(VARIABLE_INDEX),
+            // An escaped identifier names a variable, exactly as an ordinary
+            // identifier does.
+            TokenType::EscapedIdentifier => Some(VARIABLE_INDEX),
             TokenType::HexDigits => None,
             TokenType::OctDigits => None,
             TokenType::BinDigits => None,
@@ -100,8 +103,11 @@ impl From<LspTokenType> for Vec<SemanticToken> {
             TokenType::Type => Some(KEYWORD_INDEX),
             TokenType::EndType => Some(KEYWORD_INDEX),
             TokenType::Array => Some(KEYWORD_INDEX),
+            TokenType::Params => Some(KEYWORD_INDEX),
             TokenType::Struct => Some(KEYWORD_INDEX),
             TokenType::EndStruct => Some(KEYWORD_INDEX),
+            TokenType::Union => Some(KEYWORD_INDEX),
+            TokenType::EndUnion => Some(KEYWORD_INDEX),
             TokenType::WString => Some(KEYWORD_INDEX),
             TokenType::Var => Some(KEYWORD_INDEX),
             TokenType::VarInput => Some(KEYWORD_INDEX),
@@ -148,11 +154,21 @@ impl From<LspTokenType> for Vec<SemanticToken> {
             TokenType::Program => Some(KEYWORD_INDEX),
             TokenType::With => Some(KEYWORD_INDEX),
             TokenType::EndProgram => Some(KEYWORD_INDEX),
+            TokenType::Namespace => Some(KEYWORD_INDEX),
+            TokenType::EndNamespace => Some(KEYWORD_INDEX),
+            TokenType::BeginImplementation => Some(KEYWORD_INDEX),
             TokenType::Or => Some(OPERATOR_INDEX),
             TokenType::Xor => Some(OPERATOR_INDEX),
             TokenType::And => Some(OPERATOR_INDEX),
             TokenType::AndThen => Some(OPERATOR_INDEX),
             TokenType::OrElse => Some(OPERATOR_INDEX),
+            // The ST-visible special operators read as operators.
+            TokenType::SpecialNew
+            | TokenType::SpecialDelete
+            | TokenType::SpecialIsValidRef
+            | TokenType::SpecialTypeOf
+            | TokenType::SpecialCurrentTask
+            | TokenType::SpecialXAdd => Some(OPERATOR_INDEX),
             TokenType::Equal => Some(OPERATOR_INDEX),
             TokenType::NotEqual => Some(OPERATOR_INDEX),
             TokenType::Less => Some(OPERATOR_INDEX),
@@ -186,6 +202,16 @@ impl From<LspTokenType> for Vec<SemanticToken> {
             TokenType::EndRepeat => Some(KEYWORD_INDEX),
             TokenType::Exit => Some(KEYWORD_INDEX),
             TokenType::Continue => Some(KEYWORD_INDEX),
+            TokenType::Try
+            | TokenType::EndTry
+            | TokenType::Catch
+            | TokenType::Finally
+            | TokenType::Throw => Some(KEYWORD_INDEX),
+            TokenType::DocComment => Some(COMMENT_INDEX),
+            // A promoted statement label is the same name the identifier
+            // would have been, so it keeps the identifier's colour.
+            TokenType::Label => Some(VARIABLE_INDEX),
+            TokenType::Jmp | TokenType::Calc | TokenType::Wait => Some(KEYWORD_INDEX),
             TokenType::Action => Some(KEYWORD_INDEX),
             TokenType::EndAction => Some(KEYWORD_INDEX),
             TokenType::En => Some(KEYWORD_INDEX),
@@ -207,9 +233,13 @@ impl From<LspTokenType> for Vec<SemanticToken> {
             TokenType::EndTransition => Some(KEYWORD_INDEX),
             TokenType::True => Some(KEYWORD_INDEX),
             TokenType::VarTemp => Some(KEYWORD_INDEX),
+            TokenType::VarStat => Some(KEYWORD_INDEX),
+            TokenType::VarInst => Some(KEYWORD_INDEX),
+            TokenType::VarGeneric => Some(KEYWORD_INDEX),
             TokenType::VarAccess => Some(KEYWORD_INDEX),
             TokenType::VarConfig => Some(KEYWORD_INDEX),
             TokenType::Bool => Some(KEYWORD_INDEX),
+            TokenType::Bit => Some(KEYWORD_INDEX),
             TokenType::Sint => Some(KEYWORD_INDEX),
             TokenType::Int => Some(KEYWORD_INDEX),
             TokenType::Dint => Some(KEYWORD_INDEX),

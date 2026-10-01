@@ -1,0 +1,28 @@
+=====
+V4110
+=====
+
+.. problem-summary:: V4110
+
+The pair link's measured timing left the envelope recorded by the
+commissioning calibration: a ping/pong round trip or its EMA10 rose
+above the calibrated maximum on either direction
+(HA_PERFORMANCE_DEGRADED, ADR-0062). Redundancy keeps working — this
+alarm surfaces the drift (cable aging, added adapters, load growth)
+while it is recoverable, instead of silently eroding the failover
+guarantee. Failover thresholds are never automatically retuned.
+
+Example
+-------
+
+A pair commissioned with a 2-tick calibrated round trip sees its link
+degrade to 10 ticks:
+
+.. code-block::
+
+   Error: V4110 - performance degraded: the measured pair-link timing left the calibrated envelope: HA_PERFORMANCE_DEGRADED; investigate the link and recalibrate the pair
+
+To fix this alarm, inspect the pair link: the medium (cable aging, a
+replaced NIC or adapter), the link speed, and the load on both units.
+Once the cause is repaired, run a new commissioning calibration — a
+recalibration re-freezes the envelope and clears the alarm.

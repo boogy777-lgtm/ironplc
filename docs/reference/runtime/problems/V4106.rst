@@ -1,0 +1,31 @@
+=====
+V4106
+=====
+
+.. problem-summary:: V4106
+
+A fencing claim was rejected: a live originator still holds the module's
+exclusive ownership at the I/O target. This is the partition evidence —
+a primary that is alive behind a network partition still owns its
+outputs, so the target's exclusivity decides in favor of the living
+owner and the claimant's ownership barrier retreats. The barrier
+releases everything it had already acquired and the unit lands in
+REDUNDANCY_LOST: the pair is no longer redundant, and recovery is a
+manual repair, never a retry.
+
+Example
+-------
+
+A secondary, promoted by the proven-death path after a partition,
+attempts its takeover claim while the old primary is in fact alive and
+still owning:
+
+.. code-block::
+
+   Error: V4106 - owner conflict: a claim was rejected: a live owner still holds the module's exclusive ownership
+
+To fix this error, repair the partition (check the pair-link wiring and
+the daisy-chain path), then requalify the unit out of REDUNDANCY_LOST.
+A claim that the target rejects is the fence working as designed — the
+alternative, two owners of one output, is what the barrier exists to
+prevent.

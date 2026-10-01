@@ -1,0 +1,61 @@
+=====
+P0023
+=====
+
+.. problem-summary:: P0023
+
+This error occurs when a conditional-compilation pragma is unbalanced: an
+``{IF}`` has no matching ``{END_IF}``, or a branch pragma — ``{ELSIF}``,
+``{ELSE}`` or ``{END_IF}`` — appears without an enclosing ``{IF}``. The
+compiler evaluates these pragmas in source order and keeps only the branch
+whose condition holds; an unbalanced set leaves it unable to tell which text
+the condition applies to.
+
+Example
+-------
+
+The following code will generate error P0023:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       x : INT;
+   END_VAR
+       {IF defined(USE_FAST)}
+           x := 1;
+       END_PROGRAM   (* Error: the {IF} is never closed *)
+
+A branch pragma with no enclosing ``{IF}`` is the other shape of the error:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       x : INT;
+   END_VAR
+       x := 1;
+       {END_IF}      (* Error: there is no {IF} to close *)
+   END_PROGRAM
+
+To fix this error, close every ``{IF}`` with its ``{END_IF}`` and remove
+branch pragmas that belong to none:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       x : INT;
+   END_VAR
+       {IF defined(USE_FAST)}
+           x := 1;
+       {ELSE}
+           x := 2;
+       {END_IF}
+   END_PROGRAM
+
+Conditional-compilation pragmas are a CODESYS/TwinCAT extension; the compiler
+evaluates them only with ``--allow-pragma-if`` (see
+:doc:`/reference/compiler/ironplcc`). An ``{IF}`` whose condition is missing
+or uses syntax the compiler does not evaluate reports
+:doc:`P0024 </reference/compiler/problems/P0024>` instead.
