@@ -4,14 +4,14 @@
 mod common;
 
 use common::{kinds, lex_exact, significant};
-use ironplc_syntax::cst::build_flat_tree;
 use ironplc_syntax::lexer::lex;
 use ironplc_syntax::SyntaxKind as K;
+use ironplc_syntax::{parse_source_file, ParseOptions};
 
 #[test]
 fn lex_when_empty_input_then_no_tokens_and_empty_tree() {
     assert_eq!(kinds(""), vec![]);
-    let parsed = build_flat_tree("");
+    let parsed = parse_source_file("", &ParseOptions::default());
     assert_eq!(parsed.root.text().to_string(), "");
     assert!(parsed.errors.is_empty());
 }
@@ -26,7 +26,13 @@ fn lex_when_whitespace_only_then_trivia_tokens_only() {
             (K::Newline, "\r\n")
         ]
     );
-    assert_eq!(build_flat_tree("  \t ").root.text().to_string(), "  \t ");
+    assert_eq!(
+        parse_source_file("  \t ", &ParseOptions::default())
+            .root
+            .text()
+            .to_string(),
+        "  \t "
+    );
 }
 
 #[test]
@@ -437,9 +443,9 @@ fn lex_when_keywords_are_not_dialect_gated_then_lexed_uniformly() {
 }
 
 #[test]
-fn build_flat_tree_when_malformed_input_then_root_text_still_equals_source() {
+fn parse_source_file_when_malformed_input_then_root_text_still_equals_source() {
     let source = "x := 'abc\r\n(* open ? ";
-    let parsed = build_flat_tree(source);
+    let parsed = parse_source_file(source, &ParseOptions::default());
     assert_eq!(parsed.root.text().to_string(), source);
-    assert_eq!(parsed.errors.len(), 2);
+    assert!(parsed.errors.len() >= 2, "{:?}", parsed.errors);
 }

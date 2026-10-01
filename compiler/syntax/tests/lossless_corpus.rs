@@ -1,11 +1,28 @@
 //! Tiling and reconstruction guarantees over the shared corpus.
+//!
+//! The tree must reproduce the source for any input, so the same corpus and
+//! the same truncations go through every parser entry point and every
+//! dialect extreme.
 
 mod common;
 
 use common::{corpus, lex_exact};
-use ironplc_syntax::cst::build_flat_tree;
 use ironplc_syntax::lexer::{check_coverage, lex};
-use ironplc_syntax::SyntaxKind;
+use ironplc_syntax::{
+    parse_expression, parse_source_file, parse_statements, Parse, ParseOptions, SyntaxKind,
+};
+
+type EntryPoint = fn(&str, &ParseOptions) -> Parse;
+
+const ENTRY_POINTS: [(&str, EntryPoint); 3] = [
+    ("parse_source_file", parse_source_file),
+    ("parse_statements", parse_statements),
+    ("parse_expression", parse_expression),
+];
+
+fn option_sets() -> [ParseOptions; 2] {
+    [ParseOptions::default(), ParseOptions::all()]
+}
 
 #[test]
 fn lex_when_corpus_file_then_tokens_tile_source_exactly() {
@@ -29,11 +46,36 @@ fn lex_when_corpus_file_then_tokens_tile_source_exactly() {
 }
 
 #[test]
-fn build_flat_tree_when_corpus_file_then_root_text_equals_source() {
+fn parse_when_corpus_file_then_root_text_equals_source_for_every_entry_point() {
     for (path, source) in corpus() {
-        let parsed = build_flat_tree(&source);
-        assert_eq!(parsed.root.kind(), SyntaxKind::SourceFile);
-        assert_eq!(parsed.root.text().to_string(), source, "{}", path.display());
+        for (name, parse) in ENTRY_POINTS {
+            for options in option_sets() {
+                let parsed = parse(&source, &options);
+                assert_eq!(parsed.root.kind(), SyntaxKind::SourceFile);
+                assert_eq!(
+                    parsed.root.text().to_string(),
+                    source,
+                    "{name} on {}",
+                    path.display()
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn parse_source_file_when_corpus_file_then_every_error_lies_inside_the_source() {
+    for (path, source) in corpus() {
+        for (name, parse) in ENTRY_POINTS {
+            let parsed = parse(&source, &ParseOptions::all());
+            for error in &parsed.errors {
+                assert!(
+                    usize::from(error.range.end()) <= source.len(),
+                    "{name} on {}: {error}",
+                    path.display()
+                );
+            }
+        }
     }
 }
 
@@ -63,9 +105,26 @@ fn lex_when_every_prefix_of_sample_then_terminates_and_tiles() {
         if !SAMPLE.is_char_boundary(end) {
             continue;
         }
+        lex_exact(&SAMPLE[..end]);
+        count += 1;
+    }
+    assert!(count > 300, "swept only {count} prefixes");
+}
+
+#[test]
+fn parse_when_every_prefix_of_sample_then_terminates_and_text_equals_prefix() {
+    let mut count = 0;
+    for end in 0..=SAMPLE.len() {
+        if !SAMPLE.is_char_boundary(end) {
+            continue;
+        }
         let prefix = &SAMPLE[..end];
-        lex_exact(prefix);
-        assert_eq!(build_flat_tree(prefix).root.text().to_string(), prefix);
+        for (name, parse) in ENTRY_POINTS {
+            for options in option_sets() {
+                let parsed = parse(prefix, &options);
+                assert_eq!(parsed.root.text().to_string(), prefix, "{name} at {end}");
+            }
+        }
         count += 1;
     }
     assert!(count > 300, "swept only {count} prefixes");
@@ -76,6 +135,19 @@ fn lex_when_every_suffix_of_sample_then_terminates_and_tiles() {
     for start in 0..=SAMPLE.len() {
         if SAMPLE.is_char_boundary(start) {
             lex_exact(&SAMPLE[start..]);
+        }
+    }
+}
+
+#[test]
+fn parse_when_every_suffix_of_sample_then_text_equals_suffix() {
+    for start in 0..=SAMPLE.len() {
+        if SAMPLE.is_char_boundary(start) {
+            let suffix = &SAMPLE[start..];
+            for (name, parse) in ENTRY_POINTS {
+                let parsed = parse(suffix, &ParseOptions::all());
+                assert_eq!(parsed.root.text().to_string(), suffix, "{name} at {start}");
+            }
         }
     }
 }
