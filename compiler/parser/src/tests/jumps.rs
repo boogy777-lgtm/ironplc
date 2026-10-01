@@ -5,7 +5,6 @@
 
 use super::common::*;
 
-
 use spec_test_macro::spec_test;
 
 /// `allow_jump_statement` on, the gate for `JMP` and statement labels.
@@ -68,8 +67,7 @@ fn lexer_spec_req_jmp_parser_001_words_are_keywords_only_behind_their_gates() {
     assert_eq!(types, [TokenType::Jmp, TokenType::Calc, TokenType::Wait]);
 
     // Case-insensitively, like every other keyword.
-    let (tokens, _) =
-        crate::tokenize_program("jmp calc __wait", &FileId::default(), &all_on, 0, 0);
+    let (tokens, _) = crate::tokenize_program("jmp calc __wait", &FileId::default(), &all_on, 0, 0);
     let types: Vec<TokenType> = tokens
         .iter()
         .filter(|t| t.token_type != TokenType::Whitespace)
@@ -117,10 +115,7 @@ END_PROGRAM",
         }
         other => panic!("expected a jump statement, got {other:?}"),
     }
-    assert!(
-        matches!(stmts[2], StmtKind::Label(_)),
-        "stmts = {stmts:?}"
-    );
+    assert!(matches!(stmts[2], StmtKind::Label(_)), "stmts = {stmts:?}");
 }
 
 /// REQ-JMP-parser-002: the conditional form carries the condition.
@@ -326,5 +321,4 @@ fn statements_without_gates_then_syntax_error() {
 
     let source = "PROGRAM main VAR x : INT; END_VAR __WAIT; END_PROGRAM";
     assert!(parse_program(source, &FileId::default(), &CompilerOptions::default()).is_err());
-
 }

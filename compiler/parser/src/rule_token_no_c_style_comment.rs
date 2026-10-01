@@ -15,10 +15,8 @@ pub fn apply(tokens: &[Token], options: &CompilerOptions) -> Result<(), Vec<Diag
     for tok in tokens {
         // A `///` documentation comment is a `DocComment` token, but it is the
         // same C-style comment form and needs the same flag.
-        if matches!(
-            tok.token_type,
-            TokenType::Comment | TokenType::DocComment
-        ) && (tok.text.starts_with("//") || tok.text.starts_with("/*"))
+        if matches!(tok.token_type, TokenType::Comment | TokenType::DocComment)
+            && (tok.text.starts_with("//") || tok.text.starts_with("/*"))
         {
             errors.push(
                 Diagnostic::problem(

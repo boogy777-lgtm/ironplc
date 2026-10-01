@@ -186,10 +186,7 @@ mod tests {
 
         let types: Vec<TokenType> = result.iter().map(|t| t.token_type.clone()).collect();
         assert_eq!(
-            types
-                .iter()
-                .filter(|t| **t == TokenType::Comment)
-                .count(),
+            types.iter().filter(|t| **t == TokenType::Comment).count(),
             1
         );
         assert!(types.contains(&TokenType::Identifier), "{types:?}");
@@ -199,8 +196,7 @@ mod tests {
     #[test]
     fn apply_when_nested_comment_then_span_covers_the_source() {
         let source = "(* a (* b *) c *)";
-        let (tokens, _) =
-            crate::lexer::tokenize(source, &dsl::core::FileId::default(), 0, 0);
+        let (tokens, _) = crate::lexer::tokenize(source, &dsl::core::FileId::default(), 0, 0);
         let result = apply(tokens, &opts(true));
 
         assert_eq!(result.len(), 1);

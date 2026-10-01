@@ -19,6 +19,7 @@ mod escaped_identifiers;
 mod exit_return;
 mod fb_inheritance;
 mod incomplete_array;
+mod jumps;
 mod method_call_expression;
 mod methods;
 mod mixed_vars;

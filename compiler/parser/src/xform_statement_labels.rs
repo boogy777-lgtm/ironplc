@@ -168,7 +168,10 @@ mod tests {
 
     #[test]
     fn apply_when_flag_off_then_identifier_unchanged() {
-        let types = types("PROGRAM p lbl: x := 1; END_PROGRAM", &CompilerOptions::default());
+        let types = types(
+            "PROGRAM p lbl: x := 1; END_PROGRAM",
+            &CompilerOptions::default(),
+        );
         assert!(!types.contains(&TokenType::Label));
     }
 
@@ -188,7 +191,10 @@ mod tests {
 
     #[test]
     fn apply_when_declaration_in_var_block_then_not_a_label() {
-        let types = types("PROGRAM p VAR x : INT; y : INT; END_VAR lbl: x := 1; END_PROGRAM", &opts());
+        let types = types(
+            "PROGRAM p VAR x : INT; y : INT; END_VAR lbl: x := 1; END_PROGRAM",
+            &opts(),
+        );
         let labels: Vec<usize> = types
             .iter()
             .enumerate()

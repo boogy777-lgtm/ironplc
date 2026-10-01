@@ -401,6 +401,42 @@ const FLAG_FIXTURES: &[FlagFixture] = &[
         prereqs: &[],
         source: "PROGRAM main\nVAR\nmy__var : INT;\nEND_VAR\nEND_PROGRAM",
     },
+    // The CODESYS jump statement and statement labels. With the flag off,
+    // `JMP` is an ordinary identifier and `JMP done;` is not a statement.
+    FlagFixture {
+        key: "allow_jump_statement",
+        prereqs: &[],
+        source: "PROGRAM main\nVAR x : INT; END_VAR\nx := 1;\nJMP done;\ndone:\nx := 2;\nEND_PROGRAM",
+    },
+    // The CODESYS CALC conditional call. With the flag off, `CALC(b, ...)`
+    // names an ordinary (undeclared) function block.
+    FlagFixture {
+        key: "allow_calc_statement",
+        prereqs: &[],
+        source: "FUNCTION_BLOCK Fb\nVAR_INPUT a : INT; END_VAR\nEND_FUNCTION_BLOCK\nPROGRAM main\nVAR b : BOOL; fb : Fb; END_VAR\nCALC(b, fb(a := 1));\nEND_PROGRAM",
+    },
+    // The CODESYS __WAIT statement. With the flag off, `__WAIT(b)` is a call
+    // to an undeclared function block.
+    FlagFixture {
+        key: "allow_wait_statement",
+        prereqs: &[],
+        source: "PROGRAM main\nVAR b : BOOL; END_VAR\nb := TRUE;\n__WAIT(b);\nEND_PROGRAM",
+    },
+    // Nested block comments. With the flag off the comment ends at the first
+    // `*)`, so the rest of the line is not comment text and does not parse.
+    FlagFixture {
+        key: "allow_nested_comments",
+        prereqs: &[],
+        source: "PROGRAM main\nVAR x : INT; END_VAR\n(* a (* b *) c *)\nx := 1;\nEND_PROGRAM",
+    },
+    // Conditional-compilation pragmas. With the flag off the pragmas stay
+    // trivia and the branch that `{IF}` would drop is parsed as source, where
+    // its text is not a statement.
+    FlagFixture {
+        key: "allow_pragma_if",
+        prereqs: &["allow_pragmas"],
+        source: "PROGRAM main\nVAR x : INT; END_VAR\n{IF defined(NEVER)}\nthis is not a statement\n{END_IF}\nx := 1;\nEND_PROGRAM",
+    },
 ];
 
 /// Builds an ed2 options object with the given flags enabled.

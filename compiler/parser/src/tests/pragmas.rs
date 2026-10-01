@@ -14,10 +14,9 @@ fn assignments(library: &Library) -> Vec<(String, String)> {
     body.body
         .iter()
         .map(|stmt| match stmt {
-            StmtKind::Assignment(assignment) => (
-                assignment.target.to_string(),
-                assignment.value.to_string(),
-            ),
+            StmtKind::Assignment(assignment) => {
+                (assignment.target.to_string(), assignment.value.to_string())
+            }
             other => panic!("expected an assignment, got {other:?}"),
         })
         .collect()

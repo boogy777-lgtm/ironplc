@@ -87,7 +87,6 @@ fn parse_program_when_not_valid_top_item_then_err() {
     assert_eq!("Expected ' ' (space) | '\\t' (tab) | '(* ... *)' (comment) | '///' (documentation comment) | 'CONFIGURATION' | 'FUNCTION' | 'FUNCTION_BLOCK' | 'INTERFACE' | 'NAMESPACE' | 'PROGRAM' | 'TYPE' | 'VAR_GLOBAL' | '\\n' (new line) | '{ ... }' (pragma). Found text 'ACTION' that matched token 'ACTION'".to_owned(), err.primary.message);
 }
 
-
 // ---------------------------------------------------------------------
 // CODESYS comments: nested `(* ... *)` and `///` documentation comments.
 // See `specs/design/codesys-jump-and-pragmas.md`.

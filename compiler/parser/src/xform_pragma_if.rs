@@ -129,7 +129,6 @@ pub fn apply(tokens: Vec<Token>, options: &CompilerOptions) -> (Vec<Token>, Vec<
                 }
             }
         }
-
     }
 
     // An `{IF}` that never met its `{END_IF}` is reported once, at its own
@@ -203,9 +202,9 @@ fn symbol(text: &str) -> Option<String> {
     if name.is_empty() {
         return None;
     }
-    let valid = name
-        .split('.')
-        .all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'));
+    let valid = name.split('.').all(|part| {
+        !part.is_empty() && part.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+    });
     valid.then(|| name.to_ascii_lowercase())
 }
 
