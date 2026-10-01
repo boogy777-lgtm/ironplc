@@ -27,6 +27,7 @@ mod method_call_expression;
 mod methods;
 mod namespaces;
 mod partial_access;
+mod pipeline_order;
 mod pointer_to;
 mod pragmas;
 mod property;
