@@ -173,6 +173,8 @@ fn scenario_hot_edit_accept_test_untest_assemble() {
     assert_eq!(assembled_status["normal"], 2);
     assert_eq!(assembled_status["application"], 2);
     assert_eq!(assembled_status["candidate"], serde_json::Value::Null);
+}
+
 /// A configuration global that its program counts up once per scan.
 const CONFIGURATION_GLOBAL_COUNTER: &str = "CONFIGURATION config
   VAR_GLOBAL count : INT; END_VAR

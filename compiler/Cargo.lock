@@ -1138,7 +1138,7 @@ dependencies = [
 
 [[package]]
 name = "ironplc-redundancy"
-version = "0.246.0"
+version = "0.247.0"
 dependencies = [
  "csv",
  "ironplc-codegen",
@@ -1153,7 +1153,7 @@ dependencies = [
 
 [[package]]
 name = "ironplc-runtime"
-version = "0.246.0"
+version = "0.247.0"
 dependencies = [
  "csv",
  "ironplc-codegen",
