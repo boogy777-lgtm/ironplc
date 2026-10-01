@@ -3,6 +3,7 @@
 extern crate ironplc_dsl as dsl;
 
 pub mod declarations;
+mod legacy;
 mod lexer;
 pub mod options;
 mod parser;
@@ -25,15 +26,11 @@ mod xform_split_duration_units;
 mod xform_statement_labels;
 mod xform_tokens;
 
-use crate::parser::{parse_library, parse_statements};
 use dsl::{core::FileId, diagnostic::Diagnostic};
 use ironplc_dsl::common::Library;
 use ironplc_dsl::textual::StmtKind;
-use lexer::tokenize;
 use options::CompilerOptions;
-use preprocessor::preprocess;
 use token::Token;
-use xform_tokens::insert_keyword_statement_terminators;
 
 #[cfg(test)]
 mod tests;
@@ -110,54 +107,7 @@ pub fn tokenize_program(
     line_offset: usize,
     col_offset: usize,
 ) -> (Vec<Token>, Vec<Diagnostic>) {
-    let source = preprocess(source);
-    let (tokens, mut errors) = tokenize(&source, file_id, line_offset, col_offset);
-
-    let tokens = xform_collapse_pragmas::apply(tokens, options);
-    // Conditional pragmas drop the branches that are not taken, so they run
-    // first: nothing below has to know a branch was ever there.
-    let (tokens, mut pragma_errors) = xform_pragma_if::apply(tokens, options);
-    let tokens = xform_nested_comments::apply(tokens, options);
-    let tokens = xform_split_duration_units::apply(tokens);
-    let mut tokens = insert_keyword_statement_terminators(tokens, file_id, options);
-    xform_statement_labels::apply(&mut tokens, options);
-    xform_demote_keywords::apply(&mut tokens, options);
-    xform_promote_special_operators::apply(&mut tokens);
-    let result = check_tokens(&tokens, options);
-    match result {
-        Ok(_) => {}
-        Err(mut diagnostics) => errors.append(&mut diagnostics),
-    }
-    errors.append(&mut pragma_errors);
-
-    (tokens, errors)
-}
-
-#[allow(clippy::type_complexity)]
-fn check_tokens(tokens: &[Token], options: &CompilerOptions) -> Result<(), Vec<Diagnostic>> {
-    let rules: Vec<fn(&[Token], &CompilerOptions) -> Result<(), Vec<Diagnostic>>> = vec![
-        rule_token_no_c_style_comment::apply,
-        rule_no_empty_var_blocks::apply,
-        rule_token_no_partial_access_syntax::apply,
-        rule_token_no_paren_string_length::apply,
-        rule_token_no_incomplete_array::apply,
-        rule_token_identifier::apply,
-        rule_token_string_escape::apply,
-    ];
-
-    let mut errors = vec![];
-    for rule in rules {
-        match rule(tokens, options) {
-            Ok(_) => {}
-            Err(mut diagnostics) => errors.append(&mut diagnostics),
-        };
-    }
-
-    if !errors.is_empty() {
-        return Err(errors);
-    }
-
-    Ok(())
+    legacy::tokenize_program(source, file_id, options, line_offset, col_offset)
 }
 
 /// Parse a full IEC 61131 program.
@@ -166,16 +116,7 @@ pub fn parse_program(
     file_id: &FileId,
     options: &CompilerOptions,
 ) -> Result<Library, Diagnostic> {
-    let mut result = tokenize_program(source, file_id, options, 0, 0);
-    if !result.1.is_empty() {
-        return Err(result.1.remove(0));
-    }
-
-    let library = parse_library(result.0).map(|elements| Library { elements })?;
-
-    // The parser does not know how to assign the file identifier, so transform the input as
-    // a post-processing step.
-    xform_assign_file_id::apply(library, file_id)
+    legacy::parse_program(source, file_id, options)
 }
 
 /// Parse ST (Structured Text) body content into statements.
@@ -197,54 +138,5 @@ pub fn parse_st_statements(
     line_offset: usize,
     col_offset: usize,
 ) -> Result<Vec<StmtKind>, Diagnostic> {
-    if source.trim().is_empty() {
-        return Ok(vec![]);
-    }
-
-    // Calculate adjusted offset after skipping leading whitespace
-    let (trimmed_source, adjusted_line, adjusted_col) =
-        skip_leading_whitespace(source, line_offset, col_offset);
-
-    let mut result = tokenize_program(
-        trimmed_source,
-        file_id,
-        options,
-        adjusted_line,
-        adjusted_col,
-    );
-    if !result.1.is_empty() {
-        return Err(result.1.remove(0));
-    }
-
-    parse_statements(result.0)
-}
-
-/// Skip leading whitespace and calculate the adjusted line/column offset.
-///
-/// Returns (trimmed_source, adjusted_line_offset, adjusted_col_offset).
-fn skip_leading_whitespace(
-    source: &str,
-    line_offset: usize,
-    col_offset: usize,
-) -> (&str, usize, usize) {
-    let mut line = line_offset;
-    let mut col = col_offset;
-    let mut start_idx = 0;
-
-    for (idx, ch) in source.char_indices() {
-        match ch {
-            '\n' => {
-                line += 1;
-                col = 0;
-                start_idx = idx + 1;
-            }
-            ' ' | '\t' | '\r' => {
-                col += 1;
-                start_idx = idx + 1;
-            }
-            _ => break,
-        }
-    }
-
-    (source[start_idx..].trim_end(), line, col)
+    legacy::parse_st_statements(source, file_id, options, line_offset, col_offset)
 }
