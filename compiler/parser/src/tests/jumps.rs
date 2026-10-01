@@ -299,3 +299,43 @@ fn statements_without_gates_then_syntax_error() {
     let source = "PROGRAM main VAR x : INT; END_VAR __WAIT; END_PROGRAM";
     assert!(parse_program(source, &FileId::default(), &CompilerOptions::default()).is_err());
 }
+
+/// A configuration that uses every `Identifier :` position outside statement
+/// position that the configuration grammar has.
+const CONFIGURATION_SOURCE: &str = "CONFIGURATION config
+VAR_GLOBAL g : INT; END_VAR
+RESOURCE res ON PLC
+VAR_GLOBAL h : INT; END_VAR
+TASK t(INTERVAL := T#100ms, PRIORITY := 1);
+PROGRAM inst1 WITH t : main;
+PROGRAM RETAIN inst2 WITH t : main;
+PROGRAM NON_RETAIN inst3 : main;
+PROGRAM inst4 : main;
+END_RESOURCE
+END_CONFIGURATION";
+
+/// The program the configuration instantiates, so the source is a whole file.
+const CONFIGURATION_PROGRAM: &str = "PROGRAM main
+VAR x : INT; END_VAR
+x := 1;
+END_PROGRAM
+";
+
+/// Configuration declarations are not statement position: `inst WITH t : main`
+/// has a name before its colon, and it must not be read as a statement label.
+#[test]
+fn parse_program_when_configuration_has_name_colon_then_same_ast_as_without_jumps() {
+    let source = format!("{CONFIGURATION_PROGRAM}{CONFIGURATION_SOURCE}");
+    let with_jumps = parse_with(&source, &opts_with_jump());
+    let without_jumps = parse_with(&source, &CompilerOptions::default());
+    assert_eq!(with_jumps, without_jumps);
+}
+
+/// The same holds under the CODESYS dialect itself, not only the bare flag.
+#[test]
+fn parse_program_when_codesys_dialect_configuration_then_parses() {
+    let source = format!("{CONFIGURATION_PROGRAM}{CONFIGURATION_SOURCE}");
+    let options = CompilerOptions::from_dialect(Dialect::Codesys);
+    assert!(options.allow_jump_statement);
+    parse_with(&source, &options);
+}
