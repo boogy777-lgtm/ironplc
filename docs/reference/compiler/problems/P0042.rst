@@ -1,0 +1,50 @@
+=====
+P0042
+=====
+
+.. problem-summary:: P0042
+
+This error occurs when the same statement-label name is defined more than
+once in one POU body. A ``JMP`` names its target by label name alone, so two
+definitions of the same name make the destination ambiguous — the compiler
+cannot say which of the two statements the jump should reach.
+
+Example
+-------
+
+The following code will generate error P0042:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       x : INT;
+   END_VAR
+       JMP step;
+   step:
+       x := 1;
+   step:             (* Error: `step` is already a label in this body *)
+       x := 2;
+   END_PROGRAM
+
+To fix this error, give each label in a body a distinct name:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       x : INT;
+   END_VAR
+       JMP step;
+   step:
+       x := 1;
+       JMP finish;
+   finish:
+       x := 2;
+   END_PROGRAM
+
+The two labels of the first example are in the same POU body; a label of the
+same name in another POU is a different, valid label. A ``JMP`` to a name no
+label defines reports :doc:`P0027 </reference/compiler/problems/P0027>`.
+Labels are a CODESYS/TwinCAT extension, gated behind
+``--allow-jump-statement`` (see :doc:`/reference/compiler/ironplcc`).

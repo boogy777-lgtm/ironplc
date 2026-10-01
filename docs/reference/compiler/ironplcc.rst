@@ -414,6 +414,46 @@ Options
    allowed. Produces :doc:`P4069 </reference/compiler/problems/P4069>` when
    used without this flag.
 
+``--allow-jump-statement``
+   Allow the ``JMP`` statement and the ``label:`` statement labels it
+   targets, in the style of a low-level jump instruction. A label names a
+   statement in the same POU body; a ``JMP`` to a name no label defines
+   produces :doc:`P0027 </reference/compiler/problems/P0027>`, and defining
+   the same label name twice produces
+   :doc:`P0042 </reference/compiler/problems/P0042>`. This is a CODESYS
+   statement extension; without this flag a ``JMP`` statement is a syntax
+   error.
+
+``--allow-calc-statement``
+   Allow the CODESYS ``CALC`` conditional call statement,
+   ``CALC(condition, instance call);``, which calls the function block
+   instance only when the condition is true. Without this flag the same text
+   is an ordinary function block invocation of a POU named ``CALC``.
+
+``--allow-wait-statement``
+   Allow the CODESYS ``__WAIT`` wait statement, bare (``__WAIT;``) and with a
+   condition (``__WAIT(b);``). This is a CODESYS statement extension; without
+   this flag ``__WAIT;`` is a syntax error.
+
+``--allow-nested-comments``
+   Allow ``(* ... *)`` block comments to nest, so an inner comment opens and
+   closes inside an outer one: ``(* a (* b *) c *)``. IEC 61131-3 block
+   comments do not nest; without this flag the first ``*)`` ends the comment
+   and the remaining text is parsed as code.
+
+``--allow-pragma-if``
+   Allow the conditional-compilation pragmas ``{IF}``, ``{ELSIF}``,
+   ``{ELSE}``, ``{END_IF}``, ``{DEFINE}`` and ``{UNDEFINE}``. ``{DEFINE name}``
+   and ``{UNDEFINE name}`` change the names in effect for the conditions that
+   follow them; a condition may combine ``defined(name)``, ``TRUE``,
+   ``FALSE``, ``NOT``, ``AND``, ``OR`` and parentheses, and only the taken
+   branch reaches the parser. An ``{IF}`` with no matching ``{END_IF}`` (or a
+   stray branch pragma) produces
+   :doc:`P0023 </reference/compiler/problems/P0023>`; a missing or
+   unevaluable condition produces
+   :doc:`P0024 </reference/compiler/problems/P0024>`. Without this flag the
+   pragmas stay trivia and both branches reach the parser.
+
 ``--policy-string-to-num-non-numeric`` *ALTERNATIVE*
    Select what ``STRING_TO_<numeric>`` treats as convertible when the string
    has non-numeric characters: ``reject`` (the whole string must be a

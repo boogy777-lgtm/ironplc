@@ -108,7 +108,10 @@ Supported Dialects
    ``--allow-var-generic``, ``--allow-namespace``,
    ``--allow-begin-implementation``, ``--allow-bit-type``,
    ``--allow-try-catch``, ``--allow-params-of``,
-   ``--allow-incomplete-array``, and ``--allow-escaped-identifiers``.
+   ``--allow-incomplete-array``, ``--allow-escaped-identifiers``,
+   ``--allow-jump-statement``, ``--allow-calc-statement``,
+   ``--allow-wait-statement``, ``--allow-nested-comments``, and
+   ``--allow-pragma-if``.
 
    **Selects:** ``--policy-string-to-num-non-numeric ignore-trailing`` and
    ``--policy-string-to-num-failure zero`` — CODESYS stops parsing at the
@@ -155,7 +158,10 @@ Supported Dialects
    ``--allow-union-type``, ``--allow-var-stat``, ``--allow-var-inst``,
    ``--allow-var-generic``, ``--allow-namespace``, ``--allow-bit-type``,
    ``--allow-try-catch``, ``--allow-params-of``,
-   ``--allow-incomplete-array``, and ``--allow-escaped-identifiers``.
+   ``--allow-incomplete-array``, ``--allow-escaped-identifiers``,
+   ``--allow-jump-statement``, ``--allow-calc-statement``,
+   ``--allow-wait-statement``, ``--allow-nested-comments``, and
+   ``--allow-pragma-if``.
 
    **Selects:** ``--policy-string-to-num-non-numeric ignore-trailing`` and
    ``--policy-string-to-num-failure zero``, as ``codesys``.

@@ -1,0 +1,66 @@
+=====
+P0024
+=====
+
+.. problem-summary:: P0024
+
+This error occurs when a conditional-compilation pragma has no condition the
+compiler can evaluate: an ``{IF}`` with no condition at all, or a condition
+outside the supported language. The supported condition language is
+``defined(name)``, the literals ``TRUE`` and ``FALSE``, ``NOT``, ``AND``,
+``OR`` and parentheses. Anything else — for example
+``{IF COMPILERVERSION >= 3.5}`` or ``{IF hastype(x)}``, which depend on the
+project database — is reported and treated as false, because the compiler
+cannot decide whether the branch applies.
+
+Example
+-------
+
+The following code will generate error P0024:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       x : INT;
+   END_VAR
+       {IF}              (* Error: no condition *)
+           x := 1;
+       {END_IF}
+   END_PROGRAM
+
+A condition that names project data instead of a define is the other shape:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       x : INT;
+   END_VAR
+       {IF COMPILERVERSION >= 3.5}   (* Error: not evaluable here *)
+           x := 1;
+       {END_IF}
+   END_PROGRAM
+
+To fix this error, gate the branch on a name the source itself defines, or
+remove the pragma:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       x : INT;
+   END_VAR
+       {DEFINE USE_FAST}
+       {IF defined(USE_FAST)}
+           x := 1;
+       {ELSE}
+           x := 2;
+       {END_IF}
+   END_PROGRAM
+
+``{DEFINE name}`` and ``{UNDEFINE name}`` take effect for the conditions that
+follow them, in source order, and names are compared like identifiers. The
+pragmas are evaluated only with ``--allow-pragma-if`` (see
+:doc:`/reference/compiler/ironplcc`); an ``{IF}`` left without its
+``{END_IF}`` reports :doc:`P0023 </reference/compiler/problems/P0023>`.

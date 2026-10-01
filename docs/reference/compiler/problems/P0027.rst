@@ -1,0 +1,47 @@
+=====
+P0027
+=====
+
+.. problem-summary:: P0027
+
+This error occurs when a ``JMP`` statement names a destination that no label
+in the same POU body defines. A statement label — a name followed by a colon,
+such as ``done:``, in front of a statement — is the only jump target within a
+POU body, and a jump to a name with no such label has nowhere to go.
+
+Example
+-------
+
+The following code will generate error P0027:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       x : INT;
+   END_VAR
+       x := 1;
+       JMP done;     (* Error: no `done:` label in this body *)
+       x := 2;
+   END_PROGRAM
+
+To fix this error, define the label in the same body, or remove the jump:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       x : INT;
+   END_VAR
+       x := 1;
+       JMP done;
+       x := 2;
+   done:
+       x := 3;
+   END_PROGRAM
+
+Labels are targets inside one POU body only: a label in another POU is not
+visible here. Defining the same label name twice in one body reports
+:doc:`P0042 </reference/compiler/problems/P0042>`. ``JMP`` and statement
+labels are a CODESYS/TwinCAT extension, gated behind
+``--allow-jump-statement`` (see :doc:`/reference/compiler/ironplcc`).
