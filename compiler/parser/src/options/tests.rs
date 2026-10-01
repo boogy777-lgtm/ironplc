@@ -43,7 +43,9 @@ fn ed2_dialect_enables_no_flags() {
 /// reference keywords, partial-access syntax, explicit enumeration member
 /// values, the `CONTINUE` statement, and the object-oriented syntax
 /// (`allow_fb_inheritance`) that is the headline addition of the 2013
-/// edition.
+/// edition. `allow_multiple_underscores` lifts the CODESYS/TwinCAT
+/// restriction on consecutive underscores, which the edition itself does not
+/// impose.
 #[test]
 fn ed3_dialect_enables_edition3_descriptors() {
     assert_enabled_flags(
@@ -55,6 +57,7 @@ fn ed3_dialect_enables_edition3_descriptors() {
             "allow_fb_inheritance",
             "allow_enum_explicit_values",
             "allow_continue",
+            "allow_multiple_underscores",
         ],
     );
 }
@@ -96,6 +99,7 @@ fn rusty_dialect_enables_exactly_these_flags() {
             "allow_enum_explicit_values",
             "allow_enum_base_type",
             "allow_continue",
+            "allow_multiple_underscores",
         ],
     );
 }
@@ -145,6 +149,9 @@ fn codesys_dialect_enables_exactly_these_flags() {
             "allow_enum_explicit_values",
             "allow_enum_base_type",
             "allow_continue",
+            "allow_params_of",
+            "allow_incomplete_array",
+            "allow_escaped_identifiers",
         ],
     );
 }
@@ -194,6 +201,9 @@ fn twincat_dialect_enables_exactly_these_flags() {
             "allow_enum_explicit_values",
             "allow_enum_base_type",
             "allow_continue",
+            "allow_params_of",
+            "allow_incomplete_array",
+            "allow_escaped_identifiers",
         ],
     );
 }

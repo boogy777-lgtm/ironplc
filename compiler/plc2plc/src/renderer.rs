@@ -601,6 +601,38 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         Ok(())
     }
 
+    /// Renders the CODESYS `PARAMS(n) OF T` type declaration.
+    fn visit_params_declaration(
+        &mut self,
+        node: &ParamsDeclaration,
+    ) -> Result<Self::Value, Diagnostic> {
+        self.visit_type_name(&node.type_name)?;
+
+        self.write_ws(":");
+
+        self.visit_params_specification(&node.spec)?;
+
+        Ok(())
+    }
+
+    /// Renders the CODESYS parameter-list type, `PARAMS(n) OF T`.
+    fn visit_params_specification(
+        &mut self,
+        node: &ParamsSpecification,
+    ) -> Result<Self::Value, Diagnostic> {
+        self.write_ws("PARAMS");
+        self.write_ws("(");
+        match &node.count {
+            IntegerRef::Literal(count) => self.visit_integer(count)?,
+            IntegerRef::Constant(id) => self.visit_id(id)?,
+        }
+        self.write_ws(")");
+        self.write_ws("OF");
+        self.visit_type_name(&node.type_name)?;
+
+        Ok(())
+    }
+
     // 2.3.3.1
     fn visit_string_declaration(
         &mut self,
@@ -642,7 +674,12 @@ impl Visitor<Diagnostic> for LibraryRenderer {
     fn visit_array_subranges(&mut self, node: &ArraySubranges) -> Result<Self::Value, Diagnostic> {
         self.write_ws("ARRAY");
         self.write_ws("[");
-        visit_comma_separated!(self, node.ranges.iter(), Subrange);
+        match &node.bounds {
+            ArrayBounds::Ranges(ranges) => visit_comma_separated!(self, ranges.iter(), Subrange),
+            // The incomplete array type has no range list, so `*` is the
+            // whole extent.
+            ArrayBounds::Incomplete(_) => self.write("*"),
+        }
         self.write_ws("]");
         self.write_ws("OF");
 

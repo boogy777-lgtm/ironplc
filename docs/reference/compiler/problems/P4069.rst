@@ -1,0 +1,44 @@
+=====
+P4069
+=====
+
+.. problem-summary:: P4069
+
+This error occurs when an identifier contains two underscores in a row
+outside the reserved leading ``__`` prefix. CODESYS and TwinCAT reject
+multiple consecutive underscores by default
+(``AllowMultipleUnderlines=false``), so the compiler reports them unless
+``--allow-multiple-underscores`` is set.
+
+The leading ``__`` is exempt in every dialect: it is the compiler's own
+reserved namespace, used by the implicit ``__SYSTEM_UP_TIME`` global and by
+intrinsics such as ``__TRUNC``, so ``__internal`` is accepted while
+``my__var`` is not.
+
+Example
+-------
+
+The following code will generate error P4069:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       my__var : INT;
+   END_VAR
+   END_PROGRAM
+
+To fix this error, use a single underscore:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       my_var : INT;
+   END_VAR
+   END_PROGRAM
+
+Or enable multiple underscores:
+
+.. |flag| replace:: ``--allow-multiple-underscores``
+.. include:: /includes/enabled-by-flag.rst

@@ -88,6 +88,8 @@ fn field_has_default(
             nested_structure_has_all_defaults(&simple_init.type_name, type_environment)
         }
         InitialValueAssignmentKind::String(string_init) => string_init.initial_value.is_some(),
+        // A PARAMS list declares no value of its own.
+        InitialValueAssignmentKind::Params(_) => false,
         InitialValueAssignmentKind::EnumeratedValues(enum_init) => {
             enum_init.initial_value.is_some()
         }

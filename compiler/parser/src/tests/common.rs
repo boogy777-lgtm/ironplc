@@ -1,11 +1,11 @@
 pub(crate) use dsl::common::{
-    next_block_id, ArrayElementType, CharacterStringLiteral, ConstantKind, DataTypeDeclarationKind,
-    DeclarationQualifier, EnumeratedSpecificationInit, EnumerationDeclaration,
-    FunctionBlockBodyKind, FunctionBlockDeclaration, FunctionDeclaration, FunctionReturnType,
-    InitialValueAssignmentKind, LateResolvedInitialValue, LateResolvedInitializer, Library,
-    LibraryElementKind, ProgramDeclaration, RealLiteral, ReferenceTarget, SimpleInitializer,
-    SpecificationKind, StringType, TypeName, TypeReference, VarDecl, VariableIdentifier,
-    VariableType,
+    next_block_id, ArrayBounds, ArrayElementType, CharacterStringLiteral, ConstantKind,
+    DataTypeDeclarationKind, DeclarationQualifier, EnumeratedSpecificationInit,
+    EnumerationDeclaration, FunctionBlockBodyKind, FunctionBlockDeclaration, FunctionDeclaration,
+    FunctionReturnType, InitialValueAssignmentKind, LateResolvedInitialValue,
+    LateResolvedInitializer, Library, LibraryElementKind, ProgramDeclaration, RealLiteral,
+    ReferenceTarget, SimpleInitializer, SpecificationKind, StringType, TypeName, TypeReference,
+    VarDecl, VariableIdentifier, VariableType,
 };
 pub(crate) use dsl::configuration::{
     ConfigurationDeclaration, DataSourceKind, ProgramConfiguration, ResourceDeclaration,
@@ -91,6 +91,25 @@ pub(crate) fn parse_text_paren_string_length(source: &str) -> Library {
     let result = parse_program(source, &FileId::default(), &options);
     assert!(result.is_ok(), "Parse failed: {:?}", result.err());
     result.unwrap()
+}
+
+// ---------------------------------------------------------------------
+// CODESYS ST surface syntax (`REQ-CS-*`).
+// See specs/design/codesys-st-surface-syntax.md.
+// ---------------------------------------------------------------------
+
+pub(crate) fn opts_with_params_of() -> CompilerOptions {
+    CompilerOptions {
+        allow_params_of: true,
+        ..CompilerOptions::default()
+    }
+}
+
+pub(crate) fn opts_with_incomplete_array() -> CompilerOptions {
+    CompilerOptions {
+        allow_incomplete_array: true,
+        ..CompilerOptions::default()
+    }
 }
 
 /// The single (non-FB-call) statement in a program body.

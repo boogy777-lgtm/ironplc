@@ -166,6 +166,11 @@ impl<'a> Visitor<Infallible> for RuleConstantVarsInitialized<'a> {
                         );
                     }
                 }
+                // A PARAMS list is a parameter list, not a value that can be
+                // constant-initialized; `rule_var_decl_const_not_fb`-style
+                // rejection is not implemented yet, so treat it like the
+                // function-block kinds and leave the initializer unchecked.
+                InitialValueAssignmentKind::Params(_) => {}
                 InitialValueAssignmentKind::Reference(ref_init) => {
                     if ref_init.initial_value.is_none() {
                         self.diagnostics.push(

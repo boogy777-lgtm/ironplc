@@ -306,6 +306,44 @@ const FLAG_FIXTURES: &[FlagFixture] = &[
         prereqs: &[],
         source: "PROGRAM main\nVAR i : INT; END_VAR\nFOR i := 1 TO 3 DO\nCONTINUE;\nEND_FOR;\nEND_PROGRAM",
     },
+    // The CODESYS PARAMS(n) OF T parameter-list type. With the flag off,
+    // PARAMS demotes to an identifier and the declaration fails to parse.
+    FlagFixture {
+        key: "allow_params_of",
+        prereqs: &[],
+        source: "PROGRAM main\nVAR\np : PARAMS(3) OF INT;\nEND_VAR\nEND_PROGRAM",
+    },
+    // The CODESYS incomplete array type ARRAY[*] OF T. The grammar accepts
+    // the star in every dialect, so the flag is what turns it into a
+    // declaration (P4066 when off).
+    FlagFixture {
+        key: "allow_incomplete_array",
+        prereqs: &[],
+        source: "PROGRAM main\nVAR\ndata : ARRAY[*] OF INT;\nEND_VAR\nEND_PROGRAM",
+    },
+    // CODESYS escaped (backtick) identifiers: an ordinary identifier may not
+    // contain a space, so with the flag off the declaration is rejected
+    // (P4067).
+    FlagFixture {
+        key: "allow_escaped_identifiers",
+        prereqs: &[],
+        source: "PROGRAM main\nVAR\n`my var` : INT;\nEND_VAR\nEND_PROGRAM",
+    },
+    // CODESYS Unicode identifiers. The lexer accepts the letter in every
+    // dialect; the flag is what allows it (P4068 when off).
+    FlagFixture {
+        key: "allow_unicode_identifiers",
+        prereqs: &[],
+        source: "PROGRAM main\nVAR\ncaf\u{e9} : INT;\nEND_VAR\nEND_PROGRAM",
+    },
+    // The consecutive-underscore rule (CODESYS AllowMultipleUnderlines=false
+    // by default). The reserved leading `__` prefix is exempt, so the fixture
+    // puts the pair inside the name (P4069 when off).
+    FlagFixture {
+        key: "allow_multiple_underscores",
+        prereqs: &[],
+        source: "PROGRAM main\nVAR\nmy__var : INT;\nEND_VAR\nEND_PROGRAM",
+    },
 ];
 
 /// Builds an ed2 options object with the given flags enabled.

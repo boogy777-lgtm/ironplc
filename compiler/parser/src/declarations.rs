@@ -116,6 +116,7 @@ fn data_type_name(decl: &DataTypeDeclarationKind) -> Option<String> {
         DataTypeDeclarationKind::StructureInitialization(d) => Some(d.type_name.to_string()),
         DataTypeDeclarationKind::String(d) => Some(d.type_name.to_string()),
         DataTypeDeclarationKind::Reference(d) => Some(d.type_name.to_string()),
+        DataTypeDeclarationKind::Params(d) => Some(d.type_name.to_string()),
         DataTypeDeclarationKind::LateBound(d) => Some(d.data_type_name.to_string()),
     }
 }
@@ -130,6 +131,7 @@ fn data_type_span(decl: &DataTypeDeclarationKind) -> SourceSpan {
         DataTypeDeclarationKind::StructureInitialization(d) => d.type_name.span(),
         DataTypeDeclarationKind::String(d) => d.type_name.span(),
         DataTypeDeclarationKind::Reference(d) => d.type_name.span(),
+        DataTypeDeclarationKind::Params(d) => d.type_name.span(),
         DataTypeDeclarationKind::LateBound(d) => d.span(),
     }
 }

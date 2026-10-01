@@ -27,6 +27,9 @@ enum TypeDefinitionKind {
     Subrange,
     Simple,
     Array,
+    /// A `PARAMS(n) OF T` list, carrying the count and the element type it
+    /// was declared with so a variable of the named type keeps the spelling.
+    Params(IntegerRef, TypeName),
     Structure,
     StructureInitialization,
     String(StringType, IntegerRef),
@@ -100,6 +103,10 @@ impl Visitor<Diagnostic> for ScopedTable<'_, TypeName, TypeDefinitionKind> {
             DataTypeDeclarationKind::Array(node) => {
                 self.add_if_new(&node.type_name, TypeDefinitionKind::Array)
             }
+            DataTypeDeclarationKind::Params(node) => self.add_if_new(
+                &node.type_name,
+                TypeDefinitionKind::Params(node.spec.count.clone(), node.spec.type_name.clone()),
+            ),
             DataTypeDeclarationKind::Structure(node) => {
                 self.add_if_new(&node.type_name, TypeDefinitionKind::Structure)
             }
@@ -316,6 +323,15 @@ impl Fold<Diagnostic> for TypeResolver<'_> {
                                 initial_values: vec![],
                             },
                         )),
+                        // Like an array alias, a variable declared against a
+                        // named PARAMS type keeps the spelling it declared
+                        // with; the type resolver lowers it the same way.
+                        TypeDefinitionKind::Params(count, element) => {
+                            Ok(InitialValueAssignmentKind::Params(ParamsSpecification {
+                                count: count.clone(),
+                                type_name: element.clone(),
+                            }))
+                        }
                         TypeDefinitionKind::Reference(ref_target) => Ok(
                             InitialValueAssignmentKind::Reference(ReferenceInitializer {
                                 target: ref_target.clone(),

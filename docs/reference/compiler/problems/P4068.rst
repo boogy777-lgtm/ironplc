@@ -1,0 +1,41 @@
+=====
+P4068
+=====
+
+.. problem-summary:: P4068
+
+This error occurs when an identifier contains a letter outside the ASCII
+range without enabling it. CODESYS can accept such identifiers as a scanner
+option (``UnicodeIdentifiers``) that is off by default there as well, so
+``--allow-unicode-identifiers`` is opt-in and no dialect enables it.
+
+Example
+-------
+
+The following code will generate error P4068:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       café : INT;
+   END_VAR
+   END_PROGRAM
+
+The lexer recognizes the name in every dialect; this rule is what reports
+the error.
+
+To fix this error, transliterate the name to ASCII:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       cafe : INT;
+   END_VAR
+   END_PROGRAM
+
+Or enable Unicode identifiers:
+
+.. |flag| replace:: ``--allow-unicode-identifiers``
+.. include:: /includes/enabled-by-flag.rst

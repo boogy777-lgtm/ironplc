@@ -1,0 +1,41 @@
+=====
+P4067
+=====
+
+.. problem-summary:: P4067
+
+This error occurs when a source declares or references an escaped
+(backtick) identifier — `` `my name` `` — without enabling it. An escaped
+identifier may contain characters an ordinary IEC 61131-3 identifier cannot
+(a space, for example); it is a CODESYS extension (non-compliant
+identifiers), gated behind ``--allow-escaped-identifiers``.
+
+Example
+-------
+
+The following code will generate error P4067:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       `counter value` : INT;
+   END_VAR
+       `counter value` := 1;
+   END_PROGRAM
+
+To fix this error, use a name an ordinary identifier can have:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       counter_value : INT;
+   END_VAR
+       counter_value := 1;
+   END_PROGRAM
+
+Or enable escaped identifiers:
+
+.. |flag| replace:: ``--allow-escaped-identifiers``
+.. include:: /includes/enabled-by-flag.rst

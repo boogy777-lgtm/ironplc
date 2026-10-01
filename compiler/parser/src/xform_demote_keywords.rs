@@ -43,6 +43,8 @@ use crate::{
 ///   (Beckhoff TwinCAT/CODESYS extension).
 /// * **`CONTINUE`** — demoted unless `allow_continue` (standardized in
 ///   IEC 61131-3:2013).
+/// * **`PARAMS`** — demoted unless `allow_params_of` (CODESYS parameter-list
+///   type `PARAMS(n) OF T`; `params` is a common variable name).
 ///
 /// The context-sensitive `TIME` keyword is handled by [`apply_time`].
 pub fn apply(tokens: &mut [Token], options: &CompilerOptions) {
@@ -55,6 +57,7 @@ pub fn apply(tokens: &mut [Token], options: &CompilerOptions) {
     let demote_short_circuit = !options.allow_short_circuit_operators;
     let demote_persistent = !options.allow_persistent_var;
     let demote_continue = !options.allow_continue;
+    let demote_params = !options.allow_params_of;
 
     for tok in tokens.iter_mut() {
         let demote = match tok.token_type {
@@ -80,6 +83,7 @@ pub fn apply(tokens: &mut [Token], options: &CompilerOptions) {
             TokenType::AndThen | TokenType::OrElse => demote_short_circuit,
             TokenType::Persistent => demote_persistent,
             TokenType::Continue => demote_continue,
+            TokenType::Params => demote_params,
             _ => false,
         };
         if demote {

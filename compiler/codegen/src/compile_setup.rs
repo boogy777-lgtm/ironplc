@@ -201,6 +201,24 @@ pub(crate) fn assign_variables(
                         )?
                     }
                 }
+                InitialValueAssignmentKind::Params(params) => {
+                    // A PARAMS list is laid out as the array it lowers to:
+                    // `ARRAY[0 .. n-1] OF T` (see the analyzer's
+                    // `intermediates::params`).
+                    let spec = crate::compile_array::array_spec_from_params(
+                        params,
+                        &decl.identifier.span(),
+                    )?;
+                    crate::compile_array::register_array_variable(
+                        ctx,
+                        builder,
+                        id,
+                        index,
+                        &spec,
+                        &decl.identifier.span(),
+                    )?;
+                    (iec_type_tag::ARRAY, "PARAMS".into())
+                }
                 InitialValueAssignmentKind::Reference(ref_init) => {
                     crate::compile_reference::register_reference_variable(
                         ctx, builder, types, id, index, ref_init,

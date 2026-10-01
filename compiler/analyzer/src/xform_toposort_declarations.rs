@@ -152,6 +152,7 @@ fn data_type_name(decl: &DataTypeDeclarationKind) -> Id {
         DataTypeDeclarationKind::Subrange(d) => d.type_name.name.clone(),
         DataTypeDeclarationKind::Simple(d) => d.type_name.name.clone(),
         DataTypeDeclarationKind::Array(d) => d.type_name.name.clone(),
+        DataTypeDeclarationKind::Params(d) => d.type_name.name.clone(),
         DataTypeDeclarationKind::Structure(d) => d.type_name.name.clone(),
         DataTypeDeclarationKind::StructureInitialization(d) => d.type_name.name.clone(),
         DataTypeDeclarationKind::String(d) => d.type_name.name.clone(),
@@ -384,6 +385,19 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
         node.recurse_visit(self)
     }
 
+    fn visit_params_declaration(
+        &mut self,
+        node: &ParamsDeclaration,
+    ) -> Result<Self::Value, Diagnostic> {
+        // As for an array declaration: the element type must be ordered
+        // before the PARAMS type that names it.
+        let this = self.declarations.add_node(&node.type_name.name);
+        let depends_on = self.declarations.add_node(&node.spec.type_name.name);
+        self.declarations.graph.add_edge(depends_on, this, ());
+
+        node.recurse_visit(self)
+    }
+
     fn visit_structure_declaration(
         &mut self,
         node: &StructureDeclaration,
@@ -594,6 +608,14 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
                         self.declarations.graph.add_edge(to, from, ());
                     }
                     InitialValueAssignmentKind::Subrange(_) => {}
+                    // A PARAMS list depends on its element type for the same
+                    // reason an array does: the type must be in the
+                    // environment before the list that uses it is resolved.
+                    InitialValueAssignmentKind::Params(params) => {
+                        let from = self.declarations.add_node(from);
+                        let to = self.declarations.add_node(&params.type_name.name);
+                        self.declarations.graph.add_edge(to, from, ());
+                    }
                     InitialValueAssignmentKind::Structure(struct_init) => {
                         // Track dependency on the nested structure type
                         let from = self.declarations.add_node(from);

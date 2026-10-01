@@ -1405,6 +1405,8 @@ pub enum DataTypeDeclarationKind {
     String(StringDeclaration),
     /// Reference type declaration (REF_TO).
     Reference(ReferenceDeclaration),
+    /// CODESYS parameter-list type declaration (`PARAMS(n) OF T`).
+    Params(ParamsDeclaration),
     /// Data declaration that is ambiguous at parse time and must be
     /// resolved to a data type declaration after parsing all types.
     LateBound(LateBoundDeclaration),
@@ -1947,6 +1949,37 @@ impl ArraySpecificationKind {
     }
 }
 
+/// The CODESYS parameter-list type `PARAMS(n) OF T`.
+///
+/// The count names how many parameters the list holds and the type is the
+/// type every one of them has. The elements are addressed by index, like an
+/// array, so the type is provisionally lowered to an array with bounds
+/// `0 .. n-1` (see the analyzer's `xform_resolve_decl_types`); the variadic
+/// call-site semantics of a PARAMS parameter are not implemented yet.
+#[derive(Clone, Debug, PartialEq, Recurse)]
+pub struct ParamsSpecification {
+    /// The number of parameters, as an integer literal or a named constant.
+    pub count: IntegerRef,
+    /// The type of every parameter in the list.
+    pub type_name: TypeName,
+}
+
+/// A `PARAMS(n) OF T` type declaration, e.g.
+/// `TYPE MyParams : PARAMS(3) OF INT; END_TYPE`.
+#[derive(Clone, Debug, PartialEq, Recurse)]
+pub struct ParamsDeclaration {
+    /// The type name of this declaration. Other library elements refer to
+    /// this type with this name.
+    pub type_name: TypeName,
+    pub spec: ParamsSpecification,
+}
+
+impl Located for ParamsDeclaration {
+    fn span(&self) -> SourceSpan {
+        SourceSpan::join2(&self.type_name, &self.spec.type_name)
+    }
+}
+
 /// The element type of an array declaration.
 ///
 /// Distinguishes between named types (e.g. `INT`, `MY_TYPE`) and sized string
@@ -1975,15 +2008,58 @@ impl ArrayElementType {
     }
 }
 
+/// The index extent of an array declaration.
+///
+/// CODESYS allows the bounds to be left open with `*` instead of a range list
+/// (`arrayType = "ARRAY" "[" ("*" | indexRange {"," indexRange}) "]" "OF"
+/// dataType`). The two forms are alternatives in the grammar, so they are
+/// alternatives here: an `ARRAY[*]` declaration has *no* range list, which a
+/// `Vec` plus a separate "is incomplete" flag could not state without
+/// inventing an empty list that no source can spell.
+#[derive(Clone, Debug, PartialEq, Recurse)]
+pub enum ArrayBounds {
+    /// One or more explicit index ranges: `ARRAY[1..3, 0..2] OF INT`.
+    /// The list is never empty.
+    Ranges(Vec<Subrange>),
+    /// The incomplete array type `ARRAY[*] OF INT`: the element count is
+    /// supplied by the caller (CODESYS extension). Carries the span of the
+    /// `*` so a later pass can point at the spelling that decided the bounds.
+    Incomplete(SourceSpan),
+}
+
 #[derive(Clone, Debug, PartialEq, Recurse)]
 pub struct ArraySubranges {
-    pub ranges: Vec<Subrange>,
+    pub bounds: ArrayBounds,
     pub type_name: ArrayElementType,
     /// The reference syntax of the element type, if any. `None` for a
     /// non-reference element; `Some(_)` when the element is wrapped in a
     /// reference keyword (`REF_TO` or `REFERENCE TO`), tagged with which one.
     #[recurse(ignore)]
     pub ref_to: Option<RefSyntax>,
+}
+
+impl ArraySubranges {
+    /// The explicit index ranges, or an empty slice for the incomplete form.
+    ///
+    /// Callers that do not care about the difference (bounds validation, code
+    /// generation over a concrete array) read the ranges through here; a
+    /// caller that must treat the incomplete form specially matches on
+    /// [`Self::bounds`].
+    pub fn ranges(&self) -> &[Subrange] {
+        match &self.bounds {
+            ArrayBounds::Ranges(ranges) => ranges,
+            ArrayBounds::Incomplete(_) => &[],
+        }
+    }
+
+    /// The span of the `*` for the incomplete `ARRAY[*]` form, if this is
+    /// that form.
+    pub fn incomplete_span(&self) -> Option<&SourceSpan> {
+        match &self.bounds {
+            ArrayBounds::Ranges(_) => None,
+            ArrayBounds::Incomplete(span) => Some(span),
+        }
+    }
 }
 
 /// Subrange of an array.
@@ -2569,6 +2645,9 @@ pub enum InitialValueAssignmentKind {
     Subrange(SubrangeSpecificationKind),
     Structure(StructureInitializationDeclaration),
     Array(ArrayInitialValueAssignment),
+    /// CODESYS parameter-list type (`PARAMS(n) OF T`); see
+    /// [`ParamsSpecification`].
+    Params(ParamsSpecification),
     /// Reference type initializer (REF_TO).
     Reference(ReferenceInitializer),
     /// A declaration whose type is a user-defined name the parser cannot
@@ -2656,6 +2735,7 @@ impl InitialValueAssignmentKind {
                 }
             }
             InitialValueAssignmentKind::Reference(_) => TypeReference::Inline,
+            InitialValueAssignmentKind::Params(_) => TypeReference::Inline,
             InitialValueAssignmentKind::LateResolvedType(late) => {
                 TypeReference::Named(late.type_name.clone())
             }
@@ -2683,6 +2763,7 @@ impl InitialValueAssignmentKind {
             | InitialValueAssignmentKind::FunctionBlock(_)
             | InitialValueAssignmentKind::FunctionBlockCall(_)
             | InitialValueAssignmentKind::Subrange(_)
+            | InitialValueAssignmentKind::Params(_)
             | InitialValueAssignmentKind::LateResolvedType(_)
             | InitialValueAssignmentKind::SimpleExpr(_) => false,
         }

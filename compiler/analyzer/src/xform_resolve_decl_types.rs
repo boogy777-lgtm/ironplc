@@ -79,6 +79,14 @@ impl DeclTypeResolver<'_> {
                     array::IntermediateResult::Alias(alias) => return env.id_of(&alias),
                 }
             }
+            // A PARAMS list is lowered to the array of the same element type
+            // (see `intermediates::params`).
+            InitialValueAssignmentKind::Params(p) => {
+                match crate::intermediates::params::try_from(name, p, env).ok()? {
+                    array::IntermediateResult::Type(attributes) => attributes,
+                    array::IntermediateResult::Alias(alias) => return env.id_of(&alias),
+                }
+            }
             // A reference type is one type however often it is spelled
             // (see `TypeEnvironment::reference_to`).
             InitialValueAssignmentKind::Reference(r) => {

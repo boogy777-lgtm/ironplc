@@ -5,10 +5,10 @@
 
 use ironplc_dsl::{
     common::{
-        next_block_id, ArrayDeclaration, ArrayElementType, ArraySubranges, Boolean, BooleanLiteral,
-        ConstantKind, DataTypeDeclarationKind, DeclarationQualifier, ElementaryTypeName,
-        EnumeratedSpecificationInit, EnumeratedSpecificationValues, EnumeratedValue,
-        EnumerationDeclaration, FunctionBlockBodyKind, FunctionBlockDeclaration,
+        next_block_id, ArrayBounds, ArrayDeclaration, ArrayElementType, ArraySubranges, Boolean,
+        BooleanLiteral, ConstantKind, DataTypeDeclarationKind, DeclarationQualifier,
+        ElementaryTypeName, EnumeratedSpecificationInit, EnumeratedSpecificationValues,
+        EnumeratedValue, EnumerationDeclaration, FunctionBlockBodyKind, FunctionBlockDeclaration,
         FunctionDeclaration, FunctionReturnType, InitialValueAssignmentKind, Integer, Library,
         LibraryElementKind, ProgramDeclaration, SignedInteger, SignedIntegerRef, SimpleDeclaration,
         SimpleInitializer, SpecificationKind, StructureDeclaration, StructureElementDeclaration,
@@ -164,7 +164,7 @@ fn transform_array_decl(
     Ok(DataTypeDeclarationKind::Array(ArrayDeclaration {
         type_name: type_name.clone(),
         spec: SpecificationKind::Inline(ArraySubranges {
-            ranges: subranges,
+            bounds: ArrayBounds::Ranges(subranges),
             type_name: ArrayElementType::Named(base_type_name),
             ref_to: None,
         }),

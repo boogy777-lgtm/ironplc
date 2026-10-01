@@ -293,6 +293,34 @@ struct FileArgs {
     #[arg(long)]
     allow_continue: bool,
 
+    /// Allow the `PARAMS(n) OF T` parameter-list data type. A CODESYS
+    /// extension, not part of the IEC 61131-3 standard.
+    #[arg(long)]
+    allow_params_of: bool,
+
+    /// Allow the incomplete array type `ARRAY[*] OF T`, whose bounds the
+    /// caller supplies. A CODESYS extension, not part of the IEC 61131-3
+    /// standard.
+    #[arg(long)]
+    allow_incomplete_array: bool,
+
+    /// Allow backtick-escaped identifiers such as `` `my name` ``. A CODESYS
+    /// extension (non-compliant identifiers), not part of the IEC 61131-3
+    /// standard.
+    #[arg(long)]
+    allow_escaped_identifiers: bool,
+
+    /// Allow identifiers with letters outside the ASCII range. An extension
+    /// (a CODESYS scanner option, off there by default too).
+    #[arg(long)]
+    allow_unicode_identifiers: bool,
+
+    /// Allow consecutive underscores inside an identifier, e.g. `my__var`.
+    /// CODESYS/TwinCAT reject them; the leading `__` compiler prefix is
+    /// always reserved and always allowed.
+    #[arg(long)]
+    allow_multiple_underscores: bool,
+
     /// What STRING_TO_<numeric> treats as convertible when the string has
     /// non-numeric characters. A behavior policy: the dialect selects an
     /// alternative and this flag replaces it.
@@ -353,6 +381,11 @@ impl FileArgs {
         options.allow_enum_explicit_values |= self.allow_enum_explicit_values;
         options.allow_enum_base_type |= self.allow_enum_base_type;
         options.allow_continue |= self.allow_continue;
+        options.allow_params_of |= self.allow_params_of;
+        options.allow_incomplete_array |= self.allow_incomplete_array;
+        options.allow_escaped_identifiers |= self.allow_escaped_identifiers;
+        options.allow_unicode_identifiers |= self.allow_unicode_identifiers;
+        options.allow_multiple_underscores |= self.allow_multiple_underscores;
         options
     }
 }
