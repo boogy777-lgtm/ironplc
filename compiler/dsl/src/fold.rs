@@ -182,11 +182,16 @@ pub trait Fold<E> {
     dispatch!(ReferenceInitializer);
     dispatch!(ReferenceInitialValue);
 
+    dispatch!(ParamsSpecification);
+    dispatch!(ParamsDeclaration);
+
     dispatch!(ArraySpecificationKind);
 
     dispatch!(ArrayElementType);
 
     dispatch!(ArraySubranges);
+
+    dispatch!(ArrayBounds);
 
     // 2.4.2.1
     dispatch!(Subrange);

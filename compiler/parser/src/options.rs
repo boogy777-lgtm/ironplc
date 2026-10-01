@@ -564,6 +564,31 @@ define_compiler_options! {
     [Rusty, Codesys, TwinCat],
     allow_bit_type,
 
+    "Allow the PARAMS(n) OF T parameter-list data type (CODESYS extension)",
+    "--allow-params-of",
+    [Codesys, TwinCat],
+    allow_params_of,
+
+    "Allow the incomplete array type ARRAY[*] OF T, whose bounds the caller supplies (CODESYS extension)",
+    "--allow-incomplete-array",
+    [Codesys, TwinCat],
+    allow_incomplete_array,
+
+    "Allow backtick-escaped identifiers such as `my name` (CODESYS non-compliant identifiers)",
+    "--allow-escaped-identifiers",
+    [Codesys, TwinCat],
+    allow_escaped_identifiers,
+
+    "Allow identifiers with letters outside the ASCII range, e.g. cafe with an accent (CODESYS Unicode identifiers option, off by default there too)",
+    "--allow-unicode-identifiers",
+    [],
+    allow_unicode_identifiers,
+
+    "Allow consecutive underscores inside an identifier, e.g. my__var (CODESYS/TwinCAT reject them; the leading __ compiler prefix is always reserved and always allowed)",
+    "--allow-multiple-underscores",
+    [Iec61131_3Ed3, Rusty],
+    allow_multiple_underscores,
+
     policies {
         "What STRING_TO_<numeric> treats as convertible when the string has non-numeric characters",
         "--policy-string-to-num-non-numeric",

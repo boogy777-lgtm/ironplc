@@ -1,5 +1,9 @@
 fn main() {
     ironplc_spec_requirements_gen::generate(&[
+        // CODESYS ST surface syntax (`REQ-CS-*`): the `|` operator, the
+        // incomplete array type, `PARAMS(n) OF T`, identifier spellings and
+        // the special operators.
+        "codesys-st-surface-syntax.md",
         "reference-to-twincat.md",
         "adr-and-pointer-to.md",
         // Partial-access syntax (`REQ-PAB-parser-*`): tokens, grammar, AST and

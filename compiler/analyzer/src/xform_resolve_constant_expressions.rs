@@ -333,7 +333,7 @@ mod tests {
     fn get_array_subranges(var: &VarDecl) -> &[Subrange] {
         let arr = cast!(&var.initializer, InitialValueAssignmentKind::Array);
         let sub = cast!(&arr.spec, ArraySpecificationKind::Inline);
-        &sub.ranges
+        sub.ranges()
     }
 
     fn signed_integer_ref_value(r: &SignedIntegerRef) -> (bool, u128) {

@@ -4,6 +4,7 @@ pub mod enumeration;
 pub mod global_vars;
 pub mod inherited_fields;
 pub mod operator_function_form;
+pub mod params;
 pub mod stdlib_function;
 pub mod stdlib_function_block;
 pub mod stdlib_time_function;

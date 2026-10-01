@@ -235,6 +235,19 @@ END_CONFIGURATION"
     verbatim,
     opts_with_paren_string_length
 )]
+// The CODESYS surface syntax (`REQ-CS-*`): the `PARAMS(n) OF T` spec and the
+// incomplete `ARRAY[*]` form introduce `_` gaps of their own, so each earns a
+// row here as the guide asks.
+#[case::params_of(
+    "TYPE A·:·PARAMS·(·3·)·OF INT; END_TYPE",
+    verbatim,
+    opts_with_params_of
+)]
+#[case::incomplete_array(
+    "TYPE A·:·ARRAY·[·*·]·OF INT; END_TYPE",
+    verbatim,
+    opts_with_incomplete_array
+)]
 #[case::enumeration_values(
     "TYPE E : (·RED·,·GREEN·); END_TYPE",
     verbatim,

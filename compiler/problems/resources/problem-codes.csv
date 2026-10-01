@@ -140,3 +140,7 @@ P0023,PragmaIfUnmatched,{IF} pragma has no matching {END_IF} or a branch pragma 
 P0024,PragmaValueExpected,Expected a pragma condition such as defined(name)
 P0027,JumpDestinationInvalid,JMP destination is not a label defined in this body
 P0042,DuplicateLabelDefinition,Label name is defined more than once in the same body
+P4067,EscapedIdentifierNotAllowed,Escaped (backtick) identifier requires choosing a dialect or --allow-escaped-identifiers flag
+P4068,UnicodeIdentifierNotAllowed,Identifier with non-ASCII letters requires choosing a dialect or --allow-unicode-identifiers flag
+P4069,MultipleUnderscoresNotAllowed,Identifier with consecutive underscores requires choosing a dialect or --allow-multiple-underscores flag
+P4070,IncompleteArrayNotAllowed,Incomplete array type ARRAY[*] requires choosing a dialect or --allow-incomplete-array flag

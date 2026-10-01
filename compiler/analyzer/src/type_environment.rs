@@ -849,7 +849,8 @@ mod tests {
         type_category::TypeCategory,
     };
     use ironplc_dsl::common::{
-        ArrayElementType, ArraySubranges, Integer, SignedInteger, SignedIntegerRef, Subrange,
+        ArrayBounds, ArrayElementType, ArraySubranges, Integer, SignedInteger, SignedIntegerRef,
+        Subrange,
     };
     use ironplc_dsl::core::SourceSpan;
 
@@ -1462,7 +1463,7 @@ mod tests {
     }
     fn subranges(element: &str) -> ArraySubranges {
         ArraySubranges {
-            ranges: vec![Subrange {
+            bounds: ArrayBounds::Ranges(vec![Subrange {
                 start: SignedIntegerRef::Literal(SignedInteger {
                     value: Integer {
                         span: SourceSpan::default(),
@@ -1477,7 +1478,7 @@ mod tests {
                     },
                     is_neg: false,
                 }),
-            }],
+            }]),
             type_name: ArrayElementType::Named(TypeName::from(element)),
             ref_to: None,
         }

@@ -121,6 +121,8 @@ impl DeclarationResolver<'_> {
             InitialValueAssignmentKind::Subrange(_) => VariableType::Subrange,
             InitialValueAssignmentKind::Structure(_) => VariableType::Structure,
             InitialValueAssignmentKind::Array(_) => VariableType::Array,
+            // A PARAMS list is indexed like an array.
+            InitialValueAssignmentKind::Params(_) => VariableType::Array,
             InitialValueAssignmentKind::Reference(_) => VariableType::Reference,
             InitialValueAssignmentKind::LateResolvedType(LateResolvedInitializer {
                 type_name,

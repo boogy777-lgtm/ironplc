@@ -8,7 +8,9 @@ pub mod options;
 mod parser;
 mod preprocessor;
 mod rule_no_empty_var_blocks;
+mod rule_token_identifier;
 mod rule_token_no_c_style_comment;
+mod rule_token_no_incomplete_array;
 mod rule_token_no_paren_string_length;
 mod rule_token_no_partial_access_syntax;
 mod rule_token_string_escape;
@@ -18,6 +20,7 @@ mod xform_collapse_pragmas;
 mod xform_demote_keywords;
 mod xform_nested_comments;
 mod xform_pragma_if;
+mod xform_promote_special_operators;
 mod xform_split_duration_units;
 mod xform_statement_labels;
 mod xform_tokens;
@@ -81,6 +84,7 @@ pub fn tokenize_program(
     let mut tokens = insert_keyword_statement_terminators(tokens, file_id, options);
     xform_statement_labels::apply(&mut tokens, options);
     xform_demote_keywords::apply(&mut tokens, options);
+    xform_promote_special_operators::apply(&mut tokens);
     let result = check_tokens(&tokens, options);
     match result {
         Ok(_) => {}
@@ -98,6 +102,8 @@ fn check_tokens(tokens: &[Token], options: &CompilerOptions) -> Result<(), Vec<D
         rule_no_empty_var_blocks::apply,
         rule_token_no_partial_access_syntax::apply,
         rule_token_no_paren_string_length::apply,
+        rule_token_no_incomplete_array::apply,
+        rule_token_identifier::apply,
         rule_token_string_escape::apply,
     ];
 

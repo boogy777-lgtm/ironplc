@@ -1,5 +1,5 @@
 pub(crate) use dsl::common::{
-    next_block_id, ArrayElementType, Boolean, CharacterStringLiteral, ConstantKind,
+    next_block_id, ArrayBounds, ArrayElementType, Boolean, CharacterStringLiteral, ConstantKind,
     DataTypeDeclarationKind, DeclarationQualifier, EnumeratedSpecificationInit,
     EnumerationDeclaration, FunctionBlockBodyKind, FunctionBlockDeclaration, FunctionDeclaration,
     FunctionReturnType, InitialValueAssignmentKind, LateResolvedInitialValue,
@@ -102,6 +102,18 @@ pub(crate) fn opts_with_try_catch() -> CompilerOptions {
     }
 }
 
+// ---------------------------------------------------------------------
+// CODESYS ST surface syntax (`REQ-CS-*`).
+// See specs/design/codesys-st-surface-syntax.md.
+// ---------------------------------------------------------------------
+
+pub(crate) fn opts_with_params_of() -> CompilerOptions {
+    CompilerOptions {
+        allow_params_of: true,
+        ..CompilerOptions::default()
+    }
+}
+
 /// Options enabling the conditional-compilation pragmas: `allow_pragmas`
 /// collapses `{ ... }` into one token, and `allow_pragma_if` evaluates the
 /// `{IF}` family over it.
@@ -117,6 +129,13 @@ pub(crate) fn opts_with_pragma_if() -> CompilerOptions {
 pub(crate) fn opts_with_nested_comments() -> CompilerOptions {
     CompilerOptions {
         allow_nested_comments: true,
+        ..CompilerOptions::default()
+    }
+}
+
+pub(crate) fn opts_with_incomplete_array() -> CompilerOptions {
+    CompilerOptions {
+        allow_incomplete_array: true,
         ..CompilerOptions::default()
     }
 }

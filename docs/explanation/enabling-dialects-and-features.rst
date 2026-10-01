@@ -39,7 +39,8 @@ Supported Dialects
    **Enables:** ``--allow-long-time-types``, ``--allow-ref-to`` (the
    Edition 3 keywords), ``--allow-partial-access-syntax``,
    ``--allow-fb-inheritance``, ``--allow-enum-explicit-values``,
-   ``--allow-continue``, and ``--allow-union-type``.
+   ``--allow-continue``, ``--allow-union-type``, and
+   ``--allow-multiple-underscores``.
 
    **Selects:** the default of every behavior policy
    (``--policy-string-to-num-non-numeric reject``,
@@ -67,7 +68,7 @@ Supported Dialects
    ``--allow-struct-initializer-expressions``,
    ``--allow-fb-inheritance``, ``--allow-enum-explicit-values``,
    ``--allow-enum-base-type``, ``--allow-continue``, ``--allow-union-type``,
-   and ``--allow-bit-type``.
+   ``--allow-bit-type``, and ``--allow-multiple-underscores``.
 
    **Selects:** ``--policy-string-to-num-non-numeric reject`` and
    ``--policy-string-to-num-failure zero`` — RuSTy rejects a string with
@@ -105,8 +106,9 @@ Supported Dialects
    ``--allow-enum-base-type``, ``--allow-continue``,
    ``--allow-union-type``, ``--allow-var-stat``, ``--allow-var-inst``,
    ``--allow-var-generic``, ``--allow-namespace``,
-   ``--allow-begin-implementation``, ``--allow-bit-type``, and
-   ``--allow-try-catch``.
+   ``--allow-begin-implementation``, ``--allow-bit-type``,
+   ``--allow-try-catch``, ``--allow-params-of``,
+   ``--allow-incomplete-array``, and ``--allow-escaped-identifiers``.
 
    **Selects:** ``--policy-string-to-num-non-numeric ignore-trailing`` and
    ``--policy-string-to-num-failure zero`` — CODESYS stops parsing at the
@@ -151,8 +153,9 @@ Supported Dialects
    ``--allow-fb-inheritance``, ``--allow-enum-explicit-values``,
    ``--allow-enum-base-type``, ``--allow-continue``,
    ``--allow-union-type``, ``--allow-var-stat``, ``--allow-var-inst``,
-   ``--allow-var-generic``, ``--allow-namespace``, ``--allow-bit-type``, and
-   ``--allow-try-catch``.
+   ``--allow-var-generic``, ``--allow-namespace``, ``--allow-bit-type``,
+   ``--allow-try-catch``, ``--allow-params-of``,
+   ``--allow-incomplete-array``, and ``--allow-escaped-identifiers``.
 
    **Selects:** ``--policy-string-to-num-non-numeric ignore-trailing`` and
    ``--policy-string-to-num-failure zero``, as ``codesys``.
@@ -547,6 +550,38 @@ which flags a dialect already enables by default, see `Supported Dialects`_.
    stores its value in the innermost enclosing ``__CATCH (e)`` variable and
    jumps to that clause; one with no enclosing ``__CATCH`` in the same body
    produces :doc:`P4066 </reference/compiler/problems/P4066>`.
+
+``--allow-params-of``
+   Allow the CODESYS parameter-list data type ``PARAMS(n) OF T``, a list of
+   ``n`` parameters of type ``T``. The elements are addressed by index like
+   an array. Without this flag, ``PARAMS`` is an ordinary identifier, so
+   ``params`` remains usable as a variable name.
+
+``--allow-incomplete-array``
+   Allow the CODESYS incomplete array type ``ARRAY[*] OF T``: the ``*``
+   stands in for the index range list and the caller supplies the bounds.
+   IEC 61131-3 declares the range list, so the form is an extension. Without
+   this flag it produces :doc:`P4070 </reference/compiler/problems/P4070>`.
+
+``--allow-escaped-identifiers``
+   Allow escaped (backtick) identifiers — ``\`my name\``` — which may contain
+   characters an ordinary identifier cannot. A CODESYS extension
+   (non-compliant identifiers). Without this flag an escaped identifier
+   produces :doc:`P4067 </reference/compiler/problems/P4067>`.
+
+``--allow-unicode-identifiers``
+   Allow identifiers with letters outside the ASCII range. A CODESYS scanner
+   option that is off there by default as well, so no dialect enables it.
+   Without this flag a non-ASCII letter in an identifier produces
+   :doc:`P4068 </reference/compiler/problems/P4068>`.
+
+``--allow-multiple-underscores``
+   Allow consecutive underscores inside an identifier, e.g. ``my__var``.
+   CODESYS and TwinCAT reject them by default
+   (``AllowMultipleUnderlines=false``). The leading ``__`` is the compiler's
+   reserved namespace (``__SYSTEM_UP_TIME``, ``__TRUNC``, ``__NEW``) and is
+   always allowed. Without this flag an inner double underscore produces
+   :doc:`P4069 </reference/compiler/problems/P4069>`.
 
 Pass the flag when running :program:`ironplcc`:
 

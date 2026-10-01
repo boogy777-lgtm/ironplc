@@ -132,9 +132,22 @@ pub enum TokenType {
     DoubleByteString,
 
     // B.1.1 Letters, digits and identifier
-    // Lower priority than any keyword.
-    #[regex(r"[A-Za-z_][A-Za-z0-9_]*", priority = 1)]
+    // Lower priority than any keyword. Letters outside ASCII are accepted by
+    // the lexer in every dialect and rejected by `rule_token_identifier`
+    // unless `allow_unicode_identifiers` is set -- the same
+    // recognize-then-gate pattern the partial-access syntax uses. `\p{L}` is
+    // the Unicode letter category, the closest match to the reference
+    // scanner's `char.IsLetter`.
+    #[regex(r"[\p{L}_][\p{L}\p{Nd}_]*", priority = 1)]
     Identifier,
+
+    // CODESYS escaped (non-compliant) identifier: a backtick-delimited name
+    // that may contain characters an ordinary identifier cannot, e.g.
+    // `my var`. Gated by `allow_escaped_identifiers` via
+    // `rule_token_identifier`; the backticks stay part of the token text, so
+    // the declaration and every reference spell the name the same way.
+    #[regex(r"`[^`\r\n]*`")]
+    EscapedIdentifier,
 
     // B.1.2 Constants
     #[regex(r"16#[0-9A-F][0-9A-F_]*")]
@@ -165,6 +178,12 @@ pub enum TokenType {
     Array,
     #[token("OF", ignore(case))]
     Of,
+
+    // CODESYS parameter-list type `PARAMS(n) OF T`. `params` is a common
+    // variable name, so the token is demoted to Identifier unless
+    // `allow_params_of` -- see xform_demote_keywords.rs.
+    #[token("PARAMS", ignore(case))]
+    Params,
 
     #[token("AT", ignore(case))]
     At,
@@ -558,7 +577,12 @@ pub enum TokenType {
     PartialAccessLWord,
 
     // Expressions
+    // `|` is the CODESYS/TwinCAT symbol spelling of OR, as `&` is of AND
+    // (both appear in `tables/operator_symbols.csv` with the StructuredText
+    // flag). Like `&`, it needs no dialect gate: it cannot be confused with
+    // an identifier or any other token.
     #[token("OR", ignore(case))]
+    #[token("|")]
     Or,
     #[token("XOR", ignore(case))]
     Xor,
@@ -572,6 +596,25 @@ pub enum TokenType {
     AndThen,
     #[token("OR_ELSE", ignore(case))]
     OrElse,
+
+    // The ST-visible CODESYS special operators (`tables/special_operators.csv`,
+    // flags `Operator|AllLanguages`). The lexer never produces these: the
+    // reference scanner reads a whole identifier first and only then looks it
+    // up in its operator table, so `__XADD_2` stays an ordinary identifier.
+    // `xform_promote_special_operators` reproduces that lookup between lexing
+    // and parsing, which is why these variants carry no logos pattern.
+    //
+    // The remaining ST-visible names are not tokens: `__SYSTEM` and `__POOL`
+    // already parse as qualified names (`__SYSTEM.x` is a structured
+    // variable), and `__QUERYINTERFACE` / `__QUERYPOINTER` /
+    // `__COMPARE_AND_SWAP` / `__MEMORYBARRIER` / `__CHECKLICENSE*` are named
+    // calls with no dedicated syntax, so they parse as ordinary calls.
+    SpecialNew,
+    SpecialDelete,
+    SpecialIsValidRef,
+    SpecialTypeOf,
+    SpecialCurrentTask,
+    SpecialXAdd,
     #[token("=")]
     Equal,
     #[token("<>")]
@@ -630,6 +673,7 @@ impl TokenType {
             TokenType::SingleByteString => "'...' (single byte string)",
             TokenType::DoubleByteString => "\"...\" (double byte string)",
             TokenType::Identifier => "(identifier)",
+            TokenType::EscapedIdentifier => "'`...`' (escaped identifier)",
             TokenType::HexDigits => "16#[0-9A-F][0-9A-F_]* (hexadecimal bit string)",
             TokenType::OctDigits => "8#[0-7][0-7]* (octal bit string)",
             TokenType::BinDigits => "2#[0-1][0-1]* (binary bit string)",
@@ -640,6 +684,7 @@ impl TokenType {
             TokenType::EndAction => "'END_ACTION'",
             TokenType::Array => "'ARRAY'",
             TokenType::Of => "'OF'",
+            TokenType::Params => "'PARAMS'",
             TokenType::At => "'AT'",
             TokenType::Case => "'CASE'",
             TokenType::Else => "'ELSE'",
@@ -786,11 +831,17 @@ impl TokenType {
             TokenType::PartialAccessWord => "'%W<n>' (partial-access word selector)",
             TokenType::PartialAccessDWord => "'%D<n>' (partial-access dword selector)",
             TokenType::PartialAccessLWord => "'%L<n>' (partial-access lword selector)",
-            TokenType::Or => "'OR'",
+            TokenType::Or => "'OR' | '|'",
             TokenType::Xor => "'XOR'",
             TokenType::And => "'AND' | '&'",
             TokenType::AndThen => "'AND_THEN'",
             TokenType::OrElse => "'OR_ELSE'",
+            TokenType::SpecialNew => "'__NEW'",
+            TokenType::SpecialDelete => "'__DELETE'",
+            TokenType::SpecialIsValidRef => "'__ISVALIDREF'",
+            TokenType::SpecialTypeOf => "'__TYPEOF'",
+            TokenType::SpecialCurrentTask => "'__CURRENTTASK'",
+            TokenType::SpecialXAdd => "'__XADD'",
             TokenType::Equal => "'='",
             TokenType::NotEqual => "'<>'",
             TokenType::Less => "'<'",
@@ -882,6 +933,7 @@ mod tests {
             (SingleByteString, "'abc'"),
             (DoubleByteString, "\"abc\""),
             (Identifier, "ident"),
+            (EscapedIdentifier, "`my var`"),
             (HexDigits, "16#A1"),
             (OctDigits, "8#77"),
             (BinDigits, "2#01"),
@@ -892,6 +944,7 @@ mod tests {
             (EndAction, "END_ACTION"),
             (Array, "ARRAY"),
             (Of, "OF"),
+            (Params, "PARAMS"),
             (At, "AT"),
             (Case, "CASE"),
             (Else, "ELSE"),
@@ -1012,10 +1065,17 @@ mod tests {
             (DirectAddress, "%I0.0"),
             (PartialAccessBit, "%X0"),
             (Or, "OR"),
+            (Or, "|"),
             (Xor, "XOR"),
             (And, "AND"),
             (AndThen, "AND_THEN"),
             (OrElse, "OR_ELSE"),
+            (SpecialNew, "__NEW"),
+            (SpecialDelete, "__DELETE"),
+            (SpecialIsValidRef, "__ISVALIDREF"),
+            (SpecialTypeOf, "__TYPEOF"),
+            (SpecialCurrentTask, "__CURRENTTASK"),
+            (SpecialXAdd, "__XADD"),
             (Equal, "="),
             (NotEqual, "<>"),
             (Less, "<"),

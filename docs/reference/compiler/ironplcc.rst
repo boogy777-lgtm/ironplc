@@ -381,6 +381,39 @@ Options
    ``__CATCH`` clause produces
    :doc:`P4066 </reference/compiler/problems/P4066>`.
 
+``--allow-params-of``
+   Allow the CODESYS parameter-list data type ``PARAMS(n) OF T``, a list of
+   ``n`` parameters of type ``T`` whose elements are addressed by index like
+   an array. Without this flag ``PARAMS`` is an ordinary identifier, so
+   ``params`` remains usable as a variable name.
+
+``--allow-incomplete-array``
+   Allow the CODESYS incomplete array type ``ARRAY[*] OF T``, whose bounds
+   the caller of the POU supplies. Produces
+   :doc:`P4070 </reference/compiler/problems/P4070>` when used without this
+   flag.
+
+``--allow-escaped-identifiers``
+   Allow escaped (backtick) identifiers such as ``\`my name\```, which may
+   contain characters an ordinary identifier cannot. A CODESYS extension
+   (non-compliant identifiers). Produces
+   :doc:`P4067 </reference/compiler/problems/P4067>` when used without this
+   flag.
+
+``--allow-unicode-identifiers``
+   Allow identifiers with letters outside the ASCII range. A CODESYS scanner
+   option that is off there by default as well, so no dialect enables it.
+   Produces :doc:`P4068 </reference/compiler/problems/P4068>` when used
+   without this flag.
+
+``--allow-multiple-underscores``
+   Allow consecutive underscores inside an identifier, e.g. ``my__var``.
+   CODESYS and TwinCAT reject them by default
+   (``AllowMultipleUnderlines=false``). The leading ``__`` is the compiler's
+   reserved namespace (``__SYSTEM_UP_TIME``, ``__TRUNC``) and is always
+   allowed. Produces :doc:`P4069 </reference/compiler/problems/P4069>` when
+   used without this flag.
+
 ``--policy-string-to-num-non-numeric`` *ALTERNATIVE*
    Select what ``STRING_TO_<numeric>`` treats as convertible when the string
    has non-numeric characters: ``reject`` (the whole string must be a

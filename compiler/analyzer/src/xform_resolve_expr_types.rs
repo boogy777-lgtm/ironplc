@@ -226,6 +226,9 @@ impl ExprTypeResolver<'_> {
                 SpecificationKind::Named(tn) => Some(tn.clone()),
                 SpecificationKind::Inline(_) => None,
             },
+            // A PARAMS list has no type name of its own; its elements are
+            // addressed directly (see `declared_element_type_name`).
+            InitialValueAssignmentKind::Params(_) => None,
             // An inline array target has no single type name.
             InitialValueAssignmentKind::Reference(ref_init) => ref_init.target.type_name().cloned(),
             InitialValueAssignmentKind::LateResolvedType(LateResolvedInitializer {
@@ -272,6 +275,10 @@ impl ExprTypeResolver<'_> {
                 type_name: tn,
                 ..
             }) => self.element_type_from_named_array(tn),
+            // A PARAMS list is indexed like an array of its element type.
+            InitialValueAssignmentKind::Params(p) => {
+                Some(self.resolve_element_type_name(&ArrayElementType::Named(p.type_name.clone())))
+            }
             _ => None,
         }
     }

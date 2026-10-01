@@ -1,0 +1,7 @@
+TYPE DataBuffer : ARRAY[*] OF INT; END_TYPE
+
+PROGRAM main
+VAR
+    data : ARRAY[*] OF BYTE;
+END_VAR
+END_PROGRAM

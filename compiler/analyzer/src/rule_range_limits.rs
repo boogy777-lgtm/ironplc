@@ -183,7 +183,7 @@ impl Visitor<Infallible> for RuleRangeLimits {
     }
 
     fn visit_array_subranges(&mut self, node: &ArraySubranges) -> Result<(), Infallible> {
-        for range in &node.ranges {
+        for range in node.ranges() {
             self.check(range, RangeContext::ArrayDimension);
         }
         node.recurse_visit(self)

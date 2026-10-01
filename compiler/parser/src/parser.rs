@@ -439,10 +439,19 @@ parser! {
     }
 
     // B.1.1 Letters, digits and identifier
-    rule identifier() -> Id = i:tok(TokenType::Identifier) {
-      Id::from(i.text.as_str())
-        .with_position(i.span.clone())
-    }
+    // An escaped identifier keeps its backticks in the name: the declaration
+    // and every reference spell the name the same way, and the renderer can
+    // write the name back verbatim. Gated by `allow_escaped_identifiers` in
+    // `rule_token_identifier`.
+    rule identifier() -> Id =
+      i:tok(TokenType::Identifier) {
+        Id::from(i.text.as_str())
+          .with_position(i.span.clone())
+      }
+      / e:tok(TokenType::EscapedIdentifier) {
+        Id::from(e.text.as_str())
+          .with_position(e.span.clone())
+      }
     // We want to be more flexible on identifiers for variable names
     // because it is common to use variable names that are reserved names
     rule variable_identifier() -> Id = identifier() / t:tok(TokenType::Step) { Id::from(t.text.as_str()) } / t:tok(TokenType::On) { Id::from(t.text.as_str()) } / t:tok(TokenType::REdge) { Id::from(t.text.as_str()) } / t:tok(TokenType::FEdge) { Id::from(t.text.as_str()) }
@@ -726,6 +735,7 @@ parser! {
       s:string_type_declaration() { DataTypeDeclarationKind::String(s) }
       / s:string_type_declaration__parenthesis() { DataTypeDeclarationKind::String(s) }
       / a:array_type_declaration() { DataTypeDeclarationKind::Array(a) }
+      / p:params_type_declaration() { p }
       / subrange:subrange_type_declaration__with_range() { DataTypeDeclarationKind::Subrange(subrange) }
       / structure_type_declaration__with_constant()
       / union:union_type_declaration__with_constant() { DataTypeDeclarationKind::Union(union) }
@@ -884,10 +894,37 @@ parser! {
         initial_values: init.unwrap_or_default()
       }
     }
-    rule array_specification() -> ArraySpecificationKind = subranges:array_subranges() { SpecificationKind::Inline(subranges) }
-    rule array_subranges() -> ArraySubranges = tok(TokenType::Array) _ tok(TokenType::LeftBracket) _ ranges:subrange() ** (_ tok(TokenType::Comma) _ ) _ tok(TokenType::RightBracket) _ tok(TokenType::Of) _ ref_to:ref_to_keyword()? _ type_name:array_element_type() {
-      ArraySubranges { ranges, type_name, ref_to }
+    // CODESYS parameter-list type: `PARAMS ( expression ) OF dataType`
+    // (`ST_GRAMMAR.ebnf`, `paramsType`). The count is read through the same
+    // `integer_ref` the STRING length and the array bounds use, so a named
+    // constant is accepted wherever a literal is.
+    // The element type is a data type, so both an elementary name (`INT`)
+    // and a user-defined one are accepted.
+    rule params_specification() -> ParamsSpecification = tok(TokenType::Params) _ tok(TokenType::LeftParen) _ count:integer_ref() _ tok(TokenType::RightParen) _ tok(TokenType::Of) _ type_name:data_type_name() {
+      ParamsSpecification { count, type_name }
     }
+    rule params_var_init_decl() -> Vec<UntypedVarDecl> = names:var1_list() _ tok(TokenType::Colon) _ spec:params_specification() {
+      names.into_iter().map(|name| {
+        UntypedVarDecl {
+          location: None,
+          name,
+          initializer: InitialValueAssignmentKind::Params(spec.clone()),
+        }
+      }).collect()
+    }
+    rule params_type_declaration() -> DataTypeDeclarationKind = type_name:type_name() _ tok(TokenType::Colon) _ spec:params_specification() {
+      DataTypeDeclarationKind::Params(ParamsDeclaration { type_name, spec })
+    }
+    rule array_specification() -> ArraySpecificationKind = subranges:array_subranges() { SpecificationKind::Inline(subranges) }
+    // `arrayType = "ARRAY" "[" ("*" | indexRange {"," indexRange}) "]" "OF"
+    // dataType` (CODESYS `ST_GRAMMAR.ebnf`): the `*` form is the incomplete
+    // array type, which has no range list at all.
+    rule array_subranges() -> ArraySubranges = tok(TokenType::Array) _ tok(TokenType::LeftBracket) _ bounds:array_bounds() _ tok(TokenType::RightBracket) _ tok(TokenType::Of) _ ref_to:ref_to_keyword()? _ type_name:array_element_type() {
+      ArraySubranges { bounds, type_name, ref_to }
+    }
+    rule array_bounds() -> ArrayBounds =
+      star:tok(TokenType::Star) { ArrayBounds::Incomplete(star.span.clone()) }
+      / ranges:subrange() ** (_ tok(TokenType::Comma) _ ) { ArrayBounds::Ranges(ranges) }
     // The length delimiter comes from string_length_spec() so that the array
     // element type accepts the same spellings as every other string position
     // -- standard `STRING[n]` brackets and the `STRING(n)` parenthesis
@@ -1111,6 +1148,11 @@ parser! {
       }
     rule symbolic_variable_head() -> SymbolicVariableKind =
       s:self_ref() { SymbolicVariableKind::SelfRef(s) }
+      // `__CURRENTTASK` reads as a value (the current task's reference), and
+      // may be followed by field access (`__CURRENTTASK^.Index`); recording it
+      // as a named variable keeps the surface syntax in the ordinary
+      // variable-reference AST.
+      / t:tok(TokenType::SpecialCurrentTask) { SymbolicVariableKind::Named(NamedVariable { name: Id::from(t.text.as_str()).with_position(t.span.clone()) }) }
       / name:variable_identifier() { SymbolicVariableKind::Named(NamedVariable { name }) }
     rule symbolic_variable_element() -> Element =
       tok(TokenType::Period) _ n:integer() { Element::Bit(n) }
@@ -1227,7 +1269,7 @@ parser! {
     // the `LateResolvedType` placeholder and
     // `xform_resolve_late_bound_type_initializer` exist -- the ambiguity is
     // deferred to the analyzer on purpose.
-    rule var_init_decl() -> Vec<UntypedVarDecl> = located_var1_init_decl() / structured_var_init_decl__without_ambiguous() / string_var_declaration() / array_var_init_decl() / ref_to_var_init_decl() / fb_call_style_var_decl() / string_var_declaration() / var1_init_decl__with_ambiguous_struct()
+    rule var_init_decl() -> Vec<UntypedVarDecl> = located_var1_init_decl() / structured_var_init_decl__without_ambiguous() / string_var_declaration() / array_var_init_decl() / params_var_init_decl() / ref_to_var_init_decl() / fb_call_style_var_decl() / string_var_declaration() / var1_init_decl__with_ambiguous_struct()
     // Extension: a located variable (complete or
     // incomplete/wildcard address) declared inside an otherwise plain
     // VAR/VAR_INPUT/VAR_OUTPUT block, instead of requiring its own
@@ -1568,7 +1610,12 @@ parser! {
       / id:type_name() { VariableSpecificationKind::Ambiguous(id) }
 
     // B.1.5.1 Functions
-    rule function_name() -> Id = standard_function_name() / derived_function_name() / t:tok(TokenType::Mod) { Id::from(t.text.as_str()).with_position(t.span.clone()) } / t:tok(TokenType::And) { Id::from(t.text.as_str()).with_position(t.span.clone()) } / t:tok(TokenType::Or) { Id::from(t.text.as_str()).with_position(t.span.clone()) } / t:tok(TokenType::Xor) { Id::from(t.text.as_str()).with_position(t.span.clone()) } / t:tok(TokenType::Not) { Id::from(t.text.as_str()).with_position(t.span.clone()) }
+    // The operator-shaped names take their name from the token text, so the
+    // written spelling survives to the renderer and to diagnostics. The
+    // CODESYS special operators that take an ordinary expression list
+    // (`__DELETE`, `__ISVALIDREF`, `__XADD`) are calls like any other; the
+    // ones that take a type (`__NEW`, `__TYPEOF`) have their own rule below.
+    rule function_name() -> Id = standard_function_name() / derived_function_name() / t:tok(TokenType::Mod) { Id::from(t.text.as_str()).with_position(t.span.clone()) } / t:tok(TokenType::And) { Id::from(t.text.as_str()).with_position(t.span.clone()) } / t:tok(TokenType::Or) { Id::from(t.text.as_str()).with_position(t.span.clone()) } / t:tok(TokenType::Xor) { Id::from(t.text.as_str()).with_position(t.span.clone()) } / t:tok(TokenType::Not) { Id::from(t.text.as_str()).with_position(t.span.clone()) } / t:tok(TokenType::SpecialDelete) { Id::from(t.text.as_str()).with_position(t.span.clone()) } / t:tok(TokenType::SpecialIsValidRef) { Id::from(t.text.as_str()).with_position(t.span.clone()) } / t:tok(TokenType::SpecialXAdd) { Id::from(t.text.as_str()).with_position(t.span.clone()) }
     rule standard_function_name() -> Id = identifier()
     rule derived_function_name() -> Id = identifier()
     rule function_return_type() -> FunctionReturnType =
@@ -2172,6 +2219,16 @@ parser! {
       / t:tok(TokenType::Null) {
           Expr::new(ExprKind::Null(t.span.clone()))
         }
+      // `__NEW(T)` and `__TYPEOF(T)` take a type where the ordinary call
+      // grammar takes an expression (`prefixedOperator`/`newExpression` in
+      // CODESYS's `ST_GRAMMAR.ebnf`). The type name is recorded as a variable
+      // reference so the AST, the renderer and the round trip are the
+      // ordinary call ones; resolving the type is semantic work a later pass
+      // does. Tried before `function_expression` because the type argument
+      // (`INT`) is not an expression.
+      / op:special_operator_type_expression() {
+          op
+        }
       / function:function_expression() {
           function
         }
@@ -2197,6 +2254,18 @@ parser! {
         param_assignment: params
       })).with_span(span)
     }
+    rule special_operator_type_expression() -> Expr =
+      start:special_operator_type_name() _ tok(TokenType::LeftParen) _ t:data_type_name() _ end:tok(TokenType::RightParen) {
+        let name = Id::from(start.text.as_str()).with_position(start.span.clone());
+        let span = SourceSpan::join(&start.span, &end.span);
+        Expr::new(ExprKind::Function(Function {
+          name,
+          param_assignment: vec![ParamAssignmentKind::positional(ExprKind::Variable(
+            Variable::Symbolic(SymbolicVariableKind::Named(NamedVariable { name: t.name })),
+          ))],
+        })).with_span(span)
+      }
+    rule special_operator_type_name() -> &'input Token = tok(TokenType::SpecialNew) / tok(TokenType::SpecialTypeOf)
 
     // B.3.2 Statements
     pub rule statement_list() -> Vec<StmtKind> = items:statements_or_empty()+ {
