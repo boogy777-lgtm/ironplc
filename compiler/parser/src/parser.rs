@@ -524,8 +524,8 @@ parser! {
     // `ns` (REQ-TL-010) conflict with no other unit, so they sit after `ms`.
     rule duration_unit() -> DurationUnit = token:[t] {?
       match token.token_type {
-        TokenType::Identifier => DurationUnit::from_word(&token.text).ok_or("duration unit"),
-        _ => Err("duration unit"),
+        TokenType::Identifier => DurationUnit::from_word(&token.text).ok_or(DurationUnit::expectation()),
+        _ => Err(DurationUnit::expectation()),
       }
     }
     rule fixed_point() -> FixedPoint =

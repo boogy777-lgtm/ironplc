@@ -66,7 +66,7 @@ impl Scanner<'_> {
     fn part(&mut self) -> Result<Part, &'static str> {
         let fractional = self.number()?;
         let word = self.take_while(char::is_alphabetic);
-        let unit = DurationUnit::from_word(&word).ok_or("unknown duration unit")?;
+        let unit = DurationUnit::from_word(&word).ok_or(DurationUnit::expectation())?;
         if self.peek() == Some('_') {
             self.at += 1;
         }

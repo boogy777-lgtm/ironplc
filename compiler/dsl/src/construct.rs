@@ -8,6 +8,8 @@
 //! pieces; they call these builders, so a rule is written once whichever
 //! grammar found the literal.
 
+use std::sync::LazyLock;
+
 use time::{Date, Month, Time};
 
 use crate::common::{
@@ -47,22 +49,40 @@ pub enum DurationUnit {
 }
 
 impl DurationUnit {
-    /// The unit a spelling names, in either case: `ns`, `us`, `ms`, `s`,
-    /// `m`, `h` or `d`.
+    /// Every unit with its spelling, largest first. This is the one table of
+    /// unit spellings: [`DurationUnit::from_word`] looks a word up in it and
+    /// [`DurationUnit::expectation`] lists it, so a unit added here is
+    /// recognised and reported without any other change.
+    pub const UNITS: [(&'static str, DurationUnit); 7] = [
+        ("d", DurationUnit::Days),
+        ("h", DurationUnit::Hours),
+        ("m", DurationUnit::Minutes),
+        ("s", DurationUnit::Seconds),
+        ("ms", DurationUnit::Milliseconds),
+        ("us", DurationUnit::Microseconds),
+        ("ns", DurationUnit::Nanoseconds),
+    ];
+
+    /// The unit a spelling names, in either case: `d`, `h`, `m`, `s`, `ms`,
+    /// `us` or `ns`.
     pub fn from_word(word: &str) -> Option<DurationUnit> {
-        const UNITS: [(&str, DurationUnit); 7] = [
-            ("ns", DurationUnit::Nanoseconds),
-            ("us", DurationUnit::Microseconds),
-            ("ms", DurationUnit::Milliseconds),
-            ("s", DurationUnit::Seconds),
-            ("m", DurationUnit::Minutes),
-            ("h", DurationUnit::Hours),
-            ("d", DurationUnit::Days),
-        ];
-        UNITS
+        Self::UNITS
             .iter()
             .find(|(spelling, _)| spelling.eq_ignore_ascii_case(word))
             .map(|(_, unit)| *unit)
+    }
+
+    /// The expected-input text for a word that is not a unit, naming every
+    /// spelling in [`DurationUnit::UNITS`] in table order.
+    pub fn expectation() -> &'static str {
+        static TEXT: LazyLock<String> = LazyLock::new(|| {
+            let spellings: Vec<&str> = DurationUnit::UNITS
+                .iter()
+                .map(|(spelling, _)| *spelling)
+                .collect();
+            format!("duration unit ({})", spellings.join(", "))
+        });
+        TEXT.as_str()
     }
 }
 
@@ -390,6 +410,23 @@ mod tests {
         assert_eq!(DurationUnit::from_word(""), None);
         assert_eq!(DurationUnit::from_word("x"), None);
         assert_eq!(DurationUnit::from_word("sec"), None);
+    }
+
+    #[test]
+    fn from_word_when_any_table_spelling_then_its_unit() {
+        for (spelling, unit) in DurationUnit::UNITS {
+            assert_eq!(DurationUnit::from_word(spelling), Some(unit));
+        }
+    }
+
+    #[test]
+    fn expectation_when_listed_then_names_every_table_spelling_largest_first() {
+        let spellings: Vec<&str> = DurationUnit::UNITS.iter().map(|(s, _)| *s).collect();
+        assert!(
+            DurationUnit::expectation().contains(&spellings.join(", ")),
+            "{}",
+            DurationUnit::expectation()
+        );
     }
 
     #[test]
