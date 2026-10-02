@@ -23,7 +23,7 @@ use crate::textual::{
     Expr, ExprKind, Function, NamedVariable, ParamAssignmentKind, PositionalInput,
     SymbolicVariableKind, UnaryOp, Variable,
 };
-use crate::time::DurationLiteral;
+use crate::time::{DurationLiteral, DurationOutOfRange};
 
 /// The characters a character-string token denotes: the text between its two
 /// delimiting quotes with its `$` escapes decoded. An invalid escape is kept
@@ -37,18 +37,27 @@ pub fn unquote(text: &str, width: &StringType) -> Vec<char> {
 
 /// A unit of a duration literal part, smallest first so that the derived
 /// order is the order of magnitude.
+///
+/// Each unit's value is its length in nanoseconds, so the scale of a unit is
+/// stated once, here, and a unit added to this enum brings its own scale.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(u64)]
 pub enum DurationUnit {
-    Nanoseconds,
-    Microseconds,
-    Milliseconds,
-    Seconds,
-    Minutes,
-    Hours,
-    Days,
+    Nanoseconds = 1,
+    Microseconds = 1_000,
+    Milliseconds = 1_000_000,
+    Seconds = 1_000_000_000,
+    Minutes = 60 * 1_000_000_000,
+    Hours = 60 * 60 * 1_000_000_000,
+    Days = 24 * 60 * 60 * 1_000_000_000,
 }
 
 impl DurationUnit {
+    /// How many nanoseconds one of this unit is.
+    pub const fn nanoseconds(self) -> u64 {
+        self as u64
+    }
+
     /// Every unit with its spelling, largest first. This is the one table of
     /// unit spellings: [`DurationUnit::from_word`] looks a word up in it and
     /// [`DurationUnit::expectation`] lists it, so a unit added here is
@@ -94,6 +103,16 @@ pub enum IntervalError {
     UnitOrder,
     /// A part before the last has a fractional value.
     FractionBeforeLast,
+    /// The parts are well formed but no duration is that long. This is not
+    /// a syntax error: the literal is reported as out of range
+    /// ([`DurationOutOfRange::diagnostic`]).
+    OutOfRange,
+}
+
+impl From<DurationOutOfRange> for IntervalError {
+    fn from(_: DurationOutOfRange) -> Self {
+        IntervalError::OutOfRange
+    }
 }
 
 /// Checks the parts of a duration literal, each given as its unit and
@@ -118,7 +137,7 @@ pub fn check_interval_parts(
 }
 
 /// Sums the parts of a duration literal once [`check_interval_parts`]
-/// accepts them.
+/// accepts them, or reports that the total is out of range.
 pub fn combine_interval_parts(
     first: (FixedPoint, DurationUnit),
     rest: Vec<(FixedPoint, DurationUnit)>,
@@ -129,24 +148,11 @@ pub fn combine_interval_parts(
             .map(|(value, unit)| (*unit, value.femptos != 0)),
     )?;
     let (value, unit) = first;
-    let total = rest
-        .into_iter()
-        .fold(duration_part(value, unit), |sum, (value, unit)| {
-            sum.plus(duration_part(value, unit))
-        });
-    Ok(total)
-}
-
-fn duration_part(value: FixedPoint, unit: DurationUnit) -> DurationLiteral {
-    match unit {
-        DurationUnit::Nanoseconds => DurationLiteral::nanoseconds(value),
-        DurationUnit::Microseconds => DurationLiteral::microseconds(value),
-        DurationUnit::Days => DurationLiteral::days(value),
-        DurationUnit::Hours => DurationLiteral::hours(value),
-        DurationUnit::Minutes => DurationLiteral::minutes(value),
-        DurationUnit::Seconds => DurationLiteral::seconds(value),
-        DurationUnit::Milliseconds => DurationLiteral::milliseconds(value),
+    let mut total = DurationLiteral::from_unit(value, unit)?;
+    for (value, unit) in rest {
+        total = total.plus(DurationLiteral::from_unit(value, unit)?)?;
     }
+    Ok(total)
 }
 
 /// A field of a time of day.
@@ -510,6 +516,51 @@ mod tests {
             vec![(fixed(30, 0), DurationUnit::Seconds)],
         );
         assert_eq!(result, Err(IntervalError::FractionBeforeLast));
+    }
+
+    #[test]
+    fn nanoseconds_when_each_unit_then_its_length() {
+        use time::Duration;
+        for (_, unit) in DurationUnit::UNITS {
+            let one = DurationLiteral::from_unit(fixed(1, 0), unit).unwrap();
+            assert_eq!(
+                one.interval.whole_nanoseconds(),
+                i128::from(unit.nanoseconds()),
+                "{unit:?}"
+            );
+        }
+        assert_eq!(DurationUnit::Days.nanoseconds(), 86_400_000_000_000);
+        assert_eq!(
+            DurationLiteral::from_unit(fixed(1, 0), DurationUnit::Hours)
+                .unwrap()
+                .interval,
+            Duration::hours(1)
+        );
+    }
+
+    #[test]
+    fn combine_interval_parts_when_single_part_too_long_then_out_of_range() {
+        let result =
+            combine_interval_parts((fixed(i64::MAX as u64, 0), DurationUnit::Days), vec![]);
+        assert_eq!(result, Err(IntervalError::OutOfRange));
+    }
+
+    #[test]
+    fn combine_interval_parts_when_parts_sum_too_long_then_out_of_range() {
+        let result = combine_interval_parts(
+            (fixed(106_751_991_167_300, 0), DurationUnit::Days),
+            vec![(fixed(23, 0), DurationUnit::Hours)],
+        );
+        assert_eq!(result, Err(IntervalError::OutOfRange));
+    }
+
+    #[test]
+    fn combine_interval_parts_when_order_wrong_and_too_long_then_order_error_first() {
+        let result = combine_interval_parts(
+            (fixed(u64::MAX, 0), DurationUnit::Seconds),
+            vec![(fixed(1, 0), DurationUnit::Days)],
+        );
+        assert_eq!(result, Err(IntervalError::UnitOrder));
     }
 
     #[test]

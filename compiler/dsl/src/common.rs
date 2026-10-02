@@ -494,6 +494,10 @@ pub struct FixedPoint {
 impl FixedPoint {
     pub const FRACTIONAL_UNITS: u64 = 1_000_000_000_000_000;
 
+    /// What a rule expects in place of a whole part beyond the `u64` the
+    /// structure holds.
+    pub const WHOLE_TOO_LARGE: &'static str = "u64";
+
     pub fn parse(input: &str) -> Result<FixedPoint, &'static str> {
         // IEC 61131 allows underscores in numbers so remove those before we try to parse.
         let value: String = input
@@ -544,7 +548,9 @@ impl FixedPoint {
                 // There is no decimal point so this is essentially a whole number
                 Ok(FixedPoint {
                     span: SourceSpan::default(),
-                    whole: value.parse::<u64>().map_err(|_e| "u64")?,
+                    whole: value
+                        .parse::<u64>()
+                        .map_err(|_e| FixedPoint::WHOLE_TOO_LARGE)?,
                     femptos: 0,
                 })
             }
@@ -552,13 +558,18 @@ impl FixedPoint {
     }
 }
 
-impl From<Integer> for FixedPoint {
-    fn from(value: Integer) -> Self {
-        FixedPoint {
+/// A whole-number token as a fixed-point value, unless its whole part is
+/// beyond the `u64` the structure holds: the same limit
+/// [`FixedPoint::parse`] puts on the same digits, so that a value is not read
+/// differently for being written with or without a decimal point.
+impl TryFrom<Integer> for FixedPoint {
+    type Error = TryFromIntegerError;
+    fn try_from(value: Integer) -> Result<Self, Self::Error> {
+        Ok(FixedPoint {
             span: value.span,
-            whole: value.value as u64,
+            whole: u64::try_from(value.value).map_err(|_e| TryFromIntegerError {})?,
             femptos: 0,
-        }
+        })
     }
 }
 
@@ -3319,6 +3330,24 @@ impl Library {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn try_from_integer_when_whole_fits_u64_then_fixed_point() {
+        let whole = Integer::new("18446744073709551615", SourceSpan::default()).unwrap();
+        let fixed = FixedPoint::try_from(whole).unwrap();
+        assert_eq!((fixed.whole, fixed.femptos), (u64::MAX, 0));
+    }
+
+    #[test]
+    fn try_from_integer_when_whole_exceeds_u64_then_error_not_wrapped() {
+        // 2^64 wrapped to 0 when the value was cast.
+        let whole = Integer::new("18446744073709551616", SourceSpan::default()).unwrap();
+        assert!(FixedPoint::try_from(whole).is_err());
+        assert_eq!(
+            FixedPoint::parse("18446744073709551616"),
+            Err(FixedPoint::WHOLE_TOO_LARGE)
+        );
+    }
 
     fn located(name: &str, block: BlockId) -> VarDecl {
         VarDecl {

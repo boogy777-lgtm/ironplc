@@ -32,6 +32,9 @@ compiler reports it rather than keeping the low bits, which would give a
 different duration than the one the program wrote — and often one with the
 opposite sign.
 
+The message names the literal and the type that cannot hold it, such as
+``Constant 'T#30d' is outside the range of type 'TIME'``.
+
 Example
 -------
 
@@ -71,6 +74,18 @@ program is likely to measure:
 
 ``LTIME`` requires IEC 61131-3 Edition 3. See
 :doc:`/reference/language/edition-support`.
+
+A duration no type can hold
+---------------------------
+
+A duration longer than about 292 billion years cannot be built at all, so it
+is reported as soon as it is read, whatever type it is stored into. This
+includes a literal whose whole part is too large for its unit
+(``T#9223372036854775807d``) and a literal whose parts together are too long
+(``T#106751991167300d23h``).
+
+A number too large to be read at all, with 20 or more digits, is a
+:doc:`syntax error <P0002>` instead.
 
 Long intervals in a control program
 -----------------------------------

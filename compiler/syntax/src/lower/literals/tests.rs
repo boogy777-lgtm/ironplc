@@ -504,6 +504,52 @@ fn lower_constant_when_duration_value_too_large_then_syntax_error_naming_the_lit
 }
 
 #[test]
+fn lower_constant_when_duration_at_last_representable_then_that_duration() {
+    assert_eq!(
+        duration_of("T#9223372036854775807.999999999s"),
+        Some((Duration::new(i64::MAX, 999_999_999), TemporalWidth::Short))
+    );
+    assert_eq!(
+        duration_of("T#106751991167300d").map(|(interval, _)| interval.whole_seconds()),
+        Some(106_751_991_167_300 * 86_400)
+    );
+    assert_eq!(
+        duration_of("T#18446744073709551615ns").map(|(interval, _)| interval.whole_nanoseconds()),
+        Some(i128::from(u64::MAX))
+    );
+}
+
+#[test]
+fn lower_constant_when_duration_past_last_representable_then_p2039_over_the_literal() {
+    // The crash report's input, the whole part past `i64`, and parts that
+    // sum past the longest duration.
+    for (source, type_name) in [
+        ("T#9223372036854775807d", "TIME"),
+        ("LTIME#9223372036854775807d", "LTIME"),
+        ("T#9223372036854775808s", "TIME"),
+        ("T#18446744073709551615s", "TIME"),
+        ("T#106751991167300d23h", "TIME"),
+        ("T#-9223372036854775807d", "TIME"),
+    ] {
+        let diagnostic = lower_with(source, &all()).unwrap_err();
+        assert_eq!(diagnostic.code, Problem::DurationLiteralOutOfRange.code());
+        assert_eq!(
+            diagnostic.primary.message,
+            format!("Constant '{source}' is outside the range of type '{type_name}'"),
+        );
+        let start = CONTEXT.len();
+        assert_eq!(
+            (
+                diagnostic.primary.location.start,
+                diagnostic.primary.location.end
+            ),
+            (start, start + source.len()),
+            "{source}"
+        );
+    }
+}
+
+#[test]
 fn lower_constant_when_value_does_not_exist_then_syntax_error_over_the_literal() {
     // The parser reports each of these; the rule still answers with the same
     // problem code, so a tree that was not checked cannot yield a wrong value.

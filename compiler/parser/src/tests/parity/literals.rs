@@ -223,7 +223,14 @@ fn compare_literals(tally: &mut Tally, key: &str, text: &str, parse: &Parse, pre
                     tally.difference(key, parent, node.kind(), what);
                 }
             }
-            (Err(_), Err(_)) => tally.both_reject += 1,
+            (Err(legacy), Err(error)) if legacy.code == error.code => tally.both_reject += 1,
+            (Err(legacy), Err(error)) => {
+                let what = format!(
+                    "{written} legacy rejects {} where lowering rejects {}",
+                    legacy.code, error.code
+                );
+                tally.difference(key, parent, node.kind(), what);
+            }
             (Ok(legacy), Err(error)) => {
                 let what = format!(
                     "{written} lowering rejects {} where legacy builds {legacy:?}",
@@ -521,4 +528,93 @@ fn compare_literals_when_literal_lowered_with_a_wrong_span_then_reported_as_unex
         .zip(lowered.as_ref().and_then(|l| l.as_ref().ok()))
         .map(|(a, b)| compare(a, b).is_empty());
     assert_eq!(both, Some(false));
+}
+
+/// Durations at and past the longest one a duration holds, with the problem
+/// both parsers must report for each (`None` when both accept it). The legacy
+/// parser and the lowering build them through the same checked builder, so
+/// each must give the same duration, or the same problem over the same bytes.
+const DURATION_RANGE_EDGES: &[(&str, Option<&str>)] = &[
+    ("T#106751991167300d", None),
+    ("T#106751991167301d", Some("P2039")),
+    ("T#2562047788015215h", None),
+    ("T#2562047788015216h", Some("P2039")),
+    ("T#153722867280912930m", None),
+    ("T#153722867280912931m", Some("P2039")),
+    ("T#9223372036854775807s", None),
+    ("T#9223372036854775807.999999999s", None),
+    ("T#9223372036854775807s999999999ns", None),
+    ("T#9223372036854775807s1000000000ns", Some("P2039")),
+    ("T#9223372036854775808s", Some("P2039")),
+    ("T#18446744073709551615s", Some("P2039")),
+    ("T#18446744073709551615ms", None),
+    ("T#18446744073709551615us", None),
+    ("T#18446744073709551615ns", None),
+    ("T#9223372036854775807d", Some("P2039")),
+    ("T#106751991167300d23h", Some("P2039")),
+    ("T#-9223372036854775807s", None),
+    ("T#-9223372036854775807d", Some("P2039")),
+    ("LTIME#9223372036854775807d", Some("P2039")),
+    ("LT#106751991167300d", None),
+    // A whole part beyond `u64` is not a number the structure holds, whether
+    // or not it has a decimal point; it was read as `0` without one.
+    ("T#18446744073709551616s", Some("P0002")),
+    ("T#18446744073709551617ms", Some("P0002")),
+    ("T#99999999999999999999.5s", Some("P0002")),
+];
+
+#[test]
+fn parity_when_duration_at_range_edge_then_same_duration_or_same_problem_and_range() {
+    for preset in presets() {
+        for (snippet, expected) in DURATION_RANGE_EDGES {
+            let text = format!("x := {snippet};");
+            let parse = new_parse(Kind::Statements, &text, &preset.new);
+            if !parse.is_ok() {
+                // `LTIME` and `LT` are keywords of the editions that have them.
+                assert!(snippet.starts_with("LT"), "{snippet} under {}", preset.name);
+                continue;
+            }
+            let node = parse
+                .root
+                .descendants()
+                .find(|node| disposition(node.kind()) == Disposition::Lowered(Area::Literal))
+                .expect("a literal");
+            let range = range_of(&node);
+            let tokens = tokenize_program(&text, &file(), &preset.legacy, 0, 0).0;
+            let legacy = parse_constant(literal_tokens(&tokens, range));
+            let lowered = lower_constant(&LowerCx::new(file()), &node);
+            let code = |result: &Result<_, ironplc_dsl::diagnostic::Diagnostic>| {
+                result.as_ref().err().map(|d| d.code.clone())
+            };
+            let expected_code = expected.map(str::to_string);
+            assert_eq!(
+                code(&legacy),
+                expected_code,
+                "{snippet} under {}: legacy",
+                preset.name
+            );
+            assert_eq!(
+                code(&lowered),
+                expected_code,
+                "{snippet} under {}: lowering",
+                preset.name
+            );
+            match (&legacy, &lowered) {
+                (Ok(legacy), Ok(lowered)) => {
+                    assert_eq!(compare(legacy, lowered), vec![], "{snippet}");
+                }
+                // The wording of a syntax error differs by parser; the range
+                // and the wording of a range problem do not.
+                (Err(legacy), Err(lowered)) if legacy.code == "P2039" => {
+                    assert_eq!(legacy.primary.message, lowered.primary.message);
+                    assert_eq!(
+                        (legacy.primary.location.start, legacy.primary.location.end),
+                        (lowered.primary.location.start, lowered.primary.location.end),
+                        "{snippet}"
+                    );
+                }
+                _ => {}
+            }
+        }
+    }
 }

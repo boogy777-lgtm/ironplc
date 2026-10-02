@@ -351,3 +351,112 @@ fn parse_program_when_duration_unit_unknown_then_p0002_lists_units() {
         diagnostic.primary.message
     );
 }
+
+// A duration holds at most `i64::MAX` seconds and 999,999,999 nanoseconds, so
+// each unit has a last whole count it can write. The literal as a whole is
+// rejected as out of range (P2039), not as a syntax error and not by wrapping
+// or panicking.
+
+#[rstest]
+#[case::days("T#106751991167300d")]
+#[case::hours("T#2562047788015215h")]
+#[case::minutes("T#153722867280912930m")]
+#[case::seconds("T#9223372036854775807s")]
+#[case::seconds_and_fraction("T#9223372036854775807.999999999s")]
+#[case::seconds_and_parts("T#9223372036854775807s999999999ns")]
+#[case::milliseconds_at_u64_max("T#18446744073709551615ms")]
+#[case::microseconds_at_u64_max("T#18446744073709551615us")]
+#[case::nanoseconds_at_u64_max("T#18446744073709551615ns")]
+#[case::negative("T#-9223372036854775807s")]
+fn parse_program_when_duration_at_last_representable_then_accepted(#[case] literal: &str) {
+    let source = duration_program(literal);
+    let result = parse_program(&source, &FileId::default(), &CompilerOptions::default());
+    assert!(result.is_ok(), "{literal}: {:?}", result.err());
+}
+
+#[rstest]
+#[case::crash_report_input("T#9223372036854775807d")]
+#[case::days("T#106751991167301d")]
+#[case::hours("T#2562047788015216h")]
+#[case::minutes("T#153722867280912931m")]
+#[case::seconds("T#9223372036854775808s")]
+#[case::seconds_at_u64_max("T#18446744073709551615s")]
+#[case::seconds_and_parts_past_the_last_nanosecond("T#9223372036854775807s1000000000ns")]
+#[case::parts_that_sum_past_the_last("T#106751991167300d23h")]
+#[case::negative("T#-9223372036854775807d")]
+#[case::negative_past_the_last("T#-9223372036854775808s")]
+fn parse_program_when_duration_past_last_representable_then_p2039_naming_the_literal(
+    #[case] literal: &str,
+) {
+    let source = duration_program(literal);
+    let diagnostic =
+        parse_program(&source, &FileId::default(), &CompilerOptions::default()).unwrap_err();
+    assert_eq!(diagnostic.code, "P2039", "{literal}");
+    assert_eq!(
+        diagnostic.primary.message,
+        format!("Constant '{literal}' is outside the range of type 'TIME'")
+    );
+    let start = source.find(literal).unwrap();
+    assert_eq!(
+        (
+            diagnostic.primary.location.start,
+            diagnostic.primary.location.end
+        ),
+        (start, start + literal.len())
+    );
+}
+
+#[test]
+fn parse_program_when_ltime_duration_past_last_representable_then_p2039_names_ltime() {
+    let options = CompilerOptions::from_dialect(Dialect::Iec61131_3Ed3);
+    let source = duration_program("LTIME#9223372036854775807d");
+    let diagnostic = parse_program(&source, &FileId::default(), &options).unwrap_err();
+    assert_eq!(diagnostic.code, "P2039");
+    assert_eq!(
+        diagnostic.primary.message,
+        "Constant 'LTIME#9223372036854775807d' is outside the range of type 'LTIME'"
+    );
+}
+
+#[test]
+fn parse_program_when_syntax_error_follows_out_of_range_duration_then_the_first_is_reported() {
+    // The parse cannot get past the literal, so the later error is never found.
+    let source = "FUNCTION fun:TIME
+VAR
+    a : TIME := T#9223372036854775807d;
+    b : TIME := ;
+END_VAR
+END_FUNCTION";
+    let diagnostic =
+        parse_program(source, &FileId::default(), &CompilerOptions::default()).unwrap_err();
+    assert_eq!(diagnostic.code, "P2039");
+}
+
+#[test]
+fn parse_program_when_syntax_error_precedes_out_of_range_duration_then_syntax_error_reported() {
+    let source = "FUNCTION fun:TIME
+VAR
+    b : TIME := ;
+    a : TIME := T#9223372036854775807d;
+END_VAR
+END_FUNCTION";
+    let diagnostic =
+        parse_program(source, &FileId::default(), &CompilerOptions::default()).unwrap_err();
+    assert_eq!(diagnostic.code, "P0002");
+}
+
+#[rstest]
+#[case::seconds("T#18446744073709551616s")]
+#[case::milliseconds("T#18446744073709551617ms")]
+#[case::days("T#99999999999999999999d")]
+#[case::fraction("T#99999999999999999999.5s")]
+fn parse_program_when_duration_whole_part_exceeds_u64_then_syntax_error_not_wrapped(
+    #[case] literal: &str,
+) {
+    // `T#18446744073709551616s` was read as 0 ms: the whole part wrapped
+    // before it was scaled by the unit.
+    let source = duration_program(literal);
+    let diagnostic =
+        parse_program(&source, &FileId::default(), &CompilerOptions::default()).unwrap_err();
+    assert_eq!(diagnostic.code, "P0002", "{literal}");
+}

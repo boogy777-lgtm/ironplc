@@ -61,7 +61,7 @@
 use ironplc_dsl::{
     common::{ElementaryTypeName, Library},
     core::SourceSpan,
-    diagnostic::{Diagnostic, Label},
+    diagnostic::Diagnostic,
     time::{DateAndTimeLiteral, DateLiteral, DurationLiteral, StoredCount, TimeOfDayLiteral},
     visitor::Visitor,
 };
@@ -117,15 +117,12 @@ impl RuleTemporalLiteralRange {
             return;
         }
 
-        let type_name = type_name.to_string();
-        self.diagnostics.push(
-            Diagnostic::problem(
-                problem,
-                Label::span(span.clone(), format!("{type_name} cannot hold this value")),
-            )
-            .with_context("value", &value)
-            .with_context("type", &type_name),
-        );
+        self.diagnostics.push(Diagnostic::literal_out_of_range(
+            problem,
+            span.clone(),
+            &value,
+            &type_name.to_string(),
+        ));
     }
 }
 
@@ -449,4 +446,39 @@ VAR
 END_VAR
 END_PROGRAM"
     );
+
+    // --- One wording for the literal no type can hold and the one this type
+    // cannot ---
+
+    #[test]
+    fn apply_when_duration_representable_but_outside_time_then_message_names_value_and_type() {
+        let opts = CompilerOptions::default();
+        let (library, context) = crate::test_helpers::resolve_fresh_with(
+            "
+PROGRAM main
+VAR
+    t : TIME := T#30d;
+END_VAR
+END_PROGRAM",
+            &opts,
+        );
+        let errors = super::apply(&library, &context, &opts).unwrap_err();
+        assert_eq!(errors.len(), 1);
+        assert_eq!(
+            errors[0].primary.message,
+            "Constant '2592000000ms' is outside the range of type 'TIME'"
+        );
+        // The constructor-level diagnostic for a literal no type can hold
+        // has the same code and wording, so the two cannot drift apart.
+        let unbuildable = ironplc_dsl::time::DurationOutOfRange.diagnostic(
+            ironplc_dsl::core::SourceSpan::default(),
+            "T#9223372036854775807d",
+            ironplc_dsl::time::TemporalWidth::Short,
+        );
+        assert_eq!(unbuildable.code, errors[0].code);
+        assert_eq!(
+            unbuildable.primary.message,
+            "Constant 'T#9223372036854775807d' is outside the range of type 'TIME'"
+        );
+    }
 }

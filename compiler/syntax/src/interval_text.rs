@@ -80,6 +80,7 @@ fn interval_message(error: IntervalError) -> &'static str {
     match error {
         IntervalError::UnitOrder => "duration units must be in descending order",
         IntervalError::FractionBeforeLast => "only the last duration part may have a fraction",
+        IntervalError::OutOfRange => "the duration is outside the range a duration can represent",
     }
 }
 
