@@ -262,6 +262,23 @@ pub fn parse_constant(tokens: &[Token]) -> Result<ConstantKind, Diagnostic> {
     plc_parser::data_source(&SliceByRef(tokens), &source).map_err(|e| parse_failure(&source, e))
 }
 
+/// Parses the tokens of one expression, as the grammar's `expression` rule
+/// reads them. Test-only: the oracle the expression lowering is compared
+/// against.
+#[cfg(test)]
+pub fn parse_expression(tokens: &[Token]) -> Result<Expr, Diagnostic> {
+    let source = Source::new(tokens);
+    plc_parser::expression(&SliceByRef(tokens), &source).map_err(|e| parse_failure(&source, e))
+}
+
+/// Parses the tokens of one variable, as the grammar's `variable` rule reads
+/// them. Test-only: the oracle the variable lowering is compared against.
+#[cfg(test)]
+pub fn parse_variable(tokens: &[Token]) -> Result<Variable, Diagnostic> {
+    let source = Source::new(tokens);
+    plc_parser::variable(&SliceByRef(tokens), &source).map_err(|e| parse_failure(&source, e))
+}
+
 enum StatementsOrEmpty {
     Statements(Vec<StmtKind>),
     Empty(),
@@ -1109,7 +1126,7 @@ parser! {
     }
 
     // B.1.4 Variables
-    rule variable() -> Variable =
+    pub rule variable() -> Variable =
       d:direct_variable() { Variable::Direct(d) }
       / symbolic_variable:symbolic_variable() { symbolic_variable.into() }
     //rule symbolic_variable() -> SymbolicVariableKind =

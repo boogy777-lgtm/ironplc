@@ -2649,7 +2649,7 @@ fn direct_address_unassigned_re() -> &'static Regex {
 )]
 fn direct_address_re() -> &'static Regex {
     static RE: std::sync::LazyLock<Regex> =
-        std::sync::LazyLock::new(|| Regex::new(r"%([IQM])([XBWDL])?(\d(\.\d)*)").unwrap());
+        std::sync::LazyLock::new(|| Regex::new(r"%([IQM])([XBWDL])?(\d+(\.\d+)*)").unwrap());
     &RE
 }
 
@@ -2669,7 +2669,8 @@ impl TryFrom<&str> for AddressAssignment {
 
         if let Some(cap) = direct_address_re().captures(value) {
             let location_prefix = LocationPrefix::try_from(&cap[1])?;
-            let size_prefix = SizePrefix::try_from(&cap[2])?;
+            let size_prefix =
+                SizePrefix::try_from(cap.get(2).and_then(|size| size.as_str().chars().next()))?;
             let pos: Vec<u32> = cap[3]
                 .split('.')
                 .map(|v| v.parse::<u32>())
@@ -3372,6 +3373,27 @@ mod tests {
         let mut decl = VarDecl::simple(name, "INT");
         decl.block = block;
         decl
+    }
+
+    #[test]
+    fn address_assignment_try_from_when_multi_digit_components_then_every_digit_kept() {
+        let word = AddressAssignment::try_from("%MD10").unwrap();
+        assert_eq!(word.size, SizePrefix::D);
+        assert_eq!(word.address, vec![10]);
+        let bit = AddressAssignment::try_from("%IX10.11").unwrap();
+        assert_eq!(bit.address, vec![10, 11]);
+    }
+
+    #[test]
+    fn address_assignment_try_from_when_no_size_letter_then_size_is_nil() {
+        let address = AddressAssignment::try_from("%M7").unwrap();
+        assert_eq!(address.size, SizePrefix::Nil);
+        assert_eq!(address.address, vec![7]);
+    }
+
+    #[test]
+    fn address_assignment_try_from_when_component_too_large_then_error() {
+        assert!(AddressAssignment::try_from("%MW99999999999").is_err());
     }
 
     #[test]
