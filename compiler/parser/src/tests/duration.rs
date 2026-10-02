@@ -1,6 +1,7 @@
 //! Duration and date literal spec-conformance tests.
 
 use super::common::*;
+use dsl::construct::DurationUnit;
 use spec_test_macro::spec_test;
 
 #[spec_test(REQ_TL_parser_002)]
@@ -333,4 +334,20 @@ fn duration_spec_req_tl_030_submillisecond_value_preserved(
     let source = duration_program(literal);
     let library = parse_program(&source, &FileId::default(), &CompilerOptions::default()).unwrap();
     assert_eq!(extract_duration(&library).interval, expected);
+}
+
+#[test]
+fn parse_program_when_duration_unit_unknown_then_p0002_lists_units() {
+    let source = duration_program("T#5x");
+    let diagnostic =
+        parse_program(&source, &FileId::default(), &CompilerOptions::default()).unwrap_err();
+    assert_eq!(diagnostic.code, "P0002");
+    assert!(
+        diagnostic
+            .primary
+            .message
+            .contains(DurationUnit::expectation()),
+        "{}",
+        diagnostic.primary.message
+    );
 }

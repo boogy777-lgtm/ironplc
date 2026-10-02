@@ -3,6 +3,7 @@
 
 pub mod common;
 pub mod configuration;
+pub mod construct;
 pub mod core;
 pub mod diagnostic;
 pub mod extension;

@@ -7,48 +7,23 @@
 //! their combined text, so the tree keeps the source tokens and no token is
 //! split or rewritten.
 //!
-//! The checks mirror what the legacy grammar accepts: units in descending
-//! order with only the last part fractional, and calendar and clock values
-//! in range.
+//! The rules are those of `ironplc_dsl::construct`, the same ones that build
+//! the literal values: units in descending order with only the last part
+//! fractional, and calendar and clock values in range. This module chooses
+//! which source range each failure is reported on.
 
 use super::literals::piece;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
+use ironplc_dsl::construct::{
+    calendar_date, check_interval_parts, ClockField, DateField, DurationUnit, IntervalError,
+};
 use rowan::TextRange;
-
-/// A duration unit, smallest first so the derived order is the order of
-/// magnitude.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum Unit {
-    Nanoseconds,
-    Microseconds,
-    Milliseconds,
-    Seconds,
-    Minutes,
-    Hours,
-    Days,
-}
-
-fn unit_from_word(word: &str) -> Option<Unit> {
-    const UNITS: [(&str, Unit); 7] = [
-        ("ns", Unit::Nanoseconds),
-        ("us", Unit::Microseconds),
-        ("ms", Unit::Milliseconds),
-        ("s", Unit::Seconds),
-        ("m", Unit::Minutes),
-        ("h", Unit::Hours),
-        ("d", Unit::Days),
-    ];
-    UNITS
-        .iter()
-        .find(|(spelling, _)| spelling.eq_ignore_ascii_case(word))
-        .map(|(_, unit)| *unit)
-}
 
 /// One `number unit` part: its unit and whether the number has a non-zero
 /// fraction.
 struct Part {
-    unit: Unit,
+    unit: DurationUnit,
     fractional: bool,
 }
 
@@ -91,7 +66,7 @@ impl Scanner<'_> {
     fn part(&mut self) -> Result<Part, &'static str> {
         let fractional = self.number()?;
         let word = self.take_while(char::is_alphabetic);
-        let unit = unit_from_word(&word).ok_or("unknown duration unit")?;
+        let unit = DurationUnit::from_word(&word).ok_or(DurationUnit::expectation())?;
         if self.peek() == Some('_') {
             self.at += 1;
         }
@@ -110,18 +85,15 @@ fn validate_interval(text: &str) -> Result<(), &'static str> {
     while scanner.peek().is_some() {
         parts.push(scanner.part()?);
     }
-    let Some((_, leading)) = parts.split_last() else {
+    if parts.is_empty() {
         return Err("expected a duration value");
-    };
-    for pair in parts.windows(2) {
-        if pair[1].unit >= pair[0].unit {
-            return Err("duration units must be in descending order");
+    }
+    check_interval_parts(parts.iter().map(|part| (part.unit, part.fractional))).map_err(|error| {
+        match error {
+            IntervalError::UnitOrder => "duration units must be in descending order",
+            IntervalError::FractionBeforeLast => "only the last duration part may have a fraction",
         }
-    }
-    if leading.iter().any(|part| part.fractional) {
-        return Err("only the last duration part may have a fraction");
-    }
-    Ok(())
+    })
 }
 
 /// The value of a duration literal: an optional `-` and the adjacent number
@@ -152,19 +124,6 @@ pub(super) fn duration_value(p: &mut Parser) {
     }
 }
 
-fn is_leap_year(year: u64) -> bool {
-    (year.is_multiple_of(4) && !year.is_multiple_of(100)) || year.is_multiple_of(400)
-}
-
-fn days_in_month(year: u64, month: u64) -> u64 {
-    match month {
-        2 if is_leap_year(year) => 29,
-        2 => 28,
-        4 | 6 | 9 | 11 => 30,
-        _ => 31,
-    }
-}
-
 /// A number token of a clock or calendar value: its value and range.
 fn number(p: &mut Parser, what: &str) -> Option<(u64, TextRange)> {
     let range = p.nth_range(0);
@@ -173,9 +132,9 @@ fn number(p: &mut Parser, what: &str) -> Option<(u64, TextRange)> {
     Some((value.unwrap_or(u64::MAX), range))
 }
 
-fn check_range(p: &mut Parser, value: Option<(u64, TextRange)>, max: u64, what: &str) {
+fn check_field(p: &mut Parser, value: Option<(u64, TextRange)>, field: ClockField, what: &str) {
     if let Some((value, range)) = value {
-        if value > max {
+        if !field.accepts(u128::from(value)) {
             p.error_at(range, &format!("{what} is out of range"));
         }
     }
@@ -184,12 +143,12 @@ fn check_range(p: &mut Parser, value: Option<(u64, TextRange)>, max: u64, what: 
 /// `hour : minute [: second]`, with the seconds optionally fractional.
 pub(super) fn daytime_value(p: &mut Parser) {
     let hour = number(p, "an hour");
-    check_range(p, hour, 23, "the hour");
+    check_field(p, hour, ClockField::Hour, "the hour");
     if !piece(p, K::Colon, "`:`") {
         return;
     }
     let minute = number(p, "a minute");
-    check_range(p, minute, 59, "the minute");
+    check_field(p, minute, ClockField::Minute, "the minute");
     if !p.at(K::Colon) || minute.is_none() {
         return;
     }
@@ -205,7 +164,12 @@ pub(super) fn daytime_value(p: &mut Parser) {
     } else if !piece(p, K::IntegerLit, "a second") {
         return;
     }
-    check_range(p, whole.map(|value| (value, range)), 59, "the second");
+    check_field(
+        p,
+        whole.map(|value| (value, range)),
+        ClockField::Second,
+        "the second",
+    );
 }
 
 /// `year - month - day`, a real calendar date.
@@ -221,12 +185,13 @@ pub(super) fn date_value(p: &mut Parser) {
     let day = number(p, "a day");
     if let (Some((year, year_range)), Some((month, _)), Some((day, day_range))) = (year, month, day)
     {
-        if year > 9999 {
-            p.error_at(year_range, "the year is out of range");
-        } else if !(1..=12).contains(&month) {
-            p.error_at(year_range.cover(day_range), "the month is out of range");
-        } else if day == 0 || day > days_in_month(year, month) {
-            p.error_at(day_range, "the day is out of range for the month");
+        match calendar_date(year.into(), month.into(), day.into()) {
+            Ok(_) => {}
+            Err(DateField::Year) => p.error_at(year_range, "the year is out of range"),
+            Err(DateField::Month) => {
+                p.error_at(year_range.cover(day_range), "the month is out of range")
+            }
+            Err(DateField::Day) => p.error_at(day_range, "the day is out of range for the month"),
         }
     }
 }
@@ -270,14 +235,5 @@ mod tests {
     #[test]
     fn validate_interval_when_zero_fraction_before_last_part_then_ok() {
         assert_eq!(validate_interval("1.0m30s"), Ok(()));
-    }
-
-    #[test]
-    fn days_in_month_when_february_then_follows_leap_years() {
-        assert_eq!(days_in_month(2024, 2), 29);
-        assert_eq!(days_in_month(1900, 2), 28);
-        assert_eq!(days_in_month(2000, 2), 29);
-        assert_eq!(days_in_month(2023, 4), 30);
-        assert_eq!(days_in_month(2023, 12), 31);
     }
 }
