@@ -36,5 +36,5 @@ pub mod syntax_kind;
 
 pub use error::{ErrorKind, SyntaxError};
 pub use parser::options::ParseOptions;
-pub use parser::{parse_expression, parse_source_file, parse_statements, Parse};
+pub use parser::{parse_expression, parse_source_file, parse_statements, Parse, MAX_DEPTH};
 pub use syntax_kind::{StLanguage, SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken};

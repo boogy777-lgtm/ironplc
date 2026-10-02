@@ -1,0 +1,60 @@
+=====
+P0019
+=====
+
+.. problem-summary:: P0019
+
+This error occurs when a program nests its syntax more deeply than the
+compiler accepts. What is limited is the depth of the syntax tree, the number of
+constructs inside one another on the way from the start of the file to the
+innermost one, and not the length of the text. The limit is 256 levels, and the
+file, the declaration it holds and the body of that declaration are levels too.
+
+A level is added by each parenthesis, each function call and each argument
+list, each ``IF``, ``CASE``, ``FOR``, ``WHILE``, ``REPEAT`` and ``__TRY``
+statement inside another, and each nested ``ARRAY``, ``REF_TO``, namespace,
+initializer or chart. A chain also adds one level for each link: every operator
+of ``a + b + c + ...`` continues the expression before it and so goes one level
+below it, and so does every ``^``, every ``.member`` and every ``[index]`` of a
+variable. A chain of a few hundred links is therefore too deep, although it
+fits on one line.
+
+A conditional-compilation condition is limited the same way: parentheses and
+``NOT`` inside an ``{IF}`` condition may nest 256 levels.
+
+The compiler reports the error once, where the limit is first passed, and
+keeps the text that follows as part of the construct that was open there.
+
+Example
+-------
+
+The following code will generate error P0019 when the sum has enough terms. The
+sum is shortened here; ``...`` stands for the terms left out:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       total : DINT;
+       a1, a2, a3, a300 : DINT;
+   END_VAR
+       total := a1 + a2 + a3 + ... + a300;  (* Error: 300 terms are 300 levels deep *)
+   END_PROGRAM
+
+To fix this error, split the construct into parts that each stay within the
+limit, and combine the parts:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       total, first_half, second_half : DINT;
+       a1, a2, a3, a150, a151, a300 : DINT;
+   END_VAR
+       first_half := a1 + a2 + a3 + ... + a150;
+       second_half := a151 + ... + a300;
+       total := first_half + second_half;  (* Correct: no part is deep *)
+   END_PROGRAM
+
+Nested statements and parentheses are fixed the same way: move the inner part
+into its own variable, function or function block.

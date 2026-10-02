@@ -1,6 +1,6 @@
 use super::*;
 use crate::lower::{INTERNAL_ERROR, NOT_IMPLEMENTED};
-use crate::{parse_expression, ParseOptions, SyntaxKind};
+use crate::{parse_expression, ParseOptions, SyntaxKind, MAX_DEPTH};
 use ironplc_dsl::common::{LocationPrefix, SizePrefix};
 use ironplc_dsl::core::FileId;
 use ironplc_dsl::textual::ExprKind;
@@ -254,15 +254,15 @@ fn lower_variable_when_direct_address_then_location_size_address_and_position() 
 }
 
 #[test]
-fn lower_variable_when_selectors_are_numerous_then_lowered_without_recursion() {
-    // The spaces keep each node over three children, which the tree builder
-    // would otherwise intern, and its interning recurses. The result is not
-    // dropped: dropping a variable this deep recurses in the objects.
+fn lower_variable_when_selectors_are_as_many_as_the_tree_allows_then_lowered_without_recursion() {
+    // On the smallest stack the compiler runs on, 1 MiB. The root, one node
+    // for each selector and the name at the bottom make the depth.
     let depth = std::thread::Builder::new()
-        .stack_size(256 * 1024)
+        .stack_size(1024 * 1024)
         .spawn(|| {
-            let source = format!("a{}", " . b".repeat(10_000));
+            let source = format!("a{}", ".b".repeat(MAX_DEPTH - 2));
             let parse = parse_expression(&source, &all());
+            assert!(parse.is_ok(), "{:?}", parse.errors);
             let node = parse.root.first_child().expect("a node");
             let variable = lower_variable(&LowerCx::new(file()), &node).expect("lowers");
             let mut depth = 0;
@@ -274,14 +274,11 @@ fn lower_variable_when_selectors_are_numerous_then_lowered_without_recursion() {
                 depth += 1;
                 current = &member.record;
             }
-            std::mem::forget(variable);
-            std::mem::forget(node);
-            std::mem::forget(parse);
             depth
         })
         .ok()
         .and_then(|thread| thread.join().ok());
-    assert_eq!(depth, Some(10_000));
+    assert_eq!(depth, Some(MAX_DEPTH - 2));
 }
 
 #[test]

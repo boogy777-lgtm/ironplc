@@ -6,6 +6,7 @@
 //! a kind, and the kind decides the problem code the error is reported under
 //! (see the `diagnostic` module).
 
+use crate::parser::MAX_DEPTH;
 use crate::pragma::Fault;
 use core::fmt;
 use rowan::TextRange;
@@ -43,6 +44,13 @@ pub enum ErrorKind {
     /// `{IF}`, `{ELSIF}` or `{DEFINE}` with a condition or name this compiler
     /// does not understand.
     PragmaValueExpected,
+    /// Nesting deeper than [`MAX_DEPTH`].
+    NestingTooDeep,
+}
+
+/// What is said of nesting beyond [`MAX_DEPTH`], wherever it is found.
+pub(crate) fn nesting_message() -> String {
+    format!("Maximum nesting depth of {MAX_DEPTH} exceeded")
 }
 
 impl From<Fault> for ErrorKind {
@@ -50,6 +58,7 @@ impl From<Fault> for ErrorKind {
         match fault {
             Fault::Unmatched => ErrorKind::PragmaIfUnmatched,
             Fault::UnexpectedValue => ErrorKind::PragmaValueExpected,
+            Fault::NestingTooDeep => ErrorKind::NestingTooDeep,
         }
     }
 }

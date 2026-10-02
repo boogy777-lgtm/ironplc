@@ -1,6 +1,6 @@
 use super::*;
 use crate::lower::{disposition, INTERNAL_ERROR, NOT_IMPLEMENTED};
-use crate::{parse_expression, parse_statements, ParseOptions, SyntaxKind};
+use crate::{parse_expression, parse_statements, ParseOptions, SyntaxKind, MAX_DEPTH};
 use ironplc_dsl::core::{FileId, Located};
 use ironplc_dsl::textual::{SelfRefKind, SymbolicVariableKind, Variable};
 use ironplc_problems::Problem;
@@ -641,15 +641,16 @@ fn lower_expr_when_operators_table_then_every_row_names_an_operator_token() {
     assert_eq!(OPERATIONS.len(), 17);
 }
 
-// Stack safety: a chain as long as the text is lowered without recursion along
-// it. The lowering runs on a stack too small for one frame per term; the
-// result is not dropped, because dropping a tree this deep recurses in the
-// objects, which is not what is under test.
+// Stack safety: a chain the tree depth limit allows is lowered, and dropped,
+// on a stack that holds a few hundred frames. The limit is what keeps a chain
+// of any length in the text from reaching the rules; the rules fold a chain
+// without recursing along it, so it costs the stack nothing.
 
-/// Runs `body` on a thread whose stack holds a few hundred frames.
+/// Runs `body` on a thread with the smallest stack the compiler runs on: the
+/// 1 MiB of the Windows main thread and of WebAssembly.
 fn on_small_stack<T: Send + 'static>(body: impl FnOnce() -> T + Send + 'static) -> Option<T> {
     std::thread::Builder::new()
-        .stack_size(256 * 1024)
+        .stack_size(1024 * 1024)
         .spawn(body)
         .ok()?
         .join()
@@ -667,29 +668,43 @@ fn left_depth(expr: &Expr) -> usize {
     depth
 }
 
+/// The terms of the longest sum the tree depth limit allows: the root, one
+/// node for each operator and the operand at the bottom make the depth.
+const LONGEST_SUM: usize = MAX_DEPTH - 1;
+
 #[test]
-fn lower_expr_when_sum_of_ten_thousand_terms_then_lowered_without_recursion() {
+fn lower_expr_when_sum_is_as_long_as_the_tree_allows_then_lowered_without_recursion() {
     let depth = on_small_stack(|| {
-        let source = vec!["a"; 10_000].join(" + ");
+        let source = vec!["a"; LONGEST_SUM].join("+");
         let parse = parse_expression(&source, &all());
+        assert!(parse.is_ok(), "{:?}", parse.errors);
         let node = parse.root.first_child().expect("a node");
         let expr = lower_expr(&LowerCx::new(file()), &node).expect("lowers");
-        let depth = left_depth(&expr);
-        std::mem::forget(expr);
-        std::mem::forget(node);
-        std::mem::forget(parse);
-        depth
+        left_depth(&expr)
     });
-    assert_eq!(depth, Some(9_999));
+    assert_eq!(depth, Some(LONGEST_SUM - 1));
 }
 
 #[test]
-fn lower_expr_when_ten_thousand_carets_then_lowered_without_recursion() {
+fn lower_expr_when_sum_is_one_term_too_long_then_the_parse_reports_the_depth_not_the_lowering() {
+    let source = vec!["a"; LONGEST_SUM + 1].join("+");
+    let parse = parse_expression(&source, &all());
+    assert_eq!(
+        parse
+            .errors
+            .iter()
+            .map(|error| error.kind)
+            .collect::<Vec<_>>(),
+        vec![crate::ErrorKind::NestingTooDeep]
+    );
+}
+
+#[test]
+fn lower_expr_when_carets_are_as_many_as_the_tree_allows_then_lowered_without_recursion() {
     let depth = on_small_stack(|| {
-        // The comments keep each node over three children, which the tree
-        // builder would otherwise intern, and its interning recurses.
-        let source = format!("a{}", " (**) ^".repeat(10_000));
+        let source = format!("a{}", "^".repeat(MAX_DEPTH - 2));
         let parse = parse_expression(&source, &all());
+        assert!(parse.is_ok(), "{:?}", parse.errors);
         let node = parse.root.first_child().expect("a node");
         let expr = lower_expr(&LowerCx::new(file()), &node).expect("lowers");
         let mut depth = 0;
@@ -698,12 +713,51 @@ fn lower_expr_when_ten_thousand_carets_then_lowered_without_recursion() {
             depth += 1;
             current = inner;
         }
-        std::mem::forget(expr);
-        std::mem::forget(node);
-        std::mem::forget(parse);
         depth
     });
-    assert_eq!(depth, Some(10_000));
+    assert_eq!(depth, Some(MAX_DEPTH - 2));
+}
+
+/// The stack the nested expressions below are lowered, walked and dropped on.
+/// Nested calls at the limit need 1.7 MiB in a debug build, the most of any
+/// construct, and 0.6 MiB in a release build; one level costs 7 KB and 2.3 KB.
+const NESTING_STACK: usize = 4 * 1024 * 1024;
+
+/// How deep `build` nests before the parse reports the depth.
+fn deepest_allowed(build: fn(usize) -> String) -> usize {
+    (1..)
+        .find(|n| !parse_expression(&build(*n), &all()).is_ok())
+        .map_or(0, |first_too_deep| first_too_deep - 1)
+}
+
+#[test]
+fn lower_expr_when_nesting_is_as_deep_as_the_tree_allows_then_lowered_walked_and_dropped() {
+    use ironplc_dsl::visitor::Visitor;
+
+    struct Walker;
+    impl Visitor<std::convert::Infallible> for Walker {
+        type Value = ();
+    }
+
+    let nestings: [fn(usize) -> String; 2] = [
+        |n| format!("{}1{}", "(".repeat(n), ")".repeat(n)),
+        |n| format!("{}1{}", "f(".repeat(n), ")".repeat(n)),
+    ];
+    for build in nestings {
+        let walked = std::thread::Builder::new()
+            .stack_size(NESTING_STACK)
+            .spawn(move || {
+                let source = build(deepest_allowed(build));
+                let parse = parse_expression(&source, &all());
+                assert!(parse.is_ok(), "{:?}", parse.errors);
+                let node = parse.root.first_child().expect("a node");
+                let expr = lower_expr(&LowerCx::new(file()), &node).expect("lowers");
+                Walker.visit_expr(&expr).is_ok()
+            })
+            .ok()
+            .and_then(|thread| thread.join().ok());
+        assert_eq!(walked, Some(true));
+    }
 }
 
 #[test]

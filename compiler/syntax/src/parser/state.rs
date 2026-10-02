@@ -9,15 +9,34 @@
 
 use super::event::{CompletedMarker, Event, Marker};
 use super::options::ParseOptions;
-use crate::error::SyntaxError;
+use crate::error::{nesting_message, ErrorKind, SyntaxError};
 use crate::lexer::Token;
 use crate::syntax_kind::SyntaxKind;
 use rowan::{TextRange, TextSize};
 
-/// Deepest nesting of expressions and statements before parsing degrades to
-/// an error node instead of recursing further. Bounds stack use on
-/// pathological input (design: parse-tree S0 audit, finding F9).
-pub(crate) const MAX_DEPTH: usize = 96;
+/// The deepest syntax tree the parser builds, counting the root: no path from
+/// the root down holds more nodes. What would be deeper is not opened; see
+/// [`Parser::open`]. Every stage that walks the tree recurses as deep as the
+/// tree is, so this number is what bounds their stack use, and a chain of
+/// `a + b + c ...` or `a.b.c ...` counts like any other nesting, because the
+/// tree nests it.
+///
+/// The reference accepts more: CODESYS 3.5.22 stops at 2000 levels of
+/// expression nesting in its parser and 5000 in its statement checker, and
+/// reports both as message 584, "Maximum nesting depth exceeded". 2000 does not
+/// fit the stack the compiler is given. The smallest is 1 MiB: the main thread
+/// on Windows, and WebAssembly, which cannot grow it. Measured with 1 MiB
+/// threads in a release build, the stack a level costs is about 0.5 KB in the
+/// parser, 0.3 KB to drop the tree, and 2.3 KB to lower a nested expression;
+/// debug builds cost up to 7 KB a level in lowering. At 2000 levels lowering
+/// alone needs 4.5 MiB; at 256 the most it needs is 583 KB, and WebAssembly
+/// runs every stage in its 1 MiB. The legacy parser overflows the same 1 MiB
+/// between 95 and 211 levels in a release build, and at 800 for chains of
+/// members or subscripts, so the limit refuses nothing it handled but those.
+///
+/// The `Fold` of the object tree costs 6.8 KB a level in a release build, 1.7
+/// MiB at this depth, which the code that runs it has to be given.
+pub const MAX_DEPTH: usize = 256;
 
 /// Keywords the legacy lexer matches only in upper case. The lexer here is
 /// case-insensitive for every keyword, so the parser treats `mod` and `not`
@@ -52,7 +71,9 @@ pub(crate) struct Parser<'t, 's> {
     events: Vec<Event>,
     errors: Vec<SyntaxError>,
     pub(super) options: ParseOptions,
-    depth: usize,
+    /// One entry per node that is open, outermost first: the height of the
+    /// tallest node completed directly inside it so far.
+    levels: Vec<u32>,
     /// How many `CASE` statements enclose the current position. Inside one,
     /// `name :` selects the next branch instead of labelling a statement.
     pub(super) case_depth: u32,
@@ -77,7 +98,7 @@ impl<'t, 's> Parser<'t, 's> {
             events: Vec::new(),
             errors: Vec::new(),
             options,
-            depth: 0,
+            levels: Vec::new(),
             case_depth: 0,
             end,
         }
@@ -85,6 +106,7 @@ impl<'t, 's> Parser<'t, 's> {
 
     /// The events and errors recorded so far.
     pub(crate) fn finish(self) -> (Vec<Event>, Vec<SyntaxError>) {
+        debug_assert!(self.levels.is_empty(), "a node was opened and never closed");
         (self.events, self.errors)
     }
 
@@ -251,21 +273,66 @@ impl<'t, 's> Parser<'t, 's> {
     // ----- nodes ----------------------------------------------------------
 
     pub(crate) fn start(&mut self) -> Marker {
-        let pos = self.events.len();
+        self.open(None)
+    }
+
+    /// Starts a node that will wrap `completed` and what follows it.
+    pub(crate) fn precede(&mut self, completed: CompletedMarker) -> Marker {
+        self.open(Some(completed))
+    }
+
+    /// The one place a node is opened, whether it nests around what comes
+    /// after it (`start`) or around what is already complete (`precede`,
+    /// which is how a left-associative chain grows). The node would sit below
+    /// every node that is open and above everything it wraps; when that makes
+    /// the tree deeper than [`MAX_DEPTH`] it is not opened. The marker is
+    /// absorbed instead: what the node would have held joins the node that is
+    /// open, so the text is all kept, and one error is reported.
+    fn open(&mut self, wraps: Option<CompletedMarker>) -> Marker {
+        let below = wraps.map_or(0, |completed| completed.height);
+        if self.levels.len() + 1 + below as usize > MAX_DEPTH {
+            self.report_nesting();
+            let pos = self.reserve();
+            return Marker::absorbed(pos, wraps.unwrap_or(CompletedMarker::none_at(pos)));
+        }
+        self.levels.push(below);
+        match wraps {
+            Some(completed) => completed.precede(&mut self.events),
+            None => Marker::at(self.reserve()),
+        }
+    }
+
+    /// Reserves a slot for a `Start` and returns where it is.
+    fn reserve(&mut self) -> usize {
         self.events.push(Event::Tombstone);
-        Marker { pos }
+        self.events.len() - 1
     }
 
     pub(crate) fn complete(&mut self, marker: Marker, kind: SyntaxKind) -> CompletedMarker {
-        marker.complete(&mut self.events, kind)
+        let height = if marker.is_absorbed() {
+            0
+        } else {
+            self.close_level(true)
+        };
+        marker.complete(&mut self.events, kind, height)
     }
 
     pub(crate) fn abandon(&mut self, marker: Marker) {
+        if !marker.is_absorbed() {
+            self.close_level(false);
+        }
         marker.abandon(&mut self.events);
     }
 
-    pub(crate) fn precede(&mut self, completed: CompletedMarker) -> Marker {
-        completed.precede(&mut self.events)
+    /// Closes the innermost open node and returns its height: one more than
+    /// its tallest child when it is a node, and the tallest child's when it
+    /// is abandoned, whose children go to its parent. The parent learns it.
+    fn close_level(&mut self, node: bool) -> u32 {
+        let height = self.levels.pop().unwrap_or(0) + u32::from(node);
+        if let Some(parent) = self.levels.last_mut() {
+            *parent = (*parent).max(height);
+        }
+        height
     }
 
     // ----- errors ---------------------------------------------------------
@@ -313,22 +380,39 @@ impl<'t, 's> Parser<'t, 's> {
 
     // ----- depth guard ----------------------------------------------------
 
-    /// Runs `body` one nesting level deeper, or `degraded` when the limit is
-    /// reached. `degraded` must consume what `body` would have, as an error
-    /// node, so the enclosing loop still makes progress.
+    /// Records that the tree has no room for another node, unless the error
+    /// just before it is that one already: a chain over the limit would
+    /// otherwise report once per link.
+    fn report_nesting(&mut self) {
+        if self
+            .errors
+            .last()
+            .is_some_and(|error| error.kind == ErrorKind::NestingTooDeep)
+        {
+            return;
+        }
+        self.errors.push(
+            SyntaxError::new(nesting_message(), self.current_range())
+                .with_kind(ErrorKind::NestingTooDeep),
+        );
+    }
+
+    /// Runs `body`, or `degraded` when the tree is too deep to recurse
+    /// further. `degraded` must consume what `body` would have, as an error
+    /// node, so the enclosing loop still makes progress. The recursion of a
+    /// rule is as deep as the tree it builds, so the room left in the tree is
+    /// the bound on the stack the parser itself uses. One level is kept free
+    /// for the error node `degraded` opens.
     pub(crate) fn guarded<T>(
         &mut self,
         body: impl FnOnce(&mut Self) -> T,
         degraded: impl FnOnce(&mut Self) -> T,
     ) -> T {
-        if self.depth >= MAX_DEPTH {
-            self.error("nesting is too deep");
+        if self.levels.len() + 1 >= MAX_DEPTH {
+            self.report_nesting();
             return degraded(self);
         }
-        self.depth += 1;
-        let result = body(self);
-        self.depth -= 1;
-        result
+        body(self)
     }
 }
 
@@ -425,14 +509,62 @@ mod tests {
     }
 
     #[test]
-    fn guarded_when_limit_reached_then_degraded_runs_and_depth_is_restored() {
+    fn guarded_when_tree_is_full_then_degraded_runs_and_levels_are_restored() {
         let (tokens, _) = lex("x");
         let mut parser = Parser::new(&tokens, ParseOptions::default());
         fn recurse(parser: &mut Parser) {
+            let node = parser.start();
             parser.guarded(recurse, |_| ());
+            parser.complete(node, SyntaxKind::ParenExpr);
         }
         recurse(&mut parser);
-        assert_eq!(parser.depth, 0);
-        assert_eq!(parser.finish().1.len(), 1);
+        assert!(parser.levels.is_empty());
+        let (_, errors) = parser.finish();
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].kind, ErrorKind::NestingTooDeep);
+    }
+
+    #[test]
+    fn start_when_tree_is_full_then_node_is_absorbed_and_nothing_is_lost() {
+        let (tokens, _) = lex("x x");
+        let mut parser = Parser::new(&tokens, ParseOptions::default());
+        let mut open = Vec::new();
+        for _ in 0..MAX_DEPTH {
+            open.push(parser.start());
+        }
+        assert_eq!(parser.levels.len(), MAX_DEPTH);
+        let beyond = parser.start();
+        assert_eq!(parser.levels.len(), MAX_DEPTH);
+        parser.bump();
+        parser.complete(beyond, SyntaxKind::ParenExpr);
+        parser.bump();
+        while let Some(node) = open.pop() {
+            parser.complete(node, SyntaxKind::ParenExpr);
+        }
+        let (events, errors) = parser.finish();
+        assert_eq!(errors.len(), 1);
+        let starts = events
+            .iter()
+            .filter(|event| matches!(event, Event::Start { .. }))
+            .count();
+        assert_eq!(starts, MAX_DEPTH);
+    }
+
+    #[test]
+    fn precede_when_wrapper_would_pass_the_limit_then_it_is_absorbed() {
+        let (tokens, _) = lex("a ^ ^");
+        let mut parser = Parser::new(&tokens, ParseOptions::default());
+        let root = parser.start();
+        let node = parser.start();
+        parser.bump();
+        let mut lhs = parser.complete(node, SyntaxKind::NameRef);
+        for _ in 0..MAX_DEPTH + 1 {
+            let wrapper = parser.precede(lhs);
+            lhs = parser.complete(wrapper, SyntaxKind::DerefExpr);
+        }
+        assert_eq!(lhs.height as usize, MAX_DEPTH - 1);
+        parser.complete(root, SyntaxKind::SourceFile);
+        let (_, errors) = parser.finish();
+        assert_eq!(errors.len(), 1);
     }
 }

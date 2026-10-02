@@ -6,7 +6,9 @@
 
 mod common;
 
-use ironplc_syntax::{parse_source_file, Parse, ParseOptions, SyntaxKind, SyntaxNode};
+use ironplc_syntax::{
+    parse_source_file, ErrorKind, Parse, ParseOptions, SyntaxKind, SyntaxNode, MAX_DEPTH,
+};
 
 fn assert_well_formed(source: &str, parsed: &Parse) {
     assert_eq!(parsed.root.text().to_string(), source);
@@ -238,7 +240,7 @@ fn assert_depth_guard(source: &str) {
         parsed
             .errors
             .iter()
-            .any(|error| error.message == "nesting is too deep"),
+            .any(|error| error.kind == ErrorKind::NestingTooDeep),
         "no depth error for {} bytes",
         source.len()
     );
@@ -249,34 +251,34 @@ fn parse_source_file_when_deeply_nested_declarations_then_depth_guard_degrades_t
     on_small_stack(|| {
         let namespaces = format!(
             "{}{}",
-            "NAMESPACE n ".repeat(400),
-            "END_NAMESPACE ".repeat(400)
+            "NAMESPACE n ".repeat(2 * MAX_DEPTH),
+            "END_NAMESPACE ".repeat(2 * MAX_DEPTH)
         );
         assert_depth_guard(&namespaces);
 
         let references = format!(
             "PROGRAM p VAR x : {}INT; END_VAR END_PROGRAM",
-            "REF_TO ".repeat(400)
+            "REF_TO ".repeat(2 * MAX_DEPTH)
         );
         assert_depth_guard(&references);
 
         let arrays = format!(
             "PROGRAM p VAR x : {}INT; END_VAR END_PROGRAM",
-            "ARRAY[1..2] OF ".repeat(400)
+            "ARRAY[1..2] OF ".repeat(2 * MAX_DEPTH)
         );
         assert_depth_guard(&arrays);
 
         let values = format!(
             "PROGRAM p VAR x : t := {}1{}; END_VAR END_PROGRAM",
-            "(a := ".repeat(400),
-            ")".repeat(400)
+            "(a := ".repeat(2 * MAX_DEPTH),
+            ")".repeat(2 * MAX_DEPTH)
         );
         assert_depth_guard(&values);
 
         let charts = format!(
             "PROGRAM p {}x := 1;{}END_PROGRAM",
-            "INITIAL_STEP s : END_STEP ACTION a : ".repeat(400),
-            "END_ACTION ".repeat(400)
+            "INITIAL_STEP s : END_STEP ACTION a : ".repeat(2 * MAX_DEPTH),
+            "END_ACTION ".repeat(2 * MAX_DEPTH)
         );
         assert_depth_guard(&charts);
     });

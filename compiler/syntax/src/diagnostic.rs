@@ -29,6 +29,7 @@ impl ErrorKind {
             ErrorKind::MultipleUnderscoresNotAllowed => Problem::MultipleUnderscoresNotAllowed,
             ErrorKind::PragmaIfUnmatched => Fault::Unmatched.problem(),
             ErrorKind::PragmaValueExpected => Fault::UnexpectedValue.problem(),
+            ErrorKind::NestingTooDeep => Problem::MaxNestingDepthExceeded,
         }
     }
 }
@@ -61,6 +62,7 @@ mod tests {
     use super::*;
     use crate::parse_source_file;
     use crate::parser::options::ParseOptions;
+    use crate::MAX_DEPTH;
 
     #[test]
     fn to_diagnostic_when_grammar_error_then_syntax_error_code_and_byte_span() {
@@ -86,5 +88,23 @@ mod tests {
         let parse = parse_source_file("PROGRAM p\n// note\nEND_PROGRAM", &ParseOptions::default());
         let diagnostics = parse.diagnostics(&FileId::default());
         assert_eq!(diagnostics[0].code, Problem::CStyleComment.code());
+    }
+
+    #[test]
+    fn to_diagnostic_when_nesting_too_deep_then_the_nesting_code_and_a_message_naming_the_limit() {
+        let source = format!(
+            "{}1{}",
+            "(".repeat(2 * MAX_DEPTH),
+            ")".repeat(2 * MAX_DEPTH)
+        );
+        let parse = crate::parse_expression(&source, &ParseOptions::default());
+        let diagnostics = parse.diagnostics(&FileId::default());
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].code, Problem::MaxNestingDepthExceeded.code());
+        assert_eq!(diagnostics[0].code, "P0019");
+        assert!(diagnostics[0]
+            .primary
+            .message
+            .contains(&MAX_DEPTH.to_string()));
     }
 }

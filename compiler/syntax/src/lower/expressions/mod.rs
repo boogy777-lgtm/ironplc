@@ -22,8 +22,8 @@
 //!
 //! A chain of left-associative operators, and a chain of `^`, is as deep as it
 //! is long, so both are folded from their innermost node outward
-//! (`left_spine`): a sum of ten thousand terms lowers without recursion.
-//! Recursion follows only nesting the parser bounds.
+//! (`left_spine`) and cost the stack nothing along their length. Recursion
+//! follows only nesting, and the tree is no deeper than [`crate::MAX_DEPTH`].
 
 use super::literals::lower_constant;
 use super::names::{lower_id, lower_name, lower_type_ref};

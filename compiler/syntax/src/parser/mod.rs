@@ -16,6 +16,7 @@ pub mod options;
 mod recovery;
 mod state;
 pub(crate) use state::is_special_operator;
+pub use state::MAX_DEPTH;
 
 use self::options::ParseOptions;
 use self::state::Parser;
@@ -27,6 +28,7 @@ use crate::syntax_kind::{SyntaxKind, SyntaxNode};
 /// The result of a parse: the tree and every syntax error found.
 ///
 /// The root is always a [`SyntaxKind::SourceFile`] whose text is the source.
+/// No path from the root down holds more than [`MAX_DEPTH`] nodes.
 /// Errors are in source order and include lexical errors, dialect-gate
 /// errors and grammar errors.
 #[derive(Debug)]

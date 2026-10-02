@@ -29,14 +29,49 @@ pub(crate) enum Event {
 }
 
 /// A reserved `Start` slot that [`Marker::complete`] fills in.
+///
+/// A marker the tree has no room for is absorbed: it reserves a slot that
+/// stays a tombstone, and completing it hands back `stands_for`, the node it
+/// would have wrapped, because the content that follows joins the enclosing
+/// node instead.
 #[derive(Debug)]
 pub(crate) struct Marker {
     pub(super) pos: usize,
+    stands_for: Option<CompletedMarker>,
 }
 
 impl Marker {
-    /// Names the node that starts at this marker and closes it.
-    pub(crate) fn complete(self, events: &mut Vec<Event>, kind: SyntaxKind) -> CompletedMarker {
+    /// A marker over the slot at `pos`.
+    pub(super) fn at(pos: usize) -> Self {
+        Marker {
+            pos,
+            stands_for: None,
+        }
+    }
+
+    /// A marker that opens no node. It reserves the slot at `pos`.
+    pub(super) fn absorbed(pos: usize, stands_for: CompletedMarker) -> Self {
+        Marker {
+            pos,
+            stands_for: Some(stands_for),
+        }
+    }
+
+    pub(super) fn is_absorbed(&self) -> bool {
+        self.stands_for.is_some()
+    }
+
+    /// Names the node that starts at this marker and closes it. `height` is
+    /// the node's height once complete: one more than its tallest child.
+    pub(crate) fn complete(
+        self,
+        events: &mut Vec<Event>,
+        kind: SyntaxKind,
+        height: u32,
+    ) -> CompletedMarker {
+        if let Some(stands_for) = self.stands_for {
+            return stands_for;
+        }
         if let Some(slot) = events.get_mut(self.pos) {
             match slot {
                 Event::Start { kind: existing, .. } => *existing = kind,
@@ -49,7 +84,10 @@ impl Marker {
             }
         }
         events.push(Event::Finish);
-        CompletedMarker { pos: self.pos }
+        CompletedMarker {
+            pos: self.pos,
+            height,
+        }
     }
 
     /// Drops the marker. When nothing was emitted after it the slot is
@@ -67,16 +105,25 @@ impl Marker {
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct CompletedMarker {
     pos: usize,
+    /// How many nodes the longest path down from this one holds, itself
+    /// included: 1 for a node without child nodes.
+    pub(super) height: u32,
 }
 
 impl CompletedMarker {
+    /// A closed node that is not in the tree, which a later node may be
+    /// asked to wrap: it adds nothing to the height of what wraps it.
+    pub(super) fn none_at(pos: usize) -> Self {
+        CompletedMarker { pos, height: 0 }
+    }
+
     /// Starts a node that will wrap this one and everything emitted after it
     /// up to its own completion.
     pub(crate) fn precede(self, events: &mut Vec<Event>) -> Marker {
         let new_pos = events.len();
         events.push(Event::Tombstone);
         link_forward_parent(events, self.pos, new_pos);
-        Marker { pos: new_pos }
+        Marker::at(new_pos)
     }
 }
 
@@ -101,16 +148,14 @@ mod tests {
 
     fn start(events: &mut Vec<Event>) -> Marker {
         events.push(Event::Tombstone);
-        Marker {
-            pos: events.len() - 1,
-        }
+        Marker::at(events.len() - 1)
     }
 
     #[test]
     fn complete_when_marker_then_start_and_finish_events() {
         let mut events = Vec::new();
         let marker = start(&mut events);
-        marker.complete(&mut events, SyntaxKind::NameRef);
+        marker.complete(&mut events, SyntaxKind::NameRef, 1);
         assert_eq!(
             events,
             vec![
@@ -145,10 +190,10 @@ mod tests {
         let mut events = Vec::new();
         let inner = start(&mut events);
         events.push(Event::Token { index: 0 });
-        let done = inner.complete(&mut events, SyntaxKind::NameRef);
+        let done = inner.complete(&mut events, SyntaxKind::NameRef, 1);
         let outer = done.precede(&mut events);
         events.push(Event::Token { index: 1 });
-        outer.complete(&mut events, SyntaxKind::BinaryExpr);
+        outer.complete(&mut events, SyntaxKind::BinaryExpr, 2);
         assert_eq!(
             events.first(),
             Some(&Event::Start {
@@ -162,13 +207,13 @@ mod tests {
     fn precede_when_twice_then_chain_links_through_outermost_wrapper() {
         let mut events = Vec::new();
         let inner = start(&mut events);
-        let done = inner.complete(&mut events, SyntaxKind::NameRef);
+        let done = inner.complete(&mut events, SyntaxKind::NameRef, 1);
         let first = done
             .precede(&mut events)
-            .complete(&mut events, SyntaxKind::BinaryExpr);
+            .complete(&mut events, SyntaxKind::BinaryExpr, 2);
         first
             .precede(&mut events)
-            .complete(&mut events, SyntaxKind::BinaryExpr);
+            .complete(&mut events, SyntaxKind::BinaryExpr, 3);
         // NameRef -> first wrapper (at 2) -> second wrapper (at 4).
         assert_eq!(
             events.get(2),
@@ -177,5 +222,19 @@ mod tests {
                 forward_parent: Some(2)
             })
         );
+    }
+
+    #[test]
+    fn complete_when_marker_is_absorbed_then_no_node_and_the_stand_in_is_returned() {
+        let mut events = Vec::new();
+        let inner = start(&mut events);
+        let done = inner.complete(&mut events, SyntaxKind::NameRef, 1);
+        events.push(Event::Tombstone);
+        let absorbed = Marker::absorbed(events.len() - 1, done);
+        assert!(absorbed.is_absorbed());
+        let before = events.clone();
+        let stand_in = absorbed.complete(&mut events, SyntaxKind::BinaryExpr, 2);
+        assert_eq!(events, before);
+        assert_eq!(stand_in.height, 1);
     }
 }
