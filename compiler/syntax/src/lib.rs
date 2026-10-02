@@ -1,3 +1,5 @@
+// Allow large errors because this is a compiler - we expect large errors.
+#![allow(clippy::result_large_err)]
 //! Lossless concrete syntax tree for IEC 61131-3 text.
 //!
 //! This crate owns the syntax kinds and the rowan language binding, the
@@ -10,8 +12,10 @@
 //! The parser covers whole files: programs, functions, function blocks with
 //! their methods and properties, interfaces, namespaces, variable blocks,
 //! `TYPE` declarations, configurations and sequential function charts, with
-//! the statements and expressions inside them. It is not used by any
-//! production consumer yet.
+//! the statements and expressions inside them. The [`lower`] module turns the
+//! tree into the `ironplc_dsl` objects, one rule per language element; it
+//! covers the literals and names so far, and neither it nor the parser is used
+//! by a production consumer yet.
 //!
 //! The text is kept as written. Two constructs make a stretch of it not code:
 //! OSCAT ranged comments (what a `(*@KEY@:NAME*)` pair holds) and, with
@@ -23,7 +27,9 @@
 mod cst;
 mod diagnostic;
 pub mod error;
+mod interval_text;
 pub mod lexer;
+pub mod lower;
 pub mod parser;
 pub mod pragma;
 pub mod syntax_kind;

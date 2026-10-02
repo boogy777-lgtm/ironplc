@@ -1212,6 +1212,7 @@ dependencies = [
  "ironplc-problems",
  "ironplc-test",
  "rowan",
+ "time",
 ]
 
 [[package]]

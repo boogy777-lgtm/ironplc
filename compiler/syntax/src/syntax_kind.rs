@@ -60,10 +60,39 @@ macro_rules! syntax_kinds {
                 !matches!(self, $(SyntaxKind::$node|)* SyntaxKind::Unknown)
             }
 
+            /// The node kind this kind is, or `None` for a token, a keyword,
+            /// trivia or `Unknown`.
+            pub fn node(self) -> Option<NodeKind> {
+                match self {
+                    $(SyntaxKind::$node => Some(NodeKind::$node),)*
+                    _ => None,
+                }
+            }
+
             fn keyword_from_upper(upper: &str) -> Option<SyntaxKind> {
                 match upper {
                     $($($spelling)|+ => Some(SyntaxKind::$keyword),)*
                     _ => None,
+                }
+            }
+        }
+
+        /// The node kinds alone, generated from the same declaration.
+        ///
+        /// A table that has to decide something about every node matches on
+        /// this type without a wildcard arm: adding a node kind to the
+        /// declaration then fails to compile until the table says what to do
+        /// with it.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        pub enum NodeKind {
+            $($node,)*
+        }
+
+        impl NodeKind {
+            /// The syntax kind of this node kind.
+            pub fn syntax_kind(self) -> SyntaxKind {
+                match self {
+                    $(NodeKind::$node => SyntaxKind::$node,)*
                 }
             }
         }
@@ -473,6 +502,21 @@ mod tests {
         assert!(SyntaxKind::Ident.is_token());
         assert!(!SyntaxKind::SourceFile.is_token());
         assert!(!SyntaxKind::Unknown.is_token());
+    }
+
+    #[test]
+    fn node_when_kind_is_a_node_then_node_kind_and_back_and_otherwise_none() {
+        for kind in SyntaxKind::ALL {
+            match kind.node() {
+                Some(node) => {
+                    assert!(!kind.is_token(), "{kind:?}");
+                    assert_eq!(node.syntax_kind(), *kind);
+                }
+                None => assert!(kind.is_token() || *kind == SyntaxKind::Unknown, "{kind:?}"),
+            }
+        }
+        assert_eq!(SyntaxKind::Ident.node(), None);
+        assert_eq!(SyntaxKind::SourceFile.node(), Some(NodeKind::SourceFile));
     }
 
     #[test]

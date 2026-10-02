@@ -148,6 +148,19 @@ pub fn parse_statements(tokens: Vec<Token>) -> Result<Vec<StmtKind>, Diagnostic>
     })
 }
 
+/// Parses the tokens of one constant, as the grammar's `constant` rule reads
+/// them. Test-only: the oracle the literal lowering is compared against.
+#[cfg(test)]
+pub fn parse_constant(tokens: &[Token]) -> Result<ConstantKind, Diagnostic> {
+    plc_parser::data_source(&SliceByRef(tokens), tokens).map_err(|e| {
+        syntax_error(
+            tokens,
+            e.location,
+            Vec::from_iter(e.expected.tokens()).join(" | "),
+        )
+    })
+}
+
 enum StatementsOrEmpty {
     Statements(Vec<StmtKind>),
     Empty(),

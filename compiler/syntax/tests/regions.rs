@@ -341,3 +341,40 @@ fn parse_source_file_when_every_prefix_of_region_input_then_lossless_and_termina
         }
     }
 }
+
+fn lexical_fixture(name: &str) -> String {
+    std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/lexical")
+            .join(name),
+    )
+    .unwrap_or_default()
+}
+
+#[test]
+fn parse_source_file_when_fixture_has_several_oscat_pairs_then_each_pair_is_a_region() {
+    let source = lexical_fixture("oscat_several_pairs.st");
+    let parsed = parse_source_file(&source, &ParseOptions::default());
+    assert!(parsed.is_ok(), "{:?}", parsed.errors);
+    assert_lossless(&source, &parsed);
+    let regions = tokens_of(&parsed, SyntaxKind::RangedComment);
+    assert_eq!(regions.len(), 3);
+    assert!(regions[0].starts_with("(*@KEY@:DESCRIPTION*)"));
+    assert!(regions[1].starts_with("(*@KEY@:NOTES*)"));
+    assert!(regions[2].starts_with("(*@KEY@:REVISION*)"));
+    assert_eq!(assignments(&parsed), 1);
+}
+
+#[test]
+fn parse_source_file_when_fixture_has_marker_text_in_a_string_then_no_region_and_code_stays_live() {
+    let source = lexical_fixture("oscat_marker_in_string.st");
+    let parsed = parse_source_file(&source, &ParseOptions::default());
+    assert!(parsed.is_ok(), "{:?}", parsed.errors);
+    assert_lossless(&source, &parsed);
+    assert!(tokens_of(&parsed, SyntaxKind::RangedComment).is_empty());
+    assert_eq!(
+        tokens_of(&parsed, SyntaxKind::StringLit),
+        vec!["'(*@KEY@:X*)'", "'(*@KEY@:END_X*)'"]
+    );
+    assert_eq!(assignments(&parsed), 3);
+}

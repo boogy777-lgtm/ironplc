@@ -12,6 +12,7 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 rowan = "0.16.1"
+time = "0.3.47"
 ironplc-dsl = { path = "../dsl", version = "0.247.0" }
 ironplc-problems = { path = "../problems", version = "0.247.0" }
 
