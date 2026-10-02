@@ -81,6 +81,9 @@ parse_options! {
     allow_partial_access_syntax,
     /// Curly-brace pragmas.
     allow_pragmas,
+    /// `{IF}`, `{ELSIF}`, `{ELSE}` and `{END_IF}` pragmas: the branches not
+    /// taken are not parsed.
+    allow_pragma_if,
     /// `AND_THEN` and `OR_ELSE` are keywords.
     allow_short_circuit_operators,
     /// `THIS`, `SUPER` and the object-oriented keywords.

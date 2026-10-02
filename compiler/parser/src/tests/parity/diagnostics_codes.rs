@@ -92,6 +92,24 @@ const RULES: &[RuleCase] = &[
         always: true,
     },
     RuleCase {
+        rule: "unclosed conditional pragma",
+        source: "PROGRAM p\n{IF FALSE}\nx := 1;\nEND_PROGRAM\n",
+        code: "P0023",
+        always: true,
+    },
+    RuleCase {
+        rule: "stray conditional pragma",
+        source: "PROGRAM p\n{END_IF}\nEND_PROGRAM\n",
+        code: "P0023",
+        always: true,
+    },
+    RuleCase {
+        rule: "pragma condition not understood",
+        source: "PROGRAM p\n{IF hastype(x)}\n{END_IF}\nEND_PROGRAM\n",
+        code: "P0024",
+        always: true,
+    },
+    RuleCase {
         rule: "grammar error",
         source: "PROGRAM p\nVAR x : INT; END_VAR\nx := ;\nEND_PROGRAM\n",
         code: "P0002",

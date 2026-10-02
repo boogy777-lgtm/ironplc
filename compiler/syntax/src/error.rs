@@ -6,6 +6,7 @@
 //! a kind, and the kind decides the problem code the error is reported under
 //! (see the `diagnostic` module).
 
+use crate::pragma::Fault;
 use core::fmt;
 use rowan::TextRange;
 
@@ -37,6 +38,20 @@ pub enum ErrorKind {
     UnicodeIdentifierNotAllowed,
     /// Identifier with consecutive underscores without the flag.
     MultipleUnderscoresNotAllowed,
+    /// `{IF}` without its `{END_IF}`, or a stray `{ELSIF}`, `{ELSE}` or `{END_IF}`.
+    PragmaIfUnmatched,
+    /// `{IF}`, `{ELSIF}` or `{DEFINE}` with a condition or name this compiler
+    /// does not understand.
+    PragmaValueExpected,
+}
+
+impl From<Fault> for ErrorKind {
+    fn from(fault: Fault) -> Self {
+        match fault {
+            Fault::Unmatched => ErrorKind::PragmaIfUnmatched,
+            Fault::UnexpectedValue => ErrorKind::PragmaValueExpected,
+        }
+    }
 }
 
 /// A problem found while lexing or parsing, anchored to a byte range.

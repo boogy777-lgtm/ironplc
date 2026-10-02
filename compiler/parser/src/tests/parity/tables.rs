@@ -571,8 +571,6 @@ const SECOND_END_KEYWORD: &str = "the legacy terminator insertion handles an END
 const MARKER_AFTER_STATEMENT: &str = "the legacy grammar accepts __BEGIN_IMPLEMENTATION only where the previous list item left no trivia unconsumed, so a marker after a statement and a space is rejected; the new parser accepts the marker as a list item anywhere";
 const LONE_CR: &str = "a lone CR is a line break in the lossless lexer (old Mac line endings); the legacy lexer reports it as an unexpected token";
 const PRAGMA_CONTENT: &str = "the legacy pipeline tokenises the inside of a pragma and rejects a character it does not know; the CST keeps a pragma as one trivia token and does not examine its text";
-const OSCAT_RANGED_COMMENT: &str = "the legacy preprocessor blanks the text between an OSCAT ranged-comment marker pair `(*@KEY@:NAME*)` and its `END_NAME` marker before lexing; the CST keeps those bytes and does not evaluate them (design: parse-tree S0 audit, finding F1)";
-const PRAGMA_IF: &str = "conditional-compilation pragmas ({IF}, {END_IF}) are evaluated by a separate legacy pass that drops untaken branches and reports unbalanced or malformed ones; the CST keeps every pragma as trivia and does not evaluate it";
 
 const fn exception(
     kind: Kind,
@@ -659,45 +657,14 @@ pub const EXPRESSION_EXCEPTIONS: &[Exception] = &[];
 
 /// Differences in the bodies lifted from the legacy parser tests, against the
 /// legacy parser inside a POU.
-pub const BODY_EXCEPTIONS: &[Exception] = &[
-    accepted_on_purpose(Kind::Statements, "\rx := 1;\r", LONE_CR),
-    accepted_on_purpose(Kind::Statements, " {END_IF} x := 1; ", PRAGMA_IF),
-    accepted_on_purpose(
-        Kind::Statements,
-        " {IF COMPILERVERSION >= 3.5} x := 1; {END_IF} ",
-        PRAGMA_IF,
-    ),
-    accepted_on_purpose(Kind::Statements, " {IF TRUE} x := 1; ", PRAGMA_IF),
-    accepted_on_purpose(Kind::Statements, " {IF} x := 1; {END_IF} ", PRAGMA_IF),
-];
+pub const BODY_EXCEPTIONS: &[Exception] = &[accepted_on_purpose(
+    Kind::Statements,
+    "\rx := 1;\r",
+    LONE_CR,
+)];
 
 /// Differences on whole files, against the legacy parser.
-pub const FILE_EXCEPTIONS: &[Exception] = &[
-    accepted_file("../resources/test/oscat.st", true, OSCAT_RANGED_COMMENT),
-    accepted_file(
-        "../resources/test/oscat.st (CRLF)",
-        true,
-        OSCAT_RANGED_COMMENT,
-    ),
-    accepted_file(
-        "../resources/test/oscat.st (tabs)",
-        true,
-        OSCAT_RANGED_COMMENT,
-    ),
-];
-
-/// The legacy parser accepts the file `name` and the new one rejects it, on
-/// purpose.
-const fn accepted_file(name: &'static str, legacy: bool, reason: &'static str) -> Exception {
-    Exception {
-        kind: Kind::File,
-        snippet: name,
-        preset: None,
-        legacy,
-        basis: Basis::Deliberate,
-        reason,
-    }
-}
+pub const FILE_EXCEPTIONS: &[Exception] = &[];
 
 /// Differences in the declarations lifted from the legacy parser tests.
 pub const LEGACY_DECLARATION_EXCEPTIONS: &[Exception] = &[
@@ -705,26 +672,6 @@ pub const LEGACY_DECLARATION_EXCEPTIONS: &[Exception] = &[
         Kind::Declarations,
         "PROGRAM p\rVAR x : INT; END_VAR\rx := 1;\rEND_PROGRAM\r",
         LONE_CR,
-    ),
-    accepted_on_purpose(
-        Kind::Declarations,
-        "PROGRAM main VAR x : INT; END_VAR {END_IF} x := 1; END_PROGRAM",
-        PRAGMA_IF,
-    ),
-    accepted_on_purpose(
-        Kind::Declarations,
-        "PROGRAM main VAR x : INT; END_VAR {IF COMPILERVERSION >= 3.5} x := 1; {END_IF} END_PROGRAM",
-        PRAGMA_IF,
-    ),
-    accepted_on_purpose(
-        Kind::Declarations,
-        "PROGRAM main VAR x : INT; END_VAR {IF TRUE} x := 1; END_PROGRAM",
-        PRAGMA_IF,
-    ),
-    accepted_on_purpose(
-        Kind::Declarations,
-        "PROGRAM main VAR x : INT; END_VAR {IF} x := 1; {END_IF} END_PROGRAM",
-        PRAGMA_IF,
     ),
     accepted_on_purpose(
         Kind::Declarations,
