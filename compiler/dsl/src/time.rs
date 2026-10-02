@@ -629,6 +629,16 @@ mod tests {
     }
 
     #[test]
+    fn from_unit_when_fraction_of_hour_finer_than_microsecond_then_keeps_nanoseconds() {
+        // REQ-TL-parser-030: the value is preserved down to the nanosecond.
+        // 1e-10 hours is 360 ns.
+        assert_eq!(
+            literal("0.0000000001", DurationUnit::Hours).interval,
+            Duration::nanoseconds(360)
+        );
+    }
+
+    #[test]
     fn from_unit_when_crash_report_input_then_out_of_range() {
         assert_eq!(
             DurationLiteral::from_unit(fixed("9223372036854775807"), DurationUnit::Days),
