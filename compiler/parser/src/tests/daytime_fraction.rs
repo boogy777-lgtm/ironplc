@@ -66,3 +66,22 @@ fn parse_program_when_second_out_of_range_then_error(#[case] literal: &str) {
     let result = parse_program(&program, &FileId::default(), &CompilerOptions::default());
     assert!(result.is_err(), "expected parse error for {literal}");
 }
+
+#[test]
+fn parse_program_when_time_of_day_seconds_exceed_u64_then_syntax_error_not_wrapped() {
+    // The whole seconds wrapped to 0 and 2^64 seconds was read as 10:00:00.
+    // The seconds are spliced in so that the declaration is not taken for a
+    // parity snippet: the new parser accepts the text and rejects it only
+    // when the literal is lowered.
+    let seconds = u128::from(u64::MAX) + 1;
+    let program = format!(
+        "PROGRAM main
+VAR
+t : TIME_OF_DAY := TOD#10:00:{seconds};
+END_VAR
+END_PROGRAM"
+    );
+    let diagnostic =
+        parse_program(&program, &FileId::default(), &CompilerOptions::default()).unwrap_err();
+    assert_eq!(diagnostic.code, "P0002");
+}

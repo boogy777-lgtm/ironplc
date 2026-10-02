@@ -1,17 +1,50 @@
 use std::fmt;
 use time::{
-    convert::{Day, Hour, Minute, Second},
+    convert::{Day, Hour, Minute, Nanosecond, Second},
     Date, Duration, PrimitiveDateTime, Time,
 };
 
 use crate::{
     common::{ElementaryTypeName, FixedPoint},
+    construct::DurationUnit,
     core::SourceSpan,
+    diagnostic::Diagnostic,
 };
+use ironplc_problems::Problem;
 
-const SECOND_PER_DAY: u64 = Second::per(Day) as u64;
-const SECOND_PER_HOUR: u64 = Second::per(Hour) as u64;
-const SECOND_PER_MINUTE: u64 = Second::per(Minute) as u64;
+const NANOSECOND_PER_SECOND: i128 = Nanosecond::per(Second) as i128;
+
+/// A duration that no duration value can represent: its length does not fit
+/// the count of seconds and nanoseconds a [`Duration`] holds.
+///
+/// This is the one failure of building a duration from a number and a unit.
+/// It says only that the value cannot be built at all; whether a value that
+/// can be built fits `TIME` or `LTIME` is the range rule's question, and the
+/// two report through [`DurationOutOfRange::diagnostic`] and
+/// [`StoredCount`] so that they cannot disagree on what is out of range.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub struct DurationOutOfRange;
+
+impl DurationOutOfRange {
+    /// The diagnostic for the literal `text` of the type `width` names: the
+    /// one the range rule gives a literal its type cannot hold, because this
+    /// is a literal no type can hold.
+    pub fn diagnostic(self, span: SourceSpan, text: &str, width: TemporalWidth) -> Diagnostic {
+        Diagnostic::literal_out_of_range(
+            Problem::DurationLiteralOutOfRange,
+            span,
+            text,
+            &duration_type_name(width).to_string(),
+        )
+    }
+}
+
+fn duration_type_name(width: TemporalWidth) -> ElementaryTypeName {
+    match width {
+        TemporalWidth::Short => ElementaryTypeName::TIME,
+        TemporalWidth::Long => ElementaryTypeName::LTIME,
+    }
+}
 
 /// The count a temporal literal holds, together with the storage its own type
 /// gives that count.
@@ -128,10 +161,7 @@ impl DurationLiteral {
     /// range wherever it is written, the way a prefixed integer literal is
     /// (`INT#40000` is not an `INT` whatever it is stored into).
     pub fn type_name(&self) -> ElementaryTypeName {
-        match self.width {
-            TemporalWidth::Short => ElementaryTypeName::TIME,
-            TemporalWidth::Long => ElementaryTypeName::LTIME,
-        }
+        duration_type_name(self.width)
     }
 
     /// The millisecond count this literal holds and the storage its type gives
@@ -147,148 +177,58 @@ impl DurationLiteral {
         }
     }
 
-    /// Creates a literal of `value` units, where one unit is `seconds_per_unit`
-    /// seconds and `whole_units` builds the whole part.
+    /// Creates a literal of `value` counted in `unit`, or says that no
+    /// duration can be that long.
     ///
-    /// A fixed-point literal carries its whole part and a femtosecond
-    /// fraction separately, and days, hours and minutes each scale that
-    /// fraction by their own unit before it becomes a duration. Only the unit
-    /// differs between them, so only the unit is passed in.
-    fn from_whole_unit(
-        value: FixedPoint,
-        whole_units: fn(i64) -> Duration,
-        seconds_per_unit: u64,
-    ) -> Self {
-        let whole = whole_units(value.whole as i64);
-
-        // `femptos / FRACTIONAL_UNITS` is the fraction of one unit, so the
-        // fraction in microseconds is
-        //
-        //     femptos / 1e15 * seconds_per_unit * 1e6 == femptos * seconds_per_unit / 1e9
-        //
-        // computed in `u128` because the numerator does not fit a `u64`: half
-        // a day is 5e14 femtos times 86,400 seconds, which is 4.3e19 against a
-        // `u64::MAX` of 1.8e19. The quotient is at most 8.64e10 microseconds,
-        // one whole unit's worth, so it always fits the `i64` a `Duration`
-        // takes.
-        let fraction = Duration::microseconds(
-            (u128::from(value.femptos) * u128::from(seconds_per_unit)
-                / (FixedPoint::FRACTIONAL_UNITS as u128 / 1_000_000)) as i64,
-        );
-
-        Self::new(value.span, whole + fraction)
-    }
-
-    /// Create a new `DurationLiteral` with the given number of days.
+    /// This is the one point where a number and a unit become a duration, so
+    /// it is the one point that checks the result fits. The whole part and
+    /// the fraction are scaled into nanoseconds in `i128`, which holds the
+    /// largest the grammar can write (`u64::MAX` days is about 1.6e33) with
+    /// room to spare, and only the total is narrowed to the seconds and
+    /// nanoseconds a [`Duration`] stores.
+    ///
+    /// A fraction finer than a nanosecond is truncated (ADR-0021).
     ///
     /// ```rust
     /// use ironplc_dsl::common::FixedPoint;
+    /// use ironplc_dsl::construct::DurationUnit;
     /// use ironplc_dsl::time::DurationLiteral;
     /// use time::Duration;
-    /// assert_eq!(DurationLiteral::days(FixedPoint::parse("1").unwrap()).interval, Duration::days(1));
+    /// let hours = |text| DurationLiteral::from_unit(FixedPoint::parse(text).unwrap(), DurationUnit::Hours);
+    /// assert_eq!(hours("1.5").unwrap().interval, Duration::minutes(90));
+    /// assert!(hours("18446744073709551615").is_err());
     /// ```
-    pub fn days(days: FixedPoint) -> Self {
-        Self::from_whole_unit(days, Duration::days, SECOND_PER_DAY)
+    pub fn from_unit(value: FixedPoint, unit: DurationUnit) -> Result<Self, DurationOutOfRange> {
+        let scale = i128::from(unit.nanoseconds());
+        // `femptos` counts 10^-15 of the unit, so its nanoseconds are
+        // `femptos * scale / 10^15`.
+        let whole = i128::from(value.whole)
+            .checked_mul(scale)
+            .ok_or(DurationOutOfRange)?;
+        let fraction = i128::from(value.femptos)
+            .checked_mul(scale)
+            .ok_or(DurationOutOfRange)?
+            / i128::from(FixedPoint::FRACTIONAL_UNITS);
+        let nanoseconds = whole.checked_add(fraction).ok_or(DurationOutOfRange)?;
+
+        let seconds =
+            i64::try_from(nanoseconds / NANOSECOND_PER_SECOND).map_err(|_| DurationOutOfRange)?;
+        let subsecond =
+            i32::try_from(nanoseconds % NANOSECOND_PER_SECOND).map_err(|_| DurationOutOfRange)?;
+        Ok(Self::new(value.span, Duration::new(seconds, subsecond)))
     }
 
-    /// Create a new `DurationLiteral` with the given number of hours.
-    ///
-    /// ```rust
-    /// use ironplc_dsl::common::FixedPoint;
-    /// use ironplc_dsl::time::DurationLiteral;
-    /// use time::Duration;
-    /// assert_eq!(DurationLiteral::hours(FixedPoint::parse("1").unwrap()).interval, Duration::hours(1));
-    /// assert_eq!(DurationLiteral::hours(FixedPoint::parse("1.5").unwrap()).interval, Duration::minutes(90));
-    /// ```
-    pub fn hours(hours: FixedPoint) -> Self {
-        Self::from_whole_unit(hours, Duration::hours, SECOND_PER_HOUR)
-    }
-
-    /// Create a new `DurationLiteral` with the given number of minutes.
-    ///
-    /// ```rust
-    /// use ironplc_dsl::common::FixedPoint;
-    /// use ironplc_dsl::time::DurationLiteral;
-    /// use time::Duration;
-    /// assert_eq!(DurationLiteral::minutes(FixedPoint::parse("1").unwrap()).interval, Duration::minutes(1));
-    /// assert_eq!(DurationLiteral::minutes(FixedPoint::parse("1.5").unwrap()).interval, Duration::seconds(90));
-    /// ```
-    pub fn minutes(minutes: FixedPoint) -> Self {
-        Self::from_whole_unit(minutes, Duration::minutes, SECOND_PER_MINUTE)
-    }
-
-    /// Create a new `DurationLiteral` with the given number of seconds.
-    ///
-    /// ```rust
-    /// use ironplc_dsl::common::FixedPoint;
-    /// use ironplc_dsl::time::DurationLiteral;
-    /// use time::Duration;
-    /// assert_eq!(DurationLiteral::seconds(FixedPoint::parse("1").unwrap()).interval, Duration::seconds(1));
-    /// assert_eq!(DurationLiteral::seconds(FixedPoint::parse("1.001").unwrap()).interval, Duration::seconds(1) + Duration::milliseconds(1));
-    /// ```
-    pub fn seconds(seconds: FixedPoint) -> Self {
-        let whole_seconds = Duration::seconds(seconds.whole as i64);
-        let fraction_seconds = Duration::nanoseconds(i64::from(seconds.nanoseconds()));
-        Self::new(seconds.span, whole_seconds + fraction_seconds)
-    }
-
-    /// Create a new `DurationLiteral` with the given number of milliseconds.
-    ///
-    /// ```rust
-    /// use ironplc_dsl::common::FixedPoint;
-    /// use ironplc_dsl::time::DurationLiteral;
-    /// use time::Duration;
-    /// assert_eq!(DurationLiteral::milliseconds(FixedPoint::parse("1").unwrap()).interval, Duration::milliseconds(1));
-    /// assert_eq!(DurationLiteral::milliseconds(FixedPoint::parse("1000").unwrap()).interval, Duration::seconds(1));
-    /// assert_eq!(DurationLiteral::milliseconds(FixedPoint::parse("1001").unwrap()).interval, Duration::seconds(1) + Duration::milliseconds(1));
-    /// assert_eq!(DurationLiteral::milliseconds(FixedPoint::parse("0.001").unwrap()).interval, Duration::microseconds(1));
-    /// ```
-    pub fn milliseconds(millis: FixedPoint) -> Self {
-        let whole_seconds = Duration::seconds((millis.whole / 1_000) as i64);
-        let whole_milliseconds = Duration::milliseconds((millis.whole % 1_000) as i64);
-
-        let fraction_nanoseconds = Duration::nanoseconds((millis.femptos / 1_000_000_000) as i64);
-        Self::new(
-            millis.span,
-            whole_seconds + whole_milliseconds + fraction_nanoseconds,
-        )
-    }
-
-    /// Create a new `DurationLiteral` with the given number of microseconds.
-    ///
-    /// ```rust
-    /// use ironplc_dsl::common::FixedPoint;
-    /// use ironplc_dsl::time::DurationLiteral;
-    /// use time::Duration;
-    /// assert_eq!(DurationLiteral::microseconds(FixedPoint::parse("1.5").unwrap()).interval, Duration::microseconds(1) + Duration::nanoseconds(500));
-    /// ```
-    pub fn microseconds(micros: FixedPoint) -> Self {
-        let whole = Duration::microseconds(micros.whole as i64);
-        // The fraction of a microsecond as whole nanoseconds: `femptos` is
-        // the fraction in 10^-15 seconds, so `femptos * 10^-6` is nanoseconds.
-        let fraction = Duration::nanoseconds((micros.femptos / 1_000_000_000_000) as i64);
-        Self::new(micros.span, whole + fraction)
-    }
-
-    /// Create a new `DurationLiteral` with the given number of nanoseconds.
-    ///
-    /// ```rust
-    /// use ironplc_dsl::common::FixedPoint;
-    /// use ironplc_dsl::time::DurationLiteral;
-    /// use time::Duration;
-    /// assert_eq!(DurationLiteral::nanoseconds(FixedPoint::parse("500").unwrap()).interval, Duration::nanoseconds(500));
-    /// ```
-    pub fn nanoseconds(nanos: FixedPoint) -> Self {
-        // A fraction finer than a nanosecond truncates: `nanos` measures
-        // nanoseconds, so its fractional digits are below the unit.
-        Self::new(nanos.span, Duration::nanoseconds(nanos.whole as i64))
-    }
-
-    pub fn plus(&self, other: DurationLiteral) -> Self {
-        Self::new(
+    /// The literal that measures `self` and `other` together, spanning both,
+    /// or says that no duration can be that long.
+    pub fn plus(&self, other: DurationLiteral) -> Result<Self, DurationOutOfRange> {
+        let interval = self
+            .interval
+            .checked_add(other.interval)
+            .ok_or(DurationOutOfRange)?;
+        Ok(Self::new(
             SourceSpan::join(&self.span, &other.span),
-            self.interval + other.interval,
-        )
+            interval,
+        ))
     }
 
     /// The `number unit` text of this literal, in the largest unit that
@@ -301,8 +241,10 @@ impl DurationLiteral {
     ///
     /// ```rust
     /// use ironplc_dsl::common::FixedPoint;
+    /// use ironplc_dsl::construct::DurationUnit;
     /// use ironplc_dsl::time::DurationLiteral;
-    /// assert_eq!("1500us", DurationLiteral::milliseconds(FixedPoint::parse("1.5").unwrap()).unit_text());
+    /// let literal = DurationLiteral::from_unit(FixedPoint::parse("1.5").unwrap(), DurationUnit::Milliseconds);
+    /// assert_eq!("1500us", literal.unwrap().unit_text());
     /// ```
     pub fn unit_text(&self) -> String {
         let nanoseconds = self.interval.whole_nanoseconds();
@@ -622,38 +564,194 @@ mod tests {
     use super::*;
     use time::{Date, Month, PrimitiveDateTime, Time};
 
+    fn fixed(text: &str) -> FixedPoint {
+        FixedPoint::parse(text).unwrap()
+    }
+
+    fn literal(text: &str, unit: DurationUnit) -> DurationLiteral {
+        DurationLiteral::from_unit(fixed(text), unit).unwrap()
+    }
+
+    /// The longest duration a `Duration` holds, in nanoseconds.
+    const MAX_NANOSECONDS: i128 = i64::MAX as i128 * NANOSECOND_PER_SECOND + 999_999_999;
+
     #[test]
-    fn days_when_one_day_then_correct_duration() {
-        let fp = FixedPoint::parse("1").unwrap();
-        let dur = DurationLiteral::days(fp);
-        assert_eq!(dur.interval, Duration::days(1));
+    fn from_unit_when_one_day_then_correct_duration() {
+        assert_eq!(literal("1", DurationUnit::Days).interval, Duration::days(1));
     }
 
     #[test]
-    fn hours_when_one_hour_then_correct_duration() {
-        let fp = FixedPoint::parse("1").unwrap();
-        let dur = DurationLiteral::hours(fp);
-        assert_eq!(dur.interval, Duration::hours(1));
+    fn from_unit_when_one_hour_then_correct_duration() {
+        assert_eq!(
+            literal("1", DurationUnit::Hours).interval,
+            Duration::hours(1)
+        );
     }
 
     #[test]
-    fn minutes_when_one_minute_then_correct_duration() {
-        let fp = FixedPoint::parse("1").unwrap();
-        let dur = DurationLiteral::minutes(fp);
-        assert_eq!(dur.interval, Duration::minutes(1));
+    fn from_unit_when_one_minute_then_correct_duration() {
+        assert_eq!(
+            literal("1", DurationUnit::Minutes).interval,
+            Duration::minutes(1)
+        );
+    }
+
+    #[test]
+    fn from_unit_when_fraction_of_each_unit_then_scaled_to_nanoseconds() {
+        assert_eq!(
+            literal("1.5", DurationUnit::Hours).interval,
+            Duration::minutes(90)
+        );
+        assert_eq!(
+            literal("1.001", DurationUnit::Seconds).interval,
+            Duration::seconds(1) + Duration::milliseconds(1)
+        );
+        assert_eq!(
+            literal("0.001", DurationUnit::Milliseconds).interval,
+            Duration::microseconds(1)
+        );
+        assert_eq!(
+            literal("1.5", DurationUnit::Microseconds).interval,
+            Duration::microseconds(1) + Duration::nanoseconds(500)
+        );
+    }
+
+    #[test]
+    fn from_unit_when_fraction_finer_than_nanosecond_then_truncated() {
+        assert_eq!(
+            literal("500.9", DurationUnit::Nanoseconds).interval,
+            Duration::nanoseconds(500)
+        );
+        assert_eq!(
+            literal("0.0000000009", DurationUnit::Seconds).interval,
+            Duration::ZERO
+        );
+    }
+
+    #[test]
+    fn from_unit_when_fraction_of_hour_finer_than_microsecond_then_keeps_nanoseconds() {
+        // REQ-TL-parser-030: the value is preserved down to the nanosecond.
+        // 1e-10 hours is 360 ns.
+        assert_eq!(
+            literal("0.0000000001", DurationUnit::Hours).interval,
+            Duration::nanoseconds(360)
+        );
+    }
+
+    #[test]
+    fn from_unit_when_crash_report_input_then_out_of_range() {
+        assert_eq!(
+            DurationLiteral::from_unit(fixed("9223372036854775807"), DurationUnit::Days),
+            Err(DurationOutOfRange)
+        );
+    }
+
+    #[test]
+    fn from_unit_when_whole_part_exceeds_i64_then_out_of_range_not_wrapped() {
+        // These wrapped to a negative or small duration when the whole part
+        // was cast to `i64`.
+        for text in ["9223372036854775808", "18446744073709551615"] {
+            assert_eq!(
+                DurationLiteral::from_unit(fixed(text), DurationUnit::Seconds),
+                Err(DurationOutOfRange),
+                "{text}s"
+            );
+        }
+    }
+
+    #[test]
+    fn from_unit_when_around_the_longest_duration_then_exact_or_out_of_range() {
+        // Every unit, at and around the point where the total stops fitting,
+        // and at the far end of what the grammar can write, judged against an
+        // independent computation in `i128`. None may panic or wrap.
+        let fractions = [0, 1, 500_000_000_000_000, 999_999_999_999_999];
+        for (_, unit) in DurationUnit::UNITS {
+            let scale = i128::from(unit.nanoseconds());
+            let edge = MAX_NANOSECONDS / scale;
+            let wholes = [0, 1, edge - 1, edge, edge + 1, edge * 2, u64::MAX.into()];
+            for whole in wholes.into_iter().filter(|w| *w <= u64::MAX.into()) {
+                for femptos in fractions {
+                    let value = FixedPoint {
+                        span: SourceSpan::default(),
+                        whole: u64::try_from(whole).unwrap(),
+                        femptos,
+                    };
+                    let expected = whole * scale + i128::from(femptos) * scale / 10_i128.pow(15);
+                    let actual = DurationLiteral::from_unit(value, unit);
+                    if expected <= MAX_NANOSECONDS {
+                        assert_eq!(
+                            actual.map(|l| l.interval.whole_nanoseconds()),
+                            Ok(expected),
+                            "{whole}.{femptos} {unit:?}"
+                        );
+                    } else {
+                        assert_eq!(
+                            actual,
+                            Err(DurationOutOfRange),
+                            "{whole}.{femptos} {unit:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn from_unit_when_longest_duration_then_ok_and_negation_fits() {
+        let longest = literal("9223372036854775807.999999999", DurationUnit::Seconds);
+        assert_eq!(longest.interval.whole_nanoseconds(), MAX_NANOSECONDS);
+        assert_eq!(-longest.interval, Duration::new(-i64::MAX, -999_999_999));
     }
 
     #[test]
     fn plus_when_two_durations_then_sum() {
-        let a = DurationLiteral::seconds(FixedPoint::parse("1").unwrap());
-        let b = DurationLiteral::seconds(FixedPoint::parse("2").unwrap());
-        let result = a.plus(b);
-        assert_eq!(result.interval, Duration::seconds(3));
+        let a = literal("1", DurationUnit::Seconds);
+        let b = literal("2", DurationUnit::Seconds);
+        assert_eq!(a.plus(b).unwrap().interval, Duration::seconds(3));
+    }
+
+    #[test]
+    fn plus_when_sum_is_longest_duration_then_ok() {
+        let a = literal("9223372036854775807", DurationUnit::Seconds);
+        let b = literal("999999999", DurationUnit::Nanoseconds);
+        assert_eq!(
+            a.plus(b).unwrap().interval.whole_nanoseconds(),
+            MAX_NANOSECONDS
+        );
+    }
+
+    #[test]
+    fn plus_when_sum_exceeds_longest_duration_then_out_of_range() {
+        let a = literal("9223372036854775807", DurationUnit::Seconds);
+        let b = literal("1", DurationUnit::Seconds);
+        assert_eq!(a.plus(b), Err(DurationOutOfRange));
+    }
+
+    #[test]
+    fn plus_when_each_part_fits_but_sum_does_not_then_out_of_range() {
+        // The multi-part grammar reaches this with every part valid: the
+        // most days a duration holds, and a day short of a day more.
+        let days = literal("106751991167300", DurationUnit::Days);
+        let hours = literal("23", DurationUnit::Hours);
+        assert_eq!(days.plus(hours), Err(DurationOutOfRange));
+    }
+
+    #[test]
+    fn diagnostic_when_out_of_range_then_p2039_naming_literal_and_type() {
+        let span = SourceSpan::default();
+        let short = DurationOutOfRange.diagnostic(span.clone(), "T#1d", TemporalWidth::Short);
+        assert_eq!(short.code, Problem::DurationLiteralOutOfRange.code());
+        assert_eq!(
+            short.primary.message,
+            "Constant 'T#1d' is outside the range of type 'TIME'"
+        );
+        let long = DurationOutOfRange.diagnostic(span, "LTIME#1d", TemporalWidth::Long);
+        assert!(long.primary.message.ends_with("of type 'LTIME'"));
     }
 
     #[test]
     fn display_when_duration_then_formats_as_time_ms() {
-        let dur = DurationLiteral::seconds(FixedPoint::parse("2").unwrap());
+        let dur = literal("2", DurationUnit::Seconds);
         assert_eq!(format!("{dur}"), "TIME#2000ms");
     }
 

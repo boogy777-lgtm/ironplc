@@ -23,11 +23,14 @@ use ironplc_dsl::common::{
     ConstantKind, FixedPoint, Integer, IntegerLiteral, IntegerTypeName, RealLiteral, RealTypeName,
     SignedInteger, StringType,
 };
-use ironplc_dsl::construct::{calendar_date, combine_interval_parts, time_of_day, unquote};
+use ironplc_dsl::construct::{
+    calendar_date, combine_interval_parts, time_of_day, unquote, IntervalError,
+};
 use ironplc_dsl::core::SourceSpan;
 use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_dsl::time::{
-    DateAndTimeLiteral, DateLiteral, DurationLiteral, TemporalWidth, TimeOfDayLiteral,
+    DateAndTimeLiteral, DateLiteral, DurationLiteral, DurationOutOfRange, TemporalWidth,
+    TimeOfDayLiteral,
 };
 use time::{PrimitiveDateTime, Time};
 
@@ -327,10 +330,16 @@ fn duration(
         .into_iter();
     let first = parts.next().ok_or_else(|| shape(cx, node))?;
     let total = combine_interval_parts(first, parts.collect())
-        .map_err(|_| shape(cx, node))?
+        .map_err(|why| match why {
+            IntervalError::OutOfRange => {
+                let text: String = tokens.iter().map(SyntaxToken::text).collect();
+                DurationOutOfRange.diagnostic(cx.node_span(node), &text, width)
+            }
+            _ => shape(cx, node),
+        })?
         .interval;
     Ok(ConstantKind::Duration(DurationLiteral {
-        interval: if negative { total * -1 } else { total },
+        interval: if negative { -total } else { total },
         width,
         span: SourceSpan::default(),
     }))

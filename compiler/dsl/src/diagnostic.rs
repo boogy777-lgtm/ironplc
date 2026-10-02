@@ -164,6 +164,29 @@ impl Diagnostic {
         }
     }
 
+    /// Creates the diagnostic for a literal that names a value its type
+    /// cannot hold, such as `T#30d` as a `TIME`.
+    ///
+    /// This is the one place the wording lives, so that the stage that cannot
+    /// build the value at all and the stage that finds it too big for its
+    /// declared type say the same thing: `value` is the literal as written
+    /// (or as the stage can best render it) and `type_name` the type it was
+    /// held to.
+    pub fn literal_out_of_range(
+        problem: Problem,
+        span: SourceSpan,
+        value: &str,
+        type_name: &str,
+    ) -> Self {
+        Self::problem(
+            problem,
+            Label::span(
+                span,
+                format!("Constant '{value}' is outside the range of type '{type_name}'"),
+            ),
+        )
+    }
+
     /// Creates a "todo" diagnostic associated with a file and line in the Rust
     /// source code. Also provides a location in IEC 61131-3 associated with the
     /// todo (but is not necessarily the origin).

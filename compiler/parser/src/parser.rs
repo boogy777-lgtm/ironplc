@@ -19,10 +19,12 @@ use dsl::core::SourceSpan;
 use dsl::diagnostic::Diagnostic;
 use dsl::diagnostic::Label;
 use ironplc_problems::Problem;
+use peg::error::ParseError;
 use peg::parser;
 use peg::Parse;
 use peg::ParseElem;
 use peg::RuleResult;
+use std::cell::RefCell;
 
 use crate::token::{Token, TokenType};
 use crate::vars::*;
@@ -58,6 +60,119 @@ fn interval_expectation(error: IntervalError) -> &'static str {
     match error {
         IntervalError::UnitOrder => "duration units in descending order",
         IntervalError::FractionBeforeLast => "an integer before the last duration unit",
+        IntervalError::OutOfRange => RANGE_EXPECTATION,
+    }
+}
+
+/// The expectation a rule fails with when its literal is well formed but names
+/// a value out of range.
+const RANGE_EXPECTATION: &str = "a value within the range of its type";
+
+/// The diagnostic of the farthest input the grammar recognised but rejected
+/// for a reason other than syntax, with the token position where it ends.
+///
+/// A rule action can fail only with an expectation text, which reports as a
+/// syntax error (P0002). A literal out of range is not a syntax error, so the
+/// action leaves its diagnostic here and fails; [`parse_failure`] reports it
+/// when the parse as a whole fails where that literal ends.
+#[derive(Default)]
+struct Rejection(RefCell<Option<(usize, Diagnostic)>>);
+
+impl Rejection {
+    /// Records `diagnostic` for input rejected up to token `end`, unless an
+    /// input rejected farther on is already recorded.
+    fn record(&self, end: usize, diagnostic: Diagnostic) {
+        let mut slot = self.0.borrow_mut();
+        if slot.as_ref().is_none_or(|(farthest, _)| end >= *farthest) {
+            *slot = Some((end, diagnostic));
+        }
+    }
+
+    /// The diagnostic recorded, when a parse that failed at token `location`
+    /// got no farther than the input it rejected.
+    ///
+    /// A rule that consumes one token to test it marks its failure after that
+    /// token, so a repetition probing for more of the rejected input fails one
+    /// token past its end.
+    fn blocking(&self, location: usize) -> Option<Diagnostic> {
+        let (end, diagnostic) = self.0.take()?;
+        (location <= end.saturating_add(1)).then_some(diagnostic)
+    }
+}
+
+/// What the grammar reads: the tokens, which it reaches through `Deref`, and
+/// where its rule actions leave the diagnostic of input they reject for a
+/// reason other than syntax.
+struct Source<'a> {
+    tokens: &'a [Token],
+    rejected: Rejection,
+}
+
+impl<'a> Source<'a> {
+    fn new(tokens: &'a [Token]) -> Self {
+        Source {
+            tokens,
+            rejected: Rejection::default(),
+        }
+    }
+}
+
+impl std::ops::Deref for Source<'_> {
+    type Target = [Token];
+
+    fn deref(&self) -> &[Token] {
+        self.tokens
+    }
+}
+
+/// The diagnostic for a failed parse: the one a rule action recorded when the
+/// parse got no farther than the input that action rejected, a syntax error
+/// otherwise.
+fn parse_failure(source: &Source, error: ParseError<usize>) -> Diagnostic {
+    source.rejected.blocking(error.location).unwrap_or_else(|| {
+        syntax_error(
+            source,
+            error.location,
+            Vec::from_iter(error.expected.tokens()).join(" | "),
+        )
+    })
+}
+
+/// A duration literal from its parts, or the reason the grammar rejects it:
+/// the syntax-error expectation, or [`RANGE_EXPECTATION`] with the
+/// out-of-range diagnostic recorded in `rejected`.
+fn duration_literal(
+    source: &Source,
+    range: (usize, usize),
+    width: TemporalWidth,
+    negative: bool,
+    parts: ((FixedPoint, DurationUnit), Vec<(FixedPoint, DurationUnit)>),
+) -> Result<DurationLiteral, &'static str> {
+    let span = span_of_tokens(source, range.0, range.1);
+    match combine_interval_parts(parts.0, parts.1) {
+        Ok(total) => Ok(DurationLiteral {
+            span,
+            interval: if negative {
+                -total.interval
+            } else {
+                total.interval
+            },
+            width,
+        }),
+        Err(error) => {
+            if error == IntervalError::OutOfRange {
+                let text: String = source
+                    .get(range.0..range.1)
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|token| token.text.as_str())
+                    .collect();
+                source
+                    .rejected
+                    .record(range.1, DurationOutOfRange.diagnostic(span, &text, width));
+            }
+            Err(interval_expectation(error))
+        }
     }
 }
 
@@ -121,13 +236,8 @@ fn syntax_error(tokens: &[Token], token_index: usize, expected: String) -> Diagn
 
 /// Parses a IEC 61131-3 library into object form.
 pub fn parse_library(tokens: Vec<Token>) -> Result<Vec<LibraryElementKind>, Diagnostic> {
-    plc_parser::library(&SliceByRef(&tokens[..]), &tokens[..]).map_err(|e| {
-        syntax_error(
-            &tokens,
-            e.location,
-            Vec::from_iter(e.expected.tokens()).join(" | "),
-        )
-    })
+    let source = Source::new(&tokens);
+    plc_parser::library(&SliceByRef(&tokens[..]), &source).map_err(|e| parse_failure(&source, e))
 }
 
 /// Parses a list of IEC 61131-3 statements into object form.
@@ -139,26 +249,17 @@ pub fn parse_statements(tokens: Vec<Token>) -> Result<Vec<StmtKind>, Diagnostic>
         return Ok(vec![]);
     }
 
-    plc_parser::statement_list(&SliceByRef(&tokens[..]), &tokens[..]).map_err(|e| {
-        syntax_error(
-            &tokens,
-            e.location,
-            Vec::from_iter(e.expected.tokens()).join(" | "),
-        )
-    })
+    let source = Source::new(&tokens);
+    plc_parser::statement_list(&SliceByRef(&tokens[..]), &source)
+        .map_err(|e| parse_failure(&source, e))
 }
 
 /// Parses the tokens of one constant, as the grammar's `constant` rule reads
 /// them. Test-only: the oracle the literal lowering is compared against.
 #[cfg(test)]
 pub fn parse_constant(tokens: &[Token]) -> Result<ConstantKind, Diagnostic> {
-    plc_parser::data_source(&SliceByRef(tokens), tokens).map_err(|e| {
-        syntax_error(
-            tokens,
-            e.location,
-            Vec::from_iter(e.expected.tokens()).join(" | "),
-        )
-    })
+    let source = Source::new(tokens);
+    plc_parser::data_source(&SliceByRef(tokens), &source).map_err(|e| parse_failure(&source, e))
 }
 
 enum StatementsOrEmpty {
@@ -246,7 +347,7 @@ impl<'a, T: 'a> ParseElem<'a> for SliceByRef<'a, T> {
 }
 
 parser! {
-  grammar plc_parser<'a>(tokens: &'a [Token]) for SliceByRef<'a, Token> {
+  grammar plc_parser<'a>(tokens: &'a Source<'a>) for SliceByRef<'a, Token> {
 
     /// Rule to enable optional tracing rule for pegviz markers that makes
     /// working with the parser easier in the terminal.
@@ -508,17 +609,8 @@ parser! {
     // Duration separators and units are case insensitive, so they are
     // matched with contextual_keyword.
     // See specs/design/time-literals.md — REQ-TL-011.
-    pub rule duration() -> DurationLiteral = start:position!() width:duration_prefix() tok(TokenType::Hash) s:(tok(TokenType::Minus))? i:interval() end:position!() {
-      let span = span_of_tokens(tokens, start, end);
-      let interval = match s {
-        Some(sign) => i.interval * -1,
-        None => i.interval,
-      };
-      DurationLiteral {
-        span,
-        interval,
-        width,
-      }
+    pub rule duration() -> DurationLiteral = start:position!() width:duration_prefix() tok(TokenType::Hash) s:(tok(TokenType::Minus))? parts:interval() end:position!() {?
+      duration_literal(tokens, (start, end), width, s.is_some(), parts)
     }
     // The prefix names the type: `LTIME#` is an LTIME, `TIME#` and `T#` a
     // TIME, and the vendor abbreviation `LT#` another LTIME. The abbreviated
@@ -526,12 +618,10 @@ parser! {
     // cannot be shadowed. See specs/design/time-literals.md — REQ-TL-004.
     rule duration_prefix() -> TemporalWidth = tok(TokenType::Time) { TemporalWidth::Short } / tok(TokenType::Ltime) { TemporalWidth::Long } / contextual_keyword("LT") { TemporalWidth::Long } / contextual_keyword("T") { TemporalWidth::Short }
     // One or more `number unit` parts, with an optional `_` between parts
-    // (REQ-TL-020 to 022); `combine_interval_parts` checks their order. The
-    // token transform `xform_split_duration_units` has already split a unit
-    // from the digits the lexer glued to it (`m30s`).
-    rule interval() -> DurationLiteral = first:interval_part() rest:(contextual_keyword("_")? p:interval_part() { p })* {?
-      combine_interval_parts(first, rest).map_err(interval_expectation)
-    }
+    // (REQ-TL-020 to 022); `duration_literal` checks their order and total.
+    // The token transform `xform_split_duration_units` has already split a
+    // unit from the digits the lexer glued to it (`m30s`).
+    rule interval() -> ((FixedPoint, DurationUnit), Vec<(FixedPoint, DurationUnit)>) = first:interval_part() rest:(contextual_keyword("_")? p:interval_part() { p })* { (first, rest) }
     rule interval_part() -> (FixedPoint, DurationUnit) = n:fixed_point() u:duration_unit() { (n, u) }
     // `ms` must come before `m`, or `100ms` would read as minutes. `us` and
     // `ns` (REQ-TL-010) conflict with no other unit, so they sit after `ms`.
@@ -546,7 +636,7 @@ parser! {
         FixedPoint::parse(fp.text.as_str())
       }
       / i:integer() {?
-        Ok(i.into())
+        FixedPoint::try_from(i).map_err(|_| FixedPoint::WHOLE_TOO_LARGE)
     }
 
     // 1.2.3.2 Time of day and date
