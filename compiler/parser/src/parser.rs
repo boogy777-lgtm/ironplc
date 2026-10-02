@@ -332,6 +332,16 @@ fn span_of_tokens(tokens: &[Token], start: usize, end: usize) -> SourceSpan {
     }
 }
 
+/// The index of a partial access (`%X3`, `%W1`): the digits after the two
+/// characters of the selector, positioned at those digits.
+fn partial_access_index(token: &Token) -> Result<Integer, &'static str> {
+    let span = SourceSpan {
+        start: token.span.start + 2,
+        ..token.span.clone()
+    };
+    Integer::new(&token.text[2..], span)
+}
+
 /// The default implementation of the parsing traits for `[T]` expects `T` to be
 /// `Copy`, as in the `[u8]` or simple enum cases. This wrapper exposes the
 /// elements by `&T` reference, which is `Copy`.
@@ -478,7 +488,7 @@ parser! {
       }
     // We want to be more flexible on identifiers for variable names
     // because it is common to use variable names that are reserved names
-    rule variable_identifier() -> Id = identifier() / t:tok(TokenType::Step) { Id::from(t.text.as_str()) } / t:tok(TokenType::On) { Id::from(t.text.as_str()) } / t:tok(TokenType::REdge) { Id::from(t.text.as_str()) } / t:tok(TokenType::FEdge) { Id::from(t.text.as_str()) }
+    rule variable_identifier() -> Id = identifier() / t:(tok(TokenType::Step) / tok(TokenType::On) / tok(TokenType::REdge) / tok(TokenType::FEdge)) { Id::from(t.text.as_str()).with_position(t.span.clone()) }
     rule type_name() -> TypeName = i:identifier() { TypeName::from_id(&i) } / generic_type_name()
 
     // B.1.3.2 Generic data types - used for polymorphic function signatures
@@ -692,7 +702,11 @@ parser! {
     // This should match generic_type_name, but that's unnecessary because
     // these are all just identifiers
     rule data_type_name() -> TypeName = non_generic_type_name()
-    rule non_generic_type_name() -> TypeName = et:elementary_type_name() { et.into() } / derived_type_name()
+    rule non_generic_type_name() -> TypeName =
+      start:position!() et:elementary_type_name() end:position!() {
+        TypeName { name: <TypeName as From<ElementaryTypeName>>::from(et).name.with_position(span_of_tokens(tokens, start, end)) }
+      }
+      / derived_type_name()
 
     // B.1.3.1 Elementary data types
     rule elementary_type_name() -> ElementaryTypeName =
@@ -1156,11 +1170,11 @@ parser! {
       / name:variable_identifier() { SymbolicVariableKind::Named(NamedVariable { name }) }
     rule symbolic_variable_element() -> Element =
       tok(TokenType::Period) _ n:integer() { Element::Bit(n) }
-      / tok(TokenType::Period) _ pa:tok(TokenType::PartialAccessBit) {? Integer::new(&pa.text[2..], SourceSpan::default()).map(Element::Bit) }
-      / tok(TokenType::Period) _ pa:tok(TokenType::PartialAccessByte) {? Integer::new(&pa.text[2..], SourceSpan::default()).map(|i| Element::PartialAccess(PartialAccessSize::Byte, i)) }
-      / tok(TokenType::Period) _ pa:tok(TokenType::PartialAccessWord) {? Integer::new(&pa.text[2..], SourceSpan::default()).map(|i| Element::PartialAccess(PartialAccessSize::Word, i)) }
-      / tok(TokenType::Period) _ pa:tok(TokenType::PartialAccessDWord) {? Integer::new(&pa.text[2..], SourceSpan::default()).map(|i| Element::PartialAccess(PartialAccessSize::DWord, i)) }
-      / tok(TokenType::Period) _ pa:tok(TokenType::PartialAccessLWord) {? Integer::new(&pa.text[2..], SourceSpan::default()).map(|i| Element::PartialAccess(PartialAccessSize::LWord, i)) }
+      / tok(TokenType::Period) _ pa:tok(TokenType::PartialAccessBit) {? partial_access_index(pa).map(Element::Bit) }
+      / tok(TokenType::Period) _ pa:tok(TokenType::PartialAccessByte) {? partial_access_index(pa).map(|i| Element::PartialAccess(PartialAccessSize::Byte, i)) }
+      / tok(TokenType::Period) _ pa:tok(TokenType::PartialAccessWord) {? partial_access_index(pa).map(|i| Element::PartialAccess(PartialAccessSize::Word, i)) }
+      / tok(TokenType::Period) _ pa:tok(TokenType::PartialAccessDWord) {? partial_access_index(pa).map(|i| Element::PartialAccess(PartialAccessSize::DWord, i)) }
+      / tok(TokenType::Period) _ pa:tok(TokenType::PartialAccessLWord) {? partial_access_index(pa).map(|i| Element::PartialAccess(PartialAccessSize::LWord, i)) }
       / tok(TokenType::Period) _ id:identifier() { Element::Struct(id) }
       / sub:subscript_list() { Element::Array(sub) }
       // A caret is only a dereference *within* the chain -- a trailing one is
@@ -1213,6 +1227,12 @@ parser! {
       head
     }
     rule variable_name() -> Id = variable_identifier()
+    // A variable read as an operand. The expression is positioned at all the
+    // tokens the variable was written with: the variable node holds its
+    // parts, not the `]` or `^` that close a subscript or a dereference.
+    rule variable_expression() -> Expr = start:position!() v:variable() end:position!() {
+      Expr::new(ExprKind::Variable(v)).with_span(span_of_tokens(tokens, start, end))
+    }
 
     // B.1.4.1 Directly represented variables
     // There is no location_prefix or size_prefix rule because it would be ambiguous when the % prefix normally
@@ -2188,7 +2208,7 @@ parser! {
       // TODO missing items here
       c:constant() { Expr::new(ExprKind::Const(c)) }
       //ev:enumerated_value()
-      v:variable() { Expr::new(ExprKind::Variable(v)) }
+      v:variable_expression() { v }
       lp:tok(TokenType::LeftParen) _ e:expression() _ rp:tok(TokenType::RightParen) { Expr::new(ExprKind::Expression(Box::new(e))).with_span(SourceSpan::join(&lp.span, &rp.span)) }
       f:function_expression() { f }
     }
@@ -2241,9 +2261,7 @@ parser! {
       / id:identifier() _ !(tok(TokenType::LeftParen) / tok(TokenType::LeftBracket) / tok(TokenType::Period) / tok(TokenType::Caret)) {
         Expr::new(ExprKind::LateBound(LateBound{ value: id }))
       }
-      / variable:variable() {
-        Expr::new(ExprKind::Variable(variable))
-      }
+      / variable:variable_expression() { variable }
       / lp:tok(TokenType::LeftParen) _ expression:expression() _ rp:tok(TokenType::RightParen) {
         expression.with_span(SourceSpan::join(&lp.span, &rp.span))
       }

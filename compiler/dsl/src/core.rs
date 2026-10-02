@@ -112,18 +112,22 @@ pub struct SourceSpan {
 }
 
 impl SourceSpan {
-    pub fn join(start: &SourceSpan, end: &SourceSpan) -> Self {
+    /// The span of a construct written as the text from `first` through
+    /// `second`: the smallest span that covers both, so that
+    /// `&source[join.start..join.end]` is the construct as written.
+    ///
+    /// This is the one way to span a construct from its parts. It reads the
+    /// same whichever operand is named first, and the same for operands that
+    /// touch, overlap or nest. The file is that of `first`: both operands are
+    /// expected to come from one file. A span that carries no position
+    /// (`SourceSpan::default()`, offsets `0..0`) is an operand like any
+    /// other and reaches back to offset 0, so give an operand its position
+    /// before joining it.
+    pub fn join(first: &SourceSpan, second: &SourceSpan) -> Self {
         Self {
-            start: start.start,
-            end: end.end,
-            file_id: start.file_id.clone(),
-        }
-    }
-    pub fn join2(start: &dyn Located, end: &dyn Located) -> Self {
-        Self {
-            start: start.span().start,
-            end: end.span().start,
-            file_id: start.span().file_id.clone(),
+            start: first.start.min(second.start),
+            end: first.end.max(second.end),
+            file_id: first.file_id.clone(),
         }
     }
     pub fn range(start: usize, end: usize) -> Self {
@@ -255,6 +259,10 @@ impl fmt::Display for Id {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::Integer;
+    use crate::textual::{
+        BitAccessVariable, NamedVariable, StructuredVariable, SymbolicVariableKind,
+    };
 
     /// Uses `#[located(position)]` on a `SourceSpan` field so the derived
     /// `span` clones that field.
@@ -398,5 +406,91 @@ mod tests {
         let file = FileId::from_string("test.rs");
         assert_ne!(builtin, file);
         assert!(!builtin.shares_arc_with(&file));
+    }
+
+    fn in_file(start: usize, end: usize, file: &str) -> SourceSpan {
+        SourceSpan::range(start, end).with_file_id(&FileId::from_string(file))
+    }
+
+    #[test]
+    fn join_when_operands_apart_then_covers_from_first_start_to_second_end() {
+        let joined = SourceSpan::join(&SourceSpan::range(2, 3), &SourceSpan::range(8, 11));
+
+        assert_eq!((joined.start, joined.end), (2, 11));
+    }
+
+    #[test]
+    fn join_when_operands_adjacent_then_covers_both() {
+        let joined = SourceSpan::join(&SourceSpan::range(2, 3), &SourceSpan::range(3, 4));
+
+        assert_eq!((joined.start, joined.end), (2, 4));
+    }
+
+    #[test]
+    fn join_when_operands_overlap_then_covers_both() {
+        let joined = SourceSpan::join(&SourceSpan::range(2, 6), &SourceSpan::range(4, 9));
+
+        assert_eq!((joined.start, joined.end), (2, 9));
+    }
+
+    #[test]
+    fn join_when_one_operand_inside_the_other_then_covers_the_outer() {
+        let joined = SourceSpan::join(&SourceSpan::range(2, 9), &SourceSpan::range(4, 5));
+
+        assert_eq!((joined.start, joined.end), (2, 9));
+    }
+
+    #[test]
+    fn join_when_operands_reversed_then_same_as_in_order() {
+        let joined = SourceSpan::join(&SourceSpan::range(8, 11), &SourceSpan::range(2, 3));
+
+        assert_eq!((joined.start, joined.end), (2, 11));
+    }
+
+    #[test]
+    fn join_when_operands_from_different_files_then_file_of_first() {
+        let joined = SourceSpan::join(&in_file(2, 3, "a.st"), &in_file(8, 11, "b.st"));
+
+        assert_eq!(joined.file_id, FileId::from_string("a.st"));
+    }
+
+    #[test]
+    fn join_when_second_operand_has_no_position_then_does_not_end_before_it_starts() {
+        let joined = SourceSpan::join(&SourceSpan::range(2, 3), &SourceSpan::default());
+
+        assert_eq!((joined.start, joined.end), (0, 3));
+    }
+
+    #[test]
+    fn span_when_structured_variable_then_covers_record_through_field() {
+        let source = "rec.field";
+        let variable = StructuredVariable {
+            record: Box::new(SymbolicVariableKind::Named(NamedVariable {
+                name: Id::from("rec").with_position(SourceSpan::range(0, 3)),
+            })),
+            field: Id::from("field").with_position(SourceSpan::range(4, 9)),
+        };
+
+        let span = variable.span();
+
+        assert_eq!(&source[span.start..span.end], "rec.field");
+    }
+
+    #[test]
+    fn span_when_bit_access_variable_then_covers_variable_through_index() {
+        let source = "word.12";
+        let variable = BitAccessVariable {
+            variable: Box::new(SymbolicVariableKind::Named(NamedVariable {
+                name: Id::from("word").with_position(SourceSpan::range(0, 4)),
+            })),
+            index: Integer {
+                span: SourceSpan::range(5, 7),
+                value: 12,
+            },
+        };
+
+        let span = variable.span();
+
+        assert_eq!(&source[span.start..span.end], "word.12");
     }
 }

@@ -1451,7 +1451,7 @@ pub struct LateBoundDeclaration {
 
 impl Located for LateBoundDeclaration {
     fn span(&self) -> SourceSpan {
-        SourceSpan::join2(&self.data_type_name, &self.base_type_name)
+        SourceSpan::join(&self.data_type_name.span(), &self.base_type_name.span())
     }
 }
 
@@ -1647,7 +1647,7 @@ impl EnumeratedValue {
 impl Located for EnumeratedValue {
     fn span(&self) -> SourceSpan {
         match &self.type_name {
-            Some(name) => SourceSpan::join2(name, &self.value),
+            Some(name) => SourceSpan::join(&name.span(), &self.value.span),
             None => self.value.span.clone(),
         }
     }
@@ -2012,7 +2012,7 @@ pub struct ParamsDeclaration {
 
 impl Located for ParamsDeclaration {
     fn span(&self) -> SourceSpan {
-        SourceSpan::join2(&self.type_name, &self.spec.type_name)
+        SourceSpan::join(&self.type_name.span(), &self.spec.type_name.span())
     }
 }
 
@@ -3014,7 +3014,7 @@ impl Located for EnumeratedValuesInitializer {
 
         if let Some(f) = first {
             if let Some(l) = last {
-                return SourceSpan::join2(f, l);
+                return SourceSpan::join(&f.span(), &l.span());
             }
             return f.span();
         }
