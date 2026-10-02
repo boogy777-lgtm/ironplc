@@ -7,6 +7,7 @@
 
 use crate::error::{ErrorKind, SyntaxError};
 use crate::parser::Parse;
+use crate::pragma::Fault;
 use ironplc_dsl::core::{FileId, SourceSpan};
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
 use ironplc_problems::Problem;
@@ -26,6 +27,8 @@ impl ErrorKind {
             ErrorKind::EscapedIdentifierNotAllowed => Problem::EscapedIdentifierNotAllowed,
             ErrorKind::UnicodeIdentifierNotAllowed => Problem::UnicodeIdentifierNotAllowed,
             ErrorKind::MultipleUnderscoresNotAllowed => Problem::MultipleUnderscoresNotAllowed,
+            ErrorKind::PragmaIfUnmatched => Fault::Unmatched.problem(),
+            ErrorKind::PragmaValueExpected => Fault::UnexpectedValue.problem(),
         }
     }
 }

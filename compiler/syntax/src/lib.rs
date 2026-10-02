@@ -13,11 +13,12 @@
 //! the statements and expressions inside them. It is not used by any
 //! production consumer yet.
 //!
-//! The text is kept as written. Two preprocessing steps of the legacy pipeline
-//! change what the text means and are not evaluated here: OSCAT ranged
-//! comments (the legacy pipeline blanks what a `(*@KEY@:NAME*)` pair holds)
-//! and conditional pragmas (`{IF ...}` and `{END_IF}` drop the branch that is
-//! not taken). A pragma is trivia in the tree and its content is not examined.
+//! The text is kept as written. Two constructs make a stretch of it not code:
+//! OSCAT ranged comments (what a `(*@KEY@:NAME*)` pair holds) and, with
+//! `allow_pragma_if`, the branches of `{IF ...}` that are not taken. Each is
+//! one trivia token in the tree (`RangedComment`, `InactiveRegion`) that the
+//! grammar skips, so no byte is dropped. Any other pragma is trivia and its
+//! content is not examined.
 
 mod cst;
 mod diagnostic;

@@ -77,7 +77,9 @@ syntax_kinds! {
         LineComment,
         DocComment,
         BlockComment,
-        Pragma
+        Pragma,
+        RangedComment,
+        InactiveRegion
     }
     tokens {
         Ident,

@@ -8,12 +8,17 @@
 //! names, become [`SyntaxKind::ErrorToken`]s instead of being dropped; each
 //! error token is accompanied by exactly one [`SyntaxError`].
 //!
+//! [`lex_regions`] is the same lexer followed by the region pass: text the
+//! grammar must not see (OSCAT ranged comments, untaken conditional-pragma
+//! branches) becomes a single trivia token, still byte-exact.
+//!
 //! Keywords are lexed uniformly and case-insensitively; dialect-dependent
 //! reservation is the parser's concern.
 
 mod cursor;
 pub(crate) mod escapes;
 mod literals;
+mod regions;
 mod trivia;
 
 use crate::error::{ErrorKind, SyntaxError};
@@ -22,6 +27,8 @@ use cursor::Cursor;
 use literals::{scan_number, scan_percent, scan_quoted, Quoted};
 use rowan::{TextRange, TextSize};
 use trivia::{scan_delimited, scan_line_comment, scan_newline, scan_whitespace};
+
+pub use regions::lex_regions;
 
 /// A token borrowing its exact source slice.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -102,25 +109,36 @@ pub fn lex_with(source: &str, options: LexOptions) -> (Vec<Token<'_>>, Vec<Synta
     let mut errors = Vec::new();
 
     while !cursor.is_at_end() {
-        let start = cursor.pos();
-        let (mut kind, mut message) = scan_token(&mut cursor, options);
-        if cursor.pos() == start {
-            // Unreachable by construction; guarantees progress regardless.
-            cursor.bump_char();
-            (kind, message) = unexpected_character();
-        }
-        let range = range_of(start, cursor.pos());
-        if let Some((error_kind, message)) = message {
-            errors.push(SyntaxError::new(message, range).with_kind(error_kind));
-        }
-        tokens.push(Token {
-            kind,
-            text: cursor.slice_from(start),
-            range,
-        });
+        let (token, error) = next_token(&mut cursor, options);
+        errors.extend(error);
+        tokens.push(token);
     }
 
     (tokens, errors)
+}
+
+/// Scans the token at the cursor and advances past it. The error is the one
+/// that goes with an error token.
+fn next_token<'src>(
+    cursor: &mut Cursor<'src>,
+    options: LexOptions,
+) -> (Token<'src>, Option<SyntaxError>) {
+    let start = cursor.pos();
+    let (mut kind, mut message) = scan_token(cursor, options);
+    if cursor.pos() == start {
+        // Unreachable by construction; guarantees progress regardless.
+        cursor.bump_char();
+        (kind, message) = unexpected_character();
+    }
+    let range = range_of(start, cursor.pos());
+    let error =
+        message.map(|(error_kind, message)| SyntaxError::new(message, range).with_kind(error_kind));
+    let token = Token {
+        kind,
+        text: cursor.slice_from(start),
+        range,
+    };
+    (token, error)
 }
 
 fn range_of(start: usize, end: usize) -> TextRange {

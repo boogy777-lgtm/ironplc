@@ -34,41 +34,28 @@ fn parity_when_whole_files_then_differences_are_exactly_the_exceptions() {
 }
 
 #[test]
-fn parity_when_ranged_comment_is_blanked_then_the_new_parser_accepts_the_oscat_file() {
+fn parity_when_oscat_file_then_ranged_comments_are_regions_and_both_parsers_accept() {
     // The legacy preprocessor blanks the text between a ranged-comment marker
-    // pair. Doing the same here shows that nothing else in the file keeps the
-    // new parser from accepting it.
+    // pair; the new parser keeps it as one trivia token and skips it.
     let source = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../resources/test/oscat.st"),
     )
     .unwrap_or_default();
-    let open = "(*@KEY@:DESCRIPTION*)";
-    let close = "(*@KEY@:END_DESCRIPTION*)";
-    let (start, end) = (source.find(open), source.find(close));
     assert!(
-        start.is_some() && end.is_some(),
+        source.contains("(*@KEY@:DESCRIPTION*)"),
         "oscat.st lost its ranged comment"
     );
-    let (start, end) = (start.unwrap_or(0), end.unwrap_or(0));
-    let blanked: String = source
-        .char_indices()
-        .map(|(index, c)| {
-            if index >= start + open.len() && index < end && c != '\n' {
-                ' '
-            } else {
-                c
-            }
-        })
-        .collect();
     for preset in presets() {
-        let parsed = ironplc_syntax::parse_source_file(&blanked, &preset.new);
+        let parsed = ironplc_syntax::parse_source_file(&source, &preset.new);
         let legacy = super::legacy::accepts_file(&source, &preset.legacy);
-        assert_eq!(
-            parsed.is_ok(),
-            legacy,
-            "{}: {:?}",
-            preset.name,
-            parsed.errors
-        );
+        assert!(legacy, "{}: legacy rejects oscat.st", preset.name);
+        assert!(parsed.is_ok(), "{}: {:?}", preset.name, parsed.errors);
+        assert_eq!(parsed.root.text().to_string(), source, "{}", preset.name);
+        let regions = parsed
+            .root
+            .descendants_with_tokens()
+            .filter(|element| element.kind() == ironplc_syntax::SyntaxKind::RangedComment)
+            .count();
+        assert!(regions > 0, "{}: no ranged comment region", preset.name);
     }
 }

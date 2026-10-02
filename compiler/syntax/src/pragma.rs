@@ -27,6 +27,7 @@ use std::collections::HashSet;
 
 use ironplc_dsl::core::SourceSpan;
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
+use ironplc_problems::Problem;
 
 /// A pragma that could not be honoured.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -39,12 +40,25 @@ pub enum Fault {
 }
 
 impl Fault {
+    /// The problem the fault is reported as.
+    pub fn problem(self) -> Problem {
+        match self {
+            Fault::Unmatched => Problem::PragmaIfUnmatched,
+            Fault::UnexpectedValue => Problem::PragmaValueExpected,
+        }
+    }
+
+    /// What is wrong with the pragma.
+    pub fn message(self) -> &'static str {
+        match self {
+            Fault::Unmatched => "Unmatched {IF} pragma",
+            Fault::UnexpectedValue => "Expected a pragma condition such as `defined(name)`",
+        }
+    }
+
     /// Renders the fault as the compiler diagnostic for the pragma at `span`.
     pub fn diagnostic(self, span: &SourceSpan) -> Diagnostic {
-        match self {
-            Fault::Unmatched => unmatched(span),
-            Fault::UnexpectedValue => unexpected_value(span),
-        }
+        Diagnostic::problem(self.problem(), Label::span(span.clone(), self.message()))
     }
 }
 
@@ -250,23 +264,6 @@ fn symbol(text: &str) -> Option<String> {
         !part.is_empty() && part.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
     });
     valid.then(|| name.to_ascii_lowercase())
-}
-
-fn unmatched(span: &SourceSpan) -> Diagnostic {
-    Diagnostic::problem(
-        ironplc_problems::Problem::PragmaIfUnmatched,
-        Label::span(span.clone(), "Unmatched {IF} pragma"),
-    )
-}
-
-fn unexpected_value(span: &SourceSpan) -> Diagnostic {
-    Diagnostic::problem(
-        ironplc_problems::Problem::PragmaValueExpected,
-        Label::span(
-            span.clone(),
-            "Expected a pragma condition such as `defined(name)`",
-        ),
-    )
 }
 
 /// Evaluates a pragma condition against the defines in scope. `Err(())` means
