@@ -19,6 +19,7 @@ time = "0.3.47"
 ironplc-container = { path = "../container", version = "0.247.0" }
 ironplc-dsl = { path = "../dsl", version = "0.247.0" }
 ironplc-problems = { path = "../problems", version = "0.247.0" }
+ironplc-syntax = { path = "../syntax", version = "0.247.0" }
 logos = "0.16.1"
 peg = "0.8.5"
 
@@ -27,7 +28,6 @@ ironplc-spec-requirements-gen = { path = "../spec_requirements_gen" }
 
 [dev-dependencies]
 ironplc-test = { path = "../test", version = "0.247.0" }
-ironplc-syntax = { path = "../syntax", version = "0.247.0" }
 rstest = "0.27"
 spec_test_macro = { path = "../spec_test_macro" }
 
