@@ -23,20 +23,24 @@ use rowan::{TextRange, TextSize};
 ///
 /// The reference accepts more: CODESYS 3.5.22 stops at 2000 levels of
 /// expression nesting in its parser and 5000 in its statement checker, and
-/// reports both as message 584, "Maximum nesting depth exceeded". 2000 does not
-/// fit the stack the compiler is given. The smallest is 1 MiB: the main thread
-/// on Windows, and WebAssembly, which cannot grow it. Measured with 1 MiB
-/// threads in a release build, the stack a level costs is about 0.5 KB in the
-/// parser, 0.3 KB to drop the tree, and 2.3 KB to lower a nested expression;
-/// debug builds cost up to 7 KB a level in lowering. At 2000 levels lowering
-/// alone needs 4.5 MiB; at 256 the most it needs is 583 KB, and WebAssembly
-/// runs every stage in its 1 MiB. The legacy parser overflows the same 1 MiB
-/// between 95 and 211 levels in a release build, and at 800 for chains of
-/// members or subscripts, so the limit refuses nothing it handled but those.
+/// reports both as message 584, "Maximum nesting depth exceeded". That is the
+/// reference and not the target: the value is what the whole pipeline survives
+/// on the smallest stack the compiler is given, 1 MiB, which is the main
+/// thread on Windows, and WebAssembly, which cannot grow it. The test
+/// `compile_when_nesting_is_as_deep_as_allowed_then_every_stage_fits_in_the_smallest_stack`
+/// of `tests/tree_depth.rs` proves it, running every stage over every nesting
+/// at the limit, and a value that fails it is too high.
 ///
-/// The `Fold` of the object tree costs 6.8 KB a level in a release build, 1.7
-/// MiB at this depth, which the code that runs it has to be given.
-pub const MAX_DEPTH: usize = 256;
+/// Measured at the limit, the stack of a stage in a release build, which is the
+/// build that ships, and in a debug build, whose frames are several times
+/// larger: parsing 0.5 KB a level and 1 KB; walking and dropping the syntax
+/// tree under 0.1 KB and 0.5 KB; lowering an expression 2 KB and 6.5 KB;
+/// `Visitor` under 0.1 KB and 0.5 KB; `Fold` of a sum 2.5 KB and 9.5 KB. The
+/// peaks are 327 KB in a release build and 1.2 MB in a debug build, both for
+/// `Fold` of a sum, so a debug build needs a stack of 2 MiB, which the test
+/// gives it. At 2000 levels lowering alone needs 4 MiB in a release build, and
+/// the legacy parser does not survive 1 MiB beyond 95 to 211 levels.
+pub const MAX_DEPTH: usize = 128;
 
 /// Keywords the legacy lexer matches only in upper case. The lexer here is
 /// case-insensitive for every keyword, so the parser treats `mod` and `not`

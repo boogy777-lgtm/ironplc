@@ -4,12 +4,20 @@
 //! `a.b.c`, `a[1][2]`, `a^^`). Each construct is parsed as deep as the limit
 //! allows, one step past it, and far past it, on a stack of 1 MiB, the
 //! smallest the compiler runs on. The tree keeps every byte and parsing ends
-//! at every depth.
+//! at every depth. What the limit is for, that every stage of a compile
+//! survives a tree as deep as it, is proved by running those stages on the
+//! same stack.
 
+use ironplc_dsl::core::FileId;
+use ironplc_dsl::fold::Fold;
+use ironplc_dsl::visitor::Visitor;
+use ironplc_syntax::lower::expressions::lower_expr;
+use ironplc_syntax::lower::LowerCx;
 use ironplc_syntax::{
     parse_expression, parse_source_file, parse_statements, ErrorKind, Parse, ParseOptions,
     SyntaxNode, MAX_DEPTH,
 };
+use std::convert::Infallible;
 
 /// What a construct is parsed as.
 #[derive(Clone, Copy)]
@@ -93,11 +101,15 @@ const CONSTRUCTS: &[Construct] = &[
     },
 ];
 
-/// Runs `check` on a thread with a stack of 1 MiB, so that a recursion the
+/// The stack the compiler is given where it has the least: the main thread on
+/// Windows, and WebAssembly, which cannot grow it.
+const SMALLEST_STACK: usize = 1024 * 1024;
+
+/// Runs `check` on a thread with the smallest stack, so that a recursion the
 /// limit fails to bound overflows here instead of passing on a roomy stack.
 fn on_small_stack(check: impl FnOnce() + Send + 'static) {
     let handle = std::thread::Builder::new()
-        .stack_size(1024 * 1024)
+        .stack_size(SMALLEST_STACK)
         .spawn(check);
     assert!(handle.is_ok_and(|handle| handle.join().is_ok()));
 }
@@ -125,6 +137,15 @@ fn assert_well_formed(source: &str, parsed: &Parse) {
         assert!(usize::from(error.range.end()) <= source.len(), "{error}");
     }
     assert!(depth_of(&parsed.root) <= MAX_DEPTH);
+}
+
+/// True when the parse reports the depth as the problem `P0019`, the way a
+/// compile shows it.
+fn reported_as_p0019(parsed: &Parse) -> bool {
+    parsed
+        .diagnostics(&FileId::from_string("t.st"))
+        .iter()
+        .any(|diagnostic| diagnostic.code == "P0019")
 }
 
 fn nesting_errors(parsed: &Parse) -> usize {
@@ -172,6 +193,7 @@ fn parse_when_nesting_is_one_step_past_the_limit_then_one_depth_error_and_tree_w
             let parsed = parse(construct, &source);
             assert_well_formed(&source, &parsed);
             assert_eq!(nesting_errors(&parsed), 1, "{}", construct.name);
+            assert!(reported_as_p0019(&parsed), "{}", construct.name);
             if construct.one_node_a_level {
                 assert_eq!(parsed.errors.len(), 1, "{}", construct.name);
                 assert_eq!(depth_of(&parsed.root), MAX_DEPTH, "{}", construct.name);
@@ -188,6 +210,7 @@ fn parse_when_nesting_is_far_past_the_limit_then_it_ends_with_the_text_kept_and_
             let parsed = parse(construct, &source);
             assert_well_formed(&source, &parsed);
             assert!(nesting_errors(&parsed) > 0, "{}", construct.name);
+            assert!(reported_as_p0019(&parsed), "{}", construct.name);
         }
     });
 }
@@ -216,4 +239,59 @@ fn parse_when_pragma_condition_nests_past_the_limit_then_depth_error_instead_of_
             assert_eq!(nesting_errors(&parsed), 1);
         }
     });
+}
+
+struct Walk;
+impl Visitor<Infallible> for Walk {
+    type Value = ();
+}
+
+struct Identity;
+impl Fold<Infallible> for Identity {}
+
+/// The stack the pipeline test runs on. The limit is what the whole pipeline
+/// survives on `SMALLEST_STACK`, and in a release build, the one that ships,
+/// that is so with room to spare: the most any stage needs at the limit is 327
+/// KB, `Fold` over a sum. A debug build is several times larger a frame, and
+/// there `Fold` over a sum needs 1.2 MB, so this build is given 2 MiB; every
+/// other stage fits in the 1 MiB in both.
+const PIPELINE_STACK: usize = if cfg!(debug_assertions) {
+    2 * SMALLEST_STACK
+} else {
+    SMALLEST_STACK
+};
+
+#[test]
+fn compile_when_nesting_is_as_deep_as_allowed_then_every_stage_fits_in_the_smallest_stack() {
+    // The limit is defined as the depth the whole pipeline survives on
+    // `SMALLEST_STACK`, and this is the proof. Each stage recurses as deep as
+    // the tree: the parse and the tree walk; lowering, `Visitor`, `Fold` and the
+    // drop of the object tree; and the drop of the syntax tree. Only expressions
+    // lower to objects today, so statements and declarations stop at the
+    // syntax tree.
+    let handle = std::thread::Builder::new()
+        .stack_size(PIPELINE_STACK)
+        .spawn(|| {
+            for construct in CONSTRUCTS {
+                let source = (construct.build)(deepest_allowed(construct));
+                let parsed = parse(construct, &source);
+                assert!(parsed.errors.is_empty(), "{}", construct.name);
+                assert!(
+                    depth_of(&parsed.root) + 8 >= MAX_DEPTH,
+                    "{}",
+                    construct.name
+                );
+                let node = parsed.root.first_child();
+                if let (Entry::Expression, Some(node)) = (&construct.entry, node) {
+                    let cx = LowerCx::new(FileId::from_string("t.st"));
+                    let lowered = lower_expr(&cx, &node);
+                    assert!(lowered.is_ok(), "{}", construct.name);
+                    if let Ok(expr) = lowered {
+                        assert!(Walk.visit_expr(&expr).is_ok(), "{}", construct.name);
+                        assert!(Identity.fold_expr(expr).is_ok(), "{}", construct.name);
+                    }
+                }
+            }
+        });
+    assert!(handle.is_ok_and(|handle| handle.join().is_ok()));
 }

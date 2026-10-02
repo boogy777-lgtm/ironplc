@@ -506,62 +506,116 @@ fn expand_struct_recurse_visit(
     Ok(gen.into())
 }
 
-/// Returns a stream of tokens that implement recursive visit for an enumeration.
+/// The value of a fold, or the error returned from the function that folds.
+///
+/// This is what `?` does, written as a `match` because a fold recurses once for
+/// each level of the tree and `?` copies the node it passes three times in a
+/// build without optimization (`Try::branch` takes it and gives it back by
+/// value), a node as large as an expression, so that the match is the smaller
+/// frame.
+fn unwrapped(fold: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+    quote! {
+        match #fold {
+            Ok(folded) => folded,
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+/// Returns a stream of tokens that implement recursive fold for an enumeration.
+///
+/// The fold of each variant is a function of its own, and the match only
+/// chooses between them. A fold recurses once for each level of the tree, so
+/// the stack it needs is the frame of what recurses times the depth, and a
+/// frame holds the temporaries of every arm of its match, one set for each
+/// arm of an enumeration as large as `ExprKind`. With a function for each
+/// variant, a frame holds the temporaries of the arm that runs.
 fn expand_enum_recurse_fold(name: &Ident, data_enum: &DataEnum) -> Result<TokenStream> {
-    // Generate the matcher and dispatch for each variant
-    let matchers: Result<Vec<proc_macro2::TokenStream>> = data_enum
+    // Generate the fold function and the dispatch for each variant
+    let arms: Result<Vec<(proc_macro2::TokenStream, proc_macro2::TokenStream)>> = data_enum
         .variants
         .iter()
         .map(|v| {
             let variant_name = &v.ident;
+            let fold_fn = syn::Ident::new(
+                &format!("recurse_fold_{}", variant_name.to_string().to_case(Case::Snake)),
+                variant_name.span(),
+            );
 
             // An ignored variant does not recurse, but we need to include is so that all have a
             // defined match.
-            if is_ignored(&v.attrs).unwrap() {
-                let has_fields = !v.fields.is_empty();
-                if has_fields {
-                    return Ok(quote! {
-                        #name::#variant_name(inner) => Ok(#name::#variant_name(inner))
-                    });
+            let (pattern, body) = if is_ignored(&v.attrs).unwrap() {
+                if v.fields.is_empty() {
+                    (quote! { #name::#variant_name }, quote! { Ok(#name::#variant_name) })
                 } else {
-                    return Ok(quote! {
-                        #name::#variant_name => Ok(#name::#variant_name)
-                    });
+                    (
+                        quote! { #name::#variant_name(inner) },
+                        quote! { Ok(#name::#variant_name(inner)) },
+                    )
                 }
-            }
+            } else {
+                let variant_contained_type = extract_type_ident_from_fields(&v.fields)?;
 
-            let variant_contained_type = extract_type_ident_from_fields(&v.fields)?;
+                let method_name = type_to_fold_method_name(variant_contained_type.0);
+                let method_name = syn::Ident::new(&method_name, name.span());
 
-            let method_name = type_to_fold_method_name(variant_contained_type.0);
-            let method_name = syn::Ident::new(&method_name, name.span());
-
-            match variant_contained_type.1 {
-                DeclaredType::Option => unimplemented!("fold enum with option"),
-                DeclaredType::Vec => Ok(quote! {
-                    #name::#variant_name(node) => {
+                let body = match variant_contained_type.1 {
+                    DeclaredType::Option => unimplemented!("fold enum with option"),
+                    DeclaredType::Vec => quote! {
                         let folds : Result<Vec<_>, E> = node.into_iter().map(|x| f.#method_name(x)).collect();
                         Ok(#name::#variant_name(folds?))
+                    },
+                    DeclaredType::Simple => {
+                        let folded = unwrapped(quote! { f.#method_name(node) });
+                        quote! { Ok(#name::#variant_name(#folded)) }
                     }
-                }),
-                DeclaredType::Simple => Ok(quote! {
-                    #name::#variant_name(node) => { Ok(#name::#variant_name(f.#method_name(node)?)) }
-                }),
-                DeclaredType::Box => Ok(quote! {
-                    #name::#variant_name(node) => { Ok(#name::#variant_name(Box::new(f.#method_name(*node)?))) }
-                }),
-            }
+                    DeclaredType::Box => {
+                        let folded = unwrapped(quote! { f.#method_name(*node) });
+                        quote! { Ok(#name::#variant_name(Box::new(#folded))) }
+                    }
+                };
+                (quote! { #name::#variant_name(node) }, body)
+            };
+
+            // The function takes what the pattern binds, if anything.
+            let (params, call_args) = if v.fields.is_empty() {
+                (quote! {}, quote! {})
+            } else {
+                let field_type = &v.fields.iter().next().map(|f| &f.ty);
+                let binding = if is_ignored(&v.attrs).unwrap() {
+                    quote! { inner }
+                } else {
+                    quote! { node }
+                };
+                (quote! { #binding: #field_type, }, quote! { #binding, })
+            };
+            let function = quote! {
+                // A boxed variant is taken as it is bound and unboxed where it is folded,
+                // as the fold of the variant did before it was a function.
+                #[allow(clippy::boxed_local)]
+                #[inline(never)]
+                fn #fold_fn<F: Fold<E> + ?Sized, E>(#params f: &mut F) -> Result<#name, E> {
+                    #body
+                }
+            };
+            let dispatch = quote! { #pattern => Self::#fold_fn(#call_args f) };
+            Ok((function, dispatch))
         })
         .collect();
-    let matchers = matchers?;
+    let arms = arms?;
+    let functions = arms.iter().map(|(function, _)| function);
+    let dispatches = arms.iter().map(|(_, dispatch)| dispatch);
 
     // Create the recurse implementation
     let gen = quote! {
         impl #name {
             pub fn recurse_fold<F: Fold<E> + ?Sized, E>(self, f: &mut F) -> Result<#name, E> {
                 match self {
-                    #(#matchers,)*
+                    #(#dispatches,)*
                 }
             }
+
+            #(#functions)*
         }
     };
 
@@ -602,12 +656,14 @@ fn expand_struct_recurse_fold(
                     }
                 }
             }
-            DeclaredType::Box => quote! {
-                #name: Box::new(f.#method_name(*self.#name)?)
-            },
-            DeclaredType::Simple => quote! {
-                #name: f.#method_name(self.#name)?
-            },
+            DeclaredType::Box => {
+                let folded = unwrapped(quote! { f.#method_name(*self.#name) });
+                quote! { #name: Box::new(#folded) }
+            }
+            DeclaredType::Simple => {
+                let folded = unwrapped(quote! { f.#method_name(self.#name) });
+                quote! { #name: #folded }
+            }
         }
     });
 

@@ -718,53 +718,11 @@ fn lower_expr_when_carets_are_as_many_as_the_tree_allows_then_lowered_without_re
     assert_eq!(depth, Some(MAX_DEPTH - 2));
 }
 
-/// The stack the nested expressions below are lowered, walked and dropped on.
-/// Nested calls at the limit need 1.7 MiB in a debug build, the most of any
-/// construct, and 0.6 MiB in a release build; one level costs 7 KB and 2.3 KB.
-const NESTING_STACK: usize = 4 * 1024 * 1024;
-
-/// How deep `build` nests before the parse reports the depth.
-fn deepest_allowed(build: fn(usize) -> String) -> usize {
-    (1..)
-        .find(|n| !parse_expression(&build(*n), &all()).is_ok())
-        .map_or(0, |first_too_deep| first_too_deep - 1)
-}
-
-#[test]
-fn lower_expr_when_nesting_is_as_deep_as_the_tree_allows_then_lowered_walked_and_dropped() {
-    use ironplc_dsl::visitor::Visitor;
-
-    struct Walker;
-    impl Visitor<std::convert::Infallible> for Walker {
-        type Value = ();
-    }
-
-    let nestings: [fn(usize) -> String; 2] = [
-        |n| format!("{}1{}", "(".repeat(n), ")".repeat(n)),
-        |n| format!("{}1{}", "f(".repeat(n), ")".repeat(n)),
-    ];
-    for build in nestings {
-        let walked = std::thread::Builder::new()
-            .stack_size(NESTING_STACK)
-            .spawn(move || {
-                let source = build(deepest_allowed(build));
-                let parse = parse_expression(&source, &all());
-                assert!(parse.is_ok(), "{:?}", parse.errors);
-                let node = parse.root.first_child().expect("a node");
-                let expr = lower_expr(&LowerCx::new(file()), &node).expect("lowers");
-                Walker.visit_expr(&expr).is_ok()
-            })
-            .ok()
-            .and_then(|thread| thread.join().ok());
-        assert_eq!(walked, Some(true));
-    }
-}
-
 #[test]
 fn lower_expr_when_long_chain_of_one_level_then_the_spans_nest() {
-    let source = vec!["a"; 200].join(" - ");
+    let source = vec!["a"; LONGEST_SUM].join(" - ");
     let expr = lower(&source);
-    assert_eq!(left_depth(&expr), 199);
+    assert_eq!(left_depth(&expr), LONGEST_SUM - 1);
     let mut current = &expr;
     while let ExprKind::BinaryOp(op) = &current.kind {
         assert_eq!(

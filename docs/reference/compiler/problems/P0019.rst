@@ -7,7 +7,7 @@ P0019
 This error occurs when a program nests its syntax more deeply than the
 compiler accepts. What is limited is the depth of the syntax tree, the number of
 constructs inside one another on the way from the start of the file to the
-innermost one, and not the length of the text. The limit is 256 levels, and the
+innermost one, and not the length of the text. The limit is 128 levels, and the
 file, the declaration it holds and the body of that declaration are levels too.
 
 A level is added by each parenthesis, each function call and each argument
@@ -20,7 +20,7 @@ variable. A chain of a few hundred links is therefore too deep, although it
 fits on one line.
 
 A conditional-compilation condition is limited the same way: parentheses and
-``NOT`` inside an ``{IF}`` condition may nest 256 levels.
+``NOT`` inside an ``{IF}`` condition may nest 128 levels.
 
 The compiler reports the error once, where the limit is first passed, and
 keeps the text that follows as part of the construct that was open there.
