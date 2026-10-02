@@ -28,6 +28,11 @@ use crate::token::{Token, TokenType};
 use crate::vars::*;
 use ironplc_dsl::common::*;
 use ironplc_dsl::configuration::*;
+use ironplc_dsl::construct::{
+    calendar_date, combine_interval_parts, late_resolved_members, late_resolved_or_enumerated,
+    resolve_initializer_expr, special_operator_type_call, time_of_day, unquote, ClockField,
+    DateField, DurationUnit, IntervalError,
+};
 use ironplc_dsl::core::Id;
 use ironplc_dsl::core::Located;
 use ironplc_dsl::member_qualifier::{
@@ -45,132 +50,50 @@ use ironplc_dsl::textual::*;
 use ironplc_dsl::time::*;
 
 // Don't use std::time::Duration because it does not allow negative values.
-use time::{Date, Month, PrimitiveDateTime, Time};
+use time::{Date, PrimitiveDateTime, Time};
 
-/// Negates a literal constant, for the small set of literal kinds that
-/// `constant()` itself already supports with a leading sign (integer, real,
-/// duration). Used to collapse `ExprKind::UnaryOp(Neg, Const(c))` — the
-/// shape produced when a negative literal reaches the parser through
-/// `expression()`'s unary-operator handling rather than directly through
-/// `constant()` — back to the same `Const` shape `constant()` alone would
-/// have produced, so that e.g. `x : INT := -123;` continues to parse as a
-/// plain literal and does not require `allow_constant_initializer_expressions`.
-/// Returns `Err(c)` (giving the original value back) for literal kinds that
-/// have no natural negation (e.g. booleans, strings), which fall through to
-/// `SimpleExpr` instead.
-fn negate_literal_constant(c: ConstantKind) -> Result<ConstantKind, ConstantKind> {
-    match c {
-        ConstantKind::IntegerLiteral(mut lit) => {
-            lit.value.is_neg = !lit.value.is_neg;
-            Ok(ConstantKind::IntegerLiteral(lit))
-        }
-        ConstantKind::RealLiteral(mut lit) => {
-            lit.value = -lit.value;
-            Ok(ConstantKind::RealLiteral(lit))
-        }
-        ConstantKind::Duration(mut lit) => {
-            lit.interval = -lit.interval;
-            Ok(ConstantKind::Duration(lit))
-        }
-        other => Err(other),
+/// The expected-input text for a duration literal whose parts do not form
+/// one; the rule is [`ironplc_dsl::construct::check_interval_parts`].
+fn interval_expectation(error: IntervalError) -> &'static str {
+    match error {
+        IntervalError::UnitOrder => "duration units in descending order",
+        IntervalError::FractionBeforeLast => "an integer before the last duration unit",
     }
 }
 
-/// A member list written against a user type name: `T := (a := 1)`. The
-/// type may be a structure or a function block; the resolver decides.
-fn late_resolved_members(init: StructureInitializationDeclaration) -> InitialValueAssignmentKind {
-    InitialValueAssignmentKind::LateResolvedType(LateResolvedInitializer {
-        type_name: init.type_name,
-        initial_value: Some(LateResolvedInitialValue::Members(init.elements_init)),
-    })
+/// The expected-input text for a clock field that is out of range.
+fn clock_expectation(field: ClockField) -> &'static str {
+    match field {
+        ClockField::Hour => "hour",
+        ClockField::Minute => "min",
+        ClockField::Second => "second",
+    }
 }
 
-/// A value written against a user type name: `T := Red`. A qualified value
-/// (`T := T#Red`) names an enumeration and is settled here; a bare
-/// identifier may be an enumeration value or a named constant of any other
-/// type, and the resolver decides.
-fn late_resolved_or_enumerated(
-    type_name: TypeName,
-    value: EnumeratedValue,
-) -> InitialValueAssignmentKind {
-    if value.type_name.is_some() {
-        return InitialValueAssignmentKind::EnumeratedType(EnumeratedInitialValueAssignment {
-            type_name,
-            initial_value: Some(value),
-        });
+/// The expected-input text for a calendar part that does not exist.
+fn date_expectation(field: DateField) -> &'static str {
+    match field {
+        DateField::Year => "year",
+        DateField::Month => "month",
+        DateField::Day => "date",
     }
-    InitialValueAssignmentKind::LateResolvedType(LateResolvedInitializer {
+}
+
+/// The call node for `__NEW(T[, n])` or `__TYPEOF(T)` between the tokens
+/// `start` (the operator) and `end` (the closing parenthesis).
+fn operator_call(start: &Token, type_name: Id, count: Option<Expr>, end: &Token) -> Expr {
+    let operator = Id::from(start.text.as_str()).with_position(start.span.clone());
+    special_operator_type_call(
+        operator,
         type_name,
-        initial_value: Some(LateResolvedInitialValue::Value(value.value)),
-    })
-}
-
-/// Returns the literal constant that an initializer expression denotes, if
-/// it denotes one: a literal, or a literal with one leading unary minus
-/// (e.g. `-123`, the shape `expression()` produces for a negative literal
-/// because it routes the sign through its own unary-operator handling).
-///
-/// Returns `None` for everything else, including a negation that has no
-/// natural literal form (`-TRUE`).
-fn literal_value_of(e: &Expr) -> Option<ConstantKind> {
-    match &e.kind {
-        ExprKind::Const(c) => Some(c.clone()),
-        ExprKind::UnaryOp(u) if u.op == UnaryOp::Neg => match &u.term.kind {
-            ExprKind::Const(c) => negate_literal_constant(c.clone()).ok(),
-            _ => None,
-        },
-        _ => None,
-    }
-}
-
-/// Collapses an initializer expression to `Simple` when it is exactly a
-/// literal (optionally with one leading unary minus, e.g. `-123`), and
-/// otherwise keeps it as `SimpleExpr` (the constant-expression extension,
-/// folded by `xform_fold_initializer_expressions`).
-fn resolve_initializer_expr(type_name: TypeName, e: Expr) -> InitialValueAssignmentKind {
-    match literal_value_of(&e) {
-        Some(initial_value) => InitialValueAssignmentKind::Simple(SimpleInitializer {
-            type_name,
-            initial_value: Some(initial_value),
-        }),
-        None => InitialValueAssignmentKind::SimpleExpr(SimpleExprInitializer {
-            type_name,
-            initial_value: e,
-        }),
-    }
+        count,
+        SourceSpan::join(&start.span, &end.span),
+    )
 }
 
 /// Builds the syntax-error diagnostic for a failed parse. `token_index`
 /// points past the offending token; an empty token stream gets a span-less
 /// message instead of a panic.
-/// The call node for `__NEW(T[, n])` or `__TYPEOF(T)`: the type name is
-/// recorded as a variable reference, followed by the element count when there
-/// is one.
-fn special_operator_type_call(
-    start: &Token,
-    type_name: Id,
-    count: Option<Expr>,
-    end: &Token,
-) -> Expr {
-    let name = Id::from(start.text.as_str()).with_position(start.span.clone());
-    let span = SourceSpan::join(&start.span, &end.span);
-    let mut param_assignment = vec![ParamAssignmentKind::positional(ExprKind::Variable(
-        Variable::Symbolic(SymbolicVariableKind::Named(NamedVariable {
-            name: type_name,
-        })),
-    ))];
-    if let Some(count) = count {
-        param_assignment.push(ParamAssignmentKind::PositionalInput(PositionalInput {
-            expr: count,
-        }));
-    }
-    Expr::new(ExprKind::Function(Function {
-        name,
-        param_assignment,
-    }))
-    .with_span(span)
-}
-
 fn syntax_error(tokens: &[Token], token_index: usize, expected: String) -> Diagnostic {
     let Some(actual) = tokens.get(token_index.saturating_sub(1)) else {
         return Diagnostic::problem(
@@ -276,64 +199,6 @@ fn span_of_tokens(tokens: &[Token], start: usize, end: usize) -> SourceSpan {
         (Some(only), None) => only.span.clone(),
         _ => SourceSpan::default(),
     }
-}
-
-/// Returns the characters a character-string token denotes: the text
-/// between its two delimiting quotes with its `$` escapes decoded. An
-/// invalid escape is kept as written; `rule_token_string_escape` reports it.
-fn unquote(text: &str, width: &StringType) -> Vec<char> {
-    let inner = text
-        .get(1..text.len().saturating_sub(1))
-        .unwrap_or_default();
-    dsl::string_escape::decode(inner, width).chars
-}
-
-/// A unit of a duration literal part, smallest first so that the derived
-/// order is the order of magnitude.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-enum DurationUnit {
-    Nanoseconds,
-    Microseconds,
-    Milliseconds,
-    Seconds,
-    Minutes,
-    Hours,
-    Days,
-}
-
-/// Sums the parts of a duration literal (REQ-TL-021): the units must be in
-/// strictly descending magnitude, which also rules out a repeated unit, and
-/// only the last part may have a fractional value.
-fn combine_interval_parts(
-    first: (FixedPoint, DurationUnit),
-    rest: Vec<(FixedPoint, DurationUnit)>,
-) -> Result<DurationLiteral, &'static str> {
-    let last = rest.len();
-    let mut total: Option<DurationLiteral> = None;
-    let mut previous: Option<DurationUnit> = None;
-    for (index, (value, unit)) in std::iter::once(first).chain(rest).enumerate() {
-        if previous.is_some_and(|p| unit >= p) {
-            return Err("duration units in descending order");
-        }
-        if index < last && value.femptos != 0 {
-            return Err("an integer before the last duration unit");
-        }
-        previous = Some(unit);
-        let part = match unit {
-            DurationUnit::Nanoseconds => DurationLiteral::nanoseconds(value),
-            DurationUnit::Microseconds => DurationLiteral::microseconds(value),
-            DurationUnit::Days => DurationLiteral::days(value),
-            DurationUnit::Hours => DurationLiteral::hours(value),
-            DurationUnit::Minutes => DurationLiteral::minutes(value),
-            DurationUnit::Seconds => DurationLiteral::seconds(value),
-            DurationUnit::Milliseconds => DurationLiteral::milliseconds(value),
-        };
-        total = Some(match total {
-            None => part,
-            Some(sum) => sum.plus(part),
-        });
-    }
-    total.ok_or("a duration")
 }
 
 /// The default implementation of the parsing traits for `[T]` expects `T` to be
@@ -652,19 +517,17 @@ parser! {
     // token transform `xform_split_duration_units` has already split a unit
     // from the digits the lexer glued to it (`m30s`).
     rule interval() -> DurationLiteral = first:interval_part() rest:(contextual_keyword("_")? p:interval_part() { p })* {?
-      combine_interval_parts(first, rest)
+      combine_interval_parts(first, rest).map_err(interval_expectation)
     }
     rule interval_part() -> (FixedPoint, DurationUnit) = n:fixed_point() u:duration_unit() { (n, u) }
     // `ms` must come before `m`, or `100ms` would read as minutes. `us` and
     // `ns` (REQ-TL-010) conflict with no other unit, so they sit after `ms`.
-    rule duration_unit() -> DurationUnit =
-      contextual_keyword("ms") { DurationUnit::Milliseconds }
-      / contextual_keyword("us") { DurationUnit::Microseconds }
-      / contextual_keyword("ns") { DurationUnit::Nanoseconds }
-      / contextual_keyword("d") { DurationUnit::Days }
-      / contextual_keyword("h") { DurationUnit::Hours }
-      / contextual_keyword("m") { DurationUnit::Minutes }
-      / contextual_keyword("s") { DurationUnit::Seconds }
+    rule duration_unit() -> DurationUnit = token:[t] {?
+      match token.token_type {
+        TokenType::Identifier => DurationUnit::from_word(&token.text).ok_or("duration unit"),
+        _ => Err("duration unit"),
+      }
+    }
     rule fixed_point() -> FixedPoint =
       fp:tok(TokenType::FixedPoint) {?
         FixedPoint::parse(fp.text.as_str())
@@ -684,18 +547,10 @@ parser! {
     // morning with zero seconds, as CODESYS accepts.
     rule daytime() -> Time = h:day_hour() tok(TokenType::Colon) m:day_minute() s:(tok(TokenType::Colon) s:day_second() { s })? {?
       let (second, nanoseconds) = match s {
-        Some(s) => (
-          u8::try_from(s.whole).map_err(|e| "second")?,
-          s.nanoseconds(),
-        ),
+        Some(s) => (u128::from(s.whole), s.nanoseconds()),
         None => (0, 0),
       };
-      Time::from_hms_nano(
-        h.try_into().map_err(|e| "hour")?,
-        m.try_into().map_err(|e| "min")?,
-        second,
-        nanoseconds,
-      ).map_err(|e| "time")
+      time_of_day(h.value, m.value, second, nanoseconds).map_err(clock_expectation)
     }
     rule day_hour() -> Integer = integer()
     rule day_minute() -> Integer = integer()
@@ -705,10 +560,7 @@ parser! {
     // like `LT` it comes after the keyword forms.
     rule date_prefix() -> TemporalWidth = tok(TokenType::Date) { TemporalWidth::Short } / tok(TokenType::Ldate) { TemporalWidth::Long } / contextual_keyword("LD") { TemporalWidth::Long } / contextual_keyword("D") { TemporalWidth::Short }
     rule date_literal() -> Date = y:year() tok(TokenType::Minus) m:month() tok(TokenType::Minus) d:day() {?
-      let y = y.value;
-      let m = Month::try_from(<dsl::common::Integer as TryInto<u8>>::try_into(m).map_err(|e| "month")?).map_err(|e| "month")?;
-      let d = d.value;
-      Date::from_calendar_date(y.try_into().map_err(|e| "year")?, m, d.try_into().map_err(|e| "date")?).map_err(|e| "date")
+      calendar_date(y.value, m.value, d.value).map_err(date_expectation)
     }
     rule year() -> Integer = i:integer() { i }
     rule month() -> Integer = i:integer() { i }
@@ -2286,10 +2138,10 @@ parser! {
     // (`NewExpressionParser`); `__TYPEOF(T)` takes the type alone.
     rule special_operator_type_expression() -> Expr =
       start:special_operator_type_name() _ tok(TokenType::LeftParen) _ t:data_type_name() _ end:tok(TokenType::RightParen) {
-        special_operator_type_call(start, t.name, None, end)
+        operator_call(start, t.name, None, end)
       }
       / start:tok(TokenType::SpecialNew) _ tok(TokenType::LeftParen) _ t:data_type_name() _ tok(TokenType::Comma) _ count:expression() _ end:tok(TokenType::RightParen) {
-        special_operator_type_call(start, t.name, Some(count), end)
+        operator_call(start, t.name, Some(count), end)
       }
     rule special_operator_type_name() -> &'input Token = tok(TokenType::SpecialNew) / tok(TokenType::SpecialTypeOf)
 

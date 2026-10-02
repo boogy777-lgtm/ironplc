@@ -3,95 +3,24 @@
 //!
 //! The lexer keeps a literal's text byte for byte, escapes included. This
 //! module only says which escapes the standard does not define, with their
-//! byte ranges inside the literal's text, so the parser can report them. It
-//! mirrors the escape table of the legacy pipeline, which owns the decoded
-//! values; no value is computed here.
-//!
-//! Both widths accept `$$`, `$'`, `$"`, `$L`, `$N`, `$P`, `$R` and `$T` in
-//! either case. A numeric escape is `$` and two hex digits in a single-byte
-//! literal, four in a double-byte one. `$U` and eight hex digits is a Unicode
-//! escape in either width; its value must be a Unicode scalar. A numeric
-//! escape in the surrogate range cannot be a character either.
+//! byte ranges inside the literal's text, so the parser can report them. The
+//! escape table itself is the one in `ironplc_dsl::string_escape`, which
+//! also decodes the values; no value is computed here.
 
 use core::ops::Range;
 
-/// How many hex digits a `$U` escape carries.
-const UNICODE_DIGITS: usize = 8;
+use ironplc_dsl::common::StringType;
+use ironplc_dsl::string_escape::decode;
 
 /// The byte ranges, in `text`, of the escapes that are not valid. `text` is
 /// the literal without its delimiters; `wide` selects the double-byte form.
 pub(crate) fn invalid_escapes(text: &str, wide: bool) -> Vec<Range<usize>> {
-    let digits = if wide { 4 } else { 2 };
-    let mut invalid = Vec::new();
-    let mut chars = text.char_indices().peekable();
-    while let Some((start, ch)) = chars.next() {
-        if ch != '$' {
-            continue;
-        }
-        let Some(&(_, next)) = chars.peek() else {
-            invalid.push(start..text.len());
-            break;
-        };
-        if is_named_escape(next) {
-            chars.next();
-        } else if next == 'U' {
-            match hex_run(text, start + 2, UNICODE_DIGITS) {
-                Some(value) if char::from_u32(value).is_some() => {
-                    for _ in 0..=UNICODE_DIGITS {
-                        chars.next();
-                    }
-                }
-                _ => invalid.push(start..unicode_escape_end(text, start)),
-            }
-        } else {
-            match hex_run(text, start + 1, digits) {
-                Some(value) if is_scalar_or_local(value) => {
-                    for _ in 0..digits {
-                        chars.next();
-                    }
-                }
-                _ => invalid.push(start..start + 1 + next.len_utf8()),
-            }
-        }
-    }
-    invalid
-}
-
-fn is_named_escape(c: char) -> bool {
-    matches!(
-        c,
-        '$' | '\'' | '"' | 'L' | 'l' | 'N' | 'n' | 'P' | 'p' | 'R' | 'r' | 'T' | 't'
-    )
-}
-
-/// The value of exactly `count` hex digits at `from`, or `None` when fewer
-/// follow or one of them is not a hex digit.
-fn hex_run(text: &str, from: usize, count: usize) -> Option<u32> {
-    let run: String = text.get(from..)?.chars().take(count).collect();
-    if run.chars().count() != count || !run.chars().all(|c| c.is_ascii_hexdigit()) {
-        return None;
-    }
-    u32::from_str_radix(&run, 16).ok()
-}
-
-/// A numeric escape is a character unless it names a surrogate.
-fn is_scalar_or_local(value: u32) -> bool {
-    char::from_u32(value).is_some()
-}
-
-/// The end of an undecodable `$U` escape: the `$`, the `U`, and the hex
-/// digits read with them (at most eight, none past the first non-digit).
-fn unicode_escape_end(text: &str, start: usize) -> usize {
-    let from = start + 2;
-    text.get(from..)
-        .map(|rest| {
-            rest.char_indices()
-                .take(UNICODE_DIGITS)
-                .take_while(|(_, c)| c.is_ascii_hexdigit())
-                .last()
-                .map_or(from, |(offset, c)| from + offset + c.len_utf8())
-        })
-        .unwrap_or(from)
+    let width = if wide {
+        StringType::WString
+    } else {
+        StringType::String
+    };
+    decode(text, &width).invalid
 }
 
 #[cfg(test)]
