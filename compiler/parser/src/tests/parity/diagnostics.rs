@@ -88,9 +88,10 @@ pub fn compare_codes(
     }
     for (index, exception) in exceptions.iter().enumerate() {
         if !used[index] {
-            report
-                .stale
-                .push(format!("{:?} ({})", exception.key, exception.legacy_code));
+            report.stale.push(format!(
+                "{:?} ({}): {}",
+                exception.key, exception.legacy_code, exception.reason
+            ));
         }
     }
     report

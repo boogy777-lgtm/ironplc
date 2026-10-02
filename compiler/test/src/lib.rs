@@ -1,4 +1,7 @@
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 pub mod fixtures;
 
@@ -61,4 +64,23 @@ pub fn shared_resource_path(name: &'static str) -> PathBuf {
     path.push("test");
     path.push(name);
     path
+}
+
+/// Every `.st` file under `dir`, recursively, sorted.
+pub fn st_files(dir: &Path) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    collect_st_files(dir, &mut files);
+    files.sort();
+    files
+}
+
+fn collect_st_files(dir: &Path, files: &mut Vec<PathBuf>) {
+    for entry in fs::read_dir(dir).expect("Unable to read directory") {
+        let path = entry.expect("Unable to read directory entry").path();
+        if path.is_dir() {
+            collect_st_files(&path, files);
+        } else if path.extension().is_some_and(|ext| ext == "st") {
+            files.push(path);
+        }
+    }
 }

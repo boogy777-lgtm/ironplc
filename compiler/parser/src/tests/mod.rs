@@ -4,6 +4,7 @@
 //! a new file here plus one `mod` line.
 
 mod common;
+mod parity;
 
 mod arrays;
 mod case;

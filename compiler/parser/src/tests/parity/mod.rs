@@ -9,9 +9,12 @@
 //! minimal `PROGRAM`, where the legacy parser behaves as it does on real
 //! files; an exception that blames the fragment entry must be confirmed by
 //! that second verdict.
-//!
-//! Each test binary uses the part of this module it needs.
-#![allow(dead_code)]
+
+mod declarations;
+mod diagnostics_codes;
+mod files;
+mod legacy_options;
+mod vocabulary;
 
 pub mod compare;
 pub mod declaration_table;
@@ -22,6 +25,7 @@ pub mod tables;
 
 use ironplc_syntax::{parse_expression, parse_source_file, parse_statements, ParseOptions};
 use legacy::Preset;
+use std::path::Path;
 
 /// Which kind of snippet a table holds.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -140,4 +144,32 @@ impl Exception {
             Basis::Deliberate => true,
         }
     }
+}
+
+/// The files compared, named by their path from the syntax crate's directory
+/// (`../resources/test/oop.st`, `tests/fixtures/codesys/x.st`), each with its
+/// CRLF and tab-indented spellings (`name (CRLF)`, `name (tabs)`). The
+/// fixtures are the syntax crate's own, read in place.
+pub fn file_variants() -> Vec<(String, String)> {
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let roots = [
+        (manifest.join("../resources/test"), "../resources/test"),
+        (manifest.join("../syntax/tests/fixtures"), "tests/fixtures"),
+    ];
+    let mut files = Vec::new();
+    for (root, label) in roots {
+        for path in ironplc_test::st_files(&root) {
+            let text = std::fs::read_to_string(&path).unwrap_or_default();
+            let relative = path
+                .strip_prefix(&root)
+                .unwrap_or(&path)
+                .to_string_lossy()
+                .replace('\\', "/");
+            let name = format!("{label}/{relative}");
+            files.push((format!("{name} (CRLF)"), text.replace('\n', "\r\n")));
+            files.push((format!("{name} (tabs)"), text.replace("    ", "\t")));
+            files.push((name, text));
+        }
+    }
+    files
 }
