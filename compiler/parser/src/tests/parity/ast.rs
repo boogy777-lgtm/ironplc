@@ -8,16 +8,20 @@
 //! which declarations shared a block. A [`Fingerprint`] keeps all three, and
 //! two objects are the same only when every part of their fingerprints is:
 //!
-//! - the `{:#?}` dump, which prints every field including each derived span
-//!   and an identifier's original spelling (`VarDecl.block` is taken out of it
-//!   because it is a process-wide counter, and is compared as a partition);
-//! - the sequence of every `SourceSpan` the visitor reaches, which includes
-//!   the identifier spans the dump leaves out;
+//! - the `{:#?}` dump, which prints every field and an identifier's original
+//!   spelling, with the spans it prints taken out (`VarDecl.block` is taken
+//!   out of it too, because it is a process-wide counter, and is compared as a
+//!   partition). It is what says the shape and the values are the same;
+//! - the spans: every `SourceSpan` the visitor reaches, which includes the
+//!   identifier spans the dump leaves out, and every one the dump printed.
+//!   It is what says the same objects are in the same places, so a difference
+//!   in this part alone is a difference of position and nothing else;
 //! - the block partition: which variable declarations share a block, with the
 //!   ids renumbered by first appearance.
 
 use ironplc_dsl::common::{ConstantKind, Library, VarDecl};
 use ironplc_dsl::core::SourceSpan;
+use ironplc_dsl::textual::{Expr, Variable};
 use ironplc_dsl::visitor::Visitor;
 use std::fmt::Debug;
 
@@ -28,6 +32,7 @@ pub type Span = (usize, usize, String);
 #[derive(Debug, PartialEq, Eq)]
 pub struct Fingerprint {
     pub dump: String,
+    pub printed_spans: Vec<String>,
     pub spans: Vec<Span>,
     pub blocks: Vec<usize>,
 }
@@ -73,6 +78,18 @@ impl Subject for ConstantKind {
     }
 }
 
+impl Subject for Expr {
+    fn walk(&self, collector: &mut Collector) {
+        let _ = self.recurse_visit(collector);
+    }
+}
+
+impl Subject for Variable {
+    fn walk(&self, collector: &mut Collector) {
+        let _ = self.recurse_visit(collector);
+    }
+}
+
 impl Subject for Library {
     fn walk(&self, collector: &mut Collector) {
         let _ = collector.walk(self);
@@ -95,22 +112,51 @@ fn partition(blocks: &[usize]) -> Vec<usize> {
         .collect()
 }
 
-/// The dump without its `block:` lines: the one field that is an identity and
-/// not a value, compared as a partition instead.
-fn dump_without_block_ids<T: Debug>(value: &T) -> String {
-    format!("{value:#?}")
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("block: "))
-        .collect::<Vec<_>>()
-        .join("\n")
+/// The dump without its `block:` lines (the one field that is an identity and
+/// not a value, compared as a partition instead), and with each printed
+/// `SourceSpan` taken out of it: the dump keeps the shape and the values, and
+/// the spans come back as their own list, in order of appearance.
+fn dump_and_printed_spans<T: Debug>(value: &T) -> (String, Vec<String>) {
+    let text = format!("{value:#?}");
+    let mut dump: Vec<String> = Vec::new();
+    let mut spans: Vec<String> = Vec::new();
+    let mut lines = text.lines();
+    while let Some(line) = lines.next() {
+        if line.trim_start().starts_with("block: ") {
+            continue;
+        }
+        if !line.trim_end().ends_with("SourceSpan {") {
+            dump.push(line.to_string());
+            continue;
+        }
+        // The printed span runs to the line that closes it, at the indent of
+        // the line that opened it.
+        let indent = line.len() - line.trim_start().len();
+        let mut printed = String::new();
+        for inner in lines.by_ref() {
+            let closes = inner.len() - inner.trim_start().len() == indent;
+            printed.push_str(inner.trim());
+            if closes {
+                break;
+            }
+        }
+        spans.push(printed);
+        dump.push(format!(
+            "{}<span>",
+            &line[..line.len() - "SourceSpan {".len()]
+        ));
+    }
+    (dump.join("\n"), spans)
 }
 
 impl Fingerprint {
     pub fn of<T: Subject>(value: &T) -> Fingerprint {
         let mut collector = Collector::default();
         value.walk(&mut collector);
+        let (dump, printed_spans) = dump_and_printed_spans(value);
         Fingerprint {
-            dump: dump_without_block_ids(value),
+            dump,
+            printed_spans,
             spans: collector.spans,
             blocks: partition(&collector.blocks),
         }
@@ -122,7 +168,7 @@ impl Fingerprint {
         if self.dump != other.dump {
             parts.push(Component::Dump);
         }
-        if self.spans != other.spans {
+        if self.spans != other.spans || self.printed_spans != other.printed_spans {
             parts.push(Component::Spans);
         }
         if self.blocks != other.blocks {
@@ -213,21 +259,21 @@ mod tests {
     }
 
     #[test]
-    fn compare_when_a_span_moves_then_dump_and_spans_differ_although_partial_eq_holds() {
+    fn compare_when_a_span_moves_then_only_the_spans_differ_although_partial_eq_holds() {
         let (a, b) = (constant("5"), constant(" 5"));
         assert_eq!(a, b, "PartialEq ignores spans");
-        assert_eq!(compare(&a, &b), vec![Component::Dump, Component::Spans]);
+        assert_eq!(compare(&a, &b), vec![Component::Spans]);
     }
 
     #[test]
-    fn compare_when_only_the_file_differs_then_spans_differ() {
+    fn compare_when_only_the_file_differs_then_only_the_spans_differ() {
         let a = constant("5");
         let moved = a
             .clone()
             .with_span(SourceSpan::range(16, 17).with_file_id(&FileId::from_string("other.st")));
         let same_range = a.clone().with_span(SourceSpan::range(16, 17));
         assert!(compare(&a, &same_range).is_empty());
-        assert_eq!(compare(&a, &moved), vec![Component::Dump, Component::Spans]);
+        assert_eq!(compare(&a, &moved), vec![Component::Spans]);
     }
 
     #[test]

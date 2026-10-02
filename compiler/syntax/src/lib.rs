@@ -14,8 +14,8 @@
 //! `TYPE` declarations, configurations and sequential function charts, with
 //! the statements and expressions inside them. The [`lower`] module turns the
 //! tree into the `ironplc_dsl` objects, one rule per language element; it
-//! covers the literals and names so far, and neither it nor the parser is used
-//! by a production consumer yet.
+//! covers the literals, names, expressions and variables so far, and neither it
+//! nor the parser is used by a production consumer yet.
 //!
 //! The text is kept as written. Two constructs make a stretch of it not code:
 //! OSCAT ranged comments (what a `(*@KEY@:NAME*)` pair holds) and, with

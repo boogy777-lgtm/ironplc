@@ -15,6 +15,7 @@ mod grammar;
 pub mod options;
 mod recovery;
 mod state;
+pub(crate) use state::is_special_operator;
 
 use self::options::ParseOptions;
 use self::state::Parser;

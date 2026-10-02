@@ -15,6 +15,7 @@ mod diagnostics_codes;
 mod files;
 mod legacy_options;
 mod literals;
+mod sites;
 mod vocabulary;
 
 pub mod ast;

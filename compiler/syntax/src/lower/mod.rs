@@ -21,9 +21,11 @@
 //! grammar guarantees but the tree lacks is an internal error, and a node whose
 //! area has no rule yet is reported as not implemented.
 
+pub mod expressions;
 pub mod literals;
 pub mod names;
 pub mod tree;
+pub mod variables;
 
 use crate::parser::Parse;
 use crate::syntax_kind::{NodeKind, SyntaxKind, SyntaxNode, SyntaxToken};
@@ -41,8 +43,14 @@ pub enum Area {
     /// The literals: numbers, bit strings, booleans, character strings and
     /// the temporal literals (`literals`).
     Literal,
-    /// Declared names (`names`).
+    /// Declared names and the names of types (`names`).
     Name,
+    /// Operations on values: operators, groups, calls, references and the
+    /// special operators (`expressions`).
+    Expression,
+    /// What a value is read from or written to: a name, a member, an element,
+    /// a bit, a dereference, a direct address (`variables`).
+    Variable,
 }
 
 /// What lowering does with a kind the tree can hold.
@@ -87,7 +95,26 @@ fn node_disposition(node: NodeKind) -> Disposition {
         | NodeKind::TimeOfDayLiteral
         | NodeKind::DateLiteral
         | NodeKind::DateTimeLiteral => Lowered(Area::Literal),
-        NodeKind::Name => Lowered(Area::Name),
+        NodeKind::Name | NodeKind::TypeRef => Lowered(Area::Name),
+        NodeKind::BinaryExpr
+        | NodeKind::UnaryExpr
+        | NodeKind::ParenExpr
+        | NodeKind::CallExpr
+        | NodeKind::RefExpr
+        | NodeKind::SpecialOpExpr
+        | NodeKind::NullLiteral => Lowered(Area::Expression),
+        NodeKind::NameRef
+        | NodeKind::FieldExpr
+        | NodeKind::IndexExpr
+        | NodeKind::BitAccessExpr
+        | NodeKind::PartialAccessExpr
+        | NodeKind::DerefExpr
+        | NodeKind::SelfRefExpr
+        | NodeKind::DirectAddressExpr => Lowered(Area::Variable),
+        // The arguments of a call, read by the rule of the call.
+        NodeKind::ArgList | NodeKind::PositionalArg | NodeKind::NamedArg | NodeKind::OutputArg => {
+            Structural
+        }
         NodeKind::ProgramDecl
         | NodeKind::FunctionDecl
         | NodeKind::FunctionBlockDecl
@@ -167,27 +194,7 @@ fn node_disposition(node: NodeKind) -> Disposition {
         | NodeKind::LabelStmt
         | NodeKind::CalcStmt
         | NodeKind::WaitStmt
-        | NodeKind::ImplementationMarker
-        | NodeKind::BinaryExpr
-        | NodeKind::UnaryExpr
-        | NodeKind::ParenExpr
-        | NodeKind::NameRef
-        | NodeKind::FieldExpr
-        | NodeKind::IndexExpr
-        | NodeKind::BitAccessExpr
-        | NodeKind::PartialAccessExpr
-        | NodeKind::DerefExpr
-        | NodeKind::SelfRefExpr
-        | NodeKind::DirectAddressExpr
-        | NodeKind::CallExpr
-        | NodeKind::ArgList
-        | NodeKind::PositionalArg
-        | NodeKind::NamedArg
-        | NodeKind::OutputArg
-        | NodeKind::RefExpr
-        | NodeKind::SpecialOpExpr
-        | NodeKind::TypeRef
-        | NodeKind::NullLiteral => Pending,
+        | NodeKind::ImplementationMarker => Pending,
     }
 }
 
@@ -272,6 +279,16 @@ impl LowerCx {
     #[track_caller]
     pub fn internal_error(&self, range: TextRange, message: impl Into<String>) -> Diagnostic {
         Diagnostic::internal_error_at(Label::span(self.span(range), message))
+    }
+
+    /// The diagnostic for a node that lacks a part the grammar guarantees:
+    /// the tree is not shaped as the parser builds it.
+    #[track_caller]
+    pub fn missing(&self, node: &SyntaxNode, what: &str) -> Diagnostic {
+        self.internal_error(
+            node.text_range(),
+            format!("{:?} does not hold {what}", node.kind()),
+        )
     }
 
     /// The diagnostic for a node that was asked to be lowered by a rule that
@@ -398,6 +415,79 @@ mod tests {
         assert_eq!(
             disposition(SyntaxKind::Name),
             Disposition::Lowered(Area::Name)
+        );
+    }
+
+    #[test]
+    fn disposition_when_expression_node_then_lowered_by_the_expression_area() {
+        for kind in [
+            SyntaxKind::BinaryExpr,
+            SyntaxKind::UnaryExpr,
+            SyntaxKind::ParenExpr,
+            SyntaxKind::CallExpr,
+            SyntaxKind::RefExpr,
+            SyntaxKind::SpecialOpExpr,
+            SyntaxKind::NullLiteral,
+        ] {
+            assert_eq!(disposition(kind), Disposition::Lowered(Area::Expression));
+        }
+    }
+
+    #[test]
+    fn disposition_when_node_that_names_a_place_then_lowered_by_the_variable_area() {
+        for kind in [
+            SyntaxKind::NameRef,
+            SyntaxKind::FieldExpr,
+            SyntaxKind::IndexExpr,
+            SyntaxKind::BitAccessExpr,
+            SyntaxKind::PartialAccessExpr,
+            SyntaxKind::DerefExpr,
+            SyntaxKind::SelfRefExpr,
+            SyntaxKind::DirectAddressExpr,
+        ] {
+            assert_eq!(disposition(kind), Disposition::Lowered(Area::Variable));
+        }
+        assert_eq!(
+            disposition(SyntaxKind::TypeRef),
+            Disposition::Lowered(Area::Name)
+        );
+    }
+
+    #[test]
+    fn disposition_when_argument_node_then_read_by_the_rule_of_the_call() {
+        for kind in [
+            SyntaxKind::ArgList,
+            SyntaxKind::PositionalArg,
+            SyntaxKind::NamedArg,
+            SyntaxKind::OutputArg,
+        ] {
+            assert_eq!(disposition(kind), Disposition::Structural);
+        }
+    }
+
+    #[test]
+    fn contains_pending_when_only_expressions_and_variables_then_false() {
+        for source in [
+            "a + f(b, c := 1, d => e)[1]",
+            "m.run(THIS^.x)",
+            "REF(a) = NULL",
+        ] {
+            let parse = parse_expression(source, &ParseOptions::all());
+            assert!(!contains_pending(&parse.root), "{source}");
+        }
+    }
+
+    #[test]
+    fn missing_when_node_lacks_a_part_then_internal_error_naming_the_node_and_the_part() {
+        let parse = parse_expression("a + b", &options());
+        let cx = LowerCx::new(FileId::default());
+        let node = parse.root.first_child();
+        let diagnostic = node.map(|node| cx.missing(&node, "an operand"));
+        let message = diagnostic.as_ref().map(|d| d.primary.message.clone());
+        assert_eq!(diagnostic.map(|d| d.code), Some(INTERNAL_ERROR.to_string()));
+        assert_eq!(
+            message,
+            Some("BinaryExpr does not hold an operand".to_string())
         );
     }
 
