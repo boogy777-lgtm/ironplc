@@ -6,16 +6,14 @@
 //! legacy statement-fragment parser accepts. A difference must be listed in
 //! the named exception table with its reason; an unlisted difference fails,
 //! and so does a listed one that no longer differs. Declarations and whole
-//! files are compared in `parity_declarations.rs` and `parity_files.rs`.
+//! files are compared in `declarations.rs` and `files.rs`.
 
-mod parity;
-
-use parity::compare::{assert_clean, compare, summarize, Item};
-use parity::legacy::presets;
-use parity::tables::{
+use super::compare::{assert_clean, compare, summarize, Item};
+use super::legacy::presets;
+use super::tables::{
     BODY_EXCEPTIONS, EXPRESSIONS, EXPRESSION_EXCEPTIONS, STATEMENTS, STATEMENT_EXCEPTIONS,
 };
-use parity::{extract, Kind, Oracle};
+use super::{extract, Kind, Oracle};
 
 fn items<'a>(snippets: &[&'a str]) -> Vec<Item<'a>> {
     snippets.iter().map(|text| Item::snippet(text)).collect()
@@ -23,7 +21,7 @@ fn items<'a>(snippets: &[&'a str]) -> Vec<Item<'a>> {
 
 #[test]
 fn convert_when_legacy_options_then_every_new_flag_has_a_legacy_counterpart() {
-    let legacy_keys: Vec<&str> = ironplc_parser::options::CompilerOptions::FEATURE_DESCRIPTORS
+    let legacy_keys: Vec<&str> = crate::options::CompilerOptions::FEATURE_DESCRIPTORS
         .iter()
         .map(|descriptor| descriptor.option_key)
         .collect();

@@ -1,8 +1,8 @@
 //! The legacy parser as a test oracle, and the options it runs under.
 
+use crate::legacy::{parse_program, parse_st_statements};
+use crate::options::{CompilerOptions, Dialect};
 use ironplc_dsl::core::FileId;
-use ironplc_parser::options::{CompilerOptions, Dialect};
-use ironplc_parser::parse_st_statements;
 use ironplc_syntax::ParseOptions;
 
 /// One dialect configuration, as the legacy options and as the new ones.
@@ -59,19 +59,19 @@ pub fn accepts(source: &str, options: &CompilerOptions) -> bool {
 /// True when the legacy parser accepts `body` as the body of a `PROGRAM`.
 pub fn accepts_in_program(body: &str, options: &CompilerOptions) -> bool {
     let source = format!("PROGRAM p\n{body}\nEND_PROGRAM\n");
-    ironplc_parser::parse_program(&source, &FileId::default(), options).is_ok()
+    parse_program(&source, &FileId::default(), options).is_ok()
 }
 
 /// True when the legacy parser accepts `source` as a whole file.
 pub fn accepts_file(source: &str, options: &CompilerOptions) -> bool {
-    ironplc_parser::parse_program(source, &FileId::default(), options).is_ok()
+    parse_program(source, &FileId::default(), options).is_ok()
 }
 
 /// The problem code of the diagnostic the legacy parser reports for `source`
 /// as a whole file, with its byte range. `None` when the file is accepted.
 /// The legacy parser reports one diagnostic: the first one found.
 pub fn rejection(source: &str, options: &CompilerOptions) -> Option<(String, usize, usize)> {
-    ironplc_parser::parse_program(source, &FileId::default(), options)
+    parse_program(source, &FileId::default(), options)
         .err()
         .map(|diagnostic| {
             (

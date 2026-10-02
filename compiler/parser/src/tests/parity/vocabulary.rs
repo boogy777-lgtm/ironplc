@@ -1,13 +1,23 @@
 //! Every keyword and operator spelling the legacy lexer recognises must get a
 //! non-error kind here. The spellings are read from the legacy token
-//! definitions (`ironplc-parser`, `token.rs`) rather than retyped.
+//! definitions (`token.rs`) rather than retyped.
 
-mod common;
-
-use common::significant;
+use ironplc_syntax::lexer::{check_coverage, lex};
 use ironplc_syntax::SyntaxKind;
 
-const LEGACY_TOKENS: &str = include_str!("../../parser/src/token.rs");
+/// The `(kind, text)` pairs of `source` without trivia, after checking the
+/// token stream tiles the source exactly.
+fn significant(source: &str) -> Vec<(SyntaxKind, &str)> {
+    let (tokens, _) = lex(source);
+    assert!(check_coverage(source, &tokens).is_exact(), "{source:?}");
+    tokens
+        .into_iter()
+        .filter(|token| !token.kind.is_trivia())
+        .map(|token| (token.kind, token.text))
+        .collect()
+}
+
+const LEGACY_TOKENS: &str = include_str!("../../token.rs");
 
 /// The string argument of every `#[token("...")]` attribute in the legacy
 /// token definitions.
