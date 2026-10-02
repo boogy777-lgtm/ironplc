@@ -103,30 +103,30 @@ pub fn combine_interval_parts(
     first: (FixedPoint, DurationUnit),
     rest: Vec<(FixedPoint, DurationUnit)>,
 ) -> Result<DurationLiteral, IntervalError> {
-    let parts: Vec<_> = std::iter::once(first).chain(rest).collect();
     check_interval_parts(
-        parts
-            .iter()
+        std::iter::once(&first)
+            .chain(&rest)
             .map(|(value, unit)| (*unit, value.femptos != 0)),
     )?;
-    let mut total: Option<DurationLiteral> = None;
-    for (value, unit) in parts {
-        let part = match unit {
-            DurationUnit::Nanoseconds => DurationLiteral::nanoseconds(value),
-            DurationUnit::Microseconds => DurationLiteral::microseconds(value),
-            DurationUnit::Days => DurationLiteral::days(value),
-            DurationUnit::Hours => DurationLiteral::hours(value),
-            DurationUnit::Minutes => DurationLiteral::minutes(value),
-            DurationUnit::Seconds => DurationLiteral::seconds(value),
-            DurationUnit::Milliseconds => DurationLiteral::milliseconds(value),
-        };
-        total = Some(match total {
-            None => part,
-            Some(sum) => sum.plus(part),
+    let (value, unit) = first;
+    let total = rest
+        .into_iter()
+        .fold(duration_part(value, unit), |sum, (value, unit)| {
+            sum.plus(duration_part(value, unit))
         });
+    Ok(total)
+}
+
+fn duration_part(value: FixedPoint, unit: DurationUnit) -> DurationLiteral {
+    match unit {
+        DurationUnit::Nanoseconds => DurationLiteral::nanoseconds(value),
+        DurationUnit::Microseconds => DurationLiteral::microseconds(value),
+        DurationUnit::Days => DurationLiteral::days(value),
+        DurationUnit::Hours => DurationLiteral::hours(value),
+        DurationUnit::Minutes => DurationLiteral::minutes(value),
+        DurationUnit::Seconds => DurationLiteral::seconds(value),
+        DurationUnit::Milliseconds => DurationLiteral::milliseconds(value),
     }
-    // `first` is always present, so there is always a total.
-    Ok(total.expect("a duration literal has at least one part"))
 }
 
 /// A field of a time of day.
@@ -540,10 +540,11 @@ mod tests {
 
     #[test]
     fn negate_literal_constant_when_integer_then_sign_flipped() {
-        match negate_literal_constant(int_const("5")).unwrap() {
-            ConstantKind::IntegerLiteral(lit) => assert!(lit.value.is_neg),
-            other => panic!("unexpected {other:?}"),
-        }
+        let negated = negate_literal_constant(int_const("5"));
+        assert!(matches!(
+            negated,
+            Ok(ConstantKind::IntegerLiteral(ref lit)) if lit.value.is_neg
+        ));
     }
 
     #[test]
@@ -595,13 +596,13 @@ mod tests {
     fn late_resolved_or_enumerated_when_bare_then_late_resolved_value() {
         let kind =
             late_resolved_or_enumerated(TypeName::from("Color"), EnumeratedValue::new("Red"));
-        match kind {
-            InitialValueAssignmentKind::LateResolvedType(init) => assert!(matches!(
-                init.initial_value,
-                Some(LateResolvedInitialValue::Value(_))
-            )),
-            other => panic!("unexpected {other:?}"),
-        }
+        assert!(matches!(
+            kind,
+            InitialValueAssignmentKind::LateResolvedType(LateResolvedInitializer {
+                initial_value: Some(LateResolvedInitialValue::Value(_)),
+                ..
+            })
+        ));
     }
 
     #[test]
@@ -612,13 +613,11 @@ mod tests {
             Some(Expr::new(ExprKind::Const(int_const("3")))),
             SourceSpan::default(),
         );
-        match call.kind {
-            ExprKind::Function(function) => {
-                assert_eq!(function.name, Id::from("__NEW"));
-                assert_eq!(function.param_assignment.len(), 2);
-            }
-            other => panic!("unexpected {other:?}"),
-        }
+        assert!(matches!(
+            call.kind,
+            ExprKind::Function(ref function)
+                if function.name == Id::from("__NEW") && function.param_assignment.len() == 2
+        ));
     }
 
     #[test]
@@ -629,9 +628,9 @@ mod tests {
             None,
             SourceSpan::default(),
         );
-        match call.kind {
-            ExprKind::Function(function) => assert_eq!(function.param_assignment.len(), 1),
-            other => panic!("unexpected {other:?}"),
-        }
+        assert!(matches!(
+            call.kind,
+            ExprKind::Function(ref function) if function.param_assignment.len() == 1
+        ));
     }
 }
