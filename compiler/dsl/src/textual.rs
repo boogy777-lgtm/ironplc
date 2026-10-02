@@ -187,7 +187,7 @@ impl fmt::Display for StructuredVariable {
 
 impl Located for StructuredVariable {
     fn span(&self) -> SourceSpan {
-        SourceSpan::join2(self.record.as_ref(), &self.field)
+        SourceSpan::join(&self.record.span(), &self.field.span)
     }
 }
 
@@ -210,7 +210,7 @@ impl fmt::Display for BitAccessVariable {
 
 impl Located for BitAccessVariable {
     fn span(&self) -> SourceSpan {
-        SourceSpan::join2(self.variable.as_ref(), &self.index)
+        SourceSpan::join(&self.variable.span(), &self.index.span)
     }
 }
 
@@ -272,7 +272,7 @@ impl fmt::Display for PartialAccessVariable {
 
 impl Located for PartialAccessVariable {
     fn span(&self) -> SourceSpan {
-        SourceSpan::join2(self.variable.as_ref(), &self.index)
+        SourceSpan::join(&self.variable.span(), &self.index.span)
     }
 }
 

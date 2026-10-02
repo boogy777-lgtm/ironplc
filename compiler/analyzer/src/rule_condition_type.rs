@@ -391,4 +391,17 @@ END_PROGRAM",
             diagnostics[0].described
         );
     }
+
+    /// The label underlines the whole operand as written, including the `]`
+    /// that closes the subscript: the variable holds its parts, not that
+    /// token.
+    #[test]
+    fn apply_when_condition_is_subscripted_dint_then_diagnostic_labels_the_whole_subscript() {
+        let program = program_with("ARRAY[0..3] OF DINT", "WHILE c[1] DO y := 1; END_WHILE;");
+        let diagnostics = diagnostics_for(&program);
+
+        assert_eq!(diagnostics.len(), 1);
+        let location = &diagnostics[0].primary.location;
+        assert_eq!("c[1]", &program[location.start..location.end]);
+    }
 }

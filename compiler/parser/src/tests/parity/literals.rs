@@ -86,12 +86,8 @@ const CASE_SELECTOR: &str = "the legacy grammar reads a case selector with its o
 const MARKER_IN_STRING: &str = "the legacy pre-pass takes marker text inside a string literal as a ranged-comment marker and blanks the statement between, so the legacy tokens are not those of the text; the new parser lexes the strings first and keeps the code (a deliberate difference, pinned by its own test)";
 const SEVERAL_PAIRS: &str = "the legacy pre-pass blanks the first ranged-comment pair only, so the legacy lexer rejects the file at the second pair's body and produces no tokens after it; the new parser makes every pair a region (a deliberate difference, listed for the file)";
 
-const PARTIAL_INDEX_SPAN: &str = "legacy bug not ported: the legacy grammar builds the index of a bit or partial access written `%X3`, `%W1` from the digits of the selector with no position (`SourceSpan::default()`), so the expression that holds it has none either; the lowering positions the index at its digits";
-const PLACE_EXPRESSION_SPAN: &str = "legacy bug not ported: the legacy grammar gives an expression that is a place the span its parts derive (`Located`), which stops at the base name for a subscript or a dereference and where the last name begins for a member or a bit (`SourceSpan::join2` ends a span at the start of its second part); the lowering gives every expression the range of the text it was written as, which is what `Expr::span` documents";
-const KEYWORD_NAME_POSITION: &str = "legacy bug not ported: the legacy grammar builds the name of a variable that is `STEP`, `ON`, `R_EDGE` or `F_EDGE` with no position; the lowering positions every name at its token";
-const KEYWORD_NAME_ALONE: &str = "deliberate behaviour change: a bare `STEP`, `ON`, `R_EDGE` or `F_EDGE` is a late-bound name like every other bare name. The legacy rule for a late-bound name (`identifier`) rejects those tokens, so the grammar fell through to the rule for a variable, which also gave the name no position";
+const KEYWORD_NAME_ALONE: &str = "deliberate behaviour change: a bare `STEP`, `ON`, `R_EDGE` or `F_EDGE` is a late-bound name like every other bare name. The legacy rule for a late-bound name (`identifier`) rejects those tokens, so the grammar fell through to the rule for a variable";
 const OUTPUT_NOT: &str = "legacy bug not ported: the legacy grammar consumes the `NOT` of `NOT name => variable` and records `not: false`, so an inverted output reads as a plain one; the lowering records it";
-const KEYWORD_TYPE_POSITION: &str = "legacy bug not ported: the legacy grammar builds the type name of `__NEW(INT)`, `__TYPEOF(INT)` from the keyword with no position (it positions a type that is a name, or a generic keyword); the lowering positions it at its token";
 
 pub const DIFFERENCES: &[Difference] = &[
     Difference {
@@ -114,56 +110,8 @@ pub const DIFFERENCES: &[Difference] = &[
     },
     Difference {
         scope: Scope::Origin {
-            node: SyntaxKind::PartialAccessExpr,
-            parts: &[Component::Spans],
-        },
-        reason: PARTIAL_INDEX_SPAN,
-        expected: 240,
-    },
-    Difference {
-        scope: Scope::Origin {
-            node: SyntaxKind::FieldExpr,
-            parts: &[Component::Spans],
-        },
-        reason: PLACE_EXPRESSION_SPAN,
-        expected: 256,
-    },
-    Difference {
-        scope: Scope::Origin {
-            node: SyntaxKind::IndexExpr,
-            parts: &[Component::Spans],
-        },
-        reason: PLACE_EXPRESSION_SPAN,
-        expected: 196,
-    },
-    Difference {
-        scope: Scope::Origin {
-            node: SyntaxKind::BitAccessExpr,
-            parts: &[Component::Spans],
-        },
-        reason: PLACE_EXPRESSION_SPAN,
-        expected: 96,
-    },
-    Difference {
-        scope: Scope::Origin {
-            node: SyntaxKind::DerefExpr,
-            parts: &[Component::Spans],
-        },
-        reason: PLACE_EXPRESSION_SPAN,
-        expected: 30,
-    },
-    Difference {
-        scope: Scope::Origin {
             node: SyntaxKind::NameRef,
-            parts: &[Component::Spans],
-        },
-        reason: KEYWORD_NAME_POSITION,
-        expected: 36,
-    },
-    Difference {
-        scope: Scope::Origin {
-            node: SyntaxKind::NameRef,
-            parts: &[Component::Dump, Component::Spans],
+            parts: &[Component::Dump],
         },
         reason: KEYWORD_NAME_ALONE,
         expected: 30,
@@ -175,14 +123,6 @@ pub const DIFFERENCES: &[Difference] = &[
         },
         reason: OUTPUT_NOT,
         expected: 18,
-    },
-    Difference {
-        scope: Scope::Origin {
-            node: SyntaxKind::SpecialOpExpr,
-            parts: &[Component::Spans],
-        },
-        reason: KEYWORD_TYPE_POSITION,
-        expected: 108,
     },
 ];
 
