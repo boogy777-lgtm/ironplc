@@ -183,7 +183,7 @@ pub fn pou_body(literal: &str) -> Option<String> {
 
 /// The test sources of the legacy parser crate.
 pub fn legacy_test_sources() -> Vec<(PathBuf, String)> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../parser/src/tests");
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/tests");
     let mut files: Vec<PathBuf> = std::fs::read_dir(root)
         .map(|entries| {
             entries
@@ -228,7 +228,8 @@ pub fn legacy_test_bodies() -> Vec<String> {
     bodies
 }
 
-/// Every Rust source file of the legacy parser crate, tests included.
+/// Every Rust source file of the legacy parser crate, tests included, except
+/// this harness: its tables are not legacy test input.
 pub fn legacy_all_sources() -> Vec<(PathBuf, String)> {
     fn collect(dir: &std::path::Path, files: &mut Vec<PathBuf>) {
         let Ok(entries) = std::fs::read_dir(dir) else {
@@ -236,7 +237,9 @@ pub fn legacy_all_sources() -> Vec<(PathBuf, String)> {
         };
         for entry in entries.filter_map(|entry| entry.ok()) {
             let path = entry.path();
-            if path.is_dir() {
+            if path.is_dir() && path.file_name().is_some_and(|name| name == "parity") {
+                continue;
+            } else if path.is_dir() {
                 collect(&path, files);
             } else if path.extension().is_some_and(|ext| ext == "rs") {
                 files.push(path);
@@ -245,7 +248,7 @@ pub fn legacy_all_sources() -> Vec<(PathBuf, String)> {
     }
     let mut files = Vec::new();
     collect(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../parser/src"),
+        &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src"),
         &mut files,
     );
     files.sort();

@@ -8,13 +8,11 @@
 //! must be listed in the named exception table with its reason; an unlisted
 //! difference fails, and so does a listed one that no longer differs.
 
-mod parity;
-
-use parity::compare::{assert_clean, compare, summarize, Item};
-use parity::declaration_table::DECLARATIONS;
-use parity::legacy::presets;
-use parity::tables::{DECLARATION_EXCEPTIONS, LEGACY_DECLARATION_EXCEPTIONS};
-use parity::{extract, Kind, Oracle};
+use super::compare::{assert_clean, compare, summarize, Item};
+use super::declaration_table::DECLARATIONS;
+use super::legacy::presets;
+use super::tables::{DECLARATION_EXCEPTIONS, LEGACY_DECLARATION_EXCEPTIONS};
+use super::{extract, Kind, Oracle};
 
 #[test]
 fn parity_when_declaration_table_then_differences_are_exactly_the_exceptions() {

@@ -7,22 +7,7 @@ use std::path::{Path, PathBuf};
 
 /// Every `.st` file under `relative` (a path from the crate manifest), sorted.
 pub fn st_files(relative: &str) -> Vec<PathBuf> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join(relative);
-    let mut files = Vec::new();
-    collect(&root, &mut files);
-    files.sort();
-    files
-}
-
-fn collect(dir: &Path, files: &mut Vec<PathBuf>) {
-    for entry in std::fs::read_dir(dir).unwrap() {
-        let path = entry.unwrap().path();
-        if path.is_dir() {
-            collect(&path, files);
-        } else if path.extension().is_some_and(|ext| ext == "st") {
-            files.push(path);
-        }
-    }
+    ironplc_test::st_files(&Path::new(env!("CARGO_MANIFEST_DIR")).join(relative))
 }
 
 /// The corpus the tiling guarantees are checked against: the shared test
@@ -115,27 +100,4 @@ pub fn file(source: &str, options: &ironplc_syntax::ParseOptions) -> String {
         .map(|node| render(&node))
         .collect::<Vec<_>>()
         .join(" ")
-}
-
-/// The files compared, named by their path from the crate manifest's
-/// directory (`../resources/test/oop.st`, `tests/fixtures/codesys/x.st`),
-/// each with its CRLF and tab-indented spellings (`name (CRLF)`,
-/// `name (tabs)`).
-pub fn file_variants() -> Vec<(String, String)> {
-    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut paths: Vec<PathBuf> = st_files("../resources/test");
-    paths.extend(st_files("tests/fixtures"));
-    let mut files = Vec::new();
-    for path in paths {
-        let text = std::fs::read_to_string(&path).unwrap_or_default();
-        let name = path
-            .strip_prefix(manifest)
-            .unwrap_or(&path)
-            .to_string_lossy()
-            .replace('\\', "/");
-        files.push((format!("{name} (CRLF)"), text.replace('\n', "\r\n")));
-        files.push((format!("{name} (tabs)"), text.replace("    ", "\t")));
-        files.push((name, text));
-    }
-    files
 }

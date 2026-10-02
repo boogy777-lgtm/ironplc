@@ -19,6 +19,4 @@ ironplc-problems = { path = "../problems", version = "0.247.0" }
 workspace = true
 
 [dev-dependencies]
-# Test-only: the parity tests compare against the legacy PEG parser and read
-# its dialect options. It is not a production dependency of this crate.
-ironplc-parser = { path = "../parser", version = "0.247.0" }
+ironplc-test = { path = "../test", version = "0.247.0" }

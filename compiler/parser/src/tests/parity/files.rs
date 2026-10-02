@@ -7,18 +7,16 @@
 //! `FILE_EXCEPTIONS` with its reason; an unlisted difference fails, and so
 //! does a listed one that no longer differs.
 
-mod common;
-mod parity;
-
-use parity::compare::{assert_clean, compare, summarize, Item};
-use parity::legacy::presets;
-use parity::tables::FILE_EXCEPTIONS;
-use parity::{Kind, Oracle};
+use super::compare::{assert_clean, compare, summarize, Item};
+use super::file_variants;
+use super::legacy::presets;
+use super::tables::FILE_EXCEPTIONS;
+use super::{Kind, Oracle};
 use std::path::Path;
 
 #[test]
 fn parity_when_whole_files_then_differences_are_exactly_the_exceptions() {
-    let files = common::file_variants();
+    let files = file_variants();
     assert!(files.len() > 180, "only {} files", files.len());
     let items: Vec<Item> = files
         .iter()
@@ -64,7 +62,7 @@ fn parity_when_ranged_comment_is_blanked_then_the_new_parser_accepts_the_oscat_f
         .collect();
     for preset in presets() {
         let parsed = ironplc_syntax::parse_source_file(&blanked, &preset.new);
-        let legacy = parity::legacy::accepts_file(&source, &preset.legacy);
+        let legacy = super::legacy::accepts_file(&source, &preset.legacy);
         assert_eq!(
             parsed.is_ok(),
             legacy,

@@ -6,14 +6,12 @@
 //! `CODE_EXCEPTIONS` with its reason. Each token check rule is also compared
 //! on a snippet of its own, down to the byte range of the diagnostic.
 
-mod common;
-mod parity;
-
+use super::diagnostics::{compare_codes, CODE_EXCEPTIONS};
+use super::file_variants;
+use super::legacy::{convert, presets, rejection};
+use crate::options::CompilerOptions;
 use ironplc_dsl::core::FileId;
-use ironplc_parser::options::CompilerOptions;
 use ironplc_syntax::{parse_source_file, ParseOptions};
-use parity::diagnostics::{compare_codes, CODE_EXCEPTIONS};
-use parity::legacy::{convert, presets, rejection};
 
 /// One rule on an input of its own. The legacy problem code and the byte range
 /// of the legacy diagnostic are expected from the new parser too.
@@ -154,7 +152,7 @@ fn diagnostics_when_rule_flag_on_then_the_rule_does_not_fire() {
 
 #[test]
 fn diagnostics_when_corpus_rejected_by_both_then_legacy_code_is_among_the_new_codes() {
-    let files = common::file_variants();
+    let files = file_variants();
     let report = compare_codes(&files, &presets(), CODE_EXCEPTIONS);
     println!(
         "{} rejected by both, {} with the same code",
@@ -180,7 +178,7 @@ fn diagnostics_when_corpus_rejected_by_both_then_legacy_code_is_among_the_new_co
 
 #[test]
 fn diagnostics_when_corpus_parsed_then_every_range_lies_inside_the_source_and_has_a_code() {
-    for (name, text) in common::file_variants() {
+    for (name, text) in file_variants() {
         for preset in presets() {
             for (code, start, end) in found(&text, &preset.new) {
                 assert!(
