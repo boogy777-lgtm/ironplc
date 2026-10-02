@@ -14,8 +14,10 @@ mod declarations;
 mod diagnostics_codes;
 mod files;
 mod legacy_options;
+mod literals;
 mod vocabulary;
 
+pub mod ast;
 pub mod compare;
 pub mod declaration_table;
 pub mod diagnostics;
@@ -23,7 +25,7 @@ pub mod extract;
 pub mod legacy;
 pub mod tables;
 
-use ironplc_syntax::{parse_expression, parse_source_file, parse_statements, ParseOptions};
+use ironplc_syntax::{parse_expression, parse_source_file, parse_statements, Parse, ParseOptions};
 use legacy::Preset;
 use std::path::Path;
 
@@ -51,12 +53,17 @@ pub struct Verdict {
     pub new: bool,
 }
 
-pub fn new_accepts(kind: Kind, snippet: &str, options: &ParseOptions) -> bool {
+/// The new parser on `snippet`, through the entry point the kind names.
+pub fn new_parse(kind: Kind, snippet: &str, options: &ParseOptions) -> Parse {
     match kind {
-        Kind::Statements => parse_statements(snippet, options).is_ok(),
-        Kind::Expression => parse_expression(snippet, options).is_ok(),
-        Kind::Declarations | Kind::File => parse_source_file(snippet, options).is_ok(),
+        Kind::Statements => parse_statements(snippet, options),
+        Kind::Expression => parse_expression(snippet, options),
+        Kind::Declarations | Kind::File => parse_source_file(snippet, options),
     }
+}
+
+pub fn new_accepts(kind: Kind, snippet: &str, options: &ParseOptions) -> bool {
+    new_parse(kind, snippet, options).is_ok()
 }
 
 pub fn verdict(kind: Kind, snippet: &str, preset: &Preset) -> Verdict {
@@ -146,15 +153,39 @@ impl Exception {
     }
 }
 
-/// The files compared, named by their path from the syntax crate's directory
-/// (`../resources/test/oop.st`, `tests/fixtures/codesys/x.st`), each with its
-/// CRLF and tab-indented spellings (`name (CRLF)`, `name (tabs)`). The
-/// fixtures are the syntax crate's own, read in place.
+/// The files compared, each with its CRLF and tab-indented spellings
+/// (`name (CRLF)`, `name (tabs)`), read in place: the shared test resources
+/// (`../resources/test/oop.st`), the syntax crate's fixtures
+/// (`tests/fixtures/codesys/x.st`), and the other `.st` sources of the
+/// repository (the plc2plc round-trip files, the bundled libraries and the
+/// source-discovery fixtures, the CLI resources, the end-to-end library files
+/// and the examples). A file that is not valid UTF-8 reads as empty.
 pub fn file_variants() -> Vec<(String, String)> {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let roots = [
         (manifest.join("../resources/test"), "../resources/test"),
         (manifest.join("../syntax/tests/fixtures"), "tests/fixtures"),
+        (
+            manifest.join("../plc2plc/resources/test"),
+            "../plc2plc/resources/test",
+        ),
+        (
+            manifest.join("../sources/resources/libs"),
+            "../sources/resources/libs",
+        ),
+        (
+            manifest.join("../sources/resources/test"),
+            "../sources/resources/test",
+        ),
+        (
+            manifest.join("../ironplc-cli/resources/test"),
+            "../ironplc-cli/resources/test",
+        ),
+        (
+            manifest.join("../../tests/e2e/library"),
+            "../../tests/e2e/library",
+        ),
+        (manifest.join("../../examples"), "../../examples"),
     ];
     let mut files = Vec::new();
     for (root, label) in roots {

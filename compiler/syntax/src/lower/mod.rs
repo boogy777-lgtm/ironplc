@@ -1,0 +1,549 @@
+//! Lowering: from the lossless tree to the `ironplc_dsl` objects.
+//!
+//! The tree keeps every byte; the objects keep what the compiler uses. This
+//! module tree is the one place that turns the first into the second (design:
+//! parse-tree architecture, sections 3.1 and 3.2), so a language element is
+//! lowered by one rule wherever it appears.
+//!
+//! Three pieces are shared by every rule:
+//!
+//! - [`LowerCx`] carries the file the text came from and is the only place a
+//!   byte range of the tree becomes a [`SourceSpan`], and a lowering problem
+//!   becomes a [`Diagnostic`].
+//! - [`disposition`] says, for every kind the tree can hold, whether it is
+//!   lowered by a rule (and which area owns it), is consumed by its parent's
+//!   rule, is trivia, or has no rule yet. It matches every node kind without
+//!   a wildcard arm, so a new node kind does not compile until it has one.
+//! - The rules, one module per area, each dispatching on the kind of the node
+//!   it is given.
+//!
+//! Lowering is only run on a tree whose parse reported no error: a node the
+//! grammar guarantees but the tree lacks is an internal error, and a node whose
+//! area has no rule yet is reported as not implemented.
+
+pub mod literals;
+pub mod names;
+pub mod tree;
+
+use crate::parser::Parse;
+use crate::syntax_kind::{NodeKind, SyntaxKind, SyntaxNode, SyntaxToken};
+use ironplc_dsl::common::Library;
+use ironplc_dsl::core::{FileId, SourceSpan};
+use ironplc_dsl::diagnostic::{Diagnostic, Label};
+use ironplc_dsl::textual::StmtKind;
+use ironplc_problems::Problem;
+use rowan::TextRange;
+
+/// The areas of the language that own lowering rules. A node lowered by a
+/// rule names its area in its [`Disposition`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Area {
+    /// The literals: numbers, bit strings, booleans, character strings and
+    /// the temporal literals (`literals`).
+    Literal,
+    /// Declared names (`names`).
+    Name,
+}
+
+/// What lowering does with a kind the tree can hold.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Disposition {
+    /// A rule of the area turns the node into an object.
+    Lowered(Area),
+    /// Read by the rule of the node that contains it (a token, or a node that
+    /// is only a part of a larger one), or a container the entry points walk.
+    Structural,
+    /// Retained text that is not language: lowering ignores it.
+    Trivia,
+    /// A node kind whose lowering rule has not been written yet. Asking to
+    /// lower one is a not-implemented diagnostic.
+    Pending,
+}
+
+impl Disposition {
+    /// True when a lowering rule for the kind is still to be written.
+    pub fn is_pending(self) -> bool {
+        self == Disposition::Pending
+    }
+}
+
+/// The disposition of every node kind. There is no wildcard arm: a node kind
+/// added to the syntax declaration fails to compile here until someone decides
+/// how it is lowered.
+fn node_disposition(node: NodeKind) -> Disposition {
+    use Disposition::{Lowered, Pending, Structural};
+    match node {
+        // Containers the entry points walk.
+        NodeKind::SourceFile | NodeKind::StatementList => Structural,
+        // Present only where the parse reported an error, which lowering
+        // never sees.
+        NodeKind::ErrorNode => Structural,
+        NodeKind::BoolLiteral
+        | NodeKind::IntLiteral
+        | NodeKind::RealLiteral
+        | NodeKind::BitStringLiteral
+        | NodeKind::StringLiteral
+        | NodeKind::DurationLiteral
+        | NodeKind::TimeOfDayLiteral
+        | NodeKind::DateLiteral
+        | NodeKind::DateTimeLiteral => Lowered(Area::Literal),
+        NodeKind::Name => Lowered(Area::Name),
+        NodeKind::ProgramDecl
+        | NodeKind::FunctionDecl
+        | NodeKind::FunctionBlockDecl
+        | NodeKind::InterfaceDecl
+        | NodeKind::NamespaceDecl
+        | NodeKind::MethodDecl
+        | NodeKind::PropertyDecl
+        | NodeKind::GetAccessor
+        | NodeKind::SetAccessor
+        | NodeKind::MemberQualifier
+        | NodeKind::ExtendsClause
+        | NodeKind::ImplementsClause
+        | NodeKind::VarBlock
+        | NodeKind::VarDecl
+        | NodeKind::Location
+        | NodeKind::EdgeSpec
+        | NodeKind::AccessDecl
+        | NodeKind::InstanceInit
+        | NodeKind::TypeBlock
+        | NodeKind::TypeDecl
+        | NodeKind::ArrayType
+        | NodeKind::Subrange
+        | NodeKind::StringType
+        | NodeKind::RefType
+        | NodeKind::ParamsType
+        | NodeKind::SubrangeType
+        | NodeKind::EnumType
+        | NodeKind::EnumValue
+        | NodeKind::StructType
+        | NodeKind::UnionType
+        | NodeKind::StructMember
+        | NodeKind::Initializer
+        | NodeKind::ArrayInit
+        | NodeKind::RepeatedInit
+        | NodeKind::StructInit
+        | NodeKind::StructInitElement
+        | NodeKind::EnumValueRef
+        | NodeKind::ConfigurationDecl
+        | NodeKind::ResourceDecl
+        | NodeKind::TaskDecl
+        | NodeKind::TaskInit
+        | NodeKind::TaskInitItem
+        | NodeKind::ProgramConfig
+        | NodeKind::TaskBinding
+        | NodeKind::ProgramConnection
+        | NodeKind::SfcBody
+        | NodeKind::InitialStepDecl
+        | NodeKind::StepDecl
+        | NodeKind::ActionAssociation
+        | NodeKind::ActionQualifier
+        | NodeKind::ActionDecl
+        | NodeKind::TransitionDecl
+        | NodeKind::TransitionPriority
+        | NodeKind::StepList
+        | NodeKind::TransitionCondition
+        | NodeKind::EmptyStmt
+        | NodeKind::AssignStmt
+        | NodeKind::AssignOp
+        | NodeKind::CallStmt
+        | NodeKind::IfStmt
+        | NodeKind::ElsifClause
+        | NodeKind::ElseClause
+        | NodeKind::CaseStmt
+        | NodeKind::CaseBranch
+        | NodeKind::CaseLabel
+        | NodeKind::ForStmt
+        | NodeKind::WhileStmt
+        | NodeKind::RepeatStmt
+        | NodeKind::ExitStmt
+        | NodeKind::ContinueStmt
+        | NodeKind::ReturnStmt
+        | NodeKind::TryStmt
+        | NodeKind::CatchClause
+        | NodeKind::FinallyClause
+        | NodeKind::ThrowStmt
+        | NodeKind::JmpStmt
+        | NodeKind::LabelStmt
+        | NodeKind::CalcStmt
+        | NodeKind::WaitStmt
+        | NodeKind::ImplementationMarker
+        | NodeKind::BinaryExpr
+        | NodeKind::UnaryExpr
+        | NodeKind::ParenExpr
+        | NodeKind::NameRef
+        | NodeKind::FieldExpr
+        | NodeKind::IndexExpr
+        | NodeKind::BitAccessExpr
+        | NodeKind::PartialAccessExpr
+        | NodeKind::DerefExpr
+        | NodeKind::SelfRefExpr
+        | NodeKind::DirectAddressExpr
+        | NodeKind::CallExpr
+        | NodeKind::ArgList
+        | NodeKind::PositionalArg
+        | NodeKind::NamedArg
+        | NodeKind::OutputArg
+        | NodeKind::RefExpr
+        | NodeKind::SpecialOpExpr
+        | NodeKind::TypeRef
+        | NodeKind::NullLiteral => Pending,
+    }
+}
+
+/// What lowering does with a node or token of `kind`: trivia is ignored, a
+/// token is read by the rule of the node holding it, and a node is decided by
+/// the node table.
+pub fn disposition(kind: SyntaxKind) -> Disposition {
+    if kind.is_trivia() {
+        return Disposition::Trivia;
+    }
+    match kind.node() {
+        Some(node) => node_disposition(node),
+        None => Disposition::Structural,
+    }
+}
+
+/// True when `root` or a node under it is of a kind whose lowering rule has
+/// not been written yet.
+pub fn contains_pending(root: &SyntaxNode) -> bool {
+    root.descendants()
+        .any(|node| disposition(node.kind()).is_pending())
+}
+
+/// The codes of the two compiler-located problems. `Problem` marks them
+/// deprecated so that only the `Diagnostic` constructors build them; tests
+/// compare the codes.
+#[cfg(test)]
+pub(crate) const NOT_IMPLEMENTED: &str = "P9999";
+#[cfg(test)]
+pub(crate) const INTERNAL_ERROR: &str = "P9998";
+
+/// What every lowering rule is given besides the node: the file the text came
+/// from, and the means to report a problem.
+#[derive(Debug, Clone)]
+pub struct LowerCx {
+    file_id: FileId,
+}
+
+impl LowerCx {
+    pub fn new(file_id: FileId) -> Self {
+        LowerCx { file_id }
+    }
+
+    /// The file the lowered text came from.
+    pub fn file_id(&self) -> &FileId {
+        &self.file_id
+    }
+
+    /// The span of a byte range of the tree: the one mapping from tree
+    /// ranges to the spans of the objects, so every span carries the file it
+    /// is in and means the same thing wherever it is built.
+    ///
+    /// The range of a node equals the join of its first and last significant
+    /// token, because the tree places trivia outside the node that ends or
+    /// begins at it.
+    pub fn span(&self, range: TextRange) -> SourceSpan {
+        SourceSpan {
+            start: usize::from(range.start()),
+            end: usize::from(range.end()),
+            file_id: self.file_id.clone(),
+        }
+    }
+
+    /// The span of a node.
+    pub fn node_span(&self, node: &SyntaxNode) -> SourceSpan {
+        self.span(node.text_range())
+    }
+
+    /// The span of a token.
+    pub fn token_span(&self, token: &SyntaxToken) -> SourceSpan {
+        self.span(token.text_range())
+    }
+
+    /// A syntax error (P0002) over `range`: the text parsed but does not
+    /// denote a value, such as a number too large for any integer type.
+    pub fn syntax_error(&self, range: TextRange, message: impl Into<String>) -> Diagnostic {
+        Diagnostic::problem(Problem::SyntaxError, Label::span(self.span(range), message))
+    }
+
+    /// An internal error (P9998) over `range`: the tree is not shaped as the
+    /// grammar guarantees.
+    #[track_caller]
+    pub fn internal_error(&self, range: TextRange, message: impl Into<String>) -> Diagnostic {
+        Diagnostic::internal_error_at(Label::span(self.span(range), message))
+    }
+
+    /// The diagnostic for a node that was asked to be lowered by a rule that
+    /// does not exist: not implemented (P9999) when the node's kind is
+    /// pending, an internal error otherwise (the caller is not the rule's
+    /// owner).
+    #[track_caller]
+    pub fn unsupported(&self, node: &SyntaxNode) -> Diagnostic {
+        let kind = node.kind();
+        if disposition(kind).is_pending() {
+            Diagnostic::not_implemented(Label::span(
+                self.node_span(node),
+                format!("lowering {kind:?} is not available yet"),
+            ))
+        } else {
+            self.internal_error(
+                node.text_range(),
+                format!("{kind:?} is not lowered by this rule"),
+            )
+        }
+    }
+}
+
+/// The diagnostic for the first error of a parse that reported any. Lowering
+/// is only run on an error-free parse; which of several errors to report is
+/// the caller's decision.
+fn first_error(parse: &Parse, file_id: &FileId) -> Option<Diagnostic> {
+    parse
+        .errors
+        .first()
+        .map(|error| error.to_diagnostic(file_id))
+}
+
+/// Lowers the tree of a whole file to a library.
+///
+/// Fails with the first error of the parse when it has any, and with a
+/// not-implemented diagnostic at the first declaration, because the rules for
+/// declarations are not written yet: only a file with no declaration lowers.
+pub fn lower_library(parse: &Parse, file_id: &FileId) -> Result<Library, Diagnostic> {
+    if let Some(error) = first_error(parse, file_id) {
+        return Err(error);
+    }
+    let cx = LowerCx::new(file_id.clone());
+    match parse.root.children().next() {
+        Some(node) => Err(cx.unsupported(&node)),
+        None => Ok(Library { elements: vec![] }),
+    }
+}
+
+/// Lowers the tree of a statement list to statements.
+///
+/// Fails with the first error of the parse when it has any, and with a
+/// not-implemented diagnostic at the first statement, because the rules for
+/// statements are not written yet: only an empty list lowers.
+pub fn lower_statements(parse: &Parse, file_id: &FileId) -> Result<Vec<StmtKind>, Diagnostic> {
+    if let Some(error) = first_error(parse, file_id) {
+        return Err(error);
+    }
+    let cx = LowerCx::new(file_id.clone());
+    let first = parse
+        .root
+        .children()
+        .filter(|list| list.kind() == SyntaxKind::StatementList)
+        .find_map(|list| list.children().next());
+    match first {
+        Some(node) => Err(cx.unsupported(&node)),
+        None => Ok(vec![]),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{parse_expression, parse_source_file, parse_statements, ParseOptions};
+
+    fn options() -> ParseOptions {
+        ParseOptions::default()
+    }
+
+    fn code_of(diagnostic: Option<Diagnostic>) -> Option<String> {
+        diagnostic.map(|diagnostic| diagnostic.code)
+    }
+
+    #[test]
+    fn disposition_when_any_kind_then_the_table_answers_without_a_gap() {
+        for kind in SyntaxKind::ALL {
+            // Totality: the call returns for every kind, including `Unknown`.
+            let _ = disposition(*kind);
+        }
+    }
+
+    #[test]
+    fn disposition_when_trivia_then_trivia() {
+        for kind in SyntaxKind::ALL.iter().filter(|kind| kind.is_trivia()) {
+            assert_eq!(disposition(*kind), Disposition::Trivia, "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn disposition_when_token_or_keyword_then_structural() {
+        for kind in SyntaxKind::ALL
+            .iter()
+            .filter(|kind| kind.is_token() && !kind.is_trivia())
+        {
+            assert_eq!(disposition(*kind), Disposition::Structural, "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn disposition_when_literal_node_then_lowered_by_the_literal_area() {
+        for kind in [
+            SyntaxKind::BoolLiteral,
+            SyntaxKind::IntLiteral,
+            SyntaxKind::RealLiteral,
+            SyntaxKind::BitStringLiteral,
+            SyntaxKind::StringLiteral,
+            SyntaxKind::DurationLiteral,
+            SyntaxKind::TimeOfDayLiteral,
+            SyntaxKind::DateLiteral,
+            SyntaxKind::DateTimeLiteral,
+        ] {
+            assert_eq!(disposition(kind), Disposition::Lowered(Area::Literal));
+        }
+        assert_eq!(
+            disposition(SyntaxKind::Name),
+            Disposition::Lowered(Area::Name)
+        );
+    }
+
+    #[test]
+    fn disposition_when_node_without_a_rule_yet_then_pending() {
+        assert!(disposition(SyntaxKind::AssignStmt).is_pending());
+        assert!(disposition(SyntaxKind::ProgramDecl).is_pending());
+        assert!(!disposition(SyntaxKind::IntLiteral).is_pending());
+        assert!(!disposition(SyntaxKind::SourceFile).is_pending());
+    }
+
+    #[test]
+    fn contains_pending_when_only_literals_then_false_and_with_a_statement_then_true() {
+        let literal = parse_expression("T#5s", &options());
+        assert!(!contains_pending(&literal.root));
+        let statement = parse_statements("x := 1;", &options());
+        assert!(contains_pending(&statement.root));
+    }
+
+    #[test]
+    fn span_when_range_then_offsets_and_the_file_of_the_context() {
+        let file = FileId::from_string("a.st");
+        let cx = LowerCx::new(file.clone());
+        let span = cx.span(TextRange::new(3.into(), 8.into()));
+        assert_eq!((span.start, span.end), (3, 8));
+        assert_eq!(span.file_id, file);
+        assert_eq!(cx.file_id(), &file);
+    }
+
+    #[test]
+    fn node_span_when_node_has_trivia_around_it_then_range_excludes_the_trivia() {
+        let parse = parse_expression("  5  ", &options());
+        let cx = LowerCx::new(FileId::default());
+        let literal = parse.root.first_child();
+        let span = literal.map(|node| cx.node_span(&node));
+        assert_eq!(span.map(|span| (span.start, span.end)), Some((2, 3)));
+    }
+
+    #[test]
+    fn token_span_when_token_then_its_range() {
+        let parse = parse_expression("  5  ", &options());
+        let cx = LowerCx::new(FileId::default());
+        let token = parse
+            .root
+            .descendants_with_tokens()
+            .filter_map(|element| element.into_token())
+            .find(|token| token.kind() == SyntaxKind::IntegerLit);
+        let span = token.map(|token| cx.token_span(&token));
+        assert_eq!(span.map(|span| (span.start, span.end)), Some((2, 3)));
+    }
+
+    #[test]
+    fn syntax_error_when_range_then_p0002_over_the_range_in_the_file() {
+        let file = FileId::from_string("a.st");
+        let cx = LowerCx::new(file.clone());
+        let diagnostic = cx.syntax_error(TextRange::new(1.into(), 4.into()), "too large");
+        assert_eq!(diagnostic.code, Problem::SyntaxError.code());
+        assert_eq!(diagnostic.primary.file_id, file);
+        assert_eq!(
+            (
+                diagnostic.primary.location.start,
+                diagnostic.primary.location.end
+            ),
+            (1, 4)
+        );
+    }
+
+    #[test]
+    fn unsupported_when_pending_node_then_not_implemented_at_the_node() {
+        let parse = parse_statements("x := 1;", &options());
+        let cx = LowerCx::new(FileId::default());
+        let node = parse
+            .root
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::AssignStmt);
+        let diagnostic = node.map(|node| cx.unsupported(&node));
+        assert_eq!(
+            diagnostic.as_ref().map(|d| (
+                d.code.as_str(),
+                d.primary.location.start,
+                d.primary.location.end
+            )),
+            Some((NOT_IMPLEMENTED, 0, 7))
+        );
+    }
+
+    #[test]
+    fn unsupported_when_node_with_a_rule_then_internal_error() {
+        let parse = parse_expression("5", &options());
+        let cx = LowerCx::new(FileId::default());
+        let diagnostic = parse.root.first_child().map(|node| cx.unsupported(&node));
+        assert_eq!(code_of(diagnostic), Some(INTERNAL_ERROR.to_string()));
+    }
+
+    #[test]
+    fn lower_library_when_no_declaration_then_empty_library() {
+        for source in ["", "  (* nothing *)\n{pragma}\n"] {
+            let parse = parse_source_file(source, &ParseOptions::all());
+            let library = lower_library(&parse, &FileId::default());
+            assert_eq!(library.map(|library| library.elements.len()).ok(), Some(0));
+        }
+    }
+
+    #[test]
+    fn lower_library_when_declaration_then_not_implemented_at_it() {
+        let parse = parse_source_file("PROGRAM p\nEND_PROGRAM\n", &options());
+        let diagnostic = lower_library(&parse, &FileId::default()).err();
+        assert_eq!(code_of(diagnostic), Some(NOT_IMPLEMENTED.to_string()));
+    }
+
+    #[test]
+    fn lower_library_when_parse_has_errors_then_the_first_error_in_the_file() {
+        let file = FileId::from_string("bad.st");
+        let parse = parse_source_file("PROGRAM p x END_PROGRAM", &options());
+        let diagnostic = lower_library(&parse, &file).err();
+        assert_eq!(
+            diagnostic
+                .as_ref()
+                .map(|d| (d.code.as_str(), &d.primary.file_id)),
+            Some((Problem::SyntaxError.code(), &file))
+        );
+    }
+
+    #[test]
+    fn lower_statements_when_empty_or_comment_only_then_no_statements() {
+        for source in ["", "(* nothing *)"] {
+            let parse = parse_statements(source, &options());
+            let statements = lower_statements(&parse, &FileId::default());
+            assert_eq!(statements.map(|list| list.len()).ok(), Some(0), "{source}");
+        }
+    }
+
+    #[test]
+    fn lower_statements_when_statement_then_not_implemented() {
+        let parse = parse_statements("x := 1;", &options());
+        let diagnostic = lower_statements(&parse, &FileId::default()).err();
+        assert_eq!(code_of(diagnostic), Some(NOT_IMPLEMENTED.to_string()));
+    }
+
+    #[test]
+    fn lower_statements_when_parse_has_errors_then_the_first_error() {
+        let parse = parse_statements("x := ;", &options());
+        let diagnostic = lower_statements(&parse, &FileId::default()).err();
+        assert_eq!(
+            code_of(diagnostic),
+            Some(Problem::SyntaxError.code().to_string())
+        );
+    }
+}

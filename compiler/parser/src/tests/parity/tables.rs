@@ -570,6 +570,7 @@ const NO_TERMINATOR_AT_END: &str = "the legacy pipeline inserts the missing `;` 
 const SECOND_END_KEYWORD: &str = "the legacy terminator insertion handles an END_* keyword that directly follows another END_* keyword without re-arming itself, so the second one gets no `;` when the source omits it; the new parser makes the `;` optional after every END_* keyword";
 const MARKER_AFTER_STATEMENT: &str = "the legacy grammar accepts __BEGIN_IMPLEMENTATION only where the previous list item left no trivia unconsumed, so a marker after a statement and a space is rejected; the new parser accepts the marker as a list item anywhere";
 const LONE_CR: &str = "a lone CR is a line break in the lossless lexer (old Mac line endings); the legacy lexer reports it as an unexpected token";
+const OSCAT_SEVERAL_PAIRS: &str = "the legacy pre-pass blanks only the first ranged-comment marker pair of a file (and none when the first marker is named END_*), so the body of a later pair is lexed as code and rejected when it holds text that is not tokens; the new parser makes every well-formed pair a region";
 const PRAGMA_CONTENT: &str = "the legacy pipeline tokenises the inside of a pragma and rejects a character it does not know; the CST keeps a pragma as one trivia token and does not examine its text";
 
 const fn exception(
@@ -664,7 +665,23 @@ pub const BODY_EXCEPTIONS: &[Exception] = &[accepted_on_purpose(
 )];
 
 /// Differences on whole files, against the legacy parser.
-pub const FILE_EXCEPTIONS: &[Exception] = &[];
+pub const FILE_EXCEPTIONS: &[Exception] = &[
+    accepted_on_purpose(
+        Kind::File,
+        "tests/fixtures/lexical/oscat_several_pairs.st",
+        OSCAT_SEVERAL_PAIRS,
+    ),
+    accepted_on_purpose(
+        Kind::File,
+        "tests/fixtures/lexical/oscat_several_pairs.st (CRLF)",
+        OSCAT_SEVERAL_PAIRS,
+    ),
+    accepted_on_purpose(
+        Kind::File,
+        "tests/fixtures/lexical/oscat_several_pairs.st (tabs)",
+        OSCAT_SEVERAL_PAIRS,
+    ),
+];
 
 /// Differences in the declarations lifted from the legacy parser tests.
 pub const LEGACY_DECLARATION_EXCEPTIONS: &[Exception] = &[
