@@ -1,8 +1,10 @@
 //! Parse-only baseline: cold and warm timings plus allocation counts.
 //!
-//! Drives `tokenize_program` and `parse_program` from `ironplc-parser` over
-//! the shared corpus (`ironplc_benchmarks::corpus`) and prints a Markdown
-//! report. Allocation counts come from `stats_alloc` installed as this
+//! Drives `tokenize_program` and `parse_program` from `ironplc-parser`, and
+//! `lex` and `parse_source_file` from `ironplc-syntax` (the lossless CST
+//! path), over the shared corpus (`ironplc_benchmarks::corpus`) and prints a
+//! Markdown report. Both paths are measured by the same helpers so their rows
+//! are directly comparable. Allocation counts come from `stats_alloc` installed as this
 //! binary's global allocator, which is why this is a separate bench target
 //! from the Criterion `parse_benchmark`.
 //!
@@ -28,6 +30,7 @@ use ironplc_benchmarks::corpus::{corpus_dir, load_corpus};
 use ironplc_dsl::core::FileId;
 use ironplc_parser::options::CompilerOptions;
 use ironplc_parser::{parse_program, tokenize_program};
+use ironplc_syntax::{lexer::lex, parse_source_file, ParseOptions};
 use stats_alloc::{Region, StatsAlloc, INSTRUMENTED_SYSTEM};
 use std::alloc::System;
 use std::hint::black_box;
@@ -115,24 +118,58 @@ fn main() {
     // One-time init: each call is made twice; the difference in allocations
     // between the first and second call is the init cost. Plain input first,
     // so the located-variable row isolates what that input kind adds.
-    let probes = [
-        ("tokenize_program, plain", PLAIN_SOURCE, true),
-        ("parse_program, plain", PLAIN_SOURCE, false),
-        ("parse_program, located variables", LOCATED_SOURCE, false),
+    let cst_options = ParseOptions::default();
+    type Probe<'a> = (&'a str, &'a str, Box<dyn Fn(&str) + 'a>);
+    let probes: Vec<Probe> = vec![
+        (
+            "tokenize_program, plain",
+            PLAIN_SOURCE,
+            Box::new(|source| {
+                black_box(tokenize_program(source, &file_id, &options, 0, 0).0.len());
+            }),
+        ),
+        (
+            "parse_program, plain",
+            PLAIN_SOURCE,
+            Box::new(|source| {
+                black_box(parse_program(source, &file_id, &options).is_ok());
+            }),
+        ),
+        (
+            "parse_program, located variables",
+            LOCATED_SOURCE,
+            Box::new(|source| {
+                black_box(parse_program(source, &file_id, &options).is_ok());
+            }),
+        ),
+        (
+            "cst lex, plain",
+            PLAIN_SOURCE,
+            Box::new(|source| {
+                black_box(lex(source).0.len());
+            }),
+        ),
+        (
+            "cst parse_source_file, plain",
+            PLAIN_SOURCE,
+            Box::new(|source| {
+                black_box(parse_source_file(source, &cst_options).is_ok());
+            }),
+        ),
+        (
+            "cst parse_source_file, located variables",
+            LOCATED_SOURCE,
+            Box::new(|source| {
+                black_box(parse_source_file(source, &cst_options).is_ok());
+            }),
+        ),
     ];
     println!("one-time init (tiny inputs, before the corpus loop):");
     println!("| call | first us | first allocs | second us | second allocs | init allocs |");
     println!("|---|---|---|---|---|---|");
-    for (name, source, tokenize_only) in probes {
-        let call = || {
-            if tokenize_only {
-                black_box(tokenize_program(source, &file_id, &options, 0, 0).0.len());
-            } else {
-                black_box(parse_program(source, &file_id, &options).is_ok());
-            }
-        };
-        let first = measure(call);
-        let second = measure(call);
+    for (name, source, call) in &probes {
+        let first = measure(|| call(source));
+        let second = measure(|| call(source));
         println!(
             "| {name} | {:.1} | {} | {:.1} | {} | {} |",
             first.micros,
@@ -160,38 +197,118 @@ fn main() {
             Ok(_) => "ok".to_string(),
             Err(diagnostic) => format!("err[{}]", diagnostic.code.as_str()),
         };
+        let cst_tokens = lex(&file.source).0.len();
+        let cst_errors = parse_source_file(&file.source, &cst_options).errors.len();
         let tokenize = measure_row(repeats, || {
             tokenize_program(&file.source, &file_id, &options, 0, 0)
         });
         let parse = measure_row(repeats, || parse_program(&file.source, &file_id, &options));
-        rows.push((file, tokens, status, tokenize, parse));
+        let cst_lex = measure_row(repeats, || lex(&file.source));
+        let cst_parse = measure_row(repeats, || parse_source_file(&file.source, &cst_options));
+        rows.push(FileRow {
+            file,
+            tokens,
+            status,
+            tokenize,
+            parse,
+            cst_tokens,
+            cst_errors,
+            cst_lex,
+            cst_parse,
+        });
     }
 
-    let cold_micros: f64 = rows.iter().map(|row| row.4.cold.micros).sum();
-    let cold_allocations: usize = rows.iter().map(|row| row.4.cold.allocations).sum();
-    let cold_kib: f64 = rows.iter().map(|row| row.4.cold.bytes as f64).sum::<f64>() / 1024.0;
-    let warm_micros: f64 = rows.iter().map(|row| row.4.warm_micros).sum();
-    println!(
-        "totals (parse, one pass): cold {:.3} ms, warm-median sum {:.3} ms, {cold_allocations} cold allocations, {cold_kib:.1} KiB allocated cold",
-        cold_micros / 1000.0,
-        warm_micros / 1000.0,
-    );
+    print_totals("tokenize", &rows, |row| &row.tokenize);
+    print_totals("parse", &rows, |row| &row.parse);
+    print_totals("cst lex", &rows, |row| &row.cst_lex);
+    print_totals("cst parse", &rows, |row| &row.cst_parse);
     println!();
     println!("| file | bytes | tokens | tok cold us | tok cold allocs | tok warm med us | parse cold us | parse cold allocs | parse cold KiB | parse warm med us | parse warm allocs | status |");
     println!("|---|---|---|---|---|---|---|---|---|---|---|---|");
-    for (file, tokens, status, tokenize, parse) in &rows {
+    for row in &rows {
         println!(
-            "| {} | {} | {tokens} | {:.1} | {} | {:.1} | {:.1} | {} | {:.1} | {:.1} | {} | {status} |",
-            file.name,
-            file.source.len(),
-            tokenize.cold.micros,
-            tokenize.cold.allocations,
-            tokenize.warm_micros,
-            parse.cold.micros,
-            parse.cold.allocations,
-            parse.cold.bytes as f64 / 1024.0,
-            parse.warm_micros,
-            parse.warm_allocations,
+            "| {} | {} | {} | {:.1} | {} | {:.1} | {:.1} | {} | {:.1} | {:.1} | {} | {} |",
+            row.file.name,
+            row.file.source.len(),
+            row.tokens,
+            row.tokenize.cold.micros,
+            row.tokenize.cold.allocations,
+            row.tokenize.warm_micros,
+            row.parse.cold.micros,
+            row.parse.cold.allocations,
+            row.parse.cold.bytes as f64 / 1024.0,
+            row.parse.warm_micros,
+            row.parse.warm_allocations,
+            row.status,
         );
     }
+    println!();
+    println!("cst (ironplc-syntax lex and parse_source_file, same corpus and method):");
+    println!("| file | bytes | cst tokens | lex cold us | lex cold allocs | lex warm med us | cst parse cold us | cst parse cold allocs | cst parse cold KiB | cst parse warm med us | cst parse warm allocs | cst errors | parse warm ratio | parse allocs ratio |");
+    println!("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
+    for row in &rows {
+        println!(
+            "| {} | {} | {} | {:.1} | {} | {:.1} | {:.1} | {} | {:.1} | {:.1} | {} | {} | {:.2} | {:.2} |",
+            row.file.name,
+            row.file.source.len(),
+            row.cst_tokens,
+            row.cst_lex.cold.micros,
+            row.cst_lex.cold.allocations,
+            row.cst_lex.warm_micros,
+            row.cst_parse.cold.micros,
+            row.cst_parse.cold.allocations,
+            row.cst_parse.cold.bytes as f64 / 1024.0,
+            row.cst_parse.warm_micros,
+            row.cst_parse.warm_allocations,
+            row.cst_errors,
+            ratio(row.cst_parse.warm_micros, row.parse.warm_micros),
+            ratio(
+                row.cst_parse.cold.allocations as f64,
+                row.parse.cold.allocations as f64
+            ),
+        );
+    }
+}
+
+/// Everything measured for one corpus file: the legacy entry points and the
+/// CST entry points, each as a cold-plus-warm [`Row`].
+struct FileRow<'a> {
+    file: &'a ironplc_benchmarks::corpus::CorpusFile,
+    tokens: usize,
+    status: String,
+    tokenize: Row,
+    parse: Row,
+    cst_tokens: usize,
+    cst_errors: usize,
+    cst_lex: Row,
+    cst_parse: Row,
+}
+
+fn ratio(numerator: f64, denominator: f64) -> f64 {
+    if denominator == 0.0 {
+        0.0
+    } else {
+        numerator / denominator
+    }
+}
+
+/// Prints one corpus pass summed over every file for the row `select` picks.
+fn print_totals<'a>(
+    label: &str,
+    rows: &[FileRow<'a>],
+    select: impl for<'r> Fn(&'r FileRow<'a>) -> &'r Row,
+) {
+    let cold_micros: f64 = rows.iter().map(|row| select(row).cold.micros).sum();
+    let cold_allocations: usize = rows.iter().map(|row| select(row).cold.allocations).sum();
+    let cold_kib: f64 = rows
+        .iter()
+        .map(|row| select(row).cold.bytes as f64)
+        .sum::<f64>()
+        / 1024.0;
+    let warm_micros: f64 = rows.iter().map(|row| select(row).warm_micros).sum();
+    println!(
+        "totals ({label}, one pass): cold {:.3} ms, warm-median sum {:.3} ms, {cold_allocations} cold allocations, {cold_kib:.1} KiB allocated cold",
+        cold_micros / 1000.0,
+        warm_micros / 1000.0,
+    );
 }

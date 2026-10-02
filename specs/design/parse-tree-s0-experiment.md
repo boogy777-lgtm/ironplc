@@ -497,6 +497,48 @@ cargo bench -p ironplc-benchmarks --bench parse_baseline -- 100   # 100 warm rep
 cargo bench -p ironplc-benchmarks --bench parse_benchmark         # Criterion warm timings
 ```
 
+### 3.6 CST parse rows (2026-10-02)
+
+`parse_baseline` and `parse_benchmark` now also measure the lossless CST path,
+`ironplc_syntax::lex` and `parse_source_file` under `ParseOptions::default()`,
+with the same corpus, helpers (`measure`, `measure_row`, 50 warm repeats) and
+output format as the legacy rows. `parse_baseline` prints the CST columns,
+per-file ratios and a `cst parse` totals line; `parse_benchmark` registers
+`parse_cst/<file>`. The legacy rows are unchanged. The corpus is the 60 files
+of `compiler/resources/test/`, now 26,229 bytes (the corpus grew by one small
+file since 3.5, so the legacy totals moved slightly: 31,253 allocations,
+4,422.8 KiB).
+
+- **Environment:** as 3.5 (Intel Core i5-9300H, Windows 11 Pro 10.0.26200,
+  rustc 1.98.1 (48a229cea, 2026-09-01), release `bench` profile, desktop, no
+  pinning), base commit `5e31a45da` plus the benchmark change.
+- **Scope of the comparison:** the CST rows are parse-only: lex, CST parse,
+  tree build. They exclude the lowering to the DSL that production needs, so
+  they bound the CST cost from below and are not a like-for-like replacement
+  for `parse_program`, which returns the DSL. 21 corpus files report syntax
+  errors under default options (the legacy path rejects 20); both paths are
+  timed on every file, including the dialect fixtures that fail.
+
+Three consecutive `parse_baseline` runs (one corpus pass):
+
+| quantity | legacy run 1 / 2 / 3 | CST run 1 / 2 / 3 | CST / legacy |
+|---|---|---|---|
+| parse, cold (ms) | 5.839 / 6.638 / 6.657 | 3.258 / 3.385 / 3.223 | 0.50-0.56 |
+| parse, warm-median sum (ms) | 4.755 / 4.810 / 4.708 | 2.260 / 2.304 / 2.279 | 0.47-0.49 |
+| parse, cold allocations | 31,253 (all runs) | 9,066 (all runs) | 0.29 |
+| parse, cold KiB allocated | 4,422.8 | 1,165.6 | 0.26 |
+| tokenize / lex, warm-median sum (ms) | 0.911 / 0.944 / 0.946 | 0.238 / 0.253 / 0.238 | 0.25-0.27 |
+| tokenize / lex, cold allocations | 9,303 | 60 | 0.006 |
+
+Allocation counts are exact and identical across runs; times are
+roughly +-10 % (the cold figures vary more, 5.8-6.7 ms legacy). The CST
+`lex` allocates once per file (the token vector); the CST parse allocates
+about 9,000 times, so the tree build, not lexing, is where its allocations
+go. The one-time init probe shows no lazy initialization in the CST path
+(65 vs 65 allocations on the located-variable input; legacy 989 extra).
+
+Reproduce: the commands in 3.5; the CST columns are in the same output.
+
 ## 4. Prefactoring candidates (observed while spiking)
 
 1. **Lossless token source (new, blocking for S1).** `ironplc-parser`
