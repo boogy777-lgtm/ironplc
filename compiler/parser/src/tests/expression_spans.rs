@@ -161,3 +161,64 @@ fn parse_when_special_operator_type_is_keyword_then_type_span_covers_the_keyword
     let span = argument.expr.span();
     assert_eq!("INT", &source[span.start..span.end]);
 }
+
+/// Parses `<target> := 1;` in a function block, where `a` is an array and `p`
+/// a pointer (the parser does not check what the target is), and returns the
+/// source with the assigned variable.
+fn parse_assigned_target(target: &str) -> (String, Variable) {
+    let source = format!(
+        "FUNCTION_BLOCK fb
+VAR
+    a : ARRAY[0..3] OF INT;
+    p : REF_TO INT;
+END_VAR
+{target} := 1;
+END_FUNCTION_BLOCK"
+    );
+    let options = CompilerOptions {
+        allow_ref_to: true,
+        ..CompilerOptions::default()
+    };
+    let library = parse_program(&source, &FileId::default(), &options);
+    assert!(library.is_ok(), "Parse failed: {:?}", library.err());
+    let library = library.unwrap();
+    let fb = extract_fb(&library);
+    let stmts = cast!(&fb.body, FunctionBlockBodyKind::Statements);
+    let assignment = cast!(&stmts.body[0], StmtKind::Assignment);
+    (source, assignment.target.clone())
+}
+
+/// The closing bracket of a subscript and the caret of a dereference belong
+/// to no part of the variable, so the variable records them itself: a
+/// diagnostic about an assignment target underlines all of it.
+#[rstest]
+#[case::subscript("a[1]")]
+#[case::subscript_of_two("a[1, 2]")]
+#[case::subscript_of_subscript("a[1][2]")]
+#[case::subscript_with_space("a [ 1 ]")]
+#[case::dereference_in_a_chain("p^.x")]
+#[case::dereference_of_subscript("p^[1]")]
+fn parse_when_assignment_target_then_span_covers_the_target(#[case] target: &str) {
+    let (source, variable) = parse_assigned_target(target);
+
+    let span = variable.span();
+    assert_eq!(
+        target,
+        &source[span.start..span.end],
+        "span of {variable:?} should cover the target as written"
+    );
+}
+
+#[test]
+fn parse_when_subscript_of_subscript_then_each_access_covers_what_it_selects_from() {
+    let (source, variable) = parse_assigned_target("a[1][2]");
+
+    let symbolic = cast!(&variable, Variable::Symbolic);
+    let outer = cast!(symbolic, SymbolicVariableKind::Array);
+    assert_eq!("a[1][2]", &source[outer.span.start..outer.span.end]);
+    let inner = cast!(
+        outer.subscripted_variable.as_ref(),
+        SymbolicVariableKind::Array
+    );
+    assert_eq!("a[1]", &source[inner.span.start..inner.span.end]);
+}

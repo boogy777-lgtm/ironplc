@@ -317,12 +317,12 @@ fn lower_variable_when_node_is_not_a_variable_then_internal_error() {
 
 #[test]
 fn lower_variable_when_node_is_pending_then_not_implemented() {
-    let parse = crate::parse_statements("x := 1;", &all());
+    let parse = crate::parse_source_file("PROGRAM p\nEND_PROGRAM\n", &all());
     let statement = parse
         .root
         .descendants()
-        .find(|node| node.kind() == SyntaxKind::AssignStmt)
-        .expect("an assignment");
+        .find(|node| node.kind() == SyntaxKind::ProgramDecl)
+        .expect("a declaration");
     let diagnostic = lower_variable(&LowerCx::new(file()), &statement).err();
     assert_eq!(
         diagnostic.map(|diagnostic| diagnostic.code),

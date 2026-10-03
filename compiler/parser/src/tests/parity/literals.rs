@@ -1,15 +1,18 @@
-//! Lowering against the legacy parser, test-only: literals, expressions and
-//! variables, and whole libraries as far as the lowering reaches.
+//! Lowering against the legacy parser, test-only: literals, expressions,
+//! variables and statements, and whole libraries as far as the lowering
+//! reaches.
 //!
 //! Two comparisons, both strict (`ast.rs`):
 //!
 //! - **Sites.** Every site of every input the new parser accepts (`sites.rs`:
-//!   a literal, an operand, an argument, a condition, a place) is lowered and
-//!   compared to what the legacy rule for it (`constant`, `expression`,
-//!   `variable`) builds from the legacy tokens of the same bytes. The legacy
-//!   rule is applied to the tokens, not looked up in the legacy tree, because
-//!   the legacy tree holds some literal positions as bare integers (a subrange
-//!   bound, a string length) that are not constants.
+//!   a literal, an operand, an argument, a condition, a place, a statement, a
+//!   list of statements, which includes the body of every program) is lowered
+//!   and compared to what the legacy rule for it (`constant`, `expression`,
+//!   `variable`, `statement_list`) builds from the legacy tokens of the same
+//!   bytes, as the body of a program, where a word that closes the body
+//!   follows. The legacy rule is applied to the tokens, not looked up in the
+//!   legacy tree, because the legacy tree holds some literal positions as bare
+//!   integers (a subrange bound, a string length) that are not constants.
 //! - **Whole inputs.** An input whose tree contains no node kind without a
 //!   lowering rule is lowered as a library and compared to the legacy
 //!   `parse_program` result. An input that does contain one is skipped and
@@ -35,16 +38,21 @@ use super::ast::{compare, explain, Component, Subject};
 use super::declaration_table::DECLARATIONS;
 use super::legacy::{presets, Preset};
 use super::sites::{sites, Site, Unit};
-use super::tables::{EXPRESSIONS, STATEMENTS};
-use super::{extract, file_variants, new_parse, Kind};
+use super::tables::{BODY_EXCEPTIONS, EXPRESSIONS, STATEMENTS, STATEMENT_EXCEPTIONS};
+use super::{extract, file_variants, new_parse, Basis, Kind};
 use crate::legacy::{parse_program, tokenize_program};
-use crate::parser::{parse_constant, parse_expression, parse_variable};
+use crate::parser::{parse_constant, parse_expression, parse_statement_list, parse_variable};
 use crate::token::{Token, TokenType};
 use ironplc_dsl::core::FileId;
 use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_syntax::lower::{
-    contains_pending, disposition, expressions::lower_expr, literals::lower_constant,
-    lower_library, variables::lower_variable, Area, Disposition, LowerCx,
+    contains_pending, disposition,
+    expressions::lower_expr,
+    literals::lower_constant,
+    lower_library,
+    statements::{lower_statement, lower_statement_list},
+    variables::lower_variable,
+    Area, Disposition, LowerCx,
 };
 use ironplc_syntax::{Parse, SyntaxKind, SyntaxNode};
 
@@ -60,16 +68,15 @@ pub enum Scope {
     /// Every site of the named input (a file, with or without its CRLF and
     /// tab spellings, or a snippet).
     Input(&'static str),
-    /// Every literal node of kind `node` directly under a node of kind
-    /// `parent`.
-    Site {
-        parent: SyntaxKind,
-        node: SyntaxKind,
-    },
-    /// A site whose node is of kind `node`, that differs in exactly `parts`
-    /// of the comparison, and in which no site inside it differs.
+    /// An input that the new parser accepts on purpose and the legacy parser
+    /// rejects, listed as such in the verdict tables, where the legacy parser
+    /// built nothing to compare.
+    AcceptedOnPurpose,
+    /// A site whose node is of one of the kinds `nodes`, that differs in
+    /// exactly `parts` of the comparison, and in which no site inside it
+    /// differs.
     Origin {
-        node: SyntaxKind,
+        nodes: &'static [SyntaxKind],
         parts: &'static [Component],
     },
 }
@@ -82,22 +89,17 @@ pub struct Difference {
     pub expected: usize,
 }
 
-const CASE_SELECTOR: &str = "the legacy grammar reads a case selector with its own rule (`case_bit_string_literal`), which builds an untyped bit string; the `constant` rule the comparison applies reads the same tokens as an integer. The selector itself is compared where case labels are lowered";
 const MARKER_IN_STRING: &str = "the legacy pre-pass takes marker text inside a string literal as a ranged-comment marker and blanks the statement between, so the legacy tokens are not those of the text; the new parser lexes the strings first and keeps the code (a deliberate difference, pinned by its own test)";
 const SEVERAL_PAIRS: &str = "the legacy pre-pass blanks the first ranged-comment pair only, so the legacy lexer rejects the file at the second pair's body and produces no tokens after it; the new parser makes every pair a region (a deliberate difference, listed for the file)";
 
 const KEYWORD_NAME_ALONE: &str = "deliberate behaviour change: a bare `STEP`, `ON`, `R_EDGE` or `F_EDGE` is a late-bound name like every other bare name. The legacy rule for a late-bound name (`identifier`) rejects those tokens, so the grammar fell through to the rule for a variable";
-const OUTPUT_NOT: &str = "legacy bug not ported: the legacy grammar consumes the `NOT` of `NOT name => variable` and records `not: false`, so an inverted output reads as a plain one; the lowering records it";
+const OUTPUT_NOT: &str = "legacy bug not ported: the legacy grammar consumes the `NOT` of `NOT name => variable` and records `not: false`, so an inverted output reads as a plain one; the lowering records it. The call is an expression or, as a statement, a call statement";
+const BIND_SPANS: &str = "deliberate behaviour change: an assignment is positioned at its whole operator (`S=`, `R=`, `REF=`) where the legacy grammar keeps the `=` token alone, and the value of `REF=` is positioned at the place it names where the legacy grammar builds it without a position";
+const POSITIVE_LABEL: &str = "legacy bug not ported: the legacy grammar positions a `CASE` label written with a `+` at its digits alone and one written with a `-` at the sign and the digits; the lowering positions the number as written";
+const LABEL_NAME: &str = "legacy bug not ported: the legacy grammar builds the name of a statement label without its position; the lowering gives it the position of the name like every other name";
+const LISTED_INPUT: &str = "deliberate behaviour changes listed with their reasons in the statement and body tables of the verdict comparison: the legacy parser rejects the input and so builds nothing to compare, and the new parser accepts it on purpose";
 
 pub const DIFFERENCES: &[Difference] = &[
-    Difference {
-        scope: Scope::Site {
-            parent: SyntaxKind::CaseLabel,
-            node: SyntaxKind::BitStringLiteral,
-        },
-        reason: CASE_SELECTOR,
-        expected: 54,
-    },
     Difference {
         scope: Scope::Input("tests/fixtures/lexical/oscat_marker_in_string.st"),
         reason: MARKER_IN_STRING,
@@ -110,7 +112,7 @@ pub const DIFFERENCES: &[Difference] = &[
     },
     Difference {
         scope: Scope::Origin {
-            node: SyntaxKind::NameRef,
+            nodes: &[SyntaxKind::NameRef],
             parts: &[Component::Dump],
         },
         reason: KEYWORD_NAME_ALONE,
@@ -118,16 +120,45 @@ pub const DIFFERENCES: &[Difference] = &[
     },
     Difference {
         scope: Scope::Origin {
-            node: SyntaxKind::CallExpr,
+            nodes: &[SyntaxKind::CallExpr, SyntaxKind::CallStmt],
             parts: &[Component::Dump],
         },
         reason: OUTPUT_NOT,
-        expected: 18,
+        expected: 24,
+    },
+    Difference {
+        scope: Scope::Origin {
+            nodes: &[SyntaxKind::AssignStmt],
+            parts: &[Component::Spans],
+        },
+        reason: BIND_SPANS,
+        expected: 144,
+    },
+    Difference {
+        scope: Scope::Origin {
+            nodes: &[SyntaxKind::CaseStmt],
+            parts: &[Component::Spans],
+        },
+        reason: POSITIVE_LABEL,
+        expected: 6,
+    },
+    Difference {
+        scope: Scope::Origin {
+            nodes: &[SyntaxKind::LabelStmt],
+            parts: &[Component::Spans],
+        },
+        reason: LABEL_NAME,
+        expected: 164,
+    },
+    Difference {
+        scope: Scope::AcceptedOnPurpose,
+        reason: LISTED_INPUT,
+        expected: 14,
     },
 ];
 
 impl Scope {
-    fn covers(&self, key: &str, parent: SyntaxKind, node: SyntaxKind, parts: &[Component]) -> bool {
+    fn covers(&self, key: &str, node: SyntaxKind, parts: &[Component]) -> bool {
         match *self {
             Scope::Input(name) => {
                 key == name
@@ -135,14 +166,21 @@ impl Scope {
                         .strip_prefix(name)
                         .is_some_and(|rest| rest.starts_with(" ("))
             }
-            Scope::Site {
-                parent: wanted_parent,
-                node: wanted_node,
-            } => wanted_parent == parent && wanted_node == node,
+            Scope::AcceptedOnPurpose => {
+                parts.is_empty()
+                    && [STATEMENT_EXCEPTIONS, BODY_EXCEPTIONS]
+                        .iter()
+                        .flat_map(|table| table.iter())
+                        .any(|entry| {
+                            entry.snippet == key
+                                && !entry.legacy
+                                && entry.basis == Basis::Deliberate
+                        })
+            }
             Scope::Origin {
-                node: wanted_node,
+                nodes: wanted_nodes,
                 parts: wanted_parts,
-            } => wanted_node == node && wanted_parts == parts,
+            } => wanted_nodes.contains(&node) && wanted_parts == parts,
         }
     }
 }
@@ -158,6 +196,17 @@ pub struct Counts {
     pub both_reject: usize,
 }
 
+impl Counts {
+    fn record(&mut self, outcome: &Outcome) {
+        self.compared += 1;
+        match outcome {
+            Outcome::Equal => self.equal += 1,
+            Outcome::BothReject => self.both_reject += 1,
+            Outcome::Differs { .. } => {}
+        }
+    }
+}
+
 /// The result of running the comparisons over a corpus.
 #[derive(Default)]
 pub struct Tally {
@@ -167,6 +216,9 @@ pub struct Tally {
     pub rejected: usize,
     /// What was compared, by unit.
     pub units: [Counts; Unit::ALL.len()],
+    /// Of the lists of statements, the bodies of declarations: the lists whose
+    /// parent is a declaration, which has no lowering rule of its own yet.
+    pub bodies: Counts,
     /// Of the equal literals, the ones in an input that holds nothing but
     /// literals.
     pub literal_only_equal: usize,
@@ -212,7 +264,7 @@ impl Tally {
     ) {
         let covering = DIFFERENCES
             .iter()
-            .position(|entry| entry.scope.covers(key, parent, node, parts));
+            .position(|entry| entry.scope.covers(key, node, parts));
         match covering {
             Some(index) => self.excepted[index] += 1,
             None => self.unexplained.push((
@@ -227,10 +279,29 @@ impl Tally {
     }
 }
 
+/// The legacy tokens of `text` as the body of a `POU`: the word that closes the
+/// body follows it, as it does in a program. The legacy pipeline inserts the `;`
+/// that a block statement may omit before the next token, so a block statement
+/// that ends the text has none to be inserted before; the fragment entry
+/// rejects it where the program does not. The offsets of `text` are those of the
+/// tokens.
+fn body_tokens(text: &str, preset: &Preset) -> Vec<Token> {
+    tokenize_program(
+        &format!("{text} END_PROGRAM"),
+        &file(),
+        &preset.legacy,
+        0,
+        0,
+    )
+    .0
+}
+
 /// The legacy tokens that make up the construct at `range`: the slice from the
 /// first to the last token inside it. Whitespace and the zero-width
-/// terminators the legacy pipeline inserts are not part of a construct.
-fn literal_tokens(tokens: &[Token], range: (usize, usize)) -> &[Token] {
+/// terminators the legacy pipeline inserts are not part of a construct, except
+/// that a construct that is read with its terminator (`terminated`: a
+/// statement) takes the one inserted where it ends.
+fn literal_tokens(tokens: &[Token], range: (usize, usize), terminated: bool) -> &[Token] {
     let counts = |token: &Token| {
         token.span.start < token.span.end
             && !matches!(token.token_type, TokenType::Whitespace | TokenType::Newline)
@@ -242,8 +313,34 @@ fn literal_tokens(tokens: &[Token], range: (usize, usize)) -> &[Token] {
     let last = tokens
         .iter()
         .rposition(|token| counts(token) && inside(token));
+    // The terminator is inserted before the first token that is not a space or
+    // a comment after the keyword that ends the statement.
+    let inserted_after = |last: usize| {
+        let after = &tokens[last + 1..];
+        let gap = after
+            .iter()
+            .take_while(|token| {
+                matches!(
+                    token.token_type,
+                    TokenType::Whitespace | TokenType::Comment | TokenType::DocComment
+                )
+            })
+            .count();
+        match after.get(gap) {
+            Some(token)
+                if token.token_type == TokenType::Semicolon
+                    && token.span.start == token.span.end =>
+            {
+                gap + 1
+            }
+            _ => 0,
+        }
+    };
     match (first, last) {
-        (Some(first), Some(last)) => &tokens[first..=last],
+        (Some(first), Some(last)) => {
+            let end = last + if terminated { inserted_after(last) } else { 0 };
+            &tokens[first..=end]
+        }
         _ => &[],
     }
 }
@@ -328,6 +425,18 @@ fn judge(site: &Site, tokens: &[Token], cx: &LowerCx, written: &str) -> Outcome 
             parse_variable(tokens),
             lower_variable(cx, &site.node),
         ),
+        Unit::Statement => settle(
+            written,
+            parse_statement_list(tokens),
+            lower_statement(cx, &site.node)
+                .map(Option::into_iter)
+                .map(Iterator::collect),
+        ),
+        Unit::Statements => settle(
+            written,
+            parse_statement_list(tokens),
+            lower_statement_list(cx, &site.node),
+        ),
     }
 }
 
@@ -335,7 +444,7 @@ fn judge(site: &Site, tokens: &[Token], cx: &LowerCx, written: &str) -> Outcome 
 /// for it.
 fn compare_sites(tally: &mut Tally, key: &str, text: &str, parse: &Parse, preset: &Preset) {
     let cx = LowerCx::new(file());
-    let tokens = tokenize_program(text, &file(), &preset.legacy, 0, 0).0;
+    let tokens = body_tokens(text, preset);
     let only_literals = parse
         .root
         .descendants()
@@ -346,16 +455,22 @@ fn compare_sites(tally: &mut Tally, key: &str, text: &str, parse: &Parse, preset
     for site in &all {
         let range = range_of(&site.node);
         let written = &text[range.0..range.1];
-        let outcome = judge(site, literal_tokens(&tokens, range), &cx, written);
-        let counts = tally.counts_mut(site.unit);
-        counts.compared += 1;
+        let outcome = judge(
+            site,
+            literal_tokens(&tokens, range, site.unit.ends_in_terminator()),
+            &cx,
+            written,
+        );
+        tally.counts_mut(site.unit).record(&outcome);
+        if site.unit == Unit::Statements && disposition(site.parent).is_pending() {
+            tally.bodies.record(&outcome);
+        }
         match outcome {
             Outcome::Equal => {
-                counts.equal += 1;
                 tally.literal_only_equal +=
                     usize::from(only_literals && site.unit == Unit::Literal);
             }
-            Outcome::BothReject => counts.both_reject += 1,
+            Outcome::BothReject => {}
             Outcome::Differs { parts, what } => differing.push((site, parts, what)),
         }
     }
@@ -478,11 +593,14 @@ pub fn run(cases: &[Case], presets: &[Preset]) -> Tally {
 /// written and never fall. The sites equal to the legacy ones, by unit, those
 /// literals among them in inputs that are nothing but a literal, and whole
 /// inputs lowered as libraries.
-const MIN_EQUAL: [(Unit, usize); 3] = [
+const MIN_EQUAL: [(Unit, usize); 5] = [
     (Unit::Literal, 18_000),
     (Unit::Expression, 30_000),
     (Unit::Variable, 9_500),
+    (Unit::Statement, 12_000),
+    (Unit::Statements, 7_500),
 ];
+const MIN_BODIES_EQUAL: usize = 3_300;
 const MIN_LITERAL_ONLY_EQUAL: usize = 400;
 const MIN_WHOLE_COMPARED: usize = 40;
 
@@ -535,6 +653,11 @@ pub fn check(tally: &Tally) -> Vec<String> {
             MIN_LITERAL_ONLY_EQUAL,
         ),
         (
+            "equal bodies of declarations",
+            tally.bodies.equal,
+            MIN_BODIES_EQUAL,
+        ),
+        (
             "whole inputs compared",
             tally.whole_compared,
             MIN_WHOLE_COMPARED,
@@ -563,6 +686,10 @@ pub fn summarize(tally: &Tally) {
             counts.both_reject
         );
     }
+    println!(
+        "  of the statement lists, the bodies of declarations: {} compared, {} equal",
+        tally.bodies.compared, tally.bodies.equal
+    );
     println!(
         "  differences: {} excepted, {} inherited from a site inside, {} unexplained",
         tally.excepted_total(),
@@ -651,48 +778,48 @@ fn difference_when_listed_scope_then_counted_against_its_entry_and_not_unexplain
         String::new(),
     );
     tally.difference(
-        "x",
-        SyntaxKind::CaseLabel,
-        SyntaxKind::BitStringLiteral,
-        &[],
+        "f(NOT a => x);",
+        SyntaxKind::StatementList,
+        SyntaxKind::CallStmt,
+        &[Component::Dump],
         String::new(),
     );
     assert!(tally.unexplained.is_empty());
-    assert_eq!(&tally.excepted[..3], &[1, 1, 0]);
+    assert_eq!(&tally.excepted[..4], &[1, 0, 0, 1]);
 }
 
 #[test]
 fn covers_when_input_scope_then_the_file_and_its_spellings_only() {
     let scope = Scope::Input("a/b.st");
     let any = SyntaxKind::Unknown;
-    assert!(scope.covers("a/b.st", any, any, &[]));
-    assert!(scope.covers("a/b.st (CRLF)", any, any, &[]));
-    assert!(scope.covers("a/b.st (tabs)", any, any, &[]));
-    assert!(!scope.covers("a/b.st.bak", any, any, &[]));
-    assert!(!scope.covers("a/bb.st", any, any, &[]));
+    assert!(scope.covers("a/b.st", any, &[]));
+    assert!(scope.covers("a/b.st (CRLF)", any, &[]));
+    assert!(scope.covers("a/b.st (tabs)", any, &[]));
+    assert!(!scope.covers("a/b.st.bak", any, &[]));
+    assert!(!scope.covers("a/bb.st", any, &[]));
 }
 
 #[test]
-fn covers_when_origin_scope_then_the_node_and_exactly_its_parts() {
+fn covers_when_origin_scope_then_any_of_its_nodes_and_exactly_its_parts() {
     let scope = Scope::Origin {
-        node: SyntaxKind::IndexExpr,
+        nodes: &[SyntaxKind::IndexExpr, SyntaxKind::FieldExpr],
         parts: &[Component::Dump, Component::Spans],
     };
-    let any = SyntaxKind::Unknown;
     let both = [Component::Dump, Component::Spans];
-    assert!(scope.covers("x", any, SyntaxKind::IndexExpr, &both));
-    assert!(!scope.covers("x", any, SyntaxKind::IndexExpr, &[Component::Dump]));
-    assert!(!scope.covers("x", any, SyntaxKind::FieldExpr, &both));
+    assert!(scope.covers("x", SyntaxKind::IndexExpr, &both));
+    assert!(!scope.covers("x", SyntaxKind::IndexExpr, &[Component::Dump]));
+    assert!(scope.covers("x", SyntaxKind::FieldExpr, &both));
+    assert!(!scope.covers("x", SyntaxKind::CallExpr, &both));
 }
 
 #[test]
 fn literal_tokens_when_range_given_then_the_tokens_inside_without_whitespace_or_terminators() {
     let source = "x := T#5s ;";
     let tokens = tokenize_program(source, &file(), &presets()[0].legacy, 0, 0).0;
-    let inside = literal_tokens(&tokens, (5, 9));
+    let inside = literal_tokens(&tokens, (5, 9), false);
     let text: Vec<&str> = inside.iter().map(|token| token.text.as_str()).collect();
     assert_eq!(text, vec!["T", "#", "5", "s"]);
-    assert!(literal_tokens(&tokens, (20, 25)).is_empty());
+    assert!(literal_tokens(&tokens, (20, 25), false).is_empty());
 }
 
 #[test]
@@ -708,7 +835,7 @@ fn compare_sites_when_lowered_with_a_wrong_file_then_reported_as_a_difference() 
         .root
         .descendants()
         .find(|node| node.kind() == SyntaxKind::UnaryExpr);
-    let legacy = parse_expression(literal_tokens(&tokens, (5, 7)));
+    let legacy = parse_expression(literal_tokens(&tokens, (5, 7), false));
     let parts = |file: FileId| {
         legacy
             .as_ref()
@@ -724,6 +851,63 @@ fn compare_sites_when_lowered_with_a_wrong_file_then_reported_as_a_difference() 
         parts(FileId::from_string("other.st")),
         Some(vec![Component::Spans])
     );
+}
+
+#[test]
+fn compare_sites_when_a_statement_is_lowered_for_another_file_then_reported_as_a_difference() {
+    // The same holds for a statement: its target, its operator and its value
+    // are positioned in a file, and a statement lowered for another one differs
+    // from the legacy statement in position and in nothing else.
+    let preset = &presets()[0];
+    let text = "IF a THEN x[1] := b; END_IF;";
+    let parse = new_parse(Kind::Statements, text, &preset.new);
+    let tokens = body_tokens(text, preset);
+    let node = parse
+        .root
+        .descendants()
+        .find(|node| node.kind() == SyntaxKind::IfStmt)
+        .expect("an IF");
+    let legacy = parse_statement_list(literal_tokens(&tokens, range_of(&node), true));
+    let parts = |file: FileId| {
+        legacy
+            .as_ref()
+            .ok()
+            .zip(
+                lower_statement(&LowerCx::new(file), &node)
+                    .ok()
+                    .map(|statement| statement.into_iter().collect::<Vec<_>>()),
+            )
+            .map(|(legacy, lowered)| compare(legacy, &lowered))
+    };
+    assert_eq!(parts(file()), Some(vec![]));
+    assert_eq!(
+        parts(FileId::from_string("other.st")),
+        Some(vec![Component::Spans])
+    );
+}
+
+#[test]
+fn literal_tokens_when_block_statement_omits_its_terminator_then_a_statement_takes_the_inserted_one(
+) {
+    let preset = presets()
+        .into_iter()
+        .find(|preset| preset.name == "all-flags")
+        .expect("the preset with every flag");
+    let text = "IF a THEN b := 1; END_IF (* c *)\nx := 2;";
+    let tokens = body_tokens(text, &preset);
+    let range = (0, "IF a THEN b := 1; END_IF".len());
+    let last = |terminated: bool| {
+        literal_tokens(&tokens, range, terminated)
+            .last()
+            .map(|token| (token.token_type.clone(), token.text.clone()))
+    };
+    assert_eq!(last(false), Some((TokenType::EndIf, "END_IF".to_string())));
+    assert_eq!(last(true), Some((TokenType::Semicolon, String::new())));
+    // A `;` that is there is the last token, and nothing is added after it.
+    let written = "x := 2;";
+    let tokens = body_tokens(written, &preset);
+    let at = literal_tokens(&tokens, (0, written.len()), true);
+    assert_eq!(at.last().map(|token| token.text.as_str()), Some(";"));
 }
 
 /// Durations at and past the longest one a duration holds, with the problem
@@ -777,7 +961,7 @@ fn parity_when_duration_at_range_edge_then_same_duration_or_same_problem_and_ran
                 .expect("a literal");
             let range = range_of(&node);
             let tokens = tokenize_program(&text, &file(), &preset.legacy, 0, 0).0;
-            let legacy = parse_constant(literal_tokens(&tokens, range));
+            let legacy = parse_constant(literal_tokens(&tokens, range, false));
             let lowered = lower_constant(&LowerCx::new(file()), &node);
             let code = |result: &Result<_, ironplc_dsl::diagnostic::Diagnostic>| {
                 result.as_ref().err().map(|d| d.code.clone())

@@ -3,13 +3,16 @@
 //! A site is a node that the lowering reads by itself, and that the legacy
 //! grammar reads with a rule of its own: a literal (`constant`), an operand or
 //! an argument or a condition (`expression`), a place that is written to or
-//! referred to (`variable`). The legacy rule is applied to the legacy tokens of
-//! the same bytes, which is a fair oracle for a node only when the node means
-//! the same thing outside its parent. A name that heads a member access, a
+//! referred to (`variable`), a statement (`statement_list` over its tokens) and
+//! a list of statements. The legacy rule is applied to the legacy tokens of the
+//! same bytes, which is a fair oracle for a node only when the node means the
+//! same thing outside its parent. A name that heads a member access, a
 //! subscript or a call is not a site: it is read with its parent, which is.
 //!
-//! `site_unit` is the one table of which child of which parent is read by which
-//! rule; a construct whose children are read differently is a row.
+//! `PARTS` is the one table of which child of which parent is read by which
+//! rule: a part names the parent, where the child stands, what is compared
+//! there and the kinds of child that are read with the parent after all. A
+//! construct whose children are read differently is a row; none is code.
 
 use ironplc_syntax::lower::{disposition, Area, Disposition};
 use ironplc_syntax::{SyntaxKind as K, SyntaxNode};
@@ -20,17 +23,50 @@ pub enum Unit {
     Literal,
     Expression,
     Variable,
+    Statement,
+    Statements,
 }
 
 impl Unit {
-    pub const ALL: [Unit; 3] = [Unit::Literal, Unit::Expression, Unit::Variable];
+    pub const ALL: [Unit; 5] = [
+        Unit::Literal,
+        Unit::Expression,
+        Unit::Variable,
+        Unit::Statement,
+        Unit::Statements,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
             Unit::Literal => "literals",
             Unit::Expression => "expressions",
             Unit::Variable => "variables",
+            Unit::Statement => "statements",
+            Unit::Statements => "statement lists",
         }
+    }
+
+    /// True for a node of `kind` that this unit compares.
+    fn holds(self, kind: K) -> bool {
+        match self {
+            Unit::Literal => is_literal(kind),
+            Unit::Expression | Unit::Variable => matches!(
+                disposition(kind),
+                Disposition::Lowered(Area::Literal | Area::Expression | Area::Variable)
+            ),
+            Unit::Statement => {
+                kind != K::StatementList
+                    && disposition(kind) == Disposition::Lowered(Area::Statement)
+            }
+            Unit::Statements => kind == K::StatementList,
+        }
+    }
+
+    /// True when the legacy tokens of the construct end with the terminator
+    /// that the legacy pipeline inserts after a block statement written
+    /// without its `;`: the construct is read with it.
+    pub fn ends_in_terminator(self) -> bool {
+        matches!(self, Unit::Statement | Unit::Statements)
     }
 }
 
@@ -41,46 +77,107 @@ pub struct Site {
     pub unit: Unit,
 }
 
-/// Which children of a parent are sites, and of what unit.
-enum Children {
-    /// Every child that has a value.
-    All(Unit),
-    /// Every child that has a value, except a literal.
-    ExceptLiterals(Unit),
-    /// Every child that has a value after the first, which is a name.
-    AfterName(Unit),
+/// Where a child stands among the children of its parent.
+enum Place {
+    /// Anywhere.
+    Every,
+    /// After the first child, which is a name.
+    AfterFirst,
+    /// Before the last child.
+    BeforeLast,
+    /// Before the child of this kind.
+    Before(K),
+    /// After the child of this kind and, when a spelling is given, only when
+    /// that child is written as it (upper case, without spaces).
+    After(K, Option<&'static str>),
 }
 
-/// The parents whose children are sites. A parent not listed has none: the
+/// The kinds of child that a row reads with the parent after all.
+enum Except {
+    Nothing,
+    Literals,
+    Kinds(&'static [K]),
+}
+
+/// A row: the children of a parent that stand at a place are compared as a
+/// unit.
+struct Part {
+    parent: K,
+    place: Place,
+    unit: Unit,
+    except: Except,
+}
+
+const fn part(parent: K, place: Place, unit: Unit) -> Part {
+    Part {
+        parent,
+        place,
+        unit,
+        except: Except::Nothing,
+    }
+}
+
+/// The parents whose children are sites; the first row whose place holds and
+/// whose unit compares the child decides. A parent not listed has none: the
 /// children of a member access, a call or a dereference are read with it. The
 /// operand of a unary operator is a primary expression, and a signed literal is
 /// one that the expression rule reads as a negation, so a literal operand is
-/// read with its operator.
-const PARENTS: &[(K, Children)] = &[
-    (K::SourceFile, Children::All(Unit::Expression)),
-    (K::BinaryExpr, Children::All(Unit::Expression)),
-    (K::ParenExpr, Children::All(Unit::Expression)),
-    (K::UnaryExpr, Children::ExceptLiterals(Unit::Expression)),
-    (K::PositionalArg, Children::All(Unit::Expression)),
-    (K::SpecialOpExpr, Children::All(Unit::Expression)),
-    (K::IfStmt, Children::All(Unit::Expression)),
-    (K::ElsifClause, Children::All(Unit::Expression)),
-    (K::CaseStmt, Children::All(Unit::Expression)),
-    (K::WhileStmt, Children::All(Unit::Expression)),
-    (K::RepeatStmt, Children::All(Unit::Expression)),
-    (K::RefExpr, Children::All(Unit::Variable)),
-    (K::NamedArg, Children::AfterName(Unit::Expression)),
-    (K::IndexExpr, Children::AfterName(Unit::Expression)),
-    (K::ForStmt, Children::AfterName(Unit::Expression)),
-    (K::OutputArg, Children::AfterName(Unit::Variable)),
+/// read with its operator. The target of an assignment through a pointer
+/// (`p^ := v`) is the assignment's own dereference flag, read with the
+/// assignment; the value of a reference binding is a place.
+const PARTS: &[Part] = &[
+    part(K::SourceFile, Place::Every, Unit::Expression),
+    part(K::BinaryExpr, Place::Every, Unit::Expression),
+    part(K::ParenExpr, Place::Every, Unit::Expression),
+    Part {
+        except: Except::Literals,
+        ..part(K::UnaryExpr, Place::Every, Unit::Expression)
+    },
+    part(K::PositionalArg, Place::Every, Unit::Expression),
+    part(K::SpecialOpExpr, Place::Every, Unit::Expression),
+    part(K::RefExpr, Place::Every, Unit::Variable),
+    part(K::NamedArg, Place::AfterFirst, Unit::Expression),
+    part(K::IndexExpr, Place::AfterFirst, Unit::Expression),
+    part(K::OutputArg, Place::AfterFirst, Unit::Variable),
+    Part {
+        except: Except::Kinds(&[K::DerefExpr]),
+        ..part(K::AssignStmt, Place::Before(K::AssignOp), Unit::Variable)
+    },
+    part(
+        K::AssignStmt,
+        Place::After(K::AssignOp, Some("REF=")),
+        Unit::Variable,
+    ),
+    part(
+        K::AssignStmt,
+        Place::After(K::AssignOp, None),
+        Unit::Expression,
+    ),
+    part(K::IfStmt, Place::Every, Unit::Expression),
+    part(K::ElsifClause, Place::Every, Unit::Expression),
+    part(K::CaseStmt, Place::Every, Unit::Expression),
+    part(K::WhileStmt, Place::Every, Unit::Expression),
+    part(K::RepeatStmt, Place::Every, Unit::Expression),
+    part(K::ForStmt, Place::AfterFirst, Unit::Expression),
+    part(K::CatchClause, Place::Every, Unit::Variable),
+    part(K::JmpStmt, Place::BeforeLast, Unit::Expression),
+    part(K::CalcStmt, Place::BeforeLast, Unit::Expression),
+    part(K::WaitStmt, Place::Every, Unit::Expression),
+    part(K::ThrowStmt, Place::Every, Unit::Expression),
+    part(K::StatementList, Place::Every, Unit::Statement),
 ];
 
-/// True for a node that has a value: a literal, an operation, or a place.
-fn has_value(kind: K) -> bool {
-    matches!(
-        disposition(kind),
-        Disposition::Lowered(Area::Literal | Area::Expression | Area::Variable)
-    )
+/// Nodes that the rule of their parent reads in place of the rule of their
+/// own unit: a bit-string literal in a `CASE` label is read by the label's
+/// rule, which builds an untyped bit string where the rule for a constant reads
+/// the same tokens as an integer.
+const READ_BY_PARENT: &[(K, K)] = &[(K::CaseLabel, K::BitStringLiteral)];
+
+/// The kinds that are a site wherever they stand, whatever their parent.
+fn standalone(kind: K) -> Option<Unit> {
+    [Unit::Literal, Unit::Statements]
+        .into_iter()
+        .find(|unit| unit.holds(kind))
 }
 
 fn is_literal(kind: K) -> bool {
@@ -92,13 +189,14 @@ fn index_of(node: &SyntaxNode) -> usize {
     std::iter::successors(node.prev_sibling(), SyntaxNode::prev_sibling).count()
 }
 
-/// The text of an assignment's operator, upper-cased.
-fn operator_text(assignment: &SyntaxNode) -> String {
-    assignment
+/// The text of the first child of `parent` of `kind`, upper-cased and without
+/// whitespace.
+fn spelling_of(parent: &SyntaxNode, kind: K) -> Option<String> {
+    parent
         .children()
-        .find(|child| child.kind() == K::AssignOp)
-        .map(|operator| {
-            operator
+        .find(|child| child.kind() == kind)
+        .map(|marker| {
+            marker
                 .text()
                 .to_string()
                 .chars()
@@ -106,39 +204,51 @@ fn operator_text(assignment: &SyntaxNode) -> String {
                 .collect::<String>()
                 .to_ascii_uppercase()
         })
-        .unwrap_or_default()
+}
+
+impl Place {
+    fn holds(&self, parent: &SyntaxNode, node: &SyntaxNode) -> bool {
+        let index = index_of(node);
+        let marker = |kind: K| parent.children().position(|child| child.kind() == kind);
+        match self {
+            Place::Every => true,
+            Place::AfterFirst => index > 0,
+            Place::BeforeLast => node.next_sibling().is_some(),
+            Place::Before(kind) => marker(*kind).is_some_and(|at| index < at),
+            Place::After(kind, spelling) => {
+                marker(*kind).is_some_and(|at| index > at)
+                    && spelling.is_none_or(|wanted| {
+                        spelling_of(parent, *kind).is_some_and(|written| written == wanted)
+                    })
+            }
+        }
+    }
+}
+
+impl Except {
+    fn covers(&self, kind: K) -> bool {
+        match self {
+            Except::Nothing => false,
+            Except::Literals => is_literal(kind),
+            Except::Kinds(kinds) => kinds.contains(&kind),
+        }
+    }
 }
 
 /// The unit compared at `node` according to its parent, if it is a site.
-///
-/// An assignment is the one parent whose children differ by position: the
-/// target and the value of a reference binding (`REF=`) are places, the value
-/// of any other assignment is an expression. A target that is a bare
-/// dereference (`p^ := v`) is the assignment's own dereference flag, read with
-/// the assignment.
 fn site_unit(parent: &SyntaxNode, node: &SyntaxNode) -> Option<Unit> {
-    if !has_value(node.kind()) {
-        return None;
-    }
-    if parent.kind() == K::AssignStmt {
-        return match (index_of(node), node.kind()) {
-            (0, K::DerefExpr) => None,
-            (0, _) => Some(Unit::Variable),
-            (_, _) if operator_text(parent).ends_with("REF=") => Some(Unit::Variable),
-            _ => Some(Unit::Expression),
-        };
-    }
-    let (_, children) = PARENTS.iter().find(|(kind, _)| *kind == parent.kind())?;
-    match children {
-        Children::All(unit) => Some(*unit),
-        Children::ExceptLiterals(unit) => (!is_literal(node.kind())).then_some(*unit),
-        Children::AfterName(unit) => (index_of(node) > 0).then_some(*unit),
-    }
+    let part = PARTS.iter().find(|part| {
+        part.parent == parent.kind()
+            && part.unit.holds(node.kind())
+            && part.place.holds(parent, node)
+    })?;
+    (!part.except.covers(node.kind())).then_some(part.unit)
 }
 
 /// Every site under `root`, outer before inner and earlier before later. A
-/// literal that is the child of a parent with a rule of its own is a site
-/// twice, first for the parent's rule and then as a literal.
+/// node that is a site wherever it stands (a literal, a list) and is the child
+/// of a parent with a row of its own is a site twice, first for the parent's
+/// rule and then as itself.
 pub fn sites(root: &SyntaxNode) -> Vec<Site> {
     let mut found = Vec::new();
     for node in root.descendants().skip(1) {
@@ -152,13 +262,118 @@ pub fn sites(root: &SyntaxNode) -> Vec<Site> {
                 unit,
             });
         }
-        if is_literal(node.kind()) {
+        let read_by_parent = READ_BY_PARENT.contains(&(parent.kind(), node.kind()));
+        if let Some(unit) = standalone(node.kind()).filter(|_| !read_by_parent) {
             found.push(Site {
                 node,
                 parent: parent.kind(),
-                unit: Unit::Literal,
+                unit,
             });
         }
     }
     found
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ironplc_syntax::{parse_statements, ParseOptions};
+
+    /// The units compared at the sites of `source`, with the text of each.
+    fn compared(source: &str) -> Vec<(Unit, String)> {
+        let parse = parse_statements(source, &ParseOptions::all());
+        assert!(parse.is_ok(), "{source}: {:?}", parse.errors);
+        sites(&parse.root)
+            .into_iter()
+            .map(|site| (site.unit, site.node.text().to_string()))
+            .collect()
+    }
+
+    fn units_of(source: &str, text: &str) -> Vec<Unit> {
+        compared(source)
+            .into_iter()
+            .filter(|(_, node)| node == text)
+            .map(|(unit, _)| unit)
+            .collect()
+    }
+
+    #[test]
+    fn sites_when_assignment_then_the_target_is_a_variable_and_the_value_an_expression() {
+        let source = "a[1] := b;";
+        assert_eq!(units_of(source, "a[1]"), vec![Unit::Variable]);
+        assert_eq!(units_of(source, "b"), vec![Unit::Expression]);
+    }
+
+    #[test]
+    fn sites_when_reference_binding_then_the_value_is_a_variable() {
+        let source = "x REF= y;";
+        assert_eq!(units_of(source, "x"), vec![Unit::Variable]);
+        assert_eq!(units_of(source, "y"), vec![Unit::Variable]);
+        // The other binds take a value.
+        assert_eq!(units_of("x S= y;", "y"), vec![Unit::Expression]);
+    }
+
+    #[test]
+    fn sites_when_assignment_through_a_pointer_then_the_target_is_read_with_the_assignment() {
+        let source = "p^ := 1;";
+        assert!(units_of(source, "p^").is_empty());
+        assert!(units_of(source, "p").is_empty());
+        assert_eq!(units_of(source, "1"), vec![Unit::Expression, Unit::Literal]);
+        // A caret inside the target is a part of it.
+        assert_eq!(units_of("p^.x := 1;", "p^.x"), vec![Unit::Variable]);
+    }
+
+    #[test]
+    fn sites_when_case_label_then_a_bit_string_is_read_by_the_label_and_a_number_is_a_literal() {
+        let source = "CASE x OF 16#FF: a := 1; 7: b := 2; END_CASE;";
+        assert!(units_of(source, "16#FF").is_empty());
+        assert_eq!(units_of(source, "7"), vec![Unit::Literal]);
+    }
+
+    #[test]
+    fn sites_when_statement_list_then_the_list_and_each_statement_in_it_are_sites() {
+        let source = "x := 1; IF a THEN y := 2; END_IF;";
+        let units = compared(source);
+        let count = |wanted: Unit| units.iter().filter(|(unit, _)| *unit == wanted).count();
+        // The top list, the `THEN` list; `x := 1;`, the `IF`, and `y := 2;`.
+        assert_eq!(count(Unit::Statements), 2);
+        assert_eq!(count(Unit::Statement), 3);
+        assert_eq!(
+            units_of(source, "IF a THEN y := 2; END_IF;"),
+            vec![Unit::Statement]
+        );
+    }
+
+    #[test]
+    fn sites_when_jump_or_calc_then_the_condition_is_an_expression_and_the_rest_is_not_a_site() {
+        assert_eq!(units_of("JMP (c) lbl;", "c"), vec![Unit::Expression]);
+        assert!(units_of("JMP (c) lbl;", "lbl").is_empty());
+        assert!(units_of("JMP lbl;", "lbl").is_empty());
+        assert_eq!(units_of("CALC(c, f(1));", "c"), vec![Unit::Expression]);
+        assert!(units_of("CALC(c, f(1));", "f(1)").is_empty());
+    }
+
+    #[test]
+    fn sites_when_catch_wait_throw_for_then_the_variable_and_the_operands_are_sites() {
+        assert_eq!(
+            units_of("__TRY __CATCH (e) __ENDTRY;", "e"),
+            vec![Unit::Variable]
+        );
+        assert_eq!(units_of("__WAIT(c);", "c"), vec![Unit::Expression]);
+        assert_eq!(units_of("__THROW(c);", "c"), vec![Unit::Expression]);
+        assert!(units_of("FOR i := 1 TO b DO ; END_FOR;", "i").is_empty());
+        assert_eq!(
+            units_of("FOR i := 1 TO b DO ; END_FOR;", "b"),
+            vec![Unit::Expression]
+        );
+    }
+
+    #[test]
+    fn site_unit_when_every_row_then_its_unit_compares_the_kinds_the_parent_holds() {
+        // A row whose unit holds no kind of child would never find a site.
+        for part in PARTS {
+            let holds_something = K::ALL.iter().any(|kind| part.unit.holds(*kind));
+            assert!(holds_something, "{:?}", part.parent);
+        }
+    }
 }

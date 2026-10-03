@@ -24,9 +24,12 @@
 pub mod expressions;
 pub mod literals;
 pub mod names;
+pub mod statements;
 pub mod tree;
 pub mod variables;
 
+use self::statements::lower_statement_list;
+use self::tree::child_of;
 use crate::parser::Parse;
 use crate::syntax_kind::{NodeKind, SyntaxKind, SyntaxNode, SyntaxToken};
 use ironplc_dsl::common::Library;
@@ -51,6 +54,9 @@ pub enum Area {
     /// What a value is read from or written to: a name, a member, an element,
     /// a bit, a dereference, a direct address (`variables`).
     Variable,
+    /// What a program does: the statements and the lists they sit in
+    /// (`statements`).
+    Statement,
 }
 
 /// What lowering does with a kind the tree can hold.
@@ -81,8 +87,8 @@ impl Disposition {
 fn node_disposition(node: NodeKind) -> Disposition {
     use Disposition::{Lowered, Pending, Structural};
     match node {
-        // Containers the entry points walk.
-        NodeKind::SourceFile | NodeKind::StatementList => Structural,
+        // The container the entry point walks.
+        NodeKind::SourceFile => Structural,
         // Present only where the parse reported an error, which lowering
         // never sees.
         NodeKind::ErrorNode => Structural,
@@ -115,6 +121,33 @@ fn node_disposition(node: NodeKind) -> Disposition {
         NodeKind::ArgList | NodeKind::PositionalArg | NodeKind::NamedArg | NodeKind::OutputArg => {
             Structural
         }
+        // The parts of a statement, read by the rule of the statement.
+        NodeKind::AssignOp
+        | NodeKind::ElsifClause
+        | NodeKind::ElseClause
+        | NodeKind::CaseBranch
+        | NodeKind::CaseLabel
+        | NodeKind::CatchClause
+        | NodeKind::FinallyClause => Structural,
+        NodeKind::StatementList
+        | NodeKind::EmptyStmt
+        | NodeKind::AssignStmt
+        | NodeKind::CallStmt
+        | NodeKind::IfStmt
+        | NodeKind::CaseStmt
+        | NodeKind::ForStmt
+        | NodeKind::WhileStmt
+        | NodeKind::RepeatStmt
+        | NodeKind::ExitStmt
+        | NodeKind::ContinueStmt
+        | NodeKind::ReturnStmt
+        | NodeKind::TryStmt
+        | NodeKind::ThrowStmt
+        | NodeKind::JmpStmt
+        | NodeKind::LabelStmt
+        | NodeKind::CalcStmt
+        | NodeKind::WaitStmt
+        | NodeKind::ImplementationMarker => Lowered(Area::Statement),
         NodeKind::ProgramDecl
         | NodeKind::FunctionDecl
         | NodeKind::FunctionBlockDecl
@@ -169,32 +202,7 @@ fn node_disposition(node: NodeKind) -> Disposition {
         | NodeKind::TransitionDecl
         | NodeKind::TransitionPriority
         | NodeKind::StepList
-        | NodeKind::TransitionCondition
-        | NodeKind::EmptyStmt
-        | NodeKind::AssignStmt
-        | NodeKind::AssignOp
-        | NodeKind::CallStmt
-        | NodeKind::IfStmt
-        | NodeKind::ElsifClause
-        | NodeKind::ElseClause
-        | NodeKind::CaseStmt
-        | NodeKind::CaseBranch
-        | NodeKind::CaseLabel
-        | NodeKind::ForStmt
-        | NodeKind::WhileStmt
-        | NodeKind::RepeatStmt
-        | NodeKind::ExitStmt
-        | NodeKind::ContinueStmt
-        | NodeKind::ReturnStmt
-        | NodeKind::TryStmt
-        | NodeKind::CatchClause
-        | NodeKind::FinallyClause
-        | NodeKind::ThrowStmt
-        | NodeKind::JmpStmt
-        | NodeKind::LabelStmt
-        | NodeKind::CalcStmt
-        | NodeKind::WaitStmt
-        | NodeKind::ImplementationMarker => Pending,
+        | NodeKind::TransitionCondition => Pending,
     }
 }
 
@@ -340,21 +348,15 @@ pub fn lower_library(parse: &Parse, file_id: &FileId) -> Result<Library, Diagnos
 
 /// Lowers the tree of a statement list to statements.
 ///
-/// Fails with the first error of the parse when it has any, and with a
-/// not-implemented diagnostic at the first statement, because the rules for
-/// statements are not written yet: only an empty list lowers.
+/// Fails with the first error of the parse when it has any, and otherwise
+/// with the first error of a statement.
 pub fn lower_statements(parse: &Parse, file_id: &FileId) -> Result<Vec<StmtKind>, Diagnostic> {
     if let Some(error) = first_error(parse, file_id) {
         return Err(error);
     }
     let cx = LowerCx::new(file_id.clone());
-    let first = parse
-        .root
-        .children()
-        .filter(|list| list.kind() == SyntaxKind::StatementList)
-        .find_map(|list| list.children().next());
-    match first {
-        Some(node) => Err(cx.unsupported(&node)),
+    match child_of(&parse.root, SyntaxKind::StatementList) {
+        Some(list) => lower_statement_list(&cx, &list),
         None => Ok(vec![]),
     }
 }
@@ -493,18 +495,22 @@ mod tests {
 
     #[test]
     fn disposition_when_node_without_a_rule_yet_then_pending() {
-        assert!(disposition(SyntaxKind::AssignStmt).is_pending());
+        assert!(disposition(SyntaxKind::SfcBody).is_pending());
         assert!(disposition(SyntaxKind::ProgramDecl).is_pending());
+        assert!(!disposition(SyntaxKind::AssignStmt).is_pending());
         assert!(!disposition(SyntaxKind::IntLiteral).is_pending());
         assert!(!disposition(SyntaxKind::SourceFile).is_pending());
     }
 
     #[test]
-    fn contains_pending_when_only_literals_then_false_and_with_a_statement_then_true() {
+    fn contains_pending_when_only_literals_and_statements_then_false_and_with_a_declaration_then_true(
+    ) {
         let literal = parse_expression("T#5s", &options());
         assert!(!contains_pending(&literal.root));
-        let statement = parse_statements("x := 1;", &options());
-        assert!(contains_pending(&statement.root));
+        let statement = parse_statements("x := 1; IF a THEN b := 2; END_IF;", &options());
+        assert!(!contains_pending(&statement.root));
+        let declaration = parse_source_file("PROGRAM p\nEND_PROGRAM\n", &options());
+        assert!(contains_pending(&declaration.root));
     }
 
     #[test]
@@ -557,12 +563,12 @@ mod tests {
 
     #[test]
     fn unsupported_when_pending_node_then_not_implemented_at_the_node() {
-        let parse = parse_statements("x := 1;", &options());
+        let parse = parse_source_file("PROGRAM p\nEND_PROGRAM\n", &options());
         let cx = LowerCx::new(FileId::default());
         let node = parse
             .root
             .descendants()
-            .find(|node| node.kind() == SyntaxKind::AssignStmt);
+            .find(|node| node.kind() == SyntaxKind::ProgramDecl);
         let diagnostic = node.map(|node| cx.unsupported(&node));
         assert_eq!(
             diagnostic.as_ref().map(|d| (
@@ -570,7 +576,7 @@ mod tests {
                 d.primary.location.start,
                 d.primary.location.end
             )),
-            Some((NOT_IMPLEMENTED, 0, 7))
+            Some((NOT_IMPLEMENTED, 0, 21))
         );
     }
 
@@ -621,10 +627,10 @@ mod tests {
     }
 
     #[test]
-    fn lower_statements_when_statement_then_not_implemented() {
-        let parse = parse_statements("x := 1;", &options());
-        let diagnostic = lower_statements(&parse, &FileId::default()).err();
-        assert_eq!(code_of(diagnostic), Some(NOT_IMPLEMENTED.to_string()));
+    fn lower_statements_when_items_then_one_statement_each_except_an_empty_one() {
+        let parse = parse_statements("x := 1;; IF a THEN END_IF;", &options());
+        let statements = lower_statements(&parse, &FileId::default());
+        assert_eq!(statements.map(|list| list.len()).ok(), Some(2));
     }
 
     #[test]

@@ -13,10 +13,12 @@
 //! `PARTIAL_ACCESS`: the bit selector `%X` is a bit access, the others name
 //! the width of the part.
 //!
-//! The span of a variable is not stored: the objects derive it from the
-//! identifiers and selectors they hold. What is stored is the position of
-//! every name and of a self reference, and the span of the index of a bit or
-//! partial access.
+//! The span of a variable is derived by the objects from the identifiers and
+//! selectors they hold. What is stored is the position of every name and of a
+//! self reference, the span of the index of a bit or partial access, and the
+//! extent of a subscript and of a dereference: the closing bracket and the
+//! caret belong to no part, so those two objects carry the whole of what was
+//! written.
 
 use super::expressions::lower_expr;
 use super::names::{lower_id, lower_name};
@@ -128,6 +130,7 @@ fn subscript(
     Ok(SymbolicVariableKind::Array(ArrayVariable {
         subscripted_variable: Box::new(array),
         subscripts,
+        span: cx.node_span(node),
     }))
 }
 
@@ -179,12 +182,13 @@ fn partial(
 
 /// `variable^`.
 fn dereference(
-    _cx: &LowerCx,
-    _node: &SyntaxNode,
+    cx: &LowerCx,
+    node: &SyntaxNode,
     variable: SymbolicVariableKind,
 ) -> Result<SymbolicVariableKind, Diagnostic> {
     Ok(SymbolicVariableKind::Deref(DerefVariable {
         variable: Box::new(variable),
+        span: cx.node_span(node),
     }))
 }
 

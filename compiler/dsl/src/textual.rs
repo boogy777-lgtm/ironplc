@@ -153,11 +153,14 @@ impl fmt::Display for NamedVariable {
 #[derive(Debug, PartialEq, Clone, Recurse, Located)]
 pub struct ArrayVariable {
     /// The variable that is being accessed by subscript (the array).
-    #[located(delegate)]
     pub subscripted_variable: Box<SymbolicVariableKind>,
     /// The ordered set of subscripts. These should be expressions that
     /// evaluate to an index.
     pub subscripts: Vec<Expr>,
+    /// Where the access is written: the array through the closing bracket,
+    /// which no other part of the object holds.
+    #[located(position)]
+    pub span: SourceSpan,
 }
 
 impl fmt::Display for ArrayVariable {
@@ -283,8 +286,11 @@ impl Located for PartialAccessVariable {
 #[derive(Debug, PartialEq, Clone, Recurse, Located)]
 pub struct DerefVariable {
     /// The variable being dereferenced.
-    #[located(delegate)]
     pub variable: Box<SymbolicVariableKind>,
+    /// Where the dereference is written: the variable through the caret,
+    /// which no other part of the object holds.
+    #[located(position)]
+    pub span: SourceSpan,
 }
 
 impl fmt::Display for DerefVariable {
@@ -1248,6 +1254,7 @@ mod tests {
                 name: Id::from("data"),
             })),
             subscripts: vec![Expr::new(ExprKind::integer_literal("0"))],
+            span: SourceSpan::default(),
         };
 
         let result = format!("{}", array_var);
@@ -1265,6 +1272,7 @@ mod tests {
                 Expr::new(ExprKind::integer_literal("1")),
                 Expr::new(ExprKind::integer_literal("2")),
             ],
+            span: SourceSpan::default(),
         };
 
         let result = format!("{}", array_var);
@@ -1279,6 +1287,7 @@ mod tests {
                 name: Id::from("arr"),
             })),
             subscripts: vec![Expr::new(ExprKind::named_variable("i"))],
+            span: SourceSpan::default(),
         };
 
         let result = format!("{}", array_var);
@@ -1315,8 +1324,36 @@ mod tests {
             variable: Box::new(SymbolicVariableKind::Named(NamedVariable {
                 name: Id::from("ptr"),
             })),
+            span: SourceSpan::default(),
         };
         assert_eq!(format!("{d}"), "ptr^");
+    }
+
+    #[test]
+    fn span_when_array_variable_then_the_written_extent_and_not_the_array_alone() {
+        let array_var = ArrayVariable {
+            subscripted_variable: Box::new(SymbolicVariableKind::Named(NamedVariable {
+                name: Id::from("a").with_position(SourceSpan::range(0, 1)),
+            })),
+            subscripts: vec![Expr::new(ExprKind::integer_literal("0"))],
+            span: SourceSpan::range(0, 4),
+        };
+        assert_eq!(array_var.span(), SourceSpan::range(0, 4));
+        assert_eq!(
+            SymbolicVariableKind::Array(array_var).span(),
+            SourceSpan::range(0, 4)
+        );
+    }
+
+    #[test]
+    fn span_when_deref_variable_then_the_written_extent_and_not_the_pointer_alone() {
+        let deref = DerefVariable {
+            variable: Box::new(SymbolicVariableKind::Named(NamedVariable {
+                name: Id::from("p").with_position(SourceSpan::range(0, 1)),
+            })),
+            span: SourceSpan::range(0, 2),
+        };
+        assert_eq!(deref.span(), SourceSpan::range(0, 2));
     }
 
     #[test]
