@@ -5,6 +5,7 @@
 use ironplc_dsl::{
     core::{FileId, Id, SourceSpan},
     diagnostic::{Diagnostic, Label},
+    stack::within_stack_budget,
 };
 use ironplc_parser::options::CompilerOptions;
 use ironplc_problems::Problem;
@@ -53,7 +54,17 @@ use crate::{
 ///
 /// Returns `Err` only when no sources are provided or when foundational type resolution
 /// fails (declaration sorting or type environment building).
+///
+/// The analysis runs on the stack budget (`ironplc_dsl::stack`): every pass
+/// recurses as deep as the tree it is given.
 pub fn analyze(
+    sources: &[&Library],
+    options: &CompilerOptions,
+) -> Result<(Library, SemanticContext), Vec<Diagnostic>> {
+    within_stack_budget(|| analyze_in_budget(sources, options))
+}
+
+fn analyze_in_budget(
     sources: &[&Library],
     options: &CompilerOptions,
 ) -> Result<(Library, SemanticContext), Vec<Diagnostic>> {
@@ -141,7 +152,16 @@ fn run_best_effort(
     }
 }
 
+/// Resolves the types of the set of files, on the stack budget like
+/// [`analyze`], which runs it first.
 pub fn resolve_types(
+    sources: &[&Library],
+    options: &CompilerOptions,
+) -> Result<(Library, SemanticContext), Vec<Diagnostic>> {
+    within_stack_budget(|| resolve_types_in_budget(sources, options))
+}
+
+fn resolve_types_in_budget(
     sources: &[&Library],
     options: &CompilerOptions,
 ) -> Result<(Library, SemanticContext), Vec<Diagnostic>> {

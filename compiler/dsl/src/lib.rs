@@ -12,6 +12,7 @@ pub mod member_qualifier;
 pub mod oop;
 pub mod scope;
 pub mod sfc;
+pub mod stack;
 pub mod string_escape;
 pub mod textual;
 pub mod time;

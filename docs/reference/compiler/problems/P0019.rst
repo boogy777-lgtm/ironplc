@@ -1,0 +1,70 @@
+=====
+P0019
+=====
+
+.. problem-summary:: P0019
+
+This error occurs when a program nests its syntax more deeply than the
+compiler accepts. What is limited is the depth of the syntax tree, the number of
+constructs inside one another on the way from the start of the file to the
+innermost one, and not the length of the text. The file, the declaration it
+holds and the body of that declaration are levels too.
+
+The limit is the depth that the stack of the compiler holds, so it depends on
+the platform the compiler runs on:
+
+* On Windows (x64) and Linux, the compiler runs its stages on a stack of
+  64 MiB and the limit is 1000 levels.
+* In the browser (WebAssembly), the stack is fixed at 1 MiB and the limit is 85
+  levels.
+
+A level is added by each parenthesis, each function call and each argument
+list, each ``IF``, ``CASE``, ``FOR``, ``WHILE``, ``REPEAT`` and ``__TRY``
+statement inside another, and each nested ``ARRAY``, ``REF_TO``, namespace,
+initializer or chart. A chain also adds one level for each link: every operator
+of ``a + b + c + ...`` continues the expression before it and so goes one level
+below it, and so does every ``^``, every ``.member`` and every ``[index]`` of a
+variable. A chain of a thousand links is therefore too deep on Windows and
+Linux, and one of a hundred is too deep in the browser, although each fits on
+one line.
+
+A conditional-compilation condition is limited the same way: parentheses and
+``NOT`` inside an ``{IF}`` condition may nest as many levels.
+
+The compiler reports the error once, where the limit is first passed, and
+keeps the text that follows as part of the construct that was open there.
+
+Example
+-------
+
+The following code will generate error P0019 when the sum has enough terms
+(more than 999 on Windows and Linux). The
+sum is shortened here; ``...`` stands for the terms left out:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       total : DINT;
+       a1, a2, a3, a1000 : DINT;
+   END_VAR
+       total := a1 + a2 + a3 + ... + a1000;  (* Error: 1000 terms are 1000 levels deep *)
+   END_PROGRAM
+
+To fix this error, split the construct into parts that each stay within the
+limit, and combine the parts:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       total, first_half, second_half : DINT;
+       a1, a2, a3, a500, a501, a1000 : DINT;
+   END_VAR
+       first_half := a1 + a2 + a3 + ... + a500;
+       second_half := a501 + ... + a1000;
+       total := first_half + second_half;  (* Correct: no part is deep *)
+   END_PROGRAM
+
+Nested statements and parentheses are fixed the same way: move the inner part
+into its own variable, function or function block.

@@ -5,8 +5,8 @@
 mod common;
 
 use ironplc_syntax::{
-    parse_expression, parse_source_file, parse_statements, Parse, ParseOptions, SyntaxKind,
-    SyntaxNode,
+    parse_expression, parse_source_file, parse_statements, ErrorKind, Parse, ParseOptions,
+    SyntaxKind, SyntaxNode, MAX_DEPTH,
 };
 
 fn assert_well_formed(source: &str, parsed: &Parse) {
@@ -167,35 +167,39 @@ fn max_depth(node: &SyntaxNode) -> usize {
 }
 
 #[test]
-fn parse_expression_when_400_nested_parentheses_then_depth_guard_degrades_to_error_node() {
+fn parse_expression_when_parentheses_nest_past_the_limit_then_depth_guard_degrades_to_error_node() {
     on_small_stack(|| {
-        let source = format!("{}1{}", "(".repeat(400), ")".repeat(400));
+        let source = format!(
+            "{}1{}",
+            "(".repeat(2 * MAX_DEPTH),
+            ")".repeat(2 * MAX_DEPTH)
+        );
         let parsed = parse_expression(&source, &ParseOptions::all());
         assert_well_formed(&source, &parsed);
         assert!(parsed
             .errors
             .iter()
-            .any(|error| error.message == "nesting is too deep"));
+            .any(|error| error.kind == ErrorKind::NestingTooDeep));
         assert!(!nodes_of(&parsed.root, SyntaxKind::ErrorNode).is_empty());
-        assert!(max_depth(&parsed.root) < 400, "tree not bounded");
+        assert!(max_depth(&parsed.root) <= MAX_DEPTH, "tree not bounded");
     });
 }
 
 #[test]
-fn parse_statements_when_400_nested_ifs_then_depth_guard_degrades_to_error_node() {
+fn parse_statements_when_ifs_nest_past_the_limit_then_depth_guard_degrades_to_error_node() {
     on_small_stack(|| {
         let source = format!(
             "{}x := 1;{}",
-            "IF a THEN ".repeat(400),
-            " END_IF;".repeat(400)
+            "IF a THEN ".repeat(2 * MAX_DEPTH),
+            " END_IF;".repeat(2 * MAX_DEPTH)
         );
         let parsed = parse_statements(&source, &ParseOptions::all());
         assert_well_formed(&source, &parsed);
         assert!(parsed
             .errors
             .iter()
-            .any(|error| error.message == "nesting is too deep"));
-        assert!(max_depth(&parsed.root) < 400, "tree not bounded");
+            .any(|error| error.kind == ErrorKind::NestingTooDeep));
+        assert!(max_depth(&parsed.root) <= MAX_DEPTH, "tree not bounded");
     });
 }
 

@@ -26,7 +26,10 @@ use ironplc_dsl::core::FileId;
 ///
 /// Returning `None` is fine — codegen falls back to an all-zero hash
 /// that disables the drift check for that file.
-pub trait SourceLookup {
+///
+/// A lookup is `Sync` because codegen reads it from the thread that owns the
+/// stack budget (`ironplc_dsl::stack`).
+pub trait SourceLookup: Sync {
     fn source_bytes(&self, file_id: &FileId) -> Option<&[u8]>;
 }
 

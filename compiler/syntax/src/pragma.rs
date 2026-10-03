@@ -29,6 +29,9 @@ use ironplc_dsl::core::SourceSpan;
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
 use ironplc_problems::Problem;
 
+use crate::error::nesting_message;
+use crate::parser::MAX_DEPTH;
+
 /// A pragma that could not be honoured.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Fault {
@@ -37,6 +40,8 @@ pub enum Fault {
     /// An `{IF}` without its `{END_IF}`, or a stray `{ELSIF}`, `{ELSE}` or
     /// `{END_IF}`.
     Unmatched,
+    /// A condition nested deeper than [`MAX_DEPTH`], the limit the tree has.
+    NestingTooDeep,
 }
 
 impl Fault {
@@ -45,14 +50,18 @@ impl Fault {
         match self {
             Fault::Unmatched => Problem::PragmaIfUnmatched,
             Fault::UnexpectedValue => Problem::PragmaValueExpected,
+            Fault::NestingTooDeep => Problem::MaxNestingDepthExceeded,
         }
     }
 
     /// What is wrong with the pragma.
-    pub fn message(self) -> &'static str {
+    pub fn message(self) -> String {
         match self {
-            Fault::Unmatched => "Unmatched {IF} pragma",
-            Fault::UnexpectedValue => "Expected a pragma condition such as `defined(name)`",
+            Fault::Unmatched => "Unmatched {IF} pragma".to_string(),
+            Fault::UnexpectedValue => {
+                "Expected a pragma condition such as `defined(name)`".to_string()
+            }
+            Fault::NestingTooDeep => nesting_message(),
         }
     }
 
@@ -111,10 +120,13 @@ impl<S> Conditionals<S> {
 
     /// Evaluates a condition, recording a fault when it is not understood.
     fn condition(&self, condition: Result<String, ()>, fault: &mut Option<Fault>) -> bool {
-        match condition.and_then(|text| eval(&text, &self.defines)) {
+        match condition
+            .map_err(|()| Fault::UnexpectedValue)
+            .and_then(|text| eval(&text, &self.defines))
+        {
             Ok(value) => value,
-            Err(()) => {
-                *fault = Some(Fault::UnexpectedValue);
+            Err(found) => {
+                *fault = Some(found);
                 false
             }
         }
@@ -266,12 +278,13 @@ fn symbol(text: &str) -> Option<String> {
     valid.then(|| name.to_ascii_lowercase())
 }
 
-/// Evaluates a pragma condition against the defines in scope. `Err(())` means
-/// the text is not a condition this compiler understands.
-fn eval(condition: &str, defines: &HashSet<String>) -> Result<bool, ()> {
+/// Evaluates a pragma condition against the defines in scope. The error says
+/// why the text is not a condition this compiler evaluates.
+fn eval(condition: &str, defines: &HashSet<String>) -> Result<bool, Fault> {
     let mut parser = ConditionParser {
         text: condition,
         pos: 0,
+        depth: 0,
         defines,
     };
     let value = parser.or_expression()?;
@@ -279,13 +292,15 @@ fn eval(condition: &str, defines: &HashSet<String>) -> Result<bool, ()> {
     if parser.pos == parser.text.len() {
         Ok(value)
     } else {
-        Err(())
+        Err(Fault::UnexpectedValue)
     }
 }
 
 struct ConditionParser<'a> {
     text: &'a str,
     pos: usize,
+    /// How many operands enclose the one being read.
+    depth: usize,
     defines: &'a HashSet<String>,
 }
 
@@ -327,7 +342,7 @@ impl ConditionParser<'_> {
         }
     }
 
-    fn or_expression(&mut self) -> Result<bool, ()> {
+    fn or_expression(&mut self) -> Result<bool, Fault> {
         let mut value = self.and_expression()?;
         loop {
             self.skip_whitespace();
@@ -342,7 +357,7 @@ impl ConditionParser<'_> {
         }
     }
 
-    fn and_expression(&mut self) -> Result<bool, ()> {
+    fn and_expression(&mut self) -> Result<bool, Fault> {
         let mut value = self.operand()?;
         loop {
             self.skip_whitespace();
@@ -357,12 +372,24 @@ impl ConditionParser<'_> {
         }
     }
 
-    fn operand(&mut self) -> Result<bool, ()> {
+    /// An operand. Every nesting of the condition, a parenthesis or a `NOT`,
+    /// goes through here, which is where its depth is counted.
+    fn operand(&mut self) -> Result<bool, Fault> {
+        if self.depth >= MAX_DEPTH {
+            return Err(Fault::NestingTooDeep);
+        }
+        self.depth += 1;
+        let value = self.operand_inside();
+        self.depth -= 1;
+        value
+    }
+
+    fn operand_inside(&mut self) -> Result<bool, Fault> {
         self.skip_whitespace();
         if self.eat('(') {
             let value = self.or_expression()?;
             if !self.eat(')') {
-                return Err(());
+                return Err(Fault::UnexpectedValue);
             }
             return Ok(value);
         }
@@ -374,26 +401,26 @@ impl ConditionParser<'_> {
             Some("false") => Ok(false),
             Some("defined") => {
                 if !self.eat('(') {
-                    return Err(());
+                    return Err(Fault::UnexpectedValue);
                 }
                 let Some(mut name) = self.next_word() else {
-                    return Err(());
+                    return Err(Fault::UnexpectedValue);
                 };
                 while self.eat('.') {
                     let Some(part) = self.next_word() else {
-                        return Err(());
+                        return Err(Fault::UnexpectedValue);
                     };
                     name.push('.');
                     name.push_str(&part);
                 }
                 if !self.eat(')') {
-                    return Err(());
+                    return Err(Fault::UnexpectedValue);
                 }
                 Ok(self.defines.contains(&name))
             }
             _ => {
                 self.pos = start;
-                Err(())
+                Err(Fault::UnexpectedValue)
             }
         }
     }
@@ -419,12 +446,41 @@ mod tests {
 
     #[test]
     fn eval_when_unknown_condition_then_err() {
-        assert_eq!(eval("hastype(x)", &HashSet::new()), Err(()));
+        assert_eq!(
+            eval("hastype(x)", &HashSet::new()),
+            Err(Fault::UnexpectedValue)
+        );
     }
 
     #[test]
     fn eval_when_unbalanced_parenthesis_then_err() {
-        assert_eq!(eval("(true", &HashSet::new()), Err(()));
+        assert_eq!(eval("(true", &HashSet::new()), Err(Fault::UnexpectedValue));
+    }
+
+    #[test]
+    fn eval_when_nested_exactly_to_the_limit_then_evaluated() {
+        let condition = format!(
+            "{}true{}",
+            "(".repeat(MAX_DEPTH - 1),
+            ")".repeat(MAX_DEPTH - 1)
+        );
+        assert_eq!(eval(&condition, &HashSet::new()), Ok(true));
+        let negations = format!("{}true", "not ".repeat(MAX_DEPTH - 1));
+        assert_eq!(eval(&negations, &HashSet::new()), Ok(MAX_DEPTH % 2 == 1));
+    }
+
+    #[test]
+    fn eval_when_nested_one_past_the_limit_then_nesting_too_deep() {
+        let condition = format!("{}true{}", "(".repeat(MAX_DEPTH), ")".repeat(MAX_DEPTH));
+        assert_eq!(
+            eval(&condition, &HashSet::new()),
+            Err(Fault::NestingTooDeep)
+        );
+        let negations = format!("{}true", "not ".repeat(MAX_DEPTH));
+        assert_eq!(
+            eval(&negations, &HashSet::new()),
+            Err(Fault::NestingTooDeep)
+        );
     }
 
     #[test]
