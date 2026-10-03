@@ -1,6 +1,6 @@
 use super::*;
 use crate::lower::{disposition, INTERNAL_ERROR, NOT_IMPLEMENTED};
-use crate::{parse_expression, parse_statements, ParseOptions, SyntaxKind, MAX_DEPTH};
+use crate::{parse_expression, parse_source_file, ParseOptions, SyntaxKind, MAX_DEPTH};
 use ironplc_dsl::core::{FileId, Located};
 use ironplc_dsl::textual::{SelfRefKind, SymbolicVariableKind, Variable};
 use ironplc_problems::Problem;
@@ -798,13 +798,13 @@ fn lower_expr_when_call_has_no_argument_list_then_internal_error() {
 
 #[test]
 fn lower_expr_when_node_is_not_an_expression_then_internal_error_or_not_implemented() {
-    let statement = parse_statements("x := 1;", &all());
-    let assignment = statement
+    let source = parse_source_file("PROGRAM p\nEND_PROGRAM\n", &all());
+    let declaration = source
         .root
         .descendants()
-        .find(|node| node.kind() == SyntaxKind::AssignStmt)
-        .expect("an assignment");
-    assert_eq!(internal(&assignment), Some(NOT_IMPLEMENTED.to_string()));
+        .find(|node| node.kind() == SyntaxKind::ProgramDecl)
+        .expect("a declaration");
+    assert_eq!(internal(&declaration), Some(NOT_IMPLEMENTED.to_string()));
     let name = built(SyntaxKind::Name, vec![]);
     assert_eq!(internal(&name), Some(INTERNAL_ERROR.to_string()));
 }

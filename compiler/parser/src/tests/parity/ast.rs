@@ -21,7 +21,7 @@
 
 use ironplc_dsl::common::{ConstantKind, Library, VarDecl};
 use ironplc_dsl::core::SourceSpan;
-use ironplc_dsl::textual::{Expr, Variable};
+use ironplc_dsl::textual::{Expr, StmtKind, Variable};
 use ironplc_dsl::visitor::Visitor;
 use std::fmt::Debug;
 
@@ -87,6 +87,14 @@ impl Subject for Expr {
 impl Subject for Variable {
     fn walk(&self, collector: &mut Collector) {
         let _ = self.recurse_visit(collector);
+    }
+}
+
+impl Subject for Vec<StmtKind> {
+    fn walk(&self, collector: &mut Collector) {
+        for statement in self {
+            let _ = statement.recurse_visit(collector);
+        }
     }
 }
 

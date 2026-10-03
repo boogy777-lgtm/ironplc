@@ -245,13 +245,18 @@ pub fn parse_library(tokens: Vec<Token>) -> Result<Vec<LibraryElementKind>, Diag
 /// This is useful for parsing ST body content from PLCopen XML files
 /// where only the statements (not the full POU declaration) are provided.
 pub fn parse_statements(tokens: Vec<Token>) -> Result<Vec<StmtKind>, Diagnostic> {
+    parse_statement_list(&tokens)
+}
+
+/// Parses the tokens of one list of statements, as the grammar's
+/// `statement_list` rule reads them.
+pub fn parse_statement_list(tokens: &[Token]) -> Result<Vec<StmtKind>, Diagnostic> {
     if tokens.is_empty() {
         return Ok(vec![]);
     }
 
-    let source = Source::new(&tokens);
-    plc_parser::statement_list(&SliceByRef(&tokens[..]), &source)
-        .map_err(|e| parse_failure(&source, e))
+    let source = Source::new(tokens);
+    plc_parser::statement_list(&SliceByRef(tokens), &source).map_err(|e| parse_failure(&source, e))
 }
 
 /// Parses the tokens of one constant, as the grammar's `constant` rule reads
@@ -1184,12 +1189,14 @@ parser! {
     // separated from what precedes it by whitespace or a comment: `s . x`,
     // `refs [0]` and `THIS^ .count` are the same variable references as their
     // tight spellings. See https://github.com/ironplc/ironplc/issues/1437.
-    rule symbolic_variable() -> SymbolicVariableKind = head:symbolic_variable_head() elements:(_ e:symbolic_variable_element() { e })* {
+    rule symbolic_variable() -> SymbolicVariableKind = start:position!() head:symbolic_variable_head() elements:(_ e:symbolic_variable_element() end:position!() { (e, end) })* {
       // Start from whatever the head matched (a plain name, or THIS^/SUPER^)
       let mut head = head;
 
-      // Then consume additional items
-      for elem in elements {
+      // Then consume additional items. An array access and a dereference are
+      // positioned from the start of the variable through their last token (the
+      // `]` or `^` that no other part of the object holds).
+      for (elem, end) in elements {
         match elem {
             Element::Struct(st) => {
               head = SymbolicVariableKind::Structured(StructuredVariable{
@@ -1199,9 +1206,10 @@ parser! {
             },
             Element::Array(arr) => {
               head = SymbolicVariableKind::Array(ArrayVariable{
-                  subscripted_variable: Box::new(head),
-                  subscripts: arr
-                });
+                subscripted_variable: Box::new(head),
+                subscripts: arr,
+                span: span_of_tokens(tokens, start, end),
+              });
             },
             Element::Bit(idx) => {
               head = SymbolicVariableKind::BitAccess(BitAccessVariable{
@@ -1219,6 +1227,7 @@ parser! {
             Element::Deref => {
               head = SymbolicVariableKind::Deref(DerefVariable{
                 variable: Box::new(head),
+                span: span_of_tokens(tokens, start, end),
               });
             },
         }

@@ -470,12 +470,12 @@ fn lower_constant_when_literal_inside_a_statement_then_offsets_are_into_the_whol
 #[test]
 fn lower_constant_when_node_is_not_a_literal_then_not_implemented_or_internal_error() {
     let cx = LowerCx::new(file());
-    let parse = parse_statements("x := 1;", &ParseOptions::default());
+    let parse = parse_source_file("PROGRAM p\nEND_PROGRAM\n", &ParseOptions::default());
     let pending = parse
         .root
         .descendants()
-        .find(|node| node.kind() == K::AssignStmt)
-        .expect("an assignment");
+        .find(|node| node.kind() == K::ProgramDecl)
+        .expect("a declaration");
     assert_eq!(
         code(lower_constant(&cx, &pending)),
         Some(NOT_IMPLEMENTED.to_string())

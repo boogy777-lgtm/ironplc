@@ -2,6 +2,7 @@
 //! of a node by kind and not by position in a child list.
 
 use crate::syntax_kind::{SyntaxKind, SyntaxNode, SyntaxToken};
+use rowan::{NodeOrToken, TextRange};
 
 /// The tokens directly under `node` that are not trivia, in source order.
 pub fn significant_tokens(node: &SyntaxNode) -> Vec<SyntaxToken> {
@@ -16,6 +17,39 @@ pub fn token_of(node: &SyntaxNode, kinds: &[SyntaxKind]) -> Option<SyntaxToken> 
     significant_tokens(node)
         .into_iter()
         .find(|token| kinds.contains(&token.kind()))
+}
+
+/// The children of `node` that are of `kind`, in source order.
+pub fn children_of(node: &SyntaxNode, kind: SyntaxKind) -> impl Iterator<Item = SyntaxNode> {
+    node.children().filter(move |child| child.kind() == kind)
+}
+
+/// The first child of `node` that is of `kind`.
+pub fn child_of(node: &SyntaxNode, kind: SyntaxKind) -> Option<SyntaxNode> {
+    children_of(node, kind).next()
+}
+
+/// The range of `node` up to its last significant element that is not a
+/// trailing `terminator` token.
+///
+/// A statement's tree node holds the `;` that ends it, and an object that
+/// records where the statement is written stops before it.
+pub fn range_before(node: &SyntaxNode, terminator: SyntaxKind) -> TextRange {
+    let start = node.text_range().start();
+    let mut elements = node
+        .children_with_tokens()
+        .filter(|element| match element {
+            NodeOrToken::Node(_) => true,
+            NodeOrToken::Token(token) => !token.kind().is_trivia(),
+        })
+        .collect::<Vec<_>>();
+    if matches!(elements.last(), Some(NodeOrToken::Token(token)) if token.kind() == terminator) {
+        elements.pop();
+    }
+    match elements.last() {
+        Some(last) => TextRange::new(start, last.text_range().end()),
+        None => node.text_range(),
+    }
 }
 
 /// The chain of nodes that nest through their first child node, from `node`
@@ -48,7 +82,7 @@ pub fn left_spine(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{parse_expression, ParseOptions};
+    use crate::{parse_expression, parse_statements, ParseOptions};
 
     #[test]
     fn left_spine_when_nested_links_then_innermost_first_over_the_base() {
@@ -86,6 +120,66 @@ mod tests {
         let (base, links) = left_spine(&node, |kind| kind == SyntaxKind::DerefExpr);
         assert!(base.is_none());
         assert_eq!(links.len(), 1);
+    }
+
+    #[test]
+    fn children_of_when_kind_then_those_children_in_order_and_child_of_the_first() {
+        let parse = parse_statements(
+            "IF a THEN x := 1; ELSIF b THEN y := 2; ELSIF c THEN END_IF;",
+            &ParseOptions::default(),
+        );
+        let node = parse
+            .root
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::IfStmt)
+            .expect("an IF");
+        let texts: Vec<String> = children_of(&node, SyntaxKind::ElsifClause)
+            .map(|clause| clause.text().to_string())
+            .collect();
+        assert_eq!(texts, vec!["ELSIF b THEN y := 2;", "ELSIF c THEN "]);
+        assert_eq!(
+            child_of(&node, SyntaxKind::ElsifClause).map(|clause| clause.text().to_string()),
+            Some("ELSIF b THEN y := 2;".to_string())
+        );
+        assert!(child_of(&node, SyntaxKind::ElseClause).is_none());
+    }
+
+    #[test]
+    fn range_before_when_node_ends_in_the_terminator_then_the_range_stops_before_it() {
+        let parse = parse_statements("  IF a THEN END_IF  ;\nx := 1;", &ParseOptions::default());
+        let ranges: Vec<(usize, usize)> = parse
+            .root
+            .descendants()
+            .filter(|node| matches!(node.kind(), SyntaxKind::IfStmt | SyntaxKind::AssignStmt))
+            .map(|node| {
+                let range = range_before(&node, SyntaxKind::Semicolon);
+                (usize::from(range.start()), usize::from(range.end()))
+            })
+            .collect();
+        // The `IF` through `END_IF`, and the assignment through its value.
+        assert_eq!(ranges, vec![(2, 18), (22, 28)]);
+    }
+
+    #[test]
+    fn range_before_when_node_has_no_terminator_then_its_own_range() {
+        let parse = parse_statements("IF a THEN END_IF", &ParseOptions::all());
+        let node = parse
+            .root
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::IfStmt)
+            .expect("an IF");
+        assert_eq!(
+            range_before(&node, SyntaxKind::Semicolon),
+            node.text_range()
+        );
+        let empty = SyntaxNode::new_root(rowan::GreenNode::new(
+            rowan::SyntaxKind(SyntaxKind::IfStmt as u16),
+            std::iter::empty(),
+        ));
+        assert_eq!(
+            range_before(&empty, SyntaxKind::Semicolon),
+            empty.text_range()
+        );
     }
 
     #[test]
