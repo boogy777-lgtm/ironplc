@@ -3,7 +3,7 @@
 
 extern crate ironplc_dsl as dsl;
 
-use ironplc_dsl::{common::Library, diagnostic::Diagnostic};
+use ironplc_dsl::{common::Library, diagnostic::Diagnostic, stack::within_stack_budget};
 use renderer::apply;
 
 mod renderer;
@@ -22,6 +22,7 @@ mod spec_conformance_pointer_to;
 #[cfg(test)]
 mod spec_conformance_string_literals;
 
+/// Renders the library as text, on the stack budget (`ironplc_dsl::stack`).
 pub fn write_to_string(lib: &Library) -> Result<String, Vec<Diagnostic>> {
-    apply(lib)
+    within_stack_budget(|| apply(lib))
 }

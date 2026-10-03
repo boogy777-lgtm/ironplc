@@ -24,6 +24,7 @@ use crate::cst::build_green;
 use crate::error::SyntaxError;
 use crate::lexer::lex_regions;
 use crate::syntax_kind::{SyntaxKind, SyntaxNode};
+use ironplc_dsl::stack::within_stack_budget;
 
 /// The result of a parse: the tree and every syntax error found.
 ///
@@ -71,20 +72,30 @@ pub fn parse_source_file(source: &str, options: &ParseOptions) -> Parse {
     parse_with(source, options, grammar::source_file)
 }
 
-fn parse_with(source: &str, options: &ParseOptions, entry: impl FnOnce(&mut Parser)) -> Parse {
-    let (tokens, mut errors) = lex_regions(source, options);
-    errors.extend(gates::gate_errors(&tokens, options));
+/// Builds the tree on the stack budget. What leaves the budget thread is the
+/// green tree, which can cross threads; the red tree over it, which cannot, is
+/// made here.
+fn parse_with(
+    source: &str,
+    options: &ParseOptions,
+    entry: impl FnOnce(&mut Parser) + Send,
+) -> Parse {
+    let (green, errors) = within_stack_budget(|| {
+        let (tokens, mut errors) = lex_regions(source, options);
+        errors.extend(gates::gate_errors(&tokens, options));
 
-    let mut parser = Parser::new(&tokens, *options);
-    let root = parser.start();
-    entry(&mut parser);
-    parser.complete(root, SyntaxKind::SourceFile);
-    let (events, parse_errors) = parser.finish();
-    errors.extend(parse_errors);
-    errors.sort_by_key(|error| (error.range.start(), error.range.end()));
+        let mut parser = Parser::new(&tokens, *options);
+        let root = parser.start();
+        entry(&mut parser);
+        parser.complete(root, SyntaxKind::SourceFile);
+        let (events, parse_errors) = parser.finish();
+        errors.extend(parse_errors);
+        errors.sort_by_key(|error| (error.range.start(), error.range.end()));
+        (build_green(&tokens, events), errors)
+    });
 
     Parse {
-        root: SyntaxNode::new_root(build_green(&tokens, events)),
+        root: SyntaxNode::new_root(green),
         errors,
     }
 }

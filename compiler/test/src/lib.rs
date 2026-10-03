@@ -4,6 +4,7 @@ use std::{
 };
 
 pub mod fixtures;
+pub mod nesting;
 
 /// Extracts the inner value from a tuple enum variant, panicking with a
 /// descriptive message if the variant does not match.

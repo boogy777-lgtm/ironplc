@@ -30,6 +30,9 @@ serde_json = "1.0"
 ironplc-container = { path = "../container", version = "0.247.0", features = [
   "test-support",
 ] }
+ironplc-plc2plc = { path = "../plc2plc", version = "0.247.0" }
+ironplc-syntax = { path = "../syntax", version = "0.247.0" }
+ironplc-test = { path = "../test", version = "0.247.0" }
 tempfile = "3"
 ctor = "1.0"
 env_logger = "0.11"

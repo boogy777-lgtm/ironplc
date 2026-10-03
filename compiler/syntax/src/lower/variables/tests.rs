@@ -255,7 +255,7 @@ fn lower_variable_when_direct_address_then_location_size_address_and_position() 
 
 #[test]
 fn lower_variable_when_selectors_are_as_many_as_the_tree_allows_then_lowered_without_recursion() {
-    // On the smallest stack the compiler runs on, 1 MiB. The root, one node
+    // On the smallest stack a caller has, 1 MiB. The root, one node
     // for each selector and the name at the bottom make the depth.
     let depth = std::thread::Builder::new()
         .stack_size(1024 * 1024)

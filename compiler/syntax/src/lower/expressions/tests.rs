@@ -644,10 +644,11 @@ fn lower_expr_when_operators_table_then_every_row_names_an_operator_token() {
 // Stack safety: a chain the tree depth limit allows is lowered, and dropped,
 // on a stack that holds a few hundred frames. The limit is what keeps a chain
 // of any length in the text from reaching the rules; the rules fold a chain
-// without recursing along it, so it costs the stack nothing.
+// without recursing along it, so it costs the stack nothing, however much a
+// stage that walks the tree is given (`ironplc_dsl::stack`).
 
-/// Runs `body` on a thread with the smallest stack the compiler runs on: the
-/// 1 MiB of the Windows main thread and of WebAssembly.
+/// Runs `body` on a thread with the smallest stack a caller has: the 1 MiB of
+/// the Windows main thread.
 fn on_small_stack<T: Send + 'static>(body: impl FnOnce() -> T + Send + 'static) -> Option<T> {
     std::thread::Builder::new()
         .stack_size(1024 * 1024)

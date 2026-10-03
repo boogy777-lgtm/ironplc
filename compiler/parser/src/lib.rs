@@ -28,6 +28,7 @@ mod xform_tokens;
 
 use dsl::{core::FileId, diagnostic::Diagnostic};
 use ironplc_dsl::common::Library;
+use ironplc_dsl::stack::within_stack_budget;
 use ironplc_dsl::textual::StmtKind;
 use options::CompilerOptions;
 use token::Token;
@@ -111,12 +112,15 @@ pub fn tokenize_program(
 }
 
 /// Parse a full IEC 61131 program.
+///
+/// The parse runs on the stack budget (`ironplc_dsl::stack`): a program nests
+/// as deep as its text does.
 pub fn parse_program(
     source: &str,
     file_id: &FileId,
     options: &CompilerOptions,
 ) -> Result<Library, Diagnostic> {
-    legacy::parse_program(source, file_id, options)
+    within_stack_budget(|| legacy::parse_program(source, file_id, options))
 }
 
 /// Parse ST (Structured Text) body content into statements.
@@ -138,5 +142,7 @@ pub fn parse_st_statements(
     line_offset: usize,
     col_offset: usize,
 ) -> Result<Vec<StmtKind>, Diagnostic> {
-    legacy::parse_st_statements(source, file_id, options, line_offset, col_offset)
+    within_stack_budget(|| {
+        legacy::parse_st_statements(source, file_id, options, line_offset, col_offset)
+    })
 }
