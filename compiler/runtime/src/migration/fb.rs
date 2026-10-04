@@ -55,6 +55,16 @@ pub(super) fn plan_fb_instances(
         ) else {
             return Err(MigrationError::FbLayoutUnsupported);
         };
+        // A STRING field's slot holds the offset of the string, and that offset
+        // is the instance's own: a slot copied from the other container would
+        // point into its layout, not this one's. The per-field path copies one
+        // slot per field and cannot carry the value, so such an instance fails
+        // closed, as an array-field retype does.
+        if has_string_field(base_variables, base_descriptor)
+            || has_string_field(candidate_variables, candidate_descriptor)
+        {
+            return Err(MigrationError::FbLayoutUnsupported);
+        }
         handled.push((from_index, to_index));
 
         if base_descriptor == candidate_descriptor {
@@ -267,4 +277,15 @@ fn same_fb_descriptors(a: &[FbTypeDescriptor], b: &[FbTypeDescriptor]) -> bool {
     a.sort_by_key(|descriptor| descriptor.type_id.raw());
     b.sort_by_key(|descriptor| descriptor.type_id.raw());
     a == b
+}
+
+/// Whether a field of the user FB type `descriptor` describes is a STRING or a
+/// WSTRING, whose characters live outside its slot, so that the slot holds where
+/// the value is rather than the value.
+fn has_string_field(variables: &[VarEntry], descriptor: &UserFbDescriptor) -> bool {
+    (0..usize::from(descriptor.num_fields)).any(|field| {
+        variables
+            .get(usize::from(descriptor.var_offset) + field)
+            .is_some_and(|entry| matches!(entry.var_type, FieldType::String | FieldType::WString))
+    })
 }

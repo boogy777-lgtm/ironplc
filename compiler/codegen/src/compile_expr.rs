@@ -732,6 +732,16 @@ pub(crate) fn compile_variable_read(
             // their fields are stored in the data region addressed via
             // FB_LOAD_PARAM.
             if let SymbolicVariableKind::Named(named) = structured.record.as_ref() {
+                // A string field keeps its characters in a run of the
+                // instance; its slot only holds where the run is.
+                if let Some(info) = crate::compile_fb_init::instance_string_field(
+                    ctx,
+                    &named.name,
+                    &structured.field,
+                ) {
+                    info.emit_load(emitter, ctx);
+                    return Ok(());
+                }
                 if let Some(fb_info) = ctx.fb_instances.get(&named.name) {
                     let field_name = structured.field.to_string().to_lowercase();
                     let field_idx =
@@ -794,9 +804,8 @@ pub(crate) fn compile_variable_read(
             // String reads emit str_load_var to produce a buf_idx on the stack,
             // which is consumed by string assignment or string function args.
             if let Some(var_name) = resolve_variable_name(variable) {
-                if let Some(info) = ctx.string_vars.get(var_name) {
-                    let data_offset = info.data_offset;
-                    emitter.emit_str_load_var(data_offset);
+                if let Some(info) = ctx.string_vars.get(var_name).cloned() {
+                    info.emit_load(emitter, ctx);
                     return Ok(());
                 }
             }

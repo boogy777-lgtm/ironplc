@@ -115,20 +115,16 @@ pub(crate) fn emit_declaration_initial_value(
                 }
             }
             InitialValueAssignmentKind::String(string_init) => {
-                if let Some(info) = ctx.string_vars.get(id) {
-                    let data_offset = info.data_offset;
-                    let max_length = info.max_length;
-                    let char_width = info.char_width;
-
+                if let Some(info) = ctx.string_vars.get(id).cloned() {
                     // Initialize the string header in the data region.
-                    emitter.emit_str_init(data_offset, max_length, char_width);
+                    info.emit_init(emitter);
 
                     // If there's an initial value, load and store it. The
                     // literal is encoded at the variable's width so the
                     // store's encoding check passes (ADR-0034).
                     if let Some(lit) = &string_init.initial_value {
-                        emit_string_literal_load(emitter, ctx, &lit.value, char_width);
-                        emitter.emit_str_store_var(data_offset);
+                        emit_string_literal_load(emitter, ctx, &lit.value, info.char_width);
+                        info.emit_store(emitter, ctx);
                     }
                 }
             }
@@ -141,6 +137,10 @@ pub(crate) fn emit_declaration_initial_value(
                     let offset_const = ctx.add_i32_constant(data_offset as i32);
                     emitter.emit_load_const_i32(offset_const);
                     emitter.emit_store_var_i32(var_index);
+
+                    // The runs of its strings come first: they are what a stated
+                    // value is stored into.
+                    crate::compile_fb_layout::emit_instance_storage(emitter, ctx, id, types)?;
 
                     // An instance starts at the values its type declares for its
                     // fields, with those of `timer : TON := (PT := T#100MS)`
@@ -365,7 +365,7 @@ pub(crate) fn emit_function_local_prologue(
         )?;
     } else if let Some(info) = ctx.string_vars.get(return_id) {
         // STRING/WSTRING return: initialize the string header in the data region.
-        emitter.emit_str_init(info.data_offset, info.max_length, info.char_width);
+        info.emit_init(emitter);
     } else {
         emit_zero_const(emitter, ctx, return_op_type);
         emit_store_var(emitter, return_var_index, return_op_type);

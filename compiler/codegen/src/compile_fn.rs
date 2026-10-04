@@ -16,20 +16,19 @@ use ironplc_dsl::diagnostic::{Diagnostic, Label};
 use ironplc_analyzer::{FunctionEnvironment, TypeEnvironment};
 
 use super::compile::{
-    char_width_for_string_type, finalize_function, string_region_size, CompileContext,
-    CompiledFunction, CurrentFunctionReturn, OpWidth, ParamPassing, SavedFbScope, Signedness,
-    StringParamInfo, StringReturnInfo, StringVarInfo, UserFunctionInfo, VarTypeInfo,
-    DEFAULT_OP_TYPE, NARROW_CHAR_WIDTH, WIDE_CHAR_WIDTH,
+    finalize_function, string_region_size, CompileContext, CompiledFunction, CurrentFunctionReturn,
+    OpWidth, ParamPassing, SavedFbScope, Signedness, StringParamInfo, StringReturnInfo,
+    StringVarInfo, UserFunctionInfo, VarTypeInfo, DEFAULT_OP_TYPE, NARROW_CHAR_WIDTH,
+    WIDE_CHAR_WIDTH,
 };
 use super::compile_expr::emit_load_var;
 use super::compile_initial_value::emit_function_local_prologue;
 use super::compile_setup::{debug_type_for_decl, debug_type_for_return, map_var_section};
-use super::compile_stmt::{
-    compile_body, compile_statements, resolve_string_max_length, resolve_string_spec_max_length,
-};
+use super::compile_stmt::{compile_body, compile_statements, resolve_string_spec_max_length};
 use super::compile_var_table::{record_decl_var_entry, record_return_var_entry};
 use super::type_info::{decl_type_info, resolve_type_name};
 use crate::emit::Emitter;
+use crate::string_storage::{register_string_variable, StringHome};
 
 /// Records a debug [`VarNameEntry`] for a function- or FB-local variable
 /// (parameter or local) owned by `function_id`. Mirrors the program/global
@@ -182,25 +181,7 @@ pub(crate) fn compile_user_function(
                     }
                 }
                 InitialValueAssignmentKind::String(string_init) => {
-                    let max_length = resolve_string_max_length(string_init)?;
-                    let char_width = char_width_for_string_type(&string_init.width);
-
-                    let total_bytes = string_region_size(max_length, char_width);
-                    let data_offset =
-                        crate::data_region::reserve(ctx, total_bytes, &string_init.span())?;
-
-                    if max_length > ctx.max_string_capacity {
-                        ctx.max_string_capacity = max_length;
-                    }
-
-                    ctx.string_vars.insert(
-                        id.clone(),
-                        StringVarInfo {
-                            data_offset,
-                            max_length,
-                            char_width,
-                        },
-                    );
+                    register_string_variable(ctx, builder, id, string_init, StringHome::Static)?;
                 }
                 InitialValueAssignmentKind::Reference(ref_init) => {
                     crate::compile_reference::register_reference_variable(
@@ -235,25 +216,7 @@ pub(crate) fn compile_user_function(
                     }
                 }
                 InitialValueAssignmentKind::String(string_init) => {
-                    let max_length = resolve_string_max_length(string_init)?;
-                    let char_width = char_width_for_string_type(&string_init.width);
-
-                    let total_bytes = string_region_size(max_length, char_width);
-                    let data_offset =
-                        crate::data_region::reserve(ctx, total_bytes, &string_init.span())?;
-
-                    if max_length > ctx.max_string_capacity {
-                        ctx.max_string_capacity = max_length;
-                    }
-
-                    ctx.string_vars.insert(
-                        id.clone(),
-                        StringVarInfo {
-                            data_offset,
-                            max_length,
-                            char_width,
-                        },
-                    );
+                    register_string_variable(ctx, builder, id, string_init, StringHome::Static)?;
                 }
                 InitialValueAssignmentKind::Reference(ref_init) => {
                     crate::compile_reference::register_reference_variable(
@@ -309,11 +272,7 @@ pub(crate) fn compile_user_function(
 
             ctx.string_vars.insert(
                 return_id.clone(),
-                StringVarInfo {
-                    data_offset,
-                    max_length,
-                    char_width,
-                },
+                StringVarInfo::fixed(data_offset, max_length, char_width),
             );
             Some(StringReturnInfo {
                 data_offset,
@@ -444,13 +403,16 @@ pub(crate) fn compile_user_function(
                 .identifier
                 .symbolic_id()
                 .and_then(|id| ctx.string_vars.get(id))
-                .map_or(ParamPassing::Value(DEFAULT_OP_TYPE), |info| {
-                    ParamPassing::String(StringParamInfo {
-                        data_offset: info.data_offset,
-                        max_length: info.max_length,
-                        char_width: info.char_width,
+                .and_then(|info| {
+                    info.static_offset().map(|data_offset| {
+                        ParamPassing::String(StringParamInfo {
+                            data_offset,
+                            max_length: info.max_length,
+                            char_width: info.char_width,
+                        })
                     })
-                }),
+                })
+                .unwrap_or(ParamPassing::Value(DEFAULT_OP_TYPE)),
             InitialValueAssignmentKind::Reference(_) => {
                 ParamPassing::Value((OpWidth::W64, Signedness::Unsigned))
             }
@@ -606,25 +568,17 @@ pub(crate) fn compile_user_function_block(
                     )?;
                 }
                 InitialValueAssignmentKind::String(string_init) => {
-                    let max_length = resolve_string_max_length(string_init)?;
-                    let char_width = char_width_for_string_type(&string_init.width);
-
-                    let total_bytes = string_region_size(max_length, char_width);
-                    let data_offset =
-                        crate::data_region::reserve(ctx, total_bytes, &string_init.span())?;
-
-                    if max_length > ctx.max_string_capacity {
-                        ctx.max_string_capacity = max_length;
-                    }
-
-                    ctx.string_vars.insert(
-                        id.clone(),
-                        StringVarInfo {
-                            data_offset,
-                            max_length,
-                            char_width,
+                    // The run belongs to the instance, not to the type: the body
+                    // reads its offset from the field's slot.
+                    register_string_variable(
+                        ctx,
+                        builder,
+                        id,
+                        string_init,
+                        StringHome::InstanceOwned {
+                            var_index: current_index,
                         },
-                    );
+                    )?;
                 }
                 _ => {}
             }

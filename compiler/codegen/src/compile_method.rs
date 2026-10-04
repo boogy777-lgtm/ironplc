@@ -28,6 +28,7 @@ use super::compile_stmt::compile_statements;
 use super::compile_var_table::{record_decl_var_entry, record_return_var_entry, slot_entry};
 use super::type_info::{decl_type_info, resolve_type_name};
 use crate::emit::Emitter;
+use crate::string_storage::{register_string_variable, StringHome};
 
 /// Compiles every `METHOD` declared on `fb_decl`, in declaration order.
 ///
@@ -64,6 +65,7 @@ pub(crate) fn compile_user_fb_methods(
         // frame bounds window.
         let saved_variables = ctx.variables.clone();
         let saved_var_types = ctx.var_types.clone();
+        let saved_string_vars = ctx.string_vars.clone();
 
         let compiled_method = compile_user_method(
             method,
@@ -77,6 +79,7 @@ pub(crate) fn compile_user_fb_methods(
 
         ctx.variables = saved_variables;
         ctx.var_types = saved_var_types;
+        ctx.string_vars = saved_string_vars;
 
         let result = compiled_method?;
 
@@ -126,7 +129,7 @@ fn compile_user_method(
     field_var_off: u16,
     param_var_off: VarIndex,
     ctx: &mut CompileContext,
-    _builder: &mut ContainerBuilder,
+    builder: &mut ContainerBuilder,
     types: &TypeEnvironment,
 ) -> Result<CompiledFunction, Diagnostic> {
     let mut current_index = param_var_off;
@@ -157,10 +160,20 @@ fn compile_user_method(
         }
         if let Some(id) = decl.identifier.symbolic_id() {
             ctx.variables.insert(id.clone(), current_index);
-            if let InitialValueAssignmentKind::Simple(_) = &decl.initializer {
-                if let Some(type_info) = decl_type_info(ctx, decl) {
-                    ctx.var_types.insert(id.clone(), type_info);
+            // A local named like a string field of the type hides that field.
+            ctx.string_vars.remove(id);
+            match &decl.initializer {
+                InitialValueAssignmentKind::Simple(_) => {
+                    if let Some(type_info) = decl_type_info(ctx, decl) {
+                        ctx.var_types.insert(id.clone(), type_info);
+                    }
                 }
+                // A method's locals start afresh on every call, so one run
+                // serves every instance, as it does for a function.
+                InitialValueAssignmentKind::String(string_init) => {
+                    register_string_variable(ctx, builder, id, string_init, StringHome::Static)?;
+                }
+                _ => {}
             }
             record_decl_var_entry(ctx, decl, id, current_index);
             current_index = VarIndex::new(current_index.raw() + 1);

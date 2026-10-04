@@ -27,7 +27,10 @@ use super::compile_expr::{
     emit_store_var, emit_truncation, extract_bit_access_target, extract_partial_access_target,
     op_type, resolve_variable, resolve_variable_name, try_classify_cmp, variable_span,
 };
-use super::compile_fb_init::{compile_fb_field_store, resolve_fb_field_op_type};
+use super::compile_fb_init::{
+    compile_fb_field_store, compile_string_field_store, compile_string_output,
+    resolve_fb_field_op_type,
+};
 use super::compile_jump::{compile_jump, compile_label, compile_wait};
 use super::compile_loop::{compile_for, compile_repeat, compile_while};
 use super::compile_method::compile_method_call_statement;
@@ -260,15 +263,13 @@ fn compile_statement(
             let target_name = resolve_variable_name(&assignment.target);
 
             // Check if the target is a STRING variable (stored in data region).
-            let string_info = target_name
-                .and_then(|name| ctx.string_vars.get(name))
-                .map(|info| (info.data_offset, info.char_width));
+            let string_info = target_name.and_then(|name| ctx.string_vars.get(name).cloned());
 
-            if let Some((data_offset, char_width)) = string_info {
+            if let Some(info) = string_info {
                 // String target: produce the RHS as a temp buffer at the
-                // target's encoding, then STR_STORE_VAR (ADR-0034).
-                compile_string_value(emitter, ctx, &assignment.value, char_width)?;
-                emitter.emit_str_store_var(data_offset);
+                // target's encoding, then store it (ADR-0034).
+                compile_string_value(emitter, ctx, &assignment.value, info.char_width)?;
+                info.emit_store(emitter, ctx);
             } else {
                 match crate::compile_array::resolve_access(ctx, &assignment.target)? {
                     crate::compile_array::ResolvedAccess::Scalar { var_index } => {
@@ -519,6 +520,7 @@ fn compile_fb_call(
         .ok_or_else(|| Diagnostic::todo_with_span(fb_call.span()))?;
     let type_id = fb_info.type_id;
     let field_indices = fb_info.field_indices.clone();
+    let strings = fb_info.strings.clone();
     let var_index = fb_info.var_index;
 
     // Push FB instance reference.
@@ -528,6 +530,12 @@ fn compile_fb_call(
     for param in &fb_call.params {
         if let ParamAssignmentKind::NamedInput(input) = param {
             let field_name = input.name.to_string().to_lowercase();
+            // A string input is written into the instance's run; the
+            // instance reference on the stack is not involved.
+            if let Some(info) = strings.get(&field_name) {
+                compile_string_field_store(emitter, ctx, info, &input.expr)?;
+                continue;
+            }
             let field_idx = field_indices
                 .get(&field_name)
                 .ok_or_else(|| Diagnostic::todo_with_span(input.name.span()))?;
@@ -553,6 +561,11 @@ fn compile_fb_call(
     for param in &fb_call.params {
         if let ParamAssignmentKind::Output(output) = param {
             let field_name = output.src.to_string().to_lowercase();
+            // A string output is copied out of the instance's run.
+            if let Some(source) = strings.get(&field_name) {
+                compile_string_output(emitter, ctx, source, &output.tgt)?;
+                continue;
+            }
             let field_idx = field_indices
                 .get(&field_name)
                 .ok_or_else(|| Diagnostic::todo_with_span(output.src.span()))?;

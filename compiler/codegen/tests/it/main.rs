@@ -110,6 +110,7 @@ mod end_to_end_fb_negated_output;
 mod end_to_end_fb_r_trig;
 mod end_to_end_fb_rs;
 mod end_to_end_fb_sr;
+mod end_to_end_fb_string_storage;
 mod end_to_end_fb_tof;
 mod end_to_end_fb_ton;
 mod end_to_end_fb_tp;

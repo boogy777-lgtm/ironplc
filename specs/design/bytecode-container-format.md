@@ -242,6 +242,8 @@ Each user FB descriptor maps a user-defined `FUNCTION_BLOCK` type to the compile
 | 6 | num_fields | u8 | Number of data-region fields in an instance |
 | 7 | reserved | u8 | Reserved; must be zero |
 
+An instance is one run of the data region: `num_fields` 8-byte slots, followed by the storage of the fields that do not fit a slot. A STRING or WSTRING field keeps its header and characters in such a run of its own, inside the instance, and its slot holds the data-region byte offset of that run. The compiler lays out the slots and the runs together, once per type, so every instance owns all of its storage and two instances of one type never share a character. The VM copies only the `num_fields` slots in and out around a call; the offset in a string field's slot is what lets the one compiled body address the run of whichever instance is running. The descriptor does not record the runs, and the compiler writes each slot's offset when it initializes the instance.
+
 ### Variable Table
 
 The variable table is the fourth sub-table of the type section ([REQ-CF-container-018](#type-section)), emitted by the compiler with one entry per compiler-assigned variable index. It describes the type of each variable slot, and it is the primary input to [Layout Hash and Online Change](#layout-hash-and-online-change). The load-time verifier that would check LOAD_VAR/STORE_VAR opcodes against it (ADR-0006) is still planned, so the interpreter continues to use the compiler-assigned indices directly.

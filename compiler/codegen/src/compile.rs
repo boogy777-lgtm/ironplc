@@ -137,8 +137,8 @@ pub(crate) enum PoolConstant {
 /// Metadata for a STRING/WSTRING variable allocated in the data region.
 #[derive(Clone)]
 pub(crate) struct StringVarInfo {
-    /// Byte offset into the data region where this string starts.
-    pub(crate) data_offset: u32,
+    /// How bytecode names the run of the data region the string occupies.
+    pub(crate) place: crate::string_storage::StringPlace,
     /// Maximum number of code units this string can hold.
     pub(crate) max_length: u16,
     /// Per-code-unit byte width: `Narrow` for STRING, `Wide` for WSTRING.
@@ -884,6 +884,7 @@ fn compile_program_with_functions(
                 field_indices,
                 function_id: FunctionId::new(next_function_id),
                 var_offset: 0, // updated after program vars are assigned
+                layout: crate::compile_fb_layout::layout_instance(&field_decls_tmp)?,
                 field_op_types,
                 field_defaults: crate::compile_fb_init::declared_field_values(
                     types,
@@ -1417,6 +1418,9 @@ pub(crate) struct FbInstanceInfo {
     pub(crate) data_offset: u32,
     /// Maps field name (lowercase) to field index.
     pub(crate) field_indices: HashMap<String, u8>,
+    /// The fields whose characters live in this instance's own runs, by name
+    /// (lowercase), as code outside the body reaches them.
+    pub(crate) strings: HashMap<String, StringVarInfo>,
 }
 
 /// Metadata for a compiled user-defined function block type.
@@ -1431,6 +1435,9 @@ pub(crate) struct UserFbTypeInfo {
     pub(crate) function_id: FunctionId,
     /// Variable table offset where the FB body's slots start.
     pub(crate) var_offset: u16,
+    /// How an instance is laid out: its slots and the runs of the fields that
+    /// do not fit one.
+    pub(crate) layout: crate::compile_fb_layout::FbLayout,
     /// Maps field name (lowercase) to its op type for codegen at call sites.
     pub(crate) field_op_types: HashMap<String, OpType>,
     /// The values the fields declare for themselves, which every instance

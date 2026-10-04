@@ -17,14 +17,12 @@ use ironplc_dsl::diagnostic::{Diagnostic, Label};
 
 use ironplc_analyzer::TypeEnvironment;
 
-use super::compile::{
-    char_width_for_string_type, string_region_size, CompileContext, FbInstanceInfo, OpType,
-    OpWidth, StringVarInfo,
-};
+use super::compile::{char_width_for_string_type, CompileContext, FbInstanceInfo, OpType, OpWidth};
 use super::compile_call::resolve_fb_type;
-use super::compile_stmt::resolve_string_max_length;
+use super::compile_fb_layout::FbLayout;
 use super::compile_var_table::{record_decl_var_entry, record_stable_var_entry};
 use crate::emit::Emitter;
+use crate::string_storage::{register_string_variable, StringHome};
 
 /// Assigns variable table indices and type info for all variable declarations.
 ///
@@ -84,33 +82,22 @@ pub(crate) fn assign_variables(
                     }
                 }
                 InitialValueAssignmentKind::String(string_init) => {
-                    let max_length = resolve_string_max_length(string_init)?;
-                    let char_width = char_width_for_string_type(&string_init.width);
-
-                    // Allocate space in the data region: [max_length: u16][cur_length: u16][data]
-                    let total_bytes = string_region_size(max_length, char_width);
-                    let data_offset =
-                        crate::data_region::reserve(ctx, total_bytes, &string_init.span())?;
-
-                    if max_length > ctx.max_string_capacity {
-                        ctx.max_string_capacity = max_length;
-                    }
-
-                    ctx.string_vars.insert(
-                        id.clone(),
-                        StringVarInfo {
+                    // Space in the data region: [max_length: u16][cur_length: u16][data]
+                    let info = register_string_variable(
+                        ctx,
+                        builder,
+                        id,
+                        string_init,
+                        StringHome::Static,
+                    )?;
+                    if let Some(data_offset) = info.static_offset() {
+                        ctx.debug_string_layouts.push(StringLayoutEntry {
+                            var_index: index,
                             data_offset,
-                            max_length,
-                            char_width,
-                        },
-                    );
-                    ctx.debug_string_layouts.push(StringLayoutEntry {
-                        var_index: index,
-                        data_offset,
-                        max_length,
-                    });
-                    if char_width.is_wide() {
-                        ctx.has_wide_string = true;
+                            max_length: info.max_length,
+                        });
+                    }
+                    if info.char_width.is_wide() {
                         (iec_type_tag::WSTRING, "WSTRING".into())
                     } else {
                         (iec_type_tag::STRING, "STRING".into())
@@ -122,38 +109,30 @@ pub(crate) fn assign_variables(
                     // has its slot offset -- each member store addresses the
                     // instance through it. Nothing to do here but size it.
                     let fb_name = fb_init.type_name.to_string().to_uppercase();
-                    if let Some((type_id, num_fields, field_map)) = resolve_fb_type(&fb_name) {
-                        // Standard library function block.
-                        let instance_size = num_fields as u32 * 8;
-                        let data_offset = crate::data_region::reserve(
-                            ctx,
-                            instance_size,
-                            &decl.identifier.span(),
-                        )?;
-
-                        ctx.fb_instances.insert(
-                            id.clone(),
-                            FbInstanceInfo {
-                                var_index: index,
-                                type_id,
-                                data_offset,
-                                field_indices: field_map,
-                            },
-                        );
-                    } else if let Some((num_fields, type_id, field_indices)) =
-                        ctx.user_fb_types.get(&fb_name).map(|user_fb| {
+                    // A standard library block is its slots; a user-defined one
+                    // is its slots and the runs of the fields that do not fit
+                    // one (`compile_fb_layout`). Either way the instance is
+                    // reserved whole, so it owns all of its storage.
+                    let instance = match resolve_fb_type(&fb_name) {
+                        Some((type_id, num_fields, field_map)) => Some((
+                            type_id,
+                            num_fields as u32 * ironplc_container::SLOT_BYTES,
+                            field_map,
+                            FbLayout::default(),
+                        )),
+                        None => ctx.user_fb_types.get(&fb_name).map(|user_fb| {
                             (
-                                user_fb.num_fields,
                                 user_fb.type_id,
+                                user_fb.layout.instance_bytes,
                                 user_fb.field_indices.clone(),
+                                user_fb.layout.clone(),
                             )
-                        })
-                    {
-                        // User-defined function block.
-                        let instance_size = num_fields as u32 * 8;
+                        }),
+                    };
+                    if let Some((type_id, instance_bytes, field_indices, layout)) = instance {
                         let data_offset = crate::data_region::reserve(
                             ctx,
-                            instance_size,
+                            instance_bytes,
                             &decl.identifier.span(),
                         )?;
 
@@ -164,6 +143,7 @@ pub(crate) fn assign_variables(
                                 type_id,
                                 data_offset,
                                 field_indices,
+                                strings: layout.views(data_offset),
                             },
                         );
                     }
