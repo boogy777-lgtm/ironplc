@@ -5,8 +5,8 @@ use super::*;
 use crate::lower::{disposition, Area, Disposition, INTERNAL_ERROR};
 use crate::{parse_source_file, ParseOptions};
 use ironplc_dsl::common::{
-    ArrayInitialElementKind, ConstantKind, IntegerRef, SignedIntegerRef,
-    StructInitialValueAssignmentKind,
+    ArrayInitialElementKind, ConstantKind, InitialValueAssignmentKind, IntegerRef,
+    SignedIntegerRef, StructInitialValueAssignmentKind,
 };
 use ironplc_dsl::core::{FileId, Located};
 use ironplc_problems::Problem;
@@ -370,14 +370,16 @@ fn lower_type_declaration_when_structure_or_union_then_its_members() {
 }
 
 #[test]
-fn lower_type_declaration_when_named_type_with_structure_value_then_structure_initialization() {
-    let structure = variant!(
+fn lower_type_declaration_when_named_type_with_structure_value_then_structure_alias() {
+    let alias = variant!(
         declaration("Point := (x := 1, y := (z := 2), a := [1, 2], e := Color#Red, n := name, k := 1 + 2, m := -5)"),
-        DataTypeDeclarationKind::StructureInitialization
+        DataTypeDeclarationKind::Simple
     );
-    // The declaration holds the name it declares and the values; the
-    // structure it copies is not recorded.
-    assert_eq!(structure.type_name.to_string(), "t");
+    // The declaration holds the name it declares, the structure it copies
+    // and the values.
+    assert_eq!(alias.type_name.to_string(), "t");
+    let structure = variant!(alias.spec_and_init, InitialValueAssignmentKind::Structure);
+    assert_eq!(structure.type_name.to_string(), "Point");
     let kinds: Vec<&str> = structure
         .elements_init
         .iter()

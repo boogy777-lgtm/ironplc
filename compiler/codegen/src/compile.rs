@@ -55,7 +55,8 @@ use ironplc_container::{
 pub(crate) use ironplc_container::{string_region_size, DEFAULT_STRING_MAX_LENGTH};
 use ironplc_dsl::common::{
     FunctionBlockDeclaration, FunctionDeclaration, InitialValueAssignmentKind, Library,
-    LibraryElementKind, ProgramDeclaration, StringType, VarDecl, VariableType,
+    LibraryElementKind, ProgramDeclaration, StringType, StructureElementInit, VarDecl,
+    VariableType,
 };
 use ironplc_dsl::configuration::{
     ConfigurationDeclaration, ProgramConfiguration, TaskConfiguration,
@@ -72,7 +73,8 @@ use ironplc_analyzer::{FunctionEnvironment, IntermediateType, SemanticContext, T
 use crate::emit::Emitter;
 
 use super::compile_fn::{compile_user_function, compile_user_function_block};
-use super::compile_setup::{assign_variables, emit_initial_values};
+use super::compile_initial_value::emit_initial_values;
+use super::compile_setup::assign_variables;
 use super::compile_stmt::compile_body;
 use super::compile_var_table::slot_entry;
 
@@ -883,6 +885,10 @@ fn compile_program_with_functions(
                 function_id: FunctionId::new(next_function_id),
                 var_offset: 0, // updated after program vars are assigned
                 field_op_types,
+                field_defaults: crate::compile_fb_init::declared_field_values(
+                    types,
+                    &field_decls_tmp,
+                ),
                 methods: HashMap::new(),
             },
         );
@@ -1427,6 +1433,9 @@ pub(crate) struct UserFbTypeInfo {
     pub(crate) var_offset: u16,
     /// Maps field name (lowercase) to its op type for codegen at call sites.
     pub(crate) field_op_types: HashMap<String, OpType>,
+    /// The values the fields declare for themselves, which every instance
+    /// starts from.
+    pub(crate) field_defaults: Vec<StructureElementInit>,
     /// Maps method name (lowercase) to compilation metadata (OOP
     /// extension, ADR-0041 Phase 1). Populated in two steps: `function_id`,
     /// `num_params`, `param_op_types`, and `has_return_value` are known

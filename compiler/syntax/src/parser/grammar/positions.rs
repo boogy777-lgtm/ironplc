@@ -41,7 +41,7 @@ pub(super) enum Initial {
     Expression,
     /// An expression and nothing else.
     Plain,
-    /// A constant: a literal, an enumeration value or a structure value.
+    /// A constant: a literal or an enumeration value.
     Constant,
     /// A literal.
     Literal,
@@ -63,9 +63,9 @@ pub(super) struct Context {
     /// in place, an enumeration may name values and a base type, and a
     /// reference type has no initial value.
     pub declares: bool,
-    /// An initial value after a type name or subrange is a constant, not an
-    /// expression.
-    pub constants_only: bool,
+    /// An initial value after a subrange is a literal, not an expression: a
+    /// subrange type holds its value as an integer.
+    pub literal_subrange: bool,
     /// A structure value `(a := 1)` may initialise a declared type.
     pub structured: bool,
     pub allowed: &'static [Spec],
@@ -102,8 +102,7 @@ impl Context {
             Spec::Reference => Initial::Reference,
             Spec::Params | Spec::Struct | Spec::Union | Spec::Call => Initial::Forbidden,
             Spec::Enumeration => Initial::Constant,
-            Spec::Elementary | Spec::Subrange if self.constants_only => Initial::Literal,
-            Spec::Named if self.constants_only => Initial::Constant,
+            Spec::Subrange if self.literal_subrange => Initial::Literal,
             Spec::Elementary | Spec::Subrange | Spec::Named | Spec::Missing => open,
         }
     }
@@ -112,7 +111,7 @@ impl Context {
 const fn position(allowed: &'static [Spec]) -> Context {
     Context {
         declares: false,
-        constants_only: false,
+        literal_subrange: false,
         structured: true,
         allowed,
     }
@@ -154,7 +153,7 @@ pub(super) const INSTANCE: Context = position(&[S::Array, S::Named]);
 /// A type that a `TYPE` declaration defines.
 pub(super) const DECLARED: Context = Context {
     declares: true,
-    constants_only: true,
+    literal_subrange: true,
     structured: true,
     allowed: &[
         S::Array,
@@ -170,7 +169,7 @@ pub(super) const DECLARED: Context = Context {
 };
 /// A member of a structure or union.
 pub(super) const MEMBER: Context = Context {
-    constants_only: true,
+    literal_subrange: true,
     ..position(&[S::Array, S::String, S::Enumeration, S::Subrange, S::Named])
 };
 /// The element type of an array.
@@ -191,10 +190,17 @@ mod tests {
     }
 
     #[test]
-    fn initial_when_type_name_then_constant_in_a_type_declaration_and_expression_in_a_variable() {
+    fn initial_when_type_name_then_expression_in_a_type_declaration_and_a_variable() {
         assert_eq!(VARIABLES.initial(Spec::Named), Initial::Expression);
-        assert_eq!(DECLARED.initial(Spec::Named), Initial::Constant);
-        assert_eq!(DECLARED.initial(Spec::Elementary), Initial::Literal);
+        assert_eq!(DECLARED.initial(Spec::Named), Initial::Expression);
+        assert_eq!(DECLARED.initial(Spec::Elementary), Initial::Expression);
+    }
+
+    #[test]
+    fn initial_when_subrange_then_literal_in_a_type_declaration_and_a_member() {
+        assert_eq!(DECLARED.initial(Spec::Subrange), Initial::Literal);
+        assert_eq!(MEMBER.initial(Spec::Subrange), Initial::Literal);
+        assert_eq!(BORROWED.initial(Spec::Subrange), Initial::Expression);
     }
 
     #[test]

@@ -43,4 +43,5 @@ mod this_super;
 mod time_and_sizeof;
 mod time_literals;
 mod try_catch;
+mod type_initial_values;
 mod union;

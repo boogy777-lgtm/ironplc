@@ -98,12 +98,12 @@ pub const DIFFERENCES: &[Difference] = &[
             parts: &[Component::Spans],
         },
         reason: TYPE_NAME_POSITION,
-        expected: 6498,
+        expected: 6528,
     },
     Difference {
         scope: Scope::AcceptedOnPurpose,
         reason: LISTED_INPUT,
-        expected: 100,
+        expected: 112,
     },
 ];
 

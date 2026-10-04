@@ -51,18 +51,6 @@ fn is_literal(node: &SyntaxNode) -> bool {
     disposition(node.kind()) == Disposition::Lowered(Area::Literal)
 }
 
-/// The constant an initial value is, for a position that takes a constant: a
-/// literal, or a literal with a sign. Anything else is not a value of the
-/// type.
-pub fn lower_constant_value(
-    cx: &LowerCx,
-    parts: &Parts,
-    value: &SyntaxNode,
-) -> Result<ConstantKind, Diagnostic> {
-    let expression = lower_expr(cx, value)?;
-    literal_value_of(&expression).ok_or_else(|| parts.mismatch(cx))
-}
-
 /// The integer an initial value is, for a position that takes an integer: a
 /// subrange's default. It is written in digits, with a sign if it has one; a
 /// typed or based number, or any other value, is not a value of the type.
@@ -410,6 +398,19 @@ fn simple(cx: &LowerCx, parts: &Parts) -> Result<InitialValueAssignmentKind, Dia
         type_name: parts.base_name(cx)?,
         initial_value: None,
     }))
+}
+
+/// A type written as one name, with the value it may state: `INT`, `INT := 5`,
+/// `INT := 2 + N`. The one reading of a simple type and its value, for a
+/// variable, a structure member and a type declaration alike.
+pub fn lower_simple_initializer(
+    cx: &LowerCx,
+    parts: &Parts,
+) -> Result<InitialValueAssignmentKind, Diagnostic> {
+    match parts.value {
+        Some(_) => simple_expression(cx, parts),
+        None => simple(cx, parts),
+    }
 }
 
 /// `x : INT := value`: a literal is a simple value, and any other expression

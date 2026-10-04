@@ -4,12 +4,12 @@ P4037
 
 .. problem-summary:: P4037
 
-This error occurs when a ``VAR`` initializer uses a constant expression
-(arithmetic between literals and/or references to declared ``CONSTANT``
-variables) instead of a bare literal, without the
-``--allow-constant-initializer-expressions`` compiler flag. The IEC 61131-3
-standard's initializer grammar only permits a single literal in this
-position. Constant expressions are an extension.
+This error occurs when the initial value of a variable, of a type declared in
+``TYPE``, or of a structure member is a constant expression (arithmetic between
+literals and/or references to declared ``CONSTANT`` variables) instead of a
+bare literal, without the ``--allow-constant-initializer-expressions``
+compiler flag. The IEC 61131-3 standard's initializer grammar only permits a
+single literal in this position. Constant expressions are an extension.
 
 Example
 -------
@@ -27,6 +27,22 @@ The following code will generate error P4037:
        d2r : LREAL := PI/180.0;
    END_VAR
    END_PROGRAM
+
+The same error is reported for the initial value of a type or of a structure
+member:
+
+.. code-block::
+
+   VAR_GLOBAL CONSTANT
+       N : INT := 5;
+   END_VAR
+
+   TYPE
+       Level : INT := N * 2;
+       Pair : STRUCT
+           a : INT := N;
+       END_STRUCT;
+   END_TYPE
 
 To fix this error, either use a literal value directly:
 

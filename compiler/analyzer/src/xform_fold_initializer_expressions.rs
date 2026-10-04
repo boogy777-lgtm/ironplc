@@ -1,4 +1,5 @@
-//! Transform that folds constant-expression `VAR` initializers into plain
+//! Transform that folds constant-expression initializers (of a variable, of a
+//! type declared in `TYPE` and of a structure member) into plain
 //! literal initializers.
 //!
 //! The IEC 61131-3 standard's `constant()` grammar production only permits
@@ -736,5 +737,124 @@ mod tests {
         assert!(diagnostics
             .iter()
             .all(|d| d.code == Problem::InitializerNotConstantExpression.code()));
+    }
+
+    /// The initial value a `TYPE` declaration of `type_name` ends with.
+    fn declared_type_value(lib: &Library, type_name: &str) -> Option<ConstantKind> {
+        lib.elements.iter().find_map(|element| match element {
+            LibraryElementKind::DataTypeDeclaration(DataTypeDeclarationKind::Simple(decl))
+                if decl.type_name.to_string().eq_ignore_ascii_case(type_name) =>
+            {
+                match &decl.spec_and_init {
+                    InitialValueAssignmentKind::Simple(simple) => simple.initial_value.clone(),
+                    _ => None,
+                }
+            }
+            _ => None,
+        })
+    }
+
+    /// The initializer of member `member` of the structure `type_name`.
+    fn declared_member<'a>(
+        lib: &'a Library,
+        type_name: &str,
+        member: &str,
+    ) -> &'a InitialValueAssignmentKind {
+        lib.elements
+            .iter()
+            .find_map(|element| match element {
+                LibraryElementKind::DataTypeDeclaration(DataTypeDeclarationKind::Structure(
+                    decl,
+                )) if decl.type_name.to_string().eq_ignore_ascii_case(type_name) => decl
+                    .elements
+                    .iter()
+                    .find(|e| e.name.to_string().eq_ignore_ascii_case(member))
+                    .map(|e| &e.init),
+                _ => None,
+            })
+            .expect("member missing from parsed test library")
+    }
+
+    const TYPE_AND_MEMBER_VALUES: &str = "
+        VAR_GLOBAL CONSTANT
+            N : INT := 5;
+        END_VAR
+        VAR_GLOBAL
+            v : INT := 1;
+        END_VAR
+        TYPE
+            Level : INT := N * 2 + 1;
+            Bad : INT := v + 1;
+            S : STRUCT
+                a : INT := N;
+                b : INT := 2 + 3;
+                c : INT := v;
+            END_STRUCT;
+        END_TYPE
+    ";
+
+    /// A value written in a type declaration or a structure member is
+    /// folded by the same rule as the value of a variable.
+    #[test]
+    fn apply_when_type_or_member_value_is_constant_expression_then_folds_to_literal() {
+        let options = CompilerOptions {
+            allow_top_level_var_global: true,
+            ..opts()
+        };
+        let lib = parse(TYPE_AND_MEMBER_VALUES, &options);
+        let (lib, _) = apply(lib, &options).unwrap();
+
+        let level = declared_type_value(&lib, "Level").expect("a folded value");
+        let level = cast!(level, ConstantKind::IntegerLiteral);
+        assert_eq!(i128::try_from(level.value).ok(), Some(11));
+        let a = cast!(
+            declared_member(&lib, "S", "a"),
+            InitialValueAssignmentKind::Simple
+        );
+        let a = cast!(
+            a.initial_value.clone().unwrap(),
+            ConstantKind::IntegerLiteral
+        );
+        assert_eq!(i128::try_from(a.value).ok(), Some(5));
+        let b = cast!(
+            declared_member(&lib, "S", "b"),
+            InitialValueAssignmentKind::Simple
+        );
+        let b = cast!(
+            b.initial_value.clone().unwrap(),
+            ConstantKind::IntegerLiteral
+        );
+        assert_eq!(i128::try_from(b.value).ok(), Some(5));
+    }
+
+    /// A value that does not reduce reports what a variable's value reports.
+    #[test]
+    fn apply_when_type_or_member_value_is_not_constant_then_not_constant_expression() {
+        let options = CompilerOptions {
+            allow_top_level_var_global: true,
+            ..opts()
+        };
+        let lib = parse(TYPE_AND_MEMBER_VALUES, &options);
+        let diagnostics = apply_expect_diagnostics(lib, &options);
+        // `Bad` and the member `c`.
+        assert_eq!(diagnostics.len(), 2);
+        assert!(diagnostics
+            .iter()
+            .all(|d| d.code == Problem::InitializerNotConstantExpression.code()));
+    }
+
+    #[test]
+    fn apply_when_type_or_member_value_is_expression_and_flag_disabled_then_not_allowed() {
+        let options = CompilerOptions {
+            allow_top_level_var_global: true,
+            ..CompilerOptions::default()
+        };
+        let lib = parse(TYPE_AND_MEMBER_VALUES, &options);
+        let diagnostics = apply_expect_diagnostics(lib, &options);
+        // `Level`, `Bad`, and the three members.
+        assert_eq!(diagnostics.len(), 5);
+        assert!(diagnostics
+            .iter()
+            .all(|d| d.code == Problem::ConstantInitializerExpressionNotAllowed.code()));
     }
 }

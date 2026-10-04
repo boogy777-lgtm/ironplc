@@ -23,7 +23,7 @@ use super::compile::{
     finalize_function, CompileContext, CompiledFunction, CurrentFunctionReturn, DEFAULT_OP_TYPE,
 };
 use super::compile_expr::{compile_expr, emit_load_var};
-use super::compile_setup::emit_function_local_prologue;
+use super::compile_initial_value::emit_function_local_prologue;
 use super::compile_stmt::compile_statements;
 use super::compile_var_table::{record_decl_var_entry, record_return_var_entry, slot_entry};
 use super::type_info::{decl_type_info, resolve_type_name};
@@ -127,7 +127,7 @@ fn compile_user_method(
     param_var_off: VarIndex,
     ctx: &mut CompileContext,
     _builder: &mut ContainerBuilder,
-    _types: &TypeEnvironment,
+    types: &TypeEnvironment,
 ) -> Result<CompiledFunction, Diagnostic> {
     let mut current_index = param_var_off;
     let mut num_params: u16 = 0;
@@ -231,6 +231,7 @@ fn compile_user_method(
         &return_id,
         return_var_index,
         return_op_type,
+        types,
     )?;
 
     let body = ironplc_dsl::textual::Statements {

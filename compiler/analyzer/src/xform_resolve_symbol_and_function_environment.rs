@@ -345,9 +345,6 @@ impl<'a> Visitor<Infallible> for EnvironmentResolver<'a> {
             ironplc_dsl::common::DataTypeDeclarationKind::LateBound(_) => {
                 // Skip late-bound types for now
             }
-            ironplc_dsl::common::DataTypeDeclarationKind::StructureInitialization(_) => {
-                // Skip structure initializations for now
-            }
             ironplc_dsl::common::DataTypeDeclarationKind::Reference(decl) => {
                 self.declare_global(&decl.type_name.name, SymbolKind::Type);
             }

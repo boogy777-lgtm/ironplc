@@ -93,16 +93,17 @@ fn resolve_field_type(
     type_environment: &TypeEnvironment,
 ) -> Result<IntermediateType, Diagnostic> {
     match &element.init {
-        InitialValueAssignmentKind::Simple(simple_init) => {
+        // A value that is an expression of constants is not folded yet when the
+        // environment is first derived; the type of the field is the same.
+        InitialValueAssignmentKind::Simple(SimpleInitializer { type_name, .. })
+        | InitialValueAssignmentKind::SimpleExpr(SimpleExprInitializer { type_name, .. }) => {
             // Handle simple field types like BOOL, INT, etc.
-            let type_attrs = type_environment
-                .get(&simple_init.type_name)
-                .ok_or_else(|| {
-                    Diagnostic::problem(
-                        Problem::StructFieldTypeNotDeclared,
-                        Label::span(simple_init.type_name.span(), "Field type"),
-                    )
-                })?;
+            let type_attrs = type_environment.get(type_name).ok_or_else(|| {
+                Diagnostic::problem(
+                    Problem::StructFieldTypeNotDeclared,
+                    Label::span(type_name.span(), "Field type"),
+                )
+            })?;
             Ok(type_attrs.representation.clone())
         }
         InitialValueAssignmentKind::LateResolvedType(LateResolvedInitializer {

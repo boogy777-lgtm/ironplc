@@ -4,6 +4,8 @@
 use std::collections::HashMap;
 
 use ironplc_container::CharWidth;
+use ironplc_dsl::common::StructInitialValueAssignmentKind;
+use ironplc_dsl::construct::merge_member_inits;
 use ironplc_dsl::{
     common::{ElementaryTypeName, ReferenceTarget, SpecificationKind, TypeName},
     core::{Located, SourceSpan},
@@ -308,6 +310,24 @@ pub struct TypeEnvironment {
     duplicates: Vec<Diagnostic>,
 }
 
+/// The value `over` states laid over the value `base` declares: two structure
+/// values merge member by member, otherwise the stated value wins.
+fn lay_over(
+    base: Option<StructInitialValueAssignmentKind>,
+    over: Option<StructInitialValueAssignmentKind>,
+) -> Option<StructInitialValueAssignmentKind> {
+    match (base, over) {
+        (
+            Some(StructInitialValueAssignmentKind::Structure(base)),
+            Some(StructInitialValueAssignmentKind::Structure(over)),
+        ) => Some(StructInitialValueAssignmentKind::Structure(
+            merge_member_inits(&base, &over),
+        )),
+        (base, None) => base,
+        (_, over) => over,
+    }
+}
+
 impl TypeEnvironment {
     /// Initializes a new instance of the type environment.
     pub fn new() -> Self {
@@ -494,7 +514,10 @@ impl TypeEnvironment {
             .id_of(type_name)
             .and_then(|id| self.entries.get_mut(&id))
         {
-            entry.attributes.initial_value = Some(Box::new(value));
+            // A copy of a structure that states some members keeps the rest
+            // of what the structure it copies declares.
+            let declared = entry.attributes.initial_value.as_deref().cloned();
+            entry.attributes.initial_value = lay_over(declared, Some(value)).map(Box::new);
         }
     }
 
@@ -518,6 +541,14 @@ impl TypeEnvironment {
             return ironplc_dsl::common::ConstantKind::integer_literal(&ordinal.to_string())
                 .ok()
                 .map(ironplc_dsl::common::StructInitialValueAssignmentKind::Constant);
+        }
+        // A structure states some of its members and leaves the others at what
+        // the structure it names declares.
+        if let Kind::Structure(structure) = init {
+            let declared = self
+                .get(&structure.type_name)
+                .and_then(|attributes| attributes.initial_value.as_deref().cloned());
+            return lay_over(declared, init.stated_value());
         }
         init.stated_value().or_else(|| {
             let type_name = match init {
