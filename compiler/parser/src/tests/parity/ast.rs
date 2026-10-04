@@ -25,6 +25,7 @@ use ironplc_dsl::common::{
 use ironplc_dsl::core::SourceSpan;
 use ironplc_dsl::textual::{Expr, StmtKind, Variable};
 use ironplc_dsl::visitor::Visitor;
+use ironplc_syntax::lower::oop::Member;
 use ironplc_syntax::lower::var_blocks::{Block, InstanceInit};
 use std::fmt::Debug;
 
@@ -110,6 +111,15 @@ impl Subject for Vec<StmtKind> {
         for statement in self {
             let _ = statement.recurse_visit(collector);
         }
+    }
+}
+
+impl Subject for Member {
+    fn walk(&self, collector: &mut Collector) {
+        let _ = match self {
+            Member::Method(method) => method.recurse_visit(collector),
+            Member::Property(property) => property.recurse_visit(collector),
+        };
     }
 }
 

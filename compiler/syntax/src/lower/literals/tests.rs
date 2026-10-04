@@ -472,11 +472,14 @@ fn lower_constant_when_literal_inside_a_statement_then_offsets_are_into_the_whol
 #[test]
 fn lower_constant_when_node_is_not_a_literal_then_not_implemented_or_internal_error() {
     let cx = LowerCx::new(file());
-    let parse = parse_source_file("PROGRAM p\nEND_PROGRAM\n", &ParseOptions::default());
+    let parse = parse_source_file(
+        "CONFIGURATION c RESOURCE r ON t PROGRAM p : q; END_RESOURCE END_CONFIGURATION\n",
+        &ParseOptions::default(),
+    );
     let pending = parse
         .root
         .descendants()
-        .find(|node| node.kind() == K::ProgramDecl)
+        .find(|node| node.kind() == K::ConfigurationDecl)
         .expect("a declaration");
     assert_eq!(
         code(lower_constant(&cx, &pending)),

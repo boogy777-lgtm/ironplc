@@ -798,11 +798,14 @@ fn lower_expr_when_call_has_no_argument_list_then_internal_error() {
 
 #[test]
 fn lower_expr_when_node_is_not_an_expression_then_internal_error_or_not_implemented() {
-    let source = parse_source_file("PROGRAM p\nEND_PROGRAM\n", &all());
+    let source = parse_source_file(
+        "CONFIGURATION c RESOURCE r ON t PROGRAM p : q; END_RESOURCE END_CONFIGURATION\n",
+        &all(),
+    );
     let declaration = source
         .root
         .descendants()
-        .find(|node| node.kind() == SyntaxKind::ProgramDecl)
+        .find(|node| node.kind() == SyntaxKind::ConfigurationDecl)
         .expect("a declaration");
     assert_eq!(internal(&declaration), Some(NOT_IMPLEMENTED.to_string()));
     let name = built(SyntaxKind::Name, vec![]);

@@ -151,3 +151,40 @@ fn parity_when_oscat_marker_inside_string_then_both_accept_but_only_the_new_pars
         );
     }
 }
+
+#[test]
+fn parity_when_unit_and_member_corpus_files_then_each_is_lowered_and_compared_under_every_preset() {
+    // The files that hold units, methods, properties, interfaces and
+    // namespaces hold nothing that has no lowering rule yet (a chart or a
+    // configuration), so the whole-input comparison reaches each of them
+    // instead of skipping it.
+    let names = [
+        "../resources/test/oop.st",
+        "../resources/test/namespace.st",
+        "../plc2plc/resources/test/oop_rendered.st",
+        "tests/fixtures/codesys/oop_members.st",
+        "tests/fixtures/codesys/namespaces.st",
+    ];
+    let files = file_variants();
+    for name in names {
+        let (_, text) = files
+            .iter()
+            .find(|(key, _)| key == name)
+            .expect("the file is in the corpus");
+        let accepted = presets()
+            .iter()
+            .map(|preset| ironplc_syntax::parse_source_file(text, &preset.new))
+            .filter(|parse| parse.is_ok())
+            .collect::<Vec<_>>();
+        assert!(
+            !accepted.is_empty(),
+            "{name} is rejected under every preset"
+        );
+        for parse in accepted {
+            assert!(
+                !ironplc_syntax::lower::contains_pending(&parse.root),
+                "{name} is skipped for a kind without a rule"
+            );
+        }
+    }
+}

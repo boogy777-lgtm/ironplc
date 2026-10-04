@@ -3,8 +3,10 @@
 //! A site is a node that the lowering reads by itself, and that the legacy
 //! grammar reads with a rule of its own: a literal (`constant`), an operand or
 //! an argument or a condition (`expression`), a place that is written to or
-//! referred to (`variable`), a statement (`statement_list` over its tokens) and
-//! a list of statements. The legacy rule is applied to the legacy tokens of the
+//! referred to (`variable`), a statement (`statement_list` over its tokens),
+//! a list of statements, a unit, an interface or a namespace (`library` over its
+//! tokens) and a method or a property of a function block
+//! (`function_block_member`). The legacy rule is applied to the legacy tokens of the
 //! same bytes, which is a fair oracle for a node only when the node means the
 //! same thing outside its parent. A name that heads a member access, a
 //! subscript or a call is not a site: it is read with its parent, which is.
@@ -29,10 +31,12 @@ pub enum Unit {
     VariableInitial,
     VariableBlock,
     VariableBlockFacts,
+    Pou,
+    Member,
 }
 
 impl Unit {
-    pub const ALL: [Unit; 9] = [
+    pub const ALL: [Unit; 11] = [
         Unit::Literal,
         Unit::Expression,
         Unit::Variable,
@@ -42,6 +46,8 @@ impl Unit {
         Unit::VariableInitial,
         Unit::VariableBlock,
         Unit::VariableBlockFacts,
+        Unit::Pou,
+        Unit::Member,
     ];
 
     pub fn name(self) -> &'static str {
@@ -55,6 +61,8 @@ impl Unit {
             Unit::VariableInitial => "variable initial values",
             Unit::VariableBlock => "variable blocks",
             Unit::VariableBlockFacts => "variable blocks, initial values left out",
+            Unit::Pou => "units",
+            Unit::Member => "members",
         }
     }
 
@@ -80,6 +88,8 @@ impl Unit {
             Unit::TypeDeclaration => kind == K::TypeDecl,
             Unit::VariableInitial => kind == K::VarDecl,
             Unit::VariableBlock | Unit::VariableBlockFacts => kind == K::VarBlock,
+            Unit::Pou => disposition(kind) == Disposition::Lowered(Area::Unit),
+            Unit::Member => disposition(kind) == Disposition::Lowered(Area::Member),
         }
     }
 
@@ -231,6 +241,8 @@ fn standalone(kind: K) -> impl Iterator<Item = Unit> {
         Unit::TypeDeclaration,
         Unit::VariableBlock,
         Unit::VariableBlockFacts,
+        Unit::Pou,
+        Unit::Member,
     ]
     .into_iter()
     .filter(move |unit| unit.holds(kind))

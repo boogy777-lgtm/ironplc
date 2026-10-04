@@ -16,6 +16,7 @@ mod declarations;
 mod diagnostics_codes;
 mod differences;
 mod files;
+mod hand_built;
 mod legacy_options;
 mod literals;
 mod sites;

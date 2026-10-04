@@ -240,6 +240,15 @@ pub fn parse_library(tokens: Vec<Token>) -> Result<Vec<LibraryElementKind>, Diag
     plc_parser::library(&SliceByRef(&tokens[..]), &source).map_err(|e| parse_failure(&source, e))
 }
 
+/// Parses the tokens of one declaration or more, as the grammar's `library`
+/// rule reads them. Test-only: the oracle the lowering of a unit, an interface
+/// or a namespace is compared against.
+#[cfg(test)]
+pub fn parse_declarations(tokens: &[Token]) -> Result<Vec<LibraryElementKind>, Diagnostic> {
+    let source = Source::new(tokens);
+    plc_parser::library(&SliceByRef(tokens), &source).map_err(|e| parse_failure(&source, e))
+}
+
 /// Parses a list of IEC 61131-3 statements into object form.
 ///
 /// This is useful for parsing ST body content from PLCopen XML files
@@ -367,6 +376,21 @@ pub fn parse_var_block(
         access,
         instances: vec![],
     })
+}
+
+/// Parses the tokens of one method or property of a function block, as the
+/// grammar's `function_block_member` rule reads them. Test-only: the oracle the
+/// member lowering is compared against.
+#[cfg(test)]
+pub fn parse_member(tokens: &[Token]) -> Result<ironplc_syntax::lower::oop::Member, Diagnostic> {
+    use ironplc_syntax::lower::oop::Member;
+    let source = Source::new(tokens);
+    plc_parser::function_block_member_entry(&SliceByRef(tokens), &source)
+        .map(|member| match member {
+            FunctionBlockMember::Method(method) => Member::Method(method),
+            FunctionBlockMember::Property(property) => Member::Property(property),
+        })
+        .map_err(|e| parse_failure(&source, e))
 }
 
 enum StatementsOrEmpty {
@@ -2183,6 +2207,7 @@ parser! {
     pub rule generic_block_entry() -> Vec<VarDeclarations> = generic:var_generic_declarations() { vec![generic] }
     pub rule global_block_entry() -> Vec<VarDecl> = global_var_declarations()
     pub rule configuration_block_entry() -> Vec<InstanceInitKind> = instance_specific_initializations()
+    pub rule function_block_member_entry() -> FunctionBlockMember = function_block_member()
     pub rule program_configuration() -> ProgramConfiguration = tok(TokenType::Program) _ storage:(tok(TokenType::Retain) {DeclarationQualifier::Retain} / tok(TokenType::NonRetain) {DeclarationQualifier::NonRetain})? _ name:program_name() task_name:( _ tok(TokenType::With) _ t:task_name() { t })? _ tok(TokenType::Colon) _ pt:program_type_name() elements:(_ tok(TokenType::LeftParen) _ e:prog_conf_elements() _ tok(TokenType::RightParen) { e })? {
       let mut sources: Vec<ProgramConnectionSource> = Vec::new();
       let mut sinks: Vec<ProgramConnectionSink> = Vec::new();
