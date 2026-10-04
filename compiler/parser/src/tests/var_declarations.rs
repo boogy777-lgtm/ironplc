@@ -85,6 +85,61 @@ END_PROGRAM",
 }
 
 #[test]
+fn parse_when_program_block_mixes_located_and_plain_then_one_block_in_the_order_written() {
+    let lib = parse_text(
+        "PROGRAM main
+VAR
+    a : BOOL;
+    x AT %IX0.0 : BOOL;
+    b : BOOL;
+END_VAR
+VAR
+    c : BOOL;
+END_VAR
+END_PROGRAM",
+    );
+    let prog = cast!(&lib.elements[0], LibraryElementKind::ProgramDeclaration);
+    let names: Vec<String> = prog
+        .variables
+        .iter()
+        .map(|variable| {
+            variable
+                .identifier
+                .symbolic_id()
+                .map(|id| id.original().to_string())
+                .unwrap_or_default()
+        })
+        .collect();
+    assert_eq!(names, vec!["a", "x", "b", "c"]);
+    // The located declaration is in the block of the plain ones beside it,
+    // which is what the mixed-block rule looks for.
+    assert_eq!(prog.variables[0].block, prog.variables[1].block);
+    assert_eq!(prog.variables[1].block, prog.variables[2].block);
+    assert_ne!(prog.variables[2].block, prog.variables[3].block);
+    assert_eq!(
+        dsl::common::mixed_located_var_decls(&prog.variables).count(),
+        1
+    );
+}
+
+#[test]
+fn parse_when_blocks_without_plain_declarations_then_the_declarations_of_each_block_share_it() {
+    let lib = parse_text(
+        "PROGRAM main
+VAR a AT %IX0.0 : BOOL; b AT %IX0.1 : BOOL; END_VAR
+VAR_EXTERNAL c : INT; d : INT; END_VAR
+END_PROGRAM
+VAR_GLOBAL e : INT; f : INT; END_VAR",
+    );
+    let prog = cast!(&lib.elements[0], LibraryElementKind::ProgramDeclaration);
+    assert_eq!(prog.variables[0].block, prog.variables[1].block);
+    assert_eq!(prog.variables[2].block, prog.variables[3].block);
+    assert_ne!(prog.variables[1].block, prog.variables[2].block);
+    let global = cast!(&lib.elements[1], LibraryElementKind::GlobalVarDeclarations);
+    assert_eq!(global[0].block, global[1].block);
+}
+
+#[test]
 fn parse_when_located_var_has_name_then_identifier_span_is_the_name() {
     let source = "PROGRAM main
 VAR

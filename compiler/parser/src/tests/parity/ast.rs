@@ -25,6 +25,7 @@ use ironplc_dsl::common::{
 use ironplc_dsl::core::SourceSpan;
 use ironplc_dsl::textual::{Expr, StmtKind, Variable};
 use ironplc_dsl::visitor::Visitor;
+use ironplc_syntax::lower::var_blocks::{Block, InstanceInit};
 use std::fmt::Debug;
 
 /// A span as compared: offsets and file.
@@ -110,6 +111,44 @@ impl Subject for Vec<StmtKind> {
             let _ = statement.recurse_visit(collector);
         }
     }
+}
+
+impl Subject for Block {
+    fn walk(&self, collector: &mut Collector) {
+        for variable in &self.variables {
+            let _ = collector.visit_var_decl(variable);
+        }
+        for edge in &self.edges {
+            let _ = edge.recurse_visit(collector);
+        }
+        for access in &self.access {
+            let _ = access.recurse_visit(collector);
+        }
+        for instance in &self.instances {
+            let _ = match instance {
+                InstanceInit::FunctionBlock(init) => init.recurse_visit(collector),
+                InstanceInit::Located(init) => init.recurse_visit(collector),
+            };
+        }
+    }
+}
+
+/// The block without what its declarations are initialised with, so that what a
+/// block owns (the kind of variable, the qualifier, the names and locations,
+/// the order, which declarations share a block) is compared on its own: an
+/// initial value is compared where its own rule is.
+pub fn without_initial_values(mut block: Block) -> Block {
+    let none = || InitialValueAssignmentKind::None(SourceSpan::default());
+    for variable in &mut block.variables {
+        variable.initializer = none();
+    }
+    for instance in &mut block.instances {
+        match instance {
+            InstanceInit::FunctionBlock(init) => init.initializer.clear(),
+            InstanceInit::Located(init) => init.initializer = none(),
+        }
+    }
+    block
 }
 
 impl Subject for Library {
@@ -328,6 +367,52 @@ mod tests {
         }
         assert_eq!(first, regrouped, "PartialEq ignores the block");
         assert_eq!(compare(&first, &regrouped), vec![Component::Blocks]);
+    }
+
+    #[test]
+    fn without_initial_values_when_only_the_initial_values_differ_then_the_blocks_are_the_same() {
+        let block = |text: &str| {
+            let library = library(&format!(
+                "PROGRAM p VAR a : INT := {text}; END_VAR END_PROGRAM"
+            ));
+            let variables = match &library.elements[0] {
+                LibraryElementKind::ProgramDeclaration(program) => program.variables.clone(),
+                _ => vec![],
+            };
+            Block {
+                variables,
+                ..Block::default()
+            }
+        };
+        let (five, six) = (block("5"), block("6"));
+        assert!(!compare(&five, &six).is_empty());
+        assert!(compare(&without_initial_values(five), &without_initial_values(six)).is_empty());
+    }
+
+    #[test]
+    fn without_initial_values_when_blocks_are_regrouped_then_the_partition_still_differs() {
+        let library = library(TWO_BLOCKS);
+        let mut regrouped = library.clone();
+        let variables = |library: &Library| match &library.elements[0] {
+            LibraryElementKind::ProgramDeclaration(program) => program.variables.clone(),
+            _ => vec![],
+        };
+        if let Some(variables) = program_variables(&mut regrouped) {
+            let shared = variables[0].block;
+            for variable in variables.iter_mut() {
+                variable.block = shared;
+            }
+        }
+        let block = |library: &Library| {
+            without_initial_values(Block {
+                variables: variables(library),
+                ..Block::default()
+            })
+        };
+        assert_eq!(
+            compare(&block(&library), &block(&regrouped)),
+            vec![Component::Blocks]
+        );
     }
 
     #[test]

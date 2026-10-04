@@ -157,6 +157,23 @@ fn parse_source_file_when_variable_blocks_then_qualifier_names_location_and_edge
 }
 
 #[test]
+fn parse_source_file_when_subrange_in_a_variable_block_then_a_subrange_type_with_a_literal_value() {
+    assert_shapes(
+        &ParseOptions::all(),
+        &[
+            (
+                "PROGRAM p VAR x : INT(3..9) := 5; END_VAR VAR_EXTERNAL e : INT(0..1); END_VAR END_PROGRAM",
+                "ProgramDecl(PROGRAM Name(p) VarBlock(VAR VarDecl(Name(x) : SubrangeType(TypeRef(INT) ( Subrange(IntLiteral(3) .. IntLiteral(9)) )) Initializer(:= IntLiteral(5))) ; END_VAR) VarBlock(VAR_EXTERNAL VarDecl(Name(e) : SubrangeType(TypeRef(INT) ( Subrange(IntLiteral(0) .. IntLiteral(1)) ))) ; END_VAR) END_PROGRAM)",
+            ),
+            (
+                "VAR_GLOBAL g AT %MW0 : INT(0..5); END_VAR",
+                "VarBlock(VAR_GLOBAL VarDecl(Name(g) Location(AT %MW0) : SubrangeType(TypeRef(INT) ( Subrange(IntLiteral(0) .. IntLiteral(5)) ))) ; END_VAR)",
+            ),
+        ],
+    );
+}
+
+#[test]
 fn parse_source_file_when_type_declarations_then_each_kind_of_type_is_a_node() {
     assert_shapes(
         &ParseOptions::all(),

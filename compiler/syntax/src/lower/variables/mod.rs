@@ -214,8 +214,10 @@ pub fn lower_self_ref(cx: &LowerCx, node: &SyntaxNode) -> Result<SelfRefVariable
     })
 }
 
-/// The address a direct-address token spells, positioned at the token.
-fn direct_address(cx: &LowerCx, node: &SyntaxNode) -> Result<AddressAssignment, Diagnostic> {
+/// The address a direct-address token spells, positioned at the token: the
+/// last token of a direct-address expression and of the location of a
+/// declaration.
+pub fn lower_address(cx: &LowerCx, node: &SyntaxNode) -> Result<AddressAssignment, Diagnostic> {
     let token = last_token(cx, node)?;
     AddressAssignment::try_from(token.text())
         .map(|address| address.with_position(cx.token_span(&token)))
@@ -253,7 +255,7 @@ pub fn lower_symbolic(cx: &LowerCx, node: &SyntaxNode) -> Result<SymbolicVariabl
 /// Lowers a node that names a place: a direct address, or a symbolic variable.
 pub fn lower_variable(cx: &LowerCx, node: &SyntaxNode) -> Result<Variable, Diagnostic> {
     match node.kind() {
-        K::DirectAddressExpr => direct_address(cx, node).map(Variable::Direct),
+        K::DirectAddressExpr => lower_address(cx, node).map(Variable::Direct),
         _ => lower_symbolic(cx, node).map(Variable::Symbolic),
     }
 }

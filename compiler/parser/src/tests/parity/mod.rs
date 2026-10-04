@@ -10,6 +10,7 @@
 //! files; an exception that blames the fragment entry must be confirmed by
 //! that second verdict.
 
+mod blocks;
 mod combinations;
 mod declarations;
 mod diagnostics_codes;

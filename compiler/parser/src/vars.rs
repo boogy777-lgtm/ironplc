@@ -208,7 +208,10 @@ impl VarDeclarations {
                     vars.append(&mut v);
                 }
                 VarDeclarations::Incomplete(v) => {
-                    vars.append(&mut v.into_iter().map(|var| var.into()).collect());
+                    // The declarations of one block share the block.
+                    vars.append(&mut set_block(
+                        v.into_iter().map(|var| var.into()).collect(),
+                    ));
                 }
                 VarDeclarations::ProgramAccess(v) => {
                     remainder.push(VarDeclarations::ProgramAccess(v));

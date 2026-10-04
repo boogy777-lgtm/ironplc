@@ -27,10 +27,12 @@ pub enum Unit {
     Statements,
     TypeDeclaration,
     VariableInitial,
+    VariableBlock,
+    VariableBlockFacts,
 }
 
 impl Unit {
-    pub const ALL: [Unit; 7] = [
+    pub const ALL: [Unit; 9] = [
         Unit::Literal,
         Unit::Expression,
         Unit::Variable,
@@ -38,6 +40,8 @@ impl Unit {
         Unit::Statements,
         Unit::TypeDeclaration,
         Unit::VariableInitial,
+        Unit::VariableBlock,
+        Unit::VariableBlockFacts,
     ];
 
     pub fn name(self) -> &'static str {
@@ -49,7 +53,15 @@ impl Unit {
             Unit::Statements => "statement lists",
             Unit::TypeDeclaration => "type declarations",
             Unit::VariableInitial => "variable initial values",
+            Unit::VariableBlock => "variable blocks",
+            Unit::VariableBlockFacts => "variable blocks, initial values left out",
         }
+    }
+
+    /// True for a unit that compares part of what another unit compares of
+    /// the same node: it is a view of the node, not a part of it.
+    pub fn is_view(self) -> bool {
+        self == Unit::VariableBlockFacts
     }
 
     /// True for a node of `kind` that this unit compares.
@@ -67,6 +79,7 @@ impl Unit {
             Unit::Statements => kind == K::StatementList,
             Unit::TypeDeclaration => kind == K::TypeDecl,
             Unit::VariableInitial => kind == K::VarDecl,
+            Unit::VariableBlock | Unit::VariableBlockFacts => kind == K::VarBlock,
         }
     }
 
@@ -208,11 +221,19 @@ const PLAIN_BLOCKS: &[K] = &[
 /// the same tokens as an integer.
 const READ_BY_PARENT: &[(K, K)] = &[(K::CaseLabel, K::BitStringLiteral)];
 
-/// The kinds that are a site wherever they stand, whatever their parent.
-fn standalone(kind: K) -> Option<Unit> {
-    [Unit::Literal, Unit::Statements, Unit::TypeDeclaration]
-        .into_iter()
-        .find(|unit| unit.holds(kind))
+/// The units of which a node of the kind is a site wherever it stands,
+/// whatever its parent: a node is a site of every unit that compares its kind
+/// (a block is compared whole, and with its initial values left out).
+fn standalone(kind: K) -> impl Iterator<Item = Unit> {
+    [
+        Unit::Literal,
+        Unit::Statements,
+        Unit::TypeDeclaration,
+        Unit::VariableBlock,
+        Unit::VariableBlockFacts,
+    ]
+    .into_iter()
+    .filter(move |unit| unit.holds(kind))
 }
 
 fn is_literal(kind: K) -> bool {
@@ -305,12 +326,14 @@ pub fn sites(root: &SyntaxNode) -> Vec<Site> {
             });
         }
         let read_by_parent = READ_BY_PARENT.contains(&(parent.kind(), node.kind()));
-        if let Some(unit) = standalone(node.kind()).filter(|_| !read_by_parent) {
-            found.push(Site {
-                node,
-                parent: parent.kind(),
-                unit,
-            });
+        if !read_by_parent {
+            for unit in standalone(node.kind()) {
+                found.push(Site {
+                    node: node.clone(),
+                    parent: parent.kind(),
+                    unit,
+                });
+            }
         }
     }
     found
@@ -319,7 +342,7 @@ pub fn sites(root: &SyntaxNode) -> Vec<Site> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ironplc_syntax::{parse_statements, ParseOptions};
+    use ironplc_syntax::{parse_source_file, parse_statements, ParseOptions};
 
     /// The units compared at the sites of `source`, with the text of each.
     fn compared(source: &str) -> Vec<(Unit, String)> {
@@ -408,6 +431,36 @@ mod tests {
             units_of("FOR i := 1 TO b DO ; END_FOR;", "b"),
             vec![Unit::Expression]
         );
+    }
+
+    #[test]
+    fn sites_when_variable_block_then_a_site_of_the_block_and_of_its_facts_and_each_plain_declaration(
+    ) {
+        let parse = parse_source_file(
+            "PROGRAM p VAR a : INT; b AT %IX0.0 : BOOL; END_VAR END_PROGRAM",
+            &ParseOptions::all(),
+        );
+        let units: Vec<Unit> = sites(&parse.root)
+            .into_iter()
+            .filter(|site| {
+                matches!(
+                    site.unit,
+                    Unit::VariableBlock | Unit::VariableBlockFacts | Unit::VariableInitial
+                )
+            })
+            .map(|site| site.unit)
+            .collect();
+        // A declaration with a location is read with its block.
+        assert_eq!(
+            units,
+            vec![
+                Unit::VariableBlock,
+                Unit::VariableBlockFacts,
+                Unit::VariableInitial
+            ]
+        );
+        assert!(Unit::VariableBlockFacts.is_view());
+        assert!(!Unit::VariableBlock.is_view());
     }
 
     #[test]

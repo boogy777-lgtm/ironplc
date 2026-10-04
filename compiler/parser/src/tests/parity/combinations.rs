@@ -78,13 +78,15 @@ const VALUES: &[&str] = &[
 ];
 
 /// Where a type and a value are written: a declaration of a type, a member of a
-/// structure, and the variables of three kinds of block.
+/// structure, and the variables of the kinds of block.
 const PLACES: &[fn(&str) -> String] = &[
     |text| format!("TYPE t : {text}; END_TYPE"),
     |text| format!("TYPE t : STRUCT a : {text}; END_STRUCT; END_TYPE"),
     |text| format!("PROGRAM p VAR x : {text}; END_VAR END_PROGRAM"),
     |text| format!("PROGRAM p VAR_TEMP x, y : {text}; END_VAR END_PROGRAM"),
     |text| format!("FUNCTION f : INT VAR x : {text}; END_VAR f := 1; END_FUNCTION"),
+    |text| format!("PROGRAM p VAR_IN_OUT x : {text}; END_VAR END_PROGRAM"),
+    |text| format!("PROGRAM p VAR_EXTERNAL x : {text}; END_VAR END_PROGRAM"),
 ];
 
 #[test]

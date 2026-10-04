@@ -304,6 +304,71 @@ pub fn parse_variable_initial(tokens: &[Token]) -> Result<InitialValueAssignment
         .map_err(|e| parse_failure(&source, e))
 }
 
+/// The kind of declaration that holds a variable block, which decides the
+/// legacy rule that reads the block.
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BlockScope {
+    Program,
+    Function,
+    FunctionBlock,
+    Method,
+    Generic,
+    Global,
+    Configuration,
+}
+
+/// Parses the tokens of one variable block, as the rule of the declaration
+/// that holds it reads them, to what the block declares. Test-only: the
+/// oracle the block lowering is compared against. The blocks are split the way
+/// the declarations split them (variables, edges, access paths), and a block
+/// the legacy grammar reads as several is the several, in the order the
+/// declaration lists them.
+#[cfg(test)]
+pub fn parse_var_block(
+    tokens: &[Token],
+    scope: BlockScope,
+) -> Result<ironplc_syntax::lower::var_blocks::Block, Diagnostic> {
+    use ironplc_syntax::lower::var_blocks::{Block, InstanceInit};
+    let source = Source::new(tokens);
+    let input = SliceByRef(tokens);
+    let blocks = match scope {
+        BlockScope::Program => plc_parser::program_block_entry(&input, &source),
+        BlockScope::Function => plc_parser::function_block_entry(&input, &source),
+        BlockScope::FunctionBlock => plc_parser::function_block_type_block_entry(&input, &source),
+        BlockScope::Method => plc_parser::method_block_entry(&input, &source),
+        BlockScope::Generic => plc_parser::generic_block_entry(&input, &source),
+        BlockScope::Global => plc_parser::global_block_entry(&input, &source)
+            .map(|variables| vec![VarDeclarations::Var(variables)]),
+        BlockScope::Configuration => {
+            return plc_parser::configuration_block_entry(&input, &source)
+                .map(|inits| Block {
+                    instances: inits
+                        .into_iter()
+                        .map(|init| match init {
+                            InstanceInitKind::FunctionBlockInit(init) => {
+                                InstanceInit::FunctionBlock(init)
+                            }
+                            InstanceInitKind::LocatedVarInit(init) => InstanceInit::Located(init),
+                        })
+                        .collect(),
+                    ..Block::default()
+                })
+                .map_err(|e| parse_failure(&source, e));
+        }
+    }
+    .map_err(|e| parse_failure(&source, e))?;
+    let (variables, rest) = VarDeclarations::drain_var_decl(blocks);
+    let (edges, rest) = VarDeclarations::drain_edge_decl(rest);
+    let (access, _) = VarDeclarations::drain_access(rest);
+    Ok(Block {
+        variables,
+        edges,
+        access,
+        instances: vec![],
+    })
+}
+
 enum StatementsOrEmpty {
     Statements(Vec<StmtKind>),
     Empty(),
@@ -1495,7 +1560,7 @@ parser! {
     }
     rule located_var_declarations() -> VarDeclarations = tok(TokenType::Var) _ qualifier:(tok(TokenType::Constant) { DeclarationQualifier::Constant } / tok(TokenType::Retain) {DeclarationQualifier::Retain} / tok(TokenType::NonRetain) {DeclarationQualifier::NonRetain})? _ declarations:semisep_or_empty(<located_var_decl()>) _ tok(TokenType::EndVar) {
       let qualifier = qualifier.unwrap_or(DeclarationQualifier::Unspecified);
-      VarDeclarations::Located(VarDeclarations::map(declarations, &qualifier))
+      VarDeclarations::Located(set_block(VarDeclarations::map(declarations, &qualifier)))
     }
     rule located_var_decl() -> VarDecl = name:variable_name()? _ location:location() _ tok(TokenType::Colon) _ initializer:located_var_spec_init() {
       VarDecl {
@@ -1511,7 +1576,7 @@ parser! {
     // We use the same type as in other places for VarInit, but the external always omits the initializer
     rule external_var_declarations() -> VarDeclarations = tok(TokenType::VarExternal) _ qualifier:(tok(TokenType::Constant) {DeclarationQualifier::Constant})? _ declarations:semisep_or_empty(<external_declaration()>) _ tok(TokenType::EndVar) {
       let qualifier = qualifier.unwrap_or(DeclarationQualifier::Unspecified);
-      VarDeclarations::External(VarDeclarations::map(declarations, &qualifier))
+      VarDeclarations::External(set_block(VarDeclarations::map(declarations, &qualifier)))
     }
     // TODO external_declaration_spec needs subrange_specification, structure_type_name and others
     rule external_declaration_spec() -> InitialValueAssignmentKind = spec:array_specification() {
@@ -1540,12 +1605,12 @@ parser! {
     pub rule global_var_declarations() -> Vec<VarDecl> = tok(TokenType::VarGlobal) _ qualifier:global_var_declarations__qualifier()? _ declarations:semisep_or_empty(<global_var_decl()>) _ tok(TokenType::EndVar) {
       // TODO set the options - this is pretty similar to VarInit - maybe it should be the same
       let declarations = declarations.into_iter().flatten();
-      declarations.into_iter().map(|declaration| {
+      set_block(declarations.into_iter().map(|declaration| {
         let qualifier = qualifier.clone().unwrap_or(DeclarationQualifier::Unspecified);
         let mut declaration = declaration;
         declaration.qualifier = qualifier;
         declaration
-      }).collect()
+      }).collect())
     }
     // TODO this doesn't pass all information. I suspect the rule from the description is not right
     rule global_var_decl() -> (Vec<VarDecl>) = vs:global_var_spec() _ tok:tok(TokenType::Colon) _ initializer:(l:located_var_spec_init() { l } / f:function_block_type_name() { InitialValueAssignmentKind::FunctionBlock(FunctionBlockInitialValueAssignment{type_name: f, init: vec![] })})? {
@@ -1894,23 +1959,11 @@ parser! {
     // declarations (e.g. `Motor : FB; xStart AT %IX0.0 : BOOL;`).
     rule program_var_declarations() -> Vec<VarDeclarations> = tok(TokenType::Var) _ qualifier:(tok(TokenType::Constant) { DeclarationQualifier::Constant } / tok(TokenType::Retain) { DeclarationQualifier::Retain } / tok(TokenType::NonRetain) { DeclarationQualifier::NonRetain } / tok(TokenType::Persistent) { DeclarationQualifier::Persistent })? _ declarations:semisep_or_empty(<program_var_decl()>) _ tok(TokenType::EndVar) {
       let qualifier = qualifier.unwrap_or(DeclarationQualifier::Unspecified);
-      let mut located = Vec::new();
-      let mut regular = Vec::new();
-      for decl in declarations.into_iter().flatten() {
-        let decl = decl.with_qualifier(qualifier.clone());
-        match &decl.identifier {
-          VariableIdentifier::Direct(_) => located.push(decl),
-          VariableIdentifier::Symbol(_) => regular.push(decl),
-        }
-      }
-      let mut result = Vec::new();
-      if !regular.is_empty() {
-        result.push(VarDeclarations::Var(regular));
-      }
-      if !located.is_empty() {
-        result.push(VarDeclarations::Located(located));
-      }
-      result
+      // The block keeps its declarations in the order written, plain and
+      // located together, as one block: a located declaration beside a plain
+      // one is what `mixed_located_var_decls` looks for in the block.
+      let vars = declarations.into_iter().flatten().map(|decl| decl.with_qualifier(qualifier.clone())).collect();
+      vec![VarDeclarations::Var(set_block(vars))]
     }
 
     // TODO program_access_decls
@@ -2119,6 +2172,17 @@ parser! {
     /// and initial value, which the test-only oracle reads on its own: the
     /// initializer its names share.
     pub rule variable_initial_entry() -> InitialValueAssignmentKind = d:var_init_decl() {? d.into_iter().next().map(|first| first.initializer).ok_or("a variable") }
+    /// A variable block as the declaration that holds it reads it, one rule
+    /// for each kind of declaration, with the alternatives in the order that
+    /// declaration lists them. Test-only: the oracle the block lowering is
+    /// compared against.
+    pub rule program_block_entry() -> Vec<VarDeclarations> = access:program_access_decls() { vec![access] } / io_var_declarations() / program_var_declarations() / other:other_var_declarations() { vec![other] } / located:located_var_declarations() { vec![located] }
+    pub rule function_block_entry() -> Vec<VarDeclarations> = io_var_declarations() / func:function_var_decls() { vec![func] } / temp:temp_var_decls() { vec![temp] } / stat:var_stat_declarations() { vec![stat] }
+    pub rule function_block_type_block_entry() -> Vec<VarDeclarations> = io_var_declarations() / other:other_var_declarations() { vec![other] } / temp:temp_var_decls() { vec![temp] }
+    pub rule method_block_entry() -> Vec<VarDeclarations> = io_var_declarations() / other:other_var_declarations() { vec![other] } / temp:temp_var_decls() { vec![temp] } / inst:var_inst_declarations() { vec![inst] }
+    pub rule generic_block_entry() -> Vec<VarDeclarations> = generic:var_generic_declarations() { vec![generic] }
+    pub rule global_block_entry() -> Vec<VarDecl> = global_var_declarations()
+    pub rule configuration_block_entry() -> Vec<InstanceInitKind> = instance_specific_initializations()
     pub rule program_configuration() -> ProgramConfiguration = tok(TokenType::Program) _ storage:(tok(TokenType::Retain) {DeclarationQualifier::Retain} / tok(TokenType::NonRetain) {DeclarationQualifier::NonRetain})? _ name:program_name() task_name:( _ tok(TokenType::With) _ t:task_name() { t })? _ tok(TokenType::Colon) _ pt:program_type_name() elements:(_ tok(TokenType::LeftParen) _ e:prog_conf_elements() _ tok(TokenType::RightParen) { e })? {
       let mut sources: Vec<ProgramConnectionSource> = Vec::new();
       let mut sinks: Vec<ProgramConnectionSink> = Vec::new();

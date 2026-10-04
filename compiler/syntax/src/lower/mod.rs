@@ -32,11 +32,13 @@ pub mod statements;
 pub mod tree;
 pub mod types;
 pub mod values;
+pub mod var_blocks;
 pub mod variables;
 
 use self::statements::lower_statement_list;
 use self::tree::child_of;
 use self::types::lower_type_block;
+use self::var_blocks::lower_variables;
 use crate::parser::options::ParseOptions;
 use crate::parser::Parse;
 use crate::syntax_kind::{NodeKind, SyntaxKind, SyntaxNode, SyntaxToken};
@@ -73,6 +75,9 @@ pub enum Area {
     /// array, the members of a structure and a qualified enumeration value
     /// (`initializers`).
     Initializer,
+    /// What a variable block declares: the blocks, their declarations and
+    /// the other items a block may hold (`var_blocks`).
+    Block,
 }
 
 /// What lowering does with a kind the tree can hold.
@@ -158,6 +163,11 @@ fn node_disposition(node: NodeKind) -> Disposition {
         | NodeKind::StructInit
         | NodeKind::StructInitElement
         | NodeKind::EnumValueRef => Lowered(Area::Initializer),
+        NodeKind::VarBlock | NodeKind::VarDecl | NodeKind::AccessDecl | NodeKind::InstanceInit => {
+            Lowered(Area::Block)
+        }
+        // The parts of a declaration, read by the rule of the declaration.
+        NodeKind::Location | NodeKind::EdgeSpec => Structural,
         // The parts of a statement, read by the rule of the statement.
         NodeKind::AssignOp
         | NodeKind::ElsifClause
@@ -197,12 +207,6 @@ fn node_disposition(node: NodeKind) -> Disposition {
         | NodeKind::MemberQualifier
         | NodeKind::ExtendsClause
         | NodeKind::ImplementsClause
-        | NodeKind::VarBlock
-        | NodeKind::VarDecl
-        | NodeKind::Location
-        | NodeKind::EdgeSpec
-        | NodeKind::AccessDecl
-        | NodeKind::InstanceInit
         | NodeKind::ConfigurationDecl
         | NodeKind::ResourceDecl
         | NodeKind::TaskDecl
@@ -383,9 +387,20 @@ fn type_elements(cx: &LowerCx, node: &SyntaxNode) -> Result<Vec<LibraryElementKi
         .collect())
 }
 
+/// `VAR_GLOBAL ... END_VAR` at the top of a file is one element: the
+/// variables it declares.
+fn global_elements(cx: &LowerCx, node: &SyntaxNode) -> Result<Vec<LibraryElementKind>, Diagnostic> {
+    Ok(vec![LibraryElementKind::GlobalVarDeclarations(
+        lower_variables(cx, node)?,
+    )])
+}
+
 /// The top-level nodes that have a rule, and the rule of each. A node of any
 /// other kind has none yet.
-const ELEMENTS: &[(SyntaxKind, ElementRule)] = &[(SyntaxKind::TypeBlock, type_elements)];
+const ELEMENTS: &[(SyntaxKind, ElementRule)] = &[
+    (SyntaxKind::TypeBlock, type_elements),
+    (SyntaxKind::VarBlock, global_elements),
+];
 
 /// Lowers the tree of a whole file to a library.
 ///
@@ -538,6 +553,17 @@ mod tests {
             let parse = parse_expression(source, &ParseOptions::all());
             assert!(!contains_pending(&parse.root), "{source}");
         }
+    }
+
+    #[test]
+    fn contains_pending_when_only_global_variable_blocks_then_false() {
+        let parse = parse_source_file(
+            "VAR_GLOBAL a AT %MW0 : INT; END_VAR
+VAR_GLOBAL b : INT := 1; END_VAR
+",
+            &options(),
+        );
+        assert!(!contains_pending(&parse.root));
     }
 
     #[test]
