@@ -19,8 +19,8 @@ When adding new syntax, ensure every applicable item is complete:
 - [ ] **End-to-end execution test**: Parse → compile → run → verify variable values
 - [ ] **Whitespace invariance**: Every `_` a new grammar rule introduces earns a row in `parser/src/tests/whitespace.rs`, so a rule that later loses its `_` fails there (see [Which leg asserts what](#which-leg-asserts-what-avoid-duplicate-tests))
 - [ ] **Non-standard gating**: If not standard IEC 61131-3, gate behind `--allow-x` flag
-- [ ] **LSP integration**: If a new `--allow-x` flag, add to LSP `extract_compiler_options`
-- [ ] **Documentation**: If a new `--allow-x` flag, update `docs/explanation/enabling-dialects-and-features.rst`, `docs/reference/compiler/ironplcc.rst`, and the flag table in this file
+- [ ] **Flag wiring**: If a new `--allow-x` flag, add its `define_compiler_options!` entry and its clap `FileArgs` field (see [Adding a New Flag](#adding-a-new-flag)); LSP, MCP and playground derive from the entry
+- [ ] **Documentation**: If a new `--allow-x` flag, update `docs/explanation/enabling-dialects-and-features.rst` and `docs/reference/compiler/ironplcc.rst`
 
 Not every syntax change requires all items. A new operator might not need new tokens. A token-level fix might not need codegen changes. Use judgment, but **always** include both round-trip and execution tests when the syntax produces executable code.
 
@@ -324,17 +324,28 @@ flag on; that is where the vendor mapping belongs.
 
 When no existing flag covers the extension, add a new one. Update these files in order:
 
-#### 1. `CompilerOptions` struct (`parser/src/options.rs`)
+#### 1. Flag entry in `define_compiler_options!` (`parser/src/options.rs`)
+
+The entry is the source of truth: description, CLI form, the dialects that
+enable it, and the field name.
 
 ```rust
-#[derive(Debug, Default, Clone, Copy)]
-pub struct CompilerOptions {
-    // ... existing fields ...
-    pub allow_my_extension: bool,
-}
+"Allow [description of the syntax it gates]",
+"--allow-my-extension",
+[Codesys, TwinCat],
+allow_my_extension,
 ```
 
-#### 2. CLI `FileArgs` (`plc2x/bin/main.rs`)
+The macro generates the `CompilerOptions` field, `from_dialect()` and the
+`FEATURE_DESCRIPTORS` entry. The LSP (`ironplc-cli/src/lsp.rs`), MCP and
+playground derive their flag handling from `FEATURE_DESCRIPTORS` — do not
+edit them for a new flag.
+
+#### 2. CLI `FileArgs` (`ironplc-cli/bin/main.rs`)
+
+clap needs a static field per argument, so this list is the one hand-maintained
+place. The test `file_args_when_each_dialect_flag_cli_form_passed_then_option_enabled`
+fails CI if a flag is missing here.
 
 Add the clap argument:
 
@@ -356,32 +367,15 @@ fn compiler_options(&self) -> CompilerOptions {
 }
 ```
 
-**Also add the flag to the relevant dialects** by listing them in the flag's own entry in `define_compiler_options!` (in `parser/src/options.rs`), e.g. `[Codesys, TwinCat]`. `from_dialect()` is generated from those tags — there are no per-dialect arms to edit.
-
-#### 3. LSP extraction (`plc2x/src/lsp.rs`)
-
-Add to `extract_compiler_options()` using the `|=` pattern:
-
-```rust
-options.allow_my_extension |= flag("allowMyExtension");  // camelCase for LSP
-```
-
-Add a test for the LSP extraction.
-
-#### 4. Playground defaults (`playground/src/lib.rs`)
-
-If the extension should be enabled by default in the playground, set it there.
-
-#### 5. Implement the gating
+#### 3. Implement the gating
 
 Use either the token demotion pattern, validation rule pattern, or analyzer-level check (see sections above). Always test both the allowed and disallowed cases.
 
-#### 6. Documentation
+#### 4. Documentation
 
 Update these files to document the new flag:
 - `docs/explanation/enabling-dialects-and-features.rst` — add to the Language Extensions section
 - `docs/reference/compiler/ironplcc.rst` — add to the Options section
-- Update the flag table in this file (syntax-support-guide.md)
 
 ## plc2plc Round-Trip Testing
 
@@ -585,7 +579,7 @@ Keyword demotions are added as a `match` arm in `xform_demote_keywords::apply()`
 ## Common Mistakes
 
 - **Forgetting dialect presets**: Every new `--allow-x` flag must list the dialects that enable it in its `define_compiler_options!` entry. Without this, every dialect silently ignores the new feature.
-- **Missing LSP wiring**: The flag works on the CLI but not in VS Code because `extract_compiler_options()` in `plc2x/src/lsp.rs` was not updated. Always add LSP extraction for new flags.
+- **Hand-wiring a derived surface**: Adding per-flag code to the LSP, MCP or playground. They derive from `FEATURE_DESCRIPTORS`; only the clap `FileArgs` is hand-maintained (and guarded by a completeness test).
 - **No round-trip test**: The feature parses but the renderer in `plc2plc` cannot write it back. Always add the round-trip test.
 - **No execution test**: The feature parses and analyzes but was never proven to execute correctly. Always add at least one end-to-end test.
 - **Creating a flag for standard syntax**: Only extensions get `--allow-x` flags. Standard IEC 61131-3 syntax is always on (or gated by `--dialect`).
@@ -606,11 +600,11 @@ Review `parser/src/options.rs` — does an existing flag cover this? If not, pro
 
 #### Step 2: Add the Flag
 
-1. Add `allow_repeat_limit` to `CompilerOptions` dialect fields in the `define_compiler_options!` macro
+1. Add an `allow_repeat_limit` entry to `define_compiler_options!`, listing the dialects that enable it
 2. Add `--allow-repeat-limit` to CLI `FileArgs`
 3. Add `|= self.allow_repeat_limit` in `compiler_options()`
-4. Add to relevant dialect presets in `CompilerOptions::from_dialect()`
-5. Add LSP extraction for `"allowRepeatLimit"`
+
+The LSP, MCP and playground pick the flag up from `FEATURE_DESCRIPTORS`.
 
 #### Step 3: Add Tokens (if needed)
 
