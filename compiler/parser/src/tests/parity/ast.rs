@@ -20,7 +20,9 @@
 //!   ids renumbered by first appearance.
 
 use ironplc_dsl::common::{
-    ConstantKind, DataTypeDeclarationKind, InitialValueAssignmentKind, Library, VarDecl,
+    ConstantKind, DataTypeDeclarationKind, FunctionBlockBodyKind, FunctionReturnType,
+    InitialValueAssignmentKind, Library, LibraryElementKind, MethodDeclaration,
+    PropertyDeclaration, VarDecl,
 };
 use ironplc_dsl::core::SourceSpan;
 use ironplc_dsl::textual::{Expr, StmtKind, Variable};
@@ -159,6 +161,89 @@ pub fn without_initial_values(mut block: Block) -> Block {
         }
     }
     block
+}
+
+/// The declarations without the parts that have comparisons of their own, so
+/// that what a unit or a member owns (its name, its qualifiers, what it extends
+/// and implements, the kind of each variable and which share a block, the kind
+/// of body, the accessors and the order of the members) is compared on its own:
+/// the initial values of the variables, the statements of the bodies and the
+/// position of the name of a return type are compared where their own rules
+/// are.
+pub fn without_inner_parts(mut elements: Vec<LibraryElementKind>) -> Vec<LibraryElementKind> {
+    for element in &mut elements {
+        match element {
+            LibraryElementKind::ProgramDeclaration(program) => {
+                mask_variables(&mut program.variables);
+                mask_body(&mut program.body);
+            }
+            LibraryElementKind::FunctionDeclaration(function) => {
+                mask_variables(&mut function.variables);
+                mask_return_type(&mut function.return_type);
+                function.body.clear();
+            }
+            LibraryElementKind::FunctionBlockDeclaration(block) => {
+                mask_variables(&mut block.variables);
+                mask_body(&mut block.body);
+                block.methods.iter_mut().for_each(mask_method);
+                block.properties.iter_mut().for_each(mask_property);
+            }
+            LibraryElementKind::GlobalVarDeclarations(variables) => mask_variables(variables),
+            LibraryElementKind::NamespaceDeclaration(namespace) => {
+                let inner = std::mem::take(&mut namespace.elements);
+                namespace.elements = without_inner_parts(inner)
+                    .into_iter()
+                    .filter(|element| {
+                        !matches!(element, LibraryElementKind::DataTypeDeclaration(_))
+                    })
+                    .collect();
+            }
+            _ => {}
+        }
+    }
+    elements
+}
+
+/// The member without the parts that have comparisons of their own.
+pub fn member_without_inner_parts(mut member: Member) -> Member {
+    match &mut member {
+        Member::Method(method) => mask_method(method),
+        Member::Property(property) => mask_property(property),
+    }
+    member
+}
+
+fn mask_variables(variables: &mut [VarDecl]) {
+    for variable in variables {
+        variable.initializer = InitialValueAssignmentKind::None(SourceSpan::default());
+    }
+}
+
+fn mask_body(body: &mut FunctionBlockBodyKind) {
+    if let FunctionBlockBodyKind::Statements(statements) = body {
+        statements.body.clear();
+    }
+}
+
+fn mask_return_type(return_type: &mut FunctionReturnType) {
+    if let FunctionReturnType::Named(name) = return_type {
+        name.name.span = SourceSpan::default();
+    }
+}
+
+fn mask_method(method: &mut MethodDeclaration) {
+    mask_variables(&mut method.variables);
+    method.body.clear();
+    if let Some(return_type) = &mut method.return_type {
+        mask_return_type(return_type);
+    }
+}
+
+fn mask_property(property: &mut PropertyDeclaration) {
+    mask_return_type(&mut property.property_type);
+    for accessor in [&mut property.get, &mut property.set].into_iter().flatten() {
+        mask_method(accessor);
+    }
 }
 
 impl Subject for Library {
@@ -425,6 +510,30 @@ mod tests {
         );
     }
 
+    #[test]
+    fn without_inner_parts_when_only_an_inner_part_differs_then_the_same_and_when_an_own_fact_differs_then_not(
+    ) {
+        let elements = |source: &str| library(source).elements;
+        let masked = |source: &str| without_inner_parts(elements(source));
+        let compare_all = |a: &str, b: &str| {
+            compare(
+                &Library {
+                    elements: masked(a),
+                },
+                &Library {
+                    elements: masked(b),
+                },
+            )
+        };
+        let unit = |body: &str, init: &str, name: &str| {
+            format!("PROGRAM {name} VAR a : INT := {init}; END_VAR {body} END_PROGRAM")
+        };
+        // The initial value and the statements have comparisons of their own.
+        assert!(compare_all(&unit("x := 1;", "1", "p"), &unit("x := 2;", "2", "p")).is_empty());
+        // The name, and the kind of body, are the unit's own.
+        assert!(!compare_all(&unit("x := 1;", "1", "p"), &unit("x := 1;", "1", "q")).is_empty());
+        assert!(!compare_all(&unit("x := 1;", "1", "p"), &unit("", "1", "p")).is_empty());
+    }
     #[test]
     fn partition_when_ids_arbitrary_then_renumbered_by_first_appearance() {
         assert_eq!(partition(&[40, 40, 7, 40, 9]), vec![0, 0, 1, 0, 2]);

@@ -60,7 +60,7 @@ pub const DIFFERENCES: &[Difference] = &[
     Difference {
         scope: Scope::Input("tests/fixtures/lexical/oscat_several_pairs.st"),
         reason: SEVERAL_PAIRS,
-        expected: 90,
+        expected: 108,
     },
     Difference {
         scope: Scope::Input("VAR_GLOBAL AT %MW0 : INT; END_VAR"),
@@ -133,7 +133,7 @@ pub const DIFFERENCES: &[Difference] = &[
     Difference {
         scope: Scope::AcceptedOnPurpose,
         reason: LISTED_INPUT,
-        expected: 430,
+        expected: 550,
     },
 ];
 

@@ -36,7 +36,9 @@
 //! explains it, and a difference of the enclosing expression itself, with no
 //! operand differing, is still found.
 
-use super::ast::{compare, explain, Component, Subject};
+use super::ast::{
+    compare, explain, member_without_inner_parts, without_inner_parts, Component, Subject,
+};
 use super::blocks::judge_block;
 use super::declaration_table::DECLARATIONS;
 use super::differences::DIFFERENCES;
@@ -52,7 +54,8 @@ use crate::parser::{
 };
 use crate::token::{Token, TokenType};
 use ironplc_dsl::common::{
-    DataTypeDeclarationKind, InitialValueAssignmentKind, Library, SimpleDeclaration,
+    DataTypeDeclarationKind, InitialValueAssignmentKind, Library, LibraryElementKind,
+    SimpleDeclaration,
 };
 use ironplc_dsl::core::{FileId, SourceSpan};
 use ironplc_dsl::diagnostic::Diagnostic;
@@ -62,7 +65,7 @@ use ironplc_syntax::lower::{
     initializers::lower_initial_value,
     literals::lower_constant,
     lower_element, lower_library,
-    oop::lower_member,
+    oop::{lower_member, Member},
     statements::{lower_statement, lower_statement_list},
     types::lower_type_declaration,
     variables::lower_variable,
@@ -341,12 +344,30 @@ fn judge(site: &Site, tokens: &[Token], cx: &LowerCx, written: &str) -> Outcome 
             lower_initial_value(cx, &site.node),
         ),
         Unit::VariableBlock | Unit::VariableBlockFacts => judge_block(site, tokens, cx, written),
-        Unit::Pou => settle(
-            written,
-            parse_declarations(tokens).map(|elements| Library { elements }),
-            lower_element(cx, &site.node).map(|elements| Library { elements }),
-        ),
-        Unit::Member => settle(written, parse_member(tokens), lower_member(cx, &site.node)),
+        Unit::Pou | Unit::PouFacts => {
+            let kept = |elements: Vec<LibraryElementKind>| Library {
+                elements: match site.unit {
+                    Unit::PouFacts => without_inner_parts(elements),
+                    _ => elements,
+                },
+            };
+            settle(
+                written,
+                parse_declarations(tokens).map(kept),
+                lower_element(cx, &site.node).map(kept),
+            )
+        }
+        Unit::Member | Unit::MemberFacts => {
+            let kept = |member: Member| match site.unit {
+                Unit::MemberFacts => member_without_inner_parts(member),
+                _ => member,
+            };
+            settle(
+                written,
+                parse_member(tokens).map(kept),
+                lower_member(cx, &site.node).map(kept),
+            )
+        }
     }
 }
 
@@ -540,7 +561,7 @@ pub fn run(cases: &[Case], presets: &[Preset]) -> Tally {
 /// written and never fall. The sites equal to the legacy ones, by unit, those
 /// literals among them in inputs that are nothing but a literal, and whole
 /// inputs lowered as libraries.
-const MIN_EQUAL: [(Unit, usize); 11] = [
+const MIN_EQUAL: [(Unit, usize); 13] = [
     (Unit::Literal, 18_000),
     (Unit::Expression, 30_000),
     (Unit::Variable, 9_500),
@@ -552,6 +573,8 @@ const MIN_EQUAL: [(Unit, usize); 11] = [
     (Unit::VariableBlockFacts, 7_500),
     (Unit::Pou, 1_900),
     (Unit::Member, 270),
+    (Unit::PouFacts, 5_400),
+    (Unit::MemberFacts, 470),
 ];
 const MIN_BODIES_EQUAL: usize = 4_500;
 const MIN_LITERAL_ONLY_EQUAL: usize = 400;

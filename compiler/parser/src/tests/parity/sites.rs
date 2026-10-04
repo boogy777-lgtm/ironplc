@@ -33,10 +33,12 @@ pub enum Unit {
     VariableBlockFacts,
     Pou,
     Member,
+    PouFacts,
+    MemberFacts,
 }
 
 impl Unit {
-    pub const ALL: [Unit; 11] = [
+    pub const ALL: [Unit; 13] = [
         Unit::Literal,
         Unit::Expression,
         Unit::Variable,
@@ -48,6 +50,8 @@ impl Unit {
         Unit::VariableBlockFacts,
         Unit::Pou,
         Unit::Member,
+        Unit::PouFacts,
+        Unit::MemberFacts,
     ];
 
     pub fn name(self) -> &'static str {
@@ -63,13 +67,18 @@ impl Unit {
             Unit::VariableBlockFacts => "variable blocks, initial values left out",
             Unit::Pou => "units",
             Unit::Member => "members",
+            Unit::PouFacts => "units, parts with comparisons of their own left out",
+            Unit::MemberFacts => "members, parts with comparisons of their own left out",
         }
     }
 
     /// True for a unit that compares part of what another unit compares of
     /// the same node: it is a view of the node, not a part of it.
     pub fn is_view(self) -> bool {
-        self == Unit::VariableBlockFacts
+        matches!(
+            self,
+            Unit::VariableBlockFacts | Unit::PouFacts | Unit::MemberFacts
+        )
     }
 
     /// True for a node of `kind` that this unit compares.
@@ -88,8 +97,10 @@ impl Unit {
             Unit::TypeDeclaration => kind == K::TypeDecl,
             Unit::VariableInitial => kind == K::VarDecl,
             Unit::VariableBlock | Unit::VariableBlockFacts => kind == K::VarBlock,
-            Unit::Pou => disposition(kind) == Disposition::Lowered(Area::Unit),
-            Unit::Member => disposition(kind) == Disposition::Lowered(Area::Member),
+            Unit::Pou | Unit::PouFacts => disposition(kind) == Disposition::Lowered(Area::Unit),
+            Unit::Member | Unit::MemberFacts => {
+                disposition(kind) == Disposition::Lowered(Area::Member)
+            }
         }
     }
 
@@ -243,6 +254,8 @@ fn standalone(kind: K) -> impl Iterator<Item = Unit> {
         Unit::VariableBlockFacts,
         Unit::Pou,
         Unit::Member,
+        Unit::PouFacts,
+        Unit::MemberFacts,
     ]
     .into_iter()
     .filter(move |unit| unit.holds(kind))
