@@ -117,39 +117,55 @@ const fn position(allowed: &'static [Spec]) -> Context {
     }
 }
 
+/// A position that declares variables. A subrange type holds its value as an
+/// integer, so the value after it is a literal here as in a `TYPE`.
+const fn variables(allowed: &'static [Spec]) -> Context {
+    Context {
+        literal_subrange: true,
+        ..position(allowed)
+    }
+}
+
 use Spec as S;
 
 /// `VAR`, `VAR_INPUT`, `VAR_OUTPUT`.
-pub(super) const VARIABLES: Context = position(&[
+pub(super) const VARIABLES: Context = variables(&[
     S::Array,
     S::String,
     S::Reference,
     S::Params,
     S::Enumeration,
+    S::Subrange,
     S::Named,
     S::Call,
 ]);
 /// `VAR_TEMP`, `VAR_STAT`, `VAR_INST`, `VAR_GENERIC` and the `VAR` of a
 /// function.
-pub(super) const TEMPORARIES: Context =
-    position(&[S::Array, S::String, S::Reference, S::Enumeration, S::Named]);
+pub(super) const TEMPORARIES: Context = variables(&[
+    S::Array,
+    S::String,
+    S::Reference,
+    S::Enumeration,
+    S::Subrange,
+    S::Named,
+]);
 /// `VAR_IN_OUT`.
 pub(super) const BORROWED: Context =
-    position(&[S::Array, S::String, S::Enumeration, S::Subrange, S::Named]);
+    variables(&[S::Array, S::String, S::Enumeration, S::Subrange, S::Named]);
 /// `VAR_EXTERNAL`.
-pub(super) const EXTERNAL: Context = position(&[S::Array, S::Named]);
+pub(super) const EXTERNAL: Context = variables(&[S::Array, S::Subrange, S::Named]);
 /// `VAR_GLOBAL`.
 pub(super) const GLOBAL: Context = Context {
     structured: false,
-    ..position(&[S::Array, S::Named])
+    ..variables(&[S::Array, S::Subrange, S::Named])
 };
 /// A variable with a complete location (`x AT %IX0.0 : BOOL`).
-pub(super) const COMPLETE_ADDRESS: &[Spec] = &[S::Array, S::Enumeration, S::Named];
+pub(super) const COMPLETE_ADDRESS: &[Spec] = &[S::Array, S::Enumeration, S::Subrange, S::Named];
 /// A variable with an incomplete location (`x AT %I* : STRING[10]`).
 pub(super) const INCOMPLETE_ADDRESS: &[Spec] =
     &[S::Array, S::String, S::Enumeration, S::Subrange, S::Named];
 /// `VAR_CONFIG`.
-pub(super) const INSTANCE: Context = position(&[S::Array, S::Named]);
+pub(super) const INSTANCE: Context = variables(&[S::Array, S::Subrange, S::Named]);
 /// A type that a `TYPE` declaration defines.
 pub(super) const DECLARED: Context = Context {
     declares: true,
@@ -197,10 +213,11 @@ mod tests {
     }
 
     #[test]
-    fn initial_when_subrange_then_literal_in_a_type_declaration_and_a_member() {
+    fn initial_when_subrange_then_literal_in_a_declaration_and_a_member() {
         assert_eq!(DECLARED.initial(Spec::Subrange), Initial::Literal);
         assert_eq!(MEMBER.initial(Spec::Subrange), Initial::Literal);
-        assert_eq!(BORROWED.initial(Spec::Subrange), Initial::Expression);
+        assert_eq!(VARIABLES.initial(Spec::Subrange), Initial::Literal);
+        assert_eq!(BORROWED.initial(Spec::Subrange), Initial::Literal);
     }
 
     #[test]

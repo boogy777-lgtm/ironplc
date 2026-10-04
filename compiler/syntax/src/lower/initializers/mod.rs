@@ -23,7 +23,7 @@ use super::declarations::{build, row, Form, Init, Parts, Row};
 use super::expressions::{lower_arguments, lower_expr};
 use super::literals::lower_constant;
 use super::names::lower_name;
-use super::tree::{child_of, children_of, significant_tokens};
+use super::tree::{child_of, children_of, significant_tokens, token_of};
 use super::types::{
     lower_array, lower_enumeration, lower_params, lower_reference, lower_string_specification,
     lower_subrange_specification,
@@ -438,6 +438,18 @@ fn call(cx: &LowerCx, parts: &Parts) -> Result<InitialValueAssignmentKind, Diagn
     ))
 }
 
+/// `x :`: a declaration that stops after its colon states no type and no value;
+/// the object records where the colon is. The standard allows it for a global
+/// variable (`global_var_decl` takes its type and value optionally) and the
+/// legacy grammar accepts it, so it stays; CODESYS rejects it where it reads
+/// the type that must follow every `:` (`Err_TypeExpected`, Codesys/Parser35220.plugin/CODESYS/Parser35220/Declaration/VariableDeclarationParser.cs:161
+/// calling TypeParser.cs:167, which reports it at :383-394).
+fn untyped(cx: &LowerCx, parts: &Parts) -> Result<InitialValueAssignmentKind, Diagnostic> {
+    let colon =
+        token_of(&parts.node, &[K::Colon]).ok_or_else(|| cx.missing(&parts.node, "a colon"))?;
+    Ok(InitialValueAssignmentKind::None(cx.token_span(&colon)))
+}
+
 /// What a declaration of a variable or of a structure member makes of its
 /// type and initial value, by the form of the type and the kind of the value.
 const INITIAL_VALUES: &[Row<InitialValueAssignmentKind>] = &[
@@ -471,14 +483,16 @@ const INITIAL_VALUES: &[Row<InitialValueAssignmentKind>] = &[
     ),
     row(&[Form::Named], &[Init::Value], simple_expression),
     row(&[Form::Call], &[Init::None], call),
+    row(&[Form::Absent], &[Init::None], untyped),
 ];
 
 /// The kinds of node that hold a declaration with an initial value: a
-/// variable declaration and a member of a structure.
-const OWNERS: &[K] = &[K::VarDecl, K::StructMember];
+/// variable declaration, a member of a structure and the initialisation of an
+/// instance in a configuration.
+const OWNERS: &[K] = &[K::VarDecl, K::StructMember, K::InstanceInit];
 
 /// Lowers what a declaration's type and initial value make of the declaration:
-/// a [`K::VarDecl`] or a [`K::StructMember`]. Every name a variable
+/// a [`K::VarDecl`], a [`K::StructMember`] or a [`K::InstanceInit`]. Every name a variable
 /// declaration lists is declared the same way, so the result is the one the
 /// names share.
 pub fn lower_initial_value(

@@ -733,7 +733,8 @@ const LEGACY_ABSTRACT_LABEL: &str = "the legacy label pass does not count the AB
 const LEGACY_BARE_NAME_INITIAL: &str = "the legacy grammar rejects an initial value that refers to a variable (`x : INT := name`, `x : INT := a.b`) because it cannot tell a named constant from an enumeration value; CODESYS accepts any expression there (the declaration parser reads the value with its general initialisation rule: Codesys/Parser35220.plugin/CODESYS/Parser35220/Declaration/VariableDeclarationParser.cs:180 and Expressions/InitializationParser.cs:70-92) and decides later whether it is constant. The CST accepts it, the lowering keeps it as an expression, and the analysis folds it or reports it (P4037, P4038)";
 const LEGACY_STRING_WIDTH: &str = "the legacy grammar requires a variable's string value to use the declared width's delimiter; the CST accepts either, the lowering gives the value the declared width (as the legacy grammar does for the default of a string type declaration) and the analysis checks its characters against that width (P4052)";
 const LEGACY_EMPTY_LIST: &str = "the legacy grammar accepts an empty parenthesised list or an empty bound list where a type needs at least one value or range, and the analysis then misses it for a variable (the inline array is reported only when it is indexed, the empty enumeration not at all). CODESYS rejects both while parsing, at the closing token: the enumeration with `Identifier expected instead of ')'` (Codesys/Parser35220.plugin/CODESYS/Parser35220/Declaration/EnumListParser.cs:261-273) and the array bounds with `Expression expected instead of ']'` (Expressions/OperandParser.cs:481-486 through Declaration/TypeParser.cs:615-625); the CST reports the same syntax error (P0002) at the same token";
-const LEGACY_NAMED_GLOBAL_LOCATION: &str = "the legacy global-variable rule takes the name alone and then fails at `AT`, so a global variable with both a name and a location is rejected; the CST accepts the standard `name AT %address : type`";
+const LEGACY_NAMED_GLOBAL_LOCATION: &str = "the legacy global-variable rule takes the name alone and then fails at `AT`, so a global variable with both a name and a location is rejected; the CST accepts the standard `name AT %address : type`, as CODESYS does for every variable declaration, a global one included: it reads the names, then an optional `AT` and address, then the type (Codesys/Parser35220.plugin/CODESYS/Parser35220/Declaration/VariableDeclarationParser.cs:149-161, with the address read by ParseAddressReturnError at :230-264)";
+const INLINE_SUBRANGE: &str = "the legacy grammar takes a subrange type (`INT(0..10)`) in a type declaration, a structure member, an input-output variable and a variable with an incomplete location, and rejects it in every other variable declaration; the standard has it in all of them and CODESYS reads it wherever it reads a type: the type parser follows every integer type keyword with an optional parenthesised range, for the variable declarations of every block (Codesys/Parser35220.plugin/CODESYS/Parser35220/Declaration/VariableDeclarationParser.cs:161 calling TypeParser.cs:167, which ends in ParseSubrangeType at :375 for an integer type and rejects the range only after the generic types of a nested position at :368-373). The CST accepts it in every variable block, and the value after it is a literal as in a type declaration, because the object holds a subrange's value as an integer";
 const LEGACY_DEMOTED_REF_TO: &str = "without `REF_TO` as a keyword the legacy grammar reads `REF_TO INT := NULL` as an enumeration type named REF_TO with the base type INT and the default NULL; the CST reads `REF_TO` as a type name and rejects the extra words";
 const VALUE_DOES_NOT_FIT: &str = "the CST grammar takes an array value, a structure value, a qualified enumeration value or a number after an elementary type or an enumeration, where the legacy grammar rejects them; CODESYS parses the value and reports a type error later (Err_UnexpectedArrayInitialisation, Err_UnexpectedStructureInitialisation, Err_NoValidEnumInit), so the lowering reports the value that does not fit the type (P4022)";
 const NAMED_ARRAY_VALUE: &str = "the legacy grammar takes an array value only after an inline array type; CODESYS takes it after the name of an array type as well, and the lowering builds an array initial value of the named type";
@@ -875,5 +876,40 @@ pub const DECLARATION_EXCEPTIONS: &[Exception] = &[
         Kind::Declarations,
         "TYPE t : REF_TO INT := NULL; END_TYPE",
         LEGACY_DEMOTED_REF_TO,
+    ),
+    accepted_on_purpose(
+        Kind::Declarations,
+        "PROGRAM p VAR x : INT(0..10); END_VAR END_PROGRAM",
+        INLINE_SUBRANGE,
+    ),
+    accepted_on_purpose(
+        Kind::Declarations,
+        "PROGRAM p VAR x : INT(0..10) := 5; END_VAR END_PROGRAM",
+        INLINE_SUBRANGE,
+    ),
+    accepted_on_purpose(
+        Kind::Declarations,
+        "PROGRAM p VAR x : INT(-5..5); END_VAR END_PROGRAM",
+        INLINE_SUBRANGE,
+    ),
+    accepted_on_purpose(
+        Kind::Declarations,
+        "PROGRAM p VAR x : INT(lo..hi); END_VAR END_PROGRAM",
+        INLINE_SUBRANGE,
+    ),
+    accepted_on_purpose(
+        Kind::Declarations,
+        "PROGRAM p VAR x : UINT(0..10); END_VAR END_PROGRAM",
+        INLINE_SUBRANGE,
+    ),
+    accepted_on_purpose(
+        Kind::Declarations,
+        "FUNCTION_BLOCK fb VAR_TEMP t : INT(0..5) := 1; END_VAR END_FUNCTION_BLOCK",
+        INLINE_SUBRANGE,
+    ),
+    accepted_on_purpose(
+        Kind::Declarations,
+        "VAR_GLOBAL g : INT(0..5); END_VAR",
+        INLINE_SUBRANGE,
     ),
 ];

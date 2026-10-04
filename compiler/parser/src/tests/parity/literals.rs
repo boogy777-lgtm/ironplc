@@ -35,6 +35,7 @@
 //! operand differing, is still found.
 
 use super::ast::{compare, explain, Component, Subject};
+use super::blocks::judge_block;
 use super::declaration_table::DECLARATIONS;
 use super::differences::DIFFERENCES;
 use super::legacy::{presets, Preset};
@@ -238,7 +239,7 @@ fn range_of(node: &SyntaxNode) -> (usize, usize) {
 }
 
 /// What the two sides say about one site.
-enum Outcome {
+pub enum Outcome {
     Equal,
     BothReject,
     /// They differ, in these parts of the comparison (none when one side
@@ -250,7 +251,7 @@ enum Outcome {
 }
 
 /// Compares what the legacy rule and the lowering make of the text `written`.
-fn settle<T: Subject>(
+pub fn settle<T: Subject>(
     written: &str,
     legacy: Result<T, Diagnostic>,
     lowered: Result<T, Diagnostic>,
@@ -332,6 +333,7 @@ fn judge(site: &Site, tokens: &[Token], cx: &LowerCx, written: &str) -> Outcome 
             parse_variable_initial(tokens),
             lower_initial_value(cx, &site.node),
         ),
+        Unit::VariableBlock | Unit::VariableBlockFacts => judge_block(site, tokens, cx, written),
     }
 }
 
@@ -370,12 +372,17 @@ fn compare_sites(tally: &mut Tally, key: &str, text: &str, parse: &Parse, preset
         }
     }
     // Sites come outer before inner, so a site contains the differing ones
-    // that follow it until one starts at or after its end.
+    // that follow it until one starts at or after its end. A view of a node
+    // (a unit that compares part of what another unit compares of the same
+    // node) is not inside the node, so it neither inherits a difference nor
+    // passes one on.
     for (index, (site, parts, what)) in differing.iter().enumerate() {
         let end = range_of(&site.node).1;
-        let inherited = differing
-            .get(index + 1)
-            .is_some_and(|(next, _, _)| range_of(&next.node).0 < end);
+        let inherited = !site.unit.is_view()
+            && differing[index + 1..]
+                .iter()
+                .take_while(|(next, _, _)| range_of(&next.node).0 < end)
+                .any(|(next, _, _)| !next.unit.is_view());
         if inherited {
             tally.inherited += 1;
         } else {
@@ -508,7 +515,7 @@ pub fn run(cases: &[Case], presets: &[Preset]) -> Tally {
 /// written and never fall. The sites equal to the legacy ones, by unit, those
 /// literals among them in inputs that are nothing but a literal, and whole
 /// inputs lowered as libraries.
-const MIN_EQUAL: [(Unit, usize); 7] = [
+const MIN_EQUAL: [(Unit, usize); 9] = [
     (Unit::Literal, 18_000),
     (Unit::Expression, 30_000),
     (Unit::Variable, 9_500),
@@ -516,6 +523,8 @@ const MIN_EQUAL: [(Unit, usize); 7] = [
     (Unit::Statements, 7_500),
     (Unit::TypeDeclaration, 1_500),
     (Unit::VariableInitial, 2_700),
+    (Unit::VariableBlock, 2_000),
+    (Unit::VariableBlockFacts, 7_500),
 ];
 const MIN_BODIES_EQUAL: usize = 3_300;
 const MIN_LITERAL_ONLY_EQUAL: usize = 400;
@@ -702,7 +711,8 @@ fn difference_when_listed_scope_then_counted_against_its_entry_and_not_unexplain
         String::new(),
     );
     assert!(tally.unexplained.is_empty());
-    assert_eq!(&tally.excepted[..4], &[1, 0, 1, 0]);
+    // The two oscat files, the unnamed located global, then the bare name.
+    assert_eq!(&tally.excepted[..4], &[1, 0, 0, 1]);
 }
 
 #[test]

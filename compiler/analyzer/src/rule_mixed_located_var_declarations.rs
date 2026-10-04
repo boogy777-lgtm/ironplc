@@ -173,6 +173,22 @@ END_FUNCTION_BLOCK",
         "tempSensor",
     );
 
+    rule_err1_at!(
+        /// A program's block reaches the rule through its own grammar rule,
+        /// which once gave every declaration a block of its own, so that no
+        /// declaration was ever mixed with another.
+        apply_when_program_mixed_block_and_flag_disabled_then_error,
+        "
+PROGRAM Main
+VAR
+    count      : INT;
+    tempSensor AT %IX0.0 : BOOL;
+END_VAR
+END_PROGRAM",
+        Problem::MixedLocatedVarDeclarationNotAllowed,
+        "tempSensor",
+    );
+
     #[test]
     fn apply_when_mixed_block_and_flag_enabled_then_ok() {
         let program = "

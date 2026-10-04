@@ -143,13 +143,20 @@ impl<'a> Visitor<Infallible> for RuleConstantVarsInitialized<'a> {
                     // Function blocks cannot be CONSTANT - this is handled by
                     // rule_var_decl_const_not_fb, so skip initialization checking here.
                 }
-                // Subrange and late-resolved initializers are both resolved to
-                // a concrete kind before semantic rules run, so reaching either
-                // here is a compiler bug. Report it against this declaration
-                // and keep checking the others.
-                InitialValueAssignmentKind::Subrange(_) => {
-                    self.diagnostics.push(Diagnostic::internal_error());
-                }
+                // A subrange written in the declaration stays a subrange; one
+                // named by its type is resolved to the type's own kind.
+                InitialValueAssignmentKind::Subrange(subrange) => match subrange.initial_value {
+                    Some(_) => {}
+                    None => {
+                        self.diagnostics.push(
+                            Diagnostic::problem(
+                                Problem::ConstantMustHaveInitializer,
+                                Label::span(node.span(), "Variable declaration"),
+                            )
+                            .with_context("variable", &node.identifier.to_string()),
+                        );
+                    }
+                },
                 InitialValueAssignmentKind::Structure(struct_init) => {
                     // For const structures, verify that all fields without defaults
                     // are explicitly initialized in the variable declaration.
@@ -182,6 +189,10 @@ impl<'a> Visitor<Infallible> for RuleConstantVarsInitialized<'a> {
                         );
                     }
                 }
+                // A late-resolved initializer is resolved to a concrete kind
+                // before semantic rules run, so reaching one here is a
+                // compiler bug. Report it against this declaration and keep
+                // checking the others.
                 InitialValueAssignmentKind::LateResolvedType(_) => {
                     self.diagnostics.push(Diagnostic::internal_error());
                 }

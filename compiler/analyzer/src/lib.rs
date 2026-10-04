@@ -27,6 +27,8 @@ mod function_environment;
 pub mod intermediate_type;
 #[cfg(test)]
 mod lowered_initial_values;
+#[cfg(test)]
+mod lowered_var_blocks;
 mod result;
 mod rule_abstract_not_instantiated;
 mod rule_assignment_aggregate_type_compat;

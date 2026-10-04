@@ -53,6 +53,8 @@ pub enum Form {
     Named,
     /// A name followed by the arguments of a function block instance.
     Call,
+    /// No type at all: a global declaration that stops after its `:`.
+    Absent,
 }
 
 impl Form {
@@ -70,6 +72,7 @@ impl Form {
             Form::Elementary => "an elementary type",
             Form::Named => "a named type",
             Form::Call => "a function block instance",
+            Form::Absent => "no type",
         }
     }
 }
@@ -132,7 +135,8 @@ const INITS: &[(K, Init)] = &[
 pub struct Parts {
     /// The declaration node.
     pub node: SyntaxNode,
-    /// The node that writes the type.
+    /// The node that writes the type: the declaration itself when it writes
+    /// none ([`Form::Absent`]).
     pub spec: SyntaxNode,
     /// The value after `:=`, when there is one.
     pub value: Option<SyntaxNode>,
@@ -206,11 +210,16 @@ fn init_of(value: Option<&SyntaxNode>) -> Init {
 /// Reads a declaration node apart: the node that writes its type, and the
 /// value that follows `:=`.
 pub fn read(cx: &LowerCx, node: &SyntaxNode) -> Result<Parts, Diagnostic> {
-    let spec = node
+    let written = node
         .children()
-        .find(|child| FORMS.iter().any(|(kind, _)| *kind == child.kind()))
-        .ok_or_else(|| cx.missing(node, "a type"))?;
-    let form = form_of(cx, &spec, node).ok_or_else(|| cx.unsupported(&spec))?;
+        .find(|child| FORMS.iter().any(|(kind, _)| *kind == child.kind()));
+    let (spec, form) = match written {
+        Some(spec) => {
+            let form = form_of(cx, &spec, node).ok_or_else(|| cx.unsupported(&spec))?;
+            (spec, form)
+        }
+        None => (node.clone(), Form::Absent),
+    };
     let value = child_of(node, K::Initializer).and_then(|initializer| initializer.first_child());
     let init = init_of(value.as_ref());
     Ok(Parts {
@@ -363,6 +372,14 @@ mod tests {
     }
 
     #[test]
+    fn read_when_declaration_stops_after_the_colon_then_no_type_and_the_declaration_stands_for_it()
+    {
+        let parts = parts_of("VAR_GLOBAL g :; END_VAR", K::VarDecl);
+        assert_eq!((parts.form, parts.init), (Form::Absent, Init::None));
+        assert_eq!(parts.spec, parts.node);
+    }
+
+    #[test]
     fn read_when_each_kind_of_value_then_its_kind() {
         let rows = [
             ("ARRAY[1..2] OF INT := [1, 2]", Init::Array),
@@ -446,6 +463,7 @@ mod tests {
             Form::Elementary,
             Form::Named,
             Form::Call,
+            Form::Absent,
         ] {
             assert!(!form.describe().is_empty(), "{form:?}");
         }

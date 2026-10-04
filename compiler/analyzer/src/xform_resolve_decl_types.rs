@@ -235,8 +235,8 @@ END_PROGRAM
         );
     }
 
-    /// An inline subrange cannot be written in a declaration, but the
-    /// initializer can hold one, so the pass has an answer for it.
+    /// A subrange written in the declaration (`x : INT(0..10)`) is held by the
+    /// initializer, and the pass has an answer for it.
     #[test]
     fn declared_type_id_when_inline_subrange_then_anonymous_subrange() {
         let (_, mut context) = resolve(PROGRAM);
