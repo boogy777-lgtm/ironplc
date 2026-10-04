@@ -243,7 +243,7 @@ impl<'a> RuleConstantVarsInitialized<'a> {
 
         // Check each field that doesn't have a default
         for field in fields {
-            if !field.has_default {
+            if !field.has_default() {
                 // This field needs explicit initialization
                 if !initialized_fields.iter().any(|name| **name == field.name) {
                     self.diagnostics.push(

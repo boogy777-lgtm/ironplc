@@ -846,15 +846,15 @@ parser! {
       })
     }
     rule simple_specification() -> TypeName = et:elementary_type_name() { et.into() } / simple_type_name()
-    rule subrange_type_declaration__with_range() -> SubrangeDeclaration = type_name:subrange_type_name() _ tok(TokenType::Colon) _ spec:subrange_spec_init__with_range() {
+    rule subrange_type_declaration__with_range() -> SubrangeDeclaration = type_name:subrange_type_name() _ tok(TokenType::Colon) _ init:subrange_spec_init__with_range() {
       SubrangeDeclaration {
         type_name,
-        spec: spec.0,
-        default: spec.1,
+        spec: init.spec,
+        default: init.initial_value,
       }
     }
-    rule subrange_spec_init__with_range() -> (SubrangeSpecificationKind, Option<SignedInteger>) = spec:subrange_specification__with_range() _ default:(tok(TokenType::Assignment) _ def:signed_integer() { def })? {
-      (spec, default)
+    rule subrange_spec_init__with_range() -> SubrangeInitializer = spec:subrange_specification__with_range() _ initial_value:(tok(TokenType::Assignment) _ def:signed_integer() { def })? {
+      SubrangeInitializer { spec, initial_value }
     }
     rule subrange_specification__with_range() -> SubrangeSpecificationKind
       = type_name:integer_type_name() _ tok(TokenType::LeftParen) _ subrange:subrange() _ tok(TokenType::RightParen) { SpecificationKind::Inline(SubrangeSpecification{ type_name, subrange }) }
@@ -1034,7 +1034,7 @@ parser! {
     rule structure_element_declaration() -> StructureElementDeclaration = name:structure_element_name() _ tok(TokenType::Colon) _ init:(
       arr:array_spec_init() { InitialValueAssignmentKind::Array(arr) }
       // handle the initial value
-      / subrange:subrange_spec_init__with_range() { InitialValueAssignmentKind::Subrange(subrange.0) }
+      / subrange:subrange_spec_init__with_range() { InitialValueAssignmentKind::Subrange(subrange) }
       / i:initialized_structure__without_ambiguous() { late_resolved_members(i) }
       / spec_init:enumerated_spec_init__with_value() {
         match spec_init.0 {
@@ -1043,8 +1043,7 @@ parser! {
             InitialValueAssignmentKind::EnumeratedValues(
               EnumeratedValuesInitializer {
                 values: values.values,
-                // TODO initial value
-                initial_value: None,
+                initial_value: Some(spec_init.1),
             })
           },
         }
@@ -1456,7 +1455,7 @@ parser! {
     }
     rule var_declaration() -> Vec<UntypedVarDecl> = temp_var_decl()
     rule temp_var_decl() -> Vec<UntypedVarDecl> = string_var_declaration() / var1_declaration() / array_var_declaration() / structured_var_declaration()
-    rule var1_declaration() -> Vec<UntypedVarDecl> = names:var1_list() _ tok(TokenType::Colon) _ init:(spec:subrange_specification__with_range() {InitialValueAssignmentKind::Subrange(spec)} / values:enumerated_specification__only_values()  {InitialValueAssignmentKind::EnumeratedValues(EnumeratedValuesInitializer{ values, initial_value: None})} / spec:simple_specification() { InitialValueAssignmentKind::LateResolvedType(LateResolvedInitializer::bare(spec))} ) {
+    rule var1_declaration() -> Vec<UntypedVarDecl> = names:var1_list() _ tok(TokenType::Colon) _ init:(spec:subrange_specification__with_range() {InitialValueAssignmentKind::Subrange(SubrangeInitializer::uninitialized(spec))} / values:enumerated_specification__only_values()  {InitialValueAssignmentKind::EnumeratedValues(EnumeratedValuesInitializer{ values, initial_value: None})} / spec:simple_specification() { InitialValueAssignmentKind::LateResolvedType(LateResolvedInitializer::bare(spec))} ) {
       // TODO this could eventually cause duplicated definitions because
       // multiple variables have the same type declaration
       names.iter().map(|identifier| {

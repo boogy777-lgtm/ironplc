@@ -345,7 +345,7 @@ fn lower_initial_value_when_params_or_subrange_then_the_specification() {
     let source = "PROGRAM p VAR_IN_OUT x : INT(1..5); END_VAR END_PROGRAM";
     let subrange = lower_first(source, K::VarDecl, &ParseOptions::all()).expect("lowers");
     let inline = variant!(
-        variant!(subrange, InitialValueAssignmentKind::Subrange),
+        variant!(subrange, InitialValueAssignmentKind::Subrange).spec,
         SpecificationKind::Inline
     );
     assert_eq!(
@@ -392,12 +392,19 @@ fn lower_initial_value_when_member_enumeration_has_a_default_then_it_is_kept() {
 }
 
 #[test]
-fn lower_initial_value_when_member_subrange_has_a_default_then_the_object_holds_no_place_for_it() {
+fn lower_initial_value_when_member_subrange_has_a_default_then_the_object_holds_it() {
     let subrange = variant!(
         member("INT(0..5) := 3"),
         InitialValueAssignmentKind::Subrange
     );
-    let inline = variant!(subrange, SpecificationKind::Inline);
+    assert_eq!(
+        subrange
+            .initial_value
+            .as_ref()
+            .map(|value| value.to_string()),
+        Some("3".to_string())
+    );
+    let inline = variant!(subrange.spec, SpecificationKind::Inline);
     assert_eq!(
         inline.subrange.end.as_signed_integer().map(|n| n.to_i64()),
         Some(5)

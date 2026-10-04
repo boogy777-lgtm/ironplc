@@ -481,6 +481,58 @@ impl TypeEnvironment {
         Ok(())
     }
 
+    /// Records the value a declaration of the type `type_name` starts at when
+    /// it states none (`TYPE Level : INT := 5`). Does nothing for a name the
+    /// environment does not hold.
+    pub fn set_initial_value(
+        &mut self,
+        type_name: &TypeName,
+        value: Option<ironplc_dsl::common::StructInitialValueAssignmentKind>,
+    ) {
+        let Some(value) = value else { return };
+        if let Some(entry) = self
+            .id_of(type_name)
+            .and_then(|id| self.entries.get_mut(&id))
+        {
+            entry.attributes.initial_value = Some(Box::new(value));
+        }
+    }
+
+    /// The value a declaration starts at: the value it states, else the one
+    /// the type it names declares for itself, else `None` (the type's own
+    /// default).
+    ///
+    /// This is the one reading of "declared initial value", for a variable and
+    /// for a structure member alike.
+    pub fn initial_value_of(
+        &self,
+        init: &ironplc_dsl::common::InitialValueAssignmentKind,
+    ) -> Option<ironplc_dsl::common::StructInitialValueAssignmentKind> {
+        use ironplc_dsl::common::{InitialValueAssignmentKind as Kind, SpecificationKind};
+        // The values of an inline enumeration have no declared type to be
+        // looked up in, so the value it states is its number.
+        if let Kind::EnumeratedValues(inline) = init {
+            let value = inline.initial_value.as_ref()?;
+            let position = inline.values.iter().position(|v| v.value == value.value)?;
+            let ordinal = crate::resolve_ordinal_values(&inline.values)[position];
+            return ironplc_dsl::common::ConstantKind::integer_literal(&ordinal.to_string())
+                .ok()
+                .map(ironplc_dsl::common::StructInitialValueAssignmentKind::Constant);
+        }
+        init.stated_value().or_else(|| {
+            let type_name = match init {
+                Kind::Simple(simple) => &simple.type_name,
+                Kind::LateResolvedType(late) => &late.type_name,
+                Kind::Subrange(subrange) => match &subrange.spec {
+                    SpecificationKind::Named(type_name) => type_name,
+                    SpecificationKind::Inline(_) => return None,
+                },
+                _ => return None,
+            };
+            self.get(type_name)?.initial_value.as_deref().cloned()
+        })
+    }
+
     /// Gets the type from the environment.
     pub fn get(&self, type_name: &TypeName) -> Option<&crate::type_attributes::TypeAttributes> {
         self.get_by_id(self.id_of(type_name)?)

@@ -204,6 +204,9 @@ pub trait Visitor<E> {
     dispatch!(SubrangeSpecification);
 
     // 2.3.3.1
+    dispatch!(SubrangeInitializer);
+
+    // 2.3.3.1
     dispatch!(SimpleDeclaration);
 
     // 2.3.3.1

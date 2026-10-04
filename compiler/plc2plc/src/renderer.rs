@@ -486,6 +486,20 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         Ok(())
     }
 
+    fn visit_subrange_initializer(
+        &mut self,
+        node: &SubrangeInitializer,
+    ) -> Result<Self::Value, Diagnostic> {
+        self.visit_subrange_specification_kind(&node.spec)?;
+
+        if let Some(init) = &node.initial_value {
+            self.write_ws(":=");
+            self.visit_signed_integer(init)?;
+        }
+
+        Ok(())
+    }
+
     fn visit_subrange_specification(
         &mut self,
         node: &SubrangeSpecification,

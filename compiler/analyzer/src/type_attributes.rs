@@ -4,6 +4,7 @@
 //! with categorization information. Memory layout information is accessed directly
 //! through IntermediateType methods.
 
+use ironplc_dsl::common::StructInitialValueAssignmentKind;
 use ironplc_dsl::core::{Located, SourceSpan};
 
 use crate::{intermediate_type::IntermediateType, type_category::TypeCategory};
@@ -18,6 +19,11 @@ pub struct TypeAttributes {
     pub representation: IntermediateType,
     /// Category of the type (elementary, user-defined, or derived)
     pub type_category: TypeCategory,
+    /// The value a declaration of this type starts at when it states none
+    /// (`TYPE Level : INT := 5; END_TYPE`). `None` when the type declares no
+    /// value of its own, which leaves the type's default: zero, or the lower
+    /// bound of a subrange.
+    pub initial_value: Option<Box<StructInitialValueAssignmentKind>>,
 }
 
 impl TypeAttributes {
@@ -28,6 +34,7 @@ impl TypeAttributes {
             span,
             representation,
             type_category,
+            initial_value: None,
         }
     }
 

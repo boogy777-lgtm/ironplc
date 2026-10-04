@@ -327,6 +327,16 @@ impl RuleConstantRange<'_> {
                     self.check_array_elements(&array.initial_values, &declared);
                 }
             }
+            // The value an inline subrange states is stored into the
+            // subrange itself, so it is held to the subrange's bounds.
+            InitialValueAssignmentKind::Subrange(subrange) => {
+                if let (Some(StructInitialValueAssignmentKind::Constant(value)), Some(declared)) = (
+                    initializer.stated_value(),
+                    self.subrange_type(&subrange.spec),
+                ) {
+                    self.check_constant(&value, &declared);
+                }
+            }
             InitialValueAssignmentKind::FunctionBlock(function_block) => {
                 self.check_named_elements(&function_block.type_name, &function_block.init);
             }
@@ -337,6 +347,24 @@ impl RuleConstantRange<'_> {
             // from a subrange that `rule_range_limits` checks, or pass
             // arguments to a constructor rather than store values.
             _ => {}
+        }
+    }
+
+    /// The type a subrange specification declares.
+    fn subrange_type(&self, spec: &SubrangeSpecificationKind) -> Option<IntermediateType> {
+        match crate::intermediates::subrange::try_from(
+            &TypeName::from("_subrange"),
+            spec,
+            self.type_environment,
+        )
+        .ok()?
+        {
+            crate::intermediates::subrange::IntermediateResult::Type(attributes) => {
+                Some(attributes.representation)
+            }
+            crate::intermediates::subrange::IntermediateResult::Alias(base) => {
+                self.representation_of(&base)
+            }
         }
     }
 

@@ -1,53 +1,67 @@
-//! Structure initialization code generation.
+//! Initial values of structure storage.
 //!
-//! Emits the init-function code that gives each field of a structure
-//! variable its initial value: an explicit initializer when the declaration
-//! has one, otherwise the type's default. Separated from `compile_struct.rs`
-//! to keep module sizes within the 1000-line guideline.
-
-use std::collections::HashMap;
+//! Emits the init-function code that gives every storage location of a
+//! structure its initial value. One recursive routine computes it for a
+//! location of any shape -- a structure variable, a structure nested in
+//! another, an element of an array of structures -- from the value the
+//! declaration of that location states, else the value the member itself
+//! declares (`a : INT := 5`), else the type's default. Separated from
+//! `compile_struct.rs` to keep module sizes within the 1000-line guideline.
 
 use ironplc_dsl::core::{Located, SourceSpan};
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
 
-use ironplc_analyzer::intermediate_type::IntermediateType;
+use ironplc_analyzer::intermediate_type::{ArrayDimension, IntermediateType};
 use ironplc_container::{SlotIndex, VarIndex};
-use ironplc_dsl::common::{StructInitialValueAssignmentKind, StructureElementInit};
+use ironplc_dsl::common::{ConstantKind, StructInitialValueAssignmentKind, StructureElementInit};
 
-use super::compile::{CompileContext, OpType, OpWidth, DEFAULT_STRING_MAX_LENGTH};
-use super::compile_array_struct::ElementStringField;
+use super::compile::{
+    emit_string_literal_load, CompileContext, OpType, OpWidth, DEFAULT_STRING_MAX_LENGTH,
+};
+use super::compile_array_struct::{ElementStringField, StructArrayVarInfo};
 use super::compile_expr::compile_constant;
 use super::compile_setup::emit_zero_const;
-use super::compile_struct::{build_struct_fields, emit_truncation_for_field, StructVarInfo};
+use super::compile_struct::{
+    build_struct_fields, emit_truncation_for_field, resolve_field_op_type, StructFieldInfo,
+    StructVarInfo,
+};
 use crate::emit::Emitter;
 
-/// Emits a constant load for the type-appropriate default value of a struct field.
+/// The value a scalar type starts at when its declaration states none: the
+/// lower bound of a subrange (IEC 61131-3 §2.4.3.1: the "leftmost value"),
+/// else zero.
+pub(crate) fn scalar_default(ty: &IntermediateType) -> i128 {
+    match ty {
+        IntermediateType::Subrange { min_value, .. } => *min_value,
+        _ => 0,
+    }
+}
+
+/// Emits the initial value of a scalar location: the value its declaration
+/// states, else `default_value`.
 ///
-/// For subrange types, emits the subrange's lower bound (min_value) as an i32/i64
-/// constant, since IEC 61131-3 §2.4.3.1 specifies the default is the "leftmost
-/// value" of the subrange. For all other types, emits zero via `emit_zero_const`.
-fn emit_default_for_field(
+/// This is the one place a scalar's initial value is emitted, for a
+/// structure member and for a variable alike.
+pub(crate) fn emit_scalar_initial_value(
     emitter: &mut Emitter,
     ctx: &mut CompileContext,
-    field_type: &IntermediateType,
     op_type: OpType,
+    stated: Option<&StructInitialValueAssignmentKind>,
+    default_value: i128,
 ) -> Result<(), Diagnostic> {
-    if let IntermediateType::Subrange { min_value, .. } = field_type {
-        match op_type.0 {
-            OpWidth::W32 => {
-                let pool_index = ctx.add_i32_constant(*min_value as i32);
-                emitter.emit_load_const_i32(pool_index);
-            }
-            OpWidth::W64 => {
-                let pool_index = ctx.add_i64_constant(*min_value as i64);
-                emitter.emit_load_const_i64(pool_index);
-            }
-            _ => {
-                emit_zero_const(emitter, ctx, op_type);
-            }
+    if let Some(value) = stated {
+        return compile_struct_field_init(emitter, ctx, value, op_type);
+    }
+    match op_type.0 {
+        OpWidth::W32 if default_value != 0 => {
+            let pool_index = ctx.add_i32_constant(default_value as i32);
+            emitter.emit_load_const_i32(pool_index);
         }
-    } else {
-        emit_zero_const(emitter, ctx, op_type);
+        OpWidth::W64 if default_value != 0 => {
+            let pool_index = ctx.add_i64_constant(default_value as i64);
+            emitter.emit_load_const_i64(pool_index);
+        }
+        _ => emit_zero_const(emitter, ctx, op_type),
     }
     Ok(())
 }
@@ -109,17 +123,37 @@ fn compile_struct_field_init(
     }
 }
 
-/// Pre-extracted field info for initialization, avoiding borrow conflicts.
-///
-/// Created by extracting data from `StructFieldInfo` before passing `ctx`
-/// mutably to `initialize_struct_fields`.
-pub(crate) struct FieldInitInfo {
-    pub name: String,
-    pub slot_offset: SlotIndex,
-    pub field_type: IntermediateType,
-    pub op_type: Option<OpType>,
-    /// For STRING fields, the maximum character length. `None` for non-STRING fields.
-    pub string_max_length: Option<u16>,
+/// Which STRING headers are already in the data region when a field is
+/// initialized.
+#[derive(Clone, Copy, PartialEq)]
+enum StringHeaders {
+    /// None: the field writes its own header.
+    Write,
+    /// The strided descriptor of an array of structures wrote it
+    /// ([`initialize_element_strings`]), so a value can be stored at once.
+    Written,
+    /// None, and none will be: a STRING nested inside an element of an array
+    /// of structures has no access path yet, so it is left untouched.
+    Unreachable,
+}
+
+/// How the fields of one structure are initialized.
+#[derive(Clone, Copy)]
+struct Mode {
+    headers: StringHeaders,
+    /// The region starts zeroed and is not initialized again, as for an
+    /// element of an array of structures, so a member whose value is the
+    /// plain zero default needs no store.
+    zeroed: bool,
+}
+
+/// The data region a structure is stored in: the variable that holds its
+/// base offset and the slot-typed descriptor over it.
+#[derive(Clone, Copy)]
+struct Region {
+    var_index: VarIndex,
+    desc_index: u16,
+    data_offset: u32,
 }
 
 /// Emits the initialization of a structure variable: stores its data-region
@@ -138,28 +172,48 @@ pub(crate) fn initialize_struct_variable(
     emitter.emit_load_const_i32(offset_const);
     emitter.emit_store_var_i32(info.var_index);
 
-    let fields: Vec<FieldInitInfo> = info
-        .fields
-        .iter()
-        .map(|f| FieldInitInfo {
-            name: f.name.clone(),
-            slot_offset: f.slot_offset,
-            field_type: f.field_type.clone(),
-            op_type: f.op_type,
-            string_max_length: f.string_max_length,
-        })
-        .collect();
+    // The element headers first: a member value stored below must land in a
+    // header that is already there.
+    initialize_element_strings(
+        emitter,
+        ctx,
+        info.data_offset,
+        info.scratch_var_index,
+        &info.element_strings,
+        span,
+    )?;
 
     initialize_struct_fields(
         emitter,
         ctx,
-        info.var_index,
-        info.desc_index,
-        info.data_offset,
-        &fields,
+        Region {
+            var_index: info.var_index,
+            desc_index: info.desc_index,
+            data_offset: info.data_offset,
+        },
+        0,
+        &info.fields,
         element_inits,
+        Mode {
+            headers: StringHeaders::Write,
+            zeroed: false,
+        },
         span,
-    )?;
+    )
+}
+
+/// Emits the initialization of a variable that is an array of structures:
+/// stores its data-region offset into the variable's slot, writes the STRING
+/// headers of its elements, then gives every element its members' values.
+pub(crate) fn initialize_struct_array_variable(
+    emitter: &mut Emitter,
+    ctx: &mut CompileContext,
+    info: &StructArrayVarInfo,
+    span: &SourceSpan,
+) -> Result<(), Diagnostic> {
+    let offset_const = ctx.add_i32_constant(info.data_offset as i32);
+    emitter.emit_load_const_i32(offset_const);
+    emitter.emit_store_var_i32(info.var_index);
 
     initialize_element_strings(
         emitter,
@@ -167,6 +221,20 @@ pub(crate) fn initialize_struct_variable(
         info.data_offset,
         info.scratch_var_index,
         &info.element_strings,
+        span,
+    )?;
+
+    initialize_array_elements(
+        emitter,
+        ctx,
+        Region {
+            var_index: info.var_index,
+            desc_index: info.desc_index,
+            data_offset: info.data_offset,
+        },
+        0,
+        &info.element_type,
+        &info.dimensions,
         span,
     )
 }
@@ -212,117 +280,272 @@ pub(crate) fn initialize_element_strings(
     Ok(())
 }
 
-/// Initializes fields of a structure variable.
+/// Gives every element of an array of structures its members' values.
 ///
-/// Emits constant-load + STORE_ARRAY for each leaf field. Uses explicit
-/// initial values from `element_inits` when available, otherwise emits
-/// type-appropriate defaults (zero or subrange lower bound).
-///
-/// `span` locates the variable declaration being initialized; a nested field
-/// type the compiler cannot lay out is reported there.
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn initialize_struct_fields(
+/// `base_slot` is the slot offset of element 0 within the region. The
+/// elements are laid out one after another, so each is the same structure
+/// initialization at a stride; an array of structures can state no initial
+/// value of its own, so every element starts from what its members declare.
+fn initialize_array_elements(
     emitter: &mut Emitter,
     ctx: &mut CompileContext,
-    var_index: VarIndex,
-    desc_index: u16,
-    struct_data_offset: u32,
-    fields: &[FieldInitInfo],
-    element_inits: &[StructureElementInit],
+    region: Region,
+    base_slot: u32,
+    element_type: &IntermediateType,
+    dimensions: &[ArrayDimension],
     span: &SourceSpan,
 ) -> Result<(), Diagnostic> {
-    // Build a map of explicit initializers
-    let init_map: HashMap<String, &StructInitialValueAssignmentKind> = element_inits
+    let IntermediateType::Structure { fields } = element_type else {
+        return Ok(());
+    };
+    let (element_fields, _) = build_struct_fields(fields, span)?;
+    let stride = element_type.slot_count().map_err(|_| {
+        Diagnostic::not_implemented(Label::span(
+            span.clone(),
+            "Array element structure is unsupported",
+        ))
+    })?;
+    let total = dimensions
         .iter()
-        .map(|e| (e.name.to_string().to_lowercase(), &e.init))
-        .collect();
+        .try_fold(1u32, |acc, d| {
+            let size = (d.upper as i64 - d.lower as i64 + 1).max(0) as u32;
+            acc.checked_mul(size)
+        })
+        .ok_or_else(|| Diagnostic::not_supported(Label::span(span.clone(), "Array too large")))?;
+    for element in 0..total {
+        initialize_struct_fields(
+            emitter,
+            ctx,
+            region,
+            base_slot + element * stride,
+            &element_fields,
+            &[],
+            Mode {
+                headers: StringHeaders::Written,
+                zeroed: true,
+            },
+            span,
+        )?;
+    }
+    Ok(())
+}
 
-    // Iterate over fields in declaration order (Vec guarantees deterministic order)
-    for field_info in fields {
-        let slot_idx = field_info.slot_offset;
-
-        if let Some(op_type) = field_info.op_type {
-            // Leaf field (primitive/enum)
-            if let Some(init_value) = init_map.get(&field_info.name) {
-                // Emit explicit initial value
-                compile_struct_field_init(emitter, ctx, init_value, op_type)?;
-            } else {
-                // Emit type-appropriate default value
-                emit_default_for_field(emitter, ctx, &field_info.field_type, op_type)?;
-            }
-
-            // Truncate narrow types (e.g., SINT stored in W32 slot)
-            emit_truncation_for_field(emitter, &field_info.field_type);
-
-            // Store to field slot
-            let idx_const = ctx.add_i32_constant(slot_idx.raw() as i32);
-            emitter.emit_load_const_i32(idx_const);
-            emitter.emit_store_array(var_index, desc_index);
-        } else if let IntermediateType::Structure { fields } = &field_info.field_type {
-            // Nested structure field — recursively initialize inner fields.
-            // Extract nested initializers from the init map for this field.
-            let nested_inits: Vec<StructureElementInit> =
-                if let Some(StructInitialValueAssignmentKind::Structure(nested)) =
-                    init_map.get(&field_info.name)
-                {
-                    nested.to_vec()
-                } else {
-                    // No explicit init — inner fields will be default-initialized.
-                    vec![]
-                };
-
-            // Build inner field metadata with offsets adjusted to the parent's base.
-            let (inner_fields, _) = build_struct_fields(fields, span)?;
-            let inner_field_infos: Vec<FieldInitInfo> = inner_fields
-                .iter()
-                .map(|f| FieldInitInfo {
-                    name: f.name.clone(),
-                    slot_offset: SlotIndex::new(slot_idx.raw() + f.slot_offset.raw()),
-                    field_type: f.field_type.clone(),
-                    op_type: f.op_type,
-                    string_max_length: f.string_max_length,
-                })
-                .collect();
-
-            initialize_struct_fields(
-                emitter,
-                ctx,
-                var_index,
-                desc_index,
-                struct_data_offset,
-                &inner_field_infos,
-                &nested_inits,
-                span,
-            )?;
-        } else if let IntermediateType::String { char_width, .. } = &field_info.field_type {
-            // STRING field — initialize the header in the data region.
-            if let Some(max_length) = field_info.string_max_length {
-                let byte_offset = struct_data_offset + slot_idx.raw() * 8;
-                emitter.emit_str_init(byte_offset, max_length, *char_width);
-            }
-        } else if let IntermediateType::Array {
-            element_type,
-            dimensions: array_dims,
-        } = &field_info.field_type
+/// The members of `over` laid over those of `base`: a member `over` names
+/// replaces the one of `base`, except that two structure values merge
+/// member by member, so a declaration that states one member of a nested
+/// structure leaves the others at what the type declares.
+fn merge_member_inits(
+    base: &[StructureElementInit],
+    over: &[StructureElementInit],
+) -> Vec<StructureElementInit> {
+    let mut merged = base.to_vec();
+    for member in over {
+        let name = member.name.to_string().to_lowercase();
+        match merged
+            .iter_mut()
+            .find(|m| m.name.to_string().to_lowercase() == name)
         {
-            if let IntermediateType::String {
-                max_len,
-                char_width,
-            } = element_type.as_ref()
-            {
-                // STRING/WSTRING array field — initialize headers for each string element.
-                let max_length = max_len.unwrap_or(DEFAULT_STRING_MAX_LENGTH as u128) as u16;
-                let total_elements = array_dims
-                    .iter()
-                    .fold(1u32, |acc, d| acc * (d.upper - d.lower + 1) as u32);
-                let stride = super::compile::string_region_size(max_length, *char_width);
-                let field_byte_offset = struct_data_offset + slot_idx.raw() * 8;
-                for i in 0..total_elements {
-                    let elem_byte_offset = field_byte_offset + i * stride;
-                    emitter.emit_str_init(elem_byte_offset, max_length, *char_width);
+            Some(existing) => {
+                existing.init = match (&existing.init, &member.init) {
+                    (
+                        StructInitialValueAssignmentKind::Structure(a),
+                        StructInitialValueAssignmentKind::Structure(b),
+                    ) => StructInitialValueAssignmentKind::Structure(merge_member_inits(a, b)),
+                    _ => member.init.clone(),
+                };
+            }
+            None => merged.push(member.clone()),
+        }
+    }
+    merged
+}
+
+/// The members a structure value states, empty when it is not one.
+fn structure_members(value: Option<&StructInitialValueAssignmentKind>) -> &[StructureElementInit] {
+    match value {
+        Some(StructInitialValueAssignmentKind::Structure(members)) => members,
+        _ => &[],
+    }
+}
+
+/// Initializes the fields of a structure stored at `base_slot` of `region`.
+///
+/// Each field starts at the value its location's declaration states in
+/// `overrides` (`s : S := (a := 3)`), else the value the field declares for
+/// itself in the type, else the type's default. A structure field applies
+/// the same rule to its own fields, so the declaration of one member never
+/// discards what the type declares for the others.
+#[allow(clippy::too_many_arguments)]
+fn initialize_struct_fields(
+    emitter: &mut Emitter,
+    ctx: &mut CompileContext,
+    region: Region,
+    base_slot: u32,
+    fields: &[StructFieldInfo],
+    overrides: &[StructureElementInit],
+    mode: Mode,
+    span: &SourceSpan,
+) -> Result<(), Diagnostic> {
+    for field in fields {
+        let slot = SlotIndex::new(base_slot + field.slot_offset.raw());
+        let explicit = overrides
+            .iter()
+            .find(|m| m.name.to_string().to_lowercase() == field.name)
+            .map(|m| &m.init);
+        // The value the field starts at, when it states one.
+        let stated = explicit.or(field.initial_value.as_ref());
+
+        if let Some(op_type) = field.op_type {
+            let default_value = scalar_default(&field.field_type);
+            if mode.zeroed && stated.is_none() && default_value == 0 {
+                continue;
+            }
+            emit_scalar_initial_value(emitter, ctx, op_type, stated, default_value)?;
+            // Truncate narrow types (e.g., SINT stored in W32 slot)
+            emit_truncation_for_field(emitter, &field.field_type);
+            let idx_const = ctx.add_i32_constant(slot.raw() as i32);
+            emitter.emit_load_const_i32(idx_const);
+            emitter.emit_store_array(region.var_index, region.desc_index);
+            continue;
+        }
+
+        match &field.field_type {
+            IntermediateType::Structure { fields: inner } => {
+                let nested = merge_member_inits(
+                    structure_members(field.initial_value.as_ref()),
+                    structure_members(explicit),
+                );
+                let (inner_fields, _) = build_struct_fields(inner, span)?;
+                let inner_mode = Mode {
+                    headers: match mode.headers {
+                        StringHeaders::Written => StringHeaders::Unreachable,
+                        other => other,
+                    },
+                    ..mode
+                };
+                initialize_struct_fields(
+                    emitter,
+                    ctx,
+                    region,
+                    slot.raw(),
+                    &inner_fields,
+                    &nested,
+                    inner_mode,
+                    span,
+                )?;
+            }
+            IntermediateType::String { char_width, .. } => {
+                let Some(max_length) = field.string_max_length else {
+                    continue;
+                };
+                let byte_offset = region.data_offset + slot.raw() * 8;
+                if mode.headers == StringHeaders::Write {
+                    emitter.emit_str_init(byte_offset, max_length, *char_width);
+                }
+                if let Some(StructInitialValueAssignmentKind::Constant(
+                    ConstantKind::CharacterString(literal),
+                )) = stated
+                {
+                    if mode.headers != StringHeaders::Unreachable {
+                        emit_string_literal_load(emitter, ctx, &literal.value, *char_width);
+                        emitter.emit_str_store_var(byte_offset);
+                    }
                 }
             }
+            IntermediateType::Array {
+                element_type,
+                dimensions,
+            } => initialize_array_field(
+                emitter,
+                ctx,
+                region,
+                slot.raw(),
+                &field.name,
+                (element_type, dimensions),
+                stated,
+                mode,
+                span,
+            )?,
+            _ => {}
         }
     }
     Ok(())
+}
+
+/// Initializes an array member stored at `slot` of `region`.
+///
+/// The elements of an array of structures start from what their members
+/// declare; the elements of an array of scalars from the values the
+/// declaration states, when it states any.
+#[allow(clippy::too_many_arguments)]
+fn initialize_array_field(
+    emitter: &mut Emitter,
+    ctx: &mut CompileContext,
+    region: Region,
+    slot: u32,
+    name: &str,
+    (element_type, dimensions): (&IntermediateType, &[ArrayDimension]),
+    stated: Option<&StructInitialValueAssignmentKind>,
+    mode: Mode,
+    span: &SourceSpan,
+) -> Result<(), Diagnostic> {
+    let values = match stated {
+        Some(StructInitialValueAssignmentKind::Array(elements)) => {
+            crate::compile_array::flatten_array_initial_values(elements)?
+        }
+        _ => Vec::new(),
+    };
+    let unsupported = |what: &str| {
+        Diagnostic::not_implemented(Label::span(
+            span.clone(),
+            format!("Initial values for {what} member '{name}'"),
+        ))
+    };
+    match element_type {
+        IntermediateType::String {
+            max_len,
+            char_width,
+        } => {
+            if !values.is_empty() {
+                return Err(unsupported("an array of STRING"));
+            }
+            if mode.headers != StringHeaders::Write {
+                return Ok(());
+            }
+            // STRING/WSTRING array field — initialize headers for each string element.
+            let max_length = max_len.unwrap_or(DEFAULT_STRING_MAX_LENGTH as u128) as u16;
+            let total_elements = dimensions
+                .iter()
+                .fold(1u32, |acc, d| acc * (d.upper - d.lower + 1) as u32);
+            let stride = super::compile::string_region_size(max_length, *char_width);
+            let field_byte_offset = region.data_offset + slot * 8;
+            for i in 0..total_elements {
+                emitter.emit_str_init(field_byte_offset + i * stride, max_length, *char_width);
+            }
+            Ok(())
+        }
+        IntermediateType::Structure { .. } => {
+            if stated.is_some() {
+                return Err(unsupported("an array of structures"));
+            }
+            initialize_array_elements(emitter, ctx, region, slot, element_type, dimensions, span)
+        }
+        _ => {
+            let Some(op_type) = resolve_field_op_type(element_type) else {
+                return if values.is_empty() {
+                    Ok(())
+                } else {
+                    Err(unsupported("an array of this element type"))
+                };
+            };
+            for (i, value) in values.iter().enumerate() {
+                compile_constant(emitter, ctx, value, op_type)?;
+                emit_truncation_for_field(emitter, element_type);
+                let idx_const = ctx.add_i32_constant((slot + i as u32) as i32);
+                emitter.emit_load_const_i32(idx_const);
+                emitter.emit_store_array(region.var_index, region.desc_index);
+            }
+            Ok(())
+        }
+    }
 }

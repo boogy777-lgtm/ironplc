@@ -100,9 +100,14 @@ impl Visitor<Diagnostic> for ScopedTable<'_, TypeName, TypeDefinitionKind> {
             DataTypeDeclarationKind::Subrange(node) => {
                 self.add_if_new(&node.type_name, TypeDefinitionKind::Subrange)
             }
-            DataTypeDeclarationKind::Simple(node) => {
-                self.add_if_new(&node.type_name, TypeDefinitionKind::Simple)
-            }
+            // An alias of a structure is a structure to whatever declares against it.
+            DataTypeDeclarationKind::Simple(node) => self.add_if_new(
+                &node.type_name,
+                match node.spec_and_init {
+                    InitialValueAssignmentKind::Structure(_) => TypeDefinitionKind::Structure,
+                    _ => TypeDefinitionKind::Simple,
+                },
+            ),
             DataTypeDeclarationKind::Array(node) => {
                 self.add_if_new(&node.type_name, TypeDefinitionKind::Array)
             }
@@ -281,7 +286,7 @@ impl Fold<Diagnostic> for TypeResolver<'_> {
                     // Subrange types (e.g., MY_RANGE : INT (1..100))
                     if ty.representation.is_subrange() {
                         return Ok(InitialValueAssignmentKind::Subrange(
-                            SpecificationKind::Named(name),
+                            SubrangeInitializer::uninitialized(SpecificationKind::Named(name)),
                         ));
                     }
                 }
@@ -351,7 +356,7 @@ impl Fold<Diagnostic> for TypeResolver<'_> {
                             }),
                         ),
                         TypeDefinitionKind::Subrange => Ok(InitialValueAssignmentKind::Subrange(
-                            SpecificationKind::Named(name),
+                            SubrangeInitializer::uninitialized(SpecificationKind::Named(name)),
                         )),
                         _ => Err(Diagnostic::todo_with_type(&name)),
                     },
@@ -566,7 +571,7 @@ END_FUNCTION_BLOCK
             assert_eq!(fb.variables.len(), 1);
             assert!(matches!(
                 &fb.variables[0].initializer,
-                InitialValueAssignmentKind::Subrange(SpecificationKind::Named(tn))
+                InitialValueAssignmentKind::Subrange(SubrangeInitializer { spec: SpecificationKind::Named(tn), .. })
                 if *tn == TypeName::from("my_range")
             ));
         }

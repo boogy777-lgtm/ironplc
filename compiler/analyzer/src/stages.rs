@@ -289,6 +289,27 @@ fn resolve_types_in_budget(
         xform_int_to_bool_initializer::apply(lib, &mut type_environment, options)
     });
 
+    // A structure member's declared value is only in its final form now:
+    // late-bound resolution and folding have turned `c : Color := Blue` and
+    // `n : INT := N * 2` into values. The environment derived the structure
+    // types before that, so derive them again from the resolved
+    // declarations; every structure, alias of one and aggregate holding one
+    // then carries the members' values. Nothing holds an id from the first
+    // derivation, which already diagnosed any repeated or unresolvable
+    // declaration, so a failure here keeps the first environment.
+    if let Ok(mut resolved_environment) = TypeEnvironmentBuilder::new()
+        .with_elementary_types()
+        .with_stdlib_function_blocks()
+        .build()
+    {
+        if let Ok((resolved, _)) =
+            xform_resolve_type_decl_environment::apply(library.clone(), &mut resolved_environment)
+        {
+            library = resolved;
+            type_environment = resolved_environment;
+        }
+    }
+
     // Best effort: a repeated declaration name is diagnosed here, by the
     // environments, and the first declaration is kept, so the rest of the
     // library still resolves instead of reverting on the first repeat.
