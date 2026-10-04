@@ -114,6 +114,18 @@ pub(crate) fn resolve_initializer(
     }
 }
 
+/// Resolves the [`IntermediateType`] of the variable in scope named `name`.
+pub(crate) fn declared_type(
+    name: &Id,
+    declarations: &Declarations,
+    type_env: &TypeEnvironment,
+) -> Option<IntermediateType> {
+    match declarations.find(name)? {
+        Declared::Variable { init, .. } => resolve_initializer(init, type_env),
+        Declared::Typed(type_name) => Some(type_env.get(type_name)?.representation.clone()),
+    }
+}
+
 /// Resolves the [`IntermediateType`] of the variable a reference names,
 /// walking through struct field accesses and array subscripts to the element
 /// it selects.
@@ -130,10 +142,7 @@ pub(crate) fn of(
     type_env: &TypeEnvironment,
 ) -> Option<IntermediateType> {
     match kind {
-        SymbolicVariableKind::Named(named) => match declarations.find(&named.name)? {
-            Declared::Variable { init, .. } => resolve_initializer(init, type_env),
-            Declared::Typed(type_name) => Some(type_env.get(type_name)?.representation.clone()),
-        },
+        SymbolicVariableKind::Named(named) => declared_type(&named.name, declarations, type_env),
         SymbolicVariableKind::Structured(structured) => {
             let record_type = of(&structured.record, declarations, type_env)?;
             struct_field_type(&record_type, &structured.field)

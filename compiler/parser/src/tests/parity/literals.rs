@@ -93,7 +93,6 @@ const MARKER_IN_STRING: &str = "the legacy pre-pass takes marker text inside a s
 const SEVERAL_PAIRS: &str = "the legacy pre-pass blanks the first ranged-comment pair only, so the legacy lexer rejects the file at the second pair's body and produces no tokens after it; the new parser makes every pair a region (a deliberate difference, listed for the file)";
 
 const KEYWORD_NAME_ALONE: &str = "deliberate behaviour change: a bare `STEP`, `ON`, `R_EDGE` or `F_EDGE` is a late-bound name like every other bare name. The legacy rule for a late-bound name (`identifier`) rejects those tokens, so the grammar fell through to the rule for a variable";
-const OUTPUT_NOT: &str = "legacy bug not ported: the legacy grammar consumes the `NOT` of `NOT name => variable` and records `not: false`, so an inverted output reads as a plain one; the lowering records it. The call is an expression or, as a statement, a call statement";
 const BIND_SPANS: &str = "deliberate behaviour change: an assignment is positioned at its whole operator (`S=`, `R=`, `REF=`) where the legacy grammar keeps the `=` token alone, and the value of `REF=` is positioned at the place it names where the legacy grammar builds it without a position";
 const POSITIVE_LABEL: &str = "legacy bug not ported: the legacy grammar positions a `CASE` label written with a `+` at its digits alone and one written with a `-` at the sign and the digits; the lowering positions the number as written";
 const LABEL_NAME: &str = "legacy bug not ported: the legacy grammar builds the name of a statement label without its position; the lowering gives it the position of the name like every other name";
@@ -117,14 +116,6 @@ pub const DIFFERENCES: &[Difference] = &[
         },
         reason: KEYWORD_NAME_ALONE,
         expected: 30,
-    },
-    Difference {
-        scope: Scope::Origin {
-            nodes: &[SyntaxKind::CallExpr, SyntaxKind::CallStmt],
-            parts: &[Component::Dump],
-        },
-        reason: OUTPUT_NOT,
-        expected: 24,
     },
     Difference {
         scope: Scope::Origin {
@@ -778,14 +769,14 @@ fn difference_when_listed_scope_then_counted_against_its_entry_and_not_unexplain
         String::new(),
     );
     tally.difference(
-        "f(NOT a => x);",
+        "STEP;",
         SyntaxKind::StatementList,
-        SyntaxKind::CallStmt,
+        SyntaxKind::NameRef,
         &[Component::Dump],
         String::new(),
     );
     assert!(tally.unexplained.is_empty());
-    assert_eq!(&tally.excepted[..4], &[1, 0, 0, 1]);
+    assert_eq!(&tally.excepted[..4], &[1, 0, 1, 0]);
 }
 
 #[test]

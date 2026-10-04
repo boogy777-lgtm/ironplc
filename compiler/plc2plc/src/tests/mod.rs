@@ -24,6 +24,7 @@ mod method_call_expression;
 mod methods;
 mod mixed_vars;
 mod namespaces;
+mod negated_output;
 mod params_of;
 mod partial_access;
 mod persistent_var;

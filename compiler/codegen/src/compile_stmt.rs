@@ -559,6 +559,11 @@ fn compile_fb_call(
             emitter.emit_fb_load_param(*field_idx);
             let target_index = resolve_variable(ctx, &output.tgt)?;
             let op_type = resolve_fb_field_op_type(ctx, type_id, &field_name);
+            // `NOT out => target` stores the complement. The analyzer
+            // admits a negated output only for a BOOL one.
+            if output.not {
+                emitter.emit_bool_not();
+            }
             emit_store_var(emitter, target_index, op_type);
         }
     }
