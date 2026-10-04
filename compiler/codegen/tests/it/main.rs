@@ -98,6 +98,7 @@ mod end_to_end_dialect;
 mod end_to_end_div;
 mod end_to_end_dup;
 mod end_to_end_duration_fraction;
+mod end_to_end_edge_input;
 mod end_to_end_enum;
 mod end_to_end_exit_return;
 mod end_to_end_expt;

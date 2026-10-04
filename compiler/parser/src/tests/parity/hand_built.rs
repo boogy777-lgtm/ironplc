@@ -62,7 +62,6 @@ fn function_block(
             FunctionBlockDeclaration {
                 name: type_name(source, "FUNCTION_BLOCK fb", "fb"),
                 variables: vec![],
-                edge_variables: vec![],
                 body: FunctionBlockBodyKind::empty(),
                 span: SourceSpan::range(0, source.len()).with_file_id(&file()),
                 oop: None,
@@ -106,7 +105,6 @@ fn lower_library_when_abstract_method_with_a_return_type_then_the_object_written
             "INT",
         ))),
         variables: vec![],
-        edge_variables: vec![],
         body: vec![],
         span: span_in(
             source,
@@ -173,7 +171,6 @@ fn compare_when_a_qualifier_is_missing_then_the_hand_built_object_differs() {
             "INT",
         ))),
         variables: vec![],
-        edge_variables: vec![],
         body: vec![],
         span: span_in(
             source,

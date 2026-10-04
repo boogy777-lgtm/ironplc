@@ -36,14 +36,6 @@ pub struct MethodDeclaration {
     pub name: Id,
     pub return_type: Option<FunctionReturnType>,
     pub variables: Vec<VarDecl>,
-    /// `R_EDGE`/`F_EDGE`-qualified `VAR` declarations (IEC 61131-3
-    /// §2.4.3). Not a TwinCAT-specific or OOP-specific capability: the
-    /// parser's `method_declaration()` rule reuses the exact same
-    /// standard variable-declaration grammar (`io_var_declarations()`/
-    /// `other_var_declarations()`) that `FunctionDeclaration` and
-    /// `FunctionBlockDeclaration` already use, so edge variables are
-    /// inherited for free, the same way a `VAR` block full stop is.
-    pub edge_variables: Vec<EdgeVarDecl>,
     pub body: Vec<StmtKind>,
     #[located(position)]
     pub span: SourceSpan,
@@ -101,7 +93,6 @@ impl PropertyDeclaration {
         name: &Id,
         property_type: &FunctionReturnType,
         variables: Vec<VarDecl>,
-        edge_variables: Vec<EdgeVarDecl>,
         body: Vec<StmtKind>,
         span: SourceSpan,
     ) -> MethodDeclaration {
@@ -110,7 +101,6 @@ impl PropertyDeclaration {
             name: name.clone(),
             return_type: Some(property_type.clone()),
             variables,
-            edge_variables,
             body,
             span,
         }
@@ -122,7 +112,6 @@ impl PropertyDeclaration {
         name: &Id,
         property_type: &FunctionReturnType,
         variables: Vec<VarDecl>,
-        edge_variables: Vec<EdgeVarDecl>,
         body: Vec<StmtKind>,
         span: SourceSpan,
     ) -> MethodDeclaration {
@@ -146,6 +135,7 @@ impl PropertyDeclaration {
             initializer,
             block: next_block_id(),
             type_id: None,
+            edge: None,
         };
         let mut all_variables = Vec::with_capacity(variables.len() + 1);
         all_variables.push(value);
@@ -155,7 +145,6 @@ impl PropertyDeclaration {
             name: name.clone(),
             return_type: None,
             variables: all_variables,
-            edge_variables,
             body,
             span,
         }

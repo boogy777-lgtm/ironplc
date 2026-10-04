@@ -132,6 +132,7 @@ fn compile_user_method(
     builder: &mut ContainerBuilder,
     types: &TypeEnvironment,
 ) -> Result<CompiledFunction, Diagnostic> {
+    crate::compile_edge::reject_edge_inputs(&method.variables, "a method")?;
     let mut current_index = param_var_off;
     let mut num_params: u16 = 0;
 

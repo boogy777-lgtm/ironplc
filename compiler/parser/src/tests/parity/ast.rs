@@ -139,9 +139,6 @@ impl Subject for Block {
         for variable in &self.variables {
             let _ = collector.visit_var_decl(variable);
         }
-        for edge in &self.edges {
-            let _ = edge.recurse_visit(collector);
-        }
         for access in &self.access {
             let _ = access.recurse_visit(collector);
         }

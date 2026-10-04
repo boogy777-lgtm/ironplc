@@ -166,25 +166,19 @@ fn lower_var_block_when_qualifier_on_a_block_with_edges_then_the_edges_take_it_t
         "VAR_INPUT RETAIN a : INT; b : BOOL R_EDGE; END_VAR",
     );
     assert_eq!(lowered.variables[0].qualifier, DeclarationQualifier::Retain);
-    assert_eq!(lowered.edges[0].qualifier, DeclarationQualifier::Retain);
+    assert_eq!(lowered.variables[1].qualifier, DeclarationQualifier::Retain);
 }
 
 #[test]
-fn lower_var_block_when_each_edge_then_one_edge_variable_for_each_name_and_no_variable() {
+fn lower_var_block_when_each_edge_then_one_edge_input_for_each_name() {
     let lowered = block(
         PROGRAM,
         "VAR_INPUT a, b : BOOL R_EDGE; c : BOOL F_EDGE; END_VAR",
     );
-    assert!(lowered.variables.is_empty());
     let edges: Vec<(String, EdgeDirection)> = lowered
-        .edges
+        .variables
         .iter()
-        .map(|edge| {
-            (
-                edge.identifier.original().to_string(),
-                edge.direction.clone(),
-            )
-        })
+        .map(|edge| (name_of(edge).to_string(), edge.edge.expect("an edge")))
         .collect();
     assert_eq!(
         edges,
@@ -198,7 +192,7 @@ fn lower_var_block_when_each_edge_then_one_edge_variable_for_each_name_and_no_va
 }
 
 #[test]
-fn lower_var_block_when_edges_beside_variables_then_each_in_its_list_and_the_variables_share_a_block(
+fn lower_var_block_when_edges_beside_variables_then_the_edge_is_an_input_in_the_one_list_of_one_block(
 ) {
     let lowered = block(
         PROGRAM,
@@ -206,10 +200,11 @@ fn lower_var_block_when_edges_beside_variables_then_each_in_its_list_and_the_var
     );
     assert_eq!(
         lowered.variables.iter().map(name_of).collect::<Vec<_>>(),
-        vec!["a", "b"]
+        vec!["a", "e", "b"]
     );
-    assert_eq!(lowered.edges.len(), 1);
+    assert_eq!(lowered.variables[1].edge, Some(EdgeDirection::Rising));
     assert_eq!(lowered.variables[0].block, lowered.variables[1].block);
+    assert_eq!(lowered.variables[0].block, lowered.variables[2].block);
 }
 
 // ---- What a block declares.

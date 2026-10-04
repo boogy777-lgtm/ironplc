@@ -3,7 +3,6 @@ FUNCTION FUNC : UINT
       E : REAL;
    END_VAR
 
-
    VAR_INPUT
       PI : BOOL R_EDGE;
    END_VAR

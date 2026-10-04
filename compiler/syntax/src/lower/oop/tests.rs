@@ -5,7 +5,9 @@
 use super::*;
 use crate::lower::{disposition, lower_library, Disposition, INTERNAL_ERROR};
 use crate::{parse_source_file, ParseOptions};
-use ironplc_dsl::common::{FunctionBlockDeclaration, LibraryElementKind, StringType, VariableType};
+use ironplc_dsl::common::{
+    EdgeDirection, FunctionBlockDeclaration, LibraryElementKind, StringType, VariableType,
+};
 use ironplc_dsl::core::FileId;
 
 fn file() -> FileId {
@@ -182,10 +184,10 @@ fn lower_method_when_string_return_type_then_the_specification() {
 }
 
 #[test]
-fn lower_method_when_edge_variable_then_kept_apart_from_the_variables() {
+fn lower_method_when_edge_variable_then_an_input_carrying_the_edge() {
     let lowered = method("METHOD m VAR_INPUT e : BOOL R_EDGE; END_VAR END_METHOD");
-    assert!(lowered.variables.is_empty());
-    assert_eq!(lowered.edge_variables.len(), 1);
+    assert_eq!(lowered.variables.len(), 1);
+    assert_eq!(lowered.variables[0].edge, Some(EdgeDirection::Rising));
 }
 
 #[test]

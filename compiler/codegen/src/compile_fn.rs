@@ -100,6 +100,7 @@ pub(crate) fn compile_user_function(
     types: &TypeEnvironment,
     num_globals: u16,
 ) -> Result<CompiledFunction, Diagnostic> {
+    crate::compile_edge::reject_edge_inputs(&func_decl.variables, "a function")?;
     // Save the program's variable mappings.
     let saved_variables = std::mem::take(&mut ctx.variables);
     let saved_var_types = std::mem::take(&mut ctx.var_types);
@@ -478,24 +479,9 @@ pub(crate) fn compile_user_function_block(
 ) -> Result<(CompiledFunction, SavedFbScope), Diagnostic> {
     let fb_name = fb_decl.name.name.to_string().to_uppercase();
 
-    // Collect fields in a stable order: inputs first, then outputs, then locals.
-    // This matches the data-region layout used by the VM's copy-in/copy-out.
-    let mut field_decls: Vec<&VarDecl> = Vec::new();
-    for decl in &fb_decl.variables {
-        if decl.var_type == VariableType::Input {
-            field_decls.push(decl);
-        }
-    }
-    for decl in &fb_decl.variables {
-        if decl.var_type == VariableType::Output {
-            field_decls.push(decl);
-        }
-    }
-    for decl in &fb_decl.variables {
-        if decl.var_type.is_pou_storage() {
-            field_decls.push(decl);
-        }
-    }
+    // The fields in the order of the data-region layout the VM copies in and out.
+    let field_decls = crate::compile_fb_layout::instance_fields(fb_decl);
+    let edge_inputs = crate::compile_edge::edge_inputs(&fb_decl.variables);
 
     // Save the program's variable mappings.
     let saved_variables = std::mem::take(&mut ctx.variables);
@@ -547,7 +533,7 @@ pub(crate) fn compile_user_function_block(
 
     // Assign variable slots for all FB fields, in the same order as field_decls.
     let mut current_index = VarIndex::new(var_offset);
-    for decl in &field_decls {
+    for decl in field_decls.iter() {
         if let Some(id) = decl.identifier.symbolic_id() {
             ctx.variables.insert(id.clone(), current_index);
             push_local_var_name(ctx, current_index, function_id, decl, id, types);
@@ -597,6 +583,7 @@ pub(crate) fn compile_user_function_block(
     ctx.current_function_id = Some(function_id);
 
     let mut fb_emitter = Emitter::new();
+    crate::compile_edge::bind_edge_inputs(&mut fb_emitter, ctx, &edge_inputs)?;
     compile_body(&mut fb_emitter, ctx, &fb_decl.body, &fb_decl.name.span())?;
     fb_emitter.emit_ret_void();
 

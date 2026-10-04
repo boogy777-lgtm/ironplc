@@ -32,10 +32,11 @@ use super::variables::{lower_address, lower_symbolic};
 use super::LowerCx;
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode};
 use ironplc_dsl::common::{
-    next_block_id, BlockId, DeclarationQualifier, EdgeDirection, EdgeVarDecl, ProgramAccessDecl,
-    VarDecl, VariableIdentifier, VariableType,
+    next_block_id, BlockId, DeclarationQualifier, EdgeDirection, ProgramAccessDecl, VarDecl,
+    VariableIdentifier, VariableType,
 };
 use ironplc_dsl::configuration::{Direction, FunctionBlockInit, LocatedVarInit};
+use ironplc_dsl::construct::edge_input;
 use ironplc_dsl::core::Id;
 use ironplc_dsl::diagnostic::Diagnostic;
 use rowan::TextRange;
@@ -54,9 +55,6 @@ pub enum InstanceInit {
 pub struct Block {
     /// The variables, in the order written.
     pub variables: Vec<VarDecl>,
-    /// The variables that name an edge (`x : BOOL R_EDGE`), which are
-    /// declarations of their own.
-    pub edges: Vec<EdgeVarDecl>,
     /// The access paths of `VAR_ACCESS`.
     pub access: Vec<ProgramAccessDecl>,
     /// The initialisations of `VAR_CONFIG`.
@@ -169,12 +167,12 @@ fn edge_of(cx: &LowerCx, node: &SyntaxNode) -> Result<Option<EdgeDirection>, Dia
     EDGES
         .iter()
         .find(|(kind, _)| *kind == keyword.kind())
-        .map(|(_, direction)| Some(direction.clone()))
+        .map(|(_, direction)| Some(*direction))
         .ok_or_else(|| cx.missing(&spec, "R_EDGE or F_EDGE"))
 }
 
 /// Lowers one declaration of a block to what it declares: a variable for each
-/// name, or an edge variable for each name when it names an edge.
+/// name. A declaration that names an edge declares edge inputs.
 fn lower_declaration(
     cx: &LowerCx,
     node: &SyntaxNode,
@@ -183,12 +181,15 @@ fn lower_declaration(
 ) -> Result<(), Diagnostic> {
     match edge_of(cx, node)? {
         Some(direction) => {
+            let bool_type = lower_type_ref(cx, &part(cx, node, K::TypeRef)?)?;
             for identifier in names_of(cx, node)? {
-                into.edges.push(EdgeVarDecl {
+                into.variables.push(edge_input(
                     identifier,
-                    direction: direction.clone(),
-                    qualifier: shared.qualifier.clone(),
-                });
+                    bool_type.clone(),
+                    direction,
+                    shared.qualifier.clone(),
+                    shared.block,
+                ));
             }
         }
         None => {
@@ -201,6 +202,7 @@ fn lower_declaration(
                     initializer: initializer.clone(),
                     block: shared.block,
                     type_id: None,
+                    edge: None,
                 });
             }
         }

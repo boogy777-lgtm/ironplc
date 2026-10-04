@@ -411,7 +411,6 @@ END_FUNCTION_BLOCK
                 LibraryElementKind::FunctionBlockDeclaration(FunctionBlockDeclaration {
                     name: TypeName::from("called"),
                     variables: vec![],
-                    edge_variables: vec![],
                     body: FunctionBlockBodyKind::empty(),
                     span: SourceSpan::default(),
                     oop: None,
@@ -421,7 +420,6 @@ END_FUNCTION_BLOCK
                 LibraryElementKind::FunctionBlockDeclaration(FunctionBlockDeclaration {
                     name: TypeName::from("caller"),
                     variables: vec![VarDecl::function_block("fb_var", "called")],
-                    edge_variables: vec![],
                     body: FunctionBlockBodyKind::empty(),
                     span: SourceSpan::default(),
                     oop: None,
@@ -472,7 +470,6 @@ END_FUNCTION_BLOCK
                 LibraryElementKind::FunctionBlockDeclaration(FunctionBlockDeclaration {
                     name: TypeName::from("caller"),
                     variables: vec![VarDecl::structure("the_var", "the_struct")],
-                    edge_variables: vec![],
                     body: FunctionBlockBodyKind::empty(),
                     span: SourceSpan::default(),
                     oop: None,
@@ -522,7 +519,6 @@ END_FUNCTION_BLOCK
                 LibraryElementKind::FunctionBlockDeclaration(FunctionBlockDeclaration {
                     name: TypeName::from("caller"),
                     variables: vec![VarDecl::uninitialized_enumerated("the_var", "values")],
-                    edge_variables: vec![],
                     body: FunctionBlockBodyKind::empty(),
                     span: SourceSpan::default(),
                     oop: None,

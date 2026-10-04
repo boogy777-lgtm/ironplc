@@ -21,8 +21,7 @@ use super::tree::{child_of, children_of, significant_tokens};
 use super::LowerCx;
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode};
 use ironplc_dsl::common::{
-    EdgeVarDecl, FunctionBlockOop, FunctionReturnType, MethodDeclaration, PropertyDeclaration,
-    TypeName, VarDecl,
+    FunctionBlockOop, FunctionReturnType, MethodDeclaration, PropertyDeclaration, TypeName, VarDecl,
 };
 use ironplc_dsl::core::{Id, SourceSpan};
 use ironplc_dsl::diagnostic::Diagnostic;
@@ -136,21 +135,14 @@ pub fn lower_method(cx: &LowerCx, node: &SyntaxNode) -> Result<MethodDeclaration
         name: declared_name(cx, node)?,
         return_type: lower_return_type(cx, node)?,
         variables: sections.variables,
-        edge_variables: sections.edges,
         body: statements_of(cx, node, sections.body)?,
         span: cx.node_span(node),
     })
 }
 
 /// A constructor of the method an accessor behaves as.
-type Accessor = fn(
-    &Id,
-    &FunctionReturnType,
-    Vec<VarDecl>,
-    Vec<EdgeVarDecl>,
-    Vec<StmtKind>,
-    SourceSpan,
-) -> MethodDeclaration;
+type Accessor =
+    fn(&Id, &FunctionReturnType, Vec<VarDecl>, Vec<StmtKind>, SourceSpan) -> MethodDeclaration;
 
 /// The accessors, by the kind of node that writes each, and the constructor of
 /// the method each behaves as.
@@ -180,7 +172,6 @@ fn lower_accessor(
         name,
         property_type,
         sections.variables,
-        sections.edges,
         statements_of(cx, &node, sections.body)?,
         cx.node_span(&node),
     )))

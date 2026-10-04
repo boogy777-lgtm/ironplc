@@ -96,6 +96,7 @@ impl From<IncomplVarDecl> for VarDecl {
             initializer: init,
             block: next_block_id(),
             type_id: None,
+            edge: None,
         }
     }
 }
@@ -121,6 +122,7 @@ impl UntypedVarDecl {
             // collected together.
             block: next_block_id(),
             type_id: None,
+            edge: None,
         }
     }
 }
@@ -173,7 +175,6 @@ pub enum VarDeclarations {
     Incomplete(Vec<IncomplVarDecl>),
     ProgramAccess(Vec<ProgramAccessDecl>),
     ConfigAccess(Vec<AccessDeclaration>),
-    Edge(Vec<EdgeVarDecl>),
 }
 
 impl VarDeclarations {
@@ -219,9 +220,6 @@ impl VarDeclarations {
                 VarDeclarations::ConfigAccess(v) => {
                     remainder.push(VarDeclarations::ConfigAccess(v));
                 }
-                VarDeclarations::Edge(v) => {
-                    remainder.push(VarDeclarations::Edge(v));
-                }
             }
         }
 
@@ -262,53 +260,6 @@ impl VarDeclarations {
                 }
                 VarDeclarations::ConfigAccess(v) => {
                     remainder.push(VarDeclarations::ConfigAccess(v));
-                }
-                VarDeclarations::Edge(v) => {
-                    remainder.push(VarDeclarations::Edge(v));
-                }
-            }
-        }
-
-        (vars, remainder)
-    }
-
-    pub fn drain_edge_decl(
-        mut decls: Vec<VarDeclarations>,
-    ) -> (Vec<EdgeVarDecl>, Vec<VarDeclarations>) {
-        let mut vars = Vec::new();
-        let mut remainder = Vec::new();
-
-        for decl in decls.drain(..) {
-            match decl {
-                VarDeclarations::Inputs(i) => {
-                    remainder.push(VarDeclarations::Inputs(i));
-                }
-                VarDeclarations::Outputs(o) => {
-                    remainder.push(VarDeclarations::Outputs(o));
-                }
-                VarDeclarations::Inouts(inouts) => {
-                    remainder.push(VarDeclarations::Inouts(inouts));
-                }
-                VarDeclarations::Located(l) => {
-                    remainder.push(VarDeclarations::Located(l));
-                }
-                VarDeclarations::Var(v) => {
-                    remainder.push(VarDeclarations::Var(v));
-                }
-                VarDeclarations::External(v) => {
-                    remainder.push(VarDeclarations::External(v));
-                }
-                VarDeclarations::Incomplete(v) => {
-                    remainder.push(VarDeclarations::Incomplete(v));
-                }
-                VarDeclarations::ProgramAccess(v) => {
-                    remainder.push(VarDeclarations::ProgramAccess(v));
-                }
-                VarDeclarations::ConfigAccess(v) => {
-                    remainder.push(VarDeclarations::ConfigAccess(v));
-                }
-                VarDeclarations::Edge(mut v) => {
-                    vars.append(&mut v);
                 }
             }
         }
@@ -364,11 +315,6 @@ impl VarDeclarations {
                     // Does not change based on the type
                     updated_decls.push(VarDeclarations::ConfigAccess(v));
                 }
-                VarDeclarations::Edge(v) => {
-                    updated_decls.push(VarDeclarations::Edge(VarDeclarations::map_edge(
-                        v, &qualifier,
-                    )));
-                }
             }
         }
 
@@ -401,20 +347,6 @@ impl VarDeclarations {
         declarations: Vec<IncomplVarDecl>,
         qualifier: &DeclarationQualifier,
     ) -> Vec<IncomplVarDecl> {
-        declarations
-            .into_iter()
-            .map(|declaration| {
-                let mut decl = declaration.clone();
-                decl.qualifier = qualifier.clone();
-                decl
-            })
-            .collect()
-    }
-
-    pub fn map_edge(
-        declarations: Vec<EdgeVarDecl>,
-        qualifier: &DeclarationQualifier,
-    ) -> Vec<EdgeVarDecl> {
         declarations
             .into_iter()
             .map(|declaration| {
