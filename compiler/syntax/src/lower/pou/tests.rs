@@ -2,7 +2,7 @@
 //! each thing a unit may hold, and what each unit makes of its parts.
 
 use super::*;
-use crate::lower::{disposition, lower_library, Area, Disposition, NOT_IMPLEMENTED};
+use crate::lower::{disposition, lower_library, Area, Disposition, INTERNAL_ERROR};
 use crate::{parse_source_file, ParseOptions};
 use ironplc_dsl::common::{
     DeclarationQualifier, IntegerRef, LibraryElementKind, StringSpecification, VariableType,
@@ -63,15 +63,6 @@ fn names(variables: &[VarDecl]) -> Vec<String> {
         .collect()
 }
 
-fn error_code(source: &str, options: &ParseOptions) -> String {
-    let parse = parse_source_file(source, options);
-    assert!(parse.is_ok(), "{source}: {:?}", parse.errors);
-    lower_library(&parse, &file())
-        .err()
-        .map(|error| error.code)
-        .unwrap_or_default()
-}
-
 // ---- Dispositions.
 
 #[test]
@@ -119,6 +110,29 @@ fn header_when_each_kind_then_it_is_not_a_section() {
             "{kind:?}"
         );
     }
+}
+
+#[test]
+fn lower_body_when_nothing_is_written_then_an_empty_body_and_a_list_without_text_is_none() {
+    let cx = LowerCx::new(file());
+    let source = "PROGRAM p INITIAL_STEP s: END_STEP ACTION a: END_ACTION ACTION b: ; END_ACTION END_PROGRAM";
+    let parse = parse_source_file(source, &ParseOptions::all());
+    let actions: Vec<_> = parse
+        .root
+        .descendants()
+        .filter(|node| node.kind() == K::ActionDecl)
+        .collect();
+    assert_eq!(actions.len(), 2);
+    // A list that holds no text is no body; one that holds a `;` is a list of
+    // no statements, as for a unit.
+    assert!(matches!(
+        lower_body(&cx, &actions[0]),
+        Ok(FunctionBlockBodyKind::Empty)
+    ));
+    assert!(matches!(
+        lower_body(&cx, &actions[1]),
+        Ok(FunctionBlockBodyKind::Statements(statements)) if statements.body.is_empty()
+    ));
 }
 
 // ---- Programs.
@@ -224,12 +238,13 @@ fn lower_program_when_name_then_original_spelling_and_position() {
 }
 
 #[test]
-fn lower_program_when_sequential_chart_then_not_implemented_and_never_an_empty_body() {
-    let code = error_code(
-        "PROGRAM p INITIAL_STEP s: END_STEP END_PROGRAM",
-        &ParseOptions::all(),
+fn lower_program_when_sequential_chart_then_a_chart_body_and_never_an_empty_one() {
+    let lowered = program("PROGRAM p INITIAL_STEP s: END_STEP END_PROGRAM");
+    assert!(
+        matches!(&lowered.body, FunctionBlockBodyKind::Sfc(chart) if chart.networks.len() == 1),
+        "{:?}",
+        lowered.body
     );
-    assert_eq!(code, NOT_IMPLEMENTED);
 }
 
 // ---- Functions.
@@ -346,12 +361,27 @@ END_FUNCTION_BLOCK",
 }
 
 #[test]
-fn lower_function_block_when_sequential_chart_then_not_implemented() {
-    let code = error_code(
-        "FUNCTION_BLOCK fb INITIAL_STEP s: END_STEP END_FUNCTION_BLOCK",
+fn lower_function_block_when_sequential_chart_then_a_chart_body() {
+    let lowered = function_block("FUNCTION_BLOCK fb INITIAL_STEP s: END_STEP END_FUNCTION_BLOCK");
+    assert!(matches!(lowered.body, FunctionBlockBodyKind::Sfc(_)));
+}
+
+#[test]
+fn lower_function_when_sequential_chart_then_an_internal_error() {
+    // The grammar does not read a chart in a function, so a tree that holds
+    // one is not the tree the parser builds.
+    let parse = parse_source_file(
+        "FUNCTION f : INT f := 1; END_FUNCTION",
         &ParseOptions::all(),
     );
-    assert_eq!(code, NOT_IMPLEMENTED);
+    let node = parse.root.first_child().expect("a function");
+    let error = statements_of(
+        &LowerCx::new(file()),
+        &node,
+        Some(FunctionBlockBodyKind::sfc(vec![])),
+    )
+    .expect_err("a chart is not statements");
+    assert_eq!(error.code, INTERNAL_ERROR);
 }
 
 // ---- Interfaces.
@@ -428,12 +458,14 @@ fn lower_namespace_when_empty_then_no_elements_and_the_span_covers_the_declarati
 }
 
 #[test]
-fn lower_namespace_when_it_holds_a_declaration_without_a_rule_then_not_implemented_there() {
-    let code = error_code(
+fn lower_namespace_when_it_holds_a_configuration_then_the_configuration_is_an_element() {
+    let written = elements(
         "NAMESPACE n CONFIGURATION c RESOURCE r ON t PROGRAM p : q; END_RESOURCE END_CONFIGURATION END_NAMESPACE",
-        &ParseOptions::all(),
     );
-    assert_eq!(code, NOT_IMPLEMENTED);
+    assert!(matches!(
+        namespace_of(&written[0]).elements[..],
+        [LibraryElementKind::ConfigurationDeclaration(_)]
+    ));
 }
 
 // ---- The file.

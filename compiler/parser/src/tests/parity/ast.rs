@@ -25,7 +25,8 @@ use ironplc_dsl::common::{
     PropertyDeclaration, VarDecl,
 };
 use ironplc_dsl::core::SourceSpan;
-use ironplc_dsl::textual::{Expr, StmtKind, Variable};
+use ironplc_dsl::sfc::{ElementKind, Network};
+use ironplc_dsl::textual::{Expr, ExprKind, StmtKind, Variable};
 use ironplc_dsl::visitor::Visitor;
 use ironplc_syntax::lower::oop::Member;
 use ironplc_syntax::lower::var_blocks::{Block, InstanceInit};
@@ -116,6 +117,14 @@ impl Subject for Vec<StmtKind> {
     }
 }
 
+impl Subject for Vec<Network> {
+    fn walk(&self, collector: &mut Collector) {
+        for network in self {
+            let _ = network.recurse_visit(collector);
+        }
+    }
+}
+
 impl Subject for Member {
     fn walk(&self, collector: &mut Collector) {
         let _ = match self {
@@ -188,6 +197,18 @@ pub fn without_inner_parts(mut elements: Vec<LibraryElementKind>) -> Vec<Library
                 block.methods.iter_mut().for_each(mask_method);
                 block.properties.iter_mut().for_each(mask_property);
             }
+            LibraryElementKind::ConfigurationDeclaration(configuration) => {
+                mask_variables(&mut configuration.global_var);
+                for init in &mut configuration.fb_inits {
+                    init.initializer.clear();
+                }
+                for init in &mut configuration.located_var_inits {
+                    init.initializer = InitialValueAssignmentKind::None(SourceSpan::default());
+                }
+                for resource in &mut configuration.resource_decl {
+                    mask_variables(&mut resource.global_vars);
+                }
+            }
             LibraryElementKind::GlobalVarDeclarations(variables) => mask_variables(variables),
             LibraryElementKind::NamespaceDeclaration(namespace) => {
                 let inner = std::mem::take(&mut namespace.elements);
@@ -220,9 +241,32 @@ fn mask_variables(variables: &mut [VarDecl]) {
 }
 
 fn mask_body(body: &mut FunctionBlockBodyKind) {
-    if let FunctionBlockBodyKind::Statements(statements) = body {
-        statements.body.clear();
+    match body {
+        FunctionBlockBodyKind::Statements(statements) => statements.body.clear(),
+        FunctionBlockBodyKind::Sfc(chart) => chart.networks.clear(),
+        FunctionBlockBodyKind::Empty => {}
     }
+}
+
+/// The networks of a chart without the parts that have comparisons of their own,
+/// so that what a chart owns (its networks, the steps and what each is
+/// associated with, the steps each transition leaves and enters and its name and
+/// priority, the names of the actions and the kind of each body) is compared on
+/// its own: the conditions and the bodies of the actions are compared where their
+/// own rules are.
+pub fn without_inner_chart_parts(mut networks: Vec<Network>) -> Vec<Network> {
+    for network in &mut networks {
+        for element in &mut network.elements {
+            match element {
+                ElementKind::Transition(transition) => {
+                    transition.condition = Expr::new(ExprKind::late_bound(""));
+                }
+                ElementKind::Action(action) => mask_body(&mut action.body),
+                ElementKind::Step(_) => {}
+            }
+        }
+    }
+    networks
 }
 
 fn mask_return_type(return_type: &mut FunctionReturnType) {

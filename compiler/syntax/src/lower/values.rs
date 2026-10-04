@@ -25,6 +25,18 @@ pub fn lower_integer(cx: &LowerCx, node: &SyntaxNode) -> Result<SignedInteger, D
     }
 }
 
+/// A priority, of a task or of a transition: a whole number that fits in
+/// 32 bits.
+pub fn lower_priority(cx: &LowerCx, node: &SyntaxNode) -> Result<u32, Diagnostic> {
+    let number = lower_integer(cx, node)?;
+    u32::try_from(number.value.value).map_err(|_| {
+        cx.syntax_error(
+            node.text_range(),
+            "a priority is a whole number that fits in 32 bits",
+        )
+    })
+}
+
 /// A count or a length: an integer, or the name of a constant.
 pub fn lower_integer_ref(cx: &LowerCx, node: &SyntaxNode) -> Result<IntegerRef, Diagnostic> {
     match node.kind() {

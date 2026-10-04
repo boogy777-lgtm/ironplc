@@ -1,6 +1,5 @@
 //! Lowering against the legacy parser, test-only: literals, expressions,
-//! variables and statements, and whole libraries as far as the lowering
-//! reaches.
+//! variables, statements, declarations and whole libraries.
 //!
 //! Two comparisons, both strict (`ast.rs`):
 //!
@@ -13,13 +12,9 @@
 //!   that closes the body follows. The legacy rule is applied to the tokens,
 //!   not looked up in the legacy tree, because the legacy tree holds some
 //!   literal positions as bare integers (a subrange bound, a string length)
-//!   that are not constants. A site that holds a node kind without a lowering
-//!   rule is skipped and counted.
-//! - **Whole inputs.** An input whose tree contains no node kind without a
-//!   lowering rule is lowered as a library and compared to the legacy
-//!   `parse_program` result. An input that does contain one is skipped and
-//!   counted: the skipped count falls as rules are written, and the floor on
-//!   the compared count rises with it.
+//!   that are not constants.
+//! - **Whole inputs.** Every input the new parser accepts is lowered as a
+//!   library and compared to the legacy `parse_program` result.
 //!
 //! The inputs are the statement, expression and declaration tables, the
 //! declarations and bodies lifted from the legacy tests, and the file corpus
@@ -37,7 +32,8 @@
 //! operand differing, is still found.
 
 use super::ast::{
-    compare, explain, member_without_inner_parts, without_inner_parts, Component, Subject,
+    compare, explain, member_without_inner_parts, without_inner_chart_parts, without_inner_parts,
+    Component, Subject,
 };
 use super::blocks::judge_block;
 use super::declaration_table::DECLARATIONS;
@@ -49,20 +45,22 @@ use super::type_table::TYPES;
 use super::{extract, file_variants, new_parse, Kind};
 use crate::legacy::{parse_program, tokenize_program};
 use crate::parser::{
-    parse_constant, parse_declarations, parse_expression, parse_member, parse_statement_list,
-    parse_type_declaration, parse_variable, parse_variable_initial,
+    parse_chart, parse_constant, parse_declarations, parse_expression, parse_member,
+    parse_statement_list, parse_type_declaration, parse_variable, parse_variable_initial,
 };
 use crate::token::{Token, TokenType};
 use ironplc_dsl::common::{Library, LibraryElementKind};
 use ironplc_dsl::core::FileId;
 use ironplc_dsl::diagnostic::Diagnostic;
+use ironplc_dsl::sfc::Network;
 use ironplc_syntax::lower::{
-    contains_pending, disposition,
+    disposition,
     expressions::lower_expr,
     initializers::lower_initial_value,
     literals::lower_constant,
     lower_element, lower_library,
     oop::{lower_member, Member},
+    sfc::lower_chart,
     statements::{lower_statement, lower_statement_list},
     types::lower_type_declaration,
     variables::lower_variable,
@@ -118,10 +116,6 @@ pub struct Tally {
     /// Whole inputs lowered and compared, and those equal.
     pub whole_compared: usize,
     pub whole_equal: usize,
-    /// Whole inputs skipped for a node kind without a rule.
-    pub whole_skipped: usize,
-    /// Sites skipped for holding a node kind without a rule.
-    pub sites_skipped: usize,
     /// How many differences each entry of `DIFFERENCES` explained.
     pub excepted: Vec<usize>,
     /// Differences no entry covers.
@@ -341,10 +335,10 @@ fn judge(site: &Site, tokens: &[Token], cx: &LowerCx, written: &str) -> Outcome 
             lower_initial_value(cx, &site.node),
         ),
         Unit::VariableBlock | Unit::VariableBlockFacts => judge_block(site, tokens, cx, written),
-        Unit::Pou | Unit::PouFacts => {
+        Unit::Pou | Unit::PouFacts | Unit::Configuration | Unit::ConfigurationFacts => {
             let kept = |elements: Vec<LibraryElementKind>| Library {
                 elements: match site.unit {
-                    Unit::PouFacts => without_inner_parts(elements),
+                    Unit::PouFacts | Unit::ConfigurationFacts => without_inner_parts(elements),
                     _ => elements,
                 },
             };
@@ -352,6 +346,17 @@ fn judge(site: &Site, tokens: &[Token], cx: &LowerCx, written: &str) -> Outcome 
                 written,
                 parse_declarations(tokens).map(kept),
                 lower_element(cx, &site.node).map(kept),
+            )
+        }
+        Unit::Chart | Unit::ChartFacts => {
+            let kept = |networks: Vec<Network>| match site.unit {
+                Unit::ChartFacts => without_inner_chart_parts(networks),
+                _ => networks,
+            };
+            settle(
+                written,
+                parse_chart(tokens).map(kept),
+                lower_chart(cx, &site.node).map(kept),
             )
         }
         Unit::Member | Unit::MemberFacts => {
@@ -387,12 +392,6 @@ fn compare_sites(tally: &mut Tally, key: &str, text: &str, parse: &Parse, preset
     let mut differing: Vec<(&Site, Vec<Component>, String)> = Vec::new();
     let all = sites(&parse.root);
     for site in &all {
-        // A site that holds a node kind without a lowering rule cannot be
-        // lowered yet; it is counted, and falls as the rules are written.
-        if contains_pending(&site.node) {
-            tally.sites_skipped += 1;
-            continue;
-        }
         let range = range_of(&site.node);
         let written = &text[range.0..range.1];
         let outcome = judge(
@@ -436,7 +435,7 @@ fn compare_sites(tally: &mut Tally, key: &str, text: &str, parse: &Parse, preset
 }
 
 /// Lowers a whole accepted input as a library and compares it to the legacy
-/// parse, when every node kind of its tree has a lowering rule.
+/// parse.
 fn compare_library(
     tally: &mut Tally,
     key: &str,
@@ -445,10 +444,6 @@ fn compare_library(
     preset: &Preset,
     sites_differ: bool,
 ) {
-    if contains_pending(&parse.root) {
-        tally.whole_skipped += 1;
-        return;
-    }
     tally.whole_compared += 1;
     let legacy = parse_program(text, &file(), &preset.legacy);
     let lowered = lower_library(parse, &file());
@@ -554,11 +549,10 @@ pub fn run(cases: &[Case], presets: &[Preset]) -> Tally {
     tally
 }
 
-/// What the run must reach at least: the floors rise as lowering rules are
-/// written and never fall. The sites equal to the legacy ones, by unit, those
+/// What the run must reach at least: the floors never fall. The sites equal to the legacy ones, by unit, those
 /// literals among them in inputs that are nothing but a literal, and whole
 /// inputs lowered as libraries.
-const MIN_EQUAL: [(Unit, usize); 13] = [
+const MIN_EQUAL: [(Unit, usize); 17] = [
     (Unit::Literal, 18_000),
     (Unit::Expression, 30_000),
     (Unit::Variable, 9_500),
@@ -572,10 +566,14 @@ const MIN_EQUAL: [(Unit, usize); 13] = [
     (Unit::Member, 270),
     (Unit::PouFacts, 5_400),
     (Unit::MemberFacts, 470),
+    (Unit::Chart, 400),
+    (Unit::ChartFacts, 405),
+    (Unit::Configuration, 310),
+    (Unit::ConfigurationFacts, 510),
 ];
 const MIN_BODIES_EQUAL: usize = 4_500;
 const MIN_LITERAL_ONLY_EQUAL: usize = 400;
-const MIN_WHOLE_COMPARED: usize = 5_800;
+const MIN_WHOLE_COMPARED: usize = 6_700;
 
 /// The differences no entry covers, one problem for each kind of difference
 /// (the node, and the parts in which it differs) with how often it was found
@@ -670,12 +668,8 @@ pub fn summarize(tally: &Tally) {
         tally.unexplained.len()
     );
     println!(
-        "  sites skipped for a kind without a rule: {}",
-        tally.sites_skipped
-    );
-    println!(
-        "  whole inputs: {} compared ({} equal), {} skipped for a kind without a rule",
-        tally.whole_compared, tally.whole_equal, tally.whole_skipped
+        "  whole inputs: {} compared ({} equal)",
+        tally.whole_compared, tally.whole_equal
     );
     for (entry, seen) in DIFFERENCES.iter().zip(&tally.excepted) {
         println!("  [{seen}] {:?}: {}", entry.scope, entry.reason);

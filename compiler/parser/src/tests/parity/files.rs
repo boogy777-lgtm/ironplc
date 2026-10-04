@@ -12,6 +12,7 @@ use super::file_variants;
 use super::legacy::{presets, Preset};
 use super::tables::FILE_EXCEPTIONS;
 use super::{Kind, Oracle};
+use ironplc_dsl::core::FileId;
 use std::path::Path;
 
 #[test]
@@ -153,17 +154,26 @@ fn parity_when_oscat_marker_inside_string_then_both_accept_but_only_the_new_pars
 }
 
 #[test]
-fn parity_when_unit_and_member_corpus_files_then_each_is_lowered_and_compared_under_every_preset() {
-    // The files that hold units, methods, properties, interfaces and
-    // namespaces hold nothing that has no lowering rule yet (a chart or a
-    // configuration), so the whole-input comparison reaches each of them
-    // instead of skipping it.
+fn parity_when_unit_chart_and_configuration_corpus_files_then_each_is_lowered_under_every_preset() {
+    // The files that hold units, methods, properties, interfaces, namespaces,
+    // charts and configurations are in the corpus, and each lowers wherever the
+    // new parser accepts it, so the whole-input comparison reaches each of them.
     let names = [
         "../resources/test/oop.st",
         "../resources/test/namespace.st",
         "../plc2plc/resources/test/oop_rendered.st",
         "tests/fixtures/codesys/oop_members.st",
         "tests/fixtures/codesys/namespaces.st",
+        "../resources/test/sfc.st",
+        "../resources/test/first_steps.st",
+        "../resources/test/first_steps_function_block_counter_sfc.st",
+        "../plc2plc/resources/test/sfc_rendered.st",
+        "tests/fixtures/codesys/sfc_chart.st",
+        "../resources/test/configuration.st",
+        "../resources/test/first_steps_configuration.st",
+        "../ironplc-cli/resources/test/set/first_steps_configuration.st",
+        "../plc2plc/resources/test/configuration_rendered.st",
+        "tests/fixtures/codesys/configuration.st",
     ];
     let files = file_variants();
     for name in names {
@@ -181,9 +191,11 @@ fn parity_when_unit_and_member_corpus_files_then_each_is_lowered_and_compared_un
             "{name} is rejected under every preset"
         );
         for parse in accepted {
+            let lowered = ironplc_syntax::lower::lower_library(&parse, &FileId::default());
             assert!(
-                !ironplc_syntax::lower::contains_pending(&parse.root),
-                "{name} is skipped for a kind without a rule"
+                lowered.is_ok(),
+                "{name} does not lower: {:?}",
+                lowered.err()
             );
         }
     }

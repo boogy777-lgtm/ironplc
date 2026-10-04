@@ -1,5 +1,5 @@
 use super::*;
-use crate::lower::{disposition, INTERNAL_ERROR, NOT_IMPLEMENTED};
+use crate::lower::{disposition, INTERNAL_ERROR};
 use crate::{parse_expression, parse_source_file, ParseOptions, SyntaxKind, MAX_DEPTH};
 use ironplc_dsl::core::{FileId, Located};
 use ironplc_dsl::textual::{SelfRefKind, SymbolicVariableKind, Variable};
@@ -797,7 +797,7 @@ fn lower_expr_when_call_has_no_argument_list_then_internal_error() {
 }
 
 #[test]
-fn lower_expr_when_node_is_not_an_expression_then_internal_error_or_not_implemented() {
+fn lower_expr_when_node_is_not_an_expression_then_internal_error() {
     let source = parse_source_file(
         "CONFIGURATION c RESOURCE r ON t PROGRAM p : q; END_RESOURCE END_CONFIGURATION\n",
         &all(),
@@ -807,7 +807,7 @@ fn lower_expr_when_node_is_not_an_expression_then_internal_error_or_not_implemen
         .descendants()
         .find(|node| node.kind() == SyntaxKind::ConfigurationDecl)
         .expect("a declaration");
-    assert_eq!(internal(&declaration), Some(NOT_IMPLEMENTED.to_string()));
+    assert_eq!(internal(&declaration), Some(INTERNAL_ERROR.to_string()));
     let name = built(SyntaxKind::Name, vec![]);
     assert_eq!(internal(&name), Some(INTERNAL_ERROR.to_string()));
 }

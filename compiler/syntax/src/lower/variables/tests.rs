@@ -1,5 +1,5 @@
 use super::*;
-use crate::lower::{INTERNAL_ERROR, NOT_IMPLEMENTED};
+use crate::lower::INTERNAL_ERROR;
 use crate::{parse_expression, ParseOptions, SyntaxKind, MAX_DEPTH};
 use ironplc_dsl::common::{LocationPrefix, SizePrefix};
 use ironplc_dsl::core::FileId;
@@ -316,7 +316,7 @@ fn lower_variable_when_node_is_not_a_variable_then_internal_error() {
 }
 
 #[test]
-fn lower_variable_when_node_is_pending_then_not_implemented() {
+fn lower_variable_when_node_is_not_a_place_then_internal_error() {
     let parse = crate::parse_source_file(
         "CONFIGURATION c RESOURCE r ON t PROGRAM p : q; END_RESOURCE END_CONFIGURATION\n",
         &all(),
@@ -329,7 +329,7 @@ fn lower_variable_when_node_is_pending_then_not_implemented() {
     let diagnostic = lower_variable(&LowerCx::new(file()), &statement).err();
     assert_eq!(
         diagnostic.map(|diagnostic| diagnostic.code),
-        Some(NOT_IMPLEMENTED.to_string())
+        Some(INTERNAL_ERROR.to_string())
     );
 }
 
