@@ -144,7 +144,11 @@ pub(crate) fn resolve_string_arg(
                 if info.char_width != char_width {
                     return Err(encoding_mismatch(char_width, info.char_width, func_span));
                 }
-                return Ok(info.data_offset);
+                // A string that belongs to an instance has no offset to name
+                // here; it is read like any other operand without one.
+                if let Some(data_offset) = info.static_offset() {
+                    return Ok(data_offset);
+                }
             }
         }
     }

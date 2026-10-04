@@ -328,6 +328,30 @@ fn build_when_fb_tail_identical_then_copy_slot_and_region() {
 }
 
 #[test]
+fn build_when_fb_has_string_field_then_fb_layout_unsupported() {
+    // A STRING field's slot holds the offset of the string inside the
+    // instance; a slot carried over from the other container would point into
+    // that container's layout, so the instance is not migrated.
+    let container = || {
+        ContainerBuilder::new()
+            .shared_globals_size(1)
+            .add_user_fb_type(user_fb_at(0x1000, 1, 1))
+            .add_var_entry(fb_entry(0x1000))
+            .add_var_entry(string_entry(10))
+            .add_stable_var(StableVarEntry {
+                var_index: VarIndex::new(0),
+                uid: 7,
+            })
+            .num_variables(2)
+            .build()
+    };
+
+    let result = StateMigrationPlan::build(&container(), &container());
+
+    assert_eq!(result.unwrap_err(), MigrationError::FbLayoutUnsupported);
+}
+
+#[test]
 fn build_when_fb_tail_changes_then_fb_layout_unsupported() {
     let base = ContainerBuilder::new()
         .shared_globals_size(1)

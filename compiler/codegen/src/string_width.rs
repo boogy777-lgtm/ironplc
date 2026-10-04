@@ -154,6 +154,20 @@ fn variable_shape(ctx: &CompileContext, variable: &Variable) -> Result<StringSha
                 })
         }
         SymbolicVariableKind::Structured(structured) => {
+            // `instance.s` -- a string field of a function block instance,
+            // whose run the instance's layout records.
+            if let SymbolicVariableKind::Named(named) = structured.record.as_ref() {
+                if let Some(info) = crate::compile_fb_init::instance_string_field(
+                    ctx,
+                    &named.name,
+                    &structured.field,
+                ) {
+                    return Ok(StringShape {
+                        char_width: info.char_width,
+                        max_length: Some(info.max_length),
+                    });
+                }
+            }
             // `a[i].s` -- the record is an array element, which the struct
             // chain walk cannot follow; the array-of-struct path locates it.
             let field_type =
@@ -495,11 +509,7 @@ mod tests {
         let mut ctx = CompileContext::new();
         ctx.string_vars.insert(
             Id::from("s"),
-            StringVarInfo {
-                data_offset: 0,
-                max_length,
-                char_width: CharWidth::Narrow,
-            },
+            StringVarInfo::fixed(0, max_length, CharWidth::Narrow),
         );
         ctx
     }

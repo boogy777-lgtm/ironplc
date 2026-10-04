@@ -24,12 +24,13 @@ use ironplc_dsl::common::{
 use ironplc_dsl::construct::merge_member_inits;
 use ironplc_dsl::core::{Id, Located};
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
-use ironplc_dsl::textual::{Expr, ExprKind};
+use ironplc_dsl::textual::{Expr, ExprKind, Variable};
 
-use super::compile::{CompileContext, OpType, DEFAULT_OP_TYPE};
-use super::compile_expr::compile_expr;
+use super::compile::{CompileContext, OpType, StringVarInfo, DEFAULT_OP_TYPE};
+use super::compile_expr::{compile_expr, resolve_variable_name, variable_span};
 use super::compile_initial_value::subrange_lower_bound;
 use crate::emit::Emitter;
+use crate::string_width::{compile_string_value, encoding_mismatch};
 
 /// Resolves the operand type for a function block field.
 ///
@@ -53,6 +54,66 @@ pub(crate) fn resolve_fb_field_op_type(
     DEFAULT_OP_TYPE
 }
 
+/// The run of the STRING/WSTRING field `field` of the function block instance
+/// `instance`, when the field keeps its characters in one: a fixed offset,
+/// because the instance is at a known place.
+pub(crate) fn instance_string_field(
+    ctx: &CompileContext,
+    instance: &Id,
+    field: &Id,
+) -> Option<StringVarInfo> {
+    ctx.fb_instances
+        .get(instance)?
+        .strings
+        .get(&field.to_string().to_lowercase())
+        .cloned()
+}
+
+/// Emits a store of `value` into the string field whose run is `info`: the
+/// value is produced at the field's encoding, then written into the run. The
+/// instance reference, if one is on the stack, is left where it is.
+pub(crate) fn compile_string_field_store(
+    emitter: &mut Emitter,
+    ctx: &mut CompileContext,
+    info: &StringVarInfo,
+    value: &Expr,
+) -> Result<(), Diagnostic> {
+    compile_string_value(emitter, ctx, value, info.char_width)?;
+    info.emit_store(emitter, ctx);
+    Ok(())
+}
+
+/// Copies the string field whose run is `source` out of an instance into the
+/// string variable `target`, which is what binding it to an output
+/// (`name => target`) means.
+pub(crate) fn compile_string_output(
+    emitter: &mut Emitter,
+    ctx: &mut CompileContext,
+    source: &StringVarInfo,
+    target: &Variable,
+) -> Result<(), Diagnostic> {
+    let span = variable_span(target);
+    let Some(destination) = resolve_variable_name(target)
+        .and_then(|name| ctx.string_vars.get(name))
+        .cloned()
+    else {
+        return Err(Diagnostic::not_implemented(Label::span(
+            span,
+            "A string output of a function block bound to something other than a string variable",
+        )));
+    };
+    if destination.char_width != source.char_width {
+        return Err(encoding_mismatch(
+            destination.char_width,
+            source.char_width,
+            &span,
+        ));
+    }
+    source.emit_load(emitter, ctx);
+    destination.emit_store(emitter, ctx);
+    Ok(())
+}
+
 /// Emits a store of `value` into `field` of the function block instance
 /// named `instance_name`.
 ///
@@ -67,6 +128,11 @@ pub(crate) fn compile_fb_field_store(
     field: &Id,
     value: &Expr,
 ) -> Result<bool, Diagnostic> {
+    // A string keeps its characters in a run of the instance, not in the slot.
+    if let Some(info) = instance_string_field(ctx, instance_name, field) {
+        compile_string_field_store(emitter, ctx, &info, value)?;
+        return Ok(true);
+    }
     let field_name = field.to_string().to_lowercase();
     let (field_idx, var_index, type_id) = match ctx.fb_instances.get(instance_name) {
         Some(fb_info) => {

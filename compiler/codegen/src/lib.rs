@@ -38,6 +38,7 @@ mod compile_call;
 mod compile_enum;
 mod compile_expr;
 mod compile_fb_init;
+mod compile_fb_layout;
 mod compile_fn;
 mod compile_initial_value;
 mod compile_jump;
@@ -58,6 +59,7 @@ mod emit;
 mod optimize;
 mod source_lookup;
 mod stack_balance;
+mod string_storage;
 mod string_width;
 mod type_info;
 

@@ -47,6 +47,11 @@
 //! | Descriptors identical | Copy the slot and the whole field region (`num_fields * 8` bytes) |
 //! | Descriptors differ | Match fields by UID; copy each shared-UID field's 8-byte slot, initialise candidate-only UIDs, drop base-only UIDs |
 //!
+//! An instance with a STRING or WSTRING field is migrated by neither path: the
+//! field's slot holds the offset of the string inside the instance, which
+//! belongs to one container's layout, so the planner fails closed with
+//! [`MigrationError::FbLayoutUnsupported`].
+//!
 //! A candidate field whose UID is unknown (no entry, or the reserved UID 0)
 //! while the layout differs rejects the whole candidate with
 //! [`MigrationError::FbLayoutUnsupported`] — the value's identity is
