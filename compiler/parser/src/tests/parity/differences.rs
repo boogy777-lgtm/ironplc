@@ -46,7 +46,7 @@ const KEYWORD_NAME_ALONE: &str = "deliberate behaviour change: a bare `STEP`, `O
 const BIND_SPANS: &str = "deliberate behaviour change: an assignment is positioned at its whole operator (`S=`, `R=`, `REF=`) where the legacy grammar keeps the `=` token alone, and the value of `REF=` is positioned at the place it names where the legacy grammar builds it without a position";
 const POSITIVE_LABEL: &str = "legacy bug not ported: the legacy grammar positions a `CASE` label written with a `+` at its digits alone and one written with a `-` at the sign and the digits; the lowering positions the number as written";
 const LABEL_NAME: &str = "legacy bug not ported: the legacy grammar builds the name of a statement label without its position; the lowering gives it the position of the name like every other name";
-const TYPE_NAME_POSITION: &str = "legacy bug not ported: the legacy grammar builds the name of an elementary type in a declaration (`INT` in `x : INT := 5`, and the base of an alias) without a position, because it converts the keyword to a name instead of recording where it was written; the lowering gives it the position of the keyword like every other type name (pinned by its own test)";
+const TYPE_NAME_POSITION: &str = "legacy bug not ported: the legacy grammar builds the name of an elementary type in a declaration (`INT` in `x : INT := 5`, the base of an alias, the return type of a function, a method or a property) without a position, because it converts the keyword to a name instead of recording where it was written; the lowering gives it the position of the keyword like every other type name (pinned by its own test)";
 const BLOCK_SHAPES: &str = "legacy shapes differ from the one table of initial values that every other declaration is built with: an input-output variable of an elementary type is a late-resolved type in the legacy grammar (the type resolver turns it into the simple type the lowering builds), and a global or external variable of a named type, or a global string, is a simple type there, which the resolver does not resolve: a global function block instance is reported as an undeclared variable (P4012: `VAR_EXTERNAL g : Fb; END_VAR g();`) instead of resolving to the instance, where the lowering gives it the late-resolved type that a local declaration has; the string shape of the lowering is the one a local string has";
 const UNNAMED_GLOBAL_LOCATION: &str = "legacy bug not ported: the legacy global-variable rule reads a location without a name (`VAR_GLOBAL AT %MW0 : INT; END_VAR`) and records a variable with the empty name and no location, so the address is lost; the lowering declares the located variable, which has no name and the address (a located variable is allowed to have none, as in a plain block)";
 const LISTED_INPUT: &str = "deliberate behaviour changes listed with their reasons in the statement, body and declaration tables of the verdict comparison: the legacy parser rejects the input and so builds nothing to compare, and the new parser accepts it on purpose";
@@ -60,7 +60,7 @@ pub const DIFFERENCES: &[Difference] = &[
     Difference {
         scope: Scope::Input("tests/fixtures/lexical/oscat_several_pairs.st"),
         reason: SEVERAL_PAIRS,
-        expected: 72,
+        expected: 108,
     },
     Difference {
         scope: Scope::Input("VAR_GLOBAL AT %MW0 : INT; END_VAR"),
@@ -105,11 +105,14 @@ pub const DIFFERENCES: &[Difference] = &[
                 SyntaxKind::VarDecl,
                 SyntaxKind::TypeDecl,
                 SyntaxKind::VarBlock,
+                SyntaxKind::FunctionDecl,
+                SyntaxKind::MethodDecl,
+                SyntaxKind::PropertyDecl,
             ],
             parts: &[Component::Spans],
         },
         reason: TYPE_NAME_POSITION,
-        expected: 7635,
+        expected: 8020,
     },
     Difference {
         scope: Scope::Origin {
@@ -130,7 +133,7 @@ pub const DIFFERENCES: &[Difference] = &[
     Difference {
         scope: Scope::AcceptedOnPurpose,
         reason: LISTED_INPUT,
-        expected: 304,
+        expected: 550,
     },
 ];
 

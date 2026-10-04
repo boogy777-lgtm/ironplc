@@ -600,16 +600,6 @@ fn lower_library_when_global_blocks_at_the_top_then_one_element_for_each_in_orde
 }
 
 #[test]
-fn lower_library_when_block_in_a_namespace_or_pou_then_not_implemented_there() {
-    let parse = parse_source_file(
-        "PROGRAM p VAR a : INT; END_VAR END_PROGRAM",
-        &ParseOptions::all(),
-    );
-    let error = lower_library(&parse, &file()).expect_err("no rule for the program yet");
-    assert_eq!(error.code, crate::lower::NOT_IMPLEMENTED);
-}
-
-#[test]
 fn disposition_when_variable_block_nodes_then_lowered_by_the_block_area_and_their_parts_structural()
 {
     for kind in [K::VarBlock, K::VarDecl, K::AccessDecl, K::InstanceInit] {

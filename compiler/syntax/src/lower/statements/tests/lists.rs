@@ -201,11 +201,14 @@ fn lower_statement_when_calc_calls_a_method_then_internal_error() {
 
 #[test]
 fn lower_statement_when_node_is_pending_then_not_implemented() {
-    let parse = parse_source_file("PROGRAM p\nEND_PROGRAM\n", &all());
+    let parse = parse_source_file(
+        "CONFIGURATION c RESOURCE r ON t PROGRAM p : q; END_RESOURCE END_CONFIGURATION\n",
+        &all(),
+    );
     let declaration = parse
         .root
         .descendants()
-        .find(|node| node.kind() == SyntaxKind::ProgramDecl)
+        .find(|node| node.kind() == SyntaxKind::ConfigurationDecl)
         .expect("a declaration");
     assert_eq!(
         code(lower_statement(&LowerCx::new(file()), &declaration)),

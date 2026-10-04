@@ -6,13 +6,15 @@
 //!
 //! - **Sites.** Every site of every input the new parser accepts (`sites.rs`:
 //!   a literal, an operand, an argument, a condition, a place, a statement, a
-//!   list of statements, which includes the body of every program) is lowered
-//!   and compared to what the legacy rule for it (`constant`, `expression`,
-//!   `variable`, `statement_list`) builds from the legacy tokens of the same
-//!   bytes, as the body of a program, where a word that closes the body
-//!   follows. The legacy rule is applied to the tokens, not looked up in the
-//!   legacy tree, because the legacy tree holds some literal positions as bare
-//!   integers (a subrange bound, a string length) that are not constants.
+//!   list of statements, a unit, a method, a property) is lowered and compared
+//!   to what the legacy rule for it (`constant`, `expression`, `variable`,
+//!   `statement_list`, `library`, `function_block_member`) builds from the
+//!   legacy tokens of the same bytes, as the body of a program, where a word
+//!   that closes the body follows. The legacy rule is applied to the tokens,
+//!   not looked up in the legacy tree, because the legacy tree holds some
+//!   literal positions as bare integers (a subrange bound, a string length)
+//!   that are not constants. A site that holds a node kind without a lowering
+//!   rule is skipped and counted.
 //! - **Whole inputs.** An input whose tree contains no node kind without a
 //!   lowering rule is lowered as a library and compared to the legacy
 //!   `parse_program` result. An input that does contain one is skipped and
@@ -34,7 +36,9 @@
 //! explains it, and a difference of the enclosing expression itself, with no
 //! operand differing, is still found.
 
-use super::ast::{compare, explain, Component, Subject};
+use super::ast::{
+    compare, explain, member_without_inner_parts, without_inner_parts, Component, Subject,
+};
 use super::blocks::judge_block;
 use super::declaration_table::DECLARATIONS;
 use super::differences::DIFFERENCES;
@@ -45,19 +49,20 @@ use super::type_table::TYPES;
 use super::{extract, file_variants, new_parse, Kind};
 use crate::legacy::{parse_program, tokenize_program};
 use crate::parser::{
-    parse_constant, parse_expression, parse_statement_list, parse_type_declaration, parse_variable,
-    parse_variable_initial,
+    parse_constant, parse_declarations, parse_expression, parse_member, parse_statement_list,
+    parse_type_declaration, parse_variable, parse_variable_initial,
 };
 use crate::token::{Token, TokenType};
-use ironplc_dsl::common::{DataTypeDeclarationKind, InitialValueAssignmentKind, SimpleDeclaration};
-use ironplc_dsl::core::{FileId, SourceSpan};
+use ironplc_dsl::common::{Library, LibraryElementKind};
+use ironplc_dsl::core::FileId;
 use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_syntax::lower::{
     contains_pending, disposition,
     expressions::lower_expr,
     initializers::lower_initial_value,
     literals::lower_constant,
-    lower_library,
+    lower_element, lower_library,
+    oop::{lower_member, Member},
     statements::{lower_statement, lower_statement_list},
     types::lower_type_declaration,
     variables::lower_variable,
@@ -67,7 +72,7 @@ use ironplc_syntax::{Parse, SyntaxKind, SyntaxNode};
 
 /// The file every comparison is made in, so that the file of every span is
 /// compared and not only its offsets.
-fn file() -> FileId {
+pub fn file() -> FileId {
     FileId::from_string("parity.st")
 }
 
@@ -102,8 +107,8 @@ pub struct Tally {
     pub rejected: usize,
     /// What was compared, by unit.
     pub units: [Counts; Unit::ALL.len()],
-    /// Of the lists of statements, the bodies of declarations: the lists whose
-    /// parent is a declaration, which has no lowering rule of its own yet.
+    /// Of the lists of statements, the bodies of declarations: the lists held by
+    /// a declaration, not by a statement or by the file.
     pub bodies: Counts,
     /// Of the equal literals, the ones in an input that holds nothing but
     /// literals.
@@ -115,6 +120,8 @@ pub struct Tally {
     pub whole_equal: usize,
     /// Whole inputs skipped for a node kind without a rule.
     pub whole_skipped: usize,
+    /// Sites skipped for holding a node kind without a rule.
+    pub sites_skipped: usize,
     /// How many differences each entry of `DIFFERENCES` explained.
     pub excepted: Vec<usize>,
     /// Differences no entry covers.
@@ -171,7 +178,7 @@ impl Tally {
 /// that ends the text has none to be inserted before; the fragment entry
 /// rejects it where the program does not. The offsets of `text` are those of the
 /// tokens.
-fn body_tokens(text: &str, preset: &Preset) -> Vec<Token> {
+pub fn body_tokens(text: &str, preset: &Preset) -> Vec<Token> {
     tokenize_program(
         &format!("{text} END_PROGRAM"),
         &file(),
@@ -187,7 +194,7 @@ fn body_tokens(text: &str, preset: &Preset) -> Vec<Token> {
 /// terminators the legacy pipeline inserts are not part of a construct, except
 /// that a construct that is read with its terminator (`terminated`: a
 /// statement) takes the one inserted where it ends.
-fn literal_tokens(tokens: &[Token], range: (usize, usize), terminated: bool) -> &[Token] {
+pub fn literal_tokens(tokens: &[Token], range: (usize, usize), terminated: bool) -> &[Token] {
     let counts = |token: &Token| {
         token.span.start < token.span.end
             && !matches!(token.token_type, TokenType::Whitespace | TokenType::Newline)
@@ -231,7 +238,7 @@ fn literal_tokens(tokens: &[Token], range: (usize, usize), terminated: bool) -> 
     }
 }
 
-fn range_of(node: &SyntaxNode) -> (usize, usize) {
+pub fn range_of(node: &SyntaxNode) -> (usize, usize) {
     (
         usize::from(node.text_range().start()),
         usize::from(node.text_range().end()),
@@ -334,7 +341,37 @@ fn judge(site: &Site, tokens: &[Token], cx: &LowerCx, written: &str) -> Outcome 
             lower_initial_value(cx, &site.node),
         ),
         Unit::VariableBlock | Unit::VariableBlockFacts => judge_block(site, tokens, cx, written),
+        Unit::Pou | Unit::PouFacts => {
+            let kept = |elements: Vec<LibraryElementKind>| Library {
+                elements: match site.unit {
+                    Unit::PouFacts => without_inner_parts(elements),
+                    _ => elements,
+                },
+            };
+            settle(
+                written,
+                parse_declarations(tokens).map(kept),
+                lower_element(cx, &site.node).map(kept),
+            )
+        }
+        Unit::Member | Unit::MemberFacts => {
+            let kept = |member: Member| match site.unit {
+                Unit::MemberFacts => member_without_inner_parts(member),
+                _ => member,
+            };
+            settle(
+                written,
+                parse_member(tokens).map(kept),
+                lower_member(cx, &site.node).map(kept),
+            )
+        }
     }
+}
+
+/// True when a list of statements held by a node of kind `parent` is the body
+/// of a declaration: it is held by neither a statement nor the file.
+fn is_declaration_body(parent: SyntaxKind) -> bool {
+    parent != SyntaxKind::SourceFile && disposition(parent) != Disposition::Lowered(Area::Statement)
 }
 
 /// Lowers every site of an accepted parse and compares it to the legacy rule
@@ -350,6 +387,12 @@ fn compare_sites(tally: &mut Tally, key: &str, text: &str, parse: &Parse, preset
     let mut differing: Vec<(&Site, Vec<Component>, String)> = Vec::new();
     let all = sites(&parse.root);
     for site in &all {
+        // A site that holds a node kind without a lowering rule cannot be
+        // lowered yet; it is counted, and falls as the rules are written.
+        if contains_pending(&site.node) {
+            tally.sites_skipped += 1;
+            continue;
+        }
         let range = range_of(&site.node);
         let written = &text[range.0..range.1];
         let outcome = judge(
@@ -359,7 +402,7 @@ fn compare_sites(tally: &mut Tally, key: &str, text: &str, parse: &Parse, preset
             written,
         );
         tally.counts_mut(site.unit).record(&outcome);
-        if site.unit == Unit::Statements && disposition(site.parent).is_pending() {
+        if site.unit == Unit::Statements && is_declaration_body(site.parent) {
             tally.bodies.record(&outcome);
         }
         match outcome {
@@ -515,7 +558,7 @@ pub fn run(cases: &[Case], presets: &[Preset]) -> Tally {
 /// written and never fall. The sites equal to the legacy ones, by unit, those
 /// literals among them in inputs that are nothing but a literal, and whole
 /// inputs lowered as libraries.
-const MIN_EQUAL: [(Unit, usize); 9] = [
+const MIN_EQUAL: [(Unit, usize); 13] = [
     (Unit::Literal, 18_000),
     (Unit::Expression, 30_000),
     (Unit::Variable, 9_500),
@@ -525,10 +568,14 @@ const MIN_EQUAL: [(Unit, usize); 9] = [
     (Unit::VariableInitial, 2_700),
     (Unit::VariableBlock, 2_000),
     (Unit::VariableBlockFacts, 7_500),
+    (Unit::Pou, 1_900),
+    (Unit::Member, 270),
+    (Unit::PouFacts, 5_400),
+    (Unit::MemberFacts, 470),
 ];
-const MIN_BODIES_EQUAL: usize = 3_300;
+const MIN_BODIES_EQUAL: usize = 4_500;
 const MIN_LITERAL_ONLY_EQUAL: usize = 400;
-const MIN_WHOLE_COMPARED: usize = 950;
+const MIN_WHOLE_COMPARED: usize = 5_800;
 
 /// The differences no entry covers, one problem for each kind of difference
 /// (the node, and the parts in which it differs) with how often it was found
@@ -621,6 +668,10 @@ pub fn summarize(tally: &Tally) {
         tally.excepted_total(),
         tally.inherited,
         tally.unexplained.len()
+    );
+    println!(
+        "  sites skipped for a kind without a rule: {}",
+        tally.sites_skipped
     );
     println!(
         "  whole inputs: {} compared ({} equal), {} skipped for a kind without a rule",
@@ -716,7 +767,7 @@ fn difference_when_listed_scope_then_counted_against_its_entry_and_not_unexplain
 }
 
 #[test]
-fn literal_tokens_when_range_given_then_the_tokens_inside_without_whitespace_or_terminators() {
+pub fn literal_tokens_when_range_given_then_the_tokens_inside_without_whitespace_or_terminators() {
     let source = "x := T#5s ;";
     let tokens = tokenize_program(source, &file(), &presets()[0].legacy, 0, 0).0;
     let inside = literal_tokens(&tokens, (5, 9), false);
@@ -790,7 +841,7 @@ fn compare_sites_when_a_statement_is_lowered_for_another_file_then_reported_as_a
 }
 
 #[test]
-fn literal_tokens_when_block_statement_omits_its_terminator_then_a_statement_takes_the_inserted_one(
+pub fn literal_tokens_when_block_statement_omits_its_terminator_then_a_statement_takes_the_inserted_one(
 ) {
     let preset = presets()
         .into_iter()
@@ -811,174 +862,4 @@ fn literal_tokens_when_block_statement_omits_its_terminator_then_a_statement_tak
     let tokens = body_tokens(written, &preset);
     let at = literal_tokens(&tokens, (0, written.len()), true);
     assert_eq!(at.last().map(|token| token.text.as_str()), Some(";"));
-}
-
-/// Durations at and past the longest one a duration holds, with the problem
-/// both parsers must report for each (`None` when both accept it). The legacy
-/// parser and the lowering build them through the same checked builder, so
-/// each must give the same duration, or the same problem over the same bytes.
-const DURATION_RANGE_EDGES: &[(&str, Option<&str>)] = &[
-    ("T#106751991167300d", None),
-    ("T#106751991167301d", Some("P2039")),
-    ("T#2562047788015215h", None),
-    ("T#2562047788015216h", Some("P2039")),
-    ("T#153722867280912930m", None),
-    ("T#153722867280912931m", Some("P2039")),
-    ("T#9223372036854775807s", None),
-    ("T#9223372036854775807.999999999s", None),
-    ("T#9223372036854775807s999999999ns", None),
-    ("T#9223372036854775807s1000000000ns", Some("P2039")),
-    ("T#9223372036854775808s", Some("P2039")),
-    ("T#18446744073709551615s", Some("P2039")),
-    ("T#18446744073709551615ms", None),
-    ("T#18446744073709551615us", None),
-    ("T#18446744073709551615ns", None),
-    ("T#9223372036854775807d", Some("P2039")),
-    ("T#106751991167300d23h", Some("P2039")),
-    ("T#-9223372036854775807s", None),
-    ("T#-9223372036854775807d", Some("P2039")),
-    ("LTIME#9223372036854775807d", Some("P2039")),
-    ("LT#106751991167300d", None),
-    // A whole part beyond `u64` is not a number the structure holds, whether
-    // or not it has a decimal point; it was read as `0` without one.
-    ("T#18446744073709551616s", Some("P0002")),
-    ("T#18446744073709551617ms", Some("P0002")),
-    ("T#99999999999999999999.5s", Some("P0002")),
-];
-
-#[test]
-fn parity_when_duration_at_range_edge_then_same_duration_or_same_problem_and_range() {
-    for preset in presets() {
-        for (snippet, expected) in DURATION_RANGE_EDGES {
-            let text = format!("x := {snippet};");
-            let parse = new_parse(Kind::Statements, &text, &preset.new);
-            if !parse.is_ok() {
-                // `LTIME` and `LT` are keywords of the editions that have them.
-                assert!(snippet.starts_with("LT"), "{snippet} under {}", preset.name);
-                continue;
-            }
-            let node = parse
-                .root
-                .descendants()
-                .find(|node| disposition(node.kind()) == Disposition::Lowered(Area::Literal))
-                .expect("a literal");
-            let range = range_of(&node);
-            let tokens = tokenize_program(&text, &file(), &preset.legacy, 0, 0).0;
-            let legacy = parse_constant(literal_tokens(&tokens, range, false));
-            let lowered = lower_constant(&LowerCx::new(file()), &node);
-            let code = |result: &Result<_, ironplc_dsl::diagnostic::Diagnostic>| {
-                result.as_ref().err().map(|d| d.code.clone())
-            };
-            let expected_code = expected.map(str::to_string);
-            assert_eq!(
-                code(&legacy),
-                expected_code,
-                "{snippet} under {}: legacy",
-                preset.name
-            );
-            assert_eq!(
-                code(&lowered),
-                expected_code,
-                "{snippet} under {}: lowering",
-                preset.name
-            );
-            match (&legacy, &lowered) {
-                (Ok(legacy), Ok(lowered)) => {
-                    assert_eq!(compare(legacy, lowered), vec![], "{snippet}");
-                }
-                // The wording of a syntax error differs by parser; the range
-                // and the wording of a range problem do not.
-                (Err(legacy), Err(lowered)) if legacy.code == "P2039" => {
-                    assert_eq!(legacy.primary.message, lowered.primary.message);
-                    assert_eq!(
-                        (legacy.primary.location.start, legacy.primary.location.end),
-                        (lowered.primary.location.start, lowered.primary.location.end),
-                        "{snippet}"
-                    );
-                }
-                _ => {}
-            }
-        }
-    }
-}
-
-/// The legacy declaration and the lowered one of the declaration of a type
-/// written as `text` (`name : type [:= value]`, without its `;`), under the
-/// first preset with every flag on.
-fn declaration_both(
-    text: &str,
-) -> (
-    Result<DataTypeDeclarationKind, Diagnostic>,
-    Result<DataTypeDeclarationKind, Diagnostic>,
-) {
-    let preset = presets()
-        .into_iter()
-        .find(|preset| preset.name == "all-flags")
-        .expect("the preset with every flag");
-    let source = format!("TYPE {text}; END_TYPE");
-    let parse = new_parse(Kind::Declarations, &source, &preset.new);
-    let node = parse
-        .root
-        .descendants()
-        .find(|node| node.kind() == SyntaxKind::TypeDecl)
-        .expect("a type declaration");
-    let tokens = body_tokens(&source, &preset);
-    let legacy = parse_type_declaration(literal_tokens(&tokens, range_of(&node), false));
-    let lowered = lower_type_declaration(&LowerCx::new(file()).with_options(preset.new), &node);
-    (legacy, lowered)
-}
-
-#[test]
-fn legacy_declaration_when_elementary_type_then_the_type_name_has_no_position_and_the_lowering_has_one(
-) {
-    // The cause named by `TYPE_NAME_POSITION`.
-    let (legacy, lowered) = declaration_both("t : INT := 5");
-    let base = |declaration: Result<DataTypeDeclarationKind, Diagnostic>| match declaration {
-        Ok(DataTypeDeclarationKind::Simple(SimpleDeclaration {
-            spec_and_init: InitialValueAssignmentKind::Simple(initializer),
-            ..
-        })) => Some(initializer.type_name.name.span),
-        _ => None,
-    };
-    let (legacy, lowered) = (
-        base(legacy).expect("legacy"),
-        base(lowered).expect("lowered"),
-    );
-    assert_eq!(legacy, SourceSpan::default());
-    assert_eq!(
-        (lowered.start, lowered.end, lowered.file_id),
-        (9, 12, file())
-    );
-}
-
-/// The value a structure member declares for itself, whatever the member's
-/// type is spelled as.
-fn member_default(
-    declaration: Result<DataTypeDeclarationKind, Diagnostic>,
-) -> Option<Option<ironplc_dsl::common::StructInitialValueAssignmentKind>> {
-    match declaration {
-        Ok(DataTypeDeclarationKind::Structure(structure)) => structure
-            .elements
-            .into_iter()
-            .next()
-            .map(|member| member.init.stated_value()),
-        _ => None,
-    }
-}
-
-#[test]
-fn declaration_when_member_type_is_inline_then_both_parsers_keep_the_default() {
-    for member in ["a : (X, Y) := X", "a : INT(1..10) := 5"] {
-        let (legacy, lowered) = declaration_both(&format!("t : STRUCT {member}; END_STRUCT"));
-        let (legacy, lowered) = (member_default(legacy), member_default(lowered));
-        assert!(
-            matches!(legacy, Some(Some(_))),
-            "{member}: legacy {legacy:?}"
-        );
-        assert_eq!(legacy.is_some(), lowered.is_some(), "{member}");
-        assert!(
-            matches!(lowered, Some(Some(_))),
-            "{member}: lowered {lowered:?}"
-        );
-    }
 }

@@ -319,11 +319,24 @@ mod tests {
         assert_eq!(body.as_deref(), Some(" x := 1; "));
     }
 
+    /// Fails unless every named legacy test source contributes at least one
+    /// declaration to the corpus.
+    fn assert_each_contributes_declarations(names: &[&str]) {
+        let sources = legacy_all_sources();
+        for name in names {
+            let count = sources
+                .iter()
+                .filter(|(path, _)| path.file_name().is_some_and(|file| file == *name))
+                .map(|(_, text)| declaration_literals(text).len())
+                .sum::<usize>();
+            assert!(count > 0, "{name} contributes no declaration to the corpus");
+        }
+    }
+
     #[test]
     fn declaration_literals_when_type_and_initializer_test_sources_then_each_contributes_declarations(
     ) {
-        let sources = legacy_all_sources();
-        for name in [
+        assert_each_contributes_declarations(&[
             "arrays.rs",
             "enums.rs",
             "struct_init_expressions.rs",
@@ -333,14 +346,21 @@ mod tests {
             "union.rs",
             "pointer_to.rs",
             "reference_to.rs",
-        ] {
-            let count = sources
-                .iter()
-                .filter(|(path, _)| path.file_name().is_some_and(|file| file == name))
-                .map(|(_, text)| declaration_literals(text).len())
-                .sum::<usize>();
-            assert!(count > 0, "{name} contributes no declaration to the corpus");
-        }
+        ]);
+    }
+
+    #[test]
+    fn declaration_literals_when_unit_and_member_test_sources_then_each_contributes_declarations() {
+        assert_each_contributes_declarations(&[
+            "methods.rs",
+            "property.rs",
+            "fb_inheritance.rs",
+            "member_qualifiers.rs",
+            "namespaces.rs",
+            "this_super.rs",
+            "time_functions.rs",
+            "types_and_returns.rs",
+        ]);
     }
 
     #[test]

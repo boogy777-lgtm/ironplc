@@ -28,6 +28,8 @@ pub mod expressions;
 pub mod initializers;
 pub mod literals;
 pub mod names;
+pub mod oop;
+pub mod pou;
 pub mod statements;
 pub mod tree;
 pub mod types;
@@ -35,6 +37,9 @@ pub mod values;
 pub mod var_blocks;
 pub mod variables;
 
+use self::pou::{
+    lower_function, lower_function_block, lower_interface, lower_namespace, lower_program,
+};
 use self::statements::lower_statement_list;
 use self::tree::child_of;
 use self::types::lower_type_block;
@@ -78,6 +83,12 @@ pub enum Area {
     /// What a variable block declares: the blocks, their declarations and
     /// the other items a block may hold (`var_blocks`).
     Block,
+    /// What a file is made of: the program organisation units, the interfaces
+    /// and the namespaces that group them (`pou`).
+    Unit,
+    /// What a function block declares besides its body: methods and
+    /// properties (`oop`).
+    Member,
 }
 
 /// What lowering does with a kind the tree can hold.
@@ -199,15 +210,17 @@ fn node_disposition(node: NodeKind) -> Disposition {
         | NodeKind::FunctionDecl
         | NodeKind::FunctionBlockDecl
         | NodeKind::InterfaceDecl
-        | NodeKind::NamespaceDecl
-        | NodeKind::MethodDecl
-        | NodeKind::PropertyDecl
-        | NodeKind::GetAccessor
+        | NodeKind::NamespaceDecl => Lowered(Area::Unit),
+        NodeKind::MethodDecl | NodeKind::PropertyDecl => Lowered(Area::Member),
+        // The parts of a declaration, read by the rule of the declaration: the
+        // accessors of a property, the qualifiers and the clauses that name
+        // the types a function block extends or implements.
+        NodeKind::GetAccessor
         | NodeKind::SetAccessor
         | NodeKind::MemberQualifier
         | NodeKind::ExtendsClause
-        | NodeKind::ImplementsClause
-        | NodeKind::ConfigurationDecl
+        | NodeKind::ImplementsClause => Structural,
+        NodeKind::ConfigurationDecl
         | NodeKind::ResourceDecl
         | NodeKind::TaskDecl
         | NodeKind::TaskInit
@@ -400,7 +413,51 @@ fn global_elements(cx: &LowerCx, node: &SyntaxNode) -> Result<Vec<LibraryElement
 const ELEMENTS: &[(SyntaxKind, ElementRule)] = &[
     (SyntaxKind::TypeBlock, type_elements),
     (SyntaxKind::VarBlock, global_elements),
+    (SyntaxKind::ProgramDecl, |cx, node| {
+        lower_program(cx, node).map(|unit| vec![LibraryElementKind::ProgramDeclaration(unit)])
+    }),
+    (SyntaxKind::FunctionDecl, |cx, node| {
+        lower_function(cx, node).map(|unit| vec![LibraryElementKind::FunctionDeclaration(unit)])
+    }),
+    (SyntaxKind::FunctionBlockDecl, |cx, node| {
+        lower_function_block(cx, node)
+            .map(|unit| vec![LibraryElementKind::FunctionBlockDeclaration(unit)])
+    }),
+    (SyntaxKind::InterfaceDecl, |cx, node| {
+        lower_interface(cx, node).map(|unit| vec![LibraryElementKind::InterfaceDeclaration(unit)])
+    }),
+    (SyntaxKind::NamespaceDecl, |cx, node| {
+        lower_namespace(cx, node).map(|unit| vec![LibraryElementKind::NamespaceDeclaration(unit)])
+    }),
 ];
+
+/// Lowers one top-level node to the library elements it writes.
+pub fn lower_element(
+    cx: &LowerCx,
+    node: &SyntaxNode,
+) -> Result<Vec<LibraryElementKind>, Diagnostic> {
+    let (_, rule) = ELEMENTS
+        .iter()
+        .find(|(kind, _)| *kind == node.kind())
+        .ok_or_else(|| cx.unsupported(node))?;
+    rule(cx, node)
+}
+
+/// Lowers the declarations a file or a namespace holds, in the order written.
+/// The header of a namespace is not one of them.
+pub fn lower_elements(
+    cx: &LowerCx,
+    parent: &SyntaxNode,
+) -> Result<Vec<LibraryElementKind>, Diagnostic> {
+    let mut elements = Vec::new();
+    for node in parent
+        .children()
+        .filter(|node| !pou::HEADER.contains(&node.kind()))
+    {
+        elements.extend(lower_element(cx, &node)?);
+    }
+    Ok(elements)
+}
 
 /// Lowers the tree of a whole file to a library.
 ///
@@ -411,15 +468,9 @@ pub fn lower_library(parse: &Parse, file_id: &FileId) -> Result<Library, Diagnos
         return Err(error);
     }
     let cx = LowerCx::new(file_id.clone()).with_options(parse.options);
-    let mut elements = Vec::new();
-    for node in parse.root.children() {
-        let (_, rule) = ELEMENTS
-            .iter()
-            .find(|(kind, _)| *kind == node.kind())
-            .ok_or_else(|| cx.unsupported(&node))?;
-        elements.extend(rule(&cx, &node)?);
-    }
-    Ok(Library { elements })
+    Ok(Library {
+        elements: lower_elements(&cx, &parse.root)?,
+    })
 }
 
 /// Lowers the tree of a statement list to statements.
@@ -583,7 +634,7 @@ VAR_GLOBAL b : INT := 1; END_VAR
     #[test]
     fn disposition_when_node_without_a_rule_yet_then_pending() {
         assert!(disposition(SyntaxKind::SfcBody).is_pending());
-        assert!(disposition(SyntaxKind::ProgramDecl).is_pending());
+        assert!(disposition(SyntaxKind::ConfigurationDecl).is_pending());
         assert!(!disposition(SyntaxKind::AssignStmt).is_pending());
         assert!(!disposition(SyntaxKind::IntLiteral).is_pending());
         assert!(!disposition(SyntaxKind::SourceFile).is_pending());
@@ -596,7 +647,10 @@ VAR_GLOBAL b : INT := 1; END_VAR
         assert!(!contains_pending(&literal.root));
         let statement = parse_statements("x := 1; IF a THEN b := 2; END_IF;", &options());
         assert!(!contains_pending(&statement.root));
-        let declaration = parse_source_file("PROGRAM p\nEND_PROGRAM\n", &options());
+        let declaration = parse_source_file(
+            "CONFIGURATION c RESOURCE r ON t PROGRAM p : q; END_RESOURCE END_CONFIGURATION\n",
+            &options(),
+        );
         assert!(contains_pending(&declaration.root));
     }
 
@@ -650,12 +704,15 @@ VAR_GLOBAL b : INT := 1; END_VAR
 
     #[test]
     fn unsupported_when_pending_node_then_not_implemented_at_the_node() {
-        let parse = parse_source_file("PROGRAM p\nEND_PROGRAM\n", &options());
+        let parse = parse_source_file(
+            "CONFIGURATION c RESOURCE r ON t PROGRAM p : q; END_RESOURCE END_CONFIGURATION\n",
+            &options(),
+        );
         let cx = LowerCx::new(FileId::default());
         let node = parse
             .root
             .descendants()
-            .find(|node| node.kind() == SyntaxKind::ProgramDecl);
+            .find(|node| node.kind() == SyntaxKind::ConfigurationDecl);
         let diagnostic = node.map(|node| cx.unsupported(&node));
         assert_eq!(
             diagnostic.as_ref().map(|d| (
@@ -663,7 +720,7 @@ VAR_GLOBAL b : INT := 1; END_VAR
                 d.primary.location.start,
                 d.primary.location.end
             )),
-            Some((NOT_IMPLEMENTED, 0, 21))
+            Some((NOT_IMPLEMENTED, 0, 77))
         );
     }
 
@@ -686,7 +743,10 @@ VAR_GLOBAL b : INT := 1; END_VAR
 
     #[test]
     fn lower_library_when_declaration_then_not_implemented_at_it() {
-        let parse = parse_source_file("PROGRAM p\nEND_PROGRAM\n", &options());
+        let parse = parse_source_file(
+            "CONFIGURATION c RESOURCE r ON t PROGRAM p : q; END_RESOURCE END_CONFIGURATION\n",
+            &options(),
+        );
         let diagnostic = lower_library(&parse, &FileId::default()).err();
         assert_eq!(code_of(diagnostic), Some(NOT_IMPLEMENTED.to_string()));
     }
