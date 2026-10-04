@@ -213,7 +213,8 @@ A plan document should include:
 - **Architecture** — brief summary of the technical approach
 - **Prefactoring** — the simplifications to make *before* adding the new
   behaviour, or an explicit statement that none is needed and why (see
-  [Prefactoring](#prefactoring))
+  [Prefactoring](#prefactoring)) + mechanism extended || new invariant
+  ([N+1](#mechanisms-not-patches-n1))
 - **Design doc reference** — link to `specs/design/` doc if one exists
 - **File map** — which files will be created or modified
 - **Tasks** — ordered steps with checkboxes (`- [ ]`) for tracking progress, grouped by the prefactor or core change PR that delivers them
@@ -227,8 +228,37 @@ existing code so the new behaviour drops in, then add it. It is the opposite
 order from the more familiar "make it work, then clean it up" — and it is the
 order this project uses.
 
-Every change **must** start by looking for related prefactoring opportunities t
+Every change **must** start by looking for related prefactoring opportunities to
 prevent complexity creep and avoid the need for premature abstractions.
+
+#### Mechanisms, not patches (N+1)
+
+```
+# terms
+class(X)      := behaviors answering one question; answers differ only by data || impl(contract)
+                 # dialects, language extensions, behavior policies, problem codes, opcodes
+variant(v, X) := v in X
+mechanism(X)  := shared code that processes every v in X
+truth(X)      := the single declaration of all v in X
+row(e)        := e maps one v -> data || handler; arm returning only data is row
+dispatch(m)   := match, 1 arm per v, !_ arm; each arm is row
+vbranch(b)    := b in shared && special logic for some v && default path for others
+                 # if dialect == X; logic arms + _ arm
+dep(l)        := l outside files(v) && l must change on add(v)  # clap FileArgs, docs table, steering checklist
+guard(l)      := test || compiler check that fails if v missing in l; dispatch -> guard
+
+# rules
+add(v) && known(X)                 -> add row to mechanism(X)
+new vbranch in shared              -> prefactoring signal (1 is enough)
+dep(l)                             -> derive(l, truth(X)) || guard(l); derive first
+mechanism replaces checklist step  -> delete step in same PR
+removal(v)                         -> changes subset of rows(v) + files(v)
+
+# reference: dialect flags
+truth := define_compiler_options!  # each flag lists its dialects; no production vbranch per dialect
+LSP   := derived from CompilerOptions::FEATURE_DESCRIPTORS
+clap  := !derivable -> guard = completeness test in ironplc-cli/bin/main.rs
+```
 
 #### Signals that a change needs prefactoring
 
@@ -245,6 +275,7 @@ means stop and reshape first:
   [compiler-standards.md](compiler-standards.md#code-organization)) once the change
   lands
 - A similar bug could occur rather than being prevented at compile time
+- violates [N+1](#mechanisms-not-patches-n1)
 
 #### How to prefactor
 

@@ -53,3 +53,4 @@ See [specs/steering/common-tasks.md](specs/steering/common-tasks.md) for complet
 4. **No duplicated content** - Including in documentation; share via `docs/includes/` and `.. include::` ([Avoid Duplication](specs/steering/development-standards.md#avoid-duplication))
 5. **Problem codes**: Must be documented in `docs/compiler/problems/P####.rst`
 6. **Version numbers**: Automatically managed - do not edit manually
+7. **N+1** - add(v) to known class -> row in its mechanism && !vbranch in shared code ([terms + rules](specs/steering/development-standards.md#mechanisms-not-patches-n1))

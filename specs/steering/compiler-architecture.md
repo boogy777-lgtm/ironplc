@@ -29,6 +29,19 @@ The IronPLC compiler follows a traditional multi-stage compilation pipeline:
 - Provide clear, actionable error messages
 - Use the shared problem code system consistently
 
+### Capabilities, Not Identities
+
+Terms: [N+1](development-standards.md#mechanisms-not-patches-n1).
+
+```
+pipeline   := parser + analyzer + codegen + VM
+capability := CompilerOptions flag || behavior policy
+pipeline reads capability only; !Dialect param in pass|rule; !vbranch on Dialect
+new dialect behavior -> new flag|policy named by behavior (!dialect, !vendor) + its dialects in define_compiler_options!
+Dialect -> CompilerOptions only at edge (CLI, LSP, MCP, playground) via from_dialect
+Dialect allowed in: parser/src/options.rs || edge || tests
+```
+
 ## Module Organization
 
 ### Size Constraints
