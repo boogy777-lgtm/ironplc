@@ -292,13 +292,18 @@ pub fn late_resolved_or_enumerated(
 /// (e.g. `-123`, the shape `expression()` produces for a negative literal
 /// because it routes the sign through its own unary-operator handling).
 ///
+/// A negated literal is positioned where the negation is written, sign
+/// included, as a literal written with its sign is.
+///
 /// Returns `None` for everything else, including a negation that has no
 /// natural literal form (`-TRUE`).
 pub fn literal_value_of(e: &Expr) -> Option<ConstantKind> {
     match &e.kind {
         ExprKind::Const(c) => Some(c.clone()),
         ExprKind::UnaryOp(u) if u.op == UnaryOp::Neg => match &u.term.kind {
-            ExprKind::Const(c) => negate_literal_constant(c.clone()).ok(),
+            ExprKind::Const(c) => negate_literal_constant(c.clone())
+                .ok()
+                .map(|negated| negated.with_span(e.span.clone())),
             _ => None,
         },
         _ => None,
@@ -647,6 +652,24 @@ mod tests {
         assert_eq!(literal_value_of(&plain), Some(int_const("7")));
         let negated = Expr::unary(UnaryOp::Neg, plain);
         assert!(literal_value_of(&negated).is_some());
+    }
+
+    #[test]
+    fn literal_value_of_when_negated_literal_then_positioned_where_the_negation_is_written() {
+        let negation = SourceSpan::range(4, 7);
+        let operand = Expr::new(ExprKind::Const(
+            int_const("5").with_span(SourceSpan::range(5, 7)),
+        ));
+        let negated = Expr::unary(UnaryOp::Neg, operand).with_span(negation.clone());
+        let value = literal_value_of(&negated).expect("a constant");
+        let ConstantKind::IntegerLiteral(literal) = value else {
+            return;
+        };
+        assert!(literal.value.is_neg);
+        assert_eq!(
+            (literal.value.value.span.start, literal.value.value.span.end),
+            (4, 7)
+        );
     }
 
     #[test]

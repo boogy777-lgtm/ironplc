@@ -183,13 +183,7 @@ impl<'t, 's> Parser<'t, 's> {
         match kind {
             SyntaxKind::Ident => !is_special_operator(self.nth_text(n)),
             SyntaxKind::EscapedIdent => true,
-            SyntaxKind::Time => {
-                self.options.allow_time_as_function_name
-                    && matches!(
-                        self.nth(n + 1),
-                        Some(SyntaxKind::LeftParen | SyntaxKind::Assignment)
-                    )
-            }
+            SyntaxKind::Time => self.options.time_is_name(self.nth(n + 1)),
             _ => kind.is_keyword() && !self.keyword_active(n, kind),
         }
     }

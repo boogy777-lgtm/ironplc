@@ -933,6 +933,7 @@ dependencies = [
  "ironplc-parser",
  "ironplc-problems",
  "ironplc-spec-requirements-gen",
+ "ironplc-syntax",
  "ironplc-test",
  "log",
  "petgraph",

@@ -284,6 +284,26 @@ pub fn parse_variable(tokens: &[Token]) -> Result<Variable, Diagnostic> {
     plc_parser::variable(&SliceByRef(tokens), &source).map_err(|e| parse_failure(&source, e))
 }
 
+/// Parses the tokens of one declaration of a `TYPE` block, as the grammar's
+/// `type_declaration` rule reads them. Test-only: the oracle the type
+/// declaration lowering is compared against.
+#[cfg(test)]
+pub fn parse_type_declaration(tokens: &[Token]) -> Result<DataTypeDeclarationKind, Diagnostic> {
+    let source = Source::new(tokens);
+    plc_parser::type_declaration_entry(&SliceByRef(tokens), &source)
+        .map_err(|e| parse_failure(&source, e))
+}
+
+/// Parses the tokens of one variable declaration, as the grammar's
+/// `var_init_decl` rule reads them, to the initial value its names share.
+/// Test-only: the oracle the initial value lowering is compared against.
+#[cfg(test)]
+pub fn parse_variable_initial(tokens: &[Token]) -> Result<InitialValueAssignmentKind, Diagnostic> {
+    let source = Source::new(tokens);
+    plc_parser::variable_initial_entry(&SliceByRef(tokens), &source)
+        .map_err(|e| parse_failure(&source, e))
+}
+
 enum StatementsOrEmpty {
     Statements(Vec<StmtKind>),
     Empty(),
@@ -2098,6 +2118,13 @@ parser! {
       / gvr:global_var_reference() { DataSourceKind::GlobalVarReference(gvr) }
     // Keep for backward compatibility with existing callers
     pub rule data_source() -> ConstantKind = constant:constant() { constant }
+    /// One declaration of a `TYPE` block, which the test-only oracle reads on
+    /// its own.
+    pub rule type_declaration_entry() -> DataTypeDeclarationKind = type_declaration()
+    /// What a variable declaration (`names : type [:= value]`) makes of its type
+    /// and initial value, which the test-only oracle reads on its own: the
+    /// initializer its names share.
+    pub rule variable_initial_entry() -> InitialValueAssignmentKind = d:var_init_decl() {? d.into_iter().next().map(|first| first.initializer).ok_or("a variable") }
     pub rule program_configuration() -> ProgramConfiguration = tok(TokenType::Program) _ storage:(tok(TokenType::Retain) {DeclarationQualifier::Retain} / tok(TokenType::NonRetain) {DeclarationQualifier::NonRetain})? _ name:program_name() task_name:( _ tok(TokenType::With) _ t:task_name() { t })? _ tok(TokenType::Colon) _ pt:program_type_name() elements:(_ tok(TokenType::LeftParen) _ e:prog_conf_elements() _ tok(TokenType::RightParen) { e })? {
       let mut sources: Vec<ProgramConnectionSource> = Vec::new();
       let mut sinks: Vec<ProgramConnectionSink> = Vec::new();

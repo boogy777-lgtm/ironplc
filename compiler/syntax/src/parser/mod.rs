@@ -36,6 +36,10 @@ use ironplc_dsl::stack::within_stack_budget;
 pub struct Parse {
     pub root: SyntaxNode,
     pub errors: Vec<SyntaxError>,
+    /// The options the text was parsed under. A keyword the dialect leaves
+    /// disabled is an ordinary word in the tree, though its token keeps the kind
+    /// of the keyword, so whoever reads the tree needs them to tell the two apart.
+    pub options: ParseOptions,
 }
 
 impl Parse {
@@ -97,5 +101,6 @@ fn parse_with(
     Parse {
         root: SyntaxNode::new_root(green),
         errors,
+        options: *options,
     }
 }

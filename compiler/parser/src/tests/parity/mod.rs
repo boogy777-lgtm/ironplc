@@ -10,8 +10,10 @@
 //! files; an exception that blames the fragment entry must be confirmed by
 //! that second verdict.
 
+mod combinations;
 mod declarations;
 mod diagnostics_codes;
+mod differences;
 mod files;
 mod legacy_options;
 mod literals;
@@ -25,6 +27,7 @@ pub mod diagnostics;
 pub mod extract;
 pub mod legacy;
 pub mod tables;
+pub mod type_table;
 
 use ironplc_syntax::{parse_expression, parse_source_file, parse_statements, Parse, ParseOptions};
 use legacy::Preset;

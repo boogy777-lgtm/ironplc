@@ -276,10 +276,10 @@ fn is_declaration_opener(kind: SyntaxKind) -> bool {
 /// Every distinct string literal in the legacy parser crate whose first
 /// token opens a declaration: the whole-file snippets the legacy authors
 /// wrote, accepted and rejected alike.
-pub fn legacy_declaration_snippets() -> Vec<String> {
-    let mut snippets: Vec<String> = legacy_all_sources()
-        .iter()
-        .flat_map(|(_, text)| string_literals(text))
+/// The string literals of a Rust source whose first token opens a declaration.
+fn declaration_literals(text: &str) -> Vec<String> {
+    string_literals(text)
+        .into_iter()
         .filter(|literal| {
             let (tokens, _) = lex(literal);
             tokens
@@ -287,6 +287,13 @@ pub fn legacy_declaration_snippets() -> Vec<String> {
                 .find(|token| !token.kind.is_trivia())
                 .is_some_and(|token| is_declaration_opener(token.kind))
         })
+        .collect()
+}
+
+pub fn legacy_declaration_snippets() -> Vec<String> {
+    let mut snippets: Vec<String> = legacy_all_sources()
+        .iter()
+        .flat_map(|(_, text)| declaration_literals(text))
         .collect();
     snippets.sort();
     snippets.dedup();
@@ -310,6 +317,30 @@ mod tests {
     fn pou_body_when_program_with_vars_then_text_between_end_var_and_end_program() {
         let body = pou_body("PROGRAM p VAR x : INT; END_VAR x := 1; END_PROGRAM");
         assert_eq!(body.as_deref(), Some(" x := 1; "));
+    }
+
+    #[test]
+    fn declaration_literals_when_type_and_initializer_test_sources_then_each_contributes_declarations(
+    ) {
+        let sources = legacy_all_sources();
+        for name in [
+            "arrays.rs",
+            "enums.rs",
+            "struct_init_expressions.rs",
+            "late_resolved_initializers.rs",
+            "constant_initializers.rs",
+            "type_alias.rs",
+            "union.rs",
+            "pointer_to.rs",
+            "reference_to.rs",
+        ] {
+            let count = sources
+                .iter()
+                .filter(|(path, _)| path.file_name().is_some_and(|file| file == name))
+                .map(|(_, text)| declaration_literals(text).len())
+                .sum::<usize>();
+            assert!(count > 0, "{name} contributes no declaration to the corpus");
+        }
     }
 
     #[test]

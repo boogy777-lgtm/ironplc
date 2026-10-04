@@ -36,21 +36,29 @@
 
 use super::ast::{compare, explain, Component, Subject};
 use super::declaration_table::DECLARATIONS;
+use super::differences::DIFFERENCES;
 use super::legacy::{presets, Preset};
 use super::sites::{sites, Site, Unit};
-use super::tables::{BODY_EXCEPTIONS, EXPRESSIONS, STATEMENTS, STATEMENT_EXCEPTIONS};
-use super::{extract, file_variants, new_parse, Basis, Kind};
+use super::tables::{EXPRESSIONS, STATEMENTS};
+use super::type_table::TYPES;
+use super::{extract, file_variants, new_parse, Kind};
 use crate::legacy::{parse_program, tokenize_program};
-use crate::parser::{parse_constant, parse_expression, parse_statement_list, parse_variable};
+use crate::parser::{
+    parse_constant, parse_expression, parse_statement_list, parse_type_declaration, parse_variable,
+    parse_variable_initial,
+};
 use crate::token::{Token, TokenType};
-use ironplc_dsl::core::FileId;
+use ironplc_dsl::common::{DataTypeDeclarationKind, InitialValueAssignmentKind, SimpleDeclaration};
+use ironplc_dsl::core::{FileId, SourceSpan};
 use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_syntax::lower::{
     contains_pending, disposition,
     expressions::lower_expr,
+    initializers::lower_initial_value,
     literals::lower_constant,
     lower_library,
     statements::{lower_statement, lower_statement_list},
+    types::lower_type_declaration,
     variables::lower_variable,
     Area, Disposition, LowerCx,
 };
@@ -60,120 +68,6 @@ use ironplc_syntax::{Parse, SyntaxKind, SyntaxNode};
 /// compared and not only its offsets.
 fn file() -> FileId {
     FileId::from_string("parity.st")
-}
-
-/// Where a difference is found.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Scope {
-    /// Every site of the named input (a file, with or without its CRLF and
-    /// tab spellings, or a snippet).
-    Input(&'static str),
-    /// An input that the new parser accepts on purpose and the legacy parser
-    /// rejects, listed as such in the verdict tables, where the legacy parser
-    /// built nothing to compare.
-    AcceptedOnPurpose,
-    /// A site whose node is of one of the kinds `nodes`, that differs in
-    /// exactly `parts` of the comparison, and in which no site inside it
-    /// differs.
-    Origin {
-        nodes: &'static [SyntaxKind],
-        parts: &'static [Component],
-    },
-}
-
-/// A documented difference: where it is, why, and how often the corpus shows
-/// it.
-pub struct Difference {
-    pub scope: Scope,
-    pub reason: &'static str,
-    pub expected: usize,
-}
-
-const MARKER_IN_STRING: &str = "the legacy pre-pass takes marker text inside a string literal as a ranged-comment marker and blanks the statement between, so the legacy tokens are not those of the text; the new parser lexes the strings first and keeps the code (a deliberate difference, pinned by its own test)";
-const SEVERAL_PAIRS: &str = "the legacy pre-pass blanks the first ranged-comment pair only, so the legacy lexer rejects the file at the second pair's body and produces no tokens after it; the new parser makes every pair a region (a deliberate difference, listed for the file)";
-
-const KEYWORD_NAME_ALONE: &str = "deliberate behaviour change: a bare `STEP`, `ON`, `R_EDGE` or `F_EDGE` is a late-bound name like every other bare name. The legacy rule for a late-bound name (`identifier`) rejects those tokens, so the grammar fell through to the rule for a variable";
-const BIND_SPANS: &str = "deliberate behaviour change: an assignment is positioned at its whole operator (`S=`, `R=`, `REF=`) where the legacy grammar keeps the `=` token alone, and the value of `REF=` is positioned at the place it names where the legacy grammar builds it without a position";
-const POSITIVE_LABEL: &str = "legacy bug not ported: the legacy grammar positions a `CASE` label written with a `+` at its digits alone and one written with a `-` at the sign and the digits; the lowering positions the number as written";
-const LABEL_NAME: &str = "legacy bug not ported: the legacy grammar builds the name of a statement label without its position; the lowering gives it the position of the name like every other name";
-const LISTED_INPUT: &str = "deliberate behaviour changes listed with their reasons in the statement and body tables of the verdict comparison: the legacy parser rejects the input and so builds nothing to compare, and the new parser accepts it on purpose";
-
-pub const DIFFERENCES: &[Difference] = &[
-    Difference {
-        scope: Scope::Input("tests/fixtures/lexical/oscat_marker_in_string.st"),
-        reason: MARKER_IN_STRING,
-        expected: 108,
-    },
-    Difference {
-        scope: Scope::Input("tests/fixtures/lexical/oscat_several_pairs.st"),
-        reason: SEVERAL_PAIRS,
-        expected: 54,
-    },
-    Difference {
-        scope: Scope::Origin {
-            nodes: &[SyntaxKind::NameRef],
-            parts: &[Component::Dump],
-        },
-        reason: KEYWORD_NAME_ALONE,
-        expected: 30,
-    },
-    Difference {
-        scope: Scope::Origin {
-            nodes: &[SyntaxKind::AssignStmt],
-            parts: &[Component::Spans],
-        },
-        reason: BIND_SPANS,
-        expected: 144,
-    },
-    Difference {
-        scope: Scope::Origin {
-            nodes: &[SyntaxKind::CaseStmt],
-            parts: &[Component::Spans],
-        },
-        reason: POSITIVE_LABEL,
-        expected: 6,
-    },
-    Difference {
-        scope: Scope::Origin {
-            nodes: &[SyntaxKind::LabelStmt],
-            parts: &[Component::Spans],
-        },
-        reason: LABEL_NAME,
-        expected: 164,
-    },
-    Difference {
-        scope: Scope::AcceptedOnPurpose,
-        reason: LISTED_INPUT,
-        expected: 14,
-    },
-];
-
-impl Scope {
-    fn covers(&self, key: &str, node: SyntaxKind, parts: &[Component]) -> bool {
-        match *self {
-            Scope::Input(name) => {
-                key == name
-                    || key
-                        .strip_prefix(name)
-                        .is_some_and(|rest| rest.starts_with(" ("))
-            }
-            Scope::AcceptedOnPurpose => {
-                parts.is_empty()
-                    && [STATEMENT_EXCEPTIONS, BODY_EXCEPTIONS]
-                        .iter()
-                        .flat_map(|table| table.iter())
-                        .any(|entry| {
-                            entry.snippet == key
-                                && !entry.legacy
-                                && entry.basis == Basis::Deliberate
-                        })
-            }
-            Scope::Origin {
-                nodes: wanted_nodes,
-                parts: wanted_parts,
-            } => wanted_nodes.contains(&node) && wanted_parts == parts,
-        }
-    }
 }
 
 /// What was compared at the sites of one unit.
@@ -428,13 +322,23 @@ fn judge(site: &Site, tokens: &[Token], cx: &LowerCx, written: &str) -> Outcome 
             parse_statement_list(tokens),
             lower_statement_list(cx, &site.node),
         ),
+        Unit::TypeDeclaration => settle(
+            written,
+            parse_type_declaration(tokens),
+            lower_type_declaration(cx, &site.node),
+        ),
+        Unit::VariableInitial => settle(
+            written,
+            parse_variable_initial(tokens),
+            lower_initial_value(cx, &site.node),
+        ),
     }
 }
 
 /// Lowers every site of an accepted parse and compares it to the legacy rule
 /// for it.
-fn compare_sites(tally: &mut Tally, key: &str, text: &str, parse: &Parse, preset: &Preset) {
-    let cx = LowerCx::new(file());
+fn compare_sites(tally: &mut Tally, key: &str, text: &str, parse: &Parse, preset: &Preset) -> bool {
+    let cx = LowerCx::new(file()).with_options(preset.new);
     let tokens = body_tokens(text, preset);
     let only_literals = parse
         .root
@@ -478,11 +382,19 @@ fn compare_sites(tally: &mut Tally, key: &str, text: &str, parse: &Parse, preset
             tally.difference(key, site.parent, site.node.kind(), parts, what.clone());
         }
     }
+    !differing.is_empty()
 }
 
 /// Lowers a whole accepted input as a library and compares it to the legacy
 /// parse, when every node kind of its tree has a lowering rule.
-fn compare_library(tally: &mut Tally, key: &str, text: &str, parse: &Parse, preset: &Preset) {
+fn compare_library(
+    tally: &mut Tally,
+    key: &str,
+    text: &str,
+    parse: &Parse,
+    preset: &Preset,
+    sites_differ: bool,
+) {
     if contains_pending(&parse.root) {
         tally.whole_skipped += 1;
         return;
@@ -495,6 +407,10 @@ fn compare_library(tally: &mut Tally, key: &str, text: &str, parse: &Parse, pres
             let parts = compare(&legacy, &lowered);
             if parts.is_empty() {
                 tally.whole_equal += 1;
+            } else if sites_differ {
+                // The difference began at a site inside the input, and is
+                // counted there.
+                tally.inherited += 1;
             } else {
                 let what = explain(&legacy, &lowered);
                 tally.difference(
@@ -547,6 +463,7 @@ pub fn corpus() -> Vec<Case> {
             .iter()
             .map(|text| case(Kind::Declarations, text)),
     );
+    cases.extend(TYPES.iter().map(|text| case(Kind::Declarations, text)));
     cases.extend(
         extract::legacy_declaration_snippets()
             .iter()
@@ -571,9 +488,16 @@ pub fn run(cases: &[Case], presets: &[Preset]) -> Tally {
                 tally.rejected += 1;
                 continue;
             }
-            compare_sites(&mut tally, &case.key, &case.text, &parse, preset);
+            let sites_differ = compare_sites(&mut tally, &case.key, &case.text, &parse, preset);
             if matches!(case.kind, Kind::Declarations | Kind::File) {
-                compare_library(&mut tally, &case.key, &case.text, &parse, preset);
+                compare_library(
+                    &mut tally,
+                    &case.key,
+                    &case.text,
+                    &parse,
+                    preset,
+                    sites_differ,
+                );
             }
         }
     }
@@ -584,16 +508,18 @@ pub fn run(cases: &[Case], presets: &[Preset]) -> Tally {
 /// written and never fall. The sites equal to the legacy ones, by unit, those
 /// literals among them in inputs that are nothing but a literal, and whole
 /// inputs lowered as libraries.
-const MIN_EQUAL: [(Unit, usize); 5] = [
+const MIN_EQUAL: [(Unit, usize); 7] = [
     (Unit::Literal, 18_000),
     (Unit::Expression, 30_000),
     (Unit::Variable, 9_500),
     (Unit::Statement, 12_000),
     (Unit::Statements, 7_500),
+    (Unit::TypeDeclaration, 1_500),
+    (Unit::VariableInitial, 2_700),
 ];
 const MIN_BODIES_EQUAL: usize = 3_300;
 const MIN_LITERAL_ONLY_EQUAL: usize = 400;
-const MIN_WHOLE_COMPARED: usize = 40;
+const MIN_WHOLE_COMPARED: usize = 950;
 
 /// The differences no entry covers, one problem for each kind of difference
 /// (the node, and the parts in which it differs) with how often it was found
@@ -777,30 +703,6 @@ fn difference_when_listed_scope_then_counted_against_its_entry_and_not_unexplain
     );
     assert!(tally.unexplained.is_empty());
     assert_eq!(&tally.excepted[..4], &[1, 0, 1, 0]);
-}
-
-#[test]
-fn covers_when_input_scope_then_the_file_and_its_spellings_only() {
-    let scope = Scope::Input("a/b.st");
-    let any = SyntaxKind::Unknown;
-    assert!(scope.covers("a/b.st", any, &[]));
-    assert!(scope.covers("a/b.st (CRLF)", any, &[]));
-    assert!(scope.covers("a/b.st (tabs)", any, &[]));
-    assert!(!scope.covers("a/b.st.bak", any, &[]));
-    assert!(!scope.covers("a/bb.st", any, &[]));
-}
-
-#[test]
-fn covers_when_origin_scope_then_any_of_its_nodes_and_exactly_its_parts() {
-    let scope = Scope::Origin {
-        nodes: &[SyntaxKind::IndexExpr, SyntaxKind::FieldExpr],
-        parts: &[Component::Dump, Component::Spans],
-    };
-    let both = [Component::Dump, Component::Spans];
-    assert!(scope.covers("x", SyntaxKind::IndexExpr, &both));
-    assert!(!scope.covers("x", SyntaxKind::IndexExpr, &[Component::Dump]));
-    assert!(scope.covers("x", SyntaxKind::FieldExpr, &both));
-    assert!(!scope.covers("x", SyntaxKind::CallExpr, &both));
 }
 
 #[test]
@@ -988,4 +890,77 @@ fn parity_when_duration_at_range_edge_then_same_duration_or_same_problem_and_ran
             }
         }
     }
+}
+
+/// The legacy declaration and the lowered one of the declaration of a type
+/// written as `text` (`name : type [:= value]`, without its `;`), under the
+/// first preset with every flag on.
+fn declaration_both(
+    text: &str,
+) -> (
+    Result<DataTypeDeclarationKind, Diagnostic>,
+    Result<DataTypeDeclarationKind, Diagnostic>,
+) {
+    let preset = presets()
+        .into_iter()
+        .find(|preset| preset.name == "all-flags")
+        .expect("the preset with every flag");
+    let source = format!("TYPE {text}; END_TYPE");
+    let parse = new_parse(Kind::Declarations, &source, &preset.new);
+    let node = parse
+        .root
+        .descendants()
+        .find(|node| node.kind() == SyntaxKind::TypeDecl)
+        .expect("a type declaration");
+    let tokens = body_tokens(&source, &preset);
+    let legacy = parse_type_declaration(literal_tokens(&tokens, range_of(&node), false));
+    let lowered = lower_type_declaration(&LowerCx::new(file()).with_options(preset.new), &node);
+    (legacy, lowered)
+}
+
+#[test]
+fn legacy_declaration_when_elementary_type_then_the_type_name_has_no_position_and_the_lowering_has_one(
+) {
+    // The cause named by `TYPE_NAME_POSITION`.
+    let (legacy, lowered) = declaration_both("t : INT := 5");
+    let base = |declaration: Result<DataTypeDeclarationKind, Diagnostic>| match declaration {
+        Ok(DataTypeDeclarationKind::Simple(SimpleDeclaration {
+            spec_and_init: InitialValueAssignmentKind::Simple(initializer),
+            ..
+        })) => Some(initializer.type_name.name.span),
+        _ => None,
+    };
+    let (legacy, lowered) = (
+        base(legacy).expect("legacy"),
+        base(lowered).expect("lowered"),
+    );
+    assert_eq!(legacy, SourceSpan::default());
+    assert_eq!(
+        (lowered.start, lowered.end, lowered.file_id),
+        (9, 12, file())
+    );
+}
+
+#[test]
+fn legacy_declaration_when_inline_enumeration_member_has_a_default_then_legacy_drops_it() {
+    // The cause named by `INLINE_ENUMERATION_DEFAULT`.
+    let (legacy, lowered) = declaration_both("t : STRUCT a : (X, Y) := X; END_STRUCT");
+    let default = |declaration: Result<DataTypeDeclarationKind, Diagnostic>| match declaration {
+        Ok(DataTypeDeclarationKind::Structure(structure)) => {
+            match structure
+                .elements
+                .into_iter()
+                .next()
+                .map(|member| member.init)
+            {
+                Some(InitialValueAssignmentKind::EnumeratedValues(values)) => {
+                    Some(values.initial_value)
+                }
+                _ => None,
+            }
+        }
+        _ => None,
+    };
+    assert_eq!(default(legacy), Some(None));
+    assert!(matches!(default(lowered), Some(Some(_))));
 }
