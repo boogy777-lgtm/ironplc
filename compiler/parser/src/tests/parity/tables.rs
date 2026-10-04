@@ -783,6 +783,11 @@ pub const DECLARATION_EXCEPTIONS: &[Exception] = &[
     ),
     accepted_on_purpose(
         Kind::Declarations,
+        "TYPE t : STRUCT a : MyArray := [1, 2]; END_STRUCT; END_TYPE",
+        NAMED_ARRAY_VALUE,
+    ),
+    accepted_on_purpose(
+        Kind::Declarations,
         "TYPE t : ARRAY[1..2] OF REF_TO ARRAY[1..2] OF INT; END_TYPE",
         ARRAY_OF_REFERENCE_TO_ARRAY,
     ),

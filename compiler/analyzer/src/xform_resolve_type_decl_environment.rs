@@ -155,12 +155,21 @@ impl Fold<Diagnostic> for TypeEnvironment {
                     "Type specification required (e.g., ': INT')",
                 )));
             }
-            InitialValueAssignmentKind::Simple(simple_initializer) => {
-                match self.get(&simple_initializer.type_name) {
+            // A value that is an expression of constants is folded after this
+            // environment is first derived, so it is the base type that counts
+            // here; the environment is derived again from the folded value.
+            InitialValueAssignmentKind::Simple(SimpleInitializer {
+                type_name: base, ..
+            })
+            | InitialValueAssignmentKind::SimpleExpr(SimpleExprInitializer {
+                type_name: base,
+                ..
+            }) => {
+                match self.get(base) {
                     Some(_base_type) => {
                         // If the base type is known, then the type is valid this type
                         // will have the same attributes as the base type.
-                        self.insert_alias(&node.type_name, &simple_initializer.type_name)?;
+                        self.insert_alias(&node.type_name, base)?;
                     }
                     None => {
                         // If the base type is not know, then this is not valid
@@ -168,10 +177,7 @@ impl Fold<Diagnostic> for TypeEnvironment {
                             Problem::ParentTypeNotDeclared,
                             Label::span(node.type_name.span(), "Derived type"),
                         )
-                        .with_secondary(Label::span(
-                            simple_initializer.type_name.span(),
-                            "Base type",
-                        )));
+                        .with_secondary(Label::span(base.span(), "Base type")));
                     }
                 }
             }
@@ -259,12 +265,6 @@ impl Fold<Diagnostic> for TypeEnvironment {
                 // Reference types are not resolved through simple declarations
             }
             InitialValueAssignmentKind::LateResolvedType(_type_name) => {
-                return Err(Diagnostic::internal_error());
-            }
-            InitialValueAssignmentKind::SimpleExpr(_) => {
-                // Constant-expression initializers are a VAR-declaration
-                // extension; they never appear in a TYPE alias's
-                // spec_and_init (that grammar path is unchanged).
                 return Err(Diagnostic::internal_error());
             }
         }

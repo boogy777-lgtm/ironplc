@@ -16,13 +16,19 @@
 //! One copy of the sequence is what makes those two observably the same
 //! thing at runtime.
 
-use ironplc_dsl::common::{StructInitialValueAssignmentKind, StructureElementInit};
+use ironplc_analyzer::TypeEnvironment;
+use ironplc_dsl::common::{
+    ConstantKind, InitialValueAssignmentKind, StructInitialValueAssignmentKind,
+    StructureElementInit, VarDecl,
+};
+use ironplc_dsl::construct::merge_member_inits;
 use ironplc_dsl::core::{Id, Located};
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
 use ironplc_dsl::textual::{Expr, ExprKind};
 
 use super::compile::{CompileContext, OpType, DEFAULT_OP_TYPE};
 use super::compile_expr::compile_expr;
+use super::compile_initial_value::subrange_lower_bound;
 use crate::emit::Emitter;
 
 /// Resolves the operand type for a function block field.
@@ -137,4 +143,60 @@ pub(crate) fn emit_fb_instance_member_initializers(
         compile_fb_field_store(emitter, ctx, instance_name, &element.name, &value)?;
     }
     Ok(())
+}
+
+/// The values the fields of a function block declare for themselves
+/// (`VAR count : INT := 4; END_VAR`), as the member initializers an instance
+/// starts from.
+///
+/// A field starts at the value its declaration states, else the value the type
+/// it names declares, else, for a subrange, its lower bound: the one reading
+/// of a declared value, so an instance and every other storage location agree.
+/// Only the fields that take one slot are listed; a string, an array and a
+/// structure are laid out by their own routines and keep what they have.
+pub(crate) fn declared_field_values(
+    types: &TypeEnvironment,
+    fields: &[&VarDecl],
+) -> Vec<StructureElementInit> {
+    fields
+        .iter()
+        .filter_map(|decl| {
+            let name = decl.identifier.symbolic_id()?.clone();
+            let init =
+                types
+                    .initial_value_of(&decl.initializer)
+                    .or_else(|| match &decl.initializer {
+                        InitialValueAssignmentKind::Subrange(subrange) => {
+                            let bound = subrange_lower_bound(types, &subrange.spec)?;
+                            ConstantKind::integer_literal(&bound.to_string())
+                                .ok()
+                                .map(StructInitialValueAssignmentKind::Constant)
+                        }
+                        _ => None,
+                    })?;
+            match &init {
+                StructInitialValueAssignmentKind::Constant(ConstantKind::CharacterString(_))
+                | StructInitialValueAssignmentKind::Array(_)
+                | StructInitialValueAssignmentKind::Structure(_) => None,
+                _ => Some(StructureElementInit { name, init }),
+            }
+        })
+        .collect()
+}
+
+/// The members a function block instance starts from: the values its type
+/// declares for its fields, with those its own declaration states laid over
+/// them.
+pub(crate) fn instance_members(
+    ctx: &CompileContext,
+    type_id: u16,
+    stated: &[StructureElementInit],
+) -> Vec<StructureElementInit> {
+    let declared = ctx
+        .user_fb_types
+        .values()
+        .find(|user_fb| user_fb.type_id == type_id)
+        .map(|user_fb| user_fb.field_defaults.as_slice())
+        .unwrap_or_default();
+    merge_member_inits(declared, stated)
 }

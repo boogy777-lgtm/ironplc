@@ -22,9 +22,8 @@ use super::compile::{
     DEFAULT_OP_TYPE, NARROW_CHAR_WIDTH, WIDE_CHAR_WIDTH,
 };
 use super::compile_expr::emit_load_var;
-use super::compile_setup::{
-    debug_type_for_decl, debug_type_for_return, emit_function_local_prologue, map_var_section,
-};
+use super::compile_initial_value::emit_function_local_prologue;
+use super::compile_setup::{debug_type_for_decl, debug_type_for_return, map_var_section};
 use super::compile_stmt::{
     compile_body, compile_statements, resolve_string_max_length, resolve_string_spec_max_length,
 };
@@ -376,6 +375,7 @@ pub(crate) fn compile_user_function(
         &func_decl.name,
         return_var_index,
         return_op_type,
+        types,
     )?;
 
     let body = ironplc_dsl::textual::Statements {

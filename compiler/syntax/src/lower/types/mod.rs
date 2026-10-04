@@ -24,7 +24,7 @@ mod tests;
 
 use super::declarations::{build, row, Form, Init, Parts, Row};
 use super::initializers::{
-    lower_array_elements, lower_constant_value, lower_initial_value, lower_integer_value,
+    lower_array_elements, lower_initial_value, lower_integer_value, lower_simple_initializer,
     lower_string_value, lower_struct_elements,
 };
 use super::names::{lower_name, lower_type_ref, lower_type_token};
@@ -35,12 +35,13 @@ use crate::syntax_kind::{SyntaxKind as K, SyntaxNode};
 use ironplc_dsl::common::{
     ArrayBounds, ArrayDeclaration, ArrayElementType, ArraySubranges, DataTypeDeclarationKind,
     ElementaryTypeName, EnumeratedSpecificationInit, EnumeratedSpecificationKind, EnumeratedValue,
-    EnumerationDeclaration, InitialValueAssignmentKind, LateBoundDeclaration, ParamsDeclaration,
-    ParamsSpecification, RefSyntax, ReferenceDeclaration, ReferenceTarget, SimpleDeclaration,
-    SimpleInitializer, SpecificationKind, StringDeclaration, StringSpecification, StringType,
-    StructureDeclaration, StructureElementDeclaration, StructureInitializationDeclaration,
-    SubrangeDeclaration, SubrangeSpecification, TypeName, UnionDeclaration,
+    EnumerationDeclaration, LateBoundDeclaration, ParamsDeclaration, ParamsSpecification,
+    RefSyntax, ReferenceDeclaration, ReferenceTarget, SimpleDeclaration, SpecificationKind,
+    StringDeclaration, StringSpecification, StringType, StructureDeclaration,
+    StructureElementDeclaration, SubrangeDeclaration, SubrangeSpecification, TypeName,
+    UnionDeclaration,
 };
+use ironplc_dsl::construct::structure_alias;
 use ironplc_dsl::diagnostic::Diagnostic;
 
 /// The keywords of the string types, and the width of the characters of each.
@@ -345,17 +346,15 @@ fn union(cx: &LowerCx, parts: &Parts) -> Result<DataTypeDeclarationKind, Diagnos
 }
 
 /// `name : Structure := (member := value, ...)`. The declaration holds the
-/// declared name and the values; the structure it is a copy of is not
-/// recorded.
+/// declared name, the structure it is a copy of and the values.
 fn structure_initialization(
     cx: &LowerCx,
     parts: &Parts,
 ) -> Result<DataTypeDeclarationKind, Diagnostic> {
-    Ok(DataTypeDeclarationKind::StructureInitialization(
-        StructureInitializationDeclaration {
-            type_name: declared(cx, parts)?,
-            elements_init: lower_struct_elements(cx, parts.value(cx)?)?,
-        },
+    Ok(structure_alias(
+        declared(cx, parts)?,
+        parts.base_name(cx)?,
+        lower_struct_elements(cx, parts.value(cx)?)?,
     ))
 }
 
@@ -398,19 +397,12 @@ fn enumeration_alias(cx: &LowerCx, parts: &Parts) -> Result<DataTypeDeclarationK
     ))
 }
 
-/// `name : T [:= constant]`: a type that is another type with a value.
+/// `name : T [:= value]`: a type that is another type with a value, which is a
+/// literal or an expression of constants.
 fn simple(cx: &LowerCx, parts: &Parts) -> Result<DataTypeDeclarationKind, Diagnostic> {
-    let initial_value = parts
-        .value
-        .as_ref()
-        .map(|value| lower_constant_value(cx, parts, value))
-        .transpose()?;
     Ok(DataTypeDeclarationKind::Simple(SimpleDeclaration {
         type_name: declared(cx, parts)?,
-        spec_and_init: InitialValueAssignmentKind::Simple(SimpleInitializer {
-            type_name: parts.base_name(cx)?,
-            initial_value,
-        }),
+        spec_and_init: lower_simple_initializer(cx, parts)?,
     }))
 }
 
@@ -455,7 +447,7 @@ const DECLARATIONS: &[Row<DataTypeDeclarationKind>] = &[
     ),
     row(
         &[Form::Elementary, Form::BareString],
-        &[Init::None, Init::Value],
+        &[Init::None, Init::Value, Init::Name],
         simple,
     ),
     row(&[Form::Named], &[Init::Value], simple),

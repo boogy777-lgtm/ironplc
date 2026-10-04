@@ -182,7 +182,6 @@ fn data_type_name(decl: &DataTypeDeclarationKind) -> Id {
         DataTypeDeclarationKind::Params(d) => d.type_name.name.clone(),
         DataTypeDeclarationKind::Structure(d) => d.type_name.name.clone(),
         DataTypeDeclarationKind::Union(d) => d.type_name.name.clone(),
-        DataTypeDeclarationKind::StructureInitialization(d) => d.type_name.name.clone(),
         DataTypeDeclarationKind::String(d) => d.type_name.name.clone(),
         DataTypeDeclarationKind::Reference(d) => d.type_name.name.clone(),
         DataTypeDeclarationKind::LateBound(d) => d.data_type_name.name.clone(),
@@ -1117,7 +1116,7 @@ END_TYPE";
 
         let decl = library.elements.get(1).unwrap();
         let decl = cast!(decl, LibraryElementKind::DataTypeDeclaration);
-        let decl = cast!(decl, DataTypeDeclarationKind::StructureInitialization);
+        let decl = cast!(decl, DataTypeDeclarationKind::Simple);
         assert_eq!(decl.type_name, TypeName::from("INIT_STRUCT"));
     }
 

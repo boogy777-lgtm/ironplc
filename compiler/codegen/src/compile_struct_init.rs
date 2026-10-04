@@ -12,8 +12,13 @@ use ironplc_dsl::core::{Located, SourceSpan};
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
 
 use ironplc_analyzer::intermediate_type::{ArrayDimension, IntermediateType};
+use ironplc_analyzer::TypeEnvironment;
 use ironplc_container::{SlotIndex, VarIndex};
-use ironplc_dsl::common::{ConstantKind, StructInitialValueAssignmentKind, StructureElementInit};
+use ironplc_dsl::common::{
+    ConstantKind, InitialValueAssignmentKind, StructInitialValueAssignmentKind,
+    StructureElementInit,
+};
+use ironplc_dsl::construct::merge_member_inits;
 
 use super::compile::{
     emit_string_literal_load, CompileContext, OpType, OpWidth, DEFAULT_STRING_MAX_LENGTH,
@@ -330,34 +335,17 @@ fn initialize_array_elements(
     Ok(())
 }
 
-/// The members of `over` laid over those of `base`: a member `over` names
-/// replaces the one of `base`, except that two structure values merge
-/// member by member, so a declaration that states one member of a nested
-/// structure leaves the others at what the type declares.
-fn merge_member_inits(
-    base: &[StructureElementInit],
-    over: &[StructureElementInit],
+/// The members a structure location starts at: those its declaration states
+/// laid over those its type declares, empty when it is not a structure
+/// location. Read through the one source of declared values.
+pub(crate) fn declared_members(
+    types: &TypeEnvironment,
+    init: &InitialValueAssignmentKind,
 ) -> Vec<StructureElementInit> {
-    let mut merged = base.to_vec();
-    for member in over {
-        let name = member.name.to_string().to_lowercase();
-        match merged
-            .iter_mut()
-            .find(|m| m.name.to_string().to_lowercase() == name)
-        {
-            Some(existing) => {
-                existing.init = match (&existing.init, &member.init) {
-                    (
-                        StructInitialValueAssignmentKind::Structure(a),
-                        StructInitialValueAssignmentKind::Structure(b),
-                    ) => StructInitialValueAssignmentKind::Structure(merge_member_inits(a, b)),
-                    _ => member.init.clone(),
-                };
-            }
-            None => merged.push(member.clone()),
-        }
+    match types.initial_value_of(init) {
+        Some(StructInitialValueAssignmentKind::Structure(members)) => members,
+        _ => Vec::new(),
     }
-    merged
 }
 
 /// The members a structure value states, empty when it is not one.
@@ -506,21 +494,31 @@ fn initialize_array_field(
             max_len,
             char_width,
         } => {
-            if !values.is_empty() {
-                return Err(unsupported("an array of STRING"));
-            }
-            if mode.headers != StringHeaders::Write {
-                return Ok(());
-            }
-            // STRING/WSTRING array field — initialize headers for each string element.
+            // STRING/WSTRING array field: each element is a string of its own,
+            // laid out one after another, so it is initialized like a string
+            // member at its own offset.
             let max_length = max_len.unwrap_or(DEFAULT_STRING_MAX_LENGTH as u128) as u16;
             let total_elements = dimensions
                 .iter()
                 .fold(1u32, |acc, d| acc * (d.upper - d.lower + 1) as u32);
             let stride = super::compile::string_region_size(max_length, *char_width);
             let field_byte_offset = region.data_offset + slot * 8;
-            for i in 0..total_elements {
-                emitter.emit_str_init(field_byte_offset + i * stride, max_length, *char_width);
+            if mode.headers == StringHeaders::Write {
+                for i in 0..total_elements {
+                    emitter.emit_str_init(field_byte_offset + i * stride, max_length, *char_width);
+                }
+            }
+            if mode.headers == StringHeaders::Unreachable {
+                return Ok(());
+            }
+            for (i, value) in values.iter().enumerate() {
+                let ConstantKind::CharacterString(literal) = value else {
+                    return Err(unsupported(
+                        "an array of STRING of a value that is not a string",
+                    ));
+                };
+                emit_string_literal_load(emitter, ctx, &literal.value, *char_width);
+                emitter.emit_str_store_var(field_byte_offset + i as u32 * stride);
             }
             Ok(())
         }

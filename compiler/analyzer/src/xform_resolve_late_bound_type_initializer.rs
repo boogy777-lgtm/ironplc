@@ -34,7 +34,6 @@ enum TypeDefinitionKind {
     /// `UNION ... END_UNION`. Resolved like a structure; the members are
     /// not overlaid yet (see `UnionDeclaration`).
     Union,
-    StructureInitialization,
     String(StringType, IntegerRef),
     FunctionBlock,
     Reference(ReferenceTarget),
@@ -121,9 +120,6 @@ impl Visitor<Diagnostic> for ScopedTable<'_, TypeName, TypeDefinitionKind> {
             DataTypeDeclarationKind::Union(node) => {
                 self.add_if_new(&node.type_name, TypeDefinitionKind::Union)
             }
-            DataTypeDeclarationKind::StructureInitialization(node) => {
-                self.add_if_new(&node.type_name, TypeDefinitionKind::StructureInitialization)
-            }
             DataTypeDeclarationKind::String(node) => self.add_if_new(
                 &node.type_name,
                 TypeDefinitionKind::String(node.width.clone(), node.length.clone()),
@@ -177,9 +173,7 @@ impl TypeResolver<'_> {
         }
         self.types.find(name).map(|kind| match kind {
             TypeDefinitionKind::FunctionBlock => ResolvedKind::FunctionBlock,
-            TypeDefinitionKind::Structure
-            | TypeDefinitionKind::Union
-            | TypeDefinitionKind::StructureInitialization => ResolvedKind::Structure,
+            TypeDefinitionKind::Structure | TypeDefinitionKind::Union => ResolvedKind::Structure,
             TypeDefinitionKind::Enumeration => ResolvedKind::Enumeration,
             _ => ResolvedKind::Other,
         })

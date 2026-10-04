@@ -15,16 +15,18 @@ fn all() -> ParseOptions {
     ParseOptions::all()
 }
 
-/// Where the literals are written: the initial value of a type declaration, a
+/// Where the literals are written: the default of a subrange type declaration, a
 /// constant position, where a sign belongs to the literal (in an expression it
 /// is an operator).
-const CONTEXT: &str = "TYPE t : INT := ";
+const CONTEXT: &str = "TYPE t : INT(1..2) := ";
 
 /// The first literal node of `source` written in [`CONTEXT`], ignoring any
 /// error the parse reported, so that malformed literals reach the rules.
 fn literal_node(source: &str, options: &ParseOptions) -> Option<SyntaxNode> {
     parse_source_file(&format!("{CONTEXT}{source}; END_TYPE"), options)
         .root
+        .descendants()
+        .find(|node| node.kind() == crate::SyntaxKind::Initializer)?
         .descendants()
         .find(|node| disposition(node.kind()) == Disposition::Lowered(Area::Literal))
 }

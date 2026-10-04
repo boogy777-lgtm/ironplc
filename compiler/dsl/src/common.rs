@@ -1421,7 +1421,6 @@ pub enum DataTypeDeclarationKind {
     Structure(StructureDeclaration),
     /// `UNION ... END_UNION` declaration (IEC 61131-3:2013 / CODESYS).
     Union(UnionDeclaration),
-    StructureInitialization(StructureInitializationDeclaration),
     String(StringDeclaration),
     /// Reference type declaration (REF_TO).
     Reference(ReferenceDeclaration),
@@ -1735,7 +1734,13 @@ pub struct SubrangeSpecification {
     pub subrange: Subrange,
 }
 
-/// The specification for a simple declared type.
+/// The specification for a simple declared type: the name it declares, and the
+/// type it is a copy of with the value it starts at.
+///
+/// An alias of a structure is one too: `P0 : Pt := (x := 1)` declares `P0`,
+/// and its `spec_and_init` is a [`InitialValueAssignmentKind::Structure`] that
+/// holds the structure `Pt` it copies and the values it states. Both names are
+/// kept, so the declaration reads back as it was written.
 ///
 /// See section 2.3.3.1.
 #[derive(Clone, Debug, PartialEq, Recurse)]
@@ -3024,7 +3029,8 @@ pub struct SimpleInitializer {
     pub initial_value: Option<ConstantKind>,
 }
 
-/// A variable initializer expressed as a constant expression (e.g.
+/// An initializer (of a variable, of a type or of a structure member)
+/// expressed as a constant expression (e.g.
 /// `PI/180.0`) rather than a bare literal.
 ///
 /// This is an extension — the IEC 61131-3 standard's `constant()`

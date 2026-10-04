@@ -13,9 +13,10 @@ use std::sync::LazyLock;
 use time::{Date, Month, Time};
 
 use crate::common::{
-    ConstantKind, EnumeratedInitialValueAssignment, EnumeratedValue, FixedPoint,
-    InitialValueAssignmentKind, LateResolvedInitialValue, LateResolvedInitializer,
-    SimpleExprInitializer, SimpleInitializer, StringType, StructureInitializationDeclaration,
+    ConstantKind, DataTypeDeclarationKind, EnumeratedInitialValueAssignment, EnumeratedValue,
+    FixedPoint, InitialValueAssignmentKind, LateResolvedInitialValue, LateResolvedInitializer,
+    SimpleDeclaration, SimpleExprInitializer, SimpleInitializer, StringType,
+    StructInitialValueAssignmentKind, StructureElementInit, StructureInitializationDeclaration,
     TypeName,
 };
 use crate::core::{Id, SourceSpan};
@@ -254,6 +255,52 @@ pub fn negate_literal_constant(c: ConstantKind) -> Result<ConstantKind, Constant
         }
         other => Err(other),
     }
+}
+
+/// The members of `over` laid over those of `base`: a member `over` names
+/// replaces the one of `base`, except that two structure values merge member
+/// by member, so a declaration that states one member of a nested structure
+/// leaves the others at what the type declares.
+pub fn merge_member_inits(
+    base: &[StructureElementInit],
+    over: &[StructureElementInit],
+) -> Vec<StructureElementInit> {
+    let mut merged = base.to_vec();
+    for member in over {
+        let name = member.name.to_string().to_lowercase();
+        match merged
+            .iter_mut()
+            .find(|m| m.name.to_string().to_lowercase() == name)
+        {
+            Some(existing) => {
+                existing.init = match (&existing.init, &member.init) {
+                    (
+                        StructInitialValueAssignmentKind::Structure(a),
+                        StructInitialValueAssignmentKind::Structure(b),
+                    ) => StructInitialValueAssignmentKind::Structure(merge_member_inits(a, b)),
+                    _ => member.init.clone(),
+                };
+            }
+            None => merged.push(member.clone()),
+        }
+    }
+    merged
+}
+
+/// A type that is a copy of a structure, with values: `P0 : Pt := (x := 1)`.
+/// The declaration keeps the name it declares and the structure it copies.
+pub fn structure_alias(
+    declared: TypeName,
+    structure: TypeName,
+    elements_init: Vec<StructureElementInit>,
+) -> DataTypeDeclarationKind {
+    DataTypeDeclarationKind::Simple(SimpleDeclaration {
+        type_name: declared,
+        spec_and_init: InitialValueAssignmentKind::Structure(StructureInitializationDeclaration {
+            type_name: structure,
+            elements_init,
+        }),
+    })
 }
 
 /// A member list written against a user type name: `T := (a := 1)`. The

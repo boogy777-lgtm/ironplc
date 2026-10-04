@@ -32,8 +32,8 @@ use ironplc_dsl::common::*;
 use ironplc_dsl::configuration::*;
 use ironplc_dsl::construct::{
     calendar_date, combine_interval_parts, late_resolved_members, late_resolved_or_enumerated,
-    resolve_initializer_expr, special_operator_type_call, time_of_day, unquote, ClockField,
-    DateField, DurationUnit, IntervalError,
+    resolve_initializer_expr, special_operator_type_call, structure_alias, time_of_day, unquote,
+    ClockField, DateField, DurationUnit, IntervalError,
 };
 use ironplc_dsl::core::Id;
 use ironplc_dsl::core::Located;
@@ -779,7 +779,7 @@ parser! {
       / structure_type_declaration__with_constant()
       / union:union_type_declaration__with_constant() { DataTypeDeclarationKind::Union(union) }
       / enumerated:enumerated_type_declaration__with_value() { DataTypeDeclarationKind::Enumeration(enumerated) }
-      / simple:simple_type_declaration__with_constant() { DataTypeDeclarationKind::Simple(simple )}
+      / simple:simple_type_declaration__with_value() { DataTypeDeclarationKind::Simple(simple )}
       / type_name:type_name() _ tok(TokenType::Colon) _ syntax:ref_to_keyword() _ ref_target:ref_to_target() {
         DataTypeDeclarationKind::Reference(ReferenceDeclaration {
           type_name,
@@ -805,7 +805,7 @@ parser! {
         base_type_name,
       }
     }
-    rule simple_type_declaration__with_constant() -> SimpleDeclaration = type_name:simple_type_name() _ tok(TokenType::Colon) _ spec_and_init:simple_spec_init__with_constant() {
+    rule simple_type_declaration__with_value() -> SimpleDeclaration = type_name:simple_type_name() _ tok(TokenType::Colon) _ spec_and_init:simple_spec_init__with_value() {
       SimpleDeclaration {
         type_name,
         spec_and_init,
@@ -820,7 +820,18 @@ parser! {
         }),
       }
     }
-    rule simple_spec_init() -> InitialValueAssignmentKind = type_name:simple_specification() _ tok(TokenType::Assignment) _ e:expression() {
+    rule simple_spec_init() -> InitialValueAssignmentKind = simple_spec_init__with_value() / type_name:simple_specification() {
+      InitialValueAssignmentKind::Simple(SimpleInitializer {
+        type_name,
+        initial_value: None,
+      })
+    }
+    // A value written against a simple type: a literal, or a constant expression.
+    // For a type that is an elementary type, this is unambiguous because simple
+    // types are keywords (e.g. INT); for a named type the callers try the
+    // enumerated value first. It is the one form of a simple type with a value,
+    // for a variable, a structure member and a type declaration alike.
+    rule simple_spec_init__with_value() -> InitialValueAssignmentKind = type_name:simple_specification() _ tok(TokenType::Assignment) _ e:expression() {
       // A bare literal parses as ExprKind::Const via expression() too (it's
       // one of its own alternatives), so this single rule handles both the
       // standard literal-only case and the constant-expression dialect
@@ -832,18 +843,6 @@ parser! {
       // xform_fold_initializer_expressions, which folds SimpleExpr back to
       // Simple or diagnoses it.
       resolve_initializer_expr(type_name, e)
-    } / type_name:simple_specification() {
-      InitialValueAssignmentKind::Simple(SimpleInitializer {
-        type_name,
-        initial_value: None,
-      })
-    }
-    // For simple types, they are inherently unambiguous because simple types are keywords (e.g. INT)
-    rule simple_spec_init__with_constant() -> InitialValueAssignmentKind = type_name:simple_specification() _ tok(TokenType::Assignment) _ constant:constant() {
-      InitialValueAssignmentKind::Simple(SimpleInitializer {
-        type_name,
-        initial_value: Some(constant),
-      })
     }
     rule simple_specification() -> TypeName = et:elementary_type_name() { et.into() } / simple_type_name()
     rule subrange_type_declaration__with_range() -> SubrangeDeclaration = type_name:subrange_type_name() _ tok(TokenType::Colon) _ init:subrange_spec_init__with_range() {
@@ -984,11 +983,7 @@ parser! {
         })
       }
       / type_name:structure_type_name() _ tok(TokenType::Colon) _ init:initialized_structure__without_ambiguous() {
-        DataTypeDeclarationKind::StructureInitialization(StructureInitializationDeclaration {
-          // TODO there is something off with having two type names
-          type_name,
-          elements_init: init.elements_init,
-        })
+        structure_alias(type_name, init.type_name, init.elements_init)
       }
     // structure_specification - covered in structure_type_declaration because that avoids
     // an intermediate object that doesn't know the type name
@@ -1050,7 +1045,7 @@ parser! {
       }
       / str_init:single_byte_string_spec() { InitialValueAssignmentKind::String(str_init) }
       / str_init:double_byte_string_spec() { InitialValueAssignmentKind::String(str_init) }
-      / simple_spec_init__with_constant()
+      / simple_spec_init__with_value()
       / simple_or_enumerated_or_subrange_ambiguous_struct_spec_init()
     ) {
         StructureElementDeclaration {
