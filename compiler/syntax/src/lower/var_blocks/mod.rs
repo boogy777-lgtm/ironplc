@@ -26,8 +26,8 @@ mod tests;
 
 use super::declarations::{build, row, Form, Init, Parts, Row};
 use super::initializers::{lower_initial_value, lower_struct_elements};
-use super::names::{lower_id, lower_name, lower_type_ref};
-use super::tree::{child_of, children_of, left_spine, significant_tokens};
+use super::names::{lower_name, lower_path, lower_type_ref};
+use super::tree::{child_of, children_of, significant_tokens};
 use super::variables::{lower_address, lower_symbolic};
 use super::LowerCx;
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode};
@@ -227,27 +227,8 @@ fn lower_access(cx: &LowerCx, node: &SyntaxNode) -> Result<ProgramAccessDecl, Di
     })
 }
 
-/// The names of `resource.program.path...`: a name, and the member names
-/// selected from it.
-fn lower_path(cx: &LowerCx, node: &SyntaxNode) -> Result<Vec<Id>, Diagnostic> {
-    let (base, links) = left_spine(node, |kind| kind == K::FieldExpr);
-    let base = base
-        .filter(|base| base.kind() == K::NameRef)
-        .ok_or_else(|| {
-            cx.syntax_error(
-                node.text_range(),
-                "expected the path `resource.program.variable`",
-            )
-        })?;
-    let mut path = vec![lower_name(cx, &base)?];
-    for link in &links {
-        let selected = significant_tokens(link)
-            .pop()
-            .ok_or_else(|| cx.missing(link, "a name"))?;
-        path.push(lower_id(cx, &selected));
-    }
-    Ok(path)
-}
+/// What an instance initialisation names.
+const EXPECTED_PATH: &str = "the path `resource.program.variable`";
 
 /// The resource, the program and the rest of the path an instance
 /// initialisation names.
@@ -255,14 +236,11 @@ fn instance_path(cx: &LowerCx, node: &SyntaxNode) -> Result<(Id, Id, Vec<Id>), D
     let first = node
         .first_child()
         .ok_or_else(|| cx.missing(node, "a path"))?;
-    let path = lower_path(cx, &first)?;
+    let path = lower_path(cx, &first, EXPECTED_PATH)?;
     let mut names = path.into_iter();
     match (names.next(), names.next()) {
         (Some(resource), Some(program)) => Ok((resource, program, names.collect())),
-        _ => Err(cx.syntax_error(
-            node.text_range(),
-            "expected the path `resource.program.variable`",
-        )),
+        _ => Err(cx.syntax_error(node.text_range(), format!("expected {EXPECTED_PATH}"))),
     }
 }
 
@@ -322,7 +300,7 @@ const INSTANCES: &[Row<InstanceInit>] = &[
 
 /// The qualifier a block's keyword is followed by: the first of its tokens
 /// that `QUALIFIERS` has a row for, or none.
-fn qualifier_of(node: &SyntaxNode) -> DeclarationQualifier {
+pub fn qualifier_of(node: &SyntaxNode) -> DeclarationQualifier {
     significant_tokens(node)
         .iter()
         .find_map(|token| {

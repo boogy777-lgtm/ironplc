@@ -49,6 +49,8 @@ const LABEL_NAME: &str = "legacy bug not ported: the legacy grammar builds the n
 const TYPE_NAME_POSITION: &str = "legacy bug not ported: the legacy grammar builds the name of an elementary type in a declaration (`INT` in `x : INT := 5`, the base of an alias, the return type of a function, a method or a property) without a position, because it converts the keyword to a name instead of recording where it was written; the lowering gives it the position of the keyword like every other type name (pinned by its own test)";
 const BLOCK_SHAPES: &str = "legacy shapes differ from the one table of initial values that every other declaration is built with: an input-output variable of an elementary type is a late-resolved type in the legacy grammar (the type resolver turns it into the simple type the lowering builds), and a global or external variable of a named type, or a global string, is a simple type there, which the resolver does not resolve: a global function block instance is reported as an undeclared variable (P4012: `VAR_EXTERNAL g : Fb; END_VAR g();`) instead of resolving to the instance, where the lowering gives it the late-resolved type that a local declaration has; the string shape of the lowering is the one a local string has";
 const UNNAMED_GLOBAL_LOCATION: &str = "legacy bug not ported: the legacy global-variable rule reads a location without a name (`VAR_GLOBAL AT %MW0 : INT; END_VAR`) and records a variable with the empty name and no location, so the address is lost; the lowering declares the located variable, which has no name and the address (a located variable is allowed to have none, as in a plain block)";
+const LONG_STEP_LIST: &str = "legacy bug not ported: the legacy grammar reads a parenthesised list of three or more steps as its first two (a note in the grammar says the rest still need to be added), so a transition that leaves or enters more steps loses them; the lowering keeps every step written (pinned by its own test)";
+const PLACEHOLDER_NAME_FILE: &str = "the legacy grammar stamps the file onto every position it left unset in a final pass over the whole library, including the empty name it records in place of the name of a function block it initialises in a configuration (`fb_name`); the rule that reads the block alone has no pass, and the lowering leaves the placeholder without a position in both";
 const LISTED_INPUT: &str = "deliberate behaviour changes listed with their reasons in the statement, body and declaration tables of the verdict comparison: the legacy parser rejects the input and so builds nothing to compare, and the new parser accepts it on purpose";
 
 pub const DIFFERENCES: &[Difference] = &[
@@ -129,6 +131,20 @@ pub const DIFFERENCES: &[Difference] = &[
         },
         reason: BLOCK_SHAPES,
         expected: 81,
+    },
+    Difference {
+        scope: Scope::Input(
+            "PROGRAM p INITIAL_STEP s : END_STEP STEP t : END_STEP TRANSITION FROM (s, t, u) TO t := TRUE; END_TRANSITION END_PROGRAM",
+        ),
+        reason: LONG_STEP_LIST,
+        expected: 12,
+    },
+    Difference {
+        scope: Scope::Input(
+            "CONFIGURATION c RESOURCE r ON t PROGRAM p : q; END_RESOURCE VAR_CONFIG r.p.fb : fb_t := (a := 1, b := 2); END_VAR END_CONFIGURATION",
+        ),
+        reason: PLACEHOLDER_NAME_FILE,
+        expected: 6,
     },
     Difference {
         scope: Scope::AcceptedOnPurpose,

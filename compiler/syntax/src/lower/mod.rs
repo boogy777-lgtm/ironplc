@@ -14,15 +14,15 @@
 //!   lowering problem becomes a [`Diagnostic`].
 //! - [`disposition`] says, for every kind the tree can hold, whether it is
 //!   lowered by a rule (and which area owns it), is consumed by its parent's
-//!   rule, is trivia, or has no rule yet. It matches every node kind without
+//!   rule, or is trivia. It matches every node kind without
 //!   a wildcard arm, so a new node kind does not compile until it has one.
 //! - The rules, one module per area, each dispatching on the kind of the node
 //!   it is given.
 //!
 //! Lowering is only run on a tree whose parse reported no error: a node the
-//! grammar guarantees but the tree lacks is an internal error, and a node whose
-//! area has no rule yet is reported as not implemented.
+//! grammar guarantees but the tree lacks is an internal error.
 
+pub mod configuration;
 pub mod declarations;
 pub mod expressions;
 pub mod initializers;
@@ -30,6 +30,7 @@ pub mod literals;
 pub mod names;
 pub mod oop;
 pub mod pou;
+pub mod sfc;
 pub mod statements;
 pub mod tree;
 pub mod types;
@@ -37,6 +38,7 @@ pub mod values;
 pub mod var_blocks;
 pub mod variables;
 
+use self::configuration::lower_configuration;
 use self::pou::{
     lower_function, lower_function_block, lower_interface, lower_namespace, lower_program,
 };
@@ -89,6 +91,14 @@ pub enum Area {
     /// What a function block declares besides its body: methods and
     /// properties (`oop`).
     Member,
+    /// What a configuration is made of: the configuration, its resources, the
+    /// tasks and the program configurations of a resource, and the
+    /// connections of a program (`configuration`).
+    Configuration,
+    /// What a body written as a sequential function chart is made of: the
+    /// chart, its steps, transitions and actions, and the associations and
+    /// qualifiers of a step (`sfc`).
+    Chart,
 }
 
 /// What lowering does with a kind the tree can hold.
@@ -101,23 +111,13 @@ pub enum Disposition {
     Structural,
     /// Retained text that is not language: lowering ignores it.
     Trivia,
-    /// A node kind whose lowering rule has not been written yet. Asking to
-    /// lower one is a not-implemented diagnostic.
-    Pending,
-}
-
-impl Disposition {
-    /// True when a lowering rule for the kind is still to be written.
-    pub fn is_pending(self) -> bool {
-        self == Disposition::Pending
-    }
 }
 
 /// The disposition of every node kind. There is no wildcard arm: a node kind
 /// added to the syntax declaration fails to compile here until someone decides
 /// how it is lowered.
 fn node_disposition(node: NodeKind) -> Disposition {
-    use Disposition::{Lowered, Pending, Structural};
+    use Disposition::{Lowered, Structural};
     match node {
         // The container the entry point walks.
         NodeKind::SourceFile => Structural,
@@ -223,21 +223,22 @@ fn node_disposition(node: NodeKind) -> Disposition {
         NodeKind::ConfigurationDecl
         | NodeKind::ResourceDecl
         | NodeKind::TaskDecl
-        | NodeKind::TaskInit
-        | NodeKind::TaskInitItem
         | NodeKind::ProgramConfig
         | NodeKind::TaskBinding
-        | NodeKind::ProgramConnection
-        | NodeKind::SfcBody
+        | NodeKind::ProgramConnection => Lowered(Area::Configuration),
+        // The properties of a task, read by the rule of the task.
+        NodeKind::TaskInit | NodeKind::TaskInitItem => Structural,
+        NodeKind::SfcBody
         | NodeKind::InitialStepDecl
         | NodeKind::StepDecl
         | NodeKind::ActionAssociation
         | NodeKind::ActionQualifier
         | NodeKind::ActionDecl
-        | NodeKind::TransitionDecl
-        | NodeKind::TransitionPriority
-        | NodeKind::StepList
-        | NodeKind::TransitionCondition => Pending,
+        | NodeKind::TransitionDecl => Lowered(Area::Chart),
+        // The parts of a transition, read by the rule of the transition.
+        NodeKind::TransitionPriority | NodeKind::StepList | NodeKind::TransitionCondition => {
+            Structural
+        }
     }
 }
 
@@ -254,18 +255,8 @@ pub fn disposition(kind: SyntaxKind) -> Disposition {
     }
 }
 
-/// True when `root` or a node under it is of a kind whose lowering rule has
-/// not been written yet.
-pub fn contains_pending(root: &SyntaxNode) -> bool {
-    root.descendants()
-        .any(|node| disposition(node.kind()).is_pending())
-}
-
-/// The codes of the two compiler-located problems. `Problem` marks them
-/// deprecated so that only the `Diagnostic` constructors build them; tests
-/// compare the codes.
-#[cfg(test)]
-pub(crate) const NOT_IMPLEMENTED: &str = "P9999";
+/// The code of a compiler-located problem. `Problem` marks it deprecated so
+/// that only the `Diagnostic` constructors build it; tests compare the code.
 #[cfg(test)]
 pub(crate) const INTERNAL_ERROR: &str = "P9998";
 
@@ -359,23 +350,13 @@ impl LowerCx {
     }
 
     /// The diagnostic for a node that was asked to be lowered by a rule that
-    /// does not exist: not implemented (P9999) when the node's kind is
-    /// pending, an internal error otherwise (the caller is not the rule's
-    /// owner).
+    /// does not exist: an internal error (the caller is not the rule's owner).
     #[track_caller]
     pub fn unsupported(&self, node: &SyntaxNode) -> Diagnostic {
-        let kind = node.kind();
-        if disposition(kind).is_pending() {
-            Diagnostic::not_implemented(Label::span(
-                self.node_span(node),
-                format!("lowering {kind:?} is not available yet"),
-            ))
-        } else {
-            self.internal_error(
-                node.text_range(),
-                format!("{kind:?} is not lowered by this rule"),
-            )
-        }
+        self.internal_error(
+            node.text_range(),
+            format!("{:?} is not lowered by this rule", node.kind()),
+        )
     }
 }
 
@@ -429,6 +410,10 @@ const ELEMENTS: &[(SyntaxKind, ElementRule)] = &[
     (SyntaxKind::NamespaceDecl, |cx, node| {
         lower_namespace(cx, node).map(|unit| vec![LibraryElementKind::NamespaceDeclaration(unit)])
     }),
+    (SyntaxKind::ConfigurationDecl, |cx, node| {
+        lower_configuration(cx, node)
+            .map(|unit| vec![LibraryElementKind::ConfigurationDeclaration(unit)])
+    }),
 ];
 
 /// Lowers one top-level node to the library elements it writes.
@@ -461,8 +446,8 @@ pub fn lower_elements(
 
 /// Lowers the tree of a whole file to a library.
 ///
-/// Fails with the first error of the parse when it has any, and with a
-/// not-implemented diagnostic at the first declaration that has no rule yet.
+/// Fails with the first error of the parse when it has any, and otherwise with
+/// the first error of a declaration.
 pub fn lower_library(parse: &Parse, file_id: &FileId) -> Result<Library, Diagnostic> {
     if let Some(error) = first_error(parse, file_id) {
         return Err(error);
@@ -595,29 +580,6 @@ mod tests {
     }
 
     #[test]
-    fn contains_pending_when_only_expressions_and_variables_then_false() {
-        for source in [
-            "a + f(b, c := 1, d => e)[1]",
-            "m.run(THIS^.x)",
-            "REF(a) = NULL",
-        ] {
-            let parse = parse_expression(source, &ParseOptions::all());
-            assert!(!contains_pending(&parse.root), "{source}");
-        }
-    }
-
-    #[test]
-    fn contains_pending_when_only_global_variable_blocks_then_false() {
-        let parse = parse_source_file(
-            "VAR_GLOBAL a AT %MW0 : INT; END_VAR
-VAR_GLOBAL b : INT := 1; END_VAR
-",
-            &options(),
-        );
-        assert!(!contains_pending(&parse.root));
-    }
-
-    #[test]
     fn missing_when_node_lacks_a_part_then_internal_error_naming_the_node_and_the_part() {
         let parse = parse_expression("a + b", &options());
         let cx = LowerCx::new(FileId::default());
@@ -632,26 +594,52 @@ VAR_GLOBAL b : INT := 1; END_VAR
     }
 
     #[test]
-    fn disposition_when_node_without_a_rule_yet_then_pending() {
-        assert!(disposition(SyntaxKind::SfcBody).is_pending());
-        assert!(disposition(SyntaxKind::ConfigurationDecl).is_pending());
-        assert!(!disposition(SyntaxKind::AssignStmt).is_pending());
-        assert!(!disposition(SyntaxKind::IntLiteral).is_pending());
-        assert!(!disposition(SyntaxKind::SourceFile).is_pending());
+    fn disposition_when_chart_node_then_lowered_by_the_chart_area_and_when_a_part_of_one_then_structural(
+    ) {
+        for kind in [
+            SyntaxKind::SfcBody,
+            SyntaxKind::InitialStepDecl,
+            SyntaxKind::StepDecl,
+            SyntaxKind::ActionAssociation,
+            SyntaxKind::ActionQualifier,
+            SyntaxKind::ActionDecl,
+            SyntaxKind::TransitionDecl,
+        ] {
+            assert_eq!(
+                disposition(kind),
+                Disposition::Lowered(Area::Chart),
+                "{kind:?}"
+            );
+        }
+        for kind in [
+            SyntaxKind::TransitionPriority,
+            SyntaxKind::StepList,
+            SyntaxKind::TransitionCondition,
+        ] {
+            assert_eq!(disposition(kind), Disposition::Structural, "{kind:?}");
+        }
     }
 
     #[test]
-    fn contains_pending_when_only_literals_and_statements_then_false_and_with_a_declaration_then_true(
+    fn disposition_when_configuration_node_then_lowered_by_the_configuration_area_and_when_a_part_of_one_then_structural(
     ) {
-        let literal = parse_expression("T#5s", &options());
-        assert!(!contains_pending(&literal.root));
-        let statement = parse_statements("x := 1; IF a THEN b := 2; END_IF;", &options());
-        assert!(!contains_pending(&statement.root));
-        let declaration = parse_source_file(
-            "CONFIGURATION c RESOURCE r ON t PROGRAM p : q; END_RESOURCE END_CONFIGURATION\n",
-            &options(),
-        );
-        assert!(contains_pending(&declaration.root));
+        for kind in [
+            SyntaxKind::ConfigurationDecl,
+            SyntaxKind::ResourceDecl,
+            SyntaxKind::TaskDecl,
+            SyntaxKind::ProgramConfig,
+            SyntaxKind::TaskBinding,
+            SyntaxKind::ProgramConnection,
+        ] {
+            assert_eq!(
+                disposition(kind),
+                Disposition::Lowered(Area::Configuration),
+                "{kind:?}"
+            );
+        }
+        for kind in [SyntaxKind::TaskInit, SyntaxKind::TaskInitItem] {
+            assert_eq!(disposition(kind), Disposition::Structural, "{kind:?}");
+        }
     }
 
     #[test]
@@ -703,7 +691,8 @@ VAR_GLOBAL b : INT := 1; END_VAR
     }
 
     #[test]
-    fn unsupported_when_pending_node_then_not_implemented_at_the_node() {
+    fn unsupported_when_node_is_given_to_a_rule_that_does_not_read_it_then_internal_error_at_the_node(
+    ) {
         let parse = parse_source_file(
             "CONFIGURATION c RESOURCE r ON t PROGRAM p : q; END_RESOURCE END_CONFIGURATION\n",
             &options(),
@@ -720,10 +709,9 @@ VAR_GLOBAL b : INT := 1; END_VAR
                 d.primary.location.start,
                 d.primary.location.end
             )),
-            Some((NOT_IMPLEMENTED, 0, 77))
+            Some((INTERNAL_ERROR, 0, 77))
         );
     }
-
     #[test]
     fn unsupported_when_node_with_a_rule_then_internal_error() {
         let parse = parse_expression("5", &options());
@@ -742,13 +730,16 @@ VAR_GLOBAL b : INT := 1; END_VAR
     }
 
     #[test]
-    fn lower_library_when_declaration_then_not_implemented_at_it() {
+    fn lower_library_when_configuration_then_one_configuration_element() {
         let parse = parse_source_file(
             "CONFIGURATION c RESOURCE r ON t PROGRAM p : q; END_RESOURCE END_CONFIGURATION\n",
             &options(),
         );
-        let diagnostic = lower_library(&parse, &FileId::default()).err();
-        assert_eq!(code_of(diagnostic), Some(NOT_IMPLEMENTED.to_string()));
+        let library = lower_library(&parse, &FileId::default());
+        assert!(matches!(
+            library.as_ref().map(|library| &library.elements[..]),
+            Ok([LibraryElementKind::ConfigurationDeclaration(_)])
+        ));
     }
 
     #[test]

@@ -1,17 +1,22 @@
-//! Program organisation units: `PROGRAM`, `FUNCTION`, `FUNCTION_BLOCK`, `INTERFACE`, and the
-//! `NAMESPACE` that groups declarations.
+//! Program organisation units: `PROGRAM`, `FUNCTION`, `FUNCTION_BLOCK`, `INTERFACE`, the
+//! `NAMESPACE` that groups declarations, and the sections every declaration is
+//! read by.
 //!
-//! A unit, a method and a property accessor are all a header followed by
-//! variable blocks, a body and, for a function block, members. [`Sections`]
-//! reads that part for every one of them: `SECTIONS` has a row for each kind
-//! of node that may stand between the header and the closing keyword, and
-//! `HEADER` lists the kinds that are the header's own and are read by the rule
-//! of the declaration. A node of any other kind is reported, so a body that has
-//! no rule yet (a sequential function chart) is never silently dropped.
+//! A unit, a method, a property accessor, a configuration and a resource are
+//! all a header followed by variable blocks and what the declaration holds: a
+//! body and, for a function block, members; resources, tasks and program
+//! configurations for a configuration and a resource. [`Sections`] reads that
+//! part for every one of them: `SECTIONS` has a row for each kind of node that
+//! may stand between the header and the closing keyword, and `HEADER` lists the
+//! kinds that are the header's own and are read by the rule of the declaration.
+//! A node of any other kind is reported, so a part that has no rule is never
+//! silently dropped.
 //!
-//! The variable blocks of a unit are assembled in the order written: the
-//! variables of every block form one list, the edge variables another and the
-//! access paths of a program a third. A body is a row of `BODIES`.
+//! The variable blocks of a declaration are assembled in the order written: the
+//! variables of every block form one list, the edge variables another, the
+//! access paths of a program a third and the initialisations of the instances of
+//! a configuration a fourth. A body is a row of `BODIES`: statements, or a
+//! sequential function chart.
 //!
 //! A return type is written as a name or as a string with a length, and
 //! `RETURN_TYPES` has a row for each. The same table reads the type of a
@@ -20,12 +25,14 @@
 #[cfg(test)]
 mod tests;
 
+use super::configuration::{lower_program_configuration, lower_resource, lower_task};
 use super::names::{lower_name, lower_type_ref};
 use super::oop::{lower_member, lower_oop, lower_type_list, Member};
+use super::sfc::lower_chart;
 use super::statements::lower_statement_list;
 use super::tree::child_of;
 use super::types::lower_string_specification;
-use super::var_blocks::lower_var_block;
+use super::var_blocks::{lower_var_block, InstanceInit};
 use super::{lower_elements, LowerCx};
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode};
 use ironplc_dsl::common::{
@@ -33,6 +40,7 @@ use ironplc_dsl::common::{
     FunctionReturnType, InterfaceDeclaration, NamespaceDeclaration, ProgramAccessDecl,
     ProgramDeclaration, StringType, TypeName, VarDecl,
 };
+use ironplc_dsl::configuration::{ProgramConfiguration, ResourceDeclaration, TaskConfiguration};
 use ironplc_dsl::core::Id;
 use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_dsl::textual::StmtKind;
@@ -50,6 +58,15 @@ pub struct Sections {
     pub body: Option<FunctionBlockBodyKind>,
     /// The methods and properties, in the order written.
     pub members: Vec<Member>,
+    /// The initialisations of the instances of a configuration, in the order
+    /// written.
+    pub instances: Vec<InstanceInit>,
+    /// The resource of a configuration.
+    pub resources: Vec<ResourceDeclaration>,
+    /// The tasks of a resource, in the order written.
+    pub tasks: Vec<TaskConfiguration>,
+    /// The program configurations of a resource, in the order written.
+    pub programs: Vec<ProgramConfiguration>,
 }
 
 /// A rule: reads one section of a unit into its parts.
@@ -60,13 +77,17 @@ type SectionRule = fn(&LowerCx, &SyntaxNode, &mut Sections) -> Result<(), Diagno
 const SECTIONS: &[(K, SectionRule)] = &[
     (K::VarBlock, block),
     (K::StatementList, body),
+    (K::SfcBody, body),
     (K::MethodDecl, member),
     (K::PropertyDecl, member),
+    (K::ResourceDecl, resource),
+    (K::TaskDecl, task),
+    (K::ProgramConfig, program_configuration),
 ];
 
 /// The kinds of node that are part of a declaration's header: its name, its
-/// type, its qualifiers and the types it extends or implements. The rule of the
-/// declaration reads them.
+/// type, its qualifiers, the types it extends or implements and the type of the
+/// processor a resource runs on. The rule of the declaration reads them.
 pub const HEADER: &[K] = &[
     K::Name,
     K::TypeRef,
@@ -74,6 +95,7 @@ pub const HEADER: &[K] = &[
     K::MemberQualifier,
     K::ExtendsClause,
     K::ImplementsClause,
+    K::NameRef,
 ];
 
 /// Adds the variables, edges and access paths of a block.
@@ -82,27 +104,54 @@ fn block(cx: &LowerCx, node: &SyntaxNode, into: &mut Sections) -> Result<(), Dia
     into.variables.extend(block.variables);
     into.edges.extend(block.edges);
     into.access.extend(block.access);
+    into.instances.extend(block.instances);
     Ok(())
 }
 
 /// A rule: builds the body a node writes.
 type BodyRule = fn(&LowerCx, &SyntaxNode) -> Result<FunctionBlockBodyKind, Diagnostic>;
 
-/// The kinds of node that write a body, and the body each is. A kind without a
-/// row has no rule yet and is reported as such.
-const BODIES: &[(K, BodyRule)] = &[(K::StatementList, statements)];
+/// The kinds of node that write a body, and the body each is.
+const BODIES: &[(K, BodyRule)] = &[(K::StatementList, statements), (K::SfcBody, chart)];
 
+/// A list with nothing written in it is no body: the body of an action that
+/// has none is the same body as that of a unit that has none.
 fn statements(cx: &LowerCx, node: &SyntaxNode) -> Result<FunctionBlockBodyKind, Diagnostic> {
+    if node.text_range().is_empty() {
+        return Ok(FunctionBlockBodyKind::empty());
+    }
     lower_statement_list(cx, node).map(FunctionBlockBodyKind::stmts)
 }
 
-/// Sets the body the node writes.
-fn body(cx: &LowerCx, node: &SyntaxNode, into: &mut Sections) -> Result<(), Diagnostic> {
+fn chart(cx: &LowerCx, node: &SyntaxNode) -> Result<FunctionBlockBodyKind, Diagnostic> {
+    lower_chart(cx, node).map(FunctionBlockBodyKind::sfc)
+}
+
+/// The body a node of a kind of `BODIES` writes.
+fn build_body(cx: &LowerCx, node: &SyntaxNode) -> Result<FunctionBlockBodyKind, Diagnostic> {
     let (_, rule) = BODIES
         .iter()
         .find(|(kind, _)| *kind == node.kind())
         .ok_or_else(|| cx.unsupported(node))?;
-    into.body = Some(rule(cx, node)?);
+    rule(cx, node)
+}
+
+/// The body a declaration writes between its header and its closing keyword:
+/// an empty one when it writes none. An action is the one declaration that has
+/// only this part.
+pub fn lower_body(cx: &LowerCx, node: &SyntaxNode) -> Result<FunctionBlockBodyKind, Diagnostic> {
+    match node
+        .children()
+        .find(|child| BODIES.iter().any(|(kind, _)| *kind == child.kind()))
+    {
+        Some(written) => build_body(cx, &written),
+        None => Ok(FunctionBlockBodyKind::empty()),
+    }
+}
+
+/// Sets the body the node writes.
+fn body(cx: &LowerCx, node: &SyntaxNode, into: &mut Sections) -> Result<(), Diagnostic> {
+    into.body = Some(build_body(cx, node)?);
     Ok(())
 }
 
@@ -112,7 +161,30 @@ fn member(cx: &LowerCx, node: &SyntaxNode, into: &mut Sections) -> Result<(), Di
     Ok(())
 }
 
-/// Reads the sections of the unit, method or accessor at `node`.
+/// Adds the resource a node declares.
+fn resource(cx: &LowerCx, node: &SyntaxNode, into: &mut Sections) -> Result<(), Diagnostic> {
+    into.resources.push(lower_resource(cx, node)?);
+    Ok(())
+}
+
+/// Adds the task a node declares.
+fn task(cx: &LowerCx, node: &SyntaxNode, into: &mut Sections) -> Result<(), Diagnostic> {
+    into.tasks.push(lower_task(cx, node)?);
+    Ok(())
+}
+
+/// Adds the program configuration a node declares.
+fn program_configuration(
+    cx: &LowerCx,
+    node: &SyntaxNode,
+    into: &mut Sections,
+) -> Result<(), Diagnostic> {
+    into.programs.push(lower_program_configuration(cx, node)?);
+    Ok(())
+}
+
+/// Reads the sections of the declaration at `node`: a unit, a method, an
+/// accessor, a configuration or a resource.
 pub fn lower_sections(cx: &LowerCx, node: &SyntaxNode) -> Result<Sections, Diagnostic> {
     let mut sections = Sections::default();
     for child in node.children() {

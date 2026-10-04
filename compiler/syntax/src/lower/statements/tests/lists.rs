@@ -200,7 +200,7 @@ fn lower_statement_when_calc_calls_a_method_then_internal_error() {
 }
 
 #[test]
-fn lower_statement_when_node_is_pending_then_not_implemented() {
+fn lower_statement_when_node_is_not_a_statement_then_internal_error() {
     let parse = parse_source_file(
         "CONFIGURATION c RESOURCE r ON t PROGRAM p : q; END_RESOURCE END_CONFIGURATION\n",
         &all(),
@@ -212,7 +212,7 @@ fn lower_statement_when_node_is_pending_then_not_implemented() {
         .expect("a declaration");
     assert_eq!(
         code(lower_statement(&LowerCx::new(file()), &declaration)),
-        Some(NOT_IMPLEMENTED.to_string())
+        Some(INTERNAL_ERROR.to_string())
     );
 }
 

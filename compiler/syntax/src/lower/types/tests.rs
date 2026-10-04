@@ -575,7 +575,7 @@ fn lower_type_declaration_when_not_a_type_declaration_then_internal_error() {
         assert!(result.is_some());
     }
     let error = lower_type_declaration(&cx, &node).expect_err("an error");
-    assert!(error.code == INTERNAL_ERROR || error.code == crate::lower::NOT_IMPLEMENTED);
+    assert_eq!(error.code, INTERNAL_ERROR);
 }
 
 // ---- Blocks.

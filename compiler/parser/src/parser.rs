@@ -393,6 +393,16 @@ pub fn parse_member(tokens: &[Token]) -> Result<ironplc_syntax::lower::oop::Memb
         .map_err(|e| parse_failure(&source, e))
 }
 
+/// Parses the tokens of one sequential function chart, as the grammar's
+/// `sequential_function_chart` rule reads them. Test-only: the oracle the chart
+/// lowering is compared against.
+#[cfg(test)]
+pub fn parse_chart(tokens: &[Token]) -> Result<Vec<Network>, Diagnostic> {
+    let source = Source::new(tokens);
+    plc_parser::sequential_function_chart(&SliceByRef(tokens), &source)
+        .map_err(|e| parse_failure(&source, e))
+}
+
 enum StatementsOrEmpty {
     Statements(Vec<StmtKind>),
     Empty(),

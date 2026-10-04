@@ -239,6 +239,14 @@ pub fn lower_symbolic(cx: &LowerCx, node: &SyntaxNode) -> Result<SymbolicVariabl
             name: lower_name(cx, &base)?,
         }),
         K::SelfRefExpr => SymbolicVariableKind::SelfRef(lower_self_ref(cx, &base)?),
+        // A place a declaration or a connection names by a name, written as an
+        // address.
+        K::DirectAddressExpr => {
+            return Err(cx.syntax_error(
+                base.text_range(),
+                "expected the name of a variable, not an address",
+            ))
+        }
         _ => return Err(cx.unsupported(&base)),
     };
     for link in &links {

@@ -35,10 +35,14 @@ pub enum Unit {
     Member,
     PouFacts,
     MemberFacts,
+    Chart,
+    ChartFacts,
+    Configuration,
+    ConfigurationFacts,
 }
 
 impl Unit {
-    pub const ALL: [Unit; 13] = [
+    pub const ALL: [Unit; 17] = [
         Unit::Literal,
         Unit::Expression,
         Unit::Variable,
@@ -52,6 +56,10 @@ impl Unit {
         Unit::Member,
         Unit::PouFacts,
         Unit::MemberFacts,
+        Unit::Chart,
+        Unit::ChartFacts,
+        Unit::Configuration,
+        Unit::ConfigurationFacts,
     ];
 
     pub fn name(self) -> &'static str {
@@ -69,6 +77,12 @@ impl Unit {
             Unit::Member => "members",
             Unit::PouFacts => "units, parts with comparisons of their own left out",
             Unit::MemberFacts => "members, parts with comparisons of their own left out",
+            Unit::Chart => "charts",
+            Unit::ChartFacts => "charts, parts with comparisons of their own left out",
+            Unit::Configuration => "configurations",
+            Unit::ConfigurationFacts => {
+                "configurations, parts with comparisons of their own left out"
+            }
         }
     }
 
@@ -77,7 +91,11 @@ impl Unit {
     pub fn is_view(self) -> bool {
         matches!(
             self,
-            Unit::VariableBlockFacts | Unit::PouFacts | Unit::MemberFacts
+            Unit::VariableBlockFacts
+                | Unit::PouFacts
+                | Unit::MemberFacts
+                | Unit::ChartFacts
+                | Unit::ConfigurationFacts
         )
     }
 
@@ -101,6 +119,8 @@ impl Unit {
             Unit::Member | Unit::MemberFacts => {
                 disposition(kind) == Disposition::Lowered(Area::Member)
             }
+            Unit::Chart | Unit::ChartFacts => kind == K::SfcBody,
+            Unit::Configuration | Unit::ConfigurationFacts => kind == K::ConfigurationDecl,
         }
     }
 
@@ -211,6 +231,7 @@ const PARTS: &[Part] = &[
     part(K::WaitStmt, Place::Every, Unit::Expression),
     part(K::ThrowStmt, Place::Every, Unit::Expression),
     part(K::StatementList, Place::Every, Unit::Statement),
+    part(K::TransitionCondition, Place::Every, Unit::Expression),
     Part {
         except: Except::Having(&[K::Location, K::EdgeSpec]),
         ..part(
@@ -256,6 +277,10 @@ fn standalone(kind: K) -> impl Iterator<Item = Unit> {
         Unit::Member,
         Unit::PouFacts,
         Unit::MemberFacts,
+        Unit::Chart,
+        Unit::ChartFacts,
+        Unit::Configuration,
+        Unit::ConfigurationFacts,
     ]
     .into_iter()
     .filter(move |unit| unit.holds(kind))
