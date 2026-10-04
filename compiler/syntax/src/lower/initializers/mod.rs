@@ -38,6 +38,7 @@ use ironplc_dsl::common::{
     LateResolvedInitializer, ReferenceInitialValue, ReferenceInitializer, SignedInteger,
     SimpleInitializer, SpecificationKind, StringInitializer, StringType,
     StructInitialValueAssignmentKind, StructureElementInit, StructureInitializationDeclaration,
+    SubrangeInitializer,
 };
 use ironplc_dsl::construct::{
     late_resolved_members, late_resolved_or_enumerated, literal_value_of, resolve_initializer_expr,
@@ -360,15 +361,17 @@ fn enumerated_values(
     ))
 }
 
-/// `x : INT(low .. high)`. The initial value a member may write after it has no
-/// place in the object, so it is checked and not kept.
+/// `x : INT(low .. high) [:= n]`.
 fn subrange(cx: &LowerCx, parts: &Parts) -> Result<InitialValueAssignmentKind, Diagnostic> {
-    if let Some(value) = &parts.value {
-        lower_integer_value(cx, parts, value)?;
-    }
-    Ok(InitialValueAssignmentKind::Subrange(
-        SpecificationKind::Inline(lower_subrange_specification(cx, &parts.spec)?),
-    ))
+    let initial_value = parts
+        .value
+        .as_ref()
+        .map(|value| lower_integer_value(cx, parts, value))
+        .transpose()?;
+    Ok(InitialValueAssignmentKind::Subrange(SubrangeInitializer {
+        spec: SpecificationKind::Inline(lower_subrange_specification(cx, &parts.spec)?),
+        initial_value,
+    }))
 }
 
 /// `x : T`: a type written as a name, which only a later stage can classify.

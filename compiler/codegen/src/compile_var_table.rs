@@ -19,7 +19,7 @@ use ironplc_container::{
 };
 use ironplc_dsl::common::{
     ElementaryTypeName, FunctionReturnType, InitialValueAssignmentKind, SpecificationKind,
-    TypeName, VarDecl,
+    SubrangeInitializer, TypeName, VarDecl,
 };
 use ironplc_dsl::core::{FileId, Id};
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
@@ -188,7 +188,10 @@ fn scalar_entry(ctx: &CompileContext, decl: &VarDecl, id: &Id) -> VarEntry {
 fn declared_type_name(decl: &VarDecl) -> Option<Id> {
     match &decl.initializer {
         InitialValueAssignmentKind::Simple(simple) => Some(simple.type_name.name.clone()),
-        InitialValueAssignmentKind::Subrange(SpecificationKind::Inline(inline)) => {
+        InitialValueAssignmentKind::Subrange(SubrangeInitializer {
+            spec: SpecificationKind::Inline(inline),
+            ..
+        }) => {
             let base: TypeName = inline.type_name.clone().into();
             Some(base.name)
         }

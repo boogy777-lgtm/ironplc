@@ -218,7 +218,7 @@ impl ExprTypeResolver<'_> {
             InitialValueAssignmentKind::EnumeratedType(e) => Some(e.type_name.clone()),
             InitialValueAssignmentKind::FunctionBlock(fb) => Some(fb.type_name.clone()),
             InitialValueAssignmentKind::FunctionBlockCall(fbc) => Some(fbc.type_name.clone()),
-            InitialValueAssignmentKind::Subrange(spec) => match spec {
+            InitialValueAssignmentKind::Subrange(spec) => match &spec.spec {
                 SpecificationKind::Named(tn) => Some(tn.clone()),
                 SpecificationKind::Inline(sr) => Some(TypeName::from(&sr.type_name.to_string())),
             },
@@ -800,9 +800,16 @@ impl Fold<Diagnostic> for ExprTypeResolver<'_> {
                 .type_environment
                 .resolve_elementary_type_name(&simple.type_name)
             {
+                // The elementary name no longer says which alias the
+                // declaration was written against, so the value that alias
+                // declares is carried by the declaration from here on.
+                let initial_value = match self.type_environment.initial_value_of(&node) {
+                    Some(StructInitialValueAssignmentKind::Constant(value)) => Some(value),
+                    _ => simple.initial_value.clone(),
+                };
                 return Ok(InitialValueAssignmentKind::Simple(SimpleInitializer {
                     type_name: resolved,
-                    initial_value: simple.initial_value.clone(),
+                    initial_value,
                 }));
             }
         }

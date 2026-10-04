@@ -47,7 +47,6 @@ const BIND_SPANS: &str = "deliberate behaviour change: an assignment is position
 const POSITIVE_LABEL: &str = "legacy bug not ported: the legacy grammar positions a `CASE` label written with a `+` at its digits alone and one written with a `-` at the sign and the digits; the lowering positions the number as written";
 const LABEL_NAME: &str = "legacy bug not ported: the legacy grammar builds the name of a statement label without its position; the lowering gives it the position of the name like every other name";
 const TYPE_NAME_POSITION: &str = "legacy bug not ported: the legacy grammar builds the name of an elementary type in a declaration (`INT` in `x : INT := 5`, and the base of an alias) without a position, because it converts the keyword to a name instead of recording where it was written; the lowering gives it the position of the keyword like every other type name (pinned by its own test)";
-const INLINE_ENUMERATION_DEFAULT: &str = "legacy bug not ported: the legacy grammar drops the default value of a structure member whose type is an inline enumeration (`a : (X, Y) := X`; a TODO in the rule) and the lowering keeps it, as it does for a variable of that type";
 const LISTED_INPUT: &str = "deliberate behaviour changes listed with their reasons in the statement, body and declaration tables of the verdict comparison: the legacy parser rejects the input and so builds nothing to compare, and the new parser accepts it on purpose";
 
 pub const DIFFERENCES: &[Difference] = &[
@@ -100,14 +99,6 @@ pub const DIFFERENCES: &[Difference] = &[
         },
         reason: TYPE_NAME_POSITION,
         expected: 6498,
-    },
-    Difference {
-        scope: Scope::Origin {
-            nodes: &[SyntaxKind::TypeDecl],
-            parts: &[Component::Dump, Component::Spans],
-        },
-        reason: INLINE_ENUMERATION_DEFAULT,
-        expected: 12,
     },
     Difference {
         scope: Scope::AcceptedOnPurpose,

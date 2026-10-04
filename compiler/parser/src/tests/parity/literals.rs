@@ -941,26 +941,34 @@ fn legacy_declaration_when_elementary_type_then_the_type_name_has_no_position_an
     );
 }
 
-#[test]
-fn legacy_declaration_when_inline_enumeration_member_has_a_default_then_legacy_drops_it() {
-    // The cause named by `INLINE_ENUMERATION_DEFAULT`.
-    let (legacy, lowered) = declaration_both("t : STRUCT a : (X, Y) := X; END_STRUCT");
-    let default = |declaration: Result<DataTypeDeclarationKind, Diagnostic>| match declaration {
-        Ok(DataTypeDeclarationKind::Structure(structure)) => {
-            match structure
-                .elements
-                .into_iter()
-                .next()
-                .map(|member| member.init)
-            {
-                Some(InitialValueAssignmentKind::EnumeratedValues(values)) => {
-                    Some(values.initial_value)
-                }
-                _ => None,
-            }
-        }
+/// The value a structure member declares for itself, whatever the member's
+/// type is spelled as.
+fn member_default(
+    declaration: Result<DataTypeDeclarationKind, Diagnostic>,
+) -> Option<Option<ironplc_dsl::common::StructInitialValueAssignmentKind>> {
+    match declaration {
+        Ok(DataTypeDeclarationKind::Structure(structure)) => structure
+            .elements
+            .into_iter()
+            .next()
+            .map(|member| member.init.stated_value()),
         _ => None,
-    };
-    assert_eq!(default(legacy), Some(None));
-    assert!(matches!(default(lowered), Some(Some(_))));
+    }
+}
+
+#[test]
+fn declaration_when_member_type_is_inline_then_both_parsers_keep_the_default() {
+    for member in ["a : (X, Y) := X", "a : INT(1..10) := 5"] {
+        let (legacy, lowered) = declaration_both(&format!("t : STRUCT {member}; END_STRUCT"));
+        let (legacy, lowered) = (member_default(legacy), member_default(lowered));
+        assert!(
+            matches!(legacy, Some(Some(_))),
+            "{member}: legacy {legacy:?}"
+        );
+        assert_eq!(legacy.is_some(), lowered.is_some(), "{member}");
+        assert!(
+            matches!(lowered, Some(Some(_))),
+            "{member}: lowered {lowered:?}"
+        );
+    }
 }

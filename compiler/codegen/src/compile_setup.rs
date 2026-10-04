@@ -257,7 +257,7 @@ pub(crate) fn assign_variables(
                 InitialValueAssignmentKind::Subrange(ref spec) => {
                     // Subrange variable (e.g., x : MY_RANGE or x : INT (1..100))
                     // Resolve VarTypeInfo from the subrange's base type.
-                    let subrange_type = match spec {
+                    let subrange_type = match &spec.spec {
                         SpecificationKind::Named(type_name) => {
                             types.resolve_subrange_type(type_name)
                         }
@@ -273,7 +273,7 @@ pub(crate) fn assign_variables(
                             ctx.var_types.insert(id.clone(), type_info);
                         }
                     }
-                    let name = match spec {
+                    let name = match &spec.spec {
                         SpecificationKind::Named(tn) => tn.to_string().to_uppercase(),
                         SpecificationKind::Inline(inline) => {
                             format!("{}", inline.type_name)
@@ -413,7 +413,7 @@ pub(crate) fn emit_initial_values(
     for decl in declarations {
         if let Some(id) = decl.identifier.symbolic_id() {
             match &decl.initializer {
-                InitialValueAssignmentKind::Simple(simple) => {
+                InitialValueAssignmentKind::Simple(_) => {
                     // The global_var_decl parser produces Simple for all
                     // named types, including structs.  If the variable was
                     // registered as a struct during assign_variables,
@@ -426,14 +426,20 @@ pub(crate) fn emit_initial_values(
                             &[],
                             &decl.identifier.span(),
                         )?;
-                    } else if let Some(constant) = &simple.initial_value {
+                    } else if let Some(stated) = _types.initial_value_of(&decl.initializer) {
                         let var_index = ctx.var_index(id)?;
                         let type_info = ctx.var_type_info(id);
                         let op_type = type_info
                             .map(|ti| (ti.op_width, ti.signedness))
                             .unwrap_or(DEFAULT_OP_TYPE);
 
-                        compile_constant(emitter, ctx, constant, op_type)?;
+                        crate::compile_struct_init::emit_scalar_initial_value(
+                            emitter,
+                            ctx,
+                            op_type,
+                            Some(&stated),
+                            0,
+                        )?;
 
                         if let Some(ti) = type_info {
                             emit_truncation(emitter, ti);
@@ -483,10 +489,8 @@ pub(crate) fn emit_initial_values(
                 }
                 InitialValueAssignmentKind::Array(array_init) => {
                     // An array of structures holds the data region offset in
-                    // its variable slot, like a structure variable does. Its
-                    // element field values are left zeroed, matching what an
-                    // array-of-struct field of a structure gets today; only
-                    // the headers of its STRING fields are written.
+                    // its variable slot, like a structure variable does, and
+                    // each element starts from what its members declare.
                     if let Some(struct_array_info) = ctx.struct_array_vars.get(id) {
                         if !array_init.initial_values.is_empty() {
                             return Err(Diagnostic::not_implemented(Label::span(
@@ -494,19 +498,11 @@ pub(crate) fn emit_initial_values(
                                 "Initial values for an array of structures",
                             )));
                         }
-                        let data_offset = struct_array_info.data_offset;
-                        let var_index = struct_array_info.var_index;
-                        let scratch_var_index = struct_array_info.scratch_var_index;
-                        let element_strings = struct_array_info.element_strings.clone();
-                        let offset_const = ctx.add_i32_constant(data_offset as i32);
-                        emitter.emit_load_const_i32(offset_const);
-                        emitter.emit_store_var_i32(var_index);
-                        crate::compile_struct_init::initialize_element_strings(
+                        let struct_array_info = struct_array_info.clone();
+                        crate::compile_struct_init::initialize_struct_array_variable(
                             emitter,
                             ctx,
-                            data_offset,
-                            scratch_var_index,
-                            &element_strings,
+                            &struct_array_info,
                             &decl.identifier.span(),
                         )?;
                     } else if let Some(array_info) = ctx.array_vars.get(id) {
@@ -614,8 +610,25 @@ pub(crate) fn emit_initial_values(
                     emitter.emit_load_const_i32(pool_index);
                     emit_store_var(emitter, var_index, op_type);
                 }
-                InitialValueAssignmentKind::Subrange(ref spec) => {
-                    // Initialize subrange variable to its lower bound (min_value)
+                InitialValueAssignmentKind::EnumeratedValues(_) => {
+                    // An inline enumeration starts at the value it states,
+                    // else at its first value, which is zero.
+                    if let Some(stated) = _types.initial_value_of(&decl.initializer) {
+                        let var_index = ctx.var_index(id)?;
+                        crate::compile_struct_init::emit_scalar_initial_value(
+                            emitter,
+                            ctx,
+                            DEFAULT_OP_TYPE,
+                            Some(&stated),
+                            0,
+                        )?;
+                        emit_store_var(emitter, var_index, DEFAULT_OP_TYPE);
+                    }
+                }
+                InitialValueAssignmentKind::Subrange(ref subrange) => {
+                    let spec = &subrange.spec;
+                    // A subrange variable starts at its stated value, else its
+                    // lower bound (min_value)
                     // per IEC 61131-3 §2.4.3.1 (default is the "leftmost value").
                     let var_index = ctx.var_index(id)?;
                     let type_info = ctx.var_type_info(id);
@@ -648,20 +661,14 @@ pub(crate) fn emit_initial_values(
                     };
 
                     if let Some(min_val) = min_value {
-                        match op_type.0 {
-                            OpWidth::W32 => {
-                                let pool_index = ctx.add_i32_constant(min_val as i32);
-                                emitter.emit_load_const_i32(pool_index);
-                            }
-                            OpWidth::W64 => {
-                                let pool_index = ctx.add_i64_constant(min_val as i64);
-                                emitter.emit_load_const_i64(pool_index);
-                            }
-                            _ => {
-                                let pool_index = ctx.add_i32_constant(min_val as i32);
-                                emitter.emit_load_const_i32(pool_index);
-                            }
-                        }
+                        let stated = _types.initial_value_of(&decl.initializer);
+                        crate::compile_struct_init::emit_scalar_initial_value(
+                            emitter,
+                            ctx,
+                            op_type,
+                            stated.as_ref(),
+                            min_val,
+                        )?;
 
                         if let Some(ti) = type_info {
                             emit_truncation(emitter, ti);

@@ -72,13 +72,18 @@ impl TypeEnvironment {
                         },
                     }),
                 ),
+                // A structure alias keeps the name it declares, with the structure
+                // it names as its base, so it stays a type of its own.
                 IntermediateType::Structure { fields: _ } => {
-                    Ok(DataTypeDeclarationKind::StructureInitialization(
-                        StructureInitializationDeclaration {
-                            type_name: node.base_type_name,
-                            elements_init: vec![],
-                        },
-                    ))
+                    Ok(DataTypeDeclarationKind::Simple(SimpleDeclaration {
+                        type_name: node.data_type_name,
+                        spec_and_init: InitialValueAssignmentKind::Structure(
+                            StructureInitializationDeclaration {
+                                type_name: node.base_type_name,
+                                elements_init: vec![],
+                            },
+                        ),
+                    }))
                 }
                 IntermediateType::Array { .. } => {
                     Ok(DataTypeDeclarationKind::Array(ArrayDeclaration {
@@ -216,7 +221,7 @@ impl Fold<Diagnostic> for TypeEnvironment {
             }
             InitialValueAssignmentKind::Subrange(spec) => {
                 // Handle subrange specifications like: TYPE MY_RANGE : INT (1..100); END_TYPE
-                let result = subrange::try_from(&node.type_name, spec, self)?;
+                let result = subrange::try_from(&node.type_name, &spec.spec, self)?;
                 match result {
                     subrange::IntermediateResult::Type(attributes) => {
                         self.insert_type(&node.type_name, attributes);
@@ -263,6 +268,9 @@ impl Fold<Diagnostic> for TypeEnvironment {
                 return Err(Diagnostic::internal_error());
             }
         }
+        // A declared default is part of the type: a declaration against the
+        // type that states no value starts at it.
+        self.set_initial_value(&node.type_name, node.spec_and_init.stated_value());
 
         Ok(node)
     }
@@ -342,6 +350,14 @@ impl Fold<Diagnostic> for TypeEnvironment {
             }
         }
 
+        self.set_initial_value(
+            &node.type_name,
+            InitialValueAssignmentKind::Subrange(SubrangeInitializer {
+                spec: node.spec.clone(),
+                initial_value: node.default.clone(),
+            })
+            .stated_value(),
+        );
         Ok(node)
     }
 
@@ -468,7 +484,7 @@ impl Fold<Diagnostic> for TypeEnvironment {
                     field_type,
                     offset: aligned_offset,
                     var_type: Some(var_type),
-                    has_default: false,
+                    initial_value: None,
                 });
 
                 current_offset = aligned_offset + size;
@@ -521,23 +537,7 @@ impl Fold<Diagnostic> for TypeEnvironment {
         // because this will change the type of the declaration.
         match node {
             DataTypeDeclarationKind::LateBound(ref lb) => {
-                // For structure aliases, we need to insert the alias directly here
-                // because StructureInitializationDeclaration doesn't have a field
-                // for the new type name being declared.
-                let existing = self.get(&lb.base_type_name);
-                if let Some(existing) = existing {
-                    if matches!(existing.representation, IntermediateType::Structure { .. }) {
-                        // Insert the alias directly and return the transformed declaration
-                        self.insert_alias(&lb.data_type_name, &lb.base_type_name)?;
-                        return Ok(DataTypeDeclarationKind::StructureInitialization(
-                            StructureInitializationDeclaration {
-                                type_name: lb.base_type_name.clone(),
-                                elements_init: vec![],
-                            },
-                        ));
-                    }
-                }
-                // For non-structure types, use the existing transform mechanism
+                // The transformed declaration declares the alias when it is folded.
                 let result = self.transform_late_bound_declaration(lb.clone())?;
                 let result = result.recurse_fold(self)?;
                 Ok(result)

@@ -1698,6 +1698,30 @@ impl SubrangeSpecificationKind {
     }
 }
 
+/// A declaration against a subrange, with the initial value it may state.
+///
+/// A named subrange type states its initial value as a [`SimpleInitializer`]
+/// does; this is the declaration of an inline subrange (`INT(1..10) := 5`),
+/// which has no type name to carry one.
+///
+/// See section 2.3.3.1.
+#[derive(Clone, Debug, PartialEq, Recurse)]
+pub struct SubrangeInitializer {
+    pub spec: SubrangeSpecificationKind,
+    /// The value the declaration starts at. When absent, the lower bound.
+    pub initial_value: Option<SignedInteger>,
+}
+
+impl SubrangeInitializer {
+    /// A declaration against `spec` that states no initial value.
+    pub fn uninitialized(spec: SubrangeSpecificationKind) -> Self {
+        Self {
+            spec,
+            initial_value: None,
+        }
+    }
+}
+
 /// The specification for a subrange. The specification restricts an integer
 /// type to a subset of the integer range.
 ///
@@ -2737,7 +2761,7 @@ pub enum InitialValueAssignmentKind {
     /// `init` sets the instance's own member values -- see
     /// [`FunctionBlockCallInitializer`].
     FunctionBlockCall(FunctionBlockCallInitializer),
-    Subrange(SubrangeSpecificationKind),
+    Subrange(SubrangeInitializer),
     Structure(StructureInitializationDeclaration),
     Array(ArrayInitialValueAssignment),
     /// CODESYS parameter-list type (`PARAMS(n) OF T`); see
@@ -2814,8 +2838,8 @@ impl InitialValueAssignmentKind {
             InitialValueAssignmentKind::FunctionBlockCall(function_block_call_initializer) => {
                 TypeReference::Named(function_block_call_initializer.type_name.clone())
             }
-            InitialValueAssignmentKind::Subrange(subrange_specification_kind) => {
-                match subrange_specification_kind {
+            InitialValueAssignmentKind::Subrange(subrange_initializer) => {
+                match &subrange_initializer.spec {
                     SpecificationKind::Inline(_subrange_specification) => TypeReference::Inline,
                     SpecificationKind::Named(type_name) => TypeReference::Named(type_name.clone()),
                 }
@@ -2854,13 +2878,55 @@ impl InitialValueAssignmentKind {
             InitialValueAssignmentKind::Array(arr) => !arr.initial_values.is_empty(),
             InitialValueAssignmentKind::Structure(st) => !st.elements_init.is_empty(),
             InitialValueAssignmentKind::Reference(re) => re.initial_value.is_some(),
+            InitialValueAssignmentKind::Subrange(sr) => sr.initial_value.is_some(),
             InitialValueAssignmentKind::None(_)
             | InitialValueAssignmentKind::FunctionBlock(_)
             | InitialValueAssignmentKind::FunctionBlockCall(_)
-            | InitialValueAssignmentKind::Subrange(_)
             | InitialValueAssignmentKind::Params(_)
             | InitialValueAssignmentKind::LateResolvedType(_)
             | InitialValueAssignmentKind::SimpleExpr(_) => false,
+        }
+    }
+
+    /// The value the declaration states, in the form a member initializer or
+    /// a storage location takes it: `None` when it states none (the type's
+    /// own default then applies).
+    ///
+    /// This is the one place that reads a declared value out of the
+    /// declaration kinds, so a structure member and a variable agree on what
+    /// "declared initial value" means.
+    pub fn stated_value(&self) -> Option<StructInitialValueAssignmentKind> {
+        match self {
+            InitialValueAssignmentKind::Simple(si) => si
+                .initial_value
+                .clone()
+                .map(StructInitialValueAssignmentKind::Constant),
+            InitialValueAssignmentKind::String(si) => si.initial_value.clone().map(|lit| {
+                StructInitialValueAssignmentKind::Constant(ConstantKind::CharacterString(lit))
+            }),
+            InitialValueAssignmentKind::Subrange(sr) => sr.initial_value.clone().map(|value| {
+                StructInitialValueAssignmentKind::Constant(ConstantKind::IntegerLiteral(
+                    IntegerLiteral {
+                        value,
+                        data_type: None,
+                    },
+                ))
+            }),
+            InitialValueAssignmentKind::EnumeratedValues(ev) => ev
+                .initial_value
+                .clone()
+                .map(StructInitialValueAssignmentKind::EnumeratedValue),
+            InitialValueAssignmentKind::EnumeratedType(et) => et
+                .initial_value
+                .clone()
+                .map(StructInitialValueAssignmentKind::EnumeratedValue),
+            InitialValueAssignmentKind::Array(arr) if !arr.initial_values.is_empty() => Some(
+                StructInitialValueAssignmentKind::Array(arr.initial_values.clone()),
+            ),
+            InitialValueAssignmentKind::Structure(st) if !st.elements_init.is_empty() => Some(
+                StructInitialValueAssignmentKind::Structure(st.elements_init.clone()),
+            ),
+            _ => None,
         }
     }
 

@@ -44,6 +44,7 @@ TYPE
       NAME : VAL_TYPE := INIT_VAL ;
       ARR_RANGE_ENUM : ARRAY [ 2.. 4 ] OF CUSTOM ;
       LIMIT_RANGE : UINT ( 0.. 3 ) ;
+      LIMIT_RANGE_DEFAULT : UINT ( 0.. 3 ) := 1 ;
    END_STRUCT ;
 END_TYPE
 TYPE

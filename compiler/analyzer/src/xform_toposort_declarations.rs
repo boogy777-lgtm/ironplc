@@ -604,7 +604,14 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
             Some(from) => {
                 match node {
                     InitialValueAssignmentKind::None(_) => {}
-                    InitialValueAssignmentKind::Simple(_) => {}
+                    // A simple type name may name a user-defined alias (`a : R := 5`),
+                    // which must be in the type environment before this declaration
+                    // is resolved, like any other type this declaration refers to.
+                    InitialValueAssignmentKind::Simple(simple) => {
+                        let from = self.declarations.add_node(from);
+                        let to = self.declarations.add_node(&simple.type_name.name);
+                        self.declarations.graph.add_edge(to, from, ());
+                    }
                     InitialValueAssignmentKind::String(_) => {}
                     InitialValueAssignmentKind::EnumeratedValues(_) => {}
                     InitialValueAssignmentKind::EnumeratedType(enum_init) => {
@@ -682,10 +689,13 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
                         let to = self.declarations.add_node(&lrt.name);
                         self.declarations.graph.add_edge(to, from, ());
                     }
-                    InitialValueAssignmentKind::SimpleExpr(_) => {
-                        // References a variable/constant by name in
-                        // expression context, not a type — no declaration
-                        // ordering edge needed.
+                    InitialValueAssignmentKind::SimpleExpr(simple) => {
+                        // The expression references a variable or constant by name,
+                        // which needs no ordering edge; the declared type does, as
+                        // for a literal initializer.
+                        let from = self.declarations.add_node(from);
+                        let to = self.declarations.add_node(&simple.type_name.name);
+                        self.declarations.graph.add_edge(to, from, ());
                     }
                 }
             }
