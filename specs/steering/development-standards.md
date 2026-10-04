@@ -213,7 +213,8 @@ A plan document should include:
 - **Architecture** — brief summary of the technical approach
 - **Prefactoring** — the simplifications to make *before* adding the new
   behaviour, or an explicit statement that none is needed and why (see
-  [Prefactoring](#prefactoring))
+  [Prefactoring](#prefactoring)) + mechanism extended || new invariant
+  ([N+1](#mechanisms-not-patches-n1))
 - **Design doc reference** — link to `specs/design/` doc if one exists
 - **File map** — which files will be created or modified
 - **Tasks** — ordered steps with checkboxes (`- [ ]`) for tracking progress, grouped by the prefactor or core change PR that delivers them
@@ -227,8 +228,70 @@ existing code so the new behaviour drops in, then add it. It is the opposite
 order from the more familiar "make it work, then clean it up" — and it is the
 order this project uses.
 
-Every change **must** start by looking for related prefactoring opportunities t
+Every change **must** start by looking for related prefactoring opportunities to
 prevent complexity creep and avoid the need for premature abstractions.
+
+#### Mechanisms, not patches (N+1)
+
+```
+directive := build mechanisms && !patches; N+1 test checks directive
+
+# terms (one meaning each)
+class(X)      := behaviors answering one question; answers differ only by data || impl(contract(X))
+variant(v, X) := v in X
+mechanism(X)  := shared code that processes every v in X
+shared(code)  := code used by > 1 variant
+truth(X)      := the single declaration of all v in X
+contract(X)   := interface between mechanism(X) and every v; names no v && no impl
+capability(v) := data that describes what v does
+identity(v)   := name || kind || type of v
+layer(L)      := one stage that v crosses
+row(e)        := e maps one v -> its data || its handler
+dispatch(m)   := match, 1 arm per v, !_ arm; each arm is row
+vbranch(b)    := b in shared && special logic for some v && default path for others
+dep(l)        := l outside files(v) && l must change on add(v)
+guard(l)      := test || compiler check that fails if v missing in l; dispatch -> guard
+patch(p)      := (logic for one v outside mechanism) || (vbranch inside mechanism)
+
+# classify (before code)
+same_question(req, X)      -> variant(req, X) && extend mechanism(X) via data|config|schema|impl(contract(X))
+add(if|flag|pipeline|exception_path) for one v -> forbidden; except row(flag)
+!same_question(req, any X) -> new invariant -> new mechanism && invariant in plan|PR
+count(vbranch, X) >= 1     -> replace by mechanism before add(v)
+
+# mechanism shape
+shared code reads capability(v) && !identity(v)
+v1 uses v2 -> via contract(X) only && !impl(v2)
+replace impl behind contract(X) -> contract(X) unchanged
+registry(X) -> derived from declarations in files(v) (v registers itself) || guard
+same logic in files(v1) && files(v2) -> move to mechanism(X)
+boundary(v) on layer L -> files(v) on every layer v crosses
+boundary(v) on L && 1 switch over v on L+-1 -> forbidden
+
+# N+1 test: add v_(N+1) to X
+require dM == 0 && dK == 0 && dC == 0
+  M := count(mechanism(X)); K := count(vbranch in shared)
+  C := count(dep(l) && !derived(l) && !guard(l))
+violated -> prefactor first || declared patch
+K: add row && !vbranch; logic common to all v -> shared; data+logic of v -> rows(v) + files(v)
+C: dep(l) -> derive(l, truth(X)) || guard(l); derive first
+   mechanism replaces checklist step -> delete step in same PR
+removal(v): changes subset of rows(v) + files(v); else patch(v)
+
+# declared patch
+patch allowed iff redesign >> task
+patch -> PR names patch + missing mechanism + condition that triggers it
+patch && !in PR -> forbidden
+
+# instances (IronPLC) -- examples of the generic rules above
+X = dialects:        truth = define_compiler_options! (each flag lists its dialects)
+                     capability = CompilerOptions flags|policies; identity = Dialect
+                     pipeline (parser, analyzer, codegen, VM) reads capability only
+                     Dialect -> CompilerOptions at edges (CLI, LSP, MCP, playground) via from_dialect
+                     LSP|MCP|playground derived from FEATURE_DESCRIPTORS
+                     clap FileArgs !derivable -> guard = completeness test in ironplc-cli/bin/main.rs
+X = other classes:   language extensions, behavior policies, problem codes, opcodes, AST node kinds
+```
 
 #### Signals that a change needs prefactoring
 
@@ -245,6 +308,7 @@ means stop and reshape first:
   [compiler-standards.md](compiler-standards.md#code-organization)) once the change
   lands
 - A similar bug could occur rather than being prevented at compile time
+- violates [N+1](#mechanisms-not-patches-n1)
 
 #### How to prefactor
 
