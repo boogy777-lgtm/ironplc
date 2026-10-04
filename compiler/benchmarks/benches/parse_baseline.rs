@@ -1,8 +1,9 @@
 //! Parse-only baseline: cold and warm timings plus allocation counts.
 //!
 //! Drives `tokenize_program` and `parse_program` from `ironplc-parser`, and
-//! `lex` and `parse_source_file` from `ironplc-syntax` (the lossless CST
-//! path), over the shared corpus (`ironplc_benchmarks::corpus`) and prints a
+//! `lex`, `parse_source_file` and `lower_library` from `ironplc-syntax` (the
+//! lossless CST path and its lowering to the objects the legacy parser builds),
+//! over the shared corpus (`ironplc_benchmarks::corpus`) and prints a
 //! Markdown report. Both paths are measured by the same helpers so their rows
 //! are directly comparable. Allocation counts come from `stats_alloc` installed as this
 //! binary's global allocator, which is why this is a separate bench target
@@ -30,7 +31,7 @@ use ironplc_benchmarks::corpus::{corpus_dir, load_corpus};
 use ironplc_dsl::core::FileId;
 use ironplc_parser::options::CompilerOptions;
 use ironplc_parser::{parse_program, tokenize_program};
-use ironplc_syntax::{lexer::lex, parse_source_file, ParseOptions};
+use ironplc_syntax::{lexer::lex, lower::lower_library, parse_source_file, ParseOptions};
 use stats_alloc::{Region, StatsAlloc, INSTRUMENTED_SYSTEM};
 use std::alloc::System;
 use std::hint::black_box;
@@ -205,6 +206,13 @@ fn main() {
         let parse = measure_row(repeats, || parse_program(&file.source, &file_id, &options));
         let cst_lex = measure_row(repeats, || lex(&file.source));
         let cst_parse = measure_row(repeats, || parse_source_file(&file.source, &cst_options));
+        // The CST path as a consumer runs it: parse, then lower what parsed. A
+        // file the parse rejects is not lowered, as the legacy path stops at
+        // its first error.
+        let cst_lower = measure_row(repeats, || {
+            let parse = parse_source_file(&file.source, &cst_options);
+            lower_library(&parse, &file_id)
+        });
         rows.push(FileRow {
             file,
             tokens,
@@ -215,6 +223,7 @@ fn main() {
             cst_errors,
             cst_lex,
             cst_parse,
+            cst_lower,
         });
     }
 
@@ -222,6 +231,8 @@ fn main() {
     print_totals("parse", &rows, |row| &row.parse);
     print_totals("cst lex", &rows, |row| &row.cst_lex);
     print_totals("cst parse", &rows, |row| &row.cst_parse);
+    print_totals("cst parse + lower", &rows, |row| &row.cst_lower);
+    print_ratios(&rows);
     println!();
     println!("| file | bytes | tokens | tok cold us | tok cold allocs | tok warm med us | parse cold us | parse cold allocs | parse cold KiB | parse warm med us | parse warm allocs | status |");
     println!("|---|---|---|---|---|---|---|---|---|---|---|---|");
@@ -244,11 +255,11 @@ fn main() {
     }
     println!();
     println!("cst (ironplc-syntax lex and parse_source_file, same corpus and method):");
-    println!("| file | bytes | cst tokens | lex cold us | lex cold allocs | lex warm med us | cst parse cold us | cst parse cold allocs | cst parse cold KiB | cst parse warm med us | cst parse warm allocs | cst errors | parse warm ratio | parse allocs ratio |");
-    println!("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
+    println!("| file | bytes | cst tokens | lex cold us | lex cold allocs | lex warm med us | cst parse cold us | cst parse cold allocs | cst parse cold KiB | cst parse warm med us | cst parse warm allocs | cst errors | parse warm ratio | parse allocs ratio | parse + lower warm med us | parse + lower warm allocs | parse + lower warm ratio | parse + lower allocs ratio |");
+    println!("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
     for row in &rows {
         println!(
-            "| {} | {} | {} | {:.1} | {} | {:.1} | {:.1} | {} | {:.1} | {:.1} | {} | {} | {:.2} | {:.2} |",
+            "| {} | {} | {} | {:.1} | {} | {:.1} | {:.1} | {} | {:.1} | {:.1} | {} | {} | {:.2} | {:.2} | {:.1} | {} | {:.2} | {:.2} |",
             row.file.name,
             row.file.source.len(),
             row.cst_tokens,
@@ -266,6 +277,13 @@ fn main() {
                 row.cst_parse.cold.allocations as f64,
                 row.parse.cold.allocations as f64
             ),
+            row.cst_lower.warm_micros,
+            row.cst_lower.warm_allocations,
+            ratio(row.cst_lower.warm_micros, row.parse.warm_micros),
+            ratio(
+                row.cst_lower.warm_allocations as f64,
+                row.parse.warm_allocations as f64
+            ),
         );
     }
 }
@@ -282,6 +300,32 @@ struct FileRow<'a> {
     cst_errors: usize,
     cst_lex: Row,
     cst_parse: Row,
+    cst_lower: Row,
+}
+
+/// Prints the CST path (parse, then lower) against the legacy parse over one
+/// corpus pass: the warm-median sum, and the allocations of a warm call, summed.
+fn print_ratios<'a>(rows: &[FileRow<'a>]) {
+    // The warm-median sum and the warm allocations, over the corpus, of the row
+    // `select` picks.
+    let sums = |select: &dyn for<'r> Fn(&'r FileRow<'a>) -> &'r Row| -> (f64, f64) {
+        (
+            rows.iter().map(|row| select(row).warm_micros).sum(),
+            rows.iter()
+                .map(|row| select(row).warm_allocations as f64)
+                .sum(),
+        )
+    };
+    let legacy = sums(&|row| &row.parse);
+    let cst = sums(&|row| &row.cst_parse);
+    let lowered = sums(&|row| &row.cst_lower);
+    println!(
+        "cst parse + lower against legacy parse (one pass): warm-median ratio {:.2}, warm allocations ratio {:.2}; cst parse alone: warm-median ratio {:.2}, warm allocations ratio {:.2}",
+        ratio(lowered.0, legacy.0),
+        ratio(lowered.1, legacy.1),
+        ratio(cst.0, legacy.0),
+        ratio(cst.1, legacy.1),
+    );
 }
 
 fn ratio(numerator: f64, denominator: f64) -> f64 {
