@@ -3,6 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+pub mod corpus;
 pub mod fixtures;
 pub mod nesting;
 

@@ -2,6 +2,7 @@
 //! diagnostics of the new parser.
 
 use super::legacy::{rejection, Preset};
+use super::Reason;
 use ironplc_dsl::core::FileId;
 use ironplc_syntax::parse_source_file;
 
@@ -14,7 +15,7 @@ pub struct CodeException {
     pub preset: Option<&'static str>,
     /// The code the legacy parser reports.
     pub legacy_code: &'static str,
-    pub reason: &'static str,
+    pub reason: Reason,
 }
 
 impl CodeException {

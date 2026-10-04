@@ -171,10 +171,23 @@ fn lower_array_when_element_is_a_reference_then_the_keyword_and_the_type_it_poin
 }
 
 #[test]
-fn lower_array_when_element_is_a_reference_to_an_array_then_syntax_error_at_the_element() {
-    let error = rejection("ARRAY[1..2] OF REF_TO ARRAY[1..2] OF INT");
-    assert_eq!(error.code, Problem::SyntaxError.code());
-    assert!(error.primary.message.contains("element of an array"));
+fn parse_array_when_element_is_a_reference_to_an_array_then_the_error_is_at_the_array() {
+    // The object holds an array element as a name or a string, so the grammar
+    // does not offer an array as the target of a reference element.
+    let source = "TYPE t : ARRAY[1..2] OF REF_TO ARRAY[1..2] OF INT; END_TYPE";
+    let parse = parse_source_file(source, &ParseOptions::all());
+    let ranges: Vec<_> = parse
+        .errors
+        .iter()
+        .map(|error| {
+            (
+                usize::from(error.range.start()),
+                usize::from(error.range.end()),
+            )
+        })
+        .collect();
+    assert_eq!(ranges, vec![(31, 36)]);
+    assert_eq!(parse.root.text().to_string(), source);
 }
 
 #[test]

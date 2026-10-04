@@ -38,6 +38,7 @@ use ironplc_dsl::common::{
 use ironplc_dsl::configuration::{Direction, FunctionBlockInit, LocatedVarInit};
 use ironplc_dsl::core::Id;
 use ironplc_dsl::diagnostic::Diagnostic;
+use rowan::TextRange;
 
 /// The initialisation of one instance in a configuration: a function block
 /// given the values of its members, or a variable given a location or a
@@ -252,8 +253,9 @@ fn function_block_init(cx: &LowerCx, parts: &Parts) -> Result<InstanceInit, Diag
         program_name,
         fb_path,
         // The path names the instance as a whole; no part of the text is the
-        // name of the block alone.
-        fb_name: Id::from(""),
+        // name of the block alone. The placeholder is empty and positioned at the
+        // start of the file, in the file, like every other span of the library.
+        fb_name: Id::from("").with_position(cx.span(TextRange::empty(0.into()))),
         type_name: parts.base_name(cx)?,
         initializer: lower_struct_elements(cx, parts.value(cx)?)?,
     })))

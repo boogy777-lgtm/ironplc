@@ -4,7 +4,7 @@
 //! rejects: parity means the same verdict, so the rejected ones matter as
 //! much as the accepted ones.
 
-use super::{Basis, Exception, Kind};
+use super::{Basis, Class, Exception, Kind, Reason};
 
 pub const STATEMENTS: &[&str] = &[
     // Empty forms.
@@ -584,22 +584,17 @@ pub const EXPRESSIONS: &[&str] = &[
 // listed difference that no longer exists.
 // ---------------------------------------------------------------------------
 
-const NO_TRAILING_TRIVIA: &str = "the legacy fragment entry does not consume trivia after the last statement (a trailing comment or pragma); inside a POU the same text is accepted";
-const NO_LEADING_TRIVIA: &str = "the legacy fragment entry skips leading whitespace but not a leading comment or pragma; inside a POU the same text is accepted";
-const NEEDS_ONE_ITEM: &str = "the legacy statement_list rule needs one item, so a fragment of only a comment is rejected; inside a POU an empty body is accepted";
-const NO_TERMINATOR_AT_END: &str = "the legacy pipeline inserts the missing `;` only before a following token, so one missing at the very end of the fragment is rejected; inside a POU a token follows";
-const SECOND_END_KEYWORD: &str = "the legacy terminator insertion handles an END_* keyword that directly follows another END_* keyword without re-arming itself, so the second one gets no `;` when the source omits it; the new parser makes the `;` optional after every END_* keyword";
-const MARKER_AFTER_STATEMENT: &str = "the legacy grammar accepts __BEGIN_IMPLEMENTATION only where the previous list item left no trivia unconsumed, so a marker after a statement and a space is rejected; the new parser accepts the marker as a list item anywhere";
-const LONE_CR: &str = "a lone CR is a line break in the lossless lexer (old Mac line endings); the legacy lexer reports it as an unexpected token";
-const OSCAT_SEVERAL_PAIRS: &str = "the legacy pre-pass blanks only the first ranged-comment marker pair of a file (and none when the first marker is named END_*), so the body of a later pair is lexed as code and rejected when it holds text that is not tokens; the new parser makes every well-formed pair a region";
-const PRAGMA_CONTENT: &str = "the legacy pipeline tokenises the inside of a pragma and rejects a character it does not know; the CST keeps a pragma as one trivia token and does not examine its text";
+const NO_TRAILING_TRIVIA: Reason = Reason::new(Class::LegacyDefect, "the legacy fragment entry does not consume trivia after the last statement (a trailing comment or pragma); inside a POU the same text is accepted");
+const NO_LEADING_TRIVIA: Reason = Reason::new(Class::LegacyDefect, "the legacy fragment entry skips leading whitespace but not a leading comment or pragma; inside a POU the same text is accepted");
+const NEEDS_ONE_ITEM: Reason = Reason::new(Class::LegacyDefect, "the legacy statement_list rule needs one item, so a fragment of only a comment is rejected; inside a POU an empty body is accepted");
+const NO_TERMINATOR_AT_END: Reason = Reason::new(Class::LegacyDefect, "the legacy pipeline inserts the missing `;` only before a following token, so one missing at the very end of the fragment is rejected; inside a POU a token follows");
+const SECOND_END_KEYWORD: Reason = Reason::new(Class::OwnerDecided, "the legacy terminator insertion handles an END_* keyword that directly follows another END_* keyword without re-arming itself, so the second one gets no `;` when the source omits it; the new parser makes the `;` optional after every END_* keyword");
+const MARKER_AFTER_STATEMENT: Reason = Reason::new(Class::OwnerDecided, "the legacy grammar accepts __BEGIN_IMPLEMENTATION only where the previous list item left no trivia unconsumed, so a marker after a statement and a space is rejected; the new parser accepts the marker as a list item anywhere");
+const LONE_CR: Reason = Reason::new(Class::OwnerDecided, "a lone CR is a line break in the lossless lexer (old Mac line endings); the legacy lexer reports it as an unexpected token");
+const OSCAT_SEVERAL_PAIRS: Reason = Reason::new(Class::OwnerDecided, "the legacy pre-pass blanks only the first ranged-comment marker pair of a file (and none when the first marker is named END_*), so the body of a later pair is lexed as code and rejected when it holds text that is not tokens; the new parser makes every well-formed pair a region");
+const PRAGMA_CONTENT: Reason = Reason::new(Class::OwnerDecided, "the legacy pipeline tokenises the inside of a pragma and rejects a character it does not know; the CST keeps a pragma as one trivia token and does not examine its text");
 
-const fn exception(
-    kind: Kind,
-    snippet: &'static str,
-    basis: Basis,
-    reason: &'static str,
-) -> Exception {
+const fn exception(kind: Kind, snippet: &'static str, basis: Basis, reason: Reason) -> Exception {
     Exception {
         kind,
         snippet,
@@ -612,12 +607,12 @@ const fn exception(
 
 /// The legacy fragment entry rejects `snippet`; the legacy parser inside a
 /// POU and the new parser accept it.
-const fn fragment_entry(snippet: &'static str, reason: &'static str) -> Exception {
+const fn fragment_entry(snippet: &'static str, reason: Reason) -> Exception {
     exception(Kind::Statements, snippet, Basis::FragmentEntry, reason)
 }
 
 /// The legacy parser rejects `snippet` and the new one accepts it, on purpose.
-const fn accepted_on_purpose(kind: Kind, snippet: &'static str, reason: &'static str) -> Exception {
+const fn accepted_on_purpose(kind: Kind, snippet: &'static str, reason: Reason) -> Exception {
     exception(kind, snippet, Basis::Deliberate, reason)
 }
 
@@ -718,7 +713,7 @@ pub const LEGACY_DECLARATION_EXCEPTIONS: &[Exception] = &[
     ),
 ];
 /// The legacy parser accepts `snippet` and the new one rejects it, on purpose.
-const fn rejected_on_purpose(kind: Kind, snippet: &'static str, reason: &'static str) -> Exception {
+const fn rejected_on_purpose(kind: Kind, snippet: &'static str, reason: Reason) -> Exception {
     Exception {
         kind,
         snippet,
@@ -729,16 +724,15 @@ const fn rejected_on_purpose(kind: Kind, snippet: &'static str, reason: &'static
     }
 }
 
-const LEGACY_ABSTRACT_LABEL: &str = "the legacy label pass does not count the ABSTRACT keyword as a qualifier word, so after `PROPERTY ABSTRACT` or `METHOD ABSTRACT` it reads the declared name followed by `:` as a statement label and rejects the declaration; the CST reads the name by its position in the declaration";
-const LEGACY_BARE_NAME_INITIAL: &str = "the legacy grammar rejects an initial value that refers to a variable (`x : INT := name`, `x : INT := a.b`) because it cannot tell a named constant from an enumeration value; CODESYS accepts any expression there (the declaration parser reads the value with its general initialisation rule: Codesys/Parser35220.plugin/CODESYS/Parser35220/Declaration/VariableDeclarationParser.cs:180 and Expressions/InitializationParser.cs:70-92) and decides later whether it is constant. The CST accepts it, the lowering keeps it as an expression, and the analysis folds it or reports it (P4037, P4038)";
-const LEGACY_STRING_WIDTH: &str = "the legacy grammar requires a variable's string value to use the declared width's delimiter; the CST accepts either, the lowering gives the value the declared width (as the legacy grammar does for the default of a string type declaration) and the analysis checks its characters against that width (P4052)";
-const LEGACY_EMPTY_LIST: &str = "the legacy grammar accepts an empty parenthesised list or an empty bound list where a type needs at least one value or range, and the analysis then misses it for a variable (the inline array is reported only when it is indexed, the empty enumeration not at all). CODESYS rejects both while parsing, at the closing token: the enumeration with `Identifier expected instead of ')'` (Codesys/Parser35220.plugin/CODESYS/Parser35220/Declaration/EnumListParser.cs:261-273) and the array bounds with `Expression expected instead of ']'` (Expressions/OperandParser.cs:481-486 through Declaration/TypeParser.cs:615-625); the CST reports the same syntax error (P0002) at the same token";
-const LEGACY_NAMED_GLOBAL_LOCATION: &str = "the legacy global-variable rule takes the name alone and then fails at `AT`, so a global variable with both a name and a location is rejected; the CST accepts the standard `name AT %address : type`, as CODESYS does for every variable declaration, a global one included: it reads the names, then an optional `AT` and address, then the type (Codesys/Parser35220.plugin/CODESYS/Parser35220/Declaration/VariableDeclarationParser.cs:149-161, with the address read by ParseAddressReturnError at :230-264)";
-const INLINE_SUBRANGE: &str = "the legacy grammar takes a subrange type (`INT(0..10)`) in a type declaration, a structure member, an input-output variable and a variable with an incomplete location, and rejects it in every other variable declaration; the standard has it in all of them and CODESYS reads it wherever it reads a type: the type parser follows every integer type keyword with an optional parenthesised range, for the variable declarations of every block (Codesys/Parser35220.plugin/CODESYS/Parser35220/Declaration/VariableDeclarationParser.cs:161 calling TypeParser.cs:167, which ends in ParseSubrangeType at :375 for an integer type and rejects the range only after the generic types of a nested position at :368-373). The CST accepts it in every variable block, and the value after it is a literal as in a type declaration, because the object holds a subrange's value as an integer";
-const LEGACY_DEMOTED_REF_TO: &str = "without `REF_TO` as a keyword the legacy grammar reads `REF_TO INT := NULL` as an enumeration type named REF_TO with the base type INT and the default NULL; the CST reads `REF_TO` as a type name and rejects the extra words";
-const VALUE_DOES_NOT_FIT: &str = "the CST grammar takes an array value, a structure value, a qualified enumeration value or a number after an elementary type or an enumeration, where the legacy grammar rejects them; CODESYS parses the value and reports a type error later (Err_UnexpectedArrayInitialisation, Err_UnexpectedStructureInitialisation, Err_NoValidEnumInit), so the lowering reports the value that does not fit the type (P4022)";
-const NAMED_ARRAY_VALUE: &str = "the legacy grammar takes an array value only after an inline array type; CODESYS takes it after the name of an array type as well, and the lowering builds an array initial value of the named type";
-const ARRAY_OF_REFERENCE_TO_ARRAY: &str = "the CST grammar takes a reference to an array as the element of an array, which the object cannot represent: the lowering rejects it with a syntax error, as the legacy grammar does";
+const LEGACY_ABSTRACT_LABEL: Reason = Reason::new(Class::LegacyDefect, "the legacy label pass does not count the ABSTRACT keyword as a qualifier word, so after `PROPERTY ABSTRACT` or `METHOD ABSTRACT` it reads the declared name followed by `:` as a statement label and rejects the declaration; the CST reads the name by its position in the declaration");
+const LEGACY_BARE_NAME_INITIAL: Reason = Reason::new(Class::AcceptedOnPurpose, "the legacy grammar rejects an initial value that refers to a variable (`x : INT := name`, `x : INT := a.b`) because it cannot tell a named constant from an enumeration value; CODESYS accepts any expression there (the declaration parser reads the value with its general initialisation rule: Codesys/Parser35220.plugin/CODESYS/Parser35220/Declaration/VariableDeclarationParser.cs:180 and Expressions/InitializationParser.cs:70-92) and decides later whether it is constant. The CST accepts it, the lowering keeps it as an expression, and the analysis folds it or reports it (P4037, P4038)");
+const LEGACY_STRING_WIDTH: Reason = Reason::new(Class::AcceptedOnPurpose, "the legacy grammar requires a variable's string value to use the declared width's delimiter; the CST accepts either, the lowering gives the value the declared width (as the legacy grammar does for the default of a string type declaration) and the analysis checks its characters against that width (P4052)");
+const LEGACY_EMPTY_LIST: Reason = Reason::new(Class::OwnerDecided, "the legacy grammar accepts an empty parenthesised list or an empty bound list where a type needs at least one value or range, and the analysis then misses it for a variable (the inline array is reported only when it is indexed, the empty enumeration not at all). CODESYS rejects both while parsing, at the closing token: the enumeration with `Identifier expected instead of ')'` (Codesys/Parser35220.plugin/CODESYS/Parser35220/Declaration/EnumListParser.cs:261-273) and the array bounds with `Expression expected instead of ']'` (Expressions/OperandParser.cs:481-486 through Declaration/TypeParser.cs:615-625); the CST reports the same syntax error (P0002) at the same token");
+const LEGACY_NAMED_GLOBAL_LOCATION: Reason = Reason::new(Class::AcceptedOnPurpose, "the legacy global-variable rule takes the name alone and then fails at `AT`, so a global variable with both a name and a location is rejected; the CST accepts the standard `name AT %address : type`, as CODESYS does for every variable declaration, a global one included: it reads the names, then an optional `AT` and address, then the type (Codesys/Parser35220.plugin/CODESYS/Parser35220/Declaration/VariableDeclarationParser.cs:149-161, with the address read by ParseAddressReturnError at :230-264)");
+const INLINE_SUBRANGE: Reason = Reason::new(Class::AcceptedOnPurpose, "the legacy grammar takes a subrange type (`INT(0..10)`) in a type declaration, a structure member, an input-output variable and a variable with an incomplete location, and rejects it in every other variable declaration; the standard has it in all of them and CODESYS reads it wherever it reads a type: the type parser follows every integer type keyword with an optional parenthesised range, for the variable declarations of every block (Codesys/Parser35220.plugin/CODESYS/Parser35220/Declaration/VariableDeclarationParser.cs:161 calling TypeParser.cs:167, which ends in ParseSubrangeType at :375 for an integer type and rejects the range only after the generic types of a nested position at :368-373). The CST accepts it in every variable block, and the value after it is a literal as in a type declaration, because the object holds a subrange's value as an integer");
+const LEGACY_DEMOTED_REF_TO: Reason = Reason::new(Class::OwnerDecided, "without `REF_TO` as a keyword the legacy grammar reads `REF_TO INT := NULL` as an enumeration type named REF_TO with the base type INT and the default NULL; the CST reads `REF_TO` as a type name and rejects the extra words");
+const VALUE_DOES_NOT_FIT: Reason = Reason::new(Class::AcceptedOnPurpose, "the CST grammar takes an array value, a structure value, a qualified enumeration value or a number after an elementary type or an enumeration, where the legacy grammar rejects them; CODESYS parses the value and reports a type error later (Err_UnexpectedArrayInitialisation, Err_UnexpectedStructureInitialisation, Err_NoValidEnumInit), so the lowering reports the value that does not fit the type (P4022)");
+const NAMED_ARRAY_VALUE: Reason = Reason::new(Class::AcceptedOnPurpose, "the legacy grammar takes an array value only after an inline array type; CODESYS takes it after the name of an array type as well, and the lowering builds an array initial value of the named type");
 
 /// Differences in the declaration table.
 pub const DECLARATION_EXCEPTIONS: &[Exception] = &[
@@ -786,11 +780,6 @@ pub const DECLARATION_EXCEPTIONS: &[Exception] = &[
         Kind::Declarations,
         "TYPE t : STRUCT a : MyArray := [1, 2]; END_STRUCT; END_TYPE",
         NAMED_ARRAY_VALUE,
-    ),
-    accepted_on_purpose(
-        Kind::Declarations,
-        "TYPE t : ARRAY[1..2] OF REF_TO ARRAY[1..2] OF INT; END_TYPE",
-        ARRAY_OF_REFERENCE_TO_ARRAY,
     ),
     accepted_on_purpose(
         Kind::Declarations,
