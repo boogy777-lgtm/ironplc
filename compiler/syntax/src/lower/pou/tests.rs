@@ -283,7 +283,7 @@ fn lower_function_when_each_form_of_return_type_then_its_row() {
 }
 
 #[test]
-fn lower_function_when_blocks_edges_and_body_then_each_in_its_list() {
+fn lower_function_when_blocks_edges_and_body_then_edges_are_inputs_in_the_one_list() {
     let lowered = function(
         "FUNCTION f : INT
 VAR_INPUT a : INT; e : BOOL R_EDGE; END_VAR
@@ -292,9 +292,8 @@ VAR_STAT s : INT; END_VAR
 f := a;
 END_FUNCTION",
     );
-    assert_eq!(names(&lowered.variables), ["a", "t", "s"]);
-    assert_eq!(lowered.edge_variables.len(), 1);
-    assert_eq!(lowered.edge_variables[0].identifier.original(), "e");
+    assert_eq!(names(&lowered.variables), ["a", "e", "t", "s"]);
+    assert!(lowered.variables[1].edge.is_some());
     assert_eq!(lowered.body.len(), 1);
 }
 

@@ -49,11 +49,11 @@ fn parse_when_first_steps_function_block_counter_fbd_then_builds_structure() {
                     }),
                     block: next_block_id(),
                     type_id: None,
+                    edge: None,
                 },
                 VarDecl::simple("_TMP_ADD4_OUT", "INT"),
                 VarDecl::simple("_TMP_SEL7_OUT", "INT"),
             ],
-            edge_variables: vec![],
             body: FunctionBlockBodyKind::stmts(vec![
                 StmtKind::simple_assignment("Cnt", "_TMP_SEL7_OUT"),
                 StmtKind::simple_assignment("OUT", "Cnt"),
@@ -94,9 +94,9 @@ fn parse_when_first_steps_func_avg_val_then_builds_structure() {
                     }),
                     block: next_block_id(),
                     type_id: None,
+                    edge: None,
                 },
             ],
-            edge_variables: vec![],
             body: vec![StmtKind::assignment(
                 Variable::named("AverageVal"),
                 ExprKind::binary(
@@ -188,6 +188,7 @@ fn parse_when_first_steps_configuration_then_builds_structure() {
                 }),
                 block: next_block_id(),
                 type_id: None,
+                edge: None,
             }],
             resource_decl: vec![ResourceDeclaration {
                 name: Id::from("resource1"),
@@ -236,7 +237,6 @@ fn parse_when_first_steps_function_block_logger_then_test_apply_when_names_corre
                     .with_type(VariableType::Input),
                 VarDecl::simple("TRIG0", "BOOL"),
             ],
-            edge_variables: vec![],
             body: FunctionBlockBodyKind::stmts(vec![
                 StmtKind::if_then(
                     ExprKind::compare(
@@ -278,9 +278,9 @@ fn parse_when_first_steps_function_block_counter_sfc_then_builds_structure() {
                     }),
                     block: next_block_id(),
                     type_id: None,
+                    edge: None,
                 },
             ],
-            edge_variables: vec![],
             body: FunctionBlockBodyKind::sfc(vec![Network {
                 initial_step: Step {
                     name: Id::from("Start"),

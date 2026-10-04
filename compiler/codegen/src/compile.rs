@@ -830,27 +830,13 @@ fn compile_program_with_functions(
         let fb_name = fb_decl.name.name.to_string().to_uppercase();
         let mut field_indices: HashMap<String, u8> = HashMap::new();
         let mut field_op_types: HashMap<String, OpType> = HashMap::new();
-        let mut field_decls_tmp: Vec<&VarDecl> = Vec::new();
+        let field_decls_owned = crate::compile_fb_layout::instance_fields(fb_decl);
+        let field_decls_tmp: Vec<&VarDecl> = field_decls_owned.iter().collect();
         // UIDs of this type's fields named by the engineering-side table
         // (ADR 0059), collected with the pre-scan and recorded once the
         // type ID is assigned below.
         let mut field_uids: Vec<(u8, u64)> = Vec::new();
 
-        for decl in &fb_decl.variables {
-            if decl.var_type == VariableType::Input {
-                field_decls_tmp.push(decl);
-            }
-        }
-        for decl in &fb_decl.variables {
-            if decl.var_type == VariableType::Output {
-                field_decls_tmp.push(decl);
-            }
-        }
-        for decl in &fb_decl.variables {
-            if decl.var_type.is_pou_storage() {
-                field_decls_tmp.push(decl);
-            }
-        }
         for (i, decl) in field_decls_tmp.iter().enumerate() {
             if let Some(id) = decl.identifier.symbolic_id() {
                 let name = id.to_string().to_lowercase();
@@ -960,7 +946,9 @@ fn compile_program_with_functions(
         .iter()
         .filter(|v| v.var_type != VariableType::External)
         .cloned()
+        .chain(crate::compile_edge::hidden_variables(&program.variables))
         .collect();
+    let edge_inputs = crate::compile_edge::edge_inputs(&program.variables);
 
     // Assign program-local variable indices (indices G..N).
     // This can now resolve user-defined FB instances via ctx.user_fb_types.
@@ -1070,6 +1058,7 @@ fn compile_program_with_functions(
     // emitted from inside the body records a call-graph edge.
     let mut scan_emitter = Emitter::new();
     ctx.current_function_id = Some(FunctionId::SCAN);
+    crate::compile_edge::bind_edge_inputs(&mut scan_emitter, &mut ctx, &edge_inputs)?;
     compile_body(
         &mut scan_emitter,
         &mut ctx,

@@ -36,9 +36,9 @@ use super::var_blocks::{lower_var_block, InstanceInit};
 use super::{lower_elements, LowerCx};
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode};
 use ironplc_dsl::common::{
-    EdgeVarDecl, FunctionBlockBodyKind, FunctionBlockDeclaration, FunctionDeclaration,
-    FunctionReturnType, InterfaceDeclaration, NamespaceDeclaration, ProgramAccessDecl,
-    ProgramDeclaration, StringType, TypeName, VarDecl,
+    FunctionBlockBodyKind, FunctionBlockDeclaration, FunctionDeclaration, FunctionReturnType,
+    InterfaceDeclaration, NamespaceDeclaration, ProgramAccessDecl, ProgramDeclaration, StringType,
+    TypeName, VarDecl,
 };
 use ironplc_dsl::configuration::{ProgramConfiguration, ResourceDeclaration, TaskConfiguration};
 use ironplc_dsl::core::Id;
@@ -50,8 +50,6 @@ use ironplc_dsl::textual::StmtKind;
 pub struct Sections {
     /// The variables of every block, in the order written.
     pub variables: Vec<VarDecl>,
-    /// The edge variables of every block, in the order written.
-    pub edges: Vec<EdgeVarDecl>,
     /// The access paths of the blocks that hold them.
     pub access: Vec<ProgramAccessDecl>,
     /// What the unit does, when it writes a body.
@@ -102,7 +100,6 @@ pub const HEADER: &[K] = &[
 fn block(cx: &LowerCx, node: &SyntaxNode, into: &mut Sections) -> Result<(), Diagnostic> {
     let block = lower_var_block(cx, node)?;
     into.variables.extend(block.variables);
-    into.edges.extend(block.edges);
     into.access.extend(block.access);
     into.instances.extend(block.instances);
     Ok(())
@@ -292,7 +289,6 @@ pub fn lower_function(cx: &LowerCx, node: &SyntaxNode) -> Result<FunctionDeclara
         name: declared_name(cx, node)?,
         return_type: required_return_type(cx, node)?,
         variables: sections.variables,
-        edge_variables: sections.edges,
         body: statements_of(cx, node, sections.body)?,
     })
 }
@@ -317,7 +313,6 @@ pub fn lower_function_block(
             name: declared_name(cx, node)?,
         },
         variables: sections.variables,
-        edge_variables: sections.edges,
         body: body_of(sections.body),
         span: cx.node_span(node),
         oop: lower_oop(cx, node)?,

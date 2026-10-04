@@ -13,11 +13,11 @@ use std::sync::LazyLock;
 use time::{Date, Month, Time};
 
 use crate::common::{
-    ConstantKind, DataTypeDeclarationKind, EnumeratedInitialValueAssignment, EnumeratedValue,
-    FixedPoint, InitialValueAssignmentKind, LateResolvedInitialValue, LateResolvedInitializer,
-    SimpleDeclaration, SimpleExprInitializer, SimpleInitializer, StringType,
-    StructInitialValueAssignmentKind, StructureElementInit, StructureInitializationDeclaration,
-    TypeName,
+    BlockId, ConstantKind, DataTypeDeclarationKind, DeclarationQualifier, EdgeDirection,
+    EnumeratedInitialValueAssignment, EnumeratedValue, FixedPoint, InitialValueAssignmentKind,
+    LateResolvedInitialValue, LateResolvedInitializer, SimpleDeclaration, SimpleExprInitializer,
+    SimpleInitializer, StringType, StructInitialValueAssignmentKind, StructureElementInit,
+    StructureInitializationDeclaration, TypeName, VarDecl, VariableIdentifier, VariableType,
 };
 use crate::core::{Id, SourceSpan};
 use crate::textual::{
@@ -401,6 +401,29 @@ pub fn special_operator_type_call(
     .with_span(span)
 }
 
+/// The declaration of an edge input, `name : BOOL R_EDGE` or `F_EDGE`: an
+/// ordinary `BOOL` input that carries the edge it names. The edge is an
+/// attribute of the input, not a kind of declaration of its own, so the
+/// variable is in the one variable list every stage reads.
+/// `bool_type` is the `BOOL` as written.
+pub fn edge_input(
+    identifier: Id,
+    bool_type: TypeName,
+    edge: EdgeDirection,
+    qualifier: DeclarationQualifier,
+    block: BlockId,
+) -> VarDecl {
+    VarDecl {
+        identifier: VariableIdentifier::Symbol(identifier),
+        var_type: VariableType::Input,
+        qualifier,
+        initializer: InitialValueAssignmentKind::simple_uninitialized(bool_type),
+        block,
+        type_id: None,
+        edge: Some(edge),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -776,6 +799,26 @@ mod tests {
             ExprKind::Function(ref function)
                 if function.name == Id::from("__NEW") && function.param_assignment.len() == 2
         ));
+    }
+
+    #[test]
+    fn edge_input_when_built_then_a_bool_input_that_carries_the_edge() {
+        let decl = edge_input(
+            Id::from("x"),
+            TypeName::from("BOOL"),
+            EdgeDirection::Falling,
+            DeclarationQualifier::Retain,
+            7,
+        );
+
+        assert_eq!(decl.var_type, VariableType::Input);
+        assert_eq!(decl.edge, Some(EdgeDirection::Falling));
+        assert_eq!(decl.qualifier, DeclarationQualifier::Retain);
+        assert_eq!(decl.block, 7);
+        assert_eq!(
+            decl.initializer,
+            InitialValueAssignmentKind::simple_uninitialized(TypeName::from("BOOL"))
+        );
     }
 
     #[test]

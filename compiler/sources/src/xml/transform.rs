@@ -466,7 +466,6 @@ fn transform_function(
             name,
             return_type,
             variables,
-            edge_variables: vec![],
             body,
         },
     ))
@@ -488,7 +487,6 @@ fn transform_function_block(
         FunctionBlockDeclaration {
             name,
             variables,
-            edge_variables: vec![],
             body,
             span,
             // PLCopen XML has no EXTENDS/IMPLEMENTS/ABSTRACT concept.
@@ -625,6 +623,7 @@ fn transform_variable(
         initializer,
         block: next_block_id(),
         type_id: None,
+        edge: None,
     })
 }
 

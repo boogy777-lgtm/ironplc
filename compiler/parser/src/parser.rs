@@ -31,9 +31,9 @@ use crate::vars::*;
 use ironplc_dsl::common::*;
 use ironplc_dsl::configuration::*;
 use ironplc_dsl::construct::{
-    calendar_date, combine_interval_parts, late_resolved_members, late_resolved_or_enumerated,
-    resolve_initializer_expr, special_operator_type_call, structure_alias, time_of_day, unquote,
-    ClockField, DateField, DurationUnit, IntervalError,
+    calendar_date, combine_interval_parts, edge_input, late_resolved_members,
+    late_resolved_or_enumerated, resolve_initializer_expr, special_operator_type_call,
+    structure_alias, time_of_day, unquote, ClockField, DateField, DurationUnit, IntervalError,
 };
 use ironplc_dsl::core::Id;
 use ironplc_dsl::core::Located;
@@ -330,7 +330,7 @@ pub enum BlockScope {
 /// Parses the tokens of one variable block, as the rule of the declaration
 /// that holds it reads them, to what the block declares. Test-only: the
 /// oracle the block lowering is compared against. The blocks are split the way
-/// the declarations split them (variables, edges, access paths), and a block
+/// the declarations split them (variables, access paths), and a block
 /// the legacy grammar reads as several is the several, in the order the
 /// declaration lists them.
 #[cfg(test)]
@@ -368,11 +368,9 @@ pub fn parse_var_block(
     }
     .map_err(|e| parse_failure(&source, e))?;
     let (variables, rest) = VarDeclarations::drain_var_decl(blocks);
-    let (edges, rest) = VarDeclarations::drain_edge_decl(rest);
     let (access, _) = VarDeclarations::drain_access(rest);
     Ok(Block {
         variables,
-        edges,
         access,
         instances: vec![],
     })
@@ -1390,14 +1388,14 @@ parser! {
       VarDeclarations::with(declarations, qualifier.unwrap_or(DeclarationQualifier::Unspecified))
     }
     rule input_declaration() -> VarDeclarations =
-      edges:edge_declaration() { VarDeclarations::Edge(edges) }
+      edges:edge_declaration() { VarDeclarations::Inputs(edges) }
       / vars:var_init_decl() {
         let vars: Vec<VarDecl> = vars.into_iter().map(|v| v.into_var_decl(VariableType::Input)).collect();
         VarDeclarations::Inputs(vars)
       }
-    rule edge_declaration() -> Vec<EdgeVarDecl> = names:var1_list() _ tok(TokenType::Colon) _ tok(TokenType::Bool) _ edge:(tok(TokenType::REdge) { EdgeDirection::Rising } / tok(TokenType::FEdge) { EdgeDirection::Falling }) {
+    rule edge_declaration() -> Vec<VarDecl> = names:var1_list() _ tok(TokenType::Colon) _ bool_type:tok(TokenType::Bool) _ edge:(tok(TokenType::REdge) { EdgeDirection::Rising } / tok(TokenType::FEdge) { EdgeDirection::Falling }) {
       names.into_iter().map(|name| {
-        EdgeVarDecl { identifier: name, direction: edge.clone(), qualifier: DeclarationQualifier::Unspecified, }
+        edge_input(name, TypeName::from_id(&Id::from(bool_type.text.as_str()).with_position(bool_type.span.clone())), edge, DeclarationQualifier::Unspecified, next_block_id())
       }).collect()
     }
     // We have to first handle the special case of enumeration or fb_name without an initializer
@@ -1605,6 +1603,7 @@ parser! {
         initializer,
         block: next_block_id(),
         type_id: None,
+        edge: None,
       }
     }
     // We use the same type as in other places for VarInit, but the external always omits the initializer
@@ -1632,6 +1631,7 @@ parser! {
         initializer: spec,
         block: next_block_id(),
         type_id: None,
+        edge: None,
       }
     }
     rule global_var_name() -> Id = i:identifier() { i }
@@ -1658,6 +1658,7 @@ parser! {
           initializer: init,
           block: next_block_id(),
           type_id: None,
+          edge: None,
         }
       }).collect()
      }
@@ -1768,12 +1769,10 @@ parser! {
     rule function_declaration() -> FunctionDeclaration = tok(TokenType::Function) _  name:derived_function_name() _ tok(TokenType::Colon) _ rt:function_return_type() _ var_decls:(io:io_var_declarations() / func:function_var_decls() { vec![ func ] } / temp:temp_var_decls() { vec![ temp ] } / stat:var_stat_declarations() { vec![ stat ] }) ** _ _ body:function_body() _ tok(TokenType::EndFunction) {
       let var_decls = VarDeclarations::flatten(var_decls);
       let (variables, remainder) = VarDeclarations::drain_var_decl(var_decls);
-      let (edge_variables, remainder) = VarDeclarations::drain_edge_decl(remainder);
       FunctionDeclaration {
         name,
         return_type: rt,
         variables,
-        edge_variables,
         body,
       }
     }
@@ -1835,13 +1834,11 @@ parser! {
     rule method_declaration() -> MethodDeclaration = start:tok(TokenType::Method) _ qualifiers:member_qualifiers() _ name:identifier() _ rt:(tok(TokenType::Colon) _ rt:function_return_type() {rt})? _ decls:(io:io_var_declarations() { io } / other:other_var_declarations() { vec![other] } / temp:temp_var_decls() { vec![temp] } / inst:var_inst_declarations() { vec![inst] }) ** _ _ body:function_body()? _ end:tok(TokenType::EndMethod) {
       let decls = VarDeclarations::flatten(decls);
       let (variables, remainder) = VarDeclarations::drain_var_decl(decls);
-      let (edge_variables, _) = VarDeclarations::drain_edge_decl(remainder);
       MethodDeclaration {
         qualifiers,
         name,
         return_type: rt,
         variables,
-        edge_variables,
         body: body.unwrap_or_default(),
         span: SourceSpan::join(&start.span, &end.span),
       }
@@ -1853,18 +1850,17 @@ parser! {
     // form stores a `<Property>` element with `<Get>`/`<Set>` children;
     // `ironplc-sources` rebuilds this textual form from it. Each accessor
     // becomes a `MethodDeclaration`, see `PropertyDeclaration`.
-    rule property_accessor_parts() -> (Vec<VarDecl>, Vec<EdgeVarDecl>, Vec<StmtKind>) = decls:(io:io_var_declarations() { io } / other:other_var_declarations() { vec![other] } / temp:temp_var_decls() { vec![temp] } / inst:var_inst_declarations() { vec![inst] }) ** _ _ body:function_body()? {
+    rule property_accessor_parts() -> (Vec<VarDecl>, Vec<StmtKind>) = decls:(io:io_var_declarations() { io } / other:other_var_declarations() { vec![other] } / temp:temp_var_decls() { vec![temp] } / inst:var_inst_declarations() { vec![inst] }) ** _ _ body:function_body()? {
       let decls = VarDeclarations::flatten(decls);
       let (variables, remainder) = VarDeclarations::drain_var_decl(decls);
-      let (edge_variables, _) = VarDeclarations::drain_edge_decl(remainder);
-      (variables, edge_variables, body.unwrap_or_default())
+      (variables, body.unwrap_or_default())
     }
     rule property_declaration() -> PropertyDeclaration = start:tok(TokenType::Property) _ qualifiers:member_qualifiers() _ name:identifier() _ tok(TokenType::Colon) _ property_type:function_return_type() _ get:(g:contextual_keyword("GET") _ parts:property_accessor_parts() _ e:tok(TokenType::EndGet) { (g, parts, e) })? _ set:(s:contextual_keyword("SET") _ parts:property_accessor_parts() _ e:tok(TokenType::EndSet) { (s, parts, e) })? _ end:tok(TokenType::EndProperty) {
-      let get = get.map(|(g, (variables, edge_variables, body), e)| {
-        PropertyDeclaration::get_accessor(&name, &property_type, variables, edge_variables, body, SourceSpan::join(&g.span, &e.span))
+      let get = get.map(|(g, (variables, body), e)| {
+        PropertyDeclaration::get_accessor(&name, &property_type, variables, body, SourceSpan::join(&g.span, &e.span))
       });
-      let set = set.map(|(s, (variables, edge_variables, body), e)| {
-        PropertyDeclaration::set_accessor(&name, &property_type, variables, edge_variables, body, SourceSpan::join(&s.span, &e.span))
+      let set = set.map(|(s, (variables, body), e)| {
+        PropertyDeclaration::set_accessor(&name, &property_type, variables, body, SourceSpan::join(&s.span, &e.span))
       });
       PropertyDeclaration {
         qualifiers,
@@ -1897,7 +1893,6 @@ parser! {
       let mut all_decls = generic;
       all_decls.extend(VarDeclarations::flatten(decls));
       let (variables, remainder) = VarDeclarations::drain_var_decl(all_decls);
-      let (edge_variables, _) = VarDeclarations::drain_edge_decl(remainder);
 
       let base = extends.as_ref().map(|(_, t)| t.clone());
       let implements_list = implements.as_ref().map(|(_, names)| names.clone()).unwrap_or_default();
@@ -1930,7 +1925,6 @@ parser! {
       FunctionBlockDeclaration {
         name,
         variables,
-        edge_variables,
         body,
         span: SourceSpan::join(&start.span, &end.span),
         oop,

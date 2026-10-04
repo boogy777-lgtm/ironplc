@@ -174,19 +174,6 @@ impl<'a> Visitor<Infallible> for EnvironmentResolver<'a> {
         node.recurse_visit(self)
     }
 
-    fn visit_edge_var_decl(
-        &mut self,
-        node: &ironplc_dsl::common::EdgeVarDecl,
-    ) -> Result<Self::Value, Infallible> {
-        let result = self.symbol_env.insert(
-            &node.identifier,
-            SymbolKind::EdgeVariable,
-            &self.current_scope(),
-        );
-        self.record(result);
-        node.recurse_visit(self)
-    }
-
     fn visit_function_declaration(
         &mut self,
         node: &ironplc_dsl::common::FunctionDeclaration,

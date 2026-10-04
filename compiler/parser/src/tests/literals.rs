@@ -52,8 +52,8 @@ END_FUNCTION";
                 }),
                 block: next_block_id(),
                 type_id: None,
+                edge: None,
             }],
-            edge_variables: vec![],
             body: vec![StmtKind::simple_assignment("fun", "InputsNumber")],
         },
     ));
@@ -92,8 +92,8 @@ END_FUNCTION";
                 }),
                 block: next_block_id(),
                 type_id: None,
+                edge: None,
             }],
-            edge_variables: vec![],
             body: vec![StmtKind::simple_assignment("fun", "InputsNumber")],
         },
     ));
@@ -132,8 +132,8 @@ END_FUNCTION";
                 }),
                 block: next_block_id(),
                 type_id: None,
+                edge: None,
             }],
-            edge_variables: vec![],
             body: vec![StmtKind::simple_assignment("fun", "InputsNumber")],
         },
     ));
@@ -172,8 +172,8 @@ END_FUNCTION";
                 }),
                 block: next_block_id(),
                 type_id: None,
+                edge: None,
             }],
-            edge_variables: vec![],
             body: vec![StmtKind::simple_assignment("fun", "tv")],
         },
     ));

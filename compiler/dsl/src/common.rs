@@ -2199,6 +2199,13 @@ pub struct VarDecl {
     /// derived from `initializer`.
     #[recurse(ignore)]
     pub type_id: Option<TypeId>,
+    /// The edge an input declaration names (`x : BOOL R_EDGE`): the
+    /// variable reads `TRUE` only in the cycle its actual input changes in
+    /// that direction (IEC 61131-3 section 2.4.3). `None` for every other
+    /// declaration. An edge input is otherwise an ordinary `BOOL` input, so
+    /// every consumer of the variable list sees it.
+    #[recurse(ignore)]
+    pub edge: Option<EdgeDirection>,
 }
 
 impl PartialEq for VarDecl {
@@ -2207,6 +2214,7 @@ impl PartialEq for VarDecl {
             && self.var_type == other.var_type
             && self.qualifier == other.qualifier
             && self.initializer == other.initializer
+            && self.edge == other.edge
     }
 }
 
@@ -2223,6 +2231,7 @@ impl VarDecl {
             )),
             block: next_block_id(),
             type_id: None,
+            edge: None,
         }
     }
 
@@ -2239,6 +2248,7 @@ impl VarDecl {
             }),
             block: next_block_id(),
             type_id: None,
+            edge: None,
         }
     }
 
@@ -2257,6 +2267,7 @@ impl VarDecl {
             ),
             block: next_block_id(),
             type_id: None,
+            edge: None,
         }
     }
 
@@ -2275,6 +2286,7 @@ impl VarDecl {
             }),
             block: next_block_id(),
             type_id: None,
+            edge: None,
         }
     }
 
@@ -2297,6 +2309,7 @@ impl VarDecl {
             ),
             block: next_block_id(),
             type_id: None,
+            edge: None,
         }
     }
 
@@ -2315,6 +2328,7 @@ impl VarDecl {
             ),
             block: next_block_id(),
             type_id: None,
+            edge: None,
         }
     }
 
@@ -2332,6 +2346,7 @@ impl VarDecl {
             ),
             block: next_block_id(),
             type_id: None,
+            edge: None,
         }
     }
 
@@ -2350,6 +2365,7 @@ impl VarDecl {
             ),
             block: next_block_id(),
             type_id: None,
+            edge: None,
         }
     }
 
@@ -2505,18 +2521,6 @@ impl VariableType {
             VariableType::Input | VariableType::Output | VariableType::InOut
         )
     }
-}
-
-/// Declaration (that does not permit a location).
-///
-/// See section 2.4.3.
-#[derive(Clone, Debug, PartialEq, Recurse)]
-pub struct EdgeVarDecl {
-    pub identifier: Id,
-    #[recurse(ignore)]
-    pub direction: EdgeDirection,
-    #[recurse(ignore)]
-    pub qualifier: DeclarationQualifier,
 }
 
 /// Ways of identifying variable data objects. These are used
@@ -3163,7 +3167,7 @@ pub struct StringSpecification {
     pub keyword_span: SourceSpan,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EdgeDirection {
     Rising,
     Falling,
@@ -3263,7 +3267,6 @@ pub struct FunctionDeclaration {
     pub name: Id,
     pub return_type: FunctionReturnType,
     pub variables: Vec<VarDecl>,
-    pub edge_variables: Vec<EdgeVarDecl>,
     pub body: Vec<StmtKind>,
 }
 
@@ -3285,7 +3288,6 @@ impl HasVariables for FunctionDeclaration {
 pub struct FunctionBlockDeclaration {
     pub name: TypeName,
     pub variables: Vec<VarDecl>,
-    pub edge_variables: Vec<EdgeVarDecl>,
     pub body: FunctionBlockBodyKind,
     #[located(position)]
     pub span: SourceSpan,
@@ -3438,6 +3440,7 @@ mod tests {
             initializer: InitialValueAssignmentKind::None(SourceSpan::default()),
             block,
             type_id: None,
+            edge: None,
         }
     }
 

@@ -195,22 +195,12 @@ impl LibraryRenderer {
     fn render_callable_body(
         &mut self,
         variables: &[VarDecl],
-        edge_variables: &[EdgeVarDecl],
         body: &[dsl::textual::StmtKind],
     ) -> Result<(), Diagnostic> {
         if !variables.is_empty() {
             self.indent();
             for item in variables.iter() {
                 self.visit_var_decl(item)?;
-            }
-            self.outdent();
-            self.newline();
-        }
-
-        if !edge_variables.is_empty() {
-            self.indent();
-            for item in edge_variables.iter() {
-                self.visit_edge_var_decl(item)?;
             }
             self.outdent();
             self.newline();
@@ -838,42 +828,12 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         self.write_ws(":");
         self.visit_initial_value_assignment_kind(&node.initializer)?;
 
-        self.write(";");
-        self.newline();
-        self.outdent();
-
-        self.write_ws("END_VAR");
-        self.newline();
-        Ok(())
-    }
-
-    // 2.4.3
-    fn visit_edge_var_decl(&mut self, node: &EdgeVarDecl) -> Result<Self::Value, Diagnostic> {
-        self.newline();
-
-        self.write_ws("VAR_INPUT");
-
-        match node.qualifier {
-            DeclarationQualifier::Unspecified => {}
-            DeclarationQualifier::Constant => self.write_ws("CONSTANT"),
-            DeclarationQualifier::Retain => self.write_ws("RETAIN"),
-            DeclarationQualifier::NonRetain => self.write_ws("NON_RETAIN"),
-            DeclarationQualifier::Persistent => self.write_ws("PERSISTENT"),
+        if let Some(edge) = node.edge {
+            self.write_ws(match edge {
+                EdgeDirection::Rising => "R_EDGE",
+                EdgeDirection::Falling => "F_EDGE",
+            });
         }
-
-        self.newline();
-
-        self.indent();
-        self.visit_id(&node.identifier)?;
-
-        self.write_ws(":");
-        self.write_ws("BOOL");
-
-        let direction = match node.direction {
-            EdgeDirection::Rising => "R_EDGE",
-            EdgeDirection::Falling => "F_EDGE",
-        };
-        self.write_ws(direction);
 
         self.write(";");
         self.newline();
@@ -1090,15 +1050,6 @@ impl Visitor<Diagnostic> for LibraryRenderer {
             self.newline();
         }
 
-        if !node.edge_variables.is_empty() {
-            self.indent();
-            for item in node.edge_variables.iter() {
-                self.visit_edge_var_decl(item)?;
-            }
-            self.outdent();
-            self.newline();
-        }
-
         self.indent();
         for stmt in node.body.iter() {
             self.visit_stmt_kind(stmt)?;
@@ -1191,7 +1142,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         }
         self.newline();
 
-        self.render_callable_body(&node.variables, &node.edge_variables, &node.body)?;
+        self.render_callable_body(&node.variables, &node.body)?;
 
         self.write_ws("END_METHOD");
         self.newline();
@@ -1216,7 +1167,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         if let Some(get) = &node.get {
             self.write_ws("GET");
             self.newline();
-            self.render_callable_body(&get.variables, &get.edge_variables, &get.body)?;
+            self.render_callable_body(&get.variables, &get.body)?;
             self.write_ws("END_GET");
             self.newline();
         }
@@ -1224,11 +1175,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         if let Some(set) = &node.set {
             self.write_ws("SET");
             self.newline();
-            self.render_callable_body(
-                node.set_declared_variables(),
-                &set.edge_variables,
-                &set.body,
-            )?;
+            self.render_callable_body(node.set_declared_variables(), &set.body)?;
             self.write_ws("END_SET");
             self.newline();
         }

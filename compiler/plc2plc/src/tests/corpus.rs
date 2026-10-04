@@ -20,6 +20,7 @@ use rstest::rstest;
 #[case::expressions("expressions.st", "expressions_rendered.st")]
 #[case::inout_var_decl("inout_var_decl.st", "inout_var_decl_rendered.st")]
 #[case::input_var_decl("input_var_decl.st", "input_var_decl_rendered.st")]
+#[case::edge_input_decl("edge_input_decl.st", "edge_input_decl_rendered.st")]
 #[case::literal("literal.st", "literal_rendered.st")]
 #[case::nested("nested.st", "nested_rendered.st")]
 #[case::program("program.st", "program_rendered.st")]

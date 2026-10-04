@@ -72,8 +72,6 @@ pub enum SymbolKind {
     EnumerationValue,
     /// Structure element
     StructureElement,
-    /// Edge variable (rising/falling edge)
-    EdgeVariable,
 }
 
 /// Metadata associated with a symbol
@@ -181,7 +179,6 @@ fn is_variable(kind: &SymbolKind) -> bool {
             | SymbolKind::Parameter
             | SymbolKind::OutputParameter
             | SymbolKind::InOutParameter
-            | SymbolKind::EdgeVariable
             | SymbolKind::Constant
     )
 }

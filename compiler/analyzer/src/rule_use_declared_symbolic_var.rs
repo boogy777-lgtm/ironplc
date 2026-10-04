@@ -373,6 +373,27 @@ END_FUNCTION_BLOCK"
     );
 
     #[test]
+    fn apply_when_edge_input_used_in_function_block_then_declared() {
+        let program = "
+FUNCTION_BLOCK COUNTER
+VAR_INPUT
+up : BOOL R_EDGE;
+down : BOOL F_EDGE;
+END_VAR
+VAR
+n : INT;
+END_VAR
+
+IF up AND NOT down THEN n := n + 1; END_IF;
+END_FUNCTION_BLOCK";
+
+        let library = parse_and_resolve_types(program);
+        let context = SemanticContextBuilder::new().build().unwrap();
+
+        assert!(apply(&library, &context, &CompilerOptions::default()).is_ok());
+    }
+
+    #[test]
     fn apply_when_typo_in_variable_name_then_suggests_closest_match() {
         let program = "
 FUNCTION_BLOCK LOGGER

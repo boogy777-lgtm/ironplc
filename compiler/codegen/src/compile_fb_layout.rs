@@ -27,13 +27,16 @@ use std::collections::HashMap;
 
 use ironplc_analyzer::TypeEnvironment;
 use ironplc_container::CharWidth;
-use ironplc_dsl::common::{InitialValueAssignmentKind, VarDecl};
+use ironplc_dsl::common::{
+    FunctionBlockDeclaration, InitialValueAssignmentKind, VarDecl, VariableType,
+};
 use ironplc_dsl::core::{Id, Located};
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
 
 use super::compile::{
     char_width_for_string_type, string_region_size, CompileContext, StringVarInfo,
 };
+use super::compile_edge::hidden_variables;
 use super::compile_initial_value::{emit_declaration_initial_value, Start};
 use super::compile_stmt::resolve_string_max_length;
 use crate::emit::Emitter;
@@ -85,6 +88,20 @@ impl FieldStorage {
             self.char_width,
         )
     }
+}
+
+/// The fields of an instance of `fb`, in the order they take slots: the inputs,
+/// then the outputs, then the rest of the variables it keeps, then the hidden
+/// variables its edge inputs need (`compile_edge`). The VM copies the slots in
+/// and out of the body in this order.
+pub(crate) fn instance_fields(fb: &FunctionBlockDeclaration) -> Vec<VarDecl> {
+    let declared =
+        |keep: fn(&VarDecl) -> bool| fb.variables.iter().filter(move |d| keep(d)).cloned();
+    declared(|d| d.var_type == VariableType::Input)
+        .chain(declared(|d| d.var_type == VariableType::Output))
+        .chain(declared(|d| d.var_type.is_pou_storage()))
+        .chain(hidden_variables(&fb.variables))
+        .collect()
 }
 
 /// Lays out an instance of a function block whose fields are `fields`, in the
