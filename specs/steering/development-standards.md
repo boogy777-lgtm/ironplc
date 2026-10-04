@@ -256,7 +256,8 @@ patch(p)      := (logic for one v outside mechanism) || (vbranch inside mechanis
 # classify (before code)
 same_question(req, X)      -> variant(req, X) && extend mechanism(X) via data|config|schema|impl(contract(X))
 add(if|flag|pipeline|exception_path) for one v -> forbidden; except row(flag)
-!same_question(req, any X) -> new invariant -> new mechanism && invariant in plan|PR
+!same_question(req, any X) -> new invariant(req) && invariant in plan|PR
+add(mechanism) && !new invariant -> forbidden
 count(vbranch, X) >= 1     -> replace by mechanism before add(v)
 
 # mechanism shape
@@ -272,8 +273,9 @@ boundary(v) on L && 1 switch over v on L+-1 -> forbidden
 require dM == 0 && dK == 0 && dC == 0
   M := count(mechanism(X)); K := count(vbranch in shared)
   C := count(dep(l) && !derived(l) && !guard(l))
-violated -> prefactor first || declared patch
+violated -> prefactor first (see Prefactoring) || declared patch
 K: add row && !vbranch; logic common to all v -> shared; data+logic of v -> rows(v) + files(v)
+   vbranch (on identity(v)) -> signal at 1; any other repeated distinction -> signal at > 1 place (Signals)
 C: dep(l) -> derive(l, truth(X)) || guard(l); derive first
    mechanism replaces checklist step -> delete step in same PR
 removal(v): changes subset of rows(v) + files(v); else patch(v)
@@ -301,6 +303,11 @@ means stop and reshape first:
 - The new behaviour needs a new `match` arm or `if` in **more than one place** —
   the distinction wants to be a type or a data table, not repeated branching
 - You would copy an existing function and change a few lines of it
+- You would add a boolean parameter (or a second one) to select behaviour inside
+  a function
+- The code has to know *where in the pipeline it is* to decide what to do
+- The change is easy to describe in a sentence but hard to place in the code —
+  usually a sign the responsibility it belongs to does not exist yet
 - The new tests would duplicate an existing test's setup wholesale, or you would
   need a combinatorial matrix of tests to cover how the new flag interacts with
   the existing ones
