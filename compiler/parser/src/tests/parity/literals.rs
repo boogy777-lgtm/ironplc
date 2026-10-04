@@ -49,6 +49,7 @@ use crate::parser::{
     parse_statement_list, parse_type_declaration, parse_variable, parse_variable_initial,
 };
 use crate::token::{Token, TokenType};
+use crate::xform_assign_file_id;
 use ironplc_dsl::common::{Library, LibraryElementKind};
 use ironplc_dsl::core::FileId;
 use ironplc_dsl::diagnostic::Diagnostic;
@@ -68,6 +69,15 @@ use ironplc_syntax::lower::{
 };
 use ironplc_syntax::{Parse, SyntaxKind, SyntaxNode};
 
+/// The problem codes of a failure inside the compiler: an internal error and a
+/// capability that is not implemented. The lowering reports neither for text the
+/// parser accepts.
+const INTERNAL_CODES: [&str; 2] = ["P9998", "P9999"];
+
+fn is_internal(diagnostic: &Diagnostic) -> bool {
+    INTERNAL_CODES.contains(&diagnostic.code.as_str())
+}
+
 /// The file every comparison is made in, so that the file of every span is
 /// compared and not only its offsets.
 pub fn file() -> FileId {
@@ -86,11 +96,18 @@ pub struct Counts {
 }
 
 impl Counts {
+    fn add(&mut self, other: Counts) {
+        self.compared += other.compared;
+        self.equal += other.equal;
+        self.both_reject += other.both_reject;
+    }
+
     fn record(&mut self, outcome: &Outcome) {
         self.compared += 1;
         match outcome {
             Outcome::Equal => self.equal += 1,
             Outcome::BothReject => self.both_reject += 1,
+            Outcome::Internal(_) => {}
             Outcome::Differs { .. } => {}
         }
     }
@@ -120,6 +137,10 @@ pub struct Tally {
     pub excepted: Vec<usize>,
     /// Differences no entry covers.
     pub unexplained: Vec<(String, String)>,
+    /// Inputs the new parser accepts whose lowering failed inside (an internal
+    /// error or a capability that is not implemented), which is never a
+    /// difference to list: lowering is total over what the parser accepts.
+    pub internal: Vec<String>,
 }
 
 impl Tally {
@@ -159,6 +180,25 @@ impl Tally {
                 format!("{key:?}: {what}"),
             )),
         }
+    }
+
+    /// Adds the tally of another part of the corpus to this one.
+    fn add(&mut self, other: Tally) {
+        self.inputs += other.inputs;
+        self.rejected += other.rejected;
+        for (unit, counts) in self.units.iter_mut().zip(other.units) {
+            unit.add(counts);
+        }
+        self.bodies.add(other.bodies);
+        self.literal_only_equal += other.literal_only_equal;
+        self.inherited += other.inherited;
+        self.whole_compared += other.whole_compared;
+        self.whole_equal += other.whole_equal;
+        for (seen, more) in self.excepted.iter_mut().zip(other.excepted) {
+            *seen += more;
+        }
+        self.unexplained.extend(other.unexplained);
+        self.internal.extend(other.internal);
     }
 
     pub fn excepted_total(&self) -> usize {
@@ -243,6 +283,8 @@ pub fn range_of(node: &SyntaxNode) -> (usize, usize) {
 pub enum Outcome {
     Equal,
     BothReject,
+    /// The lowering failed inside (see `Tally::internal`).
+    Internal(String),
     /// They differ, in these parts of the comparison (none when one side
     /// rejects what the other builds).
     Differs {
@@ -258,6 +300,11 @@ pub fn settle<T: Subject>(
     lowered: Result<T, Diagnostic>,
 ) -> Outcome {
     let differs = |parts, what| Outcome::Differs { parts, what };
+    if let Err(error) = &lowered {
+        if is_internal(error) {
+            return Outcome::Internal(format!("{written} lowering fails with {}", error.code));
+        }
+    }
     match (legacy, lowered) {
         (Ok(legacy), Ok(lowered)) => {
             let parts = compare(&legacy, &lowered);
@@ -342,10 +389,14 @@ fn judge(site: &Site, tokens: &[Token], cx: &LowerCx, written: &str) -> Outcome 
                     _ => elements,
                 },
             };
+            // The last step of the legacy pipeline stamps the file on every position
+            // the grammar left unset (the empty name of a function block
+            // initialisation is one); the rule alone has not run it.
+            let stamped = |library: Library| xform_assign_file_id::apply(library, &file());
             settle(
                 written,
-                parse_declarations(tokens).map(kept),
-                lower_element(cx, &site.node).map(kept),
+                parse_declarations(tokens).map(kept).and_then(stamped),
+                lower_element(cx, &site.node).map(kept).and_then(stamped),
             )
         }
         Unit::Chart | Unit::ChartFacts => {
@@ -410,6 +461,7 @@ fn compare_sites(tally: &mut Tally, key: &str, text: &str, parse: &Parse, preset
                     usize::from(only_literals && site.unit == Unit::Literal);
             }
             Outcome::BothReject => {}
+            Outcome::Internal(what) => tally.internal.push(format!("{key:?}: {what}")),
             Outcome::Differs { parts, what } => differing.push((site, parts, what)),
         }
     }
@@ -447,6 +499,13 @@ fn compare_library(
     tally.whole_compared += 1;
     let legacy = parse_program(text, &file(), &preset.legacy);
     let lowered = lower_library(parse, &file());
+    if let Err(error) = &lowered {
+        if is_internal(error) {
+            tally
+                .internal
+                .push(format!("{key:?}: the library fails with {}", error.code));
+        }
+    }
     match (legacy, lowered) {
         (Ok(legacy), Ok(lowered)) => {
             let parts = compare(&legacy, &lowered);
@@ -522,8 +581,31 @@ pub fn corpus() -> Vec<Case> {
     cases
 }
 
-/// Runs both comparisons over `cases` under every preset.
+/// Runs both comparisons over `cases` under every preset. The inputs are
+/// independent, so they are dealt out to one worker for each processor and the
+/// tallies are added: the run is as long as the busiest worker, not the sum.
 pub fn run(cases: &[Case], presets: &[Preset]) -> Tally {
+    let workers = std::thread::available_parallelism()
+        .map_or(1, |count| count.get())
+        .min(cases.len().max(1));
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = (0..workers)
+            .map(|first| {
+                scope.spawn(move || run_inputs(cases.iter().skip(first).step_by(workers), presets))
+            })
+            .collect();
+        let mut tally = Tally::new();
+        for handle in handles {
+            match handle.join() {
+                Ok(part) => tally.add(part),
+                Err(panic) => std::panic::resume_unwind(panic),
+            }
+        }
+        tally
+    })
+}
+
+fn run_inputs<'a>(cases: impl Iterator<Item = &'a Case>, presets: &[Preset]) -> Tally {
     let mut tally = Tally::new();
     for case in cases {
         for preset in presets {
@@ -573,7 +655,7 @@ const MIN_EQUAL: [(Unit, usize); 17] = [
 ];
 const MIN_BODIES_EQUAL: usize = 4_500;
 const MIN_LITERAL_ONLY_EQUAL: usize = 400;
-const MIN_WHOLE_COMPARED: usize = 6_700;
+const MIN_WHOLE_COMPARED: usize = 6_750;
 
 /// The differences no entry covers, one problem for each kind of difference
 /// (the node, and the parts in which it differs) with how often it was found
@@ -596,6 +678,12 @@ fn unexplained_by_class(tally: &Tally) -> Vec<String> {
 /// entry's count is the one recorded, and the floors are met.
 pub fn check(tally: &Tally) -> Vec<String> {
     let mut problems = unexplained_by_class(tally);
+    problems.extend(
+        tally
+            .internal
+            .iter()
+            .map(|what| format!("lowering is not total: {what}")),
+    );
     for (entry, seen) in DIFFERENCES.iter().zip(&tally.excepted) {
         if *seen != entry.expected {
             let how = if *seen == 0 {

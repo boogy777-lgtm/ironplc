@@ -266,6 +266,58 @@ to claim a future stage is implemented. Advance the status to **partially
 implemented** with named delivered stages, then **implemented** when S1, S2
 and S4 describe the working frontend. S5 may remain unnecessary.
 
+### 5.1 Requirements of the Syntax Crate
+
+`ironplc-syntax` owns the lossless tree and the lowering of that tree to the
+`ironplc_dsl` objects. The requirements below are tested there, over the
+corpus the repository shares (every `.st` source of the repository, each read
+in LF, CRLF and tab-indented spelling) and every option set the claim names.
+
+**REQ-PT-syntax-001** For every file of the corpus, in LF, CRLF and
+tab-indented spelling, under every option set, the text of the tree equals the
+text parsed, whether or not the parse reports errors.
+
+**REQ-PT-syntax-002** An OSCAT ranged-comment pair, and with `allow_pragma_if`
+each branch of an `{IF}` that is not taken, is one trivia token of the tree
+holding the bytes it covers; the grammar does not read what is inside.
+
+**REQ-PT-syntax-003** Lowering is total over the text the parser accepts: for
+every file of the corpus and every prefix of it, the parse and the lowering
+return, and a lowering that fails reports a problem other than an internal
+error (`P9998`) or a capability that is not implemented (`P9999`).
+
+**REQ-PT-syntax-004** Lowering a parse that reported errors fails with the
+first of them, positioned in the file given, and builds no object.
+
+**REQ-PT-syntax-005** Every kind of node that a lowering rule owns occurs in a
+file of the corpus that lowers, so a construct added to the grammar has a rule
+and a case before the corpus passes. The disposition table that assigns each
+kind to a rule, to its parent's rule or to trivia has no wildcard arm, so a
+kind added without a decision does not compile.
+
+**REQ-PT-syntax-006** Every span of a lowered library carries the file the
+text came from and lies inside the text, on character boundaries.
+
+**REQ-PT-syntax-007** Spelling the trivia differently (CRLF line ends, tabs for
+indentation) does not change what is lowered: a file and a spelling of it with
+the same significant tokens lower to equal libraries.
+
+**REQ-PT-syntax-008** Lowering a tree as deep as the parser allows, for every
+construct that nests, completes on the stack budget and reports no internal
+error.
+
+The old-against-new comparison that held the lowering to the PEG parser it
+replaces is test-only and lives with that parser, in `ironplc-parser`. It
+compares the objects strictly (their printed form, the sequence of their spans
+and the grouping of their variable blocks) over the corpus, the declaration
+tables and the declarations lifted from the legacy tests, under every dialect
+preset. Each remaining difference is a row of a table with its reason, and the
+reason is one of three classes: a defect of the old parser that is not ported,
+a change the owner decided, or a form the new parser accepts on purpose. A
+difference that is none of them is fixed in the new parser. The decisions the
+comparison settled are recorded in
+[ADR-0072](../adrs/0072-lowering-lives-in-the-syntax-crate.md).
+
 ## 6. References
 
 - [rowan](https://github.com/rust-analyzer/rowan) and

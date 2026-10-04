@@ -34,7 +34,6 @@ pub mod type_table;
 
 use ironplc_syntax::{parse_expression, parse_source_file, parse_statements, Parse, ParseOptions};
 use legacy::Preset;
-use std::path::Path;
 
 /// Which kind of snippet a table holds.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -113,6 +112,57 @@ impl Verdict {
     }
 }
 
+/// What kind of reason a listed difference has. Every difference from the
+/// legacy parser is one of these three, so a difference that is none of them
+/// is a defect of the new parser and is fixed at its cause, not listed.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub enum Class {
+    /// The legacy parser is wrong and the new one does not port the defect.
+    LegacyDefect,
+    /// A behaviour change the owner decided, by name or by the rule that
+    /// CODESYS is the reference.
+    OwnerDecided,
+    /// The new parser takes what the legacy one rejects (or lowers it to
+    /// another shape), on purpose, and the reason says why.
+    AcceptedOnPurpose,
+}
+
+impl Class {
+    pub const ALL: [Class; 3] = [
+        Class::LegacyDefect,
+        Class::OwnerDecided,
+        Class::AcceptedOnPurpose,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Class::LegacyDefect => "legacy defect not ported",
+            Class::OwnerDecided => "owner-decided change",
+            Class::AcceptedOnPurpose => "accepted on purpose",
+        }
+    }
+}
+
+/// A reason for a difference, with its class. A reason is defined once and
+/// named by every entry it explains, so one reason has one class.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Reason {
+    pub class: Class,
+    pub text: &'static str,
+}
+
+impl Reason {
+    pub const fn new(class: Class, text: &'static str) -> Self {
+        Reason { class, text }
+    }
+}
+
+impl std::fmt::Display for Reason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}] {}", self.class.name(), self.text)
+    }
+}
+
 /// Why a difference exists.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Basis {
@@ -132,7 +182,7 @@ pub struct Exception {
     pub preset: Option<&'static str>,
     pub legacy: bool,
     pub basis: Basis,
-    pub reason: &'static str,
+    pub reason: Reason,
 }
 
 impl Exception {
@@ -161,53 +211,8 @@ impl Exception {
 }
 
 /// The files compared, each with its CRLF and tab-indented spellings
-/// (`name (CRLF)`, `name (tabs)`), read in place: the shared test resources
-/// (`../resources/test/oop.st`), the syntax crate's fixtures
-/// (`tests/fixtures/codesys/x.st`), and the other `.st` sources of the
-/// repository (the plc2plc round-trip files, the bundled libraries and the
-/// source-discovery fixtures, the CLI resources, the end-to-end library files
-/// and the examples). A file that is not valid UTF-8 reads as empty.
+/// (`name (CRLF)`, `name (tabs)`), read in place from the corpus the
+/// repository shares (`ironplc_test::corpus`).
 pub fn file_variants() -> Vec<(String, String)> {
-    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let roots = [
-        (manifest.join("../resources/test"), "../resources/test"),
-        (manifest.join("../syntax/tests/fixtures"), "tests/fixtures"),
-        (
-            manifest.join("../plc2plc/resources/test"),
-            "../plc2plc/resources/test",
-        ),
-        (
-            manifest.join("../sources/resources/libs"),
-            "../sources/resources/libs",
-        ),
-        (
-            manifest.join("../sources/resources/test"),
-            "../sources/resources/test",
-        ),
-        (
-            manifest.join("../ironplc-cli/resources/test"),
-            "../ironplc-cli/resources/test",
-        ),
-        (
-            manifest.join("../../tests/e2e/library"),
-            "../../tests/e2e/library",
-        ),
-        (manifest.join("../../examples"), "../../examples"),
-    ];
-    let mut files = Vec::new();
-    for (root, label) in roots {
-        for path in ironplc_test::st_files(&root) {
-            let text = std::fs::read_to_string(&path).unwrap_or_default();
-            let relative = path
-                .strip_prefix(&root)
-                .unwrap_or(&path)
-                .to_string_lossy()
-                .replace('\\', "/");
-            let name = format!("{label}/{relative}");
-            files.push((format!("{name} (CRLF)"), text.replace('\n', "\r\n")));
-            files.push((format!("{name} (tabs)"), text.replace("    ", "\t")));
-            files.push((name, text));
-        }
-    }
-    files
+    ironplc_test::corpus::variants()
 }

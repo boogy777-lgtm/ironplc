@@ -22,7 +22,7 @@ use super::control::{bound, bound_ahead};
 use super::expressions::{arg_list, close_group, type_ref};
 use super::initializers::initializer;
 use super::literals::literal;
-use super::positions::{Context, Spec, COUNTED, DECLARED, ELEMENT, MEMBER, TARGET};
+use super::positions::{Context, Spec, COUNTED, DECLARED, ELEMENT, MEMBER};
 use crate::parser::recovery::BLOCK_END;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
@@ -96,11 +96,11 @@ fn specification(p: &mut Parser, context: &Context) -> Spec {
             }
         }
         K::RefTo => {
-            reference_type(p, 1);
+            reference_type(p, 1, context);
             Spec::Reference
         }
         K::Reference | K::Pointer => {
-            reference_type(p, 2);
+            reference_type(p, 2, context);
             Spec::Reference
         }
         K::Params => {
@@ -208,13 +208,13 @@ pub(super) fn subrange(p: &mut Parser) {
 
 /// `REF_TO T`, `REFERENCE TO T` and `POINTER TO T`; `keyword_tokens` is how
 /// many tokens the introducer takes.
-fn reference_type(p: &mut Parser, keyword_tokens: usize) {
+fn reference_type(p: &mut Parser, keyword_tokens: usize, context: &Context) {
     let node = p.start();
     p.bump();
     if keyword_tokens == 2 {
         p.expect(K::To, "`TO`");
     }
-    type_spec(p, &TARGET);
+    type_spec(p, &context.target());
     p.complete(node, K::RefType);
 }
 

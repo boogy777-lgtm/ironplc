@@ -39,3 +39,11 @@ pub use error::{ErrorKind, SyntaxError};
 pub use parser::options::ParseOptions;
 pub use parser::{parse_expression, parse_source_file, parse_statements, Parse, MAX_DEPTH};
 pub use syntax_kind::{StLanguage, SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken};
+
+// Spec conformance testing infrastructure (test-only).
+#[cfg(test)]
+mod spec_requirements {
+    include!(concat!(env!("OUT_DIR"), "/spec_requirements.rs"));
+}
+#[cfg(test)]
+mod spec_conformance;

@@ -69,6 +69,8 @@ pub(super) struct Context {
     /// A structure value `(a := 1)` may initialise a declared type.
     pub structured: bool,
     pub allowed: &'static [Spec],
+    /// The kinds of type a reference written in this position may point to.
+    pub points_to: &'static [Spec],
 }
 
 impl Context {
@@ -79,6 +81,14 @@ impl Context {
             allowed,
             structured: false,
             ..self
+        }
+    }
+
+    /// The position of what a reference written in this position points to.
+    pub(super) const fn target(&self) -> Context {
+        Context {
+            allowed: self.points_to,
+            ..TARGET
         }
     }
 
@@ -114,6 +124,7 @@ const fn position(allowed: &'static [Spec]) -> Context {
         literal_subrange: false,
         structured: true,
         allowed,
+        points_to: &[S::Array, S::Named],
     }
 }
 
@@ -182,14 +193,20 @@ pub(super) const DECLARED: Context = Context {
         S::Union,
         S::Named,
     ],
+    points_to: &[S::Array, S::Named],
 };
 /// A member of a structure or union.
 pub(super) const MEMBER: Context = Context {
     literal_subrange: true,
     ..position(&[S::Array, S::String, S::Enumeration, S::Subrange, S::Named])
 };
-/// The element type of an array.
-pub(super) const ELEMENT: Context = position(&[S::String, S::Reference, S::Named]);
+/// The element type of an array. A reference element points to a name: the
+/// object holds an array element as a name or a string, with the reference
+/// recorded beside it, and has no place for an array there.
+pub(super) const ELEMENT: Context = Context {
+    points_to: &[S::Named],
+    ..position(&[S::String, S::Reference, S::Named])
+};
 /// What a reference points to.
 pub(super) const TARGET: Context = position(&[S::Array, S::Named]);
 /// The element type of a parameter list.
