@@ -147,26 +147,49 @@ fn is_elementary(cx: &LowerCx, token: &SyntaxToken) -> bool {
         .is_some_and(|spelling| ElementaryTypeName::try_from(&Id::from(spelling)).is_ok())
 }
 
+/// A form that a node of the kind of another form holds more than: it is the
+/// form `to` when `when` holds of the type node and its declaration.
+struct Refinement {
+    from: Form,
+    when: fn(&LowerCx, &SyntaxNode, &SyntaxNode) -> bool,
+    to: Form,
+}
+
+/// The refinements, the first that holds deciding. A string with a length
+/// differs from one without; a name followed by arguments is an instance, and
+/// a keyword type differs from a name.
+const REFINEMENTS: &[Refinement] = &[
+    Refinement {
+        from: Form::BareString,
+        when: |_, spec, _| spec.first_child().is_some(),
+        to: Form::SizedString,
+    },
+    Refinement {
+        from: Form::Named,
+        when: |_, _, declaration| child_of(declaration, K::ArgList).is_some(),
+        to: Form::Call,
+    },
+    Refinement {
+        from: Form::Named,
+        when: |cx, spec, _| {
+            significant_tokens(spec)
+                .first()
+                .is_some_and(|token| is_elementary(cx, token))
+        },
+        to: Form::Elementary,
+    },
+];
+
 /// The form a type node is: its row of `FORMS`, refined by what the node
-/// holds. A string with a length differs from one without, a keyword type
-/// from a name, and a name followed by arguments is an instance.
+/// holds.
 fn form_of(cx: &LowerCx, spec: &SyntaxNode, declaration: &SyntaxNode) -> Option<Form> {
     let (_, form) = FORMS.iter().find(|(kind, _)| *kind == spec.kind())?;
-    Some(match form {
-        Form::BareString if spec.first_child().is_some() => Form::SizedString,
-        Form::Named if child_of(declaration, K::ArgList).is_some() => Form::Call,
-        Form::Named => {
-            let elementary = significant_tokens(spec)
-                .first()
-                .is_some_and(|token| is_elementary(cx, token));
-            if elementary {
-                Form::Elementary
-            } else {
-                Form::Named
-            }
-        }
-        other => *other,
-    })
+    Some(
+        REFINEMENTS
+            .iter()
+            .find(|refinement| refinement.from == *form && (refinement.when)(cx, spec, declaration))
+            .map_or(*form, |refinement| refinement.to),
+    )
 }
 
 /// The kind of value a node writes.
