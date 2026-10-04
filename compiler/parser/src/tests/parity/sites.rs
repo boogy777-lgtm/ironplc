@@ -25,15 +25,19 @@ pub enum Unit {
     Variable,
     Statement,
     Statements,
+    TypeDeclaration,
+    VariableInitial,
 }
 
 impl Unit {
-    pub const ALL: [Unit; 5] = [
+    pub const ALL: [Unit; 7] = [
         Unit::Literal,
         Unit::Expression,
         Unit::Variable,
         Unit::Statement,
         Unit::Statements,
+        Unit::TypeDeclaration,
+        Unit::VariableInitial,
     ];
 
     pub fn name(self) -> &'static str {
@@ -43,6 +47,8 @@ impl Unit {
             Unit::Variable => "variables",
             Unit::Statement => "statements",
             Unit::Statements => "statement lists",
+            Unit::TypeDeclaration => "type declarations",
+            Unit::VariableInitial => "variable initial values",
         }
     }
 
@@ -59,6 +65,8 @@ impl Unit {
                     && disposition(kind) == Disposition::Lowered(Area::Statement)
             }
             Unit::Statements => kind == K::StatementList,
+            Unit::TypeDeclaration => kind == K::TypeDecl,
+            Unit::VariableInitial => kind == K::VarDecl,
         }
     }
 
@@ -90,6 +98,8 @@ enum Place {
     /// After the child of this kind and, when a spelling is given, only when
     /// that child is written as it (upper case, without spaces).
     After(K, Option<&'static str>),
+    /// In a parent that is introduced by one of these keywords.
+    InBlock(&'static [K]),
 }
 
 /// The kinds of child that a row reads with the parent after all.
@@ -97,6 +107,8 @@ enum Except {
     Nothing,
     Literals,
     Kinds(&'static [K]),
+    /// A child that has a part of one of these kinds.
+    Having(&'static [K]),
 }
 
 /// A row: the children of a parent that stand at a place are compared as a
@@ -165,6 +177,29 @@ const PARTS: &[Part] = &[
     part(K::WaitStmt, Place::Every, Unit::Expression),
     part(K::ThrowStmt, Place::Every, Unit::Expression),
     part(K::StatementList, Place::Every, Unit::Statement),
+    Part {
+        except: Except::Having(&[K::Location, K::EdgeSpec]),
+        ..part(
+            K::VarBlock,
+            Place::InBlock(PLAIN_BLOCKS),
+            Unit::VariableInitial,
+        )
+    },
+];
+
+/// The blocks whose declarations the legacy grammar reads with one rule
+/// (`names : type [:= value]`, the same initial value for every name). The
+/// blocks that read a declaration in a form of their own are not compared: a
+/// declaration with a location, an edge, or one in an argument, global,
+/// external or configuration block.
+const PLAIN_BLOCKS: &[K] = &[
+    K::Var,
+    K::VarInput,
+    K::VarOutput,
+    K::VarTemp,
+    K::VarStat,
+    K::VarInst,
+    K::VarGeneric,
 ];
 
 /// Nodes that the rule of their parent reads in place of the rule of their
@@ -175,7 +210,7 @@ const READ_BY_PARENT: &[(K, K)] = &[(K::CaseLabel, K::BitStringLiteral)];
 
 /// The kinds that are a site wherever they stand, whatever their parent.
 fn standalone(kind: K) -> Option<Unit> {
-    [Unit::Literal, Unit::Statements]
+    [Unit::Literal, Unit::Statements, Unit::TypeDeclaration]
         .into_iter()
         .find(|unit| unit.holds(kind))
 }
@@ -221,16 +256,23 @@ impl Place {
                         spelling_of(parent, *kind).is_some_and(|written| written == wanted)
                     })
             }
+            Place::InBlock(keywords) => parent
+                .children_with_tokens()
+                .filter_map(|element| element.into_token())
+                .find(|token| !token.kind().is_trivia())
+                .is_some_and(|keyword| keywords.contains(&keyword.kind())),
         }
     }
 }
 
 impl Except {
-    fn covers(&self, kind: K) -> bool {
+    fn covers(&self, node: &SyntaxNode) -> bool {
+        let kind = node.kind();
         match self {
             Except::Nothing => false,
             Except::Literals => is_literal(kind),
             Except::Kinds(kinds) => kinds.contains(&kind),
+            Except::Having(parts) => node.children().any(|part| parts.contains(&part.kind())),
         }
     }
 }
@@ -242,7 +284,7 @@ fn site_unit(parent: &SyntaxNode, node: &SyntaxNode) -> Option<Unit> {
             && part.unit.holds(node.kind())
             && part.place.holds(parent, node)
     })?;
-    (!part.except.covers(node.kind())).then_some(part.unit)
+    (!part.except.covers(node)).then_some(part.unit)
 }
 
 /// Every site under `root`, outer before inner and earlier before later. A

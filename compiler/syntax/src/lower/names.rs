@@ -15,7 +15,7 @@
 use super::tree::significant_tokens;
 use super::LowerCx;
 use crate::syntax_kind::{SyntaxKind, SyntaxNode, SyntaxToken};
-use ironplc_dsl::common::TypeName;
+use ironplc_dsl::common::{ElementaryTypeName, GenericTypeName, TypeName};
 use ironplc_dsl::core::Id;
 use ironplc_dsl::diagnostic::Diagnostic;
 
@@ -39,12 +39,45 @@ pub fn lower_name(cx: &LowerCx, node: &SyntaxNode) -> Result<Id, Diagnostic> {
     }
 }
 
-/// The canonical spelling of a keyword: the first one its declaration lists.
-fn canonical_spelling(kind: SyntaxKind) -> Option<&'static str> {
-    SyntaxKind::KEYWORDS
+/// The kind of the token that follows `token`, trivia left out.
+fn next_significant(token: &SyntaxToken) -> Option<SyntaxKind> {
+    std::iter::successors(token.next_token(), SyntaxToken::next_token)
+        .find(|next| !next.kind().is_trivia())
+        .map(|next| next.kind())
+}
+
+/// True when a keyword token is an ordinary name where it stands: the dialect
+/// leaves the word available as a name, or it is `TIME` where the dialect lets
+/// it name a function and a call or an assignment follows. The parser makes the
+/// same decision for the same token (`Parser::name_at`), so a word the parser
+/// read as a name is never lowered as a keyword.
+fn is_name_word(cx: &LowerCx, token: &SyntaxToken) -> bool {
+    !cx.keyword_enabled(token.kind())
+        || (token.kind() == SyntaxKind::Time && cx.time_is_name(next_significant(token)))
+}
+
+/// The canonical spelling of the type a token names as a keyword: the first
+/// spelling its declaration lists. A token that is not a type keyword has none,
+/// and neither has a type keyword that is a name where it stands: it is a user
+/// type there, named as written.
+pub fn type_keyword(cx: &LowerCx, token: &SyntaxToken) -> Option<&'static str> {
+    let (spelling, _) = SyntaxKind::KEYWORDS
         .iter()
-        .find(|(_, keyword)| *keyword == kind)
-        .map(|(spelling, _)| *spelling)
+        .find(|(_, keyword)| *keyword == token.kind())?;
+    let id = Id::from(spelling);
+    let names_a_type =
+        ElementaryTypeName::try_from(&id).is_ok() || GenericTypeName::try_from(&id).is_ok();
+    (names_a_type && !is_name_word(cx, token)).then_some(*spelling)
+}
+
+/// The type a token names: a type keyword is its canonical spelling, and any
+/// other token is a user type, named as written.
+pub fn lower_type_token(cx: &LowerCx, token: &SyntaxToken) -> TypeName {
+    let name = match type_keyword(cx, token) {
+        Some(spelling) => Id::from(spelling).with_position(cx.token_span(token)),
+        None => lower_id(cx, token),
+    };
+    TypeName { name }
 }
 
 /// Lowers a reference to a type: a [`SyntaxKind::TypeRef`] holding the type's
@@ -57,18 +90,14 @@ pub fn lower_type_ref(cx: &LowerCx, node: &SyntaxNode) -> Result<TypeName, Diagn
     let token = tokens
         .first()
         .ok_or_else(|| cx.missing(node, "a type name"))?;
-    let name = match canonical_spelling(token.kind()) {
-        Some(spelling) => Id::from(spelling).with_position(cx.token_span(token)),
-        None => lower_id(cx, token),
-    };
-    Ok(TypeName { name })
+    Ok(lower_type_token(cx, token))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::lower::INTERNAL_ERROR;
-    use crate::{parse_source_file, ParseOptions};
+    use crate::{parse_expression, parse_source_file, ParseOptions};
     use ironplc_dsl::core::FileId;
 
     fn names_of(source: &str, options: &ParseOptions, file: &FileId) -> Vec<Id> {
@@ -257,5 +286,40 @@ mod tests {
         let node = SyntaxNode::new_root(green);
         let diagnostic = lower_name(&LowerCx::new(FileId::default()), &node).err();
         assert_eq!(diagnostic.map(|d| d.code), Some(INTERNAL_ERROR.to_string()));
+    }
+
+    /// The type name of the first type reference in `__NEW(<text>)`, lowered
+    /// for text parsed under `options`.
+    fn type_named(text: &str, options: &ParseOptions) -> Option<String> {
+        let parse = parse_expression(&format!("__NEW({text})"), options);
+        let node = parse
+            .root
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::TypeRef)?;
+        let cx = LowerCx::new(FileId::default()).with_options(*options);
+        lower_type_ref(&cx, &node)
+            .ok()
+            .map(|name| name.name.original().to_string())
+    }
+
+    #[test]
+    fn lower_type_ref_when_keyword_is_left_a_name_by_the_dialect_then_the_name_as_written() {
+        let strict = ParseOptions::default();
+        let all = ParseOptions::all();
+        assert_eq!(type_named("bit", &strict).as_deref(), Some("bit"));
+        assert_eq!(type_named("bit", &all).as_deref(), Some("BIT"));
+        assert_eq!(type_named("ltime", &strict).as_deref(), Some("ltime"));
+        assert_eq!(type_named("ltime", &all).as_deref(), Some("LTIME"));
+        // A keyword that is no type is a name wherever a type is named.
+        assert_eq!(type_named("mod", &all).as_deref(), Some("mod"));
+    }
+
+    #[test]
+    fn keyword_enabled_when_context_built_with_options_then_those_options_decide() {
+        let cx = LowerCx::new(FileId::default());
+        assert!(cx.keyword_enabled(SyntaxKind::Bit));
+        let strict = cx.with_options(ParseOptions::default());
+        assert!(!strict.keyword_enabled(SyntaxKind::Bit));
+        assert!(strict.keyword_enabled(SyntaxKind::If));
     }
 }

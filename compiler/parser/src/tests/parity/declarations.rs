@@ -1,23 +1,26 @@
 //! Declaration parity with the legacy PEG parser, test-only.
 //!
-//! Two tables of whole-file snippets, each under every dialect preset: the
+//! Tables of whole-file snippets, each under every dialect preset: the
 //! declarations the legacy parser's own tests contain, lifted from their
-//! sources, and a table written for this slice with one row per declaration
-//! form, accepted and rejected. The new parser must report no syntax errors
-//! exactly when the legacy `parse_program` accepts the snippet. A difference
-//! must be listed in the named exception table with its reason; an unlisted
+//! sources, a table with one row per declaration form, accepted and rejected,
+//! and one with a row for each pair of a type and an initial value
+//! (`type_table`). The new parser must report no syntax errors exactly when
+//! the legacy `parse_program` accepts the snippet. A difference must be
+//! listed in the named exception table with its reason; an unlisted
 //! difference fails, and so does a listed one that no longer differs.
 
 use super::compare::{assert_clean, compare, summarize, Item};
 use super::declaration_table::DECLARATIONS;
 use super::legacy::presets;
 use super::tables::{DECLARATION_EXCEPTIONS, LEGACY_DECLARATION_EXCEPTIONS};
+use super::type_table::TYPES;
 use super::{extract, Kind, Oracle};
 
 #[test]
 fn parity_when_declaration_table_then_differences_are_exactly_the_exceptions() {
     let items: Vec<Item> = DECLARATIONS
         .iter()
+        .chain(TYPES)
         .map(|text| Item::snippet(text))
         .collect();
     let report = compare(
@@ -27,7 +30,7 @@ fn parity_when_declaration_table_then_differences_are_exactly_the_exceptions() {
         &presets(),
         DECLARATION_EXCEPTIONS,
     );
-    summarize("declarations", DECLARATIONS.len(), &report);
+    summarize("declarations", items.len(), &report);
     assert_clean(&report, 300, 300);
 }
 

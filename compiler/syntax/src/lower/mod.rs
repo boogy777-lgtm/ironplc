@@ -7,9 +7,11 @@
 //!
 //! Three pieces are shared by every rule:
 //!
-//! - [`LowerCx`] carries the file the text came from and is the only place a
-//!   byte range of the tree becomes a [`SourceSpan`], and a lowering problem
-//!   becomes a [`Diagnostic`].
+//! - [`LowerCx`] carries the file the text came from and the options it was
+//!   parsed under (a word the dialect leaves available as a name keeps the kind
+//!   of the keyword in the tree, and only the options say which it is), and is
+//!   the only place a byte range of the tree becomes a [`SourceSpan`], and a
+//!   lowering problem becomes a [`Diagnostic`].
 //! - [`disposition`] says, for every kind the tree can hold, whether it is
 //!   lowered by a rule (and which area owns it), is consumed by its parent's
 //!   rule, is trivia, or has no rule yet. It matches every node kind without
@@ -21,18 +23,24 @@
 //! grammar guarantees but the tree lacks is an internal error, and a node whose
 //! area has no rule yet is reported as not implemented.
 
+pub mod declarations;
 pub mod expressions;
+pub mod initializers;
 pub mod literals;
 pub mod names;
 pub mod statements;
 pub mod tree;
+pub mod types;
+pub mod values;
 pub mod variables;
 
 use self::statements::lower_statement_list;
 use self::tree::child_of;
+use self::types::lower_type_block;
+use crate::parser::options::ParseOptions;
 use crate::parser::Parse;
 use crate::syntax_kind::{NodeKind, SyntaxKind, SyntaxNode, SyntaxToken};
-use ironplc_dsl::common::Library;
+use ironplc_dsl::common::{Library, LibraryElementKind};
 use ironplc_dsl::core::{FileId, SourceSpan};
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
 use ironplc_dsl::textual::StmtKind;
@@ -57,6 +65,14 @@ pub enum Area {
     /// What a program does: the statements and the lists they sit in
     /// (`statements`).
     Statement,
+    /// What a declaration says a thing is: the `TYPE` blocks and their
+    /// declarations, the forms of type, and the members of a structure
+    /// (`types`).
+    Type,
+    /// The values that follow a `:=` in a declaration: the elements of an
+    /// array, the members of a structure and a qualified enumeration value
+    /// (`initializers`).
+    Initializer,
 }
 
 /// What lowering does with a kind the tree can hold.
@@ -121,6 +137,27 @@ fn node_disposition(node: NodeKind) -> Disposition {
         NodeKind::ArgList | NodeKind::PositionalArg | NodeKind::NamedArg | NodeKind::OutputArg => {
             Structural
         }
+        // The `:=` of a declaration and its value, read by the rule of the
+        // declaration.
+        NodeKind::Initializer => Structural,
+        NodeKind::TypeBlock
+        | NodeKind::TypeDecl
+        | NodeKind::ArrayType
+        | NodeKind::Subrange
+        | NodeKind::StringType
+        | NodeKind::RefType
+        | NodeKind::ParamsType
+        | NodeKind::SubrangeType
+        | NodeKind::EnumType
+        | NodeKind::EnumValue
+        | NodeKind::StructType
+        | NodeKind::UnionType
+        | NodeKind::StructMember => Lowered(Area::Type),
+        NodeKind::ArrayInit
+        | NodeKind::RepeatedInit
+        | NodeKind::StructInit
+        | NodeKind::StructInitElement
+        | NodeKind::EnumValueRef => Lowered(Area::Initializer),
         // The parts of a statement, read by the rule of the statement.
         NodeKind::AssignOp
         | NodeKind::ElsifClause
@@ -166,25 +203,6 @@ fn node_disposition(node: NodeKind) -> Disposition {
         | NodeKind::EdgeSpec
         | NodeKind::AccessDecl
         | NodeKind::InstanceInit
-        | NodeKind::TypeBlock
-        | NodeKind::TypeDecl
-        | NodeKind::ArrayType
-        | NodeKind::Subrange
-        | NodeKind::StringType
-        | NodeKind::RefType
-        | NodeKind::ParamsType
-        | NodeKind::SubrangeType
-        | NodeKind::EnumType
-        | NodeKind::EnumValue
-        | NodeKind::StructType
-        | NodeKind::UnionType
-        | NodeKind::StructMember
-        | NodeKind::Initializer
-        | NodeKind::ArrayInit
-        | NodeKind::RepeatedInit
-        | NodeKind::StructInit
-        | NodeKind::StructInitElement
-        | NodeKind::EnumValueRef
         | NodeKind::ConfigurationDecl
         | NodeKind::ResourceDecl
         | NodeKind::TaskDecl
@@ -239,11 +257,35 @@ pub(crate) const INTERNAL_ERROR: &str = "P9998";
 #[derive(Debug, Clone)]
 pub struct LowerCx {
     file_id: FileId,
+    options: ParseOptions,
 }
 
 impl LowerCx {
+    /// A context for lowering text of `file_id` under every keyword enabled.
+    /// The text of a dialect is lowered with [`LowerCx::with_options`].
     pub fn new(file_id: FileId) -> Self {
-        LowerCx { file_id }
+        LowerCx {
+            file_id,
+            options: ParseOptions::all(),
+        }
+    }
+
+    /// This context for text parsed under `options`.
+    pub fn with_options(self, options: ParseOptions) -> Self {
+        LowerCx { options, ..self }
+    }
+
+    /// True when `kind` is a keyword in the dialect the text was written in,
+    /// and false when the dialect leaves the word available as a name.
+    pub fn keyword_enabled(&self, kind: SyntaxKind) -> bool {
+        self.options.keyword_enabled(kind)
+    }
+
+    /// True when `TIME`, followed by a token of kind `next`, is an ordinary
+    /// name in the dialect the text was written in (see
+    /// [`ParseOptions::time_is_name`]).
+    pub fn time_is_name(&self, next: Option<SyntaxKind>) -> bool {
+        self.options.time_is_name(next)
     }
 
     /// The file the lowered text came from.
@@ -330,20 +372,39 @@ fn first_error(parse: &Parse, file_id: &FileId) -> Option<Diagnostic> {
         .map(|error| error.to_diagnostic(file_id))
 }
 
+/// A rule: builds the library elements a top-level node writes.
+type ElementRule = fn(&LowerCx, &SyntaxNode) -> Result<Vec<LibraryElementKind>, Diagnostic>;
+
+/// `TYPE ... END_TYPE` is one element for each of its declarations.
+fn type_elements(cx: &LowerCx, node: &SyntaxNode) -> Result<Vec<LibraryElementKind>, Diagnostic> {
+    Ok(lower_type_block(cx, node)?
+        .into_iter()
+        .map(LibraryElementKind::DataTypeDeclaration)
+        .collect())
+}
+
+/// The top-level nodes that have a rule, and the rule of each. A node of any
+/// other kind has none yet.
+const ELEMENTS: &[(SyntaxKind, ElementRule)] = &[(SyntaxKind::TypeBlock, type_elements)];
+
 /// Lowers the tree of a whole file to a library.
 ///
 /// Fails with the first error of the parse when it has any, and with a
-/// not-implemented diagnostic at the first declaration, because the rules for
-/// declarations are not written yet: only a file with no declaration lowers.
+/// not-implemented diagnostic at the first declaration that has no rule yet.
 pub fn lower_library(parse: &Parse, file_id: &FileId) -> Result<Library, Diagnostic> {
     if let Some(error) = first_error(parse, file_id) {
         return Err(error);
     }
-    let cx = LowerCx::new(file_id.clone());
-    match parse.root.children().next() {
-        Some(node) => Err(cx.unsupported(&node)),
-        None => Ok(Library { elements: vec![] }),
+    let cx = LowerCx::new(file_id.clone()).with_options(parse.options);
+    let mut elements = Vec::new();
+    for node in parse.root.children() {
+        let (_, rule) = ELEMENTS
+            .iter()
+            .find(|(kind, _)| *kind == node.kind())
+            .ok_or_else(|| cx.unsupported(&node))?;
+        elements.extend(rule(&cx, &node)?);
     }
+    Ok(Library { elements })
 }
 
 /// Lowers the tree of a statement list to statements.
@@ -354,7 +415,7 @@ pub fn lower_statements(parse: &Parse, file_id: &FileId) -> Result<Vec<StmtKind>
     if let Some(error) = first_error(parse, file_id) {
         return Err(error);
     }
-    let cx = LowerCx::new(file_id.clone());
+    let cx = LowerCx::new(file_id.clone()).with_options(parse.options);
     match child_of(&parse.root, SyntaxKind::StatementList) {
         Some(list) => lower_statement_list(&cx, &list),
         None => Ok(vec![]),

@@ -143,7 +143,7 @@ VAR
 END_VAR
 END_PROGRAM",
         Problem::RealLiteralOutOfRange,
-        "1.0E400"
+        "-1.0E400"
     );
 
     rule_err1_at!(

@@ -9,13 +9,13 @@ use super::super::expressions::lower_expr;
 use super::super::literals::lower_constant;
 use super::super::names::lower_name;
 use super::super::tree::{child_of, children_of, token_of};
+use super::super::values::{
+    lower_bare_value, lower_integer, lower_qualified_value, lower_subrange,
+};
 use super::super::LowerCx;
 use super::{body_of, condition_of};
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode};
-use ironplc_dsl::common::{
-    BitStringLiteral, ConstantKind, EnumeratedValue, SignedInteger, SignedIntegerRef, Subrange,
-    TypeName,
-};
+use ironplc_dsl::common::{BitStringLiteral, ConstantKind};
 use ironplc_dsl::core::SourceSpan;
 use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_dsl::textual::{
@@ -150,51 +150,14 @@ const LABELS: &[(Shape, LabelRule)] = &[
     (Shape::Child(K::NameRef), value),
 ];
 
-/// The integer a number node spells.
-fn integer(cx: &LowerCx, node: &SyntaxNode) -> Result<SignedInteger, Diagnostic> {
-    match lower_constant(cx, node)? {
-        ConstantKind::IntegerLiteral(literal) => Ok(literal.value),
-        _ => Err(cx.missing(node, "an integer")),
-    }
-}
-
-/// The nodes a label is made of, as the grammar gives them.
-fn parts(cx: &LowerCx, label: &SyntaxNode) -> Result<(SyntaxNode, SyntaxNode), Diagnostic> {
-    let mut nodes = label.children();
-    match (nodes.next(), nodes.next()) {
-        (Some(first), Some(second)) => Ok((first, second)),
-        _ => Err(cx.missing(label, "two parts")),
-    }
-}
-
-/// A bound of a range: a number, or the name of a constant.
-fn bound(cx: &LowerCx, node: &SyntaxNode) -> Result<SignedIntegerRef, Diagnostic> {
-    match node.kind() {
-        K::IntLiteral => integer(cx, node).map(SignedIntegerRef::Literal),
-        K::NameRef => lower_name(cx, node).map(SignedIntegerRef::Constant),
-        _ => Err(cx.unsupported(node)),
-    }
-}
-
 /// `low..high`
 fn range(cx: &LowerCx, label: &SyntaxNode) -> Result<CaseSelectionKind, Diagnostic> {
-    let (low, high) = parts(cx, label)?;
-    Ok(CaseSelectionKind::Subrange(Subrange {
-        start: bound(cx, &low)?,
-        end: bound(cx, &high)?,
-    }))
+    lower_subrange(cx, label).map(CaseSelectionKind::Subrange)
 }
 
 /// `Type#Value`
 fn qualified_value(cx: &LowerCx, label: &SyntaxNode) -> Result<CaseSelectionKind, Diagnostic> {
-    let (type_name, value) = parts(cx, label)?;
-    Ok(CaseSelectionKind::EnumeratedValue(EnumeratedValue {
-        type_name: Some(TypeName {
-            name: lower_name(cx, &type_name)?,
-        }),
-        value: lower_name(cx, &value)?,
-        explicit_value: None,
-    }))
+    lower_qualified_value(cx, label).map(CaseSelectionKind::EnumeratedValue)
 }
 
 /// `16#FF`, `8#17`, `2#1010`: a bit string, which a label spells without a
@@ -219,7 +182,7 @@ fn number(cx: &LowerCx, label: &SyntaxNode) -> Result<CaseSelectionKind, Diagnos
     let literal = label
         .first_child()
         .ok_or_else(|| cx.missing(label, "a number"))?;
-    integer(cx, &literal).map(CaseSelectionKind::SignedInteger)
+    lower_integer(cx, &literal).map(CaseSelectionKind::SignedInteger)
 }
 
 /// `Red`: a name alone selects an enumeration value.
@@ -227,11 +190,7 @@ fn value(cx: &LowerCx, label: &SyntaxNode) -> Result<CaseSelectionKind, Diagnost
     let name = label
         .first_child()
         .ok_or_else(|| cx.missing(label, "a name"))?;
-    Ok(CaseSelectionKind::EnumeratedValue(EnumeratedValue {
-        type_name: None,
-        value: lower_name(cx, &name)?,
-        explicit_value: None,
-    }))
+    lower_bare_value(cx, &name).map(CaseSelectionKind::EnumeratedValue)
 }
 
 /// One selector of a branch.

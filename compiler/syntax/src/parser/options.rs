@@ -137,6 +137,14 @@ impl ParseOptions {
     /// This is the one table that decides which keyword is gated by which
     /// flag. Kinds that are not keywords, and keywords no flag gates, are
     /// always enabled.
+    /// True when `TIME`, followed by a token of kind `next`, is an ordinary
+    /// name: where the dialect lets `TIME` name a function, a `TIME` that a
+    /// call or an assignment follows is the function and not the type.
+    pub fn time_is_name(&self, next: Option<SyntaxKind>) -> bool {
+        self.allow_time_as_function_name
+            && matches!(next, Some(SyntaxKind::LeftParen | SyntaxKind::Assignment))
+    }
+
     pub fn keyword_enabled(&self, kind: SyntaxKind) -> bool {
         use SyntaxKind as K;
         match kind {
