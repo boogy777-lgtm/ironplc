@@ -57,6 +57,7 @@ use ironplc_dsl::{
     common::*,
     core::Located,
     diagnostic::{Diagnostic, Label},
+    scope::ScopeNode,
     textual::*,
     visitor::Visitor,
 };
@@ -64,6 +65,7 @@ use ironplc_parser::options::CompilerOptions;
 use ironplc_problems::Problem;
 use std::convert::Infallible;
 
+use crate::intermediate_type::IntermediateType;
 use crate::intermediates::arithmetic_overload::{
     resolve_arithmetic_fold, resolve_arithmetic_overload, FoldFailure,
 };
@@ -76,6 +78,7 @@ use crate::semantic_context::SemanticContext;
 use crate::type_compat::{are_types_compatible, is_checkable_type};
 use crate::type_environment::TypeEnvironment;
 use crate::value_type::operand_type_name;
+use crate::variable_type::{declared_type, struct_field_type, Declarations, Declared};
 
 pub fn apply(
     lib: &Library,
@@ -87,6 +90,7 @@ pub fn apply(
             types: context.types(),
             options,
             diagnostics: vec![],
+            declarations: Declarations::new(),
         },
         lib,
     )
@@ -145,6 +149,9 @@ struct RuleOperatorOperandTypeCheck<'a> {
     types: &'a TypeEnvironment,
     options: &'a CompilerOptions,
     diagnostics: Vec<Diagnostic>,
+    /// Declared type of every variable in scope, to type the outputs of a
+    /// function block call.
+    declarations: Declarations<'static>,
 }
 
 impl DiagnosticVisitor for RuleOperatorOperandTypeCheck<'_> {
@@ -281,8 +288,79 @@ impl RuleOperatorOperandTypeCheck<'_> {
     }
 }
 
+impl RuleOperatorOperandTypeCheck<'_> {
+    /// Reports P4049 for the `NOT` of a negated output assignment
+    /// (`NOT out => target`) whose output is not `BOOL`.
+    ///
+    /// `NOT out => target` stores the complement of the output, so the output
+    /// is the operand of a `NOT` like any other. It is held to `BOOL` rather
+    /// than to the row's bit-string category because the store negates a
+    /// single truth value; a bit string would need its width truncated back,
+    /// which the store does not do. An output whose type cannot be resolved
+    /// (an unknown callee or field is reported by the call rules) is skipped.
+    fn check_negated_outputs(&mut self, fb_call: &FbCall) {
+        let Some(form) = checked_unary_form(&UnaryOp::Not) else {
+            return;
+        };
+        let Some(instance) = declared_type(&fb_call.var_name, &self.declarations, self.types)
+        else {
+            return;
+        };
+        for param in &fb_call.params {
+            let ParamAssignmentKind::Output(output) = param else {
+                continue;
+            };
+            if !output.not {
+                continue;
+            }
+            let Some(actual) = struct_field_type(&instance, &output.src) else {
+                continue;
+            };
+            if actual == IntermediateType::Bool {
+                continue;
+            }
+            let actual_name = self.types.elementary_type_name_for(&actual).map_or_else(
+                || "a non-elementary type".to_owned(),
+                |n| n.to_string().to_uppercase(),
+            );
+            self.diagnostics.push(
+                Diagnostic::problem(
+                    Problem::OperatorOperandTypeMismatch,
+                    Label::span(output.src.span(), "Negated output"),
+                )
+                .with_context("operator", &form.name.to_string())
+                .with_context("expected", &"BOOL".to_owned())
+                .with_context("actual", &actual_name),
+            );
+        }
+    }
+}
+
 impl Visitor<Infallible> for RuleOperatorOperandTypeCheck<'_> {
     type Value = ();
+
+    /// Opens a declaration's scope, so the outputs of a call are typed by
+    /// the instances the declaration itself sees.
+    fn enter_scope(&mut self, _node: ScopeNode<'_>) -> Result<(), Infallible> {
+        self.declarations.enter();
+        Ok(())
+    }
+
+    fn exit_scope(&mut self) {
+        self.declarations.exit();
+    }
+
+    fn visit_var_decl(&mut self, node: &VarDecl) -> Result<Self::Value, Infallible> {
+        if let VariableIdentifier::Symbol(ref id) = node.identifier {
+            self.declarations.add(id, Declared::of(node));
+        }
+        node.recurse_visit(self)
+    }
+
+    fn visit_fb_call(&mut self, node: &FbCall) -> Result<Self::Value, Infallible> {
+        self.check_negated_outputs(node);
+        node.recurse_visit(self)
+    }
 
     /// Checks an operator expression at the `Expr` that holds it, rather than
     /// at the operator node, so a check has the span of the whole expression
@@ -799,6 +877,89 @@ VAR
     c : BOOL;
 END_VAR
     c := b AND r > 1.0 AND r;
+END_PROGRAM",
+        Problem::OperatorOperandTypeMismatch
+    );
+
+    // A negated output assignment is a `NOT` of the output: it is held to
+    // BOOL, for a user-defined and a standard function block alike.
+    rule_ctx_ok!(
+        apply_when_negated_output_is_bool_then_ok,
+        "
+FUNCTION_BLOCK FLAG
+VAR_OUTPUT q : BOOL; END_VAR
+END_FUNCTION_BLOCK
+
+PROGRAM main
+VAR
+    fb : FLAG;
+    t : TON;
+    r : BOOL;
+END_VAR
+    fb(NOT q => r);
+    t(IN := TRUE, PT := T#1s, NOT Q => r);
+END_PROGRAM"
+    );
+
+    rule_ctx_ok!(
+        apply_when_plain_output_is_not_bool_then_ok,
+        "
+FUNCTION_BLOCK COUNTER
+VAR_OUTPUT n : DINT; END_VAR
+END_FUNCTION_BLOCK
+
+PROGRAM main
+VAR
+    fb : COUNTER;
+    d : DINT;
+END_VAR
+    fb(n => d);
+END_PROGRAM"
+    );
+
+    rule_ctx_err1!(
+        apply_when_negated_output_is_integer_then_error,
+        "
+FUNCTION_BLOCK COUNTER
+VAR_OUTPUT n : DINT; END_VAR
+END_FUNCTION_BLOCK
+
+PROGRAM main
+VAR
+    fb : COUNTER;
+    d : DINT;
+END_VAR
+    fb(NOT n => d);
+END_PROGRAM",
+        Problem::OperatorOperandTypeMismatch
+    );
+
+    rule_ctx_err1!(
+        apply_when_negated_output_is_bit_string_then_error,
+        "
+FUNCTION_BLOCK MASKS
+VAR_OUTPUT m : BYTE; END_VAR
+END_FUNCTION_BLOCK
+
+PROGRAM main
+VAR
+    fb : MASKS;
+    b : BYTE;
+END_VAR
+    fb(NOT m => b);
+END_PROGRAM",
+        Problem::OperatorOperandTypeMismatch
+    );
+
+    rule_ctx_err1!(
+        apply_when_negated_standard_output_is_not_bool_then_error,
+        "
+PROGRAM main
+VAR
+    t : TON;
+    e : TIME;
+END_VAR
+    t(IN := TRUE, PT := T#1s, NOT ET => e);
 END_PROGRAM",
         Problem::OperatorOperandTypeMismatch
     );

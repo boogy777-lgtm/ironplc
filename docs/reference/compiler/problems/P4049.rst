@@ -222,3 +222,48 @@ The same applies to ``NOT``, whose operand is a single bit string:
    END_VAR
        inverted := NOT flags;   (* 16#F0 *)
    END_PROGRAM
+
+Negated outputs
+---------------
+
+A negated output assignment, ``NOT output => target``, stores the complement of
+the function block output. It is the ``NOT`` of that output, so the output must
+be a ``BOOL``. A bit-string or numeric output is reported with the expected
+type ``BOOL``.
+
+The following code will generate error P4049:
+
+.. code-block::
+
+   FUNCTION_BLOCK Counter
+   VAR_OUTPUT
+       count : DINT;
+   END_VAR
+   END_FUNCTION_BLOCK
+
+   PROGRAM main
+   VAR
+       counter : Counter;
+       inverted : DINT;
+   END_VAR
+       counter(NOT count => inverted);
+   END_PROGRAM
+
+To fix this error, remove the ``NOT`` to store the output as it is, or negate a
+``BOOL`` output:
+
+.. code-block::
+
+   FUNCTION_BLOCK Latch
+   VAR_OUTPUT
+       is_set : BOOL;
+   END_VAR
+   END_FUNCTION_BLOCK
+
+   PROGRAM main
+   VAR
+       latch : Latch;
+       is_clear : BOOL;
+   END_VAR
+       latch(NOT is_set => is_clear);
+   END_PROGRAM
