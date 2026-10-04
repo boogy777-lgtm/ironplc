@@ -17,16 +17,10 @@ BEFORE changes: read specs/steering/<topic>.md matching touched path
 terminology := specs/steering/glossary.md; !coin_new_terms
 ```
 
-## Design: N+1 (owner + terms: specs/steering/development-standards.md#mechanisms-not-patches-n1)
+## Design
 
 ```
-before code    -> identify class(X) of change
-mechanism(X)   -> add row && !vbranch
-new invariant  -> new mechanism ok && invariant in plan|PR
-|X| == 1       -> !mechanism
-dep(l)         -> derive || guard
-pipeline       := CompilerOptions flags|policies; !Dialect
-patch          -> PR names patch + missing mechanism + trigger condition
+BEFORE code: read + apply N+1 := specs/steering/development-standards.md#mechanisms-not-patches-n1
 ```
 
 ## Gates (MUST pass before PR)
