@@ -173,22 +173,21 @@ fn lowering_spec_req_pt_003_total_over_accepted_text_for_files_and_prefixes() {
     }
 }
 
-/// REQ-PT-syntax-004: Lowering a parse that reported errors fails with the
-/// first of them, positioned in the file given, and builds no object.
+/// REQ-PT-syntax-004: Lowering a parse that reported errors fails with its
+/// primary error (REQ-PT-syntax-009), positioned in the file given, and builds
+/// no object.
 #[spec_test(REQ_PT_syntax_004)]
-fn lowering_spec_req_pt_004_refuses_a_parse_with_errors_with_its_first_error() {
+fn lowering_spec_req_pt_004_refuses_a_parse_with_errors_with_its_primary_error() {
     let named = FileId::from_string("bad.st");
     for source in [
         "PROGRAM p x END_PROGRAM",
         "PROGRAM p VAR x : INT; END_VAR x := ; END_PROGRAM",
+        "PROGRAM p VAR x : INT; END_VAR x := ; // note\nEND_PROGRAM",
     ] {
         let parse = parse_source_file(source, &ParseOptions::default());
         assert!(!parse.is_ok(), "{source}");
         let refused = lower_library(&parse, &named).err();
-        let first = parse
-            .errors
-            .first()
-            .map(|error| error.to_diagnostic(&named));
+        let primary = parse.primary_diagnostic(&named);
         assert!(refused.is_some(), "{source}");
         let describe = |diagnostic: Option<ironplc_dsl::diagnostic::Diagnostic>| {
             diagnostic.map(|d| {
@@ -200,8 +199,60 @@ fn lowering_spec_req_pt_004_refuses_a_parse_with_errors_with_its_first_error() {
                 )
             })
         };
-        assert_eq!(describe(refused), describe(first), "{source}");
+        assert_eq!(describe(refused), describe(primary), "{source}");
     }
+}
+
+/// REQ-PT-syntax-009: A parse reports every error it finds, and one of them is
+/// primary: the error of the earliest stage that finds errors, and the earliest
+/// in the text among the errors of that stage.
+#[spec_test(REQ_PT_syntax_009)]
+fn parse_spec_req_pt_009_the_primary_error_is_the_earliest_stage_then_the_earliest_position() {
+    let check = |name: &str, text: &str, options: &ParseOptions| {
+        let parse = parse_source_file(text, options);
+        let Some(primary) = parse.primary_error() else {
+            assert!(parse.errors.is_empty(), "{name}");
+            return false;
+        };
+        for error in &parse.errors {
+            assert!(
+                (error.kind.rank(), error.range.start(), error.range.end())
+                    >= (
+                        primary.kind.rank(),
+                        primary.range.start(),
+                        primary.range.end()
+                    ),
+                "{name}: {error:?} precedes the primary {primary:?}"
+            );
+        }
+        true
+    };
+    let mut with_errors = 0;
+    for (name, text) in corpus() {
+        for options in option_sets() {
+            with_errors += usize::from(check(&name, &text, &options));
+        }
+    }
+    // Cuts of the corpus add grammar errors to the gated forms of a file.
+    for (name, text) in corpus_as_written() {
+        for step in 1..16 {
+            let mut end = text.len() * step / 16;
+            while !text.is_char_boundary(end) {
+                end -= 1;
+            }
+            for options in option_sets() {
+                with_errors += usize::from(check(&name, &text[..end], &options));
+            }
+        }
+    }
+    assert!(with_errors > 100, "only {with_errors} parses had errors");
+    // Every kind of error is in exactly one stage.
+    let listed: usize = crate::STAGES.iter().map(|stage| stage.kinds.len()).sum();
+    let distinct: BTreeSet<String> = crate::STAGES
+        .iter()
+        .flat_map(|stage| stage.kinds.iter().map(|kind| format!("{kind:?}")))
+        .collect();
+    assert_eq!(listed, distinct.len());
 }
 
 /// REQ-PT-syntax-005: Every kind of node that a lowering rule owns occurs in a

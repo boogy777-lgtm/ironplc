@@ -19,7 +19,8 @@ use rowan::TextRange;
 pub enum ErrorKind {
     /// The text does not follow the grammar.
     Syntax,
-    /// Bytes that match no token.
+    /// Text that makes no token: bytes that start none, a string or an
+    /// escaped identifier that is never closed.
     UnexpectedCharacter,
     /// `//` or `/* */` comment without the flag.
     CStyleComment,

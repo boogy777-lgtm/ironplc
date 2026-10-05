@@ -321,20 +321,23 @@ fn duration(
         _ => (false, value),
     };
     let text: String = pieces.iter().map(SyntaxToken::text).collect();
+    // A number too large for any count is a duration too large for any type,
+    // the same as a count that fits but whose duration does not.
+    let too_large = || {
+        let written: String = tokens.iter().map(SyntaxToken::text).collect();
+        DurationOutOfRange.diagnostic(cx.node_span(node), &written, width)
+    };
     let mut parts = interval_text::parse(&text)
         .map_err(|why| out_of_range(cx, node, why))?
         .into_iter()
         .map(|part| FixedPoint::parse(&part.number).map(|number| (number, part.unit)))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|why| out_of_range(cx, node, why))?
+        .map_err(|_| too_large())?
         .into_iter();
     let first = parts.next().ok_or_else(|| shape(cx, node))?;
     let total = combine_interval_parts(first, parts.collect())
         .map_err(|why| match why {
-            IntervalError::OutOfRange => {
-                let text: String = tokens.iter().map(SyntaxToken::text).collect();
-                DurationOutOfRange.diagnostic(cx.node_span(node), &text, width)
-            }
+            IntervalError::OutOfRange => too_large(),
             _ => shape(cx, node),
         })?
         .interval;

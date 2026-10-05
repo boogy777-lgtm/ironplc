@@ -258,6 +258,42 @@ impl<'t, 's> Parser<'t, 's> {
         self.pos
     }
 
+    /// How many errors have been recorded.
+    pub(crate) fn error_count(&self) -> usize {
+        self.errors.len()
+    }
+
+    /// The source text of the tokens consumed since `start` (a
+    /// [`Parser::position`]), the trivia between them included.
+    pub(crate) fn text_since(&self, start: usize) -> String {
+        let first = self.significant.get(start);
+        let last = self
+            .pos
+            .checked_sub(1)
+            .and_then(|last| self.significant.get(last));
+        match (first, last) {
+            (Some(first), Some(last)) if first <= last => self
+                .tokens
+                .get(*first..=*last)
+                .unwrap_or_default()
+                .iter()
+                .map(|token| token.text)
+                .collect(),
+            _ => String::new(),
+        }
+    }
+
+    /// Adds `text`, the source of the construct they are about, to the message
+    /// of every grammar error recorded after the first `errors` errors, so a
+    /// diagnostic about a part of a literal names the literal.
+    pub(crate) fn quote_in_errors_since(&mut self, errors: usize, text: &str) {
+        for error in self.errors.iter_mut().skip(errors) {
+            if error.kind == ErrorKind::Syntax {
+                error.message = format!("{}: '{text}'", error.message);
+            }
+        }
+    }
+
     // ----- nodes ----------------------------------------------------------
 
     pub(crate) fn start(&mut self) -> Marker {
@@ -331,9 +367,17 @@ impl<'t, 's> Parser<'t, 's> {
             .map_or_else(|| TextRange::empty(self.end), |token| token.range)
     }
 
+    /// Records an error, unless it is the one just recorded: two rules that
+    /// each notice the same fault at the same place say it once.
+    fn record(&mut self, error: SyntaxError) {
+        if self.errors.last() != Some(&error) {
+            self.errors.push(error);
+        }
+    }
+
     /// Records an error over an explicit range of the source.
     pub(crate) fn error_at(&mut self, range: TextRange, message: &str) {
-        self.errors.push(SyntaxError::new(message, range));
+        self.record(SyntaxError::new(message, range));
     }
 
     /// The range of the `n`th token ahead, or the empty range at the end.
@@ -352,8 +396,7 @@ impl<'t, 's> Parser<'t, 's> {
             .and_then(|previous| self.significant.get(previous))
             .and_then(|index| self.tokens.get(*index))
             .map_or_else(|| TextSize::from(0), |token| token.range.end());
-        self.errors
-            .push(SyntaxError::new(message, TextRange::empty(end)));
+        self.record(SyntaxError::new(message, TextRange::empty(end)));
     }
 
     /// Records an error at the next token. A lexical error token already has
@@ -362,8 +405,7 @@ impl<'t, 's> Parser<'t, 's> {
         if self.nth(0) == Some(SyntaxKind::ErrorToken) {
             return;
         }
-        self.errors
-            .push(SyntaxError::new(message, self.current_range()));
+        self.record(SyntaxError::new(message, self.current_range()));
     }
 
     // ----- depth guard ----------------------------------------------------
@@ -486,6 +528,17 @@ mod tests {
         let (_, errors) = parser.finish();
         assert_eq!(errors.len(), 1);
         assert_eq!(errors[0].range, TextRange::empty(TextSize::from(2)));
+    }
+
+    #[test]
+    fn error_when_the_same_error_is_reported_twice_in_a_row_then_once() {
+        let (tokens, _) = lex("a");
+        let mut parser = Parser::new(&tokens, ParseOptions::default());
+        parser.error("expected something");
+        parser.error("expected something");
+        parser.error("expected something else");
+        let (_, errors) = parser.finish();
+        assert_eq!(errors.len(), 2);
     }
 
     #[test]

@@ -91,6 +91,20 @@ mod tests {
     }
 
     #[test]
+    fn to_diagnostic_when_string_never_closed_then_the_unmatched_text_code_over_its_line() {
+        let source = "PROGRAM p\nx := 'open;\nEND_PROGRAM";
+        let parse = parse_source_file(source, &ParseOptions::default());
+        let diagnostic = parse.primary_diagnostic(&FileId::default());
+        let first = diagnostic.as_ref().map(|d| d.code.as_str());
+        assert_eq!(first, Some(Problem::UnexpectedToken.code()));
+        let quote = source.find('\'').unwrap_or(0);
+        assert_eq!(
+            diagnostic.map(|d| (d.primary.location.start, d.primary.location.end)),
+            Some((quote, source.find("\nEND").unwrap_or(0)))
+        );
+    }
+
+    #[test]
     fn to_diagnostic_when_nesting_too_deep_then_the_nesting_code_and_a_message_naming_the_limit() {
         let source = format!(
             "{}1{}",

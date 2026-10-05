@@ -47,6 +47,15 @@ impl Class {
             Class::DateTime => K::DateTimeLiteral,
         }
     }
+
+    /// True for the literals of time: a diagnostic about a part of one names
+    /// the whole literal, because the part (`61`, `5s1m`) means nothing alone.
+    fn is_temporal(self) -> bool {
+        matches!(
+            self,
+            Class::Duration | Class::TimeOfDay | Class::Date | Class::DateTime
+        )
+    }
 }
 
 /// Prefixes that are keywords.
@@ -193,6 +202,7 @@ fn is_based_decimal(p: &Parser) -> bool {
 
 fn typed(p: &mut Parser, class: Class) -> CompletedMarker {
     let marker = p.start();
+    let (start, errors) = (p.position(), p.error_count());
     p.bump_n(2);
     if !p.touches_previous() {
         p.error("no whitespace is allowed inside a literal");
@@ -223,6 +233,10 @@ fn typed(p: &mut Parser, class: Class) -> CompletedMarker {
         Class::TimeOfDay => daytime_value(p),
         Class::Date => date_value(p),
         Class::DateTime => date_and_time_value(p),
+    }
+    if class.is_temporal() {
+        let text = p.text_since(start);
+        p.quote_in_errors_since(errors, &text);
     }
     p.complete(marker, class.node())
 }

@@ -7,7 +7,7 @@
 //! parts are separate tokens.
 
 use super::cursor::Cursor;
-use super::{error, unexpected_character, Scan};
+use super::{error, unexpected_character, unmatched, Scan};
 use crate::syntax_kind::SyntaxKind;
 
 /// How a quoted token is delimited.
@@ -37,7 +37,7 @@ pub(super) fn scan_quoted(cursor: &mut Cursor<'_>, quoted: &Quoted) -> Scan {
                 if let Some(pos) = first_break {
                     cursor.set_pos(pos);
                 }
-                return error(quoted.unterminated);
+                return unmatched(quoted.unterminated);
             }
             Some(byte) if byte == quoted.quote => {
                 cursor.bump();
@@ -45,7 +45,7 @@ pub(super) fn scan_quoted(cursor: &mut Cursor<'_>, quoted: &Quoted) -> Scan {
             }
             Some(byte) if is_line_break(byte) => {
                 if quoted.single_line {
-                    return error(quoted.unterminated);
+                    return unmatched(quoted.unterminated);
                 }
                 first_break.get_or_insert(cursor.pos());
                 cursor.bump();

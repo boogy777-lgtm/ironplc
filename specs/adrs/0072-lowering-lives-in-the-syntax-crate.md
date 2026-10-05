@@ -114,6 +114,24 @@ listed: the grammar's reference element in an array of references no longer
 admits an array target, which the object cannot hold, so the form is a syntax
 error at the array where the old parser also rejected it.
 
+### One diagnostic is reported, chosen by one table
+
+The old parser reports the first problem it finds, in the order its checks run:
+text it cannot read, each token check in turn, the conditional pragmas, the
+grammar. The new parser finds every problem, so the choice is made explicitly:
+`ironplc_syntax::STAGES` lists the stages in that order, each with the kinds of
+error it reports, and `Parse::primary_error` is the error of the earliest stage
+and, within a stage, the earliest in the text. A kind of error is a row (or one
+more kind of an existing row), not a branch, and lowering follows the last
+stage because it runs only on a tree without errors. The same comparison that
+holds the objects to the old parser holds the one diagnostic: for every input
+both reject, the problem code and the byte range are equal or a row of
+`code_exceptions.rs` says why, and what the two say is equal or a row of
+`diagnostics_messages.rs` says why. A temporal literal that is wrong in one
+part names the whole literal in the message; a number of twenty digits or more
+in a duration is a duration out of range (`P2039`), the same class as a count
+that fits but whose duration does not.
+
 ### The inputs are one corpus in three spellings
 
 Every `.st` source of the repository is read in place and compared as written,
@@ -140,10 +158,10 @@ only in trivia lowers to an equal library.
 ### Confirmation
 
 - `compiler/syntax/src/spec_conformance.rs` holds the tests of
-  `REQ-PT-syntax-001` to `REQ-PT-syntax-008`: reconstruction, regions,
+  `REQ-PT-syntax-001` to `REQ-PT-syntax-009`: reconstruction, regions,
   totality over the corpus and its prefixes, refusal of a parse with errors,
   coverage of every node kind with a rule, spans in the file, spelling of
-  trivia, and nesting as deep as the parser allows.
+  trivia, nesting as deep as the parser allows, and the one primary error.
 - `compiler/parser/src/tests/parity/` runs the strict comparison with the old
   parser over the corpus, the tables of statements, expressions and
   declarations, and the declarations lifted from the old parser's tests, under
