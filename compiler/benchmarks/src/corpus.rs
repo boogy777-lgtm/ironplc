@@ -5,11 +5,16 @@
 //! enumeration so they always measure the same files. The statement bodies of
 //! the files' program organization units are the second input set
 //! ([`statement_bodies`]): what a PLCopen XML document hands to
-//! `parse_st_statements`. Files are parsed under
+//! `parse_st_statements`. One PLCopen XML document that holds the bodies that
+//! parse is the third ([`plcopen_document`]): a run that reads many bodies. Files
+//! are parsed under
 //! the default dialect options (`CompilerOptions::default()`), the same
 //! options the parser's own corpus tests use; files that need `--allow-*`
 //! flags or are intentionally malformed therefore measure the fail-fast path.
 
+use ironplc_dsl::core::FileId;
+use ironplc_parser::options::CompilerOptions;
+use ironplc_parser::parse_st_statements;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -112,4 +117,64 @@ fn bodies_of(source: &str) -> Vec<&str> {
         }
     }
     bodies
+}
+
+/// The head and the foot of a PLCopen XML document that holds units.
+const DOCUMENT_HEAD: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://www.plcopen.org/xml/tc6_0201">
+  <fileHeader companyName="Test" productName="Test" productVersion="1.0" creationDateTime="2024-01-01T00:00:00"/>
+  <contentHeader name="TestProject">
+    <coordinateInfo><fbd><scaling x="1" y="1"/></fbd><ld><scaling x="1" y="1"/></ld><sfc><scaling x="1" y="1"/></sfc></coordinateInfo>
+  </contentHeader>
+  <types><dataTypes/><pous>
+"#;
+const DOCUMENT_FOOT: &str = "</pous></types>\n</project>\n";
+
+/// A tiny document with one unit and one statement body: the baseline for the
+/// init probe of the document paths.
+pub const PLAIN_DOCUMENT: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://www.plcopen.org/xml/tc6_0201">
+  <fileHeader companyName="Test" productName="Test" productVersion="1.0" creationDateTime="2024-01-01T00:00:00"/>
+  <contentHeader name="TestProject">
+    <coordinateInfo><fbd><scaling x="1" y="1"/></fbd><ld><scaling x="1" y="1"/></ld><sfc><scaling x="1" y="1"/></sfc></coordinateInfo>
+  </contentHeader>
+  <types><dataTypes/><pous>
+<pou name="P0" pouType="program"><interface/><body><ST><xhtml xmlns="http://www.w3.org/1999/xhtml">x := 1;</xhtml></ST></body></pou>
+</pous></types>
+</project>
+"#;
+
+/// The text as it is written inside an XML element.
+fn xml_text(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+/// One PLCopen XML document, as one input named `plcopen-xml`, with a program
+/// for each of the bodies that the statement parser accepts: reading it is one
+/// run that reads as many bodies as there are. A body that does not parse is
+/// left out, so that the document is read, not rejected.
+pub fn plcopen_document(bodies: &[CorpusFile]) -> CorpusFile {
+    let options = CompilerOptions::default();
+    let file_id = FileId::default();
+    let mut source = String::from(DOCUMENT_HEAD);
+    let mut accepted = 0;
+    for body in bodies {
+        if parse_st_statements(&body.source, &file_id, &options, 0, 0).is_err() {
+            continue;
+        }
+        accepted += 1;
+        source.push_str(&format!(
+            "<pou name=\"P{accepted}\" pouType=\"program\"><interface/><body><ST>\
+             <xhtml xmlns=\"http://www.w3.org/1999/xhtml\">{}</xhtml></ST></body></pou>\n",
+            xml_text(&body.source)
+        ));
+    }
+    source.push_str(DOCUMENT_FOOT);
+    CorpusFile {
+        name: format!("plcopen-xml ({accepted} bodies)"),
+        path: PathBuf::new(),
+        source,
+    }
 }

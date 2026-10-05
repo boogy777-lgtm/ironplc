@@ -18,6 +18,12 @@
 //! stage is a part of, and the ratio is the share of the whole that the stage
 //! is.
 //!
+//! A row says which stack it runs on ([`Stack`]). The stages give themselves the
+//! budget when the caller has none, which costs a thread for each stage call; a
+//! program of the compiler holds the budget from its entry and its stages make
+//! none. The rows marked `held` run the same call as their baseline on a thread
+//! that holds the budget, so one table shows both costs of one call.
+//!
 //! A row's call is typed by what it returns, and a table cannot hold the
 //! returned types, so a row gets a [`Probe`] from its caller and brackets the
 //! call with it: the caller times and counts allocations between
@@ -28,11 +34,12 @@
 // same lint); the paths return it as the public functions they measure do.
 #![allow(clippy::result_large_err)]
 
-use crate::corpus::{statement_bodies, CorpusFile};
+use crate::corpus::{plcopen_document, statement_bodies, CorpusFile, PLAIN_DOCUMENT};
 use ironplc_dsl::core::FileId;
 use ironplc_dsl::stack::within_stack_budget;
 use ironplc_parser::options::CompilerOptions;
 use ironplc_parser::{parse_program, parse_st_statements, tokenize_program};
+use ironplc_sources::{parse_source, FileType};
 use ironplc_syntax::{
     lexer::lex, lower::lower_library, lower::lower_statements, parse_source_file, parse_statements,
     tokenize, ParseOptions,
@@ -73,7 +80,7 @@ pub struct Ctx {
 
 /// Brackets the call a row makes, so that the caller measures the call and not
 /// what the row does around it.
-pub trait Probe {
+pub trait Probe: Send {
     fn start(&mut self);
     fn stop(&mut self);
 }
@@ -95,16 +102,20 @@ pub enum Over {
     /// The statement body of every unit of the corpus
     /// ([`statement_bodies`]): what a PLCopen XML document hands over.
     Bodies,
+    /// One PLCopen XML document that holds the bodies of the corpus that
+    /// parse ([`plcopen_document`]): a run that reads many bodies.
+    Document,
 }
 
 impl Over {
-    pub const ALL: [Over; 2] = [Over::Files, Over::Bodies];
+    pub const ALL: [Over; 3] = [Over::Files, Over::Bodies, Over::Document];
 
     /// The inputs of this set, from the files of the corpus.
     pub fn items(self, files: &[CorpusFile]) -> Vec<CorpusFile> {
         match self {
             Over::Files => files.to_vec(),
             Over::Bodies => statement_bodies(files),
+            Over::Document => vec![plcopen_document(&statement_bodies(files))],
         }
     }
 
@@ -114,6 +125,7 @@ impl Over {
         match self {
             Over::Files => &[("plain", PLAIN_SOURCE), ("located", LOCATED_SOURCE)],
             Over::Bodies => &[("plain", PLAIN_BODY)],
+            Over::Document => &[("one body", PLAIN_DOCUMENT)],
         }
     }
 
@@ -121,8 +133,26 @@ impl Over {
         match self {
             Over::Files => "files",
             Over::Bodies => "bodies",
+            Over::Document => "documents",
         }
     }
+}
+
+/// The stack a path runs on.
+///
+/// The stages give themselves the budget when the caller has none, which costs
+/// a thread for each stage call. A program of the compiler holds the budget
+/// from its entry (`ironplc_dsl::stack`), and the stages it calls make no
+/// thread. A path says which of the two it measures, so that one table shows
+/// both costs of the same call.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Stack {
+    /// The thread the harness is on, which has no budget: each stage call
+    /// makes a thread of its own.
+    Caller,
+    /// A thread that holds the budget, as the run of a program does: the call
+    /// is measured on it, and the thread is made outside the measurement.
+    Held,
 }
 
 /// One measured path.
@@ -135,18 +165,32 @@ pub struct Path {
     /// The name of the path whose result this path is compared with (a path
     /// over the same inputs), or none.
     pub baseline: Option<&'static str>,
-    /// Makes the call on one text, bracketed by the probe.
+    /// The stack the call runs on.
+    pub stack: Stack,
+    /// Makes the call on one text, bracketed by the probe. Call it through
+    /// [`Path::call`], which puts it on the stack the path measures.
     pub run: fn(&Ctx, &str, &mut dyn Probe),
     /// What the call makes of one text, in a few words (a count of tokens or
     /// errors, `ok`, or the problem code). It is made outside any measurement.
     pub describe: fn(&Ctx, &str) -> String,
 }
 
+impl Path {
+    /// One call of the path on one text, on the stack the path measures,
+    /// bracketed by the probe.
+    pub fn call(&self, ctx: &Ctx, source: &str, probe: &mut dyn Probe) {
+        match self.stack {
+            Stack::Caller => (self.run)(ctx, source, probe),
+            Stack::Held => within_stack_budget(|| (self.run)(ctx, source, probe)),
+        }
+    }
+}
+
 /// One row of [`PATHS`] from the call written once: `run` brackets it, and
 /// `describe` shows what it returned.
 macro_rules! path {
     (
-        $name:expr, $group:expr, $over:expr, $baseline:expr,
+        @row $stack:expr, $name:expr, $group:expr, $over:expr, $baseline:expr,
         |$ctx:ident, $src:ident| $call:expr,
         |$out:ident| $describe:expr
     ) => {
@@ -155,12 +199,36 @@ macro_rules! path {
             group: $group,
             over: $over,
             baseline: $baseline,
+            stack: $stack,
             run: |$ctx, $src, probe| timed(probe, || $call),
             describe: |$ctx, $src| {
                 let $out = $call;
                 $describe
             },
         }
+    };
+    // A row that is measured on a stack that holds the budget.
+    (
+        held $name:expr, $group:expr, $over:expr, $baseline:expr,
+        |$ctx:ident, $src:ident| $call:expr,
+        |$out:ident| $describe:expr
+    ) => {
+        path!(
+            @row Stack::Held, $name, $group, $over, $baseline,
+            |$ctx, $src| $call,
+            |$out| $describe
+        )
+    };
+    (
+        $name:expr, $group:expr, $over:expr, $baseline:expr,
+        |$ctx:ident, $src:ident| $call:expr,
+        |$out:ident| $describe:expr
+    ) => {
+        path!(
+            @row Stack::Caller, $name, $group, $over, $baseline,
+            |$ctx, $src| $call,
+            |$out| $describe
+        )
     };
 }
 
@@ -190,6 +258,18 @@ pub static PATHS: &[Path] = &[
         "parse_full",
         Over::Files,
         None,
+        |ctx, src| parse_program(src, &ctx.file_id, &ctx.options),
+        |out| status!(out)
+    ),
+    // The same call on a stack that holds the budget, as a program of the
+    // compiler makes it: the stage finds the budget and makes no thread. Its
+    // ratio to `parse` is what the thread of the stage entry costs a program
+    // that holds the budget from its entry.
+    path!(
+        held "parse (held)",
+        "parse_full_held",
+        Over::Files,
+        Some("parse"),
         |ctx, src| parse_program(src, &ctx.file_id, &ctx.options),
         |out| status!(out)
     ),
@@ -264,6 +344,43 @@ pub static PATHS: &[Path] = &[
         |ctx, src| parse_st_statements(src, &ctx.file_id, &ctx.options, 0, 0),
         |out| match out {
             Ok(statements) => format!("ok, {} statements", statements.len()),
+            Err(diagnostic) => format!("err[{}]", diagnostic.code.as_str()),
+        }
+    ),
+    path!(
+        held "statements (held)",
+        "parse_statements_held",
+        Over::Bodies,
+        Some("statements"),
+        |ctx, src| parse_st_statements(src, &ctx.file_id, &ctx.options, 0, 0),
+        |out| match out {
+            Ok(statements) => format!("ok, {} statements", statements.len()),
+            Err(diagnostic) => format!("err[{}]", diagnostic.code.as_str()),
+        }
+    ),
+    // A PLCopen XML document with a body for each unit of the corpus that
+    // parses: one run that reads many bodies, one `parse_st_statements` call
+    // for each. Where the caller holds no budget it is one thread for each
+    // body.
+    path!(
+        "xml document",
+        "parse_xml_document",
+        Over::Document,
+        None,
+        |ctx, src| parse_source(FileType::Xml, src, &ctx.file_id, &ctx.options),
+        |out| match out {
+            Ok(library) => format!("ok, {} units", library.elements.len()),
+            Err(diagnostic) => format!("err[{}]", diagnostic.code.as_str()),
+        }
+    ),
+    path!(
+        held "xml document (held)",
+        "parse_xml_document_held",
+        Over::Document,
+        Some("xml document"),
+        |ctx, src| parse_source(FileType::Xml, src, &ctx.file_id, &ctx.options),
+        |out| match out {
+            Ok(library) => format!("ok, {} units", library.elements.len()),
             Err(diagnostic) => format!("err[{}]", diagnostic.code.as_str()),
         }
     ),

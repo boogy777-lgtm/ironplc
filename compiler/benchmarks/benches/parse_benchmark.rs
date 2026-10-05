@@ -63,7 +63,7 @@ fn bench_paths(c: &mut Criterion) {
                                 elapsed: Duration::ZERO,
                             };
                             for _ in 0..iterations {
-                                (path.run)(&ctx, source, &mut timer);
+                                path.call(&ctx, source, &mut timer);
                             }
                             timer.elapsed
                         })

@@ -952,6 +952,7 @@ dependencies = [
  "ironplc-container",
  "ironplc-dsl",
  "ironplc-parser",
+ "ironplc-sources",
  "ironplc-syntax",
  "ironplc-vm",
  "stats_alloc",

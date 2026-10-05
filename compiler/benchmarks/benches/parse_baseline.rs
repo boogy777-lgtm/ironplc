@@ -84,7 +84,7 @@ impl Probe for Meter {
 /// One call of `path` on `source`, measured.
 fn measure(path: &Path, ctx: &Ctx, source: &str) -> Measurement {
     let mut meter = Meter::new();
-    (path.run)(ctx, source, &mut meter);
+    path.call(ctx, source, &mut meter);
     meter.measurement
 }
 
