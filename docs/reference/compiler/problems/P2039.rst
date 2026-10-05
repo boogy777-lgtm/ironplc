@@ -84,8 +84,10 @@ includes a literal whose whole part is too large for its unit
 (``T#9223372036854775807d``) and a literal whose parts together are too long
 (``T#106751991167300d23h``).
 
-A number too large to be read at all, with 20 or more digits, is a
-:doc:`syntax error <P0002>` instead.
+A number too large to be read as a count at all, with 20 or more digits, is
+reported the same way: the whole part of a literal is out of range whether it
+has 19 digits or 25, and the message names the literal as it was written
+(``T#99999999999999999999d``).
 
 Long intervals in a control program
 -----------------------------------

@@ -63,8 +63,12 @@ visualize test coverage in Visual Studio Code.
 
 ### Debugging the Parser
 
-The PEG parser is difficult to debug without a little help. The steps below
-will help enormously in understanding and fixing what the parser is doing.
+The compiler reads text with the recursive-descent parser and the lowering of
+`ironplc-syntax`; a failing parse is debugged with the tests of that crate and
+the tree they build. The PEG parser in `ironplc-parser` is the legacy pipeline,
+compiled for tests only as the oracle of the parity tests, and is difficult to
+debug without a little help. The steps below apply to it: they show what the
+oracle is doing when a parity test fails.
 
 Run tests with the `trace` feature enabled to get output on rule matching
 for any test that is failing:
