@@ -18,8 +18,9 @@ use ironplc_dsl::diagnostic::{Diagnostic, Label};
 use ironplc_analyzer::TypeEnvironment;
 
 use super::compile::{char_width_for_string_type, CompileContext, FbInstanceInfo, OpType, OpWidth};
-use super::compile_call::resolve_fb_type;
-use super::compile_fb_layout::FbLayout;
+use super::compile_fb_instance::{
+    instance_array_declaration, instance_template, register_instance_array,
+};
 use super::compile_var_table::{record_decl_var_entry, record_stable_var_entry};
 use crate::emit::Emitter;
 use crate::string_storage::{register_string_variable, StringHome};
@@ -109,30 +110,12 @@ pub(crate) fn assign_variables(
                     // has its slot offset -- each member store addresses the
                     // instance through it. Nothing to do here but size it.
                     let fb_name = fb_init.type_name.to_string().to_uppercase();
-                    // A standard library block is its slots; a user-defined one
-                    // is its slots and the runs of the fields that do not fit
-                    // one (`compile_fb_layout`). Either way the instance is
-                    // reserved whole, so it owns all of its storage.
-                    let instance = match resolve_fb_type(&fb_name) {
-                        Some((type_id, num_fields, field_map)) => Some((
-                            type_id,
-                            num_fields as u32 * ironplc_container::SLOT_BYTES,
-                            field_map,
-                            FbLayout::default(),
-                        )),
-                        None => ctx.user_fb_types.get(&fb_name).map(|user_fb| {
-                            (
-                                user_fb.type_id,
-                                user_fb.layout.instance_bytes,
-                                user_fb.field_indices.clone(),
-                                user_fb.layout.clone(),
-                            )
-                        }),
-                    };
-                    if let Some((type_id, instance_bytes, field_indices, layout)) = instance {
+                    // The instance is reserved whole, so it owns all of its
+                    // storage.
+                    if let Some(template) = instance_template(ctx, &fb_name) {
                         let data_offset = crate::data_region::reserve(
                             ctx,
-                            instance_bytes,
+                            template.instance_bytes,
                             &decl.identifier.span(),
                         )?;
 
@@ -140,20 +123,33 @@ pub(crate) fn assign_variables(
                             id.clone(),
                             FbInstanceInfo {
                                 var_index: index,
-                                type_id,
+                                type_id: template.type_id,
                                 data_offset,
-                                field_indices,
-                                strings: layout.views(data_offset),
+                                field_indices: template.field_indices,
+                                strings: template.layout.views(data_offset),
+                                array: None,
                             },
                         );
                     }
                     (iec_type_tag::FB_INSTANCE, fb_name)
                 }
                 InitialValueAssignmentKind::Array(array_init) => {
-                    // An array whose elements are structures is laid out as
-                    // one flat run of slots rather than one slot per element,
-                    // so it registers through its own path.
-                    if let Some((element_type, debug_type_name, dimensions)) =
+                    // An array whose elements are function block instances or
+                    // structures is laid out as one flat run of slots rather
+                    // than one slot per element, so it registers through its
+                    // own path.
+                    if let Some(declaration) =
+                        instance_array_declaration(ctx, &array_init.spec, &decl.identifier.span())?
+                    {
+                        register_instance_array(
+                            ctx,
+                            builder,
+                            id,
+                            index,
+                            declaration,
+                            &decl.identifier.span(),
+                        )?
+                    } else if let Some((element_type, debug_type_name, dimensions)) =
                         crate::compile_array_struct::struct_array_declaration(
                             types,
                             &array_init.spec,

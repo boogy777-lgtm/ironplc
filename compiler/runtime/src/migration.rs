@@ -576,6 +576,18 @@ fn array_action(
     if base_descriptor != candidate_descriptor {
         return Err(MigrationError::ArrayDescriptorMismatch { uid });
     }
+    // The slots of an array of instances are copied as they are, which carries
+    // the state only when the block is laid out alike on both sides; the
+    // descriptor holds the block's type and the slots of the whole array.
+    if candidate_descriptor.element_type == FieldType::FbInstance as u8
+        && !fb::same_instance_layout(
+            base_section,
+            candidate_section,
+            FbTypeId::new(candidate_descriptor.element_extra),
+        )
+    {
+        return Err(MigrationError::FbLayoutUnsupported);
+    }
     let byte_size = candidate_descriptor
         .byte_size()
         .ok_or(MigrationError::IncompatibleEntry {

@@ -32,14 +32,14 @@ mod control;
 #[cfg(test)]
 mod tests;
 
-use super::expressions::{lower_call, lower_expr, Call, Callee};
+use super::expressions::{lower_call, lower_expr, Callee};
 use super::tree::{child_of, range_before, significant_tokens};
 use super::variables::lower_variable;
 use super::LowerCx;
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode};
 use ironplc_dsl::core::SourceSpan;
 use ironplc_dsl::diagnostic::Diagnostic;
-use ironplc_dsl::textual::{Assignment, Expr, ExprKind, FbCall, MethodCall, StmtKind};
+use ironplc_dsl::textual::{Assignment, Expr, ExprKind, MethodCall, StmtKind};
 
 /// Where a statement is positioned.
 enum Extent {
@@ -246,23 +246,17 @@ fn assignment(cx: &LowerCx, node: &SyntaxNode, span: SourceSpan) -> Result<StmtK
 /// A call as a statement: a function block call, or a method call.
 fn call(cx: &LowerCx, node: &SyntaxNode, _span: SourceSpan) -> Result<StmtKind, Diagnostic> {
     let call = child_of(node, K::CallExpr).ok_or_else(|| cx.missing(node, "a call"))?;
-    let Call {
-        callee,
-        params,
-        span,
-    } = lower_call(cx, &call)?;
-    Ok(match callee {
-        Callee::Name(var_name) => StmtKind::FbCall(FbCall {
-            var_name,
-            params,
-            position: span,
-        }),
+    let call = lower_call(cx, &call)?;
+    Ok(match call.callee {
         Callee::Method { receiver, method } => StmtKind::MethodCall(MethodCall {
             receiver,
             method,
-            params,
-            position: span,
+            params: call.params,
+            position: call.span,
         }),
+        Callee::Name(_) | Callee::Element(_) => {
+            StmtKind::FbCall(call.into_fb_call().ok_or_else(|| cx.unsupported(node))?)
+        }
     })
 }
 

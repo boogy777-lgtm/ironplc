@@ -17,6 +17,7 @@ mod declarations;
 mod enums;
 mod escaped_identifiers;
 mod exit_return;
+mod fb_call_callee;
 mod fb_inheritance;
 mod incomplete_array;
 mod jumps;

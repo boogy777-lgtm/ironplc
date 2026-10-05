@@ -57,6 +57,7 @@ use ironplc_dsl::{
 use ironplc_problems::Problem;
 
 use crate::{
+    callee_resolution::callee_root,
     result::SemanticResult,
     rule_support::{run_rule, DiagnosticVisitor},
     semantic_context::SemanticContext,
@@ -169,7 +170,11 @@ impl Visitor<Infallible> for RulePouHierarchy {
     }
 
     fn visit_fb_call(&mut self, node: &FbCall) -> Result<Self::Value, Infallible> {
-        self.check_invocation(&node.var_name, node, "Function block invoked in a function");
+        // The root variable of the callee is the instance that is stateful:
+        // `fbs` in `fbs[i](...)`, as `inst` in `inst(...)`.
+        if let Some((instance, _)) = callee_root(&node.callee) {
+            self.check_invocation(instance, node, "Function block invoked in a function");
+        }
         Ok(())
     }
 

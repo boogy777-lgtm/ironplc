@@ -6,6 +6,7 @@
 //! end-to-end host behavior lives in `tests/migration_acceptance.rs`.
 
 mod decisions;
+mod instance_arrays;
 
 use super::*;
 use ironplc_container::{

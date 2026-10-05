@@ -253,9 +253,41 @@ fn operator_function_ahead(p: &Parser) -> bool {
             .any(|word| p.nth_is_word(0, word))
 }
 
-/// True when a call starts at the cursor: `name(`, `receiver.method(` or
-/// `THIS^.method(`. `operators` also admits the operator words used as
-/// function names (`MOD(a, b)`), which a call statement does not.
+/// True when a call of an array element starts at the cursor: `name[i](`, or
+/// `name[i][j](`. Only a statement calls an instance, so only a statement
+/// admits it. The subscripts are skipped by their brackets, whatever they hold.
+pub(in crate::parser) fn element_call_ahead(p: &Parser) -> bool {
+    if !(p.variable_name_at(0) && p.nth_at(1, K::LeftBracket)) {
+        return false;
+    }
+    let mut n = 1;
+    loop {
+        let mut depth = 0usize;
+        loop {
+            match p.nth(n) {
+                Some(K::LeftBracket) => depth += 1,
+                Some(K::RightBracket) => {
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                Some(K::Semicolon) | None => return false,
+                Some(_) => {}
+            }
+            n += 1;
+        }
+        n += 1;
+        if !p.nth_at(n, K::LeftBracket) {
+            return p.nth_at(n, K::LeftParen);
+        }
+    }
+}
+
+/// True when a call starts at the cursor: `name(`, `receiver.method(`,
+/// `THIS^.method(` or, in a statement, `name[i](`. `operators` also admits the
+/// operator words used as function names (`MOD(a, b)`), which a call statement
+/// does not, and which is how an expression is told from a statement.
 pub(in crate::parser) fn call_ahead(p: &Parser, operators: bool) -> bool {
     let function =
         (p.name_at(0) || (operators && operator_function_ahead(p))) && p.nth_at(1, K::LeftParen);
@@ -266,7 +298,7 @@ pub(in crate::parser) fn call_ahead(p: &Parser, operators: bool) -> bool {
         && p.nth_at(2, K::Period)
         && p.name_at(3)
         && p.nth_at(4, K::LeftParen);
-    function || method || self_method
+    function || method || self_method || (!operators && element_call_ahead(p))
 }
 
 /// A call expression, when one starts at the cursor.
@@ -274,7 +306,9 @@ pub(in crate::parser) fn call(p: &mut Parser, operators: bool) -> Option<Complet
     if !call_ahead(p, operators) {
         return None;
     }
-    let callee = if p.at_any(&[K::This, K::Super]) {
+    let callee = if !operators && element_call_ahead(p) {
+        variable(p)?
+    } else if p.at_any(&[K::This, K::Super]) {
         self_ref(p)
     } else {
         name_ref(p)

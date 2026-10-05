@@ -20,15 +20,15 @@ use crate::{
     rule_bit_and_partial_access_range, rule_case_bit_string_label, rule_case_selector_type,
     rule_condition_type, rule_constant_range, rule_decl_struct_element_unique_names,
     rule_enum_base_type_allowed, rule_enum_explicit_value_allowed, rule_enumeration_values_unique,
-    rule_extends_field_duplicated, rule_function_block_call_unsupported,
-    rule_function_block_invocation, rule_function_call_declared,
-    rule_function_call_in_out_argument, rule_function_call_type_check, rule_jump_target,
-    rule_loop_control_inside_loop, rule_member_qualifier_allowed, rule_member_qualifier_invalid,
-    rule_method_call_declared, rule_mixed_located_var_declarations, rule_no_top_level_var_global,
-    rule_operator_operand_type_check, rule_pou_hierarchy, rule_program_task_definition_exists,
-    rule_program_var_hides_global, rule_range_limits, rule_real_literal_range, rule_ref_to,
-    rule_special_operator, rule_stdlib_type_redefinition, rule_string_encoding_compat,
-    rule_string_length_range, rule_string_literal_char_range,
+    rule_extends_field_duplicated, rule_fb_instance_array_allowed,
+    rule_function_block_call_unsupported, rule_function_block_invocation,
+    rule_function_call_declared, rule_function_call_in_out_argument, rule_function_call_type_check,
+    rule_jump_target, rule_loop_control_inside_loop, rule_member_qualifier_allowed,
+    rule_member_qualifier_invalid, rule_method_call_declared, rule_mixed_located_var_declarations,
+    rule_no_top_level_var_global, rule_operator_operand_type_check, rule_pou_hierarchy,
+    rule_program_task_definition_exists, rule_program_var_hides_global, rule_range_limits,
+    rule_real_literal_range, rule_ref_to, rule_special_operator, rule_stdlib_type_redefinition,
+    rule_string_encoding_compat, rule_string_length_range, rule_string_literal_char_range,
     rule_struct_initializer_expression_allowed, rule_task_names_unique,
     rule_temporal_literal_range, rule_unsupported_extension, rule_use_declared_enumerated_value,
     rule_use_declared_symbolic_var, rule_var_decl_const_initialized, rule_var_decl_const_not_fb,
@@ -425,6 +425,7 @@ pub(crate) fn semantic(
         rule_string_literal_char_range::apply,
         rule_temporal_literal_range::apply,
         rule_struct_initializer_expression_allowed::apply,
+        rule_fb_instance_array_allowed::apply,
         rule_use_declared_enumerated_value::apply,
         rule_use_declared_symbolic_var::apply,
         rule_unsupported_extension::apply,
@@ -911,5 +912,59 @@ END_RESOURCE
 END_CONFIGURATION",
         );
         assert!(codes.is_empty(), "expected no diagnostics, got: {codes:?}");
+    }
+    // ---------------------------------------------------------------------
+    // Arrays of function block instances, through the whole pipeline: the
+    // dialect decides whether the declaration is accepted, and an accepted
+    // array is an instance like any other for every rule that follows.
+    // ---------------------------------------------------------------------
+
+    const TIMER_ARRAY_PROGRAM: &str = "
+PROGRAM main
+VAR
+    timers : ARRAY[0..2] OF TON;
+    done : BOOL;
+    i : DINT;
+END_VAR
+    FOR i := 0 TO 2 DO
+        timers[i](IN := TRUE, PT := T#1s, Q => done);
+        IF timers[i].Q THEN
+            done := TRUE;
+        END_IF;
+    END_FOR;
+END_PROGRAM";
+
+    fn codes_under(options: &CompilerOptions, program: &str) -> Vec<String> {
+        let lib = parse_program(program, &FileId::default(), options).unwrap();
+        let (_library, context) = analyze(&[&lib], options).unwrap();
+        context
+            .diagnostics()
+            .iter()
+            .map(|d| d.code.clone())
+            .collect()
+    }
+
+    #[test]
+    fn analyze_when_array_of_instances_and_dialect_has_no_arrays_then_declaration_rejected_once() {
+        let codes = codes_under(&CompilerOptions::default(), TIMER_ARRAY_PROGRAM);
+        assert_eq!(vec!["P4075"], codes);
+    }
+
+    #[test]
+    fn analyze_when_array_of_instances_and_codesys_dialect_then_no_diagnostics() {
+        let codes = codes_under(
+            &CompilerOptions::from_dialect(ironplc_parser::options::Dialect::Codesys),
+            TIMER_ARRAY_PROGRAM,
+        );
+        assert!(codes.is_empty(), "expected no diagnostics, got: {codes:?}");
+    }
+
+    #[test]
+    fn analyze_when_undeclared_instance_called_then_reported_once_as_not_in_scope() {
+        let codes = codes_under(
+            &CompilerOptions::default(),
+            "PROGRAM main VAR x : INT; END_VAR missing(IN := TRUE); END_PROGRAM",
+        );
+        assert_eq!(vec!["P4012"], codes);
     }
 }

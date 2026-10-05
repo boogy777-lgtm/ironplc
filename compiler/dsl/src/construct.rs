@@ -21,7 +21,7 @@ use crate::common::{
 };
 use crate::core::{Id, SourceSpan};
 use crate::textual::{
-    Expr, ExprKind, Function, NamedVariable, ParamAssignmentKind, PositionalInput,
+    Expr, ExprKind, FbCall, Function, NamedVariable, ParamAssignmentKind, PositionalInput,
     SymbolicVariableKind, UnaryOp, Variable,
 };
 use crate::time::{DurationLiteral, DurationOutOfRange};
@@ -421,6 +421,23 @@ pub fn edge_input(
         block,
         type_id: None,
         edge: Some(edge),
+    }
+}
+
+/// The invocation of the function block instance `callee`. An instance is
+/// named by a symbolic variable: a plain name or an array element; a plain
+/// `inst(...)` is the named form of the one callee, not a call of its own kind.
+/// Both producers build the call here, so a callee can never be a directly
+/// represented variable in one and not the other.
+pub fn fb_call(
+    callee: SymbolicVariableKind,
+    params: Vec<ParamAssignmentKind>,
+    position: SourceSpan,
+) -> FbCall {
+    FbCall {
+        callee: callee.into(),
+        params,
+        position,
     }
 }
 

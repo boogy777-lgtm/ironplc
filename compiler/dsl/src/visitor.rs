@@ -530,7 +530,7 @@ mod test {
 
         fn visit_fb_call(&mut self, fb_call: &FbCall) -> Result<(), ()> {
             let dst = &mut self.names;
-            dst.push_back(fb_call.var_name.to_string());
+            dst.push_back(fb_call.callee.to_string());
             Ok(())
         }
     }

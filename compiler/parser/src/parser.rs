@@ -31,7 +31,7 @@ use crate::vars::*;
 use ironplc_dsl::common::*;
 use ironplc_dsl::configuration::*;
 use ironplc_dsl::construct::{
-    calendar_date, combine_interval_parts, edge_input, late_resolved_members,
+    self, calendar_date, combine_interval_parts, edge_input, late_resolved_members,
     late_resolved_or_enumerated, resolve_initializer_expr, special_operator_type_call,
     structure_alias, time_of_day, unquote, ClockField, DateField, DurationUnit, IntervalError,
 };
@@ -2502,15 +2502,25 @@ parser! {
     // B.3.2.2 Subprogram control statements
     rule subprogram_control_statement() -> StmtKind = m:method_invocation() { m } / fb:fb_invocation() { fb } / tok(TokenType::Return) { StmtKind::Return }
     rule fb_invocation() -> StmtKind = call:fb_invocation_body() { StmtKind::FbCall(call) }
-    // `name(args)`, shared by the statement form above and the call operand of
-    // `CALC(cond, call)`.
-    rule fb_invocation_body() -> FbCall = name:fb_name() _ tok(TokenType::LeftParen) _ params:param_assignment() ** (_ tok(TokenType::Comma) _) _ end:tok(TokenType::RightParen) {
-      let span = SourceSpan::join(&name.span, &end.span);
-      FbCall {
-        var_name: name,
-        params,
-        position: span,
+    // `callee(args)`, shared by the statement form above and the call operand of
+    // `CALC(cond, call)`. The callee is the instance as a variable: a name, or an
+    // element of an array of instances (`fbs[i](...)`); a plain `inst(...)` is
+    // its named form. A structure member is not a callee: `a.b(...)` is a method
+    // call, whichever the receiver is declared to be.
+    rule fb_callee() -> SymbolicVariableKind = start:position!() name:fb_name() elements:(_ s:subscript_list() end:position!() { (s, end) })* {
+      let mut callee = SymbolicVariableKind::Named(NamedVariable { name });
+      for (subscripts, end) in elements {
+        callee = SymbolicVariableKind::Array(ArrayVariable {
+          subscripted_variable: Box::new(callee),
+          subscripts,
+          span: span_of_tokens(tokens, start, end),
+        });
       }
+      callee
+    }
+    rule fb_invocation_body() -> FbCall = callee:fb_callee() _ tok(TokenType::LeftParen) _ params:param_assignment() ** (_ tok(TokenType::Comma) _) _ end:tok(TokenType::RightParen) {
+      let span = SourceSpan::join(&callee.span(), &end.span);
+      construct::fb_call(callee, params, span)
     }
     // OOP extension: `instance.MethodName(args);` (ADR-0041 Phase 1).
     // Statement position only; a previously-syntax-error shape

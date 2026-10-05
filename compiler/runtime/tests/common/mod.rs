@@ -20,13 +20,13 @@ use std::io::Cursor;
 use ironplc_codegen::EmptyLookup;
 use ironplc_container::{Container, VarIndex};
 use ironplc_dsl::core::FileId;
-use ironplc_parser::options::CompilerOptions;
+use ironplc_parser::options::{CompilerOptions, Dialect};
 use ironplc_project::{compile, MemoryBackedProject, SidecarKey};
 use ironplc_runtime::RuntimeHost;
 
 /// Compiles `source` and round-trips the container through the wire format.
 pub fn compile_source(source: &str) -> Container {
-    compile_container(source, &[])
+    compile_container(source, &[], &CompilerOptions::default())
 }
 
 /// Compiles `source` with the given engineering-side program-variable
@@ -38,7 +38,22 @@ pub fn compile_with_ids(source: &str, ids: &[(&str, u64)]) -> Container {
         .iter()
         .map(|(name, uid)| (SidecarKey::new("main", name), *uid))
         .collect();
-    compile_container(source, &keys)
+    compile_container(source, &keys, &CompilerOptions::default())
+}
+
+/// Compiles `source` under the CODESYS dialect, with the given
+/// engineering-side program-variable `(name, uid)` table, and round-trips the
+/// container through the wire format.
+pub fn compile_codesys_with_ids(source: &str, ids: &[(&str, u64)]) -> Container {
+    let keys: Vec<(SidecarKey, u64)> = ids
+        .iter()
+        .map(|(name, uid)| (SidecarKey::new("main", name), *uid))
+        .collect();
+    compile_container(
+        source,
+        &keys,
+        &CompilerOptions::from_dialect(Dialect::Codesys),
+    )
 }
 
 /// Compiles `source` with the given engineering-side keyed UID table —
@@ -49,22 +64,21 @@ pub fn compile_with_uid_keys(source: &str, keys: &[(&str, &str, u64)]) -> Contai
         .iter()
         .map(|(scope, name, uid)| (SidecarKey::new(scope, name), *uid))
         .collect();
-    compile_container(source, &keyed)
+    compile_container(source, &keyed, &CompilerOptions::default())
 }
 
 /// Compiles `source`, assigning the given stable variable IDs, and
 /// round-trips the container through the wire format.
-fn compile_container(source: &str, ids: &[(SidecarKey, u64)]) -> Container {
-    let mut project = MemoryBackedProject::new(CompilerOptions::default());
+fn compile_container(
+    source: &str,
+    ids: &[(SidecarKey, u64)],
+    options: &CompilerOptions,
+) -> Container {
+    let mut project = MemoryBackedProject::new(*options);
     project.add_source(FileId::from_string("main.st"), source.to_owned());
     project.set_stable_var_ids(ids.to_vec());
 
-    let output = compile(
-        &mut project,
-        &CompilerOptions::default(),
-        &EmptyLookup,
-        vec![],
-    );
+    let output = compile(&mut project, options, &EmptyLookup, vec![]);
     assert!(
         output.diagnostics.is_empty(),
         "fixture must compile cleanly: {:?}",

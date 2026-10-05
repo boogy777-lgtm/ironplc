@@ -400,8 +400,8 @@ impl Visitor<Infallible> for WriteCollector<'_> {
     }
 
     fn visit_fb_call(&mut self, node: &FbCall) -> Result<(), Infallible> {
-        self.mark(&node.var_name);
-        let fb_type = self.instances.type_of(&node.var_name).cloned();
+        self.mark_variable(&node.callee);
+        let fb_type = self.instances.type_of_callee(&node.callee).cloned();
         match fb_type {
             Some(fb_type) => match self.function_blocks.get(&fb_type) {
                 Some(fb) => self.mark_bound_arguments(fb, &node.params),
