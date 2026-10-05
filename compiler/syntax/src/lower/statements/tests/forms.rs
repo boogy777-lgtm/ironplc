@@ -138,6 +138,9 @@ fn lower_statements_when_call_then_a_function_block_call_or_a_method_call() {
         ("inst.Run(1);", "[(call inst.Run(1))]"),
         ("THIS^.Run();", "[(call THIS^.Run())]"),
         ("SUPER^.Run(x := 1);", "[(call SUPER^.Run(x := 1))]"),
+        ("fbs[i](IN := x);", "[(call fbs[i](IN := ?x))]"),
+        ("fbs[i, j](Q => y);", "[(call fbs[i, j](Q => $y))]"),
+        ("fbs[i][j]();", "[(call fbs[i][j]())]"),
     ];
     for (source, expected) in rows {
         assert_eq!(shows(source), expected, "{source}");
@@ -157,6 +160,8 @@ fn lower_statements_when_call_then_positioned_from_the_callee_through_the_closin
     assert_eq!(at(source, &statement.span()), "inst . Run(1, 2)");
     let source = "f(1) ;";
     assert_eq!(at(source, &one(source).span()), "f(1)");
+    let source = "fbs [ i ] (1) ;";
+    assert_eq!(at(source, &one(source).span()), "fbs [ i ] (1)");
 }
 
 // Selection.

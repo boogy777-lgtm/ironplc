@@ -169,6 +169,7 @@ fn codesys_dialect_enables_exactly_these_flags() {
             "allow_incomplete_array",
             "allow_escaped_identifiers",
             "allow_special_operators",
+            "allow_fb_instance_arrays",
         ],
     );
 }
@@ -233,6 +234,7 @@ fn twincat_dialect_enables_exactly_these_flags() {
             "allow_params_of",
             "allow_incomplete_array",
             "allow_escaped_identifiers",
+            "allow_fb_instance_arrays",
         ],
     );
 }

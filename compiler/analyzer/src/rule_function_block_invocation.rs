@@ -101,7 +101,7 @@ impl<'a> RuleFunctionBlockUse<'a> {
             Problem::FunctionBlockNotInScope,
             Label::span(fb_call.span(), "Function block invocation"),
         )
-        .with_context_id("invocation", &fb_call.var_name)
+        .with_context("invocation", &fb_call.callee.to_string())
     }
 }
 
@@ -157,7 +157,7 @@ impl Visitor<Infallible> for RuleFunctionBlockUse<'_> {
         // call a function block that doesn't exist
         // Cloned so that the borrow of `instances` ends here: the arms below
         // push onto `self.diagnostics`, which borrows `self` mutably.
-        let function_block_name = self.instances.type_of(&fb_call.var_name).cloned();
+        let function_block_name = self.instances.type_of_callee(&fb_call.callee).cloned();
         let Some(function_block_name) = function_block_name else {
             self.diagnostics.push(Self::not_in_scope(fb_call));
             return Ok(());
@@ -453,5 +453,116 @@ FB_INSTANCE(NOPE1 := TRUE, NOPE2 := TRUE);
 END_PROGRAM",
         2,
         ironplc_problems::Problem::FunctionInvocationMissingInput
+    );
+    // An element of an array of instances is an instance: it resolves to the
+    // block the array declares, and its call is checked against that block as a
+    // plain instance's is.
+    rule_ok!(
+        apply_when_element_of_standard_block_array_called_then_ok,
+        "
+PROGRAM main
+VAR
+ts : ARRAY[0..2] OF TON;
+END_VAR
+ts[1](IN := TRUE, PT := T#1s);
+END_PROGRAM"
+    );
+
+    rule_ok!(
+        apply_when_element_of_two_dimensional_user_block_array_called_then_ok,
+        "
+FUNCTION_BLOCK Callee
+VAR_INPUT
+IN1 : BOOL;
+END_VAR
+END_FUNCTION_BLOCK
+
+PROGRAM main
+VAR
+grid : ARRAY[0..2, 0..2] OF Callee;
+k : INT;
+END_VAR
+grid[1, k + 1](IN1 := TRUE);
+END_PROGRAM"
+    );
+
+    rule_err1!(
+        apply_when_element_call_names_undeclared_input_then_error,
+        "
+FUNCTION_BLOCK Callee
+VAR_INPUT
+IN1 : BOOL;
+END_VAR
+END_FUNCTION_BLOCK
+
+PROGRAM main
+VAR
+cs : ARRAY[0..2] OF Callee;
+END_VAR
+cs[0](NOPE := TRUE);
+END_PROGRAM",
+        ironplc_problems::Problem::FunctionInvocationMissingInput
+    );
+
+    // What the callee names must be an instance, selected by as many
+    // subscripts as the variable has dimensions.
+    rule_err1!(
+        apply_when_scalar_instance_called_with_subscript_then_not_in_scope,
+        "
+PROGRAM main
+VAR
+t : TON;
+END_VAR
+t[0](IN := TRUE, PT := T#1s);
+END_PROGRAM",
+        ironplc_problems::Problem::FunctionBlockNotInScope
+    );
+
+    rule_err1!(
+        apply_when_array_of_instances_called_without_subscript_then_not_in_scope,
+        "
+PROGRAM main
+VAR
+ts : ARRAY[0..2] OF TON;
+END_VAR
+ts(IN := TRUE, PT := T#1s);
+END_PROGRAM",
+        ironplc_problems::Problem::FunctionBlockNotInScope
+    );
+
+    rule_err1!(
+        apply_when_element_called_with_too_few_subscripts_then_not_in_scope,
+        "
+PROGRAM main
+VAR
+grid : ARRAY[0..2, 0..2] OF TON;
+END_VAR
+grid[1](IN := TRUE, PT := T#1s);
+END_PROGRAM",
+        ironplc_problems::Problem::FunctionBlockNotInScope
+    );
+
+    rule_err1!(
+        apply_when_element_of_array_of_non_block_called_then_not_in_scope,
+        "
+PROGRAM main
+VAR
+values : ARRAY[0..2] OF DINT;
+END_VAR
+values[1](IN := TRUE);
+END_PROGRAM",
+        ironplc_problems::Problem::FunctionBlockNotInScope
+    );
+
+    rule_err1!(
+        apply_when_element_of_undeclared_array_called_then_not_in_scope,
+        "
+PROGRAM main
+VAR
+x : DINT;
+END_VAR
+missing[1](IN := TRUE);
+END_PROGRAM",
+        ironplc_problems::Problem::FunctionBlockNotInScope
     );
 }

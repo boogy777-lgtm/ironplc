@@ -224,6 +224,8 @@ Each array descriptor defines the element type, total element count and element 
 
 `element_stride` is the element's own size, except for a STRING/WSTRING field of each element of an array of structures, where it is the size of one structure. The reader rejects a STRING/WSTRING stride smaller than one element (elements would overlap) and, for every other element type, any stride other than one 8-byte slot, because `LOAD_ARRAY`/`STORE_ARRAY` always step by one slot.
 
+An array of function block instances is a flat array of the slots of its instances, as an array of structures is, because an instance is a contiguous run of slots: its descriptor has `element_type` FB_INSTANCE, `element_extra` the block's `fb_type_id`, and `total_elements` the number of slots of all the instances, not the number of instances. Selecting an instance computes its first slot from the index, and `LOAD_ARRAY` of that slot is what bounds-checks the index. The online-change planner copies such an array as one region only when the block is laid out alike in both containers.
+
 The VM reads these descriptors at runtime to size array elements and bound array accesses. The verifier (planned) checks that every LOAD_ARRAY/STORE_ARRAY descriptor index references a valid array descriptor and that the descriptor's `element_type` is valid.
 
 The descriptor carries neither the declared bounds nor a structure element type, and two arrays of the same size share one descriptor, so it cannot serve a debugger. The debug section's ARRAY_TYPE sub-table (tag 10, [Variable Inspection Model](variable-inspection-model.md) §1.4) carries those, and a codegen test keeps the two consistent.

@@ -17,6 +17,7 @@ mod dialect_flags;
 mod duration;
 mod enums;
 mod expression_spans;
+mod fb_call_callee;
 mod fb_inheritance;
 mod function_calls;
 mod identifiers;

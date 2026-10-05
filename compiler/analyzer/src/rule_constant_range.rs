@@ -490,14 +490,11 @@ impl RuleConstantRange<'_> {
     /// `VAR_INPUT` and `VAR_IN_OUT` variables, a positional one by position
     /// among the `VAR_INPUT` variables.
     fn check_fb_call_arguments(&mut self, node: &FbCall) {
-        let Some(declared) = self.declarations.find(&node.var_name) else {
-            return;
-        };
-        let TypeReference::Named(type_name) = declared.type_reference() else {
+        let Variable::Symbolic(callee) = &node.callee else {
             return;
         };
         let Some(IntermediateType::FunctionBlock { fields, .. }) =
-            self.representation_of(&type_name)
+            variable_type::of(callee, &self.declarations, self.type_environment)
         else {
             return;
         };

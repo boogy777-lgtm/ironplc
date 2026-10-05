@@ -1,0 +1,43 @@
+=====
+P4075
+=====
+
+.. problem-summary:: P4075
+
+This error occurs when a program declares an array of function block
+instances without enabling it. IEC 61131-3 Edition 2 declares a function block
+instance by name (``timer : TON;``); CODESYS also accepts an array of
+instances and calls an element of one, so the form is gated behind
+``--allow-fb-instance-arrays``.
+
+Example
+-------
+
+The following code will generate error P4075:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       timers : ARRAY[0..2] OF TON;
+   END_VAR
+       timers[1](IN := TRUE, PT := T#1s);
+   END_PROGRAM
+
+To fix this error, declare each instance by name:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       timer0 : TON;
+       timer1 : TON;
+       timer2 : TON;
+   END_VAR
+       timer1(IN := TRUE, PT := T#1s);
+   END_PROGRAM
+
+Or enable arrays of instances:
+
+.. |flag| replace:: ``--allow-fb-instance-arrays``
+.. include:: /includes/enabled-by-flag.rst

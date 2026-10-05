@@ -362,9 +362,9 @@ impl crate::extension::LanguageExtension for SelfRefVariable {
 /// See section 3.2.3.
 #[derive(Debug, PartialEq, Clone, Recurse, Located)]
 pub struct FbCall {
-    /// Name of the variable that is associated with the function block
-    /// call.
-    pub var_name: Id,
+    /// The function block instance that is called: a variable, named or an
+    /// array element. A plain `inst(...)` is the named case of the same callee.
+    pub callee: Variable,
     pub params: Vec<ParamAssignmentKind>,
     pub position: SourceSpan,
 }
@@ -985,7 +985,7 @@ impl StmtKind {
             .collect::<Vec<ParamAssignmentKind>>();
 
         StmtKind::FbCall(FbCall {
-            var_name: Id::from(fb_instance_name),
+            callee: Variable::named(fb_instance_name),
             params: assignments,
             position: SourceSpan::default(),
         })

@@ -16,9 +16,10 @@ use std::collections::{HashMap, HashSet};
 
 use ironplc_dsl::common::{
     FunctionBlockDeclaration, InitialValueAssignmentKind, Library, LibraryElementKind,
-    MethodDeclaration, TypeName, VarDecl,
+    MethodDeclaration, SpecificationKind, TypeName, VarDecl,
 };
 use ironplc_dsl::core::Id;
+use ironplc_dsl::textual::{SymbolicVariableKind, Variable};
 
 /// The function blocks a library declares, by name.
 pub(crate) struct FunctionBlocks<'a> {
@@ -108,32 +109,96 @@ impl<'a> FunctionBlocks<'a> {
 /// Instances are declared per unit, so a walk records each declaration as
 /// it meets it and calls [`InstanceTypes::clear`] when it leaves the unit,
 /// exactly as the rules that own a walk have always done.
+///
+/// A variable that holds several instances, `fbs : ARRAY[0..3] OF TON`, is
+/// recorded the same way, with the number of subscripts that select one
+/// instance from it, so the callee `fbs[i]` and the callee `inst` resolve
+/// through the one lookup, [`InstanceTypes::type_of_callee`].
 #[derive(Default)]
 pub(crate) struct InstanceTypes {
-    var_to_fb: HashMap<Id, TypeName>,
+    var_to_fb: HashMap<Id, DeclaredInstances>,
+}
+
+/// What a variable declares: instances of one type, selected by `rank`
+/// subscripts (none for a single instance).
+struct DeclaredInstances {
+    type_name: TypeName,
+    rank: usize,
 }
 
 impl InstanceTypes {
-    /// Records `decl` when it declares a function-block instance; any other
+    /// Records `decl` when it declares function-block instances; any other
     /// declaration is ignored. Type resolution has already turned every
-    /// instance declaration, member-initialized or not, into a
+    /// single-instance declaration, member-initialized or not, into a
     /// function-block initializer, so the initializer kind is the whole test.
+    /// An array declaration is recorded under its element type, which is a
+    /// function block when the callee check later finds it declared.
     pub(crate) fn declare(&mut self, decl: &VarDecl) {
-        if let InitialValueAssignmentKind::FunctionBlock(init) = &decl.initializer {
-            if let Some(name) = decl.identifier.symbolic_id() {
-                self.var_to_fb.insert(name.clone(), init.type_name.clone());
-            }
-        }
+        let Some(name) = decl.identifier.symbolic_id() else {
+            return;
+        };
+        let declared = match &decl.initializer {
+            InitialValueAssignmentKind::FunctionBlock(init) => DeclaredInstances {
+                type_name: init.type_name.clone(),
+                rank: 0,
+            },
+            InitialValueAssignmentKind::Array(array) => match &array.spec {
+                SpecificationKind::Inline(subranges) if subranges.ref_to.is_none() => {
+                    DeclaredInstances {
+                        type_name: subranges.type_name.to_type_name(),
+                        rank: subranges.ranges().len(),
+                    }
+                }
+                _ => return,
+            },
+            _ => return,
+        };
+        self.var_to_fb.insert(name.clone(), declared);
     }
 
-    /// The declared function-block type of the variable `instance`.
+    /// The declared function-block type of the variable `instance`, when it
+    /// declares a single instance.
     pub(crate) fn type_of(&self, instance: &Id) -> Option<&TypeName> {
-        self.var_to_fb.get(instance)
+        self.var_to_fb
+            .get(instance)
+            .filter(|declared| declared.rank == 0)
+            .map(|declared| &declared.type_name)
+    }
+
+    /// The declared function-block type of the instance a call's `callee`
+    /// names: a variable that declares one instance, or an element of one that
+    /// declares several, selected by as many subscripts as it has dimensions.
+    pub(crate) fn type_of_callee(&self, callee: &Variable) -> Option<&TypeName> {
+        let (root, subscripts) = callee_root(callee)?;
+        self.var_to_fb
+            .get(root)
+            .filter(|declared| declared.rank == subscripts)
+            .map(|declared| &declared.type_name)
     }
 
     /// Forgets every instance, on leaving the unit that declared them.
     pub(crate) fn clear(&mut self) {
         self.var_to_fb.clear();
+    }
+}
+
+/// The variable a callee names and how many subscripts select the instance
+/// from it: `(inst, 0)` for `inst`, `(fbs, 2)` for `fbs[i, j]`. `None` for a
+/// callee that is not a variable of this form, such as a structure member.
+pub(crate) fn callee_root(callee: &Variable) -> Option<(&Id, usize)> {
+    fn root(kind: &SymbolicVariableKind) -> Option<(&Id, usize)> {
+        match kind {
+            SymbolicVariableKind::Named(named) => Some((&named.name, 0)),
+            SymbolicVariableKind::Array(array) => {
+                let (name, inner) = root(&array.subscripted_variable)?;
+                Some((name, inner + array.subscripts.len()))
+            }
+            _ => None,
+        }
+    }
+    match callee {
+        Variable::Symbolic(kind) => root(kind),
+        Variable::Direct(_) => None,
     }
 }
 

@@ -147,3 +147,4 @@ P4069,MultipleUnderscoresNotAllowed,Identifier with consecutive underscores requ
 P4070,IncompleteArrayNotAllowed,Incomplete array type ARRAY[*] requires choosing a dialect or --allow-incomplete-array flag
 P4073,SpecialOperatorOperandInvalid,Operands of a CODESYS special operator do not fit the operator
 P4074,SpecialOperatorNotSupported,CODESYS special operator is recognised but not supported
+P4075,FbInstanceArrayNotAllowed,Array of function block instances requires choosing a dialect or --allow-fb-instance-arrays flag

@@ -1536,7 +1536,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
 
     // 3.2.3
     fn visit_fb_call(&mut self, node: &dsl::textual::FbCall) -> Result<Self::Value, Diagnostic> {
-        self.visit_id(&node.var_name)?;
+        self.visit_variable(&node.callee)?;
 
         self.write_ws("(");
         visit_comma_separated!(self, node.params.iter(), ParamAssignmentKind);
@@ -1814,7 +1814,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         self.write("(");
         self.visit_expr(&node.condition)?;
         self.write(",");
-        self.visit_id(&node.call.var_name)?;
+        self.visit_variable(&node.call.callee)?;
         self.write("(");
         visit_comma_separated!(self, node.call.params.iter(), ParamAssignmentKind);
         self.write(")");

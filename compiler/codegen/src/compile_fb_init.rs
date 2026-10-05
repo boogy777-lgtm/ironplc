@@ -28,6 +28,7 @@ use ironplc_dsl::textual::{Expr, ExprKind, Variable};
 
 use super::compile::{CompileContext, OpType, StringVarInfo, DEFAULT_OP_TYPE};
 use super::compile_expr::{compile_expr, resolve_variable_name, variable_span};
+use super::compile_fb_instance::ResolvedInstance;
 use super::compile_initial_value::subrange_lower_bound;
 use crate::emit::Emitter;
 use crate::string_width::{compile_string_value, encoding_mismatch};
@@ -114,52 +115,39 @@ pub(crate) fn compile_string_output(
     Ok(())
 }
 
-/// Emits a store of `value` into `field` of the function block instance
-/// named `instance_name`.
-///
-/// Returns `Ok(false)` without emitting anything when `instance_name` is not
-/// a function block instance, so a caller that cannot tell the two apart
-/// (an assignment target may equally be a structure field) can fall through
-/// to its own handling.
+/// Emits a store of `value` into `field` of `instance`.
 pub(crate) fn compile_fb_field_store(
     emitter: &mut Emitter,
     ctx: &mut CompileContext,
-    instance_name: &Id,
+    instance: &ResolvedInstance,
     field: &Id,
     value: &Expr,
-) -> Result<bool, Diagnostic> {
-    // A string keeps its characters in a run of the instance, not in the slot.
-    if let Some(info) = instance_string_field(ctx, instance_name, field) {
-        compile_string_field_store(emitter, ctx, &info, value)?;
-        return Ok(true);
-    }
+) -> Result<(), Diagnostic> {
     let field_name = field.to_string().to_lowercase();
-    let (field_idx, var_index, type_id) = match ctx.fb_instances.get(instance_name) {
-        Some(fb_info) => {
-            let field_idx = fb_info
-                .field_indices
-                .get(&field_name)
-                .copied()
-                .ok_or_else(|| {
-                    Diagnostic::not_implemented(Label::span(
-                        field.span(),
-                        format!(
-                            "Unknown field '{field}' on function block '{instance_name}' \
-                             (writing a PROPERTY is not supported yet)"
-                        ),
-                    ))
-                })?;
-            (field_idx, fb_info.var_index, fb_info.type_id)
-        }
-        None => return Ok(false),
-    };
+    // A string keeps its characters in a run of the instance, not in the slot.
+    if let Some(info) = instance.strings.get(&field_name) {
+        return compile_string_field_store(emitter, ctx, info, value);
+    }
+    let field_idx = instance
+        .field_indices
+        .get(&field_name)
+        .copied()
+        .ok_or_else(|| {
+            Diagnostic::not_implemented(Label::span(
+                field.span(),
+                format!(
+                    "Unknown field '{field}' on a function block instance \
+                     (writing a PROPERTY is not supported yet)"
+                ),
+            ))
+        })?;
 
-    let op_type = resolve_fb_field_op_type(ctx, type_id, &field_name);
-    emitter.emit_fb_load_instance(var_index);
+    let op_type = resolve_fb_field_op_type(ctx, instance.type_id, &field_name);
+    instance.emit_reference(emitter, ctx)?;
     compile_expr(emitter, ctx, value, op_type)?;
     emitter.emit_fb_store_param(field_idx);
     emitter.emit_pop();
-    Ok(true)
+    Ok(())
 }
 
 /// Emits the member initializers of a function block instance declaration
@@ -171,7 +159,7 @@ pub(crate) fn compile_fb_field_store(
 pub(crate) fn emit_fb_instance_member_initializers(
     emitter: &mut Emitter,
     ctx: &mut CompileContext,
-    instance_name: &Id,
+    instance: &ResolvedInstance,
     init: &[StructureElementInit],
 ) -> Result<(), Diagnostic> {
     for element in init {
@@ -200,13 +188,13 @@ pub(crate) fn emit_fb_instance_member_initializers(
                 return Err(Diagnostic::not_implemented(Label::span(
                     element.name.span(),
                     format!(
-                        "Array or structure value initializing field '{}' of function block instance '{instance_name}'",
+                        "Array or structure value initializing field '{}' of a function block instance",
                         element.name
                     ),
                 )))
             }
         };
-        compile_fb_field_store(emitter, ctx, instance_name, &element.name, &value)?;
+        compile_fb_field_store(emitter, ctx, instance, &element.name, &value)?;
     }
     Ok(())
 }

@@ -42,6 +42,7 @@ mod rule_enum_base_type_allowed;
 mod rule_enum_explicit_value_allowed;
 mod rule_enumeration_values_unique;
 mod rule_extends_field_duplicated;
+mod rule_fb_instance_array_allowed;
 mod rule_function_block_call_unsupported;
 mod rule_function_block_invocation;
 mod rule_function_call_declared;

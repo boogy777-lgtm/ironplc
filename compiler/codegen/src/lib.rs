@@ -39,6 +39,7 @@ mod compile_edge;
 mod compile_enum;
 mod compile_expr;
 mod compile_fb_init;
+mod compile_fb_instance;
 mod compile_fb_layout;
 mod compile_fn;
 mod compile_initial_value;

@@ -78,7 +78,7 @@ use crate::semantic_context::SemanticContext;
 use crate::type_compat::{are_types_compatible, is_checkable_type};
 use crate::type_environment::TypeEnvironment;
 use crate::value_type::operand_type_name;
-use crate::variable_type::{declared_type, struct_field_type, Declarations, Declared};
+use crate::variable_type::{of, struct_field_type, Declarations, Declared};
 
 pub fn apply(
     lib: &Library,
@@ -302,8 +302,10 @@ impl RuleOperatorOperandTypeCheck<'_> {
         let Some(form) = checked_unary_form(&UnaryOp::Not) else {
             return;
         };
-        let Some(instance) = declared_type(&fb_call.var_name, &self.declarations, self.types)
-        else {
+        let Variable::Symbolic(callee) = &fb_call.callee else {
+            return;
+        };
+        let Some(instance) = of(callee, &self.declarations, self.types) else {
             return;
         };
         for param in &fb_call.params {

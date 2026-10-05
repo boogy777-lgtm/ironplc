@@ -259,6 +259,11 @@ END_CONFIGURATION"
 #[case::unary_operator("v := -·10;", in_program, CompilerOptions::default)]
 #[case::binary_operator("v := 1·+·2;", in_program, CompilerOptions::default)]
 #[case::statement_separator("v := 1·;·b := 2;", in_program, CompilerOptions::default)]
+#[case::element_call(
+    "fbs·[·1·,·2·]·[·0·]·(·IN := TRUE·,·PT := T#1s·)·;",
+    in_program,
+    CompilerOptions::default
+)]
 #[case::if_statement(
     "IF r· THEN v := 1;· ELSE v := 2;· END_IF;",
     in_program,

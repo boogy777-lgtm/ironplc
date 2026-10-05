@@ -31,6 +31,7 @@ use super::compile_fb_init::{
     compile_fb_field_store, compile_string_field_store, compile_string_output,
     resolve_fb_field_op_type,
 };
+use super::compile_fb_instance::resolve_instance;
 use super::compile_jump::{compile_jump, compile_label, compile_wait};
 use super::compile_loop::{compile_for, compile_repeat, compile_while};
 use super::compile_method::compile_method_call_statement;
@@ -183,6 +184,23 @@ fn compile_statement(
                 );
             }
 
+            // Function block instance member write (`timer.IN := TRUE`,
+            // `timers[i].IN := TRUE`). The record may equally be a structure,
+            // which resolves to no instance and falls through.
+            if let Variable::Symbolic(SymbolicVariableKind::Structured(structured)) =
+                &assignment.target
+            {
+                if let Some(instance) = resolve_instance(ctx, &structured.record)? {
+                    return compile_fb_field_store(
+                        emitter,
+                        ctx,
+                        &instance,
+                        &structured.field,
+                        &assignment.value,
+                    );
+                }
+            }
+
             // Check if the target is a structured variable (struct field write).
             // Excludes `s.arr[i].field := ...`, whose record is an array
             // element rather than a fixed-offset struct field. That shape
@@ -196,22 +214,6 @@ fn compile_statement(
                 _ => None,
             };
             if let Some(structured) = fixed_offset_field {
-                // Function block instance field write (e.g. `timer.IN := TRUE`).
-                // FB instances live in `ctx.fb_instances` rather than
-                // `ctx.struct_vars`, and their fields are stored in the data
-                // region addressed via FB_STORE_PARAM.
-                if let SymbolicVariableKind::Named(named) = structured.record.as_ref() {
-                    if compile_fb_field_store(
-                        emitter,
-                        ctx,
-                        &named.name,
-                        &structured.field,
-                        &assignment.value,
-                    )? {
-                        return Ok(());
-                    }
-                }
-
                 // STRING fields are composite (multi-slot) and handled via the
                 // data region, so we intercept before resolve_struct_field_access
                 // which only supports single-slot (primitive/enum) fields.
@@ -514,17 +516,16 @@ fn compile_fb_call(
     ctx: &mut CompileContext,
     fb_call: &FbCall,
 ) -> Result<(), Diagnostic> {
-    let fb_info = ctx
-        .fb_instances
-        .get(&fb_call.var_name)
-        .ok_or_else(|| Diagnostic::todo_with_span(fb_call.span()))?;
-    let type_id = fb_info.type_id;
-    let field_indices = fb_info.field_indices.clone();
-    let strings = fb_info.strings.clone();
-    let var_index = fb_info.var_index;
+    let Variable::Symbolic(callee) = &fb_call.callee else {
+        return Err(Diagnostic::todo_with_span(fb_call.span()));
+    };
+    let instance =
+        resolve_instance(ctx, callee)?.ok_or_else(|| Diagnostic::todo_with_span(fb_call.span()))?;
+    let (type_id, field_indices, strings) =
+        (instance.type_id, &instance.field_indices, &instance.strings);
 
     // Push FB instance reference.
-    emitter.emit_fb_load_instance(var_index);
+    instance.emit_reference(emitter, ctx)?;
 
     // Store input parameters.
     for param in &fb_call.params {

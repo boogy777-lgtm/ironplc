@@ -6,7 +6,7 @@
 //! at the word; the statements that enclose others or end in a closing word
 //! are positioned as written.
 
-use super::super::expressions::{lower_call, lower_expr, Callee};
+use super::super::expressions::{lower_call, lower_expr};
 use super::super::names::{lower_id, lower_name};
 use super::super::tree::{child_of, significant_tokens};
 use super::super::variables::lower_variable;
@@ -16,8 +16,7 @@ use crate::syntax_kind::{SyntaxKind as K, SyntaxNode};
 use ironplc_dsl::core::SourceSpan;
 use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_dsl::textual::{
-    CatchClause, ConditionalCall, Expr, FbCall, Jump, LabelStatement, StmtKind, Throw, TryCatch,
-    Wait,
+    CatchClause, ConditionalCall, Expr, Jump, LabelStatement, StmtKind, Throw, TryCatch, Wait,
 };
 
 /// The operand a node writes in parentheses after its word, when it has one.
@@ -113,16 +112,12 @@ pub fn conditional_call(
         .next()
         .ok_or_else(|| cx.missing(node, "a call"))
         .and_then(|call| lower_call(cx, &call))?;
-    let Callee::Name(var_name) = call.callee else {
-        return Err(cx.missing(node, "a function block instance to call"));
-    };
+    let call = call
+        .into_fb_call()
+        .ok_or_else(|| cx.missing(node, "a function block instance to call"))?;
     Ok(StmtKind::ConditionalCall(ConditionalCall {
         condition,
-        call: FbCall {
-            var_name,
-            params: call.params,
-            position: call.span,
-        },
+        call,
         span,
     }))
 }

@@ -66,6 +66,32 @@ Function blocks must be instantiated as variables before use:
 
 Outputs are accessed using dot notation on the instance.
 
+Arrays of Instances
+-------------------
+
+With the :doc:`CODESYS or TwinCAT dialect </explanation/enabling-dialects-and-features>`
+or ``--allow-fb-instance-arrays``, an array can hold instances. An element is
+called, read and written like any instance, and each element has its own state:
+
+.. code-block::
+
+   PROGRAM main
+       VAR
+           counters : ARRAY[0..2] OF Counter;
+           i : DINT;
+           total : INT;
+       END_VAR
+
+       FOR i := 0 TO 2 DO
+           counters[i](reset := FALSE);
+           total := total + counters[i].count;
+       END_FOR;
+   END_PROGRAM
+
+An index outside the array stops the program, as it does for any array. A
+function block with a ``STRING`` or ``WSTRING`` field, and starting values for
+the elements of the array, are not supported yet.
+
 See Also
 --------
 

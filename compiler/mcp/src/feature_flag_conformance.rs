@@ -386,6 +386,14 @@ const FLAG_FIXTURES: &[FlagFixture] = &[
         prereqs: &[],
         source: "PROGRAM main\nVAR\n`my var` : INT;\nEND_VAR\nEND_PROGRAM",
     },
+    // Arrays of function block instances. With the flag off the declaration
+    // is rejected (P4075); with it on the array and a call of its element
+    // are accepted.
+    FlagFixture {
+        key: "allow_fb_instance_arrays",
+        prereqs: &[],
+        source: "PROGRAM main\nVAR\ntimers : ARRAY[0..2] OF TON;\nEND_VAR\ntimers[1](IN := TRUE, PT := T#1s);\nEND_PROGRAM",
+    },
     // The CODESYS special operators. With the flag off `__XADD` is an
     // undeclared function (P4017); with it on it resolves.
     FlagFixture {

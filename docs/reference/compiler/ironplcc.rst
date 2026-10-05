@@ -424,6 +424,12 @@ Options
    :doc:`P4073 </reference/compiler/problems/P4073>`. See
    :doc:`/reference/extension-library/functions/special-operators`.
 
+``--allow-fb-instance-arrays``
+   Allow arrays of function block instances (``ARRAY[0..3] OF TON``) and
+   calling an element of one (``timers[i](IN := start, PT := T#1s);``).
+   Produces :doc:`P4075 </reference/compiler/problems/P4075>` when an array
+   of function block instances is declared without this flag.
+
 ``--allow-jump-statement``
    Allow the ``JMP`` statement and the ``label:`` statement labels it
    targets, in the style of a low-level jump instruction. A label names a

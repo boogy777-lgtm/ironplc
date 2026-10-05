@@ -201,6 +201,40 @@ fn has_unhandled_shared_instance(
     Ok(false)
 }
 
+/// Whether instances of the FB type `type_id` are laid out alike in both
+/// containers: a standard-library block by its type ID alone, a user-defined one
+/// by the same number of fields of the same storage classes under the same UIDs.
+/// The slots of an array of instances can then be copied as they are; anything
+/// less could attach a value to a different field.
+pub(super) fn same_instance_layout(
+    base: Option<&TypeSection>,
+    candidate: Option<&TypeSection>,
+    type_id: FbTypeId,
+) -> bool {
+    let fields = |section: Option<&TypeSection>, descriptor: &UserFbDescriptor| {
+        let first = usize::from(descriptor.var_offset);
+        variable_table(section)
+            .get(first..first + usize::from(descriptor.num_fields))
+            .map(<[VarEntry]>::to_vec)
+    };
+    match (
+        user_fb_descriptor(base, type_id),
+        user_fb_descriptor(candidate, type_id),
+    ) {
+        (None, None) => true,
+        (Some(base_descriptor), Some(candidate_descriptor)) => {
+            base_descriptor.num_fields == candidate_descriptor.num_fields
+                && fields(base, base_descriptor).is_some()
+                && fields(base, base_descriptor) == fields(candidate, candidate_descriptor)
+                && matches!(
+                    (field_uid_indexes(base, type_id), field_uid_indexes(candidate, type_id)),
+                    (Ok(a), Ok(b)) if a.by_uid == b.by_uid
+                )
+        }
+        _ => false,
+    }
+}
+
 /// UID → field index and field index → UID maps for one FB type's entries in
 /// the type section's FB field UID table. UID 0 is reserved (the UID sidecar
 /// never assigns it) and excluded: an entry carrying it is treated as no

@@ -7,7 +7,7 @@
 //! ordinary name there.
 
 use super::control::close_block;
-use super::expressions::{call, close_group, expression, name_ref, variable};
+use super::expressions::{call, close_group, element_call_ahead, expression, name_ref, variable};
 use super::statements::{statement_list, terminator, ListEnd};
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
@@ -96,7 +96,7 @@ pub(super) fn calc_statement(p: &mut Parser) {
     if p.expect(K::LeftParen, "`(`") {
         expression(p);
         p.expect(K::Comma, "`,`");
-        if p.name_at(0) && p.nth_at(1, K::LeftParen) {
+        if (p.name_at(0) && p.nth_at(1, K::LeftParen)) || element_call_ahead(p) {
             call(p, false);
         } else {
             p.error("expected a function block call");

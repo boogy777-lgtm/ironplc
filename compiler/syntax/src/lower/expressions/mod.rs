@@ -28,16 +28,17 @@
 use super::literals::lower_constant;
 use super::names::{lower_id, lower_name, lower_type_ref};
 use super::tree::{left_spine, significant_tokens, token_of};
-use super::variables::{lower_self_ref, lower_variable};
+use super::variables::{lower_self_ref, lower_symbolic, lower_variable};
 use super::{Area, Disposition, LowerCx};
 use crate::parser::is_special_operator;
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode};
-use ironplc_dsl::construct::special_operator_type_call;
+use ironplc_dsl::construct::{fb_call, special_operator_type_call};
 use ironplc_dsl::core::{Id, SourceSpan};
 use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_dsl::textual::{
-    CompareOp, Expr, ExprKind, Function, LateBound, MethodCall, MethodReceiver, NamedInput,
-    Operator, Output, ParamAssignmentKind, PositionalInput, UnaryOp,
+    CompareOp, Expr, ExprKind, FbCall, Function, LateBound, MethodCall, MethodReceiver, NamedInput,
+    NamedVariable, Operator, Output, ParamAssignmentKind, PositionalInput, SymbolicVariableKind,
+    UnaryOp,
 };
 
 #[cfg(test)]
@@ -242,6 +243,9 @@ fn special_operator(cx: &LowerCx, node: &SyntaxNode) -> Result<ExprKind, Diagnos
 pub enum Callee {
     /// A function, or a function block instance, by name.
     Name(Id),
+    /// A function block instance that is an array element, `fbs[i]`. Only a
+    /// statement can call one: a function is always named.
+    Element(SymbolicVariableKind),
     /// A method of an instance, or of `THIS^` or `SUPER^`.
     Method {
         receiver: MethodReceiver,
@@ -258,6 +262,19 @@ pub struct Call {
     pub params: Vec<ParamAssignmentKind>,
     /// From the callee through the closing parenthesis.
     pub span: SourceSpan,
+}
+
+impl Call {
+    /// The call as the invocation of the function block instance its callee
+    /// names, whether by name or as an array element; `None` for a method call.
+    pub fn into_fb_call(self) -> Option<FbCall> {
+        let callee = match self.callee {
+            Callee::Name(name) => SymbolicVariableKind::Named(NamedVariable { name }),
+            Callee::Element(element) => element,
+            Callee::Method { .. } => return None,
+        };
+        Some(fb_call(callee, self.params, self.span))
+    }
 }
 
 /// `value`, as an argument by position.
@@ -357,6 +374,7 @@ pub fn lower_call(cx: &LowerCx, node: &SyntaxNode) -> Result<Call, Diagnostic> {
                 method,
             }
         }
+        K::IndexExpr => Callee::Element(lower_symbolic(cx, &callee)?),
         _ => Callee::Name(lower_name(cx, &callee)?),
     };
     Ok(Call {
@@ -380,5 +398,6 @@ fn call_expression(cx: &LowerCx, node: &SyntaxNode) -> Result<ExprKind, Diagnost
             params: call.params,
             position: call.span,
         }),
+        Callee::Element(_) => return Err(cx.unsupported(node)),
     })
 }

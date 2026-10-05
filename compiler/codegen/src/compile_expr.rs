@@ -721,53 +721,19 @@ pub(crate) fn compile_variable_read(
             }
             Ok(())
         }
+        // A member of a function block instance (`timer.Q`, `timers[i].Q`):
+        // the fields are stored in the data region addressed via FB_LOAD_PARAM.
+        Variable::Symbolic(SymbolicVariableKind::Structured(structured))
+            if crate::compile_fb_instance::names_instance(ctx, &structured.record) =>
+        {
+            crate::compile_fb_instance::compile_member_read(emitter, ctx, structured)
+        }
         // The guard excludes `s.arr[i].field`, whose record is an array
         // element rather than a fixed-offset struct field. That shape falls
         // through to the generic `resolve_access` dispatch below.
         Variable::Symbolic(SymbolicVariableKind::Structured(structured))
             if !matches!(structured.record.as_ref(), SymbolicVariableKind::Array(_)) =>
         {
-            // Function block instance field read (e.g. `timer.Q`). FB instances
-            // live in `ctx.fb_instances` rather than `ctx.struct_vars`, and
-            // their fields are stored in the data region addressed via
-            // FB_LOAD_PARAM.
-            if let SymbolicVariableKind::Named(named) = structured.record.as_ref() {
-                // A string field keeps its characters in a run of the
-                // instance; its slot only holds where the run is.
-                if let Some(info) = crate::compile_fb_init::instance_string_field(
-                    ctx,
-                    &named.name,
-                    &structured.field,
-                ) {
-                    info.emit_load(emitter, ctx);
-                    return Ok(());
-                }
-                if let Some(fb_info) = ctx.fb_instances.get(&named.name) {
-                    let field_name = structured.field.to_string().to_lowercase();
-                    let field_idx =
-                        fb_info
-                            .field_indices
-                            .get(&field_name)
-                            .copied()
-                            .ok_or_else(|| {
-                                Diagnostic::not_implemented(Label::span(
-                                    structured.field.span(),
-                                    format!(
-                                        "Unknown field '{}' on function block '{}' \
-                                         (reading a PROPERTY is not supported yet)",
-                                        structured.field, named.name
-                                    ),
-                                ))
-                            })?;
-                    let var_index = fb_info.var_index;
-                    emitter.emit_fb_load_instance(var_index);
-                    emitter.emit_fb_load_param(field_idx);
-                    emitter.emit_swap();
-                    emitter.emit_pop();
-                    return Ok(());
-                }
-            }
-
             // STRING fields are composite (multi-slot) and stored in the data
             // region, so we intercept before resolve_struct_field_access which
             // only supports single-slot (primitive/enum) fields.

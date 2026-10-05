@@ -115,6 +115,15 @@ fn registered_entry(ctx: &CompileContext, id: &Id) -> Option<VarEntry> {
         });
     }
     if let Some(info) = ctx.fb_instances.get(id) {
+        // An array of instances is the flat slot array its descriptor spans, the
+        // same entry an array of structures has.
+        if let Some(array) = &info.array {
+            return Some(VarEntry {
+                var_type: FieldType::Slot,
+                flags: VAR_FLAG_IS_ARRAY,
+                extra: array.desc_index,
+            });
+        }
         return Some(VarEntry {
             var_type: FieldType::FbInstance,
             flags: 0,

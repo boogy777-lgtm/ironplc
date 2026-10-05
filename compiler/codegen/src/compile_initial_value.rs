@@ -149,16 +149,32 @@ pub(crate) fn emit_declaration_initial_value(
                     // it.
                     let members =
                         crate::compile_fb_init::instance_members(ctx, type_id, &fb_init.init);
-                    crate::compile_fb_init::emit_fb_instance_member_initializers(
-                        emitter, ctx, id, &members,
-                    )?;
+                    if let Some(instance) = crate::compile_fb_instance::named_instance(ctx, id) {
+                        crate::compile_fb_init::emit_fb_instance_member_initializers(
+                            emitter, ctx, &instance, &members,
+                        )?;
+                    }
                 }
             }
             InitialValueAssignmentKind::Array(array_init) => {
                 // An array of structures holds the data region offset in
                 // its variable slot, like a structure variable does, and
                 // each element starts from what its members declare.
-                if let Some(struct_array_info) = ctx.struct_array_vars.get(id) {
+                if ctx
+                    .fb_instances
+                    .get(id)
+                    .is_some_and(|info| info.array.is_some())
+                {
+                    // An array of function block instances starts every
+                    // instance as a single instance starts.
+                    if !array_init.initial_values.is_empty() {
+                        return Err(Diagnostic::not_implemented(Label::span(
+                            decl.identifier.span(),
+                            "Initial values for an array of function block instances",
+                        )));
+                    }
+                    crate::compile_fb_instance::initialize_instance_array(emitter, ctx, id)?;
+                } else if let Some(struct_array_info) = ctx.struct_array_vars.get(id) {
                     if !array_init.initial_values.is_empty() {
                         return Err(Diagnostic::not_implemented(Label::span(
                             decl.identifier.span(),

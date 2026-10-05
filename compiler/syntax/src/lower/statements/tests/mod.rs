@@ -211,7 +211,7 @@ fn show(statement: &StmtKind) -> String {
             )
         }
         StmtKind::FbCall(call) => {
-            format!("(call {}({}))", call.var_name, show_params(&call.params))
+            format!("(call {}({}))", call.callee, show_params(&call.params))
         }
         StmtKind::MethodCall(call) => format!(
             "(call {}.{}({}))",
@@ -310,7 +310,7 @@ fn show(statement: &StmtKind) -> String {
         StmtKind::ConditionalCall(node) => format!(
             "(CALC {} {}({}))",
             show_expr(&node.condition),
-            node.call.var_name,
+            node.call.callee,
             show_params(&node.call.params)
         ),
         StmtKind::Wait(node) => format!(

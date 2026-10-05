@@ -608,6 +608,21 @@ impl ExprTypeResolver<'_> {
                     None
                 }
             }
+            // An element of an array of function block instances, `timers[i]`,
+            // exposes the members of the block as the instance `timer` does.
+            // An element that is a structure is typed by the paths that know
+            // its layout, not here.
+            SymbolicVariableKind::Array(av) => {
+                let SymbolicVariableKind::Named(nv) = av.subscripted_variable.as_ref() else {
+                    return None;
+                };
+                let element = self.declared_element_type_name(&nv.name)?;
+                self.type_environment
+                    .resolve_member_access_type(&element)
+                    .filter(|member_type| {
+                        matches!(member_type, IntermediateType::FunctionBlock { .. })
+                    })
+            }
             _ => None,
         }
     }

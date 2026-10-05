@@ -111,7 +111,8 @@ Supported Dialects
    ``--allow-incomplete-array``, ``--allow-escaped-identifiers``,
    ``--allow-jump-statement``, ``--allow-calc-statement``,
    ``--allow-wait-statement``, ``--allow-nested-comments``,
-   ``--allow-pragma-if``, and ``--allow-special-operators``.
+   ``--allow-pragma-if``, ``--allow-special-operators``, and
+   ``--allow-fb-instance-arrays``.
 
    **Selects:** ``--policy-string-to-num-non-numeric ignore-trailing`` and
    ``--policy-string-to-num-failure zero`` — CODESYS stops parsing at the
@@ -160,8 +161,8 @@ Supported Dialects
    ``--allow-try-catch``, ``--allow-params-of``,
    ``--allow-incomplete-array``, ``--allow-escaped-identifiers``,
    ``--allow-jump-statement``, ``--allow-calc-statement``,
-   ``--allow-wait-statement``, ``--allow-nested-comments``, and
-   ``--allow-pragma-if``.
+   ``--allow-wait-statement``, ``--allow-nested-comments``,
+   ``--allow-pragma-if``, and ``--allow-fb-instance-arrays``.
 
    **Selects:** ``--policy-string-to-num-non-numeric ignore-trailing`` and
    ``--policy-string-to-num-failure zero``, as ``codesys``.
@@ -601,6 +602,15 @@ which flags a dialect already enables by default, see `Supported Dialects`_.
    produces :doc:`P4073 </reference/compiler/problems/P4073>`. Only the
    ``codesys`` dialect enables it. See
    :doc:`/reference/extension-library/functions/special-operators`.
+
+``--allow-fb-instance-arrays``
+   Allow arrays of function block instances, ``ARRAY[0..3] OF TON``, and
+   calling an element, ``timers[i](IN := start, PT := T#1s);``, reading its
+   members, ``timers[i].Q``, and binding its outputs,
+   ``Q => done``. IEC 61131-3 Edition 2 declares a function block instance by
+   name only, so an array of them is an extension. Without this flag the
+   declaration produces :doc:`P4075 </reference/compiler/problems/P4075>`.
+   The ``codesys`` and ``twincat`` dialects enable it.
 
 Pass the flag when running :program:`ironplcc`:
 

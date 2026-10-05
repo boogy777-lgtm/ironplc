@@ -809,16 +809,6 @@ fn compile_program_with_functions(
         register_pou_source_file(&mut ctx, &fb.name.name.span.file_id, sources);
     }
 
-    // Assign global variable indices first (indices 0..G).
-    assign_variables(
-        &mut ctx,
-        &mut builder,
-        global_vars,
-        types,
-        &options.stable_var_ids,
-    )?;
-    let num_globals = ctx.variables.len() as u16;
-
     // Pre-scan user-defined FB declarations to register type metadata
     // (field indices, field op types, type IDs) before assign_variables runs.
     // This allows assign_variables to resolve user-defined FB instance variables.
@@ -938,6 +928,17 @@ fn compile_program_with_functions(
             }
         }
     }
+
+    // Assign global variable indices first (indices 0..G), after the pre-scan so
+    // that a global user-defined instance resolves its type like a local one.
+    assign_variables(
+        &mut ctx,
+        &mut builder,
+        global_vars,
+        types,
+        &options.stable_var_ids,
+    )?;
+    let num_globals = ctx.variables.len() as u16;
 
     // Collect program-local variables, skipping VAR_EXTERNAL declarations
     // since they alias the corresponding global variables.
@@ -1410,6 +1411,9 @@ pub(crate) struct FbInstanceInfo {
     /// The fields whose characters live in this instance's own runs, by name
     /// (lowercase), as code outside the body reaches them.
     pub(crate) strings: HashMap<String, StringVarInfo>,
+    /// The array of instances, when the variable declares several; `data_offset`
+    /// is then where the first starts. See `compile_fb_instance`.
+    pub(crate) array: Option<crate::compile_fb_instance::InstanceArray>,
 }
 
 /// Metadata for a compiled user-defined function block type.

@@ -320,6 +320,7 @@ fn compile_method_call(
     let fb_info = ctx
         .fb_instances
         .get(instance)
+        .filter(|info| info.array.is_none())
         .ok_or_else(|| Diagnostic::todo_with_span(call.span()))?;
     let type_id = fb_info.type_id;
     let var_index = fb_info.var_index;

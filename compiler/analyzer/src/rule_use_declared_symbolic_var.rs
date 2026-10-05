@@ -143,6 +143,21 @@ impl SymbolScopeChecker<'_> {
         }
     }
 
+    /// Visits the references of a callee other than the name of the instance.
+    fn visit_callee(&mut self, kind: &SymbolicVariableKind) -> Result<(), Infallible> {
+        match kind {
+            SymbolicVariableKind::Named(_) => Ok(()),
+            SymbolicVariableKind::Array(array) => {
+                self.visit_callee(&array.subscripted_variable)?;
+                array
+                    .subscripts
+                    .iter()
+                    .try_for_each(|subscript| self.visit_expr(subscript))
+            }
+            other => other.recurse_visit(self),
+        }
+    }
+
     fn is_enclosing_property(&self, name: &Id) -> bool {
         self.enclosing_properties
             .iter()
@@ -227,6 +242,19 @@ impl Visitor<Infallible> for SymbolScopeChecker<'_> {
         self.table
             .add_if(node.identifier.symbolic_id(), DummyNode {});
         node.recurse_visit(self)
+    }
+
+    /// The instance a call names is reported when it is not one by
+    /// `rule_function_block_invocation` (P4012), so not a second time here.
+    fn visit_fb_call(&mut self, node: &FbCall) -> Result<Self::Value, Infallible> {
+        match &node.callee {
+            Variable::Symbolic(callee) => self.visit_callee(callee)?,
+            Variable::Direct(_) => node.callee.recurse_visit(self)?,
+        }
+        for param in &node.params {
+            self.visit_param_assignment_kind(param)?;
+        }
+        Ok(())
     }
 
     fn visit_function(&mut self, node: &Function) -> Result<Self::Value, Infallible> {
@@ -946,4 +974,17 @@ END_PROGRAM";
 
         assert!(errors[0].described.contains(&"variable=Speed".to_owned()));
     }
+
+    // The instance a call starts from is reported once, as P4012 by the
+    // invocation rule; what an element callee subscripts is an ordinary reference.
+    rule_ok!(
+        apply_when_call_names_undeclared_instance_then_left_to_the_invocation_rule,
+        "PROGRAM main VAR x : DINT; END_VAR missing(IN := TRUE); END_PROGRAM"
+    );
+
+    rule_err1!(
+        apply_when_element_callee_subscript_undeclared_then_undefined_variable,
+        "PROGRAM main VAR ts : ARRAY[0..2] OF TON; END_VAR ts[missing](IN := TRUE); END_PROGRAM",
+        Problem::VariableUndefined
+    );
 }

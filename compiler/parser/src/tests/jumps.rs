@@ -249,7 +249,7 @@ END_PROGRAM",
     );
 
     let call = cast!(&statements(&library)[1], StmtKind::ConditionalCall);
-    assert_eq!(call.call.var_name.to_string(), "Fb");
+    assert_eq!(call.call.callee.to_string(), "Fb");
     assert_eq!(call.call.params.len(), 1);
 }
 
@@ -267,7 +267,7 @@ END_PROGRAM",
     );
 
     let call = cast!(&statements(&library)[0], StmtKind::FbCall);
-    assert_eq!(call.var_name.to_string(), "CALC");
+    assert_eq!(call.callee.to_string(), "CALC");
 }
 
 /// REQ-JMP-parser-005: `__WAIT;` and `__WAIT(condition);` both parse.

@@ -594,6 +594,11 @@ define_compiler_options! {
     [Codesys],
     allow_special_operators,
 
+    "Allow arrays of function block instances, ARRAY[0..3] OF TON, and calling an element, fbs[i](IN := x) (CODESYS extension)",
+    "--allow-fb-instance-arrays",
+    [Codesys, TwinCat],
+    allow_fb_instance_arrays,
+
     policies {
         "What STRING_TO_<numeric> treats as convertible when the string has non-numeric characters",
         "--policy-string-to-num-non-numeric",
