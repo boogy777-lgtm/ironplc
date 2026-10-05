@@ -856,8 +856,9 @@ mod tests {
     /// own run, which is the run of one command over its files.
     fn spawns_of_command(arguments: &[&str]) -> usize {
         let args = Args::try_parse_from(arguments);
+        assert!(args.is_ok(), "the arguments are not a command: {args:?}");
         let Ok(args) = args else {
-            panic!("the arguments are not a command: {args:?}");
+            return usize::MAX;
         };
         let before = spawns_by_current_thread();
         let result = run(args.action);

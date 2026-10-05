@@ -70,15 +70,17 @@ const ENTRIES: &[(&str, Entry)] = &[
     }),
 ];
 
-fn input() -> Input {
+fn input() -> Result<Input, String> {
     let options = CompilerOptions::default();
-    let library = parse_program(PROGRAM, &FileId::default(), &options).expect("the program parses");
-    let analyzed = analyze(&[&library], &options).expect("the program analyzes");
-    Input {
+    let library = parse_program(PROGRAM, &FileId::default(), &options)
+        .map_err(|diagnostic| format!("{diagnostic:?}"))?;
+    let analyzed =
+        analyze(&[&library], &options).map_err(|diagnostics| format!("{diagnostics:?}"))?;
+    Ok(Input {
         options,
         library,
         analyzed,
-    }
+    })
 }
 
 /// How many threads `entry` makes on behalf of the calling thread.
@@ -89,8 +91,8 @@ fn spawned_by(entry: Entry, input: &Input) -> usize {
 }
 
 #[test]
-fn entries_when_caller_has_no_budget_then_each_makes_one_thread() {
-    let input = input();
+fn entries_when_caller_has_no_budget_then_each_makes_one_thread() -> Result<(), String> {
+    let input = input()?;
     let without: Vec<&str> = ENTRIES
         .iter()
         .filter(|(_, entry)| spawned_by(*entry, &input) != 1)
@@ -98,18 +100,22 @@ fn entries_when_caller_has_no_budget_then_each_makes_one_thread() {
         .collect();
 
     assert_eq!(without, Vec::<&str>::new());
+    Ok(())
 }
 
 #[test]
-fn entries_when_caller_has_the_budget_then_none_makes_a_thread() {
+fn entries_when_caller_has_the_budget_then_none_makes_a_thread() -> Result<(), String> {
     let spawning: Vec<&str> = within_stack_budget(|| {
-        let input = input();
-        ENTRIES
-            .iter()
-            .filter(|(_, entry)| spawned_by(*entry, &input) != 0)
-            .map(|(name, _)| *name)
-            .collect()
-    });
+        let input = input()?;
+        Ok::<_, String>(
+            ENTRIES
+                .iter()
+                .filter(|(_, entry)| spawned_by(*entry, &input) != 0)
+                .map(|(name, _)| *name)
+                .collect(),
+        )
+    })?;
 
     assert_eq!(spawning, Vec::<&str>::new());
+    Ok(())
 }

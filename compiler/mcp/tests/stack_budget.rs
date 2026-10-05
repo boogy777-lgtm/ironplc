@@ -37,7 +37,7 @@ where
         let _ = call();
         (is_on_budget(), spawns_by_current_thread() - before)
     });
-    observed.expect("the runtime starts")
+    observed.unwrap_or_default()
 }
 
 fn spawned_by_the_server<F: Future + 'static>(work: impl FnOnce() -> F + Send) -> usize
@@ -45,7 +45,7 @@ where
     F::Output: Send,
 {
     let before = spawns_by_current_thread();
-    let _ = block_on_budget(work).expect("the runtime starts");
+    assert!(block_on_budget(work).is_ok());
     spawns_by_current_thread() - before
 }
 

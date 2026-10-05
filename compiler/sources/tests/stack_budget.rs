@@ -48,8 +48,10 @@ fn read_document() {
         &FileId::from_string("many.xml"),
         &CompilerOptions::default(),
     );
-    let library = library.expect("the document parses");
-    assert_eq!(library.elements.len(), BODIES);
+    assert_eq!(
+        library.map(|library| library.elements.len()).ok(),
+        Some(BODIES)
+    );
 }
 
 #[test]
