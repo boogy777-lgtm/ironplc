@@ -957,6 +957,99 @@ from one build per front end on the same machine.
 
 Reproduce: the commands of 3.7; the tables are the same output.
 
+#### Follow-on: the stack budget at the entry of the run (2026-10-06)
+
+The tables above stay as recorded. Q4 and Q5 counted threads per stage call
+(1 per `parse_program`, 1 per `analyze`, N for a PLCopen XML document with N
+bodies, about 2 per language-server edit). Production no longer pays that: each
+program of the compiler gives itself the budget once, at its entry, and the
+stages it calls find it (`ironplc_dsl::stack`: `within_stack_budget` runs on the
+caller's thread when that thread already has the budget). The stage entries keep
+their own call, so a caller that has no budget (a test, a benchmark, an
+embedding program) still gets one from the entry it calls and nothing overflows.
+
+**Where the budget is given.** `ironplcc`: `run` in `ironplc-cli/bin/main.rs`,
+for every command, `lsp` included. The language server: `start_with_connection`
+in `ironplc-cli/src/lsp.rs`, so the thread that serves requests is the budget
+thread for the life of the server. The MCP server: `block_on_budget` in
+`mcp/src/lib.rs`, which makes the runtime of one thread and runs it on the
+budget, so the thread that runs the tools is the budget thread. `ironplcvm`
+and `ironplcvmd` read no source. The playground has no threads (`wasm32`): the
+budget is the 1 MiB of the shadow stack and every call is inline, as before.
+
+**Threads per run, counted** (`spawns_by_current_thread`, a per-thread count;
+before: the same code with the count and the tests added, the program entry not
+yet wrapping):
+
+| run | before | after | pinned by |
+|---|---|---|---|
+| `ironplcc check`, 3 files | 4 (3 parses, 1 analysis) | 1 | `run_when_check_over_three_files_then_one_thread_for_the_run` |
+| `ironplcc echo`, 3 files | 6 (3 parses, 3 prints) | 1 | `run_when_echo_over_three_files_then_one_thread_for_the_run` |
+| `ironplcc compile`, 3 files | 5 (3 parses, analysis, code generation) | 1 | `run_when_compile_over_three_files_then_one_thread_for_the_run` |
+| language server, one edit | 2 (parse, analysis) | 0 | `start_with_connection_when_edits_are_served_then_no_request_makes_a_thread` |
+| language server, three edits and a token request | 6 | 0 after the 1 of the server | `start_with_connection_when_server_runs_then_it_makes_one_thread_for_its_whole_life` |
+| MCP `check` call | 2 | 0 | `block_on_budget_when_check_tool_runs_then_the_thread_has_the_budget_and_makes_none` |
+| MCP `compile` call | 3 | 0 | `block_on_budget_when_compile_tool_runs_then_the_thread_has_the_budget_and_makes_none` |
+| MCP, three `check` calls | 6 | 1 | `block_on_budget_when_server_serves_calls_then_the_whole_run_makes_one_thread` |
+| PLCopen XML document, 20 bodies | 20 | 1 for the run (0 more) | `parse_source_when_xml_document_has_many_bodies_and_run_has_the_budget_then_one_thread_for_the_run` |
+| 4 bundled library files | 4 | 1 for the run (0 more) | `load_activated_libraries_when_run_has_the_budget_then_one_thread_for_the_run` |
+
+For a command over K files the count is K+1 (`check`), 2K (`echo`) and K+2
+(`compile`) before and 1 after; per language-server edit it was 2 plus 1 for
+each bundled library file of an activated compatibility library, and is 0. A caller with no budget still pays one thread for each stage entry it calls, as
+before: `entries_when_caller_has_no_budget_then_each_makes_one_thread` holds each
+stage entry to exactly one, and `entries_when_caller_has_the_budget_then_none_makes_a_thread`
+to none on a held budget.
+
+**Measured** with the same harness, corpus, machine, profile and method as 3.7
+(release `bench` profile, Intel Core i5-9300H, Windows 11 Pro 10.0.26200, rustc
+1.98.1, base commit `c7ac3389c` plus the change; another build ran on the
+machine during these runs, so the absolute figures are higher and wider than in
+3.7 and the ratios are the evidence). Three consecutive runs, run 1 / 2 / 3.
+The rows `parse (held)`, `statements (held)` and `xml document (held)` run the
+same call as `parse`, `statements` and `xml document` on a thread that holds the
+budget (the attribute `stack` of a row of the table, `Held`); the thread is made
+outside the measurement. A row without the attribute is what a program paid
+before: each facade call spawned and joined its own thread.
+
+| quantity | caller without the budget (before) | budget held (after) | after / before, run 1 / 2 / 3 |
+|---|---|---|---|
+| `parse`, 61 files, warm-median sum (ms) | 10.401 / 9.500 / 9.950 | 4.734 / 4.282 / 4.275 | 0.46 / 0.45 / 0.43 |
+| `parse`, 61 files, cold, one pass (ms) | 14.661 / 10.392 / 10.804 | 4.736 / 4.335 / 4.416 | 0.32 / 0.42 / 0.41 |
+| `parse`, 61 files, cold allocations | 23,874 | 23,621 | 0.99 |
+| `statements`, 75 bodies, warm-median sum (ms) | 7.740 / 7.600 / 8.334 | 1.756 / 1.729 / 1.775 | 0.23 / 0.23 / 0.21 |
+| `statements`, 75 bodies, cold allocations | 8,306 | 8,006 | 0.96 |
+| `xml document`, 59 bodies, 11,399 bytes, warm median (ms) | 6.719 / 6.903 / 7.349 | 1.268 / 1.304 / 1.302 | 0.19 / 0.19 / 0.18 |
+| `xml document`, cold allocations | 7,466 | 7,230 | 0.97 |
+| `strings.st` (53 bytes), warm median (us) | 119.8 / 95.2 / 100.3 | 21.9 / 17.5 / 17.4 | 0.18 / 0.18 / 0.17 |
+| `first_steps.st` (2,719 bytes), warm median (us) | 576.6 / 518.2 / 519.1 | 436.4 / 404.6 / 407.0 | 0.76 / 0.78 / 0.78 |
+| `stack budget, empty work`, 61 calls, warm-median sum (ms) | 5.130 / 4.579 / 5.020 | | |
+
+The allocations that go are the 4 of each thread (59 x 4 = 236 for the document,
+75 x 4 = 300 for the bodies). The document is the case the thread cost compounds
+in: 59 bodies were 59 threads, 5.4-6.0 ms of the 6.7-7.3 ms, and are now none
+beyond the thread of the program. The edit of a language-server session loses
+its two threads: for `first_steps.st` the `parse` row falls by 0.11-0.14 ms (576.6 to 436.4 us
+in run 1), and the analysis loses a thread of the same size, which was not
+measured. `parse (held)` of the 53-byte `strings.st` is 17.4-21.9 us, the cost of the parse
+without the thread. The figure that Q4 and 5.2 of the architecture
+document record (the thread as 43-45 % of the corpus parse sum) is what a stage
+call paid when the caller had no budget; with the budget held it is 0 % of the
+run, and one thread of the program (about 75-84 us, the mean of the 61 calls of
+the empty row) for the whole run.
+
+**Does the tree cross threads?** No path of production builds a tree on one
+thread and lowers it on another. The one place that builds a tree and lowers it
+is `parser/src/frontend.rs` (`parse_program`, `parse_st_statements`), and it
+does both inside one `within_stack_budget`. The other callers of the tree
+builder and of the lowering are tests (`analyzer/src/lowered_*.rs`,
+compiled for tests only) and this crate's benchmarks.
+
+Reproduce: `cargo bench --package ironplc-benchmarks --bench parse_baseline`
+(from `compiler/`); the rows named `(held)` and `xml document` are in the same
+output. The counts come from `cargo test`: the tests named above.
+
+
 ## 4. Prefactoring candidates (observed while spiking)
 
 1. **Lossless token source (new, blocking for S1).** `ironplc-parser`

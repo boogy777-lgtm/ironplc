@@ -403,9 +403,15 @@ added to the table is measured against both. As recorded there:
 - the token view is within the budget after the gate pass of the tokenizer was
   indexed by token kind (warm time 1.26-1.31 of legacy, allocations 1.00); it is
   above the 1.25 line and the remaining cost is explained in the record;
-- both front ends pay one stack-budget thread per `parse_program` and per
-  `parse_st_statements` call (about 75-83 us on the measured machine, 43-45 % of
-  the corpus parse sum), and none for `tokenize_program`.
+- a stage entry called by a caller that has no stack budget pays one thread per
+  `parse_program` and per `parse_st_statements` call (about 75-83 us on the
+  measured machine, 43-45 % of the corpus parse sum), and none for
+  `tokenize_program`. A program of the compiler holds the budget from its entry
+  (`ironplcc`, the language server, the MCP server), so production pays one
+  thread for a run of the command, none for a request of a server, and none per
+  body of a PLCopen XML document; measured on a held budget the corpus parse sum
+  is 0.43-0.46 of the figure above and the document of 59 bodies 0.18-0.19
+  ([follow-on of 3.7, 2026-10-06](parse-tree-s0-experiment.md#follow-on-the-stack-budget-at-the-entry-of-the-run-2026-10-06)).
 
 ## 6. References
 
