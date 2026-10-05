@@ -92,9 +92,11 @@ fn first(label: &str, text: &str) -> Reported {
     let preset = preset();
     let legacy = legacy_reported(text, &preset);
     let new = new_reported(text, &preset);
-    let (Some(legacy), Some(new)) = (legacy, new) else {
-        panic!("{label}: a parser accepts the input");
-    };
+    assert!(
+        legacy.is_some() && new.is_some(),
+        "{label}: a parser accepts the input"
+    );
+    let (legacy, new) = (legacy.expect("checked above"), new.expect("checked above"));
     assert_eq!(
         (&legacy.code, legacy.start, legacy.end),
         (&new.code, new.start, new.end),
