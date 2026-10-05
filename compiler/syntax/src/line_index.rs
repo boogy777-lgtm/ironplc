@@ -64,28 +64,82 @@ impl<'a> LineIndex<'a> {
 
     /// The line and the column, both 0-based, of the byte at `offset`. An
     /// offset past the end of the text is the end of the text.
+    ///
+    /// Many positions of one text, in order, are cheaper through
+    /// [`LineIndex::walker`]: this one counts the columns of its line from the
+    /// start of the line every time.
     pub fn position(&self, offset: usize) -> (usize, usize) {
-        let mut offset = offset.min(self.text.len());
-        while !self.text.is_char_boundary(offset) {
+        self.walker().position(offset)
+    }
+
+    /// A reader of positions that remembers where the last one was, so that a
+    /// run of positions that only move forward counts each character of the text
+    /// once. A position that is before the last one is still right: it is found
+    /// from the start of its line.
+    pub fn walker(&self) -> Walker<'_, 'a> {
+        Walker {
+            index: self,
+            line: 0,
+            at: 0,
+            column: 0,
+        }
+    }
+}
+
+/// The positions of one [`LineIndex`], read one after the other.
+#[derive(Debug, Clone)]
+pub struct Walker<'i, 'a> {
+    index: &'i LineIndex<'a>,
+    /// The line of `at`, and its column within the line, not counting the
+    /// column offset of the first line.
+    line: usize,
+    at: usize,
+    column: usize,
+}
+
+impl Walker<'_, '_> {
+    /// The line and the column, both 0-based, of the byte at `offset`; see
+    /// [`LineIndex::position`].
+    pub fn position(&mut self, offset: usize) -> (usize, usize) {
+        let index = self.index;
+        let mut offset = offset.min(index.text.len());
+        while !index.text.is_char_boundary(offset) {
             offset -= 1;
         }
-        let line = self.starts.partition_point(|start| *start <= offset);
-        let line = line.saturating_sub(1);
-        let start = self.starts.get(line).copied().unwrap_or(0);
-        let column: usize = self
+        if offset < self.at {
+            // Backwards: start again at the line the offset is on.
+            self.line = 0;
+            self.at = 0;
+            self.column = 0;
+        }
+        // The last line that starts at or before the offset, looking forward
+        // from the line the walker is on.
+        let ahead = index.starts.get(self.line..).unwrap_or_default();
+        let line = self.line
+            + ahead
+                .partition_point(|start| *start <= offset)
+                .saturating_sub(1);
+        if line != self.line || self.at < index.starts.get(line).copied().unwrap_or(0) {
+            self.line = line;
+            self.at = index.starts.get(line).copied().unwrap_or(0);
+            self.column = 0;
+        }
+        self.column += index
             .text
-            .get(start..offset)
+            .get(self.at..offset)
             .unwrap_or_default()
             .chars()
             .map(char::len_utf16)
-            .sum();
-        let (line_offset, col_offset) = self.origin;
-        let column = if line == 0 {
-            col_offset + column
+            .sum::<usize>();
+        self.at = offset;
+
+        let (line_offset, col_offset) = index.origin;
+        let column = if self.line == 0 {
+            col_offset + self.column
         } else {
-            column
+            self.column
         };
-        (line_offset + line, column)
+        (line_offset + self.line, column)
     }
 }
 
@@ -147,6 +201,21 @@ mod tests {
         assert_eq!(index.position(2), (5, 9));
         assert_eq!(index.position(3), (6, 0));
         assert_eq!(index.position(4), (6, 1));
+    }
+
+    #[test]
+    fn walker_when_offsets_come_in_any_order_then_the_same_positions_as_one_at_a_time() {
+        let text = "ab\r\n\u{1F600}cd\ref\n\n\u{e9}x";
+        let index = LineIndex::new(text, 3, 4);
+        let mut offsets: Vec<usize> = (0..=text.len()).collect();
+        let mut walker = index.walker();
+        for offset in offsets.clone() {
+            assert_eq!(walker.position(offset), index.position(offset), "{offset}");
+        }
+        offsets.reverse();
+        for offset in offsets {
+            assert_eq!(walker.position(offset), index.position(offset), "{offset}");
+        }
     }
 
     #[test]

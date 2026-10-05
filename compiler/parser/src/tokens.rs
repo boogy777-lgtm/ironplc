@@ -246,7 +246,8 @@ pub(crate) fn project(
     line_offset: usize,
     col_offset: usize,
 ) -> Vec<Token> {
-    let lines = LineIndex::new(source, line_offset, col_offset);
+    let index = LineIndex::new(source, line_offset, col_offset);
+    let mut lines = index.walker();
     (0..tokens.len())
         .filter_map(|index| {
             let token_type = type_of(tokens, index, options)?;
