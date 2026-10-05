@@ -191,6 +191,29 @@ fn echo_when_semantic_error_file_then_ok() -> Result<(), Box<dyn std::error::Err
 }
 
 #[test]
+fn tokenize_when_unterminated_comment_then_err() -> Result<(), Box<dyn std::error::Error>> {
+    // The tokenizer reports the comment that is never closed, and the command
+    // fails with its diagnostic, while the tokens before it are still printed.
+    let dir = tempfile::TempDir::new()?;
+    let file = dir.path().join("open_comment.st");
+    std::fs::write(
+        &file,
+        "PROGRAM main
+END_PROGRAM (* open
+",
+    )?;
+
+    let mut cmd = Command::new(cargo::cargo_bin!("ironplcc"));
+    cmd.arg("tokenize").arg(&file);
+    cmd.assert()
+        .failure()
+        .stdout(predicate::str::contains("Type: Program"))
+        .stderr(predicate::str::contains("P0002"));
+
+    Ok(())
+}
+
+#[test]
 fn tokenize_when_valid_file_then_ok() -> Result<(), Box<dyn std::error::Error>> {
     let mut cmd = Command::new(cargo::cargo_bin!("ironplcc"));
 
