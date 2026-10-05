@@ -10,7 +10,7 @@ use ironplc_dsl::core::{FileId, Located};
 use ironplc_dsl::diagnostic::LineColumn;
 use log::error;
 use lsp_types::{
-    CodeDescription, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, DocumentSymbol,
+    CodeDescription, DiagnosticRelatedInformation, DiagnosticSeverity, DocumentSymbol,
     DocumentSymbolResponse, Location, NumberOrString, SymbolKind, WorkspaceFolder,
 };
 use lsp_types::{SemanticToken, Uri};
@@ -155,27 +155,21 @@ impl LspProject {
         }
     }
 
-    pub(crate) fn tokenize(&self, uri: &Uri) -> Result<Vec<SemanticToken>, Vec<Diagnostic>> {
-        let path = to_path_buf(uri);
-        if let Ok(path) = path {
-            let file_id = FileId::from_path(&path);
-
-            let result = self.wrapped.tokenize(&file_id);
-
-            if !result.1.is_empty() {
-                return Err(result
-                    .1
-                    .into_iter()
-                    .map(|err| map_diagnostic(err, self.wrapped.as_ref()))
-                    .collect());
-            }
-
-            return Ok(to_semantic_tokens(result.0));
-        } else {
+    /// The semantic tokens of the document, whatever the tokenizer reports.
+    ///
+    /// The token stream covers every byte of the text, so an unterminated
+    /// comment, a pragma in a dialect without pragmas or any other error of the
+    /// tokenizer leaves the rest of the document highlighted, as an editor
+    /// expects while the text is being typed. The tokenizer's diagnostics are
+    /// not returned here: they reach the editor through [`Self::semantic_all`].
+    /// A document the project does not hold has no tokens.
+    pub(crate) fn tokenize(&self, uri: &Uri) -> Vec<SemanticToken> {
+        let Ok(path) = to_path_buf(uri) else {
             error!("URL must be convertible to a file path {}", uri.as_str());
-        }
-
-        Err(vec![])
+            return vec![];
+        };
+        let (tokens, _diagnostics) = self.wrapped.tokenize(&FileId::from_path(&path));
+        to_semantic_tokens(tokens)
     }
 
     /// Run semantic analysis on the whole workspace and return all
@@ -592,10 +586,33 @@ mod test {
     }
 
     #[test]
-    fn tokenize_when_no_document_then_error() {
+    fn tokenize_when_no_document_then_no_tokens() {
         let proj = new_empty_project();
         let url = Uri::from_str("http://example.com").unwrap();
-        assert!(proj.tokenize(&url).is_err());
+        assert!(proj.tokenize(&url).is_empty());
+    }
+
+    #[test]
+    fn tokenize_when_unterminated_comment_then_tokens_served_and_diagnostic_published() {
+        // The tokenizer reports the comment that is never closed. Tokens are
+        // served whatever it reports, so the text before the comment is still
+        // highlighted while the comment is being typed, and the diagnostic
+        // reaches the editor through the analysis.
+        let mut proj = new_empty_project();
+        let url = Uri::from_str(FAKE_PATH).unwrap();
+        proj.change_text_document(
+            &url,
+            "PROGRAM Main
+END_PROGRAM (* open"
+                .to_owned(),
+        );
+
+        let tokens = proj.tokenize(&url);
+        assert!(!tokens.is_empty());
+
+        let published = proj.semantic_all();
+        let diagnostics: Vec<_> = published.values().flatten().collect();
+        assert!(!diagnostics.is_empty(), "no diagnostic was published");
     }
 
     #[test]
@@ -605,7 +622,7 @@ mod test {
         proj.change_text_document(&url, "TYPE TEXT_EMPTY : STRING [1]; END_TYPE".to_owned());
 
         let result = proj.tokenize(&url);
-        assert!(!result.unwrap().is_empty());
+        assert!(!result.is_empty());
     }
 
     #[test]
@@ -621,7 +638,7 @@ mod test {
             "PROGRAM Main\nVAR\nx : BOOL;\nEND_VAR\nEND_PROGRAM".to_owned(),
         );
 
-        let tokens = proj.tokenize(&url).unwrap();
+        let tokens = proj.tokenize(&url);
         assert!(!tokens.is_empty(), "expected tokens, got none");
 
         // Reconstruct absolute positions from the deltas.
@@ -675,7 +692,7 @@ mod test {
         let url = Uri::from_str(FAKE_PATH).unwrap();
         proj.change_text_document(&url, source.to_owned());
 
-        let tokens = proj.tokenize(&url).unwrap();
+        let tokens = proj.tokenize(&url);
         let resolved = resolve_lsp_tokens(source, &tokens);
 
         // Spot-check key tokens that the user reported as broken.
@@ -737,7 +754,7 @@ mod test {
             "VAR\n  a : BOOL; (* note *) b : BOOL;\nEND_VAR".to_owned(),
         );
 
-        let tokens = proj.tokenize(&url).unwrap();
+        let tokens = proj.tokenize(&url);
         // Reconstruct absolute positions and the keyword index of each token.
         let mut line: u32 = 0;
         let mut col: u32 = 0;
@@ -774,7 +791,7 @@ mod test {
         let content = read_shared_resource("first_steps.st");
         proj.change_text_document(&url, content.clone());
 
-        let tokens = proj.tokenize(&url).unwrap();
+        let tokens = proj.tokenize(&url);
         assert!(!tokens.is_empty(), "expected tokens, got none");
 
         // first_steps.st is ASCII, so a char index is also the UTF-16 offset
