@@ -539,6 +539,302 @@ go. The one-time init probe shows no lazy initialization in the CST path
 
 Reproduce: the commands in 3.5; the CST columns are in the same output.
 
+### 3.7 Both front ends side by side (2026-10-05)
+
+`parse_baseline` and `parse_benchmark` now measure every path from one table
+(`compiler/benchmarks/src/paths.rs`). A path is one row: its name, the inputs it
+runs over, the call, and optionally the path it is compared with. The totals,
+the ratios, the per-input table, the one-time init probe and the Criterion
+groups iterate that table, so one more path is one more row. The rows of 3.5
+and 3.6 keep their names and meaning; the allocation totals of `tokenize`,
+`parse`, `cst lex`, `cst parse` and `cst parse + lower` are identical before and
+after the change (9,448 / 32,121 / 61 / 9,590 / 23,865 on the 61-file corpus).
+
+The public functions of `ironplc-parser` are rows like the others, and they run
+the front end the crate was built with. The two front ends are therefore two
+runs of the same table: default features (the legacy pipeline), then
+`--features ironplc-parser/cst-frontend` (the pipeline on the lossless tree:
+tokens, regions, gates, grammar, lowering, and the token view). The output
+header says which one the public functions ran; it is read from what they do (the
+legacy transforms split the duration literal `T#1m30s` into more tokens than the
+lexer of the tree gives it), not from how the crate was built, so it is right
+however the feature was switched on. The rows that call `ironplc-syntax` directly are in
+both runs.
+
+- **Environment:** Intel Core i5-9300H @ 2.40 GHz (4 cores / 8 threads),
+  Windows 11 Pro 10.0.26200, rustc 1.98.1 (48a229cea, 2026-09-01), cargo 1.98.1,
+  release `bench` profile, desktop at normal load, no pinning, no other build
+  running during a run. Base commit `66b7c230e` plus the benchmark change.
+- **Corpus:** 61 files of `compiler/resources/test/`, 26,638 bytes, under
+  `CompilerOptions::default()` (the corpus grew by one file since 3.6, so the
+  figures of 3.6 are not comparable file for file). 20 files are rejected by
+  both front ends under default options (`ok` for 41 of 61 in both): they
+  measure the path that rejects.
+- **Method:** as 3.5: cold is the first call for the input after one unmeasured
+  call, warm is the median of 50 calls, allocations are `stats_alloc` counts
+  inside the call, the result is dropped after the counters are read.
+- **Three consecutive runs** per feature set, run 1 / 2 / 3 below. No warm sum
+  differed by more than 15 % between runs of one set (the widest spread is the
+  legacy `parse` warm sum, 10.818-11.517 ms, 6.5 %), so no run was repeated.
+  Allocation counts are exact and equal in every run.
+
+**What changed against 3.6.** Every `parse_program` and `parse_st_statements`
+call now runs on one thread of the stack budget (`ironplc_dsl::stack`), spawned
+and joined per call. 3.5 and 3.6 measured before that existed. It is 43-45 % of
+the `parse` sum on this corpus (Q4), and it is why the legacy `parse` sum is
+about 10.8 ms here and was 4.7 ms in 3.5.
+
+#### Q1: whole file, `parse_program`
+
+The legacy column is the default run; the cst column is the run with the feature
+on, where `parse_program` is parse plus lowering on one budget thread (the
+public function wraps it once and the front end's own wrap, and the syntax
+crate's, reuse that thread). 61 files.
+
+| quantity | legacy run 1 / 2 / 3 | cst run 1 / 2 / 3 | cst / legacy run 1 / 2 / 3 |
+|---|---|---|---|
+| cold, one pass (ms) | 12.974 / 12.313 / 12.075 | 12.358 / 12.214 / 12.338 | 0.95 / 0.99 / 1.02 |
+| warm-median sum (ms) | 11.517 / 10.818 / 10.907 | 10.373 / 10.887 / 10.420 | 0.90 / 1.01 / 0.96 |
+| cold allocations | 32,121 | 23,949 | 0.75 |
+| cold KiB allocated | 4,544.6 | 2,800.8 | 0.62 |
+
+The warm allocation sums are 32,037 (legacy) and 23,865 (cst): each front end's
+cold sum is 84 higher, in `configuration.st` and `var_decl.st` (first use of a
+construct in the process); the ratio is 0.75 either way.
+
+Per file, the warm allocation ratio is exact: worst is
+`first_steps_configuration.st` 1.91 (248 against 130 allocations), then
+`strings.st` 1.82 (73 / 40), `main.st` 1.64, `configuration.st` 1.62. The
+worst warm-time ratio moves between runs, as 100 us medians do: `oop.st` 1.37 /
+1.80 / 1.32 (run 3: `var_decl.st` 1.33 is the worst), and 3 / 7 / 5 of 61 files
+are above 1.25, 0 / 1 / 0 above 1.5. Why, from the same rows:
+
+- `oop.st`, `c_style_block_comment.st` and the other rejected files: the legacy
+  grammar stops at its first error (`oop.st` 137 us); the tree parses the whole
+  file with recovery (19 errors) and ranks them (247 us).
+- `var_decl.st`, `type_decl.st`, `configuration.st`, `main.st`,
+  `first_steps_configuration.st`: lowering-bound. For `var_decl.st` the parse
+  alone is 447 allocations and parse plus lowering 1,563; the lowering allocates
+  per name and per node and the tree parse does not.
+- `strings.st` (53 bytes): 40 against 73 allocations is the fixed part of the
+  tree builder and the lowering on a file with six tokens; in time both sides
+  are the budget thread (Q4).
+- The largest bodies are at parity or better on the tree: `first_steps.st`
+  631.8-707.5 us against 641.8-720.5 us warm, 2,685 against 3,259 allocations;
+  `first_steps_program.st` 267.8 against 326.8 us (run 2).
+
+#### Q2: token view, `tokenize_program`
+
+Legacy: the default run. cst: the run with the feature on, which is
+`ironplc_syntax::tokenize` followed by the projection to `Token` (what the
+language server's semantic tokens and `ironplcc tokenize` call).
+
+| quantity | legacy run 1 / 2 / 3 | cst run 1 / 2 / 3 | cst / legacy run 1 / 2 / 3 |
+|---|---|---|---|
+| cold, one pass (ms) | 1.717 / 1.683 / 1.690 | 3.230 / 3.169 / 3.129 | 1.88 / 1.88 / 1.85 |
+| warm-median sum (ms) | 0.925 / 0.917 / 0.925 | 2.212 / 2.212 / 2.254 | 2.39 / 2.41 / 2.44 |
+| cold allocations | 9,448 | 9,430 | 1.00 |
+| cold KiB allocated | 1,753.3 | 1,407.8 | 0.80 |
+
+Every one of the 61 files is above 1.5 times the legacy warm time (smallest
+1.55 / 1.73 / 1.57 in run 1 / 2 / 3; largest `incomplete_array.st` 3.58 in run 1
+on 5 us medians, else `var_decl.st` 2.64, 112.6 against 42.6 us), so the cost is
+per token and not one file.
+
+Where it goes, from the direct rows (default run, 3 below) and from two ad-hoc
+timings that are not in the tree: `lex` alone is 0.258-0.261 ms; `tokenize`
+(lexer, regions, gates) is 1.240-1.252 ms; the projection and the options
+conversion are the 0.96 ms that remain of 2.21. Splitting the facade with
+temporary timers gave 1.43 ms for `tokenize` and 1.03 ms for the projection per
+pass; and with the gates skipped (temporary switch) `tokenize` went from 1.27 to
+0.37 ms, so the gates are about 0.9 ms. The gate pass calls every disabled gate
+on every token, 11 function-pointer calls that each build a `Vec`, for about
+9,400 tokens (`compiler/syntax/src/parser/gates.rs`, `gate_errors`); hoisting
+the `enabled` test out of the token loop did not change the time. The
+projection is a string per token (as many allocations as the legacy path: 9,430
+against 9,448), a position per token and the option test per token.
+
+#### Q3: statement fragments, `parse_st_statements`
+
+Input: the statement body of every unit of the corpus that has a variable
+block, the text between its last `END_VAR` and its `END_...` word, trimmed (75
+bodies, 5,551 bytes; `corpus::statement_bodies`). These are the text a PLCopen
+XML document hands to `parse_st_statements`, but they are cut from the ST corpus
+and not from XML documents (the repository has no XML corpus with ST bodies of
+this kind), and a body is 74 bytes on average: **indicative**. Both front ends
+accept 59 of the 75.
+
+| quantity | legacy run 1 / 2 / 3 | cst run 1 / 2 / 3 | cst / legacy run 1 / 2 / 3 |
+|---|---|---|---|
+| cold, one pass (ms) | 8.950 / 8.768 / 8.741 | 8.256 / 8.453 / 8.275 | 0.92 / 0.96 / 0.95 |
+| warm-median sum (ms) | 8.367 / 8.179 / 8.215 | 7.789 / 8.338 / 8.014 | 0.93 / 1.02 / 0.98 |
+| cold allocations | 7,744 | 8,306 | 1.07 |
+| cold KiB allocated | 1,247.8 | 962.3 | 0.77 |
+
+No body is above 1.25 in warm time in the runs (worst 1.20); the worst
+allocation ratio is `c_style_block_comment.st#1` 1.76 (44 against 25), a tiny
+rejected body. The bodies are dominated by the budget thread (Q4): the median
+call is 107 us, of which the thread is about 75.
+
+#### Q4: the stack budget thread
+
+`within_stack_budget` (`compiler/dsl/src/stack.rs:106`) spawns a thread with a
+64 MiB stack and joins it, except where the caller is already on one
+(`ON_BUDGET`, `stack.rs:107-109`). Measured as the path `stack budget, empty
+work` (one spawn and join for work that returns the length of the input), over
+the 61 corpus files:
+
+| quantity | default run 1 / 2 / 3 | cst run 1 / 2 / 3 |
+|---|---|---|
+| one call, warm median over the files (us) | 82.3 / 74.0 / 78.2 | 73.5 / 79.5 / 73.6 |
+| one call, min-max over the files, run 1 (us) | 77.1-106.8 | 72.2-93.9 |
+| warm-median sum over 61 calls (ms) | 5.095 / 4.627 / 4.719 | 4.608 / 4.928 / 4.540 |
+| allocations per call | 4 | 4 |
+| share of the `parse` warm sum | 0.44 / 0.43 / 0.43 | 0.44 / 0.45 / 0.44 |
+| share of one `parse` of `strings.st` (53 bytes) | 0.82 / 0.92 / 0.88 | 0.76 / 0.77 / 0.70 |
+| share of one `parse` of `first_steps.st` (2,719 bytes) | 0.12 / 0.12 / 0.12 | 0.12 / 0.12 / 0.12 |
+
+A tiny parse is the thread: `strings.st` takes 94.0-103.3 us (legacy) and
+95.5-105.0 us (cst) against 72.9-86.7 us for the thread alone, which is one
+spawn in each, not two. Threads per public call, from the code:
+
+| public call | legacy | cst | evidence |
+|---|---|---|---|
+| `tokenize_program` | 0 | 0 | `parser/src/lib.rs:118` has no budget; `frontend.rs` `cst_tokenize_program` has none; `ironplc_syntax::tokenize` runs on the caller's stack (`syntax/src/parser/mod.rs:93`) |
+| `parse_program` | 1 | 1 | `parser/src/lib.rs:137` spawns; the front end's own `within_stack_budget` (`frontend.rs`, `cst_parse_program`) and `parse_with` (`syntax/src/parser/mod.rs:111`) run on that thread (`stack.rs:107-109`) |
+| `parse_st_statements` | 1 | 1 | `parser/src/lib.rs:159`, nested the same way |
+
+The tree adds no thread to the facade. Called directly, `parse_source_file`
+spawns its own (`mod.rs:111`) and `lower_library` then runs on the caller's
+stack; the row `cst parse + lower (budget)` is the facade's shape, on one thread.
+A `parse_st_statements` call per body (`sources/src/xml/transform.rs:1110`) is
+one thread per body: for a PLCopen XML file with N bodies, N threads.
+
+#### Q5: the language server, per edit
+
+Calls per text change (`DidOpenTextDocument` / `DidChangeTextDocument`,
+`ironplc-cli/src/lsp.rs:451-483`): `change_text_document` stores the text and
+parses nothing (`lsp_project.rs:147`, `sources/src/project.rs:99`);
+`publish_workspace_diagnostics` (`lsp.rs:229-233`) calls `semantic_all`
+(`lsp_project.rs:195`), which runs `run_semantic_analysis`
+(`project/src/project.rs:33`): each activated compatibility library is parsed
+again with `parse_program` (`sources/src/libraries/mod.rs:338`, not cached; none
+unless discovery activated one), `Source::library()` parses the changed source
+only (`project.rs:63`, `sources/src/source.rs:91`; the other sources keep their
+cached library) and `analyze` runs (`project.rs:93`, `analyzer/src/stages.rs:64`,
+on the budget). Per semantic-token request (`lsp.rs:324-346`): one
+`tokenize_program` (`lsp_project.rs:158-173`, `project.rs:333`).
+
+Threads per edit: 1 (`parse_program` of the edited file) + 1 (`analyze`) + 1 per
+bundled library file of each activated library, the same for both front ends.
+Threads per semantic-token request: 0 for both. Measured, the parse side for
+`first_steps.st` (2,719 bytes, run 1 / 2 / 3, warm median):
+
+| call | legacy (us) | cst (us) | allocations legacy / cst |
+|---|---|---|---|
+| `tokenize_program`, per semantic-token request | 130.0 / 125.7 / 128.0 | 214.6 / 217.5 / 256.1 | 897 / 894 |
+| `tokenize_program`, cold | 144.5 / 224.3 / 173.8 | 277.9 / 325.0 / 285.1 | |
+| `parse_program`, per edit | 720.5 / 696.1 / 641.8 | 631.8 / 707.5 / 655.3 | 3,259 / 2,685 |
+| `parse_program`, cold | 751.1 / 833.1 / 700.7 | 764.6 / 748.5 / 890.9 | |
+| thread of one budget call (Q4), per edit twice | 89.7 / 81.0 / 73.9 | 72.9 / 82.3 / 79.1 | 4 |
+
+So one edit pays about two budget threads (150-165 us) on top of the parse and
+the analysis; the thread is 12 % of the parse of this file and the parse is the
+same cost in both front ends within noise. A semantic-token request is 126-130
+us on the legacy path and 215-256 us on the tree, the Q2 overshoot at the scale
+of one typical file. The analysis itself and the end-to-end edit were not
+measured.
+
+#### Q6: one-time initialization
+
+The init probe of 3.5, run for the facade under each front end (tiny inputs,
+before the corpus loop; allocations are exact):
+
+| call | legacy first / second / init | cst first / second / init |
+|---|---|---|
+| `tokenize`, plain | 30 / 30 / 0 | 30 / 30 / 0 |
+| `tokenize`, located variables | 46 / 46 / 0 | 46 / 46 / 0 |
+| `parse`, plain | 123 / 123 / 0 | 124 / 124 / 0 |
+| `parse`, located variables | 1,115 / 184 / 931 | 1,194 / 263 / 931 |
+
+Time of the first and second `parse` call on the located input (run 1 / 2 / 3):
+legacy 746.1 / 782.1 / 753.4 us then 200.9 / 245.2 / 250.6 us; cst 885.8 / 774.7 /
+710.4 us then 314.6 / 319.6 / 206.6 us. Both front ends pay the same 931
+allocations once, on the first program with a located variable, for the
+direct-variable address regexes of `ironplc-dsl`; neither pays anything else on
+a plain program or on the token view. The direct rows come after the facade in
+the order of the table, so they inherit what it initialized. One difference is
+visible there and its cause was not investigated: the located input lowered on
+the caller's thread is 263 allocations the first time and 188 after
+(`cst parse + lower, located`), and 263 every time on a fresh budget thread (the
+`(budget)` row, and the second call of the cst facade above), where the legacy
+facade's second call is 184. It reads as per-thread state, 75 allocations, that a
+thread made for the call has to build again.
+
+#### Direct rows of the syntax crate (default run, run 1 / 2 / 3)
+
+| path | warm-median sum (ms) | cold one pass (ms) | cold allocations | cold KiB |
+|---|---|---|---|---|
+| `cst lex` | 0.258 / 0.258 / 0.261 | 0.735 / 0.708 / 0.698 | 61 | 387.0 |
+| `cst tokenize` | 1.252 / 1.240 / 1.240 | 1.490 / 1.499 / 1.478 | 186 | 393.9 |
+| `cst parse` | 8.512 / 7.913 / 7.968 | 10.100 / 9.342 / 9.554 | 9,590 | 1,199.6 |
+| `cst parse + lower` | 10.627 / 10.032 / 10.165 | 11.119 / 10.400 / 10.484 | 23,865 | 2,759.6 |
+| `cst parse + lower (budget)` | 10.985 / 10.403 / 10.489 | 11.376 / 10.984 / 10.954 | 23,865 | 2,770.0 |
+| `stack budget, empty work` | 5.095 / 4.627 / 4.719 | 5.541 / 5.166 / 5.158 | 244 | 9.5 |
+| `statements` (legacy) | 8.367 / 8.179 / 8.215 | 8.950 / 8.768 / 8.741 | 7,744 | 1,247.8 |
+| `cst statements (budget)` | 8.211 / 7.920 / 7.988 | 8.921 / 8.803 / 8.801 | 8,306 | 962.3 |
+
+#### Budget and verdict
+
+The owner-approved budget: the warm-median corpus sum and the allocation count
+of the tree-based front end are each at most 1.5 times the legacy front end's;
+anything above 1.25 is explained here.
+
+| quantity | warm-median sum | allocations | verdict |
+|---|---|---|---|
+| Q1 whole file | 0.90 / 1.01 / 0.96 | 0.75 | met; nothing above 1.25 |
+| Q2 token view | 2.39 / 2.41 / 2.44 | 1.00 | **warm time over the budget** |
+| Q3 fragments (indicative) | 0.93 / 1.02 / 0.98 | 1.07 | met |
+
+Q2 overshoots in time and not in allocations. The cause is the two stages in
+front of the view, both per token and both measured above: the gate pass of the
+syntax tokenizer (about 0.9 ms of 2.2) and the projection (about 1.0 ms). It is
+not a defect of one place, so it is not fixed in this change. The fix the
+numbers point at is in the gates: each gate declares the token kinds it looks
+at and one pass hands a token only to the gates of its kind (and a test that a
+gate reports nothing at any other kind), which removes the 11 calls per token;
+whether that alone brings 2.2 ms under 1.39 ms (1.5 times 0.925) is not
+established, the projection would need to give back about 0.2 ms with it. The
+absolute cost is 126-130 us against 215-256 us for the tokens of `first_steps.st`
+per semantic-token request.
+
+Also visible in these numbers: on this corpus the budget thread is 43-45 % of
+`parse` and about 70 % of a statement body. It is the same in both front ends, so
+it does not move the ratios, but a language server that parses per edit and an
+XML file with many bodies pay it (Q4, Q5).
+
+#### Not measured
+
+The analysis, code generation and the end-to-end edit in the language server;
+files larger than 2.7 KB (the largest input of the corpus; the thread is a fixed
+cost, so larger inputs shift the share to the parse and the Q2 per-token cost to
+the whole); PLCopen XML documents (Q3 is cut from ST); Linux and `wasm32` (which
+has no thread to spawn); memory retained after a call (only allocations during
+it); Criterion warm timings (`parse_benchmark` registers the same paths and was
+run in test mode only); the activated-library parse per edit.
+
+Reproduce:
+
+```
+cd compiler
+cargo bench -p ironplc-benchmarks --bench parse_baseline > legacy.txt
+cargo bench -p ironplc-benchmarks --features ironplc-parser/cst-frontend --bench parse_baseline > cst.txt
+cargo bench -p ironplc-benchmarks --bench parse_benchmark      # Criterion, also with the feature
+```
+
+The header of each output names the front end the public functions ran. A new
+path is one row of `PATHS` in `compiler/benchmarks/src/paths.rs`.
+
 ## 4. Prefactoring candidates (observed while spiking)
 
 1. **Lossless token source (new, blocking for S1).** `ironplc-parser`
