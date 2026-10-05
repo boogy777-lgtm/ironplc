@@ -5,6 +5,7 @@ use clap::Parser;
 use ironplc_cli::cli;
 use ironplc_cli::logger;
 use ironplc_cli::lsp;
+use ironplc_dsl::stack::within_stack_budget;
 use ironplc_parser::options::{
     describe_dialects, BehaviorPolicy, CompilerOptions, Dialect, StringToNumFailure,
     StringToNumNonNumeric,
@@ -603,7 +604,19 @@ pub fn main() -> Result<(), String> {
 
     logger::configure(args.verbose, args.log_file)?;
 
-    match args.action {
+    run(args.action)
+}
+
+/// Runs the command, on the stack budget. This is where the program is given
+/// the budget: every command, whatever stages it reaches, runs inside the one
+/// thread, so the stages that it calls find the budget and make no thread of
+/// their own. A command added to [`Action`] gets it with its arm.
+fn run(action: Action) -> Result<(), String> {
+    within_stack_budget(|| execute(action))
+}
+
+fn execute(action: Action) -> Result<(), String> {
+    match action {
         Action::Lsp { stdio: _ } => lsp::start(),
         Action::Check {
             file_args,
@@ -658,6 +671,8 @@ pub fn main() -> Result<(), String> {
 mod tests {
     use super::*;
     use clap::ValueEnum;
+    use ironplc_dsl::stack::spawns_by_current_thread;
+    use ironplc_test::shared_resource_path;
 
     #[test]
     fn clap_dialect_value_variants_when_compared_then_matches_dialect_all() {
@@ -835,5 +850,54 @@ mod tests {
                 "ironplc.dialect.markdownDescription does not mention `{name}`"
             );
         }
+    }
+
+    /// The threads that running the command makes: the cost of the program's
+    /// own run, which is the run of one command over its files.
+    fn spawns_of_command(arguments: &[&str]) -> usize {
+        let args = Args::try_parse_from(arguments);
+        let Ok(args) = args else {
+            panic!("the arguments are not a command: {args:?}");
+        };
+        let before = spawns_by_current_thread();
+        let result = run(args.action);
+        assert_eq!(result, Ok(()), "{arguments:?}");
+        spawns_by_current_thread() - before
+    }
+
+    fn corpus_files() -> Vec<String> {
+        ["steel_thread.st", "bit_access.st", "literal.st"]
+            .iter()
+            .map(|name| shared_resource_path(name).display().to_string())
+            .collect()
+    }
+
+    #[test]
+    fn run_when_check_over_three_files_then_one_thread_for_the_run() {
+        let files = corpus_files();
+        let mut arguments = vec!["ironplcc", "check"];
+        arguments.extend(files.iter().map(String::as_str));
+
+        assert_eq!(spawns_of_command(&arguments), 1);
+    }
+
+    #[test]
+    fn run_when_echo_over_three_files_then_one_thread_for_the_run() {
+        let files = corpus_files();
+        let mut arguments = vec!["ironplcc", "echo"];
+        arguments.extend(files.iter().map(String::as_str));
+
+        assert_eq!(spawns_of_command(&arguments), 1);
+    }
+
+    #[test]
+    fn run_when_compile_over_three_files_then_one_thread_for_the_run() {
+        let files = corpus_files();
+        let output = tempfile::NamedTempFile::new().unwrap();
+        let output = output.path().display().to_string();
+        let mut arguments = vec!["ironplcc", "compile", "--output", output.as_str()];
+        arguments.extend(files.iter().map(String::as_str));
+
+        assert_eq!(spawns_of_command(&arguments), 1);
     }
 }

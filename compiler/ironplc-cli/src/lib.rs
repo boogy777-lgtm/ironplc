@@ -12,6 +12,9 @@ pub mod lsp_runner;
 mod semantic_tokens;
 
 #[cfg(test)]
+mod lsp_stack_budget_tests;
+
+#[cfg(test)]
 mod test_helpers;
 
 #[cfg(test)]

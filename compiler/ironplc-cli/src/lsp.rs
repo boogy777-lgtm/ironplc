@@ -2,6 +2,7 @@
 //! as Visual Studio Code.
 
 use crossbeam_channel::{Receiver, Sender};
+use ironplc_dsl::stack::within_stack_budget;
 use ironplc_parser::options::{CompilerOptions, Dialect};
 use log::{debug, trace};
 use lsp_server::{Connection, ExtractError, Message, RequestId};
@@ -113,10 +114,19 @@ fn extract_compiler_options(initialize_params: &InitializeParams) -> CompilerOpt
 /// When `project_override` is `None`, the project is constructed from
 /// `initializationOptions` received from the client. When `Some`, the
 /// provided project is used directly (for testing).
-fn start_with_connection(
+///
+/// The server is its loop, and the loop is a process entry: it runs on the
+/// stack budget for as long as the server lives, so every request is served
+/// on a thread that has the budget and the stages that a request reaches make
+/// no thread of their own.
+pub(crate) fn start_with_connection(
     connection: Connection,
     project_override: Option<LspProject>,
 ) -> Result<(), String> {
+    within_stack_budget(|| serve(connection, project_override))
+}
+
+fn serve(connection: Connection, project_override: Option<LspProject>) -> Result<(), String> {
     // Declare what capabilities this server supports
     let server_capabilities =
         serde_json::to_value(LspServer::server_capabilities()).map_err(|e| e.to_string())?;
