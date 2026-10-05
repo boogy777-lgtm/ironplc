@@ -106,7 +106,9 @@ fn is_non_ascii_identifier(token: &Token<'_>) -> bool {
 
 /// A double underscore anywhere but in the reserved leading `__` prefix.
 fn has_repeated_underscores(token: &Token<'_>) -> bool {
-    if token.kind != SyntaxKind::Ident {
+    // Most names have no underscore, and looking for one byte is cheaper than
+    // searching for two.
+    if token.kind != SyntaxKind::Ident || !token.text.contains('_') {
         return false;
     }
     match token.text.find("__") {
