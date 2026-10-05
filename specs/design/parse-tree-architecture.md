@@ -377,6 +377,30 @@ difference that is none of them is fixed in the new parser. The decisions the
 comparison settled are recorded in
 [ADR-0072](../adrs/0072-lowering-lives-in-the-syntax-crate.md).
 
+### 5.2 Performance Budget and Evidence
+
+The front end built on the tree is held to a budget against the legacy front
+end it replaces, for the same public function of `ironplc-parser`, over the
+shared corpus: the warm-median sum of the timings and the allocation count are
+each at most 1.5 times the legacy figure, and a ratio above 1.25 is explained
+where it is recorded. The owner approved this budget.
+
+The evidence is in [section 3.7 of the experiment record](parse-tree-s0-experiment.md#37-both-front-ends-side-by-side-2026-10-05):
+three consecutive runs per front end of one benchmark table, so that a path
+added to the table is measured against both. As recorded there:
+
+- the whole-file parse is within the budget (warm time 0.90-1.01 of legacy,
+  allocations 0.75);
+- statement fragments are within it on an indicative input set (0.93-1.02,
+  1.07);
+- the token view is over the budget in warm time (2.4 times; allocations 1.00),
+  the cost being per token in the tokenizer's gate pass and in the projection to
+  the token type. It has to be brought under the budget, or the budget decided
+  again, before the language server's semantic tokens are read from the tree;
+- both front ends pay one stack-budget thread per `parse_program` and per
+  `parse_st_statements` call (about 75-83 us on the measured machine, 43-45 % of
+  the corpus parse sum), and none for `tokenize_program`.
+
 ## 6. References
 
 - [rowan](https://github.com/rust-analyzer/rowan) and
