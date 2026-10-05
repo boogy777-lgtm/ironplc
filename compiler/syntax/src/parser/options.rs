@@ -245,6 +245,31 @@ mod tests {
     }
 
     #[test]
+    fn time_is_name_when_function_precedes_or_a_call_or_assignment_follows_then_a_name_only_where_the_flag_is_on(
+    ) {
+        use SyntaxKind as K;
+        let on = ParseOptions {
+            allow_time_as_function_name: true,
+            ..ParseOptions::default()
+        };
+        assert!(on.time_is_name(Some(K::Function), Some(K::Colon)));
+        assert!(on.time_is_name(None, Some(K::LeftParen)));
+        assert!(on.time_is_name(Some(K::Colon), Some(K::Assignment)));
+        assert!(!on.time_is_name(Some(K::Colon), Some(K::Semicolon)));
+        assert!(!ParseOptions::default().time_is_name(Some(K::Function), Some(K::LeftParen)));
+    }
+
+    #[test]
+    fn keyword_active_when_operator_keyword_then_only_in_the_spelling_the_legacy_lexer_reads() {
+        let options = ParseOptions::default();
+        assert!(options.keyword_active(SyntaxKind::Mod, "MOD"));
+        assert!(!options.keyword_active(SyntaxKind::Mod, "mod"));
+        assert!(options.keyword_active(SyntaxKind::If, "if"));
+        assert!(!options.keyword_active(SyntaxKind::Continue, "CONTINUE"));
+        assert!(ParseOptions::all().keyword_active(SyntaxKind::Continue, "continue"));
+    }
+
+    #[test]
     fn keyword_enabled_when_every_gated_keyword_then_some_flag_turns_it_on() {
         // A gated keyword that no flag could enable would be dead syntax.
         let strict = ParseOptions::default();

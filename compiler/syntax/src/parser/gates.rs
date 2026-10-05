@@ -300,6 +300,8 @@ pub(crate) fn gate_errors(tokens: &[Token<'_>], options: &ParseOptions) -> Vec<S
 mod tests {
     use super::*;
     use crate::lexer::lex;
+    use crate::parse_source_file;
+    use ironplc_dsl::core::FileId;
 
     fn messages(source: &str, options: &ParseOptions) -> Vec<String> {
         let (tokens, _) = lex(source);
@@ -333,6 +335,25 @@ mod tests {
             ..ParseOptions::default()
         };
         assert!(gate_errors(&tokens, &allowed).is_empty());
+    }
+
+    #[test]
+    fn gate_errors_when_gate_has_advice_then_the_error_carries_it() {
+        let (tokens, _) = lex("x // note\n 'a$Qb' \"a$Qb\"");
+        let errors = gate_errors(&tokens, &ParseOptions::default());
+        let help: Vec<Option<&str>> = errors.iter().map(|error| error.help).collect();
+        assert_eq!(errors.len(), 3);
+        assert!(help.iter().all(Option::is_some), "{help:?}");
+        // The two string widths give different advice.
+        assert_ne!(help[1], help[2]);
+        // A gate without advice gives none.
+        let (tokens, _) = lex("a.%X3");
+        let errors = gate_errors(&tokens, &ParseOptions::default());
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].help, None);
+        let diagnostics =
+            parse_source_file("x // c", &ParseOptions::default()).diagnostics(&FileId::default());
+        assert!(diagnostics.iter().any(|d| !d.help().is_empty()));
     }
 
     #[test]
