@@ -289,11 +289,11 @@ impl LowerCx {
         self.options.keyword_enabled(kind)
     }
 
-    /// True when `TIME`, followed by a token of kind `next`, is an ordinary
-    /// name in the dialect the text was written in (see
+    /// True when `TIME`, between tokens of kind `previous` and `next`, is an
+    /// ordinary name in the dialect the text was written in (see
     /// [`ParseOptions::time_is_name`]).
-    pub fn time_is_name(&self, next: Option<SyntaxKind>) -> bool {
-        self.options.time_is_name(next)
+    pub fn time_is_name(&self, previous: Option<SyntaxKind>, next: Option<SyntaxKind>) -> bool {
+        self.options.time_is_name(previous, next)
     }
 
     /// The file the lowered text came from.

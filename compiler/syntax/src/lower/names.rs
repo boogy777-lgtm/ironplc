@@ -57,6 +57,13 @@ pub fn lower_path(cx: &LowerCx, node: &SyntaxNode, expected: &str) -> Result<Vec
     Ok(path)
 }
 
+/// The kind of the token that precedes `token`, trivia left out.
+fn previous_significant(token: &SyntaxToken) -> Option<SyntaxKind> {
+    std::iter::successors(token.prev_token(), SyntaxToken::prev_token)
+        .find(|previous| !previous.kind().is_trivia())
+        .map(|previous| previous.kind())
+}
+
 /// The kind of the token that follows `token`, trivia left out.
 fn next_significant(token: &SyntaxToken) -> Option<SyntaxKind> {
     std::iter::successors(token.next_token(), SyntaxToken::next_token)
@@ -66,12 +73,14 @@ fn next_significant(token: &SyntaxToken) -> Option<SyntaxKind> {
 
 /// True when a keyword token is an ordinary name where it stands: the dialect
 /// leaves the word available as a name, or it is `TIME` where the dialect lets
-/// it name a function and a call or an assignment follows. The parser makes the
-/// same decision for the same token (`Parser::name_at`), so a word the parser
-/// read as a name is never lowered as a keyword.
+/// it name a function and `FUNCTION`, a call or an assignment is next to it
+/// (`ParseOptions::time_is_name`). The parser makes the same decision for the
+/// same token (`Parser::name_at`), so a word the parser read as a name is never
+/// lowered as a keyword.
 fn is_name_word(cx: &LowerCx, token: &SyntaxToken) -> bool {
     !cx.keyword_enabled(token.kind())
-        || (token.kind() == SyntaxKind::Time && cx.time_is_name(next_significant(token)))
+        || (token.kind() == SyntaxKind::Time
+            && cx.time_is_name(previous_significant(token), next_significant(token)))
 }
 
 /// The canonical spelling of the type a token names as a keyword: the first

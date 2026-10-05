@@ -77,6 +77,13 @@ impl<'a> Cursor<'a> {
             .is_some_and(|rest| rest.starts_with(text.as_bytes()))
     }
 
+    /// The length of the line break at the cursor, if there is one.
+    pub(super) fn line_break_len(&self) -> Option<usize> {
+        self.source
+            .get(self.pos..)
+            .and_then(crate::line_index::break_len)
+    }
+
     /// The source text from `start` to the cursor.
     pub(super) fn slice_from(&self, start: usize) -> &'a str {
         self.source.get(start..self.pos).unwrap_or_default()

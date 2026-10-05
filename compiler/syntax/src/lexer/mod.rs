@@ -157,9 +157,11 @@ fn scan_token(cursor: &mut Cursor<'_>, options: LexOptions) -> Scan {
     let Some(byte) = cursor.peek() else {
         return error("unexpected end of input");
     };
+    if cursor.line_break_len().is_some() {
+        return scan_newline(cursor);
+    }
     match byte {
         b' ' | b'\t' => scan_whitespace(cursor),
-        b'\r' | b'\n' | 0x0c => scan_newline(cursor),
         b'/' if cursor.peek_at(1) == Some(b'/') => scan_line_comment(cursor),
         b'/' if cursor.peek_at(1) == Some(b'*') => scan_delimited(
             cursor,

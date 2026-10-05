@@ -32,15 +32,9 @@ use rowan::{TextRange, TextSize};
 /// nesting at the limit on a thread of exactly the budget.
 pub use ironplc_dsl::stack::MAX_DEPTH;
 
-/// Keywords the legacy lexer matches only in upper case. The lexer here is
-/// case-insensitive for every keyword, so the parser treats `mod` and `not`
-/// as ordinary names, as the legacy pipeline does.
-const UPPER_CASE_ONLY: &[(SyntaxKind, &str)] =
-    &[(SyntaxKind::Mod, "MOD"), (SyntaxKind::Not, "NOT")];
-
 /// The CODESYS special operators the legacy token pipeline promotes out of
 /// identifiers. They are not available as ordinary names.
-const SPECIAL_OPERATORS: &[&str] = &[
+pub const SPECIAL_OPERATORS: &[&str] = &[
     "__NEW",
     "__DELETE",
     "__ISVALIDREF",
@@ -50,7 +44,7 @@ const SPECIAL_OPERATORS: &[&str] = &[
 ];
 
 /// True when `text` spells one of the special operators (any case).
-pub(crate) fn is_special_operator(text: &str) -> bool {
+pub fn is_special_operator(text: &str) -> bool {
     SPECIAL_OPERATORS
         .iter()
         .any(|name| name.eq_ignore_ascii_case(text))
@@ -116,6 +110,12 @@ impl<'t, 's> Parser<'t, 's> {
         self.token(n).map(|token| token.kind)
     }
 
+    /// The kind of the significant token before the `n`th one ahead.
+    pub(crate) fn previous_of(&self, n: usize) -> Option<SyntaxKind> {
+        let index = *self.significant.get((self.pos + n).checked_sub(1)?)?;
+        self.tokens.get(index).map(|token| token.kind)
+    }
+
     /// The source text of the `n`th significant token ahead.
     pub(crate) fn nth_text(&self, n: usize) -> &'s str {
         self.token(n).map_or("", |token| token.text)
@@ -138,10 +138,7 @@ impl<'t, 's> Parser<'t, 's> {
     /// True when the `n`th token, of keyword kind `kind`, is a keyword here: its
     /// dialect flag is on, and it is spelled the way the language requires.
     fn keyword_active(&self, n: usize, kind: SyntaxKind) -> bool {
-        self.options.keyword_enabled(kind)
-            && UPPER_CASE_ONLY
-                .iter()
-                .all(|(only, spelling)| *only != kind || self.nth_text(n) == *spelling)
+        self.options.keyword_active(kind, self.nth_text(n))
     }
 
     pub(crate) fn at_any(&self, kinds: &[SyntaxKind]) -> bool {
@@ -183,7 +180,9 @@ impl<'t, 's> Parser<'t, 's> {
         match kind {
             SyntaxKind::Ident => !is_special_operator(self.nth_text(n)),
             SyntaxKind::EscapedIdent => true,
-            SyntaxKind::Time => self.options.time_is_name(self.nth(n + 1)),
+            SyntaxKind::Time => self
+                .options
+                .time_is_name(self.previous_of(n), self.nth(n + 1)),
             _ => kind.is_keyword() && !self.keyword_active(n, kind),
         }
     }

@@ -202,3 +202,32 @@ fn compile_when_nesting_is_as_deep_as_allowed_then_every_stage_fits_the_stack_bu
         }
     });
 }
+
+#[test]
+fn tokenize_when_input_nests_far_past_the_limit_then_it_ends_on_the_callers_small_stack() {
+    // Tokenizing runs on the caller's stack and spawns no thread, so it must
+    // not recurse as deep as the input does: comments, strings, pragma
+    // conditions and `{IF}` nesting, each 20 000 levels deep, from a thread of
+    // 1 MiB.
+    on_small_stack(|| {
+        let options = ParseOptions::all();
+        let open = "(".repeat(20_000);
+        let close = ")".repeat(20_000);
+        let sources = [
+            format!("{}x{}", "(* ".repeat(20_000), " *)".repeat(20_000)),
+            format!("{{IF {open}TRUE{close}}} x := 1; {{END_IF}}"),
+            format!("{{IF {}TRUE}} x := 1; {{END_IF}}", "NOT ".repeat(20_000)),
+            format!(
+                "{}x := 1;{}",
+                "{IF TRUE} ".repeat(20_000),
+                "{END_IF} ".repeat(20_000)
+            ),
+            format!("{open}1{close}"),
+        ];
+        for source in sources {
+            let (tokens, _) = ironplc_syntax::tokenize(&source, &options);
+            let text: String = tokens.iter().map(|token| token.text).collect();
+            assert_eq!(text, source);
+        }
+    });
+}

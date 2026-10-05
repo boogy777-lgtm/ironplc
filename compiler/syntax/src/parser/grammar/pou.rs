@@ -119,7 +119,9 @@ pub(super) fn function(p: &mut Parser) {
     let node = p.start();
     p.bump();
     // `FUNCTION TIME` names a function where the dialect allows it.
-    if name_ahead(p, NameClass::Plain) || (p.options.allow_time_as_function_name && p.at(K::Time)) {
+    if name_ahead(p, NameClass::Plain)
+        || (p.at(K::Time) && p.options.time_is_name(Some(K::Function), None))
+    {
         let name = p.start();
         p.bump();
         p.complete(name, K::Name);

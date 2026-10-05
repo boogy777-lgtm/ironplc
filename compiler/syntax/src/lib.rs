@@ -30,6 +30,7 @@ mod diagnostic;
 pub mod error;
 mod interval_text;
 pub mod lexer;
+pub mod line_index;
 pub mod lower;
 pub mod parser;
 pub mod pragma;
@@ -38,9 +39,12 @@ pub mod syntax_kind;
 
 pub use error::{ErrorKind, SyntaxError};
 pub use parser::options::ParseOptions;
-pub use parser::{parse_expression, parse_source_file, parse_statements, Parse, MAX_DEPTH};
+pub use parser::{
+    is_special_operator, parse_expression, parse_source_file, parse_statements, tokenize, Parse,
+    MAX_DEPTH, SPECIAL_OPERATORS,
+};
 pub use ranking::{Stage, STAGES};
-pub use syntax_kind::{StLanguage, SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken};
+pub use syntax_kind::{StLanguage, SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken, TokenKind};
 
 // Spec conformance testing infrastructure (test-only).
 #[cfg(test)]
@@ -49,3 +53,5 @@ mod spec_requirements {
 }
 #[cfg(test)]
 mod spec_conformance;
+#[cfg(test)]
+mod spec_conformance_tokens;

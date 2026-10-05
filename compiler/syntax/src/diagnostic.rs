@@ -42,7 +42,12 @@ impl SyntaxError {
             usize::from(self.range.end()),
         )
         .with_file_id(file_id);
-        Diagnostic::problem(self.kind.problem(), Label::span(span, self.message.clone()))
+        let diagnostic =
+            Diagnostic::problem(self.kind.problem(), Label::span(span, self.message.clone()));
+        match self.help {
+            Some(help) => diagnostic.with_help(help),
+            None => diagnostic,
+        }
     }
 }
 

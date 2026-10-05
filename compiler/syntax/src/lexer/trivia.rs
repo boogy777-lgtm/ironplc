@@ -13,14 +13,12 @@ pub(super) fn scan_whitespace(cursor: &mut Cursor<'_>) -> Scan {
     (SyntaxKind::Whitespace, None)
 }
 
-/// One line break, keeping its spelling: `\r\n`, `\n`, a lone `\r`, or a
-/// form feed (which the legacy lexer also treats as a line break).
+/// One line break, keeping its spelling: one of the spellings of
+/// [`crate::line_index::LINE_BREAKS`], so the lexer and a position agree on
+/// what ends a line.
 pub(super) fn scan_newline(cursor: &mut Cursor<'_>) -> Scan {
-    let first = cursor.peek();
-    cursor.bump();
-    if first == Some(b'\r') && cursor.peek() == Some(b'\n') {
-        cursor.bump();
-    }
+    let len = cursor.line_break_len().unwrap_or(1);
+    cursor.bump_n(len);
     (SyntaxKind::Newline, None)
 }
 
