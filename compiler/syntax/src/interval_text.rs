@@ -8,6 +8,7 @@
 //! ordering rule itself is `ironplc_dsl::construct::check_interval_parts`.
 
 use ironplc_dsl::construct::{check_interval_parts, DurationUnit, IntervalError};
+use std::sync::LazyLock;
 
 /// One `number unit` part: the text of its number, its unit and whether the
 /// number has a non-zero fraction.
@@ -16,6 +17,14 @@ pub(crate) struct Part {
     pub(crate) number: String,
     pub(crate) unit: DurationUnit,
     pub(crate) fractional: bool,
+}
+
+/// What a word that is not a unit is told: the units there are, from the one
+/// table of them.
+fn expected_unit() -> &'static str {
+    static TEXT: LazyLock<String> =
+        LazyLock::new(|| format!("expected a {}", DurationUnit::expectation()));
+    TEXT.as_str()
 }
 
 struct Scanner<'a> {
@@ -63,7 +72,7 @@ impl Scanner<'_> {
     fn part(&mut self) -> Result<Part, &'static str> {
         let (number, fractional) = self.number()?;
         let word = self.take_while(char::is_alphabetic);
-        let unit = DurationUnit::from_word(&word).ok_or(DurationUnit::expectation())?;
+        let unit = DurationUnit::from_word(&word).ok_or_else(expected_unit)?;
         if self.peek() == Some('_') {
             self.at += 1;
         }
@@ -171,7 +180,8 @@ mod tests {
 
     #[test]
     fn parse_when_unknown_unit_then_message_lists_the_valid_units() {
-        assert_eq!(parse("5x"), Err(DurationUnit::expectation()));
+        let expected = format!("expected a {}", DurationUnit::expectation());
+        assert_eq!(parse("5x"), Err(expected.as_str()));
     }
 
     #[test]

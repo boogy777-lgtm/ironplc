@@ -11,9 +11,12 @@
 //! that second verdict.
 
 mod blocks;
+mod code_exceptions;
 mod combinations;
 mod declarations;
 mod diagnostics_codes;
+mod diagnostics_messages;
+mod diagnostics_order;
 mod differences;
 mod edges;
 mod files;

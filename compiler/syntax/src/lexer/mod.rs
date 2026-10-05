@@ -47,12 +47,18 @@ fn error(message: &'static str) -> Scan {
     (SyntaxKind::ErrorToken, Some((ErrorKind::Syntax, message)))
 }
 
-/// An error token for bytes that match no token.
-fn unexpected_character() -> Scan {
+/// An error token for text that makes no token: bytes that start none, or a
+/// quoted token that is never closed.
+fn unmatched(message: &'static str) -> Scan {
     (
         SyntaxKind::ErrorToken,
-        Some((ErrorKind::UnexpectedCharacter, "unexpected character")),
+        Some((ErrorKind::UnexpectedCharacter, message)),
     )
+}
+
+/// An error token for bytes that match no token.
+fn unexpected_character() -> Scan {
+    unmatched("unexpected character")
 }
 
 const SINGLE_QUOTED: Quoted = Quoted {

@@ -38,13 +38,19 @@ impl<'t> Site<'_, 't> {
         self.tokens.get(self.index)
     }
 
-    /// The significant tokens after this one, trivia skipped.
+    /// The significant tokens after this one, trivia skipped. A pragma the
+    /// dialect has not enabled is not trivia: it is a token in the way, so a
+    /// form it interrupts (`STRING {attr} (10)`, `VAR {attr} END_VAR`) is not
+    /// the form, and the pragma is what is reported.
     fn following(&self) -> impl Iterator<Item = &Token<'t>> {
+        let pragmas = self.options.allow_pragmas;
         self.tokens
             .get(self.index + 1..)
             .unwrap_or_default()
             .iter()
-            .filter(|token| !token.kind.is_trivia())
+            .filter(move |token| {
+                !token.kind.is_trivia() || (token.kind == SyntaxKind::Pragma && !pragmas)
+            })
     }
 }
 
@@ -373,6 +379,39 @@ mod tests {
             ..ParseOptions::default()
         };
         assert_eq!(messages("VAR_STAT END_VAR", &stat).len(), 1);
+    }
+
+    #[test]
+    fn gate_errors_when_a_pragma_the_dialect_lacks_interrupts_a_form_then_it_is_not_the_form() {
+        // The pragma is a token in the way where the dialect has none, so the
+        // form is not there and the pragma is what is reported (by the
+        // grammar); where pragmas are enabled it is trivia and the form stands.
+        let none = ParseOptions::default();
+        let pragmas = ParseOptions {
+            allow_pragmas: true,
+            ..ParseOptions::default()
+        };
+        let kinds = |source: &str, options: &ParseOptions| -> Vec<ErrorKind> {
+            let (tokens, _) = lex(source);
+            gate_errors(&tokens, options)
+                .into_iter()
+                .map(|error| error.kind)
+                .collect()
+        };
+        // Without pragmas the only error is the pragma's own.
+        assert_eq!(
+            kinds("x : STRING {a} (10);", &none),
+            vec![ErrorKind::Syntax]
+        );
+        assert_eq!(kinds("VAR {a} END_VAR", &none), vec![ErrorKind::Syntax]);
+        assert_eq!(
+            kinds("x : STRING {a} (10);", &pragmas),
+            vec![ErrorKind::ParenStringLengthNotAllowed]
+        );
+        assert_eq!(
+            kinds("VAR {a} END_VAR", &pragmas),
+            vec![ErrorKind::EmptyVarBlock]
+        );
     }
 
     #[test]

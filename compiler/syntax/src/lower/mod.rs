@@ -360,16 +360,6 @@ impl LowerCx {
     }
 }
 
-/// The diagnostic for the first error of a parse that reported any. Lowering
-/// is only run on an error-free parse; which of several errors to report is
-/// the caller's decision.
-fn first_error(parse: &Parse, file_id: &FileId) -> Option<Diagnostic> {
-    parse
-        .errors
-        .first()
-        .map(|error| error.to_diagnostic(file_id))
-}
-
 /// A rule: builds the library elements a top-level node writes.
 type ElementRule = fn(&LowerCx, &SyntaxNode) -> Result<Vec<LibraryElementKind>, Diagnostic>;
 
@@ -446,10 +436,11 @@ pub fn lower_elements(
 
 /// Lowers the tree of a whole file to a library.
 ///
-/// Fails with the first error of the parse when it has any, and otherwise with
-/// the first error of a declaration.
+/// Fails with the primary error of the parse when it has any (see
+/// [`Parse::primary_error`]), and otherwise with the first error of a
+/// declaration.
 pub fn lower_library(parse: &Parse, file_id: &FileId) -> Result<Library, Diagnostic> {
-    if let Some(error) = first_error(parse, file_id) {
+    if let Some(error) = parse.primary_diagnostic(file_id) {
         return Err(error);
     }
     let cx = LowerCx::new(file_id.clone()).with_options(parse.options);
@@ -460,10 +451,10 @@ pub fn lower_library(parse: &Parse, file_id: &FileId) -> Result<Library, Diagnos
 
 /// Lowers the tree of a statement list to statements.
 ///
-/// Fails with the first error of the parse when it has any, and otherwise
+/// Fails with the primary error of the parse when it has any, and otherwise
 /// with the first error of a statement.
 pub fn lower_statements(parse: &Parse, file_id: &FileId) -> Result<Vec<StmtKind>, Diagnostic> {
-    if let Some(error) = first_error(parse, file_id) {
+    if let Some(error) = parse.primary_diagnostic(file_id) {
         return Err(error);
     }
     let cx = LowerCx::new(file_id.clone()).with_options(parse.options);
@@ -743,7 +734,7 @@ mod tests {
     }
 
     #[test]
-    fn lower_library_when_parse_has_errors_then_the_first_error_in_the_file() {
+    fn lower_library_when_parse_has_errors_then_the_primary_error_in_the_file() {
         let file = FileId::from_string("bad.st");
         let parse = parse_source_file("PROGRAM p x END_PROGRAM", &options());
         let diagnostic = lower_library(&parse, &file).err();
@@ -752,6 +743,39 @@ mod tests {
                 .as_ref()
                 .map(|d| (d.code.as_str(), &d.primary.file_id)),
             Some((Problem::SyntaxError.code(), &file))
+        );
+    }
+
+    #[test]
+    fn lower_library_when_a_gated_form_follows_a_grammar_error_then_the_gated_form() {
+        // The grammar error comes first in the file and the comment ranks
+        // above it: the same diagnostic a consumer of the parse alone gets.
+        let source = "PROGRAM p x := ; // note\nEND_PROGRAM";
+        let parse = parse_source_file(source, &ParseOptions::default());
+        let file = FileId::default();
+        let lowered = lower_library(&parse, &file).err().map(|d| d.code);
+        let primary = parse.primary_diagnostic(&file).map(|d| d.code);
+        assert_eq!(lowered, Some(Problem::CStyleComment.code().to_string()));
+        assert_eq!(lowered, primary);
+    }
+
+    #[test]
+    fn lower_library_when_a_value_is_out_of_range_before_a_grammar_error_then_the_grammar_error() {
+        // A problem of lowering is ranked after every problem of the parse:
+        // lowering runs only on a tree that has none.
+        let source = "FUNCTION f : TIME\nVAR a : TIME := T#9223372036854775807d; b : TIME := ; END_VAR\nf := a;\nEND_FUNCTION";
+        let parse = parse_source_file(source, &options());
+        assert!(!parse.is_ok());
+        let lowered = lower_library(&parse, &FileId::default()).err();
+        assert_eq!(
+            code_of(lowered),
+            Some(Problem::SyntaxError.code().to_string())
+        );
+        let repaired = source.replace("b : TIME := ;", "b : TIME := T#1s;");
+        let parse = parse_source_file(&repaired, &options());
+        assert_eq!(
+            code_of(lower_library(&parse, &FileId::default()).err()),
+            Some(Problem::DurationLiteralOutOfRange.code().to_string())
         );
     }
 
@@ -772,7 +796,7 @@ mod tests {
     }
 
     #[test]
-    fn lower_statements_when_parse_has_errors_then_the_first_error() {
+    fn lower_statements_when_parse_has_errors_then_the_primary_error() {
         let parse = parse_statements("x := ;", &options());
         let diagnostic = lower_statements(&parse, &FileId::default()).err();
         assert_eq!(

@@ -179,7 +179,7 @@ impl Scope {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::parity::diagnostics::CODE_EXCEPTIONS;
+    use crate::tests::parity::code_exceptions::CODE_EXCEPTIONS;
     use crate::tests::parity::tables::{EXPRESSION_EXCEPTIONS, FILE_EXCEPTIONS};
     use crate::tests::parity::Exception;
 
@@ -216,7 +216,7 @@ mod tests {
             by_class[entry.reason.class as usize] += 1;
         }
         for entry in CODE_EXCEPTIONS {
-            assert!(!entry.reason.text.is_empty(), "{:?}", entry.key);
+            assert!(!entry.reason.text.is_empty(), "{:?}", entry.legacy_code);
             by_class[entry.reason.class as usize] += 1;
         }
         for class in Class::ALL {

@@ -5,7 +5,7 @@
 use super::ast::compare;
 use super::legacy::presets;
 use super::literals::{body_tokens, file, literal_tokens, range_of};
-use super::{new_parse, Kind};
+use super::{new_parse, Class, Kind, Reason};
 use crate::legacy::tokenize_program;
 use crate::parser::{parse_constant, parse_type_declaration};
 use ironplc_dsl::common::{DataTypeDeclarationKind, InitialValueAssignmentKind, SimpleDeclaration};
@@ -43,12 +43,45 @@ const DURATION_RANGE_EDGES: &[(&str, Option<&str>)] = &[
     ("T#-9223372036854775807d", Some("P2039")),
     ("LTIME#9223372036854775807d", Some("P2039")),
     ("LT#106751991167300d", None),
-    // A whole part beyond `u64` is not a number the structure holds, whether
-    // or not it has a decimal point; it was read as `0` without one.
-    ("T#18446744073709551616s", Some("P0002")),
-    ("T#18446744073709551617ms", Some("P0002")),
-    ("T#99999999999999999999.5s", Some("P0002")),
 ];
+
+const DIGITS_BEYOND_U64: Reason = Reason::new(Class::OwnerDecided, "owner decision: a number of twenty digits or more in a duration is a duration too large for any type, the same class as one that fits a count but not a duration, and so is reported with the same code (P2039); the legacy grammar fails to read the number and reports a syntax error (P0002)");
+
+/// A whole part beyond `u64` is not a number the structure holds, whether or
+/// not it has a decimal point (it was read as `0` without one). The legacy
+/// parser reports a syntax error where the lowering reports the range problem.
+const DURATION_DIGITS_EDGES: &[(&str, Reason)] = &[
+    ("T#18446744073709551616s", DIGITS_BEYOND_U64),
+    ("T#18446744073709551617ms", DIGITS_BEYOND_U64),
+    ("T#99999999999999999999.5s", DIGITS_BEYOND_U64),
+    ("LT#99999999999999999999999ns", DIGITS_BEYOND_U64),
+];
+
+#[test]
+fn parity_when_duration_number_beyond_u64_then_legacy_syntax_error_and_lowering_range_error() {
+    let preset = presets()
+        .into_iter()
+        .find(|preset| preset.name == "all-flags")
+        .expect("the preset with every flag");
+    for (snippet, reason) in DURATION_DIGITS_EDGES {
+        assert!(!reason.text.is_empty());
+        let text = format!("x := {snippet};");
+        let parse = new_parse(Kind::Statements, &text, &preset.new);
+        assert!(parse.is_ok(), "{snippet}");
+        let node = parse
+            .root
+            .descendants()
+            .find(|node| disposition(node.kind()) == Disposition::Lowered(Area::Literal))
+            .expect("a literal");
+        let tokens = tokenize_program(&text, &file(), &preset.legacy, 0, 0).0;
+        let legacy = parse_constant(literal_tokens(&tokens, range_of(&node), false));
+        let lowered = lower_constant(&LowerCx::new(file()), &node).err();
+        assert_eq!(legacy.err().map(|d| d.code), Some("P0002".to_string()));
+        let lowered = lowered.expect("the lowering rejects the number");
+        assert_eq!(lowered.code, "P2039", "{snippet}");
+        assert!(lowered.primary.message.contains(snippet), "{snippet}");
+    }
+}
 
 #[test]
 fn parity_when_duration_at_range_edge_then_same_duration_or_same_problem_and_range() {

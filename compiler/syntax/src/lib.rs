@@ -33,11 +33,13 @@ pub mod lexer;
 pub mod lower;
 pub mod parser;
 pub mod pragma;
+mod ranking;
 pub mod syntax_kind;
 
 pub use error::{ErrorKind, SyntaxError};
 pub use parser::options::ParseOptions;
 pub use parser::{parse_expression, parse_source_file, parse_statements, Parse, MAX_DEPTH};
+pub use ranking::{Stage, STAGES};
 pub use syntax_kind::{StLanguage, SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken};
 
 // Spec conformance testing infrastructure (test-only).

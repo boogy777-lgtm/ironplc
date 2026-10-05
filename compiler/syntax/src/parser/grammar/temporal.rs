@@ -125,3 +125,56 @@ pub(super) fn date_and_time_value(p: &mut Parser) {
         daytime_value(p);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::parse_expression;
+    use crate::parser::options::ParseOptions;
+    use ironplc_dsl::construct::DurationUnit;
+
+    fn messages(source: &str) -> Vec<String> {
+        parse_expression(source, &ParseOptions::all())
+            .errors
+            .into_iter()
+            .map(|error| error.message)
+            .collect()
+    }
+
+    #[test]
+    fn parse_expression_when_part_of_a_temporal_literal_is_wrong_then_the_message_names_the_literal(
+    ) {
+        for (source, message) in [
+            ("TOD#25:00:00", "the hour is out of range: 'TOD#25:00:00'"),
+            ("TOD#10:61:00", "the minute is out of range: 'TOD#10:61:00'"),
+            ("D#2020-13-01", "the month is out of range: 'D#2020-13-01'"),
+            (
+                "T#5s1m",
+                "duration units must be in descending order: 'T#5s1m'",
+            ),
+            (
+                "DT#2020-01-01-25:00:00",
+                "the hour is out of range: 'DT#2020-01-01-25:00:00'",
+            ),
+        ] {
+            assert_eq!(messages(source), vec![message.to_string()], "{source}");
+        }
+    }
+
+    #[test]
+    fn parse_expression_when_duration_unit_unknown_then_the_units_come_from_the_one_table() {
+        let found = messages("T#5x");
+        let expected = format!("expected a {}: 'T#5x'", DurationUnit::expectation());
+        assert_eq!(found, vec![expected]);
+        for (spelling, _) in DurationUnit::UNITS {
+            assert!(found[0].contains(spelling), "{spelling}");
+        }
+    }
+
+    #[test]
+    fn parse_expression_when_literal_is_not_temporal_then_the_message_does_not_quote_it() {
+        assert_eq!(
+            messages("INT# 5"),
+            vec!["no whitespace is allowed inside a literal".to_string()]
+        );
+    }
+}

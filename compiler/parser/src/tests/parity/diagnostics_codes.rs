@@ -1,13 +1,14 @@
-//! Problem-code parity with the legacy parser, test-only.
+//! Diagnostic parity with the legacy parser, test-only.
 //!
 //! The legacy parser reports the first diagnostic it finds; the new parser
-//! reports every one. For each input both reject, the legacy problem code must
-//! be among the new codes, and a difference must be listed in
+//! reports every one and ranks them. For each input both reject, the legacy
+//! diagnostic and the primary diagnostic of the new parser must have the same
+//! problem code and byte range, and a difference must be listed in
 //! `CODE_EXCEPTIONS` with its reason. Each token check rule is also compared
-//! on a snippet of its own, down to the byte range of the diagnostic.
+//! on a snippet of its own.
 
-use super::diagnostics::{compare_codes, CODE_EXCEPTIONS};
-use super::file_variants;
+use super::code_exceptions::CODE_EXCEPTIONS;
+use super::diagnostics::{compare_diagnostics, whole_inputs};
 use super::legacy::{convert, presets, rejection};
 use crate::options::CompilerOptions;
 use ironplc_dsl::core::FileId;
@@ -136,8 +137,14 @@ fn found(source: &str, options: &ParseOptions) -> Vec<(String, usize, usize)> {
         .collect()
 }
 
+fn primary(source: &str, options: &ParseOptions) -> Option<(String, usize, usize)> {
+    parse_source_file(source, options)
+        .primary_diagnostic(&FileId::default())
+        .map(|d| (d.code, d.primary.location.start, d.primary.location.end))
+}
+
 #[test]
-fn diagnostics_when_token_check_rule_input_then_same_code_and_range_as_legacy() {
+fn diagnostics_when_token_check_rule_input_then_the_primary_is_the_legacy_code_and_range() {
     for case in RULES {
         let (legacy_options, new_options) = options_for(case);
         let legacy = rejection(case.source, &legacy_options);
@@ -148,12 +155,8 @@ fn diagnostics_when_token_check_rule_input_then_same_code_and_range_as_legacy() 
         );
         let legacy = legacy.unwrap_or_default();
         assert_eq!(legacy.0, case.code, "{}: legacy code", case.rule);
-        let new = found(case.source, &new_options);
-        assert!(
-            new.contains(&legacy),
-            "{}: expected {legacy:?}, got {new:?}",
-            case.rule
-        );
+        let new = primary(case.source, &new_options);
+        assert_eq!(new, Some(legacy), "{}", case.rule);
     }
 }
 
@@ -169,34 +172,44 @@ fn diagnostics_when_rule_flag_on_then_the_rule_does_not_fire() {
 }
 
 #[test]
-fn diagnostics_when_corpus_rejected_by_both_then_legacy_code_is_among_the_new_codes() {
-    let files = file_variants();
-    let report = compare_codes(&files, &presets(), CODE_EXCEPTIONS);
+fn diagnostics_when_corpus_rejected_by_both_then_primary_is_the_legacy_diagnostic_or_an_exception()
+{
+    let report = compare_diagnostics(&whole_inputs(), &presets(), CODE_EXCEPTIONS);
     println!(
-        "{} rejected by both, {} with the same code",
-        report.both_reject, report.same_code
+        "{} rejected by both, {} with the same code and range, {} excepted",
+        report.both_reject,
+        report.equal,
+        report.excepted.iter().sum::<usize>()
     );
     assert!(
-        report.same_code >= 100,
-        "only {} files rejected by both parsers with the same code",
-        report.same_code
+        report.equal >= 4_000,
+        "only {} inputs rejected by both parsers with the same diagnostic",
+        report.equal
     );
     assert!(
         report.unexplained.is_empty(),
-        "{} unexplained code differences:\n{}",
+        "{} unexplained differences:
+{}",
         report.unexplained.len(),
-        report.unexplained.join("\n")
+        report.unexplained.join(
+            "
+"
+        )
     );
     assert!(
-        report.stale.is_empty(),
-        "exceptions that no longer differ:\n{}",
-        report.stale.join("\n")
+        report.miscounted.is_empty(),
+        "rows whose count differs:
+{}",
+        report.miscounted.join(
+            "
+"
+        )
     );
 }
 
 #[test]
 fn diagnostics_when_corpus_parsed_then_every_range_lies_inside_the_source_and_has_a_code() {
-    for (name, text) in file_variants() {
+    for (name, text) in super::file_variants() {
         for preset in presets() {
             for (code, start, end) in found(&text, &preset.new) {
                 assert!(

@@ -492,14 +492,20 @@ fn lower_constant_when_node_is_not_a_literal_then_internal_error() {
 }
 
 #[test]
-fn lower_constant_when_duration_value_too_large_then_syntax_error_naming_the_literal() {
+fn lower_constant_when_duration_number_too_large_then_the_range_code_naming_the_literal() {
+    // Twenty digits fit no count; a count that fits but whose duration does
+    // not is reported the same way, as one class.
+    for text in ["T#99999999999999999999s", "T#9223372036854775807d"] {
+        let diagnostic = lower_with(text, &all()).err();
+        assert_eq!(
+            diagnostic
+                .as_ref()
+                .map(|diagnostic| diagnostic.code.as_str()),
+            Some(Problem::DurationLiteralOutOfRange.code()),
+            "{text}"
+        );
+    }
     let diagnostic = lower_with("T#99999999999999999999s", &all()).err();
-    assert_eq!(
-        diagnostic
-            .as_ref()
-            .map(|diagnostic| diagnostic.code.as_str()),
-        Some(Problem::SyntaxError.code())
-    );
     assert!(diagnostic
         .map(|diagnostic| diagnostic
             .primary

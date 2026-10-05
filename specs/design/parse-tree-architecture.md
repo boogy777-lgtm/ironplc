@@ -286,8 +286,9 @@ every file of the corpus and every prefix of it, the parse and the lowering
 return, and a lowering that fails reports a problem other than an internal
 error (`P9998`) or a capability that is not implemented (`P9999`).
 
-**REQ-PT-syntax-004** Lowering a parse that reported errors fails with the
-first of them, positioned in the file given, and builds no object.
+**REQ-PT-syntax-004** Lowering a parse that reported errors fails with its
+primary error (REQ-PT-syntax-009), positioned in the file given, and builds no
+object.
 
 **REQ-PT-syntax-005** Every kind of node that a lowering rule owns occurs in a
 file of the corpus that lowers, so a construct added to the grammar has a rule
@@ -306,12 +307,21 @@ the same significant tokens lower to equal libraries.
 construct that nests, completes on the stack budget and reports no internal
 error.
 
+**REQ-PT-syntax-009** A parse reports every error it finds, and one of them is
+primary: the error of the earliest stage that finds errors, and the earliest in
+the text among the errors of that stage. The stages are one table
+(`ironplc_syntax::STAGES`) in the order the established checks run: text that
+makes no token, one gated form after another, the conditional pragmas, the
+grammar. Every kind of error is in exactly one stage. Lowering runs only on a
+tree without errors, so a problem it reports follows every stage.
+
 The old-against-new comparison that held the lowering to the PEG parser it
 replaces is test-only and lives with that parser, in `ironplc-parser`. It
 compares the objects strictly (their printed form, the sequence of their spans
 and the grouping of their variable blocks) over the corpus, the declaration
 tables and the declarations lifted from the legacy tests, under every dialect
-preset. Each remaining difference is a row of a table with its reason, and the
+preset, and the one diagnostic each parser reports for every input both reject:
+its problem code and byte range, and what it says. Each remaining difference is a row of a table with its reason, and the
 reason is one of three classes: a defect of the old parser that is not ported,
 a change the owner decided, or a form the new parser accepts on purpose. A
 difference that is none of them is fixed in the new parser. The decisions the
