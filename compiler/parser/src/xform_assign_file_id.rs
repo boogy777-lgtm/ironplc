@@ -31,7 +31,7 @@ impl Fold<Diagnostic> for TransformFileId<'_> {
 mod tests {
     use ironplc_dsl::core::FileId;
 
-    use crate::{options::CompilerOptions, parse_program};
+    use crate::{legacy::parse_program, options::CompilerOptions};
 
     use super::apply;
 

@@ -170,7 +170,7 @@ fn echo_when_syntax_error_file_then_err() -> Result<(), Box<dyn std::error::Erro
     cmd.assert()
         .failure()
         .stdout(predicate::str::is_empty())
-        .stderr(predicate::str::contains("Expected"));
+        .stderr(predicate::str::contains("expected `;`"));
 
     Ok(())
 }

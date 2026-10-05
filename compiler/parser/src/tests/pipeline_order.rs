@@ -1,9 +1,10 @@
-//! The token-transform order in `tokenize_program` is observable.
+//! The token-transform order of the legacy pipeline (`legacy::tokenize_program`)
+//! is observable.
 //!
 //! Each test builds the smallest source whose token stream differs if two
 //! adjacent transforms were swapped, or if the dialect gate that guards one of
-//! them changed. They document the order recorded next to the pipeline in
-//! `lib.rs` (see `specs/design/parse-tree-s0-audit.md`, findings F6 and F7).
+//! them changed. They document the order recorded next to
+//! `legacy::tokenize_program` (see `specs/design/parse-tree-s0-audit.md`, findings F6 and F7).
 
 use super::common::*;
 use crate::token::TokenType;

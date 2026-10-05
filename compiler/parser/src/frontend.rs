@@ -1,20 +1,12 @@
-//! The front ends of the parser and the one place that chooses between them.
+//! The front end of the parser: text to tokens, a library, or a list of
+//! statements, through the lossless tree of `ironplc_syntax` (the lexer, the
+//! regions, the gates, the grammar and the lowering).
 //!
-//! A front end turns text into tokens, a library, or a list of statements.
-//! There are two: the legacy pipeline (the logos lexer, the token transforms
-//! and the PEG grammar, [`crate::legacy`]) and the one built on the lossless
-//! tree of `ironplc_syntax` (the lexer, the regions, the gates, the grammar and
-//! the lowering). Each is one row of data, [`LEGACY`] and [`CST`], with the same
-//! three entries, and [`SELECTED`] names the row every public function of the
-//! crate calls. The `cst-frontend` feature, off by default, is read here and
-//! nowhere else in the crate's code: adding a front end is one more row and one
-//! more name for the selection, and no public function changes.
-//!
-//! Both rows are compiled whichever one is selected, so the one that is not
-//! selected cannot rot, and a test can run any row. The row that is not
-//! selected is never called by the public functions.
+//! The public functions of the crate call the three entries of this module and
+//! nothing else reads text. There is one front end in production, so there is
+//! nothing to select; the legacy pipeline (`legacy`) is compiled for
+//! the tests only, as the oracle of the parity tests.
 
-use crate::legacy;
 use crate::options::CompilerOptions;
 use crate::token::Token;
 use crate::tokens::project;
@@ -24,51 +16,6 @@ use ironplc_dsl::stack::within_stack_budget;
 use ironplc_dsl::textual::StmtKind;
 use ironplc_syntax::lower::{lower_library, lower_statements};
 use ironplc_syntax::{parse_source_file, parse_statements, tokenize, ParseOptions};
-
-/// The entry that tokenizes a text that starts at a line and a column of its
-/// document: the tokens, and the diagnostics of the tokenizer.
-pub(crate) type TokenizeFn =
-    fn(&str, &FileId, &CompilerOptions, usize, usize) -> (Vec<Token>, Vec<Diagnostic>);
-
-/// The entry that reads a statement fragment that starts at a line and a column
-/// of its document.
-pub(crate) type StatementsFn =
-    fn(&str, &FileId, &CompilerOptions, usize, usize) -> Result<Vec<StmtKind>, Diagnostic>;
-
-/// One front end: its three entries, which are those of the
-/// public functions of the crate (`tokenize_program`, `parse_program`,
-/// `parse_st_statements`) and mean what they mean there.
-pub(crate) struct Frontend {
-    pub tokenize_program: TokenizeFn,
-    pub parse_program: fn(&str, &FileId, &CompilerOptions) -> Result<Library, Diagnostic>,
-    pub parse_st_statements: StatementsFn,
-}
-
-/// The legacy pipeline.
-pub(crate) static LEGACY: Frontend = Frontend {
-    tokenize_program: legacy::tokenize_program,
-    parse_program: legacy::parse_program,
-    parse_st_statements: legacy::parse_st_statements,
-};
-
-/// The pipeline built on the lossless tree.
-pub(crate) static CST: Frontend = Frontend {
-    tokenize_program: cst_tokenize_program,
-    parse_program: cst_parse_program,
-    parse_st_statements: cst_parse_st_statements,
-};
-
-/// Every front end, for the tests that run them all.
-#[cfg(test)]
-pub(crate) static FRONTENDS: [&Frontend; 2] = [&LEGACY, &CST];
-
-/// The front end the public functions of the crate call: the legacy pipeline,
-/// or the one on the lossless tree where the `cst-frontend` feature is on.
-pub(crate) static SELECTED: &Frontend = if cfg!(feature = "cst-frontend") {
-    &CST
-} else {
-    &LEGACY
-};
 
 /// The dialect flags of the lossless tree for the options of the compiler,
 /// read flag by flag by name ([`ParseOptions::FLAG_KEYS`]). A flag the tree
@@ -125,7 +72,7 @@ pub(crate) fn statement_fragment(
 /// The tokens of the lossless tree, as the token view, and every error of the
 /// tokenizer as a diagnostic, in source order. The tokenizer needs no stack
 /// budget: it does not recurse on the input.
-fn cst_tokenize_program(
+pub(crate) fn tokenize_program(
     source: &str,
     file_id: &FileId,
     options: &CompilerOptions,
@@ -152,7 +99,7 @@ fn cst_tokenize_program(
 /// A whole file: parse and lower on the stack budget. The tree is not `Send`,
 /// so it is built and dropped inside the budget; only the library, or the one
 /// diagnostic, leaves it.
-fn cst_parse_program(
+pub(crate) fn parse_program(
     source: &str,
     file_id: &FileId,
     options: &CompilerOptions,
@@ -164,13 +111,12 @@ fn cst_parse_program(
     })
 }
 
-/// A statement fragment, read as `parse_st_statements` of the legacy pipeline
-/// reads it. The line and column offsets say where the fragment starts in its
+/// A statement fragment. The line and column offsets say where the fragment starts in its
 /// document. Only a token carries a line and a column, and a diagnostic names a
 /// byte range, so the offsets change nothing that this entry returns: the
-/// spans are byte offsets into the trimmed text, as the legacy pipeline gives
+/// spans are byte offsets into the trimmed text, as the legacy pipeline gave
 /// them.
-fn cst_parse_st_statements(
+pub(crate) fn parse_st_statements(
     source: &str,
     file_id: &FileId,
     options: &CompilerOptions,
@@ -235,50 +181,70 @@ mod tests {
         }
     }
 
-    #[spec_test(REQ_PT_parser_014)]
-    fn selected_when_feature_then_the_row_the_feature_names() {
-        let expected = if cfg!(feature = "cst-frontend") {
-            &CST
-        } else {
-            &LEGACY
-        };
-        assert!(std::ptr::eq(SELECTED, expected));
-        assert!(FRONTENDS.iter().any(|row| std::ptr::eq(*row, SELECTED)));
-    }
-
     const SOURCE: &str = "PROGRAM main
 VAR x : INT; END_VAR
 x := 1;
 END_PROGRAM";
 
-    #[test]
-    fn parse_program_when_valid_then_the_public_function_answers_as_the_selected_front_end() {
+    #[spec_test(REQ_PT_parser_014)]
+    fn parse_program_when_valid_then_the_public_function_answers_with_the_lowered_tree() {
         let options = CompilerOptions::default();
         let id = FileId::default();
         let public = crate::parse_program(SOURCE, &id, &options).unwrap();
-        let selected = (SELECTED.parse_program)(SOURCE, &id, &options).unwrap();
-        assert_eq!(public, selected);
+        let tree = parse_source_file(SOURCE, &parse_options(&options));
+        assert_eq!(public, lower_library(&tree, &id).unwrap());
     }
 
-    #[test]
-    fn tokenize_program_when_valid_then_the_public_function_answers_as_the_selected_front_end() {
+    #[spec_test(REQ_PT_parser_014)]
+    fn tokenize_program_when_valid_then_the_public_function_answers_with_the_token_view_of_the_tree(
+    ) {
         let options = CompilerOptions::default();
         let id = FileId::default();
-        let public = crate::tokenize_program(SOURCE, &id, &options, 2, 3);
-        let selected = (SELECTED.tokenize_program)(SOURCE, &id, &options, 2, 3);
-        assert_eq!(public.0.len(), selected.0.len());
-        assert_eq!(public.1.len(), selected.1.len());
-        let first = public.0.first().map(|token| (token.line, token.col));
+        let (tokens, diagnostics) = crate::tokenize_program(SOURCE, &id, &options, 2, 3);
+        let parse = parse_options(&options);
+        let (tree, errors) = tokenize(SOURCE, &parse);
+        assert_eq!(
+            format!("{tokens:?}"),
+            format!("{:?}", project(SOURCE, &tree, &parse, &id, 2, 3))
+        );
+        assert_eq!(diagnostics.len(), errors.len());
+        let first = tokens.first().map(|token| (token.line, token.col));
         assert_eq!(first, Some((2, 3)));
     }
 
-    #[test]
-    fn parse_st_statements_when_valid_then_the_public_function_answers_as_the_selected_front_end() {
+    #[spec_test(REQ_PT_parser_014)]
+    fn parse_st_statements_when_valid_then_the_public_function_answers_with_the_lowered_tree() {
         let options = CompilerOptions::default();
         let id = FileId::default();
         let public = crate::parse_st_statements("  x := 1;", &id, &options, 0, 0).unwrap();
-        let selected = (SELECTED.parse_st_statements)("  x := 1;", &id, &options, 0, 0).unwrap();
-        assert_eq!(public, selected);
+        let tree = parse_statements("x := 1;", &parse_options(&options));
+        assert_eq!(public, lower_statements(&tree, &id).unwrap());
+    }
+
+    #[spec_test(REQ_PT_parser_014)]
+    fn legacy_modules_when_declared_in_the_crate_root_then_compiled_for_tests_only() {
+        // The modules of the crate root that a production build compiles are
+        // the ones named here. Every other module is declared under
+        // `cfg(test)`, so a build without it cannot name the legacy pipeline:
+        // the compiler, not a checklist, says production does not reach it.
+        const PRODUCTION: [&str; 5] = ["declarations", "frontend", "options", "token", "tokens"];
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lib.rs");
+        let text = std::fs::read_to_string(root).unwrap();
+        let lines: Vec<&str> = text.lines().map(str::trim).collect();
+        let mut production = Vec::new();
+        for (index, line) in lines.iter().enumerate() {
+            let declared = line
+                .strip_prefix("pub mod ")
+                .or_else(|| line.strip_prefix("mod "))
+                .and_then(|rest| rest.strip_suffix(';'));
+            let Some(name) = declared else { continue };
+            let for_tests = index > 0 && lines[index - 1] == "#[cfg(test)]";
+            if !for_tests {
+                production.push(name);
+            }
+        }
+        production.sort_unstable();
+        assert_eq!(production, PRODUCTION);
     }
 
     #[test]
@@ -296,27 +262,8 @@ END_PROGRAM";
         assert_eq!(statement_fragment("x := 1;", 2, 5), Some(("x := 1;", 2, 5)));
     }
 
-    #[spec_test(REQ_PT_parser_014)]
-    fn selected_when_source_of_the_crate_then_the_feature_is_named_in_the_front_end_module_only() {
-        // The code of the crate (the modules next to this one; the tests are in
-        // `src/tests`) names the feature in one module. A second naming would be a
-        // second place that chooses.
-        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let mut naming = Vec::new();
-        for entry in std::fs::read_dir(src).unwrap() {
-            let path = entry.unwrap().path();
-            if path.extension().is_some_and(|ext| ext == "rs") {
-                let text = std::fs::read_to_string(&path).unwrap();
-                if text.contains("cst-frontend") {
-                    naming.push(path.file_name().unwrap().to_string_lossy().to_string());
-                }
-            }
-        }
-        assert_eq!(naming, vec!["frontend.rs".to_string()]);
-    }
-
     #[test]
-    fn parse_st_statements_when_fragment_is_embedded_then_the_offsets_change_no_span_in_either_front_end(
+    fn parse_st_statements_when_fragment_is_embedded_then_the_offsets_change_no_span_in_the_tree_or_the_oracle(
     ) {
         // The line and column offsets say where the fragment starts in its
         // document. Only a token has a line and a column, so the statements and
@@ -328,10 +275,14 @@ END_PROGRAM";
 	 x := 1;
  IF a THEN b := 2; END_IF;  
 ";
+        // The legacy pipeline is the oracle: it read a fragment the same way.
+        type Reader =
+            fn(&str, &FileId, &CompilerOptions, usize, usize) -> Result<Vec<StmtKind>, Diagnostic>;
+        let readers: [Reader; 2] = [crate::legacy::parse_st_statements, parse_st_statements];
         let mut by_front_end = Vec::new();
-        for row in &FRONTENDS {
-            let at_start = (row.parse_st_statements)(fragment, &id, &options, 0, 0).unwrap();
-            let embedded = (row.parse_st_statements)(fragment, &id, &options, 7, 11).unwrap();
+        for read in readers {
+            let at_start = read(fragment, &id, &options, 0, 0).unwrap();
+            let embedded = read(fragment, &id, &options, 7, 11).unwrap();
             assert_eq!(format!("{at_start:?}"), format!("{embedded:?}"));
             let first = format!("{:?}", at_start.first());
             assert!(first.contains("start: 5, end: 6"), "{first}");

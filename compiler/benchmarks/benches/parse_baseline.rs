@@ -3,10 +3,10 @@
 //! Measures every path of the table in `ironplc_benchmarks::paths` over its set
 //! of inputs: the shared corpus (`ironplc_benchmarks::corpus`) for whole
 //! programs and the statement bodies of its units for fragments. The table has
-//! the public functions of `ironplc-parser` (which run the front end the crate
-//! was built with) and the entry points of `ironplc-syntax` (the lossless tree
-//! and its lowering), and every path is measured by the same helpers, so rows
-//! are directly comparable. Allocation counts come from `stats_alloc` installed
+//! the public functions of `ironplc-parser` (which run the front end built on
+//! the lossless tree) and the entry points of `ironplc-syntax` (the stages they
+//! are made of), and every path is measured by the same helpers, so rows are
+//! directly comparable. Allocation counts come from `stats_alloc` installed
 //! as this binary's global allocator, which is why this is a separate bench
 //! target from the Criterion `parse_benchmark`.
 //!
@@ -18,9 +18,7 @@
 //! cold figures then describe the per-file path, not process start-up.
 //!
 //! Run with: `cargo bench --package ironplc-benchmarks --bench parse_baseline`
-//! (optionally `-- <warm-repeats>`, default 50). Run it again with
-//! `--features ironplc-parser/cst-frontend` to measure the public functions on
-//! the front end built on the tree; the output says which one they ran.
+//! (optionally `-- <warm-repeats>`, default 50).
 
 // Benchmark-target boundary: a corpus that cannot be read is a
 // benchmark-authoring bug, not user input.
@@ -30,7 +28,7 @@
 )]
 
 use ironplc_benchmarks::corpus::{corpus_dir, load_corpus, CorpusFile};
-use ironplc_benchmarks::paths::{selected_frontend, Ctx, Over, Path, Probe, PATHS};
+use ironplc_benchmarks::paths::{Ctx, Over, Path, Probe, PATHS};
 use stats_alloc::{Region, StatsAlloc, INSTRUMENTED_SYSTEM};
 use std::alloc::System;
 use std::time::Instant;
@@ -153,12 +151,6 @@ fn main() {
         .next_back()
         .unwrap_or(DEFAULT_REPEATS);
     let ctx = Ctx::default();
-
-    println!(
-        "front end of the public functions of ironplc-parser: {}",
-        selected_frontend(&ctx)
-    );
-    println!();
 
     // One-time init: each call is made twice; the difference in allocations
     // between the first and second call is the init cost. Plain input first,

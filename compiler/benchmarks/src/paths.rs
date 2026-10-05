@@ -9,10 +9,14 @@
 //!
 //! The public functions of `ironplc-parser` (`tokenize_program`,
 //! `parse_program`, `parse_st_statements`) are rows like any other. They run
-//! the front end the parser crate was built with, so measuring both front ends
-//! through them is two runs of the same table: the default features, then
-//! `--features ironplc-parser/cst-frontend`. The rows that call
-//! `ironplc-syntax` directly are available in either run.
+//! the one front end the compiler has, the one built on the lossless tree of
+//! `ironplc-syntax`; the rows that call `ironplc-syntax` directly measure the
+//! stages the public functions are made of. The legacy pipeline is not
+//! reachable from this crate, so no row compares with it: the figures of the
+//! legacy pipeline are the recorded history in
+//! `specs/design/parse-tree-s0-experiment.md`. A baseline is a row that a
+//! stage is a part of, and the ratio is the share of the whole that the stage
+//! is.
 //!
 //! A row's call is typed by what it returns, and a table cannot hold the
 //! returned types, so a row gets a [`Probe`] from its caller and brackets the
@@ -58,8 +62,8 @@ END_PROGRAM
 /// paths.
 pub const PLAIN_BODY: &str = "x := 1;";
 
-/// What a path needs to run besides the text: the file id and the options of
-/// both front ends.
+/// What a path needs to run besides the text: the file id and the options as
+/// the public functions read them and as the tree reads them.
 #[derive(Debug, Default)]
 pub struct Ctx {
     pub file_id: FileId,
@@ -172,7 +176,7 @@ macro_rules! status {
 
 /// Every path. A path is one row; nothing else needs to change.
 pub static PATHS: &[Path] = &[
-    // The public functions of the parser crate: the front end it was built with.
+    // The public functions of the parser crate: the front end of the compiler.
     path!(
         "tokenize",
         "parse_tokenize",
@@ -189,12 +193,12 @@ pub static PATHS: &[Path] = &[
         |ctx, src| parse_program(src, &ctx.file_id, &ctx.options),
         |out| status!(out)
     ),
-    // The syntax crate directly, whichever front end the parser crate has.
+    // The syntax crate directly: the stages the public functions are made of.
     path!(
         "cst lex",
         "parse_cst_lex",
         Over::Files,
-        Some("tokenize"),
+        None,
         |_ctx, src| lex(src),
         |out| format!("{} tokens", out.0.len())
     ),
@@ -202,7 +206,7 @@ pub static PATHS: &[Path] = &[
         "cst tokenize",
         "parse_cst_tokenize",
         Over::Files,
-        Some("tokenize"),
+        None,
         |ctx, src| tokenize(src, &ctx.cst_options),
         |out| format!("{} tokens, {} errors", out.0.len(), out.1.len())
     ),
@@ -210,31 +214,30 @@ pub static PATHS: &[Path] = &[
         "cst parse",
         "parse_cst",
         Over::Files,
-        Some("parse"),
+        None,
         |ctx, src| parse_source_file(src, &ctx.cst_options),
         |out| format!("{} errors", out.errors.len())
     ),
     // The tree path as a consumer runs it: parse, then lower what parsed. A
-    // file the parse rejects is not lowered, as the legacy path stops at its
-    // first error.
+    // file the parse rejects is not lowered.
     path!(
         "cst parse + lower",
         "parse_cst_lower",
         Over::Files,
-        Some("parse"),
+        None,
         |ctx, src| {
             let parse = parse_source_file(src, &ctx.cst_options);
             lower_library(&parse, &ctx.file_id)
         },
         |out| status!(out)
     ),
-    // The same on one stack budget thread, as the facade of the parser crate
-    // runs it: the parse and the lowering share the thread.
+    // The same on one stack budget thread, as the public function of the parser
+    // crate runs it: the parse and the lowering share the thread.
     path!(
         "cst parse + lower (budget)",
         "parse_cst_lower_budget",
         Over::Files,
-        Some("parse"),
+        None,
         |ctx, src| within_stack_budget(|| {
             let parse = parse_source_file(src, &ctx.cst_options);
             lower_library(&parse, &ctx.file_id)
@@ -268,7 +271,7 @@ pub static PATHS: &[Path] = &[
         "cst statements (budget)",
         "parse_cst_statements_budget",
         Over::Bodies,
-        Some("statements"),
+        None,
         |ctx, src| within_stack_budget(|| {
             let parse = parse_statements(src, &ctx.cst_options);
             lower_statements(&parse, &ctx.file_id)
@@ -283,21 +286,4 @@ pub static PATHS: &[Path] = &[
 /// The path named `name`.
 pub fn path_named(name: &str) -> Option<&'static Path> {
     PATHS.iter().find(|path| path.name == name)
-}
-
-/// The front end the public functions of `ironplc-parser` run, read from what
-/// they do and not from how the crate was built, so that it holds however the
-/// feature was switched on. The duration literal `T#1m30s` is `T # 1 m 30 s` to
-/// the legacy token transforms and `T # 1 m30s` to the tree, so the facade
-/// returns as many tokens as the lexer of the tree exactly when it is the tree.
-pub fn selected_frontend(ctx: &Ctx) -> &'static str {
-    const PROBE: &str = "T#1m30s";
-    let facade = tokenize_program(PROBE, &ctx.file_id, &ctx.options, 0, 0)
-        .0
-        .len();
-    if facade == lex(PROBE).0.len() {
-        "cst"
-    } else {
-        "legacy"
-    }
 }

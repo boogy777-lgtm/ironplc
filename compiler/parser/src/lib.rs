@@ -4,33 +4,59 @@ extern crate ironplc_dsl as dsl;
 
 pub mod declarations;
 mod frontend;
-mod legacy;
-mod lexer;
 pub mod options;
-mod parser;
-mod preprocessor;
-mod rule_no_empty_var_blocks;
-mod rule_token_identifier;
-mod rule_token_no_c_style_comment;
-mod rule_token_no_incomplete_array;
-mod rule_token_no_paren_string_length;
-mod rule_token_no_partial_access_syntax;
-mod rule_token_string_escape;
 mod tokens;
+
+// The legacy pipeline (the logos lexer, the token transforms, the token checks
+// and the PEG grammar) is compiled for the tests only: it is the oracle that
+// the parity tests of this crate compare the front end against. Nothing in a
+// build without `cfg(test)` can name it, so the compiler, not a checklist, says
+// that production does not reach it.
+#[cfg(test)]
+mod legacy;
+#[cfg(test)]
+mod lexer;
+#[cfg(test)]
+mod parser;
+#[cfg(test)]
+mod preprocessor;
+#[cfg(test)]
+mod rule_no_empty_var_blocks;
+#[cfg(test)]
+mod rule_token_identifier;
+#[cfg(test)]
+mod rule_token_no_c_style_comment;
+#[cfg(test)]
+mod rule_token_no_incomplete_array;
+#[cfg(test)]
+mod rule_token_no_paren_string_length;
+#[cfg(test)]
+mod rule_token_no_partial_access_syntax;
+#[cfg(test)]
+mod rule_token_string_escape;
+#[cfg(test)]
 mod vars;
+#[cfg(test)]
 mod xform_assign_file_id;
+#[cfg(test)]
 mod xform_collapse_pragmas;
+#[cfg(test)]
 mod xform_demote_keywords;
+#[cfg(test)]
 mod xform_nested_comments;
+#[cfg(test)]
 mod xform_pragma_if;
+#[cfg(test)]
 mod xform_promote_special_operators;
+#[cfg(test)]
 mod xform_split_duration_units;
+#[cfg(test)]
 mod xform_statement_labels;
+#[cfg(test)]
 mod xform_tokens;
 
 use dsl::{core::FileId, diagnostic::Diagnostic};
 use ironplc_dsl::common::Library;
-use ironplc_dsl::stack::within_stack_budget;
 use ironplc_dsl::textual::StmtKind;
 use options::CompilerOptions;
 use token::Token;
@@ -61,55 +87,14 @@ pub mod token;
 /// because we usually continue with parsing even if there are token errors because
 /// that will give the context of what was wrong in the location with the error.
 ///
-/// # Front ends
-///
-/// The tokens come from the front end that the `frontend` module selects. The
-/// legacy pipeline, described below, is the one that is selected unless the
-/// crate is built for the front end on the lossless tree of `ironplc-syntax`.
-/// That one gives the same token types and positions except in the differences
-/// the token view lists: a duration lexeme is not split, no empty `;` is
-/// inserted, a region the grammar does not read is one comment token and a lone
-/// carriage return is a line break. It reports the errors of its tokenizer in
-/// source order.
-///
-/// # Transform order
-///
-/// The token transforms of the legacy pipeline run in a fixed order and the
-/// order is observable: a
-/// later transform sees the token types an earlier one left behind. The order
-/// is pinned by the tests in `tests/pipeline_order.rs` (see
-/// `specs/design/parse-tree-s0-audit.md`, findings F6 and F7):
-///
-/// 1. `preprocess` rewrites the text, then the lexer produces tokens.
-/// 2. `xform_collapse_pragmas` makes each `{ ... }` one `Pragma` token. This
-///    precedes `xform_pragma_if`, which only understands collapsed pragmas.
-/// 3. `xform_pragma_if` drops the branches that are not taken, so nothing
-///    after it has to know a branch was ever there.
-/// 4. `xform_nested_comments` merges a nested comment into one `Comment`
-///    token. This precedes terminator insertion, which would otherwise fire on
-///    the tokens inside the comment.
-/// 5. `xform_split_duration_units` splits duration literals. It still sees
-///    `TIME`, `LTIME` and `T` prefixes as the lexer typed them.
-/// 6. `insert_keyword_statement_terminators` adds missing `;` tokens. It runs
-///    before demotion, so its decisions (`END_TRY` as a terminator,
-///    `CONTINUE` as the start of a CASE-branch statement) use the keyword
-///    types, whether or not the dialect later demotes those keywords.
-/// 7. `xform_statement_labels` marks `name :` in statement position as
-///    `Label`. It runs before demotion for the same reason: a keyword that a
-///    dialect demotes (`VAR_STAT`, `METHOD`) still opens a declaration for
-///    this pass, and a demoted keyword never becomes a label. It runs before
-///    promotion, which only touches identifiers.
-/// 8. `xform_demote_keywords` turns dialect-gated keywords back into
-///    identifiers. Classification is destructive: it depends on the options
-///    and, for `TIME`, on the neighbouring tokens, so it cannot be recomputed
-///    from the finished stream alone.
-/// 9. `xform_promote_special_operators` promotes the `__NEW` family. It is
-///    not gated by any dialect flag.
-/// 10. The token check rules run over the finished stream.
-///
-/// Each dialect-gated transform returns its input unchanged when its flag is
-/// off, so a dialect only changes which of these steps do any work, never
-/// their order.
+/// The tokens are the token view of the lossless tree of `ironplc-syntax`: the
+/// tokens cover every byte of the text, a keyword that the dialect does not
+/// enable is a name, a duration lexeme is one token, a stretch that the grammar
+/// does not read (a pragma, a comment) is one token, and a lone carriage return
+/// is a line break. The diagnostics are the errors of the tokenizer (an
+/// unterminated comment, pragma or string; a pragma in a dialect without
+/// pragmas), in source order. Nothing here parses, so the tokenizer runs on
+/// the stack of the caller.
 ///
 /// The offset parameters allow tokenizing embedded content (like ST body from XML)
 /// where the content doesn't start at the beginning of the file:
@@ -122,19 +107,22 @@ pub fn tokenize_program(
     line_offset: usize,
     col_offset: usize,
 ) -> (Vec<Token>, Vec<Diagnostic>) {
-    (frontend::SELECTED.tokenize_program)(source, file_id, options, line_offset, col_offset)
+    frontend::tokenize_program(source, file_id, options, line_offset, col_offset)
 }
 
 /// Parse a full IEC 61131 program.
 ///
-/// The parse runs on the stack budget (`ironplc_dsl::stack`): a program nests
-/// as deep as its text does.
+/// The parse reads the program into the lossless tree and lowers the tree to
+/// the library, and reports the one diagnostic that the ranking of
+/// `ironplc-syntax` chooses. It runs on the stack budget
+/// (`ironplc_dsl::stack`): a program nests as deep as its text does, up to
+/// `MAX_DEPTH` nodes of the tree, and deeper is a diagnostic (P0019).
 pub fn parse_program(
     source: &str,
     file_id: &FileId,
     options: &CompilerOptions,
 ) -> Result<Library, Diagnostic> {
-    within_stack_budget(|| (frontend::SELECTED.parse_program)(source, file_id, options))
+    frontend::parse_program(source, file_id, options)
 }
 
 /// Parse ST (Structured Text) body content into statements.
@@ -156,7 +144,5 @@ pub fn parse_st_statements(
     line_offset: usize,
     col_offset: usize,
 ) -> Result<Vec<StmtKind>, Diagnostic> {
-    within_stack_budget(|| {
-        (frontend::SELECTED.parse_st_statements)(source, file_id, options, line_offset, col_offset)
-    })
+    frontend::parse_st_statements(source, file_id, options, line_offset, col_offset)
 }
