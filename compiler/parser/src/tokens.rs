@@ -248,26 +248,26 @@ pub(crate) fn project(
 ) -> Vec<Token> {
     let index = LineIndex::new(source, line_offset, col_offset);
     let mut lines = index.walker();
-    (0..tokens.len())
-        .filter_map(|index| {
-            let token_type = type_of(tokens, index, options)?;
-            let token = tokens.get(index)?;
-            let start = usize::from(token.range.start());
-            let end = usize::from(token.range.end());
-            let (line, col) = lines.position(start);
-            Some(Token {
-                token_type,
-                span: SourceSpan {
-                    file_id: file_id.clone(),
-                    start,
-                    end,
-                },
-                line,
-                col,
-                text: token.text.to_string(),
-            })
+    let mut view = Vec::with_capacity(tokens.len());
+    view.extend((0..tokens.len()).filter_map(|index| {
+        let token_type = type_of(tokens, index, options)?;
+        let token = tokens.get(index)?;
+        let start = usize::from(token.range.start());
+        let end = usize::from(token.range.end());
+        let (line, col) = lines.position(start);
+        Some(Token {
+            token_type,
+            span: SourceSpan {
+                file_id: file_id.clone(),
+                start,
+                end,
+            },
+            line,
+            col,
+            text: token.text.to_string(),
         })
-        .collect()
+    }));
+    view
 }
 
 #[cfg(test)]

@@ -796,7 +796,8 @@ anything above 1.25 is explained here.
 | Q2 token view | 2.39 / 2.41 / 2.44 | 1.00 | **warm time over the budget** |
 | Q3 fragments (indicative) | 0.93 / 1.02 / 0.98 | 1.07 | met |
 
-Q2 overshoots in time and not in allocations. The cause is the two stages in
+Q2 overshoots in time and not in allocations (the follow-on at the end of this
+section records the change made for it and the figures after). The cause is the two stages in
 front of the view, both per token and both measured above: the gate pass of the
 syntax tokenizer (about 0.9 ms of 2.2) and the projection (about 1.0 ms). It is
 not a defect of one place, so it is not fixed in this change. The fix the
@@ -834,6 +835,119 @@ cargo bench -p ironplc-benchmarks --bench parse_benchmark      # Criterion, also
 
 The header of each output names the front end the public functions ran. A new
 path is one row of `PATHS` in `compiler/benchmarks/src/paths.rs`.
+
+#### Follow-on: the token view after the gate index (2026-10-05)
+
+The tables above stay as recorded. This follow-on repeats the measurement after
+one change at the cause found in Q2, with the same corpus, machine, profile and
+method (three consecutive runs per front end, base commit `e50261054` plus the
+change).
+
+**What changed.** Each gate of the syntax tokenizer now names the token kinds at
+which it can start (its `triggers`, data in its row of `GATES`). The pass over
+the tokens derives once an index from a token kind to the gates that name it,
+and per call the set of gates the dialect leaves inactive, so a token is handed
+to the gates of its kind that are inactive and to no other: the 11 calls per
+token are none for most tokens. A test holds every gate to its triggers (a gate
+reports nothing at a token whose kind it does not name) over the corpus in LF,
+CRLF and tab spelling under the default options, every flag on, and each flag on
+alone. A parse starts with the same pass (`tokenize`), so `parse_program` has
+the gain too. In the token view, the result is reserved at its final capacity,
+the line walker moves by one comparison where positions go forward and counts
+ASCII text without decoding it, and the index of line starts skips the bytes no
+break starts with. Tokens, diagnostics and positions are unchanged.
+
+**Profile before the change** (ad-hoc timers, not in the tree; best of 300 to
+500 passes over the corpus, the drop of the result included, so the figures are
+not those of the table below, which excludes the drop): `lex` 308 us,
+`lex_regions` 342, `tokenize` 1,263 (the gates are 0.92 ms of it; with the
+gate pass skipped, 372), the facade 2,541, so the options conversion and the
+projection together 1,278. Pieces of the projection measured apart: one string
+per token with its release 501 us, the index of line starts 102 and the walk 158,
+a `FileId` clone per token 120, the keyword test 37. Skipping one part of the
+projection at a time: the text of the token -560 us, the position -182, the
+token type -74, the `FileId` -0.
+
+**Profile after** (the same timers, the drop excluded as in the benchmark):
+`tokenize` 447 us (`lex` 304, regions 43, gates 94), the facade 1,222, so the
+projection is about 775: the string per token 318, the token type 94, the
+position 83, the rest (index of line starts 42, the vector and the `Token`
+fields, the `FileId` clone) about 280.
+
+#### Q2 after: token view, `tokenize_program`
+
+Run 1 / 2 / 3; legacy is the default run, cst the run with the feature on.
+
+| quantity | legacy | cst | cst / legacy |
+|---|---|---|---|
+| cold, one pass (ms) | 1.705 / 1.710 / 1.641 | 1.709 / 1.688 / 1.678 | 1.00 / 0.99 / 1.02 |
+| warm-median sum (ms) | 0.919 / 0.909 / 0.869 | 1.155 / 1.151 / 1.141 | 1.26 / 1.27 / 1.31 |
+| cold allocations | 9,448 | 9,430 | 1.00 |
+| cold KiB allocated | 1,753.3 | 1,151.3 | 0.66 |
+
+The warm-median sum was 2.39 / 2.41 / 2.44 times the legacy one before the
+change. The legacy sums moved by 5.5 % between runs and the cst sums by 1.2 %, so
+the ratio's spread is the legacy side's. Per file the ratio is 1.0-1.5 (smallest
+0.78 / 0.83 / 1.09, 49 / 49 / 58 of 61 files above 1.25; the largest is
+`bit_string_arithmetic.st` 1.45-1.47 on 4-6 us medians, and `namespace.st` 2.19
+in run 1 on a 10 us median that the other runs do not repeat).
+
+The direct rows of the syntax crate (default run, run 1 / 2 / 3), before the
+change in brackets:
+
+| path | warm-median sum (ms) | cold one pass (ms) |
+|---|---|---|
+| `cst tokenize` | 0.370 / 0.371 / 0.371 (1.252 / 1.240 / 1.240) | 0.596 / 0.586 / 0.577 (1.490 / 1.499 / 1.478) |
+| `cst parse` | 7.228 / 6.999 / 7.013 (8.512 / 7.913 / 7.968) | 8.865 / 8.202 / 8.059 (10.100 / 9.342 / 9.554) |
+| `cst parse + lower` | 9.427 / 9.156 / 9.221 (10.627 / 10.032 / 10.165) | 9.706 / 9.486 / 9.690 (11.119 / 10.400 / 10.484) |
+| `cst parse + lower (budget)` | 9.849 / 9.594 / 9.559 (10.985 / 10.403 / 10.489) | 10.417 / 9.765 / 9.934 (11.376 / 10.984 / 10.954) |
+
+#### Q1 after: whole file, `parse_program`
+
+| quantity | legacy | cst | cst / legacy |
+|---|---|---|---|
+| cold, one pass (ms) | 12.582 / 12.256 / 11.754 | 10.647 / 10.795 / 11.101 | 0.85 / 0.88 / 0.94 |
+| warm-median sum (ms) | 11.415 / 10.974 / 10.902 | 9.526 / 10.013 / 9.906 | 0.83 / 0.91 / 0.91 |
+| cold allocations | 32,121 | 23,949 | 0.75 |
+| cold KiB allocated | 4,544.6 | 2,800.8 | 0.62 |
+
+The cst sum was 10.373 / 10.887 / 10.420 ms before the change and the ratio
+0.90 / 1.01 / 0.96. Per file, the worst warm ratio is 1.22 / 1.29 / 1.32
+(`type_decl.st`, `empty_var_block.st` and `first_steps_configuration.st`,
+`oop.st`), 0 / 3 / 2 files above 1.25, none above 1.5; the allocation ratios are
+those of Q1 above (worst `first_steps_configuration.st` 1.91).
+
+#### Q5 after: `first_steps.st`, warm median (us), run 1 / 2 / 3
+
+| call | legacy | cst |
+|---|---|---|
+| `tokenize_program` | 127.3 / 120.8 / 85.9 | 132.6 / 132.1 / 110.0 |
+| `parse_program` | 679.0 / 685.5 / 674.2 | 518.1 / 628.7 / 611.2 |
+
+#### Verdict after the change
+
+| quantity | warm-median sum | allocations | verdict |
+|---|---|---|---|
+| Q1 whole file | 0.83 / 0.91 / 0.91 | 0.75 | met |
+| Q2 token view | 1.26 / 1.27 / 1.31 | 1.00 | within the 1.5 budget; between 1.25 and 1.5, explained below |
+
+The token view is within the budget and above the 1.25 line the budget asks to
+be explained, by 0.24-0.27 ms on the corpus (`first_steps.st`, 2.7 KB: 110-133 us
+against 86-127 us). Its allocation count is the legacy one (a string per token, the
+`Token` the compiler reads has to own its text); what remains is non-allocating
+work per token that the legacy path does not have: the regions and gates pass
+over the tokens (about 0.11-0.13 ms), the token type decided from the tree's options
+(about 0.09 ms) and the position mapped from a byte offset (about 0.08 ms), on
+top of the same string and `FileId` per token (0.3 ms and 0.1 ms). Each is one
+mechanism of the tree front end doing what the legacy transforms did in another
+shape; going further means a cheaper `Token` (a borrowed text), which changes
+the type the rest of the compiler reads, and is not part of this change.
+
+Not measured again: Q3, Q4 and Q6 (the statement fragments also start with this
+pass; their figures stand as recorded above). The figures of this follow-on come
+from one build per front end on the same machine.
+
+Reproduce: the commands of 3.7; the tables are the same output.
 
 ## 4. Prefactoring candidates (observed while spiking)
 

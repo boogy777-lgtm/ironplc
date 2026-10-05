@@ -44,10 +44,19 @@ impl<'a> LineIndex<'a> {
     pub fn new(text: &'a str, line_offset: usize, col_offset: usize) -> Self {
         let mut starts = vec![0];
         let mut at = 0;
-        while at < text.len() {
-            // The scan moves by bytes and every break starts with an ASCII
-            // byte, so `get` only fails inside a multi-byte character.
-            match text.get(at..).and_then(break_len) {
+        let bytes = text.as_bytes();
+        while let Some(byte) = bytes.get(at) {
+            // Only a byte that a break starts with is worth matching the table
+            // at; the others, which are nearly all of them, are skipped. A break
+            // starts with an ASCII byte, so `get` only fails inside a multi-byte
+            // character, and then no break starts there.
+            let starts_break = LINE_BREAKS
+                .iter()
+                .any(|spelling| spelling.as_bytes().first() == Some(byte));
+            match starts_break
+                .then(|| text.get(at..).and_then(break_len))
+                .flatten()
+            {
                 Some(len) => {
                     at += len;
                     starts.push(at);
@@ -113,24 +122,31 @@ impl Walker<'_, '_> {
             self.column = 0;
         }
         // The last line that starts at or before the offset, looking forward
-        // from the line the walker is on.
+        // from the line the walker is on. A run of positions that move forward
+        // mostly stay on the line or step to the next, which one comparison
+        // settles; a longer step is a search.
         let ahead = index.starts.get(self.line..).unwrap_or_default();
-        let line = self.line
-            + ahead
-                .partition_point(|start| *start <= offset)
-                .saturating_sub(1);
+        let stays = ahead.get(1).is_none_or(|next| *next > offset);
+        let line = if stays {
+            self.line
+        } else {
+            self.line
+                + ahead
+                    .partition_point(|start| *start <= offset)
+                    .saturating_sub(1)
+        };
         if line != self.line || self.at < index.starts.get(line).copied().unwrap_or(0) {
             self.line = line;
             self.at = index.starts.get(line).copied().unwrap_or(0);
             self.column = 0;
         }
-        self.column += index
-            .text
-            .get(self.at..offset)
-            .unwrap_or_default()
-            .chars()
-            .map(char::len_utf16)
-            .sum::<usize>();
+        let passed = index.text.get(self.at..offset).unwrap_or_default();
+        self.column += if passed.is_ascii() {
+            // One unit a character: no need to decode.
+            passed.len()
+        } else {
+            passed.chars().map(char::len_utf16).sum::<usize>()
+        };
         self.at = offset;
 
         let (line_offset, col_offset) = index.origin;
@@ -216,6 +232,37 @@ mod tests {
         for offset in offsets {
             assert_eq!(walker.position(offset), index.position(offset), "{offset}");
         }
+    }
+
+    #[test]
+    fn walker_when_text_has_many_lines_then_every_offset_matches_a_count_by_characters() {
+        // An oracle that reads the text one character at a time, to hold the
+        // forward step, the search and the ASCII shortcut of the walker to it.
+        let text = "ab\ncd\r\nef\r\u{e9}\u{1F600}x\n\n\n\u{c}tail\nlast";
+        let index = LineIndex::new(text, 0, 0);
+        let mut walker = index.walker();
+        let mut line = 0;
+        let mut column = 0;
+        let mut previous = ' ';
+        for (offset, ch) in text.char_indices() {
+            // The `\n` of a `\r\n` is inside the break: it has no position.
+            let inside_crlf = ch == '\n' && previous == '\r';
+            if !inside_crlf {
+                assert_eq!(walker.position(offset), (line, column), "{offset}");
+            }
+            let ends_line =
+                matches!(ch, '\n' | '\u{c}') || (ch == '\r' && !text[offset..].starts_with("\r\n"));
+            if ends_line {
+                line += 1;
+                column = 0;
+            } else if ch != '\r' && !inside_crlf {
+                column += ch.len_utf16();
+            } else if inside_crlf {
+                column = 0;
+            }
+            previous = ch;
+        }
+        assert_eq!(walker.position(text.len()), (line, column));
     }
 
     #[test]

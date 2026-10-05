@@ -17,6 +17,14 @@
 //!
 //! Gates on keywords are not here: a disabled keyword is an ordinary name,
 //! see [`ParseOptions::keyword_enabled`].
+//!
+//! A gate also names the kinds of token at which it can start (its
+//! `triggers`). One pass over the tokens hands a token only to the gates that
+//! name its kind and that the dialect leaves inactive, through an index from a
+//! kind to its gates that is derived from the table, so the cost of a pass is
+//! the tokens a gate can report at, not every token times every gate. A test
+//! holds the triggers to the gates: a gate reports nothing at a token whose
+//! kind it does not name.
 
 use super::options::ParseOptions;
 use super::recovery::VAR_OPENERS;
@@ -25,6 +33,7 @@ use crate::lexer::escapes::invalid_escapes;
 use crate::lexer::Token;
 use crate::syntax_kind::SyntaxKind;
 use rowan::{TextRange, TextSize};
+use std::sync::OnceLock;
 
 /// The token a gate is asked about, with the tokens after it.
 struct Site<'a, 't> {
@@ -56,6 +65,9 @@ impl<'t> Site<'_, 't> {
 
 /// One gated form.
 struct Gate {
+    /// The kinds of token at which the form can start: [`Gate::find`] reports
+    /// nothing at a token of any other kind.
+    triggers: &'static [SyntaxKind],
     /// The ranges, at this site, of the gated form: empty when it is not here.
     find: fn(&Site) -> Vec<TextRange>,
     /// True when the dialect enables the form.
@@ -94,7 +106,9 @@ fn is_non_ascii_identifier(token: &Token<'_>) -> bool {
 
 /// A double underscore anywhere but in the reserved leading `__` prefix.
 fn has_repeated_underscores(token: &Token<'_>) -> bool {
-    if token.kind != SyntaxKind::Ident {
+    // Most names have no underscore, and looking for one byte is cheaper than
+    // searching for two.
+    if token.kind != SyntaxKind::Ident || !token.text.contains('_') {
         return false;
     }
     match token.text.find("__") {
@@ -186,6 +200,11 @@ fn invalid_string_escapes(site: &Site, literal: SyntaxKind) -> Vec<TextRange> {
 
 const GATES: &[Gate] = &[
     Gate {
+        triggers: &[
+            SyntaxKind::LineComment,
+            SyntaxKind::DocComment,
+            SyntaxKind::BlockComment,
+        ],
         find: |site| on_token(site, is_c_style_comment),
         enabled: |options| options.allow_c_style_comments,
         kind: ErrorKind::CStyleComment,
@@ -196,6 +215,7 @@ const GATES: &[Gate] = &[
         ),
     },
     Gate {
+        triggers: &[SyntaxKind::Pragma],
         find: |site| on_token(site, |token| token.kind == SyntaxKind::Pragma),
         enabled: |options| options.allow_pragmas,
         kind: ErrorKind::Syntax,
@@ -203,6 +223,7 @@ const GATES: &[Gate] = &[
         help: None,
     },
     Gate {
+        triggers: &[SyntaxKind::PartialAccess],
         find: |site| on_token(site, is_partial_access),
         enabled: |options| options.allow_partial_access_syntax,
         kind: ErrorKind::PartialAccessSyntaxDisabled,
@@ -210,6 +231,7 @@ const GATES: &[Gate] = &[
         help: None,
     },
     Gate {
+        triggers: &[SyntaxKind::EscapedIdent],
         find: |site| on_token(site, |token| token.kind == SyntaxKind::EscapedIdent),
         enabled: |options| options.allow_escaped_identifiers,
         kind: ErrorKind::EscapedIdentifierNotAllowed,
@@ -217,6 +239,7 @@ const GATES: &[Gate] = &[
         help: None,
     },
     Gate {
+        triggers: &[SyntaxKind::Ident],
         find: |site| on_token(site, is_non_ascii_identifier),
         enabled: |options| options.allow_unicode_identifiers,
         kind: ErrorKind::UnicodeIdentifierNotAllowed,
@@ -224,6 +247,7 @@ const GATES: &[Gate] = &[
         help: None,
     },
     Gate {
+        triggers: &[SyntaxKind::Ident],
         find: |site| on_token(site, has_repeated_underscores),
         enabled: |options| options.allow_multiple_underscores,
         kind: ErrorKind::MultipleUnderscoresNotAllowed,
@@ -231,6 +255,7 @@ const GATES: &[Gate] = &[
         help: None,
     },
     Gate {
+        triggers: VAR_OPENERS,
         find: empty_var_block,
         enabled: |options| options.allow_empty_var_blocks,
         kind: ErrorKind::EmptyVarBlock,
@@ -238,6 +263,7 @@ const GATES: &[Gate] = &[
         help: None,
     },
     Gate {
+        triggers: &[SyntaxKind::String, SyntaxKind::WString],
         find: paren_string_length,
         enabled: |options| options.allow_paren_string_length,
         kind: ErrorKind::ParenStringLengthNotAllowed,
@@ -245,6 +271,7 @@ const GATES: &[Gate] = &[
         help: None,
     },
     Gate {
+        triggers: &[SyntaxKind::Array],
         find: incomplete_array,
         enabled: |options| options.allow_incomplete_array,
         kind: ErrorKind::IncompleteArrayNotAllowed,
@@ -252,6 +279,7 @@ const GATES: &[Gate] = &[
         help: None,
     },
     Gate {
+        triggers: &[SyntaxKind::StringLit],
         find: |site| invalid_string_escapes(site, SyntaxKind::StringLit),
         enabled: |_| false,
         kind: ErrorKind::InvalidStringEscape,
@@ -262,6 +290,7 @@ const GATES: &[Gate] = &[
         ),
     },
     Gate {
+        triggers: &[SyntaxKind::WStringLit],
         find: |site| invalid_string_escapes(site, SyntaxKind::WStringLit),
         enabled: |_| false,
         kind: ErrorKind::InvalidStringEscape,
@@ -273,17 +302,56 @@ const GATES: &[Gate] = &[
     },
 ];
 
+/// A set of gates, one bit each: bit `g` is `GATES[g]`.
+type GateSet = u64;
+
+const _: () = assert!(GATES.len() <= GateSet::BITS as usize);
+
+/// For each kind of token, the gates that name it as a trigger. Derived from
+/// [`GATES`] once, so a gate is registered by its row alone.
+fn trigger_index() -> &'static [GateSet] {
+    static INDEX: OnceLock<Vec<GateSet>> = OnceLock::new();
+    INDEX.get_or_init(|| {
+        let mut index = vec![0; SyntaxKind::ALL.len()];
+        for (position, gate) in GATES.iter().enumerate() {
+            for kind in gate.triggers {
+                if let Some(slot) = index.get_mut(*kind as usize) {
+                    *slot |= 1 << position;
+                }
+            }
+        }
+        index
+    })
+}
+
+/// The gates that report a form the dialect leaves disabled.
+fn inactive_gates(options: &ParseOptions) -> GateSet {
+    GATES
+        .iter()
+        .enumerate()
+        .filter(|(_, gate)| !(gate.enabled)(options))
+        .fold(0, |set, (position, _)| set | 1 << position)
+}
+
 /// The errors for every gated form in `tokens` that `options` leaves
 /// disabled, in source order.
 pub(crate) fn gate_errors(tokens: &[Token<'_>], options: &ParseOptions) -> Vec<SyntaxError> {
     let mut errors = Vec::new();
-    for index in 0..tokens.len() {
-        let site = Site {
-            tokens,
-            index,
-            options,
-        };
-        for gate in GATES.iter().filter(|gate| !(gate.enabled)(options)) {
+    let inactive = inactive_gates(options);
+    if inactive == 0 {
+        return errors;
+    }
+    let index = trigger_index();
+    for (position, token) in tokens.iter().enumerate() {
+        let mut here = index.get(token.kind as usize).copied().unwrap_or(0) & inactive;
+        while here != 0 {
+            let gate = &GATES[here.trailing_zeros() as usize];
+            here &= here - 1;
+            let site = Site {
+                tokens,
+                index: position,
+                options,
+            };
             errors.extend((gate.find)(&site).into_iter().map(|range| {
                 let error = SyntaxError::new(gate.message, range).with_kind(gate.kind);
                 match gate.help {
@@ -470,5 +538,76 @@ mod tests {
             vec![(7, 9)]
         );
         assert!(ranges("x := 'a$$b$41';", &ParseOptions::all()).is_empty());
+    }
+
+    /// Every option set the gates are asked about: the strict defaults, every
+    /// flag on, and each flag on alone. The sets differ in which regions and
+    /// pragmas the tokens hold.
+    fn option_sets() -> Vec<ParseOptions> {
+        let mut sets = vec![ParseOptions::default(), ParseOptions::all()];
+        for key in ParseOptions::FLAG_KEYS {
+            let mut options = ParseOptions::default();
+            assert!(options.set_flag_by_key(key, true), "{key}");
+            sets.push(options);
+        }
+        sets
+    }
+
+    #[test]
+    fn triggers_when_gate_declared_then_named_and_unique_token_kinds() {
+        for gate in GATES {
+            assert!(!gate.triggers.is_empty(), "{}", gate.message);
+            for (position, kind) in gate.triggers.iter().enumerate() {
+                assert!(kind.is_token(), "{kind:?}");
+                assert!(!gate.triggers[..position].contains(kind), "{kind:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn trigger_index_when_built_then_each_kind_holds_exactly_the_gates_that_name_it() {
+        let index = trigger_index();
+        assert_eq!(index.len(), SyntaxKind::ALL.len());
+        for kind in SyntaxKind::ALL {
+            for (position, gate) in GATES.iter().enumerate() {
+                let set = index[*kind as usize] & (1 << position) != 0;
+                assert_eq!(set, gate.triggers.contains(kind), "{kind:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn find_when_token_kind_is_not_a_trigger_then_the_gate_reports_nothing() {
+        // The guard of the trigger sets: over the corpus in every spelling and
+        // every option set, no gate reports at a token whose kind it does not
+        // name, so a wrong trigger set fails here and does not lose a diagnostic.
+        let mut outside = 0;
+        let mut inside = 0;
+        for (name, text) in ironplc_test::corpus::variants() {
+            for options in option_sets() {
+                let (tokens, _) = crate::tokenize(&text, &options);
+                for index in 0..tokens.len() {
+                    let site = Site {
+                        tokens: &tokens,
+                        index,
+                        options: &options,
+                    };
+                    for gate in GATES {
+                        if gate.triggers.contains(&tokens[index].kind) {
+                            inside += 1;
+                        } else {
+                            outside += 1;
+                            assert!(
+                                (gate.find)(&site).is_empty(),
+                                "{name}: `{}` reports at a {:?} token",
+                                gate.message,
+                                tokens[index].kind
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        assert!(outside > 0 && inside > 0);
     }
 }

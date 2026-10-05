@@ -389,14 +389,13 @@ The evidence is in [section 3.7 of the experiment record](parse-tree-s0-experime
 three consecutive runs per front end of one benchmark table, so that a path
 added to the table is measured against both. As recorded there:
 
-- the whole-file parse is within the budget (warm time 0.90-1.01 of legacy,
+- the whole-file parse is within the budget (warm time 0.83-0.91 of legacy,
   allocations 0.75);
 - statement fragments are within it on an indicative input set (0.93-1.02,
   1.07);
-- the token view is over the budget in warm time (2.4 times; allocations 1.00),
-  the cost being per token in the tokenizer's gate pass and in the projection to
-  the token type. It has to be brought under the budget, or the budget decided
-  again, before the language server's semantic tokens are read from the tree;
+- the token view is within the budget after the gate pass of the tokenizer was
+  indexed by token kind (warm time 1.26-1.31 of legacy, allocations 1.00); it is
+  above the 1.25 line and the remaining cost is explained in the record;
 - both front ends pay one stack-budget thread per `parse_program` and per
   `parse_st_statements` call (about 75-83 us on the measured machine, 43-45 % of
   the corpus parse sum), and none for `tokenize_program`.
