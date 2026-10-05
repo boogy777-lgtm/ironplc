@@ -3,6 +3,7 @@
 extern crate ironplc_dsl as dsl;
 
 pub mod declarations;
+mod frontend;
 mod legacy;
 mod lexer;
 pub mod options;
@@ -15,6 +16,7 @@ mod rule_token_no_incomplete_array;
 mod rule_token_no_paren_string_length;
 mod rule_token_no_partial_access_syntax;
 mod rule_token_string_escape;
+mod tokens;
 mod vars;
 mod xform_assign_file_id;
 mod xform_collapse_pragmas;
@@ -59,9 +61,21 @@ pub mod token;
 /// because we usually continue with parsing even if there are token errors because
 /// that will give the context of what was wrong in the location with the error.
 ///
+/// # Front ends
+///
+/// The tokens come from the front end that the `frontend` module selects. The
+/// legacy pipeline, described below, is the one that is selected unless the
+/// crate is built for the front end on the lossless tree of `ironplc-syntax`.
+/// That one gives the same token types and positions except in the differences
+/// the token view lists: a duration lexeme is not split, no empty `;` is
+/// inserted, a region the grammar does not read is one comment token and a lone
+/// carriage return is a line break. It reports the errors of its tokenizer in
+/// source order.
+///
 /// # Transform order
 ///
-/// The token transforms run in a fixed order and the order is observable: a
+/// The token transforms of the legacy pipeline run in a fixed order and the
+/// order is observable: a
 /// later transform sees the token types an earlier one left behind. The order
 /// is pinned by the tests in `tests/pipeline_order.rs` (see
 /// `specs/design/parse-tree-s0-audit.md`, findings F6 and F7):
@@ -108,7 +122,7 @@ pub fn tokenize_program(
     line_offset: usize,
     col_offset: usize,
 ) -> (Vec<Token>, Vec<Diagnostic>) {
-    legacy::tokenize_program(source, file_id, options, line_offset, col_offset)
+    (frontend::SELECTED.tokenize_program)(source, file_id, options, line_offset, col_offset)
 }
 
 /// Parse a full IEC 61131 program.
@@ -120,7 +134,7 @@ pub fn parse_program(
     file_id: &FileId,
     options: &CompilerOptions,
 ) -> Result<Library, Diagnostic> {
-    within_stack_budget(|| legacy::parse_program(source, file_id, options))
+    within_stack_budget(|| (frontend::SELECTED.parse_program)(source, file_id, options))
 }
 
 /// Parse ST (Structured Text) body content into statements.
@@ -143,6 +157,6 @@ pub fn parse_st_statements(
     col_offset: usize,
 ) -> Result<Vec<StmtKind>, Diagnostic> {
     within_stack_budget(|| {
-        legacy::parse_st_statements(source, file_id, options, line_offset, col_offset)
+        (frontend::SELECTED.parse_st_statements)(source, file_id, options, line_offset, col_offset)
     })
 }

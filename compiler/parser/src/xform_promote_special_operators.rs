@@ -20,25 +20,12 @@
 
 use crate::token::{Token, TokenType};
 
-/// The operator names and the token each promotes to. Matched
-/// case-insensitively, as the reference scanner does under `IgnoreCase`; the
-/// token keeps the text as written so the renderer writes the source
-/// spelling back.
-const PROMOTIONS: &[(&str, TokenType)] = &[
-    ("__NEW", TokenType::SpecialNew),
-    ("__DELETE", TokenType::SpecialDelete),
-    ("__ISVALIDREF", TokenType::SpecialIsValidRef),
-    ("__TYPEOF", TokenType::SpecialTypeOf),
-    ("__CURRENTTASK", TokenType::SpecialCurrentTask),
-    ("__XADD", TokenType::SpecialXAdd),
-];
-
 pub fn apply(tokens: &mut [Token]) {
     for tok in tokens.iter_mut() {
         if tok.token_type != TokenType::Identifier {
             continue;
         }
-        if let Some((_, promoted)) = PROMOTIONS
+        if let Some((_, promoted)) = crate::tokens::SPECIAL_OPERATORS
             .iter()
             .find(|(name, _)| tok.text.eq_ignore_ascii_case(name))
         {

@@ -71,7 +71,10 @@ pub(super) fn daytime_value(p: &mut Parser) {
     }
     let minute = number(p, "a minute");
     check_field(p, minute, ClockField::Minute, "the minute");
-    if !p.at(K::Colon) || minute.is_none() {
+    // The colon before the seconds belongs to the literal only when it touches
+    // the minute: a gap ends the literal at the minute, and what follows it is
+    // not a part of it (no whitespace is allowed inside a literal).
+    if !p.at(K::Colon) || !p.touches_previous() || minute.is_none() {
         return;
     }
     p.bump();
@@ -168,6 +171,18 @@ mod tests {
         for (spelling, _) in DurationUnit::UNITS {
             assert!(found[0].contains(spelling), "{spelling}");
         }
+    }
+
+    #[test]
+    fn parse_statements_when_colon_before_the_seconds_is_separated_by_a_gap_then_the_literal_ends_at_the_minute(
+    ) {
+        use crate::parse_statements;
+        let options = ParseOptions::all();
+        // The gap ends the literal, so the rest is not part of it.
+        let split = parse_statements("x := TOD#14:30 :20;", &options);
+        assert!(!split.errors.is_empty());
+        let seconds = parse_statements("x := TOD#14:30:20;", &options);
+        assert!(seconds.errors.is_empty(), "{:?}", seconds.errors);
     }
 
     #[test]

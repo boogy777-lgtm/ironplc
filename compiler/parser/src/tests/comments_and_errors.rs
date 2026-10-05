@@ -57,6 +57,8 @@ fn parse_program_when_comment_not_closed_then_err() {
     assert!(res.is_err());
 }
 
+// The wording of the PEG parser's message; the tree says `expected a name`.
+#[cfg(not(feature = "cst-frontend"))]
 #[test]
 fn parse_program_when_bad_name_then_err() {
     let program = "
@@ -74,6 +76,8 @@ fn parse_program_when_bad_name_then_err() {
     assert_eq!("Expected ' ' (space) | '\\t' (tab) | '(* ... *)' (comment) | '///' (documentation comment) | '\\n' (new line) | '`...`' (escaped identifier) | '{ ... }' (pragma) | (identifier). Found text '&' that matched token 'AND' | '&'".to_owned(), err.primary.message);
 }
 
+// The wording of the PEG parser's message; the tree says `expected a declaration`.
+#[cfg(not(feature = "cst-frontend"))]
 #[test]
 fn parse_program_when_not_valid_top_item_then_err() {
     let program = "ACTION

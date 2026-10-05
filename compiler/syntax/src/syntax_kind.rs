@@ -69,6 +69,16 @@ macro_rules! syntax_kinds {
                 }
             }
 
+            /// The token kind this kind is, or `None` for a node or `Unknown`.
+            pub fn token(self) -> Option<TokenKind> {
+                match self {
+                    $(SyntaxKind::$trivia => Some(TokenKind::$trivia),)*
+                    $(SyntaxKind::$token => Some(TokenKind::$token),)*
+                    $(SyntaxKind::$keyword => Some(TokenKind::$keyword),)*
+                    _ => None,
+                }
+            }
+
             fn keyword_from_upper(upper: &str) -> Option<SyntaxKind> {
                 match upper {
                     $($($spelling)|+ => Some(SyntaxKind::$keyword),)*
@@ -93,6 +103,31 @@ macro_rules! syntax_kinds {
             pub fn syntax_kind(self) -> SyntaxKind {
                 match self {
                     $(NodeKind::$node => SyntaxKind::$node,)*
+                }
+            }
+        }
+
+        /// The leaf kinds alone (trivia, tokens and keywords), generated from
+        /// the same declaration.
+        ///
+        /// A table that has to decide something about every token matches on
+        /// this type without a wildcard arm: adding a token kind to the
+        /// declaration then fails to compile until the table says what to do
+        /// with it.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        pub enum TokenKind {
+            $($trivia,)*
+            $($token,)*
+            $($keyword,)*
+        }
+
+        impl TokenKind {
+            /// The syntax kind of this token kind.
+            pub fn syntax_kind(self) -> SyntaxKind {
+                match self {
+                    $(TokenKind::$trivia => SyntaxKind::$trivia,)*
+                    $(TokenKind::$token => SyntaxKind::$token,)*
+                    $(TokenKind::$keyword => SyntaxKind::$keyword,)*
                 }
             }
         }
@@ -517,6 +552,21 @@ mod tests {
         }
         assert_eq!(SyntaxKind::Ident.node(), None);
         assert_eq!(SyntaxKind::SourceFile.node(), Some(NodeKind::SourceFile));
+    }
+
+    #[test]
+    fn token_when_kind_is_a_leaf_then_token_kind_and_back_and_otherwise_none() {
+        for kind in SyntaxKind::ALL {
+            match kind.token() {
+                Some(token) => {
+                    assert!(kind.is_token(), "{kind:?}");
+                    assert_eq!(token.syntax_kind(), *kind);
+                }
+                None => assert!(!kind.is_token(), "{kind:?}"),
+            }
+        }
+        assert_eq!(SyntaxKind::Ident.token(), Some(TokenKind::Ident));
+        assert_eq!(SyntaxKind::SourceFile.token(), None);
     }
 
     #[test]

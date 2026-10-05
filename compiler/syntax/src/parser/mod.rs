@@ -15,14 +15,14 @@ mod grammar;
 pub mod options;
 mod recovery;
 mod state;
-pub(crate) use state::is_special_operator;
 pub use state::MAX_DEPTH;
+pub use state::{is_special_operator, SPECIAL_OPERATORS};
 
 use self::options::ParseOptions;
 use self::state::Parser;
 use crate::cst::build_green;
 use crate::error::SyntaxError;
-use crate::lexer::lex_regions;
+use crate::lexer::{lex_regions, Token};
 use crate::syntax_kind::{SyntaxKind, SyntaxNode};
 use ironplc_dsl::stack::within_stack_budget;
 
@@ -76,6 +76,30 @@ pub fn parse_source_file(source: &str, options: &ParseOptions) -> Parse {
     parse_with(source, options, grammar::source_file)
 }
 
+/// The tokens of `source` under `options`, and the errors found in them, in
+/// source order: the lexer, the regions the dialect sets aside and the gates
+/// on lexical forms, without the grammar. A parse starts with exactly this.
+///
+/// The tokens tile the source, trivia and the regions included. The errors are
+/// those that depend on the token stream alone: bytes that make no token, a
+/// form the dialect has not enabled, a malformed conditional pragma.
+///
+/// It runs on the caller's stack. Nothing in it recurses on the input: the
+/// lexer and the region pass are loops over the bytes, and the one recursive
+/// call in the lexer happens at most once for a comment (its retry as a
+/// comment that does not nest). A caller that tokenizes on every keystroke
+/// therefore pays for no thread, unlike a parse, whose grammar nests as deep as
+/// the text does.
+pub fn tokenize<'src>(
+    source: &'src str,
+    options: &ParseOptions,
+) -> (Vec<Token<'src>>, Vec<SyntaxError>) {
+    let (tokens, mut errors) = lex_regions(source, options);
+    errors.extend(gates::gate_errors(&tokens, options));
+    errors.sort_by_key(|error| (error.range.start(), error.range.end()));
+    (tokens, errors)
+}
+
 /// Builds the tree on the stack budget. What leaves the budget thread is the
 /// green tree, which can cross threads; the red tree over it, which cannot, is
 /// made here.
@@ -85,8 +109,7 @@ fn parse_with(
     entry: impl FnOnce(&mut Parser) + Send,
 ) -> Parse {
     let (green, errors) = within_stack_budget(|| {
-        let (tokens, mut errors) = lex_regions(source, options);
-        errors.extend(gates::gate_errors(&tokens, options));
+        let (tokens, mut errors) = tokenize(source, options);
 
         let mut parser = Parser::new(&tokens, *options);
         let root = parser.start();

@@ -130,21 +130,40 @@ parse_options! {
     allow_incomplete_array,
 }
 
+/// Keywords the legacy lexer matches only in upper case. The lexer here is
+/// case-insensitive for every keyword, so a keyword listed here is an ordinary
+/// name unless it is spelled as listed (`mod` and `not` are names).
+const UPPER_CASE_ONLY: &[(SyntaxKind, &str)] =
+    &[(SyntaxKind::Mod, "MOD"), (SyntaxKind::Not, "NOT")];
+
 impl ParseOptions {
+    /// True when `TIME` is an ordinary name between the significant tokens of
+    /// kind `previous` and `next`: where the dialect lets `TIME` name a
+    /// function, a `TIME` that follows `FUNCTION`, or that a call or an
+    /// assignment follows, is the function and not the type.
+    pub fn time_is_name(&self, previous: Option<SyntaxKind>, next: Option<SyntaxKind>) -> bool {
+        self.allow_time_as_function_name
+            && (previous == Some(SyntaxKind::Function)
+                || matches!(next, Some(SyntaxKind::LeftParen | SyntaxKind::Assignment)))
+    }
+
+    /// True when the keyword token of kind `kind`, spelled `text`, is a keyword
+    /// here: its dialect flag is on ([`ParseOptions::keyword_enabled`]) and it
+    /// is spelled the way the language requires. A keyword that is not active
+    /// is an ordinary name.
+    pub fn keyword_active(&self, kind: SyntaxKind, text: &str) -> bool {
+        self.keyword_enabled(kind)
+            && UPPER_CASE_ONLY
+                .iter()
+                .all(|(only, spelling)| *only != kind || text == *spelling)
+    }
+
     /// True when `kind` is a keyword under these options, false when the
     /// dialect leaves the word available as an ordinary name.
     ///
     /// This is the one table that decides which keyword is gated by which
     /// flag. Kinds that are not keywords, and keywords no flag gates, are
     /// always enabled.
-    /// True when `TIME`, followed by a token of kind `next`, is an ordinary
-    /// name: where the dialect lets `TIME` name a function, a `TIME` that a
-    /// call or an assignment follows is the function and not the type.
-    pub fn time_is_name(&self, next: Option<SyntaxKind>) -> bool {
-        self.allow_time_as_function_name
-            && matches!(next, Some(SyntaxKind::LeftParen | SyntaxKind::Assignment))
-    }
-
     pub fn keyword_enabled(&self, kind: SyntaxKind) -> bool {
         use SyntaxKind as K;
         match kind {
@@ -223,6 +242,31 @@ mod tests {
         let all = ParseOptions::all();
         assert!(all.keyword_enabled(SyntaxKind::Continue));
         assert!(all.keyword_enabled(SyntaxKind::Ltime));
+    }
+
+    #[test]
+    fn time_is_name_when_function_precedes_or_a_call_or_assignment_follows_then_a_name_only_where_the_flag_is_on(
+    ) {
+        use SyntaxKind as K;
+        let on = ParseOptions {
+            allow_time_as_function_name: true,
+            ..ParseOptions::default()
+        };
+        assert!(on.time_is_name(Some(K::Function), Some(K::Colon)));
+        assert!(on.time_is_name(None, Some(K::LeftParen)));
+        assert!(on.time_is_name(Some(K::Colon), Some(K::Assignment)));
+        assert!(!on.time_is_name(Some(K::Colon), Some(K::Semicolon)));
+        assert!(!ParseOptions::default().time_is_name(Some(K::Function), Some(K::LeftParen)));
+    }
+
+    #[test]
+    fn keyword_active_when_operator_keyword_then_only_in_the_spelling_the_legacy_lexer_reads() {
+        let options = ParseOptions::default();
+        assert!(options.keyword_active(SyntaxKind::Mod, "MOD"));
+        assert!(!options.keyword_active(SyntaxKind::Mod, "mod"));
+        assert!(options.keyword_active(SyntaxKind::If, "if"));
+        assert!(!options.keyword_active(SyntaxKind::Continue, "CONTINUE"));
+        assert!(ParseOptions::all().keyword_active(SyntaxKind::Continue, "continue"));
     }
 
     #[test]

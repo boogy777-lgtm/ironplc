@@ -90,10 +90,16 @@ impl Nesting {
     /// `limit` is the depth the report is for; a nesting takes at most a few
     /// source levels for each tree level.
     pub fn deepest(&self, limit: usize, too_deep: impl Fn(&str) -> bool) -> usize {
+        self.deepest_by(limit, |n| too_deep(&(self.build)(n)))
+    }
+
+    /// Like [`Nesting::deepest`], for a test that builds its source around the
+    /// nesting itself: `too_deep` is asked about a number of levels.
+    pub fn deepest_by(&self, limit: usize, too_deep: impl Fn(usize) -> bool) -> usize {
         let (mut fine, mut too_much) = (0, 4 * limit);
         while too_much - fine > 1 {
             let middle = (fine + too_much) / 2;
-            if too_deep(&(self.build)(middle)) {
+            if too_deep(middle) {
                 too_much = middle;
             } else {
                 fine = middle;

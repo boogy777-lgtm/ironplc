@@ -271,7 +271,9 @@ and S4 describe the working frontend. S5 may remain unnecessary.
 `ironplc-syntax` owns the lossless tree and the lowering of that tree to the
 `ironplc_dsl` objects. The requirements below are tested there, over the
 corpus the repository shares (every `.st` source of the repository, each read
-in LF, CRLF and tab-indented spelling) and every option set the claim names.
+in LF, CRLF and tab-indented spelling) and every option set the claim names. The
+requirements with the slug `parser` are tested in `ironplc-parser`, over the same
+corpus.
 
 **REQ-PT-syntax-001** For every file of the corpus, in LF, CRLF and
 tab-indented spelling, under every option set, the text of the tree equals the
@@ -314,6 +316,53 @@ the text among the errors of that stage. The stages are one table
 makes no token, one gated form after another, the conditional pragmas, the
 grammar. Every kind of error is in exactly one stage. Lowering runs only on a
 tree without errors, so a problem it reports follows every stage.
+
+The syntax crate also owns what the front end that reads the tree needs of
+the text itself: the tokens of a text without a parse, and where a byte is.
+
+**REQ-PT-syntax-010** `ironplc_syntax::tokenize` is the first stage of a parse
+and nothing besides it: for every file of the corpus, in LF, CRLF and
+tab-indented spelling, under every option set, its tokens tile the text, and its
+errors are errors of the parse of the same text, with the same kind, message and
+range, in source order. A parse takes its tokens and its first errors from this
+function (there is no second lexing sequence), and tokenizing needs no thread of
+its own: it does not recurse on the input, so it completes on the caller's
+stack for input nested far past the depth limit.
+
+**REQ-PT-syntax-011** A position in a text is counted by one mapping,
+`ironplc_syntax::line_index::LineIndex`, over one table of line breaks
+(`LINE_BREAKS`): `\r\n` is one break, a lone `\r` is a break, and so is a form
+feed. A column counts UTF-16 code units. A text that is embedded in a document
+starts at the line and the column it is given, and the column offset applies
+to the first line only. The lexer reads a newline token with the same table, so
+that every newline token of a text ends a line.
+
+The front end that reads the tree is in `ironplc-parser`, which converts to and
+from the objects the rest of the compiler reads.
+
+**REQ-PT-parser-012** The token view of the tree (`tokenize_program` of the
+front end built on the tree) is the token sequence of the legacy pipeline except
+for the differences that are rows of one table, each with its reason: a duration
+literal is not split into its parts (`T#1m30s` is `T`, `#`, `1`, `m30s`); no
+synthetic empty `;` token is inserted; a region the grammar does not read (an
+OSCAT ranged comment, an untaken `{IF}` branch) is one comment token; a lone
+carriage return is a line break. A difference that no row names fails, and so
+does a row that explains no difference. The kind map is one dispatch over the
+token kinds of the tree with no wildcard arm, so a token kind added to the tree
+does not compile until the view says what it makes of it.
+
+**REQ-PT-parser-013** The compiler options become the options of the tree flag
+by flag, by name, in one function (`parse_options`), driven by the list of the
+flags the tree reads: every such flag has a counterpart among the compiler
+options, so a flag that is renamed or removed fails a test instead of reading
+as off, and for every dialect each flag has the value it has in the compiler
+options.
+
+**REQ-PT-parser-014** The public functions of the crate call one row of a table
+of front ends, the one named by `frontend::SELECTED`: the legacy pipeline, or
+the one built on the tree where the `cst-frontend` feature is on. The feature
+is named in no other module of the crate's code, and every row of the table
+answers the same questions, so adding a front end is one row.
 
 The old-against-new comparison that held the lowering to the PEG parser it
 replaces is test-only and lives with that parser, in `ironplc-parser`. It

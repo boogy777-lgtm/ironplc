@@ -63,6 +63,8 @@ struct Gate {
     /// The kind of error, which decides its problem code.
     kind: ErrorKind,
     message: &'static str,
+    /// What to do about the form, when it is the same every time.
+    help: Option<&'static str>,
 }
 
 /// The gate for a form that is one token: its range when `applies`.
@@ -160,17 +162,14 @@ fn empty_var_block(site: &Site) -> Vec<TextRange> {
     }
 }
 
-/// Each `$` escape in a character string that the standard does not define.
-/// The ranges are over the literal's source text, delimiters included.
-fn invalid_string_escapes(site: &Site) -> Vec<TextRange> {
-    let Some(token) = site.token() else {
+/// Each `$` escape in a character string literal of kind `literal` (a string or
+/// a wide string) that the standard does not define. The ranges are over the
+/// literal's source text, delimiters included.
+fn invalid_string_escapes(site: &Site, literal: SyntaxKind) -> Vec<TextRange> {
+    let Some(token) = site.token().filter(|token| token.kind == literal) else {
         return Vec::new();
     };
-    let wide = match token.kind {
-        SyntaxKind::StringLit => false,
-        SyntaxKind::WStringLit => true,
-        _ => return Vec::new(),
-    };
+    let wide = literal == SyntaxKind::WStringLit;
     let Some(inner) = token.text.get(1..token.text.len().saturating_sub(1)) else {
         return Vec::new();
     };
@@ -191,60 +190,86 @@ const GATES: &[Gate] = &[
         enabled: |options| options.allow_c_style_comments,
         kind: ErrorKind::CStyleComment,
         message: "C-style comments are not enabled in this dialect",
+        help: Some(
+            "Convert the comment to IEC 61131-3 syntax using `(*` and `*)`, \
+             or select a dialect that supports C-style comments.",
+        ),
     },
     Gate {
         find: |site| on_token(site, |token| token.kind == SyntaxKind::Pragma),
         enabled: |options| options.allow_pragmas,
         kind: ErrorKind::Syntax,
         message: "pragmas are not enabled in this dialect",
+        help: None,
     },
     Gate {
         find: |site| on_token(site, is_partial_access),
         enabled: |options| options.allow_partial_access_syntax,
         kind: ErrorKind::PartialAccessSyntaxDisabled,
         message: "partial-access syntax is not enabled in this dialect",
+        help: None,
     },
     Gate {
         find: |site| on_token(site, |token| token.kind == SyntaxKind::EscapedIdent),
         enabled: |options| options.allow_escaped_identifiers,
         kind: ErrorKind::EscapedIdentifierNotAllowed,
         message: "escaped identifiers are not enabled in this dialect",
+        help: None,
     },
     Gate {
         find: |site| on_token(site, is_non_ascii_identifier),
         enabled: |options| options.allow_unicode_identifiers,
         kind: ErrorKind::UnicodeIdentifierNotAllowed,
         message: "identifiers with letters outside ASCII are not enabled in this dialect",
+        help: None,
     },
     Gate {
         find: |site| on_token(site, has_repeated_underscores),
         enabled: |options| options.allow_multiple_underscores,
         kind: ErrorKind::MultipleUnderscoresNotAllowed,
         message: "consecutive underscores in an identifier are not enabled in this dialect",
+        help: None,
     },
     Gate {
         find: empty_var_block,
         enabled: |options| options.allow_empty_var_blocks,
         kind: ErrorKind::EmptyVarBlock,
         message: "empty variable blocks are not enabled in this dialect",
+        help: None,
     },
     Gate {
         find: paren_string_length,
         enabled: |options| options.allow_paren_string_length,
         kind: ErrorKind::ParenStringLengthNotAllowed,
         message: "a string length in parentheses is not enabled in this dialect",
+        help: None,
     },
     Gate {
         find: incomplete_array,
         enabled: |options| options.allow_incomplete_array,
         kind: ErrorKind::IncompleteArrayNotAllowed,
         message: "incomplete array bounds are not enabled in this dialect",
+        help: None,
     },
     Gate {
-        find: invalid_string_escapes,
+        find: |site| invalid_string_escapes(site, SyntaxKind::StringLit),
         enabled: |_| false,
         kind: ErrorKind::InvalidStringEscape,
         message: "this `$` escape is not defined for character strings",
+        help: Some(
+            "Use $$, $', $L, $N, $P, $R, $T, $ followed by two hex digits, \
+             or $U followed by eight hex digits.",
+        ),
+    },
+    Gate {
+        find: |site| invalid_string_escapes(site, SyntaxKind::WStringLit),
+        enabled: |_| false,
+        kind: ErrorKind::InvalidStringEscape,
+        message: "this `$` escape is not defined for character strings",
+        help: Some(
+            "Use $$, $\", $L, $N, $P, $R, $T, $ followed by four hex digits, \
+             or $U followed by eight hex digits.",
+        ),
     },
 ];
 
@@ -259,11 +284,13 @@ pub(crate) fn gate_errors(tokens: &[Token<'_>], options: &ParseOptions) -> Vec<S
             options,
         };
         for gate in GATES.iter().filter(|gate| !(gate.enabled)(options)) {
-            errors.extend(
-                (gate.find)(&site)
-                    .into_iter()
-                    .map(|range| SyntaxError::new(gate.message, range).with_kind(gate.kind)),
-            );
+            errors.extend((gate.find)(&site).into_iter().map(|range| {
+                let error = SyntaxError::new(gate.message, range).with_kind(gate.kind);
+                match gate.help {
+                    Some(help) => error.with_help(help),
+                    None => error,
+                }
+            }));
         }
     }
     errors
@@ -273,6 +300,8 @@ pub(crate) fn gate_errors(tokens: &[Token<'_>], options: &ParseOptions) -> Vec<S
 mod tests {
     use super::*;
     use crate::lexer::lex;
+    use crate::parse_source_file;
+    use ironplc_dsl::core::FileId;
 
     fn messages(source: &str, options: &ParseOptions) -> Vec<String> {
         let (tokens, _) = lex(source);
@@ -306,6 +335,25 @@ mod tests {
             ..ParseOptions::default()
         };
         assert!(gate_errors(&tokens, &allowed).is_empty());
+    }
+
+    #[test]
+    fn gate_errors_when_gate_has_advice_then_the_error_carries_it() {
+        let (tokens, _) = lex("x // note\n 'a$Qb' \"a$Qb\"");
+        let errors = gate_errors(&tokens, &ParseOptions::default());
+        let help: Vec<Option<&str>> = errors.iter().map(|error| error.help).collect();
+        assert_eq!(errors.len(), 3);
+        assert!(help.iter().all(Option::is_some), "{help:?}");
+        // The two string widths give different advice.
+        assert_ne!(help[1], help[2]);
+        // A gate without advice gives none.
+        let (tokens, _) = lex("a.%X3");
+        let errors = gate_errors(&tokens, &ParseOptions::default());
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].help, None);
+        let diagnostics =
+            parse_source_file("x // c", &ParseOptions::default()).diagnostics(&FileId::default());
+        assert!(diagnostics.iter().any(|d| !d.help().is_empty()));
     }
 
     #[test]

@@ -30,5 +30,8 @@ fn main() {
         // CODESYS jump statements, comments and conditional pragmas
         // (`REQ-JMP-parser-*`).
         "codesys-jump-and-pragmas.md",
+        // Front end on the lossless tree (`REQ-PT-parser-*`): the token view,
+        // the conversion of the options and the selection of the front end.
+        "parse-tree-architecture.md",
     ]);
 }

@@ -233,6 +233,13 @@ enum Directive {
     Other,
 }
 
+/// True when the pragma `text` is a conditional directive (`{IF}`, `{ELSIF}`,
+/// `{ELSE}`, `{END_IF}`, `{DEFINE}`, `{UNDEFINE}`), which the state machine
+/// consumes ([`Step::keep`] is false for it) wherever it stands.
+pub fn is_directive(text: &str) -> bool {
+    !matches!(directive(text), Directive::Other)
+}
+
 /// Reads the leading keyword of a `{ ... }` pragma and the rest of its text.
 fn directive(text: &str) -> Directive {
     let body = text
@@ -519,5 +526,22 @@ mod tests {
     fn step_when_define_without_name_then_unexpected_value() {
         let steps = run(&["{DEFINE}"]);
         assert_eq!(steps[0].fault, Some(Fault::UnexpectedValue));
+    }
+
+    #[test]
+    fn is_directive_when_pragma_then_exactly_the_ones_the_state_machine_consumes() {
+        for text in [
+            "{IF true}",
+            "{ELSIF false}",
+            "{ELSE}",
+            "{END_IF}",
+            "{DEFINE a}",
+            "{UNDEFINE a}",
+            "{attribute x}",
+            "{}",
+        ] {
+            let consumed = !Conditionals::new().step(text, ()).keep;
+            assert_eq!(is_directive(text), consumed, "{text}");
+        }
     }
 }

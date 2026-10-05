@@ -24,6 +24,8 @@ mod hand_built;
 mod legacy_options;
 mod literals;
 mod sites;
+mod token_rows;
+mod token_view;
 mod vocabulary;
 
 pub mod ast;

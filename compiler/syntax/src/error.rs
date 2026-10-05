@@ -73,6 +73,9 @@ pub struct SyntaxError {
     pub message: String,
     /// The bytes of the original source this error covers.
     pub range: TextRange,
+    /// What to do about it, for a problem whose fix is the same every time
+    /// (a form the dialect has not enabled, an undefined escape).
+    pub help: Option<&'static str>,
 }
 
 impl SyntaxError {
@@ -82,7 +85,14 @@ impl SyntaxError {
             kind: ErrorKind::Syntax,
             message: message.into(),
             range,
+            help: None,
         }
+    }
+
+    /// Returns the error with advice on how to fix it.
+    pub fn with_help(mut self, help: &'static str) -> Self {
+        self.help = Some(help);
+        self
     }
 
     /// Returns the error with its kind replaced.
