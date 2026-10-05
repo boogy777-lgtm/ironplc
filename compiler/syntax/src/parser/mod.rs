@@ -7,7 +7,8 @@
 //! not, and every error range lies inside the source.
 //!
 //! The grammar covers expressions, statements and every declaration of a file.
-//! Nothing here is wired into a production consumer.
+//! It is the only grammar the compiler reads text with: `ironplc-parser` calls
+//! these entry points and lowers what they return.
 
 pub(crate) mod event;
 mod gates;

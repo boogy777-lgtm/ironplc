@@ -1,5 +1,33 @@
 # Design: Dialect Token Transform Pipeline
 
+## Status: superseded by the lossless tree
+
+The compiler has no token transform pipeline any more. `ironplc-parser` reads
+text through the lossless tree of `ironplc-syntax`, and the dialect decisions
+that this document assigns to transforms between the lexer and the grammar are
+made by the lexer's regions, the dialect gates and the grammar over the
+untouched tokens (see [parse-tree-architecture.md](parse-tree-architecture.md),
+sections 3.1 and 5.1, and the
+[syntax support guide](../steering/syntax-support-guide.md)). The transforms
+described below remain in `compiler/parser/src/` as the legacy pipeline,
+compiled for tests only, as the oracle of the parity tests, until it is
+deleted. The text of this document is kept as the history of the design; where
+it conflicts with the table below, the table describes the compiler.
+
+| Legacy transform (`compiler/parser/src/`) | Where the behaviour lives now (`compiler/syntax/src/`) |
+|---|---|
+| `preprocessor.rs` (OSCAT ranged-comment contents become whitespace) | `lexer/regions.rs`: a ranged comment is one `RangedComment` trivia token; the text is kept byte-exact |
+| `xform_collapse_pragmas.rs` (`{ ... }` becomes one token) | `lexer/`: a pragma is one trivia token; the `allow_pragmas` gate row in `parser/gates.rs` rejects it in a dialect without pragmas |
+| `xform_pragma_if.rs` (untaken `{IF}` branches dropped) | `lexer/regions.rs` with `pragma.rs`: an untaken branch is one `InactiveRegion` trivia token; `allow_pragma_if` selects the dialects that evaluate them |
+| `xform_nested_comments.rs` | `lexer/regions.rs`: nesting is counted when `allow_nested_comments` is on |
+| `xform_split_duration_units.rs` (duration lexeme split into parts) | no split: a duration is one `DurationLiteral` node over one token, read by `interval_text.rs` and lowered by `lower/literals/` |
+| `xform_tokens.rs` (`;` inserted after `END_*` when missing) | `parser/grammar/common.rs` and `control.rs`: the terminator is optional where `allow_missing_semicolon` is on; no token is inserted |
+| `xform_statement_labels.rs` (`name :` becomes `Label`) | `parser/grammar/statements.rs`: the grammar decides a label by its position, gated by `allow_jump_statement` |
+| `xform_demote_keywords.rs` (keyword becomes `Identifier`) | `ParseOptions::keyword_enabled`, `keyword_active` and `time_is_name` in `parser/options.rs`: one table of which keyword is gated by which flag; a keyword that is not active is a name, in the grammar and in the token view |
+| `xform_promote_special_operators.rs` (`__NEW` family) | `is_special_operator` and `SPECIAL_OPERATORS` in `parser/state.rs`, one list read by the grammar and the token view |
+| `rule_token_no_c_style_comment.rs`, `rule_no_empty_var_blocks.rs`, `rule_token_no_partial_access_syntax.rs`, `rule_token_no_paren_string_length.rs`, `rule_token_no_incomplete_array.rs`, `rule_token_identifier.rs`, `rule_token_string_escape.rs` | rows of `GATES` in `parser/gates.rs`, each with its `ErrorKind`, message and help; the stage that ranks the error is a row of `STAGES` in `ranking.rs` |
+| `lib.rs` `tokenize_program` order of the passes | no order to keep: the decisions are independent reads of the same tokens; the view of the tokens for `tokenize_program` is `compiler/parser/src/tokens.rs` |
+
 ## Overview
 
 This document describes the architecture for dialect-specific token transforms — the mechanism that enables dialect parsing without modifying the core logos lexer. It is the shared infrastructure underlying both the [Siemens SCL](siemens-scl-dialect.md) and [Beckhoff TwinCAT](beckhoff-twincat-dialect.md) dialect designs.

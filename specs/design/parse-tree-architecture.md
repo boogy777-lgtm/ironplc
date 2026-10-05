@@ -12,8 +12,11 @@ compilation. This replaces the previous white/CST → red → green staircase.
 The status is **partially implemented**: S0 is delivered — the
 preprocessing/provenance [audit](parse-tree-s0-audit.md), the rowan/Salsa
 [experiment](parse-tree-s0-experiment.md) with the parser choice and
-dependency versions, and the parse benchmark baseline. S1–S4 are
-**not implemented**, and the production frontend remains the PEG path.
+dependency versions, and the parse benchmark baseline — and so are S1 and S2:
+the production frontend reads text through the lossless tree and its lowering
+(`ironplc-syntax`, reached through the `ironplc-parser` facade), and the
+legacy PEG pipeline remains only as a test oracle, compiled for tests, until
+its deletion. S4 is **not implemented**.
 
 On 2026-10-01 the owner **withdrew the query-based tracking mechanism**:
 Salsa and dependency-tracked query caches are not part of the plan. Semantic
@@ -57,7 +60,9 @@ design does not claim those future criteria already pass.
 
 ## 1. Current Architecture
 
-At baseline bfa5d9fd7cb30a2f7ec83fc10bbaf95121fa0d2e, IronPLC uses:
+At baseline bfa5d9fd7cb30a2f7ec83fc10bbaf95121fa0d2e, IronPLC used the
+following. This is the legacy pipeline that the tree replaced; it is now
+compiled for tests only (section 5.1, REQ-PT-parser-014):
 
 - **compiler/parser/src/lib.rs:** tokenize_program preprocesses text, runs
   the logos lexer, applies token transforms/checks, then parse_program calls
@@ -239,8 +244,8 @@ parser, resolver or invalidation engine, reconsider the abstraction first.
 
 ## 5. Evolution Steps
 
-The approved foundation is S0–S4; only S0's evidence is delivered so far
-(audit, experiment, baseline — linked above), and S1, S2 and S4 remain not
+The approved foundation is S0–S4; S0's evidence (audit, experiment,
+baseline — linked above), S1 and S2 are delivered, and S4 remains not
 implemented. S3 is withdrawn (owner decision, 2026-10-01 — see §3.3). S5 is
 conditional optimization. Syntax-gap work continues against one grammar; S0
 settled that seam before a new frontend path is introduced.
@@ -248,8 +253,8 @@ settled that seam before a new frontend path is introduced.
 | Stage | Work and boundary | Exit evidence |
 |---|---|---|
 | **S0 — integration experiment** | Audit preprocessing/provenance; assess PEG extension versus scoped replacement; validate the rowan adapter (the Salsa part of the spike was withdrawn afterwards, §3.3); record prefactoring | Standard/CODESYS/malformed corpus, OSCAT/Unicode/pragmas; parser choice, dependency versions, file map and benchmark baseline; no dual production parser |
-| **S1 — CST and recovery** | Original-text CST with rowan green storage/red views; full-file parsing and syntax diagnostics | Byte-identical valid/malformed reconstruction; CRLF/tabs/Unicode/comments/pragmas; complete ranges, recovery progress/termination; existing dialect tests preserved |
-| **S2 — CST-to-dsl lowering** | Replace semantic parse entry with lowering; retain preprocessing meaning through provenance; reuse analyzer/codegen | Legacy/new AST/diagnostic comparison; canonical plc2plc and analyzer/codegen regressions pass; one production parse path; losslessness retained |
+| **S1 — CST and recovery** | Original-text CST with rowan green storage/red views; full-file parsing and syntax diagnostics | Byte-identical valid/malformed reconstruction; CRLF/tabs/Unicode/comments/pragmas; complete ranges, recovery progress/termination; existing dialect tests preserved **Delivered:** `ironplc-syntax` (lexer, regions, gates, grammar with recovery). |
+| **S2 — CST-to-dsl lowering** | Replace semantic parse entry with lowering; retain preprocessing meaning through provenance; reuse analyzer/codegen | Legacy/new AST/diagnostic comparison; canonical plc2plc and analyzer/codegen regressions pass; one production parse path; losslessness retained **Delivered:** the production parse path is the tree and its lowering; the legacy pipeline is a test-only oracle until it is deleted. |
 | **S3 — tracked analysis** | **Withdrawn (2026-10-01, owner decision):** recompute per snapshot; reuse in the CODESYS style (precompile model, selective typification, explicit invalidation) only as measured stages, §3.3 | — |
 | **S4 — shared consumers and editing** | CLI/LSP/MCP/build use one snapshot API; syntax edits; bound cache/snapshot retention | Same-snapshot diagnostics agree; revision/cancellation exclude stale publication; untouched text preserved; measured cold/warm latency and memory limits; no private resolver/query graph |
 | **S5 — measured local reparse** | Safe boundaries and full-file fallback; reuse unaffected syntax | Local/full trees and diagnostics agree after edit sequences, including delimiter/comment/pragma changes; measured latency/allocation improvement |
@@ -262,9 +267,9 @@ workload. Do not claim universal speed superiority from rowan or any cache.
 
 Implementation stages register requirement IDs and assertions in the actual
 owning crates as they land. Do not add placeholder tests or empty crates
-to claim a future stage is implemented. Advance the status to **partially
-implemented** with named delivered stages, then **implemented** when S1, S2
-and S4 describe the working frontend. S5 may remain unnecessary.
+to claim a future stage is implemented. The status is **partially
+implemented** with the delivered stages named (S0, S1, S2), and becomes
+**implemented** when S4 also describes the working frontend. S5 may remain unnecessary.
 
 ### 5.1 Requirements of the Syntax Crate
 
@@ -358,11 +363,13 @@ options, so a flag that is renamed or removed fails a test instead of reading
 as off, and for every dialect each flag has the value it has in the compiler
 options.
 
-**REQ-PT-parser-014** The public functions of the crate call one row of a table
-of front ends, the one named by `frontend::SELECTED`: the legacy pipeline, or
-the one built on the tree where the `cst-frontend` feature is on. The feature
-is named in no other module of the crate's code, and every row of the table
-answers the same questions, so adding a front end is one row.
+**REQ-PT-parser-014** The compiler has one front end, the one built on the
+tree. The public functions of the crate (`tokenize_program`, `parse_program`,
+`parse_st_statements`) call it unconditionally: no feature and no table selects
+another. The legacy pipeline is compiled for tests only (its modules are
+declared under `cfg(test)` in the crate root), so a production build cannot name
+it, and a test fails when a module of the crate root that is not production code
+is declared without `cfg(test)`.
 
 The old-against-new comparison that held the lowering to the PEG parser it
 replaces is test-only and lives with that parser, in `ironplc-parser`. It

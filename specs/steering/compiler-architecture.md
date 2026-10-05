@@ -8,7 +8,13 @@ This steering file provides high-level architectural guidance and principles for
 
 The IronPLC compiler follows a traditional multi-stage compilation pipeline:
 
-1. **Parser** (`parser/`) - Converts source text to AST
+1. **Parser** (`parser/`, over `syntax/`) - Converts source text to AST. `syntax/`
+   (`ironplc-syntax`) reads the text into a lossless tree (lexer, gates, grammar)
+   and lowers the tree to the `dsl` objects; `parser/` (`ironplc-parser`) is the
+   facade the rest of the compiler calls (`tokenize_program`, `parse_program`,
+   `parse_st_statements`). There is no pass that rewrites tokens: dialect
+   decisions are made by the grammar over the untouched tokens. The legacy PEG
+   pipeline in `parser/` is compiled for tests only, as an oracle
 2. **Analyzer** (`analyzer/`) - Semantic analysis and type checking
 3. **Code Generation** (future) - Generate target code
 
@@ -40,7 +46,8 @@ The IronPLC compiler follows a traditional multi-stage compilation pipeline:
 - **Split when needed**: If a module grows beyond 1000 lines, split it into smaller, focused modules
 
 ### Naming Conventions
-- `xform_*` modules handle transformations
+- `xform_*` modules of `analyzer/` handle transformations of the `Library`
+  (parsing has no transformation passes; see [syntax-support-guide.md](syntax-support-guide.md))
 - `intermediate_*` modules define data structures
 - `*_environment` modules manage symbol tables and contexts
 - Use descriptive names that reflect the module's purpose
@@ -206,7 +213,7 @@ For information on running tests, coverage analysis, and debugging tools, see [c
 ## Extension Guidelines
 
 ### Adding New Language Features
-1. **Parser**: Update to recognize new syntax
+1. **Parser**: Update to recognize new syntax: the token or keyword, its dialect gate, the grammar function and the lowering rule in `syntax/` (the steps are in [syntax-support-guide.md](syntax-support-guide.md))
 2. **AST**: Add nodes for new constructs
 3. **Analyzer**: Implement semantic validation
 4. **Tests**: Add comprehensive test coverage

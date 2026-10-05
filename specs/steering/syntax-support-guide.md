@@ -8,16 +8,18 @@ This guide describes everything needed to add support for new syntax in the Iron
 
 When adding new syntax, ensure every applicable item is complete:
 
-- [ ] **Lexer**: Add token types in `parser/src/token.rs` (if new keywords/operators)
-- [ ] **Token transforms**: Add demotion or insertion logic (if conditionally enabled)
-- [ ] **Parser**: Add grammar rules in `parser/src/parser.rs`
+- [ ] **Token / keyword**: Add the spelling to `SyntaxKind` in `syntax/src/syntax_kind.rs` and the token type it becomes in `parser/src/token.rs` and `parser/src/tokens.rs` (if new keywords/operators)
+- [ ] **Dialect gating**: Add the flag to `ParseOptions` (`syntax/src/parser/options.rs`) and a `keyword_enabled` row or a `GATES` row (if conditionally enabled)
+- [ ] **Grammar**: Add the grammar function in `syntax/src/parser/grammar/` and the node kind (with its `disposition`) in `syntax/src/syntax_kind.rs` and `syntax/src/lower/mod.rs`
+- [ ] **Lowering**: Add the lowering rule in `syntax/src/lower/` (the area that owns the node kind)
 - [ ] **AST**: Add/modify nodes in the `dsl` crate
 - [ ] **Analyzer**: Add semantic validation in `analyzer/`
 - [ ] **Codegen**: Add bytecode emission in `codegen/`
 - [ ] **plc2plc renderer**: Update `plc2plc/src/renderer.rs` to render the new syntax
 - [ ] **plc2plc round-trip test**: Parse → render → **re-parse** (in a focused file under `plc2plc/src/tests/` — see [Test File Organization](#test-file-organization-avoid-merge-conflicts) and [plc2plc round-trip tests](#plc2plc-round-trip-tests-always-re-parse))
 - [ ] **End-to-end execution test**: Parse → compile → run → verify variable values
-- [ ] **Whitespace invariance**: Every `_` a new grammar rule introduces earns a row in `parser/src/tests/whitespace.rs`, so a rule that later loses its `_` fails there (see [Which leg asserts what](#which-leg-asserts-what-avoid-duplicate-tests))
+- [ ] **Whitespace invariance**: Every gap a new grammar function permits earns a row in `parser/src/tests/whitespace.rs`, so a function that later stops skipping trivia there fails (see [Which leg asserts what](#which-leg-asserts-what-avoid-duplicate-tests))
+- [ ] **Expected-AST test**: A focused file under `parser/src/tests/` that parses through `parse_program` and asserts the AST shape, and a row in the parity exception tables (`parser/src/tests/parity/`) with its reason if the legacy oracle rejects or reads the form differently (see [Parity against the legacy oracle](#parity-against-the-legacy-oracle))
 - [ ] **Non-standard gating**: If not standard IEC 61131-3, gate behind `--allow-x` flag
 - [ ] **LSP integration**: If a new `--allow-x` flag, add to LSP `extract_compiler_options`
 - [ ] **Documentation**: If a new `--allow-x` flag, update `docs/explanation/enabling-dialects-and-features.rst`, `docs/reference/compiler/ironplcc.rst`, and the flag table in this file
@@ -112,134 +114,158 @@ When a VM test and a codegen end-to-end test would cover the same behavior,
 the codegen test owns it and the VM file says so in its module header (see
 `vm/tests/it/execute_fb_ton.rs` or `execute_string_ops.rs` for the wording).
 
-## Lexer and Token Patterns
+## The Front End: Tokens, Gating, Grammar, Lowering
 
-The lexer lives in `parser/src/lexer.rs` and uses the `logos` crate. Token types are defined in `parser/src/token.rs` with ~200+ variants.
+The compiler reads text through one front end, the lossless tree of
+`ironplc-syntax`. `ironplc-parser` is the facade: `tokenize_program`,
+`parse_program` and `parse_st_statements` call `compiler/parser/src/frontend.rs`,
+which parses with `ironplc_syntax::parse_source_file` / `parse_statements` and
+lowers the tree with `ironplc_syntax::lower`. The tree keeps every byte of the
+text and the dialect decisions are made by the parser over the untouched tokens;
+nothing rewrites a token stream. The legacy pipeline (the logos lexer, the
+`xform_*` token transforms, the `rule_token_*` checks and the PEG grammar in
+`parser/src/parser.rs`) is compiled for tests only, as the oracle of the parity
+tests; it is not the way to add syntax. For the design, see
+[parse-tree-architecture.md](../design/parse-tree-architecture.md).
+
+| Step | Where | What it decides |
+|------|-------|-----------------|
+| Token or keyword | `syntax/src/syntax_kind.rs` (`syntax_kinds!`) | The spelling, in the `keywords` list: the lexer, `SyntaxKind::KEYWORDS` and `ALL` are generated from it |
+| Token view | `parser/src/tokens.rs` (`rows!`), `parser/src/token.rs` | The `TokenType` the token becomes for `tokenize_program`; the match over `TokenKind` has no wildcard arm, so a new kind does not compile until it has a row |
+| Dialect flag | `syntax/src/parser/options.rs` (`parse_options!`) | The `allow_*` flag the parser reads; it mirrors the flag of the same name in `CompilerOptions` (`parser/src/options.rs`) |
+| Keyword gate | `ParseOptions::keyword_enabled` | Which flag makes a keyword a keyword; a keyword the dialect leaves off is an ordinary name |
+| Lexical-form gate | `syntax/src/parser/gates.rs` (`GATES`), `syntax/src/ranking.rs` (`STAGES`) | A form the lexer always reads but a dialect rejects, with the error kind, its message and the stage that ranks it |
+| Grammar | `syntax/src/parser/grammar/` | The recursive-descent function for the construct; `positions.rs` is the table of where a type or a value may stand |
+| Node kind and disposition | `syntax/src/syntax_kind.rs` (`nodes`), `syntax/src/lower/mod.rs` (`node_disposition`) | Whether lowering turns the node into an object (and in which area), reads it as part of its parent, or ignores it; the match has no wildcard arm |
+| Lowering rule | `syntax/src/lower/<area>/` | The `dsl` object the node becomes, with the spans of the source text, and the lowering problems |
 
 ### Adding New Tokens
 
-Add token definitions to `parser/src/token.rs`:
+Add a keyword to the `keywords` list in `syntax_kinds!` (`syntax/src/syntax_kind.rs`),
+spelled in upper case; the lexer matches every keyword case-insensitively and the
+tables generated from the list stay in step:
 
 ```rust
-// For keywords (case-insensitive):
-#[token("MY_KEYWORD", ignore(case))]
-MyKeyword,
-
-// For operators/punctuation:
-#[token("=>")]
-FatArrow,
-```
-
-Keywords are case-insensitive (`ignore(case)`). Identifiers have lower priority than keywords to avoid conflicts.
-
-### Token Demotion Pattern
-
-**When to use**: When a keyword is only valid under certain conditions (e.g., Edition 3 mode, or an extension flag) and programs may use that keyword as an identifier otherwise.
-
-**How it works**: Define the token as a specific type in the lexer, then "demote" it to `TokenType::Identifier` when the feature is disabled. All flag-gated demotions live in **one** module, `parser/src/xform_demote_keywords.rs`, which is the single place that defines *which keyword demotes under which flag*.
-
-**Reference implementation**: `parser/src/xform_demote_keywords.rs`
-
-To add a demotion, precompute the gate once and add a `match` arm to `apply`:
-
-```rust
-pub fn apply(tokens: &mut [Token], options: &CompilerOptions) {
-    // Precompute each gate once. Demotion happens when the gate is `true`.
-    let demote_time_types = !options.allow_long_time_types;
-    let demote_ref = !options.allow_ref_to;
-    let demote_oop = !options.allow_fb_inheritance;
-    // ...one gate per feature...
-
-    for tok in tokens.iter_mut() {
-        let demote = match tok.token_type {
-            TokenType::Ltime | TokenType::Ldate | TokenType::Ltod | TokenType::Ldt => {
-                demote_time_types
-            }
-            TokenType::RefTo | TokenType::Ref | TokenType::Null => demote_ref,
-            TokenType::Extends | TokenType::Implements | TokenType::Interface
-                | TokenType::EndInterface | TokenType::Abstract => demote_oop,
-            // ...one arm per keyword group...
-            _ => false,
-        };
-        if demote {
-            tok.token_type = TokenType::Identifier;
-        }
-    }
-
-    apply_time(tokens, options); // context-sensitive cases stay separate
+keywords {
+    // ...
+    Limit = ["LIMIT"],
 }
 ```
 
-**Key points**:
-- The transform runs between lexing and parsing
-- When the feature is enabled, tokens keep their specific type and the parser can match on them
-- When disabled, tokens become identifiers, so programs can use those names freely
-- Adding a keyword is normally **one `match` arm plus one gate** in `xform_demote_keywords.rs` — no new module and no `lib.rs` registration
-- A **context-sensitive** demotion (one that depends on neighbouring tokens, like `TIME`) stays its own private function in that module (see `apply_time`), called from `apply`
+Then give the kind a row in `rows!` (`parser/src/tokens.rs`), which is the token
+view the language server and `ironplcc tokenize` read. A keyword is listed in the
+`keywords` arm, which maps `TokenKind::Limit` to `TokenType::Limit` and so needs a
+variant of that name in `TokenType` (`parser/src/token.rs`), and the places that
+match `TokenType` exhaustively (for example `ironplc-cli/src/semantic_tokens.rs`)
+need an arm. Operators and punctuation are tokens of `syntax_kinds!` and a row in
+the `plain` arm.
 
-### Validation Rule Pattern
+### Keyword Gating Pattern
 
-**When to use**: When the syntax should always be recognized by the lexer but rejected unless a flag is set. Useful when the syntax cannot be confused with an identifier (e.g., `//` comments).
+**When to use**: When a keyword is only valid under certain conditions (e.g.,
+Edition 3 mode, or an extension flag) and programs may use that keyword as an
+identifier otherwise.
 
-**How it works**: The lexer always tokenizes the syntax. A separate validation rule checks the tokens and produces diagnostics when the flag is not set.
+**How it works**: The lexer always produces the keyword token. The parser asks
+`ParseOptions::keyword_active(kind, text)` before it treats the token as a
+keyword, and a keyword that is not active is an ordinary name everywhere
+(including in the token view of `tokenize_program`). One table decides which
+keyword is gated by which flag: `ParseOptions::keyword_enabled`.
 
-**Reference implementation**: `parser/src/rule_token_no_c_style_comment.rs`
+**Reference implementation**: `ParseOptions::keyword_enabled` in
+`syntax/src/parser/options.rs`
+
+To gate a keyword, add the flag to `parse_options!` and a row to the match:
 
 ```rust
-pub fn apply(tokens: &[Token], options: &CompilerOptions) -> Result<(), Vec<Diagnostic>> {
-    if options.allow_c_style_comments {
-        return Ok(());
-    }
-
-    let mut errors = Vec::new();
-    for tok in tokens {
-        if tok.token_type == TokenType::Comment && tok.text.starts_with("//") {
-            errors.push(Diagnostic::problem(
-                Problem::CStyleComment,
-                Label::span(tok.span.clone(), "Comment"),
-            ));
-        }
-    }
-
-    if !errors.is_empty() {
-        return Err(errors);
-    }
-    Ok(())
+parse_options! {
+    // ...
+    /// `LIMIT` is a keyword.
+    allow_repeat_limit,
 }
+
+// in keyword_enabled:
+K::Limit => self.allow_repeat_limit,
 ```
 
 **Key points**:
-- Returns `Result<(), Vec<Diagnostic>>` — collects multiple errors
-- Uses problem codes from the shared `ironplc_problems` crate
+- Nothing rewrites tokens: the decision is made where the parser reads the token
+- The match ends in a wildcard arm (`_ => true`), so a gated keyword that has no
+  row is silently always on: add the row in the same change that adds the flag
+- A **context-sensitive** decision (one that depends on the neighbouring tokens,
+  like `TIME` as a function name) is a method of `ParseOptions` next to
+  `time_is_name`, read by both the parser and the token view
+
+### Lexical-Form Gate Pattern
+
+**When to use**: When the syntax is always recognised by the lexer but rejected
+unless a flag is set, because it cannot be confused with an identifier (e.g.,
+`//` comments, `{ }` pragmas).
+
+**How it works**: Each gated form is one row of `GATES` in
+`syntax/src/parser/gates.rs`: the token kinds it can start at, a function that
+finds its ranges at a site, the flag that enables it, the `ErrorKind` (which
+decides the problem code) and the message. The error is reported with the other
+errors of the parse, and `STAGES` in `syntax/src/ranking.rs` says which stage of
+checking the kind belongs to, which decides the one diagnostic a consumer reports.
+
+**Reference implementation**: the `GATES` row for C-style comments in
+`syntax/src/parser/gates.rs`
+
+**Key points**:
+- A new `ErrorKind` is mapped to its `Problem` in `syntax/src/diagnostic.rs` and
+  to exactly one `Stage` in `syntax/src/ranking.rs`; both are exhaustive
+- Problem codes come from the shared `ironplc_problems` crate and need the four
+  parts of the problem-code rule (CSV row, `docs/reference/compiler/problems/P####.rst`,
+  emitter, test)
+- A `GATES` row names its trigger kinds; a guard test over the corpus fails a
+  trigger set that misses a place where the form occurs
 - Always include tests for both allowed and disallowed cases
 
-### Choosing Between Demotion and Validation
+### Choosing Between Keyword Gating and a Lexical-Form Gate
 
 | Scenario | Use |
 |----------|-----|
-| New keyword that could conflict with existing identifiers | Token demotion |
-| Syntax that is always distinct from standard syntax | Validation rule |
-| Feature controlled by `--dialect` (edition selection) | Token demotion |
+| New keyword that could conflict with existing identifiers | Keyword gating (`keyword_enabled`) |
+| Syntax that is always distinct from standard syntax | Lexical-form gate (`GATES`) |
+| Feature controlled by `--dialect` (edition selection) | Keyword gating |
 | Feature controlled by `--allow-x` flag | Either, depending on conflict risk |
 
-### Token Insertion Pattern
+### Grammar, Node Kinds and Lowering
 
-**When to use**: When the compiler needs to fix up the token stream to handle common non-standard patterns (e.g., missing semicolons).
+The grammar is a set of functions over a `Parser` that records events
+(`syntax/src/parser/grammar/`); a construct is one function that opens a node of
+its kind, reads its tokens (skipping trivia) and closes the node, and the
+functions it calls are the places the construct nests. Recovery follows the
+tokens that can follow a construct (`syntax/src/parser/recovery.rs`), and the
+depth of the tree is bounded at the place a node is opened.
 
-**Reference implementation**: `parser/src/xform_tokens.rs`
+A new construct adds:
 
-```rust
-pub fn insert_keyword_statement_terminators(
-    input: Vec<Token>,
-    _file_id: &FileId,
-    options: &CompilerOptions,
-) -> Vec<Token> {
-    if !options.allow_missing_semicolon {
-        return input;
-    }
-    // ... insert semicolons after END_IF, END_STRUCT when missing
-}
-```
+1. a node kind to `nodes` in `syntax_kinds!`;
+2. a `node_disposition` arm in `syntax/src/lower/mod.rs` (it does not compile
+   without one): `Lowered(area)` when a rule turns the node into an object,
+   `Structural` when its parent's rule reads it;
+3. for a lowered node, one row in the dispatch of its area (for a statement,
+   the table in `syntax/src/lower/statements/mod.rs`), whose rule builds the
+   `dsl` object from the node and its tokens, takes spans from the source text
+   through `LowerCx` and reports a lowering problem as a `Diagnostic`.
+
+Lowering runs only on a tree whose parse reported no error, so a node the
+grammar guarantees but the tree lacks is an internal error, not a diagnostic.
+
+### Parity against the legacy oracle
+
+The legacy pipeline stays, compiled for tests only, so that the tree is held to
+the language it replaced. The tests in `parser/src/tests/parity/` compare the
+objects the lowering builds, the tokens of the token view and the diagnostics
+with those of the legacy parser over the corpus and the declaration tables,
+under every dialect preset. A difference must be a row of a table with its
+reason (a defect of the legacy parser, an owner decision, or a form accepted on
+purpose); an unlisted difference fails, and so does a row that no longer
+explains one. New syntax that only the tree reads is a row of the verdict
+tables (accepted on purpose), and is asserted by an expected-AST test in
+`parser/src/tests/`.
 
 ## Non-Standard Syntax Gating (`--allow-x` Flags)
 
@@ -324,15 +350,22 @@ flag on; that is where the vendor mapping belongs.
 
 When no existing flag covers the extension, add a new one. Update these files in order:
 
-#### 1. `CompilerOptions` struct (`parser/src/options.rs`)
+#### 1. `CompilerOptions` (`parser/src/options.rs`) and `ParseOptions` (`syntax/src/parser/options.rs`)
+
+Add the flag to the `define_compiler_options!` invocation, and, when the grammar
+or the lexical gates read it, a flag of the same name to `parse_options!`:
 
 ```rust
-#[derive(Debug, Default, Clone, Copy)]
-pub struct CompilerOptions {
-    // ... existing fields ...
-    pub allow_my_extension: bool,
+parse_options! {
+    // ...
+    /// Describe the syntax the flag gates.
+    allow_my_extension,
 }
 ```
+
+`frontend::parse_options` converts the compiler options to the tree's options flag
+by flag, by name; a test fails when the tree reads a flag the compiler options do
+not have, so a renamed or missing flag is not silently off.
 
 #### 2. CLI `FileArgs` (`plc2x/bin/main.rs`)
 
@@ -374,7 +407,7 @@ If the extension should be enabled by default in the playground, set it there.
 
 #### 5. Implement the gating
 
-Use either the token demotion pattern, validation rule pattern, or analyzer-level check (see sections above). Always test both the allowed and disallowed cases.
+Use either the keyword gating pattern, the lexical-form gate pattern, or an analyzer-level check (see sections above). Always test both the allowed and disallowed cases.
 
 #### 6. Documentation
 
@@ -553,34 +586,24 @@ pub fn parse_with_extension(source: &str) -> (Library, SemanticContext) {
 
 ## Pipeline Integration Points
 
-The token processing pipeline in `parser/src/lib.rs` (`tokenize_program` function) runs these steps in order:
+`parse_program` (`parser/src/lib.rs`) calls `frontend::parse_program`, which runs
+on the stack budget (`ironplc_dsl::stack`) these steps in order:
 
-1. **`preprocess()`** — normalize source text
-2. **`tokenize()`** — lexer produces raw tokens (via `logos`)
-3. **`insert_keyword_statement_terminators()`** — token transform (flag-gated)
-4. **`xform_demote_keywords::apply()`** — token demotion (edition- and flag-gated)
-5. **`check_tokens()`** — runs validation rules (flag-gated)
-6. **`parse_library()`** — PEG parser consumes tokens, produces AST
+1. **`parse_source_file()`** � the lexer reads the text byte-exactly, the region
+   pass sets aside the stretches the grammar must not read (OSCAT ranged
+   comments, untaken `{IF}` branches), the gates report the forms the dialect
+   rejects, and the recursive-descent parser builds the lossless tree
+2. **`lower_library()`** � lowering turns the tree of a file with no error into
+   the `Library`; when the tree has errors the one the ranking chooses
+   (`syntax/src/ranking.rs`) is the diagnostic
 
-New token transforms go between steps 2 and 5. New validation rules are registered in `check_tokens()`:
+`tokenize_program` is the token view of the same lexer and gates
+(`parser/src/tokens.rs`) and does not parse. `parse_st_statements` parses a
+statement fragment with `parse_statements` and `lower_statements`.
 
-```rust
-fn check_tokens(tokens: &[Token], options: &CompilerOptions) -> Result<(), Vec<Diagnostic>> {
-    let rules: Vec<fn(&[Token], &CompilerOptions) -> Result<(), Vec<Diagnostic>>> =
-        vec![rule_token_no_c_style_comment::apply];  // Add your rule here
-
-    let mut errors = vec![];
-    for rule in rules {
-        match rule(tokens, options) {
-            Ok(_) => {}
-            Err(mut diagnostics) => errors.append(&mut diagnostics),
-        };
-    }
-    // ...
-}
-```
-
-Keyword demotions are added as a `match` arm in `xform_demote_keywords::apply()` (already wired into `tokenize_program()`), not as new modules. That single pass runs **before** `check_tokens()` and **before** `parse_library()`: demotion must happen before parsing so the parser sees identifiers, not keywords.
+New syntax goes in the grammar, the gates or the lowering, not in a pass over
+tokens: a keyword is gated by a row of `keyword_enabled`, a lexical form by a row
+of `GATES`, and a construct by a grammar function with its lowering rule.
 
 ## Common Mistakes
 
@@ -589,8 +612,10 @@ Keyword demotions are added as a `match` arm in `xform_demote_keywords::apply()`
 - **No round-trip test**: The feature parses but the renderer in `plc2plc` cannot write it back. Always add the round-trip test.
 - **No execution test**: The feature parses and analyzes but was never proven to execute correctly. Always add at least one end-to-end test.
 - **Creating a flag for standard syntax**: Only extensions get `--allow-x` flags. Standard IEC 61131-3 syntax is always on (or gated by `--dialect`).
-- **Stateful lexer changes**: The lexer (`logos`) is stateless. Use token transforms for context-dependent behavior, not lexer rules.
-- **Not registering transforms**: Adding a new `xform_*.rs` module but forgetting to call it from `tokenize_program()` in `parser/src/lib.rs`, or adding a new rule module but forgetting to register it in `check_tokens()`.
+- **Context in the lexer**: The lexer reads every keyword the same way in every dialect. Decide context-dependent behavior in the parser (`ParseOptions`), not in lexer rules.
+- **Editing the legacy pipeline**: `xform_*`, `rule_token_*` and the PEG grammar are compiled for tests only. A change there changes the oracle, not the compiler.
+- **A gated keyword without a row**: `keyword_enabled` ends in a wildcard arm, so a keyword with a flag but no row is always on.
+- **A placeholder decision**: A new node kind does not compile until `node_disposition` has an arm for it, and a new token kind until `tokens.rs` has a row; give them real decisions, not a placeholder.
 
 ## Step-by-Step Walkthrough
 
@@ -606,34 +631,23 @@ Review `parser/src/options.rs` — does an existing flag cover this? If not, pro
 
 #### Step 2: Add the Flag
 
-1. Add `allow_repeat_limit` to `CompilerOptions` dialect fields in the `define_compiler_options!` macro
-2. Add `--allow-repeat-limit` to CLI `FileArgs`
-3. Add `|= self.allow_repeat_limit` in `compiler_options()`
-4. Add to relevant dialect presets in `CompilerOptions::from_dialect()`
+1. Add `allow_repeat_limit` to `CompilerOptions` dialect fields in the `define_compiler_options!` macro, tagged with the dialects that enable it
+2. Add `allow_repeat_limit` to `parse_options!` in `syntax/src/parser/options.rs`
+3. Add `--allow-repeat-limit` to CLI `FileArgs`
+4. Add `|= self.allow_repeat_limit` in `compiler_options()`
 5. Add LSP extraction for `"allowRepeatLimit"`
 
 #### Step 3: Add Tokens (if needed)
 
-If the syntax uses a new keyword like `LIMIT`, add it to `parser/src/token.rs`:
+If the syntax uses a new keyword like `LIMIT`, add it to `keywords` in `syntax_kinds!` (`syntax/src/syntax_kind.rs`), give it a `TokenType` and a row in `parser/src/tokens.rs`, and gate it so that `LIMIT` is an ordinary name when the flag is off � a row in `ParseOptions::keyword_enabled`:
 
 ```rust
-#[token("LIMIT", ignore(case))]
-Limit,
+K::Limit => self.allow_repeat_limit,
 ```
 
-Then add a demotion so that `LIMIT` is treated as an identifier when the flag is off — a gate plus a `match` arm in the existing `xform_demote_keywords::apply`:
+#### Step 4: Add Grammar and Lowering
 
-```rust
-// In xform_demote_keywords::apply, alongside the other gates:
-let demote_limit = !options.allow_repeat_limit;
-
-// ...and in the match inside the loop:
-TokenType::Limit => demote_limit,
-```
-
-#### Step 4: Add Parser Rules
-
-Update `parser/src/parser.rs` to handle the new syntax in the grammar.
+Add the grammar function in `syntax/src/parser/grammar/` (the `REPEAT` statement is read by the function that reads the statements), the node kind and its `node_disposition` arm, and the lowering rule in `syntax/src/lower/statements/`. Add an expected-AST test in `parser/src/tests/` and, if the legacy oracle rejects the form, the row in the parity tables that says so.
 
 #### Step 5: Add AST Nodes
 
