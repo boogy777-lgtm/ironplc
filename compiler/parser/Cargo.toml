@@ -11,6 +11,10 @@ repository.workspace = true
 maintenance = { status = "experimental" }
 
 [features]
+# Read the source with the front end built on the lossless tree of
+# `ironplc-syntax` instead of the legacy pipeline. Off by default; see the
+# `frontend` module.
+cst-frontend = []
 debug = ["peg/trace"]
 trace = ["debug"]
 

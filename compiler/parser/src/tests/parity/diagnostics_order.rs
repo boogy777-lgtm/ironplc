@@ -9,7 +9,8 @@
 //! parsers, with the same bytes.
 
 use super::diagnostics::{legacy_reported, new_reported, Reported};
-use super::legacy::{convert, Preset};
+use super::legacy::Preset;
+use crate::frontend::parse_options;
 use crate::options::CompilerOptions;
 
 /// One fault, as a whole program that holds only that fault, and the code the
@@ -82,7 +83,7 @@ fn preset() -> Preset {
     legacy.set_flag_by_key("allow_pragma_if", true);
     Preset {
         name: "strict with conditional pragmas".to_string(),
-        new: convert(&legacy),
+        new: parse_options(&legacy),
         legacy,
     }
 }

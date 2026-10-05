@@ -296,7 +296,7 @@ fn pinned_violations(case: &str, options: &CompilerOptions) -> Vec<Violation> {
 }
 
 fn tokens_of(source: &str, options: &CompilerOptions) -> Vec<Token> {
-    crate::tokenize_program(source, &FileId::default(), options, 0, 0).0
+    crate::legacy::tokenize_program(source, &FileId::default(), options, 0, 0).0
 }
 
 /// Tokenizes `source` under every dialect's options and asserts the actual

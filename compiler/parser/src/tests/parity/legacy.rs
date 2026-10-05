@@ -1,5 +1,6 @@
 //! The legacy parser as a test oracle, and the options it runs under.
 
+use crate::frontend::parse_options;
 use crate::legacy::{parse_program, parse_st_statements};
 use crate::options::{CompilerOptions, Dialect};
 use ironplc_dsl::core::FileId;
@@ -12,19 +13,6 @@ pub struct Preset {
     pub new: ParseOptions,
 }
 
-/// The legacy options converted flag by flag, by name. A flag the new
-/// parser reads must exist in the legacy options: a renamed or removed
-/// legacy flag fails here instead of silently reading as off.
-pub fn convert(legacy: &CompilerOptions) -> ParseOptions {
-    let mut options = ParseOptions::default();
-    for key in ParseOptions::FLAG_KEYS {
-        let value = legacy.get_flag_by_key(key);
-        assert!(value.is_some(), "legacy options have no flag {key}");
-        assert!(options.set_flag_by_key(key, value.unwrap_or(false)));
-    }
-    options
-}
-
 /// Every dialect preset, plus all legacy flags on.
 pub fn presets() -> Vec<Preset> {
     let mut presets: Vec<Preset> = Dialect::ALL
@@ -33,7 +21,7 @@ pub fn presets() -> Vec<Preset> {
             let legacy = CompilerOptions::from_dialect(*dialect);
             Preset {
                 name: dialect.cli_name().to_string(),
-                new: convert(&legacy),
+                new: parse_options(&legacy),
                 legacy,
             }
         })
@@ -44,7 +32,7 @@ pub fn presets() -> Vec<Preset> {
     }
     presets.push(Preset {
         name: "all-flags".to_string(),
-        new: convert(&every_flag),
+        new: parse_options(&every_flag),
         legacy: every_flag,
     });
     presets

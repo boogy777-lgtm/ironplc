@@ -174,7 +174,7 @@ pub fn insert_keyword_statement_terminators(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tokenize_program;
+    use crate::legacy::tokenize_program;
 
     fn tokens_for(source: &str) -> Vec<Token> {
         let options = CompilerOptions {

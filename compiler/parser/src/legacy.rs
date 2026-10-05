@@ -1,10 +1,12 @@
 //! The legacy parse pipeline: logos lexer, token transforms, token checks and
 //! the PEG grammar.
 //!
-//! The public functions in the crate root delegate here through a single
-//! selection point. This module is crate-private, so it is reachable only from
-//! this crate (including its tests) and never becomes public API.
+//! The public functions in the crate root reach it through `frontend`, the one
+//! place that selects a front end. This module is crate-private, so it is
+//! reachable only from this crate (including its tests) and never becomes
+//! public API.
 
+use crate::frontend::statement_fragment;
 use crate::lexer::tokenize;
 use crate::options::CompilerOptions;
 use crate::parser::{parse_library, parse_statements};
@@ -103,13 +105,11 @@ pub(crate) fn parse_st_statements(
     line_offset: usize,
     col_offset: usize,
 ) -> Result<Vec<StmtKind>, Diagnostic> {
-    if source.trim().is_empty() {
+    let Some((trimmed_source, adjusted_line, adjusted_col)) =
+        statement_fragment(source, line_offset, col_offset)
+    else {
         return Ok(vec![]);
-    }
-
-    // Calculate adjusted offset after skipping leading whitespace
-    let (trimmed_source, adjusted_line, adjusted_col) =
-        skip_leading_whitespace(source, line_offset, col_offset);
+    };
 
     let mut result = tokenize_program(
         trimmed_source,
@@ -123,70 +123,4 @@ pub(crate) fn parse_st_statements(
     }
 
     parse_statements(result.0)
-}
-
-/// Skip leading whitespace and calculate the adjusted line/column offset.
-///
-/// Returns (trimmed_source, adjusted_line_offset, adjusted_col_offset).
-fn skip_leading_whitespace(
-    source: &str,
-    line_offset: usize,
-    col_offset: usize,
-) -> (&str, usize, usize) {
-    let mut line = line_offset;
-    let mut col = col_offset;
-    let mut start_idx = 0;
-
-    for (idx, ch) in source.char_indices() {
-        match ch {
-            '\n' => {
-                line += 1;
-                col = 0;
-                start_idx = idx + 1;
-            }
-            ' ' | '\t' | '\r' => {
-                col += 1;
-                start_idx = idx + 1;
-            }
-            _ => break,
-        }
-    }
-
-    (source[start_idx..].trim_end(), line, col)
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use dsl::core::FileId;
-
-    const SOURCE: &str = "PROGRAM main\nVAR x : INT; END_VAR\nx := 1;\nEND_PROGRAM";
-
-    #[test]
-    fn parse_program_when_valid_then_facade_matches_legacy() {
-        let options = CompilerOptions::default();
-        let id = FileId::default();
-        let facade = crate::parse_program(SOURCE, &id, &options).unwrap();
-        let legacy = parse_program(SOURCE, &id, &options).unwrap();
-        assert_eq!(facade, legacy);
-    }
-
-    #[test]
-    fn tokenize_program_when_valid_then_facade_matches_legacy() {
-        let options = CompilerOptions::default();
-        let id = FileId::default();
-        let facade = crate::tokenize_program(SOURCE, &id, &options, 0, 0);
-        let legacy = tokenize_program(SOURCE, &id, &options, 0, 0);
-        assert_eq!(facade.0.len(), legacy.0.len());
-        assert_eq!(facade.1.len(), legacy.1.len());
-    }
-
-    #[test]
-    fn parse_st_statements_when_valid_then_facade_matches_legacy() {
-        let options = CompilerOptions::default();
-        let id = FileId::default();
-        let facade = crate::parse_st_statements("  x := 1;", &id, &options, 0, 0).unwrap();
-        let legacy = parse_st_statements("  x := 1;", &id, &options, 0, 0).unwrap();
-        assert_eq!(facade, legacy);
-    }
 }

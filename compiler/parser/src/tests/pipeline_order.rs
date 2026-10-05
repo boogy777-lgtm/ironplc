@@ -12,7 +12,7 @@ use crate::token::TokenType;
 /// with whitespace, newlines and comments dropped. Inserted terminators have
 /// empty text.
 fn stream(source: &str, options: &CompilerOptions) -> Vec<(TokenType, String)> {
-    let (tokens, _) = crate::tokenize_program(source, &FileId::default(), options, 0, 0);
+    let (tokens, _) = crate::legacy::tokenize_program(source, &FileId::default(), options, 0, 0);
     tokens
         .into_iter()
         .filter(|t| {

@@ -3,6 +3,7 @@
 extern crate ironplc_dsl as dsl;
 
 pub mod declarations;
+mod frontend;
 mod legacy;
 mod lexer;
 pub mod options;
@@ -15,6 +16,7 @@ mod rule_token_no_incomplete_array;
 mod rule_token_no_paren_string_length;
 mod rule_token_no_partial_access_syntax;
 mod rule_token_string_escape;
+mod tokens;
 mod vars;
 mod xform_assign_file_id;
 mod xform_collapse_pragmas;
@@ -108,7 +110,7 @@ pub fn tokenize_program(
     line_offset: usize,
     col_offset: usize,
 ) -> (Vec<Token>, Vec<Diagnostic>) {
-    legacy::tokenize_program(source, file_id, options, line_offset, col_offset)
+    (frontend::SELECTED.tokenize_program)(source, file_id, options, line_offset, col_offset)
 }
 
 /// Parse a full IEC 61131 program.
@@ -120,7 +122,7 @@ pub fn parse_program(
     file_id: &FileId,
     options: &CompilerOptions,
 ) -> Result<Library, Diagnostic> {
-    within_stack_budget(|| legacy::parse_program(source, file_id, options))
+    within_stack_budget(|| (frontend::SELECTED.parse_program)(source, file_id, options))
 }
 
 /// Parse ST (Structured Text) body content into statements.
@@ -143,6 +145,6 @@ pub fn parse_st_statements(
     col_offset: usize,
 ) -> Result<Vec<StmtKind>, Diagnostic> {
     within_stack_budget(|| {
-        legacy::parse_st_statements(source, file_id, options, line_offset, col_offset)
+        (frontend::SELECTED.parse_st_statements)(source, file_id, options, line_offset, col_offset)
     })
 }

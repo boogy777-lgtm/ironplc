@@ -39,8 +39,8 @@ pub struct Difference {
     pub expected: usize,
 }
 
-const MARKER_IN_STRING: Reason = Reason::new(Class::LegacyDefect, "the legacy pre-pass takes marker text inside a string literal as a ranged-comment marker and blanks the statement between, so the legacy tokens are not those of the text; the new parser lexes the strings first and keeps the code (a deliberate difference, pinned by its own test)");
-const SEVERAL_PAIRS: Reason = Reason::new(Class::OwnerDecided, "the legacy pre-pass blanks the first ranged-comment pair only, so the legacy lexer rejects the file at the second pair's body and produces no tokens after it; the new parser makes every pair a region (a deliberate difference, listed for the file)");
+pub(super) const MARKER_IN_STRING: Reason = Reason::new(Class::LegacyDefect, "the legacy pre-pass takes marker text inside a string literal as a ranged-comment marker and blanks the statement between, so the legacy tokens are not those of the text; the new parser lexes the strings first and keeps the code (a deliberate difference, pinned by its own test)");
+pub(super) const SEVERAL_PAIRS: Reason = Reason::new(Class::OwnerDecided, "the legacy pre-pass blanks the first ranged-comment pair only, so the legacy lexer rejects the file at the second pair's body and produces no tokens after it; the new parser makes every pair a region (a deliberate difference, listed for the file)");
 
 const KEYWORD_NAME_ALONE: Reason = Reason::new(Class::AcceptedOnPurpose, "deliberate behaviour change: a bare `STEP`, `ON`, `R_EDGE` or `F_EDGE` is a late-bound name like every other bare name. The legacy rule for a late-bound name (`identifier`) rejects those tokens, so the grammar fell through to the rule for a variable");
 const BIND_SPANS: Reason = Reason::new(Class::LegacyDefect, "legacy bug not ported: an assignment is positioned at its whole operator (`S=`, `R=`, `REF=`) where the legacy grammar keeps the `=` token alone, and the value of `REF=` is positioned at the place it names where the legacy grammar builds it without a position");

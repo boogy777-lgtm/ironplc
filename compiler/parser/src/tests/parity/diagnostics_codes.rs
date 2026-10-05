@@ -9,7 +9,8 @@
 
 use super::code_exceptions::CODE_EXCEPTIONS;
 use super::diagnostics::{compare_diagnostics, whole_inputs};
-use super::legacy::{convert, presets, rejection};
+use super::legacy::{presets, rejection};
+use crate::frontend::parse_options;
 use crate::options::CompilerOptions;
 use ironplc_dsl::core::FileId;
 use ironplc_syntax::{parse_source_file, ParseOptions};
@@ -125,7 +126,7 @@ fn options_for(case: &RuleCase) -> (CompilerOptions, ParseOptions) {
             legacy.set_flag_by_key(descriptor.option_key, true);
         }
     }
-    let new = convert(&legacy);
+    let new = parse_options(&legacy);
     (legacy, new)
 }
 

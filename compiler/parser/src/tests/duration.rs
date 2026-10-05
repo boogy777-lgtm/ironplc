@@ -418,6 +418,10 @@ fn parse_program_when_ltime_duration_past_last_representable_then_p2039_names_lt
     );
 }
 
+// The legacy parser raises the out-of-range literal while it parses and reports it
+// before a later syntax error; the tree reports the syntax error first (an
+// owner-decided difference, `VALUE_BEFORE_SYNTAX` in the diagnostic parity).
+#[cfg(not(feature = "cst-frontend"))]
 #[test]
 fn parse_program_when_syntax_error_follows_out_of_range_duration_then_the_first_is_reported() {
     // The parse cannot get past the literal, so the later error is never found.
@@ -445,6 +449,9 @@ END_FUNCTION";
     assert_eq!(diagnostic.code, "P0002");
 }
 
+// A number of 20 or more digits in a duration is P0002 in the legacy parser; the tree
+// reports P2039 for it with the literal (an owner decision).
+#[cfg(not(feature = "cst-frontend"))]
 #[rstest]
 #[case::seconds("T#18446744073709551616s")]
 #[case::milliseconds("T#18446744073709551617ms")]
