@@ -53,9 +53,6 @@ struct Frontend {
     parse: fn(&str, &CompilerOptions) -> Result<Library, Diagnostic>,
     /// True when the front end has the construct.
     supports: fn(&Nesting) -> bool,
-    /// True when the front end limits how deep a tree may be, so that the
-    /// depth it accepts has to be found.
-    limits_depth: bool,
 }
 
 fn production(source: &str, options: &CompilerOptions) -> Result<Library, Diagnostic> {
@@ -74,13 +71,11 @@ const FRONTENDS: &[Frontend] = &[
         parse: production,
         // The legacy grammar has no nested namespaces.
         supports: |construct| construct.entry != Entry::File,
-        limits_depth: false,
     },
     Frontend {
         name: "cst",
         parse: cst,
         supports: |_| true,
-        limits_depth: true,
     },
 ];
 
@@ -106,19 +101,22 @@ fn program(construct: &Nesting, n: usize) -> String {
     }
 }
 
-/// How deep `construct` is nested for `frontend` and `limit`: the limit, or
-/// where the front end limits depth, the deepest nesting it accepts up to the
-/// limit.
+/// True when `frontend` rejects `construct` nested `n` times as too deep (P0019).
+fn rejects_as_too_deep(frontend: &Frontend, construct: &Nesting, n: usize) -> bool {
+    // The program around the nesting is the text that is parsed.
+    let parsed = (frontend.parse)(&program(construct, n), &options());
+    parsed.is_err_and(|diagnostic| diagnostic.code == "P0019")
+}
+
+/// How deep `construct` is nested for `frontend` and `limit`: the limit, or,
+/// where the front end limits the depth of its tree and the limit is more than
+/// the program around the nesting leaves it, the deepest nesting it accepts.
+/// A front end that has no limit of its own is never asked beyond `limit`.
 fn depth_for(frontend: &Frontend, construct: &Nesting, limit: usize) -> usize {
-    if !frontend.limits_depth {
+    if !rejects_as_too_deep(frontend, construct, limit) {
         return limit;
     }
-    // The program around the nesting is the text that is parsed.
-    let deepest = construct.deepest_by(limit, |n| {
-        let parsed = (frontend.parse)(&program(construct, n), &options());
-        parsed.is_err_and(|diagnostic| diagnostic.code == "P0019")
-    });
-    deepest.min(limit)
+    construct.deepest_by(limit, |n| rejects_as_too_deep(frontend, construct, n))
 }
 
 #[test]

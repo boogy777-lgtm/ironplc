@@ -61,9 +61,21 @@ pub mod token;
 /// because we usually continue with parsing even if there are token errors because
 /// that will give the context of what was wrong in the location with the error.
 ///
+/// # Front ends
+///
+/// The tokens come from the front end that the `frontend` module selects. The
+/// legacy pipeline, described below, is the one that is selected unless the
+/// crate is built for the front end on the lossless tree of `ironplc-syntax`.
+/// That one gives the same token types and positions except in the differences
+/// the token view lists: a duration lexeme is not split, no empty `;` is
+/// inserted, a region the grammar does not read is one comment token and a lone
+/// carriage return is a line break. It reports the errors of its tokenizer in
+/// source order.
+///
 /// # Transform order
 ///
-/// The token transforms run in a fixed order and the order is observable: a
+/// The token transforms of the legacy pipeline run in a fixed order and the
+/// order is observable: a
 /// later transform sees the token types an earlier one left behind. The order
 /// is pinned by the tests in `tests/pipeline_order.rs` (see
 /// `specs/design/parse-tree-s0-audit.md`, findings F6 and F7):
