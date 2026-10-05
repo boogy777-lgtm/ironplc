@@ -21,9 +21,12 @@ use super::legacy::{presets, Preset};
 use super::token_rows::{
     Hunk, Input, Item, Reported, Tuple, DIAGNOSTIC_EXCEPTIONS, TOKEN_EXCEPTIONS,
 };
-use crate::frontend::{Frontend, CST, LEGACY};
+use crate::legacy;
+use crate::options::CompilerOptions;
+use crate::token::Token;
 use crate::tokens::type_of;
 use ironplc_dsl::core::FileId;
+use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_syntax::{tokenize, SyntaxKind};
 use spec_test_macro::spec_test;
 use std::collections::BTreeMap;
@@ -34,9 +37,15 @@ pub struct View {
     pub diagnostics: Vec<Reported>,
 }
 
-fn view(frontend: &Frontend, text: &str, preset: &Preset, (line, col): (usize, usize)) -> View {
-    let (tokens, diagnostics) =
-        (frontend.tokenize_program)(text, &FileId::default(), &preset.legacy, line, col);
+/// The two tokenizers that are compared: the legacy pipeline, the oracle, and
+/// the public function of the crate, which is the token view of the tree.
+type Tokenize = fn(&str, &FileId, &CompilerOptions, usize, usize) -> (Vec<Token>, Vec<Diagnostic>);
+
+const LEGACY: Tokenize = legacy::tokenize_program;
+const CST: Tokenize = crate::tokenize_program;
+
+fn view(tokenize: Tokenize, text: &str, preset: &Preset, (line, col): (usize, usize)) -> View {
+    let (tokens, diagnostics) = tokenize(text, &FileId::default(), &preset.legacy, line, col);
     View {
         tokens: tokens
             .into_iter()
@@ -252,8 +261,8 @@ pub fn compare_views(
     for (key, text) in inputs {
         for preset in presets {
             report.compared += 1;
-            let legacy = view(&LEGACY, text, preset, start);
-            let mut cst = view(&CST, text, preset, start);
+            let legacy = view(LEGACY, text, preset, start);
+            let mut cst = view(CST, text, preset, start);
             let (regions, pragmas) = tree_facts(text, preset);
             for (tuple, region) in cst.tokens.iter_mut().zip(regions) {
                 tuple.region = region;
@@ -477,9 +486,8 @@ fn tokenize_when_gated_form_then_the_diagnostic_carries_the_help_of_the_legacy_r
     ];
     let preset = &presets()[0];
     for source in sources {
-        let (_, legacy) =
-            (LEGACY.tokenize_program)(source, &FileId::default(), &preset.legacy, 0, 0);
-        let (_, cst) = (CST.tokenize_program)(source, &FileId::default(), &preset.legacy, 0, 0);
+        let (_, legacy) = LEGACY(source, &FileId::default(), &preset.legacy, 0, 0);
+        let (_, cst) = CST(source, &FileId::default(), &preset.legacy, 0, 0);
         assert_eq!(legacy.len(), 1, "{source:?}");
         assert_eq!(cst.len(), 1, "{source:?}");
         assert!(!legacy[0].help().is_empty(), "{source:?}");

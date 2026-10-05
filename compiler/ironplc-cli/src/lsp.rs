@@ -324,24 +324,15 @@ impl<'a> LspServer<'a> {
         let req = match Self::cast_request::<request::SemanticTokensFullRequest>(req) {
             Ok(params) => {
                 let uri = params.text_document.uri;
-                let token_result = self.project.tokenize(&uri);
-
-                match token_result {
-                    Ok(tokens) => {
-                        trace!("SemanticTokensFullRequest Success Response {tokens:?}");
-                        self.send_response::<request::SemanticTokensFullRequest>(
-                            req_id,
-                            Some(SemanticTokensResult::Tokens(SemanticTokens {
-                                result_id: None,
-                                data: tokens,
-                            })),
-                        );
-                    }
-                    Err(diagnostic) => {
-                        trace!("SemanticTokensFullRequest Error Response {diagnostic:?}");
-                        self.send_response::<request::SemanticTokensFullRequest>(req_id, None);
-                    }
-                }
+                let tokens = self.project.tokenize(&uri);
+                trace!("SemanticTokensFullRequest Response {tokens:?}");
+                self.send_response::<request::SemanticTokensFullRequest>(
+                    req_id,
+                    Some(SemanticTokensResult::Tokens(SemanticTokens {
+                        result_id: None,
+                        data: tokens,
+                    })),
+                );
 
                 return request::SemanticTokensFullRequest::METHOD;
             }

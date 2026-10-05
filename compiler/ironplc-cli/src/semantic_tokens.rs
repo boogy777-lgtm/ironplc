@@ -669,7 +669,8 @@ END_CONFIGURATION"#;
     }
 
     #[test]
-    fn to_semantic_tokens_when_pragmas_disabled_then_braces_dropped_and_contents_tagged() {
+    fn to_semantic_tokens_when_pragmas_disabled_then_one_pragma_token_and_the_tokenizer_reports_it()
+    {
         let source = "{attribute 'qualified_only'}";
         let (tokens, diagnostics) = tokenize_program(
             source,
@@ -678,20 +679,15 @@ END_CONFIGURATION"#;
             0,
             0,
         );
-        assert!(
-            diagnostics.is_empty(),
-            "source must lex cleanly: {diagnostics:?}"
-        );
+        // The tokenizer reports a pragma in a dialect without pragmas, and the
+        // stream still has the pragma as one token that covers its text.
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
 
         let lexed: Vec<TokenType> = tokens.iter().map(|t| t.token_type.clone()).collect();
-        assert!(lexed.contains(&TokenType::LeftBrace));
-        assert!(lexed.contains(&TokenType::RightBrace));
+        assert_eq!(lexed, [TokenType::Pragma]);
 
         let actual = tags(source, &to_semantic_tokens(tokens));
-        assert_eq!(
-            actual,
-            [("attribute", VARIABLE), ("'qualified_only'", STRING)]
-        );
+        assert_eq!(actual, [("{attribute 'qualified_only'}", KEYWORD)]);
     }
 
     /// Lex `source` with every dialect keyword enabled and resolve each

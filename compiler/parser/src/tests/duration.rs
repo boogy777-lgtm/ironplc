@@ -418,13 +418,13 @@ fn parse_program_when_ltime_duration_past_last_representable_then_p2039_names_lt
     );
 }
 
-// The legacy parser raises the out-of-range literal while it parses and reports it
-// before a later syntax error; the tree reports the syntax error first (an
-// owner-decided difference, `VALUE_BEFORE_SYNTAX` in the diagnostic parity).
-#[cfg(not(feature = "cst-frontend"))]
+// The tree reports a syntax error before an out-of-range literal wherever the
+// two are in the file: lowering, which finds the literal, runs only on a file the
+// grammar accepted (an owner-decided difference, `VALUE_BEFORE_SYNTAX` in the
+// diagnostic parity).
 #[test]
-fn parse_program_when_syntax_error_follows_out_of_range_duration_then_the_first_is_reported() {
-    // The parse cannot get past the literal, so the later error is never found.
+fn parse_program_when_syntax_error_follows_out_of_range_duration_then_the_syntax_error_is_reported()
+{
     let source = "FUNCTION fun:TIME
 VAR
     a : TIME := T#9223372036854775807d;
@@ -433,7 +433,12 @@ END_VAR
 END_FUNCTION";
     let diagnostic =
         parse_program(source, &FileId::default(), &CompilerOptions::default()).unwrap_err();
-    assert_eq!(diagnostic.code, "P2039");
+    assert_eq!(diagnostic.code, "P0002");
+    let start = source.find("b : TIME := ;").unwrap() + "b : TIME := ".len();
+    assert_eq!(
+        start..start + 1,
+        diagnostic.primary.location.start..diagnostic.primary.location.end
+    );
 }
 
 #[test]
@@ -449,15 +454,15 @@ END_FUNCTION";
     assert_eq!(diagnostic.code, "P0002");
 }
 
-// A number of 20 or more digits in a duration is P0002 in the legacy parser; the tree
-// reports P2039 for it with the literal (an owner decision).
-#[cfg(not(feature = "cst-frontend"))]
+// A number of 20 or more digits in a duration is out of range like any other
+// number too large for the unit: P2039 with the literal as written (an owner
+// decision).
 #[rstest]
 #[case::seconds("T#18446744073709551616s")]
 #[case::milliseconds("T#18446744073709551617ms")]
 #[case::days("T#99999999999999999999d")]
 #[case::fraction("T#99999999999999999999.5s")]
-fn parse_program_when_duration_whole_part_exceeds_u64_then_syntax_error_not_wrapped(
+fn parse_program_when_duration_whole_part_exceeds_u64_then_out_of_range_not_wrapped(
     #[case] literal: &str,
 ) {
     // `T#18446744073709551616s` was read as 0 ms: the whole part wrapped
@@ -465,5 +470,12 @@ fn parse_program_when_duration_whole_part_exceeds_u64_then_syntax_error_not_wrap
     let source = duration_program(literal);
     let diagnostic =
         parse_program(&source, &FileId::default(), &CompilerOptions::default()).unwrap_err();
-    assert_eq!(diagnostic.code, "P0002", "{literal}");
+    assert_eq!(diagnostic.code, "P2039", "{literal}");
+    assert!(diagnostic.primary.message.contains(literal), "{literal}");
+    let start = source.find(literal).unwrap();
+    assert_eq!(
+        start..start + literal.len(),
+        diagnostic.primary.location.start..diagnostic.primary.location.end,
+        "{literal}"
+    );
 }

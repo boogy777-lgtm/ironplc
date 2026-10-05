@@ -550,16 +550,25 @@ and 3.6 keep their names and meaning; the allocation totals of `tokenize`,
 `parse`, `cst lex`, `cst parse` and `cst parse + lower` are identical before and
 after the change (9,448 / 32,121 / 61 / 9,590 / 23,865 on the 61-file corpus).
 
-The public functions of `ironplc-parser` are rows like the others, and they run
-the front end the crate was built with. The two front ends are therefore two
-runs of the same table: default features (the legacy pipeline), then
-`--features ironplc-parser/cst-frontend` (the pipeline on the lossless tree:
-tokens, regions, gates, grammar, lowering, and the token view). The output
-header says which one the public functions ran; it is read from what they do (the
-legacy transforms split the duration literal `T#1m30s` into more tokens than the
-lexer of the tree gives it), not from how the crate was built, so it is right
-however the feature was switched on. The rows that call `ironplc-syntax` directly are in
-both runs.
+At the time of these measurements the public functions of `ironplc-parser` were
+rows like the others, and they ran the front end the crate was built with. The
+two front ends were therefore two runs of the same table: default features (the
+legacy pipeline), then the `cst-frontend` feature of `ironplc-parser` (the
+pipeline on the lossless tree: tokens, regions, gates, grammar, lowering, and
+the token view). The output header said which one the public functions ran,
+read from what they do (the legacy transforms split the duration literal
+`T#1m30s` into more tokens than the lexer of the tree gives it). The rows that
+call `ironplc-syntax` directly were in both runs.
+
+**After the switch.** The compiler has one front end, the tree, and the legacy
+pipeline is compiled for tests only, so it is not reachable from the benchmark
+crate. The facade rows (`tokenize`, `parse`, `statements`) now measure the tree;
+the feature, the header and the second run are gone, and no row has the legacy
+pipeline as its baseline. The figures in this section that compare the two front
+ends, and the ratios they give, are the recorded history of the comparison that
+the budget of the architecture document (section 5.2) was checked against; they
+were measured before the switch and are not re-measured, and none of them
+becomes false by it.
 
 - **Environment:** Intel Core i5-9300H @ 2.40 GHz (4 cores / 8 threads),
   Windows 11 Pro 10.0.26200, rustc 1.98.1 (48a229cea, 2026-09-01), cargo 1.98.1,
@@ -824,17 +833,16 @@ has no thread to spawn); memory retained after a call (only allocations during
 it); Criterion warm timings (`parse_benchmark` registers the same paths and was
 run in test mode only); the activated-library parse per edit.
 
-Reproduce:
+Reproduce (the tree figures; the legacy figures were measured on the commit
+before the switch, where the same command ran the legacy pipeline):
 
 ```
 cd compiler
-cargo bench -p ironplc-benchmarks --bench parse_baseline > legacy.txt
-cargo bench -p ironplc-benchmarks --features ironplc-parser/cst-frontend --bench parse_baseline > cst.txt
-cargo bench -p ironplc-benchmarks --bench parse_benchmark      # Criterion, also with the feature
+cargo bench -p ironplc-benchmarks --bench parse_baseline
+cargo bench -p ironplc-benchmarks --bench parse_benchmark      # Criterion
 ```
 
-The header of each output names the front end the public functions ran. A new
-path is one row of `PATHS` in `compiler/benchmarks/src/paths.rs`.
+A new path is one row of `PATHS` in `compiler/benchmarks/src/paths.rs`.
 
 #### Follow-on: the token view after the gate index (2026-10-05)
 

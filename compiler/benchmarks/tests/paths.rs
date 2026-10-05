@@ -3,7 +3,7 @@
 //! baseline that names no path, two paths with one name, a path that panics.
 
 use ironplc_benchmarks::corpus::{corpus_dir, load_corpus, statement_bodies};
-use ironplc_benchmarks::paths::{path_named, selected_frontend, timed, Ctx, Over, Probe, PATHS};
+use ironplc_benchmarks::paths::{path_named, timed, Ctx, Over, Probe, PATHS};
 use std::collections::HashSet;
 
 /// Counts the brackets a path makes.
@@ -75,13 +75,6 @@ fn probes_when_each_set_then_at_least_one_tiny_input() {
     for over in Over::ALL {
         assert!(!over.probes().is_empty(), "{}", over.label());
     }
-}
-
-#[test]
-fn selected_frontend_when_asked_then_one_of_the_two_front_ends() {
-    let selected = selected_frontend(&Ctx::default());
-
-    assert!(selected == "legacy" || selected == "cst", "{selected}");
 }
 
 #[test]

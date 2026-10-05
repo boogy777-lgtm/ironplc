@@ -13,10 +13,11 @@
 //! their methods and properties, interfaces, namespaces, variable blocks,
 //! `TYPE` declarations, configurations and sequential function charts, with
 //! the statements and expressions inside them. The [`lower`] module turns the
-//! tree into the `ironplc_dsl` objects, one rule per language element; it
-//! covers the literals, names, expressions, variables, statements, types and
-//! initial values so far, and neither it nor the parser is used by a production
-//! consumer yet.
+//! tree into the `ironplc_dsl` objects, one rule per language element, for every
+//! element the parser reads. This is the front end of the compiler:
+//! `ironplc-parser` reads text through the parser and the lowering of this
+//! crate, and the compiler, the language server, the MCP server and the
+//! playground read what it returns.
 //!
 //! The text is kept as written. Two constructs make a stretch of it not code:
 //! OSCAT ranged comments (what a `(*@KEY@:NAME*)` pair holds) and, with

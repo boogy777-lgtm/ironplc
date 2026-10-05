@@ -1,7 +1,8 @@
 # Lowering Lives in the Syntax Crate; the Parser Crate Is the Compatibility Facade
 
-status: proposed
+status: accepted
 date: 2026-10-05
+amended: 2026-10-05 (Confirmation records the facade and the switch, which have landed)
 
 ## Context and Problem Statement
 
@@ -151,7 +152,8 @@ only in trivia lowers to an equal library.
   made it so.
 - Bad, because `ironplc-syntax` grows by the lowering and every consumer of the
   parser links the lowering and the tree library.
-- Bad, because until the cutover two parse paths exist, one of them test-only.
+- Bad, because until the old parser is deleted two parse paths exist, one of
+  them test-only.
 - Neutral: the table of differences is deleted with the old parser, and the rows
   that remain true become permanent accept/reject and expected-object tests.
 
@@ -167,9 +169,12 @@ only in trivia lowers to an equal library.
   declarations, and the declarations lifted from the old parser's tests, under
   every dialect preset; `differences.rs` and `tables.rs` hold the rows with
   their classes.
-- The facade (option conversion, one diagnostic, the token projection) and the
-  switch to the new path are not part of this decision's delivery; this ADR
-  stays `proposed` until they land.
+- The facade and the switch to the new path have landed. `ironplc-parser`
+  reads text through `compiler/parser/src/frontend.rs` only (option conversion,
+  the one diagnostic of the ranking, the token view of `tokens.rs`), and the
+  old parser is declared under `cfg(test)` in the crate root, so a build without
+  it cannot name it; `frontend::tests::legacy_modules_when_declared_in_the_crate_root_then_compiled_for_tests_only`
+  fails when a module that is not production code is declared without it.
 
 ## Pros and Cons of the Options
 

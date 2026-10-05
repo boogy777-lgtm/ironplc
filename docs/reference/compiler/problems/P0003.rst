@@ -16,19 +16,21 @@ The following code will generate error P0003:
 .. code-block::
 
    TYPE
-       CUSTOM_STRUCT : STRUCT&   (* Error: Invalid character '&' *)
+       CUSTOM_STRUCT : STRUCT
            NAME: BOOL;
+           $ : BOOL;   (* Error: Invalid character '$' *)
        END_STRUCT;
    END_TYPE
 
-The parser encountered the ``&`` character in an unexpected position where it expected valid identifier characters.
+The tokenizer encountered the ``$`` character, which starts no token of IEC 61131-3 text. A character that is a token but is not valid where it stands (the ``&`` of ``STRUCT&``, which is the ``AND`` operator) is a :doc:`syntax error <P0002>` instead.
 
 To fix this error, remove the invalid character and use valid IEC 61131-3 syntax:
 
 .. code-block::
 
    TYPE
-       CUSTOM_STRUCT : STRUCT   (* Correct: No invalid characters *)
+       CUSTOM_STRUCT : STRUCT
            NAME: BOOL;
+           FLAG : BOOL;   (* Correct: No invalid characters *)
        END_STRUCT;
    END_TYPE

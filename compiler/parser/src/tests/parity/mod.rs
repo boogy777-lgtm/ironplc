@@ -1,8 +1,9 @@
-//! Test-only comparison of the new parser against the legacy PEG parser.
+//! Test-only comparison of the parser the compiler runs (the lossless tree and
+//! its lowering) against the legacy PEG parser.
 //!
-//! The new parser is not wired into any production consumer; these tests
-//! are how its accepted language is held to the legacy one until the legacy
-//! path is replaced. The oracle is `parse_st_statements`, the fragment entry
+//! The legacy pipeline is compiled for tests only; these tests are how the
+//! accepted language of the tree is held to the legacy one until the legacy
+//! path is deleted. The oracle is `parse_st_statements`, the fragment entry
 //! the legacy crate exposes for ST bodies. That entry has artifacts of its
 //! own (it rejects a trailing comment or pragma, and a block statement that
 //! ends the input without a `;`), so each snippet is also run inside a

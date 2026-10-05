@@ -11,10 +11,6 @@ repository.workspace = true
 maintenance = { status = "experimental" }
 
 [features]
-# Read the source with the front end built on the lossless tree of
-# `ironplc-syntax` instead of the legacy pipeline. Off by default; see the
-# `frontend` module.
-cst-frontend = []
 debug = ["peg/trace"]
 trace = ["debug"]
 
@@ -25,12 +21,12 @@ ironplc-dsl = { path = "../dsl", version = "0.247.0" }
 ironplc-problems = { path = "../problems", version = "0.247.0" }
 ironplc-syntax = { path = "../syntax", version = "0.247.0" }
 logos = "0.16.1"
-peg = "0.8.5"
 
 [build-dependencies]
 ironplc-spec-requirements-gen = { path = "../spec_requirements_gen" }
 
 [dev-dependencies]
+peg = "0.8.5"
 ironplc-test = { path = "../test", version = "0.247.0" }
 rstest = "0.27"
 spec_test_macro = { path = "../spec_test_macro" }

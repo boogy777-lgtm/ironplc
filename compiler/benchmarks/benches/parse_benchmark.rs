@@ -3,15 +3,13 @@
 //! Per-input warm timings of every path of the table in
 //! `ironplc_benchmarks::paths`: the public functions of `ironplc-parser`
 //! (`tokenize_program`, `parse_program`, `parse_st_statements`, which run the
-//! front end the crate was built with) and the entry points of `ironplc-syntax`
-//! (lex, tokenize, the CST parse and its lowering). Each path is one Criterion
+//! front end built on the lossless tree) and the entry points of
+//! `ironplc-syntax` (lex, tokenize, the CST parse and its lowering). Each path is one Criterion
 //! group over the inputs it runs over. Cold timings and allocation counts are
 //! reported by `benches/parse_baseline.rs`, which needs its own global
 //! allocator and so cannot share this binary.
 //!
-//! Run with: `cargo bench --package ironplc-benchmarks --bench parse_benchmark`
-//! (add `--features ironplc-parser/cst-frontend` for the tree front end behind
-//! the public functions).
+//! Run with: `cargo bench --package ironplc-benchmarks --bench parse_benchmark`.
 
 // Benchmark-target boundary: a corpus that cannot be read is a
 // benchmark-authoring bug, not user input.

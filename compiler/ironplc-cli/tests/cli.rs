@@ -170,7 +170,7 @@ fn echo_when_syntax_error_file_then_err() -> Result<(), Box<dyn std::error::Erro
     cmd.assert()
         .failure()
         .stdout(predicate::str::is_empty())
-        .stderr(predicate::str::contains("Expected"));
+        .stderr(predicate::str::contains("expected `;`"));
 
     Ok(())
 }
@@ -186,6 +186,29 @@ fn echo_when_semantic_error_file_then_ok() -> Result<(), Box<dyn std::error::Err
     cmd.assert()
         .success()
         .stdout(predicate::str::contains("END_CONFIGURATION"));
+
+    Ok(())
+}
+
+#[test]
+fn tokenize_when_unterminated_comment_then_err() -> Result<(), Box<dyn std::error::Error>> {
+    // The tokenizer reports the comment that is never closed, and the command
+    // fails with its diagnostic, while the tokens before it are still printed.
+    let dir = tempfile::TempDir::new()?;
+    let file = dir.path().join("open_comment.st");
+    std::fs::write(
+        &file,
+        "PROGRAM main
+END_PROGRAM (* open
+",
+    )?;
+
+    let mut cmd = Command::new(cargo::cargo_bin!("ironplcc"));
+    cmd.arg("tokenize").arg(&file);
+    cmd.assert()
+        .failure()
+        .stdout(predicate::str::contains("Type: Program"))
+        .stderr(predicate::str::contains("P0002"));
 
     Ok(())
 }
