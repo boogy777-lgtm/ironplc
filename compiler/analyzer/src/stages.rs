@@ -15,25 +15,10 @@ use crate::{
     function_environment::FunctionEnvironmentBuilder,
     intermediates::special_operator::special_operator_signatures,
     ironplc_dsl::common::Library,
-    result::SemanticResult,
-    rule_abstract_not_instantiated, rule_assignment_aggregate_type_compat,
-    rule_bit_and_partial_access_range, rule_case_bit_string_label, rule_case_selector_type,
-    rule_condition_type, rule_constant_range, rule_decl_struct_element_unique_names,
-    rule_enum_base_type_allowed, rule_enum_explicit_value_allowed, rule_enumeration_values_unique,
-    rule_extends_field_duplicated, rule_fb_instance_array_allowed,
-    rule_function_block_call_unsupported, rule_function_block_invocation,
-    rule_function_call_declared, rule_function_call_in_out_argument, rule_function_call_type_check,
-    rule_jump_target, rule_loop_control_inside_loop, rule_member_qualifier_allowed,
-    rule_member_qualifier_invalid, rule_method_call_declared, rule_mixed_located_var_declarations,
-    rule_no_top_level_var_global, rule_operator_operand_type_check, rule_pou_hierarchy,
-    rule_program_task_definition_exists, rule_program_var_hides_global, rule_range_limits,
-    rule_real_literal_range, rule_ref_to, rule_special_operator, rule_stdlib_type_redefinition,
-    rule_string_encoding_compat, rule_string_length_range, rule_string_literal_char_range,
-    rule_struct_initializer_expression_allowed, rule_task_names_unique,
-    rule_temporal_literal_range, rule_unsupported_extension, rule_use_declared_enumerated_value,
-    rule_use_declared_symbolic_var, rule_var_decl_const_initialized, rule_var_decl_const_not_fb,
-    rule_var_decl_global_const_requires_external_const, rule_var_decl_initializer_type_compat,
+    observe::{self, Observer, Unobserved},
+    pass_runner::{direct, pass, run_best_effort, run_reverting_on_error},
     semantic_context::SemanticContext,
+    semantic_rules::semantic,
     symbol_environment::{ScopeKind, SymbolEnvironment, SymbolKind},
     system_globals::SYSTEM_UPTIME_GLOBALS,
     type_environment::{TypeEnvironment, TypeEnvironmentBuilder},
@@ -61,12 +46,24 @@ pub fn analyze(
     sources: &[&Library],
     options: &CompilerOptions,
 ) -> Result<(Library, SemanticContext), Vec<Diagnostic>> {
-    within_stack_budget(|| analyze_in_budget(sources, options))
+    analyze_observed(sources, options, &Unobserved)
 }
 
-fn analyze_in_budget(
+/// [`analyze`], told what each step of the analysis does: every pass and every
+/// semantic rule is run through `observer` (see [`crate::observe`]). The result
+/// is the one [`analyze`] gives.
+pub fn analyze_observed<O: Observer>(
     sources: &[&Library],
     options: &CompilerOptions,
+    observer: &O,
+) -> Result<(Library, SemanticContext), Vec<Diagnostic>> {
+    within_stack_budget(|| analyze_in_budget(sources, options, observer))
+}
+
+fn analyze_in_budget<O: Observer>(
+    sources: &[&Library],
+    options: &CompilerOptions,
+    observer: &O,
 ) -> Result<(Library, SemanticContext), Vec<Diagnostic>> {
     if sources.is_empty() {
         let span = SourceSpan::range(0, 0).with_file_id(&FileId::default());
@@ -75,16 +72,16 @@ fn analyze_in_budget(
             Label::span(span, "First location"),
         )]);
     }
-    let (library, mut context) = resolve_types(sources, options)?;
+    let (library, mut context) = resolve_types_in_budget(sources, options, observer)?;
 
-    if let Err(diagnostics) = semantic(&library, &context, options) {
+    if let Err(diagnostics) = semantic(&library, &context, options, observer) {
         context.add_diagnostics(diagnostics);
     }
 
     // TODO this is currently in progress. It isn't clear to me yet how this will influence
     // semantic analysis, but it should because the type table should influence rule checking.
     // For now, this is just after the rules as they were originally written.
-    match type_table::apply(&library) {
+    match direct!(observer, type_table(&library)) {
         Ok(type_table_result) => {
             debug!("{type_table_result:?}");
         }
@@ -96,60 +93,15 @@ fn analyze_in_budget(
     Ok((library, context))
 }
 
-/// Runs a transform whose failure discards the whole library.
-///
-/// The pre-pass library is restored when the transform returns `Err`, so every
-/// transformation it had already completed is thrown away with the one that
-/// failed. Reserve this for a pass whose output is meaningless when any part
-/// of it failed, and prefer [`run_best_effort`].
-///
-/// The reason the distinction exists is not one failing test. Corpus testing
-/// showed what looked like merge-order or file-pairing sensitivity: a source
-/// that analyzed cleanly alone failed once merged with unrelated code. The
-/// cause was never ordering -- a transform that accumulates diagnostics and
-/// then discards its whole result throws away every unrelated resolution it
-/// had already completed. A pass that returns `Err` after a user-level
-/// diagnostic reintroduces that, so a new pass reports per-declaration
-/// problems through `run_best_effort` instead.
-fn run_reverting_on_error(
-    library: Library,
-    diagnostics: &mut Vec<Diagnostic>,
-    xform: impl FnOnce(Library) -> Result<Library, Vec<Diagnostic>>,
-) -> Library {
-    let fallback = library.clone();
-    match xform(library) {
-        Ok(result) => result,
-        Err(errs) => {
-            diagnostics.extend(errs);
-            fallback
-        }
-    }
-}
-
-/// Runs a transform that reports per-declaration problems without discarding
-/// the declarations it did transform.
-///
-/// `Ok((library, diagnostics))` means "here is the transformed library, and
-/// here is what was wrong with parts of it": the transformed library is kept
-/// and the diagnostics are collected alongside it. A best-effort pass reserves
-/// `Err` for a failure that left it with no library to return at all, which
-/// still reverts because there is nothing else to keep.
-fn run_best_effort(
-    library: Library,
-    diagnostics: &mut Vec<Diagnostic>,
-    xform: impl FnOnce(Library) -> Result<(Library, Vec<Diagnostic>), Vec<Diagnostic>>,
-) -> Library {
-    let fallback = library.clone();
-    match xform(library) {
-        Ok((result, errs)) => {
-            diagnostics.extend(errs);
-            result
-        }
-        Err(errs) => {
-            diagnostics.extend(errs);
-            fallback
-        }
-    }
+/// The environment of the elementary types and the standard function blocks,
+/// which every analysis starts a type environment from.
+fn build_type_environment<O: Observer>(observer: &O) -> Result<TypeEnvironment, Diagnostic> {
+    observer.observe(observe::setup("type environment"), || {
+        TypeEnvironmentBuilder::new()
+            .with_elementary_types()
+            .with_stdlib_function_blocks()
+            .build()
+    })
 }
 
 /// Resolves the types of the set of files, on the stack budget like
@@ -158,12 +110,13 @@ pub fn resolve_types(
     sources: &[&Library],
     options: &CompilerOptions,
 ) -> Result<(Library, SemanticContext), Vec<Diagnostic>> {
-    within_stack_budget(|| resolve_types_in_budget(sources, options))
+    within_stack_budget(|| resolve_types_in_budget(sources, options, &Unobserved))
 }
 
-fn resolve_types_in_budget(
+fn resolve_types_in_budget<O: Observer>(
     sources: &[&Library],
     options: &CompilerOptions,
+    observer: &O,
 ) -> Result<(Library, SemanticContext), Vec<Diagnostic>> {
     let mut diagnostics: Vec<Diagnostic> = vec![];
 
@@ -171,19 +124,18 @@ fn resolve_types_in_budget(
     // into a single library. Extend owns the item so after this we are free to modify
     let mut library = Library::new();
     for x in sources {
-        library = library.extend((*x).clone());
+        let copy = observer.observe(observe::setup("merge sources"), || (*x).clone());
+        library = library.extend(copy);
     }
 
     // Hard failures: these are foundational and all subsequent steps depend on them.
-    let mut type_environment = TypeEnvironmentBuilder::new()
-        .with_elementary_types()
-        .with_stdlib_function_blocks()
-        .build()
-        .map_err(|err| vec![err])?;
+    let mut type_environment = build_type_environment(observer).map_err(|err| vec![err])?;
 
-    let mut function_environment = FunctionEnvironmentBuilder::new()
-        .with_stdlib_functions()
-        .build();
+    let mut function_environment = observer.observe(observe::setup("function environment"), || {
+        FunctionEnvironmentBuilder::new()
+            .with_stdlib_functions()
+            .build()
+    });
 
     // Conditionally register dialect-extension functions gated by allow flags.
     if options.allow_sizeof {
@@ -219,38 +171,52 @@ fn resolve_types_in_budget(
     // Must run before toposort so that concrete integer values are available.
     // Best effort: an unresolvable reference is diagnosed and left as a
     // `Constant`, which is the state reverting would leave every reference in.
-    library = run_best_effort(library, &mut diagnostics, |lib| {
-        xform_resolve_constant_expressions::apply(lib, options)
-    });
+    library = pass!(
+        run_best_effort,
+        observer,
+        library,
+        &mut diagnostics,
+        xform_resolve_constant_expressions,
+        options
+    );
 
     // Hard failure: declaration ordering is required for all subsequent transforms.
     // Also computes the set of declarations reachable from PROGRAM roots,
     // which codegen uses to skip unused functions. A repeated declaration
     // name survives the sort; the environments built below diagnose it.
-    let (mut library, reachable) = xform_toposort_declarations::apply(library)?;
+    let (mut library, reachable) = direct!(observer, xform_toposort_declarations(library))?;
 
     // Best effort: a repeated type or function block name is diagnosed by
     // the type environment, which keeps the first declaration, so the rest
     // of the library still resolves. `Err` is a declaration that cannot be
     // resolved at all, which still reverts.
-    library = run_best_effort(library, &mut diagnostics, |lib| {
-        xform_resolve_type_decl_environment::apply(lib, &mut type_environment)
-    });
+    library = pass!(
+        run_best_effort,
+        observer,
+        library,
+        &mut diagnostics,
+        xform_resolve_type_decl_environment,
+        &mut type_environment
+    );
 
     // Best effort: an unresolvable declaration is diagnosed but does not
     // discard the rest of the library's successfully resolved declarations.
-    let recoverable_xforms: Vec<
-        fn(Library, &mut TypeEnvironment) -> Result<(Library, Vec<Diagnostic>), Vec<Diagnostic>>,
-    > = vec![
-        xform_resolve_late_bound_expr_kind::apply,
-        xform_resolve_late_bound_type_initializer::apply,
-    ];
-
-    for xform in recoverable_xforms {
-        library = run_best_effort(library, &mut diagnostics, |lib| {
-            xform(lib, &mut type_environment)
-        });
-    }
+    library = pass!(
+        run_best_effort,
+        observer,
+        library,
+        &mut diagnostics,
+        xform_resolve_late_bound_expr_kind,
+        &mut type_environment
+    );
+    library = pass!(
+        run_best_effort,
+        observer,
+        library,
+        &mut diagnostics,
+        xform_resolve_late_bound_type_initializer,
+        &mut type_environment
+    );
 
     // Give TwinCAT `REFERENCE TO` variables their auto-dereferencing semantics
     // (bare reads/writes go through the reference) and lower `__ISVALIDREF`.
@@ -259,9 +225,14 @@ fn resolve_types_in_budget(
     // `__ISVALIDREF` is lowered before it would be flagged as undeclared) and
     // before the reference semantic rules. See
     // specs/design/reference-to-twincat.md (PR 2).
-    library = run_reverting_on_error(library, &mut diagnostics, |lib| {
-        xform_insert_implicit_deref::apply(lib, options)
-    });
+    library = pass!(
+        run_reverting_on_error,
+        observer,
+        library,
+        &mut diagnostics,
+        xform_insert_implicit_deref,
+        options
+    );
 
     // Rewrite the `ADR(x)` address-of operator into `ExprKind::Ref` when
     // `allow_adr` is set. Runs after implicit-deref (so a `REFERENCE TO`
@@ -269,9 +240,14 @@ fn resolve_types_in_budget(
     // (so a recognized `ADR` is not reported as an undeclared function).
     // Best effort: a diagnosed call is lowered to a placeholder, so the
     // transformed library is kept even when diagnostics are present.
-    library = run_best_effort(library, &mut diagnostics, |lib| {
-        xform_resolve_adr::apply(lib, options)
-    });
+    library = pass!(
+        run_best_effort,
+        observer,
+        library,
+        &mut diagnostics,
+        xform_resolve_adr,
+        options
+    );
 
     // Fold constant-expression VAR initializers (e.g. `scaled : LREAL := SCALE*4.0;`)
     // back into ordinary literal initializers, or diagnose. Must run before
@@ -279,15 +255,26 @@ fn resolve_types_in_budget(
     // Best effort: a diagnosed initializer is still normalized, so the
     // transformed library must be kept even when diagnostics are present —
     // reverting would leak `SimpleExpr` nodes to later passes.
-    library = run_best_effort(library, &mut diagnostics, |lib| {
-        xform_fold_initializer_expressions::apply(lib, options)
-    });
+    library = pass!(
+        run_best_effort,
+        observer,
+        library,
+        &mut diagnostics,
+        xform_fold_initializer_expressions,
+        options
+    );
 
     // Rewrite integer 0/1 initializers on BOOL variables to boolean literals.
     // Short-circuits internally when allow_int_to_bool_initializer is false.
-    library = run_reverting_on_error(library, &mut diagnostics, |lib| {
-        xform_int_to_bool_initializer::apply(lib, &mut type_environment, options)
-    });
+    library = pass!(
+        run_reverting_on_error,
+        observer,
+        library,
+        &mut diagnostics,
+        xform_int_to_bool_initializer,
+        &mut type_environment,
+        options
+    );
 
     // A structure member's declared value is only in its final form now:
     // late-bound resolution and folding have turned `c : Color := Blue` and
@@ -297,14 +284,15 @@ fn resolve_types_in_budget(
     // then carries the members' values. Nothing holds an id from the first
     // derivation, which already diagnosed any repeated or unresolvable
     // declaration, so a failure here keeps the first environment.
-    if let Ok(mut resolved_environment) = TypeEnvironmentBuilder::new()
-        .with_elementary_types()
-        .with_stdlib_function_blocks()
-        .build()
-    {
-        if let Ok((resolved, _)) =
-            xform_resolve_type_decl_environment::apply(library.clone(), &mut resolved_environment)
-        {
+    if let Ok(mut resolved_environment) = build_type_environment(observer) {
+        let copy = observer.observe(
+            observe::fallback("xform_resolve_type_decl_environment"),
+            || library.clone(),
+        );
+        if let Ok((resolved, _)) = direct!(
+            observer,
+            xform_resolve_type_decl_environment(copy, &mut resolved_environment)
+        ) {
             library = resolved;
             type_environment = resolved_environment;
         }
@@ -313,45 +301,79 @@ fn resolve_types_in_budget(
     // Best effort: a repeated declaration name is diagnosed here, by the
     // environments, and the first declaration is kept, so the rest of the
     // library still resolves instead of reverting on the first repeat.
-    library = run_best_effort(library, &mut diagnostics, |lib| {
-        xform_resolve_symbol_and_function_environment::apply(
-            lib,
-            &mut symbol_environment,
-            &mut function_environment,
-        )
-    });
+    library = pass!(
+        run_best_effort,
+        observer,
+        library,
+        &mut diagnostics,
+        xform_resolve_symbol_and_function_environment,
+        &mut symbol_environment,
+        &mut function_environment
+    );
 
     // Convert named function call arguments to positional.
     // Best effort: a diagnosed call keeps its named arguments, which is the
     // state reverting would leave every call in -- including the valid ones.
-    library = run_best_effort(library, &mut diagnostics, |lib| {
-        xform_named_to_positional_args::apply(lib, &function_environment)
-    });
+    library = pass!(
+        run_best_effort,
+        observer,
+        library,
+        &mut diagnostics,
+        xform_named_to_positional_args,
+        &function_environment
+    );
 
     // Record the type id each declaration declares, entering types spelled
     // out in place as anonymous types.
-    library = run_reverting_on_error(library, &mut diagnostics, |lib| {
-        xform_resolve_decl_types::apply(lib, &mut type_environment)
-    });
+    library = pass!(
+        run_reverting_on_error,
+        observer,
+        library,
+        &mut diagnostics,
+        xform_resolve_decl_types,
+        &mut type_environment
+    );
 
     // Resolve expression types using the function environment.
-    library = run_reverting_on_error(library, &mut diagnostics, |lib| {
-        xform_resolve_expr_types::apply(lib, &mut type_environment, &function_environment, options)
-    });
+    library = pass!(
+        run_reverting_on_error,
+        observer,
+        library,
+        &mut diagnostics,
+        xform_resolve_expr_types,
+        &mut type_environment,
+        &function_environment,
+        options
+    );
 
     // Fold constant binary and unary expressions.
-    library = run_reverting_on_error(library, &mut diagnostics, |lib| {
-        xform_fold_constant_expressions::apply(lib)
-    });
+    library = pass!(
+        run_reverting_on_error,
+        observer,
+        library,
+        &mut diagnostics,
+        xform_fold_constant_expressions
+    );
 
     // ABS of an unsigned value is the value itself; no back end sees it.
-    library = run_reverting_on_error(library, &mut diagnostics, |lib| {
-        xform_remove_unsigned_abs::apply(lib, &type_environment)
-    });
+    library = pass!(
+        run_reverting_on_error,
+        observer,
+        library,
+        &mut diagnostics,
+        xform_remove_unsigned_abs,
+        &type_environment
+    );
 
-    library = run_reverting_on_error(library, &mut diagnostics, |lib| {
-        xform_resolve_type_aliases::apply(lib, &type_environment, &mut symbol_environment)
-    });
+    library = pass!(
+        run_reverting_on_error,
+        observer,
+        library,
+        &mut diagnostics,
+        xform_resolve_type_aliases,
+        &type_environment,
+        &mut symbol_environment
+    );
 
     // Mark every variable the program never writes as CONSTANT, so the
     // semantic rules and codegen see one notion of a constant variable.
@@ -359,11 +381,14 @@ fn resolve_types_in_budget(
     // rewritten to `Ref`, user functions in the function environment and
     // named arguments made positional. Infallible, so nothing to revert.
     // See specs/design/constant-variable-inference.md.
-    let library = xform_mark_unwritten_constants::apply(
-        library,
-        &type_environment,
-        &function_environment,
-        &symbol_environment,
+    let library = direct!(
+        observer,
+        xform_mark_unwritten_constants(
+            library,
+            &type_environment,
+            &function_environment,
+            &symbol_environment
+        )
     );
 
     // Generate and display useful symbol table information
@@ -383,84 +408,6 @@ fn resolve_types_in_budget(
     context.add_diagnostics(diagnostics);
 
     Ok((library, context))
-}
-
-/// Semantic implements semantic analysis (stage 3).
-///
-/// Returns `Ok(())` if the library is free of semantic errors.
-/// Returns `Err(String)` if the library contains a semantic error.
-pub(crate) fn semantic(
-    library: &Library,
-    context: &SemanticContext,
-    options: &CompilerOptions,
-) -> SemanticResult {
-    let functions: Vec<fn(&Library, &SemanticContext, &CompilerOptions) -> SemanticResult> = vec![
-        rule_abstract_not_instantiated::apply,
-        rule_assignment_aggregate_type_compat::apply,
-        rule_decl_struct_element_unique_names::apply,
-        rule_range_limits::apply,
-        rule_real_literal_range::apply,
-        rule_enum_base_type_allowed::apply,
-        rule_enum_explicit_value_allowed::apply,
-        rule_enumeration_values_unique::apply,
-        rule_loop_control_inside_loop::apply,
-        rule_jump_target::apply,
-        rule_extends_field_duplicated::apply,
-        rule_function_block_call_unsupported::apply,
-        rule_function_block_invocation::apply,
-        rule_function_call_declared::apply,
-        rule_function_call_in_out_argument::apply,
-        rule_function_call_type_check::apply,
-        rule_member_qualifier_allowed::apply,
-        rule_member_qualifier_invalid::apply,
-        rule_method_call_declared::apply,
-        rule_program_task_definition_exists::apply,
-        rule_program_var_hides_global::apply,
-        rule_no_top_level_var_global::apply,
-        rule_operator_operand_type_check::apply,
-        rule_task_names_unique::apply,
-        rule_stdlib_type_redefinition::apply,
-        rule_string_encoding_compat::apply,
-        rule_string_length_range::apply,
-        rule_string_literal_char_range::apply,
-        rule_temporal_literal_range::apply,
-        rule_struct_initializer_expression_allowed::apply,
-        rule_fb_instance_array_allowed::apply,
-        rule_use_declared_enumerated_value::apply,
-        rule_use_declared_symbolic_var::apply,
-        rule_unsupported_extension::apply,
-        rule_var_decl_const_initialized::apply,
-        rule_var_decl_const_not_fb::apply,
-        rule_var_decl_initializer_type_compat::apply,
-        rule_var_decl_global_const_requires_external_const::apply,
-        rule_mixed_located_var_declarations::apply,
-        rule_pou_hierarchy::apply,
-        rule_bit_and_partial_access_range::apply,
-        rule_case_bit_string_label::apply,
-        rule_case_selector_type::apply,
-        rule_condition_type::apply,
-        rule_constant_range::apply,
-        rule_ref_to::apply,
-        rule_special_operator::apply,
-    ];
-
-    let mut all_diagnostics = vec![];
-    for func in functions {
-        match func(library, context, options) {
-            Ok(_) => {
-                // Nothing to do here
-            }
-            Err(diagnostics) => {
-                all_diagnostics.extend(diagnostics);
-            }
-        }
-    }
-
-    if !all_diagnostics.is_empty() {
-        return Err(all_diagnostics);
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]
