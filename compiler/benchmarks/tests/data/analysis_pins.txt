@@ -1,0 +1,454 @@
+## adr.st [default]
+parse P0002 expected `;`
+## adr.st [rusty]
+parse P0002 expected `;`
+## array.st [default]
+library 1cb29c5fec27d9db 1 elements
+diagnostic P4007 Undefined variable
+## array.st [rusty]
+library 1cb29c5fec27d9db 1 elements
+diagnostic P4007 Undefined variable
+## array_in_function_var.st [default]
+library f8b60881d671303f 1 elements
+## array_in_function_var.st [rusty]
+library f8b60881d671303f 1 elements
+## array_of_string.st [default]
+library 78dc993474bd6637 1 elements
+## array_of_string.st [rusty]
+library 78dc993474bd6637 1 elements
+## based_literals.st [default]
+parse P0002 expected `;`
+## based_literals.st [rusty]
+library 262e4825df7ad9d8 1 elements
+## bit_access.st [default]
+library c3500cdc912290c1 1 elements
+## bit_access.st [rusty]
+library c3500cdc912290c1 1 elements
+## bit_string_arithmetic.st [default]
+library 014f745c2da8f5b5 1 elements
+diagnostic P4049 Expression
+## bit_string_arithmetic.st [rusty]
+library 014f745c2da8f5b5 1 elements
+## c_style_block_comment.st [default]
+parse P0004 C-style comments are not enabled in this dialect
+## c_style_block_comment.st [rusty]
+library 77f5bfec4030d750 1 elements
+## comment.st [default]
+library ca111a5799b347e9 1 elements
+diagnostic P4007 Undefined variable
+## comment.st [rusty]
+library ca111a5799b347e9 1 elements
+diagnostic P4007 Undefined variable
+## conditional.st [default]
+library f344fcb4f8a06e05 1 elements
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+## conditional.st [rusty]
+library f344fcb4f8a06e05 1 elements
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+## configuration.st [default]
+library 26d6b9bb198d2269 2 elements
+diagnostic P4043 Expression-valued struct/FB-instance initializer
+diagnostic P4007 Undefined variable
+## configuration.st [rusty]
+library 26d6b9bb198d2269 2 elements
+diagnostic P4007 Undefined variable
+## edge_input_decl.st [default]
+library 727dba31bb800987 2 elements
+## edge_input_decl.st [rusty]
+library 727dba31bb800987 2 elements
+## empty_var_block.st [default]
+parse P0011 empty variable blocks are not enabled in this dialect
+## empty_var_block.st [rusty]
+library a97a2b5a412e04fe 1 elements
+## escaped_identifiers.st [default]
+parse P4067 escaped identifiers are not enabled in this dialect
+## escaped_identifiers.st [rusty]
+parse P4067 escaped identifiers are not enabled in this dialect
+## expressions.st [default]
+library 8669453422d76565 1 elements
+diagnostic P4017 Function call
+diagnostic P4035 Assignment value
+diagnostic P4035 Assignment value
+diagnostic P4035 Assignment value
+diagnostic P4035 Assignment value
+diagnostic P4049 Operand
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+## expressions.st [rusty]
+library 8669453422d76565 1 elements
+diagnostic P4017 Function call
+diagnostic P4035 Assignment value
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+## first_steps.st [default]
+library 19b18a563e78493b 8 elements
+## first_steps.st [rusty]
+library 19b18a563e78493b 8 elements
+## first_steps_configuration.st [default]
+library 48397ed1b61c701a 1 elements
+## first_steps_configuration.st [rusty]
+library 48397ed1b61c701a 1 elements
+## first_steps_data_type_decl.st [default]
+library aef0365c8879a26c 1 elements
+## first_steps_data_type_decl.st [rusty]
+library aef0365c8879a26c 1 elements
+## first_steps_func_avg_val.st [default]
+library 49942bce9abd3e23 1 elements
+## first_steps_func_avg_val.st [rusty]
+library 49942bce9abd3e23 1 elements
+## first_steps_function_block_counter_fbd.st [default]
+library 678a24ebc57a0476 1 elements
+## first_steps_function_block_counter_fbd.st [rusty]
+library 678a24ebc57a0476 1 elements
+## first_steps_function_block_counter_ld.st [default]
+library 797848bb98776dea 1 elements
+## first_steps_function_block_counter_ld.st [rusty]
+library 797848bb98776dea 1 elements
+## first_steps_function_block_counter_sfc.st [default]
+library 634bd24be7806075 1 elements
+## first_steps_function_block_counter_sfc.st [rusty]
+library 634bd24be7806075 1 elements
+## first_steps_function_block_logger.st [default]
+library f37f2d017f02faa3 1 elements
+diagnostic P2008 Variable type
+## first_steps_function_block_logger.st [rusty]
+library f37f2d017f02faa3 1 elements
+diagnostic P2008 Variable type
+## first_steps_program.st [default]
+library 9c46eec2d592d7be 1 elements
+diagnostic P2008 Variable type
+diagnostic P2008 Variable type
+diagnostic P2008 Variable type
+diagnostic P2008 Variable type
+diagnostic P2008 Variable type
+diagnostic P4012 Function block invocation
+diagnostic P4012 Function block invocation
+diagnostic P4012 Function block invocation
+diagnostic P4012 Function block invocation
+diagnostic P4012 Function block invocation
+diagnostic P4017 Function call
+## first_steps_program.st [rusty]
+library 9c46eec2d592d7be 1 elements
+diagnostic P2008 Variable type
+diagnostic P2008 Variable type
+diagnostic P2008 Variable type
+diagnostic P2008 Variable type
+diagnostic P2008 Variable type
+diagnostic P4012 Function block invocation
+diagnostic P4012 Function block invocation
+diagnostic P4012 Function block invocation
+diagnostic P4012 Function block invocation
+diagnostic P4012 Function block invocation
+diagnostic P4017 Function call
+## first_steps_semantic_error.st [default]
+library 967b2e52b8b5c7be 8 elements
+diagnostic P2006 Expected value in enumeration
+## first_steps_semantic_error.st [rusty]
+library 967b2e52b8b5c7be 8 elements
+diagnostic P2006 Expected value in enumeration
+## first_steps_syntax_error.st [default]
+parse P0002 expected `;`
+## first_steps_syntax_error.st [rusty]
+parse P0002 expected `;`
+## if.st [default]
+parse P0002 expected `;`
+## if.st [rusty]
+library 1313b2ee8afb3fbe 1 elements
+## incomplete_array.st [default]
+parse P4070 incomplete array bounds are not enabled in this dialect
+## incomplete_array.st [rusty]
+parse P4070 incomplete array bounds are not enabled in this dialect
+## inout_var_decl.st [default]
+library e1a07e554d3ddd89 1 elements
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+## inout_var_decl.st [rusty]
+library e1a07e554d3ddd89 1 elements
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+## input_var_decl.st [default]
+library fc17a4f4b2f1728f 1 elements
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+## input_var_decl.st [rusty]
+library fc17a4f4b2f1728f 1 elements
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+## literal.st [default]
+library 97dfb93e0a4f9cf2 1 elements
+## literal.st [rusty]
+library 97dfb93e0a4f9cf2 1 elements
+## main.st [default]
+library c0f7731e22cb83c8 2 elements
+## main.st [rusty]
+library c0f7731e22cb83c8 2 elements
+## namespace.st [default]
+parse P0002 expected a declaration
+## namespace.st [rusty]
+parse P0002 expected a declaration
+## nested.st [default]
+library 9af95805eb7ed705 1 elements
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+## nested.st [rusty]
+library 9af95805eb7ed705 1 elements
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+## oop.st [default]
+parse P0002 expected a declaration
+## oop.st [rusty]
+library 2a1f31d27badeead 6 elements
+diagnostic P9999 SUPER^ is recognized but its type cannot be resolved by IronPLC yet
+diagnostic P9999 SUPER^ method invocation is recognized but not yet resolved by IronPLC
+diagnostic P9999 THIS^ method invocation is recognized but not yet resolved by IronPLC
+diagnostic P9999 SUPER^ method invocation is recognized but not yet resolved by IronPLC
+diagnostic P9999 EXTENDS/IMPLEMENTS/ABSTRACT clause is recognized but not yet supported by IronPLC
+diagnostic P9999 EXTENDS/IMPLEMENTS/ABSTRACT clause is recognized but not yet supported by IronPLC
+diagnostic P9999 SUPER^ base reference is recognized but not yet supported by IronPLC
+diagnostic P9999 THIS^ self reference is recognized but not yet supported by IronPLC
+diagnostic P9999 SUPER^ base reference is recognized but not yet supported by IronPLC
+diagnostic P9999 THIS^ self reference is recognized but not yet supported by IronPLC
+diagnostic P9999 THIS^ self reference is recognized but not yet supported by IronPLC
+diagnostic P9999 SUPER^ base reference is recognized but not yet supported by IronPLC
+diagnostic P9999 INTERFACE declaration is recognized but not yet supported by IronPLC
+diagnostic P9999 INTERFACE declaration is recognized but not yet supported by IronPLC
+diagnostic P9999 INTERFACE declaration is recognized but not yet supported by IronPLC
+diagnostic P9999 SUPER^ is recognized but its members are not yet resolved, so bit and partial access through it is not range-checked
+diagnostic P9999 THIS^ is recognized but its members are not yet resolved, so bit and partial access through it is not range-checked
+diagnostic P9999 SUPER^ is recognized but its members are not yet resolved, so bit and partial access through it is not range-checked
+diagnostic P9999 THIS^ is recognized but its members are not yet resolved, so bit and partial access through it is not range-checked
+diagnostic P9999 THIS^ is recognized but its members are not yet resolved, so bit and partial access through it is not range-checked
+diagnostic P9999 SUPER^ is recognized but its members are not yet resolved, so bit and partial access through it is not range-checked
+## oscat.st [default]
+library 91b71b3806d2ee1f 1 elements
+## oscat.st [rusty]
+library 91b71b3806d2ee1f 1 elements
+## params_of.st [default]
+parse P0002 expected `;`
+## params_of.st [rusty]
+parse P0002 expected `;`
+## partial_access_bit.st [default]
+parse P4033 partial-access syntax is not enabled in this dialect
+## partial_access_bit.st [rusty]
+library b030bc7141ebc4d3 1 elements
+## partial_access_multi.st [default]
+parse P4033 partial-access syntax is not enabled in this dialect
+## partial_access_multi.st [rusty]
+library 744a8fbd26049f35 1 elements
+## pipe_or.st [default]
+library 3038ae1d4ed0076c 1 elements
+## pipe_or.st [rusty]
+library 3038ae1d4ed0076c 1 elements
+## pointer_to.st [default]
+parse P0002 expected `;`
+## pointer_to.st [rusty]
+parse P0002 expected `;`
+## program.st [default]
+library 826d61fc59279ccb 1 elements
+diagnostic P4007 Undefined variable
+## program.st [rusty]
+library 826d61fc59279ccb 1 elements
+diagnostic P4007 Undefined variable
+## ref.st [default]
+parse P0002 expected `;`
+## ref.st [rusty]
+library ed5ecdac5d9d404f 4 elements
+## reference_to.st [default]
+parse P0002 expected `;`
+## reference_to.st [rusty]
+parse P0002 expected `;`
+## sfc.st [default]
+library d7fe20fb72e4fd08 1 elements
+## sfc.st [rusty]
+library d7fe20fb72e4fd08 1 elements
+## sized_string_contexts.st [default]
+library 908802dfb758d2bd 4 elements
+## sized_string_contexts.st [rusty]
+library 908802dfb758d2bd 4 elements
+## sizeof.st [default]
+library 06c2cfe1dea5ebf0 1 elements
+diagnostic P4017 Function call
+diagnostic P4017 Function call
+diagnostic P4017 Function call
+## sizeof.st [rusty]
+library 06c2cfe1dea5ebf0 1 elements
+## special_operators.st [default]
+library 72f625da8c2d44a0 1 elements
+diagnostic P4017 Function call
+diagnostic P4017 Function call
+diagnostic P4017 Function call
+diagnostic P4017 Function call
+diagnostic P4017 Function call
+diagnostic P4017 Function call
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+## special_operators.st [rusty]
+library 72f625da8c2d44a0 1 elements
+diagnostic P4017 Function call
+diagnostic P4017 Function call
+diagnostic P4017 Function call
+diagnostic P4017 Function call
+diagnostic P4017 Function call
+diagnostic P4017 Function call
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+## steel_thread.st [default]
+library ee85df651ca4fb60 1 elements
+## steel_thread.st [rusty]
+library ee85df651ca4fb60 1 elements
+## strings.st [default]
+library 38109d41b3689231 1 elements
+diagnostic P4052 Character not representable in STRING
+## strings.st [rusty]
+library 38109d41b3689231 1 elements
+diagnostic P4052 Character not representable in STRING
+## textual.st [default]
+library 9c16853e60fccf0a 1 elements
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+## textual.st [rusty]
+library 9c16853e60fccf0a 1 elements
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+## time_function_decl.st [default]
+parse P0002 expected a name
+## time_function_decl.st [rusty]
+library e991512c77d2afc4 2 elements
+## time_literal_extensions.st [default]
+library e3b6522b563270fc 1 elements
+diagnostic P4022 Variable declaration
+## time_literal_extensions.st [rusty]
+library e3b6522b563270fc 1 elements
+diagnostic P4022 Variable declaration
+## try_catch.st [default]
+parse P0002 expected `:=` after the assignment target
+## try_catch.st [rusty]
+parse P0002 expected `:=` after the assignment target
+## type_decl.st [default]
+library 9dfe3ad55da229d1 16 elements
+diagnostic P2021 Field type
+diagnostic P2008 Variable type
+## type_decl.st [rusty]
+library 9dfe3ad55da229d1 16 elements
+diagnostic P2021 Field type
+diagnostic P2008 Variable type
+## typed_string_literals.st [default]
+library 757d78766313bd31 1 elements
+## typed_string_literals.st [rusty]
+library 757d78766313bd31 1 elements
+## union.st [default]
+parse P0002 expected `;`
+## union.st [rusty]
+library 438e9c164415482c 2 elements
+## var_decl.st [default]
+library c448f7310066ecea 1 elements
+diagnostic P2008 Variable type
+diagnostic P2008 Variable type
+diagnostic P2008 Variable type
+diagnostic P2008 Variable type
+diagnostic P4043 Expression-valued struct/FB-instance initializer
+diagnostic P4043 Expression-valued struct/FB-instance initializer
+diagnostic P4043 Expression-valued struct/FB-instance initializer
+diagnostic P4043 Expression-valued struct/FB-instance initializer
+diagnostic P4043 Expression-valued struct/FB-instance initializer
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4022 Variable declaration
+## var_decl.st [rusty]
+library 7886d55e3560ac83 1 elements
+diagnostic P2008 Variable type
+diagnostic P2008 Variable type
+diagnostic P2008 Variable type
+diagnostic P2008 Variable type
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+## var_sections.st [default]
+parse P0002 expected `:=` after the assignment target
+## var_sections.st [rusty]
+parse P0002 expected `:=` after the assignment target
+## var_temp.st [default]
+library 29251bb3d94ec602 2 elements
+## var_temp.st [rusty]
+library 29251bb3d94ec602 2 elements
+## wstring_ops.st [default]
+library 7f5e5739b7cc952c 1 elements
+## wstring_ops.st [rusty]
+library 7f5e5739b7cc952c 1 elements
+## generated x1/16
+library 787b53cd94b274a8 23 elements
+## generated one program x1/16
+library 40e1504da24b4f8c 22 elements
