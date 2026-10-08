@@ -14,13 +14,12 @@ use ironplc_dsl::{
     core::{Id, Located},
 };
 use std::collections::{HashMap, HashSet};
+use std::convert::Infallible;
 
+use crate::pass_runner::Outcome;
 use crate::type_environment::TypeEnvironment;
 
-pub fn apply(
-    lib: Library,
-    type_environment: &mut TypeEnvironment,
-) -> Result<(Library, Vec<Diagnostic>), Vec<Diagnostic>> {
+pub fn apply(lib: Library, type_environment: &mut TypeEnvironment) -> Outcome {
     let enum_values = collect_enum_values(&lib);
 
     // Resolve the types. This is a single fold of the library
@@ -31,12 +30,11 @@ pub fn apply(
         type_environment,
         enum_values,
     };
-    // A resolution failure on one declaration is diagnosed but does not
-    // stop the fold, so unrelated declarations still resolve. Only a
-    // genuine fold failure (a compiler bug) discards the result.
-    let result = resolver.fold_library(lib).map_err(|e| vec![e])?;
+    // A resolution failure on one declaration is diagnosed and the node is
+    // kept as it was, so unrelated declarations still resolve.
+    let Ok(result) = resolver.fold_library(lib);
 
-    Ok((result, resolver.diagnostics))
+    Outcome::new(result, resolver.diagnostics)
 }
 
 /// Pre-scans the library to collect all known enumeration value names.
@@ -168,7 +166,7 @@ impl DeclarationResolver<'_> {
     }
 }
 
-impl Fold<Diagnostic> for DeclarationResolver<'_> {
+impl Fold<Infallible> for DeclarationResolver<'_> {
     /// Resolves a bare identifier used as a structure or function-block
     /// member initializer value.
     ///
@@ -185,7 +183,7 @@ impl Fold<Diagnostic> for DeclarationResolver<'_> {
     fn fold_struct_initial_value_assignment_kind(
         &mut self,
         node: StructInitialValueAssignmentKind,
-    ) -> Result<StructInitialValueAssignmentKind, Diagnostic> {
+    ) -> Result<StructInitialValueAssignmentKind, Infallible> {
         if let StructInitialValueAssignmentKind::LateBound(late_bound) = node {
             return Ok(match self.resolve_late_bound(late_bound.value) {
                 ExprKind::EnumeratedValue(value) => {
@@ -200,7 +198,7 @@ impl Fold<Diagnostic> for DeclarationResolver<'_> {
     fn fold_function_declaration(
         &mut self,
         node: FunctionDeclaration,
-    ) -> Result<FunctionDeclaration, Diagnostic> {
+    ) -> Result<FunctionDeclaration, Infallible> {
         node.variables.iter().for_each(|v| self.insert(v));
         let result = node.recurse_fold(self);
         self.names_to_types.clear();
@@ -210,7 +208,7 @@ impl Fold<Diagnostic> for DeclarationResolver<'_> {
     fn fold_function_block_declaration(
         &mut self,
         node: FunctionBlockDeclaration,
-    ) -> Result<FunctionBlockDeclaration, Diagnostic> {
+    ) -> Result<FunctionBlockDeclaration, Infallible> {
         node.variables.iter().for_each(|v| self.insert(v));
         let result = node.recurse_fold(self);
         self.names_to_types.clear();
@@ -219,7 +217,7 @@ impl Fold<Diagnostic> for DeclarationResolver<'_> {
     fn fold_program_declaration(
         &mut self,
         node: ProgramDeclaration,
-    ) -> Result<ProgramDeclaration, Diagnostic> {
+    ) -> Result<ProgramDeclaration, Infallible> {
         node.variables.iter().for_each(|v| self.insert(v));
         let result = node.recurse_fold(self);
         self.names_to_types.clear();
@@ -228,7 +226,7 @@ impl Fold<Diagnostic> for DeclarationResolver<'_> {
     fn fold_assignment(
         &mut self,
         node: ironplc_dsl::textual::Assignment,
-    ) -> Result<ironplc_dsl::textual::Assignment, Diagnostic> {
+    ) -> Result<ironplc_dsl::textual::Assignment, Infallible> {
         // Check the type of the target. We will later use that to assign
         // any late types in the expression.
         match &node.target {
@@ -260,13 +258,16 @@ impl Fold<Diagnostic> for DeclarationResolver<'_> {
                         // late-bound value on the right-hand side to the
                         // wrong type once the construct is supported.
                         // See issue #1406.
-                        return Err(Diagnostic::not_implemented(Label::span(
+                        let diagnostic = Diagnostic::not_implemented(Label::span(
                             self_ref.span(),
                             format!(
                                 "{} is recognized but its members are not yet resolved by IronPLC",
                                 self_ref.kind.spelling()
                             ),
-                        )));
+                        ));
+                        self.diagnostics.push(diagnostic);
+                        self.current_type = VariableType::None;
+                        return Ok(node);
                     }
                     SymbolicVariableKind::BitAccess(_ba) => {
                         // Assignment to a bit access like w.0 := value
@@ -299,7 +300,7 @@ impl Fold<Diagnostic> for DeclarationResolver<'_> {
     fn fold_expr_kind(
         &mut self,
         node: ironplc_dsl::textual::ExprKind,
-    ) -> Result<ironplc_dsl::textual::ExprKind, Diagnostic> {
+    ) -> Result<ironplc_dsl::textual::ExprKind, Infallible> {
         match node {
             ExprKind::Compare(node) => node
                 .recurse_fold(self)
@@ -356,8 +357,10 @@ impl Fold<Diagnostic> for DeclarationResolver<'_> {
                 })),
                 VariableType::FunctionBlock => {
                     // Function block variables are parsed as LateResolvedType, not FunctionBlock.
-                    // If we reach this branch, it indicates an internal error.
-                    Err(Diagnostic::internal_error())
+                    // If we reach this branch, it indicates an internal error; the
+                    // expression stays as it was.
+                    self.diagnostics.push(Diagnostic::internal_error());
+                    Ok(ExprKind::LateBound(node))
                 }
                 VariableType::Subrange => Ok(self.resolve_late_bound(node.value)),
                 VariableType::Structure => Ok(self.resolve_late_bound(node.value)),
@@ -412,9 +415,9 @@ END_FUNCTION_BLOCK";
             .with_elementary_types()
             .build()
             .unwrap();
-        let result = apply(library, &mut type_environment);
+        let result = apply(library, &mut type_environment).diagnostics;
 
-        assert!(result.is_ok());
+        assert!(result.is_empty());
     }
 
     #[test]
@@ -442,8 +445,8 @@ END_FUNCTION_BLOCK
             .with_elementary_types()
             .build()
             .unwrap();
-        let result = apply(library, &mut type_environment);
-        assert!(result.is_ok());
+        let result = apply(library, &mut type_environment).diagnostics;
+        assert!(result.is_empty());
     }
 
     // Test: String variable type - assignment from another variable
@@ -466,8 +469,8 @@ END_FUNCTION_BLOCK";
             .with_elementary_types()
             .build()
             .unwrap();
-        let result = apply(library, &mut type_environment);
-        assert!(result.is_ok());
+        let result = apply(library, &mut type_environment).diagnostics;
+        assert!(result.is_empty());
     }
 
     // Test: Inline enumerated values
@@ -489,8 +492,8 @@ END_FUNCTION_BLOCK";
             .with_elementary_types()
             .build()
             .unwrap();
-        let result = apply(library, &mut type_environment);
-        assert!(result.is_ok());
+        let result = apply(library, &mut type_environment).diagnostics;
+        assert!(result.is_empty());
     }
 
     // Test: Subrange type - inline subrange in VAR_IN_OUT
@@ -516,8 +519,8 @@ END_FUNCTION_BLOCK";
             .with_elementary_types()
             .build()
             .unwrap();
-        let result = apply(library, &mut type_environment);
-        assert!(result.is_ok());
+        let result = apply(library, &mut type_environment).diagnostics;
+        assert!(result.is_empty());
     }
 
     // Test: Structure type
@@ -546,8 +549,8 @@ END_FUNCTION_BLOCK";
             .with_elementary_types()
             .build()
             .unwrap();
-        let result = apply(library, &mut type_environment);
-        assert!(result.is_ok());
+        let result = apply(library, &mut type_environment).diagnostics;
+        assert!(result.is_empty());
     }
 
     // Test: LateResolvedType - enum without initializer
@@ -573,8 +576,8 @@ END_FUNCTION_BLOCK";
             .with_elementary_types()
             .build()
             .unwrap();
-        let result = apply(library, &mut type_environment);
-        assert!(result.is_ok());
+        let result = apply(library, &mut type_environment).diagnostics;
+        assert!(result.is_empty());
     }
 
     // Test: Function block assignment.
@@ -601,11 +604,11 @@ END_FUNCTION_BLOCK";
             .with_elementary_types()
             .build()
             .unwrap();
-        let result = apply(library, &mut type_environment);
+        let result = apply(library, &mut type_environment).diagnostics;
         // This succeeds because FB variables are parsed as LateResolvedType,
         // and we handle that by treating the RHS as a variable reference.
         // Semantic analysis later will catch invalid FB assignments.
-        assert!(result.is_ok());
+        assert!(result.is_empty());
     }
 
     #[test]
@@ -631,8 +634,8 @@ END_FUNCTION_BLOCK";
             .with_elementary_types()
             .build()
             .unwrap();
-        let result = apply(library, &mut type_environment);
-        assert!(result.is_ok());
+        let result = apply(library, &mut type_environment).diagnostics;
+        assert!(result.is_empty());
     }
 
     #[test]
@@ -659,7 +662,7 @@ END_FUNCTION_BLOCK";
             .with_elementary_types()
             .build()
             .unwrap();
-        let result = apply(library, &mut type_environment);
-        assert!(result.is_ok());
+        let result = apply(library, &mut type_environment).diagnostics;
+        assert!(result.is_empty());
     }
 }

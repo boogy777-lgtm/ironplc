@@ -202,7 +202,7 @@ fn resolve_types_in_budget<O: Observer>(
     // Best effort: an unresolvable declaration is diagnosed but does not
     // discard the rest of the library's successfully resolved declarations.
     library = pass!(
-        run_best_effort,
+        run_pass,
         observer,
         library,
         &mut diagnostics,
@@ -210,7 +210,7 @@ fn resolve_types_in_budget<O: Observer>(
         &mut type_environment
     );
     library = pass!(
-        run_best_effort,
+        run_pass,
         observer,
         library,
         &mut diagnostics,

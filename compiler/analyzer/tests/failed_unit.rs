@@ -135,6 +135,11 @@ fn analysis(unit: &str, unit_first: bool) -> Reported {
 /// One kind of pass failure: a unit that fails in that pass, the correct unit
 /// of the same name, and the codes the failing unit is reported with.
 #[rstest::rstest]
+#[case::self_reference_written(
+    "FUNCTION_BLOCK T_UNIT VAR count : INT; END_VAR METHOD Run THIS^.count := 1; END_METHOD END_FUNCTION_BLOCK",
+    "FUNCTION_BLOCK T_UNIT VAR count : INT; END_VAR METHOD Run count := 1; END_METHOD END_FUNCTION_BLOCK",
+    &["P9999"]
+)]
 #[case::self_reference_read(
     "FUNCTION_BLOCK T_UNIT VAR count : INT; END_VAR METHOD Run count := THIS^.count; END_METHOD END_FUNCTION_BLOCK",
     "FUNCTION_BLOCK T_UNIT VAR count : INT; END_VAR METHOD Run count := count; END_METHOD END_FUNCTION_BLOCK",
