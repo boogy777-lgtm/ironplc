@@ -1,32 +1,40 @@
 //! How a pass of the type resolution is run.
 //!
-//! Every transform of the library crosses one of the functions here, and each
-//! reports itself to the observer ([`crate::observe`]) under the name of its
-//! module. The two functions differ in one thing, what a failure keeps; the
-//! macros take the name from the module a call names, so a pass is written once
-//! and is reported under that name.
+//! Every transform of the library crosses [`run_pass`], and each reports itself
+//! to the observer ([`crate::observe`]) under the name of its module. The
+//! contract is one for every pass: a pass takes the library and gives back an
+//! [`Outcome`], the library as far as it could transform it and what it found
+//! wrong with the parts it could not. A problem in the user's program is not a
+//! failure of the pass, so a pass that finds one keeps the node it was about to
+//! transform as it was, and the runner has nothing to give back and keeps no
+//! copy of the library. The macros take the name from the module a call names,
+//! so a pass is written once and is reported under that name.
 
 use ironplc_dsl::{common::Library, diagnostic::Diagnostic};
 
 use crate::observe::{self, Observer};
 
 /// Runs the transform of the module named, `<module>::apply(library, ...)`,
-/// as the pass named after that module: `how` is the function that decides
-/// what a failure keeps ([`run_best_effort`] or [`run_reverting_on_error`]),
-/// and the arguments after the module are the arguments of `apply` that follow
-/// the library. The name an observer is told is the identifier of the module,
-/// taken from the call, so a pass added here is reported under its own name.
+/// as the pass named after that module: the arguments after the module are the
+/// arguments of `apply` that follow the library. The name an observer is told
+/// is the identifier of the module, taken from the call, so a pass added here
+/// is reported under its own name.
 macro_rules! pass {
-    ($how:ident, $observer:expr, $library:expr, $diagnostics:expr, $module:ident $(, $argument:expr)*) => {
-        $how($observer, stringify!($module), $library, $diagnostics, |library| {
-            $module::apply(library $(, $argument)*)
-        })
+    ($observer:expr, $library:expr, $diagnostics:expr, $module:ident $(, $argument:expr)*) => {
+        $crate::pass_runner::run_pass(
+            $observer,
+            stringify!($module),
+            $library,
+            $diagnostics,
+            |library| $module::apply(library $(, $argument)*),
+        )
     };
 }
 
-/// Runs `<module>::apply(...)` as the pass named after the module, for a pass
-/// that has no fallback to keep: one whose failure is a hard failure, one that
-/// cannot fail, or one that does not transform the library.
+/// Runs `<module>::apply(...)` as the pass named after the module, for a step
+/// that is not a transform with the contract of [`run_pass`]: one whose failure
+/// is a hard failure (the library cannot be analyzed at all), one that cannot
+/// fail, or one that does not transform the library.
 macro_rules! direct {
     ($observer:expr, $module:ident ( $($argument:expr),* $(,)? )) => {
         $observer.observe($crate::observe::pass(stringify!($module)), || {
@@ -71,35 +79,6 @@ pub(crate) fn run_pass<O: Observer>(
     let outcome = observer.observe(observe::pass(name), || xform(library));
     diagnostics.extend(outcome.diagnostics);
     outcome.library
-}
-
-/// Runs a transform that reports per-declaration problems without discarding
-/// the declarations it did transform.
-///
-/// `Ok((library, diagnostics))` means "here is the transformed library, and
-/// here is what was wrong with parts of it": the transformed library is kept
-/// and the diagnostics are collected alongside it. A best-effort pass reserves
-/// `Err` for a failure that left it with no library to return at all, which
-/// still reverts because there is nothing else to keep.
-pub(crate) fn run_best_effort<O: Observer>(
-    observer: &O,
-    name: &'static str,
-    library: Library,
-    diagnostics: &mut Vec<Diagnostic>,
-    xform: impl FnOnce(Library) -> Result<(Library, Vec<Diagnostic>), Vec<Diagnostic>>,
-) -> Library {
-    let fallback = observer.observe(observe::fallback(name), || library.clone());
-    match observer.observe(observe::pass(name), || xform(library)) {
-        Ok((result, errs)) => {
-            diagnostics.extend(errs);
-            observer.observe(observe::fallback(name), || drop(fallback));
-            result
-        }
-        Err(errs) => {
-            diagnostics.extend(errs);
-            fallback
-        }
-    }
 }
 
 #[cfg(test)]
@@ -150,6 +129,5 @@ mod tests {
 
         assert_eq!(vec!["p"], recorder.names(Kind::Pass));
         assert!(recorder.names(Kind::Setup).is_empty());
-        assert!(recorder.names(Kind::Fallback).is_empty());
     }
 }

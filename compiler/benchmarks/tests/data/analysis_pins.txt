@@ -400,10 +400,12 @@ parse P0002 expected `:=` after the assignment target
 ## type_decl.st [default]
 library 9dfe3ad55da229d1 16 elements
 diagnostic P2021 Field type
+diagnostic P2013 Array declaration
 diagnostic P2008 Variable type
 ## type_decl.st [rusty]
 library 9dfe3ad55da229d1 16 elements
 diagnostic P2021 Field type
+diagnostic P2013 Array declaration
 diagnostic P2008 Variable type
 ## typed_string_literals.st [default]
 library 757d78766313bd31 1 elements

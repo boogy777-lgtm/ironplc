@@ -185,7 +185,7 @@ END_TYPE
             .with_elementary_types()
             .build()
             .unwrap();
-        let _library = apply(input, &mut env).unwrap();
+        let _library = apply(input, &mut env).library;
 
         // Check that the enumeration uses 16-bit underlying type
         let attributes = env.get(&TypeName::from("SMALL_ENUM")).unwrap();
@@ -220,7 +220,7 @@ END_TYPE
             .with_elementary_types()
             .build()
             .unwrap();
-        let _library = apply(input, &mut env).unwrap();
+        let _library = apply(input, &mut env).library;
 
         // Check that the enumeration uses 16-bit underlying type
         let attributes = env.get(&TypeName::from("LARGE_ENUM")).unwrap();
@@ -255,7 +255,7 @@ END_TYPE
             .with_elementary_types()
             .build()
             .unwrap();
-        let errors = apply(input, &mut env).err().unwrap();
+        let errors = apply(input, &mut env).diagnostics;
         assert_eq!(1, errors.len());
         assert_eq!(
             Problem::EnumerationTooManyValues.code(),
@@ -277,7 +277,7 @@ END_TYPE
             .with_elementary_types()
             .build()
             .unwrap();
-        let _library = apply(input, &mut env).unwrap();
+        let _library = apply(input, &mut env).library;
 
         // Check that the enumeration type was created
         let attributes = env.get(&TypeName::from("LEVEL")).unwrap();
@@ -300,7 +300,7 @@ END_TYPE
             .with_elementary_types()
             .build()
             .unwrap();
-        let _library = apply(input, &mut env).unwrap();
+        let _library = apply(input, &mut env).library;
 
         // Check that the enumeration type was created
         let attributes = env.get(&TypeName::from("LEVEL2")).unwrap();
@@ -322,7 +322,7 @@ END_TYPE
             .with_elementary_types()
             .build()
             .unwrap();
-        let _library = apply(input, &mut env).unwrap();
+        let _library = apply(input, &mut env).library;
 
         // WORD is explicitly specified -- 2 bytes, even though only 2
         // members would otherwise size to 1 byte automatically.
@@ -344,7 +344,7 @@ END_TYPE
             .with_elementary_types()
             .build()
             .unwrap();
-        let _library = apply(input, &mut env).unwrap();
+        let _library = apply(input, &mut env).library;
 
         // Only 2 members (would auto-size to 1 byte by count), but the
         // explicit value 300 requires 2 bytes -- sizing must be based on

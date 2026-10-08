@@ -62,7 +62,7 @@ END_TYPE
             .with_elementary_types()
             .build()
             .unwrap();
-        let _library = apply(input, &mut env).unwrap();
+        let _library = apply(input, &mut env).library;
 
         let my_str_type = env.get(&TypeName::from("MY_STR")).unwrap();
         assert!(matches!(
@@ -88,7 +88,7 @@ END_TYPE
             .with_elementary_types()
             .build()
             .unwrap();
-        let _library = apply(input, &mut env).unwrap();
+        let _library = apply(input, &mut env).library;
 
         let my_wstr_type = env.get(&TypeName::from("MY_WSTR")).unwrap();
         assert!(matches!(
@@ -114,7 +114,7 @@ END_TYPE
             .with_elementary_types()
             .build()
             .unwrap();
-        let _library = apply(input, &mut env).unwrap();
+        let _library = apply(input, &mut env).library;
 
         // Check that the string type was created
         let my_string_type = env.get(&TypeName::from("MY_STRING")).unwrap();

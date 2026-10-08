@@ -135,6 +135,46 @@ fn analysis(unit: &str, unit_first: bool) -> Reported {
 /// One kind of pass failure: a unit that fails in that pass, the correct unit
 /// of the same name, and the codes the failing unit is reported with.
 #[rstest::rstest]
+#[case::declared_type_alias_of_undeclared_type(
+    "TYPE T_UNIT : T_NOWHERE; END_TYPE",
+    "TYPE T_UNIT : INT; END_TYPE",
+    &["P2011"]
+)]
+#[case::structure_field_of_undeclared_type(
+    "TYPE T_UNIT : STRUCT a : T_NOWHERE; END_STRUCT; END_TYPE",
+    "TYPE T_UNIT : STRUCT a : INT; END_STRUCT; END_TYPE",
+    &["P2021"]
+)]
+#[case::array_of_undeclared_element_type(
+    "TYPE T_UNIT : ARRAY[1..3] OF T_NOWHERE; END_TYPE",
+    "TYPE T_UNIT : ARRAY[1..3] OF INT; END_TYPE",
+    &["P2013"]
+)]
+#[case::array_with_bounds_in_the_wrong_order(
+    "TYPE T_UNIT : ARRAY[3..1] OF INT; END_TYPE",
+    "TYPE T_UNIT : ARRAY[1..3] OF INT; END_TYPE",
+    &["P2024"]
+)]
+#[case::subrange_with_bounds_in_the_wrong_order(
+    "TYPE T_UNIT : INT (5..1); END_TYPE",
+    "TYPE T_UNIT : INT (1..5); END_TYPE",
+    &["P2002"]
+)]
+#[case::enumeration_alias_of_undeclared_enumeration(
+    "TYPE T_UNIT : E_NOWHERE := A1; END_TYPE",
+    "TYPE T_UNIT : (A1, A2); END_TYPE",
+    &["P2009"]
+)]
+#[case::reference_to_undeclared_type(
+    "TYPE T_UNIT : REF_TO T_NOWHERE; END_TYPE",
+    "TYPE T_UNIT : REF_TO INT; END_TYPE",
+    &["P2011"]
+)]
+#[case::function_block_variable_of_undeclared_type_with_initializer(
+    "FUNCTION_BLOCK T_UNIT VAR x : T_NOWHERE := 1; END_VAR END_FUNCTION_BLOCK",
+    "FUNCTION_BLOCK T_UNIT VAR x : INT := 1; END_VAR END_FUNCTION_BLOCK",
+    &["P2011"]
+)]
 #[case::self_reference_written(
     "FUNCTION_BLOCK T_UNIT VAR count : INT; END_VAR METHOD Run THIS^.count := 1; END_METHOD END_FUNCTION_BLOCK",
     "FUNCTION_BLOCK T_UNIT VAR count : INT; END_VAR METHOD Run count := 1; END_METHOD END_FUNCTION_BLOCK",

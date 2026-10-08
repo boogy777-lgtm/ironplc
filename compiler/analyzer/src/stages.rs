@@ -16,7 +16,7 @@ use crate::{
     intermediates::special_operator::special_operator_signatures,
     ironplc_dsl::common::Library,
     observe::{self, Observer, Unobserved},
-    pass_runner::{direct, pass, run_best_effort, run_pass},
+    pass_runner::{direct, pass},
     semantic_context::SemanticContext,
     semantic_rules::semantic,
     symbol_environment::{ScopeKind, SymbolEnvironment, SymbolKind},
@@ -172,7 +172,6 @@ fn resolve_types_in_budget<O: Observer>(
     // Best effort: an unresolvable reference is diagnosed and left as a
     // `Constant`, which is the state reverting would leave every reference in.
     library = pass!(
-        run_pass,
         observer,
         library,
         &mut diagnostics,
@@ -186,23 +185,23 @@ fn resolve_types_in_budget<O: Observer>(
     // name survives the sort; the environments built below diagnose it.
     let (mut library, reachable) = direct!(observer, xform_toposort_declarations(library))?;
 
-    // Best effort: a repeated type or function block name is diagnosed by
-    // the type environment, which keeps the first declaration, so the rest
-    // of the library still resolves. `Err` is a declaration that cannot be
-    // resolved at all, which still reverts.
+    // A repeated type or function block name is diagnosed by the type
+    // environment, which keeps the first declaration, and a declaration that
+    // cannot be resolved is diagnosed and left out of it, so the rest of the
+    // library still resolves.
+    let before = diagnostics.len();
     library = pass!(
-        run_best_effort,
         observer,
         library,
         &mut diagnostics,
         xform_resolve_type_decl_environment,
         &mut type_environment
     );
+    let first_derivation_found = diagnostics.len() - before;
 
     // Best effort: an unresolvable declaration is diagnosed but does not
     // discard the rest of the library's successfully resolved declarations.
     library = pass!(
-        run_pass,
         observer,
         library,
         &mut diagnostics,
@@ -210,7 +209,6 @@ fn resolve_types_in_budget<O: Observer>(
         &mut type_environment
     );
     library = pass!(
-        run_pass,
         observer,
         library,
         &mut diagnostics,
@@ -226,7 +224,6 @@ fn resolve_types_in_budget<O: Observer>(
     // before the reference semantic rules. See
     // specs/design/reference-to-twincat.md (PR 2).
     library = pass!(
-        run_pass,
         observer,
         library,
         &mut diagnostics,
@@ -241,7 +238,6 @@ fn resolve_types_in_budget<O: Observer>(
     // Best effort: a diagnosed call is lowered to a placeholder, so the
     // transformed library is kept even when diagnostics are present.
     library = pass!(
-        run_pass,
         observer,
         library,
         &mut diagnostics,
@@ -256,7 +252,6 @@ fn resolve_types_in_budget<O: Observer>(
     // transformed library must be kept even when diagnostics are present —
     // reverting would leak `SimpleExpr` nodes to later passes.
     library = pass!(
-        run_pass,
         observer,
         library,
         &mut diagnostics,
@@ -267,7 +262,6 @@ fn resolve_types_in_budget<O: Observer>(
     // Rewrite integer 0/1 initializers on BOOL variables to boolean literals.
     // Short-circuits internally when allow_int_to_bool_initializer is false.
     library = pass!(
-        run_pass,
         observer,
         library,
         &mut diagnostics,
@@ -283,17 +277,16 @@ fn resolve_types_in_budget<O: Observer>(
     // declarations; every structure, alias of one and aggregate holding one
     // then carries the members' values. Nothing holds an id from the first
     // derivation, which already diagnosed any repeated or unresolvable
-    // declaration, so a failure here keeps the first environment.
+    // declaration, so what the second derivation finds is not reported again.
+    // It replaces the first environment unless it found more than the first
+    // did, a declaration the first resolved and this one cannot.
     if let Ok(mut resolved_environment) = build_type_environment(observer) {
-        let copy = observer.observe(
-            observe::fallback("xform_resolve_type_decl_environment"),
-            || library.clone(),
-        );
-        if let Ok((resolved, _)) = direct!(
+        let second = direct!(
             observer,
-            xform_resolve_type_decl_environment(copy, &mut resolved_environment)
-        ) {
-            library = resolved;
+            xform_resolve_type_decl_environment(library, &mut resolved_environment)
+        );
+        library = second.library;
+        if second.diagnostics.len() <= first_derivation_found {
             type_environment = resolved_environment;
         }
     }
@@ -302,7 +295,6 @@ fn resolve_types_in_budget<O: Observer>(
     // environments, and the first declaration is kept, so the rest of the
     // library still resolves instead of reverting on the first repeat.
     library = pass!(
-        run_pass,
         observer,
         library,
         &mut diagnostics,
@@ -315,7 +307,6 @@ fn resolve_types_in_budget<O: Observer>(
     // Best effort: a diagnosed call keeps its named arguments, which is the
     // state reverting would leave every call in -- including the valid ones.
     library = pass!(
-        run_pass,
         observer,
         library,
         &mut diagnostics,
@@ -326,7 +317,6 @@ fn resolve_types_in_budget<O: Observer>(
     // Record the type id each declaration declares, entering types spelled
     // out in place as anonymous types.
     library = pass!(
-        run_pass,
         observer,
         library,
         &mut diagnostics,
@@ -336,7 +326,6 @@ fn resolve_types_in_budget<O: Observer>(
 
     // Resolve expression types using the function environment.
     library = pass!(
-        run_pass,
         observer,
         library,
         &mut diagnostics,
@@ -348,7 +337,6 @@ fn resolve_types_in_budget<O: Observer>(
 
     // Fold constant binary and unary expressions.
     library = pass!(
-        run_pass,
         observer,
         library,
         &mut diagnostics,
@@ -357,7 +345,6 @@ fn resolve_types_in_budget<O: Observer>(
 
     // ABS of an unsigned value is the value itself; no back end sees it.
     library = pass!(
-        run_pass,
         observer,
         library,
         &mut diagnostics,
@@ -366,7 +353,6 @@ fn resolve_types_in_budget<O: Observer>(
     );
 
     library = pass!(
-        run_pass,
         observer,
         library,
         &mut diagnostics,

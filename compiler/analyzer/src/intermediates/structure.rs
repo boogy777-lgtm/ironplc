@@ -232,7 +232,11 @@ mod tests {
             .build()
             .unwrap();
         let result = apply(input, &mut env);
-        assert!(result.is_ok(), "Expected Ok, got error: {:?}", result.err());
+        assert!(
+            result.diagnostics.is_empty(),
+            "Expected no diagnostics, got: {:?}",
+            result.diagnostics
+        );
         env
     }
 
@@ -247,8 +251,8 @@ mod tests {
             .build()
             .unwrap();
         let result = apply(input, &mut env);
-        assert!(result.is_err());
-        result.unwrap_err()
+        assert!(!result.diagnostics.is_empty());
+        result.diagnostics
     }
 
     #[test]

@@ -516,7 +516,7 @@ END_TYPE
             .build()
             .unwrap();
         let result = apply(input, &mut env);
-        assert!(result.is_ok());
+        assert!(result.diagnostics.is_empty());
 
         // Check that the subrange types were created
         let my_range_type = env.get(&TypeName::from("MY_RANGE")).unwrap();
@@ -560,7 +560,7 @@ END_TYPE
             .build()
             .unwrap();
         let result = apply(input, &mut env);
-        assert!(result.is_ok());
+        assert!(result.diagnostics.is_empty());
 
         // Check that both types were created
         let base_type = env.get(&TypeName::from("BASE_RANGE")).unwrap();
@@ -586,8 +586,8 @@ END_TYPE
             .build()
             .unwrap();
         let result = apply(input, &mut env);
-        assert!(result.is_err());
-        let error = result.unwrap_err();
+        let error = result.diagnostics;
+        assert!(!error.is_empty());
         assert_eq!(
             Problem::SubrangeMinStrictlyLessMax.code(),
             error.first().unwrap().code
@@ -610,7 +610,7 @@ END_TYPE
             .unwrap();
         let result = apply(input, &mut env);
 
-        let error = result.unwrap_err();
+        let error = result.diagnostics;
         assert_eq!(
             Problem::SubrangeOutOfBounds.code(),
             error.first().unwrap().code
@@ -630,7 +630,7 @@ END_TYPE
         let mut env = TypeEnvironment::new();
         let result = apply(input, &mut env);
 
-        let error = result.unwrap_err();
+        let error = result.diagnostics;
         assert_eq!(
             Problem::ParentTypeNotDeclared.code(),
             error.first().unwrap().code
@@ -654,7 +654,7 @@ END_TYPE
             .build()
             .unwrap();
         let result = apply(input, &mut env);
-        assert!(result.is_ok());
+        assert!(result.diagnostics.is_empty());
 
         // Check memory sizes
         let sint_range = env.get(&TypeName::from("SINT_RANGE")).unwrap();
@@ -684,7 +684,7 @@ END_TYPE
             .build()
             .unwrap();
         let result = apply(input, &mut env);
-        assert!(result.is_ok());
+        assert!(result.diagnostics.is_empty());
 
         // Check that all types were created with the same representation
         let base_type = env.get(&TypeName::from("BASE_RANGE")).unwrap();
@@ -716,7 +716,7 @@ END_TYPE
             .build()
             .unwrap();
         let result = apply(input, &mut env);
-        assert!(result.is_ok());
+        assert!(result.diagnostics.is_empty());
 
         // This exercises bounds validation for different integer sizes
         let sint_type = env.get(&TypeName::from("SINT_RANGE")).unwrap();
