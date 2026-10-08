@@ -285,10 +285,16 @@ fn resolve_types_in_budget<O: Observer>(
     // derivation, which already diagnosed any repeated or unresolvable
     // declaration, so a failure here keeps the first environment.
     if let Ok(mut resolved_environment) = build_type_environment(observer) {
-        let copy = observer.observe(
-            observe::fallback("xform_resolve_type_decl_environment"),
-            || library.clone(),
-        );
+        // Prototype B1: with the switch on, the library is moved into the pass
+        // and not copied; a failed pass leaves an empty library.
+        let copy = if crate::experiment::NO_FALLBACK.level() == 1 {
+            std::mem::take(&mut library)
+        } else {
+            observer.observe(
+                observe::fallback("xform_resolve_type_decl_environment"),
+                || library.clone(),
+            )
+        };
         if let Ok((resolved, _)) = direct!(
             observer,
             xform_resolve_type_decl_environment(copy, &mut resolved_environment)

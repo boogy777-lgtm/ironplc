@@ -8,6 +8,7 @@
 
 use ironplc_dsl::{common::Library, diagnostic::Diagnostic};
 
+use crate::experiment::NO_FALLBACK;
 use crate::observe::{self, Observer};
 
 /// Runs the transform of the module named, `<module>::apply(library, ...)`,
@@ -38,6 +39,26 @@ macro_rules! direct {
 pub(crate) use direct;
 pub(crate) use pass;
 
+/// The copy a pass keeps so that a failure can give the library back.
+///
+/// Prototype B1: with the switch on, no copy is kept and a failed pass gives
+/// back an empty library. That is the cost of the contract "a failed pass
+/// returns the library it was given" when the contract needs no copy; the
+/// result is the same whenever no pass fails.
+fn keep_copy<O: Observer>(observer: &O, name: &'static str, library: &Library) -> Library {
+    if NO_FALLBACK.level() == 1 {
+        return Library::new();
+    }
+    observer.observe(observe::fallback(name), || library.clone())
+}
+
+fn release_copy<O: Observer>(observer: &O, name: &'static str, copy: Library) {
+    if NO_FALLBACK.level() == 1 {
+        return;
+    }
+    observer.observe(observe::fallback(name), || drop(copy));
+}
+
 /// Runs a transform whose failure discards the whole library.
 ///
 /// The pre-pass library is restored when the transform returns `Err`, so every
@@ -60,10 +81,10 @@ pub(crate) fn run_reverting_on_error<O: Observer>(
     diagnostics: &mut Vec<Diagnostic>,
     xform: impl FnOnce(Library) -> Result<Library, Vec<Diagnostic>>,
 ) -> Library {
-    let fallback = observer.observe(observe::fallback(name), || library.clone());
+    let fallback = keep_copy(observer, name, &library);
     match observer.observe(observe::pass(name), || xform(library)) {
         Ok(result) => {
-            observer.observe(observe::fallback(name), || drop(fallback));
+            release_copy(observer, name, fallback);
             result
         }
         Err(errs) => {
@@ -88,11 +109,11 @@ pub(crate) fn run_best_effort<O: Observer>(
     diagnostics: &mut Vec<Diagnostic>,
     xform: impl FnOnce(Library) -> Result<(Library, Vec<Diagnostic>), Vec<Diagnostic>>,
 ) -> Library {
-    let fallback = observer.observe(observe::fallback(name), || library.clone());
+    let fallback = keep_copy(observer, name, &library);
     match observer.observe(observe::pass(name), || xform(library)) {
         Ok((result, errs)) => {
             diagnostics.extend(errs);
-            observer.observe(observe::fallback(name), || drop(fallback));
+            release_copy(observer, name, fallback);
             result
         }
         Err(errs) => {
