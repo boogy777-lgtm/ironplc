@@ -54,8 +54,34 @@ keeps that decision.
 Measured before the switch of the front end (i5-9300H, Windows, 11 small
 programs): parse 2.2 ms, analysis 20.2 ms, code generation 3.2 ms. The fixed
 cost of one `analyze` call is about 1.4 ms (function environment 630-660 µs,
-type environment 55-100 µs, the rest not attributed). **There is no
-measurement of analysis on a large project.**
+type environment 55-100 µs, the rest not attributed).
+
+### Measured on a large project (2026-10-08)
+
+Phase 1 is done on the local branch `perf/analysis-benchmark-rows`; the record
+is `specs/design/analysis-cost-measurement.md` on that branch. It corrects
+figures of this plan and sizes the later phases:
+
+| This plan said | Measured |
+|---|---|
+| 15 passes, plus one more clone (17 copies) | 17 transforms and `type_table` (18 passes); 16 copies of the library per analysis |
+| about 45 rules | 47 rules; 45 of them walk the whole library, each with its own walk |
+| fixed cost 1.4 ms | 1.66 ms warm, 2.2 ms cold; function environment 1.09 ms |
+| no figure for a large project | 44,828 lines: analysis 1.43 s; 134,571 lines: 4.44 s |
+
+Share of one analysis, the same at every scale: copies of the library kept by
+passes 54 %, passes 22 %, rules 21 %, setup 3 %. Growth is linear in the size
+except `xform_resolve_type_aliases` (quadratic in the number of types) and
+`rule_constant_range`.
+
+Only two passes read the bodies of other units: `xform_toposort_declarations`
+(names called) and `xform_mark_unwritten_constants` (writes). Every other
+cross-unit read, in passes and in rules, is a read of declarations.
+
+Prototypes of phase 2 (branch `exp/analysis-reuse-prototypes`, figures only):
+no copy per pass gives 0.42-0.46 of the analysis time; standard environments
+shared by a layer give a fixed cost of 0.48 ms; bundled libraries parsed once
+give 3.2 ms to 1.1 ms per load and nothing visible on a large project.
 
 ### Hot edit findings of 2026-10-06
 
@@ -93,6 +119,56 @@ pushed).
 | D2 | Scope of "it builds, so it applies" for hot edit | A code edit and new data always apply. A change of the shape of existing data applies when a rule for its values exists (stable IDs, a migration decision), else it is refused with an exact cause |
 | D3 | State layout = persistent state only; transient call frames are outside it | Yes. Compiling every declared function instead is rejected: it moves the refusal to "declare a function" and compiles unused library code |
 | D4 | Order against the deletion of the legacy parser | Independent; either order |
+| D5 | What a pass keeps when it fails, so that no pass keeps a copy of the library | Every pass keeps what it transformed and reports the unit that failed; no pass reverts the whole library. Results on a program without errors do not change |
+| D6 | Two consumers of one analysis: the check while the user types, and the build | One service, two requests. See "Check and build" |
+
+### Decided by the owner (2026-10-08)
+
+- Phase 1 is executed (D1).
+- Hot edit and code generation of this plan are proven on a project of one
+  `PROGRAM`. More than one program is to-do, outside this plan.
+- D3: prepare the design note; an agent researches the pipeline and the
+  options first, and the note carries that research so that the owner decides
+  from it. The owner's objection is one of the options to test: the controller
+  holds two copies while a candidate is loaded, so the place where the
+  candidate is held may be what has to change, not the definition of the layout.
+- D5 and D6 are open. The owner asked for the check while typing and the build
+  to be separated before D5 is decided.
+- How decisions reach the owner: a technical decision that can be undone and
+  changes nothing on a correct program is made by the agent and recorded; a
+  decision that changes what a user sees is put as a question about behaviour,
+  with what CODESYS does and what a mistake costs; a decision about the goal is
+  the owner's.
+
+### Check and build
+
+Today both are the same analysis of the whole project: the language server
+runs it on every edit (`compiler/ironplc-cli/src/lsp.rs:243`,
+`lsp_project.rs:189`), and the build runs it and then generates code only when
+nothing reported a problem (`compiler/project/src/compile.rs:69-77`).
+
+| | Check while typing | Build |
+|---|---|---|
+| Input | usually has an error | must have none |
+| Needs | messages, soon | messages, then code |
+| On an error | keep everything that could be analyzed | no code is generated |
+| Scope it could have | the edited unit and what depends on it | everything |
+
+In neither is the reverted library of a failed pass used for more than
+messages, which is why D5 is asked. The phases 4 and 5 give the check its
+scope; the build stays the control path of the invariant.
+
+### To-do outside this plan, in the owner's order
+
+1. Code generation of a function block instance inside a function block
+   (reported by the measurement agent, `compile_stmt.rs:523`; to be verified).
+2. Code generation of a member of a structure variable declared in a function
+   block (reported, `compile_struct.rs:236`; to be verified).
+3. More than one `PROGRAM` (`compile.rs:576`); whether the runtime runs more
+   than one is not known.
+
+A real project uses all three, so a hot edit of a real project waits for them
+whatever this plan delivers.
 
 ## Architecture
 
@@ -196,16 +272,29 @@ by it.
 
 ### Phase 1 — measure (PF4, then a report)
 
-- [ ] Large input: a project of hundreds of POUs (bundled compatibility
+- [x] Large input: a project of hundreds of POUs (bundled compatibility
       library plus generated callers, or a multiplied corpus); record how it
       was made
-- [ ] Time and allocations per pass and per rule, cold and warm, three runs
-- [ ] List of passes and rules that need the whole program, with the body
+- [x] Time and allocations per pass and per rule, cold and warm, three runs
+- [x] List of passes and rules that need the whole program, with the body
       fact each one reads
-- [ ] Record in the design document; no product change besides the benchmark
+- [x] Record in the design document; no product change besides the benchmark
+
+Done on the local branch `perf/analysis-benchmark-rows` (not pushed). The
+code generation rows run on a project of one program whose function blocks
+hold no instance and read no member, because code generation refuses the
+project of many programs.
 
 **Gate.** Phases 4 and 5 are sized from this report. Revise this plan before
-starting them.
+starting them. What the report already changes:
+
+- Phase 2, PF1 cannot be done as written: a pass consumes the library and
+  fails midway, so it has no library to give back. It needs D5.
+- Phase 4 is smaller than feared for the passes (two read bodies of other
+  units) and has a part this plan did not name: the rules. Forty-five walks of
+  the library become one walk, or the rule loop takes the unit to check.
+- `xform_resolve_type_aliases` and `type_table` fit no split by unit; the
+  first is quadratic and the result of the second is only logged.
 
 ### Phase 2 — stop redoing the unchanged (PF1, PF2, PF3; three PRs)
 
@@ -265,8 +354,12 @@ starting them.
 
 ## Risks
 
-- **Phase 4 is the large one and is not sized.** Fifteen transforms and about
-  forty-five rules run on the whole library today. Phase 1 exists to size it.
+- **Phase 4 is the large one.** Seventeen transforms and forty-seven rules run
+  on the whole library today. Phase 1 sized it; see "Measured on a large
+  project".
+- **The end of the line is not reachable on a real project** until the to-do
+  outside this plan is done: the plan can deliver a hot edit of one unit of a
+  project that code generation accepts, and today that is a small one.
 - **A stale result shown as current.** The only defence is the control
   invariant; no selective stage lands without it.
 - **Format change in phase H.** The container, the verifier and the runtime
