@@ -127,13 +127,21 @@ pushed).
 - Phase 1 is executed (D1).
 - Hot edit and code generation of this plan are proven on a project of one
   `PROGRAM`. More than one program is to-do, outside this plan.
-- D3: prepare the design note; an agent researches the pipeline and the
-  options first, and the note carries that research so that the owner decides
-  from it. The owner's objection is one of the options to test: the controller
-  holds two copies while a candidate is loaded, so the place where the
-  candidate is held may be what has to change, not the definition of the layout.
-- D5 and D6 are open. The owner asked for the check while typing and the build
-  to be separated before D5 is decided.
+- D3 is decided: the state layout is the persistent part (option O1 of
+  `specs/design/state-layout-and-body-edits.md`). A call added or removed is
+  an ordinary online change. The owner accepts the cost: one format version,
+  so a project is built and loaded in full once after the runtime is updated.
+  The owner's objection, that the place where the candidate is held is what
+  has to change, was tested as options of its own in that note: the program is
+  held in two copies and the data in one, and the refusal is a comparison, not
+  a lack of storage.
+- D5 is decided: when a unit has an error, every other unit is checked in
+  full, in the check while typing and in the build. So every pass keeps what
+  it transformed and reports the unit that failed, and no pass keeps a copy of
+  the library.
+- D6: the check while typing and the build are two requests to one analysis
+  ("Check and build"). The owner asked for the separation; its scope for the
+  check comes with phases 4 and 5.
 - How decisions reach the owner: a technical decision that can be undone and
   changes nothing on a correct program is made by the agent and recorded; a
   decision that changes what a user sees is put as a question about behaviour,
