@@ -169,8 +169,7 @@ fn resolve_types_in_budget<O: Observer>(
 
     // Resolve constant references in type parameters (STRING lengths, array bounds).
     // Must run before toposort so that concrete integer values are available.
-    // Best effort: an unresolvable reference is diagnosed and left as a
-    // `Constant`, which is the state reverting would leave every reference in.
+    // An unresolvable reference is diagnosed and left as a `Constant`.
     library = pass!(
         observer,
         library,
@@ -199,8 +198,8 @@ fn resolve_types_in_budget<O: Observer>(
     );
     let first_derivation_found = diagnostics.len() - before;
 
-    // Best effort: an unresolvable declaration is diagnosed but does not
-    // discard the rest of the library's successfully resolved declarations.
+    // An unresolvable declaration is diagnosed and kept as it was; the rest of
+    // the library's declarations are resolved.
     library = pass!(
         observer,
         library,
@@ -235,8 +234,7 @@ fn resolve_types_in_budget<O: Observer>(
     // `allow_adr` is set. Runs after implicit-deref (so a `REFERENCE TO`
     // operand is not mis-addressed) and before symbol/function resolution
     // (so a recognized `ADR` is not reported as an undeclared function).
-    // Best effort: a diagnosed call is lowered to a placeholder, so the
-    // transformed library is kept even when diagnostics are present.
+    // A diagnosed call is lowered to a placeholder.
     library = pass!(
         observer,
         library,
@@ -248,9 +246,8 @@ fn resolve_types_in_budget<O: Observer>(
     // Fold constant-expression VAR initializers (e.g. `scaled : LREAL := SCALE*4.0;`)
     // back into ordinary literal initializers, or diagnose. Must run before
     // any other pass touches `InitialValueAssignmentKind::SimpleExpr`.
-    // Best effort: a diagnosed initializer is still normalized, so the
-    // transformed library must be kept even when diagnostics are present —
-    // reverting would leak `SimpleExpr` nodes to later passes.
+    // A diagnosed initializer is still normalized, so no `SimpleExpr` reaches
+    // later passes.
     library = pass!(
         observer,
         library,
@@ -291,9 +288,8 @@ fn resolve_types_in_budget<O: Observer>(
         }
     }
 
-    // Best effort: a repeated declaration name is diagnosed here, by the
-    // environments, and the first declaration is kept, so the rest of the
-    // library still resolves instead of reverting on the first repeat.
+    // A repeated declaration name is diagnosed here, by the environments, and
+    // the first declaration is kept, so the rest of the library still resolves.
     library = pass!(
         observer,
         library,
@@ -304,8 +300,7 @@ fn resolve_types_in_budget<O: Observer>(
     );
 
     // Convert named function call arguments to positional.
-    // Best effort: a diagnosed call keeps its named arguments, which is the
-    // state reverting would leave every call in -- including the valid ones.
+    // A diagnosed call keeps its named arguments.
     library = pass!(
         observer,
         library,
@@ -365,7 +360,7 @@ fn resolve_types_in_budget<O: Observer>(
     // semantic rules and codegen see one notion of a constant variable.
     // Runs last: it needs bare identifiers resolved to variables, `ADR`
     // rewritten to `Ref`, user functions in the function environment and
-    // named arguments made positional. Infallible, so nothing to revert.
+    // named arguments made positional. Infallible.
     // See specs/design/constant-variable-inference.md.
     let library = direct!(
         observer,

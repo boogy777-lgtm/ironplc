@@ -320,8 +320,8 @@ END_TYPE
     ));
 }
 
-/// What `apply` returns: the resolved library with the repeats it met, or
-/// the failure that reverted it.
+/// What `apply` returns: the resolved library with the repeats and the
+/// failures it met.
 type Applied = Outcome;
 
 /// Helper function to parse 61131-3 code and apply type resolution with elementary types
