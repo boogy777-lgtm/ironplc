@@ -16,42 +16,126 @@
 //! The text is deterministic: the same [`Scale`] gives the same files, byte for
 //! byte, with a generator seeded by a constant and no other source of
 //! variation. It is accepted by the analysis with no diagnostic
-//! (`tests/generated.rs` holds the smallest scale to that). It is not an input
-//! of code generation, which takes a project of one program and reports the
-//! second with `P9999`.
+//! (`tests/generated.rs` holds the smallest scale to that).
+//!
+//! Code generation takes a project of one program and reports the second with
+//! `P9999`, so a project of the shape of the industrial one (39 programs) is an
+//! input of analysis only. [`PROGRAM`] is the shape for code generation: one
+//! program, which holds an instance of every function block of the project and
+//! so reaches the function blocks and functions of the project. A shape is data
+//! ([`SHAPES`]); the generator is one.
 
 use crate::corpus::CorpusFile;
 use ironplc_parser::options::CompilerOptions;
 use std::path::PathBuf;
 
-/// The counts of a project, which a [`Scale`] multiplies.
-#[derive(Debug, Clone, Copy)]
+/// How many of something a project holds: `fixed`, plus `scaled` taken at the
+/// [`Scale`] of the project (never fewer than one when `scaled` is not zero).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Count {
+    pub fixed: usize,
+    pub scaled: usize,
+}
+
+impl Count {
+    pub const fn fixed(count: usize) -> Self {
+        Self {
+            fixed: count,
+            scaled: 0,
+        }
+    }
+
+    pub const fn scaled(count: usize) -> Self {
+        Self {
+            fixed: 0,
+            scaled: count,
+        }
+    }
+
+    fn at(&self, scale: &Scale) -> usize {
+        if self.scaled == 0 {
+            self.fixed
+        } else {
+            self.fixed + scale.of(self.scaled)
+        }
+    }
+}
+
+/// What the body of a function block does with what it holds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BlockUse {
+    /// Reads and writes members of the structure it holds (`state.f_0`).
+    pub members: bool,
+    /// Holds instances of function blocks of a lower level and calls them.
+    pub blocks: bool,
+}
+
+/// What a project is made of, before it is given a size.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Shape {
-    pub structures: usize,
-    pub function_blocks: usize,
-    pub functions: usize,
-    pub programs: usize,
-    pub global_files: usize,
+    /// The name of the inputs this shape makes.
+    pub name: &'static str,
+    pub structures: Count,
+    pub function_blocks: Count,
+    pub functions: Count,
+    pub programs: Count,
+    pub global_files: Count,
+    /// The function block instances one program holds: this many, plus up to
+    /// `instance_spread` more (chosen by the generator). The function blocks of
+    /// the project are shared out among the instances of a program in order, so
+    /// as many instances as function blocks reach every function block.
+    pub instances: Count,
+    pub instance_spread: usize,
+    /// What a function block holds and uses of other declarations. Analysis
+    /// accepts all of it; code generation does not compile all of it.
+    pub blocks: BlockUse,
     /// The bodies of a few programs that are thousands of lines long, in
-    /// lines; at a scale they repeat in this order.
+    /// lines; the first programs have them, in this order.
     pub big_bodies: &'static [usize],
 }
 
-/// The shape the series of scales is made from.
-pub const SHAPE: Shape = Shape {
-    structures: 185,
-    function_blocks: 80,
-    functions: 30,
-    programs: 39,
-    global_files: 8,
+/// The shape of an industrial project: the counts are taken from one and are
+/// numbers only. Its 39 programs are an input of analysis.
+pub const PROJECT: Shape = Shape {
+    name: "generated",
+    structures: Count::scaled(185),
+    function_blocks: Count::scaled(80),
+    functions: Count::scaled(30),
+    programs: Count::scaled(39),
+    global_files: Count::scaled(8),
+    instances: Count::fixed(4),
+    instance_spread: 5,
+    blocks: BlockUse {
+        members: true,
+        blocks: true,
+    },
     big_bodies: &[3_000, 5_000, 9_000, 20_000],
 };
+
+/// The same declarations with one program, which holds an instance of each
+/// function block and has the longest body: the input of code generation, which
+/// compiles one program.
+pub const PROGRAM: Shape = Shape {
+    name: "generated one program",
+    programs: Count::fixed(1),
+    instances: Count::scaled(80),
+    instance_spread: 0,
+    blocks: BlockUse {
+        members: false,
+        blocks: false,
+    },
+    big_bodies: &[20_000],
+    ..PROJECT
+};
+
+/// Every shape the benchmarks measure; an input set is made of each.
+pub const SHAPES: &[&Shape] = &[&PROJECT, &PROGRAM];
 
 /// The lines of the body of a function block or of a program that is not one of
 /// the big ones.
 const SMALL_BODY: usize = 24;
 
-/// The counts of one project: [`SHAPE`] at a [`Scale`].
+/// The counts of one project: a [`Shape`] at a [`Scale`].
 #[derive(Debug, Clone, Copy)]
 struct Counts {
     structures: usize,
@@ -59,11 +143,12 @@ struct Counts {
     functions: usize,
     programs: usize,
     global_files: usize,
+    instances: usize,
     big_bodies: usize,
 }
 
-/// How much of [`SHAPE`] a project is: `numerator / denominator` of every
-/// count, never fewer than one of each.
+/// How much of a [`Shape`] a project is: `numerator / denominator` of every
+/// scaled count, never fewer than one of each.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Scale {
     pub numerator: usize,
@@ -71,8 +156,8 @@ pub struct Scale {
 }
 
 /// The series of projects the benchmarks measure, smallest first. The largest
-/// holds 447 function blocks, functions and programs and more than 130,000
-/// lines.
+/// of the shape [`PROJECT`] holds 447 function blocks, functions and programs
+/// and more than 130,000 lines.
 pub const SCALES: &[Scale] = &[
     Scale::new(1, 16),
     Scale::new(1, 4),
@@ -88,12 +173,12 @@ impl Scale {
         }
     }
 
-    /// The name of the input this scale makes.
-    pub fn label(&self) -> String {
+    /// The name of the input a shape makes at this scale.
+    pub fn label(&self, shape: &Shape) -> String {
         if self.denominator == 1 {
-            format!("generated x{}", self.numerator)
+            format!("{} x{}", shape.name, self.numerator)
         } else {
-            format!("generated x{}/{}", self.numerator, self.denominator)
+            format!("{} x{}/{}", shape.name, self.numerator, self.denominator)
         }
     }
 
@@ -101,14 +186,15 @@ impl Scale {
         ((count * self.numerator + self.denominator / 2) / self.denominator).max(1)
     }
 
-    fn counts(&self) -> Counts {
+    fn counts(&self, shape: &Shape) -> Counts {
         Counts {
-            structures: self.of(SHAPE.structures),
-            function_blocks: self.of(SHAPE.function_blocks),
-            functions: self.of(SHAPE.functions),
-            programs: self.of(SHAPE.programs),
-            global_files: self.of(SHAPE.global_files),
-            big_bodies: self.of(SHAPE.big_bodies.len()),
+            structures: shape.structures.at(self),
+            function_blocks: shape.function_blocks.at(self),
+            functions: shape.functions.at(self),
+            programs: shape.programs.at(self),
+            global_files: shape.global_files.at(self),
+            instances: shape.instances.at(self),
+            big_bodies: self.of(shape.big_bodies.len()),
         }
     }
 }
@@ -307,33 +393,32 @@ fn function(index: usize, rng: &mut Lcg) -> String {
     text
 }
 
-fn function_block(index: usize, counts: &Counts, body_lines: usize, rng: &mut Lcg) -> String {
+fn function_block(index: usize, shape: &Shape, counts: &Counts, rng: &mut Lcg) -> String {
     let structure = rng.below(counts.structures);
     let mut declarations = format!(
         "FUNCTION_BLOCK Blk{index}\n  VAR_INPUT\n    in_a : DINT;\n    in_b : LREAL;\n    in_c : BOOL;\n  END_VAR\n  VAR_OUTPUT\n    out_a : DINT;\n    out_b : LREAL;\n  END_VAR\n  VAR\n    state : Rec{structure};\n    count : DINT;\n    idx : DINT;\n    ready : BOOL;\n    level : LREAL;\n"
     );
     let mut scope = Scope {
-        integers: vec![
-            "count".into(),
-            "in_a".into(),
-            "out_a".into(),
-            "state.f_0".into(),
-        ],
+        integers: vec!["count".into(), "in_a".into(), "out_a".into()],
         reals: vec!["level".into(), "in_b".into(), "out_b".into()],
-        booleans: vec!["ready".into(), "in_c".into(), "state.f_2".into()],
-        records: vec![("state".into(), structure)],
+        booleans: vec!["ready".into(), "in_c".into()],
         functions: counts.functions,
         ..Scope::default()
     };
+    if shape.blocks.members {
+        scope.integers.push("state.f_0".into());
+        scope.booleans.push("state.f_2".into());
+        scope.records.push(("state".into(), structure));
+    }
     for slot in 0..2 {
-        if let Some(other) = lower(index, rng) {
+        if let Some(other) = lower(index, rng).filter(|_| shape.blocks.blocks) {
             declarations.push_str(&format!("    sub_{slot} : Blk{other};\n"));
             scope.instances.push((format!("sub_{slot}"), other));
         }
     }
     declarations.push_str("  END_VAR\n");
     let mut text = declarations;
-    statements(&mut text, body_lines, &scope, rng);
+    statements(&mut text, SMALL_BODY, &scope, rng);
     text.push_str("END_FUNCTION_BLOCK\n");
     text
 }
@@ -364,6 +449,7 @@ fn program(
     index: usize,
     counts: &Counts,
     body_lines: usize,
+    spread: usize,
     globals: &[GlobalFile],
     rng: &mut Lcg,
 ) -> String {
@@ -379,8 +465,13 @@ fn program(
         functions: counts.functions,
         ..Scope::default()
     };
-    for slot in 0..(4 + rng.below(5)) {
-        let other = rng.below(counts.function_blocks);
+    let instances = counts.instances + rng.below(spread);
+    // The function blocks are shared out among the instances in order, each
+    // instance taking one of its own share.
+    let share = (counts.function_blocks / instances.max(1)).max(1);
+    for slot in 0..instances {
+        let other = (slot * counts.function_blocks / instances.max(1) + rng.below(share))
+            .min(counts.function_blocks.saturating_sub(1));
         text.push_str(&format!("    inst_{slot} : Blk{other};\n"));
         scope.instances.push((format!("inst_{slot}"), other));
     }
@@ -431,12 +522,12 @@ fn file(name: String, source: String) -> CorpusFile {
     }
 }
 
-/// The files of the project of `scale`: one per structure group, per global
-/// variable group, per function block, function and program, and the
+/// The files of the project of `shape` at `scale`: one per structure group, per
+/// global variable group, per function block, function and program, and the
 /// configuration.
-pub fn generate(scale: &Scale) -> Vec<CorpusFile> {
+pub fn generate(shape: &Shape, scale: &Scale) -> Vec<CorpusFile> {
     let mut rng = Lcg(0x1ec6_1131_3000_0001);
-    let counts = scale.counts();
+    let counts = scale.counts(shape);
 
     let mut files = Vec::new();
     for group in 0..counts.structures.div_ceil(20) {
@@ -456,20 +547,27 @@ pub fn generate(scale: &Scale) -> Vec<CorpusFile> {
         files.push(file(format!("func_{index}.st"), function(index, &mut rng)));
     }
     for index in 0..counts.function_blocks {
-        let text = function_block(index, &counts, SMALL_BODY, &mut rng);
+        let text = function_block(index, shape, &counts, &mut rng);
         files.push(file(format!("blk_{index}.st"), text));
     }
     for index in 0..counts.programs {
         let body_lines = if index < counts.big_bodies {
-            SHAPE
+            shape
                 .big_bodies
-                .get(index % SHAPE.big_bodies.len())
+                .get(index % shape.big_bodies.len())
                 .copied()
                 .unwrap_or(SMALL_BODY)
         } else {
             SMALL_BODY
         };
-        let text = program(index, &counts, body_lines, &globals, &mut rng);
+        let text = program(
+            index,
+            &counts,
+            body_lines,
+            shape.instance_spread,
+            &globals,
+            &mut rng,
+        );
         files.push(file(format!("prog_{index}.st"), text));
     }
     files.push(file(
