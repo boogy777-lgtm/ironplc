@@ -7,6 +7,7 @@ pub mod corpus;
 pub mod generated;
 pub mod paths;
 pub mod programs;
+pub mod project;
 
 use ironplc_codegen::compile;
 use ironplc_container::Container;

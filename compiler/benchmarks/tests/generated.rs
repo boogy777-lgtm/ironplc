@@ -2,6 +2,13 @@
 //! the same text on every run, a project the analysis accepts, and a project
 //! whose state grows in proportion to its scale.
 
+// Test-target boundary: a project that does not parse is a defect of the
+// generator, and the test that reads it should stop there.
+#![allow(
+    clippy::unwrap_used,
+    reason = "test target: panicking helpers are sanctioned in tests"
+)]
+
 use ironplc_benchmarks::corpus::CorpusFile;
 use ironplc_benchmarks::generated::{generate, options, PROGRAM, SCALES, SHAPES};
 use ironplc_dsl::common::Library;

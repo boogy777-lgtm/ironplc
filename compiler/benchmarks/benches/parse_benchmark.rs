@@ -20,7 +20,7 @@
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use ironplc_benchmarks::corpus::{corpus_dir, load_corpus};
-use ironplc_benchmarks::paths::{Ctx, Over, Probe, PATHS};
+use ironplc_benchmarks::paths::{Ctx, Input, Over, Probe, PATHS};
 use std::time::{Duration, Instant};
 
 /// Adds up the time between `start` and `stop`, so that Criterion times the
@@ -47,23 +47,24 @@ impl Probe for Timer {
 fn bench_paths(c: &mut Criterion) {
     let ctx = Ctx::default();
     let files = load_corpus(&corpus_dir()).unwrap();
-    for over in Over::ALL {
+    for over in Over::all() {
         let items = over.items(&files);
-        for path in PATHS.iter().filter(|path| path.over == over) {
+        for path in PATHS.iter().filter(|path| path.runs_over(over)) {
             let mut group = c.benchmark_group(path.group);
+            group.sample_size(over.samples());
             for item in &items {
-                group.throughput(Throughput::Bytes(item.source.len() as u64));
+                group.throughput(Throughput::Bytes(item.bytes() as u64));
                 group.bench_with_input(
                     BenchmarkId::from_parameter(&item.name),
-                    &item.source,
-                    |b, source| {
+                    item,
+                    |b, input: &Input| {
                         b.iter_custom(|iterations| {
                             let mut timer = Timer {
                                 started: None,
                                 elapsed: Duration::ZERO,
                             };
                             for _ in 0..iterations {
-                                path.call(&ctx, source, &mut timer);
+                                path.call(&ctx, input, &mut timer);
                             }
                             timer.elapsed
                         })

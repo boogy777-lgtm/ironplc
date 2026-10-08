@@ -113,7 +113,7 @@ pub const PROJECT: Shape = Shape {
 };
 
 /// The same declarations with one program, which holds an instance of each
-/// function block and has the longest body: the input of code generation, which
+/// function block and has a body of 5,000 lines: the input of code generation, which
 /// compiles one program.
 pub const PROGRAM: Shape = Shape {
     name: "generated one program",
@@ -124,7 +124,7 @@ pub const PROGRAM: Shape = Shape {
         members: false,
         blocks: false,
     },
-    big_bodies: &[20_000],
+    big_bodies: &[5_000],
     ..PROJECT
 };
 
@@ -164,6 +164,26 @@ pub const SCALES: &[Scale] = &[
     Scale::new(1, 1),
     Scale::new(3, 1),
 ];
+
+/// The environment variable that limits a run to the smallest scales: the
+/// number of scales of [`SCALES`] to measure, smallest first. A project of the
+/// largest scale takes seconds to analyze and more than a gigabyte of memory, so
+/// a first run of a new path or shape measures one scale, then the next.
+pub const SCALES_LIMIT: &str = "IRONPLC_BENCH_SCALES";
+
+/// The scales a run measures: [`SCALES`], or the smallest few of them when
+/// [`SCALES_LIMIT`] says so.
+pub fn scales() -> &'static [Scale] {
+    let limit = std::env::var(SCALES_LIMIT)
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(SCALES.len());
+    SCALES.get(..limit).unwrap_or(SCALES)
+}
+
+/// A project smaller than any of [`SCALES`]: the input of the one-time
+/// initialization probe, which needs a call that is cheap to make twice.
+pub const PROBE: Scale = Scale::new(1, 64);
 
 impl Scale {
     pub const fn new(numerator: usize, denominator: usize) -> Self {

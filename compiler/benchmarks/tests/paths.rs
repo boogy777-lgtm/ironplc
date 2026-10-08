@@ -3,7 +3,8 @@
 //! baseline that names no path, two paths with one name, a path that panics.
 
 use ironplc_benchmarks::corpus::{corpus_dir, load_corpus, plcopen_document, statement_bodies};
-use ironplc_benchmarks::paths::{path_named, timed, Ctx, Over, Probe, Stack, PATHS};
+use ironplc_benchmarks::generated::SHAPES;
+use ironplc_benchmarks::paths::{path_named, timed, Ctx, Input, Over, Probe, Stack, PATHS};
 use std::collections::HashSet;
 
 /// Counts the brackets a path makes.
@@ -31,7 +32,7 @@ fn paths_when_listed_then_names_and_groups_are_unique() {
 }
 
 #[test]
-fn paths_when_baseline_named_then_a_path_over_the_same_inputs_has_that_name() {
+fn paths_when_baseline_named_then_a_path_over_at_least_the_same_inputs_has_that_name() {
     for path in PATHS {
         let Some(baseline) = path.baseline else {
             continue;
@@ -43,7 +44,9 @@ fn paths_when_baseline_named_then_a_path_over_the_same_inputs_has_that_name() {
             path.name
         );
         let other = other.unwrap();
-        assert_eq!(other.over, path.over, "{}", path.name);
+        for over in path.over {
+            assert!(other.runs_over(*over), "{}", path.name);
+        }
         assert_ne!(other.name, path.name);
     }
 }
@@ -52,11 +55,11 @@ fn paths_when_baseline_named_then_a_path_over_the_same_inputs_has_that_name() {
 fn paths_when_run_on_a_tiny_input_then_one_call_is_bracketed_and_described() {
     let ctx = Ctx::default();
     for path in PATHS {
-        for (_, source) in path.over.probes() {
+        for (_, input) in path.over.iter().flat_map(|over| over.probes()) {
             let mut counter = Counter::default();
-            path.call(&ctx, source, &mut counter);
+            path.call(&ctx, &input, &mut counter);
             assert_eq!((counter.starts, counter.stops), (1, 1), "{}", path.name);
-            assert!(!(path.describe)(&ctx, source).is_empty(), "{}", path.name);
+            assert!(!(path.describe)(&ctx, &input).is_empty(), "{}", path.name);
         }
     }
 }
@@ -72,8 +75,31 @@ fn timed_when_called_then_the_call_runs_between_start_and_stop() {
 
 #[test]
 fn probes_when_each_set_then_at_least_one_tiny_input() {
-    for over in Over::ALL {
+    for over in Over::all() {
         assert!(!over.probes().is_empty(), "{}", over.label());
+    }
+}
+
+#[test]
+fn paths_when_listed_then_every_set_of_inputs_a_path_names_exists() {
+    let all = Over::all();
+    for path in PATHS {
+        assert!(!path.over.is_empty(), "{}", path.name);
+        for over in path.over {
+            assert!(all.contains(over), "{} names {}", path.name, over.label());
+        }
+    }
+}
+
+#[test]
+fn paths_when_listed_then_every_shape_of_projects_has_a_path_over_it() {
+    for shape in SHAPES {
+        let over = Over::Generated(shape);
+        assert!(
+            PATHS.iter().any(|path| path.runs_over(over)),
+            "no path runs over {}",
+            shape.name
+        );
     }
 }
 
@@ -109,9 +135,9 @@ impl Probe for OnBudget {
 fn paths_when_stack_is_held_then_the_call_starts_on_the_budget_and_otherwise_does_not() {
     let ctx = Ctx::default();
     for path in PATHS {
-        for (_, source) in path.over.probes() {
+        for (_, input) in path.over.iter().flat_map(|over| over.probes()) {
             let mut probe = OnBudget::default();
-            path.call(&ctx, source, &mut probe);
+            path.call(&ctx, &input, &mut probe);
             assert_eq!(
                 probe.at_start,
                 Some(path.stack == Stack::Held),
@@ -141,7 +167,7 @@ fn plcopen_document_when_corpus_then_the_document_is_read_with_a_unit_for_each_b
     let ctx = Ctx::default();
     let path = path_named("xml document").unwrap();
 
-    let described = (path.describe)(&ctx, &document.source);
+    let described = (path.describe)(&ctx, &Input::of(document.clone()));
 
     let units: usize = described
         .strip_prefix("ok, ")
