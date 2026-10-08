@@ -335,7 +335,7 @@ impl Declaration<'_> {
 
     fn enter_string_declaration(&mut self, node: &StringDeclaration) -> Result<(), Diagnostic> {
         self.environment
-            .insert_type(&node.type_name, string::from_decl(&node));
+            .insert_type(&node.type_name, string::from_decl(node));
         Ok(())
     }
 
@@ -345,7 +345,7 @@ impl Declaration<'_> {
     ) -> Result<(), Diagnostic> {
         // Use the structure processing module to create the structure type
         let attrs =
-            crate::intermediates::structure::try_from(&node.type_name, &node, self.environment)?;
+            crate::intermediates::structure::try_from(&node.type_name, node, self.environment)?;
         self.environment.insert_type(&node.type_name, attrs);
         Ok(())
     }
@@ -354,7 +354,7 @@ impl Declaration<'_> {
         // A union is registered with the members' structure layout for now;
         // overlaying them at offset 0 is not implemented yet.
         let attrs =
-            crate::intermediates::structure::from_union(&node.type_name, &node, self.environment)?;
+            crate::intermediates::structure::from_union(&node.type_name, node, self.environment)?;
         self.environment.insert_type(&node.type_name, attrs);
         Ok(())
     }
