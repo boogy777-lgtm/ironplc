@@ -628,6 +628,20 @@ mod tests {
     }
 
     #[test]
+    fn container_read_from_when_version_7_file_then_unsupported_version() {
+        // A container of the previous format version is refused when its
+        // header is read; it is never read with the old meaning of the layout
+        // hash or without the persistent extent.
+        let mut buf = Vec::new();
+        layout_hash_container().write_to(&mut buf).unwrap();
+        let version_7 = with_tampered_header(&buf, |h| h.format_version = 7);
+
+        let result = Container::read_from(&mut Cursor::new(&version_7));
+
+        assert!(matches!(result, Err(ContainerError::UnsupportedVersion)));
+    }
+
+    #[test]
     fn write_to_when_called_then_header_hashes_match_computation() {
         let container = layout_hash_container();
         let mut buf = Vec::new();
