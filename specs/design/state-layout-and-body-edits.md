@@ -110,8 +110,23 @@ the data changes when an interface changes, and the identity of the code when
 code changes (`CompilerPhase5_Codegenerator.cs:664-694`). What the controller
 holds during a download was not found in these sources.
 
-**Rockwell Logix.** No primary source on the memory layout was found on the
-machine of the research.
+**Rockwell Logix** (Logix 5000 Controllers Design Considerations, publication
+1756-RM094N-EN-P, September 2025; the table "Comparison of Partial
+Import/Export and Add-On Instructions"). An import into a running controller
+adds programs, routines and Add-On Instructions, replaces existing programs
+and routines, and creates tags and data types; "the data values in the
+controller are maintained and new tags have their values initialized from the
+import file". The definition of an existing Add-On Instruction is edited
+offline only, and such an edit keeps the values of members that are inserted,
+deleted, moved, renamed or retyped, but not of a member renamed and moved in
+one operation: values follow the identity of the member. Parameters of a
+subroutine are passed by value and local tags belong to the program, so logic
+owns no state of its own. Where the controller keeps temporaries, and whether
+it holds data in two copies during an edit, the manual does not say.
+
+Both references agree on the behaviour this note proposes: new code on a
+running controller keeps every value, and a change of the shape of existing
+data is a separate, stricter case.
 
 ## Options
 
