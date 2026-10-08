@@ -6,6 +6,7 @@
 pub mod corpus;
 pub mod generated;
 pub mod paths;
+pub mod profile;
 pub mod programs;
 pub mod project;
 
