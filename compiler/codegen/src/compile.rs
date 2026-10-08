@@ -1270,6 +1270,13 @@ fn compile_program_with_functions(
     // collected before the debug loops below, which move their vectors out
     // of `ctx`.
     let variable_table = ctx.collect_variable_table(total_variables.raw())?;
+    // The function block type table states the field layout of each user
+    // function block by type, from the same entries.
+    for descriptor in
+        crate::compile_fb_layout::type_descriptors(&ctx.user_fb_types, &variable_table)?
+    {
+        builder = builder.add_fb_type(descriptor);
+    }
     for entry in variable_table {
         builder = builder.add_var_entry(entry);
     }

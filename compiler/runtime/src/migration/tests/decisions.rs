@@ -24,11 +24,21 @@ fn scalar_entry(var_type: FieldType) -> VarEntry {
     }
 }
 
-/// A container with one user FB instance (uid 7) whose type maps `fields`
-/// fields at `var_offset` 1, carrying the given field UIDs.
+/// A container with one user FB instance (uid 7) whose type lists `fields` and
+/// keeps its working slots at `var_offset` 1, carrying the given field UIDs.
 fn fb_container(fields: &[FieldType], field_uids: &[(u8, u64)]) -> Container {
     let mut builder = ContainerBuilder::new()
         .add_user_fb_type(user_fb_at(0x1000, 1, fields.len() as u8))
+        .add_fb_type(FbTypeDescriptor {
+            type_id: FbTypeId::new(0x1000),
+            fields: fields
+                .iter()
+                .map(|field_type| FieldEntry {
+                    field_type: *field_type,
+                    field_extra: 0,
+                })
+                .collect(),
+        })
         .add_var_entry(fb_entry(0x1000));
     for field_type in fields {
         builder = builder.add_var_entry(VarEntry {

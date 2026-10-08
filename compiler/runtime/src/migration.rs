@@ -34,18 +34,19 @@
 //!
 //! ## Function-block instances (ADR 0059)
 //!
-//! An FB instance's slot holds the offset of its field region, and the field
-//! values themselves are addressed through the type section's user FB
-//! descriptors. The type section's FB field UID table gives each field of a
+//! An FB instance's slot holds the offset of its field region, and the fields
+//! of its type are listed by the type section's FB type descriptor (ADR-0073);
+//! where the block's body keeps its working slots is not part of that layout.
+//! The type section's FB field UID table gives each field of a
 //! user-defined FB type a stable UID, so the planner no longer needs the
 //! stage-2 POC's global "identical tail layout" rule (ADR 0054) for
 //! user-defined instances. For every shared-UID instance of a user FB type
-//! (a descriptor exists on both sides):
+//! (a type descriptor exists on both sides):
 //!
 //! | Layout | Action |
 //! |---|---|
-//! | Descriptors identical | Copy the slot and the whole field region (`num_fields * 8` bytes) |
-//! | Descriptors differ | Match fields by UID; copy each shared-UID field's 8-byte slot, initialise candidate-only UIDs, drop base-only UIDs |
+//! | Field lists identical | Copy the slot and the whole field region (one 8-byte slot per field) |
+//! | Field lists differ | Match fields by UID; copy each shared-UID field's 8-byte slot, initialise candidate-only UIDs, drop base-only UIDs |
 //!
 //! An instance with a STRING or WSTRING field is migrated by neither path: the
 //! field's slot holds the offset of the string inside the instance, which

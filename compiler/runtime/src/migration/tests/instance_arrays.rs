@@ -35,7 +35,18 @@ fn container_with_instances(
         builder = builder.add_var_entry(field.clone());
     }
     if let Some(descriptor) = user_block {
-        builder = builder.add_user_fb_type(descriptor);
+        builder = builder
+            .add_user_fb_type(descriptor)
+            .add_fb_type(FbTypeDescriptor {
+                type_id: descriptor.type_id,
+                fields: fields
+                    .iter()
+                    .map(|field| FieldEntry {
+                        field_type: field.var_type,
+                        field_extra: field.extra,
+                    })
+                    .collect(),
+            });
     }
     for uid in field_uids {
         builder = builder.add_fb_field_uid(*uid);

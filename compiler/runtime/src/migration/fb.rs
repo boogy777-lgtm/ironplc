@@ -1,8 +1,12 @@
 //! Function-block instance planning for the state migration planner.
 //!
 //! An FB instance's slot holds the offset of its field region, and the field
-//! values themselves are addressed through the type section's user FB
-//! descriptors (ADR 0059). This module is the planner's ADR 0059 half: it
+//! values themselves are addressed through the type section's FB type
+//! descriptors, which list the fields of each user function block (ADR 0059,
+//! ADR-0073). The position of the block's working slots in the variable table
+//! (the `var_offset` of the user FB descriptor) is an address for the VM and
+//! is never read as the identity of the block. This module is the planner's
+//! ADR 0059 half: it
 //! plans the copies for shared-UID instances of user FB types and enforces
 //! the fallback rule for everything else. The per-variable machinery —
 //! scalars, strings, arrays, and type-changing conversions (ADR 0060) —
@@ -12,18 +16,18 @@ use std::collections::HashMap;
 use std::vec::Vec;
 
 use ironplc_container::{
-    Container, FbFieldUidEntry, FbTypeDescriptor, FbTypeId, FieldType, StableVarEntry, TypeSection,
-    UserFbDescriptor, VarEntry, VarIndex, VAR_FLAG_IS_ARRAY,
+    Container, FbFieldUidEntry, FbTypeDescriptor, FbTypeId, FieldEntry, FieldType, StableVarEntry,
+    TypeSection, UserFbDescriptor, VarEntry, VarIndex,
 };
 
 use super::decision::{self, Decisions, TypeChangeChoice};
-use super::{entry_difference, variable_at, variable_table, MigrationAction, MigrationError};
+use super::{variable_at, variable_table, MigrationAction, MigrationError};
 
 /// Plans the copies for shared-UID FB instances of user FB types and enforces
 /// the fallback rule for everything else (see the module documentation).
 ///
 /// `instances` holds `(base index, candidate index)` pairs for the
-/// shared-UID instances whose type has a user FB descriptor on both sides;
+/// shared-UID instances whose type lists its fields on both sides;
 /// every other FB instance named by either stable table (standard-library
 /// instances, instances only one side has) makes the planner fall back to
 /// the stage-2 rule: the layout after the program prefix must be identical.
@@ -49,9 +53,9 @@ pub(super) fn plan_fb_instances(
     let mut handled: Vec<(VarIndex, VarIndex)> = Vec::with_capacity(instances.len());
     for &(from_index, to_index) in instances {
         let type_id = FbTypeId::new(variable_at(candidate_variables, to_index)?.extra);
-        let (Some(base_descriptor), Some(candidate_descriptor)) = (
-            user_fb_descriptor(base_section, type_id),
-            user_fb_descriptor(candidate_section, type_id),
+        let (Some(base_fields), Some(candidate_fields)) = (
+            fb_fields(base_section, type_id),
+            fb_fields(candidate_section, type_id),
         ) else {
             return Err(MigrationError::FbLayoutUnsupported);
         };
@@ -60,69 +64,61 @@ pub(super) fn plan_fb_instances(
         // point into its layout, not this one's. The per-field path copies one
         // slot per field and cannot carry the value, so such an instance fails
         // closed, as an array-field retype does.
-        if has_string_field(base_variables, base_descriptor)
-            || has_string_field(candidate_variables, candidate_descriptor)
-        {
+        if has_string_field(base_fields) || has_string_field(candidate_fields) {
             return Err(MigrationError::FbLayoutUnsupported);
         }
         handled.push((from_index, to_index));
 
-        if base_descriptor == candidate_descriptor {
+        if base_fields == candidate_fields {
             // Identical layout: carry the slot and the whole field region.
-            // The descriptor comparison covers var_offset and num_fields, so
-            // both sides agree on where the region lives and how big it is.
+            // The lists of fields are equal, so both sides agree on how big
+            // the region is and what each slot holds.
             actions.push(MigrationAction::FbInstance {
                 from_index,
                 to_index,
-                byte_size: u32::from(candidate_descriptor.num_fields)
-                    .checked_mul(ironplc_container::SLOT_BYTES)
+                byte_size: u32::try_from(candidate_fields.len())
+                    .ok()
+                    .and_then(|fields| fields.checked_mul(ironplc_container::SLOT_BYTES))
                     .ok_or(MigrationError::FbLayoutUnsupported)?,
             });
             continue;
         }
 
         // The layout differs: match the type's fields by UID (ADR 0059).
-        let base_fields = field_uid_indexes(base_section, type_id)?;
-        let candidate_fields = field_uid_indexes(candidate_section, type_id)?;
-        for field_index in 0..candidate_descriptor.num_fields {
-            let Some(&field_uid) = candidate_fields.by_index.get(&field_index) else {
+        let base_uids = field_uid_indexes(base_section, type_id)?;
+        let candidate_uids = field_uid_indexes(candidate_section, type_id)?;
+        for (field_index, candidate_field) in (0..).zip(candidate_fields) {
+            let Some(&field_uid) = candidate_uids.by_index.get(&field_index) else {
                 // The field carries no UID (or the reserved UID 0) while
                 // the layout differs: the value's identity is unprovable,
                 // so the planner fails closed.
                 return Err(MigrationError::FbLayoutUnsupported);
             };
-            let Some(&from_field) = base_fields.by_uid.get(&field_uid) else {
+            let Some(&from_field) = base_uids.by_uid.get(&field_uid) else {
                 // A candidate-only field UID is a new entity; the
                 // candidate's init image has already initialized it.
                 continue;
             };
-            let base_field_index =
-                VarIndex::new(base_descriptor.var_offset + u16::from(from_field));
-            let candidate_field_index =
-                VarIndex::new(candidate_descriptor.var_offset + u16::from(field_index));
-            let base_field = variable_at(base_variables, base_field_index)?;
-            let candidate_field = variable_at(candidate_variables, candidate_field_index)?;
+            let Some(base_field) = base_fields.get(usize::from(from_field)) else {
+                return Err(MigrationError::FbLayoutUnsupported);
+            };
             if base_field != candidate_field {
                 // The field entry differs: reconcile the storage-class
                 // change against the policy (ADR 0060) and the engineer's
                 // decisions (ADR 0061), or reject the structural difference
                 // as before.
-                if base_field.flags != candidate_field.flags
-                    || base_field.var_type == candidate_field.var_type
-                    || base_field.flags & VAR_FLAG_IS_ARRAY != 0
-                {
-                    // The per-field path copies one 8-byte slot per field, so
-                    // it cannot carry an array field (the slot holds the
-                    // region offset, not the elements): an array-field retype
-                    // fails closed until that path learns region copies.
+                if base_field.field_type == candidate_field.field_type {
+                    // The type tag is the same and its details differ (a
+                    // STRING length, a nested block's type): a structural
+                    // change, not a storage-class change.
                     return Err(MigrationError::IncompatibleEntry {
                         uid: field_uid,
-                        reason: entry_difference(base_field, candidate_field),
+                        reason: "the variable's type details changed",
                     });
                 }
-                let from = base_field.var_type;
-                let to = candidate_field.var_type;
-                let name = decision::debug_name(candidate, candidate_field_index);
+                let from = base_field.field_type;
+                let to = candidate_field.field_type;
+                let name = field_debug_name(candidate_section, candidate, type_id, field_index);
                 let size_equal = decision::scalar_size_equal(from, to);
                 let conversion = match decisions.resolve(field_uid, name, from, to, size_equal)? {
                     TypeChangeChoice::Convert(conversion) => Some(conversion),
@@ -157,11 +153,7 @@ pub(super) fn plan_fb_instances(
     // initialized by the candidate's init image, so no copy references
     // either.
     if has_unhandled_shared_instance(base_stable, base_variables, candidate_stable, &handled)?
-        && (base.task_table.shared_globals_size != candidate.task_table.shared_globals_size
-            || !same_user_fb_descriptors(
-                user_fb_descriptors(base_section),
-                user_fb_descriptors(candidate_section),
-            )
+        && (base.persistent_extents() != candidate.persistent_extents()
             || !same_fb_descriptors(
                 fb_descriptors(base_section),
                 fb_descriptors(candidate_section),
@@ -211,21 +203,14 @@ pub(super) fn same_instance_layout(
     candidate: Option<&TypeSection>,
     type_id: FbTypeId,
 ) -> bool {
-    let fields = |section: Option<&TypeSection>, descriptor: &UserFbDescriptor| {
-        let first = usize::from(descriptor.var_offset);
-        variable_table(section)
-            .get(first..first + usize::from(descriptor.num_fields))
-            .map(<[VarEntry]>::to_vec)
-    };
     match (
         user_fb_descriptor(base, type_id),
         user_fb_descriptor(candidate, type_id),
     ) {
         (None, None) => true,
-        (Some(base_descriptor), Some(candidate_descriptor)) => {
-            base_descriptor.num_fields == candidate_descriptor.num_fields
-                && fields(base, base_descriptor).is_some()
-                && fields(base, base_descriptor) == fields(candidate, candidate_descriptor)
+        (Some(_), Some(_)) => {
+            fb_fields(base, type_id).is_some()
+                && fb_fields(base, type_id) == fb_fields(candidate, type_id)
                 && matches!(
                     (field_uid_indexes(base, type_id), field_uid_indexes(candidate, type_id)),
                     (Ok(a), Ok(b)) if a.by_uid == b.by_uid
@@ -266,39 +251,50 @@ fn fb_field_uids(section: Option<&TypeSection>) -> &[FbFieldUidEntry] {
     section.map_or(&[], |section| section.fb_field_uids.as_slice())
 }
 
-/// The user FB descriptor for `type_id`, if the type section carries one.
+/// The user FB descriptor for `type_id`, if the type section carries one. A
+/// block that has none is a standard-library block, whose layout the VM owns.
 pub(super) fn user_fb_descriptor(
     section: Option<&TypeSection>,
     type_id: FbTypeId,
 ) -> Option<&UserFbDescriptor> {
-    user_fb_descriptors(section)
-        .iter()
-        .find(|descriptor| descriptor.type_id == type_id)
+    section.and_then(|section| {
+        section
+            .user_fb_types
+            .iter()
+            .find(|descriptor| descriptor.type_id == type_id)
+    })
 }
 
-/// The user FB descriptors, or an empty slice without a type section.
-fn user_fb_descriptors(section: Option<&TypeSection>) -> &[UserFbDescriptor] {
-    section.map_or(&[], |section| section.user_fb_types.as_slice())
+/// The fields of the function block type `type_id`, as its FB type descriptor
+/// lists them, if the type section carries one. This is the one place the
+/// planner reads the layout of an instance from.
+pub(super) fn fb_fields(section: Option<&TypeSection>, type_id: FbTypeId) -> Option<&[FieldEntry]> {
+    fb_descriptors(section)
+        .iter()
+        .find(|descriptor| descriptor.type_id == type_id)
+        .map(|descriptor| descriptor.fields.as_slice())
+}
+
+/// The name the debug section gives the field at ordinal `field_index` of the
+/// type `type_id`, for the engineer's decision prompt. The name is looked up at
+/// the field's slot in the body, which is where the debug section records it;
+/// it names the field and does not identify it.
+fn field_debug_name(
+    section: Option<&TypeSection>,
+    container: &Container,
+    type_id: FbTypeId,
+    field_index: u8,
+) -> Option<String> {
+    let descriptor = user_fb_descriptor(section, type_id)?;
+    decision::debug_name(
+        container,
+        VarIndex::new(descriptor.var_offset + u16::from(field_index)),
+    )
 }
 
 /// The FB type descriptors, or an empty slice without a type section.
 fn fb_descriptors(section: Option<&TypeSection>) -> &[FbTypeDescriptor] {
     section.map_or(&[], |section| section.fb_types.as_slice())
-}
-
-/// Compares user FB descriptors as a set keyed by type ID.
-///
-/// Codegen emits the descriptors from a hash map, so their order is not part
-/// of the container contract; only the descriptor contents are.
-fn same_user_fb_descriptors(a: &[UserFbDescriptor], b: &[UserFbDescriptor]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut a = a.to_vec();
-    let mut b = b.to_vec();
-    a.sort_by_key(|descriptor| descriptor.type_id.raw());
-    b.sort_by_key(|descriptor| descriptor.type_id.raw());
-    a == b
 }
 
 /// Compares FB type descriptors as a set keyed by type ID.
@@ -313,13 +309,11 @@ fn same_fb_descriptors(a: &[FbTypeDescriptor], b: &[FbTypeDescriptor]) -> bool {
     a == b
 }
 
-/// Whether a field of the user FB type `descriptor` describes is a STRING or a
-/// WSTRING, whose characters live outside its slot, so that the slot holds where
-/// the value is rather than the value.
-fn has_string_field(variables: &[VarEntry], descriptor: &UserFbDescriptor) -> bool {
-    (0..usize::from(descriptor.num_fields)).any(|field| {
-        variables
-            .get(usize::from(descriptor.var_offset) + field)
-            .is_some_and(|entry| matches!(entry.var_type, FieldType::String | FieldType::WString))
-    })
+/// Whether a field of an FB type is a STRING or a WSTRING, whose characters
+/// live outside its slot, so that the slot holds where the value is rather
+/// than the value.
+fn has_string_field(fields: &[FieldEntry]) -> bool {
+    fields
+        .iter()
+        .any(|field| matches!(field.field_type, FieldType::String | FieldType::WString))
 }

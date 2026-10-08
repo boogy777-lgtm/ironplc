@@ -187,7 +187,9 @@ The type section describes the aggregate types a program uses. The interpreter r
 
 ### FB Type Descriptors
 
-Each FB type descriptor defines the field layout for a function block type.
+Each FB type descriptor defines the field layout for a function block type. The compiler writes one for every user function block ([ADR-0073](../adrs/0073-state-layout-is-the-persistent-part.md)): it is where the layout hash, the load check and the migration planner read the fields of an instance, so none of them reads the position of the block's working slots in the variable table (the `var_offset` of the user FB descriptor, which is an address for the VM).
+
+**REQ-CF-codegen-028** The compiler writes one FB type descriptor for every user function block, in ascending `type_id` order, listing the block's fields in slot order (inputs, outputs, then the other variables the block keeps) with the type and extra of each field as the variable table records them; the number of fields equals the `num_fields` of the user FB descriptor with the same `type_id`.
 
 **REQ-CF-container-021** Each FB type descriptor is a 4-byte header followed by `num_fields` FieldEntry records:
 

@@ -10,7 +10,7 @@ use std::collections::HashSet;
 
 use crate::common::{parse, parse_and_compile};
 use ironplc_container::{
-    string_region_size, CharWidth, Container, FieldType, VarEntry, VAR_FLAG_IS_ARRAY,
+    string_region_size, CharWidth, Container, FieldEntry, FieldType, VarEntry, VAR_FLAG_IS_ARRAY,
 };
 use ironplc_dsl::common::{DeclarationQualifier, LibraryElementKind, VarDecl};
 use ironplc_parser::options::CompilerOptions;
@@ -355,6 +355,71 @@ END_PROGRAM
         container.task_table.shared_globals_size, extents[0].var_count,
         "the task table's shared extent and the declared extent agree for one program"
     );
+}
+
+/// The function block type table lists the fields of each user function block
+/// in the order the VM copies them in and out: inputs, outputs, then the rest.
+#[test]
+fn fb_types_when_user_function_blocks_then_each_lists_its_fields_in_slot_order() {
+    let source = "
+FUNCTION_BLOCK mixer
+  VAR text : STRING[8]; END_VAR
+  VAR_OUTPUT total : REAL; END_VAR
+  VAR_INPUT step : DINT; END_VAR
+  total := total + 1.0;
+END_FUNCTION_BLOCK
+
+FUNCTION_BLOCK plain
+  VAR_INPUT x : DINT; END_VAR
+  x := x;
+END_FUNCTION_BLOCK
+
+PROGRAM main
+  VAR m : mixer; p : plain; END_VAR
+  m(step := 1);
+  p(x := 1);
+END_PROGRAM
+";
+    let container = parse_and_compile(source, &CompilerOptions::default());
+    let section = container.type_section.as_ref().unwrap();
+
+    assert_eq!(section.fb_types.len(), 2);
+    assert_eq!(container.header.num_fb_types, 2);
+    let field = |field_type, field_extra| FieldEntry {
+        field_type,
+        field_extra,
+    };
+    let fields_of = |name: &str| -> Vec<FieldEntry> {
+        let debug = container.debug_section.as_ref().unwrap();
+        let first = debug
+            .var_names
+            .iter()
+            .find(|entry| entry.name.eq_ignore_ascii_case(name))
+            .unwrap()
+            .var_index;
+        let user = section
+            .user_fb_types
+            .iter()
+            .find(|desc| desc.var_offset == first.raw())
+            .unwrap();
+        let listed = section
+            .fb_types
+            .iter()
+            .find(|desc| desc.type_id == user.type_id)
+            .unwrap();
+        assert_eq!(listed.fields.len(), usize::from(user.num_fields));
+        listed.fields.clone()
+    };
+    assert_eq!(
+        fields_of("step"),
+        vec![
+            field(FieldType::I32, 0),
+            field(FieldType::F32, 0),
+            field(FieldType::String, 8),
+        ]
+    );
+    assert_eq!(fields_of("x"), vec![field(FieldType::I32, 0)]);
+    assert!(section.fb_types[0].type_id.raw() < section.fb_types[1].type_id.raw());
 }
 
 /// Every part of a container that online change compares to decide whether

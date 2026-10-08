@@ -18,6 +18,7 @@
 //! | Array element type tags are defined | [`LoadViolation::InvalidArrayElementType`] |
 //! | Stable variable IDs are in bounds and ascending | [`LoadViolation::StableVarIdOutOfBounds`] / [`LoadViolation::StableVarIdsOutOfOrder`] |
 //! | User FB descriptors reference an existing function and a field range inside the variable table | [`LoadViolation::UserFbFunctionOutOfBounds`] / [`LoadViolation::UserFbVarsOutOfBounds`] |
+//! | A user FB descriptor and the FB type descriptor of the same type ID agree on the number of fields | [`LoadViolation::UserFbFieldCountMismatch`] |
 //! | FB field UIDs name an existing user FB type and a field inside it, ascending | [`LoadViolation::FbFieldUidUnknownType`] / [`LoadViolation::FbFieldUidFieldOutOfBounds`] / [`LoadViolation::FbFieldUidsOutOfOrder`] |
 //! | Persistent extent rows lie inside the variable table and the data region, ascend without overlap, and name distinct program instances of the task table | [`LoadViolation::PersistentExtentOutOfBounds`] / [`LoadViolation::PersistentExtentsOutOfOrder`] / [`LoadViolation::PersistentExtentInstance`] |
 //! | `layout_hash` recomputes over the type section | [`LoadViolation::LayoutHashMismatch`] |
@@ -142,6 +143,16 @@ pub enum LoadViolation {
         num_fields: u8,
         /// The header's `num_variables`.
         num_variables: u16,
+    },
+    /// A user FB descriptor and the FB type descriptor of the same type ID
+    /// disagree on the number of fields of an instance.
+    UserFbFieldCountMismatch {
+        /// The FB type ID both descriptors carry.
+        type_id: FbTypeId,
+        /// `num_fields` of the user FB descriptor.
+        user_fields: u8,
+        /// Number of fields the FB type descriptor lists.
+        type_fields: usize,
     },
     /// A persistent extent row runs past the end of the variable table or of
     /// the data region.
@@ -276,6 +287,14 @@ impl core::fmt::Display for LoadViolation {
                 f,
                 "user FB {type_id} fields at variable offset {var_offset} ({} fields) exceed {num_variables} variables",
                 u32::from(*num_fields)
+            ),
+            LoadViolation::UserFbFieldCountMismatch {
+                type_id,
+                user_fields,
+                type_fields,
+            } => write!(
+                f,
+                "user FB {type_id} declares {user_fields} fields but its FB type descriptor lists {type_fields}"
             ),
             LoadViolation::PersistentExtentOutOfBounds {
                 instance_id,
@@ -440,6 +459,22 @@ fn verify_type_section(
                 var_offset: descriptor.var_offset,
                 num_fields: descriptor.num_fields,
                 num_variables: header.num_variables,
+            });
+        }
+    }
+
+    for descriptor in &type_section.user_fb_types {
+        let listed = type_section
+            .fb_types
+            .iter()
+            .find(|fb_type| fb_type.type_id == descriptor.type_id);
+        if let Some(fb_type) =
+            listed.filter(|t| t.fields.len() != usize::from(descriptor.num_fields))
+        {
+            return Err(LoadViolation::UserFbFieldCountMismatch {
+                type_id: descriptor.type_id,
+                user_fields: descriptor.num_fields,
+                type_fields: fb_type.fields.len(),
             });
         }
     }
@@ -765,6 +800,32 @@ mod tests {
                 num_fields: 1,
                 num_variables: 3
             }) if type_id == FbTypeId::new(0x1000)
+        ));
+    }
+
+    #[test]
+    fn verify_load_when_user_fb_field_count_matches_type_descriptor_then_ok() {
+        let mut container = consistent_container();
+        container.type_section.as_mut().unwrap().fb_types[0].type_id = FbTypeId::new(0x1000);
+        assert_eq!(verify_load(&container), Ok(()));
+    }
+
+    #[test]
+    fn verify_load_when_user_fb_field_count_differs_from_type_descriptor_then_violation() {
+        let mut container = consistent_container();
+        let section = container.type_section.as_mut().unwrap();
+        section.fb_types[0].type_id = FbTypeId::new(0x1000);
+        section.fb_types[0].fields.push(FieldEntry {
+            field_type: FieldType::I32,
+            field_extra: 0,
+        });
+        assert!(matches!(
+            verify_load(&container),
+            Err(LoadViolation::UserFbFieldCountMismatch {
+                user_fields: 1,
+                type_fields: 2,
+                ..
+            })
         ));
     }
 

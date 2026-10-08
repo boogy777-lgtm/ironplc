@@ -174,3 +174,34 @@ fn container_spec_req_cf_027_persistent_extent_ends_at_the_last_persistent_varia
     assert_eq!(container.header.num_variables, 3);
     assert_eq!((declared[0].data_start, declared[0].data_len), (0, 16));
 }
+
+/// REQ-CF-codegen-028: the compiler writes one FB type descriptor for every
+/// user function block, in ascending type ID order, listing its fields in slot
+/// order, and its field count equals the user FB descriptor's.
+#[spec_test(REQ_CF_codegen_028)]
+fn container_spec_req_cf_028_fb_type_descriptor_lists_the_fields_of_each_user_block() {
+    let container = compiled_container_with_fb_uids(FB_PROGRAM, &[]);
+    let type_section = container.type_section.as_ref().unwrap();
+
+    assert_eq!(type_section.fb_types.len(), 1);
+    assert_eq!(type_section.user_fb_types.len(), 1);
+    let listed = &type_section.fb_types[0];
+    assert_eq!(listed.type_id, type_section.user_fb_types[0].type_id);
+    assert_eq!(
+        listed.fields,
+        vec![
+            ironplc_container::FieldEntry {
+                field_type: ironplc_container::FieldType::I32,
+                field_extra: 0,
+            },
+            ironplc_container::FieldEntry {
+                field_type: ironplc_container::FieldType::I32,
+                field_extra: 0,
+            },
+        ]
+    );
+    assert_eq!(
+        listed.fields.len(),
+        usize::from(type_section.user_fb_types[0].num_fields)
+    );
+}

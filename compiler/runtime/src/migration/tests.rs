@@ -294,6 +294,7 @@ fn build_when_fb_tail_identical_then_copy_slot_and_region() {
     let base = ContainerBuilder::new()
         .shared_globals_size(2)
         .add_user_fb_type(user_fb(0x1000, 2))
+        .add_fb_type(fb_type(0x1000, 2))
         .add_var_entry(fb_entry(0x1000))
         .add_var_entry(i32_entry())
         .add_stable_var(StableVarEntry {
@@ -305,6 +306,7 @@ fn build_when_fb_tail_identical_then_copy_slot_and_region() {
     let candidate = ContainerBuilder::new()
         .shared_globals_size(2)
         .add_user_fb_type(user_fb(0x1000, 2))
+        .add_fb_type(fb_type(0x1000, 2))
         .add_var_entry(i32_entry())
         .add_var_entry(fb_entry(0x1000))
         .add_stable_var(StableVarEntry {
@@ -329,6 +331,49 @@ fn build_when_fb_tail_identical_then_copy_slot_and_region() {
 }
 
 #[test]
+fn build_when_fb_working_slots_move_but_fields_equal_then_copy_slot_and_region() {
+    // The candidate adds a function that sits before the block's working slots
+    // in the variable table, so the descriptor's `var_offset` and the body's
+    // function ID differ. Neither is the layout of an instance: the lists of
+    // fields are equal, so the instance is carried as it is, with no field
+    // UIDs involved.
+    let base = ContainerBuilder::new()
+        .add_user_fb_type(user_fb_at(0x1000, 1, 2))
+        .add_fb_type(fb_type(0x1000, 2))
+        .add_var_entry(fb_entry(0x1000))
+        .add_stable_var(StableVarEntry {
+            var_index: VarIndex::new(0),
+            uid: 7,
+        })
+        .num_variables(3)
+        .build();
+    let candidate = ContainerBuilder::new()
+        .add_user_fb_type(UserFbDescriptor {
+            function_id: FunctionId::new(3),
+            ..user_fb_at(0x1000, 4, 2)
+        })
+        .add_fb_type(fb_type(0x1000, 2))
+        .add_var_entry(fb_entry(0x1000))
+        .add_stable_var(StableVarEntry {
+            var_index: VarIndex::new(0),
+            uid: 7,
+        })
+        .num_variables(6)
+        .build();
+
+    let plan = StateMigrationPlan::build(&base, &candidate).unwrap();
+
+    assert_eq!(
+        plan.actions,
+        vec![MigrationAction::FbInstance {
+            from_index: VarIndex::new(0),
+            to_index: VarIndex::new(0),
+            byte_size: 16,
+        }]
+    );
+}
+
+#[test]
 fn build_when_fb_has_string_field_then_fb_layout_unsupported() {
     // A STRING field's slot holds the offset of the string inside the
     // instance; a slot carried over from the other container would point into
@@ -337,6 +382,13 @@ fn build_when_fb_has_string_field_then_fb_layout_unsupported() {
         ContainerBuilder::new()
             .shared_globals_size(1)
             .add_user_fb_type(user_fb_at(0x1000, 1, 1))
+            .add_fb_type(FbTypeDescriptor {
+                type_id: FbTypeId::new(0x1000),
+                fields: vec![FieldEntry {
+                    field_type: FieldType::String,
+                    field_extra: 10,
+                }],
+            })
             .add_var_entry(fb_entry(0x1000))
             .add_var_entry(string_entry(10))
             .add_stable_var(StableVarEntry {
@@ -357,6 +409,7 @@ fn build_when_fb_tail_changes_then_fb_layout_unsupported() {
     let base = ContainerBuilder::new()
         .shared_globals_size(1)
         .add_user_fb_type(user_fb(0x1000, 2))
+        .add_fb_type(fb_type(0x1000, 2))
         .add_var_entry(fb_entry(0x1000))
         .add_stable_var(StableVarEntry {
             var_index: VarIndex::new(0),
@@ -367,6 +420,7 @@ fn build_when_fb_tail_changes_then_fb_layout_unsupported() {
     let candidate = ContainerBuilder::new()
         .shared_globals_size(1)
         .add_user_fb_type(user_fb(0x1000, 3))
+        .add_fb_type(fb_type(0x1000, 3))
         .add_var_entry(fb_entry(0x1000))
         .add_stable_var(StableVarEntry {
             var_index: VarIndex::new(0),
@@ -385,6 +439,7 @@ fn build_when_no_fb_instance_then_tail_change_is_ignored() {
     let base = ContainerBuilder::new()
         .shared_globals_size(1)
         .add_user_fb_type(user_fb(0x1000, 2))
+        .add_fb_type(fb_type(0x1000, 2))
         .add_var_entry(i32_entry())
         .add_stable_var(StableVarEntry {
             var_index: VarIndex::new(0),
@@ -395,6 +450,7 @@ fn build_when_no_fb_instance_then_tail_change_is_ignored() {
     let candidate = ContainerBuilder::new()
         .shared_globals_size(1)
         .add_user_fb_type(user_fb(0x1000, 3))
+        .add_fb_type(fb_type(0x1000, 3))
         .add_var_entry(i32_entry())
         .add_stable_var(StableVarEntry {
             var_index: VarIndex::new(0),
@@ -415,6 +471,7 @@ fn build_when_fb_instance_and_program_prefix_grows_then_copy_slot_and_region() {
     let base = ContainerBuilder::new()
         .shared_globals_size(1)
         .add_user_fb_type(user_fb(0x1000, 2))
+        .add_fb_type(fb_type(0x1000, 2))
         .add_var_entry(fb_entry(0x1000))
         .add_stable_var(StableVarEntry {
             var_index: VarIndex::new(0),
@@ -425,6 +482,7 @@ fn build_when_fb_instance_and_program_prefix_grows_then_copy_slot_and_region() {
     let candidate = ContainerBuilder::new()
         .shared_globals_size(2)
         .add_user_fb_type(user_fb(0x1000, 2))
+        .add_fb_type(fb_type(0x1000, 2))
         .add_var_entry(fb_entry(0x1000))
         .add_var_entry(i32_entry())
         .add_stable_var(StableVarEntry {
@@ -456,6 +514,7 @@ fn build_when_fb_field_uids_cover_layout_change_then_per_field_copy() {
     // initializes it).
     let base = ContainerBuilder::new()
         .add_user_fb_type(user_fb_at(0x1000, 1, 2))
+        .add_fb_type(fb_type(0x1000, 2))
         .add_var_entry(fb_entry(0x1000))
         .add_var_entry(i32_entry())
         .add_var_entry(i32_entry())
@@ -469,6 +528,7 @@ fn build_when_fb_field_uids_cover_layout_change_then_per_field_copy() {
         .build();
     let candidate = ContainerBuilder::new()
         .add_user_fb_type(user_fb_at(0x1000, 1, 3))
+        .add_fb_type(fb_type(0x1000, 3))
         .add_var_entry(fb_entry(0x1000))
         .add_var_entry(i32_entry())
         .add_var_entry(i32_entry())
@@ -513,6 +573,7 @@ fn build_when_fb_field_uid_unknown_and_layout_differs_then_fail_closed() {
     // rejects the whole candidate (ADR 0059's fail-closed rule).
     let base = ContainerBuilder::new()
         .add_user_fb_type(user_fb_at(0x1000, 1, 2))
+        .add_fb_type(fb_type(0x1000, 2))
         .add_var_entry(fb_entry(0x1000))
         .add_var_entry(i32_entry())
         .add_var_entry(i32_entry())
@@ -526,6 +587,7 @@ fn build_when_fb_field_uid_unknown_and_layout_differs_then_fail_closed() {
         .build();
     let candidate = ContainerBuilder::new()
         .add_user_fb_type(user_fb_at(0x1000, 1, 3))
+        .add_fb_type(fb_type(0x1000, 3))
         .add_var_entry(fb_entry(0x1000))
         .add_var_entry(i32_entry())
         .add_var_entry(i32_entry())
@@ -544,17 +606,22 @@ fn build_when_fb_field_uid_unknown_and_layout_differs_then_fail_closed() {
 }
 
 #[test]
-fn build_when_fb_array_field_retyped_then_incompatible_entry() {
-    // The per-field path copies one slot per field, and an array field's
-    // slot holds the region offset rather than the elements: a retyped
-    // array field cannot migrate through it, so the planner fails closed
-    // until array-field retype is supported.
-    let mut base_builder = ContainerBuilder::new();
-    base_builder.add_array_descriptor(FieldType::I32 as u8, 2, 0);
-    let base = base_builder
+fn build_when_fb_field_type_details_change_then_incompatible_entry() {
+    // A nested block field keeps its type tag while the block it holds
+    // changes: that is a structural change of the field, not a storage-class
+    // change the policy could convert, so the planner rejects it.
+    let fb_type_with = |nested: u16| FbTypeDescriptor {
+        type_id: FbTypeId::new(0x1000),
+        fields: vec![FieldEntry {
+            field_type: FieldType::FbInstance,
+            field_extra: nested,
+        }],
+    };
+    let base = ContainerBuilder::new()
         .add_user_fb_type(user_fb_at(0x1000, 1, 1))
+        .add_fb_type(fb_type_with(0x1001))
         .add_var_entry(fb_entry(0x1000))
-        .add_var_entry(array_entry(0))
+        .add_var_entry(fb_entry(0x1001))
         .add_fb_field_uid(field_uid(0x1000, 0, 101))
         .add_stable_var(StableVarEntry {
             var_index: VarIndex::new(0),
@@ -562,16 +629,23 @@ fn build_when_fb_array_field_retyped_then_incompatible_entry() {
         })
         .num_variables(2)
         .build();
-    let mut candidate_builder = ContainerBuilder::new();
-    candidate_builder.add_array_descriptor(FieldType::U32 as u8, 2, 0);
-    let candidate = candidate_builder
+    let candidate = ContainerBuilder::new()
         .add_user_fb_type(user_fb_at(0x1000, 1, 2))
-        .add_var_entry(fb_entry(0x1000))
-        .add_var_entry(VarEntry {
-            var_type: FieldType::U32,
-            flags: VAR_FLAG_IS_ARRAY,
-            extra: 0,
+        .add_fb_type(FbTypeDescriptor {
+            type_id: FbTypeId::new(0x1000),
+            fields: vec![
+                FieldEntry {
+                    field_type: FieldType::FbInstance,
+                    field_extra: 0x1002,
+                },
+                FieldEntry {
+                    field_type: FieldType::I32,
+                    field_extra: 0,
+                },
+            ],
         })
+        .add_var_entry(fb_entry(0x1000))
+        .add_var_entry(fb_entry(0x1002))
         .add_var_entry(i32_entry())
         .add_fb_field_uid(field_uid(0x1000, 0, 101))
         .add_fb_field_uid(field_uid(0x1000, 1, 102))
@@ -588,7 +662,7 @@ fn build_when_fb_array_field_retyped_then_incompatible_entry() {
         result.unwrap_err(),
         MigrationError::IncompatibleEntry {
             uid: 101,
-            reason: "the variable type changed",
+            reason: "the variable's type details changed",
         }
     );
 }
