@@ -160,15 +160,40 @@ scope; the build stays the control path of the invariant.
 
 ### To-do outside this plan, in the owner's order
 
-1. Code generation of a function block instance inside a function block
-   (reported by the measurement agent, `compile_stmt.rs:523`; to be verified).
-2. Code generation of a member of a structure variable declared in a function
-   block (reported, `compile_struct.rs:236`; to be verified).
-3. More than one `PROGRAM` (`compile.rs:576`); whether the runtime runs more
-   than one is not known.
+Each was confirmed on 2026-10-08 by a run of `ironplcc check` and `ironplcc
+compile` on a minimal program: the analysis accepts every one and code
+generation refuses with `P9999`.
+
+1. A function block instance inside a function block
+   (`codegen/src/compile_stmt.rs:523`).
+2. A structure variable local to a function block
+   (`codegen/src/compile_struct.rs:279`). A structure as an input or an output
+   of a function block is accepted.
+3. More than one `PROGRAM`, or more than one instance of a program
+   (`codegen/src/compile.rs:512`, `:539`).
+
+Items 1 and 2 have one cause and are one piece of work: the loop that lays out
+the fields of a function block body handles simple, reference and string
+fields and drops the rest (`codegen/src/compile_fn.rs:548-571`), so a nested
+instance and a structure have no place inside the instance.
+
+Item 3 is code generation only. The container format holds a list of tasks and
+a list of program instances, each with its own range of variables, and the run
+loop of the VM runs every instance of every ready task (`vm/src/vm.rs:401`).
+That was read and not run: no test runs a container of two instances. The
+debugger takes one instance by a recorded decision.
+
+A defect found with them, to fix apart from the order above: a second `TASK`
+with one program is accepted and silently not scheduled
+(`codegen/src/compile.rs:429` writes the first task entry only). A program
+that does not do what its text says is worse than a refusal.
 
 A real project uses all three, so a hot edit of a real project waits for them
 whatever this plan delivers.
+
+The state layout decision (D3) has its note:
+`specs/design/state-layout-and-body-edits.md` on the local branch
+`hotedit/body-edit-layout-guard`.
 
 ## Architecture
 
