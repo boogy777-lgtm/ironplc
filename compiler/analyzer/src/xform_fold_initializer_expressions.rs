@@ -61,34 +61,24 @@ use ironplc_parser::options::CompilerOptions;
 use ironplc_problems::Problem;
 
 use crate::constant_folding::{fold_error_to_diagnostic, try_fold_binary, try_fold_unary};
+use crate::pass_runner::Outcome;
 use crate::scoped_table::{ScopedTable, Value};
+use std::convert::Infallible;
 
 impl Value for ConstantKind {}
 
-pub fn apply(
-    lib: Library,
-    options: &CompilerOptions,
-) -> Result<(Library, Vec<Diagnostic>), Vec<Diagnostic>> {
+pub fn apply(lib: Library, options: &CompilerOptions) -> Outcome {
     let mut folder = InitializerFolder {
         constants: collect_constants(&lib),
         options,
         diagnostics: Vec::new(),
     };
 
-    // Diagnostics ride along with the normalized library rather than failing
-    // the transform: every `SimpleExpr` is normalized away even when it is
-    // diagnosed, so later passes must run over this result. Reverting to the
-    // pre-transform library on a per-declaration diagnostic would leak
-    // `SimpleExpr` nodes downstream (P9998 in
-    // rule_var_decl_const_initialized).
-    match folder.fold_library(lib) {
-        Ok(result) => Ok((result, folder.diagnostics)),
-        Err(e) => {
-            let mut diagnostics = folder.diagnostics;
-            diagnostics.push(e);
-            Err(diagnostics)
-        }
-    }
+    // Every `SimpleExpr` is normalized away even when it is diagnosed, so
+    // later passes must run over this result: a `SimpleExpr` left in the
+    // library would leak downstream (P9998 in rule_var_decl_const_initialized).
+    let Ok(library) = folder.fold_library(lib);
+    Outcome::new(library, folder.diagnostics)
 }
 
 /// Scan the library for top-level (`VAR_GLOBAL`) constant declarations with
@@ -278,11 +268,11 @@ impl InitializerFolder<'_> {
     }
 }
 
-impl Fold<Diagnostic> for InitializerFolder<'_> {
+impl Fold<Infallible> for InitializerFolder<'_> {
     fn fold_initial_value_assignment_kind(
         &mut self,
         node: InitialValueAssignmentKind,
-    ) -> Result<InitialValueAssignmentKind, Diagnostic> {
+    ) -> Result<InitialValueAssignmentKind, Infallible> {
         match node {
             InitialValueAssignmentKind::SimpleExpr(se) => Ok(self.normalize(se)),
             other => InitialValueAssignmentKind::recurse_fold(other, self),
@@ -297,7 +287,7 @@ impl Fold<Diagnostic> for InitializerFolder<'_> {
     /// thing: should a new kind of scope not want its constants
     /// registered, that has to be said here rather than inferred from an
     /// absent arm.
-    fn enter_scope(&mut self, node: ScopeNode<'_>) -> Result<(), Diagnostic> {
+    fn enter_scope(&mut self, node: ScopeNode<'_>) -> Result<(), Infallible> {
         self.constants.enter();
 
         let variables = match node {
@@ -349,7 +339,10 @@ mod tests {
 
     /// Applies the transform expecting no diagnostics; returns the library.
     fn apply_clean(lib: Library, options: &CompilerOptions) -> Library {
-        let (lib, diagnostics) = apply(lib, options).unwrap();
+        let Outcome {
+            library: lib,
+            diagnostics,
+        } = apply(lib, options);
         assert!(
             diagnostics.is_empty(),
             "unexpected diagnostics: {diagnostics:?}"
@@ -359,7 +352,7 @@ mod tests {
 
     /// Applies the transform expecting diagnostics; returns them.
     fn apply_expect_diagnostics(lib: Library, options: &CompilerOptions) -> Vec<Diagnostic> {
-        let (_, diagnostics) = apply(lib, options).unwrap();
+        let diagnostics = apply(lib, options).diagnostics;
         assert!(!diagnostics.is_empty(), "expected diagnostics");
         diagnostics
     }
@@ -498,7 +491,10 @@ mod tests {
             "PROGRAM main VAR d2r : LREAL := 4.25/180.0; END_VAR END_PROGRAM",
             &opts(),
         );
-        let (lib, diagnostics) = apply(lib, &CompilerOptions::default()).unwrap();
+        let Outcome {
+            library: lib,
+            diagnostics,
+        } = apply(lib, &CompilerOptions::default());
         assert!(diagnostics
             .iter()
             .any(|d| d.code == Problem::ConstantInitializerExpressionNotAllowed.code()));
@@ -802,7 +798,7 @@ mod tests {
             ..opts()
         };
         let lib = parse(TYPE_AND_MEMBER_VALUES, &options);
-        let (lib, _) = apply(lib, &options).unwrap();
+        let lib = apply(lib, &options).library;
 
         let level = declared_type_value(&lib, "Level").expect("a folded value");
         let level = cast!(level, ConstantKind::IntegerLiteral);

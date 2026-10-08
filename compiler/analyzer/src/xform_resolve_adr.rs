@@ -28,6 +28,7 @@
 //!
 //! See `specs/design/adr-and-pointer-to.md`.
 
+use crate::pass_runner::Outcome;
 use ironplc_dsl::common::Library;
 use ironplc_dsl::core::Located;
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
@@ -35,22 +36,20 @@ use ironplc_dsl::fold::Fold;
 use ironplc_dsl::textual::*;
 use ironplc_parser::options::CompilerOptions;
 use ironplc_problems::Problem;
+use std::convert::Infallible;
 
 /// The address-of operator, recognized only when `allow_adr` is set.
 const ADR: &str = "ADR";
 
-pub fn apply(
-    lib: Library,
-    options: &CompilerOptions,
-) -> Result<(Library, Vec<Diagnostic>), Vec<Diagnostic>> {
+pub fn apply(lib: Library, options: &CompilerOptions) -> Outcome {
     if !options.allow_adr {
-        return Ok((lib, Vec::new()));
+        return Outcome::new(lib, Vec::new());
     }
     let mut resolver = ResolveAdr {
         diagnostics: Vec::new(),
     };
-    let result = resolver.fold_library(lib).map_err(|e| vec![e])?;
-    Ok((result, resolver.diagnostics))
+    let Ok(library) = resolver.fold_library(lib);
+    Outcome::new(library, resolver.diagnostics)
 }
 
 struct ResolveAdr {
@@ -69,8 +68,8 @@ fn adr_operand(func: &Function) -> Option<Expr> {
     }
 }
 
-impl Fold<Diagnostic> for ResolveAdr {
-    fn fold_expr_kind(&mut self, node: ExprKind) -> Result<ExprKind, Diagnostic> {
+impl Fold<Infallible> for ResolveAdr {
+    fn fold_expr_kind(&mut self, node: ExprKind) -> Result<ExprKind, Infallible> {
         match node {
             ExprKind::Function(func) if func.name.to_string().eq_ignore_ascii_case(ADR) => {
                 // Fold the arguments first so a nested `ADR` is rewritten

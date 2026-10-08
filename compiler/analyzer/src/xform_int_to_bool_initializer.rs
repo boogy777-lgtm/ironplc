@@ -22,23 +22,25 @@
 //! END_VAR
 //! ```
 use ironplc_dsl::common::*;
-use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_dsl::fold::Fold;
 use ironplc_parser::options::CompilerOptions;
+use std::convert::Infallible;
 
 use crate::intermediate_type::IntermediateType;
+use crate::pass_runner::Outcome;
 use crate::type_environment::TypeEnvironment;
 
 pub fn apply(
     lib: Library,
     type_environment: &mut TypeEnvironment,
     options: &CompilerOptions,
-) -> Result<Library, Vec<Diagnostic>> {
+) -> Outcome {
     if !options.allow_int_to_bool_initializer {
-        return Ok(lib);
+        return Outcome::new(lib, Vec::new());
     }
     let mut folder = IntToBoolFolder { type_environment };
-    folder.fold_library(lib).map_err(|e| vec![e])
+    let Ok(library) = folder.fold_library(lib);
+    Outcome::new(library, Vec::new())
 }
 
 struct IntToBoolFolder<'a> {
@@ -61,8 +63,8 @@ fn as_bool_value(constant: &ConstantKind) -> Option<Boolean> {
     }
 }
 
-impl Fold<Diagnostic> for IntToBoolFolder<'_> {
-    fn fold_var_decl(&mut self, node: VarDecl) -> Result<VarDecl, Diagnostic> {
+impl Fold<Infallible> for IntToBoolFolder<'_> {
+    fn fold_var_decl(&mut self, node: VarDecl) -> Result<VarDecl, Infallible> {
         let mut node = VarDecl::recurse_fold(node, self)?;
 
         if let InitialValueAssignmentKind::Simple(ref mut si) = node.initializer {
@@ -90,12 +92,13 @@ impl Fold<Diagnostic> for IntToBoolFolder<'_> {
 mod tests {
     use super::*;
     use crate::test_helpers::parse_and_resolve_types_with_context;
+    use ironplc_dsl::diagnostic::Diagnostic;
     use ironplc_parser::options::{CompilerOptions, Dialect};
 
     fn apply_xform(program: &str) -> Library {
         let (library, mut context) = parse_and_resolve_types_with_context(program);
         let options = CompilerOptions::from_dialect(Dialect::Rusty);
-        apply(library, context.types_mut(), &options).unwrap()
+        apply(library, context.types_mut(), &options).library
     }
 
     fn get_first_var_initializer(library: &Library) -> ConstantKind {

@@ -38,6 +38,41 @@ macro_rules! direct {
 pub(crate) use direct;
 pub(crate) use pass;
 
+/// What every pass gives back: the library as far as the pass could transform
+/// it, and what the pass found wrong with the parts it could not.
+///
+/// A problem in the user's program is never a failure of the pass. The place
+/// that finds it holds the node it was about to transform, so it records the
+/// diagnostic and keeps the node as it was; everything else is transformed.
+/// There is nothing to give back from a copy, so no pass keeps one.
+pub(crate) struct Outcome {
+    pub library: Library,
+    pub diagnostics: Vec<Diagnostic>,
+}
+
+impl Outcome {
+    pub(crate) fn new(library: Library, diagnostics: Vec<Diagnostic>) -> Self {
+        Self {
+            library,
+            diagnostics,
+        }
+    }
+}
+
+/// Runs a pass: hands it the library, keeps the library it returns and adds
+/// what it found to `diagnostics`.
+pub(crate) fn run_pass<O: Observer>(
+    observer: &O,
+    name: &'static str,
+    library: Library,
+    diagnostics: &mut Vec<Diagnostic>,
+    xform: impl FnOnce(Library) -> Outcome,
+) -> Library {
+    let outcome = observer.observe(observe::pass(name), || xform(library));
+    diagnostics.extend(outcome.diagnostics);
+    outcome.library
+}
+
 /// Runs a transform whose failure discards the whole library.
 ///
 /// The pre-pass library is restored when the transform returns `Err`, so every
@@ -99,5 +134,57 @@ pub(crate) fn run_best_effort<O: Observer>(
             diagnostics.extend(errs);
             fallback
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::observe::{Kind, Recorder, Unobserved};
+    use ironplc_dsl::core::FileId;
+    use ironplc_parser::{options::CompilerOptions, parse_program};
+    use ironplc_problems::Problem;
+
+    fn library_of(text: &str) -> Library {
+        parse_program(text, &FileId::default(), &CompilerOptions::default()).unwrap()
+    }
+
+    fn a_diagnostic() -> Diagnostic {
+        Diagnostic::problem(
+            Problem::NoContent,
+            ironplc_dsl::diagnostic::Label::span(ironplc_dsl::core::SourceSpan::default(), "x"),
+        )
+    }
+
+    #[test]
+    fn run_pass_when_pass_returns_library_and_findings_then_library_is_kept_and_findings_added() {
+        let library = library_of("PROGRAM main VAR x : INT; END_VAR x := 1; END_PROGRAM");
+        let expected = library.clone();
+        let mut diagnostics = vec![a_diagnostic()];
+
+        let result = run_pass(&Unobserved, "p", library, &mut diagnostics, |library| {
+            Outcome::new(library, vec![a_diagnostic()])
+        });
+
+        assert_eq!(expected, result);
+        assert_eq!(2, diagnostics.len());
+    }
+
+    #[test]
+    fn run_pass_when_observed_then_the_pass_is_told_once_and_nothing_else() {
+        let recorder = Recorder::default();
+        let mut diagnostics = vec![];
+
+        run_pass(
+            &recorder,
+            "p",
+            Library::new(),
+            &mut diagnostics,
+            |library| Outcome::new(library, vec![]),
+        );
+
+        assert_eq!(vec!["p"], recorder.names(Kind::Pass));
+        assert!(recorder.names(Kind::Setup).is_empty());
+        assert!(recorder.names(Kind::Fallback).is_empty());
     }
 }

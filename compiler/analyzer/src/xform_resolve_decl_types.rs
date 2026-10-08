@@ -21,19 +21,18 @@
 //! A declaration whose type cannot be resolved keeps `type_id: None`. The
 //! rules that check declarations report why; this pass stays silent.
 use ironplc_dsl::common::*;
-use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_dsl::fold::Fold;
 use ironplc_dsl::type_id::TypeId;
 
 use crate::intermediates::{array, enumeration, subrange};
+use crate::pass_runner::Outcome;
 use crate::type_environment::TypeEnvironment;
+use std::convert::Infallible;
 
-pub fn apply(
-    lib: Library,
-    type_environment: &mut TypeEnvironment,
-) -> Result<Library, Vec<Diagnostic>> {
+pub fn apply(lib: Library, type_environment: &mut TypeEnvironment) -> Outcome {
     let mut resolver = DeclTypeResolver { type_environment };
-    resolver.fold_library(lib).map_err(|e| vec![e])
+    let Ok(library) = resolver.fold_library(lib);
+    Outcome::new(library, Vec::new())
 }
 
 struct DeclTypeResolver<'a> {
@@ -109,8 +108,8 @@ impl DeclTypeResolver<'_> {
     }
 }
 
-impl Fold<Diagnostic> for DeclTypeResolver<'_> {
-    fn fold_var_decl(&mut self, node: VarDecl) -> Result<VarDecl, Diagnostic> {
+impl Fold<Infallible> for DeclTypeResolver<'_> {
+    fn fold_var_decl(&mut self, node: VarDecl) -> Result<VarDecl, Infallible> {
         let name = match node.identifier.symbolic_id() {
             Some(id) => TypeName::from_id(id),
             None => TypeName::from("_"),

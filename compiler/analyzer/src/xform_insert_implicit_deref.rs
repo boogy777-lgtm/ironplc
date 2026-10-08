@@ -30,25 +30,27 @@
 //!
 //! See `specs/design/reference-to-twincat.md` (PR 2).
 
+use crate::pass_runner::Outcome;
 use ironplc_dsl::common::*;
 use ironplc_dsl::core::{Id, Located};
-use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_dsl::fold::Fold;
 use ironplc_dsl::textual::*;
 use ironplc_parser::options::CompilerOptions;
 use std::collections::HashSet;
+use std::convert::Infallible;
 
 /// The TwinCAT reference-validity builtin, recognized only when
 /// `allow_reference_to` is set.
 const IS_VALID_REF: &str = "__ISVALIDREF";
 
-pub fn apply(lib: Library, options: &CompilerOptions) -> Result<Library, Vec<Diagnostic>> {
+pub fn apply(lib: Library, options: &CompilerOptions) -> Outcome {
     let mut resolver = ImplicitDeref {
         reference_to_vars: HashSet::new(),
         allow_reference_to: options.allow_reference_to,
         suppress_wrap: false,
     };
-    resolver.fold_library(lib).map_err(|e| vec![e])
+    let Ok(library) = resolver.fold_library(lib);
+    Outcome::new(library, Vec::new())
 }
 
 struct ImplicitDeref {
@@ -101,11 +103,11 @@ impl ImplicitDeref {
     }
 }
 
-impl Fold<Diagnostic> for ImplicitDeref {
+impl Fold<Infallible> for ImplicitDeref {
     fn fold_function_declaration(
         &mut self,
         node: FunctionDeclaration,
-    ) -> Result<FunctionDeclaration, Diagnostic> {
+    ) -> Result<FunctionDeclaration, Infallible> {
         self.collect_reference_to_vars(&node.variables);
         let result = node.recurse_fold(self);
         self.reference_to_vars.clear();
@@ -115,7 +117,7 @@ impl Fold<Diagnostic> for ImplicitDeref {
     fn fold_function_block_declaration(
         &mut self,
         node: FunctionBlockDeclaration,
-    ) -> Result<FunctionBlockDeclaration, Diagnostic> {
+    ) -> Result<FunctionBlockDeclaration, Infallible> {
         self.collect_reference_to_vars(&node.variables);
         let result = node.recurse_fold(self);
         self.reference_to_vars.clear();
@@ -125,14 +127,14 @@ impl Fold<Diagnostic> for ImplicitDeref {
     fn fold_program_declaration(
         &mut self,
         node: ProgramDeclaration,
-    ) -> Result<ProgramDeclaration, Diagnostic> {
+    ) -> Result<ProgramDeclaration, Infallible> {
         self.collect_reference_to_vars(&node.variables);
         let result = node.recurse_fold(self);
         self.reference_to_vars.clear();
         result
     }
 
-    fn fold_assignment(&mut self, node: Assignment) -> Result<Assignment, Diagnostic> {
+    fn fold_assignment(&mut self, node: Assignment) -> Result<Assignment, Infallible> {
         // A bare `:=` write to a REFERENCE TO variable stores *through* the
         // reference. Skip `REF=` bindings (which rebind the reference itself)
         // and skip when the value is itself a reference-binding form (`REF(x)`
@@ -150,7 +152,7 @@ impl Fold<Diagnostic> for ImplicitDeref {
         Ok(folded)
     }
 
-    fn fold_expr_kind(&mut self, node: ExprKind) -> Result<ExprKind, Diagnostic> {
+    fn fold_expr_kind(&mut self, node: ExprKind) -> Result<ExprKind, Infallible> {
         match node {
             // Lower `__ISVALIDREF(r)` to `r <> NULL` -- a comparison of the
             // reference *value* (not its dereference) against the null

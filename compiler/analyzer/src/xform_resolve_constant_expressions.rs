@@ -10,7 +10,9 @@
 //! controls whether unresolved references are accepted or rejected.
 
 use std::collections::HashMap;
+use std::convert::Infallible;
 
+use crate::pass_runner::Outcome;
 use ironplc_dsl::common::*;
 use ironplc_dsl::core::{Id, Located};
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
@@ -37,19 +39,13 @@ struct ConstantInfo {
 /// reference is rejected with [`Problem::ConstantTypeParamNotAllowed`] instead
 /// of being resolved.
 ///
-/// Best effort: the folded library rides back alongside the diagnostics rather
-/// than being discarded. A reference this pass could not resolve is left as
-/// `IntegerRef::Constant`/`SignedIntegerRef::Constant`, which is exactly the
-/// state reverting would leave *every* reference in -- including the ones that
-/// did resolve -- so reverting cannot be the safer option. Downstream handling
-/// of an unresolved `Constant` is already defined: `rule_range_limits`
-/// skips the node, the array and subrange intermediates report a problem, and
-/// codegen is never reached because `ironplc_project::compile` gates it on an
-/// empty diagnostic list.
-pub fn apply(
-    lib: Library,
-    options: &CompilerOptions,
-) -> Result<(Library, Vec<Diagnostic>), Vec<Diagnostic>> {
+/// A reference this pass could not resolve is diagnosed and left as
+/// `IntegerRef::Constant`/`SignedIntegerRef::Constant`; every reference that
+/// resolves is replaced. Downstream handling of an unresolved `Constant` is
+/// already defined: `rule_range_limits` skips the node, the array and subrange
+/// intermediates report a problem, and codegen is never reached because
+/// `ironplc_project::compile` gates it on an empty diagnostic list.
+pub fn apply(lib: Library, options: &CompilerOptions) -> Outcome {
     let constants = collect_constants(&lib);
 
     let mut resolver = ConstantResolver {
@@ -58,14 +54,8 @@ pub fn apply(
         diagnostics: vec![],
     };
 
-    match resolver.fold_library(lib) {
-        Ok(result) => Ok((result, resolver.diagnostics)),
-        Err(e) => {
-            let mut diagnostics = resolver.diagnostics;
-            diagnostics.push(e);
-            Err(diagnostics)
-        }
-    }
+    let Ok(library) = resolver.fold_library(lib);
+    Outcome::new(library, resolver.diagnostics)
 }
 
 /// Scan the library for global constant declarations with integer values.
@@ -171,8 +161,8 @@ impl ConstantResolver {
     }
 }
 
-impl<E> Fold<E> for ConstantResolver {
-    fn fold_integer_ref(&mut self, node: IntegerRef) -> Result<IntegerRef, E> {
+impl Fold<Infallible> for ConstantResolver {
+    fn fold_integer_ref(&mut self, node: IntegerRef) -> Result<IntegerRef, Infallible> {
         match node {
             IntegerRef::Literal(_) => Ok(node),
             IntegerRef::Constant(ref id) => {
@@ -198,7 +188,10 @@ impl<E> Fold<E> for ConstantResolver {
         }
     }
 
-    fn fold_signed_integer_ref(&mut self, node: SignedIntegerRef) -> Result<SignedIntegerRef, E> {
+    fn fold_signed_integer_ref(
+        &mut self,
+        node: SignedIntegerRef,
+    ) -> Result<SignedIntegerRef, Infallible> {
         match node {
             SignedIntegerRef::Literal(_) => Ok(node),
             SignedIntegerRef::Constant(ref id) => {
@@ -229,7 +222,7 @@ impl<E> Fold<E> for ConstantResolver {
     fn fold_function_block_declaration(
         &mut self,
         node: FunctionBlockDeclaration,
-    ) -> Result<FunctionBlockDeclaration, E> {
+    ) -> Result<FunctionBlockDeclaration, Infallible> {
         let saved = self.constants.clone();
         collect_from_var_decls(&node.variables, &mut self.constants);
         let result = node.recurse_fold(self);
@@ -240,7 +233,7 @@ impl<E> Fold<E> for ConstantResolver {
     fn fold_function_declaration(
         &mut self,
         node: FunctionDeclaration,
-    ) -> Result<FunctionDeclaration, E> {
+    ) -> Result<FunctionDeclaration, Infallible> {
         let saved = self.constants.clone();
         collect_from_var_decls(&node.variables, &mut self.constants);
         let result = node.recurse_fold(self);
@@ -251,7 +244,7 @@ impl<E> Fold<E> for ConstantResolver {
     fn fold_program_declaration(
         &mut self,
         node: ProgramDeclaration,
-    ) -> Result<ProgramDeclaration, E> {
+    ) -> Result<ProgramDeclaration, Infallible> {
         let saved = self.constants.clone();
         collect_from_var_decls(&node.variables, &mut self.constants);
         let result = node.recurse_fold(self);
@@ -292,7 +285,10 @@ mod tests {
     /// Applies the pass and asserts it resolved everything cleanly, returning
     /// the folded library.
     fn resolved(lib: Library, options: &CompilerOptions) -> Library {
-        let (lib, diagnostics) = apply(lib, options).expect("fold produced a library");
+        let Outcome {
+            library: lib,
+            diagnostics,
+        } = apply(lib, options);
         assert!(
             diagnostics.is_empty(),
             "expected no diagnostics, got {diagnostics:?}"
@@ -300,11 +296,9 @@ mod tests {
         lib
     }
 
-    /// Applies the pass and returns the diagnostics it reported. The folded
-    /// library still comes back -- the pass is best effort -- so this asserts
-    /// the `Ok` arm rather than an `Err`.
+    /// Applies the pass and returns the diagnostics it reported.
     fn diagnostics_of(lib: Library, options: &CompilerOptions) -> Vec<Diagnostic> {
-        apply(lib, options).expect("fold produced a library").1
+        apply(lib, options).diagnostics
     }
 
     /// Find the first VarDecl with the given name from a POU.
@@ -455,7 +449,10 @@ mod tests {
         ",
         );
 
-        let (lib, diagnostics) = apply(lib, &enabled()).expect("fold produced a library");
+        let Outcome {
+            library: lib,
+            diagnostics,
+        } = apply(lib, &enabled());
 
         assert_eq!(
             diagnostics

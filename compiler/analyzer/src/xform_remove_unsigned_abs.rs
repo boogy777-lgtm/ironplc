@@ -21,16 +21,18 @@
 //! y := x;
 //! ```
 use ironplc_dsl::common::*;
-use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_dsl::fold::Fold;
 use ironplc_dsl::textual::*;
 
 use crate::intermediate_type::IntermediateType;
+use crate::pass_runner::Outcome;
 use crate::type_environment::TypeEnvironment;
+use std::convert::Infallible;
 
-pub fn apply(lib: Library, type_environment: &TypeEnvironment) -> Result<Library, Vec<Diagnostic>> {
+pub fn apply(lib: Library, type_environment: &TypeEnvironment) -> Outcome {
     let mut remover = UnsignedAbsRemover { type_environment };
-    remover.fold_library(lib).map_err(|e| vec![e])
+    let Ok(library) = remover.fold_library(lib);
+    Outcome::new(library, Vec::new())
 }
 
 struct UnsignedAbsRemover<'a> {
@@ -57,8 +59,8 @@ impl UnsignedAbsRemover<'_> {
     }
 }
 
-impl Fold<Diagnostic> for UnsignedAbsRemover<'_> {
-    fn fold_expr(&mut self, node: Expr) -> Result<Expr, Diagnostic> {
+impl Fold<Infallible> for UnsignedAbsRemover<'_> {
+    fn fold_expr(&mut self, node: Expr) -> Result<Expr, Infallible> {
         let node = Expr::recurse_fold(node, self)?;
         Ok(self.unsigned_abs_argument(&node).unwrap_or(node))
     }

@@ -16,7 +16,7 @@ use crate::{
     intermediates::special_operator::special_operator_signatures,
     ironplc_dsl::common::Library,
     observe::{self, Observer, Unobserved},
-    pass_runner::{direct, pass, run_best_effort, run_reverting_on_error},
+    pass_runner::{direct, pass, run_best_effort, run_pass, run_reverting_on_error},
     semantic_context::SemanticContext,
     semantic_rules::semantic,
     symbol_environment::{ScopeKind, SymbolEnvironment, SymbolKind},
@@ -172,7 +172,7 @@ fn resolve_types_in_budget<O: Observer>(
     // Best effort: an unresolvable reference is diagnosed and left as a
     // `Constant`, which is the state reverting would leave every reference in.
     library = pass!(
-        run_best_effort,
+        run_pass,
         observer,
         library,
         &mut diagnostics,
@@ -226,7 +226,7 @@ fn resolve_types_in_budget<O: Observer>(
     // before the reference semantic rules. See
     // specs/design/reference-to-twincat.md (PR 2).
     library = pass!(
-        run_reverting_on_error,
+        run_pass,
         observer,
         library,
         &mut diagnostics,
@@ -241,7 +241,7 @@ fn resolve_types_in_budget<O: Observer>(
     // Best effort: a diagnosed call is lowered to a placeholder, so the
     // transformed library is kept even when diagnostics are present.
     library = pass!(
-        run_best_effort,
+        run_pass,
         observer,
         library,
         &mut diagnostics,
@@ -256,7 +256,7 @@ fn resolve_types_in_budget<O: Observer>(
     // transformed library must be kept even when diagnostics are present —
     // reverting would leak `SimpleExpr` nodes to later passes.
     library = pass!(
-        run_best_effort,
+        run_pass,
         observer,
         library,
         &mut diagnostics,
@@ -267,7 +267,7 @@ fn resolve_types_in_budget<O: Observer>(
     // Rewrite integer 0/1 initializers on BOOL variables to boolean literals.
     // Short-circuits internally when allow_int_to_bool_initializer is false.
     library = pass!(
-        run_reverting_on_error,
+        run_pass,
         observer,
         library,
         &mut diagnostics,
@@ -302,7 +302,7 @@ fn resolve_types_in_budget<O: Observer>(
     // environments, and the first declaration is kept, so the rest of the
     // library still resolves instead of reverting on the first repeat.
     library = pass!(
-        run_best_effort,
+        run_pass,
         observer,
         library,
         &mut diagnostics,
@@ -326,7 +326,7 @@ fn resolve_types_in_budget<O: Observer>(
     // Record the type id each declaration declares, entering types spelled
     // out in place as anonymous types.
     library = pass!(
-        run_reverting_on_error,
+        run_pass,
         observer,
         library,
         &mut diagnostics,
@@ -357,7 +357,7 @@ fn resolve_types_in_budget<O: Observer>(
 
     // ABS of an unsigned value is the value itself; no back end sees it.
     library = pass!(
-        run_reverting_on_error,
+        run_pass,
         observer,
         library,
         &mut diagnostics,
@@ -366,7 +366,7 @@ fn resolve_types_in_budget<O: Observer>(
     );
 
     library = pass!(
-        run_reverting_on_error,
+        run_pass,
         observer,
         library,
         &mut diagnostics,
