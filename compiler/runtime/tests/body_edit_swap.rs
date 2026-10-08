@@ -23,9 +23,10 @@
 
 mod common;
 
-use common::{compile_source, variable_index};
+use common::{compile_source, compile_with_ids, variable_index};
 use ironplc_container::Container;
-use ironplc_runtime::{HostMode, RuntimeHost};
+use ironplc_runtime::{HostMode, OnlineChangeError, RuntimeHost};
+use ironplc_test::edit_classes::{edit_classes, EditClass, Layout, WithStableIds};
 use rstest::rstest;
 
 /// One kind of persistent variable: the declarations that make the program
@@ -391,4 +392,150 @@ fn swap_when_body_only_edit_accepted_then_state_survives_and_buffers_fit_candida
     host.run(3, || 0).unwrap();
     assert_eq!(read(&host, &candidate, &observed_names), before_swap);
     assert_eq!(read(&host, &candidate, &computed_names), expected);
+}
+
+/// Compiles the two sources of `class`, with the class's stable variable IDs
+/// or without any.
+fn compile_class(class: &EditClass, with_stable_ids: bool) -> (Container, Container) {
+    let ids = if with_stable_ids {
+        class.stable_ids
+    } else {
+        &[]
+    };
+    (
+        compile_with_ids(&class.before, ids),
+        compile_with_ids(&class.after, ids),
+    )
+}
+
+/// What a host does with a candidate whose layout is unchanged: it accepts it
+/// as an ordinary online change. The swap applies at a scan boundary, the
+/// observed persistent values are those they were, the edited code runs, and
+/// an untest returns to the original code without touching the state.
+fn assert_ordinary_online_change(class: &EditClass, active: Container, candidate: Container) {
+    let name = class.name;
+    let mut host = RuntimeHost::new(active).unwrap();
+    host.permit_execution();
+    host.run(5, || 0).unwrap();
+    let before_swap = read(&host, &candidate, class.observed);
+    assert!(
+        before_swap.iter().all(|value| *value != 0),
+        "{name}: warm-up left an observed variable at its initial value: {before_swap:?}"
+    );
+
+    host.stage(candidate.clone()).unwrap();
+    assert!(
+        !host.status().migration,
+        "{name}: an unchanged layout must be a plain swap, not a migration"
+    );
+    host.test().unwrap();
+    host.run(1, || 0).unwrap();
+    assert_eq!(
+        host.status().mode,
+        HostMode::Testing,
+        "{name}: the swap did not apply"
+    );
+
+    let computed_names: Vec<&str> = class.computed.iter().map(|(name, _)| *name).collect();
+    let computed: Vec<i32> = class.computed.iter().map(|(_, value)| *value).collect();
+    assert_eq!(
+        read(&host, &candidate, class.observed),
+        before_swap,
+        "{name}: state lost at the swap"
+    );
+    assert_eq!(
+        read(&host, &candidate, &computed_names),
+        computed,
+        "{name}: edited code did not run"
+    );
+
+    host.run(3, || 0).unwrap();
+    assert_eq!(
+        read(&host, &candidate, class.observed),
+        before_swap,
+        "{name}: state lost after the swap"
+    );
+    assert_eq!(
+        read(&host, &candidate, &computed_names),
+        computed,
+        "{name}: edited code drifted"
+    );
+
+    host.untest().unwrap();
+    host.run(1, || 0).unwrap();
+    assert_eq!(
+        host.status().mode,
+        HostMode::Normal,
+        "{name}: the untest did not apply"
+    );
+    assert_eq!(
+        read(&host, &candidate, class.observed),
+        before_swap,
+        "{name}: state lost at the untest"
+    );
+}
+
+/// What a host does with a candidate whose layout changed: without stable
+/// variable IDs it refuses it; with them, the planner decides.
+fn assert_layout_change_handled(
+    class: &EditClass,
+    outcome: WithStableIds,
+    with_stable_ids: bool,
+    active: Container,
+    candidate: Container,
+) {
+    let name = class.name;
+    let mut host = RuntimeHost::new(active).unwrap();
+    host.permit_execution();
+    host.run(2, || 0).unwrap();
+
+    let staged = host.stage(candidate);
+
+    match (with_stable_ids, outcome) {
+        (false, _) => assert!(
+            matches!(staged, Err(OnlineChangeError::LayoutIncompatible)),
+            "{name}: without stable IDs a changed layout must be refused: {staged:?}"
+        ),
+        (true, WithStableIds::Migration) => {
+            assert!(
+                staged.is_ok(),
+                "{name}: the planner must accept: {staged:?}"
+            );
+            assert!(host.status().migration, "{name}: accepted as a plain swap");
+        }
+        (true, WithStableIds::Refused) => assert!(
+            matches!(staged, Err(OnlineChangeError::MigrationUnsupported(_))),
+            "{name}: the planner must refuse: {staged:?}"
+        ),
+    }
+}
+
+fn assert_host_handles_class(class: &EditClass, with_stable_ids: bool) {
+    let (active, candidate) = compile_class(class, with_stable_ids);
+    match class.layout {
+        Layout::Unchanged => assert_ordinary_online_change(class, active, candidate),
+        Layout::Changed(outcome) => {
+            assert_layout_change_handled(class, outcome, with_stable_ids, active, candidate)
+        }
+    }
+}
+
+/// Every class of edit in the table is handled by a host as the table says,
+/// without stable variable IDs: a body edit is an ordinary online change, and a
+/// changed declaration of persistent state is refused.
+#[test]
+fn host_when_edit_class_staged_without_stable_ids_then_handled_as_the_table_says() {
+    for class in edit_classes() {
+        assert_host_handles_class(&class, false);
+    }
+}
+
+/// The same with stable variable IDs on both containers: an unchanged layout
+/// is still a plain swap with test and untest, never a migration, and a
+/// changed layout goes to the planner.
+#[test]
+fn host_when_edit_class_staged_with_stable_ids_then_handled_as_the_table_says() {
+    for class in edit_classes() {
+        assert_host_handles_class(&class, true);
+    }
 }

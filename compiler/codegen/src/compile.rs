@@ -815,6 +815,7 @@ fn compile_program_with_functions(
     // The actual FB body compilation happens after program-local variables are
     // assigned, once var_offsets are known.
     let mut compiled_fb_bodies: Vec<CompiledFunction> = Vec::new();
+    let fb_type_ids = user_fb_type_ids(fb_decls)?;
 
     for (next_function_id, fb_decl) in (2_u16..).zip(fb_decls.iter()) {
         let fb_name = fb_decl.name.name.to_string().to_uppercase();
@@ -850,8 +851,9 @@ fn compile_program_with_functions(
             }
         }
 
-        let type_id = ctx.next_user_fb_type_id;
-        ctx.next_user_fb_type_id += 1;
+        let type_id = *fb_type_ids
+            .get(&fb_name)
+            .ok_or_else(Diagnostic::internal_error)?;
         ctx.user_fb_types.insert(
             fb_name,
             UserFbTypeInfo {
@@ -1437,9 +1439,44 @@ pub(crate) struct FbInstanceInfo {
     pub(crate) array: Option<crate::compile_fb_instance::InstanceArray>,
 }
 
+/// The first type ID of a user-defined function block.
+const FIRST_USER_FB_TYPE_ID: u16 = 0x1000;
+
+/// The type ID of each user-defined function block, by upper-cased name.
+///
+/// The ID of a type is its rank among the names of the compiled types, not the
+/// position of its declaration in the container. The position comes from the
+/// dependency sort of the declarations, and an edit of a body that starts to
+/// call a function can move blocks that have nothing to do with the call; an ID
+/// taken from the position would then change the entry of every instance in
+/// the variable table and with it the layout of the state (ADR-0073). The set
+/// of compiled types is fixed by the declarations of the instances that reach
+/// them, so the rank is stable under every edit of a body.
+fn user_fb_type_ids(
+    fb_decls: &[&FunctionBlockDeclaration],
+) -> Result<HashMap<String, u16>, Diagnostic> {
+    let mut names: Vec<String> = fb_decls
+        .iter()
+        .map(|fb_decl| fb_decl.name.name.to_string().to_uppercase())
+        .collect();
+    names.sort();
+    names
+        .into_iter()
+        .enumerate()
+        .map(|(rank, name)| {
+            let type_id = u16::try_from(rank)
+                .ok()
+                .and_then(|rank| FIRST_USER_FB_TYPE_ID.checked_add(rank))
+                .ok_or_else(Diagnostic::internal_error)?;
+            Ok((name, type_id))
+        })
+        .collect()
+}
+
 /// Metadata for a compiled user-defined function block type.
 pub(crate) struct UserFbTypeInfo {
-    /// Unique type ID for FB_CALL dispatch (starts at 0x1000).
+    /// Unique type ID for FB_CALL dispatch (starts at 0x1000; see
+    /// [`user_fb_type_ids`]).
     pub(crate) type_id: u16,
     /// Number of data-region fields in each instance.
     pub(crate) num_fields: usize,
@@ -1559,7 +1596,6 @@ pub(crate) struct CompileContext {
     /// Maps user-defined FB type name (uppercase) to compilation metadata.
     pub(crate) user_fb_types: HashMap<String, UserFbTypeInfo>,
     /// Next available type ID for user-defined function blocks.
-    next_user_fb_type_id: u16,
     /// When compiling a function body that returns a value, describes how an
     /// early `RETURN` statement should produce the return value before the
     /// `RET` opcode. `None` for programs and FBs (RETURN emits `RET_VOID`).
@@ -1647,7 +1683,6 @@ impl CompileContext {
             debug_source_files: crate::source_lookup::SourceFileRegistry::new(),
             user_functions: HashMap::new(),
             user_fb_types: HashMap::new(),
-            next_user_fb_type_id: 0x1000,
             enum_map: crate::compile_enum::EnumOrdinalMap::default(),
             types: HashMap::new(),
             operand_names: HashMap::new(),

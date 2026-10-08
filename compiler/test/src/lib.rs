@@ -4,6 +4,7 @@ use std::{
 };
 
 pub mod corpus;
+pub mod edit_classes;
 pub mod fixtures;
 pub mod nesting;
 
