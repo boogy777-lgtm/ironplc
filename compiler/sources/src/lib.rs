@@ -49,6 +49,7 @@
 #![allow(clippy::result_large_err)]
 
 pub mod discovery;
+pub mod experiment;
 pub mod file_type;
 pub mod libraries;
 pub mod parsers;

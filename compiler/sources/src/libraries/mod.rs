@@ -320,7 +320,7 @@ fn load_version_library(
     paths.sort();
 
     let options = CompilerOptions::default();
-    let mut library = Library::new();
+    let mut files: Vec<(FileId, String)> = Vec::new();
     for path in paths {
         let is_st = path
             .extension()
@@ -335,10 +335,53 @@ fn load_version_library(
                 Label::file(file_id.clone(), format!("cannot read library file: {e}")),
             )
         })?;
-        let parsed = parse_program(&content, &file_id, &options)?;
+        files.push((file_id, content));
+    }
+
+    // Prototype B3: a library parsed once. The key is what the parse reads:
+    // the directory (name and version), the options, and the name and content
+    // of every file.
+    let key = (crate::experiment::LIBRARY_CACHE.level() == 1)
+        .then(|| cache_key(version_dir, &options, &files));
+    if let Some(key) = key {
+        if let Some(cached) = cache()
+            .lock()
+            .ok()
+            .and_then(|cache| cache.get(&key).cloned())
+        {
+            return Ok(cached);
+        }
+    }
+
+    let mut library = Library::new();
+    for (file_id, content) in &files {
+        let parsed = parse_program(content, file_id, &options)?;
         library = library.extend(parsed);
     }
+    if let Some(key) = key {
+        if let Ok(mut cache) = cache().lock() {
+            cache.insert(key, library.clone());
+        }
+    }
     Ok(library)
+}
+
+fn cache() -> &'static std::sync::Mutex<std::collections::HashMap<u64, Library>> {
+    static CACHE: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<u64, Library>>> =
+        std::sync::OnceLock::new();
+    CACHE.get_or_init(Default::default)
+}
+
+fn cache_key(version_dir: &Path, options: &CompilerOptions, files: &[(FileId, String)]) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    version_dir.hash(&mut hasher);
+    format!("{options:?}").hash(&mut hasher);
+    for (file_id, content) in files {
+        file_id.to_string().hash(&mut hasher);
+        content.hash(&mut hasher);
+    }
+    hasher.finish()
 }
 
 #[cfg(test)]

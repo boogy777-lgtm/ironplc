@@ -117,3 +117,75 @@ fn switches_when_a_program_declares_a_standard_function_then_the_diagnostics_are
         assert_eq!(reference, seen, "level {level}");
     }
 }
+
+mod library_cache {
+    use super::{analysis, without_block_counters, SWITCHES};
+    use ironplc_benchmarks::generated::{PROGRAM, SCALES};
+    use ironplc_benchmarks::project;
+    use ironplc_sources::experiment::LIBRARY_CACHE;
+    use ironplc_sources::libraries::{LibraryName, LibraryRegistry};
+    use std::fs;
+
+    #[test]
+    fn library_cache_when_on_then_bundled_libraries_are_the_ones_parsed_each_time() {
+        let _held = SWITCHES
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        LIBRARY_CACHE.set(0);
+        let reference =
+            without_block_counters(&format!("{:?}", project::bundled_libraries().unwrap()));
+        let reference_analysis = analysis(&PROGRAM, &SCALES[0]);
+
+        LIBRARY_CACHE.set(1);
+        let first = without_block_counters(&format!("{:?}", project::bundled_libraries().unwrap()));
+        let second =
+            without_block_counters(&format!("{:?}", project::bundled_libraries().unwrap()));
+        let cached_analysis = analysis(&PROGRAM, &SCALES[0]);
+        LIBRARY_CACHE.set(0);
+
+        assert!(reference == first);
+        assert!(reference == second);
+        assert_eq!(reference_analysis.1, cached_analysis.1);
+    }
+
+    #[test]
+    fn library_cache_when_a_library_file_changes_then_the_new_content_is_parsed() {
+        let _held = SWITCHES
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let root = std::env::temp_dir().join(format!("ironplc-b3-{}", std::process::id()));
+        let version = root.join("Lib").join("1.0.0");
+        fs::create_dir_all(&version).unwrap();
+        fs::write(
+            root.join("Lib").join("library.toml"),
+            "name = \"Lib\"\nvendor = \"v\"\ndefault_version = \"1.0.0\"\nreferences = [\"r\"]\n",
+        )
+        .unwrap();
+        let file = version.join("a.st");
+        let load = || {
+            let registry = LibraryRegistry::with_root(&root);
+            let loaded = registry.load(&LibraryName::new("Lib")).unwrap();
+            without_block_counters(&format!("{:?}", loaded.library))
+        };
+
+        LIBRARY_CACHE.set(1);
+        fs::write(
+            &file,
+            "FUNCTION F : DINT\n  VAR_INPUT a : DINT; END_VAR\n  F := a;\nEND_FUNCTION\n",
+        )
+        .unwrap();
+        let before = load();
+        let again = load();
+        fs::write(
+            &file,
+            "FUNCTION F : DINT\n  VAR_INPUT a : DINT; END_VAR\n  F := a + 1;\nEND_FUNCTION\n",
+        )
+        .unwrap();
+        let after = load();
+        LIBRARY_CACHE.set(0);
+        let _ = fs::remove_dir_all(&root);
+
+        assert!(before == again);
+        assert!(before != after);
+    }
+}

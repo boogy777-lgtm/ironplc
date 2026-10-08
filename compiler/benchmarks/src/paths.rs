@@ -628,6 +628,41 @@ pub static PATHS: &[Path] = &[
         |ctx, input| let files = &input.files[..] => project::build(files, &ctx.project_options),
         |out| project::describe_build(&out)
     ),
+    // Prototype B3: what a project that activates the bundled compatibility
+    // libraries pays for them on each analysis.
+    path!(
+        project "libraries",
+        "project_libraries",
+        GENERATED,
+        None,
+        |_ctx, _input| let () = () => project::bundled_libraries(),
+        |out| match out {
+            Ok(libraries) => format!("ok, {} libraries", libraries.len()),
+            Err(diagnostics) => format!("err, {} diagnostics", diagnostics.len()),
+        }
+    ),
+    path!(
+        project "analyze with libraries",
+        "project_analyze_libraries",
+        GENERATED,
+        None,
+        |ctx, input| let libraries = project::parse_files(&input.files, &ctx.project_options) => libraries
+            .as_ref()
+            .map_err(|diagnostic| vec![diagnostic.clone()])
+            .and_then(|libraries| project::analyze_with_libraries(libraries, &ctx.project_options)),
+        |out| project::describe_analysis(&out)
+    ),
+    path!(
+        project held "analyze with libraries (held)",
+        "project_analyze_libraries_held",
+        GENERATED,
+        Some("analyze with libraries"),
+        |ctx, input| let libraries = project::parse_files(&input.files, &ctx.project_options) => libraries
+            .as_ref()
+            .map_err(|diagnostic| vec![diagnostic.clone()])
+            .and_then(|libraries| project::analyze_with_libraries(libraries, &ctx.project_options)),
+        |out| project::describe_analysis(&out)
+    ),
 ];
 
 /// The path named `name`.

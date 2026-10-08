@@ -98,3 +98,32 @@ pub fn describe_build(result: &Result<Container, Vec<Diagnostic>>) -> String {
         Err(diagnostics) => format!("err, {} diagnostics", diagnostics.len()),
     }
 }
+
+/// Loads every bundled compatibility library: what a project that activates
+/// them pays on each analysis.
+pub fn bundled_libraries() -> Result<Vec<Library>, Vec<Diagnostic>> {
+    let registry = ironplc_sources::libraries::LibraryRegistry::bundled();
+    let mut libraries = Vec::new();
+    let mut diagnostics = Vec::new();
+    for name in registry.library_names() {
+        match registry.load(&name) {
+            Ok(loaded) => libraries.push(loaded.library),
+            Err(diagnostic) => diagnostics.push(diagnostic),
+        }
+    }
+    if diagnostics.is_empty() {
+        Ok(libraries)
+    } else {
+        Err(diagnostics)
+    }
+}
+
+/// Loads the bundled libraries and analyzes them ahead of the parsed files.
+pub fn analyze_with_libraries(
+    libraries: &[Library],
+    options: &CompilerOptions,
+) -> Result<Analyzed, Vec<Diagnostic>> {
+    let mut all = bundled_libraries()?;
+    all.extend(libraries.iter().cloned());
+    analyze_files(&all, options)
+}
