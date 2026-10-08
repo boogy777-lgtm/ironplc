@@ -43,8 +43,10 @@ pub const FRAME_MAGIC: [u8; 2] = [0xC7, 0x1C];
 
 const MAGIC: [u8; 2] = FRAME_MAGIC;
 
-/// The frame format version this codec encodes.
-const VERSION: u8 = 1;
+/// The frame format version this codec encodes. Version 2 carries the
+/// persistent extent of the state only (ADR-0073): the counts of a snapshot
+/// are the counts of persistent variables and persistent data bytes.
+const VERSION: u8 = 2;
 
 /// Wire discriminant of a [`CrossloadMessage`].
 const KIND_OFFER: u8 = 0;
@@ -166,16 +168,16 @@ impl CrossloadRefusal {
     }
 }
 
-/// Appends the snapshot's fixed prefix fields: `num_variables`,
-/// `data_region_bytes`, `layout_hash`.
+/// Appends the snapshot's fixed prefix fields: `persistent_vars`,
+/// `persistent_data_bytes`, `layout_hash`.
 fn push_snapshot_prefix(frame: &mut Vec<u8>, snapshot: &StateSnapshot) {
-    frame.extend_from_slice(&snapshot.num_variables.to_be_bytes());
-    frame.extend_from_slice(&snapshot.data_region_bytes.to_be_bytes());
+    frame.extend_from_slice(&snapshot.persistent_vars.to_be_bytes());
+    frame.extend_from_slice(&snapshot.persistent_data_bytes.to_be_bytes());
     frame.extend_from_slice(&snapshot.layout_hash);
 }
 
-/// Appends the snapshot's byte blobs: the raw slot bytes, then the data
-/// region.
+/// Appends the snapshot's byte blobs: the raw slot bytes of the persistent
+/// variables, then the persistent bytes of the data region.
 fn push_snapshot_blobs(frame: &mut Vec<u8>, snapshot: &StateSnapshot) {
     for slot in &snapshot.vars {
         frame.extend_from_slice(&slot.to_be_bytes());
@@ -183,29 +185,31 @@ fn push_snapshot_blobs(frame: &mut Vec<u8>, snapshot: &StateSnapshot) {
     frame.extend_from_slice(&snapshot.data_region);
 }
 
-/// The snapshot prefix before the byte blobs: `num_variables`,
-/// `data_region_bytes`, `layout_hash` — 38 bytes.
+/// The snapshot prefix before the byte blobs: `persistent_vars`,
+/// `persistent_data_bytes`, `layout_hash` — 38 bytes.
 const SNAPSHOT_PREFIX_LEN: usize = 38;
 
 /// Reads one snapshot from `prefix` + `payload`, where `payload` holds
 /// the slot blob followed by the data region. `None` when the payload is
 /// internally inconsistent — a garbled frame is dropped, never acted on.
 fn take_snapshot(prefix: &[u8], payload: &[u8]) -> Option<StateSnapshot> {
-    let num_variables = u16::from_be_bytes(prefix.get(..2)?.try_into().ok()?);
-    let data_region_bytes = u32::from_be_bytes(prefix.get(2..6)?.try_into().ok()?);
+    let persistent_vars = u16::from_be_bytes(prefix.get(..2)?.try_into().ok()?);
+    let persistent_data_bytes = u32::from_be_bytes(prefix.get(2..6)?.try_into().ok()?);
     let mut layout_hash = [0u8; 32];
     layout_hash.copy_from_slice(prefix.get(6..SNAPSHOT_PREFIX_LEN)?);
-    // `num_variables` pins the slot count, so the slot blob is the
-    // leading `num_variables * 8` bytes and the data region takes the
-    // rest; either length mismatching the declarations is garbled.
+    // `persistent_vars` pins the slot count, so the slot blob is the leading
+    // `persistent_vars * 8` bytes and the data region takes the rest; either
+    // length mismatching the declarations is garbled.
     let (vars, data_region) = payload.as_chunks::<8>();
-    if vars.len() != usize::from(num_variables) || data_region.len() != data_region_bytes as usize {
+    if vars.len() != usize::from(persistent_vars)
+        || data_region.len() != persistent_data_bytes as usize
+    {
         return None;
     }
     Some(StateSnapshot {
         layout_hash,
-        num_variables,
-        data_region_bytes,
+        persistent_vars,
+        persistent_data_bytes,
         vars: vars
             .iter()
             .map(|chunk| u64::from_be_bytes(*chunk))
@@ -573,8 +577,8 @@ mod tests {
             candidate_wire: vec![1, 2, 3, 4],
             snapshot: StateSnapshot {
                 layout_hash: [9; 32],
-                num_variables: 2,
-                data_region_bytes: 4,
+                persistent_vars: 2,
+                persistent_data_bytes: 4,
                 vars: vec![0x0102_0304_0506_0708, 0x1112_1314_1516_1718],
                 data_region: vec![0xAA, 0xBB, 0xCC, 0xDD],
             },

@@ -23,6 +23,7 @@ mod generation;
 mod host;
 mod migration;
 mod online_change;
+mod persistent_state;
 mod snapshot;
 
 // V-code constants are generated from resources/problem-codes.csv by build.rs.
