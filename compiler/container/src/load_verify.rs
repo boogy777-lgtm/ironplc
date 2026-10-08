@@ -19,6 +19,7 @@
 //! | Stable variable IDs are in bounds and ascending | [`LoadViolation::StableVarIdOutOfBounds`] / [`LoadViolation::StableVarIdsOutOfOrder`] |
 //! | User FB descriptors reference an existing function and a field range inside the variable table | [`LoadViolation::UserFbFunctionOutOfBounds`] / [`LoadViolation::UserFbVarsOutOfBounds`] |
 //! | FB field UIDs name an existing user FB type and a field inside it, ascending | [`LoadViolation::FbFieldUidUnknownType`] / [`LoadViolation::FbFieldUidFieldOutOfBounds`] / [`LoadViolation::FbFieldUidsOutOfOrder`] |
+//! | Persistent extent rows lie inside the variable table and the data region, ascend without overlap, and name distinct program instances of the task table | [`LoadViolation::PersistentExtentOutOfBounds`] / [`LoadViolation::PersistentExtentsOutOfOrder`] / [`LoadViolation::PersistentExtentInstance`] |
 //! | `layout_hash` recomputes over the type section | [`LoadViolation::LayoutHashMismatch`] |
 //!
 //! Note what is deliberately *not* checked: an `FbInstance` variable's
@@ -34,7 +35,7 @@
 
 use std::vec::Vec;
 
-use crate::id_types::{FbTypeId, FunctionId, VarIndex};
+use crate::id_types::{FbTypeId, FunctionId, InstanceId, VarIndex};
 use crate::type_section::{FieldType, TypeSection, VAR_FLAG_IS_ARRAY};
 use crate::Container;
 
@@ -141,6 +142,32 @@ pub enum LoadViolation {
         num_fields: u8,
         /// The header's `num_variables`.
         num_variables: u16,
+    },
+    /// A persistent extent row runs past the end of the variable table or of
+    /// the data region.
+    PersistentExtentOutOfBounds {
+        /// The program instance owning the row.
+        instance_id: InstanceId,
+        /// The end (exclusive) of the row's variable run.
+        var_end: u32,
+        /// The header's `num_variables`.
+        num_variables: u16,
+        /// The end (exclusive) of the row's data run.
+        data_end: u64,
+        /// The header's `data_region_bytes`.
+        data_region_bytes: u32,
+    },
+    /// Persistent extent rows are not in ascending order or overlap in the
+    /// variable table or in the data region.
+    PersistentExtentsOutOfOrder {
+        /// The program instance owning the offending row.
+        instance_id: InstanceId,
+    },
+    /// A persistent extent row names a program instance that the task table
+    /// does not have, or that another row already names.
+    PersistentExtentInstance {
+        /// The program instance the row names.
+        instance_id: InstanceId,
     },
     /// An FB field UID entry names a type ID that has no user FB descriptor.
     /// Standard-library FBs own their layouts and never carry entries, so an
@@ -249,6 +276,24 @@ impl core::fmt::Display for LoadViolation {
                 f,
                 "user FB {type_id} fields at variable offset {var_offset} ({} fields) exceed {num_variables} variables",
                 u32::from(*num_fields)
+            ),
+            LoadViolation::PersistentExtentOutOfBounds {
+                instance_id,
+                var_end,
+                num_variables,
+                data_end,
+                data_region_bytes,
+            } => write!(
+                f,
+                "persistent extent of instance {instance_id} ends at variable {var_end} of {num_variables} and at data byte {data_end} of {data_region_bytes}"
+            ),
+            LoadViolation::PersistentExtentsOutOfOrder { instance_id } => write!(
+                f,
+                "persistent extent of instance {instance_id} does not follow the previous row"
+            ),
+            LoadViolation::PersistentExtentInstance { instance_id } => write!(
+                f,
+                "persistent extent names instance {instance_id}, which is not a distinct program instance"
             ),
             LoadViolation::FbFieldUidUnknownType { type_id } => {
                 write!(f, "FB field UID references user FB {type_id}, which has no descriptor")
@@ -436,13 +481,62 @@ fn verify_type_section(
         }
     }
 
+    verify_persistent_extents(container, type_section)
+}
+
+/// Verifies the persistent extent rows against the tables they index and
+/// against the task table. A container that declares no row has the default
+/// extent (the whole tables), which holds by construction.
+fn verify_persistent_extents(
+    container: &Container,
+    type_section: &TypeSection,
+) -> Result<(), LoadViolation> {
+    let header = &container.header;
+    let mut var_end: u32 = 0;
+    let mut data_end: u64 = 0;
+    let mut instances: Vec<InstanceId> = Vec::with_capacity(type_section.persistent_extents.len());
+    for row in &type_section.persistent_extents {
+        let row_var_end = u32::from(row.var_start) + u32::from(row.var_count);
+        let row_data_end = u64::from(row.data_start) + u64::from(row.data_len);
+        if row_var_end > u32::from(header.num_variables)
+            || row_data_end > u64::from(header.data_region_bytes)
+        {
+            return Err(LoadViolation::PersistentExtentOutOfBounds {
+                instance_id: row.instance_id,
+                var_end: row_var_end,
+                num_variables: header.num_variables,
+                data_end: row_data_end,
+                data_region_bytes: header.data_region_bytes,
+            });
+        }
+        if u32::from(row.var_start) < var_end || u64::from(row.data_start) < data_end {
+            return Err(LoadViolation::PersistentExtentsOutOfOrder {
+                instance_id: row.instance_id,
+            });
+        }
+        var_end = row_var_end;
+        data_end = row_data_end;
+
+        let known = container
+            .task_table
+            .programs
+            .iter()
+            .any(|program| program.instance_id == row.instance_id);
+        if !known || instances.contains(&row.instance_id) {
+            return Err(LoadViolation::PersistentExtentInstance {
+                instance_id: row.instance_id,
+            });
+        }
+        instances.push(row.instance_id);
+    }
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::id_types::{FbTypeId, FunctionId, VarIndex};
+    use crate::id_types::{FbTypeId, FunctionId, InstanceId, VarIndex};
+    use crate::persistent_extent::PersistentExtent;
     use crate::test_support::round_trip;
     use crate::type_section::{
         FbTypeDescriptor, FieldEntry, StableVarEntry, UserFbDescriptor, VarEntry,
@@ -758,5 +852,106 @@ mod tests {
         container.header.layout_hash = [0xFF; 32];
         let result = verify_load(&container);
         assert!(matches!(result, Err(LoadViolation::LayoutHashMismatch)));
+    }
+
+    fn row(
+        instance: u16,
+        var_start: u16,
+        var_count: u16,
+        data_start: u32,
+        data_len: u32,
+    ) -> PersistentExtent {
+        PersistentExtent {
+            instance_id: InstanceId::new(instance),
+            var_start,
+            var_count,
+            data_start,
+            data_len,
+        }
+    }
+
+    /// The consistent container (three variables) with a 64-byte data region
+    /// and the given extent rows.
+    fn container_with_extents(rows: &[PersistentExtent]) -> Container {
+        let mut container = consistent_container();
+        container.header.data_region_bytes = 64;
+        container.type_section.as_mut().unwrap().persistent_extents = rows.to_vec();
+        container
+    }
+
+    #[test]
+    fn verify_load_when_persistent_extent_inside_tables_then_ok() {
+        let container = container_with_extents(&[row(0, 0, 2, 0, 40)]);
+        assert_eq!(verify_load(&container), Ok(()));
+    }
+
+    #[test]
+    fn verify_load_when_persistent_extent_past_variable_table_then_violation() {
+        let container = container_with_extents(&[row(0, 1, 3, 0, 8)]);
+        assert!(matches!(
+            verify_load(&container),
+            Err(LoadViolation::PersistentExtentOutOfBounds { var_end: 4, .. })
+        ));
+    }
+
+    #[test]
+    fn verify_load_when_persistent_extent_past_data_region_then_violation() {
+        let container = container_with_extents(&[row(0, 0, 2, 32, 40)]);
+        assert!(matches!(
+            verify_load(&container),
+            Err(LoadViolation::PersistentExtentOutOfBounds { data_end: 72, .. })
+        ));
+    }
+
+    #[test]
+    fn verify_load_when_persistent_extent_data_end_overflows_u32_then_violation() {
+        let container = container_with_extents(&[row(0, 0, 2, u32::MAX, u32::MAX)]);
+        assert!(matches!(
+            verify_load(&container),
+            Err(LoadViolation::PersistentExtentOutOfBounds { .. })
+        ));
+    }
+
+    #[test]
+    fn verify_load_when_persistent_extents_overlap_then_violation() {
+        let mut container = container_with_extents(&[row(0, 0, 2, 0, 8), row(1, 1, 1, 8, 8)]);
+        container
+            .task_table
+            .programs
+            .push(container.task_table.programs[0]);
+        container.task_table.programs[1].instance_id = InstanceId::new(1);
+        assert!(matches!(
+            verify_load(&container),
+            Err(LoadViolation::PersistentExtentsOutOfOrder { instance_id }) if instance_id == InstanceId::new(1)
+        ));
+    }
+
+    #[test]
+    fn verify_load_when_two_persistent_extents_follow_each_other_then_ok() {
+        let mut container = container_with_extents(&[row(0, 0, 1, 0, 8), row(1, 1, 2, 8, 8)]);
+        container
+            .task_table
+            .programs
+            .push(container.task_table.programs[0]);
+        container.task_table.programs[1].instance_id = InstanceId::new(1);
+        assert_eq!(verify_load(&container), Ok(()));
+    }
+
+    #[test]
+    fn verify_load_when_persistent_extent_names_unknown_instance_then_violation() {
+        let container = container_with_extents(&[row(7, 0, 2, 0, 8)]);
+        assert!(matches!(
+            verify_load(&container),
+            Err(LoadViolation::PersistentExtentInstance { instance_id }) if instance_id == InstanceId::new(7)
+        ));
+    }
+
+    #[test]
+    fn verify_load_when_two_persistent_extents_name_one_instance_then_violation() {
+        let container = container_with_extents(&[row(0, 0, 1, 0, 8), row(0, 1, 1, 8, 8)]);
+        assert!(matches!(
+            verify_load(&container),
+            Err(LoadViolation::PersistentExtentInstance { instance_id }) if instance_id == InstanceId::new(0)
+        ));
     }
 }

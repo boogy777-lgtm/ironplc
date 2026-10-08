@@ -9,7 +9,9 @@
 use std::collections::HashSet;
 
 use crate::common::{parse, parse_and_compile};
-use ironplc_container::{Container, FieldType, VarEntry, VAR_FLAG_IS_ARRAY};
+use ironplc_container::{
+    string_region_size, CharWidth, Container, FieldType, VarEntry, VAR_FLAG_IS_ARRAY,
+};
 use ironplc_dsl::common::{DeclarationQualifier, LibraryElementKind, VarDecl};
 use ironplc_parser::options::CompilerOptions;
 use rstest::rstest;
@@ -316,6 +318,43 @@ fn variable_table_when_every_allocation_kind_then_entries_describe_declarations(
         .user_fb_types
         .iter()
         .any(|desc| desc.type_id.raw() == entry("cfb").extra));
+}
+
+/// The persistent extent is declared at the one point where code generation
+/// has assigned the last persistent variable. A function's slots and its
+/// string local come after it, in the variable table and in the data region.
+#[test]
+fn persistent_extent_when_function_has_string_local_then_extent_ends_before_function_data() {
+    let source = "
+FUNCTION join : DINT
+  VAR_INPUT i : DINT; END_VAR
+  VAR t : STRING[8]; END_VAR
+  join := i + LEN(t);
+END_FUNCTION
+
+PROGRAM main
+  VAR s : STRING[10]; r : DINT; END_VAR
+  r := join(i := 1);
+END_PROGRAM
+";
+    let container = parse_and_compile(source, &CompilerOptions::default());
+
+    let extents = container.persistent_extents();
+
+    assert_eq!(extents.len(), 1);
+    // The program's two variables; the function's three slots follow.
+    assert_eq!((extents[0].var_start, extents[0].var_count), (0, 2));
+    assert_eq!(container.header.num_variables, 5);
+    assert_eq!(extents[0].data_start, 0);
+    assert_eq!(
+        extents[0].data_len,
+        string_region_size(10, CharWidth::Narrow)
+    );
+    assert!(container.header.data_region_bytes > extents[0].data_len);
+    assert_eq!(
+        container.task_table.shared_globals_size, extents[0].var_count,
+        "the task table's shared extent and the declared extent agree for one program"
+    );
 }
 
 /// Every part of a container that online change compares to decide whether

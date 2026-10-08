@@ -73,7 +73,7 @@ Per-file source integrity lives in the debug section's `SOURCE_FILE_TABLE` (tag 
 | Requirement | Offset | Field | Type | Description |
 |-------------|--------|-------|------|-------------|
 | **REQ-CF-container-002** | 0 | magic | u32 | `0x49504C43` ("IPLC" in ASCII) |
-| **REQ-CF-container-003** | 4 | format_version | u16 | Container format version (currently 7; bumped to 2 from 1 by ADR-0033 opcode-encoding migration, to 3 by ADR-0035 WSTRING string-header/constant-pool encoding tags, to 4 by the variable table added to the type section, to 5 by the stable variable IDs added to the type section, to 6 by the FB field UIDs added to the type section, and to 7 by ADR-0069's explicit array element stride) |
+| **REQ-CF-container-003** | 4 | format_version | u16 | Container format version (currently 8; bumped to 2 from 1 by ADR-0033 opcode-encoding migration, to 3 by ADR-0035 WSTRING string-header/constant-pool encoding tags, to 4 by the variable table added to the type section, to 5 by the stable variable IDs added to the type section, to 6 by the FB field UIDs added to the type section, to 7 by ADR-0069's explicit array element stride, and to 8 by the persistent extent added to the type section with a layout hash over the persistent part, ADR-0073) |
 | | 6 | profile | u8 | Reserved for future VM profile definitions; must be zero |
 | **REQ-CF-container-007** | 7 | flags | u8 | Bit 0: has system uptime variables (`FLAG_HAS_SYSTEM_UPTIME`); Bit 1: has debug section (`FLAG_HAS_DEBUG_SECTION`); Bit 2: has type section (`FLAG_HAS_TYPE_SECTION`); bits 3–7 reserved. No bit indicates a signature section (see below) |
 | | 8 | content_hash | [u8; 32] | BLAKE3 over the masked header, task table, type section, constant pool and code section (see Content Hash Scope). Computed and written by the container writer; the reader verifies a nonzero value against the section bytes, and a zero value (a container written before this hash was populated) is accepted as legacy |
@@ -116,6 +116,8 @@ Per-file source integrity lives in the debug section's `SOURCE_FILE_TABLE` (tag 
 **REQ-CF-container-016** A container with no signature sections has `sig_section_offset`, `sig_section_size`, `debug_sig_offset` and `debug_sig_size` all zero.
 
 **REQ-CF-codegen-025** The compiler computes `layout_hash` (see [Layout Hash and Online Change](#layout-hash-and-online-change)) and writes it into the header when the container is serialized. It also computes `content_hash` (BLAKE3 over the masked header, task table, type section, constant pool and code section — see [Content Hash Scope](#content-hash-scope)) and `debug_hash` (BLAKE3 over the debug section, zero when absent), each reproducible from the section bytes the compiler wrote, and writes them into the header; the reader verifies nonzero hashes at load (see [Loading Sequence](#loading-sequence) and REQ-CF-container-029), and a zero hash is accepted as a legacy container. The signature sections remain unimplemented: `sig_section_offset` and `sig_section_size` stay zero, and no reader validates a signature. Content and debug signatures are tracked by the Implementation Status in [ADR-0007](../adrs/0007-dual-signature-integrity-model.md) and [issue #1583](https://github.com/ironplc/ironplc/issues/1583).
+
+**REQ-CF-codegen-027** The compiler declares one persistent extent row per program instance in the type section ([Persistent Extent](#persistent-extent)), taken at the point where it has assigned the last persistent variable: the variable slots and the data-region bytes reserved for the globals and the program lie inside the row, and those reserved afterwards for functions and function block bodies lie outside it.
 
 **REQ-CF-codegen-026** The compiler records the type section's FB field UID table from the engineering-side `(qualified FB type name, field name) → uid` input (ADR-0059): each user-defined `FUNCTION_BLOCK` field the input names gets an entry mapping the type's `fb_type_id` and the field's ordinal to that uid, emitted in ascending `(fb_type_id, field_index)` order. Fields the input does not name carry no entry. The table is excluded from `layout_hash`.
 
@@ -164,9 +166,9 @@ Present when `debug_sig_offset` is nonzero, which requires a debug section (`fla
 
 Present when `flags` bit 2 is set. Required for on-device verification (ADR-0006). May be stripped for constrained targets using the signature fallback.
 
-The type section describes the aggregate types a program uses. The interpreter reads the array descriptors (element stride and bounds) and the user FB descriptors (body dispatch) at runtime; the FB type descriptors are for the verifier; the stable variable IDs are for the online-change migration planner ([ADR-0053](../adrs/0053-stable-variable-ids-for-declaration-level-hot-edit.md)), and the interpreter ignores them; the FB field UIDs are for per-field FB instance migration ([ADR-0059](../adrs/0059-fb-field-stable-ids.md)), and the interpreter ignores them too.
+The type section describes the aggregate types a program uses. The interpreter reads the array descriptors (element stride and bounds) and the user FB descriptors (body dispatch) at runtime; the FB type descriptors are for the verifier; the stable variable IDs are for the online-change migration planner ([ADR-0053](../adrs/0053-stable-variable-ids-for-declaration-level-hot-edit.md)), and the interpreter ignores them; the FB field UIDs are for per-field FB instance migration ([ADR-0059](../adrs/0059-fb-field-stable-ids.md)), and the interpreter ignores them too; the persistent extent says which part of the variable table and of the data region is state ([ADR-0073](../adrs/0073-state-layout-is-the-persistent-part.md)), and the interpreter ignores it as well.
 
-**REQ-CF-container-018** The type section is six sub-tables in this order, each prefixed by a u16 count: FB type descriptors, array descriptors, user FB descriptors, variable table, stable variable IDs, FB field UIDs.
+**REQ-CF-container-018** The type section is seven sub-tables in this order, each prefixed by a u16 count: FB type descriptors, array descriptors, user FB descriptors, variable table, stable variable IDs, FB field UIDs, persistent extent rows.
 
 | Offset | Field | Type | Description |
 |--------|-------|------|-------------|
@@ -291,11 +293,11 @@ Each StableVarEntry (10 bytes, fixed size):
 
 ### FB Field UIDs
 
-The FB field UID table is the sixth and last sub-table of the type section ([REQ-CF-container-018](#type-section)). It maps one field of a user-defined FB type — identified by the type's `type_id` and the field's ordinal within the type's field list — to the engineering-side entity UID of the field declaration (ADR-0059). The UID identifies the field, not its position: inserting a field into the type shifts the ordinals of the following fields, but a field's UID (and therefore its migrated value) stays with the field. Only user-defined FB types carry entries; standard-library FBs (TON, ...) have fixed, VM-owned layouts and none.
+The FB field UID table is the sixth sub-table of the type section ([REQ-CF-container-018](#type-section)). It maps one field of a user-defined FB type — identified by the type's `type_id` and the field's ordinal within the type's field list — to the engineering-side entity UID of the field declaration (ADR-0059). The UID identifies the field, not its position: inserting a field into the type shifts the ordinals of the following fields, but a field's UID (and therefore its migrated value) stays with the field. Only user-defined FB types carry entries; standard-library FBs (TON, ...) have fixed, VM-owned layouts and none.
 
 The table exists for per-field FB instance migration: the runtime migration planner matches the active and candidate containers' fields of one FB type by UID and copies each surviving field's value into its new ordinal position, initialises fields whose UID is new, and drops fields whose UID disappeared ([ADR-0059](../adrs/0059-fb-field-stable-ids.md)). Like the stable variable IDs, the table is identity, not layout, and is excluded from [`layout_hash`](#layout-hash-and-online-change).
 
-The table is emitted always, with a count of zero when it is empty (containers written before format v6 end after the stable variable IDs). Entries are stored in ascending `(fb_type_id, field_index)` order; the UIDs come from the same engineering project model as the stable variable IDs — the UID sidecar keys an FB field as `(scope = qualified FB type name, name = field)`, so no sidecar format change was needed.
+The table is emitted always, with a count of zero when it is empty. Entries are stored in ascending `(fb_type_id, field_index)` order; the UIDs come from the same engineering project model as the stable variable IDs — the UID sidecar keys an FB field as `(scope = qualified FB type name, name = field)`, so no sidecar format change was needed.
 
 | Offset | Field | Type | Description |
 |--------|-------|------|-------------|
@@ -311,6 +313,24 @@ Each FbFieldUidEntry (11 bytes, fixed size):
 | 3 | uid | u64 | Engineering-side entity UID of the field declaration; survives renames and reorderings |
 
 **REQ-CF-container-030** The FB field UID table is emitted with a u16 count, followed by that many 11-byte entries in ascending `(fb_type_id, field_index)` order; each entry maps a user FB type's `(fb_type_id, field_index)` to its u64 field UID.
+
+### Persistent Extent
+
+The persistent extent is the seventh and last sub-table of the type section ([REQ-CF-container-018](#type-section)). The variable table holds, in this order, the global variables, the variables of the program, and then the working slots: the parameters, locals and return value of functions, and the working slots of function block bodies and methods. Only the first two parts are state that outlives a scan. The extent declares them as data, one row per program instance, so that every reader that has to tell state from working memory reads one definition instead of computing it.
+
+Each row (14 bytes, fixed size) names two runs:
+
+| Offset | Field | Type | Description |
+|--------|-------|------|-------------|
+| 0 | instance_id | u16 | Program instance that owns the row (matches a task table program instance) |
+| 2 | var_start | u16 | Index of the first persistent variable slot |
+| 4 | var_count | u16 | Number of persistent variable slots |
+| 6 | data_start | u32 | Offset of the first persistent byte of the data region |
+| 10 | data_len | u32 | Number of persistent bytes of the data region |
+
+The compiler writes one row, taken at the point where it has assigned the last persistent variable: the variable count and the data-region offset at that moment. Everything it reserves in the data region before that point belongs to a persistent variable (strings, arrays, structures, function block instances); everything it reserves afterwards (function locals, function block working slots, string temporaries) is working memory.
+
+**REQ-CF-container-038** The persistent extent is emitted with a u16 count, followed by that many 14-byte rows (`instance_id`, `var_start`, `var_count`, `data_start`, `data_len`); a container that declares no row has the whole variable table and the whole data region as its persistent extent.
 
 **REQ-CF-container-029** The container reader verifies a container at load time (ADR-0006). When `content_hash` is nonzero it must equal the digest defined in [Content Hash Scope](#content-hash-scope) (checked by `ironplc_container::integrity` before any section is parsed, REQ-CF-container-037); when `layout_hash` is nonzero it must recompute over the variable table, FB type descriptors and array descriptors; and the type section's tables must be internally consistent — the variable table count matches `num_variables`, variable entries set no reserved flag bits, array variables reference an existing array descriptor, FB type IDs and stable variable IDs are distinct (stable IDs ascending and within `num_variables`), user FB descriptors reference an existing function and a field range within the variable table, array descriptor element types are defined tags, and FB field UIDs name an existing user FB descriptor and a field ordinal within its `num_fields` (entries ascending). A violated invariant is rejected with `ContainerError::VerificationFailed` carrying the specific violation; a hash field of all zeros is a container written before this verification existed and is accepted as legacy. When `debug_hash` is nonzero but does not match the debug section, the debug section is discarded (non-fatal), per step 13 of the Loading Sequence. Implemented by `ironplc_container::verify_load` and the hash checks in `Container::read_from` (ADR-0058).
 

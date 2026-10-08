@@ -46,8 +46,8 @@ use ironplc_container::debug_section::{
     EnumDefEntry, FuncNameEntry, StringLayoutEntry, VarNameEntry,
 };
 use ironplc_container::{
-    CharWidth, Container, ContainerBuilder, FbFieldUidEntry, FbTypeId, FunctionId, StableVarEntry,
-    TaskType, UserFbDescriptor, VarEntry, VarIndex,
+    CharWidth, Container, ContainerBuilder, FbFieldUidEntry, FbTypeId, FunctionId, InstanceId,
+    PersistentExtent, StableVarEntry, TaskType, UserFbDescriptor, VarEntry, VarIndex,
 };
 // The string data-region layout lives in `ironplc-container` so the analyzer
 // and codegen size strings the same way. Re-exported here because the rest of
@@ -965,6 +965,19 @@ fn compile_program_with_functions(
         &options.stable_var_ids,
     )?;
     let program_var_count = ctx.variables.len() as u16;
+    // The persistent part ends here: every variable slot and every byte of the
+    // data region reserved so far belongs to a global or to the program, and
+    // everything reserved from now on (function slots, function block working
+    // slots, string temporaries) is working memory. The container declares
+    // this point as its persistent extent (ADR-0073); no other site in the
+    // compiler decides what is persistent.
+    let persistent_extent = PersistentExtent {
+        instance_id: InstanceId::DEFAULT,
+        var_start: 0,
+        var_count: program_var_count,
+        data_start: 0,
+        data_len: ctx.data_region_offset,
+    };
 
     // Now compile the FB bodies with correct var_offsets.
     let mut compiled_functions = Vec::new();
@@ -1217,6 +1230,7 @@ fn compile_program_with_functions(
         .init_function_id(FunctionId::INIT)
         .entry_function_id(FunctionId::SCAN)
         .shared_globals_size(program_var_count)
+        .add_persistent_extent(persistent_extent)
         .max_call_depth(max_call_depth);
 
     // Add debug info.

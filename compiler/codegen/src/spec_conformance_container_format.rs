@@ -150,3 +150,27 @@ fn container_spec_req_cf_026_fb_field_uids_are_recorded() {
         1
     );
 }
+
+/// REQ-CF-codegen-027: the compiler declares one persistent extent row per
+/// program instance, taken at the point where it has assigned the last
+/// persistent variable: the variable slots and data-region bytes reserved for
+/// the globals and the program come inside it, and those reserved for
+/// functions and function block bodies afterwards come outside it.
+#[spec_test(REQ_CF_codegen_027)]
+fn container_spec_req_cf_027_persistent_extent_ends_at_the_last_persistent_variable() {
+    let container = compiled_container_with_fb_uids(FB_PROGRAM, &[]);
+
+    let declared = &container.type_section.as_ref().unwrap().persistent_extents;
+
+    // The program's `acc` is the only persistent variable; the function
+    // block's two fields are working slots after it. The instance's two
+    // 8-byte field slots are its persistent data.
+    assert_eq!(declared.len(), 1);
+    assert_eq!(
+        declared[0].instance_id,
+        ironplc_container::InstanceId::DEFAULT
+    );
+    assert_eq!((declared[0].var_start, declared[0].var_count), (0, 1));
+    assert_eq!(container.header.num_variables, 3);
+    assert_eq!((declared[0].data_start, declared[0].data_len), (0, 16));
+}

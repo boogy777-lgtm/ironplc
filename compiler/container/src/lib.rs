@@ -17,6 +17,7 @@ pub mod id_types;
 mod instruction;
 pub mod integrity;
 pub mod opcode;
+mod persistent_extent;
 pub mod policy;
 mod string_layout;
 mod task_type;
@@ -63,6 +64,7 @@ pub use id_types::{
     SourceLine, TaskId, VarIndex,
 };
 pub use opcode::Opcode;
+pub use persistent_extent::PersistentExtent;
 pub use string_layout::{string_region_size, DEFAULT_STRING_MAX_LENGTH, STRING_HEADER_BYTES};
 pub use task_table::{ProgramInstanceEntry, TaskEntry};
 pub use task_type::TaskType;

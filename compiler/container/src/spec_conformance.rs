@@ -24,7 +24,8 @@ use crate::header::{
     FileHeader, FLAG_HAS_DEBUG_SECTION, FLAG_HAS_SYSTEM_UPTIME, FLAG_HAS_TYPE_SECTION,
     FORMAT_VERSION, HEADER_SIZE, MAGIC,
 };
-use crate::id_types::{FbTypeId, FunctionId, VarIndex};
+use crate::id_types::{FbTypeId, FunctionId, InstanceId, VarIndex};
+use crate::persistent_extent::PersistentExtent;
 use crate::test_support::with_tampered_header;
 use crate::type_section::{
     ArrayDescriptor, FbFieldUidEntry, FbTypeDescriptor, FieldEntry, FieldType, StableVarEntry,
@@ -68,10 +69,10 @@ fn container_spec_req_cf_002_magic_is_iplc() {
     assert_eq!(bytes, [0x43, 0x4C, 0x50, 0x49]);
 }
 
-/// REQ-CF-container-003: Format version is 7.
+/// REQ-CF-container-003: Format version is 8.
 #[spec_test(REQ_CF_container_003)]
-fn container_spec_req_cf_003_format_version_is_7() {
-    assert_eq!(FORMAT_VERSION, 7);
+fn container_spec_req_cf_003_format_version_is_8() {
+    assert_eq!(FORMAT_VERSION, 8);
 }
 
 /// REQ-CF-container-004: All multi-byte values in the header are little-endian.
@@ -500,7 +501,8 @@ fn write_type_section(section: &TypeSection) -> Vec<u8> {
 
 /// REQ-CF-container-018: The type section is FB type descriptors, then array
 /// descriptors, then user FB descriptors, then the variable table, then the
-/// stable variable IDs, then the FB field UIDs, each behind a u16 count.
+/// stable variable IDs, then the FB field UIDs, then the persistent extent
+/// rows, each behind a u16 count.
 #[spec_test(REQ_CF_container_018)]
 fn container_spec_req_cf_018_type_section_sub_table_order() {
     let section = TypeSection {
@@ -532,13 +534,15 @@ fn container_spec_req_cf_018_type_section_sub_table_order() {
             field_index: 0,
             uid: 0x1112_1314_1516_1718,
         }],
+        persistent_extents: vec![],
     };
     let buf = write_type_section(&section);
     // fb count(2) + fb header(4) + one field(4) = 10, then array count(2) +
     // descriptor(12) = 24, then user count(2) + descriptor(8) = 34, then
     // variable count(2) + entry(4) = 40, then stable var count(2) +
-    // entry(10) = 52, then FB field UID count(2) + entry(11) = 65.
-    assert_eq!(buf.len(), 65);
+    // entry(10) = 52, then FB field UID count(2) + entry(11) = 65, then
+    // persistent extent count(2) = 67.
+    assert_eq!(buf.len(), 67);
     assert_eq!(&buf[0..2], &1u16.to_le_bytes());
     assert_eq!(&buf[2..4], &0x0Au16.to_le_bytes());
     assert_eq!(&buf[10..12], &1u16.to_le_bytes());
@@ -557,7 +561,53 @@ fn container_spec_req_cf_018_type_section_sub_table_order() {
         &buf[57..65],
         &[0x18, 0x17, 0x16, 0x15, 0x14, 0x13, 0x12, 0x11]
     );
+    assert_eq!(&buf[65..67], &0u16.to_le_bytes());
 }
+
+/// REQ-CF-container-038: The persistent extent is a u16 count followed by
+/// 14-byte rows — instance_id, var_start, var_count (u16 LE each),
+/// data_start, data_len (u32 LE each) — and a container that declares no row
+/// has the whole variable table and the whole data region as its extent.
+#[spec_test(REQ_CF_container_038)]
+fn container_spec_req_cf_038_persistent_extent_layout() {
+    let section = TypeSection {
+        persistent_extents: vec![PersistentExtent {
+            instance_id: InstanceId::new(0x0102),
+            var_start: 0x0304,
+            var_count: 0x0506,
+            data_start: 0x0708_090A,
+            data_len: 0x0B0C_0D0E,
+        }],
+        ..Default::default()
+    };
+    let buf = write_type_section(&section);
+
+    // Six empty counts(12), then the extent count at 12..14 and the row at
+    // 14..28.
+    assert_eq!(buf.len(), 28);
+    assert_eq!(&buf[12..14], &1u16.to_le_bytes());
+    assert_eq!(
+        &buf[14..28],
+        &[0x02, 0x01, 0x04, 0x03, 0x06, 0x05, 0x0A, 0x09, 0x08, 0x07, 0x0E, 0x0D, 0x0C, 0x0B]
+    );
+
+    let undeclared = ContainerBuilder::new()
+        .num_variables(3)
+        .data_region_bytes(40)
+        .add_function(FunctionId::INIT, &[0x8C], 0, 3, 0)
+        .build();
+    assert_eq!(
+        undeclared.persistent_extents(),
+        vec![PersistentExtent {
+            instance_id: InstanceId::DEFAULT,
+            var_start: 0,
+            var_count: 3,
+            data_start: 0,
+            data_len: 40,
+        }]
+    );
+}
+
 /// REQ-CF-container-028: The stable variable ID table is a u16 count followed
 /// by 10-byte `var_index`/`uid` entries in ascending `var_index` order.
 #[spec_test(REQ_CF_container_028)]
@@ -577,9 +627,9 @@ fn container_spec_req_cf_028_stable_var_table_layout() {
     };
     let buf = write_type_section(&section);
 
-    // Six counts(12) + 2 entries * 10 = 32. The stable var count is the
+    // Seven counts(14) + 2 entries * 10 = 34. The stable var count is the
     // fifth count, at bytes 8..10; entries follow at 10..20 and 20..30.
-    assert_eq!(buf.len(), 32);
+    assert_eq!(buf.len(), 34);
     assert_eq!(&buf[8..10], &2u16.to_le_bytes());
     assert_eq!(
         &buf[10..20],
@@ -613,9 +663,10 @@ fn container_spec_req_cf_030_fb_field_uid_table_layout() {
     };
     let buf = write_type_section(&section);
 
-    // Six counts(12) + 2 entries * 11 = 34. The FB field UID count is the
-    // sixth count, at bytes 10..12; entries follow at 12..23 and 23..34.
-    assert_eq!(buf.len(), 34);
+    // Seven counts(14) + 2 entries * 11 = 36. The FB field UID count is the
+    // sixth count, at bytes 10..12; entries follow at 12..23 and 23..34, and
+    // the seventh count (no persistent extent rows) closes the section.
+    assert_eq!(buf.len(), 36);
     assert_eq!(&buf[10..12], &2u16.to_le_bytes());
     assert_eq!(
         &buf[12..23],
@@ -643,7 +694,8 @@ fn container_spec_req_cf_019_array_descriptor_is_12_bytes() {
     let buf = write_type_section(&section);
     // fb count(2) + array count(2) + descriptor(12) + user count(2)
     //   + variable count(2) + stable var count(2) + FB field UID count(2)
-    assert_eq!(buf.len(), 24);
+    // + persistent extent count(2)
+    assert_eq!(buf.len(), 26);
     assert_eq!(
         &buf[4..16],
         &[
@@ -679,7 +731,8 @@ fn container_spec_req_cf_020_user_fb_descriptor_is_8_bytes() {
     let buf = write_type_section(&section);
     // fb count(2) + array count(2) + user count(2) + descriptor(8)
     //   + variable count(2) + stable var count(2) + FB field UID count(2)
-    assert_eq!(buf.len(), 20);
+    // + persistent extent count(2)
+    assert_eq!(buf.len(), 22);
     assert_eq!(&buf[6..14], &[0x02, 0x01, 0x04, 0x03, 0x06, 0x05, 7, 0]);
 }
 
@@ -706,7 +759,8 @@ fn container_spec_req_cf_021_fb_type_descriptor_header_is_4_bytes() {
     let buf = write_type_section(&section);
     // fb count(2) + header(4) + 2 fields(8) + array count(2) + user count(2)
     //   + variable count(2) + stable var count(2) + FB field UID count(2)
-    assert_eq!(buf.len(), 24);
+    // + persistent extent count(2)
+    assert_eq!(buf.len(), 26);
     assert_eq!(&buf[2..6], &[0x02, 0x01, 2, 0]);
     assert_eq!(&buf[6..10], &[FieldType::I32 as u8, 0, 0, 0]);
     assert_eq!(&buf[10..14], &[FieldType::String as u8, 0, 0x08, 0x07]);
@@ -907,7 +961,7 @@ fn container_spec_req_cf_008_field_entry_is_4_bytes() {
     //   + array_count(2) + user_fb_count(2) + variable_count(2)
     //   + stable_var_count(2) + fb_field_uid_count(2) = 20
     // The single field entry occupies exactly 4 bytes (bytes 6..10).
-    assert_eq!(buf.len(), 20);
+    assert_eq!(buf.len(), 22);
 }
 
 /// REQ-CF-container-009: FieldType/var_type encoding values 0 through 10.

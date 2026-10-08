@@ -51,9 +51,10 @@ fn all_spec_requirements_have_tests() {
 /// Both goldens are frozen artifacts that exercise the container reader
 /// end-to-end, and both must be refreshed whenever `FORMAT_VERSION` bumps:
 /// the reader only accepts the current version. Last refreshed for the
-/// format version 6 -> 7 array-descriptor stride bump (ADR-0069), which
-/// changed only the version field because the file has no type section, and
-/// for the population of the header integrity hashes (`content_hash`,
+/// format version 7 -> 8 persistent extent bump (ADR-0073), and before that
+/// for the 6 -> 7 array-descriptor stride bump (ADR-0069), which changed only
+/// the version field because the file has no type section, and for the
+/// population of the header integrity hashes (`content_hash`,
 /// `debug_hash`, `layout_hash`), so a golden load also exercises the
 /// ADR-0006 load-time verifier (REQ-CF-container-029).
 /// Adding a new entry to this generator is fine; if you ever need to
