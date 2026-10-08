@@ -200,12 +200,11 @@ fn take_snapshot(prefix: &[u8], payload: &[u8]) -> Option<StateSnapshot> {
     // `persistent_vars` pins the slot count, so the slot blob is the leading
     // `persistent_vars * 8` bytes and the data region takes the rest; either
     // length mismatching the declarations is garbled.
-    let (vars, data_region) = payload.as_chunks::<8>();
-    if vars.len() != usize::from(persistent_vars)
-        || data_region.len() != persistent_data_bytes as usize
-    {
+    let (slots, data_region) = payload.split_at_checked(usize::from(persistent_vars) * 8)?;
+    if data_region.len() != persistent_data_bytes as usize {
         return None;
     }
+    let (vars, _) = slots.as_chunks::<8>();
     Some(StateSnapshot {
         layout_hash,
         persistent_vars,
@@ -606,6 +605,16 @@ mod tests {
         assert_round_trip(&CrossloadMessage::UntestCandidate);
         assert_round_trip(&CrossloadMessage::AssembleCandidate);
         assert_round_trip(&CrossloadMessage::StateUpdate(offer().snapshot));
+    }
+
+    #[test]
+    fn decode_when_data_region_is_longer_than_a_slot_then_snapshot_survives() {
+        let mut long = offer();
+        long.snapshot.persistent_data_bytes = 26;
+        long.snapshot.data_region = (0..26).collect();
+
+        assert_round_trip(&CrossloadMessage::Offer(long.clone()));
+        assert_round_trip(&CrossloadMessage::StateUpdate(long.snapshot));
     }
 
     #[test]
