@@ -71,8 +71,14 @@ gvl.st   ─┘                    │                 ├─ shared.bin
 ```
 
 A POU-body edit recompiles one POU, rewrites that POU's artifact, and relinks.
-The shared sections, the type section, the variable table, and every hash the
-runtime compares are unchanged by construction.
+The layout hash and the persistent extent that the runtime compares
+([ADR-0073](../adrs/0073-state-layout-is-the-persistent-part.md)) are
+unchanged. The shared sections are not unchanged by construction: an edit that
+adds the first call of a user function or removes the last one adds or removes
+that function's working slots in the variable table, and with them the whole
+table's count of variables; the persistent part stays where it is, so the
+runtime treats the edit as a body edit. The type section is rewritten whenever
+the set of compiled functions changes.
 
 ## Detailed Design
 
@@ -158,10 +164,14 @@ header keeps zeros until serialized, preserving the hash contract of
 Linking is deterministic: `link(compile(P))` and `link(split(x))` for any
 linked container `x = link(compile(P))` produce byte-identical output,
 because every numeric identity and every sort order is already
-source-derived. Relinking after a one-POU edit therefore changes exactly that
-POU's bytes in the code section — which is precisely the "logic-only change"
-the `layout_hash` already admits
-([What counts as a "logic-only" change](bytecode-container-format.md#what-counts-as-a-logic-only-change)).
+source-derived. Relinking after a one-POU edit therefore changes that POU's
+bytes in the code section — which is precisely the body edit the `layout_hash`
+already admits
+([What counts as a body edit](bytecode-container-format.md#what-counts-as-a-body-edit)).
+An edit that adds the first call of a user function or removes the last one
+also adds or removes the artifact of that function and changes the working part
+of the variable table in the shared sections; the persistent part, the layout
+hash and the persistent extent stay as they are.
 
 ### 5. Loader Changes
 

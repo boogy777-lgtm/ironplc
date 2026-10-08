@@ -79,7 +79,7 @@ Per-file source integrity lives in the debug section's `SOURCE_FILE_TABLE` (tag 
 | | 8 | content_hash | [u8; 32] | BLAKE3 over the masked header, task table, type section, constant pool and code section (see Content Hash Scope). Computed and written by the container writer; the reader verifies a nonzero value against the section bytes, and a zero value (a container written before this hash was populated) is accepted as legacy |
 | | 40 | reserved_hash_slot | [u8; 32] | Reserved (formerly `source_hash`); must be zero. Per-file source integrity is now in the debug section's `SOURCE_FILE_TABLE` (tag 6). |
 | | 72 | debug_hash | [u8; 32] | BLAKE3 over the debug section (all zeros if no debug section, or if no hash was computed). The reader verifies a nonzero value against the debug bytes and discards the debug section (non-fatal) on mismatch, matching step 13 of the Loading Sequence |
-| | 104 | layout_hash | [u8; 32] | BLAKE3 over the memory layout signature (see Layout Hash and Online Change). Computed and written by the container writer; all-zero only in a header that was never serialized |
+| | 104 | layout_hash | [u8; 32] | BLAKE3 over the layout of the persistent state (see Layout Hash and Online Change). Computed and written by the container writer; all-zero only in a header that was never serialized |
 | | 136 | sig_section_offset | u32 | Offset of content signature section (0 if absent) |
 | | 140 | sig_section_size | u32 | Size of content signature section |
 | | 144 | debug_sig_offset | u32 | Offset of debug signature section (0 if absent) |
@@ -334,7 +334,7 @@ The compiler writes one row, taken at the point where it has assigned the last p
 
 **REQ-CF-container-038** The persistent extent is emitted with a u16 count, followed by that many 14-byte rows (`instance_id`, `var_start`, `var_count`, `data_start`, `data_len`); a container that declares no row has the whole variable table and the whole data region as its persistent extent.
 
-**REQ-CF-container-029** The container reader verifies a container at load time (ADR-0006). When `content_hash` is nonzero it must equal the digest defined in [Content Hash Scope](#content-hash-scope) (checked by `ironplc_container::integrity` before any section is parsed, REQ-CF-container-037); when `layout_hash` is nonzero it must recompute over the variable table, FB type descriptors and array descriptors; and the type section's tables must be internally consistent — the variable table count matches `num_variables`, variable entries set no reserved flag bits, array variables reference an existing array descriptor, FB type IDs and stable variable IDs are distinct (stable IDs ascending and within `num_variables`), user FB descriptors reference an existing function and a field range within the variable table, array descriptor element types are defined tags, and FB field UIDs name an existing user FB descriptor and a field ordinal within its `num_fields` (entries ascending). A violated invariant is rejected with `ContainerError::VerificationFailed` carrying the specific violation; a hash field of all zeros is a container written before this verification existed and is accepted as legacy. When `debug_hash` is nonzero but does not match the debug section, the debug section is discarded (non-fatal), per step 13 of the Loading Sequence. Implemented by `ironplc_container::verify_load` and the hash checks in `Container::read_from` (ADR-0058).
+**REQ-CF-container-029** The container reader verifies a container at load time (ADR-0006). When `content_hash` is nonzero it must equal the digest defined in [Content Hash Scope](#content-hash-scope) (checked by `ironplc_container::integrity` before any section is parsed, REQ-CF-container-037); when `layout_hash` is nonzero it must recompute over the persistent extent, the variables in it, the array descriptors they name and the FB type descriptors ([Layout Hash and Online Change](#layout-hash-and-online-change)); and the type section's tables must be internally consistent — the variable table count matches `num_variables`, variable entries set no reserved flag bits, array variables reference an existing array descriptor, FB type IDs and stable variable IDs are distinct (stable IDs ascending and within `num_variables`), user FB descriptors reference an existing function and a field range within the variable table, a user FB descriptor and the FB type descriptor of the same type ID agree on the number of fields, array descriptor element types are defined tags, FB field UIDs name an existing user FB descriptor and a field ordinal within its `num_fields` (entries ascending), and the persistent extent rows lie within the variable table and the data region, ascend without overlapping, and name distinct program instances of the task table. A violated invariant is rejected with `ContainerError::VerificationFailed` carrying the specific violation; a hash field of all zeros is a container written before this verification existed and is accepted as legacy. When `debug_hash` is nonzero but does not match the debug section, the debug section is discarded (non-fatal), per step 13 of the Loading Sequence. Implemented by `ironplc_container::verify_load` and the hash checks in `Container::read_from` (ADR-0058).
 
 ### Function Signatures (planned, not emitted)
 
@@ -720,56 +720,64 @@ The all-zero form exists for containers assembled without a writer that hashes �
 
 ## Deterministic Ordering
 
-The compiler must assign all numeric indices (variable indices, FB type IDs, field indices, function IDs) in a deterministic order derived from the source program's declarations. This ensures that two compilations of the same program — differing only in logic — produce identical type sections and variable tables, which in turn produce identical `layout_hash` values.
+The compiler assigns all numeric indices (variable indices, FB type IDs, field indices, function IDs) in an order derived from the source program's declarations. Two compilations of the same program that differ only in the statements of its bodies therefore produce the same persistent extent, the same persistent variable entries and the same function block type table, and so the same `layout_hash`.
 
 ### Ordering rules
 
-| Item | Sort key | Tie-breaking |
-|------|----------|-------------|
-| Global variables | Qualified name (lexicographic, UTF-8 byte order) | N/A (names must be unique) |
-| Program-local variables | Program name, then variable name | N/A |
-| FB type descriptors | Qualified type name (lexicographic) | N/A (type names must be unique) |
-| Fields within an FB type | Declaration order in source | N/A (declaration order is deterministic) |
-| Function signatures | Qualified function name (lexicographic) | N/A |
-| Array descriptors | Order of first referencing variable | N/A |
-| Constant pool entries | Order of first reference in bytecode | N/A |
+| Item | Order |
+|------|-------|
+| Global variables | The system uptime globals when enabled, then the top-level `VAR_GLOBAL` declarations in source order, then those of the configuration; within a block, declaration order |
+| Program variables | Declaration order, after the globals; a `VAR_EXTERNAL` declaration takes no slot because it aliases a global; the hidden variables of edge inputs come last |
+| Working slots | After the program variables: the parameters, locals and return value of each compiled function, in the order of the dependency sort of the declarations; then, for each function block in that order, its field slots and those of its methods |
+| FB type IDs | The rank of the upper-cased type name among the compiled function block types, counted from `0x1000`; the position of the declaration in the dependency sort does not enter |
+| Fields within an FB type | Slot order: inputs, outputs, the other variables the block keeps, then the hidden variables of its edge inputs |
+| Function IDs | Positional in the code section: `0` init, `1` scan, then the function block bodies, then the functions, then the methods, each in the order of the dependency sort of the declarations |
+| Array descriptors | The order of the first variable that needs a shape; two variables of one shape share a descriptor. The index of a descriptor is not part of the layout hash |
+| Constant pool entries | The order of first reference while compiling |
 
-The compiler assigns indices 0, 1, 2, ... in the sorted order. Because the sort key is derived entirely from the source declarations (names and types), adding or removing a variable, FB type, or field changes the indices of subsequent items. This is intentional — any structural change invalidates the `layout_hash`, forcing a full restart rather than silently reinterpreting memory.
+The dependency sort puts a unit after the units it calls or instantiates, and orders the rest in a way that a new call can change for units that have nothing to do with it. Nothing in the layout hash depends on that order: the function IDs and the working slots are outside it, and the FB type IDs are ranked by name. The variable indices of the persistent part come from declaration order and so change only when a declaration of persistent state changes, which is the point: any such change changes the `layout_hash`, and the host refuses it or migrates it by stable variable ID rather than silently reinterpreting memory.
 
-### What counts as a "logic-only" change
+### What counts as a body edit
 
-A change is logic-only (and produces a matching `layout_hash`) if and only if:
-- No variables are added, removed, renamed, or retyped
-- No FB types are added, removed, or have their fields changed
-- No array bounds are changed
-- Function bodies, constant values, and control flow may change freely
+A change is a body edit (and produces a matching `layout_hash` and persistent extent) if and only if:
+- No global or program variable is added, removed, renamed with a new type, or retyped
+- No FB type is added, removed, or has a field added, removed or retyped
+- No array bound of a persistent variable is changed
+- Statements, constant values, control flow, and the calls a body makes may change freely, including the first call of a user function and the removal of the last one: the function's parameters, locals and return value are working slots and are outside the layout
+- The declarations of a function (a local added or retyped) may change freely for the same reason
 
 ## Layout Hash and Online Change
 
-The `layout_hash` in the file header enables safe online change (hot reloading) of bytecode without restarting the VM or losing variable state.
+The `layout_hash` in the file header enables safe online change (hot reloading) of bytecode without restarting the VM or losing variable state. It is the identity of the state layout, and the state layout is the persistent part of the container ([ADR-0073](../adrs/0073-state-layout-is-the-persistent-part.md)): the global variables, the variables of the program, the arrays they use, and the fields of function blocks. The working slots of functions and function block bodies are in the variable table but outside the layout.
 
 ### Hash computation
 
-The layout hash is computed as:
+**REQ-CF-container-039** The layout hash is computed as:
 
 ```
 layout_hash = BLAKE3(
-    num_variables (u16, LE) ||
-    for each variable in index order:
-        var_type (u8) || flags (u8) || extra (u16, LE) ||
+    num_extent_rows (u16, LE) ||
+    for each persistent extent row, in row order:
+        var_start (u16, LE) || var_count (u16, LE) ||
+        data_start (u32, LE) || data_len (u32, LE) ||
+        for each variable of the row's run, in variable table order:
+            var_type (u8) || flags (u8) ||
+            if the array flag is set:
+                the array descriptor the entry names:
+                    1 (u8) || element_type (u8) || total_elements (u32, LE) ||
+                    element_extra (u16, LE) || element_stride (u32, LE)
+                (0 (u8) when the index names no descriptor)
+            otherwise:
+                extra (u16, LE)
     num_fb_types (u16, LE) ||
-    for each FB type in type_id order:
-        num_fields (u8) ||
+    for each FB type descriptor, in ascending type_id order:
+        type_id (u16, LE) || num_fields (u16, LE) ||
         for each field in field index order:
-            field_type (u8) || field_extra (u16, LE) ||
-    num_arrays (u16, LE) ||
-    for each array descriptor in index order:
-        element_type (u8) || total_elements (u32, LE) ||
-        element_extra (u16, LE) || element_stride (u32, LE)
+            field_type (u8) || field_extra (u16, LE)
 )
 ```
 
-The hash covers all information that determines memory layout. It excludes code, constants, and debug info — those can change freely without affecting variable memory.
+The hash covers what determines the memory layout of the persistent state: where it is, what each variable is, what each array is (by content, so the position of a descriptor in the table does not matter) and what each function block holds. It excludes the count of variables of the whole table, the variable table entries outside the extent (the working slots), array descriptors that no persistent variable names, the user FB descriptors (function IDs and the position of the block's working slots), the stable variable IDs, code, constants, and debug info — those can change freely without affecting persistent memory.
 
 ### Online change protocol
 
@@ -780,29 +788,37 @@ application runs:
 
 ```
 1. Read new file header
-2. Compare new layout_hash to current layout_hash
-3. If hashes match:
+2. Compare new layout_hash to current layout_hash, and the new persistent
+   extent to the current one
+3. If both match:
    a. Verify new bytecode (signature + optional verifier)
    b. At the end of the current scan cycle (after OUTPUT_FLUSH):
+      - Rebuild the buffers for the new container
+      - Carry the persistent extent of the variable table and of the data
+        region from the old buffers to the new ones; the working part of the
+        new buffers starts fresh
       - Reload the VM from the new container on the host's buffers
         (`Vm::load(...).resume(...)`)
-      - Keep all variable, FB instance, and process image memory intact
       - Resume execution with new code on next scan cycle
-4. If hashes differ:
-   a. Reject the online change with "layout incompatible" error
-   b. The operator must perform a full stop-load-start sequence
+4. If they differ:
+   a. If both containers carry stable variable IDs, hand the pair to the
+      migration planner, which accepts or refuses it (see below)
+   b. Otherwise reject the online change with "layout incompatible" error;
+      the operator must perform a full stop-load-start sequence
 ```
 
-The swap occurs at a safe point (between scan cycles) to ensure the program never executes a mix of old and new code within a single scan. The host rebuilds the buffers for the destination container and carries the persistent bytes over, which accommodates a candidate that grows the data region. See [ADR-0052](../adrs/0052-online-change-performed-by-the-runtime-host.md) for the host-level decision and the typed validation errors.
+The swap occurs at a safe point (between scan cycles) to ensure the program never executes a mix of old and new code within a single scan. The host rebuilds the buffers for the destination container and carries the persistent bytes over, which accommodates a candidate that needs more stack, more call depth, more string temporaries, more data region or more working slots than the active container; the carry is the same for an untest, with the original container. The count of variables in the header and the variable count of the program entry in the task table describe the whole table, working slots included, and are not compared.
+
+A replicated state snapshot (the redundancy crossload) carries the same persistent runs, identified by the layout hash and by the counts of persistent variables and persistent data bytes, so two units that run different bodies of one layout exchange images of one size.
 
 ### Why compiler-determined ordering is sufficient
 
 This design relies on the compiler producing deterministic output rather than embedding names in the container for runtime matching. This is the right trade-off because:
 
-- **Logic-only changes are the common case** — most PLC online changes modify function bodies while keeping the same variables and FB types
-- **All-or-nothing is safe by default** — if any declaration changes, the hash changes, and the host requires a full restart unless a migration planner can prove per-variable compatibility from the stable variable IDs; there is no unverified partial migration that could silently corrupt data
+- **Body edits are the common case** — most PLC online changes modify function bodies, and the calls they make, while keeping the same persistent variables and FB types
+- **All-or-nothing is safe by default** — if any declaration of persistent state changes, the hash changes, and the host requires a full restart unless a migration planner can prove per-variable compatibility from the stable variable IDs; there is no unverified partial migration
 - **Smaller container format** — no variable names, type names, or field names in the type section; names belong in the debug section
-- **Simpler runtime** — one 32-byte hash comparison replaces O(n) name matching and per-item layout checking
+- **Simpler runtime** — one 32-byte hash comparison and one comparison of the extent replace O(n) name matching and per-item layout checking
 
 Per-variable migration is the successor feature: the type section's stable variable ID table (see [Stable Variable IDs](#stable-variable-ids)) carries a UID per persistent variable, and the runtime migration planner compares the active and candidate tables to decide which values are copied, which are initialised, and which are dropped — a shared UID whose entry differs is reconciled per the migration rules below (conversion policy, or a collected decision), and anything else rejects the whole candidate. The table is deliberately excluded from `layout_hash`: a rename changes UIDs and names only, the hash stays equal, and the planner — not a single hash — decides compatibility ([ADR-0053](../adrs/0053-stable-variable-ids-for-declaration-level-hot-edit.md), [ADR-0054](../adrs/0054-state-migration-across-declaration-level-edits.md)). FB instance fields are covered the same way by the FB field UID table (see [FB Field UIDs](#fb-field-uids)): the planner matches a shared instance's fields by UID and copies, initialises or drops each field individually, and rejects a layout-changing edit whose fields carry no UIDs ([ADR-0059](../adrs/0059-fb-field-stable-ids.md)).
 
@@ -810,7 +826,7 @@ Type-changing migration is policy-gated ([ADR-0060](../adrs/0060-type-changing-m
 
 ## Versioning
 
-The `format_version` field allows future changes to the container format. The VM must reject versions it does not support. The current version is 6 (`FORMAT_VERSION`; see the header table for the history), and the reader rejects any other value.
+The `format_version` field allows future changes to the container format. The VM must reject versions it does not support. The current version is 8 (`FORMAT_VERSION`; see the header table for the history), and the reader rejects any other value. A container of an earlier version is refused with `ContainerError::UnsupportedVersion` and is never read with the old meaning.
 
 Rules for version increments:
 - Adding new optional sections → minor version (backward compatible)
@@ -823,4 +839,8 @@ Version history:
 | 1 | This spec as first written |
 | 2 | Opcode encoding by class and type ([ADR-0033](../adrs/0033-opcode-encoding-by-class-and-type.md)) |
 | 3 | WSTRING string header and constant-pool encoding tags ([ADR-0035](../adrs/0035-length-and-encoding-prefixed-string-layout.md)) |
-| 4 (in development) | Debug section: `VarNameEntry` carries a type reference and static `data_offset`; STRING_LAYOUT retired; COMPOSITE_TYPE and ARRAY_TYPE added ([Variable Inspection Model](variable-inspection-model.md)) |
+| 4 | The variable table in the type section. In development for this version: the debug section, where `VarNameEntry` carries a type reference and static `data_offset`; STRING_LAYOUT retired; COMPOSITE_TYPE and ARRAY_TYPE added ([Variable Inspection Model](variable-inspection-model.md)) |
+| 5 | The stable variable IDs in the type section ([ADR-0053](../adrs/0053-stable-variable-ids-for-declaration-level-hot-edit.md)) |
+| 6 | The FB field UIDs in the type section ([ADR-0059](../adrs/0059-fb-field-stable-ids.md)) |
+| 7 | The explicit element stride in array descriptors ([ADR-0069](../adrs/0069-explicit-element-stride-in-array-descriptors.md)) |
+| 8 | The persistent extent in the type section, and a layout hash over the persistent part only ([ADR-0073](../adrs/0073-state-layout-is-the-persistent-part.md)) |

@@ -10,7 +10,7 @@ and the running application both carry stable variable IDs, but at least one
 ID that exists on both sides is bound to an entry the planner cannot migrate:
 a changed variable type outside the conversion policy, a changed array
 descriptor, a current string value that no longer fits the candidate's
-maximum length, a changed function-block tail layout, or a migration decision
+maximum length, a changed function-block field layout, or a migration decision
 that names nothing or asks to preserve a size-mismatched pair.
 
 For an out-of-policy type change the refusal is decidable per entity: the

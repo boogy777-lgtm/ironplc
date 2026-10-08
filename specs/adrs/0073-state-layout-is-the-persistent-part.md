@@ -1,6 +1,6 @@
 # State Layout Is the Persistent Part
 
-status: proposed
+status: accepted
 date: 2026-10-08
 
 ## Context and Problem Statement
@@ -101,6 +101,15 @@ field layout of the type, read from there by the hash, the load check and the
 migration planner. The position of a block's working slots (`var_offset` of the
 user function block descriptor) is an address for the VM and is no longer read
 as identity.
+
+The type ID of a function block is the rank of its upper-cased name among the
+compiled function blocks, counted from `0x1000`. It used to be the position of
+the block in the container, which comes from the dependency sort of the
+declarations; a body that starts to call a function declared before it adds an
+edge to that sort and swapped the type IDs of two blocks that had nothing to do
+with the call, which changed the variable table entry of every instance and
+with it the layout. The rank is fixed by the set of compiled blocks, which only
+a declaration can change.
 
 ### What the layout hash covers
 
