@@ -4,6 +4,7 @@
 //! and the integration tests under `tests/`.
 
 pub mod corpus;
+pub mod generated;
 pub mod paths;
 pub mod programs;
 
