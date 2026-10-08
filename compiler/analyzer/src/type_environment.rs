@@ -275,7 +275,7 @@ pub fn elementary_type(type_name: &TypeName) -> Option<&'static IntermediateType
 }
 
 /// A type in the environment: what it is, and the name it was declared with.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct TypeEntry {
     /// The name the type was first entered under, or `None` for an
     /// anonymous type (see [`TypeEnvironment::insert_anonymous`]). It is for
@@ -291,7 +291,7 @@ struct TypeEntry {
 /// elementary type (`TIME_OF_DAY` and `TOD`) share the elementary type's id.
 /// A type alias (`TYPE MyByte : BYTE`) is a type of its own with an id of its
 /// own. See [`crate::type_id`] for how ids are numbered.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TypeEnvironment {
     entries: HashMap<TypeId, TypeEntry>,
     names: HashMap<TypeName, TypeId>,

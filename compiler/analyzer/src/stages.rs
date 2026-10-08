@@ -10,9 +10,14 @@ use ironplc_dsl::{
 use ironplc_parser::options::CompilerOptions;
 use ironplc_problems::Problem;
 use log::debug;
+use std::{
+    collections::HashMap,
+    sync::{Arc, OnceLock},
+};
 
 use crate::{
-    function_environment::FunctionEnvironmentBuilder,
+    experiment::STANDARD_ENVIRONMENTS,
+    function_environment::{FunctionEnvironment, FunctionEnvironmentBuilder, FunctionSignature},
     intermediates::special_operator::special_operator_signatures,
     ironplc_dsl::common::Library,
     observe::{self, Observer, Unobserved},
@@ -97,10 +102,56 @@ fn analyze_in_budget<O: Observer>(
 /// which every analysis starts a type environment from.
 fn build_type_environment<O: Observer>(observer: &O) -> Result<TypeEnvironment, Diagnostic> {
     observer.observe(observe::setup("type environment"), || {
+        // Prototype B2: build once, then clone the built tables.
+        if STANDARD_ENVIRONMENTS.level() != 0 {
+            static BASE: OnceLock<TypeEnvironment> = OnceLock::new();
+            if let Some(base) = BASE.get() {
+                return Ok(base.clone());
+            }
+            let built = TypeEnvironmentBuilder::new()
+                .with_elementary_types()
+                .with_stdlib_function_blocks()
+                .build()?;
+            return Ok(BASE.get_or_init(|| built).clone());
+        }
         TypeEnvironmentBuilder::new()
             .with_elementary_types()
             .with_stdlib_function_blocks()
             .build()
+    })
+}
+
+/// The environment of the standard functions, which every analysis adds the
+/// functions of the program to.
+fn build_function_environment<O: Observer>(observer: &O) -> FunctionEnvironment {
+    observer.observe(observe::setup("function environment"), || {
+        // Prototype B2: build once; clone the built table, or share it.
+        match STANDARD_ENVIRONMENTS.level() {
+            0 => FunctionEnvironmentBuilder::new()
+                .with_stdlib_functions()
+                .build(),
+            1 => {
+                static BASE: OnceLock<FunctionEnvironment> = OnceLock::new();
+                BASE.get_or_init(|| {
+                    FunctionEnvironmentBuilder::new()
+                        .with_stdlib_functions()
+                        .build()
+                })
+                .clone()
+            }
+            _ => {
+                static BASE: OnceLock<Arc<HashMap<String, FunctionSignature>>> = OnceLock::new();
+                let base = BASE.get_or_init(|| {
+                    Arc::new(
+                        FunctionEnvironmentBuilder::new()
+                            .with_stdlib_functions()
+                            .build()
+                            .into_table(),
+                    )
+                });
+                FunctionEnvironment::layered_over(Arc::clone(base))
+            }
+        }
     })
 }
 
@@ -131,11 +182,7 @@ fn resolve_types_in_budget<O: Observer>(
     // Hard failures: these are foundational and all subsequent steps depend on them.
     let mut type_environment = build_type_environment(observer).map_err(|err| vec![err])?;
 
-    let mut function_environment = observer.observe(observe::setup("function environment"), || {
-        FunctionEnvironmentBuilder::new()
-            .with_stdlib_functions()
-            .build()
-    });
+    let mut function_environment = build_function_environment(observer);
 
     // Conditionally register dialect-extension functions gated by allow flags.
     if options.allow_sizeof {

@@ -177,10 +177,13 @@ impl FunctionSignature {
 }
 
 /// The function environment tracks all function signatures.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FunctionEnvironment {
     /// Map from lowercase function name to signature
     table: HashMap<String, FunctionSignature>,
+    /// Prototype B2: signatures shared with other environments, which this
+    /// one reads and never changes. A name in `table` is not in `base`.
+    base: Option<std::sync::Arc<HashMap<String, FunctionSignature>>>,
 }
 
 impl FunctionEnvironment {
@@ -188,7 +191,27 @@ impl FunctionEnvironment {
     pub fn new() -> Self {
         Self {
             table: HashMap::new(),
+            base: None,
         }
+    }
+
+    /// An environment that reads `base` and adds to a layer of its own.
+    pub fn layered_over(base: std::sync::Arc<HashMap<String, FunctionSignature>>) -> Self {
+        Self {
+            table: HashMap::new(),
+            base: Some(base),
+        }
+    }
+
+    /// The signatures, to share them as the base of other environments.
+    pub fn into_table(self) -> HashMap<String, FunctionSignature> {
+        self.table
+    }
+
+    fn lookup(&self, key: &str) -> Option<&FunctionSignature> {
+        self.table
+            .get(key)
+            .or_else(|| self.base.as_ref().and_then(|base| base.get(key)))
     }
 
     /// Inserts a function signature into the environment.
@@ -199,7 +222,7 @@ impl FunctionEnvironment {
     pub fn insert(&mut self, signature: FunctionSignature) -> Result<(), Diagnostic> {
         let key = signature.name.lower_case().to_string();
 
-        if let Some(existing) = self.table.get(&key) {
+        if let Some(existing) = self.lookup(&key) {
             return Err(duplicate_declaration(
                 Problem::FunctionDeclNameDuplicated,
                 &signature.name,
@@ -214,34 +237,36 @@ impl FunctionEnvironment {
     ///
     /// Uses case-insensitive lookup.
     pub fn get(&self, name: &Id) -> Option<&FunctionSignature> {
-        self.table.get(&name.lower_case().to_string())
+        self.lookup(&name.lower_case().to_string())
     }
 
     /// Returns true if the function exists in the environment.
     pub fn contains(&self, name: &Id) -> bool {
-        self.table.contains_key(&name.lower_case().to_string())
+        self.lookup(&name.lower_case().to_string()).is_some()
     }
 
     /// Returns an iterator over all function signatures.
     pub fn iter(&self) -> impl Iterator<Item = (&String, &FunctionSignature)> {
-        self.table.iter()
+        self.table
+            .iter()
+            .chain(self.base.iter().flat_map(|base| base.iter()))
     }
 
     /// Returns an iterator over user-defined (non-stdlib) function signatures.
     pub fn iter_user_defined(&self) -> impl Iterator<Item = (&String, &FunctionSignature)> {
-        self.table.iter().filter(|(_, sig)| !sig.is_stdlib())
+        self.iter().filter(|(_, sig)| !sig.is_stdlib())
     }
 
     /// Returns the number of functions in the environment.
     #[allow(dead_code)]
     pub fn len(&self) -> usize {
-        self.table.len()
+        self.table.len() + self.base.as_ref().map_or(0, |base| base.len())
     }
 
     /// Returns true if the environment is empty.
     #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
-        self.table.is_empty()
+        self.len() == 0
     }
 }
 

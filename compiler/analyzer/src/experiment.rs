@@ -43,3 +43,8 @@ impl Switch {
 
 /// B1: a pass keeps no copy of the library. 1 = no copy.
 pub static NO_FALLBACK: Switch = Switch::new("IRONPLC_EXP_NO_FALLBACK");
+
+/// B2: the standard environments are built once per process. 1 = a built base
+/// is cloned for each analysis; 2 = the function environment is a layer over
+/// a shared base and the type environment is cloned.
+pub static STANDARD_ENVIRONMENTS: Switch = Switch::new("IRONPLC_EXP_STANDARD_ENVIRONMENTS");
