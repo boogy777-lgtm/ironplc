@@ -920,3 +920,49 @@ END_PROGRAM
     host.run(1, || 0).unwrap();
     assert_eq!(host.read_variable(counter).unwrap(), 8);
 }
+
+#[test]
+fn run_when_persistent_variable_has_no_stable_id_then_migration_returns_it_to_its_initial_value() {
+    // Pins what a migration does today to a persistent variable that carries
+    // no stable variable ID: the planner copies by ID, so the variable is not
+    // copied, and the candidate's init image gives it its declared initial
+    // value. The edit is accepted without a refusal or a warning. B counts up
+    // by ten on every scan from its initial 5; after the edit it starts over.
+    let source = |declarations: &str| {
+        format!(
+            "PROGRAM main
+  VAR
+    A : DINT;
+    B : DINT := 5;
+    {declarations}
+  END_VAR
+  A := A + 1;
+  B := B + 10;
+END_PROGRAM
+"
+        )
+    };
+    let base = compile_with_ids(&source(""), &[("A", 1)]);
+    let (a, b) = (variable_index(&base, "A"), variable_index(&base, "B"));
+    let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
+    host.run(3, || 0).unwrap();
+    assert_eq!(host.read_variable(a).unwrap(), 3);
+    assert_eq!(host.read_variable(b).unwrap(), 35);
+
+    let candidate = compile_with_ids(&source("C : DINT;"), &[("A", 1)]);
+    host.stage(candidate.clone()).unwrap();
+    assert!(host.status().migration);
+    host.test().unwrap();
+    host.run(1, || 0).unwrap();
+
+    assert_eq!(
+        host.read_variable(variable_index(&candidate, "A")).unwrap(),
+        4
+    );
+    // 5 (the initial value) + 10 (the one scan since the swap), not 45.
+    assert_eq!(
+        host.read_variable(variable_index(&candidate, "B")).unwrap(),
+        15
+    );
+}
