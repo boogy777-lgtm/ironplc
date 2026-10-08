@@ -61,7 +61,7 @@ fn run_pass_with_options(program: &str, options: &CompilerOptions) -> Resolved {
         &function_environment,
         options,
     )
-    .unwrap();
+    .library;
     Resolved {
         library,
         types: type_environment,

@@ -223,7 +223,12 @@ diagnostic P4007 Undefined variable
 ## oop.st [default]
 parse P0002 expected a declaration
 ## oop.st [rusty]
-library 2a1f31d27badeead 6 elements
+library 80589617eb76bc7b 6 elements
+diagnostic P9999 SUPER^ is recognized but its type cannot be resolved by IronPLC yet
+diagnostic P9999 THIS^ is recognized but its type cannot be resolved by IronPLC yet
+diagnostic P9999 SUPER^ is recognized but its type cannot be resolved by IronPLC yet
+diagnostic P9999 THIS^ is recognized but its type cannot be resolved by IronPLC yet
+diagnostic P9999 THIS^ is recognized but its type cannot be resolved by IronPLC yet
 diagnostic P9999 SUPER^ is recognized but its type cannot be resolved by IronPLC yet
 diagnostic P9999 SUPER^ method invocation is recognized but not yet resolved by IronPLC
 diagnostic P9999 THIS^ method invocation is recognized but not yet resolved by IronPLC

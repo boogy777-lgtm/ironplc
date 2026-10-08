@@ -73,41 +73,6 @@ pub(crate) fn run_pass<O: Observer>(
     outcome.library
 }
 
-/// Runs a transform whose failure discards the whole library.
-///
-/// The pre-pass library is restored when the transform returns `Err`, so every
-/// transformation it had already completed is thrown away with the one that
-/// failed. Reserve this for a pass whose output is meaningless when any part
-/// of it failed, and prefer [`run_best_effort`].
-///
-/// The reason the distinction exists is not one failing test. Corpus testing
-/// showed what looked like merge-order or file-pairing sensitivity: a source
-/// that analyzed cleanly alone failed once merged with unrelated code. The
-/// cause was never ordering -- a transform that accumulates diagnostics and
-/// then discards its whole result throws away every unrelated resolution it
-/// had already completed. A pass that returns `Err` after a user-level
-/// diagnostic reintroduces that, so a new pass reports per-declaration
-/// problems through `run_best_effort` instead.
-pub(crate) fn run_reverting_on_error<O: Observer>(
-    observer: &O,
-    name: &'static str,
-    library: Library,
-    diagnostics: &mut Vec<Diagnostic>,
-    xform: impl FnOnce(Library) -> Result<Library, Vec<Diagnostic>>,
-) -> Library {
-    let fallback = observer.observe(observe::fallback(name), || library.clone());
-    match observer.observe(observe::pass(name), || xform(library)) {
-        Ok(result) => {
-            observer.observe(observe::fallback(name), || drop(fallback));
-            result
-        }
-        Err(errs) => {
-            diagnostics.extend(errs);
-            fallback
-        }
-    }
-}
-
 /// Runs a transform that reports per-declaration problems without discarding
 /// the declarations it did transform.
 ///

@@ -16,7 +16,7 @@ use crate::{
     intermediates::special_operator::special_operator_signatures,
     ironplc_dsl::common::Library,
     observe::{self, Observer, Unobserved},
-    pass_runner::{direct, pass, run_best_effort, run_pass, run_reverting_on_error},
+    pass_runner::{direct, pass, run_best_effort, run_pass},
     semantic_context::SemanticContext,
     semantic_rules::semantic,
     symbol_environment::{ScopeKind, SymbolEnvironment, SymbolKind},
@@ -315,7 +315,7 @@ fn resolve_types_in_budget<O: Observer>(
     // Best effort: a diagnosed call keeps its named arguments, which is the
     // state reverting would leave every call in -- including the valid ones.
     library = pass!(
-        run_best_effort,
+        run_pass,
         observer,
         library,
         &mut diagnostics,
@@ -336,7 +336,7 @@ fn resolve_types_in_budget<O: Observer>(
 
     // Resolve expression types using the function environment.
     library = pass!(
-        run_reverting_on_error,
+        run_pass,
         observer,
         library,
         &mut diagnostics,
@@ -348,7 +348,7 @@ fn resolve_types_in_budget<O: Observer>(
 
     // Fold constant binary and unary expressions.
     library = pass!(
-        run_reverting_on_error,
+        run_pass,
         observer,
         library,
         &mut diagnostics,
