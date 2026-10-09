@@ -57,7 +57,7 @@ fn end_to_end_when_bare_value_has_several_enumerations_then_internal_error_not_a
 
     let result = try_parse_and_compile(&source, &CompilerOptions::default());
 
-    let diagnostic = result.err().expect("an ambiguous value does not compile");
+    let diagnostic = result.expect_err("an ambiguous value does not compile");
     assert_eq!(diagnostic.code, "P9998");
 }
 
@@ -67,6 +67,6 @@ fn end_to_end_when_bare_value_has_several_enumerations_in_a_statement_then_inter
 
     let result = try_parse_and_compile(&source, &CompilerOptions::default());
 
-    let diagnostic = result.err().expect("an ambiguous value does not compile");
+    let diagnostic = result.expect_err("an ambiguous value does not compile");
     assert_eq!(diagnostic.code, "P9998");
 }

@@ -125,13 +125,13 @@ fn enumerations_declaring_when_name_differs_only_in_case_then_the_same_name() {
 fn enumerations_declaring_when_several_then_each_owner_points_at_its_own_value() {
     let env = environment(&[("E1", &["U2", "U1"]), ("E2", &["U1", "U3"])]);
 
-    let ValueOwners::Several(owners) = env.enumerations_declaring(&Id::from("U1")) else {
-        panic!("expected several owners");
+    let starts: Vec<usize> = match env.enumerations_declaring(&Id::from("U1")) {
+        ValueOwners::Several(owners) => owners.iter().map(|o| o.value.span.start).collect(),
+        _ => vec![],
     };
 
     // E1 declares U1 second (position 20 of its declaration), E2 first.
-    assert_eq!(owners[0].value.span.start, 20);
-    assert_eq!(owners[1].value.span.start, 110);
+    assert_eq!(starts, [20, 110]);
 }
 
 #[test]
