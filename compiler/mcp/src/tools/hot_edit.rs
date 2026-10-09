@@ -114,7 +114,8 @@ pub struct HotEditResponse {
     /// The stable V-code when the command layer refused the command (e.g.
     /// `"V4011"`) or the VM trapped during a driven scan round. Null when the
     /// failure never reached the command layer (compile diagnostics, a
-    /// missing session, an internal invariant).
+    /// missing session, a candidate the workstation did not send because the
+    /// stable variable IDs are out of sync, an internal invariant).
     pub v_code: Option<String>,
     /// The failure message accompanying `v_code`.
     pub message: Option<String>,
@@ -136,6 +137,21 @@ impl HotEditResponse {
             status: Some(status),
             v_code: None,
             message: None,
+            pairs: None,
+            diagnostics: vec![],
+        }
+    }
+
+    /// Builds the failure response for a candidate the workstation did not
+    /// send: the command layer never saw it, so there is no V-code, and the
+    /// message says what to do.
+    fn not_sent(message: String) -> Self {
+        HotEditResponse {
+            ok: false,
+            result: None,
+            status: None,
+            v_code: None,
+            message: Some(message),
             pairs: None,
             diagnostics: vec![],
         }
@@ -334,17 +350,37 @@ pub fn build_accept_response_with_decisions(
     let Some(container_id) = compiled.container_id else {
         return internal_failure("compile succeeded without a container id".to_string());
     };
-    let program = {
+    let cached = {
         let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
         guard
             .get(&container_id)
-            .map(|cached| cached.iplc_bytes.clone())
+            .map(|cached| (cached.iplc_bytes.clone(), cached.ids_out_of_sync.clone()))
     };
-    let Some(program) = program else {
+    let Some((program, ids_out_of_sync)) = cached else {
         return internal_failure(format!(
             "compiled container '{container_id}' was evicted before it could be staged"
         ));
     };
+    send_candidate(program, ids_out_of_sync, migration, session)
+}
+
+/// Sends a compiled candidate to the session, unless the workstation knows the
+/// controller would refuse it (ADR-0074).
+///
+/// `ids_out_of_sync` is the verdict of the project's comparison of its stable
+/// variable IDs with its declared persistent variables, rendered for the
+/// engineer. While it is set the candidate is not sent: the controller refuses a
+/// candidate that goes through a migration while a persistent variable has no ID
+/// (V4020), and says so after the candidate has been transferred.
+fn send_candidate(
+    program: Vec<u8>,
+    ids_out_of_sync: Option<String>,
+    migration: &BTreeMap<u64, MigrationDecisionSpec>,
+    session: &Mutex<HotEditSession>,
+) -> HotEditResponse {
+    if let Some(difference) = ids_out_of_sync {
+        return HotEditResponse::not_sent(difference);
+    }
 
     let mut guard = session.lock().unwrap_or_else(|e| e.into_inner());
     if guard.host.is_none() {
@@ -554,6 +590,31 @@ END_PROGRAM"
         assert_eq!(status.rounds, 0);
     }
 
+    #[test]
+    fn send_candidate_when_ids_are_out_of_sync_then_not_sent_and_no_session() {
+        let (_, session) = make_state();
+        let program = {
+            let container = compile_container(COUNTER_PROGRAM);
+            let mut bytes = Vec::new();
+            container.write_to(&mut bytes).unwrap();
+            bytes
+        };
+
+        let resp = send_candidate(
+            program,
+            Some("the stable variable IDs are out of sync with the declarations".to_string()),
+            &BTreeMap::new(),
+            &session,
+        );
+
+        assert!(!resp.ok);
+        assert!(resp.v_code.is_none());
+        assert_eq!(
+            resp.message.as_deref(),
+            Some("the stable variable IDs are out of sync with the declarations")
+        );
+        assert!(session.lock().unwrap().host.is_none());
+    }
     #[test]
     fn build_accept_response_when_session_running_then_stages_candidate() {
         let (cache, session) = make_state();

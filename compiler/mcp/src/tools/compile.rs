@@ -195,7 +195,10 @@ pub fn build_response(
     let symbols = crate::runner::build_symbol_map(context, &container);
 
     // Cache the container
-    let cached = CachedContainer::new(bytes, task_metas, program_metas, symbols);
+    let mut cached = CachedContainer::new(bytes, task_metas, program_metas, symbols);
+    cached.ids_out_of_sync = output
+        .id_difference
+        .map(|difference| difference.to_string());
     let container_id = {
         let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
         match guard.insert(cached) {
