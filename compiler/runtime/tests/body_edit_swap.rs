@@ -23,9 +23,9 @@
 
 mod common;
 
-use common::{compile_source, compile_with_ids, variable_index};
+use common::{compile_source, compile_with_uid_keys, variable_index};
 use ironplc_container::Container;
-use ironplc_runtime::{HostMode, OnlineChangeError, RuntimeHost};
+use ironplc_runtime::{HostMode, MigrationError, OnlineChangeError, RuntimeHost};
 use ironplc_test::edit_classes::{edit_classes, EditClass, Layout, WithStableIds};
 use rstest::rstest;
 
@@ -397,14 +397,21 @@ fn swap_when_body_only_edit_accepted_then_state_survives_and_buffers_fit_candida
 /// Compiles the two sources of `class`, with the class's stable variable IDs
 /// or without any.
 fn compile_class(class: &EditClass, with_stable_ids: bool) -> (Container, Container) {
-    let ids = if with_stable_ids {
-        class.stable_ids
+    // The keys of the class: the program variables, which the sources name in the
+    // scope `main`, and the fields of function blocks, in the scope of their type.
+    let keys: Vec<(&str, &str, u64)> = if with_stable_ids {
+        class
+            .stable_ids
+            .iter()
+            .map(|(name, uid)| ("main", *name, *uid))
+            .chain(class.field_ids.iter().copied())
+            .collect()
     } else {
-        &[]
+        Vec::new()
     };
     (
-        compile_with_ids(&class.before, ids),
-        compile_with_ids(&class.after, ids),
+        compile_with_uid_keys(&class.before, &keys),
+        compile_with_uid_keys(&class.after, &keys),
     )
 }
 
@@ -504,8 +511,21 @@ fn assert_layout_change_handled(
             assert!(host.status().migration, "{name}: accepted as a plain swap");
         }
         (true, WithStableIds::Refused) => assert!(
-            matches!(staged, Err(OnlineChangeError::MigrationUnsupported(_))),
-            "{name}: the planner must refuse: {staged:?}"
+            matches!(
+                &staged,
+                Err(OnlineChangeError::MigrationUnsupported(cause))
+                    if !matches!(cause, MigrationError::UnidentifiedVariables { .. })
+            ),
+            "{name}: the planner must refuse for a reason other than a missing ID: {staged:?}"
+        ),
+        (true, WithStableIds::Unidentified) => assert!(
+            matches!(
+                staged,
+                Err(OnlineChangeError::MigrationUnsupported(
+                    MigrationError::UnidentifiedVariables { .. }
+                ))
+            ),
+            "{name}: a persistent variable without an ID must be refused as such: {staged:?}"
         ),
     }
 }

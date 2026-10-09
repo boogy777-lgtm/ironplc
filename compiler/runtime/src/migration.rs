@@ -86,6 +86,15 @@
 //! maximum length or an FB type ID) keep the stage-2 rejection. FB instance
 //! *fields* follow the same path via their field UIDs (ADR 0059).
 //!
+//! ## Persistent variables without an ID (ADR-0074)
+//!
+//! Before any of the above, [`identity`] refuses a pair of containers in which a
+//! persistent variable carries no stable ID: a global, a program variable, a
+//! system or hidden slot, or a field of a function block type. The rows above
+//! then never meet a variable they cannot place, and a value is never returned
+//! to its initial value without the candidate being refused and the variable
+//! named.
+//!
 //! ## Applying a plan
 //!
 //! [`StateMigrationPlan::apply`] copies from the active [`VmBuffers`] into a
@@ -104,6 +113,7 @@ use ironplc_container::{
 use ironplc_vm::{Slot, VmBuffers};
 
 use crate::conversion::{type_name, ValueConversion};
+use crate::problem_codes;
 
 /// Byte offset of the `cur_length` field of a data-region string header.
 ///
@@ -214,6 +224,33 @@ pub enum MigrationError {
     RegionOutOfRange { index: VarIndex },
     /// Two stable variable ID entries share one UID.
     DuplicateUid { uid: u64 },
+    /// Persistent variables of the active application or of the candidate
+    /// carry no stable ID, so a migration would return their values to the
+    /// initial value without saying so (ADR-0074). Carries every one.
+    UnidentifiedVariables {
+        variables: Vec<UnidentifiedVariable>,
+    },
+}
+
+impl MigrationError {
+    /// The stable V-code of the refusal this cause makes of a candidate. Every
+    /// cause names its code here, so a new cause cannot reach a client under the
+    /// code of another.
+    pub fn v_code(&self) -> &'static str {
+        match self {
+            MigrationError::UnidentifiedVariables { .. } => problem_codes::STABLE_ID_MISSING,
+            MigrationError::IncompatibleEntry { .. }
+            | MigrationError::TypeChangeUnsupported { .. }
+            | MigrationError::PreserveSizeMismatch { .. }
+            | MigrationError::UnknownDecisionUid { .. }
+            | MigrationError::StringShrink { .. }
+            | MigrationError::ArrayDescriptorMismatch { .. }
+            | MigrationError::FbLayoutUnsupported
+            | MigrationError::IndexOutOfRange { .. }
+            | MigrationError::RegionOutOfRange { .. }
+            | MigrationError::DuplicateUid { .. } => problem_codes::MIGRATION_UNSUPPORTED,
+        }
+    }
 }
 
 impl fmt::Display for MigrationError {
@@ -270,6 +307,24 @@ impl fmt::Display for MigrationError {
             MigrationError::DuplicateUid { uid } => {
                 write!(f, "stable variable uid {uid} is bound more than once")
             }
+            MigrationError::UnidentifiedVariables { variables } => {
+                write!(f, "persistent variables without a stable ID:")?;
+                let mut separator = " ";
+                for side in [IdentitySide::Active, IdentitySide::Candidate] {
+                    let mut named = variables.iter().filter(|variable| variable.side == side);
+                    let Some(first) = named.next() else { continue };
+                    let label = match side {
+                        IdentitySide::Active => "active application",
+                        IdentitySide::Candidate => "candidate",
+                    };
+                    write!(f, "{separator}{label}: {first}")?;
+                    for variable in named {
+                        write!(f, ", {variable}")?;
+                    }
+                    separator = "; ";
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -312,6 +367,10 @@ impl StateMigrationPlan {
         candidate: &Container,
         decisions: &BTreeMap<u64, MigrationDecision>,
     ) -> Result<Self, MigrationError> {
+        // The rule comes first: no plan is built, and no decision is read, for
+        // a candidate that would lose a value without saying so (ADR-0074).
+        identity::require_identified(base, candidate)?;
+
         let base_section = base.type_section.as_ref();
         let candidate_section = candidate.type_section.as_ref();
 
@@ -810,8 +869,10 @@ fn string_current_length(region: &[u8]) -> u16 {
 
 mod decision;
 mod fb;
+mod identity;
 
 pub use decision::{MigrationDecision, TypeChangePair};
+pub use identity::{IdentitySide, IdentitySubject, UnidentifiedVariable};
 
 #[cfg(test)]
 mod tests;

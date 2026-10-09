@@ -41,5 +41,8 @@ pub use generation::{ApplicationGeneration, LogicGeneration};
 pub use host::{
     AcceptedEdit, EditBaseline, HostMode, HostStatus, PendingEditRecord, RuntimeHost, ScanCommit,
 };
-pub use migration::{MigrationDecision, MigrationError, StateMigrationPlan, TypeChangePair};
+pub use migration::{
+    IdentitySide, IdentitySubject, MigrationDecision, MigrationError, StateMigrationPlan,
+    TypeChangePair, UnidentifiedVariable,
+};
 pub use snapshot::StateSnapshot;

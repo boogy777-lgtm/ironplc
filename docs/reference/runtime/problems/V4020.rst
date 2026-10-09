@@ -1,0 +1,47 @@
+=====
+V4020
+=====
+
+.. problem-summary:: V4020
+
+Online change refused a schema edit because a persistent variable has no stable
+variable ID. A declaration-level edit carries the running values into the
+candidate by ID, and a variable with no ID would not be carried: it would start
+over from its initial value, and the change would look accepted. The runtime
+never does this silently. The refusal lists every persistent variable without
+an ID, first those of the running application and then those of the candidate,
+by the name the debug section gives them (a function block field as
+``block.field``) or, when the container has no names, by position. A variable
+that is new in the candidate is listed too when the candidate has no ID for it;
+a variable that exists on one side only does not need an ID from the other
+side.
+
+The persistent variables are the global variables, the variables of the
+program, and the fields of function blocks. A migration needs an ID for every
+one of them, in the running application and in the candidate. The IDs are
+assigned by synchronizing the project (the sidecar ``<project>.uids.json``);
+a build only reads them.
+
+Example
+-------
+
+A program keeps ``Counter`` and ``Total``. Only ``Counter`` was given an ID
+before the program was loaded, and the edit declares a new variable ``Extra``
+without synchronizing the IDs first:
+
+.. code-block::
+
+   {"command":"acceptEdits","program":[...]}
+   {"response":"error","vCode":"V4020","message":"candidate state cannot be migrated: persistent variables without a stable ID: active application: Total; candidate: Total, Extra"}
+
+The candidate was not staged and the running application is unchanged.
+
+To fix this error, synchronize the stable variable IDs of the project with
+``ironplcc refactor sync-uids`` and build the candidate again. If the report of
+the synchronization lists rename or swap candidates, it did not save the IDs:
+resolve each candidate with ``ironplcc refactor map-uid`` and synchronize
+again. If the running application itself lists a variable (it was loaded
+before that variable had an ID), no candidate can carry that variable's value;
+load the new container with a full download. See :doc:`V4007` for a candidate
+that carries no IDs at all and :doc:`V4010` for the other reasons a migration is
+refused.

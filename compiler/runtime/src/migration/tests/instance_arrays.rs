@@ -59,6 +59,7 @@ fn container_with_instances(
         .num_variables(1 + fields.len() as u16)
         .data_region_bytes(slots * 8)
         .build()
+        .identified()
 }
 
 #[test]

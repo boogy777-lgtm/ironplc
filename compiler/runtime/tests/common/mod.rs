@@ -56,6 +56,21 @@ pub fn compile_codesys_with_ids(source: &str, ids: &[(&str, u64)]) -> Container 
     )
 }
 
+/// Compiles `source` under the CODESYS dialect with the given engineering-side
+/// keyed UID table (see [`compile_with_uid_keys`]) and round-trips the container
+/// through the wire format.
+pub fn compile_codesys_with_uid_keys(source: &str, keys: &[(&str, &str, u64)]) -> Container {
+    let keyed: Vec<(SidecarKey, u64)> = keys
+        .iter()
+        .map(|(scope, name, uid)| (SidecarKey::new(scope, name), *uid))
+        .collect();
+    compile_container(
+        source,
+        &keyed,
+        &CompilerOptions::from_dialect(Dialect::Codesys),
+    )
+}
+
 /// Compiles `source` with the given engineering-side keyed UID table —
 /// `(scope, name, uid)` triples where an FB field's scope is its FB type
 /// name (ADR 0059) — and round-trips the container through the wire format.

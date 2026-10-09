@@ -34,6 +34,11 @@ pub enum WithStableIds {
     Migration,
     /// The migration planner cannot: the candidate is refused.
     Refused,
+    /// A persistent variable of one of the containers has no stable ID (a
+    /// variable declared after the last synchronization, or one never keyed):
+    /// the candidate is refused with that cause, whatever else the planner could
+    /// have justified (ADR-0074).
+    Unidentified,
 }
 
 /// One class of edit.
@@ -52,8 +57,13 @@ pub struct EditClass {
     /// What the edit does to the layout.
     pub layout: Layout,
     /// The program variables that carry a stable ID when a host runs the
-    /// class with stable IDs, as `(name, uid)`.
+    /// class with stable IDs, as `(name, uid)`. A persistent variable of the
+    /// sources that is not listed has no ID, which is the case of a class whose
+    /// outcome is [`WithStableIds::Unidentified`].
     pub stable_ids: &'static [(&'static str, u64)],
+    /// The fields of function blocks that carry a stable ID when a host runs the
+    /// class with stable IDs, as `(function block type, field, uid)`.
+    pub field_ids: &'static [(&'static str, &'static str, u64)],
     /// Variables that are non-zero once the program has run a few scans and
     /// that the edit must not change: a swap keeps them.
     pub observed: &'static [&'static str],
@@ -145,6 +155,7 @@ fn body_edit(
         flips_constant_inference,
         layout: Layout::Unchanged,
         stable_ids: &[],
+        field_ids: &[],
         observed: &[],
         computed: &[],
     }
@@ -165,6 +176,7 @@ fn declaration_edit(
         flips_constant_inference: false,
         layout: Layout::Changed(outcome),
         stable_ids,
+        field_ids: &[],
         observed: &[],
         computed: &[],
     }
@@ -472,6 +484,7 @@ fn call_edits() -> Vec<EditClass> {
             flips_constant_inference: false,
             layout: Layout::Unchanged,
             stable_ids: &[("a", 1), ("b", 2), ("c", 3), ("r", 4)],
+            field_ids: &[],
             observed: &[],
             computed: &[("r", 5)],
         },
@@ -484,6 +497,7 @@ fn call_edits() -> Vec<EditClass> {
             flips_constant_inference: false,
             layout: Layout::Unchanged,
             stable_ids: &[("n", 1), ("v", 2), ("r", 3)],
+            field_ids: &[],
             observed: &["v"],
             computed: &[("r", 41)],
         },
@@ -529,6 +543,13 @@ END_PROGRAM
     )
 }
 
+/// The IDs of the fields of the function block `doubler` of [`fb_program`].
+const FB_FIELD_IDS: &[(&str, &str, u64)] = &[
+    ("doubler", "x", 11),
+    ("doubler", "y", 12),
+    ("doubler", "z", 13),
+];
+
 /// Edits of a declaration of persistent state.
 fn declaration_edits() -> Vec<EditClass> {
     vec![
@@ -561,25 +582,63 @@ fn declaration_edits() -> Vec<EditClass> {
             &[("a", 1)],
         ),
         declaration_edit(
-            "function_block_field_added",
-            fb_program("VAR_INPUT x : DINT; END_VAR VAR_OUTPUT y : DINT; END_VAR"),
-            fb_program(
-                "VAR_INPUT x : DINT; END_VAR VAR_OUTPUT y : DINT; END_VAR VAR z : DINT; END_VAR",
-            ),
-            WithStableIds::Refused,
-            &[("inst", 1), ("result", 2)],
+            "variable_added_without_id",
+            program("x : DINT;", "x := 1;"),
+            program("x : DINT; y : DINT;", "x := 1;"),
+            WithStableIds::Unidentified,
+            &[("x", 1)],
         ),
+        // The case the identity rule exists for: `b` was never given an ID and
+        // keeps running through an edit that adds `c`. A migration would return
+        // `b` to its initial value without a word.
         declaration_edit(
-            "function_block_field_retyped",
-            fb_program(
-                "VAR_INPUT x : DINT; END_VAR VAR_OUTPUT y : DINT; END_VAR VAR z : DINT; END_VAR",
-            ),
-            fb_program(
-                "VAR_INPUT x : DINT; END_VAR VAR_OUTPUT y : DINT; END_VAR VAR z : REAL; END_VAR",
-            ),
-            WithStableIds::Refused,
-            &[("inst", 1), ("result", 2)],
+            "variable_without_id_kept_across_an_added_variable",
+            program("x : DINT; b : DINT := 5;", "x := x + 1; b := b + 10;"),
+            program("x : DINT; b : DINT := 5; c : DINT;", "x := x + 1; b := b + 10;"),
+            WithStableIds::Unidentified,
+            &[("x", 1)],
         ),
+        EditClass {
+            field_ids: FB_FIELD_IDS,
+            ..declaration_edit(
+                "function_block_field_added",
+                fb_program("VAR_INPUT x : DINT; END_VAR VAR_OUTPUT y : DINT; END_VAR"),
+                fb_program(
+                    "VAR_INPUT x : DINT; END_VAR VAR_OUTPUT y : DINT; END_VAR VAR z : DINT; END_VAR",
+                ),
+                WithStableIds::Migration,
+                &[("inst", 1), ("result", 2)],
+            )
+        },
+        EditClass {
+            field_ids: FB_FIELD_IDS,
+            ..declaration_edit(
+                "function_block_field_retyped",
+                fb_program(
+                    "VAR_INPUT x : DINT; END_VAR VAR_OUTPUT y : DINT; END_VAR VAR z : DINT; END_VAR",
+                ),
+                fb_program(
+                    "VAR_INPUT x : DINT; END_VAR VAR_OUTPUT y : DINT; END_VAR VAR z : REAL; END_VAR",
+                ),
+                // With an ID for every field, the retype is a conversion the policy
+                // admits (ADR-0060), not a refusal.
+                WithStableIds::Migration,
+                &[("inst", 1), ("result", 2)],
+            )
+        },
+        // The fields of the block carry IDs except the one the edit adds.
+        EditClass {
+            field_ids: &[("doubler", "x", 11), ("doubler", "y", 12)],
+            ..declaration_edit(
+                "function_block_field_added_without_uid",
+                fb_program("VAR_INPUT x : DINT; END_VAR VAR_OUTPUT y : DINT; END_VAR"),
+                fb_program(
+                    "VAR_INPUT x : DINT; END_VAR VAR_OUTPUT y : DINT; END_VAR VAR z : DINT; END_VAR",
+                ),
+                WithStableIds::Unidentified,
+                &[("inst", 1), ("result", 2)],
+            )
+        },
     ]
 }
 

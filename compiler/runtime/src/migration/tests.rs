@@ -6,7 +6,10 @@
 //! end-to-end host behavior lives in `tests/migration_acceptance.rs`.
 
 mod decisions;
+mod identity;
 mod instance_arrays;
+
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use super::*;
 use ironplc_container::{
@@ -14,6 +17,70 @@ use ironplc_container::{
     FieldType, FunctionId, UserFbDescriptor,
 };
 use ironplc_vm::Slot;
+
+/// The source of the IDs [`Identified::identified`] gives out. They start far
+/// above the IDs the tests write by hand and never repeat, so an ID given to one
+/// container is never shared with another and no copy follows from it.
+static NEXT_GENERATED_UID: AtomicU64 = AtomicU64::new(1_000_000);
+
+/// Completes the identity of a container the tests build by hand.
+///
+/// The tests below pin the rows of the planner under the identity rule
+/// (ADR-0074). A hand-built container names a few IDs, the ones the test is
+/// about, and leaves the other persistent variables and function block fields
+/// without one; the rule would refuse those before the row is reached. The
+/// rule has tests of its own in [`identity`].
+trait Identified {
+    /// The container, with a fresh ID for each persistent variable and each
+    /// function block field that had none.
+    fn identified(self) -> Self;
+}
+
+impl Identified for Container {
+    fn identified(mut self) -> Self {
+        let extents = self.persistent_extents();
+        let Some(section) = self.type_section.as_mut() else {
+            return self;
+        };
+        for extent in extents {
+            let first = extent.var_start;
+            for raw in first..first + extent.var_count {
+                let index = VarIndex::new(raw);
+                if !section
+                    .stable_vars
+                    .iter()
+                    .any(|entry| entry.var_index == index)
+                {
+                    section.stable_vars.push(StableVarEntry {
+                        var_index: index,
+                        uid: NEXT_GENERATED_UID.fetch_add(1, Ordering::Relaxed),
+                    });
+                }
+            }
+        }
+        section
+            .stable_vars
+            .sort_by_key(|entry| entry.var_index.raw());
+        for descriptor in section.fb_types.clone() {
+            for ordinal in 0..descriptor.fields.len() as u8 {
+                let named = section.fb_field_uids.iter().any(|entry| {
+                    entry.fb_type_id == descriptor.type_id && entry.field_index == ordinal
+                });
+                if !named {
+                    section.fb_field_uids.push(FbFieldUidEntry {
+                        fb_type_id: descriptor.type_id,
+                        field_index: ordinal,
+                        uid: NEXT_GENERATED_UID.fetch_add(1, Ordering::Relaxed),
+                    });
+                }
+            }
+        }
+        section
+            .fb_field_uids
+            .sort_by_key(|entry| (entry.fb_type_id.raw(), entry.field_index));
+        self
+    }
+}
 
 /// An I32 variable-table entry.
 fn i32_entry() -> VarEntry {
@@ -91,7 +158,10 @@ fn container(variables: &[VarEntry], stable: &[(u16, u64)]) -> Container {
             uid: *uid,
         });
     }
-    builder.num_variables(variables.len() as u16).build()
+    builder
+        .num_variables(variables.len() as u16)
+        .build()
+        .identified()
 }
 
 /// Builds a container with one stable I32 array variable sized so its data
@@ -108,6 +178,7 @@ fn array_container(elements: u32, data_region_bytes: u32) -> Container {
         .num_variables(1)
         .data_region_bytes(data_region_bytes)
         .build()
+        .identified()
 }
 
 /// A buffer set with the given slots and data region, for direct applications.
@@ -241,6 +312,7 @@ fn typed_array_container(element: FieldType, elements: u32, data_region_bytes: u
         .num_variables(1)
         .data_region_bytes(data_region_bytes)
         .build()
+        .identified()
 }
 
 #[test]
@@ -302,7 +374,8 @@ fn build_when_fb_tail_identical_then_copy_slot_and_region() {
             uid: 7,
         })
         .num_variables(2)
-        .build();
+        .build()
+        .identified();
     let candidate = ContainerBuilder::new()
         .shared_globals_size(2)
         .add_user_fb_type(user_fb(0x1000, 2))
@@ -314,7 +387,8 @@ fn build_when_fb_tail_identical_then_copy_slot_and_region() {
             uid: 7,
         })
         .num_variables(2)
-        .build();
+        .build()
+        .identified();
 
     let plan = StateMigrationPlan::build(&base, &candidate).unwrap();
 
@@ -341,12 +415,15 @@ fn build_when_fb_working_slots_move_but_fields_equal_then_copy_slot_and_region()
         .add_user_fb_type(user_fb_at(0x1000, 1, 2))
         .add_fb_type(fb_type(0x1000, 2))
         .add_var_entry(fb_entry(0x1000))
+        .add_var_entry(i32_entry())
+        .add_var_entry(i32_entry())
         .add_stable_var(StableVarEntry {
             var_index: VarIndex::new(0),
             uid: 7,
         })
         .num_variables(3)
-        .build();
+        .build()
+        .identified();
     let candidate = ContainerBuilder::new()
         .add_user_fb_type(UserFbDescriptor {
             function_id: FunctionId::new(3),
@@ -354,12 +431,18 @@ fn build_when_fb_working_slots_move_but_fields_equal_then_copy_slot_and_region()
         })
         .add_fb_type(fb_type(0x1000, 2))
         .add_var_entry(fb_entry(0x1000))
+        .add_var_entry(i32_entry())
+        .add_var_entry(i32_entry())
+        .add_var_entry(i32_entry())
+        .add_var_entry(i32_entry())
+        .add_var_entry(i32_entry())
         .add_stable_var(StableVarEntry {
             var_index: VarIndex::new(0),
             uid: 7,
         })
         .num_variables(6)
-        .build();
+        .build()
+        .identified();
 
     let plan = StateMigrationPlan::build(&base, &candidate).unwrap();
 
@@ -397,6 +480,7 @@ fn build_when_fb_has_string_field_then_fb_layout_unsupported() {
             })
             .num_variables(2)
             .build()
+            .identified()
     };
 
     let result = StateMigrationPlan::build(&container(), &container());
@@ -405,29 +489,29 @@ fn build_when_fb_has_string_field_then_fb_layout_unsupported() {
 }
 
 #[test]
-fn build_when_fb_tail_changes_then_fb_layout_unsupported() {
+fn build_when_standard_fb_instance_and_layout_after_prefix_changes_then_fb_layout_unsupported() {
+    // A standard-library block has no user descriptor, so its fields are not
+    // identified by UID and the layout after the program prefix must be the
+    // same for the instance to be carried.
     let base = ContainerBuilder::new()
-        .shared_globals_size(1)
-        .add_user_fb_type(user_fb(0x1000, 2))
-        .add_fb_type(fb_type(0x1000, 2))
-        .add_var_entry(fb_entry(0x1000))
+        .add_var_entry(fb_entry(0x0010))
         .add_stable_var(StableVarEntry {
             var_index: VarIndex::new(0),
             uid: 7,
         })
         .num_variables(1)
-        .build();
+        .build()
+        .identified();
     let candidate = ContainerBuilder::new()
-        .shared_globals_size(1)
-        .add_user_fb_type(user_fb(0x1000, 3))
-        .add_fb_type(fb_type(0x1000, 3))
-        .add_var_entry(fb_entry(0x1000))
+        .add_var_entry(fb_entry(0x0010))
+        .add_var_entry(i32_entry())
         .add_stable_var(StableVarEntry {
             var_index: VarIndex::new(0),
             uid: 7,
         })
-        .num_variables(1)
-        .build();
+        .num_variables(2)
+        .build()
+        .identified();
 
     let result = StateMigrationPlan::build(&base, &candidate);
 
@@ -446,7 +530,8 @@ fn build_when_no_fb_instance_then_tail_change_is_ignored() {
             uid: 7,
         })
         .num_variables(1)
-        .build();
+        .build()
+        .identified();
     let candidate = ContainerBuilder::new()
         .shared_globals_size(1)
         .add_user_fb_type(user_fb(0x1000, 3))
@@ -457,7 +542,8 @@ fn build_when_no_fb_instance_then_tail_change_is_ignored() {
             uid: 7,
         })
         .num_variables(1)
-        .build();
+        .build()
+        .identified();
 
     assert!(StateMigrationPlan::build(&base, &candidate).is_ok());
 }
@@ -478,7 +564,8 @@ fn build_when_fb_instance_and_program_prefix_grows_then_copy_slot_and_region() {
             uid: 7,
         })
         .num_variables(1)
-        .build();
+        .build()
+        .identified();
     let candidate = ContainerBuilder::new()
         .shared_globals_size(2)
         .add_user_fb_type(user_fb(0x1000, 2))
@@ -490,7 +577,8 @@ fn build_when_fb_instance_and_program_prefix_grows_then_copy_slot_and_region() {
             uid: 7,
         })
         .num_variables(2)
-        .build();
+        .build()
+        .identified();
 
     let plan = StateMigrationPlan::build(&base, &candidate).unwrap();
 
@@ -525,7 +613,8 @@ fn build_when_fb_field_uids_cover_layout_change_then_per_field_copy() {
             uid: 7,
         })
         .num_variables(3)
-        .build();
+        .build()
+        .identified();
     let candidate = ContainerBuilder::new()
         .add_user_fb_type(user_fb_at(0x1000, 1, 3))
         .add_fb_type(fb_type(0x1000, 3))
@@ -541,7 +630,8 @@ fn build_when_fb_field_uids_cover_layout_change_then_per_field_copy() {
             uid: 7,
         })
         .num_variables(4)
-        .build();
+        .build()
+        .identified();
 
     let plan = StateMigrationPlan::build(&base, &candidate).unwrap();
 
@@ -567,10 +657,11 @@ fn build_when_fb_field_uids_cover_layout_change_then_per_field_copy() {
 }
 
 #[test]
-fn build_when_fb_field_uid_unknown_and_layout_differs_then_fail_closed() {
-    // The candidate's field 2 carries no UID while the layout differs
-    // underneath it: the value's identity is unprovable, so the planner
-    // rejects the whole candidate (ADR 0059's fail-closed rule).
+fn build_when_fb_field_uid_unknown_and_layout_differs_then_refused_as_unidentified() {
+    // The candidate's fields 1 and 2 carry no UID while the layout differs
+    // underneath them: the value's identity is unprovable, so the candidate is
+    // refused (ADR 0059's fail-closed rule, which is the identity rule of
+    // ADR-0074 for the fields of a function block).
     let base = ContainerBuilder::new()
         .add_user_fb_type(user_fb_at(0x1000, 1, 2))
         .add_fb_type(fb_type(0x1000, 2))
@@ -584,7 +675,8 @@ fn build_when_fb_field_uid_unknown_and_layout_differs_then_fail_closed() {
             uid: 7,
         })
         .num_variables(3)
-        .build();
+        .build()
+        .identified();
     let candidate = ContainerBuilder::new()
         .add_user_fb_type(user_fb_at(0x1000, 1, 3))
         .add_fb_type(fb_type(0x1000, 3))
@@ -597,12 +689,42 @@ fn build_when_fb_field_uid_unknown_and_layout_differs_then_fail_closed() {
             var_index: VarIndex::new(0),
             uid: 7,
         })
+        .add_stable_var(StableVarEntry {
+            var_index: VarIndex::new(1),
+            uid: 8,
+        })
+        .add_stable_var(StableVarEntry {
+            var_index: VarIndex::new(2),
+            uid: 9,
+        })
+        .add_stable_var(StableVarEntry {
+            var_index: VarIndex::new(3),
+            uid: 10,
+        })
         .num_variables(4)
         .build();
 
     let result = StateMigrationPlan::build(&base, &candidate);
 
-    assert_eq!(result.unwrap_err(), MigrationError::FbLayoutUnsupported);
+    let fields: Vec<IdentitySubject> = match result {
+        Err(MigrationError::UnidentifiedVariables { variables }) => {
+            variables.iter().map(|variable| variable.subject).collect()
+        }
+        _ => Vec::new(),
+    };
+    assert_eq!(
+        fields,
+        vec![
+            IdentitySubject::FbField {
+                type_id: FbTypeId::new(0x1000),
+                ordinal: 1
+            },
+            IdentitySubject::FbField {
+                type_id: FbTypeId::new(0x1000),
+                ordinal: 2
+            },
+        ]
+    );
 }
 
 #[test]
@@ -628,7 +750,8 @@ fn build_when_fb_field_type_details_change_then_incompatible_entry() {
             uid: 7,
         })
         .num_variables(2)
-        .build();
+        .build()
+        .identified();
     let candidate = ContainerBuilder::new()
         .add_user_fb_type(user_fb_at(0x1000, 1, 2))
         .add_fb_type(FbTypeDescriptor {
@@ -654,7 +777,8 @@ fn build_when_fb_field_type_details_change_then_incompatible_entry() {
             uid: 7,
         })
         .num_variables(3)
-        .build();
+        .build()
+        .identified();
 
     let result = StateMigrationPlan::build(&base, &candidate);
 
@@ -691,7 +815,8 @@ fn build_when_fb_type_descriptor_changed_then_fb_layout_unsupported() {
             uid: 7,
         })
         .num_variables(1)
-        .build();
+        .build()
+        .identified();
     let candidate = ContainerBuilder::new()
         .shared_globals_size(1)
         .add_fb_type(fb_type(0x0010, 3))
@@ -701,7 +826,8 @@ fn build_when_fb_type_descriptor_changed_then_fb_layout_unsupported() {
             uid: 7,
         })
         .num_variables(1)
-        .build();
+        .build()
+        .identified();
 
     let result = StateMigrationPlan::build(&base, &candidate);
 
@@ -722,7 +848,8 @@ fn build_when_fb_type_descriptors_reordered_then_copy_slot() {
             uid: 7,
         })
         .num_variables(1)
-        .build();
+        .build()
+        .identified();
     let candidate = ContainerBuilder::new()
         .shared_globals_size(1)
         .add_fb_type(fb_type(0x0040, 3))
@@ -733,7 +860,8 @@ fn build_when_fb_type_descriptors_reordered_then_copy_slot() {
             uid: 7,
         })
         .num_variables(1)
-        .build();
+        .build()
+        .identified();
 
     let plan = StateMigrationPlan::build(&base, &candidate).unwrap();
 
@@ -820,7 +948,8 @@ fn apply_when_string_copy_then_region_and_slot_move() {
         })
         .num_variables(1)
         .data_region_bytes(16)
-        .build();
+        .build()
+        .identified();
     let candidate = ContainerBuilder::new()
         .add_var_entry(i32_entry())
         .add_var_entry(string_entry(10))
@@ -830,7 +959,8 @@ fn apply_when_string_copy_then_region_and_slot_move() {
         })
         .num_variables(2)
         .data_region_bytes(16)
-        .build();
+        .build()
+        .identified();
     let plan = StateMigrationPlan::build(&base, &candidate).unwrap();
 
     let mut base_buffers = VmBuffers::from_container(&base);
@@ -865,7 +995,8 @@ fn apply_when_array_copy_then_region_and_slot_move() {
         })
         .num_variables(2)
         .data_region_bytes(16)
-        .build();
+        .build()
+        .identified();
     let plan = StateMigrationPlan::build(&base, &candidate).unwrap();
 
     let mut base_buffers = VmBuffers::from_container(&base);

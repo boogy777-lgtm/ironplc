@@ -57,6 +57,7 @@ fn fb_container(fields: &[FieldType], field_uids: &[(u8, u64)]) -> Container {
         })
         .num_variables((1 + fields.len()) as u16)
         .build()
+        .identified()
 }
 
 /// A container like [`container`] whose variables also carry debug names.
@@ -85,7 +86,10 @@ fn named_container(
             type_name: String::new(),
         });
     }
-    builder.num_variables(variables.len() as u16).build()
+    builder
+        .num_variables(variables.len() as u16)
+        .build()
+        .identified()
 }
 
 /// A decision map from `(uid, decision)` pairs.
