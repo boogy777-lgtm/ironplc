@@ -53,10 +53,11 @@
 //! belongs to one container's layout, so the planner fails closed with
 //! [`MigrationError::FbLayoutUnsupported`].
 //!
-//! A candidate field whose UID is unknown (no entry, or the reserved UID 0)
-//! while the layout differs rejects the whole candidate with
-//! [`MigrationError::FbLayoutUnsupported`] — the value's identity is
-//! unprovable, so the planner fails closed rather than guess. Standard-
+//! A field whose UID is unknown (no entry, or the reserved UID 0) never reaches
+//! these rows: the identity rule ([`identity`], ADR-0074) refuses the candidate
+//! first and names the field. The branch of the planner that meets a field
+//! without a UID remains as a guard that fails closed with
+//! [`MigrationError::FbLayoutUnsupported`]. Standard-
 //! library FB instances (TON, ...), which have no user FB descriptor, keep
 //! the stage-2 rule: when any unhandled instance exists on either side, the
 //! layout after the program prefix (program prefix size, user FB descriptors,

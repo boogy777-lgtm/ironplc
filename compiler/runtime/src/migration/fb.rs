@@ -89,9 +89,10 @@ pub(super) fn plan_fb_instances(
         let candidate_uids = field_uid_indexes(candidate_section, type_id)?;
         for (field_index, candidate_field) in (0..).zip(candidate_fields) {
             let Some(&field_uid) = candidate_uids.by_index.get(&field_index) else {
-                // The field carries no UID (or the reserved UID 0) while
-                // the layout differs: the value's identity is unprovable,
-                // so the planner fails closed.
+                // Every field of the type carries a UID by now: the identity
+                // rule (ADR-0074) refused the candidate otherwise. Reaching
+                // here means the descriptor and the UID table disagree, and
+                // the planner fails closed.
                 return Err(MigrationError::FbLayoutUnsupported);
             };
             let Some(&from_field) = base_uids.by_uid.get(&field_uid) else {
