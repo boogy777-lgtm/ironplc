@@ -5,7 +5,7 @@
 //! through IntermediateType methods.
 
 use ironplc_dsl::common::StructInitialValueAssignmentKind;
-use ironplc_dsl::core::{Located, SourceSpan};
+use ironplc_dsl::core::{Id, Located, SourceSpan};
 
 use crate::{intermediate_type::IntermediateType, type_category::TypeCategory};
 
@@ -24,6 +24,15 @@ pub struct TypeAttributes {
     /// value of its own, which leaves the type's default: zero, or the lower
     /// bound of a subrange.
     pub initial_value: Option<Box<StructInitialValueAssignmentKind>>,
+    /// The values an enumeration declares, in declaration order; empty for a
+    /// type that is not an enumeration.
+    ///
+    /// The names are part of the type and not of its representation: two
+    /// enumerations with the same underlying type are different types. An
+    /// alias is entered with the attributes of the type its declaration names
+    /// (`TypeEnvironment::insert_alias`), so it has the same values as that
+    /// type and a name that two enumerations share belongs to both.
+    pub enumerated_values: Vec<Id>,
 }
 
 impl TypeAttributes {
@@ -35,7 +44,14 @@ impl TypeAttributes {
             representation,
             type_category,
             initial_value: None,
+            enumerated_values: Vec::new(),
         }
+    }
+
+    /// Sets the values an enumeration declares.
+    pub fn with_enumerated_values(mut self, values: Vec<Id>) -> Self {
+        self.enumerated_values = values;
+        self
     }
 
     /// Creates new TypeAttributes for elementary types

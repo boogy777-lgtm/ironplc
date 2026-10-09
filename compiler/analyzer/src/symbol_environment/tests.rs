@@ -93,11 +93,9 @@ fn default_implementation_when_creating_default_then_creates_empty_environment()
     let env = SymbolEnvironment::default();
 
     // Default should create an empty environment
-    assert_eq!(env.all_symbols().count(), 0);
-
-    // Should be equivalent to new()
-    let env2 = SymbolEnvironment::new();
-    assert_eq!(env.all_symbols().count(), env2.all_symbols().count());
+    assert!(env.get_programs().is_empty());
+    assert!(env.get_function_blocks().is_empty());
+    assert!(env.get_variables_in_scope(&ScopeKind::Global).is_empty());
 }
 
 #[test]
@@ -167,78 +165,6 @@ fn edge_cases_and_error_conditions_when_handling_edge_cases_then_handles_correct
     let non_existent_scope = ScopeKind::Named(Id::from("NON_EXISTENT").into());
     let found = env.find(&global_id, &non_existent_scope);
     assert!(found.is_some()); // Should find in global scope
-}
-
-#[test]
-fn get_enumeration_values_for_type_when_values_in_global_and_scoped_then_returns_matching_only() {
-    let mut env = SymbolEnvironment::new();
-    let enum_type = TypeName::from("COLOR");
-    let other_type = TypeName::from("SIZE");
-
-    // Global enumeration value of the requested type.
-    env.insert_enumeration_value(&Id::from("RED"), &enum_type, &ScopeKind::Global)
-        .unwrap();
-    // Scoped enumeration value of the requested type.
-    let scope = ScopeKind::Named(Id::from("FB").into());
-    env.insert_enumeration_value(&Id::from("GREEN"), &enum_type, &scope)
-        .unwrap();
-    // Enumeration value of a different type (should be excluded).
-    env.insert_enumeration_value(&Id::from("SMALL"), &other_type, &ScopeKind::Global)
-        .unwrap();
-    // Non-enumeration symbol whose enum_type is None (should be excluded).
-    env.insert(&Id::from("PLAIN"), SymbolKind::Variable, &ScopeKind::Global)
-        .unwrap();
-
-    let values = env.get_enumeration_values_for_type(&enum_type);
-    assert_eq!(values.len(), 2);
-    assert!(values.iter().any(|id| **id == Id::from("RED")));
-    assert!(values.iter().any(|id| **id == Id::from("GREEN")));
-}
-
-#[test]
-fn get_enumeration_values_for_type_when_no_matching_values_then_returns_empty() {
-    let mut env = SymbolEnvironment::new();
-    env.insert(&Id::from("PLAIN"), SymbolKind::Variable, &ScopeKind::Global)
-        .unwrap();
-
-    let values = env.get_enumeration_values_for_type(&TypeName::from("COLOR"));
-    assert!(values.is_empty());
-}
-
-#[test]
-fn get_structure_fields_for_type_when_fields_in_global_and_scoped_then_returns_matching_only() {
-    let mut env = SymbolEnvironment::new();
-    let struct_type = TypeName::from("POINT");
-    let other_type = TypeName::from("LINE");
-
-    // Global structure field of the requested type.
-    env.insert_structure_field(&Id::from("X"), &struct_type, &ScopeKind::Global)
-        .unwrap();
-    // Scoped structure field of the requested type.
-    let scope = ScopeKind::Named(Id::from("FB").into());
-    env.insert_structure_field(&Id::from("Y"), &struct_type, &scope)
-        .unwrap();
-    // Structure field of a different type (should be excluded).
-    env.insert_structure_field(&Id::from("START"), &other_type, &ScopeKind::Global)
-        .unwrap();
-    // Non-structure symbol whose struct_type is None (should be excluded).
-    env.insert(&Id::from("PLAIN"), SymbolKind::Variable, &ScopeKind::Global)
-        .unwrap();
-
-    let fields = env.get_structure_fields_for_type(&struct_type);
-    assert_eq!(fields.len(), 2);
-    assert!(fields.iter().any(|id| **id == Id::from("X")));
-    assert!(fields.iter().any(|id| **id == Id::from("Y")));
-}
-
-#[test]
-fn get_structure_fields_for_type_when_no_matching_fields_then_returns_empty() {
-    let mut env = SymbolEnvironment::new();
-    env.insert(&Id::from("PLAIN"), SymbolKind::Variable, &ScopeKind::Global)
-        .unwrap();
-
-    let fields = env.get_structure_fields_for_type(&TypeName::from("POINT"));
-    assert!(fields.is_empty());
 }
 
 #[test]
@@ -430,14 +356,14 @@ fn insert_variable_when_name_matches_type_then_ok() {
         .is_ok());
 }
 
-/// An enumeration value or structure element sharing a declaration's
-/// name is not a repeated declaration; those names have their own rules.
+/// A structure element sharing a declaration's name is not a repeated
+/// declaration; those names have their own rules.
 #[test]
-fn insert_when_enumeration_value_shares_type_name_then_ok() {
+fn insert_when_structure_element_shares_type_name_then_ok() {
     let mut env = SymbolEnvironment::new();
     global(&mut env, "Red", SymbolKind::Type).unwrap();
 
-    assert!(global(&mut env, "Red", SymbolKind::EnumerationValue).is_ok());
+    assert!(global(&mut env, "Red", SymbolKind::StructureElement).is_ok());
 }
 
 #[test]
@@ -534,21 +460,6 @@ fn get_variables_in_scope_when_several_declared_then_returns_declaration_order()
         .map(|(id, _)| id)
         .collect();
     let expected: Vec<&Id> = variables.iter().collect();
-    assert_eq!(actual, expected);
-}
-
-#[test]
-fn get_enumeration_values_for_type_when_several_declared_then_returns_declaration_order() {
-    let mut env = SymbolEnvironment::new();
-    let enum_type = TypeName::from("Color");
-    let values = names("value");
-    for name in &values {
-        env.insert_enumeration_value(name, &enum_type, &ScopeKind::Global)
-            .unwrap();
-    }
-
-    let actual = env.get_enumeration_values_for_type(&enum_type);
-    let expected: Vec<&Id> = values.iter().collect();
     assert_eq!(actual, expected);
 }
 

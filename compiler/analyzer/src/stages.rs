@@ -27,8 +27,8 @@ use crate::{
     xform_named_to_positional_args, xform_remove_unsigned_abs, xform_resolve_adr,
     xform_resolve_constant_expressions, xform_resolve_decl_types, xform_resolve_expr_types,
     xform_resolve_late_bound_expr_kind, xform_resolve_late_bound_type_initializer,
-    xform_resolve_symbol_and_function_environment, xform_resolve_type_aliases,
-    xform_resolve_type_decl_environment, xform_toposort_declarations,
+    xform_resolve_symbol_and_function_environment, xform_resolve_type_decl_environment,
+    xform_toposort_declarations,
     xform_toposort_declarations::Sorted,
 };
 
@@ -365,15 +365,6 @@ fn resolve_types_in_budget<O: Observer>(
         &mut diagnostics,
         xform_remove_unsigned_abs,
         &type_environment
-    );
-
-    library = pass!(
-        observer,
-        library,
-        &mut diagnostics,
-        xform_resolve_type_aliases,
-        &type_environment,
-        &mut symbol_environment
     );
 
     // Mark every variable the program never writes as CONSTANT, so the

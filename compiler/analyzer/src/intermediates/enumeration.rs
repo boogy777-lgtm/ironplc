@@ -1,6 +1,7 @@
 use crate::intermediate_type::{ByteSized, IntermediateType};
 use crate::type_environment::TypeAttributes;
 use ironplc_dsl::common::*;
+use ironplc_dsl::core::Id;
 use ironplc_dsl::diagnostic::*;
 use ironplc_problems::Problem;
 
@@ -64,6 +65,12 @@ pub fn try_from_values(
     enumerated_values: &dyn HasEnumeratedValues,
     underlying_type_override: Option<ElementaryTypeName>,
 ) -> Result<TypeAttributes, Diagnostic> {
+    let declared: Vec<Id> = enumerated_values
+        .values()
+        .iter()
+        .map(|value| value.value.clone())
+        .collect();
+
     if let Some(type_name) = underlying_type_override {
         return Ok(TypeAttributes::new(
             enumerated_values.values_span(),
@@ -72,7 +79,8 @@ pub fn try_from_values(
                     size: byte_sized_for_underlying_type(type_name),
                 }),
             },
-        ));
+        )
+        .with_enumerated_values(declared));
     }
 
     // Enumeration with values: MY_ENUM : (VAL1, VAL2, VAL3);
@@ -102,7 +110,8 @@ pub fn try_from_values(
         IntermediateType::Enumeration {
             underlying_type: Box::new(underlying_type),
         },
-    ))
+    )
+    .with_enumerated_values(declared))
 }
 
 #[cfg(test)]

@@ -8,7 +8,7 @@ use ironplc_dsl::common::StructInitialValueAssignmentKind;
 use ironplc_dsl::construct::merge_member_inits;
 use ironplc_dsl::{
     common::{ElementaryTypeName, ReferenceTarget, SpecificationKind, TypeName},
-    core::{Located, SourceSpan},
+    core::{Id, Located, SourceSpan},
     diagnostic::{Diagnostic, Label},
     textual::{Expr, ExprType},
 };
@@ -570,6 +570,14 @@ impl TypeEnvironment {
     /// Adds an alias type into the environment; a repeated name is recorded
     /// as for [`Self::insert_type`].
     ///
+    /// The alias is the type its declaration names (`base_type_name`) under a
+    /// new id: it has that type's attributes in full -- representation, the
+    /// values of an enumeration, the declared initial value -- so what a
+    /// declaration made from the alias can use is what one made from the base
+    /// can use. This is the one place an alias inherits anything; a kind of
+    /// type that keeps its data in [`TypeAttributes`] is inherited with no
+    /// code of its own.
+    ///
     /// Returns an error if the base type is not already in the type
     /// environment.
     pub(crate) fn insert_alias(
@@ -778,6 +786,18 @@ impl TypeEnvironment {
         self.get(name)
             .map(|ty| ty.representation.is_enumeration())
             .unwrap_or(false)
+    }
+
+    /// The values an enumeration declares, in declaration order, or `None`
+    /// when `name` is not an enumeration. An alias of an enumeration answers
+    /// the values of the enumeration it names, and a value name that two
+    /// enumerations declare is a value of each.
+    pub fn enumerated_values(&self, name: &TypeName) -> Option<&[Id]> {
+        let attributes = self.get(name)?;
+        attributes
+            .representation
+            .is_enumeration()
+            .then_some(attributes.enumerated_values.as_slice())
     }
 
     /// Resolves a type name to its canonical elementary type name.
@@ -1071,7 +1091,7 @@ mod tests {
         ArrayBounds, ArrayElementType, ArraySubranges, Integer, SignedInteger, SignedIntegerRef,
         Subrange,
     };
-    use ironplc_dsl::core::SourceSpan;
+    use ironplc_dsl::core::{Id, SourceSpan};
 
     #[test]
     fn insert_type_when_type_already_exists_then_p2007_and_first_kept() {
@@ -1147,6 +1167,80 @@ mod tests {
         assert!(env
             .insert_alias(&TypeName::from("TYPE_ALIAS"), &TypeName::from("TYPE"))
             .is_ok());
+    }
+
+    /// An alias inherits everything its base declares, whatever kind of type
+    /// the base is: the alias is entered with the base's attributes in full,
+    /// so a kind of type needs no code of its own to be inherited.
+    #[rstest::rstest]
+    #[case::bool(attributes(IntermediateType::Bool))]
+    #[case::enumeration(
+        attributes(IntermediateType::Enumeration {
+            underlying_type: Box::new(IntermediateType::Int { size: ByteSized::B8 }),
+        })
+        .with_enumerated_values(vec![Id::from("A"), Id::from("B")])
+    )]
+    #[case::structure(attributes(IntermediateType::Structure { fields: vec![] }))]
+    #[case::array(attributes(IntermediateType::Array {
+        element_type: Box::new(IntermediateType::Bool),
+        dimensions: vec![ArrayDimension { lower: 1, upper: 3 }],
+    }))]
+    #[case::subrange(attributes(IntermediateType::Subrange {
+        base_type: Box::new(IntermediateType::Int { size: ByteSized::B16 }),
+        min_value: 1,
+        max_value: 9,
+    }))]
+    #[case::function_block(attributes(IntermediateType::FunctionBlock {
+        name: "FB".to_string(),
+        fields: vec![],
+    }))]
+    fn insert_alias_when_base_declared_then_alias_has_the_attributes_of_base(
+        #[case] base: TypeAttributes,
+    ) {
+        let mut env = TypeEnvironment::new();
+        env.insert_type(&TypeName::from("BASE"), base.clone());
+
+        env.insert_alias(&TypeName::from("ALIAS"), &TypeName::from("BASE"))
+            .unwrap();
+
+        assert_eq!(env.get(&TypeName::from("ALIAS")), Some(&base));
+    }
+
+    fn attributes(representation: IntermediateType) -> TypeAttributes {
+        TypeAttributes::new(SourceSpan::default(), representation)
+    }
+
+    #[test]
+    fn enumerated_values_when_two_enumerations_share_a_value_name_then_each_has_it() {
+        let enumeration = |values: &[&str]| {
+            attributes(IntermediateType::Enumeration {
+                underlying_type: Box::new(IntermediateType::Int {
+                    size: ByteSized::B8,
+                }),
+            })
+            .with_enumerated_values(values.iter().map(|v| Id::from(v)).collect())
+        };
+        let mut env = TypeEnvironment::new();
+        env.insert_type(&TypeName::from("E1"), enumeration(&["U1", "U2"]));
+        env.insert_type(&TypeName::from("E2"), enumeration(&["U1", "U3"]));
+
+        assert_eq!(
+            env.enumerated_values(&TypeName::from("E1")),
+            Some([Id::from("U1"), Id::from("U2")].as_slice())
+        );
+        assert_eq!(
+            env.enumerated_values(&TypeName::from("E2")),
+            Some([Id::from("U1"), Id::from("U3")].as_slice())
+        );
+    }
+
+    #[test]
+    fn enumerated_values_when_not_an_enumeration_then_none() {
+        let mut env = TypeEnvironment::new();
+        env.insert_type(&TypeName::from("FLAG"), attributes(IntermediateType::Bool));
+
+        assert_eq!(env.enumerated_values(&TypeName::from("FLAG")), None);
+        assert_eq!(env.enumerated_values(&TypeName::from("MISSING")), None);
     }
 
     #[test]

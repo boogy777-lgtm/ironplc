@@ -126,9 +126,10 @@ fn collect_types(context: &SemanticContext) -> Vec<TypeEntry> {
         let entry = match &attrs.representation {
             IntermediateType::Enumeration { .. } => {
                 let values: Vec<String> = context
-                    .symbols()
-                    .get_enumeration_values_for_type(name)
-                    .into_iter()
+                    .types()
+                    .enumerated_values(name)
+                    .unwrap_or_default()
+                    .iter()
                     .map(|v| v.to_string())
                     .collect();
                 TypeEntry {

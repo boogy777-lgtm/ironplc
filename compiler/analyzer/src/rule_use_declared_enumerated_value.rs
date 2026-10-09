@@ -68,37 +68,24 @@ impl<'a> RuleDeclaredEnumeratedValues<'a> {
         }
     }
 
-    /// Returns enumeration values for a given enumeration type name.
+    /// Returns the values of the enumeration a type name names.
     ///
-    /// Uses the TypeEnvironment to resolve aliases and the SymbolEnvironment to find values.
-    /// Handles alias chains by following references to base enumeration types.
-    ///
-    /// Returns Ok containing the list of valid enumeration value IDs.
+    /// The type environment holds the values with the type, so an alias of an
+    /// enumeration answers the values of the enumeration it names.
     ///
     /// # Errors
     ///
-    /// Returns Err(String) description of the error if:
-    ///
-    /// * a type name does not exist
-    /// * the type is not an enumeration
-    /// * there's a circular reference in the alias chain
-    fn find_enum_declaration_values(
-        &self,
-        type_name: &TypeName,
-    ) -> Result<Vec<&'a Id>, Diagnostic> {
-        // Check if the type exists and is an enumeration
-        if !self.context.types().is_enumeration(type_name) {
-            return Err(Diagnostic::problem(
-                Problem::EnumNotDeclared,
-                Label::span(type_name.span(), "Type is not an enumeration"),
-            ));
-        }
-
-        // Get all enumeration values for the type from the symbol environment
-        Ok(self
-            .context
-            .symbols()
-            .get_enumeration_values_for_type(type_name))
+    /// Returns a diagnostic if the type name does not name an enumeration.
+    fn find_enum_declaration_values(&self, type_name: &TypeName) -> Result<&'a [Id], Diagnostic> {
+        self.context
+            .types()
+            .enumerated_values(type_name)
+            .ok_or_else(|| {
+                Diagnostic::problem(
+                    Problem::EnumNotDeclared,
+                    Label::span(type_name.span(), "Type is not an enumeration"),
+                )
+            })
     }
 }
 
@@ -132,7 +119,7 @@ impl Visitor<Infallible> for RuleDeclaredEnumeratedValues<'_> {
         };
         if let Some(value) = &init.initial_value {
             // Check if the value is in the list of defined enumeration values
-            if !defined_values.iter().any(|id| **id == value.value) {
+            if !defined_values.contains(&value.value) {
                 self.diagnostics.push(
                     Diagnostic::problem(
                         Problem::EnumValueNotDefined,
@@ -153,6 +140,7 @@ mod tests {
     use crate::stages::analyze;
     use ironplc_dsl::core::FileId;
     use ironplc_parser::{options::CompilerOptions, parse_program};
+    use rstest::rstest;
 
     #[test]
     fn apply_when_two_undefined_enum_values_then_reports_both() {
@@ -251,7 +239,6 @@ END_FUNCTION_BLOCK";
     }
 
     #[test]
-    #[ignore = "flaky test - needs to be fixed"]
     fn apply_when_var_init_valid_enum_value_through_alias_then_ok() {
         let program = "
 TYPE
@@ -271,6 +258,103 @@ END_FUNCTION_BLOCK";
         let result = analyze(&[&library], &CompilerOptions::default());
 
         assert!(result.is_ok());
+    }
+
+    /// How many times a program is analyzed to see the result of every
+    /// analysis. Each analysis makes containers of its own, so a result that
+    /// depends on the order of a hash container varies within one process.
+    const RUNS: usize = 24;
+
+    /// The distinct results of analyzing `program` `RUNS` times, each result
+    /// the sorted codes of the diagnostics reported.
+    fn distinct_results(program: &str) -> Vec<Vec<String>> {
+        let library =
+            parse_program(program, &FileId::default(), &CompilerOptions::default()).unwrap();
+        let mut results: Vec<Vec<String>> = (0..RUNS)
+            .map(|_| {
+                let (_library, context) =
+                    analyze(&[&library], &CompilerOptions::default()).unwrap();
+                let mut codes: Vec<String> = context
+                    .diagnostics()
+                    .iter()
+                    .map(|d| d.code.clone())
+                    .collect();
+                codes.sort();
+                codes
+            })
+            .collect();
+        results.sort();
+        results.dedup();
+        results
+    }
+
+    /// A program with the two variables `declarations` declare, against the
+    /// enumerations and aliases `types` declare.
+    fn program_of(types: &str, declarations: &str) -> String {
+        format!("TYPE {types} END_TYPE PROGRAM main VAR {declarations} END_VAR END_PROGRAM")
+    }
+
+    const NONE: &[&str] = &[];
+    const P2006: &[&str] = &["P2006"];
+
+    #[rstest]
+    // Enumerations that share no value name.
+    #[case::own_value("E1 : (A, B); E2 : (C, D);", "v : E1 := A;", NONE)]
+    #[case::other_enumerations_value("E1 : (A, B); E2 : (C, D);", "v : E1 := C;", P2006)]
+    #[case::own_value_of_second("E1 : (A, B); E2 : (C, D);", "v : E2 := C;", NONE)]
+    // Enumerations that share a value name: the name is a value of each.
+    #[case::shared_value_of_first("E1 : (U1, U2); E2 : (U1, U3);", "v : E1 := U1;", NONE)]
+    #[case::shared_value_of_second("E1 : (U1, U2); E2 : (U1, U3);", "w : E2 := U1;", NONE)]
+    #[case::shared_value_not_of_second("E1 : (U1, U2); E2 : (U1, U3);", "w : E2 := U2;", P2006)]
+    #[case::shared_value_not_of_first("E1 : (U1, U2); E2 : (U1, U3);", "v : E1 := U3;", P2006)]
+    // An alias has the values of the enumeration its declaration names.
+    #[case::alias_own_value("E1 : (A, B); E2 : (C, D); EA : E1;", "v : EA := A;", NONE)]
+    #[case::alias_other_enumerations_value(
+        "E1 : (A, B); E2 : (C, D); EA : E1;",
+        "v : EA := C;",
+        P2006
+    )]
+    #[case::alias_of_second_enumeration("E1 : (A, B); E2 : (C, D); EA : E2;", "v : EA := C;", NONE)]
+    #[case::alias_of_second_not_first_value(
+        "E1 : (A, B); E2 : (C, D); EA : E2;",
+        "v : EA := A;",
+        P2006
+    )]
+    #[case::alias_of_alias_own_value(
+        "E1 : (A, B); E2 : (C, D); EA : E1; EB : EA;",
+        "v : EB := B;",
+        NONE
+    )]
+    #[case::alias_of_alias_other_value(
+        "E1 : (A, B); E2 : (C, D); EA : E1; EB : EA;",
+        "v : EB := D;",
+        P2006
+    )]
+    #[case::alias_with_shared_value_name(
+        "E1 : (U1, U2); E2 : (U1, U3); EA : E2;",
+        "v : EA := U1;",
+        NONE
+    )]
+    #[case::alias_with_shared_value_name_not_of_base(
+        "E1 : (U1, U2); E2 : (U1, U3); EA : E2;",
+        "v : EA := U2;",
+        P2006
+    )]
+    #[case::aliases_of_two_enumerations(
+        "E1 : (U1, U2); E2 : (U1, U3); EA : E1; EB : E2;",
+        "v : EA := U2; w : EB := U3;",
+        NONE
+    )]
+    fn apply_when_enumerations_declared_then_value_is_checked_against_its_type_in_every_run(
+        #[case] types: &str,
+        #[case] declarations: &str,
+        #[case] expected: &[&str],
+    ) {
+        let expected: Vec<String> = expected.iter().map(|code| code.to_string()).collect();
+
+        let results = distinct_results(&program_of(types, declarations));
+
+        assert_eq!(results, vec![expected]);
     }
 
     rule_ctx_ok!(
