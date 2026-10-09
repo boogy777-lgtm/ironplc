@@ -47,3 +47,8 @@ Or declare the custom type before using it:
            field2 : INT;
        END_STRUCT;
    END_TYPE
+
+Uses of a declaration that has an error
+---------------------------------------
+
+.. include:: /includes/declared-with-an-error.rst

@@ -98,3 +98,8 @@ transform it together with its diagnostics, and a problem in one unit is
 reported where it stands and leaves the node as it was, so no pass stops and no
 pass keeps a copy. The decision itself, that a rule cannot fail, stands. See
 [Analysis Cost Measurement](../design/analysis-cost-measurement.md) section 9.
+
+The one step that still stopped the analysis, the sort of the declarations on a
+recursive cycle, no longer does: the cycle is the error of its members, and a
+use of a declaration that has an error shows the first cause only. See section
+10 of the same document.

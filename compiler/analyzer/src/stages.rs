@@ -37,8 +37,10 @@ use crate::{
 /// function, and symbol information gathered during analysis. If any analysis step found
 /// errors, they are stored in `context.diagnostics()` rather than causing an `Err` return.
 ///
-/// Returns `Err` only when no sources are provided or when foundational type resolution
-/// fails (declaration sorting or type environment building).
+/// Returns `Err` only when no sources are provided or when the environments of the
+/// language cannot be built, which no input causes. A recursive cycle is the error of
+/// its members: it is reported with the other messages and the rest of the project is
+/// analyzed.
 ///
 /// The analysis runs on the stack budget (`ironplc_dsl::stack`): every pass
 /// recurses as deep as the tree it is given.

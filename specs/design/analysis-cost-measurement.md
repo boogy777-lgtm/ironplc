@@ -638,10 +638,10 @@ only when nothing reported a problem (`compiler/project/src/compile.rs:69-77`).
 3. Nothing is given back from a copy, so the runner (`run_pass`) and the passes
    keep none. A new pass is one more `pass!` row in `stages.rs`; the runner
    reads what the pass returned, not its name or kind.
-4. A step whose failure means the library cannot be analyzed at all is run
-   through `direct!` and returns `Result`; `analyze` returns its diagnostics as
-   `Err`. Today that is `xform_toposort_declarations` (a recursive cycle, and
-   two constructs it does not support).
+4. No step stops the analysis for a problem in the user's program. The sort of
+   the declarations reports a recursive cycle for its members and goes on
+   (section 10). `analyze` returns `Err` for a project without sources and for
+   a failure to build the environments of the language, which no input causes.
 5. Later passes and rules run on a unit that failed as on any other unit. No
    set of failed units is kept: the state a failed node is left in is the state
    every node was in when a pass reverted the library, which later steps were
@@ -730,13 +730,11 @@ with the failing unit made correct (section 9.4).
 
 ### 9.5 What is still seen
 
-A unit that uses a name the failing unit would have declared still draws a
-message of its own: a variable of a type whose declaration failed is reported
-as using an undeclared type (P2008) besides the message about the declaration.
-The message is true, but it is a second unit's message caused by the first.
-Suppressing it needs the set of failed units that item 5 of section 9.1
-declined to keep, and a check in every step that reports an undeclared name;
-it is a choice about what the engineer sees.
+A unit that uses a name the failing unit would have declared drew a message of
+its own: a variable of a type whose declaration failed was reported as using an
+undeclared type (P2008) besides the message about the declaration. Section 10
+records the choice made about what the engineer sees and the mechanism that
+implements it; the messages that remain are listed in section 10.7.
 
 ## 10. A declaration with an error: the first cause only
 
@@ -841,25 +839,102 @@ A lookup of a declared name has three results, not two: **declared and valid**,
 names owns the fact.
 
 - `TypeEnvironment` records a declaration that failed as an entry of its own (a
-  `TypeId`, the name and the span of the declaration) whose state is *failed*,
-  entered by the code that enters a valid type. `lookup` answers
-  `Resolved::Valid`, `Resolved::Failed` or `Resolved::Absent`
-  (`compiler/analyzer/src/resolution.rs`); `get` and `get_by_id` answer a valid
-  type only, so a reader that wants a representation never meets a failed one.
-- The error value is that `TypeId`. A variable of a failed type is declared with
-  it and an expression that reads the variable has it as its type;
-  `TypeEnvironment::is_error` is the one definition of "is error". The checks
-  already treat a type they cannot resolve as "nothing to compare"
+  `TypeId`, the name and the place of the declaration) whose state is *failed*,
+  entered by the code that enters a valid type (`insert_failed` beside
+  `insert_type`, both through `TypeEnvironment::enter`, which also reports a
+  repeated name). `lookup` answers `Resolved::Valid`, `Resolved::Failed` or
+  `Resolved::Absent` (`compiler/analyzer/src/resolution.rs`); `get` and
+  `get_by_id` answer a type that can be used only, so a reader that wants a
+  representation never meets a failed one, and a reader that does not know about
+  failed declarations treats one as a type it cannot resolve, as it always
+  treated one.
+- The error value is that `TypeId`; there is no variant of `IntermediateType`
+  for it. A variable of a failed type is declared with it
+  (`xform_resolve_decl_types`) and an expression that reads the variable has it
+  as its type. `TypeEnvironment::is_error` is the one definition of "is error".
+  The checks already treat a type they cannot resolve as "nothing to compare"
   (`value_type::of` is `None`), so an expression of the error type draws no
   message from them.
-- A message "not declared" is made from `Resolved::Absent` only. A site that
-  declares a type from another (an alias, an array element, a structure member,
-  a reference target) answers `Failure::Inherited` for `Resolved::Failed`: the
-  declaration fails too and says nothing, because the first cause is already in
-  the report.
+- A message "not declared" is made from `Resolved::Absent` only. A declaration
+  made from another (an alias, an array element, a structure member, a
+  reference target, a function block variable) gets the declaration from
+  `Resolved::or_failure`, which answers `Failure::Inherited` for
+  `Resolved::Failed`: the declaration fails too and says nothing, because the
+  first cause is already in the report. `xform_resolve_type_decl_environment`
+  enters a failed declaration whatever the failure was.
+- The checks that read a type by name read the error type through the lookup:
+  `value_type::check` takes a required type that is failed, or is not declared
+  and is not a generic category, as the error type; the variable type of
+  `xform_resolve_late_bound_type_initializer` is reported only when `Absent`;
+  `rule_use_declared_enumerated_value`, `rule_ref_to` (dereference and `NULL`)
+  and the callee of a call or a method call (`callee_resolution::InstanceTypes`,
+  read by `rule_function_block_invocation` and `rule_method_call_declared`) do
+  not report that a failed type is not of the kind they require.
 - A function is declared with a valid signature whatever its parameter types
-  are; a parameter of a type that is failed or absent is the error type, and a
-  call is not checked against it.
-- A cycle is entered in the environment by the sort as a failed declaration for
-  each of its members, and reported once for the cycle, naming its members. The
-  sort goes on with the declarations that are not members.
+  are, so a call of it is checked for what it passes, and a parameter of a type
+  that is failed or not declared is the error type. A function is not entered
+  as failed for a cycle either: the problem is in the order of the calls, not in
+  its signature.
+- A cycle is reported once, by `DeclarationsGraph::order`: at the first member
+  in source order, with the other members as secondary locations and every name
+  in the message. The code is P4005, as before. The sort enters each member that
+  is a type, an interface or a function block in the type environment as a
+  failed declaration, before any later step looks at the library
+  (`xform_toposort_declarations::apply`, `Declares::enter_failed`), then orders
+  the declarations that are not members as if the cycle were not there and puts
+  the members last. A library without a cycle is ordered by the same
+  `petgraph::algo::toposort` as before, so a correct program has the same
+  library. A construct the sort does not support is reported for the
+  declaration that holds it, which is entered as failed too, and the walk goes
+  on.
+- No step after the sort goes round a cycle: the guard runs every row of a
+  cycle under a time limit, and a function that calls itself, two that call each
+  other, a type that holds itself and function blocks that hold each other are
+  rows.
+
+### 10.6 What the engineer sees now
+
+For the programs of 10.3 the first cause is the only message about a failed
+declaration, and a program with an error of its own still reports it:
+
+| Input | Before | After |
+|---|---|---|
+| `TYPE T : T_NOWHERE;` and `PROGRAM main VAR v : T; END_VAR v := 1; END_PROGRAM` | P2011 at `T`, and P2008 at `v` | P2011 at `T` |
+| `TYPE A : STRUCT b : B; END_STRUCT; END_TYPE`, `TYPE B : STRUCT a : A; END_STRUCT; END_TYPE` and `main` with `x := 'text'` | P4005 (at `B`), and nothing about `main` | P4005 at `A`, with `B` as a secondary location and `members=A, B`, and P4035 for `x := 'text'` |
+| a function with a parameter of an undeclared type, called | P2008 at the parameter, and P4026 at every call | P2008 at the parameter |
+| a function that calls itself, or two functions that call each other | P4005, and nothing else in the project | P4005, and everything else in the project |
+
+### 10.7 What is still seen
+
+- A structure with a member of an undeclared type is reported twice at the
+  member, once by the declaration of the structure (P2021) and once by the
+  resolution of the member's type (P2008). Both are about the declaration that
+  has the error, not about its uses.
+- A variable of a type that is not declared (not one declared with an error) is
+  reported at each declaration (P2008) and its uses are not analyzed as of the
+  error type: a dereference or a call through it is reported as before.
+- A name used as the value of an enumeration whose declaration failed because
+  its base enumeration is not declared (`TYPE E : E_NOWHERE := A1`) is reported
+  as an undefined variable (P4007): the value is declared nowhere.
+- An enumeration that repeats a value is not a declaration that failed: the
+  type is usable, and the repeat is reported by `rule_enumeration_values_unique`.
+- A function whose return type is not declared is not reported (10.3).
+- The order of the messages about the other units follows the order of the
+  declarations, and a cycle takes edges out of the graph that order is made
+  from, so the messages about the other units are the same as with the cycle
+  broken but not always in the same order.
+
+### 10.8 Guards
+
+`compiler/analyzer/tests/failed_unit.rs` holds the rows. Each kind of failed
+declaration (an alias, a structure, an enumeration alias, a subrange, an array
+with an undeclared element and with bounds in the wrong order, a reference, a
+function block, a function) is used by a file in every way the language allows
+and with an error of its own, and the messages about every other unit must be
+those of the project with the declaration correct, in the same order, with the
+declaration first and last. A cycle of two types, of three, a type that holds
+itself, two aliases, an array of itself, two function blocks, a function block
+that holds itself, two functions and a function that calls itself are rows of a
+second table, which compares the messages about the other units as a set and
+runs each analysis under a time limit. The tests of the rules that report that
+a type is not of a kind are in the rule modules.

@@ -4,7 +4,9 @@ P4005
 
 .. problem-summary:: P4005
 
-This error occurs when there is a recursive cycle in the library declarations, where items reference each other in a circular manner.
+This error occurs when declarations use each other in a circle: a function block that holds an instance of itself, two types that each hold the other, a type that is an alias of itself, or functions that call each other.
+
+The compiler reports each cycle once. The message is at the first declaration of the cycle in the source and names every declaration in it. Those declarations are the error; every other declaration is analyzed in full, so the same run reports any other problem in the project. A use of a declaration in a cycle is analyzed without a message about the cycle.
 
 Example
 -------
@@ -37,3 +39,32 @@ To fix this error, break the cycle by using a different approach:
    END_VAR
    END_FUNCTION_BLOCK
 
+The same holds for a cycle of more than one declaration:
+
+.. code-block::
+
+   TYPE
+       Parent : STRUCT
+           Child : Leaf;  (* Error: Parent and Leaf hold each other *)
+       END_STRUCT;
+       Leaf : STRUCT
+           Owner : Parent;
+       END_STRUCT;
+   END_TYPE
+
+   FUNCTION Even : BOOL
+   VAR_INPUT N : INT; END_VAR
+       Even := Odd(N);  (* Error: Even and Odd call each other *)
+   END_FUNCTION
+
+   FUNCTION Odd : BOOL
+   VAR_INPUT N : INT; END_VAR
+       Odd := Even(N);
+   END_FUNCTION
+
+To fix the error, break the cycle: replace one of the declarations that holds another by a value, or pass the data in a parameter.
+
+Uses of a declaration that has an error
+---------------------------------------
+
+.. include:: /includes/declared-with-an-error.rst

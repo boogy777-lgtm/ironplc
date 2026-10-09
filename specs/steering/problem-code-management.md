@@ -464,8 +464,13 @@ if min_value > max_value {
 ```
 
 ### Type Not Found Errors
+A type has three lookup results (see
+[compiler-architecture.md](compiler-architecture.md#error-handling)): report
+"not declared" for a type that is not declared, and say nothing for one that is
+declared with an error, because its own declaration is reported.
+
 ```rust
-let base_type = type_environment.get(&base_type_name).ok_or_else(|| {
+let base_type = type_environment.lookup(&base_type_name).or_failure(|| {
     Diagnostic::problem(
         Problem::ParentTypeNotDeclared,
         Label::span(node_name.span(), "Type declaration"),
