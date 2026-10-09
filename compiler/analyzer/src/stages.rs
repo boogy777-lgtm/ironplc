@@ -178,11 +178,19 @@ fn resolve_types_in_budget<O: Observer>(
         options
     );
 
-    // Hard failure: declaration ordering is required for all subsequent transforms.
-    // Also computes the set of declarations reachable from PROGRAM roots,
-    // which codegen uses to skip unused functions. A repeated declaration
-    // name survives the sort; the environments built below diagnose it.
-    let (mut library, reachable) = direct!(observer, xform_toposort_declarations(library))?;
+    // Declaration ordering is required for all subsequent transforms. It also
+    // computes the set of declarations reachable from PROGRAM roots, which
+    // codegen uses to skip unused functions. A repeated declaration name
+    // survives the sort; the environments built below diagnose it. A cycle is
+    // the error of its members only: each is reported once and entered in the
+    // type environment as a declaration with an error, and the other
+    // declarations are ordered as if it were not there.
+    let sorted = direct!(
+        observer,
+        xform_toposort_declarations(library, &mut type_environment)
+    );
+    let (mut library, reachable) = (sorted.library, sorted.reachable);
+    diagnostics.extend(sorted.diagnostics);
 
     // A repeated type or function block name is diagnosed by the type
     // environment, which keeps the first declaration, and a declaration that
