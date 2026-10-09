@@ -921,8 +921,8 @@ mod test {
     // this fixes): sources used to be merged in HashMap iteration order,
     // which is randomized per-process, so the same multi-file project could
     // produce different (spuriously failing) semantic analysis results on
-    // different runs of the identical binary. Sources are now sorted by
-    // FileId before merging, so the combined library's element order --
+    // different runs of the identical binary. The project now yields its
+    // sources ascending by FileId, so the combined library's element order --
     // and therefore the analysis result -- no longer depends on either
     // insertion order or hash-seed randomness.
     #[test]
