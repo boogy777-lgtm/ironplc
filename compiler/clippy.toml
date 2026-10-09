@@ -3,12 +3,12 @@ allow-expect-in-tests = true
 
 # A result that reaches a user must not depend on the order a hash container
 # yields its entries: the order differs from one container to the next, so the
-# same program would give different results from run to run. The crates that
-# produce results (`ironplc-analyzer`, `ironplc-dsl`) deny `disallowed_methods`
-# and `iter_over_hash_type` (a `for` loop over a hash container), so the way to
-# iterate is an ordered container (`IndexMap`/`IndexSet`) or a sort that names
-# its key. `into_iter` of a hash container cannot be named here; the lint
-# `iter_over_hash_type` sees it only as a `for` loop.
+# same program would give different results from run to run. Every crate of
+# the workspace denies `disallowed_methods` and `iter_over_hash_type` (a `for`
+# loop over a hash container) through `[workspace.lints.clippy]`, so the way to
+# iterate is an ordered container (`IndexMap`/`IndexSet`, `BTreeMap`/`BTreeSet`)
+# or a sort that names its key. `into_iter` of a hash container cannot be named
+# here; the lint `iter_over_hash_type` sees it only as a `for` loop.
 disallowed-methods = [
     { path = "std::collections::HashMap::iter", reason = "iterates in hash order; use IndexMap/IndexSet, or sort by a key" },
     { path = "std::collections::HashMap::iter_mut", reason = "iterates in hash order; use IndexMap/IndexSet, or sort by a key" },

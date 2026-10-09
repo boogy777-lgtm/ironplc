@@ -1,8 +1,5 @@
 // Allow large errors because this is a compiler - we expect large errors.
 #![allow(clippy::result_large_err)]
-// A result that reaches a user must not depend on the order a hash container
-// iterates in: see `disallowed-methods` in `clippy.toml`.
-#![deny(clippy::iter_over_hash_type, clippy::disallowed_methods)]
 
 extern crate ironplc_dsl;
 extern crate ironplc_parser;

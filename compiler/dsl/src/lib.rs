@@ -1,10 +1,6 @@
 //! Provides definitions of objects from the IEC 61131-3 language elements
 //! and base implementations of common patterns for working with libraries.
 
-// A result that reaches a user must not depend on the order a hash container
-// iterates in: see `disallowed-methods` in `clippy.toml`.
-#![deny(clippy::iter_over_hash_type, clippy::disallowed_methods)]
-
 pub mod common;
 pub mod configuration;
 pub mod construct;

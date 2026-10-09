@@ -1229,6 +1229,9 @@ dependencies = [
 [[package]]
 name = "ironplc-test"
 version = "0.247.0"
+dependencies = [
+ "toml",
+]
 
 [[package]]
 name = "ironplc-vm"
