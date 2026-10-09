@@ -8,8 +8,9 @@
 
 use std::collections::HashSet;
 
-use crate::common::parse_and_compile;
-use ironplc_container::{FieldType, VAR_FLAG_IS_ARRAY};
+use crate::common::{parse, parse_and_compile};
+use ironplc_container::{Container, FieldType, VarEntry, VAR_FLAG_IS_ARRAY};
+use ironplc_dsl::common::{DeclarationQualifier, LibraryElementKind, VarDecl};
 use ironplc_parser::options::CompilerOptions;
 use rstest::rstest;
 
@@ -315,4 +316,264 @@ fn variable_table_when_every_allocation_kind_then_entries_describe_declarations(
         .user_fb_types
         .iter()
         .any(|desc| desc.type_id.raw() == entry("cfb").extra));
+}
+
+/// Every part of a container that online change compares to decide whether
+/// the running state can carry over to a candidate: the layout hash, the
+/// variable count, the header flags, the process-image sizes, the variable
+/// table and the task table. A new compared field is added here, once.
+#[derive(Debug, PartialEq)]
+struct Layout {
+    layout_hash: [u8; 32],
+    num_variables: u16,
+    flags: u8,
+    input_image_bytes: u16,
+    output_image_bytes: u16,
+    memory_image_bytes: u16,
+    variable_table: Vec<VarEntry>,
+    task_table: Vec<u8>,
+}
+
+fn layout_of(container: &Container) -> Layout {
+    let mut task_table = Vec::new();
+    container.task_table.write_to(&mut task_table).unwrap();
+    Layout {
+        layout_hash: container.compute_layout_hash(),
+        num_variables: container.header.num_variables,
+        flags: container.header.flags,
+        input_image_bytes: container.header.input_image_bytes,
+        output_image_bytes: container.header.output_image_bytes,
+        memory_image_bytes: container.header.memory_image_bytes,
+        variable_table: container
+            .type_section
+            .as_ref()
+            .map(|section| section.variable_table.clone())
+            .unwrap_or_default(),
+        task_table,
+    }
+}
+
+/// The qualifier of every declaration the analyzer hands to code generation,
+/// in declaration order: the result of constant inference, which is the one
+/// thing a body edit can change about a declaration.
+fn qualifiers(source: &str) -> Vec<DeclarationQualifier> {
+    let (library, _) = parse(source, &CompilerOptions::default());
+    let declarations = |variables: &[VarDecl]| -> Vec<DeclarationQualifier> {
+        variables
+            .iter()
+            .map(|decl| decl.qualifier.clone())
+            .collect()
+    };
+    library
+        .elements
+        .iter()
+        .flat_map(|element| match element {
+            LibraryElementKind::ProgramDeclaration(unit) => declarations(&unit.variables),
+            LibraryElementKind::FunctionDeclaration(unit) => declarations(&unit.variables),
+            LibraryElementKind::FunctionBlockDeclaration(unit) => declarations(&unit.variables),
+            LibraryElementKind::GlobalVarDeclarations(variables) => declarations(variables),
+            _ => Vec::new(),
+        })
+        .collect()
+}
+
+/// `template` with its `{body}` marker replaced by `body`.
+fn with_body(template: &str, body: &str) -> String {
+    template.replace("{body}", body)
+}
+
+/// A function with a parameter and a local, so a compiled call has slots.
+const ADD_ONE: &str = "
+FUNCTION add_one : DINT
+  VAR_INPUT i : DINT; END_VAR
+  VAR t : DINT; END_VAR
+  add_one := i + t;
+END_FUNCTION
+";
+
+/// A function block `counter` whose body is the template's `{body}`; `fields`
+/// is its declaration list.
+fn counter_fb(fields: &str) -> String {
+    format!(
+        "
+FUNCTION_BLOCK counter
+  VAR_OUTPUT q : DINT; END_VAR
+  {fields}
+  {{body}}
+END_FUNCTION_BLOCK
+"
+    )
+}
+
+/// Edits whose statements change and whose declarations do not. Each row is
+/// the one source text with a `{body}` marker, the body before and after, and
+/// whether the edit flips constant inference for some declaration (a first
+/// write added, or a last write removed). The container's layout must be
+/// identical either way: the variable layout is a function of the
+/// declarations alone, not of anything the bodies imply about them.
+///
+/// A first or last call of a user function is deliberately not a row: the call
+/// decides whether the function is compiled at all, so its parameter, local
+/// and return slots join or leave the layout (see `compile_in_budget` in
+/// `compile.rs`, where `reachable` filters the functions).
+#[rstest]
+// Constant inference flips: one row per kind of declaration it can mark.
+#[case::flip_program_scalar(
+    program("v : DINT := 1; r : DINT;", "{body}"),
+    "r := v;",
+    "r := v; v := 2;",
+    true
+)]
+#[case::flip_global_through_external(
+    "VAR_GLOBAL g : DINT := 5; END_VAR
+PROGRAM main
+  VAR_EXTERNAL g : DINT; END_VAR
+  VAR r : DINT; END_VAR
+  {body}
+END_PROGRAM"
+        .to_string(),
+    "r := g;",
+    "r := g; g := 6;",
+    true
+)]
+#[case::flip_fb_field_written_in_fb_body(
+    [counter_fb("VAR c : DINT := 1; END_VAR"), program("inst : counter;", "inst();")].concat(),
+    "q := c;",
+    "q := c; c := c + 1;",
+    true
+)]
+#[case::flip_fb_field_written_through_instance(
+    [counter_fb("VAR c : DINT := 1; END_VAR").replace("{body}", "q := c;"),
+     program("inst : counter;", "inst(); {body}")].concat(),
+    "",
+    "inst.c := 3;",
+    true
+)]
+#[case::flip_string_read_by_len(
+    program("s : STRING[10] := 'abc'; n : INT;", "{body}"),
+    "n := LEN(s);",
+    "n := LEN(s); s := 'xyz';",
+    true
+)]
+#[case::flip_array_element(
+    program("a : ARRAY[1..3] OF INT := [1, 2, 3]; r : INT;", "{body}"),
+    "r := a[1];",
+    "r := a[1]; a[2] := 5;",
+    true
+)]
+#[case::flip_function_local(
+    "FUNCTION add_t : DINT
+  VAR_INPUT i : DINT; END_VAR
+  VAR t : DINT := 3; END_VAR
+  {body}
+END_FUNCTION
+PROGRAM main
+  VAR r : DINT; END_VAR
+  r := add_t(i := 1);
+END_PROGRAM"
+        .to_string(),
+    "add_t := i + t;",
+    "add_t := i + t; t := 4;",
+    true
+)]
+#[case::flip_output_binding(
+    [counter_fb("").replace("{body}", "q := 1;"), program("inst : counter; v : DINT := 0;", "{body}")].concat(),
+    "inst();",
+    "inst(q => v);",
+    true
+)]
+#[case::flip_for_control_variable(
+    program("i : DINT := 0; r : DINT;", "{body}"),
+    "r := i;",
+    "r := i; FOR i := 1 TO 3 DO r := r + 1; END_FOR;",
+    true
+)]
+#[case::flip_write_inside_case_branch(
+    program("v : DINT := 1; sel : DINT; r : DINT;", "{body}"),
+    "CASE sel OF 1: r := v; END_CASE;",
+    "CASE sel OF 1: r := v; 2: v := 5; END_CASE;",
+    true
+)]
+#[case::flip_write_inside_if_branch(
+    program("v : DINT := 1; r : DINT;", "{body}"),
+    "IF r > 0 THEN r := v; END_IF;",
+    "IF r > 0 THEN r := v; ELSE v := 5; END_IF;",
+    true
+)]
+// Other facts a body determines about the compiled program.
+#[case::first_call_of_standard_fb(
+    program("t : TON; r : BOOL;", "{body}"),
+    "r := FALSE;",
+    "t(IN := TRUE, PT := T#1s); r := t.Q;",
+    false
+)]
+#[case::first_string_temporary(
+    program("s : STRING[20]; r : STRING[20];", "{body}"),
+    "r := s;",
+    "r := CONCAT(s, s);",
+    false
+)]
+#[case::deeper_string_temporaries(
+    program("s : STRING[20]; r : STRING[20];", "{body}"),
+    "r := CONCAT(s, s);",
+    "r := CONCAT(CONCAT(s, s), s);",
+    false
+)]
+#[case::string_temporary_inside_function_body(
+    "FUNCTION join : DINT
+  VAR_INPUT i : DINT; END_VAR
+  VAR s : STRING[8]; END_VAR
+  {body}
+END_FUNCTION
+PROGRAM main
+  VAR r : DINT; END_VAR
+  r := join(i := 1);
+END_PROGRAM"
+        .to_string(),
+    "join := i;",
+    "s := CONCAT(s, s); join := LEN(s);",
+    false
+)]
+#[case::new_integer_constant(dint_program("{body}"), "x := x + 1;", "x := x + 700000;", false)]
+#[case::new_string_constant(
+    program("s : STRING[20];", "{body}"),
+    "s := 'abc';",
+    "s := 'abcdefgh';",
+    false
+)]
+#[case::deeper_expression_stack(
+    dint_program("{body}"),
+    "x := x + 1;",
+    "x := x + (x * (x - (x + (x * x))));",
+    false
+)]
+#[case::deeper_call_chain(
+    [ADD_ONE.to_string(), counter_fb(""), program("inst : counter; r : DINT;", "r := add_one(i := 1); inst();")].concat(),
+    "q := 1;",
+    "q := add_one(i := 2);",
+    false
+)]
+fn layout_when_body_only_edit_then_layout_unchanged(
+    #[case] template: String,
+    #[case] before: &str,
+    #[case] after: &str,
+    #[case] flips_constant_inference: bool,
+) {
+    let (before_source, after_source) = (with_body(&template, before), with_body(&template, after));
+
+    let inference_changed = qualifiers(&before_source) != qualifiers(&after_source);
+    assert_eq!(
+        inference_changed, flips_constant_inference,
+        "the row's declared effect on constant inference does not hold"
+    );
+
+    let before_layout = layout_of(&parse_and_compile(
+        &before_source,
+        &CompilerOptions::default(),
+    ));
+    let after_layout = layout_of(&parse_and_compile(
+        &after_source,
+        &CompilerOptions::default(),
+    ));
+    assert_eq!(before_layout, after_layout);
 }
