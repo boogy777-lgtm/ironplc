@@ -737,3 +737,129 @@ The message is true, but it is a second unit's message caused by the first.
 Suppressing it needs the set of failed units that item 5 of section 9.1
 declined to keep, and a check in every step that reports an undeclared name;
 it is a choice about what the engineer sees.
+
+## 10. A declaration with an error: the first cause only
+
+Section 9.5 left two things to a choice about what the engineer sees. The
+choice is made: **a recursive cycle is the error of its members only**, and **a
+use of a declaration that has an error shows the first cause only**. This
+section is the inventory the mechanism was derived from (10.1 to 10.4) and the
+mechanism (10.5). Where it speaks of a "message today" it means the analysis
+before this section's change, measured on programs of the shape of
+`compiler/analyzer/tests/failed_unit.rs`.
+
+### 10.1 Where an undeclared name is reported
+
+A name of a declaration the analysis cannot find is reported from these sites
+(the construction of the diagnostic, outside tests):
+
+| Kind of name | Code | Site | Lookup it makes |
+|---|---|---|---|
+| type, alias parent | P2011 | `xform_resolve_type_decl_environment.rs` (late-bound alias, simple, function-block alias, structure alias, function block variable) | `TypeEnvironment::get` |
+| type, alias parent | P2012 | `type_environment.rs` `insert_alias` | `TypeEnvironment::get` |
+| type, reference target | P2011 | `type_environment.rs` `resolve_reference_target` | `TypeEnvironment::get` |
+| type, subrange parent | P2011 | `intermediates/subrange.rs` | `TypeEnvironment::get` |
+| type, array element and parent | P2013, P2011 | `intermediates/array.rs` | `TypeEnvironment::get` |
+| type, structure member | P2021 | `intermediates/structure.rs` (six sites) | `TypeEnvironment::get` |
+| enumeration, parent | P2009 | `xform_resolve_type_decl_environment.rs` | `TypeEnvironment::get` |
+| type of a variable | P2008 | `xform_resolve_late_bound_type_initializer.rs` (initialized form and bare form) | `TypeEnvironment::get`, then the pass's own table of the declarations of the library |
+| enumeration of a variable | P2004 | `rule_use_declared_enumerated_value.rs` | `TypeEnvironment::is_enumeration` |
+| function | P4017 | `rule_function_call_declared.rs` | `FunctionEnvironment::contains` |
+| function block | P4012 | `rule_function_block_invocation.rs`, `rule_method_call_declared.rs` | the function blocks of the library, and the instances in scope |
+| method | P4046 | `rule_method_call_declared.rs` | the function block and its `EXTENDS` chain, from the library |
+| variable, enumeration value | P4007 | `rule_use_declared_symbolic_var.rs` | the scoped declarations of the unit, and `SymbolEnvironment` |
+| constant of a type parameter | P4030 | `xform_resolve_constant_expressions.rs` | the constants of the library |
+| named argument | P4023 | `xform_named_to_positional_args.rs` | `FunctionSignature` |
+| input, output of a call | P4002, P4004 | `call_assignment_check.rs` | the declaration of the function block |
+| program of a task | P4006 | `rule_program_task_definition_exists.rs` | the programs of the library |
+
+`TypeEnvironment::get_memory_size` and `validate_type_usage` also report P2025;
+nothing calls them.
+
+### 10.2 What each lookup structure holds for a declaration that failed
+
+| Structure | Built from | A declaration that failed |
+|---|---|---|
+| `TypeEnvironment` (`type_environment.rs`): types, function blocks, interfaces, by name and by `TypeId` | the type declaration pass | not entered: the name is absent, as if never declared |
+| `FunctionEnvironment` (`function_environment.rs`): signatures by name | the declarations of the library | a signature is built from names, so it exists whatever its parameter types are; the parameter type is a name the type environment may not hold |
+| `SymbolEnvironment` (`symbol_environment.rs`): variables, enumeration values, structure fields, types, programs | the declarations of the library | entered: it reads the library, which keeps a failed declaration |
+| `TypeDefinitionKind` table of `xform_resolve_late_bound_type_initializer.rs` | the declarations of the library | entered, except a late-bound alias (`TYPE T : T_NOWHERE`), which is not in it |
+| function blocks and methods of the library (`rule_function_block_invocation.rs`, `rule_method_call_declared.rs`) | the library | entered |
+| dependency graph of `xform_toposort_declarations.rs` | the library | every declaration, whatever its problem |
+
+So the structure that owns the names of types loses the fact that a name was
+declared when its declaration fails, and answers "absent" to every later
+question. That is the source of every extra message in 10.3.
+
+### 10.3 What the engineer sees today
+
+For a program `user.st` that uses a failed declaration `X` in every way the
+language allows (a variable of it, a parameter of a function and of a function
+block, a member of a structure, an element of an array, an alias of it, the
+variable in an assignment and as an argument) and has one error of its own
+(`k := 'text'`):
+
+| Declaration with an error | First cause | Extra messages today, in the using units |
+|---|---|---|
+| alias of an undeclared type | P2011 at `X` | P2011 for an alias of `X`, P2013 for an array of `X`, P2021 for a structure member of `X`, P2008 for every variable of `X` and of those, P4026 for the call `G(1)` |
+| structure with a member of an undeclared type | P2021, P2008 at the member | the same, without the P2008 of `X` |
+| alias of an undeclared enumeration | P2009 | the same, and P2004 for each variable of `X` |
+| subrange with bounds in the wrong order | P2002 | P2011, P2013, P2021, P2008 (the alias, array, structure, variables), P4026 |
+| array of an undeclared element type | P2013 | the same |
+| array with bounds in the wrong order | P2024 | the same |
+| reference to an undeclared type | P2011 | the same; the P4026 names `T_NOWHERE` |
+| function block with a variable of an undeclared type | P2011 or P2008 at the variable | none that depends on the error (P2021 for a function block as a structure member and P4054 for one as a function parameter are reported for a correct function block too) |
+| function with a parameter of an undeclared type | P2008 at the parameter | P4026 at every call, with `expected=T_NOWHERE` |
+| recursive cycle among types, among function blocks, among functions, or a type or function block that holds itself | P4005 at one member | the analysis stops at the cycle: no message about any other unit |
+
+`FUNCTION F : T_NOWHERE` is not reported anywhere (the return type is not looked
+up); that is not changed here.
+
+### 10.4 What the sort refuses
+
+`xform_toposort_declarations::apply` returns `Err` (the `direct!` line of
+`resolve_types_in_budget` in `stages.rs` passes it up, and `analyze` returns it
+as its `Err`) for three inputs:
+
+- a cycle in the graph of declarations, found by `toposort` in
+  `DeclarationsGraph::sorted_ids`: P4005, at one node of the cycle (the label
+  says "Cycle"; the node is the one `toposort` returns, not every member);
+- a function call met where no declaration is being visited, in
+  `visit_function`: P9999, "Function call outside a program organization unit";
+- a function block instance met where no declaration is being visited, in
+  `visit_function_block_initial_value_assignment`: P9999, "Function block
+  instance outside a program organization unit".
+
+The parser produces neither of the last two for any text: every declaration
+that can hold an expression or an instance sets the context the visitor reads.
+They are reachable only from a tree built by hand.
+
+### 10.5 The mechanism
+
+A lookup of a declared name has three results, not two: **declared and valid**,
+**declared with an error** and **not declared**. The structure that owns the
+names owns the fact.
+
+- `TypeEnvironment` records a declaration that failed as an entry of its own (a
+  `TypeId`, the name and the span of the declaration) whose state is *failed*,
+  entered by the code that enters a valid type. `lookup` answers
+  `Resolved::Valid`, `Resolved::Failed` or `Resolved::Absent`
+  (`compiler/analyzer/src/resolution.rs`); `get` and `get_by_id` answer a valid
+  type only, so a reader that wants a representation never meets a failed one.
+- The error value is that `TypeId`. A variable of a failed type is declared with
+  it and an expression that reads the variable has it as its type;
+  `TypeEnvironment::is_error` is the one definition of "is error". The checks
+  already treat a type they cannot resolve as "nothing to compare"
+  (`value_type::of` is `None`), so an expression of the error type draws no
+  message from them.
+- A message "not declared" is made from `Resolved::Absent` only. A site that
+  declares a type from another (an alias, an array element, a structure member,
+  a reference target) answers `Failure::Inherited` for `Resolved::Failed`: the
+  declaration fails too and says nothing, because the first cause is already in
+  the report.
+- A function is declared with a valid signature whatever its parameter types
+  are; a parameter of a type that is failed or absent is the error type, and a
+  call is not checked against it.
+- A cycle is entered in the environment by the sort as a failed declaration for
+  each of its members, and reported once for the cycle, naming its members. The
+  sort goes on with the declarations that are not members.
