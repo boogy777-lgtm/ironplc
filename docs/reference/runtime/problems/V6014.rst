@@ -18,3 +18,9 @@ Solutions
    teardown (a dropped session releases the device immediately) and retry.
 3. Coordinate with the engineer holding the session: one workstation edits
    the device at a time.
+
+See Also
+--------
+
+- :doc:`/reference/editor/problems/E0013` --- how the editor reports this refusal
+- :doc:`/reference/runtime/problems/V6013` --- the device received a malformed frame

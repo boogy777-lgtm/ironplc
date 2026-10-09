@@ -12,7 +12,6 @@
 
 reference/compiler/problems/P0001
 reference/compiler/problems/P0002
-reference/compiler/problems/P0003
 reference/compiler/problems/P0010
 reference/compiler/problems/P2001
 reference/compiler/problems/P2003
@@ -29,7 +28,6 @@ reference/compiler/problems/P2016
 reference/compiler/problems/P2017
 reference/compiler/problems/P2019
 reference/compiler/problems/P2020
-reference/compiler/problems/P2022
 reference/compiler/problems/P2023
 reference/compiler/problems/P2027
 reference/compiler/problems/P2028

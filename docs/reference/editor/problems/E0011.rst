@@ -18,3 +18,25 @@ an IPv6 literal, or an RFC 1123 hostname, or an ``address`` was set on a
 
 3. **Check for typos**: hostnames contain letters, digits and hyphens only;
    a label cannot start or end with a hyphen.
+
+The extension checks the form of the address when it reads the setting. It
+does not resolve a hostname and it does not contact the device, so a
+well-formed address that does not answer is reported later as E0013.
+
+A hostname is at most 253 characters, and each label between the dots is 1
+to 63 characters. A dotted name made of digits only is read as an IPv4
+address, so ``999.1.1.1`` is rejected: an octet cannot be greater than 255.
+
+Example
+-------
+
+.. code-block:: json
+
+   { "name": "line-1", "transport": "tcp", "address": "plc-01.plant.example" }
+
+See Also
+--------
+
+- :doc:`/reference/editor/problems/E0010` --- a profile is invalid
+- :doc:`/reference/editor/problems/E0012` --- the ``port`` of a profile is invalid
+- :doc:`/reference/editor/problems/E0013` --- the connection could not be opened

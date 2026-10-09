@@ -18,3 +18,15 @@ state is refused (fail-closed).
 2. **Review before building**: while the baseline is stale the connection
    stays up for monitoring, but Build is refused until the project matches
    the device again.
+
+The baseline is recorded when the device accepts a build from this
+workspace. It holds the generation counters the device reports and the hash
+of the container this workspace built. Before the extension sends anything,
+it compares the state the device reports now with that record. A workspace
+that has no baseline yet (the first deploy to a device) is not checked.
+
+See Also
+--------
+
+- :doc:`/reference/editor/problems/E0013` --- the connection could not be opened
+- :doc:`/reference/editor/problems/E0014` --- the connection was lost

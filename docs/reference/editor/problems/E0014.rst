@@ -20,3 +20,15 @@ stdio connection (a stdio session is never respawned).
 
 3. **Connect again** once the device answers; the device panel and the
    baseline check refresh on the next connection.
+
+There is no delay before the first reconnect attempt. The longest delay
+before each later attempt doubles, from 1 second up to a limit of 8 seconds,
+and the actual delay is a random part of it, so that several workstations do
+not retry at the same instant.
+
+See Also
+--------
+
+- :doc:`/reference/editor/problems/E0013` --- the connection could not be opened
+- :doc:`/reference/runtime/problems/V6013` --- the device received a malformed frame
+- :doc:`/reference/runtime/problems/V6014` --- the device already serves one session
