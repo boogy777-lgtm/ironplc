@@ -43,3 +43,7 @@ To fix this error, use a value that is defined in the enumeration:
      END_VAR
    END_FUNCTION_BLOCK
 
+See Also
+--------
+
+- :doc:`P2042` (a value name that more than one enumeration declares)

@@ -217,3 +217,19 @@ fn enumeration_declared_as_when_not_an_enumeration_then_none() {
     assert_eq!(env.enumeration_declared_as(&TypeName::from("FLAG")), None);
     assert_eq!(env.enumeration_declared_as(&TypeName::from("NOPE")), None);
 }
+
+#[test]
+fn enumerations_declaring_when_entered_out_of_source_order_then_named_in_source_order() {
+    let mut env = TypeEnvironment::new();
+    // The analysis enters declarations in the order it sorted them.
+    env.insert_type(
+        &TypeName::from_id(&at("LATE", 500)),
+        enumeration(&[at("U1", 510)]),
+    );
+    env.insert_type(
+        &TypeName::from_id(&at("EARLY", 5)),
+        enumeration(&[at("U1", 15)]),
+    );
+
+    assert_eq!(declaring(&env, "U1"), ["EARLY", "LATE"]);
+}

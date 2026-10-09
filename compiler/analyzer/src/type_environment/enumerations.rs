@@ -15,7 +15,11 @@
 use std::collections::HashMap;
 
 use indexmap::IndexMap;
-use ironplc_dsl::{common::TypeName, core::Id, type_id::TypeId};
+use ironplc_dsl::{
+    common::TypeName,
+    core::{Id, Located},
+    type_id::TypeId,
+};
 
 use super::TypeEnvironment;
 use crate::type_attributes::TypeAttributes;
@@ -82,8 +86,9 @@ pub enum ValueOwners<'a> {
     None,
     /// Exactly one enumeration declares the name.
     One(Owner<'a>),
-    /// More than one enumeration declares the name, in the order they were
-    /// declared. The name does not denote one of them.
+    /// More than one enumeration declares the name, in the order of their
+    /// declarations in the source (by file, then by position). The name does
+    /// not denote one of them.
     Several(Vec<Owner<'a>>),
 }
 
@@ -110,6 +115,12 @@ impl TypeEnvironment {
                 })
             })
             .collect();
+        // The order the declarations are read in is the order of the analysis,
+        // not the order of the source: name them where a reader finds them.
+        owners.sort_by_cached_key(|owner| {
+            let span = owner.enumeration.span();
+            (span.file_id, span.start)
+        });
         match owners.len() {
             0 => ValueOwners::None,
             1 => ValueOwners::One(owners.remove(0)),

@@ -134,6 +134,7 @@ P2038,DateLiteralOutOfRange,Date literal is outside the range the date type can 
 P2039,DurationLiteralOutOfRange,Duration literal is outside the range the duration type can represent
 P2040,RealLiteralOutOfRange,Real literal is outside the range the real type can represent
 P2041,StringLengthOutOfRange,String length is more than a string can hold
+P2042,AmbiguousEnumeratedValue,Enumeration value name is declared by more than one enumeration
 P6013,CannotWriteFile,Unable to write file
 P4066,ThrowOutsideTryCatch,__THROW is not inside a __TRY statement with a __CATCH clause
 P0019,MaxNestingDepthExceeded,Maximum nesting depth exceeded

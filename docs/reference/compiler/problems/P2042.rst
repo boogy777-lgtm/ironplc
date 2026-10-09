@@ -1,0 +1,112 @@
+=====
+P2042
+=====
+
+.. problem-summary:: P2042
+
+This error occurs when a program uses the name of an enumeration value without
+the name of its enumeration, and more than one enumeration declares a value
+with that name.
+
+Two enumerations can declare values with the same name, and declaring them is
+not an error. The error is reported where the bare name is used, because
+nothing in the program says which enumeration is meant: ``Running`` could be
+the value of ``Motor`` or the value of ``Pump``, and the two are different
+numbers. The compiler does not choose between them. The message points at the
+name that is used and at the declaration of the value in each enumeration that
+declares it.
+
+The name is refused wherever a value can stand: the initial value of a
+variable, of a structure member, of an array element or of a function block
+input, an assignment, a comparison or any other expression, a ``CASE`` label,
+an argument of a call, and the default value of a type declaration that names
+another enumeration.
+
+Example
+-------
+
+The following code will generate error P2042:
+
+.. playground::
+
+   TYPE
+       Motor : (Idle, Running, Fault);
+       Pump : (Idle, Priming, Running);
+   END_TYPE
+
+   PROGRAM main
+       VAR
+           m : Motor;
+       END_VAR
+
+       m := Running;  (* Error: Running is a value of Motor and of Pump *)
+   END_PROGRAM
+
+Both ``Motor`` and ``Pump`` declare ``Running``, so the statement ``m :=
+Running`` does not say which one is meant, even though ``m`` is a ``Motor``.
+
+To fix this error, rename the values so that each name is declared by one
+enumeration:
+
+.. playground::
+
+   TYPE
+       Motor : (MotorIdle, MotorRunning, MotorFault);
+       Pump : (PumpIdle, PumpPriming, PumpRunning);
+   END_TYPE
+
+   PROGRAM main
+       VAR
+           m : Motor;
+       END_VAR
+
+       m := MotorRunning;
+   END_PROGRAM
+
+A value that only one enumeration declares can be used as it is. In the first
+example ``Fault`` and ``Priming`` are declared once, so ``m := Fault`` is
+accepted.
+
+Writing the enumeration with the value
+--------------------------------------
+
+A value written with the name of its enumeration, ``Pump#Running``, names its
+enumeration and is never ambiguous. The compiler accepts this form in the
+initial value of a variable, of a structure member, of an array element and of
+a function block input, and in the default value of a type declaration:
+
+.. playground::
+
+   TYPE
+       Motor : (Idle, Running, Fault);
+       Pump : (Idle, Priming, Running);
+   END_TYPE
+
+   PROGRAM main
+       VAR
+           m : Motor := Motor#Running;
+           p : Pump := Pump#Running;
+       END_VAR
+   END_PROGRAM
+
+The qualified form is not accepted in a statement, in a comparison, in a
+``CASE`` label or in an argument of a call. In those places a value that
+another enumeration also declares has to be renamed.
+
+What is not an error
+--------------------
+
+- Declaring a value name that another enumeration declares, with no bare use of
+  the name.
+- An alias of an enumeration, ``TYPE Engine : Motor;``. The alias has the same
+  values as the enumeration it names, so it does not make those names ambiguous.
+- A value of an enumeration whose declaration has an error. The compiler
+  reports the first cause where the enumeration is declared and adds no message
+  about the values that are used.
+
+See Also
+--------
+
+- :doc:`P2006` (a value that the enumeration does not define)
+- :doc:`P2003` (a value declared twice in one enumeration)
+- :doc:`/reference/language/data-types/derived/enumerated-types` — enumerated types
