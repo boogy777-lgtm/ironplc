@@ -4,8 +4,11 @@
 //! and the integration tests under `tests/`.
 
 pub mod corpus;
+pub mod generated;
 pub mod paths;
+pub mod profile;
 pub mod programs;
+pub mod project;
 
 use ironplc_codegen::compile;
 use ironplc_container::Container;

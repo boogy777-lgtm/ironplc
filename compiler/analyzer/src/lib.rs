@@ -29,6 +29,8 @@ pub mod intermediate_type;
 mod lowered_initial_values;
 #[cfg(test)]
 mod lowered_var_blocks;
+pub mod observe;
+mod pass_runner;
 mod result;
 mod rule_abstract_not_instantiated;
 mod rule_assignment_aggregate_type_compat;
@@ -80,6 +82,7 @@ mod rule_var_decl_global_const_requires_external_const;
 mod rule_var_decl_initializer_type_compat;
 mod scoped_table;
 mod semantic_context;
+mod semantic_rules;
 pub mod stages;
 mod string_similarity;
 pub mod symbol_environment;

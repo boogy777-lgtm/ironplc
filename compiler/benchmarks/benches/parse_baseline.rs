@@ -27,8 +27,8 @@
     reason = "benchmark target: panicking helpers are sanctioned in benchmarks"
 )]
 
-use ironplc_benchmarks::corpus::{corpus_dir, load_corpus, CorpusFile};
-use ironplc_benchmarks::paths::{Ctx, Over, Path, Probe, PATHS};
+use ironplc_benchmarks::corpus::{corpus_dir, load_corpus};
+use ironplc_benchmarks::paths::{Ctx, Input, Over, Path, Probe, PATHS};
 use stats_alloc::{Region, StatsAlloc, INSTRUMENTED_SYSTEM};
 use std::alloc::System;
 use std::time::Instant;
@@ -81,10 +81,10 @@ impl Probe for Meter {
     }
 }
 
-/// One call of `path` on `source`, measured.
-fn measure(path: &Path, ctx: &Ctx, source: &str) -> Measurement {
+/// One call of `path` on `input`, measured.
+fn measure(path: &Path, ctx: &Ctx, input: &Input) -> Measurement {
     let mut meter = Meter::new();
-    path.call(ctx, source, &mut meter);
+    path.call(ctx, input, &mut meter);
     meter.measurement
 }
 
@@ -95,15 +95,16 @@ fn median<T: PartialOrd + Copy + Default>(values: &[T]) -> T {
 }
 
 /// Cold (first call for this input) plus warm medians for one path.
+#[derive(Clone)]
 struct Row {
     cold: Measurement,
     warm_micros: f64,
     warm_allocations: usize,
 }
 
-fn measure_row(path: &Path, ctx: &Ctx, source: &str, repeats: usize) -> Row {
-    let cold = measure(path, ctx, source);
-    let warm: Vec<Measurement> = (0..repeats).map(|_| measure(path, ctx, source)).collect();
+fn measure_row(path: &Path, ctx: &Ctx, input: &Input, repeats: usize) -> Row {
+    let cold = measure(path, ctx, input);
+    let warm: Vec<Measurement> = (0..repeats).map(|_| measure(path, ctx, input)).collect();
     Row {
         cold,
         warm_micros: median(&warm.iter().map(|m| m.micros).collect::<Vec<_>>()),
@@ -112,8 +113,9 @@ fn measure_row(path: &Path, ctx: &Ctx, source: &str, repeats: usize) -> Row {
 }
 
 /// One input measured on one path.
+#[derive(Clone)]
 struct ItemRow<'a> {
-    item: &'a CorpusFile,
+    item: &'a Input,
     outcome: String,
     row: Row,
 }
@@ -124,7 +126,25 @@ struct PathResult<'a> {
     items: Vec<ItemRow<'a>>,
 }
 
-impl PathResult<'_> {
+impl<'a> PathResult<'a> {
+    /// What was measured on the inputs that `other` was measured on: a baseline
+    /// may run over more inputs than the path that is compared with it.
+    fn on_inputs_of(&self, other: &PathResult) -> PathResult<'a> {
+        PathResult {
+            path: self.path,
+            items: self
+                .items
+                .iter()
+                .filter(|item| other.item_named(&item.item.name).is_some())
+                .cloned()
+                .collect(),
+        }
+    }
+
+    fn item_named(&self, name: &str) -> Option<&ItemRow<'a>> {
+        self.items.iter().find(|item| item.item.name == name)
+    }
+
     fn cold_micros(&self) -> f64 {
         self.items.iter().map(|i| i.row.cold.micros).sum()
     }
@@ -160,9 +180,9 @@ fn main() {
     println!("| call | first us | first allocs | second us | second allocs | init allocs |");
     println!("|---|---|---|---|---|---|");
     for path in PATHS {
-        for (label, source) in path.over.probes() {
-            let first = measure(path, &ctx, source);
-            let second = measure(path, &ctx, source);
+        for (label, input) in path.over.iter().flat_map(|over| over.probes()) {
+            let first = measure(path, &ctx, &input);
+            let second = measure(path, &ctx, &input);
             println!(
                 "| {}, {label} | {:.1} | {} | {:.1} | {} | {} |",
                 path.name,
@@ -177,12 +197,12 @@ fn main() {
     println!();
 
     let files = load_corpus(&corpus_dir()).unwrap();
-    let sets: Vec<(Over, Vec<CorpusFile>)> = Over::ALL
-        .iter()
-        .map(|over| (*over, over.items(&files)))
+    let sets: Vec<(Over, Vec<Input>)> = Over::all()
+        .into_iter()
+        .map(|over| (over, over.items(&files)))
         .collect();
     for (over, items) in &sets {
-        let bytes: usize = items.iter().map(|item| item.source.len()).sum();
+        let bytes: usize = items.iter().map(|item| item.bytes()).sum();
         println!(
             "{}: {}, bytes: {bytes}, warm repeats per input: {repeats}",
             over.label(),
@@ -204,12 +224,12 @@ fn main() {
             let outcomes: Vec<(usize, String)> = PATHS
                 .iter()
                 .enumerate()
-                .filter(|(_, path)| path.over == *over)
-                .map(|(index, path)| (index, (path.describe)(&ctx, &item.source)))
+                .filter(|(_, path)| path.runs_over(*over))
+                .map(|(index, path)| (index, (path.describe)(&ctx, item)))
                 .collect();
             for (index, outcome) in outcomes {
                 let path = &PATHS[index];
-                let row = measure_row(path, &ctx, &item.source, repeats);
+                let row = measure_row(path, &ctx, item, repeats);
                 results[index].items.push(ItemRow { item, outcome, row });
             }
         }
@@ -255,6 +275,7 @@ fn print_ratios(results: &[PathResult]) {
             .path
             .baseline
             .and_then(|name| results.iter().find(|other| other.path.name == name))
+            .map(|baseline| baseline.on_inputs_of(result))
         else {
             continue;
         };
@@ -262,7 +283,7 @@ fn print_ratios(results: &[PathResult]) {
             result
                 .items
                 .iter()
-                .zip(&baseline.items)
+                .filter_map(|item| Some((item, baseline.item_named(&item.item.name)?)))
                 .map(|(item, base)| {
                     (
                         ratio(select(&item.row), select(&base.row)),
@@ -301,25 +322,26 @@ fn print_items(results: &[PathResult]) {
             .path
             .baseline
             .and_then(|name| results.iter().find(|other| other.path.name == name));
-        for (index, item) in result.items.iter().enumerate() {
-            let (warm_ratio, allocations_ratio) = match baseline.and_then(|b| b.items.get(index)) {
-                Some(base) => (
-                    format!("{:.2}", ratio(item.row.warm_micros, base.row.warm_micros)),
-                    format!(
-                        "{:.2}",
-                        ratio(
-                            item.row.warm_allocations as f64,
-                            base.row.warm_allocations as f64
-                        )
+        for item in &result.items {
+            let (warm_ratio, allocations_ratio) =
+                match baseline.and_then(|b| b.item_named(&item.item.name)) {
+                    Some(base) => (
+                        format!("{:.2}", ratio(item.row.warm_micros, base.row.warm_micros)),
+                        format!(
+                            "{:.2}",
+                            ratio(
+                                item.row.warm_allocations as f64,
+                                base.row.warm_allocations as f64
+                            )
+                        ),
                     ),
-                ),
-                None => (String::new(), String::new()),
-            };
+                    None => (String::new(), String::new()),
+                };
             println!(
                 "| {} | {} | {} | {} | {:.1} | {} | {:.1} | {:.1} | {} | {} | {} |",
                 result.path.name,
                 item.item.name,
-                item.item.source.len(),
+                item.item.bytes(),
                 item.outcome,
                 item.row.cold.micros,
                 item.row.cold.allocations,
