@@ -108,7 +108,7 @@ impl Visitor<Infallible> for RuleAmbiguousEnumeratedValue<'_> {
             )
             .with_context_id("value", &node.value)
             .with_help(
-                "Rename the value so that one enumeration declares it, or write it as                  Enumeration#Value where that form is accepted",
+                "Rename the value so that one enumeration declares it, or write Enumeration#Value where that form is accepted",
             );
             for owner in owners {
                 diagnostic = diagnostic.with_secondary(Label::span(
