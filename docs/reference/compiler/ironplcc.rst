@@ -87,14 +87,21 @@ Refactor Commands
    and removed variables, plus rename candidates (exactly one removed and one
    added variable) and swap candidates (exactly two of each); the candidates
    are heuristics for the user to resolve, never applied automatically. A
-   project that does not analyze cleanly leaves the sidecar untouched.
+   project that does not analyze cleanly leaves the sidecar untouched. An
+   online change that migrates state needs an ID for every persistent
+   variable, so synchronize before each such change. A report with candidates
+   is not saved, and the variables it lists stay without an ID until the
+   candidates are resolved with :program:`ironplcc refactor map-uid` (see
+   :doc:`/reference/runtime/problems/V4020`).
 
 :program:`ironplcc refactor map-uid` *PROJECT* *OLD-SCOPE* *OLD-NAME* *NEW-SCOPE* *NEW-NAME*
    Record an explicit rename or swap resolution in the project's stable
    variable UID sidecar by moving the UID of the old ``(scope, name)`` key to
    the new one. The scope of a program variable is the program's name; the
-   scope of a top-level ``VAR_GLOBAL`` declaration is ``global``. The command
-   fails when the old key has no UID or the new key already has one.
+   scope of every global variable is ``global``, whether it is declared at the
+   top level or in a ``CONFIGURATION``. The scope of a function block field is
+   the function block's type name. The command fails when the old key has no
+   UID or the new key already has one.
 
 Other Commands
 --------------

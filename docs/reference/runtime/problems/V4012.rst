@@ -7,7 +7,7 @@ V4012
 A command that requires a staged candidate — ``testEdits``, ``assembleEdits``,
 or ``cancelEdits`` — arrived while no candidate is staged. The runtime stages
 nothing implicitly: ``acceptEdits`` must succeed first, and its refusal codes
-(V4007 through V4016) leave no candidate behind.
+(V4007 through V4016, and V4020) leave no candidate behind.
 
 Example
 -------

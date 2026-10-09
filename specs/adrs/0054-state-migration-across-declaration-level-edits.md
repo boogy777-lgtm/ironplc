@@ -147,3 +147,14 @@ migration to justify is still rejected as layout-incompatible.
   the UID table the planner diffs.
 * `compiler/runtime/src/migration.rs`, `host.rs`, `online_change.rs`,
   `error.rs`; acceptance tests in `compiler/runtime/tests/migration_acceptance.rs`.
+
+### Postscript, 2026-10-09
+
+The Neutral consequence above, that containers without stable IDs keep the
+stage 1 rejection, held only for a container with no IDs at all. A candidate
+and an active application that both carried some IDs were migrated even when a
+persistent variable had none, and that variable returned to its initial value
+without a refusal. [ADR-0074](0074-a-migration-needs-a-stable-id-for-every-persistent-variable.md)
+decides that a migration needs an ID for every persistent variable of both
+containers and refuses the candidate otherwise, naming the variables. The
+decision above stands; the planner's rows apply to variables that have IDs.

@@ -66,8 +66,9 @@ Run the two runtimes manually
 
 Each unit serves its own copy of the same compiled container and names
 the other's pair-link address. The edit candidate must carry stable
-variable IDs for the schema-changing edit to stage as a migration
-candidate (see :doc:`/explanation/variables-and-io`).
+variable IDs, for every persistent variable of both programs, for the
+schema-changing edit to stage as a migration candidate (see
+:doc:`/explanation/variables-and-io` and :doc:`/reference/runtime/problems/V4020`).
 
 .. code-block:: console
 

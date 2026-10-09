@@ -46,4 +46,5 @@ string maximum that shrinks below the current value, a changed array
 descriptor, or an FB field layout change) does not. Split the edit so the
 incompatible declaration changes are applied as a cold start, or adjust the
 candidate so every shared ID keeps its entry. See :doc:`V4007` when the
-candidate lacks the stable IDs a migration needs.
+candidate lacks the stable IDs a migration needs, and :doc:`V4020` when a
+persistent variable has no ID.

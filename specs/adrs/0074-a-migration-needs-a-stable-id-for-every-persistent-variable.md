@@ -1,6 +1,6 @@
 # A Migration Needs a Stable ID for Every Persistent Variable
 
-status: proposed
+status: accepted
 date: 2026-10-09
 
 ## Context and Problem Statement
@@ -157,14 +157,21 @@ it is.
 
 ### The workstation
 
-A function of `ironplc-project` compares the declared persistent variables of a
-project with the sidecar: it returns the keys declared without an ID and the
-keys with an ID that nothing declares. Every sender of a candidate calls it
-before sending and does not send when the table is non-empty and the two differ;
-it names the difference and tells the engineer to synchronize. An empty table is
+A function of `ironplc-project` (`id_difference`, `project/src/id_agreement.rs`)
+compares the declared persistent variables of a project with the sidecar: it
+returns the keys declared without an ID and the keys with an ID that nothing
+declares. The compile pipeline attaches the verdict to its output
+(`CompileOutput::id_difference`); a build ignores it. A sender of a candidate
+reads it and does not send when the table is non-empty and the two differ; it
+names the difference and tells the engineer to synchronize. An empty table is
 not compared: no variable has an ID then, and the controller refuses a layout
 change itself (V4007). The controller applies the rule regardless of what the
 workstation did.
+
+Senders today: the MCP hot edit tool reads the verdict. It has no way to set a
+table, so the verdict is empty there. The VS Code extension compiles with
+`ironplcc` and sends the bytes; it does not read the verdict, and until it does
+the refusal of the controller (V4020) is the only line of defence on that path.
 
 ### Consequences
 
@@ -193,6 +200,9 @@ workstation did.
   each side.
 - `compiler/project/tests/persistent_keys.rs`: the guard of the key definition
   against code generation.
+- `compiler/project/src/id_agreement.rs` and `compile.rs` tests: the comparison
+  and the verdict the pipeline attaches; `compiler/mcp/src/tools/hot_edit.rs`:
+  a candidate is not sent while the verdict is set.
 
 ## More Information
 

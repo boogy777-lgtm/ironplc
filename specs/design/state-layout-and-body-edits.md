@@ -225,9 +225,11 @@ Option O1, on format version 8. The VM did not change.
    version, the hash formula including the element stride, and the order rules.
 
 Item 4 of the list above (more than one program) is not implemented: only the
-shape that makes it one more row. Item 5 (a variable without an ID returns to
-its initial value in a migration) is pinned by a test and not changed; it is a
-decision for the owner.
+shape that makes it one more row. Item 5 (a variable without an ID returned to its
+initial value in a migration) was decided afterwards: the planner refuses a
+candidate in which a persistent variable of either container has no ID, and the
+refusal names it (V4020, [ADR-0074](../adrs/0074-a-migration-needs-a-stable-id-for-every-persistent-variable.md)).
+The rows of the table of edit classes that carry partial IDs say so as data.
 
 ## What Was Found
 

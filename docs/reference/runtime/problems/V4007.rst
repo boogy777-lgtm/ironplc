@@ -39,5 +39,6 @@ state layout unchanged (a code-body edit, including calls to functions, or a
 rename when stable variable IDs are assigned), or assign stable variable IDs so
 a declaration-level edit can migrate per variable. Until a schema edit can be migrated, apply it as a
 cold start: stop the runtime and load the new container. See
-:doc:`V4010` for the migration case and :doc:`V4016` for payloads that are
-not containers at all.
+:doc:`V4010` for the migration case, :doc:`V4020` when the candidate and the
+running application carry IDs but a persistent variable has none, and
+:doc:`V4016` for payloads that are not containers at all.
