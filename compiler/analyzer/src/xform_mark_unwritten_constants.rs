@@ -83,7 +83,7 @@ pub fn apply(
         globals: HashMap::new(),
     };
     let Ok(()) = collector.walk(&lib);
-    let mut marker = Marker::new(collector.written, &collector.globals);
+    let mut marker = Marker::new(collector.written, collector.globals);
     let Ok(lib) = marker.fold_library(lib);
     lib
 }
@@ -527,25 +527,26 @@ impl Visitor<Infallible> for WriteCollector<'_> {
 /// Applies the verdicts: which declarations become `CONSTANT`.
 struct Marker {
     written: Writes,
-    /// Global names whose `VAR_GLOBAL` and `VAR_EXTERNAL` declarations are
-    /// all marked together.
-    constant_globals: HashSet<Id>,
+    /// Each global name, and whether its declarations qualify to be marked.
+    /// All the `VAR_GLOBAL` and `VAR_EXTERNAL` declarations of a name are
+    /// marked together.
+    globals: HashMap<Id, bool>,
     /// The declarations the fold is inside, outermost first.
     scope: Vec<Id>,
 }
 
 impl Marker {
-    fn new(written: Writes, globals: &HashMap<Id, bool>) -> Self {
-        let constant_globals = globals
-            .iter()
-            .filter(|(name, qualifies)| **qualifies && !written.contains(&ScopeKind::Global, name))
-            .map(|(name, _)| name.clone())
-            .collect();
+    fn new(written: Writes, globals: HashMap<Id, bool>) -> Self {
         Marker {
             written,
-            constant_globals,
+            globals,
             scope: Vec::new(),
         }
+    }
+
+    /// Whether the global `name` is marked: it qualifies and nothing writes it.
+    fn is_constant_global(&self, name: &Id) -> bool {
+        self.globals.get(name) == Some(&true) && !self.written.contains(&ScopeKind::Global, name)
     }
 
     fn should_mark(&self, decl: &VarDecl) -> bool {
@@ -569,7 +570,7 @@ impl Marker {
                 };
                 may_be_constant(&decl.initializer) && !self.written.contains(&scope, name)
             }
-            VariableType::Global | VariableType::External => self.constant_globals.contains(name),
+            VariableType::Global | VariableType::External => self.is_constant_global(name),
             VariableType::Input
             | VariableType::Output
             | VariableType::InOut

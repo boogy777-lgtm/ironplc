@@ -107,9 +107,12 @@ mod tests {
 
     #[test]
     fn elementary_when_every_type_then_distinct_ids_that_are_debug_tags() {
-        let ids: HashSet<TypeId> = ALL_ELEMENTARY.iter().map(elementary).collect();
+        let ids: Vec<TypeId> = ALL_ELEMENTARY.iter().map(elementary).collect();
 
-        assert_eq!(ids.len(), ALL_ELEMENTARY.len());
+        assert_eq!(
+            ids.iter().collect::<HashSet<_>>().len(),
+            ALL_ELEMENTARY.len()
+        );
         for id in ids {
             assert!(elementary_debug_tag(id).is_some(), "{id:?}");
         }

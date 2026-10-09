@@ -245,18 +245,15 @@ impl<'a> RuleConstantVarsInitialized<'a> {
             }
         };
 
-        // Collect the names of explicitly initialized fields
-        let initialized_fields: std::collections::HashSet<_> = struct_init
-            .elements_init
-            .iter()
-            .map(|init| &init.name)
-            .collect();
-
         // Check each field that doesn't have a default
         for field in fields {
             if !field.has_default() {
                 // This field needs explicit initialization
-                if !initialized_fields.iter().any(|name| **name == field.name) {
+                if !struct_init
+                    .elements_init
+                    .iter()
+                    .any(|init| init.name == field.name)
+                {
                     self.diagnostics.push(
                         Diagnostic::problem(
                             Problem::ConstantMustHaveInitializer,

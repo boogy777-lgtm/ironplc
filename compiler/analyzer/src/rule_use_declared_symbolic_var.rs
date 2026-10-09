@@ -988,3 +988,6 @@ END_PROGRAM";
         Problem::VariableUndefined
     );
 }
+
+#[cfg(test)]
+mod suggestion_tests;

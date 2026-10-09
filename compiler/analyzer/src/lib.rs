@@ -1,5 +1,8 @@
 // Allow large errors because this is a compiler - we expect large errors.
 #![allow(clippy::result_large_err)]
+// A result that reaches a user must not depend on the order a hash container
+// iterates in: see `disallowed-methods` in `clippy.toml`.
+#![deny(clippy::iter_over_hash_type, clippy::disallowed_methods)]
 
 extern crate ironplc_dsl;
 extern crate ironplc_parser;
@@ -111,7 +114,6 @@ mod xform_resolve_expr_types;
 mod xform_resolve_late_bound_expr_kind;
 mod xform_resolve_late_bound_type_initializer;
 mod xform_resolve_symbol_and_function_environment;
-mod xform_resolve_type_aliases;
 mod xform_resolve_type_decl_environment;
 mod xform_toposort_declarations;
 

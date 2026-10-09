@@ -3,6 +3,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use indexmap::IndexMap;
 use ironplc_dsl::common::{
     FunctionBlockDeclaration, Library, LibraryElementKind, TypeName, VarDecl,
 };
@@ -30,7 +31,7 @@ use ironplc_dsl::common::{
 /// existing behavior for referencing an undeclared base is unchanged by
 /// this function.
 pub fn collect_inherited_fields(lib: &Library) -> HashMap<TypeName, Vec<VarDecl>> {
-    let by_name: HashMap<TypeName, &FunctionBlockDeclaration> = lib
+    let by_name: IndexMap<TypeName, &FunctionBlockDeclaration> = lib
         .elements
         .iter()
         .filter_map(|e| match e {
@@ -56,7 +57,7 @@ pub fn collect_inherited_fields(lib: &Library) -> HashMap<TypeName, Vec<VarDecl>
 /// through more than one descendant.
 fn resolve_own_and_inherited(
     name: TypeName,
-    by_name: &HashMap<TypeName, &FunctionBlockDeclaration>,
+    by_name: &IndexMap<TypeName, &FunctionBlockDeclaration>,
     memo: &mut HashMap<TypeName, Vec<VarDecl>>,
     visiting: &mut HashSet<TypeName>,
 ) -> Vec<VarDecl> {

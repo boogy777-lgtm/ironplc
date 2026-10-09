@@ -377,6 +377,85 @@ mod tests {
         assert_eq!(params[0].direction, VariableDirection::In);
     }
 
+    /// Declarations of each kind, none depending on another, declared in an
+    /// order that is not alphabetical.
+    const DECLARED_OUT_OF_ALPHABETICAL_ORDER: &str = "
+TYPE T_Z : (Z1, Z2); T_A : (A1, A2); T_M : (M1, M2); END_TYPE
+FUNCTION F_Z : INT F_Z := 1; END_FUNCTION
+FUNCTION F_A : INT F_A := 1; END_FUNCTION
+FUNCTION F_M : INT F_M := 1; END_FUNCTION
+FUNCTION_BLOCK FB_Z END_FUNCTION_BLOCK
+FUNCTION_BLOCK FB_A END_FUNCTION_BLOCK
+FUNCTION_BLOCK FB_M END_FUNCTION_BLOCK
+PROGRAM P_Z VAR vz : INT; va : INT; vm : INT; END_VAR END_PROGRAM
+PROGRAM P_A END_PROGRAM
+PROGRAM P_M END_PROGRAM
+";
+
+    /// Every list the language server and the MCP tools show: the types, the
+    /// functions, the function blocks, the programs and the variables of the
+    /// programs, each as the names in the order the list has them.
+    fn symbol_lists(ctx: &SemanticContext) -> [Vec<String>; 5] {
+        [
+            ctx.user_defined_types()
+                .iter()
+                .map(|t| t.name.to_string())
+                .collect(),
+            ctx.user_defined_functions()
+                .iter()
+                .map(|f| f.signature.name.to_string())
+                .collect(),
+            ctx.function_blocks()
+                .iter()
+                .map(|b| b.name.to_string())
+                .collect(),
+            ctx.programs().iter().map(|p| p.name.to_string()).collect(),
+            ctx.programs()
+                .iter()
+                .flat_map(|p| p.variables.iter().map(|v| v.name.to_string()))
+                .collect(),
+        ]
+    }
+
+    /// The lists of 16 analyses of the same source, each analysis making
+    /// containers of its own.
+    fn symbol_lists_of_each_run() -> Vec<[Vec<String>; 5]> {
+        (0..16)
+            .map(|_| symbol_lists(&analyze_source(DECLARED_OUT_OF_ALPHABETICAL_ORDER)))
+            .collect()
+    }
+
+    #[test]
+    fn symbol_lists_when_analyzed_again_then_same_order_in_every_run() {
+        let runs = symbol_lists_of_each_run();
+
+        assert!(runs.iter().all(|lists| *lists == runs[0]), "{runs:?}");
+    }
+
+    #[test]
+    fn symbol_lists_when_declared_out_of_alphabetical_order_then_every_declaration_listed_once() {
+        let mut lists = symbol_lists(&analyze_source(DECLARED_OUT_OF_ALPHABETICAL_ORDER));
+        lists.iter_mut().for_each(|names| names.sort());
+
+        assert_eq!(
+            lists,
+            [
+                vec!["T_A", "T_M", "T_Z"],
+                vec!["F_A", "F_M", "F_Z"],
+                vec!["FB_A", "FB_M", "FB_Z"],
+                vec!["P_A", "P_M", "P_Z"],
+                vec!["va", "vm", "vz"],
+            ]
+        );
+    }
+
+    #[test]
+    fn symbol_lists_when_variables_declared_out_of_alphabetical_order_then_declaration_order() {
+        let lists = symbol_lists(&analyze_source(DECLARED_OUT_OF_ALPHABETICAL_ORDER));
+
+        assert_eq!(lists[4], vec!["vz", "va", "vm"]);
+    }
+
     #[test]
     fn user_defined_functions_when_only_stdlib_then_empty() {
         let ctx = analyze_source("PROGRAM p\nEND_PROGRAM");

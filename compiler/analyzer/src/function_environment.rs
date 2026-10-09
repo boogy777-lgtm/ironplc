@@ -9,7 +9,7 @@
 //! complete signatures even when type resolution fails. Types can be resolved
 //! on-demand via `TypeEnvironment` when needed for validation.
 
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 use ironplc_dsl::common::{FunctionReturnType, TypeName};
 use ironplc_dsl::core::{Id, SourceSpan};
@@ -179,15 +179,17 @@ impl FunctionSignature {
 /// The function environment tracks all function signatures.
 #[derive(Debug)]
 pub struct FunctionEnvironment {
-    /// Map from lowercase function name to signature
-    table: HashMap<String, FunctionSignature>,
+    /// Map from lowercase function name to signature, in declaration order:
+    /// the functions are listed to the user (the symbol lists of the language
+    /// server and of the MCP tools).
+    table: IndexMap<String, FunctionSignature>,
 }
 
 impl FunctionEnvironment {
     /// Creates a new empty function environment.
     pub fn new() -> Self {
         Self {
-            table: HashMap::new(),
+            table: IndexMap::new(),
         }
     }
 
