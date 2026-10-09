@@ -272,4 +272,13 @@ END_FUNCTION_BLOCK";
 
         assert!(result.is_ok());
     }
+
+    rule_ctx_ok!(
+        apply_when_enumeration_is_declared_with_an_error_then_ok,
+        "
+TYPE E : E_NOWHERE := A1; END_TYPE
+PROGRAM main
+VAR v : E; END_VAR
+END_PROGRAM"
+    );
 }

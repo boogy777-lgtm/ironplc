@@ -947,4 +947,24 @@ END_PROGRAM",
         );
         assert!(result.is_err(), "Expected error but got OK");
     }
+
+    rule_ctx_ok!(
+        deref_when_type_is_declared_with_an_error_then_ok,
+        "
+TYPE X : T_NOWHERE; END_TYPE
+PROGRAM main
+VAR v : X; k : INT; END_VAR
+    k := v^;
+END_PROGRAM"
+    );
+
+    rule_ctx_ok!(
+        null_when_assigned_to_type_declared_with_an_error_then_ok,
+        "
+TYPE X : T_NOWHERE; END_TYPE
+PROGRAM main
+VAR v : X; END_VAR
+    v := NULL;
+END_PROGRAM"
+    );
 }

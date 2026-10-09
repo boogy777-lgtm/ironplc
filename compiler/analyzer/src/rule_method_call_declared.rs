@@ -501,4 +501,26 @@ v := m.Scaled(m.Nope());
 END_PROGRAM",
         Problem::MethodNotFound
     );
+
+    rule_ctx_ok!(
+        apply_when_receiver_type_is_declared_with_an_error_then_ok,
+        "
+TYPE X : T_NOWHERE; END_TYPE
+PROGRAM main
+VAR v : X; k : INT; END_VAR
+    v.M();
+    k := v.M();
+END_PROGRAM"
+    );
+
+    rule_ctx_err1!(
+        apply_when_receiver_type_is_declared_and_is_not_a_function_block_then_not_in_scope,
+        "
+TYPE X : INT; END_TYPE
+PROGRAM main
+VAR v : X; END_VAR
+    v.M();
+END_PROGRAM",
+        Problem::FunctionBlockNotInScope
+    );
 }

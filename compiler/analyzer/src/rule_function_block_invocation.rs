@@ -573,4 +573,25 @@ missing[1](IN := TRUE);
 END_PROGRAM",
         ironplc_problems::Problem::FunctionBlockNotInScope
     );
+
+    rule_ctx_ok!(
+        apply_when_callee_type_is_declared_with_an_error_then_ok,
+        "
+TYPE X : T_NOWHERE; END_TYPE
+PROGRAM main
+VAR v : X; END_VAR
+    v(p := 1);
+END_PROGRAM"
+    );
+
+    rule_ctx_err1!(
+        apply_when_callee_type_is_declared_and_is_not_a_function_block_then_not_in_scope,
+        "
+TYPE X : INT; END_TYPE
+PROGRAM main
+VAR v : X; END_VAR
+    v(p := 1);
+END_PROGRAM",
+        ironplc_problems::Problem::FunctionBlockNotInScope
+    );
 }
