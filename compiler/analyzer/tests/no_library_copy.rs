@@ -1,7 +1,9 @@
 //! No step of the analysis keeps a copy of the library.
 //!
 //! The guard reads the count of library elements cloned in the process
-//! (`ironplc_dsl::common::library_element_clones`) around every step the
+//! (`ironplc_dsl::common::library_element_clones`, built with the feature
+//! `count-library-clones` of the dsl crate, which this crate enables for its
+//! tests) around every step the
 //! analysis tells its observer about: a pass, a rule, or the making of an input.
 //! A copy of a library, however a step makes it (`library.clone()`, a clone of
 //! its elements, a clone of each element), is a clone of its elements, so a

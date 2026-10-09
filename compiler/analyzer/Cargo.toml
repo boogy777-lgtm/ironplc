@@ -26,6 +26,9 @@ indexmap = "2"
 ironplc-spec-requirements-gen = { path = "../spec_requirements_gen" }
 
 [dev-dependencies]
+# The guard that no step of the analysis keeps a copy of the library counts the
+# clones of library elements, which a product build of the crate does not.
+ironplc-dsl = { path = "../dsl", version = "0.247.0", features = ["count-library-clones"] }
 ironplc-parser = { path = "../parser", version = "0.247.0" }
 ironplc-syntax = { path = "../syntax", version = "0.247.0" }
 ctor = "1.0"

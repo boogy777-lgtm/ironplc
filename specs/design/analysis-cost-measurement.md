@@ -714,7 +714,9 @@ with the failing unit made correct (section 9.4).
   Every message about the other units must equal the one with the unit made
   correct.
 - `compiler/analyzer/tests/no_library_copy.rs`: the count of cloned library
-  elements (`ironplc_dsl::common::library_element_clones`), read around every
+  elements (`ironplc_dsl::common::library_element_clones`, built only with the
+  feature `count-library-clones`, which this test enables as a dev dependency
+  of the analyzer; a product build has the derived `Clone`), read around every
   step the analysis reports, is zero for every step but the merge of the inputs.
   A copy is a clone of elements however it is written, and the observer sees
   every step, so a pass added later is held to it with no edit.

@@ -3178,6 +3178,7 @@ pub enum EdgeDirection {
 ///
 /// The library element flattens data type declaration blocks so that each
 /// enumeration is for a single data type declaration.
+#[cfg_attr(not(feature = "count-library-clones"), derive(Clone))]
 #[derive(Debug, PartialEq, Recurse)]
 pub enum LibraryElementKind {
     DataTypeDeclaration(DataTypeDeclarationKind),
@@ -3382,6 +3383,7 @@ pub struct Library {
 }
 
 /// How many library elements have been cloned in this process.
+#[cfg(feature = "count-library-clones")]
 static LIBRARY_ELEMENT_CLONES: std::sync::atomic::AtomicUsize =
     std::sync::atomic::AtomicUsize::new(0);
 
@@ -3390,10 +3392,15 @@ static LIBRARY_ELEMENT_CLONES: std::sync::atomic::AtomicUsize =
 /// A copy of a library is a clone of each of its elements, so the difference
 /// between two readings is what a stretch of code copied: a guard that no step
 /// of the analysis keeps a copy of the library reads this around each step.
+/// Only built with the feature `count-library-clones`, which only that guard
+/// enables: without it `LibraryElementKind` has the derived `Clone` and counts
+/// nothing.
+#[cfg(feature = "count-library-clones")]
 pub fn library_element_clones() -> usize {
     LIBRARY_ELEMENT_CLONES.load(std::sync::atomic::Ordering::Relaxed)
 }
 
+#[cfg(feature = "count-library-clones")]
 impl Clone for LibraryElementKind {
     fn clone(&self) -> Self {
         LIBRARY_ELEMENT_CLONES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
