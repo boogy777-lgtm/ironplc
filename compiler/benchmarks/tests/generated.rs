@@ -14,7 +14,7 @@ use ironplc_benchmarks::generated::{generate, options, PROGRAM, SCALES, SHAPES};
 use ironplc_dsl::common::Library;
 use ironplc_dsl::core::FileId;
 use ironplc_parser::parse_program;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 /// What one structure, function block or program may hold at any scale, in
 /// scalar variables, with the structures and the instances it holds counted in
@@ -25,8 +25,8 @@ const MOST_SCALARS: u64 = 10_000;
 
 /// The type of every variable that each structure, function block, function and
 /// program of the text declares, by the name of the declaration.
-fn declared_types(files: &[CorpusFile]) -> HashMap<String, Vec<String>> {
-    let mut declared: HashMap<String, Vec<String>> = HashMap::new();
+fn declared_types(files: &[CorpusFile]) -> BTreeMap<String, Vec<String>> {
+    let mut declared: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for file in files {
         let mut current = None;
         for line in file.source.lines() {
@@ -57,7 +57,7 @@ fn declared_types(files: &[CorpusFile]) -> HashMap<String, Vec<String>> {
 /// declarations.
 fn scalars<'a>(
     of: &'a str,
-    declared: &'a HashMap<String, Vec<String>>,
+    declared: &'a BTreeMap<String, Vec<String>>,
     known: &mut HashMap<&'a str, u64>,
 ) -> u64 {
     if let Some(count) = known.get(of) {

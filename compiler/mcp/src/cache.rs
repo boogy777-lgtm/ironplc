@@ -8,6 +8,8 @@
 //! See REQ-ARC-mcp-070 through REQ-ARC-mcp-073 in `specs/design/mcp-server.md`.
 
 use std::collections::{HashMap, VecDeque};
+
+use indexmap::IndexMap;
 use std::fmt;
 
 use ironplc_container::VarIndex;
@@ -89,8 +91,11 @@ pub struct ResolvedVar {
 /// container bytes per REQ-ARC-mcp-070.
 #[derive(Clone, Debug, Default)]
 pub struct VariableSymbolMap {
-    /// Canonical qualified name → resolved variable.
-    by_qualified: HashMap<String, ResolvedVar>,
+    /// Canonical qualified name → resolved variable, in the order the
+    /// variables were inserted (the order `build_symbol_map` meets them in:
+    /// programs, then globals, each in declaration order), so every walk of
+    /// the map gives the same order on every run.
+    by_qualified: IndexMap<String, ResolvedVar>,
     /// Bare variable name → every resolution sharing that suffix.
     /// Used for the REQ-ARC-mcp-020 bare-name fallback lookup.
     by_bare: HashMap<String, Vec<ResolvedVar>>,

@@ -16,7 +16,7 @@ use lsp_types::{
     WorkspaceServerCapabilities,
 };
 use serde::{de::DeserializeOwned, Serialize};
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::str::FromStr;
 
 use crate::lsp_project::{LspProject, UriKey};
@@ -184,7 +184,7 @@ struct LspServer<'a> {
     /// of lingering forever. Stored as `UriKey` (a `String` newtype)
     /// rather than `Uri` so the set is independent of `lsp_types::Uri`'s
     /// interior `Cell`s.
-    published_uris: HashSet<UriKey>,
+    published_uris: BTreeSet<UriKey>,
 }
 
 impl<'a> LspServer<'a> {
@@ -226,7 +226,7 @@ impl<'a> LspServer<'a> {
         Self {
             sender,
             project,
-            published_uris: HashSet::new(),
+            published_uris: BTreeSet::new(),
         }
     }
 
@@ -241,7 +241,7 @@ impl<'a> LspServer<'a> {
     fn publish_workspace_diagnostics(&mut self, edited_uri: &Uri, edited_version: Option<i32>) {
         let edited_key = UriKey::from_uri(edited_uri);
         let by_key = self.project.semantic_all();
-        let mut new_published: HashSet<UriKey> = HashSet::new();
+        let mut new_published: BTreeSet<UriKey> = BTreeSet::new();
 
         for (key, diagnostics) in by_key {
             if diagnostics.is_empty() {
@@ -550,7 +550,7 @@ mod test {
     };
     use serde::de::DeserializeOwned;
     use serde::Serialize;
-    use std::collections::HashMap;
+    use std::collections::{BTreeMap, HashMap};
     use std::str::FromStr;
 
     use crate::lsp_project::{LspProject, UriKey};
@@ -717,10 +717,8 @@ mod test {
         /// server and return them keyed by URI. The server emits one
         /// notification per affected file plus one per stale URI it
         /// is clearing, so callers know exactly how many to expect.
-        /// HashMap iteration order in `semantic_all` is non-deterministic,
-        /// so tests must look notifications up by URI rather than position.
-        fn receive_publishes(&mut self, n: usize) -> HashMap<UriKey, PublishDiagnosticsParams> {
-            let mut out = HashMap::new();
+        fn receive_publishes(&mut self, n: usize) -> BTreeMap<UriKey, PublishDiagnosticsParams> {
+            let mut out = BTreeMap::new();
             for _ in 0..n {
                 let p = self.receive_notification::<PublishDiagnosticsParams>();
                 out.insert(UriKey::from_uri(&p.uri), p);
