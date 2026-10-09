@@ -1,6 +1,6 @@
 //! Project management for multiple source files
 
-use std::{collections::HashMap, path::Path};
+use std::{collections::BTreeMap, path::Path};
 
 use ironplc_dsl::{common::Library, core::FileId, diagnostic::Diagnostic};
 use ironplc_parser::options::CompilerOptions;
@@ -12,8 +12,13 @@ use crate::source::Source;
 
 /// A project consisting of one or more source files
 pub struct SourceProject {
-    /// The source files in the project
-    sources: HashMap<FileId, Source>,
+    /// The source files in the project.
+    ///
+    /// A project is a set of files, so the order is a function of the set and
+    /// nothing else: ascending by file ID, whatever order the files were added
+    /// in and whatever order the file system listed them in. Every reader
+    /// (analysis, the commands, the language server) sees this one order.
+    sources: BTreeMap<FileId, Source>,
     /// Parse options applied to all sources
     compiler_options: CompilerOptions,
     /// Names of the activated compatibility libraries, in activation order.
@@ -34,7 +39,7 @@ impl SourceProject {
     /// Create a new empty project
     pub fn new() -> Self {
         SourceProject {
-            sources: HashMap::new(),
+            sources: BTreeMap::new(),
             compiler_options: CompilerOptions::default(),
             activated_libraries: Vec::new(),
         }
@@ -43,7 +48,7 @@ impl SourceProject {
     /// Create a new project with specific parse options
     pub fn with_options(compiler_options: CompilerOptions) -> Self {
         SourceProject {
-            sources: HashMap::new(),
+            sources: BTreeMap::new(),
             compiler_options,
             activated_libraries: Vec::new(),
         }
@@ -128,12 +133,12 @@ impl SourceProject {
         self.sources.get_mut(file_id)
     }
 
-    /// Get all sources
+    /// Get all sources, ascending by file ID
     pub fn sources(&self) -> Vec<&Source> {
         self.sources.values().collect()
     }
 
-    /// Get all sources mutably
+    /// Get all sources mutably, ascending by file ID
     pub fn sources_mut(&mut self) -> Vec<&mut Source> {
         self.sources.values_mut().collect()
     }
@@ -243,6 +248,26 @@ mod tests {
         let project = SourceProject::new();
         assert!(project.is_empty());
         assert_eq!(project.len(), 0);
+    }
+
+    #[test]
+    fn sources_when_added_in_any_order_then_ascending_by_file_id() {
+        let ids = ["c.st", "a.st", "b.st"];
+        let mut project = SourceProject::new();
+        for id in ids {
+            project.add_source(
+                FileId::from_string(id),
+                "PROGRAM Main END_PROGRAM".to_string(),
+            );
+        }
+
+        let order: Vec<String> = project
+            .sources()
+            .iter()
+            .map(|source| source.file_id().to_string())
+            .collect();
+
+        assert_eq!(order, ["a.st", "b.st", "c.st"]);
     }
 
     #[test]

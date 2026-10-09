@@ -48,18 +48,11 @@ fn run_semantic_analysis(
     compat_libraries.extend(preparsed_libraries.iter().cloned());
     all_diagnostics.extend(compat_diagnostics);
 
-    // Sources are backed by a HashMap, so iteration order is randomized
-    // per-process by its hasher's random seed. Merging them in that order
-    // made the combined Library's declaration order -- and therefore
-    // semantic analysis's outcome for a given multi-file project -- vary
-    // from run to run of the identical binary and identical input. Sort by
-    // FileId first so the merged order (and every downstream result) is
-    // deterministic.
-    let mut sources = source_project.sources_mut();
-    sources.sort_by_key(|source| source.file_id().to_string());
-
+    // The project yields its sources ascending by file ID, a function of the
+    // set of files alone, so the combined Library's declaration order -- and
+    // with it the outcome of analysis -- is the same on every run.
     let mut any_source_failed_to_parse = false;
-    for source in sources {
+    for source in source_project.sources_mut() {
         match source.library() {
             Ok(library) => {
                 all_libraries.push(library);

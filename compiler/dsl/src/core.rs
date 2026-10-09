@@ -21,7 +21,7 @@ static EMPTY_FILE_ID: LazyLock<Arc<str>> = LazyLock::new(|| Arc::from(""));
 /// where a source position is in a file. It can also represent
 /// built-in types that are part of the compiler (e.g., standard
 /// library function blocks, elementary types).
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Ord, PartialOrd)]
 pub enum FileId {
     /// Source code from a file (local or remote). The string is the file path.
     File(Arc<str>),
