@@ -525,6 +525,30 @@ PROGRAM main VAR s : S; END_VAR s.n := 4; END_PROGRAM",
     }
 
     #[test]
+    fn analyze_when_cycle_then_structure_members_carry_their_resolved_default_values() {
+        let options = CompilerOptions::default();
+        let library = parse_program(
+            "
+TYPE A : STRUCT b : B; END_STRUCT; END_TYPE
+TYPE B : STRUCT a : A; END_STRUCT; END_TYPE
+TYPE COLOR : (RED, GREEN); END_TYPE
+TYPE S : STRUCT c : COLOR := GREEN; END_STRUCT; END_TYPE",
+            &FileId::default(),
+            &options,
+        )
+        .unwrap();
+
+        let (_library, context) = analyze(&[&library], &options).unwrap();
+
+        let structure = context
+            .types()
+            .get(&ironplc_dsl::common::TypeName::from("S"))
+            .unwrap();
+        let fields = structure.representation.member_fields().unwrap();
+        assert!(fields[0].initial_value.is_some());
+    }
+
+    #[test]
     fn analyze_2() {
         let lib = parse_shared_library("main.st");
         let res = analyze(&[&lib], &CompilerOptions::default());
