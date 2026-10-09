@@ -6,14 +6,17 @@
 //! untouched: the sidecar is the only UID store, so a project that loses it
 //! degrades to no-migration (safe rejection) rather than silent guessing.
 //!
-//! The mapping covers the persistent prefix -- program variables and
-//! top-level `VAR_GLOBAL` declarations -- the same population codegen records
-//! in the container's `stable_vars` table, plus the fields of user-defined
-//! function blocks, which codegen records in the container's `fb_field_uids`
-//! table (ADR 0059). Codegen matches persistent declarations by name only,
-//! so the sidecar's scope exists for disambiguation and for rename/swap
-//! tracking, not for the container lookup; an FB field's scope is its
-//! qualified FB type name.
+//! The mapping covers every persistent declaration code generation lays out --
+//! the globals wherever they are declared, the variables of programs, and the
+//! fields of user-defined function blocks -- and nothing else. The list is
+//! `ironplc_codegen::persistent_scopes`, the one definition code generation
+//! lays the declarations out from (ADR-0074); codegen records the program and
+//! global population in the container's `stable_vars` table and the fields in
+//! its `fb_field_uids` table (ADR 0059). Codegen matches persistent
+//! declarations by name only, so the sidecar's scope exists for disambiguation
+//! and for rename/swap tracking, not for the container lookup; an FB field's
+//! scope is its qualified FB type name, and every global has the scope
+//! `global`.
 //!
 //! ## Format
 //!
@@ -54,21 +57,17 @@ use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use ironplc_codegen::FbFieldUidKey;
-use ironplc_dsl::common::{Library, LibraryElementKind, VarDecl, VariableType};
+use ironplc_codegen::{persistent_scopes, CodegenOptions, FbFieldUidKey};
+use ironplc_dsl::common::{Library, LibraryElementKind};
 use ironplc_dsl::core::{FileId, Id};
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
+use ironplc_parser::options::CompilerOptions;
 use ironplc_problems::Problem;
 use serde_json::{json, Value};
 
 /// The format version written into the sidecar's `version` field. A loader
 /// accepts only this version; anything else is malformed and recovers empty.
 const FORMAT_VERSION: u64 = 1;
-
-/// The scope name recorded for top-level `VAR_GLOBAL` declarations, which
-/// have no containing program. Mirrors the debug section's global-scope
-/// concept.
-const GLOBAL_SCOPE: &str = "global";
 
 /// A sidecar key: the declaration's scope path and name.
 ///
@@ -406,60 +405,33 @@ pub fn sidecar_path_for(project: &Path) -> Option<PathBuf> {
     Some(project.with_file_name(format!("{stem}.uids.json")))
 }
 
-/// Collects the keys the sidecar tracks for a library: the persistent
-/// prefix's declared variables -- program variables (scope = program name)
-/// and top-level `VAR_GLOBAL` declarations (scope = `global`), ADR 0053 --
-/// and the fields of user-defined function blocks (scope = qualified FB type
-/// name, name = field), ADR 0059. `VAR_EXTERNAL` aliases are skipped,
-/// matching codegen, which allocates the global itself. The result is
+/// Collects the keys the sidecar tracks for a library: one key for each
+/// persistent declaration code generation lays out (ADR-0074).
+///
+/// The declarations are the ones `ironplc_codegen::persistent_scopes` lists, so
+/// that the engineering side keys exactly what code generation lays out as
+/// state and the two cannot drift apart: the globals wherever they are declared
+/// (scope `global`), the system uptime globals the options provide, the
+/// variables of a program and the hidden variables of its edge inputs (scope =
+/// program name), and the fields of function blocks with the hidden fields of
+/// their edge inputs (scope = function block type name, ADR 0059).
+/// `VAR_EXTERNAL` aliases are not declarations of their own. The result is
 /// sorted and deduplicated.
-pub fn declared_var_keys(library: &Library) -> Vec<SidecarKey> {
+pub fn declared_var_keys(library: &Library, options: &CompilerOptions) -> Vec<SidecarKey> {
     let mut keys = Vec::new();
-    for element in &library.elements {
-        match element {
-            LibraryElementKind::ProgramDeclaration(program) => {
-                push_var_keys(&program.name, &program.variables, &mut keys);
+    for scope in persistent_scopes(library, &CodegenOptions::from(options)) {
+        for variable in &scope.variables {
+            if let Some(name) = variable.identifier.symbolic_id() {
+                keys.push(SidecarKey {
+                    scope: scope.scope.clone(),
+                    name: name.clone(),
+                });
             }
-            LibraryElementKind::GlobalVarDeclarations(variables) => {
-                push_var_keys(&Id::from(GLOBAL_SCOPE), variables, &mut keys);
-            }
-            LibraryElementKind::FunctionBlockDeclaration(fb) => {
-                // The same field population codegen records in the
-                // container's `fb_field_uids` table: VAR_INPUT, VAR_OUTPUT,
-                // VAR, in that order (order is normalized away by the final
-                // sort).
-                for var_type in [VariableType::Input, VariableType::Output, VariableType::Var] {
-                    for variable in fb.variables.iter().filter(|v| v.var_type == var_type) {
-                        push_var_key(&fb.name.name, variable, &mut keys);
-                    }
-                }
-            }
-            _ => {}
         }
     }
     keys.sort();
     keys.dedup();
     keys
-}
-
-fn push_var_keys(scope: &Id, variables: &[VarDecl], keys: &mut Vec<SidecarKey>) {
-    for variable in variables {
-        if variable.var_type == VariableType::External {
-            // VAR_EXTERNAL aliases the global declaration; the global is
-            // keyed, so the alias must not become a second key.
-            continue;
-        }
-        push_var_key(scope, variable, keys);
-    }
-}
-
-fn push_var_key(scope: &Id, variable: &VarDecl, keys: &mut Vec<SidecarKey>) {
-    if let Some(name) = variable.identifier.symbolic_id() {
-        keys.push(SidecarKey {
-            scope: scope.clone(),
-            name: name.clone(),
-        });
-    }
 }
 
 /// The two UID tables codegen consumes: persistent program/global
@@ -839,12 +811,94 @@ mod tests {
         )
         .unwrap();
 
-        let keys = declared_var_keys(&library);
+        let keys = declared_var_keys(&library, &CompilerOptions::default());
 
         // Sorted by scope then name; VAR_EXTERNAL is skipped.
         assert_eq!(
             keys,
             vec![key("global", "g"), key("main", "e"), key("main", "x")]
+        );
+    }
+
+    /// The keys of `source` under `options`.
+    fn keys_of(source: &str, options: &CompilerOptions) -> Vec<SidecarKey> {
+        let library = ironplc_sources::parse_source(
+            ironplc_sources::FileType::StructuredText,
+            source,
+            &FileId::from_string("main.st"),
+            options,
+        )
+        .unwrap();
+        declared_var_keys(&library, options)
+    }
+
+    #[test]
+    fn declared_var_keys_when_global_in_configuration_then_keyed_in_the_global_scope() {
+        // Code generation lays a `VAR_GLOBAL` of the configuration out with the
+        // other globals, and matches it by name: it is keyed like a top-level
+        // global, so that renaming the configuration does not change its key.
+        let keys = keys_of(
+            "CONFIGURATION plc \
+               VAR_GLOBAL g : DINT; END_VAR \
+               RESOURCE res ON PROCESSOR \
+                 TASK scan(PRIORITY := 1); \
+                 PROGRAM instance WITH scan : main; \
+               END_RESOURCE \
+             END_CONFIGURATION \
+             PROGRAM main VAR_EXTERNAL g : DINT; END_VAR VAR x : INT; END_VAR g := g + 1; END_PROGRAM",
+            &CompilerOptions::default(),
+        );
+
+        assert_eq!(keys, vec![key("global", "g"), key("main", "x")]);
+    }
+
+    #[test]
+    fn declared_var_keys_when_edge_input_then_hidden_variables_keyed_in_the_owner_scope() {
+        let keys = keys_of(
+            "FUNCTION_BLOCK counter \
+               VAR_INPUT up : BOOL R_EDGE; END_VAR \
+               VAR_OUTPUT q : DINT; END_VAR \
+               q := q + 1; \
+             END_FUNCTION_BLOCK \
+             PROGRAM main VAR_INPUT go : BOOL F_EDGE; END_VAR VAR c : counter; END_VAR c(up := go); END_PROGRAM",
+            &CompilerOptions::default(),
+        );
+
+        assert_eq!(
+            keys,
+            vec![
+                key("counter", "q"),
+                key("counter", "up"),
+                key("counter", "up$edge"),
+                key("counter", "up$prev"),
+                key("main", "c"),
+                key("main", "go"),
+                key("main", "go$edge"),
+                key("main", "go$prev"),
+            ]
+        );
+    }
+
+    #[test]
+    fn declared_var_keys_when_system_uptime_option_then_its_globals_keyed() {
+        let source = "PROGRAM main VAR x : INT; END_VAR x := 1; END_PROGRAM";
+        let without = keys_of(source, &CompilerOptions::default());
+        let with = keys_of(
+            source,
+            &CompilerOptions {
+                allow_system_uptime_global: true,
+                ..CompilerOptions::default()
+            },
+        );
+
+        assert_eq!(without, vec![key("main", "x")]);
+        assert_eq!(
+            with,
+            vec![
+                key("global", "__SYSTEM_UP_LTIME"),
+                key("global", "__SYSTEM_UP_TIME"),
+                key("main", "x"),
+            ]
         );
     }
 
@@ -864,7 +918,7 @@ mod tests {
         )
         .unwrap();
 
-        let keys = declared_var_keys(&library);
+        let keys = declared_var_keys(&library, &CompilerOptions::default());
 
         // FB fields are keyed by (FB type name, field); the instance `acc`
         // is a program variable like any other.

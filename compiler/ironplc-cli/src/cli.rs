@@ -186,7 +186,7 @@ pub fn sync_uids(
             return finish("Sync UIDs", diagnostics, Some(&project), suppress_output);
         }
     };
-    let report = sidecar.sync(&declared_var_keys(library));
+    let report = sidecar.sync(&declared_var_keys(library, &compiler_options));
     let has_candidates = !report.rename_candidates.is_empty() || !report.swap_candidates.is_empty();
     if !has_candidates {
         if let Err(err) = sidecar.save(&sidecar_path) {

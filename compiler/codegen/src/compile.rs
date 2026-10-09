@@ -56,7 +56,6 @@ pub(crate) use ironplc_container::{string_region_size, DEFAULT_STRING_MAX_LENGTH
 use ironplc_dsl::common::{
     FunctionBlockDeclaration, FunctionDeclaration, InitialValueAssignmentKind, Library,
     LibraryElementKind, ProgramDeclaration, StringType, StructureElementInit, VarDecl,
-    VariableType,
 };
 use ironplc_dsl::configuration::{
     ConfigurationDeclaration, ProgramConfiguration, TaskConfiguration,
@@ -67,7 +66,6 @@ use ironplc_dsl::stack::within_stack_budget;
 use ironplc_parser::options::{CompilerOptions, StringToNumFailure, StringToNumNonNumeric};
 use ironplc_problems::Problem;
 
-use ironplc_analyzer::system_globals::SYSTEM_UPTIME_GLOBALS;
 use ironplc_analyzer::{FunctionEnvironment, IntermediateType, SemanticContext, TypeEnvironment};
 
 use crate::emit::Emitter;
@@ -77,6 +75,7 @@ use super::compile_initial_value::emit_initial_values;
 use super::compile_setup::assign_variables;
 use super::compile_stmt::compile_body;
 use super::compile_var_table::slot_entry;
+use super::persistent::{compiled_configuration, global_declarations, program_declarations};
 
 /// The native operation width used for arithmetic and comparisons.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -298,30 +297,15 @@ fn compile_in_budget(
     sources: &dyn crate::source_lookup::SourceLookup,
 ) -> Result<Container, Diagnostic> {
     let program = find_program(library)?;
-    let config = find_configuration(library);
+    let config = compiled_configuration(library);
     if let Some(config) = config {
         check_single_program_instance(config)?;
     }
-    let user_globals: &[VarDecl] = config.map(|c| c.global_var.as_slice()).unwrap_or(&[]);
 
-    // Prepend system uptime globals when the feature is enabled.
-    let mut synthetic_globals: Vec<VarDecl> = Vec::new();
-    if options.system_uptime_global {
-        for global in &SYSTEM_UPTIME_GLOBALS {
-            synthetic_globals.push(
-                VarDecl::simple(global.name, global.type_name).with_type(VariableType::Global),
-            );
-        }
-    }
-
-    // Collect top-level VAR_GLOBAL declarations (outside CONFIGURATION blocks).
-    for element in &library.elements {
-        if let LibraryElementKind::GlobalVarDeclarations(decls) = element {
-            synthetic_globals.extend_from_slice(decls);
-        }
-    }
-
-    synthetic_globals.extend_from_slice(user_globals);
+    // The globals: the system uptime globals the options provide, the top-level
+    // VAR_GLOBAL declarations and those of the configuration. The engineering
+    // side keys the same list (`persistent`).
+    let synthetic_globals = global_declarations(library, options);
     let global_vars = &synthetic_globals;
 
     let reachable = context.reachable();
@@ -609,17 +593,6 @@ fn ordinal(position: usize) -> String {
         }
     };
     format!("{position}{suffix}")
-}
-
-/// Finds the first CONFIGURATION declaration in the library, if any.
-fn find_configuration(library: &Library) -> Option<&ConfigurationDeclaration> {
-    library.elements.iter().find_map(|e| {
-        if let LibraryElementKind::ConfigurationDeclaration(config) = e {
-            Some(config)
-        } else {
-            None
-        }
-    })
 }
 
 /// Idempotently registers a POU's source file with the debug section's
@@ -944,13 +917,7 @@ fn compile_program_with_functions(
 
     // Collect program-local variables, skipping VAR_EXTERNAL declarations
     // since they alias the corresponding global variables.
-    let local_vars: Vec<VarDecl> = program
-        .variables
-        .iter()
-        .filter(|v| v.var_type != VariableType::External)
-        .cloned()
-        .chain(crate::compile_edge::hidden_variables(&program.variables))
-        .collect();
+    let local_vars: Vec<VarDecl> = program_declarations(program);
     let edge_inputs = crate::compile_edge::edge_inputs(&program.variables);
 
     // Assign program-local variable indices (indices G..N).

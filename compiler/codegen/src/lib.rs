@@ -59,6 +59,7 @@ mod compile_var_table;
 mod data_region;
 mod emit;
 mod optimize;
+mod persistent;
 mod source_lookup;
 mod stack_balance;
 mod string_storage;
@@ -66,6 +67,10 @@ mod string_width;
 mod type_info;
 
 pub use compile::{compile, CodegenOptions, FbFieldUidKey, StringToNumPolicies};
+pub use persistent::{
+    function_block_declarations, global_declarations, persistent_scopes, program_declarations,
+    PersistentScope, GLOBAL_SCOPE,
+};
 pub use source_lookup::{EmptyLookup, SourceLookup};
 
 // Spec conformance testing infrastructure (test-only)
