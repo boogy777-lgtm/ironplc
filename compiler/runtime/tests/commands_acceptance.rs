@@ -253,7 +253,7 @@ END_PROGRAM
   Counter := Counter + 1;
 END_PROGRAM
 ",
-        &[("Counter", 1)],
+        &[("Counter", 1), ("Extra", 2)],
     );
     let response = run_line(&mut host, &accept);
     assert_eq!(response["response"], "ack");

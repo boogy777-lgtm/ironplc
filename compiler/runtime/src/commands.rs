@@ -330,7 +330,7 @@ impl From<OnlineChangeError> for CommandError {
             OnlineChangeError::LayoutIncompatible => problem_codes::LAYOUT_INCOMPATIBLE,
             OnlineChangeError::ScheduleIncompatible => problem_codes::SCHEDULE_INCOMPATIBLE,
             OnlineChangeError::IoIncompatible => problem_codes::IO_INCOMPATIBLE,
-            OnlineChangeError::MigrationUnsupported(_) => problem_codes::MIGRATION_UNSUPPORTED,
+            OnlineChangeError::MigrationUnsupported(ref cause) => cause.v_code(),
             OnlineChangeError::UntestUnsupported => problem_codes::UNTEST_UNSUPPORTED,
             OnlineChangeError::NoCandidateStaged => problem_codes::NO_CANDIDATE_STAGED,
             OnlineChangeError::CandidateAlreadyStaged => problem_codes::CANDIDATE_ALREADY_STAGED,
@@ -739,6 +739,12 @@ mod tests {
     #[case::migration(
         OnlineChangeError::MigrationUnsupported(MigrationError::FbLayoutUnsupported),
         "V4010"
+    )]
+    #[case::unidentified(
+        OnlineChangeError::MigrationUnsupported(MigrationError::UnidentifiedVariables {
+            variables: Vec::new()
+        }),
+        "V4020"
     )]
     #[case::untest(OnlineChangeError::UntestUnsupported, "V4011")]
     #[case::none_staged(OnlineChangeError::NoCandidateStaged, "V4012")]

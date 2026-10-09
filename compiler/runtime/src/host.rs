@@ -38,7 +38,7 @@
 use std::collections::BTreeMap;
 
 use ironplc_container::{Container, InstanceId, TaskId, VarIndex};
-use ironplc_vm::{FaultContext, Slot, Vm, VmBuffers};
+use ironplc_vm::{FaultContext, Vm, VmBuffers};
 
 use crate::error::{OnlineChangeError, RuntimeError};
 use crate::generation::{ApplicationGeneration, LogicGeneration};
@@ -420,21 +420,16 @@ impl RuntimeHost {
     /// Exports the persistent state as a typed snapshot (the HA
     /// redundancy architecture, "Minimal Seams" 3): the bulk read beside
     /// `data_region` and `read_variable`, in the carry-over vocabulary of
-    /// `swap_buffers` — the whole `vars` table and the whole data region,
-    /// stamped with the active artifact's layout identity.
+    /// `swap_buffers` — the persistent extent of the `vars` table and of the
+    /// data region (ADR-0073), stamped with the active artifact's layout
+    /// identity.
     pub fn state_snapshot(&self) -> StateSnapshot {
         let container = if self.active_is_candidate {
             self.candidate.as_ref().unwrap_or(&self.normal)
         } else {
             &self.normal
         };
-        StateSnapshot {
-            layout_hash: container.header.layout_hash,
-            num_variables: container.header.num_variables,
-            data_region_bytes: container.header.data_region_bytes,
-            vars: self.buffers.vars.iter().map(|slot| slot.as_u64()).collect(),
-            data_region: self.buffers.data_region.clone(),
-        }
+        StateSnapshot::of(container, &self.buffers)
     }
 
     /// Applies a replicated snapshot to this host while it drives no
@@ -486,8 +481,7 @@ impl RuntimeHost {
             &self.normal
         };
         if snapshot.layout_matches(active) {
-            Self::copy_persistent(snapshot, &mut self.buffers);
-            return Ok(());
+            return Self::copy_persistent(snapshot, active, &mut self.buffers);
         }
 
         if !self.active_is_candidate
@@ -505,7 +499,7 @@ impl RuntimeHost {
                 // (V4011); a retreat image names exactly that.
                 return Err(OnlineChangeError::UntestUnsupported);
             }
-            Self::copy_persistent(snapshot, &mut self.buffers);
+            Self::copy_persistent(snapshot, &self.normal, &mut self.buffers)?;
             self.active_is_candidate = false;
             return Ok(());
         }
@@ -555,14 +549,21 @@ impl RuntimeHost {
         self.apply_pending_swap(false)
     }
 
-    /// Overwrites both persistent regions of `buffers` with the
-    /// snapshot's bytes; the caller has already proven the layout
-    /// identity, so the lengths match by construction.
-    fn copy_persistent(snapshot: &StateSnapshot, buffers: &mut VmBuffers) {
-        for (slot, raw) in buffers.vars.iter_mut().zip(snapshot.vars.iter()) {
-            *slot = Slot::from_u64(*raw);
+    /// Overwrites the persistent extent of `buffers`, which `container`
+    /// laid out, with the bytes of the snapshot. The caller has already proven
+    /// the layout identity; the buffers may be larger than the image says (a
+    /// body that needs more working slots or working bytes than the one that
+    /// produced it), and the working part is left as it is.
+    fn copy_persistent(
+        snapshot: &StateSnapshot,
+        container: &Container,
+        buffers: &mut VmBuffers,
+    ) -> Result<(), OnlineChangeError> {
+        if snapshot.write_to(container, buffers) {
+            Ok(())
+        } else {
+            Err(OnlineChangeError::SnapshotCorrupt)
         }
-        buffers.data_region.copy_from_slice(&snapshot.data_region);
     }
 
     /// The replicated Test advance of a migration candidate: rebuild the
@@ -574,10 +575,10 @@ impl RuntimeHost {
     /// identical container initialized on the peer — means the replica
     /// is divergent, so it is refused as corrupt.
     fn apply_advance(&mut self, snapshot: &StateSnapshot) -> Result<(), OnlineChangeError> {
+        let Some(candidate) = self.candidate.as_ref() else {
+            return Err(OnlineChangeError::NoCandidateStaged);
+        };
         let mut advanced = {
-            let Some(candidate) = self.candidate.as_ref() else {
-                return Err(OnlineChangeError::NoCandidateStaged);
-            };
             let mut advanced = VmBuffers::from_container(candidate);
             Vm::new()
                 .load(candidate, &mut advanced)
@@ -586,7 +587,7 @@ impl RuntimeHost {
                 .map_err(|_| OnlineChangeError::SnapshotCorrupt)?;
             advanced
         };
-        Self::copy_persistent(snapshot, &mut advanced);
+        Self::copy_persistent(snapshot, candidate, &mut advanced)?;
         self.buffers = advanced;
         self.active_is_candidate = true;
         Ok(())

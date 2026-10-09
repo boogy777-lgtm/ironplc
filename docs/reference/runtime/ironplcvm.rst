@@ -94,7 +94,9 @@ Commands
    Responses are JSON: an acknowledgment, a status payload, or an error
    carrying a stable ``vCode`` and ``message``; a V4010 refusal additionally
    carries a ``pairs`` array naming every out-of-policy type change, so the
-   client can resubmit the payload with the decisions map. A line that does
+   client can resubmit the payload with the decisions map. A V4020 refusal
+   names the persistent variables that have no stable variable ID, which no
+   decision can replace. A line that does
    not parse as a command is answered with an error line whose ``vCode`` is
    null — codec errors carry no V-code. A ``testEdits``, ``untestEdits`` or
    ``assembleEdits`` acknowledgment records a swap that applies at the next

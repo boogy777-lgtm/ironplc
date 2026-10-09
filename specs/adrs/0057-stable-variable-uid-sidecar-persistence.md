@@ -114,3 +114,16 @@ ADR-0054's no-guessing rule on the engineering side.
   `compiler/project/src/project.rs` — auto-load; `compiler/ironplc-cli/src/cli.rs` —
   the `refactor sync-uids`/`map-uid` commands;
   `integrations/vscode/src/syncUidsLogic.ts` — the IDE resolution flow.
+
+### Postscript, 2026-10-09
+
+The population of the sidecar was stated as program variables and top-level
+`VAR_GLOBAL` declarations, and the scope `global` as that of a top-level
+declaration. Code generation also lays out the `VAR_GLOBAL` declarations of a
+`CONFIGURATION`, the system uptime globals, and the hidden variables of an edge
+input, and none of them could get an ID. The sidecar now keys exactly the
+persistent declarations that code generation lays out, from the one list both
+read ([ADR-0074](0074-a-migration-needs-a-stable-id-for-every-persistent-variable.md)).
+The scope `global` is the scope of every global wherever its block is declared,
+because code generation matches globals by name and lays them out in one prefix.
+The format, the allocation and the rest of the decision are unchanged.

@@ -12,6 +12,7 @@ use crate::debug_section::{
 };
 use crate::header::FileHeader;
 use crate::id_types::{FunctionId, InstanceId, TaskId, VarIndex};
+use crate::persistent_extent::PersistentExtent;
 use crate::task_table::{ProgramInstanceEntry, TaskEntry, TaskTable};
 use crate::task_type::TaskType;
 use crate::type_section::{
@@ -46,6 +47,7 @@ pub struct ContainerBuilder {
     variable_table: Vec<VarEntry>,
     stable_vars: Vec<StableVarEntry>,
     fb_field_uids: Vec<FbFieldUidEntry>,
+    persistent_extents: Vec<PersistentExtent>,
     debug_var_names: Vec<VarNameEntry>,
     debug_func_names: Vec<FuncNameEntry>,
     debug_line_map: Vec<LineMapEntry>,
@@ -78,6 +80,7 @@ impl ContainerBuilder {
             variable_table: Vec::new(),
             stable_vars: Vec::new(),
             fb_field_uids: Vec::new(),
+            persistent_extents: Vec::new(),
             debug_var_names: Vec::new(),
             debug_func_names: Vec::new(),
             debug_line_map: Vec::new(),
@@ -292,6 +295,16 @@ impl ContainerBuilder {
         self
     }
 
+    /// Declares the persistent extent of one program instance: the runs of
+    /// the variable table and of the data region that hold state. A builder
+    /// that declares no row builds a container whose persistent extent is the
+    /// whole table and the whole data region (see
+    /// [`Container::persistent_extents`]).
+    pub fn add_persistent_extent(mut self, row: PersistentExtent) -> Self {
+        self.persistent_extents.push(row);
+        self
+    }
+
     /// Adds a variable table entry to the type section. Entries are stored
     /// in call order, which is the variable index order.
     pub fn add_var_entry(mut self, entry: VarEntry) -> Self {
@@ -397,6 +410,7 @@ impl ContainerBuilder {
             || !self.variable_table.is_empty()
             || !self.stable_vars.is_empty()
             || !self.fb_field_uids.is_empty()
+            || !self.persistent_extents.is_empty()
         {
             Some(TypeSection {
                 fb_types: self.fb_types,
@@ -405,6 +419,7 @@ impl ContainerBuilder {
                 variable_table: self.variable_table,
                 stable_vars: self.stable_vars,
                 fb_field_uids: self.fb_field_uids,
+                persistent_extents: self.persistent_extents,
             })
         } else {
             None

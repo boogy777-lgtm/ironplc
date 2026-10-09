@@ -25,55 +25,13 @@ pub struct Container {
 }
 
 impl Container {
-    /// Computes the layout hash for online change: BLAKE3 over the variable
-    /// table, FB type descriptors and array descriptors, as defined by the
-    /// Layout Hash and Online Change formula
-    /// (`specs/design/bytecode-container-format.md`). Code, constants and
-    /// debug info are excluded, so a logic-only edit yields the same hash
-    /// and can be swapped in without restarting.
-    ///
-    /// [`write_to`](Self::write_to) stores this value in
-    /// `header.layout_hash`, along with `content_hash` and `debug_hash`;
-    /// the in-memory header keeps zeros until serialized (ADR-0052's hash
-    /// contract).
-    pub fn compute_layout_hash(&self) -> [u8; 32] {
-        let mut hasher = blake3::Hasher::new();
-        hasher.update(&self.header.num_variables.to_le_bytes());
-
-        let empty_type_section = TypeSection::default();
-        let type_section = self.type_section.as_ref().unwrap_or(&empty_type_section);
-
-        for entry in &type_section.variable_table {
-            hasher.update(&[entry.var_type as u8, entry.flags]);
-            hasher.update(&entry.extra.to_le_bytes());
-        }
-
-        hasher.update(&(type_section.fb_types.len() as u16).to_le_bytes());
-        for desc in &type_section.fb_types {
-            hasher.update(&[desc.fields.len() as u8]);
-            for field in &desc.fields {
-                hasher.update(&[field.field_type as u8]);
-                hasher.update(&field.field_extra.to_le_bytes());
-            }
-        }
-
-        hasher.update(&(type_section.array_descriptors.len() as u16).to_le_bytes());
-        for desc in &type_section.array_descriptors {
-            hasher.update(&[desc.element_type]);
-            hasher.update(&desc.total_elements.to_le_bytes());
-            hasher.update(&desc.element_extra.to_le_bytes());
-        }
-
-        *hasher.finalize().as_bytes()
-    }
-
     /// Writes the container to the given writer.
     ///
     /// Each section is serialized to a buffer first, so the header is
     /// derived from the bytes that actually reach the file — the section
     /// directory from their lengths, `content_hash` and `debug_hash` from
     /// their contents, and `layout_hash` (see [`compute_layout_hash`](Self::compute_layout_hash))
-    /// from the type section — before anything is written. Whatever
+    /// from the persistent part of the type section — before anything is written. Whatever
     /// `self.header` carries in those fields is replaced.
     pub fn write_to(&self, w: &mut impl Write) -> Result<(), ContainerError> {
         let task_bytes = serialize(|buf| self.task_table.write_to(buf))?;
@@ -670,12 +628,17 @@ mod tests {
     }
 
     #[test]
-    fn compute_layout_hash_when_array_descriptor_changes_then_differs() {
-        let first = layout_hash_container();
-        let mut second = layout_hash_container();
-        second.type_section.as_mut().unwrap().array_descriptors[0].total_elements = 5;
+    fn container_read_from_when_version_7_file_then_unsupported_version() {
+        // A container of the previous format version is refused when its
+        // header is read; it is never read with the old meaning of the layout
+        // hash or without the persistent extent.
+        let mut buf = Vec::new();
+        layout_hash_container().write_to(&mut buf).unwrap();
+        let version_7 = with_tampered_header(&buf, |h| h.format_version = 7);
 
-        assert_ne!(first.compute_layout_hash(), second.compute_layout_hash());
+        let result = Container::read_from(&mut Cursor::new(&version_7));
+
+        assert!(matches!(result, Err(ContainerError::UnsupportedVersion)));
     }
 
     #[test]

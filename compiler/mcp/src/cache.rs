@@ -31,6 +31,11 @@ pub struct CachedContainer {
     /// Empty when the analyzer didn't emit enough info (e.g. no programs
     /// declared); the `run` tool surfaces that as a diagnostic.
     pub symbols: VariableSymbolMap,
+    /// How the project's stable variable IDs differ from its declared persistent
+    /// variables, rendered for the engineer (ADR-0074); `None` when they agree
+    /// or the project has no IDs. A sender of a candidate for online change
+    /// reads it and does not send while it is set.
+    pub ids_out_of_sync: Option<String>,
     /// Cached byte size (equal to `iplc_bytes.len()`).
     byte_size: usize,
 }
@@ -49,6 +54,7 @@ impl CachedContainer {
             tasks,
             programs,
             symbols,
+            ids_out_of_sync: None,
             byte_size,
         }
     }

@@ -26,7 +26,7 @@
 use std::collections::HashMap;
 
 use ironplc_analyzer::TypeEnvironment;
-use ironplc_container::CharWidth;
+use ironplc_container::{CharWidth, FbTypeDescriptor, FbTypeId, FieldEntry, VarEntry};
 use ironplc_dsl::common::{
     FunctionBlockDeclaration, InitialValueAssignmentKind, VarDecl, VariableType,
 };
@@ -34,7 +34,7 @@ use ironplc_dsl::core::{Id, Located};
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
 
 use super::compile::{
-    char_width_for_string_type, string_region_size, CompileContext, StringVarInfo,
+    char_width_for_string_type, string_region_size, CompileContext, StringVarInfo, UserFbTypeInfo,
 };
 use super::compile_edge::hidden_variables;
 use super::compile_initial_value::{emit_declaration_initial_value, Start};
@@ -141,6 +141,49 @@ pub(crate) fn layout_instance(fields: &[&VarDecl]) -> Result<FbLayout, Diagnosti
         storage,
         instance_bytes,
     })
+}
+
+/// The function block type table of the container: the field layout of every
+/// user function block, in ascending type ID order.
+///
+/// The fields of a type are the slots its body works in, which the variable
+/// table already describes (the slots from `var_offset`, one per field, in
+/// the order the VM copies them in and out). The type table states the same
+/// fields once, by type, so that the readers of the layout (the layout hash,
+/// the load check, the migration planner) read a field layout from the type
+/// and never from the position of the body's slots in the variable table.
+///
+/// A field of an array or structure kind has no entry here, because the type
+/// table carries no flag to say so; a field that the variable table records as
+/// one is an internal error, not a silently altered layout.
+pub(crate) fn type_descriptors(
+    user_fb_types: &HashMap<String, UserFbTypeInfo>,
+    variable_table: &[VarEntry],
+) -> Result<Vec<FbTypeDescriptor>, Diagnostic> {
+    let mut descriptors = Vec::with_capacity(user_fb_types.len());
+    for info in user_fb_types.values() {
+        let first = usize::from(info.var_offset);
+        let slots = variable_table
+            .get(first..first + info.num_fields)
+            .ok_or_else(Diagnostic::internal_error)?;
+        let fields = slots
+            .iter()
+            .map(|slot| {
+                (slot.flags == 0)
+                    .then_some(FieldEntry {
+                        field_type: slot.var_type,
+                        field_extra: slot.extra,
+                    })
+                    .ok_or_else(Diagnostic::internal_error)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        descriptors.push(FbTypeDescriptor {
+            type_id: FbTypeId::new(info.type_id),
+            fields,
+        });
+    }
+    descriptors.sort_by_key(|descriptor| descriptor.type_id.raw());
+    Ok(descriptors)
 }
 
 /// Emits the setup of the storage of the instance `instance`: each field's

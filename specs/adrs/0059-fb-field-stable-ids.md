@@ -130,3 +130,13 @@ level inward. `FORMAT_VERSION` bumps to 6.
   `compiler/codegen/src/compile_var_table.rs`; the planner in
   `compiler/runtime/src/migration.rs`; acceptance tests in
   `compiler/runtime/tests/migration_acceptance.rs`.
+
+### Postscript, 2026-10-09
+
+The fail-closed rule for a field without a UID, which the planner applied only
+when the layout of the type changed, is now the identity rule of
+[ADR-0074](0074-a-migration-needs-a-stable-id-for-every-persistent-variable.md):
+every field of every user function block type needs a UID in both containers,
+or the candidate is refused with the field named. The check in the function
+block planner remains as a guard. The sidecar also keys the hidden fields that
+an edge input adds to a block.

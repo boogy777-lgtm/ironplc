@@ -1,24 +1,25 @@
 # Design: State Layout and Body Edits
 
-status: proposed
+status: partially implemented
 date: 2026-10-08
 
 ## Overview
 
 An edit of the body of a program must be an ordinary online change: accepted,
-testable, revertible, with every value kept. Today the first call of a user
-function, and the removal of the last call, is refused. This note states why,
-what the options are, and which one is recommended.
+testable, revertible, with every value kept. Before the change the first call
+of a user function, and the removal of the last call, was refused. This note
+states why, what the options were, and which one was chosen.
 
-**The decision is the owner's and is not made.** This note is the research the
-decision is made from. An agent read the code path of an online change end to
-end, the decompiled CODESYS compiler, and the design documents; nothing was
-built or run for it. The three comparisons of "Why a first call is refused",
-the swap of "What the swap does", and the absence of `add_fb_type` in code
-generation were read a second time by the coordinator. Every other line number
-is as the research reported it. Paths are under `compiler/`.
+**The owner decided option O1** (see [Options](#options)), recorded in
+[ADR-0073](../adrs/0073-state-layout-is-the-persistent-part.md). This note is
+the research the decision was made from, followed by what was implemented and
+what was found ([What Was Implemented](#what-was-implemented)). An agent read
+the code path of an online change end to end, the decompiled CODESYS compiler,
+and the design documents; nothing was built or run for it. The sections up to
+[Recommendation](#recommendation) describe the code before the change, with the
+line numbers of that time. Paths are under `compiler/`.
 
-## What Happens Today
+## What Happened Before the Change
 
 ### The path of an online change
 
@@ -161,6 +162,9 @@ analysis is also partitioned by storage class, as CODESYS partitions it.
 
 ## Before Implementation
 
+These were the open items when the decision was made. Each is answered in
+[What Was Implemented](#what-was-implemented).
+
 1. The data region has no persistent extent, only a total size. Define it.
 2. The fields of a function block are covered by the hash only through the
    working slots. Move them to the function block type table, and have the
@@ -181,11 +185,82 @@ analysis is also partitioned by storage class, as CODESYS partitions it.
 
 Items 5 and 6 were found beside the question and are defects on their own.
 
+## What Was Implemented
+
+Option O1, on format version 8. The VM did not change.
+
+1. **The persistent extent is data of the container.** The type section has a
+   seventh sub-table, one row per program instance, with a run of the variable
+   table and a run of the data region
+   ([Persistent Extent](bytecode-container-format.md#persistent-extent)). Code
+   generation writes the row at the one point where it has assigned the last
+   persistent variable; `Container::persistent_extents` is the one accessor.
+   A container that declares no row has the whole tables as its extent. A
+   second program instance is one more row; the readers assume no count, and
+   code generation still takes one program.
+2. **The function block type table is filled.** Code generation writes one
+   descriptor per user function block, from the variable table entries of the
+   block's field slots. The hash, the load check and the migration planner read
+   the fields there; the planner no longer reads the position of the working
+   slots as identity. It reads that position only for a debug name in a
+   decision prompt.
+3. **The hash and the gates.** The layout hash covers the extent, the variables
+   in it, the arrays they name (by content, including the element stride) and
+   the function block type table
+   ([Layout Hash and Online Change](bytecode-container-format.md#layout-hash-and-online-change)).
+   The host compares the hash and the extent. The count of variables in the
+   header and the variable count of the program entry are no longer compared.
+   The swap carries the extent and starts the working part fresh. The
+   redundancy snapshot carries the extent only.
+4. **The order channel.** A guard row for a body that starts to call a function
+   declared before it found one: the type ID of a function block was its
+   position in the container, which comes from the dependency sort, and the new
+   edge moved two other blocks and swapped their IDs. The type ID is now the
+   rank of the block's name among the compiled blocks. The IDs of functions are
+   positions still, and no hash reads them.
+5. **The guard.** One table of edit classes,
+   `ironplc_test::edit_classes`, drives the layout guard of code generation and
+   the swap guard of the runtime, with and without stable variable IDs.
+6. **The document of the format** is true to the code (item 7 above): the
+   version, the hash formula including the element stride, and the order rules.
+
+Item 4 of the list above (more than one program) is not implemented: only the
+shape that makes it one more row. Item 5 (a variable without an ID returned to its
+initial value in a migration) was decided afterwards: the planner refuses a
+candidate in which a persistent variable of either container has no ID, and the
+refusal names it (V4020, [ADR-0074](../adrs/0074-a-migration-needs-a-stable-id-for-every-persistent-variable.md)).
+The rows of the table of edit classes that carry partial IDs say so as data.
+
+## What Was Found
+
+- A replicated untest could panic. `copy_persistent` copied the data region
+  with `copy_from_slice`; a standby that held buffers a candidate had sized
+  larger than the reverting primary's image panicked. The image now carries the
+  persistent runs and applies to the same runs of any buffers.
+- The crossload codec dropped every snapshot with a data region of eight bytes
+  or more, because it split the payload with `as_chunks::<8>()` and took the
+  remainder as the data region. A program with a STRING variable could not
+  replicate its state. Fixed.
+- The hash did not cover `element_stride`, which the format document said it
+  did. A change of a structure that moves the strided STRING fields of an array
+  of structures changed the data layout and not the hash. It is covered now.
+- The user function block descriptors were written from a hash map, in an order
+  that is not stable between compilations. They are not part of the hash and
+  the planner no longer compares them; the order was left as it is.
+- The format document gave the version as 6 and ordered by sorted name; the
+  code was at 7 and ordered by declaration and dependency. Both are corrected.
+
 ## Guard
 
-The table of body edits in `codegen/tests/it/layout_hash.rs` and
-`runtime/tests/body_edit_swap.rs` holds the rows that are true today. The rows
-"first call of a user function" and "last call removed", in a program and in a
-function block body, and the dependency order row join it with the
-implementation. The declaration rows stay and gain "a field of a function
-block is retyped", which O1 must still refuse.
+`ironplc_test::edit_classes` holds the rows. `codegen/tests/it/layout_hash.rs`
+asserts for each row that the state layout is unchanged or changed as the row
+says; `runtime/tests/body_edit_swap.rs` asserts that a host swaps and
+reverts an unchanged layout as an ordinary online change, keeps the observed
+persistent values and runs the edited code, and that it refuses a changed
+layout without stable variable IDs and as the row says with them. The rows are
+the ones that were true before (logic, constant inference, string temporaries
+and call chains), the first call and the last call of a user function in a
+program body and in a function block body, a function nothing calls, a body that
+adds a dependency, and the declaration rows: a variable added, removed or
+retyped, an array bound, a function block field added, and a function block
+field retyped.

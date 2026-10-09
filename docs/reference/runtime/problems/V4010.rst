@@ -10,7 +10,7 @@ and the running application both carry stable variable IDs, but at least one
 ID that exists on both sides is bound to an entry the planner cannot migrate:
 a changed variable type outside the conversion policy, a changed array
 descriptor, a current string value that no longer fits the candidate's
-maximum length, a changed function-block tail layout, or a migration decision
+maximum length, a changed function-block field layout, or a migration decision
 that names nothing or asks to preserve a size-mismatched pair.
 
 For an out-of-policy type change the refusal is decidable per entity: the
@@ -46,4 +46,5 @@ string maximum that shrinks below the current value, a changed array
 descriptor, or an FB field layout change) does not. Split the edit so the
 incompatible declaration changes are applied as a cold start, or adjust the
 candidate so every shared ID keeps its entry. See :doc:`V4007` when the
-candidate lacks the stable IDs a migration needs.
+candidate lacks the stable IDs a migration needs, and :doc:`V4020` when a
+persistent variable has no ID.

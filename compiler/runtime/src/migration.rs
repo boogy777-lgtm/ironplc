@@ -34,28 +34,30 @@
 //!
 //! ## Function-block instances (ADR 0059)
 //!
-//! An FB instance's slot holds the offset of its field region, and the field
-//! values themselves are addressed through the type section's user FB
-//! descriptors. The type section's FB field UID table gives each field of a
+//! An FB instance's slot holds the offset of its field region, and the fields
+//! of its type are listed by the type section's FB type descriptor (ADR-0073);
+//! where the block's body keeps its working slots is not part of that layout.
+//! The type section's FB field UID table gives each field of a
 //! user-defined FB type a stable UID, so the planner no longer needs the
 //! stage-2 POC's global "identical tail layout" rule (ADR 0054) for
 //! user-defined instances. For every shared-UID instance of a user FB type
-//! (a descriptor exists on both sides):
+//! (a type descriptor exists on both sides):
 //!
 //! | Layout | Action |
 //! |---|---|
-//! | Descriptors identical | Copy the slot and the whole field region (`num_fields * 8` bytes) |
-//! | Descriptors differ | Match fields by UID; copy each shared-UID field's 8-byte slot, initialise candidate-only UIDs, drop base-only UIDs |
+//! | Field lists identical | Copy the slot and the whole field region (one 8-byte slot per field) |
+//! | Field lists differ | Match fields by UID; copy each shared-UID field's 8-byte slot, initialise candidate-only UIDs, drop base-only UIDs |
 //!
 //! An instance with a STRING or WSTRING field is migrated by neither path: the
 //! field's slot holds the offset of the string inside the instance, which
 //! belongs to one container's layout, so the planner fails closed with
 //! [`MigrationError::FbLayoutUnsupported`].
 //!
-//! A candidate field whose UID is unknown (no entry, or the reserved UID 0)
-//! while the layout differs rejects the whole candidate with
-//! [`MigrationError::FbLayoutUnsupported`] — the value's identity is
-//! unprovable, so the planner fails closed rather than guess. Standard-
+//! A field whose UID is unknown (no entry, or the reserved UID 0) never reaches
+//! these rows: the identity rule ([`identity`], ADR-0074) refuses the candidate
+//! first and names the field. The branch of the planner that meets a field
+//! without a UID remains as a guard that fails closed with
+//! [`MigrationError::FbLayoutUnsupported`]. Standard-
 //! library FB instances (TON, ...), which have no user FB descriptor, keep
 //! the stage-2 rule: when any unhandled instance exists on either side, the
 //! layout after the program prefix (program prefix size, user FB descriptors,
@@ -85,6 +87,15 @@
 //! maximum length or an FB type ID) keep the stage-2 rejection. FB instance
 //! *fields* follow the same path via their field UIDs (ADR 0059).
 //!
+//! ## Persistent variables without an ID (ADR-0074)
+//!
+//! Before any of the above, [`identity`] refuses a pair of containers in which a
+//! persistent variable carries no stable ID: a global, a program variable, a
+//! system or hidden slot, or a field of a function block type. The rows above
+//! then never meet a variable they cannot place, and a value is never returned
+//! to its initial value without the candidate being refused and the variable
+//! named.
+//!
 //! ## Applying a plan
 //!
 //! [`StateMigrationPlan::apply`] copies from the active [`VmBuffers`] into a
@@ -103,6 +114,7 @@ use ironplc_container::{
 use ironplc_vm::{Slot, VmBuffers};
 
 use crate::conversion::{type_name, ValueConversion};
+use crate::problem_codes;
 
 /// Byte offset of the `cur_length` field of a data-region string header.
 ///
@@ -213,6 +225,33 @@ pub enum MigrationError {
     RegionOutOfRange { index: VarIndex },
     /// Two stable variable ID entries share one UID.
     DuplicateUid { uid: u64 },
+    /// Persistent variables of the active application or of the candidate
+    /// carry no stable ID, so a migration would return their values to the
+    /// initial value without saying so (ADR-0074). Carries every one.
+    UnidentifiedVariables {
+        variables: Vec<UnidentifiedVariable>,
+    },
+}
+
+impl MigrationError {
+    /// The stable V-code of the refusal this cause makes of a candidate. Every
+    /// cause names its code here, so a new cause cannot reach a client under the
+    /// code of another.
+    pub fn v_code(&self) -> &'static str {
+        match self {
+            MigrationError::UnidentifiedVariables { .. } => problem_codes::STABLE_ID_MISSING,
+            MigrationError::IncompatibleEntry { .. }
+            | MigrationError::TypeChangeUnsupported { .. }
+            | MigrationError::PreserveSizeMismatch { .. }
+            | MigrationError::UnknownDecisionUid { .. }
+            | MigrationError::StringShrink { .. }
+            | MigrationError::ArrayDescriptorMismatch { .. }
+            | MigrationError::FbLayoutUnsupported
+            | MigrationError::IndexOutOfRange { .. }
+            | MigrationError::RegionOutOfRange { .. }
+            | MigrationError::DuplicateUid { .. } => problem_codes::MIGRATION_UNSUPPORTED,
+        }
+    }
 }
 
 impl fmt::Display for MigrationError {
@@ -269,6 +308,24 @@ impl fmt::Display for MigrationError {
             MigrationError::DuplicateUid { uid } => {
                 write!(f, "stable variable uid {uid} is bound more than once")
             }
+            MigrationError::UnidentifiedVariables { variables } => {
+                write!(f, "persistent variables without a stable ID:")?;
+                let mut separator = " ";
+                for side in [IdentitySide::Active, IdentitySide::Candidate] {
+                    let mut named = variables.iter().filter(|variable| variable.side == side);
+                    let Some(first) = named.next() else { continue };
+                    let label = match side {
+                        IdentitySide::Active => "active application",
+                        IdentitySide::Candidate => "candidate",
+                    };
+                    write!(f, "{separator}{label}: {first}")?;
+                    for variable in named {
+                        write!(f, ", {variable}")?;
+                    }
+                    separator = "; ";
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -311,6 +368,10 @@ impl StateMigrationPlan {
         candidate: &Container,
         decisions: &BTreeMap<u64, MigrationDecision>,
     ) -> Result<Self, MigrationError> {
+        // The rule comes first: no plan is built, and no decision is read, for
+        // a candidate that would lose a value without saying so (ADR-0074).
+        identity::require_identified(base, candidate)?;
+
         let base_section = base.type_section.as_ref();
         let candidate_section = candidate.type_section.as_ref();
 
@@ -809,8 +870,10 @@ fn string_current_length(region: &[u8]) -> u16 {
 
 mod decision;
 mod fb;
+mod identity;
 
 pub use decision::{MigrationDecision, TypeChangePair};
+pub use identity::{IdentitySide, IdentitySubject, UnidentifiedVariable};
 
 #[cfg(test)]
 mod tests;

@@ -16,7 +16,7 @@
 
 mod common;
 
-use common::{compile_codesys_with_ids, variable_index};
+use common::{compile_codesys_with_uid_keys, variable_index};
 use ironplc_runtime::{MigrationError, OnlineChangeError, RuntimeHost};
 
 fn program(total_type: &str, extra: &str) -> String {
@@ -44,11 +44,27 @@ END_PROGRAM
     )
 }
 
-const IDS: &[(&str, u64)] = &[("accs", 1), ("seen", 2)];
+/// The IDs of every persistent variable of the program and of the fields of the
+/// block (ADR-0074).
+const IDS: &[(&str, &str, u64)] = &[
+    ("main", "accs", 1),
+    ("main", "seen", 2),
+    ("Accumulator", "step", 101),
+    ("Accumulator", "total", 102),
+];
+
+/// [`IDS`] and the one for `added`.
+const IDS_WITH_ADDED: &[(&str, &str, u64)] = &[
+    ("main", "accs", 1),
+    ("main", "seen", 2),
+    ("main", "added", 3),
+    ("Accumulator", "step", 101),
+    ("Accumulator", "total", 102),
+];
 
 #[test]
 fn run_when_unrelated_variable_added_then_every_instance_keeps_its_state() {
-    let base = compile_codesys_with_ids(&program("DINT", ""), IDS);
+    let base = compile_codesys_with_uid_keys(&program("DINT", ""), IDS);
     let mut host = RuntimeHost::new(base.clone()).unwrap();
     host.permit_execution();
     host.run(3, || 0).unwrap();
@@ -57,7 +73,8 @@ fn run_when_unrelated_variable_added_then_every_instance_keeps_its_state() {
         30
     );
 
-    let candidate = compile_codesys_with_ids(&program("DINT", "    added : DINT;\n"), IDS);
+    let candidate =
+        compile_codesys_with_uid_keys(&program("DINT", "    added : DINT;\n"), IDS_WITH_ADDED);
     let seen = variable_index(&candidate, "seen");
 
     host.stage(candidate).unwrap();
@@ -72,7 +89,7 @@ fn run_when_unrelated_variable_added_then_every_instance_keeps_its_state() {
 #[test]
 fn stage_when_block_field_changes_type_at_same_size_then_fb_layout_unsupported_and_application_runs(
 ) {
-    let base = compile_codesys_with_ids(&program("DINT", ""), IDS);
+    let base = compile_codesys_with_uid_keys(&program("DINT", ""), IDS);
     let seen = variable_index(&base, "seen");
     let mut host = RuntimeHost::new(base).unwrap();
     host.permit_execution();
@@ -80,7 +97,7 @@ fn stage_when_block_field_changes_type_at_same_size_then_fb_layout_unsupported_a
 
     // DINT to LINT keeps the number of slots, so only the field entries say
     // that the instances' slots no longer hold the same values.
-    let candidate = compile_codesys_with_ids(&program("LINT", ""), IDS);
+    let candidate = compile_codesys_with_uid_keys(&program("LINT", ""), IDS);
 
     let result = host.stage(candidate);
 

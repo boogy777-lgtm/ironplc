@@ -8,14 +8,16 @@ pub const MAGIC: u32 = 0x49504C43;
 
 /// Current container format version.
 /// v4 added the variable table, v5 the stable variable IDs, v6 the FB field
-/// UIDs, and v7 the explicit element stride in array descriptors.
+/// UIDs, v7 the explicit element stride in array descriptors, and v8 the
+/// persistent extent rows in the type section and a layout hash over the
+/// persistent part only (ADR-0073).
 ///
 /// The version is the reader's gate, so a merge that lands two incompatible
 /// changes at once (here: the fork's v4-v6 subtables and upstream's v4
 /// element stride) must bump once more, to a number neither side shipped —
 /// readers of either ancestor release must reject the merged format rather
 /// than misparse it.
-pub const FORMAT_VERSION: u16 = 7;
+pub const FORMAT_VERSION: u16 = 8;
 
 /// Flag bit: container expects __SYSTEM_UP_TIME at VarIndex(0) and
 /// __SYSTEM_UP_LTIME at VarIndex(1), written by the VM before each scan.

@@ -19,16 +19,19 @@ use crate::error::OnlineChangeError;
 
 /// Validates a candidate against the active container for online change.
 ///
-/// The candidate may change code and grow the data region, but it must keep
-/// the active application's state layout: the layout hash (variable table,
-/// FB descriptors, array descriptors), the variable count, the header flags,
-/// the process-image sizes, and the task table.
+/// The candidate may change code, grow the data region and add or remove the
+/// working slots of functions, but it must keep the active application's
+/// state layout (ADR-0073): the layout hash and the persistent extent, which
+/// is the part of the variable table and of the data region that holds state;
+/// and the header flags, the process-image sizes, and the task table. The
+/// count of variables of the whole table is not compared: it moves with the
+/// first call of a user function.
 pub(crate) fn validate_candidate(
     active: &Container,
     candidate: &Container,
 ) -> Result<(), OnlineChangeError> {
     if active.header.layout_hash != candidate.header.layout_hash
-        || active.header.num_variables != candidate.header.num_variables
+        || active.persistent_extents() != candidate.persistent_extents()
         || active.header.flags != candidate.header.flags
     {
         return Err(OnlineChangeError::LayoutIncompatible);
@@ -54,6 +57,11 @@ pub(crate) fn validate_candidate(
 /// `PartialEq`, and the comparison must cover every field so that a
 /// schedule change can never slip through as an equal hash: the layout hash
 /// deliberately excludes the task table, so this is the only schedule check.
+///
+/// The variable count of a program entry (`var_table_count`) is not
+/// compared. It is the access scope of the instance over the whole table,
+/// working slots included, and the state layout lives in the persistent
+/// extent that [`validate_candidate`] compares.
 pub(crate) fn task_table_matches(a: &TaskTable, b: &TaskTable) -> bool {
     a.shared_globals_size == b.shared_globals_size
         && a.tasks.len() == b.tasks.len()
@@ -150,7 +158,6 @@ fn program_entry_matches(a: &ProgramInstanceEntry, b: &ProgramInstanceEntry) -> 
         && a.task_id == b.task_id
         && a.entry_function_id == b.entry_function_id
         && a.var_table_offset == b.var_table_offset
-        && a.var_table_count == b.var_table_count
         && a.fb_instance_offset == b.fb_instance_offset
         && a.fb_instance_count == b.fb_instance_count
         && a.init_function_id == b.init_function_id
@@ -159,20 +166,18 @@ fn program_entry_matches(a: &ProgramInstanceEntry, b: &ProgramInstanceEntry) -> 
 /// Rebuilds `buffers` for `next` and carries the persistent state over.
 ///
 /// Sized buffers (`vars`, `data_region`) come from `next`, so a candidate
-/// that grows the data region is accommodated here, outside the scan. The
-/// persistent prefix of `vars` and `data_region` is copied byte-for-byte
-/// into the rebuilt buffers; transient buffers (stack, temp buffer, frames,
-/// ready list) are left at their fresh values because nothing in them
-/// outlives a scan boundary. `Vm::load` then re-arms the scheduler state
-/// from `next` (see the module comment).
+/// that grows the data region or the working slots is accommodated here,
+/// outside the scan. The persistent extent of `vars` and `data_region` (the
+/// same in the active container and in `next`, by [`validate_candidate`]) is
+/// copied byte-for-byte into the rebuilt buffers; everything else starts
+/// fresh: the working slots and working bytes (a function sets its locals at
+/// every call) and the transient buffers (stack, temp buffer, frames, ready
+/// list), because nothing in them outlives a scan boundary. `Vm::load` then
+/// re-arms the scheduler state from `next` (see the module comment).
 pub(crate) fn swap_buffers(next: &Container, buffers: &mut VmBuffers, rounds: u64) {
     let mut rebuilt = VmBuffers::from_container(next);
 
-    let var_count = rebuilt.vars.len().min(buffers.vars.len());
-    rebuilt.vars[..var_count].copy_from_slice(&buffers.vars[..var_count]);
-
-    let data_len = rebuilt.data_region.len().min(buffers.data_region.len());
-    rebuilt.data_region[..data_len].copy_from_slice(&buffers.data_region[..data_len]);
+    crate::persistent_state::carry(next, buffers, &mut rebuilt);
 
     *buffers = rebuilt;
 
@@ -234,9 +239,19 @@ mod tests {
     #[test]
     fn task_table_matches_when_program_field_differs_then_false() {
         let mut changed = task_table();
-        changed.programs[0].var_table_count = 3;
+        changed.programs[0].fb_instance_count = 1;
 
         assert!(!task_table_matches(&task_table(), &changed));
+    }
+
+    #[test]
+    fn task_table_matches_when_only_the_whole_table_count_differs_then_true() {
+        // The first call of a user function adds working slots to the table;
+        // the state layout is judged by the persistent extent.
+        let mut changed = task_table();
+        changed.programs[0].var_table_count = 5;
+
+        assert!(task_table_matches(&task_table(), &changed));
     }
 
     #[test]

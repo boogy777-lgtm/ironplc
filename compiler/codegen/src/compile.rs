@@ -46,8 +46,8 @@ use ironplc_container::debug_section::{
     EnumDefEntry, FuncNameEntry, StringLayoutEntry, VarNameEntry,
 };
 use ironplc_container::{
-    CharWidth, Container, ContainerBuilder, FbFieldUidEntry, FbTypeId, FunctionId, StableVarEntry,
-    TaskType, UserFbDescriptor, VarEntry, VarIndex,
+    CharWidth, Container, ContainerBuilder, FbFieldUidEntry, FbTypeId, FunctionId, InstanceId,
+    PersistentExtent, StableVarEntry, TaskType, UserFbDescriptor, VarEntry, VarIndex,
 };
 // The string data-region layout lives in `ironplc-container` so the analyzer
 // and codegen size strings the same way. Re-exported here because the rest of
@@ -56,7 +56,6 @@ pub(crate) use ironplc_container::{string_region_size, DEFAULT_STRING_MAX_LENGTH
 use ironplc_dsl::common::{
     FunctionBlockDeclaration, FunctionDeclaration, InitialValueAssignmentKind, Library,
     LibraryElementKind, ProgramDeclaration, StringType, StructureElementInit, VarDecl,
-    VariableType,
 };
 use ironplc_dsl::configuration::{
     ConfigurationDeclaration, ProgramConfiguration, TaskConfiguration,
@@ -67,7 +66,6 @@ use ironplc_dsl::stack::within_stack_budget;
 use ironplc_parser::options::{CompilerOptions, StringToNumFailure, StringToNumNonNumeric};
 use ironplc_problems::Problem;
 
-use ironplc_analyzer::system_globals::SYSTEM_UPTIME_GLOBALS;
 use ironplc_analyzer::{FunctionEnvironment, IntermediateType, SemanticContext, TypeEnvironment};
 
 use crate::emit::Emitter;
@@ -77,6 +75,7 @@ use super::compile_initial_value::emit_initial_values;
 use super::compile_setup::assign_variables;
 use super::compile_stmt::compile_body;
 use super::compile_var_table::slot_entry;
+use super::persistent::{compiled_configuration, global_declarations, program_declarations};
 
 /// The native operation width used for arithmetic and comparisons.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -298,30 +297,15 @@ fn compile_in_budget(
     sources: &dyn crate::source_lookup::SourceLookup,
 ) -> Result<Container, Diagnostic> {
     let program = find_program(library)?;
-    let config = find_configuration(library);
+    let config = compiled_configuration(library);
     if let Some(config) = config {
         check_single_program_instance(config)?;
     }
-    let user_globals: &[VarDecl] = config.map(|c| c.global_var.as_slice()).unwrap_or(&[]);
 
-    // Prepend system uptime globals when the feature is enabled.
-    let mut synthetic_globals: Vec<VarDecl> = Vec::new();
-    if options.system_uptime_global {
-        for global in &SYSTEM_UPTIME_GLOBALS {
-            synthetic_globals.push(
-                VarDecl::simple(global.name, global.type_name).with_type(VariableType::Global),
-            );
-        }
-    }
-
-    // Collect top-level VAR_GLOBAL declarations (outside CONFIGURATION blocks).
-    for element in &library.elements {
-        if let LibraryElementKind::GlobalVarDeclarations(decls) = element {
-            synthetic_globals.extend_from_slice(decls);
-        }
-    }
-
-    synthetic_globals.extend_from_slice(user_globals);
+    // The globals: the system uptime globals the options provide, the top-level
+    // VAR_GLOBAL declarations and those of the configuration. The engineering
+    // side keys the same list (`persistent`).
+    let synthetic_globals = global_declarations(library, options);
     let global_vars = &synthetic_globals;
 
     let reachable = context.reachable();
@@ -611,17 +595,6 @@ fn ordinal(position: usize) -> String {
     format!("{position}{suffix}")
 }
 
-/// Finds the first CONFIGURATION declaration in the library, if any.
-fn find_configuration(library: &Library) -> Option<&ConfigurationDeclaration> {
-    library.elements.iter().find_map(|e| {
-        if let LibraryElementKind::ConfigurationDeclaration(config) = e {
-            Some(config)
-        } else {
-            None
-        }
-    })
-}
-
 /// Idempotently registers a POU's source file with the debug section's
 /// SOURCE_FILE_TABLE. Called from `compile_program_with_functions` for
 /// each top-level program / function / function-block declaration.
@@ -815,6 +788,7 @@ fn compile_program_with_functions(
     // The actual FB body compilation happens after program-local variables are
     // assigned, once var_offsets are known.
     let mut compiled_fb_bodies: Vec<CompiledFunction> = Vec::new();
+    let fb_type_ids = user_fb_type_ids(fb_decls)?;
 
     for (next_function_id, fb_decl) in (2_u16..).zip(fb_decls.iter()) {
         let fb_name = fb_decl.name.name.to_string().to_uppercase();
@@ -850,8 +824,9 @@ fn compile_program_with_functions(
             }
         }
 
-        let type_id = ctx.next_user_fb_type_id;
-        ctx.next_user_fb_type_id += 1;
+        let type_id = *fb_type_ids
+            .get(&fb_name)
+            .ok_or_else(Diagnostic::internal_error)?;
         ctx.user_fb_types.insert(
             fb_name,
             UserFbTypeInfo {
@@ -942,13 +917,7 @@ fn compile_program_with_functions(
 
     // Collect program-local variables, skipping VAR_EXTERNAL declarations
     // since they alias the corresponding global variables.
-    let local_vars: Vec<VarDecl> = program
-        .variables
-        .iter()
-        .filter(|v| v.var_type != VariableType::External)
-        .cloned()
-        .chain(crate::compile_edge::hidden_variables(&program.variables))
-        .collect();
+    let local_vars: Vec<VarDecl> = program_declarations(program);
     let edge_inputs = crate::compile_edge::edge_inputs(&program.variables);
 
     // Assign program-local variable indices (indices G..N).
@@ -965,6 +934,19 @@ fn compile_program_with_functions(
         &options.stable_var_ids,
     )?;
     let program_var_count = ctx.variables.len() as u16;
+    // The persistent part ends here: every variable slot and every byte of the
+    // data region reserved so far belongs to a global or to the program, and
+    // everything reserved from now on (function slots, function block working
+    // slots, string temporaries) is working memory. The container declares
+    // this point as its persistent extent (ADR-0073); no other site in the
+    // compiler decides what is persistent.
+    let persistent_extent = PersistentExtent {
+        instance_id: InstanceId::DEFAULT,
+        var_start: 0,
+        var_count: program_var_count,
+        data_start: 0,
+        data_len: ctx.data_region_offset,
+    };
 
     // Now compile the FB bodies with correct var_offsets.
     let mut compiled_functions = Vec::new();
@@ -1217,6 +1199,7 @@ fn compile_program_with_functions(
         .init_function_id(FunctionId::INIT)
         .entry_function_id(FunctionId::SCAN)
         .shared_globals_size(program_var_count)
+        .add_persistent_extent(persistent_extent)
         .max_call_depth(max_call_depth);
 
     // Add debug info.
@@ -1256,6 +1239,13 @@ fn compile_program_with_functions(
     // collected before the debug loops below, which move their vectors out
     // of `ctx`.
     let variable_table = ctx.collect_variable_table(total_variables.raw())?;
+    // The function block type table states the field layout of each user
+    // function block by type, from the same entries.
+    for descriptor in
+        crate::compile_fb_layout::type_descriptors(&ctx.user_fb_types, &variable_table)?
+    {
+        builder = builder.add_fb_type(descriptor);
+    }
     for entry in variable_table {
         builder = builder.add_var_entry(entry);
     }
@@ -1416,9 +1406,44 @@ pub(crate) struct FbInstanceInfo {
     pub(crate) array: Option<crate::compile_fb_instance::InstanceArray>,
 }
 
+/// The first type ID of a user-defined function block.
+const FIRST_USER_FB_TYPE_ID: u16 = 0x1000;
+
+/// The type ID of each user-defined function block, by upper-cased name.
+///
+/// The ID of a type is its rank among the names of the compiled types, not the
+/// position of its declaration in the container. The position comes from the
+/// dependency sort of the declarations, and an edit of a body that starts to
+/// call a function can move blocks that have nothing to do with the call; an ID
+/// taken from the position would then change the entry of every instance in
+/// the variable table and with it the layout of the state (ADR-0073). The set
+/// of compiled types is fixed by the declarations of the instances that reach
+/// them, so the rank is stable under every edit of a body.
+fn user_fb_type_ids(
+    fb_decls: &[&FunctionBlockDeclaration],
+) -> Result<HashMap<String, u16>, Diagnostic> {
+    let mut names: Vec<String> = fb_decls
+        .iter()
+        .map(|fb_decl| fb_decl.name.name.to_string().to_uppercase())
+        .collect();
+    names.sort();
+    names
+        .into_iter()
+        .enumerate()
+        .map(|(rank, name)| {
+            let type_id = u16::try_from(rank)
+                .ok()
+                .and_then(|rank| FIRST_USER_FB_TYPE_ID.checked_add(rank))
+                .ok_or_else(Diagnostic::internal_error)?;
+            Ok((name, type_id))
+        })
+        .collect()
+}
+
 /// Metadata for a compiled user-defined function block type.
 pub(crate) struct UserFbTypeInfo {
-    /// Unique type ID for FB_CALL dispatch (starts at 0x1000).
+    /// Unique type ID for FB_CALL dispatch (starts at 0x1000; see
+    /// [`user_fb_type_ids`]).
     pub(crate) type_id: u16,
     /// Number of data-region fields in each instance.
     pub(crate) num_fields: usize,
@@ -1538,7 +1563,6 @@ pub(crate) struct CompileContext {
     /// Maps user-defined FB type name (uppercase) to compilation metadata.
     pub(crate) user_fb_types: HashMap<String, UserFbTypeInfo>,
     /// Next available type ID for user-defined function blocks.
-    next_user_fb_type_id: u16,
     /// When compiling a function body that returns a value, describes how an
     /// early `RETURN` statement should produce the return value before the
     /// `RET` opcode. `None` for programs and FBs (RETURN emits `RET_VOID`).
@@ -1626,7 +1650,6 @@ impl CompileContext {
             debug_source_files: crate::source_lookup::SourceFileRegistry::new(),
             user_functions: HashMap::new(),
             user_fb_types: HashMap::new(),
-            next_user_fb_type_id: 0x1000,
             enum_map: crate::compile_enum::EnumOrdinalMap::default(),
             types: HashMap::new(),
             operand_names: HashMap::new(),

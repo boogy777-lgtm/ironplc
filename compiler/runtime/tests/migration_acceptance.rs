@@ -192,7 +192,7 @@ END_PROGRAM
   Counter := Counter + 1;
 END_PROGRAM
 ",
-        &[("Counter", 1)],
+        &[("Counter", 1), ("Extra", 2)],
     );
     let counter = variable_index(&candidate, "Counter");
     let extra = variable_index(&candidate, "Extra");
@@ -310,7 +310,7 @@ END_PROGRAM
   Length := LEN(Text);
 END_PROGRAM
 ",
-        &[("Text", 1), ("Length", 2)],
+        &[("Text", 1), ("Length", 2), ("Extra", 3)],
     );
     let length = variable_index(&candidate, "Length");
     let extra = variable_index(&candidate, "Extra");
@@ -653,7 +653,10 @@ END_PROGRAM
 }
 
 #[test]
-fn stage_when_fb_field_added_then_fb_layout_unsupported_and_application_runs() {
+fn stage_when_fb_field_added_without_field_uids_then_refused_naming_the_fields_and_application_runs(
+) {
+    // The fields of `Accumulator` carry no UID on either side: the identity rule
+    // (ADR-0074) refuses the candidate before the planner reads the layout.
     let base = compile_with_ids(
         "FUNCTION_BLOCK Accumulator
   VAR_INPUT
@@ -703,12 +706,18 @@ END_PROGRAM
 
     let result = host.stage(candidate);
 
+    let error = result.unwrap_err();
     assert!(matches!(
-        result,
-        Err(OnlineChangeError::MigrationUnsupported(
-            MigrationError::FbLayoutUnsupported
-        ))
+        error,
+        OnlineChangeError::MigrationUnsupported(MigrationError::UnidentifiedVariables { .. })
     ));
+    let text = error.to_string();
+    assert_eq!(
+        text,
+        "candidate state cannot be migrated: persistent variables without a stable ID: \
+         active application: ACCUMULATOR.step, ACCUMULATOR.total; \
+         candidate: ACCUMULATOR.step, ACCUMULATOR.total, ACCUMULATOR.extra"
+    );
     host.run(1, || 0).unwrap();
     assert_eq!(host.read_variable(total).unwrap(), 3);
 }
@@ -793,10 +802,11 @@ END_PROGRAM
 }
 
 #[test]
-fn stage_when_fb_layout_changes_and_field_uid_missing_then_fail_closed() {
+fn stage_when_fb_layout_changes_and_field_uid_missing_then_refused_naming_the_field() {
     // The candidate drops `total`'s UID while changing the layout: the
-    // value's identity is unprovable, so the planner must reject rather
-    // than guess (ADR 0059's fail-closed rule).
+    // value's identity is unprovable, so the candidate is refused and the
+    // field named rather than guessed (ADR 0059's fail-closed rule, which is the
+    // identity rule of ADR-0074 for the fields of a function block).
     let base = compile_with_uid_keys(
         "FUNCTION_BLOCK Accumulator
   VAR_INPUT
@@ -856,12 +866,12 @@ END_PROGRAM
 
     let result = host.stage(candidate);
 
+    let error = result.unwrap_err();
     assert!(matches!(
-        result,
-        Err(OnlineChangeError::MigrationUnsupported(
-            MigrationError::FbLayoutUnsupported
-        ))
+        error,
+        OnlineChangeError::MigrationUnsupported(MigrationError::UnidentifiedVariables { .. })
     ));
+    assert!(error.to_string().ends_with("candidate: ACCUMULATOR.total"));
     // The rejection leaves the running application untouched.
     host.run(1, || 0).unwrap();
     assert_eq!(host.read_variable(total).unwrap(), 3);
@@ -892,7 +902,7 @@ END_PROGRAM
   Counter := Counter + 1;
 END_PROGRAM
 ",
-        &[("Counter", 1)],
+        &[("Counter", 1), ("Extra", 2)],
     );
     let counter = variable_index(&candidate, "Counter");
 
@@ -919,4 +929,82 @@ END_PROGRAM
     assert!(!host.status().migration);
     host.run(1, || 0).unwrap();
     assert_eq!(host.read_variable(counter).unwrap(), 8);
+}
+
+/// A program with `A` (counts by one) and `B` (starts at 5, counts by ten), and
+/// the extra declarations `declarations`.
+fn ab_program(declarations: &str) -> String {
+    format!(
+        "PROGRAM main
+  VAR
+    A : DINT;
+    B : DINT := 5;
+    {declarations}
+  END_VAR
+  A := A + 1;
+  B := B + 10;
+END_PROGRAM
+"
+    )
+}
+
+#[test]
+fn stage_when_persistent_variable_has_no_stable_id_then_refused_naming_it_and_application_runs() {
+    // `B` carries no stable ID and the edit declares `C` without one. A
+    // migration would copy `A` by its ID and return `B` to its initial value
+    // without a word; the candidate is refused instead (ADR-0074) and `B`
+    // keeps counting on the application that runs. B counts up by ten on every
+    // scan from its initial 5.
+    let base = compile_with_ids(&ab_program(""), &[("A", 1)]);
+    let (a, b) = (variable_index(&base, "A"), variable_index(&base, "B"));
+    let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
+    host.run(3, || 0).unwrap();
+    assert_eq!(host.read_variable(a).unwrap(), 3);
+    assert_eq!(host.read_variable(b).unwrap(), 35);
+
+    let candidate = compile_with_ids(&ab_program("C : DINT;"), &[("A", 1)]);
+    let refused = host.stage(candidate).unwrap_err();
+
+    assert!(matches!(
+        refused,
+        OnlineChangeError::MigrationUnsupported(MigrationError::UnidentifiedVariables { .. })
+    ));
+    assert_eq!(
+        refused.to_string(),
+        "candidate state cannot be migrated: persistent variables without a stable ID: \
+         active application: B; candidate: B, C"
+    );
+    // Nothing was staged or applied: the next scan continues from 35.
+    assert!(host.status().candidate.is_none());
+    host.run(1, || 0).unwrap();
+    assert_eq!(host.read_variable(b).unwrap(), 45);
+}
+
+#[test]
+fn run_when_every_persistent_variable_has_a_stable_id_then_the_same_edit_migrates_b() {
+    // The same edit once the IDs are synchronized: `B` and the new `C` have
+    // IDs, so `B` continues from 35 instead of starting over.
+    let base = compile_with_ids(&ab_program(""), &[("A", 1), ("B", 2)]);
+    let (a, b) = (variable_index(&base, "A"), variable_index(&base, "B"));
+    let mut host = RuntimeHost::new(base).unwrap();
+    host.permit_execution();
+    host.run(3, || 0).unwrap();
+    assert_eq!(host.read_variable(a).unwrap(), 3);
+    assert_eq!(host.read_variable(b).unwrap(), 35);
+
+    let candidate = compile_with_ids(&ab_program("C : DINT;"), &[("A", 1), ("B", 2), ("C", 3)]);
+    host.stage(candidate.clone()).unwrap();
+    assert!(host.status().migration);
+    host.test().unwrap();
+    host.run(1, || 0).unwrap();
+
+    assert_eq!(
+        host.read_variable(variable_index(&candidate, "A")).unwrap(),
+        4
+    );
+    assert_eq!(
+        host.read_variable(variable_index(&candidate, "B")).unwrap(),
+        45
+    );
 }

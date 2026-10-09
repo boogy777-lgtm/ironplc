@@ -261,3 +261,67 @@ fn idle_boundary_when_untest_mirrored_then_swaps_without_rounds_or_permit() {
     );
     assert_eq!(secondary.read_variable(counter).unwrap(), 12);
 }
+
+/// The program of the untest scenario: `Counter` is the persistent state the
+/// pair replicates, and `body` is the edited statement.
+fn growing_program(body: &str) -> String {
+    format!(
+        "PROGRAM main
+  VAR
+    Counter : DINT;
+    r : DINT;
+  END_VAR
+  Counter := Counter + 1;
+  {body}
+END_PROGRAM
+"
+    )
+}
+
+#[test]
+fn apply_state_snapshot_when_untest_image_arrives_and_candidate_grew_data_region_then_state_applied(
+) {
+    // A body edit may ask for a larger data region (a string temporary)
+    // without changing the layout. The pair is in Testing; the primary
+    // reverts and replicates its image. The standby still holds buffers the
+    // candidate sized, which are larger than the ones the original sized the
+    // image from: the image is the persistent state only, so it applies, and
+    // the working bytes the candidate asked for are left alone.
+    let original = compile_source(&growing_program("r := 1;"));
+    let grown = compile_source(&growing_program(
+        "r := LEN('012345678901234567890123456789012345678901234567890123456789');",
+    ));
+    assert_eq!(original.header.layout_hash, grown.header.layout_hash);
+    assert!(grown.header.data_region_bytes > original.header.data_region_bytes);
+    let counter = variable_index(&original, "Counter");
+
+    let mut primary = RuntimeHost::new(original.clone()).unwrap();
+    primary.permit_execution();
+    primary.run(3, || 0).unwrap();
+    primary.stage(grown.clone()).unwrap();
+    primary.test().unwrap();
+    primary.run(1, || 0).unwrap();
+
+    let mut standby = RuntimeHost::new(original).unwrap();
+    standby.stage(grown).unwrap();
+    standby.test().unwrap();
+    standby.apply_pending_at_boundary().unwrap();
+    standby
+        .apply_state_snapshot(&primary.state_snapshot())
+        .unwrap();
+    assert_eq!(standby.status().mode, HostMode::Testing);
+
+    primary.untest().unwrap();
+    primary.run(1, || 0).unwrap();
+    let reverted = primary.state_snapshot();
+    standby.apply_state_snapshot(&reverted).unwrap();
+
+    assert_eq!(standby.read_variable(counter).unwrap(), 5);
+    assert_eq!(standby.state_snapshot(), reverted);
+
+    // The standby mirrors the pair's Untest at its own boundary.
+    standby.untest().unwrap();
+    standby.apply_pending_at_boundary().unwrap();
+    assert_eq!(standby.status().mode, HostMode::Normal);
+    assert_eq!(standby.read_variable(counter).unwrap(), 5);
+}

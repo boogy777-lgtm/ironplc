@@ -6,6 +6,8 @@ use std::vec::Vec;
 #[cfg(feature = "std")]
 use crate::id_types::VarIndex;
 use crate::id_types::{FbTypeId, FunctionId};
+#[cfg(feature = "std")]
+use crate::persistent_extent::PersistentExtent;
 use crate::ContainerError;
 
 /// Type tags for FB field entries.
@@ -357,6 +359,11 @@ pub struct TypeSection {
     /// Callers (codegen) own the ordering contract; the writer preserves
     /// the given order.
     pub fb_field_uids: Vec<FbFieldUidEntry>,
+    /// The persistent extent, one row per program instance (format v8).
+    /// Empty when the container declares none; read through
+    /// [`Container::persistent_extents`](crate::Container::persistent_extents),
+    /// which applies that default.
+    pub persistent_extents: Vec<PersistentExtent>,
 }
 
 #[cfg(feature = "std")]
@@ -379,6 +386,8 @@ impl TypeSection {
         size += 2 + self.stable_vars.len() as u32 * STABLE_VAR_ENTRY_SIZE as u32;
         // FB field UIDs: count(2) + entries * 11
         size += 2 + self.fb_field_uids.len() as u32 * FB_FIELD_UID_ENTRY_SIZE as u32;
+        // Persistent extents: count(2) + rows * 14
+        size += 2 + self.persistent_extents.len() as u32 * PersistentExtent::SIZE as u32;
         size
     }
 
@@ -388,7 +397,8 @@ impl TypeSection {
     /// descriptors, user FB count (u16 LE), user FB descriptors, variable
     /// table count (u16 LE), variable entries, stable variable ID count
     /// (u16 LE), stable variable ID entries, FB field UID count (u16 LE),
-    /// FB field UID entries.
+    /// FB field UID entries, persistent extent count (u16 LE), persistent
+    /// extent rows.
     pub fn write_to(&self, w: &mut impl Write) -> Result<(), ContainerError> {
         // FB type descriptors
         w.write_all(&(self.fb_types.len() as u16).to_le_bytes())?;
@@ -430,13 +440,20 @@ impl TypeSection {
             w.write_all(&entry.uid.to_le_bytes())?;
         }
 
-        // FB field UIDs (sixth and last sub-table), in the caller's
-        // ascending (fb_type_id, field_index) order.
+        // FB field UIDs (sixth sub-table), in the caller's ascending
+        // (fb_type_id, field_index) order.
         w.write_all(&(self.fb_field_uids.len() as u16).to_le_bytes())?;
         for entry in &self.fb_field_uids {
             w.write_all(&entry.fb_type_id.to_le_bytes())?;
             w.write_all(&[entry.field_index])?;
             w.write_all(&entry.uid.to_le_bytes())?;
+        }
+
+        // Persistent extents (seventh and last sub-table), in the caller's
+        // order.
+        w.write_all(&(self.persistent_extents.len() as u16).to_le_bytes())?;
+        for row in &self.persistent_extents {
+            w.write_all(&row.to_bytes())?;
         }
         Ok(())
     }
@@ -552,9 +569,8 @@ impl TypeSection {
             });
         }
 
-        // FB field UIDs (sixth and last sub-table). A type section that ends
-        // before it (a container written before format v6) reads as zero
-        // entries.
+        // FB field UIDs (sixth sub-table). A type section that ends before
+        // it (a container written before format v6) reads as zero entries.
         let mut buf2 = [0u8; 2];
         let fb_field_uid_count = if r.read_exact(&mut buf2).is_ok() {
             u16::from_le_bytes(buf2) as usize
@@ -582,6 +598,23 @@ impl TypeSection {
             });
         }
 
+        // Persistent extents (seventh and last sub-table). A type section
+        // that ends before it (a container written before format v8) reads as
+        // zero rows.
+        let mut buf2 = [0u8; 2];
+        let extent_count = if r.read_exact(&mut buf2).is_ok() {
+            u16::from_le_bytes(buf2) as usize
+        } else {
+            0
+        };
+
+        let mut persistent_extents = Vec::with_capacity(extent_count);
+        for _ in 0..extent_count {
+            let mut row_buf = [0u8; PersistentExtent::SIZE];
+            r.read_exact(&mut row_buf)?;
+            persistent_extents.push(PersistentExtent::from_bytes(&row_buf));
+        }
+
         Ok(TypeSection {
             fb_types,
             array_descriptors,
@@ -589,6 +622,7 @@ impl TypeSection {
             variable_table,
             stable_vars,
             fb_field_uids,
+            persistent_extents,
         })
     }
 }
@@ -654,6 +688,7 @@ mod tests {
             variable_table: vec![],
             stable_vars: vec![],
             fb_field_uids: vec![],
+            persistent_extents: vec![],
         };
 
         let mut buf = Vec::new();
@@ -686,6 +721,7 @@ mod tests {
             variable_table: vec![],
             stable_vars: vec![],
             fb_field_uids: vec![],
+            persistent_extents: vec![],
         };
 
         let mut buf = Vec::new();
@@ -723,6 +759,7 @@ mod tests {
             variable_table: vec![],
             stable_vars: vec![],
             fb_field_uids: vec![],
+            persistent_extents: vec![],
         };
 
         let mut buf = Vec::new();
@@ -744,8 +781,8 @@ mod tests {
     #[test]
     fn section_size_when_empty_then_returns_header_counts_only() {
         let section = TypeSection::default();
-        // 2 bytes for each of the six sub-table counts
-        assert_eq!(section.section_size(), 12);
+        // 2 bytes for each of the seven sub-table counts
+        assert_eq!(section.section_size(), 14);
     }
 
     #[test]
@@ -760,9 +797,10 @@ mod tests {
             variable_table: vec![],
             stable_vars: vec![],
             fb_field_uids: vec![],
+            persistent_extents: vec![],
         };
-        // 6 counts(12) + 2 * 12 (descriptors) = 36
-        assert_eq!(section.section_size(), 36);
+        // 7 counts(14) + 2 * 12 (descriptors) = 38
+        assert_eq!(section.section_size(), 38);
     }
 
     fn read_single_descriptor(desc: ArrayDescriptor) -> Result<TypeSection, ContainerError> {
@@ -863,6 +901,7 @@ mod tests {
             variable_table: vec![],
             stable_vars: vec![],
             fb_field_uids: vec![],
+            persistent_extents: vec![],
         };
 
         let mut buf = Vec::new();
@@ -937,8 +976,8 @@ mod tests {
             ],
             ..Default::default()
         };
-        // 6 counts(12) + 2 entries * 4 = 20
-        assert_eq!(section.section_size(), 20);
+        // 7 counts(14) + 2 entries * 4 = 22
+        assert_eq!(section.section_size(), 22);
     }
 
     #[test]
@@ -994,8 +1033,8 @@ mod tests {
             ],
             ..Default::default()
         };
-        // 6 counts(12) + 2 entries * 10 = 32
-        assert_eq!(section.section_size(), 32);
+        // 7 counts(14) + 2 entries * 10 = 34
+        assert_eq!(section.section_size(), 34);
     }
 
     #[test]
@@ -1056,6 +1095,7 @@ mod tests {
         ];
         let section = TypeSection {
             fb_field_uids: entries.clone(),
+            persistent_extents: vec![],
             ..Default::default()
         };
 
@@ -1085,8 +1125,8 @@ mod tests {
             ],
             ..Default::default()
         };
-        // 6 counts(12) + 2 entries * 11 = 34
-        assert_eq!(section.section_size(), 34);
+        // 7 counts(14) + 2 entries * 11 = 36
+        assert_eq!(section.section_size(), 36);
     }
 
     #[test]
@@ -1155,12 +1195,13 @@ mod tests {
             variable_table: vec![],
             stable_vars: vec![],
             fb_field_uids: vec![],
+            persistent_extents: vec![],
         };
 
-        // Header: 6 counts * 2 = 12
+        // Header: 7 counts * 2 = 14
         // Per descriptor: 4 (header) + 3 fields * 4 = 16
-        // Total: 12 + 16 = 28
-        assert_eq!(section.section_size(), 28);
+        // Total: 14 + 16 = 30
+        assert_eq!(section.section_size(), 30);
 
         let mut buf = Vec::new();
         section.write_to(&mut buf).unwrap();
@@ -1184,5 +1225,40 @@ mod tests {
         assert!(decoded.array_descriptors.is_empty());
         assert!(decoded.user_fb_types.is_empty());
         assert!(decoded.variable_table.is_empty());
+    }
+
+    #[test]
+    fn type_section_write_read_when_persistent_extents_then_roundtrips() {
+        let section = TypeSection {
+            persistent_extents: vec![PersistentExtent {
+                instance_id: crate::id_types::InstanceId::new(1),
+                var_start: 2,
+                var_count: 3,
+                data_start: 16,
+                data_len: 24,
+            }],
+            ..Default::default()
+        };
+
+        let mut buf = Vec::new();
+        section.write_to(&mut buf).unwrap();
+        let decoded = TypeSection::read_from(&mut Cursor::new(&buf)).unwrap();
+
+        assert_eq!(decoded.persistent_extents, section.persistent_extents);
+        assert_eq!(buf.len() as u32, section.section_size());
+    }
+
+    #[test]
+    fn type_section_read_from_when_no_persistent_extents_then_no_rows() {
+        // A type section that ends after the FB field UIDs has no extent
+        // rows; the container then has the whole tables as its extent.
+        let mut buf = Vec::new();
+        for _ in 0..6 {
+            buf.extend_from_slice(&0u16.to_le_bytes());
+        }
+
+        let decoded = TypeSection::read_from(&mut Cursor::new(&buf)).unwrap();
+
+        assert!(decoded.persistent_extents.is_empty());
     }
 }
