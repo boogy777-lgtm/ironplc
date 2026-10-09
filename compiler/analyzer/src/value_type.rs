@@ -23,6 +23,7 @@ use ironplc_dsl::type_id::TypeId;
 use ironplc_parser::options::CompilerOptions;
 
 use crate::intermediate_type::IntermediateType;
+use crate::resolution::Resolved;
 use crate::type_compat::are_types_compatible;
 use crate::type_environment::TypeEnvironment;
 
@@ -154,6 +155,12 @@ pub(crate) fn check(
     expr: &Expr,
     options: &CompilerOptions,
 ) -> Result<(), Mismatch> {
+    // A required type that is a declaration with an error, or a name that is
+    // not declared, is the error type: the declaration that uses it is already
+    // reported, so there is nothing to compare the value with.
+    if requires_error_type(types, expected) {
+        return Ok(());
+    }
     if let Some(ExprType::Concrete(id)) = &expr.expr_type {
         if types.id_of(expected) == Some(*id) {
             return Ok(());
@@ -179,6 +186,18 @@ pub(crate) fn check(
                 })
             }
         }
+    }
+}
+
+/// Whether `expected` names no type a value can be compared with: a
+/// declaration with an error, or a name that is not declared and is not a
+/// generic category either (`ANY_INT` is in no environment).
+fn requires_error_type(types: &TypeEnvironment, expected: &TypeName) -> bool {
+    let generic = GenericTypeName::try_from(&expected.name).is_ok();
+    match types.lookup(expected) {
+        Resolved::Valid(_) => false,
+        Resolved::Failed => true,
+        Resolved::Absent => !generic,
     }
 }
 
@@ -364,5 +383,74 @@ mod tests {
             describe(&types, TypeId::from_raw(100_000)),
             "an unknown type"
         );
+    }
+
+    fn expression_of(types: &TypeEnvironment, type_name: &str) -> Expr {
+        let mut expr = Expr::new(ironplc_dsl::textual::ExprKind::integer_literal("1"));
+        expr.expr_type = types
+            .id_of(&TypeName::from(type_name))
+            .map(ExprType::Concrete);
+        expr
+    }
+
+    #[test]
+    fn check_when_required_type_is_declared_with_an_error_then_ok() {
+        let mut types = environment();
+        types.insert_failed(&TypeName::from("BROKEN"));
+        let expr = expression_of(&types, "STRING");
+
+        let result = check(
+            &types,
+            &TypeName::from("BROKEN"),
+            &expr,
+            &CompilerOptions::default(),
+        );
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn check_when_required_type_is_not_declared_then_ok() {
+        let types = environment();
+        let expr = expression_of(&types, "STRING");
+
+        let result = check(
+            &types,
+            &TypeName::from("NOWHERE"),
+            &expr,
+            &CompilerOptions::default(),
+        );
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn check_when_required_type_is_a_generic_category_then_still_compared() {
+        let types = environment();
+        let expr = expression_of(&types, "STRING");
+
+        let result = check(
+            &types,
+            &TypeName::from("ANY_INT"),
+            &expr,
+            &CompilerOptions::default(),
+        );
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn check_when_required_type_is_declared_then_still_compared() {
+        let types = environment();
+        let expr = expression_of(&types, "STRING");
+
+        let result = check(
+            &types,
+            &TypeName::from("INT"),
+            &expr,
+            &CompilerOptions::default(),
+        );
+
+        assert!(result.is_err());
     }
 }

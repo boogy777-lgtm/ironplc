@@ -23,18 +23,20 @@ use crate::intermediates::arithmetic_overload::{
 use crate::intermediates::inherited_fields::collect_inherited_fields;
 use crate::intermediates::operator_function_form::{operator_function_form, FormOf};
 use crate::intermediates::special_operator::{ResultType, SpecialOperator};
+use crate::pass_runner::Outcome;
 use crate::system_globals::SYSTEM_UPTIME_GLOBALS;
 use crate::type_environment::TypeEnvironment;
 use crate::value_type::operand_type_name;
 use crate::variable_type::{Declarations, Declared};
 use ironplc_parser::options::CompilerOptions;
+use std::convert::Infallible;
 
 pub fn apply(
     lib: Library,
     type_environment: &mut TypeEnvironment,
     function_environment: &FunctionEnvironment,
     options: &CompilerOptions,
-) -> Result<Library, Vec<Diagnostic>> {
+) -> Outcome {
     let inherited_fields = collect_inherited_fields(&lib);
     let method_return_types = collect_method_return_types(&lib);
     let mut resolver = ExprTypeResolver {
@@ -44,6 +46,7 @@ pub fn apply(
         type_environment,
         function_environment,
         options: *options,
+        diagnostics: Vec::new(),
     };
 
     // Implicit system globals live in the outermost scope, so every POU
@@ -57,7 +60,8 @@ pub fn apply(
         }
     }
 
-    resolver.fold_library(lib).map_err(|e| vec![e])
+    let Ok(library) = resolver.fold_library(lib);
+    Outcome::new(library, resolver.diagnostics)
 }
 
 /// The return type of every method callable on every function block, by
@@ -183,6 +187,8 @@ struct ExprTypeResolver<'a> {
     /// The compiler options, which decide whether a bit-string operand of
     /// an arithmetic operator is judged as an unsigned integer (ADR-0053).
     options: CompilerOptions,
+    /// What the pass found it cannot type.
+    diagnostics: Vec<Diagnostic>,
 }
 
 impl ExprTypeResolver<'_> {
@@ -701,9 +707,8 @@ impl ExprTypeResolver<'_> {
             }
             Variable::Symbolic(SymbolicVariableKind::SelfRef(_)) => {
                 // THIS^/SUPER^ has no resolvable type until function-block
-                // member resolution exists. Unreachable in practice:
-                // `fold_self_ref_variable` rejects the construct before any
-                // type resolution runs. See issue #1406.
+                // member resolution exists; `fold_self_ref_variable` has said
+                // so, and the expression stays untyped. See issue #1406.
                 None
             }
             Variable::Direct(_) => None,
@@ -711,11 +716,11 @@ impl ExprTypeResolver<'_> {
     }
 }
 
-impl Fold<Diagnostic> for ExprTypeResolver<'_> {
+impl Fold<Infallible> for ExprTypeResolver<'_> {
     fn fold_library(
         &mut self,
         node: ironplc_dsl::common::Library,
-    ) -> Result<ironplc_dsl::common::Library, Diagnostic> {
+    ) -> Result<ironplc_dsl::common::Library, Infallible> {
         // Collect top-level VAR_GLOBAL types into the outermost scope,
         // where they stay visible to every POU body the fold enters.
         for element in &node.elements {
@@ -738,7 +743,7 @@ impl Fold<Diagnostic> for ExprTypeResolver<'_> {
     /// The match is exhaustive so a new kind of scope has to state what
     /// it contributes rather than silently contributing nothing -- which
     /// in this pass means silently skipping type checks, not failing.
-    fn enter_scope(&mut self, node: ScopeNode<'_>) -> Result<(), Diagnostic> {
+    fn enter_scope(&mut self, node: ScopeNode<'_>) -> Result<(), Infallible> {
         self.declarations.enter();
 
         match node {
@@ -783,21 +788,24 @@ impl Fold<Diagnostic> for ExprTypeResolver<'_> {
     fn fold_self_ref_variable(
         &mut self,
         node: SelfRefVariable,
-    ) -> Result<SelfRefVariable, Diagnostic> {
-        // Fail rather than resolve to "unknown": every downstream consumer
+    ) -> Result<SelfRefVariable, Infallible> {
+        // Say so rather than resolve to "unknown": every downstream consumer
         // of this pass treats an unresolved type as a fact about the
         // program, and silently producing one here would let THIS^/SUPER^
-        // through unnoticed once it is otherwise supported. See issue #1406.
-        Err(Diagnostic::not_implemented(Label::span(
-            node.span(),
-            format!(
-                "{} is recognized but its type cannot be resolved by IronPLC yet",
-                node.kind.spelling()
-            ),
-        )))
+        // through unnoticed once it is otherwise supported. The node stays as
+        // it was, and every other expression is typed. See issue #1406.
+        self.diagnostics
+            .push(Diagnostic::not_implemented(Label::span(
+                node.span(),
+                format!(
+                    "{} is recognized but its type cannot be resolved by IronPLC yet",
+                    node.kind.spelling()
+                ),
+            )));
+        Ok(node)
     }
 
-    fn fold_expr(&mut self, node: Expr) -> Result<Expr, Diagnostic> {
+    fn fold_expr(&mut self, node: Expr) -> Result<Expr, Infallible> {
         // First, recurse to fold children (bottom-up)
         let mut expr = node.recurse_fold(self)?;
 
@@ -809,7 +817,7 @@ impl Fold<Diagnostic> for ExprTypeResolver<'_> {
     fn fold_initial_value_assignment_kind(
         &mut self,
         node: InitialValueAssignmentKind,
-    ) -> Result<InitialValueAssignmentKind, Diagnostic> {
+    ) -> Result<InitialValueAssignmentKind, Infallible> {
         if let InitialValueAssignmentKind::Simple(simple) = &node {
             if let Some(resolved) = self
                 .type_environment

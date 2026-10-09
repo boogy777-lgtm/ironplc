@@ -1,13 +1,21 @@
 //! Transformation rule that changes the order of declarations
 //! so that items only have a reference to an already declared item.
 //!
-//! The transformation succeeds when:
+//! The order is complete when:
 //! 1. there are no cycles and
 //! 2. the calls respect the POU hierarchy.
 //!
 //! Program can call function or function block
 //! Function block can call function or other function block
 //! Function can call other functions
+//!
+//! A recursive cycle is the error of its members only: it is reported once,
+//! naming the members, the members are entered in the type environment as
+//! declarations with an error (see [`crate::resolution`]), and every other
+//! declaration is ordered and analyzed as before. The same holds for a
+//! construct the sort does not support: the declaration that holds it is
+//! reported and entered as a declaration with an error, and the walk goes on.
+//! Nothing here stops the analysis.
 //!
 //! ## Passes
 //!
@@ -37,39 +45,145 @@
 use core::fmt;
 use ironplc_dsl::{
     common::*,
-    core::{FileId, Id, Located, SourceSpan},
+    core::{Id, Located, SourceSpan},
     diagnostic::{Diagnostic, Label},
     visitor::Visitor,
 };
 use ironplc_problems::Problem;
 use log::debug;
 use petgraph::{
-    algo::toposort,
+    algo::{tarjan_scc, toposort},
     dot::{Config, Dot},
     stable_graph::{NodeIndex, StableDiGraph},
     Direction,
 };
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::convert::Infallible;
 
-pub fn apply(lib: Library) -> Result<(Library, HashSet<Id>), Vec<Diagnostic>> {
+use crate::type_environment::TypeEnvironment;
+
+/// What the sort gives back: the library in dependency order, the
+/// declarations reachable from the programs, what it found wrong, and the
+/// declarations it entered as declarations with an error.
+pub struct Sorted {
+    pub library: Library,
+    pub reachable: HashSet<Id>,
+    pub diagnostics: Vec<Diagnostic>,
+    pub failed: FailedDeclarations,
+}
+
+/// The declarations the sort could not order, with what each declares.
+pub struct FailedDeclarations(Vec<(Id, Declares)>);
+
+impl FailedDeclarations {
+    /// Enters the declarations as declarations with an error. The sort does
+    /// this to the environment it is given; a type environment that is made
+    /// again from the library needs the same entries.
+    pub fn enter(&self, type_environment: &mut TypeEnvironment) {
+        for (name, declares) in &self.0 {
+            declares.enter_failed(name, type_environment);
+        }
+    }
+}
+
+/// What a declaration is to the environments that hold declared names. A
+/// declaration that has an error is entered in the environment of its kind
+/// (the same one a valid declaration of that kind is entered in), so its name
+/// is declared whatever else happens to it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Declares {
+    /// A data type or an interface: a type of the type environment.
+    Type,
+    /// A function block: a type of the type environment, and a program
+    /// organization unit.
+    FunctionBlock,
+    /// A function. Its signature is made from names and is valid whatever
+    /// its parameter types are, so a call of it is checked against it; the
+    /// problem is in the order of the calls, not in the function.
+    Function,
+    /// A program or a configuration, which no declaration uses.
+    Unit,
+}
+
+impl Declares {
+    /// Enters the declaration `name` of this kind as a declaration with an
+    /// error.
+    fn enter_failed(self, name: &Id, type_environment: &mut TypeEnvironment) {
+        match self {
+            Declares::Type => type_environment.insert_failed(&TypeName::from_id(name)),
+            Declares::FunctionBlock => {
+                type_environment.insert_failed_function_block(&TypeName::from_id(name))
+            }
+            Declares::Function | Declares::Unit => {}
+        }
+    }
+}
+
+/// The names the elements of a library declare, in source order, each with
+/// the place of its declaration and what it declares.
+fn declared_names(elements: &[LibraryElementKind]) -> Vec<(Id, Declares)> {
+    elements.iter().filter_map(declared_name).collect()
+}
+
+/// The name an element declares, if it declares one.
+fn declared_name(element: &LibraryElementKind) -> Option<(Id, Declares)> {
+    match element {
+        LibraryElementKind::DataTypeDeclaration(decl) => {
+            Some((data_type_name(decl), Declares::Type))
+        }
+        LibraryElementKind::FunctionDeclaration(decl) => {
+            Some((decl.name.clone(), Declares::Function))
+        }
+        LibraryElementKind::FunctionBlockDeclaration(decl) => {
+            Some((decl.name.name.clone(), Declares::FunctionBlock))
+        }
+        LibraryElementKind::ProgramDeclaration(decl) => Some((decl.name.clone(), Declares::Unit)),
+        LibraryElementKind::ConfigurationDeclaration(decl) => {
+            Some((decl.name.clone(), Declares::Unit))
+        }
+        LibraryElementKind::InterfaceDeclaration(decl) => Some((decl.name.clone(), Declares::Type)),
+        // Global variables are placed first and take no part in the order;
+        // `flatten_namespaces` spliced every namespace out before this.
+        LibraryElementKind::GlobalVarDeclarations(_)
+        | LibraryElementKind::NamespaceDeclaration(_) => None,
+    }
+}
+
+/// Orders the declarations of `lib` so that each follows what it uses, and
+/// enters every declaration that cannot be ordered in `type_environment` as a
+/// declaration with an error.
+pub fn apply(lib: Library, type_environment: &mut TypeEnvironment) -> Sorted {
     // A `NAMESPACE` only groups declarations; the semantic model is flat, so
     // its contents are spliced in at the position of the namespace before
     // anything else looks at the library. Namespaces nest, so this recurses.
     let lib = Library {
         elements: flatten_namespaces(lib.elements),
     };
+    let declared = declared_names(&lib.elements);
+    let mut diagnostics = Vec::new();
 
     // Walk to build a graph of types, POUs and their relationships
     let mut data_type_visitor = RuleGraphReferenceableElements::new();
-    data_type_visitor.walk(&lib).map_err(|e| vec![e])?;
+    let Ok(()) = data_type_visitor.walk(&lib);
+    diagnostics.append(&mut data_type_visitor.diagnostics);
 
     debug!("Sorted declarations {:?}", data_type_visitor.declarations);
 
-    let sorted_ids = data_type_visitor
-        .declarations
-        .sorted_ids()
-        .map_err(|err| vec![err])?;
+    // A declaration that cannot be ordered, with the name it declares: the
+    // members of each cycle and the declarations that hold a construct the
+    // sort does not support.
+    let mut failed: Vec<Id> = data_type_visitor.unsupported_in.clone();
+    let order = data_type_visitor.declarations.order(&declared);
+    diagnostics.extend(order.diagnostics);
+    failed.extend(order.cyclic);
 
+    let failed: Vec<(Id, Declares)> = failed
+        .iter()
+        .filter_map(|name| declared.iter().find(|(id, _)| id == name))
+        .cloned()
+        .collect();
+
+    let sorted_ids = order.sorted;
     debug!("Sorted identifiers {sorted_ids:?}");
 
     // Compute the set of declarations reachable from PROGRAM roots.
@@ -153,7 +267,14 @@ pub fn apply(lib: Library) -> Result<(Library, HashSet<Id>), Vec<Diagnostic>> {
             .flatten(),
     );
 
-    Ok((Library { elements }, reachable))
+    let failed = FailedDeclarations(failed);
+    failed.enter(type_environment);
+    Sorted {
+        library: Library { elements },
+        reachable,
+        diagnostics,
+        failed,
+    }
 }
 
 /// Replaces each `NAMESPACE` element by its contents, in source order.
@@ -256,32 +377,107 @@ impl DeclarationsGraph {
             .collect()
     }
 
-    fn sorted_ids(&self) -> Result<Vec<Id>, Diagnostic> {
-        let sorted_nodes = toposort(&self.graph, None).map_err(|err| {
-            let id_in_cycle = self.index_to_id.get(&err.node_id());
-
-            let span = match id_in_cycle {
-                Some(id) => id.span.clone(),
-                None => SourceSpan::range(0, 0).with_file_id(&FileId::default()),
+    /// Puts the declarations in dependency order. A declaration in a cycle
+    /// cannot be put after what it depends on, so each cycle is reported once
+    /// and its members are put last, in source order; the declarations that
+    /// are not in a cycle are ordered as if the cycle were not there.
+    fn order(&self, declared: &[(Id, Declares)]) -> Order {
+        if let Ok(nodes) = toposort(&self.graph, None) {
+            return Order {
+                sorted: self.ids_of(&nodes),
+                cyclic: vec![],
+                diagnostics: vec![],
             };
-
-            Diagnostic::problem(
-                Problem::RecursiveCycle,
-                // TODO wrong location
-                Label::span(span, "Cycle"),
-            )
-        })?;
-        let mut sorted_ids: Vec<Id> = Vec::with_capacity(sorted_nodes.len());
-        for node in &sorted_nodes {
-            let Some(id) = self.index_to_id.get(node) else {
-                // Toposort emits only nodes that are keys of the graph;
-                // absence is a compiler invariant violation.
-                return Err(Diagnostic::internal_error());
-            };
-            sorted_ids.push(id.clone());
         }
-        Ok(sorted_ids)
+
+        // Each strongly connected component of more than one declaration, and
+        // each declaration that depends on itself, is a cycle.
+        let cycles: Vec<Vec<NodeIndex>> = tarjan_scc(&self.graph)
+            .into_iter()
+            .filter(|component| {
+                component.len() > 1
+                    || component
+                        .first()
+                        .is_some_and(|node| self.graph.find_edge(*node, *node).is_some())
+            })
+            .collect();
+
+        let position = |id: &Id| declared.iter().position(|(declared, _)| declared == id);
+        let mut diagnostics = Vec::new();
+        let mut cyclic: Vec<Id> = Vec::new();
+        let mut members_of_cycles: HashSet<NodeIndex> = HashSet::new();
+        for component in &cycles {
+            let mut members: Vec<Id> = component
+                .iter()
+                .filter_map(|node| self.index_to_id.get(node))
+                .map(|id| match position(id) {
+                    Some(at) => declared[at].0.clone(),
+                    None => id.clone(),
+                })
+                .collect();
+            members.sort_by_key(|id| position(id).unwrap_or(usize::MAX));
+            diagnostics.push(cycle_diagnostic(&members));
+            cyclic.extend(members);
+            members_of_cycles.extend(component.iter().copied());
+        }
+        cyclic.sort_by_key(|id| position(id).unwrap_or(usize::MAX));
+
+        // What is left when the members of the cycles are taken out has no
+        // cycle, so it can be ordered.
+        let mut rest = self.graph.clone();
+        for node in &members_of_cycles {
+            rest.remove_node(*node);
+        }
+        let mut sorted = match toposort(&rest, None) {
+            Ok(nodes) => self.ids_of(&nodes),
+            Err(_) => {
+                diagnostics.push(Diagnostic::internal_error());
+                vec![]
+            }
+        };
+        sorted.extend(cyclic.iter().cloned());
+        Order {
+            sorted,
+            cyclic,
+            diagnostics,
+        }
     }
+
+    /// The identifiers of the nodes, in the order of the nodes.
+    fn ids_of(&self, nodes: &[NodeIndex]) -> Vec<Id> {
+        nodes
+            .iter()
+            .filter_map(|node| self.index_to_id.get(node))
+            .cloned()
+            .collect()
+    }
+}
+
+/// What ordering the declarations found.
+struct Order {
+    /// Every declaration, each after the ones it uses; the members of cycles
+    /// come last.
+    sorted: Vec<Id>,
+    /// The members of the cycles, in source order.
+    cyclic: Vec<Id>,
+    /// One diagnostic for each cycle.
+    diagnostics: Vec<Diagnostic>,
+}
+
+/// The one diagnostic of a cycle: at its first member in source order, with
+/// the other members as secondary locations.
+fn cycle_diagnostic(members: &[Id]) -> Diagnostic {
+    let span = members
+        .first()
+        .map(|id| id.span.clone())
+        .unwrap_or_default();
+    let names: Vec<String> = members.iter().map(|id| id.to_string()).collect();
+    let mut diagnostic = Diagnostic::problem(Problem::RecursiveCycle, Label::span(span, "Cycle"))
+        .with_context("members", &names.join(", "));
+    for member in members.iter().skip(1) {
+        diagnostic = diagnostic.with_secondary(Label::span(member.span.clone(), "Cycle member"));
+    }
+    diagnostic
 }
 
 impl fmt::Debug for DeclarationsGraph {
@@ -299,6 +495,12 @@ struct RuleGraphReferenceableElements {
     // Graph node indices for PROGRAM declarations, used as roots for
     // reachability analysis.
     program_nodes: Vec<NodeIndex>,
+    // The name the library element being visited declares.
+    unit: Option<Id>,
+    // The declarations that hold a construct the sort does not support.
+    unsupported_in: Vec<Id>,
+    // What the walk found wrong. The walk never stops for it.
+    diagnostics: Vec<Diagnostic>,
 }
 impl RuleGraphReferenceableElements {
     fn new() -> Self {
@@ -306,6 +508,20 @@ impl RuleGraphReferenceableElements {
             declarations: DeclarationsGraph::new(),
             current_from: None,
             program_nodes: Vec::new(),
+            unit: None,
+            unsupported_in: Vec::new(),
+            diagnostics: Vec::new(),
+        }
+    }
+
+    /// A construct the sort does not support: it is the error of the
+    /// declaration that holds it, which is reported and entered as a
+    /// declaration with an error, and the walk goes on.
+    fn unsupported(&mut self, span: SourceSpan, what: &str) {
+        self.diagnostics
+            .push(Diagnostic::not_implemented(Label::span(span, what)));
+        if let Some(unit) = &self.unit {
+            self.unsupported_in.push(unit.clone());
         }
     }
 }
@@ -319,13 +535,13 @@ fn reference_target_type_name(target: &ReferenceTarget) -> Id {
     }
 }
 
-impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
+impl Visitor<Infallible> for RuleGraphReferenceableElements {
     type Value = ();
 
     fn visit_library_element_kind(
         &mut self,
         node: &LibraryElementKind,
-    ) -> Result<Self::Value, Diagnostic> {
+    ) -> Result<Self::Value, Infallible> {
         match node {
             // Global variable declarations are not POUs or types and don't
             // participate in the dependency graph. They are unconditionally
@@ -333,7 +549,12 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
             // for subsequent passes. Skip recursion to avoid hitting visitor
             // methods that require current_from context.
             LibraryElementKind::GlobalVarDeclarations(_) => Ok(()),
-            _ => node.recurse_visit(self),
+            _ => {
+                self.unit = declared_name(node).map(|(id, _)| id);
+                let result = node.recurse_visit(self);
+                self.unit = None;
+                result
+            }
         }
     }
 
@@ -342,7 +563,7 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
     fn visit_late_bound_declaration(
         &mut self,
         node: &LateBoundDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
+    ) -> Result<Self::Value, Infallible> {
         let this = self.declarations.add_node(&node.data_type_name.name);
         let depends_on = self.declarations.add_node(&node.base_type_name.name);
         self.declarations.graph.add_edge(depends_on, this, ());
@@ -353,7 +574,7 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
     fn visit_enumeration_declaration(
         &mut self,
         node: &EnumerationDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
+    ) -> Result<Self::Value, Infallible> {
         let this = self.declarations.add_node(&node.type_name.name);
 
         if let SpecificationKind::Named(parent) = &node.spec_init.spec {
@@ -367,7 +588,7 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
     fn visit_subrange_declaration(
         &mut self,
         node: &SubrangeDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
+    ) -> Result<Self::Value, Infallible> {
         let this = self.declarations.add_node(&node.type_name.name);
 
         if let SpecificationKind::Named(parent) = &node.spec {
@@ -381,7 +602,7 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
     fn visit_reference_declaration(
         &mut self,
         node: &ReferenceDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
+    ) -> Result<Self::Value, Infallible> {
         // `REF_TO T` depends on `T`, and `REF_TO ARRAY [..] OF T` on the
         // element type, exactly as `visit_array_declaration` does. Without
         // this edge a `REF_TO` to a type declared in the same source may be
@@ -398,7 +619,7 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
     fn visit_array_declaration(
         &mut self,
         node: &ArrayDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
+    ) -> Result<Self::Value, Infallible> {
         let this = self.declarations.add_node(&node.type_name.name);
 
         match &node.spec {
@@ -420,7 +641,7 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
     fn visit_params_declaration(
         &mut self,
         node: &ParamsDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
+    ) -> Result<Self::Value, Infallible> {
         // As for an array declaration: the element type must be ordered
         // before the PARAMS type that names it.
         let this = self.declarations.add_node(&node.type_name.name);
@@ -433,7 +654,7 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
     fn visit_structure_declaration(
         &mut self,
         node: &StructureDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
+    ) -> Result<Self::Value, Infallible> {
         self.current_from = Some(node.type_name.name.clone());
         self.declarations.add_node(&node.type_name.name);
         let res = node.recurse_visit(self);
@@ -444,7 +665,7 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
     fn visit_structure_initialization_declaration(
         &mut self,
         node: &StructureInitializationDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
+    ) -> Result<Self::Value, Infallible> {
         // Save and restore current_from because this visitor can be called
         // both as a top-level type declaration and nested within a program's
         // VarDecl initializer (e.g., `s : MyStruct := (a := 10, b := 20)`).
@@ -461,7 +682,7 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
     fn visit_simple_declaration(
         &mut self,
         node: &SimpleDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
+    ) -> Result<Self::Value, Infallible> {
         self.current_from = Some(node.type_name.name.clone());
         self.declarations.add_node(&node.type_name.name);
         let res = node.recurse_visit(self);
@@ -472,7 +693,7 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
     fn visit_string_declaration(
         &mut self,
         node: &StringDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
+    ) -> Result<Self::Value, Infallible> {
         self.current_from = Some(node.type_name.name.clone());
         self.declarations.add_node(&node.type_name.name);
         let res = node.recurse_visit(self);
@@ -485,7 +706,7 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
     fn visit_function_declaration(
         &mut self,
         node: &FunctionDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
+    ) -> Result<Self::Value, Infallible> {
         self.current_from = Some(node.name.clone());
         self.declarations.add_node(&node.name);
         let res = node.recurse_visit(self);
@@ -496,7 +717,7 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
     fn visit_function_block_declaration(
         &mut self,
         node: &FunctionBlockDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
+    ) -> Result<Self::Value, Infallible> {
         self.current_from = Some(node.name.name.clone());
         let this = self.declarations.add_node(&node.name.name);
         if let Some(parent) = node.oop.as_ref().and_then(|oop| oop.base.as_ref()) {
@@ -511,7 +732,7 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
     fn visit_program_declaration(
         &mut self,
         node: &ProgramDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
+    ) -> Result<Self::Value, Infallible> {
         self.current_from = Some(node.name.clone());
         let idx = self.declarations.add_node(&node.name);
         self.program_nodes.push(idx);
@@ -523,7 +744,7 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
     fn visit_interface_declaration(
         &mut self,
         node: &InterfaceDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
+    ) -> Result<Self::Value, Infallible> {
         self.current_from = Some(node.name.clone());
         let this = self.declarations.add_node(&node.name);
         for parent in &node.extends {
@@ -538,7 +759,7 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
     fn visit_configuration_declaration(
         &mut self,
         node: &ironplc_dsl::configuration::ConfigurationDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
+    ) -> Result<Self::Value, Infallible> {
         self.current_from = Some(node.name.clone());
         self.declarations.add_node(&node.name);
         let res = node.recurse_visit(self);
@@ -549,7 +770,7 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
     fn visit_function(
         &mut self,
         node: &ironplc_dsl::textual::Function,
-    ) -> Result<Self::Value, Diagnostic> {
+    ) -> Result<Self::Value, Infallible> {
         // A function call creates a dependency: the current POU depends on the
         // called function. Add an edge so the called function is ordered first.
         match &self.current_from {
@@ -558,12 +779,10 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
                 let to = self.declarations.add_node(&node.name);
                 self.declarations.graph.add_edge(to, from, ());
             }
-            None => {
-                return Err(Diagnostic::not_implemented(Label::span(
-                    node.name.span(),
-                    "Function call outside a program organization unit",
-                )))
-            }
+            None => self.unsupported(
+                node.name.span(),
+                "Function call outside a program organization unit",
+            ),
         }
 
         node.recurse_visit(self)
@@ -572,7 +791,7 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
     fn visit_function_block_initial_value_assignment(
         &mut self,
         init: &FunctionBlockInitialValueAssignment,
-    ) -> Result<Self::Value, Diagnostic> {
+    ) -> Result<Self::Value, Infallible> {
         // Current context has a reference to this function block. The
         // referenced type must be ordered before the containing POU (same
         // convention as the Structure/LateResolvedType arms in
@@ -584,12 +803,10 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
                 let to = self.declarations.add_node(&init.type_name.name);
                 self.declarations.graph.add_edge(to, from, ());
             }
-            None => {
-                return Err(Diagnostic::not_implemented(Label::span(
-                    init.type_name.span(),
-                    "Function block instance outside a program organization unit",
-                )))
-            }
+            None => self.unsupported(
+                init.type_name.span(),
+                "Function block instance outside a program organization unit",
+            ),
         }
 
         Ok(())
@@ -598,7 +815,7 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
     fn visit_initial_value_assignment_kind(
         &mut self,
         node: &InitialValueAssignmentKind,
-    ) -> Result<Self::Value, Diagnostic> {
+    ) -> Result<Self::Value, Infallible> {
         match &self.current_from {
             Some(from) => {
                 match node {
@@ -711,895 +928,6 @@ impl Visitor<Diagnostic> for RuleGraphReferenceableElements {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    use crate::test_helpers::parse_only;
-    use ironplc_parser::{options::CompilerOptions, parse_program};
-    use ironplc_test::cast;
-
-    /// A repeated name keeps both declarations: the environments built from
-    /// the sorted library diagnose the repeat, so the sort must not hide it.
-    #[test]
-    fn apply_when_function_name_repeated_then_both_declarations_kept() {
-        let program = "
-FUNCTION F : INT
-  F := 1;
-END_FUNCTION
-
-FUNCTION F : INT
-  F := 2;
-END_FUNCTION";
-        let library =
-            parse_program(program, &FileId::default(), &CompilerOptions::default()).unwrap();
-        let (sorted, _) = apply(library).unwrap();
-        let functions = sorted
-            .elements
-            .iter()
-            .filter(|e| matches!(e, LibraryElementKind::FunctionDeclaration(f) if f.name == Id::from("F")))
-            .count();
-        assert_eq!(functions, 2);
-    }
-
-    #[test]
-    fn apply_when_function_block_recursive_call_in_self_then_return_error() {
-        let program = "
-        FUNCTION_BLOCK SelfRecursive
-            VAR
-               SelfRecursiveInstance : SelfRecursive;
-            END_VAR
-
-        END_FUNCTION_BLOCK";
-
-        let library = parse_only(program);
-        let result = apply(library);
-        assert_eq!(
-            result.unwrap_err().first().unwrap().code,
-            Problem::RecursiveCycle.code().to_string()
-        );
-    }
-
-    #[test]
-    fn apply_when_function_block_not_recursive_call_in_self_then_return_ok() {
-        let program = "
-        FUNCTION_BLOCK Callee
-            VAR
-               IN1: BOOL;
-            END_VAR
-
-        END_FUNCTION_BLOCK
-        
-        FUNCTION_BLOCK Caller
-            VAR
-                CalleeInstance : Callee;
-            END_VAR
-
-        END_FUNCTION_BLOCK";
-
-        let library = parse_only(program);
-        let (library, _reachable) = apply(library).unwrap();
-
-        let decl = library.elements.first().unwrap();
-        let decl = cast!(decl, LibraryElementKind::FunctionBlockDeclaration);
-        assert_eq!(decl.name, TypeName::from("Callee"));
-
-        let decl = library.elements.get(1).unwrap();
-        let decl = cast!(decl, LibraryElementKind::FunctionBlockDeclaration);
-        assert_eq!(decl.name, TypeName::from("Caller"));
-    }
-
-    // ---------------------------------------------------------------------
-    // FUNCTION_BLOCK EXTENDS dependency edge.
-    // ---------------------------------------------------------------------
-
-    fn parse_with_fb_inheritance(program: &str) -> Library {
-        use ironplc_parser::{options::CompilerOptions, parse_program};
-
-        let options = CompilerOptions {
-            allow_fb_inheritance: true,
-            ..CompilerOptions::default()
-        };
-        parse_program(program, &FileId::default(), &options).unwrap()
-    }
-
-    #[test]
-    fn apply_when_function_block_extends_cycle_then_return_error() {
-        let program = "
-FUNCTION_BLOCK FB_A EXTENDS FB_B
-END_FUNCTION_BLOCK
-
-FUNCTION_BLOCK FB_B EXTENDS FB_A
-END_FUNCTION_BLOCK";
-
-        let library = parse_with_fb_inheritance(program);
-        let result = apply(library);
-        assert_eq!(
-            result.unwrap_err().first().unwrap().code,
-            Problem::RecursiveCycle.code().to_string()
-        );
-    }
-
-    #[test]
-    fn apply_when_function_block_extends_forward_reference_then_base_ordered_first() {
-        // The derived FB is declared textually *before* its base -- the
-        // new dependency edge must still order the base first.
-        let program = "
-FUNCTION_BLOCK FB_Derived EXTENDS FB_Base
-END_FUNCTION_BLOCK
-
-FUNCTION_BLOCK FB_Base
-END_FUNCTION_BLOCK";
-
-        let library = parse_with_fb_inheritance(program);
-        let (library, _reachable) = apply(library).unwrap();
-
-        let decl = library.elements.first().unwrap();
-        let decl = cast!(decl, LibraryElementKind::FunctionBlockDeclaration);
-        assert_eq!(decl.name, TypeName::from("FB_Base"));
-
-        let decl = library.elements.get(1).unwrap();
-        let decl = cast!(decl, LibraryElementKind::FunctionBlockDeclaration);
-        assert_eq!(decl.name, TypeName::from("FB_Derived"));
-    }
-
-    #[test]
-    fn apply_when_function_block_no_extends_then_return_ok() {
-        let program = "
-FUNCTION_BLOCK FB_Plain
-END_FUNCTION_BLOCK";
-
-        let library = parse_with_fb_inheritance(program);
-        let result = apply(library);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn apply_when_eager_function_block_initializer_forward_reference_then_referenced_type_ordered_first(
-    ) {
-        // Regression for a dependency-graph edge-direction bug: the
-        // FunctionBlock arms (both this dedicated visitor and the inline
-        // arm in visit_initial_value_assignment_kind) previously added the
-        // edge in the opposite direction to the Structure/LateResolvedType
-        // arms, ordering a referenced type *after* its referencing POU and
-        // producing a spurious P2011 "Parent type is not declared"
-        // downstream.
-        //
-        // A bare `CalleeInstance : Callee;` declaration parses to
-        // LateResolvedType (the correct arm, already covered above), so it
-        // does not exercise this. An *eager* InitialValueAssignmentKind::
-        // FunctionBlock initializer is what the CODESYS/TwinCAT call-style
-        // instance initializer (`name : FB_Type(args);`) constructs at
-        // parse time -- but that grammar lands in a separate PR. To keep
-        // this regression independent of it, construct the eager
-        // FunctionBlock initializer directly on the parsed AST.
-        let mut library = parse_only(
-            "
-        FUNCTION_BLOCK Caller
-            VAR
-                CalleeInstance : Callee;
-            END_VAR
-        END_FUNCTION_BLOCK
-
-        FUNCTION_BLOCK Callee
-            VAR
-               IN1: BOOL;
-            END_VAR
-        END_FUNCTION_BLOCK",
-        );
-
-        // Rewrite Caller's forward reference to Callee into the eager
-        // FunctionBlock form. Caller is declared first, so the referenced
-        // type Callee must be reordered before it.
-        for element in library.elements.iter_mut() {
-            if let LibraryElementKind::FunctionBlockDeclaration(fb) = element {
-                if fb.name == TypeName::from("Caller") {
-                    fb.variables[0].initializer = InitialValueAssignmentKind::FunctionBlock(
-                        FunctionBlockInitialValueAssignment {
-                            type_name: TypeName::from("Callee"),
-                            init: vec![],
-                        },
-                    );
-                }
-            }
-        }
-
-        let (library, _reachable) = apply(library).unwrap();
-
-        // Callee (the referenced type) must come before Caller.
-        let decl = library.elements.first().unwrap();
-        let decl = cast!(decl, LibraryElementKind::FunctionBlockDeclaration);
-        assert_eq!(decl.name, TypeName::from("Callee"));
-
-        let decl = library.elements.get(1).unwrap();
-        let decl = cast!(decl, LibraryElementKind::FunctionBlockDeclaration);
-        assert_eq!(decl.name, TypeName::from("Caller"));
-    }
-
-    #[test]
-    fn apply_when_function_block_call_style_init_then_referenced_type_ordered_first() {
-        // The call-style FB instance initializer (`name : FB_Type(args)`)
-        // parses to InitialValueAssignmentKind::FunctionBlockCall, a distinct
-        // node that must get the same referenced-type-before-POU dependency
-        // edge as the FunctionBlock arm. Caller is declared first but
-        // references Callee, so Callee must be reordered before it.
-        let program = "
-        FUNCTION_BLOCK Caller
-            VAR
-                CalleeInstance : Callee(IN1 := TRUE);
-            END_VAR
-        END_FUNCTION_BLOCK
-
-        FUNCTION_BLOCK Callee
-            VAR_INPUT
-               IN1: BOOL;
-            END_VAR
-        END_FUNCTION_BLOCK";
-
-        let library = parse_only(program);
-        let (library, _reachable) = apply(library).unwrap();
-
-        let decl = library.elements.first().unwrap();
-        let decl = cast!(decl, LibraryElementKind::FunctionBlockDeclaration);
-        assert_eq!(decl.name, TypeName::from("Callee"));
-
-        let decl = library.elements.get(1).unwrap();
-        let decl = cast!(decl, LibraryElementKind::FunctionBlockDeclaration);
-        assert_eq!(decl.name, TypeName::from("Caller"));
-    }
-
-    #[test]
-    fn apply_when_nested_enumeration_types() {
-        let program = "
-TYPE
-LEVEL_ALIAS : LEVEL;
-LEVEL : (CRITICAL) := CRITICAL;
-END_TYPE";
-
-        let library = parse_only(program);
-        let (library, _reachable) = apply(library).unwrap();
-
-        let decl = library.elements.first().unwrap();
-        let decl = cast!(decl, LibraryElementKind::DataTypeDeclaration);
-        let decl = cast!(decl, DataTypeDeclarationKind::Enumeration);
-        assert_eq!(decl.type_name, TypeName::from("LEVEL"));
-
-        let decl = library.elements.get(1).unwrap();
-        let decl = cast!(decl, LibraryElementKind::DataTypeDeclaration);
-        let decl = cast!(decl, DataTypeDeclarationKind::LateBound);
-        assert_eq!(decl.data_type_name, TypeName::from("LEVEL_ALIAS"));
-    }
-
-    #[test]
-    fn apply_when_nested_string_types() {
-        let program = "
-TYPE
-TYPE_NAME_ALIAS : TYPE_NAME;
-TYPE_NAME : STRING[5];
-END_TYPE";
-
-        let library = parse_only(program);
-        let (library, _reachable) = apply(library).unwrap();
-
-        let decl = library.elements.first().unwrap();
-        let decl = cast!(decl, LibraryElementKind::DataTypeDeclaration);
-        let decl = cast!(decl, DataTypeDeclarationKind::String);
-        assert_eq!(decl.type_name, TypeName::from("TYPE_NAME"));
-
-        let decl = library.elements.get(1).unwrap();
-        let decl = cast!(decl, LibraryElementKind::DataTypeDeclaration);
-        let decl = cast!(decl, DataTypeDeclarationKind::LateBound);
-        assert_eq!(decl.data_type_name, TypeName::from("TYPE_NAME_ALIAS"));
-    }
-
-    #[test]
-    fn apply_when_nested_subrange_types() {
-        let program = "
-TYPE
-TYPE_NAME_ALIAS : TYPE_NAME;
-TYPE_NAME : INT (1..128);
-END_TYPE";
-
-        let library = parse_only(program);
-        let (library, _reachable) = apply(library).unwrap();
-
-        let decl = library.elements.first().unwrap();
-        let decl = cast!(decl, LibraryElementKind::DataTypeDeclaration);
-        let decl = cast!(decl, DataTypeDeclarationKind::Subrange);
-        assert_eq!(decl.type_name, TypeName::from("TYPE_NAME"));
-
-        let decl = library.elements.get(1).unwrap();
-        let decl = cast!(decl, LibraryElementKind::DataTypeDeclaration);
-        let decl = cast!(decl, DataTypeDeclarationKind::LateBound);
-        assert_eq!(decl.data_type_name, TypeName::from("TYPE_NAME_ALIAS"));
-    }
-
-    #[test]
-    fn apply_when_array_of_enum_types() {
-        let program = "
-TYPE
-COLORS_ARRAY : ARRAY[1..2] OF COLOR;
-COLOR : (RED, GREEN, BLUE);
-END_TYPE";
-
-        let library = parse_only(program);
-        let (library, _reachable) = apply(library).unwrap();
-
-        let decl = library.elements.first().unwrap();
-        let decl = cast!(decl, LibraryElementKind::DataTypeDeclaration);
-        let decl = cast!(decl, DataTypeDeclarationKind::Enumeration);
-        assert_eq!(decl.type_name, TypeName::from("COLOR"));
-
-        let decl = library.elements.get(1).unwrap();
-        let decl = cast!(decl, LibraryElementKind::DataTypeDeclaration);
-        let decl = cast!(decl, DataTypeDeclarationKind::Array);
-        assert_eq!(decl.type_name, TypeName::from("COLORS_ARRAY"));
-    }
-
-    #[test]
-    fn apply_when_nested_simple_types() {
-        let program = "
-TYPE
-DEFAULT_2 : DEFAULT_1 := 2;
-DEFAULT_1 : INT := 1;
-END_TYPE";
-
-        let library = parse_only(program);
-        let (library, _reachable) = apply(library).unwrap();
-
-        let decl = library.elements.first().unwrap();
-        let decl = cast!(decl, LibraryElementKind::DataTypeDeclaration);
-        let decl = cast!(decl, DataTypeDeclarationKind::Simple);
-        assert_eq!(decl.type_name, TypeName::from("DEFAULT_1"));
-
-        let decl = library.elements.get(1).unwrap();
-        let decl = cast!(decl, LibraryElementKind::DataTypeDeclaration);
-        let decl = cast!(decl, DataTypeDeclarationKind::Simple);
-        assert_eq!(decl.type_name, TypeName::from("DEFAULT_2"));
-    }
-
-    #[test]
-    fn apply_when_nested_structure_types() {
-        let program = "
-TYPE
-
-OUTER_STRUCT : STRUCT
-   MEMBER : INNER_STRUCT;
-END_STRUCT;
-
-INNER_STRUCT: STRUCT
-   MEMBER : ENUM_TYPE;
-END_STRUCT;
-
-ENUM_TYPE : (A, B, C);
-
-END_TYPE";
-
-        let library = parse_only(program);
-        let (library, _reachable) = apply(library).unwrap();
-
-        let decl = library.elements.first().unwrap();
-        let decl = cast!(decl, LibraryElementKind::DataTypeDeclaration);
-        let decl = cast!(decl, DataTypeDeclarationKind::Enumeration);
-        assert_eq!(decl.type_name, TypeName::from("ENUM_TYPE"));
-
-        let decl = library.elements.get(1).unwrap();
-        let decl = cast!(decl, LibraryElementKind::DataTypeDeclaration);
-        let decl = cast!(decl, DataTypeDeclarationKind::Structure);
-        assert_eq!(decl.type_name, TypeName::from("INNER_STRUCT"));
-
-        let decl = library.elements.get(2).unwrap();
-        let decl = cast!(decl, LibraryElementKind::DataTypeDeclaration);
-        let decl = cast!(decl, DataTypeDeclarationKind::Structure);
-        assert_eq!(decl.type_name, TypeName::from("OUTER_STRUCT"));
-    }
-
-    #[test]
-    fn apply_when_initialized_structure_types() {
-        let program = "
-TYPE
-
-INIT_STRUCT : MY_STRUCT := (MEMBER := 2);
-
-MY_STRUCT : STRUCT
-   MEMBER : INT := 1;
-END_STRUCT;
-
-END_TYPE";
-
-        let library = parse_only(program);
-        let (library, _reachable) = apply(library).unwrap();
-
-        let decl = library.elements.first().unwrap();
-        let decl = cast!(decl, LibraryElementKind::DataTypeDeclaration);
-        let decl = cast!(decl, DataTypeDeclarationKind::Structure);
-        assert_eq!(decl.type_name, TypeName::from("MY_STRUCT"));
-
-        let decl = library.elements.get(1).unwrap();
-        let decl = cast!(decl, LibraryElementKind::DataTypeDeclaration);
-        let decl = cast!(decl, DataTypeDeclarationKind::Simple);
-        assert_eq!(decl.type_name, TypeName::from("INIT_STRUCT"));
-    }
-
-    #[test]
-    fn apply_when_function_calls_another_function_then_callee_ordered_first() {
-        let program = "
-        FUNCTION INNER : REAL
-        VAR_INPUT
-            X : REAL;
-        END_VAR
-            INNER := X * 2.0;
-        END_FUNCTION
-
-        FUNCTION OUTER : REAL
-        VAR_INPUT
-            Y : REAL;
-        END_VAR
-            OUTER := INNER(X := Y);
-        END_FUNCTION
-
-        PROGRAM main
-        VAR
-            result : REAL;
-        END_VAR
-            result := OUTER(Y := 3.0);
-        END_PROGRAM";
-
-        let library = parse_only(program);
-        let (library, _reachable) = apply(library).unwrap();
-
-        // INNER must come before OUTER (callee before caller), both before main.
-        // Collect just the function declarations in order.
-        let func_names: Vec<&Id> = library
-            .elements
-            .iter()
-            .filter_map(|e| {
-                if let LibraryElementKind::FunctionDeclaration(f) = e {
-                    Some(&f.name)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        assert_eq!(func_names.len(), 2);
-        assert_eq!(func_names[0], &Id::from("INNER"));
-        assert_eq!(func_names[1], &Id::from("OUTER"));
-    }
-
-    #[test]
-    fn apply_when_array_element_is_struct_then_ok() {
-        let program = "TYPE subrange_element_type :
-  STRUCT
-	DAY : SINT;
-  END_STRUCT;
-END_TYPE
-
-TYPE
-  array_container 	: ARRAY [0..29] OF subrange_element_type;
-END_TYPE";
-
-        let library = parse_only(program);
-        let (library, _reachable) = apply(library).unwrap();
-
-        let decl = library.elements.first().unwrap();
-        let decl = cast!(decl, LibraryElementKind::DataTypeDeclaration);
-        let decl = cast!(decl, DataTypeDeclarationKind::Structure);
-        assert_eq!(decl.type_name, TypeName::from("subrange_element_type"));
-
-        let decl = library.elements.get(1).unwrap();
-        let decl = cast!(decl, LibraryElementKind::DataTypeDeclaration);
-        let decl = cast!(decl, DataTypeDeclarationKind::Array);
-        assert_eq!(decl.type_name, TypeName::from("array_container"));
-    }
-
-    #[test]
-    fn apply_when_array_element_is_struct_needs_reorder_then_ok() {
-        let program = "
-TYPE
-  array_container 	: ARRAY [0..29] OF subrange_element_type;
-END_TYPE
-
-TYPE subrange_element_type :
-  STRUCT
-	DAY : SINT;
-  END_STRUCT;
-END_TYPE";
-
-        let library = parse_only(program);
-        let (library, _reachable) = apply(library).unwrap();
-
-        let decl = library.elements.first().unwrap();
-        let decl = cast!(decl, LibraryElementKind::DataTypeDeclaration);
-        let decl = cast!(decl, DataTypeDeclarationKind::Structure);
-        assert_eq!(decl.type_name, TypeName::from("subrange_element_type"));
-
-        let decl = library.elements.get(1).unwrap();
-        let decl = cast!(decl, LibraryElementKind::DataTypeDeclaration);
-        let decl = cast!(decl, DataTypeDeclarationKind::Array);
-        assert_eq!(decl.type_name, TypeName::from("array_container"));
-    }
-
-    #[test]
-    fn apply_when_unused_function_then_not_in_reachable_set() {
-        let program = "
-        FUNCTION INNER : REAL
-        VAR_INPUT X : REAL; END_VAR
-            INNER := X * 2.0;
-        END_FUNCTION
-
-        FUNCTION UNUSED : REAL
-        VAR_INPUT X : REAL; END_VAR
-            UNUSED := X;
-        END_FUNCTION
-
-        FUNCTION OUTER : REAL
-        VAR_INPUT A : REAL; END_VAR
-            OUTER := INNER(X := A);
-        END_FUNCTION
-
-        PROGRAM main
-        VAR result : REAL; END_VAR
-            result := OUTER(A := 3.0);
-        END_PROGRAM";
-
-        let library = parse_only(program);
-        let (_library, reachable) = apply(library).unwrap();
-
-        assert!(reachable.contains(&Id::from("main")));
-        assert!(reachable.contains(&Id::from("OUTER")));
-        assert!(reachable.contains(&Id::from("INNER")));
-        assert!(!reachable.contains(&Id::from("UNUSED")));
-    }
-
-    #[test]
-    fn apply_when_top_level_var_global_then_return_ok() {
-        let program = "
-        VAR_GLOBAL CONSTANT
-            MY_LENGTH : INT := 250;
-        END_VAR
-
-        FUNCTION MY_FUNC : INT
-        VAR_INPUT
-            x : INT;
-        END_VAR
-            MY_FUNC := x;
-        END_FUNCTION
-
-        PROGRAM main
-        VAR
-            result : INT;
-        END_VAR
-            result := MY_FUNC(x := 1);
-        END_PROGRAM";
-
-        let library = {
-            use ironplc_parser::{options::CompilerOptions, parse_program};
-            parse_program(
-                program,
-                &FileId::default(),
-                &CompilerOptions {
-                    allow_top_level_var_global: true,
-                    ..Default::default()
-                },
-            )
-            .unwrap()
-        };
-
-        let (library, _reachable) = apply(library).unwrap();
-
-        // Global var declarations should come first
-        let first = library.elements.first().unwrap();
-        assert!(matches!(
-            first,
-            LibraryElementKind::GlobalVarDeclarations(_)
-        ));
-    }
-
-    // ---------------------------------------------------------------------
-    // Array element type dependency edge for array-typed struct fields.
-    // ---------------------------------------------------------------------
-
-    /// Returns the position of the named structure declaration in the sorted
-    /// library, or `None` when the library does not declare that structure.
-    fn structure_position(library: &Library, name: &str) -> Option<usize> {
-        library.elements.iter().position(|element| match element {
-            LibraryElementKind::DataTypeDeclaration(DataTypeDeclarationKind::Structure(decl)) => {
-                decl.type_name == TypeName::from(name)
-            }
-            _ => false,
-        })
-    }
-
-    /// Position of the enumeration declaration named `name` in the sorted
-    /// library, or `None` when the library does not declare that enumeration.
-    fn enumeration_position(library: &Library, name: &str) -> Option<usize> {
-        library.elements.iter().position(|element| match element {
-            LibraryElementKind::DataTypeDeclaration(DataTypeDeclarationKind::Enumeration(decl)) => {
-                decl.type_name == TypeName::from(name)
-            }
-            _ => false,
-        })
-    }
-
-    #[test]
-    fn apply_when_struct_array_field_element_declared_first_then_element_ordered_first() {
-        // Declaration order already matches dependency order. The element type
-        // must still be ordered ahead of the struct that arrays over it --
-        // without a dependency edge the sort is free to emit either order.
-        let program = "
-TYPE Item : STRUCT
-    Flag : BOOL;
-END_STRUCT;
-END_TYPE
-
-TYPE Holder : STRUCT
-    Items : ARRAY[1..6] OF Item;
-END_STRUCT;
-END_TYPE";
-
-        let library = parse_only(program);
-        let (library, _reachable) = apply(library).unwrap();
-
-        let item = structure_position(&library, "Item").unwrap();
-        let holder = structure_position(&library, "Holder").unwrap();
-        assert!(item < holder, "Item must be ordered before Holder");
-    }
-
-    #[test]
-    fn apply_when_struct_array_field_element_declared_last_then_element_ordered_first() {
-        // Forward reference: the element type is declared textually *after*
-        // the struct whose array field references it.
-        let program = "
-TYPE Holder : STRUCT
-    Items : ARRAY[1..6] OF Item;
-END_STRUCT;
-END_TYPE
-
-TYPE Item : STRUCT
-    Flag : BOOL;
-END_STRUCT;
-END_TYPE";
-
-        let library = parse_only(program);
-        let (library, _reachable) = apply(library).unwrap();
-
-        let item = structure_position(&library, "Item").unwrap();
-        let holder = structure_position(&library, "Holder").unwrap();
-        assert!(item < holder, "Item must be ordered before Holder");
-    }
-
-    #[test]
-    fn apply_when_struct_array_field_element_is_elementary_then_return_ok() {
-        // Elementary element types have no declaration to order against. The
-        // added edge must not make the graph unsortable.
-        let program = "
-TYPE Holder : STRUCT
-    Nums : ARRAY[1..4] OF INT;
-    Flags : ARRAY[1..2] OF BOOL;
-END_STRUCT;
-END_TYPE";
-
-        let library = parse_only(program);
-        let (library, _reachable) = apply(library).unwrap();
-
-        assert!(structure_position(&library, "Holder").is_some());
-    }
-
-    #[test]
-    fn apply_when_struct_array_field_is_self_recursive_then_return_error() {
-        // An array of the enclosing struct is infinitely sized. The new edge
-        // makes this a genuine cycle, which must be reported as such.
-        let program = "
-TYPE A : STRUCT
-    Items : ARRAY[1..2] OF A;
-END_STRUCT;
-END_TYPE";
-
-        let library = parse_only(program);
-        let result = apply(library);
-        assert_eq!(
-            result.unwrap_err().first().unwrap().code,
-            Problem::RecursiveCycle.code().to_string()
-        );
-    }
-
-    #[test]
-    fn apply_when_struct_array_fields_are_mutually_recursive_then_return_error() {
-        let program = "
-TYPE A : STRUCT
-    Items : ARRAY[1..2] OF B;
-END_STRUCT;
-END_TYPE
-
-TYPE B : STRUCT
-    Items : ARRAY[1..2] OF A;
-END_STRUCT;
-END_TYPE";
-
-        let library = parse_only(program);
-        let result = apply(library);
-        assert_eq!(
-            result.unwrap_err().first().unwrap().code,
-            Problem::RecursiveCycle.code().to_string()
-        );
-    }
-
-    #[test]
-    fn resolve_types_when_struct_array_field_element_declared_before_program_then_return_ok() {
-        // Pipeline-level regression guard for the reported symptom: this
-        // layout previously failed with P2013 because the element type was
-        // absent from the type environment when the array field was resolved.
-        // See https://github.com/ironplc/ironplc/issues/1376.
-        use ironplc_parser::options::CompilerOptions;
-
-        let program = "
-TYPE Item : STRUCT
-    Flag : BOOL;
-END_STRUCT;
-END_TYPE
-
-TYPE Holder : STRUCT
-    Items : ARRAY[1..6] OF Item;
-    Other : BOOL;
-END_STRUCT;
-END_TYPE
-
-PROGRAM Main
-VAR
-    H : Holder;
-END_VAR
-    H.Other := TRUE;
-END_PROGRAM";
-
-        let library = parse_only(program);
-        let (_library, context) =
-            crate::stages::resolve_types(&[&library], &CompilerOptions::default()).unwrap();
-        assert!(
-            !context.has_diagnostics(),
-            "expected type resolution to succeed, got {:?}",
-            context.diagnostics()
-        );
-    }
-
-    #[test]
-    fn apply_when_struct_enum_field_initialized_and_enum_declared_first_then_enum_ordered_first() {
-        // Declaration order already matches dependency order. The qualified
-        // initializer parses straight to the EnumeratedType arm, which must
-        // record the edge so the sort is not free to emit either order.
-        let program = "
-TYPE Color : (RED, GREEN, BLUE); END_TYPE
-
-TYPE Thing : STRUCT
-    c : Color := Color#GREEN;
-    n : INT;
-END_STRUCT;
-END_TYPE";
-
-        let library = parse_only(program);
-        let (library, _reachable) = apply(library).unwrap();
-
-        let color = enumeration_position(&library, "Color").unwrap();
-        let thing = structure_position(&library, "Thing").unwrap();
-        assert!(color < thing, "Color must be ordered before Thing");
-    }
-
-    #[test]
-    fn apply_when_struct_enum_field_initialized_and_enum_declared_last_then_enum_ordered_first() {
-        // Forward reference: the enumeration is declared textually *after*
-        // the struct whose initialized field references it.
-        let program = "
-TYPE Thing : STRUCT
-    c : Color := Color#GREEN;
-    n : INT;
-END_STRUCT;
-END_TYPE
-
-TYPE Color : (RED, GREEN, BLUE); END_TYPE";
-
-        let library = parse_only(program);
-        let (library, _reachable) = apply(library).unwrap();
-
-        let color = enumeration_position(&library, "Color").unwrap();
-        let thing = structure_position(&library, "Thing").unwrap();
-        assert!(color < thing, "Color must be ordered before Thing");
-    }
-
-    #[test]
-    fn resolve_types_when_struct_enum_field_initialized_and_enum_declared_first_then_return_ok() {
-        // Pipeline-level regression guard for the reported symptom: this
-        // layout previously failed with P2021 and P2004 because the
-        // enumeration was absent from the type environment when the
-        // initialized field was resolved. Removing the initializer, or
-        // swapping the two TYPE blocks, made it pass.
-        // See https://github.com/ironplc/ironplc/issues/1593.
-        use ironplc_parser::options::CompilerOptions;
-
-        let program = "
-TYPE Color : (RED, GREEN, BLUE); END_TYPE
-
-TYPE Thing : STRUCT
-    c : Color := Color#GREEN;
-    n : INT;
-END_STRUCT;
-END_TYPE
-
-PROGRAM Main
-VAR
-    t : Thing;
-    r : INT;
-END_VAR
-    r := t.n;
-END_PROGRAM";
-
-        let library = parse_only(program);
-        let (_library, context) =
-            crate::stages::resolve_types(&[&library], &CompilerOptions::default()).unwrap();
-        assert!(
-            !context.has_diagnostics(),
-            "expected type resolution to succeed, got {:?}",
-            context.diagnostics()
-        );
-    }
-    #[test]
-    fn apply_when_reference_target_declared_last_then_target_ordered_first() {
-        // `TYPE ArrRef : REF_TO ARR4` depends on ARR4 exactly as an array
-        // alias depends on its base type.
-        // See https://github.com/ironplc/ironplc/issues/1580.
-        use ironplc_parser::options::{CompilerOptions, Dialect};
-
-        let program = "
-TYPE
-  ArrRef : REF_TO ARR4;
-  ARR4 : ARRAY[0..3] OF INT;
-END_TYPE";
-
-        let library = ironplc_parser::parse_program(
-            program,
-            &FileId::default(),
-            &CompilerOptions::from_dialect(Dialect::Iec61131_3Ed3),
-        )
-        .unwrap();
-        let (library, _reachable) = apply(library).unwrap();
-
-        let decl = library.elements.first().unwrap();
-        let decl = cast!(decl, LibraryElementKind::DataTypeDeclaration);
-        let decl = cast!(decl, DataTypeDeclarationKind::Array);
-        assert_eq!(decl.type_name, TypeName::from("ARR4"));
-
-        let decl = library.elements.get(1).unwrap();
-        let decl = cast!(decl, LibraryElementKind::DataTypeDeclaration);
-        let decl = cast!(decl, DataTypeDeclarationKind::Reference);
-        assert_eq!(decl.type_name, TypeName::from("ArrRef"));
-    }
-
-    #[test]
-    fn resolve_types_when_reference_type_targets_named_array_type_then_return_ok() {
-        // Pipeline-level guard: before the reference declaration carried a
-        // dependency edge, this layout resolved `ArrRef` before `ARR4` in
-        // some runs and reported P2011 for a type that is declared.
-        // See https://github.com/ironplc/ironplc/issues/1580.
-        use ironplc_parser::options::{CompilerOptions, Dialect};
-
-        let program = "
-TYPE
-  ARR4 : ARRAY[0..3] OF INT;
-  ArrRef : REF_TO ARR4;
-END_TYPE
-
-PROGRAM Main
-VAR
-    arr : ARR4;
-    pt : ArrRef;
-END_VAR
-    pt := REF(arr);
-END_PROGRAM";
-
-        let options = CompilerOptions::from_dialect(Dialect::Iec61131_3Ed3);
-        let library = ironplc_parser::parse_program(program, &FileId::default(), &options).unwrap();
-        let (_library, context) = crate::stages::resolve_types(&[&library], &options).unwrap();
-        assert!(
-            !context.has_diagnostics(),
-            "expected type resolution to succeed, got {:?}",
-            context.diagnostics()
-        );
-    }
-}
+mod cycle_tests;
+#[cfg(test)]
+mod tests;

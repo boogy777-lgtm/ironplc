@@ -172,7 +172,7 @@ END_VAR
 END_PROGRAM";
     let library = parse_program(source, &FileId::default(), &reference_to_options()).unwrap();
     let folded =
-        crate::xform_insert_implicit_deref::apply(library, &reference_to_options()).unwrap();
+        crate::xform_insert_implicit_deref::apply(library, &reference_to_options()).library;
     let statements = program_statements(&folded);
     let assignments: Vec<&Assignment> = statements
         .iter()

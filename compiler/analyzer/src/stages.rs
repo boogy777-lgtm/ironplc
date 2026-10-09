@@ -16,7 +16,7 @@ use crate::{
     intermediates::special_operator::special_operator_signatures,
     ironplc_dsl::common::Library,
     observe::{self, Observer, Unobserved},
-    pass_runner::{direct, pass, run_best_effort, run_reverting_on_error},
+    pass_runner::{direct, pass},
     semantic_context::SemanticContext,
     semantic_rules::semantic,
     symbol_environment::{ScopeKind, SymbolEnvironment, SymbolKind},
@@ -29,6 +29,7 @@ use crate::{
     xform_resolve_late_bound_expr_kind, xform_resolve_late_bound_type_initializer,
     xform_resolve_symbol_and_function_environment, xform_resolve_type_aliases,
     xform_resolve_type_decl_environment, xform_toposort_declarations,
+    xform_toposort_declarations::Sorted,
 };
 
 /// Analyze runs semantic analysis on the set of files as a self-contained and complete unit.
@@ -37,8 +38,10 @@ use crate::{
 /// function, and symbol information gathered during analysis. If any analysis step found
 /// errors, they are stored in `context.diagnostics()` rather than causing an `Err` return.
 ///
-/// Returns `Err` only when no sources are provided or when foundational type resolution
-/// fails (declaration sorting or type environment building).
+/// Returns `Err` only when no sources are provided or when the environments of the
+/// language cannot be built, which no input causes. A recursive cycle is the error of
+/// its members: it is reported with the other messages and the rest of the project is
+/// analyzed.
 ///
 /// The analysis runs on the stack budget (`ironplc_dsl::stack`): every pass
 /// recurses as deep as the tree it is given.
@@ -169,10 +172,8 @@ fn resolve_types_in_budget<O: Observer>(
 
     // Resolve constant references in type parameters (STRING lengths, array bounds).
     // Must run before toposort so that concrete integer values are available.
-    // Best effort: an unresolvable reference is diagnosed and left as a
-    // `Constant`, which is the state reverting would leave every reference in.
+    // An unresolvable reference is diagnosed and left as a `Constant`.
     library = pass!(
-        run_best_effort,
         observer,
         library,
         &mut diagnostics,
@@ -180,29 +181,43 @@ fn resolve_types_in_budget<O: Observer>(
         options
     );
 
-    // Hard failure: declaration ordering is required for all subsequent transforms.
-    // Also computes the set of declarations reachable from PROGRAM roots,
-    // which codegen uses to skip unused functions. A repeated declaration
-    // name survives the sort; the environments built below diagnose it.
-    let (mut library, reachable) = direct!(observer, xform_toposort_declarations(library))?;
+    // Declaration ordering is required for all subsequent transforms. It also
+    // computes the set of declarations reachable from PROGRAM roots, which
+    // codegen uses to skip unused functions. A repeated declaration name
+    // survives the sort; the environments built below diagnose it. A cycle is
+    // the error of its members only: each is reported once and entered in the
+    // type environment as a declaration with an error, and the other
+    // declarations are ordered as if it were not there.
+    let sorted = direct!(
+        observer,
+        xform_toposort_declarations(library, &mut type_environment)
+    );
+    let Sorted {
+        library: sorted_library,
+        reachable,
+        diagnostics: sort_diagnostics,
+        failed: failed_declarations,
+    } = sorted;
+    let mut library = sorted_library;
+    diagnostics.extend(sort_diagnostics);
 
-    // Best effort: a repeated type or function block name is diagnosed by
-    // the type environment, which keeps the first declaration, so the rest
-    // of the library still resolves. `Err` is a declaration that cannot be
-    // resolved at all, which still reverts.
+    // A repeated type or function block name is diagnosed by the type
+    // environment, which keeps the first declaration, and a declaration that
+    // cannot be resolved is diagnosed and left out of it, so the rest of the
+    // library still resolves.
+    let before = diagnostics.len();
     library = pass!(
-        run_best_effort,
         observer,
         library,
         &mut diagnostics,
         xform_resolve_type_decl_environment,
         &mut type_environment
     );
+    let first_derivation_found = diagnostics.len() - before;
 
-    // Best effort: an unresolvable declaration is diagnosed but does not
-    // discard the rest of the library's successfully resolved declarations.
+    // An unresolvable declaration is diagnosed and kept as it was; the rest of
+    // the library's declarations are resolved.
     library = pass!(
-        run_best_effort,
         observer,
         library,
         &mut diagnostics,
@@ -210,7 +225,6 @@ fn resolve_types_in_budget<O: Observer>(
         &mut type_environment
     );
     library = pass!(
-        run_best_effort,
         observer,
         library,
         &mut diagnostics,
@@ -226,7 +240,6 @@ fn resolve_types_in_budget<O: Observer>(
     // before the reference semantic rules. See
     // specs/design/reference-to-twincat.md (PR 2).
     library = pass!(
-        run_reverting_on_error,
         observer,
         library,
         &mut diagnostics,
@@ -238,10 +251,8 @@ fn resolve_types_in_budget<O: Observer>(
     // `allow_adr` is set. Runs after implicit-deref (so a `REFERENCE TO`
     // operand is not mis-addressed) and before symbol/function resolution
     // (so a recognized `ADR` is not reported as an undeclared function).
-    // Best effort: a diagnosed call is lowered to a placeholder, so the
-    // transformed library is kept even when diagnostics are present.
+    // A diagnosed call is lowered to a placeholder.
     library = pass!(
-        run_best_effort,
         observer,
         library,
         &mut diagnostics,
@@ -252,11 +263,9 @@ fn resolve_types_in_budget<O: Observer>(
     // Fold constant-expression VAR initializers (e.g. `scaled : LREAL := SCALE*4.0;`)
     // back into ordinary literal initializers, or diagnose. Must run before
     // any other pass touches `InitialValueAssignmentKind::SimpleExpr`.
-    // Best effort: a diagnosed initializer is still normalized, so the
-    // transformed library must be kept even when diagnostics are present —
-    // reverting would leak `SimpleExpr` nodes to later passes.
+    // A diagnosed initializer is still normalized, so no `SimpleExpr` reaches
+    // later passes.
     library = pass!(
-        run_best_effort,
         observer,
         library,
         &mut diagnostics,
@@ -267,7 +276,6 @@ fn resolve_types_in_budget<O: Observer>(
     // Rewrite integer 0/1 initializers on BOOL variables to boolean literals.
     // Short-circuits internally when allow_int_to_bool_initializer is false.
     library = pass!(
-        run_reverting_on_error,
         observer,
         library,
         &mut diagnostics,
@@ -283,26 +291,26 @@ fn resolve_types_in_budget<O: Observer>(
     // declarations; every structure, alias of one and aggregate holding one
     // then carries the members' values. Nothing holds an id from the first
     // derivation, which already diagnosed any repeated or unresolvable
-    // declaration, so a failure here keeps the first environment.
+    // declaration, so what the second derivation finds is not reported again.
+    // It replaces the first environment unless it found more than the first
+    // did, a declaration the first resolved and this one cannot.
     if let Ok(mut resolved_environment) = build_type_environment(observer) {
-        let copy = observer.observe(
-            observe::fallback("xform_resolve_type_decl_environment"),
-            || library.clone(),
-        );
-        if let Ok((resolved, _)) = direct!(
+        // The declarations the sort could not order are declarations with an
+        // error in this environment too.
+        failed_declarations.enter(&mut resolved_environment);
+        let second = direct!(
             observer,
-            xform_resolve_type_decl_environment(copy, &mut resolved_environment)
-        ) {
-            library = resolved;
+            xform_resolve_type_decl_environment(library, &mut resolved_environment)
+        );
+        library = second.library;
+        if second.diagnostics.len() <= first_derivation_found {
             type_environment = resolved_environment;
         }
     }
 
-    // Best effort: a repeated declaration name is diagnosed here, by the
-    // environments, and the first declaration is kept, so the rest of the
-    // library still resolves instead of reverting on the first repeat.
+    // A repeated declaration name is diagnosed here, by the environments, and
+    // the first declaration is kept, so the rest of the library still resolves.
     library = pass!(
-        run_best_effort,
         observer,
         library,
         &mut diagnostics,
@@ -312,10 +320,8 @@ fn resolve_types_in_budget<O: Observer>(
     );
 
     // Convert named function call arguments to positional.
-    // Best effort: a diagnosed call keeps its named arguments, which is the
-    // state reverting would leave every call in -- including the valid ones.
+    // A diagnosed call keeps its named arguments.
     library = pass!(
-        run_best_effort,
         observer,
         library,
         &mut diagnostics,
@@ -326,7 +332,6 @@ fn resolve_types_in_budget<O: Observer>(
     // Record the type id each declaration declares, entering types spelled
     // out in place as anonymous types.
     library = pass!(
-        run_reverting_on_error,
         observer,
         library,
         &mut diagnostics,
@@ -336,7 +341,6 @@ fn resolve_types_in_budget<O: Observer>(
 
     // Resolve expression types using the function environment.
     library = pass!(
-        run_reverting_on_error,
         observer,
         library,
         &mut diagnostics,
@@ -348,7 +352,6 @@ fn resolve_types_in_budget<O: Observer>(
 
     // Fold constant binary and unary expressions.
     library = pass!(
-        run_reverting_on_error,
         observer,
         library,
         &mut diagnostics,
@@ -357,7 +360,6 @@ fn resolve_types_in_budget<O: Observer>(
 
     // ABS of an unsigned value is the value itself; no back end sees it.
     library = pass!(
-        run_reverting_on_error,
         observer,
         library,
         &mut diagnostics,
@@ -366,7 +368,6 @@ fn resolve_types_in_budget<O: Observer>(
     );
 
     library = pass!(
-        run_reverting_on_error,
         observer,
         library,
         &mut diagnostics,
@@ -379,7 +380,7 @@ fn resolve_types_in_budget<O: Observer>(
     // semantic rules and codegen see one notion of a constant variable.
     // Runs last: it needs bare identifiers resolved to variables, `ADR`
     // rewritten to `Ref`, user functions in the function environment and
-    // named arguments made positional. Infallible, so nothing to revert.
+    // named arguments made positional. Infallible.
     // See specs/design/constant-variable-inference.md.
     let library = direct!(
         observer,
@@ -472,6 +473,79 @@ END_PROGRAM";
                 "expected {expected}, got {reported:?}"
             );
         }
+    }
+
+    /// The codes of what `analyze` reports for `program`, in order.
+    fn codes_of(program: &str) -> Vec<String> {
+        let options = CompilerOptions::default();
+        let library = parse_program(program, &FileId::default(), &options).unwrap();
+        let (_library, context) = analyze(&[&library], &options).unwrap();
+        context
+            .diagnostics()
+            .iter()
+            .map(|d| d.code.clone())
+            .collect()
+    }
+
+    #[test]
+    fn analyze_when_types_hold_each_other_then_cycle_and_error_of_another_unit_are_reported() {
+        let codes = codes_of(
+            "
+TYPE A : STRUCT b : B; END_STRUCT; END_TYPE
+TYPE B : STRUCT a : A; END_STRUCT; END_TYPE
+PROGRAM main VAR x : INT; END_VAR x := 'text'; END_PROGRAM",
+        );
+
+        assert_eq!(vec!["P4005", "P4035"], codes);
+    }
+
+    #[test]
+    fn analyze_when_variable_is_of_a_type_declared_with_an_error_then_only_the_first_cause() {
+        let codes = codes_of(
+            "
+TYPE T : T_NOWHERE; END_TYPE
+PROGRAM main VAR v : T; END_VAR v := 1; END_PROGRAM",
+        );
+
+        assert_eq!(vec!["P2011"], codes);
+    }
+
+    #[test]
+    fn analyze_when_cycle_and_structure_with_enumeration_default_then_only_the_cycle() {
+        let codes = codes_of(
+            "
+TYPE A : STRUCT b : B; END_STRUCT; END_TYPE
+TYPE B : STRUCT a : A; END_STRUCT; END_TYPE
+TYPE COLOR : (RED, GREEN); END_TYPE
+TYPE S : STRUCT c : COLOR := GREEN; n : INT := 3; END_STRUCT; END_TYPE
+PROGRAM main VAR s : S; END_VAR s.n := 4; END_PROGRAM",
+        );
+
+        assert_eq!(vec!["P4005"], codes);
+    }
+
+    #[test]
+    fn analyze_when_cycle_then_structure_members_carry_their_resolved_default_values() {
+        let options = CompilerOptions::default();
+        let library = parse_program(
+            "
+TYPE A : STRUCT b : B; END_STRUCT; END_TYPE
+TYPE B : STRUCT a : A; END_STRUCT; END_TYPE
+TYPE COLOR : (RED, GREEN); END_TYPE
+TYPE S : STRUCT c : COLOR := GREEN; END_STRUCT; END_TYPE",
+            &FileId::default(),
+            &options,
+        )
+        .unwrap();
+
+        let (_library, context) = analyze(&[&library], &options).unwrap();
+
+        let structure = context
+            .types()
+            .get(&ironplc_dsl::common::TypeName::from("S"))
+            .unwrap();
+        let fields = structure.representation.member_fields().unwrap();
+        assert!(fields[0].initial_value.is_some());
     }
 
     #[test]

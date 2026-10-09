@@ -3178,7 +3178,8 @@ pub enum EdgeDirection {
 ///
 /// The library element flattens data type declaration blocks so that each
 /// enumeration is for a single data type declaration.
-#[derive(Clone, Debug, PartialEq, Recurse)]
+#[cfg_attr(not(feature = "count-library-clones"), derive(Clone))]
+#[derive(Debug, PartialEq, Recurse)]
 pub enum LibraryElementKind {
     DataTypeDeclaration(DataTypeDeclarationKind),
     FunctionDeclaration(FunctionDeclaration),
@@ -3379,6 +3380,41 @@ impl FunctionBlockBodyKind {
 #[derive(Clone, Debug, PartialEq, Recurse)]
 pub struct Library {
     pub elements: Vec<LibraryElementKind>,
+}
+
+/// How many library elements have been cloned in this process.
+#[cfg(feature = "count-library-clones")]
+static LIBRARY_ELEMENT_CLONES: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+/// The number of library elements cloned so far in this process.
+///
+/// A copy of a library is a clone of each of its elements, so the difference
+/// between two readings is what a stretch of code copied: a guard that no step
+/// of the analysis keeps a copy of the library reads this around each step.
+/// Only built with the feature `count-library-clones`, which only that guard
+/// enables: without it `LibraryElementKind` has the derived `Clone` and counts
+/// nothing.
+#[cfg(feature = "count-library-clones")]
+pub fn library_element_clones() -> usize {
+    LIBRARY_ELEMENT_CLONES.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+#[cfg(feature = "count-library-clones")]
+impl Clone for LibraryElementKind {
+    fn clone(&self) -> Self {
+        LIBRARY_ELEMENT_CLONES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        match self {
+            Self::DataTypeDeclaration(x) => Self::DataTypeDeclaration(x.clone()),
+            Self::FunctionDeclaration(x) => Self::FunctionDeclaration(x.clone()),
+            Self::FunctionBlockDeclaration(x) => Self::FunctionBlockDeclaration(x.clone()),
+            Self::ProgramDeclaration(x) => Self::ProgramDeclaration(x.clone()),
+            Self::ConfigurationDeclaration(x) => Self::ConfigurationDeclaration(x.clone()),
+            Self::GlobalVarDeclarations(x) => Self::GlobalVarDeclarations(x.clone()),
+            Self::InterfaceDeclaration(x) => Self::InterfaceDeclaration(x.clone()),
+            Self::NamespaceDeclaration(x) => Self::NamespaceDeclaration(x.clone()),
+        }
+    }
 }
 
 impl Default for Library {

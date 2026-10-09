@@ -28,3 +28,7 @@ To fix this error, declare the parent enumeration first:
        ChildEnum : (VALUE1, VALUE2) EXTENDS BaseEnum;  (* Correct: Parent enum declared *)
    END_TYPE
 
+Uses of a declaration that has an error
+---------------------------------------
+
+.. include:: /includes/declared-with-an-error.rst

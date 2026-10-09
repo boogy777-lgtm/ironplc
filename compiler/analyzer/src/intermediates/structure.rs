@@ -6,6 +6,7 @@
 use crate::intermediate_type::{IntermediateStructField, IntermediateType};
 use crate::intermediates::enumeration::try_from_values;
 use crate::intermediates::subrange::IntermediateResult;
+use crate::resolution::Failure;
 use crate::type_environment::{TypeAttributes, TypeEnvironment};
 use ironplc_dsl::common::*;
 use ironplc_dsl::core::Located;
@@ -17,7 +18,7 @@ pub fn try_from(
     node_name: &TypeName,
     spec: &StructureDeclaration,
     type_environment: &TypeEnvironment,
-) -> Result<TypeAttributes, Diagnostic> {
+) -> Result<TypeAttributes, Failure> {
     from_elements(node_name, &spec.elements, type_environment)
 }
 
@@ -29,7 +30,7 @@ pub fn from_union(
     node_name: &TypeName,
     spec: &UnionDeclaration,
     type_environment: &TypeEnvironment,
-) -> Result<TypeAttributes, Diagnostic> {
+) -> Result<TypeAttributes, Failure> {
     from_elements(node_name, &spec.elements, type_environment)
 }
 
@@ -38,7 +39,7 @@ fn from_elements(
     node_name: &TypeName,
     elements: &[StructureElementDeclaration],
     type_environment: &TypeEnvironment,
-) -> Result<TypeAttributes, Diagnostic> {
+) -> Result<TypeAttributes, Failure> {
     // Note: Field name uniqueness is validated by semantic rules, not here
 
     // Resolve field types and calculate offsets
@@ -91,14 +92,14 @@ fn align_offset(offset: u32, alignment: u32) -> u32 {
 fn resolve_field_type(
     element: &StructureElementDeclaration,
     type_environment: &TypeEnvironment,
-) -> Result<IntermediateType, Diagnostic> {
+) -> Result<IntermediateType, Failure> {
     match &element.init {
         // A value that is an expression of constants is not folded yet when the
         // environment is first derived; the type of the field is the same.
         InitialValueAssignmentKind::Simple(SimpleInitializer { type_name, .. })
         | InitialValueAssignmentKind::SimpleExpr(SimpleExprInitializer { type_name, .. }) => {
             // Handle simple field types like BOOL, INT, etc.
-            let type_attrs = type_environment.get(type_name).ok_or_else(|| {
+            let type_attrs = type_environment.lookup(type_name).or_failure(|| {
                 Diagnostic::problem(
                     Problem::StructFieldTypeNotDeclared,
                     Label::span(type_name.span(), "Field type"),
@@ -112,7 +113,7 @@ fn resolve_field_type(
             // LateResolvedType may appear when the field references a user-defined type.
             // Since types are processed in topological order, the referenced type should
             // already be in the environment.
-            let type_attrs = type_environment.get(type_name).ok_or_else(|| {
+            let type_attrs = type_environment.lookup(type_name).or_failure(|| {
                 Diagnostic::problem(
                     Problem::StructFieldTypeNotDeclared,
                     Label::span(type_name.span(), "Field type"),
@@ -134,7 +135,7 @@ fn resolve_field_type(
             match subrange_result {
                 IntermediateResult::Type(attrs) => Ok(attrs.representation),
                 IntermediateResult::Alias(base_name) => {
-                    let base_attrs = type_environment.get(&base_name).ok_or_else(|| {
+                    let base_attrs = type_environment.lookup(&base_name).or_failure(|| {
                         Diagnostic::problem(
                             Problem::StructFieldTypeNotDeclared,
                             Label::span(base_name.span(), "Base type"),
@@ -152,8 +153,8 @@ fn resolve_field_type(
         InitialValueAssignmentKind::EnumeratedType(enum_assignment) => {
             // Handle enumerated field types with type reference
             let type_attrs = type_environment
-                .get(&enum_assignment.type_name)
-                .ok_or_else(|| {
+                .lookup(&enum_assignment.type_name)
+                .or_failure(|| {
                     Diagnostic::problem(
                         Problem::StructFieldTypeNotDeclared,
                         Label::span(enum_assignment.type_name.span(), "Enumeration type"),
@@ -164,8 +165,8 @@ fn resolve_field_type(
         InitialValueAssignmentKind::Structure(structure_init) => {
             // Handle nested structure field types
             let type_attrs = type_environment
-                .get(&structure_init.type_name)
-                .ok_or_else(|| {
+                .lookup(&structure_init.type_name)
+                .or_failure(|| {
                     Diagnostic::problem(
                         Problem::StructFieldTypeNotDeclared,
                         Label::span(structure_init.type_name.span(), "Structure type"),
@@ -186,7 +187,7 @@ fn resolve_field_type(
                     Ok(attrs.representation)
                 }
                 crate::intermediates::array::IntermediateResult::Alias(base_name) => {
-                    let base_attrs = type_environment.get(&base_name).ok_or_else(|| {
+                    let base_attrs = type_environment.lookup(&base_name).or_failure(|| {
                         Diagnostic::problem(
                             Problem::StructFieldTypeNotDeclared,
                             Label::span(base_name.span(), "Base type"),
@@ -205,7 +206,8 @@ fn resolve_field_type(
             Err(Diagnostic::not_implemented(Label::span(
                 element.name.span(),
                 "Structure field with an unsupported type",
-            )))
+            ))
+            .into())
         }
     }
 }
@@ -232,7 +234,11 @@ mod tests {
             .build()
             .unwrap();
         let result = apply(input, &mut env);
-        assert!(result.is_ok(), "Expected Ok, got error: {:?}", result.err());
+        assert!(
+            result.diagnostics.is_empty(),
+            "Expected no diagnostics, got: {:?}",
+            result.diagnostics
+        );
         env
     }
 
@@ -247,8 +253,8 @@ mod tests {
             .build()
             .unwrap();
         let result = apply(input, &mut env);
-        assert!(result.is_err());
-        result.unwrap_err()
+        assert!(!result.diagnostics.is_empty());
+        result.diagnostics
     }
 
     #[test]

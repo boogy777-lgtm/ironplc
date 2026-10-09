@@ -12,8 +12,10 @@ use ironplc_dsl::textual::{Expr, ExprKind, NamedVariable, SymbolicVariableKind, 
 use ironplc_dsl::visitor::Visitor;
 use ironplc_problems::Problem;
 use log::trace;
+use std::convert::Infallible;
 
 use crate::intermediate_type::IntermediateType;
+use crate::pass_runner::Outcome;
 use crate::scoped_table::{ScopedTable, Value};
 use crate::type_environment::TypeEnvironment;
 
@@ -41,15 +43,12 @@ enum TypeDefinitionKind {
 
 impl Value for TypeDefinitionKind {}
 
-pub fn apply(
-    lib: Library,
-    type_environment: &mut TypeEnvironment,
-) -> Result<(Library, Vec<Diagnostic>), Vec<Diagnostic>> {
+pub fn apply(lib: Library, type_environment: &mut TypeEnvironment) -> Outcome {
     let mut type_to_type_kind: ScopedTable<TypeName, TypeDefinitionKind> = ScopedTable::new();
 
     // Walk the entire library to find the types. We don't need
     // to keep track of contexts because types are global scoped.
-    type_to_type_kind.walk(&lib).map_err(|err| vec![err])?;
+    let Ok(()) = type_to_type_kind.walk(&lib);
 
     // Set the types for each item.
     let mut resolver = TypeResolver {
@@ -58,13 +57,12 @@ pub fn apply(
         diagnostics: vec![],
     };
     // An unresolvable type on one declaration (e.g. a reference to a type
-    // that isn't declared anywhere in the compilation unit) is diagnosed
-    // but does not stop the fold: every other, unrelated declaration is
-    // still resolved. Only a genuine fold failure (a compiler bug, not a
-    // user error) should discard the result.
-    let result = resolver.fold_library(lib).map_err(|e| vec![e])?;
+    // that isn't declared anywhere in the compilation unit) is diagnosed and
+    // the declaration is kept as it was: every other, unrelated declaration is
+    // still resolved.
+    let Ok(result) = resolver.fold_library(lib);
 
-    Ok((result, resolver.diagnostics))
+    Outcome::new(result, resolver.diagnostics)
 }
 
 impl ScopedTable<'_, TypeName, TypeDefinitionKind> {
@@ -76,19 +74,19 @@ impl ScopedTable<'_, TypeName, TypeDefinitionKind> {
         &mut self,
         to_add: &TypeName,
         kind: TypeDefinitionKind,
-    ) -> Result<(), Diagnostic> {
+    ) -> Result<(), Infallible> {
         self.try_add(to_add, kind);
         Ok(())
     }
 }
 
-impl Visitor<Diagnostic> for ScopedTable<'_, TypeName, TypeDefinitionKind> {
+impl Visitor<Infallible> for ScopedTable<'_, TypeName, TypeDefinitionKind> {
     type Value = ();
 
     fn visit_data_type_declaration_kind(
         &mut self,
         node: &DataTypeDeclarationKind,
-    ) -> Result<(), Diagnostic> {
+    ) -> Result<(), Infallible> {
         // We could visit all of the types individually, but that would allow
         // new types to be created without necessarily handling the type. Using
         // the match ensures that doesn't happen.
@@ -135,7 +133,7 @@ impl Visitor<Diagnostic> for ScopedTable<'_, TypeName, TypeDefinitionKind> {
     fn visit_function_block_declaration(
         &mut self,
         node: &FunctionBlockDeclaration,
-    ) -> Result<(), Diagnostic> {
+    ) -> Result<(), Infallible> {
         // Other items are types, but in the case of a function block declaration, this is
         // actually an identifier, so treat identifier and type as equivalent in this context.
         self.add_if_new(&node.name, TypeDefinitionKind::FunctionBlock)
@@ -159,6 +157,22 @@ enum ResolvedKind {
 }
 
 impl TypeResolver<'_> {
+    /// Says that `name` is not declared, unless it is declared with an error:
+    /// then the type is already reported where it is declared, and the
+    /// variable that uses it is of the error type.
+    fn report_undeclared(&mut self, name: &TypeName) {
+        if !self.type_environment.lookup(name).is_absent() {
+            return;
+        }
+        self.diagnostics.push(
+            Diagnostic::problem(
+                Problem::UndeclaredUnknownType,
+                Label::span(name.span(), "Variable type"),
+            )
+            .with_context_type("identifier", name),
+        );
+    }
+
     /// Classifies `name` from the type environment, or from this pass's own
     /// table of declared types when the environment does not hold it, in
     /// the same order the bare-declaration arm consults them.
@@ -187,25 +201,17 @@ impl TypeResolver<'_> {
         &mut self,
         name: TypeName,
         initial_value: LateResolvedInitialValue,
-    ) -> Result<InitialValueAssignmentKind, Diagnostic> {
+    ) -> InitialValueAssignmentKind {
         let Some(kind) = self.classify(&name) else {
             // Undeclared, as for a bare declaration: say so and keep the
             // placeholder so the rest of the library still resolves.
-            self.diagnostics.push(
-                Diagnostic::problem(
-                    Problem::UndeclaredUnknownType,
-                    Label::span(name.span(), "Variable type"),
-                )
-                .with_context_type("identifier", &name),
-            );
-            return Ok(InitialValueAssignmentKind::LateResolvedType(
-                LateResolvedInitializer {
-                    type_name: name,
-                    initial_value: Some(initial_value),
-                },
-            ));
+            self.report_undeclared(&name);
+            return InitialValueAssignmentKind::LateResolvedType(LateResolvedInitializer {
+                type_name: name,
+                initial_value: Some(initial_value),
+            });
         };
-        Ok(match (initial_value, kind) {
+        match (initial_value, kind) {
             (LateResolvedInitialValue::Members(elements), ResolvedKind::FunctionBlock) => {
                 InitialValueAssignmentKind::FunctionBlock(FunctionBlockInitialValueAssignment {
                     type_name: name,
@@ -241,21 +247,21 @@ impl TypeResolver<'_> {
                     ))),
                 })
             }
-        })
+        }
     }
 }
 
-impl Fold<Diagnostic> for TypeResolver<'_> {
+impl Fold<Infallible> for TypeResolver<'_> {
     fn fold_initial_value_assignment_kind(
         &mut self,
         node: InitialValueAssignmentKind,
-    ) -> Result<InitialValueAssignmentKind, Diagnostic> {
+    ) -> Result<InitialValueAssignmentKind, Infallible> {
         match node {
             // TODO this needs to handle struct definitions
             InitialValueAssignmentKind::LateResolvedType(LateResolvedInitializer {
                 type_name: name,
                 initial_value: Some(initial_value),
-            }) => self.resolve_initialized(name, initial_value),
+            }) => Ok(self.resolve_initialized(name, initial_value)),
             InitialValueAssignmentKind::LateResolvedType(LateResolvedInitializer {
                 type_name: name,
                 initial_value: None,
@@ -352,17 +358,18 @@ impl Fold<Diagnostic> for TypeResolver<'_> {
                         TypeDefinitionKind::Subrange => Ok(InitialValueAssignmentKind::Subrange(
                             SubrangeInitializer::uninitialized(SpecificationKind::Named(name)),
                         )),
-                        _ => Err(Diagnostic::todo_with_type(&name)),
+                        _ => {
+                            // No resolution for this kind of declared type yet:
+                            // say so, and keep the declaration as it was.
+                            self.diagnostics.push(Diagnostic::todo_with_type(&name));
+                            Ok(InitialValueAssignmentKind::LateResolvedType(
+                                LateResolvedInitializer::bare(name),
+                            ))
+                        }
                     },
                     None => {
                         trace!("{:?}", self.types);
-                        self.diagnostics.push(
-                            Diagnostic::problem(
-                                Problem::UndeclaredUnknownType,
-                                Label::span(name.span(), "Variable type"),
-                            )
-                            .with_context_type("identifier", &name),
-                        );
+                        self.report_undeclared(&name);
                         Ok(InitialValueAssignmentKind::LateResolvedType(
                             LateResolvedInitializer::bare(name),
                         ))
@@ -379,6 +386,7 @@ mod tests {
     use crate::type_environment::TypeEnvironment;
 
     use super::apply;
+    use crate::pass_runner::Outcome;
     use ironplc_dsl::{
         common::*,
         core::{FileId, Id, SourceSpan},
@@ -404,7 +412,7 @@ END_FUNCTION_BLOCK
             ironplc_parser::parse_program(program, &FileId::default(), &CompilerOptions::default())
                 .unwrap();
         let mut type_environment = TypeEnvironment::new();
-        let result = apply(input, &mut type_environment).unwrap().0;
+        let result = apply(input, &mut type_environment).library;
 
         let expected = Library {
             elements: vec![
@@ -452,7 +460,7 @@ END_FUNCTION_BLOCK
             ironplc_parser::parse_program(program, &FileId::default(), &CompilerOptions::default())
                 .unwrap();
         let mut type_environment = TypeEnvironment::new();
-        let result = apply(input, &mut type_environment).unwrap().0;
+        let result = apply(input, &mut type_environment).library;
 
         let expected = Library {
             elements: vec![
@@ -500,7 +508,7 @@ END_FUNCTION_BLOCK
             ironplc_parser::parse_program(program, &FileId::default(), &CompilerOptions::default())
                 .unwrap();
         let mut type_environment = TypeEnvironment::new();
-        let result = apply(input, &mut type_environment).unwrap().0;
+        let result = apply(input, &mut type_environment).library;
 
         let expected = Library {
             elements: vec![
@@ -549,7 +557,7 @@ END_FUNCTION_BLOCK
             ironplc_parser::parse_program(program, &FileId::default(), &CompilerOptions::default())
                 .unwrap();
         let mut type_environment = TypeEnvironment::new();
-        let result = apply(input, &mut type_environment).unwrap().0;
+        let result = apply(input, &mut type_environment).library;
 
         // Find the caller function block and check the variable initializer
         let caller_fb = result.elements.iter().find(|e| {
@@ -585,7 +593,7 @@ END_FUNCTION_BLOCK
             ironplc_parser::parse_program(program, &FileId::default(), &CompilerOptions::default())
                 .unwrap();
         let mut type_environment = TypeEnvironment::new();
-        let result = apply(input, &mut type_environment).unwrap().0;
+        let result = apply(input, &mut type_environment).library;
 
         let caller_fb = result.elements.iter().find_map(|e| match e {
             LibraryElementKind::FunctionBlockDeclaration(fb)
@@ -629,7 +637,7 @@ END_FUNCTION_BLOCK
             ironplc_parser::parse_program(program, &FileId::default(), &CompilerOptions::default())
                 .unwrap();
         let mut type_environment = TypeEnvironment::new();
-        let (_library, diagnostics) = apply(input, &mut type_environment).unwrap();
+        let diagnostics = apply(input, &mut type_environment).diagnostics;
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
     }
 
@@ -658,7 +666,10 @@ END_FUNCTION_BLOCK
             ironplc_parser::parse_program(program, &FileId::default(), &CompilerOptions::default())
                 .unwrap();
         let mut type_environment = TypeEnvironment::new();
-        let (result, diagnostics) = apply(input, &mut type_environment).unwrap();
+        let Outcome {
+            library: result,
+            diagnostics,
+        } = apply(input, &mut type_environment);
 
         assert_eq!(1, diagnostics.len());
         assert_eq!(Problem::UndeclaredUnknownType.code(), diagnostics[0].code);
@@ -702,7 +713,10 @@ END_FUNCTION_BLOCK
             ironplc_parser::parse_program(program, &FileId::default(), &CompilerOptions::default())
                 .unwrap();
         let mut type_environment = TypeEnvironment::new();
-        let (result, diagnostics) = apply(input, &mut type_environment).unwrap();
+        let Outcome {
+            library: result,
+            diagnostics,
+        } = apply(input, &mut type_environment);
 
         assert_eq!(1, diagnostics.len());
         assert_eq!(Problem::UndeclaredUnknownType.code(), diagnostics[0].code);
@@ -775,7 +789,10 @@ END_PROGRAM"
             ironplc_parser::parse_program(program, &FileId::default(), &CompilerOptions::default())
                 .unwrap();
         let mut type_environment = TypeEnvironment::new();
-        let (result, diagnostics) = apply(input, &mut type_environment).unwrap();
+        let Outcome {
+            library: result,
+            diagnostics,
+        } = apply(input, &mut type_environment);
         let decl = result
             .elements
             .iter()
@@ -874,5 +891,48 @@ END_PROGRAM",
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn apply_when_type_is_declared_with_an_error_then_no_diagnostic_and_declaration_kept() {
+        let program = "
+PROGRAM main
+VAR
+    v : FAILED;
+END_VAR
+END_PROGRAM
+        ";
+        let input =
+            ironplc_parser::parse_program(program, &FileId::default(), &CompilerOptions::default())
+                .unwrap();
+        let mut type_environment = TypeEnvironment::new();
+        type_environment.insert_failed(&TypeName::from("FAILED"));
+
+        let result = apply(input, &mut type_environment);
+
+        assert!(result.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn apply_when_type_is_not_declared_then_p2008() {
+        let program = "
+PROGRAM main
+VAR
+    v : NOWHERE;
+END_VAR
+END_PROGRAM
+        ";
+        let input =
+            ironplc_parser::parse_program(program, &FileId::default(), &CompilerOptions::default())
+                .unwrap();
+        let mut type_environment = TypeEnvironment::new();
+
+        let result = apply(input, &mut type_environment);
+
+        assert_eq!(result.diagnostics.len(), 1);
+        assert_eq!(
+            result.diagnostics[0].code,
+            Problem::UndeclaredUnknownType.code()
+        );
     }
 }

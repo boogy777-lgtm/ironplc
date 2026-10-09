@@ -88,3 +88,18 @@ every visitor.
   declarations, diagnostics are emitted in dependency order rather than file
   order. That no longer hides anything, but the output is not sorted by file
   and position.
+
+### Postscript, 2026-10-08
+
+The premise in the decision outcome that the `xform_*` passes "have a real
+reason to stop", and that the runner "reverts to a pre-pass clone when one
+fails", no longer holds. A pass now returns the library as far as it could
+transform it together with its diagnostics, and a problem in one unit is
+reported where it stands and leaves the node as it was, so no pass stops and no
+pass keeps a copy. The decision itself, that a rule cannot fail, stands. See
+[Analysis Cost Measurement](../design/analysis-cost-measurement.md) section 9.
+
+The one step that still stopped the analysis, the sort of the declarations on a
+recursive cycle, no longer does: the cycle is the error of its members, and a
+use of a declaration that has an error shows the first cause only. See section
+10 of the same document.

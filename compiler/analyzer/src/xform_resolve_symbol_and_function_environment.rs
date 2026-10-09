@@ -16,6 +16,7 @@
 //! itself. The first declaration is kept and analysis continues on it; the
 //! diagnostics are collected rather than aborting the walk.
 
+use crate::pass_runner::Outcome;
 use ironplc_dsl::{
     common::{
         AddressAssignment, InitialValueAssignmentKind, Library, LocationPrefix, SizePrefix,
@@ -45,9 +46,9 @@ pub fn apply(
     lib: Library,
     symbol_environment: &mut SymbolEnvironment,
     function_environment: &mut FunctionEnvironment,
-) -> Result<(Library, Vec<Diagnostic>), Vec<Diagnostic>> {
+) -> Outcome {
     let diagnostics = apply_impl(&lib, symbol_environment, function_environment);
-    Ok((lib, diagnostics))
+    Outcome::new(lib, diagnostics)
 }
 
 pub fn apply_impl(

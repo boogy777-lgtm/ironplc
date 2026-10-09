@@ -9,16 +9,17 @@
 //! - Other types: handle as needed
 
 use crate::intermediate_type::IntermediateType;
+use crate::pass_runner::Outcome;
 use crate::symbol_environment::SymbolEnvironment;
 use crate::type_environment::TypeEnvironment;
 use ironplc_dsl::common::*;
 use ironplc_dsl::diagnostic::Diagnostic;
 
 pub fn apply(
-    _lib: Library,
+    lib: Library,
     type_environment: &TypeEnvironment,
     symbol_environment: &mut SymbolEnvironment,
-) -> Result<Library, Vec<Diagnostic>> {
+) -> Outcome {
     let mut errors = Vec::new();
 
     // Find all type aliases and duplicate their relevant symbols
@@ -43,11 +44,7 @@ pub fn apply(
         }
     }
 
-    if errors.is_empty() {
-        Ok(_lib)
-    } else {
-        Err(errors)
-    }
+    Outcome::new(lib, errors)
 }
 
 /// Duplicate relevant symbols for a type alias based on the type kind

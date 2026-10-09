@@ -130,6 +130,14 @@ impl RuleRefTo<'_> {
             .unwrap_or(false)
     }
 
+    /// Returns true if the variable is declared with a type whose declaration
+    /// has an error, which may be a reference: that is reported where the type
+    /// is declared, so a use of the variable is not reported as a non-reference.
+    fn is_variable_of_error_type(&self, var: &Variable) -> bool {
+        self.variable_type_name(var)
+            .is_some_and(|type_name| self.type_environment.lookup(&type_name).is_failed())
+    }
+
     /// Returns true if the variable is declared as REF_TO.
     fn is_variable_reference(&self, var: &Variable) -> bool {
         let id = match var {
@@ -226,7 +234,7 @@ impl RuleRefTo<'_> {
     /// P2031: Dereference requires reference type
     fn check_deref(&mut self, inner: &Expr) {
         if let ExprKind::Variable(var) = &inner.kind {
-            if !self.is_variable_reference(var) {
+            if !self.is_variable_reference(var) && !self.is_variable_of_error_type(var) {
                 self.diagnostics.push(Diagnostic::problem(
                     Problem::DerefRequiresReferenceType,
                     Label::span(
@@ -297,7 +305,7 @@ impl RuleRefTo<'_> {
     /// P2034: NULL can only be assigned to REF_TO type
     fn check_null_assignment(&mut self, target: &Variable, value: &Expr) {
         if let ExprKind::Null(span) = &value.kind {
-            if !self.is_variable_reference(target) {
+            if !self.is_variable_reference(target) && !self.is_variable_of_error_type(target) {
                 self.diagnostics.push(Diagnostic::problem(
                     Problem::NullRequiresReferenceType,
                     Label::span(span.clone(), "NULL can only be assigned to a REF_TO type"),
@@ -938,5 +946,31 @@ END_PROGRAM",
             &options,
         );
         assert!(result.is_err(), "Expected error but got OK");
+    }
+
+    rule_ctx_ok!(
+        deref_when_type_is_declared_with_an_error_then_ok,
+        "
+TYPE X : T_NOWHERE; END_TYPE
+PROGRAM main
+VAR v : X; k : INT; END_VAR
+    k := v^;
+END_PROGRAM"
+    );
+
+    #[test]
+    fn null_when_assigned_to_type_declared_with_an_error_then_ok() {
+        let options = CompilerOptions::from_dialect(ironplc_parser::options::Dialect::Rusty);
+        let (library, context) = crate::test_helpers::parse_and_resolve_types_with_options(
+            "
+TYPE X : T_NOWHERE; END_TYPE
+PROGRAM main
+VAR v : X; END_VAR
+    v := NULL;
+END_PROGRAM",
+            &options,
+        );
+
+        assert!(super::apply(&library, &context, &options).is_ok());
     }
 }

@@ -22,37 +22,25 @@ use ironplc_dsl::textual::*;
 use ironplc_problems::Problem;
 
 use crate::function_environment::{FunctionEnvironment, FunctionSignature};
+use crate::pass_runner::Outcome;
+use std::convert::Infallible;
 
 /// Rewrites every named call argument this pass can place into a positional
 /// one, and diagnoses the rest.
 ///
-/// Best effort: the rewritten library rides back alongside the diagnostics
-/// rather than being discarded. A diagnosed call keeps its `NamedInput`
-/// entries, which is exactly the state reverting would leave *every* call in
-/// -- including the valid ones in unrelated POUs -- so reverting cannot be the
-/// safer option. Downstream passes already have `NamedInput` arms
-/// (`xform_resolve_expr_types`, `xform_mark_unwritten_constants`,
-/// `call_assignment_check`, `codegen::compile_stmt`), and codegen is never
-/// reached because `ironplc_project::compile` gates it on an empty diagnostic
-/// list.
-///
-/// `Err` is reserved for a fold that could not produce a library at all.
-pub fn apply(
-    lib: Library,
-    function_environment: &FunctionEnvironment,
-) -> Result<(Library, Vec<Diagnostic>), Vec<Diagnostic>> {
+/// A diagnosed call keeps its `NamedInput` entries, and every call that can be
+/// placed is rewritten, whatever unit it is in. Downstream passes already have
+/// `NamedInput` arms (`xform_resolve_expr_types`,
+/// `xform_mark_unwritten_constants`, `call_assignment_check`,
+/// `codegen::compile_stmt`), and codegen is never reached because
+/// `ironplc_project::compile` gates it on an empty diagnostic list.
+pub fn apply(lib: Library, function_environment: &FunctionEnvironment) -> Outcome {
     let mut resolver = NamedToPositionalResolver {
         function_environment,
         errors: vec![],
     };
-    match resolver.fold_library(lib) {
-        Ok(result) => Ok((result, resolver.errors)),
-        Err(e) => {
-            let mut errors = resolver.errors;
-            errors.push(e);
-            Err(errors)
-        }
-    }
+    let Ok(library) = resolver.fold_library(lib);
+    Outcome::new(library, resolver.errors)
 }
 
 struct NamedToPositionalResolver<'a> {
@@ -137,8 +125,8 @@ impl NamedToPositionalResolver<'_> {
     }
 }
 
-impl Fold<Diagnostic> for NamedToPositionalResolver<'_> {
-    fn fold_function(&mut self, node: Function) -> Result<Function, Diagnostic> {
+impl Fold<Infallible> for NamedToPositionalResolver<'_> {
+    fn fold_function(&mut self, node: Function) -> Result<Function, Infallible> {
         // 1. Look up the function signature; if not found, pass through
         let Some(signature) = self.function_environment.get(&node.name) else {
             return Function::recurse_fold(node, self);
@@ -182,8 +170,10 @@ impl Fold<Diagnostic> for NamedToPositionalResolver<'_> {
         for name in order {
             let Some(ni) = named.remove(&name) else {
                 // Planned names come from these arguments; absence is a
-                // compiler invariant violation.
-                return Err(Diagnostic::internal_error());
+                // compiler invariant violation, reported like any other
+                // problem and leaving the other arguments in place.
+                self.errors.push(Diagnostic::internal_error());
+                continue;
             };
             param_assignment.push(ParamAssignmentKind::PositionalInput(PositionalInput {
                 expr: self.fold_expr(ni.expr)?,
@@ -217,7 +207,10 @@ mod tests {
     /// Applies the pass and asserts it rewrote everything cleanly, returning
     /// the rewritten library.
     fn rewritten(lib: Library, env: &FunctionEnvironment) -> Library {
-        let (lib, diagnostics) = apply(lib, env).expect("fold produced a library");
+        let Outcome {
+            library: lib,
+            diagnostics,
+        } = apply(lib, env);
         assert!(
             diagnostics.is_empty(),
             "expected no diagnostics, got {diagnostics:?}"
@@ -225,11 +218,9 @@ mod tests {
         lib
     }
 
-    /// Applies the pass and returns the diagnostics it reported. The rewritten
-    /// library still comes back -- the pass is best effort -- so this asserts
-    /// the `Ok` arm rather than an `Err`.
+    /// Applies the pass and returns the diagnostics it reported.
     fn diagnostics_of(lib: Library, env: &FunctionEnvironment) -> Vec<Diagnostic> {
-        apply(lib, env).expect("fold produced a library").1
+        apply(lib, env).diagnostics
     }
 
     /// Signature of a user-defined `INT` function taking the given inputs.
@@ -611,7 +602,10 @@ END_PROGRAM
             ("BAD_FUNC", vec![("B", "INT")]),
         ]);
 
-        let (library, diagnostics) = apply(library, &env).expect("fold produced a library");
+        let Outcome {
+            library,
+            diagnostics,
+        } = apply(library, &env);
 
         assert_eq!(
             diagnostics
@@ -648,7 +642,7 @@ END_PROGRAM
         let library = parse_only(program);
         let env = env_with_function("MY_FUNC", vec![("A", "INT")]);
 
-        let (library, _diagnostics) = apply(library, &env).expect("fold produced a library");
+        let library = apply(library, &env).library;
 
         let call = find_function_call(&library, "MY_FUNC").expect("MY_FUNC call");
         let names: Vec<String> = call

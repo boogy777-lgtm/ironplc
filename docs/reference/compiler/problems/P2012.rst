@@ -36,3 +36,7 @@ Alternatively, use a built-in type:
        TypeAlias : INT;  (* Correct: INT is a built-in type *)
    END_TYPE
 
+Uses of a declaration that has an error
+---------------------------------------
+
+.. include:: /includes/declared-with-an-error.rst

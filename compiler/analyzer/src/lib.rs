@@ -31,6 +31,7 @@ mod lowered_initial_values;
 mod lowered_var_blocks;
 pub mod observe;
 mod pass_runner;
+mod resolution;
 mod result;
 mod rule_abstract_not_instantiated;
 mod rule_assignment_aggregate_type_compat;

@@ -21,6 +21,8 @@ use ironplc_dsl::common::{
 use ironplc_dsl::core::Id;
 use ironplc_dsl::textual::{SymbolicVariableKind, Variable};
 
+use crate::type_environment::TypeEnvironment;
+
 /// The function blocks a library declares, by name.
 pub(crate) struct FunctionBlocks<'a> {
     by_name: HashMap<TypeName, &'a FunctionBlockDeclaration>,
@@ -117,6 +119,9 @@ impl<'a> FunctionBlocks<'a> {
 #[derive(Default)]
 pub(crate) struct InstanceTypes {
     var_to_fb: HashMap<Id, DeclaredInstances>,
+    /// The variables declared with a type whose declaration has an error,
+    /// which may be a function block: see [`InstanceTypes::declare_in`].
+    error_typed: HashSet<Id>,
 }
 
 /// What a variable declares: instances of one type, selected by `rank`
@@ -156,6 +161,31 @@ impl InstanceTypes {
         self.var_to_fb.insert(name.clone(), declared);
     }
 
+    /// [`Self::declare`], and records a variable declared with a type whose
+    /// declaration has an error (the error type, `TypeEnvironment::is_error`).
+    /// It may have been a function block, so a call through it is not
+    /// reported as a call through a variable that is not an instance: the
+    /// declaration of the type is reported where it is.
+    pub(crate) fn declare_in(&mut self, decl: &VarDecl, types: &TypeEnvironment) {
+        self.declare(decl);
+        if let (Some(name), Some(id)) = (decl.identifier.symbolic_id(), decl.type_id) {
+            if types.is_error(id) {
+                self.error_typed.insert(name.clone());
+            }
+        }
+    }
+
+    /// Whether the variable `instance` is declared with the error type.
+    pub(crate) fn has_error_type(&self, instance: &Id) -> bool {
+        self.error_typed.contains(instance)
+    }
+
+    /// Whether the instance a call's `callee` names is declared with the error
+    /// type.
+    pub(crate) fn callee_has_error_type(&self, callee: &Variable) -> bool {
+        callee_root(callee).is_some_and(|(root, _)| self.has_error_type(root))
+    }
+
     /// The declared function-block type of the variable `instance`, when it
     /// declares a single instance.
     pub(crate) fn type_of(&self, instance: &Id) -> Option<&TypeName> {
@@ -179,6 +209,7 @@ impl InstanceTypes {
     /// Forgets every instance, on leaving the unit that declared them.
     pub(crate) fn clear(&mut self) {
         self.var_to_fb.clear();
+        self.error_typed.clear();
     }
 }
 

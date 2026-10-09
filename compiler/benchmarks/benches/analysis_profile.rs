@@ -104,7 +104,6 @@ fn kind_label(kind: Kind) -> &'static str {
     match kind {
         Kind::Setup => "setup",
         Kind::Pass => "pass",
-        Kind::Fallback => "fallback",
         Kind::Rule => "rule",
     }
 }

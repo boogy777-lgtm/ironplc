@@ -52,17 +52,20 @@ use ironplc_parser::options::CompilerOptions;
 
 pub fn apply(
     lib: &Library,
-    _context: &SemanticContext,
+    context: &SemanticContext,
     _options: &CompilerOptions,
 ) -> SemanticResult {
     let function_blocks = FunctionBlocks::from_library(lib);
 
     // Walk the library to find all references to function blocks
-    run_rule(RuleFunctionBlockUse::new(&function_blocks), lib)
+    run_rule(RuleFunctionBlockUse::new(&function_blocks, context), lib)
 }
 
 struct RuleFunctionBlockUse<'a> {
     function_blocks: &'a FunctionBlocks<'a>,
+
+    /// The types of the project, to tell the declarations that have an error.
+    context: &'a SemanticContext,
 
     /// The instances declared in the unit being walked.
     instances: InstanceTypes,
@@ -70,9 +73,10 @@ struct RuleFunctionBlockUse<'a> {
     diagnostics: Vec<Diagnostic>,
 }
 impl<'a> RuleFunctionBlockUse<'a> {
-    fn new(function_blocks: &'a FunctionBlocks<'a>) -> Self {
+    fn new(function_blocks: &'a FunctionBlocks<'a>, context: &'a SemanticContext) -> Self {
         Self {
             function_blocks,
+            context,
             instances: InstanceTypes::default(),
             diagnostics: Vec::new(),
         }
@@ -148,7 +152,7 @@ impl Visitor<Infallible> for RuleFunctionBlockUse<'_> {
     }
 
     fn visit_var_decl(&mut self, node: &VarDecl) -> Result<Self::Value, Infallible> {
-        self.instances.declare(node);
+        self.instances.declare_in(node, self.context.types());
         Ok(())
     }
 
@@ -159,7 +163,11 @@ impl Visitor<Infallible> for RuleFunctionBlockUse<'_> {
         // push onto `self.diagnostics`, which borrows `self` mutably.
         let function_block_name = self.instances.type_of_callee(&fb_call.callee).cloned();
         let Some(function_block_name) = function_block_name else {
-            self.diagnostics.push(Self::not_in_scope(fb_call));
+            // A callee of a type whose declaration has an error is reported
+            // where the type is declared.
+            if !self.instances.callee_has_error_type(&fb_call.callee) {
+                self.diagnostics.push(Self::not_in_scope(fb_call));
+            }
             return Ok(());
         };
 
@@ -562,6 +570,27 @@ VAR
 x : DINT;
 END_VAR
 missing[1](IN := TRUE);
+END_PROGRAM",
+        ironplc_problems::Problem::FunctionBlockNotInScope
+    );
+
+    rule_ctx_ok!(
+        apply_when_callee_type_is_declared_with_an_error_then_ok,
+        "
+TYPE X : T_NOWHERE; END_TYPE
+PROGRAM main
+VAR v : X; END_VAR
+    v(p := 1);
+END_PROGRAM"
+    );
+
+    rule_ctx_err1!(
+        apply_when_callee_type_is_declared_and_is_not_a_function_block_then_not_in_scope,
+        "
+TYPE X : INT; END_TYPE
+PROGRAM main
+VAR v : X; END_VAR
+    v(p := 1);
 END_PROGRAM",
         ironplc_problems::Problem::FunctionBlockNotInScope
     );

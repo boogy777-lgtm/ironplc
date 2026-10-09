@@ -20,6 +20,7 @@ use ironplc_dsl::diagnostic::{Diagnostic, Label};
 use ironplc_problems::Problem;
 
 use crate::intermediates::array;
+use crate::resolution::Failure;
 use crate::type_environment::TypeEnvironment;
 
 /// The array bounds a `PARAMS(n) OF T` list lowers to: the single dimension
@@ -73,7 +74,7 @@ pub fn try_from(
     node_name: &TypeName,
     spec: &ParamsSpecification,
     type_environment: &TypeEnvironment,
-) -> Result<array::IntermediateResult, Diagnostic> {
+) -> Result<array::IntermediateResult, Failure> {
     let subranges = to_array_subranges(spec)?;
     array::try_from(
         node_name,

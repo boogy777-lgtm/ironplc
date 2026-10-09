@@ -89,25 +89,48 @@ walk --- otherwise every problem after it goes unreported. See
 [ADR-0048](../adrs/0048-semantic-rules-cannot-fail.md).
 
 This does not apply to the `xform_*` passes, which must produce a `Library`.
-Each runs under one of two failure policies, named by the helper it is called
-through in `stages::resolve_types`:
+They share one contract, `stages::resolve_types` runs each through
+`pass_runner::run_pass`, and a pass returns an `Outcome`: the library as far
+as the pass could transform it, and the diagnostics it found. A problem in the
+user's program is never an `Err`. The place that finds it still holds the node
+it was about to transform, so it records the diagnostic and keeps the node as it
+was; every other unit is transformed in full. No pass keeps a copy of the
+library to give back, and none ends at the first problem, so an error in one
+unit never hides, changes or adds a message about another unit.
 
-| Signature | Called through | On a problem |
-|---|---|---|
-| `Result<(Library, Vec<Diagnostic>), Vec<Diagnostic>>` | `run_best_effort` | The transformed library is kept and the diagnostics collected alongside it. `Err` means the pass had no library to return at all. |
-| `Result<Library, Vec<Diagnostic>>` | `run_reverting_on_error` | The pre-pass clone is restored, discarding every transformation the pass had already completed. |
+No step stops the analysis for a problem in the user's program. The sort of
+the declarations (`xform_toposort_declarations`, run through `direct!`)
+reports a recursive cycle once, for its members, and goes on with the
+declarations that are not in it. What `analyze` returns as `Err` is a project
+without sources and a failure to build the environments of the language, which
+no input causes.
 
-**A new pass reports per-declaration problems through `run_best_effort`.** A
-pass that accumulates diagnostics and then returns `Err` throws away every
-unrelated declaration it had already transformed, which is how a source that
-analyzed cleanly alone came to fail once merged with unrelated code. Revert is
-for a pass whose whole output is meaningless when any part of it failed, and
-the call site says why.
+**A lookup of a declared name has three results**
+(`compiler/analyzer/src/resolution.rs`): declared and valid, declared with an
+error, and not declared. The environment that owns the names owns the fact:
+`TypeEnvironment` enters a declaration that failed, from the same code that
+enters a valid one (`TypeEnvironment::insert_failed`), and `lookup` answers
+`Resolved::Valid`, `Resolved::Failed` or `Resolved::Absent`. A message "not
+declared" is made from `Absent` only. A declaration made from one that failed
+answers `Failure::Inherited`: it fails too, and says nothing, because the first
+cause is already in the report. The id of a failed declaration is the error
+type (`TypeEnvironment::is_error`, the one definition of "is error"); a value
+of it has no type to compare, so a check that meets it reports nothing, and
+`TypeEnvironment::get` answers a type that can be used only. A rule that reports
+that a variable's type is not of some kind (a function block, a reference) asks
+whether the type is `Failed` first. A function is declared with a valid
+signature whatever its parameter types are; a parameter of a type that is failed
+or not declared is the error type. `analyzer/tests/failed_unit.rs` holds a row
+for each kind of declaration that can fail, used in every way the language
+allows.
 
-Best effort is a per-declaration decision, not a licence to emit a
-half-transformed node. A declaration the pass could not transform is left in a
-state later passes already handle — unchanged, or normalized to a placeholder —
-and nothing the author wrote is dropped from it.
+A pass writes its fold with `Infallible` as the error type and keeps what it
+found in a `diagnostics` field. A node it could not transform is left in a
+state later passes already handle -- unchanged, or normalized to a placeholder
+-- and nothing the author wrote is dropped from it. A new pass is one more
+`pass!` row in `stages::resolve_types`; `analyzer/tests/no_library_copy.rs`
+fails for a pass that copies the library, and `analyzer/tests/failed_unit.rs`
+holds one row for each kind of pass failure.
 
 ## Testing Architecture
 

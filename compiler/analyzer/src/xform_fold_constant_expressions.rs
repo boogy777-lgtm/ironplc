@@ -26,13 +26,23 @@ use ironplc_dsl::fold::Fold;
 use ironplc_dsl::textual::*;
 
 use crate::constant_folding::{fold_error_to_diagnostic, try_fold_binary, try_fold_unary};
+use crate::pass_runner::Outcome;
+use std::convert::Infallible;
 
-pub fn apply(lib: Library) -> Result<Library, Vec<Diagnostic>> {
-    let mut folder = ConstantFolder;
-    folder.fold_library(lib).map_err(|e| vec![e])
+/// An operation on constants that has no result (a division by zero, an
+/// overflow) is diagnosed where it stands and stays an operation; every other
+/// constant operation is folded.
+pub fn apply(lib: Library) -> Outcome {
+    let mut folder = ConstantFolder {
+        diagnostics: Vec::new(),
+    };
+    let Ok(library) = folder.fold_library(lib);
+    Outcome::new(library, folder.diagnostics)
 }
 
-struct ConstantFolder;
+struct ConstantFolder {
+    diagnostics: Vec<Diagnostic>,
+}
 
 /// Gives a folded integer literal the span of the expression it replaces.
 ///
@@ -47,15 +57,20 @@ fn with_span(kind: ExprKind, span: SourceSpan) -> ExprKind {
     }
 }
 
-impl Fold<Diagnostic> for ConstantFolder {
-    fn fold_expr(&mut self, node: Expr) -> Result<Expr, Diagnostic> {
+impl Fold<Infallible> for ConstantFolder {
+    fn fold_expr(&mut self, node: Expr) -> Result<Expr, Infallible> {
         // Recurse into children first (bottom-up folding).
         let node = Expr::recurse_fold(node, self)?;
 
         let folded_kind = match &node.kind {
-            ExprKind::BinaryOp(binary) => {
-                try_fold_binary(binary).map_err(|e| fold_error_to_diagnostic(e, node.span()))?
-            }
+            ExprKind::BinaryOp(binary) => match try_fold_binary(binary) {
+                Ok(folded) => folded,
+                Err(error) => {
+                    self.diagnostics
+                        .push(fold_error_to_diagnostic(error, node.span()));
+                    None
+                }
+            },
             ExprKind::UnaryOp(unary) => try_fold_unary(unary),
             _ => None,
         };
@@ -87,7 +102,20 @@ mod tests {
 
     fn apply_fold(program: &str) -> Library {
         let library = parse_and_resolve_types(program);
-        apply(library).unwrap()
+        apply(library).library
+    }
+
+    /// The codes the pass reports for the assignment `x := <expr>` to a variable
+    /// of type `declared`.
+    fn codes_of(declared: &str, expr: &str) -> Vec<String> {
+        let library = parse_and_resolve_types(&format!(
+            "PROGRAM main VAR x : {declared}; END_VAR x := {expr}; END_PROGRAM"
+        ));
+        apply(library)
+            .diagnostics
+            .into_iter()
+            .map(|d| d.code)
+            .collect()
     }
 
     /// Extracts all `Expr` nodes from a library for inspection.
@@ -216,52 +244,34 @@ mod tests {
 
     #[test]
     fn fold_expr_when_int_div_by_zero_then_error() {
-        let library =
-            parse_and_resolve_types("PROGRAM main VAR x : INT; END_VAR x := 10 / 0; END_PROGRAM");
-        let result = apply(library);
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .iter()
-            .all(|d| d.code == Problem::ConstantExpressionDivisionByZero.code()));
+        assert_eq!(
+            vec![Problem::ConstantExpressionDivisionByZero.code()],
+            codes_of("INT", "10 / 0")
+        );
     }
 
     #[test]
     fn fold_expr_when_int_mod_by_zero_then_error() {
-        let library =
-            parse_and_resolve_types("PROGRAM main VAR x : INT; END_VAR x := 10 MOD 0; END_PROGRAM");
-        let result = apply(library);
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .iter()
-            .all(|d| d.code == Problem::ConstantExpressionDivisionByZero.code()));
+        assert_eq!(
+            vec![Problem::ConstantExpressionDivisionByZero.code()],
+            codes_of("INT", "10 MOD 0")
+        );
     }
 
     #[test]
     fn fold_expr_when_real_div_by_zero_then_error() {
-        let library = parse_and_resolve_types(
-            "PROGRAM main VAR x : LREAL; END_VAR x := 1.0 / 0.0; END_PROGRAM",
+        assert_eq!(
+            vec![Problem::ConstantExpressionDivisionByZero.code()],
+            codes_of("LREAL", "1.0 / 0.0")
         );
-        let result = apply(library);
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .iter()
-            .all(|d| d.code == Problem::ConstantExpressionDivisionByZero.code()));
     }
 
     #[test]
     fn fold_expr_when_int_overflow_then_error() {
-        let library = parse_and_resolve_types(
-            "PROGRAM main VAR x : LINT; END_VAR x := 170141183460469231731687303715884105727 * 2; END_PROGRAM",
+        assert_eq!(
+            vec![Problem::ConstantExpressionOverflow.code()],
+            codes_of("LINT", "170141183460469231731687303715884105727 * 2")
         );
-        let result = apply(library);
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .iter()
-            .all(|d| d.code == Problem::ConstantExpressionOverflow.code()));
     }
 
     #[rstest]
@@ -273,15 +283,10 @@ mod tests {
     #[case("0.0 ** -1.0")]
     #[case("(-8.0) ** 0.5")]
     fn fold_expr_when_real_result_not_finite_then_overflow_error(#[case] expr: &str) {
-        let library = parse_and_resolve_types(&format!(
-            "PROGRAM main VAR x : LREAL; END_VAR x := {expr}; END_PROGRAM"
-        ));
-        let result = apply(library);
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .iter()
-            .all(|d| d.code == Problem::ConstantExpressionOverflow.code()));
+        assert_eq!(
+            vec![Problem::ConstantExpressionOverflow.code()],
+            codes_of("LREAL", expr)
+        );
     }
 
     #[test]
@@ -298,7 +303,7 @@ mod tests {
         // it stays unfolded and is not reported as an overflow.
         let library =
             parse_and_resolve_types("PROGRAM main VAR x : INT; END_VAR x := 2 ** -1; END_PROGRAM");
-        let lib = apply(library).unwrap();
+        let lib = apply(library).library;
         let exprs = collect_exprs(&lib);
         let has_binary = exprs.iter().any(|e| matches!(e, ExprKind::BinaryOp(_)));
         assert!(has_binary, "Negative exponent should not be folded");

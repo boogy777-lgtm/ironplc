@@ -29,9 +29,6 @@ pub enum Kind {
     Setup,
     /// A transform of the library, or another analysis over it.
     Pass,
-    /// The copy of the library that a pass keeps so that a failure can give it
-    /// back, and its release.
-    Fallback,
     /// A semantic rule.
     Rule,
 }
@@ -74,14 +71,6 @@ pub(crate) const fn setup(name: &'static str) -> Step {
 pub(crate) const fn pass(name: &'static str) -> Step {
     Step {
         kind: Kind::Pass,
-        name,
-    }
-}
-
-/// The copy that the pass named `name` keeps, and its release.
-pub(crate) const fn fallback(name: &'static str) -> Step {
-    Step {
-        kind: Kind::Fallback,
         name,
     }
 }
@@ -225,17 +214,6 @@ mod tests {
             .filter(|name| name.starts_with("xform_"))
             .cloned()
             .collect()
-    }
-
-    #[test]
-    fn analyze_observed_when_a_pass_keeps_a_fallback_then_the_copy_is_reported_under_that_pass() {
-        let recorder = observed_analysis(&CompilerOptions::default());
-
-        let passes: BTreeSet<&str> = recorder.names(Kind::Pass).into_iter().collect();
-        let fallbacks: BTreeSet<&str> = recorder.names(Kind::Fallback).into_iter().collect();
-
-        assert!(!fallbacks.is_empty());
-        assert!(fallbacks.is_subset(&passes), "{fallbacks:?}");
     }
 
     #[test]

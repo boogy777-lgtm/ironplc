@@ -35,3 +35,7 @@ To fix this error, declare the type before using it:
    END_VAR
    END_FUNCTION_BLOCK
 
+Uses of a declaration that has an error
+---------------------------------------
+
+.. include:: /includes/declared-with-an-error.rst
