@@ -2,8 +2,6 @@
 //!
 //! Provides a builder that appends opcodes and operands to a byte buffer.
 
-use std::collections::HashSet;
-
 use ironplc_container::opcode;
 use ironplc_container::{CharWidth, FunctionId, SourceColumn, SourceFileId, SourceLine, VarIndex};
 
@@ -74,7 +72,7 @@ pub(crate) struct UnpatchedCode<'a> {
     pub(crate) bytecode: &'a [u8],
     /// Bound label positions referenced by at least one pending jump. These
     /// are the offsets the optimizer must not remove or rewrite.
-    pub(crate) jump_targets: HashSet<usize>,
+    pub(crate) jump_targets: crate::optimize::OffsetSet,
 }
 
 /// Accumulates bytecode instructions.

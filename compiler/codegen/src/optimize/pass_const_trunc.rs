@@ -21,17 +21,15 @@
 //! `emit_truncation` already emits nothing. A `DUP` left by the emitter's
 //! consecutive-load peephole is not matched, so that `TRUNC_*` survives.
 
-use std::collections::HashSet;
-
 use ironplc_container::opcode;
 
 use super::rewrite::{apply_peephole, Action, Instruction};
-use super::OffsetMap;
+use super::{OffsetMap, OffsetSet};
 use crate::compile::{intern_i32_constant, PoolConstant};
 
 pub(super) fn apply(
     bytecode: &[u8],
-    protected: &HashSet<usize>,
+    protected: &OffsetSet,
     constants: &mut Vec<PoolConstant>,
 ) -> (Vec<u8>, OffsetMap) {
     apply_peephole(bytecode, protected, |a, b| {
@@ -104,7 +102,7 @@ mod tests {
         let mut constants = vec![PoolConstant::I32(42)];
         let (result, _) = apply(
             &const_then_trunc(opcode::TRUNC_I8),
-            &HashSet::new(),
+            &OffsetSet::new(),
             &mut constants,
         );
 
@@ -121,7 +119,7 @@ mod tests {
         let mut constants = vec![PoolConstant::I32(300)];
         let (result, _) = apply(
             &const_then_trunc(opcode::TRUNC_U8),
-            &HashSet::new(),
+            &OffsetSet::new(),
             &mut constants,
         );
 
@@ -141,7 +139,7 @@ mod tests {
         bytecode.push(opcode::TRUNC_U8);
         bytecode.push(opcode::RET_VOID);
 
-        let (result, _) = apply(&bytecode, &HashSet::new(), &mut constants);
+        let (result, _) = apply(&bytecode, &OffsetSet::new(), &mut constants);
 
         let mut expected = load_const_i32(0);
         expected.push(opcode::RET_VOID);
@@ -157,7 +155,7 @@ mod tests {
     fn apply_when_pool_entry_is_not_i32_then_no_change() {
         let mut constants = vec![PoolConstant::I64(42)];
         let bytecode = const_then_trunc(opcode::TRUNC_I8);
-        let (result, _) = apply(&bytecode, &HashSet::new(), &mut constants);
+        let (result, _) = apply(&bytecode, &OffsetSet::new(), &mut constants);
 
         assert_eq!(result, bytecode);
     }
@@ -166,7 +164,7 @@ mod tests {
     fn apply_when_pool_index_out_of_bounds_then_no_change() {
         let mut constants = Vec::new();
         let bytecode = const_then_trunc(opcode::TRUNC_I8);
-        let (result, _) = apply(&bytecode, &HashSet::new(), &mut constants);
+        let (result, _) = apply(&bytecode, &OffsetSet::new(), &mut constants);
 
         assert_eq!(result, bytecode);
     }
@@ -182,7 +180,7 @@ mod tests {
         bytecode.push(opcode::TRUNC_U8);
         bytecode.push(opcode::RET_VOID);
 
-        let (result, _) = apply(&bytecode, &HashSet::new(), &mut constants);
+        let (result, _) = apply(&bytecode, &OffsetSet::new(), &mut constants);
 
         assert_eq!(result, bytecode);
     }
@@ -194,7 +192,7 @@ mod tests {
         bytecode.push(opcode::NEG_I32);
         bytecode.push(opcode::RET_VOID);
 
-        let (result, _) = apply(&bytecode, &HashSet::new(), &mut constants);
+        let (result, _) = apply(&bytecode, &OffsetSet::new(), &mut constants);
 
         assert_eq!(result, bytecode);
     }
@@ -265,7 +263,7 @@ mod tests {
             let expected = trunc_fold_value(trunc_op, value).unwrap();
 
             let mut constants = vec![PoolConstant::I32(value)];
-            let (result, _) = apply(&const_then_trunc(trunc_op), &HashSet::new(), &mut constants);
+            let (result, _) = apply(&const_then_trunc(trunc_op), &OffsetSet::new(), &mut constants);
 
             prop_assert_eq!(result[0], opcode::LOAD_CONST_I32);
             prop_assert!(!result.contains(&trunc_op));

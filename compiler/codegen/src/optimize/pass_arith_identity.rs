@@ -21,17 +21,15 @@
 //! infinities alike. The float `ADD` row is therefore absent from the
 //! additive table below, on purpose.
 
-use std::collections::HashSet;
-
 use ironplc_container::opcode;
 
 use super::rewrite::{apply_peephole, Action, Instruction};
-use super::OffsetMap;
+use super::{OffsetMap, OffsetSet};
 use crate::compile::PoolConstant;
 
 pub(super) fn apply(
     bytecode: &[u8],
-    protected: &HashSet<usize>,
+    protected: &OffsetSet,
     constants: &[PoolConstant],
 ) -> (Vec<u8>, OffsetMap) {
     apply_peephole(bytecode, protected, |a, b| is_identity(a, b, constants))

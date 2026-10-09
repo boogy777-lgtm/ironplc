@@ -16,7 +16,7 @@ use ironplc_plc2plc::write_to_string;
 use ironplc_problems::Problem;
 use log::{error, trace};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap},
     fs::{canonicalize, metadata},
     ops::Range,
     path::{Path, PathBuf},
@@ -431,7 +431,7 @@ fn handle_diagnostics(
 
         let mut files: SimpleFiles<String, &str> = SimpleFiles::new();
 
-        let mut unique_files: HashSet<&FileId> = HashSet::new();
+        let mut unique_files: BTreeSet<&FileId> = BTreeSet::new();
         for diagnostic in diagnostics {
             for file_id in diagnostic.file_ids() {
                 unique_files.insert(file_id);

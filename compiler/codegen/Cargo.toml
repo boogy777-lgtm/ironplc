@@ -14,6 +14,7 @@ ironplc-problems = { path = "../problems", version = "0.247.0" }
 ironplc-analyzer = { path = "../analyzer", version = "0.247.0" }
 ironplc-parser = { path = "../parser", version = "0.247.0" }
 blake3 = "1"
+indexmap = "2"
 paste = "1.0"
 
 [build-dependencies]

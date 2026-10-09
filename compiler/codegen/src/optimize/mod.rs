@@ -36,7 +36,7 @@ mod rewrite;
 #[cfg(test)]
 mod tests;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 
 use ironplc_dsl::core::FileId;
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
@@ -48,6 +48,10 @@ use crate::emit::UnpatchedCode;
 /// optimized bytecode. Includes one-past-the-end so spans that touch the end
 /// of the function can still be remapped.
 pub(crate) type OffsetMap = HashMap<usize, usize>;
+
+/// A set of bytecode offsets. Ascending, so that visiting the offsets
+/// (to remap them after a pass) gives the same order on every run.
+pub(crate) type OffsetSet = BTreeSet<usize>;
 
 /// Remaps an emitter line map through the optimizer's old→new offset table.
 ///
@@ -115,14 +119,14 @@ struct Pipeline {
     /// Offsets in `bytecode` no pass may remove or rewrite — the positions
     /// the function's jumps land on. Remapped after every pass so it always
     /// describes the current bytes.
-    protected: HashSet<usize>,
+    protected: OffsetSet,
     /// Maps original offsets to offsets in `bytecode`. `None` until the first
     /// pass has run, after which it is that pass's own map.
     map: Option<OffsetMap>,
 }
 
 impl Pipeline {
-    fn run(&mut self, pass: impl FnOnce(&[u8], &HashSet<usize>) -> (Vec<u8>, OffsetMap)) {
+    fn run(&mut self, pass: impl FnOnce(&[u8], &OffsetSet) -> (Vec<u8>, OffsetMap)) {
         let (bytecode, map) = pass(&self.bytecode, &self.protected);
         self.bytecode = bytecode;
         // A protected offset is an instruction boundary that no pass may

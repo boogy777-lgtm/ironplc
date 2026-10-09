@@ -1,6 +1,6 @@
 //! Adapts data types between what is required by the compiler
 //! and the language server protocol.
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -32,7 +32,7 @@ fn to_path_buf(uri: &Uri) -> Result<PathBuf, ()> {
 /// the upstream crate could silently break lookups. Convert to this
 /// newtype at the boundary so the collections store nothing more
 /// than the canonical URI string.
-#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub(crate) struct UriKey(String);
 
 impl UriKey {
@@ -182,17 +182,20 @@ impl LspProject {
     /// to a URI (e.g. `BuiltIn`) are attributed to the most recently
     /// edited URI so they do not silently disappear.
     ///
+    /// The map is ascending by URI, so the notifications go out in the same
+    /// order on every run.
+    ///
     /// Callers are responsible for emitting `PublishDiagnostics`
     /// notifications for every URI in the returned map and for
     /// emitting empty notifications to clear URIs that previously
     /// had diagnostics but no longer do.
-    pub(crate) fn semantic_all(&mut self) -> HashMap<UriKey, Vec<lsp_types::Diagnostic>> {
+    pub(crate) fn semantic_all(&mut self) -> BTreeMap<UriKey, Vec<lsp_types::Diagnostic>> {
         let diagnostics = self.wrapped.semantic();
         if diagnostics.is_empty() {
-            return HashMap::new();
+            return BTreeMap::new();
         }
 
-        let mut by_key: HashMap<UriKey, Vec<lsp_types::Diagnostic>> = HashMap::new();
+        let mut by_key: BTreeMap<UriKey, Vec<lsp_types::Diagnostic>> = BTreeMap::new();
         for diagnostic in diagnostics {
             // Resolve every file id this diagnostic touches into a key.
             // De-duplicate so a diagnostic with primary and secondary

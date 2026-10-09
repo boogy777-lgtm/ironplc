@@ -19,7 +19,7 @@
 //! walk would otherwise loop forever, so we detect cycles and return an
 //! `InternalError` diagnostic instead.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 
 use ironplc_container::FunctionId;
 use ironplc_dsl::core::FileId;
@@ -33,7 +33,7 @@ use ironplc_dsl::diagnostic::{Diagnostic, Label};
 /// analysis means we should never see one in practice; this is a
 /// fail-loud backstop against analyzer regressions.
 pub(crate) fn compute_max_call_depth(
-    graph: &HashMap<FunctionId, HashSet<FunctionId>>,
+    graph: &HashMap<FunctionId, BTreeSet<FunctionId>>,
     entry: FunctionId,
 ) -> Result<u16, Diagnostic> {
     longest_path(graph, entry, |_| 1)
@@ -46,7 +46,7 @@ pub(crate) fn compute_max_call_depth(
 /// A function absent from `graph` has no callees. Returns `InternalError`
 /// on a cycle, as [`compute_max_call_depth`] does.
 pub(crate) fn longest_path(
-    graph: &HashMap<FunctionId, HashSet<FunctionId>>,
+    graph: &HashMap<FunctionId, BTreeSet<FunctionId>>,
     entry: FunctionId,
     weight: impl Fn(FunctionId) -> u16,
 ) -> Result<u16, Diagnostic> {
@@ -145,8 +145,8 @@ pub(crate) fn longest_path(
 mod tests {
     use super::*;
 
-    fn graph(edges: &[(u16, u16)]) -> HashMap<FunctionId, HashSet<FunctionId>> {
-        let mut g: HashMap<FunctionId, HashSet<FunctionId>> = HashMap::new();
+    fn graph(edges: &[(u16, u16)]) -> HashMap<FunctionId, BTreeSet<FunctionId>> {
+        let mut g: HashMap<FunctionId, BTreeSet<FunctionId>> = HashMap::new();
         for &(from, to) in edges {
             g.entry(FunctionId::new(from))
                 .or_default()

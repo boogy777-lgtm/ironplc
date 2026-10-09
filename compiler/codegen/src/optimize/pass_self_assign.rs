@@ -4,14 +4,12 @@
 //! at the same width, leaving the variable table unchanged. Both instructions
 //! are removed.
 
-use std::collections::HashSet;
-
 use ironplc_container::opcode;
 
 use super::rewrite::{apply_peephole, Action, Instruction};
-use super::OffsetMap;
+use super::{OffsetMap, OffsetSet};
 
-pub(super) fn apply(bytecode: &[u8], protected: &HashSet<usize>) -> (Vec<u8>, OffsetMap) {
+pub(super) fn apply(bytecode: &[u8], protected: &OffsetSet) -> (Vec<u8>, OffsetMap) {
     apply_peephole(bytecode, protected, is_self_assignment)
 }
 

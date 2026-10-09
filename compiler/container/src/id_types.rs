@@ -14,7 +14,7 @@ use container_derive::U16Id;
 /// A function identifier within a bytecode container.
 ///
 /// Function IDs are compiler-assigned sequential indices starting from 0.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, U16Id)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord, U16Id)]
 pub struct FunctionId(u16);
 
 impl FunctionId {

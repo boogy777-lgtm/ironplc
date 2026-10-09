@@ -1005,6 +1005,7 @@ name = "ironplc-codegen"
 version = "0.247.0"
 dependencies = [
  "blake3",
+ "indexmap",
  "ironplc-analyzer",
  "ironplc-container",
  "ironplc-dsl",
@@ -1051,6 +1052,7 @@ dependencies = [
  "assert_cmd",
  "base64",
  "env_logger",
+ "indexmap",
  "ironplc-analyzer",
  "ironplc-codegen",
  "ironplc-container",
@@ -1227,6 +1229,9 @@ dependencies = [
 [[package]]
 name = "ironplc-test"
 version = "0.247.0"
+dependencies = [
+ "toml",
+]
 
 [[package]]
 name = "ironplc-vm"
