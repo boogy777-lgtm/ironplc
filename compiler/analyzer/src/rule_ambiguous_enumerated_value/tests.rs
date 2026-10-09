@@ -112,6 +112,15 @@ fn with_methods() -> CompilerOptions {
      END_CONFIGURATION
      PROGRAM main END_PROGRAM"
 )]
+#[case::program_input_connected_in_a_configuration(
+    default_options(),
+    "PROGRAM p VAR_INPUT i : E2; END_VAR END_PROGRAM
+     CONFIGURATION c RESOURCE r ON PLC
+         TASK t(INTERVAL := T#10ms, PRIORITY := 1);
+         PROGRAM pi WITH t : p(i := U1);
+       END_RESOURCE
+     END_CONFIGURATION"
+)]
 // Initial value of a structure member or of a function block input.
 #[case::initial_value_of_a_structure_member_declaration(
     default_options(),
