@@ -75,6 +75,9 @@ expect_used = "deny"
 panic = "deny"
 todo = "deny"
 unimplemented = "deny"
+# Configured in `clippy.toml` (the hash-order iteration methods), and denied by
+# the crates that produce results: see `ironplc-analyzer` and `ironplc-dsl`.
+disallowed_methods = "allow"
 
 # Reduce per-binary debug-info size. `line-tables-only` retains the file/line
 # tables that `cargo llvm-cov` needs to map coverage hits to source, but drops
