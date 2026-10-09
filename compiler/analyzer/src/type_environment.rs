@@ -407,12 +407,11 @@ impl TypeEnvironment {
         type_name: &TypeName,
         symbol: crate::type_attributes::TypeAttributes,
     ) {
-        let function_block = matches!(symbol.representation, IntermediateType::FunctionBlock { .. });
-        self.enter(
-            type_name,
-            function_block,
-            EntryState::Valid(symbol),
+        let function_block = matches!(
+            symbol.representation,
+            IntermediateType::FunctionBlock { .. }
         );
+        self.enter(type_name, function_block, EntryState::Valid(symbol));
     }
 
     /// Adds a declaration that has an error, which was reported where it is.
@@ -663,7 +662,10 @@ impl TypeEnvironment {
 
     /// What `type_name` names: a type that can be used, a declaration that has
     /// an error, or nothing at all (see [`crate::resolution`]).
-    pub(crate) fn lookup(&self, type_name: &TypeName) -> Resolved<'_, crate::type_attributes::TypeAttributes> {
+    pub(crate) fn lookup(
+        &self,
+        type_name: &TypeName,
+    ) -> Resolved<'_, crate::type_attributes::TypeAttributes> {
         match self.id_of(type_name) {
             None => Resolved::Absent,
             Some(id) => match self.entries.get(&id).map(|entry| &entry.state) {
@@ -718,8 +720,11 @@ impl TypeEnvironment {
         // A target that is a declaration with an error has its first cause
         // reported where it is declared; a caller that wants a diagnostic is
         // told that the target cannot be resolved.
-        self.reference_target(declaring, target)
-            .map_err(|failure| failure.into_diagnostic().unwrap_or_else(Diagnostic::internal_error))
+        self.reference_target(declaring, target).map_err(|failure| {
+            failure
+                .into_diagnostic()
+                .unwrap_or_else(Diagnostic::internal_error)
+        })
     }
 
     /// [`Self::resolve_reference_target`], told whether a failure is reported
@@ -1789,7 +1794,9 @@ mod tests {
     }
 
     fn named(name: &str, start: usize) -> TypeName {
-        TypeName::from_id(&ironplc_dsl::core::Id::from(name).with_position(SourceSpan::range(start, start + 4)))
+        TypeName::from_id(
+            &ironplc_dsl::core::Id::from(name).with_position(SourceSpan::range(start, start + 4)),
+        )
     }
 
     #[test]

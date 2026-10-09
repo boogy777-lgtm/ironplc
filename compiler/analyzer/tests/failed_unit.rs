@@ -92,14 +92,21 @@ const USES_FILE: &str = "uses.st";
 const TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(60);
 
 /// [`analysis`] on a thread of its own with a time limit.
-fn analysis_within_limit(unit: &'static str, uses: Option<&'static str>, unit_first: bool) -> Reported {
+fn analysis_within_limit(
+    unit: &'static str,
+    uses: Option<&'static str>,
+    unit_first: bool,
+) -> Reported {
     let (sender, receiver) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         let _ = sender.send(analysis(unit, uses, unit_first));
     });
-    receiver
-        .recv_timeout(TIME_LIMIT)
-        .expect("the analysis finished within the time limit")
+    let result = receiver.recv_timeout(TIME_LIMIT);
+    assert!(
+        result.is_ok(),
+        "the analysis finished within the time limit"
+    );
+    result.unwrap()
 }
 
 fn options() -> CompilerOptions {

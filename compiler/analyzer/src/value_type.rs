@@ -399,7 +399,12 @@ mod tests {
         types.insert_failed(&TypeName::from("BROKEN"));
         let expr = expression_of(&types, "STRING");
 
-        let result = check(&types, &TypeName::from("BROKEN"), &expr, &CompilerOptions::default());
+        let result = check(
+            &types,
+            &TypeName::from("BROKEN"),
+            &expr,
+            &CompilerOptions::default(),
+        );
 
         assert!(result.is_ok());
     }
@@ -409,7 +414,12 @@ mod tests {
         let types = environment();
         let expr = expression_of(&types, "STRING");
 
-        let result = check(&types, &TypeName::from("NOWHERE"), &expr, &CompilerOptions::default());
+        let result = check(
+            &types,
+            &TypeName::from("NOWHERE"),
+            &expr,
+            &CompilerOptions::default(),
+        );
 
         assert!(result.is_ok());
     }
@@ -419,7 +429,12 @@ mod tests {
         let types = environment();
         let expr = expression_of(&types, "STRING");
 
-        let result = check(&types, &TypeName::from("ANY_INT"), &expr, &CompilerOptions::default());
+        let result = check(
+            &types,
+            &TypeName::from("ANY_INT"),
+            &expr,
+            &CompilerOptions::default(),
+        );
 
         assert!(result.is_err());
     }
@@ -429,7 +444,12 @@ mod tests {
         let types = environment();
         let expr = expression_of(&types, "STRING");
 
-        let result = check(&types, &TypeName::from("INT"), &expr, &CompilerOptions::default());
+        let result = check(
+            &types,
+            &TypeName::from("INT"),
+            &expr,
+            &CompilerOptions::default(),
+        );
 
         assert!(result.is_err());
     }

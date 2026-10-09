@@ -17,9 +17,7 @@ fn names_of_types(library: &Library) -> Vec<String> {
         .elements
         .iter()
         .filter_map(|element| match element {
-            LibraryElementKind::DataTypeDeclaration(decl) => {
-                Some(data_type_name(decl).to_string())
-            }
+            LibraryElementKind::DataTypeDeclaration(decl) => Some(data_type_name(decl).to_string()),
             _ => None,
         })
         .collect()
@@ -143,7 +141,8 @@ PROGRAM main VAR v : A; END_VAR END_PROGRAM",
 }
 
 #[test]
-fn visit_function_when_no_declaration_is_being_visited_then_reported_for_its_unit_and_walk_goes_on() {
+fn visit_function_when_no_declaration_is_being_visited_then_reported_for_its_unit_and_walk_goes_on()
+{
     let mut visitor = RuleGraphReferenceableElements::new();
     visitor.unit = Some(Id::from("T"));
     let call = ironplc_dsl::textual::Function {

@@ -44,7 +44,8 @@ pub fn try_from(
                     Problem::SubrangeBaseTypeNotNumeric,
                     Label::span(node_name.span(), "Subrange declaration"),
                 )
-                .with_secondary(Label::span(base_type_name.span(), "Non-numeric base type")).into());
+                .with_secondary(Label::span(base_type_name.span(), "Non-numeric base type"))
+                .into());
             }
 
             // Extract min and max values from the subrange
@@ -85,7 +86,8 @@ pub fn try_from(
                 .with_secondary(Label::span(
                     end.value.span(),
                     format!("Maximum value: {}", max_value),
-                )).into());
+                ))
+                .into());
             }
 
             // Validate range is within base type bounds

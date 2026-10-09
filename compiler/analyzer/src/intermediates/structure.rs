@@ -206,7 +206,8 @@ fn resolve_field_type(
             Err(Diagnostic::not_implemented(Label::span(
                 element.name.span(),
                 "Structure field with an unsupported type",
-            )).into())
+            ))
+            .into())
         }
     }
 }

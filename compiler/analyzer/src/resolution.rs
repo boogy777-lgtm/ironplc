@@ -44,14 +44,11 @@ impl<'a, T> Resolved<'a, T> {
     /// declaration makes the user fail without a message of its own; only a
     /// name that is not declared is reported, with the diagnostic `absent`
     /// makes.
-    pub(crate) fn or_failure(
-        self,
-        absent: impl FnOnce() -> Diagnostic,
-    ) -> Result<&'a T, Failure> {
+    pub(crate) fn or_failure(self, absent: impl FnOnce() -> Diagnostic) -> Result<&'a T, Failure> {
         match self {
             Resolved::Valid(declared) => Ok(declared),
             Resolved::Failed => Err(Failure::Inherited),
-            Resolved::Absent => Err(Failure::Reported(absent())),
+            Resolved::Absent => Err(Failure::Reported(Box::new(absent()))),
         }
     }
 }
@@ -60,7 +57,7 @@ impl<'a, T> Resolved<'a, T> {
 #[derive(Debug, Clone)]
 pub(crate) enum Failure {
     /// The declaration has a problem of its own, which is reported.
-    Reported(Diagnostic),
+    Reported(Box<Diagnostic>),
     /// The declaration is made from one that has an error. The first cause is
     /// reported where that declaration is, so nothing is reported here.
     Inherited,
@@ -68,7 +65,7 @@ pub(crate) enum Failure {
 
 impl From<Diagnostic> for Failure {
     fn from(diagnostic: Diagnostic) -> Self {
-        Failure::Reported(diagnostic)
+        Failure::Reported(Box::new(diagnostic))
     }
 }
 
@@ -76,7 +73,7 @@ impl Failure {
     /// The message to report for this failure, if there is one.
     pub(crate) fn into_diagnostic(self) -> Option<Diagnostic> {
         match self {
-            Failure::Reported(diagnostic) => Some(diagnostic),
+            Failure::Reported(diagnostic) => Some(*diagnostic),
             Failure::Inherited => None,
         }
     }

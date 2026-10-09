@@ -192,7 +192,8 @@ impl Declaration<'_> {
                 .with_secondary(Label::span(
                     source_span.clone(),
                     "Type specification required (e.g., ': INT')",
-                )).into());
+                ))
+                .into());
             }
             // A value that is an expression of constants is folded after this
             // environment is first derived, so it is the base type that counts
@@ -357,10 +358,7 @@ impl Declaration<'_> {
         Ok(())
     }
 
-    fn enter_structure_declaration(
-        &mut self,
-        node: &StructureDeclaration,
-    ) -> Result<(), Failure> {
+    fn enter_structure_declaration(&mut self, node: &StructureDeclaration) -> Result<(), Failure> {
         // Use the structure processing module to create the structure type
         let attrs =
             crate::intermediates::structure::try_from(&node.type_name, node, self.environment)?;
@@ -435,10 +433,7 @@ impl Declaration<'_> {
         Ok(())
     }
 
-    fn enter_reference_declaration(
-        &mut self,
-        node: &ReferenceDeclaration,
-    ) -> Result<(), Failure> {
+    fn enter_reference_declaration(&mut self, node: &ReferenceDeclaration) -> Result<(), Failure> {
         let target_type = self
             .environment
             .reference_target(&node.type_name, &node.target)?;
@@ -544,10 +539,7 @@ impl Declaration<'_> {
         Ok(())
     }
 
-    fn enter_interface_declaration(
-        &mut self,
-        node: &InterfaceDeclaration,
-    ) -> Result<(), Failure> {
+    fn enter_interface_declaration(&mut self, node: &InterfaceDeclaration) -> Result<(), Failure> {
         // Register the interface name as a known type so that variables
         // declared with an interface type (e.g. `pDrv : I_Drivable;`)
         // resolve instead of failing with "type not declared."

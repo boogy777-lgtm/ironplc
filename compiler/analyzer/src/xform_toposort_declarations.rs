@@ -122,17 +122,18 @@ impl Declares {
 /// The names the elements of a library declare, in source order, each with
 /// the place of its declaration and what it declares.
 fn declared_names(elements: &[LibraryElementKind]) -> Vec<(Id, Declares)> {
-    elements
-        .iter()
-        .filter_map(|element| declared_name(element))
-        .collect()
+    elements.iter().filter_map(declared_name).collect()
 }
 
 /// The name an element declares, if it declares one.
 fn declared_name(element: &LibraryElementKind) -> Option<(Id, Declares)> {
     match element {
-        LibraryElementKind::DataTypeDeclaration(decl) => Some((data_type_name(decl), Declares::Type)),
-        LibraryElementKind::FunctionDeclaration(decl) => Some((decl.name.clone(), Declares::Function)),
+        LibraryElementKind::DataTypeDeclaration(decl) => {
+            Some((data_type_name(decl), Declares::Type))
+        }
+        LibraryElementKind::FunctionDeclaration(decl) => {
+            Some((decl.name.clone(), Declares::Function))
+        }
         LibraryElementKind::FunctionBlockDeclaration(decl) => {
             Some((decl.name.name.clone(), Declares::FunctionBlock))
         }
@@ -469,7 +470,7 @@ fn cycle_diagnostic(members: &[Id]) -> Diagnostic {
     let span = members
         .first()
         .map(|id| id.span.clone())
-        .unwrap_or_else(SourceSpan::default);
+        .unwrap_or_default();
     let names: Vec<String> = members.iter().map(|id| id.to_string()).collect();
     let mut diagnostic = Diagnostic::problem(Problem::RecursiveCycle, Label::span(span, "Cycle"))
         .with_context("members", &names.join(", "));

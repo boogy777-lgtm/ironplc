@@ -28,13 +28,14 @@ END_FUNCTION
 FUNCTION F : INT
   F := 2;
 END_FUNCTION";
-    let library =
-        parse_program(program, &FileId::default(), &CompilerOptions::default()).unwrap();
+    let library = parse_program(program, &FileId::default(), &CompilerOptions::default()).unwrap();
     let (sorted, _) = apply(library).unwrap();
     let functions = sorted
         .elements
         .iter()
-        .filter(|e| matches!(e, LibraryElementKind::FunctionDeclaration(f) if f.name == Id::from("F")))
+        .filter(
+            |e| matches!(e, LibraryElementKind::FunctionDeclaration(f) if f.name == Id::from("F")),
+        )
         .count();
     assert_eq!(functions, 2);
 }

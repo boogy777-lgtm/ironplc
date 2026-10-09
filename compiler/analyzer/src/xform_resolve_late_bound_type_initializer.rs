@@ -930,6 +930,9 @@ END_PROGRAM
         let result = apply(input, &mut type_environment);
 
         assert_eq!(result.diagnostics.len(), 1);
-        assert_eq!(result.diagnostics[0].code, Problem::UndeclaredUnknownType.code());
+        assert_eq!(
+            result.diagnostics[0].code,
+            Problem::UndeclaredUnknownType.code()
+        );
     }
 }
