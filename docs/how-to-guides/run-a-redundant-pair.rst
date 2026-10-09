@@ -1,8 +1,8 @@
 .. _run a redundant pair target:
 
-============================
+================================
 Run a Redundant Pair of Runtimes
-============================
+================================
 
 Two :program:`ironplcvm serve` processes can form a redundant pair over a
 UDP pair link on loopback. This guide shows how to run the two-runtime

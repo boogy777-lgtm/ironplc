@@ -21,3 +21,26 @@ for ``stdio``, ``address`` for ``tcp``.
 3. **Check the transport fields**: a ``stdio`` profile must name the
    ``program`` the spawned session loads; a ``tcp`` profile must name the
    device ``address``.
+
+The extension checks every profile when it reads the setting, before it
+opens a transport. An invalid profile therefore fails without network
+traffic and without starting a child process.
+
+Example
+-------
+
+A valid ``ironplc.connections`` setting with one profile for each transport:
+
+.. code-block:: json
+
+   [
+     { "name": "local", "transport": "stdio", "program": "main.st" },
+     { "name": "line-1", "transport": "tcp", "address": "192.168.1.10" }
+   ]
+
+See Also
+--------
+
+- :doc:`/reference/editor/problems/E0011` --- the ``address`` of a profile is invalid
+- :doc:`/reference/editor/problems/E0012` --- the ``port`` of a profile is invalid
+- :doc:`/reference/editor/settings` --- the settings of the extension

@@ -18,3 +18,24 @@ session and has no network target).
 
 3. **Check for quotes**: a port written as a string (``"49152"``) is
    rejected; write it as a number.
+
+The extension checks the port when it reads the setting, before it opens a
+connection. When a ``tcp`` profile has no ``port``, the extension uses
+49152, the first port of the IANA dynamic range, so most profiles do not
+need the field at all.
+
+Example
+-------
+
+A profile for a device that listens on a port other than the default:
+
+.. code-block:: json
+
+   { "name": "line-1", "transport": "tcp", "address": "192.168.1.10", "port": 50000 }
+
+See Also
+--------
+
+- :doc:`/reference/editor/problems/E0010` --- a profile is invalid
+- :doc:`/reference/editor/problems/E0011` --- the ``address`` of a profile is invalid
+- :doc:`/reference/editor/problems/E0013` --- the connection could not be opened
