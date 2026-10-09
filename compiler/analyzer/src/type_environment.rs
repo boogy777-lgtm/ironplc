@@ -710,7 +710,21 @@ impl TypeEnvironment {
     ///
     /// `declaring` is the declaration that owns the target, used for the primary
     /// diagnostic label.
-    pub(crate) fn resolve_reference_target(
+    pub fn resolve_reference_target(
+        &self,
+        declaring: &TypeName,
+        target: &ReferenceTarget,
+    ) -> Result<IntermediateType, Diagnostic> {
+        // A target that is a declaration with an error has its first cause
+        // reported where it is declared; a caller that wants a diagnostic is
+        // told that the target cannot be resolved.
+        self.reference_target(declaring, target)
+            .map_err(|failure| failure.into_diagnostic().unwrap_or_else(Diagnostic::internal_error))
+    }
+
+    /// [`Self::resolve_reference_target`], told whether a failure is reported
+    /// by this target or by the declaration it is made from.
+    pub(crate) fn reference_target(
         &self,
         declaring: &TypeName,
         target: &ReferenceTarget,
@@ -1757,7 +1771,7 @@ mod tests {
 
         assert!(result.is_err());
         assert_eq!(
-            result.unwrap_err().into_diagnostic().unwrap().code,
+            result.unwrap_err().code,
             Problem::ParentTypeNotDeclared.code()
         );
     }
@@ -1869,5 +1883,18 @@ mod tests {
 
         assert_eq!(env.iter().count(), 0);
         assert_eq!(env.iter_ids().count(), 0);
+    }
+
+    #[test]
+    fn reference_target_when_named_target_is_declared_with_an_error_then_inherited() {
+        let mut env = TypeEnvironment::new();
+        env.insert_failed(&named("BROKEN", 0));
+
+        let result = env.reference_target(
+            &TypeName::from("REF"),
+            &ReferenceTarget::Named(named("BROKEN", 20)),
+        );
+
+        assert!(matches!(result, Err(Failure::Inherited)));
     }
 }

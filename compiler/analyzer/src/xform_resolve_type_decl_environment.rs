@@ -441,7 +441,7 @@ impl Declaration<'_> {
     ) -> Result<(), Failure> {
         let target_type = self
             .environment
-            .resolve_reference_target(&node.type_name, &node.target)?;
+            .reference_target(&node.type_name, &node.target)?;
 
         let attrs = crate::type_attributes::TypeAttributes::new(
             node.type_name.span(),

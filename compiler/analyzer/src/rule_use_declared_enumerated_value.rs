@@ -115,6 +115,11 @@ impl Visitor<Infallible> for RuleDeclaredEnumeratedValues<'_> {
         &mut self,
         init: &EnumeratedInitialValueAssignment,
     ) -> Result<Self::Value, Infallible> {
+        // A declaration with an error has no values to check this one
+        // against, and is reported where it is declared.
+        if self.context.types().lookup(&init.type_name).is_failed() {
+            return Ok(());
+        }
         let defined_values = match self.find_enum_declaration_values(&init.type_name) {
             Ok(values) => values,
             Err(diagnostic) => {

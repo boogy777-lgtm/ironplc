@@ -29,6 +29,17 @@ pub(crate) enum Resolved<'a, T> {
 }
 
 impl<'a, T> Resolved<'a, T> {
+    /// Whether the name is declared with an error.
+    pub(crate) fn is_failed(&self) -> bool {
+        matches!(self, Resolved::Failed)
+    }
+
+    /// Whether the name is not declared at all: the only result a message
+    /// "not declared" is made from.
+    pub(crate) fn is_absent(&self) -> bool {
+        matches!(self, Resolved::Absent)
+    }
+
     /// The declaration for a declaration that is made from it. A failed
     /// declaration makes the user fail without a message of its own; only a
     /// name that is not declared is reported, with the diagnostic `absent`

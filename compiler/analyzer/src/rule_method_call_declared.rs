@@ -60,16 +60,19 @@ use ironplc_parser::options::CompilerOptions;
 
 pub fn apply(
     lib: &Library,
-    _context: &SemanticContext,
+    context: &SemanticContext,
     _options: &CompilerOptions,
 ) -> SemanticResult {
     let function_blocks = FunctionBlocks::from_library(lib);
 
-    run_rule(RuleMethodCallDeclared::new(&function_blocks), lib)
+    run_rule(RuleMethodCallDeclared::new(&function_blocks, context), lib)
 }
 
 struct RuleMethodCallDeclared<'a> {
     function_blocks: &'a FunctionBlocks<'a>,
+
+    /// The types of the project, to tell the declarations that have an error.
+    context: &'a SemanticContext,
 
     /// The instances declared in the unit being walked.
     instances: InstanceTypes,
@@ -82,9 +85,10 @@ struct RuleMethodCallDeclared<'a> {
 }
 
 impl<'a> RuleMethodCallDeclared<'a> {
-    fn new(function_blocks: &'a FunctionBlocks<'a>) -> Self {
+    fn new(function_blocks: &'a FunctionBlocks<'a>, context: &'a SemanticContext) -> Self {
         Self {
             function_blocks,
+            context,
             instances: InstanceTypes::default(),
             in_expression: false,
             diagnostics: Vec::new(),
@@ -159,7 +163,7 @@ impl Visitor<Infallible> for RuleMethodCallDeclared<'_> {
     }
 
     fn visit_var_decl(&mut self, node: &VarDecl) -> Result<Self::Value, Infallible> {
-        self.instances.declare(node);
+        self.instances.declare_in(node, self.context.types());
         Ok(())
     }
 
@@ -205,7 +209,11 @@ impl RuleMethodCallDeclared<'_> {
         // push onto `self.diagnostics`, which borrows `self` mutably.
         let fb_type = self.instances.type_of(instance).cloned();
         let Some(fb_type) = fb_type else {
-            self.diagnostics.push(Self::not_in_scope(call, instance));
+            // A receiver of a type whose declaration has an error is
+            // reported where the type is declared.
+            if !self.instances.has_error_type(instance) {
+                self.diagnostics.push(Self::not_in_scope(call, instance));
+            }
             return;
         };
 

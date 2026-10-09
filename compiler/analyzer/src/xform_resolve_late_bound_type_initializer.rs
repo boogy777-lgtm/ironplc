@@ -157,6 +157,22 @@ enum ResolvedKind {
 }
 
 impl TypeResolver<'_> {
+    /// Says that `name` is not declared, unless it is declared with an error:
+    /// then the type is already reported where it is declared, and the
+    /// variable that uses it is of the error type.
+    fn report_undeclared(&mut self, name: &TypeName) {
+        if !self.type_environment.lookup(name).is_absent() {
+            return;
+        }
+        self.diagnostics.push(
+            Diagnostic::problem(
+                Problem::UndeclaredUnknownType,
+                Label::span(name.span(), "Variable type"),
+            )
+            .with_context_type("identifier", name),
+        );
+    }
+
     /// Classifies `name` from the type environment, or from this pass's own
     /// table of declared types when the environment does not hold it, in
     /// the same order the bare-declaration arm consults them.
@@ -189,13 +205,7 @@ impl TypeResolver<'_> {
         let Some(kind) = self.classify(&name) else {
             // Undeclared, as for a bare declaration: say so and keep the
             // placeholder so the rest of the library still resolves.
-            self.diagnostics.push(
-                Diagnostic::problem(
-                    Problem::UndeclaredUnknownType,
-                    Label::span(name.span(), "Variable type"),
-                )
-                .with_context_type("identifier", &name),
-            );
+            self.report_undeclared(&name);
             return InitialValueAssignmentKind::LateResolvedType(LateResolvedInitializer {
                 type_name: name,
                 initial_value: Some(initial_value),
@@ -359,13 +369,7 @@ impl Fold<Infallible> for TypeResolver<'_> {
                     },
                     None => {
                         trace!("{:?}", self.types);
-                        self.diagnostics.push(
-                            Diagnostic::problem(
-                                Problem::UndeclaredUnknownType,
-                                Label::span(name.span(), "Variable type"),
-                            )
-                            .with_context_type("identifier", &name),
-                        );
+                        self.report_undeclared(&name);
                         Ok(InitialValueAssignmentKind::LateResolvedType(
                             LateResolvedInitializer::bare(name),
                         ))
@@ -887,5 +891,45 @@ END_PROGRAM",
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn apply_when_type_is_declared_with_an_error_then_no_diagnostic_and_declaration_kept() {
+        let program = "
+PROGRAM main
+VAR
+    v : FAILED;
+END_VAR
+END_PROGRAM
+        ";
+        let input =
+            ironplc_parser::parse_program(program, &FileId::default(), &CompilerOptions::default())
+                .unwrap();
+        let mut type_environment = TypeEnvironment::new();
+        type_environment.insert_failed(&TypeName::from("FAILED"));
+
+        let result = apply(input, &mut type_environment);
+
+        assert!(result.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn apply_when_type_is_not_declared_then_p2008() {
+        let program = "
+PROGRAM main
+VAR
+    v : NOWHERE;
+END_VAR
+END_PROGRAM
+        ";
+        let input =
+            ironplc_parser::parse_program(program, &FileId::default(), &CompilerOptions::default())
+                .unwrap();
+        let mut type_environment = TypeEnvironment::new();
+
+        let result = apply(input, &mut type_environment);
+
+        assert_eq!(result.diagnostics.len(), 1);
+        assert_eq!(result.diagnostics[0].code, Problem::UndeclaredUnknownType.code());
     }
 }
