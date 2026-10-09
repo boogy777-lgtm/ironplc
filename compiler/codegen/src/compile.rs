@@ -338,7 +338,7 @@ fn compile_in_budget(
         })
         .collect();
 
-    let enum_map = crate::compile_enum::build_enum_ordinal_map(library);
+    let enum_map = crate::compile_enum::build_enum_ordinal_map(library, context.types());
 
     let mut container = compile_program_with_functions(
         ProgramInputs {

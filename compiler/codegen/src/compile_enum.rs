@@ -9,6 +9,7 @@ use std::collections::HashMap;
 
 use indexmap::IndexMap;
 
+use ironplc_analyzer::{TypeEnvironment, ValueOwners};
 use ironplc_dsl::common::{
     DataTypeDeclarationKind, EnumeratedValue, Library, LibraryElementKind, SpecificationKind,
 };
@@ -17,18 +18,37 @@ use ironplc_dsl::diagnostic::{Diagnostic, Label};
 
 use super::compile::{OpWidth, Signedness, VarTypeInfo};
 
+/// Which enumeration an unqualified value name denotes, as the type
+/// environment answers it (`TypeEnvironment::enumerations_declaring`).
+enum ValueOwner {
+    /// Exactly one enumeration declares the name: its declared name, upper case.
+    One(String),
+    /// More than one enumeration declares the name. The analyzer refuses a
+    /// program that uses such a name bare, so a use that reaches code
+    /// generation is a defect in the compiler.
+    Several,
+}
+
 /// Pre-computed ordinal mappings for all named enumeration types.
 ///
-/// Built once at codegen entry from the library's type declarations
-/// and stored in `CompileContext` for use by all codegen phases.
+/// Built once at codegen entry from the library's type declarations and the
+/// type environment, and stored in `CompileContext` for use by all codegen
+/// phases.
 #[derive(Default)]
 pub(crate) struct EnumOrdinalMap {
-    /// Maps (type_name_upper, value_name_upper) → 0-based ordinal.
+    /// Maps (declared_name_upper, value_name_upper) → 0-based ordinal, for
+    /// each enumeration by the name it was declared with.
     ordinals: HashMap<(String, String), i32>,
 
-    /// Maps unqualified value_name_upper → (type_name_upper, ordinal).
-    /// The analyzer guarantees unqualified names are unambiguous within scope.
-    value_lookup: HashMap<String, (String, i32)>,
+    /// Maps the name of an enumeration or of an alias of one, upper case, to
+    /// the name the enumeration was declared with: `E#V` names an
+    /// enumeration by either.
+    declared_as: HashMap<String, String>,
+
+    /// Maps a value_name_upper to the enumeration the type environment says
+    /// declares it. The map records that answer and chooses nothing: a name
+    /// that several enumerations declare is recorded as such.
+    value_owners: HashMap<String, ValueOwner>,
 
     /// Maps type_name_upper → default ordinal (from the type declaration's
     /// default value, or 0 if no default is specified).
@@ -45,12 +65,14 @@ pub(crate) struct EnumOrdinalMap {
 ///
 /// For each `TYPE X : (A, B, C) := A; END_TYPE`, records:
 /// - ordinals: (X, A)→0, (X, B)→1, (X, C)→2
-/// - value_lookup: A→(X, 0), B→(X, 1), C→(X, 2)
+/// - declared_as: X→X (and EA→X for `TYPE EA : X;`)
+/// - value_owners: A→the enumeration `types` says declares A, and likewise B, C
 /// - defaults: X→0 (ordinal of A)
 /// - definitions: X→[A, B, C]
-pub(crate) fn build_enum_ordinal_map(library: &Library) -> EnumOrdinalMap {
+pub(crate) fn build_enum_ordinal_map(library: &Library, types: &TypeEnvironment) -> EnumOrdinalMap {
     let mut ordinals = HashMap::new();
-    let mut value_lookup = HashMap::new();
+    let mut declared_as = HashMap::new();
+    let mut value_owners = HashMap::new();
     let mut defaults = HashMap::new();
     let mut definitions = IndexMap::new();
 
@@ -59,6 +81,9 @@ pub(crate) fn build_enum_ordinal_map(library: &Library) -> EnumOrdinalMap {
             element
         {
             let type_upper = decl.type_name.to_string().to_uppercase();
+            if let Some(declared) = types.enumeration_declared_as(&decl.type_name) {
+                declared_as.insert(type_upper.clone(), declared.to_string().to_uppercase());
+            }
 
             if let SpecificationKind::Inline(spec_values) = &decl.spec_init.spec {
                 let mut value_names = Vec::new();
@@ -72,7 +97,9 @@ pub(crate) fn build_enum_ordinal_map(library: &Library) -> EnumOrdinalMap {
                     let val_upper = ev.value.to_string().to_uppercase();
                     let ordinal = ordinal as i32;
                     ordinals.insert((type_upper.clone(), val_upper.clone()), ordinal);
-                    value_lookup.insert(val_upper.clone(), (type_upper.clone(), ordinal));
+                    if let Some(owner) = value_owner(types, &ev.value) {
+                        value_owners.insert(val_upper.clone(), owner);
+                    }
                     value_names.push(val_upper);
                 }
 
@@ -95,39 +122,65 @@ pub(crate) fn build_enum_ordinal_map(library: &Library) -> EnumOrdinalMap {
 
     EnumOrdinalMap {
         ordinals,
-        value_lookup,
+        declared_as,
+        value_owners,
         defaults,
         definitions,
     }
 }
 
+/// The enumeration the type environment says declares `value`, as the map
+/// records it; `None` for a name no enumeration of the environment declares.
+fn value_owner(types: &TypeEnvironment, value: &ironplc_dsl::core::Id) -> Option<ValueOwner> {
+    match types.enumerations_declaring(value) {
+        ValueOwners::None => None,
+        ValueOwners::One(owner) => Some(ValueOwner::One(
+            owner.enumeration.to_string().to_uppercase(),
+        )),
+        ValueOwners::Several(_) => Some(ValueOwner::Several),
+    }
+}
+
 /// Resolves an `EnumeratedValue` AST node to its integer ordinal.
 ///
-/// For qualified values (`COLOR#GREEN`), uses the explicit type name.
-/// For unqualified values (`GREEN`), uses the reverse lookup.
+/// For qualified values (`COLOR#GREEN`), uses the explicit type name, which
+/// may be an alias of the enumeration. For unqualified values (`GREEN`), uses
+/// the enumeration the type environment says declares the name.
 pub(crate) fn resolve_enum_ordinal(
     map: &EnumOrdinalMap,
     ev: &EnumeratedValue,
 ) -> Result<i32, Diagnostic> {
     let value_upper = ev.value.to_string().to_uppercase();
 
+    let ordinal_of = |declared: &str| {
+        map.ordinals
+            .get(&(declared.to_string(), value_upper.clone()))
+    };
     if let Some(type_name) = &ev.type_name {
         // Qualified: COLOR#GREEN
         let type_upper = type_name.to_string().to_uppercase();
-        map.ordinals
-            .get(&(type_upper, value_upper))
+        map.declared_as
+            .get(&type_upper)
+            .and_then(|declared| ordinal_of(declared))
             .copied()
             .ok_or_else(|| {
                 Diagnostic::not_implemented(Label::span(ev.span(), "Unknown qualified enum value"))
             })
     } else {
         // Unqualified: GREEN
-        map.value_lookup
-            .get(&value_upper)
-            .map(|(_, ordinal)| *ordinal)
-            .ok_or_else(|| {
+        match map.value_owners.get(&value_upper) {
+            Some(ValueOwner::One(declared)) => ordinal_of(declared).copied().ok_or_else(|| {
                 Diagnostic::not_implemented(Label::span(ev.span(), "Unknown enum value"))
-            })
+            }),
+            Some(ValueOwner::Several) => Err(Diagnostic::internal_error_at(Label::span(
+                ev.span(),
+                "Enum value is declared by several enumerations",
+            ))),
+            None => Err(Diagnostic::not_implemented(Label::span(
+                ev.span(),
+                "Unknown enum value",
+            ))),
+        }
     }
 }
 
@@ -153,6 +206,18 @@ pub(crate) fn enum_var_type_info() -> VarTypeInfo {
     }
 }
 
+/// The ordinal map of a library as parsed: the library is analyzed first, since
+/// the map reads the type environment the analysis builds.
+#[cfg(test)]
+pub(crate) fn ordinal_map_of(library: &Library) -> EnumOrdinalMap {
+    let (analyzed, context) = ironplc_analyzer::stages::resolve_types(
+        &[library],
+        &ironplc_parser::options::CompilerOptions::default(),
+    )
+    .unwrap();
+    build_enum_ordinal_map(&analyzed, context.types())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -170,7 +235,7 @@ mod tests {
             "TYPE COLOR : (RED, GREEN, BLUE) := RED; END_TYPE
              PROGRAM main END_PROGRAM",
         );
-        let map = build_enum_ordinal_map(&lib);
+        let map = ordinal_map_of(&lib);
 
         assert_eq!(map.ordinals.get(&("COLOR".into(), "RED".into())), Some(&0));
         assert_eq!(
@@ -186,7 +251,7 @@ mod tests {
             "TYPE LEVEL : (LOW, MEDIUM, HIGH) := MEDIUM; END_TYPE
              PROGRAM main END_PROGRAM",
         );
-        let map = build_enum_ordinal_map(&lib);
+        let map = ordinal_map_of(&lib);
 
         assert_eq!(map.defaults.get("LEVEL"), Some(&1));
     }
@@ -197,7 +262,7 @@ mod tests {
             "TYPE STATUS : (STOPPED, RUNNING); END_TYPE
              PROGRAM main END_PROGRAM",
         );
-        let map = build_enum_ordinal_map(&lib);
+        let map = ordinal_map_of(&lib);
 
         assert_eq!(map.defaults.get("STATUS"), Some(&0));
     }
@@ -209,7 +274,7 @@ mod tests {
              TYPE LEVEL : (LOW, HIGH) := LOW; END_TYPE
              PROGRAM main END_PROGRAM",
         );
-        let map = build_enum_ordinal_map(&lib);
+        let map = ordinal_map_of(&lib);
 
         assert_eq!(map.ordinals.len(), 5);
         assert_eq!(map.ordinals.get(&("COLOR".into(), "BLUE".into())), Some(&2));
@@ -222,11 +287,100 @@ mod tests {
             "TYPE COLOR : (RED, GREEN, BLUE) := RED; END_TYPE
              PROGRAM main END_PROGRAM",
         );
-        let map = build_enum_ordinal_map(&lib);
+        let map = ordinal_map_of(&lib);
 
         let ev = EnumeratedValue::new("GREEN");
         let result = resolve_enum_ordinal(&map, &ev).unwrap();
         assert_eq!(result, 1);
+    }
+
+    fn qualified(type_name: &str, value: &str) -> EnumeratedValue {
+        let mut ev = EnumeratedValue::new(value);
+        ev.type_name = Some(ironplc_dsl::common::TypeName::from(type_name));
+        ev
+    }
+
+    #[test]
+    fn resolve_enum_ordinal_when_value_is_shared_and_qualified_then_ordinal_of_its_enumeration() {
+        let lib = parse_library(
+            "TYPE E1 : (U2, U1); E2 : (U1, U3); END_TYPE
+             PROGRAM main END_PROGRAM",
+        );
+        let map = ordinal_map_of(&lib);
+
+        assert_eq!(
+            resolve_enum_ordinal(&map, &qualified("E1", "U1")).unwrap(),
+            1
+        );
+        assert_eq!(
+            resolve_enum_ordinal(&map, &qualified("E2", "U1")).unwrap(),
+            0
+        );
+    }
+
+    #[test]
+    fn resolve_enum_ordinal_when_qualified_by_an_alias_then_ordinal_of_the_declaration() {
+        let lib = parse_library(
+            "TYPE E1 : (U2, U1); E2 : (U1, U3); EA : E2; EB : EA; END_TYPE
+             PROGRAM main END_PROGRAM",
+        );
+        let map = ordinal_map_of(&lib);
+
+        assert_eq!(
+            resolve_enum_ordinal(&map, &qualified("EA", "U1")).unwrap(),
+            0
+        );
+        assert_eq!(
+            resolve_enum_ordinal(&map, &qualified("EB", "U3")).unwrap(),
+            1
+        );
+    }
+
+    #[test]
+    fn resolve_enum_ordinal_when_qualified_value_is_not_of_the_enumeration_then_error() {
+        let lib = parse_library(
+            "TYPE E1 : (U2, U1); E2 : (U1, U3); END_TYPE
+             PROGRAM main END_PROGRAM",
+        );
+        let map = ordinal_map_of(&lib);
+
+        assert!(resolve_enum_ordinal(&map, &qualified("E1", "U3")).is_err());
+    }
+
+    #[test]
+    fn resolve_enum_ordinal_when_unqualified_value_has_several_enumerations_then_internal_error() {
+        let lib = parse_library(
+            "TYPE E1 : (U2, U1); E2 : (U1, U3); END_TYPE
+             PROGRAM main END_PROGRAM",
+        );
+        let map = ordinal_map_of(&lib);
+
+        let error = resolve_enum_ordinal(&map, &EnumeratedValue::new("U1")).unwrap_err();
+
+        assert_eq!(error.code, "P9998");
+        // The names declared once are not affected.
+        assert_eq!(
+            resolve_enum_ordinal(&map, &EnumeratedValue::new("U2")).unwrap(),
+            0
+        );
+        assert_eq!(
+            resolve_enum_ordinal(&map, &EnumeratedValue::new("U3")).unwrap(),
+            1
+        );
+    }
+
+    #[test]
+    fn resolve_enum_ordinal_when_alias_of_an_enumeration_then_its_values_are_not_ambiguous() {
+        let lib = parse_library(
+            "TYPE E1 : (A, B); EA : E1; END_TYPE
+             PROGRAM main END_PROGRAM",
+        );
+        let map = ordinal_map_of(&lib);
+
+        assert_eq!(
+            resolve_enum_ordinal(&map, &EnumeratedValue::new("B")).unwrap(),
+            1
+        );
     }
 
     #[test]
@@ -235,7 +389,7 @@ mod tests {
             "TYPE LEVEL : (LOW, MEDIUM, HIGH) := HIGH; END_TYPE
              PROGRAM main END_PROGRAM",
         );
-        let map = build_enum_ordinal_map(&lib);
+        let map = ordinal_map_of(&lib);
 
         assert_eq!(resolve_enum_default_ordinal(&map, "LEVEL"), 2);
     }
@@ -243,7 +397,7 @@ mod tests {
     #[test]
     fn resolve_enum_default_ordinal_when_unknown_type_then_returns_zero() {
         let lib = parse_library("PROGRAM main END_PROGRAM");
-        let map = build_enum_ordinal_map(&lib);
+        let map = ordinal_map_of(&lib);
 
         assert_eq!(resolve_enum_default_ordinal(&map, "NONEXISTENT"), 0);
     }
@@ -262,7 +416,7 @@ mod tests {
             "TYPE COLOR : (RED, GREEN, BLUE) := RED; END_TYPE
              PROGRAM main END_PROGRAM",
         );
-        let map = build_enum_ordinal_map(&lib);
+        let map = ordinal_map_of(&lib);
 
         assert_eq!(
             map.definitions.get("COLOR"),
@@ -275,22 +429,19 @@ mod tests {
     }
 
     #[test]
-    fn build_enum_ordinal_map_when_enum_then_populates_value_lookup() {
+    fn build_enum_ordinal_map_when_enum_then_records_the_enumeration_of_each_value() {
         let lib = parse_library(
             "TYPE COLOR : (RED, GREEN, BLUE) := RED; END_TYPE
              PROGRAM main END_PROGRAM",
         );
-        let map = build_enum_ordinal_map(&lib);
+        let map = ordinal_map_of(&lib);
 
-        assert_eq!(map.value_lookup.get("RED"), Some(&("COLOR".to_string(), 0)));
-        assert_eq!(
-            map.value_lookup.get("GREEN"),
-            Some(&("COLOR".to_string(), 1))
-        );
-        assert_eq!(
-            map.value_lookup.get("BLUE"),
-            Some(&("COLOR".to_string(), 2))
-        );
+        for value in ["RED", "GREEN", "BLUE"] {
+            assert!(
+                matches!(map.value_owners.get(value), Some(ValueOwner::One(owner)) if owner == "COLOR"),
+                "{value}"
+            );
+        }
     }
 
     #[test]
@@ -299,7 +450,7 @@ mod tests {
             "TYPE E_ModeLanguage : (Deutsch := 1, English := 2); END_TYPE
              PROGRAM main END_PROGRAM",
         );
-        let map = build_enum_ordinal_map(&lib);
+        let map = ordinal_map_of(&lib);
 
         // Uses the explicit values, not declaration position (which
         // would otherwise give Deutsch=0, English=1).
@@ -321,7 +472,7 @@ mod tests {
             "TYPE E_AssertionType : (Type_UNDEFINED := 0, Type_ANY, Type_BOOL) BYTE; END_TYPE
              PROGRAM main END_PROGRAM",
         );
-        let map = build_enum_ordinal_map(&lib);
+        let map = ordinal_map_of(&lib);
 
         assert_eq!(
             map.ordinals
