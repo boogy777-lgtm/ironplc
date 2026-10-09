@@ -14,6 +14,7 @@
 use crate::intermediate_type::{FunctionBlockVarType, IntermediateStructField, IntermediateType};
 use crate::intermediates::*;
 use crate::pass_runner::Outcome;
+use crate::resolution::Failure;
 use crate::type_environment::TypeEnvironment;
 use ironplc_dsl::common::*;
 use ironplc_dsl::core::{Id, Located};
@@ -50,10 +51,29 @@ struct Declaration<'a> {
 
 impl Declaration<'_> {
     /// `node`, whether or not it could be entered: a declaration that could
-    /// not be entered is reported and stays as it was.
-    fn kept<T>(&mut self, node: T, entered: Result<(), Diagnostic>) -> T {
-        if let Err(diagnostic) = entered {
-            self.diagnostics.push(diagnostic);
+    /// not be entered stays as it was. It is reported when the failure is its
+    /// own, and it is entered as a declaration with an error either way, so
+    /// that its name stays declared and a declaration made from it fails
+    /// without a message of its own (see [`crate::resolution`]).
+    fn kept<T>(&mut self, name: &TypeName, node: T, entered: Result<(), Failure>) -> T {
+        if let Err(failure) = entered {
+            self.environment.insert_failed(name);
+            self.diagnostics.extend(failure.into_diagnostic());
+        }
+        node
+    }
+
+    /// [`Self::kept`] for a function block, which is a program organization
+    /// unit as well as a type.
+    fn kept_function_block(
+        &mut self,
+        node: FunctionBlockDeclaration,
+        entered: Result<(), Failure>,
+    ) -> FunctionBlockDeclaration {
+        if let Err(failure) = entered {
+            self.environment
+                .insert_failed_function_block(&TypeName::from_id(&node.name.name));
+            self.diagnostics.extend(failure.into_diagnostic());
         }
         node
     }
@@ -63,10 +83,10 @@ impl TypeEnvironment {
     fn transform_late_bound_declaration(
         &mut self,
         node: LateBoundDeclaration,
-    ) -> Result<DataTypeDeclarationKind, Diagnostic> {
+    ) -> Result<DataTypeDeclarationKind, Failure> {
         // At this point we should have a type for the late bound declaration
         // so we can replace the late bound declaration with the correct type
-        let existing = self.get(&node.base_type_name).ok_or_else(|| {
+        let existing = self.lookup(&node.base_type_name).or_failure(|| {
             Diagnostic::problem(
                 Problem::ParentTypeNotDeclared,
                 Label::span(node.data_type_name.span(), "Type alias"),
@@ -138,7 +158,7 @@ impl TypeEnvironment {
                 // not TYPE declarations, so they should never appear in the type environment.
                 // If we reach this branch, it indicates a bug in the compiler.
                 IntermediateType::FunctionBlock { .. } | IntermediateType::Function { .. } => {
-                    Err(Diagnostic::internal_error())
+                    Err(Diagnostic::internal_error().into())
                 }
                 // Primitive types are handled by the is_primitive() check above,
                 // so reaching this branch indicates a bug in the compiler
@@ -151,14 +171,14 @@ impl TypeEnvironment {
                 | IntermediateType::Date { .. }
                 | IntermediateType::TimeOfDay { .. }
                 | IntermediateType::DateAndTime { .. }
-                | IntermediateType::String { .. } => Err(Diagnostic::internal_error()),
+                | IntermediateType::String { .. } => Err(Diagnostic::internal_error().into()),
             }
         }
     }
 }
 
 impl Declaration<'_> {
-    fn enter_simple_declaration(&mut self, node: &SimpleDeclaration) -> Result<(), Diagnostic> {
+    fn enter_simple_declaration(&mut self, node: &SimpleDeclaration) -> Result<(), Failure> {
         // A simple declaration consists of a type name followed by specification/initialization.
         match &node.spec_and_init {
             InitialValueAssignmentKind::None(source_span) => {
@@ -172,7 +192,7 @@ impl Declaration<'_> {
                 .with_secondary(Label::span(
                     source_span.clone(),
                     "Type specification required (e.g., ': INT')",
-                )));
+                )).into());
             }
             // A value that is an expression of constants is folded after this
             // environment is first derived, so it is the base type that counts
@@ -184,21 +204,17 @@ impl Declaration<'_> {
                 type_name: base,
                 ..
             }) => {
-                match self.environment.get(base) {
-                    Some(_base_type) => {
-                        // If the base type is known, then the type is valid this type
-                        // will have the same attributes as the base type.
-                        self.environment.insert_alias(&node.type_name, base)?;
-                    }
-                    None => {
-                        // If the base type is not know, then this is not valid
-                        return Err(Diagnostic::problem(
-                            Problem::ParentTypeNotDeclared,
-                            Label::span(node.type_name.span(), "Derived type"),
-                        )
-                        .with_secondary(Label::span(base.span(), "Base type")));
-                    }
-                }
+                // If the base type is known, then the type is valid this type
+                // will have the same attributes as the base type. If the base
+                // type is not declared, then this is not valid.
+                self.environment.lookup(base).or_failure(|| {
+                    Diagnostic::problem(
+                        Problem::ParentTypeNotDeclared,
+                        Label::span(node.type_name.span(), "Derived type"),
+                    )
+                    .with_secondary(Label::span(base.span(), "Base type"))
+                })?;
+                self.environment.insert_alias(&node.type_name, base)?;
             }
             InitialValueAssignmentKind::String(string_initializer) => {
                 self.environment
@@ -215,18 +231,18 @@ impl Declaration<'_> {
                 // A PARAMS type declaration is a `DataTypeDeclarationKind::Params`,
                 // folded by `fold_params_declaration`; it never reaches the
                 // `TYPE Name : <spec>` form this fold handles.
-                return Err(Diagnostic::internal_error());
+                return Err(Diagnostic::internal_error().into());
             }
             InitialValueAssignmentKind::FunctionBlock(fb_init) => {
                 // Handle function block type aliases like: TYPE MyFBAlias : ExistingFB := (input := 10); END_TYPE
                 // This creates an alias to an existing function block type
-                if self.environment.get(&fb_init.type_name).is_none() {
-                    return Err(Diagnostic::problem(
+                self.environment.lookup(&fb_init.type_name).or_failure(|| {
+                    Diagnostic::problem(
                         Problem::ParentTypeNotDeclared,
                         Label::span(node.type_name.span(), "Function block type alias"),
                     )
-                    .with_secondary(Label::span(fb_init.type_name.span(), "Base type")));
-                }
+                    .with_secondary(Label::span(fb_init.type_name.span(), "Base type"))
+                })?;
                 self.environment
                     .insert_alias(&node.type_name, &fb_init.type_name)?;
             }
@@ -237,13 +253,13 @@ impl Declaration<'_> {
                 // Handle it like the FunctionBlock alias arm for robustness:
                 // treat it as an alias to the referenced FB type, ignoring
                 // the (codegen-unsupported) constructor arguments.
-                if self.environment.get(&fb_call.type_name).is_none() {
-                    return Err(Diagnostic::problem(
+                self.environment.lookup(&fb_call.type_name).or_failure(|| {
+                    Diagnostic::problem(
                         Problem::ParentTypeNotDeclared,
                         Label::span(node.type_name.span(), "Function block type alias"),
                     )
-                    .with_secondary(Label::span(fb_call.type_name.span(), "Base type")));
-                }
+                    .with_secondary(Label::span(fb_call.type_name.span(), "Base type"))
+                })?;
                 self.environment
                     .insert_alias(&node.type_name, &fb_call.type_name)?;
             }
@@ -263,13 +279,15 @@ impl Declaration<'_> {
             InitialValueAssignmentKind::Structure(structure_init) => {
                 // Handle structure type aliases like: TYPE MyAlias : ExistingStruct := (field := 10); END_TYPE
                 // This creates an alias to an existing structure type
-                if self.environment.get(&structure_init.type_name).is_none() {
-                    return Err(Diagnostic::problem(
-                        Problem::ParentTypeNotDeclared,
-                        Label::span(node.type_name.span(), "Structure type alias"),
-                    )
-                    .with_secondary(Label::span(structure_init.type_name.span(), "Base type")));
-                }
+                self.environment
+                    .lookup(&structure_init.type_name)
+                    .or_failure(|| {
+                        Diagnostic::problem(
+                            Problem::ParentTypeNotDeclared,
+                            Label::span(node.type_name.span(), "Structure type alias"),
+                        )
+                        .with_secondary(Label::span(structure_init.type_name.span(), "Base type"))
+                    })?;
                 self.environment
                     .insert_alias(&node.type_name, &structure_init.type_name)?;
             }
@@ -290,7 +308,7 @@ impl Declaration<'_> {
                 // Reference types are not resolved through simple declarations
             }
             InitialValueAssignmentKind::LateResolvedType(_type_name) => {
-                return Err(Diagnostic::internal_error());
+                return Err(Diagnostic::internal_error().into());
             }
         }
         // A declared default is part of the type: a declaration against the
@@ -304,19 +322,19 @@ impl Declaration<'_> {
     fn enter_enumeration_declaration(
         &mut self,
         node: &EnumerationDeclaration,
-    ) -> Result<(), Diagnostic> {
+    ) -> Result<(), Failure> {
         // Enumeration declaration can define a set of values
         // or rename another enumeration.
         match &node.spec_init.spec {
             SpecificationKind::Named(base_type_name) => {
                 // Alias of another enumeration: base must already exist because we sort the items
-                if self.environment.get(base_type_name).is_none() {
-                    return Err(Diagnostic::problem(
+                self.environment.lookup(base_type_name).or_failure(|| {
+                    Diagnostic::problem(
                         Problem::ParentEnumNotDeclared,
                         Label::span(node.type_name.span(), "Enumeration"),
                     )
-                    .with_secondary(Label::span(base_type_name.span(), "Base type name")));
-                }
+                    .with_secondary(Label::span(base_type_name.span(), "Base type name"))
+                })?;
                 // Use explicit alias insertion to avoid duplicating representation logic
                 self.environment
                     .insert_alias(&node.type_name, base_type_name)?;
@@ -333,7 +351,7 @@ impl Declaration<'_> {
         Ok(())
     }
 
-    fn enter_string_declaration(&mut self, node: &StringDeclaration) -> Result<(), Diagnostic> {
+    fn enter_string_declaration(&mut self, node: &StringDeclaration) -> Result<(), Failure> {
         self.environment
             .insert_type(&node.type_name, string::from_decl(node));
         Ok(())
@@ -342,7 +360,7 @@ impl Declaration<'_> {
     fn enter_structure_declaration(
         &mut self,
         node: &StructureDeclaration,
-    ) -> Result<(), Diagnostic> {
+    ) -> Result<(), Failure> {
         // Use the structure processing module to create the structure type
         let attrs =
             crate::intermediates::structure::try_from(&node.type_name, node, self.environment)?;
@@ -350,7 +368,7 @@ impl Declaration<'_> {
         Ok(())
     }
 
-    fn enter_union_declaration(&mut self, node: &UnionDeclaration) -> Result<(), Diagnostic> {
+    fn enter_union_declaration(&mut self, node: &UnionDeclaration) -> Result<(), Failure> {
         // A union is registered with the members' structure layout for now;
         // overlaying them at offset 0 is not implemented yet.
         let attrs =
@@ -359,7 +377,7 @@ impl Declaration<'_> {
         Ok(())
     }
 
-    fn enter_subrange_declaration(&mut self, node: &SubrangeDeclaration) -> Result<(), Diagnostic> {
+    fn enter_subrange_declaration(&mut self, node: &SubrangeDeclaration) -> Result<(), Failure> {
         let result = subrange::try_from(&node.type_name, &node.spec, self.environment)?;
 
         match result {
@@ -383,7 +401,7 @@ impl Declaration<'_> {
         Ok(())
     }
 
-    fn enter_array_declaration(&mut self, node: &ArrayDeclaration) -> Result<(), Diagnostic> {
+    fn enter_array_declaration(&mut self, node: &ArrayDeclaration) -> Result<(), Failure> {
         // Use the array processing module to create the array type
         let result = array::try_from(&node.type_name, &node.spec, self.environment)?;
 
@@ -400,7 +418,7 @@ impl Declaration<'_> {
         Ok(())
     }
 
-    fn enter_params_declaration(&mut self, node: &ParamsDeclaration) -> Result<(), Diagnostic> {
+    fn enter_params_declaration(&mut self, node: &ParamsDeclaration) -> Result<(), Failure> {
         // A PARAMS type is the array its bounds are derived from (see
         // `intermediates::params`), so it resolves through the array module.
         match crate::intermediates::params::try_from(&node.type_name, &node.spec, self.environment)?
@@ -420,7 +438,7 @@ impl Declaration<'_> {
     fn enter_reference_declaration(
         &mut self,
         node: &ReferenceDeclaration,
-    ) -> Result<(), Diagnostic> {
+    ) -> Result<(), Failure> {
         let target_type = self
             .environment
             .resolve_reference_target(&node.type_name, &node.target)?;
@@ -438,7 +456,7 @@ impl Declaration<'_> {
     fn enter_function_block_declaration(
         &mut self,
         node: &FunctionBlockDeclaration,
-    ) -> Result<(), Diagnostic> {
+    ) -> Result<(), Failure> {
         // Register the user-defined function block in the type environment
         // so that variable declarations like `myFb : MY_FB` resolve to
         // IntermediateType::FunctionBlock, just like stdlib FBs.
@@ -468,8 +486,8 @@ impl Declaration<'_> {
                 let field_type = match &decl.initializer {
                     InitialValueAssignmentKind::Simple(simple) => self
                         .environment
-                        .get(&simple.type_name)
-                        .ok_or_else(|| {
+                        .lookup(&simple.type_name)
+                        .or_failure(|| {
                             Diagnostic::problem(
                                 Problem::ParentTypeNotDeclared,
                                 Label::span(simple.type_name.span(), "Field type"),
@@ -479,8 +497,8 @@ impl Declaration<'_> {
                         .clone(),
                     InitialValueAssignmentKind::FunctionBlock(fb_init) => self
                         .environment
-                        .get(&fb_init.type_name)
-                        .ok_or_else(|| {
+                        .lookup(&fb_init.type_name)
+                        .or_failure(|| {
                             Diagnostic::problem(
                                 Problem::ParentTypeNotDeclared,
                                 Label::span(fb_init.type_name.span(), "Field type"),
@@ -529,7 +547,7 @@ impl Declaration<'_> {
     fn enter_interface_declaration(
         &mut self,
         node: &InterfaceDeclaration,
-    ) -> Result<(), Diagnostic> {
+    ) -> Result<(), Failure> {
         // Register the interface name as a known type so that variables
         // declared with an interface type (e.g. `pDrv : I_Drivable;`)
         // resolve instead of failing with "type not declared."
@@ -559,7 +577,8 @@ impl Fold<Infallible> for Declaration<'_> {
         node: SimpleDeclaration,
     ) -> Result<SimpleDeclaration, Infallible> {
         let entered = self.enter_simple_declaration(&node);
-        Ok(self.kept(node, entered))
+        let name = node.type_name.clone();
+        Ok(self.kept(&name, node, entered))
     }
 
     fn fold_enumeration_declaration(
@@ -567,7 +586,8 @@ impl Fold<Infallible> for Declaration<'_> {
         node: EnumerationDeclaration,
     ) -> Result<EnumerationDeclaration, Infallible> {
         let entered = self.enter_enumeration_declaration(&node);
-        Ok(self.kept(node, entered))
+        let name = node.type_name.clone();
+        Ok(self.kept(&name, node, entered))
     }
 
     fn fold_string_declaration(
@@ -575,7 +595,8 @@ impl Fold<Infallible> for Declaration<'_> {
         node: StringDeclaration,
     ) -> Result<StringDeclaration, Infallible> {
         let entered = self.enter_string_declaration(&node);
-        Ok(self.kept(node, entered))
+        let name = node.type_name.clone();
+        Ok(self.kept(&name, node, entered))
     }
 
     fn fold_structure_declaration(
@@ -583,7 +604,8 @@ impl Fold<Infallible> for Declaration<'_> {
         node: StructureDeclaration,
     ) -> Result<StructureDeclaration, Infallible> {
         let entered = self.enter_structure_declaration(&node);
-        Ok(self.kept(node, entered))
+        let name = node.type_name.clone();
+        Ok(self.kept(&name, node, entered))
     }
 
     fn fold_union_declaration(
@@ -591,7 +613,8 @@ impl Fold<Infallible> for Declaration<'_> {
         node: UnionDeclaration,
     ) -> Result<UnionDeclaration, Infallible> {
         let entered = self.enter_union_declaration(&node);
-        Ok(self.kept(node, entered))
+        let name = node.type_name.clone();
+        Ok(self.kept(&name, node, entered))
     }
 
     fn fold_subrange_declaration(
@@ -599,7 +622,8 @@ impl Fold<Infallible> for Declaration<'_> {
         node: SubrangeDeclaration,
     ) -> Result<SubrangeDeclaration, Infallible> {
         let entered = self.enter_subrange_declaration(&node);
-        Ok(self.kept(node, entered))
+        let name = node.type_name.clone();
+        Ok(self.kept(&name, node, entered))
     }
 
     fn fold_array_declaration(
@@ -607,7 +631,8 @@ impl Fold<Infallible> for Declaration<'_> {
         node: ArrayDeclaration,
     ) -> Result<ArrayDeclaration, Infallible> {
         let entered = self.enter_array_declaration(&node);
-        Ok(self.kept(node, entered))
+        let name = node.type_name.clone();
+        Ok(self.kept(&name, node, entered))
     }
 
     fn fold_params_declaration(
@@ -615,7 +640,8 @@ impl Fold<Infallible> for Declaration<'_> {
         node: ParamsDeclaration,
     ) -> Result<ParamsDeclaration, Infallible> {
         let entered = self.enter_params_declaration(&node);
-        Ok(self.kept(node, entered))
+        let name = node.type_name.clone();
+        Ok(self.kept(&name, node, entered))
     }
 
     fn fold_reference_declaration(
@@ -623,7 +649,8 @@ impl Fold<Infallible> for Declaration<'_> {
         node: ReferenceDeclaration,
     ) -> Result<ReferenceDeclaration, Infallible> {
         let entered = self.enter_reference_declaration(&node);
-        Ok(self.kept(node, entered))
+        let name = node.type_name.clone();
+        Ok(self.kept(&name, node, entered))
     }
 
     fn fold_function_block_declaration(
@@ -631,7 +658,7 @@ impl Fold<Infallible> for Declaration<'_> {
         node: FunctionBlockDeclaration,
     ) -> Result<FunctionBlockDeclaration, Infallible> {
         let entered = self.enter_function_block_declaration(&node);
-        Ok(self.kept(node, entered))
+        Ok(self.kept_function_block(node, entered))
     }
 
     fn fold_interface_declaration(
@@ -639,7 +666,8 @@ impl Fold<Infallible> for Declaration<'_> {
         node: InterfaceDeclaration,
     ) -> Result<InterfaceDeclaration, Infallible> {
         let entered = self.enter_interface_declaration(&node);
-        Ok(self.kept(node, entered))
+        let name = TypeName::from_id(&node.name);
+        Ok(self.kept(&name, node, entered))
     }
 
     fn fold_data_type_declaration_kind(
@@ -659,7 +687,15 @@ impl Fold<Infallible> for Declaration<'_> {
         {
             // The transformed declaration declares the alias when it is folded.
             Ok(resolved) => resolved.recurse_fold(self),
-            Err(diagnostic) => Ok(self.kept(node, Err(diagnostic))),
+            Err(failure) => {
+                let name = match &node {
+                    DataTypeDeclarationKind::LateBound(late_bound) => {
+                        late_bound.data_type_name.clone()
+                    }
+                    _ => return Ok(node),
+                };
+                Ok(self.kept(&name, node, Err(failure)))
+            }
         }
     }
 

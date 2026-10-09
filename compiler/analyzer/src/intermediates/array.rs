@@ -4,6 +4,7 @@
 //! including validation of array bounds and element types.
 
 use crate::intermediate_type::{ArrayDimension, IntermediateType};
+use crate::resolution::Failure;
 use crate::type_environment::{TypeAttributes, TypeEnvironment};
 use ironplc_container::CharWidth;
 use ironplc_dsl::common::*;
@@ -25,7 +26,7 @@ pub fn try_from(
     node_name: &TypeName,
     spec: &ArraySpecificationKind,
     type_environment: &TypeEnvironment,
-) -> Result<IntermediateResult, Diagnostic> {
+) -> Result<IntermediateResult, Failure> {
     match spec {
         SpecificationKind::Inline(array_subranges) => {
             // Array with explicit subranges: MY_ARRAY : ARRAY [1..10, 1..5] OF INT;
@@ -49,7 +50,7 @@ pub fn try_from(
                 },
                 ArrayElementType::Named(_) => {
                     let element_type =
-                        type_environment.get(&element_type_name).ok_or_else(|| {
+                        type_environment.lookup(&element_type_name).or_failure(|| {
                             Diagnostic::problem(
                                 Problem::ArrayElementTypeNotDeclared,
                                 Label::span(node_name.span(), "Array declaration"),
@@ -104,13 +105,13 @@ pub fn try_from(
         }
         SpecificationKind::Named(base_type_name) => {
             // Array type alias: MY_ARRAY : OTHER_ARRAY;
-            if type_environment.get(base_type_name).is_none() {
-                return Err(Diagnostic::problem(
+            type_environment.lookup(base_type_name).or_failure(|| {
+                Diagnostic::problem(
                     Problem::ParentTypeNotDeclared,
                     Label::span(node_name.span(), "Array alias"),
                 )
-                .with_secondary(Label::span(base_type_name.span(), "Base type")));
-            }
+                .with_secondary(Label::span(base_type_name.span(), "Base type"))
+            })?;
 
             Ok(IntermediateResult::Alias(base_type_name.clone()))
         }
@@ -444,7 +445,7 @@ mod tests {
         let spec = SpecificationKind::Inline(array_subranges);
         let result = try_from(&TypeName::from("MY_ARRAY"), &spec, &env);
         assert!(result.is_err());
-        let error = result.unwrap_err();
+        let error = result.unwrap_err().into_diagnostic().unwrap();
         assert_eq!(Problem::ArrayElementTypeNotDeclared.code(), error.code);
     }
 
@@ -455,7 +456,7 @@ mod tests {
         let spec = SpecificationKind::Named(TypeName::from("MISSING_ARRAY"));
         let result = try_from(&TypeName::from("ALIAS_ARRAY"), &spec, &env);
         assert!(result.is_err());
-        let error = result.unwrap_err();
+        let error = result.unwrap_err().into_diagnostic().unwrap();
         assert_eq!(Problem::ParentTypeNotDeclared.code(), error.code);
     }
 

@@ -4,6 +4,7 @@
 //! of the base type.
 
 use crate::intermediate_type::IntermediateType;
+use crate::resolution::Failure;
 use crate::type_environment::{TypeAttributes, TypeEnvironment};
 use ironplc_dsl::common::*;
 use ironplc_dsl::core::Located;
@@ -24,12 +25,12 @@ pub fn try_from(
     node_name: &TypeName,
     spec: &SubrangeSpecificationKind,
     type_environment: &TypeEnvironment,
-) -> Result<IntermediateResult, Diagnostic> {
+) -> Result<IntermediateResult, Failure> {
     match spec {
         SpecificationKind::Inline(spec) => {
             // Direct subrange specification: MY_RANGE : INT (1..100);
             let base_type_name: TypeName = spec.type_name.clone().into();
-            let base_type = type_environment.get(&base_type_name).ok_or_else(|| {
+            let base_type = type_environment.lookup(&base_type_name).or_failure(|| {
                 Diagnostic::problem(
                     Problem::ParentTypeNotDeclared,
                     Label::span(node_name.span(), "Subrange declaration"),
@@ -43,7 +44,7 @@ pub fn try_from(
                     Problem::SubrangeBaseTypeNotNumeric,
                     Label::span(node_name.span(), "Subrange declaration"),
                 )
-                .with_secondary(Label::span(base_type_name.span(), "Non-numeric base type")));
+                .with_secondary(Label::span(base_type_name.span(), "Non-numeric base type")).into());
             }
 
             // Extract min and max values from the subrange
@@ -84,7 +85,7 @@ pub fn try_from(
                 .with_secondary(Label::span(
                     end.value.span(),
                     format!("Maximum value: {}", max_value),
-                )));
+                )).into());
             }
 
             // Validate range is within base type bounds
@@ -103,13 +104,13 @@ pub fn try_from(
         }
         SpecificationKind::Named(base_type_name) => {
             // Subrange type alias: MY_RANGE : OTHER_RANGE;
-            if type_environment.get(base_type_name).is_none() {
-                return Err(Diagnostic::problem(
+            type_environment.lookup(base_type_name).or_failure(|| {
+                Diagnostic::problem(
                     Problem::ParentTypeNotDeclared,
                     Label::span(node_name.span(), "Subrange alias"),
                 )
-                .with_secondary(Label::span(base_type_name.span(), "Base type")));
-            }
+                .with_secondary(Label::span(base_type_name.span(), "Base type"))
+            })?;
 
             Ok(IntermediateResult::Alias(base_type_name.clone()))
         }
@@ -388,7 +389,7 @@ mod tests {
 
         let result = try_from(&TypeName::from("INVALID_RANGE"), &spec, &env);
         assert!(result.is_err());
-        let error = result.unwrap_err();
+        let error = result.unwrap_err().into_diagnostic().unwrap();
         assert_eq!(Problem::SubrangeMinStrictlyLessMax.code(), error.code);
     }
 
@@ -422,7 +423,7 @@ mod tests {
 
         let result = try_from(&TypeName::from("OUT_OF_BOUNDS"), &spec, &env);
         assert!(result.is_err());
-        let error = result.unwrap_err();
+        let error = result.unwrap_err().into_diagnostic().unwrap();
         assert_eq!(Problem::SubrangeOutOfBounds.code(), error.code);
     }
 
@@ -453,7 +454,7 @@ mod tests {
 
         let result = try_from(&TypeName::from("MY_RANGE"), &spec, &env);
         assert!(result.is_err());
-        let error = result.unwrap_err();
+        let error = result.unwrap_err().into_diagnostic().unwrap();
         assert_eq!(Problem::ParentTypeNotDeclared.code(), error.code);
     }
 
@@ -496,7 +497,7 @@ mod tests {
 
         let result = try_from(&TypeName::from("INVALID_BASE"), &spec, &env);
         assert!(result.is_err());
-        let error = result.unwrap_err();
+        let error = result.unwrap_err().into_diagnostic().unwrap();
         assert_eq!(Problem::SubrangeBaseTypeNotNumeric.code(), error.code);
     }
 

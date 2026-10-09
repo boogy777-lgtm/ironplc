@@ -16,6 +16,7 @@ use ironplc_problems::Problem;
 
 use crate::intermediate_type::{ByteSized, IntermediateType};
 use crate::intermediates::array;
+use crate::resolution::{Failure, Resolved};
 use crate::symbol_environment::duplicate_declaration;
 use crate::type_id;
 use ironplc_dsl::type_id::TypeId;
@@ -282,7 +283,54 @@ struct TypeEntry {
     /// people reading diagnostics and debug output -- a type's identity is
     /// its [`TypeId`], never its name.
     name: Option<TypeName>,
-    attributes: crate::type_attributes::TypeAttributes,
+    state: EntryState,
+}
+
+/// What the environment knows of a type it holds.
+#[derive(Debug)]
+enum EntryState {
+    /// A type that can be used.
+    Valid(crate::type_attributes::TypeAttributes),
+    /// A declaration that has an error, which was reported where it is. The
+    /// name is declared, so it is never reported as not declared; there is no
+    /// type to use. Its id is the error type: see [`TypeEnvironment::is_error`].
+    Failed {
+        /// The location of the declaration.
+        span: SourceSpan,
+        /// Whether the declaration is a function block, which is a program
+        /// organization unit as well as a type (see
+        /// [`TypeEnvironment::insert_type`] for what that changes).
+        function_block: bool,
+    },
+}
+
+impl TypeEntry {
+    /// The type when it can be used.
+    fn valid(&self) -> Option<&crate::type_attributes::TypeAttributes> {
+        match &self.state {
+            EntryState::Valid(attributes) => Some(attributes),
+            EntryState::Failed { .. } => None,
+        }
+    }
+
+    /// The location of the declaration that entered this type, valid or not.
+    fn span(&self) -> Option<SourceSpan> {
+        match &self.state {
+            EntryState::Valid(attributes) => Some(attributes.span()),
+            EntryState::Failed { span, .. } => Some(span.clone()),
+        }
+    }
+
+    /// Whether the declaration is a function block, valid or not.
+    fn is_function_block(&self) -> bool {
+        match &self.state {
+            EntryState::Valid(attributes) => matches!(
+                attributes.representation,
+                IntermediateType::FunctionBlock { .. }
+            ),
+            EntryState::Failed { function_block, .. } => *function_block,
+        }
+    }
 }
 
 /// Every type the program can use, each identified by a [`TypeId`].
@@ -308,6 +356,12 @@ pub struct TypeEnvironment {
     /// repeat does not abort the fold that met it: the first declaration is
     /// kept and every other declaration still resolves.
     duplicates: Vec<Diagnostic>,
+}
+
+/// Whether two spans are the same place in the source. `SourceSpan` compares
+/// equal whatever its position, so a declaration's identity is its place.
+fn same_place(a: &SourceSpan, b: &SourceSpan) -> bool {
+    a.start == b.start && a.end == b.end && a.file_id == b.file_id
 }
 
 /// The value `over` states laid over the value `base` declares: two structure
@@ -353,27 +407,67 @@ impl TypeEnvironment {
         type_name: &TypeName,
         symbol: crate::type_attributes::TypeAttributes,
     ) {
-        let Some(existing) = self.get(type_name) else {
+        let function_block = matches!(symbol.representation, IntermediateType::FunctionBlock { .. });
+        self.enter(
+            type_name,
+            function_block,
+            EntryState::Valid(symbol),
+        );
+    }
+
+    /// Adds a declaration that has an error, which was reported where it is.
+    /// The name is declared from now on, with no type to use: a lookup answers
+    /// [`Resolved::Failed`] and the id is the error type
+    /// ([`Self::is_error`]). A repeated name is recorded as for
+    /// [`Self::insert_type`]; so is a declaration that was entered as failed
+    /// before and is entered again, which changes nothing.
+    pub fn insert_failed(&mut self, type_name: &TypeName) {
+        self.enter(
+            type_name,
+            false,
+            EntryState::Failed {
+                span: type_name.span(),
+                function_block: false,
+            },
+        );
+    }
+
+    /// [`Self::insert_failed`] for a function block, which is a program
+    /// organization unit as well as a type.
+    pub fn insert_failed_function_block(&mut self, type_name: &TypeName) {
+        self.enter(
+            type_name,
+            true,
+            EntryState::Failed {
+                span: type_name.span(),
+                function_block: true,
+            },
+        );
+    }
+
+    /// Enters a declaration of `type_name`, valid or failed. The first
+    /// declaration of a name is kept; a repeat is recorded as a duplicate
+    /// unless it is the declaration that is already there, entered as failed
+    /// before it was reached (a member of a cycle).
+    fn enter(&mut self, type_name: &TypeName, function_block: bool, state: EntryState) {
+        let Some(existing) = self.id_of(type_name).and_then(|id| self.entries.get(&id)) else {
             let id = self.allocate();
-            self.bind(type_name, id, symbol);
+            self.bind(type_name, id, state);
             return;
         };
-        let is_function_block = |attributes: &crate::type_attributes::TypeAttributes| {
-            matches!(
-                attributes.representation,
-                IntermediateType::FunctionBlock { .. }
-            )
-        };
-        let problem = if is_function_block(existing) || is_function_block(&symbol) {
+        if let EntryState::Failed { span, .. } = &existing.state {
+            if same_place(span, &type_name.span()) {
+                return;
+            }
+        }
+        let problem = if existing.is_function_block() || function_block {
             Problem::PouDeclNameDuplicated
         } else {
             Problem::TypeDeclNameDuplicated
         };
-        self.duplicates.push(duplicate_declaration(
-            problem,
-            &type_name.name,
-            existing.span(),
-        ));
+        let first = existing.span().unwrap_or_default();
+        self.duplicates
+            .push(duplicate_declaration(problem, &type_name.name, first));
     }
 
     /// Adds a type that has no name -- one spelled out where it is used,
@@ -389,7 +483,7 @@ impl TypeEnvironment {
             id,
             TypeEntry {
                 name: None,
-                attributes,
+                state: EntryState::Valid(attributes),
             },
         );
         id
@@ -445,7 +539,7 @@ impl TypeEnvironment {
         if self.entries.contains_key(&id) {
             self.names.insert(type_name.clone(), id);
         } else {
-            self.bind(type_name, id, symbol);
+            self.bind(type_name, id, EntryState::Valid(symbol));
         }
     }
 
@@ -457,18 +551,13 @@ impl TypeEnvironment {
     }
 
     /// Enters a new type under `type_name` with id `id`.
-    fn bind(
-        &mut self,
-        type_name: &TypeName,
-        id: TypeId,
-        attributes: crate::type_attributes::TypeAttributes,
-    ) {
+    fn bind(&mut self, type_name: &TypeName, id: TypeId, state: EntryState) {
         self.names.insert(type_name.clone(), id);
         self.entries.insert(
             id,
             TypeEntry {
                 name: Some(type_name.clone()),
-                attributes,
+                state,
             },
         );
     }
@@ -484,12 +573,12 @@ impl TypeEnvironment {
     ///
     /// Returns an error if the base type is not already in the type
     /// environment.
-    pub fn insert_alias(
+    pub(crate) fn insert_alias(
         &mut self,
         type_name: &TypeName,
         base_type_name: &TypeName,
-    ) -> Result<(), Diagnostic> {
-        let base_intermediate_type = self.get(base_type_name).ok_or_else(|| {
+    ) -> Result<(), Failure> {
+        let base_intermediate_type = self.lookup(base_type_name).or_failure(|| {
             Diagnostic::problem(
                 Problem::AliasParentTypeNotDeclared,
                 Label::span(type_name.span(), "Type alias"),
@@ -510,14 +599,15 @@ impl TypeEnvironment {
         value: Option<ironplc_dsl::common::StructInitialValueAssignmentKind>,
     ) {
         let Some(value) = value else { return };
-        if let Some(entry) = self
+        if let Some(EntryState::Valid(attributes)) = self
             .id_of(type_name)
             .and_then(|id| self.entries.get_mut(&id))
+            .map(|entry| &mut entry.state)
         {
             // A copy of a structure that states some members keeps the rest
             // of what the structure it copies declares.
-            let declared = entry.attributes.initial_value.as_deref().cloned();
-            entry.attributes.initial_value = lay_over(declared, Some(value)).map(Box::new);
+            let declared = attributes.initial_value.as_deref().cloned();
+            attributes.initial_value = lay_over(declared, Some(value)).map(Box::new);
         }
     }
 
@@ -564,20 +654,47 @@ impl TypeEnvironment {
         })
     }
 
-    /// Gets the type from the environment.
+    /// Gets the type from the environment. `None` for a name that is not
+    /// declared and for one whose declaration has an error: use
+    /// [`Self::lookup`] to tell them apart.
     pub fn get(&self, type_name: &TypeName) -> Option<&crate::type_attributes::TypeAttributes> {
         self.get_by_id(self.id_of(type_name)?)
     }
 
-    /// The id of the type `type_name` names.
+    /// What `type_name` names: a type that can be used, a declaration that has
+    /// an error, or nothing at all (see [`crate::resolution`]).
+    pub(crate) fn lookup(&self, type_name: &TypeName) -> Resolved<'_, crate::type_attributes::TypeAttributes> {
+        match self.id_of(type_name) {
+            None => Resolved::Absent,
+            Some(id) => match self.entries.get(&id).map(|entry| &entry.state) {
+                Some(EntryState::Valid(attributes)) => Resolved::Valid(attributes),
+                Some(EntryState::Failed { .. }) => Resolved::Failed,
+                None => Resolved::Absent,
+            },
+        }
+    }
+
+    /// The id of the type `type_name` names, whether the declaration is valid
+    /// or has an error.
     pub fn id_of(&self, type_name: &TypeName) -> Option<TypeId> {
         self.names.get(type_name).copied()
     }
 
-    /// Gets the type `id` identifies. `None` only for an id this environment
-    /// did not allocate.
+    /// Whether `id` is the id of a declaration that has an error: the error
+    /// type. A value of this type has no type to compare, so a check that
+    /// meets it reports nothing and the values made from it have it too. This
+    /// is the one definition of "is error".
+    pub fn is_error(&self, id: TypeId) -> bool {
+        matches!(
+            self.entries.get(&id).map(|entry| &entry.state),
+            Some(EntryState::Failed { .. })
+        )
+    }
+
+    /// Gets the type `id` identifies. `None` for an id this environment did
+    /// not allocate and for the error type ([`Self::is_error`]).
     pub fn get_by_id(&self, id: TypeId) -> Option<&crate::type_attributes::TypeAttributes> {
-        self.entries.get(&id).map(|entry| &entry.attributes)
+        self.entries.get(&id)?.valid()
     }
 
     /// The name the type `id` identifies was declared with, for diagnostics
@@ -593,14 +710,14 @@ impl TypeEnvironment {
     ///
     /// `declaring` is the declaration that owns the target, used for the primary
     /// diagnostic label.
-    pub fn resolve_reference_target(
+    pub(crate) fn resolve_reference_target(
         &self,
         declaring: &TypeName,
         target: &ReferenceTarget,
-    ) -> Result<IntermediateType, Diagnostic> {
+    ) -> Result<IntermediateType, Failure> {
         match target {
             ReferenceTarget::Named(referenced_type_name) => {
-                let referenced_attrs = self.get(referenced_type_name).ok_or_else(|| {
+                let referenced_attrs = self.lookup(referenced_type_name).or_failure(|| {
                     Diagnostic::problem(
                         Problem::ParentTypeNotDeclared,
                         Label::span(declaring.span(), "Reference type declaration"),
@@ -737,7 +854,7 @@ impl TypeEnvironment {
     ) -> impl Iterator<Item = (TypeId, &crate::type_attributes::TypeAttributes)> {
         self.entries
             .iter()
-            .map(|(id, entry)| (*id, &entry.attributes))
+            .filter_map(|(id, entry)| Some((*id, entry.valid()?)))
     }
 
     /// Returns an iterator over user-defined types, excluding elementary types,
@@ -1640,7 +1757,7 @@ mod tests {
 
         assert!(result.is_err());
         assert_eq!(
-            result.unwrap_err().code,
+            result.unwrap_err().into_diagnostic().unwrap().code,
             Problem::ParentTypeNotDeclared.code()
         );
     }
@@ -1655,5 +1772,102 @@ mod tests {
         );
 
         assert!(result.is_err());
+    }
+
+    fn named(name: &str, start: usize) -> TypeName {
+        TypeName::from_id(&ironplc_dsl::core::Id::from(name).with_position(SourceSpan::range(start, start + 4)))
+    }
+
+    #[test]
+    fn lookup_when_failed_declaration_then_failed_and_get_has_no_type() {
+        let mut env = TypeEnvironment::new();
+        env.insert_failed(&named("BAD", 0));
+
+        assert!(matches!(env.lookup(&named("BAD", 20)), Resolved::Failed));
+        assert!(env.get(&named("BAD", 20)).is_none());
+    }
+
+    #[test]
+    fn lookup_when_valid_declaration_then_valid() {
+        let mut env = TypeEnvironment::new();
+        env.insert_type(
+            &named("GOOD", 0),
+            TypeAttributes::new(SourceSpan::range(0, 4), IntermediateType::Bool),
+        );
+
+        assert!(matches!(env.lookup(&named("GOOD", 20)), Resolved::Valid(_)));
+    }
+
+    #[test]
+    fn lookup_when_not_declared_then_absent() {
+        let env = TypeEnvironment::new();
+
+        assert!(matches!(env.lookup(&named("NOPE", 0)), Resolved::Absent));
+    }
+
+    #[test]
+    fn is_error_when_id_of_failed_declaration_then_true_and_when_valid_then_false() {
+        let mut env = TypeEnvironment::new();
+        env.insert_failed(&named("BAD", 0));
+        env.insert_type(
+            &named("GOOD", 10),
+            TypeAttributes::new(SourceSpan::range(10, 14), IntermediateType::Bool),
+        );
+
+        let bad = env.id_of(&named("BAD", 20)).unwrap();
+        let good = env.id_of(&named("GOOD", 20)).unwrap();
+
+        assert!(env.is_error(bad));
+        assert!(!env.is_error(good));
+        assert!(env.get_by_id(bad).is_none());
+    }
+
+    #[test]
+    fn insert_failed_when_the_same_declaration_is_entered_again_then_no_duplicate() {
+        let mut env = TypeEnvironment::new();
+        env.insert_failed(&named("BAD", 0));
+        env.insert_failed(&named("BAD", 0));
+        env.insert_type(
+            &named("BAD", 0),
+            TypeAttributes::new(SourceSpan::range(0, 4), IntermediateType::Bool),
+        );
+
+        assert!(env.take_duplicates().is_empty());
+        assert!(matches!(env.lookup(&named("BAD", 0)), Resolved::Failed));
+    }
+
+    #[test]
+    fn insert_type_when_declaration_repeats_a_failed_one_then_p2007() {
+        let mut env = TypeEnvironment::new();
+        env.insert_failed(&named("BAD", 0));
+        env.insert_type(
+            &named("BAD", 10),
+            TypeAttributes::new(SourceSpan::range(10, 14), IntermediateType::Bool),
+        );
+
+        let duplicates = env.take_duplicates();
+        assert_eq!(duplicates.len(), 1);
+        assert_eq!(duplicates[0].code, Problem::TypeDeclNameDuplicated.code());
+        assert!(matches!(env.lookup(&named("BAD", 0)), Resolved::Failed));
+    }
+
+    #[test]
+    fn insert_failed_function_block_when_repeated_by_a_function_block_then_p4013() {
+        let mut env = TypeEnvironment::new();
+        env.insert_failed_function_block(&named("FB", 0));
+        env.insert_failed_function_block(&named("FB", 10));
+
+        let duplicates = env.take_duplicates();
+        assert_eq!(duplicates.len(), 1);
+        assert_eq!(duplicates[0].code, Problem::PouDeclNameDuplicated.code());
+    }
+
+    #[test]
+    fn iter_when_failed_declaration_then_not_listed() {
+        let mut env = TypeEnvironment::new();
+        env.insert_failed(&named("BAD", 0));
+
+        assert_eq!(env.iter().count(), 0);
+        assert_eq!(env.iter_ids().count(), 0);
     }
 }
