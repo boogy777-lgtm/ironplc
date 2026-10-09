@@ -184,3 +184,20 @@ fn declares_enter_failed_when_function_or_unit_then_nothing_is_entered() {
     assert!(environment.id_of(&TypeName::from("F")).is_none());
     assert!(environment.id_of(&TypeName::from("P")).is_none());
 }
+
+#[test]
+fn enter_when_the_environment_is_made_again_then_the_members_are_declarations_with_an_error() {
+    let (sorted, _) = sorted(
+        "
+TYPE A : STRUCT b : B; END_STRUCT; END_TYPE
+TYPE B : STRUCT a : A; END_STRUCT; END_TYPE
+TYPE C : STRUCT x : INT; END_STRUCT; END_TYPE",
+    );
+    let mut again = TypeEnvironment::new();
+
+    sorted.failed.enter(&mut again);
+
+    assert!(again.is_error(again.id_of(&TypeName::from("A")).unwrap()));
+    assert!(again.is_error(again.id_of(&TypeName::from("B")).unwrap()));
+    assert!(again.id_of(&TypeName::from("C")).is_none());
+}

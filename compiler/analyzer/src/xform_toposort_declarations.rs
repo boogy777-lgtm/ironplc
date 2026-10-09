@@ -63,11 +63,27 @@ use std::convert::Infallible;
 use crate::type_environment::TypeEnvironment;
 
 /// What the sort gives back: the library in dependency order, the
-/// declarations reachable from the programs, and what it found wrong.
+/// declarations reachable from the programs, what it found wrong, and the
+/// declarations it entered as declarations with an error.
 pub struct Sorted {
     pub library: Library,
     pub reachable: HashSet<Id>,
     pub diagnostics: Vec<Diagnostic>,
+    pub failed: FailedDeclarations,
+}
+
+/// The declarations the sort could not order, with what each declares.
+pub struct FailedDeclarations(Vec<(Id, Declares)>);
+
+impl FailedDeclarations {
+    /// Enters the declarations as declarations with an error. The sort does
+    /// this to the environment it is given; a type environment that is made
+    /// again from the library needs the same entries.
+    pub fn enter(&self, type_environment: &mut TypeEnvironment) {
+        for (name, declares) in &self.0 {
+            declares.enter_failed(name, type_environment);
+        }
+    }
 }
 
 /// What a declaration is to the environments that hold declared names. A
@@ -75,7 +91,7 @@ pub struct Sorted {
 /// (the same one a valid declaration of that kind is entered in), so its name
 /// is declared whatever else happens to it.
 #[derive(Clone, Copy, Debug, PartialEq)]
-enum Declares {
+pub enum Declares {
     /// A data type or an interface: a type of the type environment.
     Type,
     /// A function block: a type of the type environment, and a program
@@ -160,11 +176,11 @@ pub fn apply(lib: Library, type_environment: &mut TypeEnvironment) -> Sorted {
     diagnostics.extend(order.diagnostics);
     failed.extend(order.cyclic);
 
-    for name in &failed {
-        if let Some((declaration, declares)) = declared.iter().find(|(id, _)| id == name) {
-            declares.enter_failed(declaration, type_environment);
-        }
-    }
+    let failed: Vec<(Id, Declares)> = failed
+        .iter()
+        .filter_map(|name| declared.iter().find(|(id, _)| id == name))
+        .cloned()
+        .collect();
 
     let sorted_ids = order.sorted;
     debug!("Sorted identifiers {sorted_ids:?}");
@@ -250,10 +266,13 @@ pub fn apply(lib: Library, type_environment: &mut TypeEnvironment) -> Sorted {
             .flatten(),
     );
 
+    let failed = FailedDeclarations(failed);
+    failed.enter(type_environment);
     Sorted {
         library: Library { elements },
         reachable,
         diagnostics,
+        failed,
     }
 }
 

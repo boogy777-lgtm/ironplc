@@ -29,6 +29,7 @@ use crate::{
     xform_resolve_late_bound_expr_kind, xform_resolve_late_bound_type_initializer,
     xform_resolve_symbol_and_function_environment, xform_resolve_type_aliases,
     xform_resolve_type_decl_environment, xform_toposort_declarations,
+    xform_toposort_declarations::Sorted,
 };
 
 /// Analyze runs semantic analysis on the set of files as a self-contained and complete unit.
@@ -191,8 +192,14 @@ fn resolve_types_in_budget<O: Observer>(
         observer,
         xform_toposort_declarations(library, &mut type_environment)
     );
-    let (mut library, reachable) = (sorted.library, sorted.reachable);
-    diagnostics.extend(sorted.diagnostics);
+    let Sorted {
+        library: sorted_library,
+        reachable,
+        diagnostics: sort_diagnostics,
+        failed: failed_declarations,
+    } = sorted;
+    let mut library = sorted_library;
+    diagnostics.extend(sort_diagnostics);
 
     // A repeated type or function block name is diagnosed by the type
     // environment, which keeps the first declaration, and a declaration that
@@ -288,6 +295,9 @@ fn resolve_types_in_budget<O: Observer>(
     // It replaces the first environment unless it found more than the first
     // did, a declaration the first resolved and this one cannot.
     if let Ok(mut resolved_environment) = build_type_environment(observer) {
+        // The declarations the sort could not order are declarations with an
+        // error in this environment too.
+        failed_declarations.enter(&mut resolved_environment);
         let second = direct!(
             observer,
             xform_resolve_type_decl_environment(library, &mut resolved_environment)
@@ -463,6 +473,55 @@ END_PROGRAM";
                 "expected {expected}, got {reported:?}"
             );
         }
+    }
+
+    /// The codes of what `analyze` reports for `program`, in order.
+    fn codes_of(program: &str) -> Vec<String> {
+        let options = CompilerOptions::default();
+        let library = parse_program(program, &FileId::default(), &options).unwrap();
+        let (_library, context) = analyze(&[&library], &options).unwrap();
+        context
+            .diagnostics()
+            .iter()
+            .map(|d| d.code.clone())
+            .collect()
+    }
+
+    #[test]
+    fn analyze_when_types_hold_each_other_then_cycle_and_error_of_another_unit_are_reported() {
+        let codes = codes_of(
+            "
+TYPE A : STRUCT b : B; END_STRUCT; END_TYPE
+TYPE B : STRUCT a : A; END_STRUCT; END_TYPE
+PROGRAM main VAR x : INT; END_VAR x := 'text'; END_PROGRAM",
+        );
+
+        assert_eq!(vec!["P4005", "P4035"], codes);
+    }
+
+    #[test]
+    fn analyze_when_variable_is_of_a_type_declared_with_an_error_then_only_the_first_cause() {
+        let codes = codes_of(
+            "
+TYPE T : T_NOWHERE; END_TYPE
+PROGRAM main VAR v : T; END_VAR v := 1; END_PROGRAM",
+        );
+
+        assert_eq!(vec!["P2011"], codes);
+    }
+
+    #[test]
+    fn analyze_when_cycle_and_structure_with_enumeration_default_then_only_the_cycle() {
+        let codes = codes_of(
+            "
+TYPE A : STRUCT b : B; END_STRUCT; END_TYPE
+TYPE B : STRUCT a : A; END_STRUCT; END_TYPE
+TYPE COLOR : (RED, GREEN); END_TYPE
+TYPE S : STRUCT c : COLOR := GREEN; n : INT := 3; END_STRUCT; END_TYPE
+PROGRAM main VAR s : S; END_VAR s.n := 4; END_PROGRAM",
+        );
+
+        assert_eq!(vec!["P4005"], codes);
     }
 
     #[test]
