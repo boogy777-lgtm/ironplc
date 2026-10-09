@@ -958,13 +958,19 @@ VAR v : X; k : INT; END_VAR
 END_PROGRAM"
     );
 
-    rule_ctx_ok!(
-        null_when_assigned_to_type_declared_with_an_error_then_ok,
-        "
+    #[test]
+    fn null_when_assigned_to_type_declared_with_an_error_then_ok() {
+        let options = CompilerOptions::from_dialect(ironplc_parser::options::Dialect::Rusty);
+        let (library, context) = crate::test_helpers::parse_and_resolve_types_with_options(
+            "
 TYPE X : T_NOWHERE; END_TYPE
 PROGRAM main
 VAR v : X; END_VAR
     v := NULL;
-END_PROGRAM"
-    );
+END_PROGRAM",
+            &options,
+        );
+
+        assert!(super::apply(&library, &context, &options).is_ok());
+    }
 }
