@@ -17,6 +17,7 @@ use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_parser::options::CompilerOptions;
 use log::debug;
 
+use crate::id_agreement::{id_difference, IdDifference};
 use crate::project::Project;
 
 /// What the compile pipeline produced.
@@ -34,6 +35,16 @@ pub struct CompileOutput {
     /// yields a container, because a failing command must not leave behind a
     /// deployable artifact.
     pub container: Option<Container>,
+
+    /// Where the project's stable variable IDs and its declared persistent
+    /// variables differ (ADR-0074), when IDs exist and a clean analysis could
+    /// compare them.
+    ///
+    /// A build does not read this: it compiles whatever IDs there are. A sender
+    /// of a candidate for online change does, and does not send a candidate that
+    /// would go through a migration while a persistent variable has no ID; the
+    /// controller refuses such a candidate anyway, after it has been sent.
+    pub id_difference: Option<IdDifference>,
 }
 
 /// Runs the full compile pipeline -- parse, semantic analysis, codegen -- over
@@ -73,6 +84,7 @@ pub fn compile(
         return CompileOutput {
             diagnostics,
             container: None,
+            id_difference: None,
         };
     }
 
@@ -84,6 +96,7 @@ pub fn compile(
         return CompileOutput {
             diagnostics,
             container: None,
+            id_difference: None,
         };
     };
 
@@ -98,16 +111,20 @@ pub fn compile(
     codegen_options.stable_var_ids = split.vars;
     codegen_options.fb_field_uids = split.fields;
 
+    let id_difference = id_difference(library, compiler_options, project.stable_var_ids());
+
     match ironplc_codegen::compile(library, context, &codegen_options, source_lookup) {
         Ok(container) => CompileOutput {
             diagnostics,
             container: Some(container),
+            id_difference,
         },
         Err(err) => {
             diagnostics.push(err);
             CompileOutput {
                 diagnostics,
                 container: None,
+                id_difference,
             }
         }
     }
@@ -361,6 +378,46 @@ END_PROGRAM
             .expect("the variable table implies a type section")
             .stable_vars
             .is_empty());
+    }
+
+    #[test]
+    fn compile_when_every_declaration_has_an_id_then_no_id_difference() {
+        let mut project = project_with(VALID_PROGRAM);
+        project.set_stable_var_ids(vec![(crate::sidecar::SidecarKey::new("Main", "x"), 1)]);
+        let output = compile(
+            &mut project,
+            &CompilerOptions::default(),
+            &EmptyLookup,
+            vec![],
+        );
+
+        assert!(output.container.is_some());
+        assert_eq!(output.id_difference, None);
+    }
+
+    #[test]
+    fn compile_when_a_declaration_has_no_id_then_the_difference_names_it() {
+        let mut project = project_with(VALID_PROGRAM);
+        project.set_stable_var_ids(vec![(crate::sidecar::SidecarKey::new("Main", "other"), 1)]);
+        let output = compile(
+            &mut project,
+            &CompilerOptions::default(),
+            &EmptyLookup,
+            vec![],
+        );
+
+        // The build still produces a container: only a sender of a candidate
+        // reads the difference.
+        assert!(output.container.is_some());
+        let difference = output.id_difference.expect("the IDs are out of sync");
+        assert_eq!(
+            difference.without_id,
+            vec![crate::sidecar::SidecarKey::new("Main", "x")]
+        );
+        assert_eq!(
+            difference.undeclared,
+            vec![crate::sidecar::SidecarKey::new("Main", "other")]
+        );
     }
 
     #[test]
