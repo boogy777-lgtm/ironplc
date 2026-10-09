@@ -357,6 +357,30 @@ END_FUNCTION_BLOCK";
         assert_eq!(results, vec![expected]);
     }
 
+    /// A value name in an expression has no enumeration to be checked against:
+    /// the type of an unqualified value is not known from its spelling, so
+    /// the name is an enumerated value when any enumeration declares it and
+    /// nothing more. This pins what the analysis gives, the same in every run;
+    /// resolving the name from the type the context expects is a separate
+    /// piece of work, and when it exists `y := U2` below is reported.
+    #[rstest]
+    #[case::compared_with_first_enumeration("IF x = U1 THEN r := TRUE; END_IF;")]
+    #[case::compared_with_second_enumeration("IF y = U1 THEN r := TRUE; END_IF;")]
+    #[case::assigned_to_each_enumeration("x := U1; y := U1;")]
+    #[case::case_labels_of_the_selectors_enumeration(
+        "CASE x OF U1: r := TRUE; U2: r := FALSE; END_CASE;"
+    )]
+    #[case::value_of_the_other_enumeration_not_checked("y := U2;")]
+    fn apply_when_shared_value_name_in_expression_then_no_diagnostic_in_every_run(
+        #[case] body: &str,
+    ) {
+        let program = format!(
+            "TYPE E1 : (U1, U2); E2 : (U1, U3); END_TYPE              PROGRAM main VAR x : E1; y : E2; r : BOOL; END_VAR {body} END_PROGRAM"
+        );
+
+        assert_eq!(distinct_results(&program), vec![Vec::<String>::new()]);
+    }
+
     rule_ctx_ok!(
         apply_when_enumeration_is_declared_with_an_error_then_ok,
         "
