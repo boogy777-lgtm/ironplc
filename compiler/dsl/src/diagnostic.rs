@@ -14,7 +14,6 @@
 //! (especially one that works for both command line and language server
 //! protocol).
 use ironplc_problems::Problem;
-use std::collections::HashSet;
 
 use crate::common::TypeName;
 use crate::core::{FileId, Id, Located, SourceSpan};
@@ -405,12 +404,17 @@ impl Diagnostic {
         }
     }
 
-    pub fn file_ids(&self) -> HashSet<&FileId> {
-        let mut file_ids = HashSet::new();
-        file_ids.insert(&self.primary.file_id);
+    /// The files the diagnostic points into, each once: the primary label's
+    /// file first, then the files of the secondary labels in the order the
+    /// labels were added. The order is the order a person reads the diagnostic
+    /// in, and the same on every run.
+    pub fn file_ids(&self) -> Vec<&FileId> {
+        let mut file_ids = vec![&self.primary.file_id];
 
         for secondary_item in self.secondary.iter() {
-            file_ids.insert(&secondary_item.file_id);
+            if !file_ids.contains(&&secondary_item.file_id) {
+                file_ids.push(&secondary_item.file_id);
+            }
         }
 
         file_ids
@@ -627,9 +631,19 @@ mod tests {
         .with_secondary(Label::file(secondary_file.clone(), "secondary"));
 
         let ids = diag.file_ids();
-        assert_eq!(ids.len(), 2);
-        assert!(ids.contains(&primary_file));
-        assert!(ids.contains(&secondary_file));
+        assert_eq!(ids, vec![&primary_file, &secondary_file]);
+    }
+
+    #[test]
+    fn file_ids_when_secondary_in_primary_file_then_file_once() {
+        let file = FileId::from_string("file1");
+        let other = FileId::from_string("file2");
+        let diag = Diagnostic::problem(Problem::SyntaxError, Label::file(file.clone(), "primary"))
+            .with_secondary(Label::file(other.clone(), "second"))
+            .with_secondary(Label::file(file.clone(), "third"))
+            .with_secondary(Label::file(other.clone(), "fourth"));
+
+        assert_eq!(diag.file_ids(), vec![&file, &other]);
     }
 
     #[test]

@@ -57,7 +57,7 @@ use petgraph::{
     stable_graph::{NodeIndex, StableDiGraph},
     Direction,
 };
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::convert::Infallible;
 
 use crate::type_environment::TypeEnvironment;
@@ -405,7 +405,7 @@ impl DeclarationsGraph {
         let position = |id: &Id| declared.iter().position(|(declared, _)| declared == id);
         let mut diagnostics = Vec::new();
         let mut cyclic: Vec<Id> = Vec::new();
-        let mut members_of_cycles: HashSet<NodeIndex> = HashSet::new();
+        let mut members_of_cycles: BTreeSet<NodeIndex> = BTreeSet::new();
         for component in &cycles {
             let mut members: Vec<Id> = component
                 .iter()

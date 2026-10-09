@@ -3,6 +3,8 @@
 //! by the language and user-defined types.
 use std::collections::HashMap;
 
+use indexmap::IndexMap;
+
 use ironplc_container::CharWidth;
 use ironplc_dsl::common::StructInitialValueAssignmentKind;
 use ironplc_dsl::construct::merge_member_inits;
@@ -341,8 +343,12 @@ impl TypeEntry {
 /// own. See [`crate::type_id`] for how ids are numbered.
 #[derive(Debug)]
 pub struct TypeEnvironment {
-    entries: HashMap<TypeId, TypeEntry>,
-    names: HashMap<TypeName, TypeId>,
+    /// The types in the order they were entered. The types are listed to the
+    /// user (the symbol lists of the language server and of the MCP tools), so
+    /// the order is the order of declaration rather than the order of a hash.
+    entries: IndexMap<TypeId, TypeEntry>,
+    /// The names in the order they were entered.
+    names: IndexMap<TypeName, TypeId>,
     /// The id the next type that is not elementary gets.
     next_id: u32,
     /// The reference type to each type, by the id of the type referenced:
@@ -386,8 +392,8 @@ impl TypeEnvironment {
     /// Initializes a new instance of the type environment.
     pub fn new() -> Self {
         Self {
-            entries: HashMap::new(),
-            names: HashMap::new(),
+            entries: IndexMap::new(),
+            names: IndexMap::new(),
             next_id: type_id::FIRST_ALLOCATED,
             references: HashMap::new(),
             referenced: HashMap::new(),
@@ -877,7 +883,8 @@ impl TypeEnvironment {
             .then_some(&attrs.representation)
     }
 
-    /// An iterator for all types in the environment
+    /// An iterator for all types in the environment, in the order their names
+    /// were entered.
     pub fn iter(
         &self,
     ) -> impl Iterator<Item = (&TypeName, &crate::type_attributes::TypeAttributes)> {
@@ -886,8 +893,8 @@ impl TypeEnvironment {
             .filter_map(|(name, id)| Some((name, self.get_by_id(*id)?)))
     }
 
-    /// Every type in the environment by id, anonymous types included, in no
-    /// particular order.
+    /// Every type in the environment by id, anonymous types included, in the
+    /// order they were entered.
     pub fn iter_ids(
         &self,
     ) -> impl Iterator<Item = (TypeId, &crate::type_attributes::TypeAttributes)> {

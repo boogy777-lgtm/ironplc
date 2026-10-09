@@ -26,7 +26,7 @@
 //!     visitor.walk(&lib);
 //! }
 //! ```
-use std::collections::HashMap;
+use indexmap::IndexMap;
 use std::collections::LinkedList;
 use std::fmt;
 use std::hash::Hash;
@@ -36,14 +36,17 @@ pub trait Key: Eq + Hash + Clone + fmt::Debug {}
 pub trait Value: fmt::Debug {}
 
 struct Scope<'a, K: Key, V: 'a + Value> {
-    table: HashMap<K, V>,
+    /// In the order the names were added: [`ScopedTable::keys`] reports names
+    /// to the user (a suggestion for an undefined name), and the order of
+    /// names in a hash container differs from one run to the next.
+    table: IndexMap<K, V>,
     phantom: PhantomData<&'a V>,
 }
 
 impl<'a, K: Key, V: 'a + Value> Scope<'a, K, V> {
     fn new() -> Self {
         Scope {
-            table: HashMap::new(),
+            table: IndexMap::new(),
             phantom: PhantomData,
         }
     }
@@ -75,7 +78,7 @@ impl<'a, K: Key, V: 'a + Value> Scope<'a, K, V> {
 
     #[allow(dead_code)]
     fn remove(&mut self, name: &K) -> Option<V> {
-        self.table.remove(name)
+        self.table.shift_remove(name)
     }
 }
 
@@ -159,7 +162,8 @@ impl<'a, K: Key, V: 'a + Value> ScopedTable<'a, K, V> {
 
     /// Returns all keys across all scopes.
     ///
-    /// Keys from inner scopes appear before keys from outer scopes.
+    /// Keys from inner scopes appear before keys from outer scopes, and the
+    /// keys of one scope in the order they were added.
     /// If the same key exists in multiple scopes, it may appear more
     /// than once.
     pub fn keys(&self) -> Vec<&K> {
