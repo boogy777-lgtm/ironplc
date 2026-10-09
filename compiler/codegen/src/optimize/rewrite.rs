@@ -10,11 +10,9 @@
 //! branch offset or where in the instruction it sits; the emitter resolves
 //! every jump against the new positions afterwards.
 
-use std::collections::HashSet;
-
 use ironplc_container::opcode;
 
-use super::OffsetMap;
+use super::{OffsetMap, OffsetSet};
 
 /// A decoded instruction: its original byte offset and raw bytes.
 pub(super) struct Instruction {
@@ -79,7 +77,7 @@ fn decode(bytecode: &[u8]) -> Vec<Instruction> {
 /// occupies, so a span that lands on one snaps forward rather than dangling.
 pub(super) fn apply_peephole(
     bytecode: &[u8],
-    protected: &HashSet<usize>,
+    protected: &OffsetSet,
     mut matches: impl FnMut(&Instruction, &Instruction) -> Option<[Action; 2]>,
 ) -> (Vec<u8>, OffsetMap) {
     let instructions = decode(bytecode);

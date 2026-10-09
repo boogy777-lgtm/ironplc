@@ -7,6 +7,8 @@
 
 use std::collections::HashMap;
 
+use indexmap::IndexMap;
+
 use ironplc_dsl::common::{
     DataTypeDeclarationKind, EnumeratedValue, Library, LibraryElementKind, SpecificationKind,
 };
@@ -33,7 +35,10 @@ pub(crate) struct EnumOrdinalMap {
     defaults: HashMap<String, i32>,
 
     /// Maps type_name_upper → ordered list of value names (for debug output).
-    pub(crate) definitions: HashMap<String, Vec<String>>,
+    ///
+    /// In the order the types are declared in the library, so the debug
+    /// section lists them in the same order on every run.
+    pub(crate) definitions: IndexMap<String, Vec<String>>,
 }
 
 /// Builds the ordinal map by walking enumeration type declarations in the AST.
@@ -47,7 +52,7 @@ pub(crate) fn build_enum_ordinal_map(library: &Library) -> EnumOrdinalMap {
     let mut ordinals = HashMap::new();
     let mut value_lookup = HashMap::new();
     let mut defaults = HashMap::new();
-    let mut definitions = HashMap::new();
+    let mut definitions = IndexMap::new();
 
     for element in &library.elements {
         if let LibraryElementKind::DataTypeDeclaration(DataTypeDeclarationKind::Enumeration(decl)) =

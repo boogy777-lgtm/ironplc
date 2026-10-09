@@ -1005,6 +1005,7 @@ name = "ironplc-codegen"
 version = "0.247.0"
 dependencies = [
  "blake3",
+ "indexmap",
  "ironplc-analyzer",
  "ironplc-container",
  "ironplc-dsl",

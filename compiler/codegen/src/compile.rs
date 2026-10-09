@@ -40,7 +40,7 @@
 //! After arithmetic at native width, narrow types (SINT, INT, USINT, UINT)
 //! are truncated back to their declared range before storing.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use ironplc_container::debug_section::{
     EnumDefEntry, FuncNameEntry, StringLayoutEntry, VarNameEntry,
@@ -1561,7 +1561,11 @@ pub(crate) struct CompileContext {
     /// Maps user-defined function name (lowercase) to compilation metadata.
     pub(crate) user_functions: HashMap<String, UserFunctionInfo>,
     /// Maps user-defined FB type name (uppercase) to compilation metadata.
-    pub(crate) user_fb_types: HashMap<String, UserFbTypeInfo>,
+    ///
+    /// Ascending by name, which is the order the type ids are ranked in
+    /// (`user_fb_type_ids`), so iterating it visits the types in ascending
+    /// type id, on every run.
+    pub(crate) user_fb_types: BTreeMap<String, UserFbTypeInfo>,
     /// Next available type ID for user-defined function blocks.
     /// When compiling a function body that returns a value, describes how an
     /// early `RETURN` statement should produce the return value before the
@@ -1582,7 +1586,7 @@ pub(crate) struct CompileContext {
     /// FBs, which have no PLC body.
     ///
     /// [`record_call_edge`]: CompileContext::record_call_edge
-    pub(crate) call_graph: HashMap<FunctionId, HashSet<FunctionId>>,
+    pub(crate) call_graph: HashMap<FunctionId, BTreeSet<FunctionId>>,
     /// One entry per compiler-assigned variable index, for the type section's
     /// variable table (see `compile_var_table`). Unlike the scope-scoped maps
     /// above, this collection is never saved or restored: an index, once
@@ -1649,7 +1653,7 @@ impl CompileContext {
             debug_string_layouts: Vec::new(),
             debug_source_files: crate::source_lookup::SourceFileRegistry::new(),
             user_functions: HashMap::new(),
-            user_fb_types: HashMap::new(),
+            user_fb_types: BTreeMap::new(),
             enum_map: crate::compile_enum::EnumOrdinalMap::default(),
             types: HashMap::new(),
             operand_names: HashMap::new(),

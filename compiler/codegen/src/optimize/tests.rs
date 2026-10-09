@@ -11,13 +11,11 @@
 //! resulting branch offsets run the real emitter through the whole finalize
 //! sequence — optimize, then patch — under "Jump patching after optimization".
 
-use std::collections::HashSet;
-
 use ironplc_container::{opcode, VarIndex};
 use rstest::rstest;
 use spec_test_macro::spec_test;
 
-use super::{optimize, remap_line_map, OffsetMap};
+use super::{optimize, remap_line_map, OffsetMap, OffsetSet};
 use crate::compile::PoolConstant;
 use crate::emit::{EmittedLineMapEntry, Emitter, UnpatchedCode};
 
@@ -25,7 +23,7 @@ use crate::emit::{EmittedLineMapEntry, Emitter, UnpatchedCode};
 fn unpatched(bytecode: &[u8]) -> UnpatchedCode<'_> {
     UnpatchedCode {
         bytecode,
-        jump_targets: HashSet::new(),
+        jump_targets: OffsetSet::new(),
     }
 }
 
@@ -791,7 +789,7 @@ fn optimize_when_operand_is_rewritten_then_following_offsets_shift_only_by_the_r
 #[spec_test(REQ_PEEP_codegen_007)]
 fn optimize_when_passes_run_in_any_order_then_bytecode_is_the_same() {
     /// One pass, wrapped so all three have the same signature.
-    type Pass = fn(&[u8], &HashSet<usize>, &mut Vec<PoolConstant>) -> (Vec<u8>, OffsetMap);
+    type Pass = fn(&[u8], &OffsetSet, &mut Vec<PoolConstant>) -> (Vec<u8>, OffsetMap);
 
     let passes: [(&str, Pass); 3] = [
         ("self_assign", |bytecode, protected, _| {
@@ -831,7 +829,7 @@ fn optimize_when_passes_run_in_any_order_then_bytecode_is_the_same() {
         let mut bytecode = all_patterns_bytecode();
         let mut constants = all_patterns_constants();
         for index in order {
-            let (next, _) = passes[index].1(&bytecode, &HashSet::new(), &mut constants);
+            let (next, _) = passes[index].1(&bytecode, &OffsetSet::new(), &mut constants);
             bytecode = next;
         }
         let names: Vec<&str> = order.iter().map(|i| passes[*i].0).collect();

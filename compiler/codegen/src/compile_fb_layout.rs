@@ -23,7 +23,7 @@
 //! variable, `emit_declaration_initial_value`, so a declared value and an empty
 //! string are applied the way they are anywhere else.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use ironplc_analyzer::TypeEnvironment;
 use ironplc_container::{CharWidth, FbTypeDescriptor, FbTypeId, FieldEntry, VarEntry};
@@ -157,7 +157,7 @@ pub(crate) fn layout_instance(fields: &[&VarDecl]) -> Result<FbLayout, Diagnosti
 /// table carries no flag to say so; a field that the variable table records as
 /// one is an internal error, not a silently altered layout.
 pub(crate) fn type_descriptors(
-    user_fb_types: &HashMap<String, UserFbTypeInfo>,
+    user_fb_types: &BTreeMap<String, UserFbTypeInfo>,
     variable_table: &[VarEntry],
 ) -> Result<Vec<FbTypeDescriptor>, Diagnostic> {
     let mut descriptors = Vec::with_capacity(user_fb_types.len());
@@ -182,7 +182,6 @@ pub(crate) fn type_descriptors(
             fields,
         });
     }
-    descriptors.sort_by_key(|descriptor| descriptor.type_id.raw());
     Ok(descriptors)
 }
 
