@@ -46,22 +46,12 @@ unsafe_code = "deny"
 # (`Problem::NotImplemented`, `Problem::InternalError`) so that constructing them
 # directly via `Diagnostic::problem(...)` — which drops the compiler file/line the
 # P9xxx dashboards rank — fails to compile. The sanctioned `Diagnostic`
-# constructors opt back in with `#[allow(deprecated)]`.
+# constructors opt back in with `#[expect(deprecated, reason = "...")]`.
 deprecated = "deny"
 
 # Fail on any warning (including clippy), matching CI's `-D warnings`. To make
 # warnings non-fatal while iterating: `RUSTFLAGS=--cap-lints=warn cargo build`.
 warnings = "deny"
-
-# rustc 1.97-1.98 regression (rust-lang/rust#159133): without an English MSVC
-# language pack, link.exe prints its "Creating library ... and object ..."
-# progress line localized ("Создается библиотека ..."), which rustc's
-# English-only filter classifies as a linker_messages warning — so every
-# cdylib/proc-macro link trips cargo's `build.warnings` deny. The upstream fix
-# (PR rust-lang/rust#160445) reclassifies these code-less lines as
-# linker_info; until it ships, allow the lint. The deny above targets
-# rustc/clippy warnings in workspace code; this is environment chatter.
-linker_messages = "allow"
 
 # The two deny tables are complementary, not redundant — keep both in syncs:
 # `warnings = "deny"` (upstream) makes every rustc/clippy warning a build

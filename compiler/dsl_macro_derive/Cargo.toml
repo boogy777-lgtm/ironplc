@@ -30,10 +30,6 @@ unsafe_code = "deny"
 deprecated = "deny"
 warnings = "deny"
 
-# See the workspace.lints.rust comment: localized MSVC link progress trips
-# rustc's linker_messages lint on rustc 1.97-1.98 (rust-lang/rust#159133).
-linker_messages = "allow"
-
 # Proc-macro codegen: panicking helpers are sanctioned here, unlike production
 # compiler code where the workspace denies them.
 [lints.clippy]
