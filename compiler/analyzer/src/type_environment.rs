@@ -1205,7 +1205,11 @@ mod tests {
     #[case::enumeration(
         attributes(IntermediateType::Enumeration {
             underlying_type: Box::new(IntermediateType::Int { size: ByteSized::B8 }),
-        })
+ base_type: Box::new(IntermediateType::Int {
+ size: crate::intermediate_type::ByteSized::B16,
+ }),
+ numbers: vec![],
+})
         .with_enumerated_values(vec![Id::from("A"), Id::from("B")])
     )]
     #[case::structure(attributes(IntermediateType::Structure { fields: vec![] }))]
@@ -1280,7 +1284,11 @@ mod tests {
         assert!(!IntermediateType::Enumeration {
             underlying_type: Box::new(IntermediateType::Int {
                 size: ByteSized::B8
-            })
+            }),
+            base_type: Box::new(IntermediateType::Int {
+                size: crate::intermediate_type::ByteSized::B16,
+            }),
+            numbers: vec![],
         }
         .is_primitive());
         assert!(!IntermediateType::Structure { fields: vec![] }.is_primitive());
@@ -1401,6 +1409,10 @@ mod tests {
                     underlying_type: Box::new(IntermediateType::Int {
                         size: ByteSized::B8,
                     }),
+                    base_type: Box::new(IntermediateType::Int {
+                        size: crate::intermediate_type::ByteSized::B16,
+                    }),
+                    numbers: vec![],
                 },
             ),
         );
@@ -1463,6 +1475,10 @@ mod tests {
                     underlying_type: Box::new(IntermediateType::Int {
                         size: ByteSized::B8,
                     }),
+                    base_type: Box::new(IntermediateType::Int {
+                        size: crate::intermediate_type::ByteSized::B16,
+                    }),
+                    numbers: vec![],
                 },
             ),
         );

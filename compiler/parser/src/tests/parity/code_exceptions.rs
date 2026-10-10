@@ -116,7 +116,7 @@ pub const CODE_EXCEPTIONS: &[CodeException] = &[
             "a structure value is not an initial value of an enumeration",
         ],
         reason: VALUE_AND_TYPE,
-        expected: 36,
+        expected: 30,
     },
     CodeException {
         legacy_code: "P2039",

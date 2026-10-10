@@ -58,6 +58,50 @@ pub fn of(representation: &IntermediateType) -> Option<(i128, i128)> {
     }
 }
 
+/// The numbers a type holds, as a constant stored into it is judged: the
+/// numbers of an integer type form a range, and the numbers of an enumeration
+/// are those of its declared values, which need not be contiguous
+/// (`(A := 10, B := 20)`).
+#[derive(Debug, PartialEq)]
+pub enum ValueSet<'a> {
+    /// Every number from the first to the second, inclusive.
+    Range(i128, i128),
+    /// Exactly these numbers.
+    Numbers(&'a [i64]),
+}
+
+impl ValueSet<'_> {
+    /// Whether the type holds `value`.
+    pub fn holds(&self, value: i128) -> bool {
+        match self {
+            ValueSet::Range(minimum, maximum) => value >= *minimum && value <= *maximum,
+            ValueSet::Numbers(numbers) => numbers.iter().any(|number| i128::from(*number) == value),
+        }
+    }
+
+    /// Whether the set lists its numbers instead of bounding them. The type
+    /// of a constant that a range holds is told by the constant (`INT#1` is an
+    /// `INT`, and it is checked against the type it is stored into by name),
+    /// and a range is the type an operation is done in, so it is pushed down
+    /// through operators to the literals beneath them (`b := 300 + 0` is the
+    /// `300` stored in a `USINT`). A constant is any number to a type that
+    /// lists them, and an operator on a value of one is not an operation in
+    /// it.
+    pub fn is_listed(&self) -> bool {
+        matches!(self, ValueSet::Numbers(_))
+    }
+}
+
+/// The numbers `representation` holds, or `None` when it does not hold
+/// integers as numbers. A range type holds what [`of`] answers, and an
+/// enumeration holds the numbers of its declared values.
+pub fn numbers_of(representation: &IntermediateType) -> Option<ValueSet<'_>> {
+    match representation {
+        IntermediateType::Enumeration { numbers, .. } => Some(ValueSet::Numbers(numbers)),
+        other => of(other).map(|(minimum, maximum)| ValueSet::Range(minimum, maximum)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -122,6 +166,46 @@ mod tests {
         };
 
         assert_eq!(of(&representation), None);
+    }
+
+    #[test]
+    fn numbers_of_when_enumeration_then_its_numbers_in_any_order() {
+        let representation = IntermediateType::Enumeration {
+            underlying_type: Box::new(IntermediateType::Int {
+                size: ByteSized::B8,
+            }),
+            base_type: Box::new(IntermediateType::Int {
+                size: ByteSized::B16,
+            }),
+            numbers: vec![20, 10],
+        };
+
+        let numbers = numbers_of(&representation).unwrap();
+
+        assert_eq!(numbers, ValueSet::Numbers(&[20, 10]));
+        assert!(numbers.holds(10));
+        assert!(numbers.holds(20));
+        assert!(!numbers.holds(15));
+        assert!(numbers.is_listed());
+    }
+
+    #[test]
+    fn numbers_of_when_integer_then_its_range_and_not_listed() {
+        let representation = IntermediateType::Int {
+            size: ByteSized::B8,
+        };
+
+        let numbers = numbers_of(&representation).unwrap();
+
+        assert_eq!(numbers, ValueSet::Range(-128, 127));
+        assert!(numbers.holds(127));
+        assert!(!numbers.holds(128));
+        assert!(!numbers.is_listed());
+    }
+
+    #[test]
+    fn numbers_of_when_not_a_number_then_none() {
+        assert_eq!(numbers_of(&IntermediateType::Bool), None);
     }
 
     #[test]

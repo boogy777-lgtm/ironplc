@@ -128,6 +128,15 @@ impl TypeEnvironment {
         }
     }
 
+    /// The declaration the enumeration `id` is: itself, or the enumeration an
+    /// alias of it names. `None` when `id` is not an enumeration.
+    pub fn enumeration_declaration(&self, id: TypeId) -> Option<TypeId> {
+        self.get_by_id(id)?
+            .representation
+            .is_enumeration()
+            .then(|| self.enumerations.declaration_of(id))
+    }
+
     /// The name an enumeration was declared with, for any name that names it:
     /// its own, or that of an alias. `None` when `name` is not an enumeration.
     pub fn enumeration_declared_as(&self, name: &TypeName) -> Option<&TypeName> {

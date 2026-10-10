@@ -62,7 +62,6 @@ END_PROGRAM"
 #[case::user_function_of_inline_array("n := TAKES_DINT(a);")]
 #[case::len_of_named_array("n := LEN(na);")]
 #[case::user_function_of_named_array("n := TAKES_DINT(na);")]
-#[case::abs_of_inline_enumeration("n := ABS(e);")]
 #[case::abs_of_structure("n := ABS(r);")]
 #[case::structure_for_array_parameter("n := TAKES_ARR(r);")]
 fn apply_when_composite_argument_for_other_type_then_p4026(#[case] body: &str) {
@@ -73,8 +72,6 @@ fn apply_when_composite_argument_for_other_type_then_p4026(#[case] body: &str) {
 #[case::inline_array("n := a;")]
 #[case::named_array("n := na;")]
 #[case::structure("n := r;")]
-#[case::inline_enumeration("n := e;")]
-#[case::named_enumeration("n := ne;")]
 fn apply_when_composite_assigned_to_elementary_then_p4035(#[case] body: &str) {
     assert_eq!(
         problem_codes(body),
@@ -89,6 +86,9 @@ fn apply_when_composite_assigned_to_elementary_then_p4035(#[case] body: &str) {
 #[case::subrange_for_numeric_parameter("l := ABS(q);")]
 #[case::subrange_for_its_type("n := TAKES_BIG(q);")]
 #[case::subrange_widened("l := q;")]
+#[case::inline_enumeration_for_integer("n := e;")]
+#[case::named_enumeration_for_integer("n := ne;")]
+#[case::enumeration_for_numeric_parameter("n := ABS(ne);")]
 fn apply_when_value_of_accepted_type_then_ok(#[case] body: &str) {
     assert_eq!(problem_codes(body), Vec::<String>::new());
 }

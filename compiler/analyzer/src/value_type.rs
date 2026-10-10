@@ -17,15 +17,16 @@
 //!     n := a;        (* P4035 *)
 //! ```
 
-use ironplc_dsl::common::{GenericTypeName, TypeName};
-use ironplc_dsl::textual::{Expr, ExprType};
+use ironplc_dsl::common::{ConstantKind, GenericTypeName, TypeName};
+use ironplc_dsl::textual::{Expr, ExprKind, ExprType};
 use ironplc_dsl::type_id::TypeId;
 use ironplc_parser::options::CompilerOptions;
 
 use crate::intermediate_type::IntermediateType;
 use crate::resolution::Resolved;
-use crate::type_compat::are_types_compatible;
+use crate::type_compat::{are_types_compatible, is_checkable_type};
 use crate::type_environment::TypeEnvironment;
+use crate::value_range;
 
 /// The type of a value, as the checks compare it.
 #[derive(Debug, PartialEq)]
@@ -169,7 +170,9 @@ pub(crate) fn check(
     match of(types, expr) {
         None => Ok(()),
         Some(ValueType::Scalar(actual)) => {
-            if are_types_compatible(expected, &actual, options) {
+            if are_types_compatible(expected, &actual, options)
+                || constant_accepted(types, expected, expr)
+            {
                 Ok(())
             } else {
                 Err(Mismatch {
@@ -178,7 +181,9 @@ pub(crate) fn check(
             }
         }
         Some(ValueType::Composite(id)) => {
-            if composite_accepted(types, expected, id) {
+            if composite_accepted(types, expected, id)
+                || number_accepted(types, expected, id, options)
+            {
                 Ok(())
             } else {
                 Err(Mismatch {
@@ -187,6 +192,57 @@ pub(crate) fn check(
             }
         }
     }
+}
+
+/// Whether `expected` is a type that lists the numbers it holds (see
+/// [`value_range::ValueSet::is_listed`]) and `expr` is an integer constant.
+///
+/// Which numbers such a type holds is a question about the constant's value,
+/// and `rule_constant_range` asks it wherever a constant is stored, so this
+/// relation only says that an integer constant is a number to such a type. It
+/// is a constant by what the analysis folded it to, not by how it was typed:
+/// `INT#1` is one, and `i`, an `INT` variable, is not.
+fn constant_accepted(types: &TypeEnvironment, expected: &TypeName, expr: &Expr) -> bool {
+    is_integer_constant(expr)
+        && types.get(expected).is_some_and(|attributes| {
+            value_range::numbers_of(&attributes.representation).is_some_and(|set| set.is_listed())
+        })
+}
+
+/// Whether `expr` is an integer constant, however it was spelled and typed.
+fn is_integer_constant(expr: &Expr) -> bool {
+    match &expr.kind {
+        ExprKind::Const(ConstantKind::IntegerLiteral(_)) => true,
+        ExprKind::Expression(inner) => is_integer_constant(inner),
+        _ => false,
+    }
+}
+
+/// Whether the composite value of type `id` is the number it stands for where
+/// `expected` asks for one: an enumeration is its base type (`INT` unless the
+/// declaration names another) wherever that type is accepted, by the same
+/// relation as any value of it.
+fn number_accepted(
+    types: &TypeEnvironment,
+    expected: &TypeName,
+    id: TypeId,
+    options: &CompilerOptions,
+) -> bool {
+    types
+        .get_by_id(id)
+        .and_then(|attributes| attributes.representation.number_type())
+        .and_then(|number| types.elementary_type_name_for(number))
+        .is_some_and(|number| are_types_compatible(expected, &number, options))
+}
+
+/// Whether the relation judges a value stored into `target`: the types
+/// [`are_types_compatible`] knows by name, and the types that hold numbers
+/// but have no elementary name, an enumeration among them.
+pub(crate) fn judges(types: &TypeEnvironment, target: &TypeName) -> bool {
+    is_checkable_type(target)
+        || types
+            .get(target)
+            .is_some_and(|attributes| attributes.representation.is_enumeration())
 }
 
 /// Whether `expected` names no type a value can be compared with: a
@@ -207,21 +263,27 @@ fn requires_error_type(types: &TypeEnvironment, expected: &TypeName) -> bool {
 /// An array or a structure is accepted where an array or structure of the
 /// same shape is, as a whole-aggregate assignment is (P2037): an inline
 /// `ARRAY[1..2] OF DINT` passes for a parameter declared with a named array
-/// type of that shape. An enumeration or a function block instance is only
-/// ever its own type. Of the generic categories only `ANY` accepts a
-/// composite, since only it is not limited to elementary types; `SIZEOF(s)`
-/// and `__TYPEOF(s)` take a structure variable.
+/// type of that shape. An enumeration is accepted where it, or an alias of it,
+/// is required, and a function block instance is only ever its own type. Of
+/// the generic categories only `ANY` accepts a composite, since only it is not
+/// limited to elementary types; `SIZEOF(s)` and `__TYPEOF(s)` take a structure
+/// variable.
 fn composite_accepted(types: &TypeEnvironment, expected: &TypeName, id: TypeId) -> bool {
     if let Ok(generic) = GenericTypeName::try_from(&expected.name) {
         return generic == GenericTypeName::Any;
     }
-    let (Some(expected), Some(actual)) = (types.get(expected), types.get_by_id(id)) else {
+    let (Some(required), Some(actual)) = (types.get(expected), types.get_by_id(id)) else {
         return false;
     };
-    matches!(
-        actual.representation,
-        IntermediateType::Array { .. } | IntermediateType::Structure { .. }
-    ) && expected.representation == actual.representation
+    let same_enumeration = types
+        .id_of(expected)
+        .and_then(|required| types.enumeration_declaration(required))
+        .is_some_and(|required| Some(required) == types.enumeration_declaration(id));
+    same_enumeration
+        || (matches!(
+            actual.representation,
+            IntermediateType::Array { .. } | IntermediateType::Structure { .. }
+        ) && required.representation == actual.representation)
 }
 
 /// The type `id` identifies, as a diagnostic shows it: its name when it
@@ -369,6 +431,10 @@ mod tests {
                 underlying_type: Box::new(IntermediateType::Int {
                     size: ByteSized::B8,
                 }),
+                base_type: Box::new(IntermediateType::Int {
+                    size: crate::intermediate_type::ByteSized::B16,
+                }),
+                numbers: vec![],
             },
         );
 

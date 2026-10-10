@@ -582,3 +582,106 @@ fn apply_when_type_default_out_of_range_then_err(
         expected
     );
 }
+
+// --- The numbers of an enumeration ---
+//
+// An integer constant stored into an enumeration is one of its numbers, the
+// numbers of its values and no others, wherever it is stored.
+
+fn not_a_value_count(program: &str) -> usize {
+    problem_count(program, Problem::EnumValueNotDefined)
+}
+
+const LEVELS: &str = "TYPE Level : (Low, Mid, High); END_TYPE\n";
+
+#[rstest]
+#[case::the_number_of_a_value("1", 0)]
+#[case::the_number_of_the_last_value("2", 0)]
+#[case::one_past_the_last("3", 1)]
+#[case::negative("-1", 1)]
+#[case::prefixed("INT#7", 1)]
+#[case::folded("1 + 6", 1)]
+#[case::folded_to_a_value("1 + 1", 0)]
+fn apply_when_integer_assigned_to_enumeration_then_err_unless_a_number_of_a_value(
+    #[case] value: &str,
+    #[case] expected: usize,
+) {
+    let program = format!(
+        "{LEVELS}{}",
+        program_with("x : Level;\n", &format!("x := {value};\n"))
+    );
+
+    assert_eq!(not_a_value_count(&program), expected);
+}
+
+#[test]
+fn apply_when_enumeration_has_explicit_numbers_then_only_those_are_numbers_of_values() {
+    let source = |value: &str| {
+        format!(
+            "TYPE Level : (Low := 10, High := 20); END_TYPE\n{}",
+            program_with("x : Level;\n", &format!("x := {value};\n"))
+        )
+    };
+    let options = CompilerOptions {
+        allow_enum_explicit_values: true,
+        ..CompilerOptions::default()
+    };
+    let count = |value: &str| {
+        let library = parse_program(&source(value), &FileId::default(), &options).unwrap();
+        let (_library, context) = analyze(&[&library], &options).unwrap();
+        context
+            .diagnostics()
+            .iter()
+            .filter(|d| d.code == Problem::EnumValueNotDefined.code())
+            .count()
+    };
+
+    assert_eq!(
+        (count("10"), count("20"), count("1"), count("15")),
+        (0, 0, 1, 1)
+    );
+}
+
+#[test]
+fn apply_when_enumeration_default_is_not_a_number_of_a_value_then_err() {
+    let program = format!(
+        "TYPE Level : (Low, Mid) := 5; END_TYPE\n{}",
+        program_with("x : Level;\n", "")
+    );
+
+    assert_eq!(not_a_value_count(&program), 1);
+}
+
+#[test]
+fn apply_when_function_result_is_not_a_number_of_a_value_then_err() {
+    let program = format!(
+        "{LEVELS}FUNCTION f : Level f := 9; END_FUNCTION\n{}",
+        program_with("x : Level;\n", "x := f();\n")
+    );
+
+    assert_eq!(not_a_value_count(&program), 1);
+}
+
+/// A function result is a place a constant is stored like any other, so the
+/// range of its type holds there too.
+#[test]
+fn apply_when_function_result_out_of_range_then_err() {
+    let program = format!(
+        "FUNCTION f : SINT f := 300; END_FUNCTION\n{}",
+        program_with("x : SINT;\n", "x := f();\n")
+    );
+
+    assert_eq!(out_of_range_count(&program), 1);
+}
+
+/// Whether a comparison with a number that is no value of the enumeration is
+/// an error is not decided, so it is not one.
+#[test]
+fn apply_when_enumeration_compared_with_a_number_that_is_no_value_then_ok() {
+    let program = format!(
+        "{LEVELS}{}",
+        program_with("x : Level;\nb : BOOL;\n", "b := x = 7;\n")
+    );
+
+    assert_eq!(not_a_value_count(&program), 0);
+}

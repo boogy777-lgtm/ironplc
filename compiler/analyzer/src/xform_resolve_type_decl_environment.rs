@@ -123,16 +123,16 @@ impl TypeEnvironment {
             }))
         } else {
             match existing.representation {
-                IntermediateType::Enumeration { underlying_type: _ } => Ok(
-                    DataTypeDeclarationKind::Enumeration(EnumerationDeclaration {
+                IntermediateType::Enumeration { .. } => Ok(DataTypeDeclarationKind::Enumeration(
+                    EnumerationDeclaration {
                         type_name: node.data_type_name,
                         spec_init: EnumeratedSpecificationInit {
                             spec: SpecificationKind::Named(node.base_type_name),
                             default: None,
                             underlying_type: None,
                         },
-                    }),
-                ),
+                    },
+                )),
                 // A structure alias keeps the name it declares, with the structure
                 // it names as its base, so it stays a type of its own.
                 IntermediateType::Structure { fields: _ } => {
@@ -503,6 +503,17 @@ impl Declaration<'_> {
                             Diagnostic::problem(
                                 Problem::ParentTypeNotDeclared,
                                 Label::span(fb_init.type_name.span(), "Field type"),
+                            )
+                        })?
+                        .representation
+                        .clone(),
+                    InitialValueAssignmentKind::EnumeratedType(enumerated) => self
+                        .environment
+                        .lookup(&enumerated.type_name)
+                        .or_failure(|| {
+                            Diagnostic::problem(
+                                Problem::ParentTypeNotDeclared,
+                                Label::span(enumerated.type_name.span(), "Field type"),
                             )
                         })?
                         .representation

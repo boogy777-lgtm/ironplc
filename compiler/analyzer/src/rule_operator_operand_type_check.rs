@@ -53,6 +53,8 @@
 //! END_PROGRAM
 //! ```
 
+mod enumerated;
+
 use ironplc_dsl::{
     common::*,
     core::Located,
@@ -170,6 +172,7 @@ impl RuleOperatorOperandTypeCheck<'_> {
     /// Reports P4049 when no overload of the arithmetic operator applies to
     /// the operand types of `binary`, labelled at the whole expression.
     fn check_arithmetic_operator(&mut self, expr: &Expr, binary: &BinaryExpr) {
+        self.check_enumerated_binary(binary);
         let left = self.operand_name(&binary.left);
         let right = self.operand_name(&binary.right);
         let (left, right) = (left.as_ref(), right.as_ref());
@@ -217,6 +220,7 @@ impl RuleOperatorOperandTypeCheck<'_> {
         let Some(names) = names else {
             return;
         };
+        self.check_enumerated_inputs(function, form);
         let inputs: Vec<Option<&TypeName>> = names.iter().map(Option::as_ref).collect();
         if let Err(FoldFailure { left, right }) = resolve_arithmetic_fold(op, &inputs, self.options)
         {
@@ -380,6 +384,7 @@ impl Visitor<Infallible> for RuleOperatorOperandTypeCheck<'_> {
                 if let Some(form) = checked_unary_form(&unary.op) {
                     self.check_operands(form, &[&unary.term]);
                 }
+                self.check_enumerated_negation(unary);
             }
             _ => {}
         }

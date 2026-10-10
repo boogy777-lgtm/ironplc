@@ -289,6 +289,17 @@ impl Fold<Infallible> for TypeResolver<'_> {
                             SubrangeInitializer::uninitialized(SpecificationKind::Named(name)),
                         ));
                     }
+                    // An enumeration, whichever declaration made it one: its
+                    // own list of values, or a copy of another enumeration
+                    // that states a number as its default (`TYPE E2 : E1 := 1`).
+                    if ty.representation.is_enumeration() {
+                        return Ok(InitialValueAssignmentKind::EnumeratedType(
+                            EnumeratedInitialValueAssignment {
+                                type_name: name,
+                                initial_value: None,
+                            },
+                        ));
+                    }
                 }
 
                 // TODO error handling

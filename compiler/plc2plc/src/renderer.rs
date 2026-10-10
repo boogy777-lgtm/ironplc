@@ -411,7 +411,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
 
         if let Some(default) = &node.default {
             self.write_ws(":=");
-            self.visit_enumerated_value(default)?;
+            self.visit_enumerated_default(default)?;
         }
 
         Ok(())

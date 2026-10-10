@@ -103,8 +103,17 @@ pub enum IntermediateType {
 
     /// User-defined enumeration type
     Enumeration {
-        /// The underlying primitive type (usually Int { size: 8 })
+        /// The primitive type the values are stored in (usually Int { size: 8 })
         underlying_type: Box<IntermediateType>,
+        /// The integer type the values are numbers of: `INT` unless the
+        /// declaration names another (`(A, B) BYTE`). It is what an
+        /// enumeration is where an integer is expected, so it states which
+        /// integer types accept it; the storage above only sizes it.
+        base_type: Box<IntermediateType>,
+        /// The number of each value the enumeration declares, in
+        /// declaration order. A constant may be stored in the enumeration
+        /// when it is one of these.
+        numbers: Vec<i64>,
     },
     /// Structure type containing named fields
     Structure {
@@ -165,6 +174,16 @@ impl IntermediateType {
                 | IntermediateType::TimeOfDay { .. }
                 | IntermediateType::DateAndTime { .. }
         )
+    }
+
+    /// The integer type a value of this type is where an integer is expected:
+    /// the base type of an enumeration. `None` for a type that is not
+    /// accepted for an integer.
+    pub fn number_type(&self) -> Option<&IntermediateType> {
+        match self {
+            IntermediateType::Enumeration { base_type, .. } => Some(base_type),
+            _ => None,
+        }
     }
 
     /// Returns if the type is an enumeration.
@@ -297,7 +316,9 @@ impl IntermediateType {
                 char_width,
             } => max_len.map(|len| len as u32 * char_width.byte_width() as u32),
             IntermediateType::Subrange { base_type, .. } => base_type.size_in_bytes(),
-            IntermediateType::Enumeration { underlying_type } => underlying_type.size_in_bytes(),
+            IntermediateType::Enumeration {
+                underlying_type, ..
+            } => underlying_type.size_in_bytes(),
             IntermediateType::Structure { fields } => {
                 if fields.is_empty() {
                     return None;
@@ -373,7 +394,9 @@ impl IntermediateType {
             IntermediateType::DateAndTime { size } => size.as_bytes(),
             IntermediateType::String { .. } => 1, // Strings are byte-aligned
             IntermediateType::Subrange { base_type, .. } => base_type.alignment_bytes(),
-            IntermediateType::Enumeration { underlying_type } => underlying_type.alignment_bytes(),
+            IntermediateType::Enumeration {
+                underlying_type, ..
+            } => underlying_type.alignment_bytes(),
             IntermediateType::Structure { fields } => {
                 // Structure alignment is the maximum alignment of all fields
                 // Empty structures have 1-byte alignment
@@ -421,9 +444,9 @@ impl IntermediateType {
             | IntermediateType::DateAndTime { .. } => true,
             IntermediateType::String { max_len, .. } => max_len.is_some(),
             IntermediateType::Subrange { base_type, .. } => base_type.has_explicit_size(),
-            IntermediateType::Enumeration { underlying_type } => {
-                underlying_type.has_explicit_size()
-            }
+            IntermediateType::Enumeration {
+                underlying_type, ..
+            } => underlying_type.has_explicit_size(),
             IntermediateType::Structure { .. } => true, // Structures always have explicit size in IEC 61131-3
             IntermediateType::Array {
                 element_type,
@@ -873,6 +896,10 @@ mod tests {
             underlying_type: Box::new(IntermediateType::Int {
                 size: ByteSized::B8,
             }),
+            base_type: Box::new(IntermediateType::Int {
+                size: crate::intermediate_type::ByteSized::B16,
+            }),
+            numbers: vec![],
         };
         assert_eq!(enumeration.size_in_bytes(), Some(1));
 
@@ -2030,7 +2057,11 @@ mod tests {
             IntermediateType::Enumeration {
                 underlying_type: Box::new(IntermediateType::Int {
                     size: ByteSized::B8
-                })
+                }),
+                base_type: Box::new(IntermediateType::Int {
+                    size: crate::intermediate_type::ByteSized::B16,
+                }),
+                numbers: vec![],
             }
             .slot_count(),
             Ok(1)

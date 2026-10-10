@@ -13,10 +13,10 @@
 //! declaration cannot be entered in the environment without saying which.
 
 use ironplc_dsl::common::{
-    ArrayDeclaration, ConstantKind, EnumeratedValue, EnumerationDeclaration, IntegerLiteral,
-    InterfaceDeclaration, ParamsDeclaration, ReferenceDeclaration, SimpleDeclaration,
-    StringDeclaration, StructInitialValueAssignmentKind, StructureDeclaration, SubrangeDeclaration,
-    UnionDeclaration,
+    ArrayDeclaration, ConstantKind, EnumeratedDefault, EnumeratedValue, EnumerationDeclaration,
+    IntegerLiteral, InterfaceDeclaration, ParamsDeclaration, ReferenceDeclaration,
+    SimpleDeclaration, StringDeclaration, StructInitialValueAssignmentKind, StructureDeclaration,
+    SubrangeDeclaration, UnionDeclaration,
 };
 
 /// A declaration of a type, and the value it states for its variables.
@@ -34,17 +34,29 @@ impl DeclaresDefault for SimpleDeclaration {
 }
 
 impl DeclaresDefault for EnumerationDeclaration {
-    /// The value is named by the enumeration it is a value of, so that it
+    /// A value is named by the enumeration it is a value of, so that it
     /// means the same wherever it is read, whichever other enumerations
-    /// declare a value of that name.
+    /// declare a value of that name. A number is a constant, as the default of
+    /// a subrange is.
     fn declared_default(&self) -> Option<StructInitialValueAssignmentKind> {
-        self.spec_init.default.as_ref().map(|value| {
-            StructInitialValueAssignmentKind::EnumeratedValue(EnumeratedValue {
-                type_name: Some(self.type_name.clone()),
-                value: value.value.clone(),
-                explicit_value: None,
+        self.spec_init
+            .default
+            .as_ref()
+            .map(|default| match default {
+                EnumeratedDefault::Value(value) => {
+                    StructInitialValueAssignmentKind::EnumeratedValue(EnumeratedValue {
+                        type_name: Some(self.type_name.clone()),
+                        value: value.value.clone(),
+                        explicit_value: None,
+                    })
+                }
+                EnumeratedDefault::Number(number) => StructInitialValueAssignmentKind::Constant(
+                    ConstantKind::IntegerLiteral(IntegerLiteral {
+                        value: number.clone(),
+                        data_type: None,
+                    }),
+                ),
             })
-        })
     }
 }
 

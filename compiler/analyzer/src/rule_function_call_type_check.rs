@@ -153,9 +153,10 @@ impl RuleFunctionCallTypeCheck<'_> {
     /// the right-hand side is a user-function call. Here we handle every other
     /// right-hand side (arithmetic, variables, literals, stdlib calls) by
     /// comparing the target's declared type against the resolved expression type.
-    /// Only simple named targets that resolve to an elementary type are checked;
-    /// user-defined targets (enums, structures, arrays, function blocks) are
-    /// skipped to avoid false positives.
+    /// Only simple named targets of a type the relation judges
+    /// ([`value_type::judges`]: an elementary type or an enumeration) are
+    /// checked; the other user-defined targets (structures, arrays, function
+    /// blocks) are skipped to avoid false positives.
     fn check_assignment_type(&mut self, target: &Variable, value: &Expr) {
         // Function-call right-hand sides are validated by `check_return_type`.
         if matches!(value.kind, ExprKind::Function(_)) {
@@ -175,7 +176,7 @@ impl RuleFunctionCallTypeCheck<'_> {
             .types()
             .resolve_elementary_type_name(&declared)
             .unwrap_or(declared);
-        if !is_checkable_type(&target_type) {
+        if !value_type::judges(self.context.types(), &target_type) {
             return;
         }
 

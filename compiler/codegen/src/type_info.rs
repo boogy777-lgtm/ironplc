@@ -17,7 +17,8 @@ use ironplc_dsl::type_id::TypeId;
 use ironplc_analyzer::intermediate_type::IntermediateType;
 use ironplc_analyzer::TypeEnvironment;
 
-use super::compile::{CompileContext, OpWidth, Signedness, VarTypeInfo};
+use super::compile::{CompileContext, OpType, OpWidth, Signedness, VarTypeInfo};
+use super::compile_arith::numeric_op_type;
 
 /// What every type in the environment is, by id, so codegen can ask what an
 /// expression's type is from its `expr_type` alone. Anonymous types are
@@ -50,6 +51,18 @@ pub(crate) fn expr_operand_name(ctx: &CompileContext, expr: &Expr) -> Option<Typ
         ExprType::Literal(generic) => Some(generic.clone().into()),
         ExprType::Null => None,
     }
+}
+
+/// The operation type an expression's value is read at in its own type: the
+/// one of its elementary name, or of the integer an enumeration is
+/// ([`IntermediateType::number_type`]), so that a value read where another
+/// width is asked for is converted from this one rather than reinterpreted.
+/// `None` for any other type (see `compile_arith::numeric_op_type`).
+pub(crate) fn expr_own_op_type(ctx: &CompileContext, expr: &Expr) -> Option<OpType> {
+    numeric_op_type(expr_operand_name(ctx, expr).as_ref()).or_else(|| {
+        let info = var_type_info(expr_representation(ctx, expr)?.number_type()?)?;
+        Some((info.op_width, info.signedness))
+    })
 }
 
 /// The `VarTypeInfo` of an expression's value, from its `expr_type`.

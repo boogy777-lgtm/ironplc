@@ -964,7 +964,7 @@ parser! {
           type_name,
           spec_init: EnumeratedSpecificationInit {
             spec,
-            default: Some(def),
+            default: Some(EnumeratedDefault::Value(def)),
             underlying_type,
           },
         }
@@ -974,7 +974,7 @@ parser! {
           type_name,
           spec_init: EnumeratedSpecificationInit {
             spec: EnumeratedSpecificationKind::values(values),
-            default,
+            default: default.map(EnumeratedDefault::Value),
             underlying_type,
           },
         }
@@ -985,7 +985,7 @@ parser! {
     rule enumerated_spec_init() -> EnumeratedSpecificationInit = spec:enumerated_specification() _ default:(tok(TokenType::Assignment) _ d:enumerated_value() { d })? {
       EnumeratedSpecificationInit {
         spec,
-        default,
+        default: default.map(EnumeratedDefault::Value),
         underlying_type: None,
       }
     }

@@ -63,3 +63,18 @@ END_TYPE
 ";
     assert_round_trips(source, &constants_enabled());
 }
+
+#[test]
+fn write_to_string_when_enumeration_default_is_a_number_then_round_trips() {
+    let source = "TYPE
+    Level : (Low, Mid, High) := 1;
+    Offset : (Down, Up) := -1;
+END_TYPE
+";
+    let rendered = assert_round_trips(source, &CompilerOptions::default());
+    assert!(
+        rendered.contains(":= 1"),
+        "rendered:
+{rendered}"
+    );
+}

@@ -1529,7 +1529,7 @@ pub struct EnumerationDeclaration {
 #[derive(Clone, Debug, PartialEq, Recurse)]
 pub struct EnumeratedSpecificationInit {
     pub spec: EnumeratedSpecificationKind,
-    pub default: Option<EnumeratedValue>,
+    pub default: Option<EnumeratedDefault>,
     /// Present for the CODESYS/TwinCAT base-type suffix (`(A, B) BYTE;`)
     /// -- overrides the automatic count/value-based sizing in
     /// `enumeration.rs`'s `try_from_values`. `None` uses the existing
@@ -1538,13 +1538,16 @@ pub struct EnumeratedSpecificationInit {
     pub underlying_type: Option<ElementaryTypeName>,
 }
 
+mod enumerated_default;
+pub use enumerated_default::EnumeratedDefault;
+
 impl EnumeratedSpecificationInit {
     pub fn values_and_default(values: Vec<&str>, default: &str) -> Self {
         EnumeratedSpecificationInit {
             spec: SpecificationKind::Inline(EnumeratedSpecificationValues {
                 values: values.into_iter().map(EnumeratedValue::new).collect(),
             }),
-            default: Some(EnumeratedValue::new(default)),
+            default: Some(EnumeratedDefault::Value(EnumeratedValue::new(default))),
             underlying_type: None,
         }
     }

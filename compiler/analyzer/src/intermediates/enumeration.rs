@@ -53,6 +53,18 @@ fn byte_sized_for_underlying_type(type_name: ElementaryTypeName) -> ByteSized {
     }
 }
 
+/// The integer type the values of an enumeration are numbers of: the type its
+/// declaration names, else `INT` (IEC 61131-3 Table 12 leaves the base type of
+/// an enumeration to the implementation; CODESYS makes it `INT`).
+fn base_type_of(declared: Option<ElementaryTypeName>) -> IntermediateType {
+    let name: TypeName = declared.map_or_else(|| TypeName::from("INT"), Into::into);
+    crate::type_environment::elementary_type(&name)
+        .cloned()
+        .unwrap_or(IntermediateType::Int {
+            size: ByteSized::B16,
+        })
+}
+
 /// Try to create the intermediate type information for the enumerated
 /// values initializer.
 ///
@@ -71,21 +83,24 @@ pub fn try_from_values(
         .map(|value| value.value.clone())
         .collect();
 
+    let numbers = resolve_ordinal_values(enumerated_values.values());
+
     if let Some(type_name) = underlying_type_override {
         return Ok(TypeAttributes::new(
             enumerated_values.values_span(),
             IntermediateType::Enumeration {
                 underlying_type: Box::new(IntermediateType::Int {
-                    size: byte_sized_for_underlying_type(type_name),
+                    size: byte_sized_for_underlying_type(type_name.clone()),
                 }),
+                base_type: Box::new(base_type_of(Some(type_name))),
+                numbers,
             },
         )
         .with_enumerated_values(declared));
     }
 
     // Enumeration with values: MY_ENUM : (VAL1, VAL2, VAL3);
-    let resolved = resolve_ordinal_values(enumerated_values.values());
-    let max_value = resolved.into_iter().max().unwrap_or(0);
+    let max_value = numbers.iter().copied().max().unwrap_or(0);
     let range = max_value.max(0) as u128 + 1;
     let underlying_type = if range <= 256 {
         IntermediateType::Int {
@@ -109,6 +124,8 @@ pub fn try_from_values(
         enumerated_values.values_span(),
         IntermediateType::Enumeration {
             underlying_type: Box::new(underlying_type),
+            base_type: Box::new(base_type_of(None)),
+            numbers,
         },
     )
     .with_enumerated_values(declared))
