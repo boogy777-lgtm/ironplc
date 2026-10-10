@@ -819,14 +819,41 @@ impl Fold<Infallible> for ExprTypeResolver<'_> {
         node: InitialValueAssignmentKind,
     ) -> Result<InitialValueAssignmentKind, Infallible> {
         if let InitialValueAssignmentKind::Simple(simple) = &node {
+            // The declaration's own form, which no longer says which alias it
+            // was written against, so the value that alias declares is carried
+            // by the declaration from here on.
+            let stated = self.type_environment.initial_value_of(&node);
+            let representation = self
+                .type_environment
+                .get(&simple.type_name)
+                .map(|attributes| &attributes.representation);
+            // A variable of a string type is laid out by the length and the
+            // width the type gives it, as one declared `STRING[10]` is.
+            if let Some(IntermediateType::String {
+                max_len,
+                char_width,
+            }) = representation
+            {
+                let literal = match &stated {
+                    Some(StructInitialValueAssignmentKind::Constant(
+                        ConstantKind::CharacterString(literal),
+                    )) => Some(literal.clone()),
+                    _ => None,
+                };
+                if let Some(string) = crate::intermediates::string::initializer(
+                    *max_len,
+                    *char_width,
+                    literal,
+                    simple.type_name.span(),
+                ) {
+                    return Ok(InitialValueAssignmentKind::String(string));
+                }
+            }
             if let Some(resolved) = self
                 .type_environment
                 .resolve_elementary_type_name(&simple.type_name)
             {
-                // The elementary name no longer says which alias the
-                // declaration was written against, so the value that alias
-                // declares is carried by the declaration from here on.
-                let initial_value = match self.type_environment.initial_value_of(&node) {
+                let initial_value = match stated {
                     Some(StructInitialValueAssignmentKind::Constant(value)) => Some(value),
                     _ => simple.initial_value.clone(),
                 };

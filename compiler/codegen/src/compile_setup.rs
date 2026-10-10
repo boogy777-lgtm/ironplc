@@ -225,8 +225,7 @@ pub(crate) fn assign_variables(
                     ctx.var_types.insert(id.clone(), type_info);
                     // Debug tag is DINT per REQ-EN-codegen-012; type_name is the
                     // user-defined enum name (e.g. "COLOR").
-                    let name = enum_init.type_name.to_string().to_uppercase();
-                    (iec_type_tag::DINT, name)
+                    crate::compile_enum::debug_type(types, &enum_init.type_name)
                 }
                 InitialValueAssignmentKind::Subrange(ref spec) => {
                     // Subrange variable (e.g., x : MY_RANGE or x : INT (1..100))
@@ -344,10 +343,9 @@ pub(crate) fn debug_type_for_decl(decl: &VarDecl, types: &TypeEnvironment) -> (u
             iec_type_tag::FB_INSTANCE,
             fb_init.type_name.to_string().to_uppercase(),
         ),
-        InitialValueAssignmentKind::EnumeratedType(enum_init) => (
-            iec_type_tag::DINT,
-            enum_init.type_name.to_string().to_uppercase(),
-        ),
+        InitialValueAssignmentKind::EnumeratedType(enum_init) => {
+            crate::compile_enum::debug_type(types, &enum_init.type_name)
+        }
         _ => (iec_type_tag::OTHER, String::new()),
     }
 }

@@ -200,3 +200,40 @@ END_PROGRAM
     assert!(debug.enum_defs.iter().any(|e| e.type_name == "COLOR"));
     assert!(debug.enum_defs.iter().any(|e| e.type_name == "LEVEL"));
 }
+
+// A variable declared with an alias of an enumeration is of that enumeration:
+// the debug section lists its values under the name the enumeration was
+// declared with, so the entry of the variable carries that name, in a program
+// and in a function block.
+#[test]
+fn end_to_end_when_enum_variable_declared_with_an_alias_then_debug_type_is_the_declared_enumeration(
+) {
+    let source = "
+TYPE LEVEL : (LOW, MEDIUM, HIGH) := MEDIUM; Alias : LEVEL; Alias2 : Alias; END_TYPE
+FUNCTION_BLOCK fb
+  VAR inner : Alias2; END_VAR
+END_FUNCTION_BLOCK
+PROGRAM main
+  VAR
+    x : Alias;
+    y : fb;
+  END_VAR
+END_PROGRAM
+";
+    let container = parse_and_compile(source, &CompilerOptions::default());
+    let debug = container.debug_section.as_ref().unwrap();
+    let type_of = |name: &str| {
+        let var = debug.var_names.iter().find(|v| v.name == name).unwrap();
+        (var.type_name.clone(), var.iec_type_tag)
+    };
+    assert_eq!(type_of("x"), ("LEVEL".to_string(), iec_type_tag::DINT));
+    assert_eq!(type_of("inner"), ("LEVEL".to_string(), iec_type_tag::DINT));
+    assert_eq!(
+        debug
+            .enum_defs
+            .iter()
+            .map(|e| e.type_name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["LEVEL"]
+    );
+}

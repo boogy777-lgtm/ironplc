@@ -12,6 +12,7 @@
 //! A declaration that does not resolve to a declared type is reported and
 //! stays as it was; the declarations around it resolve.
 use crate::intermediate_type::{FunctionBlockVarType, IntermediateStructField, IntermediateType};
+use crate::intermediates::declared_default::DeclaresDefault;
 use crate::intermediates::*;
 use crate::pass_runner::Outcome;
 use crate::resolution::Failure;
@@ -61,6 +62,24 @@ impl Declaration<'_> {
             self.diagnostics.extend(failure.into_diagnostic());
         }
         node
+    }
+
+    /// [`Self::kept`] for a declaration of a type, which also records the
+    /// value the declaration states for the variables of the type. This is
+    /// the one place a declared value enters the environment: every kind of
+    /// declaration says what it states ([`DeclaresDefault`]), and an alias
+    /// that states none keeps what the type it names declares.
+    fn kept_declaration<T: DeclaresDefault>(
+        &mut self,
+        name: &TypeName,
+        node: T,
+        entered: Result<(), Failure>,
+    ) -> T {
+        if entered.is_ok() {
+            self.environment
+                .set_initial_value(name, node.declared_default());
+        }
+        self.kept(name, node, entered)
     }
 
     /// [`Self::kept`] for a function block, which is a program organization
@@ -312,11 +331,6 @@ impl Declaration<'_> {
                 return Err(Diagnostic::internal_error().into());
             }
         }
-        // A declared default is part of the type: a declaration against the
-        // type that states no value starts at it.
-        self.environment
-            .set_initial_value(&node.type_name, node.spec_and_init.stated_value());
-
         Ok(())
     }
 
@@ -388,14 +402,6 @@ impl Declaration<'_> {
             }
         }
 
-        self.environment.set_initial_value(
-            &node.type_name,
-            InitialValueAssignmentKind::Subrange(SubrangeInitializer {
-                spec: node.spec.clone(),
-                initial_value: node.default.clone(),
-            })
-            .stated_value(),
-        );
         Ok(())
     }
 
@@ -570,7 +576,7 @@ impl Fold<Infallible> for Declaration<'_> {
     ) -> Result<SimpleDeclaration, Infallible> {
         let entered = self.enter_simple_declaration(&node);
         let name = node.type_name.clone();
-        Ok(self.kept(&name, node, entered))
+        Ok(self.kept_declaration(&name, node, entered))
     }
 
     fn fold_enumeration_declaration(
@@ -579,7 +585,7 @@ impl Fold<Infallible> for Declaration<'_> {
     ) -> Result<EnumerationDeclaration, Infallible> {
         let entered = self.enter_enumeration_declaration(&node);
         let name = node.type_name.clone();
-        Ok(self.kept(&name, node, entered))
+        Ok(self.kept_declaration(&name, node, entered))
     }
 
     fn fold_string_declaration(
@@ -588,7 +594,7 @@ impl Fold<Infallible> for Declaration<'_> {
     ) -> Result<StringDeclaration, Infallible> {
         let entered = self.enter_string_declaration(&node);
         let name = node.type_name.clone();
-        Ok(self.kept(&name, node, entered))
+        Ok(self.kept_declaration(&name, node, entered))
     }
 
     fn fold_structure_declaration(
@@ -597,7 +603,7 @@ impl Fold<Infallible> for Declaration<'_> {
     ) -> Result<StructureDeclaration, Infallible> {
         let entered = self.enter_structure_declaration(&node);
         let name = node.type_name.clone();
-        Ok(self.kept(&name, node, entered))
+        Ok(self.kept_declaration(&name, node, entered))
     }
 
     fn fold_union_declaration(
@@ -606,7 +612,7 @@ impl Fold<Infallible> for Declaration<'_> {
     ) -> Result<UnionDeclaration, Infallible> {
         let entered = self.enter_union_declaration(&node);
         let name = node.type_name.clone();
-        Ok(self.kept(&name, node, entered))
+        Ok(self.kept_declaration(&name, node, entered))
     }
 
     fn fold_subrange_declaration(
@@ -615,7 +621,7 @@ impl Fold<Infallible> for Declaration<'_> {
     ) -> Result<SubrangeDeclaration, Infallible> {
         let entered = self.enter_subrange_declaration(&node);
         let name = node.type_name.clone();
-        Ok(self.kept(&name, node, entered))
+        Ok(self.kept_declaration(&name, node, entered))
     }
 
     fn fold_array_declaration(
@@ -624,7 +630,7 @@ impl Fold<Infallible> for Declaration<'_> {
     ) -> Result<ArrayDeclaration, Infallible> {
         let entered = self.enter_array_declaration(&node);
         let name = node.type_name.clone();
-        Ok(self.kept(&name, node, entered))
+        Ok(self.kept_declaration(&name, node, entered))
     }
 
     fn fold_params_declaration(
@@ -633,7 +639,7 @@ impl Fold<Infallible> for Declaration<'_> {
     ) -> Result<ParamsDeclaration, Infallible> {
         let entered = self.enter_params_declaration(&node);
         let name = node.type_name.clone();
-        Ok(self.kept(&name, node, entered))
+        Ok(self.kept_declaration(&name, node, entered))
     }
 
     fn fold_reference_declaration(
@@ -642,7 +648,7 @@ impl Fold<Infallible> for Declaration<'_> {
     ) -> Result<ReferenceDeclaration, Infallible> {
         let entered = self.enter_reference_declaration(&node);
         let name = node.type_name.clone();
-        Ok(self.kept(&name, node, entered))
+        Ok(self.kept_declaration(&name, node, entered))
     }
 
     fn fold_function_block_declaration(
@@ -659,7 +665,7 @@ impl Fold<Infallible> for Declaration<'_> {
     ) -> Result<InterfaceDeclaration, Infallible> {
         let entered = self.enter_interface_declaration(&node);
         let name = TypeName::from_id(&node.name);
-        Ok(self.kept(&name, node, entered))
+        Ok(self.kept_declaration(&name, node, entered))
     }
 
     fn fold_data_type_declaration_kind(

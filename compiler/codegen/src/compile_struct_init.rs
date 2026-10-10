@@ -15,7 +15,7 @@ use ironplc_analyzer::intermediate_type::{ArrayDimension, IntermediateType};
 use ironplc_analyzer::TypeEnvironment;
 use ironplc_container::{SlotIndex, VarIndex};
 use ironplc_dsl::common::{
-    ConstantKind, InitialValueAssignmentKind, StructInitialValueAssignmentKind,
+    ConstantKind, InitialValueAssignmentKind, SpecificationKind, StructInitialValueAssignmentKind,
     StructureElementInit,
 };
 use ironplc_dsl::construct::merge_member_inits;
@@ -214,6 +214,7 @@ pub(crate) fn initialize_struct_array_variable(
     emitter: &mut Emitter,
     ctx: &mut CompileContext,
     info: &StructArrayVarInfo,
+    members: &[StructureElementInit],
     span: &SourceSpan,
 ) -> Result<(), Diagnostic> {
     let offset_const = ctx.add_i32_constant(info.data_offset as i32);
@@ -238,8 +239,8 @@ pub(crate) fn initialize_struct_array_variable(
             data_offset: info.data_offset,
         },
         0,
-        &info.element_type,
-        &info.dimensions,
+        (&info.element_type, &info.dimensions),
+        members,
         span,
     )
 }
@@ -290,14 +291,16 @@ pub(crate) fn initialize_element_strings(
 /// `base_slot` is the slot offset of element 0 within the region. The
 /// elements are laid out one after another, so each is the same structure
 /// initialization at a stride; an array of structures can state no initial
-/// value of its own, so every element starts from what its members declare.
+/// value of its own, so every element starts from what its structure declares
+/// for its members, with `members` (what the element type declares) laid over
+/// them.
 fn initialize_array_elements(
     emitter: &mut Emitter,
     ctx: &mut CompileContext,
     region: Region,
     base_slot: u32,
-    element_type: &IntermediateType,
-    dimensions: &[ArrayDimension],
+    (element_type, dimensions): (&IntermediateType, &[ArrayDimension]),
+    members: &[StructureElementInit],
     span: &SourceSpan,
 ) -> Result<(), Diagnostic> {
     let IntermediateType::Structure { fields } = element_type else {
@@ -324,7 +327,7 @@ fn initialize_array_elements(
             region,
             base_slot + element * stride,
             &element_fields,
-            &[],
+            members,
             Mode {
                 headers: StringHeaders::Written,
                 zeroed: true,
@@ -344,6 +347,29 @@ pub(crate) fn declared_members(
 ) -> Vec<StructureElementInit> {
     match types.initial_value_of(init) {
         Some(StructInitialValueAssignmentKind::Structure(members)) => members,
+        _ => Vec::new(),
+    }
+}
+
+/// The members each element of an array of structures starts at, laid over
+/// what its structure declares for them: those the type of the element
+/// declares, when the declaration names it (`ARRAY [0..1] OF Alias`, where
+/// `Alias` is a copy of a structure that states members). Read through the one
+/// source of declared values, like every other storage location.
+pub(crate) fn declared_element_members(
+    types: &TypeEnvironment,
+    init: &InitialValueAssignmentKind,
+) -> Vec<StructureElementInit> {
+    match init {
+        InitialValueAssignmentKind::Array(array) => match &array.spec {
+            SpecificationKind::Inline(subranges) => declared_members(
+                types,
+                &InitialValueAssignmentKind::simple_uninitialized(
+                    subranges.type_name.to_type_name(),
+                ),
+            ),
+            SpecificationKind::Named(_) => Vec::new(),
+        },
         _ => Vec::new(),
     }
 }
@@ -526,7 +552,15 @@ fn initialize_array_field(
             if stated.is_some() {
                 return Err(unsupported("an array of structures"));
             }
-            initialize_array_elements(emitter, ctx, region, slot, element_type, dimensions, span)
+            initialize_array_elements(
+                emitter,
+                ctx,
+                region,
+                slot,
+                (element_type, dimensions),
+                &[],
+                span,
+            )
         }
         _ => {
             let Some(op_type) = resolve_field_op_type(element_type) else {

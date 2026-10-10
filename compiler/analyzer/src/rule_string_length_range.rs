@@ -47,14 +47,11 @@ use ironplc_problems::Problem;
 use std::convert::Infallible;
 
 use crate::{
+    intermediates::string::MAX_STRING_LENGTH,
     result::SemanticResult,
     rule_support::{run_rule, DiagnosticVisitor},
     semantic_context::SemanticContext,
 };
-
-/// The most code units a string can be declared to hold: the string header
-/// stores the capacity as a `u16` (ADR-0035).
-const MAX_STRING_LENGTH: u128 = u16::MAX as u128;
 
 pub fn apply(
     lib: &Library,

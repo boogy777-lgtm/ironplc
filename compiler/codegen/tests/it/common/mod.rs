@@ -15,6 +15,7 @@ use ironplc_parser::parse_program;
 use ironplc_vm::test_support::load_and_start;
 use ironplc_vm::FaultContext;
 pub use ironplc_vm::VmBuffers;
+pub mod checked;
 
 /// Per-instruction bytecode builders.
 ///
@@ -638,15 +639,11 @@ pub fn parse_and_try_run(
     source: &str,
     options: &CompilerOptions,
 ) -> Result<(Container, VmBuffers), FaultContext> {
-    let (library, context) = parse(source, options);
-    let codegen_options = ironplc_codegen::CodegenOptions::from(options);
-    let container = compile(
-        &library,
-        &context,
-        &codegen_options,
-        &ironplc_codegen::EmptyLookup,
-    )
-    .unwrap();
+    run_one_scan(parse_and_compile(source, options))
+}
+
+/// Loads a container and runs one scan cycle.
+pub fn run_one_scan(container: Container) -> Result<(Container, VmBuffers), FaultContext> {
     let mut bufs = VmBuffers::from_container(&container);
     {
         let mut vm = load_and_start(&container, &mut bufs)?;
