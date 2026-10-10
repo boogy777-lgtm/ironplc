@@ -654,17 +654,21 @@ impl TypeEnvironment {
         }
     }
 
-    /// The value a declaration starts at: the value it states, else the one
-    /// the type it names declares for itself, else `None` (the type's own
-    /// default).
+    /// The value a declaration starts at: the value it states laid over the
+    /// one the type it names declares for itself (the nearest declaration
+    /// that states a value wins, through every alias), else `None` (the
+    /// type's own default).
     ///
-    /// This is the one reading of "declared initial value", for a variable and
-    /// for a structure member alike.
+    /// This is the one reading of "declared initial value": for a variable and
+    /// for a structure member alike, and for every kind of type, because every
+    /// kind of declaration records what it states with its type
+    /// ([`Self::set_initial_value`]) and every kind of initializer names its
+    /// type the same way ([`InitialValueAssignmentKind::type_reference`]).
     pub fn initial_value_of(
         &self,
         init: &ironplc_dsl::common::InitialValueAssignmentKind,
     ) -> Option<ironplc_dsl::common::StructInitialValueAssignmentKind> {
-        use ironplc_dsl::common::{InitialValueAssignmentKind as Kind, SpecificationKind};
+        use ironplc_dsl::common::{InitialValueAssignmentKind as Kind, TypeReference};
         // The values of an inline enumeration have no declared type to be
         // looked up in, so the value it states is its number.
         if let Kind::EnumeratedValues(inline) = init {
@@ -675,26 +679,13 @@ impl TypeEnvironment {
                 .ok()
                 .map(ironplc_dsl::common::StructInitialValueAssignmentKind::Constant);
         }
-        // A structure states some of its members and leaves the others at what
-        // the structure it names declares.
-        if let Kind::Structure(structure) = init {
-            let declared = self
-                .get(&structure.type_name)
-                .and_then(|attributes| attributes.initial_value.as_deref().cloned());
-            return lay_over(declared, init.stated_value());
-        }
-        init.stated_value().or_else(|| {
-            let type_name = match init {
-                Kind::Simple(simple) => &simple.type_name,
-                Kind::LateResolvedType(late) => &late.type_name,
-                Kind::Subrange(subrange) => match &subrange.spec {
-                    SpecificationKind::Named(type_name) => type_name,
-                    SpecificationKind::Inline(_) => return None,
-                },
-                _ => return None,
-            };
-            self.get(type_name)?.initial_value.as_deref().cloned()
-        })
+        let declared = match init.type_reference() {
+            TypeReference::Named(type_name) => self
+                .get(&type_name)
+                .and_then(|attributes| attributes.initial_value.as_deref().cloned()),
+            TypeReference::Inline | TypeReference::Unspecified => None,
+        };
+        lay_over(declared, init.stated_value())
     }
 
     /// Gets the type from the environment. `None` for a name that is not
@@ -1896,3 +1887,6 @@ mod enumerations;
 pub use enumerations::{Owner, ValueOwners};
 #[cfg(test)]
 mod failed_tests;
+
+#[cfg(test)]
+mod initial_value_tests;

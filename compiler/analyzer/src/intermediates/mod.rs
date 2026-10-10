@@ -1,5 +1,6 @@
 pub mod arithmetic_overload;
 pub mod array;
+pub(crate) mod declared_default;
 pub mod enumeration;
 pub mod global_vars;
 pub mod inherited_fields;
