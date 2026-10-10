@@ -560,7 +560,7 @@ impl<'a> VmRunning<'a> {
     /// The recording happens before the flag check: the program only *sees* the
     /// uptime when it was compiled with the globals, but the VM knows it either
     /// way, which is what [`uptime`](Self::uptime) reports.
-    #[allow(
+    #[expect(
         clippy::expect_used,
         reason = "FLAG_HAS_SYSTEM_UPTIME implies codegen emitted uptime variables at indices 0 and 1"
     )]
@@ -1009,7 +1009,10 @@ macro_rules! load_const {
 /// [`NoopDebugHook`]. Existing call sites use this entry point so that
 /// the debug-hook plumbing imposes no overhead on VMs that do not need
 /// instruction-level callbacks (the noop hook is a ZST and inlines away).
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the run borrows each VM buffer separately; one context struct would borrow them all at once"
+)]
 fn execute(
     container: &Container,
     stack: &mut OperandStack,
@@ -1084,7 +1087,10 @@ pub enum ExecuteOutcome {
 /// It is generic over the hook type so that the noop hook monomorphizes
 /// to identical code as before; only callers that supply a real hook
 /// pay any runtime cost.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the run borrows each VM buffer separately; one context struct would borrow them all at once"
+)]
 pub(crate) fn execute_with_hook<H: DebugHook>(
     container: &Container,
     stack: &mut OperandStack,
@@ -2928,7 +2934,7 @@ pub(crate) fn execute_with_hook<H: DebugHook>(
 /// Panics if the frame stack is empty; every caller holds the loop invariant
 /// that a frame is live at the commit point.
 #[inline(always)]
-#[allow(
+#[expect(
     clippy::expect_used,
     reason = "documented invariant helper: callers hold a live frame at the commit point"
 )]
@@ -3238,7 +3244,10 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::default_constructed_unit_structs)]
+    #[expect(
+        clippy::default_constructed_unit_structs,
+        reason = "the test calls `Default::default` on the unit struct to cover its Default impl"
+    )]
     fn vm_default_when_called_then_loads_container() {
         let c = steel_thread_container();
         let mut b = VmBuffers::from_container(&c);

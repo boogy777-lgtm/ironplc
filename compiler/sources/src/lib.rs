@@ -45,9 +45,6 @@
 //! }
 //! ```
 
-// Allow large errors because this is a compiler - we expect large errors.
-#![allow(clippy::result_large_err)]
-
 pub mod discovery;
 pub mod file_type;
 pub mod libraries;

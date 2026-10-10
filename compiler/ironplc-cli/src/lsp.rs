@@ -412,7 +412,7 @@ impl<'a> LspServer<'a> {
         ""
     }
 
-    #[allow(
+    #[expect(
         clippy::panic,
         reason = "ExtractError::JsonError consumes the request, so it cannot be handed back; mirrors rust-analyzer's cast pattern"
     )]
@@ -492,7 +492,7 @@ impl<'a> LspServer<'a> {
         ""
     }
 
-    #[allow(
+    #[expect(
         clippy::panic,
         reason = "ExtractError::JsonError consumes the notification, so it cannot be handed back; mirrors rust-analyzer's cast pattern"
     )]
@@ -578,7 +578,6 @@ mod test {
     }
 
     impl TestServer {
-        #[allow(deprecated)]
         fn new(project: Box<dyn Project + Send>) -> Self {
             let project = LspProject::new(project);
             let (server_connection, client_connection) = Connection::memory();
@@ -595,27 +594,7 @@ mod test {
                 notifications: Vec::new(),
             };
 
-            let init = InitializeParams {
-                process_id: None,
-                root_path: None,
-                root_uri: None,
-                initialization_options: None,
-                capabilities: ClientCapabilities {
-                    workspace: None,
-                    text_document: None,
-                    window: None,
-                    general: None,
-                    experimental: None,
-                    notebook_document: None,
-                },
-                trace: None,
-                workspace_folders: None,
-                client_info: None,
-                locale: None,
-                work_done_progress_params: WorkDoneProgressParams {
-                    work_done_token: None,
-                },
-            };
+            let init = params_with_init_options(None);
 
             let initialize_id = server.send_request::<request::Initialize>(init);
             server.receive_response::<InitializeResult>(initialize_id);
@@ -789,13 +768,16 @@ mod test {
     }
 
     /// Builds `InitializeParams` carrying the given `initializationOptions`.
-    #[allow(deprecated)]
-    fn params_with_init_options(init: serde_json::Value) -> InitializeParams {
+    #[expect(
+        deprecated,
+        reason = "lsp_types requires the deprecated `root_path` field to be set"
+    )]
+    fn params_with_init_options(init: Option<serde_json::Value>) -> InitializeParams {
         InitializeParams {
             process_id: None,
             root_path: None,
             root_uri: None,
-            initialization_options: Some(init),
+            initialization_options: init,
             capabilities: ClientCapabilities::default(),
             trace: None,
             workspace_folders: None,
@@ -819,9 +801,9 @@ mod test {
         for pd in ironplc_parser::options::CompilerOptions::POLICY_DESCRIPTORS {
             for alt in pd.alternatives {
                 let key = super::to_lower_camel_case(pd.option_key);
-                let params = params_with_init_options(
+                let params = params_with_init_options(Some(
                     serde_json::json!({ "dialect": "codesys", key.clone(): alt }),
-                );
+                ));
                 let options = super::extract_compiler_options(&params);
                 assert_eq!(
                     options.get_policy_by_key(pd.option_key),
@@ -835,9 +817,9 @@ mod test {
 
     #[test]
     fn extract_compiler_options_when_policy_value_unknown_then_dialect_selection_kept() {
-        let params = params_with_init_options(
+        let params = params_with_init_options(Some(
             serde_json::json!({ "dialect": "codesys", "policyStringToNumFailure": "wrap" }),
-        );
+        ));
         let options = super::extract_compiler_options(&params);
         assert_eq!(
             options.get_policy_by_key("policy_string_to_num_failure"),
@@ -849,7 +831,7 @@ mod test {
     fn extract_compiler_options_when_each_dialect_flag_key_set_then_flag_enabled() {
         for fd in ironplc_parser::options::CompilerOptions::FEATURE_DESCRIPTORS {
             let key = super::to_lower_camel_case(fd.option_key);
-            let params = params_with_init_options(serde_json::json!({ key.clone(): true }));
+            let params = params_with_init_options(Some(serde_json::json!({ key.clone(): true })));
             let options = super::extract_compiler_options(&params);
             assert_eq!(
                 options.get_flag_by_key(fd.option_key),
@@ -872,21 +854,8 @@ mod test {
 
     #[test]
     fn extract_compiler_options_when_ed3_dialect_then_enables_edition_3() {
-        #[allow(deprecated)]
-        let params = InitializeParams {
-            process_id: None,
-            root_path: None,
-            root_uri: None,
-            initialization_options: Some(serde_json::json!({"dialect": "iec61131-3-ed3"})),
-            capabilities: ClientCapabilities::default(),
-            trace: None,
-            workspace_folders: None,
-            client_info: None,
-            locale: None,
-            work_done_progress_params: WorkDoneProgressParams {
-                work_done_token: None,
-            },
-        };
+        let params =
+            params_with_init_options(Some(serde_json::json!({"dialect": "iec61131-3-ed3"})));
 
         let options = super::extract_compiler_options(&params);
         assert!(options.allow_long_time_types);
@@ -895,21 +864,8 @@ mod test {
 
     #[test]
     fn extract_compiler_options_when_ed2_dialect_then_uses_default() {
-        #[allow(deprecated)]
-        let params = InitializeParams {
-            process_id: None,
-            root_path: None,
-            root_uri: None,
-            initialization_options: Some(serde_json::json!({"dialect": "iec61131-3-ed2"})),
-            capabilities: ClientCapabilities::default(),
-            trace: None,
-            workspace_folders: None,
-            client_info: None,
-            locale: None,
-            work_done_progress_params: WorkDoneProgressParams {
-                work_done_token: None,
-            },
-        };
+        let params =
+            params_with_init_options(Some(serde_json::json!({"dialect": "iec61131-3-ed2"})));
 
         let options = super::extract_compiler_options(&params);
         assert!(!options.allow_long_time_types);
@@ -917,21 +873,7 @@ mod test {
 
     #[test]
     fn extract_compiler_options_when_rusty_dialect_then_enables_ref_to_and_dialect_flags() {
-        #[allow(deprecated)]
-        let params = InitializeParams {
-            process_id: None,
-            root_path: None,
-            root_uri: None,
-            initialization_options: Some(serde_json::json!({"dialect": "rusty"})),
-            capabilities: ClientCapabilities::default(),
-            trace: None,
-            workspace_folders: None,
-            client_info: None,
-            locale: None,
-            work_done_progress_params: WorkDoneProgressParams {
-                work_done_token: None,
-            },
-        };
+        let params = params_with_init_options(Some(serde_json::json!({"dialect": "rusty"})));
 
         let options = super::extract_compiler_options(&params);
         assert!(!options.allow_long_time_types);
@@ -942,21 +884,7 @@ mod test {
 
     #[test]
     fn extract_compiler_options_when_codesys_dialect_then_enables_ref_to_without_uptime_global() {
-        #[allow(deprecated)]
-        let params = InitializeParams {
-            process_id: None,
-            root_path: None,
-            root_uri: None,
-            initialization_options: Some(serde_json::json!({"dialect": "codesys"})),
-            capabilities: ClientCapabilities::default(),
-            trace: None,
-            workspace_folders: None,
-            client_info: None,
-            locale: None,
-            work_done_progress_params: WorkDoneProgressParams {
-                work_done_token: None,
-            },
-        };
+        let params = params_with_init_options(Some(serde_json::json!({"dialect": "codesys"})));
 
         let options = super::extract_compiler_options(&params);
         assert!(options.allow_long_time_types);
@@ -969,21 +897,7 @@ mod test {
 
     #[test]
     fn extract_compiler_options_when_twincat_dialect() {
-        #[allow(deprecated)]
-        let params = InitializeParams {
-            process_id: None,
-            root_path: None,
-            root_uri: None,
-            initialization_options: Some(serde_json::json!({"dialect": "twincat"})),
-            capabilities: ClientCapabilities::default(),
-            trace: None,
-            workspace_folders: None,
-            client_info: None,
-            locale: None,
-            work_done_progress_params: WorkDoneProgressParams {
-                work_done_token: None,
-            },
-        };
+        let params = params_with_init_options(Some(serde_json::json!({"dialect": "twincat"})));
 
         let options = super::extract_compiler_options(&params);
         assert!(options.allow_long_time_types);
@@ -1005,21 +919,7 @@ mod test {
 
     #[test]
     fn extract_compiler_options_when_no_options_then_uses_default() {
-        #[allow(deprecated)]
-        let params = InitializeParams {
-            process_id: None,
-            root_path: None,
-            root_uri: None,
-            initialization_options: None,
-            capabilities: ClientCapabilities::default(),
-            trace: None,
-            workspace_folders: None,
-            client_info: None,
-            locale: None,
-            work_done_progress_params: WorkDoneProgressParams {
-                work_done_token: None,
-            },
-        };
+        let params = params_with_init_options(None);
 
         let options = super::extract_compiler_options(&params);
         assert!(!options.allow_long_time_types);
@@ -1027,21 +927,8 @@ mod test {
 
     #[test]
     fn extract_compiler_options_when_allow_missing_semicolon_then_enables_flag() {
-        #[allow(deprecated)]
-        let params = InitializeParams {
-            process_id: None,
-            root_path: None,
-            root_uri: None,
-            initialization_options: Some(serde_json::json!({"allowMissingSemicolon": true})),
-            capabilities: ClientCapabilities::default(),
-            trace: None,
-            workspace_folders: None,
-            client_info: None,
-            locale: None,
-            work_done_progress_params: WorkDoneProgressParams {
-                work_done_token: None,
-            },
-        };
+        let params =
+            params_with_init_options(Some(serde_json::json!({"allowMissingSemicolon": true})));
 
         let options = super::extract_compiler_options(&params);
         assert!(options.allow_missing_semicolon);
@@ -1049,21 +936,8 @@ mod test {
 
     #[test]
     fn extract_compiler_options_when_allow_empty_var_blocks_then_enables_flag() {
-        #[allow(deprecated)]
-        let params = InitializeParams {
-            process_id: None,
-            root_path: None,
-            root_uri: None,
-            initialization_options: Some(serde_json::json!({"allowEmptyVarBlocks": true})),
-            capabilities: ClientCapabilities::default(),
-            trace: None,
-            workspace_folders: None,
-            client_info: None,
-            locale: None,
-            work_done_progress_params: WorkDoneProgressParams {
-                work_done_token: None,
-            },
-        };
+        let params =
+            params_with_init_options(Some(serde_json::json!({"allowEmptyVarBlocks": true})));
 
         let options = super::extract_compiler_options(&params);
         assert!(options.allow_empty_var_blocks);
@@ -1071,21 +945,7 @@ mod test {
 
     #[test]
     fn extract_compiler_options_when_allow_sizeof_then_enables_flag() {
-        #[allow(deprecated)]
-        let params = InitializeParams {
-            process_id: None,
-            root_path: None,
-            root_uri: None,
-            initialization_options: Some(serde_json::json!({"allowSizeof": true})),
-            capabilities: ClientCapabilities::default(),
-            trace: None,
-            workspace_folders: None,
-            client_info: None,
-            locale: None,
-            work_done_progress_params: WorkDoneProgressParams {
-                work_done_token: None,
-            },
-        };
+        let params = params_with_init_options(Some(serde_json::json!({"allowSizeof": true})));
 
         let options = super::extract_compiler_options(&params);
         assert!(options.allow_sizeof);
@@ -1093,21 +953,7 @@ mod test {
 
     #[test]
     fn extract_compiler_options_when_allow_pragmas_then_enables_flag() {
-        #[allow(deprecated)]
-        let params = InitializeParams {
-            process_id: None,
-            root_path: None,
-            root_uri: None,
-            initialization_options: Some(serde_json::json!({"allowPragmas": true})),
-            capabilities: ClientCapabilities::default(),
-            trace: None,
-            workspace_folders: None,
-            client_info: None,
-            locale: None,
-            work_done_progress_params: WorkDoneProgressParams {
-                work_done_token: None,
-            },
-        };
+        let params = params_with_init_options(Some(serde_json::json!({"allowPragmas": true})));
 
         let options = super::extract_compiler_options(&params);
         assert!(options.allow_pragmas);
@@ -1115,23 +961,9 @@ mod test {
 
     #[test]
     fn extract_compiler_options_when_allow_mixed_located_var_declarations_then_enables_flag() {
-        #[allow(deprecated)]
-        let params = InitializeParams {
-            process_id: None,
-            root_path: None,
-            root_uri: None,
-            initialization_options: Some(
-                serde_json::json!({"allowMixedLocatedVarDeclarations": true}),
-            ),
-            capabilities: ClientCapabilities::default(),
-            trace: None,
-            workspace_folders: None,
-            client_info: None,
-            locale: None,
-            work_done_progress_params: WorkDoneProgressParams {
-                work_done_token: None,
-            },
-        };
+        let params = params_with_init_options(Some(
+            serde_json::json!({"allowMixedLocatedVarDeclarations": true}),
+        ));
 
         let options = super::extract_compiler_options(&params);
         assert!(options.allow_mixed_located_var_declarations);
@@ -1139,23 +971,9 @@ mod test {
 
     #[test]
     fn extract_compiler_options_when_allow_constant_initializer_expressions_then_enables_flag() {
-        #[allow(deprecated)]
-        let params = InitializeParams {
-            process_id: None,
-            root_path: None,
-            root_uri: None,
-            initialization_options: Some(
-                serde_json::json!({"allowConstantInitializerExpressions": true}),
-            ),
-            capabilities: ClientCapabilities::default(),
-            trace: None,
-            workspace_folders: None,
-            client_info: None,
-            locale: None,
-            work_done_progress_params: WorkDoneProgressParams {
-                work_done_token: None,
-            },
-        };
+        let params = params_with_init_options(Some(
+            serde_json::json!({"allowConstantInitializerExpressions": true}),
+        ));
 
         let options = super::extract_compiler_options(&params);
         assert!(options.allow_constant_initializer_expressions);
@@ -1163,21 +981,7 @@ mod test {
 
     #[test]
     fn extract_compiler_options_when_allow_reference_to_then_enables_flag() {
-        #[allow(deprecated)]
-        let params = InitializeParams {
-            process_id: None,
-            root_path: None,
-            root_uri: None,
-            initialization_options: Some(serde_json::json!({"allowReferenceTo": true})),
-            capabilities: ClientCapabilities::default(),
-            trace: None,
-            workspace_folders: None,
-            client_info: None,
-            locale: None,
-            work_done_progress_params: WorkDoneProgressParams {
-                work_done_token: None,
-            },
-        };
+        let params = params_with_init_options(Some(serde_json::json!({"allowReferenceTo": true})));
 
         let options = super::extract_compiler_options(&params);
         assert!(options.allow_reference_to);
@@ -1185,21 +989,7 @@ mod test {
 
     #[test]
     fn extract_compiler_options_when_allow_pointer_to_then_enables_flag() {
-        #[allow(deprecated)]
-        let params = InitializeParams {
-            process_id: None,
-            root_path: None,
-            root_uri: None,
-            initialization_options: Some(serde_json::json!({"allowPointerTo": true})),
-            capabilities: ClientCapabilities::default(),
-            trace: None,
-            workspace_folders: None,
-            client_info: None,
-            locale: None,
-            work_done_progress_params: WorkDoneProgressParams {
-                work_done_token: None,
-            },
-        };
+        let params = params_with_init_options(Some(serde_json::json!({"allowPointerTo": true})));
 
         let options = super::extract_compiler_options(&params);
         assert!(options.allow_pointer_to);
@@ -1207,21 +997,7 @@ mod test {
 
     #[test]
     fn extract_compiler_options_when_allow_adr_then_enables_flag() {
-        #[allow(deprecated)]
-        let params = InitializeParams {
-            process_id: None,
-            root_path: None,
-            root_uri: None,
-            initialization_options: Some(serde_json::json!({"allowAdr": true})),
-            capabilities: ClientCapabilities::default(),
-            trace: None,
-            workspace_folders: None,
-            client_info: None,
-            locale: None,
-            work_done_progress_params: WorkDoneProgressParams {
-                work_done_token: None,
-            },
-        };
+        let params = params_with_init_options(Some(serde_json::json!({"allowAdr": true})));
 
         let options = super::extract_compiler_options(&params);
         assert!(options.allow_adr);
@@ -1229,21 +1005,8 @@ mod test {
 
     #[test]
     fn extract_compiler_options_when_allow_fb_inheritance_then_enables_flag() {
-        #[allow(deprecated)]
-        let params = InitializeParams {
-            process_id: None,
-            root_path: None,
-            root_uri: None,
-            initialization_options: Some(serde_json::json!({"allowFbInheritance": true})),
-            capabilities: ClientCapabilities::default(),
-            trace: None,
-            workspace_folders: None,
-            client_info: None,
-            locale: None,
-            work_done_progress_params: WorkDoneProgressParams {
-                work_done_token: None,
-            },
-        };
+        let params =
+            params_with_init_options(Some(serde_json::json!({"allowFbInheritance": true})));
 
         let options = super::extract_compiler_options(&params);
         assert!(options.allow_fb_inheritance);

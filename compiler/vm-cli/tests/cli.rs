@@ -1,8 +1,7 @@
 // Test-target boundary: the workspace denies panicking constructs in
 // production code; tests assert by panicking, so they are exempt here.
-#![allow(
+#![expect(
     clippy::unwrap_used,
-    clippy::expect_used,
     reason = "integration test target: panicking helpers are sanctioned in tests"
 )]
 
@@ -28,7 +27,6 @@ use tempfile::TempDir;
 
 /// Spec-conformance requirements generated from `specs/design/vm-cli.md`.
 /// Referenced by `#[spec_test(REQ_VC_NNN)]`. See vm-cli/build.rs.
-#[allow(dead_code)]
 mod spec_requirements {
     include!(concat!(env!("OUT_DIR"), "/spec_requirements.rs"));
 }

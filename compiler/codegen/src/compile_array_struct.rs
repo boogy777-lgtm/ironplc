@@ -277,7 +277,10 @@ enum ArrayOfStructBase<'ast> {
 ///
 /// A STRING leaf is the exception: it has no single-slot load or store, so it
 /// resolves through [`string_element_field`] instead.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "its arguments are the independent parts of one element-field address, each already a named type"
+)]
 fn struct_array_element_field<'ctx, 'ast>(
     region: ArrayOfStructRegion<'ctx>,
     base_slot_offset: u32,
@@ -569,7 +572,6 @@ fn total_elements(dimensions: &[ArrayDimension], span: &SourceSpan) -> Result<u3
 /// Returns `None` for every other array — including `ARRAY[..] OF REF_TO
 /// <struct>`, whose elements are one-slot references and so belong on the
 /// ordinary array path.
-#[allow(clippy::type_complexity)]
 pub(crate) fn struct_array_declaration(
     types: &TypeEnvironment,
     spec: &SpecificationKind<ironplc_dsl::common::ArraySubranges>,
@@ -633,7 +635,10 @@ pub(crate) fn struct_array_declaration(
 ///
 /// Returns the debug type tag and type name, like
 /// [`register_array_variable`].
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "its arguments are the compile context, the container builder and the facts of one array declaration, shared with no other caller"
+)]
 pub(crate) fn register_struct_array_variable(
     ctx: &mut CompileContext,
     builder: &mut ContainerBuilder,

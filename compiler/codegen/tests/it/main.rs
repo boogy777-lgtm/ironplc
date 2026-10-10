@@ -11,7 +11,7 @@
 
 // Test-target boundary: the workspace denies panicking constructs in
 // production code; tests assert by panicking, so they are exempt here.
-#![allow(
+#![expect(
     clippy::unwrap_used,
     clippy::expect_used,
     reason = "integration test target: panicking helpers are sanctioned in tests"

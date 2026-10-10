@@ -944,7 +944,6 @@ impl TypeEnvironment {
     /// Returns `Ok(Some(size))` if the type exists and has a known size,
     /// `Ok(None)` if the type exists but has unknown size (e.g., dynamic arrays),
     /// or `Err` if the type is not declared.
-    #[allow(dead_code)]
     pub fn get_memory_size(&self, type_name: &TypeName) -> Result<Option<u32>, Diagnostic> {
         self.get(type_name)
             .map(|attrs| attrs.size_bytes())
@@ -957,7 +956,6 @@ impl TypeEnvironment {
     }
 
     /// Validates type usage in a specific context
-    #[allow(dead_code)]
     pub fn validate_type_usage(
         &self,
         type_name: &TypeName,
@@ -1021,7 +1019,6 @@ impl TypeEnvironment {
     }
 
     /// Gets all types organized by category
-    #[allow(dead_code)]
     pub fn get_all_types_by_category(
         &self,
     ) -> std::collections::HashMap<crate::type_category::TypeCategory, Vec<&TypeName>> {

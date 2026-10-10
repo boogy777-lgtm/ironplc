@@ -18,7 +18,7 @@
 //! rows are in the same table, and each runs under a time limit, so a step that
 //! went round a cycle without end would fail the row rather than hang.
 
-#![allow(
+#![expect(
     clippy::unwrap_used,
     reason = "test target: panicking helpers are sanctioned in tests"
 )]

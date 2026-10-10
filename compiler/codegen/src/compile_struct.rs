@@ -31,9 +31,6 @@ pub(crate) struct StructVarInfo {
     pub var_index: VarIndex,
     /// Data region byte offset where this structure's fields start.
     pub data_offset: u32,
-    /// Total number of 8-byte slots this structure occupies.
-    #[allow(dead_code)]
-    pub total_slots: SlotIndex,
     /// Array descriptor index for this structure (treats struct as flat slot array).
     pub desc_index: u16,
     /// Fields in declaration order. Preserving order ensures deterministic
@@ -524,7 +521,6 @@ pub(crate) fn allocate_struct_variable(
         StructVarInfo {
             var_index: index,
             data_offset,
-            total_slots: SlotIndex::new(total_slots),
             desc_index,
             fields: fields_vec,
             field_index,

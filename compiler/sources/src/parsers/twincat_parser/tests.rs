@@ -761,10 +761,6 @@ END_VAR]]></Declaration>
 
 /// Extract the single function block from a library, or panic describing
 /// what was found instead.
-#[allow(
-    clippy::panic,
-    reason = "test helper: a wrong fixture shape is a test-authoring bug, not user input"
-)]
 pub(super) fn only_function_block(library: Library) -> FunctionBlockDeclaration {
     assert_eq!(library.elements.len(), 1);
     match library.elements.into_iter().next() {

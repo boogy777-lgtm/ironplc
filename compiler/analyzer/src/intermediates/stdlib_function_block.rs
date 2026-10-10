@@ -28,10 +28,12 @@ fn time_type() -> IntermediateType {
     }
 }
 
+/// Builds the integer type of a counter variant.
+type IntBuilder = fn() -> IntermediateType;
+
 /// Integer type variants for counter function blocks.
 /// Each variant specifies the type name suffix and the IntermediateType for PV/CV fields.
-#[allow(clippy::type_complexity)]
-const COUNTER_INT_VARIANTS: &[(&str, fn() -> IntermediateType)] = &[
+const COUNTER_INT_VARIANTS: &[(&str, IntBuilder)] = &[
     ("", || IntermediateType::Int {
         size: ByteSized::B16,
     }), // INT (default)

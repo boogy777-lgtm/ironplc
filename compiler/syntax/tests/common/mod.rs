@@ -1,5 +1,9 @@
 //! Helpers shared by the integration tests.
-#![allow(dead_code, clippy::unwrap_used)]
+#![expect(
+    dead_code,
+    clippy::unwrap_used,
+    reason = "each integration test target uses a different subset of these shared helpers, so some are dead in any single target; panicking helpers are sanctioned in tests"
+)]
 
 use ironplc_syntax::lexer::{check_coverage, lex, Token};
 use ironplc_syntax::SyntaxKind;

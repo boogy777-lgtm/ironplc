@@ -615,7 +615,7 @@ pub fn run_source(
     })
 }
 
-#[allow(
+#[expect(
     clippy::unwrap_used,
     reason = "bytecode is Some when diagnostics are empty (checked above); base64 is compiler-produced"
 )]
@@ -705,7 +705,7 @@ pub fn load_program(
     })
 }
 
-#[allow(
+#[expect(
     clippy::unwrap_used,
     reason = "bytecode is Some when diagnostics are empty (checked above); base64 is compiler-produced"
 )]

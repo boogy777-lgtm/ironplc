@@ -7,10 +7,9 @@
 // Test-target boundary: the workspace denies panicking constructs in
 // production code; tests assert by panicking, so they are exempt here. Each
 // integration test target uses a different subset of these helpers, so some
-// are dead in any single target — the allow keeps that from warning.
-#![allow(
+// are dead in any single target — the expectation holds in each.
+#![expect(
     clippy::unwrap_used,
-    clippy::expect_used,
     dead_code,
     reason = "integration test target: panicking helpers are sanctioned in tests and each target uses a subset of the shared helpers"
 )]

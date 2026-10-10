@@ -1,6 +1,3 @@
-// Allow large errors because this is a compiler - we expect large errors.
-#![allow(clippy::result_large_err)]
-
 extern crate ironplc_dsl;
 extern crate ironplc_parser;
 
@@ -21,7 +18,6 @@ fn init_test_logger() {
 // their inline `#[cfg(test)] mod tests`.
 #[cfg(test)]
 #[macro_use]
-#[allow(unused_macros)]
 mod test_macros;
 
 mod call_assignment_check;

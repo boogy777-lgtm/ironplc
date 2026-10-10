@@ -93,6 +93,16 @@ large_futures = "deny"
 # word: the error is invisible to the user and to tests. Handle it, or state why
 # ignoring is the contract with `#[expect(clippy::let_underscore_must_use, reason = "...")]`.
 let_underscore_must_use = "deny"
+# A suppression is `#[expect(<lint>, reason = "...")]`: `expect` fails the build
+# once the suppressed finding is gone, so a suppression cannot outlive its cause,
+# and the reason is what a reviewer checks.
+allow_attributes = "deny"
+allow_attributes_without_reason = "deny"
+# A compiler error carries its diagnostic and a VM error its fault context, so
+# both are large by design: every `Result<_, Diagnostic>` would trip this lint,
+# and boxing the error would only move the allocation to every error path and
+# obscure the error vocabulary.
+result_large_err = "allow"
 
 # Reduce per-binary debug-info size. `line-tables-only` retains the file/line
 # tables that `cargo llvm-cov` needs to map coverage hits to source, but drops

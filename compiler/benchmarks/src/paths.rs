@@ -37,10 +37,6 @@
 //! [`Probe::start`] and [`Probe::stop`], and what the call returned is dropped
 //! after that, as the result of a call of a consumer is.
 
-// `Diagnostic` is large by design in this compiler (the parser crate allows the
-// same lint); the paths return it as the public functions they measure do.
-#![allow(clippy::result_large_err)]
-
 use crate::corpus::{plcopen_document, statement_bodies, CorpusFile, PLAIN_DOCUMENT};
 use crate::generated::{self, Scale, Shape, SHAPES};
 use crate::project;

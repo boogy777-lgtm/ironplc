@@ -5,7 +5,6 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use ironplc_analyzer::extractors::TypeSymbolKind;
-use ironplc_analyzer::SemanticContext;
 use ironplc_dsl::core::{FileId, Located};
 use ironplc_dsl::diagnostic::LineColumn;
 use log::error;
@@ -78,7 +77,7 @@ impl UriKey {
     /// notifications. The key only ever holds a string that was
     /// previously produced by a valid `Uri`, so parsing must
     /// succeed.
-    #[allow(
+    #[expect(
         clippy::expect_used,
         reason = "UriKey was constructed from a valid Uri, so parsing must succeed"
     )]
@@ -231,19 +230,16 @@ impl LspProject {
     /// should be shown for `uri`. Retained as a thin wrapper over
     /// `semantic_all` for tests and callers that only need a single
     /// file's diagnostics.
-    #[allow(dead_code)]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "only the tests ask for the diagnostics of one file"
+        )
+    )]
     pub(crate) fn semantic(&mut self, uri: &Uri) -> Vec<lsp_types::Diagnostic> {
         let mut by_key = self.semantic_all();
         by_key.remove(&UriKey::from_uri(uri)).unwrap_or_default()
-    }
-
-    /// Returns the semantic context from the last successful analysis.
-    ///
-    /// This provides access to type, function, and symbol information
-    /// for IDE features like document symbols, go to definition, and hover.
-    #[allow(dead_code)]
-    pub(crate) fn semantic_context(&self) -> Option<&SemanticContext> {
-        self.wrapped.semantic_context()
     }
 
     /// Returns document symbols for the given URI.
@@ -285,17 +281,12 @@ impl LspProject {
                 continue;
             }
             let range = span_to_range(contents, &view.attributes.span());
-            #[allow(deprecated)]
-            symbols.push(DocumentSymbol {
-                name: view.name.to_string(),
-                detail: Some(format!("{:?}", view.attributes.type_category)),
-                kind: type_kind_to_symbol_kind(view.kind),
-                tags: None,
-                deprecated: None,
+            symbols.push(document_symbol(
+                view.name.to_string(),
+                Some(format!("{:?}", view.attributes.type_category)),
+                type_kind_to_symbol_kind(view.kind),
                 range,
-                selection_range: range,
-                children: None,
-            });
+            ));
         }
 
         // Function blocks (declared by the user; not surfaced via
@@ -306,17 +297,12 @@ impl LspProject {
                 continue;
             }
             let range = span_to_range(contents, &view.info.span);
-            #[allow(deprecated)]
-            symbols.push(DocumentSymbol {
-                name: view.name.to_string(),
-                detail: None,
-                kind: SymbolKind::CLASS,
-                tags: None,
-                deprecated: None,
+            symbols.push(document_symbol(
+                view.name.to_string(),
+                None,
+                SymbolKind::CLASS,
                 range,
-                selection_range: range,
-                children: None,
-            });
+            ));
         }
 
         // User-defined functions
@@ -325,21 +311,15 @@ impl LspProject {
                 continue;
             }
             let range = span_to_range(contents, &view.signature.span);
-            #[allow(deprecated)]
-            symbols.push(DocumentSymbol {
-                name: view.signature.name.to_string(),
-                detail: view
-                    .signature
+            symbols.push(document_symbol(
+                view.signature.name.to_string(),
+                view.signature
                     .return_type
                     .as_ref()
                     .map(|t| format!("{:?}", t)),
-                kind: SymbolKind::FUNCTION,
-                tags: None,
-                deprecated: None,
+                SymbolKind::FUNCTION,
                 range,
-                selection_range: range,
-                children: None,
-            });
+            ));
         }
 
         DocumentSymbolResponse::Nested(symbols)
@@ -384,6 +364,29 @@ impl LspProject {
             total_scans: 0,
             error: None,
         }
+    }
+}
+
+/// A document symbol that spans `range` and has no children.
+#[expect(
+    deprecated,
+    reason = "lsp_types requires the deprecated `deprecated` field to be set"
+)]
+fn document_symbol(
+    name: String,
+    detail: Option<String>,
+    kind: SymbolKind,
+    range: lsp_types::Range,
+) -> DocumentSymbol {
+    DocumentSymbol {
+        name,
+        detail,
+        kind,
+        tags: None,
+        deprecated: None,
+        range,
+        selection_range: range,
+        children: None,
     }
 }
 

@@ -11,11 +11,6 @@
 //! [`commands`] module exposes the same protocol to external clients as typed,
 //! line-delimited JSON commands with stable V-codes.
 
-// This crate surfaces VM errors (`FaultContext`, whose trap variants are
-// large) directly; boxing every one to satisfy clippy would obscure the
-// error vocabulary for no runtime benefit.
-#![allow(clippy::result_large_err)]
-
 mod commands;
 mod conversion;
 mod error;

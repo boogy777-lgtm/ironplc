@@ -4,7 +4,7 @@
 
 // Test-target boundary: a project that does not parse is a defect of the
 // generator, and the test that reads it should stop there.
-#![allow(
+#![expect(
     clippy::unwrap_used,
     reason = "test target: panicking helpers are sanctioned in tests"
 )]
