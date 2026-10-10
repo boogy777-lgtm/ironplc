@@ -8,10 +8,11 @@
 use std::collections::HashMap;
 
 use indexmap::IndexMap;
-
 use ironplc_analyzer::{TypeEnvironment, ValueOwners};
+use ironplc_container::debug_section::iec_type_tag;
 use ironplc_dsl::common::{
     DataTypeDeclarationKind, EnumeratedValue, Library, LibraryElementKind, SpecificationKind,
+    TypeName,
 };
 use ironplc_dsl::core::Located;
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
@@ -176,6 +177,17 @@ pub(crate) fn enum_var_type_info() -> VarTypeInfo {
         signedness: Signedness::Signed,
         storage_bits: 32,
     }
+}
+
+/// The debug entry of a variable of the enumeration `type_name`: the tag is
+/// DINT (REQ-EN-codegen-012) and the type name is the enumeration as it was
+/// declared, whichever alias the variable is declared with, because the debug
+/// section lists the values of an enumeration under that name.
+pub(crate) fn debug_type(types: &TypeEnvironment, type_name: &TypeName) -> (u8, String) {
+    let declared = types
+        .enumeration_declared_as(type_name)
+        .unwrap_or(type_name);
+    (iec_type_tag::DINT, declared.to_string().to_uppercase())
 }
 
 /// The ordinal map of a library as parsed: the library is analyzed first, since
