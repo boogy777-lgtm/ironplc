@@ -134,6 +134,6 @@ Each EnumValueName (variable size):
 
 **REQ-EN-codegen-081** The ordinal map also records, for each unqualified value name, the enumeration that the type environment says declares it, and resolves unqualified references with the ordinals of that enumeration per REQ-EN-codegen-032.
 
-**REQ-EN-codegen-082** The ordinal map also stores the type declaration's default value (from `spec_init.default`) as a pre-resolved ordinal, used by REQ-EN-codegen-021.
+**REQ-EN-codegen-082** The default value an enumeration declaration states (`spec_init.default`) is recorded with the type in the type environment, named by the enumeration it is a value of, and is not stored in the ordinal map. A variable of the enumeration or of an alias of it that states no value starts at it (REQ-EN-codegen-021), and so does a structure member or a function block field of it.
 
 **REQ-EN-codegen-083** The ordinal map is built once at codegen entry and stored in `CompileContext` for use by all codegen phases.

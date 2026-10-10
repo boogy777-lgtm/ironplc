@@ -18,9 +18,7 @@ use ironplc_vm::test_support::load_and_start;
 use ironplc_vm::VmBuffers;
 use spec_test_macro::spec_test;
 
-use crate::compile_enum::{
-    enum_var_type_info, ordinal_map_of, resolve_enum_default_ordinal, resolve_enum_ordinal,
-};
+use crate::compile_enum::{enum_var_type_info, ordinal_map_of, resolve_enum_ordinal};
 
 // ---------------------------------------------------------------------------
 // Meta-test: completeness check
@@ -654,15 +652,24 @@ fn enum_spec_req_en_081_reverse_lookup_for_unqualified() {
     assert_eq!(resolve_enum_ordinal(&map, &ev).unwrap(), 1);
 }
 
-/// REQ-EN-codegen-082: Type declaration default stored as pre-resolved ordinal.
+/// REQ-EN-codegen-082: The default a type declaration states is recorded with
+/// the type, not in the ordinal map, so a declaration of an alias of the
+/// enumeration starts at it too.
 #[spec_test(REQ_EN_codegen_082)]
-fn enum_spec_req_en_082_default_ordinal_from_type_declaration() {
-    let lib = parse_library(
-        "TYPE LEVEL : (LOW, MEDIUM, HIGH) := HIGH; END_TYPE
-         PROGRAM main END_PROGRAM",
-    );
-    let map = ordinal_map_of(&lib);
-    assert_eq!(resolve_enum_default_ordinal(&map, "LEVEL"), 2);
+fn enum_spec_req_en_082_default_is_recorded_with_the_type() {
+    let source = "
+TYPE LEVEL : (LOW, MEDIUM, HIGH) := HIGH; Alias : LEVEL; END_TYPE
+PROGRAM main
+  VAR
+    a : LEVEL;
+    b : Alias;
+  END_VAR
+END_PROGRAM
+";
+    let (_c, bufs) = compile_and_run(source);
+    // The type default is HIGH = ordinal 2, for the type and for its alias.
+    assert_eq!(bufs.vars[0].as_i32(), 2);
+    assert_eq!(bufs.vars[1].as_i32(), 2);
 }
 
 /// REQ-EN-codegen-083: Ordinal map built once at codegen entry, stored in CompileContext.

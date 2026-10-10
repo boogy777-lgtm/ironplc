@@ -655,22 +655,6 @@ const DEFECTS: &[Cells] = &[
         columns: ALL_COLUMNS,
         places: &[STRUCTURE_MEMBER.name],
     },
-    // A variable of an alias of an enumeration loses the value.
-    Cells {
-        kinds: &[ENUMERATION.name],
-        columns: &[
-            Column::Alias,
-            Column::AliasOfAlias,
-            Column::AliasStatesValue,
-        ],
-        places: &[PROGRAM.name, GLOBAL.name, RETAIN.name, FUNCTION_LOCAL.name],
-    },
-    // The value a type states for an array is lost.
-    Cells {
-        kinds: &[ARRAY_INT.name],
-        columns: TYPE_COLUMNS,
-        places: &[PROGRAM.name, GLOBAL.name, RETAIN.name],
-    },
     // The elements of an array of enumerations in a structure start at the
     // first value of the enumeration.
     Cells {

@@ -9,7 +9,7 @@
 use ironplc_container::VarIndex;
 use ironplc_dsl::common::{
     ConstantKind, InitialValueAssignmentKind, ReferenceInitialValue, SpecificationKind,
-    SubrangeSpecification, VarDecl, VariableType,
+    StructInitialValueAssignmentKind, SubrangeSpecification, VarDecl, VariableType,
 };
 use ironplc_dsl::core::{Id, Located};
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
@@ -114,7 +114,7 @@ pub(crate) fn emit_declaration_initial_value(
                     emit_store_var(emitter, var_index, op_type);
                 }
             }
-            InitialValueAssignmentKind::String(string_init) => {
+            InitialValueAssignmentKind::String(_) => {
                 if let Some(info) = ctx.string_vars.get(id).cloned() {
                     // Initialize the string header in the data region.
                     info.emit_init(emitter);
@@ -122,7 +122,10 @@ pub(crate) fn emit_declaration_initial_value(
                     // If there's an initial value, load and store it. The
                     // literal is encoded at the variable's width so the
                     // store's encoding check passes (ADR-0034).
-                    if let Some(lit) = &string_init.initial_value {
+                    if let Some(StructInitialValueAssignmentKind::Constant(
+                        ConstantKind::CharacterString(lit),
+                    )) = types.initial_value_of(&decl.initializer)
+                    {
                         emit_string_literal_load(emitter, ctx, &lit.value, info.char_width);
                         info.emit_store(emitter, ctx);
                     }
@@ -156,7 +159,12 @@ pub(crate) fn emit_declaration_initial_value(
                     }
                 }
             }
-            InitialValueAssignmentKind::Array(array_init) => {
+            InitialValueAssignmentKind::Array(_) => {
+                // The elements the declaration states, else those its type declares.
+                let elements = match types.initial_value_of(&decl.initializer) {
+                    Some(StructInitialValueAssignmentKind::Array(elements)) => elements,
+                    _ => Vec::new(),
+                };
                 // An array of structures holds the data region offset in
                 // its variable slot, like a structure variable does, and
                 // each element starts from what its members declare.
@@ -167,7 +175,7 @@ pub(crate) fn emit_declaration_initial_value(
                 {
                     // An array of function block instances starts every
                     // instance as a single instance starts.
-                    if !array_init.initial_values.is_empty() {
+                    if !elements.is_empty() {
                         return Err(Diagnostic::not_implemented(Label::span(
                             decl.identifier.span(),
                             "Initial values for an array of function block instances",
@@ -175,7 +183,7 @@ pub(crate) fn emit_declaration_initial_value(
                     }
                     crate::compile_fb_instance::initialize_instance_array(emitter, ctx, id)?;
                 } else if let Some(struct_array_info) = ctx.struct_array_vars.get(id) {
-                    if !array_init.initial_values.is_empty() {
+                    if !elements.is_empty() {
                         return Err(Diagnostic::not_implemented(Label::span(
                             decl.identifier.span(),
                             "Initial values for an array of structures",
@@ -208,10 +216,9 @@ pub(crate) fn emit_declaration_initial_value(
                         // Emit STR_STORE_ARRAY_ELEM for each initial string value.
                         // String literals are encoded at the element width so
                         // the array element's encoding check passes.
-                        if !array_init.initial_values.is_empty() {
-                            let values = crate::compile_array::flatten_array_initial_values(
-                                &array_init.initial_values,
-                            )?;
+                        if !elements.is_empty() {
+                            let values =
+                                crate::compile_array::flatten_array_initial_values(&elements)?;
                             for (i, value) in values.iter().enumerate() {
                                 if let ConstantKind::CharacterString(lit) = value {
                                     emit_string_literal_load(
@@ -230,10 +237,9 @@ pub(crate) fn emit_declaration_initial_value(
                         }
                     } else {
                         // Emit STORE_ARRAY for each initial value.
-                        if !array_init.initial_values.is_empty() {
-                            let values = crate::compile_array::flatten_array_initial_values(
-                                &array_init.initial_values,
-                            )?;
+                        if !elements.is_empty() {
+                            let values =
+                                crate::compile_array::flatten_array_initial_values(&elements)?;
                             let element_op_type = (element_vti.op_width, element_vti.signedness);
                             for (i, value) in values.iter().enumerate() {
                                 compile_constant(emitter, ctx, value, element_op_type)?;
@@ -274,20 +280,21 @@ pub(crate) fn emit_declaration_initial_value(
                     )?;
                 }
             }
-            InitialValueAssignmentKind::EnumeratedType(enum_init) => {
-                // Emit LOAD_CONST_I32(ordinal) + STORE_VAR_I32 per REQ-EN-codegen-020.
+            InitialValueAssignmentKind::EnumeratedType(_) => {
+                // An enumeration starts at the value it states, else the one
+                // its type declares, else its first value (ordinal 0)
+                // (REQ-EN-codegen-020 to REQ-EN-codegen-022), and is written
+                // whether or not it states one.
                 let var_index = ctx.var_index(id)?;
-                let op_type = DEFAULT_OP_TYPE;
-                let ordinal = if let Some(ev) = &enum_init.initial_value {
-                    crate::compile_enum::resolve_enum_ordinal(&ctx.enum_map, ev)?
-                } else {
-                    // No explicit init: use type declaration default (REQ-EN-codegen-021/022).
-                    let type_upper = enum_init.type_name.to_string().to_uppercase();
-                    crate::compile_enum::resolve_enum_default_ordinal(&ctx.enum_map, &type_upper)
-                };
-                let pool_index = ctx.add_i32_constant(ordinal);
-                emitter.emit_load_const_i32(pool_index);
-                emit_store_var(emitter, var_index, op_type);
+                let stated = types.initial_value_of(&decl.initializer);
+                crate::compile_struct_init::emit_scalar_initial_value(
+                    emitter,
+                    ctx,
+                    DEFAULT_OP_TYPE,
+                    stated.as_ref(),
+                    0,
+                )?;
+                emit_store_var(emitter, var_index, DEFAULT_OP_TYPE);
             }
             InitialValueAssignmentKind::EnumeratedValues(_) => {
                 // An inline enumeration starts at the value it states,
