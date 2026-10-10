@@ -871,10 +871,7 @@ impl fmt::Display for UnaryOp {
 ///
 /// See section 3.3.2.
 #[derive(Debug, PartialEq, Clone, Recurse)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "the variants are the AST nodes themselves, held by value; boxing them would change every pattern that destructures the enum"
-)]
+#[expect(clippy::large_enum_variant, reason = "the AST nodes are held by value")]
 pub enum StmtKind {
     Assignment(Assignment),
     // Function and function block control

@@ -12,7 +12,7 @@ analyzer/src/type_environment.rs 1905
 analyzer/src/xform_resolve_symbol_and_function_environment.rs 1340
 codegen/src/compile.rs 2387
 codegen/src/compile_call.rs 1276
-codegen/src/compile_expr.rs 2027
+codegen/src/compile_expr.rs 1836
 codegen/src/emit.rs 2233
 codegen/tests/it/wire_format.rs 1058
 container/src/debug_section.rs 1167
@@ -22,14 +22,14 @@ container/src/spec_conformance.rs 1110
 container/src/type_section.rs 1264
 container/src/verify.rs 1203
 dsl/src/common.rs 4291
-dsl/src/textual.rs 1485
+dsl/src/textual.rs 1482
 ironplc-cli/src/cli.rs 1027
 ironplc-cli/src/lsp.rs 1362
-ironplc-cli/src/lsp_project.rs 1459
+ironplc-cli/src/lsp_project.rs 1456
 ironplc-redundancy/src/calibration.rs 1024
 mcp/src/spec_conformance.rs 1342
 mcp/src/tools/hot_edit.rs 1204
-mcp/src/tools/run.rs 1048
+mcp/src/tools/run.rs 1046
 parser/src/parser.rs 2731
 parser/src/token.rs 1214
 playground/src/lib.rs 1850

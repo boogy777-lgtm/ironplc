@@ -9,10 +9,10 @@ use ironplc_dsl::diagnostic::{Diagnostic, Label};
 use ironplc_dsl::textual::{Expr, ExprKind, StmtKind, UnaryOp};
 
 use super::compile::{CompileContext, OpType, OpWidth, Signedness, VarTypeInfo};
+use super::compile_cmp_br::{emit_classified_cmp_br, try_classify_cmp, ClassifiedCmp, CmpWidth};
 use super::compile_expr::{
-    compile_expr, condition_op_type, emit_add, emit_classified_cmp_br, emit_ge, emit_le,
-    emit_load_var, emit_store_var, emit_truncation, signed_integer_to_i64, try_classify_cmp,
-    ClassifiedCmp, CmpWidth,
+    compile_expr, condition_op_type, emit_add, emit_ge, emit_le, emit_load_var, emit_store_var,
+    emit_truncation, signed_integer_to_i64,
 };
 use super::compile_stmt::compile_stmts;
 use crate::emit::{self, Emitter};

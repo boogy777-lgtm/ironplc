@@ -368,10 +368,7 @@ impl LspProject {
 }
 
 /// A document symbol that spans `range` and has no children.
-#[expect(
-    deprecated,
-    reason = "lsp_types requires the deprecated `deprecated` field to be set"
-)]
+#[expect(deprecated, reason = "the struct has a deprecated field to set")]
 fn document_symbol(
     name: String,
     detail: Option<String>,

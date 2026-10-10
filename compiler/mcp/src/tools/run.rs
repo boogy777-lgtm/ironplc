@@ -301,12 +301,10 @@ fn build_success_response(
         TerminatedReason::SampleCap => {
             Some("Trace sample cap reached; emitted trace is truncated.".to_string())
         }
-        TerminatedReason::Error => Some(
-            outcome
-                .error_message
-                .clone()
-                .unwrap_or_else(|| "VM trap during execution.".to_string()),
-        ),
+        TerminatedReason::Error => outcome
+            .error_message
+            .clone()
+            .or_else(|| Some("VM trap during execution.".to_string())),
     };
     if let Some(msg) = stop_message {
         diagnostics.push(serialize_diagnostic(&Diagnostic::problem(

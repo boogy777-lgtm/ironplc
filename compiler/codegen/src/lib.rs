@@ -34,6 +34,7 @@ mod compile_arith;
 mod compile_array;
 mod compile_array_struct;
 mod compile_call;
+mod compile_cmp_br;
 mod compile_edge;
 mod compile_enum;
 mod compile_expr;
