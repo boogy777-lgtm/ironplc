@@ -1,0 +1,21 @@
+# The toolchain every cargo invocation in this repository uses, locally, in the
+# dev container and in CI: rustup finds this file from any directory below it
+# (compiler/, playground/, ...).
+#
+# It is pinned because the set of clippy findings changes with each stable
+# release, and the workspace turns every warning into an error
+# (`warnings = "deny"` in compiler/Cargo.toml). With "stable" a new release
+# could break the gate with no change to the code. Moving to a newer toolchain
+# is a change of this file, made together with the fixes that release's clippy
+# asks for.
+#
+# components: clippy and rustfmt are the lint gate; llvm-tools-preview is what
+# `cargo llvm-cov` (the coverage recipe in compiler/justfile) needs.
+# targets: the playground is built to WebAssembly (playground/justfile). The
+# release targets of the installers are not listed: each packaging job adds its
+# own, and none is needed on a developer machine.
+[toolchain]
+channel = "1.99.0"
+profile = "minimal"
+components = ["clippy", "rustfmt", "llvm-tools-preview"]
+targets = ["wasm32-unknown-unknown"]
