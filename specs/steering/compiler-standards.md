@@ -138,7 +138,10 @@ When writing compiler code:
   reason is what a reviewer checks. The reason names the invariant or the fact that
   makes the finding wrong ("needed" is not a reason). Fix the code first; suppress
   only when the finding is right to ignore. Put the `expect` on the smallest item
-  that carries the finding, not on a crate or a module. A finding that appears only
+  that carries the finding, not on a crate or a module. The one exception is the
+  root of a test or benchmark target and a shared test-support module: the
+  `allow-*-in-tests` settings do not reach a helper function outside `#[test]`,
+  so those roots waive `unwrap_used`/`expect_used` for the target. A finding that appears only
   under some configuration (dead code that only the tests use) is
   `#[cfg_attr(not(test), expect(...))]`, so the other configuration has no
   unfulfilled expectation. A lint the whole workspace waives is set in the lint
