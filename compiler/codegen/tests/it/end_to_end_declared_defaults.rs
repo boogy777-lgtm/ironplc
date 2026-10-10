@@ -16,10 +16,9 @@
 //! fail the guard: the row has to be taken out of the list, which is how the
 //! table says that support has arrived.
 //!
-//! The value is read on the right of `=`: a member of a structure that is a
-//! string with a length compares unequal to a literal written after it
-//! (`v.m = 'abc'`), whatever it holds, which is not a question of what it
-//! starts at.
+//! The value is read on the right of `=`. Which side an operand of a string
+//! comparison is on does not change the answer (`end_to_end_string_compare_operands`
+//! is the guard of that), so the side is not part of this table.
 
 use crate::common::checked::try_check_and_run;
 use ironplc_parser::options::CompilerOptions;

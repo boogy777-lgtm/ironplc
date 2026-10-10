@@ -33,7 +33,7 @@ use ironplc_container::CharWidth;
 use ironplc_dsl::common::ConstantKind;
 use ironplc_dsl::core::{Located, SourceSpan};
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
-use ironplc_dsl::textual::{Expr, ExprKind, Function, SymbolicVariableKind, Variable};
+use ironplc_dsl::textual::{CompareExpr, Expr, ExprKind, Function, SymbolicVariableKind, Variable};
 
 use ironplc_problems::Problem;
 
@@ -45,6 +45,7 @@ use super::compile_call::{parse_string_conversion, StringConversion};
 use super::compile_expr::{compile_expr, variable_span};
 use super::compile_string::collect_positional_args;
 use crate::emit::Emitter;
+use crate::type_info::expr_representation;
 
 /// What a string-valued expression is, before any bytecode runs.
 ///
@@ -106,6 +107,29 @@ pub(crate) fn string_expr_shape(
             "a string expression of an unexpected kind",
         )),
     }
+}
+
+/// Returns `true` if the expression's value is a STRING or WSTRING.
+///
+/// The analyzer's type says so when it typed the expression. It does not type
+/// every operand -- a member of a structure declared `STRING[n]` and a string
+/// field of a function block instance carry none -- but the declaration an
+/// operand is read from does, and that is what loads it ([`string_expr_shape`]),
+/// so an operand is a string when either says it is.
+fn expr_is_string(ctx: &CompileContext, expr: &Expr) -> bool {
+    matches!(
+        expr_representation(ctx, expr),
+        Some(IntermediateType::String { .. })
+    ) || string_expr_shape(ctx, expr).is_ok()
+}
+
+/// Returns `true` if the comparison is one of strings.
+///
+/// The two operands of a comparison have one type, so a comparison is of
+/// strings when either operand is a string; deciding by the left one alone
+/// would load `v.m = 'abc'` as numbers while `'abc' = v.m` is loaded as strings.
+pub(crate) fn compare_is_string(ctx: &CompileContext, compare: &CompareExpr) -> bool {
+    expr_is_string(ctx, &compare.left) || expr_is_string(ctx, &compare.right)
 }
 
 /// Returns the encoding a string-valued expression produces.
