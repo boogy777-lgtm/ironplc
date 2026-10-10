@@ -27,6 +27,7 @@ use super::compile_short_circuit::{compile_short_circuit, ShortCircuitOp};
 use super::compile_string::compile_string_compare;
 use super::type_info::{expr_operand_name, expr_representation, expr_type_info};
 use crate::emit::Emitter;
+use crate::string_width::compare_is_string;
 
 /// Returns the operation type of an expression's value, from its
 /// `expr_type`.
@@ -65,14 +66,6 @@ pub(crate) fn concrete_op_type_from_expr(ctx: &CompileContext, expr: &Expr) -> O
 /// Returns `true` if the expression's value is a BOOL.
 pub(crate) fn expr_is_bool(ctx: &CompileContext, expr: &Expr) -> bool {
     matches!(expr_representation(ctx, expr), Some(IntermediateType::Bool))
-}
-
-/// Returns `true` if the expression's value is a STRING or WSTRING.
-pub(crate) fn expr_is_string(ctx: &CompileContext, expr: &Expr) -> bool {
-    matches!(
-        expr_representation(ctx, expr),
-        Some(IntermediateType::String { .. })
-    )
 }
 
 /// Returns the storage bit width of an expression's value.
@@ -114,7 +107,7 @@ pub(crate) fn condition_op_type(ctx: &CompileContext, expr: &Expr) -> Result<OpT
             _ => {
                 // String comparisons take a dedicated path in compile_expr
                 // that emits an i32 boolean; the operand op_type is unused.
-                if expr_is_string(ctx, &compare.left) {
+                if compare_is_string(ctx, compare) {
                     return Ok(DEFAULT_OP_TYPE);
                 }
                 op_type(ctx, &compare.left)
@@ -235,7 +228,7 @@ fn compile_compare(
 
     // String comparisons need a completely different code path because
     // strings live in the data region, not on the operand stack.
-    if expr_is_string(ctx, &compare.left) {
+    if compare_is_string(ctx, compare) {
         return compile_string_compare(emitter, ctx, compare);
     }
 
