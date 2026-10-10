@@ -18,6 +18,7 @@ csv = "1.4"
 # individual lints in the same crate.
 unsafe_code = "deny"
 deprecated = "deny"
+warnings = "deny"
 
 # Build-time codegen (problem-codes CSV -> enum): panicking helpers are sanctioned here, unlike production
 # compiler code where the workspace denies them.
@@ -31,3 +32,8 @@ unimplemented = "allow"
 # inherit and override); `workspace_lints_guard` fails if one is missing.
 disallowed_methods = "deny"
 iter_over_hash_type = "deny"
+dbg_macro = "deny"
+mem_forget = "deny"
+let_underscore_future = "deny"
+large_stack_arrays = "deny"
+large_futures = "deny"

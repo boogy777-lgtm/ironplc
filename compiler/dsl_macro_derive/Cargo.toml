@@ -28,6 +28,7 @@ convert_case = "0.12.0"
 # individual lints in the same crate.
 unsafe_code = "deny"
 deprecated = "deny"
+warnings = "deny"
 
 # See the workspace.lints.rust comment: localized MSVC link progress trips
 # rustc's linker_messages lint on rustc 1.97-1.98 (rust-lang/rust#159133).
@@ -45,3 +46,8 @@ unimplemented = "allow"
 # inherit and override); `workspace_lints_guard` fails if one is missing.
 disallowed_methods = "deny"
 iter_over_hash_type = "deny"
+dbg_macro = "deny"
+mem_forget = "deny"
+let_underscore_future = "deny"
+large_stack_arrays = "deny"
+large_futures = "deny"

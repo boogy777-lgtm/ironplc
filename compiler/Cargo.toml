@@ -80,6 +80,14 @@ unimplemented = "deny"
 # workspace so that a new crate is covered without an edit of its own.
 disallowed_methods = "deny"
 iter_over_hash_type = "deny"
+# Debug leftovers and leaks that no test notices; none exist now, the check
+# stops the first one. `large_stack_arrays` and `large_futures` guard the stack
+# of a PLC target and of the controller thread.
+dbg_macro = "deny"
+mem_forget = "deny"
+let_underscore_future = "deny"
+large_stack_arrays = "deny"
+large_futures = "deny"
 
 # Reduce per-binary debug-info size. `line-tables-only` retains the file/line
 # tables that `cargo llvm-cov` needs to map coverage hits to source, but drops
