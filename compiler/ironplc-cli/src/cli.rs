@@ -463,11 +463,11 @@ fn handle_diagnostics(
         diagnostics.iter().for_each(|d| {
             let diagnostic = map_diagnostic(d, &files_to_ids);
 
-            let _ = term::emit_to_write_style(&mut writer.lock(), &config, &files, &diagnostic)
-                .map_err(|err| {
-                    error!("Failed writing to terminal: {err}");
-                    1usize
-                });
+            if let Err(err) =
+                term::emit_to_write_style(&mut writer.lock(), &config, &files, &diagnostic)
+            {
+                error!("Failed writing to terminal: {err}");
+            }
         });
     }
 }

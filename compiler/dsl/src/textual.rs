@@ -632,7 +632,7 @@ impl ExprKind {
         })
     }
 
-    #[allow(
+    #[expect(
         clippy::unwrap_used,
         reason = "AST test builder: callers pass validated literals; a Result here would pollute every test callsite"
     )]
@@ -871,7 +871,7 @@ impl fmt::Display for UnaryOp {
 ///
 /// See section 3.3.2.
 #[derive(Debug, PartialEq, Clone, Recurse)]
-#[allow(clippy::large_enum_variant)]
+#[expect(clippy::large_enum_variant, reason = "the AST nodes are held by value")]
 pub enum StmtKind {
     Assignment(Assignment),
     // Function and function block control

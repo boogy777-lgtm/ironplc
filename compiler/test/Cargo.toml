@@ -18,6 +18,7 @@ maintenance = { status = "experimental" }
 # individual lints in the same crate.
 unsafe_code = "deny"
 deprecated = "deny"
+warnings = "deny"
 
 # Test-support crate (cast! macros, fixtures): panicking helpers are sanctioned here, unlike production
 # compiler code where the workspace denies them.
@@ -27,7 +28,16 @@ expect_used = "allow"
 panic = "allow"
 todo = "allow"
 unimplemented = "allow"
+unreachable = "deny"
 # Declared here because this table replaces the workspace one (cargo cannot
 # inherit and override); `workspace_lints_guard` fails if one is missing.
 disallowed_methods = "deny"
 iter_over_hash_type = "deny"
+dbg_macro = "deny"
+mem_forget = "deny"
+let_underscore_future = "deny"
+large_stack_arrays = "deny"
+large_futures = "deny"
+let_underscore_must_use = "deny"
+allow_attributes = "deny"
+allow_attributes_without_reason = "deny"

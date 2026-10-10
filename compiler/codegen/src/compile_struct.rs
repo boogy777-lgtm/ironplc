@@ -31,9 +31,6 @@ pub(crate) struct StructVarInfo {
     pub var_index: VarIndex,
     /// Data region byte offset where this structure's fields start.
     pub data_offset: u32,
-    /// Total number of 8-byte slots this structure occupies.
-    #[allow(dead_code)]
-    pub total_slots: SlotIndex,
     /// Array descriptor index for this structure (treats struct as flat slot array).
     pub desc_index: u16,
     /// Fields in declaration order. Preserving order ensures deterministic
@@ -390,8 +387,10 @@ pub(crate) fn allocate_struct_variable(
         Diagnostic::not_implemented(Label::span(span.clone(), "Unknown structure type"))
     })?;
 
+    // `resolve_struct_type` returns only structures; any other type is a
+    // compiler invariant violation.
     let IntermediateType::Structure { fields } = struct_type else {
-        unreachable!("resolve_struct_type guarantees Structure variant");
+        return Err(Diagnostic::internal_error());
     };
 
     // Compute total slots.
@@ -522,7 +521,6 @@ pub(crate) fn allocate_struct_variable(
         StructVarInfo {
             var_index: index,
             data_offset,
-            total_slots: SlotIndex::new(total_slots),
             desc_index,
             fields: fields_vec,
             field_index,

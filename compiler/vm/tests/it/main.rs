@@ -13,8 +13,8 @@ mod common;
 
 /// Spec-conformance requirements generated from `specs/design/runtime-execution-model.md`.
 /// Referenced by `#[spec_test(REQ_RT_vm_NNN)]`. See `vm/build.rs`. Every item the
-/// build script emits carries its own targeted `#[allow(dead_code)]`, so no
-/// module-level blanket allow is needed.
+/// build script emits is read by an anonymous const in the generated file, so
+/// no item needs a `dead_code` suppression.
 mod spec_requirements {
     include!(concat!(env!("OUT_DIR"), "/spec_requirements.rs"));
 }

@@ -10,7 +10,7 @@
 //! `container` → `vm` dev-dependency cycle. They are re-exported below so
 //! VM-side callers have a single import surface.
 
-#![allow(
+#![expect(
     clippy::unwrap_used,
     clippy::expect_used,
     reason = "test-only helpers (cfg(test) or test-support feature); panicking helpers are sanctioned in tests"

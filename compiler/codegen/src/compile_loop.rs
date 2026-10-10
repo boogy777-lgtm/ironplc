@@ -9,10 +9,10 @@ use ironplc_dsl::diagnostic::{Diagnostic, Label};
 use ironplc_dsl::textual::{Expr, ExprKind, StmtKind, UnaryOp};
 
 use super::compile::{CompileContext, OpType, OpWidth, Signedness, VarTypeInfo};
+use super::compile_cmp_br::{emit_classified_cmp_br, try_classify_cmp, ClassifiedCmp, CmpWidth};
 use super::compile_expr::{
-    compile_expr, condition_op_type, emit_add, emit_classified_cmp_br, emit_ge, emit_le,
-    emit_load_var, emit_store_var, emit_truncation, signed_integer_to_i64, try_classify_cmp,
-    ClassifiedCmp,
+    compile_expr, condition_op_type, emit_add, emit_ge, emit_le, emit_load_var, emit_store_var,
+    emit_truncation, signed_integer_to_i64,
 };
 use super::compile_stmt::compile_stmts;
 use crate::emit::{self, Emitter};
@@ -291,21 +291,11 @@ fn try_classify_for_head(
         OpWidth::W32 => {
             let v32 = i32::try_from(to_value).ok()?;
             let const_idx = ctx.add_i32_constant(v32);
-            Some(ClassifiedCmp {
-                cmp_op_byte,
-                var_index,
-                const_idx,
-                op_width: OpWidth::W32,
-            })
+            ClassifiedCmp::new(cmp_op_byte, var_index, const_idx, CmpWidth::W32)
         }
         OpWidth::W64 => {
             let const_idx = ctx.add_i64_constant(to_value);
-            Some(ClassifiedCmp {
-                cmp_op_byte,
-                var_index,
-                const_idx,
-                op_width: OpWidth::W64,
-            })
+            ClassifiedCmp::new(cmp_op_byte, var_index, const_idx, CmpWidth::W64)
         }
         OpWidth::F32 | OpWidth::F64 => None,
     }

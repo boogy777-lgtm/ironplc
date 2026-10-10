@@ -1,5 +1,3 @@
-// Allow large errors because this is a compiler - we expect large errors.
-#![allow(clippy::result_large_err)]
 //! Lossless concrete syntax tree for IEC 61131-3 text.
 //!
 //! This crate owns the syntax kinds and the rowan language binding, the

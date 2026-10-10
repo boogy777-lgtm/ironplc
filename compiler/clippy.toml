@@ -1,5 +1,9 @@
 allow-unwrap-in-tests = true
 allow-expect-in-tests = true
+# A test states an arm that must not happen with `panic!` and a message, as it
+# states a failed expectation with `unwrap`/`expect`. Production code stays under
+# `[workspace.lints.clippy] panic = "deny"`.
+allow-panic-in-tests = true
 
 # A result that reaches a user must not depend on the order a hash container
 # yields its entries: the order differs from one container to the next, so the

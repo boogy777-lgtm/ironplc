@@ -5,7 +5,5 @@
 //! so the same helpers are reachable from `vm-cli`, `project` and `codegen`.
 //! This module stays as the import surface the test files already use.
 
-#![allow(unused_imports)]
-
 pub use ironplc_vm::test_support::*;
 pub use ironplc_vm::VmBuffers;

@@ -48,6 +48,10 @@ fn options(non_numeric: StringToNumNonNumeric, failure: StringToNumFailure) -> C
 /// value the declared type holds, read at `target`'s width and signedness:
 /// a signed type's slot is sign-extended, an unsigned type's slot holds the
 /// value's low bits.
+#[expect(
+    clippy::panic,
+    reason = "a test helper outside any #[test] fn: a real target here is a test-authoring bug"
+)]
 fn convert(
     type_name: &str,
     target: Target,
@@ -63,7 +67,7 @@ fn convert(
         Target::I64 => slot.as_i64() as i128,
         Target::U64 => slot.as_u64() as i128,
         Target::F32 | Target::F64 => {
-            unreachable!("the real targets are covered in end_to_end_string_to_real")
+            panic!("the real targets are covered in end_to_end_string_to_real")
         }
     }
 }

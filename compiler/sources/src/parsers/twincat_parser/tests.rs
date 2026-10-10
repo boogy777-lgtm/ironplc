@@ -65,7 +65,9 @@ END_VAR]]></Declaration>
         }
     }
     let mut collector = SpanCollector { spans: &mut spans };
-    let _ = collector.fold_library(result);
+    collector
+        .fold_library(result)
+        .expect("the collector cannot fail");
 
     // All spans should point to positions within the XML document that
     // fall inside CDATA sections
@@ -759,10 +761,6 @@ END_VAR]]></Declaration>
 
 /// Extract the single function block from a library, or panic describing
 /// what was found instead.
-#[allow(
-    clippy::panic,
-    reason = "test helper: a wrong fixture shape is a test-authoring bug, not user input"
-)]
 pub(super) fn only_function_block(library: Library) -> FunctionBlockDeclaration {
     assert_eq!(library.elements.len(), 1);
     match library.elements.into_iter().next() {
@@ -785,7 +783,9 @@ fn collect_spans(library: Library) -> Vec<SourceSpan> {
 
     let mut spans = Vec::new();
     let mut collector = SpanCollector { spans: &mut spans };
-    let _ = collector.fold_library(library);
+    collector
+        .fold_library(library)
+        .expect("the collector cannot fail");
     spans
 }
 

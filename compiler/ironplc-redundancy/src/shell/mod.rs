@@ -243,9 +243,17 @@ impl Shell {
         {
             return AdmissionVerdict::Secondary;
         }
+        #[expect(
+            clippy::let_underscore_must_use,
+            reason = "claim_active records a failed barrier and retreats the unit to REDUNDANCY_LOST itself; the admission verdict is unchanged"
+        )]
         let _ = self.claim_active(claiming);
         // Commissioning calibration (ADR-0062): the readiness chain
         // UNQUALIFIED → CALIBRATING → CALIBRATED, gating TakeoverReady.
+        #[expect(
+            clippy::let_underscore_must_use,
+            reason = "run_calibration refuses only a shell without a pair, and start_up returned above unless it has one"
+        )]
         let _ = self.run_calibration();
         verdict
     }

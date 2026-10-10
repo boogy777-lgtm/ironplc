@@ -324,6 +324,10 @@ pub fn claim_in_order(
 /// (faulted, aged out, never acquired) is the desired end state.
 pub fn release_all(client: &mut impl FencingClient, owner: OwnerId, modules: &[ModuleId]) {
     for &module in modules {
+        #[expect(
+            clippy::let_underscore_must_use,
+            reason = "a release that finds the module already gone (faulted, aged out, never acquired) is the desired end state"
+        )]
         let _ = client.release(module, owner);
     }
 }

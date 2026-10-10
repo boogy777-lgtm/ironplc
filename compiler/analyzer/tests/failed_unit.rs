@@ -18,7 +18,7 @@
 //! rows are in the same table, and each runs under a time limit, so a step that
 //! went round a cycle without end would fail the row rather than hang.
 
-#![allow(
+#![expect(
     clippy::unwrap_used,
     reason = "test target: panicking helpers are sanctioned in tests"
 )]
@@ -99,6 +99,10 @@ fn analysis_within_limit(
 ) -> Reported {
     let (sender, receiver) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
+        #[expect(
+            clippy::let_underscore_must_use,
+            reason = "send fails only when the receiver has given up at the time limit, and the test then reports that"
+        )]
         let _ = sender.send(analysis(unit, uses, unit_first));
     });
     let result = receiver.recv_timeout(TIME_LIMIT);

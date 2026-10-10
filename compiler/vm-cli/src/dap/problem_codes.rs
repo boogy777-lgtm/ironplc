@@ -4,7 +4,7 @@
 //! `ironplcvmd` binary does not compile that module, so this thin re-include
 //! gives the DAP server the same generated constants from the one CSV source of
 //! truth. Only a few are used on the launch path (`FILE_OPEN`, `CONTAINER_READ`,
-//! and the `LAUNCH_*` codes); the rest are unused here, hence the allowance.
-#![allow(dead_code)]
+//! and the `LAUNCH_*` codes); the generated file reads every code in an
+//! anonymous const, so the unused ones raise no `dead_code`.
 
 include!(concat!(env!("OUT_DIR"), "/io_codes.rs"));

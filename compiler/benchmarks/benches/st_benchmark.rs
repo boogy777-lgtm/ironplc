@@ -12,7 +12,7 @@
 
 // Benchmark-target boundary: the workspace denies panicking constructs in
 // production code; a failing fixture here is a benchmark-authoring bug.
-#![allow(
+#![expect(
     clippy::unwrap_used,
     reason = "benchmark target: panicking helpers are sanctioned in benchmarks"
 )]

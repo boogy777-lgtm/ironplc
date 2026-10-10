@@ -84,6 +84,10 @@ pub enum Trap {
         target: str_to_num::Target,
         value: StringPreview,
     },
+    /// A debug hook paused a run that is not resumable, such as the
+    /// initialization run of `Vm::start`, which installs only the no-op hook.
+    /// That hook never pauses, so reaching this trap indicates a VM defect.
+    PauseNotResumable,
 }
 
 /// The start of a `STRING` value, carried in a [`Trap`] so a message can
@@ -223,6 +227,9 @@ impl fmt::Display for Trap {
                     "string {value} is not convertible to {}",
                     target_type_name(*target)
                 )
+            }
+            Trap::PauseNotResumable => {
+                write!(f, "a debug hook paused a run that cannot be resumed")
             }
         }
     }
@@ -364,6 +371,10 @@ mod tests {
         "program declares call depth 64 but VM frame buffer holds at most 32"
     )]
     #[case(Trap::ZeroCallDepth, "container declares a maximum call depth of zero")]
+    #[case(
+        Trap::PauseNotResumable,
+        "a debug hook paused a run that cannot be resumed"
+    )]
     fn trap_display_when_variant_then_expected(#[case] trap: Trap, #[case] expected: &str) {
         assert_eq!(format!("{trap}"), expected);
     }
@@ -405,6 +416,7 @@ mod tests {
         "V9016"
     )]
     #[case(Trap::ZeroCallDepth, "V9017")]
+    #[case(Trap::PauseNotResumable, "V9019")]
     fn v_code_when_variant_then_expected(#[case] trap: Trap, #[case] expected: &str) {
         assert_eq!(trap.v_code(), expected);
     }
@@ -462,5 +474,6 @@ mod tests {
             3
         );
         assert_eq!(Trap::ZeroCallDepth.exit_code(), 3);
+        assert_eq!(Trap::PauseNotResumable.exit_code(), 3);
     }
 }

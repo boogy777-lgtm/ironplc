@@ -37,7 +37,6 @@ pub enum ByteSized {
 
 impl ByteSized {
     /// Converts the ByteSized variant to its corresponding bit width
-    #[allow(dead_code)]
     pub fn into(&self) -> u8 {
         match self {
             ByteSized::B8 => 8,
@@ -496,7 +495,6 @@ impl IntermediateType {
     /// Currently returns the pre-calculated offset stored in the field definition.
     /// Future enhancements may include dynamic offset calculation with proper
     /// alignment and padding rules.
-    #[allow(dead_code)]
     pub fn get_field_offset(&self, field_name: &ironplc_dsl::core::Id) -> Option<u32> {
         match self {
             IntermediateType::Structure { fields } => {

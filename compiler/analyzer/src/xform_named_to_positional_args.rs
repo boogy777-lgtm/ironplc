@@ -158,8 +158,11 @@ impl Fold<Infallible> for NamedToPositionalResolver<'_> {
                     named.insert(ni.name.clone(), ni);
                 }
                 ParamAssignmentKind::Output(_) => outputs.push(param),
+                // Calls with a positional input were passed through above; one
+                // here is a compiler invariant violation, reported like any
+                // other problem and leaving the other arguments in place.
                 ParamAssignmentKind::PositionalInput(_) => {
-                    unreachable!("positional inputs already handled above")
+                    self.errors.push(Diagnostic::internal_error());
                 }
             }
         }
@@ -777,7 +780,7 @@ END_PROGRAM
             target: Id::from(name),
             found: None,
         };
-        let _ = finder.walk(library);
+        finder.walk(library).expect("the finder cannot fail");
         finder.found
     }
 }

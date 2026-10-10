@@ -22,6 +22,10 @@ proptest! {
         if let Ok(mut vm) = crate::common::load_and_start(&c, &mut b) {
             // We don't care whether it succeeds or traps --
             // only that it doesn't panic.
+            #[expect(
+                clippy::let_underscore_must_use,
+                reason = "the property is only that the VM does not panic; a trap is a legal outcome"
+            )]
             let _ = vm.run_round(0);
         }
     }

@@ -637,6 +637,10 @@ fn lower_constant_when_malformed_literal_then_an_answer_and_no_panic() {
             .descendants()
             .filter(|node| disposition(node.kind()) == Disposition::Lowered(Area::Literal))
         {
+            #[expect(
+                clippy::let_underscore_must_use,
+                reason = "the test asks only that malformed text does not panic; whether it lowers or is rejected is not under test"
+            )]
             let _ = lower_constant(&LowerCx::new(file()), &node);
         }
     }

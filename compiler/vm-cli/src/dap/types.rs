@@ -14,7 +14,6 @@
 //! and not worth an alpha dependency on the public build.
 //!
 //! The types are consumed by the request-dispatch loop in [`super::server`].
-#![allow(dead_code)]
 
 use ironplc_container::{SourceColumn, SourceLine};
 use serde::{Deserialize, Serialize};
@@ -165,22 +164,6 @@ impl Event {
 // initialize
 // ---------------------------------------------------------------------------
 
-/// Arguments to `initialize`. Only the coordinate-base flags matter to the v1
-/// server (they govern the source-line ↔ bytecode mapping added in a later
-/// commit); everything else the client advertises is accepted and ignored.
-#[derive(Debug, Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct InitializeRequestArguments {
-    #[serde(default)]
-    pub adapter_id: Option<String>,
-    /// Whether the client's line numbers start at 1 (DAP default true).
-    #[serde(default)]
-    pub lines_start_at1: Option<bool>,
-    /// Whether the client's column numbers start at 1 (DAP default true).
-    #[serde(default)]
-    pub columns_start_at1: Option<bool>,
-}
-
 /// Capabilities advertised in the `initialize` response.
 ///
 /// The v1 server advertises exactly one: it handles `configurationDone`. Every
@@ -249,6 +232,13 @@ pub struct SourceBreakpoint {
     #[serde(deserialize_with = "source_coords::deserialize_opt_line")]
     pub line: Option<SourceLine>,
     #[serde(default, deserialize_with = "source_coords::deserialize_opt_column")]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "the request carries the column, but the v1 server breaks on whole lines and only the tests read it"
+        )
+    )]
     pub column: Option<SourceColumn>,
 }
 
@@ -306,18 +296,6 @@ pub struct ThreadsResponseBody {
 // stackTrace / scopes / variables
 // ---------------------------------------------------------------------------
 
-/// Arguments to `stackTrace`. Paging fields are accepted; the v1 server returns
-/// the whole (short) stack and may ignore them.
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StackTraceArguments {
-    pub thread_id: i64,
-    #[serde(default)]
-    pub start_frame: Option<i64>,
-    #[serde(default)]
-    pub levels: Option<i64>,
-}
-
 /// One frame in the stack trace.
 #[derive(Debug, Serialize)]
 pub struct StackFrame {
@@ -338,13 +316,6 @@ pub struct StackTraceResponseBody {
     pub stack_frames: Vec<StackFrame>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub total_frames: Option<i64>,
-}
-
-/// Arguments to `scopes`: the frame whose scopes are requested.
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ScopesArguments {
-    pub frame_id: i64,
 }
 
 /// A named variable scope (e.g. `VAR`, `VAR_INPUT`).
@@ -392,34 +363,11 @@ pub struct VariablesResponseBody {
 // execution control: continue / next / stepIn / stepOut
 // ---------------------------------------------------------------------------
 
-/// Arguments shared by the thread-scoped execution-control requests
-/// (`continue`, `next`, `stepIn`, `stepOut`). The v1 server has a single
-/// thread, so `thread_id` is validated but otherwise unused.
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ThreadArguments {
-    pub thread_id: i64,
-}
-
 /// Body of the `continue` response.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContinueResponseBody {
     pub all_threads_continued: bool,
-}
-
-// ---------------------------------------------------------------------------
-// disconnect
-// ---------------------------------------------------------------------------
-
-/// Arguments to `disconnect`.
-#[derive(Debug, Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DisconnectArguments {
-    #[serde(default)]
-    pub restart: Option<bool>,
-    #[serde(default)]
-    pub terminate_debuggee: Option<bool>,
 }
 
 // ---------------------------------------------------------------------------
@@ -656,11 +604,5 @@ mod tests {
         assert_eq!(value["threadId"], 1);
         assert_eq!(value["allThreadsStopped"], true);
         assert!(value.get("description").is_none());
-    }
-
-    #[test]
-    fn thread_arguments_when_camel_case_then_reads_thread_id() {
-        let args: ThreadArguments = serde_json::from_value(json!({ "threadId": 1 })).unwrap();
-        assert_eq!(args.thread_id, 1);
     }
 }

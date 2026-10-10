@@ -21,11 +21,12 @@ use super::compile::{
     CompileContext, CurrentFunctionReturn, OpType, OpWidth, Signedness, DEFAULT_OP_TYPE,
     DEFAULT_STRING_MAX_LENGTH,
 };
+use super::compile_cmp_br::{emit_classified_cmp_br, try_classify_cmp};
 use super::compile_expr::{
     compile_bit_access_assignment, compile_expr, compile_partial_access_assignment,
-    condition_op_type, emit_classified_cmp_br, emit_eq, emit_ge, emit_le, emit_load_var,
-    emit_store_var, emit_truncation, extract_bit_access_target, extract_partial_access_target,
-    op_type, resolve_variable, resolve_variable_name, try_classify_cmp, variable_span,
+    condition_op_type, emit_eq, emit_ge, emit_le, emit_load_var, emit_store_var, emit_truncation,
+    extract_bit_access_target, extract_partial_access_target, op_type, resolve_variable,
+    resolve_variable_name, variable_span,
 };
 use super::compile_fb_init::{
     compile_fb_field_store, compile_string_field_store, compile_string_output,

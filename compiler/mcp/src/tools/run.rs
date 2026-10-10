@@ -285,28 +285,28 @@ fn build_success_response(
 
     let mut diagnostics = Vec::new();
     let reason = outcome.terminated_reason;
-    if reason != TerminatedReason::Completed {
-        let msg = match reason {
-            TerminatedReason::Duration => format!(
-                "Requested simulated duration ({} ms) exceeds the server limit ({} ms); \
+    let stop_message = match reason {
+        TerminatedReason::Completed => None,
+        TerminatedReason::Duration => Some(format!(
+            "Requested simulated duration ({} ms) exceeds the server limit ({} ms); \
                  the run stopped at the limit.",
-                requested_duration_ms, limits.max_duration_ms
-            ),
-            TerminatedReason::Fuel => {
-                "VM fuel budget exhausted (checked between task cycles).".to_string()
-            }
-            TerminatedReason::WallClock => {
-                "Wall-clock limit exceeded before the run completed.".to_string()
-            }
-            TerminatedReason::SampleCap => {
-                "Trace sample cap reached; emitted trace is truncated.".to_string()
-            }
-            TerminatedReason::Error => outcome
-                .error_message
-                .clone()
-                .unwrap_or_else(|| "VM trap during execution.".to_string()),
-            TerminatedReason::Completed => unreachable!(),
-        };
+            requested_duration_ms, limits.max_duration_ms
+        )),
+        TerminatedReason::Fuel => {
+            Some("VM fuel budget exhausted (checked between task cycles).".to_string())
+        }
+        TerminatedReason::WallClock => {
+            Some("Wall-clock limit exceeded before the run completed.".to_string())
+        }
+        TerminatedReason::SampleCap => {
+            Some("Trace sample cap reached; emitted trace is truncated.".to_string())
+        }
+        TerminatedReason::Error => outcome
+            .error_message
+            .clone()
+            .or_else(|| Some("VM trap during execution.".to_string())),
+    };
+    if let Some(msg) = stop_message {
         diagnostics.push(serialize_diagnostic(&Diagnostic::problem(
             Problem::McpInputValidation,
             Label::span(SourceSpan::default(), msg),

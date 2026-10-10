@@ -22,7 +22,7 @@
 
 // Benchmark-target boundary: a corpus that cannot be read is a
 // benchmark-authoring bug, not user input.
-#![allow(
+#![expect(
     clippy::unwrap_used,
     reason = "benchmark target: panicking helpers are sanctioned in benchmarks"
 )]

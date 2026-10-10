@@ -1,11 +1,12 @@
-// Allow large errors because this is a compiler - we expect large errors.
-#![allow(clippy::result_large_err)]
-
 extern crate ironplc_dsl;
 extern crate ironplc_parser;
 
 #[cfg(test)]
 #[ctor::ctor(unsafe)]
+#[expect(
+    clippy::let_underscore_must_use,
+    reason = "try_init fails only when a logger is already installed, which is what the tests want to keep"
+)]
 fn init_test_logger() {
     let _ = env_logger::builder()
         .is_test(true)
@@ -17,7 +18,6 @@ fn init_test_logger() {
 // their inline `#[cfg(test)] mod tests`.
 #[cfg(test)]
 #[macro_use]
-#[allow(unused_macros)]
 mod test_macros;
 
 mod call_assignment_check;

@@ -296,9 +296,11 @@ mod tests {
 
         // A qualifying setting alone does not clear the latch; only a
         // new calibration run does.
-        let _ = shell.set_timing_budget(2, 1000);
+        shell
+            .set_timing_budget(2, 1000)
+            .expect("the shell has a pair");
         assert!(shell.alarm_flags().1);
-        let _ = shell.run_calibration();
+        shell.run_calibration().expect("the shell has a pair");
         assert!(!shell.alarm_flags().1);
     }
 
