@@ -523,7 +523,6 @@ const POU_LOCALS: &[&str] = &[
     FB_OUTPUT.name,
     FUNCTION_LOCAL.name,
 ];
-const STRING_KINDS: &[&str] = &[STRING.name, STRING_N.name, WSTRING.name, WSTRING_N.name];
 const SCALAR_KINDS: &[&str] = &[
     BOOL.name,
     INT.name,
@@ -635,21 +634,7 @@ const REFUSED: &[(Cells, &str)] = &[
 /// value the cell expects, or it is accepted and crashes the compiler. A cell
 /// that stops failing takes its group out of this list.
 const DEFECTS: &[Cells] = &[
-    // A variable of a named string type crashes the compiler, and a member of
-    // one with a length loses the value.
-    Cells {
-        kinds: STRING_KINDS,
-        columns: ALL_COLUMNS,
-        places: &[
-            PROGRAM.name,
-            GLOBAL.name,
-            RETAIN.name,
-            FB_VARIABLE.name,
-            FB_INPUT.name,
-            FB_OUTPUT.name,
-            FUNCTION_LOCAL.name,
-        ],
-    },
+    // A member of a string type with a length loses the value.
     Cells {
         kinds: &[STRING_N.name, WSTRING_N.name],
         columns: ALL_COLUMNS,

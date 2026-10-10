@@ -1,8 +1,10 @@
 use crate::{intermediate_type::IntermediateType, type_environment::TypeAttributes};
 
 use ironplc_container::CharWidth;
-use ironplc_dsl::common::{StringDeclaration, StringInitializer, StringType};
-use ironplc_dsl::core::Located;
+use ironplc_dsl::common::{
+    CharacterStringLiteral, Integer, IntegerRef, StringDeclaration, StringInitializer, StringType,
+};
+use ironplc_dsl::core::{Located, SourceSpan};
 
 /// Maps an IEC 61131-3 `StringType` to its per-code-unit byte width per
 /// ADR-0016: STRING is Latin-1 (1 byte), WSTRING is UTF-16LE (2 bytes).
@@ -35,6 +37,40 @@ pub fn from_decl(decl: &StringDeclaration) -> TypeAttributes {
             char_width: char_width_for(&decl.width),
         },
     )
+}
+
+/// The most code units a string can be declared to hold: the string header
+/// stores the capacity as a `u16` (ADR-0035).
+pub(crate) const MAX_STRING_LENGTH: u128 = u16::MAX as u128;
+
+/// The initializer that declares a variable of a string type, with the length
+/// and the width the variable has, starting at `initial_value`: what
+/// `x : STRING[10] := 'abc'` is, for `x : Name` where `Name` is a string type
+/// of that length and width.
+///
+/// `None` for a type whose length no string can hold: that is reported where
+/// the type declares it (`rule_string_length_range`), and a variable of the
+/// type keeps the declaration it was written with rather than say it again.
+pub fn initializer(
+    max_len: Option<u128>,
+    char_width: CharWidth,
+    initial_value: Option<CharacterStringLiteral>,
+    span: SourceSpan,
+) -> Option<StringInitializer> {
+    if max_len.is_some_and(|len| len > MAX_STRING_LENGTH) {
+        return None;
+    }
+    Some(StringInitializer {
+        length: max_len
+            .and_then(|len| Integer::new(&len.to_string(), span.clone()).ok())
+            .map(IntegerRef::Literal),
+        width: match char_width {
+            CharWidth::Narrow => StringType::String,
+            CharWidth::Wide => StringType::WString,
+        },
+        initial_value,
+        keyword_span: span,
+    })
 }
 
 #[cfg(test)]
