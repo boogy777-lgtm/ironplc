@@ -53,6 +53,18 @@ const TIMER_RUNNING: usize = 5; // hidden
 /// Number of fields (including hidden) for a timer FB instance.
 pub const TIMER_INSTANCE_FIELDS: usize = 6;
 
+/// The data-region bytes of the timer instance (`TON`, `TOF`, `TP`) that
+/// starts at `instance_start`, or a trap when they lie outside the region.
+pub(crate) fn timer_instance(
+    data_region: &mut [u8],
+    instance_start: usize,
+) -> Result<&mut [u8], Trap> {
+    let instance_end = instance_start + TIMER_INSTANCE_FIELDS * 8;
+    data_region
+        .get_mut(instance_start..instance_end)
+        .ok_or(Trap::DataRegionOutOfBounds(instance_start as u32))
+}
+
 /// Executes one scan of the TON (on-delay timer) intrinsic.
 ///
 /// # Arguments

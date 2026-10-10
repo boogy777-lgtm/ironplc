@@ -390,8 +390,10 @@ pub(crate) fn allocate_struct_variable(
         Diagnostic::not_implemented(Label::span(span.clone(), "Unknown structure type"))
     })?;
 
+    // `resolve_struct_type` returns only structures; any other type is a
+    // compiler invariant violation.
     let IntermediateType::Structure { fields } = struct_type else {
-        unreachable!("resolve_struct_type guarantees Structure variant");
+        return Err(Diagnostic::internal_error());
     };
 
     // Compute total slots.

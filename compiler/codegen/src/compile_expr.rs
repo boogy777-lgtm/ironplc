@@ -1604,8 +1604,38 @@ pub(crate) struct ClassifiedCmp {
     pub var_index: VarIndex,
     /// Constant pool index of the RHS literal.
     pub const_idx: u16,
-    /// Operand op width: `W32` (→ `CMP_BR_I32`) or `W64` (→ `CMP_BR_I64`).
-    pub op_width: OpWidth,
+    /// Operand width: `W32` (→ `CMP_BR_I32`) or `W64` (→ `CMP_BR_I64`).
+    pub width: CmpWidth,
+    /// The negation of `cmp_op_byte`, for a branch taken when the predicate
+    /// is false.
+    negated_cmp_op_byte: u8,
+}
+
+/// The operand widths a fused `CMP_BR_*` instruction exists for. The float
+/// widths have no such instruction, so a classified comparison cannot name them.
+#[derive(Clone, Copy)]
+pub(crate) enum CmpWidth {
+    W32,
+    W64,
+}
+
+impl ClassifiedCmp {
+    /// A classified comparison, or `None` when `cmp_op_byte` has no negation
+    /// (is not a comparison code).
+    pub(crate) fn new(
+        cmp_op_byte: u8,
+        var_index: VarIndex,
+        const_idx: u16,
+        width: CmpWidth,
+    ) -> Option<Self> {
+        Some(ClassifiedCmp {
+            cmp_op_byte,
+            var_index,
+            const_idx,
+            width,
+            negated_cmp_op_byte: opcode::cmp_op::negate(cmp_op_byte)?,
+        })
+    }
 }
 
 /// Recognises the fusable shape `var <cmp> const_literal` (or
@@ -1654,21 +1684,11 @@ fn classify_with_named(
         OpWidth::W32 => {
             let v32 = i32::try_from(value).ok()?;
             let const_idx = ctx.add_i32_constant(v32);
-            Some(ClassifiedCmp {
-                cmp_op_byte,
-                var_index,
-                const_idx,
-                op_width: OpWidth::W32,
-            })
+            ClassifiedCmp::new(cmp_op_byte, var_index, const_idx, CmpWidth::W32)
         }
         OpWidth::W64 => {
             let const_idx = ctx.add_i64_constant(value);
-            Some(ClassifiedCmp {
-                cmp_op_byte,
-                var_index,
-                const_idx,
-                op_width: OpWidth::W64,
-            })
+            ClassifiedCmp::new(cmp_op_byte, var_index, const_idx, CmpWidth::W64)
         }
         OpWidth::F32 | OpWidth::F64 => None,
     }
@@ -1679,10 +1699,6 @@ fn classify_with_named(
 /// to true. When `branch_when_true` is `false`, the comparison operator
 /// is negated so the branch fires on the false-polarity (e.g. for
 /// "branch to END if NOT cond" zero-trip and IF skip patterns).
-#[allow(
-    clippy::expect_used,
-    reason = "classified cmp_op bytes are valid comparison codes by construction"
-)]
 pub(crate) fn emit_classified_cmp_br(
     emitter: &mut crate::emit::Emitter,
     classified: ClassifiedCmp,
@@ -1692,25 +1708,21 @@ pub(crate) fn emit_classified_cmp_br(
     let cmp_op_byte = if branch_when_true {
         classified.cmp_op_byte
     } else {
-        opcode::cmp_op::negate(classified.cmp_op_byte)
-            .expect("classified cmp_op must be a valid comparison code")
+        classified.negated_cmp_op_byte
     };
-    match classified.op_width {
-        OpWidth::W32 => emitter.emit_cmp_br_i32(
+    match classified.width {
+        CmpWidth::W32 => emitter.emit_cmp_br_i32(
             cmp_op_byte,
             classified.var_index,
             classified.const_idx,
             target,
         ),
-        OpWidth::W64 => emitter.emit_cmp_br_i64(
+        CmpWidth::W64 => emitter.emit_cmp_br_i64(
             cmp_op_byte,
             classified.var_index,
             classified.const_idx,
             target,
         ),
-        OpWidth::F32 | OpWidth::F64 => {
-            unreachable!("classify_with_named rejects float widths")
-        }
     }
 }
 

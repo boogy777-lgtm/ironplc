@@ -75,6 +75,7 @@ expect_used = "deny"
 panic = "deny"
 todo = "deny"
 unimplemented = "deny"
+unreachable = "deny"
 # A result must not depend on the order a hash container yields its entries
 # (see `clippy.toml`, which lists the iterating methods). Denied for the whole
 # workspace so that a new crate is covered without an edit of its own.

@@ -574,7 +574,7 @@ mod tests {
 
         let attrs = match result.unwrap() {
             IntermediateResult::Type(attrs) => attrs,
-            _ => unreachable!("Expected Type result"),
+            _ => panic!("Expected Type result"),
         };
 
         if let IntermediateType::Array {
@@ -593,7 +593,7 @@ mod tests {
             assert_eq!(dimensions[0].lower, 1);
             assert_eq!(dimensions[0].upper, 3);
         } else {
-            unreachable!("Expected Array type");
+            panic!("Expected Array type");
         }
     }
 
@@ -623,7 +623,7 @@ mod tests {
 
         let attrs = match result.unwrap() {
             IntermediateResult::Type(attrs) => attrs,
-            _ => unreachable!("Expected Type result"),
+            _ => panic!("Expected Type result"),
         };
 
         if let IntermediateType::Array {
@@ -640,7 +640,7 @@ mod tests {
             );
             assert_eq!(dimensions.len(), 1);
         } else {
-            unreachable!("Expected Array type");
+            panic!("Expected Array type");
         }
     }
 }

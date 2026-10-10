@@ -28,6 +28,7 @@ expect_used = "allow"
 panic = "allow"
 todo = "allow"
 unimplemented = "allow"
+unreachable = "deny"
 # Declared here because this table replaces the workspace one (cargo cannot
 # inherit and override); `workspace_lints_guard` fails if one is missing.
 disallowed_methods = "deny"

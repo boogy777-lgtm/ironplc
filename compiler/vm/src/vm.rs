@@ -1047,9 +1047,9 @@ fn execute(
         &mut hook,
     )? {
         ExecuteOutcome::Completed => Ok(()),
-        ExecuteOutcome::Paused(_) => {
-            unreachable!("NoopDebugHook always returns HookAction::Continue")
-        }
+        // The no-op hook always continues; a pause here is a VM defect, and
+        // this run has no way to resume it.
+        ExecuteOutcome::Paused(_) => Err(Trap::PauseNotResumable),
     }
 }
 
@@ -2460,21 +2460,18 @@ pub(crate) fn execute_with_hook<H: DebugHook>(
                 let fb_ref = stack.peek()?.as_i32() as u32;
                 let instance_start = fb_ref as usize;
                 match type_id {
-                    opcode::fb_type::TON | opcode::fb_type::TOF | opcode::fb_type::TP => {
-                        let instance_size = crate::intrinsic::TIMER_INSTANCE_FIELDS * 8;
-                        let instance_end = instance_start + instance_size;
-                        if instance_end > data_region.len() {
-                            return Err(Trap::DataRegionOutOfBounds(instance_start as u32));
-                        }
-                        let slice = &mut data_region[instance_start..instance_end];
-                        let time = uptime_us as i64;
-                        match type_id {
-                            opcode::fb_type::TON => crate::intrinsic::ton(slice, time)?,
-                            opcode::fb_type::TOF => crate::intrinsic::tof(slice, time)?,
-                            opcode::fb_type::TP => crate::intrinsic::tp(slice, time)?,
-                            _ => unreachable!(),
-                        }
-                    }
+                    opcode::fb_type::TON => crate::intrinsic::ton(
+                        crate::intrinsic::timer_instance(data_region, instance_start)?,
+                        uptime_us as i64,
+                    )?,
+                    opcode::fb_type::TOF => crate::intrinsic::tof(
+                        crate::intrinsic::timer_instance(data_region, instance_start)?,
+                        uptime_us as i64,
+                    )?,
+                    opcode::fb_type::TP => crate::intrinsic::tp(
+                        crate::intrinsic::timer_instance(data_region, instance_start)?,
+                        uptime_us as i64,
+                    )?,
                     opcode::fb_type::CTU => {
                         let instance_size = crate::intrinsic::CTU_INSTANCE_FIELDS * 8;
                         let instance_end = instance_start + instance_size;

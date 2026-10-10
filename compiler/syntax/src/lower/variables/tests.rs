@@ -34,7 +34,7 @@ fn lower(source: &str) -> Variable {
 fn symbolic(source: &str) -> SymbolicVariableKind {
     match lower(source) {
         Variable::Symbolic(symbolic) => symbolic,
-        other => unreachable!("{source} is not symbolic: {other:?}"),
+        other => panic!("{source} is not symbolic: {other:?}"),
     }
 }
 
@@ -79,15 +79,15 @@ fn lower_variable_when_selectors_then_written_back_the_same() {
 fn lower_variable_when_chain_then_each_selector_wraps_what_comes_before_it() {
     // `a.b[1].c`: the member `c` of the element 1 of the member `b` of `a`.
     let SymbolicVariableKind::Structured(outer) = symbolic("a.b[1].c") else {
-        unreachable!("not a member");
+        panic!("not a member");
     };
     assert_eq!(outer.field.original(), "c");
     let SymbolicVariableKind::Array(array) = *outer.record else {
-        unreachable!("not a subscript");
+        panic!("not a subscript");
     };
     assert_eq!(array.subscripts.len(), 1);
     let SymbolicVariableKind::Structured(inner) = *array.subscripted_variable else {
-        unreachable!("not a member");
+        panic!("not a member");
     };
     assert_eq!(inner.field.original(), "b");
     assert!(matches!(*inner.record, SymbolicVariableKind::Named(_)));
@@ -96,10 +96,10 @@ fn lower_variable_when_chain_then_each_selector_wraps_what_comes_before_it() {
 #[test]
 fn lower_variable_when_dereference_inside_a_chain_then_a_dereference_variable() {
     let SymbolicVariableKind::Structured(member) = symbolic("a^.b") else {
-        unreachable!("not a member");
+        panic!("not a member");
     };
     let SymbolicVariableKind::Deref(deref) = *member.record else {
-        unreachable!("not a dereference");
+        panic!("not a dereference");
     };
     assert!(matches!(*deref.variable, SymbolicVariableKind::Named(_)));
 }
@@ -107,7 +107,7 @@ fn lower_variable_when_dereference_inside_a_chain_then_a_dereference_variable() 
 #[test]
 fn lower_variable_when_name_then_original_spelling_lower_case_and_position() {
     let SymbolicVariableKind::Named(named) = symbolic("  Speed ") else {
-        unreachable!("not a name");
+        panic!("not a name");
     };
     assert_eq!(named.name.original(), "Speed");
     assert_eq!(named.name.lower_case(), "speed");
@@ -125,7 +125,7 @@ fn lower_variable_when_name_then_original_spelling_lower_case_and_position() {
 fn lower_variable_when_names_the_legacy_grammar_gives_no_position_then_positioned() {
     for name in ["STEP", "ON", "R_EDGE", "F_EDGE", "__CURRENTTASK"] {
         let SymbolicVariableKind::Named(named) = symbolic(name) else {
-            unreachable!("{name} is not a name");
+            panic!("{name} is not a name");
         };
         assert_eq!(
             (named.name.span.start, named.name.span.end),
@@ -138,7 +138,7 @@ fn lower_variable_when_names_the_legacy_grammar_gives_no_position_then_positione
 #[test]
 fn lower_variable_when_member_then_the_field_is_positioned_at_its_name() {
     let SymbolicVariableKind::Structured(member) = symbolic("counter . OUT") else {
-        unreachable!("not a member");
+        panic!("not a member");
     };
     assert_eq!((member.field.span.start, member.field.span.end), (10, 13));
 }
@@ -146,7 +146,7 @@ fn lower_variable_when_member_then_the_field_is_positioned_at_its_name() {
 #[test]
 fn lower_variable_when_bit_then_the_index_is_positioned_at_its_digits() {
     let SymbolicVariableKind::BitAccess(bit) = symbolic("a.12") else {
-        unreachable!("not a bit");
+        panic!("not a bit");
     };
     assert_eq!(bit.index.value, 12);
     assert_eq!((bit.index.span.start, bit.index.span.end), (2, 4));
@@ -164,7 +164,7 @@ fn lower_variable_when_partial_access_then_the_size_of_its_letter_and_the_digits
     ];
     for (source, size, index) in rows {
         let SymbolicVariableKind::PartialAccess(partial) = symbolic(source) else {
-            unreachable!("{source} is not a partial access");
+            panic!("{source} is not a partial access");
         };
         assert_eq!(partial.size, size, "{source}");
         assert_eq!(partial.index.value, index, "{source}");
@@ -175,7 +175,7 @@ fn lower_variable_when_partial_access_then_the_size_of_its_letter_and_the_digits
 fn lower_variable_when_partial_access_then_the_index_is_positioned_at_the_digits_after_the_letter()
 {
     let SymbolicVariableKind::PartialAccess(partial) = symbolic("a.%W12") else {
-        unreachable!("not a partial access");
+        panic!("not a partial access");
     };
     assert_eq!((partial.index.span.start, partial.index.span.end), (4, 6));
     assert_eq!(partial.index.span.file_id, file());
@@ -187,7 +187,7 @@ fn lower_variable_when_bit_letter_then_the_same_bit_access_as_the_digit_form() {
     let digit = symbolic("a.3");
     assert_eq!(letter, digit);
     let SymbolicVariableKind::BitAccess(bit) = letter else {
-        unreachable!("not a bit");
+        panic!("not a bit");
     };
     assert_eq!((bit.index.span.start, bit.index.span.end), (4, 5));
 }
@@ -195,7 +195,7 @@ fn lower_variable_when_bit_letter_then_the_same_bit_access_as_the_digit_form() {
 #[test]
 fn lower_variable_when_subscripts_then_each_is_an_expression() {
     let SymbolicVariableKind::Array(array) = symbolic("a[i + 1, 2]") else {
-        unreachable!("not a subscript");
+        panic!("not a subscript");
     };
     assert_eq!(array.subscripts.len(), 2);
     assert!(matches!(array.subscripts[0].kind, ExprKind::BinaryOp(_)));
@@ -213,7 +213,7 @@ fn lower_variable_when_self_reference_then_the_keyword_kind_and_the_range_to_the
             SymbolicVariableKind::Structured(member) => *member.record,
             other => other,
         }) else {
-            unreachable!("{source} is not a self reference");
+            panic!("{source} is not a self reference");
         };
         assert_eq!(self_ref.kind, kind, "{source}");
         assert_eq!(
@@ -248,7 +248,7 @@ fn lower_variable_when_direct_address_then_location_size_address_and_position() 
                     "{source}"
                 );
             }
-            other => unreachable!("{source} is not a direct address: {other:?}"),
+            other => panic!("{source} is not a direct address: {other:?}"),
         }
     }
 }
