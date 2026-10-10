@@ -26,7 +26,13 @@ directory, the git workflow — live in
 - Keep modules focused on a single responsibility
 - **Maximum 1000 lines per module.** Split a module that grows past the limit
   into smaller, focused modules (see
-  [compiler-architecture.md](compiler-architecture.md#size-constraints))
+  [compiler-architecture.md](compiler-architecture.md#size-constraints)). The test
+  `module_size_guard` (`compiler/test/tests/`) enforces it: it fails for a file
+  over the limit that is not in `module_size_allowlist.txt`, for a listed file
+  that has grown past its recorded count, and for a listed file that is missing
+  or within the limit. The list holds the files that were over the limit when the
+  guard was introduced and only shrinks, so a failure is answered by splitting
+  the module, never by raising a number
 
 ## Testing Standards
 
@@ -48,10 +54,14 @@ Examples:
 - **No global state dependencies** - each test must be self-contained
 - **Terminate on failure** - use `assert!`, `assert_eq!`, etc. rather than continuing
 - **One assertion per logical concept** - but multiple assertions for the same concept are fine
-- **No panic! in tests** - Use `assert!` macros instead of `panic!()` for test failures
+- **No panic! to check a value in tests** - Use `assert!` macros instead of `panic!()` for test failures
   - ❌ Bad: `match result { Ok(x) => assert_eq!(x, 5), _ => panic!("Expected Ok") }`
   - ✅ Good: `assert!(result.is_ok()); assert_eq!(result.unwrap(), 5);`
   - ✅ Better: `assert!(matches!(result, Ok(5)))`
+  - `panic!` with a message is allowed in test code only to state an arm that must not
+    happen where no value check fits (`allow-panic-in-tests` in `compiler/clippy.toml`),
+    as `unwrap`/`expect` are. Production code never panics (see
+    [Rust Best Practices](#rust-best-practices))
 
 ### Test Organization
 - Group related tests in the same module
@@ -121,17 +131,50 @@ When writing compiler code:
 ## Code Quality
 
 ### Rust Best Practices
-- Do not suppress clippy warnings with `#[allow(...)]` — fix the underlying code instead. The only acceptable exception is `#[allow(dead_code)]` or `#[allow(unused_*)]` for in-progress code that is not yet wired up; remove these suppressions once the code is complete
-- Never use `panic!`, `unwrap`, `expect`, `todo!`, `unreachable!`, or similar
-  panicking constructs. Return `Result<T, E>` and propagate; for a violated
-  compiler invariant use `Diagnostic::internal_error()` instead of panicking
+- A suppression is `#[expect(<lint>, reason = "...")]`, never `#[allow(...)]`.
+  The build enforces it: `allow_attributes` and `allow_attributes_without_reason`
+  are denied in `[workspace.lints.clippy]`. Reason: `expect` fails the build when the
+  suppressed finding is gone, so a suppression cannot outlive its cause, and the
+  reason is what a reviewer checks. The reason names the invariant or the fact that
+  makes the finding wrong ("needed" is not a reason). Fix the code first; suppress
+  only when the finding is right to ignore. Put the `expect` on the smallest item
+  that carries the finding, not on a crate or a module. A finding that appears only
+  under some configuration (dead code that only the tests use) is
+  `#[cfg_attr(not(test), expect(...))]`, so the other configuration has no
+  unfulfilled expectation. A lint the whole workspace waives is set in the lint
+  table with its reason, as `result_large_err` is. Code that a build script or a
+  macro of this workspace generates follows the same rule
+- Build with the pinned toolchain (`rust-toolchain.toml`). Reason: the findings of
+  clippy change with each release and `warnings = "deny"` makes every one an error,
+  so moving to a newer toolchain is a change of that file, made together with the
+  fixes that release asks for
+- Never use `unwrap`, `expect`, `panic!`, `todo!`, `unimplemented!` or `unreachable!`
+  in non-test code. The build denies exactly these six in `[workspace.lints.clippy]`
+  (tests may use `unwrap`, `expect` and `panic!` through `compiler/clippy.toml`).
+  Return `Result<T, E>` and propagate; for a violated compiler invariant use
+  `Diagnostic::internal_error()`, and in the VM return a `Trap`. Reason: in a
+  compiler a panic loses the diagnostics, and in the VM an executed "unreachable"
+  arm stops the controller instead of reporting a fault. Indexing, slicing and
+  arithmetic overflow can also panic; the build does not check them, so keep them
+  out of code that handles input
+- Do not satisfy a lint or a type error by substituting a default for a failure
+  (`unwrap_or_default`, an empty "successful" result, a sentinel value). Report the
+  failure or propagate it; a default is allowed only when it is the contract (state
+  that in a comment). Reason: a silent wrong value is worse than a reported error.
+  This project fixed several such defects: an out-of-range number stored in an
+  enumeration, and a variable started at 0 instead of the value its type declares
+- Write a narrowing numeric conversion in a checked form (`try_from`) or state the
+  range that makes `as` safe. In the VM the arithmetic of an instruction follows
+  IEC 61131-3, not the preference of a Rust lint. Reason: `as` truncates silently,
+  and a lint that suggests another operation can change what the PLC program
+  computes. (The build does not check this yet.)
 - Use appropriate visibility modifiers (`pub`, `pub(crate)`, etc.)
 - Follow Rust naming conventions and idioms
 
 ### Safety
 - Leverage Rust's safety guarantees
 - **`unsafe` code is rejected at compile time.** The workspace sets `unsafe_code = "deny"` in `[workspace.lints.rust]` (root `compiler/Cargo.toml`), and every member crate inherits it via `[lints] workspace = true`. Any `unsafe` block, function, trait, or impl in IronPLC code fails the build
-- **Do not bypass the check with `#[allow(unsafe_code)]`.** The standards already forbid `#[allow(...)]` suppressions (see [Rust Best Practices](#rust-best-practices)); `unsafe_code` is no exception. `deny` (rather than `forbid`) is the chosen level only so that proc-macros which wrap unsafe internally — e.g. `ctor::ctor`, whose expansion includes `#[allow(unsafe_code)]` — keep working. If a feature appears to require `unsafe`, raise it for discussion
+- **Do not bypass the check with `#[allow(unsafe_code)]` or `#[expect(unsafe_code, ...)]`.** The standards already forbid `#[allow(...)]` suppressions (see [Rust Best Practices](#rust-best-practices)); `unsafe_code` is no exception. `deny` (rather than `forbid`) is the chosen level only so that proc-macros which wrap unsafe internally — e.g. `ctor::ctor`, whose expansion includes `#[allow(unsafe_code)]` — keep working. If a feature appears to require `unsafe`, raise it for discussion
 - Use strong typing to prevent logic errors: wrap primitives in newtypes so the
   compiler rejects mixing them up. Prefer a domain type over a bare `String`
   (e.g., `TypeName` vs `String`) or a bare integer — wrap a `u16` element count
