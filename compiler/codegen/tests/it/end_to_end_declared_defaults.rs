@@ -21,7 +21,7 @@
 //! (`v.m = 'abc'`), whatever it holds, which is not a question of what it
 //! starts at.
 
-use crate::common::try_check_and_run;
+use crate::common::checked::try_check_and_run;
 use ironplc_parser::options::CompilerOptions;
 use rstest::rstest;
 
