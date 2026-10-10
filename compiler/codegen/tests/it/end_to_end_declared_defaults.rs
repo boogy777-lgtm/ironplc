@@ -15,6 +15,11 @@
 //! today). A refusal that stops being one, and a defect that stops being one,
 //! fail the guard: the row has to be taken out of the list, which is how the
 //! table says that support has arrived.
+//!
+//! The value is read on the right of `=`: a member of a structure that is a
+//! string with a length compares unequal to a literal written after it
+//! (`v.m = 'abc'`), whatever it holds, which is not a question of what it
+//! starts at.
 
 use crate::common::try_check_and_run;
 use ironplc_parser::options::CompilerOptions;
@@ -331,7 +336,7 @@ TYPE {TYPES} END_TYPE
 PROGRAM main
   VAR r : BOOL; END_VAR
   VAR {DECL}; END_VAR
-  r := ({PROBE} = {EXPECTED});
+  r := ({EXPECTED} = {PROBE});
 END_PROGRAM
 ",
     options: default_options,
@@ -354,7 +359,7 @@ END_CONFIGURATION
 PROGRAM main
   VAR_EXTERNAL {PLAIN}; END_VAR
   VAR r : BOOL; END_VAR
-  r := ({PROBE} = {EXPECTED});
+  r := ({EXPECTED} = {PROBE});
 END_PROGRAM
 ",
     options: default_options,
@@ -370,7 +375,7 @@ TYPE {TYPES} END_TYPE
 PROGRAM main
   VAR r : BOOL; END_VAR
   VAR RETAIN {DECL}; END_VAR
-  r := ({PROBE} = {EXPECTED});
+  r := ({EXPECTED} = {PROBE});
 END_PROGRAM
 ",
     options: default_options,
@@ -386,7 +391,7 @@ TYPE {TYPES} END_TYPE
 FUNCTION_BLOCK fb
   VAR_OUTPUT ok : BOOL; END_VAR
   VAR {DECL}; END_VAR
-  ok := ({PROBE} = {EXPECTED});
+  ok := ({EXPECTED} = {PROBE});
 END_FUNCTION_BLOCK
 PROGRAM main
   VAR r : BOOL; i : fb; j : fb; END_VAR
@@ -408,7 +413,7 @@ TYPE {TYPES} END_TYPE
 FUNCTION_BLOCK fb
   VAR_INPUT {DECL}; END_VAR
   VAR_OUTPUT ok : BOOL; END_VAR
-  ok := ({PROBE} = {EXPECTED});
+  ok := ({EXPECTED} = {PROBE});
 END_FUNCTION_BLOCK
 PROGRAM main
   VAR r : BOOL; i : fb; END_VAR
@@ -428,7 +433,7 @@ const FB_OUTPUT: Place = Place {
 TYPE {TYPES} END_TYPE
 FUNCTION_BLOCK fb
   VAR_OUTPUT {DECL}; ok : BOOL; END_VAR
-  ok := ({PROBE} = {EXPECTED});
+  ok := ({EXPECTED} = {PROBE});
 END_FUNCTION_BLOCK
 PROGRAM main
   VAR r : BOOL; i : fb; END_VAR
@@ -449,7 +454,7 @@ TYPE {TYPES} END_TYPE
 FUNCTION f : BOOL
   VAR_INPUT unused : INT; END_VAR
   VAR {DECL}; END_VAR
-  f := ({PROBE} = {EXPECTED});
+  f := ({EXPECTED} = {PROBE});
 END_FUNCTION
 PROGRAM main
   VAR r : BOOL; END_VAR
@@ -634,25 +639,12 @@ const REFUSED: &[(Cells, &str)] = &[
 /// value the cell expects, or it is accepted and crashes the compiler. A cell
 /// that stops failing takes its group out of this list.
 const DEFECTS: &[Cells] = &[
-    // A member of a string type with a length loses the value.
-    Cells {
-        kinds: &[STRING_N.name, WSTRING_N.name],
-        columns: ALL_COLUMNS,
-        places: &[STRUCTURE_MEMBER.name],
-    },
     // The elements of an array of enumerations in a structure start at the
     // first value of the enumeration.
     Cells {
         kinds: &[ARRAY_ENUMERATION.name],
         columns: TYPE_COLUMNS,
         places: &[STRUCTURE_MEMBER.name],
-    },
-    // The elements of an array of a structure alias that states members start
-    // at the members of the structure it names.
-    Cells {
-        kinds: &[STRUCTURE.name],
-        columns: &[Column::AliasStatesValue],
-        places: &[ARRAY_ELEMENT.name],
     },
 ];
 

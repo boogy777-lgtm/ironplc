@@ -190,10 +190,17 @@ pub(crate) fn emit_declaration_initial_value(
                         )));
                     }
                     let struct_array_info = struct_array_info.clone();
+                    // Each element starts at the members its element type
+                    // declares, as a structure variable of that type does.
+                    let element_members = crate::compile_struct_init::declared_element_members(
+                        types,
+                        &decl.initializer,
+                    );
                     crate::compile_struct_init::initialize_struct_array_variable(
                         emitter,
                         ctx,
                         &struct_array_info,
+                        &element_members,
                         &decl.identifier.span(),
                     )?;
                 } else if let Some(array_info) = ctx.array_vars.get(id) {
