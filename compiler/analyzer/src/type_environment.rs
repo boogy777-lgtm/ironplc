@@ -362,6 +362,8 @@ pub struct TypeEnvironment {
     /// repeat does not abort the fold that met it: the first declaration is
     /// kept and every other declaration still resolves.
     duplicates: Vec<Diagnostic>,
+    /// Which enumeration declares which value name (see [`enumerations`]).
+    enumerations: enumerations::EnumerationIndex,
 }
 
 /// Whether two spans are the same place in the source. `SourceSpan` compares
@@ -398,6 +400,7 @@ impl TypeEnvironment {
             references: HashMap::new(),
             referenced: HashMap::new(),
             duplicates: Vec::new(),
+            enumerations: enumerations::EnumerationIndex::default(),
         }
     }
 
@@ -413,11 +416,26 @@ impl TypeEnvironment {
         type_name: &TypeName,
         symbol: crate::type_attributes::TypeAttributes,
     ) {
+        self.enter_valid(type_name, symbol, None);
+    }
+
+    /// [`Self::insert_type`] for an alias, which `renames` the type it names.
+    fn enter_valid(
+        &mut self,
+        type_name: &TypeName,
+        symbol: crate::type_attributes::TypeAttributes,
+        renames: Option<TypeId>,
+    ) {
         let function_block = matches!(
             symbol.representation,
             IntermediateType::FunctionBlock { .. }
         );
-        self.enter(type_name, function_block, EntryState::Valid(symbol));
+        self.enter(
+            type_name,
+            function_block,
+            EntryState::Valid(symbol),
+            renames,
+        );
     }
 
     /// Adds a declaration that has an error, which was reported where it is.
@@ -434,6 +452,7 @@ impl TypeEnvironment {
                 span: type_name.span(),
                 function_block: false,
             },
+            None,
         );
     }
 
@@ -447,6 +466,7 @@ impl TypeEnvironment {
                 span: type_name.span(),
                 function_block: true,
             },
+            None,
         );
     }
 
@@ -454,9 +474,18 @@ impl TypeEnvironment {
     /// declaration of a name is kept; a repeat is recorded as a duplicate
     /// unless it is the declaration that is already there, entered as failed
     /// before it was reached (a member of a cycle).
-    fn enter(&mut self, type_name: &TypeName, function_block: bool, state: EntryState) {
+    fn enter(
+        &mut self,
+        type_name: &TypeName,
+        function_block: bool,
+        state: EntryState,
+        renames: Option<TypeId>,
+    ) {
         let Some(existing) = self.id_of(type_name).and_then(|id| self.entries.get(&id)) else {
             let id = self.allocate();
+            if let EntryState::Valid(attributes) = &state {
+                self.enumerations.declare(id, renames, attributes);
+            }
             self.bind(type_name, id, state);
             return;
         };
@@ -599,7 +628,8 @@ impl TypeEnvironment {
             .with_secondary(Label::span(base_type_name.span(), "Base type"))
         })?;
 
-        self.insert_type(type_name, base_intermediate_type.clone());
+        let base = base_intermediate_type.clone();
+        self.enter_valid(type_name, base, self.id_of(base_type_name));
         Ok(())
     }
 
@@ -1215,39 +1245,6 @@ mod tests {
 
     fn attributes(representation: IntermediateType) -> TypeAttributes {
         TypeAttributes::new(SourceSpan::default(), representation)
-    }
-
-    #[test]
-    fn enumerated_values_when_two_enumerations_share_a_value_name_then_each_has_it() {
-        let enumeration = |values: &[&str]| {
-            attributes(IntermediateType::Enumeration {
-                underlying_type: Box::new(IntermediateType::Int {
-                    size: ByteSized::B8,
-                }),
-            })
-            .with_enumerated_values(values.iter().map(|v| Id::from(v)).collect())
-        };
-        let mut env = TypeEnvironment::new();
-        env.insert_type(&TypeName::from("E1"), enumeration(&["U1", "U2"]));
-        env.insert_type(&TypeName::from("E2"), enumeration(&["U1", "U3"]));
-
-        assert_eq!(
-            env.enumerated_values(&TypeName::from("E1")),
-            Some([Id::from("U1"), Id::from("U2")].as_slice())
-        );
-        assert_eq!(
-            env.enumerated_values(&TypeName::from("E2")),
-            Some([Id::from("U1"), Id::from("U3")].as_slice())
-        );
-    }
-
-    #[test]
-    fn enumerated_values_when_not_an_enumeration_then_none() {
-        let mut env = TypeEnvironment::new();
-        env.insert_type(&TypeName::from("FLAG"), attributes(IntermediateType::Bool));
-
-        assert_eq!(env.enumerated_values(&TypeName::from("FLAG")), None);
-        assert_eq!(env.enumerated_values(&TypeName::from("MISSING")), None);
     }
 
     #[test]
@@ -1895,5 +1892,7 @@ mod tests {
     }
 }
 
+mod enumerations;
+pub use enumerations::{Owner, ValueOwners};
 #[cfg(test)]
 mod failed_tests;

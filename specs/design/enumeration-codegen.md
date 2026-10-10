@@ -61,9 +61,9 @@ The design builds on:
 
 **REQ-EN-codegen-030** An `ExprKind::EnumeratedValue` compiles to `LOAD_CONST_I32(ordinal)`, pushing the ordinal onto the stack.
 
-**REQ-EN-codegen-031** A qualified enumeration reference (`COLOR#GREEN`) resolves the ordinal using the explicit type name and value name.
+**REQ-EN-codegen-031** A qualified enumeration reference (`COLOR#GREEN`) resolves the ordinal using the explicit type name and value name. The type name may be an alias of the enumeration, which has the ordinals of the enumeration it names.
 
-**REQ-EN-codegen-032** An unqualified enumeration reference (`GREEN`) resolves the ordinal using the value name alone. The semantic analyzer guarantees unqualified names are unambiguous within scope.
+**REQ-EN-codegen-032** An unqualified enumeration reference (`GREEN`) resolves the ordinal in the enumeration that the type environment says declares the name. The semantic analyzer refuses (P2042) an unqualified name that more than one enumeration declares, so code generation reaches only names that one enumeration declares; a name that several enumerations declare is an internal error and is never resolved by choosing one of them.
 
 **REQ-EN-codegen-033** Enumeration equality comparison (`x = GREEN`) compiles to the same integer comparison sequence as any other integer type: load both operands, emit `EQ_I32`.
 
@@ -132,7 +132,7 @@ Each EnumValueName (variable size):
 
 **REQ-EN-codegen-080** The codegen builds the ordinal map by walking `LibraryElementKind::DataTypeDeclaration(Enumeration(decl))` entries in the library AST. For each `EnumerationDeclaration` whose `spec_init.spec` is `SpecificationKind::Inline(values)`, the codegen enumerates `values.values` and records `(type_name, value_name) → ordinal`.
 
-**REQ-EN-codegen-081** The ordinal map also maintains a reverse lookup from unqualified value names to `(type_name, ordinal)` for resolving unqualified references per REQ-EN-codegen-032.
+**REQ-EN-codegen-081** The ordinal map also records, for each unqualified value name, the enumeration that the type environment says declares it, and resolves unqualified references with the ordinals of that enumeration per REQ-EN-codegen-032.
 
 **REQ-EN-codegen-082** The ordinal map also stores the type declaration's default value (from `spec_init.default`) as a pre-resolved ordinal, used by REQ-EN-codegen-021.
 

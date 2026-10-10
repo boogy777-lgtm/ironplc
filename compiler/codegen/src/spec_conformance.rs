@@ -19,7 +19,7 @@ use ironplc_vm::VmBuffers;
 use spec_test_macro::spec_test;
 
 use crate::compile_enum::{
-    build_enum_ordinal_map, enum_var_type_info, resolve_enum_default_ordinal, resolve_enum_ordinal,
+    enum_var_type_info, ordinal_map_of, resolve_enum_default_ordinal, resolve_enum_ordinal,
 };
 
 // ---------------------------------------------------------------------------
@@ -78,7 +78,7 @@ fn enum_spec_req_en_001_ordinals_are_zero_based_by_declaration_order() {
         "TYPE COLOR : (RED, GREEN, BLUE) := RED; END_TYPE
          PROGRAM main END_PROGRAM",
     );
-    let map = build_enum_ordinal_map(&lib);
+    let map = ordinal_map_of(&lib);
 
     let red = ironplc_dsl::common::EnumeratedValue::new("RED");
     let green = ironplc_dsl::common::EnumeratedValue::new("GREEN");
@@ -298,7 +298,7 @@ fn enum_spec_req_en_031_qualified_reference_resolves() {
         "TYPE COLOR : (RED, GREEN, BLUE) := RED; END_TYPE
          PROGRAM main END_PROGRAM",
     );
-    let map = build_enum_ordinal_map(&lib);
+    let map = ordinal_map_of(&lib);
 
     let mut ev = ironplc_dsl::common::EnumeratedValue::new("GREEN");
     ev.type_name = Some(ironplc_dsl::common::TypeName::from("COLOR"));
@@ -313,7 +313,7 @@ fn enum_spec_req_en_032_unqualified_reference_resolves() {
         "TYPE COLOR : (RED, GREEN, BLUE) := RED; END_TYPE
          PROGRAM main END_PROGRAM",
     );
-    let map = build_enum_ordinal_map(&lib);
+    let map = ordinal_map_of(&lib);
 
     let ev = ironplc_dsl::common::EnumeratedValue::new("BLUE");
     assert_eq!(resolve_enum_ordinal(&map, &ev).unwrap(), 2);
@@ -627,7 +627,7 @@ fn enum_spec_req_en_080_ordinal_map_from_type_declarations() {
          TYPE LEVEL : (LOW, HIGH) := LOW; END_TYPE
          PROGRAM main END_PROGRAM",
     );
-    let map = build_enum_ordinal_map(&lib);
+    let map = ordinal_map_of(&lib);
     // Both type declarations are in the map.
     assert!(map.definitions.contains_key("COLOR"));
     assert!(map.definitions.contains_key("LEVEL"));
@@ -648,7 +648,7 @@ fn enum_spec_req_en_081_reverse_lookup_for_unqualified() {
         "TYPE COLOR : (RED, GREEN, BLUE) := RED; END_TYPE
          PROGRAM main END_PROGRAM",
     );
-    let map = build_enum_ordinal_map(&lib);
+    let map = ordinal_map_of(&lib);
     // Unqualified lookup resolves correctly.
     let ev = ironplc_dsl::common::EnumeratedValue::new("GREEN");
     assert_eq!(resolve_enum_ordinal(&map, &ev).unwrap(), 1);
@@ -661,7 +661,7 @@ fn enum_spec_req_en_082_default_ordinal_from_type_declaration() {
         "TYPE LEVEL : (LOW, MEDIUM, HIGH) := HIGH; END_TYPE
          PROGRAM main END_PROGRAM",
     );
-    let map = build_enum_ordinal_map(&lib);
+    let map = ordinal_map_of(&lib);
     assert_eq!(resolve_enum_default_ordinal(&map, "LEVEL"), 2);
 }
 

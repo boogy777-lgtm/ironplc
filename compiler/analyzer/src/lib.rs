@@ -34,6 +34,7 @@ mod pass_runner;
 mod resolution;
 mod result;
 mod rule_abstract_not_instantiated;
+mod rule_ambiguous_enumerated_value;
 mod rule_assignment_aggregate_type_compat;
 mod rule_bit_and_partial_access_range;
 mod rule_case_bit_string_label;
@@ -136,7 +137,7 @@ pub use semantic_context::{SemanticContext, SemanticContextBuilder};
 pub use type_attributes::TypeAttributes;
 pub use type_category::TypeCategory;
 pub use type_environment::{
-    elementary_type, TypeEnvironment, TypeEnvironmentBuilder, UsageContext,
+    elementary_type, Owner, TypeEnvironment, TypeEnvironmentBuilder, UsageContext, ValueOwners,
 };
 
 #[cfg(test)]

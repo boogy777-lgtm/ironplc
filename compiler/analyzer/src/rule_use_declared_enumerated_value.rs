@@ -296,6 +296,9 @@ END_FUNCTION_BLOCK";
 
     const NONE: &[&str] = &[];
     const P2006: &[&str] = &["P2006"];
+    /// A bare value name that two enumerations declare is refused where it is
+    /// used (`rule_ambiguous_enumerated_value`), whatever its type expects.
+    const P2042: &[&str] = &["P2042"];
 
     #[rstest]
     // Enumerations that share no value name.
@@ -303,8 +306,8 @@ END_FUNCTION_BLOCK";
     #[case::other_enumerations_value("E1 : (A, B); E2 : (C, D);", "v : E1 := C;", P2006)]
     #[case::own_value_of_second("E1 : (A, B); E2 : (C, D);", "v : E2 := C;", NONE)]
     // Enumerations that share a value name: the name is a value of each.
-    #[case::shared_value_of_first("E1 : (U1, U2); E2 : (U1, U3);", "v : E1 := U1;", NONE)]
-    #[case::shared_value_of_second("E1 : (U1, U2); E2 : (U1, U3);", "w : E2 := U1;", NONE)]
+    #[case::shared_value_of_first("E1 : (U1, U2); E2 : (U1, U3);", "v : E1 := U1;", P2042)]
+    #[case::shared_value_of_second("E1 : (U1, U2); E2 : (U1, U3);", "w : E2 := U1;", P2042)]
     #[case::shared_value_not_of_second("E1 : (U1, U2); E2 : (U1, U3);", "w : E2 := U2;", P2006)]
     #[case::shared_value_not_of_first("E1 : (U1, U2); E2 : (U1, U3);", "v : E1 := U3;", P2006)]
     // An alias has the values of the enumeration its declaration names.
@@ -333,7 +336,7 @@ END_FUNCTION_BLOCK";
     #[case::alias_with_shared_value_name(
         "E1 : (U1, U2); E2 : (U1, U3); EA : E2;",
         "v : EA := U1;",
-        NONE
+        P2042
     )]
     #[case::alias_with_shared_value_name_not_of_base(
         "E1 : (U1, U2); E2 : (U1, U3); EA : E2;",
@@ -360,25 +363,30 @@ END_FUNCTION_BLOCK";
     /// A value name in an expression has no enumeration to be checked against:
     /// the type of an unqualified value is not known from its spelling, so
     /// the name is an enumerated value when any enumeration declares it and
-    /// nothing more. This pins what the analysis gives, the same in every run;
-    /// resolving the name from the type the context expects is a separate
-    /// piece of work, and when it exists `y := U2` below is reported.
+    /// nothing more. A name that two enumerations declare is refused where it
+    /// is used (`rule_ambiguous_enumerated_value`); a name that one declares
+    /// is not checked against the type the context expects, which is a
+    /// separate piece of work, and when it exists `y := U2` below is reported.
+    /// The report is the same in every run.
     #[rstest]
-    #[case::compared_with_first_enumeration("IF x = U1 THEN r := TRUE; END_IF;")]
-    #[case::compared_with_second_enumeration("IF y = U1 THEN r := TRUE; END_IF;")]
-    #[case::assigned_to_each_enumeration("x := U1; y := U1;")]
+    #[case::compared_with_first_enumeration("IF x = U1 THEN r := TRUE; END_IF;", P2042)]
+    #[case::compared_with_second_enumeration("IF y = U1 THEN r := TRUE; END_IF;", P2042)]
+    #[case::assigned_to_each_enumeration("x := U1; y := U1;", &["P2042", "P2042"])]
     #[case::case_labels_of_the_selectors_enumeration(
-        "CASE x OF U1: r := TRUE; U2: r := FALSE; END_CASE;"
+        "CASE x OF U1: r := TRUE; U2: r := FALSE; END_CASE;",
+        P2042
     )]
-    #[case::value_of_the_other_enumeration_not_checked("y := U2;")]
-    fn apply_when_shared_value_name_in_expression_then_no_diagnostic_in_every_run(
+    #[case::value_of_the_other_enumeration_not_checked("y := U2;", NONE)]
+    fn apply_when_value_name_in_expression_then_only_a_shared_name_is_reported_in_every_run(
         #[case] body: &str,
+        #[case] expected: &[&str],
     ) {
         let program = format!(
             "TYPE E1 : (U1, U2); E2 : (U1, U3); END_TYPE              PROGRAM main VAR x : E1; y : E2; r : BOOL; END_VAR {body} END_PROGRAM"
         );
+        let expected: Vec<String> = expected.iter().map(|code| code.to_string()).collect();
 
-        assert_eq!(distinct_results(&program), vec![Vec::<String>::new()]);
+        assert_eq!(distinct_results(&program), vec![expected]);
     }
 
     rule_ctx_ok!(

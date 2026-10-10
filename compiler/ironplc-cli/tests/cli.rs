@@ -839,3 +839,85 @@ fn refactor_map_uid_when_old_key_unknown_then_err() -> Result<(), Box<dyn std::e
 
     Ok(())
 }
+
+/// Two enumerations that declare `U1`, and a program that uses the bare name.
+const SHARED_VALUE_BARE: &str = "TYPE E1 : (U2, U1); E2 : (U1, U3); END_TYPE
+PROGRAM main
+VAR v : E1 := U1; w : E2 := U1; x : E1; y : E2; END_VAR
+  x := U1; y := U1;
+END_PROGRAM
+";
+
+/// The same enumerations, with the shared name written with its enumeration
+/// where the language accepts that form and the other names used bare.
+const SHARED_VALUE_QUALIFIED: &str = "TYPE E1 : (U2, U1); E2 : (U1, U3); END_TYPE
+PROGRAM main
+VAR v : E1 := E1#U1; w : E2 := E2#U1; x : E1; y : E2; END_VAR
+  x := U2; y := U3;
+END_PROGRAM
+";
+
+fn st_source(text: &str) -> Result<NamedTempFile, Box<dyn std::error::Error>> {
+    use std::io::Write;
+
+    let mut source = tempfile::Builder::new().suffix(".st").tempfile()?;
+    source.write_all(text.as_bytes())?;
+    Ok(source)
+}
+
+#[test]
+fn check_when_bare_value_name_is_declared_by_two_enumerations_then_p2042(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let source = st_source(SHARED_VALUE_BARE)?;
+    let mut cmd = Command::new(cargo::cargo_bin!("ironplcc"));
+
+    cmd.arg("check").arg(source.path());
+    cmd.assert()
+        .failure()
+        .stderr(predicate::str::contains("P2042"));
+
+    Ok(())
+}
+
+#[test]
+fn compile_when_bare_value_name_is_declared_by_two_enumerations_then_p2042_and_no_container(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let source = st_source(SHARED_VALUE_BARE)?;
+    let output = NamedTempFile::new()?;
+    let mut cmd = Command::new(cargo::cargo_bin!("ironplcc"));
+
+    cmd.arg("compile")
+        .arg(source.path())
+        .arg("--output")
+        .arg(output.path());
+    cmd.assert()
+        .failure()
+        .stderr(predicate::str::contains("P2042"));
+
+    assert_eq!(output.path().metadata()?.len(), 0);
+
+    Ok(())
+}
+
+#[test]
+fn compile_when_shared_value_name_is_qualified_then_creates_output(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let source = st_source(SHARED_VALUE_QUALIFIED)?;
+    let output = NamedTempFile::new()?;
+
+    let mut check = Command::new(cargo::cargo_bin!("ironplcc"));
+    check.arg("check").arg(source.path());
+    check.assert().success().stdout(predicate::str::is_empty());
+
+    let mut compile = Command::new(cargo::cargo_bin!("ironplcc"));
+    compile
+        .arg("compile")
+        .arg(source.path())
+        .arg("--output")
+        .arg(output.path());
+    compile.assert().success();
+
+    assert!(output.path().metadata()?.len() > 0);
+
+    Ok(())
+}
