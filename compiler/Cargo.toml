@@ -89,6 +89,10 @@ mem_forget = "deny"
 let_underscore_future = "deny"
 large_stack_arrays = "deny"
 large_futures = "deny"
+# `let _ = f();` drops a `Result` or another `#[must_use]` value without a
+# word: the error is invisible to the user and to tests. Handle it, or state why
+# ignoring is the contract with `#[expect(clippy::let_underscore_must_use, reason = "...")]`.
+let_underscore_must_use = "deny"
 
 # Reduce per-binary debug-info size. `line-tables-only` retains the file/line
 # tables that `cargo llvm-cov` needs to map coverage hits to source, but drops

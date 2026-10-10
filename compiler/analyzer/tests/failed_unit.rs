@@ -99,6 +99,10 @@ fn analysis_within_limit(
 ) -> Reported {
     let (sender, receiver) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
+        #[expect(
+            clippy::let_underscore_must_use,
+            reason = "send fails only when the receiver has given up at the time limit, and the test then reports that"
+        )]
         let _ = sender.send(analysis(unit, uses, unit_first));
     });
     let result = receiver.recv_timeout(TIME_LIMIT);

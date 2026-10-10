@@ -14,11 +14,11 @@ use crate::frame_stack::{FbCallReturn, Frame, FrameStack};
 use crate::profile::InstructionProfile;
 use crate::scheduler::{ProgramInstanceState, TaskScheduler, TaskState};
 use crate::stack::OperandStack;
+use crate::stack_fmt::StackFmtBuf;
 use crate::str_to_num;
 use crate::string_ops;
 use crate::value::Slot;
 use crate::variable_table::{VariableScope, VariableTable};
-use core::fmt::Write as FmtWrite;
 use ironplc_container::opcode;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
@@ -1459,8 +1459,7 @@ pub(crate) fn execute_with_hook<H: DebugHook>(
                     // because they need access to temp_buf and data_region.
                     opcode::builtin::CONV_I32_TO_STR => {
                         let val = stack.pop()?.as_i32();
-                        let mut fmt_buf = StackFmtBuf::new();
-                        let _ = write!(fmt_buf, "{}", val);
+                        let fmt_buf = StackFmtBuf::of(val);
                         let bytes = fmt_buf.as_bytes();
                         // Numeric formatting always produces ASCII (narrow).
                         let (buf_idx, buf_start) = {
@@ -1483,8 +1482,7 @@ pub(crate) fn execute_with_hook<H: DebugHook>(
                     }
                     opcode::builtin::CONV_U32_TO_STR => {
                         let val = stack.pop()?.as_i32() as u32;
-                        let mut fmt_buf = StackFmtBuf::new();
-                        let _ = write!(fmt_buf, "{}", val);
+                        let fmt_buf = StackFmtBuf::of(val);
                         let bytes = fmt_buf.as_bytes();
                         // Numeric formatting always produces ASCII (narrow).
                         let (buf_idx, buf_start) = {
@@ -1507,8 +1505,7 @@ pub(crate) fn execute_with_hook<H: DebugHook>(
                     }
                     opcode::builtin::CONV_F32_TO_STR => {
                         let val = stack.pop()?.as_f32();
-                        let mut fmt_buf = StackFmtBuf::new();
-                        let _ = write!(fmt_buf, "{}", val);
+                        let fmt_buf = StackFmtBuf::of(val);
                         let bytes = fmt_buf.as_bytes();
                         // Numeric formatting always produces ASCII (narrow).
                         let (buf_idx, buf_start) = {
@@ -3023,40 +3020,6 @@ fn read_i16_le(bytecode: &[u8], pc: &mut usize) -> Result<i16, Trap> {
     let value = i16::from_le_bytes([bytecode[*pc], bytecode[*pc + 1]]);
     *pc = end;
     Ok(value)
-}
-
-/// A small stack-allocated buffer for formatting numbers as strings.
-///
-/// Used by CONV_I32_TO_STR, CONV_U32_TO_STR, and CONV_F32_TO_STR to
-/// avoid heap allocation. 48 bytes is enough for any i32, u32, or f32
-/// decimal representation.
-struct StackFmtBuf {
-    buf: [u8; 48],
-    len: usize,
-}
-
-impl StackFmtBuf {
-    fn new() -> Self {
-        Self {
-            buf: [0u8; 48],
-            len: 0,
-        }
-    }
-
-    fn as_bytes(&self) -> &[u8] {
-        &self.buf[..self.len]
-    }
-}
-
-impl core::fmt::Write for StackFmtBuf {
-    fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        let bytes = s.as_bytes();
-        let remaining = self.buf.len() - self.len;
-        let to_copy = bytes.len().min(remaining);
-        self.buf[self.len..self.len + to_copy].copy_from_slice(&bytes[..to_copy]);
-        self.len += to_copy;
-        Ok(())
-    }
 }
 
 #[cfg(test)]

@@ -33,13 +33,24 @@ struct Input {
 
 type Entry = fn(&Input);
 
+/// Takes the result of an entry. What an entry returns is not under test --
+/// only the steps it reports to the observer are -- so the result is handed
+/// here by name rather than dropped with `let _ =`.
+fn ignore<T>(_result: T) {}
+
 /// Every public entry of a stage, by name.
 const ENTRIES: &[(&str, Entry)] = &[
     ("parse_program", |input| {
-        let _ = parse_program(PROGRAM, &FileId::default(), &input.options);
+        ignore(parse_program(PROGRAM, &FileId::default(), &input.options));
     }),
     ("parse_st_statements", |input| {
-        let _ = parse_st_statements("x := 1;", &FileId::default(), &input.options, 0, 0);
+        ignore(parse_st_statements(
+            "x := 1;",
+            &FileId::default(),
+            &input.options,
+            0,
+            0,
+        ));
     }),
     ("syntax::parse_source_file", |_| {
         let _ = parse_source_file(PROGRAM, &ParseOptions::default());
@@ -51,22 +62,22 @@ const ENTRIES: &[(&str, Entry)] = &[
         let _ = parse_expression("1 + 2", &ParseOptions::default());
     }),
     ("analyze", |input| {
-        let _ = analyze(&[&input.library], &input.options);
+        ignore(analyze(&[&input.library], &input.options));
     }),
     ("resolve_types", |input| {
-        let _ = resolve_types(&[&input.library], &input.options);
+        ignore(resolve_types(&[&input.library], &input.options));
     }),
     ("codegen::compile", |input| {
         let (library, context) = &input.analyzed;
-        let _ = ironplc_codegen::compile(
+        ignore(ironplc_codegen::compile(
             library,
             context,
             &CodegenOptions::from(&input.options),
             &EmptyLookup,
-        );
+        ));
     }),
     ("write_to_string", |input| {
-        let _ = write_to_string(&input.library);
+        ignore(write_to_string(&input.library));
     }),
 ];
 

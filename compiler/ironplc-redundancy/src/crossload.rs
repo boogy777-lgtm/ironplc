@@ -377,6 +377,10 @@ pub fn accept_offer(
 /// effort by construction: the caller's sequencing keeps the host from
 /// advancing between the refusal and this call.
 fn rollback(host: &mut RuntimeHost) {
+    #[expect(
+        clippy::let_underscore_must_use,
+        reason = "cancel refuses only when no candidate is staged or the candidate is active; the sequencing keeps the host from advancing, so the rollback has nothing left to undo"
+    )]
     let _ = host.cancel();
 }
 

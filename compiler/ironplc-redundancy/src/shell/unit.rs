@@ -195,9 +195,8 @@ impl Unit {
             pong_seq,
         };
         // The loopback binding's send is infallible (its
-        // `PortError::Closed` is never constructed); a frame the link
-        // drops is the partition model, not an error to act on.
-        let _ = self.port.send(&packet.encode());
+        // `PortError::Closed` is never constructed).
+        self.port.send_lossy(&packet.encode());
         event
     }
 }

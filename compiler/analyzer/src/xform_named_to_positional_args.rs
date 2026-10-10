@@ -780,7 +780,7 @@ END_PROGRAM
             target: Id::from(name),
             found: None,
         };
-        let _ = finder.walk(library);
+        finder.walk(library).expect("the finder cannot fail");
         finder.found
     }
 }

@@ -19,6 +19,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::collections::BTreeSet;
 use std::str::FromStr;
 
+use crate::lsp_client::send_to_client;
 use crate::lsp_project::{LspProject, UriKey};
 use crate::semantic_tokens::TOKEN_TYPE_LEGEND;
 use ironplc_project::disassemble;
@@ -376,7 +377,7 @@ impl<'a> LspServer<'a> {
             };
 
             let response = lsp_server::Response::new_ok(req_id, result);
-            let _ = self.sender.send(lsp_server::Message::Response(response));
+            send_to_client(self.sender, lsp_server::Message::Response(response));
             return "ironplc/disassemble";
         }
 
@@ -387,7 +388,7 @@ impl<'a> LspServer<'a> {
 
             let result = self.project.run_load(source, cycle_time_us);
             let response = lsp_server::Response::new_ok(req_id, result);
-            let _ = self.sender.send(lsp_server::Message::Response(response));
+            send_to_client(self.sender, lsp_server::Message::Response(response));
             return "ironplc/run";
         }
 
@@ -397,14 +398,14 @@ impl<'a> LspServer<'a> {
 
             let result = self.project.run_step(scans);
             let response = lsp_server::Response::new_ok(req_id, result);
-            let _ = self.sender.send(lsp_server::Message::Response(response));
+            send_to_client(self.sender, lsp_server::Message::Response(response));
             return "ironplc/step";
         }
 
         if _req.method == "ironplc/stop" {
             let result = self.project.run_stop();
             let response = lsp_server::Response::new_ok(req_id, result);
-            let _ = self.sender.send(lsp_server::Message::Response(response));
+            send_to_client(self.sender, lsp_server::Message::Response(response));
             return "ironplc/stop";
         }
 
@@ -436,8 +437,7 @@ impl<'a> LspServer<'a> {
     {
         trace!("Response for method {}", R::METHOD);
         let response = lsp_server::Response::new_ok(request_id, params);
-        // A send failure means the client disconnected; nothing to answer to.
-        let _ = self.sender.send(Message::Response(response));
+        send_to_client(self.sender, Message::Response(response));
     }
 
     fn handle_notification(&mut self, notification: lsp_server::Notification) -> &'static str {
@@ -515,8 +515,7 @@ impl<'a> LspServer<'a> {
         N::Params: Serialize,
     {
         let notification = lsp_server::Notification::new(N::METHOD.to_string(), params);
-        // A send failure means the client disconnected; nothing to answer to.
-        let _ = self.sender.send(Message::Notification(notification));
+        send_to_client(self.sender, Message::Notification(notification));
     }
 }
 

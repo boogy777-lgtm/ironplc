@@ -30,6 +30,7 @@ use ironplc_dsl::textual::{Expr, ExprKind, StmtKind, Variable};
 use ironplc_dsl::visitor::Visitor;
 use ironplc_syntax::lower::oop::Member;
 use ironplc_syntax::lower::var_blocks::{Block, InstanceInit};
+use std::convert::Infallible;
 use std::fmt::Debug;
 
 /// A span as compared: offsets and file.
@@ -59,16 +60,16 @@ pub struct Collector {
     blocks: Vec<usize>,
 }
 
-impl Visitor<()> for Collector {
+impl Visitor<Infallible> for Collector {
     type Value = ();
 
-    fn visit_source_span(&mut self, node: &SourceSpan) -> Result<(), ()> {
+    fn visit_source_span(&mut self, node: &SourceSpan) -> Result<(), Infallible> {
         self.spans
             .push((node.start, node.end, node.file_id.to_string()));
         Ok(())
     }
 
-    fn visit_var_decl(&mut self, node: &VarDecl) -> Result<(), ()> {
+    fn visit_var_decl(&mut self, node: &VarDecl) -> Result<(), Infallible> {
         self.blocks.push(node.block);
         node.recurse_visit(self)
     }
@@ -81,38 +82,38 @@ pub trait Subject: Debug {
 
 impl Subject for ConstantKind {
     fn walk(&self, collector: &mut Collector) {
-        let _ = self.recurse_visit(collector);
+        let Ok(()) = self.recurse_visit(collector);
     }
 }
 
 impl Subject for Expr {
     fn walk(&self, collector: &mut Collector) {
-        let _ = self.recurse_visit(collector);
+        let Ok(()) = self.recurse_visit(collector);
     }
 }
 
 impl Subject for Variable {
     fn walk(&self, collector: &mut Collector) {
-        let _ = self.recurse_visit(collector);
+        let Ok(()) = self.recurse_visit(collector);
     }
 }
 
 impl Subject for DataTypeDeclarationKind {
     fn walk(&self, collector: &mut Collector) {
-        let _ = self.recurse_visit(collector);
+        let Ok(()) = self.recurse_visit(collector);
     }
 }
 
 impl Subject for InitialValueAssignmentKind {
     fn walk(&self, collector: &mut Collector) {
-        let _ = self.recurse_visit(collector);
+        let Ok(()) = self.recurse_visit(collector);
     }
 }
 
 impl Subject for Vec<StmtKind> {
     fn walk(&self, collector: &mut Collector) {
         for statement in self {
-            let _ = statement.recurse_visit(collector);
+            let Ok(()) = statement.recurse_visit(collector);
         }
     }
 }
@@ -120,14 +121,14 @@ impl Subject for Vec<StmtKind> {
 impl Subject for Vec<Network> {
     fn walk(&self, collector: &mut Collector) {
         for network in self {
-            let _ = network.recurse_visit(collector);
+            let Ok(()) = network.recurse_visit(collector);
         }
     }
 }
 
 impl Subject for Member {
     fn walk(&self, collector: &mut Collector) {
-        let _ = match self {
+        let Ok(()) = match self {
             Member::Method(method) => method.recurse_visit(collector),
             Member::Property(property) => property.recurse_visit(collector),
         };
@@ -137,13 +138,13 @@ impl Subject for Member {
 impl Subject for Block {
     fn walk(&self, collector: &mut Collector) {
         for variable in &self.variables {
-            let _ = collector.visit_var_decl(variable);
+            let Ok(()) = collector.visit_var_decl(variable);
         }
         for access in &self.access {
-            let _ = access.recurse_visit(collector);
+            let Ok(()) = access.recurse_visit(collector);
         }
         for instance in &self.instances {
-            let _ = match instance {
+            let Ok(()) = match instance {
                 InstanceInit::FunctionBlock(init) => init.recurse_visit(collector),
                 InstanceInit::Located(init) => init.recurse_visit(collector),
             };
@@ -289,7 +290,7 @@ fn mask_property(property: &mut PropertyDeclaration) {
 
 impl Subject for Library {
     fn walk(&self, collector: &mut Collector) {
-        let _ = collector.walk(self);
+        let Ok(()) = collector.walk(self);
     }
 }
 
@@ -421,16 +422,16 @@ mod tests {
         let library = library(&format!("TYPE t : INT := {source}; END_TYPE"));
         let mut found = Vec::new();
         let mut collector = ConstantCollector(&mut found);
-        let _ = collector.walk(&library);
+        let Ok(()) = collector.walk(&library);
         found.remove(0)
     }
 
     struct ConstantCollector<'a>(&'a mut Vec<ConstantKind>);
 
-    impl Visitor<()> for ConstantCollector<'_> {
+    impl Visitor<Infallible> for ConstantCollector<'_> {
         type Value = ();
 
-        fn visit_constant_kind(&mut self, node: &ConstantKind) -> Result<(), ()> {
+        fn visit_constant_kind(&mut self, node: &ConstantKind) -> Result<(), Infallible> {
             self.0.push(node.clone());
             Ok(())
         }

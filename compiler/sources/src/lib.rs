@@ -73,6 +73,10 @@ mod spec_conformance;
 
 #[cfg(test)]
 #[ctor::ctor(unsafe)]
+#[expect(
+    clippy::let_underscore_must_use,
+    reason = "try_init fails only when a logger is already installed, which is what the tests want to keep"
+)]
 fn init_test_logger() {
     let _ = env_logger::builder()
         .is_test(true)

@@ -65,7 +65,9 @@ END_VAR]]></Declaration>
         }
     }
     let mut collector = SpanCollector { spans: &mut spans };
-    let _ = collector.fold_library(result);
+    collector
+        .fold_library(result)
+        .expect("the collector cannot fail");
 
     // All spans should point to positions within the XML document that
     // fall inside CDATA sections
@@ -785,7 +787,9 @@ fn collect_spans(library: Library) -> Vec<SourceSpan> {
 
     let mut spans = Vec::new();
     let mut collector = SpanCollector { spans: &mut spans };
-    let _ = collector.fold_library(library);
+    collector
+        .fold_library(library)
+        .expect("the collector cannot fail");
     spans
 }
 

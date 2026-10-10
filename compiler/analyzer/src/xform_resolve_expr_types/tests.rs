@@ -93,7 +93,9 @@ fn collect_assignment_types(resolved: &Resolved) -> Vec<Option<ironplc_dsl::comm
         types: &resolved.types,
         names: vec![],
     };
-    let _ = collector.fold_library(resolved.library.clone());
+    collector
+        .fold_library(resolved.library.clone())
+        .expect("the collector cannot fail");
     collector.names
 }
 
@@ -115,7 +117,9 @@ fn collect_all_expr_types(resolved: &Resolved) -> Vec<Option<ironplc_dsl::common
         types: &resolved.types,
         names: vec![],
     };
-    let _ = collector.fold_library(resolved.library.clone());
+    collector
+        .fold_library(resolved.library.clone())
+        .expect("the collector cannot fail");
     collector.names
 }
 

@@ -7,6 +7,7 @@ extern crate ironplc_parser;
 pub mod cli;
 pub mod logger;
 pub mod lsp;
+mod lsp_client;
 pub mod lsp_project;
 pub mod lsp_runner;
 mod semantic_tokens;
@@ -19,6 +20,10 @@ mod test_helpers;
 
 #[cfg(test)]
 #[ctor::ctor(unsafe)]
+#[expect(
+    clippy::let_underscore_must_use,
+    reason = "try_init fails only when a logger is already installed, which is what the tests want to keep"
+)]
 fn init_test_logger() {
     let _ = env_logger::builder()
         .is_test(true)
