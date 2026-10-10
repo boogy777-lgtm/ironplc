@@ -34,12 +34,12 @@ use super::LowerCx;
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode};
 use ironplc_dsl::common::{
     ArrayBounds, ArrayDeclaration, ArrayElementType, ArraySubranges, DataTypeDeclarationKind,
-    ElementaryTypeName, EnumeratedSpecificationInit, EnumeratedSpecificationKind, EnumeratedValue,
-    EnumerationDeclaration, LateBoundDeclaration, ParamsDeclaration, ParamsSpecification,
-    RefSyntax, ReferenceDeclaration, ReferenceTarget, SimpleDeclaration, SpecificationKind,
-    StringDeclaration, StringSpecification, StringType, StructureDeclaration,
-    StructureElementDeclaration, SubrangeDeclaration, SubrangeSpecification, TypeName,
-    UnionDeclaration,
+    ElementaryTypeName, EnumeratedDefault, EnumeratedSpecificationInit,
+    EnumeratedSpecificationKind, EnumeratedValue, EnumerationDeclaration, LateBoundDeclaration,
+    ParamsDeclaration, ParamsSpecification, RefSyntax, ReferenceDeclaration, ReferenceTarget,
+    SimpleDeclaration, SpecificationKind, StringDeclaration, StringSpecification, StringType,
+    StructureDeclaration, StructureElementDeclaration, SubrangeDeclaration, SubrangeSpecification,
+    TypeName, UnionDeclaration,
 };
 use ironplc_dsl::construct::structure_alias;
 use ironplc_dsl::diagnostic::Diagnostic;
@@ -358,12 +358,17 @@ fn structure_initialization(
     ))
 }
 
-/// The value written as the default of an enumeration, when there is one.
-fn default_value(cx: &LowerCx, parts: &Parts) -> Result<Option<EnumeratedValue>, Diagnostic> {
+/// The value written as the default of an enumeration, when there is one: a
+/// value of it, or a number (`:= 1`), whose being the number of a value the
+/// analysis decides.
+fn default_value(cx: &LowerCx, parts: &Parts) -> Result<Option<EnumeratedDefault>, Diagnostic> {
     parts
         .value
         .as_ref()
-        .map(|value| lower_enumerated_value(cx, value))
+        .map(|value| match parts.init {
+            Init::Value => lower_integer_value(cx, parts, value).map(EnumeratedDefault::Number),
+            _ => lower_enumerated_value(cx, value).map(EnumeratedDefault::Value),
+        })
         .transpose()
 }
 
@@ -437,7 +442,7 @@ const DECLARATIONS: &[Row<DataTypeDeclarationKind>] = &[
     row(&[Form::Named], &[Init::Struct], structure_initialization),
     row(
         &[Form::Enumeration],
-        &[Init::None, Init::Name, Init::Qualified],
+        &[Init::None, Init::Name, Init::Qualified, Init::Value],
         enumeration,
     ),
     row(

@@ -290,6 +290,10 @@ mod tests {
             underlying_type: Box::new(IntermediateType::Int {
                 size: crate::intermediate_type::ByteSized::B8,
             }),
+            base_type: Box::new(IntermediateType::Int {
+                size: crate::intermediate_type::ByteSized::B16,
+            }),
+            numbers: vec![],
         });
         assert_eq!(kind, TypeSymbolKind::Enumeration);
     }

@@ -118,7 +118,10 @@ fn is_compatible(constant: &ConstantKind, target: &IntermediateType) -> bool {
             matches!(constant, ConstantKind::DateAndTime(lit) if fits_width(lit.width, size))
         }
         IntermediateType::Subrange { base_type, .. } => is_compatible(constant, base_type),
-        // Complex types (Enumeration, Structure, Array, FunctionBlock, Function)
+        // A number is the one constant an enumeration holds, and whether it is
+        // the number of one of its values is for `rule_constant_range`.
+        IntermediateType::Enumeration { .. } => matches!(constant, ConstantKind::IntegerLiteral(_)),
+        // Complex types (Structure, Array, FunctionBlock, Function)
         // use different InitialValueAssignmentKind variants, not Simple.
         _ => true,
     }
@@ -251,6 +254,35 @@ END_PROGRAM"
 PROGRAM main
 VAR
     dummy : INT := 10.0;
+END_VAR
+END_PROGRAM",
+        Problem::InitializerTypeMismatch
+    );
+
+    rule_ctx_ok!(
+        apply_when_enumeration_var_with_integer_literal_then_ok,
+        "
+TYPE
+    Level : (Low, High);
+END_TYPE
+
+PROGRAM main
+VAR
+    x : Level := 1;
+END_VAR
+END_PROGRAM"
+    );
+
+    rule_ctx_err1!(
+        apply_when_enumeration_var_with_real_literal_then_error,
+        "
+TYPE
+    Level : (Low, High);
+END_TYPE
+
+PROGRAM main
+VAR
+    x : Level := 1.5;
 END_VAR
 END_PROGRAM",
         Problem::InitializerTypeMismatch

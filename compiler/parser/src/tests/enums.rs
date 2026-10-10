@@ -102,7 +102,11 @@ END_TYPE";
     assert!(values.values.iter().all(|v| v.explicit_value.is_none()));
     assert!(decl.spec_init.underlying_type.is_none());
     assert_eq!(
-        decl.spec_init.default.as_ref().map(|d| d.value.to_string()),
+        decl.spec_init
+            .default
+            .as_ref()
+            .and_then(|d| d.as_value())
+            .map(|d| d.value.to_string()),
         Some("RED".to_string())
     );
 }

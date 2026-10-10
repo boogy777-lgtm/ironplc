@@ -43,7 +43,58 @@ To fix this error, use a value that is defined in the enumeration:
      END_VAR
    END_FUNCTION_BLOCK
 
+Integer Constants
+-----------------
+
+The same error occurs when an integer constant is stored into an enumeration
+and no value of the enumeration has that number. An enumeration holds its own
+values, so a constant is accepted only when it is the number of one of them:
+
+.. code-block::
+
+   TYPE
+       TrafficLight : (Red, Yellow, Green);
+   END_TYPE
+
+   PROGRAM main
+       VAR
+           light : TrafficLight;
+       END_VAR
+
+       light := 7;  (* Error: no value of TrafficLight is numbered 7 *)
+   END_PROGRAM
+
+``Red`` is 0, ``Yellow`` is 1 and ``Green`` is 2, so ``7`` is not a value of
+``TrafficLight``. The error is the same wherever the constant is stored: an
+assignment, an initial value, the default of a type, a member or an element of
+an initializer, an argument, or the result of a function. A negative constant
+and a constant that folds to one, such as ``3 + 4``, are reported the same way.
+
+To fix this error, store the number of a value, or the value itself:
+
+.. code-block::
+
+   TYPE
+       TrafficLight : (Red, Yellow, Green);
+   END_TYPE
+
+   PROGRAM main
+       VAR
+           light : TrafficLight;
+       END_VAR
+
+       light := 2;      (* Correct: 2 is the number of Green *)
+       light := Green;  (* Correct: the value itself *)
+   END_PROGRAM
+
+A value that has an explicit number (``(Low := 10, High := 20)``) is numbered
+by it: ``20`` is the number of ``High`` and ``1`` is the number of no value.
+An integer that is not a constant is reported as a type mismatch instead (see
+:doc:`P4035` and :doc:`P4026`).
+
 See Also
 --------
 
 - :doc:`P2042` (a value name that more than one enumeration declares)
+- :doc:`/reference/language/data-types/derived/enumerated-types` (the rules for
+  integers and enumerations)

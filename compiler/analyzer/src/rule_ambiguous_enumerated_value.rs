@@ -134,7 +134,7 @@ impl Visitor<Infallible> for RuleAmbiguousEnumeratedValue<'_> {
                 .spec_init
                 .default
                 .as_ref()
-                .map_or(Ok(()), |value| self.visit_enumerated_value(value)),
+                .map_or(Ok(()), |value| self.visit_enumerated_default(value)),
         }
     }
 

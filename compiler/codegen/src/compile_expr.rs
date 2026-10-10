@@ -25,7 +25,7 @@ use super::compile_call::compile_function_call;
 use super::compile_method::compile_method_call_expression;
 use super::compile_short_circuit::{compile_short_circuit, ShortCircuitOp};
 use super::compile_string::compile_string_compare;
-use super::type_info::{expr_operand_name, expr_representation, expr_type_info};
+use super::type_info::{expr_operand_name, expr_own_op_type, expr_representation, expr_type_info};
 use crate::emit::Emitter;
 use crate::string_width::compare_is_string;
 
@@ -133,16 +133,14 @@ pub(crate) fn compile_expr(
         // A variable read at a different width is read at its own and
         // converted: loading an INT's slot as a REAL would reinterpret its
         // bits, and loading a UDINT's as a LINT would sign-extend it.
-        ExprKind::Variable(variable) => {
-            match crate::compile_arith::numeric_op_type(expr_operand_name(ctx, expr).as_ref()) {
-                Some(own) if own.0 != op_type.0 => {
-                    compile_variable_read(emitter, ctx, variable, own)?;
-                    crate::compile_arith::convert(emitter, own, op_type);
-                    Ok(())
-                }
-                _ => compile_variable_read(emitter, ctx, variable, op_type),
+        ExprKind::Variable(variable) => match expr_own_op_type(ctx, expr) {
+            Some(own) if own.0 != op_type.0 => {
+                compile_variable_read(emitter, ctx, variable, own)?;
+                crate::compile_arith::convert(emitter, own, op_type);
+                Ok(())
             }
-        }
+            _ => compile_variable_read(emitter, ctx, variable, op_type),
+        },
         ExprKind::BinaryOp(binary) => {
             let result = expr_operand_name(ctx, expr);
             compile_binary_arith(emitter, ctx, binary, result.as_ref(), op_type)

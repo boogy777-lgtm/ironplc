@@ -267,7 +267,7 @@ fn lower_enumeration_when_values_explicit_values_and_base_type_then_each_part() 
         enumeration
             .spec_init
             .default
-            .map(|value| value.value.to_string()),
+            .and_then(|default| default.as_value().map(|value| value.value.to_string())),
         Some("B".to_string())
     );
 }
@@ -425,10 +425,11 @@ fn lower_type_declaration_when_enumeration_then_enumeration_declaration_of_inlin
         declaration("(Red, Green) := Color#Red"),
         DataTypeDeclarationKind::Enumeration
     );
-    let value = enumeration.spec_init.default.expect("a default");
+    let default = enumeration.spec_init.default.expect("a default");
+    let value = default.as_value().expect("a value");
     assert_eq!(value.value.to_string(), "Red");
     assert_eq!(
-        value.type_name.map(|name| name.to_string()),
+        value.type_name.as_ref().map(|name| name.to_string()),
         Some("Color".to_string())
     );
     assert!(enumeration.spec_init.underlying_type.is_none());
@@ -444,7 +445,7 @@ fn lower_type_declaration_when_named_type_with_a_value_then_enumeration_of_that_
             enumeration
                 .spec_init
                 .default
-                .map(|value| value.value.to_string()),
+                .and_then(|default| default.as_value().map(|value| value.value.to_string())),
             Some("Red".to_string()),
             "{text}"
         );
@@ -546,7 +547,6 @@ fn lower_type_declaration_when_value_does_not_fit_the_type_then_initializer_mism
         "STRING[5] := 5",
         "INT := [1, 2]",
         "INT := Color#Red",
-        "(A, B) := 5",
         "PARAMS(2) OF INT := 5",
         "INT(1..5) := 1.5",
         "INT(1..5) := INT#5",
@@ -566,9 +566,30 @@ fn lower_type_declaration_when_value_does_not_fit_the_type_then_initializer_mism
     }
 }
 
+/// The number written as the default of the enumeration in `text`.
+fn default_number(text: &str) -> i64 {
+    let enumeration = variant!(declaration(text), DataTypeDeclarationKind::Enumeration);
+    let default = enumeration.spec_init.default.expect("a default");
+    assert!(default.as_value().is_none());
+    match default {
+        EnumeratedDefault::Number(number) => number.to_i64(),
+        EnumeratedDefault::Value(_) => 0,
+    }
+}
+
 #[test]
-fn lower_type_declaration_when_enumeration_default_is_a_number_then_initializer_mismatch() {
-    let error = rejection("(A, B) := 5");
+fn lower_type_declaration_when_enumeration_default_is_a_number_then_the_number_is_the_default() {
+    assert_eq!(default_number("(A, B) := 1"), 1);
+}
+
+#[test]
+fn lower_type_declaration_when_enumeration_default_is_negative_then_the_number_is_the_default() {
+    assert_eq!(default_number("(A, B) := -1"), -1);
+}
+
+#[test]
+fn lower_type_declaration_when_enumeration_default_is_not_an_integer_then_initializer_mismatch() {
+    let error = rejection("(A, B) := 1.5");
     assert_eq!(error.code, Problem::InitializerTypeMismatch.code());
     assert!(error
         .primary

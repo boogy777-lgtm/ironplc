@@ -90,7 +90,7 @@ use crate::{
     rule_support::{run_rule, DiagnosticVisitor},
     semantic_context::SemanticContext,
     type_environment::TypeEnvironment,
-    value_range,
+    value_range::{self, ValueSet},
     variable_type::{self, Declarations, Declared},
 };
 
@@ -146,8 +146,8 @@ impl RuleConstantRange<'_> {
         // real -- a duration, a string -- has no range to check.
         match constant {
             ConstantKind::IntegerLiteral(literal) => {
-                if let Some(range) = value_range::of(expected) {
-                    self.check_literal(literal, range);
+                if let Some(numbers) = value_range::numbers_of(expected) {
+                    self.check_literal(literal, &numbers);
                 }
             }
             ConstantKind::RealLiteral(literal) => self.check_real_literal(literal, expected),
@@ -202,28 +202,27 @@ impl RuleConstantRange<'_> {
         else {
             return;
         };
-        if let Some(range) = value_range::of(&attributes.representation) {
-            self.check_literal(literal, range);
+        if let Some((minimum, maximum)) = value_range::of(&attributes.representation) {
+            self.check_literal(literal, &ValueSet::Range(minimum, maximum));
         }
     }
 
-    /// Reports `literal` when its value is outside `range`.
-    fn check_literal(&mut self, literal: &IntegerLiteral, range: (i128, i128)) {
-        self.check_signed(&literal.value, range);
+    /// Reports `literal` when its value is not one `numbers` holds.
+    fn check_literal(&mut self, literal: &IntegerLiteral, numbers: &ValueSet) {
+        self.check_signed(&literal.value, numbers);
     }
 
     /// Reports the value that `is_neg` and `magnitude` spell at `span` when
-    /// it is outside `range`.
+    /// `numbers` does not hold it.
     fn check_magnitude(
         &mut self,
         span: SourceSpan,
         is_neg: bool,
         magnitude: u128,
-        range: (i128, i128),
+        numbers: &ValueSet,
     ) {
-        let (minimum, maximum) = range;
         let value = signed_value(is_neg, magnitude);
-        if value.is_some_and(|value| value >= minimum && value <= maximum) {
+        if value.is_some_and(|value| numbers.holds(value)) {
             return;
         }
 
@@ -232,7 +231,24 @@ impl RuleConstantRange<'_> {
         let sign = if is_neg { "-" } else { "" };
         let reported =
             value.map_or_else(|| format!("{sign}{magnitude}"), |value| value.to_string());
-        self.report_out_of_range(span, &reported, range);
+        match numbers {
+            ValueSet::Range(minimum, maximum) => {
+                self.report_out_of_range(span, &reported, (*minimum, *maximum))
+            }
+            ValueSet::Numbers(_) => self.report_not_a_value(span, &reported),
+        }
+    }
+
+    /// Reports the number spelled `reported` as the number of no value of the
+    /// enumeration it is stored into.
+    fn report_not_a_value(&mut self, span: SourceSpan, reported: &String) {
+        self.diagnostics.push(
+            Diagnostic::problem(
+                Problem::EnumValueNotDefined,
+                Label::span(span, "Expected the number of a value in the enumeration"),
+            )
+            .with_context("value", reported),
+        );
     }
 
     /// Reports the value spelled `reported` as outside `range`.
@@ -269,14 +285,24 @@ impl RuleConstantRange<'_> {
     fn check_expr(&mut self, expr: &Expr, expected: &IntermediateType) {
         match &expr.kind {
             ExprKind::Const(constant) => self.check_constant(constant, expected),
-            ExprKind::BinaryOp(binary) => {
+            ExprKind::BinaryOp(binary) if self.pushes_through_operators(expected) => {
                 self.check_expr(&binary.left, expected);
                 self.check_expr(&binary.right, expected);
             }
-            ExprKind::UnaryOp(unary) => self.check_expr(&unary.term, expected),
+            ExprKind::UnaryOp(unary) if self.pushes_through_operators(expected) => {
+                self.check_expr(&unary.term, expected)
+            }
             ExprKind::Expression(inner) => self.check_expr(inner, expected),
             _ => {}
         }
+    }
+
+    /// Whether the numbers `expected` holds are pushed down through operators
+    /// to the literals beneath them: a range is, and a list of numbers is not
+    /// (see [`ValueSet::is_listed`]). A type that holds no numbers does, as a
+    /// real does.
+    fn pushes_through_operators(&self, expected: &IntermediateType) -> bool {
+        value_range::numbers_of(expected).is_none_or(|numbers| !numbers.is_listed())
     }
 
     /// The type an assignment writes through `target`.
@@ -527,12 +553,24 @@ impl RuleConstantRange<'_> {
     ///
     /// `IF c = 200` compares at `c`'s type, so a literal that `c` can never
     /// hold makes the comparison unsatisfiable rather than false.
+    ///
+    /// Only a type with a numeric range is asked: whether `a = 7` is an error
+    /// for an enumeration `a` none of whose values is numbered 7 is not
+    /// decided, so a comparison is not held to the numbers of an enumeration
+    /// as a store is.
     fn check_compare(&mut self, compare: &CompareExpr) {
-        if let Some(left) = self.type_environment.representation_of_expr(&compare.left) {
-            self.check_expr(&compare.right, left);
+        let ranged = |expr: &Expr| {
+            self.type_environment
+                .representation_of_expr(expr)
+                .filter(|representation| value_range::of(representation).is_some())
+                .cloned()
+        };
+        let (left, right) = (ranged(&compare.left), ranged(&compare.right));
+        if let Some(left) = left {
+            self.check_expr(&compare.right, &left);
         }
-        if let Some(right) = self.type_environment.representation_of_expr(&compare.right) {
-            self.check_expr(&compare.left, right);
+        if let Some(right) = right {
+            self.check_expr(&compare.left, &right);
         }
     }
 
@@ -548,9 +586,10 @@ impl RuleConstantRange<'_> {
         let Some(selector) = self.type_environment.representation_of_expr(&node.selector) else {
             return;
         };
-        let Some(range) = value_range::of(selector) else {
+        let Some((minimum, maximum)) = value_range::of(selector) else {
             return;
         };
+        let range = ValueSet::Range(minimum, maximum);
 
         for selection in node
             .statement_groups
@@ -558,15 +597,15 @@ impl RuleConstantRange<'_> {
             .flat_map(|group| group.selectors.iter())
         {
             match selection {
-                CaseSelectionKind::SignedInteger(value) => self.check_signed(value, range),
+                CaseSelectionKind::SignedInteger(value) => self.check_signed(value, &range),
                 CaseSelectionKind::BitStringLiteral(literal) => {
-                    self.check_magnitude(literal.value.span(), false, literal.value.value, range)
+                    self.check_magnitude(literal.value.span(), false, literal.value.value, &range)
                 }
                 CaseSelectionKind::Subrange(subrange) => {
                     // A bound that names a constant has no value here.
                     for bound in [&subrange.start, &subrange.end] {
                         if let Some(value) = bound.as_signed_integer() {
-                            self.check_signed(value, range);
+                            self.check_signed(value, &range);
                         }
                     }
                 }
@@ -577,27 +616,37 @@ impl RuleConstantRange<'_> {
         }
     }
 
-    /// Reports the signed integer `value` when it is outside `range`.
-    fn check_signed(&mut self, value: &SignedInteger, range: (i128, i128)) {
-        self.check_magnitude(value.value.span(), value.is_neg, value.value.value, range);
+    /// Reports the signed integer `value` when `numbers` does not hold it.
+    fn check_signed(&mut self, value: &SignedInteger, numbers: &ValueSet) {
+        self.check_magnitude(value.value.span(), value.is_neg, value.value.value, numbers);
     }
 }
 
 impl Visitor<Infallible> for RuleConstantRange<'_> {
     type Value = ();
 
-    /// Opens a declaration's scope.
+    /// Opens a declaration's scope: a frame its own declarations go into.
     ///
-    /// Every kind contributes the same thing -- a frame its own declarations
-    /// go into -- but the match stays exhaustive so that a new kind of scope
-    /// has to say so rather than silently sharing the enclosing
+    /// The match stays exhaustive so that a new kind of scope has to say
+    /// what it contributes rather than silently sharing the enclosing
     /// declaration's frame.
     fn enter_scope(&mut self, node: ScopeNode<'_>) -> Result<(), Infallible> {
+        self.declarations.enter();
+        // A declaration's own name is its result variable, which the body
+        // assigns the value the call returns: `f := 300` stores a constant
+        // into the type `f` is declared to return, like any other assignment.
         match node {
-            ScopeNode::Function(_)
-            | ScopeNode::FunctionBlock(_)
-            | ScopeNode::Program(_)
-            | ScopeNode::Method(_) => self.declarations.enter(),
+            ScopeNode::Function(node) => {
+                self.declarations
+                    .add(&node.name, Declared::Typed(node.return_type.to_type_name()));
+            }
+            ScopeNode::Method(node) => {
+                if let Some(return_type) = &node.return_type {
+                    self.declarations
+                        .add(&node.name, Declared::Typed(return_type.to_type_name()));
+                }
+            }
+            ScopeNode::FunctionBlock(_) | ScopeNode::Program(_) => {}
         }
         Ok(())
     }
@@ -647,6 +696,22 @@ impl Visitor<Infallible> for RuleConstantRange<'_> {
         node: &StructureElementDeclaration,
     ) -> Result<(), Infallible> {
         self.check_initializer(&node.init);
+        node.recurse_visit(self)
+    }
+
+    /// The number an enumeration declaration states as its default is held to
+    /// the numbers of the enumeration's own values.
+    fn visit_enumeration_declaration(
+        &mut self,
+        node: &EnumerationDeclaration,
+    ) -> Result<(), Infallible> {
+        if let Some(EnumeratedDefault::Number(number)) = &node.spec_init.default {
+            if let Some(declared) = self.representation_of(&node.type_name) {
+                if let Some(numbers) = value_range::numbers_of(&declared) {
+                    self.check_signed(number, &numbers);
+                }
+            }
+        }
         node.recurse_visit(self)
     }
 

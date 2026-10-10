@@ -80,7 +80,11 @@ mod tests {
             TypeCategory::for_type(&IntermediateType::Enumeration {
                 underlying_type: Box::new(IntermediateType::Int {
                     size: ByteSized::B8
-                })
+                }),
+                base_type: Box::new(IntermediateType::Int {
+                    size: crate::intermediate_type::ByteSized::B16,
+                }),
+                numbers: vec![],
             }),
             TypeCategory::UserDefined
         );

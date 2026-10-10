@@ -23,6 +23,10 @@ fn enumeration(values: &[Id]) -> TypeAttributes {
         underlying_type: Box::new(IntermediateType::Int {
             size: ByteSized::B8,
         }),
+        base_type: Box::new(IntermediateType::Int {
+            size: crate::intermediate_type::ByteSized::B16,
+        }),
+        numbers: vec![],
     })
     .with_enumerated_values(values.to_vec())
 }

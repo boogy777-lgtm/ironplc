@@ -131,6 +131,9 @@ pub trait Fold<E> {
     // 2.4.3.2
     dispatch!(EnumeratedSpecificationInit);
 
+    // 2.3.3.1
+    dispatch!(EnumeratedDefault);
+
     // 2.4.3.2
     dispatch!(EnumeratedSpecificationValues);
 

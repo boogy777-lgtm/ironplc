@@ -98,10 +98,60 @@ A declaration can name the elementary type the members are stored in:
 
 Without it, IronPLC picks the smallest type that holds every member's value.
 
+Integers and Enumerations
+-------------------------
+
+IronPLC follows the strict enumeration rules of CODESYS (``{attribute 'strict'}``).
+An enumeration holds its own values, and an integer is not one of them unless
+it is constant and names one.
+
+- An integer constant is accepted where an enumeration is stored when it is
+  the number of one of its values: ``Red`` is 0, ``Yellow`` is 1 and ``Green``
+  is 2 above, so ``2`` is accepted and ``7`` is not (:doc:`P2006
+  </reference/compiler/problems/P2006>`). A member with an explicit value is
+  numbered by that value, so ``(A := 10, B := 20)`` accepts ``10`` and ``20``
+  and neither ``0`` nor ``15``. The rule is the same wherever a value is
+  stored: an assignment, an initial value, the default of a type or of a
+  structure member, an element of an array or structure initializer, the
+  argument of a function or of a function block input, and the result of a
+  function.
+- An integer that is not a constant is refused. ``light := count`` and
+  ``light := count + 1`` store an ``INT`` into an enumeration, and the compiler
+  reports :doc:`P4035 </reference/compiler/problems/P4035>` for an assignment
+  and :doc:`P4026 </reference/compiler/problems/P4026>` for a function
+  argument.
+- An enumeration is accepted where an integer is expected. Its base type is
+  ``INT``, unless the declaration names another (see above), so it is accepted
+  wherever an ``INT`` is: for an ``INT`` or ``DINT`` target, and for an ``INT``
+  or ``DINT`` parameter. A narrower target such as ``SINT`` is refused. The
+  number is the value's number: ``2`` for ``Green``.
+- Arithmetic on an enumeration is refused. ``light + 1``, ``light * 2`` and
+  ``-light`` report :doc:`P4049 </reference/compiler/problems/P4049>`.
+
+.. playground::
+
+   TYPE
+       TrafficLight : (Red, Yellow, Green);
+   END_TYPE
+
+   PROGRAM main
+       VAR
+           light : TrafficLight;
+           number : DINT;
+       END_VAR
+
+       light := 2;
+       number := light;
+   END_PROGRAM
+
+After one scan ``light`` is ``Green`` and ``number`` is 2.
+
 Related Problem Codes
 ---------------------
 
 - :doc:`/reference/compiler/problems/P2003` — Duplicate enumeration value
+- :doc:`/reference/compiler/problems/P2006` — Enumeration uses value that is
+  not defined in the enumeration
 - :doc:`/reference/compiler/problems/P4055` — Explicit enumeration member
   value requires a dialect or flag
 - :doc:`/reference/compiler/problems/P4056` — Enumeration base-type suffix
