@@ -8,6 +8,13 @@
 //! library). A change of the analysis that changes what a correct program
 //! produces changes a pin, and the test names the program.
 //!
+//! The digest is of the debug text of the library, so a change of the shape of
+//! a node of the library changes a digest though the analysis gives the same.
+//! Such a change is made in two steps, so that the pins still prove that:
+//! first the change itself, with the node reading as it did before (the pins
+//! do not move); then the change of how it reads alone, with the pins
+//! rewritten. A rewrite in the second step may move only `library` digests.
+//!
 //! The data is rewritten, not edited, with
 //! `cargo test -p ironplc-benchmarks --test analysis_pins -- --ignored write_pins`.
 

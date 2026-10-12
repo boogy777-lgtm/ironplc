@@ -91,17 +91,17 @@ diagnostic P4035 Assignment value
 diagnostic P4007 Undefined variable
 diagnostic P4007 Undefined variable
 ## first_steps.st [default]
-library 19b18a563e78493b 8 elements
+library 0e220fb8b1d46ed3 8 elements
 ## first_steps.st [rusty]
-library 19b18a563e78493b 8 elements
+library 0e220fb8b1d46ed3 8 elements
 ## first_steps_configuration.st [default]
 library 48397ed1b61c701a 1 elements
 ## first_steps_configuration.st [rusty]
 library 48397ed1b61c701a 1 elements
 ## first_steps_data_type_decl.st [default]
-library aef0365c8879a26c 1 elements
+library 2f340847e33446e4 1 elements
 ## first_steps_data_type_decl.st [rusty]
-library aef0365c8879a26c 1 elements
+library 2f340847e33446e4 1 elements
 ## first_steps_func_avg_val.st [default]
 library 49942bce9abd3e23 1 elements
 ## first_steps_func_avg_val.st [rusty]
@@ -151,10 +151,10 @@ diagnostic P4012 Function block invocation
 diagnostic P4012 Function block invocation
 diagnostic P4017 Function call
 ## first_steps_semantic_error.st [default]
-library 967b2e52b8b5c7be 8 elements
+library 5841bf17839f92b6 8 elements
 diagnostic P2006 Expected value in enumeration
 ## first_steps_semantic_error.st [rusty]
-library 967b2e52b8b5c7be 8 elements
+library 5841bf17839f92b6 8 elements
 diagnostic P2006 Expected value in enumeration
 ## first_steps_syntax_error.st [default]
 parse P0002 expected `;`
@@ -398,12 +398,12 @@ parse P0002 expected `:=` after the assignment target
 ## try_catch.st [rusty]
 parse P0002 expected `:=` after the assignment target
 ## type_decl.st [default]
-library 9dfe3ad55da229d1 16 elements
+library 508f46002374f65d 16 elements
 diagnostic P2021 Field type
 diagnostic P2013 Array declaration
 diagnostic P2008 Variable type
 ## type_decl.st [rusty]
-library 9dfe3ad55da229d1 16 elements
+library 508f46002374f65d 16 elements
 diagnostic P2021 Field type
 diagnostic P2013 Array declaration
 diagnostic P2008 Variable type
