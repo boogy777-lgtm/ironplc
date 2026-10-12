@@ -149,14 +149,14 @@ pub fn generate(spec_files: &[&str]) {
     for req in &owned {
         let ident = req.replace('-', "_");
         // The ident carries the lowercase crate slug (e.g. `REQ_EN_codegen_001`),
-        // so silence `non_upper_case_globals` in addition to `dead_code`.
+        // which the tests name, so `non_upper_case_globals` fires on every one.
         code.push_str(&format!(
-            "#[allow(dead_code, non_upper_case_globals)] pub const {ident}: &str = \"{req}\";\n"
+            "#[expect(non_upper_case_globals, reason = \"the lowercase crate slug is part of the requirement id\")]\npub const {ident}: &str = \"{req}\";\n"
         ));
     }
 
     code.push('\n');
-    code.push_str("#[allow(dead_code)]\npub const ALL: &[&str] = &[\n");
+    code.push_str("pub const ALL: &[&str] = &[\n");
     for req in &owned {
         code.push_str(&format!("    \"{req}\",\n"));
     }
@@ -171,11 +171,21 @@ pub fn generate(spec_files: &[&str]) {
         .collect();
 
     code.push('\n');
-    code.push_str("#[allow(dead_code)]\npub const UNTESTED: &[&str] = &[\n");
+    code.push_str("pub const UNTESTED: &[&str] = &[\n");
     for req in &untested {
         code.push_str(&format!("    \"{req}\",\n"));
     }
     code.push_str("];\n");
+
+    // Which of these a crate's tests name or read differs from crate to crate
+    // (and from one test binary to the next), so no item can state in advance
+    // that it is unused. An anonymous const reads them all: every one is used
+    // wherever the file is included, and none needs a suppression.
+    let idents: Vec<String> = owned.iter().map(|r| r.replace('-', "_")).collect();
+    code.push_str(&format!(
+        "\nconst _: (&[&str], &[&str], &[&str]) = (ALL, UNTESTED, &[{}]);\n",
+        idents.join(", ")
+    ));
 
     fs::write(&dest, code).unwrap();
 }

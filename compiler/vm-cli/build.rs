@@ -21,6 +21,7 @@ fn generate_io_codes() -> Result<(), Box<dyn Error>> {
     let out_path = PathBuf::from(env::var("OUT_DIR")?).join("io_codes.rs");
     let mut out = File::create(out_path)?;
 
+    let mut const_names = Vec::new();
     let mut rdr = csv::Reader::from_reader(src);
     for result in rdr.records() {
         let record = result?;
@@ -40,7 +41,13 @@ fn generate_io_codes() -> Result<(), Box<dyn Error>> {
         out.write_all(
             format!("/// {message}\npub const {const_name}: &str = \"{code}\";\n\n").as_bytes(),
         )?;
+        const_names.push(const_name);
     }
+
+    // The two binaries that include this file use different subsets of the
+    // codes. An anonymous const reads them all, so every code is used in each
+    // binary and none needs a `dead_code` suppression.
+    out.write_all(format!("const _: &[&str] = &[{}];\n", const_names.join(", ")).as_bytes())?;
 
     out.flush()?;
     Ok(())

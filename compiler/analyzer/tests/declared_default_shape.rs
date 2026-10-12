@@ -3,7 +3,7 @@
 //! 'abc'` is for `x : Name` where `Name` is a string type of that length with
 //! that default, however many aliases lie between the two.
 
-#![allow(
+#![expect(
     clippy::unwrap_used,
     reason = "test target: panicking helpers are sanctioned in tests"
 )]

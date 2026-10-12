@@ -346,7 +346,7 @@ END_PROGRAM
                 assert!(!err.ok);
                 assert!(err.error.is_some());
             }
-            Ok(_) => unreachable!(),
+            Ok(_) => panic!(),
         }
     }
 

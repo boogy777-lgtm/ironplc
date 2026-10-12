@@ -21,9 +21,8 @@
 
 // Test-target boundary: the workspace denies panicking constructs in
 // production code; tests assert by panicking, so they are exempt here.
-#![allow(
+#![expect(
     clippy::unwrap_used,
-    clippy::expect_used,
     reason = "integration test target: panicking helpers are sanctioned in tests"
 )]
 
@@ -286,16 +285,23 @@ impl Session {
         }
     }
 
-    /// Kills the child and reaps it, bounded.
-    fn kill(mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+    /// Kills the child and reaps it, bounded (the drop does both).
+    fn kill(self) {
+        drop(self);
     }
 }
 
 impl Drop for Session {
     fn drop(&mut self) {
+        #[expect(
+            clippy::let_underscore_must_use,
+            reason = "kill fails when the child has already exited, which is the state wanted"
+        )]
         let _ = self.child.kill();
+        #[expect(
+            clippy::let_underscore_must_use,
+            reason = "wait fails only when the child was already reaped, which is the state wanted"
+        )]
         let _ = self.child.wait();
     }
 }

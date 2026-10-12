@@ -10,7 +10,6 @@
 //!
 //! The predicate is consumed by that server loop, so for this commit it is
 //! exercised only by the exhaustive unit tests below.
-#![allow(dead_code)]
 
 /// The VM lifecycle phase, mirrored on the DAP side so request legality can be
 /// decided without reaching into the engine.
@@ -35,6 +34,13 @@ pub enum Phase {
     Running,
     Paused,
     Terminated,
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "the engine reports no trap to the DAP server yet; only the legality table and its tests name this phase"
+        )
+    )]
     Faulted,
 }
 

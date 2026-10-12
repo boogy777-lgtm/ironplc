@@ -107,7 +107,10 @@ fn in_out_value_type(decl: &VarDecl) -> Result<VarTypeInfo, Diagnostic> {
 /// - Input parameters (in declaration order)
 /// - Local variables (VAR)
 /// - Return value variable (named same as function)
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the compiler state it threads (context, environments, builder) are distinct borrows that one struct could not hold together"
+)]
 pub(crate) fn compile_user_function(
     func_decl: &FunctionDeclaration,
     function_id: FunctionId,

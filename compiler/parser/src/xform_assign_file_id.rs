@@ -72,7 +72,9 @@ END_TYPE
         }
 
         let mut collector = SpanCollector { spans: &mut spans };
-        let _ = collector.fold_library(library);
+        collector
+            .fold_library(library)
+            .expect("the collector cannot fail");
 
         // Find the span that matches our expected position (the type name "LEVEL")
         let type_name_span = spans
@@ -122,7 +124,9 @@ END_TYPE
         let mut collector = FileIdCollector {
             file_ids: &mut file_ids,
         };
-        let _ = collector.fold_library(library);
+        collector
+            .fold_library(library)
+            .expect("the collector cannot fail");
 
         // Verify all FileIds are equal (the Arc sharing is tested in the dsl crate)
         assert!(!file_ids.is_empty(), "Should have collected some FileIds");

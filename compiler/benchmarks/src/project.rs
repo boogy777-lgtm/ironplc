@@ -3,10 +3,6 @@
 //! projects are made of these steps, so that a row measures one step and
 //! prepares the steps before it outside the measurement.
 
-// `Diagnostic` is large by design in this compiler (the parser crate allows the
-// same lint); the steps return it as the public functions they call do.
-#![allow(clippy::result_large_err)]
-
 use crate::corpus::CorpusFile;
 use ironplc_analyzer::{stages::analyze, SemanticContext};
 use ironplc_codegen::{compile, CodegenOptions, EmptyLookup};

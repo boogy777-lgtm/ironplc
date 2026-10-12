@@ -176,6 +176,10 @@ mod tests {
 
     /// Uses 64 KiB of stack a level, so that a few dozen levels need more than
     /// the 2 MiB a test thread has.
+    #[expect(
+        clippy::large_stack_arrays,
+        reason = "the test needs a 64 KiB frame per level to outgrow the 2 MiB stack of a test thread"
+    )]
     fn burn_stack(levels: usize) -> usize {
         let frame = [1u8; 64 * 1024];
         let frame = std::hint::black_box(frame);

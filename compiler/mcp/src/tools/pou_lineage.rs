@@ -6,6 +6,7 @@
 //! REQ-TOL-mcp-231, and REQ-TOL-mcp-232.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::convert::Infallible;
 
 use ironplc_analyzer::SemanticContext;
 use ironplc_dsl::common::{
@@ -13,7 +14,6 @@ use ironplc_dsl::common::{
     FunctionDeclaration, Library, LibraryElementKind, ProgramDeclaration, VarDecl,
 };
 use ironplc_dsl::core::FileId;
-use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_dsl::textual::{FbCall, Function};
 use ironplc_dsl::visitor::Visitor;
 use ironplc_project::project::{MemoryBackedProject, Project};
@@ -325,7 +325,7 @@ fn record_program(graph: &mut PouGraph, p: &ProgramDeclaration) {
     let caller = p.name.to_string();
     record_variables(graph, &caller, &p.variables);
     let mut collector = ReferenceCollector::new(&caller, graph);
-    let _ = collector.visit_function_block_body_kind(&p.body);
+    let Ok(()) = collector.visit_function_block_body_kind(&p.body);
 }
 
 fn record_function(graph: &mut PouGraph, f: &FunctionDeclaration) {
@@ -333,7 +333,7 @@ fn record_function(graph: &mut PouGraph, f: &FunctionDeclaration) {
     record_variables(graph, &caller, &f.variables);
     let mut collector = ReferenceCollector::new(&caller, graph);
     for stmt in &f.body {
-        let _ = collector.visit_stmt_kind(stmt);
+        let Ok(()) = collector.visit_stmt_kind(stmt);
     }
 }
 
@@ -341,7 +341,7 @@ fn record_function_block(graph: &mut PouGraph, fb: &FunctionBlockDeclaration) {
     let caller = fb.name.to_string();
     record_variables(graph, &caller, &fb.variables);
     let mut collector = ReferenceCollector::new(&caller, graph);
-    let _ = collector.visit_function_block_body_kind(&fb.body);
+    let Ok(()) = collector.visit_function_block_body_kind(&fb.body);
 }
 
 fn record_variables(graph: &mut PouGraph, caller: &str, variables: &[VarDecl]) {
@@ -385,19 +385,19 @@ impl<'a> ReferenceCollector<'a> {
     }
 }
 
-impl<'a> Visitor<Diagnostic> for ReferenceCollector<'a> {
+impl<'a> Visitor<Infallible> for ReferenceCollector<'a> {
     type Value = ();
 
-    fn visit_function(&mut self, node: &Function) -> Result<Self::Value, Diagnostic> {
+    fn visit_function(&mut self, node: &Function) -> Result<Self::Value, Infallible> {
         self.graph.add_edge(&self.caller, &node.name.to_string());
         // Still recurse into the argument list so nested calls are captured.
         for p in &node.param_assignment {
-            let _ = self.visit_param_assignment_kind(p);
+            let Ok(()) = self.visit_param_assignment_kind(p);
         }
         Ok(())
     }
 
-    fn visit_fb_call(&mut self, _node: &FbCall) -> Result<Self::Value, Diagnostic> {
+    fn visit_fb_call(&mut self, _node: &FbCall) -> Result<Self::Value, Infallible> {
         // The variable name targets a specific FB *instance*; the FB type
         // dependency is already captured by `record_variables`. Nothing to
         // do here — avoid double counting.

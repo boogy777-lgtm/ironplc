@@ -230,7 +230,7 @@ fn lower_expr_when_group_then_the_grouped_expression_spanning_the_parentheses() 
         assert_eq!(written(source, &op.left), "(a + b)");
         assert_eq!(written(source, &op.right), "c");
     } else {
-        unreachable!("not a product: {expr:?}");
+        panic!("not a product: {expr:?}");
     }
 }
 
@@ -247,7 +247,7 @@ fn lower_expr_when_name_alone_then_late_bound_at_its_token() {
             );
             assert_eq!(late.value.span.file_id, file());
         }
-        other => unreachable!("not late-bound: {other:?}"),
+        other => panic!("not late-bound: {other:?}"),
     }
 }
 
@@ -286,7 +286,7 @@ fn lower_expr_when_name_that_the_legacy_grammar_treats_apart_then_late_bound_lik
                     "{name} is positioned"
                 );
             }
-            other => unreachable!("{name} is not late-bound: {other:?}"),
+            other => panic!("{name} is not late-bound: {other:?}"),
         }
     }
 }
@@ -307,7 +307,7 @@ fn lower_expr_when_constant_then_a_constant_spanning_the_literal() {
         assert_eq!(written(source, &op.left), "T#5s");
         assert_eq!(written(source, &op.right), "1");
     } else {
-        unreachable!("not a sum: {expr:?}");
+        panic!("not a sum: {expr:?}");
     }
 }
 
@@ -363,7 +363,7 @@ fn lower_expr_when_operand_is_unary_or_a_call_argument_then_its_own_span_include
     if let ExprKind::BinaryOp(op) = lower(source).kind {
         assert_eq!(written(source, &op.right), "NOT c");
     } else {
-        unreachable!("not a sum");
+        panic!("not a sum");
     }
     let source = "MAX(a, -b)";
     let expr = lower(source);
@@ -379,7 +379,7 @@ fn lower_expr_when_subscripts_then_each_is_an_expression_of_its_own() {
     let expr = lower(source);
     let ExprKind::Variable(Variable::Symbolic(SymbolicVariableKind::Array(array))) = &expr.kind
     else {
-        unreachable!("not a subscript: {expr:?}");
+        panic!("not a subscript: {expr:?}");
     };
     let shown: Vec<String> = array.subscripts.iter().map(show).collect();
     assert_eq!(shown, vec!["(+ ?i 1)", "2"]);
@@ -402,7 +402,7 @@ fn lower_expr_when_call_then_function_with_its_arguments_in_order() {
             assert_eq!(named.name.original(), "a");
             assert_eq!(show(&named.expr), "2");
         }
-        other => unreachable!("not named: {other:?}"),
+        other => panic!("not named: {other:?}"),
     }
     match &call.param_assignment[2] {
         ParamAssignmentKind::Output(output) => {
@@ -410,14 +410,14 @@ fn lower_expr_when_call_then_function_with_its_arguments_in_order() {
             assert_eq!(output.src.original(), "b");
             assert_eq!(output.tgt.to_string(), "x");
         }
-        other => unreachable!("not an output: {other:?}"),
+        other => panic!("not an output: {other:?}"),
     }
     match &call.param_assignment[3] {
         ParamAssignmentKind::Output(output) => {
             assert!(output.not, "the NOT of an output binding is kept");
             assert_eq!(output.src.original(), "c");
         }
-        other => unreachable!("not an output: {other:?}"),
+        other => panic!("not an output: {other:?}"),
     }
 }
 
@@ -447,7 +447,7 @@ fn lower_expr_when_operator_word_is_the_function_then_its_name_is_the_word() {
         ("__XADD(a, b)", "__XADD"),
     ] {
         let expr = lower(source);
-        let call = function(&expr).unwrap_or_else(|| unreachable!("{source} is not a function"));
+        let call = function(&expr).unwrap_or_else(|| panic!("{source} is not a function"));
         assert_eq!(call.name.original(), name, "{source}");
         assert_eq!(
             (call.name.span.start, call.name.span.end),
@@ -482,7 +482,7 @@ fn lower_expr_when_self_reference_receives_the_call_then_the_receiver_is_this_or
         ("this^.GetSpeed()", SelfRefKind::This),
     ] {
         let expr = lower(source);
-        let call = method(&expr).unwrap_or_else(|| unreachable!("{source} is not a method call"));
+        let call = method(&expr).unwrap_or_else(|| panic!("{source} is not a method call"));
         match &call.receiver {
             MethodReceiver::SelfRef(self_ref) => {
                 assert_eq!(self_ref.kind, kind, "{source}");
@@ -490,7 +490,7 @@ fn lower_expr_when_self_reference_receives_the_call_then_the_receiver_is_this_or
                 assert_eq!(Some(self_ref.position.end), end, "{source}");
                 assert_eq!(self_ref.position.start, 0);
             }
-            other => unreachable!("{source}: not a self reference: {other:?}"),
+            other => panic!("{source}: not a self reference: {other:?}"),
         }
     }
 }
@@ -518,7 +518,7 @@ fn lower_expr_when_null_then_null_spanning_the_word() {
     let expr = lower("NULL");
     match &expr.kind {
         ExprKind::Null(span) => assert_eq!((span.start, span.end), (0, 4)),
-        other => unreachable!("not NULL: {other:?}"),
+        other => panic!("not NULL: {other:?}"),
     }
     assert_eq!(shows("NULL"), "NULL");
 }
@@ -551,7 +551,7 @@ fn lower_expr_when_special_operator_names_a_keyword_type_then_the_canonical_name
         .input_expr()
         .map(|e| e.kind.clone())
     else {
-        unreachable!("the type is not a named variable");
+        panic!("the type is not a named variable");
     };
     assert_eq!(named.name.original(), "TIME_OF_DAY");
     assert_eq!((named.name.span.start, named.name.span.end), (6, 9));
@@ -563,7 +563,7 @@ fn lower_call_when_function_then_callee_name_arguments_and_span() {
     let call = lower_call(&LowerCx::new(file()), &node).expect("a call");
     match &call.callee {
         Callee::Name(name) => assert_eq!(name.original(), "f"),
-        other => unreachable!("not a name: {other:?}"),
+        other => panic!("not a name: {other:?}"),
     }
     assert_eq!(call.params.len(), 2);
     assert_eq!((call.span.start, call.span.end), (0, 12));
@@ -578,7 +578,7 @@ fn lower_call_when_method_then_callee_receiver_and_method() {
             assert_eq!(receiver, &MethodReceiver::Instance(Id::from("m")));
             assert_eq!(method.original(), "run");
         }
-        other => unreachable!("not a method: {other:?}"),
+        other => panic!("not a method: {other:?}"),
     }
 }
 

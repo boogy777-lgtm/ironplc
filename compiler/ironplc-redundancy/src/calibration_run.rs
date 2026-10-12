@@ -171,7 +171,7 @@ impl Exchange {
             ping_seq,
             pong_seq,
         };
-        let _ = self.port.send(&packet.encode());
+        self.port.send_lossy(&packet.encode());
     }
 }
 

@@ -1,7 +1,7 @@
 //! A declaration made from an alias can use what a declaration made from the
 //! type the alias names can use, whatever kind of type that is.
 
-#![allow(
+#![expect(
     clippy::unwrap_used,
     reason = "test target: panicking helpers are sanctioned in tests"
 )]

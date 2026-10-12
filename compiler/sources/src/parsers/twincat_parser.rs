@@ -189,7 +189,9 @@ pub fn parse(
             compiler_options,
         ),
         "GVL" => parse_gvl(declaration_text, file_id),
-        _ => unreachable!(),
+        // `object` was selected above by one of these four names; any other
+        // is a compiler invariant violation.
+        _ => Err(Diagnostic::internal_error()),
     }
 }
 

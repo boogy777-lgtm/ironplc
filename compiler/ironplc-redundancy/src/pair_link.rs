@@ -510,11 +510,9 @@ impl<P: NicPort> PairLink<P> {
             ping_seq,
             pong_seq,
         };
-        // A frame the link drops is the partition/loss model, not an
-        // error to act on; the exchange's miss counting owns the truth.
-        let _ = self.port.send(&packet.encode());
+        self.port.send_lossy(&packet.encode());
         for message in self.outbound.drain(..) {
-            let _ = self.port.send(&encode(&message));
+            self.port.send_lossy(&encode(&message));
         }
         died
     }
@@ -551,6 +549,10 @@ impl<P: NicPort> PairLink<P> {
         }
         self.verdict = Some(AdmissionVerdict::Primary);
         if host.status().mode == HostMode::Normal && host.status().candidate.is_some() {
+            #[expect(
+                clippy::let_underscore_must_use,
+                reason = "a refused flip leaves the unit executing the original artifact, the safe outcome; the promotion does not depend on the flip"
+            )]
             let _ = host.takeover_testing();
         }
         true

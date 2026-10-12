@@ -93,9 +93,11 @@ pub(crate) fn tokenize_program(
     (tokens, errors)
 }
 
-#[allow(clippy::type_complexity)]
+/// A rule over the token stream: it reports every violation it finds.
+type TokenRule = fn(&[Token], &CompilerOptions) -> Result<(), Vec<Diagnostic>>;
+
 fn check_tokens(tokens: &[Token], options: &CompilerOptions) -> Result<(), Vec<Diagnostic>> {
-    let rules: Vec<fn(&[Token], &CompilerOptions) -> Result<(), Vec<Diagnostic>>> = vec![
+    let rules: Vec<TokenRule> = vec![
         rule_token_no_c_style_comment::apply,
         rule_no_empty_var_blocks::apply,
         rule_token_no_partial_access_syntax::apply,

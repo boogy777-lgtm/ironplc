@@ -14,7 +14,7 @@
 //! The count is global to the process, so this file holds one test: a second
 //! test running at the same time would clone elements of its own.
 
-#![allow(
+#![expect(
     clippy::unwrap_used,
     reason = "test target: panicking helpers are sanctioned in tests"
 )]

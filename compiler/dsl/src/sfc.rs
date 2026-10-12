@@ -33,7 +33,13 @@ pub struct Network {
 ///
 /// See section 2.6.2.
 #[derive(Debug, PartialEq, Clone, Recurse)]
-#[allow(clippy::large_enum_variant)]
+#[cfg_attr(
+    target_pointer_width = "64",
+    expect(
+        clippy::large_enum_variant,
+        reason = "the variants are the AST nodes themselves, held by value; boxing them would change every pattern that destructures the enum (on 32-bit targets they are under the size limit)"
+    )
+)]
 pub enum ElementKind {
     Step(Step),
     Transition(Transition),

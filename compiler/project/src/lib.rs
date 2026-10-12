@@ -1,6 +1,3 @@
-// Allow large errors because this is a compiler - we expect large errors.
-#![allow(clippy::result_large_err)]
-
 pub mod compile;
 pub mod disassemble;
 pub mod id_agreement;
@@ -15,6 +12,10 @@ pub use sidecar::{sidecar_path_for, Sidecar, SidecarKey, SplitVarUids, SyncRepor
 
 #[cfg(test)]
 #[ctor::ctor(unsafe)]
+#[expect(
+    clippy::let_underscore_must_use,
+    reason = "try_init fails only when a logger is already installed, which is what the tests want to keep"
+)]
 fn init_test_logger() {
     let _ = env_logger::builder()
         .is_test(true)

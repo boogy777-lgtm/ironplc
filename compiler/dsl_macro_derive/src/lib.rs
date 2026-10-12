@@ -544,13 +544,14 @@ fn expand_enum_recurse_fold(name: &Ident, data_enum: &DataEnum) -> Result<TokenS
 
             // An ignored variant does not recurse, but we need to include is so that all have a
             // defined match.
-            let (pattern, body) = if is_ignored(&v.attrs).unwrap() {
+            let (pattern, body, unboxes) = if is_ignored(&v.attrs).unwrap() {
                 if v.fields.is_empty() {
-                    (quote! { #name::#variant_name }, quote! { Ok(#name::#variant_name) })
+                    (quote! { #name::#variant_name }, quote! { Ok(#name::#variant_name) }, false)
                 } else {
                     (
                         quote! { #name::#variant_name(inner) },
                         quote! { Ok(#name::#variant_name(inner)) },
+                        false,
                     )
                 }
             } else {
@@ -574,7 +575,8 @@ fn expand_enum_recurse_fold(name: &Ident, data_enum: &DataEnum) -> Result<TokenS
                         quote! { Ok(#name::#variant_name(Box::new(#folded))) }
                     }
                 };
-                (quote! { #name::#variant_name(node) }, body)
+                let unboxes = matches!(variant_contained_type.1, DeclaredType::Box);
+                (quote! { #name::#variant_name(node) }, body, unboxes)
             };
 
             // The function takes what the pattern binds, if anything.
@@ -589,10 +591,21 @@ fn expand_enum_recurse_fold(name: &Ident, data_enum: &DataEnum) -> Result<TokenS
                 };
                 (quote! { #binding: #field_type, }, quote! { #binding, })
             };
+            // A boxed variant is taken as it is bound and unboxed where it is folded,
+            // as the fold of the variant did before it was a function; only that
+            // function trips `boxed_local`, so only it states the expectation.
+            let boxed_local = if unboxes {
+                quote! {
+                    #[expect(
+                        clippy::boxed_local,
+                        reason = "the fold function takes the box as the pattern binds it and moves the value out of it"
+                    )]
+                }
+            } else {
+                quote! {}
+            };
             let function = quote! {
-                // A boxed variant is taken as it is bound and unboxed where it is folded,
-                // as the fold of the variant did before it was a function.
-                #[allow(clippy::boxed_local)]
+                #boxed_local
                 #[inline(never)]
                 fn #fold_fn<F: Fold<E> + ?Sized, E>(#params f: &mut F) -> Result<#name, E> {
                     #body

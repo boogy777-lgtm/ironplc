@@ -196,7 +196,10 @@ impl Diagnostic {
     /// The location is captured via `#[track_caller]`, so no `file!()`/`line!()`
     /// need to be passed.
     #[track_caller]
-    #[allow(deprecated)]
+    #[expect(
+        deprecated,
+        reason = "this is a sanctioned constructor of the deprecated compiler-located problem variants"
+    )]
     pub fn todo_with_id(id: &Id) -> Self {
         let caller = std::panic::Location::caller();
         Diagnostic::problem(
@@ -216,7 +219,10 @@ impl Diagnostic {
     /// The location is captured via `#[track_caller]`, so no `file!()`/`line!()`
     /// need to be passed.
     #[track_caller]
-    #[allow(deprecated)]
+    #[expect(
+        deprecated,
+        reason = "this is a sanctioned constructor of the deprecated compiler-located problem variants"
+    )]
     pub fn todo_with_type(ty: &TypeName) -> Self {
         let caller = std::panic::Location::caller();
         Diagnostic::problem(
@@ -236,7 +242,10 @@ impl Diagnostic {
     /// The location is captured via `#[track_caller]`, so no `file!()`/`line!()`
     /// need to be passed.
     #[track_caller]
-    #[allow(deprecated)]
+    #[expect(
+        deprecated,
+        reason = "this is a sanctioned constructor of the deprecated compiler-located problem variants"
+    )]
     pub fn todo_with_span(span: SourceSpan) -> Self {
         let caller = std::panic::Location::caller();
         Diagnostic::problem(
@@ -258,7 +267,10 @@ impl Diagnostic {
     /// The location is captured via `#[track_caller]`, so no `file!()`/`line!()`
     /// need to be passed.
     #[track_caller]
-    #[allow(deprecated)]
+    #[expect(
+        deprecated,
+        reason = "this is a sanctioned constructor of the deprecated compiler-located problem variants"
+    )]
     pub fn not_implemented(primary: Label) -> Self {
         let caller = std::panic::Location::caller();
         Diagnostic::problem(Problem::NotImplemented, primary)
@@ -277,7 +289,10 @@ impl Diagnostic {
     /// The location is captured via `#[track_caller]`, so no `file!()`/`line!()`
     /// need to be passed.
     #[track_caller]
-    #[allow(deprecated)]
+    #[expect(
+        deprecated,
+        reason = "this is a sanctioned constructor of the deprecated compiler-located problem variants"
+    )]
     pub fn not_supported(primary: Label) -> Self {
         let caller = std::panic::Location::caller();
         Diagnostic::problem(Problem::NotSupported, primary)
@@ -293,7 +308,10 @@ impl Diagnostic {
     /// The location is captured via `#[track_caller]`, so no `file!()`/`line!()`
     /// need to be passed.
     #[track_caller]
-    #[allow(deprecated)]
+    #[expect(
+        deprecated,
+        reason = "this is a sanctioned constructor of the deprecated compiler-located problem variants"
+    )]
     pub fn internal_error() -> Self {
         let caller = std::panic::Location::caller();
         Diagnostic::problem(
@@ -321,7 +339,10 @@ impl Diagnostic {
     /// The location is captured via `#[track_caller]`, so no `file!()`/`line!()`
     /// need to be passed.
     #[track_caller]
-    #[allow(deprecated)]
+    #[expect(
+        deprecated,
+        reason = "this is a sanctioned constructor of the deprecated compiler-located problem variants"
+    )]
     pub fn internal_error_at(primary: Label) -> Self {
         let caller = std::panic::Location::caller();
         Diagnostic::problem(Problem::InternalError, primary)

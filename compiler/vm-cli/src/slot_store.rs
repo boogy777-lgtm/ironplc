@@ -152,7 +152,7 @@ impl SlotStore {
             return Ok(container);
         }
         // Unverifiable tmp is garbage residue of a crashed write: discard it.
-        let _ = fs::remove_file(&self.tmp);
+        self.discard_tmp();
 
         if self.store_files_present() {
             return Err(VmError::io(

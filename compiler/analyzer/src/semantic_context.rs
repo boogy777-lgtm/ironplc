@@ -111,7 +111,6 @@ impl SemanticContext {
     }
 
     /// Provides mutable access to the function environment.
-    #[allow(dead_code)]
     pub fn functions_mut(&mut self) -> &mut FunctionEnvironment {
         &mut self.functions
     }

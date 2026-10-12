@@ -230,7 +230,6 @@ impl Emitter {
     /// supplies to the container builder. Lines and columns follow the
     /// [`ironplc_container::LineMapEntry`] convention: 1-based, with
     /// `0` reserved for "unknown" column.
-    #[allow(dead_code)]
     pub fn set_source_position(
         &mut self,
         file_id: SourceFileId,
@@ -243,7 +242,10 @@ impl Emitter {
     /// Clears the current source position. Subsequent opcodes will not
     /// produce line_map entries until [`Self::set_source_position`] is
     /// called again.
-    #[allow(dead_code)]
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "only the tests clear the position")
+    )]
     pub fn clear_source_position(&mut self) {
         self.current_position = None;
     }
@@ -251,7 +253,6 @@ impl Emitter {
     /// Takes ownership of the recorded line_map entries, leaving the
     /// Emitter's internal vec empty. Entries are returned in emission
     /// order (which is sorted by `bytecode_offset`).
-    #[allow(dead_code)]
     pub fn take_line_map(&mut self) -> Vec<EmittedLineMapEntry> {
         core::mem::take(&mut self.line_map)
     }
@@ -383,7 +384,6 @@ impl Emitter {
     emit_push_op!(emit_load_true, opcode::LOAD_TRUE);
     emit_push_op!(emit_load_false, opcode::LOAD_FALSE);
     /// Emits DUP (duplicates top of stack). Net: +1.
-    #[allow(dead_code)]
     pub fn emit_dup(&mut self) {
         self.emit_opcode(opcode::DUP);
         self.push_stack(1);
@@ -472,7 +472,6 @@ impl Emitter {
 
     // --- Stack manipulation ops ---
     /// Emits SWAP (swaps top two values). Net: 0.
-    #[allow(dead_code)]
     pub fn emit_swap(&mut self) {
         self.emit_opcode(opcode::SWAP);
     }
@@ -502,7 +501,6 @@ impl Emitter {
 
     /// Emits LOAD_ARRAY with var_index and desc_index operands.
     /// Pops 1 (flat index already on stack), pushes 1 (element value). Net: 0.
-    #[allow(dead_code)]
     pub fn emit_load_array(&mut self, var_index: VarIndex, desc_index: u16) {
         self.emit_opcode(opcode::LOAD_ARRAY);
         self.bytecode.extend_from_slice(&var_index.to_le_bytes());
@@ -514,7 +512,6 @@ impl Emitter {
 
     /// Emits STORE_ARRAY with var_index and desc_index operands.
     /// Pops 2 (value and flat index). Net: -2.
-    #[allow(dead_code)]
     pub fn emit_store_array(&mut self, var_index: VarIndex, desc_index: u16) {
         self.emit_opcode(opcode::STORE_ARRAY);
         self.bytecode.extend_from_slice(&var_index.to_le_bytes());
@@ -744,7 +741,6 @@ impl Emitter {
 
     /// Emits STR_LOAD_VAR with a data_offset operand.
     /// Copies a string from the data region into a temp buffer and pushes buf_idx.
-    #[allow(dead_code)]
     pub fn emit_str_load_var(&mut self, data_offset: u32) {
         self.emit_opcode(opcode::STR_LOAD_VAR);
         self.bytecode.extend_from_slice(&data_offset.to_le_bytes());
@@ -902,7 +898,10 @@ impl Emitter {
     /// has a return type -- pushes the return value on top of `fb_ref`
     /// (the caller is responsible for discarding both, in that order,
     /// once done with the call).
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "it encodes the METHOD_CALL instruction operand for operand; the operands are the instruction"
+    )]
     pub fn emit_method_call(
         &mut self,
         function_id: FunctionId,
@@ -989,7 +988,7 @@ impl Emitter {
     /// every bound label: a label that is bound but never jumped to
     /// constrains nothing, and protecting its position would needlessly
     /// block a peephole there.
-    #[allow(
+    #[expect(
         clippy::expect_used,
         reason = "labels are bound before the optimizer sees the emitter; this is the pipeline contract"
     )]
@@ -1070,7 +1069,7 @@ impl Emitter {
     }
 
     /// Resolves all pending jump patches by computing relative offsets.
-    #[allow(
+    #[expect(
         clippy::expect_used,
         reason = "labels are bound before patching; this is the pipeline contract"
     )]

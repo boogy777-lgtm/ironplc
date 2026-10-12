@@ -37,7 +37,6 @@ pub(crate) struct ArraySpec {
 }
 
 /// Metadata for a single dimension of an array, used for index computation.
-#[allow(dead_code)]
 pub(crate) struct DimensionInfo {
     pub lower_bound: i32,
     pub size: u32,
@@ -45,7 +44,6 @@ pub(crate) struct DimensionInfo {
 }
 
 /// Metadata for an array variable, stored in CompileContext.
-#[allow(dead_code)]
 pub(crate) struct ArrayVarInfo {
     pub var_index: VarIndex,
     pub desc_index: u16,

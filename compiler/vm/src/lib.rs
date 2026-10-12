@@ -10,6 +10,7 @@ pub(crate) mod intrinsic;
 mod profile;
 pub(crate) mod scheduler;
 pub(crate) mod stack;
+pub(crate) mod stack_fmt;
 pub(crate) mod str_to_num;
 pub(crate) mod str_to_real;
 pub(crate) mod string_ops;

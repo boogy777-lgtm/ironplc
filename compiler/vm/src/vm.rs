@@ -14,11 +14,11 @@ use crate::frame_stack::{FbCallReturn, Frame, FrameStack};
 use crate::profile::InstructionProfile;
 use crate::scheduler::{ProgramInstanceState, TaskScheduler, TaskState};
 use crate::stack::OperandStack;
+use crate::stack_fmt::StackFmtBuf;
 use crate::str_to_num;
 use crate::string_ops;
 use crate::value::Slot;
 use crate::variable_table::{VariableScope, VariableTable};
-use core::fmt::Write as FmtWrite;
 use ironplc_container::opcode;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
@@ -560,7 +560,7 @@ impl<'a> VmRunning<'a> {
     /// The recording happens before the flag check: the program only *sees* the
     /// uptime when it was compiled with the globals, but the VM knows it either
     /// way, which is what [`uptime`](Self::uptime) reports.
-    #[allow(
+    #[expect(
         clippy::expect_used,
         reason = "FLAG_HAS_SYSTEM_UPTIME implies codegen emitted uptime variables at indices 0 and 1"
     )]
@@ -1009,7 +1009,10 @@ macro_rules! load_const {
 /// [`NoopDebugHook`]. Existing call sites use this entry point so that
 /// the debug-hook plumbing imposes no overhead on VMs that do not need
 /// instruction-level callbacks (the noop hook is a ZST and inlines away).
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the run borrows each VM buffer separately; one context struct would borrow them all at once"
+)]
 fn execute(
     container: &Container,
     stack: &mut OperandStack,
@@ -1047,9 +1050,9 @@ fn execute(
         &mut hook,
     )? {
         ExecuteOutcome::Completed => Ok(()),
-        ExecuteOutcome::Paused(_) => {
-            unreachable!("NoopDebugHook always returns HookAction::Continue")
-        }
+        // The no-op hook always continues; a pause here is a VM defect, and
+        // this run has no way to resume it.
+        ExecuteOutcome::Paused(_) => Err(Trap::PauseNotResumable),
     }
 }
 
@@ -1084,7 +1087,10 @@ pub enum ExecuteOutcome {
 /// It is generic over the hook type so that the noop hook monomorphizes
 /// to identical code as before; only callers that supply a real hook
 /// pay any runtime cost.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the run borrows each VM buffer separately; one context struct would borrow them all at once"
+)]
 pub(crate) fn execute_with_hook<H: DebugHook>(
     container: &Container,
     stack: &mut OperandStack,
@@ -1459,8 +1465,7 @@ pub(crate) fn execute_with_hook<H: DebugHook>(
                     // because they need access to temp_buf and data_region.
                     opcode::builtin::CONV_I32_TO_STR => {
                         let val = stack.pop()?.as_i32();
-                        let mut fmt_buf = StackFmtBuf::new();
-                        let _ = write!(fmt_buf, "{}", val);
+                        let fmt_buf = StackFmtBuf::of(val);
                         let bytes = fmt_buf.as_bytes();
                         // Numeric formatting always produces ASCII (narrow).
                         let (buf_idx, buf_start) = {
@@ -1483,8 +1488,7 @@ pub(crate) fn execute_with_hook<H: DebugHook>(
                     }
                     opcode::builtin::CONV_U32_TO_STR => {
                         let val = stack.pop()?.as_i32() as u32;
-                        let mut fmt_buf = StackFmtBuf::new();
-                        let _ = write!(fmt_buf, "{}", val);
+                        let fmt_buf = StackFmtBuf::of(val);
                         let bytes = fmt_buf.as_bytes();
                         // Numeric formatting always produces ASCII (narrow).
                         let (buf_idx, buf_start) = {
@@ -1507,8 +1511,7 @@ pub(crate) fn execute_with_hook<H: DebugHook>(
                     }
                     opcode::builtin::CONV_F32_TO_STR => {
                         let val = stack.pop()?.as_f32();
-                        let mut fmt_buf = StackFmtBuf::new();
-                        let _ = write!(fmt_buf, "{}", val);
+                        let fmt_buf = StackFmtBuf::of(val);
                         let bytes = fmt_buf.as_bytes();
                         // Numeric formatting always produces ASCII (narrow).
                         let (buf_idx, buf_start) = {
@@ -2460,21 +2463,18 @@ pub(crate) fn execute_with_hook<H: DebugHook>(
                 let fb_ref = stack.peek()?.as_i32() as u32;
                 let instance_start = fb_ref as usize;
                 match type_id {
-                    opcode::fb_type::TON | opcode::fb_type::TOF | opcode::fb_type::TP => {
-                        let instance_size = crate::intrinsic::TIMER_INSTANCE_FIELDS * 8;
-                        let instance_end = instance_start + instance_size;
-                        if instance_end > data_region.len() {
-                            return Err(Trap::DataRegionOutOfBounds(instance_start as u32));
-                        }
-                        let slice = &mut data_region[instance_start..instance_end];
-                        let time = uptime_us as i64;
-                        match type_id {
-                            opcode::fb_type::TON => crate::intrinsic::ton(slice, time)?,
-                            opcode::fb_type::TOF => crate::intrinsic::tof(slice, time)?,
-                            opcode::fb_type::TP => crate::intrinsic::tp(slice, time)?,
-                            _ => unreachable!(),
-                        }
-                    }
+                    opcode::fb_type::TON => crate::intrinsic::ton(
+                        crate::intrinsic::timer_instance(data_region, instance_start)?,
+                        uptime_us as i64,
+                    )?,
+                    opcode::fb_type::TOF => crate::intrinsic::tof(
+                        crate::intrinsic::timer_instance(data_region, instance_start)?,
+                        uptime_us as i64,
+                    )?,
+                    opcode::fb_type::TP => crate::intrinsic::tp(
+                        crate::intrinsic::timer_instance(data_region, instance_start)?,
+                        uptime_us as i64,
+                    )?,
                     opcode::fb_type::CTU => {
                         let instance_size = crate::intrinsic::CTU_INSTANCE_FIELDS * 8;
                         let instance_end = instance_start + instance_size;
@@ -2934,7 +2934,7 @@ pub(crate) fn execute_with_hook<H: DebugHook>(
 /// Panics if the frame stack is empty; every caller holds the loop invariant
 /// that a frame is live at the commit point.
 #[inline(always)]
-#[allow(
+#[expect(
     clippy::expect_used,
     reason = "documented invariant helper: callers hold a live frame at the commit point"
 )]
@@ -3026,40 +3026,6 @@ fn read_i16_le(bytecode: &[u8], pc: &mut usize) -> Result<i16, Trap> {
     let value = i16::from_le_bytes([bytecode[*pc], bytecode[*pc + 1]]);
     *pc = end;
     Ok(value)
-}
-
-/// A small stack-allocated buffer for formatting numbers as strings.
-///
-/// Used by CONV_I32_TO_STR, CONV_U32_TO_STR, and CONV_F32_TO_STR to
-/// avoid heap allocation. 48 bytes is enough for any i32, u32, or f32
-/// decimal representation.
-struct StackFmtBuf {
-    buf: [u8; 48],
-    len: usize,
-}
-
-impl StackFmtBuf {
-    fn new() -> Self {
-        Self {
-            buf: [0u8; 48],
-            len: 0,
-        }
-    }
-
-    fn as_bytes(&self) -> &[u8] {
-        &self.buf[..self.len]
-    }
-}
-
-impl core::fmt::Write for StackFmtBuf {
-    fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        let bytes = s.as_bytes();
-        let remaining = self.buf.len() - self.len;
-        let to_copy = bytes.len().min(remaining);
-        self.buf[self.len..self.len + to_copy].copy_from_slice(&bytes[..to_copy]);
-        self.len += to_copy;
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -3278,7 +3244,10 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::default_constructed_unit_structs)]
+    #[expect(
+        clippy::default_constructed_unit_structs,
+        reason = "the test calls `Default::default` on the unit struct to cover its Default impl"
+    )]
     fn vm_default_when_called_then_loads_container() {
         let c = steel_thread_container();
         let mut b = VmBuffers::from_container(&c);

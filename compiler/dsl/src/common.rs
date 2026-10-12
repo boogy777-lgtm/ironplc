@@ -1408,7 +1408,6 @@ impl TryFrom<&Id> for GenericTypeName {
 ///
 /// See section 2.3.3.1
 #[derive(Clone, Debug, PartialEq, Recurse)]
-#[allow(clippy::large_enum_variant)]
 pub enum DataTypeDeclarationKind {
     /// Derived data type the restricts permitted values from a set of identifiers.
     Enumeration(EnumerationDeclaration),
@@ -2669,7 +2668,7 @@ impl AddressAssignment {
     }
 }
 
-#[allow(
+#[expect(
     clippy::unwrap_used,
     reason = "static regex literals are compile-time-validated patterns; regex has no const constructor"
 )]
@@ -2679,7 +2678,7 @@ fn direct_address_unassigned_re() -> &'static Regex {
     &RE
 }
 
-#[allow(
+#[expect(
     clippy::unwrap_used,
     reason = "static regex literals are compile-time-validated patterns; regex has no const constructor"
 )]

@@ -22,6 +22,7 @@ use ironplc_test::corpus::{CRLF, TABS};
 use ironplc_test::nesting::{Entry, NESTINGS};
 use spec_test_macro::spec_test;
 use std::collections::BTreeSet;
+use std::convert::Infallible;
 
 #[test]
 fn all_spec_requirements_have_tests() {
@@ -75,10 +76,10 @@ fn significant_text(parse: &Parse) -> Vec<String> {
 #[derive(Default)]
 struct Spans(Vec<SourceSpan>);
 
-impl Visitor<()> for Spans {
+impl Visitor<Infallible> for Spans {
     type Value = ();
 
-    fn visit_source_span(&mut self, node: &SourceSpan) -> Result<(), ()> {
+    fn visit_source_span(&mut self, node: &SourceSpan) -> Result<(), Infallible> {
         self.0.push(node.clone());
         Ok(())
     }
@@ -86,7 +87,7 @@ impl Visitor<()> for Spans {
 
 fn spans_of(library: &Library) -> Vec<SourceSpan> {
     let mut spans = Spans::default();
-    let _ = spans.walk(library);
+    let Ok(()) = spans.walk(library);
     spans.0
 }
 

@@ -76,7 +76,10 @@ impl<'a, K: Key, V: 'a + Value> Scope<'a, K, V> {
         self.table.get(name)
     }
 
-    #[allow(dead_code)]
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "only the tests remove a name from one scope")
+    )]
     fn remove(&mut self, name: &K) -> Option<V> {
         self.table.shift_remove(name)
     }
@@ -178,7 +181,13 @@ impl<'a, K: Key, V: 'a + Value> ScopedTable<'a, K, V> {
     ///
     /// Returns the value or `None` if value is not in
     /// the inner-most scope.
-    #[allow(dead_code)]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "only the tests remove a name from the inner-most scope"
+        )
+    )]
     pub fn remove(&mut self, name: &K) -> Option<V> {
         match self.stack.front_mut() {
             None => None,

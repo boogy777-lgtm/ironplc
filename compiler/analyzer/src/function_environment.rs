@@ -235,13 +235,11 @@ impl FunctionEnvironment {
     }
 
     /// Returns the number of functions in the environment.
-    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.table.len()
     }
 
     /// Returns true if the environment is empty.
-    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.table.is_empty()
     }

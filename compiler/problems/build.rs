@@ -102,7 +102,7 @@ fn create_problems() -> Result<(), Box<dyn Error>> {
     // Create the function to return information about each definition. The impl
     // allows `deprecated` because `code()`/`message()` legitimately match every
     // variant, including the compiler-located ones marked above.
-    out.write_all(b"#[allow(deprecated)]\n")?;
+    out.write_all(b"#[expect(deprecated, reason = \"the impl names every variant, including the deprecated compiler-located ones\")]\n")?;
     out.write_all(b"impl Problem {\n")?;
 
     // Define code()

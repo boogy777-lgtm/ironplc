@@ -1,5 +1,3 @@
-#![allow(clippy::type_complexity)]
-
 //! The compiler as individual stages (to enable testing).
 
 use ironplc_dsl::{

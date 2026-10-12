@@ -22,6 +22,16 @@ pub trait NicPort {
     fn counters(&self) -> PhyCounters;
     /// Queues one frame for transmission on the port.
     fn send(&mut self, frame: &[u8]) -> Result<(), PortError>;
+    /// Queues one frame and accepts that the link may drop it: loss is the
+    /// partition/loss model, not an error to act on, and the liveness
+    /// exchange's miss counting owns the truth about the link.
+    fn send_lossy(&mut self, frame: &[u8]) {
+        #[expect(
+            clippy::let_underscore_must_use,
+            reason = "a frame the link drops is the partition/loss model; the exchange's miss counting owns the truth"
+        )]
+        let _ = self.send(frame);
+    }
     /// Takes the next received frame, if any. The timestamp is the
     /// ingress time when the port has a clock; `IngressTimestamp::NONE`
     /// otherwise.

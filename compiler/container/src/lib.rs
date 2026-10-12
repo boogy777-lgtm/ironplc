@@ -1,5 +1,4 @@
 #![no_std]
-#![allow(clippy::result_large_err)]
 
 #[cfg(feature = "std")]
 extern crate std;

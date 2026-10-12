@@ -1,0 +1,24 @@
+=====
+V9019
+=====
+
+.. problem-summary:: V9019
+
+A debug hook asked the VM to pause a run that the VM has no way to resume, so
+the VM halted instead of reporting that run as finished.
+
+The runs that cannot be resumed (the one-time initialization of the program
+instances when the VM starts, and a production scan) install a hook that never
+pauses. A pause there is therefore a defect in the VM rather than anything in
+the PLC program.
+
+Cause
+-----
+
+The likely causes are:
+
+* A defect in the IronPLC runtime. Please report it, with the source program,
+  at https://github.com/ironplc/ironplc/issues.
+
+To resolve, there is nothing to correct in the PLC source. Update to the
+current ``ironplcc`` and ``ironplcvm``; if the trap persists, report it.

@@ -6,7 +6,7 @@ use crate::error::Trap;
 const FIELD_SIZE: usize = 8;
 
 /// Reads an i32 from an FB instance field.
-#[allow(
+#[expect(
     clippy::unwrap_used,
     reason = "slice is exactly 4 bytes by construction (offset..offset+4)"
 )]
@@ -25,7 +25,7 @@ fn write_i32(instance: &mut [u8], field: usize, value: i32) {
 }
 
 /// Reads an i64 from an FB instance field.
-#[allow(
+#[expect(
     clippy::unwrap_used,
     reason = "slice is exactly 8 bytes by construction (offset..offset+8)"
 )]
@@ -52,6 +52,18 @@ const TIMER_RUNNING: usize = 5; // hidden
 
 /// Number of fields (including hidden) for a timer FB instance.
 pub const TIMER_INSTANCE_FIELDS: usize = 6;
+
+/// The data-region bytes of the timer instance (`TON`, `TOF`, `TP`) that
+/// starts at `instance_start`, or a trap when they lie outside the region.
+pub(crate) fn timer_instance(
+    data_region: &mut [u8],
+    instance_start: usize,
+) -> Result<&mut [u8], Trap> {
+    let instance_end = instance_start + TIMER_INSTANCE_FIELDS * 8;
+    data_region
+        .get_mut(instance_start..instance_end)
+        .ok_or(Trap::DataRegionOutOfBounds(instance_start as u32))
+}
 
 /// Executes one scan of the TON (on-delay timer) intrinsic.
 ///

@@ -16,7 +16,7 @@
 
 // Benchmark-target boundary: an input that does not parse is a
 // benchmark-authoring bug, not user input.
-#![allow(
+#![expect(
     clippy::unwrap_used,
     reason = "benchmark target: panicking helpers are sanctioned in benchmarks"
 )]

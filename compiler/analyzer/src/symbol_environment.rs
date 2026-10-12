@@ -66,7 +66,6 @@ pub enum SymbolKind {
     /// Type declaration
     Type,
     /// Constant declaration
-    #[allow(unused)]
     Constant,
     /// Structure element
     StructureElement,
@@ -356,7 +355,6 @@ impl SymbolEnvironment {
     }
 
     /// Get a symbol by name and scope (alias for find)
-    #[allow(dead_code)]
     pub fn get(&self, name: &Id, scope: &ScopeKind) -> Option<&SymbolInfo> {
         self.find(name, scope)
     }

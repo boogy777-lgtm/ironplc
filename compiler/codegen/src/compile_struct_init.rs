@@ -389,7 +389,10 @@ fn structure_members(value: Option<&StructInitialValueAssignmentKind>) -> &[Stru
 /// itself in the type, else the type's default. A structure field applies
 /// the same rule to its own fields, so the declaration of one member never
 /// discards what the type declares for the others.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the emitter and the context are distinct mutable borrows, and the rest is the field data of one initializer"
+)]
 fn initialize_struct_fields(
     emitter: &mut Emitter,
     ctx: &mut CompileContext,
@@ -491,7 +494,10 @@ fn initialize_struct_fields(
 /// The elements of an array of structures start from what their members
 /// declare; the elements of an array of scalars from the values the
 /// declaration states, when it states any.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the emitter and the context are distinct mutable borrows, and the rest is the data of one array field"
+)]
 fn initialize_array_field(
     emitter: &mut Emitter,
     ctx: &mut CompileContext,

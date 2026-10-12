@@ -11,7 +11,7 @@
 //! The data is rewritten, not edited, with
 //! `cargo test -p ironplc-benchmarks --test analysis_pins -- --ignored write_pins`.
 
-#![allow(
+#![expect(
     clippy::unwrap_used,
     reason = "test target: panicking helpers are sanctioned in tests"
 )]
