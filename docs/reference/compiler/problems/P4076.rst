@@ -1,0 +1,64 @@
+=====
+P4076
+=====
+
+.. problem-summary:: P4076
+
+This error occurs when an attribute pragma — ``{attribute 'name'}`` or
+``{attribute 'name' := 'value'}`` — names an attribute that IronPLC knows and
+the pragma stands before a kind of declaration that the attribute does not
+apply to. Each known attribute applies to some kinds of declaration: for
+example ``pack_mode`` describes how the members of a structure or a union are
+aligned, so it applies to a structure type or a union type and means nothing
+before a variable or a program. The message names the attribute, the kind of
+declaration it stands before, and the kinds it applies to.
+
+The reference page :doc:`/reference/language/attributes` lists every known
+attribute with the kinds of declaration it applies to.
+
+Example
+-------
+
+The following code will generate error P4076:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       {attribute 'pack_mode' := '1'}   (* Error: pack_mode applies to a structure type or a union type *)
+       a : INT;
+   END_VAR
+   END_PROGRAM
+
+To fix this error, move the pragma before a declaration that the attribute
+applies to:
+
+.. code-block::
+
+   {attribute 'pack_mode' := '1'}
+   TYPE Packet :
+       STRUCT
+           a : INT;
+       END_STRUCT;
+   END_TYPE
+
+   PROGRAM main
+   VAR
+       p : Packet;
+   END_VAR
+   END_PROGRAM
+
+Or remove the pragma when the attribute is not needed.
+
+A pragma before a ``TYPE`` block or a variable block describes every
+declaration the block holds, so one attribute before a block that holds
+declarations of different kinds is reported when it does not apply to one of
+them. The compiler reports it once, at the pragma.
+
+The compiler does not report an attribute that it does not know. A name that is
+not in the reference list is a user-defined attribute: the compiler accepts it
+before any declaration and keeps it as written.
+
+Pragmas are a CODESYS/TwinCAT extension, accepted only with
+``--allow-pragmas`` (see :doc:`/reference/compiler/ironplcc`). A pragma
+that is not an attribute is not checked.

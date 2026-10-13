@@ -32,6 +32,7 @@ pub(crate) static RULES: &[(&str, Rule)] = rules![
     rule_abstract_not_instantiated,
     rule_ambiguous_enumerated_value,
     rule_assignment_aggregate_type_compat,
+    rule_attribute,
     rule_decl_struct_element_unique_names,
     rule_range_limits,
     rule_real_literal_range,

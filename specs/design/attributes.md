@@ -285,6 +285,46 @@ written on the declaration.
 fault, whatever its value and the kind of declaration; a declaration without
 attributes has none.
 
+## What the analysis reports
+
+One semantic rule (`rule_attribute`) walks the declarations of the library (the
+census lists them with their kind and attributes), asks the check of the
+registry for the faults of each and turns each fault into a diagnostic. It holds
+no knowledge of any attribute: a row added to the registry is checked without a
+change to the rule. The dialect does not change the check; an attribute pragma is
+read only where pragmas are allowed (see [Dialects and conditional
+text](#dialects-and-conditional-text)).
+
+| Fault | Problem | The primary label | Other labels |
+|---|---|---|---|
+| Not allowed here | P4076 | at the attribute: names it as written, the kind of declaration it stands before, and the kinds its row stands before | none |
+| Value | P4077 | at the attribute: names it, says what it takes and what was found (the value as written, or no value) | none |
+| Repeated | P4078 | at the later attribute: names it | at the first attribute: where it was first written |
+
+An attribute written before a group is attached to each declaration of the
+group with one span, so the same fault is found once for each declaration. The
+rule reports one diagnostic for each problem code and span of the attribute.
+
+**REQ-ATTR-analyzer-010** A known attribute before a declaration of a kind its
+row does not stand before is reported as P4076 at the span of the attribute,
+with its name as written, the label of the kind of declaration and the kinds the
+row stands before.
+
+**REQ-ATTR-analyzer-011** A known attribute with a value its row does not take
+is reported as P4077 at the span of the attribute, with its name, what it takes
+and what was found.
+
+**REQ-ATTR-analyzer-012** An attribute written twice before one declaration is
+reported as P4078 at the span of the second, with a secondary label at the span
+of the first.
+
+**REQ-ATTR-analyzer-013** An attribute before a group that is attached to
+several declarations gives one diagnostic for each problem code and span, not
+one for each declaration.
+
+**REQ-ATTR-analyzer-014** An attribute that is user-defined is not reported,
+and neither is a known attribute where it may stand with a value it takes.
+
 ## The reference page
 
 The reference page `docs/reference/language/attributes.rst` says what an attribute

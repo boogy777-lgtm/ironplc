@@ -1,0 +1,68 @@
+=====
+P4078
+=====
+
+.. problem-summary:: P4078
+
+This error occurs when the same attribute pragma is written more than once
+before one declaration. The second pragma has no effect that the first does not
+already have, and when the two give different values the compiler cannot tell
+which one is meant, so it reports the second one. The error is at the later
+pragma, and a second label marks the place where the attribute was first
+written.
+
+Two pragmas are the same attribute when their names are equal without regard to
+case (``hide`` and ``HIDE``), and, for an attribute that IronPLC knows, when one
+is an alias of the other: ``noinit``, ``no_init`` and ``no-init`` are one
+attribute. This holds for an attribute that IronPLC does not know too, where
+the names are compared without regard to case.
+
+A pragma before a ``TYPE`` block or a variable block is an attribute of every
+declaration the block holds, and it counts as written before each of them. A
+declaration in the block that writes the same attribute again is the error.
+
+Example
+-------
+
+The following code will generate error P4078:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       {attribute 'hide'}
+       {attribute 'HIDE'}   (* Error: hide is already written for this variable *)
+       a : INT;
+   END_VAR
+   END_PROGRAM
+
+The same attribute through an alias is the same error:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       {attribute 'noinit'}
+       {attribute 'no-init'}   (* Error: no-init is an alias of noinit *)
+       a : INT;
+   END_VAR
+   END_PROGRAM
+
+To fix this error, remove one of the pragmas:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       {attribute 'hide'}
+       a : INT;
+   END_VAR
+   END_PROGRAM
+
+Different attributes before one declaration are not an error. Several
+attributes may describe the same declaration, as long as each is written once.
+The compiler reports the error once for a pragma that stands before a block
+with several declarations.
+
+Pragmas are a CODESYS/TwinCAT extension, accepted only with
+``--allow-pragmas`` (see :doc:`/reference/compiler/ironplcc`).
