@@ -139,11 +139,10 @@ impl<S> Conditionals<S> {
         let mut fault = None;
         let keep = match kind(text) {
             Kind::Directive(directive) => self.directive(directive, origin, &mut fault),
-            // Every pragma that is not a directive (`{attribute ...}`,
-            // `{warning ...}`, any other) is trivia, kept or dropped with the
-            // branch it sits in. A kind added to `Kind` is trivia until a
-            // reader of it says otherwise.
-            _ => self.is_active(),
+            // A pragma that is not a directive is trivia, kept or dropped with
+            // the branch it sits in. Each kind is named, so a kind added to
+            // `Kind` does not compile here until it is given an answer.
+            Kind::Attribute { .. } | Kind::Message { .. } | Kind::Other => self.is_active(),
         };
         Step { keep, fault }
     }
