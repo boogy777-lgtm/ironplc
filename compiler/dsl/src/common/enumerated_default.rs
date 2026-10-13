@@ -14,23 +14,10 @@ use crate::visitor::Visitor;
 /// declaration records what was written.
 ///
 /// See section 2.3.3.1.
-#[derive(Clone, PartialEq, Recurse)]
+#[derive(Clone, Debug, PartialEq, Recurse)]
 pub enum EnumeratedDefault {
     Value(EnumeratedValue),
     Number(SignedInteger),
-}
-
-/// A value default reads as the value does, as it did before a default could
-/// be a number, so that what a library of such declarations reads as -- the
-/// text a fingerprint of it is made of -- does not depend on there being two
-/// kinds of default.
-impl std::fmt::Debug for EnumeratedDefault {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            EnumeratedDefault::Value(value) => std::fmt::Debug::fmt(value, f),
-            EnumeratedDefault::Number(number) => f.debug_tuple("Number").field(number).finish(),
-        }
-    }
 }
 
 impl EnumeratedDefault {
