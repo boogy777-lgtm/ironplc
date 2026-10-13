@@ -1,9 +1,11 @@
-//! Conditional-compilation pragmas: `{IF}`, `{ELSIF}`, `{ELSE}`, `{END_IF}`,
-//! `{DEFINE}` and `{UNDEFINE}`.
+//! Pragmas: what the text of a `{ ... }` says ([`kind`]), and the
+//! conditional-compilation pragmas `{IF}`, `{ELSIF}`, `{ELSE}`, `{END_IF}`,
+//! `{DEFINE}` and `{UNDEFINE}` ([`Conditionals`]).
 //!
-//! Pure functions over the text of a `{ ... }` pragma, and the state machine
-//! that decides which branch of an `{IF}` is live. The caller owns the token
-//! or tree representation; this module only reads pragma text.
+//! Pure functions over the text of a pragma, and the state machine that
+//! decides which branch of an `{IF}` is live. The caller owns the token or
+//! tree representation; this module is the only place that reads pragma text,
+//! so that no second reader of the braces and the keyword exists.
 //!
 //! The condition language is the subset the reference accepts that can be
 //! answered without a project database:
@@ -135,9 +137,23 @@ impl<S> Conditionals<S> {
     /// Advances over the pragma `text` found at `origin`.
     pub fn step(&mut self, text: &str, origin: S) -> Step {
         let mut fault = None;
-        let keep = match directive(text) {
+        let keep = match kind(text) {
+            Kind::Directive(directive) => self.directive(directive, origin, &mut fault),
+            // Every pragma that is not a directive (`{attribute ...}`,
+            // `{warning ...}`, any other) is trivia, kept or dropped with the
+            // branch it sits in. A kind added to `Kind` is trivia until a
+            // reader of it says otherwise.
+            _ => self.is_active(),
+        };
+        Step { keep, fault }
+    }
+
+    /// Applies one conditional directive. Whether the directive token stays
+    /// in the output is always false: a directive is consumed.
+    fn directive(&mut self, directive: Directive, origin: S, fault: &mut Option<Fault>) -> bool {
+        match directive {
             Directive::If(condition) => {
-                let active = self.condition(condition, &mut fault);
+                let active = self.condition(condition, fault);
                 self.frames.push(Frame {
                     active,
                     taken: active,
@@ -148,7 +164,7 @@ impl<S> Conditionals<S> {
             Directive::Elsif(condition) => {
                 match self.frames.last().map(|frame| frame.taken) {
                     Some(false) => {
-                        let active = self.condition(condition, &mut fault);
+                        let active = self.condition(condition, fault);
                         if let Some(frame) = self.frames.last_mut() {
                             frame.active = active;
                             frame.taken = active;
@@ -159,7 +175,7 @@ impl<S> Conditionals<S> {
                             frame.active = false;
                         }
                     }
-                    None => fault = Some(Fault::Unmatched),
+                    None => *fault = Some(Fault::Unmatched),
                 }
                 false
             }
@@ -169,33 +185,29 @@ impl<S> Conditionals<S> {
                         frame.active = !frame.taken;
                         frame.taken = true;
                     }
-                    None => fault = Some(Fault::Unmatched),
+                    None => *fault = Some(Fault::Unmatched),
                 }
                 false
             }
             Directive::EndIf => {
                 if self.frames.pop().is_none() {
-                    fault = Some(Fault::Unmatched);
+                    *fault = Some(Fault::Unmatched);
                 }
                 false
             }
             Directive::Define(name) => {
-                self.change_define(name, &mut fault, |defines, name| {
+                self.change_define(name, fault, |defines, name| {
                     defines.insert(name);
                 });
                 false
             }
             Directive::Undefine(name) => {
-                self.change_define(name, &mut fault, |defines, name| {
+                self.change_define(name, fault, |defines, name| {
                     defines.remove(&name);
                 });
                 false
             }
-            // Any other pragma (`{attribute ...}`) is trivia, kept or dropped
-            // with the branch it sits in.
-            Directive::Other => self.is_active(),
-        };
-        Step { keep, fault }
+        }
     }
 
     fn change_define(
@@ -222,14 +234,44 @@ impl<S> Conditionals<S> {
     }
 }
 
-/// What a pragma token asks the transform to do.
-enum Directive {
+/// A conditional directive: a pragma the state machine ([`Conditionals`])
+/// consumes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Directive {
     If(Result<String, ()>),
     Elsif(Result<String, ()>),
     Else,
     EndIf,
     Define(Option<String>),
     Undefine(Option<String>),
+}
+
+/// How a `{text}`, `{info}`, `{warning}` or `{error}` pragma asks to be shown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Level {
+    Text,
+    Info,
+    Warning,
+    Error,
+}
+
+/// What the text of a pragma says. The one reading of pragma text: every
+/// reader asks [`kind`] and none reads the braces or the keyword itself.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Kind {
+    /// A conditional directive (`{IF}`, `{ELSIF}`, `{ELSE}`, `{END_IF}`,
+    /// `{DEFINE}`, `{UNDEFINE}`).
+    Directive(Directive),
+    /// `{attribute 'name'}` or `{attribute 'name' := 'value'}`. The name is
+    /// not empty and holds letters, digits, `-`, `.` and `_`; the value is the
+    /// text between its quotes, as written.
+    Attribute { name: String, value: Option<String> },
+    /// `{text '..'}`, `{info '..'}`, `{warning '..'}` or `{error '..'}`: the
+    /// text between the quotes, as written.
+    Message { level: Level, text: String },
+    /// Any other pragma, including a known keyword whose form is malformed
+    /// (`{attribute}`, `{attribute ''}`, `{warning disable C0195}`). Kept as it
+    /// is.
     Other,
 }
 
@@ -237,11 +279,12 @@ enum Directive {
 /// `{ELSE}`, `{END_IF}`, `{DEFINE}`, `{UNDEFINE}`), which the state machine
 /// consumes ([`Step::keep`] is false for it) wherever it stands.
 pub fn is_directive(text: &str) -> bool {
-    !matches!(directive(text), Directive::Other)
+    matches!(kind(text), Kind::Directive(_))
 }
 
-/// Reads the leading keyword of a `{ ... }` pragma and the rest of its text.
-fn directive(text: &str) -> Directive {
+/// Reads the leading keyword of a `{ ... }` pragma, without regard to case,
+/// and the rest of its text.
+pub fn kind(text: &str) -> Kind {
     let body = text
         .strip_prefix('{')
         .and_then(|t| t.strip_suffix('}'))
@@ -253,14 +296,71 @@ fn directive(text: &str) -> Directive {
     };
 
     match keyword.to_ascii_uppercase().as_str() {
-        "IF" => Directive::If(non_empty(rest)),
-        "ELSIF" => Directive::Elsif(non_empty(rest)),
-        "ELSE" => Directive::Else,
-        "END_IF" => Directive::EndIf,
-        "DEFINE" => Directive::Define(symbol(rest)),
-        "UNDEFINE" => Directive::Undefine(symbol(rest)),
-        _ => Directive::Other,
+        "IF" => Kind::Directive(Directive::If(non_empty(rest))),
+        "ELSIF" => Kind::Directive(Directive::Elsif(non_empty(rest))),
+        "ELSE" => Kind::Directive(Directive::Else),
+        "END_IF" => Kind::Directive(Directive::EndIf),
+        "DEFINE" => Kind::Directive(Directive::Define(symbol(rest))),
+        "UNDEFINE" => Kind::Directive(Directive::Undefine(symbol(rest))),
+        "ATTRIBUTE" => attribute(rest),
+        "TEXT" => message(Level::Text, rest),
+        "INFO" => message(Level::Info, rest),
+        "WARNING" => message(Level::Warning, rest),
+        "ERROR" => message(Level::Error, rest),
+        _ => Kind::Other,
     }
+}
+
+/// Reads what follows `attribute`: `'name'`, then optionally `:=` and
+/// `'value'`, with white space between the parts.
+fn attribute(rest: &str) -> Kind {
+    let Some((name, after)) = quoted(rest) else {
+        return Kind::Other;
+    };
+    let name_is_valid = !name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '.' | '_'));
+    if !name_is_valid {
+        return Kind::Other;
+    }
+
+    let after = after.trim_start();
+    if after.is_empty() {
+        return Kind::Attribute {
+            name: name.to_string(),
+            value: None,
+        };
+    }
+    let Some(value_text) = after.strip_prefix(":=") else {
+        return Kind::Other;
+    };
+    match quoted(value_text.trim_start()) {
+        Some((value, tail)) if tail.trim().is_empty() => Kind::Attribute {
+            name: name.to_string(),
+            value: Some(value.to_string()),
+        },
+        _ => Kind::Other,
+    }
+}
+
+/// Reads what follows `text`, `info`, `warning` or `error`: the quoted text
+/// and nothing after it.
+fn message(level: Level, rest: &str) -> Kind {
+    match quoted(rest) {
+        Some((text, tail)) if tail.trim().is_empty() => Kind::Message {
+            level,
+            text: text.to_string(),
+        },
+        _ => Kind::Other,
+    }
+}
+
+/// Splits `'text'` and what follows it. No escape is read: the text ends at
+/// the next single quote, so a text that holds one is not understood.
+fn quoted(text: &str) -> Option<(&str, &str)> {
+    const QUOTE: char = '\'';
+    text.strip_prefix(QUOTE)?.split_once(QUOTE)
 }
 
 fn non_empty(text: &str) -> Result<String, ()> {
@@ -436,6 +536,91 @@ impl ConditionParser<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
+
+    fn attribute(name: &str, value: Option<&str>) -> Kind {
+        Kind::Attribute {
+            name: name.to_string(),
+            value: value.map(str::to_string),
+        }
+    }
+
+    fn message(level: Level, text: &str) -> Kind {
+        Kind::Message {
+            level,
+            text: text.to_string(),
+        }
+    }
+
+    #[rstest]
+    #[case::if_directive("{IF defined(X)}", Kind::Directive(Directive::If(Ok("defined(X)".to_string()))))]
+    #[case::if_without_condition("{IF}", Kind::Directive(Directive::If(Err(()))))]
+    #[case::elsif_directive("{ELSIF true}", Kind::Directive(Directive::Elsif(Ok("true".to_string()))))]
+    #[case::else_directive("{ELSE}", Kind::Directive(Directive::Else))]
+    #[case::end_if_directive("{END_IF}", Kind::Directive(Directive::EndIf))]
+    #[case::define_directive("{DEFINE Foo}", Kind::Directive(Directive::Define(Some("foo".to_string()))))]
+    #[case::undefine_directive("{UNDEFINE Foo}", Kind::Directive(Directive::Undefine(Some("foo".to_string()))))]
+    #[case::directive_keyword_without_case("{end_if}", Kind::Directive(Directive::EndIf))]
+    #[case::attribute_with_name("{attribute 'hide'}", attribute("hide", None))]
+    #[case::attribute_with_value(
+        "{attribute 'pack_mode' := '2'}",
+        attribute("pack_mode", Some("2"))
+    )]
+    #[case::attribute_with_value_without_white_space(
+        "{attribute 'pack_mode':='2'}",
+        attribute("pack_mode", Some("2"))
+    )]
+    #[case::attribute_with_white_space_around_the_parts(
+        "{  attribute   'a'  :=  'b'  }",
+        attribute("a", Some("b"))
+    )]
+    #[case::attribute_with_new_lines(
+        "{attribute\n\t'a'\r\n:=\n\t'b'\n}",
+        attribute("a", Some("b"))
+    )]
+    #[case::attribute_keyword_without_case("{ATTRIBUTE 'Hide'}", attribute("Hide", None))]
+    #[case::attribute_name_with_dash("{attribute 'no-init'}", attribute("no-init", None))]
+    #[case::attribute_name_with_dashes(
+        "{attribute 'estimated-stack-usage' := '64'}",
+        attribute("estimated-stack-usage", Some("64"))
+    )]
+    #[case::attribute_name_with_dots(
+        "{attribute 'OPC.UA.DA' := '1'}",
+        attribute("OPC.UA.DA", Some("1"))
+    )]
+    #[case::attribute_with_empty_value("{attribute 'a' := ''}", attribute("a", Some("")))]
+    #[case::attribute_with_value_holding_spaces(
+        "{attribute 'a' := 'x y'}",
+        attribute("a", Some("x y"))
+    )]
+    #[case::attribute_without_name("{attribute}", Kind::Other)]
+    #[case::attribute_with_empty_name("{attribute ''}", Kind::Other)]
+    #[case::attribute_name_without_quotes("{attribute hide}", Kind::Other)]
+    #[case::attribute_name_without_closing_quote("{attribute 'hide}", Kind::Other)]
+    #[case::attribute_name_with_forbidden_character("{attribute 'a b'}", Kind::Other)]
+    #[case::attribute_with_text_after_the_name("{attribute 'a' 'b'}", Kind::Other)]
+    #[case::attribute_with_assignment_without_value("{attribute 'a' :=}", Kind::Other)]
+    #[case::attribute_with_value_without_quotes("{attribute 'a' := 2}", Kind::Other)]
+    #[case::attribute_with_value_without_closing_quote("{attribute 'a' := '2}", Kind::Other)]
+    #[case::attribute_with_text_after_the_value("{attribute 'a' := 'b' c}", Kind::Other)]
+    #[case::text_message("{text 'hello'}", message(Level::Text, "hello"))]
+    #[case::info_message("{info 'hello'}", message(Level::Info, "hello"))]
+    #[case::warning_message("{warning 'hello world'}", message(Level::Warning, "hello world"))]
+    #[case::error_message("{error 'hello'}", message(Level::Error, "hello"))]
+    #[case::message_keyword_without_case("{WARNING 'x'}", message(Level::Warning, "x"))]
+    #[case::message_with_white_space("{  warning   'x'  }", message(Level::Warning, "x"))]
+    #[case::message_with_empty_text("{info ''}", message(Level::Info, ""))]
+    #[case::message_without_text("{warning}", Kind::Other)]
+    #[case::message_without_quotes("{warning hello}", Kind::Other)]
+    #[case::message_without_closing_quote("{warning 'hello}", Kind::Other)]
+    #[case::message_with_text_after_the_quoted_text("{warning 'a' b}", Kind::Other)]
+    #[case::warning_disable("{warning disable C0195}", Kind::Other)]
+    #[case::warning_restore("{warning restore C0195}", Kind::Other)]
+    #[case::unknown_keyword("{flag 'x'}", Kind::Other)]
+    #[case::empty_pragma("{}", Kind::Other)]
+    fn kind_when_pragma_text_then_the_kind_it_says(#[case] text: &str, #[case] expected: Kind) {
+        assert_eq!(kind(text), expected);
+    }
 
     fn run(pragmas: &[&str]) -> Vec<Step> {
         let mut conditionals = Conditionals::new();

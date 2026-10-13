@@ -1222,6 +1222,7 @@ dependencies = [
  "ironplc-spec-requirements-gen",
  "ironplc-test",
  "rowan",
+ "rstest",
  "spec_test_macro",
  "time",
 ]
