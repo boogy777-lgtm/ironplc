@@ -155,6 +155,8 @@ mod spec_conformance_adr;
 #[cfg(test)]
 mod spec_conformance_arithmetic_operator_overloads;
 #[cfg(test)]
+mod spec_conformance_attributes;
+#[cfg(test)]
 mod spec_conformance_constant_inference;
 #[cfg(test)]
 mod spec_conformance_keyword_function_forms;

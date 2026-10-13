@@ -77,7 +77,8 @@ END_CONFIGURATION";
 /// `subrange`, `simple`, `array`, `structure`, `union`, `string`, `reference`,
 /// `params`, `late_bound`, `member`, `variable`, `function`, `function_block`,
 /// `program`, `interface`, `method`, `property` and `action`. Written for the
-/// CODESYS dialect.
+/// CODESYS dialect. `Main` declares a variable of the union, because the
+/// analysis leaves out a union that no declaration uses.
 pub const ATTRIBUTE_PROGRAM: &str = "TYPE
     {attribute 'enumeration'}
     Color : (Red, Green, Blue);
@@ -148,4 +149,31 @@ END_FUNCTION_BLOCK
 
 {attribute 'program'}
 PROGRAM Main
+VAR
+    overlay : Overlay;
+END_VAR
 END_PROGRAM";
+
+/// The attribute that stands before each declaration of [`ATTRIBUTE_PROGRAM`],
+/// and the name of that declaration, in source order.
+pub const ATTRIBUTE_PROGRAM_ATTRIBUTES: [(&str, &str); 19] = [
+    ("enumeration", "Color"),
+    ("subrange", "Percent"),
+    ("simple", "Count"),
+    ("array", "Buffer"),
+    ("structure", "Point"),
+    ("member", "x"),
+    ("union", "Overlay"),
+    ("string", "Label"),
+    ("reference", "IntRef"),
+    ("params", "Pair"),
+    ("late_bound", "Location"),
+    ("interface", "Shape"),
+    ("function", "Twice"),
+    ("variable", "value"),
+    ("function_block", "Counter"),
+    ("method", "Reset"),
+    ("property", "Current"),
+    ("action", "Light"),
+    ("program", "Main"),
+];

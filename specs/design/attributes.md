@@ -148,3 +148,7 @@ back.
 **REQ-ATTR-dsl-003** The kinds of target are named once (`TargetKind`) and the
 census (`ironplc_dsl::attribute::census::declared`) lists every declaration of
 a library of each kind with its attributes.
+
+**REQ-ATTR-analyzer-001** After the full analysis the library still carries the
+attributes of every kind of target. A transform that rebuilds a declaration from
+another one carries the field over.
