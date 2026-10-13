@@ -22,6 +22,7 @@
 #[cfg(test)]
 mod tests;
 
+use super::attributes::attributes_of;
 use super::declarations::{build, row, Form, Init, Parts, Row};
 use super::initializers::{
     lower_array_elements, lower_initial_value, lower_integer_value, lower_simple_initializer,
@@ -270,7 +271,7 @@ pub fn lower_members(
             Ok(StructureElementDeclaration {
                 name: lower_name(cx, &part(cx, &member, K::Name)?)?,
                 init: lower_initial_value(cx, &member)?,
-                attributes: Attributes::default(),
+                attributes: attributes_of(cx, &member),
             })
         })
         .collect()
@@ -478,7 +479,7 @@ pub fn lower_type_declaration(
     node: &SyntaxNode,
 ) -> Result<DataTypeDeclarationKind, Diagnostic> {
     expect(cx, node, K::TypeDecl)?;
-    build(cx, DECLARATIONS, node)
+    build(cx, DECLARATIONS, node).map(|kind| kind.with_attributes(attributes_of(cx, node)))
 }
 
 /// Lowers a `TYPE ... END_TYPE` block to its declarations, in order.

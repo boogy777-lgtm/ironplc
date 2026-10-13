@@ -24,8 +24,12 @@ lazy_static = "1.5.0"
 # enables it, so a product build has the derived `Clone` and no counter.
 count-library-clones = []
 
+[build-dependencies]
+ironplc-spec-requirements-gen = { path = "../spec_requirements_gen" }
+
 [dev-dependencies]
 rstest = "0.27"
+spec_test_macro = { path = "../spec_test_macro" }
 
 [lints]
 workspace = true

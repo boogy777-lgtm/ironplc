@@ -70,3 +70,82 @@ CONFIGURATION config
     PROGRAM program1 WITH plc_task : Main;
   END_RESOURCE
 END_CONFIGURATION";
+
+/// A file with one attribute pragma before each of the nineteen kinds of
+/// declaration that can carry one (see `ironplc_dsl::attribute::census`). Each
+/// attribute is named for the kind it stands before: `enumeration`,
+/// `subrange`, `simple`, `array`, `structure`, `union`, `string`, `reference`,
+/// `params`, `late_bound`, `member`, `variable`, `function`, `function_block`,
+/// `program`, `interface`, `method`, `property` and `action`. Written for the
+/// CODESYS dialect.
+pub const ATTRIBUTE_PROGRAM: &str = "TYPE
+    {attribute 'enumeration'}
+    Color : (Red, Green, Blue);
+    {attribute 'subrange'}
+    Percent : INT (0..100);
+    {attribute 'simple'}
+    Count : INT := 5;
+    {attribute 'array'}
+    Buffer : ARRAY [0..3] OF INT;
+    {attribute 'structure'}
+    Point : STRUCT
+        {attribute 'member'}
+        x : INT;
+        y : INT;
+    END_STRUCT;
+    {attribute 'union'}
+    Overlay : UNION
+        whole : DINT;
+        part : INT;
+    END_UNION;
+    {attribute 'string'}
+    Label : STRING[10];
+    {attribute 'reference'}
+    IntRef : REF_TO INT;
+    {attribute 'params'}
+    Pair : PARAMS(2) OF INT;
+    {attribute 'late_bound'}
+    Location : Point;
+END_TYPE
+
+{attribute 'interface'}
+INTERFACE Shape
+END_INTERFACE
+
+{attribute 'function'}
+FUNCTION Twice : INT
+VAR_INPUT
+    {attribute 'variable'}
+    value : INT;
+END_VAR
+    Twice := value * 2;
+END_FUNCTION
+
+{attribute 'function_block'}
+FUNCTION_BLOCK Counter
+VAR
+    ticks : INT;
+END_VAR
+    {attribute 'method'}
+    METHOD Reset
+        ticks := 0;
+    END_METHOD
+    {attribute 'property'}
+    PROPERTY Current : INT
+    GET
+        Current := ticks;
+    END_GET
+    END_PROPERTY
+END_FUNCTION_BLOCK
+
+FUNCTION_BLOCK Sequence
+INITIAL_STEP Idle:
+END_STEP
+    {attribute 'action'}
+    ACTION Light:
+    END_ACTION
+END_FUNCTION_BLOCK
+
+{attribute 'program'}
+PROGRAM Main
+END_PROGRAM";

@@ -9,9 +9,11 @@
 //! declaration kinds in this module has one arm per kind and no wildcard, so
 //! a declaration kind added later does not compile until it answers.
 //!
-//! The lowering does not fill the field in yet: every node has the empty
-//! set, and a later change attaches each attribute pragma to the declaration
-//! it stands before.
+//! The lowering of the syntax tree fills the field: each attribute pragma is
+//! attached to the declaration it stands before (design: attributes). A node
+//! built by hand, or by a parser that reads no pragma, has the empty set.
+pub mod census;
+
 use crate::common::{DataTypeDeclarationKind, LibraryElementKind};
 use crate::core::SourceSpan;
 
@@ -81,6 +83,29 @@ impl Attributed for DataTypeDeclarationKind {
     }
 }
 
+impl DataTypeDeclarationKind {
+    /// This declaration with `attributes` as its attributes, whatever kind of
+    /// declaration it is. One arm per kind and no wildcard, as for
+    /// [`Attributed`].
+    pub fn with_attributes(mut self, attributes: Attributes) -> Self {
+        match &mut self {
+            DataTypeDeclarationKind::Enumeration(declaration) => {
+                declaration.attributes = attributes
+            }
+            DataTypeDeclarationKind::Subrange(declaration) => declaration.attributes = attributes,
+            DataTypeDeclarationKind::Simple(declaration) => declaration.attributes = attributes,
+            DataTypeDeclarationKind::Array(declaration) => declaration.attributes = attributes,
+            DataTypeDeclarationKind::Structure(declaration) => declaration.attributes = attributes,
+            DataTypeDeclarationKind::Union(declaration) => declaration.attributes = attributes,
+            DataTypeDeclarationKind::String(declaration) => declaration.attributes = attributes,
+            DataTypeDeclarationKind::Reference(declaration) => declaration.attributes = attributes,
+            DataTypeDeclarationKind::Params(declaration) => declaration.attributes = attributes,
+            DataTypeDeclarationKind::LateBound(declaration) => declaration.attributes = attributes,
+        }
+        self
+    }
+}
+
 impl Attributed for LibraryElementKind {
     fn attributes(&self) -> &Attributes {
         match self {
@@ -101,11 +126,18 @@ impl Attributed for LibraryElementKind {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use spec_test_macro::spec_test;
 
+    use super::census::{declared, Declared, TargetKind};
     use super::*;
     use crate::common::{
-        FunctionBlockBodyKind, ProgramDeclaration, StructureDeclaration, TypeName, VarDecl,
+        ArrayDeclaration, EnumeratedSpecificationInit, EnumerationDeclaration,
+        FunctionBlockBodyKind, IntegerRef, LateBoundDeclaration, Library, ParamsDeclaration,
+        ParamsSpecification, ProgramDeclaration, RefSyntax, ReferenceDeclaration, ReferenceTarget,
+        SimpleDeclaration, SpecificationKind, StringDeclaration, StringType, StructureDeclaration,
+        SubrangeDeclaration, TypeName, UnionDeclaration, VarDecl,
     };
+    use crate::common::{InitialValueAssignmentKind, Integer};
     use crate::configuration::ConfigurationDeclaration;
     use crate::core::Id;
 
@@ -179,6 +211,15 @@ mod tests {
     }
 
     #[test]
+    fn all_spec_requirements_have_tests() {
+        assert!(
+            crate::spec_requirements::UNTESTED.is_empty(),
+            "Requirements in spec with no conformance test: {:?}",
+            crate::spec_requirements::UNTESTED
+        );
+    }
+
+    #[spec_test(REQ_ATTR_dsl_001)]
     fn eq_when_programs_differ_only_by_attribute_then_not_equal() {
         let plain = program(Attributes::default());
         let attributed = program(Attributes::new(vec![attribute("hide", None)]));
@@ -187,12 +228,136 @@ mod tests {
         assert_eq!(attributed, attributed.clone());
     }
 
-    #[test]
+    #[spec_test(REQ_ATTR_dsl_001)]
     fn eq_when_variables_differ_only_by_attribute_then_not_equal() {
         let plain = VarDecl::simple("x", "INT");
         let mut attributed = VarDecl::simple("x", "INT");
         attributed.attributes = Attributes::new(vec![attribute("hide", None)]);
 
         assert_ne!(plain, attributed);
+    }
+
+    /// One declaration of each kind of type, each with the attribute `old`.
+    fn data_types() -> Vec<DataTypeDeclarationKind> {
+        let old = Attributes::new(vec![attribute("old", None)]);
+        let name = || TypeName::from("t");
+        let count = || IntegerRef::Literal(Integer::new("2", SourceSpan::default()).unwrap());
+        vec![
+            DataTypeDeclarationKind::Enumeration(EnumerationDeclaration {
+                type_name: name(),
+                spec_init: EnumeratedSpecificationInit::values_and_default(vec!["A"], "A"),
+                attributes: old.clone(),
+            }),
+            DataTypeDeclarationKind::Subrange(SubrangeDeclaration {
+                type_name: name(),
+                spec: SpecificationKind::Named(TypeName::from("base")),
+                default: None,
+                attributes: old.clone(),
+            }),
+            DataTypeDeclarationKind::Simple(SimpleDeclaration {
+                type_name: name(),
+                spec_and_init: InitialValueAssignmentKind::simple_uninitialized(TypeName::from(
+                    "INT",
+                )),
+                attributes: old.clone(),
+            }),
+            DataTypeDeclarationKind::Array(ArrayDeclaration {
+                type_name: name(),
+                spec: SpecificationKind::Named(TypeName::from("base")),
+                init: vec![],
+                attributes: old.clone(),
+            }),
+            DataTypeDeclarationKind::Structure(StructureDeclaration {
+                type_name: name(),
+                elements: vec![],
+                attributes: old.clone(),
+            }),
+            DataTypeDeclarationKind::Union(UnionDeclaration {
+                type_name: name(),
+                elements: vec![],
+                attributes: old.clone(),
+            }),
+            DataTypeDeclarationKind::String(StringDeclaration {
+                type_name: name(),
+                length: count(),
+                width: StringType::String,
+                init: None,
+                attributes: old.clone(),
+            }),
+            DataTypeDeclarationKind::Reference(ReferenceDeclaration {
+                type_name: name(),
+                target: ReferenceTarget::Named(TypeName::from("INT")),
+                syntax: RefSyntax::RefTo,
+                attributes: old.clone(),
+            }),
+            DataTypeDeclarationKind::Params(ParamsDeclaration {
+                type_name: name(),
+                spec: ParamsSpecification {
+                    count: count(),
+                    type_name: TypeName::from("INT"),
+                },
+                attributes: old.clone(),
+            }),
+            DataTypeDeclarationKind::LateBound(LateBoundDeclaration {
+                data_type_name: name(),
+                base_type_name: TypeName::from("base"),
+                attributes: old,
+            }),
+        ]
+    }
+
+    #[spec_test(REQ_ATTR_dsl_002)]
+    fn with_attributes_when_any_kind_of_type_declaration_then_its_attributes_are_replaced() {
+        let kinds = data_types();
+        assert_eq!(kinds.len(), 10);
+        for declaration in kinds {
+            let before = declaration.clone();
+            let replaced = declaration.with_attributes(Attributes::new(vec![
+                attribute("first", None),
+                attribute("second", Some("2")),
+            ]));
+
+            let names: Vec<&str> = replaced
+                .attributes()
+                .iter()
+                .map(|a| a.name.as_str())
+                .collect();
+            assert_eq!(names, vec!["first", "second"], "{before:?}");
+            assert_ne!(replaced, before);
+        }
+    }
+
+    #[spec_test(REQ_ATTR_dsl_003)]
+    fn declared_when_library_has_targets_then_each_with_its_kind_name_and_attributes() {
+        let mut variable = VarDecl::simple("x", "INT");
+        variable.attributes = Attributes::new(vec![attribute("hide", None)]);
+        let mut program = program(Attributes::new(vec![attribute("pack_mode", Some("1"))]));
+        program.variables = vec![variable];
+        let library = Library {
+            elements: vec![LibraryElementKind::ProgramDeclaration(program)],
+        };
+
+        let found = declared(&library);
+
+        let summary: Vec<(TargetKind, &str, usize)> = found
+            .iter()
+            .map(|d: &Declared| (d.kind, d.name.as_str(), d.attributes.iter().count()))
+            .collect();
+        assert_eq!(
+            summary,
+            vec![
+                (TargetKind::Program, "main", 1),
+                (TargetKind::Variable, "x", 1)
+            ]
+        );
+    }
+
+    #[spec_test(REQ_ATTR_dsl_003)]
+    fn target_kind_when_all_then_nineteen_kinds_with_distinct_labels() {
+        let labels: std::collections::HashSet<&str> =
+            TargetKind::ALL.iter().map(|kind| kind.label()).collect();
+
+        assert_eq!(TargetKind::ALL.len(), 19);
+        assert_eq!(labels.len(), 19);
     }
 }

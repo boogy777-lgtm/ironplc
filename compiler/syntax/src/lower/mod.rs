@@ -22,6 +22,7 @@
 //! Lowering is only run on a tree whose parse reported no error: a node the
 //! grammar guarantees but the tree lacks is an internal error.
 
+pub mod attributes;
 pub mod configuration;
 pub mod declarations;
 pub mod expressions;
