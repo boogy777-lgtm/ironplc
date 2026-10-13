@@ -234,10 +234,22 @@ pub(crate) fn of(types: &TypeEnvironment, expr: &Expr) -> Option<ValueType> {
 }
 
 /// Checks that the value of `expr` may be used where `expected` is
-/// required, by a place that makes `value_use` of it. `Ok` when it may, and
-/// when the analyzer resolved no type for the value, since there is nothing
-/// to compare.
+/// required by a place that only holds it (see [`ValueUse::Holds`]): an
+/// assignment, a parameter of a function that does not compute, a condition.
+/// `Ok` when it may, and when the analyzer resolved no type for the value,
+/// since there is nothing to compare.
 pub(crate) fn check(
+    types: &TypeEnvironment,
+    expected: &TypeName,
+    expr: &Expr,
+    options: &CompilerOptions,
+) -> Result<(), Mismatch> {
+    check_use(types, ValueUse::Holds, expected, expr, options)
+}
+
+/// [`check`] for a place that makes `value_use` of the value: where it
+/// computes, an enumeration is no number (see [`ValueUse::refuses`]).
+pub(crate) fn check_use(
     types: &TypeEnvironment,
     value_use: ValueUse,
     expected: &TypeName,
@@ -563,7 +575,6 @@ mod tests {
 
         let result = check(
             &types,
-            ValueUse::Holds,
             &TypeName::from("BROKEN"),
             &expr,
             &CompilerOptions::default(),
@@ -579,7 +590,6 @@ mod tests {
 
         let result = check(
             &types,
-            ValueUse::Holds,
             &TypeName::from("NOWHERE"),
             &expr,
             &CompilerOptions::default(),
@@ -595,7 +605,6 @@ mod tests {
 
         let result = check(
             &types,
-            ValueUse::Holds,
             &TypeName::from("ANY_INT"),
             &expr,
             &CompilerOptions::default(),
@@ -611,7 +620,6 @@ mod tests {
 
         let result = check(
             &types,
-            ValueUse::Holds,
             &TypeName::from("INT"),
             &expr,
             &CompilerOptions::default(),

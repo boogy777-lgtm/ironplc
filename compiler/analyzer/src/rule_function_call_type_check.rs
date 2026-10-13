@@ -62,7 +62,7 @@ use crate::{
     rule_support::{run_rule, DiagnosticVisitor},
     semantic_context::SemanticContext,
     type_compat::is_checkable_type,
-    value_type::{self, ValueType, ValueUse},
+    value_type::{self, ValueType},
     variable_type::{Declarations, Declared},
 };
 use ironplc_parser::options::CompilerOptions;
@@ -131,13 +131,9 @@ impl RuleFunctionCallTypeCheck<'_> {
             return;
         };
 
-        if let Err(mismatch) = value_type::check(
-            self.context.types(),
-            ValueUse::Holds,
-            &target_type,
-            value,
-            self.options,
-        ) {
+        if let Err(mismatch) =
+            value_type::check(self.context.types(), &target_type, value, self.options)
+        {
             self.diagnostics.push(
                 Diagnostic::text(
                     func_call.name.span(),
@@ -197,9 +193,7 @@ impl RuleFunctionCallTypeCheck<'_> {
             return;
         }
 
-        if let Err(mismatch) =
-            value_type::check(types, ValueUse::Holds, &target_type, value, self.options)
-        {
+        if let Err(mismatch) = value_type::check(types, &target_type, value, self.options) {
             self.diagnostics.push(
                 Diagnostic::text(
                     value.span(),
@@ -286,13 +280,12 @@ impl Visitor<Infallible> for RuleFunctionCallTypeCheck<'_> {
                 }
             }
 
-            // Check each positional argument type against the parameter type.
-            // Standard-library functions are checked too: their parameters use
-            // generic ANY_* categories (or concrete types for the conversion
-            // functions), all handled by `are_types_compatible`. The parameter
-            // list continues past the declared ones for an extensible
-            // function, so every input of `AND(a, b, c)` is checked. A
-            // VAR_IN_OUT argument must match exactly, not just be compatible;
+            // Check each positional argument type against the parameter type
+            // as the function's use of its inputs allows (an enumeration is
+            // no number to a function that computes). The parameter list
+            // continues past the declared ones for an extensible function,
+            // so every input of `AND(a, b, c)` is checked. A VAR_IN_OUT
+            // argument must match exactly, not just be compatible;
             // `rule_function_call_in_out_argument` checks it.
             //
             // `ADD`, `SUB`, `MUL` and `DIV` are the exception. Their inputs
@@ -309,7 +302,7 @@ impl Visitor<Infallible> for RuleFunctionCallTypeCheck<'_> {
                 if param.is_inout {
                     continue;
                 }
-                if let Err(mismatch) = value_type::check(
+                if let Err(mismatch) = value_type::check_use(
                     self.context.types(),
                     signature.value_use,
                     &param.param_type,

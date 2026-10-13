@@ -55,7 +55,7 @@ use crate::{
     rule_support::{run_rule, DiagnosticVisitor},
     semantic_context::SemanticContext,
     type_environment::{elementary_type, TypeEnvironment},
-    value_type::{self, ValueUse},
+    value_type,
 };
 
 pub fn apply(
@@ -154,14 +154,7 @@ impl RuleSpecialOperator<'_> {
                 text::special_operator_operand_invalid_new_array_of_user_defined_type(),
             );
         }
-        if value_type::check(
-            self.types,
-            ValueUse::Holds,
-            &TypeName::from("ANY_INT"),
-            count,
-            &self.options,
-        )
-        .is_err()
+        if value_type::check(self.types, &TypeName::from("ANY_INT"), count, &self.options).is_err()
         {
             self.invalid(
                 operator,
