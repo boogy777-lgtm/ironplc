@@ -136,6 +136,60 @@ fn operand_name_of(types: &TypeEnvironment, id: TypeId) -> Option<TypeName> {
     }
 }
 
+/// The type of the result of a call whose declared result is a generic
+/// category, from the types of the inputs declared with that category, in the
+/// order of the arguments. `None` when no input has a type.
+///
+/// The result takes the type of the first input, as the inputs of numbers
+/// bind: how two different integer types meet is not decided here. An
+/// enumeration changes that in one way, because it is the number it stands
+/// for only where a value is held:
+///
+/// - every input is the same enumeration: the result is that enumeration, as
+///   `SEL(g, a, b)` gives back one of the values it was given;
+/// - an enumeration among inputs that are not all that enumeration: each stands
+///   as its number, so the result is a number and not an enumeration.
+///   `MAX(x, 1)` is an `INT`, and storing it into an enumeration is refused
+///   by the check of the place that stores it, as any `INT` is.
+pub(crate) fn generic_result(types: &TypeEnvironment, inputs: &[ExprType]) -> Option<ExprType> {
+    let first = inputs.first()?;
+    let declarations: Vec<Option<TypeId>> = inputs
+        .iter()
+        .map(|input| enumeration_declaration(types, input))
+        .collect();
+    let same_enumeration = declarations
+        .first()
+        .copied()
+        .flatten()
+        .is_some_and(|head| declarations.iter().all(|d| *d == Some(head)));
+    if same_enumeration || declarations.iter().all(Option::is_none) {
+        return Some(first.clone());
+    }
+    match first {
+        ExprType::Concrete(id) if types.enumeration_declaration(*id).is_some() => {
+            number_of(types, *id)
+        }
+        ExprType::Concrete(_) | ExprType::Literal(_) | ExprType::Null => Some(first.clone()),
+    }
+}
+
+/// The enumeration a value of type `expr_type` is, aliases resolved, or `None`
+/// when it is not an enumeration.
+fn enumeration_declaration(types: &TypeEnvironment, expr_type: &ExprType) -> Option<TypeId> {
+    match expr_type {
+        ExprType::Concrete(id) => types.enumeration_declaration(*id),
+        ExprType::Literal(_) | ExprType::Null => None,
+    }
+}
+
+/// The type of the number the enumeration `id` stands for, or `None` when the
+/// base type has no type of its own in the environment.
+fn number_of(types: &TypeEnvironment, id: TypeId) -> Option<ExprType> {
+    let number = types.get_by_id(id)?.representation.number_type()?;
+    let name = types.elementary_type_name_for(number)?;
+    types.id_of(&name).map(ExprType::Concrete)
+}
+
 /// Classifies the value of `expr`, or `None` when the analyzer resolved no
 /// type for it.
 pub(crate) fn of(types: &TypeEnvironment, expr: &Expr) -> Option<ValueType> {

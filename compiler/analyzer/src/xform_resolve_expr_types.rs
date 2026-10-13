@@ -26,7 +26,7 @@ use crate::intermediates::special_operator::{ResultType, SpecialOperator};
 use crate::pass_runner::Outcome;
 use crate::system_globals::SYSTEM_UPTIME_GLOBALS;
 use crate::type_environment::TypeEnvironment;
-use crate::value_type::operand_type_name;
+use crate::value_type::{generic_result, operand_type_name};
 use crate::variable_type::{Declarations, Declared};
 use ironplc_parser::options::CompilerOptions;
 use std::convert::Infallible;
@@ -372,33 +372,27 @@ impl ExprTypeResolver<'_> {
                 if !is_generic_type(&return_type) {
                     return self.expr_type_named(return_type);
                 }
-                // Generic return type: infer concrete type from the first argument
-                // whose parameter declaration type matches the generic return type.
-                // This correctly skips selector parameters whose type differs from
-                // the return type (e.g., BOOL for SEL, ANY_INT for MUX).
-                let mut positional_index = 0usize;
-                f.param_assignment.iter().find_map(|p| match p {
-                    ParamAssignmentKind::PositionalInput(pos) => {
-                        let idx = positional_index;
-                        positional_index += 1;
-                        match sig.parameters.get(idx) {
-                            Some(param) if param.param_type == return_type => {
-                                pos.expr.expr_type.clone()
-                            }
-                            _ => None,
-                        }
+                // Generic return type: the result takes the type of the inputs
+                // whose parameter is of the same category (see
+                // `value_type::generic_result`). This skips selector
+                // parameters whose type differs from the return type (e.g.,
+                // BOOL for SEL, ANY_INT for MUX).
+                let positional = sig
+                    .bind_inputs(&f.param_assignment)
+                    .filter(|(param, _)| param.param_type == return_type)
+                    .filter_map(|(_, input)| input.expr_type.clone());
+                let named = f.param_assignment.iter().filter_map(|p| match p {
+                    ParamAssignmentKind::NamedInput(named) => sig
+                        .parameters
+                        .iter()
+                        .find(|param| param.name == named.name && param.param_type == return_type)
+                        .and_then(|_| named.expr.expr_type.clone()),
+                    ParamAssignmentKind::PositionalInput(_) | ParamAssignmentKind::Output(_) => {
+                        None
                     }
-                    ParamAssignmentKind::NamedInput(named) => {
-                        let param = sig.parameters.iter().find(|p| p.name == named.name);
-                        match param {
-                            Some(param) if param.param_type == return_type => {
-                                named.expr.expr_type.clone()
-                            }
-                            _ => None,
-                        }
-                    }
-                    ParamAssignmentKind::Output(_) => None,
-                })
+                });
+                let inputs: Vec<ExprType> = positional.chain(named).collect();
+                generic_result(self.type_environment, &inputs)
             }
             // The method's return type. A call on `THIS^`/`SUPER^`, or to a
             // method without a return type, has no type here; the method

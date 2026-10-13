@@ -23,6 +23,8 @@ mod test_macros;
 mod call_assignment_check;
 mod callee_resolution;
 mod constant_folding;
+#[cfg(test)]
+mod enumeration_use_guard;
 mod function_environment;
 pub mod intermediate_type;
 #[cfg(test)]

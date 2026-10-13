@@ -417,3 +417,189 @@ fn arithmetic_mismatches() -> Vec<String> {
 fn enumeration_when_operand_of_arithmetic_then_refused_as_an_operand_of_the_wrong_type() {
     assert_eq!(arithmetic_mismatches(), Vec::<String>::new());
 }
+
+/// A row of the table of places that compute with an enumeration or only hold
+/// it: the statements of a program that declares `r : DINT`, `x : E1 := C`,
+/// `y : E1`, `z : E2 := Q`, `i : INT`, `g : BOOL`, `w : WORD` and `f : REAL`,
+/// and the outcome the table states.
+///
+/// A place that computes -- an arithmetic operator, the function form of one,
+/// a numerical function, the counter of a `FOR` -- refuses an enumeration; a
+/// place that holds it -- stores, passes, compares, selects, converts -- takes
+/// the number it stands for. The result of a selection is an enumeration when
+/// every input is the same one, and a number when they are not.
+struct Use {
+    name: &'static str,
+    statements: &'static str,
+    outcome: &'static str,
+}
+
+const USES: [Use; 29] = [
+    Use {
+        name: "numerical function into an integer",
+        statements: "i := ABS(x); r := i;",
+        outcome: "P4026",
+    },
+    Use {
+        name: "numerical function into an enumeration",
+        statements: "y := ABS(x); r := y;",
+        outcome: "P4026",
+    },
+    Use {
+        name: "power function",
+        statements: "i := EXPT(x, 2); r := i;",
+        outcome: "P4026",
+    },
+    Use {
+        name: "remainder function",
+        statements: "i := MOD(x, 2); r := i;",
+        outcome: "P4026",
+    },
+    Use {
+        name: "product function",
+        statements: "i := MUL(x, 2); r := i;",
+        outcome: "P4049",
+    },
+    Use {
+        name: "real function",
+        statements: "f := SQRT(x); r := REAL_TO_DINT(f);",
+        outcome: "P4026",
+    },
+    Use {
+        name: "counter of a FOR",
+        statements: "FOR x := A TO C DO r := r + 1; END_FOR;",
+        outcome: "P4049",
+    },
+    Use {
+        name: "FOR over enumeration bounds",
+        statements: "FOR i := A TO C DO r := r + 1; END_FOR;",
+        outcome: "3",
+    },
+    Use {
+        name: "FOR to an enumeration bound",
+        statements: "FOR i := 1 TO x DO r := r + 1; END_FOR;",
+        outcome: "2",
+    },
+    Use {
+        name: "SEL of values",
+        statements: "y := SEL(g, A, B); r := y;",
+        outcome: "0",
+    },
+    Use {
+        name: "SEL of variables",
+        statements: "y := SEL(TRUE, y, x); r := y;",
+        outcome: "2",
+    },
+    Use {
+        name: "MAX of enumerations",
+        statements: "y := MAX(x, y); r := y;",
+        outcome: "2",
+    },
+    Use {
+        name: "MOVE",
+        statements: "y := MOVE(x); r := y;",
+        outcome: "2",
+    },
+    Use {
+        name: "MUX of enumerations",
+        statements: "y := MUX(1, y, x); r := y;",
+        outcome: "2",
+    },
+    Use {
+        name: "LIMIT of enumerations",
+        statements: "y := LIMIT(A, x, B); r := y;",
+        outcome: "1",
+    },
+    Use {
+        name: "MAX with a number into an integer",
+        statements: "i := MAX(x, 1); r := i;",
+        outcome: "2",
+    },
+    Use {
+        name: "SEL with a number into an integer",
+        statements: "i := SEL(g, x, 1); r := i;",
+        outcome: "2",
+    },
+    Use {
+        name: "MIN of two enumerations into an integer",
+        statements: "i := MIN(x, z); r := i;",
+        outcome: "1",
+    },
+    Use {
+        name: "MUX selected by an enumeration",
+        statements: "i := MUX(x, 10, 20, 30); r := i;",
+        outcome: "30",
+    },
+    Use {
+        name: "comparison function",
+        statements: "g := GT(x, A); IF g THEN r := 1; END_IF;",
+        outcome: "1",
+    },
+    Use {
+        name: "BCD conversion",
+        statements: "w := INT_TO_BCD(x); r := WORD_TO_DINT(w);",
+        outcome: "2",
+    },
+    Use {
+        name: "conversion",
+        statements: "r := INT_TO_DINT(x);",
+        outcome: "2",
+    },
+    Use {
+        name: "MAX with a number into an enumeration",
+        statements: "y := MAX(x, 1); r := y;",
+        outcome: "P4027",
+    },
+    Use {
+        name: "MIN of two enumerations into an enumeration",
+        statements: "y := MIN(x, z); r := y;",
+        outcome: "P4027",
+    },
+    Use {
+        name: "SEL of two enumerations into an enumeration",
+        statements: "y := SEL(g, x, z); r := y;",
+        outcome: "P4027",
+    },
+    Use {
+        name: "MUX of two enumerations into an enumeration",
+        statements: "y := MUX(1, x, z); r := y;",
+        outcome: "P4027",
+    },
+    Use {
+        name: "comparison with a number",
+        statements: "g := x = 2;",
+        outcome: "0",
+    },
+    Use {
+        name: "comparison of two enumerations",
+        statements: "g := x = z;",
+        outcome: "0",
+    },
+    Use {
+        name: "comparison function of two enumerations",
+        statements: "g := EQ(x, z);",
+        outcome: "0",
+    },
+];
+
+fn use_mismatches() -> Vec<String> {
+    let mut found = Vec::new();
+    for row in &USES {
+        let source = format!(
+            "TYPE E1 : (A, B, C); END_TYPE TYPE E2 : (P, Q, R); END_TYPE \
+             PROGRAM main VAR r : DINT; x : E1 := C; y : E1; z : E2 := Q; i : INT; \
+             g : BOOL; w : WORD; f : REAL; END_VAR {} END_PROGRAM",
+            row.statements
+        );
+        let got = outcome_of(&source);
+        if got != row.outcome {
+            found.push(format!("{}: expected {}, got {got}", row.name, row.outcome));
+        }
+    }
+    found
+}
+
+#[test]
+fn enumeration_when_computed_with_then_refused_and_when_held_then_taken_as_its_number() {
+    assert_eq!(use_mismatches(), Vec::<String>::new());
+}
