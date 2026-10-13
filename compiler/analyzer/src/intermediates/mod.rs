@@ -10,6 +10,7 @@ pub mod params;
 pub mod special_operator;
 pub mod stdlib_function;
 pub mod stdlib_function_block;
+pub mod stdlib_numeric_function;
 pub mod stdlib_time_function;
 pub mod string;
 pub mod structure;

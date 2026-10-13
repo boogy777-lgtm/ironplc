@@ -40,6 +40,38 @@ pub(crate) enum ValueType {
     Composite(TypeId),
 }
 
+/// What a place does with the value it is given.
+///
+/// This is the one place the language states when an enumeration is a number.
+/// An enumeration is the number it stands for (its base type, `INT` unless the
+/// declaration names another) where the place only holds the value: stores it,
+/// passes it, compares it, selects it, converts it. It is no number where the
+/// place computes a new number from it: an arithmetic operator, the function
+/// form of one, a numerical function, the counter of a `FOR`. CODESYS refuses
+/// those for an enumeration declared `strict`, and an operation on a named
+/// value has no meaning.
+///
+/// A place states its use as data -- a row of the function environment, an
+/// operator -- and every check asks [`ValueUse::refuses`], so a new place
+/// cannot answer differently from the others.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ValueUse {
+    /// The place stores, passes, compares, selects or converts the value, and
+    /// the value stays what it is.
+    #[default]
+    Holds,
+    /// The place makes a new number from the value.
+    Computes,
+}
+
+impl ValueUse {
+    /// Whether a value of `representation` is refused by a place that makes
+    /// this use of it: an enumeration is no number where the place computes.
+    pub fn refuses(self, representation: &IntermediateType) -> bool {
+        self == ValueUse::Computes && representation.is_enumeration()
+    }
+}
+
 /// A value used where its type is not accepted.
 #[derive(Debug, PartialEq)]
 pub(crate) struct Mismatch {

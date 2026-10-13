@@ -43,11 +43,14 @@ pub(crate) struct TimeOverload {
 impl TimeOverload {
     /// The registered signature: `name(IN1 : in1, IN2 : in2) : result`.
     fn signature(&self) -> FunctionSignature {
+        // Each is a typed overload of an arithmetic function (Table 30), so it
+        // computes like the numeric overload does.
         FunctionSignature::stdlib(
             self.name,
             TypeName::from(self.result),
             vec![input_param("IN1", self.in1), input_param("IN2", self.in2)],
         )
+        .computing()
     }
 
     /// The long form of this overload: the same shape with each temporal
@@ -293,6 +296,20 @@ END_PROGRAM";
             "{:?}",
             context.diagnostics()
         );
+    }
+
+    #[test]
+    fn get_time_functions_when_typed_overload_then_computes_and_other_holds() {
+        let multiply = registered("MUL_TIME").unwrap();
+        let multiply_long = registered("MUL_LTIME").unwrap();
+        let concatenate = registered("CONCAT_DATE_TOD").unwrap();
+
+        assert_eq!(multiply.value_use, crate::value_type::ValueUse::Computes);
+        assert_eq!(
+            multiply_long.value_use,
+            crate::value_type::ValueUse::Computes
+        );
+        assert_eq!(concatenate.value_use, crate::value_type::ValueUse::Holds);
     }
 
     #[test]

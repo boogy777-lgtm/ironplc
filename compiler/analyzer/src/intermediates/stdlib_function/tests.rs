@@ -123,59 +123,8 @@ fn get_real_to_real_conversions_contains_expected_functions() {
 }
 
 #[test]
-fn get_numeric_functions_when_called_then_contains_all_functions() {
-    let functions = get_numeric_functions();
-
-    assert_eq!(functions.len(), 17);
-
-    assert!(functions.iter().any(|f| f.name.original() == "ABS"));
-    assert!(functions.iter().any(|f| f.name.original() == "SQRT"));
-    assert!(functions.iter().any(|f| f.name.original() == "MIN"));
-    assert!(functions.iter().any(|f| f.name.original() == "MAX"));
-    assert!(functions.iter().any(|f| f.name.original() == "LIMIT"));
-    assert!(functions.iter().any(|f| f.name.original() == "SEL"));
-    assert!(functions.iter().any(|f| f.name.original() == "LN"));
-    assert!(functions.iter().any(|f| f.name.original() == "LOG"));
-    assert!(functions.iter().any(|f| f.name.original() == "EXP"));
-    assert!(functions.iter().any(|f| f.name.original() == "SIN"));
-    assert!(functions.iter().any(|f| f.name.original() == "COS"));
-    assert!(functions.iter().any(|f| f.name.original() == "TAN"));
-    assert!(functions.iter().any(|f| f.name.original() == "ASIN"));
-    assert!(functions.iter().any(|f| f.name.original() == "ACOS"));
-    assert!(functions.iter().any(|f| f.name.original() == "ATAN"));
-    assert!(functions.iter().any(|f| f.name.original() == "ATAN2"));
-    assert!(functions.iter().any(|f| f.name.original() == "EXPT"));
-}
-
-#[test]
-fn get_numeric_functions_when_abs_then_has_one_input() {
-    let functions = get_numeric_functions();
-    let abs = functions
-        .iter()
-        .find(|f| f.name.original() == "ABS")
-        .unwrap();
-
-    assert_eq!(abs.input_parameter_count(), 1);
-    assert_eq!(abs.parameters[0].name.original(), "IN");
-    assert!(abs.is_stdlib());
-}
-
-#[test]
-fn get_numeric_functions_when_sqrt_then_has_one_input() {
-    let functions = get_numeric_functions();
-    let sqrt = functions
-        .iter()
-        .find(|f| f.name.original() == "SQRT")
-        .unwrap();
-
-    assert_eq!(sqrt.input_parameter_count(), 1);
-    assert_eq!(sqrt.parameters[0].name.original(), "IN");
-    assert!(sqrt.is_stdlib());
-}
-
-#[test]
-fn get_numeric_functions_when_min_then_has_two_inputs() {
-    let functions = get_numeric_functions();
+fn get_selection_functions_when_min_then_has_two_inputs() {
+    let functions = get_selection_functions();
     let min = functions
         .iter()
         .find(|f| f.name.original() == "MIN")
@@ -188,8 +137,8 @@ fn get_numeric_functions_when_min_then_has_two_inputs() {
 }
 
 #[test]
-fn get_numeric_functions_when_max_then_has_two_inputs() {
-    let functions = get_numeric_functions();
+fn get_selection_functions_when_max_then_has_two_inputs() {
+    let functions = get_selection_functions();
     let max = functions
         .iter()
         .find(|f| f.name.original() == "MAX")
@@ -202,8 +151,8 @@ fn get_numeric_functions_when_max_then_has_two_inputs() {
 }
 
 #[test]
-fn get_numeric_functions_when_limit_then_has_three_inputs() {
-    let functions = get_numeric_functions();
+fn get_selection_functions_when_limit_then_has_three_inputs() {
+    let functions = get_selection_functions();
     let limit = functions
         .iter()
         .find(|f| f.name.original() == "LIMIT")
@@ -217,8 +166,8 @@ fn get_numeric_functions_when_limit_then_has_three_inputs() {
 }
 
 #[test]
-fn get_numeric_functions_when_sel_then_has_three_inputs() {
-    let functions = get_numeric_functions();
+fn get_selection_functions_when_sel_then_has_three_inputs() {
+    let functions = get_selection_functions();
     let sel = functions
         .iter()
         .find(|f| f.name.original() == "SEL")
@@ -232,11 +181,22 @@ fn get_numeric_functions_when_sel_then_has_three_inputs() {
 }
 
 #[test]
-fn get_selection_functions_when_called_then_contains_mux() {
+fn get_selection_functions_when_called_then_every_function_holds() {
     let functions = get_selection_functions();
 
-    assert_eq!(functions.len(), 1);
-    assert!(functions.iter().any(|f| f.name.original() == "MUX"));
+    assert!(functions
+        .iter()
+        .all(|f| f.value_use == crate::value_type::ValueUse::Holds));
+}
+
+#[test]
+fn get_selection_functions_when_called_then_contains_every_selection_function() {
+    let functions = get_selection_functions();
+
+    assert_eq!(functions.len(), 5);
+    assert!(["MIN", "MAX", "LIMIT", "SEL", "MUX"]
+        .iter()
+        .all(|name| functions.iter().any(|f| f.name.original() == *name)));
 }
 
 #[test]
