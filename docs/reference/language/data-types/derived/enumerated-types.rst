@@ -126,7 +126,33 @@ it is constant and names one.
   or ``DINT`` parameter. A narrower target such as ``SINT`` is refused. The
   number is the value's number: ``2`` for ``Green``.
 - Arithmetic on an enumeration is refused. ``light + 1``, ``light * 2`` and
-  ``-light`` report :doc:`P4049 </reference/compiler/problems/P4049>`.
+  ``-light`` report :doc:`P4049 </reference/compiler/problems/P4049>`. So does
+  every place that computes a new number from the value:
+
+  - the function forms ``ADD``, ``SUB``, ``MUL`` and ``DIV``
+    (:doc:`P4049 </reference/compiler/problems/P4049>`);
+  - the numerical functions ``ABS``, ``SQRT``, ``LN``, ``LOG``, ``EXP``,
+    ``SIN``, ``COS``, ``TAN``, ``ASIN``, ``ACOS``, ``ATAN``, ``ATAN2``,
+    ``TRUNC`` and ``EXPT``, the function form ``MOD(a, b)`` and the time
+    products and quotients ``MUL_TIME`` and ``DIV_TIME``
+    (:doc:`P4026 </reference/compiler/problems/P4026>` for the enumeration
+    argument);
+  - the control variable of ``FOR``, which the statement increments on every
+    pass (:doc:`P4049 </reference/compiler/problems/P4049>`).
+
+  A place that only holds the value takes the number the enumeration stands
+  for: an assignment, a parameter of an integer type, a comparison (``=``,
+  ``<``, ``GT``, ...), the selection functions ``SEL``, ``MAX``, ``MIN``,
+  ``LIMIT`` and ``MUX``, ``MOVE``, the conversions (``INT_TO_DINT``,
+  ``INT_TO_BCD``, ...) and the bounds of a ``FOR``.
+- The result of a selection function is an enumeration only when every value it
+  selects among is that enumeration. ``SEL(flag, Red, Green)`` and
+  ``MAX(light, other)`` give a ``TrafficLight`` back when both are one. When the
+  values are an enumeration and a number, or two different enumerations, each
+  stands as its number and the result is a number, so storing it into an
+  enumeration is refused like any integer that is not a constant
+  (:doc:`P4027 </reference/compiler/problems/P4027>`): ``light := MAX(light, 1)``
+  is an error, and ``number := MAX(light, 1)`` is not.
 
 .. playground::
 
@@ -145,6 +171,30 @@ it is constant and names one.
    END_PROGRAM
 
 After one scan ``light`` is ``Green`` and ``number`` is 2.
+
+.. playground::
+
+   TYPE
+       TrafficLight : (Red, Yellow, Green);
+   END_TYPE
+
+   PROGRAM main
+       VAR
+           light : TrafficLight := Green;
+           other : TrafficLight := Yellow;
+           flag : BOOL;
+           chosen : TrafficLight;
+           number : DINT;
+       END_VAR
+
+       chosen := SEL(flag, light, other);
+       number := MAX(light, 1);
+   END_PROGRAM
+
+After one scan ``chosen`` is ``Green`` and ``number`` is 2. Replacing the last
+statement with ``chosen := MAX(light, 1);`` reports
+:doc:`P4027 </reference/compiler/problems/P4027>`, because the result is an
+``INT``.
 
 Related Problem Codes
 ---------------------
