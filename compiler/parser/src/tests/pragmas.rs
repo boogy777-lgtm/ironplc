@@ -292,7 +292,7 @@ fn parse_program_when_pragma_between_declarations_then_ok() {
         TYPE E_Color :
             (Red, Green, Blue);
         END_TYPE
-        {attribute 'qualified_only'}
+        {attribute 'hide'}
         FUNCTION_BLOCK FB_Example
         VAR
             x : INT;

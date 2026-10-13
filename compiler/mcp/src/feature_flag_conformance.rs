@@ -214,7 +214,7 @@ const FLAG_FIXTURES: &[FlagFixture] = &[
     FlagFixture {
         key: "allow_pragmas",
         prereqs: &[],
-        source: "{attribute 'qualified_only'}\nPROGRAM p\nEND_PROGRAM",
+        source: "{attribute 'hide'}\nPROGRAM p\nEND_PROGRAM",
     },
     // AND_THEN short-circuit operator. With the flag off, AND_THEN is demoted
     // to an identifier and the expression fails to parse.

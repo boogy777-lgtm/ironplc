@@ -220,7 +220,7 @@ const SNIPPETS: &[(&str, &str)] = &[
     ),
     (
         "pragma",
-        "{attribute 'strict'}\nPROGRAM p\n{attribute 'x' := 'y'}\nVAR x : INT; END_VAR\nx := 1;\nEND_PROGRAM\n",
+        "{attribute 'hide'}\nPROGRAM p\n{attribute 'x' := 'y'}\nVAR x : INT; END_VAR\nx := 1;\nEND_PROGRAM\n",
     ),
     (
         "pragma_unicode",

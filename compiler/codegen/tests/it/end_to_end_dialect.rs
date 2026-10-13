@@ -181,7 +181,7 @@ e2e_i32_with!(
     end_to_end_when_twincat_dialect_then_pragmas_are_skipped,
     CompilerOptions::from_dialect(Dialect::TwinCat),
     "
-{attribute 'qualified_only'}
+{attribute 'hide'}
 PROGRAM main
 VAR
     x : DINT := 99;
