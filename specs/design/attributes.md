@@ -152,3 +152,19 @@ a library of each kind with its attributes.
 **REQ-ATTR-analyzer-001** After the full analysis the library still carries the
 attributes of every kind of target. A transform that rebuilds a declaration from
 another one carries the field over.
+
+## Rendering
+
+The renderer writes the attributes of a declaration before the declaration, one
+pragma per line, as `{attribute 'name'}` or `{attribute 'name' := 'value'}`,
+with the name and the value as written. It writes each type declaration in a
+`TYPE` block of its own and each variable in a variable block of its own, so the
+attributes stand before the `TYPE` or the variable block keyword and attach to
+the one declaration the block holds; `a, b : INT` is written as two variables,
+each with the attributes.
+
+**REQ-ATTR-plc2plc-001** The attributes of a declaration are rendered before it,
+one pragma per line, in the forms above.
+
+**REQ-ATTR-plc2plc-002** For every kind of target, parsing the rendered text
+gives the same attributes on the same declarations.

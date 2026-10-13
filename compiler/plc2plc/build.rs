@@ -24,5 +24,8 @@ fn main() {
         "codesys-try-catch.md",
         // The CODESYS jump statements (`REQ-JMP-plc2plc-*`): round trip.
         "codesys-jump-and-pragmas.md",
+        // Attributes of declarations (`REQ-ATTR-plc2plc-*`): rendering and the
+        // round trip.
+        "attributes.md",
     ]);
 }
