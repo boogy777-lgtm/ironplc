@@ -12,9 +12,9 @@
 use super::ast::{compare, explain};
 use super::legacy::presets;
 use ironplc_dsl::common::{
-    FunctionBlockBodyKind, FunctionBlockDeclaration, FunctionReturnType, Integer, IntegerRef,
-    Library, LibraryElementKind, MethodDeclaration, PropertyDeclaration, StringSpecification,
-    StringType, TypeName,
+    Attributes, FunctionBlockBodyKind, FunctionBlockDeclaration, FunctionReturnType, Integer,
+    IntegerRef, Library, LibraryElementKind, MethodDeclaration, PropertyDeclaration,
+    StringSpecification, StringType, TypeName,
 };
 use ironplc_dsl::core::{FileId, Id, SourceSpan};
 use ironplc_dsl::member_qualifier::{MemberQualifier, MemberQualifierKind, MemberQualifiers};
@@ -67,6 +67,7 @@ fn function_block(
                 oop: None,
                 methods,
                 properties,
+                attributes: Attributes::default(),
             },
         )],
     }
@@ -111,6 +112,7 @@ fn lower_library_when_abstract_method_with_a_return_type_then_the_object_written
             "METHOD ABSTRACT m : INT END_METHOD",
             "METHOD ABSTRACT m : INT END_METHOD",
         ),
+        attributes: Attributes::default(),
     };
     assert_same(source, &function_block(source, vec![method], vec![]));
 }
@@ -129,6 +131,7 @@ fn lower_library_when_abstract_property_then_the_object_written_by_hand() {
             "PROPERTY ABSTRACT p : INT END_PROPERTY",
             "PROPERTY ABSTRACT p : INT END_PROPERTY",
         ),
+        attributes: Attributes::default(),
     };
     assert_same(source, &function_block(source, vec![], vec![property]));
 }
@@ -153,6 +156,7 @@ fn lower_library_when_abstract_property_with_a_string_type_then_the_object_writt
             "PROPERTY ABSTRACT p : STRING[4] END_PROPERTY",
             "PROPERTY ABSTRACT p : STRING[4] END_PROPERTY",
         ),
+        attributes: Attributes::default(),
     };
     assert_same(source, &function_block(source, vec![], vec![property]));
 }
@@ -177,6 +181,7 @@ fn compare_when_a_qualifier_is_missing_then_the_hand_built_object_differs() {
             "METHOD ABSTRACT m : INT END_METHOD",
             "METHOD ABSTRACT m : INT END_METHOD",
         ),
+        attributes: Attributes::default(),
     };
     let expected = function_block(source, vec![method], vec![]);
     assert!(!compare(&expected, &lowered(source)).is_empty());

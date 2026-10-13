@@ -2,6 +2,7 @@
 
 use super::common::*;
 use dsl::core::Located;
+use ironplc_dsl::common::Attributes;
 use spec_test_macro::spec_test;
 
 #[test]
@@ -53,8 +54,10 @@ END_FUNCTION";
                 block: next_block_id(),
                 type_id: None,
                 edge: None,
+                attributes: Attributes::default(),
             }],
             body: vec![StmtKind::simple_assignment("fun", "InputsNumber")],
+            attributes: Attributes::default(),
         },
     ));
     assert_eq!(res, expected);
@@ -93,8 +96,10 @@ END_FUNCTION";
                 block: next_block_id(),
                 type_id: None,
                 edge: None,
+                attributes: Attributes::default(),
             }],
             body: vec![StmtKind::simple_assignment("fun", "InputsNumber")],
+            attributes: Attributes::default(),
         },
     ));
     assert_eq!(res, expected);
@@ -133,8 +138,10 @@ END_FUNCTION";
                 block: next_block_id(),
                 type_id: None,
                 edge: None,
+                attributes: Attributes::default(),
             }],
             body: vec![StmtKind::simple_assignment("fun", "InputsNumber")],
+            attributes: Attributes::default(),
         },
     ));
     assert_eq!(res, expected);
@@ -173,8 +180,10 @@ END_FUNCTION";
                 block: next_block_id(),
                 type_id: None,
                 edge: None,
+                attributes: Attributes::default(),
             }],
             body: vec![StmtKind::simple_assignment("fun", "tv")],
+            attributes: Attributes::default(),
         },
     ));
     assert_eq!(actual, expected);

@@ -10,7 +10,7 @@ use crate::time::*;
 
 use crate::fold::Fold;
 use crate::visitor::Visitor;
-use dsl_macro_derive::Recurse;
+use dsl_macro_derive::{Attributed, Recurse};
 
 /// Sequential function chart.
 ///
@@ -51,6 +51,7 @@ impl ElementKind {
         ElementKind::Action(Action {
             name: Id::from(name),
             body: FunctionBlockBodyKind::Statements(Statements { body }),
+            attributes: Attributes::default(),
         })
     }
 
@@ -97,10 +98,12 @@ pub struct Transition {
 /// Action item for a SFC.
 ///
 /// See section 2.6.4. Action
-#[derive(Debug, PartialEq, Clone, Recurse)]
+#[derive(Debug, PartialEq, Clone, Recurse, Attributed)]
 pub struct Action {
     pub name: Id,
     pub body: FunctionBlockBodyKind,
+    #[recurse(ignore)]
+    pub attributes: Attributes,
 }
 
 /// Action qualifiers defined for each step/action association.

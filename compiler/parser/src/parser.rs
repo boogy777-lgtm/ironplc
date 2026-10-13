@@ -881,7 +881,7 @@ parser! {
         DataTypeDeclarationKind::Reference(ReferenceDeclaration {
           type_name,
           target: ref_target,
-          syntax,
+          syntax, attributes: Attributes::default(),
         })
       }
       // A simple type without an initializer whose base is an elementary
@@ -899,13 +899,13 @@ parser! {
     rule structure_or_enumerated_or_simple_type_declaration__without_value() -> LateBoundDeclaration = data_type_name:type_name() _ tok(TokenType::Colon) _ base_type_name:type_name() {
       LateBoundDeclaration {
         data_type_name,
-        base_type_name,
+        base_type_name, attributes: Attributes::default(),
       }
     }
     rule simple_type_declaration__with_value() -> SimpleDeclaration = type_name:simple_type_name() _ tok(TokenType::Colon) _ spec_and_init:simple_spec_init__with_value() {
       SimpleDeclaration {
         type_name,
-        spec_and_init,
+        spec_and_init, attributes: Attributes::default(),
       }
     }
     rule simple_type_declaration__without_value() -> SimpleDeclaration = type_name:simple_type_name() _ tok(TokenType::Colon) _ base:elementary_type_name() {
@@ -914,7 +914,7 @@ parser! {
         spec_and_init: InitialValueAssignmentKind::Simple(SimpleInitializer {
           type_name: base.into(),
           initial_value: None,
-        }),
+        }), attributes: Attributes::default(),
       }
     }
     rule simple_spec_init() -> InitialValueAssignmentKind = simple_spec_init__with_value() / type_name:simple_specification() {
@@ -946,7 +946,7 @@ parser! {
       SubrangeDeclaration {
         type_name,
         spec: init.spec,
-        default: init.initial_value,
+        default: init.initial_value, attributes: Attributes::default(),
       }
     }
     rule subrange_spec_init__with_range() -> SubrangeInitializer = spec:subrange_specification__with_range() _ initial_value:(tok(TokenType::Assignment) _ def:signed_integer() { def })? {
@@ -966,7 +966,7 @@ parser! {
             spec,
             default: Some(EnumeratedDefault::Value(def)),
             underlying_type,
-          },
+          }, attributes: Attributes::default(),
         }
       }
       / type_name:enumerated_type_name() _ tok(TokenType::Colon) _ values:enumerated_specification__only_values() _ underlying_type:enum_underlying_type()? _ default:(tok(TokenType::Assignment) _ d:enumerated_value() { d })? {
@@ -976,7 +976,7 @@ parser! {
             spec: EnumeratedSpecificationKind::values(values),
             default: default.map(EnumeratedDefault::Value),
             underlying_type,
-          },
+          }, attributes: Attributes::default(),
         }
       }
     rule enumerated_spec_init__with_value() -> (EnumeratedSpecificationKind, EnumeratedValue) = spec:enumerated_specification() _ tok(TokenType::Assignment) _ def:enumerated_value() {
@@ -1020,7 +1020,7 @@ parser! {
       ArrayDeclaration {
         type_name,
         spec: spec_and_init.spec,
-        init: spec_and_init.initial_values,
+        init: spec_and_init.initial_values, attributes: Attributes::default(),
       }
     }
     rule array_spec_init() -> ArrayInitialValueAssignment = spec:array_specification() _ init:(tok(TokenType::Assignment) _ a:array_initialization() { a })? {
@@ -1048,7 +1048,7 @@ parser! {
       }).collect()
     }
     rule params_type_declaration() -> DataTypeDeclarationKind = type_name:type_name() _ tok(TokenType::Colon) _ spec:params_specification() {
-      DataTypeDeclarationKind::Params(ParamsDeclaration { type_name, spec })
+      DataTypeDeclarationKind::Params(ParamsDeclaration { type_name, spec, attributes: Attributes::default() })
     }
     rule array_specification() -> ArraySpecificationKind = subranges:array_subranges() { SpecificationKind::Inline(subranges) }
     // `arrayType = "ARRAY" "[" ("*" | indexRange {"," indexRange}) "]" "OF"
@@ -1076,7 +1076,7 @@ parser! {
       type_name:structure_type_name() _ tok(TokenType::Colon) _ decl:structure_declaration() {
         DataTypeDeclarationKind::Structure(StructureDeclaration {
           type_name,
-          elements: decl.elements,
+          elements: decl.elements, attributes: Attributes::default(),
         })
       }
       / type_name:structure_type_name() _ tok(TokenType::Colon) _ init:initialized_structure__without_ambiguous() {
@@ -1103,7 +1103,7 @@ parser! {
       StructureDeclaration {
         // Requires a value but we don't know the name until one level up
         type_name: TypeName::from(""),
-        elements,
+        elements, attributes: Attributes::default(),
       }
     }
     // CODESYS `UNION ... END_UNION`: the same member grammar as a
@@ -1113,14 +1113,14 @@ parser! {
       type_name:structure_type_name() _ tok(TokenType::Colon) _ decl:union_declaration() {
         UnionDeclaration {
           type_name,
-          elements: decl.elements,
+          elements: decl.elements, attributes: Attributes::default(),
         }
       }
     rule union_declaration() -> UnionDeclaration = tok(TokenType::Union) _ elements:semisep_oneplus(<structure_element_declaration()>) _ tok(TokenType::EndUnion) {
       UnionDeclaration {
         // Requires a value but we don't know the name until one level up
         type_name: TypeName::from(""),
-        elements,
+        elements, attributes: Attributes::default(),
       }
     }
     rule structure_element_declaration() -> StructureElementDeclaration = name:structure_element_name() _ tok(TokenType::Colon) _ init:(
@@ -1147,7 +1147,7 @@ parser! {
     ) {
         StructureElementDeclaration {
           name,
-          init,
+          init, attributes: Attributes::default(),
         }
     }
     rule structure_element_name() ->Id = identifier()
@@ -1243,7 +1243,7 @@ parser! {
         type_name,
         length,
         init: init.map(|lit| CharacterStringLiteral { width: width.clone(), ..lit }),
-        width,
+        width, attributes: Attributes::default(),
       }
     }
     rule string_type_declaration__parenthesis() -> StringDeclaration = type_name:string_type_name() _ tok(TokenType::Colon) _ width:(tok(TokenType::String) { StringType::String } / tok(TokenType::WString) { StringType::WString }) _ tok(TokenType::LeftParen) _ length:integer_ref() _ tok(TokenType::RightParen) _ init:(tok(TokenType::Assignment) _ str:character_string_literal() {str})? {
@@ -1251,7 +1251,7 @@ parser! {
         type_name,
         length,
         init: init.map(|lit| CharacterStringLiteral { width: width.clone(), ..lit }),
-        width,
+        width, attributes: Attributes::default(),
       }
     }
 
@@ -1603,7 +1603,7 @@ parser! {
         initializer,
         block: next_block_id(),
         type_id: None,
-        edge: None,
+        edge: None, attributes: Attributes::default(),
       }
     }
     // We use the same type as in other places for VarInit, but the external always omits the initializer
@@ -1631,7 +1631,7 @@ parser! {
         initializer: spec,
         block: next_block_id(),
         type_id: None,
-        edge: None,
+        edge: None, attributes: Attributes::default(),
       }
     }
     rule global_var_name() -> Id = i:identifier() { i }
@@ -1658,7 +1658,7 @@ parser! {
           initializer: init,
           block: next_block_id(),
           type_id: None,
-          edge: None,
+          edge: None, attributes: Attributes::default(),
         }
       }).collect()
      }
@@ -1773,7 +1773,7 @@ parser! {
         name,
         return_type: rt,
         variables,
-        body,
+        body, attributes: Attributes::default(),
       }
     }
     rule io_var_declarations() -> Vec<VarDeclarations> = input_declarations() / o:output_declarations() { vec![VarDeclarations::Outputs(o)] } / io:input_output_declarations() { vec![VarDeclarations::Inouts(io)] }
@@ -1840,7 +1840,7 @@ parser! {
         return_type: rt,
         variables,
         body: body.unwrap_or_default(),
-        span: SourceSpan::join(&start.span, &end.span),
+        span: SourceSpan::join(&start.span, &end.span), attributes: Attributes::default(),
       }
     }
 
@@ -1868,7 +1868,7 @@ parser! {
         property_type,
         get,
         set,
-        span: SourceSpan::join(&start.span, &end.span),
+        span: SourceSpan::join(&start.span, &end.span), attributes: Attributes::default(),
       }
     }
 
@@ -1929,7 +1929,7 @@ parser! {
         span: SourceSpan::join(&start.span, &end.span),
         oop,
         methods,
-        properties,
+        properties, attributes: Attributes::default(),
       }
     }
 
@@ -1940,7 +1940,7 @@ parser! {
     rule interface_declaration() -> InterfaceDeclaration = tok(TokenType::Interface) _ name:identifier() _ extends:(tok(TokenType::Extends) _ names:type_name_list() {names})? _ tok(TokenType::EndInterface) {
       InterfaceDeclaration {
         name,
-        extends: extends.unwrap_or_default(),
+        extends: extends.unwrap_or_default(), attributes: Attributes::default(),
       }
     }
 
@@ -2003,7 +2003,7 @@ parser! {
         name: p,
         variables,
         access_variables,
-        body,
+        body, attributes: Attributes::default(),
       }
     }
     // TODO
@@ -2094,7 +2094,7 @@ parser! {
     rule action() -> ElementKind = tok(TokenType::Action) _ name:action_name() _ tok(TokenType::Colon) _ body:function_block_body() _ tok(TokenType::EndAction) {
       ElementKind::Action(Action {
         name,
-        body
+        body, attributes: Attributes::default(),
       })
     }
 

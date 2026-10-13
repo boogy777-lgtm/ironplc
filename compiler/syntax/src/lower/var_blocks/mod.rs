@@ -32,8 +32,8 @@ use super::variables::{lower_address, lower_symbolic};
 use super::LowerCx;
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode};
 use ironplc_dsl::common::{
-    next_block_id, BlockId, DeclarationQualifier, EdgeDirection, ProgramAccessDecl, VarDecl,
-    VariableIdentifier, VariableType,
+    next_block_id, Attributes, BlockId, DeclarationQualifier, EdgeDirection, ProgramAccessDecl,
+    VarDecl, VariableIdentifier, VariableType,
 };
 use ironplc_dsl::configuration::{Direction, FunctionBlockInit, LocatedVarInit};
 use ironplc_dsl::construct::edge_input;
@@ -203,6 +203,7 @@ fn lower_declaration(
                     block: shared.block,
                     type_id: None,
                     edge: None,
+                    attributes: Attributes::default(),
                 });
             }
         }

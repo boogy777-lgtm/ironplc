@@ -5,7 +5,7 @@ use core::str::FromStr;
 use regex::Regex;
 use std::fmt::{self, Display};
 
-use dsl_macro_derive::{Located, Recurse};
+use dsl_macro_derive::{Attributed, Located, Recurse};
 
 use crate::configuration::{ConfigurationDeclaration, Direction};
 use crate::core::{Id, Located, SourceSpan};
@@ -17,6 +17,7 @@ use crate::time::*;
 use crate::type_id::TypeId;
 use crate::visitor::Visitor;
 
+pub use crate::attribute::{Attribute, Attributed, Attributes};
 pub use crate::oop::*;
 pub use crate::type_name::*;
 
@@ -722,7 +723,7 @@ pub enum DataTypeDeclarationKind {
 /// * enumeration
 /// * structure
 /// * simple
-#[derive(Clone, Debug, PartialEq, Recurse)]
+#[derive(Clone, Debug, PartialEq, Recurse, Attributed)]
 pub struct LateBoundDeclaration {
     /// The type name of this declaration. Other library elements
     /// refer to this this type with this name.
@@ -732,6 +733,8 @@ pub struct LateBoundDeclaration {
     /// For example, if this is an alias then this is the underlying
     /// type.
     pub base_type_name: TypeName,
+    #[recurse(ignore)]
+    pub attributes: Attributes,
 }
 
 impl Located for LateBoundDeclaration {
@@ -792,21 +795,25 @@ pub enum RefSyntax {
 ///
 /// See IEC 61131-3 Edition 3, section 2.3.3.1, and
 /// `specs/design/reference-to-twincat.md`.
-#[derive(Clone, Debug, PartialEq, Recurse)]
+#[derive(Clone, Debug, PartialEq, Recurse, Attributed)]
 pub struct ReferenceDeclaration {
     pub type_name: TypeName,
     pub target: ReferenceTarget,
     /// The surface keyword that produced this declaration.
     #[recurse(ignore)]
     pub syntax: RefSyntax,
+    #[recurse(ignore)]
+    pub attributes: Attributes,
 }
 
 /// See section 2.3.3.1.
-#[derive(Clone, Debug, PartialEq, Recurse)]
+#[derive(Clone, Debug, PartialEq, Recurse, Attributed)]
 pub struct EnumerationDeclaration {
     pub type_name: TypeName,
     // TODO need to understand when the context name matters in the definition
     pub spec_init: EnumeratedSpecificationInit,
+    #[recurse(ignore)]
+    pub attributes: Attributes,
 }
 
 /// The specification of an enumeration with a possible default value.
@@ -955,11 +962,13 @@ impl fmt::Display for EnumeratedValue {
 /// specified values, that is, `[minimum, maximum]`.
 ///
 /// See section 2.3.3.1.
-#[derive(Clone, Debug, PartialEq, Recurse)]
+#[derive(Clone, Debug, PartialEq, Recurse, Attributed)]
 pub struct SubrangeDeclaration {
     pub type_name: TypeName,
     pub spec: SubrangeSpecificationKind,
     pub default: Option<SignedInteger>,
+    #[recurse(ignore)]
+    pub attributes: Attributes,
 }
 
 /// Subrange specification: either a reference to a named subrange type
@@ -1032,18 +1041,22 @@ pub struct SubrangeSpecification {
 /// kept, so the declaration reads back as it was written.
 ///
 /// See section 2.3.3.1.
-#[derive(Clone, Debug, PartialEq, Recurse)]
+#[derive(Clone, Debug, PartialEq, Recurse, Attributed)]
 pub struct SimpleDeclaration {
     pub type_name: TypeName,
     pub spec_and_init: InitialValueAssignmentKind,
+    #[recurse(ignore)]
+    pub attributes: Attributes,
 }
 
 /// Derived data type that
-#[derive(Clone, Debug, PartialEq, Recurse)]
+#[derive(Clone, Debug, PartialEq, Recurse, Attributed)]
 pub struct ArrayDeclaration {
     pub type_name: TypeName,
     pub spec: ArraySpecificationKind,
     pub init: Vec<ArrayInitialElementKind>,
+    #[recurse(ignore)]
+    pub attributes: Attributes,
 }
 
 #[derive(Clone, Debug, PartialEq, Recurse)]
@@ -1099,12 +1112,14 @@ impl Repeated {
 /// may be nested but must not contain an instance of itself.
 ///
 /// See section 2.3.3.1.
-#[derive(Clone, Debug, PartialEq, Recurse)]
+#[derive(Clone, Debug, PartialEq, Recurse, Attributed)]
 pub struct StructureDeclaration {
     /// The name of the structure.
     pub type_name: TypeName,
     /// The elements (components) of the structure declaration.
     pub elements: Vec<StructureElementDeclaration>,
+    #[recurse(ignore)]
+    pub attributes: Attributes,
 }
 
 /// `UNION ... END_UNION` declaration: the members are located at the same
@@ -1115,21 +1130,25 @@ pub struct StructureDeclaration {
 /// differs. Recognizing a union type makes it usable as a declared type
 /// name; overlaying the members at offset 0 is not implemented yet (P1 in
 /// `Codesys/LEXER-GAP-ANALYSIS.md`).
-#[derive(Clone, Debug, PartialEq, Recurse)]
+#[derive(Clone, Debug, PartialEq, Recurse, Attributed)]
 pub struct UnionDeclaration {
     /// The name of the union.
     pub type_name: TypeName,
     /// The elements (components) of the union declaration.
     pub elements: Vec<StructureElementDeclaration>,
+    #[recurse(ignore)]
+    pub attributes: Attributes,
 }
 
 /// Declares an element contained within a structure.
 ///
 /// See section 2.3.3.1.
-#[derive(Clone, Debug, PartialEq, Recurse)]
+#[derive(Clone, Debug, PartialEq, Recurse, Attributed)]
 pub struct StructureElementDeclaration {
     pub name: Id,
     pub init: InitialValueAssignmentKind,
+    #[recurse(ignore)]
+    pub attributes: Attributes,
 }
 
 /// See section 2.3.3.1.
@@ -1182,7 +1201,7 @@ impl StringType {
 /// Declares a string type with restricted length.
 ///
 /// See section 2.3.3.1.
-#[derive(Clone, Debug, PartialEq, Recurse)]
+#[derive(Clone, Debug, PartialEq, Recurse, Attributed)]
 pub struct StringDeclaration {
     pub type_name: TypeName,
     pub length: IntegerRef,
@@ -1194,6 +1213,8 @@ pub struct StringDeclaration {
     /// decides), and it keeps its own span so a check on the literal can
     /// point at it.
     pub init: Option<CharacterStringLiteral>,
+    #[recurse(ignore)]
+    pub attributes: Attributes,
 }
 
 /// Location prefix for directly represented variables.
@@ -1320,12 +1341,14 @@ pub struct ParamsSpecification {
 
 /// A `PARAMS(n) OF T` type declaration, e.g.
 /// `TYPE MyParams : PARAMS(3) OF INT; END_TYPE`.
-#[derive(Clone, Debug, PartialEq, Recurse)]
+#[derive(Clone, Debug, PartialEq, Recurse, Attributed)]
 pub struct ParamsDeclaration {
     /// The type name of this declaration. Other library elements refer to
     /// this type with this name.
     pub type_name: TypeName,
     pub spec: ParamsSpecification,
+    #[recurse(ignore)]
+    pub attributes: Attributes,
 }
 
 impl Located for ParamsDeclaration {
@@ -1464,7 +1487,7 @@ pub fn next_block_id() -> BlockId {
 /// Variable declaration.
 ///
 /// See section 2.4.3.
-#[derive(Clone, Debug, Recurse, Located)]
+#[derive(Clone, Debug, Recurse, Located, Attributed)]
 pub struct VarDecl {
     // Not all variable types have a "name", so the name is part of the type.
     #[located(delegate)]
@@ -1495,6 +1518,8 @@ pub struct VarDecl {
     /// every consumer of the variable list sees it.
     #[recurse(ignore)]
     pub edge: Option<EdgeDirection>,
+    #[recurse(ignore)]
+    pub attributes: Attributes,
 }
 
 impl PartialEq for VarDecl {
@@ -1504,6 +1529,7 @@ impl PartialEq for VarDecl {
             && self.qualifier == other.qualifier
             && self.initializer == other.initializer
             && self.edge == other.edge
+            && self.attributes == other.attributes
     }
 }
 
@@ -1521,6 +1547,7 @@ impl VarDecl {
             block: next_block_id(),
             type_id: None,
             edge: None,
+            attributes: Attributes::default(),
         }
     }
 
@@ -1538,6 +1565,7 @@ impl VarDecl {
             block: next_block_id(),
             type_id: None,
             edge: None,
+            attributes: Attributes::default(),
         }
     }
 
@@ -1557,6 +1585,7 @@ impl VarDecl {
             block: next_block_id(),
             type_id: None,
             edge: None,
+            attributes: Attributes::default(),
         }
     }
 
@@ -1576,6 +1605,7 @@ impl VarDecl {
             block: next_block_id(),
             type_id: None,
             edge: None,
+            attributes: Attributes::default(),
         }
     }
 
@@ -1599,6 +1629,7 @@ impl VarDecl {
             block: next_block_id(),
             type_id: None,
             edge: None,
+            attributes: Attributes::default(),
         }
     }
 
@@ -1618,6 +1649,7 @@ impl VarDecl {
             block: next_block_id(),
             type_id: None,
             edge: None,
+            attributes: Attributes::default(),
         }
     }
 
@@ -1636,6 +1668,7 @@ impl VarDecl {
             block: next_block_id(),
             type_id: None,
             edge: None,
+            attributes: Attributes::default(),
         }
     }
 
@@ -1655,6 +1688,7 @@ impl VarDecl {
             block: next_block_id(),
             type_id: None,
             edge: None,
+            attributes: Attributes::default(),
         }
     }
 
@@ -2551,13 +2585,15 @@ impl From<TypeName> for FunctionReturnType {
 /// return value and bound variables.
 ///
 /// See section 2.5.1.
-#[derive(Clone, Debug, PartialEq, Recurse)]
+#[derive(Clone, Debug, PartialEq, Recurse, Attributed)]
 #[recurse(scope)]
 pub struct FunctionDeclaration {
     pub name: Id,
     pub return_type: FunctionReturnType,
     pub variables: Vec<VarDecl>,
     pub body: Vec<StmtKind>,
+    #[recurse(ignore)]
+    pub attributes: Attributes,
 }
 
 impl HasVariables for FunctionDeclaration {
@@ -2573,7 +2609,7 @@ impl HasVariables for FunctionDeclaration {
 /// and variables retain values between invocations.
 ///
 /// See section 2.5.2.
-#[derive(Clone, Debug, PartialEq, Recurse, Located)]
+#[derive(Clone, Debug, PartialEq, Recurse, Located, Attributed)]
 #[recurse(scope)]
 pub struct FunctionBlockDeclaration {
     pub name: TypeName,
@@ -2602,6 +2638,8 @@ pub struct FunctionBlockDeclaration {
     /// their accessors are methods, but they are reached through the
     /// property, not by a method call. See [`PropertyDeclaration`].
     pub properties: Vec<PropertyDeclaration>,
+    #[recurse(ignore)]
+    pub attributes: Attributes,
 }
 
 impl HasVariables for FunctionBlockDeclaration {
@@ -2616,13 +2654,15 @@ impl HasVariables for FunctionBlockDeclaration {
 /// or control objective.
 ///
 /// See section 2.5.3.
-#[derive(Clone, Debug, PartialEq, Recurse)]
+#[derive(Clone, Debug, PartialEq, Recurse, Attributed)]
 #[recurse(scope)]
 pub struct ProgramDeclaration {
     pub name: Id,
     pub variables: Vec<VarDecl>,
     pub access_variables: Vec<ProgramAccessDecl>,
     pub body: FunctionBlockBodyKind,
+    #[recurse(ignore)]
+    pub attributes: Attributes,
 }
 
 impl HasVariables for ProgramDeclaration {
@@ -2766,6 +2806,7 @@ mod tests {
             block,
             type_id: None,
             edge: None,
+            attributes: Attributes::default(),
         }
     }
 
@@ -3030,6 +3071,7 @@ mod tests {
         let enum_decl = EnumerationDeclaration {
             type_name: TypeName::from("ENUM"),
             spec_init: EnumeratedSpecificationInit::values_and_default(vec!["A", "B"], "A"),
+            attributes: Attributes::default(),
         };
         let d1 = DataTypeDeclarationKind::Enumeration(enum_decl.clone());
         let d2 = d1.clone();
@@ -3037,6 +3079,7 @@ mod tests {
         let d3 = DataTypeDeclarationKind::Enumeration(EnumerationDeclaration {
             type_name: TypeName::from("ENUM"),
             spec_init: EnumeratedSpecificationInit::values_and_default(vec!["A", "B"], "B"),
+            attributes: Attributes::default(),
         });
         assert_ne!(d1, d3);
     }
@@ -3051,6 +3094,7 @@ mod tests {
                 DataTypeDeclarationKind::Enumeration(EnumerationDeclaration {
                     type_name: TypeName::from("ENUM"),
                     spec_init: EnumeratedSpecificationInit::values_and_default(vec!["A"], "A"),
+                    attributes: Attributes::default(),
                 }),
             )],
         };

@@ -26,6 +26,7 @@
 //!
 //! I am unaware of a way to enforce the assumptions other
 //! than at build time.
+mod attributed;
 mod located;
 
 use convert_case::{Case, Casing};
@@ -211,6 +212,18 @@ fn type_is_named(ty: &syn::Type, name: &str) -> bool {
 pub fn located_macro_derive(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
     located::expand_located(&ast).unwrap_or_else(|err| err.to_compile_error().into())
+}
+
+/// Implements `crate::attribute::Attributed` for a declaration node.
+///
+/// The struct must have a field named `attributes` (of type `Attributes`);
+/// the implementation returns a reference to it.
+#[proc_macro_derive(Attributed)]
+pub fn attributed_macro_derive(input: TokenStream) -> TokenStream {
+    let ast = parse_macro_input!(input as DeriveInput);
+    attributed::expand_attributed(&ast)
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
 }
 
 /// Returns a stream of tokens that implement recursive visit for an enumeration.

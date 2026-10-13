@@ -36,9 +36,9 @@ use super::var_blocks::{lower_var_block, InstanceInit};
 use super::{lower_elements, LowerCx};
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode};
 use ironplc_dsl::common::{
-    FunctionBlockBodyKind, FunctionBlockDeclaration, FunctionDeclaration, FunctionReturnType,
-    InterfaceDeclaration, NamespaceDeclaration, ProgramAccessDecl, ProgramDeclaration, StringType,
-    TypeName, VarDecl,
+    Attributes, FunctionBlockBodyKind, FunctionBlockDeclaration, FunctionDeclaration,
+    FunctionReturnType, InterfaceDeclaration, NamespaceDeclaration, ProgramAccessDecl,
+    ProgramDeclaration, StringType, TypeName, VarDecl,
 };
 use ironplc_dsl::configuration::{ProgramConfiguration, ResourceDeclaration, TaskConfiguration};
 use ironplc_dsl::core::Id;
@@ -279,6 +279,7 @@ pub fn lower_program(cx: &LowerCx, node: &SyntaxNode) -> Result<ProgramDeclarati
         variables: sections.variables,
         access_variables: sections.access,
         body: body_of(sections.body),
+        attributes: Attributes::default(),
     })
 }
 
@@ -290,6 +291,7 @@ pub fn lower_function(cx: &LowerCx, node: &SyntaxNode) -> Result<FunctionDeclara
         return_type: required_return_type(cx, node)?,
         variables: sections.variables,
         body: statements_of(cx, node, sections.body)?,
+        attributes: Attributes::default(),
     })
 }
 
@@ -318,6 +320,7 @@ pub fn lower_function_block(
         oop: lower_oop(cx, node)?,
         methods,
         properties,
+        attributes: Attributes::default(),
     })
 }
 
@@ -344,5 +347,6 @@ pub fn lower_interface(
             Some(clause) => lower_type_list(cx, &clause)?,
             None => vec![],
         },
+        attributes: Attributes::default(),
     })
 }

@@ -33,8 +33,8 @@ use super::values::{lower_enumerated_value, lower_integer, lower_integer_ref, lo
 use super::LowerCx;
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode};
 use ironplc_dsl::common::{
-    ArrayBounds, ArrayDeclaration, ArrayElementType, ArraySubranges, DataTypeDeclarationKind,
-    ElementaryTypeName, EnumeratedDefault, EnumeratedSpecificationInit,
+    ArrayBounds, ArrayDeclaration, ArrayElementType, ArraySubranges, Attributes,
+    DataTypeDeclarationKind, ElementaryTypeName, EnumeratedDefault, EnumeratedSpecificationInit,
     EnumeratedSpecificationKind, EnumeratedValue, EnumerationDeclaration, LateBoundDeclaration,
     ParamsDeclaration, ParamsSpecification, RefSyntax, ReferenceDeclaration, ReferenceTarget,
     SimpleDeclaration, SpecificationKind, StringDeclaration, StringSpecification, StringType,
@@ -270,6 +270,7 @@ pub fn lower_members(
             Ok(StructureElementDeclaration {
                 name: lower_name(cx, &part(cx, &member, K::Name)?)?,
                 init: lower_initial_value(cx, &member)?,
+                attributes: Attributes::default(),
             })
         })
         .collect()
@@ -293,6 +294,7 @@ fn string(cx: &LowerCx, parts: &Parts) -> Result<DataTypeDeclarationKind, Diagno
         length,
         width: specification.width,
         init,
+        attributes: Attributes::default(),
     }))
 }
 
@@ -305,6 +307,7 @@ fn array(cx: &LowerCx, parts: &Parts) -> Result<DataTypeDeclarationKind, Diagnos
             Some(elements) => lower_array_elements(cx, elements)?,
             None => vec![],
         },
+        attributes: Attributes::default(),
     }))
 }
 
@@ -313,6 +316,7 @@ fn params(cx: &LowerCx, parts: &Parts) -> Result<DataTypeDeclarationKind, Diagno
     Ok(DataTypeDeclarationKind::Params(ParamsDeclaration {
         type_name: declared(cx, parts)?,
         spec: lower_params(cx, &parts.spec)?,
+        attributes: Attributes::default(),
     }))
 }
 
@@ -326,6 +330,7 @@ fn subrange(cx: &LowerCx, parts: &Parts) -> Result<DataTypeDeclarationKind, Diag
             .as_ref()
             .map(|value| lower_integer_value(cx, parts, value))
             .transpose()?,
+        attributes: Attributes::default(),
     }))
 }
 
@@ -334,6 +339,7 @@ fn structure(cx: &LowerCx, parts: &Parts) -> Result<DataTypeDeclarationKind, Dia
     Ok(DataTypeDeclarationKind::Structure(StructureDeclaration {
         type_name: declared(cx, parts)?,
         elements: lower_members(cx, &parts.spec)?,
+        attributes: Attributes::default(),
     }))
 }
 
@@ -342,6 +348,7 @@ fn union(cx: &LowerCx, parts: &Parts) -> Result<DataTypeDeclarationKind, Diagnos
     Ok(DataTypeDeclarationKind::Union(UnionDeclaration {
         type_name: declared(cx, parts)?,
         elements: lower_members(cx, &parts.spec)?,
+        attributes: Attributes::default(),
     }))
 }
 
@@ -383,6 +390,7 @@ fn enumeration(cx: &LowerCx, parts: &Parts) -> Result<DataTypeDeclarationKind, D
                 default: default_value(cx, parts)?,
                 underlying_type,
             },
+            attributes: Attributes::default(),
         },
     ))
 }
@@ -398,6 +406,7 @@ fn enumeration_alias(cx: &LowerCx, parts: &Parts) -> Result<DataTypeDeclarationK
                 default: default_value(cx, parts)?,
                 underlying_type: None,
             },
+            attributes: Attributes::default(),
         },
     ))
 }
@@ -408,6 +417,7 @@ fn simple(cx: &LowerCx, parts: &Parts) -> Result<DataTypeDeclarationKind, Diagno
     Ok(DataTypeDeclarationKind::Simple(SimpleDeclaration {
         type_name: declared(cx, parts)?,
         spec_and_init: lower_simple_initializer(cx, parts)?,
+        attributes: Attributes::default(),
     }))
 }
 
@@ -418,6 +428,7 @@ fn reference(cx: &LowerCx, parts: &Parts) -> Result<DataTypeDeclarationKind, Dia
         type_name: declared(cx, parts)?,
         target,
         syntax,
+        attributes: Attributes::default(),
     }))
 }
 
@@ -427,6 +438,7 @@ fn late_bound(cx: &LowerCx, parts: &Parts) -> Result<DataTypeDeclarationKind, Di
     Ok(DataTypeDeclarationKind::LateBound(LateBoundDeclaration {
         data_type_name: declared(cx, parts)?,
         base_type_name: parts.base_name(cx)?,
+        attributes: Attributes::default(),
     }))
 }
 

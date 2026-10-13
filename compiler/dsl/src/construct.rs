@@ -13,11 +13,12 @@ use std::sync::LazyLock;
 use time::{Date, Month, Time};
 
 use crate::common::{
-    BlockId, ConstantKind, DataTypeDeclarationKind, DeclarationQualifier, EdgeDirection,
-    EnumeratedInitialValueAssignment, EnumeratedValue, FixedPoint, InitialValueAssignmentKind,
-    LateResolvedInitialValue, LateResolvedInitializer, SimpleDeclaration, SimpleExprInitializer,
-    SimpleInitializer, StringType, StructInitialValueAssignmentKind, StructureElementInit,
-    StructureInitializationDeclaration, TypeName, VarDecl, VariableIdentifier, VariableType,
+    Attributes, BlockId, ConstantKind, DataTypeDeclarationKind, DeclarationQualifier,
+    EdgeDirection, EnumeratedInitialValueAssignment, EnumeratedValue, FixedPoint,
+    InitialValueAssignmentKind, LateResolvedInitialValue, LateResolvedInitializer,
+    SimpleDeclaration, SimpleExprInitializer, SimpleInitializer, StringType,
+    StructInitialValueAssignmentKind, StructureElementInit, StructureInitializationDeclaration,
+    TypeName, VarDecl, VariableIdentifier, VariableType,
 };
 use crate::core::{Id, SourceSpan};
 use crate::textual::{
@@ -300,6 +301,7 @@ pub fn structure_alias(
             type_name: structure,
             elements_init,
         }),
+        attributes: Attributes::default(),
     })
 }
 
@@ -421,6 +423,7 @@ pub fn edge_input(
         block,
         type_id: None,
         edge: Some(edge),
+        attributes: Attributes::default(),
     }
 }
 

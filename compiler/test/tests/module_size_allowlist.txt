@@ -21,7 +21,7 @@ container/src/opcode.rs 1022
 container/src/spec_conformance.rs 1110
 container/src/type_section.rs 1264
 container/src/verify.rs 1203
-dsl/src/common.rs 4291
+dsl/src/common.rs 3622
 dsl/src/textual.rs 1482
 ironplc-cli/src/cli.rs 1027
 ironplc-cli/src/lsp.rs 1362
@@ -40,7 +40,7 @@ runtime/src/migration/tests.rs 1180
 runtime/tests/migration_acceptance.rs 1005
 sources/src/parsers/twincat_parser/tests.rs 1115
 sources/src/xml/position.rs 1632
-sources/src/xml/transform.rs 1991
+sources/src/xml/transform.rs 2002
 vm-cli/src/dap/server.rs 2066
 vm-cli/tests/cli.rs 1549
 vm/src/vm.rs 3409

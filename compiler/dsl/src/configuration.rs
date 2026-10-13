@@ -211,6 +211,7 @@ pub struct LocatedVarInit {
 mod tests {
     use super::*;
     use crate::common::next_block_id;
+    use crate::common::Attributes;
     use crate::common::VariableIdentifier;
     use crate::common::VariableType;
     use crate::core::{Id, SourceSpan};
@@ -224,6 +225,7 @@ mod tests {
             block: next_block_id(),
             type_id: None,
             edge: None,
+            attributes: Attributes::default(),
         }
     }
 

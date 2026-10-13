@@ -5,8 +5,8 @@
 
 use ironplc_dsl::{
     common::{
-        next_block_id, ArrayBounds, ArrayDeclaration, ArrayElementType, ArraySubranges, Boolean,
-        BooleanLiteral, ConstantKind, DataTypeDeclarationKind, DeclarationQualifier,
+        next_block_id, ArrayBounds, ArrayDeclaration, ArrayElementType, ArraySubranges, Attributes,
+        Boolean, BooleanLiteral, ConstantKind, DataTypeDeclarationKind, DeclarationQualifier,
         ElementaryTypeName, EnumeratedSpecificationInit, EnumeratedSpecificationValues,
         EnumeratedValue, EnumerationDeclaration, FunctionBlockBodyKind, FunctionBlockDeclaration,
         FunctionDeclaration, FunctionReturnType, InitialValueAssignmentKind, Integer, Library,
@@ -116,6 +116,7 @@ fn transform_data_type_decl(
                     type_name: base_type_name,
                     initial_value: None,
                 }),
+                attributes: Attributes::default(),
             }))
         }
     }
@@ -148,6 +149,7 @@ fn transform_enum_decl(
                 default: None,
                 underlying_type: None,
             },
+            attributes: Attributes::default(),
         },
     ))
 }
@@ -169,6 +171,7 @@ fn transform_array_decl(
             ref_to: None,
         }),
         init: vec![],
+        attributes: Attributes::default(),
     }))
 }
 
@@ -227,6 +230,7 @@ fn transform_struct_decl(
                     type_name: member_type,
                     initial_value: None,
                 }),
+                attributes: Attributes::default(),
             })
         })
         .collect();
@@ -234,6 +238,7 @@ fn transform_struct_decl(
     Ok(DataTypeDeclarationKind::Structure(StructureDeclaration {
         type_name: type_name.clone(),
         elements: elements?,
+        attributes: Attributes::default(),
     }))
 }
 
@@ -277,6 +282,7 @@ fn transform_subrange_signed_decl(
             },
         }),
         default: None,
+        attributes: Attributes::default(),
     }))
 }
 
@@ -317,6 +323,7 @@ fn transform_subrange_unsigned_decl(
             },
         }),
         default: None,
+        attributes: Attributes::default(),
     }))
 }
 
@@ -467,6 +474,7 @@ fn transform_function(
             return_type,
             variables,
             body,
+            attributes: Attributes::default(),
         },
     ))
 }
@@ -496,6 +504,7 @@ fn transform_function_block(
             // here. Wiring those into `methods` is a follow-up slice.
             methods: vec![],
             properties: vec![],
+            attributes: Attributes::default(),
         },
     ))
 }
@@ -516,6 +525,7 @@ fn transform_program(
         variables,
         access_variables: vec![],
         body,
+        attributes: Attributes::default(),
     }))
 }
 
@@ -624,6 +634,7 @@ fn transform_variable(
         block: next_block_id(),
         type_id: None,
         edge: None,
+        attributes: Attributes::default(),
     })
 }
 

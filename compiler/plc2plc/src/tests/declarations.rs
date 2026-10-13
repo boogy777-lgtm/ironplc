@@ -1,6 +1,7 @@
 //! Late-bound, empty VAR, VAR_TEMP and sized-array declarations.
 
 use super::common::*;
+use ironplc_dsl::common::Attributes;
 
 #[test]
 fn write_to_string_late_bound_declaration() {
@@ -14,6 +15,7 @@ fn write_to_string_late_bound_declaration() {
     let late_bound_decl = LateBoundDeclaration {
         data_type_name: TypeName::from("MY_ALIAS"),
         base_type_name: TypeName::from("MY_BASE"),
+        attributes: Attributes::default(),
     };
 
     let library = Library {

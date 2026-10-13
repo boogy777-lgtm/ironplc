@@ -27,7 +27,7 @@ use super::tree::{child_of, children_of, significant_tokens};
 use super::values::lower_priority;
 use super::LowerCx;
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode};
-use ironplc_dsl::common::ConstantKind;
+use ironplc_dsl::common::{Attributes, ConstantKind};
 use ironplc_dsl::core::Id;
 use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_dsl::sfc::{
@@ -217,5 +217,6 @@ pub fn lower_action(cx: &LowerCx, node: &SyntaxNode) -> Result<Action, Diagnosti
     Ok(Action {
         name: declared_name(cx, node)?,
         body: lower_body(cx, node)?,
+        attributes: Attributes::default(),
     })
 }

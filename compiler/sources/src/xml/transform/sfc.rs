@@ -181,7 +181,11 @@ fn transform_sfc_action(
         FunctionBlockBodyKind::Empty
     };
 
-    Ok(SfcAction { name, body })
+    Ok(SfcAction {
+        name,
+        body,
+        attributes: Attributes::default(),
+    })
 }
 
 /// Parse an action qualifier string to ActionQualifier

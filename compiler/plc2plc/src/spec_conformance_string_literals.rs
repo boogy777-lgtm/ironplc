@@ -10,7 +10,7 @@
 //! See `specs/design/string-literals.md`.
 
 use dsl::common::{
-    CharacterStringLiteral, DataTypeDeclarationKind, Integer, IntegerRef, Library,
+    Attributes, CharacterStringLiteral, DataTypeDeclarationKind, Integer, IntegerRef, Library,
     LibraryElementKind, StringDeclaration, TypeName,
 };
 use dsl::core::{FileId, SourceSpan};
@@ -38,6 +38,7 @@ fn library_with_default(value: Vec<char>, wide: bool) -> Library {
                 }),
                 width: init.width.clone(),
                 init: Some(init),
+                attributes: Attributes::default(),
             }),
         )],
     }
