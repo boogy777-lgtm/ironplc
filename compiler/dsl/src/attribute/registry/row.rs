@@ -38,6 +38,7 @@ families! {
     Display => "Display",
     Messages => "Messages",
     CompileChecks => "Compile checks",
+    StaticAnalysis => "Static analysis",
     Initialisation => "Initialisation",
     OnlineChange => "Online change",
     CodeGeneration => "Code generation",

@@ -239,9 +239,11 @@ fn accepts_when_row_takes_one_of_texts_then_each_text_in_any_case_and_with_space
         .flat_map(|row| {
             let texts: &[&str] = match row.value {
                 ValueKind::OneOf(texts) | ValueKind::OptionalOneOf(texts) => texts,
-                ValueKind::Flag | ValueKind::Number | ValueKind::Text | ValueKind::OptionalText => {
-                    &[]
-                }
+                ValueKind::Flag
+                | ValueKind::Number
+                | ValueKind::Text
+                | ValueKind::OptionalText
+                | ValueKind::RuleList => &[],
             };
             texts
                 .iter()

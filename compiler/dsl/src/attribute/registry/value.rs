@@ -25,6 +25,9 @@ pub enum ValueKind {
     Text,
     /// Any value, or none.
     OptionalText,
+    /// A value is required: one or more rule numbers, each a minus sign and
+    /// decimal digits, separated by commas.
+    RuleList,
 }
 
 impl ValueKind {
@@ -39,6 +42,9 @@ impl ValueKind {
             ValueKind::Number => "an unsigned integer".to_string(),
             ValueKind::Text => "a text that is not empty".to_string(),
             ValueKind::OptionalText => "any text, or no value".to_string(),
+            ValueKind::RuleList => {
+                "negative rule numbers separated by commas, such as -33, -31".to_string()
+            }
         }
     }
 }
@@ -106,6 +112,31 @@ impl Value for OptionalText {
 
     fn parse(text: Option<&str>) -> Option<Self> {
         Some(OptionalText(text.map(str::to_string)))
+    }
+}
+
+/// The value of an attribute that takes the numbers of the rules to switch off:
+/// each item is a minus sign and decimal digits, the items are separated by
+/// commas, and white space around an item is ignored (`-33`, `-33, -31`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuleNumbers(pub Vec<u32>);
+
+/// The number of one item of a list of rules: `-` and decimal digits.
+fn rule_number(item: &str) -> Option<u32> {
+    let digits = item.trim().strip_prefix('-')?;
+    if !digits.is_empty() && digits.bytes().all(|byte| byte.is_ascii_digit()) {
+        digits.parse().ok()
+    } else {
+        None
+    }
+}
+
+impl Value for RuleNumbers {
+    const KIND: ValueKind = ValueKind::RuleList;
+
+    fn parse(text: Option<&str>) -> Option<Self> {
+        let rules: Option<Vec<u32>> = text?.split(',').map(rule_number).collect();
+        rules.map(RuleNumbers)
     }
 }
 

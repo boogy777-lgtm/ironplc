@@ -14,7 +14,7 @@ anything: is this name one the compiler knows, may it stand before this
 declaration, and is its value one it takes.
 
 Where those answers live decides what each of the dozens of attributes costs.
-There are 49 attributes with a CODESYS help page read so far, and more will
+Many attributes have a CODESYS help page, and more will
 follow. Each has a name, sometimes aliases (`noinit`, `no_init`, `no-init`), a
 set of declarations it may stand before, one of a few kinds of value, and a
 reader that acts on it (layout reads `pack_mode`, the enumeration analysis reads

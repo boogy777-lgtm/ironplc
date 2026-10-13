@@ -138,10 +138,48 @@ fn parse_when_optional_one_of_then_a_missing_value_or_one_of_the_texts(
 #[case::number(Number::KIND, "an unsigned integer")]
 #[case::text(Text::KIND, "a text that is not empty")]
 #[case::optional_text(OptionalText::KIND, "any text, or no value")]
+#[case::rule_list(
+    RuleNumbers::KIND,
+    "negative rule numbers separated by commas, such as -33, -31"
+)]
 #[spec_test(REQ_ATTR_dsl_022)]
 fn describe_when_value_kind_then_what_the_attribute_takes(
     #[case] kind: ValueKind,
     #[case] expected: &str,
 ) {
     assert_eq!(kind.describe(), expected);
+}
+
+#[rstest]
+#[case::one("-33", &[33])]
+#[case::two("-33, -31", &[33, 31])]
+#[case::without_spaces("-28,-33", &[28, 33])]
+#[case::white_space_around_items("  -1 ,\t-2  ", &[1, 2])]
+#[case::zero("-0", &[0])]
+#[spec_test(REQ_ATTR_dsl_022)]
+fn parse_when_rule_list_then_the_numbers_of_the_rules(
+    #[case] text: &str,
+    #[case] expected: &[u32],
+) {
+    assert_eq!(
+        RuleNumbers::parse(Some(text)),
+        Some(RuleNumbers(expected.to_vec()))
+    );
+}
+
+#[rstest]
+#[case::missing(None)]
+#[case::empty(Some(""))]
+#[case::positive(Some("33"))]
+#[case::plus(Some("+33"))]
+#[case::minus_alone(Some("-"))]
+#[case::minus_and_letter(Some("-x"))]
+#[case::trailing_comma(Some("-33,"))]
+#[case::leading_comma(Some(",-33"))]
+#[case::items_without_comma(Some("-33 -31"))]
+#[case::too_large(Some("-4294967296"))]
+#[case::second_item_wrong(Some("-33, 31"))]
+#[spec_test(REQ_ATTR_dsl_022)]
+fn parse_when_rule_list_is_not_a_list_of_negative_numbers_then_none(#[case] text: Option<&str>) {
+    assert_eq!(RuleNumbers::parse(text), None);
 }

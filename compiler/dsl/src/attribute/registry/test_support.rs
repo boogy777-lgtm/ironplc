@@ -56,6 +56,7 @@ pub(super) fn valid_value(kind: ValueKind) -> Option<&'static str> {
         ValueKind::Number => Some("7"),
         ValueKind::Text => Some("a text"),
         ValueKind::OptionalText => Some("a text"),
+        ValueKind::RuleList => Some("-33, -31"),
     }
 }
 
@@ -76,6 +77,16 @@ pub(super) fn invalid_values(kind: ValueKind) -> &'static [Option<&'static str>]
         ],
         ValueKind::Text => &[None, Some(""), Some("   ")],
         ValueKind::OptionalText => &[],
+        ValueKind::RuleList => &[
+            None,
+            Some(""),
+            Some("33"),
+            Some("+33"),
+            Some("-"),
+            Some("-x"),
+            Some("-33,"),
+            Some("-33 -31"),
+        ],
     }
 }
 
@@ -84,6 +95,6 @@ pub(super) fn allows_missing(kind: ValueKind) -> bool {
     match kind {
         ValueKind::Flag => true,
         ValueKind::OptionalOneOf(_) | ValueKind::OptionalText => true,
-        ValueKind::OneOf(_) | ValueKind::Number | ValueKind::Text => false,
+        ValueKind::OneOf(_) | ValueKind::Number | ValueKind::Text | ValueKind::RuleList => false,
     }
 }

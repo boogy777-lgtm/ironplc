@@ -229,6 +229,7 @@ arm in each match over `ValueKind`, which has no wildcard.
 | `Number` | `Number(u32)` | it is an unsigned decimal integer that fits `u32`, with white space around it ignored |
 | `Text` | `Text` | it is not empty and not only white space |
 | `OptionalText` | `OptionalText` | always |
+| `RuleList` | `RuleNumbers(Vec<u32>)` | it is one or more items separated by commas, each a minus sign and decimal digits, with white space around an item ignored |
 
 **REQ-ATTR-dsl-020** `ROW.of(&attributes)` gives the typed value of the first
 attribute that the name or an alias of the row names, without regard to case,

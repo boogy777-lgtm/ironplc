@@ -14,7 +14,7 @@ use super::row::{Family, Info, Row, State};
 use super::targets::{Targets, EVERY, TYPES};
 use super::value::{
     DisplayMode, Flag, MonitoringEncoding, MonitoringMode, Number, Optional, OptionalText,
-    PackMode, SymbolAccess, Text,
+    PackMode, RuleNumbers, SymbolAccess, Text,
 };
 use crate::attribute::census::TargetKind as T;
 
@@ -232,6 +232,15 @@ rows! {
         targets: kinds![FunctionBlock],
         family: CompileChecks,
         summary: "`__NEW` may create an instance of the block",
+        state: Waiting,
+    }
+
+    ANALYSIS: RuleNumbers = {
+        name: "analysis",
+        aliases: [],
+        targets: EVERY,
+        family: StaticAnalysis,
+        summary: "The listed rules of the static analysis are not checked for the declaration",
         state: Waiting,
     }
 
