@@ -30,6 +30,7 @@ END_TYPE
                         vec!["CRITICAL"],
                         "CRITICAL",
                     ),
+                    attributes: Attributes::default(),
                 },
             )),
             LibraryElementKind::DataTypeDeclaration(DataTypeDeclarationKind::Enumeration(
@@ -40,6 +41,7 @@ END_TYPE
                         default: None,
                         underlying_type: None,
                     },
+                    attributes: Attributes::default(),
                 },
             )),
         ],
@@ -488,6 +490,7 @@ fn apply_when_simple_decl_without_type_spec_then_error() {
             DataTypeDeclarationKind::Simple(SimpleDeclaration {
                 type_name: TypeName::from("MY_TYPE"),
                 spec_and_init: InitialValueAssignmentKind::None(SourceSpan::default()),
+                attributes: Attributes::default(),
             }),
         )],
     };

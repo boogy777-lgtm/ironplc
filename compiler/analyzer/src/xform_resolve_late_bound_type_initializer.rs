@@ -435,6 +435,7 @@ END_FUNCTION_BLOCK
                     oop: None,
                     methods: vec![],
                     properties: vec![],
+                    attributes: Attributes::default(),
                 }),
                 LibraryElementKind::FunctionBlockDeclaration(FunctionBlockDeclaration {
                     name: TypeName::from("caller"),
@@ -444,6 +445,7 @@ END_FUNCTION_BLOCK
                     oop: None,
                     methods: vec![],
                     properties: vec![],
+                    attributes: Attributes::default(),
                 }),
             ],
         };
@@ -483,7 +485,9 @@ END_FUNCTION_BLOCK
                             init: InitialValueAssignmentKind::simple_uninitialized(TypeName::from(
                                 "BOOL",
                             )),
+                            attributes: Attributes::default(),
                         }],
+                        attributes: Attributes::default(),
                     },
                 )),
                 LibraryElementKind::FunctionBlockDeclaration(FunctionBlockDeclaration {
@@ -494,6 +498,7 @@ END_FUNCTION_BLOCK
                     oop: None,
                     methods: vec![],
                     properties: vec![],
+                    attributes: Attributes::default(),
                 }),
             ],
         };
@@ -533,6 +538,7 @@ END_FUNCTION_BLOCK
                             default: None,
                             underlying_type: None,
                         },
+                        attributes: Attributes::default(),
                     },
                 )),
                 LibraryElementKind::FunctionBlockDeclaration(FunctionBlockDeclaration {
@@ -543,6 +549,7 @@ END_FUNCTION_BLOCK
                     oop: None,
                     methods: vec![],
                     properties: vec![],
+                    attributes: Attributes::default(),
                 }),
             ],
         };

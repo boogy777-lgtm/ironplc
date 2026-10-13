@@ -550,6 +550,7 @@ mod test {
                     vec!["Cnt1", "Cnt2"],
                     "_TMP_AverageVal17_OUT",
                 )]),
+                attributes: Attributes::default(),
             })],
         };
 

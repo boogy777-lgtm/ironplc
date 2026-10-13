@@ -2,6 +2,7 @@
 //! First Steps structural fixtures.
 
 use super::common::*;
+use ironplc_dsl::common::Attributes;
 use rstest::rstest;
 
 /// Corpus `.st` resources that must parse without error but have no plc2plc
@@ -50,6 +51,7 @@ fn parse_when_first_steps_function_block_counter_fbd_then_builds_structure() {
                     block: next_block_id(),
                     type_id: None,
                     edge: None,
+                    attributes: Attributes::default(),
                 },
                 VarDecl::simple("_TMP_ADD4_OUT", "INT"),
                 VarDecl::simple("_TMP_SEL7_OUT", "INT"),
@@ -62,6 +64,7 @@ fn parse_when_first_steps_function_block_counter_fbd_then_builds_structure() {
             oop: None,
             methods: vec![],
             properties: vec![],
+            attributes: Attributes::default(),
         },
     ));
     assert_eq!(actual, expected);
@@ -95,6 +98,7 @@ fn parse_when_first_steps_func_avg_val_then_builds_structure() {
                     block: next_block_id(),
                     type_id: None,
                     edge: None,
+                    attributes: Attributes::default(),
                 },
             ],
             body: vec![StmtKind::assignment(
@@ -124,6 +128,7 @@ fn parse_when_first_steps_func_avg_val_then_builds_structure() {
                     ExprKind::late_bound("InputsNumber"),
                 ),
             )],
+            attributes: Attributes::default(),
         },
     ));
     assert_eq!(actual, expected)
@@ -168,6 +173,7 @@ fn parse_when_first_steps_program_declaration_then_builds_structure() {
             StmtKind::fb_call_mapped("CounterLD0", vec![("Reset", "Reset")]),
             StmtKind::structured_assignment("Cnt5", "CounterLD0", "Out"),
         ]),
+        attributes: Attributes::default(),
     }));
     assert_eq!(actual, expected)
 }
@@ -189,6 +195,7 @@ fn parse_when_first_steps_configuration_then_builds_structure() {
                 block: next_block_id(),
                 type_id: None,
                 edge: None,
+                attributes: Attributes::default(),
             }],
             resource_decl: vec![ResourceDeclaration {
                 name: Id::from("resource1"),
@@ -252,6 +259,7 @@ fn parse_when_first_steps_function_block_logger_then_test_apply_when_names_corre
             oop: None,
             methods: vec![],
             properties: vec![],
+            attributes: Attributes::default(),
         },
     ));
 
@@ -279,6 +287,7 @@ fn parse_when_first_steps_function_block_counter_sfc_then_builds_structure() {
                     block: next_block_id(),
                     type_id: None,
                     edge: None,
+                    attributes: Attributes::default(),
                 },
             ],
             body: FunctionBlockBodyKind::sfc(vec![Network {
@@ -348,6 +357,7 @@ fn parse_when_first_steps_function_block_counter_sfc_then_builds_structure() {
             oop: None,
             methods: vec![],
             properties: vec![],
+            attributes: Attributes::default(),
         },
     ));
     assert_eq!(actual, expected);
@@ -363,6 +373,7 @@ fn parse_when_first_steps_data_type_decl_then_builds_structure() {
                 vec!["CRITICAL", "WARNING", "INFO", "DEBUG"],
                 "INFO",
             ),
+            attributes: Attributes::default(),
         }),
     ));
     assert_eq!(actual, expected)

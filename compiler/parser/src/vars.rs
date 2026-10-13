@@ -97,6 +97,7 @@ impl From<IncomplVarDecl> for VarDecl {
             block: next_block_id(),
             type_id: None,
             edge: None,
+            attributes: Attributes::default(),
         }
     }
 }
@@ -123,6 +124,7 @@ impl UntypedVarDecl {
             block: next_block_id(),
             type_id: None,
             edge: None,
+            attributes: Attributes::default(),
         }
     }
 }

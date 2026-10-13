@@ -12,7 +12,7 @@ use crate::member_qualifier::MemberQualifiers;
 use crate::scope::ScopeBearing;
 use crate::textual::*;
 use crate::visitor::Visitor;
-use dsl_macro_derive::{Located, Recurse};
+use dsl_macro_derive::{Attributed, Located, Recurse};
 
 /// `METHOD name (: return_type)? ... END_METHOD` (OOP extension).
 ///
@@ -26,7 +26,7 @@ use dsl_macro_derive::{Located, Recurse};
 /// Phase 1: static dispatch. Resolution of calls against this declaration
 /// (own methods first, then the `EXTENDS` chain) is implemented outside
 /// the AST, in `ironplc-analyzer`.
-#[derive(Clone, Debug, PartialEq, Recurse, Located)]
+#[derive(Clone, Debug, PartialEq, Recurse, Located, Attributed)]
 #[recurse(scope)]
 pub struct MethodDeclaration {
     /// Qualifiers between `METHOD` and the name, in source order, such as
@@ -39,6 +39,8 @@ pub struct MethodDeclaration {
     pub body: Vec<StmtKind>,
     #[located(position)]
     pub span: SourceSpan,
+    #[recurse(ignore)]
+    pub attributes: Attributes,
 }
 
 impl HasVariables for MethodDeclaration {
@@ -72,7 +74,7 @@ impl FunctionBlockDeclaration {
 ///
 /// Every scope-aware pass therefore handles an accessor body as a method
 /// body, with no property-specific case. See ADR-0041 Phase 1.
-#[derive(Clone, Debug, PartialEq, Recurse, Located)]
+#[derive(Clone, Debug, PartialEq, Recurse, Located, Attributed)]
 pub struct PropertyDeclaration {
     /// Qualifiers between `PROPERTY` and the name, in source order, such as
     /// `PUBLIC` or `FINAL`. Same words as on a method (`PROPERTY PUBLIC
@@ -85,6 +87,8 @@ pub struct PropertyDeclaration {
     pub set: Option<MethodDeclaration>,
     #[located(position)]
     pub span: SourceSpan,
+    #[recurse(ignore)]
+    pub attributes: Attributes,
 }
 
 impl PropertyDeclaration {
@@ -103,6 +107,7 @@ impl PropertyDeclaration {
             variables,
             body,
             span,
+            attributes: Attributes::default(),
         }
     }
 
@@ -136,6 +141,7 @@ impl PropertyDeclaration {
             block: next_block_id(),
             type_id: None,
             edge: None,
+            attributes: Attributes::default(),
         };
         let mut all_variables = Vec::with_capacity(variables.len() + 1);
         all_variables.push(value);
@@ -147,6 +153,7 @@ impl PropertyDeclaration {
             variables: all_variables,
             body,
             span,
+            attributes: Attributes::default(),
         }
     }
 
@@ -215,12 +222,14 @@ impl LanguageExtension for FunctionBlockOop {
 /// is enough for an interface name to be recognized as a known type, so
 /// that variables declared with an interface type resolve instead of
 /// failing with "type not declared."
-#[derive(Clone, Debug, PartialEq, Recurse)]
+#[derive(Clone, Debug, PartialEq, Recurse, Attributed)]
 pub struct InterfaceDeclaration {
     pub name: Id,
     /// Interfaces this interface extends (an interface may extend more than
     /// one other interface, unlike a function block).
     pub extends: Vec<TypeName>,
+    #[recurse(ignore)]
+    pub attributes: Attributes,
 }
 
 impl Located for InterfaceDeclaration {

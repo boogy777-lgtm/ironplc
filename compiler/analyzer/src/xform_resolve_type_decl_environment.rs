@@ -120,6 +120,7 @@ impl TypeEnvironment {
                     type_name: node.base_type_name,
                     initial_value: None,
                 }),
+                attributes: node.attributes,
             }))
         } else {
             match existing.representation {
@@ -131,6 +132,7 @@ impl TypeEnvironment {
                             default: None,
                             underlying_type: None,
                         },
+                        attributes: node.attributes,
                     },
                 )),
                 // A structure alias keeps the name it declares, with the structure
@@ -144,6 +146,7 @@ impl TypeEnvironment {
                                 elements_init: vec![],
                             },
                         ),
+                        attributes: node.attributes,
                     }))
                 }
                 IntermediateType::Array { .. } => {
@@ -151,6 +154,7 @@ impl TypeEnvironment {
                         type_name: node.data_type_name,
                         spec: SpecificationKind::Named(node.base_type_name),
                         init: vec![],
+                        attributes: node.attributes,
                     }))
                 }
                 IntermediateType::Subrange { .. } => {
@@ -158,6 +162,7 @@ impl TypeEnvironment {
                         type_name: node.data_type_name,
                         spec: SpecificationKind::Named(node.base_type_name),
                         default: None,
+                        attributes: node.attributes,
                     }))
                 }
                 IntermediateType::Reference { .. } => {
@@ -170,6 +175,7 @@ impl TypeEnvironment {
                             ),
                             // Resolved alias; original surface keyword not preserved.
                             syntax: ironplc_dsl::common::RefSyntax::RefTo,
+                            attributes: node.attributes,
                         },
                     ))
                 }
