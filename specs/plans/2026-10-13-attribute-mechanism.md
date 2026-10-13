@@ -147,17 +147,24 @@ Not found in the help (HTTP 403 and 404): `nonvirtual`, `noflow`. They get a
 row when a page is found.
 
 Seen in a production CODESYS project and not in the list above: `analysis`
-(`{attribute 'analysis' := '-33'}` before a method or a block: a rule of the
-static analysis is switched off for the declaration; page to read) and
-`object_name` (before `VAR_GLOBAL`; not found in the help). The owner confirms
-that it is the name of the global variable list, written by the export: it
-gives the Name scope family its list name, so `qualified_only` and `GVL.x` need
-no other source of the name.
+(`{attribute 'analysis' := '-33'}` before a function block, a type or a global
+variable list: a rule of the static analysis is switched off for the
+declaration; page to read) and `object_name` (not found in the help). In that
+project `object_name` stands before `METHOD` and its value is the name of the
+method: the export writes the name of the object there. An earlier revision of
+this plan said it stands before `VAR_GLOBAL` and names the global variable
+list; that was a misreading of the counts, so the Name scope family still
+needs a source for the name of a list. Neither has a row until its meaning is
+read from a page or stated by the owner; until then each is a user-defined
+attribute.
 
-Use in that project (aggregate counts): `pack_mode` 192 (`'2'` 191 times, `'1'`
-once), `analysis` 6, `object_name` 3, `subsequent` 2, `linkalways` 1; no
-`strict`, no `qualified_only`. So the first family after the mechanism is
-Layout.
+Use in that project (aggregate counts over its `.st` sources): `pack_mode` 192
+before `TYPE` (always `'2'`), `analysis` 6, `object_name` 3 (before `METHOD`),
+`subsequent` 2 and `linkalways` 1 (both before `VAR_GLOBAL`); no `strict`, no
+`qualified_only`. Text exports of libraries beside it add `qualified_only` 17
+(14 before `TYPE`, 3 before `VAR_GLOBAL`) and one `pack_mode` before
+`VAR_GLOBAL`, a place the help does not give for it. So the first family after
+the mechanism is Layout.
 
 TwinCAT documents more attributes (`OPC.UA.DA` and its family, `TcRpcEnable`,
 `TcDisplayScale`, `tc_no_symbol`, `TcNcAxis`, `TcLinkTo`, `TcInitSymbol`,
@@ -221,10 +228,10 @@ carry it) and attributes kept as trivia (no observer can read them).
 - [x] guard: the trait `Attributed` and a match without a wildcard over the declaration kinds
 - [x] pins rewritten; only `library` digests move
 
-### PR 3 (core: Part 1)
-- [ ] the attachment rule; targets ask it; an attribute without a target is reported
-- [ ] `plc2plc` round trip
-- [ ] design doc and ADR
+### PR 3 (core: Part 1) — merged, #67
+- [x] the attachment rule; targets ask it; an attribute without a target is reported
+- [x] `plc2plc` round trip
+- [x] design doc and ADR
 
 ### PR 4 (core: Part 2)
 - [ ] the registry with every row of the table; typed readers
