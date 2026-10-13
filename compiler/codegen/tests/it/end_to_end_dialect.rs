@@ -173,8 +173,9 @@ END_PROGRAM
 }
 
 // Curly-brace pragmas ({attribute '...'}) appear in virtually every
-// TwinCAT source file. The TwinCAT dialect skips them as opaque trivia so
-// the surrounding code compiles and runs unchanged.
+// TwinCAT source file. The TwinCAT dialect attaches an attribute to the
+// declaration after it and gives it no effect, so the surrounding code
+// compiles and runs unchanged.
 // var layout: x=0, result=1
 e2e_i32_with!(
     end_to_end_when_twincat_dialect_then_pragmas_are_skipped,

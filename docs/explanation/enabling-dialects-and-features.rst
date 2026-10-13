@@ -378,10 +378,15 @@ which flags a dialect already enables by default, see `Supported Dialects`_.
    Allow curly-brace pragmas such as ``{attribute 'qualified_only'}`` and
    ``{attribute 'strict'}``. These are CODESYS-core syntax (documented by
    CODESYS itself, and inherited by any IDE built on the CODESYS V3 runtime,
-   including Beckhoff TwinCAT and Schneider Electric Machine Expert). A
-   pragma is parsed and discarded like a comment — its contents are not yet
-   interpreted. Pragmas do not nest; an unclosed ``{`` still produces a parse
-   error.
+   including Beckhoff TwinCAT and Schneider Electric Machine Expert). An
+   attribute pragma (``{attribute 'name'}`` or
+   ``{attribute 'name' := 'value'}``) is attached to the declaration that
+   follows it. The compiler keeps it and gives it no effect yet. An attribute
+   pragma that no declaration follows is reported as
+   :doc:`P0043 </reference/compiler/problems/P0043>`. Any other pragma, such as
+   ``{warning '...'}`` or ``{info '...'}``, is skipped. The conditional pragmas
+   (``{IF}`` and the others) have a flag of their own, ``--allow-pragma-if``.
+   Pragmas do not nest; an unclosed ``{`` still produces a parse error.
 
 ``--allow-short-circuit-operators``
    Allow the ``AND_THEN`` and ``OR_ELSE`` short-circuit boolean

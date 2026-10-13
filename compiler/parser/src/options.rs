@@ -444,7 +444,7 @@ define_compiler_options! {
     [Rusty, Iec61131_3Ed3, Codesys, TwinCat],
     allow_partial_access_syntax,
 
-    "Allow curly-brace pragmas ({attribute 'name'}) as opaque, skipped trivia",
+    "Allow curly-brace pragmas; an attribute pragma ({attribute 'name'}) is attached to the declaration it stands before, any other is skipped",
     "--allow-pragmas",
     [Rusty, Codesys, TwinCat],
     allow_pragmas,
