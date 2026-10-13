@@ -1,0 +1,63 @@
+=====
+P0043
+=====
+
+.. problem-summary:: P0043
+
+This error occurs when an attribute pragma — ``{attribute 'name'}`` or
+``{attribute 'name' := 'value'}`` — does not stand before a declaration it can
+be attached to. An attribute describes the declaration that follows it: a type,
+a structure member, a variable, a program, a function, a function block, an
+interface, a method, a property or an action. A pragma before a
+``TYPE`` block or a variable block describes every declaration the block
+holds. A pragma anywhere else describes nothing, so the compiler reports it
+instead of accepting it and ignoring it.
+
+Example
+-------
+
+The following code will generate error P0043:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       x : INT;
+   END_VAR
+       {attribute 'hide'}   (* Error: a statement is not a declaration *)
+       x := 1;
+   END_PROGRAM
+
+A pragma at the end of a block, or before the name of a declaration, is the
+other shape of the error:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       x : INT;
+       {attribute 'hide'}   (* Error: no declaration follows *)
+   END_VAR
+   END_PROGRAM
+
+To fix this error, move the pragma directly before the declaration it
+describes:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       {attribute 'hide'}
+       x : INT;
+   END_VAR
+       x := 1;
+   END_PROGRAM
+
+Comments and other pragmas may stand between the attribute and the
+declaration. Several attributes before one declaration all describe it.
+
+Pragmas are a CODESYS/TwinCAT extension, accepted only with
+``--allow-pragmas`` (see :doc:`/reference/compiler/ironplcc`). A pragma that is
+not an attribute, such as ``{info 'text'}``, is accepted anywhere and
+describes nothing. Text in a branch of ``{IF}`` that is not taken is not
+read, so an attribute there is not reported.

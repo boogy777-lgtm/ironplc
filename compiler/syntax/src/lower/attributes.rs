@@ -1,5 +1,5 @@
 //! Attributes: which declaration each `{attribute 'name'}` pragma is attached
-//! to.
+//! to, and which pragma is attached to none.
 //!
 //! A pragma is one trivia token, and the tree places the trivia before a node
 //! in the node that holds it, before the node. So the pragmas that stand
@@ -11,8 +11,11 @@
 //!   the run before it, and passes them down to every target it holds;
 //! - any other node claims none.
 //!
-//! A declaration asks for its attributes ([`attributes_of`]): what its group
-//! passes down, then what it claims.
+//! The two readings of the rule come from this one function. A declaration
+//! asks for its attributes ([`attributes_of`]): what its group passes down,
+//! then what it claims. The check asks for the pragmas no node claims
+//! ([`unattached`]). A pragma is therefore attached or reported, never both
+//! and never neither.
 //!
 //! [`role`] matches every node kind without a wildcard arm: a node kind added
 //! to the syntax declaration does not compile until it says whether an
@@ -23,7 +26,10 @@ use crate::pragma::{kind, Kind};
 use crate::syntax_kind::{NodeKind, SyntaxKind, SyntaxNode, SyntaxToken};
 use ironplc_dsl::attribute::Attribute;
 use ironplc_dsl::common::Attributes;
-use rowan::NodeOrToken;
+use ironplc_dsl::diagnostic::{Diagnostic, Label};
+use ironplc_problems::Problem;
+use rowan::{NodeOrToken, TextRange};
+use std::collections::HashSet;
 
 /// What a node is to the attribute pragmas that stand before it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -235,5 +241,52 @@ pub fn attributes_of(cx: &LowerCx, node: &SyntaxNode) -> Attributes {
     )
 }
 
+/// The attribute pragmas under `root` that no node claims, in source order.
+pub fn unattached(root: &SyntaxNode) -> Vec<SyntaxToken> {
+    let pragmas: Vec<SyntaxToken> = root
+        .descendants_with_tokens()
+        .filter_map(NodeOrToken::into_token)
+        .filter(|token| attribute_of(token).is_some())
+        .collect();
+    if pragmas.is_empty() {
+        return pragmas;
+    }
+    let claimed: HashSet<TextRange> = root
+        .descendants()
+        .flat_map(|node| claimed_by(&node))
+        .map(|token| token.text_range())
+        .collect();
+    pragmas
+        .into_iter()
+        .filter(|token| !claimed.contains(&token.text_range()))
+        .collect()
+}
+
+/// Fails with the first attribute pragma under `root` that is attached to
+/// nothing (P0043): an accepted attribute is never without a declaration by
+/// accident.
+pub fn reject_unattached(cx: &LowerCx, root: &SyntaxNode) -> Result<(), Diagnostic> {
+    match unattached(root).first() {
+        None => Ok(()),
+        Some(token) => {
+            let name = attribute_of(token)
+                .map(|(name, _)| name)
+                .unwrap_or_default();
+            Err(Diagnostic::problem(
+                Problem::AttributeNotAttached,
+                Label::span(
+                    cx.token_span(token),
+                    format!("The attribute '{name}' is not followed by a declaration it can be attached to"),
+                ),
+            )
+            .with_help(
+                "Write the attribute pragma directly before the declaration it describes: a type, a variable, a structure member, a program, a function, a function block, an interface, a method, a property or an action",
+            ))
+        }
+    }
+}
+
+#[cfg(test)]
+mod reported_tests;
 #[cfg(test)]
 mod tests;

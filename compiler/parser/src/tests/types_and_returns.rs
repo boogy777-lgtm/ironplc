@@ -351,7 +351,7 @@ fn parse_when_var_with_string_paren_length_and_pragma_between_then_parses() {
     let result = parse_program(
         "PROGRAM main
 VAR
-    hostName : STRING {attribute 'x'} (255);
+    hostName : STRING {info 'x'} (255);
 END_VAR
 END_PROGRAM",
         &FileId::default(),
@@ -378,7 +378,7 @@ fn parse_when_var_with_string_paren_length_and_pragma_between_but_flag_off_then_
     let result = parse_program(
         "PROGRAM main
 VAR
-    hostName : STRING {attribute 'x'} (255);
+    hostName : STRING {info 'x'} (255);
 END_VAR
 END_PROGRAM",
         &FileId::default(),
