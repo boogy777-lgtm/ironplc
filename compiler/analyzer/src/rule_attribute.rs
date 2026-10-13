@@ -85,7 +85,7 @@ fn diagnostic(fault: Fault) -> Diagnostic {
             Label::span(
                 fault.span,
                 format!(
-                    "The attribute '{name}' stands before a {}, but applies only to: {}",
+                    "The attribute '{name}' does not apply to a declaration of this kind ({}); it applies to: {}",
                     kind.label(),
                     row.targets.describe()
                 ),
@@ -183,8 +183,14 @@ END_PROGRAM";
         );
         let message = &found[0].primary.message;
         assert!(message.contains("'pack_mode'"), "{message}");
-        assert!(message.contains("variable"), "{message}");
-        assert!(message.contains("structure type, union type"), "{message}");
+        assert!(
+            message.contains("a declaration of this kind (variable)"),
+            "{message}"
+        );
+        assert!(
+            message.contains("it applies to: array type, structure type, union type"),
+            "{message}"
+        );
     }
 
     #[spec_test(REQ_ATTR_analyzer_010)]
@@ -361,6 +367,13 @@ TYPE Color : (Red, Green); END_TYPE
 VAR_GLOBAL
     g : INT;
 END_VAR
+
+PROGRAM main
+END_PROGRAM"
+    )]
+    #[case::array_type(
+        "{attribute 'pack_mode' := '2'}
+TYPE Samples : ARRAY [0..3] OF INT; END_TYPE
 
 PROGRAM main
 END_PROGRAM"

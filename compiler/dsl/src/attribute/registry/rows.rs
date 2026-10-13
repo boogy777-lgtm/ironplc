@@ -85,7 +85,7 @@ rows! {
     PACK_MODE: PackMode = {
         name: "pack_mode",
         aliases: [],
-        targets: kinds![Structure, Union],
+        targets: kinds![Structure, Union, Array],
         family: Layout,
         summary: "How the members of the structure are aligned in memory",
         state: Waiting,
