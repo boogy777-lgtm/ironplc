@@ -7,6 +7,11 @@
 //! stored or passed (see `value_type::check`), but its values are named, and
 //! an operation on one has no meaning (CODESYS reports "arithmetic operations
 //! with enumeration members" for an enumeration declared `strict`).
+//!
+//! Whether an enumeration is a number to a place that computes is answered by
+//! [`ValueUse::refuses`], the relation every computing place asks: the
+//! numerical functions and the `FOR` counter ask it too, and report in their
+//! own rule.
 
 use ironplc_dsl::{
     common::TypeName,
@@ -20,6 +25,7 @@ use super::RuleOperatorOperandTypeCheck;
 use crate::intermediates::operator_function_form::{
     form_of_operator, FormOf, OperatorFunctionForm,
 };
+use crate::value_type::ValueUse;
 
 impl RuleOperatorOperandTypeCheck<'_> {
     /// Reports P4049 for each of `operands` that is an enumeration, where the
@@ -34,7 +40,7 @@ impl RuleOperatorOperandTypeCheck<'_> {
             let Some(representation) = self.types.representation_of_expr(operand) else {
                 continue;
             };
-            if !representation.is_enumeration() {
+            if !ValueUse::Computes.refuses(representation) {
                 continue;
             }
             let actual = self

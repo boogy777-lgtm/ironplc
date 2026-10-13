@@ -63,7 +63,7 @@ use crate::{
     rule_support::{run_rule, DiagnosticVisitor},
     semantic_context::SemanticContext,
     type_environment::TypeEnvironment,
-    value_type,
+    value_type::{self, ValueUse},
 };
 
 pub fn apply(
@@ -101,6 +101,7 @@ impl RuleConditionType<'_> {
     fn check_condition(&mut self, condition: &Expr, statement: &str) {
         let Err(mismatch) = value_type::check(
             self.type_environment,
+            ValueUse::Holds,
             &self.bool_type,
             condition,
             self.options,

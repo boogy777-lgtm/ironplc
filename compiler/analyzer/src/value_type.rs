@@ -180,10 +180,12 @@ pub(crate) fn of(types: &TypeEnvironment, expr: &Expr) -> Option<ValueType> {
 }
 
 /// Checks that the value of `expr` may be used where `expected` is
-/// required. `Ok` when it may, and when the analyzer resolved no type for
-/// the value, since there is nothing to compare.
+/// required, by a place that makes `value_use` of it. `Ok` when it may, and
+/// when the analyzer resolved no type for the value, since there is nothing
+/// to compare.
 pub(crate) fn check(
     types: &TypeEnvironment,
+    value_use: ValueUse,
     expected: &TypeName,
     expr: &Expr,
     options: &CompilerOptions,
@@ -214,7 +216,7 @@ pub(crate) fn check(
         }
         Some(ValueType::Composite(id)) => {
             if composite_accepted(types, expected, id)
-                || number_accepted(types, expected, id, options)
+                || (!refused(types, value_use, id) && number_accepted(types, expected, id, options))
             {
                 Ok(())
             } else {
@@ -248,6 +250,14 @@ fn is_integer_constant(expr: &Expr) -> bool {
         ExprKind::Expression(inner) => is_integer_constant(inner),
         _ => false,
     }
+}
+
+/// Whether the place that makes `value_use` of a value refuses the value of
+/// type `id` (see [`ValueUse::refuses`]).
+fn refused(types: &TypeEnvironment, value_use: ValueUse, id: TypeId) -> bool {
+    types
+        .get_by_id(id)
+        .is_some_and(|attributes| value_use.refuses(&attributes.representation))
 }
 
 /// Whether the composite value of type `id` is the number it stands for where
@@ -499,6 +509,7 @@ mod tests {
 
         let result = check(
             &types,
+            ValueUse::Holds,
             &TypeName::from("BROKEN"),
             &expr,
             &CompilerOptions::default(),
@@ -514,6 +525,7 @@ mod tests {
 
         let result = check(
             &types,
+            ValueUse::Holds,
             &TypeName::from("NOWHERE"),
             &expr,
             &CompilerOptions::default(),
@@ -529,6 +541,7 @@ mod tests {
 
         let result = check(
             &types,
+            ValueUse::Holds,
             &TypeName::from("ANY_INT"),
             &expr,
             &CompilerOptions::default(),
@@ -544,6 +557,7 @@ mod tests {
 
         let result = check(
             &types,
+            ValueUse::Holds,
             &TypeName::from("INT"),
             &expr,
             &CompilerOptions::default(),

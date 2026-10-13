@@ -62,7 +62,7 @@ use crate::{
     rule_support::{run_rule, DiagnosticVisitor},
     semantic_context::SemanticContext,
     type_compat::is_checkable_type,
-    value_type::{self, ValueType},
+    value_type::{self, ValueType, ValueUse},
     variable_type::{Declarations, Declared},
 };
 use ironplc_parser::options::CompilerOptions;
@@ -131,9 +131,13 @@ impl RuleFunctionCallTypeCheck<'_> {
             return;
         };
 
-        if let Err(mismatch) =
-            value_type::check(self.context.types(), &target_type, value, self.options)
-        {
+        if let Err(mismatch) = value_type::check(
+            self.context.types(),
+            ValueUse::Holds,
+            &target_type,
+            value,
+            self.options,
+        ) {
             self.diagnostics.push(
                 Diagnostic::text(
                     func_call.name.span(),
@@ -193,7 +197,9 @@ impl RuleFunctionCallTypeCheck<'_> {
             return;
         }
 
-        if let Err(mismatch) = value_type::check(types, &target_type, value, self.options) {
+        if let Err(mismatch) =
+            value_type::check(types, ValueUse::Holds, &target_type, value, self.options)
+        {
             self.diagnostics.push(
                 Diagnostic::text(
                     value.span(),
@@ -305,6 +311,7 @@ impl Visitor<Infallible> for RuleFunctionCallTypeCheck<'_> {
                 }
                 if let Err(mismatch) = value_type::check(
                     self.context.types(),
+                    signature.value_use,
                     &param.param_type,
                     arg_expr,
                     self.options,

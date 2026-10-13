@@ -45,6 +45,7 @@ VAR
   q : BIG;
   n : DINT;
   l : LINT;
+  t : TIME;
 END_VAR
   {body}
 END_PROGRAM"
@@ -64,6 +65,10 @@ END_PROGRAM"
 #[case::user_function_of_named_array("n := TAKES_DINT(na);")]
 #[case::abs_of_structure("n := ABS(r);")]
 #[case::structure_for_array_parameter("n := TAKES_ARR(r);")]
+#[case::enumeration_for_numerical_function("n := ABS(ne);")]
+#[case::enumeration_for_power("n := EXPT(ne, 2);")]
+#[case::enumeration_for_remainder_function("n := MOD(ne, 2);")]
+#[case::enumeration_for_time_product("t := MUL_TIME(t, ne);")]
 fn apply_when_composite_argument_for_other_type_then_p4026(#[case] body: &str) {
     assert!(problem_codes(body).contains(&Problem::FunctionCallArgTypeMismatch.code().to_string()));
 }
@@ -88,7 +93,8 @@ fn apply_when_composite_assigned_to_elementary_then_p4035(#[case] body: &str) {
 #[case::subrange_widened("l := q;")]
 #[case::inline_enumeration_for_integer("n := e;")]
 #[case::named_enumeration_for_integer("n := ne;")]
-#[case::enumeration_for_numeric_parameter("n := ABS(ne);")]
+#[case::enumeration_for_selection_function("n := MAX(ne, 1);")]
+#[case::enumeration_for_conversion_function("n := INT_TO_DINT(ne);")]
 fn apply_when_value_of_accepted_type_then_ok(#[case] body: &str) {
     assert_eq!(problem_codes(body), Vec::<String>::new());
 }
