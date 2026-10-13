@@ -30,10 +30,7 @@ pub use row::{Family, Info, Row, State};
 pub use rows::*;
 pub use table::table;
 pub use targets::{Targets, EVERY, TYPES};
-pub use value::{
-    Choice, DisplayMode, Flag, MonitoringEncoding, MonitoringMode, Number, Optional, OptionalText,
-    PackMode, SymbolAccess, Text, Value, ValueKind,
-};
+pub use value::*;
 
 /// The row of the attribute `name` (its name or an alias, without regard to
 /// case), or nothing when the compiler does not know the attribute.
