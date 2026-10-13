@@ -21,8 +21,10 @@
 //! OSCAT ranged comments (what a `(*@KEY@:NAME*)` pair holds) and, with
 //! `allow_pragma_if`, the branches of `{IF ...}` that are not taken. Each is
 //! one trivia token in the tree (`RangedComment`, `InactiveRegion`) that the
-//! grammar skips, so no byte is dropped. Any other pragma is trivia and its
-//! content is not examined.
+//! grammar skips, so no byte is dropped. An attribute pragma is trivia in the
+//! tree and is attached to the declaration it stands before by the lowering
+//! (`lower::attributes`); any other pragma is trivia and its content is not
+//! examined.
 
 mod cst;
 mod diagnostic;

@@ -64,7 +64,7 @@ SCL uses `{ }` for compile-time directives:
 
 **Design:** A dialect token transform collapses `LeftBrace ... RightBrace` sequences into a single `Pragma` token (see [dialect-token-transforms.md](dialect-token-transforms.md#category-4-token-collapsing)). The parser skips `Pragma` tokens like whitespace.
 
-The pragma content is opaque — the parser does not interpret key-value pairs inside pragmas. Future work could extract structured metadata from pragmas for use in analysis. This transform is shared with the Beckhoff TwinCAT dialect.
+The pragma content is opaque to the parser, except that an `{attribute 'name'}` pragma is attached to the declaration it stands before (see [attributes.md](attributes.md)); no attribute has an effect yet, and any other pragma is skipped. This transform is shared with the Beckhoff TwinCAT dialect.
 
 #### 1.3 `REGION` / `END_REGION`
 

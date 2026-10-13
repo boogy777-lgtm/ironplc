@@ -28,5 +28,8 @@ fn main() {
         "numeric-literals.md",
         // CODESYS jump statements (`REQ-JMP-analyzer-*`): label scope rules.
         "codesys-jump-and-pragmas.md",
+        // Attributes of declarations (`REQ-ATTR-analyzer-*`): the field
+        // survives the analysis.
+        "attributes.md",
     ]);
 }

@@ -310,6 +310,21 @@ fn partition(blocks: &[usize]) -> Vec<usize> {
         .collect()
 }
 
+/// Takes the field `attributes` out of a dump: the legacy parser reads no
+/// attribute pragma, so the comparison does not look at what the lowering
+/// attaches (a node of the new output carries the attributes of its pragmas,
+/// the node of the legacy output never does). The field runs from `first`, its
+/// opening line, to the line that closes it at the same indent. This is the one
+/// place the comparison leaves attributes out.
+fn skip_attributes<'a>(first: &str, lines: &mut impl Iterator<Item = &'a str>) {
+    let indent = first.len() - first.trim_start().len();
+    for inner in lines.by_ref() {
+        if inner.len() - inner.trim_start().len() == indent {
+            break;
+        }
+    }
+}
+
 /// The dump without its `block:` lines (the one field that is an identity and
 /// not a value, compared as a partition instead), and with each printed
 /// `SourceSpan` taken out of it: the dump keeps the shape and the values, and
@@ -321,6 +336,10 @@ fn dump_and_printed_spans<T: Debug>(value: &T) -> (String, Vec<String>) {
     let mut lines = text.lines();
     while let Some(line) = lines.next() {
         if line.trim_start().starts_with("block: ") {
+            continue;
+        }
+        if line.trim_start().starts_with("attributes: Attributes(") {
+            skip_attributes(line, &mut lines);
             continue;
         }
         if !line.trim_end().ends_with("SourceSpan {") {

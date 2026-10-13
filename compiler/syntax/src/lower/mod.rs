@@ -22,6 +22,7 @@
 //! Lowering is only run on a tree whose parse reported no error: a node the
 //! grammar guarantees but the tree lacks is an internal error.
 
+pub mod attributes;
 pub mod configuration;
 pub mod declarations;
 pub mod expressions;
@@ -444,9 +445,9 @@ pub fn lower_library(parse: &Parse, file_id: &FileId) -> Result<Library, Diagnos
         return Err(error);
     }
     let cx = LowerCx::new(file_id.clone()).with_options(parse.options);
-    Ok(Library {
-        elements: lower_elements(&cx, &parse.root)?,
-    })
+    let elements = lower_elements(&cx, &parse.root)?;
+    attributes::reject_unattached(&cx, &parse.root)?;
+    Ok(Library { elements })
 }
 
 /// Lowers the tree of a statement list to statements.
@@ -458,10 +459,12 @@ pub fn lower_statements(parse: &Parse, file_id: &FileId) -> Result<Vec<StmtKind>
         return Err(error);
     }
     let cx = LowerCx::new(file_id.clone()).with_options(parse.options);
-    match child_of(&parse.root, SyntaxKind::StatementList) {
-        Some(list) => lower_statement_list(&cx, &list),
-        None => Ok(vec![]),
-    }
+    let statements = match child_of(&parse.root, SyntaxKind::StatementList) {
+        Some(list) => lower_statement_list(&cx, &list)?,
+        None => vec![],
+    };
+    attributes::reject_unattached(&cx, &parse.root)?;
+    Ok(statements)
 }
 
 #[cfg(test)]

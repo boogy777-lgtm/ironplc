@@ -333,7 +333,7 @@ And region markers:
 {endregion}
 ```
 
-**Design:** Same approach as the [Siemens SCL pragma design](siemens-scl-dialect.md#12-curly-brace-pragmas). A token transform collapses `LeftBrace ... RightBrace` sequences into `Pragma` tokens that are skipped during parsing. The content inside pragmas is opaque.
+**Design:** Same approach as the [Siemens SCL pragma design](siemens-scl-dialect.md#12-curly-brace-pragmas). A token transform collapses `LeftBrace ... RightBrace` sequences into `Pragma` tokens that are skipped during parsing, except that an `{attribute}` pragma is attached to the declaration it stands before ([attributes.md](attributes.md)). The content inside other pragmas is opaque.
 
 For TwinCAT, pragmas are always present (they appear in virtually every `.TcPOU` file), so the pragma collapsing transform should be automatically enabled for the TwinCAT dialect.
 
@@ -866,7 +866,7 @@ When an extension moves from "parsed but unsupported" to "fully supported":
 - `POINTER TO` and `REFERENCE TO` type declarations
 - `UNION` type declarations
 - `VAR_INST` and `VAR_STAT` sections
-- `{attribute}` pragmas (verify they're skipped cleanly)
+- `{attribute}` pragmas (verify they're attached to the declaration after them)
 - Additional time types (`LTIME`, `LDT`, etc.)
 - Enum with underlying type
 - `S=` / `R=` / `REF=` extended assignment operators

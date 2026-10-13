@@ -20,3 +20,9 @@ pub mod time;
 pub mod type_id;
 pub mod type_name;
 pub mod visitor;
+
+// Spec conformance testing infrastructure (test-only).
+#[cfg(test)]
+mod spec_requirements {
+    include!(concat!(env!("OUT_DIR"), "/spec_requirements.rs"));
+}

@@ -12,6 +12,9 @@ use ironplc_dsl::time::*;
 use ironplc_dsl::{diagnostic::Diagnostic, visitor::Visitor};
 use paste::paste;
 
+mod text;
+use text::character_string_text;
+
 /// Defines a macro for creating a comma separated list of items where
 /// each item in the list is created by visiting the item.
 macro_rules! visit_comma_separated {
@@ -57,16 +60,6 @@ pub fn apply(lib: &Library) -> Result<String, Vec<Diagnostic>> {
 struct LibraryRenderer {
     buffer: String,
     indents: usize,
-}
-
-/// The spelling of a character string: its characters, `$`-escaped where
-/// they cannot appear as themselves, inside the delimiter `width` selects.
-fn character_string_text(width: &StringType, value: &[char]) -> String {
-    let delimiter = width.delimiter();
-    let mut val = String::from(delimiter);
-    val.push_str(&ironplc_dsl::string_escape::encode(value, width));
-    val.push(delimiter);
-    val
 }
 
 impl LibraryRenderer {
@@ -351,7 +344,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         &mut self,
         node: &DataTypeDeclarationKind,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("TYPE");
+        self.write_declaration_keyword(node, "TYPE");
         self.newline();
 
         self.indent();
@@ -556,6 +549,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         &mut self,
         node: &StructureElementDeclaration,
     ) -> Result<Self::Value, Diagnostic> {
+        self.write_attributes(node);
         self.visit_id(&node.name)?;
         self.write_ws(":");
         self.visit_initial_value_assignment_kind(&node.init)
@@ -803,7 +797,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
             VariableType::Global => "VAR_GLOBAL",
             VariableType::Access => "VAR_ACCESS",
         };
-        self.write_ws(var_type);
+        self.write_declaration_keyword(node, var_type);
 
         match node.qualifier {
             DeclarationQualifier::Unspecified => {}
@@ -1036,7 +1030,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         &mut self,
         node: &FunctionDeclaration,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("FUNCTION");
+        self.write_declaration_keyword(node, "FUNCTION");
         self.visit_id(&node.name)?;
         self.write_ws(":");
         self.visit_function_return_type(&node.return_type)?;
@@ -1066,7 +1060,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         &mut self,
         node: &FunctionBlockDeclaration,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("FUNCTION_BLOCK");
+        self.write_declaration_keyword(node, "FUNCTION_BLOCK");
         if let Some(oop) = &node.oop {
             self.write_qualifiers(&oop.qualifiers);
         }
@@ -1133,7 +1127,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         &mut self,
         node: &MethodDeclaration,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("METHOD");
+        self.write_declaration_keyword(node, "METHOD");
         self.write_qualifiers(&node.qualifiers);
         self.visit_id(&node.name)?;
         if let Some(return_type) = &node.return_type {
@@ -1157,7 +1151,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         &mut self,
         node: &PropertyDeclaration,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("PROPERTY");
+        self.write_declaration_keyword(node, "PROPERTY");
         self.write_qualifiers(&node.qualifiers);
         self.visit_id(&node.name)?;
         self.write_ws(":");
@@ -1211,7 +1205,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         &mut self,
         node: &InterfaceDeclaration,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("INTERFACE");
+        self.write_declaration_keyword(node, "INTERFACE");
         self.visit_id(&node.name)?;
         if !node.extends.is_empty() {
             self.write_ws("EXTENDS");
@@ -1234,7 +1228,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         &mut self,
         node: &ProgramDeclaration,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("PROGRAM");
+        self.write_declaration_keyword(node, "PROGRAM");
 
         self.visit_id(&node.name)?;
         self.newline();
@@ -1297,7 +1291,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
 
     // 2.6.3
     fn visit_action(&mut self, node: &dsl::sfc::Action) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("ACTION");
+        self.write_declaration_keyword(node, "ACTION");
 
         self.visit_id(&node.name)?;
         self.write_ws(":");

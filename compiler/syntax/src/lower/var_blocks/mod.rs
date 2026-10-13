@@ -24,6 +24,7 @@
 #[cfg(test)]
 mod tests;
 
+use super::attributes::attributes_of;
 use super::declarations::{build, row, Form, Init, Parts, Row};
 use super::initializers::{lower_initial_value, lower_struct_elements};
 use super::names::{lower_name, lower_path, lower_type_ref};
@@ -179,6 +180,7 @@ fn lower_declaration(
     shared: &Shared,
     into: &mut Block,
 ) -> Result<(), Diagnostic> {
+    let first = into.variables.len();
     match edge_of(cx, node)? {
         Some(direction) => {
             let bool_type = lower_type_ref(cx, &part(cx, node, K::TypeRef)?)?;
@@ -207,6 +209,11 @@ fn lower_declaration(
                 });
             }
         }
+    }
+    // Every variable the declaration declares carries its attributes.
+    let attributes = attributes_of(cx, node);
+    for variable in &mut into.variables[first..] {
+        variable.attributes = attributes.clone();
     }
     Ok(())
 }

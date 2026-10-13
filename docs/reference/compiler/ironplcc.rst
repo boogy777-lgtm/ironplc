@@ -250,8 +250,10 @@ Options
 ``--allow-pragmas``
    Allow curly-brace pragmas such as ``{attribute 'qualified_only'}``. This
    is CODESYS-core syntax, inherited by TwinCAT and other CODESYS-based
-   IDEs. A pragma is parsed and discarded like a comment; its contents are
-   not interpreted.
+   IDEs. An attribute pragma is attached to the declaration that follows it
+   and has no effect yet; one that no declaration follows is reported as
+   :doc:`P0043 </reference/compiler/problems/P0043>`. Any other pragma is
+   skipped.
 
 ``--allow-short-circuit-operators``
    Allow the ``AND_THEN`` and ``OR_ELSE`` short-circuit boolean operators, a

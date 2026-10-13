@@ -13,6 +13,7 @@
 #[cfg(test)]
 mod tests;
 
+use super::attributes::attributes_of;
 use super::names::lower_type_ref;
 use super::pou::{
     declared_name, lower_return_type, lower_sections, required_return_type, statements_of,
@@ -21,8 +22,7 @@ use super::tree::{child_of, children_of, significant_tokens};
 use super::LowerCx;
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode};
 use ironplc_dsl::common::{
-    Attributes, FunctionBlockOop, FunctionReturnType, MethodDeclaration, PropertyDeclaration,
-    TypeName, VarDecl,
+    FunctionBlockOop, FunctionReturnType, MethodDeclaration, PropertyDeclaration, TypeName, VarDecl,
 };
 use ironplc_dsl::core::{Id, SourceSpan};
 use ironplc_dsl::diagnostic::Diagnostic;
@@ -138,7 +138,7 @@ pub fn lower_method(cx: &LowerCx, node: &SyntaxNode) -> Result<MethodDeclaration
         variables: sections.variables,
         body: statements_of(cx, node, sections.body)?,
         span: cx.node_span(node),
-        attributes: Attributes::default(),
+        attributes: attributes_of(cx, node),
     })
 }
 
@@ -191,7 +191,7 @@ pub fn lower_property(cx: &LowerCx, node: &SyntaxNode) -> Result<PropertyDeclara
         name,
         property_type,
         span: cx.node_span(node),
-        attributes: Attributes::default(),
+        attributes: attributes_of(cx, node),
     })
 }
 

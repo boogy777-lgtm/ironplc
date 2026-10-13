@@ -25,6 +25,7 @@
 #[cfg(test)]
 mod tests;
 
+use super::attributes::attributes_of;
 use super::configuration::{lower_program_configuration, lower_resource, lower_task};
 use super::names::{lower_name, lower_type_ref};
 use super::oop::{lower_member, lower_oop, lower_type_list, Member};
@@ -36,9 +37,9 @@ use super::var_blocks::{lower_var_block, InstanceInit};
 use super::{lower_elements, LowerCx};
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode};
 use ironplc_dsl::common::{
-    Attributes, FunctionBlockBodyKind, FunctionBlockDeclaration, FunctionDeclaration,
-    FunctionReturnType, InterfaceDeclaration, NamespaceDeclaration, ProgramAccessDecl,
-    ProgramDeclaration, StringType, TypeName, VarDecl,
+    FunctionBlockBodyKind, FunctionBlockDeclaration, FunctionDeclaration, FunctionReturnType,
+    InterfaceDeclaration, NamespaceDeclaration, ProgramAccessDecl, ProgramDeclaration, StringType,
+    TypeName, VarDecl,
 };
 use ironplc_dsl::configuration::{ProgramConfiguration, ResourceDeclaration, TaskConfiguration};
 use ironplc_dsl::core::Id;
@@ -279,7 +280,7 @@ pub fn lower_program(cx: &LowerCx, node: &SyntaxNode) -> Result<ProgramDeclarati
         variables: sections.variables,
         access_variables: sections.access,
         body: body_of(sections.body),
-        attributes: Attributes::default(),
+        attributes: attributes_of(cx, node),
     })
 }
 
@@ -291,7 +292,7 @@ pub fn lower_function(cx: &LowerCx, node: &SyntaxNode) -> Result<FunctionDeclara
         return_type: required_return_type(cx, node)?,
         variables: sections.variables,
         body: statements_of(cx, node, sections.body)?,
-        attributes: Attributes::default(),
+        attributes: attributes_of(cx, node),
     })
 }
 
@@ -320,7 +321,7 @@ pub fn lower_function_block(
         oop: lower_oop(cx, node)?,
         methods,
         properties,
-        attributes: Attributes::default(),
+        attributes: attributes_of(cx, node),
     })
 }
 
@@ -347,6 +348,6 @@ pub fn lower_interface(
             Some(clause) => lower_type_list(cx, &clause)?,
             None => vec![],
         },
-        attributes: Attributes::default(),
+        attributes: attributes_of(cx, node),
     })
 }

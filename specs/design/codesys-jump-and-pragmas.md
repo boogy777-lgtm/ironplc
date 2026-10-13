@@ -67,12 +67,19 @@ condition and only the taken branch's tokens reach the parser. The condition
 language is `OR`, `AND`, `NOT`, parentheses, `TRUE`/`FALSE`, and
 `defined(name)`. `{DEFINE name}` adds a name and `{UNDEFINE name}` removes
 one, in source order, for the conditions that follow. Name comparison is
-case-insensitive. Pragmas that are not branch pragmas (`{attribute …}`) keep
-their trivia behavior inside the taken branch.
+case-insensitive. Pragmas that are not branch pragmas keep their trivia
+behavior inside the taken branch; an `{attribute …}` pragma there is attached
+to the declaration after it, as everywhere else
+([attributes.md](attributes.md)).
 
 **REQ-JMP-parser-031** An `{IF}` with no `{END_IF}`, and a branch pragma with
 no `{IF}`, report P0023; a condition the compiler does not understand reports
 P0024 and evaluates to FALSE.
+
+Attribute pragmas (`{attribute 'name'}`) are data of the declaration they stand
+before, not trivia: [attributes.md](attributes.md) specifies how they are
+attached, and what is reported when one stands before no declaration. The
+conditional pragmas stay specified here.
 
 ## Semantic Analysis
 

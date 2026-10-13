@@ -210,7 +210,7 @@ const FLAG_FIXTURES: &[FlagFixture] = &[
         prereqs: &[],
         source: "PROGRAM main\nVAR\nb : BYTE;\nr : BOOL;\nEND_VAR\nr := b.%X0;\nEND_PROGRAM",
     },
-    // Curly-brace pragma skipped as trivia.
+    // Curly-brace pragma: an attribute attached to the program after it.
     FlagFixture {
         key: "allow_pragmas",
         prereqs: &[],

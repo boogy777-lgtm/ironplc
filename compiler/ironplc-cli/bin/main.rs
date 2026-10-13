@@ -227,7 +227,8 @@ struct FileArgs {
     #[arg(long)]
     allow_partial_access_syntax: bool,
 
-    /// Allow curly-brace pragmas ({attribute 'name'}) as opaque, skipped trivia.
+    /// Allow curly-brace pragmas; an attribute pragma ({attribute 'name'}) is attached
+    /// to the declaration it stands before, any other is skipped.
     /// This is an extension not part of the IEC 61131-3 standard.
     #[arg(long)]
     allow_pragmas: bool,

@@ -165,12 +165,12 @@ END_PROGRAM",
 
 /// REQ-JMP-parser-030: a non-branch pragma inside a taken branch stays trivia.
 #[spec_test(REQ_JMP_parser_030)]
-fn pragma_if_when_attribute_inside_branch_then_it_is_trivia() {
+fn pragma_if_when_message_inside_branch_then_it_is_trivia() {
     let library = parse_with_pragma_if(
         "PROGRAM main
 VAR x : INT; END_VAR
 {IF TRUE}
-{attribute 'qualified_only'}
+{info 'qualified_only'}
 x := 1;
 {END_IF}
 END_PROGRAM",
