@@ -164,11 +164,11 @@ macro_rules! choices {
 choices! {
     /// How the members of a structure are aligned (`pack_mode`).
     PackMode {
-        Aligned = "0",
-        Unaligned = "1",
-        Bytes2 = "2",
-        Bytes4 = "4",
-        Bytes8 = "8",
+        Mode0 = "0",
+        Mode1 = "1",
+        Mode2 = "2",
+        Mode4 = "4",
+        Mode8 = "8",
     }
 
     /// The number format of a value while monitoring (`displaymode`).

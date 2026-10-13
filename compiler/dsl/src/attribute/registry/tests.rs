@@ -141,11 +141,11 @@ fn of_when_name_or_alias_in_any_case_then_the_value(#[case] written: &str) {
 }
 
 #[rstest]
-#[case("0", PackMode::Aligned)]
-#[case("1", PackMode::Unaligned)]
-#[case("2", PackMode::Bytes2)]
-#[case("4", PackMode::Bytes4)]
-#[case(" 8 ", PackMode::Bytes8)]
+#[case("0", PackMode::Mode0)]
+#[case("1", PackMode::Mode1)]
+#[case("2", PackMode::Mode2)]
+#[case("4", PackMode::Mode4)]
+#[case(" 8 ", PackMode::Mode8)]
 #[spec_test(REQ_ATTR_dsl_020)]
 fn of_when_pack_mode_has_a_valid_value_then_the_typed_value(
     #[case] value: &str,
@@ -174,7 +174,7 @@ fn of_when_attribute_is_written_twice_then_the_value_of_the_first() {
         attribute("PACK_MODE", Some("8"), 1),
     ]);
 
-    assert_eq!(PACK_MODE.of(&present), Some(PackMode::Bytes2));
+    assert_eq!(PACK_MODE.of(&present), Some(PackMode::Mode2));
 }
 
 #[spec_test(REQ_ATTR_dsl_020)]
