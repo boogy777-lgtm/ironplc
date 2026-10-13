@@ -77,9 +77,11 @@ Terms (one meaning each):
 3. **One field.** `dsl::attribute::Attributes` (the attributes in source order,
    each with its span) is a field of every target node: a program, function,
    function block, interface, method, property and action; every type
-   declaration; a structure member; a variable declaration; a statement. A
-   table names the target kinds; a test fails when a declaration node has no
-   such field or the lowering does not fill it.
+   declaration; a structure member; a variable declaration. A match without a
+   wildcard over the declaration kinds reads the field, so a declaration kind
+   added later does not compile until it has one. A statement is not a target:
+   CODESYS places attributes in the declaration part, and the message pragmas
+   that stand before a statement belong to the Messages family.
 4. **Round trip.** `plc2plc` renders the attributes of a node before it.
 
 ### Part 2 — a known attribute is a row
@@ -141,6 +143,18 @@ run before the core change of the family.
 
 Not found in the help (HTTP 403 and 404): `nonvirtual`, `noflow`. They get a
 row when a page is found.
+
+Seen in a production CODESYS project and not in the list above: `analysis`
+(`{attribute 'analysis' := '-33'}` before a method or a block: a rule of the
+static analysis is switched off for the declaration; page to read) and
+`object_name` (before `VAR_GLOBAL`; not found in the help — to confirm with the
+owner whether it names the global variable list, which would give the Name
+scope family its list name).
+
+Use in that project (aggregate counts): `pack_mode` 192 (`'2'` 191 times, `'1'`
+once), `analysis` 6, `object_name` 3, `subsequent` 2, `linkalways` 1; no
+`strict`, no `qualified_only`. So the first family after the mechanism is
+Layout.
 
 TwinCAT documents more attributes (`OPC.UA.DA` and its family, `TcRpcEnable`,
 `TcDisplayScale`, `tc_no_symbol`, `TcNcAxis`, `TcLinkTo`, `TcInitSymbol`,
@@ -215,8 +229,14 @@ carry it) and attributes kept as trivia (no observer can read them).
 - [ ] the reference page, checked against the registry
 
 ### PR 5.. (core: one per family, in the owner's order)
-- [ ] Enumeration · Layout · Visibility · Display · Compile checks ·
-      Initialisation · Online change · Code generation · Inheritance
+- [ ] Layout first (`pack_mode`, `subsequent`), then Enumeration · Visibility ·
+      Display · Compile checks · Initialisation · Online change · Code
+      generation · Inheritance
+- [ ] Enumeration lands together with PR #64 (an enumeration in a place that
+      computes): the owner holds #64 until `strict` is a row, so that its
+      refusals, and the refusal of arithmetic that is on `main`, apply to an
+      enumeration declared `strict` and an enumeration without the attribute
+      is its base type, as in CODESYS
 - [ ] Messages (after PF3) · Name scope · Symbols · Conditions
 - [ ] I/O mapping · Graphical editors: rows only, until the part they concern exists
 
