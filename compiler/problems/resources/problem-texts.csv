@@ -239,6 +239,7 @@ P4046,method_not_found_method_invocation,Method invocation
 P4047,task_single_not_supported,Task declares SINGLE
 P4048,task_parameter_out_of_range_interval,Task declares an INTERVAL of {microseconds} microseconds
 P4048,task_parameter_out_of_range_priority,"Task declares PRIORITY := {priority}, which exceeds the maximum of {maximum}"
+P4049,operator_operand_type_mismatch_control_variable,Control variable
 P4049,operator_operand_type_mismatch_expression,Expression
 P4049,operator_operand_type_mismatch_function_call,Function call
 P4049,operator_operand_type_mismatch_negated_output,Negated output

@@ -371,6 +371,11 @@ impl Visitor<Infallible> for RuleOperatorOperandTypeCheck<'_> {
         node.recurse_visit(self)
     }
 
+    fn visit_for(&mut self, node: &For) -> Result<Self::Value, Infallible> {
+        self.check_enumerated_counter(node);
+        node.recurse_visit(self)
+    }
+
     /// Checks an operator expression at the `Expr` that holds it, rather than
     /// at the operator node, so a check has the span of the whole expression
     /// as well as each operand's.
@@ -394,6 +399,9 @@ impl Visitor<Infallible> for RuleOperatorOperandTypeCheck<'_> {
         node.recurse_visit(self)
     }
 }
+
+#[cfg(test)]
+mod enumerated_tests;
 
 #[cfg(test)]
 mod tests {
