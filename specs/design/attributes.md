@@ -27,7 +27,9 @@ with no row is accepted and kept as written.
 The conditional pragmas (`{IF}`, `{DEFINE}`, ...) stay in
 [codesys-jump-and-pragmas.md](codesys-jump-and-pragmas.md); the decision to
 make an attribute a field of the node is
-[ADR-0075](../adrs/0075-an-attribute-is-data-of-its-declaration.md).
+[ADR-0075](../adrs/0075-an-attribute-is-data-of-its-declaration.md), and the
+decision to make a known attribute a row with a typed reader is
+[ADR-0076](../adrs/0076-a-known-attribute-is-a-row-with-a-typed-reader.md).
 
 ## Terms
 
