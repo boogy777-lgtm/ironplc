@@ -115,25 +115,38 @@ validation rule do not change.
 
 ## Attributes and what they concern
 
-Verified = the CODESYS page of the attribute was read. The rows marked
-"to read" are completed before the core change of their family.
+Every row was read from the CODESYS page of the attribute on 2026-10-13
+(`content.helpme-codesys.com`, or its ABB mirror where that host refused),
+except where the table says otherwise. "IronPLC today" is by run where it says
+so, otherwise by the presence of the feature in the code, to be confirmed by
+run before the core change of the family.
 
-| Family | Attributes | Concerns | IronPLC today | Needs |
+| Family | Attributes | Concerns (CODESYS) | IronPLC today | Needs |
 |---|---|---|---|---|
-| Enumeration | `strict`, `qualified_only` (enumeration), `to_string` | which programs are accepted; what a name means; `TO_STRING` | always strict; `E.V` is not read (P4007); no `TO_STRING`/`TO_INT` | a not-strict mode; the qualified form; the `TO_<type>` conversions |
-| Name scope | `qualified_only` (global variable list) | global variables are addressed with the list name | a global list has no name in text sources | named global variable lists |
-| Layout | `pack_mode` (`0`,`1`,`2`,`4`,`8`) | offsets and size of a structure | layout computed with natural alignment; not observable (`SIZEOF(structure)` is P9999) | `SIZEOF` of a structure; the layout rule per mode |
-| Visibility | `hide`, `hide_all_locals`, `conditionalshow`, `conditionalshow_all_locals` | lists a user sees: monitoring, debugger, input assistance, symbols | `--dump-vars`, the debugger and the language server show everything | one "is shown" answer read by each list |
-| Display | `displaymode`, `monitoring`, `monitoring_display`, `monitoring_encoding` | how a value is shown while monitoring | values shown in decimal | a display format in the debug information |
-| Messages | `{text}`, `{info}`, `{warning}`, `{error}`, `obsolete`, `suppress_warning`, `no_assign`, `no_assign_warning`, `{warning disable/restore}` | messages of a compile | errors only | a warning and a message level (also wanted for C0354) |
-| Initialisation | `noinit`, `global_init_slot`, `call_after_init`, `call_after_global_init_slot`, `call_before_global_exit_slot`, `initialize_on_call`, `init_namespace`, `no_instance_in_retain` | values after start and reset; order of initialisation; `FB_Init` | to read | to read |
-| Online change | `init_on_onlchange`, `no_copy`, `call_after_online_change_slot`, `call_on_type_change` | what a variable holds after an online change | the migration of a hot edit copies every variable that keeps its identity (ADR-0073, ADR-0074) | the migration reads the row |
-| Code generation | `linkalways`, `no_check`, `const_replaced`, `const_non_replaced`, `estimated-stack-usage` | what is compiled in; implicit check functions; constants | every POU is compiled; no implicit check functions | to read |
-| Dynamic creation | `enable_dynamic_creation` | `__NEW` of a function block | to check | to check |
-| Symbols | `symbol` (`none`, `read`, `write`, `readwrite`) | which variables are exported | no symbol export | a symbol export |
-| Graphical editors | `pingroup`, `pin_presentation_order_inputs`, `pin_presentation_order_outputs`, `ExpandFully` | pins of a block in FBD/LD | no graphical editor | waits for one |
-| To read | `dataflow`, `instance-path`, `io_function_block`, `io_function_block_mapping`, `is_connected`, `no-exit`, `no_virtual_actions`, `ProcessValue`, `reflection`, `subsequent` | to read | — | — |
-| Conditions | `hasattribute`, `hastype`, `hasvalue`, `hasconstantvalue`, `defined(variable: ...)` in `{IF}` | conditional compilation over the project | a fault (P0024) | conditions evaluated after the declarations are known |
+| Enumeration | `strict`, `qualified_only` (enumeration), `to_string` | strict type test; a value is written with the type name; `TO_STRING` gives the name of the value | always strict (run); `E.V` is not read, P4007 (run); no `TO_STRING` of an enumeration | a not-strict mode; the qualified form; `TO_STRING` |
+| Name scope | `qualified_only` (global variable list) | a variable of the list is addressed only with the list name | a global list has no name in text sources | named global variable lists |
+| Layout | `pack_mode` (`0`,`1`,`2`,`4`,`8`), `subsequent` | alignment of the members of a structure (default 4 or 8 by device; an array of structures is padded; a packed structure must not hold an unpacked one); consecutive allocation of the variables of a program or list | natural alignment, not observable: `SIZEOF(structure)` is P9999 (run); the VM stores a field in an 8-byte slot | the layout rule per mode; `SIZEOF` of a structure; a decision on what "memory" a pack mode describes in a slot VM |
+| Visibility | `hide`, `hide_all_locals`, `conditionalshow`, `conditionalshow_all_locals` | the variable is not shown in monitoring, debugging, input assistance, the library manager, the symbol configuration; it stays usable by name | `--dump-vars` shows it (run); the debugger and the language server show everything | one "is shown" answer read by every list |
+| Display | `displaymode` (`bin`,`dec`,`hex`), `monitoring` (`variable`,`call`), `monitoring_display`, `monitoring_encoding` (`UTF8`) | how a value is shown while monitoring; monitoring of a property | decimal only | a display format in the debug information; property monitoring |
+| Messages | `{text}`, `{info}`, `{warning}`, `{error}`, `obsolete`, `suppress_warning`, `{warning disable/restore <id>}`, `no_assign_warning`, `estimated-stack-usage` | messages of a compile; a warning at each use of a type; suppression by id; the stack check of a recursive method | errors only (code) | PF3: a warning and a message level |
+| Compile checks | `no_assign`, `no_instance_in_retain`, `enable_dynamic_creation` | assigning an instance to an instance is an error; an instance in retain memory is an error; `__NEW` of a function block needs the attribute | `__NEW` and `RETAIN` are in the compiler (code) | three rules reading the row |
+| Initialisation | `noinit` (`no_init`, `no-init`), `initialize_on_call`, `global_init_slot`, `call_after_init`, `call_after_global_init_slot`, `call_before_global_exit_slot`, `no-exit`, `init_namespace`, `instance-path`, `is_connected`, `reflection` | a variable keeps its value on reset; inputs are initialised on each call; order of initialisation (default slot 50000 for a POU, 49990 for a list); a method runs after `FB_Init`; functions run after global initialisation and before exit; `FB_Exit` is not called for an instance; a string holds the library namespace or the instance path; a flag tells whether an input was assigned | `FB_Init` is in the compiler (code); no `FB_Exit`, no reset kinds, no initialisation order (code) | reset kinds; an initialisation order; `FB_Exit`; libraries with a namespace |
+| Online change | `init_on_onlchange`, `no_copy`, `call_after_online_change_slot`, `call_on_type_change` | the variable is initialised, not copied, by an online change; functions and methods run after one | the migration of a hot edit copies every variable that keeps its identity (ADR-0073, ADR-0074) | the migration reads the row; a call after the change |
+| Code generation | `linkalways`, `no_check`, `const_replaced`, `const_non_replaced` | an unused POU is still compiled in; the implicit check functions (`CheckBounds`, `CheckDiv*`, `CheckRange*`, `CheckPointer`) are not called for a POU; a constant is or is not replaced by its value | every POU is compiled; no implicit check functions (code) | removal of unused POUs; the check functions |
+| Inheritance | `no_virtual_actions` | the actions of an SFC base block are not overridden by a derived block | to check | to check |
+| Symbols | `symbol` (`none`,`read`,`write`,`readwrite`) | which variables are exported as symbols | no symbol export | a symbol export |
+| I/O mapping | `io_function_block`, `io_function_block_mapping` | the block is offered for a channel in the device configuration | no device configuration | waits for one |
+| Graphical editors | `pingroup`, `pin_presentation_order_inputs`, `pin_presentation_order_outputs`, `dataflow`, `ProcessValue`, `ExpandFully` | pins and data flow of a block in FBD, LD, CFC; members shown in a visualisation | no graphical editor, no visualisation | waits for one |
+| Conditions | `hasattribute`, `hastype`, `hasvalue`, `hasconstantvalue`, `hasconstanttype`, `defined(variable: ...)`, `defined(type: ...)`, `defined(pou: ...)` in `{IF}` | conditional compilation over the project | a fault, P0024 (code) | conditions evaluated after the declarations are known |
+
+Not found in the help (HTTP 403 and 404): `nonvirtual`, `noflow`. They get a
+row when a page is found.
+
+TwinCAT documents more attributes (`OPC.UA.DA` and its family, `TcRpcEnable`,
+`TcDisplayScale`, `tc_no_symbol`, `TcNcAxis`, `TcLinkTo`, `TcInitSymbol`,
+`TcContextName`, `c++_compatible`, `minimal_input_size`, `analysis`,
+`naming`). They are outside this plan; until a row exists each is a
+user-defined attribute.
 
 ## Prefactoring
 
@@ -202,8 +215,9 @@ carry it) and attributes kept as trivia (no observer can read them).
 - [ ] the reference page, checked against the registry
 
 ### PR 5.. (core: one per family, in the owner's order)
-- [ ] Enumeration · Layout · Visibility · Display · Initialisation · Online
-      change · Code generation · Dynamic creation
+- [ ] Enumeration · Layout · Visibility · Display · Compile checks ·
+      Initialisation · Online change · Code generation · Inheritance
 - [ ] Messages (after PF3) · Name scope · Symbols · Conditions
+- [ ] I/O mapping · Graphical editors: rows only, until the part they concern exists
 
-Tracking issue: to be opened with this plan PR.
+Tracking issue: #62.
