@@ -17,4 +17,5 @@ pub mod string_escape;
 pub mod textual;
 pub mod time;
 pub mod type_id;
+pub mod type_name;
 pub mod visitor;
