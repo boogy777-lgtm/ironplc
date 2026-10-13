@@ -1,7 +1,9 @@
 # Plan: Attribute Mechanism
 
 **Status of this file:** plan PR, never merged (development standards). The
-core change PRs are listed in the tracking issue named at the end.
+core change PRs are listed in the tracking issue named at the end. Approved by
+the owner on 2026-10-13, with the five decisions of "Decisions of this
+project"; PR 1 and PR 2 are merged (#66, #65).
 
 ## Goal
 
@@ -147,9 +149,10 @@ row when a page is found.
 Seen in a production CODESYS project and not in the list above: `analysis`
 (`{attribute 'analysis' := '-33'}` before a method or a block: a rule of the
 static analysis is switched off for the declaration; page to read) and
-`object_name` (before `VAR_GLOBAL`; not found in the help — to confirm with the
-owner whether it names the global variable list, which would give the Name
-scope family its list name).
+`object_name` (before `VAR_GLOBAL`; not found in the help). The owner confirms
+that it is the name of the global variable list, written by the export: it
+gives the Name scope family its list name, so `qualified_only` and `GVL.x` need
+no other source of the name.
 
 Use in that project (aggregate counts): `pack_mode` 192 (`'2'` 191 times, `'1'`
 once), `analysis` 6, `object_name` 3, `subsequent` 2, `linkalways` 1; no
@@ -210,13 +213,13 @@ carry it) and attributes kept as trivia (no observer can read them).
 
 ## Tasks
 
-### PR 1 (prefactor PF1)
-- [ ] `pragma::kind`; conditional evaluation asks it; tests unchanged
+### PR 1 (prefactor PF1) — merged, #66
+- [x] `pragma::kind`; conditional evaluation asks it; tests unchanged
 
-### PR 2 (prefactor PF2)
-- [ ] `dsl::attribute`; the field on every target node, empty
-- [ ] guard: every declaration node kind is in the target table
-- [ ] pins rewritten; only `library` digests move
+### PR 2 (prefactor PF2) — merged, #65
+- [x] `dsl::attribute`; the field on every target node, empty
+- [x] guard: the trait `Attributed` and a match without a wildcard over the declaration kinds
+- [x] pins rewritten; only `library` digests move
 
 ### PR 3 (core: Part 1)
 - [ ] the attachment rule; targets ask it; an attribute without a target is reported
