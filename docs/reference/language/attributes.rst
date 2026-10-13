@@ -67,7 +67,8 @@ as the table says.
        and its alias are the same attribute, and names are compared without
        regard to case.
 
-Names, aliases and values are compared without regard to case.
+Names and aliases are compared without regard to case. So is the value of an
+attribute that takes one of a list of values.
 
 User-defined attributes
 =======================
