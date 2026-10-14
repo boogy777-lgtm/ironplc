@@ -17,6 +17,7 @@ supported language.
    :hidden:
 
    edition-support
+   attributes
    data-types/index
    variables/index
    pous/index

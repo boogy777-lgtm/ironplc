@@ -8,23 +8,28 @@ implementations built on the CODESYS V3 runtime write them before types,
 variables and program organisation units (`{attribute 'pack_mode' := '1'}`,
 `{attribute 'hide'}`, `{attribute 'qualified_only'}`). This document specifies
 how the compiler attaches each attribute pragma to the declaration it stands
-before, what it reports when a pragma stands before no such declaration, and
-how the attributes travel through the compiler.
+before, what it reports when a pragma stands before no such declaration, which
+attributes the compiler knows and what it reports about a known attribute that
+stands in the wrong place, has a value it does not take or is written twice,
+and how the attributes travel through the compiler.
 
 The attribute data of a declaration is a field of the declaration's node in
 the library (`attributes: Attributes`, `ironplc_dsl::attribute`). The lowering
 of the syntax tree fills it; the analysis keeps it; the renderer writes it
 back as the pragmas it came from.
 
-**Out of scope.** Which attribute names are known, where a known attribute may
-stand, which values it takes, and what it does to the analysis or the
-generated code are not part of this document. An attribute is carried as
-written; no rule and no code generation reads one yet.
+**Out of scope.** What an attribute does to the analysis or to the generated
+code is not part of this document: no part of IronPLC acts on an attribute yet.
+The names the compiler knows, the places a known attribute may stand and the
+values it takes are in scope (see [The registry](#the-registry)); an attribute
+with no row is accepted and kept as written.
 
 The conditional pragmas (`{IF}`, `{DEFINE}`, ...) stay in
 [codesys-jump-and-pragmas.md](codesys-jump-and-pragmas.md); the decision to
 make an attribute a field of the node is
-[ADR-0075](../adrs/0075-an-attribute-is-data-of-its-declaration.md).
+[ADR-0075](../adrs/0075-an-attribute-is-data-of-its-declaration.md), and the
+decision to make a known attribute a row with a typed reader is
+[ADR-0076](../adrs/0076-a-known-attribute-is-a-row-with-a-typed-reader.md).
 
 ## Terms
 
@@ -152,6 +157,195 @@ a library of each kind with its attributes.
 **REQ-ATTR-analyzer-001** After the full analysis the library still carries the
 attributes of every kind of target. A transform that rebuilds a declaration from
 another one carries the field over.
+
+## The registry
+
+A **known attribute** is a **row** of the registry
+(`ironplc_dsl::attribute::registry`). A row is the one declaration of what the
+compiler knows about an attribute:
+
+- the **name**, and the **aliases** that name the same attribute (`noinit`,
+  `no_init` and `no-init`);
+- the **targets**: the kinds of declaration the attribute may stand before, a
+  set of `TargetKind`;
+- the **value kind**: what the attribute takes (see [The reader](#the-reader));
+- the **family**, which groups the rows on the reference page by what the
+  attribute concerns in CODESYS;
+- the **summary**: one line saying what the attribute does in CODESYS;
+- the **state**: `Waiting` when no part of IronPLC acts on the attribute yet,
+  so the compiler reads and checks it and does nothing else with it;
+  `Honoured` when a part of IronPLC acts on it. Every row is `Waiting` today.
+
+An attribute that has no row is **user-defined**. It is accepted and kept as
+written, and nothing is reported about it unless it is written twice.
+
+The rows are what the CODESYS help documents. An attribute whose help page was
+not read has no row, and so has every TwinCAT name.
+
+The registry is one declaration list (`rows!` in `registry/rows.rs`). Each entry
+makes the typed constant of the row (`PACK_MODE`) and the place of the row in
+`ALL`, the list of all rows without the type of the value. A row cannot exist
+outside the list, and no other list of names exists: the reference page, the
+check and the tests read `ALL`. Adding an attribute is one entry and the
+regenerated table of the reference page (see
+[The reference page](#the-reference-page)).
+
+**REQ-ATTR-dsl-010** Every known attribute is a row in one list: a row has a
+name, a summary and at least one kind of target, and the typed constant of a
+row is the entry of that list.
+
+**REQ-ATTR-dsl-011** A name or an alias finds its row without regard to case;
+the names and aliases of the rows are unique across the registry without regard
+to case; a name that is no row's name or alias finds no row.
+
+**REQ-ATTR-dsl-012** The kinds a row stands before are a set of `TargetKind`
+that a row states as a constant; the ten kinds of type declaration are named
+once, and that set is exactly the kinds whose label says "type"; a set names
+itself by the labels of its kinds.
+
+## The reader
+
+A part of the compiler that acts on an attribute asks the typed constant of the
+row, never the name: `registry::PACK_MODE.of(&declaration.attributes)` gives an
+`Option<PackMode>`. The reader finds the first attribute of the declaration
+named by the row or an alias, without regard to case, and reads its value. It
+gives nothing when the declaration has no such attribute and when its value is
+not one the row takes. It reports nothing: the fault of a value is reported by
+the check (see [The faults](#the-faults)).
+
+A row names the type of its value, and each type reads its value with one
+function (`Value::parse`). The reader returns what that function gives and the
+check of the value asks whether it gives anything, so what the check accepts and
+what the reader returns cannot differ. A type states what it takes
+(`ValueKind`) beside its `parse`, and that statement is what a message and the
+reference page say. A value kind added later is a new type, its `parse`, and an
+arm in each match over `ValueKind`, which has no wildcard.
+
+| Value kind | Type | A value is valid when |
+|---|---|---|
+| `Flag` | `Flag` | the attribute has no value |
+| `OneOf` | an enumeration named by meaning (`PackMode`) | it is one of the listed texts, without regard to case and to the white space around it |
+| `OptionalOneOf` | `Optional<..>` of such an enumeration | the attribute has no value, or as `OneOf` |
+| `Number` | `Number(u32)` | it is an unsigned decimal integer that fits `u32`, with white space around it ignored |
+| `Text` | `Text` | it is not empty and not only white space |
+| `OptionalText` | `OptionalText` | always |
+| `RuleList` | `RuleNumbers(Vec<u32>)` | it is one or more items separated by commas, each a minus sign and decimal digits, with white space around an item ignored |
+
+**REQ-ATTR-dsl-020** `ROW.of(&attributes)` gives the typed value of the first
+attribute that the name or an alias of the row names, without regard to case,
+and nothing when the attribute is absent or its value is not valid.
+
+**REQ-ATTR-dsl-021** The check of a value and the reader use the same reading
+of it: for every row, a value of its kind that is valid is accepted and a value
+that is not is refused, and every text a `OneOf` or `OptionalOneOf` row lists is
+accepted in any case and with white space around it.
+
+**REQ-ATTR-dsl-022** Each value kind reads the values of the table above: valid
+and invalid samples of each.
+
+## The faults
+
+`registry::faults(kind, &attributes)` is the one check. It takes the kind of
+the declaration and its attributes and returns the faults, each with the name of
+the attribute as written and its span. It holds no logic about a row: it asks
+the row where it may stand and whether it takes the value. The part of the
+compiler that reports a fault turns it into its own diagnostic and holds no
+logic about a row either. One attribute has at most one fault, found in this
+order:
+
+1. **Repeated**: an attribute of the same declaration before it is the same
+   attribute. Two known attributes are the same when they are the same row, so
+   `noinit` and `no-init` are the same; two user-defined attributes are the same
+   when their names are equal without regard to case. The fault is at the
+   later attribute and carries the span of the first.
+2. **Not allowed here**: the attribute is known and the declaration is of a kind
+   its row does not stand before.
+3. **Value**: the attribute is known and its value is not one its row takes: a
+   value given to an attribute that takes none, a value missing, a value not
+   in the list, a value that is not an integer, an empty text. The fault carries
+   the value as written, and `None` when it is missing.
+
+An attribute that is user-defined and not repeated has no fault.
+
+**REQ-ATTR-dsl-030** A known attribute before a declaration of a kind that its
+row does not stand before has the fault `NotAllowedHere`, at its span with the
+row and the kind; before a kind the row stands before it has none; a name, an
+alias, and their other spellings in case give the same result, for every row and
+every kind of declaration.
+
+**REQ-ATTR-dsl-031** A known attribute before a declaration of a kind it stands
+before, with a value that its row does not read, has the fault `Value`, at its
+span with the row and the value as written; with a value the row reads it has
+no fault; an attribute that is not allowed there has no `Value` fault.
+
+**REQ-ATTR-dsl-032** An attribute that the same declaration holds earlier has
+the fault `Repeated` and no other, at the later attribute with the span of the
+first: the same name, a name in another case, a name and an alias, two aliases,
+two user-defined names, and an attribute of a group and the same attribute
+written on the declaration.
+
+**REQ-ATTR-dsl-033** An attribute that is user-defined and not repeated has no
+fault, whatever its value and the kind of declaration; a declaration without
+attributes has none.
+
+## What the analysis reports
+
+One semantic rule (`rule_attribute`) walks the declarations of the library (the
+census lists them with their kind and attributes), asks the check of the
+registry for the faults of each and turns each fault into a diagnostic. It holds
+no knowledge of any attribute: a row added to the registry is checked without a
+change to the rule. The dialect does not change the check; an attribute pragma is
+read only where pragmas are allowed (see [Dialects and conditional
+text](#dialects-and-conditional-text)).
+
+| Fault | Problem | The primary label | Other labels |
+|---|---|---|---|
+| Not allowed here | P4076 | at the attribute: names it as written, the kind of declaration it stands before, and the kinds its row stands before | none |
+| Value | P4077 | at the attribute: names it, says what it takes and what was found (the value as written, or no value) | none |
+| Repeated | P4078 | at the later attribute: names it | at the first attribute: where it was first written |
+
+An attribute written before a group is attached to each declaration of the
+group with one span, so the same fault is found once for each declaration. The
+rule reports one diagnostic for each problem code and span of the attribute.
+
+**REQ-ATTR-analyzer-010** A known attribute before a declaration of a kind its
+row does not stand before is reported as P4076 at the span of the attribute,
+with its name as written, the label of the kind of declaration and the kinds the
+row stands before.
+
+**REQ-ATTR-analyzer-011** A known attribute with a value its row does not take
+is reported as P4077 at the span of the attribute, with its name, what it takes
+and what was found.
+
+**REQ-ATTR-analyzer-012** An attribute written twice before one declaration is
+reported as P4078 at the span of the second, with a secondary label at the span
+of the first.
+
+**REQ-ATTR-analyzer-013** An attribute before a group that is attached to
+several declarations gives one diagnostic for each problem code and span, not
+one for each declaration.
+
+**REQ-ATTR-analyzer-014** An attribute that is user-defined is not reported,
+and neither is a known attribute where it may stand with a value it takes.
+
+## The reference page
+
+The reference page `docs/reference/language/attributes.rst` says what an attribute
+is, what is reported, and lists the rows grouped by family. The list is not
+written by hand: it is the file `docs/reference/language/attributes-table.csv`,
+generated from the registry (`registry::table`) and read by the page. A test
+fails when the file differs from the text the registry generates, and the
+failure names the command that writes it. The page says once that the state
+`Waiting` means the compiler reads and checks the attribute and does nothing
+else with it yet; it does not call a row supported.
+
+**REQ-ATTR-dsl-040** The table of the reference page is generated from the
+registry, and the checked-in file is equal to the generated text.
+
+**REQ-ATTR-dsl-041** The generated table has one line for each row, grouped by
+family in the order of the families, with the name, the aliases, the kinds of
+declaration the attribute stands before, the value, what it concerns in CODESYS
+and the state.
 
 ## Rendering
 

@@ -1,0 +1,76 @@
+=====
+P4077
+=====
+
+.. problem-summary:: P4077
+
+This error occurs when an attribute pragma — ``{attribute 'name'}`` or
+``{attribute 'name' := 'value'}`` — names an attribute that IronPLC knows and
+the value of the pragma is not one that the attribute takes. Each known
+attribute takes one kind of value: none (``hide``), one of a list of texts
+(``pack_mode`` takes ``0``, ``1``, ``2``, ``4`` or ``8``), an unsigned integer
+(``global_init_slot``), a text that is not empty (``obsolete``), or a text that
+may be left out (``conditionalshow``). The compiler compares a value from a
+list without regard to case and ignores the white space around it.
+
+The message names the attribute, what it takes, and what the pragma gives: the
+value as written, or that it has no value.
+
+The reference page :doc:`/reference/language/attributes` lists every known
+attribute with the value it takes.
+
+Example
+-------
+
+The following code will generate error P4077:
+
+.. code-block::
+
+   {attribute 'pack_mode' := '3'}   (* Error: pack_mode takes one of 0, 1, 2, 4, 8 *)
+   TYPE Packet :
+       STRUCT
+           a : INT;
+       END_STRUCT;
+   END_TYPE
+
+A value given to an attribute that takes none, and a value that is left out of
+an attribute that needs one, are the same error:
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       {attribute 'hide' := 'yes'}   (* Error: hide takes no value *)
+       a : INT;
+   END_VAR
+   END_PROGRAM
+
+To fix this error, give the attribute a value it takes, or remove the value
+from an attribute that takes none:
+
+.. code-block::
+
+   {attribute 'pack_mode' := '2'}
+   TYPE Packet :
+       STRUCT
+           a : INT;
+       END_STRUCT;
+   END_TYPE
+
+   PROGRAM main
+   VAR
+       {attribute 'hide'}
+       a : INT;
+   END_VAR
+   END_PROGRAM
+
+If the attribute is placed before a kind of declaration that it does not apply
+to, the compiler reports only that error (see :doc:`P4076`), because the value
+of an attribute that does not apply has no meaning.
+
+The compiler does not check the value of an attribute that it does not know. A
+name that is not in the reference list is a user-defined attribute: the
+compiler accepts it with any value, or none, and keeps it as written.
+
+Pragmas are a CODESYS/TwinCAT extension, accepted only with
+``--allow-pragmas`` (see :doc:`/reference/compiler/ironplcc`).

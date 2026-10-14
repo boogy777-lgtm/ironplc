@@ -150,3 +150,6 @@ P4070,IncompleteArrayNotAllowed,Incomplete array type ARRAY[*] requires choosing
 P4073,SpecialOperatorOperandInvalid,Operands of a CODESYS special operator do not fit the operator
 P4074,SpecialOperatorNotSupported,CODESYS special operator is recognised but not supported
 P4075,FbInstanceArrayNotAllowed,Array of function block instances requires choosing a dialect or --allow-fb-instance-arrays flag
+P4076,AttributeNotAllowedHere,Attribute does not apply to this kind of declaration
+P4077,AttributeValueInvalid,Attribute value is not one the attribute takes
+P4078,AttributeRepeated,Attribute is written more than once before one declaration

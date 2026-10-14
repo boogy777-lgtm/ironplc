@@ -12,7 +12,12 @@
 //! The lowering of the syntax tree fills the field: each attribute pragma is
 //! attached to the declaration it stands before (design: attributes). A node
 //! built by hand, or by a parser that reads no pragma, has the empty set.
+//!
+//! The attributes the compiler knows are the rows of [`registry`]: where each
+//! may stand, what it takes, and the typed reader of its value. An attribute
+//! with no row is user-defined and is kept as written.
 pub mod census;
+pub mod registry;
 
 use crate::common::{DataTypeDeclarationKind, LibraryElementKind};
 use crate::core::SourceSpan;

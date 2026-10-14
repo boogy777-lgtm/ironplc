@@ -85,14 +85,14 @@ fn write_to_string_when_declarations_have_attributes_then_a_pragma_line_each_bef
 #[spec_test(REQ_ATTR_plc2plc_001)]
 fn write_to_string_when_attribute_has_a_value_then_the_pragma_has_the_value_as_written() {
     let text =
-        rendered("{attribute 'pack_mode' := '2'}\n{attribute 'Hide'}\nPROGRAM p\nEND_PROGRAM");
+        rendered("{attribute 'obsolete' := 'use q'}\n{attribute 'Hide'}\nPROGRAM p\nEND_PROGRAM");
 
     let lines: Vec<&str> = text.lines().map(str::trim).collect();
 
     assert_eq!(
         &lines[..3],
         [
-            "{attribute 'pack_mode' := '2'}",
+            "{attribute 'obsolete' := 'use q'}",
             "{attribute 'Hide'}",
             "PROGRAM p"
         ]

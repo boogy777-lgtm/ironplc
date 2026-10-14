@@ -1,0 +1,51 @@
+Family,Name,Aliases,Stands before,Value,In CODESYS,State
+Enumeration,:code:`strict`,,enumeration type,no value,"A strict type test for the enumeration: no arithmetic with its values, no assignment of a value that is not one of them",Waiting
+Enumeration,:code:`to_string`,,enumeration type,no value,:code:`TO_STRING` of a value of the enumeration gives the name of the value,Waiting
+Name scope,:code:`qualified_only`,,"enumeration type, variable",no value,"A value of the enumeration, or a variable of the global variable list, is addressed only with the name of the type or the list",Waiting
+Layout,:code:`pack_mode`,,"array type, structure type, union type","one of 0, 1, 2, 4, 8",How the members of the structure are aligned in memory,Waiting
+Layout,:code:`subsequent`,,"variable, program",no value,The variables of the program or the global variable list are allocated one after another in memory,Waiting
+Visibility,:code:`hide`,,every declaration,no value,"The declaration is not shown in monitoring, debugging, input assistance and the symbol configuration; it stays usable by name",Waiting
+Visibility,:code:`hide_all_locals`,,"function, function block, program, method, property",no value,Every local variable of the block is hidden as by :code:`hide`,Waiting
+Visibility,:code:`conditionalshow`,,every declaration,"any text, or no value",The declaration of a compiled library is hidden unless the library is opened with the matching option,Waiting
+Visibility,:code:`conditionalshow_all_locals`,,"function, function block, program, method, property","any text, or no value",Every local variable of the library block is hidden as by :code:`conditionalshow`,Waiting
+Display,:code:`displaymode`,,"structure member, variable","one of bin, binary, dec, decimal, hex, hexadecimal",The number format of the value while monitoring,Waiting
+Display,:code:`monitoring`,,property,"one of variable, call",How the value of the property is read while monitoring,Waiting
+Display,:code:`monitoring_display`,,"structure type, function block",a text that is not empty,The member whose value is shown in the top line of a monitored instance,Waiting
+Display,:code:`monitoring_encoding`,,"structure member, variable","one of UTF8, UTF-8",The string value is decoded as UTF-8 while monitoring,Waiting
+Messages,:code:`obsolete`,,every declaration,a text that is not empty,A warning with the given text at each use of the declaration,Waiting
+Messages,:code:`suppress_warning`,,"any type declaration, function, function block, program, interface, method, property, action",a text that is not empty,The listed compiler warnings are not reported for the declaration,Waiting
+Messages,:code:`no_assign_warning`,,function block,no value,Assigning an instance of the block to another instance is a warning,Waiting
+Messages,:code:`estimated-stack-usage`,,"function, method",an unsigned integer,The stack size in bytes that the stack check assumes for a recursive call,Waiting
+Compile checks,:code:`no_assign`,,function block,no value,Assigning an instance of the block to another instance is an error,Waiting
+Compile checks,:code:`no_instance_in_retain`,,function block,no value,An instance of the block in retain memory is an error,Waiting
+Compile checks,:code:`enable_dynamic_creation`,,function block,no value,:code:`__NEW` may create an instance of the block,Waiting
+Static analysis,:code:`analysis`,,every declaration,"negative rule numbers separated by commas, such as -33, -31",The listed rules of the static analysis are not checked for the declaration,Waiting
+Initialisation,:code:`noinit`,":code:`no_init`, :code:`no-init`","structure member, variable",no value,The variable keeps its value when the application is reset,Waiting
+Initialisation,:code:`initialize_on_call`,,"variable, function block",no value,The input variables of the block are initialised on each call,Waiting
+Initialisation,:code:`global_init_slot`,,"variable, function, function block, program",an unsigned integer,The place of the block or the global variable list in the order of initialisation,Waiting
+Initialisation,:code:`call_after_init`,,"function block, method",no value,The method runs after :code:`FB_Init` and after the initial values are assigned,Waiting
+Initialisation,:code:`call_after_global_init_slot`,,"function, program, method",an unsigned integer,"The function runs after the global initialisation, in the order of the slot",Waiting
+Initialisation,:code:`call_before_global_exit_slot`,,"function, program, method",an unsigned integer,"The function runs before the global exit, in the order of the slot",Waiting
+Initialisation,:code:`no-exit`,,variable,no value,:code:`FB_Exit` is not called for this instance,Waiting
+Initialisation,:code:`init_namespace`,,variable,no value,The string variable is initialised with the namespace of the library,Waiting
+Initialisation,:code:`instance-path`,,variable,no value,The string variable is initialised with the path of the instance,Waiting
+Initialisation,:code:`is_connected`,,variable,a text that is not empty,The Boolean variable tells whether the named input was assigned in the call,Waiting
+Initialisation,:code:`reflection`,,"function, function block, program",no value,The compiler looks in the block for :code:`instance-path` and :code:`is_connected` variables,Waiting
+Online change,:code:`init_on_onlchange`,,variable,no value,The variable is initialised by each online change,Waiting
+Online change,:code:`no_copy`,,variable,no value,An online change initialises the variable and does not copy its value,Waiting
+Online change,:code:`call_after_online_change_slot`,,"function, program, method",an unsigned integer,"The function runs after an online change, in the order of the slot",Waiting
+Online change,:code:`call_on_type_change`,,method,a text that is not empty,The method runs when the type of one of the named function blocks changes,Waiting
+Code generation,:code:`linkalways`,,"any type declaration, variable, function, function block, program, interface, method",no value,The declaration is compiled and downloaded even when nothing uses it,Waiting
+Code generation,:code:`no_check`,,"function, function block, program, method, property",no value,The implicit check functions are not called in the block,Waiting
+Code generation,:code:`const_replaced`,,variable,no value,The constant is replaced by its value in the code,Waiting
+Code generation,:code:`const_non_replaced`,,variable,no value,The constant is not replaced by its value and stays a variable,Waiting
+Inheritance,:code:`no_virtual_actions`,,function block,no value,The actions of the SFC block are not overridden by a block that extends it,Waiting
+Symbols,:code:`symbol`,,"structure member, variable, function block, program","no value, or one of none, read, write, readwrite",Whether the variable is exported as a symbol and with which access,Waiting
+I/O mapping,:code:`io_function_block`,,function block,no value,The block is offered for a channel in the device configuration,Waiting
+I/O mapping,:code:`io_function_block_mapping`,,variable,no value,The parameter that is connected to the channel when the block is mapped,Waiting
+Graphical editors,:code:`pingroup`,,variable,a text that is not empty,The group of pins the parameter belongs to in FBD and LD,Waiting
+Graphical editors,:code:`pin_presentation_order_inputs`,,function block,a text that is not empty,"The order of the input pins of the block in CFC, FBD and LD",Waiting
+Graphical editors,:code:`pin_presentation_order_outputs`,,function block,a text that is not empty,"The order of the output pins of the block in CFC, FBD and LD",Waiting
+Graphical editors,:code:`dataflow`,,variable,no value,"The input and the output through which the data flows in FBD, LD and IL",Waiting
+Graphical editors,:code:`ProcessValue`,,structure member,no value,The member is offered by the CFC command that uses attributed members as inputs,Waiting
+Graphical editors,:code:`ExpandFully`,,"structure member, variable",no value,The members of the array are shown in the properties of a visualisation,Waiting
