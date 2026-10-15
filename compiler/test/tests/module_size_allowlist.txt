@@ -5,7 +5,6 @@
 # module (move code into a module of its own) instead of raising it, and delete
 # the entry once the file is within the limit. A file that is not listed has at
 # most 1000 lines.
-analyzer/src/intermediates/stdlib_function.rs 1337
 analyzer/src/rule_function_call_type_check.rs 1860
 parser/src/parser.rs 2731
 vm/src/vm.rs 3032
