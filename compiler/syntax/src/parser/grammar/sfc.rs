@@ -6,8 +6,10 @@
 //! body again, so a chart can nest; the depth guard bounds it.
 
 use super::common::{close, declared_name, item_terminator, skip_stray, NameClass};
+use super::configuration::PRIORITY_WORD;
 use super::expressions::{close_group, expression, name_ref};
 use super::pou::body;
+use crate::expectation::{Expectation, Item};
 use crate::kind_set::KindSet;
 use crate::parser::recovery::BLOCK_END;
 use crate::parser::state::Parser;
@@ -58,7 +60,7 @@ fn step(p: &mut Parser, node_kind: K) {
             association(p);
         }
         if p.position() == before {
-            p.bump_as_error(text::syntax_error_expected_an_action_association());
+            p.bump_as_error(Item::ActionAssociation.text());
         }
     }
     close(p, K::EndStep);
@@ -71,7 +73,7 @@ fn association(p: &mut Parser) {
     if p.name_at(0) {
         name_ref(p);
     } else {
-        p.error(text::syntax_error_expected_the_name_of_an_action());
+        p.expected(Item::ActionName);
         super::common::skip_declaration(p);
         p.abandon(node);
         return;
@@ -141,7 +143,7 @@ fn transition(p: &mut Parser) {
             p,
             K::EndTransition,
             KindSet::EMPTY,
-            text::syntax_error_expected_end_transition(),
+            Expectation::token(K::EndTransition).text(),
         );
     }
     close(p, K::EndTransition);
@@ -152,10 +154,10 @@ fn transition(p: &mut Parser) {
 fn priority(p: &mut Parser) {
     let node = p.start();
     p.bump();
-    if p.nth(0) == Some(K::Ident) && p.nth_text(0) == "PRIORITY" {
+    if p.nth(0) == Some(K::Ident) && p.nth_text(0) == PRIORITY_WORD {
         p.bump();
     } else {
-        p.error(text::syntax_error_expected_priority());
+        p.expected(Expectation::words([PRIORITY_WORD]));
     }
     p.expect(K::Assignment);
     if p.at(K::IntegerLit) {
@@ -163,7 +165,7 @@ fn priority(p: &mut Parser) {
         p.bump();
         p.complete(literal, K::IntLiteral);
     } else {
-        p.error(text::syntax_error_expected_the_priority());
+        p.expected(Item::Priority);
     }
     close_group(p, K::RightParen);
     p.complete(node, K::TransitionPriority);
@@ -180,7 +182,7 @@ fn steps(p: &mut Parser) {
                 name_ref(p);
                 count += 1;
             } else {
-                p.error(text::syntax_error_expected_the_name_of_a_step());
+                p.expected(Item::StepName);
             }
             if !p.eat(K::Comma) {
                 break;
@@ -193,7 +195,7 @@ fn steps(p: &mut Parser) {
     } else if p.name_at(0) {
         name_ref(p);
     } else {
-        p.error(text::syntax_error_expected_the_name_of_a_step());
+        p.expected(Item::StepName);
     }
     p.complete(node, K::StepList);
 }

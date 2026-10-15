@@ -19,6 +19,7 @@ use super::expressions::{type_ref, variable};
 use super::initializers::initializer;
 use super::positions::{self, Context, Spec, COMPLETE_ADDRESS, INCOMPLETE_ADDRESS};
 use super::types::type_spec;
+use crate::expectation::Item;
 use crate::kind_set::KindSet;
 use crate::parser::recovery::{BLOCK_END, VAR_OPENERS, VAR_QUALIFIERS};
 use crate::parser::state::Parser;
@@ -255,7 +256,7 @@ pub(super) fn var_block(p: &mut Parser, scope: Scope) {
         Instance => items(p, true, instance_initialization),
     }
     if !p.eat(K::EndVar) {
-        p.error_after_previous(text::syntax_error_expected_end_var());
+        p.expected_after_previous(K::EndVar);
     }
     p.complete(node, K::VarBlock);
 }
@@ -273,11 +274,11 @@ fn items(p: &mut Parser, at_least_one: bool, mut item: impl FnMut(&mut Parser)) 
         item(p);
         count += 1;
         if p.position() == before {
-            p.bump_as_error(text::syntax_error_expected_a_declaration());
+            p.bump_as_error(Item::Declaration.text());
         }
     }
     if at_least_one && count == 0 {
-        p.error(text::syntax_error_expected_a_declaration());
+        p.expected(Item::Declaration);
     }
 }
 
@@ -352,7 +353,7 @@ fn location(p: &mut Parser) -> Address {
     if p.at(K::DirectAddress) || p.at(K::DirectAddressIncomplete) {
         p.bump();
     } else {
-        p.error(text::syntax_error_expected_a_direct_address());
+        p.expected(Item::DirectAddress);
     }
     p.complete(node, K::Location);
     address
@@ -371,7 +372,7 @@ fn access_declaration(p: &mut Parser) {
             p.error(text::syntax_error_a_path_starts_with_a_name());
         }
         if variable(p).is_none() {
-            p.error(text::syntax_error_expected_the_path_of_a_variable());
+            p.expected(Item::VariablePath);
         }
         if p.expect(K::Colon) {
             type_ref(p);
@@ -394,7 +395,7 @@ fn instance_initialization(p: &mut Parser) {
         && p.nth_at(3, K::Period)
         && p.name_at(4);
     if !path {
-        p.error(text::syntax_error_expected_the_path_resource_program_variable());
+        p.expected(Item::InstancePath);
     }
     if variable(p).is_none() {
         skip_declaration(p);

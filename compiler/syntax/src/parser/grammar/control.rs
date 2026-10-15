@@ -11,10 +11,10 @@ use super::common::SIGN;
 use super::expressions::{expression, name_ref};
 use super::literals::BASED_LITERALS;
 use super::statements::{statement_list, terminator, ListEnd};
+use crate::expectation::Item;
 use crate::parser::recovery::BLOCK_END;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
-use ironplc_problems::text;
 
 /// `IF c THEN ... {ELSIF c THEN ...} [ELSE ...] END_IF`
 pub(super) fn if_statement(p: &mut Parser) {
@@ -60,7 +60,7 @@ pub(super) fn for_statement(p: &mut Parser) {
     if p.name_at(0) {
         name_ref(p);
     } else {
-        p.error(text::syntax_error_expected_the_loop_variable());
+        p.expected(Item::LoopVariable);
     }
     p.expect(K::Assignment);
     expression(p);
@@ -108,7 +108,7 @@ pub(super) fn case_statement(p: &mut Parser) {
         let before = p.position();
         case_branch(p);
         if p.position() == before {
-            p.bump_as_error(text::syntax_error_expected_a_case_selector());
+            p.bump_as_error(Item::CaseSelector.text());
         }
     }
     else_clause(p);
@@ -162,13 +162,13 @@ fn case_label(p: &mut Parser) -> bool {
             if bound_ahead(p) {
                 bound(p);
             } else {
-                p.error(text::syntax_error_expected_the_upper_bound_of_the_range());
+                p.expected(Item::CaseRangeUpperBound);
             }
         }
     } else if p.variable_name_at(0) {
         name_ref(p);
     } else {
-        p.error(text::syntax_error_expected_a_case_selector());
+        p.expected(Item::CaseSelector);
         p.abandon(node);
         return false;
     }
@@ -205,6 +205,6 @@ fn qualified_enumeration_value(p: &mut Parser) {
     if p.variable_name_at(0) {
         name_ref(p);
     } else {
-        p.error(text::syntax_error_expected_the_enumeration_value());
+        p.expected(Item::EnumerationValue);
     }
 }

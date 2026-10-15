@@ -12,6 +12,7 @@
 use super::expressions::{close_group, expression, name_ref, ref_expr};
 use super::literals::{literal, string_literal_ahead};
 use super::positions::Initial;
+use crate::expectation::Item;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
 use ironplc_problems::text;
@@ -28,7 +29,7 @@ pub(super) fn initializer(p: &mut Parser, rule: Initial) {
         Initial::Constant => constant(p),
         Initial::Literal => {
             if literal(p).is_none() {
-                p.error(text::syntax_error_expected_a_literal());
+                p.expected(Item::Literal);
             }
         }
         Initial::Array => {
@@ -94,7 +95,7 @@ fn constant(p: &mut Parser) {
         if p.variable_name_at(0) {
             name_ref(p);
         } else {
-            p.error(text::syntax_error_expected_a_constant());
+            p.expected(Item::Constant);
         }
     }
 }
@@ -152,7 +153,7 @@ fn struct_element(p: &mut Parser) {
     if p.variable_name_at(0) {
         name_ref(p);
     } else {
-        p.error(text::syntax_error_expected_a_member_name());
+        p.expected(Item::MemberName);
         p.abandon(node);
         return;
     }
@@ -205,7 +206,7 @@ pub(super) fn simple_value(p: &mut Parser) {
         if p.variable_name_at(0) {
             name_ref(p);
         } else {
-            p.error(text::syntax_error_expected_a_constant());
+            p.expected(Item::Constant);
         }
     }
 }

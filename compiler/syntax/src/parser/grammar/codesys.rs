@@ -9,9 +9,9 @@
 use super::control::close_block;
 use super::expressions::{call, close_group, element_call_ahead, expression, name_ref, variable};
 use super::statements::{statement_list, terminator, ListEnd};
+use crate::expectation::Item;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
-use ironplc_problems::text;
 
 /// `__BEGIN_IMPLEMENTATION [;]`: the marker opening a POU's implementation.
 /// It is not a statement and takes no terminator of its own.
@@ -50,7 +50,7 @@ pub(super) fn try_statement(p: &mut Parser) {
         if p.at(K::LeftParen) {
             p.bump();
             if !p.at(K::RightParen) && variable(p).is_none() {
-                p.error(text::syntax_error_expected_a_variable());
+                p.expected(Item::Variable);
             }
             close_group(p, K::RightParen);
         }
@@ -84,7 +84,7 @@ pub(super) fn jump_statement(p: &mut Parser) {
     if p.name_at(0) {
         name_ref(p);
     } else {
-        p.error(text::syntax_error_expected_a_label_name());
+        p.expected(Item::LabelName);
     }
     terminator(p, false);
     p.complete(node, K::JmpStmt);
@@ -100,7 +100,7 @@ pub(super) fn calc_statement(p: &mut Parser) {
         if (p.name_at(0) && p.nth_at(1, K::LeftParen)) || element_call_ahead(p) {
             call(p, false);
         } else {
-            p.error(text::syntax_error_expected_a_function_block_call());
+            p.expected(Item::FunctionBlockCall);
         }
         close_group(p, K::RightParen);
     }

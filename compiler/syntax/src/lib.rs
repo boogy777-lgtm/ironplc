@@ -29,6 +29,7 @@
 mod cst;
 mod diagnostic;
 pub mod error;
+mod expectation;
 mod interval_text;
 pub mod kind_set;
 pub mod lexer;

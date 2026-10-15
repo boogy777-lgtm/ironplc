@@ -31,6 +31,7 @@ use super::names::{lower_name, lower_path, lower_type_ref};
 use super::tree::{child_of, children_of, significant_tokens};
 use super::variables::{lower_address, lower_symbolic};
 use super::LowerCx;
+use crate::expectation::Item;
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode};
 use ironplc_dsl::common::{
     next_block_id, Attributes, BlockId, DeclarationQualifier, EdgeDirection, ProgramAccessDecl,
@@ -40,7 +41,6 @@ use ironplc_dsl::configuration::{Direction, FunctionBlockInit, LocatedVarInit};
 use ironplc_dsl::construct::edge_input;
 use ironplc_dsl::core::Id;
 use ironplc_dsl::diagnostic::Diagnostic;
-use ironplc_problems::text;
 use rowan::TextRange;
 
 /// The initialisation of one instance in a configuration: a function block
@@ -239,23 +239,17 @@ fn lower_access(cx: &LowerCx, node: &SyntaxNode) -> Result<ProgramAccessDecl, Di
     })
 }
 
-/// What an instance initialisation names.
-const EXPECTED_PATH: &str = "the path `resource.program.variable`";
-
 /// The resource, the program and the rest of the path an instance
 /// initialisation names.
 fn instance_path(cx: &LowerCx, node: &SyntaxNode) -> Result<(Id, Id, Vec<Id>), Diagnostic> {
     let first = node
         .first_child()
         .ok_or_else(|| cx.missing(node, "a path"))?;
-    let path = lower_path(cx, &first, EXPECTED_PATH)?;
+    let path = lower_path(cx, &first, Item::InstancePath)?;
     let mut names = path.into_iter();
     match (names.next(), names.next()) {
         (Some(resource), Some(program)) => Ok((resource, program, names.collect())),
-        _ => Err(cx.syntax_error(
-            node.text_range(),
-            text::syntax_error_expected_what(EXPECTED_PATH),
-        )),
+        _ => Err(cx.syntax_error(node.text_range(), Item::InstancePath.text())),
     }
 }
 

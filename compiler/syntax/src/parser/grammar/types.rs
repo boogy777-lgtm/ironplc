@@ -24,6 +24,7 @@ use super::expressions::{arg_list, close_group, type_ref};
 use super::initializers::initializer;
 use super::literals::literal;
 use super::positions::{Context, Spec, COUNTED, DECLARED, ELEMENT, MEMBER};
+use crate::expectation::Item;
 use crate::kind_set::KindSet;
 use crate::parser::recovery::BLOCK_END;
 use crate::parser::state::Parser;
@@ -191,13 +192,13 @@ pub(super) fn subrange(p: &mut Parser) {
     if bound_ahead(p) {
         bound(p);
     } else {
-        p.error(text::syntax_error_expected_the_lower_bound_of_a_range());
+        p.expected(Item::RangeLowerBound);
     }
     p.expect(K::Range);
     if bound_ahead(p) {
         bound(p);
     } else {
-        p.error(text::syntax_error_expected_the_upper_bound_of_a_range());
+        p.expected(Item::RangeUpperBound);
     }
     p.complete(node, K::Subrange);
 }
@@ -279,7 +280,7 @@ fn signed_integer(p: &mut Parser) {
     if p.at(K::IntegerLit) || signed {
         literal(p);
     } else {
-        p.error(text::syntax_error_expected_an_integer());
+        p.expected(Item::Integer);
     }
 }
 
@@ -294,14 +295,14 @@ fn aggregate(p: &mut Parser, node_kind: K, closer: K) {
         member(p);
         members += 1;
         if p.position() == before {
-            p.bump_as_error(text::syntax_error_expected_a_member());
+            p.bump_as_error(Item::Member.text());
         }
     }
     if members == 0 {
         p.error(text::syntax_error_expected_at_least_one_member());
     }
     if !p.eat(closer) {
-        p.error(text::syntax_error_expected_the_end_of_the_structure());
+        p.expected(Item::StructureEnd);
     }
     p.complete(node, node_kind);
 }
@@ -339,11 +340,11 @@ pub(super) fn type_block(p: &mut Parser) {
         type_declaration(p);
         declarations += 1;
         if p.position() == before {
-            p.bump_as_error(text::syntax_error_expected_a_type_declaration());
+            p.bump_as_error(Item::TypeDeclaration.text());
         }
     }
     if declarations == 0 && !lone_terminator {
-        p.error(text::syntax_error_expected_a_type_declaration());
+        p.expected(Item::TypeDeclaration);
     }
     close(p, K::EndType);
     p.complete(node, K::TypeBlock);

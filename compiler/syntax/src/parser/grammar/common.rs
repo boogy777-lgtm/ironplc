@@ -3,7 +3,7 @@
 //! declaration.
 
 use super::expressions::name_ref;
-use crate::error::expected_token;
+use crate::expectation::Item;
 use crate::kind_set::KindSet;
 use crate::parser::recovery::{BLOCK_END, DECLARATION_END, DECLARATION_START};
 use crate::parser::state::Parser;
@@ -35,7 +35,7 @@ pub(super) fn name_ahead(p: &Parser, class: NameClass) -> bool {
 /// nothing consumed, when no name is next.
 pub(super) fn declared_name(p: &mut Parser, class: NameClass) -> bool {
     if !name_ahead(p, class) {
-        p.error(text::syntax_error_expected_a_name());
+        p.expected(Item::Name);
         return false;
     }
     let node = p.start();
@@ -70,7 +70,7 @@ pub(super) fn integer_ref(p: &mut Parser) {
     } else if p.name_at(0) {
         name_ref(p);
     } else {
-        p.error(text::syntax_error_expected_an_integer_or_the_name_of_a_constant());
+        p.expected(Item::IntegerOrConstantName);
     }
 }
 
@@ -79,7 +79,7 @@ pub(super) fn integer_ref(p: &mut Parser) {
 /// next one still sees whatever stopped the body.
 pub(super) fn close(p: &mut Parser, closer: K) {
     if !p.eat(closer) {
-        p.error_after_previous(expected_token(closer));
+        p.expected_after_previous(closer);
     }
 }
 
@@ -128,7 +128,7 @@ pub(super) fn terminator(p: &mut Parser, may_omit: bool) {
         return;
     }
     if !p.eat(K::Semicolon) {
-        p.error(text::syntax_error_expected_semicolon());
+        p.expected(K::Semicolon);
         // The next item starts right here: leave it.
         if !(p.variable_name_at(0) && p.nth_at(1, K::Colon)) {
             skip_declaration(p);

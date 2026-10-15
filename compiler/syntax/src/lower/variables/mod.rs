@@ -24,6 +24,7 @@ use super::expressions::lower_expr;
 use super::names::{lower_id, lower_name};
 use super::tree::{left_spine, significant_tokens, token_of};
 use super::LowerCx;
+use crate::expectation::Item;
 use crate::kind_set::KindSet;
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode, SyntaxToken};
 use ironplc_dsl::common::{AddressAssignment, Integer};
@@ -244,10 +245,7 @@ pub fn lower_symbolic(cx: &LowerCx, node: &SyntaxNode) -> Result<SymbolicVariabl
         // A place a declaration or a connection names by a name, written as an
         // address.
         K::DirectAddressExpr => {
-            return Err(cx.syntax_error(
-                base.text_range(),
-                text::syntax_error_expected_the_name_of_a_variable_not_an_address(),
-            ))
+            return Err(cx.syntax_error(base.text_range(), Item::VariableNameNotAddress.text()))
         }
         _ => return Err(cx.unsupported(&base)),
     };

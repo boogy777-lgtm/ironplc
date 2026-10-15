@@ -7,6 +7,7 @@
 //! number, a unit and a well-formed sequence of parts is decided once. The
 //! ordering rule itself is `ironplc_dsl::construct::check_interval_parts`.
 
+use crate::expectation::Item;
 use ironplc_dsl::construct::{check_interval_parts, DurationUnit, IntervalError};
 use ironplc_problems::{text, Text};
 
@@ -22,7 +23,7 @@ pub(crate) struct Part {
 /// What a word that is not a unit is told: the units there are, from the one
 /// table of them.
 fn expected_unit() -> Text {
-    text::syntax_error_expected_a_duration_unit(DurationUnit::expectation())
+    Item::DurationUnit.text()
 }
 
 struct Scanner<'a> {
@@ -49,7 +50,7 @@ impl Scanner<'_> {
     fn number(&mut self) -> Result<(String, bool), Text> {
         let mut text = self.take_while(|c| c.is_ascii_digit() || c == '_');
         if !text.chars().any(|c| c.is_ascii_digit()) {
-            return Err(text::syntax_error_expected_a_number_in_the_duration());
+            return Err(Item::NumberInDuration.text());
         }
         if self.peek() != Some('.') {
             return Ok((text, false));
@@ -110,7 +111,7 @@ pub(crate) fn parse(written: &str) -> Result<Vec<Part>, Text> {
         parts.push(scanner.part()?);
     }
     if parts.is_empty() {
-        return Err(text::syntax_error_expected_a_duration_value());
+        return Err(Item::DurationValue.text());
     }
     check_interval_parts(parts.iter().map(|part| (part.unit, part.fractional)))
         .map_err(interval_text)?;

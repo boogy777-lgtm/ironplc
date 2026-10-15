@@ -9,6 +9,7 @@
 use super::codesys;
 use super::control;
 use super::expressions::{call, call_ahead, expression, variable};
+use crate::expectation::Item;
 use crate::parser::recovery::BLOCK_END;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
@@ -40,7 +41,7 @@ pub(in crate::parser) fn statement_list(p: &mut Parser, end: ListEnd, required: 
         items += 1;
     }
     if required && items == 0 {
-        p.error(text::syntax_error_expected_a_statement());
+        p.expected(Item::Statement);
     }
     p.complete(list, K::StatementList);
 }
@@ -83,7 +84,7 @@ fn label_ahead(p: &Parser) -> bool {
 /// when the dialect allows missing semicolons.
 pub(in crate::parser) fn terminator(p: &mut Parser, optional: bool) {
     if !p.eat(K::Semicolon) && !(optional && p.options.allow_missing_semicolon) {
-        p.error(text::syntax_error_expected_semicolon());
+        p.expected(K::Semicolon);
     }
 }
 
@@ -141,7 +142,7 @@ fn assignment_or_call(p: &mut Parser) {
         return;
     }
     let Some(mut target) = variable(p) else {
-        return p.skip_statement(text::syntax_error_expected_a_statement());
+        return p.skip_statement(Item::Statement.text());
     };
     if p.at(K::Caret) && p.nth_at(1, K::Assignment) {
         let deref = p.precede(target);

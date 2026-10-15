@@ -12,7 +12,8 @@
 //! fractional, and calendar and clock values in range. This module chooses
 //! which source range each failure is reported on.
 
-use super::literals::piece;
+use super::literals::{piece, piece_as};
+use crate::expectation::Item;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
 use ironplc_dsl::construct::{calendar_date, ClockField, DateField};
@@ -23,7 +24,7 @@ use rowan::TextRange;
 /// and unit tokens.
 pub(super) fn duration_value(p: &mut Parser) {
     if p.at(K::Minus) {
-        piece(p, K::Minus, "`-`");
+        piece(p, K::Minus);
     }
     let mut written = String::new();
     let mut range: Option<TextRange> = None;
@@ -38,7 +39,7 @@ pub(super) fn duration_value(p: &mut Parser) {
         p.bump();
     }
     match range {
-        None => p.error(text::syntax_error_expected_a_duration_value()),
+        None => p.expected(Item::DurationValue),
         Some(range) => {
             if let Err(text) = crate::interval_text::validate(&written) {
                 p.error_at(range, text);
@@ -48,10 +49,10 @@ pub(super) fn duration_value(p: &mut Parser) {
 }
 
 /// A number token of a clock or calendar value: its value and range.
-fn number(p: &mut Parser, what: &str) -> Option<(u64, TextRange)> {
+fn number(p: &mut Parser, expected: Item) -> Option<(u64, TextRange)> {
     let range = p.nth_range(0);
     let value = p.nth_number(0);
-    piece(p, K::IntegerLit, what).then_some(())?;
+    piece_as(p, K::IntegerLit, expected).then_some(())?;
     Some((value.unwrap_or(u64::MAX), range))
 }
 
@@ -65,12 +66,12 @@ fn check_field(p: &mut Parser, value: Option<(u64, TextRange)>, field: ClockFiel
 
 /// `hour : minute [: second]`, with the seconds optionally fractional.
 pub(super) fn daytime_value(p: &mut Parser) {
-    let hour = number(p, "an hour");
+    let hour = number(p, Item::Hour);
     check_field(p, hour, ClockField::Hour, "the hour");
-    if !piece(p, K::Colon, "`:`") {
+    if !piece(p, K::Colon) {
         return;
     }
-    let minute = number(p, "a minute");
+    let minute = number(p, Item::Minute);
     check_field(p, minute, ClockField::Minute, "the minute");
     // The colon before the seconds belongs to the literal only when it touches
     // the minute: a gap ends the literal at the minute, and what follows it is
@@ -87,7 +88,7 @@ pub(super) fn daytime_value(p: &mut Parser) {
         .and_then(|digits| digits.replace('_', "").parse::<u64>().ok());
     if p.at(K::FixedPointLit) {
         p.bump();
-    } else if !piece(p, K::IntegerLit, "a second") {
+    } else if !piece_as(p, K::IntegerLit, Item::Second) {
         return;
     }
     check_field(
@@ -100,15 +101,15 @@ pub(super) fn daytime_value(p: &mut Parser) {
 
 /// `year - month - day`, a real calendar date.
 pub(super) fn date_value(p: &mut Parser) {
-    let year = number(p, "a year");
-    if !piece(p, K::Minus, "`-`") {
+    let year = number(p, Item::Year);
+    if !piece(p, K::Minus) {
         return;
     }
-    let month = number(p, "a month");
-    if !piece(p, K::Minus, "`-`") {
+    let month = number(p, Item::Month);
+    if !piece(p, K::Minus) {
         return;
     }
-    let day = number(p, "a day");
+    let day = number(p, Item::Day);
     if let (Some((year, year_range)), Some((month, _)), Some((day, day_range))) = (year, month, day)
     {
         match calendar_date(year.into(), month.into(), day.into()) {
@@ -131,7 +132,7 @@ pub(super) fn date_value(p: &mut Parser) {
 /// A date and a time of day joined by `-`.
 pub(super) fn date_and_time_value(p: &mut Parser) {
     date_value(p);
-    if piece(p, K::Minus, "`-`") {
+    if piece(p, K::Minus) {
         daytime_value(p);
     }
 }

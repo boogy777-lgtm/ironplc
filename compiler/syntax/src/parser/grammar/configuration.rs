@@ -16,6 +16,7 @@ use super::expressions::{close_group, name_ref, type_ref, variable};
 use super::initializers::{connection_source, value};
 use super::literals::duration_literal_ahead;
 use super::var_blocks::{block_ahead, var_block, Scope, RETENTION};
+use crate::expectation::{Expectation, Item};
 use crate::kind_set::KindSet;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
@@ -66,7 +67,7 @@ pub(super) fn configuration(p: &mut Parser) {
                 p,
                 K::EndConfiguration,
                 CONFIGURATION_OWNS,
-                text::syntax_error_expected_a_resource_or_a_variable_block(),
+                Item::ResourceOrVariableBlock.text(),
             );
         }
         if p.position() == before {
@@ -106,7 +107,7 @@ fn resource(p: &mut Parser) {
     if p.name_at(0) {
         name_ref(p);
     } else {
-        p.error(text::syntax_error_expected_the_type_of_the_resource());
+        p.expected(Item::ResourceType);
     }
     let mut order = Order::default();
     while !declaration_stops(p, K::EndResource, RESOURCE_OWNS) {
@@ -121,12 +122,7 @@ fn resource(p: &mut Parser) {
             order.enter(p, PROGRAMS);
             program_configuration(p);
         } else {
-            skip_stray(
-                p,
-                K::EndResource,
-                RESOURCE_OWNS,
-                text::syntax_error_expected_a_task_or_a_program(),
-            );
+            skip_stray(p, K::EndResource, RESOURCE_OWNS, Item::TaskOrProgram.text());
         }
         if p.position() == before {
             p.bump_as_error(text::syntax_error_unexpected_input());
@@ -165,6 +161,9 @@ struct Property {
     expected: &'static str,
 }
 
+/// The word of the `PRIORITY` property of a task. A transition has one too.
+pub(super) const PRIORITY_WORD: &str = "PRIORITY";
+
 const TASK_PROPERTIES: [Property; 3] = [
     Property {
         word: "SINGLE",
@@ -179,7 +178,7 @@ const TASK_PROPERTIES: [Property; 3] = [
         expected: "a duration",
     },
     Property {
-        word: "PRIORITY",
+        word: PRIORITY_WORD,
         part: PRIORITY,
         value_ahead: |p| p.at(K::IntegerLit),
         expected: "an integer",
@@ -218,12 +217,14 @@ fn task_item(p: &mut Parser, order: &mut Order) {
         .find(|property| p.nth(0) == Some(K::Ident) && p.nth_text(0) == property.word);
     match property {
         Some(property) => order.enter(p, property.part),
-        None => p.error(text::syntax_error_expected_single_interval_or_priority()),
+        None => p.expected(Expectation::words(
+            TASK_PROPERTIES.iter().map(|property| property.word),
+        )),
     }
     if p.name_at(0) {
         name_ref(p);
     } else {
-        p.error(text::syntax_error_expected_a_task_property());
+        p.expected(Item::TaskProperty);
     }
     if p.expect(K::Assignment) {
         if let Some(property) = property {
@@ -273,6 +274,9 @@ fn program_configuration(p: &mut Parser) {
     item_terminator(p);
 }
 
+/// The operators that join a connection to its source or its sink.
+const CONNECTION_OPERATORS: KindSet = KindSet::new(&[K::Assignment, K::RightArrow]);
+
 /// `function_block WITH task`, `input := source` or `output => sink`.
 fn connection(p: &mut Parser) {
     if p.name_at(0) && p.nth_at(1, K::With) {
@@ -282,14 +286,14 @@ fn connection(p: &mut Parser) {
         if p.name_at(0) {
             name_ref(p);
         } else {
-            p.error(text::syntax_error_expected_the_name_of_a_task());
+            p.expected(Item::TaskName);
         }
         p.complete(node, K::TaskBinding);
         return;
     }
     let node = p.start();
     if variable(p).is_none() {
-        p.error(text::syntax_error_expected_a_variable());
+        p.expected(Item::Variable);
         p.abandon(node);
         return;
     }
@@ -299,10 +303,10 @@ fn connection(p: &mut Parser) {
     } else if p.at(K::RightArrow) {
         p.bump();
         if variable(p).is_none() {
-            p.error(text::syntax_error_expected_a_variable());
+            p.expected(Item::Variable);
         }
     } else {
-        p.error(text::syntax_error_expected_assign_or_arrow());
+        p.expected(CONNECTION_OPERATORS);
     }
     p.complete(node, K::ProgramConnection);
 }

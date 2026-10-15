@@ -13,6 +13,7 @@ use super::oop::interface;
 use super::pou::{function, function_block, program};
 use super::types::type_block;
 use super::var_blocks::{var_block, Scope};
+use crate::expectation::Item;
 use crate::parser::recovery::DECLARATION_START;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
@@ -73,7 +74,7 @@ fn namespace(p: &mut Parser) {
 /// Wraps tokens that start no declaration, up to the next declaration or the
 /// closer of the enclosing namespace.
 fn skip_to_declaration(p: &mut Parser, until: Option<K>) {
-    p.error(text::syntax_error_expected_a_declaration());
+    p.expected(Item::Declaration);
     let node = p.start();
     p.bump();
     while !p.at_eof() && !p.at_any(DECLARATION_START) && !until.is_some_and(|closer| p.at(closer)) {

@@ -22,7 +22,7 @@
 mod tests;
 
 use super::expressions::lower_expr;
-use ironplc_problems::text;
+use crate::expectation::Item;
 
 use super::names::{lower_name, lower_path, lower_type_ref};
 use super::pou::{declared_name, lower_sections};
@@ -90,28 +90,25 @@ fn read<T>(
     cx: &LowerCx,
     rows: &[(Source, Build<T>)],
     node: &SyntaxNode,
-    expected: &str,
+    expected: Item,
 ) -> Result<T, Diagnostic> {
     let source = source_of(node);
     match rows.iter().find(|(class, _)| *class == source) {
         Some((_, build)) => build(cx, node),
-        None => Err(cx.syntax_error(
-            node.text_range(),
-            text::syntax_error_expected_what(expected),
-        )),
+        None => Err(cx.syntax_error(node.text_range(), expected.text())),
     }
 }
 
 /// The constant a node writes: a literal, with its sign when it has one.
 fn constant(cx: &LowerCx, node: &SyntaxNode) -> Result<ConstantKind, Diagnostic> {
     literal_value_of(&lower_expr(cx, node)?)
-        .ok_or_else(|| cx.syntax_error(node.text_range(), text::syntax_error_expected_a_constant()))
+        .ok_or_else(|| cx.syntax_error(node.text_range(), Item::Constant.text()))
 }
 
 /// `[resource .] variable [. member]`: the global variable a path names. The
 /// first of two names is the resource, as the legacy grammar reads it.
 fn global_reference(cx: &LowerCx, node: &SyntaxNode) -> Result<GlobalVarReference, Diagnostic> {
-    let mut names = lower_path(cx, node, "a global variable")?.into_iter();
+    let mut names = lower_path(cx, node, Item::GlobalVariable)?.into_iter();
     let reference = |resource_name, global_var_name, structure_element_name| GlobalVarReference {
         resource_name,
         global_var_name,
@@ -123,10 +120,7 @@ fn global_reference(cx: &LowerCx, node: &SyntaxNode) -> Result<GlobalVarReferenc
         (Some(resource), Some(variable), Some(member), None) => {
             Ok(reference(Some(resource), variable, Some(member)))
         }
-        _ => Err(cx.syntax_error(
-            node.text_range(),
-            text::syntax_error_expected_a_global_variable(),
-        )),
+        _ => Err(cx.syntax_error(node.text_range(), Item::GlobalVariable.text())),
     }
 }
 
@@ -196,17 +190,17 @@ const TASK_PROPERTIES: &[(&str, Property)] = &[
             cx,
             DATA_SOURCES,
             value,
-            "a constant or a global variable",
+            Item::ConstantOrGlobalVariable,
         )?);
         Ok(())
     }),
     ("INTERVAL", |cx, value, into| {
-        match read(cx, DATA_SOURCES, value, "a duration")? {
+        match read(cx, DATA_SOURCES, value, Item::Duration)? {
             DataSourceKind::Constant(ConstantKind::Duration(duration)) => {
                 into.interval = Some(duration);
                 Ok(())
             }
-            _ => Err(cx.syntax_error(value.text_range(), text::syntax_error_expected_a_duration())),
+            _ => Err(cx.syntax_error(value.text_range(), Item::Duration.text())),
         }
     }),
     ("PRIORITY", |cx, value, into| {
@@ -285,7 +279,7 @@ const DIRECTIONS: &[(K, Connect)] = &[
                 cx,
                 CONNECTION_SOURCES,
                 other,
-                "a constant, an enumeration value or an address",
+                Item::ConstantEnumerationValueOrAddress,
             )?,
         });
         Ok(())
@@ -293,7 +287,7 @@ const DIRECTIONS: &[(K, Connect)] = &[
     (K::RightArrow, |cx, variable, other, into| {
         into.sinks.push(ProgramConnectionSink {
             src: lower_symbolic(cx, variable)?,
-            dst: read(cx, SINKS, other, "a global variable or an address")?,
+            dst: read(cx, SINKS, other, Item::GlobalVariableOrAddress)?,
         });
         Ok(())
     }),

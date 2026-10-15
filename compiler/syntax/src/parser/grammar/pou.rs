@@ -20,6 +20,7 @@ use super::sfc;
 use super::statements::{statement_list, ListEnd};
 use super::types::return_type;
 use super::var_blocks::{block_ahead, var_block, Scope};
+use crate::expectation::Item;
 use crate::kind_set::KindSet;
 use crate::parser::recovery::{BLOCK_END, MEMBER_START};
 use crate::parser::state::Parser;
@@ -93,7 +94,7 @@ pub(super) fn sections(p: &mut Parser, layout: &Layout) {
         }
     }
     if layout.body == Body::Required && !order.has(BODY.rank) {
-        p.error(text::syntax_error_expected_a_statement());
+        p.expected(Item::Statement);
     }
 }
 
@@ -128,7 +129,7 @@ pub(super) fn function(p: &mut Parser) {
         p.bump();
         p.complete(name, K::Name);
     } else {
-        p.error(text::syntax_error_expected_a_name());
+        p.expected(Item::Name);
     }
     if p.expect(K::Colon) {
         return_type(p);

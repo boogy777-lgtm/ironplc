@@ -9,7 +9,8 @@
 
 use super::event::{CompletedMarker, Event, Marker};
 use super::options::ParseOptions;
-use crate::error::{expected_token, nesting_too_deep, SyntaxError};
+use crate::error::{nesting_too_deep, SyntaxError};
+use crate::expectation::Expectation;
 use crate::kind_set::KindSet;
 use crate::lexer::Token;
 use crate::syntax_kind::SyntaxKind;
@@ -258,7 +259,7 @@ impl<'t, 's> Parser<'t, 's> {
     pub(crate) fn expect(&mut self, kind: SyntaxKind) -> bool {
         let found = self.eat(kind);
         if !found {
-            self.error(expected_token(kind));
+            self.expected(kind);
         }
         found
     }
@@ -411,6 +412,16 @@ impl<'t, 's> Parser<'t, 's> {
         self.record(SyntaxError::new(text, TextRange::empty(end)));
     }
 
+    /// Records that `expected` was to stand at the next token.
+    pub(crate) fn expected(&mut self, expected: impl Into<Expectation>) {
+        self.error(expected.into().text());
+    }
+
+    /// Records that `expected` was to stand where the previous token ends.
+    pub(crate) fn expected_after_previous(&mut self, expected: impl Into<Expectation>) {
+        self.error_after_previous(expected.into().text());
+    }
+
     /// Records an error at the next token. A lexical error token already has
     /// its own error, so none is added for it.
     pub(crate) fn error(&mut self, text: Text) {
@@ -459,6 +470,7 @@ impl<'t, 's> Parser<'t, 's> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::expectation::Item;
     use crate::lexer::lex;
 
     fn parser_over<T>(source: &str, options: ParseOptions, check: impl FnOnce(Parser) -> T) -> T {
@@ -544,9 +556,9 @@ mod tests {
     fn error_when_the_same_error_is_reported_twice_in_a_row_then_once() {
         let (tokens, _) = lex("a");
         let mut parser = Parser::new(&tokens, ParseOptions::default());
-        parser.error(text::syntax_error_expected_a_name());
-        parser.error(text::syntax_error_expected_a_name());
-        parser.error(text::syntax_error_expected_a_statement());
+        parser.error(Item::Name.text());
+        parser.error(Item::Name.text());
+        parser.error(Item::Statement.text());
         let (_, errors) = parser.finish();
         assert_eq!(errors.len(), 2);
     }

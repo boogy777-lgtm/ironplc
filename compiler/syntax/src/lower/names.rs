@@ -14,12 +14,12 @@
 
 use super::tree::{left_spine, significant_tokens};
 use super::LowerCx;
+use crate::expectation::Item;
 use crate::kind_set::KindSet;
 use crate::syntax_kind::{SyntaxKind, SyntaxNode, SyntaxToken};
 use ironplc_dsl::common::{ElementaryTypeName, GenericTypeName, TypeName};
 use ironplc_dsl::core::Id;
 use ironplc_dsl::diagnostic::Diagnostic;
-use ironplc_problems::text;
 
 /// The identifier a name token spells.
 pub fn lower_id(cx: &LowerCx, token: &SyntaxToken) -> Id {
@@ -44,16 +44,15 @@ pub fn lower_name(cx: &LowerCx, node: &SyntaxNode) -> Result<Id, Diagnostic> {
 /// The names of a dotted path (`a.b.c`): a name, and the member names selected
 /// from it, in the order written. `expected` says what the path was to be, for
 /// the problem reported when the node is not one.
-pub fn lower_path(cx: &LowerCx, node: &SyntaxNode, expected: &str) -> Result<Vec<Id>, Diagnostic> {
+pub(crate) fn lower_path(
+    cx: &LowerCx,
+    node: &SyntaxNode,
+    expected: Item,
+) -> Result<Vec<Id>, Diagnostic> {
     let (base, links) = left_spine(node, |kind| kind == SyntaxKind::FieldExpr);
     let base = base
         .filter(|base| base.kind() == SyntaxKind::NameRef)
-        .ok_or_else(|| {
-            cx.syntax_error(
-                node.text_range(),
-                text::syntax_error_expected_what(expected),
-            )
-        })?;
+        .ok_or_else(|| cx.syntax_error(node.text_range(), expected.text()))?;
     let mut path = vec![lower_name(cx, &base)?];
     for link in &links {
         let selected = significant_tokens(link)
