@@ -23,7 +23,6 @@ parser/src/parser.rs 2731
 parser/src/token.rs 1214
 playground/src/lib.rs 1850
 plc2plc/src/renderer.rs 2190
-project/src/disassemble.rs 1293
 project/src/project.rs 1361
 runtime/src/migration/tests.rs 1180
 runtime/tests/migration_acceptance.rs 1005
