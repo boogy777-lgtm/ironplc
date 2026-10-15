@@ -10,97 +10,100 @@
 //! case ranks above a mistake in how the text is put together, because the
 //! second is often the consequence of the first.
 //!
-//! The order is the data in [`STAGES`]. A new kind of error is one row, or one
-//! more kind in an existing row when it is another spelling of what that
-//! stage checks.
+//! The order is the data in [`STAGES`]. A new problem is one row, or one more
+//! problem in an existing row when it is another spelling of what that stage
+//! checks.
 
-use crate::error::{ErrorKind, SyntaxError};
+use crate::error::SyntaxError;
 use crate::parser::Parse;
 use ironplc_dsl::core::FileId;
 use ironplc_dsl::diagnostic::Diagnostic;
+use ironplc_problems::Problem;
 
-/// One stage of checking and the kinds of error it reports. Errors of the
-/// kinds of one stage are ordered by position.
+/// One stage of checking and the problems it reports. Errors of the problems
+/// of one stage are ordered by position.
 pub struct Stage {
     /// What the stage looks at.
     pub name: &'static str,
-    pub kinds: &'static [ErrorKind],
+    pub problems: &'static [Problem],
 }
 
-/// The stages in rank order, the first stage first. Every [`ErrorKind`] is in
-/// exactly one stage.
+/// The stages in rank order, the first stage first. A problem is in at most
+/// one stage; an error of a problem that is in none ranks after every stage.
 ///
 /// Lowering follows the last stage: it runs only on a tree that has no error,
 /// so a problem it finds is never ranked against these.
 pub const STAGES: &[Stage] = &[
     Stage {
         name: "bytes that match no token",
-        kinds: &[ErrorKind::UnexpectedCharacter],
+        problems: &[Problem::UnexpectedToken],
     },
     Stage {
         name: "C-style comments",
-        kinds: &[ErrorKind::CStyleComment],
+        problems: &[Problem::CStyleComment],
     },
     Stage {
         name: "empty variable blocks",
-        kinds: &[ErrorKind::EmptyVarBlock],
+        problems: &[Problem::EmptyVarBlock],
     },
     Stage {
         name: "partial-access syntax",
-        kinds: &[ErrorKind::PartialAccessSyntaxDisabled],
+        problems: &[Problem::PartialAccessSyntaxDisabled],
     },
     Stage {
         name: "parenthesis string length",
-        kinds: &[ErrorKind::ParenStringLengthNotAllowed],
+        problems: &[Problem::ParenStringLengthNotAllowed],
     },
     Stage {
         name: "incomplete arrays",
-        kinds: &[ErrorKind::IncompleteArrayNotAllowed],
+        problems: &[Problem::IncompleteArrayNotAllowed],
     },
     Stage {
         name: "identifier spelling",
-        kinds: &[
-            ErrorKind::EscapedIdentifierNotAllowed,
-            ErrorKind::UnicodeIdentifierNotAllowed,
-            ErrorKind::MultipleUnderscoresNotAllowed,
+        problems: &[
+            Problem::EscapedIdentifierNotAllowed,
+            Problem::UnicodeIdentifierNotAllowed,
+            Problem::MultipleUnderscoresNotAllowed,
         ],
     },
     Stage {
         name: "string escapes",
-        kinds: &[ErrorKind::InvalidStringEscape],
+        problems: &[Problem::InvalidStringEscape],
     },
     Stage {
         name: "conditional pragmas and the nesting limit",
-        kinds: &[
-            ErrorKind::PragmaIfUnmatched,
-            ErrorKind::PragmaValueExpected,
-            ErrorKind::NestingTooDeep,
+        problems: &[
+            Problem::PragmaIfUnmatched,
+            Problem::PragmaValueExpected,
+            Problem::MaxNestingDepthExceeded,
         ],
     },
     Stage {
         name: "grammar",
-        kinds: &[ErrorKind::Syntax],
+        problems: &[Problem::SyntaxError],
     },
 ];
 
-impl ErrorKind {
-    /// The rank of the stage that reports errors of this kind: lower ranks
-    /// first. A kind that is in no stage ranks after every stage.
-    pub fn rank(self) -> usize {
-        STAGES
-            .iter()
-            .position(|stage| stage.kinds.contains(&self))
-            .unwrap_or(STAGES.len())
-    }
+/// The rank of the stage that reports `problem`: lower ranks first. A problem
+/// that is in no stage ranks after every stage.
+pub(crate) fn rank(problem: Problem) -> usize {
+    STAGES
+        .iter()
+        .position(|stage| stage.problems.contains(&problem))
+        .unwrap_or(STAGES.len())
 }
 
 impl Parse {
     /// The error to report when one is reported: the lowest rank, and the
     /// earliest of that rank. `None` when the parse found no error.
     pub fn primary_error(&self) -> Option<&SyntaxError> {
-        self.errors
-            .iter()
-            .min_by_key(|error| (error.kind.rank(), error.range.start(), error.range.end()))
+        self.errors.iter().min_by_key(|error| {
+            (
+                rank(error.problem()),
+                error.range.start(),
+                error.range.end(),
+            )
+        })
     }
 
     /// The diagnostic of [`Parse::primary_error`], for a parse of the text of
@@ -116,57 +119,18 @@ mod tests {
     use super::*;
     use crate::{parse_source_file, ParseOptions};
 
-    /// Every kind. The match has no wildcard arm, so a new kind fails to
-    /// compile here until it is added to the list, and then to the stages.
-    fn every_kind() -> Vec<ErrorKind> {
-        let all = vec![
-            ErrorKind::Syntax,
-            ErrorKind::UnexpectedCharacter,
-            ErrorKind::CStyleComment,
-            ErrorKind::EmptyVarBlock,
-            ErrorKind::InvalidStringEscape,
-            ErrorKind::PartialAccessSyntaxDisabled,
-            ErrorKind::ParenStringLengthNotAllowed,
-            ErrorKind::IncompleteArrayNotAllowed,
-            ErrorKind::EscapedIdentifierNotAllowed,
-            ErrorKind::UnicodeIdentifierNotAllowed,
-            ErrorKind::MultipleUnderscoresNotAllowed,
-            ErrorKind::PragmaIfUnmatched,
-            ErrorKind::PragmaValueExpected,
-            ErrorKind::NestingTooDeep,
-        ];
-        for kind in &all {
-            match kind {
-                ErrorKind::Syntax
-                | ErrorKind::UnexpectedCharacter
-                | ErrorKind::CStyleComment
-                | ErrorKind::EmptyVarBlock
-                | ErrorKind::InvalidStringEscape
-                | ErrorKind::PartialAccessSyntaxDisabled
-                | ErrorKind::ParenStringLengthNotAllowed
-                | ErrorKind::IncompleteArrayNotAllowed
-                | ErrorKind::EscapedIdentifierNotAllowed
-                | ErrorKind::UnicodeIdentifierNotAllowed
-                | ErrorKind::MultipleUnderscoresNotAllowed
-                | ErrorKind::PragmaIfUnmatched
-                | ErrorKind::PragmaValueExpected
-                | ErrorKind::NestingTooDeep => {}
-            }
-        }
-        all
-    }
-
     #[test]
-    fn rank_when_every_kind_then_it_is_in_exactly_one_stage() {
-        for kind in every_kind() {
-            let stages = STAGES
-                .iter()
-                .filter(|stage| stage.kinds.contains(&kind))
-                .count();
-            assert_eq!(stages, 1, "{kind:?}");
+    fn rank_when_problem_listed_then_it_is_in_exactly_one_stage() {
+        let listed: Vec<&str> = STAGES
+            .iter()
+            .flat_map(|stage| stage.problems.iter().map(Problem::code))
+            .collect();
+        for code in &listed {
+            assert_eq!(listed.iter().filter(|other| *other == code).count(), 1);
         }
-        let listed: usize = STAGES.iter().map(|stage| stage.kinds.len()).sum();
-        assert_eq!(listed, every_kind().len());
+        for problem in STAGES.iter().flat_map(|stage| stage.problems) {
+            assert!(rank(*problem) < STAGES.len(), "{}", problem.code());
+        }
     }
 
     #[test]
@@ -182,9 +146,9 @@ mod tests {
         // above it.
         let source = "PROGRAM p x := ; // note\nEND_PROGRAM";
         let parse = parse_source_file(source, &ParseOptions::default());
-        assert_eq!(parse.errors[0].kind, ErrorKind::Syntax);
-        let primary = parse.primary_error().map(|error| error.kind);
-        assert_eq!(primary, Some(ErrorKind::CStyleComment));
+        assert_eq!(parse.errors[0].problem(), Problem::SyntaxError);
+        let primary = parse.primary_error().map(SyntaxError::problem);
+        assert_eq!(primary, Some(Problem::CStyleComment));
     }
 
     #[test]

@@ -7,6 +7,7 @@ use crate::kind_set::KindSet;
 use crate::parser::recovery::{BLOCK_END, DECLARATION_END, DECLARATION_START};
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
+use ironplc_problems::{text, Text};
 
 /// The sign of a number.
 pub(super) const SIGN: KindSet = KindSet::new(&[K::Plus, K::Minus]);
@@ -33,7 +34,7 @@ pub(super) fn name_ahead(p: &Parser, class: NameClass) -> bool {
 /// nothing consumed, when no name is next.
 pub(super) fn declared_name(p: &mut Parser, class: NameClass) -> bool {
     if !name_ahead(p, class) {
-        p.error("expected a name");
+        p.error(text::syntax_error_expected_a_name());
         return false;
     }
     let node = p.start();
@@ -68,7 +69,7 @@ pub(super) fn integer_ref(p: &mut Parser) {
     } else if p.name_at(0) {
         name_ref(p);
     } else {
-        p.error("expected an integer or the name of a constant");
+        p.error(text::syntax_error_expected_an_integer_or_the_name_of_a_constant());
     }
 }
 
@@ -77,7 +78,7 @@ pub(super) fn integer_ref(p: &mut Parser) {
 /// next one still sees whatever stopped the body.
 pub(super) fn close(p: &mut Parser, closer: K, what: &str) {
     if !p.eat(closer) {
-        p.error_after_previous(&format!("expected {what}"));
+        p.error_after_previous(text::syntax_error_expected_what(what));
     }
 }
 
@@ -126,7 +127,7 @@ pub(super) fn terminator(p: &mut Parser, may_omit: bool) {
         return;
     }
     if !p.eat(K::Semicolon) {
-        p.error("expected `;`");
+        p.error(text::syntax_error_expected_semicolon());
         // The next item starts right here: leave it.
         if !(p.variable_name_at(0) && p.nth_at(1, K::Colon)) {
             skip_declaration(p);
@@ -149,8 +150,8 @@ pub(super) fn declaration_stops(p: &Parser, closer: K, owns: KindSet) -> bool {
 
 /// Wraps the tokens that cannot continue a declaration in one error node,
 /// up to where [`declaration_stops`] says the declaration ends.
-pub(super) fn skip_stray(p: &mut Parser, closer: K, owns: KindSet, message: &str) {
-    p.error(message);
+pub(super) fn skip_stray(p: &mut Parser, closer: K, owns: KindSet, text: Text) {
+    p.error(text);
     let node = p.start();
     let mut consumed = false;
     while !declaration_stops(p, closer, owns) {
@@ -186,9 +187,9 @@ impl Order {
     pub(super) fn enter(&mut self, p: &mut Parser, part: Part) {
         let bit = 1u32.checked_shl(u32::from(part.rank)).unwrap_or(0);
         if part.rank < self.reached {
-            p.error(&format!("{} comes too late here", part.name));
+            p.error(text::syntax_error_part_comes_too_late(part.name));
         } else if part.once && self.seen & bit != 0 {
-            p.error(&format!("{} may appear only once", part.name));
+            p.error(text::syntax_error_part_may_appear_only_once(part.name));
         }
         self.reached = self.reached.max(part.rank);
         self.seen |= bit;

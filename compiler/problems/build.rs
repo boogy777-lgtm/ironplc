@@ -63,7 +63,7 @@ fn create_problems() -> Result<(), Box<dyn Error>> {
         File::create(out_path).map_err(|e| format!("Unable to create 'problems.rs': {e}"))?;
 
     // Create the enumeration definition
-    out.write_all(b"pub enum Problem {\n")?;
+    out.write_all(b"#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub enum Problem {\n")?;
     for def in &defs {
         if let Some(note) = ironplc_problems_gen::deprecation_note(&def.name) {
             out.write_all(format!("    #[deprecated(note = \"{note}\")]\n").as_bytes())?;

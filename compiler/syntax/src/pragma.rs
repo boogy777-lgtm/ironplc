@@ -28,10 +28,10 @@
 use std::collections::HashSet;
 
 use ironplc_dsl::core::SourceSpan;
-use ironplc_dsl::diagnostic::{Diagnostic, Label};
-use ironplc_problems::Problem;
+use ironplc_dsl::diagnostic::Diagnostic;
+use ironplc_problems::{text, Text};
 
-use crate::error::nesting_message;
+use crate::error::nesting_too_deep;
 use crate::parser::MAX_DEPTH;
 
 /// A pragma that could not be honoured.
@@ -47,29 +47,18 @@ pub enum Fault {
 }
 
 impl Fault {
-    /// The problem the fault is reported as.
-    pub fn problem(self) -> Problem {
+    /// What is wrong with the pragma, with the problem it is reported as.
+    pub fn text(self) -> Text {
         match self {
-            Fault::Unmatched => Problem::PragmaIfUnmatched,
-            Fault::UnexpectedValue => Problem::PragmaValueExpected,
-            Fault::NestingTooDeep => Problem::MaxNestingDepthExceeded,
-        }
-    }
-
-    /// What is wrong with the pragma.
-    pub fn message(self) -> String {
-        match self {
-            Fault::Unmatched => "Unmatched {IF} pragma".to_string(),
-            Fault::UnexpectedValue => {
-                "Expected a pragma condition such as `defined(name)`".to_string()
-            }
-            Fault::NestingTooDeep => nesting_message(),
+            Fault::Unmatched => text::pragma_if_unmatched_found(),
+            Fault::UnexpectedValue => text::pragma_value_expected_found(),
+            Fault::NestingTooDeep => nesting_too_deep(),
         }
     }
 
     /// Renders the fault as the compiler diagnostic for the pragma at `span`.
     pub fn diagnostic(self, span: &SourceSpan) -> Diagnostic {
-        Diagnostic::problem(self.problem(), Label::span(span.clone(), self.message()))
+        Diagnostic::text(span.clone(), self.text())
     }
 }
 

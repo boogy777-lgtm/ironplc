@@ -16,6 +16,7 @@ use crate::kind_set::KindSet;
 use crate::parser::event::CompletedMarker;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
+use ironplc_problems::text;
 
 /// Binding powers `(left, right)` of the binary operator at the cursor.
 fn infix_power(p: &Parser) -> Option<(u8, u8)> {
@@ -136,7 +137,7 @@ fn primary(p: &mut Parser) -> Option<CompletedMarker> {
     if let Some(done) = variable(p) {
         return Some(done);
     }
-    p.error("expected an expression");
+    p.error(text::syntax_error_expected_an_expression());
     p.skip_expression()
 }
 
@@ -152,7 +153,7 @@ fn paren_expr(p: &mut Parser) -> CompletedMarker {
 /// up to its closer first, so one bad element does not hide the rest.
 pub(in crate::parser) fn close_group(p: &mut Parser, closer: K, what: &str) {
     if !p.at(closer) {
-        p.error(&format!("expected {what}"));
+        p.error(text::syntax_error_expected_what(what));
         p.skip_expression();
     }
     p.eat(closer);
@@ -162,7 +163,7 @@ pub(in crate::parser) fn ref_expr(p: &mut Parser) -> CompletedMarker {
     let node = p.start();
     p.bump_n(2);
     if variable(p).is_none() {
-        p.error("expected a variable");
+        p.error(text::syntax_error_expected_a_variable());
     }
     close_group(p, K::RightParen, "`)`");
     p.complete(node, K::RefExpr)
@@ -225,7 +226,7 @@ pub(in crate::parser) fn type_ref(p: &mut Parser) -> bool {
         p.complete(node, K::TypeRef);
         true
     } else {
-        p.error("expected a type name");
+        p.error(text::syntax_error_expected_a_type_name());
         false
     }
 }
@@ -357,7 +358,7 @@ fn argument(p: &mut Parser) {
         name_ref(p);
         p.bump();
         if variable(p).is_none() {
-            p.error("expected a variable");
+            p.error(text::syntax_error_expected_a_variable());
         }
         p.complete(node, K::OutputArg);
     } else if p.variable_name_at(0) && p.nth_at(1, K::Assignment) {

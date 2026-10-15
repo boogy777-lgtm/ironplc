@@ -6,9 +6,8 @@
 
 mod common;
 
-use ironplc_syntax::{
-    parse_source_file, ErrorKind, Parse, ParseOptions, SyntaxKind, SyntaxNode, MAX_DEPTH,
-};
+use ironplc_problems::Problem;
+use ironplc_syntax::{parse_source_file, Parse, ParseOptions, SyntaxKind, SyntaxNode, MAX_DEPTH};
 
 fn assert_well_formed(source: &str, parsed: &Parse) {
     assert_eq!(parsed.root.text().to_string(), source);
@@ -70,7 +69,7 @@ fn parse_source_file_when_program_is_not_closed_then_next_program_parses_cleanly
     assert!(parsed
         .errors
         .iter()
-        .all(|error| error.message.contains("END_PROGRAM")));
+        .all(|error| error.message().contains("END_PROGRAM")));
     let first = named(&parsed, SyntaxKind::ProgramDecl, "First");
     let second = named(&parsed, SyntaxKind::ProgramDecl, "Second");
     // The first program ends where the second begins, and neither swallows
@@ -155,11 +154,7 @@ fn parse_source_file_when_configuration_is_truncated_then_nodes_close_with_error
     assert_eq!(nodes_of(&parsed.root, SyntaxKind::ResourceDecl).len(), 1);
     assert_eq!(nodes_of(&parsed.root, SyntaxKind::TaskDecl).len(), 1);
     assert_eq!(nodes_of(&parsed.root, SyntaxKind::ProgramConfig).len(), 1);
-    let messages: Vec<&str> = parsed
-        .errors
-        .iter()
-        .map(|error| error.message.as_str())
-        .collect();
+    let messages: Vec<&str> = parsed.errors.iter().map(|error| error.message()).collect();
     assert!(
         messages.contains(&"expected `END_RESOURCE`"),
         "{messages:?}"
@@ -240,7 +235,7 @@ fn assert_depth_guard(source: &str) {
         parsed
             .errors
             .iter()
-            .any(|error| error.kind == ErrorKind::NestingTooDeep),
+            .any(|error| error.problem() == Problem::MaxNestingDepthExceeded),
         "no depth error for {} bytes",
         source.len()
     );

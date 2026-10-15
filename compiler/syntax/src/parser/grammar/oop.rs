@@ -14,6 +14,7 @@ use super::var_blocks::Scope;
 use crate::kind_set::KindSet;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
+use ironplc_problems::text;
 
 /// The qualifier words that are not keywords.
 const QUALIFIER_WORDS: &[&str] = &[
@@ -143,7 +144,12 @@ fn property(p: &mut Parser) {
             order.enter(p, SET);
             accessor(p, K::SetAccessor, K::EndSet);
         } else {
-            skip_stray(p, K::EndProperty, KindSet::EMPTY, "expected `GET` or `SET`");
+            skip_stray(
+                p,
+                K::EndProperty,
+                KindSet::EMPTY,
+                text::syntax_error_expected_get_or_set(),
+            );
         }
     }
     close(p, K::EndProperty, "`END_PROPERTY`");
@@ -189,7 +195,7 @@ pub(super) fn interface(p: &mut Parser) {
             p,
             K::EndInterface,
             KindSet::EMPTY,
-            "an interface has no body",
+            text::syntax_error_an_interface_has_no_body(),
         );
     }
     close(p, K::EndInterface, "`END_INTERFACE`");

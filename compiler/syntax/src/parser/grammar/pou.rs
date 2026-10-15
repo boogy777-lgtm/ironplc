@@ -24,6 +24,7 @@ use crate::kind_set::KindSet;
 use crate::parser::recovery::{BLOCK_END, MEMBER_START};
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
+use ironplc_problems::text;
 
 const VARIABLES: Part = Part {
     rank: 0,
@@ -82,17 +83,17 @@ pub(super) fn sections(p: &mut Parser, layout: &Layout) {
             order.enter(p, MEMBERS);
             member(p);
         } else if p.at_any(BLOCK_END) {
-            p.bump_as_error("this keyword does not belong here");
+            p.bump_as_error(text::syntax_error_this_keyword_does_not_belong_here());
         } else {
             order.enter(p, BODY);
             body(p, layout.chart);
         }
         if p.position() == before {
-            p.bump_as_error("unexpected input");
+            p.bump_as_error(text::syntax_error_unexpected_input());
         }
     }
     if layout.body == Body::Required && !order.has(BODY.rank) {
-        p.error("expected a statement");
+        p.error(text::syntax_error_expected_a_statement());
     }
 }
 
@@ -127,7 +128,7 @@ pub(super) fn function(p: &mut Parser) {
         p.bump();
         p.complete(name, K::Name);
     } else {
-        p.error("expected a name");
+        p.error(text::syntax_error_expected_a_name());
     }
     if p.expect(K::Colon, "`:`") {
         return_type(p);

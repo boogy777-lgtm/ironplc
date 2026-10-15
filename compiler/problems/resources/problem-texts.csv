@@ -1,8 +1,102 @@
 Code,Key,Template
+P0002,syntax_error_a_base_type_is_part_of_a_type_declaration,a base type is part of a type declaration
+P0002,syntax_error_a_configuration_needs_a_resource,a configuration needs a resource
+P0002,syntax_error_a_located_variable_has_one_name,a located variable has one name
+P0002,syntax_error_a_path_starts_with_a_name,a path starts with a name
+P0002,syntax_error_a_reference_starts_as_null_or_ref_variable,a reference starts as `NULL` or `REF(variable)`
+P0002,syntax_error_a_resource_needs_a_program,a resource needs a program
+P0002,syntax_error_a_sign_must_touch_the_number_after_it,a sign must touch the number after it
+P0002,syntax_error_a_string_starts_as_a_character_string_literal,a string starts as a character string literal
+P0002,syntax_error_a_task_needs_a_priority,a task needs a `PRIORITY`
+P0002,syntax_error_a_value_is_part_of_a_type_declaration,a value is part of a type declaration
+P0002,syntax_error_an_array_starts_as_brackets,an array starts as `[` ... `]`
+P0002,syntax_error_an_initial_value_is_not_allowed_for_this_kind_of_type,an initial value is not allowed for this kind of type
+P0002,syntax_error_an_initial_value_is_not_allowed_on_this_variable_block,an initial value is not allowed on this variable block
+P0002,syntax_error_an_interface_has_no_body,an interface has no body
+P0002,syntax_error_duration_units_must_be_in_descending_order,duration units must be in descending order
 P0002,syntax_error_end_of_input,Expected further input. Found end of input
+P0002,syntax_error_expected_0_1_or_a_boolean_word,"expected 0, 1 or a boolean word"
+P0002,syntax_error_expected_a_case_selector,expected a case selector
+P0002,syntax_error_expected_a_constant,expected a constant
+P0002,syntax_error_expected_a_declaration,expected a declaration
+P0002,syntax_error_expected_a_direct_address,expected a direct address
+P0002,syntax_error_expected_a_duration_unit,expected a {units}
+P0002,syntax_error_expected_a_duration_value,expected a duration value
+P0002,syntax_error_expected_a_function_block_call,expected a function block call
+P0002,syntax_error_expected_a_label_name,expected a label name
+P0002,syntax_error_expected_a_literal,expected a literal
+P0002,syntax_error_expected_a_member,expected a member
+P0002,syntax_error_expected_a_member_name,expected a member name
+P0002,syntax_error_expected_a_name,expected a name
+P0002,syntax_error_expected_a_number_in_the_duration,expected a number in the duration
+P0002,syntax_error_expected_a_resource_or_a_variable_block,expected a resource or a variable block
+P0002,syntax_error_expected_a_statement,expected a statement
+P0002,syntax_error_expected_a_task_or_a_program,expected a task or a program
+P0002,syntax_error_expected_a_task_property,expected a task property
+P0002,syntax_error_expected_a_type_declaration,expected a type declaration
+P0002,syntax_error_expected_a_type_name,expected a type name
+P0002,syntax_error_expected_a_variable,expected a variable
+P0002,syntax_error_expected_a_variable_after_ref,expected a variable after `REF=`
+P0002,syntax_error_expected_an_action_association,expected an action association
+P0002,syntax_error_expected_an_expression,expected an expression
+P0002,syntax_error_expected_an_integer,expected an integer
+P0002,syntax_error_expected_an_integer_or_the_name_of_a_constant,expected an integer or the name of a constant
+P0002,syntax_error_expected_assign_after_the_assignment_target,expected `:=` after the assignment target
+P0002,syntax_error_expected_assign_or_arrow,expected `:=` or `=>`
+P0002,syntax_error_expected_at_least_one_member,expected at least one member
+P0002,syntax_error_expected_at_least_two_steps,expected at least two steps
+P0002,syntax_error_expected_digits_after_the_decimal_point_in_the_duration,expected digits after the decimal point in the duration
+P0002,syntax_error_expected_end_transition,expected `END_TRANSITION`
+P0002,syntax_error_expected_end_var,expected `END_VAR`
 P0002,syntax_error_expected_found,Expected {expected}. Found text '{found}' that matched token {token}
+P0002,syntax_error_expected_get_or_set,expected `GET` or `SET`
+P0002,syntax_error_expected_priority,expected `PRIORITY`
+P0002,syntax_error_expected_semicolon,expected `;`
+P0002,syntax_error_expected_single_interval_or_priority,"expected `SINGLE`, `INTERVAL` or `PRIORITY`"
+P0002,syntax_error_expected_the_end_of_the_structure,expected the end of the structure
+P0002,syntax_error_expected_the_enumeration_value,expected the enumeration value
+P0002,syntax_error_expected_the_loop_variable,expected the loop variable
+P0002,syntax_error_expected_the_lower_bound_of_a_range,expected the lower bound of a range
+P0002,syntax_error_expected_the_name_of_a_step,expected the name of a step
+P0002,syntax_error_expected_the_name_of_a_task,expected the name of a task
+P0002,syntax_error_expected_the_name_of_an_action,expected the name of an action
+P0002,syntax_error_expected_the_path_of_a_variable,expected the path of a variable
+P0002,syntax_error_expected_the_path_resource_program_variable,expected the path `resource.program.variable`
+P0002,syntax_error_expected_the_priority,expected the priority
+P0002,syntax_error_expected_the_type_of_the_resource,expected the type of the resource
+P0002,syntax_error_expected_the_upper_bound_of_a_range,expected the upper bound of a range
+P0002,syntax_error_expected_the_upper_bound_of_the_range,expected the upper bound of the range
+P0002,syntax_error_expected_what,expected {what}
+P0002,syntax_error_in_literal,{message}: '{literal}'
+P0002,syntax_error_incomplete_direct_address,incomplete direct address
+P0002,syntax_error_no_whitespace_is_allowed_inside_a_literal,no whitespace is allowed inside a literal
+P0002,syntax_error_only_the_last_duration_part_may_have_a_fraction,only the last duration part may have a fraction
+P0002,syntax_error_part_comes_too_late,{part} comes too late here
+P0002,syntax_error_part_may_appear_only_once,{part} may appear only once
+P0002,syntax_error_pragmas_are_not_enabled_in_this_dialect,pragmas are not enabled in this dialect
+P0002,syntax_error_property_takes,`{word}` takes {expected}
+P0002,syntax_error_the_day_is_out_of_range_for_the_month,the day is out of range for the month
+P0002,syntax_error_the_duration_is_outside_the_range_a_duration_can_represent,the duration is outside the range a duration can represent
+P0002,syntax_error_the_month_is_out_of_range,the month is out of range
+P0002,syntax_error_the_year_is_out_of_range,the year is out of range
+P0002,syntax_error_this_keyword_does_not_belong_here,this keyword does not belong here
+P0002,syntax_error_this_kind_of_type_is_not_allowed_here,this kind of type is not allowed here
+P0002,syntax_error_this_kind_of_variable_block_is_not_allowed_in,this kind of variable block is not allowed in {scope}
+P0002,syntax_error_this_qualifier_is_not_allowed_on_this_variable_block,this qualifier is not allowed on this variable block
+P0002,syntax_error_this_variable_block_declares_one_variable_at_a_time,this variable block declares one variable at a time
+P0002,syntax_error_unexpected_end_of_input,unexpected end of input
+P0002,syntax_error_unexpected_input,unexpected input
+P0002,syntax_error_unexpected_input_after_the_expression,unexpected input after the expression
+P0002,syntax_error_unexpected_token_in_statement_list,unexpected token in statement list
+P0002,syntax_error_unterminated_block_comment,unterminated block comment
+P0002,syntax_error_unterminated_pragma,unterminated pragma
+P0002,syntax_error_what_is_out_of_range,{what} is out of range
 P0003,unexpected_token,The text '{text}' is not valid IEC 61131-3 text at line {line} colum {column}.
+P0003,unexpected_token_unexpected_character,unexpected character
+P0003,unexpected_token_unterminated_escaped_identifier,unterminated escaped identifier
+P0003,unexpected_token_unterminated_string_literal,unterminated string literal
 P0004,c_style_comment,Comment
+P0004,c_style_comment_found,C-style comments are not enabled in this dialect
 P0006,xml_malformed_parse_error,XML parse error: {reason}
 P0006,xml_malformed_plcproj,Malformed .plcproj XML: {reason}
 P0007,xml_schema_violation_duration_invalid,"Invalid duration format: '{value}'. Expected format like T#100ms, T#1s, T#1m"
@@ -19,7 +113,12 @@ P0009,twin_cat_malformed_declaration_missing_named,{kind} '{name}' is missing re
 P0009,twin_cat_malformed_object_missing,"TcPlcObject must contain a POU, GVL, DUT, or Itf element"
 P0009,twin_cat_malformed_root_element,"Expected root element 'TcPlcObject', found '{found}'"
 P0011,empty_var_block,Empty variable block
+P0011,empty_var_block_found,empty variable blocks are not enabled in this dialect
 P0012,invalid_string_escape,Escape
+P0012,invalid_string_escape_found,this `$` escape is not defined for character strings
+P0019,max_nesting_depth_exceeded_over_limit,Maximum nesting depth of {depth} exceeded
+P0023,pragma_if_unmatched_found,Unmatched {{IF}} pragma
+P0024,pragma_value_expected_found,Expected a pragma condition such as `defined(name)`
 P0027,jump_destination_invalid,No label '{label}' in this body
 P2026,constant_overflow_bit_string_literal,Bit string literal
 P2026,constant_overflow_case_label,CASE label
@@ -29,17 +128,23 @@ P4007,variable_undefined,Variable reference
 P4020,no_program_declaration,Source does not contain a PROGRAM declaration
 P4021,exit_outside_loop,"EXIT must be inside a FOR, WHILE, or REPEAT loop"
 P4033,partial_access_syntax_disabled,partial-access selector
+P4033,partial_access_syntax_disabled_found,partial-access syntax is not enabled in this dialect
 P4034,string_encoding_mismatch,String operand
 P4042,paren_string_length_not_allowed,parenthesis length delimiter
+P4042,paren_string_length_not_allowed_found,a string length in parentheses is not enabled in this dialect
 P4047,task_single_not_supported,Task declares SINGLE
 P4048,task_parameter_out_of_range_interval,Task declares an INTERVAL of {microseconds} microseconds
 P4048,task_parameter_out_of_range_priority,"Task declares PRIORITY := {priority}, which exceeds the maximum of {maximum}"
 P4065,continue_outside_loop,"CONTINUE must be inside a FOR, WHILE, or REPEAT loop"
 P4066,throw_outside_try_catch,__THROW must be inside a __TRY statement with a __CATCH clause
 P4067,escaped_identifier_not_allowed,escaped identifier
+P4067,escaped_identifier_not_allowed_found,escaped identifiers are not enabled in this dialect
 P4068,unicode_identifier_not_allowed,identifier
+P4068,unicode_identifier_not_allowed_found,identifiers with letters outside ASCII are not enabled in this dialect
 P4069,multiple_underscores_not_allowed,identifier
+P4069,multiple_underscores_not_allowed_found,consecutive underscores in an identifier are not enabled in this dialect
 P4070,incomplete_array_not_allowed,incomplete array bounds
+P4070,incomplete_array_not_allowed_found,incomplete array bounds are not enabled in this dialect
 P4076,attribute_not_allowed_here,The attribute '{name}' does not apply to a declaration of this kind ({kind}); it applies to: {targets}
 P4077,attribute_value_invalid_found,"The attribute '{name}' takes {takes}, but its value is '{value}'"
 P4077,attribute_value_invalid_missing,"The attribute '{name}' takes {takes}, but it has no value"

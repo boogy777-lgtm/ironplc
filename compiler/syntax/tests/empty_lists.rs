@@ -21,7 +21,7 @@ fn first_error(source: &str) -> Option<(String, String)> {
     let parse = parse_source_file(source, &ParseOptions::all());
     let error = parse.errors.first()?;
     let range = usize::from(error.range.start())..usize::from(error.range.end());
-    Some((error.message.clone(), source[range].to_string()))
+    Some((error.message().to_string(), source[range].to_string()))
 }
 
 #[test]

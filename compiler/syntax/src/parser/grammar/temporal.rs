@@ -16,6 +16,7 @@ use super::literals::piece;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
 use ironplc_dsl::construct::{calendar_date, ClockField, DateField};
+use ironplc_problems::text;
 use rowan::TextRange;
 
 /// The value of a duration literal: an optional `-` and the adjacent number
@@ -24,7 +25,7 @@ pub(super) fn duration_value(p: &mut Parser) {
     if p.at(K::Minus) {
         piece(p, K::Minus, "`-`");
     }
-    let mut text = String::new();
+    let mut written = String::new();
     let mut range: Option<TextRange> = None;
     while matches!(
         p.nth(0),
@@ -32,15 +33,15 @@ pub(super) fn duration_value(p: &mut Parser) {
     ) && (range.is_none() || p.touches_previous())
     {
         let token = p.nth_range(0);
-        text.push_str(p.nth_text(0));
+        written.push_str(p.nth_text(0));
         range = Some(range.map_or(token, |seen| seen.cover(token)));
         p.bump();
     }
     match range {
-        None => p.error("expected a duration value"),
+        None => p.error(text::syntax_error_expected_a_duration_value()),
         Some(range) => {
-            if let Err(message) = crate::interval_text::validate(&text) {
-                p.error_at(range, message);
+            if let Err(text) = crate::interval_text::validate(&written) {
+                p.error_at(range, text);
             }
         }
     }
@@ -57,7 +58,7 @@ fn number(p: &mut Parser, what: &str) -> Option<(u64, TextRange)> {
 fn check_field(p: &mut Parser, value: Option<(u64, TextRange)>, field: ClockField, what: &str) {
     if let Some((value, range)) = value {
         if !field.accepts(u128::from(value)) {
-            p.error_at(range, &format!("{what} is out of range"));
+            p.error_at(range, text::syntax_error_what_is_out_of_range(what));
         }
     }
 }
@@ -112,11 +113,17 @@ pub(super) fn date_value(p: &mut Parser) {
     {
         match calendar_date(year.into(), month.into(), day.into()) {
             Ok(_) => {}
-            Err(DateField::Year) => p.error_at(year_range, "the year is out of range"),
-            Err(DateField::Month) => {
-                p.error_at(year_range.cover(day_range), "the month is out of range")
+            Err(DateField::Year) => {
+                p.error_at(year_range, text::syntax_error_the_year_is_out_of_range())
             }
-            Err(DateField::Day) => p.error_at(day_range, "the day is out of range for the month"),
+            Err(DateField::Month) => p.error_at(
+                year_range.cover(day_range),
+                text::syntax_error_the_month_is_out_of_range(),
+            ),
+            Err(DateField::Day) => p.error_at(
+                day_range,
+                text::syntax_error_the_day_is_out_of_range_for_the_month(),
+            ),
         }
     }
 }
@@ -139,7 +146,7 @@ mod tests {
         parse_expression(source, &ParseOptions::all())
             .errors
             .into_iter()
-            .map(|error| error.message)
+            .map(|error| error.message().to_string())
             .collect()
     }
 

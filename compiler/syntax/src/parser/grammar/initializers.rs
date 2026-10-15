@@ -14,6 +14,7 @@ use super::literals::{literal, string_literal_ahead};
 use super::positions::Initial;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
+use ironplc_problems::text;
 
 /// `:= value`, at the `:=`, with the value the type before it takes.
 pub(super) fn initializer(p: &mut Parser, rule: Initial) {
@@ -27,14 +28,14 @@ pub(super) fn initializer(p: &mut Parser, rule: Initial) {
         Initial::Constant => constant(p),
         Initial::Literal => {
             if literal(p).is_none() {
-                p.error("expected a literal");
+                p.error(text::syntax_error_expected_a_literal());
             }
         }
         Initial::Array => {
             if p.at(K::LeftBracket) {
                 array_initializer(p);
             } else {
-                p.error("an array starts as `[` ... `]`");
+                p.error(text::syntax_error_an_array_starts_as_brackets());
                 value(p);
             }
         }
@@ -42,13 +43,13 @@ pub(super) fn initializer(p: &mut Parser, rule: Initial) {
             if string_literal_ahead(p) {
                 literal(p);
             } else {
-                p.error("a string starts as a character string literal");
+                p.error(text::syntax_error_a_string_starts_as_a_character_string_literal());
                 value(p);
             }
         }
         Initial::Reference => reference(p),
         Initial::Forbidden => {
-            p.error("an initial value is not allowed for this kind of type");
+            p.error(text::syntax_error_an_initial_value_is_not_allowed_for_this_kind_of_type());
             value(p);
         }
     }
@@ -93,7 +94,7 @@ fn constant(p: &mut Parser) {
         if p.variable_name_at(0) {
             name_ref(p);
         } else {
-            p.error("expected a constant");
+            p.error(text::syntax_error_expected_a_constant());
         }
     }
 }
@@ -107,7 +108,7 @@ fn reference(p: &mut Parser) {
     } else if p.at(K::Ref) && p.nth_at(1, K::LeftParen) {
         ref_expr(p);
     } else {
-        p.error("a reference starts as `NULL` or `REF(variable)`");
+        p.error(text::syntax_error_a_reference_starts_as_null_or_ref_variable());
     }
 }
 
@@ -151,7 +152,7 @@ fn struct_element(p: &mut Parser) {
     if p.variable_name_at(0) {
         name_ref(p);
     } else {
-        p.error("expected a member name");
+        p.error(text::syntax_error_expected_a_member_name());
         p.abandon(node);
         return;
     }
@@ -204,7 +205,7 @@ pub(super) fn simple_value(p: &mut Parser) {
         if p.variable_name_at(0) {
             name_ref(p);
         } else {
-            p.error("expected a constant");
+            p.error(text::syntax_error_expected_a_constant());
         }
     }
 }

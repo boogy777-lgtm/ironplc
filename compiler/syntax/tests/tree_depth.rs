@@ -12,11 +12,12 @@ use ironplc_dsl::core::FileId;
 use ironplc_dsl::fold::Fold;
 use ironplc_dsl::stack::within_stack_budget;
 use ironplc_dsl::visitor::Visitor;
+use ironplc_problems::Problem;
 use ironplc_syntax::lower::expressions::lower_expr;
 use ironplc_syntax::lower::LowerCx;
 use ironplc_syntax::{
-    parse_expression, parse_source_file, parse_statements, ErrorKind, Parse, ParseOptions,
-    SyntaxNode, MAX_DEPTH,
+    parse_expression, parse_source_file, parse_statements, Parse, ParseOptions, SyntaxNode,
+    MAX_DEPTH,
 };
 use ironplc_test::nesting::{Entry, Nesting, NESTINGS};
 use std::convert::Infallible;
@@ -72,7 +73,7 @@ fn nesting_errors(parsed: &Parse) -> usize {
     parsed
         .errors
         .iter()
-        .filter(|error| error.kind == ErrorKind::NestingTooDeep)
+        .filter(|error| error.problem() == Problem::MaxNestingDepthExceeded)
         .count()
 }
 
@@ -142,8 +143,8 @@ fn parse_when_chain_is_past_the_limit_then_the_links_beyond_it_join_the_last_nod
     let parsed = parse_expression(&source, &ParseOptions::all());
     assert_well_formed(&source, &parsed);
     assert_eq!(parsed.errors.len(), 1);
-    assert_eq!(parsed.errors[0].kind, ErrorKind::NestingTooDeep);
-    assert!(parsed.errors[0].message.contains(&MAX_DEPTH.to_string()));
+    assert_eq!(parsed.errors[0].problem(), Problem::MaxNestingDepthExceeded);
+    assert!(parsed.errors[0].message().contains(&MAX_DEPTH.to_string()));
 }
 
 #[test]

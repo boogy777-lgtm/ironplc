@@ -28,11 +28,12 @@
 
 use super::options::ParseOptions;
 use super::recovery::{VAR_OPENERS, VAR_QUALIFIERS};
-use crate::error::{ErrorKind, SyntaxError};
+use crate::error::SyntaxError;
 use crate::kind_set::KindSet;
 use crate::lexer::escapes::invalid_escapes;
 use crate::lexer::Token;
 use crate::syntax_kind::SyntaxKind;
+use ironplc_problems::{text, Text};
 use rowan::{TextRange, TextSize};
 use std::sync::OnceLock;
 
@@ -73,9 +74,8 @@ struct Gate {
     find: fn(&Site) -> Vec<TextRange>,
     /// True when the dialect enables the form.
     enabled: fn(&ParseOptions) -> bool,
-    /// The kind of error, which decides its problem code.
-    kind: ErrorKind,
-    message: &'static str,
+    /// The text of the error, which decides its problem code.
+    text: fn() -> Text,
     /// What to do about the form, when it is the same every time.
     help: Option<&'static str>,
 }
@@ -202,8 +202,7 @@ const GATES: &[Gate] = &[
         ]),
         find: |site| on_token(site, is_c_style_comment),
         enabled: |options| options.allow_c_style_comments,
-        kind: ErrorKind::CStyleComment,
-        message: "C-style comments are not enabled in this dialect",
+        text: text::c_style_comment_found,
         help: Some(
             "Convert the comment to IEC 61131-3 syntax using `(*` and `*)`, \
              or select a dialect that supports C-style comments.",
@@ -213,72 +212,63 @@ const GATES: &[Gate] = &[
         triggers: KindSet::new(&[SyntaxKind::Pragma]),
         find: |site| on_token(site, |token| token.kind == SyntaxKind::Pragma),
         enabled: |options| options.allow_pragmas,
-        kind: ErrorKind::Syntax,
-        message: "pragmas are not enabled in this dialect",
+        text: text::syntax_error_pragmas_are_not_enabled_in_this_dialect,
         help: None,
     },
     Gate {
         triggers: KindSet::new(&[SyntaxKind::PartialAccess]),
         find: |site| on_token(site, is_partial_access),
         enabled: |options| options.allow_partial_access_syntax,
-        kind: ErrorKind::PartialAccessSyntaxDisabled,
-        message: "partial-access syntax is not enabled in this dialect",
+        text: text::partial_access_syntax_disabled_found,
         help: None,
     },
     Gate {
         triggers: KindSet::new(&[SyntaxKind::EscapedIdent]),
         find: |site| on_token(site, |token| token.kind == SyntaxKind::EscapedIdent),
         enabled: |options| options.allow_escaped_identifiers,
-        kind: ErrorKind::EscapedIdentifierNotAllowed,
-        message: "escaped identifiers are not enabled in this dialect",
+        text: text::escaped_identifier_not_allowed_found,
         help: None,
     },
     Gate {
         triggers: KindSet::new(&[SyntaxKind::Ident]),
         find: |site| on_token(site, is_non_ascii_identifier),
         enabled: |options| options.allow_unicode_identifiers,
-        kind: ErrorKind::UnicodeIdentifierNotAllowed,
-        message: "identifiers with letters outside ASCII are not enabled in this dialect",
+        text: text::unicode_identifier_not_allowed_found,
         help: None,
     },
     Gate {
         triggers: KindSet::new(&[SyntaxKind::Ident]),
         find: |site| on_token(site, has_repeated_underscores),
         enabled: |options| options.allow_multiple_underscores,
-        kind: ErrorKind::MultipleUnderscoresNotAllowed,
-        message: "consecutive underscores in an identifier are not enabled in this dialect",
+        text: text::multiple_underscores_not_allowed_found,
         help: None,
     },
     Gate {
         triggers: VAR_OPENERS,
         find: empty_var_block,
         enabled: |options| options.allow_empty_var_blocks,
-        kind: ErrorKind::EmptyVarBlock,
-        message: "empty variable blocks are not enabled in this dialect",
+        text: text::empty_var_block_found,
         help: None,
     },
     Gate {
         triggers: KindSet::new(&[SyntaxKind::String, SyntaxKind::WString]),
         find: paren_string_length,
         enabled: |options| options.allow_paren_string_length,
-        kind: ErrorKind::ParenStringLengthNotAllowed,
-        message: "a string length in parentheses is not enabled in this dialect",
+        text: text::paren_string_length_not_allowed_found,
         help: None,
     },
     Gate {
         triggers: KindSet::new(&[SyntaxKind::Array]),
         find: incomplete_array,
         enabled: |options| options.allow_incomplete_array,
-        kind: ErrorKind::IncompleteArrayNotAllowed,
-        message: "incomplete array bounds are not enabled in this dialect",
+        text: text::incomplete_array_not_allowed_found,
         help: None,
     },
     Gate {
         triggers: KindSet::new(&[SyntaxKind::StringLit]),
         find: |site| invalid_string_escapes(site, SyntaxKind::StringLit),
         enabled: |_| false,
-        kind: ErrorKind::InvalidStringEscape,
-        message: "this `$` escape is not defined for character strings",
+        text: text::invalid_string_escape_found,
         help: Some(
             "Use $$, $', $L, $N, $P, $R, $T, $ followed by two hex digits, \
              or $U followed by eight hex digits.",
@@ -288,8 +278,7 @@ const GATES: &[Gate] = &[
         triggers: KindSet::new(&[SyntaxKind::WStringLit]),
         find: |site| invalid_string_escapes(site, SyntaxKind::WStringLit),
         enabled: |_| false,
-        kind: ErrorKind::InvalidStringEscape,
-        message: "this `$` escape is not defined for character strings",
+        text: text::invalid_string_escape_found,
         help: Some(
             "Use $$, $\", $L, $N, $P, $R, $T, $ followed by four hex digits, \
              or $U followed by eight hex digits.",
@@ -348,7 +337,7 @@ pub(crate) fn gate_errors(tokens: &[Token<'_>], options: &ParseOptions) -> Vec<S
                 options,
             };
             errors.extend((gate.find)(&site).into_iter().map(|range| {
-                let error = SyntaxError::new(gate.message, range).with_kind(gate.kind);
+                let error = SyntaxError::new((gate.text)(), range);
                 match gate.help {
                     Some(help) => error.with_help(help),
                     None => error,
@@ -365,12 +354,13 @@ mod tests {
     use crate::lexer::lex;
     use crate::parse_source_file;
     use ironplc_dsl::core::FileId;
+    use ironplc_problems::Problem;
 
     fn messages(source: &str, options: &ParseOptions) -> Vec<String> {
         let (tokens, _) = lex(source);
         gate_errors(&tokens, options)
             .into_iter()
-            .map(|error| error.message)
+            .map(|error| error.message().to_string())
             .collect()
     }
 
@@ -502,26 +492,26 @@ mod tests {
             allow_pragmas: true,
             ..ParseOptions::default()
         };
-        let kinds = |source: &str, options: &ParseOptions| -> Vec<ErrorKind> {
+        let kinds = |source: &str, options: &ParseOptions| -> Vec<Problem> {
             let (tokens, _) = lex(source);
             gate_errors(&tokens, options)
                 .into_iter()
-                .map(|error| error.kind)
+                .map(|error| error.problem())
                 .collect()
         };
         // Without pragmas the only error is the pragma's own.
         assert_eq!(
             kinds("x : STRING {a} (10);", &none),
-            vec![ErrorKind::Syntax]
+            vec![Problem::SyntaxError]
         );
-        assert_eq!(kinds("VAR {a} END_VAR", &none), vec![ErrorKind::Syntax]);
+        assert_eq!(kinds("VAR {a} END_VAR", &none), vec![Problem::SyntaxError]);
         assert_eq!(
             kinds("x : STRING {a} (10);", &pragmas),
-            vec![ErrorKind::ParenStringLengthNotAllowed]
+            vec![Problem::ParenStringLengthNotAllowed]
         );
         assert_eq!(
             kinds("VAR {a} END_VAR", &pragmas),
-            vec![ErrorKind::EmptyVarBlock]
+            vec![Problem::EmptyVarBlock]
         );
     }
 
@@ -551,10 +541,26 @@ mod tests {
     #[test]
     fn triggers_when_gate_declared_then_named_and_token_kinds() {
         for gate in GATES {
-            assert!(gate.triggers.iter().next().is_some(), "{}", gate.message);
+            assert!(
+                gate.triggers.iter().next().is_some(),
+                "{}",
+                (gate.text)().message()
+            );
             for kind in gate.triggers.iter() {
                 assert!(kind.is_token(), "{kind:?}");
             }
+        }
+    }
+
+    #[test]
+    fn text_when_gate_declared_then_its_problem_is_in_a_stage_of_the_ranking() {
+        for gate in GATES {
+            let text = (gate.text)();
+            assert!(
+                crate::ranking::rank(*text.problem()) < crate::STAGES.len(),
+                "{}",
+                text.message()
+            );
         }
     }
 
@@ -594,7 +600,7 @@ mod tests {
                             assert!(
                                 (gate.find)(&site).is_empty(),
                                 "{name}: `{}` reports at a {:?} token",
-                                gate.message,
+                                (gate.text)().message(),
                                 tokens[index].kind
                             );
                         }

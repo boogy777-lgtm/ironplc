@@ -17,6 +17,7 @@ include!(concat!(env!("OUT_DIR"), "/texts.rs"));
 /// function of the module [`text`] from one row of `problem-texts.csv`.
 ///
 /// The row names the code, so a text cannot be paired with the wrong problem.
+#[derive(Clone, PartialEq, Eq)]
 pub struct Text {
     problem: Problem,
     message: String,

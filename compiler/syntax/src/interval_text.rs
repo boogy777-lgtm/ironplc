@@ -8,7 +8,7 @@
 //! ordering rule itself is `ironplc_dsl::construct::check_interval_parts`.
 
 use ironplc_dsl::construct::{check_interval_parts, DurationUnit, IntervalError};
-use std::sync::LazyLock;
+use ironplc_problems::{text, Text};
 
 /// One `number unit` part: the text of its number, its unit and whether the
 /// number has a non-zero fraction.
@@ -21,10 +21,8 @@ pub(crate) struct Part {
 
 /// What a word that is not a unit is told: the units there are, from the one
 /// table of them.
-fn expected_unit() -> &'static str {
-    static TEXT: LazyLock<String> =
-        LazyLock::new(|| format!("expected a {}", DurationUnit::expectation()));
-    TEXT.as_str()
+fn expected_unit() -> Text {
+    text::syntax_error_expected_a_duration_unit(DurationUnit::expectation())
 }
 
 struct Scanner<'a> {
@@ -48,10 +46,10 @@ impl Scanner<'_> {
 
     /// `digits [. digits]`: the text of the number and whether its fraction
     /// is non-zero.
-    fn number(&mut self) -> Result<(String, bool), &'static str> {
+    fn number(&mut self) -> Result<(String, bool), Text> {
         let mut text = self.take_while(|c| c.is_ascii_digit() || c == '_');
         if !text.chars().any(|c| c.is_ascii_digit()) {
-            return Err("expected a number in the duration");
+            return Err(text::syntax_error_expected_a_number_in_the_duration());
         }
         if self.peek() != Some('.') {
             return Ok((text, false));
@@ -59,7 +57,9 @@ impl Scanner<'_> {
         self.at += 1;
         let fraction = self.take_while(|c| c.is_ascii_digit() || c == '_');
         if !fraction.chars().any(|c| c.is_ascii_digit()) {
-            return Err("expected digits after the decimal point in the duration");
+            return Err(
+                text::syntax_error_expected_digits_after_the_decimal_point_in_the_duration(),
+            );
         }
         text.push('.');
         text.push_str(&fraction);
@@ -69,7 +69,7 @@ impl Scanner<'_> {
         ))
     }
 
-    fn part(&mut self) -> Result<Part, &'static str> {
+    fn part(&mut self) -> Result<Part, Text> {
         let (number, fractional) = self.number()?;
         let word = self.take_while(char::is_alphabetic);
         let unit = DurationUnit::from_word(&word).ok_or_else(expected_unit)?;
@@ -84,19 +84,23 @@ impl Scanner<'_> {
     }
 }
 
-/// Why the parts do not form a duration, as the message a diagnostic gives.
-fn interval_message(error: IntervalError) -> &'static str {
+/// Why the parts do not form a duration, as the text a diagnostic gives.
+fn interval_text(error: IntervalError) -> Text {
     match error {
-        IntervalError::UnitOrder => "duration units must be in descending order",
-        IntervalError::FractionBeforeLast => "only the last duration part may have a fraction",
-        IntervalError::OutOfRange => "the duration is outside the range a duration can represent",
+        IntervalError::UnitOrder => text::syntax_error_duration_units_must_be_in_descending_order(),
+        IntervalError::FractionBeforeLast => {
+            text::syntax_error_only_the_last_duration_part_may_have_a_fraction()
+        }
+        IntervalError::OutOfRange => {
+            text::syntax_error_the_duration_is_outside_the_range_a_duration_can_represent()
+        }
     }
 }
 
 /// The parts of a duration value, in order, when they form one: at least one
 /// part, units in descending order and only the last part fractional.
-pub(crate) fn parse(text: &str) -> Result<Vec<Part>, &'static str> {
-    let chars: Vec<char> = text.chars().collect();
+pub(crate) fn parse(written: &str) -> Result<Vec<Part>, Text> {
+    let chars: Vec<char> = written.chars().collect();
     let mut scanner = Scanner {
         chars: &chars,
         at: 0,
@@ -106,21 +110,26 @@ pub(crate) fn parse(text: &str) -> Result<Vec<Part>, &'static str> {
         parts.push(scanner.part()?);
     }
     if parts.is_empty() {
-        return Err("expected a duration value");
+        return Err(text::syntax_error_expected_a_duration_value());
     }
     check_interval_parts(parts.iter().map(|part| (part.unit, part.fractional)))
-        .map_err(interval_message)?;
+        .map_err(interval_text)?;
     Ok(parts)
 }
 
 /// Checks the text of a duration value (`1m30s`, `1.5s`, `1h_30m`).
-pub(crate) fn validate(text: &str) -> Result<(), &'static str> {
-    parse(text).map(|_| ())
+pub(crate) fn validate(written: &str) -> Result<(), Text> {
+    parse(written).map(|_| ())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The parts, or the message of why the text is not a duration.
+    fn why(written: &str) -> Result<Vec<Part>, String> {
+        parse(written).map_err(|text| text.message().to_string())
+    }
 
     #[test]
     fn validate_when_well_formed_then_ok() {
@@ -181,18 +190,18 @@ mod tests {
     #[test]
     fn parse_when_unknown_unit_then_message_lists_the_valid_units() {
         let expected = format!("expected a {}", DurationUnit::expectation());
-        assert_eq!(parse("5x"), Err(expected.as_str()));
+        assert_eq!(why("5x"), Err(expected));
     }
 
     #[test]
     fn parse_when_units_out_of_order_then_ordering_message() {
         assert_eq!(
-            parse("30s1m"),
-            Err("duration units must be in descending order")
+            why("30s1m"),
+            Err("duration units must be in descending order".to_string())
         );
         assert_eq!(
-            parse("1.5m30s"),
-            Err("only the last duration part may have a fraction")
+            why("1.5m30s"),
+            Err("only the last duration part may have a fraction".to_string())
         );
     }
 }

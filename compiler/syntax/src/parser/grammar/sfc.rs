@@ -12,6 +12,7 @@ use crate::kind_set::KindSet;
 use crate::parser::recovery::BLOCK_END;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
+use ironplc_problems::text;
 
 /// The qualifiers of an action association. The legacy grammar matches them
 /// by their exact upper-case spelling.
@@ -57,7 +58,7 @@ fn step(p: &mut Parser, node_kind: K) {
             association(p);
         }
         if p.position() == before {
-            p.bump_as_error("expected an action association");
+            p.bump_as_error(text::syntax_error_expected_an_action_association());
         }
     }
     close(p, K::EndStep, "`END_STEP`");
@@ -70,7 +71,7 @@ fn association(p: &mut Parser) {
     if p.name_at(0) {
         name_ref(p);
     } else {
-        p.error("expected the name of an action");
+        p.error(text::syntax_error_expected_the_name_of_an_action());
         super::common::skip_declaration(p);
         p.abandon(node);
         return;
@@ -140,7 +141,7 @@ fn transition(p: &mut Parser) {
             p,
             K::EndTransition,
             KindSet::EMPTY,
-            "expected `END_TRANSITION`",
+            text::syntax_error_expected_end_transition(),
         );
     }
     close(p, K::EndTransition, "`END_TRANSITION`");
@@ -154,7 +155,7 @@ fn priority(p: &mut Parser) {
     if p.nth(0) == Some(K::Ident) && p.nth_text(0) == "PRIORITY" {
         p.bump();
     } else {
-        p.error("expected `PRIORITY`");
+        p.error(text::syntax_error_expected_priority());
     }
     p.expect(K::Assignment, "`:=`");
     if p.at(K::IntegerLit) {
@@ -162,7 +163,7 @@ fn priority(p: &mut Parser) {
         p.bump();
         p.complete(literal, K::IntLiteral);
     } else {
-        p.error("expected the priority");
+        p.error(text::syntax_error_expected_the_priority());
     }
     close_group(p, K::RightParen, "`)`");
     p.complete(node, K::TransitionPriority);
@@ -179,20 +180,20 @@ fn steps(p: &mut Parser) {
                 name_ref(p);
                 count += 1;
             } else {
-                p.error("expected the name of a step");
+                p.error(text::syntax_error_expected_the_name_of_a_step());
             }
             if !p.eat(K::Comma) {
                 break;
             }
         }
         if count < 2 {
-            p.error("expected at least two steps");
+            p.error(text::syntax_error_expected_at_least_two_steps());
         }
         close_group(p, K::RightParen, "`)`");
     } else if p.name_at(0) {
         name_ref(p);
     } else {
-        p.error("expected the name of a step");
+        p.error(text::syntax_error_expected_the_name_of_a_step());
     }
     p.complete(node, K::StepList);
 }

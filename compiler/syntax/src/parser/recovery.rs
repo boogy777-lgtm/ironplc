@@ -10,6 +10,7 @@ use super::event::CompletedMarker;
 use super::state::Parser;
 use crate::kind_set::KindSet;
 use crate::syntax_kind::SyntaxKind as K;
+use ironplc_problems::Text;
 
 /// Keywords that open a variable block.
 pub(crate) const VAR_OPENERS: KindSet = KindSet::new(&[
@@ -142,8 +143,8 @@ const EXPRESSION_STOP: KindSet = KindSet::new(&[
 impl Parser<'_, '_> {
     /// Records `message`, then wraps the next token (if any) in an error
     /// node. Always makes progress unless the input is exhausted.
-    pub(crate) fn bump_as_error(&mut self, message: &str) {
-        self.error(message);
+    pub(crate) fn bump_as_error(&mut self, text: Text) {
+        self.error(text);
         if !self.at_eof() {
             let marker = self.start();
             self.bump();
@@ -152,8 +153,8 @@ impl Parser<'_, '_> {
     }
 
     /// Reports `message` and wraps every remaining token in one error node.
-    pub(crate) fn skip_rest(&mut self, message: &str) {
-        self.error(message);
+    pub(crate) fn skip_rest(&mut self, text: Text) {
+        self.error(text);
         let marker = self.start();
         let mut consumed = false;
         while !self.at_eof() {
@@ -209,8 +210,8 @@ impl Parser<'_, '_> {
     /// Stops without the `;` before a block word or, after the first token,
     /// before a keyword that begins a statement. Consumes nothing when the
     /// next token is itself a block word.
-    pub(crate) fn skip_statement(&mut self, message: &str) {
-        self.error(message);
+    pub(crate) fn skip_statement(&mut self, text: Text) {
+        self.error(text);
         let marker = self.start();
         let mut consumed = false;
         while !self.at_eof() {
@@ -269,6 +270,7 @@ mod tests {
     use super::*;
     use crate::lexer::lex;
     use crate::parser::options::ParseOptions;
+    use ironplc_problems::text;
 
     fn consumed_by(source: &str, run: impl FnOnce(&mut Parser)) -> usize {
         let (tokens, _) = lex(source);
@@ -312,22 +314,38 @@ mod tests {
 
     #[test]
     fn skip_statement_when_terminator_then_consumed_with_it() {
-        assert_eq!(consumed_by("a b c ; d", |p| p.skip_statement("e")), 4);
+        assert_eq!(
+            consumed_by("a b c ; d", |p| p
+                .skip_statement(text::syntax_error_unexpected_input())),
+            4
+        );
     }
 
     #[test]
     fn skip_statement_when_statement_keyword_follows_then_stops_before_it() {
-        assert_eq!(consumed_by("a b IF c", |p| p.skip_statement("e")), 2);
+        assert_eq!(
+            consumed_by("a b IF c", |p| p
+                .skip_statement(text::syntax_error_unexpected_input())),
+            2
+        );
     }
 
     #[test]
     fn skip_statement_when_first_token_is_statement_keyword_then_it_is_consumed() {
-        assert_eq!(consumed_by("IF ; x", |p| p.skip_statement("e")), 2);
+        assert_eq!(
+            consumed_by("IF ; x", |p| p
+                .skip_statement(text::syntax_error_unexpected_input())),
+            2
+        );
     }
 
     #[test]
     fn skip_statement_when_block_word_then_consumes_nothing() {
-        assert_eq!(consumed_by("END_IF ;", |p| p.skip_statement("e")), 0);
+        assert_eq!(
+            consumed_by("END_IF ;", |p| p
+                .skip_statement(text::syntax_error_unexpected_input())),
+            0
+        );
     }
 
     #[test]
@@ -339,7 +357,15 @@ mod tests {
 
     #[test]
     fn bump_as_error_when_input_then_one_token_consumed() {
-        assert_eq!(consumed_by("a b", |p| p.bump_as_error("e")), 1);
-        assert_eq!(consumed_by("", |p| p.bump_as_error("e")), 0);
+        assert_eq!(
+            consumed_by("a b", |p| p
+                .bump_as_error(text::syntax_error_unexpected_input())),
+            1
+        );
+        assert_eq!(
+            consumed_by("", |p| p
+                .bump_as_error(text::syntax_error_unexpected_input())),
+            0
+        );
     }
 }

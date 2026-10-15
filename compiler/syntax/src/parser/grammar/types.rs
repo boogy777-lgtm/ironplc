@@ -28,6 +28,7 @@ use crate::kind_set::KindSet;
 use crate::parser::recovery::BLOCK_END;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
+use ironplc_problems::text;
 
 /// The integer types, which a subrange restricts.
 pub(super) const INTEGER_TYPES: KindSet = KindSet::new(&[
@@ -66,7 +67,10 @@ pub(super) fn type_spec(p: &mut Parser, context: &Context) -> Spec {
         },
     );
     if !context.accepts(spec) {
-        p.error_at(start, "this kind of type is not allowed here");
+        p.error_at(
+            start,
+            text::syntax_error_this_kind_of_type_is_not_allowed_here(),
+        );
     }
     spec
 }
@@ -187,13 +191,13 @@ pub(super) fn subrange(p: &mut Parser) {
     if bound_ahead(p) {
         bound(p);
     } else {
-        p.error("expected the lower bound of a range");
+        p.error(text::syntax_error_expected_the_lower_bound_of_a_range());
     }
     p.expect(K::Range, "`..`");
     if bound_ahead(p) {
         bound(p);
     } else {
-        p.error("expected the upper bound of a range");
+        p.error(text::syntax_error_expected_the_upper_bound_of_a_range());
     }
     p.complete(node, K::Subrange);
 }
@@ -246,7 +250,7 @@ fn enum_type(p: &mut Parser, declares: bool) {
     close_group(p, K::RightParen, "`)`");
     if p.at_any(ENUM_BASE_TYPES) {
         if !declares {
-            p.error("a base type is part of a type declaration");
+            p.error(text::syntax_error_a_base_type_is_part_of_a_type_declaration());
         }
         type_ref(p);
     }
@@ -261,7 +265,7 @@ fn enum_value(p: &mut Parser, declares: bool) {
     }
     if p.at(K::Assignment) {
         if !declares {
-            p.error("a value is part of a type declaration");
+            p.error(text::syntax_error_a_value_is_part_of_a_type_declaration());
         }
         p.bump();
         signed_integer(p);
@@ -275,7 +279,7 @@ fn signed_integer(p: &mut Parser) {
     if p.at(K::IntegerLit) || signed {
         literal(p);
     } else {
-        p.error("expected an integer");
+        p.error(text::syntax_error_expected_an_integer());
     }
 }
 
@@ -290,14 +294,14 @@ fn aggregate(p: &mut Parser, node_kind: K, closer: K) {
         member(p);
         members += 1;
         if p.position() == before {
-            p.bump_as_error("expected a member");
+            p.bump_as_error(text::syntax_error_expected_a_member());
         }
     }
     if members == 0 {
-        p.error("expected at least one member");
+        p.error(text::syntax_error_expected_at_least_one_member());
     }
     if !p.eat(closer) {
-        p.error("expected the end of the structure");
+        p.error(text::syntax_error_expected_the_end_of_the_structure());
     }
     p.complete(node, node_kind);
 }
@@ -335,11 +339,11 @@ pub(super) fn type_block(p: &mut Parser) {
         type_declaration(p);
         declarations += 1;
         if p.position() == before {
-            p.bump_as_error("expected a type declaration");
+            p.bump_as_error(text::syntax_error_expected_a_type_declaration());
         }
     }
     if declarations == 0 && !lone_terminator {
-        p.error("expected a type declaration");
+        p.error(text::syntax_error_expected_a_type_declaration());
     }
     close(p, K::EndType, "`END_TYPE`");
     p.complete(node, K::TypeBlock);

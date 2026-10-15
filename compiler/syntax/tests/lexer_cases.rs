@@ -111,7 +111,7 @@ fn lex_when_non_letter_unicode_outside_text_then_error_token_per_character() {
     assert!(tokens.contains(&(K::ErrorToken, "×")));
     let (_, errors) = lex(source);
     assert_eq!(errors.len(), 1);
-    assert_eq!(errors[0].message, "unexpected character");
+    assert_eq!(errors[0].message(), "unexpected character");
     assert_eq!(usize::from(errors[0].range.start()), 2);
     assert_eq!(usize::from(errors[0].range.end()), 4);
 }
@@ -176,7 +176,7 @@ fn lex_when_comment_opener_looks_like_paren_star_paren_then_comment_not_closed()
     let (tokens, errors) = lex("(*)");
     assert_eq!(tokens.len(), 1);
     assert_eq!(tokens[0].kind, K::ErrorToken);
-    assert_eq!(errors[0].message, "unterminated block comment");
+    assert_eq!(errors[0].message(), "unterminated block comment");
 }
 
 #[test]
@@ -208,7 +208,7 @@ fn lex_when_unterminated_block_comment_then_error_token_covers_rest() {
     assert_eq!(last.kind, K::ErrorToken);
     assert_eq!(last.text, "(* never closed\r\ny := 2;");
     assert_eq!(errors.len(), 1);
-    assert_eq!(errors[0].message, "unterminated block comment");
+    assert_eq!(errors[0].message(), "unterminated block comment");
     assert_eq!(errors[0].range, last.range);
 }
 
@@ -238,7 +238,7 @@ fn lex_when_unterminated_pragma_then_error_token_covers_rest() {
     let last = tokens.last().unwrap();
     assert_eq!(last.kind, K::ErrorToken);
     assert_eq!(last.text, "{attribute 'x'\r\nb");
-    assert_eq!(errors[0].message, "unterminated pragma");
+    assert_eq!(errors[0].message(), "unterminated pragma");
 }
 
 #[test]
@@ -252,7 +252,7 @@ fn lex_when_unterminated_string_then_error_token_covers_rest_of_line() {
         .unwrap();
     assert_eq!(error.text, "'abc;");
     assert_eq!(errors.len(), 1);
-    assert_eq!(errors[0].message, "unterminated string literal");
+    assert_eq!(errors[0].message(), "unterminated string literal");
     // Lexing resumes on the next line.
     assert!(significant(source).contains(&(K::Ident, "next")));
 }
@@ -300,7 +300,7 @@ fn lex_when_escaped_identifier_then_backtick_token_and_unterminated_is_error() {
     let (tokens, errors) = lex("`my var\nx");
     assert_eq!(tokens[0].kind, K::ErrorToken);
     assert_eq!(tokens[0].text, "`my var");
-    assert_eq!(errors[0].message, "unterminated escaped identifier");
+    assert_eq!(errors[0].message(), "unterminated escaped identifier");
 }
 
 #[test]

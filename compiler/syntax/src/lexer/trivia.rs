@@ -7,6 +7,7 @@
 use super::cursor::Cursor;
 use super::{error, Scan};
 use crate::syntax_kind::SyntaxKind;
+use ironplc_problems::Text;
 
 pub(super) fn scan_whitespace(cursor: &mut Cursor<'_>) -> Scan {
     cursor.eat_while(|byte| byte == b' ' || byte == b'\t');
@@ -43,7 +44,7 @@ pub(super) fn scan_delimited(
     kind: SyntaxKind,
     (open, close): (&str, &str),
     nested: bool,
-    unterminated: &'static str,
+    unterminated: fn() -> Text,
 ) -> Scan {
     let start = cursor.pos();
     cursor.bump_n(open.len());
@@ -68,5 +69,5 @@ pub(super) fn scan_delimited(
         cursor.set_pos(start);
         return scan_delimited(cursor, kind, (open, close), false, unterminated);
     }
-    error(unterminated)
+    error(unterminated())
 }

@@ -19,6 +19,7 @@ use super::var_blocks::{block_ahead, var_block, Scope, RETENTION};
 use crate::kind_set::KindSet;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
+use ironplc_problems::text;
 
 /// The keywords that open something inside a configuration, and not after it.
 const CONFIGURATION_OWNS: KindSet = KindSet::new(&[K::VarGlobal]);
@@ -65,15 +66,15 @@ pub(super) fn configuration(p: &mut Parser) {
                 p,
                 K::EndConfiguration,
                 CONFIGURATION_OWNS,
-                "expected a resource or a variable block",
+                text::syntax_error_expected_a_resource_or_a_variable_block(),
             );
         }
         if p.position() == before {
-            p.bump_as_error("unexpected input");
+            p.bump_as_error(text::syntax_error_unexpected_input());
         }
     }
     if !order.has(RESOURCE.rank) {
-        p.error("a configuration needs a resource");
+        p.error(text::syntax_error_a_configuration_needs_a_resource());
     }
     close(p, K::EndConfiguration, "`END_CONFIGURATION`");
     p.complete(node, K::ConfigurationDecl);
@@ -105,7 +106,7 @@ fn resource(p: &mut Parser) {
     if p.name_at(0) {
         name_ref(p);
     } else {
-        p.error("expected the type of the resource");
+        p.error(text::syntax_error_expected_the_type_of_the_resource());
     }
     let mut order = Order::default();
     while !declaration_stops(p, K::EndResource, RESOURCE_OWNS) {
@@ -124,15 +125,15 @@ fn resource(p: &mut Parser) {
                 p,
                 K::EndResource,
                 RESOURCE_OWNS,
-                "expected a task or a program",
+                text::syntax_error_expected_a_task_or_a_program(),
             );
         }
         if p.position() == before {
-            p.bump_as_error("unexpected input");
+            p.bump_as_error(text::syntax_error_unexpected_input());
         }
     }
     if !order.has(PROGRAMS.rank) {
-        p.error("a resource needs a program");
+        p.error(text::syntax_error_a_resource_needs_a_program());
     }
     close(p, K::EndResource, "`END_RESOURCE`");
     p.complete(node, K::ResourceDecl);
@@ -200,7 +201,7 @@ fn task(p: &mut Parser) {
             }
         }
         if !order.has(PRIORITY.rank) {
-            p.error("a task needs a `PRIORITY`");
+            p.error(text::syntax_error_a_task_needs_a_priority());
         }
         close_group(p, K::RightParen, "`)`");
     }
@@ -217,17 +218,20 @@ fn task_item(p: &mut Parser, order: &mut Order) {
         .find(|property| p.nth(0) == Some(K::Ident) && p.nth_text(0) == property.word);
     match property {
         Some(property) => order.enter(p, property.part),
-        None => p.error("expected `SINGLE`, `INTERVAL` or `PRIORITY`"),
+        None => p.error(text::syntax_error_expected_single_interval_or_priority()),
     }
     if p.name_at(0) {
         name_ref(p);
     } else {
-        p.error("expected a task property");
+        p.error(text::syntax_error_expected_a_task_property());
     }
     if p.expect(K::Assignment, "`:=`") {
         if let Some(property) = property {
             if !(property.value_ahead)(p) {
-                p.error(&format!("`{}` takes {}", property.word, property.expected));
+                p.error(text::syntax_error_property_takes(
+                    property.word,
+                    property.expected,
+                ));
             }
         }
         value(p);
@@ -278,14 +282,14 @@ fn connection(p: &mut Parser) {
         if p.name_at(0) {
             name_ref(p);
         } else {
-            p.error("expected the name of a task");
+            p.error(text::syntax_error_expected_the_name_of_a_task());
         }
         p.complete(node, K::TaskBinding);
         return;
     }
     let node = p.start();
     if variable(p).is_none() {
-        p.error("expected a variable");
+        p.error(text::syntax_error_expected_a_variable());
         p.abandon(node);
         return;
     }
@@ -295,10 +299,10 @@ fn connection(p: &mut Parser) {
     } else if p.at(K::RightArrow) {
         p.bump();
         if variable(p).is_none() {
-            p.error("expected a variable");
+            p.error(text::syntax_error_expected_a_variable());
         }
     } else {
-        p.error("expected `:=` or `=>`");
+        p.error(text::syntax_error_expected_assign_or_arrow());
     }
     p.complete(node, K::ProgramConnection);
 }

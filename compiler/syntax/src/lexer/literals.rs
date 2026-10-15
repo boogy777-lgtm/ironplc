@@ -7,8 +7,9 @@
 //! parts are separate tokens.
 
 use super::cursor::Cursor;
-use super::{error, unexpected_character, unmatched, Scan};
+use super::{error, unexpected_character, Scan};
 use crate::syntax_kind::SyntaxKind;
+use ironplc_problems::{text, Text};
 
 /// How a quoted token is delimited.
 pub(super) struct Quoted {
@@ -18,7 +19,8 @@ pub(super) struct Quoted {
     pub(super) escapes: bool,
     /// The token may not contain a line break.
     pub(super) single_line: bool,
-    pub(super) unterminated: &'static str,
+    /// The text of the error for a token that is never closed.
+    pub(super) unterminated: fn() -> Text,
 }
 
 fn is_line_break(byte: u8) -> bool {
@@ -37,7 +39,7 @@ pub(super) fn scan_quoted(cursor: &mut Cursor<'_>, quoted: &Quoted) -> Scan {
                 if let Some(pos) = first_break {
                     cursor.set_pos(pos);
                 }
-                return unmatched(quoted.unterminated);
+                return error((quoted.unterminated)());
             }
             Some(byte) if byte == quoted.quote => {
                 cursor.bump();
@@ -45,7 +47,7 @@ pub(super) fn scan_quoted(cursor: &mut Cursor<'_>, quoted: &Quoted) -> Scan {
             }
             Some(byte) if is_line_break(byte) => {
                 if quoted.single_line {
-                    return unmatched(quoted.unterminated);
+                    return error((quoted.unterminated)());
                 }
                 first_break.get_or_insert(cursor.pos());
                 cursor.bump();
@@ -137,7 +139,7 @@ pub(super) fn scan_percent(cursor: &mut Cursor<'_>) -> Scan {
                 cursor.bump();
             }
             if !cursor.peek().is_some_and(|byte| byte.is_ascii_digit()) {
-                return error("incomplete direct address");
+                return error(text::syntax_error_incomplete_direct_address());
             }
             cursor.eat_while(|byte| byte.is_ascii_digit());
             while cursor.peek() == Some(b'.')

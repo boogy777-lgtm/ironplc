@@ -329,7 +329,7 @@ fn duration(
         DurationOutOfRange.diagnostic(cx.node_span(node), &written, width)
     };
     let mut parts = interval_text::parse(&text)
-        .map_err(|why| out_of_range(cx, node, why))?
+        .map_err(|why| out_of_range(cx, node, why.message()))?
         .into_iter()
         .map(|part| FixedPoint::parse(&part.number).map(|number| (number, part.unit)))
         .collect::<Result<Vec<_>, _>>()

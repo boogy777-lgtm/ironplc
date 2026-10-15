@@ -39,7 +39,7 @@ pub mod pragma;
 mod ranking;
 pub mod syntax_kind;
 
-pub use error::{ErrorKind, SyntaxError};
+pub use error::SyntaxError;
 pub use parser::options::ParseOptions;
 pub use parser::{
     is_special_operator, parse_expression, parse_source_file, parse_statements, tokenize, Parse,

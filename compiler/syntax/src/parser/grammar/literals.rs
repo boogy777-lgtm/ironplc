@@ -16,6 +16,7 @@ use crate::kind_set::KindSet;
 use crate::parser::event::CompletedMarker;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
+use ironplc_problems::text;
 
 /// The literals written in a base other than ten: `16#FF`, `8#17`, `2#101`.
 pub(super) const BASED_LITERALS: KindSet = KindSet::new(&[K::HexLit, K::OctLit, K::BinLit]);
@@ -139,11 +140,11 @@ pub(super) fn duration_literal_ahead(p: &Parser) -> bool {
 /// piece before it.
 pub(super) fn piece(p: &mut Parser, kind: K, what: &str) -> bool {
     if !p.at(kind) {
-        p.error(&format!("expected {what}"));
+        p.error(text::syntax_error_expected_what(what));
         return false;
     }
     if !p.touches_previous() {
-        p.error("no whitespace is allowed inside a literal");
+        p.error(text::syntax_error_no_whitespace_is_allowed_inside_a_literal());
     }
     p.bump();
     true
@@ -154,7 +155,7 @@ fn piece_any(p: &mut Parser, kinds: KindSet, what: &str) -> bool {
     match p.nth(0).filter(|_| p.at_any(kinds)) {
         Some(kind) => piece(p, kind, what),
         None => {
-            p.error(&format!("expected {what}"));
+            p.error(text::syntax_error_expected_what(what));
             false
         }
     }
@@ -166,7 +167,7 @@ fn sign(p: &mut Parser, numbers: KindSet) {
         if p.adjacent(0) && p.nth_at_any(1, numbers) {
             p.bump();
         } else {
-            p.error("a sign must touch the number after it");
+            p.error(text::syntax_error_a_sign_must_touch_the_number_after_it());
             p.bump();
         }
     }
@@ -222,7 +223,7 @@ fn typed(p: &mut Parser, class: Class) -> CompletedMarker {
     let (start, errors) = (p.position(), p.error_count());
     p.bump_n(2);
     if !p.touches_previous() {
-        p.error("no whitespace is allowed inside a literal");
+        p.error(text::syntax_error_no_whitespace_is_allowed_inside_a_literal());
     }
     match class {
         Class::Int => int_value(p),
@@ -275,6 +276,6 @@ fn bool_value(p: &mut Parser, words: bool) {
     if is_bit_digit || (words && p.at_any(BOOL_WORDS)) {
         p.bump();
     } else {
-        p.error("expected 0, 1 or a boolean word");
+        p.error(text::syntax_error_expected_0_1_or_a_boolean_word());
     }
 }
