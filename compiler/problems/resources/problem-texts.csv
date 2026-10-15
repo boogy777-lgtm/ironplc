@@ -19,14 +19,18 @@ P4077,attribute_value_invalid_found,"The attribute '{name}' takes {takes}, but i
 P4077,attribute_value_invalid_missing,"The attribute '{name}' takes {takes}, but it has no value"
 P4078,attribute_repeated,The attribute '{name}' is written again for the same declaration
 P4078,attribute_repeated_first_written_here,First written here
+P6001,cannot_canonicalize_path,"{path}, {reason}"
+P6002,cannot_read_metadata,{reason}
 P6003,cannot_read_directory,Path does not exist: {path}
 P6004,cannot_read_file,{reason}
 P6004,cannot_read_file_plcproj,Cannot read .plcproj file: {reason}
 P6004,cannot_read_file_referenced_missing,Referenced file does not exist: {include} (resolved to {resolved})
 P6004,cannot_read_file_with_path,"{path}, {reason}"
+P6005,symlink_unsupported,
 P6006,unsupported_encoding,The file is not UTF-8 or latin1
 P6007,unsupported_file_type,Unsupported file type: {file_type}
 P6008,xml_unsupported_version,"Unsupported PLCopen XML version. Found namespace '{found}', expected '{expected}'"
+P6009,output_path_conflicts_with_input,Choose an output path that is not an input source file
 P6010,library_manifest_invalid_field_empty,manifest field `{field}` must not be empty
 P6010,library_manifest_invalid_field_missing,manifest is missing the required `{field}` field
 P6010,library_manifest_invalid_field_not_string,manifest field `{field}` must be a string
