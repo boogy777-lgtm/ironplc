@@ -16,5 +16,4 @@ dsl/src/common.rs 3622
 dsl/src/textual.rs 1482
 parser/src/parser.rs 2731
 plc2plc/src/renderer.rs 2190
-vm-cli/tests/cli.rs 1549
 vm/src/vm.rs 3409
