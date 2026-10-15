@@ -13,7 +13,7 @@
 //! for different integrations and there is no one crate that does it all
 //! (especially one that works for both command line and language server
 //! protocol).
-use ironplc_problems::Problem;
+use ironplc_problems::{Problem, Text};
 
 use crate::common::TypeName;
 use crate::core::{FileId, Id, Located, SourceSpan};
@@ -161,6 +161,17 @@ impl Diagnostic {
             source_file: None,
             source_line: None,
         }
+    }
+
+    /// Creates a diagnostic from a text of the dictionary
+    /// (`ironplc_problems::text`) and the place it is about.
+    ///
+    /// The text carries its problem, so the code and the label text come from
+    /// one row of `problem-texts.csv` and cannot be paired wrongly. This is
+    /// `Diagnostic::problem(problem, Label::span(span, message))` for that row.
+    pub fn text(span: SourceSpan, text: Text) -> Self {
+        let (problem, message) = text.into_parts();
+        Self::problem(problem, Label::span(span, message))
     }
 
     /// Creates the diagnostic for a literal that names a value its type
@@ -534,6 +545,52 @@ pub fn problem_help_url(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn text_when_row_then_same_diagnostic_as_problem_with_span_label() {
+        let span = SourceSpan::default();
+
+        let from_text = Diagnostic::text(
+            span.clone(),
+            ironplc_problems::text::attribute_repeated("pack_mode"),
+        );
+        let from_problem = Diagnostic::problem(
+            Problem::AttributeRepeated,
+            Label::span(
+                span,
+                "The attribute 'pack_mode' is written again for the same declaration",
+            ),
+        );
+
+        assert_eq!(from_text.code, from_problem.code);
+        assert_eq!(from_text.description, from_problem.description);
+        assert_eq!(from_text.primary.message, from_problem.primary.message);
+        assert_eq!(from_text.primary.file_id, from_problem.primary.file_id);
+        assert_eq!(
+            from_text.primary.location.start,
+            from_problem.primary.location.start
+        );
+        assert_eq!(
+            from_text.primary.location.end,
+            from_problem.primary.location.end
+        );
+        assert!(from_text.secondary.is_empty() && from_text.help.is_empty());
+        assert!(from_text.source_file.is_none() && from_text.source_line.is_none());
+    }
+
+    #[test]
+    fn with_secondary_when_row_text_then_label_message_is_the_text() {
+        let diag = Diagnostic::text(
+            SourceSpan::default(),
+            ironplc_problems::text::attribute_repeated("a"),
+        )
+        .with_secondary(Label::span(
+            SourceSpan::default(),
+            ironplc_problems::text::attribute_repeated_first_written_here(),
+        ));
+
+        assert_eq!(diag.secondary[0].message, "First written here");
+    }
 
     #[test]
     fn todo_with_id_when_called_then_includes_id_location() {

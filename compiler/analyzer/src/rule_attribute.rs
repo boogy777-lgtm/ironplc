@@ -44,7 +44,7 @@ use ironplc_dsl::{
     diagnostic::{Diagnostic, Label},
 };
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 
 use crate::{result::SemanticResult, semantic_context::SemanticContext};
 
@@ -76,43 +76,29 @@ pub fn apply(
     }
 }
 
-/// The diagnostic of one fault: one arm for each kind of fault.
+/// The diagnostic of one fault: one arm for each kind of fault, each text a row
+/// of the dictionary (`problem-texts.csv`).
 fn diagnostic(fault: Fault) -> Diagnostic {
     let name = fault.name;
     match fault.kind {
-        FaultKind::NotAllowedHere { row, kind } => Diagnostic::problem(
-            Problem::AttributeNotAllowedHere,
-            Label::span(
-                fault.span,
-                format!(
-                    "The attribute '{name}' does not apply to a declaration of this kind ({}); it applies to: {}",
-                    kind.label(),
-                    row.targets.describe()
-                ),
-            ),
+        FaultKind::NotAllowedHere { row, kind } => Diagnostic::text(
+            fault.span,
+            text::attribute_not_allowed_here(name, kind.label(), row.targets.describe()),
         ),
-        FaultKind::Value { row, found } => Diagnostic::problem(
-            Problem::AttributeValueInvalid,
-            Label::span(
-                fault.span,
-                format!(
-                    "The attribute '{name}' takes {}, but {}",
-                    row.value.describe(),
-                    match found {
-                        Some(value) => format!("its value is '{value}'"),
-                        None => "it has no value".to_string(),
-                    }
-                ),
-            ),
+        FaultKind::Value { row, found } => Diagnostic::text(
+            fault.span,
+            match found {
+                Some(value) => {
+                    text::attribute_value_invalid_found(name, row.value.describe(), value)
+                }
+                None => text::attribute_value_invalid_missing(name, row.value.describe()),
+            },
         ),
-        FaultKind::Repeated { first } => Diagnostic::problem(
-            Problem::AttributeRepeated,
-            Label::span(
-                fault.span,
-                format!("The attribute '{name}' is written again for the same declaration"),
-            ),
-        )
-        .with_secondary(Label::span(first, "First written here")),
+        FaultKind::Repeated { first } => {
+            Diagnostic::text(fault.span, text::attribute_repeated(name)).with_secondary(
+                Label::span(first, text::attribute_repeated_first_written_here()),
+            )
+        }
     }
 }
 

@@ -1,0 +1,6 @@
+Code,Key,Template
+P4076,attribute_not_allowed_here,"The attribute '{name}' does not apply to a declaration of this kind ({kind}); it applies to: {targets}"
+P4077,attribute_value_invalid_found,"The attribute '{name}' takes {takes}, but its value is '{value}'"
+P4077,attribute_value_invalid_missing,"The attribute '{name}' takes {takes}, but it has no value"
+P4078,attribute_repeated,The attribute '{name}' is written again for the same declaration
+P4078,attribute_repeated_first_written_here,First written here
