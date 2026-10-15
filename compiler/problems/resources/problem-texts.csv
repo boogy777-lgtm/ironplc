@@ -163,6 +163,8 @@ P2034,null_requires_reference_type_null_can_only_be_assigned_to_a_ref_to_type,NU
 P2035,ordering_on_reference_ordering_comparison_on_reference_types,Ordering comparison on reference types
 P2036,nested_ref_to_not_supported_nested_ref_to_is_not_supported,Nested REF_TO is not supported
 P2037,aggregate_assignment_type_mismatch_requires_identical_types,Assignment between arrays or structures requires identical types
+P2038,date_literal_out_of_range_constant_is_outside_the_range_of_type,Constant '{value}' is outside the range of type '{type_name}'
+P2039,duration_literal_out_of_range_constant_is_outside_the_range_of_type,Constant '{value}' is outside the range of type '{type_name}'
 P2040,real_literal_out_of_range_outside_the_range_of_type,Value is outside the range of {type_name}
 P2041,string_length_out_of_range_more_than_a_string_can_hold,Length {length} is more than a string can hold
 P2042,ambiguous_enumerated_value_value_is_declared_by_several_enumerations,Value is declared by several enumerations
