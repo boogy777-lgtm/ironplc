@@ -437,6 +437,13 @@ fn lex_when_symbol_operators_then_longest_match() {
 }
 
 #[test]
+fn lex_when_a_symbol_is_written_then_the_kind_that_declares_it() {
+    for (symbol, kind) in K::SYMBOLS {
+        assert_eq!(kinds(symbol), vec![(*kind, *symbol)], "{symbol}");
+    }
+}
+
+#[test]
 fn lex_when_star_paren_without_opener_then_separate_tokens() {
     assert_eq!(
         significant("*)"),

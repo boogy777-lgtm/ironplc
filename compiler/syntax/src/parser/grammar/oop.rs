@@ -109,7 +109,7 @@ fn method(p: &mut Parser) {
             chart: false,
         },
     );
-    close(p, K::EndMethod, "`END_METHOD`");
+    close(p, K::EndMethod);
     p.complete(node, K::MethodDecl);
 }
 
@@ -132,7 +132,7 @@ fn property(p: &mut Parser) {
     p.bump();
     member_qualifiers(p);
     declared_name(p, NameClass::Plain);
-    if p.expect(K::Colon, "`:`") {
+    if p.expect(K::Colon) {
         return_type(p);
     }
     let mut order = Order::default();
@@ -152,7 +152,7 @@ fn property(p: &mut Parser) {
             );
         }
     }
-    close(p, K::EndProperty, "`END_PROPERTY`");
+    close(p, K::EndProperty);
     p.complete(node, K::PropertyDecl);
 }
 
@@ -169,7 +169,9 @@ fn accessor(p: &mut Parser, node_kind: K, closer: K) {
             chart: false,
         },
     );
-    close(p, closer, "the end of the accessor");
+    if !p.eat(closer) {
+        p.error_after_previous(text::syntax_error_expected_what("the end of the accessor"));
+    }
     p.complete(node, node_kind);
 }
 
@@ -198,6 +200,6 @@ pub(super) fn interface(p: &mut Parser) {
             text::syntax_error_an_interface_has_no_body(),
         );
     }
-    close(p, K::EndInterface, "`END_INTERFACE`");
+    close(p, K::EndInterface);
     p.complete(node, K::InterfaceDecl);
 }

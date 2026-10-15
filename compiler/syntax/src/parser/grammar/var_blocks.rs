@@ -307,7 +307,7 @@ fn declaration(p: &mut Parser, shape: Shape) {
     if shape.single && names > 1 {
         p.error(text::syntax_error_this_variable_block_declares_one_variable_at_a_time());
     }
-    if p.expect(K::Colon, "`:`") && !(shape.optional_type && p.at(K::Semicolon)) {
+    if p.expect(K::Colon) && !(shape.optional_type && p.at(K::Semicolon)) {
         let context = match address {
             Some(Address::Incomplete) => shape.context.located(INCOMPLETE_ADDRESS),
             Some(Address::Complete) => shape.context.located(COMPLETE_ADDRESS),
@@ -366,14 +366,14 @@ fn access_declaration(p: &mut Parser) {
         p.abandon(node);
         return;
     }
-    if p.expect(K::Colon, "`:`") {
+    if p.expect(K::Colon) {
         if p.at(K::DirectAddress) {
             p.error(text::syntax_error_a_path_starts_with_a_name());
         }
         if variable(p).is_none() {
             p.error(text::syntax_error_expected_the_path_of_a_variable());
         }
-        if p.expect(K::Colon, "`:`") {
+        if p.expect(K::Colon) {
             type_ref(p);
             if p.at_any(ACCESS_RIGHTS) {
                 p.bump();
@@ -404,7 +404,7 @@ fn instance_initialization(p: &mut Parser) {
     if p.at(K::At) {
         location(p);
     }
-    if p.expect(K::Colon, "`:`") {
+    if p.expect(K::Colon) {
         let spec = type_spec(p, &positions::INSTANCE);
         if p.at(K::Assignment) {
             initializer(p, positions::INSTANCE.initial(spec));

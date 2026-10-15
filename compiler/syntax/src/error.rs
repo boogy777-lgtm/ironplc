@@ -7,6 +7,7 @@
 //! under, so no second fact decides the code (see the `diagnostic` module).
 
 use crate::parser::MAX_DEPTH;
+use crate::syntax_kind::SyntaxKind;
 use core::fmt;
 use ironplc_problems::{text, Problem, Text};
 use rowan::TextRange;
@@ -14,6 +15,14 @@ use rowan::TextRange;
 /// What is said of nesting beyond [`MAX_DEPTH`], wherever it is found.
 pub(crate) fn nesting_too_deep() -> Text {
     text::max_nesting_depth_exceeded_over_limit(MAX_DEPTH)
+}
+
+/// What is said when the token `kind` was expected and is not next: its name
+/// is the spelling the declaration of the kind gives it.
+pub(crate) fn expected_token(kind: SyntaxKind) -> Text {
+    let spelling = kind.spelling();
+    debug_assert!(spelling.is_some(), "{kind:?} has no spelling to expect");
+    text::syntax_error_expected_what(format_args!("`{}`", spelling.unwrap_or_default()))
 }
 
 /// A problem found while lexing or parsing, anchored to a byte range.

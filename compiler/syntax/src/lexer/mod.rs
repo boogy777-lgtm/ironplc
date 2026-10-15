@@ -226,43 +226,15 @@ fn scan_identifier(cursor: &mut Cursor<'_>) -> Scan {
 }
 
 /// Operators and punctuation, longest match first: (kind, length in bytes).
+/// The symbols are those declared with the kinds ([`SyntaxKind::SYMBOLS`]).
 fn punctuation(cursor: &Cursor<'_>) -> Option<(SyntaxKind, usize)> {
-    const TWO_BYTE: [(&str, SyntaxKind); 7] = [
-        ("..", SyntaxKind::Range),
-        ("<>", SyntaxKind::NotEqual),
-        ("<=", SyntaxKind::LessEqual),
-        (">=", SyntaxKind::GreaterEqual),
-        ("**", SyntaxKind::Power),
-        (":=", SyntaxKind::Assignment),
-        ("=>", SyntaxKind::RightArrow),
-    ];
-    const ONE_BYTE: [(&str, SyntaxKind); 20] = [
-        ("(", SyntaxKind::LeftParen),
-        (")", SyntaxKind::RightParen),
-        ("}", SyntaxKind::RightBrace),
-        ("[", SyntaxKind::LeftBracket),
-        ("]", SyntaxKind::RightBracket),
-        (",", SyntaxKind::Comma),
-        (";", SyntaxKind::Semicolon),
-        (":", SyntaxKind::Colon),
-        (".", SyntaxKind::Period),
-        ("#", SyntaxKind::Hash),
-        ("=", SyntaxKind::Equal),
-        ("<", SyntaxKind::Less),
-        (">", SyntaxKind::Greater),
-        ("/", SyntaxKind::Div),
-        ("*", SyntaxKind::Star),
-        ("+", SyntaxKind::Plus),
-        ("-", SyntaxKind::Minus),
-        ("^", SyntaxKind::Caret),
-        // `|` and `&` are the symbol spellings of OR and AND.
-        ("|", SyntaxKind::Or),
-        ("&", SyntaxKind::And),
-    ];
-    TWO_BYTE
+    /// `|` and `&` are the symbol spellings of OR and AND, which are keywords.
+    const WORD_SYMBOLS: [(&str, SyntaxKind); 2] = [("|", SyntaxKind::Or), ("&", SyntaxKind::And)];
+    SyntaxKind::SYMBOLS
         .iter()
-        .chain(ONE_BYTE.iter())
-        .find(|(text, _)| cursor.starts_with(text))
+        .chain(WORD_SYMBOLS.iter())
+        .filter(|(text, _)| cursor.starts_with(text))
+        .max_by_key(|(text, _)| text.len())
         .map(|(text, kind)| (*kind, text.len()))
 }
 

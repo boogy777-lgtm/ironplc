@@ -21,18 +21,18 @@ pub(super) fn if_statement(p: &mut Parser) {
     let node = p.start();
     p.bump();
     expression(p);
-    p.expect(K::Then, "`THEN`");
+    p.expect(K::Then);
     statement_list(p, ListEnd::Block, false);
     while p.at(K::Elsif) {
         let clause = p.start();
         p.bump();
         expression(p);
-        p.expect(K::Then, "`THEN`");
+        p.expect(K::Then);
         statement_list(p, ListEnd::Block, true);
         p.complete(clause, K::ElsifClause);
     }
     else_clause(p);
-    close_block(p, K::EndIf, "`END_IF`");
+    close_block(p, K::EndIf);
     p.complete(node, K::IfStmt);
 }
 
@@ -47,8 +47,8 @@ fn else_clause(p: &mut Parser) {
 
 /// The `END_*` word that closes a block statement and its `;`, which the
 /// dialect may let the source omit.
-pub(super) fn close_block(p: &mut Parser, closer: K, what: &str) {
-    if p.expect(closer, what) {
+pub(super) fn close_block(p: &mut Parser, closer: K) {
+    if p.expect(closer) {
         terminator(p, true);
     }
 }
@@ -62,16 +62,16 @@ pub(super) fn for_statement(p: &mut Parser) {
     } else {
         p.error(text::syntax_error_expected_the_loop_variable());
     }
-    p.expect(K::Assignment, "`:=`");
+    p.expect(K::Assignment);
     expression(p);
-    p.expect(K::To, "`TO`");
+    p.expect(K::To);
     expression(p);
     if p.eat(K::By) {
         expression(p);
     }
-    p.expect(K::Do, "`DO`");
+    p.expect(K::Do);
     statement_list(p, ListEnd::Block, true);
-    close_block(p, K::EndFor, "`END_FOR`");
+    close_block(p, K::EndFor);
     p.complete(node, K::ForStmt);
 }
 
@@ -80,9 +80,9 @@ pub(super) fn while_statement(p: &mut Parser) {
     let node = p.start();
     p.bump();
     expression(p);
-    p.expect(K::Do, "`DO`");
+    p.expect(K::Do);
     statement_list(p, ListEnd::Block, true);
-    close_block(p, K::EndWhile, "`END_WHILE`");
+    close_block(p, K::EndWhile);
     p.complete(node, K::WhileStmt);
 }
 
@@ -91,9 +91,9 @@ pub(super) fn repeat_statement(p: &mut Parser) {
     let node = p.start();
     p.bump();
     statement_list(p, ListEnd::Block, true);
-    p.expect(K::Until, "`UNTIL`");
+    p.expect(K::Until);
     expression(p);
-    close_block(p, K::EndRepeat, "`END_REPEAT`");
+    close_block(p, K::EndRepeat);
     p.complete(node, K::RepeatStmt);
 }
 
@@ -102,7 +102,7 @@ pub(super) fn case_statement(p: &mut Parser) {
     let node = p.start();
     p.bump();
     expression(p);
-    p.expect(K::Of, "`OF`");
+    p.expect(K::Of);
     p.case_depth += 1;
     while !p.at_eof() && !p.at_any(BLOCK_END) {
         let before = p.position();
@@ -113,7 +113,7 @@ pub(super) fn case_statement(p: &mut Parser) {
     }
     else_clause(p);
     p.case_depth -= 1;
-    close_block(p, K::EndCase, "`END_CASE`");
+    close_block(p, K::EndCase);
     p.complete(node, K::CaseStmt);
 }
 
@@ -124,7 +124,7 @@ fn case_branch(p: &mut Parser) {
             break;
         }
     }
-    p.expect(K::Colon, "`:`");
+    p.expect(K::Colon);
     let required = !p.options.allow_missing_semicolon;
     statement_list(p, ListEnd::CaseBranch, required);
     p.complete(node, K::CaseBranch);

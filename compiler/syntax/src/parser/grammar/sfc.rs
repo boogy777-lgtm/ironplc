@@ -49,7 +49,7 @@ fn step(p: &mut Parser, node_kind: K) {
     let node = p.start();
     p.bump();
     declared_name(p, NameClass::Plain);
-    p.expect(K::Colon, "`:`");
+    p.expect(K::Colon);
     while !p.at_eof() && !p.at(K::EndStep) && !p.at_any(BLOCK_END) {
         let before = p.position();
         if p.at(K::Semicolon) {
@@ -61,7 +61,7 @@ fn step(p: &mut Parser, node_kind: K) {
             p.bump_as_error(text::syntax_error_expected_an_action_association());
         }
     }
-    close(p, K::EndStep, "`END_STEP`");
+    close(p, K::EndStep);
     p.complete(node, node_kind);
 }
 
@@ -76,7 +76,7 @@ fn association(p: &mut Parser) {
         p.abandon(node);
         return;
     }
-    if p.expect(K::LeftParen, "`(`") {
+    if p.expect(K::LeftParen) {
         qualifier(p);
         if p.at(K::Comma) {
             p.bump();
@@ -87,7 +87,7 @@ fn association(p: &mut Parser) {
                 }
             }
         }
-        close_group(p, K::RightParen, "`)`");
+        close_group(p, K::RightParen);
     }
     p.complete(node, K::ActionAssociation);
     item_terminator(p);
@@ -101,7 +101,7 @@ fn qualifier(p: &mut Parser) {
     let node = p.start();
     p.bump();
     if TIMED.contains(&text) {
-        p.expect(K::Comma, "`,`");
+        p.expect(K::Comma);
         expression(p);
     }
     p.complete(node, K::ActionQualifier);
@@ -112,9 +112,9 @@ fn action(p: &mut Parser) {
     let node = p.start();
     p.bump();
     declared_name(p, NameClass::Plain);
-    p.expect(K::Colon, "`:`");
+    p.expect(K::Colon);
     body(p, true);
-    close(p, K::EndAction, "`END_ACTION`");
+    close(p, K::EndAction);
     p.complete(node, K::ActionDecl);
 }
 
@@ -129,9 +129,9 @@ fn transition(p: &mut Parser) {
     if p.at(K::LeftParen) {
         priority(p);
     }
-    if p.expect(K::From, "`FROM`") {
+    if p.expect(K::From) {
         steps(p);
-        if p.expect(K::To, "`TO`") {
+        if p.expect(K::To) {
             steps(p);
             condition(p);
         }
@@ -144,7 +144,7 @@ fn transition(p: &mut Parser) {
             text::syntax_error_expected_end_transition(),
         );
     }
-    close(p, K::EndTransition, "`END_TRANSITION`");
+    close(p, K::EndTransition);
     p.complete(node, K::TransitionDecl);
 }
 
@@ -157,7 +157,7 @@ fn priority(p: &mut Parser) {
     } else {
         p.error(text::syntax_error_expected_priority());
     }
-    p.expect(K::Assignment, "`:=`");
+    p.expect(K::Assignment);
     if p.at(K::IntegerLit) {
         let literal = p.start();
         p.bump();
@@ -165,7 +165,7 @@ fn priority(p: &mut Parser) {
     } else {
         p.error(text::syntax_error_expected_the_priority());
     }
-    close_group(p, K::RightParen, "`)`");
+    close_group(p, K::RightParen);
     p.complete(node, K::TransitionPriority);
 }
 
@@ -189,7 +189,7 @@ fn steps(p: &mut Parser) {
         if count < 2 {
             p.error(text::syntax_error_expected_at_least_two_steps());
         }
-        close_group(p, K::RightParen, "`)`");
+        close_group(p, K::RightParen);
     } else if p.name_at(0) {
         name_ref(p);
     } else {
@@ -201,9 +201,9 @@ fn steps(p: &mut Parser) {
 /// `:= expression ;`
 fn condition(p: &mut Parser) {
     let node = p.start();
-    if p.expect(K::Assignment, "`:=`") {
+    if p.expect(K::Assignment) {
         expression(p);
-        p.expect(K::Semicolon, "`;`");
+        p.expect(K::Semicolon);
     }
     p.complete(node, K::TransitionCondition);
 }

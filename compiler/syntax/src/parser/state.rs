@@ -9,7 +9,7 @@
 
 use super::event::{CompletedMarker, Event, Marker};
 use super::options::ParseOptions;
-use crate::error::{nesting_too_deep, SyntaxError};
+use crate::error::{expected_token, nesting_too_deep, SyntaxError};
 use crate::kind_set::KindSet;
 use crate::lexer::Token;
 use crate::syntax_kind::SyntaxKind;
@@ -254,11 +254,11 @@ impl<'t, 's> Parser<'t, 's> {
         found
     }
 
-    /// Consumes `kind` or reports that `what` was expected, consuming nothing.
-    pub(crate) fn expect(&mut self, kind: SyntaxKind, what: &str) -> bool {
+    /// Consumes `kind` or reports that it was expected, consuming nothing.
+    pub(crate) fn expect(&mut self, kind: SyntaxKind) -> bool {
         let found = self.eat(kind);
         if !found {
-            self.error(text::syntax_error_expected_what(what));
+            self.error(expected_token(kind));
         }
         found
     }

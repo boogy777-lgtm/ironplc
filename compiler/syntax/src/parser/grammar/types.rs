@@ -148,15 +148,15 @@ pub(super) fn string_type(p: &mut Parser) -> bool {
     let node = p.start();
     p.bump();
     let closer = match p.nth(0) {
-        Some(K::LeftBracket) => Some((K::RightBracket, "`]`")),
-        Some(K::LeftParen) => Some((K::RightParen, "`)`")),
+        Some(K::LeftBracket) => Some(K::RightBracket),
+        Some(K::LeftParen) => Some(K::RightParen),
         _ => None,
     };
     let has_length = closer.is_some();
-    if let Some((closer, what)) = closer {
+    if let Some(closer) = closer {
         p.bump();
         integer_ref(p);
-        close_group(p, closer, what);
+        close_group(p, closer);
     }
     p.complete(node, K::StringType);
     has_length
@@ -167,7 +167,7 @@ pub(super) fn string_type(p: &mut Parser) -> bool {
 fn array_type(p: &mut Parser) {
     let node = p.start();
     p.bump();
-    if p.expect(K::LeftBracket, "`[`") {
+    if p.expect(K::LeftBracket) {
         if p.at(K::Star) {
             p.bump();
         } else {
@@ -178,9 +178,9 @@ fn array_type(p: &mut Parser) {
                 }
             }
         }
-        close_group(p, K::RightBracket, "`]`");
+        close_group(p, K::RightBracket);
     }
-    p.expect(K::Of, "`OF`");
+    p.expect(K::Of);
     type_spec(p, &ELEMENT);
     p.complete(node, K::ArrayType);
 }
@@ -193,7 +193,7 @@ pub(super) fn subrange(p: &mut Parser) {
     } else {
         p.error(text::syntax_error_expected_the_lower_bound_of_a_range());
     }
-    p.expect(K::Range, "`..`");
+    p.expect(K::Range);
     if bound_ahead(p) {
         bound(p);
     } else {
@@ -208,7 +208,7 @@ fn reference_type(p: &mut Parser, keyword_tokens: usize, context: &Context) {
     let node = p.start();
     p.bump();
     if keyword_tokens == 2 {
-        p.expect(K::To, "`TO`");
+        p.expect(K::To);
     }
     type_spec(p, &context.target());
     p.complete(node, K::RefType);
@@ -218,11 +218,11 @@ fn reference_type(p: &mut Parser, keyword_tokens: usize, context: &Context) {
 fn params_type(p: &mut Parser) {
     let node = p.start();
     p.bump();
-    if p.expect(K::LeftParen, "`(`") {
+    if p.expect(K::LeftParen) {
         integer_ref(p);
-        close_group(p, K::RightParen, "`)`");
+        close_group(p, K::RightParen);
     }
-    p.expect(K::Of, "`OF`");
+    p.expect(K::Of);
     type_spec(p, &COUNTED);
     p.complete(node, K::ParamsType);
 }
@@ -233,7 +233,7 @@ fn subrange_type(p: &mut Parser) {
     type_ref(p);
     p.bump();
     subrange(p);
-    close_group(p, K::RightParen, "`)`");
+    close_group(p, K::RightParen);
     p.complete(node, K::SubrangeType);
 }
 
@@ -247,7 +247,7 @@ fn enum_type(p: &mut Parser, declares: bool) {
             break;
         }
     }
-    close_group(p, K::RightParen, "`)`");
+    close_group(p, K::RightParen);
     if p.at_any(ENUM_BASE_TYPES) {
         if !declares {
             p.error(text::syntax_error_a_base_type_is_part_of_a_type_declaration());
@@ -313,7 +313,7 @@ fn member(p: &mut Parser) {
         p.abandon(node);
         return;
     }
-    if p.expect(K::Colon, "`:`") {
+    if p.expect(K::Colon) {
         let spec = type_spec(p, &MEMBER);
         if p.at(K::Assignment) {
             initializer(p, MEMBER.initial(spec));
@@ -345,7 +345,7 @@ pub(super) fn type_block(p: &mut Parser) {
     if declarations == 0 && !lone_terminator {
         p.error(text::syntax_error_expected_a_type_declaration());
     }
-    close(p, K::EndType, "`END_TYPE`");
+    close(p, K::EndType);
     p.complete(node, K::TypeBlock);
 }
 
@@ -357,7 +357,7 @@ fn type_declaration(p: &mut Parser) {
         return;
     }
     let mut spec = Spec::Missing;
-    if p.expect(K::Colon, "`:`") {
+    if p.expect(K::Colon) {
         spec = type_spec(p, &DECLARED);
         if p.at(K::Assignment) {
             initializer(p, DECLARED.initial(spec));

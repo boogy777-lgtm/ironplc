@@ -112,7 +112,7 @@ pub(super) fn program(p: &mut Parser) {
             chart: true,
         },
     );
-    close(p, K::EndProgram, "`END_PROGRAM`");
+    close(p, K::EndProgram);
     p.complete(node, K::ProgramDecl);
 }
 
@@ -130,7 +130,7 @@ pub(super) fn function(p: &mut Parser) {
     } else {
         p.error(text::syntax_error_expected_a_name());
     }
-    if p.expect(K::Colon, "`:`") {
+    if p.expect(K::Colon) {
         return_type(p);
     }
     sections(
@@ -143,7 +143,7 @@ pub(super) fn function(p: &mut Parser) {
             chart: false,
         },
     );
-    close(p, K::EndFunction, "`END_FUNCTION`");
+    close(p, K::EndFunction);
     p.complete(node, K::FunctionDecl);
 }
 
@@ -176,6 +176,6 @@ pub(super) fn function_block(p: &mut Parser) {
             chart: true,
         },
     );
-    close(p, K::EndFunctionBlock, "`END_FUNCTION_BLOCK`");
+    close(p, K::EndFunctionBlock);
     p.complete(node, K::FunctionBlockDecl);
 }

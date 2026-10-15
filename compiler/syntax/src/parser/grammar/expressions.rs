@@ -12,6 +12,7 @@
 
 use super::literals::literal;
 use super::types::{BIT_STRING_TYPES, INTEGER_TYPES};
+use crate::error::expected_token;
 use crate::kind_set::KindSet;
 use crate::parser::event::CompletedMarker;
 use crate::parser::state::Parser;
@@ -145,15 +146,15 @@ fn paren_expr(p: &mut Parser) -> CompletedMarker {
     let node = p.start();
     p.bump();
     expression(p);
-    close_group(p, K::RightParen, "`)`");
+    close_group(p, K::RightParen);
     p.complete(node, K::ParenExpr)
 }
 
 /// Consumes the `closer` of a bracketed group. A malformed group is skipped
 /// up to its closer first, so one bad element does not hide the rest.
-pub(in crate::parser) fn close_group(p: &mut Parser, closer: K, what: &str) {
+pub(in crate::parser) fn close_group(p: &mut Parser, closer: K) {
     if !p.at(closer) {
-        p.error(text::syntax_error_expected_what(what));
+        p.error(expected_token(closer));
         p.skip_expression();
     }
     p.eat(closer);
@@ -165,7 +166,7 @@ pub(in crate::parser) fn ref_expr(p: &mut Parser) -> CompletedMarker {
     if variable(p).is_none() {
         p.error(text::syntax_error_expected_a_variable());
     }
-    close_group(p, K::RightParen, "`)`");
+    close_group(p, K::RightParen);
     p.complete(node, K::RefExpr)
 }
 
@@ -183,7 +184,7 @@ fn special_operator(p: &mut Parser) -> CompletedMarker {
     if takes_count && p.eat(K::Comma) {
         expression(p);
     }
-    close_group(p, K::RightParen, "`)`");
+    close_group(p, K::RightParen);
     p.complete(node, K::SpecialOpExpr)
 }
 
@@ -342,7 +343,7 @@ pub(in crate::parser) fn arg_list(p: &mut Parser) {
             }
         }
     }
-    close_group(p, K::RightParen, "`)`");
+    close_group(p, K::RightParen);
     p.complete(node, K::ArgList);
 }
 
@@ -413,7 +414,7 @@ pub(in crate::parser) fn variable(p: &mut Parser) -> Option<CompletedMarker> {
                         break;
                     }
                 }
-                close_group(p, K::RightBracket, "`]`");
+                close_group(p, K::RightBracket);
             }
             K::DerefExpr => p.bump(),
             _ => p.bump_n(2),

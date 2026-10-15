@@ -143,7 +143,7 @@ fn struct_initializer(p: &mut Parser) {
             break;
         }
     }
-    close_group(p, K::RightParen, "`)`");
+    close_group(p, K::RightParen);
     p.complete(node, K::StructInit);
 }
 
@@ -156,7 +156,7 @@ fn struct_element(p: &mut Parser) {
         p.abandon(node);
         return;
     }
-    if p.expect(K::Assignment, "`:=`") {
+    if p.expect(K::Assignment) {
         value(p);
     }
     p.complete(node, K::StructInitElement);
@@ -174,7 +174,7 @@ fn array_initializer(p: &mut Parser) {
             }
         }
     }
-    close_group(p, K::RightBracket, "`]`");
+    close_group(p, K::RightBracket);
     p.complete(node, K::ArrayInit);
 }
 
@@ -189,7 +189,7 @@ fn array_element(p: &mut Parser) {
         if !p.at(K::RightParen) {
             simple_value(p);
         }
-        close_group(p, K::RightParen, "`)`");
+        close_group(p, K::RightParen);
         p.complete(node, K::RepeatedInit);
     } else {
         simple_value(p);

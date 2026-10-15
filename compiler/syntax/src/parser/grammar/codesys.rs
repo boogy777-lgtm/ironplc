@@ -35,7 +35,7 @@ fn optional_condition(p: &mut Parser) {
     if p.at(K::LeftParen) {
         p.bump();
         expression(p);
-        close_group(p, K::RightParen, "`)`");
+        close_group(p, K::RightParen);
     }
 }
 
@@ -52,7 +52,7 @@ pub(super) fn try_statement(p: &mut Parser) {
             if !p.at(K::RightParen) && variable(p).is_none() {
                 p.error(text::syntax_error_expected_a_variable());
             }
-            close_group(p, K::RightParen, "`)`");
+            close_group(p, K::RightParen);
         }
         statement_list(p, ListEnd::Block, false);
         p.complete(clause, K::CatchClause);
@@ -63,7 +63,7 @@ pub(super) fn try_statement(p: &mut Parser) {
         statement_list(p, ListEnd::Block, false);
         p.complete(clause, K::FinallyClause);
     }
-    close_block(p, K::EndTry, "`__ENDTRY`");
+    close_block(p, K::EndTry);
     p.complete(node, K::TryStmt);
 }
 
@@ -94,15 +94,15 @@ pub(super) fn jump_statement(p: &mut Parser) {
 pub(super) fn calc_statement(p: &mut Parser) {
     let node = p.start();
     p.bump();
-    if p.expect(K::LeftParen, "`(`") {
+    if p.expect(K::LeftParen) {
         expression(p);
-        p.expect(K::Comma, "`,`");
+        p.expect(K::Comma);
         if (p.name_at(0) && p.nth_at(1, K::LeftParen)) || element_call_ahead(p) {
             call(p, false);
         } else {
             p.error(text::syntax_error_expected_a_function_block_call());
         }
-        close_group(p, K::RightParen, "`)`");
+        close_group(p, K::RightParen);
     }
     terminator(p, false);
     p.complete(node, K::CalcStmt);

@@ -59,7 +59,7 @@ fn namespace(p: &mut Parser) {
             p.bump();
             declared_name(p, NameClass::Plain);
             declarations(p, Some(K::EndNamespace));
-            close(p, K::EndNamespace, "`END_NAMESPACE`");
+            close(p, K::EndNamespace);
             p.complete(node, K::NamespaceDecl);
         },
         |p| {

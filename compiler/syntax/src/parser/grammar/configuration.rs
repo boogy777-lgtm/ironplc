@@ -76,7 +76,7 @@ pub(super) fn configuration(p: &mut Parser) {
     if !order.has(RESOURCE.rank) {
         p.error(text::syntax_error_a_configuration_needs_a_resource());
     }
-    close(p, K::EndConfiguration, "`END_CONFIGURATION`");
+    close(p, K::EndConfiguration);
     p.complete(node, K::ConfigurationDecl);
 }
 
@@ -102,7 +102,7 @@ fn resource(p: &mut Parser) {
     let node = p.start();
     p.bump();
     declared_name(p, NameClass::Plain);
-    p.expect(K::On, "`ON`");
+    p.expect(K::On);
     if p.name_at(0) {
         name_ref(p);
     } else {
@@ -135,7 +135,7 @@ fn resource(p: &mut Parser) {
     if !order.has(PROGRAMS.rank) {
         p.error(text::syntax_error_a_resource_needs_a_program());
     }
-    close(p, K::EndResource, "`END_RESOURCE`");
+    close(p, K::EndResource);
     p.complete(node, K::ResourceDecl);
 }
 
@@ -193,7 +193,7 @@ fn task(p: &mut Parser) {
     declared_name(p, NameClass::Plain);
     let init = p.start();
     let mut order = Order::default();
-    if p.expect(K::LeftParen, "`(`") {
+    if p.expect(K::LeftParen) {
         loop {
             task_item(p, &mut order);
             if !p.eat(K::Comma) {
@@ -203,7 +203,7 @@ fn task(p: &mut Parser) {
         if !order.has(PRIORITY.rank) {
             p.error(text::syntax_error_a_task_needs_a_priority());
         }
-        close_group(p, K::RightParen, "`)`");
+        close_group(p, K::RightParen);
     }
     p.complete(init, K::TaskInit);
     p.complete(node, K::TaskDecl);
@@ -225,7 +225,7 @@ fn task_item(p: &mut Parser, order: &mut Order) {
     } else {
         p.error(text::syntax_error_expected_a_task_property());
     }
-    if p.expect(K::Assignment, "`:=`") {
+    if p.expect(K::Assignment) {
         if let Some(property) = property {
             if !(property.value_ahead)(p) {
                 p.error(text::syntax_error_property_takes(
@@ -256,7 +256,7 @@ fn program_configuration(p: &mut Parser) {
         p.bump();
         declared_name(p, NameClass::Plain);
     }
-    if p.expect(K::Colon, "`:`") {
+    if p.expect(K::Colon) {
         type_ref(p);
         if p.at(K::LeftParen) {
             p.bump();
@@ -266,7 +266,7 @@ fn program_configuration(p: &mut Parser) {
                     break;
                 }
             }
-            close_group(p, K::RightParen, "`)`");
+            close_group(p, K::RightParen);
         }
     }
     p.complete(node, K::ProgramConfig);

@@ -3,6 +3,7 @@
 //! declaration.
 
 use super::expressions::name_ref;
+use crate::error::expected_token;
 use crate::kind_set::KindSet;
 use crate::parser::recovery::{BLOCK_END, DECLARATION_END, DECLARATION_START};
 use crate::parser::state::Parser;
@@ -76,9 +77,9 @@ pub(super) fn integer_ref(p: &mut Parser) {
 /// Consumes the keyword `closer` that ends a declaration, or reports that it
 /// is missing and consumes nothing, so that the enclosing declaration or the
 /// next one still sees whatever stopped the body.
-pub(super) fn close(p: &mut Parser, closer: K, what: &str) {
+pub(super) fn close(p: &mut Parser, closer: K) {
     if !p.eat(closer) {
-        p.error_after_previous(text::syntax_error_expected_what(what));
+        p.error_after_previous(expected_token(closer));
     }
 }
 
