@@ -27,8 +27,9 @@
 //! kind it does not name.
 
 use super::options::ParseOptions;
-use super::recovery::VAR_OPENERS;
+use super::recovery::{VAR_OPENERS, VAR_QUALIFIERS};
 use crate::error::{ErrorKind, SyntaxError};
+use crate::kind_set::KindSet;
 use crate::lexer::escapes::invalid_escapes;
 use crate::lexer::Token;
 use crate::syntax_kind::SyntaxKind;
@@ -67,7 +68,7 @@ impl<'t> Site<'_, 't> {
 struct Gate {
     /// The kinds of token at which the form can start: [`Gate::find`] reports
     /// nothing at a token of any other kind.
-    triggers: &'static [SyntaxKind],
+    triggers: KindSet,
     /// The ranges, at this site, of the gated form: empty when it is not here.
     find: fn(&Site) -> Vec<TextRange>,
     /// True when the dialect enables the form.
@@ -158,17 +159,11 @@ fn empty_var_block(site: &Site) -> Vec<TextRange> {
     let Some(opener) = site.token() else {
         return Vec::new();
     };
-    if !VAR_OPENERS.contains(&opener.kind) || !site.options.keyword_enabled(opener.kind) {
+    if !VAR_OPENERS.contains(opener.kind) || !site.options.keyword_enabled(opener.kind) {
         return Vec::new();
     }
-    let qualifiers = [
-        SyntaxKind::Constant,
-        SyntaxKind::Retain,
-        SyntaxKind::NonRetain,
-        SyntaxKind::Persistent,
-    ];
     let first = site.following().find(|token| {
-        !(qualifiers.contains(&token.kind) && site.options.keyword_enabled(token.kind))
+        !(VAR_QUALIFIERS.contains(token.kind) && site.options.keyword_enabled(token.kind))
     });
     match first {
         Some(token) if token.kind == SyntaxKind::EndVar => vec![opener.range],
@@ -200,11 +195,11 @@ fn invalid_string_escapes(site: &Site, literal: SyntaxKind) -> Vec<TextRange> {
 
 const GATES: &[Gate] = &[
     Gate {
-        triggers: &[
+        triggers: KindSet::new(&[
             SyntaxKind::LineComment,
             SyntaxKind::DocComment,
             SyntaxKind::BlockComment,
-        ],
+        ]),
         find: |site| on_token(site, is_c_style_comment),
         enabled: |options| options.allow_c_style_comments,
         kind: ErrorKind::CStyleComment,
@@ -215,7 +210,7 @@ const GATES: &[Gate] = &[
         ),
     },
     Gate {
-        triggers: &[SyntaxKind::Pragma],
+        triggers: KindSet::new(&[SyntaxKind::Pragma]),
         find: |site| on_token(site, |token| token.kind == SyntaxKind::Pragma),
         enabled: |options| options.allow_pragmas,
         kind: ErrorKind::Syntax,
@@ -223,7 +218,7 @@ const GATES: &[Gate] = &[
         help: None,
     },
     Gate {
-        triggers: &[SyntaxKind::PartialAccess],
+        triggers: KindSet::new(&[SyntaxKind::PartialAccess]),
         find: |site| on_token(site, is_partial_access),
         enabled: |options| options.allow_partial_access_syntax,
         kind: ErrorKind::PartialAccessSyntaxDisabled,
@@ -231,7 +226,7 @@ const GATES: &[Gate] = &[
         help: None,
     },
     Gate {
-        triggers: &[SyntaxKind::EscapedIdent],
+        triggers: KindSet::new(&[SyntaxKind::EscapedIdent]),
         find: |site| on_token(site, |token| token.kind == SyntaxKind::EscapedIdent),
         enabled: |options| options.allow_escaped_identifiers,
         kind: ErrorKind::EscapedIdentifierNotAllowed,
@@ -239,7 +234,7 @@ const GATES: &[Gate] = &[
         help: None,
     },
     Gate {
-        triggers: &[SyntaxKind::Ident],
+        triggers: KindSet::new(&[SyntaxKind::Ident]),
         find: |site| on_token(site, is_non_ascii_identifier),
         enabled: |options| options.allow_unicode_identifiers,
         kind: ErrorKind::UnicodeIdentifierNotAllowed,
@@ -247,7 +242,7 @@ const GATES: &[Gate] = &[
         help: None,
     },
     Gate {
-        triggers: &[SyntaxKind::Ident],
+        triggers: KindSet::new(&[SyntaxKind::Ident]),
         find: |site| on_token(site, has_repeated_underscores),
         enabled: |options| options.allow_multiple_underscores,
         kind: ErrorKind::MultipleUnderscoresNotAllowed,
@@ -263,7 +258,7 @@ const GATES: &[Gate] = &[
         help: None,
     },
     Gate {
-        triggers: &[SyntaxKind::String, SyntaxKind::WString],
+        triggers: KindSet::new(&[SyntaxKind::String, SyntaxKind::WString]),
         find: paren_string_length,
         enabled: |options| options.allow_paren_string_length,
         kind: ErrorKind::ParenStringLengthNotAllowed,
@@ -271,7 +266,7 @@ const GATES: &[Gate] = &[
         help: None,
     },
     Gate {
-        triggers: &[SyntaxKind::Array],
+        triggers: KindSet::new(&[SyntaxKind::Array]),
         find: incomplete_array,
         enabled: |options| options.allow_incomplete_array,
         kind: ErrorKind::IncompleteArrayNotAllowed,
@@ -279,7 +274,7 @@ const GATES: &[Gate] = &[
         help: None,
     },
     Gate {
-        triggers: &[SyntaxKind::StringLit],
+        triggers: KindSet::new(&[SyntaxKind::StringLit]),
         find: |site| invalid_string_escapes(site, SyntaxKind::StringLit),
         enabled: |_| false,
         kind: ErrorKind::InvalidStringEscape,
@@ -290,7 +285,7 @@ const GATES: &[Gate] = &[
         ),
     },
     Gate {
-        triggers: &[SyntaxKind::WStringLit],
+        triggers: KindSet::new(&[SyntaxKind::WStringLit]),
         find: |site| invalid_string_escapes(site, SyntaxKind::WStringLit),
         enabled: |_| false,
         kind: ErrorKind::InvalidStringEscape,
@@ -314,8 +309,8 @@ fn trigger_index() -> &'static [GateSet] {
     INDEX.get_or_init(|| {
         let mut index = vec![0; SyntaxKind::ALL.len()];
         for (position, gate) in GATES.iter().enumerate() {
-            for kind in gate.triggers {
-                if let Some(slot) = index.get_mut(*kind as usize) {
+            for kind in gate.triggers.iter() {
+                if let Some(slot) = index.get_mut(kind as usize) {
                     *slot |= 1 << position;
                 }
             }
@@ -554,12 +549,11 @@ mod tests {
     }
 
     #[test]
-    fn triggers_when_gate_declared_then_named_and_unique_token_kinds() {
+    fn triggers_when_gate_declared_then_named_and_token_kinds() {
         for gate in GATES {
-            assert!(!gate.triggers.is_empty(), "{}", gate.message);
-            for (position, kind) in gate.triggers.iter().enumerate() {
+            assert!(gate.triggers.iter().next().is_some(), "{}", gate.message);
+            for kind in gate.triggers.iter() {
                 assert!(kind.is_token(), "{kind:?}");
-                assert!(!gate.triggers[..position].contains(kind), "{kind:?}");
             }
         }
     }
@@ -571,7 +565,7 @@ mod tests {
         for kind in SyntaxKind::ALL {
             for (position, gate) in GATES.iter().enumerate() {
                 let set = index[*kind as usize] & (1 << position) != 0;
-                assert_eq!(set, gate.triggers.contains(kind), "{kind:?}");
+                assert_eq!(set, gate.triggers.contains(*kind), "{kind:?}");
             }
         }
     }
@@ -593,7 +587,7 @@ mod tests {
                         options: &options,
                     };
                     for gate in GATES {
-                        if gate.triggers.contains(&tokens[index].kind) {
+                        if gate.triggers.contains(tokens[index].kind) {
                             inside += 1;
                         } else {
                             outside += 1;

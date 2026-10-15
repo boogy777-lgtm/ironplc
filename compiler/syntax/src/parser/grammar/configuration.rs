@@ -15,9 +15,16 @@ use super::common::{
 use super::expressions::{close_group, name_ref, type_ref, variable};
 use super::initializers::{connection_source, value};
 use super::literals::duration_literal_ahead;
-use super::var_blocks::{block_ahead, var_block, Scope};
+use super::var_blocks::{block_ahead, var_block, Scope, RETENTION};
+use crate::kind_set::KindSet;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
+
+/// The keywords that open something inside a configuration, and not after it.
+const CONFIGURATION_OWNS: KindSet = KindSet::new(&[K::VarGlobal]);
+
+/// The keywords that open something inside a resource, and not after it.
+const RESOURCE_OWNS: KindSet = KindSet::new(&[K::VarGlobal, K::Program]);
 
 const GLOBALS: Part = Part {
     rank: 0,
@@ -41,9 +48,8 @@ pub(super) fn configuration(p: &mut Parser) {
     let node = p.start();
     p.bump();
     declared_name(p, NameClass::Plain);
-    let owns = [K::VarGlobal];
     let mut order = Order::default();
-    while !declaration_stops(p, K::EndConfiguration, &owns) {
+    while !declaration_stops(p, K::EndConfiguration, CONFIGURATION_OWNS) {
         let before = p.position();
         if p.at(K::Resource) {
             order.enter(p, RESOURCE);
@@ -58,7 +64,7 @@ pub(super) fn configuration(p: &mut Parser) {
             skip_stray(
                 p,
                 K::EndConfiguration,
-                &owns,
+                CONFIGURATION_OWNS,
                 "expected a resource or a variable block",
             );
         }
@@ -101,9 +107,8 @@ fn resource(p: &mut Parser) {
     } else {
         p.error("expected the type of the resource");
     }
-    let owns = [K::VarGlobal, K::Program];
     let mut order = Order::default();
-    while !declaration_stops(p, K::EndResource, &owns) {
+    while !declaration_stops(p, K::EndResource, RESOURCE_OWNS) {
         let before = p.position();
         if p.at(K::VarGlobal) {
             order.enter(p, RESOURCE_GLOBALS);
@@ -115,7 +120,12 @@ fn resource(p: &mut Parser) {
             order.enter(p, PROGRAMS);
             program_configuration(p);
         } else {
-            skip_stray(p, K::EndResource, &owns, "expected a task or a program");
+            skip_stray(
+                p,
+                K::EndResource,
+                RESOURCE_OWNS,
+                "expected a task or a program",
+            );
         }
         if p.position() == before {
             p.bump_as_error("unexpected input");
@@ -230,7 +240,7 @@ fn task_item(p: &mut Parser, order: &mut Order) {
 fn program_configuration(p: &mut Parser) {
     let node = p.start();
     p.bump();
-    if p.at_any(&[K::Retain, K::NonRetain]) {
+    if p.at_any(RETENTION) {
         p.bump();
     }
     if !declared_name(p, NameClass::Plain) {

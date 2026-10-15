@@ -11,6 +11,7 @@ use super::expressions::type_ref;
 use super::pou::{sections, Body, Layout};
 use super::types::return_type;
 use super::var_blocks::Scope;
+use crate::kind_set::KindSet;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
 
@@ -134,7 +135,7 @@ fn property(p: &mut Parser) {
         return_type(p);
     }
     let mut order = Order::default();
-    while !declaration_stops(p, K::EndProperty, &[]) {
+    while !declaration_stops(p, K::EndProperty, KindSet::EMPTY) {
         if p.nth_is_word(0, "GET") {
             order.enter(p, GET);
             accessor(p, K::GetAccessor, K::EndGet);
@@ -142,7 +143,7 @@ fn property(p: &mut Parser) {
             order.enter(p, SET);
             accessor(p, K::SetAccessor, K::EndSet);
         } else {
-            skip_stray(p, K::EndProperty, &[], "expected `GET` or `SET`");
+            skip_stray(p, K::EndProperty, KindSet::EMPTY, "expected `GET` or `SET`");
         }
     }
     close(p, K::EndProperty, "`END_PROPERTY`");
@@ -183,8 +184,13 @@ pub(super) fn interface(p: &mut Parser) {
         }
         p.complete(clause, K::ExtendsClause);
     }
-    if !declaration_stops(p, K::EndInterface, &[]) {
-        skip_stray(p, K::EndInterface, &[], "an interface has no body");
+    if !declaration_stops(p, K::EndInterface, KindSet::EMPTY) {
+        skip_stray(
+            p,
+            K::EndInterface,
+            KindSet::EMPTY,
+            "an interface has no body",
+        );
     }
     close(p, K::EndInterface, "`END_INTERFACE`");
     p.complete(node, K::InterfaceDecl);

@@ -7,7 +7,9 @@
 //! only when the dialect allows missing semicolons, where the legacy pipeline
 //! inserts an empty statement for it.
 
+use super::common::SIGN;
 use super::expressions::{expression, name_ref};
+use super::literals::BASED_LITERALS;
 use super::statements::{statement_list, terminator, ListEnd};
 use crate::parser::recovery::BLOCK_END;
 use crate::parser::state::Parser;
@@ -146,7 +148,7 @@ pub(super) fn case_selector_ahead(p: &Parser) -> bool {
 /// Returns false, having consumed nothing, when no selector starts here.
 fn case_label(p: &mut Parser) -> bool {
     let node = p.start();
-    if p.at_any(&[K::HexLit, K::OctLit, K::BinLit]) {
+    if p.at_any(BASED_LITERALS) {
         let literal = p.start();
         p.bump();
         p.complete(literal, K::BitStringLiteral);
@@ -188,7 +190,7 @@ pub(super) fn bound(p: &mut Parser) {
         return;
     }
     let literal = p.start();
-    if p.at_any(&[K::Plus, K::Minus]) {
+    if p.at_any(SIGN) {
         p.bump();
     }
     p.bump();

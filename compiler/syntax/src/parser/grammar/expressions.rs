@@ -11,6 +11,8 @@
 //! `name(...)`, `receiver.method(...)` and `THIS^.method(...)`.
 
 use super::literals::literal;
+use super::types::{BIT_STRING_TYPES, INTEGER_TYPES};
+use crate::kind_set::KindSet;
 use crate::parser::event::CompletedMarker;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
@@ -184,15 +186,8 @@ fn special_operator(p: &mut Parser) -> CompletedMarker {
     p.complete(node, K::SpecialOpExpr)
 }
 
-const TYPE_KEYWORDS: &[K] = &[
-    K::Sint,
-    K::Int,
-    K::Dint,
-    K::Lint,
-    K::Usint,
-    K::Uint,
-    K::Udint,
-    K::Ulint,
+/// The elementary and generic type keywords.
+const TYPE_KEYWORDS: KindSet = INTEGER_TYPES.union(BIT_STRING_TYPES).union(KindSet::new(&[
     K::Real,
     K::Lreal,
     K::Date,
@@ -201,11 +196,6 @@ const TYPE_KEYWORDS: &[K] = &[
     K::Ltod,
     K::DateAndTime,
     K::Ldt,
-    K::Bool,
-    K::Byte,
-    K::Word,
-    K::Dword,
-    K::Lword,
     K::Bit,
     K::String,
     K::WString,
@@ -221,7 +211,10 @@ const TYPE_KEYWORDS: &[K] = &[
     K::AnyBit,
     K::AnyString,
     K::AnyDate,
-];
+]));
+
+/// The words that name the instance a method or a call is on.
+const THIS_OR_SUPER: KindSet = KindSet::new(&[K::This, K::Super]);
 
 /// A type name: an elementary or generic type keyword, or a name. Returns
 /// false, having reported an error and consumed nothing, when there is none.
@@ -244,10 +237,13 @@ pub(in crate::parser) fn name_ref(p: &mut Parser) -> CompletedMarker {
     p.complete(node, K::NameRef)
 }
 
+/// The operators that are spelled as words.
+const OPERATOR_WORDS: KindSet = KindSet::new(&[K::Mod, K::And, K::Or, K::Xor, K::Not]);
+
 /// Words that name a function although they are keywords or special
 /// operators.
 fn operator_function_ahead(p: &Parser) -> bool {
-    p.at_any(&[K::Mod, K::And, K::Or, K::Xor, K::Not])
+    p.at_any(OPERATOR_WORDS)
         || ["__DELETE", "__ISVALIDREF", "__XADD"]
             .iter()
             .any(|word| p.nth_is_word(0, word))
@@ -293,7 +289,7 @@ pub(in crate::parser) fn call_ahead(p: &Parser, operators: bool) -> bool {
         (p.name_at(0) || (operators && operator_function_ahead(p))) && p.nth_at(1, K::LeftParen);
     let method =
         p.name_at(0) && p.nth_at(1, K::Period) && p.name_at(2) && p.nth_at(3, K::LeftParen);
-    let self_method = p.at_any(&[K::This, K::Super])
+    let self_method = p.at_any(THIS_OR_SUPER)
         && p.nth_at(1, K::Caret)
         && p.nth_at(2, K::Period)
         && p.name_at(3)
@@ -308,7 +304,7 @@ pub(in crate::parser) fn call(p: &mut Parser, operators: bool) -> Option<Complet
     }
     let callee = if !operators && element_call_ahead(p) {
         variable(p)?
-    } else if p.at_any(&[K::This, K::Super]) {
+    } else if p.at_any(THIS_OR_SUPER) {
         self_ref(p)
     } else {
         name_ref(p)
@@ -381,7 +377,7 @@ fn argument(p: &mut Parser) {
 /// `^`. A `^` belongs to the chain only when a `[` or `.` follows it; a
 /// trailing one is a dereference of the whole expression.
 pub(in crate::parser) fn variable(p: &mut Parser) -> Option<CompletedMarker> {
-    let mut lhs = if p.at_any(&[K::This, K::Super]) && p.nth_at(1, K::Caret) {
+    let mut lhs = if p.at_any(THIS_OR_SUPER) && p.nth_at(1, K::Caret) {
         self_ref(p)
     } else if p.at(K::DirectAddress) {
         let node = p.start();

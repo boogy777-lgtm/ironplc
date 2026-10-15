@@ -3,9 +3,13 @@
 //! declaration.
 
 use super::expressions::name_ref;
+use crate::kind_set::KindSet;
 use crate::parser::recovery::{BLOCK_END, DECLARATION_END, DECLARATION_START};
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
+
+/// The sign of a number.
+pub(super) const SIGN: KindSet = KindSet::new(&[K::Plus, K::Minus]);
 
 /// Which words may be declared as a name.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -136,16 +140,16 @@ pub(super) fn terminator(p: &mut Parser, may_omit: bool) {
 /// keywords that belong inside this declaration. A declaration that stops
 /// before its closer reports the closer missing and leaves the keyword to
 /// whoever owns it.
-pub(super) fn declaration_stops(p: &Parser, closer: K, owns: &[K]) -> bool {
+pub(super) fn declaration_stops(p: &Parser, closer: K, owns: KindSet) -> bool {
     p.at_eof()
         || p.at(closer)
-        || (p.at_any(DECLARATION_START) && !owns.iter().any(|kind| p.at(*kind)))
+        || (p.at_any(DECLARATION_START) && !p.at_any(owns))
         || p.at_any(DECLARATION_END)
 }
 
 /// Wraps the tokens that cannot continue a declaration in one error node,
 /// up to where [`declaration_stops`] says the declaration ends.
-pub(super) fn skip_stray(p: &mut Parser, closer: K, owns: &[K], message: &str) {
+pub(super) fn skip_stray(p: &mut Parser, closer: K, owns: KindSet, message: &str) {
     p.error(message);
     let node = p.start();
     let mut consumed = false;

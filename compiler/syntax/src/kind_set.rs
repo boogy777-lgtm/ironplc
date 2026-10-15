@@ -61,6 +61,14 @@ impl KindSet {
         let (word, bit) = position(kind);
         self.words[word] & bit != 0
     }
+
+    /// The kinds of the set, in the order they are declared.
+    pub fn iter(self) -> impl Iterator<Item = SyntaxKind> {
+        SyntaxKind::ALL
+            .iter()
+            .copied()
+            .filter(move |kind| self.contains(*kind))
+    }
 }
 
 /// The word of a set that holds `kind`, and the bit of that word that stands
@@ -73,9 +81,7 @@ const fn position(kind: SyntaxKind) -> (usize, u64) {
 
 impl fmt::Debug for KindSet {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_set()
-            .entries(SyntaxKind::ALL.iter().filter(|kind| self.contains(**kind)))
-            .finish()
+        f.debug_set().entries(self.iter()).finish()
     }
 }
 
@@ -156,6 +162,13 @@ mod tests {
         let set = KindSet::new(&[*first, *last]);
         assert!(set.contains(*first));
         assert!(set.contains(*last));
+    }
+
+    #[test]
+    fn iter_when_set_has_kinds_then_yields_each_once_in_declaration_order() {
+        let set = KindSet::new(&[K::If, K::Else, K::If]);
+        assert_eq!(set.iter().collect::<Vec<_>>(), vec![K::Else, K::If]);
+        assert_eq!(KindSet::EMPTY.iter().count(), 0);
     }
 
     #[test]
