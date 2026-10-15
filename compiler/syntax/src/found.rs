@@ -1,15 +1,16 @@
 //! What a syntax error says was found.
 //!
-//! An "expected ..." error also says what stood at its position instead: the
-//! source text of the first significant (not trivia) token there, as written,
-//! or the end of input. It is data taken from the token stream, never a string
-//! a caller words: a [`Found`] is built only from the tokens the lexer made
-//! ([`Found::lexed`], [`Found::lexed_run`]) or from the tokens of the syntax
-//! tree ([`Found::node`], [`Found::syntax_run`]).
+//! An "expected ..." error also says what stood at its position instead: for
+//! the parser the source text of the first significant (not trivia) token
+//! there, for the lowering the source text of the whole node it rejects, as
+//! written, or the end of input. It is data taken from the token stream, never
+//! a string a caller words: a [`Found`] is built only from the tokens the lexer
+//! made ([`Found::lexed`], [`Found::lexed_run`]) or from the tokens of the
+//! syntax tree ([`Found::node`], [`Found::syntax_run`]).
 //!
-//! The text is shown as written, in code quotes, without shortening. A token
-//! can hold a line break (a string literal that spans lines), and then so does
-//! the message.
+//! The text is shown in code quotes. A text that holds a line break (a string
+//! literal or a node that spans lines) is shown up to its first line break,
+//! followed by `...`, inside the quotes: `'abc...`.
 
 use crate::lexer::Token;
 use crate::syntax_kind::{SyntaxNode, SyntaxToken};
@@ -52,18 +53,26 @@ impl Found {
         run(tokens.iter().map(SyntaxToken::text))
     }
 
-    /// What stands at `node`: its first significant token; for a node without
-    /// one, the first significant token after it; at the end of the input,
-    /// that.
+    /// What stands at `node`: its source text from its first to its last
+    /// significant token, trivia around it left out; for a node without one,
+    /// the first significant token after it; at the end of the input, that.
     pub(crate) fn node(node: &SyntaxNode) -> Found {
-        let inside = node
+        let mut significant = node
             .descendants_with_tokens()
             .filter_map(NodeOrToken::into_token)
-            .find(|token| !token.kind().is_trivia());
-        let token = inside.or_else(|| first_significant_from(node, node.text_range().end()));
-        token.map_or_else(Found::end_of_input, |token| {
-            Found(Repr::Source(token.text().to_string()))
-        })
+            .filter(|token| !token.kind().is_trivia());
+        let first = significant.next();
+        let last = significant.last().or_else(|| first.clone());
+        if let (Some(first), Some(last)) = (first, last) {
+            let start = first.text_range().start() - node.text_range().start();
+            let end = last.text_range().end() - node.text_range().start();
+            let text = node.text().slice(rowan::TextRange::new(start, end));
+            return Found(Repr::Source(text.to_string()));
+        }
+        first_significant_from(node, node.text_range().end())
+            .map_or_else(Found::end_of_input, |token| {
+                Found(Repr::Source(token.text().to_string()))
+            })
     }
 
     /// The found of the first significant token of `source`, for tests.
@@ -92,7 +101,10 @@ fn first_significant_from(node: &SyntaxNode, offset: TextSize) -> Option<SyntaxT
 impl fmt::Display for Found {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.0 {
-            Repr::Source(text) => write!(f, "`{text}`"),
+            Repr::Source(text) => match text.find(['\n', '\r']) {
+                Some(end) => write!(f, "`{}...`", &text[..end]),
+                None => write!(f, "`{text}`"),
+            },
             Repr::EndOfInput => f.write_str("end of input"),
         }
     }
@@ -142,8 +154,10 @@ mod tests {
     }
 
     #[test]
-    fn display_when_token_holds_a_line_break_then_it_is_shown_as_written() {
-        assert_eq!(Found::first_in("'a\nb'").to_string(), "`'a\nb'`");
+    fn display_when_text_holds_a_line_break_then_it_is_cut_there_and_ends_in_dots() {
+        assert_eq!(Found::first_in("'a\nb'").to_string(), "`'a...`");
+        assert_eq!(Found::first_in("'a\r\nb'").to_string(), "`'a...`");
+        assert_eq!(Found::first_in("'ab'").to_string(), "`'ab'`");
     }
 
     /// The first node of `kind` in the tree of `source`.
@@ -157,9 +171,18 @@ mod tests {
     }
 
     #[test]
-    fn node_when_node_has_tokens_then_its_first_significant_token() {
-        let node = node_of("(* c *) a + b", crate::syntax_kind::SyntaxKind::BinaryExpr);
-        assert_eq!(Found::node(&node).to_string(), "`a`");
+    fn node_when_node_has_tokens_then_its_text_without_the_trivia_around_it() {
+        let node = node_of(
+            "(* c *) a +  (* d *) b  ",
+            crate::syntax_kind::SyntaxKind::BinaryExpr,
+        );
+        assert_eq!(Found::node(&node).to_string(), "`a +  (* d *) b`");
+    }
+
+    #[test]
+    fn node_when_node_spans_lines_then_it_is_cut_at_the_first_line_break() {
+        let node = node_of("a +\n b", crate::syntax_kind::SyntaxKind::BinaryExpr);
+        assert_eq!(Found::node(&node).to_string(), "`a +...`");
     }
 
     #[test]

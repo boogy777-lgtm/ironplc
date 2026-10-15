@@ -336,8 +336,8 @@ impl LowerCx {
     }
 
     /// A syntax error (P0002) over `node`: it is not what the place takes,
-    /// which is `expected`. It says what stands at the node instead, the first
-    /// token of the node or, when it has none, the one after it.
+    /// which is `expected`. It says what stands at the node instead, the text
+    /// of the node or, when it has no token, the token after it.
     pub(crate) fn expected(&self, node: &SyntaxNode, expected: impl Into<Expected>) -> Diagnostic {
         let expectation = Expectation::new(Found::node(node), expected);
         self.syntax_error(node.text_range(), expectation.text())

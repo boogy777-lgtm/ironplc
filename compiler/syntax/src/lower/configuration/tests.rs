@@ -513,7 +513,7 @@ fn error_message(body: &str) -> String {
 fn lower_library_when_task_data_is_an_expression_then_error_says_what_it_found() {
     assert_eq!(
         error_message("TASK k (SINGLE := a + b, PRIORITY := 1); PROGRAM p WITH k : q;"),
-        "found `a`, expected a constant"
+        "found `a + b`, expected a constant"
     );
 }
 
@@ -521,6 +521,6 @@ fn lower_library_when_task_data_is_an_expression_then_error_says_what_it_found()
 fn lower_library_when_task_data_is_a_path_of_four_names_then_error_says_what_it_found() {
     assert_eq!(
         error_message("TASK k (SINGLE := a.b.c.d, PRIORITY := 1); PROGRAM p WITH k : q;"),
-        "found `a`, expected a global variable"
+        "found `a.b.c.d`, expected a global variable"
     );
 }
