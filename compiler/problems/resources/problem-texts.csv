@@ -23,6 +23,7 @@ P6003,cannot_read_directory,Path does not exist: {path}
 P6004,cannot_read_file,{reason}
 P6004,cannot_read_file_plcproj,Cannot read .plcproj file: {reason}
 P6004,cannot_read_file_referenced_missing,Referenced file does not exist: {include} (resolved to {resolved})
+P6004,cannot_read_file_with_path,"{path}, {reason}"
 P6006,unsupported_encoding,The file is not UTF-8 or latin1
 P6007,unsupported_file_type,Unsupported file type: {file_type}
 P6008,xml_unsupported_version,"Unsupported PLCopen XML version. Found namespace '{found}', expected '{expected}'"
@@ -39,5 +40,9 @@ P6010,library_manifest_invalid_version_dir_unreadable,cannot read version direct
 P6011,library_not_found,compatibility library `{name}` not found
 P6011,library_not_found_not_bundled,"project references compatibility library `{name}`, which IronPLC does not bundle"
 P6012,project_manifest_unresolvable,{manifest} does not resolve to a project: {reason}
+P6013,cannot_write_file,"{path}, {reason}"
+P9002,no_content_directory_initialization_unsupported,MemoryBackedProject does not support directory initialization
+P9002,no_content_multiple_directories_unsupported,This project implementation does not support multiple directories
+P9002,no_content_no_documents_to_tokenize,No documents to tokenize
 P9003,xml_body_type_not_supported_implementation,POU uses {language} which is not supported. Use ST (Structured Text) instead.
 P9003,xml_body_type_not_supported_pou,POU '{name}' uses {language} which is not supported. Use ST (Structured Text) instead.

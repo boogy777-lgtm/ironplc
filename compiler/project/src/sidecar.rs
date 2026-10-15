@@ -60,8 +60,11 @@ use std::path::{Path, PathBuf};
 use ironplc_codegen::{persistent_scopes, CodegenOptions, FbFieldUidKey};
 use ironplc_dsl::common::{Library, LibraryElementKind};
 use ironplc_dsl::core::{FileId, Id};
-use ironplc_dsl::diagnostic::{Diagnostic, Label};
+use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_parser::options::CompilerOptions;
+use ironplc_problems::text;
+// The tests of this module name problems through `use super::*`.
+#[cfg(test)]
 use ironplc_problems::Problem;
 use serde_json::{json, Value};
 
@@ -261,7 +264,12 @@ impl Sidecar {
         let text = match fs::read_to_string(path) {
             Ok(text) => text,
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(Sidecar::new()),
-            Err(err) => return Err(fs_diagnostic(Problem::CannotReadFile, path, err)),
+            Err(err) => {
+                return Err(Diagnostic::text_in_file(
+                    FileId::from_path(path),
+                    text::cannot_read_file_with_path(path.display(), err),
+                ))
+            }
         };
         Ok(parse(&text).unwrap_or_default())
     }
@@ -274,7 +282,12 @@ impl Sidecar {
         // fail; the error arm guards the type system, not a real case.
         let text = serde_json::to_string_pretty(&self.to_json())
             .map_err(|_| Diagnostic::internal_error())?;
-        fs::write(path, text).map_err(|err| fs_diagnostic(Problem::CannotWriteFile, path, err))
+        fs::write(path, text).map_err(|err| {
+            Diagnostic::text_in_file(
+                FileId::from_path(path),
+                text::cannot_write_file(path.display(), err),
+            )
+        })
     }
 
     /// Reconciles the sidecar with the keys currently declared.
@@ -500,18 +513,6 @@ fn parse(text: &str) -> Option<Sidecar> {
         }
     }
     Some(Sidecar { entries })
-}
-
-/// Builds the diagnostic for a sidecar file I/O failure, following the
-/// discovery-time diagnostic shape (`path, error`).
-fn fs_diagnostic(problem: Problem, path: &Path, err: std::io::Error) -> Diagnostic {
-    Diagnostic::problem(
-        problem,
-        Label::file(
-            FileId::from_path(path),
-            format!("{}, {}", path.display(), err),
-        ),
-    )
 }
 
 #[cfg(test)]
