@@ -84,6 +84,9 @@ P0023,pragma_if_unmatched_found,Unmatched {{IF}} pragma
 P0024,pragma_value_expected_found,Expected a pragma condition such as `defined(name)`
 P0027,jump_destination_invalid,No label '{label}' in this body
 P0043,attribute_not_attached,The attribute '{name}' is not followed by a declaration it can be attached to
+P2001,structure_duplicated_element_first_use_of_name,First use of name
+P2001,structure_duplicated_element_second_use_of_name,Second use of name
+P2001,structure_duplicated_element_structure,Structure
 P2002,subrange_min_strictly_less_max_maximum_value,Maximum value: {maximum}
 P2002,subrange_min_strictly_less_max_minimum_value,Minimum value: {minimum}
 P2002,subrange_min_strictly_less_max_subrange_declaration,Subrange declaration
@@ -150,24 +153,36 @@ P4004,function_invocation_undefined_output_function_block_invocation,Function bl
 P4004,function_invocation_undefined_output_method_invocation,Method invocation
 P4005,recursive_cycle_cycle,Cycle
 P4005,recursive_cycle_cycle_member,Cycle member
+P4006,program_missing_task_config_reference_to_task_configuration,Reference to task configuration
 P4007,variable_undefined,Variable reference
+P4008,constant_must_have_initializer_constant_structure_variable,Constant structure variable
+P4008,constant_must_have_initializer_variable,Variable
+P4008,constant_must_have_initializer_variable_declaration,Variable declaration
+P4009,function_block_not_constant_declaration_of_function_block_instance,Declaration of function block instance
+P4010,variable_must_be_const_constant_global_variable,Constant global variable
+P4010,variable_must_be_const_reference_to_global_variable,Reference to global variable
 P4013,pou_decl_name_duplicated_declaration_repeats_an_earlier_name,Declaration repeats an earlier name
 P4013,pou_decl_name_duplicated_first_declaration,First declaration
 P4014,symbol_decl_duplicated_declaration_repeats_an_earlier_name,Declaration repeats an earlier name
 P4014,symbol_decl_duplicated_first_declaration,First declaration
 P4014,symbol_decl_duplicated_variable_name_reserved,Variable name is reserved for a compiler-provided global
+P4015,stdlib_type_redefinition_user_defined_function_block,User-defined function block
 P4016,function_decl_name_duplicated_declaration_repeats_an_earlier_name,Declaration repeats an earlier name
 P4016,function_decl_name_duplicated_first_declaration,First declaration
+P4019,duplicate_task_name_duplicate_task_name,Duplicate task name
 P4020,no_program_declaration,Source does not contain a PROGRAM declaration
 P4021,exit_outside_loop,"EXIT must be inside a FOR, WHILE, or REPEAT loop"
 P4022,initializer_type_mismatch,{initial} is not an initial value of {form}
+P4022,initializer_type_mismatch_variable_declaration,Variable declaration
 P4023,function_call_named_arg_undeclared_undeclared_parameter,Undeclared parameter
 P4024,function_call_duplicate_named_arg_duplicate_argument,Duplicate argument
+P4028,top_level_var_global_not_allowed_top_level_var_global,Top-level VAR_GLOBAL
 P4029,constant_type_param_not_allowed_used_in_type_parameter,Constant '{name}' used in type parameter
 P4030,undefined_constant_reference_not_defined,Constant '{name}' is not defined
 P4033,partial_access_syntax_disabled,partial-access selector
 P4033,partial_access_syntax_disabled_found,partial-access syntax is not enabled in this dialect
 P4034,string_encoding_mismatch,String operand
+P4036,mixed_located_var_declaration_not_allowed_located_variable,Located variable
 P4037,constant_initializer_expression_not_allowed_constant_expression_initializer,Constant expression initializer
 P4038,initializer_not_constant_expression_initializer_expression,Initializer expression
 P4039,constant_expression_division_by_zero_division_or_modulo_by_zero,Division or modulo by zero
@@ -175,9 +190,24 @@ P4040,constant_expression_overflow_arithmetic_overflow,Arithmetic overflow
 P4040,constant_expression_overflow_arithmetic_result_not_a_number,Arithmetic result is not a number
 P4042,paren_string_length_not_allowed,parenthesis length delimiter
 P4042,paren_string_length_not_allowed_found,a string length in parentheses is not enabled in this dialect
+P4044,extends_field_name_duplicated_already_declared_in_a_base,Field '{field}' is already declared as '{base}' in a base function block
+P4045,abstract_function_block_instantiated_cannot_be_instantiated,Function block '{name}' is ABSTRACT and cannot be instantiated
 P4047,task_single_not_supported,Task declares SINGLE
 P4048,task_parameter_out_of_range_interval,Task declares an INTERVAL of {microseconds} microseconds
 P4048,task_parameter_out_of_range_priority,"Task declares PRIORITY := {priority}, which exceeds the maximum of {maximum}"
+P4050,program_variable_hides_global_global_variable,Global variable
+P4050,program_variable_hides_global_same_name_as_global,Program variable has the same name as a global variable
+P4054,function_block_in_function_function_block_instance_declared_in_a_function,Function block instance declared in a function
+P4054,function_block_in_function_function_block_invoked_in_a_function,Function block invoked in a function
+P4054,function_block_in_function_function_block_method_called_in_a_function,Function block method called in a function
+P4062,member_qualifier_not_allowed_function_block_qualifier,Function block qualifier
+P4063,member_qualifier_invalid_abstract_method_has_a_body,ABSTRACT method has a body
+P4063,member_qualifier_invalid_abstract_method_in_non_abstract_function_block,"ABSTRACT method in {function_block}, which is not ABSTRACT"
+P4063,member_qualifier_invalid_appears_more_than_once,{keyword} appears more than once
+P4063,member_qualifier_invalid_cannot_be_combined_with,{keyword} cannot be combined with {other}
+P4063,member_qualifier_invalid_must_come_before,{keyword} must come before {earlier}
+P4063,member_qualifier_invalid_not_allowed_on_a_function_block,{keyword} is not allowed on a function block
+P4063,member_qualifier_invalid_second_access_specifier,{keyword} is a second access specifier
 P4065,continue_outside_loop,"CONTINUE must be inside a FOR, WHILE, or REPEAT loop"
 P4066,throw_outside_try_catch,__THROW must be inside a __TRY statement with a __CATCH clause
 P4067,escaped_identifier_not_allowed,escaped identifier
@@ -188,6 +218,7 @@ P4069,multiple_underscores_not_allowed,identifier
 P4069,multiple_underscores_not_allowed_found,consecutive underscores in an identifier are not enabled in this dialect
 P4070,incomplete_array_not_allowed,incomplete array bounds
 P4070,incomplete_array_not_allowed_found,incomplete array bounds are not enabled in this dialect
+P4075,fb_instance_array_not_allowed_array_of_function_block_instances,Array of function block instances
 P4076,attribute_not_allowed_here,The attribute '{name}' does not apply to a declaration of this kind ({kind}); it applies to: {targets}
 P4077,attribute_value_invalid_found,"The attribute '{name}' takes {takes}, but its value is '{value}'"
 P4077,attribute_value_invalid_missing,"The attribute '{name}' takes {takes}, but it has no value"

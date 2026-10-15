@@ -23,14 +23,9 @@
 //! END_VAR
 //! END_FUNCTION_BLOCK
 //! ```
-use ironplc_dsl::{
-    common::*,
-    core::Located,
-    diagnostic::{Diagnostic, Label},
-    visitor::Visitor,
-};
+use ironplc_dsl::{common::*, core::Located, diagnostic::Diagnostic, visitor::Visitor};
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use std::convert::Infallible;
 
 use crate::{
@@ -69,9 +64,9 @@ impl DiagnosticVisitor for RuleMixedLocatedVarDeclarations {
 impl RuleMixedLocatedVarDeclarations {
     fn check(&mut self, owner: &dyn HasVariables) {
         for decl in mixed_located_var_decls(owner.variables()) {
-            self.diagnostics.push(Diagnostic::problem(
-                Problem::MixedLocatedVarDeclarationNotAllowed,
-                Label::span(decl.identifier.span(), "Located variable"),
+            self.diagnostics.push(Diagnostic::text(
+                decl.identifier.span(),
+                text::mixed_located_var_declaration_not_allowed_located_variable(),
             ));
         }
     }
@@ -109,6 +104,7 @@ impl Visitor<Infallible> for RuleMixedLocatedVarDeclarations {
 mod tests {
     use crate::semantic_context::SemanticContextBuilder;
     use crate::test_helpers::parse_and_resolve_types;
+    use ironplc_problems::Problem;
 
     use super::*;
 

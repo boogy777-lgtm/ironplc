@@ -14,13 +14,8 @@
 //! END_FUNCTION_BLOCK
 //! ```
 
-use ironplc_dsl::{
-    common::*,
-    core::Located,
-    diagnostic::{Diagnostic, Label},
-    visitor::Visitor,
-};
-use ironplc_problems::Problem;
+use ironplc_dsl::{common::*, core::Located, diagnostic::Diagnostic, visitor::Visitor};
+use ironplc_problems::text;
 use std::convert::Infallible;
 
 use crate::{
@@ -57,9 +52,9 @@ impl Visitor<Infallible> for RuleStdlibTypeRedefinition {
     ) -> Result<(), Infallible> {
         if is_stdlib_function_block(&node.name.name) {
             self.diagnostics.push(
-                Diagnostic::problem(
-                    Problem::StdlibTypeRedefinition,
-                    Label::span(node.name.span(), "User-defined function block"),
+                Diagnostic::text(
+                    node.name.span(),
+                    text::stdlib_type_redefinition_user_defined_function_block(),
                 )
                 .with_context_type("name", &node.name),
             );
@@ -79,6 +74,7 @@ mod tests {
     use super::*;
     use crate::semantic_context::SemanticContextBuilder;
     use crate::test_helpers::parse_only;
+    use ironplc_problems::Problem;
 
     #[test]
     fn apply_when_user_defines_ton_then_err() {

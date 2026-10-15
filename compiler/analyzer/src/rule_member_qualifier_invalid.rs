@@ -34,12 +34,12 @@
 //! ```
 use ironplc_dsl::{
     common::{FunctionBlockDeclaration, MethodDeclaration, PropertyDeclaration},
-    diagnostic::{Diagnostic, Label},
+    diagnostic::Diagnostic,
     member_qualifier::{AccessSpecifier, MemberQualifier, MemberQualifierKind, MemberQualifiers},
     visitor::Visitor,
 };
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::Problem;
+use ironplc_problems::{text, Text};
 use std::convert::Infallible;
 
 use crate::{
@@ -70,14 +70,11 @@ struct RuleMemberQualifierInvalid {
 }
 
 impl RuleMemberQualifierInvalid {
-    fn report(&mut self, qualifier: &MemberQualifier, owner: &str, message: String) {
+    fn report(&mut self, qualifier: &MemberQualifier, owner: &str, message: Text) {
         self.diagnostics.push(
-            Diagnostic::problem(
-                Problem::MemberQualifierInvalid,
-                Label::span(qualifier.span.clone(), message),
-            )
-            .with_context("qualifier", &qualifier.kind.keyword().to_string())
-            .with_context("declaration", &owner.to_string()),
+            Diagnostic::text(qualifier.span.clone(), message)
+                .with_context("qualifier", &qualifier.kind.keyword().to_string())
+                .with_context("declaration", &owner.to_string()),
         );
     }
 
@@ -93,19 +90,22 @@ impl RuleMemberQualifierInvalid {
                 self.report(
                     qualifier,
                     owner,
-                    format!("{keyword} appears more than once"),
+                    text::member_qualifier_invalid_appears_more_than_once(keyword),
                 );
             } else if is_access(qualifier.kind) && earlier.iter().any(|e| is_access(e.kind)) {
                 self.report(
                     qualifier,
                     owner,
-                    format!("{keyword} is a second access specifier"),
+                    text::member_qualifier_invalid_second_access_specifier(keyword),
                 );
             } else if is_access(qualifier.kind) && !earlier.is_empty() {
                 self.report(
                     qualifier,
                     owner,
-                    format!("{keyword} must come before {}", earlier[0].kind.keyword()),
+                    text::member_qualifier_invalid_must_come_before(
+                        keyword,
+                        earlier[0].kind.keyword(),
+                    ),
                 );
             } else if let Some(other) = excluded_by(qualifier.kind)
                 .and_then(|other| earlier.iter().find(|e| e.kind == other))
@@ -113,7 +113,10 @@ impl RuleMemberQualifierInvalid {
                 self.report(
                     qualifier,
                     owner,
-                    format!("{keyword} cannot be combined with {}", other.kind.keyword()),
+                    text::member_qualifier_invalid_cannot_be_combined_with(
+                        keyword,
+                        other.kind.keyword(),
+                    ),
                 );
             }
         }
@@ -136,9 +139,8 @@ impl RuleMemberQualifierInvalid {
                 self.report(
                     qualifier,
                     &owner,
-                    format!(
-                        "{} is not allowed on a function block",
-                        qualifier.kind.keyword()
+                    text::member_qualifier_invalid_not_allowed_on_a_function_block(
+                        qualifier.kind.keyword(),
                     ),
                 );
             }
@@ -169,14 +171,17 @@ impl RuleMemberQualifierInvalid {
                 self.report(
                     qualifier,
                     &owner,
-                    format!(
-                        "ABSTRACT method in {}, which is not ABSTRACT",
-                        function_block.name
+                    text::member_qualifier_invalid_abstract_method_in_non_abstract_function_block(
+                        &function_block.name,
                     ),
                 );
             }
             if !node.body.is_empty() {
-                self.report(qualifier, &owner, "ABSTRACT method has a body".to_string());
+                self.report(
+                    qualifier,
+                    &owner,
+                    text::member_qualifier_invalid_abstract_method_has_a_body(),
+                );
             }
         }
     }
@@ -222,6 +227,7 @@ impl Visitor<Infallible> for RuleMemberQualifierInvalid {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ironplc_problems::Problem;
     use rstest::rstest;
 
     fn opts_flag() -> CompilerOptions {

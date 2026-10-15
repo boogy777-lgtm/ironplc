@@ -20,13 +20,9 @@
 //! FUNCTION_BLOCK PUBLIC FB_Motor
 //! END_FUNCTION_BLOCK
 //! ```
-use ironplc_dsl::{
-    common::FunctionBlockDeclaration,
-    diagnostic::{Diagnostic, Label},
-    visitor::Visitor,
-};
+use ironplc_dsl::{common::FunctionBlockDeclaration, diagnostic::Diagnostic, visitor::Visitor};
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use std::convert::Infallible;
 
 use crate::{
@@ -72,9 +68,9 @@ impl Visitor<Infallible> for RuleMemberQualifierAllowed {
         if let Some(oop) = &node.oop {
             for qualifier in oop.qualifiers.iter() {
                 self.diagnostics.push(
-                    Diagnostic::problem(
-                        Problem::MemberQualifierNotAllowed,
-                        Label::span(qualifier.span.clone(), "Function block qualifier"),
+                    Diagnostic::text(
+                        qualifier.span.clone(),
+                        text::member_qualifier_not_allowed_function_block_qualifier(),
                     )
                     .with_context("qualifier", &qualifier.kind.keyword().to_string())
                     .with_context("function_block", &node.name.to_string()),
@@ -88,6 +84,7 @@ impl Visitor<Infallible> for RuleMemberQualifierAllowed {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ironplc_problems::Problem;
 
     fn opts_flag() -> CompilerOptions {
         CompilerOptions {

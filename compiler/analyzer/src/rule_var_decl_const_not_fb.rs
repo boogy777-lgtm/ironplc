@@ -17,13 +17,8 @@
 //!    END_VAR
 //! END_FUNCTION_BLOCK
 //! ```
-use ironplc_dsl::{
-    common::*,
-    core::Located,
-    diagnostic::{Diagnostic, Label},
-    visitor::Visitor,
-};
-use ironplc_problems::Problem;
+use ironplc_dsl::{common::*, core::Located, diagnostic::Diagnostic, visitor::Visitor};
+use ironplc_problems::text;
 use std::convert::Infallible;
 
 use crate::{
@@ -63,12 +58,9 @@ impl Visitor<Infallible> for RuleVarDeclConstIsNotFunctionBlock {
         if node.qualifier == DeclarationQualifier::Constant {
             if let InitialValueAssignmentKind::FunctionBlock(fb) = &node.initializer {
                 self.diagnostics.push(
-                    Diagnostic::problem(
-                        Problem::FunctionBlockNotConstant,
-                        Label::span(
-                            node.identifier.span(),
-                            "Declaration of function block instance",
-                        ),
+                    Diagnostic::text(
+                        node.identifier.span(),
+                        text::function_block_not_constant_declaration_of_function_block_instance(),
                     )
                     .with_context_type("function block", &fb.type_name),
                 );

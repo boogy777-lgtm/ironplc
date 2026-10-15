@@ -43,7 +43,7 @@ use ironplc_dsl::{
     diagnostic::{Diagnostic, Label},
     visitor::Visitor,
 };
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 
 use crate::{
     intermediates::global_vars::collect_global_var_decls,
@@ -127,12 +127,15 @@ impl Visitor<Infallible> for RuleExternalGlobalConst<'_> {
                 let global = self.global_consts.get(name).cloned();
                 if let Some(global) = global {
                     self.diagnostics.push(
-                        Diagnostic::problem(
-                            Problem::VariableMustBeConst,
-                            Label::span(node.identifier.span(), "Reference to global variable"),
+                        Diagnostic::text(
+                            node.identifier.span(),
+                            text::variable_must_be_const_reference_to_global_variable(),
                         )
                         .with_context("variable", &node.identifier.to_string())
-                        .with_secondary(Label::span(global.span(), "Constant global variable")),
+                        .with_secondary(Label::span(
+                            global.span(),
+                            text::variable_must_be_const_constant_global_variable(),
+                        )),
                     );
                 }
             }

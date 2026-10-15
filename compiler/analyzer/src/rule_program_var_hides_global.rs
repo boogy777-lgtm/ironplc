@@ -50,7 +50,7 @@ use ironplc_dsl::{
     diagnostic::{Diagnostic, Label},
     visitor::Visitor,
 };
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 
 use crate::{
     intermediates::global_vars::collect_global_var_decls,
@@ -110,16 +110,16 @@ impl Visitor<Infallible> for RuleProgramVarHidesGlobal {
             };
             if let Some(global) = self.globals.get(name) {
                 self.diagnostics.push(
-                    Diagnostic::problem(
-                        Problem::ProgramVariableHidesGlobal,
-                        Label::span(
-                            decl.identifier.span(),
-                            "Program variable has the same name as a global variable",
-                        ),
+                    Diagnostic::text(
+                        decl.identifier.span(),
+                        text::program_variable_hides_global_same_name_as_global(),
                     )
                     .with_context_id("variable", name)
                     .with_context_id("program", &node.name)
-                    .with_secondary(Label::span(global.span(), "Global variable")),
+                    .with_secondary(Label::span(
+                        global.span(),
+                        text::program_variable_hides_global_global_variable(),
+                    )),
                 );
             }
         }

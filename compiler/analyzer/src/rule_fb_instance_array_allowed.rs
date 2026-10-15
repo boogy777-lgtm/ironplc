@@ -31,14 +31,9 @@
 //! ```
 use std::convert::Infallible;
 
-use ironplc_dsl::{
-    common::*,
-    core::Located,
-    diagnostic::{Diagnostic, Label},
-    visitor::Visitor,
-};
+use ironplc_dsl::{common::*, core::Located, diagnostic::Diagnostic, visitor::Visitor};
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 
 use crate::{
     callee_resolution::FunctionBlocks,
@@ -95,13 +90,7 @@ impl Visitor<Infallible> for RuleFbInstanceArray<'_> {
                 {
                     if self.is_function_block(element) {
                         self.diagnostics.push(
-                            Diagnostic::problem(
-                                Problem::FbInstanceArrayNotAllowed,
-                                Label::span(
-                                    node.identifier.span(),
-                                    "Array of function block instances",
-                                ),
-                            )
+                            Diagnostic::text(node.identifier.span(), text::fb_instance_array_not_allowed_array_of_function_block_instances())
                             .with_context("function block", &element.to_string()),
                         );
                     }
@@ -115,6 +104,7 @@ impl Visitor<Infallible> for RuleFbInstanceArray<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ironplc_problems::Problem;
 
     fn flag_enabled() -> CompilerOptions {
         CompilerOptions {

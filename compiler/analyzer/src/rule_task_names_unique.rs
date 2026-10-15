@@ -16,13 +16,10 @@
 //!   PROGRAM instance1 WITH my_task : plc_prg;
 //! END_RESOURCE
 use ironplc_dsl::{
-    common::*,
-    configuration::ResourceDeclaration,
-    core::Located,
-    diagnostic::{Diagnostic, Label},
+    common::*, configuration::ResourceDeclaration, core::Located, diagnostic::Diagnostic,
     visitor::Visitor,
 };
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use std::collections::HashSet;
 use std::convert::Infallible;
 
@@ -65,9 +62,9 @@ impl Visitor<Infallible> for RuleTaskNamesUnique {
         for task_config in &node.tasks {
             if !seen_names.insert(&task_config.name) {
                 self.diagnostics.push(
-                    Diagnostic::problem(
-                        Problem::DuplicateTaskName,
-                        Label::span(task_config.name.span(), "Duplicate task name"),
+                    Diagnostic::text(
+                        task_config.name.span(),
+                        text::duplicate_task_name_duplicate_task_name(),
                     )
                     .with_context_id("resource", &node.name)
                     .with_context_id("task", &task_config.name),
