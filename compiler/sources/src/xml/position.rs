@@ -5,9 +5,6 @@
 
 use ironplc_dsl::{core::FileId, diagnostic::Diagnostic};
 use ironplc_problems::{text, Text};
-// The tests of this module name problems through `use super::*`.
-#[cfg(test)]
-use ironplc_problems::Problem;
 
 use super::schema::{
     Action, Actions, ArrayType, Body, Configuration, Configurations, ContentHeader, CoordinateInfo,

@@ -1,6 +1,7 @@
 //! Tests for the PLCopen XML parser.
 
 use super::*;
+use ironplc_problems::Problem;
 use ironplc_test::cast;
 
 fn test_file_id() -> FileId {

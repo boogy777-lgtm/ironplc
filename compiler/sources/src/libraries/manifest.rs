@@ -9,9 +9,6 @@
 use ironplc_dsl::core::FileId;
 use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_problems::{text, Text};
-// The tests of this module name problems through `use super::*`.
-#[cfg(test)]
-use ironplc_problems::Problem;
 
 /// A parsed and validated `library.toml` manifest.
 ///
@@ -114,6 +111,7 @@ impl LibraryManifest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ironplc_problems::Problem;
 
     fn file_id() -> FileId {
         FileId::from_string("library.toml")

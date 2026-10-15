@@ -2,9 +2,10 @@
 
 use ironplc_dsl::core::FileId;
 use ironplc_parser::options::{CompilerOptions, Dialect};
+use ironplc_problems::Problem;
 use std::path::Path;
 
-use super::{FileBackedProject, LibraryName, MemoryBackedProject, Problem, Project};
+use super::{FileBackedProject, LibraryName, MemoryBackedProject, Project};
 
 #[test]
 fn change_text_document_when_overwrite_then_one_file() {

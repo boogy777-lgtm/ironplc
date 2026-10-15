@@ -8,9 +8,6 @@ use ironplc_dsl::{
     diagnostic::Diagnostic,
 };
 use ironplc_problems::text;
-// The tests of this module name problems through `use super::*`.
-#[cfg(test)]
-use ironplc_problems::Problem;
 use log::debug;
 
 use ironplc_parser::options::CompilerOptions;
@@ -75,6 +72,7 @@ pub fn parse(
 mod tests {
     use super::*;
     use ironplc_dsl::core::FileId;
+    use ironplc_problems::Problem;
 
     fn test_file_id() -> FileId {
         FileId::from_string("test.xml")

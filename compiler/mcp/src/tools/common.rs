@@ -15,8 +15,6 @@ use ironplc_problems::{text, Text};
 // The tests of this module name `Label` and `Problem` through `use super::*`.
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-#[cfg(test)]
-use {ironplc_dsl::diagnostic::Label, ironplc_problems::Problem};
 
 // ───────────────────────────────────────────────────────────────────
 // Input types
@@ -263,6 +261,8 @@ fn truncate(s: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ironplc_dsl::diagnostic::Label;
+    use ironplc_problems::Problem;
 
     // -- validate_sources tests --
 

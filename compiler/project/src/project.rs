@@ -13,9 +13,6 @@ use ironplc_dsl::{
 };
 use ironplc_parser::{options::CompilerOptions, token::Token, tokenize_program};
 use ironplc_problems::text;
-// The tests of this module name problems through `super`.
-#[cfg(test)]
-use ironplc_problems::Problem;
 use ironplc_sources::{FileType, LibraryName, Source, SourceProject};
 use log::{debug, trace};
 

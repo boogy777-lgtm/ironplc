@@ -1,6 +1,7 @@
 //! Tests that graphical implementation bodies (FBD, LD, IL, SFC) are rejected as unsupported.
 
 use super::*;
+use ironplc_problems::Problem;
 
 #[test]
 fn parse_when_fbd_implementation_then_returns_p9003() {

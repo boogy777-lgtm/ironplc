@@ -63,9 +63,6 @@ use ironplc_dsl::core::{FileId, Id};
 use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_parser::options::CompilerOptions;
 use ironplc_problems::text;
-// The tests of this module name problems through `use super::*`.
-#[cfg(test)]
-use ironplc_problems::Problem;
 use serde_json::{json, Value};
 
 /// The format version written into the sidecar's `version` field. A loader
@@ -518,6 +515,7 @@ fn parse(text: &str) -> Option<Sidecar> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ironplc_problems::Problem;
     use rstest::rstest;
     use std::path::Path;
     use tempfile::TempDir;

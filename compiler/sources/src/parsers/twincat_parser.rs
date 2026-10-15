@@ -29,9 +29,6 @@ use ironplc_dsl::{
 };
 use ironplc_parser::options::CompilerOptions;
 use ironplc_problems::text;
-// The tests of this module name problems through `use super::*`.
-#[cfg(test)]
-use ironplc_problems::Problem;
 use log::debug;
 
 use super::st_parser;

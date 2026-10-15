@@ -22,9 +22,6 @@ use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_parser::options::CompilerOptions;
 use ironplc_parser::parse_program;
 use ironplc_problems::text;
-// The tests of this module name problems through `use super::*`.
-#[cfg(test)]
-use ironplc_problems::Problem;
 
 use crate::libraries::manifest::LibraryManifest;
 
@@ -330,6 +327,7 @@ fn load_version_library(
 mod tests {
     use super::*;
     use ironplc_dsl::common::LibraryElementKind;
+    use ironplc_problems::Problem;
 
     #[test]
     fn library_name_round_trips_through_str() {
