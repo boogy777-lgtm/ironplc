@@ -24,6 +24,9 @@ use ironplc_dsl::{
     time::DurationLiteral,
 };
 use ironplc_parser::options::CompilerOptions;
+use ironplc_problems::text;
+// The tests of this module name problems through `use super::*`.
+#[cfg(test)]
 use ironplc_problems::Problem;
 
 mod sfc;
@@ -342,15 +345,9 @@ fn transform_base_type_to_elementary(
         DataType::UInt => Ok(ElementaryTypeName::UINT),
         DataType::UDInt => Ok(ElementaryTypeName::UDINT),
         DataType::ULInt => Ok(ElementaryTypeName::ULINT),
-        _ => Err(Diagnostic::problem(
-            Problem::XmlSchemaViolation,
-            Label::span(
-                span,
-                format!(
-                    "Subrange base type must be an integer type, found: {}",
-                    data_type.type_name()
-                ),
-            ),
+        _ => Err(Diagnostic::text(
+            span,
+            text::xml_schema_violation_subrange_base_type(data_type.type_name()),
         )),
     }
 }
@@ -447,21 +444,15 @@ fn transform_function(
             FunctionReturnType::Named(transform_data_type(rt, file_id)?)
         } else {
             // Functions must have a return type
-            return Err(Diagnostic::problem(
-                Problem::XmlSchemaViolation,
-                Label::span(
-                    span,
-                    format!("Function '{}' is missing a return type", pou.name.as_str()),
-                ),
+            return Err(Diagnostic::text(
+                span,
+                text::xml_schema_violation_function_missing_return_type(pou.name.as_str()),
             ));
         }
     } else {
-        return Err(Diagnostic::problem(
-            Problem::XmlSchemaViolation,
-            Label::span(
-                span,
-                format!("Function '{}' is missing interface", pou.name.as_str()),
-            ),
+        return Err(Diagnostic::text(
+            span,
+            text::xml_schema_violation_function_missing_interface(pou.name.as_str()),
         ));
     };
 
@@ -780,12 +771,9 @@ fn transform_task(task: &Task, file_id: &FileId) -> Result<TaskConfiguration, Di
 
     // Parse priority
     let priority = task.priority.parse::<u32>().map_err(|_| {
-        Diagnostic::problem(
-            Problem::XmlSchemaViolation,
-            Label::span(
-                file_span(file_id),
-                format!("Invalid task priority: '{}'", task.priority),
-            ),
+        Diagnostic::text(
+            file_span(file_id),
+            text::xml_schema_violation_task_priority_invalid(&task.priority),
         )
     })?;
 
@@ -888,15 +876,9 @@ fn parse_duration(duration_str: &str, file_id: &FileId) -> Result<DurationLitera
 
 /// Create an error diagnostic for invalid duration values
 fn invalid_duration_error(value: &str, file_id: &FileId) -> Diagnostic {
-    Diagnostic::problem(
-        Problem::XmlSchemaViolation,
-        Label::span(
-            file_span(file_id),
-            format!(
-                "Invalid duration format: '{}'. Expected format like T#100ms, T#1s, T#1m",
-                value
-            ),
-        ),
+    Diagnostic::text(
+        file_span(file_id),
+        text::xml_schema_violation_duration_invalid(value),
     )
 }
 
@@ -933,12 +915,9 @@ fn parse_st_body(
 
 /// Create an error diagnostic for invalid values
 fn invalid_value_error(value: &str, context: &str, file_id: &FileId) -> Diagnostic {
-    Diagnostic::problem(
-        Problem::XmlSchemaViolation,
-        Label::span(
-            file_span(file_id),
-            format!("Invalid {}: '{}'", context, value),
-        ),
+    Diagnostic::text(
+        file_span(file_id),
+        text::xml_schema_violation_value_invalid(context, value),
     )
 }
 

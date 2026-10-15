@@ -17,8 +17,8 @@ use std::{
 use super::{DiscoveredProject, ProjectType};
 use crate::libraries::{LibraryName, LibraryReference};
 use ironplc_dsl::core::FileId;
-use ironplc_dsl::diagnostic::{Diagnostic, Label};
-use ironplc_problems::Problem;
+use ironplc_dsl::diagnostic::Diagnostic;
+use ironplc_problems::text;
 
 /// Bundled libraries TwinCAT provides to every PLC project without a
 /// reference anywhere in the `.plcproj` — the built-in (compiler-operator)
@@ -137,22 +137,16 @@ fn append_implicit_references(
 /// Parse a `.plcproj` file and extract `<Compile Include="...">` paths.
 fn parse_plcproj(plcproj_path: &Path, root_dir: &Path) -> Result<DiscoveredProject, Diagnostic> {
     let content = fs::read_to_string(plcproj_path).map_err(|e| {
-        Diagnostic::problem(
-            Problem::CannotReadFile,
-            Label::file(
-                FileId::from_path(plcproj_path),
-                format!("Cannot read .plcproj file: {e}"),
-            ),
+        Diagnostic::text_in_file(
+            FileId::from_path(plcproj_path),
+            text::cannot_read_file_plcproj(e),
         )
     })?;
 
     let doc = roxmltree::Document::parse(&content).map_err(|e| {
-        Diagnostic::problem(
-            Problem::XmlMalformed,
-            Label::file(
-                FileId::from_path(plcproj_path),
-                format!("Malformed .plcproj XML: {e}"),
-            ),
+        Diagnostic::text_in_file(
+            FileId::from_path(plcproj_path),
+            text::xml_malformed_plcproj(e),
         )
     })?;
 
@@ -177,16 +171,9 @@ fn parse_plcproj(plcproj_path: &Path, root_dir: &Path) -> Result<DiscoveredProje
                 let resolved = root_dir.join(&normalized);
 
                 if !resolved.is_file() {
-                    errors.push(Diagnostic::problem(
-                        Problem::CannotReadFile,
-                        Label::file(
-                            FileId::from_path(plcproj_path),
-                            format!(
-                                "Referenced file does not exist: {} (resolved to {})",
-                                include,
-                                resolved.display()
-                            ),
-                        ),
+                    errors.push(Diagnostic::text_in_file(
+                        FileId::from_path(plcproj_path),
+                        text::cannot_read_file_referenced_missing(include, resolved.display()),
                     ));
                     continue;
                 }

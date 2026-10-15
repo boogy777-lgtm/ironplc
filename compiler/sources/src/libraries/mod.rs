@@ -18,9 +18,12 @@ use std::str::FromStr;
 
 use ironplc_dsl::common::Library;
 use ironplc_dsl::core::FileId;
-use ironplc_dsl::diagnostic::{Diagnostic, Label};
+use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_parser::options::CompilerOptions;
 use ironplc_parser::parse_program;
+use ironplc_problems::text;
+// The tests of this module name problems through `use super::*`.
+#[cfg(test)]
 use ironplc_problems::Problem;
 
 use crate::libraries::manifest::LibraryManifest;
@@ -205,22 +208,16 @@ impl LibraryRegistry {
         // directory-entry check guards against case-insensitive filesystems
         // that would otherwise bind e.g. `tc2_system` to `Tc2_System`.
         if !self.has_exact_dir(name) || !manifest_path.is_file() {
-            return Err(Diagnostic::problem(
-                Problem::LibraryNotFound,
-                Label::file(
-                    manifest_file_id,
-                    format!("compatibility library `{name}` not found"),
-                ),
+            return Err(Diagnostic::text_in_file(
+                manifest_file_id,
+                text::library_not_found(name),
             ));
         }
 
         let content = fs::read_to_string(&manifest_path).map_err(|e| {
-            Diagnostic::problem(
-                Problem::LibraryManifestInvalid,
-                Label::file(
-                    manifest_file_id.clone(),
-                    format!("cannot read manifest: {e}"),
-                ),
+            Diagnostic::text_in_file(
+                manifest_file_id.clone(),
+                text::library_manifest_invalid_manifest_unreadable(e),
             )
         })?;
         let manifest = LibraryManifest::from_toml(&content, &manifest_file_id)?;
@@ -259,15 +256,9 @@ impl LibraryRegistry {
                     activated.push(reference.name.clone());
                 }
             } else {
-                diagnostics.push(Diagnostic::problem(
-                    Problem::LibraryNotFound,
-                    Label::file(
-                        reference.declared_in.clone(),
-                        format!(
-                            "project references compatibility library `{}`, which IronPLC does not bundle",
-                            reference.name
-                        ),
-                    ),
+                diagnostics.push(Diagnostic::text_in_file(
+                    reference.declared_in.clone(),
+                    text::library_not_found_not_bundled(&reference.name),
                 ));
             }
         }
@@ -304,15 +295,9 @@ fn load_version_library(
     manifest_file_id: &FileId,
 ) -> Result<Library, Diagnostic> {
     let read_dir = fs::read_dir(version_dir).map_err(|e| {
-        Diagnostic::problem(
-            Problem::LibraryManifestInvalid,
-            Label::file(
-                manifest_file_id.clone(),
-                format!(
-                    "cannot read version directory {}: {e}",
-                    version_dir.display()
-                ),
-            ),
+        Diagnostic::text_in_file(
+            manifest_file_id.clone(),
+            text::library_manifest_invalid_version_dir_unreadable(version_dir.display(), e),
         )
     })?;
 
@@ -330,9 +315,9 @@ fn load_version_library(
         }
         let file_id = FileId::from_path(&path);
         let content = fs::read_to_string(&path).map_err(|e| {
-            Diagnostic::problem(
-                Problem::LibraryManifestInvalid,
-                Label::file(file_id.clone(), format!("cannot read library file: {e}")),
+            Diagnostic::text_in_file(
+                file_id.clone(),
+                text::library_manifest_invalid_library_file_unreadable(e),
             )
         })?;
         let parsed = parse_program(&content, &file_id, &options)?;

@@ -35,8 +35,8 @@ use std::{
 };
 
 use ironplc_dsl::core::FileId;
-use ironplc_dsl::diagnostic::{Diagnostic, Label};
-use ironplc_problems::Problem;
+use ironplc_dsl::diagnostic::Diagnostic;
+use ironplc_problems::text;
 use log::info;
 
 use crate::file_type::FileType;
@@ -137,12 +137,9 @@ pub fn discover(path: &Path) -> Result<DiscoveredProject, Diagnostic> {
     info!("Discovering project structure at: {}", path.display());
 
     if !path.exists() {
-        return Err(Diagnostic::problem(
-            Problem::CannotReadDirectory,
-            Label::file(
-                FileId::from_path(path),
-                format!("Path does not exist: {}", path.display()),
-            ),
+        return Err(Diagnostic::text_in_file(
+            FileId::from_path(path),
+            text::cannot_read_directory(path.display()),
         ));
     }
 

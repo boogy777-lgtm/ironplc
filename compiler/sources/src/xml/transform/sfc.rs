@@ -24,12 +24,7 @@ pub(super) fn transform_sfc_body(
         .steps
         .iter()
         .find(|s| s.initial_step)
-        .ok_or_else(|| {
-            Diagnostic::problem(
-                Problem::SfcMissingInitialStep,
-                Label::span(file_span(file_id), "SFC body"),
-            )
-        })?;
+        .ok_or_else(|| Diagnostic::text(file_span(file_id), text::sfc_missing_initial_step()))?;
 
     // Build action associations map from action blocks
     let action_associations = build_action_associations(sfc_body, file_id);
