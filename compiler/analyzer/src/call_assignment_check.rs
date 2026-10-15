@@ -20,7 +20,7 @@ use ironplc_dsl::{
     diagnostic::{Diagnostic, Label},
     textual::ParamAssignmentKind,
 };
-use ironplc_problems::Problem;
+use ironplc_problems::Text;
 
 /// Returns the first variable matching the specified name and one of the
 /// variable types, or `None` if the owner does not contain a matching
@@ -90,20 +90,35 @@ pub(crate) fn bind_inputs<'a>(
         .collect()
 }
 
-/// Labels used to build the diagnostics `check_assignments` returns, so
+/// Label texts used to build the diagnostics `check_assignments` returns, so
 /// the same validation logic reads naturally for both a function-block
 /// invocation ("Function block invocation" / "invocation" /
 /// "Function block declaration") and a method call ("Method invocation" /
 /// "method" / "Method declaration").
+///
+/// Each text is a function of `ironplc_problems::text` -- a row of
+/// `problem-texts.csv` of the code that diagnostic is reported under -- that
+/// the caller chooses, so the wording and the code stay in one row.
 pub(crate) struct AssignmentCheckLabels<'a> {
-    /// Primary label on the call-site span, e.g. "Method invocation".
-    pub(crate) call_label: &'a str,
+    /// Primary label on the call-site span of `FunctionCallMixedArgTypes`,
+    /// e.g. "Method invocation".
+    pub(crate) mixed_arg_types: fn() -> Text,
+    /// Primary label on the call-site span of
+    /// `FunctionInvocationMissingInput`.
+    pub(crate) missing_input: fn() -> Text,
+    /// Secondary label on the declaration span of
+    /// `FunctionInvocationMissingInput`, e.g. "Method declaration".
+    pub(crate) missing_input_declaration: fn() -> Text,
+    /// Primary label on the call-site span of
+    /// `FunctionInvocationRequiresFormal`.
+    pub(crate) requires_formal: fn() -> Text,
+    /// Primary label on the call-site span of
+    /// `FunctionInvocationUndefinedOutput`.
+    pub(crate) undefined_output: fn() -> Text,
     /// Context key paired with `owner_name`, e.g. "method" or "invocation".
     pub(crate) context_key: &'a str,
     /// The callee's own name/identity shown in diagnostic context.
     pub(crate) owner_name: &'a str,
-    /// Secondary label on the declaration span, e.g. "Method declaration".
-    pub(crate) decl_label: &'a str,
 }
 
 /// Validates a call's parameter assignments against `owner`'s declared
@@ -145,11 +160,10 @@ pub(crate) fn check_assignments(
     // Don't allow a mixture so assert that either named is empty or
     // positional is empty
     if !formal.is_empty() && !non_formal.is_empty() {
-        return vec![Diagnostic::problem(
-            Problem::FunctionCallMixedArgTypes,
-            Label::span(call_span.clone(), labels.call_label),
-        )
-        .with_context(labels.context_key, &labels.owner_name.to_string())];
+        return vec![
+            Diagnostic::text(call_span.clone(), (labels.mixed_arg_types)())
+                .with_context(labels.context_key, &labels.owner_name.to_string()),
+        ];
     }
 
     let mut diagnostics = Vec::new();
@@ -161,13 +175,13 @@ pub(crate) fn check_assignments(
         for (param, declared) in bind_inputs(owner, params) {
             if let (ParamAssignmentKind::NamedInput(name), None) = (param, declared) {
                 diagnostics.push(
-                    Diagnostic::problem(
-                        Problem::FunctionInvocationMissingInput,
-                        Label::span(call_span.clone(), labels.call_label),
-                    )
-                    .with_context(labels.context_key, &labels.owner_name.to_string())
-                    .with_context_id("undefined input", &name.name)
-                    .with_secondary(Label::span(owner_span.clone(), labels.decl_label)),
+                    Diagnostic::text(call_span.clone(), (labels.missing_input)())
+                        .with_context(labels.context_key, &labels.owner_name.to_string())
+                        .with_context_id("undefined input", &name.name)
+                        .with_secondary(Label::span(
+                            owner_span.clone(),
+                            (labels.missing_input_declaration)(),
+                        )),
                 );
             }
         }
@@ -179,13 +193,10 @@ pub(crate) fn check_assignments(
         let num_required_inputs = count_input_type(owner);
         if non_formal.len() != num_required_inputs {
             diagnostics.push(
-                Diagnostic::problem(
-                    Problem::FunctionInvocationRequiresFormal,
-                    Label::span(call_span.clone(), labels.call_label),
-                )
-                .with_context(labels.context_key, &labels.owner_name.to_string())
-                .with_context("required", &format!("{num_required_inputs}"))
-                .with_context("actual", &format!("{}", non_formal.len())),
+                Diagnostic::text(call_span.clone(), (labels.requires_formal)())
+                    .with_context(labels.context_key, &labels.owner_name.to_string())
+                    .with_context("required", &format!("{num_required_inputs}"))
+                    .with_context("actual", &format!("{}", non_formal.len())),
             );
         }
     }
@@ -195,13 +206,10 @@ pub(crate) fn check_assignments(
     for output in outputs {
         if find_output_type(owner, &output.src).is_none() {
             diagnostics.push(
-                Diagnostic::problem(
-                    Problem::FunctionInvocationUndefinedOutput,
-                    Label::span(call_span.clone(), labels.call_label),
-                )
-                .with_context(labels.context_key, &labels.owner_name.to_string())
-                .with_context_id("source", &output.src)
-                .with_context("target", &output.tgt.to_string()),
+                Diagnostic::text(call_span.clone(), (labels.undefined_output)())
+                    .with_context(labels.context_key, &labels.owner_name.to_string())
+                    .with_context_id("source", &output.src)
+                    .with_context("target", &output.tgt.to_string()),
             );
         }
     }

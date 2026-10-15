@@ -38,7 +38,7 @@ use ironplc_dsl::{
     textual::*,
     visitor::Visitor,
 };
-use ironplc_problems::Problem;
+use ironplc_problems::{text, Problem};
 use std::convert::Infallible;
 
 use crate::{
@@ -92,10 +92,16 @@ impl<'a> RuleFunctionBlockUse<'a> {
             fb_call.span(),
             &fb_call.params,
             &crate::call_assignment_check::AssignmentCheckLabels {
-                call_label: "Function block invocation",
+                mixed_arg_types: text::function_call_mixed_arg_types_function_block_invocation,
+                missing_input: text::function_invocation_missing_input_function_block_invocation,
+                missing_input_declaration:
+                    text::function_invocation_missing_input_function_block_declaration,
+                requires_formal:
+                    text::function_invocation_requires_formal_function_block_invocation,
+                undefined_output:
+                    text::function_invocation_undefined_output_function_block_invocation,
                 context_key: "invocation",
                 owner_name: &function_block.name.to_string(),
-                decl_label: "Function block declaration",
             },
         )
     }
