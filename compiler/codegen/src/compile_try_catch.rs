@@ -25,9 +25,9 @@
 //! are omitted, so the body falls straight into the `__FINALLY` body.
 
 use ironplc_dsl::core::{Id, Located};
-use ironplc_dsl::diagnostic::{Diagnostic, Label};
+use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_dsl::textual::{CatchClause, Throw, TryCatch};
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 
 use super::compile::{CompileContext, DEFAULT_OP_TYPE};
 use super::compile_expr::{compile_expr, emit_store_var, emit_truncation, resolve_variable_name};
@@ -106,12 +106,9 @@ pub(crate) fn compile_throw(
     // Copy the handler out before compiling: compiling the thrown value needs
     // `ctx` mutably.
     let Some(handler) = ctx.try_handlers.last().cloned() else {
-        return Err(Diagnostic::problem(
-            Problem::ThrowOutsideTryCatch,
-            Label::span(
-                node.span(),
-                "__THROW must be inside a __TRY statement with a __CATCH clause",
-            ),
+        return Err(Diagnostic::text(
+            node.span(),
+            text::throw_outside_try_catch(),
         ));
     };
 

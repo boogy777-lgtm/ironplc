@@ -4,7 +4,7 @@ use ironplc_dsl::common::{Library, LibraryElementKind, ProgramDeclaration};
 use ironplc_dsl::configuration::{ConfigurationDeclaration, ProgramConfiguration};
 use ironplc_dsl::core::{FileId, Id, Located};
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 
 /// Finds the one PROGRAM declaration that the container runs.
 ///
@@ -25,12 +25,9 @@ pub(super) fn find_program(library: &Library) -> Result<&ProgramDeclaration, Dia
     sort_by_source_position(&mut programs, |program| &program.name);
 
     match programs.as_slice() {
-        [] => Err(Diagnostic::problem(
-            Problem::NoProgramDeclaration,
-            Label::file(
-                FileId::default(),
-                "Source does not contain a PROGRAM declaration",
-            ),
+        [] => Err(Diagnostic::text_in_file(
+            FileId::default(),
+            text::no_program_declaration(),
         )),
         [program] => Ok(program),
         _ => Err(multiple_programs_not_implemented(

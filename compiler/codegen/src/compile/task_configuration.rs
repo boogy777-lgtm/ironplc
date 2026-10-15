@@ -3,8 +3,8 @@
 use ironplc_container::{Container, TaskType};
 use ironplc_dsl::configuration::{ConfigurationDeclaration, TaskConfiguration};
 use ironplc_dsl::core::{Id, Located};
-use ironplc_dsl::diagnostic::{Diagnostic, Label};
-use ironplc_problems::Problem;
+use ironplc_dsl::diagnostic::Diagnostic;
+use ironplc_problems::text;
 
 /// Applies the `TASK` that the configuration binds to the compiled program.
 ///
@@ -28,23 +28,16 @@ pub(super) fn apply_task_configuration(
     // emitting one would produce a program whose task body never runs. Reject
     // it rather than compile something that silently does nothing.
     if task.single.is_some() {
-        return Err(Diagnostic::problem(
-            Problem::TaskSingleNotSupported,
-            Label::span(task.name.span(), "Task declares SINGLE"),
+        return Err(Diagnostic::text(
+            task.name.span(),
+            text::task_single_not_supported(),
         ));
     }
 
     let priority = u16::try_from(task.priority).map_err(|_| {
-        Diagnostic::problem(
-            Problem::TaskParameterOutOfRange,
-            Label::span(
-                task.name.span(),
-                format!(
-                    "Task declares PRIORITY := {}, which exceeds the maximum of {}",
-                    task.priority,
-                    u16::MAX
-                ),
-            ),
+        Diagnostic::text(
+            task.name.span(),
+            text::task_parameter_out_of_range_priority(task.priority, u16::MAX),
         )
     })?;
 
@@ -75,12 +68,9 @@ fn task_interval_us(task: &TaskConfiguration) -> Result<u64, Diagnostic> {
 
     let micros = interval.interval.whole_microseconds();
     u64::try_from(micros).map_err(|_| {
-        Diagnostic::problem(
-            Problem::TaskParameterOutOfRange,
-            Label::span(
-                interval.span.clone(),
-                format!("Task declares an INTERVAL of {micros} microseconds"),
-            ),
+        Diagnostic::text(
+            interval.span.clone(),
+            text::task_parameter_out_of_range_interval(micros),
         )
     })
 }

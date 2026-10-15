@@ -14,6 +14,20 @@ P0009,twin_cat_malformed_declaration_missing,{object_type} element is missing re
 P0009,twin_cat_malformed_declaration_missing_named,{kind} '{name}' is missing required 'Declaration' element
 P0009,twin_cat_malformed_object_missing,"TcPlcObject must contain a POU, GVL, DUT, or Itf element"
 P0009,twin_cat_malformed_root_element,"Expected root element 'TcPlcObject', found '{found}'"
+P0027,jump_destination_invalid,No label '{label}' in this body
+P2026,constant_overflow_bit_string_literal,Bit string literal
+P2026,constant_overflow_case_label,CASE label
+P2026,constant_overflow_integer_literal,Integer literal
+P2027,array_index_out_of_bounds,Array index out of bounds
+P4007,variable_undefined,Variable reference
+P4020,no_program_declaration,Source does not contain a PROGRAM declaration
+P4021,exit_outside_loop,"EXIT must be inside a FOR, WHILE, or REPEAT loop"
+P4034,string_encoding_mismatch,String operand
+P4047,task_single_not_supported,Task declares SINGLE
+P4048,task_parameter_out_of_range_interval,Task declares an INTERVAL of {microseconds} microseconds
+P4048,task_parameter_out_of_range_priority,"Task declares PRIORITY := {priority}, which exceeds the maximum of {maximum}"
+P4065,continue_outside_loop,"CONTINUE must be inside a FOR, WHILE, or REPEAT loop"
+P4066,throw_outside_try_catch,__THROW must be inside a __TRY statement with a __CATCH clause
 P4076,attribute_not_allowed_here,The attribute '{name}' does not apply to a declaration of this kind ({kind}); it applies to: {targets}
 P4077,attribute_value_invalid_found,"The attribute '{name}' takes {takes}, but its value is '{value}'"
 P4077,attribute_value_invalid_missing,"The attribute '{name}' takes {takes}, but it has no value"

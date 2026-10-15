@@ -15,7 +15,7 @@ use ironplc_dsl::textual::{
     CaseSelectionKind, Expr, FbCall, ParamAssignmentKind, Statements, StmtKind,
     SymbolicVariableKind, Variable,
 };
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 
 use super::compile::{
     CompileContext, CurrentFunctionReturn, OpType, OpWidth, Signedness, DEFAULT_OP_TYPE,
@@ -461,28 +461,16 @@ fn compile_statement(
             Ok(())
         }
         StmtKind::Exit(span) => {
-            let label = ctx.current_loop_exit().ok_or_else(|| {
-                Diagnostic::problem(
-                    Problem::ExitOutsideLoop,
-                    Label::span(
-                        span.clone(),
-                        "EXIT must be inside a FOR, WHILE, or REPEAT loop",
-                    ),
-                )
-            })?;
+            let label = ctx
+                .current_loop_exit()
+                .ok_or_else(|| Diagnostic::text(span.clone(), text::exit_outside_loop()))?;
             emitter.emit_jmp(label);
             Ok(())
         }
         StmtKind::Continue(span) => {
-            let label = ctx.current_loop_next().ok_or_else(|| {
-                Diagnostic::problem(
-                    Problem::ContinueOutsideLoop,
-                    Label::span(
-                        span.clone(),
-                        "CONTINUE must be inside a FOR, WHILE, or REPEAT loop",
-                    ),
-                )
-            })?;
+            let label = ctx
+                .current_loop_next()
+                .ok_or_else(|| Diagnostic::text(span.clone(), text::continue_outside_loop()))?;
             emitter.emit_jmp(label);
             Ok(())
         }
@@ -836,11 +824,8 @@ impl<'a> CaseLabelValue<'a> {
 
     fn overflow(&self) -> Diagnostic {
         let sign = if self.is_neg { "-" } else { "" };
-        Diagnostic::problem(
-            Problem::ConstantOverflow,
-            Label::span(self.magnitude.span(), "CASE label"),
-        )
-        .with_context("value", &format!("{sign}{}", self.magnitude.value))
+        Diagnostic::text(self.magnitude.span(), text::constant_overflow_case_label())
+            .with_context("value", &format!("{sign}{}", self.magnitude.value))
     }
 }
 
@@ -954,19 +939,13 @@ pub(crate) fn signed_integer_to_i32(si: &SignedInteger) -> Result<i32, Diagnosti
         let unsigned = si.value.value as i128;
         let signed = -unsigned;
         i32::try_from(signed).map_err(|_| {
-            Diagnostic::problem(
-                Problem::ConstantOverflow,
-                Label::span(si.value.span(), "Integer literal"),
-            )
-            .with_context("value", &signed.to_string())
+            Diagnostic::text(si.value.span(), text::constant_overflow_integer_literal())
+                .with_context("value", &signed.to_string())
         })
     } else {
         i32::try_from(si.value.value).map_err(|_| {
-            Diagnostic::problem(
-                Problem::ConstantOverflow,
-                Label::span(si.value.span(), "Integer literal"),
-            )
-            .with_context("value", &si.value.value.to_string())
+            Diagnostic::text(si.value.span(), text::constant_overflow_integer_literal())
+                .with_context("value", &si.value.value.to_string())
         })
     }
 }

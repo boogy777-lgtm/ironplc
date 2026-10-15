@@ -8,7 +8,7 @@ use ironplc_dsl::common::{ArrayInitialElementKind, ConstantKind};
 use ironplc_dsl::core::{Id, Located, SourceSpan};
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
 use ironplc_dsl::textual::{Expr, ExprKind, SymbolicVariableKind, UnaryOp, Variable};
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 
 use ironplc_analyzer::intermediate_type::{ArrayDimension, ByteSized, IntermediateType};
 use ironplc_container::{CharWidth, ContainerBuilder, SlotIndex, VarIndex};
@@ -901,9 +901,9 @@ fn try_constant_flat_index(
         };
         let upper = dim.lower_bound + dim.size as i32 - 1;
         if value < dim.lower_bound || value > upper {
-            return Err(Diagnostic::problem(
-                Problem::ArrayIndexOutOfBounds,
-                Label::span(span.clone(), "Array index out of bounds"),
+            return Err(Diagnostic::text(
+                span.clone(),
+                text::array_index_out_of_bounds(),
             ));
         }
         flat_index += (value - dim.lower_bound) * dim.stride as i32;
