@@ -18,7 +18,6 @@ codegen/tests/it/wire_format.rs 1058
 container/src/spec_conformance.rs 1110
 dsl/src/common.rs 3622
 dsl/src/textual.rs 1482
-ironplc-cli/src/cli.rs 1027
 ironplc-cli/src/lsp.rs 1362
 ironplc-cli/src/lsp_project.rs 1456
 mcp/src/spec_conformance.rs 1342
