@@ -21,7 +21,7 @@ use ironplc_dsl::common::*;
 use ironplc_dsl::core::{Id, Located};
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
 use ironplc_dsl::fold::Fold;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use std::convert::Infallible;
 
 /// Populates the type environment (this also transforms late bound
@@ -106,11 +106,14 @@ impl TypeEnvironment {
         // At this point we should have a type for the late bound declaration
         // so we can replace the late bound declaration with the correct type
         let existing = self.lookup(&node.base_type_name).or_failure(|| {
-            Diagnostic::problem(
-                Problem::ParentTypeNotDeclared,
-                Label::span(node.data_type_name.span(), "Type alias"),
+            Diagnostic::text(
+                node.data_type_name.span(),
+                text::parent_type_not_declared_type_alias(),
             )
-            .with_secondary(Label::span(node.base_type_name.span(), "Base type"))
+            .with_secondary(Label::span(
+                node.base_type_name.span(),
+                text::parent_type_not_declared_base_type(),
+            ))
         })?;
 
         if existing.representation.is_primitive() {
@@ -210,13 +213,13 @@ impl Declaration<'_> {
                 // Simple declarations must have a type specification
                 // Example: TYPE MY_TYPE : INT; END_TYPE (valid)
                 // Example: TYPE MY_TYPE; END_TYPE (invalid - this case)
-                return Err(Diagnostic::problem(
-                    Problem::InvalidSimpleTypeDecl,
-                    Label::span(node.type_name.span(), "Type declaration"),
+                return Err(Diagnostic::text(
+                    node.type_name.span(),
+                    text::invalid_simple_type_decl_type_declaration(),
                 )
                 .with_secondary(Label::span(
                     source_span.clone(),
-                    "Type specification required (e.g., ': INT')",
+                    text::invalid_simple_type_decl_type_specification_required(),
                 ))
                 .into());
             }
@@ -234,11 +237,14 @@ impl Declaration<'_> {
                 // will have the same attributes as the base type. If the base
                 // type is not declared, then this is not valid.
                 self.environment.lookup(base).or_failure(|| {
-                    Diagnostic::problem(
-                        Problem::ParentTypeNotDeclared,
-                        Label::span(node.type_name.span(), "Derived type"),
+                    Diagnostic::text(
+                        node.type_name.span(),
+                        text::parent_type_not_declared_derived_type(),
                     )
-                    .with_secondary(Label::span(base.span(), "Base type"))
+                    .with_secondary(Label::span(
+                        base.span(),
+                        text::parent_type_not_declared_base_type(),
+                    ))
                 })?;
                 self.environment.insert_alias(&node.type_name, base)?;
             }
@@ -263,11 +269,14 @@ impl Declaration<'_> {
                 // Handle function block type aliases like: TYPE MyFBAlias : ExistingFB := (input := 10); END_TYPE
                 // This creates an alias to an existing function block type
                 self.environment.lookup(&fb_init.type_name).or_failure(|| {
-                    Diagnostic::problem(
-                        Problem::ParentTypeNotDeclared,
-                        Label::span(node.type_name.span(), "Function block type alias"),
+                    Diagnostic::text(
+                        node.type_name.span(),
+                        text::parent_type_not_declared_function_block_type_alias(),
                     )
-                    .with_secondary(Label::span(fb_init.type_name.span(), "Base type"))
+                    .with_secondary(Label::span(
+                        fb_init.type_name.span(),
+                        text::parent_type_not_declared_base_type(),
+                    ))
                 })?;
                 self.environment
                     .insert_alias(&node.type_name, &fb_init.type_name)?;
@@ -280,11 +289,14 @@ impl Declaration<'_> {
                 // treat it as an alias to the referenced FB type, ignoring
                 // the (codegen-unsupported) constructor arguments.
                 self.environment.lookup(&fb_call.type_name).or_failure(|| {
-                    Diagnostic::problem(
-                        Problem::ParentTypeNotDeclared,
-                        Label::span(node.type_name.span(), "Function block type alias"),
+                    Diagnostic::text(
+                        node.type_name.span(),
+                        text::parent_type_not_declared_function_block_type_alias(),
                     )
-                    .with_secondary(Label::span(fb_call.type_name.span(), "Base type"))
+                    .with_secondary(Label::span(
+                        fb_call.type_name.span(),
+                        text::parent_type_not_declared_base_type(),
+                    ))
                 })?;
                 self.environment
                     .insert_alias(&node.type_name, &fb_call.type_name)?;
@@ -308,11 +320,14 @@ impl Declaration<'_> {
                 self.environment
                     .lookup(&structure_init.type_name)
                     .or_failure(|| {
-                        Diagnostic::problem(
-                            Problem::ParentTypeNotDeclared,
-                            Label::span(node.type_name.span(), "Structure type alias"),
+                        Diagnostic::text(
+                            node.type_name.span(),
+                            text::parent_type_not_declared_structure_type_alias(),
                         )
-                        .with_secondary(Label::span(structure_init.type_name.span(), "Base type"))
+                        .with_secondary(Label::span(
+                            structure_init.type_name.span(),
+                            text::parent_type_not_declared_base_type(),
+                        ))
                     })?;
                 self.environment
                     .insert_alias(&node.type_name, &structure_init.type_name)?;
@@ -350,11 +365,14 @@ impl Declaration<'_> {
             SpecificationKind::Named(base_type_name) => {
                 // Alias of another enumeration: base must already exist because we sort the items
                 self.environment.lookup(base_type_name).or_failure(|| {
-                    Diagnostic::problem(
-                        Problem::ParentEnumNotDeclared,
-                        Label::span(node.type_name.span(), "Enumeration"),
+                    Diagnostic::text(
+                        node.type_name.span(),
+                        text::parent_enum_not_declared_enumeration(),
                     )
-                    .with_secondary(Label::span(base_type_name.span(), "Base type name"))
+                    .with_secondary(Label::span(
+                        base_type_name.span(),
+                        text::parent_enum_not_declared_base_type_name(),
+                    ))
                 })?;
                 // Use explicit alias insertion to avoid duplicating representation logic
                 self.environment
@@ -495,9 +513,9 @@ impl Declaration<'_> {
                         .environment
                         .lookup(&simple.type_name)
                         .or_failure(|| {
-                            Diagnostic::problem(
-                                Problem::ParentTypeNotDeclared,
-                                Label::span(simple.type_name.span(), "Field type"),
+                            Diagnostic::text(
+                                simple.type_name.span(),
+                                text::parent_type_not_declared_field_type(),
                             )
                         })?
                         .representation
@@ -506,9 +524,9 @@ impl Declaration<'_> {
                         .environment
                         .lookup(&fb_init.type_name)
                         .or_failure(|| {
-                            Diagnostic::problem(
-                                Problem::ParentTypeNotDeclared,
-                                Label::span(fb_init.type_name.span(), "Field type"),
+                            Diagnostic::text(
+                                fb_init.type_name.span(),
+                                text::parent_type_not_declared_field_type(),
                             )
                         })?
                         .representation
@@ -517,9 +535,9 @@ impl Declaration<'_> {
                         .environment
                         .lookup(&enumerated.type_name)
                         .or_failure(|| {
-                            Diagnostic::problem(
-                                Problem::ParentTypeNotDeclared,
-                                Label::span(enumerated.type_name.span(), "Field type"),
+                            Diagnostic::text(
+                                enumerated.type_name.span(),
+                                text::parent_type_not_declared_field_type(),
                             )
                         })?
                         .representation

@@ -6,11 +6,11 @@
 //! with well-known types.
 use ironplc_dsl::common::*;
 use ironplc_dsl::core::{Located, SourceSpan};
-use ironplc_dsl::diagnostic::{Diagnostic, Label};
+use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_dsl::fold::Fold;
 use ironplc_dsl::textual::{Expr, ExprKind, NamedVariable, SymbolicVariableKind, Variable};
 use ironplc_dsl::visitor::Visitor;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use log::trace;
 use std::convert::Infallible;
 
@@ -165,11 +165,8 @@ impl TypeResolver<'_> {
             return;
         }
         self.diagnostics.push(
-            Diagnostic::problem(
-                Problem::UndeclaredUnknownType,
-                Label::span(name.span(), "Variable type"),
-            )
-            .with_context_type("identifier", name),
+            Diagnostic::text(name.span(), text::undeclared_unknown_type_variable_type())
+                .with_context_type("identifier", name),
         );
     }
 

@@ -49,7 +49,7 @@ use ironplc_dsl::{
     diagnostic::{Diagnostic, Label},
     visitor::Visitor,
 };
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use log::debug;
 use petgraph::{
     algo::{tarjan_scc, toposort},
@@ -472,10 +472,13 @@ fn cycle_diagnostic(members: &[Id]) -> Diagnostic {
         .map(|id| id.span.clone())
         .unwrap_or_default();
     let names: Vec<String> = members.iter().map(|id| id.to_string()).collect();
-    let mut diagnostic = Diagnostic::problem(Problem::RecursiveCycle, Label::span(span, "Cycle"))
+    let mut diagnostic = Diagnostic::text(span, text::recursive_cycle_cycle())
         .with_context("members", &names.join(", "));
     for member in members.iter().skip(1) {
-        diagnostic = diagnostic.with_secondary(Label::span(member.span.clone(), "Cycle member"));
+        diagnostic = diagnostic.with_secondary(Label::span(
+            member.span.clone(),
+            text::recursive_cycle_cycle_member(),
+        ));
     }
     diagnostic
 }

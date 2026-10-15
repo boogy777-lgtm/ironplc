@@ -15,10 +15,10 @@ use std::convert::Infallible;
 use crate::pass_runner::Outcome;
 use ironplc_dsl::common::*;
 use ironplc_dsl::core::{Id, Located};
-use ironplc_dsl::diagnostic::{Diagnostic, Label};
+use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_dsl::fold::Fold;
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 
 /// Stored information about an integer constant.
 #[derive(Debug, Clone)]
@@ -148,9 +148,9 @@ impl ConstantResolver {
             return false;
         }
         self.diagnostics.push(
-            Diagnostic::problem(
-                Problem::ConstantTypeParamNotAllowed,
-                Label::span(id.span(), format!("Constant '{id}' used in type parameter")),
+            Diagnostic::text(
+                id.span(),
+                text::constant_type_param_not_allowed_used_in_type_parameter(id),
             )
             .with_help(
                 "Use an integer literal in the type parameter, or enable the \
@@ -176,9 +176,9 @@ impl Fold<Infallible> for ConstantResolver {
                         span: id.span(),
                     })),
                     None => {
-                        self.diagnostics.push(Diagnostic::problem(
-                            Problem::UndefinedConstantReference,
-                            Label::span(id.span(), format!("Constant '{}' is not defined", id)),
+                        self.diagnostics.push(Diagnostic::text(
+                            id.span(),
+                            text::undefined_constant_reference_not_defined(id),
                         ));
                         // Return the node as-is; the diagnostic will cause an error
                         Ok(node)
@@ -208,9 +208,9 @@ impl Fold<Infallible> for ConstantResolver {
                         is_neg: false,
                     })),
                     None => {
-                        self.diagnostics.push(Diagnostic::problem(
-                            Problem::UndefinedConstantReference,
-                            Label::span(id.span(), format!("Constant '{}' is not defined", id)),
+                        self.diagnostics.push(Diagnostic::text(
+                            id.span(),
+                            text::undefined_constant_reference_not_defined(id),
                         ));
                         Ok(node)
                     }
@@ -258,6 +258,7 @@ mod tests {
     use super::*;
     use ironplc_dsl::core::FileId;
     use ironplc_parser::parse_program;
+    use ironplc_problems::Problem;
     use ironplc_test::cast;
 
     fn parse(src: &str) -> Library {

@@ -1,5 +1,6 @@
 use super::*;
 use ironplc_dsl::core::FileId;
+use ironplc_problems::Problem;
 
 use crate::test_helpers::parse_only;
 use ironplc_parser::{options::CompilerOptions, parse_program};
