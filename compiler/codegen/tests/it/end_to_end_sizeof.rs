@@ -2,6 +2,7 @@
 
 use ironplc_parser::options::{CompilerOptions, Dialect};
 use rstest::rstest;
+use spec_test_macro::spec_test;
 
 fn sizeof_options() -> CompilerOptions {
     CompilerOptions {
@@ -126,6 +127,7 @@ END_PROGRAM
 #[case::mode_2_aligned_to_2("{attribute 'pack_mode' := '2'}", 20)]
 #[case::mode_4_aligned_to_4("{attribute 'pack_mode' := '4'}", 24)]
 #[case::mode_8_byte_image_ends_with_last_member("{attribute 'pack_mode' := '8'}", 28)]
+#[spec_test(REQ_ATTR_codegen_001)]
 fn end_to_end_when_sizeof_structure_with_pack_mode_then_size_of_the_byte_image(
     #[case] pragma: &str,
     #[case] size: i32,
@@ -156,6 +158,7 @@ fn codesys_options() -> CompilerOptions {
 // An element of an array occupies its stride: the byte image of the structure
 // (LWORD and BYTE: 9 bytes) padded up to its alignment (16 bytes).
 e2e_i32_with!(
+    #[spec_test(REQ_ATTR_codegen_002)]
     end_to_end_when_sizeof_array_of_structure_then_each_element_occupies_its_stride,
     codesys_options(),
     "
@@ -173,6 +176,7 @@ END_PROGRAM
 );
 
 e2e_i32_with!(
+    #[spec_test(REQ_ATTR_codegen_002)]
     end_to_end_when_sizeof_array_of_packed_structure_then_elements_follow_each_other,
     codesys_options(),
     "
@@ -193,6 +197,7 @@ END_PROGRAM
 // A structure that nests in another occupies its stride: Inner is 9 bytes,
 // 8-aligned, so it occupies 16 and the BYTE after it stands at 8 + 16.
 e2e_i32_with!(
+    #[spec_test(REQ_ATTR_codegen_002)]
     end_to_end_when_sizeof_structure_with_nested_structure_then_nested_occupies_its_stride,
     codesys_options(),
     "

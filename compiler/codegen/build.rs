@@ -27,5 +27,8 @@ fn main() {
         "codesys-try-catch.md",
         // The CODESYS jump statements (`REQ-JMP-codegen-*`).
         "codesys-jump-and-pragmas.md",
+        // Attributes of declarations (`REQ-ATTR-codegen-*`): what `SIZEOF`
+        // answers for a structure, and the allocation of `subsequent`.
+        "attributes.md",
     ]);
 }

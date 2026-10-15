@@ -9,6 +9,7 @@ use ironplc_dsl::core::SourceSpan;
 use ironplc_dsl::{common::*, core::FileId};
 use ironplc_parser::options::CompilerOptions;
 use ironplc_problems::Problem;
+use spec_test_macro::spec_test;
 
 #[test]
 fn apply_when_ambiguous_enum_then_resolves_type() {
@@ -602,4 +603,21 @@ END_FUNCTION_BLOCK
         .unwrap();
     let result = apply(input, &mut env);
     assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+}
+
+#[test]
+#[spec_test(REQ_ATTR_analyzer_022)]
+fn apply_when_function_block_has_fields_then_offsets_follow_natural_alignment_of_the_layout() {
+    let program = "
+FUNCTION_BLOCK Blk
+    VAR_INPUT a : BYTE; b : LWORD; END_VAR
+    VAR c : WORD; END_VAR
+END_FUNCTION_BLOCK
+    ";
+    let (_result, env) = parse_and_apply_with_elementary_types(program);
+
+    let blk = env.get(&TypeName::from("Blk")).unwrap();
+    let fields = blk.representation.member_fields().unwrap();
+    let offsets: Vec<u32> = fields.iter().map(|field| field.offset).collect();
+    assert_eq!(offsets, vec![0, 8, 16]);
 }

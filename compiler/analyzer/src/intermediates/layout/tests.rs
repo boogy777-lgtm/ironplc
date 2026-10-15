@@ -2,6 +2,7 @@
 
 use ironplc_dsl::attribute::registry::PackMode;
 use rstest::rstest;
+use spec_test_macro::spec_test;
 
 use super::*;
 use crate::intermediate_type::{ByteSized, IntermediateStructField};
@@ -103,6 +104,7 @@ fn example_3() -> Vec<IntermediateType> {
 #[case::example_3_mode_2(example_3(), PackMode::Mode2, vec![0, 2, 10, 11, 12, 16, 17, 18], 20)]
 #[case::example_3_mode_4(example_3(), PackMode::Mode4, vec![0, 4, 12, 13, 16, 20, 21, 22], 24)]
 #[case::example_3_mode_8(example_3(), PackMode::Mode8, vec![0, 8, 16, 17, 20, 24, 25, 26], 28)]
+#[spec_test(REQ_ATTR_analyzer_020)]
 fn layout_when_examples_of_the_help_then_offsets_and_size_of_the_mode(
     #[case] members: Vec<IntermediateType>,
     #[case] mode: PackMode,
@@ -132,6 +134,7 @@ fn layout_when_no_bound_then_each_member_stands_at_its_own_alignment() {
 #[case::mode_2(PackMode::Mode2, 2)]
 #[case::mode_4(PackMode::Mode4, 4)]
 #[case::mode_8(PackMode::Mode8, 8)]
+#[spec_test(REQ_ATTR_analyzer_021)]
 fn layout_when_mode_then_alignment_of_whole_is_the_smaller_of_largest_member_and_mode(
     #[case] mode: PackMode,
     #[case] alignment: u8,

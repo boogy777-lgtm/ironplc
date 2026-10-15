@@ -226,6 +226,7 @@ mod tests {
     use ironplc_problems::Problem;
     use ironplc_test::cast_struct;
     use rstest::rstest;
+    use spec_test_macro::spec_test;
 
     /// Helper function to parse a program and apply type resolution
     /// Returns the type environment with resolved types
@@ -846,6 +847,7 @@ END_STRUCT END_TYPE"
     #[case::mode_4("{attribute 'pack_mode' := '4'}", vec![0, 4, 12, 13, 16, 20, 21, 22], 24)]
     #[case::mode_8("{attribute 'pack_mode' := '8'}", vec![0, 8, 16, 17, 20, 24, 25, 26], 28)]
     #[case::mode_in_other_case("{attribute 'PACK_MODE' := '1'}", vec![0, 1, 9, 10, 11, 15, 16, 17], 19)]
+    #[spec_test(REQ_ATTR_analyzer_020)]
     fn try_from_when_structure_has_pack_mode_then_fields_stand_at_the_offsets_of_the_mode(
         #[case] pragma: &str,
         #[case] offsets: Vec<u32>,
@@ -864,6 +866,7 @@ END_STRUCT END_TYPE"
     }
 
     #[test]
+    #[spec_test(REQ_ATTR_analyzer_020)]
     fn from_union_when_union_has_pack_mode_then_members_stand_at_the_offsets_of_the_mode() {
         let program = "{attribute 'pack_mode' := '1'}
 TYPE U : UNION a : BYTE; b : LWORD; END_UNION; END_TYPE";

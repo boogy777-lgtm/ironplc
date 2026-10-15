@@ -5,6 +5,7 @@
 use crate::common::parse_and_compile;
 use ironplc_container::Container;
 use ironplc_parser::options::{CompilerOptions, Dialect};
+use spec_test_macro::spec_test;
 
 /// The variable-table indices of the variables named, in the order named.
 fn var_indices(container: &Container, names: &[&str]) -> Vec<u16> {
@@ -24,6 +25,7 @@ fn var_indices(container: &Container, names: &[&str]) -> Vec<u16> {
 }
 
 #[test]
+#[spec_test(REQ_ATTR_codegen_003)]
 fn compile_when_program_has_subsequent_then_variables_have_consecutive_indices_in_declaration_order(
 ) {
     let source = "
@@ -46,6 +48,7 @@ END_PROGRAM
 }
 
 #[test]
+#[spec_test(REQ_ATTR_codegen_003)]
 fn compile_when_global_list_has_subsequent_then_variables_have_consecutive_indices_in_declaration_order(
 ) {
     let source = "

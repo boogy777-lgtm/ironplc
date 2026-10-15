@@ -8,7 +8,7 @@
 //!
 //! The rows are what CODESYS documents: where the attribute may stand, what
 //! it takes, and what it does. `state: Waiting` says that no part of IronPLC
-//! acts on the attribute yet.
+//! acts on the attribute yet; `state: Honoured` says that a part does.
 
 use super::row::{Family, Info, Row, State};
 use super::targets::{Targets, EVERY, TYPES};
@@ -88,7 +88,7 @@ rows! {
         targets: kinds![Structure, Union, Array],
         family: Layout,
         summary: "How the members of the structure are aligned in memory",
-        state: Waiting,
+        state: Honoured,
     }
 
     SUBSEQUENT: Flag = {
@@ -97,7 +97,7 @@ rows! {
         targets: kinds![Program, Variable],
         family: Layout,
         summary: "The variables of the program or the global variable list are allocated one after another in memory",
-        state: Waiting,
+        state: Honoured,
     }
 
     HIDE: Flag = {

@@ -179,7 +179,7 @@ END_PROGRAM";
         );
     }
 
-    #[spec_test(REQ_ATTR_analyzer_010)]
+    #[spec_test(REQ_ATTR_analyzer_023)]
     fn apply_when_pack_mode_stands_before_a_global_variable_list_then_p4076() {
         // A variable block passes its attributes to each variable, and a
         // variable is not a declaration whose layout `pack_mode` describes.
@@ -199,6 +199,17 @@ END_PROGRAM";
             primary_place(&found[0]),
             at(source, "{attribute 'pack_mode' := '1'}")
         );
+    }
+
+    #[spec_test(REQ_ATTR_analyzer_023)]
+    fn apply_when_pack_mode_stands_before_an_array_type_then_no_diagnostic() {
+        let source = "{attribute 'pack_mode' := '1'}
+TYPE Samples : ARRAY [0..3] OF INT; END_TYPE
+
+PROGRAM main
+END_PROGRAM";
+
+        assert!(reported(source).is_empty());
     }
 
     #[spec_test(REQ_ATTR_analyzer_010)]
