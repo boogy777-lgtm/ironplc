@@ -23,7 +23,6 @@ ironplc-cli/src/lsp.rs 1362
 ironplc-cli/src/lsp_project.rs 1456
 mcp/src/spec_conformance.rs 1342
 mcp/src/tools/hot_edit.rs 1204
-mcp/src/tools/run.rs 1046
 parser/src/parser.rs 2731
 parser/src/token.rs 1214
 playground/src/lib.rs 1850
