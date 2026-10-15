@@ -21,7 +21,6 @@ dsl/src/textual.rs 1482
 ironplc-cli/src/cli.rs 1027
 ironplc-cli/src/lsp.rs 1362
 ironplc-cli/src/lsp_project.rs 1456
-ironplc-redundancy/src/calibration.rs 1024
 mcp/src/spec_conformance.rs 1342
 mcp/src/tools/hot_edit.rs 1204
 mcp/src/tools/run.rs 1046
