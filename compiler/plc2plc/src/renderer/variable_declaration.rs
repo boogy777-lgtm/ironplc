@@ -1,51 +1,50 @@
 //! Renders variable declarations, direct addresses and the initial values that follow a variable.
 
 use super::text::character_string_text;
-use super::LibraryRenderer;
+use super::{LibraryRenderer, Render};
 use ironplc_dsl::common::*;
 use ironplc_dsl::{diagnostic::Diagnostic, visitor::Visitor};
 use paste::paste;
 
-impl LibraryRenderer {
-    pub(super) fn render_program_access_decl(
-        &mut self,
-        node: &ProgramAccessDecl,
-    ) -> Result<(), Diagnostic> {
-        self.newline();
+impl Render for ProgramAccessDecl {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.newline();
 
-        self.write_ws("VAR_ACCESS");
+        r.write_ws("VAR_ACCESS");
 
-        self.newline();
-        self.indent();
+        r.newline();
+        r.indent();
 
-        self.visit_id(&node.access_name)?;
-        self.write_ws(":");
-        self.visit_symbolic_variable_kind(&node.symbolic_variable)?;
-        self.write_ws(":");
-        self.visit_type_name(&node.type_name)?;
+        r.visit_id(&self.access_name)?;
+        r.write_ws(":");
+        r.visit_symbolic_variable_kind(&self.symbolic_variable)?;
+        r.write_ws(":");
+        r.visit_type_name(&self.type_name)?;
 
-        if let Some(dir) = &node.direction {
+        if let Some(dir) = &self.direction {
             let dir = match dir {
                 dsl::configuration::Direction::ReadWrite => "READ_WRITE",
                 dsl::configuration::Direction::ReadOnly => "READ_ONLY",
             };
-            self.write_ws(dir);
+            r.write_ws(dir);
         }
 
-        self.write(";");
-        self.newline();
-        self.outdent();
+        r.write(";");
+        r.newline();
+        r.outdent();
 
-        self.write_ws("END_VAR");
-        self.newline();
+        r.write_ws("END_VAR");
+        r.newline();
         Ok(())
     }
+}
 
-    // 2.4.3
-    pub(super) fn render_var_decl(&mut self, node: &VarDecl) -> Result<(), Diagnostic> {
-        self.newline();
+// 2.4.3
+impl Render for VarDecl {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.newline();
 
-        let var_type = match node.var_type {
+        let var_type = match self.var_type {
             VariableType::Var => "VAR",
             VariableType::VarTemp => "VAR_TEMP",
             VariableType::VarStat => "VAR_STAT",
@@ -58,62 +57,61 @@ impl LibraryRenderer {
             VariableType::Global => "VAR_GLOBAL",
             VariableType::Access => "VAR_ACCESS",
         };
-        self.write_declaration_keyword(node, var_type);
+        r.write_declaration_keyword(self, var_type);
 
-        match node.qualifier {
+        match self.qualifier {
             DeclarationQualifier::Unspecified => {}
-            DeclarationQualifier::Constant => self.write_ws("CONSTANT"),
-            DeclarationQualifier::Retain => self.write_ws("RETAIN"),
-            DeclarationQualifier::NonRetain => self.write_ws("NON_RETAIN"),
-            DeclarationQualifier::Persistent => self.write_ws("PERSISTENT"),
+            DeclarationQualifier::Constant => r.write_ws("CONSTANT"),
+            DeclarationQualifier::Retain => r.write_ws("RETAIN"),
+            DeclarationQualifier::NonRetain => r.write_ws("NON_RETAIN"),
+            DeclarationQualifier::Persistent => r.write_ws("PERSISTENT"),
         }
 
-        self.newline();
+        r.newline();
 
-        self.indent();
-        match &node.identifier {
+        r.indent();
+        match &self.identifier {
             VariableIdentifier::Symbol(id) => {
-                self.visit_id(id)?;
+                r.visit_id(id)?;
             }
             VariableIdentifier::Direct(direct) => {
-                self.visit_direct_variable_identifier(direct)?;
+                r.visit_direct_variable_identifier(direct)?;
             }
         }
 
-        self.write_ws(":");
-        self.visit_initial_value_assignment_kind(&node.initializer)?;
+        r.write_ws(":");
+        r.visit_initial_value_assignment_kind(&self.initializer)?;
 
-        if let Some(edge) = node.edge {
-            self.write_ws(match edge {
+        if let Some(edge) = self.edge {
+            r.write_ws(match edge {
                 EdgeDirection::Rising => "R_EDGE",
                 EdgeDirection::Falling => "F_EDGE",
             });
         }
 
-        self.write(";");
-        self.newline();
-        self.outdent();
+        r.write(";");
+        r.newline();
+        r.outdent();
 
-        self.write_ws("END_VAR");
-        self.newline();
+        r.write_ws("END_VAR");
+        r.newline();
         Ok(())
     }
+}
 
-    // 2.4.3.1
-    pub(super) fn render_address_assignment(
-        &mut self,
-        node: &AddressAssignment,
-    ) -> Result<(), Diagnostic> {
+// 2.4.3.1
+impl Render for AddressAssignment {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
         let mut address = String::from("%");
 
-        let loc = match &node.location {
+        let loc = match &self.location {
             LocationPrefix::I => 'I',
             LocationPrefix::Q => 'Q',
             LocationPrefix::M => 'M',
         };
         address.push(loc);
 
-        let size = match &node.size {
+        let size = match &self.size {
             SizePrefix::Unspecified => "*",
             SizePrefix::Nil => "",
             SizePrefix::X => "X",
@@ -124,115 +122,109 @@ impl LibraryRenderer {
         };
         address.push_str(size);
 
-        let location: String = node
+        let location: String = self
             .address
             .iter()
             .map(|&id| id.to_string() + ".")
             .collect();
         address.push_str(location.trim_end_matches('.'));
 
-        self.write_ws(address.as_str());
+        r.write_ws(address.as_str());
 
         Ok(())
     }
+}
 
-    // 2.4.3.2
-    pub(super) fn render_simple_initializer(
-        &mut self,
-        node: &SimpleInitializer,
-    ) -> Result<(), Diagnostic> {
-        self.visit_type_name(&node.type_name)?;
+// 2.4.3.2
+impl Render for SimpleInitializer {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.visit_type_name(&self.type_name)?;
 
-        if let Some(iv) = &node.initial_value {
-            self.write_ws(":=");
-            self.visit_constant_kind(iv)?;
-        }
-
-        Ok(())
-    }
-
-    // 2.4.3.1 and 2.4.3.2
-    pub(super) fn render_string_initializer(
-        &mut self,
-        node: &StringInitializer,
-    ) -> Result<(), Diagnostic> {
-        self.write_ws(node.width.keyword());
-
-        if let Some(len) = &node.length {
-            self.write_ws("[");
-            self.visit_integer(len.as_integer().ok_or_else(Diagnostic::internal_error)?)?;
-            self.write_ws("]");
-        }
-
-        if let Some(init) = &node.initial_value {
-            self.write_ws(":=");
-            self.write(&character_string_text(&init.width, &init.value));
+        if let Some(iv) = &self.initial_value {
+            r.write_ws(":=");
+            r.visit_constant_kind(iv)?;
         }
 
         Ok(())
     }
+}
 
-    // 2.4.3.2
-    pub(super) fn render_enumerated_values_initializer(
-        &mut self,
-        node: &EnumeratedValuesInitializer,
-    ) -> Result<(), Diagnostic> {
-        self.write_ws("(");
-        visit_comma_separated!(self, node.values.iter(), EnumeratedValue);
-        self.write_ws(")");
+// 2.4.3.1 and 2.4.3.2
+impl Render for StringInitializer {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.write_ws(self.width.keyword());
 
-        if let Some(init) = &node.initial_value {
-            self.write_ws(":=");
+        if let Some(len) = &self.length {
+            r.write_ws("[");
+            r.visit_integer(len.as_integer().ok_or_else(Diagnostic::internal_error)?)?;
+            r.write_ws("]");
+        }
 
-            self.visit_enumerated_value(init)?;
+        if let Some(init) = &self.initial_value {
+            r.write_ws(":=");
+            r.write(&character_string_text(&init.width, &init.value));
         }
 
         Ok(())
     }
+}
 
-    // 2.4.3.2
-    pub(super) fn render_array_initial_value_assignment(
-        &mut self,
-        node: &ArrayInitialValueAssignment,
-    ) -> Result<(), Diagnostic> {
-        self.visit_array_specification_kind(&node.spec)?;
+// 2.4.3.2
+impl Render for EnumeratedValuesInitializer {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.write_ws("(");
+        visit_comma_separated!(r, self.values.iter(), EnumeratedValue);
+        r.write_ws(")");
 
-        if !node.initial_values.is_empty() {
-            self.write_ws(":=");
+        if let Some(init) = &self.initial_value {
+            r.write_ws(":=");
 
-            self.write_ws("[");
-            visit_comma_separated!(self, node.initial_values.iter(), ArrayInitialElementKind);
-            self.write_ws("]");
+            r.visit_enumerated_value(init)?;
         }
 
         Ok(())
     }
+}
 
-    pub(super) fn render_enumerated_initial_value_assignment(
-        &mut self,
-        node: &EnumeratedInitialValueAssignment,
-    ) -> Result<(), Diagnostic> {
-        self.visit_type_name(&node.type_name)?;
+// 2.4.3.2
+impl Render for ArrayInitialValueAssignment {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.visit_array_specification_kind(&self.spec)?;
 
-        if let Some(init) = &node.initial_value {
-            self.write_ws(":=");
-            self.visit_enumerated_value(init)?;
+        if !self.initial_values.is_empty() {
+            r.write_ws(":=");
+
+            r.write_ws("[");
+            visit_comma_separated!(r, self.initial_values.iter(), ArrayInitialElementKind);
+            r.write_ws("]");
         }
 
         Ok(())
     }
+}
 
-    pub(super) fn render_direct_variable_identifier(
-        &mut self,
-        node: &DirectVariableIdentifier,
-    ) -> Result<(), Diagnostic> {
-        if let Some(name) = &node.name {
-            self.visit_id(name)?;
+impl Render for EnumeratedInitialValueAssignment {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.visit_type_name(&self.type_name)?;
+
+        if let Some(init) = &self.initial_value {
+            r.write_ws(":=");
+            r.visit_enumerated_value(init)?;
         }
 
-        self.write_ws("AT");
+        Ok(())
+    }
+}
 
-        self.visit_address_assignment(&node.address_assignment)?;
+impl Render for DirectVariableIdentifier {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        if let Some(name) = &self.name {
+            r.visit_id(name)?;
+        }
+
+        r.write_ws("AT");
+
+        r.visit_address_assignment(&self.address_assignment)?;
 
         Ok(())
     }

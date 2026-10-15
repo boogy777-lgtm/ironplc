@@ -1,6 +1,6 @@
 //! Renders sequential function chart networks, steps, transitions and actions.
 
-use super::LibraryRenderer;
+use super::{LibraryRenderer, Render};
 use ironplc_dsl::{diagnostic::Diagnostic, visitor::Visitor};
 use paste::paste;
 
@@ -23,81 +23,83 @@ impl LibraryRenderer {
         self.newline();
         Ok(())
     }
+}
 
-    // 2.6.2
-    pub(super) fn render_network(&mut self, node: &dsl::sfc::Network) -> Result<(), Diagnostic> {
-        self.write_ws("INITIAL_STEP");
-        self.write_step_body(&node.initial_step)?;
-        self.newline();
+// 2.6.2
+impl Render for dsl::sfc::Network {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.write_ws("INITIAL_STEP");
+        r.write_step_body(&self.initial_step)?;
+        r.newline();
 
-        for elem in node.elements.iter() {
-            self.visit_element_kind(elem)?;
-            self.newline();
+        for elem in self.elements.iter() {
+            r.visit_element_kind(elem)?;
+            r.newline();
         }
         Ok(())
     }
+}
 
-    // 2.6.3
-    pub(super) fn render_transition(
-        &mut self,
-        node: &dsl::sfc::Transition,
-    ) -> Result<(), Diagnostic> {
-        self.write_ws("TRANSITION FROM");
+// 2.6.3
+impl Render for dsl::sfc::Transition {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.write_ws("TRANSITION FROM");
 
-        visit_comma_separated!(self, node.from.iter(), Id);
+        visit_comma_separated!(r, self.from.iter(), Id);
 
-        self.write_ws("TO");
+        r.write_ws("TO");
 
-        visit_comma_separated!(self, node.to.iter(), Id);
-        self.newline();
+        visit_comma_separated!(r, self.to.iter(), Id);
+        r.newline();
 
-        self.indent();
-        self.write_ws(":=");
-        self.visit_expr(&node.condition)?;
-        self.write_ws(";");
-        self.newline();
-        self.outdent();
+        r.indent();
+        r.write_ws(":=");
+        r.visit_expr(&self.condition)?;
+        r.write_ws(";");
+        r.newline();
+        r.outdent();
 
-        self.write_ws("END_TRANSITION");
-        self.newline();
+        r.write_ws("END_TRANSITION");
+        r.newline();
         Ok(())
     }
+}
 
-    // 2.6.3
-    pub(super) fn render_action(&mut self, node: &dsl::sfc::Action) -> Result<(), Diagnostic> {
-        self.write_declaration_keyword(node, "ACTION");
+// 2.6.3
+impl Render for dsl::sfc::Action {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.write_declaration_keyword(self, "ACTION");
 
-        self.visit_id(&node.name)?;
-        self.write_ws(":");
-        self.newline();
+        r.visit_id(&self.name)?;
+        r.write_ws(":");
+        r.newline();
 
-        self.indent();
-        self.visit_function_block_body_kind(&node.body)?;
-        self.outdent();
+        r.indent();
+        r.visit_function_block_body_kind(&self.body)?;
+        r.outdent();
 
-        self.write_ws("END_ACTION");
-        self.newline();
+        r.write_ws("END_ACTION");
+        r.newline();
         Ok(())
     }
+}
 
-    // 2.6.4
-    pub(super) fn render_action_association(
-        &mut self,
-        node: &dsl::sfc::ActionAssociation,
-    ) -> Result<(), Diagnostic> {
-        self.visit_id(&node.name)?;
+// 2.6.4
+impl Render for dsl::sfc::ActionAssociation {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.visit_id(&self.name)?;
 
-        self.write_ws("(");
+        r.write_ws("(");
 
-        if let Some(qualifier) = &node.qualifier {
-            self.write_ws(qualifier.to_string().as_str());
-            if !node.indicators.is_empty() {
-                self.write_ws(",");
+        if let Some(qualifier) = &self.qualifier {
+            r.write_ws(qualifier.to_string().as_str());
+            if !self.indicators.is_empty() {
+                r.write_ws(",");
             }
         }
 
-        visit_comma_separated!(self, node.indicators.iter(), Id);
-        self.write_ws(");");
+        visit_comma_separated!(r, self.indicators.iter(), Id);
+        r.write_ws(");");
 
         Ok(())
     }

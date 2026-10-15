@@ -1,6 +1,6 @@
 //! Renders configurations, resources, tasks and the program and function block instances they hold.
 
-use super::LibraryRenderer;
+use super::{LibraryRenderer, Render};
 use dsl::configuration::LocatedVarInit;
 use ironplc_dsl::common::*;
 use ironplc_dsl::{diagnostic::Diagnostic, visitor::Visitor};
@@ -29,46 +29,44 @@ impl LibraryRenderer {
         }
         Ok(())
     }
+}
 
-    // 2.7.1
-    pub(super) fn render_resource_declaration(
-        &mut self,
-        node: &dsl::configuration::ResourceDeclaration,
-    ) -> Result<(), Diagnostic> {
-        self.write_ws("RESOURCE");
-        self.visit_id(&node.name)?;
-        self.write_ws("ON");
-        self.visit_id(&node.resource)?;
-        self.newline();
+// 2.7.1
+impl Render for dsl::configuration::ResourceDeclaration {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.write_ws("RESOURCE");
+        r.visit_id(&self.name)?;
+        r.write_ws("ON");
+        r.visit_id(&self.resource)?;
+        r.newline();
 
-        self.indent();
-        for task in node.tasks.iter() {
-            self.visit_task_configuration(task)?;
+        r.indent();
+        for task in self.tasks.iter() {
+            r.visit_task_configuration(task)?;
         }
 
-        for program in node.programs.iter() {
-            self.visit_program_configuration(program)?;
+        for program in self.programs.iter() {
+            r.visit_program_configuration(program)?;
         }
 
-        for var in node.global_vars.iter() {
-            self.visit_var_decl(var)?;
+        for var in self.global_vars.iter() {
+            r.visit_var_decl(var)?;
         }
 
-        self.outdent();
+        r.outdent();
 
-        self.write_ws("END_RESOURCE");
-        self.newline();
+        r.write_ws("END_RESOURCE");
+        r.newline();
         Ok(())
     }
+}
 
-    // 2.7.2
-    pub(super) fn render_program_configuration(
-        &mut self,
-        node: &dsl::configuration::ProgramConfiguration,
-    ) -> Result<(), Diagnostic> {
-        self.write_ws("PROGRAM");
+// 2.7.2
+impl Render for dsl::configuration::ProgramConfiguration {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.write_ws("PROGRAM");
 
-        if let Some(storage) = &node.storage {
+        if let Some(storage) = &self.storage {
             let storage = match storage {
                 DeclarationQualifier::Unspecified => "",
                 DeclarationQualifier::Constant => "",
@@ -79,157 +77,153 @@ impl LibraryRenderer {
                 // Exhaustive match still needs an arm.
                 DeclarationQualifier::Persistent => "",
             };
-            self.write_ws(storage);
+            r.write_ws(storage);
         }
 
-        self.visit_id(&node.name)?;
+        r.visit_id(&self.name)?;
 
-        if let Some(task) = &node.task_name {
-            self.write_ws("WITH");
-            self.visit_id(task)?;
+        if let Some(task) = &self.task_name {
+            r.write_ws("WITH");
+            r.visit_id(task)?;
         }
 
-        self.write_ws(":");
-        self.visit_id(&node.type_name)?;
+        r.write_ws(":");
+        r.visit_id(&self.type_name)?;
 
-        self.write_ws(";");
-        self.newline();
+        r.write_ws(";");
+        r.newline();
 
         Ok(())
     }
+}
 
-    // 2.7.2
-    pub(super) fn render_configuration_declaration(
-        &mut self,
-        node: &dsl::configuration::ConfigurationDeclaration,
-    ) -> Result<(), Diagnostic> {
-        self.write_ws("CONFIGURATION");
-        self.visit_id(&node.name)?;
-        self.newline();
+// 2.7.2
+impl Render for dsl::configuration::ConfigurationDeclaration {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.write_ws("CONFIGURATION");
+        r.visit_id(&self.name)?;
+        r.newline();
 
-        self.indent();
-        for res in node.resource_decl.iter() {
-            self.visit_resource_declaration(res)?;
+        r.indent();
+        for res in self.resource_decl.iter() {
+            r.visit_resource_declaration(res)?;
         }
-        self.outdent();
+        r.outdent();
 
         // A configuration has a single VAR_CONFIG block holding every
         // instance-specific initialization.
-        if !node.fb_inits.is_empty() || !node.located_var_inits.is_empty() {
-            self.indent();
-            self.write_ws("VAR_CONFIG");
-            self.newline();
+        if !self.fb_inits.is_empty() || !self.located_var_inits.is_empty() {
+            r.indent();
+            r.write_ws("VAR_CONFIG");
+            r.newline();
 
-            self.indent();
-            for fb_init in node.fb_inits.iter() {
-                self.visit_function_block_init(fb_init)?;
+            r.indent();
+            for fb_init in self.fb_inits.iter() {
+                r.visit_function_block_init(fb_init)?;
             }
-            for loc_var_init in node.located_var_inits.iter() {
-                self.visit_located_var_init(loc_var_init)?;
+            for loc_var_init in self.located_var_inits.iter() {
+                r.visit_located_var_init(loc_var_init)?;
             }
-            self.outdent();
+            r.outdent();
 
-            self.write_ws("END_VAR");
-            self.newline();
-            self.outdent();
+            r.write_ws("END_VAR");
+            r.newline();
+            r.outdent();
         }
 
-        self.newline();
+        r.newline();
 
-        self.write_ws("END_CONFIGURATION");
-        self.newline();
+        r.write_ws("END_CONFIGURATION");
+        r.newline();
         Ok(())
     }
+}
 
-    /// Renders one initializer line; the enclosing `VAR_CONFIG` block is
-    /// written once by `visit_configuration_declaration`.
-    pub(super) fn render_function_block_init(
-        &mut self,
-        node: &dsl::configuration::FunctionBlockInit,
-    ) -> Result<(), Diagnostic> {
+/// Renders one initializer line; the enclosing `VAR_CONFIG` block is
+/// written once by `visit_configuration_declaration`.
+impl Render for dsl::configuration::FunctionBlockInit {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
         let mut vars: Vec<&String> = Vec::new();
-        vars.push(node.resource_name.original());
-        vars.push(node.program_name.original());
-        vars.extend(node.fb_path.iter().map(|v| v.original()));
+        vars.push(self.resource_name.original());
+        vars.push(self.program_name.original());
+        vars.extend(self.fb_path.iter().map(|v| v.original()));
 
-        write_period_separated!(self, vars.iter());
+        write_period_separated!(r, vars.iter());
 
-        self.write_ws(":");
+        r.write_ws(":");
 
-        self.visit_type_name(&node.type_name)?;
+        r.visit_type_name(&self.type_name)?;
 
-        self.write_ws(":=");
+        r.write_ws(":=");
 
-        self.write_ws("(");
+        r.write_ws("(");
 
-        visit_comma_separated!(self, node.initializer.iter(), StructureElementInit);
+        visit_comma_separated!(r, self.initializer.iter(), StructureElementInit);
 
-        self.write_ws(")");
-        self.write_ws(";");
-        self.newline();
+        r.write_ws(")");
+        r.write_ws(";");
+        r.newline();
 
         Ok(())
     }
+}
 
-    /// Renders one initializer line; see `visit_function_block_init`.
-    pub(super) fn render_located_var_init(
-        &mut self,
-        node: &LocatedVarInit,
-    ) -> Result<(), Diagnostic> {
+/// Renders one initializer line; see `visit_function_block_init`.
+impl Render for LocatedVarInit {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
         let mut vars: Vec<&String> = Vec::new();
-        vars.push(node.resource_name.original());
-        vars.push(node.program_name.original());
-        vars.extend(node.fb_path.iter().map(|v| v.original()));
+        vars.push(self.resource_name.original());
+        vars.push(self.program_name.original());
+        vars.extend(self.fb_path.iter().map(|v| v.original()));
 
-        write_period_separated!(self, vars.iter());
+        write_period_separated!(r, vars.iter());
 
-        if let Some(loc) = &node.address {
-            self.write_ws("AT");
-            self.visit_address_assignment(loc)?;
+        if let Some(loc) = &self.address {
+            r.write_ws("AT");
+            r.visit_address_assignment(loc)?;
         }
 
-        self.write_ws(":");
+        r.write_ws(":");
 
-        self.visit_initial_value_assignment_kind(&node.initializer)?;
+        r.visit_initial_value_assignment_kind(&self.initializer)?;
 
-        self.write_ws(";");
-        self.newline();
+        r.write_ws(";");
+        r.newline();
 
         Ok(())
     }
+}
 
-    // 2.7.1
-    pub(super) fn render_task_configuration(
-        &mut self,
-        node: &dsl::configuration::TaskConfiguration,
-    ) -> Result<(), Diagnostic> {
-        self.write_ws("TASK");
+// 2.7.1
+impl Render for dsl::configuration::TaskConfiguration {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.write_ws("TASK");
 
-        self.visit_id(&node.name)?;
-        self.write_ws("(");
+        r.visit_id(&self.name)?;
+        r.write_ws("(");
 
-        if let Some(single) = &node.single {
-            self.write_ws("SINGLE");
-            self.write_ws(":=");
-            self.render_data_source_kind(single)?;
-            self.write_ws(",");
+        if let Some(single) = &self.single {
+            r.write_ws("SINGLE");
+            r.write_ws(":=");
+            r.render_data_source_kind(single)?;
+            r.write_ws(",");
         }
 
-        if let Some(interval) = &node.interval {
-            self.write_ws("INTERVAL");
-            self.write_ws(":=");
-            self.visit_duration_literal(interval)?;
-            self.write_ws(",");
+        if let Some(interval) = &self.interval {
+            r.write_ws("INTERVAL");
+            r.write_ws(":=");
+            r.visit_duration_literal(interval)?;
+            r.write_ws(",");
         }
 
-        self.write_ws("PRIORITY");
-        self.write_ws(":=");
-        self.write_ws(node.priority.to_string().as_str());
+        r.write_ws("PRIORITY");
+        r.write_ws(":=");
+        r.write_ws(self.priority.to_string().as_str());
 
-        self.write_ws(")");
+        r.write_ws(")");
 
-        self.write_ws(";");
-        self.newline();
+        r.write_ws(";");
+        r.newline();
         Ok(())
     }
 }
