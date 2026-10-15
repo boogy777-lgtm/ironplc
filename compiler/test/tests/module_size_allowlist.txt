@@ -17,7 +17,6 @@ codegen/src/emit.rs 2233
 codegen/tests/it/wire_format.rs 1058
 container/src/debug_section.rs 1167
 container/src/spec_conformance.rs 1110
-container/src/type_section.rs 1264
 dsl/src/common.rs 3622
 dsl/src/textual.rs 1482
 ironplc-cli/src/cli.rs 1027
