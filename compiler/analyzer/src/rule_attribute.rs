@@ -180,6 +180,62 @@ END_PROGRAM";
     }
 
     #[spec_test(REQ_ATTR_analyzer_010)]
+    fn apply_when_pack_mode_stands_before_a_global_variable_list_then_p4076() {
+        // A variable block passes its attributes to each variable, and a
+        // variable is not a declaration whose layout `pack_mode` describes.
+        let source = "{attribute 'pack_mode' := '1'}
+VAR_GLOBAL
+    g : INT;
+END_VAR
+
+PROGRAM main
+END_PROGRAM";
+
+        let found = reported(source);
+
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].code, Problem::AttributeNotAllowedHere.code());
+        assert_eq!(
+            primary_place(&found[0]),
+            at(source, "{attribute 'pack_mode' := '1'}")
+        );
+    }
+
+    #[spec_test(REQ_ATTR_analyzer_010)]
+    fn apply_when_subsequent_stands_before_a_structure_type_then_p4076() {
+        let source = "{attribute 'subsequent'}
+TYPE Packet : STRUCT
+    a : INT;
+END_STRUCT; END_TYPE
+
+PROGRAM main
+END_PROGRAM";
+
+        let found = reported(source);
+
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].code, Problem::AttributeNotAllowedHere.code());
+    }
+
+    #[test]
+    fn apply_when_program_with_subsequent_declares_var_temp_then_it_is_a_syntax_error() {
+        // CODESYS reports `VAR_TEMP` in a program with `subsequent` as a
+        // compile error. The parser takes no `VAR_TEMP` block in a program at
+        // all, so the combination never reaches the analysis.
+        let source = "{attribute 'subsequent'}
+PROGRAM main
+VAR_TEMP
+    scratch : INT;
+END_VAR
+END_PROGRAM";
+        let options = CompilerOptions::from_dialect(Dialect::Codesys);
+
+        let result = parse_program(source, &FileId::default(), &options);
+
+        assert_eq!(result.unwrap_err().code, Problem::SyntaxError.code());
+    }
+
+    #[spec_test(REQ_ATTR_analyzer_010)]
     fn apply_when_attribute_is_written_in_other_case_then_it_is_still_the_known_attribute() {
         let source = "PROGRAM main
 VAR
@@ -365,6 +421,16 @@ PROGRAM main
 END_PROGRAM"
     )]
     #[case::program_without_attributes("PROGRAM main END_PROGRAM")]
+    #[case::subsequent_before_a_program_and_a_global_list(
+        "{attribute 'subsequent'}
+VAR_GLOBAL
+    g : INT;
+END_VAR
+
+{attribute 'subsequent'}
+PROGRAM main
+END_PROGRAM"
+    )]
     #[spec_test(REQ_ATTR_analyzer_014)]
     fn apply_when_known_attributes_are_where_they_may_stand_then_no_diagnostic(
         #[case] source: &str,
