@@ -9,9 +9,11 @@
 use super::codesys;
 use super::control;
 use super::expressions::{call, call_ahead, expression, variable};
+use crate::expectation::Item;
 use crate::parser::recovery::BLOCK_END;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
+use ironplc_problems::text;
 
 /// What ends a statement list.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -34,12 +36,12 @@ pub(in crate::parser) fn statement_list(p: &mut Parser, end: ListEnd, required: 
         let before = p.position();
         item(p);
         if p.position() == before {
-            p.bump_as_error("unexpected token in statement list");
+            p.bump_as_error(text::syntax_error_unexpected_token_in_statement_list());
         }
         items += 1;
     }
     if required && items == 0 {
-        p.error("expected a statement");
+        p.expected(Item::Statement);
     }
     p.complete(list, K::StatementList);
 }
@@ -82,7 +84,7 @@ fn label_ahead(p: &Parser) -> bool {
 /// when the dialect allows missing semicolons.
 pub(in crate::parser) fn terminator(p: &mut Parser, optional: bool) {
     if !p.eat(K::Semicolon) && !(optional && p.options.allow_missing_semicolon) {
-        p.error("expected `;`");
+        p.expected(K::Semicolon);
     }
 }
 
@@ -140,7 +142,7 @@ fn assignment_or_call(p: &mut Parser) {
         return;
     }
     let Some(mut target) = variable(p) else {
-        return p.skip_statement("expected a statement");
+        return p.skip_statement(Item::Statement.text());
     };
     if p.at(K::Caret) && p.nth_at(1, K::Assignment) {
         let deref = p.precede(target);
@@ -149,7 +151,7 @@ fn assignment_or_call(p: &mut Parser) {
     }
     let node = p.precede(target);
     let Some(operator_len) = assignment_operator(p) else {
-        p.skip_statement("expected `:=` after the assignment target");
+        p.skip_statement(text::syntax_error_expected_assign_after_the_assignment_target());
         p.complete(node, K::ErrorNode);
         return;
     };
@@ -159,7 +161,7 @@ fn assignment_or_call(p: &mut Parser) {
     p.complete(operator, K::AssignOp);
     if binds_reference {
         if variable(p).is_none() {
-            p.error("expected a variable after `REF=`");
+            p.error(text::syntax_error_expected_a_variable_after_ref());
         }
     } else {
         expression(p);

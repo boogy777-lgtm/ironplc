@@ -1,38 +1,14 @@
 //! Rendering syntax errors as compiler diagnostics.
 //!
-//! The error kind picks the problem code and the byte range becomes the span
-//! of the primary label, over the original source text, the same coordinates
-//! the legacy parser reports. The caller supplies the [`FileId`] of the text
+//! The text of the error carries the problem code and the label text, and the
+//! byte range becomes the span of the primary label, over the original source
+//! text, the same coordinates the legacy parser reports. The caller supplies the [`FileId`] of the text
 //! that was parsed.
 
-use crate::error::{ErrorKind, SyntaxError};
+use crate::error::SyntaxError;
 use crate::parser::Parse;
-use crate::pragma::Fault;
 use ironplc_dsl::core::{FileId, SourceSpan};
-use ironplc_dsl::diagnostic::{Diagnostic, Label};
-use ironplc_problems::Problem;
-
-impl ErrorKind {
-    /// The problem a syntax error of this kind is reported as.
-    pub fn problem(self) -> Problem {
-        match self {
-            ErrorKind::Syntax => Problem::SyntaxError,
-            ErrorKind::UnexpectedCharacter => Problem::UnexpectedToken,
-            ErrorKind::CStyleComment => Problem::CStyleComment,
-            ErrorKind::EmptyVarBlock => Problem::EmptyVarBlock,
-            ErrorKind::InvalidStringEscape => Problem::InvalidStringEscape,
-            ErrorKind::PartialAccessSyntaxDisabled => Problem::PartialAccessSyntaxDisabled,
-            ErrorKind::ParenStringLengthNotAllowed => Problem::ParenStringLengthNotAllowed,
-            ErrorKind::IncompleteArrayNotAllowed => Problem::IncompleteArrayNotAllowed,
-            ErrorKind::EscapedIdentifierNotAllowed => Problem::EscapedIdentifierNotAllowed,
-            ErrorKind::UnicodeIdentifierNotAllowed => Problem::UnicodeIdentifierNotAllowed,
-            ErrorKind::MultipleUnderscoresNotAllowed => Problem::MultipleUnderscoresNotAllowed,
-            ErrorKind::PragmaIfUnmatched => Fault::Unmatched.problem(),
-            ErrorKind::PragmaValueExpected => Fault::UnexpectedValue.problem(),
-            ErrorKind::NestingTooDeep => Problem::MaxNestingDepthExceeded,
-        }
-    }
-}
+use ironplc_dsl::diagnostic::Diagnostic;
 
 impl SyntaxError {
     /// The diagnostic for this error in the file `file_id`.
@@ -42,8 +18,7 @@ impl SyntaxError {
             usize::from(self.range.end()),
         )
         .with_file_id(file_id);
-        let diagnostic =
-            Diagnostic::problem(self.kind.problem(), Label::span(span, self.message.clone()));
+        let diagnostic = Diagnostic::text(span, self.text.clone());
         match self.help {
             Some(help) => diagnostic.with_help(help),
             None => diagnostic,
@@ -68,6 +43,7 @@ mod tests {
     use crate::parse_source_file;
     use crate::parser::options::ParseOptions;
     use crate::MAX_DEPTH;
+    use ironplc_problems::Problem;
 
     #[test]
     fn to_diagnostic_when_grammar_error_then_syntax_error_code_and_byte_span() {

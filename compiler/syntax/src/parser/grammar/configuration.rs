@@ -16,9 +16,11 @@ use super::expressions::{close_group, name_ref, type_ref, variable};
 use super::initializers::{connection_source, value};
 use super::literals::duration_literal_ahead;
 use super::var_blocks::{block_ahead, var_block, Scope, RETENTION};
+use crate::expectation::{Expectation, Item};
 use crate::kind_set::KindSet;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
+use ironplc_problems::text;
 
 /// The keywords that open something inside a configuration, and not after it.
 const CONFIGURATION_OWNS: KindSet = KindSet::new(&[K::VarGlobal]);
@@ -65,17 +67,17 @@ pub(super) fn configuration(p: &mut Parser) {
                 p,
                 K::EndConfiguration,
                 CONFIGURATION_OWNS,
-                "expected a resource or a variable block",
+                Item::ResourceOrVariableBlock.text(),
             );
         }
         if p.position() == before {
-            p.bump_as_error("unexpected input");
+            p.bump_as_error(text::syntax_error_unexpected_input());
         }
     }
     if !order.has(RESOURCE.rank) {
-        p.error("a configuration needs a resource");
+        p.error(text::syntax_error_a_configuration_needs_a_resource());
     }
-    close(p, K::EndConfiguration, "`END_CONFIGURATION`");
+    close(p, K::EndConfiguration);
     p.complete(node, K::ConfigurationDecl);
 }
 
@@ -101,11 +103,11 @@ fn resource(p: &mut Parser) {
     let node = p.start();
     p.bump();
     declared_name(p, NameClass::Plain);
-    p.expect(K::On, "`ON`");
+    p.expect(K::On);
     if p.name_at(0) {
         name_ref(p);
     } else {
-        p.error("expected the type of the resource");
+        p.expected(Item::ResourceType);
     }
     let mut order = Order::default();
     while !declaration_stops(p, K::EndResource, RESOURCE_OWNS) {
@@ -120,21 +122,16 @@ fn resource(p: &mut Parser) {
             order.enter(p, PROGRAMS);
             program_configuration(p);
         } else {
-            skip_stray(
-                p,
-                K::EndResource,
-                RESOURCE_OWNS,
-                "expected a task or a program",
-            );
+            skip_stray(p, K::EndResource, RESOURCE_OWNS, Item::TaskOrProgram.text());
         }
         if p.position() == before {
-            p.bump_as_error("unexpected input");
+            p.bump_as_error(text::syntax_error_unexpected_input());
         }
     }
     if !order.has(PROGRAMS.rank) {
-        p.error("a resource needs a program");
+        p.error(text::syntax_error_a_resource_needs_a_program());
     }
-    close(p, K::EndResource, "`END_RESOURCE`");
+    close(p, K::EndResource);
     p.complete(node, K::ResourceDecl);
 }
 
@@ -164,6 +161,9 @@ struct Property {
     expected: &'static str,
 }
 
+/// The word of the `PRIORITY` property of a task. A transition has one too.
+pub(super) const PRIORITY_WORD: &str = "PRIORITY";
+
 const TASK_PROPERTIES: [Property; 3] = [
     Property {
         word: "SINGLE",
@@ -178,7 +178,7 @@ const TASK_PROPERTIES: [Property; 3] = [
         expected: "a duration",
     },
     Property {
-        word: "PRIORITY",
+        word: PRIORITY_WORD,
         part: PRIORITY,
         value_ahead: |p| p.at(K::IntegerLit),
         expected: "an integer",
@@ -192,7 +192,7 @@ fn task(p: &mut Parser) {
     declared_name(p, NameClass::Plain);
     let init = p.start();
     let mut order = Order::default();
-    if p.expect(K::LeftParen, "`(`") {
+    if p.expect(K::LeftParen) {
         loop {
             task_item(p, &mut order);
             if !p.eat(K::Comma) {
@@ -200,9 +200,9 @@ fn task(p: &mut Parser) {
             }
         }
         if !order.has(PRIORITY.rank) {
-            p.error("a task needs a `PRIORITY`");
+            p.error(text::syntax_error_a_task_needs_a_priority());
         }
-        close_group(p, K::RightParen, "`)`");
+        close_group(p, K::RightParen);
     }
     p.complete(init, K::TaskInit);
     p.complete(node, K::TaskDecl);
@@ -217,17 +217,22 @@ fn task_item(p: &mut Parser, order: &mut Order) {
         .find(|property| p.nth(0) == Some(K::Ident) && p.nth_text(0) == property.word);
     match property {
         Some(property) => order.enter(p, property.part),
-        None => p.error("expected `SINGLE`, `INTERVAL` or `PRIORITY`"),
+        None => p.expected(Expectation::words(
+            TASK_PROPERTIES.iter().map(|property| property.word),
+        )),
     }
     if p.name_at(0) {
         name_ref(p);
     } else {
-        p.error("expected a task property");
+        p.expected(Item::TaskProperty);
     }
-    if p.expect(K::Assignment, "`:=`") {
+    if p.expect(K::Assignment) {
         if let Some(property) = property {
             if !(property.value_ahead)(p) {
-                p.error(&format!("`{}` takes {}", property.word, property.expected));
+                p.error(text::syntax_error_property_takes(
+                    property.word,
+                    property.expected,
+                ));
             }
         }
         value(p);
@@ -252,7 +257,7 @@ fn program_configuration(p: &mut Parser) {
         p.bump();
         declared_name(p, NameClass::Plain);
     }
-    if p.expect(K::Colon, "`:`") {
+    if p.expect(K::Colon) {
         type_ref(p);
         if p.at(K::LeftParen) {
             p.bump();
@@ -262,12 +267,15 @@ fn program_configuration(p: &mut Parser) {
                     break;
                 }
             }
-            close_group(p, K::RightParen, "`)`");
+            close_group(p, K::RightParen);
         }
     }
     p.complete(node, K::ProgramConfig);
     item_terminator(p);
 }
+
+/// The operators that join a connection to its source or its sink.
+const CONNECTION_OPERATORS: KindSet = KindSet::new(&[K::Assignment, K::RightArrow]);
 
 /// `function_block WITH task`, `input := source` or `output => sink`.
 fn connection(p: &mut Parser) {
@@ -278,14 +286,14 @@ fn connection(p: &mut Parser) {
         if p.name_at(0) {
             name_ref(p);
         } else {
-            p.error("expected the name of a task");
+            p.expected(Item::TaskName);
         }
         p.complete(node, K::TaskBinding);
         return;
     }
     let node = p.start();
     if variable(p).is_none() {
-        p.error("expected a variable");
+        p.expected(Item::Variable);
         p.abandon(node);
         return;
     }
@@ -295,10 +303,10 @@ fn connection(p: &mut Parser) {
     } else if p.at(K::RightArrow) {
         p.bump();
         if variable(p).is_none() {
-            p.error("expected a variable");
+            p.expected(Item::Variable);
         }
     } else {
-        p.error("expected `:=` or `=>`");
+        p.expected(CONNECTION_OPERATORS);
     }
     p.complete(node, K::ProgramConnection);
 }

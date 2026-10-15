@@ -13,11 +13,13 @@
 //! See `specs/design/parse-tree-architecture.md`.
 
 use crate::lower::{disposition, lower_library, Disposition};
+use crate::ranking::rank;
 use crate::{parse_source_file, Parse, ParseOptions, SyntaxKind};
 use ironplc_dsl::common::Library;
 use ironplc_dsl::core::{FileId, SourceSpan};
 use ironplc_dsl::stack::within_stack_budget;
 use ironplc_dsl::visitor::Visitor;
+use ironplc_problems::Problem;
 use ironplc_test::corpus::{CRLF, TABS};
 use ironplc_test::nesting::{Entry, NESTINGS};
 use spec_test_macro::spec_test;
@@ -217,12 +219,15 @@ fn parse_spec_req_pt_009_the_primary_error_is_the_earliest_stage_then_the_earlie
         };
         for error in &parse.errors {
             assert!(
-                (error.kind.rank(), error.range.start(), error.range.end())
-                    >= (
-                        primary.kind.rank(),
-                        primary.range.start(),
-                        primary.range.end()
-                    ),
+                (
+                    rank(error.problem()),
+                    error.range.start(),
+                    error.range.end()
+                ) >= (
+                    rank(primary.problem()),
+                    primary.range.start(),
+                    primary.range.end()
+                ),
                 "{name}: {error:?} precedes the primary {primary:?}"
             );
         }
@@ -247,11 +252,11 @@ fn parse_spec_req_pt_009_the_primary_error_is_the_earliest_stage_then_the_earlie
         }
     }
     assert!(with_errors > 100, "only {with_errors} parses had errors");
-    // Every kind of error is in exactly one stage.
-    let listed: usize = crate::STAGES.iter().map(|stage| stage.kinds.len()).sum();
+    // Every problem is in at most one stage.
+    let listed: usize = crate::STAGES.iter().map(|stage| stage.problems.len()).sum();
     let distinct: BTreeSet<String> = crate::STAGES
         .iter()
-        .flat_map(|stage| stage.kinds.iter().map(|kind| format!("{kind:?}")))
+        .flat_map(|stage| stage.problems.iter().map(|problem| format!("{problem:?}")))
         .collect();
     assert_eq!(listed, distinct.len());
 }
@@ -353,7 +358,7 @@ fn lowering_spec_req_pt_008_deepest_allowed_nesting_lowers_on_the_stack_budget()
                 parse
                     .errors
                     .iter()
-                    .any(|error| error.kind == crate::ErrorKind::NestingTooDeep)
+                    .any(|error| error.problem() == Problem::MaxNestingDepthExceeded)
             });
             let source = (construct.build)(deepest);
             let parse = parse_for(construct.entry, &source);

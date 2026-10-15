@@ -12,19 +12,21 @@
 //! fractional, and calendar and clock values in range. This module chooses
 //! which source range each failure is reported on.
 
-use super::literals::piece;
+use super::literals::{piece, piece_as};
+use crate::expectation::Item;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
 use ironplc_dsl::construct::{calendar_date, ClockField, DateField};
+use ironplc_problems::text;
 use rowan::TextRange;
 
 /// The value of a duration literal: an optional `-` and the adjacent number
 /// and unit tokens.
 pub(super) fn duration_value(p: &mut Parser) {
     if p.at(K::Minus) {
-        piece(p, K::Minus, "`-`");
+        piece(p, K::Minus);
     }
-    let mut text = String::new();
+    let mut written = String::new();
     let mut range: Option<TextRange> = None;
     while matches!(
         p.nth(0),
@@ -32,44 +34,44 @@ pub(super) fn duration_value(p: &mut Parser) {
     ) && (range.is_none() || p.touches_previous())
     {
         let token = p.nth_range(0);
-        text.push_str(p.nth_text(0));
+        written.push_str(p.nth_text(0));
         range = Some(range.map_or(token, |seen| seen.cover(token)));
         p.bump();
     }
     match range {
-        None => p.error("expected a duration value"),
+        None => p.expected(Item::DurationValue),
         Some(range) => {
-            if let Err(message) = crate::interval_text::validate(&text) {
-                p.error_at(range, message);
+            if let Err(text) = crate::interval_text::validate(&written) {
+                p.error_at(range, text);
             }
         }
     }
 }
 
 /// A number token of a clock or calendar value: its value and range.
-fn number(p: &mut Parser, what: &str) -> Option<(u64, TextRange)> {
+fn number(p: &mut Parser, expected: Item) -> Option<(u64, TextRange)> {
     let range = p.nth_range(0);
     let value = p.nth_number(0);
-    piece(p, K::IntegerLit, what).then_some(())?;
+    piece_as(p, K::IntegerLit, expected).then_some(())?;
     Some((value.unwrap_or(u64::MAX), range))
 }
 
 fn check_field(p: &mut Parser, value: Option<(u64, TextRange)>, field: ClockField, what: &str) {
     if let Some((value, range)) = value {
         if !field.accepts(u128::from(value)) {
-            p.error_at(range, &format!("{what} is out of range"));
+            p.error_at(range, text::syntax_error_what_is_out_of_range(what));
         }
     }
 }
 
 /// `hour : minute [: second]`, with the seconds optionally fractional.
 pub(super) fn daytime_value(p: &mut Parser) {
-    let hour = number(p, "an hour");
+    let hour = number(p, Item::Hour);
     check_field(p, hour, ClockField::Hour, "the hour");
-    if !piece(p, K::Colon, "`:`") {
+    if !piece(p, K::Colon) {
         return;
     }
-    let minute = number(p, "a minute");
+    let minute = number(p, Item::Minute);
     check_field(p, minute, ClockField::Minute, "the minute");
     // The colon before the seconds belongs to the literal only when it touches
     // the minute: a gap ends the literal at the minute, and what follows it is
@@ -86,7 +88,7 @@ pub(super) fn daytime_value(p: &mut Parser) {
         .and_then(|digits| digits.replace('_', "").parse::<u64>().ok());
     if p.at(K::FixedPointLit) {
         p.bump();
-    } else if !piece(p, K::IntegerLit, "a second") {
+    } else if !piece_as(p, K::IntegerLit, Item::Second) {
         return;
     }
     check_field(
@@ -99,24 +101,30 @@ pub(super) fn daytime_value(p: &mut Parser) {
 
 /// `year - month - day`, a real calendar date.
 pub(super) fn date_value(p: &mut Parser) {
-    let year = number(p, "a year");
-    if !piece(p, K::Minus, "`-`") {
+    let year = number(p, Item::Year);
+    if !piece(p, K::Minus) {
         return;
     }
-    let month = number(p, "a month");
-    if !piece(p, K::Minus, "`-`") {
+    let month = number(p, Item::Month);
+    if !piece(p, K::Minus) {
         return;
     }
-    let day = number(p, "a day");
+    let day = number(p, Item::Day);
     if let (Some((year, year_range)), Some((month, _)), Some((day, day_range))) = (year, month, day)
     {
         match calendar_date(year.into(), month.into(), day.into()) {
             Ok(_) => {}
-            Err(DateField::Year) => p.error_at(year_range, "the year is out of range"),
-            Err(DateField::Month) => {
-                p.error_at(year_range.cover(day_range), "the month is out of range")
+            Err(DateField::Year) => {
+                p.error_at(year_range, text::syntax_error_the_year_is_out_of_range())
             }
-            Err(DateField::Day) => p.error_at(day_range, "the day is out of range for the month"),
+            Err(DateField::Month) => p.error_at(
+                year_range.cover(day_range),
+                text::syntax_error_the_month_is_out_of_range(),
+            ),
+            Err(DateField::Day) => p.error_at(
+                day_range,
+                text::syntax_error_the_day_is_out_of_range_for_the_month(),
+            ),
         }
     }
 }
@@ -124,7 +132,7 @@ pub(super) fn date_value(p: &mut Parser) {
 /// A date and a time of day joined by `-`.
 pub(super) fn date_and_time_value(p: &mut Parser) {
     date_value(p);
-    if piece(p, K::Minus, "`-`") {
+    if piece(p, K::Minus) {
         daytime_value(p);
     }
 }
@@ -139,7 +147,7 @@ mod tests {
         parse_expression(source, &ParseOptions::all())
             .errors
             .into_iter()
-            .map(|error| error.message)
+            .map(|error| error.message().to_string())
             .collect()
     }
 

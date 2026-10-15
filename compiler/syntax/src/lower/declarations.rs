@@ -23,8 +23,8 @@ use super::LowerCx;
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode, SyntaxToken};
 use ironplc_dsl::common::{ElementaryTypeName, TypeName};
 use ironplc_dsl::core::Id;
-use ironplc_dsl::diagnostic::{Diagnostic, Label};
-use ironplc_problems::Problem;
+use ironplc_dsl::diagnostic::Diagnostic;
+use ironplc_problems::text;
 
 /// What the type of a declaration is.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -258,16 +258,9 @@ impl Parts {
             .value
             .as_ref()
             .map_or_else(|| self.node.text_range(), |value| value.text_range());
-        Diagnostic::problem(
-            Problem::InitializerTypeMismatch,
-            Label::span(
-                cx.span(range),
-                format!(
-                    "{} is not an initial value of {}",
-                    self.init.describe(),
-                    self.form.describe()
-                ),
-            ),
+        Diagnostic::text(
+            cx.span(range),
+            text::initializer_type_mismatch(self.init.describe(), self.form.describe()),
         )
     }
 }
@@ -301,7 +294,7 @@ pub fn build<T>(cx: &LowerCx, rows: &[Row<T>], node: &SyntaxNode) -> Result<T, D
         None if named.count() > 0 => Err(parts.mismatch(cx)),
         None => Err(cx.syntax_error(
             parts.spec.text_range(),
-            format!("{} is not allowed here", parts.form.describe()),
+            text::syntax_error_form_is_not_allowed_here(parts.form.describe()),
         )),
     }
 }
@@ -311,6 +304,7 @@ mod tests {
     use super::*;
     use crate::{parse_source_file, ParseOptions};
     use ironplc_dsl::core::FileId;
+    use ironplc_problems::Problem;
 
     /// The parts of the first declaration of `kind` in the source.
     fn parts_of(source: &str, kind: K) -> Parts {

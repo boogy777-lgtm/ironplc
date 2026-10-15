@@ -1,6 +1,6 @@
 use super::*;
 use crate::lower::{disposition, Area, Disposition, INTERNAL_ERROR};
-use crate::{parse_source_file, parse_statements, ErrorKind, ParseOptions, SyntaxKind, MAX_DEPTH};
+use crate::{parse_source_file, parse_statements, ParseOptions, SyntaxKind, MAX_DEPTH};
 use ironplc_dsl::common::{BitStringLiteral, SignedIntegerRef};
 use ironplc_dsl::core::{FileId, Located};
 use ironplc_dsl::stack::STACK_BUDGET;

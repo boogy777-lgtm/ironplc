@@ -12,10 +12,12 @@
 
 use super::common::SIGN;
 use super::temporal::{date_and_time_value, date_value, daytime_value, duration_value};
+use crate::expectation::{Expectation, Item};
 use crate::kind_set::KindSet;
 use crate::parser::event::CompletedMarker;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
+use ironplc_problems::text;
 
 /// The literals written in a base other than ten: `16#FF`, `8#17`, `2#101`.
 pub(super) const BASED_LITERALS: KindSet = KindSet::new(&[K::HexLit, K::OctLit, K::BinLit]);
@@ -137,24 +139,30 @@ pub(super) fn duration_literal_ahead(p: &Parser) -> bool {
 
 /// Consumes `kind` as the next piece of a literal, which must touch the
 /// piece before it.
-pub(super) fn piece(p: &mut Parser, kind: K, what: &str) -> bool {
+pub(super) fn piece(p: &mut Parser, kind: K) -> bool {
+    piece_as(p, kind, kind)
+}
+
+/// Like [`piece`], for a piece that is called by what it is in the literal
+/// (`expected`) and not by the token it is.
+pub(super) fn piece_as(p: &mut Parser, kind: K, expected: impl Into<Expectation>) -> bool {
     if !p.at(kind) {
-        p.error(&format!("expected {what}"));
+        p.expected(expected);
         return false;
     }
     if !p.touches_previous() {
-        p.error("no whitespace is allowed inside a literal");
+        p.error(text::syntax_error_no_whitespace_is_allowed_inside_a_literal());
     }
     p.bump();
     true
 }
 
 /// Consumes one of `kinds` as the next piece of a literal.
-fn piece_any(p: &mut Parser, kinds: KindSet, what: &str) -> bool {
+fn piece_any(p: &mut Parser, kinds: KindSet, expected: Item) -> bool {
     match p.nth(0).filter(|_| p.at_any(kinds)) {
-        Some(kind) => piece(p, kind, what),
+        Some(kind) => piece_as(p, kind, expected),
         None => {
-            p.error(&format!("expected {what}"));
+            p.expected(expected);
             false
         }
     }
@@ -166,7 +174,7 @@ fn sign(p: &mut Parser, numbers: KindSet) {
         if p.adjacent(0) && p.nth_at_any(1, numbers) {
             p.bump();
         } else {
-            p.error("a sign must touch the number after it");
+            p.error(text::syntax_error_a_sign_must_touch_the_number_after_it());
             p.bump();
         }
     }
@@ -205,7 +213,7 @@ pub(super) fn literal(p: &mut Parser) -> Option<CompletedMarker> {
     }
     if !numeric_with_sign && p.at(K::IntegerLit) && is_based_decimal(p) {
         p.bump_n(2);
-        piece(p, K::IntegerLit, "digits after `10#`");
+        piece_as(p, K::IntegerLit, Item::DigitsAfterBase);
     } else {
         p.bump();
     }
@@ -222,29 +230,29 @@ fn typed(p: &mut Parser, class: Class) -> CompletedMarker {
     let (start, errors) = (p.position(), p.error_count());
     p.bump_n(2);
     if !p.touches_previous() {
-        p.error("no whitespace is allowed inside a literal");
+        p.error(text::syntax_error_no_whitespace_is_allowed_inside_a_literal());
     }
     match class {
         Class::Int => int_value(p),
         Class::Real => {
             sign(p, REAL_LITERALS);
-            piece_any(p, REAL_LITERALS, "a real value");
+            piece_any(p, REAL_LITERALS, Item::RealValue);
         }
         Class::BitString => {
             piece_any(
                 p,
                 BASED_LITERALS.union(INTEGER_LITERAL),
-                "a bit-string value",
+                Item::BitStringValue,
             );
         }
         Class::Bool(words) => bool_value(p, words),
         Class::String { wide } => {
-            let (kind, what) = if wide {
-                (K::WStringLit, "a double-quoted string")
+            let (kind, expected) = if wide {
+                (K::WStringLit, Item::DoubleQuotedString)
             } else {
-                (K::StringLit, "a single-quoted string")
+                (K::StringLit, Item::SingleQuotedString)
             };
-            piece(p, kind, what);
+            piece_as(p, kind, expected);
         }
         Class::Duration => duration_value(p),
         Class::TimeOfDay => daytime_value(p),
@@ -263,10 +271,10 @@ fn int_value(p: &mut Parser) {
         p.bump();
     } else if p.at(K::IntegerLit) && is_based_decimal(p) {
         p.bump_n(2);
-        piece(p, K::IntegerLit, "digits after `10#`");
+        piece_as(p, K::IntegerLit, Item::DigitsAfterBase);
     } else {
         sign(p, INTEGER_LITERAL);
-        piece(p, K::IntegerLit, "an integer value");
+        piece_as(p, K::IntegerLit, Item::IntegerValue);
     }
 }
 
@@ -275,6 +283,6 @@ fn bool_value(p: &mut Parser, words: bool) {
     if is_bit_digit || (words && p.at_any(BOOL_WORDS)) {
         p.bump();
     } else {
-        p.error("expected 0, 1 or a boolean word");
+        p.expected(Item::BooleanValue);
     }
 }

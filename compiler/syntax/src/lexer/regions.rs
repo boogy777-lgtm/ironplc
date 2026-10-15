@@ -207,7 +207,7 @@ struct PragmaIf {
 
 impl PragmaIf {
     fn fault(fault: Fault, range: TextRange) -> SyntaxError {
-        SyntaxError::new(fault.message(), range).with_kind(fault.into())
+        SyntaxError::new(fault.text(), range)
     }
 }
 
@@ -253,7 +253,7 @@ impl Rule for PragmaIf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::ErrorKind;
+    use ironplc_problems::Problem;
 
     fn options() -> ParseOptions {
         ParseOptions {
@@ -372,7 +372,7 @@ mod tests {
             Some(SyntaxKind::InactiveRegion)
         );
         assert_eq!(errors.len(), 1);
-        assert_eq!(errors[0].kind, ErrorKind::PragmaIfUnmatched);
+        assert_eq!(errors[0].problem(), Problem::PragmaIfUnmatched);
         assert_eq!(usize::from(errors[0].range.end()), "{IF false}".len());
     }
 }

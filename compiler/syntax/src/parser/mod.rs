@@ -26,6 +26,7 @@ use crate::error::SyntaxError;
 use crate::lexer::{lex_regions, Token};
 use crate::syntax_kind::{SyntaxKind, SyntaxNode};
 use ironplc_dsl::stack::within_stack_budget;
+use ironplc_problems::text;
 
 /// The result of a parse: the tree and every syntax error found.
 ///
@@ -64,7 +65,7 @@ pub fn parse_expression(source: &str, options: &ParseOptions) -> Parse {
     parse_with(source, options, |p| {
         grammar::expression(p);
         if !p.at_eof() {
-            p.skip_rest("unexpected input after the expression");
+            p.skip_rest(text::syntax_error_unexpected_input_after_the_expression());
         }
     })
 }

@@ -9,6 +9,7 @@
 use super::control::close_block;
 use super::expressions::{call, close_group, element_call_ahead, expression, name_ref, variable};
 use super::statements::{statement_list, terminator, ListEnd};
+use crate::expectation::Item;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
 
@@ -34,7 +35,7 @@ fn optional_condition(p: &mut Parser) {
     if p.at(K::LeftParen) {
         p.bump();
         expression(p);
-        close_group(p, K::RightParen, "`)`");
+        close_group(p, K::RightParen);
     }
 }
 
@@ -49,9 +50,9 @@ pub(super) fn try_statement(p: &mut Parser) {
         if p.at(K::LeftParen) {
             p.bump();
             if !p.at(K::RightParen) && variable(p).is_none() {
-                p.error("expected a variable");
+                p.expected(Item::Variable);
             }
-            close_group(p, K::RightParen, "`)`");
+            close_group(p, K::RightParen);
         }
         statement_list(p, ListEnd::Block, false);
         p.complete(clause, K::CatchClause);
@@ -62,7 +63,7 @@ pub(super) fn try_statement(p: &mut Parser) {
         statement_list(p, ListEnd::Block, false);
         p.complete(clause, K::FinallyClause);
     }
-    close_block(p, K::EndTry, "`__ENDTRY`");
+    close_block(p, K::EndTry);
     p.complete(node, K::TryStmt);
 }
 
@@ -83,7 +84,7 @@ pub(super) fn jump_statement(p: &mut Parser) {
     if p.name_at(0) {
         name_ref(p);
     } else {
-        p.error("expected a label name");
+        p.expected(Item::LabelName);
     }
     terminator(p, false);
     p.complete(node, K::JmpStmt);
@@ -93,15 +94,15 @@ pub(super) fn jump_statement(p: &mut Parser) {
 pub(super) fn calc_statement(p: &mut Parser) {
     let node = p.start();
     p.bump();
-    if p.expect(K::LeftParen, "`(`") {
+    if p.expect(K::LeftParen) {
         expression(p);
-        p.expect(K::Comma, "`,`");
+        p.expect(K::Comma);
         if (p.name_at(0) && p.nth_at(1, K::LeftParen)) || element_call_ahead(p) {
             call(p, false);
         } else {
-            p.error("expected a function block call");
+            p.expected(Item::FunctionBlockCall);
         }
-        close_group(p, K::RightParen, "`)`");
+        close_group(p, K::RightParen);
     }
     terminator(p, false);
     p.complete(node, K::CalcStmt);

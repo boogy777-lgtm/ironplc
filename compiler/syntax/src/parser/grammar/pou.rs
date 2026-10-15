@@ -20,10 +20,12 @@ use super::sfc;
 use super::statements::{statement_list, ListEnd};
 use super::types::return_type;
 use super::var_blocks::{block_ahead, var_block, Scope};
+use crate::expectation::Item;
 use crate::kind_set::KindSet;
 use crate::parser::recovery::{BLOCK_END, MEMBER_START};
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
+use ironplc_problems::text;
 
 const VARIABLES: Part = Part {
     rank: 0,
@@ -82,17 +84,17 @@ pub(super) fn sections(p: &mut Parser, layout: &Layout) {
             order.enter(p, MEMBERS);
             member(p);
         } else if p.at_any(BLOCK_END) {
-            p.bump_as_error("this keyword does not belong here");
+            p.bump_as_error(text::syntax_error_this_keyword_does_not_belong_here());
         } else {
             order.enter(p, BODY);
             body(p, layout.chart);
         }
         if p.position() == before {
-            p.bump_as_error("unexpected input");
+            p.bump_as_error(text::syntax_error_unexpected_input());
         }
     }
     if layout.body == Body::Required && !order.has(BODY.rank) {
-        p.error("expected a statement");
+        p.expected(Item::Statement);
     }
 }
 
@@ -111,7 +113,7 @@ pub(super) fn program(p: &mut Parser) {
             chart: true,
         },
     );
-    close(p, K::EndProgram, "`END_PROGRAM`");
+    close(p, K::EndProgram);
     p.complete(node, K::ProgramDecl);
 }
 
@@ -127,9 +129,9 @@ pub(super) fn function(p: &mut Parser) {
         p.bump();
         p.complete(name, K::Name);
     } else {
-        p.error("expected a name");
+        p.expected(Item::Name);
     }
-    if p.expect(K::Colon, "`:`") {
+    if p.expect(K::Colon) {
         return_type(p);
     }
     sections(
@@ -142,7 +144,7 @@ pub(super) fn function(p: &mut Parser) {
             chart: false,
         },
     );
-    close(p, K::EndFunction, "`END_FUNCTION`");
+    close(p, K::EndFunction);
     p.complete(node, K::FunctionDecl);
 }
 
@@ -175,6 +177,6 @@ pub(super) fn function_block(p: &mut Parser) {
             chart: true,
         },
     );
-    close(p, K::EndFunctionBlock, "`END_FUNCTION_BLOCK`");
+    close(p, K::EndFunctionBlock);
     p.complete(node, K::FunctionBlockDecl);
 }

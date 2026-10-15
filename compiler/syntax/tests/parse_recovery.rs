@@ -4,9 +4,10 @@
 
 mod common;
 
+use ironplc_problems::Problem;
 use ironplc_syntax::{
-    parse_expression, parse_source_file, parse_statements, ErrorKind, Parse, ParseOptions,
-    SyntaxKind, SyntaxNode, MAX_DEPTH,
+    parse_expression, parse_source_file, parse_statements, Parse, ParseOptions, SyntaxKind,
+    SyntaxNode, MAX_DEPTH,
 };
 
 fn assert_well_formed(source: &str, parsed: &Parse) {
@@ -179,7 +180,7 @@ fn parse_expression_when_parentheses_nest_past_the_limit_then_depth_guard_degrad
         assert!(parsed
             .errors
             .iter()
-            .any(|error| error.kind == ErrorKind::NestingTooDeep));
+            .any(|error| error.problem() == Problem::MaxNestingDepthExceeded));
         assert!(!nodes_of(&parsed.root, SyntaxKind::ErrorNode).is_empty());
         assert!(max_depth(&parsed.root) <= MAX_DEPTH, "tree not bounded");
     });
@@ -198,7 +199,7 @@ fn parse_statements_when_ifs_nest_past_the_limit_then_depth_guard_degrades_to_er
         assert!(parsed
             .errors
             .iter()
-            .any(|error| error.kind == ErrorKind::NestingTooDeep));
+            .any(|error| error.problem() == Problem::MaxNestingDepthExceeded));
         assert!(max_depth(&parsed.root) <= MAX_DEPTH, "tree not bounded");
     });
 }

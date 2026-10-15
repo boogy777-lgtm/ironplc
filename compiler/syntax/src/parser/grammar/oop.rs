@@ -11,9 +11,11 @@ use super::expressions::type_ref;
 use super::pou::{sections, Body, Layout};
 use super::types::return_type;
 use super::var_blocks::Scope;
+use crate::expectation::{Expectation, Item};
 use crate::kind_set::KindSet;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
+use ironplc_problems::text;
 
 /// The qualifier words that are not keywords.
 const QUALIFIER_WORDS: &[&str] = &[
@@ -108,9 +110,13 @@ fn method(p: &mut Parser) {
             chart: false,
         },
     );
-    close(p, K::EndMethod, "`END_METHOD`");
+    close(p, K::EndMethod);
     p.complete(node, K::MethodDecl);
 }
+
+/// The words that open the accessors of a property.
+const GET_WORD: &str = "GET";
+const SET_WORD: &str = "SET";
 
 const GET: Part = Part {
     rank: 0,
@@ -131,22 +137,27 @@ fn property(p: &mut Parser) {
     p.bump();
     member_qualifiers(p);
     declared_name(p, NameClass::Plain);
-    if p.expect(K::Colon, "`:`") {
+    if p.expect(K::Colon) {
         return_type(p);
     }
     let mut order = Order::default();
     while !declaration_stops(p, K::EndProperty, KindSet::EMPTY) {
-        if p.nth_is_word(0, "GET") {
+        if p.nth_is_word(0, GET_WORD) {
             order.enter(p, GET);
             accessor(p, K::GetAccessor, K::EndGet);
-        } else if p.nth_is_word(0, "SET") {
+        } else if p.nth_is_word(0, SET_WORD) {
             order.enter(p, SET);
             accessor(p, K::SetAccessor, K::EndSet);
         } else {
-            skip_stray(p, K::EndProperty, KindSet::EMPTY, "expected `GET` or `SET`");
+            skip_stray(
+                p,
+                K::EndProperty,
+                KindSet::EMPTY,
+                Expectation::words([GET_WORD, SET_WORD]).text(),
+            );
         }
     }
-    close(p, K::EndProperty, "`END_PROPERTY`");
+    close(p, K::EndProperty);
     p.complete(node, K::PropertyDecl);
 }
 
@@ -163,7 +174,9 @@ fn accessor(p: &mut Parser, node_kind: K, closer: K) {
             chart: false,
         },
     );
-    close(p, closer, "the end of the accessor");
+    if !p.eat(closer) {
+        p.expected_after_previous(Item::AccessorEnd);
+    }
     p.complete(node, node_kind);
 }
 
@@ -189,9 +202,9 @@ pub(super) fn interface(p: &mut Parser) {
             p,
             K::EndInterface,
             KindSet::EMPTY,
-            "an interface has no body",
+            text::syntax_error_an_interface_has_no_body(),
         );
     }
-    close(p, K::EndInterface, "`END_INTERFACE`");
+    close(p, K::EndInterface);
     p.complete(node, K::InterfaceDecl);
 }

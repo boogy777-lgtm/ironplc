@@ -9,10 +9,12 @@
 
 use super::event::{CompletedMarker, Event, Marker};
 use super::options::ParseOptions;
-use crate::error::{nesting_message, ErrorKind, SyntaxError};
+use crate::error::{nesting_too_deep, SyntaxError};
+use crate::expectation::Expectation;
 use crate::kind_set::KindSet;
 use crate::lexer::Token;
 use crate::syntax_kind::SyntaxKind;
+use ironplc_problems::{text, Problem, Text};
 use rowan::{TextRange, TextSize};
 
 /// The deepest syntax tree the parser builds, counting the root: no path from
@@ -253,11 +255,11 @@ impl<'t, 's> Parser<'t, 's> {
         found
     }
 
-    /// Consumes `kind` or reports that `what` was expected, consuming nothing.
-    pub(crate) fn expect(&mut self, kind: SyntaxKind, what: &str) -> bool {
+    /// Consumes `kind` or reports that it was expected, consuming nothing.
+    pub(crate) fn expect(&mut self, kind: SyntaxKind) -> bool {
         let found = self.eat(kind);
         if !found {
-            self.error(&format!("expected {what}"));
+            self.expected(kind);
         }
         found
     }
@@ -292,13 +294,15 @@ impl<'t, 's> Parser<'t, 's> {
         }
     }
 
-    /// Adds `text`, the source of the construct they are about, to the message
+    /// Adds `literal`, the source of the construct they are about, to the text
     /// of every grammar error recorded after the first `errors` errors, so a
-    /// diagnostic about a part of a literal names the literal.
-    pub(crate) fn quote_in_errors_since(&mut self, errors: usize, text: &str) {
+    /// diagnostic about a part of a literal names the literal. The new text is
+    /// a row of the grammar errors that holds the old message, so the problem
+    /// stays the grammar's.
+    pub(crate) fn quote_in_errors_since(&mut self, errors: usize, literal: &str) {
         for error in self.errors.iter_mut().skip(errors) {
-            if error.kind == ErrorKind::Syntax {
-                error.message = format!("{}: '{text}'", error.message);
+            if error.problem() == Problem::SyntaxError {
+                error.text = text::syntax_error_in_literal(error.message(), literal);
             }
         }
     }
@@ -385,8 +389,8 @@ impl<'t, 's> Parser<'t, 's> {
     }
 
     /// Records an error over an explicit range of the source.
-    pub(crate) fn error_at(&mut self, range: TextRange, message: &str) {
-        self.record(SyntaxError::new(message, range));
+    pub(crate) fn error_at(&mut self, range: TextRange, text: Text) {
+        self.record(SyntaxError::new(text, range));
     }
 
     /// The range of the `n`th token ahead, or the empty range at the end.
@@ -398,23 +402,33 @@ impl<'t, 's> Parser<'t, 's> {
     /// Records an error where the previous token ends, as an empty range: for
     /// something missing after it, such as the closing keyword of a declaration
     /// that ends where the next one begins.
-    pub(crate) fn error_after_previous(&mut self, message: &str) {
+    pub(crate) fn error_after_previous(&mut self, text: Text) {
         let end = self
             .pos
             .checked_sub(1)
             .and_then(|previous| self.significant.get(previous))
             .and_then(|index| self.tokens.get(*index))
             .map_or_else(|| TextSize::from(0), |token| token.range.end());
-        self.record(SyntaxError::new(message, TextRange::empty(end)));
+        self.record(SyntaxError::new(text, TextRange::empty(end)));
+    }
+
+    /// Records that `expected` was to stand at the next token.
+    pub(crate) fn expected(&mut self, expected: impl Into<Expectation>) {
+        self.error(expected.into().text());
+    }
+
+    /// Records that `expected` was to stand where the previous token ends.
+    pub(crate) fn expected_after_previous(&mut self, expected: impl Into<Expectation>) {
+        self.error_after_previous(expected.into().text());
     }
 
     /// Records an error at the next token. A lexical error token already has
     /// its own error, so none is added for it.
-    pub(crate) fn error(&mut self, message: &str) {
+    pub(crate) fn error(&mut self, text: Text) {
         if self.nth(0) == Some(SyntaxKind::ErrorToken) {
             return;
         }
-        self.record(SyntaxError::new(message, self.current_range()));
+        self.record(SyntaxError::new(text, self.current_range()));
     }
 
     // ----- depth guard ----------------------------------------------------
@@ -426,14 +440,12 @@ impl<'t, 's> Parser<'t, 's> {
         if self
             .errors
             .last()
-            .is_some_and(|error| error.kind == ErrorKind::NestingTooDeep)
+            .is_some_and(|error| error.problem() == Problem::MaxNestingDepthExceeded)
         {
             return;
         }
-        self.errors.push(
-            SyntaxError::new(nesting_message(), self.current_range())
-                .with_kind(ErrorKind::NestingTooDeep),
-        );
+        self.errors
+            .push(SyntaxError::new(nesting_too_deep(), self.current_range()));
     }
 
     /// Runs `body`, or `degraded` when the tree is too deep to recurse
@@ -458,6 +470,7 @@ impl<'t, 's> Parser<'t, 's> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::expectation::Item;
     use crate::lexer::lex;
 
     fn parser_over<T>(source: &str, options: ParseOptions, check: impl FnOnce(Parser) -> T) -> T {
@@ -533,7 +546,7 @@ mod tests {
         let (tokens, _) = lex("x ");
         let mut parser = Parser::new(&tokens, ParseOptions::default());
         parser.bump();
-        parser.error("boom");
+        parser.error(text::syntax_error_unexpected_input());
         let (_, errors) = parser.finish();
         assert_eq!(errors.len(), 1);
         assert_eq!(errors[0].range, TextRange::empty(TextSize::from(2)));
@@ -543,9 +556,9 @@ mod tests {
     fn error_when_the_same_error_is_reported_twice_in_a_row_then_once() {
         let (tokens, _) = lex("a");
         let mut parser = Parser::new(&tokens, ParseOptions::default());
-        parser.error("expected something");
-        parser.error("expected something");
-        parser.error("expected something else");
+        parser.error(Item::Name.text());
+        parser.error(Item::Name.text());
+        parser.error(Item::Statement.text());
         let (_, errors) = parser.finish();
         assert_eq!(errors.len(), 2);
     }
@@ -554,7 +567,7 @@ mod tests {
     fn error_when_next_is_error_token_then_not_reported_twice() {
         let (tokens, _) = lex("?");
         let mut parser = Parser::new(&tokens, ParseOptions::default());
-        parser.error("boom");
+        parser.error(text::syntax_error_unexpected_input());
         assert!(parser.finish().1.is_empty());
     }
 
@@ -571,7 +584,7 @@ mod tests {
         assert!(parser.levels.is_empty());
         let (_, errors) = parser.finish();
         assert_eq!(errors.len(), 1);
-        assert_eq!(errors[0].kind, ErrorKind::NestingTooDeep);
+        assert_eq!(errors[0].problem(), Problem::MaxNestingDepthExceeded);
     }
 
     #[test]

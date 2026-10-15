@@ -21,9 +21,10 @@ mod literals;
 mod regions;
 mod trivia;
 
-use crate::error::{ErrorKind, SyntaxError};
+use crate::error::SyntaxError;
 use crate::syntax_kind::SyntaxKind;
 use cursor::Cursor;
+use ironplc_problems::{text, Text};
 use literals::{scan_number, scan_percent, scan_quoted, Quoted};
 use rowan::{TextRange, TextSize};
 use trivia::{scan_delimited, scan_line_comment, scan_newline, scan_whitespace};
@@ -39,26 +40,19 @@ pub struct Token<'src> {
 }
 
 /// What one scanner consumed: the token kind and, when the token is an error
-/// token, the kind and message of its syntax error.
-type Scan = (SyntaxKind, Option<(ErrorKind, &'static str)>);
+/// token, the text of its syntax error.
+type Scan = (SyntaxKind, Option<Text>);
 
-/// An error token for a malformed construct.
-fn error(message: &'static str) -> Scan {
-    (SyntaxKind::ErrorToken, Some((ErrorKind::Syntax, message)))
-}
-
-/// An error token for text that makes no token: bytes that start none, or a
-/// quoted token that is never closed.
-fn unmatched(message: &'static str) -> Scan {
-    (
-        SyntaxKind::ErrorToken,
-        Some((ErrorKind::UnexpectedCharacter, message)),
-    )
+/// An error token, with the text of the error that goes with it: a malformed
+/// construct, text that makes no token (bytes that start none), or a quoted
+/// token that is never closed.
+fn error(text: Text) -> Scan {
+    (SyntaxKind::ErrorToken, Some(text))
 }
 
 /// An error token for bytes that match no token.
 fn unexpected_character() -> Scan {
-    unmatched("unexpected character")
+    error(text::unexpected_token_unexpected_character())
 }
 
 const SINGLE_QUOTED: Quoted = Quoted {
@@ -66,7 +60,7 @@ const SINGLE_QUOTED: Quoted = Quoted {
     kind: SyntaxKind::StringLit,
     escapes: true,
     single_line: false,
-    unterminated: "unterminated string literal",
+    unterminated: text::unexpected_token_unterminated_string_literal,
 };
 
 const DOUBLE_QUOTED: Quoted = Quoted {
@@ -74,7 +68,7 @@ const DOUBLE_QUOTED: Quoted = Quoted {
     kind: SyntaxKind::WStringLit,
     escapes: true,
     single_line: false,
-    unterminated: "unterminated string literal",
+    unterminated: text::unexpected_token_unterminated_string_literal,
 };
 
 const BACKTICK_QUOTED: Quoted = Quoted {
@@ -82,7 +76,7 @@ const BACKTICK_QUOTED: Quoted = Quoted {
     kind: SyntaxKind::EscapedIdent,
     escapes: false,
     single_line: true,
-    unterminated: "unterminated escaped identifier",
+    unterminated: text::unexpected_token_unterminated_escaped_identifier,
 };
 
 /// The lexer settings that change which bytes a token covers.
@@ -130,15 +124,14 @@ fn next_token<'src>(
     options: LexOptions,
 ) -> (Token<'src>, Option<SyntaxError>) {
     let start = cursor.pos();
-    let (mut kind, mut message) = scan_token(cursor, options);
+    let (mut kind, mut text) = scan_token(cursor, options);
     if cursor.pos() == start {
         // Unreachable by construction; guarantees progress regardless.
         cursor.bump_char();
-        (kind, message) = unexpected_character();
+        (kind, text) = unexpected_character();
     }
     let range = range_of(start, cursor.pos());
-    let error =
-        message.map(|(error_kind, message)| SyntaxError::new(message, range).with_kind(error_kind));
+    let error = text.map(|text| SyntaxError::new(text, range));
     let token = Token {
         kind,
         text: cursor.slice_from(start),
@@ -155,7 +148,7 @@ fn range_of(start: usize, end: usize) -> TextRange {
 /// Scans exactly one token at the cursor.
 fn scan_token(cursor: &mut Cursor<'_>, options: LexOptions) -> Scan {
     let Some(byte) = cursor.peek() else {
-        return error("unexpected end of input");
+        return error(text::syntax_error_unexpected_end_of_input());
     };
     if cursor.line_break_len().is_some() {
         return scan_newline(cursor);
@@ -168,21 +161,21 @@ fn scan_token(cursor: &mut Cursor<'_>, options: LexOptions) -> Scan {
             SyntaxKind::BlockComment,
             ("/*", "*/"),
             false,
-            "unterminated block comment",
+            text::syntax_error_unterminated_block_comment,
         ),
         b'(' if cursor.peek_at(1) == Some(b'*') => scan_delimited(
             cursor,
             SyntaxKind::BlockComment,
             ("(*", "*)"),
             options.nested_comments,
-            "unterminated block comment",
+            text::syntax_error_unterminated_block_comment,
         ),
         b'{' => scan_delimited(
             cursor,
             SyntaxKind::Pragma,
             ("{", "}"),
             false,
-            "unterminated pragma",
+            text::syntax_error_unterminated_pragma,
         ),
         b'\'' => scan_quoted(cursor, &SINGLE_QUOTED),
         b'"' => scan_quoted(cursor, &DOUBLE_QUOTED),
@@ -233,43 +226,15 @@ fn scan_identifier(cursor: &mut Cursor<'_>) -> Scan {
 }
 
 /// Operators and punctuation, longest match first: (kind, length in bytes).
+/// The symbols are those declared with the kinds ([`SyntaxKind::SYMBOLS`]).
 fn punctuation(cursor: &Cursor<'_>) -> Option<(SyntaxKind, usize)> {
-    const TWO_BYTE: [(&str, SyntaxKind); 7] = [
-        ("..", SyntaxKind::Range),
-        ("<>", SyntaxKind::NotEqual),
-        ("<=", SyntaxKind::LessEqual),
-        (">=", SyntaxKind::GreaterEqual),
-        ("**", SyntaxKind::Power),
-        (":=", SyntaxKind::Assignment),
-        ("=>", SyntaxKind::RightArrow),
-    ];
-    const ONE_BYTE: [(&str, SyntaxKind); 20] = [
-        ("(", SyntaxKind::LeftParen),
-        (")", SyntaxKind::RightParen),
-        ("}", SyntaxKind::RightBrace),
-        ("[", SyntaxKind::LeftBracket),
-        ("]", SyntaxKind::RightBracket),
-        (",", SyntaxKind::Comma),
-        (";", SyntaxKind::Semicolon),
-        (":", SyntaxKind::Colon),
-        (".", SyntaxKind::Period),
-        ("#", SyntaxKind::Hash),
-        ("=", SyntaxKind::Equal),
-        ("<", SyntaxKind::Less),
-        (">", SyntaxKind::Greater),
-        ("/", SyntaxKind::Div),
-        ("*", SyntaxKind::Star),
-        ("+", SyntaxKind::Plus),
-        ("-", SyntaxKind::Minus),
-        ("^", SyntaxKind::Caret),
-        // `|` and `&` are the symbol spellings of OR and AND.
-        ("|", SyntaxKind::Or),
-        ("&", SyntaxKind::And),
-    ];
-    TWO_BYTE
+    /// `|` and `&` are the symbol spellings of OR and AND, which are keywords.
+    const WORD_SYMBOLS: [(&str, SyntaxKind); 2] = [("|", SyntaxKind::Or), ("&", SyntaxKind::And)];
+    SyntaxKind::SYMBOLS
         .iter()
-        .chain(ONE_BYTE.iter())
-        .find(|(text, _)| cursor.starts_with(text))
+        .chain(WORD_SYMBOLS.iter())
+        .filter(|(text, _)| cursor.starts_with(text))
+        .max_by_key(|(text, _)| text.len())
         .map(|(text, kind)| (*kind, text.len()))
 }
 

@@ -6,9 +6,8 @@
 mod common;
 
 use ironplc_dsl::core::FileId;
-use ironplc_syntax::{
-    parse_source_file, parse_statements, ErrorKind, Parse, ParseOptions, SyntaxKind,
-};
+use ironplc_problems::Problem;
+use ironplc_syntax::{parse_source_file, parse_statements, Parse, ParseOptions, SyntaxKind};
 
 fn with_pragma_if() -> ParseOptions {
     ParseOptions {
@@ -228,7 +227,7 @@ fn parse_statements_when_pragmas_not_enabled_then_directives_are_gated_like_any_
     assert!(parsed
         .errors
         .iter()
-        .all(|error| error.kind == ErrorKind::Syntax));
+        .all(|error| error.problem() == Problem::SyntaxError));
 }
 
 #[test]
@@ -237,7 +236,7 @@ fn parse_statements_when_if_never_closed_then_p0023_at_the_if_and_the_rest_is_a_
     let parsed = parse_statements(source, &with_pragma_if());
     assert_lossless(source, &parsed);
     assert_eq!(parsed.errors.len(), 1);
-    assert_eq!(parsed.errors[0].kind, ErrorKind::PragmaIfUnmatched);
+    assert_eq!(parsed.errors[0].problem(), Problem::PragmaIfUnmatched);
     assert_eq!(codes(&parsed), vec!["P0023"]);
     let start = source.find("{IF").unwrap_or(0);
     assert_eq!(usize::from(parsed.errors[0].range.start()), start);
@@ -284,7 +283,7 @@ fn parse_statements_when_condition_not_understood_then_p0024_and_the_branch_is_u
         let parsed = parse_statements(source, &with_pragma_if());
         assert_lossless(source, &parsed);
         assert_eq!(codes(&parsed), vec!["P0024"], "{source}");
-        assert_eq!(parsed.errors[0].kind, ErrorKind::PragmaValueExpected);
+        assert_eq!(parsed.errors[0].problem(), Problem::PragmaValueExpected);
         assert_eq!(tokens_of(&parsed, SyntaxKind::InactiveRegion).len(), 1);
     }
 }

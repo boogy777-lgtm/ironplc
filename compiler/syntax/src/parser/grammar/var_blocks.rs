@@ -19,10 +19,12 @@ use super::expressions::{type_ref, variable};
 use super::initializers::initializer;
 use super::positions::{self, Context, Spec, COMPLETE_ADDRESS, INCOMPLETE_ADDRESS};
 use super::types::type_spec;
+use crate::expectation::Item;
 use crate::kind_set::KindSet;
 use crate::parser::recovery::{BLOCK_END, VAR_OPENERS, VAR_QUALIFIERS};
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
+use ironplc_problems::text;
 
 /// What a block's declarations look like.
 #[derive(Clone, Copy)]
@@ -239,15 +241,12 @@ pub(super) fn var_block(p: &mut Parser, scope: Scope) {
     };
     let node = p.start();
     if allowed.is_none() {
-        p.error(&format!(
-            "this kind of variable block is not allowed in {}",
-            scope.name()
-        ));
+        p.error(text::syntax_error_this_kind_of_variable_block_is_not_allowed_in(scope.name()));
     }
     p.bump();
     if let Some(qualifier) = p.nth(0).filter(|_| p.at_any(VAR_QUALIFIERS)) {
         if !rule.qualifiers.contains(qualifier) {
-            p.error("this qualifier is not allowed on this variable block");
+            p.error(text::syntax_error_this_qualifier_is_not_allowed_on_this_variable_block());
         }
         p.bump();
     }
@@ -257,7 +256,7 @@ pub(super) fn var_block(p: &mut Parser, scope: Scope) {
         Instance => items(p, true, instance_initialization),
     }
     if !p.eat(K::EndVar) {
-        p.error_after_previous("expected `END_VAR`");
+        p.expected_after_previous(K::EndVar);
     }
     p.complete(node, K::VarBlock);
 }
@@ -275,11 +274,11 @@ fn items(p: &mut Parser, at_least_one: bool, mut item: impl FnMut(&mut Parser)) 
         item(p);
         count += 1;
         if p.position() == before {
-            p.bump_as_error("expected a declaration");
+            p.bump_as_error(Item::Declaration.text());
         }
     }
     if at_least_one && count == 0 {
-        p.error("expected a declaration");
+        p.expected(Item::Declaration);
     }
 }
 
@@ -302,14 +301,14 @@ fn declaration(p: &mut Parser, shape: Shape) {
     let mut address = None;
     if located {
         if names > 1 {
-            p.error("a located variable has one name");
+            p.error(text::syntax_error_a_located_variable_has_one_name());
         }
         address = Some(location(p));
     }
     if shape.single && names > 1 {
-        p.error("this variable block declares one variable at a time");
+        p.error(text::syntax_error_this_variable_block_declares_one_variable_at_a_time());
     }
-    if p.expect(K::Colon, "`:`") && !(shape.optional_type && p.at(K::Semicolon)) {
+    if p.expect(K::Colon) && !(shape.optional_type && p.at(K::Semicolon)) {
         let context = match address {
             Some(Address::Incomplete) => shape.context.located(INCOMPLETE_ADDRESS),
             Some(Address::Complete) => shape.context.located(COMPLETE_ADDRESS),
@@ -324,7 +323,9 @@ fn declaration(p: &mut Parser, shape: Shape) {
             p.complete(edge, K::EdgeSpec);
         } else if p.at(K::Assignment) {
             if !shape.initial {
-                p.error("an initial value is not allowed on this variable block");
+                p.error(
+                    text::syntax_error_an_initial_value_is_not_allowed_on_this_variable_block(),
+                );
             }
             initializer(p, context.initial(spec));
         }
@@ -352,7 +353,7 @@ fn location(p: &mut Parser) -> Address {
     if p.at(K::DirectAddress) || p.at(K::DirectAddressIncomplete) {
         p.bump();
     } else {
-        p.error("expected a direct address");
+        p.expected(Item::DirectAddress);
     }
     p.complete(node, K::Location);
     address
@@ -366,14 +367,14 @@ fn access_declaration(p: &mut Parser) {
         p.abandon(node);
         return;
     }
-    if p.expect(K::Colon, "`:`") {
+    if p.expect(K::Colon) {
         if p.at(K::DirectAddress) {
-            p.error("a path starts with a name");
+            p.error(text::syntax_error_a_path_starts_with_a_name());
         }
         if variable(p).is_none() {
-            p.error("expected the path of a variable");
+            p.expected(Item::VariablePath);
         }
-        if p.expect(K::Colon, "`:`") {
+        if p.expect(K::Colon) {
             type_ref(p);
             if p.at_any(ACCESS_RIGHTS) {
                 p.bump();
@@ -394,7 +395,7 @@ fn instance_initialization(p: &mut Parser) {
         && p.nth_at(3, K::Period)
         && p.name_at(4);
     if !path {
-        p.error("expected the path `resource.program.variable`");
+        p.expected(Item::InstancePath);
     }
     if variable(p).is_none() {
         skip_declaration(p);
@@ -404,7 +405,7 @@ fn instance_initialization(p: &mut Parser) {
     if p.at(K::At) {
         location(p);
     }
-    if p.expect(K::Colon, "`:`") {
+    if p.expect(K::Colon) {
         let spec = type_spec(p, &positions::INSTANCE);
         if p.at(K::Assignment) {
             initializer(p, positions::INSTANCE.initial(spec));

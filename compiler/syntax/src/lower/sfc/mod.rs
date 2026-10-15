@@ -27,6 +27,7 @@ use super::pou::{declared_name, lower_body};
 use super::tree::{child_of, children_of, significant_tokens};
 use super::values::lower_priority;
 use super::LowerCx;
+use crate::expectation::Item;
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode};
 use ironplc_dsl::common::ConstantKind;
 use ironplc_dsl::core::Id;
@@ -130,10 +131,7 @@ fn lower_time(cx: &LowerCx, node: &SyntaxNode) -> Result<ActionTimeKind, Diagnos
             ConstantKind::Duration(duration) => Ok(ActionTimeKind::Duration(duration)),
             _ => Err(cx.missing(node, "a duration")),
         },
-        _ => Err(cx.syntax_error(
-            node.text_range(),
-            "expected a duration or the name of a variable",
-        )),
+        _ => Err(cx.syntax_error(node.text_range(), Item::DurationOrVariableName.text())),
     }
 }
 

@@ -6,12 +6,15 @@
 //! body again, so a chart can nest; the depth guard bounds it.
 
 use super::common::{close, declared_name, item_terminator, skip_stray, NameClass};
+use super::configuration::PRIORITY_WORD;
 use super::expressions::{close_group, expression, name_ref};
 use super::pou::body;
+use crate::expectation::{Expectation, Item};
 use crate::kind_set::KindSet;
 use crate::parser::recovery::BLOCK_END;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
+use ironplc_problems::text;
 
 /// The qualifiers of an action association. The legacy grammar matches them
 /// by their exact upper-case spelling.
@@ -48,7 +51,7 @@ fn step(p: &mut Parser, node_kind: K) {
     let node = p.start();
     p.bump();
     declared_name(p, NameClass::Plain);
-    p.expect(K::Colon, "`:`");
+    p.expect(K::Colon);
     while !p.at_eof() && !p.at(K::EndStep) && !p.at_any(BLOCK_END) {
         let before = p.position();
         if p.at(K::Semicolon) {
@@ -57,10 +60,10 @@ fn step(p: &mut Parser, node_kind: K) {
             association(p);
         }
         if p.position() == before {
-            p.bump_as_error("expected an action association");
+            p.bump_as_error(Item::ActionAssociation.text());
         }
     }
-    close(p, K::EndStep, "`END_STEP`");
+    close(p, K::EndStep);
     p.complete(node, node_kind);
 }
 
@@ -70,12 +73,12 @@ fn association(p: &mut Parser) {
     if p.name_at(0) {
         name_ref(p);
     } else {
-        p.error("expected the name of an action");
+        p.expected(Item::ActionName);
         super::common::skip_declaration(p);
         p.abandon(node);
         return;
     }
-    if p.expect(K::LeftParen, "`(`") {
+    if p.expect(K::LeftParen) {
         qualifier(p);
         if p.at(K::Comma) {
             p.bump();
@@ -86,7 +89,7 @@ fn association(p: &mut Parser) {
                 }
             }
         }
-        close_group(p, K::RightParen, "`)`");
+        close_group(p, K::RightParen);
     }
     p.complete(node, K::ActionAssociation);
     item_terminator(p);
@@ -100,7 +103,7 @@ fn qualifier(p: &mut Parser) {
     let node = p.start();
     p.bump();
     if TIMED.contains(&text) {
-        p.expect(K::Comma, "`,`");
+        p.expect(K::Comma);
         expression(p);
     }
     p.complete(node, K::ActionQualifier);
@@ -111,9 +114,9 @@ fn action(p: &mut Parser) {
     let node = p.start();
     p.bump();
     declared_name(p, NameClass::Plain);
-    p.expect(K::Colon, "`:`");
+    p.expect(K::Colon);
     body(p, true);
-    close(p, K::EndAction, "`END_ACTION`");
+    close(p, K::EndAction);
     p.complete(node, K::ActionDecl);
 }
 
@@ -128,9 +131,9 @@ fn transition(p: &mut Parser) {
     if p.at(K::LeftParen) {
         priority(p);
     }
-    if p.expect(K::From, "`FROM`") {
+    if p.expect(K::From) {
         steps(p);
-        if p.expect(K::To, "`TO`") {
+        if p.expect(K::To) {
             steps(p);
             condition(p);
         }
@@ -140,10 +143,10 @@ fn transition(p: &mut Parser) {
             p,
             K::EndTransition,
             KindSet::EMPTY,
-            "expected `END_TRANSITION`",
+            Expectation::token(K::EndTransition).text(),
         );
     }
-    close(p, K::EndTransition, "`END_TRANSITION`");
+    close(p, K::EndTransition);
     p.complete(node, K::TransitionDecl);
 }
 
@@ -151,20 +154,20 @@ fn transition(p: &mut Parser) {
 fn priority(p: &mut Parser) {
     let node = p.start();
     p.bump();
-    if p.nth(0) == Some(K::Ident) && p.nth_text(0) == "PRIORITY" {
+    if p.nth(0) == Some(K::Ident) && p.nth_text(0) == PRIORITY_WORD {
         p.bump();
     } else {
-        p.error("expected `PRIORITY`");
+        p.expected(Expectation::words([PRIORITY_WORD]));
     }
-    p.expect(K::Assignment, "`:=`");
+    p.expect(K::Assignment);
     if p.at(K::IntegerLit) {
         let literal = p.start();
         p.bump();
         p.complete(literal, K::IntLiteral);
     } else {
-        p.error("expected the priority");
+        p.expected(Item::Priority);
     }
-    close_group(p, K::RightParen, "`)`");
+    close_group(p, K::RightParen);
     p.complete(node, K::TransitionPriority);
 }
 
@@ -179,20 +182,20 @@ fn steps(p: &mut Parser) {
                 name_ref(p);
                 count += 1;
             } else {
-                p.error("expected the name of a step");
+                p.expected(Item::StepName);
             }
             if !p.eat(K::Comma) {
                 break;
             }
         }
         if count < 2 {
-            p.error("expected at least two steps");
+            p.error(text::syntax_error_expected_at_least_two_steps());
         }
-        close_group(p, K::RightParen, "`)`");
+        close_group(p, K::RightParen);
     } else if p.name_at(0) {
         name_ref(p);
     } else {
-        p.error("expected the name of a step");
+        p.expected(Item::StepName);
     }
     p.complete(node, K::StepList);
 }
@@ -200,9 +203,9 @@ fn steps(p: &mut Parser) {
 /// `:= expression ;`
 fn condition(p: &mut Parser) {
     let node = p.start();
-    if p.expect(K::Assignment, "`:=`") {
+    if p.expect(K::Assignment) {
         expression(p);
-        p.expect(K::Semicolon, "`;`");
+        p.expect(K::Semicolon);
     }
     p.complete(node, K::TransitionCondition);
 }

@@ -24,10 +24,12 @@ use super::expressions::{arg_list, close_group, type_ref};
 use super::initializers::initializer;
 use super::literals::literal;
 use super::positions::{Context, Spec, COUNTED, DECLARED, ELEMENT, MEMBER};
+use crate::expectation::Item;
 use crate::kind_set::KindSet;
 use crate::parser::recovery::BLOCK_END;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
+use ironplc_problems::text;
 
 /// The integer types, which a subrange restricts.
 pub(super) const INTEGER_TYPES: KindSet = KindSet::new(&[
@@ -66,7 +68,10 @@ pub(super) fn type_spec(p: &mut Parser, context: &Context) -> Spec {
         },
     );
     if !context.accepts(spec) {
-        p.error_at(start, "this kind of type is not allowed here");
+        p.error_at(
+            start,
+            text::syntax_error_this_kind_of_type_is_not_allowed_here(),
+        );
     }
     spec
 }
@@ -144,15 +149,15 @@ pub(super) fn string_type(p: &mut Parser) -> bool {
     let node = p.start();
     p.bump();
     let closer = match p.nth(0) {
-        Some(K::LeftBracket) => Some((K::RightBracket, "`]`")),
-        Some(K::LeftParen) => Some((K::RightParen, "`)`")),
+        Some(K::LeftBracket) => Some(K::RightBracket),
+        Some(K::LeftParen) => Some(K::RightParen),
         _ => None,
     };
     let has_length = closer.is_some();
-    if let Some((closer, what)) = closer {
+    if let Some(closer) = closer {
         p.bump();
         integer_ref(p);
-        close_group(p, closer, what);
+        close_group(p, closer);
     }
     p.complete(node, K::StringType);
     has_length
@@ -163,7 +168,7 @@ pub(super) fn string_type(p: &mut Parser) -> bool {
 fn array_type(p: &mut Parser) {
     let node = p.start();
     p.bump();
-    if p.expect(K::LeftBracket, "`[`") {
+    if p.expect(K::LeftBracket) {
         if p.at(K::Star) {
             p.bump();
         } else {
@@ -174,9 +179,9 @@ fn array_type(p: &mut Parser) {
                 }
             }
         }
-        close_group(p, K::RightBracket, "`]`");
+        close_group(p, K::RightBracket);
     }
-    p.expect(K::Of, "`OF`");
+    p.expect(K::Of);
     type_spec(p, &ELEMENT);
     p.complete(node, K::ArrayType);
 }
@@ -187,13 +192,13 @@ pub(super) fn subrange(p: &mut Parser) {
     if bound_ahead(p) {
         bound(p);
     } else {
-        p.error("expected the lower bound of a range");
+        p.expected(Item::RangeLowerBound);
     }
-    p.expect(K::Range, "`..`");
+    p.expect(K::Range);
     if bound_ahead(p) {
         bound(p);
     } else {
-        p.error("expected the upper bound of a range");
+        p.expected(Item::RangeUpperBound);
     }
     p.complete(node, K::Subrange);
 }
@@ -204,7 +209,7 @@ fn reference_type(p: &mut Parser, keyword_tokens: usize, context: &Context) {
     let node = p.start();
     p.bump();
     if keyword_tokens == 2 {
-        p.expect(K::To, "`TO`");
+        p.expect(K::To);
     }
     type_spec(p, &context.target());
     p.complete(node, K::RefType);
@@ -214,11 +219,11 @@ fn reference_type(p: &mut Parser, keyword_tokens: usize, context: &Context) {
 fn params_type(p: &mut Parser) {
     let node = p.start();
     p.bump();
-    if p.expect(K::LeftParen, "`(`") {
+    if p.expect(K::LeftParen) {
         integer_ref(p);
-        close_group(p, K::RightParen, "`)`");
+        close_group(p, K::RightParen);
     }
-    p.expect(K::Of, "`OF`");
+    p.expect(K::Of);
     type_spec(p, &COUNTED);
     p.complete(node, K::ParamsType);
 }
@@ -229,7 +234,7 @@ fn subrange_type(p: &mut Parser) {
     type_ref(p);
     p.bump();
     subrange(p);
-    close_group(p, K::RightParen, "`)`");
+    close_group(p, K::RightParen);
     p.complete(node, K::SubrangeType);
 }
 
@@ -243,10 +248,10 @@ fn enum_type(p: &mut Parser, declares: bool) {
             break;
         }
     }
-    close_group(p, K::RightParen, "`)`");
+    close_group(p, K::RightParen);
     if p.at_any(ENUM_BASE_TYPES) {
         if !declares {
-            p.error("a base type is part of a type declaration");
+            p.error(text::syntax_error_a_base_type_is_part_of_a_type_declaration());
         }
         type_ref(p);
     }
@@ -261,7 +266,7 @@ fn enum_value(p: &mut Parser, declares: bool) {
     }
     if p.at(K::Assignment) {
         if !declares {
-            p.error("a value is part of a type declaration");
+            p.error(text::syntax_error_a_value_is_part_of_a_type_declaration());
         }
         p.bump();
         signed_integer(p);
@@ -275,7 +280,7 @@ fn signed_integer(p: &mut Parser) {
     if p.at(K::IntegerLit) || signed {
         literal(p);
     } else {
-        p.error("expected an integer");
+        p.expected(Item::Integer);
     }
 }
 
@@ -290,14 +295,14 @@ fn aggregate(p: &mut Parser, node_kind: K, closer: K) {
         member(p);
         members += 1;
         if p.position() == before {
-            p.bump_as_error("expected a member");
+            p.bump_as_error(Item::Member.text());
         }
     }
     if members == 0 {
-        p.error("expected at least one member");
+        p.error(text::syntax_error_expected_at_least_one_member());
     }
     if !p.eat(closer) {
-        p.error("expected the end of the structure");
+        p.expected(Item::StructureEnd);
     }
     p.complete(node, node_kind);
 }
@@ -309,7 +314,7 @@ fn member(p: &mut Parser) {
         p.abandon(node);
         return;
     }
-    if p.expect(K::Colon, "`:`") {
+    if p.expect(K::Colon) {
         let spec = type_spec(p, &MEMBER);
         if p.at(K::Assignment) {
             initializer(p, MEMBER.initial(spec));
@@ -335,13 +340,13 @@ pub(super) fn type_block(p: &mut Parser) {
         type_declaration(p);
         declarations += 1;
         if p.position() == before {
-            p.bump_as_error("expected a type declaration");
+            p.bump_as_error(Item::TypeDeclaration.text());
         }
     }
     if declarations == 0 && !lone_terminator {
-        p.error("expected a type declaration");
+        p.expected(Item::TypeDeclaration);
     }
-    close(p, K::EndType, "`END_TYPE`");
+    close(p, K::EndType);
     p.complete(node, K::TypeBlock);
 }
 
@@ -353,7 +358,7 @@ fn type_declaration(p: &mut Parser) {
         return;
     }
     let mut spec = Spec::Missing;
-    if p.expect(K::Colon, "`:`") {
+    if p.expect(K::Colon) {
         spec = type_spec(p, &DECLARED);
         if p.at(K::Assignment) {
             initializer(p, DECLARED.initial(spec));

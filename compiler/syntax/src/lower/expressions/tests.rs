@@ -1,6 +1,8 @@
 use super::*;
 use crate::lower::{disposition, INTERNAL_ERROR};
-use crate::{parse_expression, parse_source_file, ParseOptions, SyntaxKind, MAX_DEPTH};
+use crate::{
+    parse_expression, parse_source_file, ParseOptions, SyntaxError, SyntaxKind, MAX_DEPTH,
+};
 use ironplc_dsl::core::{FileId, Located};
 use ironplc_dsl::textual::{SelfRefKind, SymbolicVariableKind, Variable};
 use ironplc_problems::Problem;
@@ -694,9 +696,9 @@ fn lower_expr_when_sum_is_one_term_too_long_then_the_parse_reports_the_depth_not
         parse
             .errors
             .iter()
-            .map(|error| error.kind)
+            .map(SyntaxError::problem)
             .collect::<Vec<_>>(),
-        vec![crate::ErrorKind::NestingTooDeep]
+        vec![Problem::MaxNestingDepthExceeded]
     );
 }
 

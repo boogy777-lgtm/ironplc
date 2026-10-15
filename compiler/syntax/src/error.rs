@@ -1,76 +1,26 @@
 //! The syntax-layer error type.
 //!
-//! A syntax error is a message plus the byte range it covers. Ranges are over
+//! A syntax error is a text plus the byte range it covers. Ranges are over
 //! the original source text (design: parse-tree architecture, section 3.1), so
-//! they are complete even when the tree contains error tokens. Each error has
-//! a kind, and the kind decides the problem code the error is reported under
-//! (see the `diagnostic` module).
+//! they are complete even when the tree contains error tokens. The text is a
+//! row of `problem-texts.csv`: it carries the problem the error is reported
+//! under, so no second fact decides the code (see the `diagnostic` module).
 
 use crate::parser::MAX_DEPTH;
-use crate::pragma::Fault;
 use core::fmt;
+use ironplc_problems::{text, Problem, Text};
 use rowan::TextRange;
 
-/// What kind of problem a [`SyntaxError`] is, which decides its problem code.
-///
-/// Every dialect-gated form has its own kind because the legacy token check
-/// rules report each one under its own code.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ErrorKind {
-    /// The text does not follow the grammar.
-    Syntax,
-    /// Text that makes no token: bytes that start none, a string or an
-    /// escaped identifier that is never closed.
-    UnexpectedCharacter,
-    /// `//` or `/* */` comment without the flag.
-    CStyleComment,
-    /// `VAR` block holding no declaration.
-    EmptyVarBlock,
-    /// `$` escape that the standard does not define.
-    InvalidStringEscape,
-    /// `.%Xn` selector without the flag.
-    PartialAccessSyntaxDisabled,
-    /// `STRING(n)` without the flag.
-    ParenStringLengthNotAllowed,
-    /// `ARRAY [*]` without the flag.
-    IncompleteArrayNotAllowed,
-    /// Backtick identifier without the flag.
-    EscapedIdentifierNotAllowed,
-    /// Identifier with letters outside ASCII without the flag.
-    UnicodeIdentifierNotAllowed,
-    /// Identifier with consecutive underscores without the flag.
-    MultipleUnderscoresNotAllowed,
-    /// `{IF}` without its `{END_IF}`, or a stray `{ELSIF}`, `{ELSE}` or `{END_IF}`.
-    PragmaIfUnmatched,
-    /// `{IF}`, `{ELSIF}` or `{DEFINE}` with a condition or name this compiler
-    /// does not understand.
-    PragmaValueExpected,
-    /// Nesting deeper than [`MAX_DEPTH`].
-    NestingTooDeep,
-}
-
 /// What is said of nesting beyond [`MAX_DEPTH`], wherever it is found.
-pub(crate) fn nesting_message() -> String {
-    format!("Maximum nesting depth of {MAX_DEPTH} exceeded")
-}
-
-impl From<Fault> for ErrorKind {
-    fn from(fault: Fault) -> Self {
-        match fault {
-            Fault::Unmatched => ErrorKind::PragmaIfUnmatched,
-            Fault::UnexpectedValue => ErrorKind::PragmaValueExpected,
-            Fault::NestingTooDeep => ErrorKind::NestingTooDeep,
-        }
-    }
+pub(crate) fn nesting_too_deep() -> Text {
+    text::max_nesting_depth_exceeded_over_limit(MAX_DEPTH)
 }
 
 /// A problem found while lexing or parsing, anchored to a byte range.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SyntaxError {
-    /// What kind of problem this is.
-    pub kind: ErrorKind,
-    /// Human-readable description of what is wrong.
-    pub message: String,
+    /// What is wrong, and the problem it is reported under.
+    pub text: Text,
     /// The bytes of the original source this error covers.
     pub range: TextRange,
     /// What to do about it, for a problem whose fix is the same every time
@@ -79,11 +29,10 @@ pub struct SyntaxError {
 }
 
 impl SyntaxError {
-    /// Creates a grammar error covering `range`.
-    pub fn new(message: impl Into<String>, range: TextRange) -> Self {
+    /// Creates an error covering `range`.
+    pub fn new(text: Text, range: TextRange) -> Self {
         SyntaxError {
-            kind: ErrorKind::Syntax,
-            message: message.into(),
+            text,
             range,
             help: None,
         }
@@ -95,10 +44,14 @@ impl SyntaxError {
         self
     }
 
-    /// Returns the error with its kind replaced.
-    pub fn with_kind(mut self, kind: ErrorKind) -> Self {
-        self.kind = kind;
-        self
+    /// The problem the error is reported as.
+    pub fn problem(&self) -> Problem {
+        *self.text.problem()
+    }
+
+    /// Human-readable description of what is wrong.
+    pub fn message(&self) -> &str {
+        self.text.message()
     }
 }
 
@@ -107,7 +60,7 @@ impl fmt::Display for SyntaxError {
         write!(
             f,
             "{} at bytes {}..{}",
-            self.message,
+            self.message(),
             u32::from(self.range.start()),
             u32::from(self.range.end())
         )
@@ -124,7 +77,7 @@ mod tests {
     #[test]
     fn display_when_error_then_message_and_byte_range() {
         let error = SyntaxError::new(
-            "unexpected character",
+            text::unexpected_token_unexpected_character(),
             TextRange::new(TextSize::from(3), TextSize::from(4)),
         );
         assert_eq!(error.to_string(), "unexpected character at bytes 3..4");

@@ -26,8 +26,8 @@ use crate::pragma::{kind, Kind};
 use crate::syntax_kind::{NodeKind, SyntaxKind, SyntaxNode, SyntaxToken};
 use ironplc_dsl::attribute::Attribute;
 use ironplc_dsl::common::Attributes;
-use ironplc_dsl::diagnostic::{Diagnostic, Label};
-use ironplc_problems::Problem;
+use ironplc_dsl::diagnostic::Diagnostic;
+use ironplc_problems::text;
 use rowan::{NodeOrToken, TextRange};
 use std::collections::HashSet;
 
@@ -272,12 +272,9 @@ pub fn reject_unattached(cx: &LowerCx, root: &SyntaxNode) -> Result<(), Diagnost
             let name = attribute_of(token)
                 .map(|(name, _)| name)
                 .unwrap_or_default();
-            Err(Diagnostic::problem(
-                Problem::AttributeNotAttached,
-                Label::span(
-                    cx.token_span(token),
-                    format!("The attribute '{name}' is not followed by a declaration it can be attached to"),
-                ),
+            Err(Diagnostic::text(
+                cx.token_span(token),
+                text::attribute_not_attached(name),
             )
             .with_help(
                 "Write the attribute pragma directly before the declaration it describes: a type, a variable, a structure member, a program, a function, a function block, an interface, a method, a property or an action",

@@ -14,8 +14,8 @@ use rowan::Language;
 macro_rules! syntax_kinds {
     (
         trivia { $($trivia:ident),* $(,)? }
-        tokens { $($token:ident),* $(,)? }
-        keywords { $($keyword:ident = [$($spelling:literal),+]),* $(,)? }
+        tokens { $($token:ident $(= $symbol:literal)?),* $(,)? }
+        keywords { $($keyword:ident = [$first:literal $(, $alias:literal)*]),* $(,)? }
         nodes { $($node:ident),* $(,)? }
     ) => {
         /// Every kind a green tree can contain.
@@ -42,8 +42,28 @@ macro_rules! syntax_kinds {
 
             /// Every keyword spelling (upper case) with the kind it lexes to.
             pub const KEYWORDS: &'static [(&'static str, SyntaxKind)] = &[
-                $($(($spelling, SyntaxKind::$keyword),)+)*
+                $(($first, SyntaxKind::$keyword), $(($alias, SyntaxKind::$keyword),)*)*
             ];
+
+            /// Every token that is written as a fixed symbol (`:=`, `;`),
+            /// with the symbol, in declaration order. The lexer reads
+            /// punctuation from this table, and an error that names a token
+            /// takes the name from it, so a symbol is declared once.
+            pub const SYMBOLS: &'static [(&'static str, SyntaxKind)] = &[
+                $($(($symbol, SyntaxKind::$token),)?)*
+            ];
+
+            /// How the kind is written in source when that is always the
+            /// same: the symbol of a punctuation token, or the first
+            /// spelling of a keyword. `None` for a token whose text varies
+            /// (an identifier, a literal), for trivia and for a node.
+            pub const fn spelling(self) -> Option<&'static str> {
+                match self {
+                    $($(SyntaxKind::$token => Some($symbol),)?)*
+                    $(SyntaxKind::$keyword => Some($first),)*
+                    _ => None,
+                }
+            }
 
             /// True for tokens that are retained but never drive parsing.
             pub fn is_trivia(self) -> bool {
@@ -81,7 +101,7 @@ macro_rules! syntax_kinds {
 
             fn keyword_from_upper(upper: &str) -> Option<SyntaxKind> {
                 match upper {
-                    $($($spelling)|+ => Some(SyntaxKind::$keyword),)*
+                    $($first $(| $alias)* => Some(SyntaxKind::$keyword),)*
                     _ => None,
                 }
             }
@@ -159,31 +179,31 @@ syntax_kinds! {
         DirectAddress,
         DirectAddressIncomplete,
         PartialAccess,
-        LeftParen,
-        RightParen,
-        RightBrace,
-        LeftBracket,
-        RightBracket,
-        Comma,
-        Semicolon,
-        Colon,
-        Period,
-        Range,
-        Hash,
-        Equal,
-        NotEqual,
-        Less,
-        Greater,
-        LessEqual,
-        GreaterEqual,
-        Div,
-        Star,
-        Plus,
-        Minus,
-        Power,
-        Caret,
-        Assignment,
-        RightArrow,
+        LeftParen = "(",
+        RightParen = ")",
+        RightBrace = "}",
+        LeftBracket = "[",
+        RightBracket = "]",
+        Comma = ",",
+        Semicolon = ";",
+        Colon = ":",
+        Period = ".",
+        Range = "..",
+        Hash = "#",
+        Equal = "=",
+        NotEqual = "<>",
+        Less = "<",
+        Greater = ">",
+        LessEqual = "<=",
+        GreaterEqual = ">=",
+        Div = "/",
+        Star = "*",
+        Plus = "+",
+        Minus = "-",
+        Power = "**",
+        Caret = "^",
+        Assignment = ":=",
+        RightArrow = "=>",
         ErrorToken
     }
     keywords {
@@ -599,6 +619,53 @@ mod tests {
             assert_eq!(*spelling, spelling.to_ascii_uppercase());
             assert!(spelling.len() <= MAX_KEYWORD_LEN);
             assert_eq!(SyntaxKind::keyword_from_str(spelling), Some(*kind));
+        }
+    }
+
+    #[test]
+    fn spelling_when_kind_is_a_keyword_then_its_first_spelling() {
+        for (_, kind) in SyntaxKind::KEYWORDS {
+            let first = SyntaxKind::KEYWORDS
+                .iter()
+                .find(|(_, other)| other == kind)
+                .map(|(first, _)| *first);
+            assert_eq!(kind.spelling(), first, "{kind:?}");
+        }
+        assert_eq!(SyntaxKind::TimeOfDay.spelling(), Some("TIME_OF_DAY"));
+        assert_eq!(SyntaxKind::EndVar.spelling(), Some("END_VAR"));
+    }
+
+    #[test]
+    fn spelling_when_kind_is_a_symbol_then_the_symbol() {
+        for (symbol, kind) in SyntaxKind::SYMBOLS {
+            assert_eq!(kind.spelling(), Some(*symbol), "{kind:?}");
+        }
+        assert_eq!(SyntaxKind::Assignment.spelling(), Some(":="));
+        assert_eq!(SyntaxKind::Semicolon.spelling(), Some(";"));
+    }
+
+    #[test]
+    fn spelling_when_kind_is_neither_keyword_nor_symbol_then_none() {
+        for kind in SyntaxKind::ALL {
+            let spelled = SyntaxKind::KEYWORDS.iter().any(|(_, other)| other == kind)
+                || SyntaxKind::SYMBOLS.iter().any(|(_, other)| other == kind);
+            assert_eq!(kind.spelling().is_some(), spelled, "{kind:?}");
+        }
+        assert_eq!(SyntaxKind::Ident.spelling(), None);
+        assert_eq!(SyntaxKind::SourceFile.spelling(), None);
+    }
+
+    #[test]
+    fn symbols_when_listed_then_no_symbol_is_empty_repeated_or_a_keyword() {
+        for (index, (symbol, kind)) in SyntaxKind::SYMBOLS.iter().enumerate() {
+            assert!(!symbol.is_empty(), "{kind:?}");
+            assert!(
+                SyntaxKind::SYMBOLS[..index]
+                    .iter()
+                    .all(|(seen, _)| seen != symbol),
+                "{symbol}"
+            );
+            assert_eq!(SyntaxKind::keyword_from_str(symbol), None, "{symbol}");
         }
     }
 }

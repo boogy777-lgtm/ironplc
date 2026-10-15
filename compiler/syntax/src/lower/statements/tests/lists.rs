@@ -360,7 +360,7 @@ fn lower_statements_when_nesting_is_one_level_too_deep_then_the_parse_reports_th
     assert!(parse
         .errors
         .iter()
-        .any(|error| error.kind == ErrorKind::NestingTooDeep));
+        .any(|error| error.problem() == Problem::MaxNestingDepthExceeded));
 }
 
 #[test]

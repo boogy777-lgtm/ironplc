@@ -13,9 +13,11 @@ use super::oop::interface;
 use super::pou::{function, function_block, program};
 use super::types::type_block;
 use super::var_blocks::{var_block, Scope};
+use crate::expectation::Item;
 use crate::parser::recovery::DECLARATION_START;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
+use ironplc_problems::text;
 
 pub(in crate::parser) fn source_file(p: &mut Parser) {
     declarations(p, None);
@@ -31,7 +33,7 @@ fn declarations(p: &mut Parser, until: Option<K>) {
             skip_to_declaration(p, until);
         }
         if p.position() == before {
-            p.bump_as_error("unexpected input");
+            p.bump_as_error(text::syntax_error_unexpected_input());
         }
     }
 }
@@ -58,7 +60,7 @@ fn namespace(p: &mut Parser) {
             p.bump();
             declared_name(p, NameClass::Plain);
             declarations(p, Some(K::EndNamespace));
-            close(p, K::EndNamespace, "`END_NAMESPACE`");
+            close(p, K::EndNamespace);
             p.complete(node, K::NamespaceDecl);
         },
         |p| {
@@ -72,7 +74,7 @@ fn namespace(p: &mut Parser) {
 /// Wraps tokens that start no declaration, up to the next declaration or the
 /// closer of the enclosing namespace.
 fn skip_to_declaration(p: &mut Parser, until: Option<K>) {
-    p.error("expected a declaration");
+    p.expected(Item::Declaration);
     let node = p.start();
     p.bump();
     while !p.at_eof() && !p.at_any(DECLARATION_START) && !until.is_some_and(|closer| p.at(closer)) {

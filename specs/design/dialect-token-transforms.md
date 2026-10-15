@@ -25,7 +25,7 @@ it conflicts with the table below, the table describes the compiler.
 | `xform_statement_labels.rs` (`name :` becomes `Label`) | `parser/grammar/statements.rs`: the grammar decides a label by its position, gated by `allow_jump_statement` |
 | `xform_demote_keywords.rs` (keyword becomes `Identifier`) | `ParseOptions::keyword_enabled`, `keyword_active` and `time_is_name` in `parser/options.rs`: one table of which keyword is gated by which flag; a keyword that is not active is a name, in the grammar and in the token view |
 | `xform_promote_special_operators.rs` (`__NEW` family) | `is_special_operator` and `SPECIAL_OPERATORS` in `parser/state.rs`, one list read by the grammar and the token view |
-| `rule_token_no_c_style_comment.rs`, `rule_no_empty_var_blocks.rs`, `rule_token_no_partial_access_syntax.rs`, `rule_token_no_paren_string_length.rs`, `rule_token_no_incomplete_array.rs`, `rule_token_identifier.rs`, `rule_token_string_escape.rs` | rows of `GATES` in `parser/gates.rs`, each with its `ErrorKind`, message and help; the stage that ranks the error is a row of `STAGES` in `ranking.rs` |
+| `rule_token_no_c_style_comment.rs`, `rule_no_empty_var_blocks.rs`, `rule_token_no_partial_access_syntax.rs`, `rule_token_no_paren_string_length.rs`, `rule_token_no_incomplete_array.rs`, `rule_token_identifier.rs`, `rule_token_string_escape.rs` | rows of `GATES` in `parser/gates.rs`, each with its text (a row of `problem-texts.csv`, which names the problem) and help; the stage that ranks the error is a row of `STAGES` in `ranking.rs` |
 | `lib.rs` `tokenize_program` order of the passes | no order to keep: the decisions are independent reads of the same tokens; the view of the tokens for `tokenize_program` is `compiler/parser/src/tokens.rs` |
 
 ## Overview

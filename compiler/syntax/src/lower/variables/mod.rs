@@ -24,6 +24,7 @@ use super::expressions::lower_expr;
 use super::names::{lower_id, lower_name};
 use super::tree::{left_spine, significant_tokens, token_of};
 use super::LowerCx;
+use crate::expectation::Item;
 use crate::kind_set::KindSet;
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode, SyntaxToken};
 use ironplc_dsl::common::{AddressAssignment, Integer};
@@ -34,6 +35,7 @@ use ironplc_dsl::textual::{
     PartialAccessVariable, SelfRefKind, SelfRefVariable, StructuredVariable, SymbolicVariableKind,
     Variable,
 };
+use ironplc_problems::text;
 use rowan::{TextRange, TextSize};
 
 #[cfg(test)]
@@ -96,7 +98,7 @@ fn index_number(
     Integer::new(digits, span).map_err(|why| {
         cx.syntax_error(
             node.text_range(),
-            format!("the index '{digits}' is not valid: {why}"),
+            text::syntax_error_the_index_is_not_valid(digits, why),
         )
     })
 }
@@ -225,7 +227,7 @@ pub fn lower_address(cx: &LowerCx, node: &SyntaxNode) -> Result<AddressAssignmen
         .map_err(|why| {
             cx.syntax_error(
                 node.text_range(),
-                format!("'{}' is not a direct address: {why}", token.text()),
+                text::syntax_error_text_is_not_a_direct_address(token.text(), why),
             )
         })
 }
@@ -243,10 +245,7 @@ pub fn lower_symbolic(cx: &LowerCx, node: &SyntaxNode) -> Result<SymbolicVariabl
         // A place a declaration or a connection names by a name, written as an
         // address.
         K::DirectAddressExpr => {
-            return Err(cx.syntax_error(
-                base.text_range(),
-                "expected the name of a variable, not an address",
-            ))
+            return Err(cx.syntax_error(base.text_range(), Item::VariableNameNotAddress.text()))
         }
         _ => return Err(cx.unsupported(&base)),
     };
