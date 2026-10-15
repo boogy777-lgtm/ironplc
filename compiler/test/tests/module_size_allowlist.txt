@@ -20,7 +20,6 @@ dsl/src/common.rs 3622
 dsl/src/textual.rs 1482
 mcp/src/spec_conformance.rs 1342
 parser/src/parser.rs 2731
-parser/src/token.rs 1214
 playground/src/lib.rs 1850
 plc2plc/src/renderer.rs 2190
 runtime/src/migration/tests.rs 1180
