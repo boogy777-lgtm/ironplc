@@ -5,8 +5,8 @@
 use std::sync::Mutex;
 
 use ironplc_dsl::core::SourceSpan;
-use ironplc_dsl::diagnostic::{Diagnostic, Label};
-use ironplc_problems::Problem;
+use ironplc_dsl::diagnostic::Diagnostic;
+use ironplc_problems::text;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -42,12 +42,9 @@ pub fn build_response(container_id: &str, cache: &Mutex<ContainerCache>) -> Cont
             diagnostics: vec![],
         }
     } else {
-        let err = Diagnostic::problem(
-            Problem::McpInputValidation,
-            Label::span(
-                SourceSpan::default(),
-                format!("unknown container_id '{container_id}'"),
-            ),
+        let err = Diagnostic::text(
+            SourceSpan::default(),
+            text::mcp_input_validation_container_id_unknown(container_id),
         );
         ContainerDropResponse {
             ok: false,
