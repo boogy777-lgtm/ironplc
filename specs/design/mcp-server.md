@@ -97,7 +97,7 @@ Use this for rapid iteration on code structure. It is faster than `check` and us
     { "kind": "function_block", "name": null, "file": "main.st", "start": 250, "end": 260 }
   ],
   "diagnostics": [
-    { "code": "P0001", "message": "expected `;`", "file": "main.st",
+    { "code": "P0001", "message": "found `END_IF`, expected `;`", "file": "main.st",
       "start": 142, "end": 143, "severity": "error" }
   ]
 }

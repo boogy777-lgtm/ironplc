@@ -71,7 +71,7 @@ fn parse_program_when_bad_name_then_err() {
 
     let err = res.unwrap_err();
     assert_eq!("Syntax error".to_owned(), err.description());
-    assert_eq!("expected a name".to_owned(), err.primary.message);
+    assert_eq!("found `&`, expected a name".to_owned(), err.primary.message);
     let start = program.find('&').unwrap();
     assert_eq!(
         start..start + 1,
@@ -89,7 +89,10 @@ fn parse_program_when_not_valid_top_item_then_err() {
 
     let err = res.unwrap_err();
     assert_eq!("Syntax error".to_owned(), err.description());
-    assert_eq!("expected a declaration".to_owned(), err.primary.message);
+    assert_eq!(
+        "found `ACTION`, expected a declaration".to_owned(),
+        err.primary.message
+    );
     let start = program.find("ACTION").unwrap();
     assert_eq!(
         start..start + "ACTION".len(),

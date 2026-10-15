@@ -95,14 +95,13 @@ fn read<T>(
     let source = source_of(node);
     match rows.iter().find(|(class, _)| *class == source) {
         Some((_, build)) => build(cx, node),
-        None => Err(cx.syntax_error(node.text_range(), expected.text())),
+        None => Err(cx.expected(node, expected)),
     }
 }
 
 /// The constant a node writes: a literal, with its sign when it has one.
 fn constant(cx: &LowerCx, node: &SyntaxNode) -> Result<ConstantKind, Diagnostic> {
-    literal_value_of(&lower_expr(cx, node)?)
-        .ok_or_else(|| cx.syntax_error(node.text_range(), Item::Constant.text()))
+    literal_value_of(&lower_expr(cx, node)?).ok_or_else(|| cx.expected(node, Item::Constant))
 }
 
 /// `[resource .] variable [. member]`: the global variable a path names. The
@@ -120,7 +119,7 @@ fn global_reference(cx: &LowerCx, node: &SyntaxNode) -> Result<GlobalVarReferenc
         (Some(resource), Some(variable), Some(member), None) => {
             Ok(reference(Some(resource), variable, Some(member)))
         }
-        _ => Err(cx.syntax_error(node.text_range(), Item::GlobalVariable.text())),
+        _ => Err(cx.expected(node, Item::GlobalVariable)),
     }
 }
 
@@ -200,7 +199,7 @@ const TASK_PROPERTIES: &[(&str, Property)] = &[
                 into.interval = Some(duration);
                 Ok(())
             }
-            _ => Err(cx.syntax_error(value.text_range(), Item::Duration.text())),
+            _ => Err(cx.expected(value, Item::Duration)),
         }
     }),
     ("PRIORITY", |cx, value, into| {

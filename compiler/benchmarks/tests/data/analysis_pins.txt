@@ -1,7 +1,7 @@
 ## adr.st [default]
-parse P0002 expected `;`
+parse P0002 found `TO`, expected `;`
 ## adr.st [rusty]
-parse P0002 expected `;`
+parse P0002 found `TO`, expected `;`
 ## array.st [default]
 library adfa527919cffa18 1 elements
 diagnostic P4007 Undefined variable
@@ -17,7 +17,7 @@ library 6e3555d20998b895 1 elements
 ## array_of_string.st [rusty]
 library 6e3555d20998b895 1 elements
 ## based_literals.st [default]
-parse P0002 expected `;`
+parse P0002 found `#`, expected `;`
 ## based_literals.st [rusty]
 library 5da3a7719a8c432a 1 elements
 ## bit_access.st [default]
@@ -157,11 +157,11 @@ diagnostic P2006 Expected value in enumeration
 library 54e442ba9b9ce3d8 8 elements
 diagnostic P2006 Expected value in enumeration
 ## first_steps_syntax_error.st [default]
-parse P0002 expected `;`
+parse P0002 found `END_VAR`, expected `;`
 ## first_steps_syntax_error.st [rusty]
-parse P0002 expected `;`
+parse P0002 found `END_VAR`, expected `;`
 ## if.st [default]
-parse P0002 expected `;`
+parse P0002 found `IF`, expected `;`
 ## if.st [rusty]
 library 3e4ea90e9a317187 1 elements
 ## incomplete_array.st [default]
@@ -203,9 +203,9 @@ library 1dcb88199da30bd9 2 elements
 ## main.st [rusty]
 library 1dcb88199da30bd9 2 elements
 ## namespace.st [default]
-parse P0002 expected a declaration
+parse P0002 found `NAMESPACE`, expected a declaration
 ## namespace.st [rusty]
-parse P0002 expected a declaration
+parse P0002 found `NAMESPACE`, expected a declaration
 ## nested.st [default]
 library bf0b595bb49876c3 1 elements
 diagnostic P4007 Undefined variable
@@ -221,7 +221,7 @@ diagnostic P4007 Undefined variable
 diagnostic P4007 Undefined variable
 diagnostic P4007 Undefined variable
 ## oop.st [default]
-parse P0002 expected a declaration
+parse P0002 found `INTERFACE`, expected a declaration
 ## oop.st [rusty]
 library ef20841625f30695 6 elements
 diagnostic P9999 SUPER^ is recognized but its type cannot be resolved by IronPLC yet
@@ -255,9 +255,9 @@ library 9eaa9fb36cc0ae1d 1 elements
 ## oscat.st [rusty]
 library 9eaa9fb36cc0ae1d 1 elements
 ## params_of.st [default]
-parse P0002 expected `;`
+parse P0002 found `(`, expected `;`
 ## params_of.st [rusty]
-parse P0002 expected `;`
+parse P0002 found `(`, expected `;`
 ## partial_access_bit.st [default]
 parse P4033 partial-access syntax is not enabled in this dialect
 ## partial_access_bit.st [rusty]
@@ -271,9 +271,9 @@ library 7f3c9bf92371a50e 1 elements
 ## pipe_or.st [rusty]
 library 7f3c9bf92371a50e 1 elements
 ## pointer_to.st [default]
-parse P0002 expected `;`
+parse P0002 found `TO`, expected `;`
 ## pointer_to.st [rusty]
-parse P0002 expected `;`
+parse P0002 found `TO`, expected `;`
 ## program.st [default]
 library 0cccaac507c449b6 1 elements
 diagnostic P4007 Undefined variable
@@ -281,13 +281,13 @@ diagnostic P4007 Undefined variable
 library 0cccaac507c449b6 1 elements
 diagnostic P4007 Undefined variable
 ## ref.st [default]
-parse P0002 expected `;`
+parse P0002 found `INT`, expected `;`
 ## ref.st [rusty]
 library 4e8fd6896976588d 4 elements
 ## reference_to.st [default]
-parse P0002 expected `;`
+parse P0002 found `TO`, expected `;`
 ## reference_to.st [rusty]
-parse P0002 expected `;`
+parse P0002 found `TO`, expected `;`
 ## sfc.st [default]
 library 703bd8b23735e293 1 elements
 ## sfc.st [rusty]
@@ -384,7 +384,7 @@ diagnostic P4007 Undefined variable
 diagnostic P4007 Undefined variable
 diagnostic P4007 Undefined variable
 ## time_function_decl.st [default]
-parse P0002 expected a name
+parse P0002 found `TIME`, expected a name
 ## time_function_decl.st [rusty]
 library 8b48d09f3e73dac1 2 elements
 ## time_literal_extensions.st [default]
@@ -412,7 +412,7 @@ library 96e833d9faeee8e7 1 elements
 ## typed_string_literals.st [rusty]
 library 96e833d9faeee8e7 1 elements
 ## union.st [default]
-parse P0002 expected `;`
+parse P0002 found `intVal`, expected `;`
 ## union.st [rusty]
 library e98cd01011468989 2 elements
 ## var_decl.st [default]

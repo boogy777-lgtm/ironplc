@@ -11,7 +11,7 @@ use super::expressions::type_ref;
 use super::pou::{sections, Body, Layout};
 use super::types::return_type;
 use super::var_blocks::Scope;
-use crate::expectation::{Expectation, Item};
+use crate::expectation::{Expected, Item};
 use crate::kind_set::KindSet;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
@@ -153,7 +153,7 @@ fn property(p: &mut Parser) {
                 p,
                 K::EndProperty,
                 KindSet::EMPTY,
-                Expectation::words([GET_WORD, SET_WORD]).text(),
+                p.expectation(Expected::words([GET_WORD, SET_WORD])),
             );
         }
     }

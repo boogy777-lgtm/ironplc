@@ -1,10 +1,12 @@
-//! What a syntax error says was expected.
+//! What a syntax error says was expected, and what it found.
 //!
 //! An "expected ..." error means that at this position one of a few things
 //! was to stand: a token, one of several tokens, one of several words, or a
 //! part of the grammar (a name, an expression, the lower bound of a range). The
-//! error carries that as data, an [`Expectation`], and its text is derived from
-//! it by one template row of `problem-texts.csv`:
+//! error carries that as data, an [`Expectation`] of an [`Expected`] and the
+//! [`Found`] input there, and its text, `found `END_IF`, expected `;``, is
+//! derived from it by one template row of `problem-texts.csv`. What is expected
+//! is:
 //!
 //! - a token is named by the spelling its kind is declared with
 //!   ([`SyntaxKind::spelling`]), so `p.expect(K::Semicolon)` is all a rule says;
@@ -16,9 +18,11 @@
 //!
 //! Expecting a new part of the grammar is one variant of [`Item`] and its
 //! phrase; expecting a token is the token. Neither is a row of the dictionary.
-//! The expectation is a struct so that it can later also hold the token that
-//! was found instead; whether an error says it is not decided.
+//! What was found is never written by a rule: the parser takes it from the
+//! next token and the lowering from the node it rejects, so every expectation
+//! says it.
 
+use crate::found::Found;
 use crate::kind_set::KindSet;
 use crate::syntax_kind::SyntaxKind;
 use core::fmt;
@@ -26,15 +30,18 @@ use ironplc_dsl::construct::DurationUnit;
 use ironplc_problems::{text, Text};
 use std::borrow::Cow;
 
-/// What was expected at the position of an error.
+/// What was expected at the position of an error, and what was found there.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Expectation {
+    found: Found,
     expected: Expected,
 }
 
-/// The things that can be expected; see the module documentation.
+/// The things that can be expected; see the module documentation. A rule
+/// names one of them (a [`SyntaxKind`], a [`KindSet`], an [`Item`] or
+/// [`Expected::words`]) and the position says what was found.
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum Expected {
+pub(crate) enum Expected {
     /// One token or keyword.
     Token(SyntaxKind),
     /// Any one token or keyword of a set.
@@ -45,63 +52,60 @@ enum Expected {
     Item(Item),
 }
 
+impl Expected {
+    /// Any one of `words`, in the order given.
+    pub(crate) fn words(words: impl IntoIterator<Item = &'static str>) -> Expected {
+        Expected::Words(words.into_iter().collect())
+    }
+}
+
 impl Expectation {
-    /// The token or keyword `kind`. The kind must have a spelling.
-    pub(crate) fn token(kind: SyntaxKind) -> Expectation {
-        debug_assert!(kind.spelling().is_some(), "{kind:?} has no spelling");
+    /// That `expected` was to stand where `found` stands.
+    pub(crate) fn new(found: Found, expected: impl Into<Expected>) -> Expectation {
         Expectation {
-            expected: Expected::Token(kind),
+            found,
+            expected: expected.into(),
         }
     }
 
-    /// Any one of the tokens and keywords of `kinds`, which must all have a
-    /// spelling.
-    pub(crate) fn one_of(kinds: KindSet) -> Expectation {
+    /// The text of the error that says this was expected and that was found.
+    pub(crate) fn text(&self) -> Text {
+        text::syntax_error_found_expected(&self.found, &self.expected)
+    }
+}
+
+impl From<SyntaxKind> for Expected {
+    fn from(kind: SyntaxKind) -> Expected {
+        debug_assert!(kind.spelling().is_some(), "{kind:?} has no spelling");
+        Expected::Token(kind)
+    }
+}
+
+impl From<KindSet> for Expected {
+    fn from(kinds: KindSet) -> Expected {
         debug_assert!(
             kinds.iter().all(|kind| kind.spelling().is_some()),
             "{kinds:?} holds a kind that has no spelling"
         );
-        Expectation {
-            expected: Expected::OneOf(kinds),
-        }
-    }
-
-    /// Any one of `words`, in the order given.
-    pub(crate) fn words(words: impl IntoIterator<Item = &'static str>) -> Expectation {
-        Expectation {
-            expected: Expected::Words(words.into_iter().collect()),
-        }
-    }
-
-    /// The text of the error that says this was expected.
-    pub(crate) fn text(&self) -> Text {
-        text::syntax_error_expected_what(self)
+        Expected::OneOf(kinds)
     }
 }
 
-impl From<SyntaxKind> for Expectation {
-    fn from(kind: SyntaxKind) -> Expectation {
-        Expectation::token(kind)
-    }
-}
-
-impl From<KindSet> for Expectation {
-    fn from(kinds: KindSet) -> Expectation {
-        Expectation::one_of(kinds)
-    }
-}
-
-impl From<Item> for Expectation {
-    fn from(item: Item) -> Expectation {
-        Expectation {
-            expected: Expected::Item(item),
-        }
+impl From<Item> for Expected {
+    fn from(item: Item) -> Expected {
+        Expected::Item(item)
     }
 }
 
 impl fmt::Display for Expectation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.expected {
+        f.write_str(self.text().message())
+    }
+}
+
+impl fmt::Display for Expected {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
             Expected::Token(kind) => list(f, kind.spelling()),
             Expected::OneOf(kinds) => list(f, kinds.iter().filter_map(SyntaxKind::spelling)),
             Expected::Words(words) => list(f, words.iter().copied()),
@@ -313,11 +317,6 @@ impl Item {
             Item::AccessorEnd => Cow::Borrowed("the end of the accessor"),
         }
     }
-
-    /// The text of the error that says this item was expected.
-    pub(crate) fn text(self) -> Text {
-        Expectation::from(self).text()
-    }
 }
 
 #[cfg(test)]
@@ -325,21 +324,55 @@ mod tests {
     use super::*;
     use crate::syntax_kind::SyntaxKind as K;
 
-    fn said(expectation: impl Into<Expectation>) -> String {
-        expectation.into().text().message().to_string()
+    /// The message of an error that expected `expected` and found `x`.
+    fn said(expected: impl Into<Expected>) -> String {
+        said_at("x", expected)
+    }
+
+    /// The message of an error that expected `expected` where `source` begins.
+    fn said_at(source: &str, expected: impl Into<Expected>) -> String {
+        Expectation::new(Found::first_in(source), expected)
+            .text()
+            .message()
+            .to_string()
+    }
+
+    #[test]
+    fn text_when_token_found_then_it_comes_first_as_written() {
+        assert_eq!(
+            said_at("END_IF", K::Semicolon),
+            "found `END_IF`, expected `;`"
+        );
+        assert_eq!(said_at("42", Item::Name), "found `42`, expected a name");
+        assert_eq!(
+            said_at("end_if ;", K::Semicolon),
+            "found `end_if`, expected `;`"
+        );
+    }
+
+    #[test]
+    fn text_when_input_ended_then_found_says_end_of_input() {
+        assert_eq!(
+            said_at("", K::EndVar),
+            "found end of input, expected `END_VAR`"
+        );
+        assert_eq!(
+            said_at("(* nothing *) ", Item::Statement),
+            "found end of input, expected a statement"
+        );
     }
 
     #[test]
     fn text_when_token_expected_then_its_spelling_in_code_quotes() {
-        assert_eq!(said(K::Semicolon), "expected `;`");
-        assert_eq!(said(K::Assignment), "expected `:=`");
-        assert_eq!(said(K::EndVar), "expected `END_VAR`");
+        assert_eq!(said(K::Semicolon), "found `x`, expected `;`");
+        assert_eq!(said(K::Assignment), "found `x`, expected `:=`");
+        assert_eq!(said(K::EndVar), "found `x`, expected `END_VAR`");
     }
 
     #[test]
     fn text_when_every_symbol_expected_then_names_it_by_its_declared_symbol() {
         for (symbol, kind) in K::SYMBOLS {
-            assert_eq!(said(*kind), format!("expected `{symbol}`"));
+            assert_eq!(said(*kind), format!("found `x`, expected `{symbol}`"));
         }
     }
 
@@ -349,118 +382,175 @@ mod tests {
         // whatever order the set was written in.
         assert_eq!(
             said(KindSet::new(&[K::RightArrow, K::Assignment])),
-            "expected `:=` or `=>`"
+            "found `x`, expected `:=` or `=>`"
         );
         assert_eq!(
             said(KindSet::new(&[K::If, K::Else, K::EndIf])),
-            "expected `ELSE`, `IF` or `END_IF`"
+            "found `x`, expected `ELSE`, `IF` or `END_IF`"
         );
-        assert_eq!(said(KindSet::new(&[K::If])), "expected `IF`");
+        assert_eq!(said(KindSet::new(&[K::If])), "found `x`, expected `IF`");
     }
 
     #[test]
     fn text_when_words_expected_then_listed_in_the_order_given() {
         assert_eq!(
-            said(Expectation::words(["SINGLE", "INTERVAL", "PRIORITY"])),
-            "expected `SINGLE`, `INTERVAL` or `PRIORITY`"
+            said(Expected::words(["SINGLE", "INTERVAL", "PRIORITY"])),
+            "found `x`, expected `SINGLE`, `INTERVAL` or `PRIORITY`"
         );
         assert_eq!(
-            said(Expectation::words(["GET", "SET"])),
-            "expected `GET` or `SET`"
+            said(Expected::words(["GET", "SET"])),
+            "found `x`, expected `GET` or `SET`"
         );
         assert_eq!(
-            said(Expectation::words(["PRIORITY"])),
-            "expected `PRIORITY`"
+            said(Expected::words(["PRIORITY"])),
+            "found `x`, expected `PRIORITY`"
         );
     }
 
     #[test]
     fn text_when_item_expected_then_its_phrase() {
         for (item, message) in [
-            (Item::BooleanValue, "expected 0, 1 or a boolean word"),
-            (Item::CaseSelector, "expected a case selector"),
-            (Item::Constant, "expected a constant"),
-            (Item::Declaration, "expected a declaration"),
-            (Item::DirectAddress, "expected a direct address"),
-            (Item::Duration, "expected a duration"),
+            (
+                Item::BooleanValue,
+                "found `x`, expected 0, 1 or a boolean word",
+            ),
+            (Item::CaseSelector, "found `x`, expected a case selector"),
+            (Item::Constant, "found `x`, expected a constant"),
+            (Item::Declaration, "found `x`, expected a declaration"),
+            (Item::DirectAddress, "found `x`, expected a direct address"),
+            (Item::Duration, "found `x`, expected a duration"),
             (
                 Item::DurationOrVariableName,
-                "expected a duration or the name of a variable",
+                "found `x`, expected a duration or the name of a variable",
             ),
-            (Item::DurationValue, "expected a duration value"),
-            (Item::FunctionBlockCall, "expected a function block call"),
-            (Item::GlobalVariable, "expected a global variable"),
-            (Item::LabelName, "expected a label name"),
-            (Item::Literal, "expected a literal"),
-            (Item::Member, "expected a member"),
-            (Item::MemberName, "expected a member name"),
-            (Item::Name, "expected a name"),
-            (Item::NumberInDuration, "expected a number in the duration"),
+            (Item::DurationValue, "found `x`, expected a duration value"),
+            (
+                Item::FunctionBlockCall,
+                "found `x`, expected a function block call",
+            ),
+            (
+                Item::GlobalVariable,
+                "found `x`, expected a global variable",
+            ),
+            (Item::LabelName, "found `x`, expected a label name"),
+            (Item::Literal, "found `x`, expected a literal"),
+            (Item::Member, "found `x`, expected a member"),
+            (Item::MemberName, "found `x`, expected a member name"),
+            (Item::Name, "found `x`, expected a name"),
+            (
+                Item::NumberInDuration,
+                "found `x`, expected a number in the duration",
+            ),
             (
                 Item::ResourceOrVariableBlock,
-                "expected a resource or a variable block",
+                "found `x`, expected a resource or a variable block",
             ),
-            (Item::Statement, "expected a statement"),
-            (Item::TaskOrProgram, "expected a task or a program"),
-            (Item::TaskProperty, "expected a task property"),
-            (Item::TypeDeclaration, "expected a type declaration"),
-            (Item::TypeName, "expected a type name"),
-            (Item::Variable, "expected a variable"),
-            (Item::ActionAssociation, "expected an action association"),
-            (Item::Expression, "expected an expression"),
-            (Item::Integer, "expected an integer"),
+            (Item::Statement, "found `x`, expected a statement"),
+            (
+                Item::TaskOrProgram,
+                "found `x`, expected a task or a program",
+            ),
+            (Item::TaskProperty, "found `x`, expected a task property"),
+            (
+                Item::TypeDeclaration,
+                "found `x`, expected a type declaration",
+            ),
+            (Item::TypeName, "found `x`, expected a type name"),
+            (Item::Variable, "found `x`, expected a variable"),
+            (
+                Item::ActionAssociation,
+                "found `x`, expected an action association",
+            ),
+            (Item::Expression, "found `x`, expected an expression"),
+            (Item::Integer, "found `x`, expected an integer"),
             (
                 Item::IntegerOrConstantName,
-                "expected an integer or the name of a constant",
+                "found `x`, expected an integer or the name of a constant",
             ),
-            (Item::StructureEnd, "expected the end of the structure"),
-            (Item::EnumerationValue, "expected the enumeration value"),
-            (Item::LoopVariable, "expected the loop variable"),
-            (Item::RangeLowerBound, "expected the lower bound of a range"),
-            (Item::StepName, "expected the name of a step"),
-            (Item::TaskName, "expected the name of a task"),
+            (
+                Item::StructureEnd,
+                "found `x`, expected the end of the structure",
+            ),
+            (
+                Item::EnumerationValue,
+                "found `x`, expected the enumeration value",
+            ),
+            (Item::LoopVariable, "found `x`, expected the loop variable"),
+            (
+                Item::RangeLowerBound,
+                "found `x`, expected the lower bound of a range",
+            ),
+            (Item::StepName, "found `x`, expected the name of a step"),
+            (Item::TaskName, "found `x`, expected the name of a task"),
             (
                 Item::VariableNameNotAddress,
-                "expected the name of a variable, not an address",
+                "found `x`, expected the name of a variable, not an address",
             ),
-            (Item::ActionName, "expected the name of an action"),
-            (Item::VariablePath, "expected the path of a variable"),
+            (
+                Item::ActionName,
+                "found `x`, expected the name of an action",
+            ),
+            (
+                Item::VariablePath,
+                "found `x`, expected the path of a variable",
+            ),
             (
                 Item::InstancePath,
-                "expected the path `resource.program.variable`",
+                "found `x`, expected the path `resource.program.variable`",
             ),
-            (Item::Priority, "expected the priority"),
-            (Item::ResourceType, "expected the type of the resource"),
-            (Item::RangeUpperBound, "expected the upper bound of a range"),
+            (Item::Priority, "found `x`, expected the priority"),
+            (
+                Item::ResourceType,
+                "found `x`, expected the type of the resource",
+            ),
+            (
+                Item::RangeUpperBound,
+                "found `x`, expected the upper bound of a range",
+            ),
             (
                 Item::CaseRangeUpperBound,
-                "expected the upper bound of the range",
+                "found `x`, expected the upper bound of the range",
             ),
-            (Item::DigitsAfterBase, "expected digits after `10#`"),
-            (Item::IntegerValue, "expected an integer value"),
-            (Item::RealValue, "expected a real value"),
-            (Item::BitStringValue, "expected a bit-string value"),
-            (Item::DoubleQuotedString, "expected a double-quoted string"),
-            (Item::SingleQuotedString, "expected a single-quoted string"),
-            (Item::Hour, "expected an hour"),
-            (Item::Minute, "expected a minute"),
-            (Item::Second, "expected a second"),
-            (Item::Year, "expected a year"),
-            (Item::Month, "expected a month"),
-            (Item::Day, "expected a day"),
+            (
+                Item::DigitsAfterBase,
+                "found `x`, expected digits after `10#`",
+            ),
+            (Item::IntegerValue, "found `x`, expected an integer value"),
+            (Item::RealValue, "found `x`, expected a real value"),
+            (
+                Item::BitStringValue,
+                "found `x`, expected a bit-string value",
+            ),
+            (
+                Item::DoubleQuotedString,
+                "found `x`, expected a double-quoted string",
+            ),
+            (
+                Item::SingleQuotedString,
+                "found `x`, expected a single-quoted string",
+            ),
+            (Item::Hour, "found `x`, expected an hour"),
+            (Item::Minute, "found `x`, expected a minute"),
+            (Item::Second, "found `x`, expected a second"),
+            (Item::Year, "found `x`, expected a year"),
+            (Item::Month, "found `x`, expected a month"),
+            (Item::Day, "found `x`, expected a day"),
             (
                 Item::ConstantOrGlobalVariable,
-                "expected a constant or a global variable",
+                "found `x`, expected a constant or a global variable",
             ),
             (
                 Item::ConstantEnumerationValueOrAddress,
-                "expected a constant, an enumeration value or an address",
+                "found `x`, expected a constant, an enumeration value or an address",
             ),
             (
                 Item::GlobalVariableOrAddress,
-                "expected a global variable or an address",
+                "found `x`, expected a global variable or an address",
             ),
-            (Item::AccessorEnd, "expected the end of the accessor"),
+            (
+                Item::AccessorEnd,
+                "found `x`, expected the end of the accessor",
+            ),
         ] {
             assert_eq!(said(item), message, "{item:?}");
         }
@@ -470,7 +560,7 @@ mod tests {
     fn text_when_duration_unit_expected_then_the_units_come_from_the_one_table() {
         assert_eq!(
             said(Item::DurationUnit),
-            format!("expected a {}", DurationUnit::expectation())
+            format!("found `x`, expected a {}", DurationUnit::expectation())
         );
     }
 
@@ -490,9 +580,10 @@ mod tests {
     }
 
     #[test]
-    fn source_when_scanned_then_only_this_module_fills_the_generic_expected_row() {
-        // A row that takes any string for "what" would let a caller word an
-        // expectation itself; the data of an expectation is the only input.
+    fn source_when_scanned_then_only_this_module_fills_the_expectation_row() {
+        // A row that takes any string for "what" or "found" would let a
+        // caller word an expectation itself; the data of an expectation is the
+        // only input.
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
         let all = sources(&root);
         assert!(all.len() > 50, "found {} sources", all.len());
@@ -500,7 +591,7 @@ mod tests {
             .iter()
             .filter(|(path, text)| {
                 !path.ends_with("expectation.rs")
-                    && text.contains(concat!("syntax_error_expected_", "what("))
+                    && text.contains(concat!("syntax_error_found_", "expected("))
             })
             .map(|(path, _)| path)
             .collect();
@@ -510,7 +601,9 @@ mod tests {
     #[test]
     fn text_when_expectation_is_made_then_the_problem_is_the_grammars() {
         assert_eq!(
-            Item::Name.text().problem(),
+            Expectation::new(Found::end_of_input(), Item::Name)
+                .text()
+                .problem(),
             &ironplc_problems::Problem::SyntaxError
         );
     }

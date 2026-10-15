@@ -142,7 +142,7 @@ fn assignment_or_call(p: &mut Parser) {
         return;
     }
     let Some(mut target) = variable(p) else {
-        return p.skip_statement(Item::Statement.text());
+        return p.skip_statement(p.expectation(Item::Statement));
     };
     if p.at(K::Caret) && p.nth_at(1, K::Assignment) {
         let deref = p.precede(target);

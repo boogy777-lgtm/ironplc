@@ -16,6 +16,7 @@
 
 use super::tree::significant_tokens;
 use super::LowerCx;
+use crate::found::Found;
 use crate::interval_text;
 use crate::kind_set::KindSet;
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode, SyntaxToken};
@@ -330,7 +331,10 @@ fn duration(
         DurationOutOfRange.diagnostic(cx.node_span(node), &written, width)
     };
     let mut parts = interval_text::parse(&text)
-        .map_err(|why| out_of_range(cx, node, why.message()))?
+        .map_err(|why| {
+            let found = Found::syntax_run(pieces).unwrap_or_else(|| Found::node(node));
+            out_of_range(cx, node, why.text(found).message())
+        })?
         .into_iter()
         .map(|part| FixedPoint::parse(&part.number).map(|number| (number, part.unit)))
         .collect::<Result<Vec<_>, _>>()

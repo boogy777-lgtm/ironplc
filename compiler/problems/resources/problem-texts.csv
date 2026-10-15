@@ -22,8 +22,8 @@ P0002,syntax_error_expected_at_least_one_member,expected at least one member
 P0002,syntax_error_expected_at_least_two_steps,expected at least two steps
 P0002,syntax_error_expected_digits_after_the_decimal_point_in_the_duration,expected digits after the decimal point in the duration
 P0002,syntax_error_expected_found,Expected {expected}. Found text '{found}' that matched token {token}
-P0002,syntax_error_expected_what,expected {what}
 P0002,syntax_error_form_is_not_allowed_here,{form} is not allowed here
+P0002,syntax_error_found_expected,"found {found}, expected {what}"
 P0002,syntax_error_in_literal,{message}: '{literal}'
 P0002,syntax_error_incomplete_direct_address,incomplete direct address
 P0002,syntax_error_literal_is_not_valid,the literal '{literal}' is not valid: {why}

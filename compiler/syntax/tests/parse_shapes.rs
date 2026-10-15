@@ -430,7 +430,7 @@ fn parse_statements_when_missing_semicolon_flag_then_end_keyword_statements_omit
     );
     let strict = parse_statements("IF a THEN b := 1; END_IF c := 2;", &ParseOptions::default());
     assert_eq!(strict.errors.len(), 1);
-    assert_eq!(strict.errors[0].message(), "expected `;`");
+    assert_eq!(strict.errors[0].message(), "found `c`, expected `;`");
 }
 
 #[test]

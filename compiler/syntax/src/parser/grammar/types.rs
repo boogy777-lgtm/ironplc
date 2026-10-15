@@ -295,7 +295,7 @@ fn aggregate(p: &mut Parser, node_kind: K, closer: K) {
         member(p);
         members += 1;
         if p.position() == before {
-            p.bump_as_error(Item::Member.text());
+            p.bump_as_error(p.expectation(Item::Member));
         }
     }
     if members == 0 {
@@ -340,7 +340,7 @@ pub(super) fn type_block(p: &mut Parser) {
         type_declaration(p);
         declarations += 1;
         if p.position() == before {
-            p.bump_as_error(Item::TypeDeclaration.text());
+            p.bump_as_error(p.expectation(Item::TypeDeclaration));
         }
     }
     if declarations == 0 && !lone_terminator {

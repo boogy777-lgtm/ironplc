@@ -16,7 +16,7 @@ use super::expressions::{close_group, name_ref, type_ref, variable};
 use super::initializers::{connection_source, value};
 use super::literals::duration_literal_ahead;
 use super::var_blocks::{block_ahead, var_block, Scope, RETENTION};
-use crate::expectation::{Expectation, Item};
+use crate::expectation::{Expected, Item};
 use crate::kind_set::KindSet;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
@@ -67,7 +67,7 @@ pub(super) fn configuration(p: &mut Parser) {
                 p,
                 K::EndConfiguration,
                 CONFIGURATION_OWNS,
-                Item::ResourceOrVariableBlock.text(),
+                p.expectation(Item::ResourceOrVariableBlock),
             );
         }
         if p.position() == before {
@@ -122,7 +122,12 @@ fn resource(p: &mut Parser) {
             order.enter(p, PROGRAMS);
             program_configuration(p);
         } else {
-            skip_stray(p, K::EndResource, RESOURCE_OWNS, Item::TaskOrProgram.text());
+            skip_stray(
+                p,
+                K::EndResource,
+                RESOURCE_OWNS,
+                p.expectation(Item::TaskOrProgram),
+            );
         }
         if p.position() == before {
             p.bump_as_error(text::syntax_error_unexpected_input());
@@ -217,7 +222,7 @@ fn task_item(p: &mut Parser, order: &mut Order) {
         .find(|property| p.nth(0) == Some(K::Ident) && p.nth_text(0) == property.word);
     match property {
         Some(property) => order.enter(p, property.part),
-        None => p.expected(Expectation::words(
+        None => p.expected(Expected::words(
             TASK_PROPERTIES.iter().map(|property| property.word),
         )),
     }
