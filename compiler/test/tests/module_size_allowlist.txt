@@ -12,7 +12,6 @@ codegen/src/compile.rs 2387
 codegen/src/compile_call.rs 1276
 codegen/src/compile_expr.rs 1836
 codegen/src/emit.rs 2233
-container/src/spec_conformance.rs 1110
 dsl/src/common.rs 3622
 dsl/src/textual.rs 1482
 mcp/src/spec_conformance.rs 1342
