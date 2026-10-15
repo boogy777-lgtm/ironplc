@@ -174,6 +174,18 @@ impl Diagnostic {
         Self::problem(problem, Label::span(span, message))
     }
 
+    /// Creates a diagnostic from a text of the dictionary
+    /// (`ironplc_problems::text`) that is about a file in its entirety rather
+    /// than a particular span of it.
+    ///
+    /// This is `Diagnostic::text` for a label made by `Label::file`: it is
+    /// `Diagnostic::problem(problem, Label::file(file_id, message))` for that
+    /// row, with the code and the label text from one row.
+    pub fn text_in_file(file_id: impl Into<FileId>, text: Text) -> Self {
+        let (problem, message) = text.into_parts();
+        Self::problem(problem, Label::file(file_id, message))
+    }
+
     /// Creates the diagnostic for a literal that names a value its type
     /// cannot hold, such as `T#30d` as a `TIME`.
     ///
@@ -574,6 +586,30 @@ mod tests {
             from_text.primary.location.end,
             from_problem.primary.location.end
         );
+        assert!(from_text.secondary.is_empty() && from_text.help.is_empty());
+        assert!(from_text.source_file.is_none() && from_text.source_line.is_none());
+    }
+
+    #[test]
+    fn text_in_file_when_row_then_same_diagnostic_as_problem_with_file_label() {
+        let from_text = Diagnostic::text_in_file(
+            FileId::from_string("file1"),
+            ironplc_problems::text::attribute_repeated("pack_mode"),
+        );
+        let from_problem = Diagnostic::problem(
+            Problem::AttributeRepeated,
+            Label::file(
+                FileId::from_string("file1"),
+                "The attribute 'pack_mode' is written again for the same declaration",
+            ),
+        );
+
+        assert_eq!(from_text.code, from_problem.code);
+        assert_eq!(from_text.description, from_problem.description);
+        assert_eq!(from_text.primary.message, from_problem.primary.message);
+        assert_eq!(from_text.primary.file_id, from_problem.primary.file_id);
+        assert_eq!(from_text.primary.location.start, 0);
+        assert_eq!(from_text.primary.location.end, 0);
         assert!(from_text.secondary.is_empty() && from_text.help.is_empty());
         assert!(from_text.source_file.is_none() && from_text.source_line.is_none());
     }
