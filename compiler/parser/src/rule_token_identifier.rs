@@ -24,7 +24,8 @@
 //! of the spelling (the reference scanner likewise skips its underline check
 //! while inside an escape).
 
-use dsl::diagnostic::{Diagnostic, Label};
+use dsl::diagnostic::Diagnostic;
+use ironplc_problems::text;
 
 use crate::{
     options::CompilerOptions,
@@ -48,15 +49,15 @@ fn has_inner_double_underscore(text: &str) -> bool {
 
 fn check_identifier_spelling(tok: &Token, options: &CompilerOptions, errors: &mut Vec<Diagnostic>) {
     if !options.allow_unicode_identifiers && !tok.text.is_ascii() {
-        errors.push(Diagnostic::problem(
-            ironplc_problems::Problem::UnicodeIdentifierNotAllowed,
-            Label::span(tok.span.clone(), "identifier"),
+        errors.push(Diagnostic::text(
+            tok.span.clone(),
+            text::unicode_identifier_not_allowed(),
         ));
     }
     if !options.allow_multiple_underscores && has_inner_double_underscore(&tok.text) {
-        errors.push(Diagnostic::problem(
-            ironplc_problems::Problem::MultipleUnderscoresNotAllowed,
-            Label::span(tok.span.clone(), "identifier"),
+        errors.push(Diagnostic::text(
+            tok.span.clone(),
+            text::multiple_underscores_not_allowed(),
         ));
     }
 }
@@ -67,9 +68,9 @@ pub fn apply(tokens: &[Token], options: &CompilerOptions) -> Result<(), Vec<Diag
         match tok.token_type {
             TokenType::EscapedIdentifier => {
                 if !options.allow_escaped_identifiers {
-                    errors.push(Diagnostic::problem(
-                        ironplc_problems::Problem::EscapedIdentifierNotAllowed,
-                        Label::span(tok.span.clone(), "escaped identifier"),
+                    errors.push(Diagnostic::text(
+                        tok.span.clone(),
+                        text::escaped_identifier_not_allowed(),
                     ));
                 }
                 // Nothing further: an accepted escape admits any character.

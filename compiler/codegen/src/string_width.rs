@@ -35,7 +35,7 @@ use ironplc_dsl::core::{Located, SourceSpan};
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
 use ironplc_dsl::textual::{CompareExpr, Expr, ExprKind, Function, SymbolicVariableKind, Variable};
 
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 
 use super::compile::{
     char_width_for_string_type, emit_string_literal_load, CompileContext, DEFAULT_OP_TYPE,
@@ -470,12 +470,9 @@ pub(crate) fn encoding_mismatch(
     actual: CharWidth,
     span: &SourceSpan,
 ) -> Diagnostic {
-    Diagnostic::problem(
-        Problem::StringEncodingMismatch,
-        Label::span(span.clone(), "String operand"),
-    )
-    .with_context("expected", &type_name_for(expected).to_string())
-    .with_context("found", &type_name_for(actual).to_string())
+    Diagnostic::text(span.clone(), text::string_encoding_mismatch())
+        .with_context("expected", &type_name_for(expected).to_string())
+        .with_context("found", &type_name_for(actual).to_string())
 }
 
 /// The IEC type name for an encoding, for diagnostics.

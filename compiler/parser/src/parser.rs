@@ -17,8 +17,7 @@ extern crate peg;
 
 use dsl::core::SourceSpan;
 use dsl::diagnostic::Diagnostic;
-use dsl::diagnostic::Label;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use peg::error::ParseError;
 use peg::parser;
 use peg::Parse;
@@ -211,25 +210,15 @@ fn operator_call(start: &Token, type_name: Id, count: Option<Expr>, end: &Token)
 /// message instead of a panic.
 fn syntax_error(tokens: &[Token], token_index: usize, expected: String) -> Diagnostic {
     let Some(actual) = tokens.get(token_index.saturating_sub(1)) else {
-        return Diagnostic::problem(
-            Problem::SyntaxError,
-            Label::span(
-                SourceSpan::default(),
-                "Expected further input. Found end of input",
-            ),
-        );
+        return Diagnostic::text(SourceSpan::default(), text::syntax_error_end_of_input());
     };
 
-    Diagnostic::problem(
-        Problem::SyntaxError,
-        Label::span(
-            actual.span.clone(),
-            format!(
-                "Expected {}. Found text '{}' that matched token {}",
-                expected,
-                actual.text.replace('\n', "\\n").replace('\r', "\\r"),
-                actual.token_type.describe()
-            ),
+    Diagnostic::text(
+        actual.span.clone(),
+        text::syntax_error_expected_found(
+            expected,
+            actual.text.replace('\n', "\\n").replace('\r', "\\r"),
+            actual.token_type.describe(),
         ),
     )
 }

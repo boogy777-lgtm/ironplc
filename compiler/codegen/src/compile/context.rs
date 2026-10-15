@@ -8,7 +8,7 @@ use ironplc_container::{FbFieldUidEntry, FunctionId, StableVarEntry, VarEntry, V
 use ironplc_dsl::core::{Id, Located};
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 
 use super::{
     FbInstanceInfo, OpType, PoolConstant, StringToNumPolicies, StringVarInfo, UserFbTypeInfo,
@@ -227,11 +227,8 @@ impl CompileContext {
             )));
         }
         self.variables.get(name).copied().ok_or_else(|| {
-            Diagnostic::problem(
-                Problem::VariableUndefined,
-                Label::span(name.span(), "Variable reference"),
-            )
-            .with_context("variable", &name.to_string())
+            Diagnostic::text(name.span(), text::variable_undefined())
+                .with_context("variable", &name.to_string())
         })
     }
 

@@ -7,9 +7,9 @@
 
 use dsl::common::StringType;
 use dsl::core::SourceSpan;
-use dsl::diagnostic::{Diagnostic, Label};
+use dsl::diagnostic::Diagnostic;
 use dsl::string_escape::decode;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 
 use crate::{
     options::CompilerOptions,
@@ -32,16 +32,13 @@ pub fn apply(tokens: &[Token], _options: &CompilerOptions) -> Result<(), Vec<Dia
         for range in decode(text, &width).invalid {
             let escape = &text[range.clone()];
             errors.push(
-                Diagnostic::problem(
-                    Problem::InvalidStringEscape,
-                    Label::span(
-                        SourceSpan {
-                            start: tok.span.start + 1 + range.start,
-                            end: tok.span.start + 1 + range.end,
-                            file_id: tok.span.file_id.clone(),
-                        },
-                        "Escape",
-                    ),
+                Diagnostic::text(
+                    SourceSpan {
+                        start: tok.span.start + 1 + range.start,
+                        end: tok.span.start + 1 + range.end,
+                        file_id: tok.span.file_id.clone(),
+                    },
+                    text::invalid_string_escape(),
                 )
                 .with_context("escape", &escape.to_string())
                 .with_help(match width {

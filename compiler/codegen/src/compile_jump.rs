@@ -18,7 +18,7 @@ use ironplc_dsl::core::{Id, Located};
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
 use ironplc_dsl::textual::{Jump, LabelStatement, StmtKind, Wait};
 use ironplc_dsl::visitor::Visitor;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 
 use super::compile::CompileContext;
 use super::compile_expr::{compile_expr, condition_op_type};
@@ -81,12 +81,9 @@ pub(crate) fn compile_jump(
     node: &Jump,
 ) -> Result<(), Diagnostic> {
     let target = ctx.jump_labels.get(&node.label).copied().ok_or_else(|| {
-        Diagnostic::problem(
-            Problem::JumpDestinationInvalid,
-            Label::span(
-                node.span(),
-                format!("No label '{}' in this body", node.label.original()),
-            ),
+        Diagnostic::text(
+            node.span(),
+            text::jump_destination_invalid(node.label.original()),
         )
     })?;
 
