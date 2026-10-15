@@ -52,7 +52,7 @@ pub(crate) fn lower_path(
     let (base, links) = left_spine(node, |kind| kind == SyntaxKind::FieldExpr);
     let base = base
         .filter(|base| base.kind() == SyntaxKind::NameRef)
-        .ok_or_else(|| cx.syntax_error(node.text_range(), expected.text()))?;
+        .ok_or_else(|| cx.expected(node, expected))?;
     let mut path = vec![lower_name(cx, &base)?];
     for link in &links {
         let selected = significant_tokens(link)

@@ -34,7 +34,7 @@ fn parse_source_file_when_enumeration_has_no_value_then_error_at_the_closing_par
     ] {
         assert_eq!(
             first_error(source),
-            Some(("expected a name".to_string(), ")".to_string())),
+            Some(("found `)`, expected a name".to_string(), ")".to_string())),
             "{source}"
         );
     }
@@ -48,7 +48,7 @@ fn parse_source_file_when_enumeration_ends_in_a_comma_then_error_at_the_closing_
     ] {
         assert_eq!(
             first_error(source),
-            Some(("expected a name".to_string(), ")".to_string())),
+            Some(("found `)`, expected a name".to_string(), ")".to_string())),
             "{source}"
         );
     }
@@ -66,7 +66,7 @@ fn parse_source_file_when_array_has_no_range_then_error_at_the_closing_bracket()
         assert_eq!(
             first_error(source),
             Some((
-                "expected the lower bound of a range".to_string(),
+                "found `]`, expected the lower bound of a range".to_string(),
                 "]".to_string()
             )),
             "{source}"
@@ -79,7 +79,7 @@ fn parse_source_file_when_array_ends_in_a_comma_then_error_at_the_closing_bracke
     assert_eq!(
         first_error("TYPE t : ARRAY[1..2, ] OF INT; END_TYPE"),
         Some((
-            "expected the lower bound of a range".to_string(),
+            "found `]`, expected the lower bound of a range".to_string(),
             "]".to_string()
         ))
     );

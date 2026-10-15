@@ -12,7 +12,7 @@
 
 use super::common::SIGN;
 use super::temporal::{date_and_time_value, date_value, daytime_value, duration_value};
-use crate::expectation::{Expectation, Item};
+use crate::expectation::{Expected, Item};
 use crate::kind_set::KindSet;
 use crate::parser::event::CompletedMarker;
 use crate::parser::state::Parser;
@@ -145,7 +145,7 @@ pub(super) fn piece(p: &mut Parser, kind: K) -> bool {
 
 /// Like [`piece`], for a piece that is called by what it is in the literal
 /// (`expected`) and not by the token it is.
-pub(super) fn piece_as(p: &mut Parser, kind: K, expected: impl Into<Expectation>) -> bool {
+pub(super) fn piece_as(p: &mut Parser, kind: K, expected: impl Into<Expected>) -> bool {
     if !p.at(kind) {
         p.expected(expected);
         return false;

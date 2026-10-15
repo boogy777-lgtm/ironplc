@@ -26,6 +26,7 @@ pub(super) fn duration_value(p: &mut Parser) {
     if p.at(K::Minus) {
         piece(p, K::Minus);
     }
+    let start = p.position();
     let mut written = String::new();
     let mut range: Option<TextRange> = None;
     while matches!(
@@ -41,7 +42,8 @@ pub(super) fn duration_value(p: &mut Parser) {
     match range {
         None => p.expected(Item::DurationValue),
         Some(range) => {
-            if let Err(text) = crate::interval_text::validate(&written) {
+            if let Err(fault) = crate::interval_text::validate(&written) {
+                let text = fault.text(p.found_since(start));
                 p.error_at(range, text);
             }
         }
@@ -174,7 +176,10 @@ mod tests {
     #[test]
     fn parse_expression_when_duration_unit_unknown_then_the_units_come_from_the_one_table() {
         let found = messages("T#5x");
-        let expected = format!("expected a {}: 'T#5x'", DurationUnit::expectation());
+        let expected = format!(
+            "found `5x`, expected a {}: 'T#5x'",
+            DurationUnit::expectation()
+        );
         assert_eq!(found, vec![expected]);
         for (spelling, _) in DurationUnit::UNITS {
             assert!(found[0].contains(spelling), "{spelling}");

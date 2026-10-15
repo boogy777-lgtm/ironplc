@@ -108,7 +108,7 @@ pub(super) fn case_statement(p: &mut Parser) {
         let before = p.position();
         case_branch(p);
         if p.position() == before {
-            p.bump_as_error(Item::CaseSelector.text());
+            p.bump_as_error(p.expectation(Item::CaseSelector));
         }
     }
     else_clause(p);

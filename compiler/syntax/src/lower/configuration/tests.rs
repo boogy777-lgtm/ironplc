@@ -497,3 +497,30 @@ fn source_of_when_each_kind_of_node_then_its_class() {
     assert_eq!(class("a.b"), Source::Path);
     assert_eq!(class("a.b.c"), Source::Path);
 }
+
+/// The message of the error that lowering `body` in a resource gives.
+fn error_message(body: &str) -> String {
+    let source = format!("CONFIGURATION c RESOURCE r ON t {body} END_RESOURCE END_CONFIGURATION");
+    let parse = parse_source_file(&source, &ParseOptions::all());
+    assert!(parse.is_ok(), "{source}: {:?}", parse.errors);
+    lower_library(&parse, &file())
+        .err()
+        .map(|error| error.primary.message)
+        .unwrap_or_default()
+}
+
+#[test]
+fn lower_library_when_task_data_is_an_expression_then_error_says_what_it_found() {
+    assert_eq!(
+        error_message("TASK k (SINGLE := a + b, PRIORITY := 1); PROGRAM p WITH k : q;"),
+        "found `a`, expected a constant"
+    );
+}
+
+#[test]
+fn lower_library_when_task_data_is_a_path_of_four_names_then_error_says_what_it_found() {
+    assert_eq!(
+        error_message("TASK k (SINGLE := a.b.c.d, PRIORITY := 1); PROGRAM p WITH k : q;"),
+        "found `a`, expected a global variable"
+    );
+}

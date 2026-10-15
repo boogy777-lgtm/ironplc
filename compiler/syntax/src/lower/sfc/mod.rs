@@ -131,7 +131,7 @@ fn lower_time(cx: &LowerCx, node: &SyntaxNode) -> Result<ActionTimeKind, Diagnos
             ConstantKind::Duration(duration) => Ok(ActionTimeKind::Duration(duration)),
             _ => Err(cx.missing(node, "a duration")),
         },
-        _ => Err(cx.syntax_error(node.text_range(), Item::DurationOrVariableName.text())),
+        _ => Err(cx.expected(node, Item::DurationOrVariableName)),
     }
 }
 

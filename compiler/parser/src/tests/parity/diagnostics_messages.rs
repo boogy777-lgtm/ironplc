@@ -30,7 +30,7 @@ impl MessageDifference {
     }
 }
 
-const PEG_EXPECTED_SET: Reason = Reason::new(Class::LegacyDefect, "legacy defect not ported: the legacy message is the set of tokens its ordered choice would have taken, spelled as the lexer's own patterns (`%[IQM]([XBWDL])?...`, whitespace and comment tokens) and the token it found; the new message says what the grammar needs at that place (`expected `;``, `the hour is out of range: 'TOD#25:00:00'`)");
+const PEG_EXPECTED_SET: Reason = Reason::new(Class::LegacyDefect, "legacy defect not ported: the legacy message is the set of tokens its ordered choice would have taken, spelled as the lexer's own patterns (`%[IQM]([XBWDL])?...`, whitespace and comment tokens) and the token it found; the new message says what the grammar needs at that place and what it found (`found `END_IF`, expected `;``, `the hour is out of range: 'TOD#25:00:00'`)");
 const LEXER_SLICE: Reason = Reason::new(Class::AcceptedOnPurpose, "the legacy message quotes the text the lexer could not read, which runs to the end of the input for a string never closed, with a line and a column the label's own location repeats; the new message says what is wrong with the text");
 const GATE_LABEL: Reason = Reason::new(Class::AcceptedOnPurpose, "the legacy label names the form (`Comment`, `identifier`) and leaves the dialect to the problem's description; the new label says the form is not enabled in this dialect, which is what a person has to change");
 const ESCAPE_LABEL: Reason = Reason::new(Class::AcceptedOnPurpose, "the legacy label is the word `Escape`; the new label says which escape is not defined for character strings");

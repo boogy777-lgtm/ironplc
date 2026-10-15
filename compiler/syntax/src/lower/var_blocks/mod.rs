@@ -249,7 +249,7 @@ fn instance_path(cx: &LowerCx, node: &SyntaxNode) -> Result<(Id, Id, Vec<Id>), D
     let mut names = path.into_iter();
     match (names.next(), names.next()) {
         (Some(resource), Some(program)) => Ok((resource, program, names.collect())),
-        _ => Err(cx.syntax_error(node.text_range(), Item::InstancePath.text())),
+        _ => Err(cx.expected(node, Item::InstancePath)),
     }
 }
 

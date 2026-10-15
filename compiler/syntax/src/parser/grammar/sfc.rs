@@ -9,7 +9,7 @@ use super::common::{close, declared_name, item_terminator, skip_stray, NameClass
 use super::configuration::PRIORITY_WORD;
 use super::expressions::{close_group, expression, name_ref};
 use super::pou::body;
-use crate::expectation::{Expectation, Item};
+use crate::expectation::{Expected, Item};
 use crate::kind_set::KindSet;
 use crate::parser::recovery::BLOCK_END;
 use crate::parser::state::Parser;
@@ -60,7 +60,7 @@ fn step(p: &mut Parser, node_kind: K) {
             association(p);
         }
         if p.position() == before {
-            p.bump_as_error(Item::ActionAssociation.text());
+            p.bump_as_error(p.expectation(Item::ActionAssociation));
         }
     }
     close(p, K::EndStep);
@@ -143,7 +143,7 @@ fn transition(p: &mut Parser) {
             p,
             K::EndTransition,
             KindSet::EMPTY,
-            Expectation::token(K::EndTransition).text(),
+            p.expectation(K::EndTransition),
         );
     }
     close(p, K::EndTransition);
@@ -157,7 +157,7 @@ fn priority(p: &mut Parser) {
     if p.nth(0) == Some(K::Ident) && p.nth_text(0) == PRIORITY_WORD {
         p.bump();
     } else {
-        p.expected(Expectation::words([PRIORITY_WORD]));
+        p.expected(Expected::words([PRIORITY_WORD]));
     }
     p.expect(K::Assignment);
     if p.at(K::IntegerLit) {

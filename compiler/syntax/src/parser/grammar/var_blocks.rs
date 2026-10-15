@@ -274,7 +274,7 @@ fn items(p: &mut Parser, at_least_one: bool, mut item: impl FnMut(&mut Parser)) 
         item(p);
         count += 1;
         if p.position() == before {
-            p.bump_as_error(Item::Declaration.text());
+            p.bump_as_error(p.expectation(Item::Declaration));
         }
     }
     if at_least_one && count == 0 {

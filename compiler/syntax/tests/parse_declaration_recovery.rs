@@ -156,11 +156,11 @@ fn parse_source_file_when_configuration_is_truncated_then_nodes_close_with_error
     assert_eq!(nodes_of(&parsed.root, SyntaxKind::ProgramConfig).len(), 1);
     let messages: Vec<&str> = parsed.errors.iter().map(|error| error.message()).collect();
     assert!(
-        messages.contains(&"expected `END_RESOURCE`"),
+        messages.contains(&"found end of input, expected `END_RESOURCE`"),
         "{messages:?}"
     );
     assert!(
-        messages.contains(&"expected `END_CONFIGURATION`"),
+        messages.contains(&"found end of input, expected `END_CONFIGURATION`"),
         "{messages:?}"
     );
 }

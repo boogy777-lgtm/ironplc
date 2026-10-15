@@ -10,7 +10,8 @@
 use super::event::{CompletedMarker, Event, Marker};
 use super::options::ParseOptions;
 use crate::error::{nesting_too_deep, SyntaxError};
-use crate::expectation::Expectation;
+use crate::expectation::{Expectation, Expected};
+use crate::found::Found;
 use crate::kind_set::KindSet;
 use crate::lexer::Token;
 use crate::syntax_kind::SyntaxKind;
@@ -274,24 +275,29 @@ impl<'t, 's> Parser<'t, 's> {
         self.errors.len()
     }
 
-    /// The source text of the tokens consumed since `start` (a
-    /// [`Parser::position`]), the trivia between them included.
-    pub(crate) fn text_since(&self, start: usize) -> String {
+    /// The tokens consumed since `start` (a [`Parser::position`]), the trivia
+    /// between them included.
+    fn consumed_since(&self, start: usize) -> &[Token<'s>] {
         let first = self.significant.get(start);
         let last = self
             .pos
             .checked_sub(1)
             .and_then(|last| self.significant.get(last));
         match (first, last) {
-            (Some(first), Some(last)) if first <= last => self
-                .tokens
-                .get(*first..=*last)
-                .unwrap_or_default()
-                .iter()
-                .map(|token| token.text)
-                .collect(),
-            _ => String::new(),
+            (Some(first), Some(last)) if first <= last => {
+                self.tokens.get(*first..=*last).unwrap_or_default()
+            }
+            _ => &[],
         }
+    }
+
+    /// The source text of the tokens consumed since `start` (a
+    /// [`Parser::position`]), the trivia between them included.
+    pub(crate) fn text_since(&self, start: usize) -> String {
+        self.consumed_since(start)
+            .iter()
+            .map(|token| token.text)
+            .collect()
     }
 
     /// Adds `literal`, the source of the construct they are about, to the text
@@ -412,14 +418,38 @@ impl<'t, 's> Parser<'t, 's> {
         self.record(SyntaxError::new(text, TextRange::empty(end)));
     }
 
-    /// Records that `expected` was to stand at the next token.
-    pub(crate) fn expected(&mut self, expected: impl Into<Expectation>) {
-        self.error(expected.into().text());
+    /// What stands at the next token: its source text, or the end of input.
+    /// The error positions of the parser are all at the next token or where
+    /// the previous one ends, which is where the next token begins once trivia
+    /// is set aside, so this is what every one of them found.
+    pub(crate) fn found(&self) -> Found {
+        Found::lexed(self.token(0))
     }
 
-    /// Records that `expected` was to stand where the previous token ends.
-    pub(crate) fn expected_after_previous(&mut self, expected: impl Into<Expectation>) {
-        self.error_after_previous(expected.into().text());
+    /// What stands in the source from the token `start` (a
+    /// [`Parser::position`]) on: the run of tokens consumed since, or what
+    /// stands at the next token when none were.
+    pub(crate) fn found_since(&self, start: usize) -> Found {
+        Found::lexed_run(self.consumed_since(start)).unwrap_or_else(|| self.found())
+    }
+
+    /// The text of the error that says `expected` was to stand at the next
+    /// token, which is what was found.
+    pub(crate) fn expectation(&self, expected: impl Into<Expected>) -> Text {
+        Expectation::new(self.found(), expected).text()
+    }
+
+    /// Records that `expected` was to stand at the next token.
+    pub(crate) fn expected(&mut self, expected: impl Into<Expected>) {
+        let text = self.expectation(expected);
+        self.error(text);
+    }
+
+    /// Records that `expected` was to stand where the previous token ends. What
+    /// was found is the token that follows it, the one the parser sees next.
+    pub(crate) fn expected_after_previous(&mut self, expected: impl Into<Expected>) {
+        let text = self.expectation(expected);
+        self.error_after_previous(text);
     }
 
     /// Records an error at the next token. A lexical error token already has
@@ -556,11 +586,91 @@ mod tests {
     fn error_when_the_same_error_is_reported_twice_in_a_row_then_once() {
         let (tokens, _) = lex("a");
         let mut parser = Parser::new(&tokens, ParseOptions::default());
-        parser.error(Item::Name.text());
-        parser.error(Item::Name.text());
-        parser.error(Item::Statement.text());
+        parser.expected(Item::Name);
+        parser.expected(Item::Name);
+        parser.expected(Item::Statement);
         let (_, errors) = parser.finish();
         assert_eq!(errors.len(), 2);
+    }
+
+    /// The message of the one error `record` reports over `source`, and its
+    /// range.
+    fn reported(source: &str, record: impl FnOnce(&mut Parser)) -> (String, TextRange) {
+        let (tokens, _) = lex(source);
+        let mut parser = Parser::new(&tokens, ParseOptions::default());
+        record(&mut parser);
+        let (_, errors) = parser.finish();
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        (errors[0].message().to_string(), errors[0].range)
+    }
+
+    #[test]
+    fn expect_when_another_token_follows_then_found_is_its_source_text() {
+        let (message, range) = reported("END_IF ;", |p| {
+            p.expect(SyntaxKind::Semicolon);
+        });
+        assert_eq!(message, "found `END_IF`, expected `;`");
+        assert_eq!(range, TextRange::new(0.into(), 6.into()));
+    }
+
+    #[test]
+    fn expected_when_keyword_found_then_it_is_in_the_case_written() {
+        let (message, _) = reported("(* c *) end_if", |p| p.expected(Item::Name));
+        assert_eq!(message, "found `end_if`, expected a name");
+    }
+
+    #[test]
+    fn expected_when_input_has_ended_then_found_is_the_end_of_input() {
+        let (message, _) = reported("VAR x : INT; ", |p| {
+            p.bump_n(5);
+            p.expected(SyntaxKind::EndVar);
+        });
+        assert_eq!(message, "found end of input, expected `END_VAR`");
+    }
+
+    #[test]
+    fn expected_when_a_set_is_expected_then_found_comes_before_the_spellings() {
+        let (message, _) = reported("42", |p| {
+            p.expected(KindSet::new(&[
+                SyntaxKind::RightArrow,
+                SyntaxKind::Assignment,
+            ]));
+        });
+        assert_eq!(message, "found `42`, expected `:=` or `=>`");
+    }
+
+    #[test]
+    fn expected_after_previous_when_a_token_follows_then_found_is_that_token() {
+        let (message, range) = reported(
+            "a  (* c *)
+  FUNCTION",
+            |p| {
+                p.bump();
+                p.expected_after_previous(SyntaxKind::Semicolon);
+            },
+        );
+        assert_eq!(message, "found `FUNCTION`, expected `;`");
+        assert_eq!(range, TextRange::empty(1.into()));
+    }
+
+    #[test]
+    fn expected_after_previous_when_nothing_follows_then_found_is_the_end_of_input() {
+        let (message, _) = reported("a ", |p| {
+            p.bump();
+            p.expected_after_previous(Item::Statement);
+        });
+        assert_eq!(message, "found end of input, expected a statement");
+    }
+
+    #[test]
+    fn found_since_when_tokens_were_consumed_then_they_are_found_as_written() {
+        let (tokens, _) = lex("5x ;");
+        let mut parser = Parser::new(&tokens, ParseOptions::default());
+        let start = parser.position();
+        parser.bump_n(2);
+        assert_eq!(parser.found_since(start).to_string(), "`5x`");
+        // Nothing consumed since: what stands next.
+        assert_eq!(parser.found_since(parser.position()).to_string(), "`;`");
     }
 
     #[test]
