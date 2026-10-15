@@ -28,7 +28,10 @@ fn get_field_offset_with_structure_then_returns_correct_offset() {
         },
     ];
 
-    let struct_type = IntermediateType::Structure { fields };
+    let struct_type = IntermediateType::Structure {
+        fields,
+        bound: AlignmentBound::Natural,
+    };
 
     let field1_id = Id::from("field1");
     let field2_id = Id::from("field2");
@@ -54,7 +57,10 @@ fn get_field_offset_with_case_insensitive_field_name_then_returns_correct_offset
         initial_value: None,
     }];
 
-    let struct_type = IntermediateType::Structure { fields };
+    let struct_type = IntermediateType::Structure {
+        fields,
+        bound: AlignmentBound::Natural,
+    };
 
     // Test case-insensitive matching following IEC 61131-3 identifier rules
     let lowercase_id = Id::from("myfield");
@@ -97,6 +103,7 @@ fn member_fields_when_structure_then_returns_fields() {
     }];
     let struct_type = IntermediateType::Structure {
         fields: fields.clone(),
+        bound: AlignmentBound::Natural,
     };
 
     assert!(struct_type.has_members());

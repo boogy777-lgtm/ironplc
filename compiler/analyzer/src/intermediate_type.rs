@@ -12,6 +12,8 @@ use ironplc_container::{string_region_size, CharWidth, DEFAULT_STRING_MAX_LENGTH
 use ironplc_dsl::common::StructInitialValueAssignmentKind;
 use ironplc_dsl::core::Id;
 
+use crate::intermediates::layout::{align_up, layout, AlignmentBound, Layout};
+
 /// Bounds for a single dimension of an array type.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ArrayDimension {
@@ -118,6 +120,10 @@ pub enum IntermediateType {
     Structure {
         /// Ordered list of fields in the structure
         fields: Vec<IntermediateStructField>,
+        /// The bound the declaration puts on the alignment of its fields
+        /// (`pack_mode`). The offsets of the fields, the alignment and the
+        /// size of the structure derive from it.
+        bound: AlignmentBound,
     },
     /// Array type with element type and per-dimension bounds.
     Array {
@@ -232,7 +238,7 @@ impl IntermediateType {
     /// needs a structure specifically.
     pub fn member_fields(&self) -> Option<&Vec<IntermediateStructField>> {
         match self {
-            IntermediateType::Structure { fields }
+            IntermediateType::Structure { fields, .. }
             | IntermediateType::FunctionBlock { fields, .. } => Some(fields),
             _ => None,
         }
@@ -318,47 +324,19 @@ impl IntermediateType {
             IntermediateType::Enumeration {
                 underlying_type, ..
             } => underlying_type.size_in_bytes(),
-            IntermediateType::Structure { fields } => {
-                if fields.is_empty() {
-                    return None;
-                }
-
-                // Calculate the end position of the last field
-                // Fields are guaranteed to be in offset order, so we just use the last one
-                let last_field = fields.last()?;
-                let last_field_size = last_field.field_type.size_in_bytes()?;
-                let size_after_last_field = last_field.offset + last_field_size;
-
-                // Pad to structure alignment
-                let alignment = self.alignment_bytes() as u32;
-
-                // Calculate padding needed to align to structure boundary
-                let padding = (alignment - (size_after_last_field % alignment)) % alignment;
-                Some(size_after_last_field.saturating_add(padding))
+            IntermediateType::Structure { fields, bound } => {
+                member_layout(fields, *bound).byte_image_size()
             }
             IntermediateType::Array { element_type, .. } => {
                 let total_elements = self.array_total_elements()?;
-                let elem_size = element_type.size_in_bytes()?;
-                (elem_size).checked_mul(total_elements)
+                // The elements repeat, so each occupies its stride.
+                let elem_stride = element_type.stride_bytes()?;
+                elem_stride.checked_mul(total_elements)
             }
             IntermediateType::FunctionBlock { fields, .. } => {
-                // Function blocks follow the same memory layout rules as structures
-                if fields.is_empty() {
-                    return None;
-                }
-
-                // Calculate the end position of the last field
-                // Fields are guaranteed to be in offset order, so we just use the last one
-                let last_field = fields.last()?;
-                let last_field_size = last_field.field_type.size_in_bytes()?;
-                let size_after_last_field = last_field.offset + last_field_size;
-
-                // Pad to function block alignment
-                let alignment = self.alignment_bytes() as u32;
-
-                // Calculate padding needed to align to function block boundary
-                let padding = (alignment - (size_after_last_field % alignment)) % alignment;
-                Some(size_after_last_field.saturating_add(padding))
+                // Function blocks follow the same memory layout rules as
+                // structures, with no bound on the alignment.
+                member_layout(fields, AlignmentBound::Natural).byte_image_size()
             }
             IntermediateType::Function { .. } => {
                 // Functions don't have memory layout in the traditional sense
@@ -369,6 +347,17 @@ impl IntermediateType {
                 Some(8)
             }
         }
+    }
+
+    /// The number of bytes a value of this type occupies where it repeats (the
+    /// element of an array) or nests (a member of a structure): its size
+    /// padded up to its alignment.
+    ///
+    /// For a type that is not a structure or a function block this is the
+    /// size. Returns `None` where `size_in_bytes` does.
+    pub fn stride_bytes(&self) -> Option<u32> {
+        self.size_in_bytes()
+            .map(|size| align_up(size, self.alignment_bytes()))
     }
 
     /// Gets the alignment requirement in bytes for this type.
@@ -396,24 +385,12 @@ impl IntermediateType {
             IntermediateType::Enumeration {
                 underlying_type, ..
             } => underlying_type.alignment_bytes(),
-            IntermediateType::Structure { fields } => {
-                // Structure alignment is the maximum alignment of all fields
-                // Empty structures have 1-byte alignment
-                fields
-                    .iter()
-                    .map(|field| field.field_type.alignment_bytes())
-                    .max()
-                    .unwrap_or(1)
+            IntermediateType::Structure { fields, bound } => {
+                member_layout(fields, *bound).alignment
             }
             IntermediateType::Array { element_type, .. } => element_type.alignment_bytes(),
             IntermediateType::FunctionBlock { fields, .. } => {
-                // Function block alignment is the maximum alignment of all fields
-                // Empty function blocks have 1-byte alignment
-                fields
-                    .iter()
-                    .map(|field| field.field_type.alignment_bytes())
-                    .max()
-                    .unwrap_or(1)
+                member_layout(fields, AlignmentBound::Natural).alignment
             }
             IntermediateType::Function { .. } => 1, // Default alignment (functions don't have memory layout)
             IntermediateType::Reference { .. } => 8, // References are 64-bit variable-table indices
@@ -483,7 +460,7 @@ impl IntermediateType {
     ///         offset: 0,
     ///     }
     /// ];
-    /// let struct_type = IntermediateType::Structure { fields };
+    /// let struct_type = IntermediateType::Structure { fields, bound: AlignmentBound::Natural };
     /// let field_id = Id::from("x");
     /// assert_eq!(struct_type.get_field_offset(&field_id), Some(0));
     /// let unknown_id = Id::from("unknown");
@@ -497,7 +474,7 @@ impl IntermediateType {
     /// alignment and padding rules.
     pub fn get_field_offset(&self, field_name: &ironplc_dsl::core::Id) -> Option<u32> {
         match self {
-            IntermediateType::Structure { fields } => {
+            IntermediateType::Structure { fields, .. } => {
                 // Find the field by name using case-insensitive Id comparison
                 fields
                     .iter()
@@ -590,6 +567,11 @@ impl IntermediateType {
     }
 }
 
+/// The layout of the fields of a structure or a function block under the bound.
+fn member_layout(fields: &[IntermediateStructField], bound: AlignmentBound) -> Layout {
+    layout(fields.iter().map(|field| &field.field_type), bound)
+}
+
 /// Represents the variable type for function block fields.
 /// This distinguishes between input, output, in-out, and internal variables.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -659,7 +641,7 @@ impl IntermediateType {
             | IntermediateType::Reference { .. } => Ok(1),
 
             // Structures: sum of field slot counts
-            IntermediateType::Structure { fields } => {
+            IntermediateType::Structure { fields, .. } => {
                 let mut total = 0u32;
                 for field in fields {
                     let field_slots = field.field_type.slot_count_inner(depth + 1)?;
@@ -739,7 +721,7 @@ impl IntermediateStructField {
         self.initial_value.is_some()
             || matches!(
                 &self.field_type,
-                IntermediateType::Structure { fields } if fields.iter().all(Self::has_default)
+                IntermediateType::Structure { fields, .. } if fields.iter().all(Self::has_default)
             )
     }
 }

@@ -13,6 +13,7 @@
 //! stays as it was; the declarations around it resolve.
 use crate::intermediate_type::{FunctionBlockVarType, IntermediateStructField, IntermediateType};
 use crate::intermediates::declared_default::DeclaresDefault;
+use crate::intermediates::layout::{layout, AlignmentBound};
 use crate::intermediates::*;
 use crate::pass_runner::Outcome;
 use crate::resolution::Failure;
@@ -140,7 +141,7 @@ impl TypeEnvironment {
                 )),
                 // A structure alias keeps the name it declares, with the structure
                 // it names as its base, so it stays a type of its own.
-                IntermediateType::Structure { fields: _ } => {
+                IntermediateType::Structure { .. } => {
                     Ok(DataTypeDeclarationKind::Simple(SimpleDeclaration {
                         type_name: node.data_type_name,
                         spec_and_init: InitialValueAssignmentKind::Structure(
@@ -485,8 +486,7 @@ impl Declaration<'_> {
         // Register the user-defined function block in the type environment
         // so that variable declarations like `myFb : MY_FB` resolve to
         // IntermediateType::FunctionBlock, just like stdlib FBs.
-        let mut fields = Vec::new();
-        let mut current_offset = 0u32;
+        let mut members = Vec::new();
 
         for decl in &node.variables {
             let var_type = match decl.var_type {
@@ -548,25 +548,27 @@ impl Declaration<'_> {
                     }
                 };
 
-                let alignment = field_type.alignment_bytes() as u32;
-                let aligned_offset = if alignment == 0 {
-                    current_offset
-                } else {
-                    current_offset.div_ceil(alignment) * alignment
-                };
-                let size = field_type.size_in_bytes().unwrap_or(0);
-
-                fields.push(IntermediateStructField {
-                    name: Id::from(id.to_string().as_str()),
-                    field_type,
-                    offset: aligned_offset,
-                    var_type: Some(var_type),
-                    initial_value: None,
-                });
-
-                current_offset = aligned_offset + size;
+                members.push((Id::from(id.to_string().as_str()), field_type, var_type));
             }
         }
+
+        let laid_out = layout(
+            members.iter().map(|(_, field_type, _)| field_type),
+            AlignmentBound::Natural,
+        );
+        let fields = members
+            .into_iter()
+            .zip(laid_out.offsets)
+            .map(
+                |((name, field_type, var_type), offset)| IntermediateStructField {
+                    name,
+                    field_type,
+                    offset,
+                    var_type: Some(var_type),
+                    initial_value: None,
+                },
+            )
+            .collect();
 
         let attrs = crate::type_attributes::TypeAttributes::new(
             node.name.span(),
@@ -596,7 +598,10 @@ impl Declaration<'_> {
         // project before this representation could matter.
         let attrs = crate::type_attributes::TypeAttributes::new(
             node.name.span(),
-            IntermediateType::Structure { fields: vec![] },
+            IntermediateType::Structure {
+                fields: vec![],
+                bound: AlignmentBound::Natural,
+            },
         );
         self.environment
             .insert_type(&TypeName::from_id(&node.name), attrs);

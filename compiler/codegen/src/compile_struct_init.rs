@@ -303,7 +303,7 @@ fn initialize_array_elements(
     members: &[StructureElementInit],
     span: &SourceSpan,
 ) -> Result<(), Diagnostic> {
-    let IntermediateType::Structure { fields } = element_type else {
+    let IntermediateType::Structure { fields, .. } = element_type else {
         return Ok(());
     };
     let (element_fields, _) = build_struct_fields(fields, span)?;
@@ -427,7 +427,7 @@ fn initialize_struct_fields(
         }
 
         match &field.field_type {
-            IntermediateType::Structure { fields: inner } => {
+            IntermediateType::Structure { fields: inner, .. } => {
                 let nested = merge_member_inits(
                     structure_members(field.initial_value.as_ref()),
                     structure_members(explicit),

@@ -1,6 +1,7 @@
 //! Tests for the type environment.
 
 use super::*;
+use crate::intermediates::layout::AlignmentBound;
 use crate::{
     intermediate_type::{ArrayDimension, ByteSized, IntermediateType},
     type_attributes::TypeAttributes,
@@ -105,7 +106,7 @@ fn insert_alias_when_type_already_exists_then_ok() {
 })
         .with_enumerated_values(vec![Id::from("A"), Id::from("B")])
     )]
-#[case::structure(attributes(IntermediateType::Structure { fields: vec![] }))]
+#[case::structure(attributes(IntermediateType::Structure { fields: vec![], bound: AlignmentBound::Natural }))]
 #[case::array(attributes(IntermediateType::Array {
         element_type: Box::new(IntermediateType::Bool),
         dimensions: vec![ArrayDimension { lower: 1, upper: 3 }],
@@ -184,7 +185,11 @@ fn intermediate_type_helper_methods_work_correctly() {
         numbers: vec![],
     }
     .is_primitive());
-    assert!(!IntermediateType::Structure { fields: vec![] }.is_primitive());
+    assert!(!IntermediateType::Structure {
+        fields: vec![],
+        bound: AlignmentBound::Natural
+    }
+    .is_primitive());
     assert!(!IntermediateType::Array {
         element_type: Box::new(IntermediateType::Int {
             size: ByteSized::B16
@@ -602,7 +607,10 @@ fn type_environment_builder_with_stdlib_function_blocks_then_contains_all() {
 #[test]
 fn resolve_struct_type_when_structure_then_returns_type() {
     let mut env = TypeEnvironment::new();
-    let struct_type = IntermediateType::Structure { fields: vec![] };
+    let struct_type = IntermediateType::Structure {
+        fields: vec![],
+        bound: AlignmentBound::Natural,
+    };
     env.insert_type(
         &TypeName::from("MY_STRUCT"),
         TypeAttributes::new(SourceSpan::default(), struct_type.clone()),
@@ -651,7 +659,10 @@ fn resolve_member_access_type_when_function_block_then_returns_type() {
 #[test]
 fn resolve_member_access_type_when_structure_then_returns_type() {
     let mut env = TypeEnvironment::new();
-    let struct_type = IntermediateType::Structure { fields: vec![] };
+    let struct_type = IntermediateType::Structure {
+        fields: vec![],
+        bound: AlignmentBound::Natural,
+    };
     env.insert_type(
         &TypeName::from("MY_STRUCT"),
         TypeAttributes::new(SourceSpan::default(), struct_type.clone()),

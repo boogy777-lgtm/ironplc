@@ -5,9 +5,12 @@
 
 use crate::intermediate_type::{IntermediateStructField, IntermediateType};
 use crate::intermediates::enumeration::try_from_values;
+use crate::intermediates::layout::{layout, AlignmentBound};
 use crate::intermediates::subrange::IntermediateResult;
 use crate::resolution::Failure;
 use crate::type_environment::{TypeAttributes, TypeEnvironment};
+use ironplc_dsl::attribute::registry::PACK_MODE;
+use ironplc_dsl::attribute::Attributes;
 use ironplc_dsl::common::*;
 use ironplc_dsl::core::Located;
 use ironplc_dsl::diagnostic::*;
@@ -19,7 +22,12 @@ pub fn try_from(
     spec: &StructureDeclaration,
     type_environment: &TypeEnvironment,
 ) -> Result<TypeAttributes, Failure> {
-    from_elements(node_name, &spec.elements, type_environment)
+    from_elements(
+        node_name,
+        &spec.elements,
+        &spec.attributes,
+        type_environment,
+    )
 }
 
 /// Same member processing for a union's members. A union is resolved as a
@@ -31,61 +39,56 @@ pub fn from_union(
     spec: &UnionDeclaration,
     type_environment: &TypeEnvironment,
 ) -> Result<TypeAttributes, Failure> {
-    from_elements(node_name, &spec.elements, type_environment)
+    from_elements(
+        node_name,
+        &spec.elements,
+        &spec.attributes,
+        type_environment,
+    )
 }
 
 /// Builds the field list and memory layout shared by structures and unions.
+///
+/// This is the one place that reads `pack_mode`: the bound it gives travels in
+/// the type, and the offsets, the alignment and the size derive from it.
 fn from_elements(
     node_name: &TypeName,
     elements: &[StructureElementDeclaration],
+    attributes: &Attributes,
     type_environment: &TypeEnvironment,
 ) -> Result<TypeAttributes, Failure> {
     // Note: Field name uniqueness is validated by semantic rules, not here
 
-    // Resolve field types and calculate offsets
-    let mut fields = Vec::new();
-    let mut current_offset = 0u32;
+    let bound = PACK_MODE
+        .of(attributes)
+        .map_or(AlignmentBound::Natural, AlignmentBound::from);
 
-    for element in elements {
-        // Resolve the field type from the initial value assignment
-        let field_type = resolve_field_type(element, type_environment)?;
+    // Resolve the type of each field
+    let field_types = elements
+        .iter()
+        .map(|element| resolve_field_type(element, type_environment))
+        .collect::<Result<Vec<IntermediateType>, Failure>>()?;
 
-        // The value the member declares for itself, if any
-        let initial_value = type_environment.initial_value_of(&element.init);
+    let laid_out = layout(&field_types, bound);
 
-        // Calculate field alignment and adjust offset if needed
-        let field_alignment = field_type.alignment_bytes() as u32;
-        let aligned_offset = align_offset(current_offset, field_alignment);
-        // Use 0 for unknown sizes - the structure's overall size_in_bytes() will return None
-        let field_size = field_type.size_in_bytes().unwrap_or(0);
-
-        // Create the field
-        let field = IntermediateStructField {
+    let fields = elements
+        .iter()
+        .zip(field_types)
+        .zip(laid_out.offsets)
+        .map(|((element, field_type), offset)| IntermediateStructField {
             name: element.name.clone(),
             field_type,
-            offset: aligned_offset,
+            offset,
             var_type: None, // Structure fields don't have input/output distinction
-            initial_value,
-        };
-
-        fields.push(field);
-
-        // Update offset for next field
-        current_offset = aligned_offset + field_size;
-    }
+            // The value the member declares for itself, if any
+            initial_value: type_environment.initial_value_of(&element.init),
+        })
+        .collect();
 
     Ok(TypeAttributes::new(
         node_name.span(),
-        IntermediateType::Structure { fields },
+        IntermediateType::Structure { fields, bound },
     ))
-}
-
-/// Aligns an offset to the specified alignment boundary
-fn align_offset(offset: u32, alignment: u32) -> u32 {
-    if alignment == 0 {
-        return offset;
-    }
-    offset.div_ceil(alignment) * alignment
 }
 
 /// Resolves the field type from the field's initial value assignment
@@ -214,22 +217,30 @@ fn resolve_field_type(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::intermediate_type::IntermediateType;
     use crate::type_environment::{TypeEnvironment, TypeEnvironmentBuilder};
     use crate::xform_resolve_type_decl_environment::apply;
     use ironplc_dsl::common::TypeName;
     use ironplc_dsl::core::{FileId, Id};
-    use ironplc_parser::options::CompilerOptions;
+    use ironplc_parser::options::{CompilerOptions, Dialect};
     use ironplc_problems::Problem;
     use ironplc_test::cast_struct;
+    use rstest::rstest;
 
     /// Helper function to parse a program and apply type resolution
     /// Returns the type environment with resolved types
     fn parse_and_apply(program: &str) -> TypeEnvironment {
-        let input =
-            ironplc_parser::parse_program(program, &FileId::default(), &CompilerOptions::default())
-                .unwrap();
+        parse_and_apply_with(program, &CompilerOptions::default())
+    }
+
+    /// Same as [`parse_and_apply`] with the options of the CODESYS dialect, which
+    /// reads the attribute pragmas and the union type.
+    fn parse_and_apply_codesys(program: &str) -> TypeEnvironment {
+        parse_and_apply_with(program, &CompilerOptions::from_dialect(Dialect::Codesys))
+    }
+
+    fn parse_and_apply_with(program: &str, options: &CompilerOptions) -> TypeEnvironment {
+        let input = ironplc_parser::parse_program(program, &FileId::default(), options).unwrap();
         let mut env = TypeEnvironmentBuilder::new()
             .with_elementary_types()
             .build()
@@ -256,39 +267,6 @@ mod tests {
         let result = apply(input, &mut env);
         assert!(!result.diagnostics.is_empty());
         result.diagnostics
-    }
-
-    #[test]
-    fn align_offset_with_various_alignments_then_aligns_correctly() {
-        // Test alignment to 1-byte boundary (no change)
-        assert_eq!(align_offset(0, 1), 0);
-        assert_eq!(align_offset(1, 1), 1);
-        assert_eq!(align_offset(5, 1), 5);
-
-        // Test alignment to 2-byte boundary
-        assert_eq!(align_offset(0, 2), 0);
-        assert_eq!(align_offset(1, 2), 2);
-        assert_eq!(align_offset(2, 2), 2);
-        assert_eq!(align_offset(3, 2), 4);
-
-        // Test alignment to 4-byte boundary
-        assert_eq!(align_offset(0, 4), 0);
-        assert_eq!(align_offset(1, 4), 4);
-        assert_eq!(align_offset(4, 4), 4);
-        assert_eq!(align_offset(5, 4), 8);
-
-        // Test alignment to 8-byte boundary
-        assert_eq!(align_offset(0, 8), 0);
-        assert_eq!(align_offset(1, 8), 8);
-        assert_eq!(align_offset(8, 8), 8);
-        assert_eq!(align_offset(9, 8), 16);
-    }
-
-    #[test]
-    fn align_offset_with_zero_alignment_then_returns_original() {
-        assert_eq!(align_offset(0, 0), 0);
-        assert_eq!(align_offset(5, 0), 5);
-        assert_eq!(align_offset(100, 0), 100);
     }
 
     // Parser-based tests (more readable and maintainable)
@@ -847,5 +825,103 @@ END_TYPE
             outer_fields[0].has_default(),
             "Outer.inner should have has_default=true because Inner has all defaults"
         );
+    }
+
+    /// The third example of the CODESYS help for `pack_mode`, with `pragma`
+    /// before the declaration.
+    fn example_3_declared_with(pragma: &str) -> String {
+        format!(
+            "{pragma}
+TYPE Example : STRUCT
+    a : BYTE; b : LWORD; c : BYTE; d : BYTE; e : DWORD; f : BYTE; g : BYTE; h : WORD;
+END_STRUCT END_TYPE"
+        )
+    }
+
+    #[rstest]
+    #[case::without_attribute("", vec![0, 8, 16, 17, 20, 24, 25, 26], 28)]
+    #[case::mode_0("{attribute 'pack_mode' := '0'}", vec![0, 1, 9, 10, 11, 15, 16, 17], 19)]
+    #[case::mode_1("{attribute 'pack_mode' := '1'}", vec![0, 1, 9, 10, 11, 15, 16, 17], 19)]
+    #[case::mode_2("{attribute 'pack_mode' := '2'}", vec![0, 2, 10, 11, 12, 16, 17, 18], 20)]
+    #[case::mode_4("{attribute 'pack_mode' := '4'}", vec![0, 4, 12, 13, 16, 20, 21, 22], 24)]
+    #[case::mode_8("{attribute 'pack_mode' := '8'}", vec![0, 8, 16, 17, 20, 24, 25, 26], 28)]
+    #[case::mode_in_other_case("{attribute 'PACK_MODE' := '1'}", vec![0, 1, 9, 10, 11, 15, 16, 17], 19)]
+    fn try_from_when_structure_has_pack_mode_then_fields_stand_at_the_offsets_of_the_mode(
+        #[case] pragma: &str,
+        #[case] offsets: Vec<u32>,
+        #[case] size: u32,
+    ) {
+        let env = parse_and_apply_codesys(&example_3_declared_with(pragma));
+
+        let example = env.get(&TypeName::from("Example")).unwrap();
+        let fields = cast_struct!(
+            &example.representation,
+            IntermediateType::Structure { fields }
+        );
+        let found: Vec<u32> = fields.iter().map(|field| field.offset).collect();
+        assert_eq!(found, offsets);
+        assert_eq!(example.representation.size_in_bytes(), Some(size));
+    }
+
+    #[test]
+    fn from_union_when_union_has_pack_mode_then_members_stand_at_the_offsets_of_the_mode() {
+        let program = "{attribute 'pack_mode' := '1'}
+TYPE U : UNION a : BYTE; b : LWORD; END_UNION; END_TYPE";
+        let env = parse_and_apply_codesys(program);
+
+        let union = env.get(&TypeName::from("U")).unwrap();
+        let fields = cast_struct!(
+            &union.representation,
+            IntermediateType::Structure { fields }
+        );
+        assert_eq!(fields[1].offset, 1);
+    }
+
+    #[test]
+    fn try_from_when_pack_mode_is_not_a_known_value_then_natural_alignment() {
+        let program = "{attribute 'pack_mode' := '3'}
+TYPE S : STRUCT a : BYTE; b : LWORD; END_STRUCT END_TYPE";
+        let input = ironplc_parser::parse_program(
+            program,
+            &FileId::default(),
+            &CompilerOptions::from_dialect(Dialect::Codesys),
+        )
+        .unwrap();
+        let mut env = TypeEnvironmentBuilder::new()
+            .with_elementary_types()
+            .build()
+            .unwrap();
+        apply(input, &mut env);
+
+        // The value is reported by the attribute check; the layout ignores it.
+        let s = env.get(&TypeName::from("S")).unwrap();
+        let fields = cast_struct!(&s.representation, IntermediateType::Structure { fields });
+        assert_eq!(fields[1].offset, 8);
+    }
+
+    #[test]
+    fn try_from_when_structure_nests_in_a_packed_structure_then_it_keeps_its_own_layout() {
+        // The inner structure is not packed, so its LWORD stays at 8 and the
+        // inner structure is 16 bytes where it nests; the outer structure only
+        // bounds where the inner one starts.
+        let program = "TYPE Inner : STRUCT a : BYTE; b : LWORD; END_STRUCT END_TYPE
+{attribute 'pack_mode' := '1'}
+TYPE Outer : STRUCT x : BYTE; inner : Inner; y : BYTE; END_STRUCT END_TYPE";
+        let env = parse_and_apply_codesys(program);
+
+        let inner = env.get(&TypeName::from("Inner")).unwrap();
+        let inner_fields = cast_struct!(
+            &inner.representation,
+            IntermediateType::Structure { fields }
+        );
+        let outer = env.get(&TypeName::from("Outer")).unwrap();
+        let outer_fields = cast_struct!(
+            &outer.representation,
+            IntermediateType::Structure { fields }
+        );
+        assert_eq!(inner_fields[1].offset, 8);
+        assert_eq!(outer_fields[1].offset, 1);
+        assert_eq!(outer_fields[2].offset, 17);
+        assert_eq!(outer.representation.size_in_bytes(), Some(18));
     }
 }

@@ -108,6 +108,7 @@ fn slot_count_when_structure_with_two_fields_then_returns_2() {
                 initial_value: None,
             },
         ],
+        bound: AlignmentBound::Natural,
     };
     assert_eq!(s.slot_count(), Ok(2));
 }
@@ -135,6 +136,7 @@ fn slot_count_when_nested_structure_then_returns_sum() {
                 initial_value: None,
             },
         ],
+        bound: AlignmentBound::Natural,
     };
     let outer = IntermediateType::Structure {
         fields: vec![
@@ -153,6 +155,7 @@ fn slot_count_when_nested_structure_then_returns_sum() {
                 initial_value: None,
             },
         ],
+        bound: AlignmentBound::Natural,
     };
     // inner occupies 2 slots + z occupies 1 slot = 3
     assert_eq!(outer.slot_count(), Ok(3));
@@ -195,6 +198,7 @@ fn slot_count_when_array_of_structures_then_returns_elements_times_struct_slots(
                 initial_value: None,
             },
         ],
+        bound: AlignmentBound::Natural,
     };
     let arr = IntermediateType::Array {
         element_type: Box::new(s),
@@ -327,6 +331,7 @@ fn slot_count_when_nesting_exceeds_max_depth_then_returns_max_depth_exceeded() {
                 var_type: None,
                 initial_value: None,
             }],
+            bound: AlignmentBound::Natural,
         };
     }
     assert_eq!(t.slot_count(), Err(SlotCountError::MaxDepthExceeded));

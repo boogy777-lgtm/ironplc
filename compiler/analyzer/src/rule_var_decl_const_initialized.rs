@@ -233,7 +233,7 @@ impl<'a> RuleConstantVarsInitialized<'a> {
 
         // Extract fields from the structure type
         let fields = match &type_attrs.representation {
-            IntermediateType::Structure { fields } => fields,
+            IntermediateType::Structure { fields, .. } => fields,
             _ => {
                 // Not a structure type - another rule will catch this error
                 return;
