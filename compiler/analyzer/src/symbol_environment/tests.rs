@@ -1,6 +1,7 @@
 use super::*;
 use ironplc_dsl::common::DeclarationQualifier;
 use ironplc_dsl::core::Id;
+use ironplc_problems::Problem;
 
 #[test]
 fn symbol_environment_basic_operations_when_inserting_and_finding_symbols_then_works_correctly() {

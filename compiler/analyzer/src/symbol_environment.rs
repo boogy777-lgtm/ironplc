@@ -2,7 +2,7 @@ use indexmap::IndexMap;
 use ironplc_dsl::common::{DeclarationQualifier, VariableType};
 use ironplc_dsl::core::{Id, Located};
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
-use ironplc_problems::Problem;
+use ironplc_problems::{text, Text};
 
 /// A scope's position in the nesting tree: the chain of declaration
 /// names from the library root.
@@ -159,24 +159,60 @@ fn is_variable(kind: &SymbolKind) -> bool {
     )
 }
 
-/// The problem a second declaration of a name in one scope is: `P4014` for
-/// a variable repeating a variable, otherwise whatever a repeated global
-/// declaration is.
-fn repeated_symbol(existing: &SymbolKind, repeat: &SymbolKind) -> Option<Problem> {
+/// What a second declaration of a name is, by the code it is reported under.
+/// Each kind has the two texts of its diagnostic in `problem-texts.csv`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Duplicated {
+    /// A variable repeating a variable (`P4014`).
+    Symbol,
+    /// A program or configuration repeating a global declaration, or a
+    /// function block repeating any type (`P4013`).
+    Pou,
+    /// A data type repeating a data type (`P2007`).
+    Type,
+    /// A function repeating a function (`P4016`).
+    Function,
+}
+
+impl Duplicated {
+    /// The label on the repeat and the label on the first declaration.
+    fn texts(self) -> (Text, Text) {
+        match self {
+            Duplicated::Symbol => (
+                text::symbol_decl_duplicated_declaration_repeats_an_earlier_name(),
+                text::symbol_decl_duplicated_first_declaration(),
+            ),
+            Duplicated::Pou => (
+                text::pou_decl_name_duplicated_declaration_repeats_an_earlier_name(),
+                text::pou_decl_name_duplicated_first_declaration(),
+            ),
+            Duplicated::Type => (
+                text::type_decl_name_duplicated_declaration_repeats_an_earlier_name(),
+                text::type_decl_name_duplicated_first_declaration(),
+            ),
+            Duplicated::Function => (
+                text::function_decl_name_duplicated_declaration_repeats_an_earlier_name(),
+                text::function_decl_name_duplicated_first_declaration(),
+            ),
+        }
+    }
+}
+
+/// What a second declaration of a name in one scope is: a variable
+/// repeating a variable, otherwise whatever a repeated global declaration
+/// is.
+fn repeated_symbol(existing: &SymbolKind, repeat: &SymbolKind) -> Option<Duplicated> {
     if is_variable(existing) && is_variable(repeat) {
-        return Some(Problem::SymbolDeclDuplicated);
+        return Some(Duplicated::Symbol);
     }
     repeated_declaration(existing, repeat)
 }
 
 /// The diagnostic for a source declaration of a name the compiler provides.
 fn reserved_name(name: &Id) -> Diagnostic {
-    Diagnostic::problem(
-        Problem::SymbolDeclDuplicated,
-        Label::span(
-            name.span(),
-            "Variable name is reserved for a compiler-provided global",
-        ),
+    Diagnostic::text(
+        name.span(),
+        text::symbol_decl_duplicated_variable_name_reserved(),
     )
     .with_context_id("name", name)
     .with_help(
@@ -185,13 +221,13 @@ fn reserved_name(name: &Id) -> Diagnostic {
     )
 }
 
-/// The problem a second global declaration of a name is, when `existing`
+/// What a second global declaration of a name is, when `existing`
 /// and `repeat` are both declarations and at least one is a program or a
 /// configuration. A pair of types or function blocks is the type
 /// environment's to report. The global scope also holds structure elements
 /// and global variables, whose uniqueness other rules own, so a pair
 /// involving one of those is `None`.
-fn repeated_declaration(existing: &SymbolKind, repeat: &SymbolKind) -> Option<Problem> {
+fn repeated_declaration(existing: &SymbolKind, repeat: &SymbolKind) -> Option<Duplicated> {
     let is_declaration = |kind: &SymbolKind| {
         matches!(
             kind,
@@ -209,23 +245,21 @@ fn repeated_declaration(existing: &SymbolKind, repeat: &SymbolKind) -> Option<Pr
     if !is_unit(existing) && !is_unit(repeat) {
         return None;
     }
-    Some(Problem::PouDeclNameDuplicated)
+    Some(Duplicated::Pou)
 }
 
 /// The diagnostic for `name` declared again at its own span when `first`
 /// already declares it. Shared with the transform that feeds this
 /// environment, which reports a function repeating a symbol the same way.
 pub(crate) fn duplicate_declaration(
-    problem: Problem,
+    duplicated: Duplicated,
     name: &Id,
     first: ironplc_dsl::core::SourceSpan,
 ) -> Diagnostic {
-    Diagnostic::problem(
-        problem,
-        Label::span(name.span(), "Declaration repeats an earlier name"),
-    )
-    .with_context_id("name", name)
-    .with_secondary(Label::span(first, "First declaration"))
+    let (repeat, first_text) = duplicated.texts();
+    Diagnostic::text(name.span(), repeat)
+        .with_context_id("name", name)
+        .with_secondary(Label::span(first, first_text))
 }
 
 /// The main symbol environment that tracks all symbols across the library.
@@ -322,8 +356,12 @@ impl SymbolEnvironment {
             if existing.compiler_provided && is_variable(&info.kind) {
                 return Err(reserved_name(name));
             }
-            if let Some(problem) = repeated_symbol(&existing.kind, &info.kind) {
-                return Err(duplicate_declaration(problem, name, existing.span.clone()));
+            if let Some(duplicated) = repeated_symbol(&existing.kind, &info.kind) {
+                return Err(duplicate_declaration(
+                    duplicated,
+                    name,
+                    existing.span.clone(),
+                ));
             }
         }
         symbols.insert(name.clone(), info);

@@ -13,12 +13,12 @@ use ironplc_dsl::{
     diagnostic::{Diagnostic, Label},
     textual::{Expr, ExprType},
 };
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 
 use crate::intermediate_type::IntermediateType;
 use crate::intermediates::array;
 use crate::resolution::{Failure, Resolved};
-use crate::symbol_environment::duplicate_declaration;
+use crate::symbol_environment::{duplicate_declaration, Duplicated};
 use crate::type_id;
 use ironplc_dsl::type_id::TypeId;
 
@@ -264,14 +264,14 @@ impl TypeEnvironment {
                 return;
             }
         }
-        let problem = if existing.is_function_block() || function_block {
-            Problem::PouDeclNameDuplicated
+        let duplicated = if existing.is_function_block() || function_block {
+            Duplicated::Pou
         } else {
-            Problem::TypeDeclNameDuplicated
+            Duplicated::Type
         };
         let first = existing.span().unwrap_or_default();
         self.duplicates
-            .push(duplicate_declaration(problem, &type_name.name, first));
+            .push(duplicate_declaration(duplicated, &type_name.name, first));
     }
 
     /// Adds a type that has no name -- one spelled out where it is used,
@@ -391,11 +391,14 @@ impl TypeEnvironment {
         base_type_name: &TypeName,
     ) -> Result<(), Failure> {
         let base_intermediate_type = self.lookup(base_type_name).or_failure(|| {
-            Diagnostic::problem(
-                Problem::AliasParentTypeNotDeclared,
-                Label::span(type_name.span(), "Type alias"),
+            Diagnostic::text(
+                type_name.span(),
+                text::alias_parent_type_not_declared_type_alias(),
             )
-            .with_secondary(Label::span(base_type_name.span(), "Base type"))
+            .with_secondary(Label::span(
+                base_type_name.span(),
+                text::alias_parent_type_not_declared_base_type(),
+            ))
         })?;
 
         let base = base_intermediate_type.clone();
@@ -542,11 +545,14 @@ impl TypeEnvironment {
         match target {
             ReferenceTarget::Named(referenced_type_name) => {
                 let referenced_attrs = self.lookup(referenced_type_name).or_failure(|| {
-                    Diagnostic::problem(
-                        Problem::ParentTypeNotDeclared,
-                        Label::span(declaring.span(), "Reference type declaration"),
+                    Diagnostic::text(
+                        declaring.span(),
+                        text::parent_type_not_declared_reference_type_declaration(),
                     )
-                    .with_secondary(Label::span(referenced_type_name.span(), "Referenced type"))
+                    .with_secondary(Label::span(
+                        referenced_type_name.span(),
+                        text::parent_type_not_declared_referenced_type(),
+                    ))
                 })?;
                 Ok(referenced_attrs.representation.clone())
             }
@@ -718,9 +724,9 @@ impl TypeEnvironment {
         self.get(type_name)
             .map(|attrs| attrs.size_bytes())
             .ok_or_else(|| {
-                Diagnostic::problem(
-                    Problem::TypeEnvironmentUnknownType,
-                    Label::span(type_name.span(), "Type reference"),
+                Diagnostic::text(
+                    type_name.span(),
+                    text::type_environment_unknown_type_type_reference(),
                 )
             })
     }
@@ -732,9 +738,9 @@ impl TypeEnvironment {
         context: &UsageContext,
     ) -> Result<(), Diagnostic> {
         let type_attrs = self.get(type_name).ok_or_else(|| {
-            Diagnostic::problem(
-                Problem::TypeEnvironmentUnknownType,
-                Label::span(type_name.span(), "Type reference"),
+            Diagnostic::text(
+                type_name.span(),
+                text::type_environment_unknown_type_type_reference(),
             )
         })?;
 
@@ -743,18 +749,19 @@ impl TypeEnvironment {
             UsageContext::SubrangeBase => {
                 // Subrange base types must be numeric
                 if !type_attrs.representation.is_numeric() {
-                    return Err(Diagnostic::problem(
-                        Problem::SubrangeBaseTypeNotNumeric,
-                        Label::span(type_name.span(), "Subrange base type"),
+                    return Err(Diagnostic::text(
+                        type_name.span(),
+                        text::subrange_base_type_not_numeric_subrange_base_type(),
                     ));
                 }
             }
             UsageContext::EnumerationUnderlying => {
                 // Enumeration underlying types must be integer types
                 if !type_attrs.representation.is_integer() {
-                    return Err(Diagnostic::problem(
-                        Problem::TypeEnvironmentUnknownType, // Using existing code for now
-                        Label::span(type_name.span(), "Enumeration underlying type"),
+                    // Reported under the existing code for now.
+                    return Err(Diagnostic::text(
+                        type_name.span(),
+                        text::type_environment_unknown_type_enumeration_underlying_type(),
                     ));
                 }
             }
@@ -763,18 +770,20 @@ impl TypeEnvironment {
                 if type_attrs.representation.is_function_block()
                     || type_attrs.representation.is_function()
                 {
-                    return Err(Diagnostic::problem(
-                        Problem::TypeEnvironmentUnknownType, // Using existing code for now
-                        Label::span(type_name.span(), "Array element type"),
+                    // Reported under the existing code for now.
+                    return Err(Diagnostic::text(
+                        type_name.span(),
+                        text::type_environment_unknown_type_array_element_type(),
                     ));
                 }
             }
             UsageContext::FunctionReturn => {
                 // Function return types cannot be function blocks
                 if type_attrs.representation.is_function_block() {
-                    return Err(Diagnostic::problem(
-                        Problem::TypeEnvironmentUnknownType, // Using existing code for now
-                        Label::span(type_name.span(), "Function return type"),
+                    // Reported under the existing code for now.
+                    return Err(Diagnostic::text(
+                        type_name.span(),
+                        text::type_environment_unknown_type_function_return_type(),
                     ));
                 }
             }
