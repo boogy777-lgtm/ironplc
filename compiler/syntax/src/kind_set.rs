@@ -79,6 +79,19 @@ const fn position(kind: SyntaxKind) -> (usize, u64) {
     (index / WORD_BITS, 1 << (index % WORD_BITS))
 }
 
+impl FromIterator<SyntaxKind> for KindSet {
+    /// The set of the kinds the iterator yields, for a set known only when the
+    /// program runs, such as the kinds a table of rules is written for.
+    fn from_iter<I: IntoIterator<Item = SyntaxKind>>(kinds: I) -> KindSet {
+        let mut words = [0u64; WORDS];
+        for kind in kinds {
+            let (word, bit) = position(kind);
+            words[word] |= bit;
+        }
+        KindSet { words }
+    }
+}
+
 impl fmt::Debug for KindSet {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_set().entries(self.iter()).finish()
@@ -169,6 +182,13 @@ mod tests {
         let set = KindSet::new(&[K::If, K::Else, K::If]);
         assert_eq!(set.iter().collect::<Vec<_>>(), vec![K::Else, K::If]);
         assert_eq!(KindSet::EMPTY.iter().count(), 0);
+    }
+
+    #[test]
+    fn from_iter_when_kinds_collected_then_equal_to_the_set_built_from_them() {
+        let collected: KindSet = [K::Plus, K::Minus, K::Plus].into_iter().collect();
+        assert_eq!(collected, KindSet::new(&[K::Minus, K::Plus]));
+        assert_eq!(std::iter::empty().collect::<KindSet>(), KindSet::EMPTY);
     }
 
     #[test]

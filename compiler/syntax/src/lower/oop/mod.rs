@@ -20,6 +20,7 @@ use super::pou::{
 };
 use super::tree::{child_of, children_of, significant_tokens};
 use super::LowerCx;
+use crate::kind_set::KindSet;
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode};
 use ironplc_dsl::common::{
     FunctionBlockOop, FunctionReturnType, MethodDeclaration, PropertyDeclaration, TypeName, VarDecl,
@@ -96,14 +97,15 @@ pub fn lower_type_list(cx: &LowerCx, clause: &SyntaxNode) -> Result<Vec<TypeName
 
 /// The clauses and qualifiers that make up the object-oriented facet of a
 /// function block.
-const FACET: &[K] = &[K::MemberQualifier, K::ExtendsClause, K::ImplementsClause];
+pub(super) const FACET: KindSet =
+    KindSet::new(&[K::MemberQualifier, K::ExtendsClause, K::ImplementsClause]);
 
 /// The facet of a function block, when it writes any of it: the clauses, the
 /// qualifiers, and the range from the first of them to the last.
 pub fn lower_oop(cx: &LowerCx, node: &SyntaxNode) -> Result<Option<FunctionBlockOop>, Diagnostic> {
     let written: Vec<SyntaxNode> = node
         .children()
-        .filter(|child| FACET.contains(&child.kind()))
+        .filter(|child| FACET.contains(child.kind()))
         .collect();
     let Some(range) = written
         .iter()

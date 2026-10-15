@@ -28,6 +28,7 @@ mod tests;
 use super::attributes::attributes_of;
 use super::configuration::{lower_program_configuration, lower_resource, lower_task};
 use super::names::{lower_name, lower_type_ref};
+use super::oop::FACET;
 use super::oop::{lower_member, lower_oop, lower_type_list, Member};
 use super::sfc::lower_chart;
 use super::statements::lower_statement_list;
@@ -35,6 +36,7 @@ use super::tree::child_of;
 use super::types::lower_string_specification;
 use super::var_blocks::{lower_var_block, InstanceInit};
 use super::{lower_elements, LowerCx};
+use crate::kind_set::KindSet;
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode};
 use ironplc_dsl::common::{
     FunctionBlockBodyKind, FunctionBlockDeclaration, FunctionDeclaration, FunctionReturnType,
@@ -87,15 +89,12 @@ const SECTIONS: &[(K, SectionRule)] = &[
 /// The kinds of node that are part of a declaration's header: its name, its
 /// type, its qualifiers, the types it extends or implements and the type of the
 /// processor a resource runs on. The rule of the declaration reads them.
-pub const HEADER: &[K] = &[
+pub const HEADER: KindSet = FACET.union(KindSet::new(&[
     K::Name,
     K::TypeRef,
     K::StringType,
-    K::MemberQualifier,
-    K::ExtendsClause,
-    K::ImplementsClause,
     K::NameRef,
-];
+]));
 
 /// Adds the variables, edges and access paths of a block.
 fn block(cx: &LowerCx, node: &SyntaxNode, into: &mut Sections) -> Result<(), Diagnostic> {
@@ -186,7 +185,7 @@ fn program_configuration(
 pub fn lower_sections(cx: &LowerCx, node: &SyntaxNode) -> Result<Sections, Diagnostic> {
     let mut sections = Sections::default();
     for child in node.children() {
-        if HEADER.contains(&child.kind()) {
+        if HEADER.contains(child.kind()) {
             continue;
         }
         let (_, rule) = SECTIONS

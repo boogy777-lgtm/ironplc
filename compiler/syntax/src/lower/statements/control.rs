@@ -14,6 +14,7 @@ use super::super::values::{
 };
 use super::super::LowerCx;
 use super::{body_of, condition_of};
+use crate::kind_set::KindSet;
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode};
 use ironplc_dsl::common::{BitStringLiteral, ConstantKind};
 use ironplc_dsl::core::SourceSpan;
@@ -128,7 +129,7 @@ enum Shape {
 impl Shape {
     fn is_in(self, label: &SyntaxNode) -> bool {
         match self {
-            Shape::Token(kind) => token_of(label, &[kind]).is_some(),
+            Shape::Token(kind) => token_of(label, KindSet::new(&[kind])).is_some(),
             Shape::Child(kind) => label
                 .first_child()
                 .is_some_and(|child| child.kind() == kind),

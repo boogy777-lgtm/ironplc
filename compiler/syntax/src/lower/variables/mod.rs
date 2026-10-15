@@ -24,6 +24,7 @@ use super::expressions::lower_expr;
 use super::names::{lower_id, lower_name};
 use super::tree::{left_spine, significant_tokens, token_of};
 use super::LowerCx;
+use crate::kind_set::KindSet;
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode, SyntaxToken};
 use ironplc_dsl::common::{AddressAssignment, Integer};
 use ironplc_dsl::core::SourceSpan;
@@ -198,11 +199,11 @@ pub fn lower_self_ref(cx: &LowerCx, node: &SyntaxNode) -> Result<SelfRefVariable
     if node.kind() != K::SelfRefExpr {
         return Err(cx.unsupported(node));
     }
-    let keywords: Vec<K> = SELF_REFERENCES
+    let keywords: KindSet = SELF_REFERENCES
         .iter()
         .map(|(keyword, _)| *keyword)
         .collect();
-    let token = token_of(node, &keywords).ok_or_else(|| cx.missing(node, "THIS or SUPER"))?;
+    let token = token_of(node, keywords).ok_or_else(|| cx.missing(node, "THIS or SUPER"))?;
     let kind = SELF_REFERENCES
         .iter()
         .find(|(keyword, _)| *keyword == token.kind())

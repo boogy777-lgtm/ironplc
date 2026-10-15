@@ -428,7 +428,7 @@ pub fn lower_elements(
     let mut elements = Vec::new();
     for node in parent
         .children()
-        .filter(|node| !pou::HEADER.contains(&node.kind()))
+        .filter(|node| !pou::HEADER.contains(node.kind()))
     {
         elements.extend(lower_element(cx, &node)?);
     }

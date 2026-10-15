@@ -36,6 +36,7 @@ use super::expressions::{lower_call, lower_expr, Callee};
 use super::tree::{child_of, range_before, significant_tokens};
 use super::variables::lower_variable;
 use super::LowerCx;
+use crate::kind_set::KindSet;
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode};
 use ironplc_dsl::core::SourceSpan;
 use ironplc_dsl::diagnostic::Diagnostic;
@@ -82,7 +83,7 @@ const STATEMENTS: &[(K, Extent, Rule)] = &[
 ];
 
 /// The items of a list that write no statement.
-const WRITES_NOTHING: &[K] = &[K::EmptyStmt];
+const WRITES_NOTHING: KindSet = KindSet::new(&[K::EmptyStmt]);
 
 /// Lowers a statement list: the statements its items write, in order.
 pub fn lower_statement_list(cx: &LowerCx, node: &SyntaxNode) -> Result<Vec<StmtKind>, Diagnostic> {
@@ -99,7 +100,7 @@ pub fn lower_statement_list(cx: &LowerCx, node: &SyntaxNode) -> Result<Vec<StmtK
 /// Lowers a statement node to the statement it writes, or to nothing for an
 /// item that writes none.
 pub fn lower_statement(cx: &LowerCx, node: &SyntaxNode) -> Result<Option<StmtKind>, Diagnostic> {
-    if WRITES_NOTHING.contains(&node.kind()) {
+    if WRITES_NOTHING.contains(node.kind()) {
         return Ok(None);
     }
     let (_, extent, rule) = STATEMENTS
