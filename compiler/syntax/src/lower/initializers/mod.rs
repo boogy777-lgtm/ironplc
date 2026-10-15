@@ -31,6 +31,7 @@ use super::types::{
 use super::values::{lower_enumerated_value, lower_integer};
 use super::variables::lower_variable;
 use super::{disposition, Area, Disposition, LowerCx};
+use crate::kind_set::KindSet;
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode};
 use ironplc_dsl::common::{
     ArrayInitialElementKind, ArrayInitialValueAssignment, CharacterStringLiteral, ConstantKind,
@@ -445,8 +446,8 @@ fn call(cx: &LowerCx, parts: &Parts) -> Result<InitialValueAssignmentKind, Diagn
 /// the type that must follow every `:` (`Err_TypeExpected`, Codesys/Parser35220.plugin/CODESYS/Parser35220/Declaration/VariableDeclarationParser.cs:161
 /// calling TypeParser.cs:167, which reports it at :383-394).
 fn untyped(cx: &LowerCx, parts: &Parts) -> Result<InitialValueAssignmentKind, Diagnostic> {
-    let colon =
-        token_of(&parts.node, &[K::Colon]).ok_or_else(|| cx.missing(&parts.node, "a colon"))?;
+    let colon = token_of(&parts.node, const { KindSet::new(&[K::Colon]) })
+        .ok_or_else(|| cx.missing(&parts.node, "a colon"))?;
     Ok(InitialValueAssignmentKind::None(cx.token_span(&colon)))
 }
 
@@ -489,7 +490,7 @@ const INITIAL_VALUES: &[Row<InitialValueAssignmentKind>] = &[
 /// The kinds of node that hold a declaration with an initial value: a
 /// variable declaration, a member of a structure and the initialisation of an
 /// instance in a configuration.
-const OWNERS: &[K] = &[K::VarDecl, K::StructMember, K::InstanceInit];
+const OWNERS: KindSet = KindSet::new(&[K::VarDecl, K::StructMember, K::InstanceInit]);
 
 /// Lowers what a declaration's type and initial value make of the declaration:
 /// a [`K::VarDecl`], a [`K::StructMember`] or a [`K::InstanceInit`]. Every name a variable
@@ -499,7 +500,7 @@ pub fn lower_initial_value(
     cx: &LowerCx,
     node: &SyntaxNode,
 ) -> Result<InitialValueAssignmentKind, Diagnostic> {
-    if !OWNERS.contains(&node.kind()) {
+    if !OWNERS.contains(node.kind()) {
         return Err(cx.internal_error(
             node.text_range(),
             format!("{:?} does not hold an initial value", node.kind()),

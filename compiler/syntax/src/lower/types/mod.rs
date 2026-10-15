@@ -32,6 +32,7 @@ use super::names::{lower_name, lower_type_ref, lower_type_token};
 use super::tree::{child_of, children_of, significant_tokens, token_of};
 use super::values::{lower_enumerated_value, lower_integer, lower_integer_ref, lower_subrange};
 use super::LowerCx;
+use crate::kind_set::KindSet;
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode};
 use ironplc_dsl::common::{
     ArrayBounds, ArrayDeclaration, ArrayElementType, ArraySubranges, Attributes,
@@ -167,7 +168,7 @@ fn reference_parts(cx: &LowerCx, node: &SyntaxNode) -> Result<(RefSyntax, Syntax
 /// reference is recorded on the array, with the type it points to.
 pub fn lower_array(cx: &LowerCx, node: &SyntaxNode) -> Result<ArraySubranges, Diagnostic> {
     expect(cx, node, K::ArrayType)?;
-    let bounds = match token_of(node, &[K::Star]) {
+    let bounds = match token_of(node, const { KindSet::new(&[K::Star]) }) {
         Some(star) => ArrayBounds::Incomplete(cx.token_span(&star)),
         None => ArrayBounds::Ranges(
             children_of(node, K::Subrange)

@@ -30,6 +30,7 @@ use super::names::{lower_id, lower_name, lower_type_ref};
 use super::tree::{left_spine, significant_tokens, token_of};
 use super::variables::{lower_self_ref, lower_symbolic, lower_variable};
 use super::{Area, Disposition, LowerCx};
+use crate::kind_set::KindSet;
 use crate::parser::is_special_operator;
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode};
 use ironplc_dsl::construct::{fb_call, special_operator_type_call};
@@ -163,8 +164,8 @@ fn operator_of<'a, T>(
     node: &SyntaxNode,
     table: &'a [(K, T)],
 ) -> Result<&'a T, Diagnostic> {
-    let kinds: Vec<K> = table.iter().map(|(kind, _)| *kind).collect();
-    let token = token_of(node, &kinds).ok_or_else(|| cx.missing(node, "an operator"))?;
+    let kinds: KindSet = table.iter().map(|(kind, _)| *kind).collect();
+    let token = token_of(node, kinds).ok_or_else(|| cx.missing(node, "an operator"))?;
     table
         .iter()
         .find(|(kind, _)| *kind == token.kind())
@@ -307,7 +308,7 @@ fn output(cx: &LowerCx, node: &SyntaxNode) -> Result<ParamAssignmentKind, Diagno
         .and_then(|name| lower_name(cx, &name))?;
     let target = nodes.next().ok_or_else(|| cx.missing(node, "a variable"))?;
     Ok(ParamAssignmentKind::Output(Output {
-        not: token_of(node, &[K::Not]).is_some(),
+        not: token_of(node, const { KindSet::new(&[K::Not]) }).is_some(),
         src,
         tgt: lower_variable(cx, &target)?,
     }))

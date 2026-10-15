@@ -19,7 +19,8 @@ use super::expressions::{type_ref, variable};
 use super::initializers::initializer;
 use super::positions::{self, Context, Spec, COMPLETE_ADDRESS, INCOMPLETE_ADDRESS};
 use super::types::type_spec;
-use crate::parser::recovery::{BLOCK_END, VAR_OPENERS};
+use crate::kind_set::KindSet;
+use crate::parser::recovery::{BLOCK_END, VAR_OPENERS, VAR_QUALIFIERS};
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
 
@@ -88,11 +89,11 @@ enum Form {
 /// One row: a block keyword, the qualifiers it takes, and its form.
 struct Rule {
     opener: K,
-    qualifiers: &'static [K],
+    qualifiers: KindSet,
     form: Form,
 }
 
-const fn rule(opener: K, qualifiers: &'static [K], form: Form) -> Rule {
+const fn rule(opener: K, qualifiers: KindSet, form: Form) -> Rule {
     Rule {
         opener,
         qualifiers,
@@ -100,14 +101,18 @@ const fn rule(opener: K, qualifiers: &'static [K], form: Form) -> Rule {
     }
 }
 
-const RETENTION: &[K] = &[K::Retain, K::NonRetain];
-const CONSTANT: &[K] = &[K::Constant];
-const STORAGE: &[K] = &[K::Constant, K::Retain, K::NonRetain, K::Persistent];
-const GLOBAL_STORAGE: &[K] = &[K::Constant, K::Retain, K::Persistent];
-const NONE: &[K] = &[];
-
-/// Every qualifier word; any of them after a block keyword is a qualifier.
-const QUALIFIERS: &[K] = &[K::Constant, K::Retain, K::NonRetain, K::Persistent];
+pub(super) const RETENTION: KindSet = KindSet::new(&[K::Retain, K::NonRetain]);
+const CONSTANT: KindSet = KindSet::new(&[K::Constant]);
+const PERSISTENT: KindSet = KindSet::new(&[K::Persistent]);
+/// What a block may be qualified with, where it takes every qualifier.
+const STORAGE: KindSet = VAR_QUALIFIERS;
+/// `VAR_GLOBAL` has no `NON_RETAIN`.
+const GLOBAL_STORAGE: KindSet = CONSTANT.union(KindSet::new(&[K::Retain])).union(PERSISTENT);
+const NONE: KindSet = KindSet::EMPTY;
+/// The words that make a `BOOL` an input on a rising or falling edge.
+const EDGES: KindSet = KindSet::new(&[K::REdge, K::FEdge]);
+/// What an access path allows.
+const ACCESS_RIGHTS: KindSet = KindSet::new(&[K::ReadOnly, K::ReadWrite]);
 
 use Form::{Access, Declarations, Instance};
 
@@ -240,11 +245,8 @@ pub(super) fn var_block(p: &mut Parser, scope: Scope) {
         ));
     }
     p.bump();
-    if let Some(qualifier) = p
-        .nth(0)
-        .filter(|kind| p.at(*kind) && QUALIFIERS.contains(kind))
-    {
-        if !rule.qualifiers.contains(&qualifier) {
+    if let Some(qualifier) = p.nth(0).filter(|_| p.at_any(VAR_QUALIFIERS)) {
+        if !rule.qualifiers.contains(qualifier) {
             p.error("this qualifier is not allowed on this variable block");
         }
         p.bump();
@@ -315,8 +317,7 @@ fn declaration(p: &mut Parser, shape: Shape) {
         };
         let is_bool = p.at(K::Bool);
         let spec = type_spec(p, &context);
-        let edge =
-            shape.edge && is_bool && spec == Spec::Elementary && p.at_any(&[K::REdge, K::FEdge]);
+        let edge = shape.edge && is_bool && spec == Spec::Elementary && p.at_any(EDGES);
         if edge {
             let edge = p.start();
             p.bump();
@@ -374,7 +375,7 @@ fn access_declaration(p: &mut Parser) {
         }
         if p.expect(K::Colon, "`:`") {
             type_ref(p);
-            if p.at_any(&[K::ReadOnly, K::ReadWrite]) {
+            if p.at_any(ACCESS_RIGHTS) {
                 p.bump();
             }
         }

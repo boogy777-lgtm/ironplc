@@ -1,6 +1,7 @@
 //! A small accessor layer over the tree, so a lowering rule reads the pieces
 //! of a node by kind and not by position in a child list.
 
+use crate::kind_set::KindSet;
 use crate::syntax_kind::{SyntaxKind, SyntaxNode, SyntaxToken};
 use rowan::{NodeOrToken, TextRange};
 
@@ -13,10 +14,10 @@ pub fn significant_tokens(node: &SyntaxNode) -> Vec<SyntaxToken> {
 }
 
 /// The first token directly under `node` that is of one of `kinds`.
-pub fn token_of(node: &SyntaxNode, kinds: &[SyntaxKind]) -> Option<SyntaxToken> {
+pub fn token_of(node: &SyntaxNode, kinds: KindSet) -> Option<SyntaxToken> {
     significant_tokens(node)
         .into_iter()
-        .find(|token| kinds.contains(&token.kind()))
+        .find(|token| kinds.contains(token.kind()))
 }
 
 /// The children of `node` that are of `kind`, in source order.
@@ -209,14 +210,14 @@ mod tests {
         let node = parse.root.first_child();
         let hash = node
             .as_ref()
-            .and_then(|node| token_of(node, &[SyntaxKind::Hash]));
+            .and_then(|node| token_of(node, KindSet::new(&[SyntaxKind::Hash])));
         assert_eq!(
             hash.map(|token| token.text().to_string()),
             Some("#".to_string())
         );
         let missing = node
             .as_ref()
-            .and_then(|node| token_of(node, &[SyntaxKind::Plus]));
+            .and_then(|node| token_of(node, KindSet::new(&[SyntaxKind::Plus])));
         assert!(missing.is_none());
     }
 }

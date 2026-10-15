@@ -10,10 +10,27 @@
 //! that select it, the node it produces, and which value parser reads what
 //! follows the `#`. Adding a family is adding its prefixes and arm there.
 
+use super::common::SIGN;
 use super::temporal::{date_and_time_value, date_value, daytime_value, duration_value};
+use crate::kind_set::KindSet;
 use crate::parser::event::CompletedMarker;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
+
+/// The literals written in a base other than ten: `16#FF`, `8#17`, `2#101`.
+pub(super) const BASED_LITERALS: KindSet = KindSet::new(&[K::HexLit, K::OctLit, K::BinLit]);
+
+/// The literal of an integer written in base ten.
+const INTEGER_LITERAL: KindSet = KindSet::new(&[K::IntegerLit]);
+
+/// The literals of a character string, single-quoted and double-quoted.
+const STRING_LITERALS: KindSet = KindSet::new(&[K::StringLit, K::WStringLit]);
+
+/// The words that are the values of a boolean.
+const BOOL_WORDS: KindSet = KindSet::new(&[K::True, K::False]);
+
+/// The literals of a real number.
+const REAL_LITERALS: KindSet = KindSet::new(&[K::FixedPointLit, K::FloatingPointLit]);
 
 /// The families of typed literal.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -109,7 +126,7 @@ fn typed_class(p: &Parser) -> Option<Class> {
 /// True when a character string literal starts at the cursor: a quoted string,
 /// or a typed one (`STRING#'a'`).
 pub(super) fn string_literal_ahead(p: &Parser) -> bool {
-    p.at_any(&[K::StringLit, K::WStringLit]) || matches!(typed_class(p), Some(Class::String { .. }))
+    p.at_any(STRING_LITERALS) || matches!(typed_class(p), Some(Class::String { .. }))
 }
 
 /// True when a duration literal (`T#5s`, `TIME#5s`, `LTIME#5s`) starts at the
@@ -133,9 +150,9 @@ pub(super) fn piece(p: &mut Parser, kind: K, what: &str) -> bool {
 }
 
 /// Consumes one of `kinds` as the next piece of a literal.
-fn piece_any(p: &mut Parser, kinds: &[K], what: &str) -> bool {
-    match kinds.iter().find(|kind| p.at(**kind)) {
-        Some(kind) => piece(p, *kind, what),
+fn piece_any(p: &mut Parser, kinds: KindSet, what: &str) -> bool {
+    match p.nth(0).filter(|_| p.at_any(kinds)) {
+        Some(kind) => piece(p, kind, what),
         None => {
             p.error(&format!("expected {what}"));
             false
@@ -144,9 +161,9 @@ fn piece_any(p: &mut Parser, kinds: &[K], what: &str) -> bool {
 }
 
 /// An optional sign that touches the number after it.
-fn sign(p: &mut Parser, numbers: &[K]) {
-    if p.at_any(&[K::Plus, K::Minus]) {
-        if p.adjacent(0) && numbers.iter().any(|kind| p.nth_at(1, *kind)) {
+fn sign(p: &mut Parser, numbers: KindSet) {
+    if p.at_any(SIGN) {
+        if p.adjacent(0) && p.nth_at_any(1, numbers) {
             p.bump();
         } else {
             p.error("a sign must touch the number after it");
@@ -161,7 +178,7 @@ pub(super) fn literal(p: &mut Parser) -> Option<CompletedMarker> {
     if let Some(class) = typed_class(p) {
         return Some(typed(p, class));
     }
-    let numeric_with_sign = p.at_any(&[K::Plus, K::Minus])
+    let numeric_with_sign = p.at_any(SIGN)
         && p.adjacent(0)
         && matches!(
             p.nth(1),
@@ -210,13 +227,13 @@ fn typed(p: &mut Parser, class: Class) -> CompletedMarker {
     match class {
         Class::Int => int_value(p),
         Class::Real => {
-            sign(p, &[K::FixedPointLit, K::FloatingPointLit]);
-            piece_any(p, &[K::FixedPointLit, K::FloatingPointLit], "a real value");
+            sign(p, REAL_LITERALS);
+            piece_any(p, REAL_LITERALS, "a real value");
         }
         Class::BitString => {
             piece_any(
                 p,
-                &[K::BinLit, K::OctLit, K::HexLit, K::IntegerLit],
+                BASED_LITERALS.union(INTEGER_LITERAL),
                 "a bit-string value",
             );
         }
@@ -242,20 +259,20 @@ fn typed(p: &mut Parser, class: Class) -> CompletedMarker {
 }
 
 fn int_value(p: &mut Parser) {
-    if p.at_any(&[K::HexLit, K::OctLit, K::BinLit]) {
+    if p.at_any(BASED_LITERALS) {
         p.bump();
     } else if p.at(K::IntegerLit) && is_based_decimal(p) {
         p.bump_n(2);
         piece(p, K::IntegerLit, "digits after `10#`");
     } else {
-        sign(p, &[K::IntegerLit]);
+        sign(p, INTEGER_LITERAL);
         piece(p, K::IntegerLit, "an integer value");
     }
 }
 
 fn bool_value(p: &mut Parser, words: bool) {
     let is_bit_digit = p.at(K::IntegerLit) && matches!(p.nth_text(0), "0" | "1");
-    if is_bit_digit || (words && p.at_any(&[K::True, K::False])) {
+    if is_bit_digit || (words && p.at_any(BOOL_WORDS)) {
         p.bump();
     } else {
         p.error("expected 0, 1 or a boolean word");

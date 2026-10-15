@@ -17,18 +17,20 @@
 
 use super::common::{
     close, declared_name, integer_ref, item_terminator, skip_declaration, terminator, NameClass,
+    SIGN,
 };
 use super::control::{bound, bound_ahead};
 use super::expressions::{arg_list, close_group, type_ref};
 use super::initializers::initializer;
 use super::literals::literal;
 use super::positions::{Context, Spec, COUNTED, DECLARED, ELEMENT, MEMBER};
+use crate::kind_set::KindSet;
 use crate::parser::recovery::BLOCK_END;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
 
 /// The integer types, which a subrange restricts.
-const INTEGER_TYPES: &[K] = &[
+pub(super) const INTEGER_TYPES: KindSet = KindSet::new(&[
     K::Sint,
     K::Int,
     K::Dint,
@@ -37,24 +39,14 @@ const INTEGER_TYPES: &[K] = &[
     K::Uint,
     K::Udint,
     K::Ulint,
-];
+]);
+
+/// The bit-string types, `BOOL` included.
+pub(super) const BIT_STRING_TYPES: KindSet =
+    KindSet::new(&[K::Bool, K::Byte, K::Word, K::Dword, K::Lword]);
 
 /// The types an enumeration may be based on: the integers and the bit strings.
-const ENUM_BASE_TYPES: &[K] = &[
-    K::Sint,
-    K::Int,
-    K::Dint,
-    K::Lint,
-    K::Usint,
-    K::Uint,
-    K::Udint,
-    K::Ulint,
-    K::Bool,
-    K::Byte,
-    K::Word,
-    K::Dword,
-    K::Lword,
-];
+const ENUM_BASE_TYPES: KindSet = INTEGER_TYPES.union(BIT_STRING_TYPES);
 
 /// A type specification in the position `context`. A malformed one is
 /// reported and left in place where it stops, so the declaration around it
@@ -119,7 +111,7 @@ fn specification(p: &mut Parser, context: &Context) -> Spec {
             aggregate(p, K::UnionType, K::EndUnion);
             Spec::Union
         }
-        kind if INTEGER_TYPES.contains(&kind) && p.nth_at(1, K::LeftParen) => {
+        kind if INTEGER_TYPES.contains(kind) && p.nth_at(1, K::LeftParen) => {
             subrange_type(p);
             Spec::Subrange
         }
@@ -279,7 +271,7 @@ fn enum_value(p: &mut Parser, declares: bool) {
 
 /// An integer with an optional sign that touches it.
 fn signed_integer(p: &mut Parser) {
-    let signed = p.at_any(&[K::Plus, K::Minus]) && p.adjacent(0) && p.nth_at(1, K::IntegerLit);
+    let signed = p.at_any(SIGN) && p.adjacent(0) && p.nth_at(1, K::IntegerLit);
     if p.at(K::IntegerLit) || signed {
         literal(p);
     } else {

@@ -10,6 +10,7 @@
 use super::event::{CompletedMarker, Event, Marker};
 use super::options::ParseOptions;
 use crate::error::{nesting_message, ErrorKind, SyntaxError};
+use crate::kind_set::KindSet;
 use crate::lexer::Token;
 use crate::syntax_kind::SyntaxKind;
 use rowan::{TextRange, TextSize};
@@ -141,8 +142,17 @@ impl<'t, 's> Parser<'t, 's> {
         self.options.keyword_active(kind, self.nth_text(n))
     }
 
-    pub(crate) fn at_any(&self, kinds: &[SyntaxKind]) -> bool {
-        kinds.iter().any(|kind| self.at(*kind))
+    /// True when the next token is a keyword or token of `kinds`, as [`Parser::at`]
+    /// means it.
+    pub(crate) fn at_any(&self, kinds: KindSet) -> bool {
+        self.nth_at_any(0, kinds)
+    }
+
+    /// True when the `n`th token ahead is a keyword or token of `kinds`, as
+    /// [`Parser::nth_at`] means it.
+    pub(crate) fn nth_at_any(&self, n: usize, kinds: KindSet) -> bool {
+        self.nth(n)
+            .is_some_and(|kind| kinds.contains(kind) && self.keyword_active(n, kind))
     }
 
     /// True when the `n`th token ahead is the word `word`, ignoring case, as an

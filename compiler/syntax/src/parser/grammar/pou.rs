@@ -20,6 +20,7 @@ use super::sfc;
 use super::statements::{statement_list, ListEnd};
 use super::types::return_type;
 use super::var_blocks::{block_ahead, var_block, Scope};
+use crate::kind_set::KindSet;
 use crate::parser::recovery::{BLOCK_END, MEMBER_START};
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
@@ -72,7 +73,7 @@ pub(super) fn body(p: &mut Parser, chart: bool) {
 /// The variable blocks, body and members of a unit, up to its closer.
 pub(super) fn sections(p: &mut Parser, layout: &Layout) {
     let mut order = Order::default();
-    while !declaration_stops(p, layout.closer, &[]) {
+    while !declaration_stops(p, layout.closer, KindSet::EMPTY) {
         let before = p.position();
         if block_ahead(p) {
             order.enter(p, VARIABLES);

@@ -17,6 +17,7 @@
 use super::tree::significant_tokens;
 use super::LowerCx;
 use crate::interval_text;
+use crate::kind_set::KindSet;
 use crate::syntax_kind::{SyntaxKind as K, SyntaxNode, SyntaxToken};
 use ironplc_dsl::common::{
     BitStringLiteral, BitStringTypeName, Boolean, BooleanLiteral, CharacterStringLiteral,
@@ -113,7 +114,7 @@ const BASED_INTEGERS: &[(K, BasedInteger)] = &[
 
 /// The keyword prefixes of the 64-bit members of the temporal types, and the
 /// vendor abbreviations (`LT#`, `LD#`) that are ordinary words.
-const LONG_KEYWORDS: &[K] = &[K::Ltime, K::Ltod, K::Ldate, K::Ldt];
+const LONG_KEYWORDS: KindSet = KindSet::new(&[K::Ltime, K::Ltod, K::Ldate, K::Ldt]);
 const LONG_WORDS: &[&str] = &["LT", "LD"];
 
 /// The tokens of a typed literal split at its prefix: the prefix word, when
@@ -144,7 +145,7 @@ fn prefixed_type<T: Clone>(prefix: Option<&SyntaxToken>, table: &[(K, T)]) -> Op
 /// one of the 64-bit ones. `None` when there is no prefix.
 fn temporal_width(prefix: Option<&SyntaxToken>) -> Option<TemporalWidth> {
     prefix.map(|token| {
-        let long = LONG_KEYWORDS.contains(&token.kind())
+        let long = LONG_KEYWORDS.contains(token.kind())
             || (token.kind() == K::Ident
                 && LONG_WORDS
                     .iter()

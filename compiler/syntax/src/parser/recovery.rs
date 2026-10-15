@@ -8,11 +8,11 @@
 
 use super::event::CompletedMarker;
 use super::state::Parser;
+use crate::kind_set::KindSet;
 use crate::syntax_kind::SyntaxKind as K;
-use crate::syntax_kind::SyntaxKind;
 
 /// Keywords that open a variable block.
-pub(crate) const VAR_OPENERS: &[SyntaxKind] = &[
+pub(crate) const VAR_OPENERS: KindSet = KindSet::new(&[
     K::Var,
     K::VarInput,
     K::VarOutput,
@@ -25,11 +25,15 @@ pub(crate) const VAR_OPENERS: &[SyntaxKind] = &[
     K::VarStat,
     K::VarInst,
     K::VarGeneric,
-];
+]);
+
+/// The words that qualify a variable block, after its opening keyword.
+pub(crate) const VAR_QUALIFIERS: KindSet =
+    KindSet::new(&[K::Constant, K::Retain, K::NonRetain, K::Persistent]);
 
 /// Keywords that open a declaration at the top of a file, or inside a
 /// namespace.
-pub(crate) const DECLARATION_START: &[SyntaxKind] = &[
+pub(crate) const DECLARATION_START: KindSet = KindSet::new(&[
     K::Program,
     K::Function,
     K::FunctionBlock,
@@ -38,15 +42,15 @@ pub(crate) const DECLARATION_START: &[SyntaxKind] = &[
     K::Interface,
     K::Namespace,
     K::VarGlobal,
-];
+]);
 
 /// Keywords that open a member of a function block, after its body.
-pub(crate) const MEMBER_START: &[SyntaxKind] = &[K::Method, K::Property];
+pub(crate) const MEMBER_START: KindSet = KindSet::new(&[K::Method, K::Property]);
 
 /// The `END_*` keywords that close a declaration. A declaration that is
 /// missing its own closer stops at another declaration's closer and leaves it
 /// for the enclosing declaration, instead of consuming it.
-pub(crate) const DECLARATION_END: &[SyntaxKind] = &[
+pub(crate) const DECLARATION_END: KindSet = KindSet::new(&[
     K::EndProgram,
     K::EndFunction,
     K::EndFunctionBlock,
@@ -62,69 +66,47 @@ pub(crate) const DECLARATION_END: &[SyntaxKind] = &[
     K::EndResource,
     K::EndNamespace,
     K::EndInterface,
-];
+]);
 
 /// Keywords that close or divide a block. A statement list ends at any of
 /// them, and recovery never consumes one on its own: whichever enclosing
 /// construct owns the keyword gets to see it. The keywords that open a
 /// declaration or a variable block are in the set too, so a block left open
 /// before the next declaration ends there instead of swallowing it.
-pub(crate) const BLOCK_END: &[SyntaxKind] = &[
+pub(crate) const BLOCK_END: KindSet = DECLARATION_END
+    .union(DECLARATION_START)
+    .union(MEMBER_START)
+    .union(VAR_OPENERS)
+    .union(STATEMENT_CLOSERS)
+    .union(KindSet::new(&[
+        K::Else,
+        K::Elsif,
+        K::Until,
+        K::Catch,
+        K::Finally,
+        K::EndVar,
+        K::EndStruct,
+        K::EndUnion,
+    ]));
+
+/// The keywords that close a statement that holds a statement list.
+const STATEMENT_CLOSERS: KindSet = KindSet::new(&[
     K::EndIf,
     K::EndCase,
     K::EndFor,
     K::EndWhile,
     K::EndRepeat,
     K::EndTry,
-    K::Else,
-    K::Elsif,
-    K::Until,
-    K::Catch,
-    K::Finally,
-    K::EndProgram,
-    K::EndFunction,
-    K::EndFunctionBlock,
-    K::EndMethod,
-    K::EndProperty,
-    K::EndGet,
-    K::EndSet,
-    K::EndAction,
-    K::EndTransition,
-    K::EndVar,
-    K::EndType,
-    K::EndStruct,
-    K::EndUnion,
-    K::EndConfiguration,
-    K::EndResource,
-    K::EndNamespace,
-    K::EndInterface,
-    K::EndStep,
-    K::Program,
-    K::Function,
-    K::FunctionBlock,
-    K::Type,
-    K::Configuration,
-    K::Interface,
-    K::Namespace,
-    K::Method,
-    K::Property,
-    K::Var,
-    K::VarInput,
-    K::VarOutput,
-    K::VarInOut,
-    K::VarTemp,
-    K::VarExternal,
-    K::VarAccess,
-    K::VarConfig,
-    K::VarGlobal,
-    K::VarStat,
-    K::VarInst,
-    K::VarGeneric,
-];
+]);
+
+/// The keywords that open a statement that holds a statement list, and so are
+/// closed by one of [`STATEMENT_CLOSERS`].
+const STATEMENT_OPENERS: KindSet =
+    KindSet::new(&[K::If, K::Case, K::For, K::While, K::Repeat, K::Try]);
 
 /// Keywords that begin a statement; recovery inside a malformed statement
 /// stops before one so the next statement is parsed normally.
-pub(crate) const STATEMENT_START: &[SyntaxKind] = &[
+pub(crate) const STATEMENT_START: KindSet = KindSet::new(&[
     K::If,
     K::Case,
     K::For,
@@ -138,12 +120,12 @@ pub(crate) const STATEMENT_START: &[SyntaxKind] = &[
     K::Jmp,
     K::Calc,
     K::Wait,
-];
+]);
 
 /// Tokens at which a malformed expression stops, when not nested inside
 /// brackets the expression itself opened: the separators and block words an
 /// enclosing construct is waiting for.
-const EXPRESSION_STOP: &[SyntaxKind] = &[
+const EXPRESSION_STOP: KindSet = KindSet::new(&[
     K::Comma,
     K::RightParen,
     K::RightBracket,
@@ -155,7 +137,7 @@ const EXPRESSION_STOP: &[SyntaxKind] = &[
     K::Colon,
     K::Assignment,
     K::RightArrow,
-];
+]);
 
 impl Parser<'_, '_> {
     /// Records `message`, then wraps the next token (if any) in an error
@@ -197,7 +179,7 @@ impl Parser<'_, '_> {
             if self.at(K::Semicolon) || self.at_any(BLOCK_END) {
                 break;
             }
-            if nesting == 0 && EXPRESSION_STOP.contains(&kind) {
+            if nesting == 0 && EXPRESSION_STOP.contains(kind) {
                 break;
             }
             // `name :=` after skipped input is the next assignment, not more
@@ -266,16 +248,9 @@ impl Parser<'_, '_> {
                 consumed = true;
                 break;
             }
-            if self.at_any(&[K::If, K::Case, K::For, K::While, K::Repeat, K::Try]) {
+            if self.at_any(STATEMENT_OPENERS) {
                 nesting += 1;
-            } else if self.at_any(&[
-                K::EndIf,
-                K::EndCase,
-                K::EndFor,
-                K::EndWhile,
-                K::EndRepeat,
-                K::EndTry,
-            ]) {
+            } else if self.at_any(STATEMENT_CLOSERS) {
                 nesting = nesting.saturating_sub(1);
             }
             self.bump();

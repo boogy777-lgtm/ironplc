@@ -8,6 +8,7 @@
 use super::common::{close, declared_name, item_terminator, skip_stray, NameClass};
 use super::expressions::{close_group, expression, name_ref};
 use super::pou::body;
+use crate::kind_set::KindSet;
 use crate::parser::recovery::BLOCK_END;
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
@@ -135,7 +136,12 @@ fn transition(p: &mut Parser) {
         }
     }
     if !p.at(K::EndTransition) && !p.at_eof() && !p.at_any(BLOCK_END) {
-        skip_stray(p, K::EndTransition, &[], "expected `END_TRANSITION`");
+        skip_stray(
+            p,
+            K::EndTransition,
+            KindSet::EMPTY,
+            "expected `END_TRANSITION`",
+        );
     }
     close(p, K::EndTransition, "`END_TRANSITION`");
     p.complete(node, K::TransitionDecl);

@@ -104,9 +104,9 @@ fn disposition_when_part_of_a_declaration_then_structural_and_when_a_member_then
 
 #[test]
 fn header_when_each_kind_then_it_is_not_a_section() {
-    for kind in HEADER {
+    for kind in HEADER.iter() {
         assert!(
-            !SECTIONS.iter().any(|(section, _)| section == kind),
+            !SECTIONS.iter().any(|(section, _)| *section == kind),
             "{kind:?}"
         );
     }

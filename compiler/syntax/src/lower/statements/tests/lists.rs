@@ -84,7 +84,7 @@ fn lower_statement_when_every_statement_kind_then_it_has_a_row_or_writes_nothing
             continue;
         }
         let listed = *kind == SyntaxKind::StatementList
-            || WRITES_NOTHING.contains(kind)
+            || WRITES_NOTHING.contains(*kind)
             || STATEMENTS.iter().any(|(row, _, _)| row == kind);
         assert!(listed, "{kind:?} has no statement rule");
     }

@@ -14,6 +14,7 @@
 
 use super::tree::{left_spine, significant_tokens};
 use super::LowerCx;
+use crate::kind_set::KindSet;
 use crate::syntax_kind::{SyntaxKind, SyntaxNode, SyntaxToken};
 use ironplc_dsl::common::{ElementaryTypeName, GenericTypeName, TypeName};
 use ironplc_dsl::core::Id;
@@ -26,11 +27,11 @@ pub fn lower_id(cx: &LowerCx, token: &SyntaxToken) -> Id {
 
 /// The kinds of node that hold one name token: the name a declaration
 /// introduces, and a use of a name.
-const NAME_KINDS: &[SyntaxKind] = &[SyntaxKind::Name, SyntaxKind::NameRef];
+const NAME_KINDS: KindSet = KindSet::new(&[SyntaxKind::Name, SyntaxKind::NameRef]);
 
 /// Lowers a name: a node of one of the [`NAME_KINDS`] holding one token.
 pub fn lower_name(cx: &LowerCx, node: &SyntaxNode) -> Result<Id, Diagnostic> {
-    if !NAME_KINDS.contains(&node.kind()) {
+    if !NAME_KINDS.contains(node.kind()) {
         return Err(cx.unsupported(node));
     }
     match significant_tokens(node).first() {
