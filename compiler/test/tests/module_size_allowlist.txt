@@ -7,6 +7,5 @@
 # most 1000 lines.
 analyzer/src/intermediates/stdlib_function.rs 1337
 analyzer/src/rule_function_call_type_check.rs 1860
-dsl/src/common.rs 3622
 parser/src/parser.rs 2731
 vm/src/vm.rs 3409
