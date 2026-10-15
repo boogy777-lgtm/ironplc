@@ -22,6 +22,7 @@
 mod tests;
 
 use super::expressions::lower_expr;
+use ironplc_problems::text;
 
 use super::names::{lower_name, lower_path, lower_type_ref};
 use super::pou::{declared_name, lower_sections};
@@ -94,14 +95,17 @@ fn read<T>(
     let source = source_of(node);
     match rows.iter().find(|(class, _)| *class == source) {
         Some((_, build)) => build(cx, node),
-        None => Err(cx.syntax_error(node.text_range(), format!("expected {expected}"))),
+        None => Err(cx.syntax_error(
+            node.text_range(),
+            text::syntax_error_expected_what(expected),
+        )),
     }
 }
 
 /// The constant a node writes: a literal, with its sign when it has one.
 fn constant(cx: &LowerCx, node: &SyntaxNode) -> Result<ConstantKind, Diagnostic> {
     literal_value_of(&lower_expr(cx, node)?)
-        .ok_or_else(|| cx.syntax_error(node.text_range(), "expected a constant"))
+        .ok_or_else(|| cx.syntax_error(node.text_range(), text::syntax_error_expected_a_constant()))
 }
 
 /// `[resource .] variable [. member]`: the global variable a path names. The
@@ -119,7 +123,10 @@ fn global_reference(cx: &LowerCx, node: &SyntaxNode) -> Result<GlobalVarReferenc
         (Some(resource), Some(variable), Some(member), None) => {
             Ok(reference(Some(resource), variable, Some(member)))
         }
-        _ => Err(cx.syntax_error(node.text_range(), "expected a global variable")),
+        _ => Err(cx.syntax_error(
+            node.text_range(),
+            text::syntax_error_expected_a_global_variable(),
+        )),
     }
 }
 
@@ -199,7 +206,7 @@ const TASK_PROPERTIES: &[(&str, Property)] = &[
                 into.interval = Some(duration);
                 Ok(())
             }
-            _ => Err(cx.syntax_error(value.text_range(), "expected a duration")),
+            _ => Err(cx.syntax_error(value.text_range(), text::syntax_error_expected_a_duration())),
         }
     }),
     ("PRIORITY", |cx, value, into| {

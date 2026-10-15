@@ -40,6 +40,7 @@ use ironplc_dsl::configuration::{Direction, FunctionBlockInit, LocatedVarInit};
 use ironplc_dsl::construct::edge_input;
 use ironplc_dsl::core::Id;
 use ironplc_dsl::diagnostic::Diagnostic;
+use ironplc_problems::text;
 use rowan::TextRange;
 
 /// The initialisation of one instance in a configuration: a function block
@@ -251,7 +252,10 @@ fn instance_path(cx: &LowerCx, node: &SyntaxNode) -> Result<(Id, Id, Vec<Id>), D
     let mut names = path.into_iter();
     match (names.next(), names.next()) {
         (Some(resource), Some(program)) => Ok((resource, program, names.collect())),
-        _ => Err(cx.syntax_error(node.text_range(), format!("expected {EXPECTED_PATH}"))),
+        _ => Err(cx.syntax_error(
+            node.text_range(),
+            text::syntax_error_expected_what(EXPECTED_PATH),
+        )),
     }
 }
 

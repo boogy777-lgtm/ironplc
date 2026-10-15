@@ -45,6 +45,7 @@ use ironplc_dsl::common::{
 };
 use ironplc_dsl::construct::structure_alias;
 use ironplc_dsl::diagnostic::Diagnostic;
+use ironplc_problems::text;
 
 /// The keywords of the string types, and the width of the characters of each.
 const STRING_WIDTHS: &[(K, StringType)] = &[
@@ -82,7 +83,7 @@ fn elementary(cx: &LowerCx, node: &SyntaxNode) -> Result<ElementaryTypeName, Dia
     ElementaryTypeName::try_from(&name.name).map_err(|()| {
         cx.syntax_error(
             node.text_range(),
-            format!("'{}' is not an elementary type", name.name),
+            text::syntax_error_name_is_not_an_elementary_type(&name.name),
         )
     })
 }
@@ -96,7 +97,10 @@ fn lower_type_name(cx: &LowerCx, node: &SyntaxNode) -> Result<TypeName, Diagnost
             .first()
             .map(|keyword| lower_type_token(cx, keyword))
             .ok_or_else(|| cx.missing(node, "a type keyword")),
-        _ => Err(cx.syntax_error(node.text_range(), "this type is not allowed here")),
+        _ => Err(cx.syntax_error(
+            node.text_range(),
+            text::syntax_error_this_type_is_not_allowed_here(),
+        )),
     }
 }
 
@@ -140,7 +144,7 @@ fn lower_element(cx: &LowerCx, node: &SyntaxNode) -> Result<ArrayElementType, Di
         }
         _ => Err(cx.syntax_error(
             node.text_range(),
-            "this type is not allowed as the element of an array",
+            text::syntax_error_this_type_is_not_allowed_as_the_element_of_an_array(),
         )),
     }
 }

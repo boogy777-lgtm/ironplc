@@ -14,6 +14,7 @@ use ironplc_dsl::common::{
     ConstantKind, EnumeratedValue, IntegerRef, SignedInteger, SignedIntegerRef, Subrange, TypeName,
 };
 use ironplc_dsl::diagnostic::Diagnostic;
+use ironplc_problems::text;
 
 /// The integer a number node spells, with its sign: the node's own range is
 /// where the integer is positioned, so a sign that touches the digits is
@@ -32,7 +33,7 @@ pub fn lower_priority(cx: &LowerCx, node: &SyntaxNode) -> Result<u32, Diagnostic
     u32::try_from(number.value.value).map_err(|_| {
         cx.syntax_error(
             node.text_range(),
-            "a priority is a whole number that fits in 32 bits",
+            text::syntax_error_a_priority_is_a_whole_number_that_fits_in_32_bits(),
         )
     })
 }

@@ -3,6 +3,7 @@ P0002,syntax_error_a_base_type_is_part_of_a_type_declaration,a base type is part
 P0002,syntax_error_a_configuration_needs_a_resource,a configuration needs a resource
 P0002,syntax_error_a_located_variable_has_one_name,a located variable has one name
 P0002,syntax_error_a_path_starts_with_a_name,a path starts with a name
+P0002,syntax_error_a_priority_is_a_whole_number_that_fits_in_32_bits,a priority is a whole number that fits in 32 bits
 P0002,syntax_error_a_reference_starts_as_null_or_ref_variable,a reference starts as `NULL` or `REF(variable)`
 P0002,syntax_error_a_resource_needs_a_program,a resource needs a program
 P0002,syntax_error_a_sign_must_touch_the_number_after_it,a sign must touch the number after it
@@ -20,9 +21,12 @@ P0002,syntax_error_expected_a_case_selector,expected a case selector
 P0002,syntax_error_expected_a_constant,expected a constant
 P0002,syntax_error_expected_a_declaration,expected a declaration
 P0002,syntax_error_expected_a_direct_address,expected a direct address
+P0002,syntax_error_expected_a_duration,expected a duration
+P0002,syntax_error_expected_a_duration_or_the_name_of_a_variable,expected a duration or the name of a variable
 P0002,syntax_error_expected_a_duration_unit,expected a {units}
 P0002,syntax_error_expected_a_duration_value,expected a duration value
 P0002,syntax_error_expected_a_function_block_call,expected a function block call
+P0002,syntax_error_expected_a_global_variable,expected a global variable
 P0002,syntax_error_expected_a_label_name,expected a label name
 P0002,syntax_error_expected_a_literal,expected a literal
 P0002,syntax_error_expected_a_member,expected a member
@@ -59,6 +63,7 @@ P0002,syntax_error_expected_the_loop_variable,expected the loop variable
 P0002,syntax_error_expected_the_lower_bound_of_a_range,expected the lower bound of a range
 P0002,syntax_error_expected_the_name_of_a_step,expected the name of a step
 P0002,syntax_error_expected_the_name_of_a_task,expected the name of a task
+P0002,syntax_error_expected_the_name_of_a_variable_not_an_address,"expected the name of a variable, not an address"
 P0002,syntax_error_expected_the_name_of_an_action,expected the name of an action
 P0002,syntax_error_expected_the_path_of_a_variable,expected the path of a variable
 P0002,syntax_error_expected_the_path_resource_program_variable,expected the path `resource.program.variable`
@@ -67,22 +72,29 @@ P0002,syntax_error_expected_the_type_of_the_resource,expected the type of the re
 P0002,syntax_error_expected_the_upper_bound_of_a_range,expected the upper bound of a range
 P0002,syntax_error_expected_the_upper_bound_of_the_range,expected the upper bound of the range
 P0002,syntax_error_expected_what,expected {what}
+P0002,syntax_error_form_is_not_allowed_here,{form} is not allowed here
 P0002,syntax_error_in_literal,{message}: '{literal}'
 P0002,syntax_error_incomplete_direct_address,incomplete direct address
+P0002,syntax_error_literal_is_not_valid,the literal '{literal}' is not valid: {why}
+P0002,syntax_error_name_is_not_an_elementary_type,'{name}' is not an elementary type
 P0002,syntax_error_no_whitespace_is_allowed_inside_a_literal,no whitespace is allowed inside a literal
 P0002,syntax_error_only_the_last_duration_part_may_have_a_fraction,only the last duration part may have a fraction
 P0002,syntax_error_part_comes_too_late,{part} comes too late here
 P0002,syntax_error_part_may_appear_only_once,{part} may appear only once
 P0002,syntax_error_pragmas_are_not_enabled_in_this_dialect,pragmas are not enabled in this dialect
 P0002,syntax_error_property_takes,`{word}` takes {expected}
+P0002,syntax_error_text_is_not_a_direct_address,'{text}' is not a direct address: {why}
 P0002,syntax_error_the_day_is_out_of_range_for_the_month,the day is out of range for the month
 P0002,syntax_error_the_duration_is_outside_the_range_a_duration_can_represent,the duration is outside the range a duration can represent
+P0002,syntax_error_the_index_is_not_valid,the index '{digits}' is not valid: {why}
 P0002,syntax_error_the_month_is_out_of_range,the month is out of range
 P0002,syntax_error_the_year_is_out_of_range,the year is out of range
 P0002,syntax_error_this_keyword_does_not_belong_here,this keyword does not belong here
 P0002,syntax_error_this_kind_of_type_is_not_allowed_here,this kind of type is not allowed here
 P0002,syntax_error_this_kind_of_variable_block_is_not_allowed_in,this kind of variable block is not allowed in {scope}
 P0002,syntax_error_this_qualifier_is_not_allowed_on_this_variable_block,this qualifier is not allowed on this variable block
+P0002,syntax_error_this_type_is_not_allowed_as_the_element_of_an_array,this type is not allowed as the element of an array
+P0002,syntax_error_this_type_is_not_allowed_here,this type is not allowed here
 P0002,syntax_error_this_variable_block_declares_one_variable_at_a_time,this variable block declares one variable at a time
 P0002,syntax_error_unexpected_end_of_input,unexpected end of input
 P0002,syntax_error_unexpected_input,unexpected input
@@ -120,6 +132,7 @@ P0019,max_nesting_depth_exceeded_over_limit,Maximum nesting depth of {depth} exc
 P0023,pragma_if_unmatched_found,Unmatched {{IF}} pragma
 P0024,pragma_value_expected_found,Expected a pragma condition such as `defined(name)`
 P0027,jump_destination_invalid,No label '{label}' in this body
+P0043,attribute_not_attached,The attribute '{name}' is not followed by a declaration it can be attached to
 P2026,constant_overflow_bit_string_literal,Bit string literal
 P2026,constant_overflow_case_label,CASE label
 P2026,constant_overflow_integer_literal,Integer literal
@@ -127,6 +140,7 @@ P2027,array_index_out_of_bounds,Array index out of bounds
 P4007,variable_undefined,Variable reference
 P4020,no_program_declaration,Source does not contain a PROGRAM declaration
 P4021,exit_outside_loop,"EXIT must be inside a FOR, WHILE, or REPEAT loop"
+P4022,initializer_type_mismatch,{initial} is not an initial value of {form}
 P4033,partial_access_syntax_disabled,partial-access selector
 P4033,partial_access_syntax_disabled_found,partial-access syntax is not enabled in this dialect
 P4034,string_encoding_mismatch,String operand

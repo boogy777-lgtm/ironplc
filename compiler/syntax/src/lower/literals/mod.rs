@@ -33,6 +33,7 @@ use ironplc_dsl::time::{
     DateAndTimeLiteral, DateLiteral, DurationLiteral, DurationOutOfRange, TemporalWidth,
     TimeOfDayLiteral,
 };
+use ironplc_problems::text;
 use time::{PrimitiveDateTime, Time};
 
 #[cfg(test)]
@@ -184,7 +185,7 @@ fn shape(cx: &LowerCx, node: &SyntaxNode) -> Diagnostic {
 fn out_of_range(cx: &LowerCx, node: &SyntaxNode, why: impl std::fmt::Display) -> Diagnostic {
     cx.syntax_error(
         node.text_range(),
-        format!("the literal '{}' is not valid: {why}", node.text()),
+        text::syntax_error_literal_is_not_valid(node.text(), why),
     )
 }
 

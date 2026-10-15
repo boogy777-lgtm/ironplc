@@ -54,7 +54,7 @@ use ironplc_dsl::common::{Library, LibraryElementKind};
 use ironplc_dsl::core::{FileId, SourceSpan};
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
 use ironplc_dsl::textual::StmtKind;
-use ironplc_problems::Problem;
+use ironplc_problems::Text;
 use rowan::TextRange;
 
 /// The areas of the language that own lowering rules. A node lowered by a
@@ -329,8 +329,8 @@ impl LowerCx {
 
     /// A syntax error (P0002) over `range`: the text parsed but does not
     /// denote a value, such as a number too large for any integer type.
-    pub fn syntax_error(&self, range: TextRange, message: impl Into<String>) -> Diagnostic {
-        Diagnostic::problem(Problem::SyntaxError, Label::span(self.span(range), message))
+    pub fn syntax_error(&self, range: TextRange, text: Text) -> Diagnostic {
+        Diagnostic::text(self.span(range), text)
     }
 
     /// An internal error (P9998) over `range`: the tree is not shaped as the
@@ -471,6 +471,7 @@ pub fn lower_statements(parse: &Parse, file_id: &FileId) -> Result<Vec<StmtKind>
 mod tests {
     use super::*;
     use crate::{parse_expression, parse_source_file, parse_statements, ParseOptions};
+    use ironplc_problems::{text, Problem};
 
     fn options() -> ParseOptions {
         ParseOptions::default()
@@ -672,7 +673,10 @@ mod tests {
     fn syntax_error_when_range_then_p0002_over_the_range_in_the_file() {
         let file = FileId::from_string("a.st");
         let cx = LowerCx::new(file.clone());
-        let diagnostic = cx.syntax_error(TextRange::new(1.into(), 4.into()), "too large");
+        let diagnostic = cx.syntax_error(
+            TextRange::new(1.into(), 4.into()),
+            text::syntax_error_a_priority_is_a_whole_number_that_fits_in_32_bits(),
+        );
         assert_eq!(diagnostic.code, Problem::SyntaxError.code());
         assert_eq!(diagnostic.primary.file_id, file);
         assert_eq!(

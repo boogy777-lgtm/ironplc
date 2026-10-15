@@ -19,6 +19,7 @@ use crate::syntax_kind::{SyntaxKind, SyntaxNode, SyntaxToken};
 use ironplc_dsl::common::{ElementaryTypeName, GenericTypeName, TypeName};
 use ironplc_dsl::core::Id;
 use ironplc_dsl::diagnostic::Diagnostic;
+use ironplc_problems::text;
 
 /// The identifier a name token spells.
 pub fn lower_id(cx: &LowerCx, token: &SyntaxToken) -> Id {
@@ -47,7 +48,12 @@ pub fn lower_path(cx: &LowerCx, node: &SyntaxNode, expected: &str) -> Result<Vec
     let (base, links) = left_spine(node, |kind| kind == SyntaxKind::FieldExpr);
     let base = base
         .filter(|base| base.kind() == SyntaxKind::NameRef)
-        .ok_or_else(|| cx.syntax_error(node.text_range(), format!("expected {expected}")))?;
+        .ok_or_else(|| {
+            cx.syntax_error(
+                node.text_range(),
+                text::syntax_error_expected_what(expected),
+            )
+        })?;
     let mut path = vec![lower_name(cx, &base)?];
     for link in &links {
         let selected = significant_tokens(link)

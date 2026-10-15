@@ -35,6 +35,7 @@ use ironplc_dsl::sfc::{
     Action, ActionAssociation, ActionQualifier, ActionTimeKind, ElementKind, Network, Step,
     Transition,
 };
+use ironplc_problems::text;
 
 /// What a part of a chart is to the network it stands in.
 enum Part {
@@ -132,7 +133,7 @@ fn lower_time(cx: &LowerCx, node: &SyntaxNode) -> Result<ActionTimeKind, Diagnos
         },
         _ => Err(cx.syntax_error(
             node.text_range(),
-            "expected a duration or the name of a variable",
+            text::syntax_error_expected_a_duration_or_the_name_of_a_variable(),
         )),
     }
 }

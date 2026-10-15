@@ -34,6 +34,7 @@ use ironplc_dsl::textual::{
     PartialAccessVariable, SelfRefKind, SelfRefVariable, StructuredVariable, SymbolicVariableKind,
     Variable,
 };
+use ironplc_problems::text;
 use rowan::{TextRange, TextSize};
 
 #[cfg(test)]
@@ -96,7 +97,7 @@ fn index_number(
     Integer::new(digits, span).map_err(|why| {
         cx.syntax_error(
             node.text_range(),
-            format!("the index '{digits}' is not valid: {why}"),
+            text::syntax_error_the_index_is_not_valid(digits, why),
         )
     })
 }
@@ -225,7 +226,7 @@ pub fn lower_address(cx: &LowerCx, node: &SyntaxNode) -> Result<AddressAssignmen
         .map_err(|why| {
             cx.syntax_error(
                 node.text_range(),
-                format!("'{}' is not a direct address: {why}", token.text()),
+                text::syntax_error_text_is_not_a_direct_address(token.text(), why),
             )
         })
 }
@@ -245,7 +246,7 @@ pub fn lower_symbolic(cx: &LowerCx, node: &SyntaxNode) -> Result<SymbolicVariabl
         K::DirectAddressExpr => {
             return Err(cx.syntax_error(
                 base.text_range(),
-                "expected the name of a variable, not an address",
+                text::syntax_error_expected_the_name_of_a_variable_not_an_address(),
             ))
         }
         _ => return Err(cx.unsupported(&base)),
