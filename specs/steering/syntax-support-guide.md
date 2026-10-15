@@ -204,17 +204,19 @@ unless a flag is set, because it cannot be confused with an identifier (e.g.,
 
 **How it works**: Each gated form is one row of `GATES` in
 `syntax/src/parser/gates.rs`: the token kinds it can start at, a function that
-finds its ranges at a site, the flag that enables it, the `ErrorKind` (which
-decides the problem code) and the message. The error is reported with the other
-errors of the parse, and `STAGES` in `syntax/src/ranking.rs` says which stage of
-checking the kind belongs to, which decides the one diagnostic a consumer reports.
+finds its ranges at a site, the flag that enables it, and the function of
+`ironplc_problems::text` that makes its text (the row decides the problem code).
+The error is reported with the other errors of the parse, and `STAGES` in
+`syntax/src/ranking.rs` says which stage of checking the problem belongs to, which
+decides the one diagnostic a consumer reports.
 
 **Reference implementation**: the `GATES` row for C-style comments in
 `syntax/src/parser/gates.rs`
 
 **Key points**:
-- A new `ErrorKind` is mapped to its `Problem` in `syntax/src/diagnostic.rs` and
-  to exactly one `Stage` in `syntax/src/ranking.rs`; both are exhaustive
+- The text of a new gate is a row of `problem-texts.csv`; its problem is listed in
+  exactly one `Stage` in `syntax/src/ranking.rs` (a test fails a gate whose
+  problem is in no stage)
 - Problem codes come from the shared `ironplc_problems` crate and need the four
   parts of the problem-code rule (CSV row, `docs/reference/compiler/problems/P####.rst`,
   emitter, test)
@@ -589,11 +591,11 @@ pub fn parse_with_extension(source: &str) -> (Library, SemanticContext) {
 `parse_program` (`parser/src/lib.rs`) calls `frontend::parse_program`, which runs
 on the stack budget (`ironplc_dsl::stack`) these steps in order:
 
-1. **`parse_source_file()`** — the lexer reads the text byte-exactly, the region
+1. **`parse_source_file()`** ï¿½ the lexer reads the text byte-exactly, the region
    pass sets aside the stretches the grammar must not read (OSCAT ranged
    comments, untaken `{IF}` branches), the gates report the forms the dialect
    rejects, and the recursive-descent parser builds the lossless tree
-2. **`lower_library()`** — lowering turns the tree of a file with no error into
+2. **`lower_library()`** ï¿½ lowering turns the tree of a file with no error into
    the `Library`; when the tree has errors the one the ranking chooses
    (`syntax/src/ranking.rs`) is the diagnostic
 
@@ -639,7 +641,7 @@ Review `parser/src/options.rs` â€” does an existing flag cover this? If not, pro
 
 #### Step 3: Add Tokens (if needed)
 
-If the syntax uses a new keyword like `LIMIT`, add it to `keywords` in `syntax_kinds!` (`syntax/src/syntax_kind.rs`), give it a `TokenType` and a row in `parser/src/tokens.rs`, and gate it so that `LIMIT` is an ordinary name when the flag is off — a row in `ParseOptions::keyword_enabled`:
+If the syntax uses a new keyword like `LIMIT`, add it to `keywords` in `syntax_kinds!` (`syntax/src/syntax_kind.rs`), give it a `TokenType` and a row in `parser/src/tokens.rs`, and gate it so that `LIMIT` is an ordinary name when the flag is off ï¿½ a row in `ParseOptions::keyword_enabled`:
 
 ```rust
 K::Limit => self.allow_repeat_limit,
