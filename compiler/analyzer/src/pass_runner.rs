@@ -87,16 +87,16 @@ mod tests {
     use crate::observe::{Kind, Recorder, Unobserved};
     use ironplc_dsl::core::FileId;
     use ironplc_parser::{options::CompilerOptions, parse_program};
-    use ironplc_problems::Problem;
+    use ironplc_problems::text;
 
     fn library_of(text: &str) -> Library {
         parse_program(text, &FileId::default(), &CompilerOptions::default()).unwrap()
     }
 
     fn a_diagnostic() -> Diagnostic {
-        Diagnostic::problem(
-            Problem::NoContent,
-            ironplc_dsl::diagnostic::Label::span(ironplc_dsl::core::SourceSpan::default(), "x"),
+        Diagnostic::text(
+            ironplc_dsl::core::SourceSpan::default(),
+            text::no_content_first_location(),
         )
     }
 

@@ -83,13 +83,12 @@ impl Failure {
 mod tests {
     use super::*;
     use ironplc_dsl::core::SourceSpan;
-    use ironplc_dsl::diagnostic::Label;
-    use ironplc_problems::Problem;
+    use ironplc_problems::text;
 
     fn a_diagnostic() -> Diagnostic {
-        Diagnostic::problem(
-            Problem::ParentTypeNotDeclared,
-            Label::span(SourceSpan::default(), "x"),
+        Diagnostic::text(
+            SourceSpan::default(),
+            text::parent_type_not_declared_type_alias(),
         )
     }
 

@@ -380,7 +380,7 @@ INVALID_SYNTAX"
 
 #[test]
 fn map_diagnostic_when_secondary_labels_then_produces_related_information() {
-    use ironplc_dsl::core::FileId;
+    use ironplc_dsl::core::{FileId, SourceSpan};
     use ironplc_dsl::diagnostic::{
         Diagnostic as DslDiagnostic, Label as DslLabel, Location as DslLocation,
     };
@@ -392,13 +392,9 @@ fn map_diagnostic_when_secondary_labels_then_produces_related_information() {
 
     let file_id = FileId::from_path(&std::path::PathBuf::from(url.path().as_str()));
 
-    let diag = DslDiagnostic::problem(
-        ironplc_problems::Problem::VariableUndefined,
-        DslLabel {
-            location: DslLocation { start: 0, end: 7 },
-            file_id: file_id.clone(),
-            message: "primary label".to_string(),
-        },
+    let diag = DslDiagnostic::text(
+        SourceSpan::range(0, 7).with_file_id(&file_id),
+        ironplc_problems::text::variable_undefined_undefined_variable(),
     )
     .with_secondary(DslLabel {
         location: DslLocation { start: 20, end: 23 },
@@ -416,10 +412,8 @@ fn map_diagnostic_when_secondary_labels_then_produces_related_information() {
 
 #[test]
 fn map_diagnostic_when_no_secondary_labels_then_related_information_is_none() {
-    use ironplc_dsl::core::FileId;
-    use ironplc_dsl::diagnostic::{
-        Diagnostic as DslDiagnostic, Label as DslLabel, Location as DslLocation,
-    };
+    use ironplc_dsl::core::{FileId, SourceSpan};
+    use ironplc_dsl::diagnostic::Diagnostic as DslDiagnostic;
 
     let mut proj = new_empty_project();
     let url = Uri::from_str(FAKE_PATH).unwrap();
@@ -428,13 +422,9 @@ fn map_diagnostic_when_no_secondary_labels_then_related_information_is_none() {
 
     let file_id = FileId::from_path(&std::path::PathBuf::from(url.path().as_str()));
 
-    let diag = DslDiagnostic::problem(
-        ironplc_problems::Problem::SyntaxError,
-        DslLabel {
-            location: DslLocation { start: 0, end: 7 },
-            file_id,
-            message: "some error".to_string(),
-        },
+    let diag = DslDiagnostic::text(
+        SourceSpan::range(0, 7).with_file_id(&file_id),
+        ironplc_problems::text::syntax_error_a_task_needs_a_priority(),
     );
 
     let lsp_diag = super::map_diagnostic(diag, proj.wrapped.as_ref());
@@ -444,10 +434,8 @@ fn map_diagnostic_when_no_secondary_labels_then_related_information_is_none() {
 
 #[test]
 fn map_diagnostic_when_problem_then_url_has_version_only() {
-    use ironplc_dsl::core::FileId;
-    use ironplc_dsl::diagnostic::{
-        Diagnostic as DslDiagnostic, Label as DslLabel, Location as DslLocation,
-    };
+    use ironplc_dsl::core::{FileId, SourceSpan};
+    use ironplc_dsl::diagnostic::Diagnostic as DslDiagnostic;
 
     let mut proj = new_empty_project();
     let url = Uri::from_str(FAKE_PATH).unwrap();
@@ -456,13 +444,9 @@ fn map_diagnostic_when_problem_then_url_has_version_only() {
 
     let file_id = FileId::from_path(&std::path::PathBuf::from(url.path().as_str()));
 
-    let diag = DslDiagnostic::problem(
-        ironplc_problems::Problem::SyntaxError,
-        DslLabel {
-            location: DslLocation { start: 0, end: 7 },
-            file_id,
-            message: "some error".to_string(),
-        },
+    let diag = DslDiagnostic::text(
+        SourceSpan::range(0, 7).with_file_id(&file_id),
+        ironplc_problems::text::syntax_error_a_task_needs_a_priority(),
     );
 
     let lsp_diag = super::map_diagnostic(diag, proj.wrapped.as_ref());
@@ -480,10 +464,8 @@ fn map_diagnostic_when_problem_then_url_has_version_only() {
 // `reference/runtime/`.
 #[test]
 fn map_diagnostic_when_runtime_code_then_url_uses_runtime_section() {
-    use ironplc_dsl::core::FileId;
-    use ironplc_dsl::diagnostic::{
-        Diagnostic as DslDiagnostic, Label as DslLabel, Location as DslLocation,
-    };
+    use ironplc_dsl::core::{FileId, SourceSpan};
+    use ironplc_dsl::diagnostic::Diagnostic as DslDiagnostic;
 
     let mut proj = new_empty_project();
     let url = Uri::from_str(FAKE_PATH).unwrap();
@@ -491,13 +473,9 @@ fn map_diagnostic_when_runtime_code_then_url_uses_runtime_section() {
 
     let file_id = FileId::from_path(&std::path::PathBuf::from(url.path().as_str()));
 
-    let mut diag = DslDiagnostic::problem(
-        ironplc_problems::Problem::SyntaxError,
-        DslLabel {
-            location: DslLocation { start: 0, end: 7 },
-            file_id,
-            message: "some error".to_string(),
-        },
+    let mut diag = DslDiagnostic::text(
+        SourceSpan::range(0, 7).with_file_id(&file_id),
+        ironplc_problems::text::syntax_error_a_task_needs_a_priority(),
     );
     // The VM's trap codes are not in the `Problem` enum, so stand one in
     // directly; `map_diagnostic` only ever reads the code.
@@ -514,10 +492,8 @@ fn map_diagnostic_when_runtime_code_then_url_uses_runtime_section() {
 
 #[test]
 fn map_diagnostic_when_todo_then_url_has_version_file_and_line() {
-    use ironplc_dsl::core::FileId;
-    use ironplc_dsl::diagnostic::{
-        Diagnostic as DslDiagnostic, Label as DslLabel, Location as DslLocation,
-    };
+    use ironplc_dsl::core::{FileId, SourceSpan};
+    use ironplc_dsl::diagnostic::Diagnostic as DslDiagnostic;
 
     let mut proj = new_empty_project();
     let url = Uri::from_str(FAKE_PATH).unwrap();
@@ -526,13 +502,9 @@ fn map_diagnostic_when_todo_then_url_has_version_file_and_line() {
 
     let file_id = FileId::from_path(&std::path::PathBuf::from(url.path().as_str()));
 
-    let diag = DslDiagnostic::problem(
-        ironplc_problems::Problem::SyntaxError,
-        DslLabel {
-            location: DslLocation { start: 0, end: 7 },
-            file_id,
-            message: "some error".to_string(),
-        },
+    let diag = DslDiagnostic::text(
+        SourceSpan::range(0, 7).with_file_id(&file_id),
+        ironplc_problems::text::syntax_error_a_task_needs_a_priority(),
     )
     .with_source("compiler/analyzer/src/rule_example.rs", 42);
 
@@ -843,12 +815,9 @@ impl ironplc_project::Project for BuiltInDiagnosticProject {
     }
 
     fn semantic(&mut self) -> Vec<Diagnostic> {
-        vec![Diagnostic::problem(
-            ironplc_problems::Problem::UnsupportedStdLibType,
-            ironplc_dsl::diagnostic::Label::span(
-                SourceSpan::default().with_file_id(&FileId::builtin()),
-                "a stdlib declaration the user cannot open",
-            ),
+        vec![Diagnostic::text(
+            SourceSpan::default().with_file_id(&FileId::builtin()),
+            ironplc_problems::text::parent_type_not_declared_referenced_type(),
         )]
     }
 

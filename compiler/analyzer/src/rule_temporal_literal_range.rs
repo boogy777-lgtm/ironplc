@@ -66,7 +66,7 @@ use ironplc_dsl::{
     visitor::Visitor,
 };
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::Problem;
+use ironplc_problems::{text, Text};
 use std::convert::Infallible;
 
 use crate::{
@@ -99,6 +99,16 @@ impl DiagnosticVisitor for RuleTemporalLiteralRange {
     }
 }
 
+/// The row for a duration or a time of day and the row for a date or a
+/// date-and-time. Both say "Constant '{value}' is outside the range of type
+/// '{type_name}'", and `ironplc_dsl::time::DurationOutOfRange::diagnostic` uses
+/// the duration row, so that the stage that cannot build the value at all and
+/// the stage that finds it too big for its declared type say the same thing.
+const DURATION_OUT_OF_RANGE: fn(String, String) -> Text =
+    text::duration_literal_out_of_range_constant_is_outside_the_range_of_type;
+const DATE_OUT_OF_RANGE: fn(String, String) -> Text =
+    text::date_literal_out_of_range_constant_is_outside_the_range_of_type;
+
 impl RuleTemporalLiteralRange {
     /// Reports `literal` when its type cannot hold the count it names.
     ///
@@ -110,18 +120,16 @@ impl RuleTemporalLiteralRange {
         stored: StoredCount,
         type_name: ElementaryTypeName,
         value: String,
-        problem: Problem,
+        out_of_range: fn(String, String) -> Text,
         span: &SourceSpan,
     ) {
         if value_range::fits(stored.count, stored.bits, stored.signed) {
             return;
         }
 
-        self.diagnostics.push(Diagnostic::literal_out_of_range(
-            problem,
+        self.diagnostics.push(Diagnostic::text(
             span.clone(),
-            &value,
-            &type_name.to_string(),
+            out_of_range(value, type_name.to_string()),
         ));
     }
 }
@@ -135,7 +143,7 @@ impl Visitor<Infallible> for RuleTemporalLiteralRange {
             stored,
             node.type_name(),
             format!("{}ms", stored.count),
-            Problem::DurationLiteralOutOfRange,
+            DURATION_OUT_OF_RANGE,
             &node.span,
         );
         Ok(())
@@ -146,7 +154,7 @@ impl Visitor<Infallible> for RuleTemporalLiteralRange {
             node.stored_count(),
             node.type_name(),
             node.daytime_text(),
-            Problem::DurationLiteralOutOfRange,
+            DURATION_OUT_OF_RANGE,
             &node.span,
         );
         Ok(())
@@ -158,7 +166,7 @@ impl Visitor<Infallible> for RuleTemporalLiteralRange {
             node.stored_count(),
             node.type_name(),
             format!("{year}-{month:02}-{day:02}"),
-            Problem::DateLiteralOutOfRange,
+            DATE_OUT_OF_RANGE,
             &node.span,
         );
         Ok(())
@@ -170,7 +178,7 @@ impl Visitor<Infallible> for RuleTemporalLiteralRange {
             node.stored_count(),
             node.type_name(),
             format!("{year}-{month:02}-{day:02}-{}", node.daytime_text()),
-            Problem::DateLiteralOutOfRange,
+            DATE_OUT_OF_RANGE,
             &node.span,
         );
         Ok(())

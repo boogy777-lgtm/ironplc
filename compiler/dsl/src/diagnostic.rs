@@ -4,7 +4,8 @@
 //! # Diagnostic Creation Guidelines
 //!
 //! When creating diagnostics:
-//! 1. Use `Problem::SomeCode` from the shared problem system
+//! 1. Make the diagnostic from a row of the message dictionary with
+//!    [`Diagnostic::text`] or [`Diagnostic::text_in_file`]
 //! 2. Primary label points to the main error location
 //! 3. Secondary labels point to different, related locations
 //! 4. Labels describe what's at each location, not how to fix issues
@@ -148,9 +149,14 @@ fn not_implemented_message(caller: &std::panic::Location<'_>) -> String {
 impl Diagnostic {
     /// Creates a diagnostic from the problem code and with the specified label.
     ///
-    /// The label associates the problem to a particular instance in IEC 61131-3 source
-    /// file.
-    pub fn problem(problem: Problem, primary: Label) -> Self {
+    /// This is the shared body of the public constructors and is not public
+    /// itself: a label text that is not a row of the message dictionary
+    /// (`problem-texts.csv`) cannot be paired with a problem from outside this
+    /// module. Use [`Diagnostic::text`] or [`Diagnostic::text_in_file`] for a
+    /// problem of the program, and [`Diagnostic::not_implemented`],
+    /// [`Diagnostic::not_supported`], [`Diagnostic::internal_error_at`] or the
+    /// `todo_with_*` constructors for a gap in the compiler.
+    fn problem(problem: Problem, primary: Label) -> Self {
         Self {
             code: problem.code().to_string(),
             description: problem.message().to_string(),
@@ -167,8 +173,8 @@ impl Diagnostic {
     /// (`ironplc_problems::text`) and the place it is about.
     ///
     /// The text carries its problem, so the code and the label text come from
-    /// one row of `problem-texts.csv` and cannot be paired wrongly. This is
-    /// `Diagnostic::problem(problem, Label::span(span, message))` for that row.
+    /// one row of `problem-texts.csv` and cannot be paired wrongly. The span
+    /// is the place of the primary label.
     pub fn text(span: SourceSpan, text: Text) -> Self {
         let (problem, message) = text.into_parts();
         Self::problem(problem, Label::span(span, message))
@@ -178,35 +184,11 @@ impl Diagnostic {
     /// (`ironplc_problems::text`) that is about a file in its entirety rather
     /// than a particular span of it.
     ///
-    /// This is `Diagnostic::text` for a label made by `Label::file`: it is
-    /// `Diagnostic::problem(problem, Label::file(file_id, message))` for that
-    /// row, with the code and the label text from one row.
+    /// This is `Diagnostic::text` for a label made by `Label::file`, with the
+    /// code and the label text from one row.
     pub fn text_in_file(file_id: impl Into<FileId>, text: Text) -> Self {
         let (problem, message) = text.into_parts();
         Self::problem(problem, Label::file(file_id, message))
-    }
-
-    /// Creates the diagnostic for a literal that names a value its type
-    /// cannot hold, such as `T#30d` as a `TIME`.
-    ///
-    /// This is the one place the wording lives, so that the stage that cannot
-    /// build the value at all and the stage that finds it too big for its
-    /// declared type say the same thing: `value` is the literal as written
-    /// (or as the stage can best render it) and `type_name` the type it was
-    /// held to.
-    pub fn literal_out_of_range(
-        problem: Problem,
-        span: SourceSpan,
-        value: &str,
-        type_name: &str,
-    ) -> Self {
-        Self::problem(
-            problem,
-            Label::span(
-                span,
-                format!("Constant '{value}' is outside the range of type '{type_name}'"),
-            ),
-        )
     }
 
     /// Creates a "todo" diagnostic associated with a file and line in the Rust
@@ -281,8 +263,7 @@ impl Diagnostic {
     /// Creates a P9999 (NotImplemented) diagnostic that automatically records
     /// the compiler `file#Lline` of the call site as its source location.
     ///
-    /// Prefer this over `Diagnostic::problem(Problem::NotImplemented, …)` (which
-    /// no longer compiles): the compiler location is what the telemetry
+    /// Use this for P9999: the compiler location is what the telemetry
     /// dashboards rank to point maintainers at the unimplemented code. Unlike
     /// `todo*()`, the caller supplies the primary label, so a descriptive
     /// message and IEC 61131-3 span are preserved.
@@ -355,9 +336,7 @@ impl Diagnostic {
     /// the compiler `file#Lline` of the call site as its source location, while
     /// letting the caller supply a descriptive primary label.
     ///
-    /// Prefer this over `Diagnostic::problem(Problem::InternalError, …)` (which
-    /// no longer compiles). Use `internal_error()` instead when no custom label
-    /// is needed.
+    /// Use `internal_error()` instead when no custom label is needed.
     ///
     /// The location is captured via `#[track_caller]`, so no `file!()`/`line!()`
     /// need to be passed.
@@ -401,8 +380,7 @@ impl Diagnostic {
     /// # Examples
     /// ```text
     /// // ✅ Correct: Different spans, describes locations
-    /// Diagnostic::problem(Problem::ParentTypeNotDeclared,
-    ///     Label::span(decl_span, "Type declaration"))
+    /// Diagnostic::text(decl_span, text::parent_type_not_declared_type_alias())
     /// .with_secondary(Label::span(base_span, "Base type"))
     ///
     /// // ❌ Wrong: Same span or fix guidance

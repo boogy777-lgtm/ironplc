@@ -62,8 +62,7 @@ whose body is `format!("<template>")` with the placeholders captured by name.
 rustc itself then checks that every placeholder has a parameter and every
 parameter a placeholder. The function returns a `Text`, which holds the `Problem`
 of the row and the rendered message and has no public constructor.
-`Diagnostic::text(span, text)` makes the diagnostic from it, the same as
-`Diagnostic::problem(problem, Label::span(span, message))`, with the code and the
+`Diagnostic::text(span, text)` makes the diagnostic from it, with the code and the
 label text from one row. A secondary label of a migrated code is also a row of
 that code (`Text` converts into the `String` a `Label` takes).
 
@@ -87,29 +86,35 @@ only the Rust build reads.
 - Bad, because a Rust-side `Display` argument is rendered as the callee's
   `Display` and a template cannot choose the form (no format specs); the call
   passes the value in the form to show.
-- Bad, because until every call site is migrated, nothing forces the use of the
-  dictionary (the declared gap, below).
+- Bad, because a secondary label still takes any string (the declared gap,
+  below).
 - Neutral: the sample migration is P4076, P4077 and P4078 in
   `analyzer/src/rule_attribute.rs`. Their rendered texts are unchanged and the
   tests of the rule are unchanged.
 
-### Declared gap
+### Guarantee in force and declared gap
 
-`Diagnostic::problem(Problem, Label)` is still public, so a new call site can
-build its label with `format!`. The steering rule
-(`problem-code-management.md`) says new texts are rows; it is not enforced.
+`Diagnostic::problem(Problem, Label)` is private to the module `ironplc_dsl::diagnostic`, so outside
+it a diagnostic of a problem is made only by `Diagnostic::text` and
+`Diagnostic::text_in_file` (a label text that is a row of the dictionary) or by
+the constructors of the compiler-located problems (`not_implemented`,
+`not_supported`, `internal_error`, `internal_error_at`, `todo_with_*`), which keep
+their own signatures. A primary label text that is not a row does not compile.
 
-The condition that closes the gap: the migration of the last call site makes
-`Diagnostic::problem(Problem, Label)` non-public, which turns the rule into a
-compile error.
+The gap that remains: `Diagnostic::with_secondary(Label)` and the `Label`
+constructors take any `impl Into<String>`, so a secondary label can still be
+written with `format!`. The steering rule (`problem-code-management.md`) says a
+secondary label of a migrated code is a row; it is not enforced. The condition
+that closes it is a secondary-label constructor that takes a `Text`.
 
 ### Confirmation
 
 - `compiler/problems/src/lib.rs`: each generated function returns the `Problem`
   of its row and the message with the arguments in place; the conversions of
   `Text`.
-- `compiler/dsl/src/diagnostic.rs`: `Diagnostic::text` builds the diagnostic that
-  `Diagnostic::problem` builds from the same problem and a `Label::span`.
+- `compiler/dsl/src/diagnostic.rs`: `Diagnostic::problem` is not `pub`, and
+  `Diagnostic::text` builds the diagnostic from the problem and the message of
+  one row; a call to `Diagnostic::problem` outside the module does not compile.
 - `compiler/analyzer/src/rule_attribute.rs`: the tests of the three codes pass
   unchanged, so the rendered texts are the texts written before.
 - `compiler/problems_gen/src/tests.rs`: the validation and the generation of the

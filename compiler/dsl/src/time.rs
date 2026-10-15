@@ -10,7 +10,7 @@ use crate::{
     core::SourceSpan,
     diagnostic::Diagnostic,
 };
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 
 const NANOSECOND_PER_SECOND: i128 = Nanosecond::per(Second) as i128;
 
@@ -26,15 +26,21 @@ const NANOSECOND_PER_SECOND: i128 = Nanosecond::per(Second) as i128;
 pub struct DurationOutOfRange;
 
 impl DurationOutOfRange {
-    /// The diagnostic for the literal `text` of the type `width` names: the
+    /// The diagnostic for the literal `literal` of the type `width` names: the
     /// one the range rule gives a literal its type cannot hold, because this
     /// is a literal no type can hold.
-    pub fn diagnostic(self, span: SourceSpan, text: &str, width: TemporalWidth) -> Diagnostic {
-        Diagnostic::literal_out_of_range(
-            Problem::DurationLiteralOutOfRange,
+    ///
+    /// The row is the one the range rule uses for a duration that is built but
+    /// too big for its type, so that the stage that cannot build the value at
+    /// all and the stage that finds it too big for its declared type say the
+    /// same thing.
+    pub fn diagnostic(self, span: SourceSpan, literal: &str, width: TemporalWidth) -> Diagnostic {
+        Diagnostic::text(
             span,
-            text,
-            &duration_type_name(width).to_string(),
+            text::duration_literal_out_of_range_constant_is_outside_the_range_of_type(
+                literal,
+                duration_type_name(width),
+            ),
         )
     }
 }
@@ -562,6 +568,7 @@ impl fmt::Display for DateAndTimeLiteral {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ironplc_problems::Problem;
     use time::{Date, Month, PrimitiveDateTime, Time};
 
     fn fixed(text: &str) -> FixedPoint {
