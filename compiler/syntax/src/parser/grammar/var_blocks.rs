@@ -105,7 +105,7 @@ pub(super) const RETENTION: KindSet = KindSet::new(&[K::Retain, K::NonRetain]);
 const CONSTANT: KindSet = KindSet::new(&[K::Constant]);
 const PERSISTENT: KindSet = KindSet::new(&[K::Persistent]);
 /// What a block may be qualified with, where it takes every qualifier.
-const STORAGE: KindSet = CONSTANT.union(RETENTION).union(PERSISTENT);
+const STORAGE: KindSet = VAR_QUALIFIERS;
 /// `VAR_GLOBAL` has no `NON_RETAIN`.
 const GLOBAL_STORAGE: KindSet = CONSTANT.union(KindSet::new(&[K::Retain])).union(PERSISTENT);
 const NONE: KindSet = KindSet::EMPTY;
@@ -412,14 +412,4 @@ fn instance_initialization(p: &mut Parser) {
     }
     p.complete(node, K::InstanceInit);
     item_terminator(p);
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn storage_when_a_block_takes_every_qualifier_then_it_is_the_set_of_qualifier_words() {
-        assert_eq!(STORAGE, VAR_QUALIFIERS);
-    }
 }
