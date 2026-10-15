@@ -1,62 +1,59 @@
 //! Renders expressions, calls and call arguments.
 
-use super::LibraryRenderer;
+use super::{LibraryRenderer, Render};
 use ironplc_dsl::{diagnostic::Diagnostic, visitor::Visitor};
 use paste::paste;
 
-impl LibraryRenderer {
-    // 3.2.3
-    pub(super) fn render_fb_call(&mut self, node: &dsl::textual::FbCall) -> Result<(), Diagnostic> {
-        self.visit_variable(&node.callee)?;
+// 3.2.3
+impl Render for dsl::textual::FbCall {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.visit_variable(&self.callee)?;
 
-        self.write_ws("(");
-        visit_comma_separated!(self, node.params.iter(), ParamAssignmentKind);
-        self.write_ws(")");
-        self.write_ws(";");
-        self.newline();
-
-        Ok(())
-    }
-
-    // OOP extension: `instance.MethodName(args)`, `THIS^.MethodName(args)`
-    // (ADR-0041 Phase 1).
-    pub(super) fn render_method_call(
-        &mut self,
-        node: &dsl::textual::MethodCall,
-    ) -> Result<(), Diagnostic> {
-        self.visit_method_receiver(&node.receiver)?;
-        self.write(".");
-        self.visit_id(&node.method)?;
-
-        self.write_ws("(");
-        visit_comma_separated!(self, node.params.iter(), ParamAssignmentKind);
-        self.write_ws(")");
+        r.write_ws("(");
+        visit_comma_separated!(r, self.params.iter(), ParamAssignmentKind);
+        r.write_ws(")");
+        r.write_ws(";");
+        r.newline();
 
         Ok(())
     }
+}
 
-    pub(super) fn render_compare_expr(
-        &mut self,
-        node: &dsl::textual::CompareExpr,
-    ) -> Result<(), Diagnostic> {
-        self.write_ws("(");
-        self.visit_expr(&node.left)?;
+// OOP extension: `instance.MethodName(args)`, `THIS^.MethodName(args)`
+// (ADR-0041 Phase 1).
+impl Render for dsl::textual::MethodCall {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.visit_method_receiver(&self.receiver)?;
+        r.write(".");
+        r.visit_id(&self.method)?;
 
-        self.write_ws(node.op.as_str());
+        r.write_ws("(");
+        visit_comma_separated!(r, self.params.iter(), ParamAssignmentKind);
+        r.write_ws(")");
 
-        self.visit_expr(&node.right)?;
-        self.write_ws(")");
         Ok(())
     }
+}
 
-    pub(super) fn render_binary_expr(
-        &mut self,
-        node: &dsl::textual::BinaryExpr,
-    ) -> Result<(), Diagnostic> {
-        self.write_ws("(");
-        self.visit_expr(&node.left)?;
+impl Render for dsl::textual::CompareExpr {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.write_ws("(");
+        r.visit_expr(&self.left)?;
 
-        let op = match node.op {
+        r.write_ws(self.op.as_str());
+
+        r.visit_expr(&self.right)?;
+        r.write_ws(")");
+        Ok(())
+    }
+}
+
+impl Render for dsl::textual::BinaryExpr {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.write_ws("(");
+        r.visit_expr(&self.left)?;
+
+        let op = match self.op {
             dsl::textual::Operator::Add => "+",
             dsl::textual::Operator::Sub => "-",
             dsl::textual::Operator::Mul => "*",
@@ -64,40 +61,39 @@ impl LibraryRenderer {
             dsl::textual::Operator::Mod => "MOD",
             dsl::textual::Operator::Pow => "**",
         };
-        self.write_ws(op);
+        r.write_ws(op);
 
-        self.visit_expr(&node.right)?;
-        self.write_ws(")");
+        r.visit_expr(&self.right)?;
+        r.write_ws(")");
 
         Ok(())
     }
+}
 
-    pub(super) fn render_expr_kind(
-        &mut self,
-        node: &dsl::textual::ExprKind,
-    ) -> Result<(), Diagnostic> {
-        match node {
+impl Render for dsl::textual::ExprKind {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        match self {
             dsl::textual::ExprKind::Ref(var) => {
-                self.write_ws("REF(");
-                self.visit_variable(var)?;
-                self.write_ws(")");
+                r.write_ws("REF(");
+                r.visit_variable(var)?;
+                r.write_ws(")");
                 Ok(())
             }
             dsl::textual::ExprKind::Deref(expr) => {
-                self.visit_expr(expr)?;
+                r.visit_expr(expr)?;
                 // No separating space: the tight spelling is the canonical
                 // output, not a parser constraint. #1437 widened
                 // `unary_expression` to take `_` before the caret, so
                 // `myRef ^` re-parses as well -- the `deref_operator` row in
                 // `parser/src/tests/whitespace.rs`.
-                self.write("^");
+                r.write("^");
                 Ok(())
             }
             dsl::textual::ExprKind::Null(_) => {
-                self.write_ws("NULL");
+                r.write_ws("NULL");
                 Ok(())
             }
-            _ => node.recurse_visit(self),
+            _ => self.recurse_visit(r),
         }
     }
 }

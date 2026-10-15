@@ -1,378 +1,388 @@
 //! Renders structured text statements: assignments, selection, iteration, jumps and exception handling.
 
-use super::LibraryRenderer;
+use super::{LibraryRenderer, Render};
 use ironplc_dsl::{diagnostic::Diagnostic, visitor::Visitor};
 use paste::paste;
 
-impl LibraryRenderer {
-    // A method call is rendered by `visit_method_call` in both positions;
-    // only the statement form ends with `;`. `RETURN`, `EXIT` and `CONTINUE` have no
-    // node to visit, so they are written here.
-    pub(super) fn render_stmt_kind(
-        &mut self,
-        node: &dsl::textual::StmtKind,
-    ) -> Result<(), Diagnostic> {
-        match node {
+// A method call is rendered by `visit_method_call` in both positions;
+// only the statement form ends with `;`. `RETURN`, `EXIT` and `CONTINUE` have no
+// node to visit, so they are written here.
+impl Render for dsl::textual::StmtKind {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        match self {
             dsl::textual::StmtKind::MethodCall(call) => {
-                self.visit_method_call(call)?;
-                self.write_ws(";");
-                self.newline();
+                r.visit_method_call(call)?;
+                r.write_ws(";");
+                r.newline();
                 Ok(())
             }
-            dsl::textual::StmtKind::Return => self.write_keyword_statement("RETURN"),
-            dsl::textual::StmtKind::Exit(_) => self.write_keyword_statement("EXIT"),
+            dsl::textual::StmtKind::Return => r.write_keyword_statement("RETURN"),
+            dsl::textual::StmtKind::Exit(_) => r.write_keyword_statement("EXIT"),
             // The marker carries no statement terminator of its own: the
             // reference grammar's `implementationBlock` is the marker
             // followed by the statements, with no `;` in between.
             dsl::textual::StmtKind::BeginImplementation(_) => {
-                self.write_ws("__BEGIN_IMPLEMENTATION");
-                self.newline();
+                r.write_ws("__BEGIN_IMPLEMENTATION");
+                r.newline();
                 Ok(())
             }
-            dsl::textual::StmtKind::Continue(_) => self.write_keyword_statement("CONTINUE"),
-            _ => node.recurse_visit(self),
+            dsl::textual::StmtKind::Continue(_) => r.write_keyword_statement("CONTINUE"),
+            _ => self.recurse_visit(r),
         }
     }
+}
 
-    // 3.3.2.1
-    pub(super) fn render_assignment(
-        &mut self,
-        node: &dsl::textual::Assignment,
-    ) -> Result<(), Diagnostic> {
-        self.visit_variable(&node.target)?;
-        if node.set_bind {
+// 3.3.2.1
+impl Render for dsl::textual::Assignment {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.visit_variable(&self.target)?;
+        if self.set_bind {
             // Reproduce the TwinCAT/CODESYS `S=` set-bind operator.
-            self.write_ws("S=");
-            self.visit_expr(&node.value)?;
-            self.write_ws(";");
-            self.newline();
+            r.write_ws("S=");
+            r.visit_expr(&self.value)?;
+            r.write_ws(";");
+            r.newline();
             return Ok(());
         }
-        if node.reset_bind {
+        if self.reset_bind {
             // Reproduce the TwinCAT/CODESYS `R=` reset-bind operator.
-            self.write_ws("R=");
-            self.visit_expr(&node.value)?;
-            self.write_ws(";");
-            self.newline();
+            r.write_ws("R=");
+            r.visit_expr(&self.value)?;
+            r.write_ws(";");
+            r.newline();
             return Ok(());
         }
-        if node.ref_bind {
+        if self.ref_bind {
             // Reproduce the TwinCAT/CODESYS `REF=` binding. The value is always
             // an `ExprKind::Ref(referent)`; render `target REF= referent`.
-            self.write_ws("REF=");
-            if let dsl::textual::ExprKind::Ref(referent) = &node.value.kind {
-                self.visit_variable(referent)?;
+            r.write_ws("REF=");
+            if let dsl::textual::ExprKind::Ref(referent) = &self.value.kind {
+                r.visit_variable(referent)?;
             } else {
-                self.visit_expr(&node.value)?;
+                r.visit_expr(&self.value)?;
             }
-            self.write_ws(";");
-            self.newline();
+            r.write_ws(";");
+            r.newline();
             return Ok(());
         }
-        if node.deref {
-            self.write("^");
+        if self.deref {
+            r.write("^");
         }
-        self.write_ws(":=");
-        self.visit_expr(&node.value)?;
+        r.write_ws(":=");
+        r.visit_expr(&self.value)?;
 
-        self.write_ws(";");
-        self.newline();
+        r.write_ws(";");
+        r.newline();
         Ok(())
     }
+}
 
-    pub(super) fn render_repeat(&mut self, node: &dsl::textual::Repeat) -> Result<(), Diagnostic> {
-        self.write_ws("REPEAT");
-        self.newline();
+impl Render for dsl::textual::Repeat {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.write_ws("REPEAT");
+        r.newline();
 
-        self.indent();
-        for item in node.body.iter() {
-            self.visit_stmt_kind(item)?;
+        r.indent();
+        for item in self.body.iter() {
+            r.visit_stmt_kind(item)?;
         }
-        self.outdent();
+        r.outdent();
 
-        self.write_ws("UNTIL");
-        self.visit_expr(&node.until)?;
-        self.newline();
+        r.write_ws("UNTIL");
+        r.visit_expr(&self.until)?;
+        r.newline();
 
-        self.write_ws("END_REPEAT");
-        self.write_ws(";");
-        self.newline();
-        self.newline();
+        r.write_ws("END_REPEAT");
+        r.write_ws(";");
+        r.newline();
+        r.newline();
 
         Ok(())
     }
+}
 
-    // CODESYS exception handling. The `__TRY`-family keywords are not in
-    // `StmtKind` themselves, so the statement is written here.
-    pub(super) fn render_try_catch(
-        &mut self,
-        node: &dsl::textual::TryCatch,
-    ) -> Result<(), Diagnostic> {
-        self.write_ws("__TRY");
-        self.newline();
+// CODESYS exception handling. The `__TRY`-family keywords are not in
+// `StmtKind` themselves, so the statement is written here.
+impl Render for dsl::textual::TryCatch {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.write_ws("__TRY");
+        r.newline();
 
-        self.indent();
-        for item in node.body.iter() {
-            self.visit_stmt_kind(item)?;
+        r.indent();
+        for item in self.body.iter() {
+            r.visit_stmt_kind(item)?;
         }
-        self.outdent();
+        r.outdent();
 
-        if let Some(catch) = &node.catch {
-            self.visit_catch_clause(catch)?;
+        if let Some(catch) = &self.catch {
+            r.visit_catch_clause(catch)?;
         }
 
-        if !node.finally_body.is_empty() {
-            self.write_ws("__FINALLY");
-            self.newline();
+        if !self.finally_body.is_empty() {
+            r.write_ws("__FINALLY");
+            r.newline();
 
-            self.indent();
-            for item in node.finally_body.iter() {
-                self.visit_stmt_kind(item)?;
+            r.indent();
+            for item in self.finally_body.iter() {
+                r.visit_stmt_kind(item)?;
             }
-            self.outdent();
+            r.outdent();
         }
 
-        self.write_ws("__ENDTRY");
-        self.write_ws(";");
-        self.newline();
-        self.newline();
+        r.write_ws("__ENDTRY");
+        r.write_ws(";");
+        r.newline();
+        r.newline();
 
         Ok(())
     }
+}
 
-    pub(super) fn render_catch_clause(
-        &mut self,
-        node: &dsl::textual::CatchClause,
-    ) -> Result<(), Diagnostic> {
-        self.write_ws("__CATCH");
-        if let Some(exception) = &node.exception {
-            self.write("(");
-            self.visit_variable(exception)?;
-            self.write(")");
+impl Render for dsl::textual::CatchClause {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.write_ws("__CATCH");
+        if let Some(exception) = &self.exception {
+            r.write("(");
+            r.visit_variable(exception)?;
+            r.write(")");
         }
-        self.newline();
+        r.newline();
 
-        self.indent();
-        for item in node.body.iter() {
-            self.visit_stmt_kind(item)?;
+        r.indent();
+        for item in self.body.iter() {
+            r.visit_stmt_kind(item)?;
         }
-        self.outdent();
+        r.outdent();
 
         Ok(())
     }
+}
 
-    // `JMP` / `label:` / `CALC` / `__WAIT`, the CODESYS jump statements.
-    pub(super) fn render_jump(&mut self, node: &dsl::textual::Jump) -> Result<(), Diagnostic> {
-        self.write_ws("JMP");
-        if let Some(condition) = &node.condition {
-            self.write("(");
-            self.visit_expr(condition)?;
-            self.write(")");
+// `JMP` / `label:` / `CALC` / `__WAIT`, the CODESYS jump statements.
+impl Render for dsl::textual::Jump {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.write_ws("JMP");
+        if let Some(condition) = &self.condition {
+            r.write("(");
+            r.visit_expr(condition)?;
+            r.write(")");
         }
-        self.write_ws(node.label.original().as_str());
-        self.write_ws(";");
-        self.newline();
+        r.write_ws(self.label.original().as_str());
+        r.write_ws(";");
+        r.newline();
 
         Ok(())
     }
+}
 
-    pub(super) fn render_conditional_call(
-        &mut self,
-        node: &dsl::textual::ConditionalCall,
-    ) -> Result<(), Diagnostic> {
-        self.write_ws("CALC");
-        self.write("(");
-        self.visit_expr(&node.condition)?;
-        self.write(",");
-        self.visit_variable(&node.call.callee)?;
-        self.write("(");
-        visit_comma_separated!(self, node.call.params.iter(), ParamAssignmentKind);
-        self.write(")");
-        self.write(")");
-        self.write_ws(";");
-        self.newline();
-
-        Ok(())
-    }
-
-    pub(super) fn render_wait(&mut self, node: &dsl::textual::Wait) -> Result<(), Diagnostic> {
-        self.write_ws("__WAIT");
-        if let Some(condition) = &node.condition {
-            self.write("(");
-            self.visit_expr(condition)?;
-            self.write(")");
-        }
-        self.write_ws(";");
-        self.newline();
+impl Render for dsl::textual::ConditionalCall {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.write_ws("CALC");
+        r.write("(");
+        r.visit_expr(&self.condition)?;
+        r.write(",");
+        r.visit_variable(&self.call.callee)?;
+        r.write("(");
+        visit_comma_separated!(r, self.call.params.iter(), ParamAssignmentKind);
+        r.write(")");
+        r.write(")");
+        r.write_ws(";");
+        r.newline();
 
         Ok(())
     }
+}
 
-    pub(super) fn render_throw(&mut self, node: &dsl::textual::Throw) -> Result<(), Diagnostic> {
-        self.write_ws("__THROW");
-        if let Some(value) = &node.value {
-            self.write("(");
-            self.visit_expr(value)?;
-            self.write(")");
+impl Render for dsl::textual::Wait {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.write_ws("__WAIT");
+        if let Some(condition) = &self.condition {
+            r.write("(");
+            r.visit_expr(condition)?;
+            r.write(")");
         }
-        self.write_ws(";");
-        self.newline();
+        r.write_ws(";");
+        r.newline();
 
         Ok(())
     }
+}
 
-    pub(super) fn render_if(&mut self, node: &dsl::textual::If) -> Result<(), Diagnostic> {
-        self.write_ws("IF");
-        self.visit_expr(&node.expr)?;
-        self.write_ws("THEN");
-        self.newline();
-
-        self.indent();
-        for item in node.body.iter() {
-            self.visit_stmt_kind(item)?;
+impl Render for dsl::textual::Throw {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.write_ws("__THROW");
+        if let Some(value) = &self.value {
+            r.write("(");
+            r.visit_expr(value)?;
+            r.write(")");
         }
-        self.outdent();
+        r.write_ws(";");
+        r.newline();
 
-        for item in node.else_ifs.iter() {
-            self.visit_else_if(item)?;
+        Ok(())
+    }
+}
+
+impl Render for dsl::textual::If {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.write_ws("IF");
+        r.visit_expr(&self.expr)?;
+        r.write_ws("THEN");
+        r.newline();
+
+        r.indent();
+        for item in self.body.iter() {
+            r.visit_stmt_kind(item)?;
+        }
+        r.outdent();
+
+        for item in self.else_ifs.iter() {
+            r.visit_else_if(item)?;
         }
 
-        if !node.else_body.is_empty() {
-            self.write_ws("ELSE");
-            self.newline();
+        if !self.else_body.is_empty() {
+            r.write_ws("ELSE");
+            r.newline();
 
-            self.indent();
-            for item in node.else_body.iter() {
-                self.visit_stmt_kind(item)?;
+            r.indent();
+            for item in self.else_body.iter() {
+                r.visit_stmt_kind(item)?;
             }
-            self.outdent();
+            r.outdent();
         }
 
-        self.write_ws("END_IF");
-        self.write_ws(";");
-        self.newline();
-        self.newline();
+        r.write_ws("END_IF");
+        r.write_ws(";");
+        r.newline();
+        r.newline();
         Ok(())
     }
+}
 
-    pub(super) fn render_else_if(&mut self, node: &dsl::textual::ElseIf) -> Result<(), Diagnostic> {
-        self.write_ws("ELSIF");
-        self.visit_expr(&node.expr)?;
-        self.write_ws("THEN");
-        self.newline();
+impl Render for dsl::textual::ElseIf {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.write_ws("ELSIF");
+        r.visit_expr(&self.expr)?;
+        r.write_ws("THEN");
+        r.newline();
 
-        self.indent();
-        for item in node.body.iter() {
-            self.visit_stmt_kind(item)?;
+        r.indent();
+        for item in self.body.iter() {
+            r.visit_stmt_kind(item)?;
         }
-        self.outdent();
+        r.outdent();
 
         Ok(())
     }
+}
 
-    pub(super) fn render_case(&mut self, node: &dsl::textual::Case) -> Result<(), Diagnostic> {
-        self.write_ws("CASE");
-        self.visit_expr(&node.selector)?;
-        self.write_ws("OF");
-        self.newline();
+impl Render for dsl::textual::Case {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.write_ws("CASE");
+        r.visit_expr(&self.selector)?;
+        r.write_ws("OF");
+        r.newline();
 
-        self.indent();
-        for item in node.statement_groups.iter() {
-            self.visit_case_statement_group(item)?;
+        r.indent();
+        for item in self.statement_groups.iter() {
+            r.visit_case_statement_group(item)?;
         }
 
-        if !node.else_body.is_empty() {
-            self.write_ws("ELSE");
-            self.newline();
-            self.indent();
+        if !self.else_body.is_empty() {
+            r.write_ws("ELSE");
+            r.newline();
+            r.indent();
 
-            for item in node.else_body.iter() {
-                self.visit_stmt_kind(item)?;
+            for item in self.else_body.iter() {
+                r.visit_stmt_kind(item)?;
             }
 
-            self.outdent();
+            r.outdent();
         }
-        self.outdent();
+        r.outdent();
 
-        self.write_ws("END_CASE");
-        self.write_ws(";");
-        self.newline();
-        self.newline();
+        r.write_ws("END_CASE");
+        r.write_ws(";");
+        r.newline();
+        r.newline();
 
         Ok(())
     }
+}
 
-    pub(super) fn render_case_statement_group(
-        &mut self,
-        node: &dsl::textual::CaseStatementGroup,
-    ) -> Result<(), Diagnostic> {
-        for selector in node.selectors.iter() {
-            self.visit_case_selection_kind(selector)?;
-            self.write_ws(":");
-            self.newline();
+impl Render for dsl::textual::CaseStatementGroup {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        for selector in self.selectors.iter() {
+            r.visit_case_selection_kind(selector)?;
+            r.write_ws(":");
+            r.newline();
         }
 
-        self.indent();
+        r.indent();
 
-        if node.statements.is_empty() {
-            self.write_ws("(* empty *)");
-            self.write_ws(";");
-            self.newline();
+        if self.statements.is_empty() {
+            r.write_ws("(* empty *)");
+            r.write_ws(";");
+            r.newline();
         } else {
-            for item in node.statements.iter() {
-                self.visit_stmt_kind(item)?;
+            for item in self.statements.iter() {
+                r.visit_stmt_kind(item)?;
             }
         }
-        self.outdent();
+        r.outdent();
 
         Ok(())
     }
+}
 
-    pub(super) fn render_for(&mut self, node: &dsl::textual::For) -> Result<(), Diagnostic> {
-        self.write_ws("FOR");
-        self.visit_id(&node.control)?;
-        self.write_ws(":=");
-        self.visit_expr(&node.from)?;
-        self.write_ws("TO");
-        self.visit_expr(&node.to)?;
+impl Render for dsl::textual::For {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.write_ws("FOR");
+        r.visit_id(&self.control)?;
+        r.write_ws(":=");
+        r.visit_expr(&self.from)?;
+        r.write_ws("TO");
+        r.visit_expr(&self.to)?;
 
-        if let Some(by) = &node.step {
-            self.write_ws("BY");
-            self.visit_expr(by)?;
+        if let Some(by) = &self.step {
+            r.write_ws("BY");
+            r.visit_expr(by)?;
         }
 
-        self.write_ws("DO");
-        self.newline();
+        r.write_ws("DO");
+        r.newline();
 
-        self.indent();
-        for item in node.body.iter() {
-            self.visit_stmt_kind(item)?;
+        r.indent();
+        for item in self.body.iter() {
+            r.visit_stmt_kind(item)?;
         }
-        self.outdent();
+        r.outdent();
 
-        self.write_ws("END_FOR");
-        self.write_ws(";");
-        self.newline();
-        self.newline();
+        r.write_ws("END_FOR");
+        r.write_ws(";");
+        r.newline();
+        r.newline();
         Ok(())
     }
+}
 
-    pub(super) fn render_while(&mut self, node: &dsl::textual::While) -> Result<(), Diagnostic> {
-        self.write_ws("WHILE");
-        self.visit_expr(&node.condition)?;
-        self.write_ws("DO");
-        self.newline();
+impl Render for dsl::textual::While {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
+        r.write_ws("WHILE");
+        r.visit_expr(&self.condition)?;
+        r.write_ws("DO");
+        r.newline();
 
-        self.indent();
-        for item in node.body.iter() {
-            self.visit_stmt_kind(item)?;
+        r.indent();
+        for item in self.body.iter() {
+            r.visit_stmt_kind(item)?;
         }
-        self.outdent();
+        r.outdent();
 
-        self.write_ws("END_WHILE");
-        self.write_ws(";");
-        self.newline();
-        self.newline();
+        r.write_ws("END_WHILE");
+        r.write_ws(";");
+        r.newline();
+        r.newline();
         Ok(())
     }
 }

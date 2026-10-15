@@ -58,6 +58,120 @@ mod variable_declaration;
 
 use text::character_string_text;
 
+/// How one kind of node is written out. A kind is rendered by exactly one
+/// `impl Render`, which lives in the file of its family. Both directions are
+/// checked by the compiler: a kind listed in [`render_rows`] without an impl
+/// fails at `node.render(self)`, and an impl of a kind without a row fails
+/// because [`Listed`] is a supertrait that only the rows implement.
+trait Render: Listed {
+    fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic>;
+}
+
+/// Marks a kind of node that has a row in [`render_rows`]. Only
+/// [`mark_listed`] implements it, so a `Render` impl needs a row.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` has a `Render` impl but no row in `render_rows!`",
+    label = "add `visit_<kind> => {Self}` to `render_rows!` in renderer.rs"
+)]
+trait Listed {}
+
+/// Defines, for each row `visit_x => T`, the [`Visitor`] method that renders a
+/// `T` with its [`Render`] impl. The guard for the other direction, an impl
+/// without a row, is the [`Listed`] supertrait of [`Render`].
+macro_rules! render_visits {
+    ($($visit:ident => $node:ty),* $(,)?) => {
+        $(
+            fn $visit(&mut self, node: &$node) -> Result<Self::Value, Diagnostic> {
+                node.render(self)
+            }
+        )*
+    };
+}
+
+/// Implements [`Listed`] for the kind of each row.
+macro_rules! mark_listed {
+    ($($visit:ident => $node:ty),* $(,)?) => {
+        $( impl Listed for $node {} )*
+    };
+}
+
+/// The rows: the one place that names the kinds of node the renderer writes
+/// through [`Render`]; every other kind is written by the method of the same
+/// name in the [`Visitor`] impl or left to the walk. The macro passes the rows
+/// to the macro it is given, which is how one list serves the [`Visitor`]
+/// methods ([`render_visits`]) and the guard ([`mark_listed`]).
+macro_rules! render_rows {
+    ($consumer:ident) => {
+        $consumer! {
+            visit_data_type_declaration_kind => DataTypeDeclarationKind,
+            visit_enumerated_specification_init => EnumeratedSpecificationInit,
+            visit_enumerated_value => EnumeratedValue,
+            visit_subrange_declaration => SubrangeDeclaration,
+            visit_subrange_initializer => SubrangeInitializer,
+            visit_structure_declaration => StructureDeclaration,
+            visit_union_declaration => UnionDeclaration,
+            visit_structure_initialization_declaration => StructureInitializationDeclaration,
+            visit_late_resolved_initializer => LateResolvedInitializer,
+            visit_params_specification => ParamsSpecification,
+            visit_string_declaration => StringDeclaration,
+            visit_array_specification_kind => ArraySpecificationKind,
+            visit_array_subranges => ArraySubranges,
+            visit_subrange => ironplc_dsl::common::Subrange,
+            visit_program_access_decl => ProgramAccessDecl,
+            visit_var_decl => VarDecl,
+            visit_address_assignment => AddressAssignment,
+            visit_simple_initializer => SimpleInitializer,
+            visit_string_initializer => StringInitializer,
+            visit_enumerated_values_initializer => EnumeratedValuesInitializer,
+            visit_array_initial_value_assignment => ArrayInitialValueAssignment,
+            visit_enumerated_initial_value_assignment => EnumeratedInitialValueAssignment,
+            visit_direct_variable_identifier => DirectVariableIdentifier,
+            visit_function_declaration => FunctionDeclaration,
+            visit_function_block_declaration => FunctionBlockDeclaration,
+            visit_method_declaration => MethodDeclaration,
+            visit_property_declaration => PropertyDeclaration,
+            visit_namespace_declaration => NamespaceDeclaration,
+            visit_interface_declaration => InterfaceDeclaration,
+            visit_program_declaration => ProgramDeclaration,
+            visit_network => dsl::sfc::Network,
+            visit_transition => dsl::sfc::Transition,
+            visit_action => dsl::sfc::Action,
+            visit_action_association => dsl::sfc::ActionAssociation,
+            visit_resource_declaration => dsl::configuration::ResourceDeclaration,
+            visit_program_configuration => dsl::configuration::ProgramConfiguration,
+            visit_configuration_declaration => dsl::configuration::ConfigurationDeclaration,
+            visit_function_block_init => dsl::configuration::FunctionBlockInit,
+            visit_located_var_init => LocatedVarInit,
+            visit_task_configuration => dsl::configuration::TaskConfiguration,
+            visit_fb_call => dsl::textual::FbCall,
+            visit_method_call => dsl::textual::MethodCall,
+            visit_stmt_kind => dsl::textual::StmtKind,
+            visit_assignment => dsl::textual::Assignment,
+            visit_compare_expr => dsl::textual::CompareExpr,
+            visit_binary_expr => dsl::textual::BinaryExpr,
+            visit_repeat => dsl::textual::Repeat,
+            visit_try_catch => dsl::textual::TryCatch,
+            visit_catch_clause => dsl::textual::CatchClause,
+            visit_jump => dsl::textual::Jump,
+            visit_conditional_call => dsl::textual::ConditionalCall,
+            visit_wait => dsl::textual::Wait,
+            visit_throw => dsl::textual::Throw,
+            visit_if => dsl::textual::If,
+            visit_else_if => dsl::textual::ElseIf,
+            visit_case => dsl::textual::Case,
+            visit_case_statement_group => dsl::textual::CaseStatementGroup,
+            visit_for => dsl::textual::For,
+            visit_while => dsl::textual::While,
+            visit_expr_kind => dsl::textual::ExprKind,
+            visit_reference_initializer => ReferenceInitializer,
+            visit_reference_initial_value => ReferenceInitialValue,
+            visit_array_variable => dsl::textual::ArrayVariable,
+        }
+    };
+}
+
+render_rows!(mark_listed);
+
 pub fn apply(lib: &Library) -> Result<String, Vec<Diagnostic>> {
     let mut visitor = LibraryRenderer::new();
     visitor
@@ -138,6 +252,8 @@ impl LibraryRenderer {
 
 impl Visitor<Diagnostic> for LibraryRenderer {
     type Value = ();
+
+    render_rows!(render_visits);
 
     fn visit_id(&mut self, node: &Id) -> Result<Self::Value, Diagnostic> {
         // TODO this is the wrong case
@@ -267,13 +383,6 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         Ok(())
     }
 
-    fn visit_data_type_declaration_kind(
-        &mut self,
-        node: &DataTypeDeclarationKind,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_data_type_declaration_kind(node)
-    }
-
     fn visit_late_bound_declaration(
         &mut self,
         node: &LateBoundDeclaration,
@@ -307,13 +416,6 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         self.visit_enumerated_specification_init(&node.spec_init)
     }
 
-    fn visit_enumerated_specification_init(
-        &mut self,
-        node: &EnumeratedSpecificationInit,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_enumerated_specification_init(node)
-    }
-
     fn visit_enumerated_specification_values(
         &mut self,
         node: &EnumeratedSpecificationValues,
@@ -324,27 +426,6 @@ impl Visitor<Diagnostic> for LibraryRenderer {
 
         self.write_ws(")");
         Ok(())
-    }
-
-    fn visit_enumerated_value(
-        &mut self,
-        node: &EnumeratedValue,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_enumerated_value(node)
-    }
-
-    fn visit_subrange_declaration(
-        &mut self,
-        node: &SubrangeDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_subrange_declaration(node)
-    }
-
-    fn visit_subrange_initializer(
-        &mut self,
-        node: &SubrangeInitializer,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_subrange_initializer(node)
     }
 
     fn visit_subrange_specification(
@@ -359,20 +440,6 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         Ok(())
     }
 
-    fn visit_structure_declaration(
-        &mut self,
-        node: &StructureDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_structure_declaration(node)
-    }
-
-    fn visit_union_declaration(
-        &mut self,
-        node: &UnionDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_union_declaration(node)
-    }
-
     fn visit_structure_element_declaration(
         &mut self,
         node: &StructureElementDeclaration,
@@ -381,20 +448,6 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         self.visit_id(&node.name)?;
         self.write_ws(":");
         self.visit_initial_value_assignment_kind(&node.init)
-    }
-
-    fn visit_structure_initialization_declaration(
-        &mut self,
-        node: &StructureInitializationDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_structure_initialization_declaration(node)
-    }
-
-    fn visit_late_resolved_initializer(
-        &mut self,
-        node: &LateResolvedInitializer,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_late_resolved_initializer(node)
     }
 
     // 2.3.3.1
@@ -436,63 +489,6 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         Ok(())
     }
 
-    fn visit_params_specification(
-        &mut self,
-        node: &ParamsSpecification,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_params_specification(node)
-    }
-
-    fn visit_string_declaration(
-        &mut self,
-        node: &StringDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_string_declaration(node)
-    }
-
-    fn visit_array_specification_kind(
-        &mut self,
-        node: &ArraySpecificationKind,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_array_specification_kind(node)
-    }
-
-    fn visit_array_subranges(&mut self, node: &ArraySubranges) -> Result<Self::Value, Diagnostic> {
-        self.render_array_subranges(node)
-    }
-
-    fn visit_subrange(
-        &mut self,
-        node: &ironplc_dsl::common::Subrange,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_subrange(node)
-    }
-
-    fn visit_program_access_decl(
-        &mut self,
-        node: &ProgramAccessDecl,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_program_access_decl(node)
-    }
-
-    fn visit_var_decl(&mut self, node: &VarDecl) -> Result<Self::Value, Diagnostic> {
-        self.render_var_decl(node)
-    }
-
-    fn visit_address_assignment(
-        &mut self,
-        node: &AddressAssignment,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_address_assignment(node)
-    }
-
-    fn visit_simple_initializer(
-        &mut self,
-        node: &SimpleInitializer,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_simple_initializer(node)
-    }
-
     // Extension: constant-expression VAR initializer
     // (e.g. `PI/180.0`), not yet folded to a literal.
     fn visit_simple_expr_initializer(
@@ -504,20 +500,6 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         self.visit_expr(&node.initial_value)?;
 
         Ok(())
-    }
-
-    fn visit_string_initializer(
-        &mut self,
-        node: &StringInitializer,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_string_initializer(node)
-    }
-
-    fn visit_enumerated_values_initializer(
-        &mut self,
-        node: &EnumeratedValuesInitializer,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_enumerated_values_initializer(node)
     }
 
     // 2.4.3.2
@@ -542,13 +524,6 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         Ok(())
     }
 
-    fn visit_array_initial_value_assignment(
-        &mut self,
-        node: &ArrayInitialValueAssignment,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_array_initial_value_assignment(node)
-    }
-
     /// Renders a repeated array element, `count(value)`.
     fn visit_repeated(
         &mut self,
@@ -563,170 +538,10 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         Ok(())
     }
 
-    fn visit_enumerated_initial_value_assignment(
-        &mut self,
-        node: &EnumeratedInitialValueAssignment,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_enumerated_initial_value_assignment(node)
-    }
-
-    fn visit_direct_variable_identifier(
-        &mut self,
-        node: &DirectVariableIdentifier,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_direct_variable_identifier(node)
-    }
-
-    fn visit_function_declaration(
-        &mut self,
-        node: &FunctionDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_function_declaration(node)
-    }
-
-    fn visit_function_block_declaration(
-        &mut self,
-        node: &FunctionBlockDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_function_block_declaration(node)
-    }
-
-    fn visit_method_declaration(
-        &mut self,
-        node: &MethodDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_method_declaration(node)
-    }
-
-    fn visit_property_declaration(
-        &mut self,
-        node: &PropertyDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_property_declaration(node)
-    }
-
-    fn visit_namespace_declaration(
-        &mut self,
-        node: &NamespaceDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_namespace_declaration(node)
-    }
-
-    fn visit_interface_declaration(
-        &mut self,
-        node: &InterfaceDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_interface_declaration(node)
-    }
-
-    fn visit_program_declaration(
-        &mut self,
-        node: &ProgramDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_program_declaration(node)
-    }
-
-    fn visit_network(&mut self, node: &dsl::sfc::Network) -> Result<Self::Value, Diagnostic> {
-        self.render_network(node)
-    }
-
     // 2.6.2
     fn visit_step(&mut self, node: &dsl::sfc::Step) -> Result<Self::Value, Diagnostic> {
         self.write_ws("STEP");
         self.write_step_body(node)
-    }
-
-    fn visit_transition(&mut self, node: &dsl::sfc::Transition) -> Result<Self::Value, Diagnostic> {
-        self.render_transition(node)
-    }
-
-    fn visit_action(&mut self, node: &dsl::sfc::Action) -> Result<Self::Value, Diagnostic> {
-        self.render_action(node)
-    }
-
-    fn visit_action_association(
-        &mut self,
-        node: &dsl::sfc::ActionAssociation,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_action_association(node)
-    }
-
-    fn visit_resource_declaration(
-        &mut self,
-        node: &dsl::configuration::ResourceDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_resource_declaration(node)
-    }
-
-    fn visit_program_configuration(
-        &mut self,
-        node: &dsl::configuration::ProgramConfiguration,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_program_configuration(node)
-    }
-
-    fn visit_configuration_declaration(
-        &mut self,
-        node: &dsl::configuration::ConfigurationDeclaration,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_configuration_declaration(node)
-    }
-
-    fn visit_function_block_init(
-        &mut self,
-        node: &dsl::configuration::FunctionBlockInit,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_function_block_init(node)
-    }
-
-    fn visit_located_var_init(&mut self, node: &LocatedVarInit) -> Result<Self::Value, Diagnostic> {
-        self.render_located_var_init(node)
-    }
-
-    fn visit_task_configuration(
-        &mut self,
-        node: &dsl::configuration::TaskConfiguration,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_task_configuration(node)
-    }
-
-    fn visit_fb_call(&mut self, node: &dsl::textual::FbCall) -> Result<Self::Value, Diagnostic> {
-        self.render_fb_call(node)
-    }
-
-    fn visit_method_call(
-        &mut self,
-        node: &dsl::textual::MethodCall,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_method_call(node)
-    }
-
-    fn visit_stmt_kind(
-        &mut self,
-        node: &dsl::textual::StmtKind,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_stmt_kind(node)
-    }
-
-    fn visit_assignment(
-        &mut self,
-        node: &dsl::textual::Assignment,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_assignment(node)
-    }
-
-    fn visit_compare_expr(
-        &mut self,
-        node: &dsl::textual::CompareExpr,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_compare_expr(node)
-    }
-
-    fn visit_binary_expr(
-        &mut self,
-        node: &dsl::textual::BinaryExpr,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_binary_expr(node)
     }
 
     fn visit_unary_expr(
@@ -752,28 +567,6 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         Ok(())
     }
 
-    fn visit_repeat(&mut self, node: &dsl::textual::Repeat) -> Result<Self::Value, Diagnostic> {
-        self.render_repeat(node)
-    }
-
-    fn visit_try_catch(
-        &mut self,
-        node: &dsl::textual::TryCatch,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_try_catch(node)
-    }
-
-    fn visit_catch_clause(
-        &mut self,
-        node: &dsl::textual::CatchClause,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_catch_clause(node)
-    }
-
-    fn visit_jump(&mut self, node: &dsl::textual::Jump) -> Result<Self::Value, Diagnostic> {
-        self.render_jump(node)
-    }
-
     fn visit_label_statement(
         &mut self,
         node: &dsl::textual::LabelStatement,
@@ -783,55 +576,6 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         self.newline();
 
         Ok(())
-    }
-
-    fn visit_conditional_call(
-        &mut self,
-        node: &dsl::textual::ConditionalCall,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_conditional_call(node)
-    }
-
-    fn visit_wait(&mut self, node: &dsl::textual::Wait) -> Result<Self::Value, Diagnostic> {
-        self.render_wait(node)
-    }
-
-    fn visit_throw(&mut self, node: &dsl::textual::Throw) -> Result<Self::Value, Diagnostic> {
-        self.render_throw(node)
-    }
-
-    fn visit_if(&mut self, node: &dsl::textual::If) -> Result<Self::Value, Diagnostic> {
-        self.render_if(node)
-    }
-
-    fn visit_else_if(&mut self, node: &dsl::textual::ElseIf) -> Result<Self::Value, Diagnostic> {
-        self.render_else_if(node)
-    }
-
-    fn visit_case(&mut self, node: &dsl::textual::Case) -> Result<Self::Value, Diagnostic> {
-        self.render_case(node)
-    }
-
-    fn visit_case_statement_group(
-        &mut self,
-        node: &dsl::textual::CaseStatementGroup,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_case_statement_group(node)
-    }
-
-    fn visit_for(&mut self, node: &dsl::textual::For) -> Result<Self::Value, Diagnostic> {
-        self.render_for(node)
-    }
-
-    fn visit_while(&mut self, node: &dsl::textual::While) -> Result<Self::Value, Diagnostic> {
-        self.render_while(node)
-    }
-
-    fn visit_expr_kind(
-        &mut self,
-        node: &dsl::textual::ExprKind,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_expr_kind(node)
     }
 
     fn visit_deref_variable(
@@ -877,13 +621,6 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         self.visit_reference_target(&node.target)
     }
 
-    fn visit_reference_initializer(
-        &mut self,
-        node: &ReferenceInitializer,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_reference_initializer(node)
-    }
-
     fn visit_reference_target(
         &mut self,
         node: &ReferenceTarget,
@@ -892,13 +629,6 @@ impl Visitor<Diagnostic> for LibraryRenderer {
             ReferenceTarget::Named(type_name) => self.visit_type_name(type_name),
             ReferenceTarget::Array(subranges) => self.visit_array_subranges(subranges),
         }
-    }
-
-    fn visit_reference_initial_value(
-        &mut self,
-        node: &ReferenceInitialValue,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_reference_initial_value(node)
     }
 
     fn visit_named_input(
@@ -917,13 +647,6 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         self.visit_id(&node.src)?;
         self.write_ws("=>");
         self.visit_variable(&node.tgt)
-    }
-
-    fn visit_array_variable(
-        &mut self,
-        node: &dsl::textual::ArrayVariable,
-    ) -> Result<Self::Value, Diagnostic> {
-        self.render_array_variable(node)
     }
 
     fn visit_structured_variable(
