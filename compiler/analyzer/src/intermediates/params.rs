@@ -16,8 +16,8 @@ use ironplc_dsl::common::{
     SignedInteger, SignedIntegerRef, SpecificationKind, Subrange, TypeName,
 };
 use ironplc_dsl::core::Located;
-use ironplc_dsl::diagnostic::{Diagnostic, Label};
-use ironplc_problems::Problem;
+use ironplc_dsl::diagnostic::Diagnostic;
+use ironplc_problems::text;
 
 use crate::intermediates::array;
 use crate::resolution::Failure;
@@ -34,19 +34,17 @@ pub fn to_array_subranges(spec: &ParamsSpecification) -> Result<ArraySubranges, 
     let count = match &spec.count {
         IntegerRef::Literal(count) => count.value,
         IntegerRef::Constant(_) => {
-            return Err(Diagnostic::problem(
-                Problem::ArrayDimensionInvalid,
-                Label::span(span, "PARAMS count"),
-            )
-            .with_help("Give the count as an integer literal."));
+            return Err(
+                Diagnostic::text(span, text::array_dimension_invalid_params_count())
+                    .with_help("Give the count as an integer literal."),
+            );
         }
     };
     if count == 0 {
-        return Err(Diagnostic::problem(
-            Problem::ArrayDimensionInvalid,
-            Label::span(span, "PARAMS count"),
-        )
-        .with_help("A PARAMS list has at least one element."));
+        return Err(
+            Diagnostic::text(span, text::array_dimension_invalid_params_count())
+                .with_help("A PARAMS list has at least one element."),
+        );
     }
 
     let literal = |value: u128| {

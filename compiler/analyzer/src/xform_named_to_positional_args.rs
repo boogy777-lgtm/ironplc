@@ -16,10 +16,10 @@ use std::collections::HashMap;
 
 use ironplc_dsl::common::Library;
 use ironplc_dsl::core::Id;
-use ironplc_dsl::diagnostic::{Diagnostic, Label};
+use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_dsl::fold::Fold;
 use ironplc_dsl::textual::*;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 
 use crate::function_environment::{FunctionEnvironment, FunctionSignature};
 use crate::pass_runner::Outcome;
@@ -75,9 +75,9 @@ impl NamedToPositionalResolver<'_> {
                 continue;
             };
             if names.contains(&&ni.name) {
-                self.errors.push(Diagnostic::problem(
-                    Problem::FunctionCallDuplicateNamedArg,
-                    Label::span(ni.name.span.clone(), "Duplicate argument"),
+                self.errors.push(Diagnostic::text(
+                    ni.name.span.clone(),
+                    text::function_call_duplicate_named_arg_duplicate_argument(),
                 ));
                 placeable = false;
             } else {
@@ -114,9 +114,9 @@ impl NamedToPositionalResolver<'_> {
 
         // Anything still unplaced names no parameter of this function.
         for name in names {
-            self.errors.push(Diagnostic::problem(
-                Problem::FunctionCallNamedArgUndeclared,
-                Label::span(name.span.clone(), "Undeclared parameter"),
+            self.errors.push(Diagnostic::text(
+                name.span.clone(),
+                text::function_call_named_arg_undeclared_undeclared_parameter(),
             ));
             placeable = false;
         }
@@ -205,6 +205,7 @@ mod tests {
     use crate::test_helpers::{parse_and_resolve_types, parse_only};
     use ironplc_dsl::common::{FunctionReturnType, TypeName};
     use ironplc_dsl::core::Id;
+    use ironplc_problems::Problem;
     use ironplc_test::cast;
 
     /// Applies the pass and asserts it rewrote everything cleanly, returning

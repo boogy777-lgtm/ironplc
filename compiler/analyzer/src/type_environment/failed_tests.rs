@@ -4,6 +4,7 @@
 use super::*;
 use crate::{intermediate_type::IntermediateType, type_attributes::TypeAttributes};
 use ironplc_dsl::core::SourceSpan;
+use ironplc_problems::Problem;
 
 fn named(name: &str, start: usize) -> TypeName {
     TypeName::from_id(

@@ -27,7 +27,6 @@ use ironplc_dsl::{
     scope::ScopeNode,
     visitor::Visitor,
 };
-use ironplc_problems::Problem;
 use log::debug;
 use std::convert::Infallible;
 
@@ -35,7 +34,7 @@ use crate::{
     function_environment::{FunctionEnvironment, FunctionSignature},
     intermediate_type::IntermediateFunctionParameter,
     symbol_environment::{
-        duplicate_declaration, ScopeKind, ScopePath, SymbolEnvironment, SymbolKind,
+        duplicate_declaration, Duplicated, ScopeKind, ScopePath, SymbolEnvironment, SymbolKind,
     },
 };
 
@@ -101,7 +100,7 @@ impl<'a> EnvironmentResolver<'a> {
     fn declare_global(&mut self, name: &Id, kind: SymbolKind) {
         if let Some(function) = self.function_env.get(name) {
             self.diagnostics.push(duplicate_declaration(
-                Problem::PouDeclNameDuplicated,
+                Duplicated::Pou,
                 name,
                 function.span.clone(),
             ));
@@ -249,7 +248,7 @@ impl<'a> Visitor<Infallible> for EnvironmentResolver<'a> {
                 )
             {
                 self.diagnostics.push(duplicate_declaration(
-                    Problem::PouDeclNameDuplicated,
+                    Duplicated::Pou,
                     &node.name,
                     existing.span.clone(),
                 ));

@@ -31,11 +31,11 @@
 use crate::pass_runner::Outcome;
 use ironplc_dsl::common::Library;
 use ironplc_dsl::core::Located;
-use ironplc_dsl::diagnostic::{Diagnostic, Label};
+use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_dsl::fold::Fold;
 use ironplc_dsl::textual::*;
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use std::convert::Infallible;
 
 /// The address-of operator, recognized only when `allow_adr` is set.
@@ -84,17 +84,18 @@ impl Fold<Infallible> for ResolveAdr {
                         // the same codes `REF()` uses.
                         ExprKind::Variable(var) => Ok(ExprKind::Ref(Box::new(var))),
                         _ => {
-                            self.diagnostics.push(Diagnostic::problem(
-                                Problem::RefOperandNotVariable,
-                                Label::span(operand.span(), "ADR() operand must be a variable"),
+                            self.diagnostics.push(Diagnostic::text(
+                                operand.span(),
+                                text::ref_operand_not_variable_adr_operand_must_be_variable(),
                             ));
                             Ok(ExprKind::Null(operand.span()))
                         }
                     },
                     None => {
-                        self.diagnostics.push(Diagnostic::problem(
-                            Problem::RefOperandNotVariable,
-                            Label::span(span.clone(), "ADR() requires exactly one input argument"),
+                        self.diagnostics.push(Diagnostic::text(
+                            span.clone(),
+                            text::ref_operand_not_variable_adr_requires_exactly_one_input_argument(
+                            ),
                         ));
                         Ok(ExprKind::Null(span))
                     }

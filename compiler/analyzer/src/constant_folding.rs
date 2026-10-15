@@ -11,9 +11,9 @@
 
 use ironplc_dsl::common::*;
 use ironplc_dsl::core::{Located, SourceSpan};
-use ironplc_dsl::diagnostic::{Diagnostic, Label};
+use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_dsl::textual::*;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 
 /// A constant expression whose operands are both known at compile time,
 /// but whose operation has no defined result (as opposed to an expression
@@ -31,17 +31,17 @@ pub(crate) enum FoldError {
 /// Converts a `FoldError` into a user-facing diagnostic at the given span.
 pub(crate) fn fold_error_to_diagnostic(err: FoldError, span: SourceSpan) -> Diagnostic {
     match err {
-        FoldError::DivisionByZero => Diagnostic::problem(
-            Problem::ConstantExpressionDivisionByZero,
-            Label::span(span, "Division or modulo by zero"),
+        FoldError::DivisionByZero => Diagnostic::text(
+            span,
+            text::constant_expression_division_by_zero_division_or_modulo_by_zero(),
         ),
-        FoldError::Overflow => Diagnostic::problem(
-            Problem::ConstantExpressionOverflow,
-            Label::span(span, "Arithmetic overflow"),
+        FoldError::Overflow => Diagnostic::text(
+            span,
+            text::constant_expression_overflow_arithmetic_overflow(),
         ),
-        FoldError::NotANumber => Diagnostic::problem(
-            Problem::ConstantExpressionOverflow,
-            Label::span(span, "Arithmetic result is not a number"),
+        FoldError::NotANumber => Diagnostic::text(
+            span,
+            text::constant_expression_overflow_arithmetic_result_not_a_number(),
         ),
     }
 }

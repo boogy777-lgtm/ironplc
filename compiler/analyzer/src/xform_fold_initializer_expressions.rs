@@ -53,12 +53,12 @@
 
 use ironplc_dsl::common::*;
 use ironplc_dsl::core::{Id, Located};
-use ironplc_dsl::diagnostic::{Diagnostic, Label};
+use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_dsl::fold::Fold;
 use ironplc_dsl::scope::ScopeNode;
 use ironplc_dsl::textual::*;
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 
 use crate::constant_folding::{fold_error_to_diagnostic, try_fold_binary, try_fold_unary};
 use crate::pass_runner::Outcome;
@@ -211,9 +211,9 @@ impl InitializerFolder<'_> {
     fn normalize(&mut self, se: SimpleExprInitializer) -> InitialValueAssignmentKind {
         if !self.options.allow_constant_initializer_expressions {
             self.diagnostics.push(
-                Diagnostic::problem(
-                    Problem::ConstantInitializerExpressionNotAllowed,
-                    Label::span(se.initial_value.span(), "Constant expression initializer"),
+                Diagnostic::text(
+                    se.initial_value.span(),
+                    text::constant_initializer_expression_not_allowed_constant_expression_initializer(),
                 )
                 .with_context("type", &se.type_name.to_string()),
             );
@@ -245,9 +245,9 @@ impl InitializerFolder<'_> {
                 }),
                 _ => {
                     self.diagnostics.push(
-                        Diagnostic::problem(
-                            Problem::InitializerNotConstantExpression,
-                            Label::span(folded.span(), "Initializer expression"),
+                        Diagnostic::text(
+                            folded.span(),
+                            text::initializer_not_constant_expression_initializer_expression(),
                         )
                         .with_context("type", &type_name.to_string()),
                     );
@@ -312,6 +312,7 @@ mod tests {
     use ironplc_dsl::core::FileId;
     use ironplc_parser::options::{CompilerOptions, Dialect};
     use ironplc_parser::parse_program;
+    use ironplc_problems::Problem;
     use ironplc_test::cast;
 
     fn opts() -> CompilerOptions {

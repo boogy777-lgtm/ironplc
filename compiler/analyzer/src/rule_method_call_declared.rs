@@ -48,7 +48,7 @@ use ironplc_dsl::{
     textual::*,
     visitor::Visitor,
 };
-use ironplc_problems::Problem;
+use ironplc_problems::{text, Problem};
 
 use crate::{
     callee_resolution::{FunctionBlocks, InstanceTypes},
@@ -106,10 +106,14 @@ impl<'a> RuleMethodCallDeclared<'a> {
             call.span(),
             &call.params,
             &crate::call_assignment_check::AssignmentCheckLabels {
-                call_label: "Method invocation",
+                mixed_arg_types: text::function_call_mixed_arg_types_method_invocation,
+                missing_input: text::function_invocation_missing_input_method_invocation,
+                missing_input_declaration:
+                    text::function_invocation_missing_input_method_declaration,
+                requires_formal: text::function_invocation_requires_formal_method_invocation,
+                undefined_output: text::function_invocation_undefined_output_method_invocation,
                 context_key: "method",
                 owner_name: owner_label,
-                decl_label: "Method declaration",
             },
         )
     }

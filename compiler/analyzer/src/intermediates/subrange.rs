@@ -9,7 +9,7 @@ use crate::type_environment::{TypeAttributes, TypeEnvironment};
 use ironplc_dsl::common::*;
 use ironplc_dsl::core::Located;
 use ironplc_dsl::diagnostic::*;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 
 /// Result of processing a subrange specification
 #[derive(Debug, Clone, PartialEq)]
@@ -31,20 +31,26 @@ pub fn try_from(
             // Direct subrange specification: MY_RANGE : INT (1..100);
             let base_type_name: TypeName = spec.type_name.clone().into();
             let base_type = type_environment.lookup(&base_type_name).or_failure(|| {
-                Diagnostic::problem(
-                    Problem::ParentTypeNotDeclared,
-                    Label::span(node_name.span(), "Subrange declaration"),
+                Diagnostic::text(
+                    node_name.span(),
+                    text::parent_type_not_declared_subrange_declaration(),
                 )
-                .with_secondary(Label::span(base_type_name.span(), "Base type"))
+                .with_secondary(Label::span(
+                    base_type_name.span(),
+                    text::parent_type_not_declared_base_type(),
+                ))
             })?;
 
             // Validate that base type is numeric
             if !base_type.representation.is_numeric() {
-                return Err(Diagnostic::problem(
-                    Problem::SubrangeBaseTypeNotNumeric,
-                    Label::span(node_name.span(), "Subrange declaration"),
+                return Err(Diagnostic::text(
+                    node_name.span(),
+                    text::subrange_base_type_not_numeric_subrange_declaration(),
                 )
-                .with_secondary(Label::span(base_type_name.span(), "Non-numeric base type"))
+                .with_secondary(Label::span(
+                    base_type_name.span(),
+                    text::subrange_base_type_not_numeric_non_numeric_base_type(),
+                ))
                 .into());
             }
 
@@ -75,17 +81,17 @@ pub fn try_from(
 
             // Validate range
             if min_value > max_value {
-                return Err(Diagnostic::problem(
-                    Problem::SubrangeMinStrictlyLessMax,
-                    Label::span(node_name.span(), "Subrange declaration"),
+                return Err(Diagnostic::text(
+                    node_name.span(),
+                    text::subrange_min_strictly_less_max_subrange_declaration(),
                 )
                 .with_secondary(Label::span(
                     start.value.span(),
-                    format!("Minimum value: {}", min_value),
+                    text::subrange_min_strictly_less_max_minimum_value(min_value),
                 ))
                 .with_secondary(Label::span(
                     end.value.span(),
-                    format!("Maximum value: {}", max_value),
+                    text::subrange_min_strictly_less_max_maximum_value(max_value),
                 ))
                 .into());
             }
@@ -107,11 +113,14 @@ pub fn try_from(
         SpecificationKind::Named(base_type_name) => {
             // Subrange type alias: MY_RANGE : OTHER_RANGE;
             type_environment.lookup(base_type_name).or_failure(|| {
-                Diagnostic::problem(
-                    Problem::ParentTypeNotDeclared,
-                    Label::span(node_name.span(), "Subrange alias"),
+                Diagnostic::text(
+                    node_name.span(),
+                    text::parent_type_not_declared_subrange_alias(),
                 )
-                .with_secondary(Label::span(base_type_name.span(), "Base type"))
+                .with_secondary(Label::span(
+                    base_type_name.span(),
+                    text::parent_type_not_declared_base_type(),
+                ))
             })?;
 
             Ok(IntermediateResult::Alias(base_type_name.clone()))
@@ -129,6 +138,7 @@ mod tests {
     use ironplc_dsl::common::TypeName;
     use ironplc_dsl::core::{FileId, SourceSpan};
     use ironplc_parser::options::CompilerOptions;
+    use ironplc_problems::Problem;
     use ironplc_test::{cast, cast_struct};
 
     // Tests for validate_subrange_bounds method

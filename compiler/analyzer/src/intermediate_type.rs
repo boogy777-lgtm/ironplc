@@ -547,8 +547,8 @@ impl IntermediateType {
         type_name: &ironplc_dsl::common::TypeName,
     ) -> Result<(), ironplc_dsl::diagnostic::Diagnostic> {
         use ironplc_dsl::core::Located;
-        use ironplc_dsl::diagnostic::{Diagnostic, Label};
-        use ironplc_problems::Problem;
+        use ironplc_dsl::diagnostic::Diagnostic;
+        use ironplc_problems::text;
 
         let (type_min, type_max) = match self {
             IntermediateType::Int { size } => match size {
@@ -572,17 +572,17 @@ impl IntermediateType {
                 (*base_min, *base_max)
             }
             _ => {
-                return Err(Diagnostic::problem(
-                    Problem::SubrangeBaseTypeNotNumeric,
-                    Label::span(type_name.span(), "Subrange base type"),
+                return Err(Diagnostic::text(
+                    type_name.span(),
+                    text::subrange_base_type_not_numeric_subrange_base_type(),
                 ));
             }
         };
 
         if min_value < type_min || max_value > type_max {
-            return Err(Diagnostic::problem(
-                Problem::SubrangeOutOfBounds,
-                Label::span(type_name.span(), "Subrange declaration"),
+            return Err(Diagnostic::text(
+                type_name.span(),
+                text::subrange_out_of_bounds_subrange_declaration(),
             ));
         }
 

@@ -12,6 +12,7 @@ use ironplc_dsl::common::{
     Subrange,
 };
 use ironplc_dsl::core::{Id, SourceSpan};
+use ironplc_problems::Problem;
 
 #[test]
 fn insert_type_when_type_already_exists_then_p2007_and_first_kept() {

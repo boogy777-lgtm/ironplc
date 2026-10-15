@@ -2,11 +2,11 @@
 
 use ironplc_dsl::{
     core::{FileId, Id, SourceSpan},
-    diagnostic::{Diagnostic, Label},
+    diagnostic::Diagnostic,
     stack::within_stack_budget,
 };
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use log::debug;
 
 use crate::{
@@ -68,9 +68,9 @@ fn analyze_in_budget<O: Observer>(
 ) -> Result<(Library, SemanticContext), Vec<Diagnostic>> {
     if sources.is_empty() {
         let span = SourceSpan::range(0, 0).with_file_id(&FileId::default());
-        return Err(vec![Diagnostic::problem(
-            Problem::NoContent,
-            Label::span(span, "First location"),
+        return Err(vec![Diagnostic::text(
+            span,
+            text::no_content_first_location(),
         )]);
     }
     let (library, mut context) = resolve_types_in_budget(sources, options, observer)?;
