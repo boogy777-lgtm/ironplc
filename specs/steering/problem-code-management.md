@@ -222,7 +222,7 @@ V####
 
 The text a label shows is a row of `compiler/problems/resources/problem-texts.csv`
 (columns `Code,Key,Template`), not a `format!` at the call site. `problems/build.rs`
-makes one function for each row in `ironplc_problems::text`, named by `Key`, with
+(through the build-support crate `compiler/problems_gen`, which holds the checks and their tests) makes one function for each row in `ironplc_problems::text`, named by `Key`, with
 one parameter for each distinct placeholder of the template in order of first
 appearance. A missing, extra or misspelled argument does not compile.
 

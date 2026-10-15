@@ -111,11 +111,14 @@ compile error.
   `Diagnostic::problem` builds from the same problem and a `Label::span`.
 - `compiler/analyzer/src/rule_attribute.rs`: the tests of the three codes pass
   unchanged, so the rendered texts are the texts written before.
-- `compiler/problems/build.rs`: the validation of the rows. Cargo does not run
-  the tests of a build script, so the failure cases (unknown code, key not
-  snake_case, key repeated, malformed placeholder, unbalanced brace,
-  compiler-located code) have no automated test; each was checked once by
-  adding the bad row and building.
+- `compiler/problems_gen/src/tests.rs`: the validation and the generation of the
+  rows live in the build-support crate `ironplc-problems-gen`, which does no file
+  access (`problems/build.rs` reads the files and writes the result), because
+  Cargo does not run the tests of a build script. One test for each failure
+  (unknown code, key not snake_case, key a Rust keyword, placeholder a Rust
+  keyword, key repeated, malformed placeholder, format spec, unbalanced `{` and
+  `}`, compiler-located code, wrong header) and for the generation (parameter
+  order, repeated placeholder, `{{`/`}}`, no placeholder).
 
 ## Pros and Cons of the Options
 

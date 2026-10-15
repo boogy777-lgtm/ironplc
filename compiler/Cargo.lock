@@ -1135,6 +1135,14 @@ name = "ironplc-problems"
 version = "0.247.0"
 dependencies = [
  "csv",
+ "ironplc-problems-gen",
+]
+
+[[package]]
+name = "ironplc-problems-gen"
+version = "0.247.0"
+dependencies = [
+ "csv",
 ]
 
 [[package]]
