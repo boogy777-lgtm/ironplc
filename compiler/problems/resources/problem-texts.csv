@@ -84,6 +84,34 @@ P0023,pragma_if_unmatched_found,Unmatched {{IF}} pragma
 P0024,pragma_value_expected_found,Expected a pragma condition such as `defined(name)`
 P0027,jump_destination_invalid,No label '{label}' in this body
 P0043,attribute_not_attached,The attribute '{name}' is not followed by a declaration it can be attached to
+P2002,subrange_min_strictly_less_max_maximum_value,Maximum value: {maximum}
+P2002,subrange_min_strictly_less_max_minimum_value,Minimum value: {minimum}
+P2002,subrange_min_strictly_less_max_subrange_declaration,Subrange declaration
+P2011,parent_type_not_declared_array_alias,Array alias
+P2011,parent_type_not_declared_base_type,Base type
+P2011,parent_type_not_declared_subrange_alias,Subrange alias
+P2011,parent_type_not_declared_subrange_declaration,Subrange declaration
+P2013,array_element_type_not_declared_array_declaration,Array declaration
+P2013,array_element_type_not_declared_element_type,Element type
+P2015,subrange_base_type_not_numeric_non_numeric_base_type,Non-numeric base type
+P2015,subrange_base_type_not_numeric_subrange_base_type,Subrange base type
+P2015,subrange_base_type_not_numeric_subrange_declaration,Subrange declaration
+P2016,subrange_out_of_bounds_subrange_declaration,Subrange declaration
+P2020,enumeration_too_many_values_enumeration_declaration,Enumeration declaration
+P2021,struct_field_type_not_declared_base_type,Base type
+P2021,struct_field_type_not_declared_enumeration_type,Enumeration type
+P2021,struct_field_type_not_declared_field_type,Field type
+P2021,struct_field_type_not_declared_structure_type,Structure type
+P2022,array_dimension_empty_array_declaration,Array declaration
+P2023,array_size_overflow_array_declaration,Array declaration
+P2023,array_size_overflow_dimension_end,Dimension end
+P2023,array_size_overflow_dimension_start,Dimension start
+P2024,array_dimension_invalid_array_declaration,Array declaration
+P2024,array_dimension_invalid_maximum_value,Maximum value: {maximum}
+P2024,array_dimension_invalid_minimum_value,Minimum value: {minimum}
+P2024,array_dimension_invalid_params_count,PARAMS count
+P2024,array_dimension_invalid_unresolved_constant,Array dimension contains unresolved constant
+P2024,array_dimension_invalid_value_out_of_i32_range,Value out of i32 range
 P2026,constant_overflow_bit_string_literal,Bit string literal
 P2026,constant_overflow_case_label,CASE label
 P2026,constant_overflow_integer_literal,Integer literal

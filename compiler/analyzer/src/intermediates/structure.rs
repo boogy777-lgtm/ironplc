@@ -11,7 +11,7 @@ use crate::type_environment::{TypeAttributes, TypeEnvironment};
 use ironplc_dsl::common::*;
 use ironplc_dsl::core::Located;
 use ironplc_dsl::diagnostic::*;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 
 /// Try to create the intermediate type information from the structure specification.
 pub fn try_from(
@@ -100,9 +100,9 @@ fn resolve_field_type(
         | InitialValueAssignmentKind::SimpleExpr(SimpleExprInitializer { type_name, .. }) => {
             // Handle simple field types like BOOL, INT, etc.
             let type_attrs = type_environment.lookup(type_name).or_failure(|| {
-                Diagnostic::problem(
-                    Problem::StructFieldTypeNotDeclared,
-                    Label::span(type_name.span(), "Field type"),
+                Diagnostic::text(
+                    type_name.span(),
+                    text::struct_field_type_not_declared_field_type(),
                 )
             })?;
             Ok(type_attrs.representation.clone())
@@ -114,9 +114,9 @@ fn resolve_field_type(
             // Since types are processed in topological order, the referenced type should
             // already be in the environment.
             let type_attrs = type_environment.lookup(type_name).or_failure(|| {
-                Diagnostic::problem(
-                    Problem::StructFieldTypeNotDeclared,
-                    Label::span(type_name.span(), "Field type"),
+                Diagnostic::text(
+                    type_name.span(),
+                    text::struct_field_type_not_declared_field_type(),
                 )
             })?;
             Ok(type_attrs.representation.clone())
@@ -136,9 +136,9 @@ fn resolve_field_type(
                 IntermediateResult::Type(attrs) => Ok(attrs.representation),
                 IntermediateResult::Alias(base_name) => {
                     let base_attrs = type_environment.lookup(&base_name).or_failure(|| {
-                        Diagnostic::problem(
-                            Problem::StructFieldTypeNotDeclared,
-                            Label::span(base_name.span(), "Base type"),
+                        Diagnostic::text(
+                            base_name.span(),
+                            text::struct_field_type_not_declared_base_type(),
                         )
                     })?;
                     Ok(base_attrs.representation.clone())
@@ -155,9 +155,9 @@ fn resolve_field_type(
             let type_attrs = type_environment
                 .lookup(&enum_assignment.type_name)
                 .or_failure(|| {
-                    Diagnostic::problem(
-                        Problem::StructFieldTypeNotDeclared,
-                        Label::span(enum_assignment.type_name.span(), "Enumeration type"),
+                    Diagnostic::text(
+                        enum_assignment.type_name.span(),
+                        text::struct_field_type_not_declared_enumeration_type(),
                     )
                 })?;
             Ok(type_attrs.representation.clone())
@@ -167,9 +167,9 @@ fn resolve_field_type(
             let type_attrs = type_environment
                 .lookup(&structure_init.type_name)
                 .or_failure(|| {
-                    Diagnostic::problem(
-                        Problem::StructFieldTypeNotDeclared,
-                        Label::span(structure_init.type_name.span(), "Structure type"),
+                    Diagnostic::text(
+                        structure_init.type_name.span(),
+                        text::struct_field_type_not_declared_structure_type(),
                     )
                 })?;
             Ok(type_attrs.representation.clone())
@@ -188,9 +188,9 @@ fn resolve_field_type(
                 }
                 crate::intermediates::array::IntermediateResult::Alias(base_name) => {
                     let base_attrs = type_environment.lookup(&base_name).or_failure(|| {
-                        Diagnostic::problem(
-                            Problem::StructFieldTypeNotDeclared,
-                            Label::span(base_name.span(), "Base type"),
+                        Diagnostic::text(
+                            base_name.span(),
+                            text::struct_field_type_not_declared_base_type(),
                         )
                     })?;
                     Ok(base_attrs.representation.clone())
@@ -221,6 +221,7 @@ mod tests {
     use ironplc_dsl::common::TypeName;
     use ironplc_dsl::core::{FileId, Id};
     use ironplc_parser::options::CompilerOptions;
+    use ironplc_problems::Problem;
     use ironplc_test::cast_struct;
 
     /// Helper function to parse a program and apply type resolution

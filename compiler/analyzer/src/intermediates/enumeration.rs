@@ -3,7 +3,7 @@ use crate::type_environment::TypeAttributes;
 use ironplc_dsl::common::*;
 use ironplc_dsl::core::Id;
 use ironplc_dsl::diagnostic::*;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 
 /// Resolves each enum member's effective integer value using ordinary
 /// C-style enum semantics: an explicit value (`member := 5`,
@@ -114,9 +114,9 @@ pub fn try_from_values(
         // We could support more than 65k values, but I cannot imagine a reasonable
         // program with that many states. We can change this if we can find such
         // a program, we can enable more states here.
-        return Err(Diagnostic::problem(
-            Problem::EnumerationTooManyValues,
-            Label::span(enumerated_values.values_span(), "Enumeration declaration"),
+        return Err(Diagnostic::text(
+            enumerated_values.values_span(),
+            text::enumeration_too_many_values_enumeration_declaration(),
         ));
     };
 

@@ -10,7 +10,7 @@ use ironplc_container::CharWidth;
 use ironplc_dsl::common::*;
 use ironplc_dsl::core::Located;
 use ironplc_dsl::diagnostic::*;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 
 /// Result of processing an array specification
 #[derive(Debug, Clone, PartialEq)]
@@ -51,11 +51,14 @@ pub fn try_from(
                 ArrayElementType::Named(_) => {
                     let element_type =
                         type_environment.lookup(&element_type_name).or_failure(|| {
-                            Diagnostic::problem(
-                                Problem::ArrayElementTypeNotDeclared,
-                                Label::span(node_name.span(), "Array declaration"),
+                            Diagnostic::text(
+                                node_name.span(),
+                                text::array_element_type_not_declared_array_declaration(),
                             )
-                            .with_secondary(Label::span(element_type_name.span(), "Element type"))
+                            .with_secondary(Label::span(
+                                element_type_name.span(),
+                                text::array_element_type_not_declared_element_type(),
+                            ))
                         })?;
                     element_type.representation.clone()
                 }
@@ -106,11 +109,14 @@ pub fn try_from(
         SpecificationKind::Named(base_type_name) => {
             // Array type alias: MY_ARRAY : OTHER_ARRAY;
             type_environment.lookup(base_type_name).or_failure(|| {
-                Diagnostic::problem(
-                    Problem::ParentTypeNotDeclared,
-                    Label::span(node_name.span(), "Array alias"),
+                Diagnostic::text(
+                    node_name.span(),
+                    text::parent_type_not_declared_array_alias(),
                 )
-                .with_secondary(Label::span(base_type_name.span(), "Base type"))
+                .with_secondary(Label::span(
+                    base_type_name.span(),
+                    text::parent_type_not_declared_base_type(),
+                ))
             })?;
 
             Ok(IntermediateResult::Alias(base_type_name.clone()))
@@ -127,12 +133,9 @@ fn resolve_signed_integer_ref<'a>(
     context: &TypeName,
 ) -> Result<&'a SignedInteger, Diagnostic> {
     sir.as_signed_integer().ok_or_else(|| {
-        Diagnostic::problem(
-            Problem::ArrayDimensionInvalid,
-            Label::span(
-                context.span(),
-                "Array dimension contains unresolved constant",
-            ),
+        Diagnostic::text(
+            context.span(),
+            text::array_dimension_invalid_unresolved_constant(),
         )
     })
 }
@@ -143,17 +146,17 @@ fn signed_integer_to_i32(si: &SignedInteger) -> Result<i32, Diagnostic> {
     if si.is_neg {
         let neg = -(magnitude as i128);
         if neg < i32::MIN as i128 {
-            return Err(Diagnostic::problem(
-                Problem::ArrayDimensionInvalid,
-                Label::span(si.value.span(), "Value out of i32 range"),
+            return Err(Diagnostic::text(
+                si.value.span(),
+                text::array_dimension_invalid_value_out_of_i32_range(),
             ));
         }
         Ok(neg as i32)
     } else {
         if magnitude > i32::MAX as u128 {
-            return Err(Diagnostic::problem(
-                Problem::ArrayDimensionInvalid,
-                Label::span(si.value.span(), "Value out of i32 range"),
+            return Err(Diagnostic::text(
+                si.value.span(),
+                text::array_dimension_invalid_value_out_of_i32_range(),
             ));
         }
         Ok(magnitude as i32)
@@ -163,9 +166,9 @@ fn signed_integer_to_i32(si: &SignedInteger) -> Result<i32, Diagnostic> {
 /// Validates that array bounds are valid (min <= max for each dimension)
 pub fn validate_array_bounds(ranges: &[Subrange], type_name: &TypeName) -> Result<(), Diagnostic> {
     if ranges.is_empty() {
-        return Err(Diagnostic::problem(
-            Problem::ArrayDimensionEmpty,
-            Label::span(type_name.span(), "Array declaration"),
+        return Err(Diagnostic::text(
+            type_name.span(),
+            text::array_dimension_empty_array_declaration(),
         ));
     }
 
@@ -185,29 +188,35 @@ pub fn validate_array_bounds(ranges: &[Subrange], type_name: &TypeName) -> Resul
         };
 
         if min_value > max_value {
-            return Err(Diagnostic::problem(
-                Problem::ArrayDimensionInvalid,
-                Label::span(type_name.span(), "Array declaration"),
+            return Err(Diagnostic::text(
+                type_name.span(),
+                text::array_dimension_invalid_array_declaration(),
             )
             .with_secondary(Label::span(
                 start.value.span(),
-                format!("Minimum value: {}", min_value),
+                text::array_dimension_invalid_minimum_value(min_value),
             ))
             .with_secondary(Label::span(
                 end.value.span(),
-                format!("Maximum value: {}", max_value),
+                text::array_dimension_invalid_maximum_value(max_value),
             )));
         }
 
         // Check for reasonable array size limits to prevent overflow
         let dimension_size = (max_value - min_value + 1) as u64;
         if dimension_size > u32::MAX as u64 {
-            return Err(Diagnostic::problem(
-                Problem::ArraySizeOverflow,
-                Label::span(type_name.span(), "Array declaration"),
+            return Err(Diagnostic::text(
+                type_name.span(),
+                text::array_size_overflow_array_declaration(),
             )
-            .with_secondary(Label::span(start.value.span(), "Dimension start"))
-            .with_secondary(Label::span(end.value.span(), "Dimension end")));
+            .with_secondary(Label::span(
+                start.value.span(),
+                text::array_size_overflow_dimension_start(),
+            ))
+            .with_secondary(Label::span(
+                end.value.span(),
+                text::array_size_overflow_dimension_end(),
+            )));
         }
     }
 
@@ -221,6 +230,7 @@ mod tests {
     use crate::type_environment::TypeEnvironmentBuilder;
     use ironplc_dsl::common::TypeName;
     use ironplc_dsl::core::SourceSpan;
+    use ironplc_problems::Problem;
     use ironplc_test::{cast, cast_struct};
 
     /// Helper to create a `SignedIntegerRef::Literal` for tests.
