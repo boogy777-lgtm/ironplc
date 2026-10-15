@@ -249,13 +249,16 @@ Diagnostic::text(fault.span, text::attribute_repeated(name))
 
 - A code with several wordings has one row for each; the call site chooses the
   row (the function), it does not build the text.
-- `Key` is snake_case, unique in the file, and starts with the name of its
-  problem (`attribute_repeated_...`).
+- `Key` is snake_case, unique in the file, and is the name of its problem in
+  snake_case or starts with that name and an underscore
+  (`AttributeRepeated`: `attribute_repeated`, `attribute_repeated_...`). The build
+  checks it.
 - A template is text and `{name}` placeholders (`[a-z][a-z0-9_]*`). `{{` and `}}`
   are the literal braces. A format spec (`{x:?}`) is not allowed: pass the value
   already in the form to show.
 - The build fails, naming the row, when a row names a code that is not in
-  `problem-codes.csv`, a key is not snake_case or is used twice, or a placeholder
+  `problem-codes.csv`, a key is not snake_case, is used twice or does not start with the name of its
+  problem, or a placeholder
   or a brace is malformed. There are no rows for P9997, P9998 and P9999: those
   have their own constructors (see below).
 - `problem-codes.csv` keeps its three columns; the texts are in their own file

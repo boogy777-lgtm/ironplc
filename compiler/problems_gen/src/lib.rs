@@ -72,6 +72,30 @@ fn is_snake_case(name: &str) -> bool {
         && !RUST_KEYWORDS.contains(&name)
 }
 
+/// The snake_case of an enum variant name: a word starts at an uppercase letter
+/// that follows a lowercase letter or a digit, and at the last uppercase letter
+/// of a run that is followed by a lowercase letter (`XmlIoError` is `xml_io_error`).
+/// A digit continues the word before it (`Utf8Bom` is `utf8_bom`).
+fn snake_case_of_name(name: &str) -> String {
+    let chars: Vec<char> = name.chars().collect();
+    let mut out = String::new();
+    for (i, c) in chars.iter().enumerate() {
+        if c.is_ascii_uppercase() && i > 0 {
+            let after_lower_or_digit =
+                chars[i - 1].is_ascii_lowercase() || chars[i - 1].is_ascii_digit();
+            let ends_acronym = chars[i - 1].is_ascii_uppercase()
+                && chars
+                    .get(i + 1)
+                    .is_some_and(|next| next.is_ascii_lowercase());
+            if after_lower_or_digit || ends_acronym {
+                out.push('_');
+            }
+        }
+        out.push(c.to_ascii_lowercase());
+    }
+    out
+}
+
 /// Whether `name` is a placeholder name: `[a-z][a-z0-9_]*`, not a Rust keyword.
 fn is_placeholder_name(name: &str) -> bool {
     name.starts_with(|c: char| c.is_ascii_lowercase())
@@ -164,6 +188,12 @@ fn read_texts(src: &str, problems: &[(&str, &str)]) -> Result<Vec<TextDef>, Stri
         }
         if texts.iter().any(|t| t.key == key) {
             return Err(format!("{row}: the key is used by an earlier row"));
+        }
+        let prefix = snake_case_of_name(name);
+        if key != prefix && !key.starts_with(&format!("{prefix}_")) {
+            return Err(format!(
+                "{row}: the key must be '{prefix}' (the name {name} in snake_case) or start with '{prefix}_'"
+            ));
         }
         let (literal, params) = parse_template(&template).map_err(|e| format!("{row}: {e}"))?;
         texts.push(TextDef {

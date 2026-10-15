@@ -50,7 +50,8 @@ parameters are one declaration that the compiler checks.
 A template is text with named placeholders `{name}` (`[a-z][a-z0-9_]*`); `{{` and
 `}}` are the literal braces; a format spec is not allowed. `build.rs` reads both
 files and fails, naming the row, when a row names a code that is not in
-`problem-codes.csv`, a key is not snake_case or is used twice, a placeholder is
+`problem-codes.csv`, a key is not snake_case, is used twice or is not the name of its problem in
+snake_case (or that name and `_` and more), a placeholder is
 malformed, a brace is unbalanced, or the code is one of the compiler-located
 problems (P9997, P9998, P9999), which have their own constructors on
 `Diagnostic`.
@@ -116,7 +117,7 @@ compile error.
   access (`problems/build.rs` reads the files and writes the result), because
   Cargo does not run the tests of a build script. One test for each failure
   (unknown code, key not snake_case, key a Rust keyword, placeholder a Rust
-  keyword, key repeated, malformed placeholder, format spec, unbalanced `{` and
+  keyword, key repeated, key without the prefix of its problem, malformed placeholder, format spec, unbalanced `{` and
   `}`, compiler-located code, wrong header) and for the generation (parameter
   order, repeated placeholder, `{{`/`}}`, no placeholder).
 

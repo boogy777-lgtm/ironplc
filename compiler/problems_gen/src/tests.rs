@@ -21,7 +21,7 @@ fn refused(rows: &str) -> String {
 
 #[test]
 fn generate_texts_when_code_not_in_problem_codes_then_error_names_line_code_and_key() {
-    let message = refused("P0001,fine,A\nP7777,unknown_code,B");
+    let message = refused("P0001,open_comment_fine,A\nP7777,unknown_code,B");
 
     assert!(message.contains("line 3"), "{message}");
     assert!(message.contains("P7777"), "{message}");
@@ -49,7 +49,7 @@ fn generate_texts_when_key_is_a_rust_keyword_then_error() {
 
 #[test]
 fn generate_texts_when_placeholder_is_a_rust_keyword_then_error() {
-    let message = refused("P0001,keyword_placeholder,\"Value {type}\"");
+    let message = refused("P0001,open_comment_keyword_placeholder,\"Value {type}\"");
 
     assert!(message.contains("{type}"), "{message}");
     assert!(message.contains("keyword"), "{message}");
@@ -57,26 +57,29 @@ fn generate_texts_when_placeholder_is_a_rust_keyword_then_error() {
 
 #[test]
 fn generate_texts_when_key_repeated_then_error_names_the_second_row() {
-    let message = refused("P0001,same,A\nP0002,same,B");
+    let message = refused("P0001,open_comment_same,A\nP0001,open_comment_same,B");
 
     assert!(message.contains("line 3"), "{message}");
-    assert!(message.contains("P0002, 'same'"), "{message}");
+    assert!(message.contains("P0001, 'open_comment_same'"), "{message}");
     assert!(message.contains("used by an earlier row"), "{message}");
 }
 
 #[test]
 fn generate_texts_when_placeholder_malformed_then_error() {
     for template in ["{}", "{0}", "{X}", "{a b}", "{_a}", "{a-b}"] {
-        let message = refused(&format!("P0001,bad,\"{template}\""));
+        let message = refused(&format!("P0001,open_comment_bad,\"{template}\""));
 
-        assert!(message.contains("P0001, 'bad'"), "'{template}': {message}");
+        assert!(
+            message.contains("P0001, 'open_comment_bad'"),
+            "'{template}': {message}"
+        );
         assert!(message.contains(template), "'{template}': {message}");
     }
 }
 
 #[test]
 fn generate_texts_when_placeholder_has_format_spec_then_error() {
-    let message = refused("P0001,bad,\"Value {x:?}\"");
+    let message = refused("P0001,open_comment_bad,\"Value {x:?}\"");
 
     assert!(message.contains("{x:?}"), "{message}");
 }
@@ -84,7 +87,7 @@ fn generate_texts_when_placeholder_has_format_spec_then_error() {
 #[test]
 fn generate_texts_when_open_brace_not_closed_then_error() {
     for template in ["open { here", "{a", "{a{b}}", "{{{a", "{"] {
-        let message = refused(&format!("P0001,bad,\"{template}\""));
+        let message = refused(&format!("P0001,open_comment_bad,\"{template}\""));
 
         assert!(message.contains("not closed"), "'{template}': {message}");
     }
@@ -93,7 +96,7 @@ fn generate_texts_when_open_brace_not_closed_then_error() {
 #[test]
 fn generate_texts_when_close_brace_alone_then_error() {
     for template in ["close } here", "a}", "a}}}", "}"] {
-        let message = refused(&format!("P0001,bad,\"{template}\""));
+        let message = refused(&format!("P0001,open_comment_bad,\"{template}\""));
 
         assert!(
             message.contains("does not close a placeholder"),
@@ -104,7 +107,7 @@ fn generate_texts_when_close_brace_alone_then_error() {
 
 #[test]
 fn generate_texts_when_code_is_compiler_located_then_error() {
-    let message = refused("P9999,not_here,A");
+    let message = refused("P9999,not_implemented_here,A");
 
     assert!(message.contains("NotImplemented"), "{message}");
     assert!(message.contains("compiler-located"), "{message}");
@@ -120,11 +123,11 @@ fn generate_texts_when_header_differs_then_error() {
 
 #[test]
 fn generate_texts_when_placeholders_then_one_display_parameter_each_in_order_of_first_appearance() {
-    let source = generated("P0001,two_names,\"{b} and {a} and {b}\"");
+    let source = generated("P0001,open_comment_two_names,\"{b} and {a} and {b}\"");
 
     assert!(
         source.contains(
-            "pub fn two_names(b: impl std::fmt::Display, a: impl std::fmt::Display) -> Text"
+            "pub fn open_comment_two_names(b: impl std::fmt::Display, a: impl std::fmt::Display) -> Text"
         ),
         "{source}"
     );
@@ -136,10 +139,10 @@ fn generate_texts_when_placeholders_then_one_display_parameter_each_in_order_of_
 
 #[test]
 fn generate_texts_when_escaped_braces_and_placeholder_then_braces_stay_escaped_in_the_format() {
-    let source = generated("P0001,braces,\"Set {{{name}}}\"");
+    let source = generated("P0001,open_comment_braces,\"Set {{{name}}}\"");
 
     assert!(
-        source.contains("pub fn braces(name: impl std::fmt::Display) -> Text"),
+        source.contains("pub fn open_comment_braces(name: impl std::fmt::Display) -> Text"),
         "{source}"
     );
     assert!(source.contains("format!(\"Set {{{name}}}\")"), "{source}");
@@ -147,11 +150,11 @@ fn generate_texts_when_escaped_braces_and_placeholder_then_braces_stay_escaped_i
 
 #[test]
 fn generate_texts_when_no_placeholder_then_no_parameter_and_braces_resolved() {
-    let source = generated("P0001,plain,\"Keep {{this}}\"");
+    let source = generated("P0001,open_comment_plain,\"Keep {{this}}\"");
 
     assert!(
         source.contains(
-            "pub fn plain() -> Text {\n        Text::new(Problem::OpenComment, \"Keep {this}\".to_string())"
+            "pub fn open_comment_plain() -> Text {\n        Text::new(Problem::OpenComment, \"Keep {this}\".to_string())"
         ),
         "{source}"
     );
@@ -159,10 +162,10 @@ fn generate_texts_when_no_placeholder_then_no_parameter_and_braces_resolved() {
 
 #[test]
 fn generate_texts_when_two_rows_for_one_code_then_a_function_for_each_of_that_problem() {
-    let source = generated("P0001,first_wording,A\nP0001,second_wording,B");
+    let source = generated("P0001,open_comment_first,A\nP0001,open_comment_second,B");
 
-    assert!(source.contains("pub fn first_wording()"), "{source}");
-    assert!(source.contains("pub fn second_wording()"), "{source}");
+    assert!(source.contains("pub fn open_comment_first()"), "{source}");
+    assert!(source.contains("pub fn open_comment_second()"), "{source}");
     assert_eq!(
         source.matches("Problem::OpenComment").count(),
         2,
@@ -172,7 +175,7 @@ fn generate_texts_when_two_rows_for_one_code_then_a_function_for_each_of_that_pr
 
 #[test]
 fn generate_texts_when_template_has_quote_and_backslash_then_the_literal_is_escaped() {
-    let source = generated("P0001,quoted,\"Say \"\"hi\"\" \\ now\"");
+    let source = generated("P0001,open_comment_quoted,\"Say \"\"hi\"\" \\ now\"");
 
     assert!(
         source.contains("\"Say \\\"hi\\\" \\\\ now\".to_string()"),
@@ -186,4 +189,45 @@ fn deprecation_note_when_compiler_located_name_then_note_and_otherwise_none() {
     assert!(deprecation_note("NotSupported").is_some());
     assert!(deprecation_note("InternalError").is_some());
     assert!(deprecation_note("SyntaxError").is_none());
+}
+
+#[test]
+fn generate_texts_when_key_lacks_the_name_of_its_problem_then_error_names_the_prefix() {
+    let message = refused("P0002,open_comment_wrong_problem,A");
+
+    assert!(message.contains("line 2"), "{message}");
+    assert!(
+        message.contains("P0002, 'open_comment_wrong_problem'"),
+        "{message}"
+    );
+    assert!(message.contains("syntax_error"), "{message}");
+}
+
+#[test]
+fn generate_texts_when_key_is_the_snake_case_of_the_name_then_accepted() {
+    let source = generated("P0001,open_comment,A");
+
+    assert!(source.contains("pub fn open_comment()"), "{source}");
+}
+
+#[test]
+fn generate_texts_when_key_is_the_name_and_a_word_then_accepted() {
+    let source = generated("P0001,open_comment_x,A");
+
+    assert!(source.contains("pub fn open_comment_x()"), "{source}");
+}
+
+#[test]
+fn generate_texts_when_key_continues_the_name_without_underscore_then_error() {
+    let message = refused("P0001,open_commentx,A");
+
+    assert!(message.contains("open_comment"), "{message}");
+}
+
+#[test]
+fn snake_case_of_name_when_camel_case_acronym_and_digits_then_words_split_once() {
+    assert_eq!(snake_case_of_name("OpenComment"), "open_comment");
+    assert_eq!(snake_case_of_name("Utf8Bom"), "utf8_bom");
+    assert_eq!(snake_case_of_name("XmlIoError"), "xml_io_error");
+    assert_eq!(snake_case_of_name("Simple"), "simple");
 }
