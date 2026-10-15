@@ -5,8 +5,9 @@
 //! * there are no pragmas
 use dsl::{
     core::{FileId, SourceSpan},
-    diagnostic::{Diagnostic, Label},
+    diagnostic::Diagnostic,
 };
+use ironplc_problems::text;
 use logos::Logos;
 
 use crate::token::{Token, TokenType};
@@ -74,18 +75,14 @@ pub fn tokenize(
             Err(_) => {
                 let span = lexer.span();
                 let span = SourceSpan::range(span.start, span.end).with_file_id(file_id);
-                diagnostics.push(Diagnostic::problem(
-                    ironplc_problems::Problem::UnexpectedToken,
-                    Label::span(
-                        span,
-                        format!(
-                            "The text '{}' is not valid IEC 61131-3 text at line {} colum {}.",
-                            lexer.slice(),
-                            // Add +1 to the line and column because these are displayed to users
-                            // having 1-index based positions.
-                            line + 1,
-                            col + 1,
-                        ),
+                diagnostics.push(Diagnostic::text(
+                    span,
+                    text::unexpected_token(
+                        lexer.slice(),
+                        // Add +1 to the line and column because these are displayed to users
+                        // having 1-index based positions.
+                        line + 1,
+                        col + 1,
                     ),
                 ))
             }

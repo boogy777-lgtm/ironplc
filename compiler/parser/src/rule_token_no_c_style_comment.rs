@@ -1,4 +1,5 @@
-use dsl::diagnostic::{Diagnostic, Label};
+use dsl::diagnostic::Diagnostic;
+use ironplc_problems::text;
 
 use crate::{
     options::CompilerOptions,
@@ -19,11 +20,7 @@ pub fn apply(tokens: &[Token], options: &CompilerOptions) -> Result<(), Vec<Diag
             && (tok.text.starts_with("//") || tok.text.starts_with("/*"))
         {
             errors.push(
-                Diagnostic::problem(
-                    ironplc_problems::Problem::CStyleComment,
-                    Label::span(tok.span.clone(), "Comment"),
-                )
-                .with_help(
+                Diagnostic::text(tok.span.clone(), text::c_style_comment()).with_help(
                     "Convert the comment to IEC 61131-3 syntax using `(*` and `*)`, \
                      or select a dialect that supports C-style comments.",
                 ),

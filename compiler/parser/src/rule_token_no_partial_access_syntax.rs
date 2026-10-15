@@ -3,7 +3,8 @@
 //! IEC 61131-3:2013 standardizes this form; IronPLC accepts it under
 //! `--allow-partial-access-syntax`.
 
-use dsl::diagnostic::{Diagnostic, Label};
+use dsl::diagnostic::Diagnostic;
+use ironplc_problems::text;
 
 use crate::{
     options::CompilerOptions,
@@ -29,12 +30,7 @@ pub fn apply(tokens: &[Token], options: &CompilerOptions) -> Result<(), Vec<Diag
     let errors: Vec<Diagnostic> = tokens
         .iter()
         .filter(|t| is_partial_access_token(&t.token_type))
-        .map(|t| {
-            Diagnostic::problem(
-                ironplc_problems::Problem::PartialAccessSyntaxDisabled,
-                Label::span(t.span.clone(), "partial-access selector"),
-            )
-        })
+        .map(|t| Diagnostic::text(t.span.clone(), text::partial_access_syntax_disabled()))
         .collect();
 
     if errors.is_empty() {

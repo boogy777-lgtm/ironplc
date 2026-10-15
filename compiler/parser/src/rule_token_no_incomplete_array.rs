@@ -15,7 +15,8 @@
 //! grammar's whitespace rule `_ = (whitespace() / comment() / pragma())*`
 //! exactly, or the gate would under-enforce.
 
-use dsl::diagnostic::{Diagnostic, Label};
+use dsl::diagnostic::Diagnostic;
+use ironplc_problems::text;
 
 use crate::{
     options::CompilerOptions,
@@ -46,9 +47,9 @@ pub fn apply(tokens: &[Token], options: &CompilerOptions) -> Result<(), Vec<Diag
         }
         if let Some(star) = significant.next() {
             if star.token_type == TokenType::Star {
-                errors.push(Diagnostic::problem(
-                    ironplc_problems::Problem::IncompleteArrayNotAllowed,
-                    Label::span(star.span.clone(), "incomplete array bounds"),
+                errors.push(Diagnostic::text(
+                    star.span.clone(),
+                    text::incomplete_array_not_allowed(),
                 ));
             }
         }

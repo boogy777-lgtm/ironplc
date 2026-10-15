@@ -1,4 +1,5 @@
-use dsl::diagnostic::{Diagnostic, Label};
+use dsl::diagnostic::Diagnostic;
+use ironplc_problems::text;
 
 use crate::{
     options::CompilerOptions,
@@ -67,9 +68,9 @@ pub fn apply(tokens: &[Token], options: &CompilerOptions) -> Result<(), Vec<Diag
             }
             // Check if the next meaningful token is END_VAR
             if j < tokens.len() && tokens[j].token_type == TokenType::EndVar {
-                errors.push(Diagnostic::problem(
-                    ironplc_problems::Problem::EmptyVarBlock,
-                    Label::span(var_tok.span.clone(), "Empty variable block"),
+                errors.push(Diagnostic::text(
+                    var_tok.span.clone(),
+                    text::empty_var_block(),
                 ));
             }
         }

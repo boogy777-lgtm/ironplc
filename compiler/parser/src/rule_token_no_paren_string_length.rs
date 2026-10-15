@@ -22,7 +22,8 @@
 //! braces surface as their own tokens and never sit between the keyword and
 //! `(`.
 
-use dsl::diagnostic::{Diagnostic, Label};
+use dsl::diagnostic::Diagnostic;
+use ironplc_problems::text;
 
 use crate::{
     options::CompilerOptions,
@@ -54,9 +55,9 @@ pub fn apply(tokens: &[Token], options: &CompilerOptions) -> Result<(), Vec<Diag
         // the parenthesis length form.
         if let Some(next) = tokens[i + 1..].iter().find(|t| !is_trivia(&t.token_type)) {
             if next.token_type == TokenType::LeftParen {
-                errors.push(Diagnostic::problem(
-                    ironplc_problems::Problem::ParenStringLengthNotAllowed,
-                    Label::span(next.span.clone(), "parenthesis length delimiter"),
+                errors.push(Diagnostic::text(
+                    next.span.clone(),
+                    text::paren_string_length_not_allowed(),
                 ));
             }
         }
