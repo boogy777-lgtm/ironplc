@@ -132,7 +132,3 @@ END_IF;
     let stmts = cast!(&fb_decl.body, FunctionBlockBodyKind::Statements);
     assert!(!stmts.body.is_empty(), "Expected parsed statements");
 }
-
-// ========================================================================
-// Configuration transform tests
-// ========================================================================

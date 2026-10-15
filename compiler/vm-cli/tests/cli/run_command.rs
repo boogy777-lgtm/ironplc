@@ -93,8 +93,8 @@ fn write_divide_by_zero_container(path: &Path) {
     ];
 
     // Deliberately a single function: init *is* the entry point, so the trap
-    // happens inside `start()`. `write_scan_divide_by_zero_container` below is
-    // the init/scan-split counterpart that traps inside `run_round`.
+    // happens inside `start()`. `write_scan_divide_by_zero_container` in
+    // `benchmark_command.rs` is the init/scan-split counterpart that traps inside `run_round`.
     let container = ContainerBuilder::new()
         .num_variables(0)
         .add_i32_constant(10)

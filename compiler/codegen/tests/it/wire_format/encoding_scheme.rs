@@ -5,7 +5,7 @@ use ironplc_container::opcode;
 // ---------------------------------------------------------------------------
 // 2. Encoding-scheme tests.
 //
-// These don't repeat the pinning above; they verify *structural*
+// These don't repeat the pinning in `opcode_bytes.rs`; they verify *structural*
 // invariants of the `[op_class:6][type:2]` scheme. A renumbering that
 // preserved every byte value but broke the scheme would be unusual,
 // but a renumbering that broke a single family's invariants is

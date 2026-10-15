@@ -5,7 +5,7 @@ use ironplc_container::opcode;
 // ---------------------------------------------------------------------------
 // Completeness guard.
 //
-// The per-family tests above pin the byte value of every opcode by name. This
+// The per-family tests in `opcode_bytes.rs` pin the byte value of every opcode by name. This
 // test proves that set is *complete*: it compares the pinned registry below to
 // the set of assigned opcodes reported by `opcode::is_assigned` (which is
 // derived from `instruction_size`, the match every new opcode must update).
@@ -16,7 +16,7 @@ use ironplc_container::opcode;
 
 #[test]
 fn opcode_pins_when_compared_to_assigned_set_then_complete() {
-    // Every opcode byte pinned by the family tests above. Keep in sync with
+    // Every opcode byte pinned by the family tests in `opcode_bytes.rs`. Keep in sync with
     // `instruction_size` in `container/src/opcode.rs`.
     let pinned: &[u8] = &[
         opcode::ADD_I32,

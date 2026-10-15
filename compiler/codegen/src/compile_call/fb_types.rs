@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use ironplc_container::opcode;
 
-// --- FB type helpers and string conversion (moved from compile.rs) ---
+// --- Standard function block type resolution and field maps ---
 
 /// Resolves a standard FB type name to its (type_id, total_num_fields, field_name->index map).
 /// Returns None for unknown FB types.
