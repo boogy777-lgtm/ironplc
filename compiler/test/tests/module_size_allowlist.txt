@@ -15,7 +15,6 @@ codegen/src/compile_call.rs 1276
 codegen/src/compile_expr.rs 1836
 codegen/src/emit.rs 2233
 codegen/tests/it/wire_format.rs 1058
-container/src/debug_section.rs 1167
 container/src/spec_conformance.rs 1110
 dsl/src/common.rs 3622
 dsl/src/textual.rs 1482
