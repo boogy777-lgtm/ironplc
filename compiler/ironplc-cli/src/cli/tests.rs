@@ -35,12 +35,12 @@ fn problem_count(err: &str) -> usize {
 #[test]
 fn problem_help_url_when_diagnostic_then_url_tagged_for_cli() {
     use ironplc_dsl::core::SourceSpan;
-    use ironplc_dsl::diagnostic::{Diagnostic, Label};
-    use ironplc_problems::Problem;
+    use ironplc_dsl::diagnostic::Diagnostic;
+    use ironplc_problems::text;
 
-    let diag = Diagnostic::problem(
-        Problem::SyntaxError,
-        Label::span(SourceSpan::default(), "some error".to_string()),
+    let diag = Diagnostic::text(
+        SourceSpan::default(),
+        text::syntax_error_a_task_needs_a_priority(),
     )
     .with_source("compiler/analyzer/src/rule_example.rs", 42);
 

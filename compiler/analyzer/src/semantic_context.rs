@@ -283,20 +283,13 @@ mod tests {
     #[test]
     fn semantic_context_when_add_diagnostics_then_has_diagnostics() {
         use ironplc_dsl::core::SourceSpan;
-        use ironplc_dsl::diagnostic::Label;
-        use ironplc_problems::Problem;
+        use ironplc_problems::text;
 
         let mut ctx = SemanticContextBuilder::new().build().unwrap();
 
         let diagnostics = vec![
-            Diagnostic::problem(
-                Problem::NoContent,
-                Label::span(SourceSpan::default(), "test diagnostic 1"),
-            ),
-            Diagnostic::problem(
-                Problem::NoContent,
-                Label::span(SourceSpan::default(), "test diagnostic 2"),
-            ),
+            Diagnostic::text(SourceSpan::default(), text::no_content_first_location()),
+            Diagnostic::text(SourceSpan::default(), text::no_content_first_location()),
         ];
         ctx.add_diagnostics(diagnostics);
 

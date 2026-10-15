@@ -12,7 +12,6 @@ use ironplc_dsl::core::SourceSpan;
 use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_parser::options::{CompilerOptions, Dialect};
 use ironplc_problems::{text, Text};
-// The tests of this module name `Label` and `Problem` through `use super::*`.
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -261,8 +260,6 @@ fn truncate(s: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ironplc_dsl::diagnostic::Label;
-    use ironplc_problems::Problem;
 
     // -- validate_sources tests --
 
@@ -481,9 +478,9 @@ mod tests {
 
     #[test]
     fn serialize_diagnostic_when_called_then_has_byte_offsets() {
-        let diag = Diagnostic::problem(
-            Problem::SyntaxError,
-            Label::span(SourceSpan::range(10, 15), "test"),
+        let diag = Diagnostic::text(
+            SourceSpan::range(10, 15),
+            text::syntax_error_a_task_needs_a_priority(),
         );
         let json = serialize_diagnostic(&diag);
         assert_eq!(json["start"], 10);
@@ -492,9 +489,9 @@ mod tests {
 
     #[test]
     fn serialize_diagnostic_when_called_then_has_code_and_message() {
-        let diag = Diagnostic::problem(
-            Problem::SyntaxError,
-            Label::span(SourceSpan::range(0, 1), "here"),
+        let diag = Diagnostic::text(
+            SourceSpan::range(0, 1),
+            text::syntax_error_a_task_needs_a_priority(),
         );
         let json = serialize_diagnostic(&diag);
         assert_eq!(json["code"], "P0002");

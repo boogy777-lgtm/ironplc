@@ -135,9 +135,9 @@ mod tests {
     use ironplc_codegen::EmptyLookup;
     use ironplc_container::StableVarEntry;
     use ironplc_dsl::core::{FileId, SourceSpan};
-    use ironplc_dsl::diagnostic::{Diagnostic, Label};
+    use ironplc_dsl::diagnostic::Diagnostic;
     use ironplc_parser::options::CompilerOptions;
-    use ironplc_problems::Problem;
+    use ironplc_problems::text;
 
     use super::compile;
     use crate::project::{FileBackedProject, MemoryBackedProject, Project};
@@ -145,9 +145,9 @@ mod tests {
     /// Stands in for a problem the caller found before the pipeline ran, the
     /// way project discovery does for the CLI.
     fn seeded_diagnostic() -> Vec<Diagnostic> {
-        vec![Diagnostic::problem(
-            Problem::CannotReadFile,
-            Label::span(SourceSpan::default(), "discovery problem"),
+        vec![Diagnostic::text(
+            SourceSpan::default(),
+            text::cannot_read_file("discovery problem"),
         )]
     }
 
