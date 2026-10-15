@@ -53,7 +53,7 @@ use ironplc_dsl::{
     textual::*,
     visitor::Visitor,
 };
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use std::convert::Infallible;
 
 use crate::{
@@ -135,9 +135,9 @@ impl RuleFunctionCallTypeCheck<'_> {
             value_type::check(self.context.types(), &target_type, value, self.options)
         {
             self.diagnostics.push(
-                Diagnostic::problem(
-                    Problem::FunctionCallReturnTypeMismatch,
-                    Label::span(func_call.name.span(), "Function call return type"),
+                Diagnostic::text(
+                    func_call.name.span(),
+                    text::function_call_return_type_mismatch_function_call_return_type(),
                 )
                 .with_context("function", &func_call.name.original().to_string())
                 .with_context("return_type", &mismatch.actual)
@@ -195,9 +195,9 @@ impl RuleFunctionCallTypeCheck<'_> {
 
         if let Err(mismatch) = value_type::check(types, &target_type, value, self.options) {
             self.diagnostics.push(
-                Diagnostic::problem(
-                    Problem::AssignmentTypeMismatch,
-                    Label::span(value.span(), "Assignment value"),
+                Diagnostic::text(
+                    value.span(),
+                    text::assignment_type_mismatch_assignment_value(),
                 )
                 .with_context("target", &nv.name.original().to_string())
                 .with_context("target_type", &target_type.to_string())
@@ -310,9 +310,9 @@ impl Visitor<Infallible> for RuleFunctionCallTypeCheck<'_> {
                     self.options,
                 ) {
                     self.diagnostics.push(
-                        Diagnostic::problem(
-                            Problem::FunctionCallArgTypeMismatch,
-                            Label::span(node.name.span(), "Function call"),
+                        Diagnostic::text(
+                            node.name.span(),
+                            text::function_call_arg_type_mismatch_function_call(),
                         )
                         .with_context("function", &node.name.original().to_string())
                         .with_context("parameter", &param.name.original().to_string())

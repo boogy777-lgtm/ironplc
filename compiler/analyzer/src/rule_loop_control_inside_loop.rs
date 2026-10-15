@@ -29,13 +29,8 @@
 //!   EXIT;
 //! END_PROGRAM
 //! ```
-use ironplc_dsl::{
-    common::*,
-    diagnostic::{Diagnostic, Label},
-    textual::*,
-    visitor::Visitor,
-};
-use ironplc_problems::Problem;
+use ironplc_dsl::{common::*, diagnostic::Diagnostic, textual::*, visitor::Visitor};
+use ironplc_problems::text;
 use std::convert::Infallible;
 
 use crate::{
@@ -91,23 +86,12 @@ impl Visitor<Infallible> for RuleLoopControlInsideLoop {
     fn visit_stmt_kind(&mut self, node: &StmtKind) -> Result<(), Infallible> {
         if self.loop_depth == 0 {
             let outside_loop = match node {
-                StmtKind::Exit(span) => Some((
-                    Problem::ExitOutsideLoop,
-                    span,
-                    "EXIT must be inside a FOR, WHILE, or REPEAT loop",
-                )),
-                StmtKind::Continue(span) => Some((
-                    Problem::ContinueOutsideLoop,
-                    span,
-                    "CONTINUE must be inside a FOR, WHILE, or REPEAT loop",
-                )),
+                StmtKind::Exit(span) => Some((span, text::exit_outside_loop())),
+                StmtKind::Continue(span) => Some((span, text::continue_outside_loop())),
                 _ => None,
             };
-            if let Some((problem, span, message)) = outside_loop {
-                self.diagnostics.push(Diagnostic::problem(
-                    problem,
-                    Label::span(span.clone(), message),
-                ));
+            if let Some((span, text)) = outside_loop {
+                self.diagnostics.push(Diagnostic::text(span.clone(), text));
             }
         }
         node.recurse_visit(self)

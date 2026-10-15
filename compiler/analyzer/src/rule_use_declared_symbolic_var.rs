@@ -49,7 +49,7 @@ use ironplc_dsl::{
     textual::*,
     visitor::Visitor,
 };
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 
 use crate::{
     intermediates::{
@@ -281,9 +281,9 @@ impl Visitor<Infallible> for SymbolScopeChecker<'_> {
         // variable: it is a value or scope this compiler does not support.
         if let Some(operator) = unsupported_name(&node.name, &self.options) {
             self.diagnostics.push(
-                Diagnostic::problem(
-                    Problem::SpecialOperatorNotSupported,
-                    Label::span(node.name.span(), "Unsupported special operator"),
+                Diagnostic::text(
+                    node.name.span(),
+                    text::special_operator_not_supported_unsupported_special_operator(),
                 )
                 .with_context("operator", &operator.to_string()),
             );
@@ -302,9 +302,9 @@ impl Visitor<Infallible> for SymbolScopeChecker<'_> {
             node.name.original(),
             self.table.keys().iter().map(|k| k.original().as_str()),
         );
-        let mut diagnostic = Diagnostic::problem(
-            Problem::VariableUndefined,
-            Label::span(node.name.span(), "Undefined variable"),
+        let mut diagnostic = Diagnostic::text(
+            node.name.span(),
+            text::variable_undefined_undefined_variable(),
         )
         .with_context_id("variable", &node.name);
         if let Some(suggestion) = suggestion {
@@ -319,6 +319,7 @@ impl Visitor<Infallible> for SymbolScopeChecker<'_> {
 mod tests {
     use crate::semantic_context::SemanticContextBuilder;
     use crate::test_helpers::parse_and_resolve_types;
+    use ironplc_problems::Problem;
 
     use super::*;
 

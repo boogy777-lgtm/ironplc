@@ -74,12 +74,12 @@
 use ironplc_dsl::{
     common::*,
     core::{Id, Located},
-    diagnostic::{Diagnostic, Label},
+    diagnostic::Diagnostic,
     scope::ScopeNode,
     textual::*,
     visitor::Visitor,
 };
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use std::convert::Infallible;
 
 use crate::{
@@ -306,9 +306,9 @@ impl Visitor<Infallible> for RuleFunctionCallInOutArgument<'_> {
                 };
                 if !is_variable {
                     self.diagnostics.push(
-                        Diagnostic::problem(
-                            Problem::FunctionCallInOutArgNotVariable,
-                            Label::span(arg.span(), "Argument"),
+                        Diagnostic::text(
+                            arg.span(),
+                            text::function_call_in_out_arg_not_variable_argument(),
                         )
                         .with_context("function", &node.name.original().to_string())
                         .with_context("parameter", &param.name.original().to_string()),
@@ -326,12 +326,9 @@ impl Visitor<Infallible> for RuleFunctionCallInOutArgument<'_> {
                 };
                 if !writable {
                     self.diagnostics.push(
-                        Diagnostic::problem(
-                            Problem::InOutArgNotWritable,
-                            Label::span(arg.span(), "Argument"),
-                        )
-                        .with_context("function", &node.name.original().to_string())
-                        .with_context("parameter", &param.name.original().to_string()),
+                        Diagnostic::text(arg.span(), text::in_out_arg_not_writable_argument())
+                            .with_context("function", &node.name.original().to_string())
+                            .with_context("parameter", &param.name.original().to_string()),
                     );
                 }
 
@@ -349,9 +346,9 @@ impl Visitor<Infallible> for RuleFunctionCallInOutArgument<'_> {
                 };
                 if expected != actual {
                     self.diagnostics.push(
-                        Diagnostic::problem(
-                            Problem::FunctionCallInOutArgTypeMismatch,
-                            Label::span(arg.span(), "Argument"),
+                        Diagnostic::text(
+                            arg.span(),
+                            text::function_call_in_out_arg_type_mismatch_argument(),
                         )
                         .with_context("function", &node.name.original().to_string())
                         .with_context("parameter", &param.name.original().to_string())
@@ -370,6 +367,7 @@ impl Visitor<Infallible> for RuleFunctionCallInOutArgument<'_> {
 mod tests {
     use super::*;
     use crate::test_helpers::parse_and_resolve_types_with_context;
+    use ironplc_problems::Problem;
     use rstest::rstest;
 
     const INC: &str = "
