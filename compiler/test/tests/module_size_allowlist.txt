@@ -8,7 +8,6 @@
 analyzer/src/intermediates/stdlib_function.rs 1337
 analyzer/src/rule_function_call_type_check.rs 1860
 analyzer/src/type_environment.rs 1905
-analyzer/src/xform_resolve_symbol_and_function_environment.rs 1340
 codegen/src/compile.rs 2387
 codegen/src/compile_call.rs 1276
 codegen/src/compile_expr.rs 1836
