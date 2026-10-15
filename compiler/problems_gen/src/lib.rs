@@ -10,8 +10,8 @@
 // `Diagnostic` constructors (`todo*`/`not_implemented`/`internal_error*`)
 // so that the compiler `file#Lline` is recorded and the P9xxx telemetry
 // dashboards can rank them. The variants are marked `#[deprecated]` and the
-// workspace denies the `deprecated` lint, so any direct
-// `Diagnostic::problem(Problem::NotImplemented, …)` fails to compile.
+// workspace denies the `deprecated` lint, so any direct use of the variant
+// fails to compile.
 const COMPILER_LOCATED: &[(&str, &str)] = &[
     (
         "NotSupported",

@@ -164,9 +164,9 @@ Use specific problem codes for XML-related errors:
 Create diagnostics with file context:
 
 ```rust
-Diagnostic::problem(
-    Problem::XmlSchemaViolation,
-    Label::span(file_span(file_id), "Description of the issue"),
+Diagnostic::text(
+    file_span(file_id),
+    text::xml_schema_violation_root_element(root_tag),
 )
 ```
 

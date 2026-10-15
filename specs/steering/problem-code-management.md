@@ -265,32 +265,24 @@ Diagnostic::text(fault.span, text::attribute_repeated(name))
   because other tools read that one. See
   [ADR-0077](../adrs/0077-message-texts-in-a-checked-dictionary.md).
 
-#### Existing call sites
+#### The constructors of a diagnostic
 
-Call sites not yet migrated build the text with `format!` in
-`Diagnostic::problem(Problem, Label)`. They are migrated over time, one crate or
-one family of codes at a time; a new text does not use that form.
+`Diagnostic::problem(Problem, Label)` is private to its module: it is the shared
+body of the constructors of `ironplc_dsl::diagnostic::Diagnostic`, and a call to
+it from outside the module does not compile. A diagnostic of a problem is made by
+exactly these:
 
-```rust
-// Simple error with primary location
-Diagnostic::problem(
-    Problem::SubrangeOutOfBounds,
-    Label::span(
-        type_name.span(),
-        format!(
-            "Subrange [{}, {}] is outside base type bounds [{}, {}]",
-            min_value, max_value, type_min, type_max
-        ),
-    ),
-)
+- `Diagnostic::text(span, text)` and `Diagnostic::text_in_file(file_id, text)`
+  for a problem of the program: the code and the primary label text come from one
+  row, so a label text that is not a row cannot be paired with a code.
+- `Diagnostic::not_implemented`, `not_supported`, `internal_error_at`,
+  `internal_error` and the `todo_with_*` constructors for a gap in the compiler
+  (below). They take the primary label as the caller writes it because the
+  compiler `file#Lline` is their point, not the wording.
 
-// Error with additional context
-Diagnostic::problem(
-    Problem::ParentTypeNotDeclared,
-    Label::span(node_name.span(), "Subrange declaration"),
-)
-.with_secondary(Label::span(base_type_name.span(), "Base type not found"))
-```
+A secondary label (`Diagnostic::with_secondary(Label::span(span, message))`)
+takes any string, so nothing yet stops a `format!` there; the rule above is that
+a secondary label of a migrated code is also a row of that code.
 
 #### Compiler-located problems (P9997 / P9998 / P9999)
 
@@ -298,7 +290,7 @@ Diagnostic::problem(
 `Problem::InternalError` (P9998) describe a gap in the *compiler*, not the
 program. Their most useful "location" is the compiler `file#Lline` that produced
 them — the telemetry dashboards rank that to point maintainers at the code that
-needs work. Constructing them via `Diagnostic::problem(...)` drops that location,
+needs work. Constructing them directly drops that location,
 so **all three variants are `#[deprecated]` and the workspace denies the
 `deprecated` lint — using them directly does not compile.** Use the dedicated
 constructors, which capture the call site's location automatically via
@@ -510,9 +502,9 @@ Before adding a new VM error code:
 ### Range Validation Errors
 ```rust
 if min_value > max_value {
-    return Err(Diagnostic::problem(
-        Problem::SubrangeMinStrictlyLessMax,
-        Label::span(node_name.span(), "Subrange instance"),
+    return Err(Diagnostic::text(
+        node_name.span(),
+        text::subrange_min_strictly_less_max_subrange_declaration(),
     ));
 }
 ```
@@ -525,9 +517,9 @@ declared with an error, because its own declaration is reported.
 
 ```rust
 let base_type = type_environment.lookup(&base_type_name).or_failure(|| {
-    Diagnostic::problem(
-        Problem::ParentTypeNotDeclared,
-        Label::span(node_name.span(), "Type declaration"),
+    Diagnostic::text(
+        node_name.span(),
+        text::parent_type_not_declared_derived_type(),
     )
     .with_secondary(Label::span(base_type_name.span(), "Type not found"))
 })?;
@@ -535,13 +527,10 @@ let base_type = type_environment.lookup(&base_type_name).or_failure(|| {
 
 ### Bounds Checking Errors
 ```rust
-if value < type_min || value > type_max {
-    return Err(Diagnostic::problem(
-        Problem::SubrangeOutOfBounds,
-        Label::span(
-            location.span(),
-            format!("Value {} is outside type bounds [{}, {}]", value, type_min, type_max),
-        ),
+if length > max_length {
+    return Err(Diagnostic::text(
+        location.span(),
+        text::string_length_out_of_range_more_than_a_string_can_hold(length),
     ));
 }
 ```

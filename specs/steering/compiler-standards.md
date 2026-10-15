@@ -137,7 +137,7 @@ When writing compiler code:
   [compiler-architecture.md](compiler-architecture.md#error-handling) and
   [ADR-0048](../adrs/0048-semantic-rules-cannot-fail.md))
 - Provide clear, actionable error messages: include what was expected vs. found
-- Use `Diagnostic::problem()` with an appropriate `Label::span()` for source location
+- Use `Diagnostic::text()` with the span of the place and a row of the message dictionary for source location (see [problem-code-management.md](problem-code-management.md#the-constructors-of-a-diagnostic))
 - Use the `internal_error` and `not_supported` helpers for the special cases they
   name — a compiler invariant that was violated (a bug) and a construct that is
   valid IEC 61131-3 but not yet implemented — rather than inventing a new
