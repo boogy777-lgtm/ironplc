@@ -120,7 +120,7 @@ pub(crate) fn struct_array_element_field_type(
     structured: &ironplc_dsl::textual::StructuredVariable,
 ) -> Result<IntermediateType, Diagnostic> {
     let array = locate_array_of_struct(ctx, structured)?;
-    let IntermediateType::Structure { fields } = &array.element_type else {
+    let IntermediateType::Structure { fields, .. } = &array.element_type else {
         return Err(Diagnostic::not_implemented(Label::span(
             structured.field.span(),
             format!(
@@ -293,6 +293,7 @@ fn struct_array_element_field<'ctx, 'ast>(
 ) -> Result<ResolvedAccess<'ctx, 'ast>, Diagnostic> {
     let IntermediateType::Structure {
         fields: element_fields,
+        ..
     } = element_type
     else {
         return Err(Diagnostic::not_implemented(Label::span(
@@ -473,7 +474,7 @@ pub(crate) fn register_struct_element_strings(
     for f in &field_infos {
         let slot = base_slot + f.slot_offset.raw();
         match &f.field_type {
-            IntermediateType::Structure { fields } => {
+            IntermediateType::Structure { fields, .. } => {
                 register_struct_element_strings(ctx, builder, fields, slot, span, out)?;
             }
             IntermediateType::Array {
@@ -511,7 +512,7 @@ fn register_array_element_strings(
     span: &SourceSpan,
     out: &mut Vec<ElementStringField>,
 ) -> Result<(), Diagnostic> {
-    let IntermediateType::Structure { fields } = element_type else {
+    let IntermediateType::Structure { fields, .. } = element_type else {
         return Ok(());
     };
     let element_bytes = element_type
@@ -720,7 +721,7 @@ fn struct_fields<'a>(
     span: &SourceSpan,
 ) -> Result<&'a [ironplc_analyzer::intermediate_type::IntermediateStructField], Diagnostic> {
     match element_type {
-        IntermediateType::Structure { fields } => Ok(fields),
+        IntermediateType::Structure { fields, .. } => Ok(fields),
         _ => Err(Diagnostic::not_implemented(Label::span(
             span.clone(),
             "Array element type is not a structure",

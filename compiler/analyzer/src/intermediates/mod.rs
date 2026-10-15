@@ -4,6 +4,7 @@ pub(crate) mod declared_default;
 pub mod enumeration;
 pub mod global_vars;
 pub mod inherited_fields;
+pub mod layout;
 pub mod operator_function_form;
 pub mod params;
 pub mod special_operator;

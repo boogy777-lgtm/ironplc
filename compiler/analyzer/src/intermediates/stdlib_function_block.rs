@@ -15,6 +15,7 @@ use ironplc_dsl::core::{Id, SourceSpan};
 use crate::intermediate_type::{
     ByteSized, FunctionBlockVarType, IntermediateStructField, IntermediateType,
 };
+use crate::intermediates::layout::{layout, AlignmentBound};
 use crate::type_attributes::TypeAttributes;
 
 // Type constants for common types used in stdlib function blocks
@@ -51,47 +52,28 @@ const COUNTER_INT_VARIANTS: &[(&str, IntBuilder)] = &[
     }), // ULINT
 ];
 
-/// Builds an IntermediateStructField with proper offset calculation.
-fn build_field(
-    name: &str,
-    field_type: IntermediateType,
-    var_type: FunctionBlockVarType,
-    current_offset: &mut u32,
-) -> IntermediateStructField {
-    // Calculate alignment
-    let alignment = field_type.alignment_bytes() as u32;
-    let aligned_offset = if alignment == 0 {
-        *current_offset
-    } else {
-        current_offset.div_ceil(alignment) * alignment
-    };
-
-    // Calculate size
-    let size = field_type.size_in_bytes().unwrap_or(0);
-
-    let field = IntermediateStructField {
-        name: Id::from(name),
-        field_type,
-        offset: aligned_offset,
-        var_type: Some(var_type),
-        initial_value: None, // Function block fields don't have defaults in the const sense
-    };
-
-    *current_offset = aligned_offset + size;
-    field
-}
-
 /// Builds TypeAttributes for a standard library function block.
 fn build_function_block(
     name: &str,
     field_defs: &[(&str, IntermediateType, FunctionBlockVarType)],
 ) -> TypeAttributes {
-    let mut current_offset = 0u32;
+    let laid_out = layout(
+        field_defs.iter().map(|(_, field_type, _)| field_type),
+        AlignmentBound::Natural,
+    );
     let fields: Vec<IntermediateStructField> = field_defs
         .iter()
-        .map(|(name, field_type, var_type)| {
-            build_field(name, field_type.clone(), *var_type, &mut current_offset)
-        })
+        .zip(laid_out.offsets)
+        .map(
+            |((name, field_type, var_type), offset)| IntermediateStructField {
+                name: Id::from(name),
+                field_type: field_type.clone(),
+                offset,
+                var_type: Some(*var_type),
+                // Function block fields don't have defaults in the const sense
+                initial_value: None,
+            },
+        )
         .collect();
 
     TypeAttributes::new(

@@ -19,10 +19,11 @@ of the syntax tree fills it; the analysis keeps it; the renderer writes it
 back as the pragmas it came from.
 
 **Out of scope.** What an attribute does to the analysis or to the generated
-code is not part of this document: no part of IronPLC acts on an attribute yet.
-The names the compiler knows, the places a known attribute may stand and the
-values it takes are in scope (see [The registry](#the-registry)); an attribute
-with no row is accepted and kept as written.
+code is not part of this document, except for the attributes of the family
+Layout (see [Layout](#layout)); no other part of IronPLC acts on an attribute
+yet. The names the compiler knows, the places a known attribute may stand and
+the values it takes are in scope (see [The registry](#the-registry)); an
+attribute with no row is accepted and kept as written.
 
 The conditional pragmas (`{IF}`, `{DEFINE}`, ...) stay in
 [codesys-jump-and-pragmas.md](codesys-jump-and-pragmas.md); the decision to
@@ -174,7 +175,8 @@ compiler knows about an attribute:
 - the **summary**: one line saying what the attribute does in CODESYS;
 - the **state**: `Waiting` when no part of IronPLC acts on the attribute yet,
   so the compiler reads and checks it and does nothing else with it;
-  `Honoured` when a part of IronPLC acts on it. Every row is `Waiting` today.
+  `Honoured` when a part of IronPLC acts on it. Every row is `Waiting`
+  except `pack_mode` and `subsequent`, which are `Honoured`.
 
 An attribute that has no row is **user-defined**. It is accepted and kept as
 written, and nothing is reported about it unless it is written twice.
@@ -327,6 +329,95 @@ one for each declaration.
 
 **REQ-ATTR-analyzer-014** An attribute that is user-defined is not reported,
 and neither is a known attribute where it may stand with a value it takes.
+
+## Layout
+
+The family Layout holds the attributes that decide where the data of a
+declaration stands in memory: `pack_mode` for the members of a structure and
+`subsequent` for the variables of a program or a global variable list. Both rows
+are `Honoured`. The decision that `pack_mode` describes the byte image and not
+the storage of the virtual machine is
+[ADR-0078](../adrs/0078-pack-mode-describes-the-byte-image-not-the-vm-slot-storage.md).
+
+### The byte image and the storage
+
+The **byte image** of a structure is the layout the CODESYS help describes: each
+member at an offset, the structure with a size. `SIZEOF` and the byte offsets
+describe it. The **storage** of a structure in the virtual machine is whole
+8-byte slots, one or more for each member, and no attribute changes it. The code
+generated for the members is the same with every value of `pack_mode`.
+
+### The mode
+
+`pack_mode` takes 0, 1, 2, 4 or 8; the mode 0 is the mode 1. The mode is an
+upper bound on the alignment of the members of the structure or union that it
+stands before:
+
+- the offset of a member is the next multiple of the smaller of the alignment
+  of the member and the mode after the end of the member before it;
+- the alignment of the structure is the smaller of the largest alignment of its
+  members (under the same bound) and the mode, and 1 when it has no member;
+- a structure without `pack_mode` has no bound: each member is aligned to its
+  own alignment. Whether the default of CODESYS without the attribute is a
+  bound of 4 or of 8 is not known yet.
+
+**REQ-ATTR-analyzer-020** The offsets of the members of a structure and of a
+union follow the mode of the attribute `pack_mode` before it: for the structures
+of the three examples of the CODESYS help, in each of the modes 0, 1, 2, 4 and
+8, the offsets and the size are those of the help.
+
+**REQ-ATTR-analyzer-021** The alignment of a structure is the smaller of the
+largest alignment of its members and the mode; a structure without the
+attribute has the largest alignment of its members.
+
+**REQ-ATTR-analyzer-022** The offsets of the members of a structure, a union and
+a function block are answered by one function of the members' types and the
+bound on their alignment; a function block has no bound.
+
+**REQ-ATTR-analyzer-023** `pack_mode` before an array type is accepted and has
+no effect, and before a global variable list it is reported as P4076.
+
+### The size
+
+A structure has two sizes. Its **byte image size**, the size `SIZEOF` answers, is
+the end of its last member, without padding to its alignment (the structure of
+the third example of the help in the mode 8 is 28 bytes, not 32). Its
+**stride** is the byte image size padded up to its alignment: it is the space an
+element of an array occupies and the space a member that is a structure
+occupies in the structure that holds it. The size of an array is its number of
+elements times the stride of an element.
+
+The padding at the end of the byte image is a provisional decision, to be
+checked on a live CODESYS. It is made in one function (`Layout::byte_image_size`),
+and the opposite decision is a change of that function alone.
+
+**REQ-ATTR-codegen-001** `SIZEOF` of a variable of a structure type is the byte
+image size of the structure, in each mode of `pack_mode`.
+
+**REQ-ATTR-codegen-002** `SIZEOF` of an array of structures is the number of
+elements times the stride of the structure, and `SIZEOF` of a structure with a
+member that is a structure counts the stride of that member.
+
+`SIZEOF` takes a variable; it does not take the name of a type.
+
+### subsequent
+
+`subsequent` asks for the variables of a program or of a global variable list to
+be allocated one after another. The compiler allocates the variables of a
+program and of a global variable list in declaration order, in consecutive
+entries of the variable table, so the attribute is honoured without a change of
+the allocation.
+
+**REQ-ATTR-codegen-003** The variables of a program and of a global variable
+list with the attribute `subsequent` have consecutive indices in the variable
+table, in the order they are declared.
+
+Not done: starting a new memory area when the list changes, and the memory for
+retained variables. The compiler has no such memory, so a variable of the list
+qualified `RETAIN` is not stored apart from the other variables. CODESYS reports
+a `VAR_TEMP` block in a program with the attribute as an error; the parser
+takes no `VAR_TEMP` block in a program, so the combination is a syntax error
+(P0002) before the analysis.
 
 ## The reference page
 

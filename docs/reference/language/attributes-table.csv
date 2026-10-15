@@ -2,8 +2,8 @@ Family,Name,Aliases,Stands before,Value,In CODESYS,State
 Enumeration,:code:`strict`,,enumeration type,no value,"A strict type test for the enumeration: no arithmetic with its values, no assignment of a value that is not one of them",Waiting
 Enumeration,:code:`to_string`,,enumeration type,no value,:code:`TO_STRING` of a value of the enumeration gives the name of the value,Waiting
 Name scope,:code:`qualified_only`,,"enumeration type, variable",no value,"A value of the enumeration, or a variable of the global variable list, is addressed only with the name of the type or the list",Waiting
-Layout,:code:`pack_mode`,,"array type, structure type, union type","one of 0, 1, 2, 4, 8",How the members of the structure are aligned in memory,Waiting
-Layout,:code:`subsequent`,,"variable, program",no value,The variables of the program or the global variable list are allocated one after another in memory,Waiting
+Layout,:code:`pack_mode`,,"array type, structure type, union type","one of 0, 1, 2, 4, 8",How the members of the structure are aligned in memory,Honoured
+Layout,:code:`subsequent`,,"variable, program",no value,The variables of the program or the global variable list are allocated one after another in memory,Honoured
 Visibility,:code:`hide`,,every declaration,no value,"The declaration is not shown in monitoring, debugging, input assistance and the symbol configuration; it stays usable by name",Waiting
 Visibility,:code:`hide_all_locals`,,"function, function block, program, method, property",no value,Every local variable of the block is hidden as by :code:`hide`,Waiting
 Visibility,:code:`conditionalshow`,,every declaration,"any text, or no value",The declaration of a compiled library is hidden unless the library is opened with the matching option,Waiting

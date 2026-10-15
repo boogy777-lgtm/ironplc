@@ -4,7 +4,10 @@ use super::*;
 
 #[test]
 fn structure_alignment_bytes_with_empty_structure_then_returns_one() {
-    let struct_type = IntermediateType::Structure { fields: vec![] };
+    let struct_type = IntermediateType::Structure {
+        fields: vec![],
+        bound: AlignmentBound::Natural,
+    };
     assert_eq!(struct_type.alignment_bytes(), 1);
 }
 
@@ -23,7 +26,10 @@ fn structure_alignment_bytes_with_single_field_then_returns_field_alignment() {
         initial_value: None,
     }];
 
-    let struct_type = IntermediateType::Structure { fields };
+    let struct_type = IntermediateType::Structure {
+        fields,
+        bound: AlignmentBound::Natural,
+    };
     assert_eq!(struct_type.alignment_bytes(), 4);
 }
 
@@ -62,7 +68,10 @@ fn structure_alignment_bytes_with_multiple_fields_then_returns_max_alignment() {
         },
     ];
 
-    let struct_type = IntermediateType::Structure { fields };
+    let struct_type = IntermediateType::Structure {
+        fields,
+        bound: AlignmentBound::Natural,
+    };
     // Maximum alignment should be 8 (from the Real field)
     assert_eq!(struct_type.alignment_bytes(), 8);
 }
@@ -83,6 +92,7 @@ fn structure_alignment_bytes_with_nested_structure_then_returns_max_nested_align
             var_type: None,
             initial_value: None,
         }],
+        bound: AlignmentBound::Natural,
     };
 
     // Create outer structure containing the inner structure
@@ -105,6 +115,7 @@ fn structure_alignment_bytes_with_nested_structure_then_returns_max_nested_align
                 initial_value: None,
             },
         ],
+        bound: AlignmentBound::Natural,
     };
 
     // Alignment should be 8 (from the nested Real field)
@@ -113,7 +124,10 @@ fn structure_alignment_bytes_with_nested_structure_then_returns_max_nested_align
 
 #[test]
 fn structure_size_in_bytes_with_empty_structure_then_returns_none() {
-    let struct_type = IntermediateType::Structure { fields: vec![] };
+    let struct_type = IntermediateType::Structure {
+        fields: vec![],
+        bound: AlignmentBound::Natural,
+    };
     assert_eq!(struct_type.size_in_bytes(), None);
 }
 
@@ -132,7 +146,10 @@ fn structure_size_in_bytes_with_single_field_then_returns_field_size() {
         initial_value: None,
     }];
 
-    let struct_type = IntermediateType::Structure { fields };
+    let struct_type = IntermediateType::Structure {
+        fields,
+        bound: AlignmentBound::Natural,
+    };
     // Size should be 4 bytes (one DINT field)
     assert_eq!(struct_type.size_in_bytes(), Some(4));
 }
@@ -164,7 +181,10 @@ fn structure_size_in_bytes_with_aligned_fields_then_returns_total_size() {
         },
     ];
 
-    let struct_type = IntermediateType::Structure { fields };
+    let struct_type = IntermediateType::Structure {
+        fields,
+        bound: AlignmentBound::Natural,
+    };
     // Size should be 8 bytes (two DINT fields)
     assert_eq!(struct_type.size_in_bytes(), Some(8));
 }
@@ -197,18 +217,23 @@ fn structure_size_in_bytes_with_padding_then_returns_padded_size() {
         },
     ];
 
-    let struct_type = IntermediateType::Structure { fields };
+    let struct_type = IntermediateType::Structure {
+        fields,
+        bound: AlignmentBound::Natural,
+    };
     // Size should be 8 bytes (1 byte + 3 padding + 4 bytes)
     assert_eq!(struct_type.size_in_bytes(), Some(8));
 }
 
 #[test]
-fn structure_size_in_bytes_with_trailing_padding_then_returns_aligned_size() {
+fn structure_size_in_bytes_with_trailing_padding_then_byte_image_ends_with_last_field_and_stride_is_aligned(
+) {
     use super::IntermediateStructField;
     use ironplc_dsl::core::Id;
 
     // Structure: LREAL (8 bytes at offset 0), SINT (1 byte at offset 8)
-    // Total size should be 16 bytes (padded to 8-byte alignment)
+    // The byte image is 9 bytes (SIZEOF); where the structure repeats or nests it
+    // occupies 16 bytes (padded to 8-byte alignment)
     let fields = vec![
         IntermediateStructField {
             name: Id::from("field1"),
@@ -230,9 +255,12 @@ fn structure_size_in_bytes_with_trailing_padding_then_returns_aligned_size() {
         },
     ];
 
-    let struct_type = IntermediateType::Structure { fields };
-    // Size should be 16 bytes (8 bytes + 1 byte + 7 padding)
-    assert_eq!(struct_type.size_in_bytes(), Some(16));
+    let struct_type = IntermediateType::Structure {
+        fields,
+        bound: AlignmentBound::Natural,
+    };
+    assert_eq!(struct_type.size_in_bytes(), Some(9));
+    assert_eq!(struct_type.stride_bytes(), Some(16));
 }
 
 #[test]
@@ -262,6 +290,7 @@ fn structure_size_in_bytes_with_nested_structure_then_returns_correct_size() {
                 initial_value: None,
             },
         ],
+        bound: AlignmentBound::Natural,
     };
 
     // Create outer structure
@@ -284,6 +313,7 @@ fn structure_size_in_bytes_with_nested_structure_then_returns_correct_size() {
                 initial_value: None,
             },
         ],
+        bound: AlignmentBound::Natural,
     };
 
     // Size should be 8 bytes (4 bytes for inner struct + 4 bytes for id)
@@ -318,7 +348,10 @@ fn structure_size_in_bytes_with_unknown_field_size_then_returns_none() {
         },
     ];
 
-    let struct_type = IntermediateType::Structure { fields };
+    let struct_type = IntermediateType::Structure {
+        fields,
+        bound: AlignmentBound::Natural,
+    };
     // Should return None because one field has unknown size
     assert_eq!(struct_type.size_in_bytes(), None);
 }

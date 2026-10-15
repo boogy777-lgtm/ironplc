@@ -91,7 +91,6 @@ fn register_ref_to_array_metadata(
             desc_index,
             data_offset: 0,
             element_var_type_info: element_vti,
-            total_elements,
             dimensions,
             is_string_element: false,
             string_max_len: 0,

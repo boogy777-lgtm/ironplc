@@ -139,7 +139,7 @@ fn collect_types(context: &SemanticContext) -> Vec<TypeEntry> {
                     ..empty_entry(name)
                 }
             }
-            IntermediateType::Structure { fields } => {
+            IntermediateType::Structure { fields, .. } => {
                 let fs: Vec<StructFieldEntry> = fields
                     .iter()
                     .map(|f| StructFieldEntry {

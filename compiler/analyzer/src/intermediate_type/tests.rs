@@ -4,6 +4,7 @@ use crate::intermediate_type::{
     ArrayDimension, ByteSized, FunctionBlockVarType, IntermediateStructField, IntermediateType,
     SlotCountError,
 };
+use crate::intermediates::layout::AlignmentBound;
 use ironplc_container::{CharWidth, STRING_HEADER_BYTES};
 use ironplc_dsl::core::Id;
 

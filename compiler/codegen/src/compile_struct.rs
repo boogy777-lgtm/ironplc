@@ -298,7 +298,7 @@ pub(crate) fn walk_struct_chain(
             let (root, parent_offset, parent_type) =
                 walk_struct_chain(ctx, &inner.record, &inner.field, depth + 1)?;
 
-            let IntermediateType::Structure { fields } = &parent_type else {
+            let IntermediateType::Structure { fields, .. } = &parent_type else {
                 return Err(Diagnostic::not_implemented(Label::span(
                     inner.field.span(),
                     format!("Field '{}' is not a structure type", inner.field),
@@ -389,7 +389,7 @@ pub(crate) fn allocate_struct_variable(
 
     // `resolve_struct_type` returns only structures; any other type is a
     // compiler invariant violation.
-    let IntermediateType::Structure { fields } = struct_type else {
+    let IntermediateType::Structure { fields, .. } = struct_type else {
         return Err(Diagnostic::internal_error());
     };
 
@@ -536,6 +536,7 @@ pub(crate) fn allocate_struct_variable(
 mod tests {
     use super::*;
     use ironplc_analyzer::intermediate_type::IntermediateStructField;
+    use ironplc_analyzer::AlignmentBound;
     use ironplc_container::CharWidth;
     use ironplc_dsl::core::Id;
 
@@ -588,6 +589,7 @@ mod tests {
                     },
                 ),
             ],
+            bound: AlignmentBound::Natural,
         };
         let fields = vec![
             make_field("inner", inner),

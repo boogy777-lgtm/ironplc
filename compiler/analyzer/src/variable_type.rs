@@ -180,7 +180,7 @@ pub(crate) fn struct_field_type(
     field_name: &Id,
 ) -> Option<IntermediateType> {
     let fields = match parent_type {
-        IntermediateType::Structure { fields } => fields,
+        IntermediateType::Structure { fields, .. } => fields,
         IntermediateType::FunctionBlock { fields, .. } => fields,
         _ => return None,
     };

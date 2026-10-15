@@ -48,6 +48,7 @@ mod compile_set_reset_bind;
 mod compile_shift;
 mod compile_special_operators;
 mod compile_struct;
+mod compile_subsequent;
 mod compile_temp_bufs;
 mod compile_this_super;
 mod compile_types;

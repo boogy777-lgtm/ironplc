@@ -292,3 +292,39 @@ fn intermediate_type_has_explicit_size_returns_correct_value() {
     };
     assert!(!dynamic_array.has_explicit_size());
 }
+
+#[test]
+fn array_size_in_bytes_when_elements_are_structures_then_each_element_occupies_its_stride() {
+    // LWORD at 0 and BYTE at 8: the byte image of one structure is 9 bytes, its
+    // stride is 16, so three elements are 48 bytes.
+    let element = IntermediateType::Structure {
+        fields: vec![
+            IntermediateStructField {
+                name: Id::from("a"),
+                field_type: IntermediateType::Bytes {
+                    size: ByteSized::B64,
+                },
+                offset: 0,
+                var_type: None,
+                initial_value: None,
+            },
+            IntermediateStructField {
+                name: Id::from("b"),
+                field_type: IntermediateType::Bytes {
+                    size: ByteSized::B8,
+                },
+                offset: 8,
+                var_type: None,
+                initial_value: None,
+            },
+        ],
+        bound: AlignmentBound::Natural,
+    };
+    let array = IntermediateType::Array {
+        element_type: Box::new(element.clone()),
+        dimensions: vec![ArrayDimension { lower: 1, upper: 3 }],
+    };
+
+    assert_eq!(element.size_in_bytes(), Some(9));
+    assert_eq!(array.size_in_bytes(), Some(48));
+}

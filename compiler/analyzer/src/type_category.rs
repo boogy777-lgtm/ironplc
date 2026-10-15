@@ -48,6 +48,7 @@ impl TypeCategory {
 mod tests {
     use super::*;
     use crate::intermediate_type::{ArrayDimension, ByteSized, IntermediateType};
+    use crate::intermediates::layout::AlignmentBound;
     use ironplc_container::CharWidth;
 
     #[test]
@@ -73,7 +74,10 @@ mod tests {
 
         // Test user-defined types
         assert_eq!(
-            TypeCategory::for_type(&IntermediateType::Structure { fields: vec![] }),
+            TypeCategory::for_type(&IntermediateType::Structure {
+                fields: vec![],
+                bound: AlignmentBound::Natural
+            }),
             TypeCategory::UserDefined
         );
         assert_eq!(

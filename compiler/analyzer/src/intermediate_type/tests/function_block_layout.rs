@@ -180,12 +180,14 @@ fn function_block_size_in_bytes_with_padding_then_returns_padded_size() {
 }
 
 #[test]
-fn function_block_size_in_bytes_with_trailing_padding_then_returns_aligned_size() {
+fn function_block_size_in_bytes_with_trailing_padding_then_byte_image_ends_with_last_field_and_stride_is_aligned(
+) {
     use super::IntermediateStructField;
     use ironplc_dsl::core::Id;
 
     // Function block: LREAL (8 bytes at offset 0), SINT (1 byte at offset 8)
-    // Total size should be 16 bytes (padded to 8-byte alignment)
+    // The byte image is 9 bytes; where the function block repeats or nests it
+    // occupies 16 bytes (padded to 8-byte alignment)
     let fields = vec![
         IntermediateStructField {
             name: Id::from("timestamp"),
@@ -211,8 +213,8 @@ fn function_block_size_in_bytes_with_trailing_padding_then_returns_aligned_size(
         name: "TimerFB".to_string(),
         fields,
     };
-    // Size should be 16 bytes (8 bytes + 1 byte + 7 padding)
-    assert_eq!(fb_type.size_in_bytes(), Some(16));
+    assert_eq!(fb_type.size_in_bytes(), Some(9));
+    assert_eq!(fb_type.stride_bytes(), Some(16));
 }
 
 #[test]
@@ -242,6 +244,7 @@ fn function_block_size_in_bytes_with_nested_structure_then_returns_correct_size(
                 initial_value: None,
             },
         ],
+        bound: AlignmentBound::Natural,
     };
 
     // Create function block containing the structure
