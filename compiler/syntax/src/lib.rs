@@ -30,6 +30,7 @@ mod cst;
 mod diagnostic;
 pub mod error;
 mod interval_text;
+pub mod kind_set;
 pub mod lexer;
 pub mod line_index;
 pub mod lower;
