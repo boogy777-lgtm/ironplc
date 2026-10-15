@@ -3,14 +3,15 @@
 use ironplc_container::opcode;
 use ironplc_dsl::core::Located;
 use ironplc_dsl::diagnostic::Diagnostic;
-use ironplc_dsl::textual::{Expr, ExprKind, Function, SymbolicVariableKind, Variable};
+use ironplc_dsl::textual::{Expr, Function};
 
 use super::builtin_lookup::lookup_builtin;
 use super::collect_positional_args;
 use super::type_conversion::emit_conversion_opcode;
 use crate::compile::{CompileContext, OpType, OpWidth, Signedness, VarTypeInfo, DEFAULT_OP_TYPE};
-use crate::compile_expr::{compile_expr, op_type, storage_bits};
+use crate::compile_expr::{compile_expr, op_type, storage_bits, unresolved_expr_type};
 use crate::emit::Emitter;
+use crate::type_info::expr_representation;
 
 /// Compiles a generic builtin function call via `lookup_builtin`.
 ///
@@ -122,8 +123,11 @@ pub(super) fn compile_trunc(
 /// Compiles SIZEOF(IN) — returns the size in bytes of the argument's type.
 ///
 /// SIZEOF is a compile-time constant: the argument is never evaluated at runtime.
-/// For elementary types, the size is derived from the storage bit width.
-/// For array variables, the total byte count is computed from element size × element count.
+/// The size is the byte size of the type the analyzer resolved for the
+/// argument (`IntermediateType::size_in_bytes`): the byte image of an
+/// elementary type, a structure or an array, not the 8-byte slots the virtual
+/// machine stores them in. A literal has no declared type, so it is as large as
+/// the type it operates as.
 pub(super) fn compile_sizeof(
     emitter: &mut Emitter,
     ctx: &mut CompileContext,
@@ -135,20 +139,7 @@ pub(super) fn compile_sizeof(
         return Err(Diagnostic::todo_with_span(func.name.span()));
     }
 
-    // Check if the argument is a variable that maps to an array.
-    let size: u32 =
-        if let ExprKind::Variable(Variable::Symbolic(SymbolicVariableKind::Named(ref named))) =
-            args[0].kind
-        {
-            if let Some(array_info) = ctx.array_vars.get(&named.name) {
-                let elem_bytes = array_info.element_var_type_info.storage_bits as u32 / 8;
-                array_info.total_elements * elem_bytes
-            } else {
-                sizeof_from_expr_type(ctx, args[0])?
-            }
-        } else {
-            sizeof_from_expr_type(ctx, args[0])?
-        };
+    let size = sizeof_from_expr_type(ctx, args[0])?;
 
     let pool_index = ctx.add_i32_constant(size as i32);
     emitter.emit_load_const_i32(pool_index);
@@ -157,9 +148,16 @@ pub(super) fn compile_sizeof(
 
 /// Returns the size in bytes of an expression's value, from its `expr_type`.
 fn sizeof_from_expr_type(ctx: &CompileContext, expr: &Expr) -> Result<u32, Diagnostic> {
-    let bits = storage_bits(ctx, expr)?;
-    // Ceiling division: types like BOOL (1 bit) still occupy 1 byte.
-    Ok((bits as u32).div_ceil(8))
+    match expr_representation(ctx, expr) {
+        Some(representation) => representation
+            .size_in_bytes()
+            .ok_or_else(|| unresolved_expr_type(expr)),
+        None => {
+            let bits = storage_bits(ctx, expr)?;
+            // Ceiling division: types like BOOL (1 bit) still occupy 1 byte.
+            Ok((bits as u32).div_ceil(8))
+        }
+    }
 }
 
 /// Compiles BCD_TO_INT(IN) — converts a BCD-encoded bit string to an integer.

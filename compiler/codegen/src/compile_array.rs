@@ -49,7 +49,6 @@ pub(crate) struct ArrayVarInfo {
     pub desc_index: u16,
     pub data_offset: u32,
     pub element_var_type_info: VarTypeInfo,
-    pub total_elements: u32,
     pub dimensions: Vec<DimensionInfo>,
     /// True when the array element type is STRING.
     pub is_string_element: bool,
@@ -773,7 +772,6 @@ pub(crate) fn register_array_variable(
             desc_index,
             data_offset,
             element_var_type_info: element_vti,
-            total_elements,
             dimensions,
             is_string_element: is_string,
             string_max_len,
