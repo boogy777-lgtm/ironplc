@@ -19,7 +19,7 @@ use std::time::Duration;
 
 use ironplc_dsl::core::SourceSpan;
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
-use ironplc_problems::Problem;
+use ironplc_problems::{text, Text};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -145,12 +145,12 @@ pub fn build_response(input: &RunInput, cache: &Mutex<ContainerCache>) -> RunRes
     match (&input.container_id, &input.container_base64) {
         (None, None) => {
             return fail(vec![validation(
-                "`run` requires exactly one of `container_id` or `container_base64`.",
+                text::mcp_input_validation_run_container_missing(),
             )]);
         }
         (Some(_), Some(_)) => {
             return fail(vec![validation(
-                "`run` accepts at most one of `container_id` or `container_base64`; both were supplied.",
+                text::mcp_input_validation_run_container_both(),
             )]);
         }
         _ => {}
@@ -158,25 +158,27 @@ pub fn build_response(input: &RunInput, cache: &Mutex<ContainerCache>) -> RunRes
 
     if input.container_base64.is_some() {
         return fail(vec![validation(
-            "`container_base64` ingestion is deferred to a follow-up; pass `container_id` from a prior `compile` call for now.",
+            text::mcp_input_validation_run_container_base64_deferred(),
         )]);
     }
 
     // --- Phase 11 feature guards ---
     if !input.stimuli.is_empty() {
         return fail(vec![validation(
-            "`stimuli` are not yet implemented; run without stimuli drives the program with declared initial values only.",
+            text::mcp_input_validation_run_stimuli_unimplemented(),
         )]);
     }
     if input.tasks.is_some() {
-        return fail(vec![validation("`tasks` filter is not yet implemented.")]);
+        return fail(vec![validation(
+            text::mcp_input_validation_run_tasks_filter_unimplemented(),
+        )]);
     }
     if let Some(trace) = &input.trace {
         if let Some(mode) = trace.mode.as_deref() {
             if mode != "every_cycle" {
-                return fail(vec![validation(&format!(
-                    "trace.mode = '{mode}' is not yet implemented; only 'every_cycle' is supported in this milestone."
-                ))]);
+                return fail(vec![validation(
+                    text::mcp_input_validation_run_trace_mode_unimplemented(mode),
+                )]);
             }
         }
     }
@@ -194,17 +196,15 @@ pub fn build_response(input: &RunInput, cache: &Mutex<ContainerCache>) -> RunRes
     let cached = match guard.get(container_id) {
         Some(c) => c,
         None => {
-            return fail(vec![validation(&format!(
-                "Unknown or evicted container_id '{container_id}'. Re-compile to obtain a fresh handle."
-            ))]);
+            return fail(vec![validation(
+                text::mcp_input_validation_run_container_unknown(container_id),
+            )]);
         }
     };
 
     // REQ-TOL-mcp-040 sentence 4: a container with no tasks cannot be scheduled.
     if cached.tasks.is_empty() {
-        return fail(vec![validation(
-            "Container declares no tasks; declare at least one TASK in a CONFIGURATION to run.",
-        )]);
+        return fail(vec![validation(text::mcp_input_validation_run_no_tasks())]);
     }
 
     // --- Freewheeling cycle time (REQ-TOL-mcp-049) ---
@@ -287,30 +287,20 @@ fn build_success_response(
     let reason = outcome.terminated_reason;
     let stop_message = match reason {
         TerminatedReason::Completed => None,
-        TerminatedReason::Duration => Some(format!(
-            "Requested simulated duration ({} ms) exceeds the server limit ({} ms); \
-                 the run stopped at the limit.",
-            requested_duration_ms, limits.max_duration_ms
+        TerminatedReason::Duration => Some(text::mcp_input_validation_run_duration_limited(
+            requested_duration_ms,
+            limits.max_duration_ms,
         )),
-        TerminatedReason::Fuel => {
-            Some("VM fuel budget exhausted (checked between task cycles).".to_string())
-        }
-        TerminatedReason::WallClock => {
-            Some("Wall-clock limit exceeded before the run completed.".to_string())
-        }
-        TerminatedReason::SampleCap => {
-            Some("Trace sample cap reached; emitted trace is truncated.".to_string())
-        }
-        TerminatedReason::Error => outcome
-            .error_message
-            .clone()
-            .or_else(|| Some("VM trap during execution.".to_string())),
+        TerminatedReason::Fuel => Some(text::mcp_input_validation_run_fuel_exhausted()),
+        TerminatedReason::WallClock => Some(text::mcp_input_validation_run_wall_clock_exceeded()),
+        TerminatedReason::SampleCap => Some(text::mcp_input_validation_run_sample_cap_reached()),
+        TerminatedReason::Error => Some(match outcome.error_message.as_deref() {
+            Some(reason) => text::mcp_input_validation_run_vm_error(reason),
+            None => text::mcp_input_validation_run_vm_trap(),
+        }),
     };
-    if let Some(msg) = stop_message {
-        diagnostics.push(serialize_diagnostic(&Diagnostic::problem(
-            Problem::McpInputValidation,
-            Label::span(SourceSpan::default(), msg),
-        )));
+    if let Some(message) = stop_message {
+        diagnostics.push(serialize_diagnostic(&validation(message)));
     }
 
     let reason_str = reason.as_str().to_string();
@@ -350,21 +340,17 @@ fn resolve_freewheeling_interval(
 ) -> Result<Option<Duration>, Vec<Diagnostic>> {
     let Some(ms) = interval_ms else {
         if let Some(task) = tasks.iter().find(|t| t.kind == TaskKind::Freewheeling) {
-            return Err(vec![validation(&format!(
-                "Task '{}' declares no INTERVAL, so it has no scan cycle time and the run has \
-                 nothing to advance simulated time by. Set `freewheeling_interval_ms` to the scan \
-                 time to run it at, or declare `INTERVAL` on the task in a CONFIGURATION.",
-                task.name
-            ))]);
+            return Err(vec![validation(
+                text::mcp_input_validation_run_freewheeling_interval_missing(&task.name),
+            )]);
         }
         return Ok(None);
     };
 
     interval_from_ms(ms).map(Some).map_err(|e| {
-        vec![validation(&format!(
-            "freewheeling_interval_ms ({ms}) {e}. It is the cycle time to run tasks that declare \
-             no INTERVAL at."
-        ))]
+        vec![validation(
+            text::mcp_input_validation_run_freewheeling_interval_invalid(ms, e),
+        )]
     })
 }
 
@@ -380,50 +366,65 @@ fn resolve_limits(
 
     if let Some(v) = o.max_duration_ms {
         if v > defaults.max_duration_ms {
-            errors.push(validation(&format!(
-                "limits.max_duration_ms ({v}) exceeds server default ({}); overrides may only tighten.",
-                defaults.max_duration_ms
-            )));
+            errors.push(validation(
+                text::mcp_input_validation_run_limit_exceeds_default(
+                    "max_duration_ms",
+                    v,
+                    defaults.max_duration_ms,
+                ),
+            ));
         } else {
             out.max_duration_ms = v;
         }
     }
     if let Some(v) = o.max_fuel {
         if v > defaults.max_fuel {
-            errors.push(validation(&format!(
-                "limits.max_fuel ({v}) exceeds server default ({}); overrides may only tighten.",
-                defaults.max_fuel
-            )));
+            errors.push(validation(
+                text::mcp_input_validation_run_limit_exceeds_default(
+                    "max_fuel",
+                    v,
+                    defaults.max_fuel,
+                ),
+            ));
         } else {
             out.max_fuel = v;
         }
     }
     if let Some(v) = o.max_wall_clock_ms {
         if v > defaults.max_wall_clock_ms {
-            errors.push(validation(&format!(
-                "limits.max_wall_clock_ms ({v}) exceeds server default ({}); overrides may only tighten.",
-                defaults.max_wall_clock_ms
-            )));
+            errors.push(validation(
+                text::mcp_input_validation_run_limit_exceeds_default(
+                    "max_wall_clock_ms",
+                    v,
+                    defaults.max_wall_clock_ms,
+                ),
+            ));
         } else {
             out.max_wall_clock_ms = v;
         }
     }
     if let Some(v) = o.max_samples {
         if v > defaults.max_samples {
-            errors.push(validation(&format!(
-                "limits.max_samples ({v}) exceeds server default ({}); overrides may only tighten.",
-                defaults.max_samples
-            )));
+            errors.push(validation(
+                text::mcp_input_validation_run_limit_exceeds_default(
+                    "max_samples",
+                    v,
+                    defaults.max_samples,
+                ),
+            ));
         } else {
             out.max_samples = v;
         }
     }
     if let Some(v) = o.max_variables_per_run {
         if v > defaults.max_variables_per_run {
-            errors.push(validation(&format!(
-                "limits.max_variables_per_run ({v}) exceeds server default ({}); overrides may only tighten.",
-                defaults.max_variables_per_run
-            )));
+            errors.push(validation(
+                text::mcp_input_validation_run_limit_exceeds_default(
+                    "max_variables_per_run",
+                    v,
+                    defaults.max_variables_per_run,
+                ),
+            ));
         } else {
             out.max_variables_per_run = v;
         }
@@ -451,8 +452,8 @@ fn resolve_trace_set(
 
     for name in requested {
         if name.contains('*') {
-            errors.push(validation(&format!(
-                "Wildcard names are not supported ('{name}'); enumerate variables or set `trace_outputs: true`."
+            errors.push(validation(text::mcp_input_validation_run_wildcard_name(
+                name,
             )));
             continue;
         }
@@ -463,15 +464,14 @@ fn resolve_trace_set(
                 }
             }
             Err(NameError::Unresolved) => {
-                errors.push(validation(&format!(
-                    "Variable '{name}' does not resolve against the loaded container."
-                )));
+                errors.push(validation(
+                    text::mcp_input_validation_run_variable_unresolved(name),
+                ));
             }
             Err(NameError::Ambiguous(candidates)) => {
-                errors.push(validation(&format!(
-                    "Variable '{name}' is ambiguous; candidates: [{}]. Qualify the name (e.g. 'Program.{name}').",
-                    candidates.join(", ")
-                )));
+                errors.push(validation(
+                    text::mcp_input_validation_run_variable_ambiguous(name, candidates.join(", ")),
+                ));
             }
         }
     }
@@ -489,11 +489,9 @@ fn resolve_trace_set(
     }
 
     if out.len() > max_variables {
-        return Err(vec![validation(&format!(
-            "Trace set has {} variables, exceeding the server-configured limit of {}.",
-            out.len(),
-            max_variables
-        ))]);
+        return Err(vec![validation(
+            text::mcp_input_validation_run_trace_set_too_large(out.len(), max_variables),
+        )]);
     }
 
     Ok(out)
@@ -547,11 +545,8 @@ fn resolve_name(symbols: &VariableSymbolMap, requested: &str) -> Result<Resolved
     Err(NameError::Ambiguous(names))
 }
 
-fn validation(message: &str) -> Diagnostic {
-    Diagnostic::problem(
-        Problem::McpInputValidation,
-        Label::span(SourceSpan::default(), message),
-    )
+fn validation(text: Text) -> Diagnostic {
+    Diagnostic::text(SourceSpan::default(), text)
 }
 
 fn fail(diags: Vec<Diagnostic>) -> RunResponse {

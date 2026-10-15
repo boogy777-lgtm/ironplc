@@ -17,8 +17,8 @@
 use std::{fs, path::Path, path::PathBuf};
 
 use ironplc_dsl::core::FileId;
-use ironplc_dsl::diagnostic::{Diagnostic, Label};
-use ironplc_problems::Problem;
+use ironplc_dsl::diagnostic::Diagnostic;
+use ironplc_problems::text;
 
 /// Find every file directly in `dir` (not recursive) whose extension is
 /// one of `extensions`, sorted by path.
@@ -188,14 +188,9 @@ fn has_extension(declared_path: &str, extension: &str) -> bool {
 /// A manifest was found and is authoritative, but does not resolve to a
 /// project. Never a reason to fall back to a heuristic.
 pub(super) fn unresolvable(manifest_path: &Path, reason: &str) -> Diagnostic {
-    Diagnostic::problem(
-        Problem::ProjectManifestUnresolvable,
-        Label::file(
-            FileId::from_path(manifest_path),
-            format!("{} does not resolve to a project: {reason}", {
-                manifest_path.display()
-            }),
-        ),
+    Diagnostic::text_in_file(
+        FileId::from_path(manifest_path),
+        text::project_manifest_unresolvable(manifest_path.display(), reason),
     )
 }
 

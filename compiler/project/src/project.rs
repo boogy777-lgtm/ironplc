@@ -9,10 +9,10 @@ use ironplc_analyzer::{stages::analyze, SemanticContext};
 use ironplc_dsl::{
     common::Library,
     core::{FileId, SourceSpan},
-    diagnostic::{Diagnostic, Label},
+    diagnostic::Diagnostic,
 };
 use ironplc_parser::{options::CompilerOptions, token::Token, tokenize_program};
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use ironplc_sources::{FileType, LibraryName, Source, SourceProject};
 use log::{debug, trace};
 
@@ -118,12 +118,9 @@ pub trait Project {
         match dirs {
             [] => vec![],
             [dir] => self.initialize(dir),
-            _ => vec![Diagnostic::problem(
-                Problem::NoContent,
-                Label::span(
-                    SourceSpan::default(),
-                    "This project implementation does not support multiple directories",
-                ),
+            _ => vec![Diagnostic::text(
+                SourceSpan::default(),
+                text::no_content_multiple_directories_unsupported(),
             )],
         }
     }
@@ -326,9 +323,9 @@ impl Project for FileBackedProject {
             Some(src) => tokenize_program(src.as_string(), file_id, &self.compiler_options, 0, 0),
             None => (
                 vec![],
-                vec![Diagnostic::problem(
-                    Problem::NoContent,
-                    Label::span(SourceSpan::default(), "No documents to tokenize"),
+                vec![Diagnostic::text(
+                    SourceSpan::default(),
+                    text::no_content_no_documents_to_tokenize(),
                 )],
             ),
         }
@@ -453,12 +450,9 @@ impl MemoryBackedProject {
 
 impl Project for MemoryBackedProject {
     fn initialize(&mut self, _dir: &Path) -> Vec<Diagnostic> {
-        vec![Diagnostic::problem(
-            Problem::NoContent,
-            Label::span(
-                SourceSpan::default(),
-                "MemoryBackedProject does not support directory initialization",
-            ),
+        vec![Diagnostic::text(
+            SourceSpan::default(),
+            text::no_content_directory_initialization_unsupported(),
         )]
     }
 
@@ -473,9 +467,9 @@ impl Project for MemoryBackedProject {
             Some(src) => tokenize_program(src.as_string(), file_id, &self.compiler_options, 0, 0),
             None => (
                 vec![],
-                vec![Diagnostic::problem(
-                    Problem::NoContent,
-                    Label::span(SourceSpan::default(), "No documents to tokenize"),
+                vec![Diagnostic::text(
+                    SourceSpan::default(),
+                    text::no_content_no_documents_to_tokenize(),
                 )],
             ),
         }

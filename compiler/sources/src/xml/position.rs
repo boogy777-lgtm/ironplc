@@ -3,11 +3,8 @@
 //! This module parses PLCopen TC6 XML documents into schema structs using roxmltree.
 //! It extracts both data and position information in a single pass.
 
-use ironplc_dsl::{
-    core::FileId,
-    diagnostic::{Diagnostic, Label},
-};
-use ironplc_problems::Problem;
+use ironplc_dsl::{core::FileId, diagnostic::Diagnostic};
+use ironplc_problems::{text, Text};
 
 use super::schema::{
     Action, Actions, ArrayType, Body, Configuration, Configurations, ContentHeader, CoordinateInfo,
@@ -26,23 +23,14 @@ use super::schema::{
 /// Returns a `Diagnostic` error with file location information if parsing fails.
 pub fn parse_plcopen_xml(xml_content: &str, file_id: &FileId) -> Result<Project, Diagnostic> {
     let doc = roxmltree::Document::parse(xml_content).map_err(|e| {
-        Diagnostic::problem(
-            Problem::XmlMalformed,
-            Label::file(file_id.clone(), format!("XML parse error: {}", e)),
-        )
+        Diagnostic::text_in_file(file_id.clone(), text::xml_malformed_parse_error(e))
     })?;
 
     let root = doc.root_element();
     if !root.has_tag_name("project") {
-        return Err(Diagnostic::problem(
-            Problem::XmlSchemaViolation,
-            Label::file(
-                file_id.clone(),
-                format!(
-                    "Expected root element 'project', found '{}'",
-                    root.tag_name().name()
-                ),
-            ),
+        return Err(Diagnostic::text_in_file(
+            file_id.clone(),
+            text::xml_schema_violation_root_element(root.tag_name().name()),
         ));
     }
 
@@ -50,25 +38,17 @@ pub fn parse_plcopen_xml(xml_content: &str, file_id: &FileId) -> Result<Project,
     const SUPPORTED_NAMESPACE: &str = "http://www.plcopen.org/xml/tc6_0201";
     if let Some(ns) = root.tag_name().namespace() {
         if ns != SUPPORTED_NAMESPACE {
-            return Err(Diagnostic::problem(
-                Problem::XmlUnsupportedVersion,
-                Label::file(
-                    file_id.clone(),
-                    format!(
-                        "Unsupported PLCopen XML version. Found namespace '{}', expected '{}'",
-                        ns, SUPPORTED_NAMESPACE
-                    ),
-                ),
+            return Err(Diagnostic::text_in_file(
+                file_id.clone(),
+                text::xml_unsupported_version(ns, SUPPORTED_NAMESPACE),
             ));
         }
     }
 
-    parse_project(&doc, root).map_err(|e| {
-        Diagnostic::problem(Problem::XmlSchemaViolation, Label::file(file_id.clone(), e))
-    })
+    parse_project(&doc, root).map_err(|e| Diagnostic::text_in_file(file_id.clone(), e))
 }
 
-fn parse_project(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<Project, String> {
+fn parse_project(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<Project, Text> {
     let mut project = Project::default();
 
     for child in node.children().filter(|n| n.is_element()) {
@@ -84,7 +64,7 @@ fn parse_project(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<Pro
     Ok(project)
 }
 
-fn parse_file_header(node: roxmltree::Node) -> Result<FileHeader, String> {
+fn parse_file_header(node: roxmltree::Node) -> Result<FileHeader, Text> {
     Ok(FileHeader {
         company_name: node.attribute("companyName").unwrap_or("").to_string(),
         company_url: node.attribute("companyURL").map(String::from),
@@ -96,7 +76,7 @@ fn parse_file_header(node: roxmltree::Node) -> Result<FileHeader, String> {
     })
 }
 
-fn parse_content_header(node: roxmltree::Node) -> Result<ContentHeader, String> {
+fn parse_content_header(node: roxmltree::Node) -> Result<ContentHeader, Text> {
     let mut header = ContentHeader {
         name: node.attribute("name").unwrap_or("").to_string(),
         version: node.attribute("version").map(String::from),
@@ -118,7 +98,7 @@ fn parse_content_header(node: roxmltree::Node) -> Result<ContentHeader, String> 
     Ok(header)
 }
 
-fn parse_coordinate_info(node: roxmltree::Node) -> Result<CoordinateInfo, String> {
+fn parse_coordinate_info(node: roxmltree::Node) -> Result<CoordinateInfo, Text> {
     let mut info = CoordinateInfo::default();
 
     for child in node.children().filter(|n| n.is_element()) {
@@ -133,7 +113,7 @@ fn parse_coordinate_info(node: roxmltree::Node) -> Result<CoordinateInfo, String
     Ok(info)
 }
 
-fn parse_scaling(node: roxmltree::Node) -> Result<Scaling, String> {
+fn parse_scaling(node: roxmltree::Node) -> Result<Scaling, Text> {
     let mut scaling = Scaling::default();
 
     for child in node.children().filter(|n| n.is_element()) {
@@ -148,7 +128,7 @@ fn parse_scaling(node: roxmltree::Node) -> Result<Scaling, String> {
     Ok(scaling)
 }
 
-fn parse_types(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<Types, String> {
+fn parse_types(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<Types, Text> {
     let mut types = Types::default();
 
     for child in node.children().filter(|n| n.is_element()) {
@@ -162,7 +142,7 @@ fn parse_types(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<Types
     Ok(types)
 }
 
-fn parse_data_types(node: roxmltree::Node) -> Result<DataTypes, String> {
+fn parse_data_types(node: roxmltree::Node) -> Result<DataTypes, Text> {
     let mut data_types = DataTypes::default();
 
     for child in node.children().filter(|n| n.is_element()) {
@@ -174,7 +154,7 @@ fn parse_data_types(node: roxmltree::Node) -> Result<DataTypes, String> {
     Ok(data_types)
 }
 
-fn parse_data_type_decl(node: roxmltree::Node) -> Result<DataTypeDecl, String> {
+fn parse_data_type_decl(node: roxmltree::Node) -> Result<DataTypeDecl, Text> {
     let name = LocatedString::from_node(node, "name");
     let mut base_type = DataType::Bool;
     let mut initial_value = None;
@@ -194,7 +174,7 @@ fn parse_data_type_decl(node: roxmltree::Node) -> Result<DataTypeDecl, String> {
     })
 }
 
-fn parse_type_element(node: roxmltree::Node) -> Result<DataType, String> {
+fn parse_type_element(node: roxmltree::Node) -> Result<DataType, Text> {
     // The type element contains exactly one child that indicates the type
     if let Some(child) = node.children().find(|n| n.is_element()) {
         return parse_data_type_node(child);
@@ -202,7 +182,7 @@ fn parse_type_element(node: roxmltree::Node) -> Result<DataType, String> {
     Ok(DataType::Bool) // Default if empty
 }
 
-fn parse_data_type_node(node: roxmltree::Node) -> Result<DataType, String> {
+fn parse_data_type_node(node: roxmltree::Node) -> Result<DataType, Text> {
     let tag = node.tag_name().name();
     match tag {
         // Elementary types
@@ -263,11 +243,11 @@ fn parse_data_type_node(node: roxmltree::Node) -> Result<DataType, String> {
         ))),
         "pointer" => Ok(DataType::Pointer(Box::new(parse_pointer_type(node)?))),
 
-        _ => Err(format!("Unknown data type: {}", tag)),
+        _ => Err(text::xml_schema_violation_unknown_data_type(tag)),
     }
 }
 
-fn parse_array_type(node: roxmltree::Node) -> Result<ArrayType, String> {
+fn parse_array_type(node: roxmltree::Node) -> Result<ArrayType, Text> {
     let mut dimensions = Vec::new();
     let mut base_type = DataType::Bool;
 
@@ -288,7 +268,7 @@ fn parse_array_type(node: roxmltree::Node) -> Result<ArrayType, String> {
     })
 }
 
-fn parse_enum_type(node: roxmltree::Node) -> Result<EnumType, String> {
+fn parse_enum_type(node: roxmltree::Node) -> Result<EnumType, Text> {
     let mut values = EnumValues { value: Vec::new() };
     let mut base_type = None;
 
@@ -312,7 +292,7 @@ fn parse_enum_type(node: roxmltree::Node) -> Result<EnumType, String> {
     Ok(EnumType { values, base_type })
 }
 
-fn parse_struct_type(node: roxmltree::Node) -> Result<StructType, String> {
+fn parse_struct_type(node: roxmltree::Node) -> Result<StructType, Text> {
     let mut members = Vec::new();
 
     for child in node.children().filter(|n| n.is_element()) {
@@ -324,7 +304,7 @@ fn parse_struct_type(node: roxmltree::Node) -> Result<StructType, String> {
     Ok(StructType { variable: members })
 }
 
-fn parse_struct_member(node: roxmltree::Node) -> Result<StructMember, String> {
+fn parse_struct_member(node: roxmltree::Node) -> Result<StructMember, Text> {
     let name = LocatedString::from_node(node, "name");
     let mut member_type = DataType::Bool;
     let mut initial_value = None;
@@ -344,7 +324,7 @@ fn parse_struct_member(node: roxmltree::Node) -> Result<StructMember, String> {
     })
 }
 
-fn parse_subrange_signed(node: roxmltree::Node) -> Result<SubrangeSigned, String> {
+fn parse_subrange_signed(node: roxmltree::Node) -> Result<SubrangeSigned, Text> {
     let lower = node.attribute("lower").unwrap_or("0").to_string();
     let upper = node.attribute("upper").unwrap_or("0").to_string();
     let mut base_type = DataType::Int;
@@ -362,7 +342,7 @@ fn parse_subrange_signed(node: roxmltree::Node) -> Result<SubrangeSigned, String
     })
 }
 
-fn parse_subrange_unsigned(node: roxmltree::Node) -> Result<SubrangeUnsigned, String> {
+fn parse_subrange_unsigned(node: roxmltree::Node) -> Result<SubrangeUnsigned, Text> {
     let lower = node.attribute("lower").unwrap_or("0").to_string();
     let upper = node.attribute("upper").unwrap_or("0").to_string();
     let mut base_type = DataType::UInt;
@@ -380,7 +360,7 @@ fn parse_subrange_unsigned(node: roxmltree::Node) -> Result<SubrangeUnsigned, St
     })
 }
 
-fn parse_pointer_type(node: roxmltree::Node) -> Result<PointerType, String> {
+fn parse_pointer_type(node: roxmltree::Node) -> Result<PointerType, Text> {
     let mut base_type = DataType::Bool;
 
     for child in node.children().filter(|n| n.is_element()) {
@@ -392,7 +372,7 @@ fn parse_pointer_type(node: roxmltree::Node) -> Result<PointerType, String> {
     Ok(PointerType { base_type })
 }
 
-fn parse_pous(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<Pous, String> {
+fn parse_pous(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<Pous, Text> {
     let mut pous = Pous::default();
 
     for child in node.children().filter(|n| n.is_element()) {
@@ -404,7 +384,7 @@ fn parse_pous(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<Pous, 
     Ok(pous)
 }
 
-fn parse_pou(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<Pou, String> {
+fn parse_pou(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<Pou, Text> {
     let name = LocatedString::from_node(node, "name");
     let pou_type = match node.attribute("pouType") {
         Some("function") => PouType::Function,
@@ -440,7 +420,7 @@ fn parse_pou(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<Pou, St
     })
 }
 
-fn parse_interface(node: roxmltree::Node) -> Result<Interface, String> {
+fn parse_interface(node: roxmltree::Node) -> Result<Interface, Text> {
     let mut interface = Interface::default();
 
     for child in node.children().filter(|n| n.is_element()) {
@@ -460,7 +440,7 @@ fn parse_interface(node: roxmltree::Node) -> Result<Interface, String> {
     Ok(interface)
 }
 
-fn parse_var_list(node: roxmltree::Node) -> Result<VarList, String> {
+fn parse_var_list(node: roxmltree::Node) -> Result<VarList, Text> {
     let mut var_list = VarList {
         name: node.attribute("name").map(String::from),
         constant: node.attribute("constant") == Some("true"),
@@ -479,7 +459,7 @@ fn parse_var_list(node: roxmltree::Node) -> Result<VarList, String> {
     Ok(var_list)
 }
 
-fn parse_variable(node: roxmltree::Node) -> Result<Variable, String> {
+fn parse_variable(node: roxmltree::Node) -> Result<Variable, Text> {
     let name = LocatedString::from_node(node, "name");
     let address = node.attribute("address").map(String::from);
     let global_id = node.attribute("globalId").map(String::from);
@@ -503,7 +483,7 @@ fn parse_variable(node: roxmltree::Node) -> Result<Variable, String> {
     })
 }
 
-fn parse_body(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<Body, String> {
+fn parse_body(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<Body, Text> {
     let mut body = Body {
         worksheet_name: node.attribute("WorksheetName").map(String::from),
         global_id: node.attribute("globalId").map(String::from),
@@ -539,7 +519,7 @@ fn parse_body(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<Body, 
     Ok(body)
 }
 
-fn parse_st_body(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<StBody, String> {
+fn parse_st_body(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<StBody, Text> {
     // Look for xhtml element first, then fall back to direct text content
     for child in node.children().filter(|n| n.is_element()) {
         if child.tag_name().name() == "xhtml" {
@@ -580,7 +560,7 @@ fn parse_st_body(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<StB
     })
 }
 
-fn parse_sfc_body(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<SfcBody, String> {
+fn parse_sfc_body(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<SfcBody, Text> {
     let mut sfc = SfcBody::default();
 
     for child in node.children().filter(|n| n.is_element()) {
@@ -596,7 +576,7 @@ fn parse_sfc_body(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<Sf
     Ok(sfc)
 }
 
-fn parse_sfc_step(node: roxmltree::Node) -> Result<SfcStep, String> {
+fn parse_sfc_step(node: roxmltree::Node) -> Result<SfcStep, Text> {
     let name = LocatedString::from_node(node, "name");
     let initial_step = node.attribute("initialStep") == Some("true");
     let global_id = node.attribute("globalId").map(String::from);
@@ -611,7 +591,7 @@ fn parse_sfc_step(node: roxmltree::Node) -> Result<SfcStep, String> {
 fn parse_sfc_transition(
     doc: &roxmltree::Document,
     node: roxmltree::Node,
-) -> Result<SfcTransition, String> {
+) -> Result<SfcTransition, Text> {
     let name = LocatedString::from_node_optional(node, "name");
     let priority = node.attribute("priority").and_then(|p| p.parse().ok());
     let global_id = node.attribute("globalId").map(String::from);
@@ -671,7 +651,7 @@ fn parse_sfc_transition(
     })
 }
 
-fn parse_sfc_action_block(node: roxmltree::Node) -> Result<SfcActionBlock, String> {
+fn parse_sfc_action_block(node: roxmltree::Node) -> Result<SfcActionBlock, Text> {
     // ActionBlock is associated with a step via connectionPointIn
     let mut step_name = LocatedString::default();
     let mut actions = Vec::new();
@@ -696,7 +676,7 @@ fn parse_sfc_action_block(node: roxmltree::Node) -> Result<SfcActionBlock, Strin
     Ok(SfcActionBlock { step_name, actions })
 }
 
-fn parse_sfc_action_association(node: roxmltree::Node) -> Result<SfcActionAssociation, String> {
+fn parse_sfc_action_association(node: roxmltree::Node) -> Result<SfcActionAssociation, Text> {
     let mut action_name = LocatedString::default();
     let qualifier = node.attribute("qualifier").map(String::from);
     let duration = node.attribute("duration").map(String::from);
@@ -717,7 +697,7 @@ fn parse_sfc_action_association(node: roxmltree::Node) -> Result<SfcActionAssoci
     })
 }
 
-fn parse_actions(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<Actions, String> {
+fn parse_actions(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<Actions, Text> {
     let mut actions = Actions::default();
 
     for child in node.children().filter(|n| n.is_element()) {
@@ -729,7 +709,7 @@ fn parse_actions(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<Act
     Ok(actions)
 }
 
-fn parse_action(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<Action, String> {
+fn parse_action(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<Action, Text> {
     let name = LocatedString::from_node(node, "name");
     let global_id = node.attribute("globalId").map(String::from);
     let mut body = Body::default();
@@ -750,7 +730,7 @@ fn parse_action(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<Acti
 fn parse_transitions(
     doc: &roxmltree::Document,
     node: roxmltree::Node,
-) -> Result<Transitions, String> {
+) -> Result<Transitions, Text> {
     let mut transitions = Transitions::default();
 
     for child in node.children().filter(|n| n.is_element()) {
@@ -762,10 +742,7 @@ fn parse_transitions(
     Ok(transitions)
 }
 
-fn parse_transition(
-    doc: &roxmltree::Document,
-    node: roxmltree::Node,
-) -> Result<Transition, String> {
+fn parse_transition(doc: &roxmltree::Document, node: roxmltree::Node) -> Result<Transition, Text> {
     let name = LocatedString::from_node(node, "name");
     let global_id = node.attribute("globalId").map(String::from);
     let mut body = Body::default();
@@ -783,7 +760,7 @@ fn parse_transition(
     })
 }
 
-fn parse_value(node: roxmltree::Node) -> Result<Value, String> {
+fn parse_value(node: roxmltree::Node) -> Result<Value, Text> {
     let mut value = Value::default();
 
     for child in node.children().filter(|n| n.is_element()) {
@@ -806,7 +783,7 @@ fn parse_value(node: roxmltree::Node) -> Result<Value, String> {
     Ok(value)
 }
 
-fn parse_array_value(node: roxmltree::Node) -> Result<super::schema::ArrayValue, String> {
+fn parse_array_value(node: roxmltree::Node) -> Result<super::schema::ArrayValue, Text> {
     let mut elements = Vec::new();
 
     for child in node
@@ -824,7 +801,7 @@ fn parse_array_value(node: roxmltree::Node) -> Result<super::schema::ArrayValue,
     Ok(super::schema::ArrayValue { value: elements })
 }
 
-fn parse_struct_value(node: roxmltree::Node) -> Result<super::schema::StructValue, String> {
+fn parse_struct_value(node: roxmltree::Node) -> Result<super::schema::StructValue, Text> {
     let mut elements = Vec::new();
 
     for child in node
@@ -842,7 +819,7 @@ fn parse_struct_value(node: roxmltree::Node) -> Result<super::schema::StructValu
     Ok(super::schema::StructValue { value: elements })
 }
 
-fn parse_instances(node: roxmltree::Node) -> Result<Instances, String> {
+fn parse_instances(node: roxmltree::Node) -> Result<Instances, Text> {
     let mut instances = Instances::default();
 
     for child in node.children().filter(|n| n.is_element()) {
@@ -854,7 +831,7 @@ fn parse_instances(node: roxmltree::Node) -> Result<Instances, String> {
     Ok(instances)
 }
 
-fn parse_configurations(node: roxmltree::Node) -> Result<Configurations, String> {
+fn parse_configurations(node: roxmltree::Node) -> Result<Configurations, Text> {
     let mut configs = Configurations::default();
 
     for child in node.children().filter(|n| n.is_element()) {
@@ -866,7 +843,7 @@ fn parse_configurations(node: roxmltree::Node) -> Result<Configurations, String>
     Ok(configs)
 }
 
-fn parse_configuration(node: roxmltree::Node) -> Result<Configuration, String> {
+fn parse_configuration(node: roxmltree::Node) -> Result<Configuration, Text> {
     let name = LocatedString::from_node(node, "name");
     let global_id = node.attribute("globalId").map(String::from);
     let mut resources = Vec::new();
@@ -888,7 +865,7 @@ fn parse_configuration(node: roxmltree::Node) -> Result<Configuration, String> {
     })
 }
 
-fn parse_resource(node: roxmltree::Node) -> Result<Resource, String> {
+fn parse_resource(node: roxmltree::Node) -> Result<Resource, Text> {
     let name = LocatedString::from_node(node, "name");
     let global_id = node.attribute("globalId").map(String::from);
     let mut tasks = Vec::new();
@@ -913,7 +890,7 @@ fn parse_resource(node: roxmltree::Node) -> Result<Resource, String> {
     })
 }
 
-fn parse_task(node: roxmltree::Node) -> Result<Task, String> {
+fn parse_task(node: roxmltree::Node) -> Result<Task, Text> {
     let name = LocatedString::from_node(node, "name");
     let priority = node.attribute("priority").unwrap_or("0").to_string();
     let interval = node.attribute("interval").map(String::from);
@@ -937,7 +914,7 @@ fn parse_task(node: roxmltree::Node) -> Result<Task, String> {
     })
 }
 
-fn parse_pou_instance(node: roxmltree::Node) -> Result<PouInstance, String> {
+fn parse_pou_instance(node: roxmltree::Node) -> Result<PouInstance, Text> {
     Ok(PouInstance {
         name: LocatedString::from_node(node, "name"),
         type_name: LocatedString::from_node(node, "typeName"),

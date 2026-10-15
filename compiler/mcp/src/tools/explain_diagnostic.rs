@@ -5,8 +5,8 @@
 //! `include_str!` (REQ-TOL-mcp-072) — the tool handler performs no filesystem I/O.
 
 use ironplc_dsl::core::SourceSpan;
-use ironplc_dsl::diagnostic::{Diagnostic, Label};
-use ironplc_problems::Problem;
+use ironplc_dsl::diagnostic::Diagnostic;
+use ironplc_problems::text;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -70,12 +70,9 @@ pub fn build_response(code: &str) -> ExplainDiagnosticResponse {
             }
         }
         None => {
-            let err = Diagnostic::problem(
-                Problem::McpInputValidation,
-                Label::span(
-                    SourceSpan::default(),
-                    format!("Unknown problem code '{normalized}'."),
-                ),
+            let err = Diagnostic::text(
+                SourceSpan::default(),
+                text::mcp_input_validation_problem_code_unknown(&normalized),
             );
             ExplainDiagnosticResponse {
                 ok: false,

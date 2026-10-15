@@ -43,7 +43,7 @@ use std::sync::Mutex;
 use ironplc_container::Container;
 use ironplc_dsl::core::SourceSpan;
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
-use ironplc_problems::Problem;
+use ironplc_problems::{text, Text};
 use ironplc_runtime::{
     execute, Command, CommandError, DeviceIdentity, MigrationDecisionSpec, Response, RuntimeError,
     RuntimeHost, StatusPayload, TypeChangeDetail,
@@ -215,7 +215,7 @@ impl HotEditResponse {
 
 /// Builds the failure response for a P8001 input/session validation error,
 /// the same convention the `run` tool uses for unknown container handles.
-fn validation_failure(message: &str) -> HotEditResponse {
+fn validation_failure(text: Text) -> HotEditResponse {
     HotEditResponse {
         ok: false,
         result: None,
@@ -223,10 +223,7 @@ fn validation_failure(message: &str) -> HotEditResponse {
         v_code: None,
         message: None,
         pairs: None,
-        diagnostics: serialize_diagnostics(&[Diagnostic::problem(
-            Problem::McpInputValidation,
-            Label::span(SourceSpan::default(), message),
-        )]),
+        diagnostics: serialize_diagnostics(&[Diagnostic::text(SourceSpan::default(), text)]),
     }
 }
 
@@ -255,9 +252,7 @@ fn internal_failure(message: String) -> HotEditResponse {
 /// module documentation for the clock convention).
 fn dispatch(command: Command, session: &mut HotEditSession, drive_scan: bool) -> HotEditResponse {
     let Some(host) = session.host.as_mut() else {
-        return validation_failure(
-            "no hot edit session; call `hot_edit_accept` with a program to start one",
-        );
+        return validation_failure(text::mcp_input_validation_hot_edit_session_missing());
     };
 
     match execute(command, host, &mcp_device_identity()) {

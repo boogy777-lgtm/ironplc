@@ -5,13 +5,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use ironplc_dsl::{
-    common::Library,
-    core::FileId,
-    diagnostic::{Diagnostic, Label},
-};
+use ironplc_dsl::{common::Library, core::FileId, diagnostic::Diagnostic};
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use log::{debug, trace};
 
 use crate::{file_type::FileType, parsers};
@@ -120,8 +116,9 @@ impl Source {
 fn read_file_content(path: &Path) -> Result<String, Diagnostic> {
     debug!("Reading file {}", path.display());
 
-    let bytes = std::fs::read(path)
-        .map_err(|e| diagnostic(Problem::CannotReadFile, path, e.to_string()))?;
+    let bytes = std::fs::read(path).map_err(|e| {
+        Diagnostic::text_in_file(FileId::from_path(path), text::cannot_read_file(e))
+    })?;
 
     // We try different encoders and return the first one that matches. From section 2.1.1,
     // the allowed character set is one with characters consistent with ISO/IEC 10646-1 (UCS).
@@ -149,16 +146,11 @@ fn read_file_content(path: &Path) -> Result<String, Diagnostic> {
 
     match result {
         Some(res) => Ok(res),
-        None => Err(diagnostic(
-            Problem::UnsupportedEncoding,
-            path,
-            String::from("The file is not UTF-8 or latin1"),
+        None => Err(Diagnostic::text_in_file(
+            FileId::from_path(path),
+            text::unsupported_encoding(),
         )),
     }
-}
-
-fn diagnostic(problem: Problem, path: &Path, message: String) -> Diagnostic {
-    Diagnostic::problem(problem, Label::file(FileId::from_path(path), message))
 }
 
 #[cfg(test)]

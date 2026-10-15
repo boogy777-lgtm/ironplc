@@ -7,8 +7,8 @@
 //! `specs/design/compatibility-libraries.md` (`REQ-CL-sources-002`).
 
 use ironplc_dsl::core::FileId;
-use ironplc_dsl::diagnostic::{Diagnostic, Label};
-use ironplc_problems::Problem;
+use ironplc_dsl::diagnostic::Diagnostic;
+use ironplc_problems::{text, Text};
 
 /// A parsed and validated `library.toml` manifest.
 ///
@@ -37,28 +37,25 @@ impl LibraryManifest {
     /// diagnostic on the offending manifest.
     pub fn from_toml(content: &str, file_id: &FileId) -> Result<Self, Diagnostic> {
         let table: toml::Table = toml::from_str(content)
-            .map_err(|e| Self::invalid(file_id, format!("manifest is not valid TOML: {e}")))?;
+            .map_err(|e| Self::invalid(file_id, text::library_manifest_invalid_not_toml(e)))?;
 
         let name = Self::required_string(&table, "name", file_id)?;
         let vendor = Self::required_string(&table, "vendor", file_id)?;
         let default_version = Self::required_string(&table, "default_version", file_id)?;
 
         let references_value = table.get("references").ok_or_else(|| {
-            Self::invalid(
-                file_id,
-                "manifest is missing the required `references` field",
-            )
+            Self::invalid(file_id, text::library_manifest_invalid_references_missing())
         })?;
         let references_array = references_value.as_array().ok_or_else(|| {
             Self::invalid(
                 file_id,
-                "manifest field `references` must be an array of strings",
+                text::library_manifest_invalid_references_not_array(),
             )
         })?;
         if references_array.is_empty() {
             return Err(Self::invalid(
                 file_id,
-                "manifest field `references` must not be empty",
+                text::library_manifest_invalid_references_empty(),
             ));
         }
         let mut references = Vec::with_capacity(references_array.len());
@@ -66,7 +63,7 @@ impl LibraryManifest {
             let reference = entry.as_str().ok_or_else(|| {
                 Self::invalid(
                     file_id,
-                    "manifest field `references` must be an array of strings",
+                    text::library_manifest_invalid_references_not_array(),
                 )
             })?;
             references.push(reference.to_string());
@@ -87,21 +84,18 @@ impl LibraryManifest {
         file_id: &FileId,
     ) -> Result<String, Diagnostic> {
         let field_value = table.get(field).ok_or_else(|| {
-            Self::invalid(
-                file_id,
-                format!("manifest is missing the required `{field}` field"),
-            )
+            Self::invalid(file_id, text::library_manifest_invalid_field_missing(field))
         })?;
         let text = field_value.as_str().ok_or_else(|| {
             Self::invalid(
                 file_id,
-                format!("manifest field `{field}` must be a string"),
+                text::library_manifest_invalid_field_not_string(field),
             )
         })?;
         if text.is_empty() {
             return Err(Self::invalid(
                 file_id,
-                format!("manifest field `{field}` must not be empty"),
+                text::library_manifest_invalid_field_empty(field),
             ));
         }
         Ok(text.to_string())
@@ -109,17 +103,15 @@ impl LibraryManifest {
 
     /// Build a `LibraryManifestInvalid` (P6010) diagnostic located on the
     /// manifest file.
-    fn invalid(file_id: &FileId, message: impl Into<String>) -> Diagnostic {
-        Diagnostic::problem(
-            Problem::LibraryManifestInvalid,
-            Label::file(file_id.clone(), message),
-        )
+    fn invalid(file_id: &FileId, text: Text) -> Diagnostic {
+        Diagnostic::text_in_file(file_id.clone(), text)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ironplc_problems::Problem;
 
     fn file_id() -> FileId {
         FileId::from_string("library.toml")

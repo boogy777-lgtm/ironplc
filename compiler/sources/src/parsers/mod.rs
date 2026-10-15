@@ -6,7 +6,7 @@ pub mod xml_parser;
 
 use ironplc_dsl::{common::Library, core::FileId, diagnostic::Diagnostic};
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 
 use crate::file_type::FileType;
 
@@ -21,12 +21,11 @@ pub fn parse_source(
         FileType::StructuredText => st_parser::parse(content, file_id, compiler_options),
         FileType::Xml => xml_parser::parse(content, file_id, compiler_options),
         FileType::TwinCat => twincat_parser::parse(content, file_id, compiler_options),
-        FileType::Unknown => Err(Diagnostic::problem(
-            Problem::UnsupportedFileType,
-            ironplc_dsl::diagnostic::Label::file(
-                file_id.clone(),
-                format!("Unsupported file type: {file_type:?}"),
-            ),
+        // The Debug rendering of the file type is the text the label has always
+        // shown, so the argument is formatted here (a template has no format spec).
+        FileType::Unknown => Err(Diagnostic::text_in_file(
+            file_id.clone(),
+            text::unsupported_file_type(format!("{file_type:?}")),
         )),
     }
 }

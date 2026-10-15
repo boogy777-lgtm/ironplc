@@ -2,6 +2,7 @@
 
 use super::*;
 use ironplc_dsl::sfc::ElementKind;
+use ironplc_problems::Problem;
 use ironplc_test::cast;
 
 // ========================================================================

@@ -13,7 +13,7 @@ use ironplc_dsl::{
     diagnostic::{Diagnostic, Label},
 };
 use ironplc_plc2plc::write_to_string;
-use ironplc_problems::Problem;
+use ironplc_problems::{text, Text};
 use log::{error, trace};
 use std::{
     collections::{BTreeSet, HashMap},
@@ -105,11 +105,7 @@ pub fn compile(
     // truncates immediately, so this must be diagnosed before codegen runs:
     // a non-empty diagnostic set below means no output is ever opened.
     if output_conflicts_with_source(&project, output) {
-        diagnostics.extend(diagnostic(
-            Problem::OutputPathConflictsWithInput,
-            output,
-            String::from("Choose an output path that is not an input source file"),
-        ));
+        diagnostics.extend(diagnostic(output, text::output_path_conflicts_with_input()));
     }
 
     // Build a SourceLookup that hands codegen the exact bytes the parser saw
@@ -366,11 +362,7 @@ fn enumerate_files(path: &PathBuf) -> (Vec<PathBuf>, Vec<LibraryName>, Vec<Diagn
             return (
                 vec![],
                 vec![],
-                diagnostic(
-                    Problem::CannotCanonicalizePath,
-                    path,
-                    format!("{}, {}", path.display(), e),
-                ),
+                diagnostic(path, text::cannot_canonicalize_path(path.display(), e)),
             );
         }
     };
@@ -382,7 +374,7 @@ fn enumerate_files(path: &PathBuf) -> (Vec<PathBuf>, Vec<LibraryName>, Vec<Diagn
             return (
                 vec![],
                 vec![],
-                diagnostic(Problem::CannotReadMetadata, &path, e.to_string()),
+                diagnostic(&path, text::cannot_read_metadata(e)),
             );
         }
     };
@@ -390,7 +382,7 @@ fn enumerate_files(path: &PathBuf) -> (Vec<PathBuf>, Vec<LibraryName>, Vec<Diagn
         return (
             vec![],
             vec![],
-            diagnostic(Problem::SymlinkUnsupported, &path, String::from("")),
+            diagnostic(&path, text::symlink_unsupported()),
         );
     }
 
@@ -550,11 +542,8 @@ fn output_conflicts_with_source(project: &FileBackedProject, output: &Path) -> b
     })
 }
 
-fn diagnostic(problem: Problem, path: &Path, message: String) -> Vec<Diagnostic> {
-    vec![Diagnostic::problem(
-        problem,
-        Label::file(FileId::from_path(path), message),
-    )]
+fn diagnostic(path: &Path, text: Text) -> Vec<Diagnostic> {
+    vec![Diagnostic::text_in_file(FileId::from_path(path), text)]
 }
 
 #[cfg(test)]

@@ -9,9 +9,10 @@
 use std::collections::HashSet;
 
 use ironplc_dsl::core::SourceSpan;
-use ironplc_dsl::diagnostic::{Diagnostic, Label};
+use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_parser::options::{CompilerOptions, Dialect};
-use ironplc_problems::Problem;
+use ironplc_problems::{text, Text};
+// The tests of this module name `Label` and `Problem` through `use super::*`.
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -87,27 +88,28 @@ pub fn validate_sources(sources: &[SourceInput]) -> Vec<Diagnostic> {
 
     for src in sources {
         if src.name.is_empty() {
-            errors.push(validation_diagnostic("Source name must not be empty."));
+            errors.push(validation_diagnostic(
+                text::mcp_input_validation_source_name_empty(),
+            ));
             continue;
         }
         if src.name.len() > 256 {
-            errors.push(validation_diagnostic(&format!(
-                "Source name '{}' exceeds 256-byte limit.",
-                truncate(&src.name, 40)
-            )));
+            errors.push(validation_diagnostic(
+                text::mcp_input_validation_source_name_too_long(truncate(&src.name, 40)),
+            ));
         }
         if !is_printable_ascii(&src.name) {
-            errors.push(validation_diagnostic(&format!(
-                "Source name '{}' contains characters outside printable ASCII (0x20-0x7E).",
-                src.name
-                    .replace(|c: char| !c.is_ascii_graphic() && c != ' ', "?")
-            )));
+            errors.push(validation_diagnostic(
+                text::mcp_input_validation_source_name_not_printable(
+                    src.name
+                        .replace(|c: char| !c.is_ascii_graphic() && c != ' ', "?"),
+                ),
+            ));
         }
         if !seen.insert(&src.name) {
-            errors.push(validation_diagnostic(&format!(
-                "Duplicate source name '{}'.",
-                src.name
-            )));
+            errors.push(validation_diagnostic(
+                text::mcp_input_validation_source_name_duplicate(&src.name),
+            ));
         }
     }
     errors
@@ -119,24 +121,24 @@ pub fn validate_sources(sources: &[SourceInput]) -> Vec<Diagnostic> {
 
 /// Parses and validates the `options` JSON value into `CompilerOptions`.
 pub fn parse_options(value: &serde_json::Value) -> Result<CompilerOptions, Vec<Diagnostic>> {
-    let obj = value
-        .as_object()
-        .ok_or_else(|| vec![validation_diagnostic("options must be a JSON object.")])?;
+    let obj = value.as_object().ok_or_else(|| {
+        vec![validation_diagnostic(
+            text::mcp_input_validation_options_not_object(),
+        )]
+    })?;
 
     // `dialect` is required
     let dialect_str = obj.get("dialect").and_then(|v| v.as_str()).ok_or_else(|| {
         vec![validation_diagnostic(
-            "options.dialect is required and must be a string.",
+            text::mcp_input_validation_options_dialect_missing(),
         )]
     })?;
 
     let dialect = resolve_dialect(dialect_str).ok_or_else(|| {
         let known: Vec<String> = Dialect::ALL.iter().map(|d| d.to_string()).collect();
-        vec![validation_diagnostic(&format!(
-            "Unknown dialect '{}'. Known dialects: {}",
-            dialect_str,
-            known.join(", ")
-        ))]
+        vec![validation_diagnostic(
+            text::mcp_input_validation_options_dialect_unknown(dialect_str, known.join(", ")),
+        )]
     })?;
 
     let mut options = CompilerOptions::from_dialect(dialect);
@@ -160,17 +162,15 @@ pub fn parse_options(value: &serde_json::Value) -> Result<CompilerOptions, Vec<D
                             .find(|pd| pd.option_key == key)
                             .map(|pd| pd.alternatives.join(", "))
                             .unwrap_or_default();
-                        errors.push(validation_diagnostic(&format!(
-                            "Option '{}' must be one of: {}.",
-                            key, allowed
-                        )));
+                        errors.push(validation_diagnostic(
+                            text::mcp_input_validation_option_policy_value_invalid(key, allowed),
+                        ));
                     }
                 }
                 None => {
-                    errors.push(validation_diagnostic(&format!(
-                        "Option '{}' must be a string.",
-                        key
-                    )));
+                    errors.push(validation_diagnostic(
+                        text::mcp_input_validation_option_not_string(key),
+                    ));
                 }
             }
             continue;
@@ -178,17 +178,15 @@ pub fn parse_options(value: &serde_json::Value) -> Result<CompilerOptions, Vec<D
         match val.as_bool() {
             Some(b) => {
                 if !options.set_flag_by_key(key, b) {
-                    errors.push(validation_diagnostic(&format!(
-                        "Unknown option key '{}'.",
-                        key
-                    )));
+                    errors.push(validation_diagnostic(
+                        text::mcp_input_validation_option_key_unknown(key),
+                    ));
                 }
             }
             None => {
-                errors.push(validation_diagnostic(&format!(
-                    "Option '{}' must be a boolean.",
-                    key
-                )));
+                errors.push(validation_diagnostic(
+                    text::mcp_input_validation_option_not_boolean(key),
+                ));
             }
         }
     }
@@ -242,11 +240,8 @@ pub fn serialize_diagnostics(diags: &[Diagnostic]) -> Vec<serde_json::Value> {
 // ───────────────────────────────────────────────────────────────────
 
 /// Creates a validation `Diagnostic` using the `P8001` problem code.
-fn validation_diagnostic(message: &str) -> Diagnostic {
-    Diagnostic::problem(
-        Problem::McpInputValidation,
-        Label::span(SourceSpan::default(), message),
-    )
+fn validation_diagnostic(text: Text) -> Diagnostic {
+    Diagnostic::text(SourceSpan::default(), text)
 }
 
 /// Truncates a string to at most `max` characters, appending "…" if truncated.
@@ -266,6 +261,8 @@ fn truncate(s: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ironplc_dsl::diagnostic::Label;
+    use ironplc_problems::Problem;
 
     // -- validate_sources tests --
 

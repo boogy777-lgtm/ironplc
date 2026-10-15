@@ -24,11 +24,11 @@
 use ironplc_dsl::{
     common::Library,
     core::{FileId, SourceSpan},
-    diagnostic::{Diagnostic, Label},
+    diagnostic::Diagnostic,
     fold::Fold,
 };
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use log::debug;
 
 use super::st_parser;
@@ -117,23 +117,14 @@ pub fn parse(
     debug!("Parsing TwinCAT XML file: {}", file_id);
 
     let doc = roxmltree::Document::parse(content).map_err(|e| {
-        Diagnostic::problem(
-            Problem::XmlMalformed,
-            Label::file(file_id.clone(), format!("XML parse error: {e}")),
-        )
+        Diagnostic::text_in_file(file_id.clone(), text::xml_malformed_parse_error(e))
     })?;
 
     let root = doc.root_element();
     if root.tag_name().name() != "TcPlcObject" {
-        return Err(Diagnostic::problem(
-            Problem::TwinCatMalformed,
-            Label::file(
-                file_id.clone(),
-                format!(
-                    "Expected root element 'TcPlcObject', found '{}'",
-                    root.tag_name().name()
-                ),
-            ),
+        return Err(Diagnostic::text_in_file(
+            file_id.clone(),
+            text::twin_cat_malformed_root_element(root.tag_name().name()),
         ));
     }
 
@@ -145,13 +136,7 @@ pub fn parse(
         .children()
         .find(|n| n.is_element() && matches!(n.tag_name().name(), "POU" | "GVL" | "DUT" | "Itf"))
         .ok_or_else(|| {
-            Diagnostic::problem(
-                Problem::TwinCatMalformed,
-                Label::file(
-                    file_id.clone(),
-                    "TcPlcObject must contain a POU, GVL, DUT, or Itf element".to_string(),
-                ),
-            )
+            Diagnostic::text_in_file(file_id.clone(), text::twin_cat_malformed_object_missing())
         })?;
 
     let object_type = object.tag_name().name();
@@ -159,12 +144,9 @@ pub fn parse(
 
     // Extract Declaration CDATA with byte offset
     let declaration = find_child_element(&object, "Declaration").ok_or_else(|| {
-        Diagnostic::problem(
-            Problem::TwinCatMalformed,
-            Label::file(
-                file_id.clone(),
-                format!("{object_type} element is missing required 'Declaration' element"),
-            ),
+        Diagnostic::text_in_file(
+            file_id.clone(),
+            text::twin_cat_malformed_declaration_missing(object_type),
         )
     })?;
 
@@ -489,14 +471,11 @@ fn required_declaration<'a>(
     file_id: &FileId,
 ) -> Result<roxmltree::Node<'a, 'a>, Diagnostic> {
     find_child_element(element, "Declaration").ok_or_else(|| {
-        Diagnostic::problem(
-            Problem::TwinCatMalformed,
-            Label::file(
-                file_id.clone(),
-                format!(
-                    "{kind} '{}' is missing required 'Declaration' element",
-                    element.attribute("Name").unwrap_or("<unnamed>")
-                ),
+        Diagnostic::text_in_file(
+            file_id.clone(),
+            text::twin_cat_malformed_declaration_missing_named(
+                kind,
+                element.attribute("Name").unwrap_or("<unnamed>"),
             ),
         )
     })
@@ -522,14 +501,9 @@ fn extract_implementation(
     for child in implementation.children().filter(|n| n.is_element()) {
         let lang = child.tag_name().name();
         if matches!(lang, "FBD" | "LD" | "IL" | "SFC") {
-            return Err(Diagnostic::problem(
-                Problem::XmlBodyTypeNotSupported,
-                Label::file(
-                    file_id.clone(),
-                    format!(
-                        "POU uses {lang} which is not supported. Use ST (Structured Text) instead."
-                    ),
-                ),
+            return Err(Diagnostic::text_in_file(
+                file_id.clone(),
+                text::xml_body_type_not_supported_implementation(lang),
             ));
         }
     }

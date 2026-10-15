@@ -1,6 +1,87 @@
 Code,Key,Template
-P4076,attribute_not_allowed_here,"The attribute '{name}' does not apply to a declaration of this kind ({kind}); it applies to: {targets}"
+P0006,xml_malformed_parse_error,XML parse error: {reason}
+P0006,xml_malformed_plcproj,Malformed .plcproj XML: {reason}
+P0007,xml_schema_violation_duration_invalid,"Invalid duration format: '{value}'. Expected format like T#100ms, T#1s, T#1m"
+P0007,xml_schema_violation_function_missing_interface,Function '{name}' is missing interface
+P0007,xml_schema_violation_function_missing_return_type,Function '{name}' is missing a return type
+P0007,xml_schema_violation_root_element,"Expected root element 'project', found '{found}'"
+P0007,xml_schema_violation_subrange_base_type,"Subrange base type must be an integer type, found: {found}"
+P0007,xml_schema_violation_task_priority_invalid,Invalid task priority: '{priority}'
+P0007,xml_schema_violation_unknown_data_type,Unknown data type: {tag}
+P0007,xml_schema_violation_value_invalid,Invalid {context}: '{value}'
+P0008,sfc_missing_initial_step,SFC body
+P0009,twin_cat_malformed_declaration_missing,{object_type} element is missing required 'Declaration' element
+P0009,twin_cat_malformed_declaration_missing_named,{kind} '{name}' is missing required 'Declaration' element
+P0009,twin_cat_malformed_object_missing,"TcPlcObject must contain a POU, GVL, DUT, or Itf element"
+P0009,twin_cat_malformed_root_element,"Expected root element 'TcPlcObject', found '{found}'"
+P4076,attribute_not_allowed_here,The attribute '{name}' does not apply to a declaration of this kind ({kind}); it applies to: {targets}
 P4077,attribute_value_invalid_found,"The attribute '{name}' takes {takes}, but its value is '{value}'"
 P4077,attribute_value_invalid_missing,"The attribute '{name}' takes {takes}, but it has no value"
 P4078,attribute_repeated,The attribute '{name}' is written again for the same declaration
 P4078,attribute_repeated_first_written_here,First written here
+P6001,cannot_canonicalize_path,"{path}, {reason}"
+P6002,cannot_read_metadata,{reason}
+P6003,cannot_read_directory,Path does not exist: {path}
+P6004,cannot_read_file,{reason}
+P6004,cannot_read_file_plcproj,Cannot read .plcproj file: {reason}
+P6004,cannot_read_file_referenced_missing,Referenced file does not exist: {include} (resolved to {resolved})
+P6004,cannot_read_file_with_path,"{path}, {reason}"
+P6005,symlink_unsupported,
+P6006,unsupported_encoding,The file is not UTF-8 or latin1
+P6007,unsupported_file_type,Unsupported file type: {file_type}
+P6008,xml_unsupported_version,"Unsupported PLCopen XML version. Found namespace '{found}', expected '{expected}'"
+P6009,output_path_conflicts_with_input,Choose an output path that is not an input source file
+P6010,library_manifest_invalid_field_empty,manifest field `{field}` must not be empty
+P6010,library_manifest_invalid_field_missing,manifest is missing the required `{field}` field
+P6010,library_manifest_invalid_field_not_string,manifest field `{field}` must be a string
+P6010,library_manifest_invalid_library_file_unreadable,cannot read library file: {reason}
+P6010,library_manifest_invalid_manifest_unreadable,cannot read manifest: {reason}
+P6010,library_manifest_invalid_not_toml,manifest is not valid TOML: {reason}
+P6010,library_manifest_invalid_references_empty,manifest field `references` must not be empty
+P6010,library_manifest_invalid_references_missing,manifest is missing the required `references` field
+P6010,library_manifest_invalid_references_not_array,manifest field `references` must be an array of strings
+P6010,library_manifest_invalid_version_dir_unreadable,cannot read version directory {path}: {reason}
+P6011,library_not_found,compatibility library `{name}` not found
+P6011,library_not_found_not_bundled,"project references compatibility library `{name}`, which IronPLC does not bundle"
+P6012,project_manifest_unresolvable,{manifest} does not resolve to a project: {reason}
+P6013,cannot_write_file,"{path}, {reason}"
+P8001,mcp_input_validation_container_id_unknown,unknown container_id '{container_id}'
+P8001,mcp_input_validation_hot_edit_session_missing,no hot edit session; call `hot_edit_accept` with a program to start one
+P8001,mcp_input_validation_option_key_unknown,Unknown option key '{key}'.
+P8001,mcp_input_validation_option_not_boolean,Option '{key}' must be a boolean.
+P8001,mcp_input_validation_option_not_string,Option '{key}' must be a string.
+P8001,mcp_input_validation_option_policy_value_invalid,Option '{key}' must be one of: {allowed}.
+P8001,mcp_input_validation_options_dialect_missing,options.dialect is required and must be a string.
+P8001,mcp_input_validation_options_dialect_unknown,Unknown dialect '{dialect}'. Known dialects: {known}
+P8001,mcp_input_validation_options_not_object,options must be a JSON object.
+P8001,mcp_input_validation_problem_code_unknown,Unknown problem code '{code}'.
+P8001,mcp_input_validation_run_container_base64_deferred,`container_base64` ingestion is deferred to a follow-up; pass `container_id` from a prior `compile` call for now.
+P8001,mcp_input_validation_run_container_both,`run` accepts at most one of `container_id` or `container_base64`; both were supplied.
+P8001,mcp_input_validation_run_container_missing,`run` requires exactly one of `container_id` or `container_base64`.
+P8001,mcp_input_validation_run_container_unknown,Unknown or evicted container_id '{container_id}'. Re-compile to obtain a fresh handle.
+P8001,mcp_input_validation_run_duration_limited,Requested simulated duration ({requested} ms) exceeds the server limit ({limit} ms); the run stopped at the limit.
+P8001,mcp_input_validation_run_freewheeling_interval_invalid,freewheeling_interval_ms ({interval}) {reason}. It is the cycle time to run tasks that declare no INTERVAL at.
+P8001,mcp_input_validation_run_freewheeling_interval_missing,"Task '{task}' declares no INTERVAL, so it has no scan cycle time and the run has nothing to advance simulated time by. Set `freewheeling_interval_ms` to the scan time to run it at, or declare `INTERVAL` on the task in a CONFIGURATION."
+P8001,mcp_input_validation_run_fuel_exhausted,VM fuel budget exhausted (checked between task cycles).
+P8001,mcp_input_validation_run_limit_exceeds_default,limits.{limit} ({value}) exceeds server default ({default}); overrides may only tighten.
+P8001,mcp_input_validation_run_no_tasks,Container declares no tasks; declare at least one TASK in a CONFIGURATION to run.
+P8001,mcp_input_validation_run_sample_cap_reached,Trace sample cap reached; emitted trace is truncated.
+P8001,mcp_input_validation_run_stimuli_unimplemented,`stimuli` are not yet implemented; run without stimuli drives the program with declared initial values only.
+P8001,mcp_input_validation_run_tasks_filter_unimplemented,`tasks` filter is not yet implemented.
+P8001,mcp_input_validation_run_trace_mode_unimplemented,trace.mode = '{mode}' is not yet implemented; only 'every_cycle' is supported in this milestone.
+P8001,mcp_input_validation_run_trace_set_too_large,"Trace set has {count} variables, exceeding the server-configured limit of {limit}."
+P8001,mcp_input_validation_run_variable_ambiguous,Variable '{name}' is ambiguous; candidates: [{candidates}]. Qualify the name (e.g. 'Program.{name}').
+P8001,mcp_input_validation_run_variable_unresolved,Variable '{name}' does not resolve against the loaded container.
+P8001,mcp_input_validation_run_vm_error,{reason}
+P8001,mcp_input_validation_run_vm_trap,VM trap during execution.
+P8001,mcp_input_validation_run_wall_clock_exceeded,Wall-clock limit exceeded before the run completed.
+P8001,mcp_input_validation_run_wildcard_name,Wildcard names are not supported ('{name}'); enumerate variables or set `trace_outputs: true`.
+P8001,mcp_input_validation_source_name_duplicate,Duplicate source name '{name}'.
+P8001,mcp_input_validation_source_name_empty,Source name must not be empty.
+P8001,mcp_input_validation_source_name_not_printable,Source name '{name}' contains characters outside printable ASCII (0x20-0x7E).
+P8001,mcp_input_validation_source_name_too_long,Source name '{name}' exceeds 256-byte limit.
+P9002,no_content_directory_initialization_unsupported,MemoryBackedProject does not support directory initialization
+P9002,no_content_multiple_directories_unsupported,This project implementation does not support multiple directories
+P9002,no_content_no_documents_to_tokenize,No documents to tokenize
+P9003,xml_body_type_not_supported_implementation,POU uses {language} which is not supported. Use ST (Structured Text) instead.
+P9003,xml_body_type_not_supported_pou,POU '{name}' uses {language} which is not supported. Use ST (Structured Text) instead.

@@ -5,9 +5,9 @@
 use ironplc_dsl::{
     common::Library,
     core::{FileId, SourceSpan},
-    diagnostic::{Diagnostic, Label},
+    diagnostic::Diagnostic,
 };
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use log::debug;
 
 use ironplc_parser::options::CompilerOptions;
@@ -47,28 +47,19 @@ pub fn parse(
     for pou in &project.types.pous.pou {
         if let Some(ref body) = pou.body {
             if let Some((lang, range)) = body.unsupported_language() {
-                let label = if let Some(range) = range {
-                    Label::span(
+                let message = text::xml_body_type_not_supported_pou(&pou.name, lang);
+                return Err(if let Some(range) = range {
+                    Diagnostic::text(
                         SourceSpan {
                             start: range.start,
                             end: range.end,
                             file_id: file_id.clone(),
                         },
-                        format!(
-                            "POU '{}' uses {} which is not supported. Use ST (Structured Text) instead.",
-                            pou.name, lang
-                        ),
+                        message,
                     )
                 } else {
-                    Label::file(
-                        file_id.clone(),
-                        format!(
-                            "POU '{}' uses {} which is not supported. Use ST (Structured Text) instead.",
-                            pou.name, lang
-                        ),
-                    )
-                };
-                return Err(Diagnostic::problem(Problem::XmlBodyTypeNotSupported, label));
+                    Diagnostic::text_in_file(file_id.clone(), message)
+                });
             }
         }
     }
@@ -81,6 +72,7 @@ pub fn parse(
 mod tests {
     use super::*;
     use ironplc_dsl::core::FileId;
+    use ironplc_problems::Problem;
 
     fn test_file_id() -> FileId {
         FileId::from_string("test.xml")

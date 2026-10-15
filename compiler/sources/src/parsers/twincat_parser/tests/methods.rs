@@ -1,6 +1,7 @@
 //! Tests that `<Method>` elements of a function block are parsed, kept in order and positioned in the XML.
 
 use super::*;
+use ironplc_problems::Problem;
 
 /// The `<Method>` shape TwinCAT writes into a `.TcPOU`: the method's own
 /// `<Declaration>` already carries the `METHOD` keyword and the signature,
