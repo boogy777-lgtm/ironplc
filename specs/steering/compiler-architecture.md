@@ -43,7 +43,7 @@ The IronPLC compiler follows a traditional multi-stage compilation pipeline:
 - **Maximum 1000 lines of code** per module (except where absolutely necessary)
 - **Single responsibility**: Each module should handle one specific aspect of analysis
 - **Focused purpose**: Avoid combining unrelated functionality in the same module
-- **Split when needed**: If a module grows beyond 1000 lines, split it into smaller, focused modules
+- **Split when needed**: If a module grows beyond 1000 lines, split it into smaller, focused modules as [compiler-standards.md](compiler-standards.md#splitting-a-module) describes
 
 ### Naming Conventions
 - `xform_*` modules of `analyzer/` handle transformations of the `Library`

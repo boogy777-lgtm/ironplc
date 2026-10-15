@@ -34,6 +34,45 @@ directory, the git workflow — live in
   guard was introduced and only shrinks, so a failure is answered by splitting
   the module, never by raising a number
 
+### Splitting a Module
+
+Split a module by responsibility, never by line number. Each new module answers
+one question, and its `pub` items are its interface. Use the means below in this
+order, stopping at the first that brings every file within the limit:
+
+1. **Move the tests out.** Replace the inline `mod tests { ... }` with
+   `#[cfg(test)] mod tests;` and put the tests in `<module>/tests.rs`. A test
+   file over the limit becomes a `<module>/tests/` directory with one file per
+   subject under test.
+2. **Turn the file into a directory module.** `<module>.rs` stays the entry and
+   declares the children `<module>/<part>.rs`. Re-export with `pub use` so that
+   every path used outside the module stays the same.
+3. **Spread the methods of one type over files.** Inherent `impl` blocks of one
+   type may live in several child modules; group the methods by the job they
+   do.
+4. **Keep one `match` over variants, move the arm bodies.** A large `match` over
+   variants (opcodes, node kinds) stays in one place, without a wildcard arm, so
+   the compiler still checks that every variant is handled. Each arm calls a
+   function in the module of its family.
+
+Give each item the narrowest visibility that compiles: private, then
+`pub(super)`, then `pub(crate)`. Do not make an item `pub` to make a split
+compile.
+
+Do not:
+
+- split at a line number (`part1.rs`, `part2.rs`);
+- use `include!` or `#[path]`;
+- create a module named for no responsibility (`utils.rs`, `helpers.rs`,
+  `misc.rs`);
+- change behaviour, tests or public paths in the change that moves the code.
+
+A split is a prefactor (see
+[development-standards.md](development-standards.md#prefactoring)): its own
+pull request, which moves code and changes nothing else. The tests pass
+unchanged, apart from `use` paths, and the change removes or lowers the file's
+entry in `module_size_allowlist.txt` when it has one.
+
 ## Testing Standards
 
 ### Test Naming
