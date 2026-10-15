@@ -44,11 +44,11 @@
 use ironplc_dsl::{
     common::*,
     core::{Id, Located, SourceSpan},
-    diagnostic::{Diagnostic, Label},
+    diagnostic::Diagnostic,
     textual::*,
     visitor::Visitor,
 };
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use std::collections::HashMap;
 use std::convert::Infallible;
 
@@ -86,24 +86,18 @@ impl RuleJumpTarget {
         let mut seen: HashMap<String, ()> = HashMap::new();
         for (name, span) in &collector.labels {
             if seen.insert(name.lower_case().clone(), ()).is_some() {
-                self.diagnostics.push(Diagnostic::problem(
-                    Problem::DuplicateLabelDefinition,
-                    Label::span(
-                        span.clone(),
-                        format!("Label '{}' is defined more than once", name.original()),
-                    ),
+                self.diagnostics.push(Diagnostic::text(
+                    span.clone(),
+                    text::duplicate_label_definition_defined_more_than_once(name.original()),
                 ));
             }
         }
 
         for (name, span) in &collector.jumps {
             if !seen.contains_key(name.lower_case()) {
-                self.diagnostics.push(Diagnostic::problem(
-                    Problem::JumpDestinationInvalid,
-                    Label::span(
-                        span.clone(),
-                        format!("No label '{}' in this body", name.original()),
-                    ),
+                self.diagnostics.push(Diagnostic::text(
+                    span.clone(),
+                    text::jump_destination_invalid(name.original()),
                 ));
             }
         }

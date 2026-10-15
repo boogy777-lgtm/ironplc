@@ -28,13 +28,8 @@
 //! I don't know if it is possible to have an external
 //! reference where one part declares the value and another
 //! references the value (and still be constant).
-use ironplc_dsl::{
-    common::*,
-    core::Located,
-    diagnostic::{Diagnostic, Label},
-    visitor::Visitor,
-};
-use ironplc_problems::Problem;
+use ironplc_dsl::{common::*, core::Located, diagnostic::Diagnostic, visitor::Visitor};
+use ironplc_problems::text;
 use std::convert::Infallible;
 
 use crate::{
@@ -94,9 +89,9 @@ impl<'a> Visitor<Infallible> for RuleConstantVarsInitialized<'a> {
                     Some(_) => {}
                     None => {
                         self.diagnostics.push(
-                            Diagnostic::problem(
-                                Problem::ConstantMustHaveInitializer,
-                                Label::span(node.span(), "Variable"),
+                            Diagnostic::text(
+                                node.span(),
+                                text::constant_must_have_initializer_variable(),
                             )
                             .with_context("variable", &node.identifier.to_string()),
                         );
@@ -106,9 +101,9 @@ impl<'a> Visitor<Infallible> for RuleConstantVarsInitialized<'a> {
                     Some(_) => {}
                     None => {
                         self.diagnostics.push(
-                            Diagnostic::problem(
-                                Problem::ConstantMustHaveInitializer,
-                                Label::span(node.span(), "Variable declaration"),
+                            Diagnostic::text(
+                                node.span(),
+                                text::constant_must_have_initializer_variable_declaration(),
                             )
                             .with_context("variable", &node.identifier.to_string()),
                         );
@@ -118,9 +113,9 @@ impl<'a> Visitor<Infallible> for RuleConstantVarsInitialized<'a> {
                     Some(_) => {}
                     None => {
                         self.diagnostics.push(
-                            Diagnostic::problem(
-                                Problem::ConstantMustHaveInitializer,
-                                Label::span(node.span(), "Variable declaration"),
+                            Diagnostic::text(
+                                node.span(),
+                                text::constant_must_have_initializer_variable_declaration(),
                             )
                             .with_context("variable", &node.identifier.to_string()),
                         );
@@ -130,9 +125,9 @@ impl<'a> Visitor<Infallible> for RuleConstantVarsInitialized<'a> {
                     match type_init.initial_value {
                         Some(_) => {}
                         None => self.diagnostics.push(
-                            Diagnostic::problem(
-                                Problem::ConstantMustHaveInitializer,
-                                Label::span(node.span(), "Variable declaration"),
+                            Diagnostic::text(
+                                node.span(),
+                                text::constant_must_have_initializer_variable_declaration(),
                             )
                             .with_context("variable", &node.identifier.to_string()),
                         ),
@@ -149,9 +144,9 @@ impl<'a> Visitor<Infallible> for RuleConstantVarsInitialized<'a> {
                     Some(_) => {}
                     None => {
                         self.diagnostics.push(
-                            Diagnostic::problem(
-                                Problem::ConstantMustHaveInitializer,
-                                Label::span(node.span(), "Variable declaration"),
+                            Diagnostic::text(
+                                node.span(),
+                                text::constant_must_have_initializer_variable_declaration(),
                             )
                             .with_context("variable", &node.identifier.to_string()),
                         );
@@ -165,9 +160,9 @@ impl<'a> Visitor<Infallible> for RuleConstantVarsInitialized<'a> {
                 InitialValueAssignmentKind::Array(array_init) => {
                     if array_init.initial_values.is_empty() {
                         self.diagnostics.push(
-                            Diagnostic::problem(
-                                Problem::ConstantMustHaveInitializer,
-                                Label::span(node.span(), "Variable declaration"),
+                            Diagnostic::text(
+                                node.span(),
+                                text::constant_must_have_initializer_variable_declaration(),
                             )
                             .with_context("variable", &node.identifier.to_string()),
                         );
@@ -181,9 +176,9 @@ impl<'a> Visitor<Infallible> for RuleConstantVarsInitialized<'a> {
                 InitialValueAssignmentKind::Reference(ref_init) => {
                     if ref_init.initial_value.is_none() {
                         self.diagnostics.push(
-                            Diagnostic::problem(
-                                Problem::ConstantMustHaveInitializer,
-                                Label::span(node.span(), "Variable declaration"),
+                            Diagnostic::text(
+                                node.span(),
+                                text::constant_must_have_initializer_variable_declaration(),
                             )
                             .with_context("variable", &node.identifier.to_string()),
                         );
@@ -255,9 +250,9 @@ impl<'a> RuleConstantVarsInitialized<'a> {
                     .any(|init| init.name == field.name)
                 {
                     self.diagnostics.push(
-                        Diagnostic::problem(
-                            Problem::ConstantMustHaveInitializer,
-                            Label::span(node.span(), "Constant structure variable"),
+                        Diagnostic::text(
+                            node.span(),
+                            text::constant_must_have_initializer_constant_structure_variable(),
                         )
                         .with_context("variable", &node.identifier.to_string())
                         .with_context("field", &field.name.to_string()),

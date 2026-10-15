@@ -59,7 +59,7 @@ use ironplc_dsl::{
     visitor::Visitor,
 };
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use std::convert::Infallible;
 
 use crate::{
@@ -102,10 +102,7 @@ impl Visitor<Infallible> for RuleAmbiguousEnumeratedValue<'_> {
             return Ok(());
         }
         if let ValueOwners::Several(owners) = self.types.enumerations_declaring(&node.value) {
-            let mut diagnostic = Diagnostic::problem(
-                Problem::AmbiguousEnumeratedValue,
-                Label::span(node.span(), "Value is declared by several enumerations"),
-            )
+            let mut diagnostic = Diagnostic::text(node.span(), text::ambiguous_enumerated_value_value_is_declared_by_several_enumerations())
             .with_context_id("value", &node.value)
             .with_help(
                 "Rename the value so that one enumeration declares it, or write Enumeration#Value where that form is accepted",
@@ -113,7 +110,7 @@ impl Visitor<Infallible> for RuleAmbiguousEnumeratedValue<'_> {
             for owner in owners {
                 diagnostic = diagnostic.with_secondary(Label::span(
                     owner.value.span(),
-                    format!("Value of enumeration {}", owner.enumeration),
+                    text::ambiguous_enumerated_value_value_of_enumeration(owner.enumeration),
                 ));
             }
             self.diagnostics.push(diagnostic);

@@ -52,7 +52,7 @@ use ironplc_dsl::{
     textual::*,
     visitor::Visitor,
 };
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use std::convert::Infallible;
 
 use crate::{
@@ -116,16 +116,12 @@ impl RuleBitAndPartialAccessRange<'_> {
 
         if access_bytes > base_bytes {
             self.diagnostics.push(
-                Diagnostic::problem(
-                    Problem::BitAccessOutOfRange,
-                    Label::span(
-                        node.index.span(),
-                        format!(
-                            "Partial access {}0 requires at least {} bytes but type has only {} bytes",
-                            node.size.prefix(),
-                            access_bytes,
-                            base_bytes,
-                        ),
+                Diagnostic::text(
+                    node.index.span(),
+                    text::bit_access_out_of_range_partial_access_requires_bytes(
+                        node.size.prefix(),
+                        access_bytes,
+                        base_bytes,
                     ),
                 )
                 .with_context("access_bytes", &access_bytes.to_string())
@@ -138,15 +134,9 @@ impl RuleBitAndPartialAccessRange<'_> {
         let index = node.index.value;
         if index > max_index {
             self.diagnostics.push(
-                Diagnostic::problem(
-                    Problem::BitAccessOutOfRange,
-                    Label::span(
-                        node.index.span(),
-                        format!(
-                            "Partial access index {} is out of range. Valid range is 0..{} for type",
-                            index, max_index,
-                        ),
-                    ),
+                Diagnostic::text(
+                    node.index.span(),
+                    text::bit_access_out_of_range_partial_access_index(index, max_index),
                 )
                 .with_context("index", &index.to_string())
                 .with_context("max_index", &max_index.to_string()),
@@ -170,16 +160,9 @@ impl RuleBitAndPartialAccessRange<'_> {
         let index = node.index.value;
         if index >= bit_width {
             self.diagnostics.push(
-                Diagnostic::problem(
-                    Problem::BitAccessOutOfRange,
-                    Label::span(
-                        node.index.span(),
-                        format!(
-                            "Bit index {} is out of range. Valid range is 0..{} for type",
-                            index,
-                            bit_width - 1,
-                        ),
-                    ),
+                Diagnostic::text(
+                    node.index.span(),
+                    text::bit_access_out_of_range_bit_index(index, bit_width - 1),
                 )
                 .with_context("index", &index.to_string())
                 .with_context("max_bit", &(bit_width - 1).to_string()),
@@ -252,6 +235,7 @@ mod tests {
     use crate::test_helpers::parse_and_resolve_types_with_context;
     use ironplc_dsl::core::FileId;
     use ironplc_parser::{options::CompilerOptions, parse_program};
+    use ironplc_problems::Problem;
     use rstest::rstest;
     use spec_test_macro::spec_test;
 

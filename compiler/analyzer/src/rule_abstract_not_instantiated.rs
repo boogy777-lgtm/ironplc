@@ -42,13 +42,8 @@
 use std::collections::HashSet;
 use std::convert::Infallible;
 
-use ironplc_dsl::{
-    common::*,
-    core::Located,
-    diagnostic::{Diagnostic, Label},
-    visitor::Visitor,
-};
-use ironplc_problems::Problem;
+use ironplc_dsl::{common::*, core::Located, diagnostic::Diagnostic, visitor::Visitor};
+use ironplc_problems::text;
 
 use crate::{
     result::SemanticResult,
@@ -103,14 +98,10 @@ impl Visitor<Infallible> for RuleAbstractNotInstantiated {
     fn visit_var_decl(&mut self, node: &VarDecl) -> Result<Self::Value, Infallible> {
         if let InitialValueAssignmentKind::FunctionBlock(fb_init) = &node.initializer {
             if self.abstract_fbs.contains(&fb_init.type_name) {
-                self.diagnostics.push(Diagnostic::problem(
-                    Problem::AbstractFunctionBlockInstantiated,
-                    Label::span(
-                        fb_init.type_name.span(),
-                        format!(
-                            "Function block '{}' is ABSTRACT and cannot be instantiated",
-                            fb_init.type_name
-                        ),
+                self.diagnostics.push(Diagnostic::text(
+                    fb_init.type_name.span(),
+                    text::abstract_function_block_instantiated_cannot_be_instantiated(
+                        &fb_init.type_name,
                     ),
                 ));
             }
@@ -122,6 +113,7 @@ impl Visitor<Infallible> for RuleAbstractNotInstantiated {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ironplc_problems::Problem;
 
     fn opts_with_fb_inheritance() -> CompilerOptions {
         CompilerOptions {

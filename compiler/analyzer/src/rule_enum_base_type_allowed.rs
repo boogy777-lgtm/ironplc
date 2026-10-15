@@ -36,13 +36,10 @@
 //! END_TYPE
 //! ```
 use ironplc_dsl::{
-    common::EnumerationDeclaration,
-    core::Located,
-    diagnostic::{Diagnostic, Label},
-    visitor::Visitor,
+    common::EnumerationDeclaration, core::Located, diagnostic::Diagnostic, visitor::Visitor,
 };
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use std::convert::Infallible;
 
 use crate::{
@@ -87,12 +84,9 @@ impl Visitor<Infallible> for RuleEnumBaseType {
     ) -> Result<Self::Value, Infallible> {
         if let Some(base_type) = &node.spec_init.underlying_type {
             self.diagnostics.push(
-                Diagnostic::problem(
-                    Problem::EnumBaseTypeNotAllowed,
-                    Label::span(
-                        node.type_name.span(),
-                        "Enumeration declared with a base-type suffix",
-                    ),
+                Diagnostic::text(
+                    node.type_name.span(),
+                    text::enum_base_type_not_allowed_enumeration_declared_with_a_base_type_suffix(),
                 )
                 .with_context("base_type", &base_type.to_string()),
             );
@@ -104,6 +98,7 @@ impl Visitor<Infallible> for RuleEnumBaseType {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ironplc_problems::Problem;
 
     fn opts_flag() -> CompilerOptions {
         CompilerOptions {

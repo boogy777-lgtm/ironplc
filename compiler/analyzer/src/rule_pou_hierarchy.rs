@@ -50,11 +50,11 @@ use std::convert::Infallible;
 use ironplc_dsl::{
     common::*,
     core::{Id, Located},
-    diagnostic::{Diagnostic, Label},
+    diagnostic::Diagnostic,
     textual::{FbCall, MethodCall, MethodReceiver},
     visitor::Visitor,
 };
-use ironplc_problems::Problem;
+use ironplc_problems::{text, Text};
 
 use crate::{
     callee_resolution::callee_root,
@@ -99,7 +99,7 @@ impl RulePouHierarchy {
     /// Reports `call` when it invokes an instance the function declared
     /// outside `VAR_IN_OUT`. An instance the function did not declare at
     /// all is `P4012`'s to report, not this rule's.
-    fn check_invocation(&mut self, instance: &Id, call: &impl Located, label: &str) {
+    fn check_invocation(&mut self, instance: &Id, call: &impl Located, label: Text) {
         let Some(function) = &self.function else {
             return;
         };
@@ -107,14 +107,11 @@ impl RulePouHierarchy {
             return;
         };
         self.diagnostics.push(
-            Diagnostic::problem(
-                Problem::FunctionBlockInFunction,
-                Label::span(call.span(), label),
-            )
-            .with_context_id("function", &function.name)
-            .with_context_id("instance", instance)
-            .with_context_type("function block", fb_type)
-            .with_help(HELP),
+            Diagnostic::text(call.span(), label)
+                .with_context_id("function", &function.name)
+                .with_context_id("instance", instance)
+                .with_context_type("function block", fb_type)
+                .with_help(HELP),
         );
     }
 }
@@ -146,11 +143,9 @@ impl Visitor<Infallible> for RulePouHierarchy {
                 continue;
             };
             self.diagnostics.push(
-                Diagnostic::problem(
-                    Problem::FunctionBlockInFunction,
-                    Label::span(
-                        decl.identifier.span(),
-                        "Function block instance declared in a function",
+                Diagnostic::text(
+                    decl.identifier.span(),
+                    text::function_block_in_function_function_block_instance_declared_in_a_function(
                     ),
                 )
                 .with_context_id("function", &node.name)
@@ -173,14 +168,22 @@ impl Visitor<Infallible> for RulePouHierarchy {
         // The root variable of the callee is the instance that is stateful:
         // `fbs` in `fbs[i](...)`, as `inst` in `inst(...)`.
         if let Some((instance, _)) = callee_root(&node.callee) {
-            self.check_invocation(instance, node, "Function block invoked in a function");
+            self.check_invocation(
+                instance,
+                node,
+                text::function_block_in_function_function_block_invoked_in_a_function(),
+            );
         }
         Ok(())
     }
 
     fn visit_method_call(&mut self, node: &MethodCall) -> Result<Self::Value, Infallible> {
         if let MethodReceiver::Instance(instance) = &node.receiver {
-            self.check_invocation(instance, node, "Function block method called in a function");
+            self.check_invocation(
+                instance,
+                node,
+                text::function_block_in_function_function_block_method_called_in_a_function(),
+            );
         }
         Ok(())
     }

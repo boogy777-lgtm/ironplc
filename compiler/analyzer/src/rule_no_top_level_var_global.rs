@@ -29,9 +29,9 @@
 use ironplc_dsl::{
     common::{Library, LibraryElementKind},
     core::{Located, SourceSpan},
-    diagnostic::{Diagnostic, Label},
+    diagnostic::Diagnostic,
 };
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 
 use crate::{result::SemanticResult, semantic_context::SemanticContext};
 use ironplc_parser::options::CompilerOptions;
@@ -58,9 +58,9 @@ pub fn apply(
             let span = decls
                 .first()
                 .map_or_else(SourceSpan::default, Located::span);
-            Diagnostic::problem(
-                Problem::TopLevelVarGlobalNotAllowed,
-                Label::span(span, "Top-level VAR_GLOBAL"),
+            Diagnostic::text(
+                span,
+                text::top_level_var_global_not_allowed_top_level_var_global(),
             )
             .with_help(
                 "Move the VAR_GLOBAL block inside a CONFIGURATION (or RESOURCE) block, \

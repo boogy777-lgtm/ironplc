@@ -25,14 +25,8 @@
 //! END_FUNCTION_BLOCK
 //! ```
 
-use ironplc_dsl::{
-    common::*,
-    core::Located,
-    diagnostic::{Diagnostic, Label},
-    textual::*,
-    visitor::Visitor,
-};
-use ironplc_problems::Problem;
+use ironplc_dsl::{common::*, core::Located, diagnostic::Diagnostic, textual::*, visitor::Visitor};
+use ironplc_problems::text;
 use std::convert::Infallible;
 
 use crate::{
@@ -78,9 +72,9 @@ impl Visitor<Infallible> for RuleFunctionCallDeclared<'_> {
             None => {
                 // Function is not declared
                 self.diagnostics.push(
-                    Diagnostic::problem(
-                        Problem::FunctionCallUndeclared,
-                        Label::span(node.name.span(), "Function call"),
+                    Diagnostic::text(
+                        node.name.span(),
+                        text::function_call_undeclared_function_call(),
                     )
                     .with_context("function", &node.name.original().to_string()),
                 );
@@ -107,9 +101,9 @@ impl Visitor<Infallible> for RuleFunctionCallDeclared<'_> {
                 // function block invocation.
                 if call_input_count > 0 && call_named_count > 0 {
                     self.diagnostics.push(
-                        Diagnostic::problem(
-                            Problem::FunctionCallMixedArgTypes,
-                            Label::span(node.name.span(), "Function call"),
+                        Diagnostic::text(
+                            node.name.span(),
+                            text::function_call_mixed_arg_types_function_call(),
                         )
                         .with_context("function", &node.name.original().to_string()),
                     );
@@ -132,9 +126,9 @@ impl Visitor<Infallible> for RuleFunctionCallDeclared<'_> {
 
                 if !args_valid {
                     self.diagnostics.push(
-                        Diagnostic::problem(
-                            Problem::FunctionCallWrongArgCount,
-                            Label::span(node.name.span(), "Function call"),
+                        Diagnostic::text(
+                            node.name.span(),
+                            text::function_call_wrong_arg_count_function_call(),
                         )
                         .with_context("function", &node.name.original().to_string())
                         .with_context("expected", &expected_inputs.to_string())
@@ -152,6 +146,7 @@ impl Visitor<Infallible> for RuleFunctionCallDeclared<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ironplc_problems::Problem;
     use rstest::rstest;
 
     rule_ctx_ok!(

@@ -13,13 +13,10 @@
 //!   PROGRAM plc_task_instance WITH plc_task : plc_prg;
 //! END_RESOURCE
 use ironplc_dsl::{
-    common::*,
-    configuration::ResourceDeclaration,
-    core::Located,
-    diagnostic::{Diagnostic, Label},
+    common::*, configuration::ResourceDeclaration, core::Located, diagnostic::Diagnostic,
     visitor::Visitor,
 };
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use std::collections::HashSet;
 use std::convert::Infallible;
 
@@ -68,9 +65,9 @@ impl Visitor<Infallible> for RuleProgramTaskDefinitionExists {
             if let Some(task_name) = &program.task_name {
                 if !task_names.contains(&task_name) {
                     self.diagnostics.push(
-                        Diagnostic::problem(
-                            Problem::ProgramMissingTaskConfig,
-                            Label::span(task_name.span(), "Reference to task configuration"),
+                        Diagnostic::text(
+                            task_name.span(),
+                            text::program_missing_task_config_reference_to_task_configuration(),
                         )
                         .with_context_id("program", &program.name)
                         .with_context_id("task name", task_name),

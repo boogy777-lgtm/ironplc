@@ -25,12 +25,12 @@
 //! ```
 use ironplc_dsl::{
     core::Located,
-    diagnostic::{Diagnostic, Label},
+    diagnostic::Diagnostic,
     textual::{Case, CaseSelectionKind},
     visitor::Visitor,
 };
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use std::convert::Infallible;
 
 use crate::{
@@ -73,9 +73,9 @@ impl Visitor<Infallible> for RuleCaseBitStringLabel {
         for group in &node.statement_groups {
             for selector in &group.selectors {
                 if let CaseSelectionKind::BitStringLiteral(lit) = selector {
-                    self.diagnostics.push(Diagnostic::problem(
-                        Problem::BitStringCaseLabelNotAllowed,
-                        Label::span(lit.value.span(), "Bit-string literal CASE label"),
+                    self.diagnostics.push(Diagnostic::text(
+                        lit.value.span(),
+                        text::bit_string_case_label_not_allowed_bit_string_literal_case_label(),
                     ));
                 }
             }

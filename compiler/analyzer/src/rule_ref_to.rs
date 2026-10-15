@@ -6,11 +6,11 @@
 use ironplc_dsl::{
     common::*,
     core::{Id, Located, SourceSpan},
-    diagnostic::{Diagnostic, Label},
+    diagnostic::Diagnostic,
     textual::*,
     visitor::Visitor,
 };
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use std::collections::HashMap;
 use std::convert::Infallible;
 
@@ -187,16 +187,16 @@ impl RuleRefTo<'_> {
             }
             Variable::Symbolic(SymbolicVariableKind::Array(_)) => {
                 // P2030: REF of array element
-                self.diagnostics.push(Diagnostic::problem(
-                    Problem::RefOfArrayElement,
-                    Label::span(span, "REF() of array element is not supported"),
+                self.diagnostics.push(Diagnostic::text(
+                    span,
+                    text::ref_of_array_element_ref_of_array_element_is_not_supported(),
                 ));
                 return;
             }
             _ => {
-                self.diagnostics.push(Diagnostic::problem(
-                    Problem::RefOperandNotVariable,
-                    Label::span(span, "REF() operand must be a simple variable"),
+                self.diagnostics.push(Diagnostic::text(
+                    span,
+                    text::ref_operand_not_variable_ref_operand_must_be_a_simple_variable(),
                 ));
                 return;
             }
@@ -211,18 +211,12 @@ impl RuleRefTo<'_> {
                 if let Some(var_class) = self.var_classes.get(&named.name) {
                     match var_class {
                         VariableType::VarTemp => {
-                            self.diagnostics.push(Diagnostic::problem(
-                                Problem::RefOfEphemeralVariable,
-                                Label::span(named.span(), "VAR_TEMP variable is stack-allocated"),
-                            ));
+                            self.diagnostics.push(Diagnostic::text(named.span(), text::ref_of_ephemeral_variable_var_temp_variable_is_stack_allocated()));
                         }
                         VariableType::Input | VariableType::Output
                             if self.pou_kind == PouKind::Function =>
                         {
-                            self.diagnostics.push(Diagnostic::problem(
-                                Problem::RefOfEphemeralVariable,
-                                Label::span(named.span(), "FUNCTION parameter is stack-allocated"),
-                            ));
+                            self.diagnostics.push(Diagnostic::text(named.span(), text::ref_of_ephemeral_variable_function_parameter_is_stack_allocated()));
                         }
                         _ => {}
                     }
@@ -235,12 +229,9 @@ impl RuleRefTo<'_> {
     fn check_deref(&mut self, inner: &Expr) {
         if let ExprKind::Variable(var) = &inner.kind {
             if !self.is_variable_reference(var) && !self.is_variable_of_error_type(var) {
-                self.diagnostics.push(Diagnostic::problem(
-                    Problem::DerefRequiresReferenceType,
-                    Label::span(
-                        variable_span(var),
-                        "Dereference operator (^) requires a REF_TO type",
-                    ),
+                self.diagnostics.push(Diagnostic::text(
+                    variable_span(var),
+                    text::deref_requires_reference_type_requires_a_ref_to_type(),
                 ));
             }
         }
@@ -259,12 +250,9 @@ impl RuleRefTo<'_> {
             } else {
                 expr_span(&expr.right)
             };
-            self.diagnostics.push(Diagnostic::problem(
-                Problem::ArithmeticOnReference,
-                Label::span(
-                    span,
-                    "Arithmetic operations are not allowed on reference types",
-                ),
+            self.diagnostics.push(Diagnostic::text(
+                span,
+                text::arithmetic_on_reference_not_allowed_on_reference_types(),
             ));
         }
     }
@@ -289,9 +277,9 @@ impl RuleRefTo<'_> {
                 } else {
                     expr_span(&expr.right)
                 };
-                self.diagnostics.push(Diagnostic::problem(
-                    Problem::OrderingOnReference,
-                    Label::span(span, "Ordering comparison on reference types"),
+                self.diagnostics.push(Diagnostic::text(
+                    span,
+                    text::ordering_on_reference_ordering_comparison_on_reference_types(),
                 ));
             }
             CompareOp::Or
@@ -306,9 +294,9 @@ impl RuleRefTo<'_> {
     fn check_null_assignment(&mut self, target: &Variable, value: &Expr) {
         if let ExprKind::Null(span) = &value.kind {
             if !self.is_variable_reference(target) && !self.is_variable_of_error_type(target) {
-                self.diagnostics.push(Diagnostic::problem(
-                    Problem::NullRequiresReferenceType,
-                    Label::span(span.clone(), "NULL can only be assigned to a REF_TO type"),
+                self.diagnostics.push(Diagnostic::text(
+                    span.clone(),
+                    text::null_requires_reference_type_null_can_only_be_assigned_to_a_ref_to_type(),
                 ));
             }
         }
@@ -346,9 +334,9 @@ impl RuleRefTo<'_> {
     fn check_ref_assignment(&mut self, target: &Variable, value: &Expr) {
         if let Some((ref_span, operand_type)) = self.pointer_source(value) {
             if !self.is_variable_reference(target) {
-                self.diagnostics.push(Diagnostic::problem(
-                    Problem::ReferenceTypeMismatch,
-                    Label::span(ref_span, "Reference type mismatch in assignment"),
+                self.diagnostics.push(Diagnostic::text(
+                    ref_span,
+                    text::reference_type_mismatch_reference_type_mismatch_in_assignment(),
                 ));
             } else if !self.allow_ref_type_punning {
                 // Check type compatibility (P2032 type mismatch branch).
@@ -357,9 +345,9 @@ impl RuleRefTo<'_> {
                 let target_ref_type = self.get_reference_target_type(target);
                 if let (Some(target_type), Some(operand_type)) = (target_ref_type, operand_type) {
                     if target_type != operand_type {
-                        self.diagnostics.push(Diagnostic::problem(
-                            Problem::ReferenceTypeMismatch,
-                            Label::span(ref_span, "Reference type mismatch in assignment"),
+                        self.diagnostics.push(Diagnostic::text(
+                            ref_span,
+                            text::reference_type_mismatch_reference_type_mismatch_in_assignment(),
                         ));
                     }
                 }
@@ -430,9 +418,9 @@ impl Visitor<Infallible> for RuleRefTo<'_> {
         // P2036: Check for nested REF_TO (only applicable for named targets)
         if let ReferenceTarget::Named(referenced_type_name) = &node.target {
             if self.is_reference_type(referenced_type_name) {
-                self.diagnostics.push(Diagnostic::problem(
-                    Problem::NestedRefToNotSupported,
-                    Label::span(node.type_name.span(), "Nested REF_TO is not supported"),
+                self.diagnostics.push(Diagnostic::text(
+                    node.type_name.span(),
+                    text::nested_ref_to_not_supported_nested_ref_to_is_not_supported(),
                 ));
             }
         }

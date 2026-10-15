@@ -11,10 +11,10 @@
 use ironplc_dsl::{
     common::TypeName,
     core::Located,
-    diagnostic::{Diagnostic, Label},
+    diagnostic::Diagnostic,
     textual::{BinaryExpr, Expr, Function, ParamAssignmentKind, UnaryExpr, UnaryOp},
 };
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 
 use super::RuleOperatorOperandTypeCheck;
 use crate::intermediates::operator_function_form::{
@@ -41,9 +41,9 @@ impl RuleOperatorOperandTypeCheck<'_> {
                 .operand_name(operand)
                 .map_or_else(|| "an enumeration".to_owned(), |name| name.to_string());
             self.diagnostics.push(
-                Diagnostic::problem(
-                    Problem::OperatorOperandTypeMismatch,
-                    Label::span(operand.span(), "Operand"),
+                Diagnostic::text(
+                    operand.span(),
+                    text::operator_operand_type_mismatch_operand(),
                 )
                 .with_context("operator", &operator.to_string())
                 .with_context("expected", &required.to_string())

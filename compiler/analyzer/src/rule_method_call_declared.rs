@@ -48,7 +48,7 @@ use ironplc_dsl::{
     textual::*,
     visitor::Visitor,
 };
-use ironplc_problems::{text, Problem};
+use ironplc_problems::text;
 
 use crate::{
     callee_resolution::{FunctionBlocks, InstanceTypes},
@@ -122,9 +122,9 @@ impl<'a> RuleMethodCallDeclared<'a> {
     /// known function block type. Both the unknown-variable and the
     /// unknown-type cases report it, against the same instance name.
     fn not_in_scope(call: &MethodCall, instance: &Id) -> Diagnostic {
-        Diagnostic::problem(
-            Problem::FunctionBlockNotInScope,
-            Label::span(call.span(), "Method invocation"),
+        Diagnostic::text(
+            call.span(),
+            text::function_block_not_in_scope_method_invocation(),
         )
         .with_context_id("invocation", instance)
     }
@@ -228,21 +228,15 @@ impl RuleMethodCallDeclared<'_> {
 
         match self.function_blocks.resolve_method(&fb_type, &call.method) {
             None => self.diagnostics.push(
-                Diagnostic::problem(
-                    Problem::MethodNotFound,
-                    Label::span(call.span(), "Method invocation"),
-                )
-                .with_context_type("function block", &fb_type)
-                .with_context_id("method", &call.method),
+                Diagnostic::text(call.span(), text::method_not_found_method_invocation())
+                    .with_context_type("function block", &fb_type)
+                    .with_context_id("method", &call.method),
             ),
             Some((owning_fb, method)) => {
                 let owner_label = format!("{}.{}", owning_fb.name, method.name);
                 if in_expression && method.return_type.is_none() {
                     self.diagnostics.push(
-                        Diagnostic::problem(
-                            Problem::MethodCallWithoutReturnValue,
-                            Label::span(call.span(), "Method invocation in an expression"),
-                        )
+                        Diagnostic::text(call.span(), text::method_call_without_return_value_method_invocation_in_an_expression())
                         .with_context_id("method", &method.name),
                     );
                 }
@@ -256,6 +250,7 @@ impl RuleMethodCallDeclared<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ironplc_problems::Problem;
 
     fn opts_with_fb_inheritance() -> CompilerOptions {
         CompilerOptions {

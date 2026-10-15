@@ -32,13 +32,10 @@
 //! END_TYPE
 //! ```
 use ironplc_dsl::{
-    common::EnumeratedValue,
-    core::Located,
-    diagnostic::{Diagnostic, Label},
-    visitor::Visitor,
+    common::EnumeratedValue, core::Located, diagnostic::Diagnostic, visitor::Visitor,
 };
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use std::convert::Infallible;
 
 use crate::{
@@ -82,9 +79,9 @@ impl Visitor<Infallible> for RuleEnumExplicitValue {
         node: &EnumeratedValue,
     ) -> Result<Self::Value, Infallible> {
         if node.explicit_value.is_some() {
-            self.diagnostics.push(Diagnostic::problem(
-                Problem::EnumExplicitValueNotAllowed,
-                Label::span(node.span(), "Enumeration member with an explicit value"),
+            self.diagnostics.push(Diagnostic::text(
+                node.span(),
+                text::enum_explicit_value_not_allowed_enumeration_member_with_an_explicit_value(),
             ));
         }
         node.recurse_visit(self)
@@ -94,6 +91,7 @@ impl Visitor<Infallible> for RuleEnumExplicitValue {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ironplc_problems::Problem;
 
     fn opts_flag() -> CompilerOptions {
         CompilerOptions {

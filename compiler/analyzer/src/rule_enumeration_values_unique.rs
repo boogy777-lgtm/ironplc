@@ -21,7 +21,7 @@ use ironplc_dsl::{
     diagnostic::{Diagnostic, Label},
     visitor::Visitor,
 };
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use std::collections::HashSet;
 use std::convert::Infallible;
 
@@ -73,13 +73,16 @@ impl Visitor<Infallible> for RuleEnumerationValuesUnique {
                     match seen {
                         Some(first) => {
                             self.diagnostics.push(
-                                Diagnostic::problem(
-                                    Problem::EnumTypeDeclDuplicateItem,
-                                    Label::span(first.span(), "First instance"),
+                                Diagnostic::text(
+                                    first.span(),
+                                    text::enum_type_decl_duplicate_item_first_instance(),
                                 )
                                 .with_context_type("declaration", &node.type_name)
                                 .with_context_id("duplicate value", first)
-                                .with_secondary(Label::span(current.span(), "Duplicate value")),
+                                .with_secondary(Label::span(
+                                    current.span(),
+                                    text::enum_type_decl_duplicate_item_duplicate_value(),
+                                )),
                             );
                         }
                         None => {

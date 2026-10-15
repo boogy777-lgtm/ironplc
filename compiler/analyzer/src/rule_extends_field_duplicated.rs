@@ -42,12 +42,8 @@
 //! END_FUNCTION_BLOCK
 //! ```
 
-use ironplc_dsl::{
-    common::*,
-    core::Located,
-    diagnostic::{Diagnostic, Label},
-};
-use ironplc_problems::Problem;
+use ironplc_dsl::{common::*, core::Located, diagnostic::Diagnostic};
+use ironplc_problems::text;
 
 use crate::{
     intermediates::inherited_fields::collect_inherited_fields, result::SemanticResult,
@@ -84,13 +80,10 @@ pub fn apply(
                     .symbolic_id()
                     .map(|id| id.to_string())
                     .unwrap_or_default();
-                diagnostics.push(Diagnostic::problem(
-                    Problem::ExtendsFieldNameDuplicated,
-                    Label::span(
-                        own_id.span(),
-                        format!(
-                            "Field '{own_id}' is already declared as '{base_name}' in a base function block"
-                        ),
+                diagnostics.push(Diagnostic::text(
+                    own_id.span(),
+                    text::extends_field_name_duplicated_already_declared_in_a_base(
+                        own_id, base_name,
                     ),
                 ));
             }
@@ -106,6 +99,7 @@ pub fn apply(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ironplc_problems::Problem;
 
     fn opts_with_fb_inheritance() -> CompilerOptions {
         CompilerOptions {

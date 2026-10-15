@@ -28,7 +28,7 @@ use ironplc_dsl::{
     diagnostic::{Diagnostic, Label},
     visitor::Visitor,
 };
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use std::collections::HashSet;
 use std::convert::Infallible;
 
@@ -70,14 +70,20 @@ impl Visitor<Infallible> for RuleStructElementNamesUnique {
             match seen {
                 Some(first) => {
                     self.diagnostics.push(
-                        Diagnostic::problem(
-                            Problem::StructureDuplicatedElement,
-                            Label::span(node.type_name.span(), "Structure"),
+                        Diagnostic::text(
+                            node.type_name.span(),
+                            text::structure_duplicated_element_structure(),
                         )
                         .with_context_type("structure", &node.type_name)
                         .with_context_id("element", &element.name)
-                        .with_secondary(Label::span(first.span(), "First use of name"))
-                        .with_secondary(Label::span(element.name.span(), "Second use of name")),
+                        .with_secondary(Label::span(
+                            first.span(),
+                            text::structure_duplicated_element_first_use_of_name(),
+                        ))
+                        .with_secondary(Label::span(
+                            element.name.span(),
+                            text::structure_duplicated_element_second_use_of_name(),
+                        )),
                     );
                 }
                 None => {

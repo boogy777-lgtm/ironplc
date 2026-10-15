@@ -45,13 +45,13 @@
 use ironplc_dsl::{
     common::*,
     core::{Id, Located},
-    diagnostic::{Diagnostic, Label},
+    diagnostic::Diagnostic,
     scope::ScopeNode,
     textual::*,
     visitor::Visitor,
 };
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use std::convert::Infallible;
 
 use crate::{
@@ -172,12 +172,9 @@ impl RuleAggregateAssignment<'_> {
         // An unresolvable source is a mismatch too: nothing other than a
         // same-typed aggregate may be assigned to an aggregate.
         if value_type.as_ref() != Some(&target_type) {
-            self.diagnostics.push(Diagnostic::problem(
-                Problem::AggregateAssignmentTypeMismatch,
-                Label::span(
-                    value.span(),
-                    "Assignment between arrays or structures requires identical types",
-                ),
+            self.diagnostics.push(Diagnostic::text(
+                value.span(),
+                text::aggregate_assignment_type_mismatch_requires_identical_types(),
             ));
         }
     }

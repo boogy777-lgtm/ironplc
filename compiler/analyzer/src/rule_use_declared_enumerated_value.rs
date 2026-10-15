@@ -31,10 +31,10 @@
 use ironplc_dsl::{
     common::*,
     core::{Id, Located},
-    diagnostic::{Diagnostic, Label},
+    diagnostic::Diagnostic,
     visitor::Visitor,
 };
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use std::convert::Infallible;
 
 use crate::{
@@ -81,9 +81,9 @@ impl<'a> RuleDeclaredEnumeratedValues<'a> {
             .types()
             .enumerated_values(type_name)
             .ok_or_else(|| {
-                Diagnostic::problem(
-                    Problem::EnumNotDeclared,
-                    Label::span(type_name.span(), "Type is not an enumeration"),
+                Diagnostic::text(
+                    type_name.span(),
+                    text::enum_not_declared_type_is_not_an_enumeration(),
                 )
             })
     }
@@ -121,9 +121,9 @@ impl Visitor<Infallible> for RuleDeclaredEnumeratedValues<'_> {
             // Check if the value is in the list of defined enumeration values
             if !defined_values.contains(&value.value) {
                 self.diagnostics.push(
-                    Diagnostic::problem(
-                        Problem::EnumValueNotDefined,
-                        Label::span(value.span(), "Expected value in enumeration"),
+                    Diagnostic::text(
+                        value.span(),
+                        text::enum_value_not_defined_expected_value_in_enumeration(),
                     )
                     .with_context_id("value", &value.value),
                 );

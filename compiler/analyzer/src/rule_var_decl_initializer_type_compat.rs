@@ -23,13 +23,9 @@
 //! END_PROGRAM
 //! ```
 use ironplc_dsl::{
-    common::*,
-    core::Located,
-    diagnostic::{Diagnostic, Label},
-    time::TemporalWidth,
-    visitor::Visitor,
+    common::*, core::Located, diagnostic::Diagnostic, time::TemporalWidth, visitor::Visitor,
 };
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use std::convert::Infallible;
 
 use crate::{
@@ -145,9 +141,9 @@ impl Visitor<Infallible> for RuleInitializerTypeCompat<'_> {
                 if let Some(type_attrs) = self.type_environment.get(&si.type_name) {
                     if !is_compatible(constant, &type_attrs.representation) {
                         self.diagnostics.push(
-                            Diagnostic::problem(
-                                Problem::InitializerTypeMismatch,
-                                Label::span(node.span(), "Variable declaration"),
+                            Diagnostic::text(
+                                node.span(),
+                                text::initializer_type_mismatch_variable_declaration(),
                             )
                             .with_context("variable", &node.identifier.to_string()),
                         );

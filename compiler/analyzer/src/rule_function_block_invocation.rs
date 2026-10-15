@@ -31,14 +31,8 @@
 //!    FB_INSTANCE(IN1 := TRUE, BAR := TRUE);
 //! END_FUNCTION_BLOCK
 //! ```
-use ironplc_dsl::{
-    common::*,
-    core::Located,
-    diagnostic::{Diagnostic, Label},
-    textual::*,
-    visitor::Visitor,
-};
-use ironplc_problems::{text, Problem};
+use ironplc_dsl::{common::*, core::Located, diagnostic::Diagnostic, textual::*, visitor::Visitor};
+use ironplc_problems::text;
 use std::convert::Infallible;
 
 use crate::{
@@ -107,9 +101,9 @@ impl<'a> RuleFunctionBlockUse<'a> {
     }
 
     fn not_in_scope(fb_call: &FbCall) -> Diagnostic {
-        Diagnostic::problem(
-            Problem::FunctionBlockNotInScope,
-            Label::span(fb_call.span(), "Function block invocation"),
+        Diagnostic::text(
+            fb_call.span(),
+            text::function_block_not_in_scope_function_block_invocation(),
         )
         .with_context("invocation", &fb_call.callee.to_string())
     }
