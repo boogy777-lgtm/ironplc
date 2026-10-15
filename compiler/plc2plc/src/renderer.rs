@@ -59,17 +59,25 @@ mod variable_declaration;
 use text::character_string_text;
 
 /// How one kind of node is written out. A kind is rendered by exactly one
-/// `impl Render`, which lives in the file of its family; forgetting the impl
-/// of a kind listed in [`render_visits`] does not compile.
-trait Render {
+/// `impl Render`, which lives in the file of its family. Both directions are
+/// checked by the compiler: a kind listed in [`render_rows`] without an impl
+/// fails at `node.render(self)`, and an impl of a kind without a row fails
+/// because [`Listed`] is a supertrait that only the rows implement.
+trait Render: Listed {
     fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic>;
 }
 
+/// Marks a kind of node that has a row in [`render_rows`]. Only
+/// [`mark_listed`] implements it, so a `Render` impl needs a row.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` has a `Render` impl but no row in `render_rows!`",
+    label = "add `visit_<kind> => {Self}` to `render_rows!` in renderer.rs"
+)]
+trait Listed {}
+
 /// Defines, for each row `visit_x => T`, the [`Visitor`] method that renders a
-/// `T` with its [`Render`] impl. The list of rows is the one place that names
-/// the kinds of node the renderer writes through [`Render`]; every other kind
-/// is written by the method of the same name in the [`Visitor`] impl or left
-/// to the walk.
+/// `T` with its [`Render`] impl. The guard for the other direction, an impl
+/// without a row, is the [`Listed`] supertrait of [`Render`].
 macro_rules! render_visits {
     ($($visit:ident => $node:ty),* $(,)?) => {
         $(
@@ -79,6 +87,90 @@ macro_rules! render_visits {
         )*
     };
 }
+
+/// Implements [`Listed`] for the kind of each row.
+macro_rules! mark_listed {
+    ($($visit:ident => $node:ty),* $(,)?) => {
+        $( impl Listed for $node {} )*
+    };
+}
+
+/// The rows: the one place that names the kinds of node the renderer writes
+/// through [`Render`]; every other kind is written by the method of the same
+/// name in the [`Visitor`] impl or left to the walk. The macro passes the rows
+/// to the macro it is given, which is how one list serves the [`Visitor`]
+/// methods ([`render_visits`]) and the guard ([`mark_listed`]).
+macro_rules! render_rows {
+    ($consumer:ident) => {
+        $consumer! {
+            visit_data_type_declaration_kind => DataTypeDeclarationKind,
+            visit_enumerated_specification_init => EnumeratedSpecificationInit,
+            visit_enumerated_value => EnumeratedValue,
+            visit_subrange_declaration => SubrangeDeclaration,
+            visit_subrange_initializer => SubrangeInitializer,
+            visit_structure_declaration => StructureDeclaration,
+            visit_union_declaration => UnionDeclaration,
+            visit_structure_initialization_declaration => StructureInitializationDeclaration,
+            visit_late_resolved_initializer => LateResolvedInitializer,
+            visit_params_specification => ParamsSpecification,
+            visit_string_declaration => StringDeclaration,
+            visit_array_specification_kind => ArraySpecificationKind,
+            visit_array_subranges => ArraySubranges,
+            visit_subrange => ironplc_dsl::common::Subrange,
+            visit_program_access_decl => ProgramAccessDecl,
+            visit_var_decl => VarDecl,
+            visit_address_assignment => AddressAssignment,
+            visit_simple_initializer => SimpleInitializer,
+            visit_string_initializer => StringInitializer,
+            visit_enumerated_values_initializer => EnumeratedValuesInitializer,
+            visit_array_initial_value_assignment => ArrayInitialValueAssignment,
+            visit_enumerated_initial_value_assignment => EnumeratedInitialValueAssignment,
+            visit_direct_variable_identifier => DirectVariableIdentifier,
+            visit_function_declaration => FunctionDeclaration,
+            visit_function_block_declaration => FunctionBlockDeclaration,
+            visit_method_declaration => MethodDeclaration,
+            visit_property_declaration => PropertyDeclaration,
+            visit_namespace_declaration => NamespaceDeclaration,
+            visit_interface_declaration => InterfaceDeclaration,
+            visit_program_declaration => ProgramDeclaration,
+            visit_network => dsl::sfc::Network,
+            visit_transition => dsl::sfc::Transition,
+            visit_action => dsl::sfc::Action,
+            visit_action_association => dsl::sfc::ActionAssociation,
+            visit_resource_declaration => dsl::configuration::ResourceDeclaration,
+            visit_program_configuration => dsl::configuration::ProgramConfiguration,
+            visit_configuration_declaration => dsl::configuration::ConfigurationDeclaration,
+            visit_function_block_init => dsl::configuration::FunctionBlockInit,
+            visit_located_var_init => LocatedVarInit,
+            visit_task_configuration => dsl::configuration::TaskConfiguration,
+            visit_fb_call => dsl::textual::FbCall,
+            visit_method_call => dsl::textual::MethodCall,
+            visit_stmt_kind => dsl::textual::StmtKind,
+            visit_assignment => dsl::textual::Assignment,
+            visit_compare_expr => dsl::textual::CompareExpr,
+            visit_binary_expr => dsl::textual::BinaryExpr,
+            visit_repeat => dsl::textual::Repeat,
+            visit_try_catch => dsl::textual::TryCatch,
+            visit_catch_clause => dsl::textual::CatchClause,
+            visit_jump => dsl::textual::Jump,
+            visit_conditional_call => dsl::textual::ConditionalCall,
+            visit_wait => dsl::textual::Wait,
+            visit_throw => dsl::textual::Throw,
+            visit_if => dsl::textual::If,
+            visit_else_if => dsl::textual::ElseIf,
+            visit_case => dsl::textual::Case,
+            visit_case_statement_group => dsl::textual::CaseStatementGroup,
+            visit_for => dsl::textual::For,
+            visit_while => dsl::textual::While,
+            visit_expr_kind => dsl::textual::ExprKind,
+            visit_reference_initializer => ReferenceInitializer,
+            visit_reference_initial_value => ReferenceInitialValue,
+            visit_array_variable => dsl::textual::ArrayVariable,
+        }
+    };
+}
+
+render_rows!(mark_listed);
 
 pub fn apply(lib: &Library) -> Result<String, Vec<Diagnostic>> {
     let mut visitor = LibraryRenderer::new();
@@ -161,71 +253,7 @@ impl LibraryRenderer {
 impl Visitor<Diagnostic> for LibraryRenderer {
     type Value = ();
 
-    render_visits! {
-        visit_data_type_declaration_kind => DataTypeDeclarationKind,
-        visit_enumerated_specification_init => EnumeratedSpecificationInit,
-        visit_enumerated_value => EnumeratedValue,
-        visit_subrange_declaration => SubrangeDeclaration,
-        visit_subrange_initializer => SubrangeInitializer,
-        visit_structure_declaration => StructureDeclaration,
-        visit_union_declaration => UnionDeclaration,
-        visit_structure_initialization_declaration => StructureInitializationDeclaration,
-        visit_late_resolved_initializer => LateResolvedInitializer,
-        visit_params_specification => ParamsSpecification,
-        visit_string_declaration => StringDeclaration,
-        visit_array_specification_kind => ArraySpecificationKind,
-        visit_array_subranges => ArraySubranges,
-        visit_subrange => ironplc_dsl::common::Subrange,
-        visit_program_access_decl => ProgramAccessDecl,
-        visit_var_decl => VarDecl,
-        visit_address_assignment => AddressAssignment,
-        visit_simple_initializer => SimpleInitializer,
-        visit_string_initializer => StringInitializer,
-        visit_enumerated_values_initializer => EnumeratedValuesInitializer,
-        visit_array_initial_value_assignment => ArrayInitialValueAssignment,
-        visit_enumerated_initial_value_assignment => EnumeratedInitialValueAssignment,
-        visit_direct_variable_identifier => DirectVariableIdentifier,
-        visit_function_declaration => FunctionDeclaration,
-        visit_function_block_declaration => FunctionBlockDeclaration,
-        visit_method_declaration => MethodDeclaration,
-        visit_property_declaration => PropertyDeclaration,
-        visit_namespace_declaration => NamespaceDeclaration,
-        visit_interface_declaration => InterfaceDeclaration,
-        visit_program_declaration => ProgramDeclaration,
-        visit_network => dsl::sfc::Network,
-        visit_transition => dsl::sfc::Transition,
-        visit_action => dsl::sfc::Action,
-        visit_action_association => dsl::sfc::ActionAssociation,
-        visit_resource_declaration => dsl::configuration::ResourceDeclaration,
-        visit_program_configuration => dsl::configuration::ProgramConfiguration,
-        visit_configuration_declaration => dsl::configuration::ConfigurationDeclaration,
-        visit_function_block_init => dsl::configuration::FunctionBlockInit,
-        visit_located_var_init => LocatedVarInit,
-        visit_task_configuration => dsl::configuration::TaskConfiguration,
-        visit_fb_call => dsl::textual::FbCall,
-        visit_method_call => dsl::textual::MethodCall,
-        visit_stmt_kind => dsl::textual::StmtKind,
-        visit_assignment => dsl::textual::Assignment,
-        visit_compare_expr => dsl::textual::CompareExpr,
-        visit_binary_expr => dsl::textual::BinaryExpr,
-        visit_repeat => dsl::textual::Repeat,
-        visit_try_catch => dsl::textual::TryCatch,
-        visit_catch_clause => dsl::textual::CatchClause,
-        visit_jump => dsl::textual::Jump,
-        visit_conditional_call => dsl::textual::ConditionalCall,
-        visit_wait => dsl::textual::Wait,
-        visit_throw => dsl::textual::Throw,
-        visit_if => dsl::textual::If,
-        visit_else_if => dsl::textual::ElseIf,
-        visit_case => dsl::textual::Case,
-        visit_case_statement_group => dsl::textual::CaseStatementGroup,
-        visit_for => dsl::textual::For,
-        visit_while => dsl::textual::While,
-        visit_expr_kind => dsl::textual::ExprKind,
-        visit_reference_initializer => ReferenceInitializer,
-        visit_reference_initial_value => ReferenceInitialValue,
-        visit_array_variable => dsl::textual::ArrayVariable,
-    }
+    render_rows!(render_visits);
 
     fn visit_id(&mut self, node: &Id) -> Result<Self::Value, Diagnostic> {
         // TODO this is the wrong case
