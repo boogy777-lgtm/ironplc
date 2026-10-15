@@ -16,61 +16,12 @@ P0002,syntax_error_an_initial_value_is_not_allowed_on_this_variable_block,an ini
 P0002,syntax_error_an_interface_has_no_body,an interface has no body
 P0002,syntax_error_duration_units_must_be_in_descending_order,duration units must be in descending order
 P0002,syntax_error_end_of_input,Expected further input. Found end of input
-P0002,syntax_error_expected_0_1_or_a_boolean_word,"expected 0, 1 or a boolean word"
-P0002,syntax_error_expected_a_case_selector,expected a case selector
-P0002,syntax_error_expected_a_constant,expected a constant
-P0002,syntax_error_expected_a_declaration,expected a declaration
-P0002,syntax_error_expected_a_direct_address,expected a direct address
-P0002,syntax_error_expected_a_duration,expected a duration
-P0002,syntax_error_expected_a_duration_or_the_name_of_a_variable,expected a duration or the name of a variable
-P0002,syntax_error_expected_a_duration_unit,expected a {units}
-P0002,syntax_error_expected_a_duration_value,expected a duration value
-P0002,syntax_error_expected_a_function_block_call,expected a function block call
-P0002,syntax_error_expected_a_global_variable,expected a global variable
-P0002,syntax_error_expected_a_label_name,expected a label name
-P0002,syntax_error_expected_a_literal,expected a literal
-P0002,syntax_error_expected_a_member,expected a member
-P0002,syntax_error_expected_a_member_name,expected a member name
-P0002,syntax_error_expected_a_name,expected a name
-P0002,syntax_error_expected_a_number_in_the_duration,expected a number in the duration
-P0002,syntax_error_expected_a_resource_or_a_variable_block,expected a resource or a variable block
-P0002,syntax_error_expected_a_statement,expected a statement
-P0002,syntax_error_expected_a_task_or_a_program,expected a task or a program
-P0002,syntax_error_expected_a_task_property,expected a task property
-P0002,syntax_error_expected_a_type_declaration,expected a type declaration
-P0002,syntax_error_expected_a_type_name,expected a type name
-P0002,syntax_error_expected_a_variable,expected a variable
 P0002,syntax_error_expected_a_variable_after_ref,expected a variable after `REF=`
-P0002,syntax_error_expected_an_action_association,expected an action association
-P0002,syntax_error_expected_an_expression,expected an expression
-P0002,syntax_error_expected_an_integer,expected an integer
-P0002,syntax_error_expected_an_integer_or_the_name_of_a_constant,expected an integer or the name of a constant
 P0002,syntax_error_expected_assign_after_the_assignment_target,expected `:=` after the assignment target
-P0002,syntax_error_expected_assign_or_arrow,expected `:=` or `=>`
 P0002,syntax_error_expected_at_least_one_member,expected at least one member
 P0002,syntax_error_expected_at_least_two_steps,expected at least two steps
 P0002,syntax_error_expected_digits_after_the_decimal_point_in_the_duration,expected digits after the decimal point in the duration
-P0002,syntax_error_expected_end_transition,expected `END_TRANSITION`
-P0002,syntax_error_expected_end_var,expected `END_VAR`
 P0002,syntax_error_expected_found,Expected {expected}. Found text '{found}' that matched token {token}
-P0002,syntax_error_expected_get_or_set,expected `GET` or `SET`
-P0002,syntax_error_expected_priority,expected `PRIORITY`
-P0002,syntax_error_expected_semicolon,expected `;`
-P0002,syntax_error_expected_single_interval_or_priority,"expected `SINGLE`, `INTERVAL` or `PRIORITY`"
-P0002,syntax_error_expected_the_end_of_the_structure,expected the end of the structure
-P0002,syntax_error_expected_the_enumeration_value,expected the enumeration value
-P0002,syntax_error_expected_the_loop_variable,expected the loop variable
-P0002,syntax_error_expected_the_lower_bound_of_a_range,expected the lower bound of a range
-P0002,syntax_error_expected_the_name_of_a_step,expected the name of a step
-P0002,syntax_error_expected_the_name_of_a_task,expected the name of a task
-P0002,syntax_error_expected_the_name_of_a_variable_not_an_address,"expected the name of a variable, not an address"
-P0002,syntax_error_expected_the_name_of_an_action,expected the name of an action
-P0002,syntax_error_expected_the_path_of_a_variable,expected the path of a variable
-P0002,syntax_error_expected_the_path_resource_program_variable,expected the path `resource.program.variable`
-P0002,syntax_error_expected_the_priority,expected the priority
-P0002,syntax_error_expected_the_type_of_the_resource,expected the type of the resource
-P0002,syntax_error_expected_the_upper_bound_of_a_range,expected the upper bound of a range
-P0002,syntax_error_expected_the_upper_bound_of_the_range,expected the upper bound of the range
 P0002,syntax_error_expected_what,expected {what}
 P0002,syntax_error_form_is_not_allowed_here,{form} is not allowed here
 P0002,syntax_error_in_literal,{message}: '{literal}'

@@ -474,6 +474,39 @@ mod tests {
         );
     }
 
+    /// The sources under `dir`, with their paths.
+    fn sources(dir: &std::path::Path) -> Vec<(std::path::PathBuf, String)> {
+        let mut found = Vec::new();
+        for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                found.extend(sources(&path));
+            } else if path.extension().is_some_and(|extension| extension == "rs") {
+                let text = std::fs::read_to_string(&path).unwrap_or_default();
+                found.push((path, text));
+            }
+        }
+        found
+    }
+
+    #[test]
+    fn source_when_scanned_then_only_this_module_fills_the_generic_expected_row() {
+        // A row that takes any string for "what" would let a caller word an
+        // expectation itself; the data of an expectation is the only input.
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let all = sources(&root);
+        assert!(all.len() > 50, "found {} sources", all.len());
+        let callers: Vec<_> = all
+            .iter()
+            .filter(|(path, text)| {
+                !path.ends_with("expectation.rs")
+                    && text.contains(concat!("syntax_error_expected_", "what("))
+            })
+            .map(|(path, _)| path)
+            .collect();
+        assert!(callers.is_empty(), "{callers:?}");
+    }
+
     #[test]
     fn text_when_expectation_is_made_then_the_problem_is_the_grammars() {
         assert_eq!(
