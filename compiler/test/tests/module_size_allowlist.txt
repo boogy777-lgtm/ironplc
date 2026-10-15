@@ -8,4 +8,4 @@
 analyzer/src/intermediates/stdlib_function.rs 1337
 analyzer/src/rule_function_call_type_check.rs 1860
 parser/src/parser.rs 2731
-vm/src/vm.rs 3409
+vm/src/vm.rs 3032
