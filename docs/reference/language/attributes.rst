@@ -160,8 +160,9 @@ variables of a program and of a global variable list in the order in which they
 are declared, in consecutive entries of the variable table, with or without the
 attribute. So the attribute needs no other action.
 
-The compiler does not start a new memory area when the kind of variable
-changes, and it has no memory for retained variables: a :code:`RETAIN` variable
+When the list changes, CODESYS allocates the whole list to a new memory area; an
+online change of IronPLC does not model this. The compiler has no memory for
+retained variables either: a :code:`RETAIN` variable
 of a list with the attribute is not stored apart from the other variables of the
 list. CODESYS stores all variables of the list in the retained memory then.
 

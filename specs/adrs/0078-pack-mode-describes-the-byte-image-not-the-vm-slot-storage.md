@@ -87,7 +87,10 @@ case of an array variable.
   pointer to bytes) does not see the packed layout. IronPLC has no such access
   for structures yet, and the option below is the way to add one.
 - Bad, because `SIZEOF` of an enumeration is now the size of the type it is
-  stored in (its underlying integer type) instead of 4 bytes.
+  stored in (its underlying integer type, 1 byte for a few values) instead of
+  4 bytes. Neither is what CODESYS gives (2 bytes, the default base type
+  `INT`); that answer belongs to the base type of an enumeration, not to the
+  layout.
 - Neutral: the default of CODESYS without the attribute is not known to be the
   natural alignment (it may be a bound of 4 or of 8). The natural alignment is
   what the compiler did before, so the default is unchanged until the question
