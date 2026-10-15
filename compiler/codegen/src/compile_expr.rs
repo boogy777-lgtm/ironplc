@@ -1,8 +1,9 @@
 //! Expression compilation for IEC 61131-3 code generation.
 //!
-//! Contains expression dispatch, constant compilation, variable reads,
-//! and typed opcode emission helpers. Separated from compile.rs to
-//! keep module sizes within the 1000-line guideline.
+//! Contains expression dispatch and the operand-type queries. Constant
+//! compilation, variable reads and references, partial and bit access
+//! assignment, and typed opcode emission helpers live in the child modules.
+//! Separated from compile.rs to keep module sizes within the 1000-line guideline.
 
 mod bit_access_assignment;
 mod constant;

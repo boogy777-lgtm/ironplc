@@ -26,7 +26,6 @@ pub(crate) struct SavedFbScope {
     pub(crate) fb_instances: HashMap<Id, FbInstanceInfo>,
 }
 
-/// Tracks state during compilation of a single program.
 /// Metadata for a function block instance variable.
 pub(crate) struct FbInstanceInfo {
     /// Variable table index holding the data region offset.

@@ -211,8 +211,9 @@ impl Emitter {
     }
 
     // Source-map recording. `compile_stmt` sets a position per statement,
-    // `compile.rs` carries the entries through the optimizer's offset
-    // remapping into the container's LINE_MAP (tag 1), and
+    // `compile/function_finalize.rs` remaps the entries through the
+    // optimizer's offset table, `compile/program_container.rs` adds them to
+    // the container's LINE_MAP (tag 1), and
     // `codegen/tests/it/end_to_end_debug_line_map.rs` asserts the result
     // against real source. See `specs/design/debugger-support.md`
     // §"Source Position Tracking".

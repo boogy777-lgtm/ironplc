@@ -6,7 +6,8 @@
 //!    requirement was removed from the spec markdown.
 //!
 //! The `all_spec_requirements_have_tests` meta-test ensures every requirement
-//! in the spec has at least one test here.
+//! in the spec has at least one test, in this module or in its child modules,
+//! one per area of the spec.
 //!
 //! See `specs/design/spec-conformance-testing.md` for full design.
 //! See `specs/design/mcp-server.md` for the MCP server requirements.

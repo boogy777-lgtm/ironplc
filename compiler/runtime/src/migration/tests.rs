@@ -29,7 +29,7 @@ static NEXT_GENERATED_UID: AtomicU64 = AtomicU64::new(1_000_000);
 
 /// Completes the identity of a container the tests build by hand.
 ///
-/// The tests below pin the rows of the planner under the identity rule
+/// The tests of the child modules pin the rows of the planner under the identity rule
 /// (ADR-0074). A hand-built container names a few IDs, the ones the test is
 /// about, and leaves the other persistent variables and function block fields
 /// without one; the rule would refuse those before the row is reached. The

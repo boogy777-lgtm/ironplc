@@ -3,15 +3,6 @@
 use ironplc_dsl::core::Id;
 use ironplc_parser::options::{CompilerOptions, StringToNumFailure, StringToNumNonNumeric};
 
-/// Compiles a library into a bytecode container.
-///
-/// Finds the first PROGRAM declaration in the library and compiles it
-/// into a container suitable for execution by the VM. Only user-defined
-/// functions reachable from the program root are included; unreachable
-/// functions are automatically excluded.
-///
-/// Returns an error if no program is found or if the program contains
-/// unsupported constructs.
 /// An engineering-side key for a function-block field's stable UID
 /// (ADR 0059): the qualified FB type name and the field name. This is the
 /// UID sidecar's `(scope, name)` key, where an FB field's scope is its type

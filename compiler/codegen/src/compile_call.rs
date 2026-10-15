@@ -1,7 +1,8 @@
 //! Function call compilation for IEC 61131-3 code generation.
 //!
-//! Contains standard library function dispatch, user-defined function calls,
-//! builtin lookup, type conversions, time functions, and shift/rotate operations.
+//! Contains the dispatch of function calls. Standard library functions,
+//! user-defined function calls, builtin lookup, type conversions, time functions
+//! and shift/rotate operations live in the child modules.
 //! Separated from compile.rs to keep module sizes within the 1000-line guideline.
 
 mod builtin_lookup;

@@ -2,7 +2,8 @@
 //! static dispatch).
 //!
 //! A method shares its owning function block type's field scratch region
-//! (see `UserFbTypeInfo::var_offset`/`num_fields` in `compile.rs`) for
+//! (see `UserFbTypeInfo::var_offset`/`num_fields` in
+//! `compile/function_block_info.rs`) for
 //! `self` access, and gets its own additional, non-shared param/local
 //! scratch region allocated immediately after -- see the module doc on
 //! `METHOD_CALL` in `ironplc_container::opcode` for the full calling

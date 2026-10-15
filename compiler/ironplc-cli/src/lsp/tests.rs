@@ -251,11 +251,6 @@ fn params_with_init_options(init: Option<serde_json::Value>) -> InitializeParams
     }
 }
 
-/// Guards the LSP option surface against drifting out of sync with the
-/// compiler: every dialect flag must be enablable via its lowerCamelCase
-/// `initializationOptions` key. `extract_compiler_options` derives these
-/// from `FEATURE_DESCRIPTORS`, so this also pins the snake -> camelCase
-/// contract the VS Code extension relies on.
 /// The policy counterpart: every behavior policy must be settable to each
 /// of its alternatives via its lowerCamelCase key with a string value.
 #[test]
@@ -289,6 +284,11 @@ fn extract_compiler_options_when_policy_value_unknown_then_dialect_selection_kep
     );
 }
 
+/// Guards the LSP option surface against drifting out of sync with the
+/// compiler: every dialect flag must be enablable via its lowerCamelCase
+/// `initializationOptions` key. `extract_compiler_options` derives these
+/// from `FEATURE_DESCRIPTORS`, so this also pins the snake -> camelCase
+/// contract the VS Code extension relies on.
 #[test]
 fn extract_compiler_options_when_each_dialect_flag_key_set_then_flag_enabled() {
     for fd in ironplc_parser::options::CompilerOptions::FEATURE_DESCRIPTORS {

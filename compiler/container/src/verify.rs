@@ -469,11 +469,6 @@ fn return_check(
     Ok(())
 }
 
-/// Resolves a branch's relative operand into an absolute offset, checking
-/// that it lands on an instruction boundary inside the body.
-///
-/// Branch offsets are relative to the byte *after* the i16 operand, which
-/// is the end of the instruction.
 /// The operand-stack depth a `METHOD_CALL` callee leaves for its caller:
 /// [`RET_DEPTH`] when the method has a return value, [`RET_VOID_DEPTH`]
 /// when it is void.

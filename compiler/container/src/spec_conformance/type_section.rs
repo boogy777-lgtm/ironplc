@@ -291,10 +291,6 @@ fn container_spec_req_cf_021_fb_type_descriptor_header_is_4_bytes() {
     assert_eq!(&buf[10..14], &[FieldType::String as u8, 0, 0x08, 0x07]);
 }
 
-// ---------------------------------------------------------------------------
-// Container Format — Type Section (REQ-CF-container-008 through REQ-CF-container-009)
-// ---------------------------------------------------------------------------
-
 /// REQ-CF-container-008: Each FieldEntry is 4 bytes.
 #[spec_test(REQ_CF_container_008)]
 fn container_spec_req_cf_008_field_entry_is_4_bytes() {

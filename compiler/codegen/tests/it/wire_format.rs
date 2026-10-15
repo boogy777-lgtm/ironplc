@@ -9,7 +9,8 @@
 //! right level for testing codegen behaviour, but it would let a
 //! silent renumbering of an opcode pass undetected.
 //!
-//! This file is the **single canonical source of wire-format truth**.
+//! This module, with its child files, is the **single canonical source of
+//! wire-format truth**.
 //! It pins:
 //!
 //! 1. **Every opcode constant's byte value.** A renumber that changes
