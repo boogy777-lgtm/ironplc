@@ -12,9 +12,6 @@ use ironplc_dsl::time::*;
 use ironplc_dsl::{diagnostic::Diagnostic, visitor::Visitor};
 use paste::paste;
 
-mod text;
-use text::character_string_text;
-
 /// Defines a macro for creating a comma separated list of items where
 /// each item in the list is created by visiting the item.
 macro_rules! visit_comma_separated {
@@ -48,6 +45,18 @@ macro_rules! write_period_separated {
         }
     };
 }
+
+mod configuration;
+mod expression;
+mod pou_declaration;
+mod sfc;
+mod statement;
+mod text;
+mod type_declaration;
+mod variable_access;
+mod variable_declaration;
+
+use text::character_string_text;
 
 pub fn apply(lib: &Library) -> Result<String, Vec<Diagnostic>> {
     let mut visitor = LibraryRenderer::new();
@@ -124,87 +133,6 @@ impl LibraryRenderer {
 
     fn outdent(&mut self) {
         self.indents -= 1;
-    }
-
-    fn visit_function_return_type(&mut self, node: &FunctionReturnType) -> Result<(), Diagnostic> {
-        match node {
-            FunctionReturnType::Named(tn) => self.visit_type_name(tn)?,
-            FunctionReturnType::String(spec) | FunctionReturnType::WString(spec) => {
-                self.write_ws(spec.width.keyword());
-                if let Some(len) = &spec.length {
-                    self.write_ws("[");
-                    self.visit_integer(len.as_integer().ok_or_else(Diagnostic::internal_error)?)?;
-                    self.write_ws("]");
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn render_data_source_kind(
-        &mut self,
-        source: &dsl::configuration::DataSourceKind,
-    ) -> Result<(), Diagnostic> {
-        match source {
-            dsl::configuration::DataSourceKind::Constant(constant) => {
-                self.visit_constant_kind(constant)?;
-            }
-            dsl::configuration::DataSourceKind::GlobalVarReference(gvr) => {
-                if let Some(resource_name) = &gvr.resource_name {
-                    self.visit_id(resource_name)?;
-                    self.write(".");
-                }
-                self.visit_id(&gvr.global_var_name)?;
-                if let Some(structure_element) = &gvr.structure_element_name {
-                    self.write(".");
-                    self.visit_id(structure_element)?;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// Renders the `name : associations END_STEP` tail shared by
-    /// `INITIAL_STEP` and `STEP`; the caller writes the keyword.
-    fn write_step_body(&mut self, node: &dsl::sfc::Step) -> Result<(), Diagnostic> {
-        self.visit_id(&node.name)?;
-        self.write_ws(":");
-        self.newline();
-
-        self.indent();
-        for elem in node.action_associations.iter() {
-            self.visit_action_association(elem)?;
-            self.newline();
-        }
-        self.outdent();
-
-        self.write_ws("END_STEP");
-        self.newline();
-        Ok(())
-    }
-
-    /// Renders the variable blocks and statements of a method or a property
-    /// accessor; the caller writes the header and the closing keyword.
-    fn render_callable_body(
-        &mut self,
-        variables: &[VarDecl],
-        body: &[dsl::textual::StmtKind],
-    ) -> Result<(), Diagnostic> {
-        if !variables.is_empty() {
-            self.indent();
-            for item in variables.iter() {
-                self.visit_var_decl(item)?;
-            }
-            self.outdent();
-            self.newline();
-        }
-
-        self.indent();
-        for stmt in body.iter() {
-            self.visit_stmt_kind(stmt)?;
-        }
-        self.outdent();
-        Ok(())
     }
 }
 
@@ -339,23 +267,11 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         Ok(())
     }
 
-    // 2.3.3.1
     fn visit_data_type_declaration_kind(
         &mut self,
         node: &DataTypeDeclarationKind,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_declaration_keyword(node, "TYPE");
-        self.newline();
-
-        self.indent();
-        node.recurse_visit(self)?;
-        self.write_ws(";");
-        self.outdent();
-        self.newline();
-
-        self.write_ws("END_TYPE");
-        self.newline();
-        Ok(())
+        self.render_data_type_declaration_kind(node)
     }
 
     fn visit_late_bound_declaration(
@@ -395,19 +311,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         &mut self,
         node: &EnumeratedSpecificationInit,
     ) -> Result<Self::Value, Diagnostic> {
-        self.visit_enumerated_specification_kind(&node.spec)?;
-
-        // CODESYS/TwinCAT enum base-type suffix, e.g. `(A, B) BYTE;`.
-        if let Some(underlying_type) = &node.underlying_type {
-            self.write_ws(&underlying_type.to_string());
-        }
-
-        if let Some(default) = &node.default {
-            self.write_ws(":=");
-            self.visit_enumerated_default(default)?;
-        }
-
-        Ok(())
+        self.render_enumerated_specification_init(node)
     }
 
     fn visit_enumerated_specification_values(
@@ -426,61 +330,21 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         &mut self,
         node: &EnumeratedValue,
     ) -> Result<Self::Value, Diagnostic> {
-        // Matches visit_structured_variable's pattern: a raw write around
-        // `#` since visit_id's write_ws would insert an unwanted space
-        // (this was a pre-existing bug -- COLOR#RED rendered as
-        // "COLOR RED", found while adding explicit_value rendering below).
-        match &node.type_name {
-            Some(type_name) => {
-                self.write_ws(type_name.name.original().as_str());
-                self.write("#");
-                self.write(node.value.original().as_str());
-            }
-            None => self.visit_id(&node.value)?,
-        }
-
-        // CODESYS/TwinCAT explicit per-member enum value, e.g.
-        // `Type_UNDEFINED := 0`. Only ever set on a member in an enum
-        // declaration's value list, never on a reference (default value,
-        // case label, expression).
-        if let Some(explicit_value) = &node.explicit_value {
-            self.write_ws(":=");
-            self.write_ws(&explicit_value.to_i64().to_string());
-        }
-
-        Ok(())
+        self.render_enumerated_value(node)
     }
 
     fn visit_subrange_declaration(
         &mut self,
         node: &SubrangeDeclaration,
     ) -> Result<Self::Value, Diagnostic> {
-        self.visit_type_name(&node.type_name)?;
-
-        self.write_ws(":");
-
-        self.visit_subrange_specification_kind(&node.spec)?;
-
-        if let Some(init) = &node.default {
-            self.write_ws(":=");
-            self.visit_signed_integer(init)?;
-        }
-
-        Ok(())
+        self.render_subrange_declaration(node)
     }
 
     fn visit_subrange_initializer(
         &mut self,
         node: &SubrangeInitializer,
     ) -> Result<Self::Value, Diagnostic> {
-        self.visit_subrange_specification_kind(&node.spec)?;
-
-        if let Some(init) = &node.initial_value {
-            self.write_ws(":=");
-            self.visit_signed_integer(init)?;
-        }
-
-        Ok(())
+        self.render_subrange_initializer(node)
     }
 
     fn visit_subrange_specification(
@@ -499,50 +363,14 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         &mut self,
         node: &StructureDeclaration,
     ) -> Result<Self::Value, Diagnostic> {
-        self.visit_type_name(&node.type_name)?;
-
-        self.write_ws(":");
-
-        self.write_ws("STRUCT");
-
-        self.indent();
-        self.newline();
-        for item in node.elements.iter() {
-            self.visit_structure_element_declaration(item)?;
-            self.write_ws(";");
-            self.newline();
-        }
-        self.outdent();
-
-        self.write_ws("END_STRUCT");
-
-        Ok(())
+        self.render_structure_declaration(node)
     }
 
-    // CODESYS `UNION ... END_UNION`. The members reuse the structure
-    // element rendering; only the enclosing keywords differ.
     fn visit_union_declaration(
         &mut self,
         node: &UnionDeclaration,
     ) -> Result<Self::Value, Diagnostic> {
-        self.visit_type_name(&node.type_name)?;
-
-        self.write_ws(":");
-
-        self.write_ws("UNION");
-
-        self.indent();
-        self.newline();
-        for item in node.elements.iter() {
-            self.visit_structure_element_declaration(item)?;
-            self.write_ws(";");
-            self.newline();
-        }
-        self.outdent();
-
-        self.write_ws("END_UNION");
-
-        Ok(())
+        self.render_union_declaration(node)
     }
 
     fn visit_structure_element_declaration(
@@ -555,48 +383,18 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         self.visit_initial_value_assignment_kind(&node.init)
     }
 
-    // 2.3.3.1
     fn visit_structure_initialization_declaration(
         &mut self,
         node: &StructureInitializationDeclaration,
     ) -> Result<Self::Value, Diagnostic> {
-        self.visit_type_name(&node.type_name)?;
-
-        if !node.elements_init.is_empty() {
-            self.write_ws(":=");
-            self.write_ws("(");
-
-            visit_comma_separated!(self, node.elements_init.iter(), StructureElementInit);
-
-            self.write_ws(")");
-        }
-
-        Ok(())
+        self.render_structure_initialization_declaration(node)
     }
 
     fn visit_late_resolved_initializer(
         &mut self,
         node: &LateResolvedInitializer,
     ) -> Result<Self::Value, Diagnostic> {
-        self.visit_type_name(&node.type_name)?;
-
-        match &node.initial_value {
-            None => {}
-            Some(LateResolvedInitialValue::Members(elements)) => {
-                self.write_ws(":=");
-                self.write_ws("(");
-
-                visit_comma_separated!(self, elements.iter(), StructureElementInit);
-
-                self.write_ws(")");
-            }
-            Some(LateResolvedInitialValue::Value(value)) => {
-                self.write_ws(":=");
-                self.visit_id(value)?;
-            }
-        }
-
-        Ok(())
+        self.render_late_resolved_initializer(node)
     }
 
     // 2.3.3.1
@@ -638,256 +436,61 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         Ok(())
     }
 
-    /// Renders the CODESYS parameter-list type, `PARAMS(n) OF T`.
     fn visit_params_specification(
         &mut self,
         node: &ParamsSpecification,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("PARAMS");
-        self.write_ws("(");
-        match &node.count {
-            IntegerRef::Literal(count) => self.visit_integer(count)?,
-            IntegerRef::Constant(id) => self.visit_id(id)?,
-        }
-        self.write_ws(")");
-        self.write_ws("OF");
-        self.visit_type_name(&node.type_name)?;
-
-        Ok(())
+        self.render_params_specification(node)
     }
 
-    // 2.3.3.1
     fn visit_string_declaration(
         &mut self,
         node: &StringDeclaration,
     ) -> Result<Self::Value, Diagnostic> {
-        self.visit_type_name(&node.type_name)?;
-
-        self.write_ws(":");
-
-        self.write_ws(node.width.keyword());
-
-        self.write_ws("[");
-        self.visit_integer(
-            node.length
-                .as_integer()
-                .ok_or_else(Diagnostic::internal_error)?,
-        )?;
-        self.write_ws("]");
-
-        if let Some(init) = &node.init {
-            self.write_ws(":=");
-            self.write(&character_string_text(&init.width, &init.value));
-        }
-
-        Ok(())
+        self.render_string_declaration(node)
     }
 
     fn visit_array_specification_kind(
         &mut self,
         node: &ArraySpecificationKind,
     ) -> Result<Self::Value, Diagnostic> {
-        match &node {
-            SpecificationKind::Named(id) => self.visit_type_name(id)?,
-            SpecificationKind::Inline(subranges) => {
-                self.visit_array_subranges(subranges)?;
-            }
-        }
-
-        Ok(())
+        self.render_array_specification_kind(node)
     }
 
-    // 2.3.3.1
     fn visit_array_subranges(&mut self, node: &ArraySubranges) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("ARRAY");
-        self.write_ws("[");
-        match &node.bounds {
-            ArrayBounds::Ranges(ranges) => visit_comma_separated!(self, ranges.iter(), Subrange),
-            // The incomplete array type has no range list, so `*` is the
-            // whole extent.
-            ArrayBounds::Incomplete(_) => self.write("*"),
-        }
-        self.write_ws("]");
-        self.write_ws("OF");
-
-        if let Some(syntax) = &node.ref_to {
-            self.write_ref_keyword(syntax);
-        }
-
-        match &node.type_name {
-            ArrayElementType::Named(tn) => self.visit_type_name(tn)?,
-            ArrayElementType::String(spec) | ArrayElementType::WString(spec) => {
-                self.write_ws(spec.width.keyword());
-                if let Some(len) = &spec.length {
-                    self.write_ws("[");
-                    self.visit_integer(len.as_integer().ok_or_else(Diagnostic::internal_error)?)?;
-                    self.write_ws("]");
-                }
-            }
-        }
-        Ok(())
+        self.render_array_subranges(node)
     }
 
-    // 2.4.2.1
     fn visit_subrange(
         &mut self,
         node: &ironplc_dsl::common::Subrange,
     ) -> Result<Self::Value, Diagnostic> {
-        self.visit_signed_integer(
-            node.start
-                .as_signed_integer()
-                .ok_or_else(Diagnostic::internal_error)?,
-        )?;
-        self.write("..");
-        self.visit_signed_integer(
-            node.end
-                .as_signed_integer()
-                .ok_or_else(Diagnostic::internal_error)?,
-        )
+        self.render_subrange(node)
     }
 
     fn visit_program_access_decl(
         &mut self,
         node: &ProgramAccessDecl,
     ) -> Result<Self::Value, Diagnostic> {
-        self.newline();
-
-        self.write_ws("VAR_ACCESS");
-
-        self.newline();
-        self.indent();
-
-        self.visit_id(&node.access_name)?;
-        self.write_ws(":");
-        self.visit_symbolic_variable_kind(&node.symbolic_variable)?;
-        self.write_ws(":");
-        self.visit_type_name(&node.type_name)?;
-
-        if let Some(dir) = &node.direction {
-            let dir = match dir {
-                dsl::configuration::Direction::ReadWrite => "READ_WRITE",
-                dsl::configuration::Direction::ReadOnly => "READ_ONLY",
-            };
-            self.write_ws(dir);
-        }
-
-        self.write(";");
-        self.newline();
-        self.outdent();
-
-        self.write_ws("END_VAR");
-        self.newline();
-        Ok(())
+        self.render_program_access_decl(node)
     }
 
-    // 2.4.3
     fn visit_var_decl(&mut self, node: &VarDecl) -> Result<Self::Value, Diagnostic> {
-        self.newline();
-
-        let var_type = match node.var_type {
-            VariableType::Var => "VAR",
-            VariableType::VarTemp => "VAR_TEMP",
-            VariableType::VarStat => "VAR_STAT",
-            VariableType::VarInst => "VAR_INST",
-            VariableType::VarGeneric => "VAR_GENERIC",
-            VariableType::Input => "VAR_INPUT",
-            VariableType::Output => "VAR_OUTPUT",
-            VariableType::InOut => "VAR_IN_OUT",
-            VariableType::External => "VAR_EXTERNAL",
-            VariableType::Global => "VAR_GLOBAL",
-            VariableType::Access => "VAR_ACCESS",
-        };
-        self.write_declaration_keyword(node, var_type);
-
-        match node.qualifier {
-            DeclarationQualifier::Unspecified => {}
-            DeclarationQualifier::Constant => self.write_ws("CONSTANT"),
-            DeclarationQualifier::Retain => self.write_ws("RETAIN"),
-            DeclarationQualifier::NonRetain => self.write_ws("NON_RETAIN"),
-            DeclarationQualifier::Persistent => self.write_ws("PERSISTENT"),
-        }
-
-        self.newline();
-
-        self.indent();
-        match &node.identifier {
-            VariableIdentifier::Symbol(id) => {
-                self.visit_id(id)?;
-            }
-            VariableIdentifier::Direct(direct) => {
-                self.visit_direct_variable_identifier(direct)?;
-            }
-        }
-
-        self.write_ws(":");
-        self.visit_initial_value_assignment_kind(&node.initializer)?;
-
-        if let Some(edge) = node.edge {
-            self.write_ws(match edge {
-                EdgeDirection::Rising => "R_EDGE",
-                EdgeDirection::Falling => "F_EDGE",
-            });
-        }
-
-        self.write(";");
-        self.newline();
-        self.outdent();
-
-        self.write_ws("END_VAR");
-        self.newline();
-        Ok(())
+        self.render_var_decl(node)
     }
 
-    // 2.4.3.1
     fn visit_address_assignment(
         &mut self,
         node: &AddressAssignment,
     ) -> Result<Self::Value, Diagnostic> {
-        let mut address = String::from("%");
-
-        let loc = match &node.location {
-            LocationPrefix::I => 'I',
-            LocationPrefix::Q => 'Q',
-            LocationPrefix::M => 'M',
-        };
-        address.push(loc);
-
-        let size = match &node.size {
-            SizePrefix::Unspecified => "*",
-            SizePrefix::Nil => "",
-            SizePrefix::X => "X",
-            SizePrefix::B => "B",
-            SizePrefix::W => "W",
-            SizePrefix::D => "D",
-            SizePrefix::L => "L",
-        };
-        address.push_str(size);
-
-        let location: String = node
-            .address
-            .iter()
-            .map(|&id| id.to_string() + ".")
-            .collect();
-        address.push_str(location.trim_end_matches('.'));
-
-        self.write_ws(address.as_str());
-
-        Ok(())
+        self.render_address_assignment(node)
     }
 
-    // 2.4.3.2
     fn visit_simple_initializer(
         &mut self,
         node: &SimpleInitializer,
     ) -> Result<Self::Value, Diagnostic> {
-        self.visit_type_name(&node.type_name)?;
-
-        if let Some(iv) = &node.initial_value {
-            self.write_ws(":=");
-            self.visit_constant_kind(iv)?;
-        }
-
-        Ok(())
+        self.render_simple_initializer(node)
     }
 
     // Extension: constant-expression VAR initializer
@@ -903,43 +506,18 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         Ok(())
     }
 
-    // 2.4.3.1 and 2.4.3.2
     fn visit_string_initializer(
         &mut self,
         node: &StringInitializer,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_ws(node.width.keyword());
-
-        if let Some(len) = &node.length {
-            self.write_ws("[");
-            self.visit_integer(len.as_integer().ok_or_else(Diagnostic::internal_error)?)?;
-            self.write_ws("]");
-        }
-
-        if let Some(init) = &node.initial_value {
-            self.write_ws(":=");
-            self.write(&character_string_text(&init.width, &init.value));
-        }
-
-        Ok(())
+        self.render_string_initializer(node)
     }
 
-    // 2.4.3.2
     fn visit_enumerated_values_initializer(
         &mut self,
         node: &EnumeratedValuesInitializer,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("(");
-        visit_comma_separated!(self, node.values.iter(), EnumeratedValue);
-        self.write_ws(")");
-
-        if let Some(init) = &node.initial_value {
-            self.write_ws(":=");
-
-            self.visit_enumerated_value(init)?;
-        }
-
-        Ok(())
+        self.render_enumerated_values_initializer(node)
     }
 
     // 2.4.3.2
@@ -964,22 +542,11 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         Ok(())
     }
 
-    // 2.4.3.2
     fn visit_array_initial_value_assignment(
         &mut self,
         node: &ArrayInitialValueAssignment,
     ) -> Result<Self::Value, Diagnostic> {
-        self.visit_array_specification_kind(&node.spec)?;
-
-        if !node.initial_values.is_empty() {
-            self.write_ws(":=");
-
-            self.write_ws("[");
-            visit_comma_separated!(self, node.initial_values.iter(), ArrayInitialElementKind);
-            self.write_ws("]");
-        }
-
-        Ok(())
+        self.render_array_initial_value_assignment(node)
     }
 
     /// Renders a repeated array element, `count(value)`.
@@ -1000,264 +567,67 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         &mut self,
         node: &EnumeratedInitialValueAssignment,
     ) -> Result<Self::Value, Diagnostic> {
-        self.visit_type_name(&node.type_name)?;
-
-        if let Some(init) = &node.initial_value {
-            self.write_ws(":=");
-            self.visit_enumerated_value(init)?;
-        }
-
-        Ok(())
+        self.render_enumerated_initial_value_assignment(node)
     }
 
     fn visit_direct_variable_identifier(
         &mut self,
         node: &DirectVariableIdentifier,
     ) -> Result<Self::Value, Diagnostic> {
-        if let Some(name) = &node.name {
-            self.visit_id(name)?;
-        }
-
-        self.write_ws("AT");
-
-        self.visit_address_assignment(&node.address_assignment)?;
-
-        Ok(())
+        self.render_direct_variable_identifier(node)
     }
 
-    // 2.5.1
     fn visit_function_declaration(
         &mut self,
         node: &FunctionDeclaration,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_declaration_keyword(node, "FUNCTION");
-        self.visit_id(&node.name)?;
-        self.write_ws(":");
-        self.visit_function_return_type(&node.return_type)?;
-
-        if !node.variables.is_empty() {
-            self.indent();
-            for item in node.variables.iter() {
-                self.visit_var_decl(item)?;
-            }
-            self.outdent();
-            self.newline();
-        }
-
-        self.indent();
-        for stmt in node.body.iter() {
-            self.visit_stmt_kind(stmt)?;
-        }
-        self.outdent();
-
-        self.write_ws("END_FUNCTION");
-        self.newline();
-        Ok(())
+        self.render_function_declaration(node)
     }
 
-    // 2.5.1
     fn visit_function_block_declaration(
         &mut self,
         node: &FunctionBlockDeclaration,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_declaration_keyword(node, "FUNCTION_BLOCK");
-        if let Some(oop) = &node.oop {
-            self.write_qualifiers(&oop.qualifiers);
-        }
-        self.visit_id(&node.name.name)?;
-        // `VAR_GENERIC` sections belong directly after the name, before
-        // `EXTENDS`/`IMPLEMENTS` (CODESYS error 544), so they are written
-        // first and the remaining sections after the header.
-        self.indent();
-        for var in node
-            .variables
-            .iter()
-            .filter(|var| var.var_type == VariableType::VarGeneric)
-        {
-            self.visit_var_decl(var)?;
-        }
-        self.outdent();
-        if let Some(oop) = &node.oop {
-            if let Some(base) = &oop.base {
-                self.write_ws("EXTENDS");
-                self.visit_id(&base.name)?;
-            }
-            if !oop.implements.is_empty() {
-                self.write_ws("IMPLEMENTS");
-                for (i, interface) in oop.implements.iter().enumerate() {
-                    if i > 0 {
-                        self.write_ws(",");
-                    }
-                    self.visit_id(&interface.name)?;
-                }
-            }
-        }
-        self.newline();
-
-        self.indent();
-        for var in node
-            .variables
-            .iter()
-            .filter(|var| var.var_type != VariableType::VarGeneric)
-        {
-            self.visit_var_decl(var)?;
-        }
-        self.outdent();
-
-        self.indent();
-        node.body.recurse_visit(self)?;
-        self.outdent();
-        self.newline();
-
-        for method in node.methods.iter() {
-            self.visit_method_declaration(method)?;
-        }
-
-        for property in node.properties.iter() {
-            self.visit_property_declaration(property)?;
-        }
-
-        self.write_ws("END_FUNCTION_BLOCK");
-        self.newline();
-        Ok(())
+        self.render_function_block_declaration(node)
     }
 
-    // OOP extension: METHOD ... END_METHOD (ADR-0041 Phase 1).
     fn visit_method_declaration(
         &mut self,
         node: &MethodDeclaration,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_declaration_keyword(node, "METHOD");
-        self.write_qualifiers(&node.qualifiers);
-        self.visit_id(&node.name)?;
-        if let Some(return_type) = &node.return_type {
-            self.write_ws(":");
-            self.visit_function_return_type(return_type)?;
-        }
-        self.newline();
-
-        self.render_callable_body(&node.variables, &node.body)?;
-
-        self.write_ws("END_METHOD");
-        self.newline();
-        Ok(())
+        self.render_method_declaration(node)
     }
 
-    // OOP extension: PROPERTY ... END_PROPERTY. Each accessor is a
-    // `MethodDeclaration`, but renders as `GET`/`SET` without a method
-    // header, and the SET accessor without the implicit input that holds
-    // the assigned value (see `PropertyDeclaration`).
     fn visit_property_declaration(
         &mut self,
         node: &PropertyDeclaration,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_declaration_keyword(node, "PROPERTY");
-        self.write_qualifiers(&node.qualifiers);
-        self.visit_id(&node.name)?;
-        self.write_ws(":");
-        self.visit_function_return_type(&node.property_type)?;
-        self.newline();
-
-        if let Some(get) = &node.get {
-            self.write_ws("GET");
-            self.newline();
-            self.render_callable_body(&get.variables, &get.body)?;
-            self.write_ws("END_GET");
-            self.newline();
-        }
-
-        if let Some(set) = &node.set {
-            self.write_ws("SET");
-            self.newline();
-            self.render_callable_body(node.set_declared_variables(), &set.body)?;
-            self.write_ws("END_SET");
-            self.newline();
-        }
-
-        self.write_ws("END_PROPERTY");
-        self.newline();
-        Ok(())
+        self.render_property_declaration(node)
     }
 
-    // OOP extension: INTERFACE ... END_INTERFACE. Only the
-    // header renders — method/property signatures are not yet parsed (see
-    // specs/design/beckhoff-twincat-dialect.md §1.3).
-    // CODESYS/TwinCAT `NAMESPACE ... END_NAMESPACE`: the nested declarations
-    // are written back inside the namespace, one level deeper.
     fn visit_namespace_declaration(
         &mut self,
         node: &NamespaceDeclaration,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("NAMESPACE");
-        self.visit_id(&node.name)?;
-        self.newline();
-        self.indent();
-        for element in node.elements.iter() {
-            element.recurse_visit(self)?;
-        }
-        self.outdent();
-        self.write_ws("END_NAMESPACE");
-        self.newline();
-        Ok(())
+        self.render_namespace_declaration(node)
     }
 
     fn visit_interface_declaration(
         &mut self,
         node: &InterfaceDeclaration,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_declaration_keyword(node, "INTERFACE");
-        self.visit_id(&node.name)?;
-        if !node.extends.is_empty() {
-            self.write_ws("EXTENDS");
-            for (i, base) in node.extends.iter().enumerate() {
-                if i > 0 {
-                    self.write_ws(",");
-                }
-                self.visit_id(&base.name)?;
-            }
-        }
-        self.newline();
-
-        self.write_ws("END_INTERFACE");
-        self.newline();
-        Ok(())
+        self.render_interface_declaration(node)
     }
 
-    // 2.5.3
     fn visit_program_declaration(
         &mut self,
         node: &ProgramDeclaration,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_declaration_keyword(node, "PROGRAM");
-
-        self.visit_id(&node.name)?;
-        self.newline();
-
-        for var in node.variables.iter() {
-            self.visit_var_decl(var)?;
-        }
-        for var in node.access_variables.iter() {
-            self.visit_program_access_decl(var)?;
-        }
-
-        node.body.recurse_visit(self)?;
-
-        self.write_ws("END_PROGRAM");
-        self.newline();
-        Ok(())
+        self.render_program_declaration(node)
     }
 
-    // 2.6.2
     fn visit_network(&mut self, node: &dsl::sfc::Network) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("INITIAL_STEP");
-        self.write_step_body(&node.initial_step)?;
-        self.newline();
-
-        for elem in node.elements.iter() {
-            self.visit_element_kind(elem)?;
-            self.newline();
-        }
-        Ok(())
+        self.render_network(node)
     }
 
     // 2.6.2
@@ -1266,408 +636,97 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         self.write_step_body(node)
     }
 
-    // 2.6.3
     fn visit_transition(&mut self, node: &dsl::sfc::Transition) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("TRANSITION FROM");
-
-        visit_comma_separated!(self, node.from.iter(), Id);
-
-        self.write_ws("TO");
-
-        visit_comma_separated!(self, node.to.iter(), Id);
-        self.newline();
-
-        self.indent();
-        self.write_ws(":=");
-        self.visit_expr(&node.condition)?;
-        self.write_ws(";");
-        self.newline();
-        self.outdent();
-
-        self.write_ws("END_TRANSITION");
-        self.newline();
-        Ok(())
+        self.render_transition(node)
     }
 
-    // 2.6.3
     fn visit_action(&mut self, node: &dsl::sfc::Action) -> Result<Self::Value, Diagnostic> {
-        self.write_declaration_keyword(node, "ACTION");
-
-        self.visit_id(&node.name)?;
-        self.write_ws(":");
-        self.newline();
-
-        self.indent();
-        self.visit_function_block_body_kind(&node.body)?;
-        self.outdent();
-
-        self.write_ws("END_ACTION");
-        self.newline();
-        Ok(())
+        self.render_action(node)
     }
 
-    // 2.6.4
     fn visit_action_association(
         &mut self,
         node: &dsl::sfc::ActionAssociation,
     ) -> Result<Self::Value, Diagnostic> {
-        self.visit_id(&node.name)?;
-
-        self.write_ws("(");
-
-        if let Some(qualifier) = &node.qualifier {
-            self.write_ws(qualifier.to_string().as_str());
-            if !node.indicators.is_empty() {
-                self.write_ws(",");
-            }
-        }
-
-        visit_comma_separated!(self, node.indicators.iter(), Id);
-        self.write_ws(");");
-
-        Ok(())
+        self.render_action_association(node)
     }
 
-    // 2.7.1
     fn visit_resource_declaration(
         &mut self,
         node: &dsl::configuration::ResourceDeclaration,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("RESOURCE");
-        self.visit_id(&node.name)?;
-        self.write_ws("ON");
-        self.visit_id(&node.resource)?;
-        self.newline();
-
-        self.indent();
-        for task in node.tasks.iter() {
-            self.visit_task_configuration(task)?;
-        }
-
-        for program in node.programs.iter() {
-            self.visit_program_configuration(program)?;
-        }
-
-        for var in node.global_vars.iter() {
-            self.visit_var_decl(var)?;
-        }
-
-        self.outdent();
-
-        self.write_ws("END_RESOURCE");
-        self.newline();
-        Ok(())
+        self.render_resource_declaration(node)
     }
 
-    // 2.7.2
     fn visit_program_configuration(
         &mut self,
         node: &dsl::configuration::ProgramConfiguration,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("PROGRAM");
-
-        if let Some(storage) = &node.storage {
-            let storage = match storage {
-                DeclarationQualifier::Unspecified => "",
-                DeclarationQualifier::Constant => "",
-                DeclarationQualifier::Retain => "RETAIN",
-                DeclarationQualifier::NonRetain => "NON_RETAIN",
-                // Unreachable via the grammar: `program_configuration()`'s
-                // `storage` is only ever produced from RETAIN/NON_RETAIN.
-                // Exhaustive match still needs an arm.
-                DeclarationQualifier::Persistent => "",
-            };
-            self.write_ws(storage);
-        }
-
-        self.visit_id(&node.name)?;
-
-        if let Some(task) = &node.task_name {
-            self.write_ws("WITH");
-            self.visit_id(task)?;
-        }
-
-        self.write_ws(":");
-        self.visit_id(&node.type_name)?;
-
-        self.write_ws(";");
-        self.newline();
-
-        Ok(())
+        self.render_program_configuration(node)
     }
 
-    // 2.7.2
     fn visit_configuration_declaration(
         &mut self,
         node: &dsl::configuration::ConfigurationDeclaration,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("CONFIGURATION");
-        self.visit_id(&node.name)?;
-        self.newline();
-
-        self.indent();
-        for res in node.resource_decl.iter() {
-            self.visit_resource_declaration(res)?;
-        }
-        self.outdent();
-
-        // A configuration has a single VAR_CONFIG block holding every
-        // instance-specific initialization.
-        if !node.fb_inits.is_empty() || !node.located_var_inits.is_empty() {
-            self.indent();
-            self.write_ws("VAR_CONFIG");
-            self.newline();
-
-            self.indent();
-            for fb_init in node.fb_inits.iter() {
-                self.visit_function_block_init(fb_init)?;
-            }
-            for loc_var_init in node.located_var_inits.iter() {
-                self.visit_located_var_init(loc_var_init)?;
-            }
-            self.outdent();
-
-            self.write_ws("END_VAR");
-            self.newline();
-            self.outdent();
-        }
-
-        self.newline();
-
-        self.write_ws("END_CONFIGURATION");
-        self.newline();
-        Ok(())
+        self.render_configuration_declaration(node)
     }
 
-    /// Renders one initializer line; the enclosing `VAR_CONFIG` block is
-    /// written once by `visit_configuration_declaration`.
     fn visit_function_block_init(
         &mut self,
         node: &dsl::configuration::FunctionBlockInit,
     ) -> Result<Self::Value, Diagnostic> {
-        let mut vars: Vec<&String> = Vec::new();
-        vars.push(node.resource_name.original());
-        vars.push(node.program_name.original());
-        vars.extend(node.fb_path.iter().map(|v| v.original()));
-
-        write_period_separated!(self, vars.iter());
-
-        self.write_ws(":");
-
-        self.visit_type_name(&node.type_name)?;
-
-        self.write_ws(":=");
-
-        self.write_ws("(");
-
-        visit_comma_separated!(self, node.initializer.iter(), StructureElementInit);
-
-        self.write_ws(")");
-        self.write_ws(";");
-        self.newline();
-
-        Ok(())
+        self.render_function_block_init(node)
     }
 
-    /// Renders one initializer line; see `visit_function_block_init`.
     fn visit_located_var_init(&mut self, node: &LocatedVarInit) -> Result<Self::Value, Diagnostic> {
-        let mut vars: Vec<&String> = Vec::new();
-        vars.push(node.resource_name.original());
-        vars.push(node.program_name.original());
-        vars.extend(node.fb_path.iter().map(|v| v.original()));
-
-        write_period_separated!(self, vars.iter());
-
-        if let Some(loc) = &node.address {
-            self.write_ws("AT");
-            self.visit_address_assignment(loc)?;
-        }
-
-        self.write_ws(":");
-
-        self.visit_initial_value_assignment_kind(&node.initializer)?;
-
-        self.write_ws(";");
-        self.newline();
-
-        Ok(())
+        self.render_located_var_init(node)
     }
 
-    // 2.7.1
     fn visit_task_configuration(
         &mut self,
         node: &dsl::configuration::TaskConfiguration,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("TASK");
-
-        self.visit_id(&node.name)?;
-        self.write_ws("(");
-
-        if let Some(single) = &node.single {
-            self.write_ws("SINGLE");
-            self.write_ws(":=");
-            self.render_data_source_kind(single)?;
-            self.write_ws(",");
-        }
-
-        if let Some(interval) = &node.interval {
-            self.write_ws("INTERVAL");
-            self.write_ws(":=");
-            self.visit_duration_literal(interval)?;
-            self.write_ws(",");
-        }
-
-        self.write_ws("PRIORITY");
-        self.write_ws(":=");
-        self.write_ws(node.priority.to_string().as_str());
-
-        self.write_ws(")");
-
-        self.write_ws(";");
-        self.newline();
-        Ok(())
+        self.render_task_configuration(node)
     }
 
-    // 3.2.3
     fn visit_fb_call(&mut self, node: &dsl::textual::FbCall) -> Result<Self::Value, Diagnostic> {
-        self.visit_variable(&node.callee)?;
-
-        self.write_ws("(");
-        visit_comma_separated!(self, node.params.iter(), ParamAssignmentKind);
-        self.write_ws(")");
-        self.write_ws(";");
-        self.newline();
-
-        Ok(())
+        self.render_fb_call(node)
     }
 
-    // OOP extension: `instance.MethodName(args)`, `THIS^.MethodName(args)`
-    // (ADR-0041 Phase 1).
     fn visit_method_call(
         &mut self,
         node: &dsl::textual::MethodCall,
     ) -> Result<Self::Value, Diagnostic> {
-        self.visit_method_receiver(&node.receiver)?;
-        self.write(".");
-        self.visit_id(&node.method)?;
-
-        self.write_ws("(");
-        visit_comma_separated!(self, node.params.iter(), ParamAssignmentKind);
-        self.write_ws(")");
-
-        Ok(())
+        self.render_method_call(node)
     }
 
-    // A method call is rendered by `visit_method_call` in both positions;
-    // only the statement form ends with `;`. `RETURN`, `EXIT` and `CONTINUE` have no
-    // node to visit, so they are written here.
     fn visit_stmt_kind(
         &mut self,
         node: &dsl::textual::StmtKind,
     ) -> Result<Self::Value, Diagnostic> {
-        match node {
-            dsl::textual::StmtKind::MethodCall(call) => {
-                self.visit_method_call(call)?;
-                self.write_ws(";");
-                self.newline();
-                Ok(())
-            }
-            dsl::textual::StmtKind::Return => self.write_keyword_statement("RETURN"),
-            dsl::textual::StmtKind::Exit(_) => self.write_keyword_statement("EXIT"),
-            // The marker carries no statement terminator of its own: the
-            // reference grammar's `implementationBlock` is the marker
-            // followed by the statements, with no `;` in between.
-            dsl::textual::StmtKind::BeginImplementation(_) => {
-                self.write_ws("__BEGIN_IMPLEMENTATION");
-                self.newline();
-                Ok(())
-            }
-            dsl::textual::StmtKind::Continue(_) => self.write_keyword_statement("CONTINUE"),
-            _ => node.recurse_visit(self),
-        }
+        self.render_stmt_kind(node)
     }
 
-    // 3.3.2.1
     fn visit_assignment(
         &mut self,
         node: &dsl::textual::Assignment,
     ) -> Result<Self::Value, Diagnostic> {
-        self.visit_variable(&node.target)?;
-        if node.set_bind {
-            // Reproduce the TwinCAT/CODESYS `S=` set-bind operator.
-            self.write_ws("S=");
-            self.visit_expr(&node.value)?;
-            self.write_ws(";");
-            self.newline();
-            return Ok(());
-        }
-        if node.reset_bind {
-            // Reproduce the TwinCAT/CODESYS `R=` reset-bind operator.
-            self.write_ws("R=");
-            self.visit_expr(&node.value)?;
-            self.write_ws(";");
-            self.newline();
-            return Ok(());
-        }
-        if node.ref_bind {
-            // Reproduce the TwinCAT/CODESYS `REF=` binding. The value is always
-            // an `ExprKind::Ref(referent)`; render `target REF= referent`.
-            self.write_ws("REF=");
-            if let dsl::textual::ExprKind::Ref(referent) = &node.value.kind {
-                self.visit_variable(referent)?;
-            } else {
-                self.visit_expr(&node.value)?;
-            }
-            self.write_ws(";");
-            self.newline();
-            return Ok(());
-        }
-        if node.deref {
-            self.write("^");
-        }
-        self.write_ws(":=");
-        self.visit_expr(&node.value)?;
-
-        self.write_ws(";");
-        self.newline();
-        Ok(())
+        self.render_assignment(node)
     }
 
     fn visit_compare_expr(
         &mut self,
         node: &dsl::textual::CompareExpr,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("(");
-        self.visit_expr(&node.left)?;
-
-        self.write_ws(node.op.as_str());
-
-        self.visit_expr(&node.right)?;
-        self.write_ws(")");
-        Ok(())
+        self.render_compare_expr(node)
     }
 
     fn visit_binary_expr(
         &mut self,
         node: &dsl::textual::BinaryExpr,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("(");
-        self.visit_expr(&node.left)?;
-
-        let op = match node.op {
-            dsl::textual::Operator::Add => "+",
-            dsl::textual::Operator::Sub => "-",
-            dsl::textual::Operator::Mul => "*",
-            dsl::textual::Operator::Div => "/",
-            dsl::textual::Operator::Mod => "MOD",
-            dsl::textual::Operator::Pow => "**",
-        };
-        self.write_ws(op);
-
-        self.visit_expr(&node.right)?;
-        self.write_ws(")");
-
-        Ok(())
+        self.render_binary_expr(node)
     }
 
     fn visit_unary_expr(
@@ -1694,99 +753,25 @@ impl Visitor<Diagnostic> for LibraryRenderer {
     }
 
     fn visit_repeat(&mut self, node: &dsl::textual::Repeat) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("REPEAT");
-        self.newline();
-
-        self.indent();
-        for item in node.body.iter() {
-            self.visit_stmt_kind(item)?;
-        }
-        self.outdent();
-
-        self.write_ws("UNTIL");
-        self.visit_expr(&node.until)?;
-        self.newline();
-
-        self.write_ws("END_REPEAT");
-        self.write_ws(";");
-        self.newline();
-        self.newline();
-
-        Ok(())
+        self.render_repeat(node)
     }
 
-    // CODESYS exception handling. The `__TRY`-family keywords are not in
-    // `StmtKind` themselves, so the statement is written here.
     fn visit_try_catch(
         &mut self,
         node: &dsl::textual::TryCatch,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("__TRY");
-        self.newline();
-
-        self.indent();
-        for item in node.body.iter() {
-            self.visit_stmt_kind(item)?;
-        }
-        self.outdent();
-
-        if let Some(catch) = &node.catch {
-            self.visit_catch_clause(catch)?;
-        }
-
-        if !node.finally_body.is_empty() {
-            self.write_ws("__FINALLY");
-            self.newline();
-
-            self.indent();
-            for item in node.finally_body.iter() {
-                self.visit_stmt_kind(item)?;
-            }
-            self.outdent();
-        }
-
-        self.write_ws("__ENDTRY");
-        self.write_ws(";");
-        self.newline();
-        self.newline();
-
-        Ok(())
+        self.render_try_catch(node)
     }
 
     fn visit_catch_clause(
         &mut self,
         node: &dsl::textual::CatchClause,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("__CATCH");
-        if let Some(exception) = &node.exception {
-            self.write("(");
-            self.visit_variable(exception)?;
-            self.write(")");
-        }
-        self.newline();
-
-        self.indent();
-        for item in node.body.iter() {
-            self.visit_stmt_kind(item)?;
-        }
-        self.outdent();
-
-        Ok(())
+        self.render_catch_clause(node)
     }
 
-    // `JMP` / `label:` / `CALC` / `__WAIT`, the CODESYS jump statements.
     fn visit_jump(&mut self, node: &dsl::textual::Jump) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("JMP");
-        if let Some(condition) = &node.condition {
-            self.write("(");
-            self.visit_expr(condition)?;
-            self.write(")");
-        }
-        self.write_ws(node.label.original().as_str());
-        self.write_ws(";");
-        self.newline();
-
-        Ok(())
+        self.render_jump(node)
     }
 
     fn visit_label_statement(
@@ -1804,229 +789,49 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         &mut self,
         node: &dsl::textual::ConditionalCall,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("CALC");
-        self.write("(");
-        self.visit_expr(&node.condition)?;
-        self.write(",");
-        self.visit_variable(&node.call.callee)?;
-        self.write("(");
-        visit_comma_separated!(self, node.call.params.iter(), ParamAssignmentKind);
-        self.write(")");
-        self.write(")");
-        self.write_ws(";");
-        self.newline();
-
-        Ok(())
+        self.render_conditional_call(node)
     }
 
     fn visit_wait(&mut self, node: &dsl::textual::Wait) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("__WAIT");
-        if let Some(condition) = &node.condition {
-            self.write("(");
-            self.visit_expr(condition)?;
-            self.write(")");
-        }
-        self.write_ws(";");
-        self.newline();
-
-        Ok(())
+        self.render_wait(node)
     }
 
     fn visit_throw(&mut self, node: &dsl::textual::Throw) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("__THROW");
-        if let Some(value) = &node.value {
-            self.write("(");
-            self.visit_expr(value)?;
-            self.write(")");
-        }
-        self.write_ws(";");
-        self.newline();
-
-        Ok(())
+        self.render_throw(node)
     }
 
     fn visit_if(&mut self, node: &dsl::textual::If) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("IF");
-        self.visit_expr(&node.expr)?;
-        self.write_ws("THEN");
-        self.newline();
-
-        self.indent();
-        for item in node.body.iter() {
-            self.visit_stmt_kind(item)?;
-        }
-        self.outdent();
-
-        for item in node.else_ifs.iter() {
-            self.visit_else_if(item)?;
-        }
-
-        if !node.else_body.is_empty() {
-            self.write_ws("ELSE");
-            self.newline();
-
-            self.indent();
-            for item in node.else_body.iter() {
-                self.visit_stmt_kind(item)?;
-            }
-            self.outdent();
-        }
-
-        self.write_ws("END_IF");
-        self.write_ws(";");
-        self.newline();
-        self.newline();
-        Ok(())
+        self.render_if(node)
     }
 
     fn visit_else_if(&mut self, node: &dsl::textual::ElseIf) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("ELSIF");
-        self.visit_expr(&node.expr)?;
-        self.write_ws("THEN");
-        self.newline();
-
-        self.indent();
-        for item in node.body.iter() {
-            self.visit_stmt_kind(item)?;
-        }
-        self.outdent();
-
-        Ok(())
+        self.render_else_if(node)
     }
 
     fn visit_case(&mut self, node: &dsl::textual::Case) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("CASE");
-        self.visit_expr(&node.selector)?;
-        self.write_ws("OF");
-        self.newline();
-
-        self.indent();
-        for item in node.statement_groups.iter() {
-            self.visit_case_statement_group(item)?;
-        }
-
-        if !node.else_body.is_empty() {
-            self.write_ws("ELSE");
-            self.newline();
-            self.indent();
-
-            for item in node.else_body.iter() {
-                self.visit_stmt_kind(item)?;
-            }
-
-            self.outdent();
-        }
-        self.outdent();
-
-        self.write_ws("END_CASE");
-        self.write_ws(";");
-        self.newline();
-        self.newline();
-
-        Ok(())
+        self.render_case(node)
     }
 
     fn visit_case_statement_group(
         &mut self,
         node: &dsl::textual::CaseStatementGroup,
     ) -> Result<Self::Value, Diagnostic> {
-        for selector in node.selectors.iter() {
-            self.visit_case_selection_kind(selector)?;
-            self.write_ws(":");
-            self.newline();
-        }
-
-        self.indent();
-
-        if node.statements.is_empty() {
-            self.write_ws("(* empty *)");
-            self.write_ws(";");
-            self.newline();
-        } else {
-            for item in node.statements.iter() {
-                self.visit_stmt_kind(item)?;
-            }
-        }
-        self.outdent();
-
-        Ok(())
+        self.render_case_statement_group(node)
     }
 
     fn visit_for(&mut self, node: &dsl::textual::For) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("FOR");
-        self.visit_id(&node.control)?;
-        self.write_ws(":=");
-        self.visit_expr(&node.from)?;
-        self.write_ws("TO");
-        self.visit_expr(&node.to)?;
-
-        if let Some(by) = &node.step {
-            self.write_ws("BY");
-            self.visit_expr(by)?;
-        }
-
-        self.write_ws("DO");
-        self.newline();
-
-        self.indent();
-        for item in node.body.iter() {
-            self.visit_stmt_kind(item)?;
-        }
-        self.outdent();
-
-        self.write_ws("END_FOR");
-        self.write_ws(";");
-        self.newline();
-        self.newline();
-        Ok(())
+        self.render_for(node)
     }
 
     fn visit_while(&mut self, node: &dsl::textual::While) -> Result<Self::Value, Diagnostic> {
-        self.write_ws("WHILE");
-        self.visit_expr(&node.condition)?;
-        self.write_ws("DO");
-        self.newline();
-
-        self.indent();
-        for item in node.body.iter() {
-            self.visit_stmt_kind(item)?;
-        }
-        self.outdent();
-
-        self.write_ws("END_WHILE");
-        self.write_ws(";");
-        self.newline();
-        self.newline();
-        Ok(())
+        self.render_while(node)
     }
 
     fn visit_expr_kind(
         &mut self,
         node: &dsl::textual::ExprKind,
     ) -> Result<Self::Value, Diagnostic> {
-        match node {
-            dsl::textual::ExprKind::Ref(var) => {
-                self.write_ws("REF(");
-                self.visit_variable(var)?;
-                self.write_ws(")");
-                Ok(())
-            }
-            dsl::textual::ExprKind::Deref(expr) => {
-                self.visit_expr(expr)?;
-                // No separating space: the tight spelling is the canonical
-                // output, not a parser constraint. #1437 widened
-                // `unary_expression` to take `_` before the caret, so
-                // `myRef ^` re-parses as well -- the `deref_operator` row in
-                // `parser/src/tests/whitespace.rs`.
-                self.write("^");
-                Ok(())
-            }
-            dsl::textual::ExprKind::Null(_) => {
-                self.write_ws("NULL");
-                Ok(())
-            }
-            _ => node.recurse_visit(self),
-        }
+        self.render_expr_kind(node)
     }
 
     fn visit_deref_variable(
@@ -2076,15 +881,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         &mut self,
         node: &ReferenceInitializer,
     ) -> Result<Self::Value, Diagnostic> {
-        self.write_ref_keyword(&node.syntax);
-        self.visit_reference_target(&node.target)?;
-
-        if let Some(init) = &node.initial_value {
-            self.write_ws(":=");
-            self.visit_reference_initial_value(init)?;
-        }
-
-        Ok(())
+        self.render_reference_initializer(node)
     }
 
     fn visit_reference_target(
@@ -2101,18 +898,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         &mut self,
         node: &ReferenceInitialValue,
     ) -> Result<Self::Value, Diagnostic> {
-        match node {
-            ReferenceInitialValue::Null(_) => {
-                self.write_ws("NULL");
-                Ok(())
-            }
-            ReferenceInitialValue::Ref(var) => {
-                self.write_ws("REF(");
-                self.visit_variable(var)?;
-                self.write_ws(")");
-                Ok(())
-            }
-        }
+        self.render_reference_initial_value(node)
     }
 
     fn visit_named_input(
@@ -2137,17 +923,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         &mut self,
         node: &dsl::textual::ArrayVariable,
     ) -> Result<Self::Value, Diagnostic> {
-        self.visit_symbolic_variable_kind(&node.subscripted_variable)?;
-
-        // No space before `[`: the tight spelling is the canonical output,
-        // not a parser constraint -- `symbolic_variable` has admitted a gap
-        // before a subscript since #1437. Inside the brackets is fine too,
-        // and there `subscript_list` is what allows it.
-        self.write("[");
-        visit_comma_separated!(self, node.subscripts.iter(), Expr);
-        self.write_ws("]");
-
-        Ok(())
+        self.render_array_variable(node)
     }
 
     fn visit_structured_variable(
