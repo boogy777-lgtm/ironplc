@@ -34,7 +34,7 @@ specs   := cd specs && just   # adr-numbers + adr-front-matter + plan-citations
 warnings      := deny via compiler/.cargo/config.toml [build] warnings="deny" (cargo >= 1.97)
 clippy_deny   := [workspace.lints.clippy] unwrap_used|expect_used|panic|todo|unimplemented = "deny"
 tests         := keep unwrap/expect via compiler/clippy.toml (allow-*-in-tests)
-exempt        := build-time/test tooling ONLY: ironplc-test, problems, spec_requirements_gen,
+exempt        := build-time/test tooling ONLY: ironplc-test, problems, problems_gen, spec_requirements_gen,
                  dsl_macro_derive (own [lints] tables) + test/bench targets + test_support modules
 exemption_way := per-target/crate #![allow(..., reason = "...")] — never silently, always with reason
                  && never for production compiler code (parser|analyzer|codegen|vm|dsl|sources src/)

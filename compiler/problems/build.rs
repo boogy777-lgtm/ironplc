@@ -22,6 +22,7 @@ struct ProblemDef {
 fn create_problems() -> Result<(), Box<dyn Error>> {
     // Tell Cargo that if the error definitions change, to rerun this build script.
     println!("cargo:rerun-if-changed=resources/problem-codes.csv");
+    println!("cargo:rerun-if-changed=resources/problem-texts.csv");
 
     // Read the problem-codes.csv into bytes so that we can use it with
     let mut src_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -61,38 +62,10 @@ fn create_problems() -> Result<(), Box<dyn Error>> {
     let mut out =
         File::create(out_path).map_err(|e| format!("Unable to create 'problems.rs': {e}"))?;
 
-    // Problems whose "location" is the compiler's own source rather than the
-    // IEC 61131-3 program. These must be constructed through the dedicated
-    // `Diagnostic` constructors (`todo*`/`not_implemented`/`internal_error*`)
-    // so that the compiler `file#Lline` is recorded and the P9xxx telemetry
-    // dashboards can rank them. The variants are marked `#[deprecated]` and the
-    // workspace denies the `deprecated` lint, so any direct
-    // `Diagnostic::problem(Problem::NotImplemented, …)` fails to compile.
-    let compiler_located: &[(&str, &str)] = &[
-        (
-            "NotSupported",
-            "construct via Diagnostic::not_supported so the compiler file/line is recorded for the P9xxx dashboards",
-        ),
-        (
-            "NotImplemented",
-            "construct via Diagnostic::not_implemented (or todo*) so the compiler file/line is recorded for the P9xxx dashboards",
-        ),
-        (
-            "InternalError",
-            "construct via Diagnostic::internal_error / internal_error_at so the compiler file/line is recorded for the P9xxx dashboards",
-        ),
-    ];
-    let deprecation_note = |name: &str| -> Option<&str> {
-        compiler_located
-            .iter()
-            .find(|(n, _)| *n == name)
-            .map(|(_, note)| *note)
-    };
-
     // Create the enumeration definition
     out.write_all(b"pub enum Problem {\n")?;
     for def in &defs {
-        if let Some(note) = deprecation_note(&def.name) {
+        if let Some(note) = ironplc_problems_gen::deprecation_note(&def.name) {
             out.write_all(format!("    #[deprecated(note = \"{note}\")]\n").as_bytes())?;
         }
         out.write_all(format!("    {},\n", def.name).as_bytes())?;
@@ -139,6 +112,25 @@ fn create_problems() -> Result<(), Box<dyn Error>> {
     // Finalize the out file
     out.flush()?;
 
+    create_texts(&defs)
+}
+
+fn create_texts(defs: &[ProblemDef]) -> Result<(), Box<dyn Error>> {
+    let mut src_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    src_path.push("resources");
+    src_path.push("problem-texts.csv");
+    let src = fs::read_to_string(src_path)
+        .map_err(|e| format!("Unable to read 'problem-texts.csv': {e}"))?;
+
+    let problems: Vec<(&str, &str)> = defs
+        .iter()
+        .map(|def| (def.code.as_str(), def.name.as_str()))
+        .collect();
+    let texts = ironplc_problems_gen::generate_texts(&src, &problems)?;
+
+    let mut out_path = PathBuf::from(env::var("OUT_DIR")?);
+    out_path.push("texts.rs");
+    fs::write(out_path, texts).map_err(|e| format!("Unable to create 'texts.rs': {e}"))?;
     Ok(())
 }
 

@@ -15,6 +15,7 @@ members = [
     "dsl_macro_derive",
     "parser",
     "problems",
+    "problems_gen",
     "runtime",
     "sources",
     "syntax",

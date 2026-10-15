@@ -218,6 +218,59 @@ V####
 
 ### Creating Diagnostics
 
+#### New label texts are rows of the dictionary
+
+The text a label shows is a row of `compiler/problems/resources/problem-texts.csv`
+(columns `Code,Key,Template`), not a `format!` at the call site. `problems/build.rs`
+(through the build-support crate `compiler/problems_gen`, which holds the checks and their tests) makes one function for each row in `ironplc_problems::text`, named by `Key`, with
+one parameter for each distinct placeholder of the template in order of first
+appearance. A missing, extra or misspelled argument does not compile.
+
+```csv
+Code,Key,Template
+P4077,attribute_value_invalid_found,"The attribute '{name}' takes {takes}, but its value is '{value}'"
+P4077,attribute_value_invalid_missing,"The attribute '{name}' takes {takes}, but it has no value"
+```
+
+```rust
+// The text carries its problem: the code and the label text come from one row.
+Diagnostic::text(
+    fault.span,
+    match found {
+        Some(value) => text::attribute_value_invalid_found(name, row.value.describe(), value),
+        None => text::attribute_value_invalid_missing(name, row.value.describe()),
+    },
+)
+
+// A secondary label of that code is also a row of that code.
+Diagnostic::text(fault.span, text::attribute_repeated(name))
+    .with_secondary(Label::span(first, text::attribute_repeated_first_written_here()))
+```
+
+- A code with several wordings has one row for each; the call site chooses the
+  row (the function), it does not build the text.
+- `Key` is snake_case, unique in the file, and is the name of its problem in
+  snake_case or starts with that name and an underscore
+  (`AttributeRepeated`: `attribute_repeated`, `attribute_repeated_...`). The build
+  checks it.
+- A template is text and `{name}` placeholders (`[a-z][a-z0-9_]*`). `{{` and `}}`
+  are the literal braces. A format spec (`{x:?}`) is not allowed: pass the value
+  already in the form to show.
+- The build fails, naming the row, when a row names a code that is not in
+  `problem-codes.csv`, a key is not snake_case, is used twice or does not start with the name of its
+  problem, or a placeholder
+  or a brace is malformed. There are no rows for P9997, P9998 and P9999: those
+  have their own constructors (see below).
+- `problem-codes.csv` keeps its three columns; the texts are in their own file
+  because other tools read that one. See
+  [ADR-0077](../adrs/0077-message-texts-in-a-checked-dictionary.md).
+
+#### Existing call sites
+
+Call sites not yet migrated build the text with `format!` in
+`Diagnostic::problem(Problem, Label)`. They are migrated over time, one crate or
+one family of codes at a time; a new text does not use that form.
+
 ```rust
 // Simple error with primary location
 Diagnostic::problem(
@@ -424,6 +477,7 @@ Before adding a new compiler problem code:
 - [ ] Documentation file created with proper format
 - [ ] Example code is realistic and demonstrates the error
 - [ ] Corrected example shows proper solution
+- [ ] Label texts are rows of `problem-texts.csv`, made by `ironplc_problems::text` (not `format!`)
 - [ ] Test exists that verifies the error is generated
 - [ ] Test verifies the correct problem code is returned
 - [ ] Build passes with new problem code
