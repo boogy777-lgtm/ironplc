@@ -42,12 +42,12 @@ use std::convert::Infallible;
 use ironplc_dsl::{
     common::*,
     core::{Located, SourceSpan},
-    diagnostic::{Diagnostic, Label},
+    diagnostic::Diagnostic,
     textual::*,
     visitor::Visitor,
 };
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::Problem;
+use ironplc_problems::{text, Text};
 
 use crate::{
     intermediates::special_operator::SpecialOperator,
@@ -86,13 +86,10 @@ struct RuleSpecialOperator<'a> {
 }
 
 impl RuleSpecialOperator<'_> {
-    fn invalid(&mut self, operator: SpecialOperator, at: &impl Located, reason: &str) {
+    fn invalid(&mut self, operator: SpecialOperator, at: &impl Located, reason: Text) {
         self.diagnostics.push(
-            Diagnostic::problem(
-                Problem::SpecialOperatorOperandInvalid,
-                Label::span(at.span(), reason.to_string()),
-            )
-            .with_context("operator", &operator.name().to_string()),
+            Diagnostic::text(at.span(), reason)
+                .with_context("operator", &operator.name().to_string()),
         );
     }
 
@@ -123,7 +120,11 @@ impl RuleSpecialOperator<'_> {
     fn check_new(&mut self, call: &Function, arguments: &[&Expr]) {
         let operator = SpecialOperator::New;
         if !self.assigned_new.contains(&call.name.span()) {
-            self.invalid(operator, &call.name, "The result of __NEW must be assigned");
+            self.invalid(
+                operator,
+                &call.name,
+                text::special_operator_operand_invalid_new_result_must_be_assigned(),
+            );
         }
         let Some(type_argument) = arguments.first() else {
             return;
@@ -139,7 +140,7 @@ impl RuleSpecialOperator<'_> {
             self.invalid(
                 operator,
                 *type_argument,
-                "The first operand of __NEW must be a type",
+                text::special_operator_operand_invalid_new_first_operand_must_be_a_type(),
             );
             return;
         };
@@ -150,12 +151,16 @@ impl RuleSpecialOperator<'_> {
             self.invalid(
                 operator,
                 *count,
-                "An array of a user-defined type cannot be created with __NEW",
+                text::special_operator_operand_invalid_new_array_of_user_defined_type(),
             );
         }
         if value_type::check(self.types, &TypeName::from("ANY_INT"), count, &self.options).is_err()
         {
-            self.invalid(operator, *count, "The element count must be an integer");
+            self.invalid(
+                operator,
+                *count,
+                text::special_operator_operand_invalid_new_element_count_must_be_an_integer(),
+            );
         }
     }
 
@@ -165,7 +170,7 @@ impl RuleSpecialOperator<'_> {
                 self.invalid(
                     SpecialOperator::Delete,
                     *operand,
-                    "The operand of __DELETE must be a pointer",
+                    text::special_operator_operand_invalid_delete_operand_must_be_a_pointer(),
                 );
             }
         }
@@ -188,7 +193,7 @@ impl RuleSpecialOperator<'_> {
             self.invalid(
                 SpecialOperator::XAdd,
                 *pointer,
-                "The first operand of __XADD must be a POINTER TO DINT",
+                text::special_operator_operand_invalid_xadd_first_operand_must_be_pointer_to_dint(),
             );
         }
     }

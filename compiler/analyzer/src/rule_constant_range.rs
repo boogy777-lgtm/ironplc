@@ -73,13 +73,13 @@
 use ironplc_dsl::{
     common::*,
     core::{Located, SourceSpan},
-    diagnostic::{Diagnostic, Label},
+    diagnostic::Diagnostic,
     scope::ScopeNode,
     textual::*,
     visitor::Visitor,
 };
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use std::convert::Infallible;
 
 use crate::{
@@ -243,9 +243,9 @@ impl RuleConstantRange<'_> {
     /// enumeration it is stored into.
     fn report_not_a_value(&mut self, span: SourceSpan, reported: &String) {
         self.diagnostics.push(
-            Diagnostic::problem(
-                Problem::EnumValueNotDefined,
-                Label::span(span, "Expected the number of a value in the enumeration"),
+            Diagnostic::text(
+                span,
+                text::enum_value_not_defined_expected_number_of_a_value(),
             )
             .with_context("value", reported),
         );
@@ -259,12 +259,9 @@ impl RuleConstantRange<'_> {
     fn report_out_of_range(&mut self, span: SourceSpan, reported: &String, range: (i128, i128)) {
         let (minimum, maximum) = range;
         self.diagnostics.push(
-            Diagnostic::problem(
-                Problem::ConstantOverflow,
-                Label::span(
-                    span,
-                    format!("Value must be in the range {minimum} to {maximum}"),
-                ),
+            Diagnostic::text(
+                span,
+                text::constant_overflow_value_must_be_in_the_range(minimum, maximum),
             )
             .with_context("value", reported)
             .with_context("minimum", &minimum.to_string())

@@ -33,11 +33,11 @@ use std::convert::Infallible;
 use ironplc_dsl::{
     common::*,
     core::{Id, Located},
-    diagnostic::{Diagnostic, Label},
+    diagnostic::Diagnostic,
     textual::*,
     visitor::Visitor,
 };
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 
 use crate::result::SemanticResult;
 use crate::rule_support::{run_rule, DiagnosticVisitor};
@@ -102,9 +102,9 @@ impl RuleStringEncodingCompat {
         right: &StringType,
     ) {
         self.diagnostics.push(
-            Diagnostic::problem(
-                Problem::StringEncodingMismatch,
-                Label::span(span, "Incompatible string encodings"),
+            Diagnostic::text(
+                span,
+                text::string_encoding_mismatch_incompatible_string_encodings(),
             )
             .with_context("left", &left.keyword().to_string())
             .with_context("right", &right.keyword().to_string()),
@@ -177,6 +177,7 @@ mod tests {
     use super::*;
     use crate::test_helpers::parse_and_resolve_types_with_context;
     use ironplc_parser::options::CompilerOptions;
+    use ironplc_problems::Problem;
 
     fn check(source: &str) -> SemanticResult {
         let (library, context) = parse_and_resolve_types_with_context(source);

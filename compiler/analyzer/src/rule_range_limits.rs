@@ -57,7 +57,7 @@ use ironplc_dsl::{
     textual::CaseSelectionKind,
     visitor::Visitor,
 };
-use ironplc_problems::Problem;
+use ironplc_problems::{text, Text};
 use std::convert::Infallible;
 
 use crate::{
@@ -139,11 +139,25 @@ impl RangeContext {
         }
     }
 
-    fn problem(self) -> Problem {
+    /// The label on the start of a range this context rejects.
+    fn expected_smaller_value(self) -> Text {
         match self {
-            RangeContext::SubrangeType => Problem::SubrangeMinStrictlyLessMax,
-            RangeContext::ArrayDimension => Problem::ArrayDimensionInvalid,
-            RangeContext::CaseLabel => Problem::CaseLabelRangeInvalid,
+            RangeContext::SubrangeType => {
+                text::subrange_min_strictly_less_max_expected_smaller_value()
+            }
+            RangeContext::ArrayDimension => text::array_dimension_invalid_expected_smaller_value(),
+            RangeContext::CaseLabel => text::case_label_range_invalid_expected_smaller_value(),
+        }
+    }
+
+    /// The label on the end of a range this context rejects.
+    fn expected_greater_value(self) -> Text {
+        match self {
+            RangeContext::SubrangeType => {
+                text::subrange_min_strictly_less_max_expected_greater_value()
+            }
+            RangeContext::ArrayDimension => text::array_dimension_invalid_expected_greater_value(),
+            RangeContext::CaseLabel => text::case_label_range_invalid_expected_greater_value(),
         }
     }
 }
@@ -156,16 +170,13 @@ impl RuleRangeLimits {
 
         if !context.accepts(bounds.min, bounds.max) {
             self.diagnostics.push(
-                Diagnostic::problem(
-                    context.problem(),
-                    Label::span(bounds.start.value.span(), "Expected smaller value"),
-                )
-                .with_context("minimum", &bounds.start.to_string())
-                .with_context("maximum", &bounds.end.to_string())
-                .with_secondary(Label::span(
-                    bounds.end.value.span(),
-                    "Expected greater value",
-                )),
+                Diagnostic::text(bounds.start.value.span(), context.expected_smaller_value())
+                    .with_context("minimum", &bounds.start.to_string())
+                    .with_context("maximum", &bounds.end.to_string())
+                    .with_secondary(Label::span(
+                        bounds.end.value.span(),
+                        context.expected_greater_value(),
+                    )),
             );
         }
     }

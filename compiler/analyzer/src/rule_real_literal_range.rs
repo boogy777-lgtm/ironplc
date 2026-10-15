@@ -38,11 +38,11 @@
 //! ```
 use ironplc_dsl::{
     common::{Library, RealLiteral, RealTypeName},
-    diagnostic::{Diagnostic, Label},
+    diagnostic::Diagnostic,
     visitor::Visitor,
 };
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use std::convert::Infallible;
 
 use crate::{
@@ -85,12 +85,9 @@ fn literal_range(node: &RealLiteral) -> (RealTypeName, bool) {
 /// The diagnostic for `literal` naming a value outside the range of
 /// `type_name`.
 pub(crate) fn out_of_range(literal: &RealLiteral, type_name: RealTypeName) -> Diagnostic {
-    Diagnostic::problem(
-        Problem::RealLiteralOutOfRange,
-        Label::span(
-            literal.span.clone(),
-            format!("Value is outside the range of {type_name}"),
-        ),
+    Diagnostic::text(
+        literal.span.clone(),
+        text::real_literal_out_of_range_outside_the_range_of_type(&type_name),
     )
     .with_context("type", &type_name.to_string())
 }

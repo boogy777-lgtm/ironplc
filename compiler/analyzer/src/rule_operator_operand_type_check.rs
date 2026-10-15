@@ -57,14 +57,14 @@ mod enumerated;
 
 use ironplc_dsl::{
     common::*,
-    core::Located,
-    diagnostic::{Diagnostic, Label},
+    core::{Located, SourceSpan},
+    diagnostic::Diagnostic,
     scope::ScopeNode,
     textual::*,
     visitor::Visitor,
 };
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::Problem;
+use ironplc_problems::{text, Text};
 use std::convert::Infallible;
 
 use crate::intermediate_type::IntermediateType;
@@ -182,7 +182,8 @@ impl RuleOperatorOperandTypeCheck<'_> {
         // `None` is only returned for a pair that has both types.
         if let (Some(left), Some(right)) = (left, right) {
             self.report_arithmetic(
-                Label::span(expr.span(), "Expression"),
+                expr.span(),
+                text::operator_operand_type_mismatch_expression(),
                 &binary.op.to_string(),
                 left,
                 right,
@@ -225,7 +226,8 @@ impl RuleOperatorOperandTypeCheck<'_> {
         if let Err(FoldFailure { left, right }) = resolve_arithmetic_fold(op, &inputs, self.options)
         {
             self.report_arithmetic(
-                Label::span(function.name.span(), "Function call"),
+                function.name.span(),
+                text::operator_operand_type_mismatch_function_call(),
                 &function.name.original().to_string(),
                 &left,
                 &right,
@@ -239,13 +241,14 @@ impl RuleOperatorOperandTypeCheck<'_> {
     /// and the two are spelled differently.
     fn report_arithmetic(
         &mut self,
-        label: Label,
+        span: SourceSpan,
+        label: Text,
         operator: &str,
         left: &TypeName,
         right: &TypeName,
     ) {
         self.diagnostics.push(
-            Diagnostic::problem(Problem::OperatorOperandTypeMismatch, label)
+            Diagnostic::text(span, label)
                 .with_context("operator", &operator.to_string())
                 .with_context("left", &left.to_string().to_uppercase())
                 .with_context("right", &right.to_string().to_uppercase()),
@@ -280,9 +283,9 @@ impl RuleOperatorOperandTypeCheck<'_> {
         }
         if !are_types_compatible(expected, &actual, self.options) {
             self.diagnostics.push(
-                Diagnostic::problem(
-                    Problem::OperatorOperandTypeMismatch,
-                    Label::span(operand.span(), "Operand"),
+                Diagnostic::text(
+                    operand.span(),
+                    text::operator_operand_type_mismatch_operand(),
                 )
                 .with_context("operator", &form.name.to_string())
                 .with_context("expected", &expected.to_string())
@@ -330,9 +333,9 @@ impl RuleOperatorOperandTypeCheck<'_> {
                 |n| n.to_string().to_uppercase(),
             );
             self.diagnostics.push(
-                Diagnostic::problem(
-                    Problem::OperatorOperandTypeMismatch,
-                    Label::span(output.src.span(), "Negated output"),
+                Diagnostic::text(
+                    output.src.span(),
+                    text::operator_operand_type_mismatch_negated_output(),
                 )
                 .with_context("operator", &form.name.to_string())
                 .with_context("expected", &"BOOL".to_owned())
@@ -395,6 +398,7 @@ impl Visitor<Infallible> for RuleOperatorOperandTypeCheck<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ironplc_problems::Problem;
 
     rule_ctx_ok!(
         apply_when_mod_of_integer_variables_then_ok,

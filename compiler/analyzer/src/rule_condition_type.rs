@@ -50,12 +50,12 @@
 use ironplc_dsl::{
     common::{Library, TypeName},
     core::Located,
-    diagnostic::{Diagnostic, Label},
+    diagnostic::Diagnostic,
     textual::{ElseIf, Expr, If, Repeat, While},
     visitor::Visitor,
 };
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use std::convert::Infallible;
 
 use crate::{
@@ -108,9 +108,9 @@ impl RuleConditionType<'_> {
             return;
         };
         self.diagnostics.push(
-            Diagnostic::problem(
-                Problem::ConditionTypeInvalid,
-                Label::span(condition.span(), format!("{statement} condition")),
+            Diagnostic::text(
+                condition.span(),
+                text::condition_type_invalid_statement_condition(statement),
             )
             .with_context("actual", &mismatch.actual),
         );
@@ -145,6 +145,7 @@ impl Visitor<Infallible> for RuleConditionType<'_> {
 mod tests {
     use super::*;
     use crate::test_helpers::parse_and_resolve_types_with_context;
+    use ironplc_problems::Problem;
     use rstest::rstest;
 
     /// A program with variables `c` of `declared_type`, `b : BOOL`,

@@ -39,11 +39,11 @@ use ironplc_dsl::{
     common::{
         Integer, IntegerRef, Library, StringDeclaration, StringInitializer, StringSpecification,
     },
-    diagnostic::{Diagnostic, Label},
+    diagnostic::Diagnostic,
     visitor::Visitor,
 };
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use std::convert::Infallible;
 
 use crate::{
@@ -89,12 +89,9 @@ impl RuleStringLengthRange {
 
 /// The diagnostic for a declared length above what a string slot can hold.
 fn out_of_range(length: &Integer) -> Diagnostic {
-    Diagnostic::problem(
-        Problem::StringLengthOutOfRange,
-        Label::span(
-            length.span.clone(),
-            format!("Length {} is more than a string can hold", length.value),
-        ),
+    Diagnostic::text(
+        length.span.clone(),
+        text::string_length_out_of_range_more_than_a_string_can_hold(length.value),
     )
     .with_context("length", &length.value.to_string())
     .with_context("maximum", &MAX_STRING_LENGTH.to_string())

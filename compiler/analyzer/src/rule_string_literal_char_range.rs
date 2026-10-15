@@ -35,12 +35,8 @@
 
 use std::convert::Infallible;
 
-use ironplc_dsl::{
-    common::*,
-    diagnostic::{Diagnostic, Label},
-    visitor::Visitor,
-};
-use ironplc_problems::Problem;
+use ironplc_dsl::{common::*, diagnostic::Diagnostic, visitor::Visitor};
+use ironplc_problems::text;
 
 use crate::result::SemanticResult;
 use crate::rule_support::{run_rule, DiagnosticVisitor};
@@ -104,11 +100,10 @@ impl Visitor<Infallible> for RuleStringLiteralCharRange {
         // would otherwise produce one diagnostic per character.
         if let Some(ch) = node.value.iter().find(|ch| u32::from(**ch) > max) {
             self.diagnostics.push(
-                Diagnostic::problem(
-                    Problem::StringLiteralCharOutOfRange,
-                    Label::span(
-                        node.span.clone(),
-                        format!("Character not representable in {}", node.width.keyword()),
+                Diagnostic::text(
+                    node.span.clone(),
+                    text::string_literal_char_out_of_range_not_representable_in_type(
+                        node.width.keyword(),
                     ),
                 )
                 .with_context("character", &format!("{ch} (U+{:04X})", u32::from(*ch)))
@@ -124,6 +119,7 @@ impl Visitor<Infallible> for RuleStringLiteralCharRange {
 mod tests {
     use super::*;
     use ironplc_parser::options::CompilerOptions;
+    use ironplc_problems::Problem;
 
     rule_ok!(
         apply_when_string_literal_latin1_then_ok,

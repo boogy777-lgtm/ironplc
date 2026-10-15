@@ -65,12 +65,12 @@
 use ironplc_dsl::{
     common::Library,
     core::Located,
-    diagnostic::{Diagnostic, Label},
+    diagnostic::Diagnostic,
     textual::{Case, Expr, ExprType},
     visitor::Visitor,
 };
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use std::convert::Infallible;
 
 use crate::{
@@ -140,9 +140,9 @@ impl Visitor<Infallible> for RuleCaseSelectorType<'_> {
     fn visit_case(&mut self, node: &Case) -> Result<Self::Value, Infallible> {
         if let Some(actual) = self.unselectable_type(&node.selector) {
             self.diagnostics.push(
-                Diagnostic::problem(
-                    Problem::CaseSelectorTypeInvalid,
-                    Label::span(node.selector.span(), "CASE selector"),
+                Diagnostic::text(
+                    node.selector.span(),
+                    text::case_selector_type_invalid_case_selector(),
                 )
                 .with_context("actual", &actual.to_string()),
             );
@@ -155,6 +155,7 @@ impl Visitor<Infallible> for RuleCaseSelectorType<'_> {
 mod tests {
     use super::*;
     use crate::test_helpers::parse_and_resolve_types_with_context;
+    use ironplc_problems::Problem;
     use rstest::rstest;
 
     /// A program whose only `CASE` selects on `sel`, declared as
