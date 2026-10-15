@@ -66,7 +66,7 @@ fn build_function_block(
         .zip(laid_out.offsets)
         .map(
             |((name, field_type, var_type), offset)| IntermediateStructField {
-                name: Id::from(*name),
+                name: Id::from(name),
                 field_type: field_type.clone(),
                 offset,
                 var_type: Some(*var_type),
