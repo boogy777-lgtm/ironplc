@@ -14,7 +14,6 @@ codegen/src/compile_expr.rs 1836
 codegen/src/emit.rs 2233
 dsl/src/common.rs 3622
 dsl/src/textual.rs 1482
-mcp/src/spec_conformance.rs 1342
 parser/src/parser.rs 2731
 plc2plc/src/renderer.rs 2190
 runtime/src/migration/tests.rs 1180
