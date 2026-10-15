@@ -24,13 +24,11 @@
 //! END_FUNCTION_BLOCK
 //! ```
 use ironplc_dsl::{
-    common::StructInitialValueAssignmentKind,
-    core::Located,
-    diagnostic::{Diagnostic, Label},
+    common::StructInitialValueAssignmentKind, core::Located, diagnostic::Diagnostic,
     visitor::Visitor,
 };
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::Problem;
+use ironplc_problems::text;
 use std::convert::Infallible;
 
 use crate::{
@@ -74,12 +72,9 @@ impl Visitor<Infallible> for RuleStructInitializerExpression {
         node: &StructInitialValueAssignmentKind,
     ) -> Result<Self::Value, Infallible> {
         if let StructInitialValueAssignmentKind::Expression(expr) = node {
-            self.diagnostics.push(Diagnostic::problem(
-                Problem::StructInitializerExpressionNotAllowed,
-                Label::span(
-                    expr.span(),
-                    "Expression-valued struct/FB-instance initializer",
-                ),
+            self.diagnostics.push(Diagnostic::text(
+                expr.span(),
+                text::struct_initializer_expression_not_allowed_expression_valued_initializer(),
             ));
         }
         node.recurse_visit(self)
@@ -89,6 +84,7 @@ impl Visitor<Infallible> for RuleStructInitializerExpression {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ironplc_problems::Problem;
 
     fn opts_ref_to() -> CompilerOptions {
         CompilerOptions {
