@@ -17,7 +17,6 @@ codegen/src/emit.rs 2233
 codegen/tests/it/wire_format.rs 1058
 container/src/debug_section.rs 1167
 container/src/load_verify.rs 1018
-container/src/opcode.rs 1022
 container/src/spec_conformance.rs 1110
 container/src/type_section.rs 1264
 container/src/verify.rs 1203
