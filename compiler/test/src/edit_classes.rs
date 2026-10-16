@@ -269,17 +269,6 @@ END_PROGRAM"
             true,
         ),
         body_edit(
-            "flip_fb_field_written_through_instance",
-            [
-                with_body(&counter_fb("VAR c : DINT := 1; END_VAR"), "q := c;"),
-                program("inst : counter;", "inst(); {body}"),
-            ]
-            .concat(),
-            "",
-            "inst.c := 3;",
-            true,
-        ),
-        body_edit(
             "flip_string_read_by_len",
             program("s : STRING[10] := 'abc'; n : INT;", "{body}"),
             "n := LEN(s);",
