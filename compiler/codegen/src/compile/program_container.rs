@@ -23,11 +23,11 @@ use super::{
     WIDE_CHAR_WIDTH,
 };
 use crate::compile_fn::{compile_user_function, compile_user_function_block};
-use crate::compile_initial_value::emit_initial_values;
+use crate::compile_initial_value::{emit_initial_values, emit_temporaries_prologue};
 use crate::compile_setup::assign_variables;
 use crate::compile_stmt::compile_body;
 use crate::emit::Emitter;
-use crate::persistent::program_declarations;
+use crate::persistent::{program_declarations, program_temporaries};
 
 /// Idempotently registers a POU's source file with the debug section's
 /// SOURCE_FILE_TABLE. Called from `compile_program_with_functions` for
@@ -296,9 +296,16 @@ pub(super) fn compile_program_with_functions(
         data_len: ctx.data_region_offset,
     };
 
+    // The program's `VAR_TEMP` variables are working memory: they take the
+    // slots and the data region right after the persistent part, where the
+    // slots of functions are, and are not part of what the container declares
+    // persistent. They start again at every scan (the prologue of the scan).
+    let temporaries: Vec<VarDecl> = program_temporaries(program);
+    assign_variables(&mut ctx, &mut builder, &temporaries, types, &[])?;
+
     // Now compile the FB bodies with correct var_offsets.
     let mut compiled_functions = Vec::new();
-    let mut var_offset = VarIndex::new(program_var_count);
+    let mut var_offset = VarIndex::new(ctx.variables.len() as u16);
 
     // Compile user FUNCTIONs before FUNCTION_BLOCK bodies so that FB bodies
     // can resolve calls to user functions via `ctx.user_functions` (functions
@@ -389,6 +396,7 @@ pub(super) fn compile_program_with_functions(
     // emitted from inside the body records a call-graph edge.
     let mut scan_emitter = Emitter::new();
     ctx.current_function_id = Some(FunctionId::SCAN);
+    emit_temporaries_prologue(&mut scan_emitter, &mut ctx, &temporaries, types)?;
     crate::compile_edge::bind_edge_inputs(&mut scan_emitter, &mut ctx, &edge_inputs)?;
     compile_body(
         &mut scan_emitter,

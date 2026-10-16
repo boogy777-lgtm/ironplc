@@ -489,6 +489,16 @@ impl VariableType {
         )
     }
 
+    /// Returns true for the section whose variables belong to one call of the
+    /// POU: they start at their declared initial value (or the default of
+    /// their type) at every call and nothing keeps their value from one call to
+    /// the next. This is `VAR_TEMP`, in every POU that declares it. A program's
+    /// `VAR_TEMP` is therefore not state of the program: it is not persistent,
+    /// and it is initialised at the start of every scan.
+    pub fn is_call_scoped(&self) -> bool {
+        matches!(self, VariableType::VarTemp)
+    }
+
     /// Returns true if this is any kind of parameter visible to a caller
     /// (VAR_INPUT, VAR_OUTPUT, or VAR_IN_OUT).
     pub fn is_parameter(&self) -> bool {

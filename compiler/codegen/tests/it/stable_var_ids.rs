@@ -244,3 +244,62 @@ fn stable_vars_when_compiled_with_and_without_table_then_layout_hash_equal() {
     assert!(stable_vars(&without).is_empty());
     assert_eq!(stable_vars(&with).len(), 1);
 }
+
+#[test]
+fn stable_vars_when_table_names_program_var_temp_then_no_entry() {
+    // A `VAR_TEMP` of a program is working memory of one scan (ADR-0073), not
+    // state: even a name match must not give it a stable ID.
+    let source = "
+PROGRAM main
+  VAR_TEMP
+    t : DINT;
+  END_VAR
+  VAR
+    A : DINT;
+  END_VAR
+  t := 1;
+  A := t;
+END_PROGRAM
+";
+    let container = compile_with_ids(source, &[("t", 3), ("A", 5)]);
+
+    assert_eq!(
+        stable_vars(&container).to_vec(),
+        vec![StableVarEntry {
+            var_index: index_of(&container, "A"),
+            uid: 5,
+        }]
+    );
+}
+
+#[test]
+fn persistent_scopes_when_program_declares_var_temp_then_it_is_not_a_persistent_variable() {
+    // The engineering side keys exactly the declarations `persistent_scopes`
+    // lists, so a `VAR_TEMP` that is not listed is never given an ID.
+    let source = "
+PROGRAM main
+  VAR_TEMP
+    t : DINT;
+  END_VAR
+  VAR
+    A : DINT;
+  END_VAR
+  t := 1;
+  A := t;
+END_PROGRAM
+";
+    let (library, _) = parse(source, &CompilerOptions::default());
+
+    let scopes = ironplc_codegen::persistent_scopes(&library, &CodegenOptions::default());
+
+    let program = scopes
+        .iter()
+        .find(|scope| scope.scope == Id::from("main"))
+        .unwrap();
+    let names: Vec<String> = program
+        .variables
+        .iter()
+        .map(|variable| variable.identifier.to_string())
+        .collect();
+    assert_eq!(names, vec!["A".to_string()]);
+}

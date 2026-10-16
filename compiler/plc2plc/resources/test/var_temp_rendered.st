@@ -18,3 +18,10 @@ FUNCTION_BLOCK my_fb
    t := 42 ;
 
 END_FUNCTION_BLOCK
+PROGRAM my_prog
+
+VAR_TEMP
+   t : INT;
+END_VAR
+t := 7 ;
+END_PROGRAM

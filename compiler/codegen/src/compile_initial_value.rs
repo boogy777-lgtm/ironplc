@@ -356,6 +356,21 @@ pub(crate) fn emit_declaration_initial_value(
     Ok(())
 }
 
+/// Emits the start of a scan for the `VAR_TEMP` variables of a program: each
+/// goes back to its declared initial value, or the default of its type, so no
+/// value survives from the scan before.
+pub(crate) fn emit_temporaries_prologue(
+    emitter: &mut Emitter,
+    ctx: &mut CompileContext,
+    temporaries: &[VarDecl],
+    types: &TypeEnvironment,
+) -> Result<(), Diagnostic> {
+    for decl in temporaries {
+        emit_declaration_initial_value(emitter, ctx, decl, types, Start::EveryCall)?;
+    }
+    Ok(())
+}
+
 /// Emits a bytecode prologue that re-initializes a function's non-parameter
 /// local variables and return variable on every call. IEC 61131-3 requires
 /// functions to be stateless (locals must not retain values between calls).
@@ -372,10 +387,10 @@ pub(crate) fn emit_function_local_prologue(
     return_op_type: OpType,
     types: &TypeEnvironment,
 ) -> Result<(), Diagnostic> {
-    // Re-initialize VAR locals (not Input parameters) the way every other
-    // unit initializes its variables.
+    // Re-initialize VAR and VAR_TEMP locals (not Input parameters) the way
+    // every other unit initializes its variables.
     for decl in variables {
-        if decl.var_type == VariableType::Var {
+        if decl.var_type == VariableType::Var || decl.var_type.is_call_scoped() {
             emit_declaration_initial_value(emitter, ctx, decl, types, Start::EveryCall)?;
         }
     }

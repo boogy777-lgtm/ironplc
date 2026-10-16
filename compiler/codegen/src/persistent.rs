@@ -15,11 +15,13 @@
 //! | the system uptime globals, when the option provides them | [`GLOBAL_SCOPE`] |
 //! | a top-level `VAR_GLOBAL` | [`GLOBAL_SCOPE`] |
 //! | a `VAR_GLOBAL` of the configuration code generation compiles | [`GLOBAL_SCOPE`] |
-//! | a variable of a program that is not a `VAR_EXTERNAL`, and the hidden variables of its edge inputs | the program |
+//! | a variable of a program that is neither a `VAR_EXTERNAL` nor a `VAR_TEMP`, and the hidden variables of its edge inputs | the program |
 //! | a field of a function block, and the hidden fields of its edge inputs | the function block type |
 //!
-//! `VAR_EXTERNAL` aliases a global and is not a second variable. A `VAR_GLOBAL`
-//! of a `RESOURCE` is not laid out and is not listed.
+//! `VAR_EXTERNAL` aliases a global and is not a second variable. A `VAR_TEMP`
+//! of a program belongs to one scan and is working memory, not state: it is
+//! laid out after the persistent part (see [`program_temporaries`]) and has no
+//! key. A `VAR_GLOBAL` of a `RESOURCE` is not laid out and is not listed.
 
 use ironplc_dsl::common::{
     FunctionBlockDeclaration, Library, LibraryElementKind, ProgramDeclaration, VarDecl,
@@ -85,16 +87,30 @@ pub(crate) fn compiled_configuration(
     })
 }
 
-/// The variables of `program` code generation lays out: its declarations except
-/// the `VAR_EXTERNAL` aliases of globals, then the hidden variables its edge
-/// inputs need.
+/// The variables of `program` code generation lays out as persistent state:
+/// its declarations except the `VAR_EXTERNAL` aliases of globals and the
+/// call-scoped `VAR_TEMP`, then the hidden variables its edge inputs need.
 pub fn program_declarations(program: &ProgramDeclaration) -> Vec<VarDecl> {
     program
         .variables
         .iter()
-        .filter(|variable| variable.var_type != VariableType::External)
+        .filter(|variable| {
+            variable.var_type != VariableType::External && !variable.var_type.is_call_scoped()
+        })
         .cloned()
         .chain(hidden_variables(&program.variables))
+        .collect()
+}
+
+/// The `VAR_TEMP` variables of `program`: working memory that code generation
+/// lays out after the persistent part and starts again at every scan. The
+/// complement of [`program_declarations`] among the program's own variables.
+pub(crate) fn program_temporaries(program: &ProgramDeclaration) -> Vec<VarDecl> {
+    program
+        .variables
+        .iter()
+        .filter(|variable| variable.var_type.is_call_scoped())
+        .cloned()
         .collect()
 }
 
