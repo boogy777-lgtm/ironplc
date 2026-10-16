@@ -14,6 +14,7 @@ mod configuration;
 mod constant_initializers;
 mod continue_statement;
 mod corpus;
+mod corpus_round_trip;
 mod declarations;
 mod enums;
 mod escaped_identifiers;
