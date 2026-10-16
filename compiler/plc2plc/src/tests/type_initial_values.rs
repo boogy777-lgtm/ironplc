@@ -78,3 +78,18 @@ END_TYPE
 {rendered}"
     );
 }
+
+#[test]
+fn write_to_string_when_array_type_has_initial_values_then_keeps_them() {
+    let source = "TYPE
+    Vector : ARRAY[1..3] OF REAL := [1.0, 2.0, 3.0];
+    Zeros : ARRAY[1..4] OF INT := [4(0)];
+END_TYPE
+";
+    let rendered = assert_round_trips(source, &CompilerOptions::default());
+    assert!(
+        rendered.contains("Vector : ARRAY [ 1.. 3 ] OF REAL := [ 1.0 , 2.0 , 3.0 ]"),
+        "rendered:\n{rendered}"
+    );
+    assert!(rendered.contains("[ 4 ( 0 ) ]"), "rendered:\n{rendered}");
+}

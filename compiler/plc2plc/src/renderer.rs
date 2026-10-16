@@ -216,6 +216,22 @@ impl LibraryRenderer {
         self.buffer.push('\n');
     }
 
+    /// Writes the `:= [ ... ]` initial value of an array, or nothing when
+    /// the array has none.
+    fn render_array_initial_values(
+        &mut self,
+        values: &[ArrayInitialElementKind],
+    ) -> Result<(), Diagnostic> {
+        if !values.is_empty() {
+            self.write_ws(":=");
+
+            self.write_ws("[");
+            visit_comma_separated!(self, values.iter(), ArrayInitialElementKind);
+            self.write_ws("]");
+        }
+        Ok(())
+    }
+
     /// Writes the reference-type keyword for the given surface syntax:
     /// `REF_TO` for IEC, `REFERENCE TO` / `POINTER TO` for the
     /// TwinCAT/CODESYS variants.
@@ -472,7 +488,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
 
         self.visit_array_specification_kind(&node.spec)?;
 
-        Ok(())
+        self.render_array_initial_values(&node.init)
     }
 
     /// Renders the CODESYS `PARAMS(n) OF T` type declaration.
