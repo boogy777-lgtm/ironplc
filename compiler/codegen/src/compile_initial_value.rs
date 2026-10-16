@@ -141,6 +141,24 @@ pub(crate) fn emit_declaration_initial_value(
                     emitter.emit_load_const_i32(offset_const);
                     emitter.emit_store_var_i32(var_index);
 
+                    // An instance that lives for one call is a new instance at
+                    // every call: every slot goes back to zero first, so what
+                    // the declarations below do not state is the default of the
+                    // field, as in an instance that has never run.
+                    if start == Start::EveryCall {
+                        let slots = crate::compile_fb_instance::instance_template(
+                            ctx,
+                            &fb_init.type_name.to_string().to_uppercase(),
+                        )
+                        .map_or(0, |template| template.slots);
+                        if let Some(instance) = crate::compile_fb_instance::named_instance(ctx, id)
+                        {
+                            crate::compile_fb_instance::emit_zero_slots(
+                                emitter, ctx, &instance, slots,
+                            )?;
+                        }
+                    }
+
                     // The runs of its strings come first: they are what a stated
                     // value is stored into.
                     crate::compile_fb_layout::emit_instance_storage(emitter, ctx, id, types)?;
@@ -181,7 +199,7 @@ pub(crate) fn emit_declaration_initial_value(
                             "Initial values for an array of function block instances",
                         )));
                     }
-                    crate::compile_fb_instance::initialize_instance_array(emitter, ctx, id)?;
+                    crate::compile_fb_instance::initialize_instance_array(emitter, ctx, id, start)?;
                 } else if let Some(struct_array_info) = ctx.struct_array_vars.get(id) {
                     if !elements.is_empty() {
                         return Err(Diagnostic::not_implemented(Label::span(

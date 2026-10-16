@@ -229,3 +229,134 @@ END_PROGRAM
         106,
     );
 }
+
+// An instance in a program's VAR_TEMP is a new instance at every scan: each
+// field is its declared value or the default of its type, as in an instance
+// that has never run. The persistent variables come first, so `rn` is at index
+// 0, `rk` at 1 and `ls` at 2.
+
+const COUNTER_BLOCK: &str = "
+FUNCTION_BLOCK Cnt
+  VAR n : INT; k : INT := 10; s : STRING[8] := 'x'; END_VAR
+  n := n + 1;
+  k := k + 1;
+  s := CONCAT(s, 'y');
+END_FUNCTION_BLOCK
+";
+
+/// Runs `source` for three scans and asserts that variables 0, 1 and 2 read
+/// `expected` after each of them.
+fn assert_instance_every_scan(source: &str, expected: [i32; 3]) {
+    parse_and_run_rounds(source, &CompilerOptions::default(), |vm| {
+        for scan in 1..=3 {
+            vm.run_round(0).unwrap();
+            for (index, value) in expected.iter().enumerate() {
+                assert_eq!(
+                    vm.read_variable(VarIndex::new(index as u16)).unwrap(),
+                    *value,
+                    "variable {index} after scan {scan}"
+                );
+            }
+        }
+    });
+}
+
+#[test]
+fn end_to_end_when_program_var_temp_is_a_function_block_instance_then_it_is_new_at_every_scan() {
+    let source = format!(
+        "{COUNTER_BLOCK}
+PROGRAM main
+  VAR rn : INT; rk : INT; ls : INT; END_VAR
+  VAR_TEMP c : Cnt; END_VAR
+  c();
+  rn := c.n;
+  rk := c.k;
+  ls := LEN(c.s);
+END_PROGRAM
+"
+    );
+
+    assert_instance_every_scan(&source, [1, 11, 2]);
+}
+
+#[test]
+fn end_to_end_when_program_var_temp_instance_states_a_member_then_it_starts_from_it_every_scan() {
+    let source = format!(
+        "{COUNTER_BLOCK}
+PROGRAM main
+  VAR rn : INT; rk : INT; ls : INT; END_VAR
+  VAR_TEMP c : Cnt := (k := 20); END_VAR
+  c();
+  rn := c.n;
+  rk := c.k;
+  ls := LEN(c.s);
+END_PROGRAM
+"
+    );
+
+    assert_instance_every_scan(&source, [1, 21, 2]);
+}
+
+#[test]
+fn end_to_end_when_program_var_is_a_function_block_instance_then_it_keeps_its_fields_between_scans()
+{
+    // The near case: an instance in VAR is initialised once and is state.
+    let source = format!(
+        "{COUNTER_BLOCK}
+PROGRAM main
+  VAR rn : INT; rk : INT; ls : INT; c : Cnt; END_VAR
+  c();
+  rn := c.n;
+  rk := c.k;
+  ls := LEN(c.s);
+END_PROGRAM
+"
+    );
+
+    parse_and_run_rounds(&source, &CompilerOptions::default(), |vm| {
+        for scan in 1..=3 {
+            vm.run_round(0).unwrap();
+            assert_eq!(vm.read_variable(VarIndex::new(0)).unwrap(), scan);
+            assert_eq!(vm.read_variable(VarIndex::new(1)).unwrap(), 10 + scan);
+            assert_eq!(vm.read_variable(VarIndex::new(2)).unwrap(), 1 + scan);
+        }
+    });
+}
+
+#[test]
+fn end_to_end_when_program_var_temp_is_an_array_of_function_block_instances_then_each_is_new_at_every_scan(
+) {
+    let source = "
+FUNCTION_BLOCK Cnt
+  VAR n : INT; k : INT := 10; END_VAR
+  n := n + 1;
+  k := k + 1;
+END_FUNCTION_BLOCK
+
+PROGRAM main
+  VAR rn : INT; rk : INT; END_VAR
+  VAR_TEMP cs : ARRAY[1..2] OF Cnt; END_VAR
+  cs[1]();
+  cs[2]();
+  rn := cs[2].n;
+  rk := cs[2].k;
+END_PROGRAM
+";
+    let options = CompilerOptions::from_dialect(ironplc_parser::options::Dialect::Codesys);
+
+    parse_and_run_rounds(source, &options, |vm| {
+        for scan in 1..=3 {
+            vm.run_round(0).unwrap();
+            assert_eq!(
+                vm.read_variable(VarIndex::new(0)).unwrap(),
+                1,
+                "n, scan {scan}"
+            );
+            assert_eq!(
+                vm.read_variable(VarIndex::new(1)).unwrap(),
+                11,
+                "k, scan {scan}"
+            );
+        }
+    });
+}

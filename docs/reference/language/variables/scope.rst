@@ -101,6 +101,10 @@ which keep their value from one scan to the next:
        seen := step;
    END_PROGRAM
 
+A function block instance declared in ``VAR_TEMP`` is a new instance at every
+call: each of its fields takes its declared initial value, or the default value
+of its type, before the instance is called.
+
 A ``VAR_TEMP`` variable of a program is not part of the state of the program.
 It takes no stable variable ID, and adding, removing or changing one does not
 change the layout that an online change compares.
