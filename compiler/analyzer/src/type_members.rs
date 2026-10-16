@@ -78,8 +78,12 @@ enum Source<'a> {
 pub(crate) enum Member<'a> {
     /// A field of a structure, a union or a standard function block.
     Field(&'a IntermediateStructField),
-    /// A variable of a function block declared in the project.
-    Variable(&'a VarDecl),
+    /// A variable of a function block declared in the project, with the block
+    /// of the `EXTENDS` chain that declares it.
+    Variable {
+        decl: &'a VarDecl,
+        block: &'a FunctionBlockDeclaration,
+    },
     Property(&'a PropertyDeclaration),
     Method(&'a MethodDeclaration),
 }
@@ -174,6 +178,16 @@ impl<'a> TypeMembers<'a> {
             .collect()
     }
 
+    /// Whether the code of the function block `block` is code of `ancestor`:
+    /// `block` is `ancestor` or has it in its `EXTENDS` chain.
+    pub(crate) fn is_code_of(&self, block: &TypeName, ancestor: &FunctionBlockDeclaration) -> bool {
+        self.function_blocks
+            .lineage(block)
+            .blocks
+            .iter()
+            .any(|declared| declared.name == ancestor.name)
+    }
+
     /// The type of the member `member`.
     pub(crate) fn type_of(&self, member: &Member<'_>) -> Option<IntermediateType> {
         member.value_type(self.types)
@@ -196,7 +210,7 @@ impl<'a> Members<'a> {
                 .map(Member::Field),
             Source::Block(block) => instance_variables(block)
                 .find(|decl| decl.identifier.symbolic_id() == Some(name))
-                .map(Member::Variable)
+                .map(|decl| Member::Variable { decl, block })
                 .or_else(|| {
                     block
                         .properties
@@ -231,6 +245,37 @@ impl<'a> Members<'a> {
     }
 }
 
+/// The kind of variable a member is, and where it is declared.
+pub(crate) struct DeclaredVariable<'a> {
+    pub(crate) kind: FunctionBlockVarType,
+    /// The function block that declares it. `None` for a variable of a standard
+    /// function block, which no code of the project is part of.
+    pub(crate) block: Option<&'a FunctionBlockDeclaration>,
+}
+
+impl<'a> Member<'a> {
+    /// The variable kind of the member, `None` for a member that is not a
+    /// variable of a function block: an element of a structure or a union, a
+    /// property, a method.
+    ///
+    /// The kind comes from the member's own declaration; it is what decides
+    /// what code outside the block may do with the member (see `member_access`).
+    pub(crate) fn declared_variable(&self) -> Option<DeclaredVariable<'a>> {
+        match self {
+            Member::Field(field) => field
+                .var_type
+                .map(|kind| DeclaredVariable { kind, block: None }),
+            Member::Variable { decl, block } => {
+                FunctionBlockVarType::of(&decl.var_type).map(|kind| DeclaredVariable {
+                    kind,
+                    block: Some(block),
+                })
+            }
+            Member::Property(_) | Member::Method(_) => None,
+        }
+    }
+}
+
 impl Member<'_> {
     /// The type of a value read from, or written to, the member. `None` for a
     /// method, which has no value without a call, and for a member whose type
@@ -238,7 +283,7 @@ impl Member<'_> {
     pub(crate) fn value_type(&self, types: &TypeEnvironment) -> Option<IntermediateType> {
         match self {
             Member::Field(field) => Some(field.field_type.clone()),
-            Member::Variable(decl) => decl
+            Member::Variable { decl, .. } => decl
                 .type_id
                 .and_then(|id| types.get_by_id(id))
                 .map(|attributes| attributes.representation.clone())

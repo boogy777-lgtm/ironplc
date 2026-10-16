@@ -1,0 +1,76 @@
+=====
+P4081
+=====
+
+.. problem-summary:: P4081
+
+This error occurs when code outside a function block assigns an output or an
+internal variable of an instance of that function block. From outside, a
+program may write the inputs of an instance and read its inputs, outputs and
+internal variables; the outputs and the internal variables are the block's own
+to assign. The error is at the name after the dot.
+
+The assignment can be any of:
+
+* an assignment, ``counter.total := 0``;
+* the target of an output binding in a call, ``other(q => counter.total)``;
+* an argument bound to a ``VAR_IN_OUT`` of the callee, ``Increment(counter.total)``;
+* an assignment to part of such a variable, ``counter.list[1] := 0`` or
+  ``counter.position.x := 0``.
+
+The internal variables are those declared in ``VAR``, ``VAR_STAT`` and
+``VAR_INST``. Code of the function block itself is not outside: the body of the
+block, its methods, and the body and methods of a function block that extends it
+may assign them. CODESYS reports the same condition as C0037.
+
+Example
+-------
+
+The following code will generate error P4081:
+
+.. code-block::
+
+   FUNCTION_BLOCK Counter
+   VAR_INPUT speed : INT; END_VAR
+   VAR_OUTPUT total : INT; END_VAR
+   VAR hidden : INT; END_VAR
+   hidden := hidden + speed;
+   total := hidden;
+   END_FUNCTION_BLOCK
+
+   PROGRAM main
+   VAR c : Counter; x : INT; END_VAR
+   c.speed := 2;
+   x := c.total;
+   c.total := 0;      (* Error: total is an output of Counter *)
+   c.hidden := 1;     (* Error: hidden is an internal variable of Counter *)
+   END_PROGRAM
+
+To fix this error, change the value through an input of the function block, and
+declare the variable ``VAR_INPUT`` if the program must set it. Read outputs and
+internal variables without assigning them:
+
+.. code-block::
+
+   FUNCTION_BLOCK Counter
+   VAR_INPUT speed : INT; reset : BOOL; END_VAR
+   VAR_OUTPUT total : INT; END_VAR
+   VAR hidden : INT; END_VAR
+   IF reset THEN hidden := 0; END_IF;
+   hidden := hidden + speed;
+   total := hidden;
+   END_FUNCTION_BLOCK
+
+   PROGRAM main
+   VAR c : Counter; x : INT; END_VAR
+   c.speed := 2;
+   x := c.total;
+   c.reset := TRUE;
+   END_PROGRAM
+
+See Also
+--------
+
+- :doc:`P4080` — a member that the type does not declare
+- :doc:`P4082` — a ``VAR_IN_OUT`` accessed from outside the function block
+- :doc:`/reference/language/pous/function-block` — ``FUNCTION_BLOCK`` declaration syntax

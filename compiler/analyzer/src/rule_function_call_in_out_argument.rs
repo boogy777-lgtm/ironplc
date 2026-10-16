@@ -83,13 +83,12 @@ use ironplc_problems::text;
 use std::convert::Infallible;
 
 use crate::{
-    intermediate_type::{FunctionBlockVarType, IntermediateType},
     result::SemanticResult,
     rule_support::{run_rule, DiagnosticVisitor},
     scoped_table::{ScopedTable, Value},
     semantic_context::SemanticContext,
     type_compat::is_checkable_type,
-    variable_type::{self, Declarations, Declared},
+    variable_type::{Declarations, Declared},
 };
 use ironplc_parser::options::CompilerOptions;
 
@@ -176,27 +175,12 @@ impl RuleFunctionCallInOutArgument<'_> {
             SymbolicVariableKind::Array(array) => {
                 self.is_symbolic_writable(&array.subscripted_variable)
             }
+            // Which member of a structure or of a function block instance the
+            // caller may assign is not decided here. The instance is writable
+            // when its variable is; `rule_member_access` refuses the member
+            // that the code may not assign (P4081, P4082), once, at the member.
             SymbolicVariableKind::Structured(structured) => {
-                if !self.is_symbolic_writable(&structured.record) {
-                    return false;
-                }
-                // Only a function block's inputs are assignable from
-                // outside the instance; its outputs, locals and VAR_IN_OUT
-                // are not.
-                match variable_type::of(
-                    &structured.record,
-                    &self.declarations,
-                    self.context.types(),
-                ) {
-                    Some(IntermediateType::FunctionBlock { fields, .. }) => fields
-                        .iter()
-                        .find(|field| field.name == structured.field)
-                        .is_some_and(|field| {
-                            matches!(field.var_type, Some(FunctionBlockVarType::Input))
-                        }),
-                    Some(_) => true,
-                    None => false,
-                }
+                self.is_symbolic_writable(&structured.record)
             }
             // A reference may target a variable whose origin is constant,
             // and THIS^/SUPER^ are not variables of the caller.
@@ -480,6 +464,18 @@ END_PROGRAM"
         "FUNCTION_BLOCK Inner VAR_INPUT i : DINT; END_VAR END_FUNCTION_BLOCK
 PROGRAM main VAR fb : Inner; r : DINT; END_VAR r := INC(1, fb.i); END_PROGRAM"
     )]
+    // Which member of an instance the caller may assign is the business of
+    // `rule_member_access`, which refuses these two (P4081); the root of the
+    // argument is a variable the caller may assign, which is all this rule
+    // proves.
+    #[case::function_block_output(
+        "FUNCTION_BLOCK Inner VAR_OUTPUT q : DINT; END_VAR END_FUNCTION_BLOCK
+PROGRAM main VAR fb : Inner; r : DINT; END_VAR r := INC(1, fb.q); END_PROGRAM"
+    )]
+    #[case::function_block_local(
+        "FUNCTION_BLOCK Inner VAR l : DINT; END_VAR END_FUNCTION_BLOCK
+PROGRAM main VAR fb : Inner; r : DINT; END_VAR r := INC(1, fb.l); END_PROGRAM"
+    )]
     fn apply_when_in_out_argument_provably_writable_then_ok(#[case] caller: &str) {
         let result = apply_to_caller(caller);
         assert!(result.is_ok(), "{result:?}");
@@ -500,13 +496,10 @@ PROGRAM main VAR fb : Inner; r : DINT; END_VAR r := INC(1, fb.i); END_PROGRAM"
     #[case::function_input(
         "FUNCTION F : DINT VAR_INPUT i : DINT; END_VAR F := INC(1, i); END_FUNCTION"
     )]
-    #[case::function_block_output(
-        "FUNCTION_BLOCK Inner VAR_OUTPUT q : DINT; END_VAR END_FUNCTION_BLOCK
-PROGRAM main VAR fb : Inner; r : DINT; END_VAR r := INC(1, fb.q); END_PROGRAM"
-    )]
-    #[case::function_block_local(
-        "FUNCTION_BLOCK Inner VAR l : DINT; END_VAR END_FUNCTION_BLOCK
-PROGRAM main VAR fb : Inner; r : DINT; END_VAR r := INC(1, fb.l); END_PROGRAM"
+    // The instance itself came in through an input.
+    #[case::function_block_input_of_an_instance_that_is_an_input(
+        "FUNCTION_BLOCK Inner VAR_INPUT i : DINT; END_VAR END_FUNCTION_BLOCK
+FUNCTION_BLOCK Outer VAR_INPUT fb : Inner; END_VAR VAR r : DINT; END_VAR r := INC(1, fb.i); END_FUNCTION_BLOCK"
     )]
     fn apply_when_in_out_argument_not_provably_writable_then_p4060(#[case] caller: &str) {
         let errors = apply_to_caller(caller).unwrap_err();

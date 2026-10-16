@@ -66,6 +66,22 @@ Function blocks must be instantiated as variables before use:
 
 Outputs are accessed using dot notation on the instance.
 
+Access from Outside
+-------------------
+
+What a program may do with the variables of an instance depends on the section
+that declares them. It may write the inputs, and read the inputs, outputs and
+internal variables (``VAR``, ``VAR_STAT`` and ``VAR_INST``). It may not assign an
+output or an internal variable (:doc:`/reference/compiler/problems/P4081`), and
+it may neither read nor assign a ``VAR_IN_OUT`` (:doc:`/reference/compiler/problems/P4082`);
+a ``VAR_IN_OUT`` receives its variable in the call, ``counter(value := reading)``.
+This holds for every way of changing a variable: an assignment, the target of
+``out => variable`` in a call, and a variable passed to a ``VAR_IN_OUT``
+parameter. It does not apply to the function block's own code: its body, its
+methods, and the body and methods of a function block that extends it. A
+``VAR_TEMP`` variable belongs to one call and cannot be reached from outside at all
+(:doc:`/reference/compiler/problems/P4080`). This is how CODESYS treats them too.
+
 Arrays of Instances
 -------------------
 

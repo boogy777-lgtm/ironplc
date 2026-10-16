@@ -57,7 +57,7 @@ fn kind_of(variable: &str, name: &str) -> &'static str {
         Membership::Members(found) => match found.find(&Id::from(name)) {
             None => "absent",
             Some(Member::Field(_)) => "field",
-            Some(Member::Variable(_)) => "variable",
+            Some(Member::Variable { .. }) => "variable",
             Some(Member::Property(_)) => "property",
             Some(Member::Method(_)) => "method",
         },

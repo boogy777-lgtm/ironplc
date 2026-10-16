@@ -155,3 +155,5 @@ P4077,AttributeValueInvalid,Attribute value is not one the attribute takes
 P4078,AttributeRepeated,Attribute is written more than once before one declaration
 P4079,AttributeForbidsVariableBlock,Attribute does not allow a variable block that its declaration holds
 P4080,MemberNotDeclared,Member is not declared by the type of the value it is selected from
+P4081,MemberNotAssignableOutside,Output or internal variable of a function block is assigned from outside the block
+P4082,InOutMemberAccessedOutside,VAR_IN_OUT of a function block is accessed from outside the block

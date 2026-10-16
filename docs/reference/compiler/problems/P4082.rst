@@ -1,0 +1,65 @@
+=====
+P4082
+=====
+
+.. problem-summary:: P4082
+
+This error occurs when code outside a function block reads or assigns a
+``VAR_IN_OUT`` variable of an instance of that function block. A ``VAR_IN_OUT``
+of a function block is a reference to a variable that the caller gave it in the
+call. Reading or assigning it as ``scaler.value`` from outside would reach the
+caller's variable through a reference that the reading code cannot see, so the
+only way to give it a variable is to pass one in the call. The error is at the
+name after the dot.
+
+Passing a variable to the ``VAR_IN_OUT`` in the call, ``scaler(value := reading)``,
+is allowed. Code of the function block itself is not outside: the body of the
+block, its methods, and the body and methods of a function block that extends it
+may use the ``VAR_IN_OUT`` as they use any variable. CODESYS reports the same
+condition as C0178, and lets the attribute ``'allow_external_var_in_out_access'``
+lift it; this compiler does not support that attribute.
+
+Example
+-------
+
+The following code will generate error P4082:
+
+.. code-block::
+
+   FUNCTION_BLOCK Scaler
+   VAR_INPUT gain : INT; END_VAR
+   VAR_IN_OUT value : INT; END_VAR
+   value := value * gain;
+   END_FUNCTION_BLOCK
+
+   PROGRAM main
+   VAR s : Scaler; reading : INT; x : INT; END_VAR
+   s.value := 5;                   (* Error: value is a VAR_IN_OUT of Scaler *)
+   x := s.value;                   (* Error: value is a VAR_IN_OUT of Scaler *)
+   s(gain := 2, value := reading);
+   END_PROGRAM
+
+To fix this error, keep the value in a variable of the program and pass it in
+the call. Read the result from that variable:
+
+.. code-block::
+
+   FUNCTION_BLOCK Scaler
+   VAR_INPUT gain : INT; END_VAR
+   VAR_IN_OUT value : INT; END_VAR
+   value := value * gain;
+   END_FUNCTION_BLOCK
+
+   PROGRAM main
+   VAR s : Scaler; reading : INT; x : INT; END_VAR
+   reading := 5;
+   s(gain := 2, value := reading);
+   x := reading;
+   END_PROGRAM
+
+See Also
+--------
+
+- :doc:`P4080` — a member that the type does not declare
+- :doc:`P4081` — an output or internal variable assigned from outside the function block
+- :doc:`/reference/language/pous/function-block` — ``FUNCTION_BLOCK`` declaration syntax

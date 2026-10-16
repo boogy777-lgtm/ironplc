@@ -11,7 +11,7 @@ than compiled with by-value semantics.
 
 | Section | Status |
 |---|---|
-| [Writable arguments](#writable-arguments), [Argument list](#argument-list), [Rules](#rules) | Implemented for function calls: P4058, P4059, P4060. P4061 and P4062 (function blocks) are not. Function block and method calls do not yet include `VAR_IN_OUT` in the positional order. |
+| [Writable arguments](#writable-arguments), [Argument list](#argument-list), [Rules](#rules) | Implemented for function calls: P4058, P4059, P4060. P4061 (function blocks) is not. An access to a function block instance's `VAR_IN_OUT` from outside the block is refused (P4082), see [Access from outside a function block](#access-from-outside-a-function-block). Function block and method calls do not yet include `VAR_IN_OUT` in the positional order. |
 | [Constant arguments](#constant-arguments) | Not implemented; `VAR_IN_OUT CONSTANT` is not parsed. |
 | [References](#references) | Variable references and their instance-scope check are implemented. Data-region references, `REF_ELEM` and `REF_BASE` are not. |
 | [Call site](#call-site), [Parameter slots](#parameter-slots) | Implemented for functions with an elementary parameter, when the argument is a named variable or a forwarded `VAR_IN_OUT`. Analyzer/codegen split: the analyzer accepts an argument of any exactly-matching type; code generation refuses a non-elementary one (string, array, structure, instance) as not implemented (P9999). Each `VAR_IN_OUT` slot is recorded in the container's variable table as a `U64` (reference-shaped) entry. |
@@ -167,8 +167,7 @@ Selecting into the root keeps or loses writability:
 |---|---|
 | `arr[i]`, `s.x` | the root is writable |
 | `fb.IN` (an input of an instance the caller owns) | the instance is writable |
-| `fb.OUT`, `fb.local` | **never**: a function block's outputs and locals are not assignable from outside the instance |
-| `fb.IO` (an instance's own `VAR_IN_OUT`) | **never**: see [Function blocks](#function-blocks) |
+| `fb.OUT`, `fb.local`, `fb.IO` | not decided here: the argument is a write to the member, and [Access from outside a function block](#access-from-outside-a-function-block) refuses it (P4081 for an output or a local, P4082 for an instance's own `VAR_IN_OUT`), once, at the member |
 
 ### Constant arguments
 
@@ -211,13 +210,47 @@ counterparts in `call_assignment_check`, with these codes:
 | P4059 `FunctionCallInOutArgTypeMismatch` | The argument's type is not the parameter's type. Both are resolved through aliases and subranges. Otherwise types match only by identity: the same string kind and capacity, the same array bounds and element type, the same structure or function block type. |
 | P4060 `InOutArgNotWritable` | The argument cannot be proved writable (see [Writable arguments](#writable-arguments)). |
 | P4061 `InOutNotBound` | A function block invocation does not bind one of the instance's `VAR_IN_OUT` parameters. |
-| P4062 `InOutAccessedOutside` | `fb.IO` names an instance's `VAR_IN_OUT` from outside the instance. |
 
 P4026 (`FunctionCallArgTypeMismatch`), which allows implicit widening, skips
 `VAR_IN_OUT` parameters so a mismatch is reported once.
 
 Assigning to a `VAR_IN_OUT` parameter inside the POU needs no new rule: it is
 an ordinary assignment to a variable of the parameter's type.
+
+### Access from outside a function block
+
+Which members of a function block instance code may read or write is decided
+once, by `member_access::check`, from the member's own variable kind and the
+`EXTENDS` lineage of the code that accesses it; `rule_member_access` finds every
+access and asks. The reference is CODESYS (C0037 and C0178).
+
+| Member declared in | Read from outside | Write from outside |
+|---|---|---|
+| `VAR_INPUT` | yes | yes |
+| `VAR_OUTPUT` | yes | **no** (P4081) |
+| `VAR`, `VAR_STAT`, `VAR_INST` | yes | **no** (P4081) |
+| `VAR_IN_OUT` | **no** (P4082) | **no** (P4082) |
+| `VAR_TEMP` | not a member (P4080) | not a member (P4080) |
+
+Code is inside, and not subject to the table, when it is the body or a method of
+the block that declares the member, or of a block that extends that block.
+Passing a variable in the call, `f(io := x)`, is the way to give a block its
+`VAR_IN_OUT` and stays allowed.
+
+The writes are the target of an assignment (including `S=`, `R=` and `REF=`),
+the target of an output binding (`g(q => f.local)`), and an argument bound to a
+`VAR_IN_OUT` of a function, a function block or a method (`g(io := f.local)`).
+Writing into a part of a variable (`f.list[1] := 1`, `f.rec.m := 1`) writes the
+variable. A `FOR` control variable is a plain name, so it never selects a member.
+Taking `REF(f.local)` is not treated as a write, as the table of
+[Writable arguments](#writable-arguments) does not treat it as one. The
+attribute `'allow_external_var_in_out_access'`, which lifts C0178 in CODESYS, is
+not supported.
+
+| Code | Condition |
+|---|---|
+| P4081 `MemberNotAssignableOutside` | An output or an internal variable of an instance is written from outside the block. |
+| P4082 `InOutMemberAccessedOutside` | An instance's `VAR_IN_OUT` is read or written from outside the block. |
 
 ## References
 
@@ -433,7 +466,7 @@ bound it:
 - **Every invocation binds every `VAR_IN_OUT`** (P4061). An instance
   never runs with a reference left over from an earlier call, and a body never
   sees the null initial value.
-- **The field is not accessible from outside** (P4062).
+- **The field is not accessible from outside** (P4082).
   `fb.IO` would read or write through a reference whose target the reader
   cannot see.
 
@@ -509,7 +542,7 @@ unrelated caller regions.
     and instance types
   - every row of both writability tables, including a constant reaching a
     function block input that is then bound to a `VAR_IN_OUT`
-  - an unbound function block `VAR_IN_OUT`, and `fb.IO` accessed from outside
+  - an unbound function block `VAR_IN_OUT`, and `fb.IO` accessed from outside (P4082)
 - **VM:** both reference forms through `LOAD_INDIRECT`/`STORE_INDIRECT` and the
   `*_ARRAY_DEREF` pair; `REF_ELEM` bounds traps; `REF_BASE` on null and on a
   variable reference; and a variable reference into a caller's frame from a

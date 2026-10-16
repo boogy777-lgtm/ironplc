@@ -31,6 +31,7 @@ pub mod intermediate_type;
 mod lowered_initial_values;
 #[cfg(test)]
 mod lowered_var_blocks;
+mod member_access;
 mod member_selection;
 pub mod observe;
 mod pass_runner;
@@ -58,6 +59,7 @@ mod rule_function_call_in_out_argument;
 mod rule_function_call_type_check;
 mod rule_jump_target;
 mod rule_loop_control_inside_loop;
+mod rule_member_access;
 mod rule_member_declared;
 mod rule_member_qualifier_allowed;
 mod rule_member_qualifier_invalid;
