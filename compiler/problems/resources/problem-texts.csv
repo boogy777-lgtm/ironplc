@@ -362,3 +362,6 @@ P9002,no_content_multiple_directories_unsupported,This project implementation do
 P9002,no_content_no_documents_to_tokenize,No documents to tokenize
 P9003,xml_body_type_not_supported_implementation,POU uses {language} which is not supported. Use ST (Structured Text) instead.
 P9003,xml_body_type_not_supported_pou,POU '{name}' uses {language} which is not supported. Use ST (Structured Text) instead.
+P4080,member_not_declared_not_a_member,'{owner}' has no member '{member}'
+P4080,member_not_declared_type_has_no_members,"'{owner}' is not a structure, union or function block instance, so it has no member '{member}'"
+P4080,member_not_declared_method_selected_as_variable,"'{member}' is a method of '{owner}': call it with parentheses, it is not a variable"

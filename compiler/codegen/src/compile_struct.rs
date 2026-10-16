@@ -199,9 +199,11 @@ pub(crate) fn find_field_in_type(
     let (field_list, field_index) = build_struct_fields(fields, span)?;
     let name_lower = field_name.to_string().to_lowercase();
     let &idx = field_index.get(&name_lower).ok_or_else(|| {
-        Diagnostic::not_implemented(Label::span(
+        // The analysis refuses a member the type does not declare (P4080), so
+        // a program that reaches here is a defect.
+        Diagnostic::internal_error_at(Label::span(
             span.clone(),
-            format!("Unknown field '{}'", field_name),
+            format!("Field '{}' is not a field of its structure", field_name),
         ))
     })?;
     let info = &field_list[idx];
@@ -280,9 +282,11 @@ pub(crate) fn walk_struct_chain(
             })?;
             let field_name = field.to_string().to_lowercase();
             let &field_idx = struct_info.field_index.get(&field_name).ok_or_else(|| {
-                Diagnostic::not_implemented(Label::span(
+                // The analysis refuses a member the type does not declare
+                // (P4080), so a program that reaches here is a defect.
+                Diagnostic::internal_error_at(Label::span(
                     field.span(),
-                    format!("Unknown field '{}'", field),
+                    format!("Field '{}' is not a field of its structure", field),
                 ))
             })?;
             let field_info = &struct_info.fields[field_idx];
