@@ -1,7 +1,10 @@
 //! Implements the command line behavior.
 
 use codespan_reporting::{
-    diagnostic::{Diagnostic as CodeSpanDiagnostic, Label as CodeSpanLabel, LabelStyle, Severity},
+    diagnostic::{
+        Diagnostic as CodeSpanDiagnostic, Label as CodeSpanLabel, LabelStyle,
+        Severity as CodeSpanSeverity,
+    },
     files::SimpleFiles,
     term::{
         self,
@@ -10,7 +13,7 @@ use codespan_reporting::{
 };
 use ironplc_dsl::{
     core::FileId,
-    diagnostic::{Diagnostic, Label},
+    diagnostic::{error_count, has_errors, Diagnostic, Label, Severity},
 };
 use ironplc_plc2plc::write_to_string;
 use ironplc_problems::{text, Text};
@@ -165,11 +168,11 @@ pub fn sync_uids(
 
     let (mut project, mut diagnostics) = create_project(paths, compiler_options, &[]);
     diagnostics.extend(project.semantic());
-    if !diagnostics.is_empty() {
+    if has_errors(&diagnostics) {
         return finish("Sync UIDs", diagnostics, Some(&project), suppress_output);
     }
     let Some(library) = project.analyzed_library() else {
-        // A clean analysis always caches its artifacts, so this is a
+        // An analysis that found no error always caches its artifacts, so this is a
         // compiler defect rather than a problem with the input.
         diagnostics.push(Diagnostic::internal_error());
         return finish("Sync UIDs", diagnostics, Some(&project), suppress_output);
@@ -258,12 +261,13 @@ impl ironplc_codegen::SourceLookup for HashMapSourceLookup {
 }
 
 /// Prints every diagnostic a command collected and derives the command's
-/// final result from that same collection: `Ok` when there are none,
-/// otherwise `Err` naming the command and the problem count.
+/// final result from that same collection: `Ok` when none is an error,
+/// otherwise `Err` naming the command and the error count. A warning or an
+/// information message is printed and does not fail the command.
 ///
 /// This is the single fold point from diagnostics (data) to exit status
-/// (control flow). Commands accumulate diagnostics from every stage —
-/// discovery, parsing, analysis, codegen — and must not decide
+/// (control flow). Commands accumulate diagnostics from every stage --
+/// discovery, parsing, analysis, codegen -- and must not decide
 /// success/failure anywhere else, so that a problem in one stage never
 /// prevents a later stage from reporting its own.
 fn finish(
@@ -275,11 +279,14 @@ fn finish(
     if diagnostics.is_empty() {
         return Ok(());
     }
-    trace!("Errors {diagnostics:?}");
+    trace!("Diagnostics {diagnostics:?}");
     handle_diagnostics(&diagnostics, project, suppress_output);
+    if !has_errors(&diagnostics) {
+        return Ok(());
+    }
     Err(format!(
         "{command} failed with {} problem(s)",
-        diagnostics.len()
+        error_count(&diagnostics)
     ))
 }
 
@@ -501,11 +508,22 @@ fn map_diagnostic(
     let mut notes = diagnostic.help().to_vec();
     notes.push(format!("Learn more: {}", problem_help_url(diagnostic)));
 
-    CodeSpanDiagnostic::new(Severity::Error)
+    CodeSpanDiagnostic::new(codespan_severity(diagnostic.severity()))
         .with_code(diagnostic.code.clone())
         .with_message(description)
         .with_labels(labels)
         .with_notes(notes)
+}
+
+/// The category the terminal prints for a severity. codespan has no
+/// information category, so an information message is a note. No arm is a
+/// wildcard: a level added to `Severity` does not compile until it is shown here.
+fn codespan_severity(severity: Severity) -> CodeSpanSeverity {
+    match severity {
+        Severity::Error => CodeSpanSeverity::Error,
+        Severity::Warning => CodeSpanSeverity::Warning,
+        Severity::Info => CodeSpanSeverity::Note,
+    }
 }
 
 fn map_label(

@@ -920,3 +920,38 @@ fn uri_key_when_to_uri_then_round_trips_back_to_original() {
     let back = key.to_uri();
     assert_eq!(back.as_str(), original.as_str());
 }
+
+#[test]
+fn lsp_severity_when_each_severity_then_its_editor_severity() {
+    use ironplc_dsl::diagnostic::Severity;
+    use lsp_types::DiagnosticSeverity;
+
+    assert_eq!(
+        super::lsp_severity(Severity::Error),
+        DiagnosticSeverity::ERROR
+    );
+    assert_eq!(
+        super::lsp_severity(Severity::Warning),
+        DiagnosticSeverity::WARNING
+    );
+    assert_eq!(
+        super::lsp_severity(Severity::Info),
+        DiagnosticSeverity::INFORMATION
+    );
+}
+
+#[test]
+fn map_diagnostic_when_error_diagnostic_then_editor_error() {
+    use ironplc_problems::text;
+    use lsp_types::DiagnosticSeverity;
+
+    let project = new_empty_project();
+    let diagnostic = Diagnostic::text(
+        SourceSpan::default(),
+        text::syntax_error_a_task_needs_a_priority(),
+    );
+
+    let mapped = super::map_diagnostic(diagnostic, project.wrapped.as_ref());
+
+    assert_eq!(mapped.severity, Some(DiagnosticSeverity::ERROR));
+}

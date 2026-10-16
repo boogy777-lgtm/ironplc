@@ -464,3 +464,66 @@ fn map_uid_when_new_key_already_mapped_then_error() {
 
     assert!(result.is_err());
 }
+
+#[test]
+fn codespan_severity_when_each_severity_then_its_terminal_category() {
+    use codespan_reporting::diagnostic::Severity as CodeSpanSeverity;
+    use ironplc_dsl::diagnostic::Severity;
+
+    assert_eq!(
+        super::codespan_severity(Severity::Error),
+        CodeSpanSeverity::Error
+    );
+    assert_eq!(
+        super::codespan_severity(Severity::Warning),
+        CodeSpanSeverity::Warning
+    );
+    assert_eq!(
+        super::codespan_severity(Severity::Info),
+        CodeSpanSeverity::Note
+    );
+}
+
+#[test]
+fn map_diagnostic_when_error_diagnostic_then_codespan_error() {
+    use codespan_reporting::diagnostic::Severity as CodeSpanSeverity;
+    use ironplc_dsl::core::SourceSpan;
+    use ironplc_dsl::diagnostic::Diagnostic;
+    use ironplc_problems::text;
+
+    let diag = Diagnostic::text(
+        SourceSpan::default(),
+        text::syntax_error_a_task_needs_a_priority(),
+    );
+
+    let mapped = super::map_diagnostic(&diag, &std::collections::HashMap::new());
+
+    assert_eq!(mapped.severity, CodeSpanSeverity::Error);
+}
+
+#[test]
+fn finish_when_no_diagnostics_then_ok() {
+    assert_eq!(super::finish("Check", vec![], None, true), Ok(()));
+}
+
+#[test]
+fn finish_when_errors_then_failure_names_the_error_count() {
+    use ironplc_dsl::core::SourceSpan;
+    use ironplc_dsl::diagnostic::Diagnostic;
+    use ironplc_problems::text;
+
+    let diagnostics = vec![
+        Diagnostic::text(
+            SourceSpan::default(),
+            text::syntax_error_a_task_needs_a_priority(),
+        ),
+        Diagnostic::text(
+            SourceSpan::default(),
+            text::syntax_error_a_task_needs_a_priority(),
+        ),
+    ];
+
+    let result = super::finish("Check", diagnostics, None, true);
+
+    assert_eq!(result, Err("Check failed with 2 problem(s)".to_string()));
+}

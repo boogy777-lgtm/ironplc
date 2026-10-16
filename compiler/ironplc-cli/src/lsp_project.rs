@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use ironplc_analyzer::extractors::TypeSymbolKind;
 use ironplc_dsl::core::{FileId, Located};
-use ironplc_dsl::diagnostic::LineColumn;
+use ironplc_dsl::diagnostic::{LineColumn, Severity};
 use log::error;
 use lsp_types::{
     CodeDescription, DiagnosticRelatedInformation, DiagnosticSeverity, DocumentSymbol,
@@ -464,7 +464,7 @@ fn map_diagnostic(
 
     lsp_types::Diagnostic {
         range,
-        severity: Some(DiagnosticSeverity::ERROR),
+        severity: Some(lsp_severity(diagnostic.severity())),
         code: Some(NumberOrString::String(diagnostic.code)),
         code_description,
         source: Some("ironplc".into()),
@@ -472,6 +472,16 @@ fn map_diagnostic(
         related_information,
         tags: None,
         data: None,
+    }
+}
+
+/// The severity the editor shows for a diagnostic's severity. No arm is a
+/// wildcard: a level added to `Severity` does not compile until it is shown here.
+fn lsp_severity(severity: Severity) -> DiagnosticSeverity {
+    match severity {
+        Severity::Error => DiagnosticSeverity::ERROR,
+        Severity::Warning => DiagnosticSeverity::WARNING,
+        Severity::Info => DiagnosticSeverity::INFORMATION,
     }
 }
 
