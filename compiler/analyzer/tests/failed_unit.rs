@@ -266,7 +266,7 @@ TYPE UA : ARRAY[1..2] OF T_UNIT; END_TYPE
 TYPE UALIAS : T_UNIT; END_TYPE
 PROGRAM p_use
 VAR v : T_UNIT; w : T_UNIT; ub : UB; us : US; ua : UA; al : UALIAS; k : INT; arr : ARRAY[1..2] OF T_UNIT; END_VAR
-  v := w; k := G(v); ub(p := v); ub.q := v; us.m := v; ua[1] := v; arr[1] := v; al := v;
+  v := w; k := G(v); ub(p := v); ub.p := v; us.m := v; ua[1] := v; arr[1] := v; al := v;
   k := 'text';
 END_PROGRAM
 ";
@@ -281,7 +281,7 @@ TYPE UA : ARRAY[1..2] OF T_UNIT; END_TYPE
 TYPE UALIAS : T_UNIT; END_TYPE
 PROGRAM p_use
 VAR v : T_UNIT; w : T_UNIT; ub : UB; us : US; ua : UA; al : UALIAS; k : INT; b : BOOL; arr : ARRAY[1..2] OF T_UNIT; END_VAR
-  v := w; k := G(v); ub(p := v); ub.q := v; us.m := v; ua[1] := v; arr[1] := v; al := v;
+  v := w; k := G(v); ub(p := v); ub.p := v; us.m := v; ua[1] := v; arr[1] := v; al := v;
   v := 3; k := v + 1; b := v = 1; b := v < w;
   IF v > 1 THEN k := 2; END_IF;
   k := 'text';
@@ -295,7 +295,7 @@ FUNCTION_BLOCK UB VAR_INPUT p : T_UNIT; END_VAR VAR q : T_UNIT; END_VAR q := p; 
 TYPE US : STRUCT m : T_UNIT; n : INT; END_STRUCT; END_TYPE
 PROGRAM p_use
 VAR v : T_UNIT; w : T_UNIT; ub : UB; us : US; k : INT; END_VAR
-  v := w; k := G(v); ub(p := v); ub.q := v; us.m := v;
+  v := w; k := G(v); ub(p := v); ub.p := v; us.m := v;
   k := 'text';
 END_PROGRAM
 ";
@@ -309,7 +309,7 @@ TYPE UA : ARRAY[1..2] OF T_UNIT; END_TYPE
 TYPE UALIAS : T_UNIT; END_TYPE
 PROGRAM p_use
 VAR v : T_UNIT; w : T_UNIT; ub : UB; us : US; ua : UA; al : UALIAS; k : INT; arr : ARRAY[1..2] OF T_UNIT; END_VAR
-  v := w; k := G(v); ub(p := v); ub.q := v; us.m := v; ua[1] := v; arr[1] := v; al := v;
+  v := w; k := G(v); ub(p := v); ub.p := v; us.m := v; ua[1] := v; arr[1] := v; al := v;
   v.a := 1; k := v.a; us.m.a := 2; arr[2].a := k;
   k := 'text';
 END_PROGRAM
@@ -322,7 +322,7 @@ FUNCTION_BLOCK UB VAR i : T_UNIT; END_VAR i(p := 1); END_FUNCTION_BLOCK
 FUNCTION_BLOCK UC EXTENDS T_UNIT VAR z : INT; END_VAR z := 1; END_FUNCTION_BLOCK
 PROGRAM p_use
 VAR v : T_UNIT; ub : UB; uc : UC; k : INT; END_VAR
-  v(p := 1); v(); k := v.y; v.y := 2; ub(); uc(p := 2); k := uc.y; k := uc.z;
+  v(p := 1); v(); k := v.y; v.p := 2; ub(); uc(p := 2); k := uc.y; k := uc.z;
   k := 'text';
 END_PROGRAM
 ";

@@ -365,3 +365,6 @@ P9003,xml_body_type_not_supported_pou,POU '{name}' uses {language} which is not 
 P4080,member_not_declared_not_a_member,'{owner}' has no member '{member}'
 P4080,member_not_declared_type_has_no_members,"'{owner}' is not a structure, union or function block instance, so it has no member '{member}'"
 P4080,member_not_declared_method_selected_as_variable,"'{member}' is a method of '{owner}': call it with parentheses, it is not a variable"
+P4081,member_not_assignable_outside_output,"'{member}' is an output of '{owner}' and cannot be assigned from outside the function block: read it, or assign an input"
+P4081,member_not_assignable_outside_internal,"'{member}' is an internal variable of '{owner}' and cannot be assigned from outside the function block: declare it VAR_INPUT to set it from outside"
+P4082,in_out_member_accessed_outside_access,"'{member}' is a VAR_IN_OUT of '{owner}' and cannot be read or assigned from outside the function block: pass a variable for it in the call"

@@ -49,6 +49,7 @@ pub(crate) static RULES: &[(&str, Rule)] = rules![
     rule_function_call_type_check,
     rule_member_qualifier_allowed,
     rule_member_qualifier_invalid,
+    rule_member_access,
     rule_member_declared,
     rule_method_call_declared,
     rule_program_task_definition_exists,

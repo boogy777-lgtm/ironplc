@@ -17,6 +17,7 @@
 
 use ironplc_dsl::{
     common::{Library, TypeName, VarDecl},
+    core::Id,
     scope::ScopeNode,
     textual::SymbolicVariableKind,
 };
@@ -99,21 +100,24 @@ impl<'a> Selections<'a> {
             .add_if(node.identifier.symbolic_id(), Declared::of(node));
     }
 
+    /// The type of the variable called `name` in scope.
+    ///
+    /// The id the analyzer resolved the declaration to names every kind of type
+    /// a variable can have, a reference among them; the initializer is the
+    /// fallback for a declaration without one.
+    pub(crate) fn declared_type(&self, name: &Id) -> Option<IntermediateType> {
+        self.declarations
+            .find(name)?
+            .type_id(self.types)
+            .and_then(|id| self.types.get_by_id(id))
+            .map(|attributes| attributes.representation.clone())
+            .or_else(|| variable_type::declared_type(name, &self.declarations, self.types))
+    }
+
     /// The type of the value that `kind` selects, when it is known.
     pub(crate) fn selected_type(&self, kind: &SymbolicVariableKind) -> Option<IntermediateType> {
         match kind {
-            // The id the analyzer resolved the declaration to names every kind
-            // of type a variable can have, a reference among them; the
-            // initializer is the fallback for a declaration without one.
-            SymbolicVariableKind::Named(named) => self
-                .declarations
-                .find(&named.name)?
-                .type_id(self.types)
-                .and_then(|id| self.types.get_by_id(id))
-                .map(|attributes| attributes.representation.clone())
-                .or_else(|| {
-                    variable_type::declared_type(&named.name, &self.declarations, self.types)
-                }),
+            SymbolicVariableKind::Named(named) => self.declared_type(&named.name),
             SymbolicVariableKind::Structured(structured) => {
                 let owner = self.selected_type(&structured.record)?;
                 match self.members.of(&owner) {
