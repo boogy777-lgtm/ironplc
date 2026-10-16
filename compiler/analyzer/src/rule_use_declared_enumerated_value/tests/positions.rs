@@ -3,21 +3,23 @@
 //! strictness.
 //!
 //! Each row is a position (see `position::Position`) and the codes reported for
-//! the five values written there:
+//! the five values written there, for a strict enumeration and for one that is
+//! not:
 //!
 //! 1. a value of the enumeration the position expects: accepted;
 //! 2. the same value written with its type: accepted;
-//! 3. a value of another enumeration: P2006;
+//! 3. a value of another enumeration: P2006 when strict, accepted when not;
 //! 4. a value of another enumeration written with its type: P4035 (P4026 for
-//!    the argument of a function, which types its operands);
+//!    the argument of a function, which types its operands) when strict,
+//!    accepted when not;
 //! 5. a name no enumeration declares: P4007 (P2006 where a declaration states
-//!    the value, which looks the name up among the values of the enumeration).
+//!    the value, which looks the name up among the values of the enumeration),
+//!    whether strict or not.
 //!
-//! Under the policy where an enumeration is not strict (the base type, see
-//! `value_type::ValueUse`), the rows differ in one place only: a position whose
-//! mismatch of types is reported by the check of the operands accepts a value
-//! of another enumeration written with its type, as it accepts an `INT`. The
-//! positions the rule reports itself do not depend on the policy.
+//! An enumeration that is not strict is its base integer type and holds the
+//! value of any enumeration (see `IntermediateType::is_strict_enumeration`), so
+//! every position answers alike; the rule asks that at one point
+//! (`expected::check_value`).
 //!
 //! Arrays of enumerations pass `check` and stop in code generation, which has
 //! no array of enumerations yet; the rows of arrays state what `check` says.
@@ -82,13 +84,6 @@ struct Expect {
 }
 
 impl Expect {
-    const fn same(codes: [&'static [&'static str]; 5]) -> Self {
-        Expect {
-            strict: codes,
-            not_strict: codes,
-        }
-    }
-
     fn of(self, policy: Policy, outcome: usize) -> &'static [&'static str] {
         match policy {
             Policy::Strict => self.strict[outcome],
@@ -97,47 +92,66 @@ impl Expect {
     }
 }
 
-/// Reported by this rule at every position that expects the first enumeration.
-const HERE: Expect = Expect::same([NONE, NONE, P2006, P4035, P4007]);
+/// A position that expects the first enumeration. A strict enumeration refuses
+/// a value of another one, bare (P2006) or written with its type (P4035); one
+/// that is not strict is its base integer type and accepts it, in every
+/// position alike. A name no enumeration declares is refused by both.
+const HERE: Expect = Expect {
+    strict: [NONE, NONE, P2006, P4035, P4007],
+    not_strict: [NONE, NONE, NONE, NONE, P4007],
+};
 /// The same for a position that expects the second enumeration: `A` is the
 /// other enumeration's value there.
-const HERE_SECOND: Expect = Expect::same([P2006, P4035, NONE, NONE, P4007]);
+const HERE_SECOND: Expect = Expect {
+    strict: [P2006, P4035, NONE, NONE, P4007],
+    not_strict: [NONE, NONE, NONE, NONE, P4007],
+};
 /// The stored value of a declaration is looked up among the values of the
 /// enumeration, so a name that is no value of it is P2006.
-const DECLARED: Expect = Expect::same([NONE, NONE, P2006, P4035, P2006]);
-const DECLARED_SECOND: Expect = Expect::same([P2006, P4035, NONE, NONE, P2006]);
+const DECLARED: Expect = Expect {
+    strict: [NONE, NONE, P2006, P4035, P2006],
+    not_strict: [NONE, NONE, NONE, NONE, P2006],
+};
+const DECLARED_SECOND: Expect = Expect {
+    strict: [P2006, P4035, NONE, NONE, P2006],
+    not_strict: [NONE, NONE, NONE, NONE, P2006],
+};
 /// A member of a structure or function block that is given a name which turns
 /// out to be a general expression.
-const MEMBER: Expect = Expect::same([NONE, NONE, P2006, P4035, P4007_P4043]);
-/// An assignment to a variable: the check of the types compares a value
-/// written with its type.
-const ASSIGNED: Expect = Expect {
-    strict: [NONE, NONE, P2006, P4035, P4007],
-    not_strict: [NONE, NONE, P2006, NONE, P4007],
+const MEMBER: Expect = Expect {
+    strict: [NONE, NONE, P2006, P4035, P4007_P4043],
+    not_strict: [NONE, NONE, NONE, NONE, P4007_P4043],
 };
+/// An assignment to a variable: the check of the types compares a value
+/// written with its type (and this rule a bare name), and answers as the rule
+/// does.
+const ASSIGNED: Expect = HERE;
 /// An argument of a function, whose parameters the check of the arguments
-/// types.
+/// types (P4026 for a value written with its type, when the enumeration is
+/// strict).
 const ARGUMENT: Expect = Expect {
     strict: [NONE, NONE, P2006, P4026, P4007],
-    not_strict: [NONE, NONE, P2006, NONE, P4007],
+    not_strict: [NONE, NONE, NONE, NONE, P4007],
 };
 /// A bound of a `FOR` whose control variable is an enumeration. A strict
 /// enumeration is no number to count with (P4049, whatever the bounds are), and
-/// one that is not strict is counted as its base type; the bounds are values of
-/// the enumeration either way.
+/// one that is not strict is counted as its base type.
 const FOR_BOUND: Expect = Expect {
     strict: [P4049, P4049, P2006_P4049, P4035_P4049, P4007_P4049],
-    not_strict: [NONE, NONE, P2006, P4035, P4007],
+    not_strict: [NONE, NONE, NONE, NONE, P4007],
 };
 /// An assignment to a variable of the second enumeration.
-const ASSIGNED_SECOND: Expect = Expect {
-    strict: [P2006, P4035, NONE, NONE, P4007],
-    not_strict: [P2006, NONE, NONE, NONE, P4007],
-};
+const ASSIGNED_SECOND: Expect = HERE_SECOND;
 /// A member of the second enumeration that is given a name which turns out to
 /// be a general expression.
-const MEMBER_SECOND: Expect = Expect::same([P2006, P4035, NONE, NONE, P4007_P4043]);
-const CALL_STYLE: Expect = Expect::same([P9999, P9999, P2006_P9999, P4035_P9999, P4007_P9999]);
+const MEMBER_SECOND: Expect = Expect {
+    strict: [P2006, P4035, NONE, NONE, P4007_P4043],
+    not_strict: [NONE, NONE, NONE, NONE, P4007_P4043],
+};
+const CALL_STYLE: Expect = Expect {
+    strict: [P9999, P9999, P2006_P9999, P4035_P9999, P4007_P9999],
+    not_strict: [P9999, P9999, P9999, P9999, P4007_P9999],
+};
 
 /// Where the value is written.
 #[derive(Clone, Copy)]
@@ -298,4 +312,22 @@ fn apply_when_value_is_written_at_a_position_then_it_is_a_value_of_the_enumerati
     let codes = codes_of(&source, &policy.options());
 
     assert_eq!(codes, expect.of(policy, outcome), "{source}");
+}
+
+/// The attribute `strict` decides for the one enumeration it precedes, in the
+/// dialects where an enumeration without it is not strict.
+#[rstest]
+#[case::strict_by_the_attribute("{attribute 'strict'} ", P2006)]
+#[case::not_strict_without_it("", NONE)]
+fn apply_when_enumeration_has_the_attribute_strict_then_a_value_of_another_is_refused_only_for_it(
+    #[case] pragma: &str,
+    #[case] expected: &[&str],
+) {
+    let source = format!(
+        "{pragma}TYPE E1 : (A, B); END_TYPE TYPE E2 : (C, D); END_TYPE \
+         PROGRAM main VAR x : E1; END_VAR x := C; END_PROGRAM"
+    );
+    let options = CompilerOptions::from_dialect(ironplc_parser::options::Dialect::Codesys);
+
+    assert_eq!(codes_of(&source, &options), expected);
 }

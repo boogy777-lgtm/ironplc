@@ -55,7 +55,10 @@ structure or function block initializer gives a value, and an element that an
 array initializer lists. ``level := WARNING`` is this error when ``WARNING`` is
 a value of another enumeration and not of ``LogLevel``; so is the member
 ``(level := WARNING)`` of a structure initializer. A name that no enumeration
-declares is a name that is not declared (:doc:`P4007`).
+declares is a name that is not declared (:doc:`P4007`). An enumeration that is
+not strict holds the value of any enumeration, so a name of another enumeration
+is accepted where it is expected (see
+:doc:`/reference/language/data-types/derived/enumerated-types`).
 
 Integer Constants
 -----------------

@@ -260,7 +260,9 @@ impl Visitor<Infallible> for RuleDeclaredEnumeratedValues<'_> {
             // Check if the value is in the list of defined enumeration values
             if value.type_name.is_some() {
                 self.check_at(Position::InitialValue(&init.type_name), value);
-            } else if !defined_values.contains(&value.value) {
+            } else if !defined_values.contains(&value.value)
+                && !self.holds_other_enumeration(&init.type_name, &value.value)
+            {
                 self.diagnostics.push(self.value_not_defined(value));
             }
         }

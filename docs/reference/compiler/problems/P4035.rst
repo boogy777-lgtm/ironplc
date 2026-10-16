@@ -92,3 +92,5 @@ one:
    END_PROGRAM
 
 To fix this error, write the enumeration of the variable: ``Motor#Running``.
+An enumeration that is not strict accepts the value of another enumeration (see
+:doc:`/reference/language/data-types/derived/enumerated-types`).

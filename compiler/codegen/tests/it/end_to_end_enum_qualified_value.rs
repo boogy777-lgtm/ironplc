@@ -248,3 +248,47 @@ END_PROGRAM
     let numbers: Vec<i32> = (3..9).map(|slot| bufs.vars[slot].as_i32()).collect();
     assert_eq!(numbers, vec![2, 1, 7, 1, 2, 30]);
 }
+
+/// An enumeration that is not strict is its base integer type (CODESYS without
+/// `{attribute 'strict'}`), so it holds a value of another enumeration, written
+/// bare or with its type, in every position alike. The value stored is the
+/// ordinal the value has in its own enumeration: `E1` is A = 0, B = 1, C1 = 2
+/// and `E2` is C = 0, D = 1, F = 2. A strict enumeration refuses each of them.
+const NOT_STRICT: &str = "
+TYPE E1 : (A, B, C1); E2 : (C, D, F); S : STRUCT m : E1; n : E1; END_STRUCT; END_TYPE
+FUNCTION_BLOCK FB
+  VAR_INPUT p : E1; END_VAR
+  VAR_OUTPUT r : DINT; END_VAR
+  r := p;
+END_FUNCTION_BLOCK
+PROGRAM main
+  VAR s : S := (m := D, n := E2#F); fb1 : FB; x : E1;
+      o1 : DINT; o2 : DINT; o3 : DINT; o4 : DINT; o5 : DINT; END_VAR
+  o1 := s.m;
+  o2 := s.n;
+  fb1(p := F);
+  o3 := fb1.r;
+  s.m := E2#D;
+  o4 := s.m;
+  x := C;
+  o5 := x;
+END_PROGRAM
+";
+
+#[test]
+fn end_to_end_when_enumeration_is_not_strict_then_a_value_of_another_enumeration_is_stored_as_its_number(
+) {
+    let options = CompilerOptions::from_dialect(Dialect::Codesys);
+
+    let (_container, bufs) = try_check_and_run(NOT_STRICT, &options).expect("the program runs");
+
+    let numbers: Vec<i32> = (3..8).map(|slot| bufs.vars[slot].as_i32()).collect();
+    assert_eq!(numbers, vec![1, 2, 2, 1, 0]);
+}
+
+#[test]
+fn end_to_end_when_enumeration_is_strict_then_the_same_program_is_refused() {
+    let refused = try_check_and_run(NOT_STRICT, &CompilerOptions::default());
+
+    assert_eq!(refused.expect_err("the program is refused").code, "P2006");
+}
