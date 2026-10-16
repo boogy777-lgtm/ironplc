@@ -18,8 +18,6 @@ An argument is rejected when its variable:
 - is declared ``CONSTANT``, in any section, including ``VAR_EXTERNAL CONSTANT``
 - is a ``VAR_INPUT`` of the calling POU: its value came from that POU's
   caller, which may have passed a constant
-- is an output or local of a function block instance, such as ``fb.Q``: only
-  an instance's inputs can be assigned from outside it
 - is reached through a dereference, such as ``p^``: a reference can point at a
   variable whose value came from a constant
 - is a direct input address, such as ``%IX0.0``: process inputs are written by
@@ -27,6 +25,11 @@ An argument is rejected when its variable:
 
 A ``VAR_IN_OUT`` parameter of the calling POU is writable, because the call
 that bound it proved its own argument writable.
+
+Which member of a function block instance an argument may name is a separate
+question. An argument such as ``fb.Q``, an output or a local of an instance, is
+refused where it is written, as :doc:`P4081`, and an instance's own
+``VAR_IN_OUT`` as :doc:`P4082`.
 
 Example
 -------
@@ -85,3 +88,4 @@ See Also
 - :doc:`/reference/language/pous/function` — ``FUNCTION`` declaration syntax
 - :doc:`P4058` — a ``VAR_IN_OUT`` argument that is not a variable
 - :doc:`P4059` — a ``VAR_IN_OUT`` argument of the wrong type
+- :doc:`P4081` — an output or internal variable of a function block assigned from outside it
