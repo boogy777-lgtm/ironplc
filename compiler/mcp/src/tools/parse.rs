@@ -4,7 +4,7 @@
 //! `structure` array describing the top-level declarations found.
 
 use ironplc_dsl::core::FileId;
-use ironplc_dsl::diagnostic::{has_errors, Diagnostic};
+use ironplc_dsl::diagnostic::{any_stops_build, Diagnostic};
 use ironplc_parser::declarations::extract_declarations;
 use ironplc_parser::parse_program;
 use serde::Serialize;
@@ -68,7 +68,7 @@ pub fn build_response(sources: &[SourceInput], options_value: &serde_json::Value
         }
     }
 
-    let ok = !has_errors(&diagnostics);
+    let ok = !any_stops_build(&diagnostics);
 
     ParseResponse {
         ok,

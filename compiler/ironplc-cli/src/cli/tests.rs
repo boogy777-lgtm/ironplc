@@ -466,26 +466,61 @@ fn map_uid_when_new_key_already_mapped_then_error() {
 }
 
 #[test]
-fn codespan_severity_when_each_severity_then_its_terminal_category() {
+fn display_of_when_each_category_then_its_terminal_display() {
+    use super::Display;
     use codespan_reporting::diagnostic::Severity as CodeSpanSeverity;
     use ironplc_dsl::diagnostic::Severity;
 
-    assert_eq!(
-        super::codespan_severity(Severity::Error),
-        CodeSpanSeverity::Error
-    );
-    assert_eq!(
-        super::codespan_severity(Severity::Warning),
-        CodeSpanSeverity::Warning
-    );
-    assert_eq!(
-        super::codespan_severity(Severity::Info),
-        CodeSpanSeverity::Note
-    );
+    for (severity, expected) in [
+        (
+            Severity::FatalError,
+            Display::Report(CodeSpanSeverity::Error),
+        ),
+        (Severity::Error, Display::Report(CodeSpanSeverity::Error)),
+        (
+            Severity::Warning,
+            Display::Report(CodeSpanSeverity::Warning),
+        ),
+        (
+            Severity::Information,
+            Display::Report(CodeSpanSeverity::Note),
+        ),
+        (Severity::Text, Display::TextOnly),
+        (Severity::SuppressedWarning, Display::Hidden),
+        (Severity::SuppressedInformation, Display::Hidden),
+    ] {
+        assert_eq!(super::display_of(severity), expected, "{severity:?}");
+        // What is shown is what the category says is shown.
+        assert_eq!(
+            super::display_of(severity) != Display::Hidden,
+            severity.is_shown(),
+            "{severity:?}"
+        );
+    }
 }
 
 #[test]
-fn map_diagnostic_when_error_diagnostic_then_codespan_error() {
+fn text_of_when_label_then_the_label_and_otherwise_the_description() {
+    use ironplc_dsl::core::SourceSpan;
+    use ironplc_dsl::diagnostic::{Diagnostic, Label};
+    use ironplc_problems::text;
+
+    let labelled = Diagnostic::text(
+        SourceSpan::default(),
+        text::syntax_error_a_task_needs_a_priority(),
+    );
+    assert_eq!(
+        super::text_of(&labelled),
+        "a task needs a `PRIORITY`".to_string()
+    );
+
+    let mut unlabelled = labelled.clone();
+    unlabelled.primary = Label::span(SourceSpan::default(), "");
+    assert_eq!(super::text_of(&unlabelled), unlabelled.description());
+}
+
+#[test]
+fn map_diagnostic_when_severity_given_then_codespan_diagnostic_has_it() {
     use codespan_reporting::diagnostic::Severity as CodeSpanSeverity;
     use ironplc_dsl::core::SourceSpan;
     use ironplc_dsl::diagnostic::Diagnostic;
@@ -496,9 +531,14 @@ fn map_diagnostic_when_error_diagnostic_then_codespan_error() {
         text::syntax_error_a_task_needs_a_priority(),
     );
 
-    let mapped = super::map_diagnostic(&diag, &std::collections::HashMap::new());
+    let mapped = super::map_diagnostic(
+        &diag,
+        CodeSpanSeverity::Warning,
+        &std::collections::HashMap::new(),
+    );
 
-    assert_eq!(mapped.severity, CodeSpanSeverity::Error);
+    assert_eq!(mapped.severity, CodeSpanSeverity::Warning);
+    assert_eq!(mapped.code.as_deref(), Some("P0002"));
 }
 
 #[test]

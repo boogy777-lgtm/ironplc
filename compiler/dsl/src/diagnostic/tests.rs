@@ -46,7 +46,7 @@ fn severity_when_made_by_each_constructor_then_the_severity_of_its_problem() {
         // Every existing problem is an error; the first two rows also
         // compare with the severity the problem itself declares.
         assert_eq!(diagnostic.severity(), Severity::Error, "{code}");
-        assert!(diagnostic.is_error(), "{code}");
+        assert!(diagnostic.stops_build(), "{code}");
     }
     assert_eq!(
         Diagnostic::text(
@@ -58,38 +58,102 @@ fn severity_when_made_by_each_constructor_then_the_severity_of_its_problem() {
     );
 }
 
+const ALL: [Severity; 7] = [
+    Severity::FatalError,
+    Severity::Error,
+    Severity::Warning,
+    Severity::Information,
+    Severity::Text,
+    Severity::SuppressedWarning,
+    Severity::SuppressedInformation,
+];
+
 #[spec_test(REQ_DS_dsl_002)]
-fn is_error_when_each_severity_then_true_only_for_error() {
-    assert!(diagnostic_of(Severity::Error).is_error());
-    assert!(!diagnostic_of(Severity::Warning).is_error());
-    assert!(!diagnostic_of(Severity::Info).is_error());
-    assert_eq!(
-        diagnostic_of(Severity::Warning).severity(),
-        Severity::Warning
-    );
-    assert_eq!(diagnostic_of(Severity::Info).severity(), Severity::Info);
+fn stops_build_when_each_category_then_true_only_for_fatal_error_and_error() {
+    for severity in ALL {
+        let expected = matches!(severity, Severity::FatalError | Severity::Error);
+        let diagnostic = diagnostic_of(severity);
+
+        assert_eq!(diagnostic.stops_build(), expected, "{severity:?}");
+        assert_eq!(diagnostic.severity(), severity);
+    }
 }
 
 #[spec_test(REQ_DS_dsl_003)]
-fn has_errors_when_list_then_true_only_with_an_error_and_error_count_counts_them() {
+fn any_stops_build_when_list_then_true_only_with_one_that_stops_and_the_count_counts_them() {
     let none: [Diagnostic; 0] = [];
-    let not_errors = [
+    let not_stopping = [
         diagnostic_of(Severity::Warning),
-        diagnostic_of(Severity::Info),
+        diagnostic_of(Severity::Information),
+        diagnostic_of(Severity::Text),
+        diagnostic_of(Severity::SuppressedWarning),
+        diagnostic_of(Severity::SuppressedInformation),
     ];
     let mixed = [
         diagnostic_of(Severity::Warning),
         diagnostic_of(Severity::Error),
-        diagnostic_of(Severity::Info),
-        diagnostic_of(Severity::Error),
+        diagnostic_of(Severity::Information),
+        diagnostic_of(Severity::FatalError),
     ];
 
-    assert!(!has_errors(&none));
-    assert_eq!(error_count(&none), 0);
-    assert!(!has_errors(&not_errors));
-    assert_eq!(error_count(&not_errors), 0);
-    assert!(has_errors(&mixed));
-    assert_eq!(error_count(&mixed), 2);
+    assert!(!any_stops_build(&none));
+    assert_eq!(stops_build_count(&none), 0);
+    assert!(!any_stops_build(&not_stopping));
+    assert_eq!(stops_build_count(&not_stopping), 0);
+    assert!(any_stops_build(&mixed));
+    assert_eq!(stops_build_count(&mixed), 2);
+}
+
+#[spec_test(REQ_DS_dsl_004)]
+fn suppress_when_each_category_then_only_a_warning_and_an_information_message_change() {
+    for (severity, expected) in [
+        (Severity::FatalError, Severity::FatalError),
+        (Severity::Error, Severity::Error),
+        (Severity::Warning, Severity::SuppressedWarning),
+        (Severity::Information, Severity::SuppressedInformation),
+        (Severity::Text, Severity::Text),
+        (Severity::SuppressedWarning, Severity::SuppressedWarning),
+        (
+            Severity::SuppressedInformation,
+            Severity::SuppressedInformation,
+        ),
+    ] {
+        let suppressed = diagnostic_of(severity).suppress();
+
+        assert_eq!(suppressed.severity(), expected, "{severity:?}");
+        assert_eq!(suppressed.code, "P0002");
+    }
+    assert!(!diagnostic_of(Severity::Warning)
+        .suppress()
+        .severity()
+        .is_shown());
+}
+
+#[spec_test(REQ_DS_dsl_005)]
+fn stop_at_fatal_when_a_fatal_error_then_only_the_fatal_ones_remain() {
+    let mixed = vec![
+        diagnostic_of(Severity::Error),
+        diagnostic_of(Severity::FatalError),
+        diagnostic_of(Severity::Warning),
+        diagnostic_of(Severity::FatalError),
+    ];
+    assert!(has_fatal(&mixed));
+
+    let kept = stop_at_fatal(mixed);
+
+    assert_eq!(kept.len(), 2);
+    assert!(kept.iter().all(|d| d.severity() == Severity::FatalError));
+}
+
+#[spec_test(REQ_DS_dsl_005)]
+fn stop_at_fatal_when_no_fatal_error_then_every_diagnostic_stays() {
+    let list = vec![
+        diagnostic_of(Severity::Error),
+        diagnostic_of(Severity::Warning),
+    ];
+    assert!(!has_fatal(&list));
+
+    assert_eq!(stop_at_fatal(list).len(), 2);
 }
 
 #[test]

@@ -13,7 +13,7 @@ use codespan_reporting::{
 };
 use ironplc_dsl::{
     core::FileId,
-    diagnostic::{error_count, has_errors, Diagnostic, Label, Severity},
+    diagnostic::{any_stops_build, stops_build_count, Diagnostic, Label, Severity},
 };
 use ironplc_plc2plc::write_to_string;
 use ironplc_problems::{text, Text};
@@ -21,6 +21,7 @@ use log::{error, trace};
 use std::{
     collections::{BTreeSet, HashMap},
     fs::{canonicalize, metadata},
+    io::Write,
     ops::Range,
     path::{Path, PathBuf},
 };
@@ -168,7 +169,7 @@ pub fn sync_uids(
 
     let (mut project, mut diagnostics) = create_project(paths, compiler_options, &[]);
     diagnostics.extend(project.semantic());
-    if has_errors(&diagnostics) {
+    if any_stops_build(&diagnostics) {
         return finish("Sync UIDs", diagnostics, Some(&project), suppress_output);
     }
     let Some(library) = project.analyzed_library() else {
@@ -281,12 +282,12 @@ fn finish(
     }
     trace!("Diagnostics {diagnostics:?}");
     handle_diagnostics(&diagnostics, project, suppress_output);
-    if !has_errors(&diagnostics) {
+    if !any_stops_build(&diagnostics) {
         return Ok(());
     }
     Err(format!(
         "{command} failed with {} problem(s)",
-        error_count(&diagnostics)
+        stops_build_count(&diagnostics)
     ))
 }
 
@@ -459,15 +460,25 @@ fn handle_diagnostics(
             }
         }
 
-        diagnostics.iter().for_each(|d| {
-            let diagnostic = map_diagnostic(d, &files_to_ids);
+        diagnostics
+            .iter()
+            .for_each(|d| match display_of(d.severity()) {
+                Display::Hidden => {}
+                Display::TextOnly => {
+                    if let Err(err) = writeln!(writer.lock(), "{}", text_of(d)) {
+                        error!("Failed writing to terminal: {err}");
+                    }
+                }
+                Display::Report(severity) => {
+                    let diagnostic = map_diagnostic(d, severity, &files_to_ids);
 
-            if let Err(err) =
-                term::emit_to_write_style(&mut writer.lock(), &config, &files, &diagnostic)
-            {
-                error!("Failed writing to terminal: {err}");
-            }
-        });
+                    if let Err(err) =
+                        term::emit_to_write_style(&mut writer.lock(), &config, &files, &diagnostic)
+                    {
+                        error!("Failed writing to terminal: {err}");
+                    }
+                }
+            });
     }
 }
 
@@ -483,6 +494,7 @@ fn problem_help_url(diagnostic: &Diagnostic) -> String {
 
 fn map_diagnostic(
     diagnostic: &Diagnostic,
+    severity: CodeSpanSeverity,
     file_to_id: &HashMap<&FileId, usize>,
 ) -> CodeSpanDiagnostic<usize> {
     let description = diagnostic.description();
@@ -508,21 +520,46 @@ fn map_diagnostic(
     let mut notes = diagnostic.help().to_vec();
     notes.push(format!("Learn more: {}", problem_help_url(diagnostic)));
 
-    CodeSpanDiagnostic::new(codespan_severity(diagnostic.severity()))
+    CodeSpanDiagnostic::new(severity)
         .with_code(diagnostic.code.clone())
         .with_message(description)
         .with_labels(labels)
         .with_notes(notes)
 }
 
-/// The category the terminal prints for a severity. codespan has no
-/// information category, so an information message is a note. No arm is a
-/// wildcard: a level added to `Severity` does not compile until it is shown here.
-fn codespan_severity(severity: Severity) -> CodeSpanSeverity {
+/// How the terminal shows a diagnostic of a category.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Display {
+    /// With its code, labels and notes, under the header codespan prints for the
+    /// severity.
+    Report(CodeSpanSeverity),
+    /// As the text alone, without a code: a line about the build.
+    TextOnly,
+    /// Not at all: the diagnostic is suppressed.
+    Hidden,
+}
+
+/// How the terminal shows a category. codespan prints a header of its own
+/// (`error`, `warning`, `note`), so a fatal error shows as an error and an
+/// information message as a note. No arm is a wildcard: a category added to
+/// `Severity` does not compile until it is shown, or hidden, here.
+fn display_of(severity: Severity) -> Display {
     match severity {
-        Severity::Error => CodeSpanSeverity::Error,
-        Severity::Warning => CodeSpanSeverity::Warning,
-        Severity::Info => CodeSpanSeverity::Note,
+        Severity::FatalError | Severity::Error => Display::Report(CodeSpanSeverity::Error),
+        Severity::Warning => Display::Report(CodeSpanSeverity::Warning),
+        Severity::Information => Display::Report(CodeSpanSeverity::Note),
+        Severity::Text => Display::TextOnly,
+        Severity::SuppressedWarning | Severity::SuppressedInformation => Display::Hidden,
+    }
+}
+
+/// The text of a diagnostic that is shown as text alone: its label when it has
+/// one, and its description otherwise.
+fn text_of(diagnostic: &Diagnostic) -> String {
+    if diagnostic.primary.message.is_empty() {
+        diagnostic.description()
+    } else {
+        diagnostic.primary.message.clone()
     }
 }
 

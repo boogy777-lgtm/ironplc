@@ -133,38 +133,85 @@ mod tests {
         );
     }
 
-    /// The name of a level, by a `match` without a wildcard: a level added to
-    /// the list of levels does not compile here until the test knows it.
-    fn level_name(severity: Severity) -> &'static str {
+    /// The seven categories in the order of CODESYS, each with the answers to
+    /// the questions asked of it: its name, whether it stops the build, whether
+    /// it is shown and what it becomes when suppressed. The `match` has no
+    /// wildcard: a category added to the list does not compile here until the
+    /// test knows it.
+    fn expected(severity: Severity) -> (&'static str, bool, bool, Severity) {
         match severity {
-            Severity::Error => "Error",
-            Severity::Warning => "Warning",
-            Severity::Info => "Info",
+            Severity::FatalError => ("fatal-error", true, true, Severity::FatalError),
+            Severity::Error => ("error", true, true, Severity::Error),
+            Severity::Warning => ("warning", false, true, Severity::SuppressedWarning),
+            Severity::Information => ("information", false, true, Severity::SuppressedInformation),
+            Severity::Text => ("text", false, true, Severity::Text),
+            Severity::SuppressedWarning => (
+                "suppressed-warning",
+                false,
+                false,
+                Severity::SuppressedWarning,
+            ),
+            Severity::SuppressedInformation => (
+                "suppressed-information",
+                false,
+                false,
+                Severity::SuppressedInformation,
+            ),
         }
     }
 
+    const ALL: [Severity; 7] = [
+        Severity::FatalError,
+        Severity::Error,
+        Severity::Warning,
+        Severity::Information,
+        Severity::Text,
+        Severity::SuppressedWarning,
+        Severity::SuppressedInformation,
+    ];
+
     #[spec_test(REQ_DS_problems_001)]
-    fn severity_when_problem_of_the_csv_then_the_level_of_its_row() {
+    fn severity_when_problem_of_the_csv_then_the_category_of_its_row() {
         assert_eq!(Problem::SyntaxError.severity(), Severity::Error);
         assert_eq!(Problem::AttributeRepeated.severity(), Severity::Error);
         assert_eq!(Problem::UnexpectedToken.severity(), Severity::Error);
-        assert_eq!(level_name(Problem::SyntaxError.severity()), "Error");
-        assert_eq!(level_name(Severity::Warning), "Warning");
-        assert_eq!(level_name(Severity::Info), "Info");
-        assert_eq!(Severity::Error.name(), "error");
-        assert_eq!(Severity::Warning.name(), "warning");
-        assert_eq!(Severity::Info.name(), "info");
     }
 
     #[spec_test(REQ_DS_problems_002)]
-    fn severity_variant_when_row_has_no_valid_level_then_error_names_code_and_value() {
-        for level in ["Error", "Warning", "Info"] {
+    fn severity_name_when_each_category_then_its_text() {
+        for severity in ALL {
+            assert_eq!(severity.name(), expected(severity).0);
+        }
+    }
+
+    #[spec_test(REQ_DS_problems_003)]
+    fn severity_questions_when_each_category_then_the_answers_of_codesys() {
+        for severity in ALL {
+            let (_, stops_build, is_shown, suppressed) = expected(severity);
+            assert_eq!(severity.stops_build(), stops_build, "{severity:?}");
+            assert_eq!(severity.is_shown(), is_shown, "{severity:?}");
+            assert_eq!(severity.suppressed(), suppressed, "{severity:?}");
+            // A suppressed category cannot be suppressed again.
             assert_eq!(
-                ironplc_problems_gen::severity_variant("P0001", level),
-                Ok(level)
+                severity.suppressed().suppressed(),
+                severity.suppressed(),
+                "{severity:?}"
             );
         }
-        for value in ["", "error", "Warn", "Information", "Fatal"] {
+    }
+
+    #[spec_test(REQ_DS_problems_004)]
+    fn severity_variant_when_row_has_no_declarable_category_then_error_names_code_and_value() {
+        for severity in ALL {
+            let declarable =
+                ironplc_problems_gen::severity_variant("P0001", &format!("{severity:?}"));
+            let suppressed_result = matches!(
+                severity,
+                Severity::SuppressedWarning | Severity::SuppressedInformation
+            );
+            assert_eq!(declarable.is_ok(), !suppressed_result, "{severity:?}");
+        }
+        for value in ["", "error", "Warn", "Info", "Fatal"] {
             let message = ironplc_problems_gen::severity_variant("P0042", value)
                 .expect_err("the value should be refused");
 
@@ -176,7 +223,7 @@ mod tests {
         }
     }
 
-    #[spec_test(REQ_DS_problems_003)]
+    #[spec_test(REQ_DS_problems_005)]
     fn check_problem_codes_header_when_not_the_four_columns_then_error() {
         assert_eq!(
             ironplc_problems_gen::check_problem_codes_header(&[

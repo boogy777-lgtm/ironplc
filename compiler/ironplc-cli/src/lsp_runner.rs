@@ -12,7 +12,7 @@ use ironplc_codegen::compile as codegen_compile;
 use ironplc_container::debug_format::VariableRenderer;
 use ironplc_container::Container;
 use ironplc_dsl::core::FileId;
-use ironplc_dsl::diagnostic::has_errors;
+use ironplc_dsl::diagnostic::any_stops_build;
 use ironplc_parser::options::CompilerOptions;
 use ironplc_sources::{parse_source, FileType};
 use ironplc_vm::{Slot, VariableView, Vm, VmBuffers};
@@ -243,7 +243,7 @@ fn compile_to_bytes(source: &str, options: &CompilerOptions) -> Result<Vec<u8>, 
         ),
     })?;
 
-    if has_errors(context.diagnostics()) {
+    if any_stops_build(context.diagnostics()) {
         return Err(RunResult {
             ok: false,
             variables: vec![],
@@ -252,7 +252,7 @@ fn compile_to_bytes(source: &str, options: &CompilerOptions) -> Result<Vec<u8>, 
                 context
                     .diagnostics()
                     .iter()
-                    .filter(|d| d.is_error())
+                    .filter(|d| d.stops_build())
                     .map(|d| d.description())
                     .collect::<Vec<_>>()
                     .join("; "),

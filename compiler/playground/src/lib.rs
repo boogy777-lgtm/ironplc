@@ -160,8 +160,8 @@ struct CompileResult {
 #[derive(Debug, Serialize, Deserialize)]
 struct DiagnosticInfo {
     code: String,
-    /// The severity of the diagnostic's problem code: `"error"`, `"warning"` or
-    /// `"info"` ([`Severity::name`]).
+    /// The category of the diagnostic ([`Severity::name`]): `"fatal-error"`,
+    /// `"error"`, `"warning"`, `"information"` or `"text"`.
     #[serde(default = "error_severity")]
     severity: String,
     message: String,
@@ -219,6 +219,16 @@ fn diagnostic_info(diag: &Diagnostic, source: &str) -> DiagnosticInfo {
         compiler_file: diag.source_file.clone().unwrap_or_default(),
         compiler_line: diag.source_line.unwrap_or(0),
     }
+}
+
+/// The [`DiagnosticInfo`] of each diagnostic that is shown: a suppressed warning
+/// and a suppressed information message are left out.
+fn shown_diagnostics(diagnostics: &[Diagnostic], source: &str) -> Vec<DiagnosticInfo> {
+    diagnostics
+        .iter()
+        .filter(|d| d.severity().is_shown())
+        .map(|d| diagnostic_info(d, source))
+        .collect()
 }
 
 /// A structured runtime error surfaced across the WASM boundary.
@@ -485,11 +495,7 @@ fn compile_inner(source: &str, dialect: &str, allows: &str, libraries: &str) -> 
         return CompileResult {
             ok: false,
             bytecode: None,
-            diagnostics: output
-                .diagnostics
-                .iter()
-                .map(|d| diagnostic_info(d, source))
-                .collect(),
+            diagnostics: shown_diagnostics(&output.diagnostics, source),
         };
     };
 
@@ -509,11 +515,7 @@ fn compile_inner(source: &str, dialect: &str, allows: &str, libraries: &str) -> 
     CompileResult {
         ok: true,
         bytecode: Some(BASE64.encode(&buf)),
-        diagnostics: output
-            .diagnostics
-            .iter()
-            .map(|d| diagnostic_info(d, source))
-            .collect(),
+        diagnostics: shown_diagnostics(&output.diagnostics, source),
     }
 }
 

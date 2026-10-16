@@ -922,22 +922,27 @@ fn uri_key_when_to_uri_then_round_trips_back_to_original() {
 }
 
 #[test]
-fn lsp_severity_when_each_severity_then_its_editor_severity() {
+fn lsp_severity_when_each_category_then_its_editor_severity() {
     use ironplc_dsl::diagnostic::Severity;
     use lsp_types::DiagnosticSeverity;
 
-    assert_eq!(
-        super::lsp_severity(Severity::Error),
-        DiagnosticSeverity::ERROR
-    );
-    assert_eq!(
-        super::lsp_severity(Severity::Warning),
-        DiagnosticSeverity::WARNING
-    );
-    assert_eq!(
-        super::lsp_severity(Severity::Info),
-        DiagnosticSeverity::INFORMATION
-    );
+    for (severity, expected) in [
+        (Severity::FatalError, Some(DiagnosticSeverity::ERROR)),
+        (Severity::Error, Some(DiagnosticSeverity::ERROR)),
+        (Severity::Warning, Some(DiagnosticSeverity::WARNING)),
+        (Severity::Information, Some(DiagnosticSeverity::INFORMATION)),
+        (Severity::Text, Some(DiagnosticSeverity::INFORMATION)),
+        (Severity::SuppressedWarning, None),
+        (Severity::SuppressedInformation, None),
+    ] {
+        assert_eq!(super::lsp_severity(severity), expected, "{severity:?}");
+        // What is published is what the category says is shown.
+        assert_eq!(
+            super::lsp_severity(severity).is_some(),
+            severity.is_shown(),
+            "{severity:?}"
+        );
+    }
 }
 
 #[test]

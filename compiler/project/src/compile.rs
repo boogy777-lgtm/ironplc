@@ -13,7 +13,9 @@
 
 use ironplc_codegen::{CodegenOptions, SourceLookup};
 use ironplc_container::Container;
-use ironplc_dsl::diagnostic::{error_count, has_errors, Diagnostic};
+use ironplc_dsl::diagnostic::{
+    any_stops_build, has_fatal, stop_at_fatal, stops_build_count, Diagnostic,
+};
 use ironplc_parser::options::CompilerOptions;
 use log::debug;
 
@@ -57,9 +59,11 @@ pub struct CompileOutput {
 /// hide a real bug in the files that did resolve, but it must still prevent a
 /// container from being produced.
 ///
-/// Analysis always runs. Codegen runs only when nothing -- seeded, parse, or
-/// analysis -- reported an error. A warning or an information message is
-/// returned in `diagnostics` beside the container and does not stop codegen.
+/// Analysis runs unless a seeded problem is a fatal error. Codegen runs only
+/// when nothing -- seeded, parse, or analysis -- stops the build. A warning or an
+/// information message is returned in `diagnostics` beside the container and
+/// does not stop codegen. A fatal error ends the run as in CODESYS: no later
+/// stage runs, and `diagnostics` holds the fatal diagnostics alone.
 ///
 /// `source_lookup` hands codegen the exact bytes the parser saw for each file,
 /// which the container's debug section hashes so a debugger can detect drift.
@@ -76,14 +80,24 @@ pub fn compile(
     source_lookup: &dyn SourceLookup,
     mut diagnostics: Vec<Diagnostic>,
 ) -> CompileOutput {
+    // A fatal error ends the run before the next stage, with the diagnostics of
+    // the fatal errors alone.
+    if has_fatal(&diagnostics) {
+        return stopped(diagnostics);
+    }
+
     // Parse and analyze. Analysis goes as far as it can and reports everything
     // it found; it never short-circuits on the seeded diagnostics.
     diagnostics.extend(project.semantic());
 
-    if has_errors(&diagnostics) {
+    if has_fatal(&diagnostics) {
+        return stopped(diagnostics);
+    }
+
+    if any_stops_build(&diagnostics) {
         debug!(
-            "Skipping codegen, {} error(s) found",
-            error_count(&diagnostics)
+            "Skipping codegen, {} problem(s) stop the build",
+            stops_build_count(&diagnostics)
         );
         return CompileOutput {
             diagnostics,
@@ -126,11 +140,21 @@ pub fn compile(
         Err(err) => {
             diagnostics.push(err);
             CompileOutput {
-                diagnostics,
+                diagnostics: stop_at_fatal(diagnostics),
                 container: None,
                 id_difference,
             }
         }
+    }
+}
+
+/// The output of a run that a fatal error ended: no container, and only the
+/// fatal diagnostics.
+fn stopped(diagnostics: Vec<Diagnostic>) -> CompileOutput {
+    CompileOutput {
+        diagnostics: stop_at_fatal(diagnostics),
+        container: None,
+        id_difference: None,
     }
 }
 
@@ -139,7 +163,7 @@ mod tests {
     use ironplc_codegen::EmptyLookup;
     use ironplc_container::StableVarEntry;
     use ironplc_dsl::core::{FileId, SourceSpan};
-    use ironplc_dsl::diagnostic::{has_errors, Diagnostic};
+    use ironplc_dsl::diagnostic::{any_stops_build, Diagnostic, Severity};
     use ironplc_parser::options::CompilerOptions;
     use ironplc_problems::text;
     use spec_test_macro::spec_test;
@@ -434,7 +458,7 @@ END_PROGRAM
             &EmptyLookup,
             vec![],
         );
-        assert!(!has_errors(&built.diagnostics));
+        assert!(!any_stops_build(&built.diagnostics));
         assert!(built.container.is_some());
 
         let mut analysis_error =
@@ -445,7 +469,7 @@ END_PROGRAM
             &EmptyLookup,
             vec![],
         );
-        assert!(has_errors(&rejected.diagnostics));
+        assert!(any_stops_build(&rejected.diagnostics));
         assert!(rejected.container.is_none());
 
         let mut seeded = project_with(VALID_PROGRAM);
@@ -455,8 +479,61 @@ END_PROGRAM
             &EmptyLookup,
             seeded_diagnostic(),
         );
-        assert!(has_errors(&rejected.diagnostics));
+        assert!(any_stops_build(&rejected.diagnostics));
         assert!(rejected.container.is_none());
+    }
+
+    #[spec_test(REQ_DS_project_001)]
+    fn compile_when_only_diagnostics_that_do_not_stop_the_build_then_container_and_the_diagnostics()
+    {
+        let mut project = project_with(VALID_PROGRAM);
+        let seeded: Vec<Diagnostic> = [
+            Severity::Warning,
+            Severity::Information,
+            Severity::Text,
+            Severity::SuppressedWarning,
+        ]
+        .into_iter()
+        .map(|severity| {
+            Diagnostic::text(SourceSpan::default(), text::cannot_read_file("a note"))
+                .with_severity_for_test(severity)
+        })
+        .collect();
+
+        let output = compile(
+            &mut project,
+            &CompilerOptions::default(),
+            &EmptyLookup,
+            seeded,
+        );
+
+        assert!(output.container.is_some());
+        assert_eq!(output.diagnostics.len(), 4);
+    }
+
+    #[spec_test(REQ_DS_project_002)]
+    fn compile_when_seeded_fatal_error_then_no_analysis_and_only_the_fatal_diagnostics() {
+        let mut project =
+            project_with("PROGRAM Main VAR x : INT; END_VAR x := undeclared_var; END_PROGRAM");
+        let mut seeded = seeded_diagnostic();
+        seeded.push(
+            Diagnostic::text(SourceSpan::default(), text::cannot_read_file("fatal"))
+                .with_severity_for_test(Severity::FatalError),
+        );
+
+        let output = compile(
+            &mut project,
+            &CompilerOptions::default(),
+            &EmptyLookup,
+            seeded,
+        );
+
+        assert!(output.container.is_none());
+        assert_eq!(output.diagnostics.len(), 1);
+        assert_eq!(output.diagnostics[0].severity(), Severity::FatalError);
+        // The analysis did not run, so it left nothing on the project.
+        assert!(project.semantic_context().is_none());
+        assert!(project.analyzed_library().is_none());
     }
 
     #[test]

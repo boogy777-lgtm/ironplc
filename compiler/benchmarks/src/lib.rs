@@ -33,7 +33,7 @@ pub fn compile_st(source: &str) -> Container {
     let codes: Vec<&str> = context
         .diagnostics()
         .iter()
-        .filter(|d| d.is_error())
+        .filter(|d| d.stops_build())
         .map(|d| d.code.as_str())
         .collect();
     assert!(codes.is_empty(), "Source has semantic errors: {codes:?}");

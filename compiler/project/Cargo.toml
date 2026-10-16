@@ -29,6 +29,8 @@ ironplc-spec-requirements-gen = { path = "../spec_requirements_gen" }
 
 [dev-dependencies]
 spec_test_macro = { path = "../spec_test_macro" }
+# A fatal error is a category no problem code declares yet.
+ironplc-dsl = { path = "../dsl", version = "0.247.0", features = ["test-support"] }
 # `test-support` gives the disassembler tests the shared container fixtures.
 # Dev-dependency only, so it never reaches a normal build.
 ironplc-container = { path = "../container", version = "0.247.0", features = [

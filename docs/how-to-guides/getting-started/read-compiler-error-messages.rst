@@ -22,8 +22,8 @@ A typical error message from :program:`ironplcc check` looks like this:
 The message has several parts:
 
 - **error[P2001]** — the severity and the problem code. The severity is
-  ``error``, ``warning`` or ``note`` (an information message). The code
-  uniquely identifies the kind of problem.
+  ``error`` (also for a fatal error), ``warning`` or ``note`` (an information
+  message). The code uniquely identifies the kind of problem.
 - **Variable 'Counter' is declared but type 'IN' is not defined** — a
   human-readable summary of what went wrong.
 - **--> main.st:3:7** — the file name, line number, and column where the
@@ -35,10 +35,12 @@ The message has several parts:
 Errors, Warnings and Information
 --------------------------------------
 
-The severity belongs to the problem code. An error means the program is not
-valid: :program:`ironplcc` exits with a failure status and does not produce a
-container. A warning or an information message is shown and does not stop
-:program:`ironplcc check` or :program:`ironplcc compile`.
+The severity belongs to the problem code. An error or a fatal error means the
+program is not valid: :program:`ironplcc` exits with a failure status and does
+not produce a container. A fatal error also ends the run, so the later stages
+do not run. A warning, an information message or a line of text is shown and
+does not stop :program:`ironplcc check` or :program:`ironplcc compile`. A
+message that is suppressed is not shown.
 
 --------------------------------------
 Using Problem Codes

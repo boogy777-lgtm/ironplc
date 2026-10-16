@@ -97,7 +97,7 @@ pub fn build_response(
     }
 
     let diagnostics = project.semantic();
-    let has_errors = ironplc_dsl::diagnostic::has_errors(&diagnostics);
+    let has_errors = ironplc_dsl::diagnostic::any_stops_build(&diagnostics);
     let diagnostics_json = serialize_diagnostics(&diagnostics);
 
     let context = match project.semantic_context() {

@@ -112,8 +112,8 @@ export interface Variable {
 
 export interface Diagnostic {
   code: string;
-  /** Severity of the diagnostic's problem code. Absent on a runtime error. */
-  severity?: "error" | "warning" | "info";
+  /** Category of the diagnostic's problem code. Absent on a runtime error. */
+  severity?: "fatal-error" | "error" | "warning" | "information" | "text";
   message: string;
   label?: string;
   /** Guidance on how to resolve the problem (e.g. "use `(* *)` comments"). */

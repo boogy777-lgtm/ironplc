@@ -31,6 +31,8 @@ ironplc-spec-requirements-gen = { path = "../spec_requirements_gen" }
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
 spec_test_macro = { path = "../spec_test_macro" }
+# A category that no problem code declares yet is built by the tests.
+ironplc-dsl = { path = "../dsl", version = "0.247.0", features = ["test-support"] }
 
 [lints]
 workspace = true

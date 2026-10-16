@@ -3,7 +3,7 @@
 //! Runs parse and full semantic analysis, returning structured diagnostics.
 
 use ironplc_dsl::core::FileId;
-use ironplc_dsl::diagnostic::has_errors;
+use ironplc_dsl::diagnostic::any_stops_build;
 use ironplc_project::project::{MemoryBackedProject, Project};
 use serde::Serialize;
 
@@ -50,7 +50,7 @@ pub fn build_response(sources: &[SourceInput], options_value: &serde_json::Value
     // Run parse + full semantic analysis
     let diagnostics = project.semantic();
     CheckResponse {
-        ok: !has_errors(&diagnostics),
+        ok: !any_stops_build(&diagnostics),
         diagnostics: serialize_diagnostics(&diagnostics),
     }
 }

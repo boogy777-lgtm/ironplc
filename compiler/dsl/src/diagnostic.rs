@@ -119,9 +119,9 @@ pub struct Diagnostic {
     /// A normally unique value describing the type of diagnostic.
     pub code: String,
 
-    /// How serious the diagnostic is. It is the severity of the problem code
-    /// and is set only where the diagnostic is made, so a call site cannot
-    /// decide it.
+    /// The message category of the diagnostic. It is the severity of the problem
+    /// code and is set only where the diagnostic is made, so a call site cannot
+    /// decide it; `suppress` is the one change made afterwards.
     severity: Severity,
 
     description: String,
@@ -148,20 +148,43 @@ pub struct Diagnostic {
     pub source_line: Option<u32>,
 }
 
-/// How many of `diagnostics` are errors.
+/// How many of `diagnostics` stop the build.
 ///
 /// This is the count a failure message reports: a warning or an information
 /// message is shown and is not a problem the program is rejected for.
-pub fn error_count(diagnostics: &[Diagnostic]) -> usize {
-    diagnostics.iter().filter(|d| d.is_error()).count()
+pub fn stops_build_count(diagnostics: &[Diagnostic]) -> usize {
+    diagnostics.iter().filter(|d| d.stops_build()).count()
 }
 
-/// Whether any of `diagnostics` is an error. This is the one test that decides
-/// that a program is rejected -- code generation does not run, a command exits
-/// with a failure, an editor request reports `ok: false` -- so a place that
-/// gates on failure asks this and not whether `diagnostics` is empty.
-pub fn has_errors(diagnostics: &[Diagnostic]) -> bool {
-    diagnostics.iter().any(Diagnostic::is_error)
+/// Whether any of `diagnostics` stops the build. This is the one test that
+/// decides that a program is rejected -- code generation does not run, a
+/// command exits with a failure, an editor request reports `ok: false` -- so a
+/// place that gates on failure asks this and not whether `diagnostics` is empty.
+pub fn any_stops_build(diagnostics: &[Diagnostic]) -> bool {
+    diagnostics.iter().any(Diagnostic::stops_build)
+}
+
+/// The diagnostics of a stage, cut short as CODESYS cuts a build short at a
+/// fatal error: when any is a `FatalError`, the diagnostics found so far are
+/// dropped and only the fatal ones remain, and the caller runs no later stage.
+/// Without a fatal error the diagnostics are returned as they are.
+pub fn stop_at_fatal(diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
+    if has_fatal(&diagnostics) {
+        diagnostics
+            .into_iter()
+            .filter(|d| d.severity == Severity::FatalError)
+            .collect()
+    } else {
+        diagnostics
+    }
+}
+
+/// Whether any of `diagnostics` is a `FatalError`, after which no later stage
+/// runs.
+pub fn has_fatal(diagnostics: &[Diagnostic]) -> bool {
+    diagnostics
+        .iter()
+        .any(|d| d.severity == Severity::FatalError)
 }
 
 /// Formats the label message for a "not implemented" diagnostic from the
@@ -441,17 +464,35 @@ impl Diagnostic {
         self
     }
 
-    /// The severity the diagnostic's problem code declares.
+    /// The category the diagnostic's problem code declares, or the one it was
+    /// suppressed to.
     pub fn severity(&self) -> Severity {
         self.severity
     }
 
-    /// Whether the diagnostic is an error, which is the one question that
+    /// Whether the diagnostic stops the build, which is the one question that
     /// decides whether a program is rejected: a warning or an information
-    /// message is shown and does not stop compilation. Ask this, not whether
-    /// there are any diagnostics.
-    pub fn is_error(&self) -> bool {
-        self.severity == Severity::Error
+    /// message is shown and does not stop it. Ask this, not whether there are
+    /// any diagnostics.
+    pub fn stops_build(&self) -> bool {
+        self.severity.stops_build()
+    }
+
+    /// Suppresses the diagnostic: a warning becomes a suppressed warning and an
+    /// information message a suppressed information message, which are not
+    /// shown. A category that cannot be suppressed stays, as in CODESYS. This is
+    /// the one way to change the category of a diagnostic after it is made.
+    pub fn suppress(mut self) -> Self {
+        self.severity = self.severity.suppressed();
+        self
+    }
+
+    /// Gives the diagnostic a category no problem code declares yet, so that a
+    /// test of a consumer can build a fatal error or a warning.
+    #[cfg(feature = "test-support")]
+    pub fn with_severity_for_test(mut self, severity: Severity) -> Self {
+        self.severity = severity;
+        self
     }
 
     /// Returns the description for the diagnostic. This may add in other

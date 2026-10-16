@@ -233,15 +233,23 @@ fn snake_case_of_name_when_camel_case_acronym_and_digits_then_words_split_once()
 }
 
 #[test]
-fn severity_variant_when_each_level_then_its_variant() {
-    assert_eq!(severity_variant("P0001", "Error"), Ok("Error"));
-    assert_eq!(severity_variant("P0001", "Warning"), Ok("Warning"));
-    assert_eq!(severity_variant("P0001", "Info"), Ok("Info"));
+fn severity_variant_when_declarable_level_then_its_variant() {
+    for level in ["FatalError", "Error", "Warning", "Information", "Text"] {
+        assert_eq!(severity_variant("P0001", level), Ok(level));
+    }
 }
 
 #[test]
-fn severity_variant_when_missing_or_unknown_then_error_names_code_and_value() {
-    for value in ["", "error", "Warn", "Information", " Error"] {
+fn severity_variant_when_missing_unknown_or_suppressed_then_error_names_code_and_value() {
+    for value in [
+        "",
+        "error",
+        "Warn",
+        "Info",
+        " Error",
+        "SuppressedWarning",
+        "SuppressedInformation",
+    ] {
         let message = severity_variant("P0042", value).expect_err("the value should be refused");
 
         assert!(message.contains("P0042"), "'{value}': {message}");
@@ -250,7 +258,7 @@ fn severity_variant_when_missing_or_unknown_then_error_names_code_and_value() {
             "'{value}': {message}"
         );
         assert!(
-            message.contains("Error, Warning, Info"),
+            message.contains("FatalError, Error, Warning, Information, Text"),
             "'{value}': {message}"
         );
     }
@@ -279,29 +287,67 @@ fn check_problem_codes_header_when_column_missing_or_moved_then_error() {
 }
 
 #[test]
-fn render_severity_enum_when_called_then_one_variant_for_each_level() {
+fn render_severity_enum_when_called_then_the_seven_categories_in_the_order_of_codesys() {
     let source = render_severity_enum();
 
-    assert!(source.contains("pub enum Severity {"), "{source}");
-    for level in ["Error", "Warning", "Info"] {
-        assert!(
-            source.contains(&format!(
-                "    {level},
-"
-            )),
-            "{source}"
-        );
-    }
+    let positions: Vec<usize> = [
+        "FatalError",
+        "Error",
+        "Warning",
+        "Information",
+        "Text",
+        "SuppressedWarning",
+        "SuppressedInformation",
+    ]
+    .iter()
+    .map(|name| {
+        source
+            .find(&format!("    {name},\n"))
+            .unwrap_or_else(|| panic!("no variant {name}: {source}"))
+    })
+    .collect();
+    assert!(
+        positions.windows(2).all(|pair| pair[0] < pair[1]),
+        "{source}"
+    );
 }
 
 #[test]
-fn render_severity_enum_when_called_then_name_matches_every_level_in_lower_case() {
+fn render_severity_enum_when_called_then_each_question_is_an_exhaustive_match_without_wildcard() {
     let source = render_severity_enum();
 
-    for (level, name) in [("Error", "error"), ("Warning", "warning"), ("Info", "info")] {
+    for function in ["name", "stops_build", "is_shown", "suppressed"] {
         assert!(
-            source.contains(&format!("Severity::{level} => \"{name}\",")),
+            source.contains(&format!("pub fn {function}(&self)")),
             "{source}"
         );
+    }
+    assert!(!source.contains("_ =>"), "{source}");
+    assert_eq!(source.matches("match self {").count(), 4, "{source}");
+    // Seven arms for each of the four questions.
+    assert_eq!(
+        source.matches("            Severity::").count(),
+        28,
+        "{source}"
+    );
+}
+
+#[test]
+fn render_severity_enum_when_called_then_the_facts_of_each_category() {
+    let source = render_severity_enum();
+
+    for line in [
+        "Severity::FatalError => \"fatal-error\",",
+        "Severity::SuppressedInformation => \"suppressed-information\",",
+        "Severity::FatalError => true,",
+        "Severity::Error => true,",
+        "Severity::Warning => false,",
+        "Severity::SuppressedWarning => false,",
+        "Severity::Warning => Severity::SuppressedWarning,",
+        "Severity::Information => Severity::SuppressedInformation,",
+        "Severity::Text => Severity::Text,",
+        "Severity::Error => Severity::Error,",
+    ] {
+        assert!(source.contains(line), "{line}: {source}");
     }
 }
