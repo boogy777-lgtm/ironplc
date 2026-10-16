@@ -14,21 +14,24 @@ use log::debug;
 /// For Structured Text files, tokenizes the entire content.
 /// For XML files, extracts and tokenizes each POU's ST body.
 ///
+/// The sources are lexed under `options`, the dialect and flags the user
+/// selected: a word that the dialect makes a keyword is a keyword in the dump,
+/// and an ordinary name where it does not.
+///
 /// Token dumps are printed to stdout as each body is processed. Returns
 /// every diagnostic produced — an empty vector means the source tokenized
 /// cleanly. Rendering (and exit-status) decisions belong to the caller.
-pub fn tokenize_source(src: &Source) -> Vec<Diagnostic> {
+pub fn tokenize_source(src: &Source, options: &CompilerOptions) -> Vec<Diagnostic> {
     match src.file_type() {
-        FileType::Xml => tokenize_xml(src.as_string(), src.file_id()),
+        FileType::Xml => tokenize_xml(src.as_string(), src.file_id(), options),
         FileType::StructuredText | FileType::TwinCat | FileType::Unknown => {
-            tokenize_st(src.as_string(), src.file_id())
+            tokenize_st(src.as_string(), src.file_id(), options)
         }
     }
 }
 
-fn tokenize_st(content: &str, file_id: &FileId) -> Vec<Diagnostic> {
-    let (tokens, diagnostics) =
-        tokenize_program(content, file_id, &CompilerOptions::default(), 0, 0);
+fn tokenize_st(content: &str, file_id: &FileId, options: &CompilerOptions) -> Vec<Diagnostic> {
+    let (tokens, diagnostics) = tokenize_program(content, file_id, options, 0, 0);
 
     let tokens = format_tokens(&tokens);
 
@@ -42,7 +45,7 @@ fn tokenize_st(content: &str, file_id: &FileId) -> Vec<Diagnostic> {
     diagnostics
 }
 
-fn tokenize_xml(content: &str, file_id: &FileId) -> Vec<Diagnostic> {
+fn tokenize_xml(content: &str, file_id: &FileId, options: &CompilerOptions) -> Vec<Diagnostic> {
     // Parse the XML document
     let xml_project = match xml::parse_plcopen_xml(content, file_id) {
         Ok(project) => project,
@@ -67,6 +70,7 @@ fn tokenize_xml(content: &str, file_id: &FileId) -> Vec<Diagnostic> {
                     &format!("POU: {} ({})", pou.name, pou_type),
                     st_body,
                     file_id,
+                    options,
                 ));
             } else if let Some((lang, _range)) = body.unsupported_language() {
                 print_header(
@@ -85,6 +89,7 @@ fn tokenize_xml(content: &str, file_id: &FileId) -> Vec<Diagnostic> {
                         &format!("Action: {}.{}", pou.name, action.name),
                         st_body,
                         file_id,
+                        options,
                     ));
                 }
             }
@@ -99,6 +104,7 @@ fn tokenize_xml(content: &str, file_id: &FileId) -> Vec<Diagnostic> {
                         &format!("Transition: {}.{}", pou.name, transition.name),
                         st_body,
                         file_id,
+                        options,
                     ));
                 }
             }
@@ -115,13 +121,14 @@ fn tokenize_st_body(
     header: &str,
     st_body: &xml::StBody,
     file_id: &FileId,
+    options: &CompilerOptions,
 ) -> Vec<Diagnostic> {
     print_header(first_pou, header);
 
     let (tokens, diagnostics) = tokenize_program(
         &st_body.text,
         file_id,
-        &CompilerOptions::default(),
+        options,
         st_body.line_offset,
         st_body.col_offset,
     );
