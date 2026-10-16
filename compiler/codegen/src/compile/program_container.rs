@@ -24,10 +24,10 @@ use super::{
 };
 use crate::compile_fn::{compile_user_function, compile_user_function_block};
 use crate::compile_initial_value::{emit_initial_values, emit_temporaries_prologue};
-use crate::compile_setup::assign_variables;
+use crate::compile_setup::{assign_variables, Placement};
 use crate::compile_stmt::compile_body;
 use crate::emit::Emitter;
-use crate::persistent::{program_declarations, program_temporaries};
+use crate::persistent::{call_scoped_declarations, program_declarations};
 
 /// Idempotently registers a POU's source file with the debug section's
 /// SOURCE_FILE_TABLE. Called from `compile_program_with_functions` for
@@ -260,6 +260,7 @@ pub(super) fn compile_program_with_functions(
         global_vars,
         types,
         &options.stable_var_ids,
+        Placement::Program,
     )?;
     let num_globals = ctx.variables.len() as u16;
 
@@ -280,6 +281,7 @@ pub(super) fn compile_program_with_functions(
         &local_vars,
         types,
         &options.stable_var_ids,
+        Placement::Program,
     )?;
     let program_var_count = ctx.variables.len() as u16;
     // The persistent part ends here: every variable slot and every byte of the
@@ -300,8 +302,15 @@ pub(super) fn compile_program_with_functions(
     // slots and the data region right after the persistent part, where the
     // slots of functions are, and are not part of what the container declares
     // persistent. They start again at every scan (the prologue of the scan).
-    let temporaries: Vec<VarDecl> = program_temporaries(program);
-    assign_variables(&mut ctx, &mut builder, &temporaries, types, &[])?;
+    let temporaries: Vec<VarDecl> = call_scoped_declarations(&program.variables);
+    assign_variables(
+        &mut ctx,
+        &mut builder,
+        &temporaries,
+        types,
+        &[],
+        Placement::Program,
+    )?;
 
     // Now compile the FB bodies with correct var_offsets.
     let mut compiled_functions = Vec::new();

@@ -24,12 +24,15 @@ use super::compile::{
     WIDE_CHAR_WIDTH,
 };
 use super::compile_expr::emit_load_var;
-use super::compile_initial_value::emit_function_local_prologue;
-use super::compile_setup::{debug_type_for_decl, debug_type_for_return, map_var_section};
+use super::compile_initial_value::{emit_function_local_prologue, emit_temporaries_prologue};
+use super::compile_setup::{
+    assign_variables, debug_type_for_decl, debug_type_for_return, map_var_section, Placement,
+};
 use super::compile_stmt::{compile_body, compile_statements, resolve_string_spec_max_length};
 use super::compile_var_table::{record_decl_var_entry, record_return_var_entry};
 use super::type_info::{decl_type_info, resolve_type_name};
 use crate::emit::Emitter;
+use crate::persistent::call_scoped_declarations;
 use crate::string_storage::{register_string_variable, StringHome};
 
 /// The entries of `scope` whose variable is a global: the variable table
@@ -457,6 +460,18 @@ pub(crate) fn compile_user_function(
 /// All FB fields (VAR_INPUT, VAR_OUTPUT, VAR) are mapped to contiguous
 /// variable table slots starting at `var_offset`, in declaration order.
 /// The VM's copy-in/copy-out logic mirrors this ordering.
+///
+/// The block's `VAR_TEMP` is not a field. It takes the slots after the fields,
+/// which the VM neither copies in nor copies out, and any data region it needs
+/// (a string, an array, a structure, an instance) is reserved once for the
+/// type, as for the locals of a function. The prologue of the body starts it
+/// again at every call. One call of a body completes before any other call of
+/// the same type begins (a block cannot call itself), so the instances of one
+/// type share these slots without being able to disturb each other. This is
+/// the mechanism of the `VAR_TEMP` of a program (`assign_variables` and
+/// `emit_temporaries_prologue`), placed in the working memory of the body
+/// rather than after the persistent part; the slots and their data stay out
+/// of the instance, of the type's field list and so of the layout hash.
 pub(crate) fn compile_user_function_block(
     fb_decl: &FunctionBlockDeclaration,
     function_id: FunctionId,
@@ -530,6 +545,19 @@ pub(crate) fn compile_user_function_block(
         }
     }
 
+    let temporaries = call_scoped_declarations(&fb_decl.variables);
+    assign_variables(
+        ctx,
+        builder,
+        &temporaries,
+        types,
+        &[],
+        Placement::Body {
+            function_id,
+            next: &mut current_index,
+        },
+    )?;
+
     let num_locals = current_index.raw() - var_offset;
 
     // Compile the FB body.
@@ -540,9 +568,19 @@ pub(crate) fn compile_user_function_block(
     ctx.current_function_id = Some(function_id);
 
     let mut fb_emitter = Emitter::new();
+    emit_temporaries_prologue(&mut fb_emitter, ctx, &temporaries, types)?;
     crate::compile_edge::bind_edge_inputs(&mut fb_emitter, ctx, &edge_inputs)?;
     compile_body(&mut fb_emitter, ctx, &fb_decl.body, &fb_decl.name.span())?;
     fb_emitter.emit_ret_void();
+
+    // The temporaries belong to this body: the methods that follow, which see
+    // the fields, must not see them.
+    for id in temporaries
+        .iter()
+        .filter_map(|d| d.identifier.symbolic_id())
+    {
+        ctx.forget_variable(id);
+    }
 
     ctx.current_function_id = saved_current_fn;
 

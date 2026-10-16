@@ -213,6 +213,19 @@ impl CompileContext {
         }
     }
 
+    /// Removes `name` from every per-scope map, so that code compiled after
+    /// this call (the methods of a function block, after its body) does not
+    /// find the variable of a scope that has ended.
+    pub(crate) fn forget_variable(&mut self, name: &Id) {
+        self.variables.remove(name);
+        self.var_types.remove(name);
+        self.string_vars.remove(name);
+        self.fb_instances.remove(name);
+        self.array_vars.remove(name);
+        self.struct_vars.remove(name);
+        self.struct_array_vars.remove(name);
+    }
+
     /// Looks up a variable index by identifier, using the provided span for error reporting.
     ///
     /// A `VAR_IN_OUT` parameter's slot holds a reference, not the value, so
