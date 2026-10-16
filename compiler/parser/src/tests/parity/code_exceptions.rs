@@ -32,7 +32,7 @@ pub const CODE_EXCEPTIONS: &[CodeException] = &[
             "found `_`, expected a type declaration",
         ],
         reason: MISSING_AT_PLACE,
-        expected: 378,
+        expected: 384,
     },
     CodeException {
         legacy_code: "P0002",

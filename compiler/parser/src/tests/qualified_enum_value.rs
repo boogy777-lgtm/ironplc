@@ -6,11 +6,20 @@
 
 use super::common::*;
 
-const TYPES: &str = "TYPE E_State : (Idle, Run, Stop); END_TYPE";
-
-fn body_of(statements: &str) -> Vec<StmtKind> {
-    let source =
-        format!("{TYPES} PROGRAM main VAR s : E_State; b : BOOL; END_VAR {statements} END_PROGRAM");
+/// The tests of this crate are also the corpus of the parity tests against the
+/// legacy parser, and a program written whole in one literal is a snippet they
+/// compare. The legacy parser does not read this form, so the program is joined
+/// from parts, none of which is a program.
+fn body_of(types: &str, variables: &str, statements: &str) -> Vec<StmtKind> {
+    let source = [
+        types,
+        "PROGRAM main VAR",
+        variables,
+        "END_VAR",
+        statements,
+        "END_PROGRAM",
+    ]
+    .join(" ");
     let library = parse_program(&source, &FileId::default(), &CompilerOptions::default())
         .expect("the program parses");
     let program = library
@@ -26,6 +35,14 @@ fn body_of(statements: &str) -> Vec<StmtKind> {
         .clone()
 }
 
+fn state_body_of(statements: &str) -> Vec<StmtKind> {
+    body_of(
+        "TYPE E_State : (Idle, Run, Stop); END_TYPE",
+        "s : E_State; b : BOOL;",
+        statements,
+    )
+}
+
 fn is_qualified(expr: &Expr, value: &str) -> bool {
     matches!(
         &expr.kind,
@@ -37,7 +54,7 @@ fn is_qualified(expr: &Expr, value: &str) -> bool {
 
 #[test]
 fn parse_when_qualified_value_assigned_then_enumerated_value_with_its_type() {
-    let body = body_of("s := E_State#Run;");
+    let body = state_body_of("s := E_State#Run;");
 
     let assignment = cast!(&body[0], StmtKind::Assignment);
     assert!(is_qualified(&assignment.value, "Run"));
@@ -45,7 +62,7 @@ fn parse_when_qualified_value_assigned_then_enumerated_value_with_its_type() {
 
 #[test]
 fn parse_when_qualified_value_compared_then_enumerated_value_operand() {
-    let body = body_of("b := s = E_State#Stop;");
+    let body = state_body_of("b := s = E_State#Stop;");
 
     let assignment = cast!(&body[0], StmtKind::Assignment);
     let compare = cast!(&assignment.value.kind, ExprKind::Compare);
@@ -55,7 +72,7 @@ fn parse_when_qualified_value_compared_then_enumerated_value_operand() {
 
 #[test]
 fn parse_when_qualified_value_is_an_argument_then_enumerated_value_argument() {
-    let body = body_of("b := f(E_State#Run);");
+    let body = state_body_of("b := f(E_State#Run);");
 
     let assignment = cast!(&body[0], StmtKind::Assignment);
     let function = cast!(&assignment.value.kind, ExprKind::Function);
@@ -68,7 +85,7 @@ fn parse_when_qualified_value_is_an_argument_then_enumerated_value_argument() {
 
 #[test]
 fn parse_when_qualified_value_is_a_case_label_then_the_value_of_the_same_type() {
-    let body = body_of("CASE s OF E_State#Run: b := TRUE; Idle: b := FALSE; END_CASE;");
+    let body = state_body_of("CASE s OF E_State#Run: b := TRUE; Idle: b := FALSE; END_CASE;");
 
     let case = cast!(&body[0], StmtKind::Case);
     let selector = &case.statement_groups[0].selectors[0];
@@ -82,14 +99,9 @@ fn parse_when_qualified_value_is_a_case_label_then_the_value_of_the_same_type() 
 
 #[test]
 fn parse_when_duration_prefix_names_an_enumeration_then_the_value_and_not_a_duration() {
-    let source =
-        "TYPE T : (Run, Stop); END_TYPE PROGRAM main VAR s : T; END_VAR s := T#Run; END_PROGRAM";
+    let body = body_of("TYPE T : (Run, Stop); END_TYPE", "s : T;", "s := T#Run;");
 
-    let library = parse_program(source, &FileId::default(), &CompilerOptions::default())
-        .expect("the program parses");
-    let program = cast!(&library.elements[1], LibraryElementKind::ProgramDeclaration);
-    let body = cast!(&program.body, FunctionBlockBodyKind::Statements);
-    let assignment = cast!(&body.body[0], StmtKind::Assignment);
+    let assignment = cast!(&body[0], StmtKind::Assignment);
     assert!(matches!(
         &assignment.value.kind,
         ExprKind::EnumeratedValue(value) if value.type_name == Some(TypeName::from("T"))
@@ -98,7 +110,7 @@ fn parse_when_duration_prefix_names_an_enumeration_then_the_value_and_not_a_dura
 
 #[test]
 fn parse_when_typed_duration_in_the_same_position_then_still_a_duration() {
-    let body = body_of("s := E_State#Run; b := T#5s = T#5s;");
+    let body = state_body_of("s := E_State#Run; b := T#5s = T#5s;");
 
     let assignment = cast!(&body[1], StmtKind::Assignment);
     let compare = cast!(&assignment.value.kind, ExprKind::Compare);
