@@ -129,7 +129,13 @@ CODESYS texts. The resource strings come from `Compiler35220` (`CompilerStrings`
 | limits | `More than {0} errors occured: Skipping all further error messages`, the same for warnings (limit 500) | Text |
 
 Tasks:
-- [ ] One header renderer whose words per category come from one exhaustive match. The bracket form and spelling (`[ERROR]`, `[WARNING]`, `[INFORMATION]`, …) come from the format study.
+- [ ] One header renderer whose words per category come from one exhaustive match. The format study found no CODESYS text form for a single message line:
+  - CODESYS shows a message's category as an icon in the Messages view, with the columns Description, Project, Object and Position;
+  - scripting exposes the category names `FatalError`, `Error`, `Warning`, `Information` and `Text`;
+  - no `[ERROR]`-style label exists in the resources or in the decompiled code.
+
+  The header therefore uses the CODESYS category names, as the owner chooses: the words of the Messages view or the scripting names.
+- [ ] The summary counts follow CODESYS: "{0} errors, {1} warnings", with the plural used even for one.
 - [ ] `check` ends with the "Compile complete" line, and `compile` with the "Build complete" line. Each counts errors and warnings with the categories of PR 1.
 - [ ] The texts are rows of the message dictionary (`problem-texts.csv`), not literals.
 - [ ] The 500 limits, as CODESYS.
