@@ -25,7 +25,8 @@ Every tool that takes source files shares two input fields:
 All tools return ``diagnostics`` as an array of objects with ``code``,
 ``message``, ``file``, ``start``, ``end``, and ``severity`` fields.
 ``code`` is a problem code documented in
-:doc:`/reference/compiler/problems/index`.
+:doc:`/reference/compiler/problems/index`. ``severity`` is ``"error"``,
+``"warning"`` or ``"info"``.
 
 Analysis Tools
 ==============
