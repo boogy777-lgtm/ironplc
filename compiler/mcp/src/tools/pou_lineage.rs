@@ -20,9 +20,7 @@ use ironplc_project::project::{MemoryBackedProject, Project};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::common::{
-    parse_options, serialize_diagnostics, severity_name, validate_sources, SourceInput,
-};
+use super::common::{parse_options, serialize_diagnostics, validate_sources, SourceInput};
 use ironplc_dsl::diagnostic::Severity;
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -410,7 +408,7 @@ fn not_found_diagnostic(pou_name: &str) -> serde_json::Value {
     serde_json::json!({
         "code": "P8001",
         "message": format!("No POU named '{}' found.", pou_name),
-        "severity": severity_name(Severity::Error),
+        "severity": Severity::Error.name(),
         "file": "",
         "start": 0,
         "end": 0

@@ -57,10 +57,11 @@ Chosen option: **a `Severity` column of `problem-codes.csv`**.
   run command, the `ok` of the MCP tools and the benchmark fixtures.
 - Every display maps `Severity` with a `match` that has no wildcard arm: the
   command line prints `error`, `warning` and `note` (the codespan category of
-  an information message), the language server uses `ERROR`, `WARNING` and
-  `INFORMATION`, and the MCP tools and the playground write `"error"`,
-  `"warning"` and `"info"`. A fourth level does not compile until each of them
-  handles it.
+  an information message), and the language server uses `ERROR`, `WARNING` and
+  `INFORMATION`. The MCP tools and the playground write the text of the level,
+  `"error"`, `"warning"` or `"info"`, which `Severity::name()` returns; it is
+  generated with the enumeration, from the same list of levels. A fourth level
+  does not compile until the command line and the language server handle it.
 - An analysis pass that collects diagnostics and returns `Err` to stop that pass
   is not a gate and is unchanged; the diagnostics it returns reach the gates
   above through the semantic context.

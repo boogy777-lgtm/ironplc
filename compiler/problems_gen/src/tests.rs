@@ -293,3 +293,15 @@ fn render_severity_enum_when_called_then_one_variant_for_each_level() {
         );
     }
 }
+
+#[test]
+fn render_severity_enum_when_called_then_name_matches_every_level_in_lower_case() {
+    let source = render_severity_enum();
+
+    for (level, name) in [("Error", "error"), ("Warning", "warning"), ("Info", "info")] {
+        assert!(
+            source.contains(&format!("Severity::{level} => \"{name}\",")),
+            "{source}"
+        );
+    }
+}

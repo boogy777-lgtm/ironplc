@@ -7,9 +7,7 @@ use ironplc_project::project::{MemoryBackedProject, Project};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::common::{
-    parse_options, serialize_diagnostics, severity_name, validate_sources, SourceInput,
-};
+use super::common::{parse_options, serialize_diagnostics, validate_sources, SourceInput};
 use ironplc_dsl::diagnostic::Severity;
 
 const MAX_RESPONSE_BYTES: usize = 256 * 1024;
@@ -149,7 +147,7 @@ pub fn build_response(
                 vec![serde_json::json!({
                     "code": "P8001",
                     "message": "Response exceeds 256 KiB limit. Use the `pou` filter or a context tool (`pou_scope`, `project_io`, `types_all`) instead.",
-                    "severity": severity_name(Severity::Error),
+                    "severity": Severity::Error.name(),
                     "file": "",
                     "start": 0,
                     "end": 0
@@ -250,7 +248,7 @@ fn apply_pou_filter(
         diags.push(serde_json::json!({
             "code": "P8001",
             "message": format!("No POU named '{}' found.", pou_name),
-            "severity": severity_name(Severity::Error),
+            "severity": Severity::Error.name(),
             "file": "",
             "start": 0,
             "end": 0

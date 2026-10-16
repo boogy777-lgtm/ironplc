@@ -9,7 +9,7 @@
 use std::collections::HashSet;
 
 use ironplc_dsl::core::SourceSpan;
-use ironplc_dsl::diagnostic::{Diagnostic, Severity};
+use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_parser::options::{CompilerOptions, Dialect};
 use ironplc_problems::{text, Text};
 use schemars::JsonSchema;
@@ -225,19 +225,8 @@ pub fn serialize_diagnostic(diag: &Diagnostic) -> serde_json::Value {
         "file": diag.primary.file_id.to_string(),
         "start": diag.primary.location.start,
         "end": diag.primary.location.end,
-        "severity": severity_name(diag.severity()),
+        "severity": diag.severity().name(),
     })
-}
-
-/// The `severity` string a diagnostic of the given severity carries in a tool
-/// response. No arm is a wildcard: a level added to `Severity` does not compile
-/// until it is named here.
-pub fn severity_name(severity: Severity) -> &'static str {
-    match severity {
-        Severity::Error => "error",
-        Severity::Warning => "warning",
-        Severity::Info => "info",
-    }
 }
 
 /// Batch-serialises compiler diagnostics to a JSON array.

@@ -57,27 +57,33 @@ const SEVERITIES: &[(&str, &str)] = &[
     ),
 ];
 
-/// The source of `enum Severity`, with a variant for each level.
+/// The source of `enum Severity` and of `Severity::name`, with a variant and an
+/// arm for each level.
 pub fn render_severity_enum() -> String {
-    let mut out = String::from(
-        "/// How serious a diagnostic is. Every problem code declares its level in the
-/// `Severity` column of `problem-codes.csv`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Severity {
-",
-    );
+    let mut out = String::from(concat!(
+        "/// How serious a diagnostic is. Every problem code declares its level in the\n",
+        "/// `Severity` column of `problem-codes.csv`.\n",
+        "#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]\n",
+        "pub enum Severity {\n",
+    ));
     for (name, doc) in SEVERITIES {
+        out.push_str(&format!("    /// {doc}\n    {name},\n"));
+    }
+    out.push_str(concat!(
+        "}\n\n",
+        "impl Severity {\n",
+        "    /// The name the level has where a program reads it as text, such as the\n",
+        "    /// `severity` of a diagnostic in a JSON response: the variant in lower case.\n",
+        "    pub fn name(&self) -> &'static str {\n",
+        "        match self {\n",
+    ));
+    for (name, _) in SEVERITIES {
         out.push_str(&format!(
-            "    /// {doc}
-    {name},
-"
+            "            Severity::{name} => \"{}\",\n",
+            name.to_ascii_lowercase()
         ));
     }
-    out.push_str(
-        "}
-
-",
-    );
+    out.push_str("        }\n    }\n}\n\n");
     out
 }
 

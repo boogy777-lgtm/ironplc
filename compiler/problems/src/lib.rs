@@ -151,6 +151,9 @@ mod tests {
         assert_eq!(level_name(Problem::SyntaxError.severity()), "Error");
         assert_eq!(level_name(Severity::Warning), "Warning");
         assert_eq!(level_name(Severity::Info), "Info");
+        assert_eq!(Severity::Error.name(), "error");
+        assert_eq!(Severity::Warning.name(), "warning");
+        assert_eq!(Severity::Info.name(), "info");
     }
 
     #[spec_test(REQ_DS_problems_002)]
