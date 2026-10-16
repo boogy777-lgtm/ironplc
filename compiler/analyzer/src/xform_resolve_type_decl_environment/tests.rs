@@ -606,6 +606,25 @@ END_FUNCTION_BLOCK
 }
 
 #[test]
+fn apply_when_function_block_declares_var_temp_then_it_is_no_member_of_the_type() {
+    // A `VAR_TEMP` belongs to one call of the body: `inst.t` names nothing.
+    let program = "
+FUNCTION_BLOCK Blk
+    VAR_INPUT a : INT; END_VAR
+    VAR_OUTPUT q : INT; END_VAR
+    VAR_TEMP t : INT; END_VAR
+    VAR c : INT; END_VAR
+END_FUNCTION_BLOCK
+    ";
+    let (_result, env) = parse_and_apply_with_elementary_types(program);
+
+    let blk = env.get(&TypeName::from("Blk")).unwrap();
+    let fields = blk.representation.member_fields().unwrap();
+    let names: Vec<String> = fields.iter().map(|field| field.name.to_string()).collect();
+    assert_eq!(names, vec!["a", "q", "c"]);
+}
+
+#[test]
 #[spec_test(REQ_ATTR_analyzer_022)]
 fn apply_when_function_block_has_fields_then_offsets_follow_natural_alignment_of_the_layout() {
     let program = "

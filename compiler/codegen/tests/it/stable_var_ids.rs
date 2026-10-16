@@ -303,3 +303,38 @@ END_PROGRAM
         .collect();
     assert_eq!(names, vec!["A".to_string()]);
 }
+
+#[test]
+fn persistent_scopes_when_function_block_declares_var_temp_then_it_is_not_a_field() {
+    // A `VAR_TEMP` of a function block belongs to one call of its body, so it
+    // is no field of the instance and the engineering side gives it no ID.
+    let source = "
+FUNCTION_BLOCK scratch
+  VAR_OUTPUT q : DINT; END_VAR
+  VAR_TEMP t : DINT; END_VAR
+  VAR kept : DINT; END_VAR
+  t := 1;
+  kept := kept + t;
+  q := kept;
+END_FUNCTION_BLOCK
+
+PROGRAM main
+  VAR s : scratch; END_VAR
+  s();
+END_PROGRAM
+";
+    let (library, _) = parse(source, &CompilerOptions::default());
+
+    let scopes = ironplc_codegen::persistent_scopes(&library, &CodegenOptions::default());
+
+    let block = scopes
+        .iter()
+        .find(|scope| scope.scope == Id::from("scratch"))
+        .unwrap();
+    let names: Vec<String> = block
+        .variables
+        .iter()
+        .map(|variable| variable.identifier.to_string())
+        .collect();
+    assert_eq!(names, vec!["q".to_string(), "kept".to_string()]);
+}

@@ -64,7 +64,7 @@ END_PROGRAM
 
 /// Runs `source` for three scans and asserts that the variable at index 0
 /// reads `expected` after each of them.
-fn assert_every_scan(source: &str, expected: i32) {
+pub(crate) fn assert_every_scan(source: &str, expected: i32) {
     parse_and_run_rounds(source, &CompilerOptions::default(), |vm| {
         for scan in 1..=3 {
             vm.run_round(0).unwrap();
@@ -235,7 +235,7 @@ END_PROGRAM
 // that has never run. The persistent variables come first, so `rn` is at index
 // 0, `rk` at 1 and `ls` at 2.
 
-const COUNTER_BLOCK: &str = "
+pub(crate) const COUNTER_BLOCK: &str = "
 FUNCTION_BLOCK Cnt
   VAR n : INT; k : INT := 10; s : STRING[8] := 'x'; END_VAR
   n := n + 1;
@@ -246,7 +246,7 @@ END_FUNCTION_BLOCK
 
 /// Runs `source` for three scans and asserts that variables 0, 1 and 2 read
 /// `expected` after each of them.
-fn assert_instance_every_scan(source: &str, expected: [i32; 3]) {
+pub(crate) fn assert_instance_every_scan(source: &str, expected: [i32; 3]) {
     parse_and_run_rounds(source, &CompilerOptions::default(), |vm| {
         for scan in 1..=3 {
             vm.run_round(0).unwrap();

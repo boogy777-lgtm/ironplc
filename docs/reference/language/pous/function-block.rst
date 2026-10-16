@@ -66,6 +66,10 @@ Function blocks must be instantiated as variables before use:
 
 Outputs are accessed using dot notation on the instance.
 
+A function block can declare temporary variables (``VAR_TEMP``). Unlike the
+variables in ``VAR``, a temporary variable does not keep its value in the
+instance: it starts again at every call (see :ref:`temporary-variables`).
+
 Access from Outside
 -------------------
 

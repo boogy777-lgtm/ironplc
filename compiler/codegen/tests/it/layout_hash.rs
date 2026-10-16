@@ -16,6 +16,7 @@ use ironplc_container::{
 use ironplc_dsl::common::{DeclarationQualifier, LibraryElementKind, VarDecl};
 use ironplc_parser::options::CompilerOptions;
 use ironplc_test::edit_classes::{dint_program, edit_classes, Layout};
+use rstest::rstest;
 
 /// Compiles `source` and returns its layout hash, as `write_to` would store
 /// it in the header.
@@ -321,6 +322,51 @@ END_PROGRAM
 ";
 
     assert_eq!(layout_hash(without), layout_hash(with));
+}
+
+/// The `VAR_TEMP` of a function block is working memory of its body, not a
+/// field of the instance: declaring one or removing one leaves the layout hash
+/// and the fields of the type as they were. (`other` is instantiated by the
+/// program in both sources, since a type that nothing instantiates is not in
+/// the container, and adding it to the container changes the type table.)
+#[rstest]
+#[case::scalar("n : DINT;")]
+#[case::string("t : STRING[8];")]
+#[case::array("a : ARRAY[1..4] OF INT;")]
+#[case::function_block_instance("o : other;")]
+fn layout_hash_when_function_block_var_temp_added_or_removed_then_unchanged(
+    #[case] temporary: &str,
+) {
+    let block = |temporaries: &str| {
+        format!(
+            "
+FUNCTION_BLOCK other
+  VAR_OUTPUT z : DINT; END_VAR
+  z := 1;
+END_FUNCTION_BLOCK
+
+FUNCTION_BLOCK scratch
+  VAR_INPUT step : DINT; END_VAR
+  VAR_OUTPUT q : DINT; END_VAR
+  VAR kept : DINT; END_VAR
+  {temporaries}
+  kept := kept + step;
+  q := kept;
+END_FUNCTION_BLOCK
+
+PROGRAM main
+  VAR s : scratch; u : other; r : DINT; END_VAR
+  s(step := 1);
+  u();
+  r := s.q + u.z;
+END_PROGRAM
+"
+        )
+    };
+    let without = block("");
+    let with = block(&format!("VAR_TEMP {temporary} END_VAR"));
+
+    assert_eq!(layout_hash(&without), layout_hash(&with));
 }
 
 /// The function block type table lists the fields of each user function block

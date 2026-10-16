@@ -7,7 +7,7 @@
 use ironplc_container::debug_section::{
     function_id, iec_type_tag, var_section, StringLayoutEntry, VarNameEntry,
 };
-use ironplc_container::{ContainerBuilder, VarIndex};
+use ironplc_container::{ContainerBuilder, FunctionId, VarIndex};
 use ironplc_dsl::common::{
     FunctionReturnType, InitialValueAssignmentKind, SpecificationKind, TypeName, VarDecl,
     VariableType,
@@ -25,6 +25,43 @@ use super::compile_var_table::{record_decl_var_entry, record_stable_var_entry};
 use crate::emit::Emitter;
 use crate::string_storage::{register_string_variable, StringHome};
 
+/// Where [`assign_variables`] puts the slots of the declarations it is given,
+/// and whom the debug entries of those slots name as their owner.
+pub(crate) enum Placement<'a> {
+    /// The globals and the variables of the program: the next index is the
+    /// number of names mapped so far, and the debug entries are global.
+    Program,
+    /// The working memory of the body of a unit (the `VAR_TEMP` of a function
+    /// block): the slots follow `next`, which the call advances, and the debug
+    /// entries name the unit's function, so that a debugger filters them to the
+    /// frame of its body.
+    Body {
+        function_id: FunctionId,
+        next: &'a mut VarIndex,
+    },
+}
+
+impl Placement<'_> {
+    /// The index of the next slot, which is taken.
+    fn take_index(&mut self, ctx: &CompileContext) -> VarIndex {
+        match self {
+            Placement::Program => VarIndex::new(ctx.variables.len() as u16),
+            Placement::Body { next, .. } => {
+                let index = **next;
+                **next = VarIndex::new(index.raw() + 1);
+                index
+            }
+        }
+    }
+
+    fn owner(&self) -> FunctionId {
+        match self {
+            Placement::Program => function_id::GLOBAL_SCOPE,
+            Placement::Body { function_id, .. } => *function_id,
+        }
+    }
+}
+
 /// Assigns variable table indices and type info for all variable declarations.
 ///
 /// `stable_var_ids` is the engineering-side name -> entity UID table
@@ -37,10 +74,11 @@ pub(crate) fn assign_variables(
     declarations: &[VarDecl],
     types: &TypeEnvironment,
     stable_var_ids: &[(Id, u64)],
+    mut placement: Placement<'_>,
 ) -> Result<(), Diagnostic> {
     for decl in declarations {
         if let Some(id) = decl.identifier.symbolic_id() {
-            let index = VarIndex::new(ctx.variables.len() as u16);
+            let index = placement.take_index(ctx);
             ctx.variables.insert(id.clone(), index);
 
             // Resolve type info and collect debug metadata.
@@ -276,7 +314,7 @@ pub(crate) fn assign_variables(
 
             ctx.debug_var_names.push(VarNameEntry {
                 var_index: index,
-                function_id: function_id::GLOBAL_SCOPE,
+                function_id: placement.owner(),
                 var_section: map_var_section(&decl.var_type),
                 iec_type_tag: type_tag,
                 name: id.to_string(),

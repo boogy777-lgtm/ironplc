@@ -508,8 +508,30 @@ fn warm_program_with_temporaries(temporaries: &str, body: &str) -> String {
     )
 }
 
-/// Edits of the `VAR_TEMP` of a program. A temporary lives for one scan: it is
-/// working memory laid out after the persistent part, so declaring one,
+/// `warm_program` that calls a function block `scratch`, whose output `q` the
+/// program adds to `v`. The block declares `temporaries` in a `VAR_TEMP` block
+/// (none when `temporaries` is empty) and runs `statement`.
+fn warm_program_with_block_temporaries(temporaries: &str, statement: &str) -> String {
+    let block = if temporaries.is_empty() {
+        String::new()
+    } else {
+        format!("VAR_TEMP {temporaries} END_VAR")
+    };
+    format!(
+        "FUNCTION_BLOCK scratch
+  VAR_OUTPUT q : DINT; END_VAR
+  {block}
+  {statement}
+END_FUNCTION_BLOCK
+
+{}",
+        warm_program("w : scratch;", "w(); r := v + w.q;")
+    )
+}
+
+/// Edits of the `VAR_TEMP` of a program or of a function block. A temporary
+/// lives for one scan or one call: it is working memory, laid out after the
+/// persistent part and outside the instance of a block, so declaring one,
 /// removing one or changing its type leaves the state layout as it was, and
 /// the persistent values (`v`) are kept by the swap.
 fn temporary_edits() -> Vec<EditClass> {
@@ -541,6 +563,24 @@ fn temporary_edits() -> Vec<EditClass> {
             "program_temporary_retyped",
             warm_program_with_temporaries("t : DINT;", "r := v;"),
             warm_program_with_temporaries("t : STRING[8];", "r := v;"),
+            &[("r", 41)],
+        ),
+        row(
+            "function_block_temporary_added",
+            warm_program_with_block_temporaries("", "q := 0;"),
+            warm_program_with_block_temporaries("t : DINT := 1; s : STRING[8];", "q := t;"),
+            &[("r", 42)],
+        ),
+        row(
+            "function_block_temporary_removed",
+            warm_program_with_block_temporaries("t : DINT := 1; s : STRING[8];", "q := t;"),
+            warm_program_with_block_temporaries("", "q := 0;"),
+            &[("r", 41)],
+        ),
+        row(
+            "function_block_temporary_retyped",
+            warm_program_with_block_temporaries("t : DINT;", "q := 0;"),
+            warm_program_with_block_temporaries("t : STRING[8];", "q := 0;"),
             &[("r", 41)],
         ),
     ]

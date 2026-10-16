@@ -510,8 +510,9 @@ impl VariableType {
     /// POU: they start at their declared initial value (or the default of
     /// their type) at every call and nothing keeps their value from one call to
     /// the next. This is `VAR_TEMP`, in every POU that declares it. A program's
-    /// `VAR_TEMP` is therefore not state of the program: it is not persistent,
-    /// and it is initialised at the start of every scan.
+    /// or a function block's `VAR_TEMP` is therefore not state of the program or
+    /// of the instance: it is not persistent, no field of an instance, and it is
+    /// initialised at the start of every scan or call.
     pub fn is_call_scoped(&self) -> bool {
         matches!(self, VariableType::VarTemp)
     }

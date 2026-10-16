@@ -16,12 +16,13 @@
 //! | a top-level `VAR_GLOBAL` | [`GLOBAL_SCOPE`] |
 //! | a `VAR_GLOBAL` of the configuration code generation compiles | [`GLOBAL_SCOPE`] |
 //! | a variable of a program that is neither a `VAR_EXTERNAL` nor a `VAR_TEMP`, and the hidden variables of its edge inputs | the program |
-//! | a field of a function block, and the hidden fields of its edge inputs | the function block type |
+//! | a field of a function block that is not a `VAR_TEMP`, and the hidden fields of its edge inputs | the function block type |
 //!
 //! `VAR_EXTERNAL` aliases a global and is not a second variable. A `VAR_TEMP`
-//! of a program belongs to one scan and is working memory, not state: it is
-//! laid out after the persistent part (see [`program_temporaries`]) and has no
-//! key. A `VAR_GLOBAL` of a `RESOURCE` is not laid out and is not listed.
+//! of a program or of a function block belongs to one scan or one call and is
+//! working memory, not state: it is laid out after the persistent part (see
+//! [`call_scoped_declarations`]) and has no key. A `VAR_GLOBAL` of a `RESOURCE`
+//! is not laid out and is not listed.
 
 use ironplc_dsl::common::{
     FunctionBlockDeclaration, Library, LibraryElementKind, ProgramDeclaration, VarDecl,
@@ -102,12 +103,13 @@ pub fn program_declarations(program: &ProgramDeclaration) -> Vec<VarDecl> {
         .collect()
 }
 
-/// The `VAR_TEMP` variables of `program`: working memory that code generation
-/// lays out after the persistent part and starts again at every scan. The
-/// complement of [`program_declarations`] among the program's own variables.
-pub(crate) fn program_temporaries(program: &ProgramDeclaration) -> Vec<VarDecl> {
-    program
-        .variables
+/// The call-scoped variables (`VAR_TEMP`) among `variables`, the declarations
+/// of a program or of a function block: working memory that code generation
+/// lays out after the persistent part and starts again at every scan or call.
+/// The complement of [`program_declarations`] and of
+/// [`function_block_declarations`] among the variables the unit declares.
+pub(crate) fn call_scoped_declarations(variables: &[VarDecl]) -> Vec<VarDecl> {
+    variables
         .iter()
         .filter(|variable| variable.var_type.is_call_scoped())
         .cloned()
