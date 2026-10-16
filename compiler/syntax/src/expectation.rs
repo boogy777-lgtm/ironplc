@@ -189,8 +189,6 @@ pub(crate) enum Item {
     IntegerOrConstantName,
     /// "the end of the structure".
     StructureEnd,
-    /// "the enumeration value".
-    EnumerationValue,
     /// "the loop variable".
     LoopVariable,
     /// "the lower bound of a range".
@@ -283,7 +281,6 @@ impl Item {
             Item::Integer => Cow::Borrowed("an integer"),
             Item::IntegerOrConstantName => Cow::Borrowed("an integer or the name of a constant"),
             Item::StructureEnd => Cow::Borrowed("the end of the structure"),
-            Item::EnumerationValue => Cow::Borrowed("the enumeration value"),
             Item::LoopVariable => Cow::Borrowed("the loop variable"),
             Item::RangeLowerBound => Cow::Borrowed("the lower bound of a range"),
             Item::StepName => Cow::Borrowed("the name of a step"),
@@ -470,10 +467,6 @@ mod tests {
             (
                 Item::StructureEnd,
                 "found `x`, expected the end of the structure",
-            ),
-            (
-                Item::EnumerationValue,
-                "found `x`, expected the enumeration value",
             ),
             (Item::LoopVariable, "found `x`, expected the loop variable"),
             (

@@ -10,6 +10,7 @@
 //! Calls are accepted in exactly the shapes the legacy grammar accepts:
 //! `name(...)`, `receiver.method(...)` and `THIS^.method(...)`.
 
+use super::enum_value::qualified_value;
 use super::literals::literal;
 use super::types::{BIT_STRING_TYPES, INTEGER_TYPES};
 use crate::expectation::Item;
@@ -114,6 +115,10 @@ fn postfix_primary(p: &mut Parser) -> Option<CompletedMarker> {
 }
 
 fn primary(p: &mut Parser) -> Option<CompletedMarker> {
+    // Before a literal: `T#Run` is a value of the type `T` and `T#5s` a duration.
+    if let Some(done) = qualified_value(p) {
+        return Some(done);
+    }
     if let Some(done) = literal(p) {
         return Some(done);
     }

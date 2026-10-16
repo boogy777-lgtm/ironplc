@@ -341,7 +341,7 @@ fn parse_statements_when_case_then_branches_hold_labels_and_statements() {
         &ParseOptions::default(),
         &[(
             "CASE x OF 1, 3..5: a := 1; Color#Red: b := 2; 16#FF: c := 1; Green: ; ELSE d := 1; END_CASE;",
-            "StatementList(CaseStmt(CASE NameRef(x) OF CaseBranch(CaseLabel(IntLiteral(1)) , CaseLabel(IntLiteral(3) .. IntLiteral(5)) : StatementList(AssignStmt(NameRef(a) AssignOp(:=) IntLiteral(1) ;))) CaseBranch(CaseLabel(NameRef(Color) # NameRef(Red)) : StatementList(AssignStmt(NameRef(b) AssignOp(:=) IntLiteral(2) ;))) CaseBranch(CaseLabel(BitStringLiteral(16#FF)) : StatementList(AssignStmt(NameRef(c) AssignOp(:=) IntLiteral(1) ;))) CaseBranch(CaseLabel(NameRef(Green)) : StatementList(EmptyStmt(;))) ElseClause(ELSE StatementList(AssignStmt(NameRef(d) AssignOp(:=) IntLiteral(1) ;))) END_CASE ;))",
+            "StatementList(CaseStmt(CASE NameRef(x) OF CaseBranch(CaseLabel(IntLiteral(1)) , CaseLabel(IntLiteral(3) .. IntLiteral(5)) : StatementList(AssignStmt(NameRef(a) AssignOp(:=) IntLiteral(1) ;))) CaseBranch(CaseLabel(EnumValueRef(NameRef(Color) # NameRef(Red))) : StatementList(AssignStmt(NameRef(b) AssignOp(:=) IntLiteral(2) ;))) CaseBranch(CaseLabel(BitStringLiteral(16#FF)) : StatementList(AssignStmt(NameRef(c) AssignOp(:=) IntLiteral(1) ;))) CaseBranch(CaseLabel(NameRef(Green)) : StatementList(EmptyStmt(;))) ElseClause(ELSE StatementList(AssignStmt(NameRef(d) AssignOp(:=) IntLiteral(1) ;))) END_CASE ;))",
         )],
     );
 }

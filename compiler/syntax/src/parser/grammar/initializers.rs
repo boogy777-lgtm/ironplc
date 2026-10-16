@@ -9,6 +9,7 @@
 //! `Color#Red`, or an expression: a constant expression (`PI / 180.0`) is a
 //! dialect extension that the analysis, not the syntax, decides.
 
+use super::enum_value::qualified_value;
 use super::expressions::{close_group, expression, name_ref, ref_expr};
 use super::literals::{literal, string_literal_ahead};
 use super::positions::Initial;
@@ -65,9 +66,8 @@ pub(super) fn value(p: &mut Parser) {
                 array_initializer(p);
             } else if struct_initializer_ahead(p) {
                 struct_initializer(p);
-            } else if qualified_value_ahead(p) {
-                qualified_value(p);
             } else {
+                // A qualified enumeration value is an operand of the expression.
                 expression(p);
             }
         },
@@ -89,9 +89,7 @@ fn degraded(p: &mut Parser) {
 fn constant(p: &mut Parser) {
     if struct_initializer_ahead(p) {
         struct_initializer(p);
-    } else if qualified_value_ahead(p) {
-        qualified_value(p);
-    } else if literal(p).is_none() {
+    } else if qualified_value(p).is_none() && literal(p).is_none() {
         if p.variable_name_at(0) {
             name_ref(p);
         } else {
@@ -117,21 +115,6 @@ fn reference(p: &mut Parser) {
 /// expression.
 fn struct_initializer_ahead(p: &Parser) -> bool {
     p.at(K::LeftParen) && p.variable_name_at(1) && p.nth_at(2, K::Assignment)
-}
-
-/// `Type#Value`: the qualified spelling of an enumeration value. A typed
-/// literal (`T#5s`, `INT#5`) also has a name before the `#`, but a number, a
-/// sign or a string after it; a name after the `#` is an enumeration value.
-fn qualified_value_ahead(p: &Parser) -> bool {
-    p.name_at(0) && p.nth_at(1, K::Hash) && p.adjacent(0) && p.adjacent(1) && p.variable_name_at(2)
-}
-
-fn qualified_value(p: &mut Parser) {
-    let node = p.start();
-    name_ref(p);
-    p.bump();
-    name_ref(p);
-    p.complete(node, K::EnumValueRef);
 }
 
 /// `( name := value {, name := value} )`
@@ -200,9 +183,7 @@ fn array_element(p: &mut Parser) {
 /// A literal or an enumeration value (a name, or `Type#Value`): an array
 /// element, or the source of a program connection.
 pub(super) fn simple_value(p: &mut Parser) {
-    if qualified_value_ahead(p) {
-        qualified_value(p);
-    } else if literal(p).is_none() {
+    if qualified_value(p).is_none() && literal(p).is_none() {
         if p.variable_name_at(0) {
             name_ref(p);
         } else {

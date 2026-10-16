@@ -17,6 +17,7 @@ mod codesys;
 mod common;
 mod configuration;
 mod control;
+mod enum_value;
 mod expressions;
 mod initializers;
 mod literals;

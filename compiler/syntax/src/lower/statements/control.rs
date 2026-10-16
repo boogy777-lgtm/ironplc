@@ -145,7 +145,7 @@ type LabelRule = fn(&LowerCx, &SyntaxNode) -> Result<CaseSelectionKind, Diagnost
 /// (`16#FF`), a number, and a name, which is an enumeration value.
 const LABELS: &[(Shape, LabelRule)] = &[
     (Shape::Token(K::Range), range),
-    (Shape::Token(K::Hash), qualified_value),
+    (Shape::Child(K::EnumValueRef), qualified_value),
     (Shape::Child(K::BitStringLiteral), bit_string),
     (Shape::Child(K::IntLiteral), number),
     (Shape::Child(K::NameRef), value),
@@ -158,7 +158,10 @@ fn range(cx: &LowerCx, label: &SyntaxNode) -> Result<CaseSelectionKind, Diagnost
 
 /// `Type#Value`
 fn qualified_value(cx: &LowerCx, label: &SyntaxNode) -> Result<CaseSelectionKind, Diagnostic> {
-    lower_qualified_value(cx, label).map(CaseSelectionKind::EnumeratedValue)
+    let value = label
+        .first_child()
+        .ok_or_else(|| cx.missing(label, "a qualified value"))?;
+    lower_qualified_value(cx, &value).map(CaseSelectionKind::EnumeratedValue)
 }
 
 /// `16#FF`, `8#17`, `2#1010`: a bit string, which a label spells without a

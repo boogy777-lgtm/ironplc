@@ -306,6 +306,11 @@ IF c THEN d := 2; END_IF
     "mod := 1;",
     "x := a<>b;",
     "x:=y<z;",
+    // A qualified enumeration value is an operand wherever an expression is.
+    "x := Color#Red;",
+    "IF s = Color#Red THEN a := 1; END_IF;",
+    "x := f(Color#Red);",
+    "CASE x OF Color#Red, Other#Blue, Green: a := 1; END_CASE;",
     // Whole programs of statements.
     "x := 1;\r\ny := 2;\r\n",
     "x := 1;\n\n\n(* c *)\n\ty := 2;",
@@ -608,6 +613,7 @@ const SECOND_END_KEYWORD: Reason = Reason::new(Class::OwnerDecided, "the legacy 
 const MARKER_AFTER_STATEMENT: Reason = Reason::new(Class::OwnerDecided, "the legacy grammar accepts __BEGIN_IMPLEMENTATION only where the previous list item left no trivia unconsumed, so a marker after a statement and a space is rejected; the new parser accepts the marker as a list item anywhere");
 const LONE_CR: Reason = Reason::new(Class::OwnerDecided, "a lone CR is a line break in the lossless lexer (old Mac line endings); the legacy lexer reports it as an unexpected token");
 const OSCAT_SEVERAL_PAIRS: Reason = Reason::new(Class::OwnerDecided, "the legacy pre-pass blanks only the first ranged-comment marker pair of a file (and none when the first marker is named END_*), so the body of a later pair is lexed as code and rejected when it holds text that is not tokens; the new parser makes every well-formed pair a region");
+const ENUMERATED_VALUE_IN_EXPRESSION: Reason = Reason::new(Class::AcceptedOnPurpose, "IEC 61131-3 writes an enumerated value `Type#Value` wherever a value may stand, and the new parser reads it as an operand of an expression; the legacy grammar has a `TODO enumerated value` where its primary expression would read it, and rejects it (adding it there makes the legacy rule for a variable with an initial value read `t#Red` as an expression instead of as an enumerated value, which moves every declaration table row of that shape)");
 const PRAGMA_CONTENT: Reason = Reason::new(Class::OwnerDecided, "the legacy pipeline tokenises the inside of a pragma and rejects a character it does not know; the CST keeps a pragma as one trivia token and does not examine its text");
 
 const fn exception(kind: Kind, snippet: &'static str, basis: Basis, reason: Reason) -> Exception {
@@ -667,6 +673,21 @@ pub const STATEMENT_EXCEPTIONS: &[Exception] = &[
         Kind::Statements,
         "x := 1; __BEGIN_IMPLEMENTATION y := 2;",
         MARKER_AFTER_STATEMENT,
+    ),
+    accepted_on_purpose(
+        Kind::Statements,
+        "x := Color#Red;",
+        ENUMERATED_VALUE_IN_EXPRESSION,
+    ),
+    accepted_on_purpose(
+        Kind::Statements,
+        "IF s = Color#Red THEN a := 1; END_IF;",
+        ENUMERATED_VALUE_IN_EXPRESSION,
+    ),
+    accepted_on_purpose(
+        Kind::Statements,
+        "x := f(Color#Red);",
+        ENUMERATED_VALUE_IN_EXPRESSION,
     ),
     accepted_on_purpose(
         Kind::Statements,
