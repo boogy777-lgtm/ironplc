@@ -61,3 +61,51 @@ END_FUNCTION_BLOCK
     assert!(rendered.contains("\n      53266 :\n"));
     assert!(rendered.contains("\n      10 :\n"));
 }
+
+#[test]
+fn write_to_string_when_case_group_has_two_values_then_one_colon_after_the_list() {
+    let source = "
+PROGRAM main
+VAR
+    s : INT;
+    x : INT;
+END_VAR
+CASE s OF
+    1, 2: x := 1;
+    3..5: x := 2;
+    ELSE x := 3;
+END_CASE;
+END_PROGRAM
+";
+    let rendered = assert_round_trips(source, &CompilerOptions::default());
+
+    assert!(rendered.contains("\n   1 , 2 :\n"));
+    assert_eq!(rendered.matches(" :\n").count(), 2);
+}
+
+#[test]
+fn write_to_string_when_case_group_mixes_value_range_and_enumeration_value_then_round_trips() {
+    let source = "
+TYPE
+E_State : (Idle, Run, Stop);
+END_TYPE
+PROGRAM main
+VAR
+    s : E_State;
+    n : INT;
+    x : INT;
+END_VAR
+CASE n OF
+    1, 3..5, 9: x := 1;
+END_CASE;
+CASE s OF
+    Idle, E_State#Run: x := 2;
+    Stop: x := 3;
+END_CASE;
+END_PROGRAM
+";
+    let rendered = assert_round_trips(source, &CompilerOptions::default());
+
+    assert!(rendered.contains("\n   1 , 3.. 5 , 9 :\n"));
+    assert!(rendered.contains("\n   Idle , E_State#Run :\n"));
+}

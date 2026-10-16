@@ -120,7 +120,7 @@ pub const DIFFERENCES: &[Difference] = &[
             parts: &[Component::Spans],
         },
         reason: TYPE_NAME_POSITION,
-        expected: 8236,
+        expected: 8272,
     },
     Difference {
         scope: Scope::Origin {

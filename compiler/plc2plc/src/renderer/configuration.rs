@@ -41,16 +41,18 @@ impl Render for dsl::configuration::ResourceDeclaration {
         r.newline();
 
         r.indent();
+        // The grammar puts the resource's global variables before its tasks
+        // and programs; after them, they do not parse.
+        for var in self.global_vars.iter() {
+            r.visit_var_decl(var)?;
+        }
+
         for task in self.tasks.iter() {
             r.visit_task_configuration(task)?;
         }
 
         for program in self.programs.iter() {
             r.visit_program_configuration(program)?;
-        }
-
-        for var in self.global_vars.iter() {
-            r.visit_var_decl(var)?;
         }
 
         r.outdent();
@@ -105,6 +107,12 @@ impl Render for dsl::configuration::ConfigurationDeclaration {
         r.newline();
 
         r.indent();
+        // The grammar puts the configuration's global variables before its
+        // resources.
+        for var in self.global_var.iter() {
+            r.visit_var_decl(var)?;
+        }
+
         for res in self.resource_decl.iter() {
             r.visit_resource_declaration(res)?;
         }

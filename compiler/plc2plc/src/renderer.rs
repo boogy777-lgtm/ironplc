@@ -216,6 +216,22 @@ impl LibraryRenderer {
         self.buffer.push('\n');
     }
 
+    /// Writes the `:= [ ... ]` initial value of an array, or nothing when
+    /// the array has none.
+    fn render_array_initial_values(
+        &mut self,
+        values: &[ArrayInitialElementKind],
+    ) -> Result<(), Diagnostic> {
+        if !values.is_empty() {
+            self.write_ws(":=");
+
+            self.write_ws("[");
+            visit_comma_separated!(self, values.iter(), ArrayInitialElementKind);
+            self.write_ws("]");
+        }
+        Ok(())
+    }
+
     /// Writes the reference-type keyword for the given surface syntax:
     /// `REF_TO` for IEC, `REFERENCE TO` / `POINTER TO` for the
     /// TwinCAT/CODESYS variants.
@@ -279,6 +295,19 @@ impl Visitor<Diagnostic> for LibraryRenderer {
             return Ok(());
         }
         self.visit_integer(&node.value)
+    }
+
+    fn visit_integer_literal(&mut self, node: &IntegerLiteral) -> Result<Self::Value, Diagnostic> {
+        // A literal that names its type (`LINT#5`) keeps it: without the
+        // prefix it re-parses as an untyped literal, which resolves to
+        // another type.
+        match node.data_type {
+            Some(_) => {
+                self.write_ws(node.to_string().as_str());
+                Ok(())
+            }
+            None => self.visit_signed_integer(&node.value),
+        }
     }
 
     fn visit_real_literal(&mut self, node: &RealLiteral) -> Result<Self::Value, Diagnostic> {
@@ -472,7 +501,7 @@ impl Visitor<Diagnostic> for LibraryRenderer {
 
         self.visit_array_specification_kind(&node.spec)?;
 
-        Ok(())
+        self.render_array_initial_values(&node.init)
     }
 
     /// Renders the CODESYS `PARAMS(n) OF T` type declaration.

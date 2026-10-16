@@ -1,6 +1,7 @@
 //! Renders sequential function chart networks, steps, transitions and actions.
 
 use super::{LibraryRenderer, Render};
+use ironplc_dsl::sfc::ActionQualifier;
 use ironplc_dsl::{diagnostic::Diagnostic, visitor::Visitor};
 use paste::paste;
 
@@ -43,7 +44,20 @@ impl Render for dsl::sfc::Network {
 // 2.6.3
 impl Render for dsl::sfc::Transition {
     fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
-        r.write_ws("TRANSITION FROM");
+        r.write_ws("TRANSITION");
+
+        if let Some(name) = &self.name {
+            r.visit_id(name)?;
+        }
+        if let Some(priority) = self.priority {
+            r.write_ws("(");
+            r.write_ws("PRIORITY");
+            r.write_ws(":=");
+            r.write_ws(priority.to_string().as_str());
+            r.write_ws(")");
+        }
+
+        r.write_ws("FROM");
 
         visit_comma_separated!(r, self.from.iter(), Id);
 
@@ -92,7 +106,24 @@ impl Render for dsl::sfc::ActionAssociation {
         r.write_ws("(");
 
         if let Some(qualifier) = &self.qualifier {
-            r.write_ws(qualifier.to_string().as_str());
+            let (word, time) = match qualifier {
+                ActionQualifier::N => ("N", None),
+                ActionQualifier::R => ("R", None),
+                ActionQualifier::S => ("S", None),
+                ActionQualifier::L => ("L", None),
+                ActionQualifier::D => ("D", None),
+                ActionQualifier::P => ("P", None),
+                ActionQualifier::SD(time) => ("SD", Some(time)),
+                ActionQualifier::DS(time) => ("DS", Some(time)),
+                ActionQualifier::SL(time) => ("SL", Some(time)),
+                ActionQualifier::PR(time) => ("P1", Some(time)),
+                ActionQualifier::PF(time) => ("P0", Some(time)),
+            };
+            r.write_ws(word);
+            if let Some(time) = time {
+                r.write_ws(",");
+                r.visit_action_time_kind(time)?;
+            }
             if !self.indicators.is_empty() {
                 r.write_ws(",");
             }

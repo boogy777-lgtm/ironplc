@@ -178,15 +178,7 @@ impl Render for ArrayInitialValueAssignment {
     fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
         r.visit_array_specification_kind(&self.spec)?;
 
-        if !self.initial_values.is_empty() {
-            r.write_ws(":=");
-
-            r.write_ws("[");
-            visit_comma_separated!(r, self.initial_values.iter(), ArrayInitialElementKind);
-            r.write_ws("]");
-        }
-
-        Ok(())
+        r.render_array_initial_values(&self.initial_values)
     }
 }
 
