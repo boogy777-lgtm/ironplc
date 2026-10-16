@@ -48,10 +48,14 @@ wherever it is written: an initial value, an assignment, a comparison, a
 ``CASE`` label, an argument of a call or an element of an initializer.
 
 A bare name is checked against the enumeration the place expects: the target of
-an assignment, a parameter of a function, the selector of a ``CASE`` and the
-other operand of a comparison. ``level := WARNING`` is this error when
-``WARNING`` is a value of another enumeration and not of ``LogLevel``. A name
-that no enumeration declares is a name that is not declared (:doc:`P4007`).
+an assignment (a variable, a member of a structure, an element of an array), a
+parameter of a function, an input of a function block or of a method, the
+selector of a ``CASE``, the other operand of a comparison, a member that a
+structure or function block initializer gives a value, and an element that an
+array initializer lists. ``level := WARNING`` is this error when ``WARNING`` is
+a value of another enumeration and not of ``LogLevel``; so is the member
+``(level := WARNING)`` of a structure initializer. A name that no enumeration
+declares is a name that is not declared (:doc:`P4007`).
 
 Integer Constants
 -----------------

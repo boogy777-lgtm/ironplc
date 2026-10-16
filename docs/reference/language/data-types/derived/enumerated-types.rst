@@ -88,6 +88,13 @@ The type before the ``#`` must be declared (:doc:`P2008
 is written. Assigning a value of one enumeration to a variable of another
 reports :doc:`P4035 </reference/compiler/problems/P4035>`.
 
+A bare value is checked against the enumeration the place expects, wherever the
+language gives the place a type: the target of an assignment, an argument of a
+function, a function block or a method, a ``CASE`` label, the other operand of a
+comparison, an initial value, and a member or an element that an initializer
+gives a value. A value of another enumeration is :doc:`P2006
+</reference/compiler/problems/P2006>` in each of them.
+
 Explicit Values
 ---------------
 
