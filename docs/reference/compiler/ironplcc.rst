@@ -496,6 +496,17 @@ Options
    alternative and this flag replaces it. See
    :doc:`/reference/standard-library/functions/type-conversions`.
 
+``--policy-enumeration-strictness`` *ALTERNATIVE*
+   Select which enumerations are no number: ``every-enumeration`` (every
+   enumeration is strict; the default) or ``with-attribute`` (an enumeration
+   is strict when its declaration has ``{attribute 'strict'}``; selected by
+   ``codesys`` and ``twincat``). Arithmetic on a strict enumeration, the
+   numerical functions, the control variable of ``FOR`` and the storing of a
+   number into it are refused; an enumeration that is not strict is its base
+   type in all of these. A behavior policy: the dialect selects an alternative
+   and this flag replaces it. See
+   :doc:`/reference/language/data-types/derived/enumerated-types`.
+
 Examples
 ========
 

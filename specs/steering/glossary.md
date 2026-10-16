@@ -132,7 +132,10 @@ implementer — for example, what `STRING_TO_INT('12abc')` returns. A policy is
 selected at compile time (by a dialect preset, or a `--policy-*` flag that
 replaces the preset's selection) and encoded in the bytecode; the runtime has
 no policy setting (see
-[ADR-0049](../adrs/0049-behavior-policies-selected-at-compile-time.md)).
+[ADR-0049](../adrs/0049-behavior-policies-selected-at-compile-time.md)). A
+policy may instead select what the analysis accepts, which no instruction
+depends on, and is then not encoded (see
+[ADR-0079](../adrs/0079-a-policy-may-select-what-the-analysis-accepts.md)).
 
 A policy is a **vendor** concept, not a dialect one: it is about what an
 operation *does*, which is the runtime a vendor is emulated by, not the shape

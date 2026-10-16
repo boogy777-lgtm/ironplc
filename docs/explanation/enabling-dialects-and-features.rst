@@ -21,7 +21,8 @@ Supported Dialects
 
    **Selects:** the default of every behavior policy
    (``--policy-string-to-num-non-numeric reject``,
-   ``--policy-string-to-num-failure trap``).
+   ``--policy-string-to-num-failure trap``,
+   ``--policy-enumeration-strictness every-enumeration``).
 
 **iec61131-3-ed3**
    Strict IEC 61131-3:2013 (Edition 3). Enables Edition 3 keywords
@@ -44,7 +45,8 @@ Supported Dialects
 
    **Selects:** the default of every behavior policy
    (``--policy-string-to-num-non-numeric reject``,
-   ``--policy-string-to-num-failure trap``).
+   ``--policy-string-to-num-failure trap``,
+   ``--policy-enumeration-strictness every-enumeration``).
 
 **rusty**
    RuSTy-compatible dialect. Uses Edition 2 as a base (so Edition 3 type
@@ -70,9 +72,10 @@ Supported Dialects
    ``--allow-enum-base-type``, ``--allow-continue``, ``--allow-union-type``,
    ``--allow-bit-type``, and ``--allow-multiple-underscores``.
 
-   **Selects:** ``--policy-string-to-num-non-numeric reject`` and
+   **Selects:** ``--policy-string-to-num-non-numeric reject``,
    ``--policy-string-to-num-failure zero`` — RuSTy rejects a string with
-   trailing characters and never faults.
+   trailing characters and never faults — and the default
+   ``--policy-enumeration-strictness every-enumeration``.
 
 **codesys**
    CODESYS-compatible dialect. Uses Edition 2 as a base and enables the
@@ -117,7 +120,9 @@ Supported Dialects
    **Selects:** ``--policy-string-to-num-non-numeric ignore-trailing`` and
    ``--policy-string-to-num-failure zero`` — CODESYS stops parsing at the
    first invalid character and returns 0 for a string that is not valid in
-   the target type.
+   the target type — and ``--policy-enumeration-strictness with-attribute``
+   — an enumeration refuses arithmetic only when its declaration has
+   ``{attribute 'strict'}``.
 
 **twincat**
    Beckhoff TwinCAT-compatible dialect. TwinCAT 3 is built on the CODESYS V3
@@ -164,8 +169,9 @@ Supported Dialects
    ``--allow-wait-statement``, ``--allow-nested-comments``,
    ``--allow-pragma-if``, and ``--allow-fb-instance-arrays``.
 
-   **Selects:** ``--policy-string-to-num-non-numeric ignore-trailing`` and
-   ``--policy-string-to-num-failure zero``, as ``codesys``.
+   **Selects:** ``--policy-string-to-num-non-numeric ignore-trailing``,
+   ``--policy-string-to-num-failure zero`` and
+   ``--policy-enumeration-strictness with-attribute``, as ``codesys``.
 
 Editions are additive — enabling a later edition includes all features from
 earlier editions.
@@ -644,8 +650,11 @@ the standard's result (or a runtime error where the standard says
 
 Unlike a flag, which can only enable, a ``--policy-*`` selection replaces
 the dialect's. Policies compose freely with each other and with any
-dialect, and the selected alternative is compiled into the program, so a
-:file:`.iplc` file behaves the same on every runtime that runs it.
+dialect. The alternative of a policy that changes what an operation does is
+compiled into the program, so a :file:`.iplc` file behaves the same on every
+runtime that runs it; ``--policy-enumeration-strictness`` changes which
+programs are accepted and compiles an accepted program to the same
+instructions as the program on the integers.
 
 ``--policy-string-to-num-non-numeric``
    What ``STRING_TO_<numeric>`` treats as convertible when the string has
@@ -657,8 +666,16 @@ dialect, and the selected alternative is compiled into the program, so a
    ``trap`` (default, runtime error
    :doc:`V4006 </reference/runtime/problems/V4006>`) or ``zero``.
 
-The alternatives, their results, and the dialects' selections are on
-:doc:`/reference/standard-library/functions/type-conversions`. To compile a
+``--policy-enumeration-strictness``
+   Which enumerations are no number: ``every-enumeration`` (default; the
+   standard, in which no enumeration has arithmetic) or ``with-attribute``
+   (an enumeration is strict only when its declaration has
+   ``{attribute 'strict'}``; ``codesys`` and ``twincat``). What a strict
+   enumeration refuses is on
+   :doc:`/reference/language/data-types/derived/enumerated-types`.
+
+The alternatives, their results, and the dialects' selections of the first two
+are on :doc:`/reference/standard-library/functions/type-conversions`. To compile a
 CODESYS program with the strict failure behavior:
 
 .. code-block:: shell

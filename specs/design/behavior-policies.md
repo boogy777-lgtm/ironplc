@@ -215,10 +215,42 @@ the unsigned target of its width, so `STRING_TO_BYTE('300')` reports that
 `'300'` is not convertible to `USINT`: the encoding does not say which of the
 two functions was called, and the range it names is the same.
 
+## Second application: which enumerations are strict
+
+The second policy is of another kind: its alternatives select what the
+analysis accepts, and no instruction depends on it. A program that the
+`with-attribute` alternative accepts and the default refuses (`x + 1` for an
+enumeration `x`) compiles to the instructions of the integer `x` stands for,
+so there is no func_id block, and the enumeration is in
+`ironplc_parser::options` and not in `ironplc_container::policy`
+([ADR-0079](../adrs/0079-a-policy-may-select-what-the-analysis-accepts.md)).
+The rest of the machinery above (the field of `CompilerOptions`, the preset
+table, `POLICY_DESCRIPTORS`, the CLI, LSP and MCP surfaces) is the same.
+
+| Policy | Option key | Alternatives (encoding order) | Default |
+|---|---|---|---|
+| Strictness: which enumerations are no number | `policy_enumeration_strictness` | `every-enumeration`, `with-attribute` | `every-enumeration` |
+
+An enumeration is **strict** when no number is computed from its values (an
+arithmetic operator, the function form of one, a numerical function, the
+counter of a `FOR`) and no number is stored into it (a variable of an integer
+type, a number that names none of its values). An enumeration that is not strict
+is its base type (`INT` unless the declaration names another) in all of those.
+Under `every-enumeration` every enumeration is strict: the behavior of the
+standard, which gives the values of an enumeration no arithmetic. Under
+`with-attribute` an enumeration is strict when its declaration has
+`{attribute 'strict'}` (see [attributes.md](attributes.md#enumeration)), as in
+CODESYS and TwinCAT; an enumeration written inline in a variable declaration
+has no declaration to carry the attribute and is not strict.
+
+**REQ-BP-parser-005** The default `CompilerOptions` and the `iec61131-3-ed2`, `iec61131-3-ed3` and `rusty` dialects select `every-enumeration`; the `codesys` and `twincat` dialects select `with-attribute`. Under `with-attribute` an enumeration is strict exactly when its declaration carries the attribute `strict`, and under `every-enumeration` it always is.
+
 ## Adding a policy
 
 1. Add the enum to `ironplc_container::policy` implementing `BehaviorPolicy`,
-   default first.
+   default first. A policy whose alternatives select what the analysis accepts
+   and not an encoding is declared in `ironplc_parser::options` instead, and
+   steps 2, 4 and 5 do not apply to it.
 2. Reserve the operation's func_id block in `ironplc_container::builtin` and
    declare the assigned rows in `declare_builtins!`; pin them in the
    wire-format tests and record them in

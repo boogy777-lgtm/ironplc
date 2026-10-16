@@ -455,6 +455,24 @@ mod tests {
     }
 
     #[test]
+    fn parse_options_when_strictness_policy_set_then_replaces_dialect_selection() {
+        let val = serde_json::json!({
+            "dialect": "codesys",
+            "policy_enumeration_strictness": "every-enumeration",
+        });
+        let opts = parse_options(&val).unwrap();
+        assert_eq!(
+            opts.get_policy_by_key("policy_enumeration_strictness"),
+            Some("every-enumeration")
+        );
+        let dialect_only = parse_options(&serde_json::json!({ "dialect": "codesys" })).unwrap();
+        assert_eq!(
+            dialect_only.get_policy_by_key("policy_enumeration_strictness"),
+            Some("with-attribute")
+        );
+    }
+
+    #[test]
     fn parse_options_when_policy_value_unknown_then_error_names_alternatives() {
         let val = serde_json::json!({
             "dialect": "iec61131-3-ed2",
