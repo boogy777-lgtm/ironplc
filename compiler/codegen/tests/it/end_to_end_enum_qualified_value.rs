@@ -106,3 +106,44 @@ fn end_to_end_when_bare_value_name_is_declared_by_two_enumerations_then_refused_
         "P2042"
     );
 }
+
+/// A name that is no value of the expected enumeration is refused by the check
+/// of the program, and does not reach code generation, which has no ordinal for
+/// it (it was P9999 "Unknown enum value" there). Each row is the first
+/// diagnostic of the program, written with `E1 : (P, R)` and `E2 : (P, Q)`.
+#[rstest]
+#[case::assigned_name_of_no_enumeration("", "s := Nope;", "P4007")]
+#[case::case_label_name_of_no_enumeration("", "CASE s OF Nope: b := TRUE; END_CASE;", "P4007")]
+#[case::compared_name_of_no_enumeration("", "b := s = Nope;", "P4007")]
+#[case::assigned_value_of_another_enumeration("", "s := Q;", "P2006")]
+#[case::case_label_value_of_another_enumeration("", "CASE s OF Q: b := TRUE; END_CASE;", "P2006")]
+#[case::initial_qualified_value_of_another_enumeration("t : E1 := E2#Q;", "", "P4035")]
+#[case::assigned_qualified_value_of_another_enumeration("", "s := E2#Q;", "P4035")]
+#[case::case_label_qualified_value_of_another_enumeration(
+    "",
+    "CASE s OF E2#Q: b := TRUE; END_CASE;",
+    "P4035"
+)]
+#[case::compared_qualified_value_of_another_enumeration("", "b := s = E2#Q;", "P4035")]
+fn end_to_end_when_value_is_not_of_the_expected_enumeration_then_the_check_refuses_it(
+    #[case] declarations: &str,
+    #[case] statements: &str,
+    #[case] code: &str,
+) {
+    let source = [
+        "TYPE E1 : (P, R); E2 : (P, Q); END_TYPE PROGRAM main VAR s : E1; b : BOOL;",
+        declarations,
+        "END_VAR",
+        statements,
+        "END_PROGRAM",
+    ]
+    .join(" ");
+
+    let refused = try_check_and_run(&source, &CompilerOptions::default());
+
+    assert_eq!(
+        refused.expect_err("the program is refused").code,
+        code,
+        "{source}"
+    );
+}
