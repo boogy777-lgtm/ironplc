@@ -10,8 +10,10 @@
 //! - A value written with the type of another enumeration is P4035 where
 //!   nothing else compares it with the expected type. An assignment to a
 //!   variable and an argument of a function type their operands and report the
-//!   mismatch themselves, so those places leave it to them (and accept it when
-//!   the enumeration is not strict, as the check of the operands does).
+//!   mismatch themselves, so those places leave it to them.
+//! - An enumeration that is not strict is its base integer type and holds a
+//!   value of any other enumeration: `check_value` reports neither of the two
+//!   for it, in every place alike.
 
 use ironplc_dsl::{
     common::{EnumeratedValue, TypeName},
