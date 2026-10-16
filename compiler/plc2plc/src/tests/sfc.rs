@@ -59,3 +59,26 @@ fn write_to_string_when_transition_has_name_and_priority_then_keeps_both() {
         "rendered:\n{rendered}"
     );
 }
+
+#[test]
+fn write_to_string_when_qualifier_is_timed_then_keeps_the_time() {
+    let source = "
+FUNCTION_BLOCK Sequence
+VAR timeout : TIME; END_VAR
+INITIAL_STEP Idle:
+    Light(N);
+    Pulse(SD, T#2s);
+    Hold(SL, timeout);
+    Flash(P1, T#1s, lit);
+    Edge(P0, T#1s);
+END_STEP
+ACTION Light: lit := TRUE; END_ACTION
+END_FUNCTION_BLOCK
+";
+    let rendered = assert_round_trips(source, &edition3());
+
+    assert!(
+        rendered.contains("Pulse ( SD , TIME#2000ms );"),
+        "rendered:\n{rendered}"
+    );
+}
