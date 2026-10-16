@@ -39,6 +39,8 @@ pub(super) enum Position<'p> {
     /// A value an array initializer lists, for an array whose elements are of
     /// the type.
     ListedElement(TypeId),
+    /// A bound or the step of a `FOR`, whose control variable is named.
+    ForBound(&'p Id),
     /// A label of a `CASE`, whose selector is the expression.
     CaseLabel(&'p Expr),
     /// One operand of a comparison, the other being the expression.
@@ -109,6 +111,11 @@ impl RuleDeclaredEnumeratedValues<'_> {
             Position::ListedElement(element) => {
                 Some(Place::reported_here(types.listed_element(element)))
             }
+            Position::ForBound(control) => self
+                .declarations
+                .find(control)?
+                .type_id(types)
+                .map(Place::reported_here),
             Position::CaseLabel(selector) => type_of_expr(selector).map(Place::reported_here),
             Position::ComparedWith(other) => type_of_expr(other).map(Place::reported_here),
         }

@@ -65,11 +65,13 @@
 //! ```
 use ironplc_dsl::{
     common::*,
+    configuration::FunctionBlockInit,
     core::{Id, Located},
     diagnostic::Diagnostic,
     scope::ScopeNode,
     textual::{
-        Assignment, Case, CaseSelectionKind, CompareExpr, CompareOp, FbCall, Function, MethodCall,
+        Assignment, Case, CaseSelectionKind, CompareExpr, CompareOp, FbCall, For, Function,
+        MethodCall,
     },
     visitor::Visitor,
 };
@@ -380,6 +382,27 @@ impl Visitor<Infallible> for RuleDeclaredEnumeratedValues<'_> {
     /// An input of a method expects its own type.
     fn visit_method_call(&mut self, node: &MethodCall) -> Result<(), Infallible> {
         self.check_method_call(node);
+        node.recurse_visit(self)
+    }
+
+    /// The bounds and the step of a `FOR` are values of the type of its control
+    /// variable.
+    fn visit_for(&mut self, node: &For) -> Result<(), Infallible> {
+        for bound in [Some(&node.from), Some(&node.to), node.step.as_ref()]
+            .into_iter()
+            .flatten()
+        {
+            self.check_expression_at(Position::ForBound(&node.control), &bound.kind);
+        }
+        node.recurse_visit(self)
+    }
+
+    /// The members of a function block instance that the configuration gives
+    /// values to.
+    fn visit_function_block_init(&mut self, node: &FunctionBlockInit) -> Result<(), Infallible> {
+        if let Some(owner) = self.context.types().id_of(&node.type_name) {
+            self.check_members(owner, &node.initializer);
+        }
         node.recurse_visit(self)
     }
 

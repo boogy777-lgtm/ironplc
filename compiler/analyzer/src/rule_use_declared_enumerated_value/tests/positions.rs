@@ -41,6 +41,10 @@ const P4007_P4043: &[&str] = &["P4007", "P4043"];
 /// The call-style initializer of a function block is not supported by code
 /// generation yet.
 const P9999: &[&str] = &["P9999"];
+const P4049: &[&str] = &["P4049"];
+const P2006_P4049: &[&str] = &["P2006", "P4049"];
+const P4035_P4049: &[&str] = &["P4035", "P4049"];
+const P4007_P4049: &[&str] = &["P4007", "P4049"];
 const P2006_P9999: &[&str] = &["P2006", "P9999"];
 const P4035_P9999: &[&str] = &["P4035", "P9999"];
 const P4007_P9999: &[&str] = &["P4007", "P9999"];
@@ -117,6 +121,14 @@ const ARGUMENT: Expect = Expect {
     strict: [NONE, NONE, P2006, P4026, P4007],
     not_strict: [NONE, NONE, P2006, NONE, P4007],
 };
+/// A bound of a `FOR` whose control variable is an enumeration. A strict
+/// enumeration is no number to count with (P4049, whatever the bounds are), and
+/// one that is not strict is counted as its base type; the bounds are values of
+/// the enumeration either way.
+const FOR_BOUND: Expect = Expect {
+    strict: [P4049, P4049, P2006_P4049, P4035_P4049, P4007_P4049],
+    not_strict: [NONE, NONE, P2006, P4035, P4007],
+};
 /// An assignment to a variable of the second enumeration.
 const ASSIGNED_SECOND: Expect = Expect {
     strict: [P2006, P4035, NONE, NONE, P4007],
@@ -138,6 +150,8 @@ enum Where {
     Type(&'static str),
     /// The body of a function that returns the first enumeration.
     Result(&'static str),
+    /// A `VAR_CONFIG` of a configuration that runs the program.
+    Configuration(&'static str),
 }
 
 const TYPES: &str = "E1 : (A, B); E2 : (C, D); EA : E1; EB : E2; \
@@ -157,12 +171,23 @@ const VARIABLES: &str = "x : E1; xa : EA; xb : EB; s : S; t : T; row : Row; mat 
     as_ : AS; g : BOOL; fb1 : FB; fbs : ARRAY[0..2] OF FB;";
 
 fn program(place: Where, value: &str) -> String {
-    let (mut type_declaration, mut variable, mut statement, mut function) =
-        (String::new(), String::new(), String::new(), String::new());
+    let (mut type_declaration, mut variable, mut statement, mut function, mut configuration) = (
+        String::new(),
+        String::new(),
+        String::new(),
+        String::new(),
+        String::new(),
+    );
     match place {
         Where::Statement(text) => statement = text.replace("{}", value),
         Where::Variable(text) => variable = text.replace("{}", value),
         Where::Type(text) => type_declaration = text.replace("{}", value),
+        Where::Configuration(text) => {
+            configuration = format!(
+                "CONFIGURATION cfg RESOURCE r ON PLC TASK t(INTERVAL := T#10ms, PRIORITY := 1);                  PROGRAM inst WITH t : main; END_RESOURCE VAR_CONFIG {} END_VAR END_CONFIGURATION",
+                text.replace("{}", value)
+            )
+        }
         Where::Result(text) => {
             function = format!(
                 "FUNCTION RF : E1 VAR_INPUT i : INT; END_VAR {} END_FUNCTION",
@@ -172,7 +197,7 @@ fn program(place: Where, value: &str) -> String {
     }
     format!(
         "TYPE {TYPES} {type_declaration} END_TYPE {BLOCKS} {function} \
-         PROGRAM main VAR {VARIABLES} {variable} END_VAR {statement} END_PROGRAM"
+         PROGRAM main VAR {VARIABLES} {variable} END_VAR {statement} END_PROGRAM {configuration}"
     )
 }
 
@@ -212,6 +237,13 @@ fn codes_of(source: &str, options: &CompilerOptions) -> Vec<String> {
 #[case::block_in_array(Where::Statement("fbs[1](p := {});"), HERE)]
 #[case::method_named(Where::Statement("fb1.M(k := {});"), HERE)]
 #[case::method_positional(Where::Statement("fb1.M({});"), HERE)]
+// The bounds and the step of a FOR.
+#[case::for_bound_to(Where::Statement("FOR x := A TO {} DO g := TRUE; END_FOR;"), FOR_BOUND)]
+#[case::for_bound_from(Where::Statement("FOR x := {} TO B DO g := TRUE; END_FOR;"), FOR_BOUND)]
+#[case::for_step(
+    Where::Statement("FOR x := A TO B BY {} DO g := TRUE; END_FOR;"),
+    FOR_BOUND
+)]
 // A label of a CASE, and an operand of a comparison.
 #[case::case_label(Where::Statement("CASE x OF {}: g := TRUE; END_CASE;"), HERE)]
 #[case::compared_on_the_right(Where::Statement("g := x = {};"), HERE)]
@@ -241,6 +273,10 @@ fn codes_of(source: &str, options: &CompilerOptions) -> Vec<String> {
 // The member of a function block instance, and the argument a call-style
 // initializer passes to it.
 #[case::block_member(Where::Variable("v : FB := (m := {});"), MEMBER)]
+#[case::block_member_of_configuration(
+    Where::Configuration("r.inst.fb1 : FB := (m := {});"),
+    MEMBER
+)]
 #[case::block_call_style(Where::Variable("v : FB(p := {});"), CALL_STYLE)]
 // The element of an array, repeated or nested in an array of arrays.
 #[case::element(Where::Variable("v : ARRAY[0..1] OF E1 := [{}, A];"), HERE)]
