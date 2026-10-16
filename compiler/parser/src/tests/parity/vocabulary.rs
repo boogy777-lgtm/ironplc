@@ -2,8 +2,14 @@
 //! non-error kind here. The spellings are read from the legacy token
 //! definitions (`token.rs`) rather than retyped.
 
+use super::legacy::presets;
+use crate::lexer::tokenize as legacy_tokenize;
+use crate::options::CompilerOptions;
+use crate::token::TokenType;
+use crate::xform_demote_keywords::apply as demote_keywords;
+use ironplc_dsl::core::FileId;
 use ironplc_syntax::lexer::{check_coverage, lex};
-use ironplc_syntax::SyntaxKind;
+use ironplc_syntax::{ParseOptions, SyntaxKind};
 
 /// The `(kind, text)` pairs of `source` without trivia, after checking the
 /// token stream tiles the source exactly.
@@ -100,5 +106,45 @@ fn lex_when_legacy_regex_token_examples_then_non_error_kinds() {
     ];
     for (text, kind) in cases {
         assert_eq!(significant(text), vec![(kind, text)], "{text}");
+    }
+}
+
+/// True when the legacy lexer and the demotion pass leave `spelling` a keyword
+/// under `options`.
+fn legacy_keeps_keyword(spelling: &str, options: &CompilerOptions) -> bool {
+    let (mut tokens, _) = legacy_tokenize(spelling, &FileId::default(), 0, 0);
+    demote_keywords(&mut tokens, options);
+    tokens.len() == 1 && tokens[0].token_type != TokenType::Identifier
+}
+
+#[test]
+fn keyword_enabled_when_each_flag_set_alone_then_the_legacy_demotion_agrees_for_every_keyword() {
+    let mut settings: Vec<(String, CompilerOptions, ParseOptions)> = vec![
+        (
+            "no flag".to_string(),
+            CompilerOptions::default(),
+            ParseOptions::default(),
+        ),
+        (
+            "every flag".to_string(),
+            presets().pop().expect("the all-flags preset").legacy,
+            ParseOptions::all(),
+        ),
+    ];
+    for key in ParseOptions::FLAG_KEYS {
+        let mut legacy = CompilerOptions::default();
+        assert!(legacy.set_flag_by_key(key, true), "{key}");
+        let mut new = ParseOptions::default();
+        assert!(new.set_flag_by_key(key, true), "{key}");
+        settings.push((format!("only {key}"), legacy, new));
+    }
+    for (name, legacy, new) in settings {
+        for (spelling, kind) in SyntaxKind::KEYWORDS {
+            assert_eq!(
+                new.keyword_active(*kind, spelling),
+                legacy_keeps_keyword(spelling, &legacy),
+                "{spelling} with {name}"
+            );
+        }
     }
 }

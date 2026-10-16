@@ -161,46 +161,12 @@ impl ParseOptions {
     /// True when `kind` is a keyword under these options, false when the
     /// dialect leaves the word available as an ordinary name.
     ///
-    /// This is the one table that decides which keyword is gated by which
-    /// flag. Kinds that are not keywords, and keywords no flag gates, are
-    /// always enabled.
+    /// The gate of each keyword is declared on its own row in `syntax_kinds!`
+    /// (`ungated`, or `gated` and the flag), so there is no table here to
+    /// keep in step: a new keyword cannot be added without deciding its gate.
+    /// Kinds that are not keywords are always enabled.
     pub fn keyword_enabled(&self, kind: SyntaxKind) -> bool {
-        use SyntaxKind as K;
-        match kind {
-            K::Ltime | K::Ldate | K::Ltod | K::Ldt => self.allow_long_time_types,
-            K::RefTo | K::Ref | K::Null => self.allow_ref_to,
-            K::Reference => self.allow_reference_to,
-            K::Pointer => self.allow_pointer_to,
-            K::Extends
-            | K::Implements
-            | K::Interface
-            | K::EndInterface
-            | K::Abstract
-            | K::Method
-            | K::EndMethod
-            | K::Property
-            | K::EndProperty
-            | K::EndGet
-            | K::EndSet
-            | K::This
-            | K::Super => self.allow_fb_inheritance,
-            K::AndThen | K::OrElse => self.allow_short_circuit_operators,
-            K::Persistent => self.allow_persistent_var,
-            K::Continue => self.allow_continue,
-            K::Union | K::EndUnion => self.allow_union_type,
-            K::VarStat => self.allow_var_stat,
-            K::VarInst => self.allow_var_inst,
-            K::VarGeneric => self.allow_var_generic,
-            K::Namespace | K::EndNamespace => self.allow_namespace,
-            K::BeginImplementation => self.allow_begin_implementation,
-            K::Bit => self.allow_bit_type,
-            K::Try | K::EndTry | K::Catch | K::Finally | K::Throw => self.allow_try_catch,
-            K::Jmp => self.allow_jump_statement,
-            K::Calc => self.allow_calc_statement,
-            K::Wait => self.allow_wait_statement,
-            K::Params => self.allow_params_of,
-            _ => true,
-        }
+        kind.available_in(self)
     }
 }
 
@@ -279,5 +245,104 @@ mod tests {
                 assert!(all.keyword_enabled(*kind), "{kind:?}");
             }
         }
+    }
+
+    /// Every keyword a flag gates, with that flag. The list is the gate table
+    /// as it stood when the gate moved onto each keyword's own row, so a change
+    /// to what a flag gates is a change to this list.
+    const GATED_KEYWORDS: &[(SyntaxKind, &str)] = {
+        use SyntaxKind as K;
+        &[
+            (K::Ltime, "allow_long_time_types"),
+            (K::Ldate, "allow_long_time_types"),
+            (K::Ltod, "allow_long_time_types"),
+            (K::Ldt, "allow_long_time_types"),
+            (K::RefTo, "allow_ref_to"),
+            (K::Ref, "allow_ref_to"),
+            (K::Null, "allow_ref_to"),
+            (K::Reference, "allow_reference_to"),
+            (K::Pointer, "allow_pointer_to"),
+            (K::Extends, "allow_fb_inheritance"),
+            (K::Implements, "allow_fb_inheritance"),
+            (K::Interface, "allow_fb_inheritance"),
+            (K::EndInterface, "allow_fb_inheritance"),
+            (K::Abstract, "allow_fb_inheritance"),
+            (K::Method, "allow_fb_inheritance"),
+            (K::EndMethod, "allow_fb_inheritance"),
+            (K::Property, "allow_fb_inheritance"),
+            (K::EndProperty, "allow_fb_inheritance"),
+            (K::EndGet, "allow_fb_inheritance"),
+            (K::EndSet, "allow_fb_inheritance"),
+            (K::This, "allow_fb_inheritance"),
+            (K::Super, "allow_fb_inheritance"),
+            (K::AndThen, "allow_short_circuit_operators"),
+            (K::OrElse, "allow_short_circuit_operators"),
+            (K::Persistent, "allow_persistent_var"),
+            (K::Continue, "allow_continue"),
+            (K::Union, "allow_union_type"),
+            (K::EndUnion, "allow_union_type"),
+            (K::VarStat, "allow_var_stat"),
+            (K::VarInst, "allow_var_inst"),
+            (K::VarGeneric, "allow_var_generic"),
+            (K::Namespace, "allow_namespace"),
+            (K::EndNamespace, "allow_namespace"),
+            (K::BeginImplementation, "allow_begin_implementation"),
+            (K::Bit, "allow_bit_type"),
+            (K::Try, "allow_try_catch"),
+            (K::EndTry, "allow_try_catch"),
+            (K::Catch, "allow_try_catch"),
+            (K::Finally, "allow_try_catch"),
+            (K::Throw, "allow_try_catch"),
+            (K::Jmp, "allow_jump_statement"),
+            (K::Calc, "allow_calc_statement"),
+            (K::Wait, "allow_wait_statement"),
+            (K::Params, "allow_params_of"),
+        ]
+    };
+
+    #[test]
+    fn keyword_enabled_when_no_flag_is_on_then_exactly_the_pinned_keywords_are_off() {
+        let strict = ParseOptions::default();
+        let off: Vec<SyntaxKind> = SyntaxKind::ALL
+            .iter()
+            .copied()
+            .filter(|kind| !strict.keyword_enabled(*kind))
+            .collect();
+        let pinned: Vec<SyntaxKind> = GATED_KEYWORDS.iter().map(|(kind, _)| *kind).collect();
+        assert_eq!(off.len(), pinned.len());
+        for kind in &off {
+            assert!(kind.is_keyword(), "{kind:?}");
+            assert!(pinned.contains(kind), "{kind:?} is gated but not pinned");
+        }
+        for kind in &pinned {
+            assert!(off.contains(kind), "{kind:?} is pinned but not gated");
+        }
+    }
+
+    #[test]
+    fn keyword_enabled_when_one_flag_changes_then_only_the_keywords_pinned_to_it_follow() {
+        for key in ParseOptions::FLAG_KEYS {
+            let mut only = ParseOptions::default();
+            only.set_flag_by_key(key, true);
+            let mut all_but = ParseOptions::all();
+            all_but.set_flag_by_key(key, false);
+            for kind in SyntaxKind::ALL {
+                let gated_by_key = GATED_KEYWORDS.contains(&(*kind, *key));
+                assert_eq!(
+                    only.keyword_enabled(*kind),
+                    !is_gated(*kind) || gated_by_key,
+                    "{kind:?} with only {key}"
+                );
+                assert_eq!(
+                    all_but.keyword_enabled(*kind),
+                    !gated_by_key,
+                    "{kind:?} with all but {key}"
+                );
+            }
+        }
+    }
+
+    fn is_gated(kind: SyntaxKind) -> bool {
+        GATED_KEYWORDS.iter().any(|(gated, _)| *gated == kind)
     }
 }
