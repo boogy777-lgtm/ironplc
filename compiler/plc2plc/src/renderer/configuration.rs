@@ -107,6 +107,12 @@ impl Render for dsl::configuration::ConfigurationDeclaration {
         r.newline();
 
         r.indent();
+        // The grammar puts the configuration's global variables before its
+        // resources.
+        for var in self.global_var.iter() {
+            r.visit_var_decl(var)?;
+        }
+
         for res in self.resource_decl.iter() {
             r.visit_resource_declaration(res)?;
         }
