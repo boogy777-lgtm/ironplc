@@ -491,6 +491,23 @@ place of REQ-ATTR-analyzer-031 and REQ-ATTR-analyzer-032, as its base type is.
 enumeration it names is, and an enumeration written inline in a variable
 declaration is strict only by the policy.
 
+### Code generation
+
+An enumeration that is not strict is held as its base type in a variable, a
+parameter and a member of a structure, so that a program the analysis accepts
+because of it runs as the same program on the base type does. A strict
+enumeration is held as before (a `DINT` in a variable, the underlying type in a
+member).
+
+**REQ-ATTR-codegen-010** A program that uses an enumeration that is not strict
+as an operand of arithmetic, as a numerical function input, as the control
+variable of `FOR` and as the target of a selection, an integer or a constant
+that names no value runs and leaves the numbers of its base type.
+
+**REQ-ATTR-codegen-011** A number stored into an enumeration that is not strict
+in a variable or a member of a structure is held at the width of its base type
+(a sum wraps as it does in a variable of the base type).
+
 ## The reference page
 
 The reference page `docs/reference/language/attributes.rst` says what an attribute

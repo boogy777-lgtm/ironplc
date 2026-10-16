@@ -99,9 +99,7 @@ pub(crate) fn resolve_field_op_type(field_type: &IntermediateType) -> Option<OpT
             ByteSized::B64 => Some((OpWidth::F64, Signedness::Signed)),
             _ => Some((OpWidth::F32, Signedness::Signed)),
         },
-        IntermediateType::Enumeration {
-            underlying_type, ..
-        } => resolve_field_op_type(underlying_type),
+        IntermediateType::Enumeration { .. } => resolve_field_op_type(field_type.stored_as()),
         IntermediateType::Subrange { base_type, .. } => resolve_field_op_type(base_type),
         IntermediateType::Reference { .. } => Some((OpWidth::W64, Signedness::Unsigned)),
         // Composite types are not loaded/stored as single values
@@ -337,10 +335,8 @@ pub(crate) fn var_type_info_for_field(field_type: &IntermediateType) -> Option<V
         | IntermediateType::Date { size }
         | IntermediateType::TimeOfDay { size }
         | IntermediateType::DateAndTime { size } => size.into(),
-        IntermediateType::Enumeration {
-            underlying_type, ..
-        } => {
-            return var_type_info_for_field(underlying_type);
+        IntermediateType::Enumeration { .. } => {
+            return var_type_info_for_field(field_type.stored_as());
         }
         IntermediateType::Subrange { base_type, .. } => {
             return var_type_info_for_field(base_type);

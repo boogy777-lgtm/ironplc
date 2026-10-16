@@ -30,17 +30,17 @@ fn outcome_of(source: &str) -> String {
 
 /// A place a value is stored into an enumeration, as a program that stores
 /// `{V}` there and then leaves the number the enumeration holds in `r`.
-struct Place {
-    name: &'static str,
+pub(crate) struct Place {
+    pub(crate) name: &'static str,
     /// Declarations before the program.
-    types: &'static str,
+    pub(crate) types: &'static str,
     /// Declarations in the `VAR` block of the program, after `r`.
-    decl: &'static str,
+    pub(crate) decl: &'static str,
     /// The statements of the program, after the value is stored.
-    body: &'static str,
+    pub(crate) body: &'static str,
 }
 
-const PLACES: [Place; 9] = [
+pub(crate) const PLACES: [Place; 9] = [
     Place {
         name: "assignment",
         types: "",
@@ -99,7 +99,7 @@ const PLACES: [Place; 9] = [
 
 /// The program that stores `value` into the enumeration `E1`, declared as
 /// `values`, at `place`.
-fn store_program(place: &Place, values: &str, value: &str) -> String {
+pub(crate) fn store_program(place: &Place, values: &str, value: &str) -> String {
     let render = |text: &str| text.replace("{V}", value).replace("{ENUM}", values);
     format!(
         "TYPE E1 : {values}; END_TYPE {} PROGRAM main VAR r : DINT; {} END_VAR {} END_PROGRAM",

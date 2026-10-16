@@ -220,8 +220,15 @@ pub(crate) fn assign_variables(
                     (iec_type_tag::STRUCT, type_name_str)
                 }
                 InitialValueAssignmentKind::EnumeratedType(enum_init) => {
-                    // Enum variables use DINT (W32/Signed/32-bit) per REQ-EN-codegen-010.
-                    let type_info = crate::compile_enum::enum_var_type_info();
+                    // A strict enum variable uses DINT (W32/Signed/32-bit) per
+                    // REQ-EN-codegen-010; one that is not strict is held as its
+                    // base type.
+                    let type_info = types
+                        .get(&enum_init.type_name)
+                        .and_then(|attributes| {
+                            crate::type_info::operand_type_info(&attributes.representation)
+                        })
+                        .unwrap_or_else(crate::compile_enum::enum_var_type_info);
                     ctx.var_types.insert(id.clone(), type_info);
                     // Debug tag is DINT per REQ-EN-codegen-012; type_name is the
                     // user-defined enum name (e.g. "COLOR").
