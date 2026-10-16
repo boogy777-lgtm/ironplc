@@ -121,11 +121,46 @@ declaration to attach it to.
 **REQ-ATTR-syntax-014** The span of the P0043 error is the span of the pragma
 and its message names the attribute as written.
 
-**REQ-ATTR-syntax-015** For every source, every attribute pragma of its tree is
-attached to a declaration or reported, never both and never neither.
+**REQ-ATTR-syntax-015** For every source, every attribute pragma of its tree
+that describes a declaration is attached to a declaration or reported, never
+both and never neither. An attribute pragma that marks the edge of a region is
+neither (see [Region markers](#region-markers)).
 
 **REQ-ATTR-syntax-016** The lowering of a statement list reports an attribute
 pragma in the list as P0043 like the lowering of a file.
+
+## Region markers
+
+A row can say that its attribute marks the edge of a region of declarations
+instead of describing the declaration it stands before (`Info::region`, set in
+the declaration list by `region: true`). `naming` is the one such attribute:
+`{attribute 'naming' := 'off'}` and `{attribute 'naming' := 'on'}` bracket the
+declarations that CODESYS leaves out of the naming-convention check, and
+`'omit'` leaves out the next line only. The closing pragma stands before
+`END_VAR`, `END_STRUCT`, `END_TYPE` or another closing keyword, where no
+declaration follows. IronPLC has no naming-convention check, so the row is
+`Waiting`; the pragma is read, its value is checked, and it does nothing else.
+
+Only `naming` is a region attribute, so there is no more general mechanism than
+the one flag of the row; a second attribute of the kind is one more entry with
+the flag. Attachment reads the flag and no name.
+
+**REQ-ATTR-syntax-040** An attribute pragma of a row with `region` set may stand
+anywhere an attribute pragma may stand, including before `END_VAR`,
+`END_STRUCT`, `END_TYPE` and at the end of the file, and is not reported as
+P0043, whether or not a declaration follows it.
+
+**REQ-ATTR-syntax-041** An attribute pragma of a row with `region` set is not an
+attribute of the declaration that follows it: the declaration carries the other
+attributes before it and not this one.
+
+**REQ-ATTR-syntax-042** The value of such a pragma is checked where it stands,
+by the check of the registry (`region_fault`), and a value its row does not read
+(or none) is reported as P4077 at the pragma, with the message the analysis
+gives for the same fault of an attribute of a declaration.
+
+**REQ-ATTR-syntax-043** The lowering of a file and of a statement list reports
+the earlier in the source of a P0043 and a P4077 of a region marker.
 
 ## What is not an attribute
 
@@ -309,6 +344,15 @@ fault `ForbidsBlock`, at the first such variable, with the row, the kind of
 block and the span of the attribute; a declaration that holds no such variable
 has none; an attribute that is not allowed there has only `NotAllowedHere`; an
 attribute written twice has the fault once.
+
+**REQ-ATTR-dsl-050** The row `naming` is the only row with `region` set; it is in
+the family Static analysis, is `Waiting`, and reads `off`, `on` and `omit` without
+regard to case and to the white space around them.
+
+**REQ-ATTR-dsl-051** `region_fault` gives the fault `Value` of an attribute of a
+row with `region` set whose value the row does not read, at the span of the
+attribute, and nothing for any other attribute; `Fault::diagnostic` is the one
+turning of a fault into its diagnostic, for the analysis and for the lowering.
 
 ## What the analysis reports
 

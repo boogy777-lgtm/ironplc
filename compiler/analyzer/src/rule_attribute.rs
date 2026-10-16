@@ -37,14 +37,13 @@ use std::collections::HashSet;
 use ironplc_dsl::{
     attribute::{
         census::declared,
-        registry::{declared_faults, Fault, FaultKind},
+        registry::{declared_faults, Fault},
     },
     common::Library,
     core::FileId,
-    diagnostic::{Diagnostic, Label},
+    diagnostic::Diagnostic,
 };
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::text;
 
 use crate::{result::SemanticResult, semantic_context::SemanticContext};
 
@@ -57,7 +56,7 @@ pub fn apply(
     let diagnostics: Vec<Diagnostic> = declared(lib)
         .iter()
         .flat_map(declared_faults)
-        .map(diagnostic)
+        .map(Fault::diagnostic)
         .filter(|diagnostic| {
             let at = &diagnostic.primary;
             reported.insert((
@@ -73,42 +72,6 @@ pub fn apply(
         Ok(())
     } else {
         Err(diagnostics)
-    }
-}
-
-/// The diagnostic of one fault: one arm for each kind of fault, each text a row
-/// of the dictionary (`problem-texts.csv`).
-fn diagnostic(fault: Fault) -> Diagnostic {
-    let name = fault.name;
-    match fault.kind {
-        FaultKind::NotAllowedHere { row, kind } => Diagnostic::text(
-            fault.span,
-            text::attribute_not_allowed_here(name, kind.label(), row.targets.describe()),
-        ),
-        FaultKind::Value { row, found } => Diagnostic::text(
-            fault.span,
-            match found {
-                Some(value) => {
-                    text::attribute_value_invalid_found(name, row.value.describe(), value)
-                }
-                None => text::attribute_value_invalid_missing(name, row.value.describe()),
-            },
-        ),
-        FaultKind::Repeated { first } => {
-            Diagnostic::text(fault.span, text::attribute_repeated(name)).with_secondary(
-                Label::span(first, text::attribute_repeated_first_written_here()),
-            )
-        }
-        FaultKind::ForbidsBlock {
-            block, attribute, ..
-        } => Diagnostic::text(
-            fault.span,
-            text::attribute_forbids_variable_block(block.keyword(), name),
-        )
-        .with_secondary(Label::span(
-            attribute,
-            text::attribute_forbids_variable_block_attribute_written_here(),
-        )),
     }
 }
 

@@ -42,6 +42,27 @@ variables.
 An attribute that stands anywhere else describes nothing, and the compiler
 reports it as :doc:`P0043 </reference/compiler/problems/P0043>`.
 
+One attribute marks the edge of a region instead of describing a declaration:
+:code:`naming`. ``{attribute 'naming' := 'off'}`` and
+``{attribute 'naming' := 'on'}`` bracket the declarations that CODESYS leaves out
+of its naming-convention check, and ``'omit'`` leaves out the next line only. The
+closing pragma stands before :code:`END_VAR`, :code:`END_STRUCT`,
+:code:`END_TYPE` or another closing keyword, so it needs no declaration after it
+and the compiler does not report it as P0043. It is not an attribute of the
+declaration after it. The compiler checks its value (one of :code:`off`,
+:code:`on` and :code:`omit`) and has no naming-convention check, so it does
+nothing else with it.
+
+.. code-block::
+
+   PROGRAM main
+   VAR
+       {attribute 'naming' := 'off'}
+       x : INT;
+       {attribute 'naming' := 'on'}
+   END_VAR
+   END_PROGRAM
+
 What the compiler reports
 =========================
 
