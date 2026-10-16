@@ -9,6 +9,7 @@ use crate::parser::recovery::{BLOCK_END, DECLARATION_END, DECLARATION_START};
 use crate::parser::state::Parser;
 use crate::syntax_kind::SyntaxKind as K;
 use ironplc_problems::{text, Text};
+use rowan::TextRange;
 
 /// The sign of a number.
 pub(super) const SIGN: KindSet = KindSet::new(&[K::Plus, K::Minus]);
@@ -44,21 +45,34 @@ pub(super) fn declared_name(p: &mut Parser, class: NameClass) -> bool {
     true
 }
 
-/// `name {, name}`. Returns how many names there are, or `None` when the first
-/// one is missing.
-pub(super) fn name_list(p: &mut Parser, class: NameClass) -> Option<usize> {
+/// The names of a list `name {, name}`.
+pub(super) struct Names {
+    /// How many names there are.
+    pub count: usize,
+    /// The first `,`, which is what makes the list more than one name, for a
+    /// rule that allows only one.
+    pub first_comma: Option<TextRange>,
+}
+
+/// `name {, name}`. Returns the names, or `None` when the first one is
+/// missing.
+pub(super) fn name_list(p: &mut Parser, class: NameClass) -> Option<Names> {
     if !declared_name(p, class) {
         return None;
     }
-    let mut count = 1;
+    let mut names = Names {
+        count: 1,
+        first_comma: None,
+    };
     while p.at(K::Comma) {
+        names.first_comma.get_or_insert(p.current_range());
         p.bump();
         if !declared_name(p, class) {
             break;
         }
-        count += 1;
+        names.count += 1;
     }
-    Some(count)
+    Some(names)
 }
 
 /// A count or length: an integer, or the name of a constant.

@@ -469,13 +469,25 @@ impl<'t, 's> Parser<'t, 's> {
         self.error_after_previous(text);
     }
 
+    /// Records that `expected` was to stand at the `n`th token ahead, which
+    /// is what was found: for a rule that has read the tokens before it and
+    /// found the first one that does not belong.
+    pub(crate) fn expected_at(&mut self, n: usize, expected: impl Into<Expected>) {
+        let text = Expectation::new(Found::lexed(self.token(n)), expected).text();
+        self.error_at_nth(n, text);
+    }
+
     /// Records an error at the next token. A lexical error token already has
     /// its own error, so none is added for it.
     pub(crate) fn error(&mut self, text: Text) {
-        if self.nth(0) == Some(SyntaxKind::ErrorToken) {
+        self.error_at_nth(0, text);
+    }
+
+    fn error_at_nth(&mut self, n: usize, text: Text) {
+        if self.nth(n) == Some(SyntaxKind::ErrorToken) {
             return;
         }
-        self.record(SyntaxError::new(text, self.current_range()));
+        self.record(SyntaxError::new(text, self.nth_range(n)));
     }
 
     // ----- depth guard ----------------------------------------------------
