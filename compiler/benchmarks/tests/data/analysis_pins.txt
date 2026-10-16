@@ -33,6 +33,10 @@ library 04cfb03d8be757df 1 elements
 parse P0004 C-style comments are not enabled in this dialect
 ## c_style_block_comment.st [rusty]
 library 2687aca02545903a 1 elements
+## case_selectors.st [default]
+library 3c2522f1ff7c54ac 2 elements
+## case_selectors.st [rusty]
+library 3c2522f1ff7c54ac 2 elements
 ## comment.st [default]
 library 00bde3cdc25363bc 1 elements
 diagnostic P4007 Undefined variable
