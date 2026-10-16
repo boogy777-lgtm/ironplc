@@ -19,7 +19,9 @@ enumeration no arithmetic, so the standard's behavior is that every enumeration
 is strict, and CODESYS and TwinCAT are the vendors who document the other. Which
 of the two a compilation uses is a choice that dialects make differently, which
 is what a policy is. What the choice changes is whether the analysis reports a
-problem; the instructions of a program that is accepted do not depend on it.
+problem; a program that both alternatives accept computes the same values under
+either. An enumeration that is not strict is held in the width of its base type,
+which changes the instructions, not the values such a program stores into it.
 
 ## Decision Drivers
 
