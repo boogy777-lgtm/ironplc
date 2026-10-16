@@ -77,8 +77,8 @@ Temporary Variables
 A ``VAR_TEMP`` variable belongs to one call of the program organization unit
 that declares it. At the start of every call it takes its initial value, or the
 default value of its type when the declaration gives none, and its value is
-never kept to the next call. A ``VAR_TEMP`` block is supported in a program and
-in a function. It takes no qualifier (``RETAIN``, ``NON_RETAIN``,
+never kept to the next call. A ``VAR_TEMP`` block is supported in a program, in
+a function, in a function block and in a method. It takes no qualifier (``RETAIN``, ``NON_RETAIN``,
 ``PERSISTENT`` and ``CONSTANT`` are errors) and no location (``AT``).
 
 In a program a call is one scan, so a ``VAR_TEMP`` variable is the way to hold
@@ -105,8 +105,16 @@ A function block instance declared in ``VAR_TEMP`` is a new instance at every
 call: each of its fields takes its declared initial value, or the default value
 of its type, before the instance is called.
 
-A ``VAR_TEMP`` variable of a program is not part of the state of the program.
-It takes no stable variable ID, and adding, removing or changing one does not
+In a function block a call is a call of the instance, so every call finds the
+``VAR_TEMP`` variables at their initial values, however often the instance has
+been called before, while the ``VAR`` and ``VAR_OUTPUT`` variables of the same
+instance keep theirs. The instances of one function block do not share the
+values of a ``VAR_TEMP`` variable, because no value outlives its call.
+
+A ``VAR_TEMP`` variable is not part of the state of the program or of the
+function block that declares it. It is no field of an instance, so ``inst.name``
+does not reach it from outside, and a method of the block does not see it. It
+takes no stable variable ID, and adding, removing or changing one does not
 change the layout that an online change compares.
 
 Global Variables
