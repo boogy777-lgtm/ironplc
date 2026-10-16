@@ -10,6 +10,9 @@ message categories of CODESYS. The category belongs to the problem code. Only a
 fatal error and an error stop the build; a warning, an information message and a
 text are shown and do not. The decision and its alternatives are in
 [ADR-0081](../adrs/0081-a-diagnostic-takes-its-category-from-its-problem-code.md).
+How the category relates to the other concepts of a message (areas, handling,
+suppression, limits, user messages) is defined in
+[Message Ontology](message-ontology.md).
 
 Every problem code is an error today, so no output depends on the other
 categories yet. This document specifies the mechanism, so that a code that
