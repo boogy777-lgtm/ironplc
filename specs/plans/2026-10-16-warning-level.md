@@ -128,13 +128,39 @@ CODESYS texts. The resource strings come from `Compiler35220` (`CompilerStrings`
 | end of a compile (check) | `Compile complete -- {0} errors, {1} warnings` | Text |
 | limits | `More than {0} errors occured: Skipping all further error messages`, the same for warnings (limit 500) | Text |
 
-Tasks:
-- [ ] One header renderer whose words per category come from one exhaustive match. The format study found no CODESYS text form for a single message line:
-  - CODESYS shows a message's category as an icon in the Messages view, with the columns Description, Project, Object and Position;
-  - scripting exposes the category names `FatalError`, `Error`, `Warning`, `Information` and `Text`;
-  - no `[ERROR]`-style label exists in the resources or in the decompiled code.
+The format study found no CODESYS text form for a single message line:
+- CODESYS shows a message's category as an icon in the Messages view, with the columns Description, Project, Object and Position;
+- scripting exposes the category names `FatalError`, `Error`, `Warning`, `Information` and `Text`;
+- no `[ERROR]`-style label exists in the resources or in the decompiled code.
 
-  The header therefore uses the CODESYS category names, as the owner chooses: the words of the Messages view or the scripting names.
+The owner's decision is to show each message in two forms, both generated from the one `LEVELS` list. Each category's row carries both names, so there is no second mapping:
+
+- **For a person** (CLI, editor): the words of the CODESYS Messages view. The header is `Error`, `Warning` or `Information`; a fatal error shows as `Error`, as the view counts it with the errors. A `Text` line is printed without a word or code. A suppressed message is not shown.
+- **For a program** (MCP, `--format json`): the CODESYS scripting model.
+  - The field names are those of `ScriptMessage`: `project`, `object`, `position`, `length`, `text`, `severity`.
+  - `severity` takes the scripting names `FatalError`, `Error`, `Warning`, `Information`, `Text`, `SuppressedWarning`, `SuppressedInformation`. They replace the kebab-case names of PR 1.
+  - A suppressed message is returned, so a script can see what was hidden.
+- **A bridge to CODESYS codes.** `problem-codes.csv` gains a `CODESYS` column with the analogue of each code, filled only where the decompiled checker confirms it (P4080 ↔ C0004, P4081 ↔ C0037, P4082 ↔ C0178, …) and left empty otherwise.
+  - The person form shows it as `Error P4081 (C0037): …`.
+  - The program form has a `"codesys"` field.
+  - Each problem page names it.
+- **VS Code.** The Problems panel filter has three switches, Errors, Warnings and Infos, the same three as the CODESYS Messages view filter. Each category goes to one place:
+
+  | Category | VS Code |
+  |---|---|
+  | `FatalError`, `Error` | Problems, `ERROR` (Errors switch) |
+  | `Warning` | Problems, `WARNING` (Warnings switch) |
+  | `Information` | Problems, `INFORMATION` (Infos switch) |
+  | `Text` | the **Output → IronPLC** channel through `window/logMessage`, not the Problems panel. The build start and "Compile complete" lines go there, as the build progress stays apart from the problems in CODESYS. This replaces PR 1's interim mapping of `Text` to `INFORMATION`. |
+  | `SuppressedWarning`, `SuppressedInformation` | not published |
+
+  Each diagnostic's `source` names its stage, `IronPLC (precompile)` or `IronPLC (build)`, matching the CODESYS message categories (Precompile, Build). The text filter of the Problems panel can then select a stage.
+
+Tasks:
+- [ ] One header renderer whose words per category come from one exhaustive match, using the Messages view words above.
+- [ ] The program form: `ScriptMessage` field names and scripting severity names; update MCP and its documentation.
+- [ ] The `CODESYS` column, its generator check, and its use in both forms and in the problem pages.
+- [ ] Language server: `Text` through `window/logMessage`; `source` per stage.
 - [ ] The summary counts follow CODESYS: "{0} errors, {1} warnings", with the plural used even for one.
 - [ ] `check` ends with the "Compile complete" line, and `compile` with the "Build complete" line. Each counts errors and warnings with the categories of PR 1.
 - [ ] The texts are rows of the message dictionary (`problem-texts.csv`), not literals.
