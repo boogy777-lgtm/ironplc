@@ -297,6 +297,19 @@ impl Visitor<Diagnostic> for LibraryRenderer {
         self.visit_integer(&node.value)
     }
 
+    fn visit_integer_literal(&mut self, node: &IntegerLiteral) -> Result<Self::Value, Diagnostic> {
+        // A literal that names its type (`LINT#5`) keeps it: without the
+        // prefix it re-parses as an untyped literal, which resolves to
+        // another type.
+        match node.data_type {
+            Some(_) => {
+                self.write_ws(node.to_string().as_str());
+                Ok(())
+            }
+            None => self.visit_signed_integer(&node.value),
+        }
+    }
+
     fn visit_real_literal(&mut self, node: &RealLiteral) -> Result<Self::Value, Diagnostic> {
         let mut val = String::new();
         if let Some(data_type) = &node.data_type {
