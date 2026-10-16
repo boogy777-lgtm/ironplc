@@ -95,7 +95,11 @@ pub(crate) fn rank(problem: Problem) -> usize {
 
 impl Parse {
     /// The error to report when one is reported: the lowest rank, and the
-    /// earliest of that rank. `None` when the parse found no error.
+    /// earliest of that rank. Of errors at one place the first found is
+    /// reported, and a construct is closed, so reports its missing closer,
+    /// before the construct around it: input that ends inside several open
+    /// constructs is reported by the innermost one's closer. `None` when the
+    /// parse found no error.
     pub fn primary_error(&self) -> Option<&SyntaxError> {
         self.errors.iter().min_by_key(|error| {
             (
