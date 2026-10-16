@@ -189,8 +189,13 @@ fn is_zero(n: &u32) -> bool {
 /// Build a [`DiagnosticInfo`] from a compiler diagnostic, computing 1-based
 /// line/column from the supplied source text.
 fn diagnostic_info(diag: &Diagnostic, source: &str) -> DiagnosticInfo {
-    let start = LineColumn::from_offset(source, diag.primary.location.start);
-    let end = LineColumn::from_offset(source, diag.primary.location.end);
+    // The range as an editor draws it: an empty span (something missing) is
+    // widened to a character, the same conversion the language server makes.
+    let (start, end) = LineColumn::editor_range(
+        source,
+        diag.primary.location.start,
+        diag.primary.location.end,
+    );
     DiagnosticInfo {
         code: diag.code.clone(),
         message: diag.description(),
