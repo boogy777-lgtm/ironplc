@@ -154,3 +154,4 @@ P4076,AttributeNotAllowedHere,Attribute does not apply to this kind of declarati
 P4077,AttributeValueInvalid,Attribute value is not one the attribute takes
 P4078,AttributeRepeated,Attribute is written more than once before one declaration
 P4079,AttributeForbidsVariableBlock,Attribute does not allow a variable block that its declaration holds
+P4080,MemberNotDeclared,Member is not declared by the type of the value it is selected from

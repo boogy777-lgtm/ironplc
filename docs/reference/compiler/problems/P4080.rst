@@ -1,0 +1,75 @@
+=====
+P4080
+=====
+
+.. problem-summary:: P4080
+
+This error occurs when a member is selected from a value, and the type of the
+value does not declare a member of that name. A member is selected with a dot,
+as in ``motor.running`` or ``setpoint.limit``, and the error is at the name
+after the dot. It is reported when the member is read and when it is written, and
+when the name of an element is given in an initializer such as
+``(limit := 10)``.
+
+The members of a type are:
+
+* for a structure or a union, its elements;
+* for a function block, its ``VAR_INPUT``, ``VAR_OUTPUT``, ``VAR_IN_OUT`` and
+  ``VAR`` variables, those of the function blocks it extends with ``EXTENDS``,
+  and its properties.
+
+``VAR_TEMP`` variables are not members. They belong to one call of the function
+block and are not kept in the instance, so they cannot be read or written from
+outside it. A method is called with parentheses (``motor.Start()``); selecting it
+as a variable is this error too. Selecting a member from a value of an
+elementary type, an enumeration or an array is this error as well.
+
+Example
+-------
+
+The following code will generate error P4080:
+
+.. code-block::
+
+   TYPE Setpoint : STRUCT
+       target : INT;
+   END_STRUCT; END_TYPE
+
+   FUNCTION_BLOCK Motor
+   VAR_OUTPUT running : BOOL; END_VAR
+   VAR_TEMP scratch : INT; END_VAR
+   END_FUNCTION_BLOCK
+
+   PROGRAM main
+   VAR m : Motor; sp : Setpoint; ok : BOOL; v : INT; END_VAR
+   ok := m.running;
+   ok := m.stopped;    (* Error: Motor has no member stopped *)
+   v := m.scratch;     (* Error: VAR_TEMP is not a member *)
+   sp.limit := 10;     (* Error: Setpoint has no member limit *)
+   END_PROGRAM
+
+To fix this error, declare the member in the type, or use the name the type
+declares. Declare a variable that must be visible from outside in
+``VAR_OUTPUT`` (or ``VAR_INPUT``), not in ``VAR_TEMP``:
+
+.. code-block::
+
+   TYPE Setpoint : STRUCT
+       target : INT;
+       limit : INT;
+   END_STRUCT; END_TYPE
+
+   FUNCTION_BLOCK Motor
+   VAR_OUTPUT running : BOOL; stopped : BOOL; scratch : INT; END_VAR
+   END_FUNCTION_BLOCK
+
+   PROGRAM main
+   VAR m : Motor; sp : Setpoint; ok : BOOL; v : INT; END_VAR
+   ok := m.running;
+   ok := m.stopped;
+   v := m.scratch;
+   sp.limit := 10;
+   END_PROGRAM
+
+If the name is misspelled, the message suggests the closest member the type
+declares.

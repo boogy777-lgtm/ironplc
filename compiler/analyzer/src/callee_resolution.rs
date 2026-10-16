@@ -72,6 +72,24 @@ impl<'a> FunctionBlocks<'a> {
         })
     }
 
+    /// `fb_name` and every block it inherits from, nearest first (the order
+    /// [`FunctionBlocks::resolve_method`] searches), and the base the chain
+    /// ends at when that base is not a function block of the library.
+    ///
+    /// A base outside the library is either a standard function block, whose
+    /// members are in the type environment, or a name that is not declared at
+    /// all; the caller that needs the members of the whole chain has to tell
+    /// them apart, and until it has, the chain is not complete.
+    pub(crate) fn lineage(&self, fb_name: &TypeName) -> Lineage<'a> {
+        let blocks: Vec<&'a FunctionBlockDeclaration> = self.chain(fb_name).collect();
+        let open_base = blocks
+            .last()
+            .and_then(|fb| fb.oop.as_ref())
+            .and_then(|oop| oop.base.as_ref())
+            .filter(|base| self.get(base).is_none());
+        Lineage { blocks, open_base }
+    }
+
     /// Resolves `method_name` against `fb_name`'s own methods, then its
     /// `EXTENDS` base, then that base's base, and so on (ADR-0041 Phase 1
     /// static dispatch). Returns the function block that actually declares
@@ -103,6 +121,15 @@ impl<'a> FunctionBlocks<'a> {
                 .any(|decl| decl.identifier.symbolic_id() == Some(field))
         })
     }
+}
+
+/// The result of [`FunctionBlocks::lineage`].
+pub(crate) struct Lineage<'a> {
+    /// The function block and the blocks it inherits from, nearest first.
+    pub(crate) blocks: Vec<&'a FunctionBlockDeclaration>,
+    /// The `EXTENDS` base of the last block when the library does not
+    /// declare it.
+    pub(crate) open_base: Option<&'a TypeName>,
 }
 
 /// The function-block instances declared in the program organization unit
