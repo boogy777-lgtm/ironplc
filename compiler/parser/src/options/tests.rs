@@ -331,7 +331,8 @@ fn assert_selected_policies(dialect: Dialect, expected: &[(&str, &str)]) {
 }
 
 /// The strict dialects select every policy's default: reject anything
-/// that is not a whole literal, and trap on failure (ADR-0049 rule 4).
+/// that is not a whole literal, trap on failure (ADR-0049 rule 4), and hold
+/// every enumeration strict.
 #[rstest]
 #[case::ed2(Dialect::Iec61131_3Ed2)]
 #[case::ed3(Dialect::Iec61131_3Ed3)]
@@ -341,6 +342,7 @@ fn strict_dialects_select_default_policies(#[case] dialect: Dialect) {
         &[
             ("policy_string_to_num_non_numeric", "reject"),
             ("policy_string_to_num_failure", "trap"),
+            ("policy_enumeration_strictness", "every-enumeration"),
         ],
     );
 }
@@ -354,13 +356,15 @@ fn rusty_dialect_selects_reject_and_zero() {
         &[
             ("policy_string_to_num_non_numeric", "reject"),
             ("policy_string_to_num_failure", "zero"),
+            ("policy_enumeration_strictness", "every-enumeration"),
         ],
     );
 }
 
 /// CODESYS and TwinCAT (observed) stop parsing at the first invalid
 /// character and document 0 as the result for a string that is not valid
-/// in the target type.
+/// in the target type; they hold an enumeration strict only when its
+/// declaration says `{attribute 'strict'}`.
 #[rstest]
 #[case::codesys(Dialect::Codesys)]
 #[case::twincat(Dialect::TwinCat)]
@@ -370,6 +374,7 @@ fn codesys_family_dialects_select_ignore_trailing_and_zero(#[case] dialect: Dial
         &[
             ("policy_string_to_num_non_numeric", "ignore-trailing"),
             ("policy_string_to_num_failure", "zero"),
+            ("policy_enumeration_strictness", "with-attribute"),
         ],
     );
 }

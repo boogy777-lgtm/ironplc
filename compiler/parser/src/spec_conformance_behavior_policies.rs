@@ -13,8 +13,11 @@ use rstest::rstest;
 use spec_test_macro::spec_test;
 
 use crate::options::{
-    CompilerOptions, Dialect, SetPolicyError, StringToNumFailure, StringToNumNonNumeric,
+    BehaviorPolicy, CompilerOptions, Dialect, EnumerationStrictness, SetPolicyError,
+    StringToNumFailure, StringToNumNonNumeric,
 };
+use ironplc_dsl::attribute::{Attribute, Attributes};
+use ironplc_dsl::core::SourceSpan;
 
 fn selected(options: &CompilerOptions) -> (StringToNumNonNumeric, StringToNumFailure) {
     (
@@ -101,7 +104,8 @@ fn parser_spec_req_bp_004_policy_descriptors_describe_every_policy() {
         keys,
         vec![
             "policy_string_to_num_non_numeric",
-            "policy_string_to_num_failure"
+            "policy_string_to_num_failure",
+            "policy_enumeration_strictness"
         ]
     );
     let defaults = CompilerOptions::default();
@@ -121,4 +125,63 @@ fn parser_spec_req_bp_004_policy_descriptors_describe_every_policy() {
     );
     let failure = &CompilerOptions::POLICY_DESCRIPTORS[1];
     assert_eq!(failure.alternatives, &["trap", "zero"]);
+    let strictness = &CompilerOptions::POLICY_DESCRIPTORS[2];
+    assert_eq!(
+        strictness.alternatives,
+        &["every-enumeration", "with-attribute"]
+    );
+}
+
+/// REQ-BP-parser-005: the default options and every dialect but `codesys`
+/// and `twincat` select `every-enumeration`; those two select
+/// `with-attribute`.
+#[spec_test(REQ_BP_parser_005)]
+#[rstest]
+#[case::default_options(CompilerOptions::default(), EnumerationStrictness::EveryEnumeration)]
+#[case::ed2(
+    CompilerOptions::from_dialect(Dialect::Iec61131_3Ed2),
+    EnumerationStrictness::EveryEnumeration
+)]
+#[case::ed3(
+    CompilerOptions::from_dialect(Dialect::Iec61131_3Ed3),
+    EnumerationStrictness::EveryEnumeration
+)]
+#[case::rusty(
+    CompilerOptions::from_dialect(Dialect::Rusty),
+    EnumerationStrictness::EveryEnumeration
+)]
+#[case::codesys(
+    CompilerOptions::from_dialect(Dialect::Codesys),
+    EnumerationStrictness::WithAttribute
+)]
+#[case::twincat(
+    CompilerOptions::from_dialect(Dialect::TwinCat),
+    EnumerationStrictness::WithAttribute
+)]
+fn parser_spec_req_bp_005_dialects_select_enumeration_strictness(
+    #[case] options: CompilerOptions,
+    #[case] expected: EnumerationStrictness,
+) {
+    assert_eq!(options.policy_enumeration_strictness, expected);
+}
+
+fn strict_attributes() -> Attributes {
+    Attributes::new(vec![Attribute {
+        name: "strict".to_string(),
+        value: None,
+        span: SourceSpan::default(),
+    }])
+}
+
+/// REQ-BP-parser-005: under `with-attribute` only a declaration that carries
+/// the attribute is strict, under `every-enumeration` every one is.
+#[spec_test(REQ_BP_parser_005)]
+fn parser_spec_req_bp_005_strictness_is_from_the_attribute_or_every_enumeration() {
+    let none = Attributes::default();
+    let strict = strict_attributes();
+    assert!(EnumerationStrictness::EveryEnumeration.is_strict(&none));
+    assert!(EnumerationStrictness::EveryEnumeration.is_strict(&strict));
+    assert!(!EnumerationStrictness::WithAttribute.is_strict(&none));
+    assert!(EnumerationStrictness::WithAttribute.is_strict(&strict));
+    assert_eq!(EnumerationStrictness::default().index(), 0);
 }

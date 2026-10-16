@@ -98,13 +98,18 @@ pub(crate) fn expr_representation<'a>(
     }
 }
 
-/// The `VarTypeInfo` a value of a type operates with. Every enumeration
-/// operates as a `DINT` (REQ-EN-codegen-003); a subrange operates as its base
-/// type; a reference is a 64-bit address, as a reference field is (see
+/// The `VarTypeInfo` a value of a type operates with. A strict enumeration
+/// operates as a `DINT` (REQ-EN-codegen-003); an enumeration that is not strict
+/// is held as its base type, so that a number stored into it wraps as it does
+/// in a variable of that type; a subrange operates as its base type; a
+/// reference is a 64-bit address, as a reference field is (see
 /// `compile_struct::var_type_info_for_field`).
-fn operand_type_info(representation: &IntermediateType) -> Option<VarTypeInfo> {
+pub(crate) fn operand_type_info(representation: &IntermediateType) -> Option<VarTypeInfo> {
     match representation {
-        IntermediateType::Enumeration { .. } => Some(crate::compile_enum::enum_var_type_info()),
+        IntermediateType::Enumeration { .. } if representation.is_strict_enumeration() => {
+            Some(crate::compile_enum::enum_var_type_info())
+        }
+        IntermediateType::Enumeration { .. } => var_type_info(representation.stored_as()),
         IntermediateType::Subrange { base_type, .. } => var_type_info(base_type),
         IntermediateType::Reference { .. } => Some(reference_type_info()),
         IntermediateType::Bool

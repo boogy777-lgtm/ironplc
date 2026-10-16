@@ -89,6 +89,7 @@ mod tests {
                     size: crate::intermediate_type::ByteSized::B16,
                 }),
                 numbers: vec![],
+                strict: true,
             }),
             TypeCategory::UserDefined
         );

@@ -103,6 +103,7 @@ fn insert_alias_when_type_already_exists_then_ok() {
  size: crate::intermediate_type::ByteSized::B16,
  }),
  numbers: vec![],
+ strict: true,
 })
         .with_enumerated_values(vec![Id::from("A"), Id::from("B")])
     )]
@@ -183,6 +184,7 @@ fn intermediate_type_helper_methods_work_correctly() {
             size: crate::intermediate_type::ByteSized::B16,
         }),
         numbers: vec![],
+        strict: true,
     }
     .is_primitive());
     assert!(!IntermediateType::Structure {
@@ -311,6 +313,7 @@ fn type_environment_is_enumeration_helper() {
                     size: crate::intermediate_type::ByteSized::B16,
                 }),
                 numbers: vec![],
+                strict: true,
             },
         ),
     );
@@ -377,6 +380,7 @@ fn type_environment_get_all_types_by_category() {
                     size: crate::intermediate_type::ByteSized::B16,
                 }),
                 numbers: vec![],
+                strict: true,
             },
         ),
     );

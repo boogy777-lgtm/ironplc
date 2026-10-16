@@ -20,6 +20,7 @@
 //!
 //! A declaration whose type cannot be resolved keeps `type_id: None`. The
 //! rules that check declarations report why; this pass stays silent.
+use ironplc_dsl::attribute::Attributes;
 use ironplc_dsl::common::*;
 use ironplc_dsl::fold::Fold;
 use ironplc_dsl::type_id::TypeId;
@@ -64,7 +65,8 @@ impl DeclTypeResolver<'_> {
             }) => return env.id_of(type_name),
             InitialValueAssignmentKind::SimpleExpr(se) => return env.id_of(&se.type_name),
             InitialValueAssignmentKind::EnumeratedValues(values) => {
-                enumeration::try_from_values(values, None).ok()?
+                let strict = env.enumeration_is_strict(&Attributes::default());
+                enumeration::try_from_values(values, None, strict).ok()?
             }
             InitialValueAssignmentKind::Subrange(spec) => {
                 match subrange::try_from(name, &spec.spec, env).ok()? {

@@ -14,12 +14,22 @@ signed argument for an unsigned parameter.
 For the full set of allowed implicit conversions, see
 :doc:`/explanation/type-conversions`.
 
-A whole array, a structure, an enumeration or a function block instance is only ever
-its own type, and no conversion applies to it. Passing one for a parameter of any other
-type, including a generic category such as ``ANY_NUM`` or ``ANY_STRING``, is this error.
-An array or structure *is* accepted for a parameter whose type has the same shape, such
-as an inline ``ARRAY[1..2] OF DINT`` for a parameter declared with a named array type of
-two ``DINT`` elements.
+A whole array, a structure or a function block instance is only ever its own type, and no
+conversion applies to it. Passing one for a parameter of any other type, including a
+generic category such as ``ANY_NUM`` or ``ANY_STRING``, is this error. An array or
+structure *is* accepted for a parameter whose type has the same shape, such as an inline
+``ARRAY[1..2] OF DINT`` for a parameter declared with a named array type of two ``DINT``
+elements.
+
+An enumeration is the integer it stands for wherever the function only holds the argument:
+it is accepted for an ``INT`` or ``DINT`` parameter, and for a generic parameter of the
+selection, comparison and conversion functions. A strict enumeration is this error for a
+parameter of a function that computes a new number from it, such as ``ABS``, ``EXPT``,
+``MOD`` or ``MUL_TIME``, and so is an integer that is not a constant for a parameter that
+is a strict enumeration; either is this error for a parameter of a narrower or unrelated
+type. An enumeration that is not strict is its base type for all of these. See
+:doc:`/reference/language/data-types/derived/enumerated-types` for which functions compute
+and which enumerations are strict.
 
 The arithmetic functions ``ADD``, ``SUB``, ``MUL`` and ``DIV`` are the exception: they
 accept the numeric types and the time and date types, so a mismatch in their inputs is

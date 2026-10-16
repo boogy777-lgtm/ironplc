@@ -5,6 +5,7 @@ use std::collections::HashMap;
 
 use indexmap::IndexMap;
 
+use ironplc_dsl::attribute::Attributes;
 use ironplc_dsl::common::StructInitialValueAssignmentKind;
 use ironplc_dsl::construct::merge_member_inits;
 use ironplc_dsl::{
@@ -13,6 +14,7 @@ use ironplc_dsl::{
     diagnostic::{Diagnostic, Label},
     textual::{Expr, ExprType},
 };
+use ironplc_parser::options::EnumerationStrictness;
 use ironplc_problems::text;
 
 use crate::intermediate_type::IntermediateType;
@@ -134,6 +136,9 @@ pub struct TypeEnvironment {
     duplicates: Vec<Diagnostic>,
     /// Which enumeration declares which value name (see [`enumerations`]).
     enumerations: enumerations::EnumerationIndex,
+    /// Which enumerations declared into this environment are strict. Decided
+    /// by the options of the analysis, once, when the environment is built.
+    enumeration_strictness: EnumerationStrictness,
 }
 
 /// Whether two spans are the same place in the source. `SourceSpan` compares
@@ -171,7 +176,16 @@ impl TypeEnvironment {
             referenced: HashMap::new(),
             duplicates: Vec::new(),
             enumerations: enumerations::EnumerationIndex::default(),
+            enumeration_strictness: EnumerationStrictness::default(),
         }
+    }
+
+    /// Whether an enumeration declared with `attributes` is strict in this
+    /// environment: decided by the policy of the analysis and the attribute
+    /// of the declaration. Every enumeration is resolved through this, and
+    /// the answer travels in its type.
+    pub fn enumeration_is_strict(&self, attributes: &Attributes) -> bool {
+        self.enumeration_strictness.is_strict(attributes)
     }
 
     /// Adds the type into the environment.
@@ -821,6 +835,7 @@ impl Default for TypeEnvironment {
 pub struct TypeEnvironmentBuilder {
     has_elementary_types: bool,
     has_stdlib_function_blocks: bool,
+    enumeration_strictness: EnumerationStrictness,
 }
 
 impl TypeEnvironmentBuilder {
@@ -829,7 +844,15 @@ impl TypeEnvironmentBuilder {
         Self {
             has_elementary_types: false,
             has_stdlib_function_blocks: false,
+            enumeration_strictness: EnumerationStrictness::default(),
         }
+    }
+
+    /// Selects which enumerations declared into the environment are strict.
+    /// Without it, every enumeration is.
+    pub fn with_enumeration_strictness(mut self, strictness: EnumerationStrictness) -> Self {
+        self.enumeration_strictness = strictness;
+        self
     }
 
     /// Adds the elementary types to the type environment.
@@ -854,6 +877,7 @@ impl TypeEnvironmentBuilder {
     /// Builds the type environment.
     pub fn build(self) -> Result<TypeEnvironment, Diagnostic> {
         let mut env = TypeEnvironment::new();
+        env.enumeration_strictness = self.enumeration_strictness;
         if self.has_elementary_types {
             for (name, elementary, representation) in ELEMENTARY_TYPES_LOWER_CASE.iter() {
                 env.insert_elementary(

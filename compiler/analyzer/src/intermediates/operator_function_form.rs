@@ -263,14 +263,16 @@ impl OperatorFunctionForm {
     /// A unary form takes `IN`; a binary form takes `IN1` and `IN2`; an
     /// extensible form declares `IN1` and `IN2` and accepts any number more.
     /// Every parameter has the row's operand category, and so does the
-    /// return type unless the row says the result is `BOOL`.
+    /// return type unless the row says the result is `BOOL`. The function
+    /// form of an arithmetic operator computes (`ValueUse::Computes`), as the
+    /// operator does.
     pub(crate) fn signature(&self) -> FunctionSignature {
         let operand = |name: &str| input_param(name, self.operands);
         let return_type = match self.result {
             FormResult::Operand => self.operand_type(),
             FormResult::Bool => TypeName::from("BOOL"),
         };
-        match self.arity {
+        let signature = match self.arity {
             Arity::Unary => FunctionSignature::stdlib(self.name, return_type, vec![operand("IN")]),
             Arity::Binary => FunctionSignature::stdlib(
                 self.name,
@@ -283,6 +285,12 @@ impl OperatorFunctionForm {
                 vec![operand("IN1"), operand("IN2")],
                 None,
             ),
+        };
+        // The function form of an arithmetic operator makes a new number, as
+        // the operator does; comparison and bitwise forms hold their operands.
+        match self.operator {
+            FormOf::Arithmetic(_) => signature.computing(),
+            FormOf::Compare(_) | FormOf::Not => signature,
         }
     }
 }
@@ -386,6 +394,24 @@ mod tests {
     #[test]
     fn form_of_operator_when_operator_has_no_function_form_then_none() {
         assert!(form_of_operator(&FormOf::Arithmetic(Operator::Pow)).is_none());
+    }
+
+    /// The function form of an arithmetic operator computes, as the operator
+    /// does; every other form holds its operands.
+    #[test]
+    fn signature_when_form_of_arithmetic_operator_then_computes_else_holds() {
+        use crate::value_type::ValueUse;
+        let arithmetic =
+            |form: &&OperatorFunctionForm| matches!(form.operator, FormOf::Arithmetic(_));
+
+        assert!(OPERATOR_FUNCTION_FORMS
+            .iter()
+            .filter(arithmetic)
+            .all(|form| form.signature().value_use == ValueUse::Computes));
+        assert!(OPERATOR_FUNCTION_FORMS
+            .iter()
+            .filter(|form| !arithmetic(form))
+            .all(|form| form.signature().value_use == ValueUse::Holds));
     }
 
     #[test]

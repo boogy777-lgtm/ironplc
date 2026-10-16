@@ -24,6 +24,14 @@ Each arithmetic expression is reported once, naming both operand types. When
 an operand of an expression is itself an expression that failed, the
 enclosing expression may be reported as well.
 
+A strict enumeration is no operand of an arithmetic operator, of ``-`` applied to
+it, or of the function forms ``ADD``, ``SUB``, ``MUL`` and ``DIV``. The control
+variable of a ``FOR`` statement may not be a strict enumeration either, because
+the statement adds the step to it on every pass; the message names ``FOR`` as the
+operator. An enumeration that is not strict is its base type in all of these.
+See :doc:`/reference/language/data-types/derived/enumerated-types` for which
+enumerations are strict.
+
 Mixed numeric types
 -------------------
 
@@ -92,6 +100,53 @@ To fix this error, use a number for the factor:
        total : TIME;
    END_VAR
        total := interval * repeats;   (* T#6s *)
+   END_PROGRAM
+
+Enumeration operands
+--------------------
+
+The following code will generate error P4049:
+
+.. playground::
+
+   TYPE
+       TrafficLight : (Red, Yellow, Green);
+   END_TYPE
+
+   PROGRAM main
+   VAR
+       light : TrafficLight := Red;
+       count : DINT;
+   END_VAR
+       count := light + 1;
+       FOR light := Red TO Green DO
+           count := count + 1;
+       END_FOR;
+   END_PROGRAM
+
+The values of an enumeration are named, and an operation on one has no meaning.
+Both ``light + 1`` and the ``FOR`` statement that counts ``light`` are reported.
+
+To fix this error, take the number the enumeration stands for into an integer
+first, and compute with the integer. A ``FOR`` counts an integer variable:
+
+.. playground::
+
+   TYPE
+       TrafficLight : (Red, Yellow, Green);
+   END_TYPE
+
+   PROGRAM main
+   VAR
+       light : TrafficLight := Red;
+       number : DINT;
+       index : DINT;
+   END_VAR
+       number := light;
+       number := number + 1;   (* 1 *)
+       FOR index := Red TO Green DO
+           number := number + 1;
+       END_FOR;
    END_PROGRAM
 
 Remainder of a real number

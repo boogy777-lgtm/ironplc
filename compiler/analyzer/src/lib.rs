@@ -23,6 +23,8 @@ mod test_macros;
 mod call_assignment_check;
 mod callee_resolution;
 mod constant_folding;
+#[cfg(test)]
+mod enumeration_use_guard;
 mod function_environment;
 pub mod intermediate_type;
 #[cfg(test)]
@@ -160,6 +162,8 @@ mod spec_conformance_arithmetic_operator_overloads;
 mod spec_conformance_attributes;
 #[cfg(test)]
 mod spec_conformance_constant_inference;
+#[cfg(test)]
+mod spec_conformance_enumeration_strict;
 #[cfg(test)]
 mod spec_conformance_keyword_function_forms;
 #[cfg(test)]

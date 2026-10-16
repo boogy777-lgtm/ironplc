@@ -7,8 +7,8 @@ use ironplc_cli::logger;
 use ironplc_cli::lsp;
 use ironplc_dsl::stack::within_stack_budget;
 use ironplc_parser::options::{
-    describe_dialects, BehaviorPolicy, CompilerOptions, Dialect, StringToNumFailure,
-    StringToNumNonNumeric,
+    describe_dialects, BehaviorPolicy, CompilerOptions, Dialect, EnumerationStrictness,
+    StringToNumFailure, StringToNumNonNumeric,
 };
 use ironplc_sources::LibraryName;
 
@@ -89,6 +89,7 @@ macro_rules! clap_policy {
 
 clap_policy!(ClapStringToNumNonNumeric, StringToNumNonNumeric);
 clap_policy!(ClapStringToNumFailure, StringToNumFailure);
+clap_policy!(ClapEnumerationStrictness, EnumerationStrictness);
 
 /// Shared arguments for commands that operate on source files.
 #[derive(clap::Args, Debug)]
@@ -419,6 +420,13 @@ struct FileArgs {
     /// replaces it.
     #[arg(long, value_name = "ALTERNATIVE")]
     policy_string_to_num_failure: Option<ClapStringToNumFailure>,
+
+    /// Which enumerations are no number: arithmetic, numerical functions and
+    /// FOR are refused for them, and a number is not stored into them. A
+    /// behavior policy: the dialect selects an alternative and this flag
+    /// replaces it.
+    #[arg(long, value_name = "ALTERNATIVE")]
+    policy_enumeration_strictness: Option<ClapEnumerationStrictness>,
 }
 
 impl FileArgs {
@@ -431,6 +439,9 @@ impl FileArgs {
         }
         if let Some(policy) = self.policy_string_to_num_failure {
             options.policy_string_to_num_failure = policy.0;
+        }
+        if let Some(policy) = self.policy_enumeration_strictness {
+            options.policy_enumeration_strictness = policy.0;
         }
         // Individual flags override (can only enable, never disable).
         options.allow_missing_semicolon |= self.allow_missing_semicolon;
@@ -771,6 +782,38 @@ mod tests {
             options.policy_string_to_num_failure,
             StringToNumFailure::Zero
         );
+        assert_eq!(
+            options.policy_enumeration_strictness,
+            EnumerationStrictness::WithAttribute
+        );
+    }
+
+    #[test]
+    fn file_args_when_strictness_flag_passed_then_replaces_dialect_selection() {
+        #[derive(Parser)]
+        struct TestCli {
+            #[command(flatten)]
+            file_args: FileArgs,
+        }
+        let cli = TestCli::try_parse_from([
+            "ironplcc",
+            "--dialect",
+            "codesys",
+            "--policy-enumeration-strictness",
+            "every-enumeration",
+        ])
+        .unwrap();
+        let options = cli.file_args.compiler_options();
+        assert_eq!(
+            options.policy_enumeration_strictness,
+            EnumerationStrictness::EveryEnumeration
+        );
+        assert!(TestCli::try_parse_from([
+            "ironplcc",
+            "--policy-enumeration-strictness",
+            "sometimes"
+        ])
+        .is_err());
     }
 
     #[test]

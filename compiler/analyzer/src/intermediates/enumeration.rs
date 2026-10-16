@@ -73,9 +73,15 @@ fn base_type_of(declared: Option<ElementaryTypeName>) -> IntermediateType {
 /// (`underlying_type_override`), or automatically from the resolved
 /// ordinal values (which may exceed the member count when explicit
 /// values are used).
+///
+/// `strict` is whether the enumeration is strict (see
+/// [`IntermediateType::Enumeration`]); the caller decides it from the
+/// attributes of the declaration and the policy of the environment
+/// (`TypeEnvironment::enumeration_is_strict`).
 pub fn try_from_values(
     enumerated_values: &dyn HasEnumeratedValues,
     underlying_type_override: Option<ElementaryTypeName>,
+    strict: bool,
 ) -> Result<TypeAttributes, Diagnostic> {
     let declared: Vec<Id> = enumerated_values
         .values()
@@ -94,6 +100,7 @@ pub fn try_from_values(
                 }),
                 base_type: Box::new(base_type_of(Some(type_name))),
                 numbers,
+                strict,
             },
         )
         .with_enumerated_values(declared));
@@ -126,6 +133,7 @@ pub fn try_from_values(
             underlying_type: Box::new(underlying_type),
             base_type: Box::new(base_type_of(None)),
             numbers,
+            strict,
         },
     )
     .with_enumerated_values(declared))

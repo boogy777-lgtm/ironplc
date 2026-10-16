@@ -254,7 +254,9 @@ impl Declaration<'_> {
                     .insert_type(&node.type_name, string::from(string_initializer));
             }
             InitialValueAssignmentKind::EnumeratedValues(enumerated_values_initializer) => {
-                let attributes = enumeration::try_from_values(enumerated_values_initializer, None)?;
+                let strict = self.environment.enumeration_is_strict(&node.attributes);
+                let attributes =
+                    enumeration::try_from_values(enumerated_values_initializer, None, strict)?;
                 self.environment.insert_type(&node.type_name, attributes);
             }
             InitialValueAssignmentKind::EnumeratedType(_enumerated_initial_value_assignment) => {
@@ -380,9 +382,11 @@ impl Declaration<'_> {
                     .insert_alias(&node.type_name, base_type_name)?;
             }
             SpecificationKind::Inline(spec_values) => {
+                let strict = self.environment.enumeration_is_strict(&node.attributes);
                 let attributes = enumeration::try_from_values(
                     spec_values,
                     node.spec_init.underlying_type.clone(),
+                    strict,
                 )?;
                 self.environment.insert_type(&node.type_name, attributes);
             }

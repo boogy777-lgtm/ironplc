@@ -15,6 +15,9 @@
 use std::fmt;
 use std::str::FromStr;
 
+mod enumeration_strictness;
+
+pub use enumeration_strictness::EnumerationStrictness;
 pub use ironplc_container::policy::{
     BehaviorPolicy, StringToNumFailure, StringToNumNonNumeric, UnknownAlternative,
 };
@@ -611,6 +614,12 @@ define_compiler_options! {
         StringToNumFailure,
         [Rusty => Zero, Codesys => Zero, TwinCat => Zero],
         policy_string_to_num_failure,
+
+        "Which enumerations are no number: arithmetic, numerical functions and FOR are refused for them, and a number is not stored into them",
+        "--policy-enumeration-strictness",
+        EnumerationStrictness,
+        [Codesys => WithAttribute, TwinCat => WithAttribute],
+        policy_enumeration_strictness,
     }
 }
 

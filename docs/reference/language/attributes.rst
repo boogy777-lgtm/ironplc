@@ -151,6 +151,39 @@ array has no members to align. Before a :code:`VAR_GLOBAL` block it is reported
 as :doc:`P4076 </reference/compiler/problems/P4076>`, because a variable block
 gives the attribute to each variable, and a variable is not a structure.
 
+strict
+------
+
+:code:`strict` before an enumeration declaration makes the enumeration strict: it
+is no number. The compiler refuses arithmetic on a value of it (``x + 1``,
+:code:`ADD(x, 1)`), the numerical functions (:code:`ABS(x)`), a :code:`FOR`
+statement that counts it, and the storing of a number into it that is not one of
+its values (a variable of an integer type, the result of :code:`MAX(x, 1)`, a
+constant that names no value). Comparison, and an enumeration where an
+:code:`INT` is expected, are accepted as they are without the attribute.
+
+.. code-block::
+
+   {attribute 'strict'}
+   TYPE Mode : (Auto, Manual); END_TYPE
+
+   PROGRAM main
+   VAR
+       m : Mode := Auto;
+   END_VAR
+       m := m + 1;   (* P4049 *)
+   END_PROGRAM
+
+Without the attribute the enumeration is its base type (:code:`INT`, unless the
+declaration names another) in all of these places, and the program above runs.
+Whether the attribute is read at all depends on the dialect: the
+:code:`codesys` and :code:`twincat` dialects read it, and every other dialect
+holds every enumeration strict whether or not it has the attribute. The policy
+:code:`--policy-enumeration-strictness` replaces the dialect's choice. An
+enumeration written inside a variable declaration has no declaration to carry the
+attribute, and an alias is strict when the enumeration it names is. See
+:doc:`/reference/language/data-types/derived/enumerated-types`.
+
 subsequent
 ----------
 

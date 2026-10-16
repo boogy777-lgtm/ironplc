@@ -20,8 +20,8 @@ back as the pragmas it came from.
 
 **Out of scope.** What an attribute does to the analysis or to the generated
 code is not part of this document, except for the attributes of the family
-Layout (see [Layout](#layout)); no other part of IronPLC acts on an attribute
-yet. The names the compiler knows, the places a known attribute may stand and
+Layout (see [Layout](#layout)) and `strict` (see [Enumeration](#enumeration));
+no other part of IronPLC acts on an attribute yet. The names the compiler knows, the places a known attribute may stand and
 the values it takes are in scope (see [The registry](#the-registry)); an
 attribute with no row is accepted and kept as written.
 
@@ -176,7 +176,7 @@ compiler knows about an attribute:
 - the **state**: `Waiting` when no part of IronPLC acts on the attribute yet,
   so the compiler reads and checks it and does nothing else with it;
   `Honoured` when a part of IronPLC acts on it. Every row is `Waiting`
-  except `pack_mode` and `subsequent`, which are `Honoured`.
+  except `pack_mode`, `subsequent` and `strict`, which are `Honoured`.
 
 An attribute that has no row is **user-defined**. It is accepted and kept as
 written, and nothing is reported about it unless it is written twice.
@@ -418,6 +418,95 @@ qualified `RETAIN` is not stored apart from the other variables. CODESYS reports
 a `VAR_TEMP` block in a program with the attribute as an error; the parser
 takes no `VAR_TEMP` block in a program, so the combination is a syntax error
 (P0002) before the analysis.
+
+## Enumeration
+
+The family Enumeration holds the attributes of an enumeration declaration:
+`strict` and `to_string`. Only `strict` is `Honoured`. It decides whether an enumeration
+is a number to the places that compute with one or store a number into one.
+Whether the attribute is read at all is a behavior policy
+([behavior-policies.md](behavior-policies.md#second-application-which-enumerations-are-strict),
+[ADR-0079](../adrs/0079-a-policy-may-select-what-the-analysis-accepts.md)).
+
+### Strict and not strict
+
+An enumeration is **strict** when its declaration carries `{attribute 'strict'}`
+and the policy `with-attribute` is selected (`codesys`, `twincat`), or when the
+policy is `every-enumeration` (the default, and every IEC 61131-3 dialect):
+IEC 61131-3 gives the values of an enumeration no arithmetic. An enumeration
+that is not strict is its **base type** (`INT` unless the declaration names
+another, `(A, B) BYTE`) in every place of the class below. The attribute is read
+at one place, where the type of the enumeration is resolved, and the answer is a
+field of the type (`IntermediateType::Enumeration::strict`), so an alias of the
+enumeration, a variable of it and a member of a structure see it. Every check
+asks the type (`IntermediateType::is_strict_enumeration`), never the attribute
+or the policy.
+
+The class is every place that treats an enumeration differently from its base
+type:
+
+- an arithmetic operator and the function form of one (P4049), a numerical
+  standard function and the time overloads that take a number (P4026), and the
+  control variable of `FOR` (P4049): these *compute* from the value
+  (`ValueUse::Computes`);
+- a selection function (`MIN`, `MAX`, `LIMIT`, `SEL`, `MUX`) whose inputs are
+  not all one strict enumeration returns a number, and a number stored into a
+  strict enumeration is refused (P4027 where the value is the result of a
+  call, P4035 for an assignment, P4026 for an argument);
+- a value of an integer type, or of another enumeration, stored into a strict
+  enumeration is refused as any other number is, and an integer constant that
+  names none of its values is refused (P2006).
+
+Comparison (`x = 2`, `x = z`), the conversion of an enumeration to an integer,
+and an enumeration where an `INT` is expected are not in the class: they accept
+the enumeration whether it is strict or not.
+
+An enumeration that is not strict is its base type there: arithmetic on it is
+accepted and has the type of the base type (`operand_type_name` knows it by the
+name of the base type), a number is stored into it as into a variable of the
+base type, the numerical functions, `FOR` and the selections accept it, and an
+integer constant that names none of its values is accepted. An enumeration
+written inline in a variable declaration (`w : (U, V)`) has no declaration to
+carry the attribute, so under `with-attribute` it is not strict; an alias
+(`TYPE E3 : E1`) is the enumeration it names, and an attribute before the alias
+declaration is accepted and has no effect.
+
+**REQ-ATTR-analyzer-030** An enumeration is strict when the policy
+`policy_enumeration_strictness` is `every-enumeration`, or is `with-attribute`
+and the declaration of the enumeration carries the attribute `strict`.
+
+**REQ-ATTR-analyzer-031** A strict enumeration is refused as an operand of an
+arithmetic operator or of its function form, as the input of a numerical
+function and as the control variable of `FOR`.
+
+**REQ-ATTR-analyzer-032** A value of an integer type, a value of another
+enumeration, the result of a selection that is not one strict enumeration and
+an integer constant that names none of its values are refused where a strict
+enumeration is stored.
+
+**REQ-ATTR-analyzer-033** An enumeration that is not strict is accepted in every
+place of REQ-ATTR-analyzer-031 and REQ-ATTR-analyzer-032, as its base type is.
+
+**REQ-ATTR-analyzer-034** An alias of an enumeration is strict as the
+enumeration it names is, and an enumeration written inline in a variable
+declaration is strict only by the policy.
+
+### Code generation
+
+An enumeration that is not strict is held as its base type in a variable, a
+parameter and a member of a structure, so that a program the analysis accepts
+because of it runs as the same program on the base type does. A strict
+enumeration is held as before (a `DINT` in a variable, the underlying type in a
+member).
+
+**REQ-ATTR-codegen-010** A program that uses an enumeration that is not strict
+as an operand of arithmetic, as a numerical function input, as the control
+variable of `FOR` and as the target of a selection, an integer or a constant
+that names no value runs and leaves the numbers of its base type.
+
+**REQ-ATTR-codegen-011** A number stored into an enumeration that is not strict
+in a variable or a member of a structure is held at the width of its base type
+(a sum wraps as it does in a variable of the base type).
 
 ## The reference page
 

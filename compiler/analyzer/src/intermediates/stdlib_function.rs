@@ -3,7 +3,8 @@
 //! This module defines the standard library functions specified in
 //! IEC 61131-3 Section 2.5.1, including:
 //! - Type conversion functions (INT_TO_REAL, REAL_TO_INT, etc.)
-//! - Numeric functions (ABS, SQRT, MIN, MAX, LIMIT)
+//! - Selection functions (MIN, MAX, LIMIT, SEL, MUX); the numerical functions
+//!   (ABS, SQRT, ...) are in `stdlib_numeric_function`
 //!
 //! These functions are automatically available in the function environment
 //! and do not need to be declared by the user.
@@ -14,6 +15,7 @@ use ironplc_dsl::core::Id;
 use crate::function_environment::FunctionSignature;
 use crate::intermediate_type::IntermediateFunctionParameter;
 use crate::intermediates::operator_function_form;
+use crate::intermediates::stdlib_numeric_function;
 use crate::intermediates::stdlib_time_function;
 
 /// Helper to create an input parameter.
@@ -369,29 +371,24 @@ fn get_string_conversion_functions() -> Vec<FunctionSignature> {
 }
 
 // =============================================================================
-// Numeric Function Definitions (IEC 61131-3 Section 2.5.1.5.2)
+// Selection Function Definitions (IEC 61131-3 Section 2.5.1.5.4)
 // =============================================================================
 
-/// Returns standard numeric function definitions.
+/// Returns standard selection function definitions.
 ///
-/// These functions are defined in IEC 61131-3 as operating on generic
-/// type categories (ANY_NUM, ANY_REAL). Parameter and return types use
-/// the generic type names so that future type validation can check
-/// compatibility via `GenericTypeName::is_compatible_with()`.
-fn get_numeric_functions() -> Vec<FunctionSignature> {
+/// A selection function chooses among its inputs and holds what it chooses, so
+/// an enumeration passes through it as the value it is (`ValueUse::Holds`,
+/// the default of a row). `MIN`, `MAX`, `LIMIT` and `SEL` are declared here
+/// beside `MUX` for that reason, though they take the generic `ANY_NUM`.
+///
+/// MUX is an extensible multiplexer that selects one of N inputs based on
+/// an integer selector K. Unlike SEL (which uses a BOOL selector and exactly
+/// 2 inputs), MUX uses an ANY_INT selector and supports 2..16 inputs.
+///
+/// The declared parameters define the minimum (K + 2 IN values = 3 args).
+/// Additional IN arguments are accepted because the signature is extensible.
+fn get_selection_functions() -> Vec<FunctionSignature> {
     vec![
-        // ABS: absolute value (ANY_NUM -> ANY_NUM)
-        FunctionSignature::stdlib(
-            "ABS",
-            TypeName::from("ANY_NUM"),
-            vec![input_param("IN", "ANY_NUM")],
-        ),
-        // SQRT: square root (ANY_REAL -> ANY_REAL)
-        FunctionSignature::stdlib(
-            "SQRT",
-            TypeName::from("ANY_REAL"),
-            vec![input_param("IN", "ANY_REAL")],
-        ),
         // MIN: minimum of two values (ANY_NUM, ANY_NUM -> ANY_NUM)
         FunctionSignature::stdlib(
             "MIN",
@@ -424,92 +421,6 @@ fn get_numeric_functions() -> Vec<FunctionSignature> {
                 input_param("IN1", "ANY_NUM"),
             ],
         ),
-        // LN: natural logarithm (ANY_REAL -> ANY_REAL)
-        FunctionSignature::stdlib(
-            "LN",
-            TypeName::from("ANY_REAL"),
-            vec![input_param("IN", "ANY_REAL")],
-        ),
-        // LOG: base-10 logarithm (ANY_REAL -> ANY_REAL)
-        FunctionSignature::stdlib(
-            "LOG",
-            TypeName::from("ANY_REAL"),
-            vec![input_param("IN", "ANY_REAL")],
-        ),
-        // EXP: natural exponential (ANY_REAL -> ANY_REAL)
-        FunctionSignature::stdlib(
-            "EXP",
-            TypeName::from("ANY_REAL"),
-            vec![input_param("IN", "ANY_REAL")],
-        ),
-        // SIN: sine (ANY_REAL -> ANY_REAL)
-        FunctionSignature::stdlib(
-            "SIN",
-            TypeName::from("ANY_REAL"),
-            vec![input_param("IN", "ANY_REAL")],
-        ),
-        // COS: cosine (ANY_REAL -> ANY_REAL)
-        FunctionSignature::stdlib(
-            "COS",
-            TypeName::from("ANY_REAL"),
-            vec![input_param("IN", "ANY_REAL")],
-        ),
-        // TAN: tangent (ANY_REAL -> ANY_REAL)
-        FunctionSignature::stdlib(
-            "TAN",
-            TypeName::from("ANY_REAL"),
-            vec![input_param("IN", "ANY_REAL")],
-        ),
-        // ASIN: arc sine (ANY_REAL -> ANY_REAL)
-        FunctionSignature::stdlib(
-            "ASIN",
-            TypeName::from("ANY_REAL"),
-            vec![input_param("IN", "ANY_REAL")],
-        ),
-        // ACOS: arc cosine (ANY_REAL -> ANY_REAL)
-        FunctionSignature::stdlib(
-            "ACOS",
-            TypeName::from("ANY_REAL"),
-            vec![input_param("IN", "ANY_REAL")],
-        ),
-        // ATAN: arc tangent (ANY_REAL -> ANY_REAL)
-        FunctionSignature::stdlib(
-            "ATAN",
-            TypeName::from("ANY_REAL"),
-            vec![input_param("IN", "ANY_REAL")],
-        ),
-        // ATAN2: two-argument arc tangent (ANY_REAL, ANY_REAL -> ANY_REAL)
-        FunctionSignature::stdlib(
-            "ATAN2",
-            TypeName::from("ANY_REAL"),
-            vec![
-                input_param("IN1", "ANY_REAL"),
-                input_param("IN2", "ANY_REAL"),
-            ],
-        ),
-        // EXPT: exponentiation (ANY_NUM, ANY_NUM -> ANY_NUM)
-        FunctionSignature::stdlib(
-            "EXPT",
-            TypeName::from("ANY_NUM"),
-            vec![input_param("IN1", "ANY_NUM"), input_param("IN2", "ANY_NUM")],
-        ),
-    ]
-}
-
-// =============================================================================
-// Selection Function Definitions (IEC 61131-3 Section 2.5.1.5.4)
-// =============================================================================
-
-/// Returns standard selection function definitions.
-///
-/// MUX is an extensible multiplexer that selects one of N inputs based on
-/// an integer selector K. Unlike SEL (which uses a BOOL selector and exactly
-/// 2 inputs), MUX uses an ANY_INT selector and supports 2..16 inputs.
-///
-/// The declared parameters define the minimum (K + 2 IN values = 3 args).
-/// Additional IN arguments are accepted because the signature is extensible.
-fn get_selection_functions() -> Vec<FunctionSignature> {
-    vec![
         // MUX: multiplexer (ANY_INT, ANY_NUM, ANY_NUM, ... -> ANY_NUM)
         // MUX supports K + 2..16 IN values = 3..17 total input arguments
         FunctionSignature::stdlib_extensible(
@@ -543,22 +454,6 @@ fn get_assignment_functions() -> Vec<FunctionSignature> {
             vec![input_param("IN", "ANY_NUM")],
         ),
     ]
-}
-
-// =============================================================================
-// Truncation Function (IEC 61131-3 Section 2.5.1.5.2)
-// =============================================================================
-
-/// Returns the TRUNC function definition.
-///
-/// TRUNC truncates a real value toward zero, removing the fractional part.
-/// It takes ANY_REAL and returns ANY_INT.
-fn get_trunc_function() -> Vec<FunctionSignature> {
-    vec![FunctionSignature::stdlib(
-        "TRUNC",
-        TypeName::from("ANY_INT"),
-        vec![input_param("IN", "ANY_REAL")],
-    )]
 }
 
 // =============================================================================
@@ -742,19 +637,16 @@ pub fn get_all_stdlib_functions() -> Vec<FunctionSignature> {
     // String conversion functions
     functions.extend(get_string_conversion_functions());
 
-    // Numeric functions
-    functions.extend(get_numeric_functions());
+    // Numerical functions, which compute (ABS, SQRT, EXPT, TRUNC, ...)
+    functions.extend(stdlib_numeric_function::get_numeric_functions());
 
     // Function forms of operators (+, -, *, /, MOD, comparisons, AND, OR, XOR, NOT)
     functions.extend(operator_function_form::signatures());
 
-    // Truncation function
-    functions.extend(get_trunc_function());
-
     // BCD conversion functions
     functions.extend(get_bcd_functions());
 
-    // Selection functions
+    // Selection functions, which hold what they select (MIN, MAX, LIMIT, SEL, MUX)
     functions.extend(get_selection_functions());
 
     // Assignment function (MOVE)
@@ -824,6 +716,9 @@ pub fn get_compiler_intrinsic_functions() -> Vec<FunctionSignature> {
             ],
         ),
     ]
+    .into_iter()
+    .map(FunctionSignature::computing)
+    .collect()
 }
 
 // =============================================================================

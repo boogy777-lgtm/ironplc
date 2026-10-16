@@ -1,5 +1,5 @@
 Family,Name,Aliases,Stands before,Value,In CODESYS,State
-Enumeration,:code:`strict`,,enumeration type,no value,"A strict type test for the enumeration: no arithmetic with its values, no assignment of a value that is not one of them",Waiting
+Enumeration,:code:`strict`,,enumeration type,no value,"A strict type test for the enumeration: no arithmetic with its values, no assignment of a value that is not one of them",Honoured
 Enumeration,:code:`to_string`,,enumeration type,no value,:code:`TO_STRING` of a value of the enumeration gives the name of the value,Waiting
 Name scope,:code:`qualified_only`,,"enumeration type, variable",no value,"A value of the enumeration, or a variable of the global variable list, is addressed only with the name of the type or the list",Waiting
 Layout,:code:`pack_mode`,,"array type, structure type, union type","one of 0, 1, 2, 4, 8",How the members of the structure are aligned in memory,Honoured

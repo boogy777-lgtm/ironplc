@@ -19,6 +19,7 @@ use ironplc_dsl::textual::{Expr, ParamAssignmentKind};
 use crate::intermediate_type::IntermediateFunctionParameter;
 use crate::intermediates::stdlib_function::get_all_stdlib_functions;
 use crate::symbol_environment::{duplicate_declaration, Duplicated};
+use crate::value_type::ValueUse;
 
 /// Represents a function signature in the function environment.
 ///
@@ -41,6 +42,10 @@ pub struct FunctionSignature {
     /// Maximum number of input arguments for extensible functions.
     /// Only meaningful when `is_extensible` is true. None means no upper limit.
     pub max_inputs: Option<usize>,
+    /// What the function does with the values it is given (see
+    /// [`ValueUse`]). Stated once, on the row that declares the function or
+    /// the group of rows it belongs to, and read by the check of a call.
+    pub value_use: ValueUse,
 }
 
 impl FunctionSignature {
@@ -58,6 +63,7 @@ impl FunctionSignature {
             span,
             is_extensible: false,
             max_inputs: None,
+            value_use: ValueUse::Holds,
         }
     }
 
@@ -74,6 +80,7 @@ impl FunctionSignature {
             span: SourceSpan::builtin(),
             is_extensible: false,
             max_inputs: None,
+            value_use: ValueUse::Holds,
         }
     }
 
@@ -97,7 +104,15 @@ impl FunctionSignature {
             span: SourceSpan::builtin(),
             is_extensible: true,
             max_inputs,
+            value_use: ValueUse::Holds,
         }
+    }
+
+    /// States that the function makes a new number from its inputs, so an
+    /// enumeration is no number to it (see [`ValueUse::Computes`]).
+    pub fn computing(mut self) -> Self {
+        self.value_use = ValueUse::Computes;
+        self
     }
 
     /// Returns true if this is a standard library function.

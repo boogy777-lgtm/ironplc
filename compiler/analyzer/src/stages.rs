@@ -96,11 +96,15 @@ fn analyze_in_budget<O: Observer>(
 
 /// The environment of the elementary types and the standard function blocks,
 /// which every analysis starts a type environment from.
-fn build_type_environment<O: Observer>(observer: &O) -> Result<TypeEnvironment, Diagnostic> {
+fn build_type_environment<O: Observer>(
+    options: &CompilerOptions,
+    observer: &O,
+) -> Result<TypeEnvironment, Diagnostic> {
     observer.observe(observe::setup("type environment"), || {
         TypeEnvironmentBuilder::new()
             .with_elementary_types()
             .with_stdlib_function_blocks()
+            .with_enumeration_strictness(options.policy_enumeration_strictness)
             .build()
     })
 }
@@ -130,7 +134,8 @@ fn resolve_types_in_budget<O: Observer>(
     }
 
     // Hard failures: these are foundational and all subsequent steps depend on them.
-    let mut type_environment = build_type_environment(observer).map_err(|err| vec![err])?;
+    let mut type_environment =
+        build_type_environment(options, observer).map_err(|err| vec![err])?;
 
     let mut function_environment = observer.observe(observe::setup("function environment"), || {
         FunctionEnvironmentBuilder::new()
@@ -292,7 +297,7 @@ fn resolve_types_in_budget<O: Observer>(
     // declaration, so what the second derivation finds is not reported again.
     // It replaces the first environment unless it found more than the first
     // did, a declaration the first resolved and this one cannot.
-    if let Ok(mut resolved_environment) = build_type_environment(observer) {
+    if let Ok(mut resolved_environment) = build_type_environment(options, observer) {
         // The declarations the sort could not order are declarations with an
         // error in this environment too.
         failed_declarations.enter(&mut resolved_environment);
