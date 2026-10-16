@@ -113,7 +113,30 @@ Facts from the decompiled code:
 - [ ] ADR-0081 and `specs/design/diagnostic-severity.md` with requirement IDs.
 - [ ] Gate: no output moves.
 
-### PR 2: the first warning
+### PR 2: the CLI writes its messages as CODESYS does
+
+codespan 0.13 hard-codes its header words (`bug`, `error`, `warning`, `note`, `help`), so PR 1 prints a fatal error as `error[P####]` and an information message as `note[P####]`. The owner's decision is to write the messages as CODESYS does. This PR replaces the header with our own renderer and keeps codespan for the source snippet.
+
+CODESYS texts. The resource strings come from `Compiler35220` (`CompilerStrings` / `Strings`, en). How a single message line is written is checked by a separate study before this PR starts:
+
+| Purpose | CODESYS text | Category in CODESYS |
+|---|---|---|
+| start of a build | `------ Build started: Application: {0} -------` | Text |
+| progress | `Typify code...`, `Generate code for {0}...`, `Generate code initialization...`, `Generate global initializations...`, `Generate relocations...` | Text |
+| sizes after code generation | `Size of generated code: {0} bytes`, `Size of global data: {0} bytes`, `Total allocated memory size for code and data: {0} bytes` | Information |
+| end of a build | `Build complete -- {0} errors, {1} warnings : Ready for download` / `... : No download possible` | Text |
+| end of a compile (check) | `Compile complete -- {0} errors, {1} warnings` | Text |
+| limits | `More than {0} errors occured: Skipping all further error messages`, the same for warnings (limit 500) | Text |
+
+Tasks:
+- [ ] One header renderer whose words per category come from one exhaustive match. The bracket form and spelling (`[ERROR]`, `[WARNING]`, `[INFORMATION]`, …) come from the format study.
+- [ ] `check` ends with the "Compile complete" line, and `compile` with the "Build complete" line. Each counts errors and warnings with the categories of PR 1.
+- [ ] The texts are rows of the message dictionary (`problem-texts.csv`), not literals.
+- [ ] The 500 limits, as CODESYS.
+- [ ] The progress lines (`Text`) and the size lines (`Information`) are produced as diagnostics of those categories, so that every consumer shows them by the PR 1 mapping.
+- [ ] Update the CLI snapshots and the documentation page on reading compiler messages.
+
+### PR 3: the first warning
 
 - [ ] A rule for comparisons of two different enumerations where one is strict, with a new code in the analyzer range whose row says `Warning`.
 - [ ] Tests covering:
@@ -131,8 +154,7 @@ Facts from the decompiled code:
 ### Later, each its own decision
 
 - **Which codes are `FatalError`.** Candidates: an internal error (P9998), stack budget exhausted, a source that cannot be read.
-- **`Information` messages.** Candidates: the related position of a recursion or of a stack use; the code and data sizes after `compile`, as CODESYS does.
-- **`Text` messages.** Candidates: progress and timing lines of `compile`.
+- **`Information` messages beyond the sizes of PR 2.** Candidate: the related position of a recursion or of a stack use, as CODESYS does.
 - **Suppression sources** (Messages family):
   - `{warning disable Cxxxx}` / `{warning restore Cxxxx}`;
   - per-code project settings "not displayed / warning / error";
