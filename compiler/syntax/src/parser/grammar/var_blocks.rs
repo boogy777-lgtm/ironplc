@@ -126,6 +126,7 @@ const PROGRAM: &[Rule] = &[
     rule(K::Var, STORAGE, Declarations(LOCATED)),
     rule(K::VarExternal, CONSTANT, Declarations(EXTERNAL)),
     rule(K::VarStat, CONSTANT, Declarations(PLAIN)),
+    rule(K::VarTemp, NONE, Declarations(PLAIN)),
 ];
 
 const FUNCTION: &[Rule] = &[

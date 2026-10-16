@@ -274,6 +274,55 @@ END_PROGRAM
     );
 }
 
+#[test]
+fn persistent_extent_when_program_has_var_temp_then_extent_ends_before_it() {
+    // The `VAR_TEMP` block is written first and holds a string, so the order of
+    // the source, the slots and the data region are all tested: the persistent
+    // part is the program's `VAR` alone, and the temporaries follow it.
+    let source = "
+PROGRAM main
+  VAR_TEMP t : STRING[8]; n : DINT; END_VAR
+  VAR s : STRING[10]; r : DINT; END_VAR
+  t := s;
+  n := LEN(t);
+  r := n;
+END_PROGRAM
+";
+    let container = parse_and_compile(source, &CompilerOptions::default());
+
+    let extents = container.persistent_extents();
+
+    assert_eq!(extents.len(), 1);
+    assert_eq!((extents[0].var_start, extents[0].var_count), (0, 2));
+    assert_eq!(container.header.num_variables, 4);
+    assert_eq!(extents[0].data_start, 0);
+    assert_eq!(
+        extents[0].data_len,
+        string_region_size(10, CharWidth::Narrow)
+    );
+    assert!(container.header.data_region_bytes > extents[0].data_len);
+}
+
+#[test]
+fn layout_hash_when_program_var_temp_added_or_removed_then_unchanged() {
+    let without = "
+PROGRAM main
+  VAR s : STRING[10]; r : DINT; END_VAR
+  r := LEN(s);
+END_PROGRAM
+";
+    let with = "
+PROGRAM main
+  VAR s : STRING[10]; r : DINT; END_VAR
+  VAR_TEMP t : STRING[8]; n : DINT; a : ARRAY[1..4] OF INT; END_VAR
+  n := LEN(s);
+  r := n;
+END_PROGRAM
+";
+
+    assert_eq!(layout_hash(without), layout_hash(with));
+}
+
 /// The function block type table lists the fields of each user function block
 /// in the order the VM copies them in and out: inputs, outputs, then the rest.
 #[test]

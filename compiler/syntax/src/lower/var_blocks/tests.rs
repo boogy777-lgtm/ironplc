@@ -117,6 +117,16 @@ fn lower_var_block_when_each_block_keyword_then_the_kind_of_variable_it_declares
 }
 
 #[test]
+fn lower_var_block_when_var_temp_in_a_program_then_the_variables_are_temporaries() {
+    let lowered = variables("VAR_TEMP a : INT := 5; b : BOOL; END_VAR");
+
+    assert_eq!(lowered.len(), 2);
+    for variable in &lowered {
+        assert_eq!(variable.var_type, VariableType::VarTemp);
+    }
+}
+
+#[test]
 fn lower_var_block_when_every_block_keyword_then_the_table_has_a_row() {
     let openers = [
         K::Var,

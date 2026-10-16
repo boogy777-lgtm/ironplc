@@ -206,6 +206,7 @@ pub fn edit_classes() -> Vec<EditClass> {
     let mut rows = Vec::new();
     rows.extend(body_edits());
     rows.extend(call_edits());
+    rows.extend(temporary_edits());
     rows.extend(declaration_edits());
     rows
 }
@@ -501,6 +502,58 @@ fn call_edits() -> Vec<EditClass> {
             observed: &["v"],
             computed: &[("r", 41)],
         },
+    ]
+}
+
+/// `warm_program("", body)` with a `VAR_TEMP` block that declares
+/// `temporaries`; none when `temporaries` is empty.
+fn warm_program_with_temporaries(temporaries: &str, body: &str) -> String {
+    let source = warm_program("", body);
+    if temporaries.is_empty() {
+        return source;
+    }
+    source.replacen(
+        "END_VAR\n",
+        &format!("END_VAR\n  VAR_TEMP {temporaries} END_VAR\n"),
+        1,
+    )
+}
+
+/// Edits of the `VAR_TEMP` of a program. A temporary lives for one scan: it is
+/// working memory laid out after the persistent part, so declaring one,
+/// removing one or changing its type leaves the state layout as it was, and
+/// the persistent values (`v`) are kept by the swap.
+fn temporary_edits() -> Vec<EditClass> {
+    let row = |name, before: String, after: String, computed| EditClass {
+        name,
+        before,
+        after,
+        flips_constant_inference: false,
+        layout: Layout::Unchanged,
+        stable_ids: &[("n", 1), ("v", 2), ("r", 3)],
+        field_ids: &[],
+        observed: &["v"],
+        computed,
+    };
+    vec![
+        row(
+            "program_temporary_added",
+            warm_program_with_temporaries("", "r := v;"),
+            warm_program_with_temporaries("t : DINT := 1; s : STRING[8];", "r := v + t;"),
+            &[("r", 42)],
+        ),
+        row(
+            "program_temporary_removed",
+            warm_program_with_temporaries("t : DINT := 1; s : STRING[8];", "r := v + t;"),
+            warm_program_with_temporaries("", "r := v;"),
+            &[("r", 41)],
+        ),
+        row(
+            "program_temporary_retyped",
+            warm_program_with_temporaries("t : DINT;", "r := v;"),
+            warm_program_with_temporaries("t : STRING[8];", "r := v;"),
+            &[("r", 41)],
+        ),
     ]
 }
 

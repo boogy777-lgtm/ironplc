@@ -40,6 +40,8 @@ pub(crate) struct InstanceTemplate {
     pub(crate) type_id: u16,
     /// Bytes one instance occupies.
     pub(crate) instance_bytes: u32,
+    /// Slots one instance occupies: the fields, not the runs of strings.
+    pub(crate) slots: u32,
     pub(crate) field_indices: HashMap<String, u8>,
     pub(crate) layout: FbLayout,
 }
@@ -52,6 +54,7 @@ pub(crate) fn instance_template(ctx: &CompileContext, fb_name: &str) -> Option<I
         Some((type_id, num_fields, field_indices)) => Some(InstanceTemplate {
             type_id,
             instance_bytes: num_fields as u32 * SLOT_BYTES,
+            slots: num_fields as u32,
             field_indices,
             layout: FbLayout::default(),
         }),
@@ -61,6 +64,7 @@ pub(crate) fn instance_template(ctx: &CompileContext, fb_name: &str) -> Option<I
             .map(|user_fb| InstanceTemplate {
                 type_id: user_fb.type_id,
                 instance_bytes: user_fb.layout.instance_bytes,
+                slots: user_fb.num_fields as u32,
                 field_indices: user_fb.field_indices.clone(),
                 layout: user_fb.layout.clone(),
             }),
@@ -345,13 +349,36 @@ pub(crate) fn register_instance_array(
     ))
 }
 
+/// Emits the stores that put each of the first `slots` slots of `instance` at
+/// zero: the image of an instance whose fields have no value of their own,
+/// which the declared values of the type are then laid over. The one place a
+/// call-scoped instance is made fresh (see `Start::EveryCall`).
+pub(crate) fn emit_zero_slots(
+    emitter: &mut Emitter,
+    ctx: &mut CompileContext,
+    instance: &ResolvedInstance,
+    slots: u32,
+) -> Result<(), Diagnostic> {
+    let zero = ctx.add_i32_constant(0);
+    for slot in 0..slots {
+        let field = u8::try_from(slot).map_err(|_| Diagnostic::internal_error())?;
+        instance.emit_reference(emitter, ctx)?;
+        emitter.emit_load_const_i32(zero);
+        emitter.emit_fb_store_param(field);
+        emitter.emit_pop();
+    }
+    Ok(())
+}
+
 /// Emits the start of every instance of the array variable `id`: the slot is
 /// pointed at the first instance, and each instance starts from the values its
-/// type declares for its fields, as a single instance does.
+/// type declares for its fields, as a single instance does. When `start` is
+/// every call, each instance is first put back to zero.
 pub(crate) fn initialize_instance_array(
     emitter: &mut Emitter,
     ctx: &mut CompileContext,
     id: &Id,
+    start: crate::compile_initial_value::Start,
 ) -> Result<(), Diagnostic> {
     let Some(info) = ctx.fb_instances.get(id) else {
         return Ok(());
@@ -378,6 +405,9 @@ pub(crate) fn initialize_instance_array(
             strings: HashMap::new(),
             reference: InstanceReference::Fixed(offset),
         };
+        if start == crate::compile_initial_value::Start::EveryCall {
+            emit_zero_slots(emitter, ctx, &instance, array.instance_slots)?;
+        }
         emit_fb_instance_member_initializers(emitter, ctx, &instance, &members)?;
     }
     Ok(())

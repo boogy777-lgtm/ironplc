@@ -832,6 +832,18 @@ mod tests {
     }
 
     #[test]
+    fn declared_var_keys_when_program_declares_var_temp_then_it_has_no_key() {
+        // A `VAR_TEMP` of a program is working memory of one scan, not state:
+        // the sidecar gives it no entry, so it never has a stable ID.
+        let keys = keys_of(
+            "PROGRAM main VAR_TEMP t : INT; END_VAR VAR x : INT; END_VAR t := 1; x := t; END_PROGRAM",
+            &CompilerOptions::default(),
+        );
+
+        assert_eq!(keys, vec![key("main", "x")]);
+    }
+
+    #[test]
     fn declared_var_keys_when_global_in_configuration_then_keyed_in_the_global_scope() {
         // Code generation lays a `VAR_GLOBAL` of the configuration out with the
         // other globals, and matches it by name: it is keyed like a top-level

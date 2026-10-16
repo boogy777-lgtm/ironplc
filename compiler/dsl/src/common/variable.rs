@@ -454,6 +454,23 @@ pub enum VariableType {
 }
 
 impl VariableType {
+    /// The keyword that opens the block of this kind of variable.
+    pub fn keyword(&self) -> &'static str {
+        match self {
+            VariableType::Var => "VAR",
+            VariableType::VarTemp => "VAR_TEMP",
+            VariableType::VarStat => "VAR_STAT",
+            VariableType::VarInst => "VAR_INST",
+            VariableType::VarGeneric => "VAR_GENERIC",
+            VariableType::Input => "VAR_INPUT",
+            VariableType::Output => "VAR_OUTPUT",
+            VariableType::InOut => "VAR_IN_OUT",
+            VariableType::External => "VAR_EXTERNAL",
+            VariableType::Global => "VAR_GLOBAL",
+            VariableType::Access => "VAR_ACCESS",
+        }
+    }
+
     /// Returns true if this variable type receives a value from the caller
     /// (i.e., VAR_INPUT or VAR_IN_OUT). These are the parameter kinds that
     /// appear as arguments in a function/FB call.
@@ -487,6 +504,16 @@ impl VariableType {
                 | VariableType::VarInst
                 | VariableType::VarGeneric
         )
+    }
+
+    /// Returns true for the section whose variables belong to one call of the
+    /// POU: they start at their declared initial value (or the default of
+    /// their type) at every call and nothing keeps their value from one call to
+    /// the next. This is `VAR_TEMP`, in every POU that declares it. A program's
+    /// `VAR_TEMP` is therefore not state of the program: it is not persistent,
+    /// and it is initialised at the start of every scan.
+    pub fn is_call_scoped(&self) -> bool {
+        matches!(self, VariableType::VarTemp)
     }
 
     /// Returns true if this is any kind of parameter visible to a caller

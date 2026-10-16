@@ -17,6 +17,7 @@ use super::value::{
     PackMode, RuleNumbers, SymbolAccess, Text,
 };
 use crate::attribute::census::TargetKind as T;
+use crate::common::VariableType;
 
 /// The set of the kinds named, for a row that stands before those kinds alone.
 macro_rules! kinds {
@@ -35,6 +36,7 @@ macro_rules! rows {
             family: $family:ident,
             summary: $summary:literal,
             state: $state:ident,
+            $(forbids: $forbids:expr,)?
         }
     )*) => {
         $(
@@ -46,7 +48,7 @@ macro_rules! rows {
                 Family::$family,
                 $summary,
                 State::$state,
-            );
+            )$(.forbidding($forbids))?;
         )*
 
         /// Every row the compiler knows, in the order of the declaration list.
@@ -98,6 +100,7 @@ rows! {
         family: Layout,
         summary: "The variables of the program or the global variable list are allocated one after another in memory",
         state: Honoured,
+        forbids: &[VariableType::VarTemp],
     }
 
     HIDE: Flag = {

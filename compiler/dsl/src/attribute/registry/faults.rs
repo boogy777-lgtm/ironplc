@@ -7,8 +7,9 @@
 
 use super::find;
 use super::row::Info;
-use crate::attribute::census::TargetKind;
+use crate::attribute::census::{Declared, Held, TargetKind};
 use crate::attribute::{Attribute, Attributes};
+use crate::common::VariableType;
 use crate::core::SourceSpan;
 
 /// What is wrong with one attribute of a declaration.
@@ -30,14 +31,23 @@ pub enum FaultKind {
     /// The same attribute stands before the declaration already; `first` is
     /// where it stood first.
     Repeated { first: SourceSpan },
+    /// The attribute is known and allowed here, and the declaration holds a
+    /// variable of a kind of block that the row forbids; the fault is at the
+    /// first such variable, and `attribute` is where the attribute is.
+    ForbidsBlock {
+        row: &'static Info,
+        block: VariableType,
+        attribute: SourceSpan,
+    },
 }
 
-/// One fault, at the attribute that has it.
+/// One fault, at the attribute that has it, or at the part of the declaration
+/// that the attribute does not allow.
 #[derive(Clone, Debug)]
 pub struct Fault {
     /// The name of the attribute, as written.
     pub name: String,
-    /// Where the attribute is in the source.
+    /// Where the fault is in the source.
     pub span: SourceSpan,
     pub kind: FaultKind,
 }
@@ -93,6 +103,53 @@ pub fn faults(kind: TargetKind, attributes: &Attributes) -> Vec<Fault> {
                 kind: fault,
             })
         })
+        .collect()
+}
+
+/// The faults of the attributes of a declaration of `kind` that holds `holds`:
+/// for each attribute whose row forbids a kind of variable block, one fault at
+/// the first variable of the declaration written in such a block. An attribute
+/// that is written again, or does not stand before this kind, has none here
+/// (the faults of [`faults`] already say so).
+fn forbidden_faults(kind: TargetKind, attributes: &Attributes, holds: &[Held]) -> Vec<Fault> {
+    attributes
+        .iter()
+        .enumerate()
+        .filter(|(index, attribute)| {
+            !attributes
+                .iter()
+                .take(*index)
+                .any(|earlier| same(earlier, attribute))
+        })
+        .filter_map(|(_, attribute)| Some((attribute, find(&attribute.name)?)))
+        .filter(|(_, row)| row.targets.contains(kind))
+        .flat_map(|(attribute, row)| {
+            row.forbids.iter().filter_map(move |block| {
+                let held = holds.iter().find(|held| held.block == *block)?;
+                Some(Fault {
+                    name: attribute.name.clone(),
+                    span: held.span.clone(),
+                    kind: FaultKind::ForbidsBlock {
+                        row,
+                        block: block.clone(),
+                        attribute: attribute.span.clone(),
+                    },
+                })
+            })
+        })
+        .collect()
+}
+
+/// The faults of a declaration of the census: those of its attributes
+/// ([`faults`]), then those of what it holds.
+pub fn declared_faults(declared: &Declared) -> Vec<Fault> {
+    faults(declared.kind, &declared.attributes)
+        .into_iter()
+        .chain(forbidden_faults(
+            declared.kind,
+            &declared.attributes,
+            &declared.holds,
+        ))
         .collect()
 }
 

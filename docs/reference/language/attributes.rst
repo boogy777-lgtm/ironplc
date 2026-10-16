@@ -200,6 +200,7 @@ of a list with the attribute is not stored apart from the other variables of the
 list. CODESYS stores all variables of the list in the retained memory then.
 
 CODESYS reports a :code:`VAR_TEMP` block in a program with the attribute as an
-error. The compiler does not accept a :code:`VAR_TEMP` block in a program at all,
-with or without the attribute, and reports it as a syntax error
-(:doc:`P0002 </reference/compiler/problems/P0002>`).
+error, and so does the compiler
+(:doc:`P4079 </reference/compiler/problems/P4079>`). A program without the
+attribute may declare :code:`VAR_TEMP` variables
+(see :ref:`temporary-variables`).

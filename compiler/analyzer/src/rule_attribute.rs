@@ -37,7 +37,7 @@ use std::collections::HashSet;
 use ironplc_dsl::{
     attribute::{
         census::declared,
-        registry::{faults, Fault, FaultKind},
+        registry::{declared_faults, Fault, FaultKind},
     },
     common::Library,
     core::FileId,
@@ -56,7 +56,7 @@ pub fn apply(
     let mut reported: HashSet<(String, FileId, usize, usize)> = HashSet::new();
     let diagnostics: Vec<Diagnostic> = declared(lib)
         .iter()
-        .flat_map(|declaration| faults(declaration.kind, &declaration.attributes))
+        .flat_map(declared_faults)
         .map(diagnostic)
         .filter(|diagnostic| {
             let at = &diagnostic.primary;
@@ -99,6 +99,16 @@ fn diagnostic(fault: Fault) -> Diagnostic {
                 Label::span(first, text::attribute_repeated_first_written_here()),
             )
         }
+        FaultKind::ForbidsBlock {
+            block, attribute, ..
+        } => Diagnostic::text(
+            fault.span,
+            text::attribute_forbids_variable_block(block.keyword(), name),
+        )
+        .with_secondary(Label::span(
+            attribute,
+            text::attribute_forbids_variable_block_attribute_written_here(),
+        )),
     }
 }
 
@@ -228,22 +238,106 @@ END_PROGRAM";
         assert_eq!(found[0].code, Problem::AttributeNotAllowedHere.code());
     }
 
-    #[test]
-    fn apply_when_program_with_subsequent_declares_var_temp_then_it_is_a_syntax_error() {
+    #[spec_test(REQ_ATTR_analyzer_015)]
+    fn apply_when_program_with_subsequent_declares_var_temp_then_p4079_at_the_variable_and_labelled_with_the_attribute(
+    ) {
         // CODESYS reports `VAR_TEMP` in a program with `subsequent` as a
-        // compile error. The parser takes no `VAR_TEMP` block in a program at
-        // all, so the combination never reaches the analysis.
+        // compile error.
         let source = "{attribute 'subsequent'}
 PROGRAM main
 VAR_TEMP
     scratch : INT;
 END_VAR
 END_PROGRAM";
-        let options = CompilerOptions::from_dialect(Dialect::Codesys);
 
-        let result = parse_program(source, &FileId::default(), &options);
+        let found = reported(source);
 
-        assert_eq!(result.unwrap_err().code, Problem::SyntaxError.code());
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].code, Problem::AttributeForbidsVariableBlock.code());
+        assert_eq!(primary_place(&found[0]), at(source, "scratch"));
+        assert_eq!(
+            found[0].primary.message,
+            "A VAR_TEMP block is not allowed in a declaration that has the attribute 'subsequent'"
+        );
+        assert_eq!(found[0].secondary.len(), 1);
+        assert_eq!(
+            (
+                found[0].secondary[0].location.start,
+                found[0].secondary[0].location.end
+            ),
+            at(source, "{attribute 'subsequent'}")
+        );
+        assert_eq!(
+            found[0].secondary[0].message,
+            "The attribute is written here"
+        );
+    }
+
+    #[spec_test(REQ_ATTR_analyzer_015)]
+    fn apply_when_program_without_subsequent_declares_var_temp_then_no_diagnostic() {
+        let source = "PROGRAM main
+VAR_TEMP
+    scratch : INT;
+END_VAR
+END_PROGRAM";
+
+        assert!(reported(source).is_empty());
+    }
+
+    #[spec_test(REQ_ATTR_analyzer_015)]
+    fn apply_when_program_with_subsequent_declares_no_var_temp_then_no_diagnostic() {
+        let source = "{attribute 'subsequent'}
+PROGRAM main
+VAR
+    kept : INT;
+END_VAR
+END_PROGRAM";
+
+        assert!(reported(source).is_empty());
+    }
+
+    #[spec_test(REQ_ATTR_analyzer_015)]
+    fn apply_when_program_with_subsequent_declares_several_var_temp_then_one_p4079_at_the_first() {
+        let source = "{attribute 'subsequent'}
+PROGRAM main
+VAR_TEMP
+    first : INT;
+    second : INT;
+END_VAR
+VAR_TEMP
+    third : INT;
+END_VAR
+END_PROGRAM";
+
+        let found = reported(source);
+
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].code, Problem::AttributeForbidsVariableBlock.code());
+        assert_eq!(primary_place(&found[0]), at(source, "first"));
+    }
+
+    #[spec_test(REQ_ATTR_analyzer_015)]
+    fn apply_when_subsequent_is_written_twice_before_a_program_with_var_temp_then_p4078_and_one_p4079(
+    ) {
+        let source = "{attribute 'subsequent'}
+{attribute 'subsequent'}
+PROGRAM main
+VAR_TEMP
+    scratch : INT;
+END_VAR
+END_PROGRAM";
+
+        let found = reported(source);
+
+        let mut codes: Vec<String> = found.iter().map(|d| d.code.clone()).collect();
+        codes.sort();
+        assert_eq!(
+            codes,
+            vec![
+                Problem::AttributeRepeated.code().to_string(),
+                Problem::AttributeForbidsVariableBlock.code().to_string(),
+            ]
+        );
     }
 
     #[spec_test(REQ_ATTR_analyzer_010)]

@@ -37,8 +37,11 @@ Example
    END_PROGRAM
 
 Programs can contain local variables (``VAR``), input variables
-(``VAR_INPUT``), and output variables (``VAR_OUTPUT``). Unlike functions,
-programs retain their variable values between execution cycles.
+(``VAR_INPUT``), output variables (``VAR_OUTPUT``) and temporary variables
+(``VAR_TEMP``). Unlike functions, programs retain the values of their
+``VAR``, ``VAR_INPUT`` and ``VAR_OUTPUT`` variables between execution cycles;
+a ``VAR_TEMP`` variable starts again at every cycle (see
+:ref:`temporary-variables`).
 
 See Also
 --------

@@ -153,3 +153,4 @@ P4075,FbInstanceArrayNotAllowed,Array of function block instances requires choos
 P4076,AttributeNotAllowedHere,Attribute does not apply to this kind of declaration
 P4077,AttributeValueInvalid,Attribute value is not one the attribute takes
 P4078,AttributeRepeated,Attribute is written more than once before one declaration
+P4079,AttributeForbidsVariableBlock,Attribute does not allow a variable block that its declaration holds
