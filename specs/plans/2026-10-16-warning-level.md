@@ -1,194 +1,107 @@
-# Message Categories for Diagnostics
+# Message Parity with CODESYS
 
 ## Goal
 
-Give every diagnostic one of the seven message categories of CODESYS, which is the reference. Each category behaves as it does in CODESYS:
-- whether it stops the build;
-- whether it is shown;
-- how it is suppressed.
-
-The first new message is a warning on a comparison of two values of different strict enumerations (`a = b` where `a : Color`, `b : Mode`). CODESYS reports this as warning C0354 and still compiles.
-
-Today every diagnostic is an error:
-- `project/src/compile.rs` skips code generation when any diagnostic exists;
-- `ironplc-cli/src/cli.rs` `finish` fails on any diagnostic;
-- the language server sets `DiagnosticSeverity::ERROR` on all of them (`ironplc-cli/src/lsp_project.rs:467`);
-- the MCP tools write `"severity": "error"` (`mcp/src/tools/common.rs:228`).
-
-## The reference: CODESYS
-
-**The categories.** `_3S.CoDeSys.Core.Messages.Severity` (decompiled `MessageStorage/Severity.cs:9-32`) is a flag set with seven values:
-
-| Value | Category | What CODESYS does with it (`Compiler35220.plugin/-/-.352.cs:113-160`) | What CODESYS uses it for |
-|---|---|---|---|
-| 1 | `FatalError` | Clears the messages already stored for the compile, marks the compile as aborted and stores this message alone. It stops the build. | Internal failures that carry no message id (`-/-.294.cs:145`) |
-| 2 | `Error` | Stored until the error limit (500) is reached. It stops the build. | 426 compiler messages `Err_*` |
-| 4 | `Warning` | Stored until the warning limit is reached. It does not stop the build. | 77 compiler messages `Wrn_*`, for example C0354 |
-| 8 | `Information` | Stored; `Inf_RelatedPosition` is capped at 500. It does not stop the build. | The related position of another message (a recursive call, the stack use); "use XSIZEOF"; the code, data and total memory sizes after a build (`-/-.349.cs:52-73`) |
-| 16 | `Text` | Stored. It does not stop the build. It has no message id. | Progress and timing lines of the build (`-/-.12.cs:125`, `-/-.340.cs:23`), and `Txt_ParentContextNotUpToDate` |
-| 32 | `SuppressedWarning` | Not stored, so not shown. It does not stop the build. | A warning whose id is disabled: `{warning disable Cxxxx}`, or "Not displayed" in the project's compiler warnings (`-/-.14.cs:27`, `-/-.135.cs:246`, `-/-.278.cs:720`) |
-| 64 | `SuppressedInformation` | Not stored, so not shown. It does not stop the build. | An information message that is disabled |
-
-Facts from the decompiled code:
-- **What stops the build.** Every check of failure in the compiler is `Severity == Error || Severity == FatalError`, for example `-/-.164.cs:137`, `-/-.281.cs:161` and `-/-.321.cs:270`.
-- **How suppression works.** Suppression is not a category a message is declared with. A warning becomes `SuppressedWarning` when its id is disabled. `MessageHandling` has three values:
-  - `Report` keeps it a warning;
-  - `Suppress` makes it `SuppressedWarning`;
-  - `Ignore` drops it entirely.
-- **Settings in the CODESYS help.** The project setting "Compiler Warnings" sets each warning to one of:
-  - "Not displayed" (suppressed);
-  - "Warning";
-  - "Error", which blocks the download.
-
-  The help says that `{warning disable Cxxxx}` / `{warning restore Cxxxx}` can be used for every compiler warning. Nothing documents how to disable an error.
-- **Other tools agree.** RuSTy (PLC-lang) has `Error`, `Warning`, `Info` and `Ignore`, set per code by an `--error-config` file. The IEC 61131-3 texts we could read define no message categories.
+IronPLC's messages behave as the CODESYS message system does, item by item. CODESYS is the reference. The concepts, the reference behaviour and the parity checklist (`MSG-NNN`) are defined in [Message Ontology](../design/message-ontology.md). This plan orders the work into one PR per concept. Each PR:
+- turns its checklist items into requirements with tests;
+- sets their state to "done" in the design document.
 
 ## Architecture
 
-- **One type.** `Severity` has the seven CODESYS categories, in the same order. An exhaustive `match` on it answers each question, and there is no other list:
-  - `stops_build()`: `FatalError` and `Error`;
-  - `is_shown()`: every category except the two suppressed ones;
-  - `suppressed()`: `Warning → SuppressedWarning`, `Information → SuppressedInformation`. The others cannot be suppressed and stay as they are, as in CODESYS.
-- **Where a code's category is declared.** `problems/resources/problem-codes.csv` gains a `Severity` column. A code may be declared `FatalError`, `Error`, `Warning`, `Information` or `Text`. The two suppressed categories are never declared; they are only the result of a suppression. `problems_gen` generates `Problem::severity()` and fails the build on a missing or invalid value. No list of warnings is kept anywhere else: each code declares its own category in its own row.
-- **How a diagnostic gets it.** `Diagnostic` (`dsl/src/diagnostic.rs`) takes its category from its problem, in the private constructor `Diagnostic::problem`. No call site sets it. `Diagnostic::suppress()` is the one way to change it later. The suppression sources, the pragma and per-code settings, come with the Messages family of attributes.
-- **A fatal error, as CODESYS.** When a stage produces a `FatalError`, analysis and code generation stop. The diagnostics of the run are only the fatal ones. Which codes are fatal is a separate decision, made per code in its row; PR 1 declares none.
-- **What decides failure.** Every place that now asks whether diagnostics are empty asks `stops_build()` instead:
-  - code generation;
-  - the exit status of the CLI;
-  - `SemanticContext` callers that gate on failure;
-  - the hot-edit and benchmark paths.
-- **What each consumer shows.** Every consumer maps `Severity` with an exhaustive `match`, so a new category does not compile until every consumer handles it:
+- **The registries.** Each concept is one class whose members declare themselves:
+  - categories in the `LEVELS` list of `problems_gen`;
+  - problem codes in `problem-codes.csv`;
+  - areas as members of an area class;
+  - suppression sources as members of their own mechanism.
 
-| Category | CLI | Language server | MCP `severity` | Playground |
-|---|---|---|---|---|
-| `FatalError` | `fatal error[P####]` | `ERROR` | `"fatal-error"` | error |
-| `Error` | `error[P####]` | `ERROR` | `"error"` | error |
-| `Warning` | `warning[P####]` | `WARNING` | `"warning"` | warning |
-| `Information` | `info[P####]` | `INFORMATION` | `"information"` | information |
-| `Text` | the text alone, without a code | `window/logMessage`, not a diagnostic | `"text"` | the output pane |
-| `SuppressedWarning`, `SuppressedInformation` | not shown | not shown | returned, with `"suppressed-warning"` / `"suppressed-information"`, so a tool can see what was hidden | not shown |
-
-- **Problem documentation.** Each `docs/reference/compiler/problems/P####.rst` says its category, through one include per category. No sentence is duplicated.
-- **The first warning.** A new rule reports `a = b`, `a <> b` and the other comparisons when the operands are values of two different enumerations and at least one of them is strict. Strictness is read through `IntermediateType::is_strict_enumeration`, the one existing answer (ADR-0079).
+  A consumer maps each class with an exhaustive `match`, so the next member does not compile until every consumer handles it.
+- **Two kinds of suppression source, never mixed:**
+  - settings (options given outside the source text, readable by a program);
+  - source text (pragmas and attributes, read by the parser and the analysis).
+- **Owner's deviation from CODESYS:** the warning limit is 500, like the error limit (MSG-050).
 
 ## Prefactoring
 
-- **PR 1 (no behaviour change).**
-  - The seven-value `Severity`, with `stops_build`, `is_shown` and `suppressed`.
-  - The `Severity` column, with every existing row `Error`.
-  - `Problem::severity()`, `Diagnostic::severity()` and `Diagnostic::suppress()`.
-  - Every failure gate asks `stops_build()`; every consumer maps all seven categories.
-
-  No code has another category yet, so no output changes: the gate, `analysis_pins` and the parity tests must not move. Record the decision in ADR-0081; 0080 is taken by an unmerged branch.
+PR 1 (#131, merged) is the prefactor: every diagnostic has one of the seven categories, taken from its code, and every existing code is `Error` (MSG-001 to MSG-005).
 
 ## Design doc reference
 
-- None for diagnostics today.
-- PR 1 adds `specs/design/diagnostic-severity.md`, with requirement IDs.
+- [Message Ontology](../design/message-ontology.md): concepts and checklist.
+- [Diagnostic Severity](../design/diagnostic-severity.md): the categories.
+- [ADR-0081](../adrs/0081-a-diagnostic-takes-its-category-from-its-problem-code.md).
 
 ## File map
 
-- `compiler/problems/resources/problem-codes.csv`: the `Severity` column.
-- `compiler/problems_gen/`: parse the column, generate `severity()`, and fail on a bad value.
-- `compiler/dsl/src/diagnostic.rs`, or the problems crate: `Severity`, `severity()`, `suppress()`.
-- `compiler/project/src/compile.rs`, `compiler/project/src/project.rs`: gate on `stops_build()`; stop at a fatal error.
-- `compiler/ironplc-cli/src/cli.rs`: rendering and exit status.
-- `compiler/ironplc-cli/src/lsp_project.rs`, `lsp_runner.rs`: the category mapping, log messages and gating.
-- `compiler/mcp/src/tools/*.rs`: the `severity` field and the "any error" checks (`pou_lineage.rs`, `pou_scope.rs`, `project_io.rs`, `project_manifest.rs`, `symbols.rs`, `types_all.rs`).
-- `compiler/playground/src/lib.rs`, `playground/`, `integrations/vscode/`: display.
-- `compiler/benchmarks/src/{lib,project}.rs`: count the categories apart.
-- `compiler/analyzer/src/rule_enumeration_comparison.rs` (new), `semantic_rules.rs`: the first warning.
-- `docs/reference/compiler/problems/P####.rst` (new); one include per category in `docs/includes/`.
-- `specs/adrs/0081-a-diagnostic-takes-its-category-from-its-problem-code.md`, `specs/design/diagnostic-severity.md`.
+Per PR below. Shared by most PRs:
+- `compiler/problems/resources/problem-codes.csv`, `problem-texts.csv`;
+- `compiler/problems_gen/`;
+- `compiler/dsl/src/diagnostic.rs`;
+- `compiler/ironplc-cli/src/{cli,lsp_project,lsp_runner}.rs`;
+- `compiler/mcp/src/tools/`;
+- `compiler/playground/`;
+- `docs/reference/compiler/problems/`.
 
 ## Tasks
 
-### PR 1: prefactor, seven categories with every code an error
+### PR 2: message forms (MSG-041, MSG-042, MSG-090 to MSG-093)
 
-- [ ] `Severity` with seven values and its three questions; unit tests for every value.
-- [ ] The `Severity` column (`FatalError`, `Error`, `Warning`, `Information`, `Text`), the `problems_gen` check, `Problem::severity()`.
-- [ ] `Diagnostic::severity()`, `suppress()`; unit tests.
-- [ ] Every failure gate asks `stops_build()`; a fatal error stops the later stages. The stop is tested through a test-only path, because no code is fatal yet.
-- [ ] Every consumer maps all seven categories with an exhaustive match. Test the mapping functions directly.
-- [ ] ADR-0081 and `specs/design/diagnostic-severity.md` with requirement IDs.
-- [ ] Gate: no output moves.
-
-### PR 2: the CLI writes its messages as CODESYS does
-
-codespan 0.13 hard-codes its header words (`bug`, `error`, `warning`, `note`, `help`), so PR 1 prints a fatal error as `error[P####]` and an information message as `note[P####]`. The owner's decision is to write the messages as CODESYS does. This PR replaces the header with our own renderer and keeps codespan for the source snippet.
-
-CODESYS texts. The resource strings come from `Compiler35220` (`CompilerStrings` / `Strings`, en). How a single message line is written is checked by a separate study before this PR starts:
-
-| Purpose | CODESYS text | Category in CODESYS |
-|---|---|---|
-| start of a build | `------ Build started: Application: {0} -------` | Text |
-| progress | `Typify code...`, `Generate code for {0}...`, `Generate code initialization...`, `Generate global initializations...`, `Generate relocations...` | Text |
-| sizes after code generation | `Size of generated code: {0} bytes`, `Size of global data: {0} bytes`, `Total allocated memory size for code and data: {0} bytes` | Information |
-| end of a build | `Build complete -- {0} errors, {1} warnings : Ready for download` / `... : No download possible` | Text |
-| end of a compile (check) | `Compile complete -- {0} errors, {1} warnings` | Text |
-| limits | `More than {0} errors occured: Skipping all further error messages`, the same for warnings (limit 500) | Text |
-
-The format study found no CODESYS text form for a single message line:
-- CODESYS shows a message's category as an icon in the Messages view, with the columns Description, Project, Object and Position;
-- scripting exposes the category names `FatalError`, `Error`, `Warning`, `Information` and `Text`;
-- no `[ERROR]`-style label exists in the resources or in the decompiled code.
-
-The owner's decision is to show each message in two forms, both generated from the one `LEVELS` list. Each category's row carries both names, so there is no second mapping:
-
-- **For a person** (CLI, editor): the words of the CODESYS Messages view. The header is `Error`, `Warning` or `Information`; a fatal error shows as `Error`, as the view counts it with the errors. A `Text` line is printed without a word or code. A suppressed message is not shown.
-- **For a program** (MCP, `--format json`): the CODESYS scripting model.
-  - The field names are those of `ScriptMessage`: `project`, `object`, `position`, `length`, `text`, `severity`.
-  - `severity` takes the scripting names `FatalError`, `Error`, `Warning`, `Information`, `Text`, `SuppressedWarning`, `SuppressedInformation`. They replace the kebab-case names of PR 1.
-  - A suppressed message is returned, so a script can see what was hidden.
-- **A bridge to CODESYS codes.** `problem-codes.csv` gains a `CODESYS` column with the analogue of each code, filled only where the decompiled checker confirms it (P4080 ↔ C0004, P4081 ↔ C0037, P4082 ↔ C0178, …) and left empty otherwise.
-  - The person form shows it as `Error P4081 (C0037): …`.
-  - The program form has a `"codesys"` field.
-  - Each problem page names it.
-- **VS Code.** The Problems panel filter has three switches, Errors, Warnings and Infos, the same three as the CODESYS Messages view filter. Each category goes to one place:
-
-  | Category | VS Code |
-  |---|---|
-  | `FatalError`, `Error` | Problems, `ERROR` (Errors switch) |
-  | `Warning` | Problems, `WARNING` (Warnings switch) |
-  | `Information` | Problems, `INFORMATION` (Infos switch) |
-  | `Text` | the **Output → IronPLC** channel through `window/logMessage`, not the Problems panel. The build start and "Compile complete" lines go there, as the build progress stays apart from the problems in CODESYS. This replaces PR 1's interim mapping of `Text` to `INFORMATION`. |
-  | `SuppressedWarning`, `SuppressedInformation` | not published |
-
-  Each diagnostic's `source` names its stage, `IronPLC (precompile)` or `IronPLC (build)`, matching the CODESYS message categories (Precompile, Build). The text filter of the Problems panel can then select a stage.
-
-Tasks:
-- [ ] One header renderer whose words per category come from one exhaustive match, using the Messages view words above.
-- [ ] The program form: `ScriptMessage` field names and scripting severity names; update MCP and its documentation.
-- [ ] The `CODESYS` column, its generator check, and its use in both forms and in the problem pages.
-- [ ] Language server: `Text` through `window/logMessage`; `source` per stage.
-- [ ] The summary counts follow CODESYS: "{0} errors, {1} warnings", with the plural used even for one.
-- [ ] `check` ends with the "Compile complete" line, and `compile` with the "Build complete" line. Each counts errors and warnings with the categories of PR 1.
-- [ ] The texts are rows of the message dictionary (`problem-texts.csv`), not literals.
-- [ ] The 500 limits, as CODESYS.
-- [ ] The progress lines (`Text`) and the size lines (`Information`) are produced as diagnostics of those categories, so that every consumer shows them by the PR 1 mapping.
-- [ ] Update the CLI snapshots and the documentation page on reading compiler messages.
+- [ ] **The person form.** Our own header renderer, with the Messages view words `Error`, `Warning`, `Information`. A `Text` has no word and no code. codespan stays for the source snippet.
+- [ ] **The program form.**
+  - The `ScriptMessage` field names and the scripting category names, in MCP and in `--format json`.
+  - Suppressed messages are included.
+  - A query that returns message objects, as `system.get_message_objects` does, beside one that returns the texts alone, as `system.get_messages` does.
+- [ ] **The `CODESYS` column** in `problem-codes.csv`.
+  - Fill it from the `exact` rows of the code study; the `close` rows only after review.
+  - It is shown in both forms and on each problem page.
+- [ ] **VS Code.**
+  - `Text` goes to the Output channel through `window/logMessage`.
+  - The Problems mapping is as in the design doc.
+  - A suppressed message is not published.
 
 ### PR 3: the first warning
 
-- [ ] A rule for comparisons of two different enumerations where one is strict, with a new code in the analyzer range whose row says `Warning`.
-- [ ] Tests covering:
-  - each comparison operator;
-  - strict against strict, strict against non-strict, non-strict against non-strict;
-  - an alias;
-  - a `CASE` with a selector of another enumeration, if the analysis has a type there; otherwise listed.
-- [ ] End to end, a program with the warning:
-  - `check` exits 0 and prints the warning;
-  - `compile` writes the container;
-  - the VM runs it.
-- [ ] The language server reports `WARNING`; MCP reports `"warning"`.
-- [ ] The problem documentation, and the enumeration page says what is reported.
+- [ ] A comparison of two different enumerations, one of them strict, is a `Warning`. It is the CODESYS counterpart of C0354.
+- [ ] Tests: each operator; strict and non-strict pairs; an alias.
+- [ ] End to end: `check` exits 0 and shows the warning, and `compile` writes the container.
 
-### Later, each its own decision
+### PR 4: codeless messages, limits and summary lines (MSG-040, MSG-050 to MSG-052, MSG-070 to MSG-074)
 
-- **Which codes are `FatalError`.** Candidates: an internal error (P9998), stack budget exhausted, a source that cannot be read.
-- **`Information` messages beyond the sizes of PR 2.** Candidate: the related position of a recursion or of a stack use, as CODESYS does.
-- **Suppression sources** (Messages family):
-  - `{warning disable Cxxxx}` / `{warning restore Cxxxx}`;
-  - per-code project settings "not displayed / warning / error";
-  - the `{info}`, `{warning}`, `{error}` and `{text}` message pragmas;
-  - the 500-message limits.
+- [ ] A message may have no code.
+- [ ] The 500 limits, with the CODESYS limit lines.
+- [ ] Related positions are dropped after the error limit.
+- [ ] The build start line and the "Build complete" and "Compile complete" summaries, with the counts of the run.
+- [ ] Production order is kept; duplicates are dropped, the first one wins.
+
+### PR 5: message areas (MSG-020 to MSG-022, MSG-053)
+
+- [ ] An area class with the members `Build` and `Precompile`; each message carries the areas it is shown in.
+  - `check` and `compile` write `Build`.
+  - The language server's analysis while editing writes `Precompile`.
+- [ ] The editor `source` per area.
+- [ ] The 950 cap of `Precompile`.
+
+### PR 6: handling and settings (MSG-030, MSG-031, MSG-036, MSG-037)
+
+- [ ] `Report` / `Suppress` / `Ignore` per message.
+- [ ] The options listing disabled warnings and warnings as errors.
+  - Raising beats disabling.
+  - Only warning codes can be listed.
+
+### PR 7: suppression in the source text (MSG-032, MSG-034, MSG-035)
+
+- [ ] `{warning disable Cnnnn}` / `{warning restore Cnnnn}`, using the code of the `CODESYS` column.
+- [ ] The attributes `suppress_warning_N` and `suppress_messages`: registry rows move from Waiting to Honoured.
+- [ ] MSG-033 is decided by a live check first.
+
+### PR 8: user messages (MSG-080 to MSG-082)
+
+- [ ] `{error}`, `{fatalerror}`, `{warning}`, `{info}` and `{text}`, with their options.
+- [ ] MSG-083 is decided by a live check first.
+
+### PR 9: related positions (MSG-060, MSG-061)
+
+- [ ] Secondary labels are given as `Information` messages in the program form, in CODESYS order.
+
+### Live checks in CODESYS (owner)
+
+MSG-033, MSG-075 and MSG-083.
