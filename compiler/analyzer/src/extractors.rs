@@ -294,6 +294,7 @@ mod tests {
                 size: crate::intermediate_type::ByteSized::B16,
             }),
             numbers: vec![],
+            strict: true,
         });
         assert_eq!(kind, TypeSymbolKind::Enumeration);
     }

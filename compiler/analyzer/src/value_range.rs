@@ -93,12 +93,16 @@ impl ValueSet<'_> {
 }
 
 /// The numbers `representation` holds, or `None` when it does not hold
-/// integers as numbers. A range type holds what [`of`] answers, and an
-/// enumeration holds the numbers of its declared values.
+/// integers as numbers. A range type holds what [`of`] answers, a strict
+/// enumeration holds the numbers of its declared values, and an enumeration
+/// that is not strict holds what its base type holds.
 pub fn numbers_of(representation: &IntermediateType) -> Option<ValueSet<'_>> {
     match representation {
-        IntermediateType::Enumeration { numbers, .. } => Some(ValueSet::Numbers(numbers)),
-        other => of(other).map(|(minimum, maximum)| ValueSet::Range(minimum, maximum)),
+        IntermediateType::Enumeration { numbers, .. } if representation.is_strict_enumeration() => {
+            Some(ValueSet::Numbers(numbers))
+        }
+        other => of(other.number_type().unwrap_or(other))
+            .map(|(minimum, maximum)| ValueSet::Range(minimum, maximum)),
     }
 }
 
@@ -178,6 +182,7 @@ mod tests {
                 size: ByteSized::B16,
             }),
             numbers: vec![20, 10],
+            strict: true,
         };
 
         let numbers = numbers_of(&representation).unwrap();
@@ -187,6 +192,26 @@ mod tests {
         assert!(numbers.holds(20));
         assert!(!numbers.holds(15));
         assert!(numbers.is_listed());
+    }
+
+    #[test]
+    fn numbers_of_when_enumeration_not_strict_then_the_range_of_its_base_type() {
+        let representation = IntermediateType::Enumeration {
+            underlying_type: Box::new(IntermediateType::Int {
+                size: ByteSized::B8,
+            }),
+            base_type: Box::new(IntermediateType::Int {
+                size: ByteSized::B16,
+            }),
+            numbers: vec![20, 10],
+            strict: false,
+        };
+
+        let numbers = numbers_of(&representation).unwrap();
+
+        assert_eq!(numbers, ValueSet::Range(-32_768, 32_767));
+        assert!(numbers.holds(15));
+        assert!(!numbers.is_listed());
     }
 
     #[test]

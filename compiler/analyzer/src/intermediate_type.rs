@@ -115,6 +115,13 @@ pub enum IntermediateType {
         /// declaration order. A constant may be stored in the enumeration
         /// when it is one of these.
         numbers: Vec<i64>,
+        /// Whether the enumeration is strict: no number is computed from its
+        /// values or stored into it. A type that is not strict is its base
+        /// type wherever a check asks whether the value is a number. Decided
+        /// where the enumeration is resolved (see
+        /// `intermediates::enumeration`); every check asks
+        /// [`IntermediateType::is_strict_enumeration`].
+        strict: bool,
     },
     /// Structure type containing named fields
     Structure {
@@ -194,6 +201,31 @@ impl IntermediateType {
     /// Returns if the type is an enumeration.
     pub fn is_enumeration(&self) -> bool {
         matches!(self, IntermediateType::Enumeration { .. })
+    }
+
+    /// Returns if the type is an enumeration that is no number: the one
+    /// question every check that treats an enumeration differently from its
+    /// base type asks (`value_type`, `value_range`, the operator and `FOR`
+    /// checks). A type that is not a strict enumeration is a number, or the
+    /// base type of one, wherever the check asks.
+    pub fn is_strict_enumeration(&self) -> bool {
+        matches!(self, IntermediateType::Enumeration { strict: true, .. })
+    }
+
+    /// The integer type that holds a value of this type where the virtual
+    /// machine stores one in a member of a structure or an element: for a
+    /// strict enumeration its underlying type, which holds every value it
+    /// declares and no other, and for an enumeration that is not strict its
+    /// base type, which holds every number the base type holds. Any other
+    /// type is held as itself.
+    pub fn stored_as(&self) -> &IntermediateType {
+        match self {
+            IntermediateType::Enumeration {
+                underlying_type, ..
+            } if self.is_strict_enumeration() => underlying_type,
+            IntermediateType::Enumeration { base_type, .. } => base_type,
+            other => other,
+        }
     }
 
     /// Returns if the type is a structure.

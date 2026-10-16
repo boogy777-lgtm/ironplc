@@ -70,6 +70,7 @@ fn slot_count_when_primitive_then_returns_1() {
                 size: crate::intermediate_type::ByteSized::B16,
             }),
             numbers: vec![],
+            strict: true,
         }
         .slot_count(),
         Ok(1)

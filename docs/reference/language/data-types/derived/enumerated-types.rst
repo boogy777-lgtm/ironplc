@@ -101,9 +101,46 @@ Without it, IronPLC picks the smallest type that holds every member's value.
 Integers and Enumerations
 -------------------------
 
-IronPLC follows the strict enumeration rules of CODESYS (``{attribute 'strict'}``).
-An enumeration holds its own values, and an integer is not one of them unless
-it is constant and names one.
+Whether an enumeration is a number depends on whether it is *strict*. A strict
+enumeration holds its own values, and an integer is not one of them unless it
+is constant and names one. An enumeration that is not strict is its base type
+(``INT`` unless the declaration names another) in every place described below.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 40 30 30
+
+   * - Dialect
+     - Declaration
+     - The enumeration is
+   * - ``iec61131-3-ed2``, ``iec61131-3-ed3``, ``rusty``
+     - any
+     - strict
+   * - ``codesys``, ``twincat``
+     - has ``{attribute 'strict'}``
+     - strict
+   * - ``codesys``, ``twincat``
+     - has no attribute
+     - not strict
+
+The standard gives the values of an enumeration no arithmetic, so every
+enumeration is strict unless the dialect says otherwise. CODESYS and TwinCAT
+mark the enumerations that refuse arithmetic with ``{attribute 'strict'}``
+before the declaration, as in ``{attribute 'strict'} TYPE Mode : (Auto, Manual);
+END_TYPE``, and the ``codesys`` and ``twincat`` dialects follow them. The
+dialect only chooses a default: ``--policy-enumeration-strictness`` replaces it
+(see :doc:`/reference/compiler/ironplcc`). An enumeration written inside a
+variable declaration (``state : (Idle, Running);``) has no declaration to
+carry the attribute, so it is strict only when every enumeration is. An alias
+(``TYPE Mode2 : Mode;``) is strict when the enumeration it names is.
+
+The rules below are those of a strict enumeration. For one that is not strict,
+each place accepts the enumeration as it would an ``INT``: arithmetic on it is
+accepted and has the type of its base type, so ``light + 1`` is an ``INT`` and
+wraps as an ``INT`` does; a number is stored into it as into a variable of the
+base type, whether or not it is a constant and whether or not it names a value;
+the numerical functions and the control variable of ``FOR`` accept it; and a
+selection function returns its base type.
 
 - An integer constant is accepted where an enumeration is stored when it is
   the number of one of its values: ``Red`` is 0, ``Yellow`` is 1 and ``Green``
@@ -196,12 +233,46 @@ statement with ``chosen := MAX(light, 1);`` reports
 :doc:`P4027 </reference/compiler/problems/P4027>`, because the result is an
 ``INT``.
 
+A dialect that makes the enumeration not strict accepts the arithmetic. Under
+``--dialect codesys``, ``light`` below is not strict and the program counts from
+``Red`` to ``Green``; adding ``{attribute 'strict'}`` before the declaration
+makes ``light + 1`` an error again.
+
+.. code-block::
+
+   TYPE
+       TrafficLight : (Red, Yellow, Green);
+   END_TYPE
+
+   PROGRAM main
+       VAR
+           light : TrafficLight := Yellow;
+           next : TrafficLight;
+           count : INT;
+       END_VAR
+
+       next := light + 1;
+       FOR light := Red TO Green DO
+           count := count + 1;
+       END_FOR;
+   END_PROGRAM
+
+After one scan ``next`` is ``Green`` and ``count`` is 3.
+
 Related Problem Codes
 ---------------------
 
 - :doc:`/reference/compiler/problems/P2003` — Duplicate enumeration value
 - :doc:`/reference/compiler/problems/P2006` — Enumeration uses value that is
   not defined in the enumeration
+- :doc:`/reference/compiler/problems/P4026` — Function call argument type does
+  not match parameter type
+- :doc:`/reference/compiler/problems/P4027` — Function return type does not
+  match assignment destination type
+- :doc:`/reference/compiler/problems/P4035` — Assignment value type does not
+  match assignment target type
+- :doc:`/reference/compiler/problems/P4049` — Operator is not defined for the
+  operand types
 - :doc:`/reference/compiler/problems/P4055` — Explicit enumeration member
   value requires a dialect or flag
 - :doc:`/reference/compiler/problems/P4056` — Enumeration base-type suffix

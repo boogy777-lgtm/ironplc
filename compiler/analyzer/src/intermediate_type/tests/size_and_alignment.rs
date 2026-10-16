@@ -118,6 +118,7 @@ fn intermediate_type_size_in_bytes_returns_bytes() {
             size: crate::intermediate_type::ByteSized::B16,
         }),
         numbers: vec![],
+        strict: true,
     };
     assert_eq!(enumeration.size_in_bytes(), Some(1));
 

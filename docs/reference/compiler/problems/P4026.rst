@@ -23,10 +23,13 @@ elements.
 
 An enumeration is the integer it stands for wherever the function only holds the argument:
 it is accepted for an ``INT`` or ``DINT`` parameter, and for a generic parameter of the
-selection, comparison and conversion functions. It is this error for a parameter of a
-function that computes a new number from it, such as ``ABS``, ``EXPT``, ``MOD`` or
-``MUL_TIME``, and for a parameter of a narrower or unrelated type. See
-:doc:`/reference/language/data-types/derived/enumerated-types` for which functions compute.
+selection, comparison and conversion functions. A strict enumeration is this error for a
+parameter of a function that computes a new number from it, such as ``ABS``, ``EXPT``,
+``MOD`` or ``MUL_TIME``, and so is an integer that is not a constant for a parameter that
+is a strict enumeration; either is this error for a parameter of a narrower or unrelated
+type. An enumeration that is not strict is its base type for all of these. See
+:doc:`/reference/language/data-types/derived/enumerated-types` for which functions compute
+and which enumerations are strict.
 
 The arithmetic functions ``ADD``, ``SUB``, ``MUL`` and ``DIV`` are the exception: they
 accept the numeric types and the time and date types, so a mismatch in their inputs is

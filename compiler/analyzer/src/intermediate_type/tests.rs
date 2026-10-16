@@ -12,5 +12,6 @@ mod field_access;
 mod function_block_layout;
 mod size_and_alignment;
 mod slot_count;
+mod strictness;
 mod structure_layout;
 mod validate_bounds;

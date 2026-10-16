@@ -1,13 +1,16 @@
-//! Guard: an enumeration is refused as the input of every standard function
-//! that computes, and accepted as the input of every one that holds, whatever
-//! functions the environment holds.
+//! Guard: a strict enumeration is refused as the input of every standard
+//! function that computes, and accepted as the input of every one that holds;
+//! an enumeration that is not strict is accepted as the input of every
+//! function an `INT` is, whatever functions the environment holds.
 //!
 //! The walk is derived from the function environment, so a standard function
 //! added later is in it with no edit here. For each function it builds a call
 //! that gives an enumeration variable to every input an `INT` satisfies and a
 //! variable of a fitting type to every other, and reads the expected outcome
-//! from the function's [`ValueUse`]: a function that computes refuses the call
-//! when it has an enumeration input, and a function that holds accepts it.
+//! from the function's [`ValueUse`] and from whether the enumeration is strict:
+//! a function that computes refuses the call when it has a strict enumeration
+//! input, and a function that holds accepts it, as does every function when the
+//! enumeration is not strict.
 //! The refusal is the problem code of the check that owns the input,
 //! [`Problem::FunctionCallArgTypeMismatch`] or
 //! [`Problem::OperatorOperandTypeMismatch`].
@@ -19,9 +22,10 @@
 use ironplc_dsl::common::TypeName;
 use ironplc_dsl::core::FileId;
 use ironplc_dsl::diagnostic::Diagnostic;
-use ironplc_parser::options::{CompilerOptions, Dialect};
+use ironplc_parser::options::{CompilerOptions, Dialect, EnumerationStrictness};
 use ironplc_parser::parse_program;
 use ironplc_problems::Problem;
+use rstest::rstest;
 
 use crate::function_environment::FunctionSignature;
 use crate::stages::analyze;
@@ -62,10 +66,52 @@ const CANDIDATES: [&str; 25] = [
     "WSTRING",
 ];
 
-fn options() -> CompilerOptions {
+/// How the enumeration the calls are given comes to be strict, or not.
+#[derive(Clone, Copy, Debug)]
+struct Declared {
+    policy: EnumerationStrictness,
+    /// Whether the declaration carries `{attribute 'strict'}`.
+    attribute: bool,
+}
+
+impl Declared {
+    /// Whether the policy and the attribute make the enumeration strict.
+    fn strict(self) -> bool {
+        match self.policy {
+            EnumerationStrictness::EveryEnumeration => true,
+            EnumerationStrictness::WithAttribute => self.attribute,
+        }
+    }
+
+    /// The declaration of the enumeration `E1`.
+    fn declaration(self) -> &'static str {
+        if self.attribute {
+            "{attribute 'strict'} TYPE E1 : (A, B, C); END_TYPE"
+        } else {
+            "TYPE E1 : (A, B, C); END_TYPE"
+        }
+    }
+}
+
+const EVERY: Declared = Declared {
+    policy: EnumerationStrictness::EveryEnumeration,
+    attribute: false,
+};
+const ATTRIBUTE: Declared = Declared {
+    policy: EnumerationStrictness::WithAttribute,
+    attribute: true,
+};
+const NEITHER: Declared = Declared {
+    policy: EnumerationStrictness::WithAttribute,
+    attribute: false,
+};
+
+fn options(declared: Declared) -> CompilerOptions {
     CompilerOptions {
         allow_sizeof: true,
         allow_special_operators: true,
+        allow_pragmas: true,
+        policy_enumeration_strictness: declared.policy,
         ..CompilerOptions::from_dialect(Dialect::Iec61131_3Ed3)
     }
 }
@@ -118,14 +164,18 @@ fn call_of(signature: &FunctionSignature, options: &CompilerOptions) -> Option<C
 
 /// The program that makes every call in `calls`, and the byte range of each
 /// call's statement in it.
-fn program_of(calls: &[Call]) -> (String, Vec<(usize, usize)>) {
+fn program_of(declared: Declared, calls: &[Call]) -> (String, Vec<(usize, usize)>) {
     let variables: String = CANDIDATES
         .iter()
         .map(|candidate| format!("v_{candidate} : {candidate};"))
         .collect::<Vec<_>>()
         .join(" ");
     let mut text = format!(
-        "TYPE E1 : (A, B, C); END_TYPE\nPROGRAM main\nVAR e : E1; sink : DINT; {variables} END_VAR\n"
+        "{}
+PROGRAM main
+VAR e : E1; sink : DINT; {variables} END_VAR
+",
+        declared.declaration()
     );
     let mut ranges = Vec::new();
     for call in calls {
@@ -157,10 +207,13 @@ struct Walk {
     ranges: Vec<(usize, usize)>,
 }
 
-fn walk() -> Walk {
-    let options = options();
+fn walk(declared: Declared) -> Walk {
+    let options = options(declared);
     let library = parse_program(
-        "TYPE E1 : (A, B, C); END_TYPE PROGRAM main VAR e : E1; END_VAR END_PROGRAM",
+        &format!(
+            "{} PROGRAM main VAR e : E1; END_VAR END_PROGRAM",
+            declared.declaration()
+        ),
         &FileId::default(),
         &options,
     )
@@ -174,7 +227,7 @@ fn walk() -> Walk {
             None => uncallable.push(signature.name.original().to_string()),
         }
     }
-    let (text, ranges) = program_of(&callable);
+    let (text, ranges) = program_of(declared, &callable);
     let library = parse_program(&text, &FileId::default(), &options).unwrap();
     let (_library, context) = analyze(&[&library], &options).unwrap();
     Walk {
@@ -185,9 +238,14 @@ fn walk() -> Walk {
     }
 }
 
-#[test]
-fn function_environment_when_function_given_an_enumeration_then_refused_exactly_when_it_computes() {
-    let walk = walk();
+#[rstest]
+#[case::every_enumeration_strict(EVERY)]
+#[case::attribute_strict(ATTRIBUTE)]
+#[case::neither_not_strict(NEITHER)]
+fn function_environment_when_function_given_an_enumeration_then_refused_exactly_when_it_computes_with_a_strict_one(
+    #[case] declared: Declared,
+) {
+    let walk = walk(declared);
 
     let mismatches: Vec<String> = walk
         .callable
@@ -195,7 +253,8 @@ fn function_environment_when_function_given_an_enumeration_then_refused_exactly_
         .zip(&walk.ranges)
         .filter_map(|(call, range)| {
             let refused = walk.diagnostics.iter().any(|d| refuses_input(d, *range));
-            let expected = call.value_use == ValueUse::Computes && call.has_enumeration;
+            let expected =
+                declared.strict() && call.value_use == ValueUse::Computes && call.has_enumeration;
             (refused != expected).then(|| {
                 format!(
                     "{}: expected {}, got {}",
@@ -210,9 +269,13 @@ fn function_environment_when_function_given_an_enumeration_then_refused_exactly_
     assert_eq!(mismatches, Vec::<String>::new());
 }
 
-#[test]
-fn function_environment_when_walked_then_the_uncallable_functions_are_the_listed_ones() {
-    let walk = walk();
+#[rstest]
+#[case::every_enumeration_strict(EVERY)]
+#[case::neither_not_strict(NEITHER)]
+fn function_environment_when_walked_then_the_uncallable_functions_are_the_listed_ones(
+    #[case] declared: Declared,
+) {
+    let walk = walk(declared);
 
     let listed: Vec<String> = UNCALLABLE
         .iter()
@@ -224,7 +287,7 @@ fn function_environment_when_walked_then_the_uncallable_functions_are_the_listed
 
 #[test]
 fn function_environment_when_walked_then_functions_that_compute_are_given_an_enumeration() {
-    let walk = walk();
+    let walk = walk(EVERY);
 
     let computing_with_enumeration = walk
         .callable

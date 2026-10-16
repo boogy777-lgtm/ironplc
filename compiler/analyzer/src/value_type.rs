@@ -45,11 +45,12 @@ pub(crate) enum ValueType {
 /// This is the one place the language states when an enumeration is a number.
 /// An enumeration is the number it stands for (its base type, `INT` unless the
 /// declaration names another) where the place only holds the value: stores it,
-/// passes it, compares it, selects it, converts it. It is no number where the
-/// place computes a new number from it: an arithmetic operator, the function
-/// form of one, a numerical function, the counter of a `FOR`. CODESYS refuses
-/// those for an enumeration declared `strict`, and an operation on a named
-/// value has no meaning.
+/// passes it, compares it, selects it, converts it. A strict enumeration (see
+/// [`IntermediateType::is_strict_enumeration`]) is no number where the place
+/// computes a new number from it: an arithmetic operator, the function form of
+/// one, a numerical function, the counter of a `FOR`. CODESYS refuses those
+/// for an enumeration declared `strict`, and an operation on a named value has
+/// no meaning. An enumeration that is not strict is its base type there too.
 ///
 /// A place states its use as data -- a row of the function environment, an
 /// operator -- and every check asks [`ValueUse::refuses`], so a new place
@@ -66,9 +67,10 @@ pub enum ValueUse {
 
 impl ValueUse {
     /// Whether a value of `representation` is refused by a place that makes
-    /// this use of it: an enumeration is no number where the place computes.
+    /// this use of it: a strict enumeration is no number where the place
+    /// computes.
     pub fn refuses(self, representation: &IntermediateType) -> bool {
-        self == ValueUse::Computes && representation.is_enumeration()
+        self == ValueUse::Computes && representation.is_strict_enumeration()
     }
 }
 
@@ -91,6 +93,7 @@ pub(crate) struct Mismatch {
 /// - a reference is known by the type it references, as a `REF_TO`
 ///   parameter records its type;
 /// - a subrange is its own name, or its base type's when it has none;
+/// - an enumeration that is not strict is its base type's name;
 /// - any other type is its own name, and has none when it is anonymous.
 ///
 /// `None` for `NULL`, which is not of one type.
@@ -128,7 +131,14 @@ fn operand_name_of(types: &TypeEnvironment, id: TypeId) -> Option<TypeName> {
             .name_of(id)
             .cloned()
             .or_else(|| types.elementary_type_name_for(base_type)),
-        IntermediateType::Enumeration { .. }
+        // A strict enumeration is known by its own name, which no overload
+        // judges. One that is not strict is the number it stands for.
+        IntermediateType::Enumeration {
+            base_type,
+            strict: false,
+            ..
+        } => types.elementary_type_name_for(base_type),
+        IntermediateType::Enumeration { strict: true, .. }
         | IntermediateType::Structure { .. }
         | IntermediateType::Array { .. }
         | IntermediateType::FunctionBlock { .. }
@@ -141,28 +151,29 @@ fn operand_name_of(types: &TypeEnvironment, id: TypeId) -> Option<TypeName> {
 /// order of the arguments. `None` when no input has a type.
 ///
 /// The result takes the type of the first input, as the inputs of numbers
-/// bind: how two different integer types meet is not decided here. An
+/// bind: how two different integer types meet is not decided here. A strict
 /// enumeration changes that in one way, because it is the number it stands
 /// for only where a value is held:
 ///
-/// - every input is the same enumeration: the result is that enumeration, as
-///   `SEL(g, a, b)` gives back one of the values it was given;
-/// - an enumeration among inputs that are not all that enumeration: each stands
-///   as its number, so the result is a number and not an enumeration.
-///   `MAX(x, 1)` is an `INT`, and storing it into an enumeration is refused
-///   by the check of the place that stores it, as any `INT` is.
+/// - every input is the same strict enumeration: the result is that
+///   enumeration, as `SEL(g, a, b)` gives back one of the values it was given;
+/// - an enumeration among inputs that are not all that strict enumeration:
+///   each stands as its number, so the result is a number and not an
+///   enumeration. `MAX(x, 1)` is an `INT`, and storing it into a strict
+///   enumeration is refused by the check of the place that stores it, as any
+///   `INT` is. An enumeration that is not strict is its number at every input.
 pub(crate) fn generic_result(types: &TypeEnvironment, inputs: &[ExprType]) -> Option<ExprType> {
     let first = inputs.first()?;
     let declarations: Vec<Option<TypeId>> = inputs
         .iter()
-        .map(|input| enumeration_declaration(types, input))
+        .map(|input| strict_enumeration_declaration(types, input))
         .collect();
     let same_enumeration = declarations
         .first()
         .copied()
         .flatten()
         .is_some_and(|head| declarations.iter().all(|d| *d == Some(head)));
-    if same_enumeration || declarations.iter().all(Option::is_none) {
+    if same_enumeration {
         return Some(first.clone());
     }
     match first {
@@ -173,13 +184,18 @@ pub(crate) fn generic_result(types: &TypeEnvironment, inputs: &[ExprType]) -> Op
     }
 }
 
-/// The enumeration a value of type `expr_type` is, aliases resolved, or `None`
-/// when it is not an enumeration.
-fn enumeration_declaration(types: &TypeEnvironment, expr_type: &ExprType) -> Option<TypeId> {
-    match expr_type {
-        ExprType::Concrete(id) => types.enumeration_declaration(*id),
-        ExprType::Literal(_) | ExprType::Null => None,
-    }
+/// The strict enumeration a value of type `expr_type` is, aliases resolved, or
+/// `None` when it is not an enumeration or the enumeration is not strict.
+fn strict_enumeration_declaration(types: &TypeEnvironment, expr_type: &ExprType) -> Option<TypeId> {
+    let ExprType::Concrete(id) = expr_type else {
+        return None;
+    };
+    let declaration = types.enumeration_declaration(*id)?;
+    types
+        .get_by_id(declaration)?
+        .representation
+        .is_strict_enumeration()
+        .then_some(declaration)
 }
 
 /// The type of the number the enumeration `id` stands for, or `None` when the
@@ -267,10 +283,13 @@ pub(crate) fn check_use(
             return Ok(());
         }
     }
+    // A required enumeration that is not strict takes the numbers its base
+    // type takes.
+    let required = required_number(types, expected);
     match of(types, expr) {
         None => Ok(()),
         Some(ValueType::Scalar(actual)) => {
-            if are_types_compatible(expected, &actual, options)
+            if are_types_compatible(&required, &actual, options)
                 || constant_accepted(types, expected, expr)
             {
                 Ok(())
@@ -282,7 +301,8 @@ pub(crate) fn check_use(
         }
         Some(ValueType::Composite(id)) => {
             if composite_accepted(types, expected, id)
-                || (!refused(types, value_use, id) && number_accepted(types, expected, id, options))
+                || (!refused(types, value_use, id)
+                    && number_accepted(types, &required, id, options))
             {
                 Ok(())
             } else {
@@ -292,6 +312,24 @@ pub(crate) fn check_use(
             }
         }
     }
+}
+
+/// The type a value must be to be stored where `expected` is required, as a
+/// number: the base type of an enumeration that is not strict, else `expected`
+/// itself. A strict enumeration holds only its own values (and the constants
+/// that name one, see [`constant_accepted`]).
+fn required_number(types: &TypeEnvironment, expected: &TypeName) -> TypeName {
+    let Some(attributes) = types.get(expected) else {
+        return expected.clone();
+    };
+    if attributes.representation.is_strict_enumeration() {
+        return expected.clone();
+    }
+    attributes
+        .representation
+        .number_type()
+        .and_then(|number| types.elementary_type_name_for(number))
+        .unwrap_or_else(|| expected.clone())
 }
 
 /// Whether `expected` is a type that lists the numbers it holds (see
@@ -543,6 +581,7 @@ mod tests {
                     size: crate::intermediate_type::ByteSized::B16,
                 }),
                 numbers: vec![],
+                strict: true,
             },
         );
 
@@ -557,6 +596,93 @@ mod tests {
             describe(&types, TypeId::from_raw(100_000)),
             "an unknown type"
         );
+    }
+
+    /// An enumeration `E` of the values 0 and 1 stored in a byte, a number of
+    /// `INT`, strict or not, and a second one `F`.
+    fn with_enumerations(strict: bool) -> TypeEnvironment {
+        let mut types = environment();
+        for name in ["E", "F"] {
+            let representation = IntermediateType::Enumeration {
+                underlying_type: Box::new(IntermediateType::Int {
+                    size: ByteSized::B8,
+                }),
+                base_type: Box::new(IntermediateType::Int {
+                    size: ByteSized::B16,
+                }),
+                numbers: vec![0, 1],
+                strict,
+            };
+            types.insert_type(
+                &TypeName::from(name),
+                TypeAttributes::new(SourceSpan::default(), representation),
+            );
+        }
+        types
+    }
+
+    fn id_of(types: &TypeEnvironment, name: &str) -> ExprType {
+        ExprType::Concrete(types.id_of(&TypeName::from(name)).unwrap())
+    }
+
+    #[rstest::rstest]
+    #[case::strict(true, "e")]
+    #[case::not_strict(false, "int")]
+    fn operand_type_name_when_enumeration_then_its_own_name_only_when_strict(
+        #[case] strict: bool,
+        #[case] expected: &str,
+    ) {
+        let types = with_enumerations(strict);
+
+        let name = operand_type_name(&types, &id_of(&types, "E"));
+
+        assert_eq!(name, Some(TypeName::from(expected)));
+    }
+
+    #[rstest::rstest]
+    #[case::strict_same_enumeration_stays(true, &["E", "E"], "E")]
+    #[case::strict_other_enumeration_is_a_number(true, &["E", "F"], "INT")]
+    #[case::not_strict_same_enumeration_is_a_number(false, &["E", "E"], "INT")]
+    #[case::not_strict_other_enumeration_is_a_number(false, &["E", "F"], "INT")]
+    fn generic_result_when_inputs_are_enumerations_then_an_enumeration_only_when_all_one_strict_one(
+        #[case] strict: bool,
+        #[case] inputs: &[&str],
+        #[case] expected: &str,
+    ) {
+        let types = with_enumerations(strict);
+        let inputs: Vec<ExprType> = inputs.iter().map(|name| id_of(&types, name)).collect();
+
+        let result = generic_result(&types, &inputs);
+
+        assert_eq!(result, Some(id_of(&types, expected)));
+    }
+
+    #[rstest::rstest]
+    #[case::strict_holds_only_its_values(true, "E", "INT", false)]
+    #[case::not_strict_holds_what_its_base_type_holds(false, "E", "INT", true)]
+    #[case::not_strict_refuses_what_its_base_type_refuses(false, "E", "STRING", false)]
+    fn check_when_number_stored_into_an_enumeration_then_accepted_only_when_not_strict(
+        #[case] strict: bool,
+        #[case] target: &str,
+        #[case] value_type: &str,
+        #[case] accepted: bool,
+    ) {
+        let types = with_enumerations(strict);
+        // A variable, not a constant: a constant is accepted by a strict
+        // enumeration when it names a value (see `constant_accepted`).
+        let mut expr = Expr::new(ExprKind::named_variable("n"));
+        expr.expr_type = types
+            .id_of(&TypeName::from(value_type))
+            .map(ExprType::Concrete);
+
+        let result = check(
+            &types,
+            &TypeName::from(target),
+            &expr,
+            &CompilerOptions::default(),
+        );
+
+        assert_eq!(result.is_ok(), accepted);
     }
 
     fn expression_of(types: &TypeEnvironment, type_name: &str) -> Expr {

@@ -61,7 +61,7 @@ rows! {
         targets: kinds![Enumeration],
         family: Enumeration,
         summary: "A strict type test for the enumeration: no arithmetic with its values, no assignment of a value that is not one of them",
-        state: Waiting,
+        state: Honoured,
     }
 
     TO_STRING: Flag = {

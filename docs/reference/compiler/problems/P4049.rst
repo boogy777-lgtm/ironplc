@@ -24,11 +24,13 @@ Each arithmetic expression is reported once, naming both operand types. When
 an operand of an expression is itself an expression that failed, the
 enclosing expression may be reported as well.
 
-An enumeration is no operand of an arithmetic operator, of ``-`` applied to it,
-or of the function forms ``ADD``, ``SUB``, ``MUL`` and ``DIV``. The control
-variable of a ``FOR`` statement may not be an enumeration either, because the
-statement adds the step to it on every pass; the message names ``FOR`` as the
-operator. See :doc:`/reference/language/data-types/derived/enumerated-types`.
+A strict enumeration is no operand of an arithmetic operator, of ``-`` applied to
+it, or of the function forms ``ADD``, ``SUB``, ``MUL`` and ``DIV``. The control
+variable of a ``FOR`` statement may not be a strict enumeration either, because
+the statement adds the step to it on every pass; the message names ``FOR`` as the
+operator. An enumeration that is not strict is its base type in all of these.
+See :doc:`/reference/language/data-types/derived/enumerated-types` for which
+enumerations are strict.
 
 Mixed numeric types
 -------------------
