@@ -7,7 +7,10 @@ use ironplc_project::project::{MemoryBackedProject, Project};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::common::{parse_options, serialize_diagnostics, validate_sources, SourceInput};
+use super::common::{
+    parse_options, serialize_diagnostics, severity_name, validate_sources, SourceInput,
+};
+use ironplc_dsl::diagnostic::Severity;
 
 const MAX_RESPONSE_BYTES: usize = 256 * 1024;
 
@@ -91,11 +94,9 @@ pub fn build_response(
         project.add_source(FileId::from_string(&src.name), src.content.clone());
     }
 
-    let diagnostics_json = serialize_diagnostics(&project.semantic());
-
-    let has_errors = diagnostics_json
-        .iter()
-        .any(|d| d["severity"].as_str() == Some("error"));
+    let diagnostics = project.semantic();
+    let has_errors = ironplc_dsl::diagnostic::has_errors(&diagnostics);
+    let diagnostics_json = serialize_diagnostics(&diagnostics);
 
     let context = match project.semantic_context() {
         Some(ctx) if !has_errors => ctx,
@@ -148,7 +149,7 @@ pub fn build_response(
                 vec![serde_json::json!({
                     "code": "P8001",
                     "message": "Response exceeds 256 KiB limit. Use the `pou` filter or a context tool (`pou_scope`, `project_io`, `types_all`) instead.",
-                    "severity": "error",
+                    "severity": severity_name(Severity::Error),
                     "file": "",
                     "start": 0,
                     "end": 0
@@ -249,7 +250,7 @@ fn apply_pou_filter(
         diags.push(serde_json::json!({
             "code": "P8001",
             "message": format!("No POU named '{}' found.", pou_name),
-            "severity": "error",
+            "severity": severity_name(Severity::Error),
             "file": "",
             "start": 0,
             "end": 0

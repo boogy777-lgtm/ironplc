@@ -20,7 +20,10 @@ use ironplc_project::project::{MemoryBackedProject, Project};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::common::{parse_options, serialize_diagnostics, validate_sources, SourceInput};
+use super::common::{
+    parse_options, serialize_diagnostics, severity_name, validate_sources, SourceInput,
+};
+use ironplc_dsl::diagnostic::Severity;
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct PouLineageInput {
@@ -107,11 +110,9 @@ pub fn build_response(
         project.add_source(FileId::from_string(&src.name), src.content.clone());
     }
 
-    let mut diagnostics_json = serialize_diagnostics(&project.semantic());
-
-    let has_errors = diagnostics_json
-        .iter()
-        .any(|d| d["severity"].as_str() == Some("error"));
+    let diagnostics = project.semantic();
+    let has_errors = ironplc_dsl::diagnostic::has_errors(&diagnostics);
+    let mut diagnostics_json = serialize_diagnostics(&diagnostics);
 
     let library = match project.analyzed_library() {
         Some(lib) => lib,
@@ -409,7 +410,7 @@ fn not_found_diagnostic(pou_name: &str) -> serde_json::Value {
     serde_json::json!({
         "code": "P8001",
         "message": format!("No POU named '{}' found.", pou_name),
-        "severity": "error",
+        "severity": severity_name(Severity::Error),
         "file": "",
         "start": 0,
         "end": 0

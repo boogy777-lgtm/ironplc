@@ -77,11 +77,9 @@ pub fn build_response(
         project.add_source(FileId::from_string(&src.name), src.content.clone());
     }
 
-    let diagnostics_json = serialize_diagnostics(&project.semantic());
-
-    let has_errors = diagnostics_json
-        .iter()
-        .any(|d| d["severity"].as_str() == Some("error"));
+    let diagnostics = project.semantic();
+    let has_errors = ironplc_dsl::diagnostic::has_errors(&diagnostics);
+    let diagnostics_json = serialize_diagnostics(&diagnostics);
 
     // REQ-TOL-mcp-201: always attempt to populate a partial manifest. `semantic_context()`
     // is set by `MemoryBackedProject::semantic()` even when analysis fails, as long

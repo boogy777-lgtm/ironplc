@@ -24,7 +24,7 @@ fn main() {
             process::exit(1);
         }
     }
-    ironplc_spec_requirements_gen::generate(&["mcp-server.md"]);
+    ironplc_spec_requirements_gen::generate(&["mcp-server.md", "diagnostic-severity.md"]);
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
