@@ -63,10 +63,7 @@ use ironplc_dsl::{
     core::{Id, Located},
     diagnostic::Diagnostic,
     scope::ScopeNode,
-    textual::{
-        Assignment, Case, CaseSelectionKind, CompareExpr, CompareOp, Function,
-        SymbolicVariableKind, Variable,
-    },
+    textual::{Assignment, Case, CaseSelectionKind, CompareExpr, CompareOp, Function},
     visitor::Visitor,
 };
 use ironplc_problems::text;
@@ -74,8 +71,9 @@ use std::collections::HashSet;
 use std::convert::Infallible;
 
 mod expected;
+mod position;
 
-use self::expected::OtherEnumeration;
+use self::position::Position;
 use crate::{
     resolution::Resolved,
     result::SemanticResult,
@@ -245,9 +243,7 @@ impl Visitor<Infallible> for RuleDeclaredEnumeratedValues<'_> {
             }
             // Check if the value is in the list of defined enumeration values
             if value.type_name.is_some() {
-                if let Some(expected) = self.expected_named(&init.type_name) {
-                    self.check_value(expected, value, OtherEnumeration::Report);
-                }
+                self.check_at(Position::InitialValue(&init.type_name), value);
             } else if !defined_values.contains(&value.value) {
                 self.diagnostics.push(self.value_not_defined(value));
             }
@@ -290,33 +286,18 @@ impl Visitor<Infallible> for RuleDeclaredEnumeratedValues<'_> {
     }
 
     /// The target of an assignment expects its own enumeration.
-    fn visit_assignment(&mut self, node: &Assignment) -> Result<(), Infallible> {
-        if let Variable::Symbolic(SymbolicVariableKind::Named(target)) = &node.target {
-            let expected = self
-                .declarations
-                .find(&target.name)
-                .and_then(|declared| declared.type_id(self.context.types()))
-                .and_then(|id| self.expected_of(id));
-            // The type of the value is compared with the target's by the check
-            // of the assignment.
-            self.check_expression_value(
-                expected,
-                &node.value.kind,
-                OtherEnumeration::ReportedByTypes,
-            );
-        }
+    fn visit_assignment(&mut self, node: &Assignment) -> Result<Self::Value, Infallible> {
+        self.check_expression_at(Position::AssignmentTarget(&node.target), &node.value.kind);
         node.recurse_visit(self)
     }
 
     /// The parameter of a function expects its own enumeration.
-    fn visit_function(&mut self, node: &Function) -> Result<(), Infallible> {
+    fn visit_function(&mut self, node: &Function) -> Result<Self::Value, Infallible> {
         if let Some(signature) = self.context.functions.get(&node.name) {
             for (parameter, argument) in signature.bind_inputs(&node.param_assignment) {
-                let expected = self.expected_named(&parameter.param_type);
-                self.check_expression_value(
-                    expected,
+                self.check_expression_at(
+                    Position::FunctionInput(&parameter.param_type),
                     &argument.kind,
-                    OtherEnumeration::ReportedByTypes,
                 );
             }
         }
@@ -325,20 +306,13 @@ impl Visitor<Infallible> for RuleDeclaredEnumeratedValues<'_> {
 
     /// A label of a `CASE` is a value of the enumeration of the selector.
     fn visit_case(&mut self, node: &Case) -> Result<(), Infallible> {
-        let expected = node
-            .selector
-            .expr_type
-            .as_ref()
-            .and_then(|expr_type| self.expected_of_expr_type(expr_type));
-        if let Some(expected) = expected {
-            for selector in node
-                .statement_groups
-                .iter()
-                .flat_map(|group| &group.selectors)
-            {
-                if let CaseSelectionKind::EnumeratedValue(value) = selector {
-                    self.check_value(expected, value, OtherEnumeration::Report);
-                }
+        for selector in node
+            .statement_groups
+            .iter()
+            .flat_map(|group| &group.selectors)
+        {
+            if let CaseSelectionKind::EnumeratedValue(value) = selector {
+                self.check_at(Position::CaseLabel(&node.selector), value);
             }
         }
         node.recurse_visit(self)
@@ -356,11 +330,7 @@ impl Visitor<Infallible> for RuleDeclaredEnumeratedValues<'_> {
                 | CompareOp::GtEq
         ) {
             for (value, other) in [(&node.left, &node.right), (&node.right, &node.left)] {
-                let expected = other
-                    .expr_type
-                    .as_ref()
-                    .and_then(|expr_type| self.expected_of_expr_type(expr_type));
-                self.check_expression_value(expected, &value.kind, OtherEnumeration::Report);
+                self.check_expression_at(Position::ComparedWith(other), &value.kind);
             }
         }
         node.recurse_visit(self)

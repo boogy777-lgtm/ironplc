@@ -16,7 +16,6 @@ use ironplc_dsl::{
     common::{EnumeratedValue, TypeName},
     core::{Id, Located},
     diagnostic::Diagnostic,
-    textual::{ExprKind, ExprType},
     type_id::TypeId,
 };
 use ironplc_problems::text;
@@ -55,29 +54,8 @@ impl<'a> RuleDeclaredEnumeratedValues<'a> {
     }
 
     /// The enumeration the type `name` names, or `None`.
-    pub(super) fn expected_named(&self, name: &TypeName) -> Option<Expected<'a>> {
+    fn expected_named(&self, name: &TypeName) -> Option<Expected<'a>> {
         self.expected_of(self.context.types().id_of(name)?)
-    }
-
-    /// The enumeration an expression of the type `expr_type` has.
-    pub(super) fn expected_of_expr_type(&self, expr_type: &ExprType) -> Option<Expected<'a>> {
-        match expr_type {
-            ExprType::Concrete(id) => self.expected_of(*id),
-            ExprType::Literal(_) | ExprType::Null => None,
-        }
-    }
-
-    /// Checks that the value written in an expression is one of the
-    /// enumeration a place expects.
-    pub(super) fn check_expression_value(
-        &mut self,
-        expected: Option<Expected<'a>>,
-        value: &ExprKind,
-        other: OtherEnumeration,
-    ) {
-        if let (Some(expected), ExprKind::EnumeratedValue(value)) = (expected, value) {
-            self.check_value(expected, value, other);
-        }
     }
 
     /// Checks that `value`, written where `expected` is expected, is one of it.
