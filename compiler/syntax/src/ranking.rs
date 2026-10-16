@@ -71,16 +71,15 @@ pub const STAGES: &[Stage] = &[
         problems: &[Problem::InvalidStringEscape],
     },
     Stage {
-        name: "conditional pragmas and the nesting limit",
-        problems: &[
-            Problem::PragmaIfUnmatched,
-            Problem::PragmaValueExpected,
-            Problem::MaxNestingDepthExceeded,
-        ],
+        name: "conditional pragmas",
+        problems: &[Problem::PragmaIfUnmatched, Problem::PragmaValueExpected],
     },
     Stage {
+        // The nesting limit is a limit of the grammar: the text that is too
+        // deep is reported where it is, among the other faults of how the text
+        // is put together, not ahead of them.
         name: "grammar",
-        problems: &[Problem::SyntaxError],
+        problems: &[Problem::SyntaxError, Problem::MaxNestingDepthExceeded],
     },
 ];
 
@@ -121,7 +120,7 @@ impl Parse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{parse_source_file, ParseOptions};
+    use crate::{parse_source_file, ParseOptions, MAX_DEPTH};
 
     #[test]
     fn rank_when_problem_listed_then_it_is_in_exactly_one_stage() {
@@ -163,5 +162,41 @@ mod tests {
             .primary_error()
             .map(|error| usize::from(error.range.start()));
         assert_eq!(primary, source.find("// one"));
+    }
+
+    fn deep() -> String {
+        format!(
+            "{}1{}",
+            "(".repeat(2 * MAX_DEPTH),
+            ")".repeat(2 * MAX_DEPTH)
+        )
+    }
+
+    #[test]
+    fn primary_error_when_nesting_is_too_deep_after_a_grammar_error_then_the_grammar_error() {
+        let source = format!("PROGRAM p\nx := ;\ny := {};\nEND_PROGRAM", deep());
+        let parse = parse_source_file(&source, &ParseOptions::default());
+        assert!(parse
+            .errors
+            .iter()
+            .any(|error| error.problem() == Problem::MaxNestingDepthExceeded));
+        let primary = parse.primary_error().map(SyntaxError::problem);
+        assert_eq!(primary, Some(Problem::SyntaxError));
+    }
+
+    #[test]
+    fn primary_error_when_nesting_is_too_deep_before_a_grammar_error_then_the_nesting_error() {
+        let source = format!("PROGRAM p\ny := {};\nx := ;\nEND_PROGRAM", deep());
+        let parse = parse_source_file(&source, &ParseOptions::default());
+        let primary = parse.primary_error().map(SyntaxError::problem);
+        assert_eq!(primary, Some(Problem::MaxNestingDepthExceeded));
+    }
+
+    #[test]
+    fn primary_error_when_nesting_is_too_deep_before_a_conditional_pragma_error_then_the_pragma() {
+        let source = format!("PROGRAM p\ny := {};\n{{END_IF}}\nEND_PROGRAM", deep());
+        let parse = parse_source_file(&source, &ParseOptions::all());
+        let primary = parse.primary_error().map(SyntaxError::problem);
+        assert_eq!(primary, Some(Problem::PragmaIfUnmatched));
     }
 }
