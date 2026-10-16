@@ -133,12 +133,12 @@ fn operand_name_of(types: &TypeEnvironment, id: TypeId) -> Option<TypeName> {
             .or_else(|| types.elementary_type_name_for(base_type)),
         // A strict enumeration is known by its own name, which no overload
         // judges. One that is not strict is the number it stands for.
-        IntermediateType::Enumeration {
-            base_type,
-            strict: false,
-            ..
-        } => types.elementary_type_name_for(base_type),
-        IntermediateType::Enumeration { strict: true, .. }
+        IntermediateType::Enumeration { base_type, .. }
+            if !representation.is_strict_enumeration() =>
+        {
+            types.elementary_type_name_for(base_type)
+        }
+        IntermediateType::Enumeration { .. }
         | IntermediateType::Structure { .. }
         | IntermediateType::Array { .. }
         | IntermediateType::FunctionBlock { .. }
