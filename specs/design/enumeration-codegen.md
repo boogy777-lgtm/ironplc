@@ -61,7 +61,7 @@ The design builds on:
 
 **REQ-EN-codegen-030** An `ExprKind::EnumeratedValue` compiles to `LOAD_CONST_I32(ordinal)`, pushing the ordinal onto the stack.
 
-**REQ-EN-codegen-031** A qualified enumeration reference (`COLOR#GREEN`) resolves the ordinal using the explicit type name and value name. The type name may be an alias of the enumeration, which has the ordinals of the enumeration it names.
+**REQ-EN-codegen-031** A qualified enumeration reference (`COLOR#GREEN`) resolves the ordinal using the explicit type name and value name. The type name may be an alias of the enumeration, which has the ordinals of the enumeration it names. The reference is the same value wherever it is written: an initial value, an assignment, an operand of a comparison, an argument of a call, and a `CASE` label.
 
 **REQ-EN-codegen-032** An unqualified enumeration reference (`GREEN`) resolves the ordinal in the enumeration that the type environment says declares the name. The semantic analyzer refuses (P2042) an unqualified name that more than one enumeration declares, so code generation reaches only names that one enumeration declares; a name that several enumerations declare is an internal error and is never resolved by choosing one of them.
 

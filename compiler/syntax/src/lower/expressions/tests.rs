@@ -301,6 +301,30 @@ fn lower_expr_when_special_operator_word_alone_then_a_variable_not_a_late_bound_
 }
 
 #[test]
+fn lower_expr_when_qualified_enumeration_value_then_the_value_of_its_type_not_a_late_bound_name() {
+    let source = "s = E_State#Run";
+    let expr = lower(source);
+    let ExprKind::Compare(compare) = &expr.kind else {
+        panic!("not a comparison: {expr:?}");
+    };
+    let ExprKind::EnumeratedValue(value) = &compare.right.kind else {
+        panic!("not an enumeration value: {:?}", compare.right);
+    };
+    assert_eq!(
+        value.type_name.as_ref().map(|name| name.to_string()),
+        Some("E_State".to_string())
+    );
+    assert_eq!(value.value.original(), "Run");
+    assert_eq!(written(source, &compare.right), "E_State#Run");
+}
+
+#[test]
+fn lower_expr_when_qualified_enumeration_value_as_argument_then_the_same_value() {
+    assert_eq!(shows("f(E_State#Run)"), "f(E_State#Run)");
+    assert_eq!(shows("f(x := E_State#Run)"), "f(x := E_State#Run)");
+}
+
+#[test]
 fn lower_expr_when_constant_then_a_constant_spanning_the_literal() {
     let source = "T#5s + 1";
     let expr = lower(source);

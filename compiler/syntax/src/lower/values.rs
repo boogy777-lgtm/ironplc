@@ -151,7 +151,8 @@ mod tests {
         let labels = case_labels("CASE x OF Color#Red: ; END_CASE;");
         let value = labels
             .first()
-            .and_then(|label| lower_qualified_value(&cx(), label).ok());
+            .and_then(SyntaxNode::first_child)
+            .and_then(|node| lower_qualified_value(&cx(), &node).ok());
         assert_eq!(
             value.map(|value| (
                 value.type_name.map(|t| t.to_string()),

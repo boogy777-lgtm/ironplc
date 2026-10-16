@@ -8,6 +8,7 @@
 //! inserts an empty statement for it.
 
 use super::common::SIGN;
+use super::enum_value::qualified_value;
 use super::expressions::{expression, name_ref};
 use super::literals::BASED_LITERALS;
 use super::statements::{statement_list, terminator, ListEnd};
@@ -153,8 +154,8 @@ fn case_label(p: &mut Parser) -> bool {
         let literal = p.start();
         p.bump();
         p.complete(literal, K::BitStringLiteral);
-    } else if p.name_at(0) && p.nth_at(1, K::Hash) && p.adjacent(0) {
-        qualified_enumeration_value(p);
+    } else if qualified_value(p).is_some() {
+        // `Type#Value`: the node of the value is the label's one child.
     } else if bound_ahead(p) {
         bound(p);
         if p.at(K::Range) {
@@ -196,15 +197,4 @@ pub(super) fn bound(p: &mut Parser) {
     }
     p.bump();
     p.complete(literal, K::IntLiteral);
-}
-
-/// `Type#Value`.
-fn qualified_enumeration_value(p: &mut Parser) {
-    name_ref(p);
-    p.bump();
-    if p.variable_name_at(0) {
-        name_ref(p);
-    } else {
-        p.expected(Item::EnumerationValue);
-    }
 }

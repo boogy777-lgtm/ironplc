@@ -146,21 +146,34 @@ pub(crate) fn resolve_enum_ordinal(
             .and_then(|declared| ordinal_of(declared))
             .copied()
             .ok_or_else(|| {
-                Diagnostic::not_implemented(Label::span(ev.span(), "Unknown qualified enum value"))
+                // The analysis refuses a type that is not declared or not an
+                // enumeration (P2008, P2004) and a value it does not declare
+                // (P2006), so a program that reaches here is a defect.
+                Diagnostic::internal_error_at(Label::span(
+                    ev.span(),
+                    "Qualified enum value is not a value of its enumeration",
+                ))
             })
     } else {
         // Unqualified: GREEN
         match map.value_owners.get(&value_upper) {
             Some(ValueOwner::One(declared)) => ordinal_of(declared).copied().ok_or_else(|| {
-                Diagnostic::not_implemented(Label::span(ev.span(), "Unknown enum value"))
+                Diagnostic::internal_error_at(Label::span(
+                    ev.span(),
+                    "Enum value has no ordinal in the enumeration that declares it",
+                ))
             }),
             Some(ValueOwner::Several) => Err(Diagnostic::internal_error_at(Label::span(
                 ev.span(),
                 "Enum value is declared by several enumerations",
             ))),
+            // The analysis refuses a name that no enumeration declares (P4007).
+            // The one name it accepts and the map lacks is a value of an
+            // enumeration spelled out where a variable is declared, which has
+            // no entry in the map.
             None => Err(Diagnostic::not_implemented(Label::span(
                 ev.span(),
-                "Unknown enum value",
+                "Value of an enumeration spelled out in a variable declaration",
             ))),
         }
     }
@@ -306,7 +319,25 @@ mod tests {
         );
         let map = ordinal_map_of(&lib);
 
-        assert!(resolve_enum_ordinal(&map, &qualified("E1", "U3")).is_err());
+        let error = resolve_enum_ordinal(&map, &qualified("E1", "U3")).unwrap_err();
+
+        assert_eq!(error.code, "P9998");
+    }
+
+    #[test]
+    fn resolve_enum_ordinal_when_no_enumeration_declares_the_name_then_not_implemented_and_no_ordinal(
+    ) {
+        // An enumeration spelled out in a variable declaration is not in the
+        // map, and the analysis accepts its values.
+        let lib = parse_library(
+            "TYPE E1 : (U2, U1); END_TYPE
+             PROGRAM main VAR c : (Red, Green); END_VAR END_PROGRAM",
+        );
+        let map = ordinal_map_of(&lib);
+
+        let error = resolve_enum_ordinal(&map, &EnumeratedValue::new("Green")).unwrap_err();
+
+        assert_eq!(error.code, "P9999");
     }
 
     #[test]

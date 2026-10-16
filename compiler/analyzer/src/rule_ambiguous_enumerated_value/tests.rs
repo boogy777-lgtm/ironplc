@@ -335,7 +335,7 @@ fn apply_when_name_differs_only_in_case_then_it_is_the_same_name() {
 }
 
 /// A value written with the name of its enumeration is never ambiguous, in
-/// every place the language accepts that form today.
+/// every place a value stands.
 #[rstest]
 #[case::initial_value_of_a_variable("PROGRAM main VAR w : E2 := E2#U1; END_VAR END_PROGRAM")]
 #[case::initial_value_of_a_constant(
@@ -359,6 +359,15 @@ fn apply_when_name_differs_only_in_case_then_it_is_the_same_name() {
 #[case::default_of_an_enumeration_alias("TYPE E3 : E2 := E2#U1; END_TYPE PROGRAM main END_PROGRAM")]
 #[case::the_first_of_the_sharing_enumerations(
     "PROGRAM main VAR v : E1 := E1#U1; END_VAR END_PROGRAM"
+)]
+#[case::assignment("PROGRAM main VAR x : E2; END_VAR x := E2#U1; END_PROGRAM")]
+#[case::comparison("PROGRAM main VAR x : E2; r : BOOL; END_VAR r := x = E2#U1; END_PROGRAM")]
+#[case::case_label(
+    "PROGRAM main VAR x : E2; r : BOOL; END_VAR CASE x OF E2#U1: r := TRUE; E2#U3: r := FALSE; END_CASE; END_PROGRAM"
+)]
+#[case::argument_of_a_call(
+    "FUNCTION f : BOOL VAR_INPUT v : E2; END_VAR f := v = E2#U3; END_FUNCTION
+     PROGRAM main VAR r : BOOL; END_VAR r := f(E2#U1); END_PROGRAM"
 )]
 fn apply_when_shared_value_name_is_qualified_then_no_diagnostic(#[case] body: &str) {
     assert_eq!(codes(&format!("{TYPES} {body}")), Vec::<String>::new());

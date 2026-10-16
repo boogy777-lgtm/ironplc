@@ -28,6 +28,7 @@
 use super::literals::lower_constant;
 use super::names::{lower_id, lower_name, lower_type_ref};
 use super::tree::{left_spine, significant_tokens, token_of};
+use super::values::lower_qualified_value;
 use super::variables::{lower_self_ref, lower_symbolic, lower_variable};
 use super::{Area, Disposition, LowerCx};
 use crate::kind_set::KindSet;
@@ -105,6 +106,7 @@ fn rule(kind: K) -> Option<Rule> {
         K::RefExpr => reference,
         K::NullLiteral => null,
         K::SpecialOpExpr => special_operator,
+        K::EnumValueRef => qualified_value,
         kind if is_lowered_by(kind, Area::Literal) => constant,
         kind if is_lowered_by(kind, Area::Variable) => variable,
         _ => return None,
@@ -135,6 +137,12 @@ fn constant(cx: &LowerCx, node: &SyntaxNode) -> Result<ExprKind, Diagnostic> {
 
 fn variable(cx: &LowerCx, node: &SyntaxNode) -> Result<ExprKind, Diagnostic> {
     lower_variable(cx, node).map(ExprKind::Variable)
+}
+
+/// `Type#Value`: an enumeration value that names its type, so it is no
+/// late-bound name; the same value an initial value is.
+fn qualified_value(cx: &LowerCx, node: &SyntaxNode) -> Result<ExprKind, Diagnostic> {
+    lower_qualified_value(cx, node).map(ExprKind::EnumeratedValue)
 }
 
 fn null(cx: &LowerCx, node: &SyntaxNode) -> Result<ExprKind, Diagnostic> {

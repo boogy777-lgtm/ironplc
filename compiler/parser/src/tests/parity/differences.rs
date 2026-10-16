@@ -148,7 +148,7 @@ pub const DIFFERENCES: &[Difference] = &[
     Difference {
         scope: Scope::AcceptedOnPurpose,
         reason: LISTED_INPUT,
-        expected: 546,
+        expected: 564,
     },
 ];
 

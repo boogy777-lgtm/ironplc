@@ -409,7 +409,14 @@ impl ExprTypeResolver<'_> {
                     .clone()?;
                 self.expr_type_named(return_type)
             }
-            ExprKind::EnumeratedValue(ev) => self.expr_type_named(ev.type_name.clone()?),
+            // A value written `Type#Value` has the type before the `#`; a type that
+            // is no enumeration has no values, and `rule_use_declared_enumerated_value`
+            // reports it, so the value is not also a mismatch of the operands.
+            ExprKind::EnumeratedValue(ev) => {
+                let type_name = ev.type_name.clone()?;
+                self.type_environment.enumerated_values(&type_name)?;
+                self.expr_type_named(type_name)
+            }
             ExprKind::Expression(inner) => inner.expr_type.clone(),
             ExprKind::LateBound(_) => None,
             // `REF(x)` is a reference to `x`'s type.

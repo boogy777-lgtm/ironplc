@@ -63,7 +63,7 @@ use crate::{
     semantic_context::SemanticContext,
     type_compat::is_checkable_type,
     value_type::{self, ValueType},
-    variable_type::{Declarations, Declared},
+    variable_type::{enter_declaration_scope, Declarations, Declared},
 };
 use ironplc_parser::options::CompilerOptions;
 pub fn apply(
@@ -217,31 +217,7 @@ impl Visitor<Infallible> for RuleFunctionCallTypeCheck<'_> {
     /// the enclosing function block's fields, and not clearing left a
     /// method's locals shadowing those fields for every later method.
     fn enter_scope(&mut self, node: ScopeNode<'_>) -> Result<(), Infallible> {
-        self.declarations.enter();
-
-        // A declaration's own name is its result variable, so assigning
-        // it is an assignment with a target type like any other. Without
-        // this the target lookup missed and the check returned early,
-        // leaving `Foo := <wrong type>` unreported -- for a FUNCTION as
-        // much as for a METHOD.
-        match node {
-            ScopeNode::Function(node) => {
-                self.declarations
-                    .add(&node.name, Declared::Typed(node.return_type.to_type_name()));
-            }
-            // Only a method that declares a return type has a result to
-            // assign; `rule_use_declared_symbolic_var` rejects the
-            // assignment outright for one that does not.
-            ScopeNode::Method(node) => {
-                if let Some(return_type) = &node.return_type {
-                    self.declarations
-                        .add(&node.name, Declared::Typed(return_type.to_type_name()));
-                }
-            }
-            // Neither has a result variable.
-            ScopeNode::FunctionBlock(_) | ScopeNode::Program(_) => {}
-        }
-
+        enter_declaration_scope(&mut self.declarations, node);
         Ok(())
     }
 

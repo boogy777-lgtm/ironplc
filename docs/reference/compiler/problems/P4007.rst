@@ -40,3 +40,27 @@ To fix this error, declare the variable in the appropriate variable section:
    TRIG := TRIG0;  (* Correct: TRIG is now declared *)
    END_FUNCTION_BLOCK
 
+Enumeration Values
+------------------
+
+A name that is written where an enumeration is expected, and that no enumeration
+declares, is reported as a name that is not declared. The target of an
+assignment, an argument, an operand of a comparison and a ``CASE`` label are such
+places:
+
+.. code-block::
+
+   TYPE
+       Mode : (Auto, Manual);
+   END_TYPE
+
+   PROGRAM main
+       VAR
+           m : Mode;
+       END_VAR
+
+       m := Manuel;  (* Error: Manuel is neither a variable nor a value of any enumeration *)
+   END_PROGRAM
+
+A name that another enumeration declares is not this error: it is a value of
+the wrong enumeration (:doc:`P2006`).

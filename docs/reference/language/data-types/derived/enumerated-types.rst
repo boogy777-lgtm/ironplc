@@ -43,6 +43,51 @@ Example
 Member names must be unique within the type. The members take consecutive
 values starting at zero, so ``Red`` is 0, ``Yellow`` is 1 and ``Green`` is 2.
 
+Writing the Type with the Value
+-------------------------------
+
+A value can carry the name of its type: ``Motor#Running`` is the value
+``Running`` of the enumeration ``Motor``. IEC 61131-3 defines this form, so every
+dialect accepts it and no option enables it. It stands wherever a value stands:
+an initial value, an assignment, a comparison, an argument of a call, a
+``CASE`` label, and an element of an array or structure initializer.
+
+Two enumerations can declare the same value name. A bare ``Running`` is then
+refused (:doc:`P2042 </reference/compiler/problems/P2042>`), and ``Motor#Running``
+and ``Pump#Running`` name one value each:
+
+.. playground::
+
+   TYPE
+       Motor : (Idle, Running, Fault);
+       Pump : (Idle, Priming, Running);
+   END_TYPE
+
+   PROGRAM main
+       VAR
+           m : Motor;
+           p : Pump := Pump#Running;
+           busy : BOOL;
+       END_VAR
+
+       m := Motor#Running;
+       busy := m = Motor#Running;
+       CASE p OF
+           Pump#Idle: busy := FALSE;
+           Pump#Running: busy := TRUE;
+       END_CASE;
+   END_PROGRAM
+
+After one scan ``m`` is ``Running`` (1), ``p`` is ``Running`` (2) and ``busy`` is
+``TRUE``.
+
+The type before the ``#`` must be declared (:doc:`P2008
+</reference/compiler/problems/P2008>`), must be an enumeration (:doc:`P2004
+</reference/compiler/problems/P2004>`) and must declare the value (:doc:`P2006
+</reference/compiler/problems/P2006>`). The check is the same wherever the value
+is written. Assigning a value of one enumeration to a variable of another
+reports :doc:`P4035 </reference/compiler/problems/P4035>`.
+
 Explicit Values
 ---------------
 
@@ -263,8 +308,13 @@ Related Problem Codes
 ---------------------
 
 - :doc:`/reference/compiler/problems/P2003` — Duplicate enumeration value
+- :doc:`/reference/compiler/problems/P2004` — Enumeration is not declared
 - :doc:`/reference/compiler/problems/P2006` — Enumeration uses value that is
   not defined in the enumeration
+- :doc:`/reference/compiler/problems/P2008` — Cannot determine kind of type
+  identifier
+- :doc:`/reference/compiler/problems/P2042` — Enumeration value name is
+  declared by more than one enumeration
 - :doc:`/reference/compiler/problems/P4026` — Function call argument type does
   not match parameter type
 - :doc:`/reference/compiler/problems/P4027` — Function return type does not

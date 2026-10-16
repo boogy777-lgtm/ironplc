@@ -17,7 +17,7 @@ use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 
 use crate::pass_runner::Outcome;
-use crate::type_environment::TypeEnvironment;
+use crate::type_environment::{TypeEnvironment, ValueOwners};
 
 pub fn apply(lib: Library, type_environment: &mut TypeEnvironment) -> Outcome {
     let enum_values = collect_enum_values(&lib);
@@ -92,8 +92,8 @@ enum VariableType {
     Structure,
     Array,
     Reference,
-    /// Late resolved type with the type name for lookup in type environment
-    LateResolvedType(TypeName),
+    /// A named type that is not resolved yet.
+    LateResolvedType,
 }
 
 struct DeclarationResolver<'a> {
@@ -122,10 +122,7 @@ impl DeclarationResolver<'_> {
             // A PARAMS list is indexed like an array.
             InitialValueAssignmentKind::Params(_) => VariableType::Array,
             InitialValueAssignmentKind::Reference(_) => VariableType::Reference,
-            InitialValueAssignmentKind::LateResolvedType(LateResolvedInitializer {
-                type_name,
-                ..
-            }) => VariableType::LateResolvedType(type_name.clone()),
+            InitialValueAssignmentKind::LateResolvedType(_) => VariableType::LateResolvedType,
             // Not yet folded to a literal (extension, folded by a
             // later pass); treat like `Simple` for type-inference purposes.
             InitialValueAssignmentKind::SimpleExpr(_) => VariableType::Simple,
@@ -142,6 +139,16 @@ impl DeclarationResolver<'_> {
         }
     }
 
+    /// Whether some enumeration declares `value`: a named one, which the type
+    /// environment holds, or one spelled out where a variable is declared.
+    fn is_enumeration_value(&self, value: &Id) -> bool {
+        self.enum_values.contains(value)
+            || !matches!(
+                self.type_environment.enumerations_declaring(value),
+                ValueOwners::None
+            )
+    }
+
     fn find_type(&self, name: &Id) -> &VariableType {
         self.names_to_types.get(name).unwrap_or(&VariableType::None)
     }
@@ -150,14 +157,13 @@ impl DeclarationResolver<'_> {
     ///
     /// A name that is a variable declared in the current scope is that
     /// variable, in every context: `y := x` reads `x` whatever the type of
-    /// `y` is. Any other name is an enumeration value when the context is one
-    /// that holds enumeration values (`in_enumeration`: the value is stored
-    /// into an enumeration), or when it is a known enumeration value; else
-    /// it is a variable reference.
-    fn resolve_late_bound(&self, value: Id, in_enumeration: bool) -> ExprKind {
-        if !self.names_to_types.contains_key(&value)
-            && (in_enumeration || self.enum_values.contains(&value))
-        {
+    /// `y` is. Any other name is an enumeration value when an enumeration
+    /// declares it, whatever the context is; else it is a variable reference,
+    /// which the check of declared variables reports (P4007). A name no
+    /// enumeration declares is no value even where one is stored into an
+    /// enumeration: there is no ordinal for code generation to give it.
+    fn resolve_late_bound(&self, value: Id) -> ExprKind {
+        if !self.names_to_types.contains_key(&value) && self.is_enumeration_value(&value) {
             ExprKind::EnumeratedValue(EnumeratedValue {
                 type_name: None,
                 value,
@@ -190,7 +196,7 @@ impl Fold<Infallible> for DeclarationResolver<'_> {
         node: StructInitialValueAssignmentKind,
     ) -> Result<StructInitialValueAssignmentKind, Infallible> {
         if let StructInitialValueAssignmentKind::LateBound(late_bound) = node {
-            return Ok(match self.resolve_late_bound(late_bound.value, false) {
+            return Ok(match self.resolve_late_bound(late_bound.value) {
                 ExprKind::EnumeratedValue(value) => {
                     StructInitialValueAssignmentKind::EnumeratedValue(value)
                 }
@@ -350,12 +356,13 @@ impl Fold<Infallible> for DeclarationResolver<'_> {
                 | VariableType::Subrange
                 | VariableType::Structure
                 | VariableType::Array
-                | VariableType::Reference => Ok(self.resolve_late_bound(node.value, false)),
-                // Inline enumeration like (Red, Green) and a named enumeration:
-                // the value is an enum constant, unless it names a variable.
-                VariableType::EnumeratedValues | VariableType::EnumeratedType => {
-                    Ok(self.resolve_late_bound(node.value, true))
-                }
+                | VariableType::Reference
+                // Inline enumeration like (Red, Green), a named enumeration,
+                // and any other named type: an enumeration value, unless the
+                // name is a variable.
+                | VariableType::EnumeratedValues
+                | VariableType::EnumeratedType
+                | VariableType::LateResolvedType => Ok(self.resolve_late_bound(node.value)),
                 VariableType::FunctionBlock => {
                     // Function block variables are parsed as LateResolvedType, not FunctionBlock.
                     // If we reach this branch, it indicates an internal error; the
@@ -363,14 +370,6 @@ impl Fold<Infallible> for DeclarationResolver<'_> {
                     self.diagnostics.push(Diagnostic::internal_error());
                     Ok(ExprKind::LateBound(node))
                 }
-                // Look up the type in the type environment to determine how to
-                // handle the late-bound expression: the value of an
-                // enumeration is an enum constant, any other is a name that
-                // may be a known enumeration value.
-                VariableType::LateResolvedType(ref type_name) => Ok(self.resolve_late_bound(
-                    node.value,
-                    self.type_environment.is_enumeration(type_name),
-                )),
             },
         }
     }

@@ -431,6 +431,12 @@ fn parse_when_gap_filled_then_same_ast(
     verbatim,
     CompilerOptions::default
 )]
+#[case::enumerated_value_in_expression("v := E2·#·RED;", in_program, CompilerOptions::default)]
+#[case::enumerated_value_as_case_label(
+    "CASE v OF E2·#·RED: b := 1; END_CASE;",
+    in_program,
+    CompilerOptions::default
+)]
 #[case::negative_subrange_bound(
     "TYPE R1 : INT (-·10..10); END_TYPE",
     verbatim,

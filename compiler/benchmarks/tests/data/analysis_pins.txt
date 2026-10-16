@@ -359,8 +359,16 @@ diagnostic P4007 Undefined variable
 diagnostic P4007 Undefined variable
 diagnostic P4007 Undefined variable
 diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
 ## textual.st [rusty]
 library 61124e2a7810f653 1 elements
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
+diagnostic P4007 Undefined variable
 diagnostic P4007 Undefined variable
 diagnostic P4007 Undefined variable
 diagnostic P4007 Undefined variable

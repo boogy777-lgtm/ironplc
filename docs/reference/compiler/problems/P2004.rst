@@ -27,6 +27,9 @@ The following code will generate error P2004:
 
 The variable ``Level`` is assigned an enumeration value ``CRITICAL``, but ``MyStruct`` is declared as a structure, not an enumeration.
 
+The same error occurs when the name before the ``#`` of a value is not an
+enumeration: ``MyStruct#CRITICAL`` is reported wherever it is written.
+
 To fix this error, use the correct enumeration type:
 
 .. code-block::

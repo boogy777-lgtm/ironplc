@@ -17,7 +17,7 @@
 //! let element = variable_type::of(&kind, &self.declarations, type_environment);
 //! ```
 
-use ironplc_dsl::{common::*, core::Id, textual::*};
+use ironplc_dsl::{common::*, core::Id, scope::ScopeNode, textual::*};
 
 use crate::{
     intermediate_type::IntermediateType,
@@ -77,6 +77,29 @@ impl Declared {
 /// land, a `CONFIGURATION`'s `VAR_GLOBAL` block most importantly, so a POU
 /// body sees the globals.
 pub(crate) type Declarations<'a> = ScopedTable<'a, Id, Declared>;
+
+/// Opens the scope of a declaration: a frame for its variables, and the name
+/// of a function or of a method that returns a value, which is the variable
+/// its result is assigned to. Without that name an assignment to the result
+/// has no target type, and whatever is checked against the target is skipped.
+pub(crate) fn enter_declaration_scope(declarations: &mut Declarations<'_>, node: ScopeNode<'_>) {
+    declarations.enter();
+    match node {
+        ScopeNode::Function(node) => {
+            declarations.add(&node.name, Declared::Typed(node.return_type.to_type_name()));
+        }
+        // Only a method that declares a return type has a result to assign;
+        // `rule_use_declared_symbolic_var` rejects the assignment outright for
+        // one that does not.
+        ScopeNode::Method(node) => {
+            if let Some(return_type) = &node.return_type {
+                declarations.add(&node.name, Declared::Typed(return_type.to_type_name()));
+            }
+        }
+        // Neither has a result variable.
+        ScopeNode::FunctionBlock(_) | ScopeNode::Program(_) => {}
+    }
+}
 
 /// Resolves the [`IntermediateType`] a declaration denotes.
 pub(crate) fn resolve_initializer(

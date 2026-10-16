@@ -65,3 +65,28 @@ To fix this error, assign one element of the array:
 .. code-block::
 
    latest := readings[2];
+
+Enumeration Values
+------------------
+
+A value written with the name of its enumeration, ``Pump#Running``, has the type
+of that enumeration. It is the same error where it is stored into a variable of
+another enumeration, and where it is the initial value of one or a label of a
+``CASE`` whose selector is another enumeration, or is compared with one:
+
+.. code-block::
+
+   TYPE
+       Motor : (Idle, Running);
+       Pump : (Idle, Running);
+   END_TYPE
+
+   PROGRAM main
+       VAR
+           m : Motor;
+       END_VAR
+
+       m := Pump#Running;  (* Error: a value of Pump stored into a Motor *)
+   END_PROGRAM
+
+To fix this error, write the enumeration of the variable: ``Motor#Running``.
