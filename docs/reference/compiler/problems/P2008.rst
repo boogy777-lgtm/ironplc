@@ -21,6 +21,9 @@ The following code will generate error P2008:
 
 The variable ``MyVar`` uses the type ``UndeclaredType`` which has not been declared anywhere in the program.
 
+The same error occurs when the name before the ``#`` of an enumeration value is
+not declared: ``UndeclaredType#Value`` is reported wherever it is written.
+
 To fix this error, declare the type before using it:
 
 .. code-block::

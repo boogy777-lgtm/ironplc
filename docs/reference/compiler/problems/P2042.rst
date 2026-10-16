@@ -71,9 +71,11 @@ Writing the enumeration with the value
 --------------------------------------
 
 A value written with the name of its enumeration, ``Pump#Running``, names its
-enumeration and is never ambiguous. The compiler accepts this form in the
-initial value of a variable, of a structure member, of an array element and of
-a function block input, and in the default value of a type declaration:
+enumeration and is never ambiguous. The compiler accepts this form wherever a
+value stands: the initial value of a variable, of a structure member, of an
+array element and of a function block input, the default value of a type
+declaration, an assignment, a comparison, a ``CASE`` label and an argument of a
+call:
 
 .. playground::
 
@@ -86,12 +88,18 @@ a function block input, and in the default value of a type declaration:
        VAR
            m : Motor := Motor#Running;
            p : Pump := Pump#Running;
+           busy : BOOL;
        END_VAR
+
+       m := Motor#Fault;
+       busy := p = Pump#Running;
+       CASE m OF
+           Motor#Idle: busy := FALSE;
+           Motor#Fault: busy := TRUE;
+       END_CASE;
    END_PROGRAM
 
-The qualified form is not accepted in a statement, in a comparison, in a
-``CASE`` label or in an argument of a call. In those places a value that
-another enumeration also declares has to be renamed.
+This is the remedy when the values have to keep their names.
 
 What is not an error
 --------------------

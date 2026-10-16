@@ -43,6 +43,10 @@ To fix this error, use a value that is defined in the enumeration:
      END_VAR
    END_FUNCTION_BLOCK
 
+A value written with its type, ``LogLevel#BLAH``, is checked against that type
+wherever it is written: an initial value, an assignment, a comparison, a
+``CASE`` label, an argument of a call or an element of an initializer.
+
 Integer Constants
 -----------------
 

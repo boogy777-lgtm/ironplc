@@ -65,7 +65,7 @@ on each expression from its operands' types:
 | `AND`, `OR`, `XOR`, `AND_THEN`, `OR_ELSE` | the concrete operand's type |
 | Comparison | `BOOL` |
 | Function call | the overload's result, else the declared return type, else for a generic return type the argument bound to it |
-| Enumerated value | its enumeration, when qualified |
+| Enumerated value | its enumeration, when qualified with a type that is an enumeration; a qualifier that is not one is reported (P2004) and the value has no type |
 | `REF(x)` | `reference_to(x's type)` |
 | Dereference | the referenced type (`TypeEnvironment::referenced_type`) |
 | `NULL` | `Null` |
