@@ -133,11 +133,13 @@ pub(crate) fn compile_fb_field_store(
         .get(&field_name)
         .copied()
         .ok_or_else(|| {
+            // See `compile_member_read`: the analysis refuses an undeclared
+            // name, so this is a PROPERTY or an inherited variable.
             Diagnostic::not_implemented(Label::span(
                 field.span(),
                 format!(
-                    "Unknown field '{field}' on a function block instance \
-                     (writing a PROPERTY is not supported yet)"
+                    "'{field}' is not a variable of the function block instance itself \
+                     (writing a PROPERTY or an inherited variable is not supported yet)"
                 ),
             ))
         })?;

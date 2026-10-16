@@ -254,8 +254,10 @@ END_PROGRAM
     &[(1, 14)],
 );
 
+// The write of a name the block does not declare is refused by the check of
+// the program (P4080); see `end_to_end_member_not_declared`.
 #[test]
-fn end_to_end_when_user_fb_dot_access_write_unknown_field_then_diagnostic() {
+fn end_to_end_when_user_fb_dot_access_write_unknown_field_then_p4080() {
     let source = "
 FUNCTION_BLOCK DOUBLER
   VAR_INPUT x : DINT; END_VAR
@@ -270,13 +272,13 @@ PROGRAM main
   fb.bogus := 1;
 END_PROGRAM
 ";
-    let result = crate::common::try_parse_and_compile(source, &CompilerOptions::default());
-    assert!(result.is_err(), "writing to unknown FB field should fail");
-    let err = result.err().unwrap();
-    let msg = format!("{:?}", err);
+    let refused = crate::common::checked::try_check_and_run(source, &CompilerOptions::default());
+    let err = refused.expect_err("writing to unknown FB field should fail");
+    assert_eq!(err.code, "P4080");
     assert!(
-        msg.contains("Unknown field") && msg.contains("bogus") && msg.contains("fb"),
-        "diagnostic should mention 'Unknown field', 'bogus', and 'fb', got: {}",
-        msg
+        err.described.contains(&"member=bogus".to_owned())
+            && err.described.contains(&"owner=fb".to_owned()),
+        "diagnostic should name the member and the instance, got: {:?}",
+        err.described
     );
 }

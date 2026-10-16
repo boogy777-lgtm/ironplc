@@ -827,8 +827,11 @@ END_PROGRAM
 }
 
 #[test]
-fn compile_when_top_level_array_of_struct_unknown_field_then_not_implemented() {
-    assert_codegen_rejects(
+fn compile_when_top_level_array_of_struct_unknown_field_then_internal_error() {
+    // The check of the program refuses the name (P4080), see
+    // `end_to_end_member_not_declared`; code generation, run without it, has
+    // no field to give it.
+    assert_codegen_rejects_with(
         "
 TYPE Item : STRUCT
   a : DINT;
@@ -845,5 +848,6 @@ PROGRAM main
 END_PROGRAM
 ",
         "an unknown field of an element",
+        "P9998",
     );
 }

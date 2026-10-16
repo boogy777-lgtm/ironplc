@@ -442,11 +442,15 @@ pub(crate) fn compile_member_read(
         .get(&field_name)
         .copied()
         .ok_or_else(|| {
+            // The analysis refuses a name that the function block does not
+            // declare (P4080), so the members that are not slots of the
+            // instance are ones it declares and this compiler does not keep
+            // there yet: a PROPERTY, and a variable inherited with EXTENDS.
             Diagnostic::not_implemented(Label::span(
                 member.field.span(),
                 format!(
-                    "Unknown field '{}' on a function block instance \
-                     (reading a PROPERTY is not supported yet)",
+                    "'{}' is not a variable of the function block instance itself \
+                     (reading a PROPERTY or an inherited variable is not supported yet)",
                     member.field
                 ),
             ))
