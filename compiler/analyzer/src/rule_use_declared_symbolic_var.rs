@@ -992,3 +992,5 @@ END_PROGRAM";
 
 #[cfg(test)]
 mod suggestion_tests;
+#[cfg(test)]
+mod var_temp_tests;
