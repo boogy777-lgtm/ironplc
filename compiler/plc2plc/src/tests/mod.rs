@@ -32,6 +32,7 @@ mod persistent_var;
 mod pipe_or;
 mod pointer_to;
 mod property;
+mod qualified_enum_value;
 mod reference_to;
 mod set_reset_bind;
 mod short_circuit;
