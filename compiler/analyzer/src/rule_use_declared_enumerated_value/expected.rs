@@ -1,16 +1,17 @@
 //! The values written where an enumeration is expected.
 //!
-//! A place that stores or compares an enumeration knows which one it expects:
-//! the target of an assignment, a parameter, the selector of a `CASE`, the
-//! other operand of a comparison. The value written there has to be one of it.
+//! A place that stores or compares an enumeration knows which one it expects
+//! (`position::Position` lists the places). The value written there has to be
+//! one of it.
 //!
 //! - A bare name that the expected enumeration does not declare is P2006, as
 //!   it is in an initial value. A name that no enumeration declares is not a
 //!   value at all; `report_unknown_value` reports it once, wherever it stands.
 //! - A value written with the type of another enumeration is P4035 where
-//!   nothing else compares it with the expected type. An assignment and an
-//!   argument type their operands and report the mismatch themselves, so those
-//!   two places leave it to them.
+//!   nothing else compares it with the expected type. An assignment to a
+//!   variable and an argument of a function type their operands and report the
+//!   mismatch themselves, so those places leave it to them (and accept it when
+//!   the enumeration is not strict, as the check of the operands does).
 
 use ironplc_dsl::{
     common::{EnumeratedValue, TypeName},

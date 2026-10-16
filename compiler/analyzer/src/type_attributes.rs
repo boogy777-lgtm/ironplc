@@ -18,8 +18,9 @@ pub enum PartType {
     /// values have the same representation.
     Of(TypeId),
     /// An array spelled out in place (`a : ARRAY[1..2] OF E`), which has no
-    /// type of its own in the environment, with the type of its elements.
-    ArrayOf(TypeId),
+    /// type of its own in the environment: the type of its elements, and the
+    /// number of subscripts that select one.
+    ArrayOf { element: TypeId, dimensions: usize },
 }
 
 /// The parts of a type, with the identity of the type of each. The

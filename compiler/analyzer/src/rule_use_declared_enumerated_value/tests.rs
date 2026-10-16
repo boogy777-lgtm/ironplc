@@ -3,6 +3,8 @@ use ironplc_dsl::core::FileId;
 use ironplc_parser::{options::CompilerOptions, parse_program};
 use rstest::rstest;
 
+mod positions;
+
 #[test]
 fn apply_when_two_undefined_enum_values_then_reports_both() {
     let program = "
@@ -124,10 +126,15 @@ const RUNS: usize = 24;
 /// The distinct results of analyzing `program` `RUNS` times, each result
 /// the sorted codes of the diagnostics reported.
 fn distinct_results(program: &str) -> Vec<Vec<String>> {
-    let library = parse_program(program, &FileId::default(), &CompilerOptions::default()).unwrap();
+    distinct_results_with(program, &CompilerOptions::default())
+}
+
+/// [`distinct_results`] under `options`.
+pub(super) fn distinct_results_with(program: &str, options: &CompilerOptions) -> Vec<Vec<String>> {
+    let library = parse_program(program, &FileId::default(), options).unwrap();
     let mut results: Vec<Vec<String>> = (0..RUNS)
         .map(|_| {
-            let (_library, context) = analyze(&[&library], &CompilerOptions::default()).unwrap();
+            let (_library, context) = analyze(&[&library], options).unwrap();
             let mut codes: Vec<String> = context
                 .diagnostics()
                 .iter()

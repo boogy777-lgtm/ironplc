@@ -114,9 +114,11 @@ fn part_type(
     match &element.init {
         InitialValueAssignmentKind::Array(array) => match &array.spec {
             SpecificationKind::Named(name) => type_environment.id_of(name).map(PartType::Of),
-            spec @ SpecificationKind::Inline(_) => {
-                element_type_id(spec, type_environment).map(PartType::ArrayOf)
-            }
+            spec @ SpecificationKind::Inline(subranges) => element_type_id(spec, type_environment)
+                .map(|element| PartType::ArrayOf {
+                    element,
+                    dimensions: subranges.ranges().len().max(1),
+                }),
         },
         init => match init.type_reference() {
             TypeReference::Named(name) => type_environment.id_of(&name).map(PartType::Of),

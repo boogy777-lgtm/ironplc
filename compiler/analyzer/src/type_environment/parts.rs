@@ -69,6 +69,27 @@ impl TypeEnvironment {
         Some(current)
     }
 
+    /// [`Self::subscripted`] for a part: the type of the element that
+    /// `subscripts` subscripts select from an array that is the part.
+    pub fn subscripted_part(&self, part: PartType, subscripts: usize) -> Option<TypeId> {
+        match part {
+            PartType::Of(array) => self.subscripted(array, subscripts),
+            PartType::ArrayOf {
+                element,
+                dimensions,
+            } => self.subscripted(element, subscripts.checked_sub(dimensions)?),
+        }
+    }
+
+    /// The type of the elements of the array that is the part, or `None` when
+    /// the part is no array.
+    pub fn element_of_part(&self, part: PartType) -> Option<TypeId> {
+        match part {
+            PartType::Of(array) => self.element_type(array),
+            PartType::ArrayOf { element, .. } => Some(element),
+        }
+    }
+
     fn is_array(&self, id: TypeId) -> bool {
         matches!(
             self.get_by_id(id)
@@ -133,7 +154,13 @@ mod tests {
 
         let part = env.member_part(id(env, "S"), &Id::from("arr"));
 
-        assert_eq!(part, Some(PartType::ArrayOf(id(env, "E2"))));
+        assert_eq!(
+            part,
+            Some(PartType::ArrayOf {
+                element: id(env, "E2"),
+                dimensions: 1
+            })
+        );
     }
 
     #[test]
@@ -183,6 +210,17 @@ mod tests {
         assert_eq!(env.subscripted(id(env, "Row"), 1), Some(id(env, "E1")));
         assert_eq!(env.subscripted(id(env, "Mat"), 2), Some(id(env, "E2")));
         assert_eq!(env.subscripted(id(env, "Grid"), 2), Some(id(env, "E1")));
+    }
+
+    #[test]
+    fn subscripted_part_when_array_spelled_in_place_then_the_element_after_its_dimensions() {
+        let context = analysed(DECLARATIONS);
+        let env = context.types();
+        let part = env.member_part(id(env, "S"), &Id::from("arr")).unwrap();
+
+        assert_eq!(env.subscripted_part(part, 1), Some(id(env, "E2")));
+        assert_eq!(env.subscripted_part(part, 0), None);
+        assert_eq!(env.element_of_part(part), Some(id(env, "E2")));
     }
 
     #[test]
