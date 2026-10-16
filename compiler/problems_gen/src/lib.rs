@@ -1,5 +1,6 @@
 //! Build-script helper of `ironplc-problems`: checks `problem-texts.csv` and
-//! generates the module `text` (one function for each row).
+//! generates the module `text` (one function for each row), and checks the
+//! `Severity` column of `problem-codes.csv`.
 //!
 //! It does no file access: `problems/build.rs` reads the files and writes the
 //! result, so every check has a unit test here (Cargo does not run the tests of
@@ -32,6 +33,77 @@ pub fn deprecation_note(name: &str) -> Option<&'static str> {
         .iter()
         .find(|(n, _)| *n == name)
         .map(|(_, note)| *note)
+}
+
+/// The header `problem-codes.csv` must have. `problems/build.rs` reads the
+/// columns by position, so the order is part of the format.
+pub const PROBLEM_CODES_HEADER: [&str; 4] = ["Code", "Name", "Message", "Severity"];
+
+/// The levels of `Severity`, each with the documentation of its variant. This
+/// is the one declaration of a level: `problems/build.rs` generates the enum
+/// from it, and a row of `problem-codes.csv` may name exactly these.
+const SEVERITIES: &[(&str, &str)] = &[
+    (
+        "Error",
+        "The program is not valid. Compilation stops after the analysis that found it.",
+    ),
+    (
+        "Warning",
+        "The program is valid but probably not what was meant. It is shown and does not stop compilation.",
+    ),
+    (
+        "Info",
+        "A note about a valid program. It is shown and does not stop compilation.",
+    ),
+];
+
+/// The source of `enum Severity`, with a variant for each level.
+pub fn render_severity_enum() -> String {
+    let mut out = String::from(
+        "/// How serious a diagnostic is. Every problem code declares its level in the
+/// `Severity` column of `problem-codes.csv`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Severity {
+",
+    );
+    for (name, doc) in SEVERITIES {
+        out.push_str(&format!("    /// {doc}
+    {name},
+"));
+    }
+    out.push_str("}
+
+");
+    out
+}
+
+/// The name of the `Severity` variant a row names, or the error that names the
+/// row. The build fails on a missing or an unknown value, so a code cannot be
+/// added without deciding whether it stops the build.
+pub fn severity_variant(code: &str, value: &str) -> Result<&'static str, String> {
+    SEVERITIES
+        .iter()
+        .find(|(name, _)| *name == value)
+        .map(|(name, _)| *name)
+        .ok_or_else(|| {
+            let allowed: Vec<&str> = SEVERITIES.iter().map(|(name, _)| *name).collect();
+            format!(
+                "problem-codes.csv {code}: the severity '{value}' is not one of {}",
+                allowed.join(", ")
+            )
+        })
+}
+
+/// Checks the header of `problem-codes.csv`.
+pub fn check_problem_codes_header(header: &[&str]) -> Result<(), String> {
+    if header == PROBLEM_CODES_HEADER {
+        Ok(())
+    } else {
+        Err(format!(
+            "the header of problem-codes.csv is {header:?}, but it must be {}",
+            PROBLEM_CODES_HEADER.join(",")
+        ))
+    }
 }
 
 /// Words a placeholder or a key cannot be: each becomes a parameter or a

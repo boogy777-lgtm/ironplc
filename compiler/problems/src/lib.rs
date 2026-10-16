@@ -2,8 +2,9 @@
 //!
 //! Two files in `resources/` are read when this crate is built:
 //!
-//! - `problem-codes.csv` makes the [`Problem`] enumeration: the code, the name
-//!   and the one generic message of each problem.
+//! - `problem-codes.csv` makes the [`Problem`] enumeration: the code, the name,
+//!   the one generic message and the [`Severity`] of each problem. A row
+//!   without a valid severity fails the build.
 //! - `problem-texts.csv` makes the module [`text`]: one function for each row,
 //!   which makes the text a label shows from the arguments the row's template
 //!   names. A call with a missing, an extra or a misspelled argument does not
@@ -114,5 +115,11 @@ mod tests {
         let shown = format!("{:?}", text::attribute_repeated_first_written_here());
 
         assert!(shown.contains("P4078") && shown.contains("First written here"));
+    }
+
+    #[test]
+    fn severity_when_problem_of_the_csv_then_the_level_of_its_row() {
+        assert_eq!(Problem::SyntaxError.severity(), Severity::Error);
+        assert_eq!(Problem::AttributeRepeated.severity(), Severity::Error);
     }
 }

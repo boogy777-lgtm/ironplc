@@ -17,6 +17,8 @@ struct ProblemDef {
     name: String,
     /// A message describing the type of error.
     message: String,
+    /// The name of the `Severity` variant, taken from the `Severity` column.
+    severity: &'static str,
 }
 
 fn create_problems() -> Result<(), Box<dyn Error>> {
@@ -35,6 +37,8 @@ fn create_problems() -> Result<(), Box<dyn Error>> {
     // Read the file into the definition (we'll iterate over the structs more than once)
     let mut defs = vec![];
     let mut rdr = csv::Reader::from_reader(src);
+    let header = rdr.headers()?.clone();
+    ironplc_problems_gen::check_problem_codes_header(&header.iter().collect::<Vec<_>>())?;
     for result in rdr.records() {
         let record = result?;
         let code = record
@@ -46,10 +50,14 @@ fn create_problems() -> Result<(), Box<dyn Error>> {
         let message = record
             .get(2)
             .ok_or_else(|| format!("Record {record:?} is not valid at column 2"))?;
+        let severity = record
+            .get(3)
+            .ok_or_else(|| format!("Record {record:?} is not valid at column 3"))?;
         defs.push(ProblemDef {
             code: code.to_string(),
             name: name.to_string(),
             message: message.to_string(),
+            severity: ironplc_problems_gen::severity_variant(code, severity)?,
         });
     }
 
@@ -61,6 +69,9 @@ fn create_problems() -> Result<(), Box<dyn Error>> {
     out_path.push("problems.rs");
     let mut out =
         File::create(out_path).map_err(|e| format!("Unable to create 'problems.rs': {e}"))?;
+
+    // Create the severity enumeration
+    out.write_all(ironplc_problems_gen::render_severity_enum().as_bytes())?;
 
     // Create the enumeration definition
     out.write_all(b"#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub enum Problem {\n")?;
@@ -100,6 +111,23 @@ fn create_problems() -> Result<(), Box<dyn Error>> {
             format!(
                 "            Problem::{} => \"{}\",\n",
                 def.name, def.message
+            )
+            .as_bytes(),
+        )?;
+    }
+    out.write_all(b"        }\n")?;
+    out.write_all(b"    }\n\n")?;
+
+    // Define severity(). The match names every problem, so the build fails on a
+    // problem that has no severity.
+    out.write_all(b"    /// Returns the severity of the particular problem, which every diagnostic of the problem has.\n")?;
+    out.write_all(b"    pub fn severity(&self) -> Severity {\n")?;
+    out.write_all(b"        match self {\n")?;
+    for def in &defs {
+        out.write_all(
+            format!(
+                "            Problem::{} => Severity::{},\n",
+                def.name, def.severity
             )
             .as_bytes(),
         )?;

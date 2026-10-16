@@ -51,9 +51,10 @@ fn generate_problem_docs(manifest_dir: &str) -> Result<(), Box<dyn Error>> {
     let mut titles: BTreeMap<String, String> = BTreeMap::new();
     if let Ok(csv_content) = fs::read_to_string(&csv_path) {
         for line in csv_content.lines().skip(1) {
-            // Format: Code,Name,Message
-            let fields: Vec<&str> = line.splitn(3, ',').collect();
-            if fields.len() == 3 {
+            // Format: Code,Name,Message,Severity. The message is the third field;
+            // the severity after it is not read here.
+            let fields: Vec<&str> = line.splitn(4, ',').collect();
+            if fields.len() == 4 {
                 titles.insert(fields[0].to_string(), fields[2].to_string());
             }
         }

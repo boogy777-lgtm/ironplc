@@ -231,3 +231,53 @@ fn snake_case_of_name_when_camel_case_acronym_and_digits_then_words_split_once()
     assert_eq!(snake_case_of_name("XmlIoError"), "xml_io_error");
     assert_eq!(snake_case_of_name("Simple"), "simple");
 }
+
+#[test]
+fn severity_variant_when_each_level_then_its_variant() {
+    assert_eq!(severity_variant("P0001", "Error"), Ok("Error"));
+    assert_eq!(severity_variant("P0001", "Warning"), Ok("Warning"));
+    assert_eq!(severity_variant("P0001", "Info"), Ok("Info"));
+}
+
+#[test]
+fn severity_variant_when_missing_or_unknown_then_error_names_code_and_value() {
+    for value in ["", "error", "Warn", "Information", " Error"] {
+        let message = severity_variant("P0042", value).expect_err("the value should be refused");
+
+        assert!(message.contains("P0042"), "'{value}': {message}");
+        assert!(message.contains(&format!("'{value}'")), "'{value}': {message}");
+        assert!(message.contains("Error, Warning, Info"), "'{value}': {message}");
+    }
+}
+
+#[test]
+fn check_problem_codes_header_when_severity_column_present_then_accepted() {
+    assert_eq!(
+        check_problem_codes_header(&["Code", "Name", "Message", "Severity"]),
+        Ok(())
+    );
+}
+
+#[test]
+fn check_problem_codes_header_when_column_missing_or_moved_then_error() {
+    for header in [
+        vec!["Code", "Name", "Message"],
+        vec!["Code", "Name", "Severity", "Message"],
+        vec!["Code", "Name", "Message", "Level"],
+    ] {
+        let message = check_problem_codes_header(&header).expect_err("the header should be refused");
+
+        assert!(message.contains("Code,Name,Message,Severity"), "{message}");
+    }
+}
+
+#[test]
+fn render_severity_enum_when_called_then_one_variant_for_each_level() {
+    let source = render_severity_enum();
+
+    assert!(source.contains("pub enum Severity {"), "{source}");
+    for level in ["Error", "Warning", "Info"] {
+        assert!(source.contains(&format!("    {level},
+")), "{source}");
+    }
+}
