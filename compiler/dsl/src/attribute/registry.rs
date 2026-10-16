@@ -25,7 +25,7 @@ mod test_support;
 #[cfg(test)]
 mod tests;
 
-pub use faults::{declared_faults, faults, Fault, FaultKind};
+pub use faults::{declared_faults, faults, region_fault, Fault, FaultKind};
 pub use row::{Family, Info, Row, State};
 pub use rows::*;
 pub use table::table;

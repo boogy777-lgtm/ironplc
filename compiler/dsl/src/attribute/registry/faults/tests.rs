@@ -9,7 +9,7 @@ use super::*;
 use crate::attribute::registry::test_support::{
     attribute, attributes, cases, invalid_values, place, spellings, valid_value,
 };
-use crate::attribute::registry::ALL;
+use crate::attribute::registry::{Family, State, ALL, NAMING};
 
 /// The faults of one attribute written before a declaration of `kind`.
 fn faults_of(kind: TargetKind, name: &str, value: Option<&str>) -> Vec<Fault> {
@@ -389,4 +389,65 @@ fn declared_faults_when_forbidding_attribute_is_written_twice_then_one_forbids_b
         blocks[0],
         FaultKind::ForbidsBlock { attribute, .. } if place(attribute) == (1, 2)
     ));
+}
+
+#[spec_test(REQ_ATTR_dsl_050)]
+fn region_when_registry_then_only_naming_marks_a_region_and_it_reads_off_on_and_omit() {
+    let regions: Vec<&str> = ALL
+        .iter()
+        .filter(|row| row.region)
+        .map(|row| row.name)
+        .collect();
+
+    assert_eq!(regions, ["naming"]);
+    for value in ["off", "on", "omit", "OFF", " On "] {
+        assert!(NAMING.info().accepts(Some(value)), "{value}");
+    }
+    for value in [None, Some(""), Some("maybe")] {
+        assert!(!NAMING.info().accepts(value), "{value:?}");
+    }
+    assert_eq!(NAMING.info().state, State::Waiting);
+    assert_eq!(NAMING.info().family, Family::StaticAnalysis);
+}
+
+#[spec_test(REQ_ATTR_dsl_051)]
+fn region_fault_when_region_attribute_has_an_unread_value_then_the_value_fault_at_its_span() {
+    let fault = region_fault(&attribute("Naming", Some("maybe"), 7));
+
+    assert!(matches!(
+        fault,
+        Some(Fault {
+            span: _,
+            kind: FaultKind::Value { found: Some(_), .. },
+            ..
+        })
+    ));
+    assert_eq!(fault.map(|fault| place(&fault.span)), Some((7, 8)));
+}
+
+#[rstest]
+#[case::valid_value("naming", Some("off"))]
+#[case::not_a_region_attribute("pack_mode", Some("not-a-choice"))]
+#[case::user_defined("my_own", Some("anything"))]
+#[spec_test(REQ_ATTR_dsl_051)]
+fn region_fault_when_no_fault_of_a_region_then_none(
+    #[case] name: &str,
+    #[case] value: Option<&str>,
+) {
+    assert!(region_fault(&attribute(name, value, 3)).is_none());
+}
+
+#[spec_test(REQ_ATTR_dsl_051)]
+fn diagnostic_when_value_fault_then_p4077_naming_the_value_and_what_the_row_takes() {
+    let fault = region_fault(&attribute("naming", Some("maybe"), 3));
+    let diagnostic = fault.map(Fault::diagnostic);
+
+    assert_eq!(diagnostic.as_ref().map(|d| d.code.as_str()), Some("P4077"));
+    assert_eq!(
+        diagnostic.map(|d| d.primary.message),
+        Some(
+            "The attribute 'naming' takes one of off, on, omit, but its value is 'maybe'"
+                .to_string()
+        )
+    );
 }

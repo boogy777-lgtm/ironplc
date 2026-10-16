@@ -11,6 +11,12 @@
 //!   the run before it, and passes them down to every target it holds;
 //! - any other node claims none.
 //!
+//! An attribute whose row says it marks the edge of a region
+//! (`registry::Info::region`, as `naming` does) describes no declaration, so it
+//! is none of these: it is attached to nothing, and it needs nothing to stand
+//! before. [`region_markers`] lists them, and [`check_pragmas`] reports one
+//! whose value its row does not read.
+//!
 //! The two readings of the rule come from this one function. A declaration
 //! asks for its attributes ([`attributes_of`]): what its group passes down,
 //! then what it claims. The check asks for the pragmas no node claims
@@ -24,6 +30,7 @@
 use super::LowerCx;
 use crate::pragma::{kind, Kind};
 use crate::syntax_kind::{NodeKind, SyntaxKind, SyntaxNode, SyntaxToken};
+use ironplc_dsl::attribute::registry::{find, region_fault};
 use ironplc_dsl::attribute::Attribute;
 use ironplc_dsl::common::Attributes;
 use ironplc_dsl::diagnostic::Diagnostic;
@@ -180,8 +187,21 @@ fn attribute_of(token: &SyntaxToken) -> Option<(String, Option<String>)> {
     }
 }
 
+/// Whether the attribute `name` marks the edge of a region instead of
+/// describing a declaration. The row says so; no name is compared here.
+fn marks_a_region(name: &str) -> bool {
+    find(name).is_some_and(|row| row.region)
+}
+
+/// Whether `token` is an attribute pragma that describes a declaration: an
+/// attribute, and not one that marks the edge of a region.
+fn describes_a_declaration(token: &SyntaxToken) -> bool {
+    attribute_of(token).is_some_and(|(name, _)| !marks_a_region(&name))
+}
+
 /// The attribute pragmas in the run of trivia just before `node` among its
-/// siblings, in source order.
+/// siblings, in source order. Those that mark the edge of a region are not in
+/// it.
 fn run_before(node: &SyntaxNode) -> Vec<SyntaxToken> {
     let mut run = Vec::new();
     let mut previous = node.prev_sibling_or_token();
@@ -190,7 +210,7 @@ fn run_before(node: &SyntaxNode) -> Vec<SyntaxToken> {
             break;
         }
         previous = token.prev_sibling_or_token();
-        if attribute_of(&token).is_some() {
+        if describes_a_declaration(&token) {
             run.push(token);
         }
     }
@@ -241,12 +261,29 @@ pub fn attributes_of(cx: &LowerCx, node: &SyntaxNode) -> Attributes {
     )
 }
 
-/// The attribute pragmas under `root` that no node claims, in source order.
+/// The attribute pragmas under `root` that mark the edge of a region, in
+/// source order, as attributes that stand before no declaration.
+pub fn region_markers(cx: &LowerCx, root: &SyntaxNode) -> Vec<Attribute> {
+    root.descendants_with_tokens()
+        .filter_map(NodeOrToken::into_token)
+        .filter_map(|token| {
+            let (name, value) = attribute_of(&token)?;
+            marks_a_region(&name).then(|| Attribute {
+                name,
+                value,
+                span: cx.token_span(&token),
+            })
+        })
+        .collect()
+}
+
+/// The attribute pragmas under `root` that describe a declaration and that no
+/// node claims, in source order.
 pub fn unattached(root: &SyntaxNode) -> Vec<SyntaxToken> {
     let pragmas: Vec<SyntaxToken> = root
         .descendants_with_tokens()
         .filter_map(NodeOrToken::into_token)
-        .filter(|token| attribute_of(token).is_some())
+        .filter(describes_a_declaration)
         .collect();
     if pragmas.is_empty() {
         return pragmas;
@@ -262,27 +299,39 @@ pub fn unattached(root: &SyntaxNode) -> Vec<SyntaxToken> {
         .collect()
 }
 
-/// Fails with the first attribute pragma under `root` that is attached to
-/// nothing (P0043): an accepted attribute is never without a declaration by
-/// accident.
-pub fn reject_unattached(cx: &LowerCx, root: &SyntaxNode) -> Result<(), Diagnostic> {
-    match unattached(root).first() {
-        None => Ok(()),
-        Some(token) => {
-            let name = attribute_of(token)
-                .map(|(name, _)| name)
-                .unwrap_or_default();
-            Err(Diagnostic::text(
-                cx.token_span(token),
-                text::attribute_not_attached(name),
-            )
-            .with_help(
-                "Write the attribute pragma directly before the declaration it describes: a type, a variable, a structure member, a program, a function, a function block, an interface, a method, a property or an action",
-            ))
-        }
+/// Fails with the first of two faults of the attribute pragmas under `root`,
+/// in source order: an attribute that describes a declaration and is attached
+/// to nothing (P0043), an accepted attribute is never without a declaration by
+/// accident; and an attribute that marks the edge of a region and has a value
+/// its row does not read (P4077), which no declaration carries to the check of
+/// the analysis.
+pub fn check_pragmas(cx: &LowerCx, root: &SyntaxNode) -> Result<(), Diagnostic> {
+    let unattached = unattached(root).first().map(|token| {
+        let name = attribute_of(token)
+            .map(|(name, _)| name)
+            .unwrap_or_default();
+        let diagnostic = Diagnostic::text(
+            cx.token_span(token),
+            text::attribute_not_attached(name),
+        )
+        .with_help(
+            "Write the attribute pragma directly before the declaration it describes: a type, a variable, a structure member, a program, a function, a function block, an interface, a method, a property or an action",
+        );
+        (usize::from(token.text_range().start()), diagnostic)
+    });
+    let misvalued = region_markers(cx, root)
+        .iter()
+        .find_map(region_fault)
+        .map(|fault| (fault.span.start, fault.diagnostic()));
+    match (unattached, misvalued) {
+        (Some((at, first)), Some((other, second))) => Err(if at <= other { first } else { second }),
+        (Some((_, diagnostic)), None) | (None, Some((_, diagnostic))) => Err(diagnostic),
+        (None, None) => Ok(()),
     }
 }
 
+#[cfg(test)]
+mod region_tests;
 #[cfg(test)]
 mod reported_tests;
 #[cfg(test)]

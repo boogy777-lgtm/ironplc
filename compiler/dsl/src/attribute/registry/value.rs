@@ -220,6 +220,14 @@ choices! {
         Utf8 = "UTF8" | "UTF-8",
     }
 
+    /// Whether a region of declarations is checked against the naming
+    /// convention (`naming`).
+    NamingRegion {
+        Off = "off",
+        On = "on",
+        Omit = "omit",
+    }
+
     /// The access to an exported symbol (`symbol`).
     SymbolAccess {
         NoAccess = "none",

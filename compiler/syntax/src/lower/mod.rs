@@ -456,7 +456,7 @@ pub fn lower_library(parse: &Parse, file_id: &FileId) -> Result<Library, Diagnos
     }
     let cx = LowerCx::new(file_id.clone()).with_options(parse.options);
     let elements = lower_elements(&cx, &parse.root)?;
-    attributes::reject_unattached(&cx, &parse.root)?;
+    attributes::check_pragmas(&cx, &parse.root)?;
     Ok(Library { elements })
 }
 
@@ -473,7 +473,7 @@ pub fn lower_statements(parse: &Parse, file_id: &FileId) -> Result<Vec<StmtKind>
         Some(list) => lower_statement_list(&cx, &list)?,
         None => vec![],
     };
-    attributes::reject_unattached(&cx, &parse.root)?;
+    attributes::check_pragmas(&cx, &parse.root)?;
     Ok(statements)
 }
 

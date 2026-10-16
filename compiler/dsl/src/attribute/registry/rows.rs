@@ -13,8 +13,8 @@
 use super::row::{Family, Info, Row, State};
 use super::targets::{Targets, EVERY, TYPES};
 use super::value::{
-    DisplayMode, Flag, MonitoringEncoding, MonitoringMode, Number, Optional, OptionalText,
-    PackMode, RuleNumbers, SymbolAccess, Text,
+    DisplayMode, Flag, MonitoringEncoding, MonitoringMode, NamingRegion, Number, Optional,
+    OptionalText, PackMode, RuleNumbers, SymbolAccess, Text,
 };
 use crate::attribute::census::TargetKind as T;
 use crate::common::VariableType;
@@ -37,6 +37,7 @@ macro_rules! rows {
             summary: $summary:literal,
             state: $state:ident,
             $(forbids: $forbids:expr,)?
+            $(region: $region:literal,)?
         }
     )*) => {
         $(
@@ -48,7 +49,7 @@ macro_rules! rows {
                 Family::$family,
                 $summary,
                 State::$state,
-            )$(.forbidding($forbids))?;
+            )$(.forbidding($forbids))?$(.with_region($region))?;
         )*
 
         /// Every row the compiler knows, in the order of the declaration list.
@@ -236,6 +237,16 @@ rows! {
         family: CompileChecks,
         summary: "`__NEW` may create an instance of the block",
         state: Waiting,
+    }
+
+    NAMING: NamingRegion = {
+        name: "naming",
+        aliases: [],
+        targets: EVERY,
+        family: StaticAnalysis,
+        summary: "`off` and `on` bracket the declarations that are left out of the naming-convention check, and `omit` leaves out the next line only; IronPLC has no naming-convention check",
+        state: Waiting,
+        region: true,
     }
 
     ANALYSIS: RuleNumbers = {

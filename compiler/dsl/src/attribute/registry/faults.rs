@@ -11,6 +11,8 @@ use crate::attribute::census::{Declared, Held, TargetKind};
 use crate::attribute::{Attribute, Attributes};
 use crate::common::VariableType;
 use crate::core::SourceSpan;
+use crate::diagnostic::{Diagnostic, Label};
+use ironplc_problems::text;
 
 /// What is wrong with one attribute of a declaration.
 #[derive(Clone, Debug)]
@@ -88,6 +90,63 @@ fn fault_of<'a>(
         });
     }
     None
+}
+
+/// The fault of `attribute`, a pragma that marks the edge of a region
+/// ([`Info::region`]) and so stands before no declaration: its value is not one
+/// the row reads. Nothing for any other attribute, which the check of the
+/// declaration it is attached to answers for.
+pub fn region_fault(attribute: &Attribute) -> Option<Fault> {
+    let row = find(&attribute.name).filter(|row| row.region)?;
+    if row.accepts(attribute.value.as_deref()) {
+        return None;
+    }
+    Some(Fault {
+        name: attribute.name.clone(),
+        span: attribute.span.clone(),
+        kind: FaultKind::Value {
+            row,
+            found: attribute.value.clone(),
+        },
+    })
+}
+
+impl Fault {
+    /// The diagnostic of the fault: one arm for each kind of fault, each text a
+    /// row of the message dictionary (`problem-texts.csv`).
+    pub fn diagnostic(self) -> Diagnostic {
+        let name = self.name;
+        match self.kind {
+            FaultKind::NotAllowedHere { row, kind } => Diagnostic::text(
+                self.span,
+                text::attribute_not_allowed_here(name, kind.label(), row.targets.describe()),
+            ),
+            FaultKind::Value { row, found } => Diagnostic::text(
+                self.span,
+                match found {
+                    Some(value) => {
+                        text::attribute_value_invalid_found(name, row.value.describe(), value)
+                    }
+                    None => text::attribute_value_invalid_missing(name, row.value.describe()),
+                },
+            ),
+            FaultKind::Repeated { first } => {
+                Diagnostic::text(self.span, text::attribute_repeated(name)).with_secondary(
+                    Label::span(first, text::attribute_repeated_first_written_here()),
+                )
+            }
+            FaultKind::ForbidsBlock {
+                block, attribute, ..
+            } => Diagnostic::text(
+                self.span,
+                text::attribute_forbids_variable_block(block.keyword(), name),
+            )
+            .with_secondary(Label::span(
+                attribute,
+                text::attribute_forbids_variable_block_attribute_written_here(),
+            )),
+        }
+    }
 }
 
 /// The faults of the attributes of a declaration of `kind`, in the order of

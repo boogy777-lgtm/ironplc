@@ -280,7 +280,11 @@ impl LspProject {
             if view.attributes.span().file_id != file_id {
                 continue;
             }
-            let range = span_to_range(contents, &view.attributes.span());
+            let range = range_of(
+                contents,
+                view.attributes.span().start,
+                view.attributes.span().end,
+            );
             symbols.push(document_symbol(
                 view.name.to_string(),
                 Some(format!("{:?}", view.attributes.type_category)),
@@ -296,7 +300,7 @@ impl LspProject {
             if view.info.span.file_id != file_id {
                 continue;
             }
-            let range = span_to_range(contents, &view.info.span);
+            let range = range_of(contents, view.info.span.start, view.info.span.end);
             symbols.push(document_symbol(
                 view.name.to_string(),
                 None,
@@ -310,7 +314,7 @@ impl LspProject {
             if view.signature.span.file_id != file_id {
                 continue;
             }
-            let range = span_to_range(contents, &view.signature.span);
+            let range = range_of(contents, view.signature.span.start, view.signature.span.end);
             symbols.push(document_symbol(
                 view.signature.name.to_string(),
                 view.signature
@@ -402,10 +406,12 @@ fn type_kind_to_symbol_kind(kind: TypeSymbolKind) -> SymbolKind {
     }
 }
 
-/// Convert a SourceSpan to an LSP Range using file contents for line/column calculation.
-fn span_to_range(contents: &str, span: &ironplc_dsl::core::SourceSpan) -> lsp_types::Range {
-    let start = LineColumn::from_offset(contents, span.start);
-    let end = LineColumn::from_offset(contents, span.end);
+/// Convert the bytes `start..end` of `contents` to an LSP Range, the one place
+/// a range is converted for the editor. An empty range (where something is
+/// missing) is widened to a character the editor can draw, see
+/// [`LineColumn::editor_range`]; the span of the diagnostic stays empty.
+fn range_of(contents: &str, start: usize, end: usize) -> lsp_types::Range {
+    let (start, end) = LineColumn::editor_range(contents, start, end);
     lsp_types::Range::new(
         lsp_types::Position::new(start.line, start.column),
         lsp_types::Position::new(end.line, end.column),
@@ -475,12 +481,10 @@ fn map_label(label: &ironplc_dsl::diagnostic::Label, project: &dyn Project) -> l
     let contents = project.find(file_id);
 
     if let Some(contents) = contents {
-        let contents = contents.as_string();
-        let start = LineColumn::from_offset(contents, label.location.start);
-        let end = LineColumn::from_offset(contents, label.location.end);
-        return lsp_types::Range::new(
-            lsp_types::Position::new(start.line, start.column),
-            lsp_types::Position::new(end.line, end.column),
+        return range_of(
+            contents.as_string(),
+            label.location.start,
+            label.location.end,
         );
     }
     lsp_types::Range::new(

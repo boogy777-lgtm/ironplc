@@ -88,6 +88,11 @@ pub struct Info {
     /// One line: what the attribute does in CODESYS.
     pub summary: &'static str,
     pub state: State,
+    /// Whether the attribute marks the edge of a region of declarations
+    /// instead of describing the declaration it stands before. A pragma of such
+    /// an attribute is attached to no declaration and needs none to stand
+    /// before: it may stand before `END_VAR`, `END_STRUCT`, and the like.
+    pub region: bool,
     /// Whether the value is one the type of the row reads: the same
     /// [`Value::parse`] as the reader.
     valid: fn(Option<&str>) -> bool,
@@ -155,6 +160,7 @@ impl<V: Value> Row<V> {
                 family,
                 summary,
                 state,
+                region: false,
                 valid: reads::<V>,
             },
             value: PhantomData,
@@ -165,6 +171,13 @@ impl<V: Value> Row<V> {
     /// attribute may not hold.
     pub(super) const fn forbidding(mut self, forbids: &'static [VariableType]) -> Self {
         self.info.forbids = forbids;
+        self
+    }
+
+    /// The row, with `region` saying whether the attribute marks the edge of
+    /// a region (see [`Info::region`]).
+    pub(super) const fn with_region(mut self, region: bool) -> Self {
+        self.info.region = region;
         self
     }
 

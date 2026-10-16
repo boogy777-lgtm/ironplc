@@ -881,3 +881,41 @@ END_PROGRAM
     let result: CompileResult = serde_json::from_str(&compile(source, "codesys", "", "")).unwrap();
     assert!(result.ok, "Expected ok but got: {:?}", result.diagnostics);
 }
+
+#[test]
+fn compile_when_something_is_missing_at_end_of_line_then_the_range_is_the_last_character() {
+    // END_PROGRAM is missing: the span of the diagnostic is empty, after the
+    // `;` of line 3 (columns 1-based). The editor gets that `;`, since there is
+    // no character after it on the line to draw the marker on.
+    let source = "PROGRAM main\nVAR x : INT; END_VAR\nx := 1;\n";
+    let result: CompileResult = serde_json::from_str(&compile(source, "", "", "")).unwrap();
+    assert!(!result.ok);
+    let diag = &result.diagnostics[0];
+    assert_eq!(
+        (
+            diag.start_line,
+            diag.start_column,
+            diag.end_line,
+            diag.end_column
+        ),
+        (3, 7, 3, 8)
+    );
+}
+
+#[test]
+fn compile_when_something_is_missing_mid_line_then_the_range_is_the_next_character() {
+    // The `.` has no member after it: the error is at the `;`, one character.
+    let source = "PROGRAM main\nVAR x : INT; a : INT; END_VAR\nx := a.;\nEND_PROGRAM";
+    let result: CompileResult = serde_json::from_str(&compile(source, "", "", "")).unwrap();
+    assert!(!result.ok);
+    let diag = &result.diagnostics[0];
+    assert_eq!(
+        (
+            diag.start_line,
+            diag.start_column,
+            diag.end_line,
+            diag.end_column
+        ),
+        (3, 8, 3, 9)
+    );
+}

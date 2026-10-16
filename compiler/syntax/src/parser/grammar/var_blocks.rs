@@ -288,9 +288,13 @@ fn declaration(p: &mut Parser, shape: Shape) {
     let node = p.start();
     let no_name = shape.located && p.at(K::At);
     let mut names = 0usize;
+    let mut first_comma = None;
     if !no_name {
         match name_list(p, shape.names) {
-            Some(count) => names = count,
+            Some(list) => {
+                names = list.count;
+                first_comma = list.first_comma;
+            }
             None => {
                 skip_declaration(p);
                 p.abandon(node);
@@ -306,8 +310,13 @@ fn declaration(p: &mut Parser, shape: Shape) {
         }
         address = Some(location(p));
     }
-    if shape.single && names > 1 {
-        p.error(text::syntax_error_this_variable_block_declares_one_variable_at_a_time());
+    // The `,` is what this block does not allow, so it is where this is
+    // reported, not the `:` after the names.
+    if let Some(comma) = first_comma.filter(|_| shape.single && names > 1) {
+        p.error_at(
+            comma,
+            text::syntax_error_this_variable_block_declares_one_variable_at_a_time(),
+        );
     }
     if p.expect(K::Colon) && !(shape.optional_type && p.at(K::Semicolon)) {
         let context = match address {
@@ -386,17 +395,23 @@ fn access_declaration(p: &mut Parser) {
     item_terminator(p);
 }
 
+/// The tokens of `resource.program.name`: names with a `.` between each.
+const INSTANCE_PATH_LENGTH: usize = 5;
+
 /// `resource.program.path [AT address] : type [:= value] ;`
 fn instance_initialization(p: &mut Parser) {
     let node = p.start();
-    // A resource, a program and at least one more name.
-    let path = p.name_at(0)
-        && p.nth_at(1, K::Period)
-        && p.name_at(2)
-        && p.nth_at(3, K::Period)
-        && p.name_at(4);
-    if !path {
-        p.expected(Item::InstancePath);
+    // A resource, a program and at least one more name: the path is wrong at
+    // the first token that is not the one it needs, not at its start.
+    let wrong = (0..INSTANCE_PATH_LENGTH).find(|n| {
+        if n % 2 == 0 {
+            !p.name_at(*n)
+        } else {
+            !p.nth_at(*n, K::Period)
+        }
+    });
+    if let Some(wrong) = wrong {
+        p.expected_at(wrong, Item::InstancePath);
     }
     if variable(p).is_none() {
         skip_declaration(p);

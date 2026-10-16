@@ -621,17 +621,12 @@ fn document_symbols_when_multiple_types_then_returns_all() {
 }
 
 #[test]
-fn span_to_range_when_single_line_then_correct_positions() {
-    use super::span_to_range;
+fn range_of_when_single_line_then_correct_positions() {
+    use super::range_of;
 
     let contents = "TYPE MyType : INT; END_TYPE";
-    let span = SourceSpan {
-        start: 5,
-        end: 11,
-        file_id: ironplc_dsl::core::FileId::default(),
-    };
 
-    let range = span_to_range(contents, &span);
+    let range = range_of(contents, 5, 11);
 
     assert_eq!(range.start.line, 0);
     assert_eq!(range.start.character, 5);
@@ -640,18 +635,12 @@ fn span_to_range_when_single_line_then_correct_positions() {
 }
 
 #[test]
-fn span_to_range_when_multiline_then_correct_positions() {
-    use super::span_to_range;
+fn range_of_when_multiline_then_correct_positions() {
+    use super::range_of;
 
     let contents = "TYPE\nMyStruct : STRUCT\n  field : INT;\nEND_STRUCT;\nEND_TYPE";
-    // Span covering "MyStruct" which starts at position 5 (after "TYPE\n")
-    let span = SourceSpan {
-        start: 5,
-        end: 13,
-        file_id: ironplc_dsl::core::FileId::default(),
-    };
-
-    let range = span_to_range(contents, &span);
+    // "MyStruct" starts at position 5 (after "TYPE\n")
+    let range = range_of(contents, 5, 13);
 
     assert_eq!(range.start.line, 1);
     assert_eq!(range.start.character, 0);

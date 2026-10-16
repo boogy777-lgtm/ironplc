@@ -19,6 +19,7 @@ Messages,:code:`estimated-stack-usage`,,"function, method",an unsigned integer,T
 Compile checks,:code:`no_assign`,,function block,no value,Assigning an instance of the block to another instance is an error,Waiting
 Compile checks,:code:`no_instance_in_retain`,,function block,no value,An instance of the block in retain memory is an error,Waiting
 Compile checks,:code:`enable_dynamic_creation`,,function block,no value,:code:`__NEW` may create an instance of the block,Waiting
+Static analysis,:code:`naming`,,every declaration,"one of off, on, omit",":code:`off` and :code:`on` bracket the declarations that are left out of the naming-convention check, and :code:`omit` leaves out the next line only; IronPLC has no naming-convention check",Waiting
 Static analysis,:code:`analysis`,,every declaration,"negative rule numbers separated by commas, such as -33, -31",The listed rules of the static analysis are not checked for the declaration,Waiting
 Initialisation,:code:`noinit`,":code:`no_init`, :code:`no-init`","structure member, variable",no value,The variable keeps its value when the application is reset,Waiting
 Initialisation,:code:`initialize_on_call`,,"variable, function block",no value,The input variables of the block are initialised on each call,Waiting

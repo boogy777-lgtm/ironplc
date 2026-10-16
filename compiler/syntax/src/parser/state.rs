@@ -380,10 +380,24 @@ impl<'t, 's> Parser<'t, 's> {
 
     // ----- errors ---------------------------------------------------------
 
+    /// Where input ends as far as the grammar is concerned: where the last
+    /// token that is not trivia ends, or the end of the text when there is
+    /// none. A fault at the end of input is anchored here, which is also where
+    /// [`Parser::error_after_previous`] anchors one when nothing follows, so
+    /// every construct that the input leaves open reports its fault at the same
+    /// place. Trivia after the last token (a newline, a comment) does not move
+    /// it, which is what lets the ranking choose among those faults by the
+    /// order in which they were found (see `ranking.rs`).
+    fn end_of_input(&self) -> TextSize {
+        self.significant
+            .last()
+            .and_then(|index| self.tokens.get(*index))
+            .map_or(self.end, |token| token.range.end())
+    }
+
     /// The range of the next token, or the empty range at the end of input.
     pub(crate) fn current_range(&self) -> TextRange {
-        self.token(0)
-            .map_or_else(|| TextRange::empty(self.end), |token| token.range)
+        self.nth_range(0)
     }
 
     /// Records an error, unless it is the one just recorded: two rules that
@@ -399,10 +413,13 @@ impl<'t, 's> Parser<'t, 's> {
         self.record(SyntaxError::new(text, range));
     }
 
-    /// The range of the `n`th token ahead, or the empty range at the end.
+    /// The range of the `n`th token ahead, or the empty range at the end of
+    /// input (see [`Parser::end_of_input`]).
     pub(crate) fn nth_range(&self, n: usize) -> TextRange {
-        self.token(n)
-            .map_or_else(|| TextRange::empty(self.end), |token| token.range)
+        self.token(n).map_or_else(
+            || TextRange::empty(self.end_of_input()),
+            |token| token.range,
+        )
     }
 
     /// Records an error where the previous token ends, as an empty range: for
@@ -452,13 +469,25 @@ impl<'t, 's> Parser<'t, 's> {
         self.error_after_previous(text);
     }
 
+    /// Records that `expected` was to stand at the `n`th token ahead, which
+    /// is what was found: for a rule that has read the tokens before it and
+    /// found the first one that does not belong.
+    pub(crate) fn expected_at(&mut self, n: usize, expected: impl Into<Expected>) {
+        let text = Expectation::new(Found::lexed(self.token(n)), expected).text();
+        self.error_at_nth(n, text);
+    }
+
     /// Records an error at the next token. A lexical error token already has
     /// its own error, so none is added for it.
     pub(crate) fn error(&mut self, text: Text) {
-        if self.nth(0) == Some(SyntaxKind::ErrorToken) {
+        self.error_at_nth(0, text);
+    }
+
+    fn error_at_nth(&mut self, n: usize, text: Text) {
+        if self.nth(n) == Some(SyntaxKind::ErrorToken) {
             return;
         }
-        self.record(SyntaxError::new(text, self.current_range()));
+        self.record(SyntaxError::new(text, self.nth_range(n)));
     }
 
     // ----- depth guard ----------------------------------------------------
@@ -572,14 +601,36 @@ mod tests {
     }
 
     #[test]
-    fn error_when_at_end_then_empty_range_at_source_end() {
-        let (tokens, _) = lex("x ");
+    fn error_when_at_end_then_empty_range_where_the_last_token_ends() {
+        // The trailing space and comment are after the last token.
+        let (tokens, _) = lex("x  (* end *)\n");
         let mut parser = Parser::new(&tokens, ParseOptions::default());
         parser.bump();
         parser.error(text::syntax_error_unexpected_input());
         let (_, errors) = parser.finish();
         assert_eq!(errors.len(), 1);
-        assert_eq!(errors[0].range, TextRange::empty(TextSize::from(2)));
+        assert_eq!(errors[0].range, TextRange::empty(TextSize::from(1)));
+    }
+
+    #[test]
+    fn error_when_at_end_then_the_same_place_as_an_error_after_the_previous_token() {
+        let (tokens, _) = lex("x \n");
+        let mut parser = Parser::new(&tokens, ParseOptions::default());
+        parser.bump();
+        parser.error(text::syntax_error_unexpected_input());
+        parser.error_after_previous(text::syntax_error_unexpected_token_in_statement_list());
+        let (_, errors) = parser.finish();
+        assert_eq!(errors.len(), 2);
+        assert_eq!(errors[0].range, errors[1].range);
+    }
+
+    #[test]
+    fn error_when_no_token_then_empty_range_at_the_end_of_the_text() {
+        let (tokens, _) = lex("  \n");
+        let mut parser = Parser::new(&tokens, ParseOptions::default());
+        parser.error(text::syntax_error_unexpected_input());
+        let (_, errors) = parser.finish();
+        assert_eq!(errors[0].range, TextRange::empty(TextSize::from(3)));
     }
 
     #[test]

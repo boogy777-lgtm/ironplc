@@ -16,6 +16,8 @@
 //! protocol).
 use ironplc_problems::{Problem, Text};
 
+mod editor_range;
+
 use crate::common::TypeName;
 use crate::core::{FileId, Id, Located, SourceSpan};
 

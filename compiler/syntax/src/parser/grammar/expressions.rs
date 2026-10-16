@@ -400,7 +400,16 @@ pub(in crate::parser) fn variable(p: &mut Parser) -> Option<CompletedMarker> {
                 Some(K::IntegerLit) => K::BitAccessExpr,
                 Some(K::PartialAccess) => K::PartialAccessExpr,
                 _ if p.name_at(1) => K::FieldExpr,
-                _ => break,
+                // A `.` after a variable can only begin a member: report the
+                // member missing at the token that stands where it was to
+                // be, not the `.` that is rightly there.
+                _ => {
+                    let node = p.precede(lhs);
+                    p.bump();
+                    p.expected(Item::MemberName);
+                    lhs = p.complete(node, K::FieldExpr);
+                    break;
+                }
             }
         } else if p.at(K::LeftBracket) {
             K::IndexExpr
