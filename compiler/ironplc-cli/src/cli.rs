@@ -82,7 +82,7 @@ pub fn tokenize(
     let (project, mut diagnostics) = create_project(paths, compiler_options, &[]);
 
     for src in project.sources() {
-        diagnostics.extend(tokenizer::tokenize_source(src));
+        diagnostics.extend(tokenizer::tokenize_source(src, &compiler_options));
     }
 
     finish("Tokenize", diagnostics, Some(&project), suppress_output)

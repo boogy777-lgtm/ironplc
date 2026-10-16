@@ -63,7 +63,8 @@ Diagnostic Commands
 :program:`ironplcc tokenize` [*FILES*...]
    Tokenize source files and verify that all content matches a token.
    This is primarily useful for diagnostics and understanding the lexer
-   behavior.
+   behavior. The words that are keywords depend on the selected dialect and
+   ``--allow-*`` flags, as they do for the other commands.
 
 Informational Commands
 ----------------------

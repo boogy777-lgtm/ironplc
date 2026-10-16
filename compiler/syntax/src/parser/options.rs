@@ -161,46 +161,12 @@ impl ParseOptions {
     /// True when `kind` is a keyword under these options, false when the
     /// dialect leaves the word available as an ordinary name.
     ///
-    /// This is the one table that decides which keyword is gated by which
-    /// flag. Kinds that are not keywords, and keywords no flag gates, are
-    /// always enabled.
+    /// The gate of each keyword is declared on its own row in `syntax_kinds!`
+    /// (`ungated`, or `gated` and the flag), so there is no table here to
+    /// keep in step: a new keyword cannot be added without deciding its gate.
+    /// Kinds that are not keywords are always enabled.
     pub fn keyword_enabled(&self, kind: SyntaxKind) -> bool {
-        use SyntaxKind as K;
-        match kind {
-            K::Ltime | K::Ldate | K::Ltod | K::Ldt => self.allow_long_time_types,
-            K::RefTo | K::Ref | K::Null => self.allow_ref_to,
-            K::Reference => self.allow_reference_to,
-            K::Pointer => self.allow_pointer_to,
-            K::Extends
-            | K::Implements
-            | K::Interface
-            | K::EndInterface
-            | K::Abstract
-            | K::Method
-            | K::EndMethod
-            | K::Property
-            | K::EndProperty
-            | K::EndGet
-            | K::EndSet
-            | K::This
-            | K::Super => self.allow_fb_inheritance,
-            K::AndThen | K::OrElse => self.allow_short_circuit_operators,
-            K::Persistent => self.allow_persistent_var,
-            K::Continue => self.allow_continue,
-            K::Union | K::EndUnion => self.allow_union_type,
-            K::VarStat => self.allow_var_stat,
-            K::VarInst => self.allow_var_inst,
-            K::VarGeneric => self.allow_var_generic,
-            K::Namespace | K::EndNamespace => self.allow_namespace,
-            K::BeginImplementation => self.allow_begin_implementation,
-            K::Bit => self.allow_bit_type,
-            K::Try | K::EndTry | K::Catch | K::Finally | K::Throw => self.allow_try_catch,
-            K::Jmp => self.allow_jump_statement,
-            K::Calc => self.allow_calc_statement,
-            K::Wait => self.allow_wait_statement,
-            K::Params => self.allow_params_of,
-            _ => true,
-        }
+        kind.available_in(self)
     }
 }
 
