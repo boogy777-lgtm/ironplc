@@ -43,7 +43,20 @@ impl Render for dsl::sfc::Network {
 // 2.6.3
 impl Render for dsl::sfc::Transition {
     fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
-        r.write_ws("TRANSITION FROM");
+        r.write_ws("TRANSITION");
+
+        if let Some(name) = &self.name {
+            r.visit_id(name)?;
+        }
+        if let Some(priority) = self.priority {
+            r.write_ws("(");
+            r.write_ws("PRIORITY");
+            r.write_ws(":=");
+            r.write_ws(priority.to_string().as_str());
+            r.write_ws(")");
+        }
+
+        r.write_ws("FROM");
 
         visit_comma_separated!(r, self.from.iter(), Id);
 

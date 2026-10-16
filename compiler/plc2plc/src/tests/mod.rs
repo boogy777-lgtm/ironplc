@@ -36,6 +36,7 @@ mod property;
 mod qualified_enum_value;
 mod reference_to;
 mod set_reset_bind;
+mod sfc;
 mod short_circuit;
 mod special_operators;
 mod string_literals;
