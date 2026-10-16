@@ -97,6 +97,7 @@ fn lower_var_block_when_each_block_keyword_then_the_kind_of_variable_it_declares
         (FUNCTION_BLOCK, "VAR_OUTPUT", VariableType::Output),
         (FUNCTION_BLOCK, "VAR_IN_OUT", VariableType::InOut),
         (FUNCTION_BLOCK, "VAR_TEMP", VariableType::VarTemp),
+        (PROGRAM, "VAR_TEMP", VariableType::VarTemp),
         (FUNCTION_BLOCK, "VAR_EXTERNAL", VariableType::External),
         (FILE, "VAR_GLOBAL", VariableType::Global),
         (FUNCTION_BLOCK, "VAR_STAT", VariableType::VarStat),

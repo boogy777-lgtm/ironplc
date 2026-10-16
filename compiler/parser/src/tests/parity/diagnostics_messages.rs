@@ -56,7 +56,7 @@ const MESSAGE_DIFFERENCES: &[MessageDifference] = &[
         legacy: None,
         new: None,
         reason: PEG_EXPECTED_SET,
-        expected: 5021,
+        expected: 4997,
     },
     MessageDifference {
         code: "P0003",
