@@ -193,7 +193,9 @@ fn faults_when_attribute_written_three_times_then_each_later_one_is_repeated_of_
         .iter()
         .filter_map(|fault| match &fault.kind {
             FaultKind::Repeated { first } => Some(place(first)),
-            FaultKind::NotAllowedHere { .. } | FaultKind::Value { .. } => None,
+            FaultKind::NotAllowedHere { .. }
+            | FaultKind::Value { .. }
+            | FaultKind::ForbidsBlock { .. } => None,
         })
         .collect();
     assert_eq!(firsts, vec![(1, 2), (1, 2)]);
@@ -218,6 +220,7 @@ fn faults_when_repeated_attribute_is_also_wrong_then_only_repeated() {
                 FaultKind::NotAllowedHere { .. } => "not allowed here",
                 FaultKind::Value { .. } => "value",
                 FaultKind::Repeated { .. } => "repeated",
+                FaultKind::ForbidsBlock { .. } => "forbids block",
             };
             (fault.span.start, what)
         })
@@ -260,4 +263,130 @@ fn faults_when_attribute_is_user_defined_then_none_before_any_kind(#[case] value
 #[spec_test(REQ_ATTR_dsl_033)]
 fn faults_when_no_attributes_then_none() {
     assert!(faults(TargetKind::Program, &attributes(vec![])).is_empty());
+}
+
+/// A declaration of `kind` with the attribute at 3 and variables of the blocks
+/// named, the one at index `i` at `10 + i`.
+fn declaration(
+    kind: TargetKind,
+    name: &str,
+    value: Option<&str>,
+    blocks: &[VariableType],
+) -> Declared {
+    Declared {
+        kind,
+        name: "d".to_string(),
+        attributes: attributes(vec![attribute(name, value, 3)]),
+        holds: blocks
+            .iter()
+            .enumerate()
+            .map(|(index, block)| Held {
+                block: block.clone(),
+                span: SourceSpan::range(10 + index, 11 + index),
+            })
+            .collect(),
+    }
+}
+
+#[spec_test(REQ_ATTR_dsl_034)]
+fn declared_faults_when_every_row_forbids_a_block_then_a_declaration_holding_it_has_the_fault_at_the_first_such_variable(
+) {
+    let mut checked = 0;
+    let mut wrong = Vec::new();
+    for row in ALL.iter().filter(|row| !row.forbids.is_empty()) {
+        for kind in TargetKind::ALL.iter().filter(|k| row.targets.contains(**k)) {
+            for block in row.forbids {
+                checked += 1;
+                let held = [VariableType::Var, block.clone(), block.clone()];
+                let found =
+                    declared_faults(&declaration(*kind, row.name, valid_value(row.value), &held));
+                let right = matches!(
+                    found.as_slice(),
+                    [Fault {
+                        kind: FaultKind::ForbidsBlock { row: named, block: forbidden, attribute },
+                        span,
+                        ..
+                    }] if *named == row
+                        && forbidden == block
+                        && place(attribute) == (3, 4)
+                        && place(span) == (11, 12)
+                );
+                if !right {
+                    wrong.push(format!(
+                        "{} in {kind:?} with {block:?}: {found:?}",
+                        row.name
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(checked > 0, "no row forbids a block");
+    assert!(wrong.is_empty(), "{wrong:?}");
+}
+
+#[spec_test(REQ_ATTR_dsl_034)]
+fn declared_faults_when_declaration_holds_no_forbidden_block_then_no_fault() {
+    for row in ALL.iter().filter(|row| !row.forbids.is_empty()) {
+        for kind in TargetKind::ALL.iter().filter(|k| row.targets.contains(**k)) {
+            let found = declared_faults(&declaration(
+                *kind,
+                row.name,
+                valid_value(row.value),
+                &[VariableType::Var, VariableType::Input],
+            ));
+
+            assert!(found.is_empty(), "{} in {kind:?}: {found:?}", row.name);
+        }
+    }
+}
+
+#[spec_test(REQ_ATTR_dsl_034)]
+fn declared_faults_when_attribute_does_not_stand_before_the_kind_then_only_not_allowed_here() {
+    // `subsequent` stands before a program and a global variable list; before
+    // a function it is not allowed, and it forbids nothing there.
+    let found = declared_faults(&declaration(
+        TargetKind::Function,
+        "subsequent",
+        None,
+        &[VariableType::VarTemp],
+    ));
+
+    assert!(
+        matches!(
+            found.as_slice(),
+            [Fault {
+                kind: FaultKind::NotAllowedHere { .. },
+                ..
+            }]
+        ),
+        "{found:?}"
+    );
+}
+
+#[spec_test(REQ_ATTR_dsl_034)]
+fn declared_faults_when_forbidding_attribute_is_written_twice_then_one_forbids_block_fault() {
+    let mut declared = declaration(
+        TargetKind::Program,
+        "subsequent",
+        None,
+        &[VariableType::VarTemp],
+    );
+    declared.attributes = attributes(vec![
+        attribute("subsequent", None, 1),
+        attribute("SUBSEQUENT", None, 2),
+    ]);
+
+    let found = declared_faults(&declared);
+
+    let blocks: Vec<&FaultKind> = found
+        .iter()
+        .map(|fault| &fault.kind)
+        .filter(|kind| matches!(kind, FaultKind::ForbidsBlock { .. }))
+        .collect();
+    assert_eq!(blocks.len(), 1, "{found:?}");
+    assert!(matches!(
+        blocks[0],
+        FaultKind::ForbidsBlock { attribute, .. } if place(attribute) == (1, 2)
+    ));
 }

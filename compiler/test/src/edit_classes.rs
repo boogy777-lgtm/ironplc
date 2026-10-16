@@ -513,11 +513,8 @@ fn warm_program_with_temporaries(temporaries: &str, body: &str) -> String {
         return source;
     }
     source.replacen(
-        "END_VAR
-",
-        &format!("END_VAR
-  VAR_TEMP {temporaries} END_VAR
-"),
+        "END_VAR\n",
+        &format!("END_VAR\n  VAR_TEMP {temporaries} END_VAR\n"),
         1,
     )
 }

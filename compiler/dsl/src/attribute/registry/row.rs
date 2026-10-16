@@ -5,6 +5,7 @@ use std::marker::PhantomData;
 use super::targets::Targets;
 use super::value::{Value, ValueKind};
 use crate::attribute::Attributes;
+use crate::common::VariableType;
 
 /// Declares [`Family`], its list [`Family::ALL`] and its titles from one list.
 macro_rules! families {
@@ -78,6 +79,9 @@ pub struct Info {
     pub aliases: &'static [&'static str],
     /// The kinds of declaration the attribute may stand before.
     pub targets: Targets,
+    /// The kinds of variable block that a declaration with the attribute may
+    /// not hold; none for most rows.
+    pub forbids: &'static [VariableType],
     /// What the attribute takes.
     pub value: ValueKind,
     pub family: Family,
@@ -146,6 +150,7 @@ impl<V: Value> Row<V> {
                 name,
                 aliases,
                 targets,
+                forbids: &[],
                 value: V::KIND,
                 family,
                 summary,
@@ -154,6 +159,13 @@ impl<V: Value> Row<V> {
             },
             value: PhantomData,
         }
+    }
+
+    /// The row, with the kinds of variable block that a declaration with the
+    /// attribute may not hold.
+    pub(super) const fn forbidding(mut self, forbids: &'static [VariableType]) -> Self {
+        self.info.forbids = forbids;
+        self
     }
 
     /// The row without the type of its value.

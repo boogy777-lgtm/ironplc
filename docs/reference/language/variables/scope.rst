@@ -35,6 +35,9 @@ Scope Keywords
    * - ``VAR_IN_OUT``
      - In/out parameter (passed by reference)
      - Partial
+   * - ``VAR_TEMP``
+     - Temporary variable (starts again at every call or scan)
+     - Supported
    * - ``VAR_GLOBAL``
      - Global variable (accessible across POUs)
      - Supported
@@ -65,6 +68,42 @@ Example
            running := FALSE;
        END_IF;
    END_FUNCTION_BLOCK
+
+.. _temporary-variables:
+
+Temporary Variables
+-------------------
+
+A ``VAR_TEMP`` variable belongs to one call of the program organization unit
+that declares it. At the start of every call it takes its initial value, or the
+default value of its type when the declaration gives none, and its value is
+never kept to the next call. A ``VAR_TEMP`` block is supported in a program and
+in a function. It takes no qualifier (``RETAIN``, ``NON_RETAIN``,
+``PERSISTENT`` and ``CONSTANT`` are errors) and no location (``AT``).
+
+In a program a call is one scan, so a ``VAR_TEMP`` variable is the way to hold
+a value that is computed again at every scan next to the ``VAR`` variables,
+which keep their value from one scan to the next:
+
+.. playground::
+
+   PROGRAM main
+       VAR
+           scans : INT;
+           seen : INT;
+       END_VAR
+       VAR_TEMP
+           step : INT := 5;
+       END_VAR
+
+       step := step + 1;     (* 6 at every scan *)
+       scans := scans + 1;   (* 1, 2, 3, ... *)
+       seen := step;
+   END_PROGRAM
+
+A ``VAR_TEMP`` variable of a program is not part of the state of the program.
+It takes no stable variable ID, and adding, removing or changing one does not
+change the layout that an online change compares.
 
 Global Variables
 ----------------

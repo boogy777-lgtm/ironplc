@@ -153,7 +153,9 @@ back.
 
 **REQ-ATTR-dsl-003** The kinds of target are named once (`TargetKind`) and the
 census (`ironplc_dsl::attribute::census::declared`) lists every declaration of
-a library of each kind with its attributes.
+a library of each kind with its attributes, and, for a function, a function
+block, a program and a method, the variables it holds with the kind of block
+each was written in.
 
 **REQ-ATTR-analyzer-001** After the full analysis the library still carries the
 attributes of every kind of target. A transform that rebuilds a declaration from
@@ -170,6 +172,8 @@ compiler knows about an attribute:
 - the **targets**: the kinds of declaration the attribute may stand before, a
   set of `TargetKind`;
 - the **value kind**: what the attribute takes (see [The reader](#the-reader));
+- the kinds of variable block a declaration with the attribute **forbids**
+  (none for most rows; `subsequent` forbids `VAR_TEMP`);
 - the **family**, which groups the rows on the reference page by what the
   attribute concerns in CODESYS;
 - the **summary**: one line saying what the attribute does in CODESYS;
@@ -247,13 +251,14 @@ and invalid samples of each.
 
 ## The faults
 
-`registry::faults(kind, &attributes)` is the one check. It takes the kind of
-the declaration and its attributes and returns the faults, each with the name of
-the attribute as written and its span. It holds no logic about a row: it asks
-the row where it may stand and whether it takes the value. The part of the
-compiler that reports a fault turns it into its own diagnostic and holds no
-logic about a row either. One attribute has at most one fault, found in this
-order:
+`registry::declared_faults(&declared)` is the one check. It takes a declaration
+of the census (its kind, its attributes and the variables it holds) and returns
+the faults, each with the name of the attribute as written and its span. It holds
+no logic about a row: it asks the row where it may stand, whether it takes the
+value and which blocks of variables it forbids. The part of the compiler that
+reports a fault turns it into its own diagnostic and holds no logic about a row
+either. About its own place and value, one attribute has at most one fault, found
+in this order (`registry::faults(kind, &attributes)` finds these three):
 
 1. **Repeated**: an attribute of the same declaration before it is the same
    attribute. Two known attributes are the same when they are the same row, so
@@ -266,6 +271,14 @@ order:
    value given to an attribute that takes none, a value missing, a value not
    in the list, a value that is not an integer, an empty text. The fault carries
    the value as written, and `None` when it is missing.
+
+Then, about what the declaration holds:
+
+4. **Forbids block**: the attribute is known, stands where its row allows, and
+   the declaration holds a variable written in a kind of block that its row
+   forbids. The fault is at the first such variable and carries the span of the
+   attribute. An attribute that is written again has this fault once, for the
+   first.
 
 An attribute that is user-defined and not repeated has no fault.
 
@@ -290,6 +303,13 @@ written on the declaration.
 fault, whatever its value and the kind of declaration; a declaration without
 attributes has none.
 
+**REQ-ATTR-dsl-034** A known attribute that stands where its row allows, before
+a declaration that holds a variable in a kind of block the row forbids, has the
+fault `ForbidsBlock`, at the first such variable, with the row, the kind of
+block and the span of the attribute; a declaration that holds no such variable
+has none; an attribute that is not allowed there has only `NotAllowedHere`; an
+attribute written twice has the fault once.
+
 ## What the analysis reports
 
 One semantic rule (`rule_attribute`) walks the declarations of the library (the
@@ -305,6 +325,7 @@ text](#dialects-and-conditional-text)).
 | Not allowed here | P4076 | at the attribute: names it as written, the kind of declaration it stands before, and the kinds its row stands before | none |
 | Value | P4077 | at the attribute: names it, says what it takes and what was found (the value as written, or no value) | none |
 | Repeated | P4078 | at the later attribute: names it | at the first attribute: where it was first written |
+| Forbids block | P4079 | at the first variable of the forbidden block: names the keyword of the block and the attribute | at the attribute: where it is written |
 
 An attribute written before a group is attached to each declaration of the
 group with one span, so the same fault is found once for each declaration. The
@@ -329,6 +350,12 @@ one for each declaration.
 
 **REQ-ATTR-analyzer-014** An attribute that is user-defined is not reported,
 and neither is a known attribute where it may stand with a value it takes.
+
+**REQ-ATTR-analyzer-015** A declaration with an attribute and a variable in a
+kind of block the attribute forbids is reported as P4079 at the first such
+variable, with the keyword of the block and the name of the attribute, and a
+secondary label at the span of the attribute; the same declaration without the
+attribute, and the attribute without such a variable, are not reported.
 
 ## Layout
 
@@ -412,12 +439,17 @@ the allocation.
 list with the attribute `subsequent` have consecutive indices in the variable
 table, in the order they are declared.
 
+CODESYS reports a `VAR_TEMP` block in a program with the attribute as an error.
+The registry row of `subsequent` forbids the block, and the analysis reports a
+program that holds a `VAR_TEMP` variable and has the attribute as P4079
+(REQ-ATTR-analyzer-015). A program accepts `VAR_TEMP` without the attribute:
+its variables are working memory of one scan, laid out after the persistent
+part and started again at every scan, so they are not among the variables the
+attribute allocates.
+
 Not done: starting a new memory area when the list changes, and the memory for
 retained variables. The compiler has no such memory, so a variable of the list
-qualified `RETAIN` is not stored apart from the other variables. CODESYS reports
-a `VAR_TEMP` block in a program with the attribute as an error; the parser
-takes no `VAR_TEMP` block in a program, so the combination is a syntax error
-(P0002) before the analysis.
+qualified `RETAIN` is not stored apart from the other variables.
 
 ## Enumeration
 

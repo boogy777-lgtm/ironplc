@@ -97,7 +97,6 @@ fn lower_var_block_when_each_block_keyword_then_the_kind_of_variable_it_declares
         (FUNCTION_BLOCK, "VAR_OUTPUT", VariableType::Output),
         (FUNCTION_BLOCK, "VAR_IN_OUT", VariableType::InOut),
         (FUNCTION_BLOCK, "VAR_TEMP", VariableType::VarTemp),
-        (PROGRAM, "VAR_TEMP", VariableType::VarTemp),
         (FUNCTION_BLOCK, "VAR_EXTERNAL", VariableType::External),
         (FILE, "VAR_GLOBAL", VariableType::Global),
         (FUNCTION_BLOCK, "VAR_STAT", VariableType::VarStat),
@@ -115,6 +114,16 @@ fn lower_var_block_when_each_block_keyword_then_the_kind_of_variable_it_declares
         .filter(|(_, items)| matches!(items, Declarations(_)))
         .count();
     assert_eq!(declaring, rows.len());
+}
+
+#[test]
+fn lower_var_block_when_var_temp_in_a_program_then_the_variables_are_temporaries() {
+    let lowered = variables("VAR_TEMP a : INT := 5; b : BOOL; END_VAR");
+
+    assert_eq!(lowered.len(), 2);
+    for variable in &lowered {
+        assert_eq!(variable.var_type, VariableType::VarTemp);
+    }
 }
 
 #[test]

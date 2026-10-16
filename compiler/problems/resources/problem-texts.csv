@@ -291,6 +291,8 @@ P4077,attribute_value_invalid_found,"The attribute '{name}' takes {takes}, but i
 P4077,attribute_value_invalid_missing,"The attribute '{name}' takes {takes}, but it has no value"
 P4078,attribute_repeated,The attribute '{name}' is written again for the same declaration
 P4078,attribute_repeated_first_written_here,First written here
+P4079,attribute_forbids_variable_block,A {block} block is not allowed in a declaration that has the attribute '{name}'
+P4079,attribute_forbids_variable_block_attribute_written_here,The attribute is written here
 P6001,cannot_canonicalize_path,"{path}, {reason}"
 P6002,cannot_read_metadata,{reason}
 P6003,cannot_read_directory,Path does not exist: {path}

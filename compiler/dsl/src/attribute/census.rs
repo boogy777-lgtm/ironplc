@@ -7,6 +7,7 @@
 //! [`TargetKind`] is answered for by every reader at once.
 
 use super::Attributes;
+use crate::common::VariableType;
 use crate::common::{
     ArrayDeclaration, EnumerationDeclaration, FunctionBlockDeclaration, FunctionDeclaration,
     InterfaceDeclaration, LateBoundDeclaration, Library, MethodDeclaration, ParamsDeclaration,
@@ -14,6 +15,7 @@ use crate::common::{
     StringDeclaration, StructureDeclaration, StructureElementDeclaration, SubrangeDeclaration,
     UnionDeclaration, VarDecl,
 };
+use crate::core::{Located, SourceSpan};
 use crate::sfc::Action;
 use crate::visitor::Visitor;
 use std::convert::Infallible;
@@ -65,6 +67,26 @@ target_kinds! {
     Action => "action",
 }
 
+/// A variable that a declaration holds directly, with the kind of block it
+/// was written in.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Held {
+    pub block: VariableType,
+    /// The place of the variable.
+    pub span: SourceSpan,
+}
+
+/// The variables a unit holds, in the order written.
+fn held(variables: &[VarDecl]) -> Vec<Held> {
+    variables
+        .iter()
+        .map(|variable| Held {
+            block: variable.var_type.clone(),
+            span: variable.identifier.span(),
+        })
+        .collect()
+}
+
 /// One declaration of a library that an attribute can stand before.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Declared {
@@ -72,6 +94,9 @@ pub struct Declared {
     /// The name the declaration declares.
     pub name: String,
     pub attributes: Attributes,
+    /// The variables the declaration holds directly: those of a function, a
+    /// function block, a program or a method. Empty for every other kind.
+    pub holds: Vec<Held>,
 }
 
 /// The declarations of `library` that an attribute can stand before, in the
@@ -88,23 +113,36 @@ struct Census {
 }
 
 impl Census {
-    fn add(&mut self, kind: TargetKind, name: String, attributes: &Attributes) {
+    fn add(&mut self, kind: TargetKind, name: String, attributes: &Attributes, holds: Vec<Held>) {
         self.found.push(Declared {
             kind,
             name,
             attributes: attributes.clone(),
+            holds,
         });
     }
 }
 
+/// The variables a node holds: those the reader of the node names, else none.
+macro_rules! holds {
+    ($node:ident) => {
+        Vec::new()
+    };
+    ($node:ident, $reader:expr) => {
+        ($reader)($node)
+    };
+}
+
 /// One method of the visitor for each kind of [`TargetKind`]: the census
-/// records the node and goes on into it.
+/// records the node and goes on into it. A kind that holds variables names
+/// them after its name.
 macro_rules! record {
-    ($($method:ident($node:ident): $kind:ident => $name:expr;)*) => {
+    ($($method:ident($node:ident): $kind:ident => $name:expr $(, holds $holds:expr)?;)*) => {
         $(
             fn $method(&mut self, node: &$node) -> Result<(), Infallible> {
                 let name = ($name)(node);
-                self.add(TargetKind::$kind, name, &node.attributes);
+                let holds: Vec<Held> = holds!(node $(, $holds)?);
+                self.add(TargetKind::$kind, name, &node.attributes, holds);
                 node.recurse_visit(self)
             }
         )*
@@ -127,11 +165,11 @@ impl Visitor<Infallible> for Census {
         visit_late_bound_declaration(LateBoundDeclaration): LateBound => |n: &LateBoundDeclaration| n.data_type_name.to_string();
         visit_structure_element_declaration(StructureElementDeclaration): Member => |n: &StructureElementDeclaration| n.name.to_string();
         visit_var_decl(VarDecl): Variable => |n: &VarDecl| n.identifier.to_string();
-        visit_function_declaration(FunctionDeclaration): Function => |n: &FunctionDeclaration| n.name.to_string();
-        visit_function_block_declaration(FunctionBlockDeclaration): FunctionBlock => |n: &FunctionBlockDeclaration| n.name.to_string();
-        visit_program_declaration(ProgramDeclaration): Program => |n: &ProgramDeclaration| n.name.to_string();
+        visit_function_declaration(FunctionDeclaration): Function => |n: &FunctionDeclaration| n.name.to_string(), holds |n: &FunctionDeclaration| held(&n.variables);
+        visit_function_block_declaration(FunctionBlockDeclaration): FunctionBlock => |n: &FunctionBlockDeclaration| n.name.to_string(), holds |n: &FunctionBlockDeclaration| held(&n.variables);
+        visit_program_declaration(ProgramDeclaration): Program => |n: &ProgramDeclaration| n.name.to_string(), holds |n: &ProgramDeclaration| held(&n.variables);
         visit_interface_declaration(InterfaceDeclaration): Interface => |n: &InterfaceDeclaration| n.name.to_string();
-        visit_method_declaration(MethodDeclaration): Method => |n: &MethodDeclaration| n.name.to_string();
+        visit_method_declaration(MethodDeclaration): Method => |n: &MethodDeclaration| n.name.to_string(), holds |n: &MethodDeclaration| held(&n.variables);
         visit_property_declaration(PropertyDeclaration): Property => |n: &PropertyDeclaration| n.name.to_string();
         visit_action(Action): Action => |n: &Action| n.name.to_string();
     }

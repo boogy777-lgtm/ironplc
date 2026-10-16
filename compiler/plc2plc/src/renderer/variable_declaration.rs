@@ -44,20 +44,7 @@ impl Render for VarDecl {
     fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
         r.newline();
 
-        let var_type = match self.var_type {
-            VariableType::Var => "VAR",
-            VariableType::VarTemp => "VAR_TEMP",
-            VariableType::VarStat => "VAR_STAT",
-            VariableType::VarInst => "VAR_INST",
-            VariableType::VarGeneric => "VAR_GENERIC",
-            VariableType::Input => "VAR_INPUT",
-            VariableType::Output => "VAR_OUTPUT",
-            VariableType::InOut => "VAR_IN_OUT",
-            VariableType::External => "VAR_EXTERNAL",
-            VariableType::Global => "VAR_GLOBAL",
-            VariableType::Access => "VAR_ACCESS",
-        };
-        r.write_declaration_keyword(self, var_type);
+        r.write_declaration_keyword(self, self.var_type.keyword());
 
         match self.qualifier {
             DeclarationQualifier::Unspecified => {}

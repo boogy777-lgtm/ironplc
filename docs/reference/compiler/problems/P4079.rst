@@ -1,0 +1,50 @@
+=====
+P4079
+=====
+
+.. problem-summary:: P4079
+
+This error occurs when an attribute pragma — ``{attribute 'name'}`` — names an
+attribute that IronPLC knows, the pragma stands before a declaration the
+attribute applies to, and the declaration holds a block of variables that the
+attribute does not allow. The error is at the first variable of the block, and a
+second label marks the pragma.
+
+The attribute ``subsequent`` does not allow a ``VAR_TEMP`` block in the program
+it stands before. A ``VAR_TEMP`` variable of a program belongs to one scan and
+is not kept from one scan to the next, so it cannot be one of the variables
+that the attribute asks to be allocated one after another in memory. CODESYS
+reports the same combination as an error. A program without the attribute may
+declare ``VAR_TEMP`` variables (see :ref:`temporary-variables`).
+
+The reference page :doc:`/reference/language/attributes` describes every known
+attribute.
+
+Example
+-------
+
+The following code will generate error P4079:
+
+.. code-block::
+
+   {attribute 'subsequent'}
+   PROGRAM main
+   VAR_TEMP
+       scratch : INT;   (* Error: subsequent does not allow VAR_TEMP *)
+   END_VAR
+   END_PROGRAM
+
+To fix this error, declare the variable in a ``VAR`` block, or remove the
+attribute:
+
+.. code-block::
+
+   {attribute 'subsequent'}
+   PROGRAM main
+   VAR
+       scratch : INT;
+   END_VAR
+   END_PROGRAM
+
+Pragmas are a CODESYS/TwinCAT extension, accepted only with
+``--allow-pragmas`` (see :doc:`/reference/compiler/ironplcc`).
