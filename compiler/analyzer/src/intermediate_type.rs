@@ -9,7 +9,7 @@
 //! IEC 61131-3 standard and similar PLC programming languages.
 
 use ironplc_container::{string_region_size, CharWidth, DEFAULT_STRING_MAX_LENGTH};
-use ironplc_dsl::common::StructInitialValueAssignmentKind;
+use ironplc_dsl::common::{StructInitialValueAssignmentKind, VariableType};
 use ironplc_dsl::core::Id;
 
 use crate::intermediates::layout::{align_up, layout, AlignmentBound, Layout};
@@ -616,6 +616,37 @@ pub enum FunctionBlockVarType {
     InOut,
     /// Internal variable (VAR)
     Internal,
+}
+
+impl FunctionBlockVarType {
+    /// The kind of field a variable block declares in a function block
+    /// instance, `None` for a block whose variables the instance does not
+    /// hold: `VAR_TEMP` belongs to one call, and `VAR_EXTERNAL`,
+    /// `VAR_GLOBAL` and `VAR_ACCESS` name storage that is outside the
+    /// instance.
+    ///
+    /// This is the one definition of which variables are members of an
+    /// instance (the type environment builds its fields from it, and so does
+    /// the list of what `instance.name` may select). The match has no
+    /// wildcard, so a new kind of variable block must say which it is.
+    pub fn of(variable_type: &VariableType) -> Option<FunctionBlockVarType> {
+        match variable_type {
+            VariableType::Input => Some(FunctionBlockVarType::Input),
+            VariableType::Output => Some(FunctionBlockVarType::Output),
+            VariableType::InOut => Some(FunctionBlockVarType::InOut),
+            // VAR_STAT/VAR_INST/VAR_GENERIC are stored like VAR until their
+            // placement rules are implemented, so they are fields too. See
+            // `VariableType::is_pou_storage`.
+            VariableType::Var
+            | VariableType::VarStat
+            | VariableType::VarInst
+            | VariableType::VarGeneric => Some(FunctionBlockVarType::Internal),
+            VariableType::VarTemp
+            | VariableType::External
+            | VariableType::Global
+            | VariableType::Access => None,
+        }
+    }
 }
 
 /// Reason why `slot_count` could not compute a slot count.

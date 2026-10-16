@@ -493,22 +493,8 @@ impl Declaration<'_> {
         let mut members = Vec::new();
 
         for decl in &node.variables {
-            let var_type = match decl.var_type {
-                VariableType::Input => Some(FunctionBlockVarType::Input),
-                VariableType::Output => Some(FunctionBlockVarType::Output),
-                VariableType::InOut => Some(FunctionBlockVarType::InOut),
-                // VAR_STAT/VAR_INST/VAR_GENERIC are stored like VAR until
-                // their placement rules are implemented, so they are FB
-                // fields too. See `VariableType::is_pou_storage`.
-                VariableType::Var
-                | VariableType::VarStat
-                | VariableType::VarInst
-                | VariableType::VarGeneric => Some(FunctionBlockVarType::Internal),
-                _ => None,
-            };
-            let var_type = match var_type {
-                Some(vt) => vt,
-                None => continue,
+            let Some(var_type) = FunctionBlockVarType::of(&decl.var_type) else {
+                continue;
             };
 
             if let Some(id) = decl.identifier.symbolic_id() {
