@@ -163,6 +163,9 @@ fn create_texts(defs: &[ProblemDef]) -> Result<(), Box<dyn Error>> {
 }
 
 fn main() {
+    // The severity column of `problem-codes.csv` is specified in
+    // `diagnostic-severity.md`; this crate owns its `REQ-DS-problems-*` tests.
+    ironplc_spec_requirements_gen::generate(&["diagnostic-severity.md"]);
     if let Err(err) = create_problems() {
         eprintln!("problem generating problems.rs: {err}");
         process::exit(1);

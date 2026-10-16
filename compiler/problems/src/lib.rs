@@ -14,6 +14,12 @@ include!(concat!(env!("OUT_DIR"), "/problems.rs"));
 
 include!(concat!(env!("OUT_DIR"), "/texts.rs"));
 
+// Spec conformance testing infrastructure (test-only).
+#[cfg(test)]
+mod spec_requirements {
+    include!(concat!(env!("OUT_DIR"), "/spec_requirements.rs"));
+}
+
 /// The text of a label together with the problem it describes, made by a
 /// function of the module [`text`] from one row of `problem-texts.csv`.
 ///
@@ -65,6 +71,7 @@ impl std::fmt::Debug for Text {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use spec_test_macro::spec_test;
 
     #[test]
     fn text_when_row_with_placeholders_then_the_problem_of_the_row_and_the_arguments_in_place() {
@@ -118,8 +125,68 @@ mod tests {
     }
 
     #[test]
+    fn all_spec_requirements_have_tests() {
+        assert!(
+            crate::spec_requirements::UNTESTED.is_empty(),
+            "Requirements in spec with no conformance test: {:?}",
+            crate::spec_requirements::UNTESTED
+        );
+    }
+
+    /// The name of a level, by a `match` without a wildcard: a level added to
+    /// the list of levels does not compile here until the test knows it.
+    fn level_name(severity: Severity) -> &'static str {
+        match severity {
+            Severity::Error => "Error",
+            Severity::Warning => "Warning",
+            Severity::Info => "Info",
+        }
+    }
+
+    #[spec_test(REQ_DS_problems_001)]
     fn severity_when_problem_of_the_csv_then_the_level_of_its_row() {
         assert_eq!(Problem::SyntaxError.severity(), Severity::Error);
         assert_eq!(Problem::AttributeRepeated.severity(), Severity::Error);
+        assert_eq!(Problem::UnexpectedToken.severity(), Severity::Error);
+        assert_eq!(level_name(Problem::SyntaxError.severity()), "Error");
+        assert_eq!(level_name(Severity::Warning), "Warning");
+        assert_eq!(level_name(Severity::Info), "Info");
+    }
+
+    #[spec_test(REQ_DS_problems_002)]
+    fn severity_variant_when_row_has_no_valid_level_then_error_names_code_and_value() {
+        for level in ["Error", "Warning", "Info"] {
+            assert_eq!(
+                ironplc_problems_gen::severity_variant("P0001", level),
+                Ok(level)
+            );
+        }
+        for value in ["", "error", "Warn", "Information", "Fatal"] {
+            let message = ironplc_problems_gen::severity_variant("P0042", value)
+                .expect_err("the value should be refused");
+
+            assert!(message.contains("P0042"), "'{value}': {message}");
+            assert!(
+                message.contains(&format!("'{value}'")),
+                "'{value}': {message}"
+            );
+        }
+    }
+
+    #[spec_test(REQ_DS_problems_003)]
+    fn check_problem_codes_header_when_not_the_four_columns_then_error() {
+        assert_eq!(
+            ironplc_problems_gen::check_problem_codes_header(&[
+                "Code", "Name", "Message", "Severity"
+            ]),
+            Ok(())
+        );
+        for header in [
+            vec!["Code", "Name", "Message"],
+            vec!["Code", "Name", "Severity", "Message"],
+            vec!["Code", "Name", "Message", "Level"],
+        ] {
+            assert!(ironplc_problems_gen::check_problem_codes_header(&header).is_err());
+        }
     }
 }

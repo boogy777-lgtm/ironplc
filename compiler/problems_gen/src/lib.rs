@@ -67,13 +67,17 @@ pub enum Severity {
 ",
     );
     for (name, doc) in SEVERITIES {
-        out.push_str(&format!("    /// {doc}
+        out.push_str(&format!(
+            "    /// {doc}
     {name},
-"));
+"
+        ));
     }
-    out.push_str("}
+    out.push_str(
+        "}
 
-");
+",
+    );
     out
 }
 

@@ -1136,6 +1136,8 @@ version = "0.247.0"
 dependencies = [
  "csv",
  "ironplc-problems-gen",
+ "ironplc-spec-requirements-gen",
+ "spec_test_macro",
 ]
 
 [[package]]

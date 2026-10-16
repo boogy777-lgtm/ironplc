@@ -245,8 +245,14 @@ fn severity_variant_when_missing_or_unknown_then_error_names_code_and_value() {
         let message = severity_variant("P0042", value).expect_err("the value should be refused");
 
         assert!(message.contains("P0042"), "'{value}': {message}");
-        assert!(message.contains(&format!("'{value}'")), "'{value}': {message}");
-        assert!(message.contains("Error, Warning, Info"), "'{value}': {message}");
+        assert!(
+            message.contains(&format!("'{value}'")),
+            "'{value}': {message}"
+        );
+        assert!(
+            message.contains("Error, Warning, Info"),
+            "'{value}': {message}"
+        );
     }
 }
 
@@ -265,7 +271,8 @@ fn check_problem_codes_header_when_column_missing_or_moved_then_error() {
         vec!["Code", "Name", "Severity", "Message"],
         vec!["Code", "Name", "Message", "Level"],
     ] {
-        let message = check_problem_codes_header(&header).expect_err("the header should be refused");
+        let message =
+            check_problem_codes_header(&header).expect_err("the header should be refused");
 
         assert!(message.contains("Code,Name,Message,Severity"), "{message}");
     }
@@ -277,7 +284,12 @@ fn render_severity_enum_when_called_then_one_variant_for_each_level() {
 
     assert!(source.contains("pub enum Severity {"), "{source}");
     for level in ["Error", "Warning", "Info"] {
-        assert!(source.contains(&format!("    {level},
-")), "{source}");
+        assert!(
+            source.contains(&format!(
+                "    {level},
+"
+            )),
+            "{source}"
+        );
     }
 }
