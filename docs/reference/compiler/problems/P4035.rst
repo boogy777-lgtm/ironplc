@@ -71,8 +71,10 @@ Enumeration Values
 
 A value written with the name of its enumeration, ``Pump#Running``, has the type
 of that enumeration. It is the same error where it is stored into a variable of
-another enumeration, and where it is the initial value of one or a label of a
-``CASE`` whose selector is another enumeration, or is compared with one:
+another enumeration, and where it is the initial value of one, a member of a
+structure, an element of an array, an input of a function block or a method, or
+a label of a ``CASE`` whose selector is another enumeration, or is compared with
+one:
 
 .. code-block::
 
@@ -90,3 +92,5 @@ another enumeration, and where it is the initial value of one or a label of a
    END_PROGRAM
 
 To fix this error, write the enumeration of the variable: ``Motor#Running``.
+An enumeration that is not strict accepts the value of another enumeration (see
+:doc:`/reference/language/data-types/derived/enumerated-types`).

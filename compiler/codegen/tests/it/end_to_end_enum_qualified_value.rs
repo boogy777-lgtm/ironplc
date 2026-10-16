@@ -147,3 +147,148 @@ fn end_to_end_when_value_is_not_of_the_expected_enumeration_then_the_check_refus
         "{source}"
     );
 }
+
+/// A value is refused where a part of a declared type is given it: the member of
+/// a structure (also in a structure in a structure), an input of a function
+/// block or of a method, an element of an array, and a member or an element that
+/// an assignment writes. These stored the ordinal of a value of the wrong
+/// enumeration before; the arrays stop in code generation when the program is
+/// right, so only their check is asked here.
+/// Each row is the first diagnostic, with `E1 : (A, B)` and `E2 : (C, D)`.
+#[rstest]
+#[case::structure_member_value_of_another_enumeration("v : S := (m := C);", "", "P2006")]
+#[case::structure_member_qualified_value_of_another_enumeration(
+    "v : S := (m := E2#C);",
+    "",
+    "P4035"
+)]
+#[case::structure_member_nested_value_of_another_enumeration(
+    "w : T := (s := (m := C));",
+    "",
+    "P2006"
+)]
+#[case::function_block_input_named_value_of_another_enumeration("", "fb1(p := C);", "P2006")]
+#[case::function_block_input_positional_value_of_another_enumeration("", "fb1(C);", "P2006")]
+#[case::function_block_input_qualified_value_of_another_enumeration("", "fb1(p := E2#C);", "P4035")]
+#[case::method_input_value_of_another_enumeration("", "fb1.M(k := C);", "P2006")]
+#[case::function_block_member_value_of_another_enumeration("f : FB := (m := C);", "", "P2006")]
+#[case::array_element_value_of_another_enumeration("a : ARRAY[0..1] OF E1 := [A, C];", "", "P2006")]
+#[case::array_element_repeated_value_of_another_enumeration(
+    "a : ARRAY[0..1] OF E1 := [2(C)];",
+    "",
+    "P2006"
+)]
+#[case::array_element_qualified_value_of_another_enumeration(
+    "a : ARRAY[0..1] OF E1 := [A, E2#C];",
+    "",
+    "P4035"
+)]
+#[case::array_element_name_of_no_enumeration("a : ARRAY[0..1] OF E1 := [A, Nope];", "", "P4007")]
+#[case::assigned_member_value_of_another_enumeration("", "s.m := C;", "P2006")]
+#[case::assigned_member_qualified_value_of_another_enumeration("", "s.m := E2#C;", "P4035")]
+fn end_to_end_when_value_is_not_of_the_enumeration_a_declared_part_has_then_the_check_refuses_it(
+    #[case] declarations: &str,
+    #[case] statements: &str,
+    #[case] code: &str,
+) {
+    let source = [
+        "TYPE E1 : (A, B); E2 : (C, D); S : STRUCT m : E1; END_STRUCT; T : STRUCT s : S; END_STRUCT; END_TYPE",
+        "FUNCTION_BLOCK FB VAR_INPUT p : E1; END_VAR VAR m : E1; END_VAR METHOD M VAR_INPUT k : E1; END_VAR END_METHOD END_FUNCTION_BLOCK",
+        "PROGRAM main VAR fb1 : FB; s : S; t : T;",
+        declarations,
+        "END_VAR",
+        statements,
+        "END_PROGRAM",
+    ]
+    .join(" ");
+    let options = CompilerOptions {
+        allow_fb_inheritance: true,
+        ..CompilerOptions::default()
+    };
+
+    let refused = try_check_and_run(&source, &options);
+
+    assert_eq!(
+        refused.expect_err("the program is refused").code,
+        code,
+        "{source}"
+    );
+}
+
+/// A structure initializer whose members are values of their enumerations, in
+/// a structure in a structure, and an input given a value of its enumeration,
+/// are what the program means: the variables `o1` to `o6` read the ordinals
+/// back (`E1` is A = 0, B = 1, C = 2 and `E2` is X = 0, Y = 1, Z = 2).
+#[test]
+fn end_to_end_when_structure_initializer_and_input_have_values_of_their_enumerations_then_the_program_runs_with_them(
+) {
+    let source = "
+TYPE E1 : (A, B, C); E2 : (X, Y, Z); S : STRUCT m : E1; n : E2; k : DINT; END_STRUCT; T : STRUCT s : S; END_STRUCT; END_TYPE
+FUNCTION_BLOCK FB
+  VAR_INPUT p : E1; END_VAR
+  VAR_OUTPUT r : DINT; END_VAR
+  CASE p OF A: r := 10; B: r := 20; C: r := 30; END_CASE;
+END_FUNCTION_BLOCK
+PROGRAM main
+  VAR s : S := (m := C, n := Y, k := 7); t : T := (s := (m := B, n := Z)); fb1 : FB;
+      o1 : DINT; o2 : DINT; o3 : DINT; o4 : DINT; o5 : DINT; o6 : DINT; END_VAR
+  o1 := s.m;
+  o2 := s.n;
+  o3 := s.k;
+  o4 := t.s.m;
+  o5 := t.s.n;
+  fb1(p := C);
+  o6 := fb1.r;
+END_PROGRAM
+";
+
+    let (_container, bufs) =
+        try_check_and_run(source, &CompilerOptions::default()).expect("the program runs");
+
+    let numbers: Vec<i32> = (3..9).map(|slot| bufs.vars[slot].as_i32()).collect();
+    assert_eq!(numbers, vec![2, 1, 7, 1, 2, 30]);
+}
+
+/// An enumeration that is not strict is its base integer type (CODESYS without
+/// `{attribute 'strict'}`), so it holds a value of another enumeration, written
+/// bare or with its type, in every position alike. The value stored is the
+/// ordinal the value has in its own enumeration: `E1` is A = 0, B = 1, C1 = 2
+/// and `E2` is C = 0, D = 1, F = 2. A strict enumeration refuses each of them.
+const NOT_STRICT: &str = "
+TYPE E1 : (A, B, C1); E2 : (C, D, F); S : STRUCT m : E1; n : E1; END_STRUCT; END_TYPE
+FUNCTION_BLOCK FB
+  VAR_INPUT p : E1; END_VAR
+  VAR_OUTPUT r : DINT; END_VAR
+  r := p;
+END_FUNCTION_BLOCK
+PROGRAM main
+  VAR s : S := (m := D, n := E2#F); fb1 : FB; x : E1;
+      o1 : DINT; o2 : DINT; o3 : DINT; o4 : DINT; o5 : DINT; END_VAR
+  o1 := s.m;
+  o2 := s.n;
+  fb1(p := F);
+  o3 := fb1.r;
+  s.m := E2#D;
+  o4 := s.m;
+  x := C;
+  o5 := x;
+END_PROGRAM
+";
+
+#[test]
+fn end_to_end_when_enumeration_is_not_strict_then_a_value_of_another_enumeration_is_stored_as_its_number(
+) {
+    let options = CompilerOptions::from_dialect(Dialect::Codesys);
+
+    let (_container, bufs) = try_check_and_run(NOT_STRICT, &options).expect("the program runs");
+
+    let numbers: Vec<i32> = (3..8).map(|slot| bufs.vars[slot].as_i32()).collect();
+    assert_eq!(numbers, vec![1, 2, 2, 1, 0]);
+}
+
+#[test]
+fn end_to_end_when_enumeration_is_strict_then_the_same_program_is_refused() {
+    let refused = try_check_and_run(NOT_STRICT, &CompilerOptions::default());
+
+    assert_eq!(refused.expect_err("the program is refused").code, "P2006");
+}

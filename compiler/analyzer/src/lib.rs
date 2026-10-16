@@ -143,7 +143,7 @@ pub use intermediates::operator_function_form::{
 };
 pub use intermediates::special_operator::SpecialOperator;
 pub use semantic_context::{SemanticContext, SemanticContextBuilder};
-pub use type_attributes::TypeAttributes;
+pub use type_attributes::{PartType, Parts, TypeAttributes};
 pub use type_category::TypeCategory;
 pub use type_environment::{
     elementary_type, Owner, TypeEnvironment, TypeEnvironmentBuilder, UsageContext, ValueOwners,

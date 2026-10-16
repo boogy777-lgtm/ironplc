@@ -85,8 +85,15 @@ The type before the ``#`` must be declared (:doc:`P2008
 </reference/compiler/problems/P2008>`), must be an enumeration (:doc:`P2004
 </reference/compiler/problems/P2004>`) and must declare the value (:doc:`P2006
 </reference/compiler/problems/P2006>`). The check is the same wherever the value
-is written. Assigning a value of one enumeration to a variable of another
-reports :doc:`P4035 </reference/compiler/problems/P4035>`.
+is written. Assigning a value of one enumeration to a variable of another strict
+enumeration reports :doc:`P4035 </reference/compiler/problems/P4035>`.
+
+A bare value is checked against the enumeration the place expects, wherever the
+language gives the place a type: the target of an assignment, an argument of a
+function, a function block or a method, a ``CASE`` label, the other operand of a
+comparison, an initial value, and a member or an element that an initializer
+gives a value. For a strict enumeration, a value of another enumeration is
+:doc:`P2006 </reference/compiler/problems/P2006>` in each of them.
 
 Explicit Values
 ---------------
@@ -180,7 +187,10 @@ carry the attribute, so it is strict only when every enumeration is. An alias
 (``TYPE Mode2 : Mode;``) is strict when the enumeration it names is.
 
 The rules below are those of a strict enumeration. For one that is not strict,
-each place accepts the enumeration as it would an ``INT``: arithmetic on it is
+each place accepts the enumeration as it would an ``INT``: a value of another
+enumeration, bare or written with its type, is stored into it, compared with it
+and passed to it in every place alike, as an ``INT`` would be (its number is the
+number the value has in its own enumeration); arithmetic on it is
 accepted and has the type of its base type, so ``light + 1`` is an ``INT`` and
 wraps as an ``INT`` does; a number is stored into it as into a variable of the
 base type, whether or not it is a constant and whether or not it names a value;

@@ -45,8 +45,9 @@ Enumeration Values
 
 A name that is written where an enumeration is expected, and that no enumeration
 declares, is reported as a name that is not declared. The target of an
-assignment, an argument, an operand of a comparison and a ``CASE`` label are such
-places:
+assignment, an argument of a function, a function block or a method, an operand
+of a comparison, a ``CASE`` label, and a member or an element that an
+initializer gives a value are such places:
 
 .. code-block::
 

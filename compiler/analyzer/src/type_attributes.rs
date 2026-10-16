@@ -6,8 +6,37 @@
 
 use ironplc_dsl::common::StructInitialValueAssignmentKind;
 use ironplc_dsl::core::{Id, Located, SourceSpan};
+use ironplc_dsl::type_id::TypeId;
 
 use crate::{intermediate_type::IntermediateType, type_category::TypeCategory};
+
+/// The type of one part of a type that has parts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PartType {
+    /// A type of the environment, by identity: what the representation of
+    /// the part cannot say, as two enumerations that list the same number of
+    /// values have the same representation.
+    Of(TypeId),
+    /// An array spelled out in place (`a : ARRAY[1..2] OF E`), which has no
+    /// type of its own in the environment: the type of its elements, and the
+    /// number of subscripts that select one.
+    ArrayOf { element: TypeId, dimensions: usize },
+}
+
+/// The parts of a type, with the identity of the type of each. The
+/// representation of a type states what its parts look like and not which
+/// declared types they are, which is what a check of the values written for
+/// them needs.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub enum Parts {
+    /// A type that has no parts, or whose parts are not recorded.
+    #[default]
+    None,
+    /// The members of a structure that name their type.
+    Members(Vec<(Id, PartType)>),
+    /// The type of the elements of an array that names it.
+    Elements(TypeId),
+}
 
 /// Attributes associated with a type in the type environment.
 #[derive(Debug, Clone, PartialEq)]
@@ -33,6 +62,10 @@ pub struct TypeAttributes {
     /// (`TypeEnvironment::insert_alias`), so it has the same values as that
     /// type and a name that two enumerations share belongs to both.
     pub enumerated_values: Vec<Id>,
+    /// The identity of the types of the parts of a structure or an array. An
+    /// alias is entered with the attributes of the type it names, so it has
+    /// the parts of that type.
+    pub parts: Parts,
 }
 
 impl TypeAttributes {
@@ -45,7 +78,14 @@ impl TypeAttributes {
             type_category,
             initial_value: None,
             enumerated_values: Vec::new(),
+            parts: Parts::None,
         }
+    }
+
+    /// Sets the identity of the types of the parts.
+    pub fn with_parts(mut self, parts: Parts) -> Self {
+        self.parts = parts;
+        self
     }
 
     /// Sets the values an enumeration declares.

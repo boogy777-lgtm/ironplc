@@ -1,22 +1,24 @@
 //! The values written where an enumeration is expected.
 //!
-//! A place that stores or compares an enumeration knows which one it expects:
-//! the target of an assignment, a parameter, the selector of a `CASE`, the
-//! other operand of a comparison. The value written there has to be one of it.
+//! A place that stores or compares an enumeration knows which one it expects
+//! (`position::Position` lists the places). The value written there has to be
+//! one of it.
 //!
 //! - A bare name that the expected enumeration does not declare is P2006, as
 //!   it is in an initial value. A name that no enumeration declares is not a
 //!   value at all; `report_unknown_value` reports it once, wherever it stands.
 //! - A value written with the type of another enumeration is P4035 where
-//!   nothing else compares it with the expected type. An assignment and an
-//!   argument type their operands and report the mismatch themselves, so those
-//!   two places leave it to them.
+//!   nothing else compares it with the expected type. An assignment to a
+//!   variable and an argument of a function type their operands and report the
+//!   mismatch themselves, so those places leave it to them.
+//! - An enumeration that is not strict is its base integer type and holds a
+//!   value of any other enumeration: `check_value` reports neither of the two
+//!   for it, in every place alike.
 
 use ironplc_dsl::{
     common::{EnumeratedValue, TypeName},
     core::{Id, Located},
     diagnostic::Diagnostic,
-    textual::{ExprKind, ExprType},
     type_id::TypeId,
 };
 use ironplc_problems::text;
@@ -30,6 +32,10 @@ pub(super) struct Expected<'a> {
     /// The declaration: the enumeration itself, whichever alias names it.
     declaration: TypeId,
     values: &'a [Id],
+    /// Whether the enumeration is strict (`IntermediateType::is_strict_enumeration`,
+    /// the one answer to that question). One that is not strict is its base
+    /// integer type, which holds the value of any enumeration.
+    strict: bool,
 }
 
 /// Whether the place compares a value of another enumeration with what it
@@ -47,52 +53,58 @@ impl<'a> RuleDeclaredEnumeratedValues<'a> {
     pub(super) fn expected_of(&self, id: TypeId) -> Option<Expected<'a>> {
         let types = self.context.types();
         let declaration = types.enumeration_declaration(id)?;
-        let values = types.get_by_id(declaration)?.enumerated_values.as_slice();
+        let attributes = types.get_by_id(declaration)?;
         Some(Expected {
             declaration,
-            values,
+            values: attributes.enumerated_values.as_slice(),
+            strict: attributes.representation.is_strict_enumeration(),
         })
     }
 
     /// The enumeration the type `name` names, or `None`.
-    pub(super) fn expected_named(&self, name: &TypeName) -> Option<Expected<'a>> {
+    fn expected_named(&self, name: &TypeName) -> Option<Expected<'a>> {
         self.expected_of(self.context.types().id_of(name)?)
     }
 
-    /// The enumeration an expression of the type `expr_type` has.
-    pub(super) fn expected_of_expr_type(&self, expr_type: &ExprType) -> Option<Expected<'a>> {
-        match expr_type {
-            ExprType::Concrete(id) => self.expected_of(*id),
-            ExprType::Literal(_) | ExprType::Null => None,
-        }
+    /// Whether a bare name that is not a value of `expected` is refused: it
+    /// is a value of another enumeration, which only a strict enumeration
+    /// refuses. This and [`Self::check_value`] are the one point where a value
+    /// of another enumeration is judged, so every position answers alike.
+    pub(super) fn refuses_other_enumeration(&self, expected: Expected<'_>, name: &Id) -> bool {
+        expected.strict
+            && self.is_declared_by_named_enumeration(name)
+            && !expected.values.contains(name)
     }
 
-    /// Checks that the value written in an expression is one of the
-    /// enumeration a place expects.
-    pub(super) fn check_expression_value(
-        &mut self,
-        expected: Option<Expected<'a>>,
-        value: &ExprKind,
-        other: OtherEnumeration,
-    ) {
-        if let (Some(expected), ExprKind::EnumeratedValue(value)) = (expected, value) {
-            self.check_value(expected, value, other);
-        }
+    /// Whether an initial value of the enumeration the type `type_name` names
+    /// is a name of another enumeration that the enumeration holds because it
+    /// is not strict.
+    pub(super) fn holds_other_enumeration(&self, type_name: &TypeName, name: &Id) -> bool {
+        self.expected_named(type_name)
+            .is_some_and(|expected| !expected.strict && self.is_declared_by_named_enumeration(name))
     }
 
     /// Checks that `value`, written where `expected` is expected, is one of it.
+    ///
+    /// An enumeration that is not strict is its base integer type, as in
+    /// CODESYS, and holds a value of any other enumeration: nothing is
+    /// reported here, wherever the value is written. A fault of the value
+    /// itself (a type that is not declared or not an enumeration, a value the
+    /// type does not declare, a name no enumeration declares) is reported
+    /// elsewhere and is the same for both.
     pub(super) fn check_value(
         &mut self,
         expected: Expected<'a>,
         value: &EnumeratedValue,
         other: OtherEnumeration,
     ) {
+        if !expected.strict {
+            return;
+        }
         match &value.type_name {
             None => {
                 // A name no enumeration declares is reported by itself.
-                if self.is_declared_by_named_enumeration(&value.value)
-                    && !expected.values.contains(&value.value)
-                {
+                if self.refuses_other_enumeration(expected, &value.value) {
                     self.diagnostics.push(self.value_not_defined(value));
                 }
             }

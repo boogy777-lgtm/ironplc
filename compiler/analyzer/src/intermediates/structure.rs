@@ -4,10 +4,12 @@
 //! including field validation, offset calculation, and memory layout.
 
 use crate::intermediate_type::{IntermediateStructField, IntermediateType};
+use crate::intermediates::array::element_type_id;
 use crate::intermediates::enumeration::try_from_values;
 use crate::intermediates::layout::{layout, AlignmentBound};
 use crate::intermediates::subrange::IntermediateResult;
 use crate::resolution::Failure;
+use crate::type_attributes::{PartType, Parts};
 use crate::type_environment::{TypeAttributes, TypeEnvironment};
 use ironplc_dsl::attribute::registry::PACK_MODE;
 use ironplc_dsl::attribute::Attributes;
@@ -85,10 +87,44 @@ fn from_elements(
         })
         .collect();
 
+    let parts = Parts::Members(
+        elements
+            .iter()
+            .filter_map(|element| {
+                Some((element.name.clone(), part_type(element, type_environment)?))
+            })
+            .collect(),
+    );
+
     Ok(TypeAttributes::new(
         node_name.span(),
         IntermediateType::Structure { fields, bound },
-    ))
+    )
+    .with_parts(parts))
+}
+
+/// The identity of the type of a member, when the member names its type or is
+/// an array of elements of a named type. The representation of a field states
+/// what the member looks like and not which declared type it is; see
+/// [`Parts`].
+fn part_type(
+    element: &StructureElementDeclaration,
+    type_environment: &TypeEnvironment,
+) -> Option<PartType> {
+    match &element.init {
+        InitialValueAssignmentKind::Array(array) => match &array.spec {
+            SpecificationKind::Named(name) => type_environment.id_of(name).map(PartType::Of),
+            spec @ SpecificationKind::Inline(subranges) => element_type_id(spec, type_environment)
+                .map(|element| PartType::ArrayOf {
+                    element,
+                    dimensions: subranges.ranges().len().max(1),
+                }),
+        },
+        init => match init.type_reference() {
+            TypeReference::Named(name) => type_environment.id_of(&name).map(PartType::Of),
+            TypeReference::Inline | TypeReference::Unspecified => None,
+        },
+    }
 }
 
 /// Resolves the field type from the field's initial value assignment

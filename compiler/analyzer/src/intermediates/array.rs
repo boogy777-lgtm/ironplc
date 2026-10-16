@@ -5,11 +5,13 @@
 
 use crate::intermediate_type::{ArrayDimension, IntermediateType};
 use crate::resolution::Failure;
+use crate::type_attributes::Parts;
 use crate::type_environment::{TypeAttributes, TypeEnvironment};
 use ironplc_container::CharWidth;
 use ironplc_dsl::common::*;
 use ironplc_dsl::core::Located;
 use ironplc_dsl::diagnostic::*;
+use ironplc_dsl::type_id::TypeId;
 use ironplc_problems::text;
 
 /// Result of processing an array specification
@@ -98,13 +100,18 @@ pub fn try_from(
                 element_repr
             };
 
-            Ok(IntermediateResult::Type(TypeAttributes::new(
-                node_name.span(),
-                IntermediateType::Array {
-                    element_type: Box::new(resolved_element_type),
-                    dimensions,
-                },
-            )))
+            Ok(IntermediateResult::Type(
+                TypeAttributes::new(
+                    node_name.span(),
+                    IntermediateType::Array {
+                        element_type: Box::new(resolved_element_type),
+                        dimensions,
+                    },
+                )
+                .with_parts(
+                    element_type_id(spec, type_environment).map_or(Parts::None, Parts::Elements),
+                ),
+            ))
         }
         SpecificationKind::Named(base_type_name) => {
             // Array type alias: MY_ARRAY : OTHER_ARRAY;
@@ -121,6 +128,25 @@ pub fn try_from(
 
             Ok(IntermediateResult::Alias(base_type_name.clone()))
         }
+    }
+}
+
+/// The identity of the type of the elements of an array spelled out in place,
+/// when the elements are of a named type. The representation of the array
+/// holds the representation of its elements and not which declared type they
+/// are; see [`Parts`].
+pub fn element_type_id(
+    spec: &ArraySpecificationKind,
+    type_environment: &TypeEnvironment,
+) -> Option<TypeId> {
+    match spec {
+        SpecificationKind::Inline(subranges) if subranges.ref_to.is_none() => {
+            match &subranges.type_name {
+                ArrayElementType::Named(name) => type_environment.id_of(name),
+                ArrayElementType::String(_) | ArrayElementType::WString(_) => None,
+            }
+        }
+        SpecificationKind::Inline(_) | SpecificationKind::Named(_) => None,
     }
 }
 
