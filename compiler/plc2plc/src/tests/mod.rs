@@ -10,6 +10,7 @@ pub(crate) use common::unwrap_parse;
 mod adr;
 mod case;
 mod codesys_literals;
+mod configuration;
 mod constant_initializers;
 mod continue_statement;
 mod corpus;
