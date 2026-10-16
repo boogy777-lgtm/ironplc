@@ -143,3 +143,38 @@ fn member_fields_when_not_composite_then_returns_none() {
     assert!(!array_type.has_members());
     assert_eq!(array_type.member_fields(), None);
 }
+
+#[rstest::rstest]
+#[case::input(
+    ironplc_dsl::common::VariableType::Input,
+    Some(FunctionBlockVarType::Input)
+)]
+#[case::output(
+    ironplc_dsl::common::VariableType::Output,
+    Some(FunctionBlockVarType::Output)
+)]
+#[case::in_out(
+    ironplc_dsl::common::VariableType::InOut,
+    Some(FunctionBlockVarType::InOut)
+)]
+#[case::local(
+    ironplc_dsl::common::VariableType::Var,
+    Some(FunctionBlockVarType::Internal)
+)]
+#[case::static_local(
+    ironplc_dsl::common::VariableType::VarStat,
+    Some(FunctionBlockVarType::Internal)
+)]
+#[case::instance_local(
+    ironplc_dsl::common::VariableType::VarInst,
+    Some(FunctionBlockVarType::Internal)
+)]
+#[case::temporary(ironplc_dsl::common::VariableType::VarTemp, None)]
+#[case::external(ironplc_dsl::common::VariableType::External, None)]
+#[case::global(ironplc_dsl::common::VariableType::Global, None)]
+fn function_block_var_type_of_when_variable_block_then_field_kind_or_none(
+    #[case] variable_type: ironplc_dsl::common::VariableType,
+    #[case] expected: Option<FunctionBlockVarType>,
+) {
+    assert_eq!(FunctionBlockVarType::of(&variable_type), expected);
+}
