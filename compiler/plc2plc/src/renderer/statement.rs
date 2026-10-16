@@ -312,11 +312,9 @@ impl Render for dsl::textual::Case {
 
 impl Render for dsl::textual::CaseStatementGroup {
     fn render(&self, r: &mut LibraryRenderer) -> Result<(), Diagnostic> {
-        for selector in self.selectors.iter() {
-            r.visit_case_selection_kind(selector)?;
-            r.write_ws(":");
-            r.newline();
-        }
+        visit_comma_separated!(r, self.selectors.iter(), CaseSelectionKind);
+        r.write_ws(":");
+        r.newline();
 
         r.indent();
 
