@@ -31,6 +31,7 @@ pub mod intermediate_type;
 mod lowered_initial_values;
 #[cfg(test)]
 mod lowered_var_blocks;
+mod member_selection;
 pub mod observe;
 mod pass_runner;
 mod resolution;

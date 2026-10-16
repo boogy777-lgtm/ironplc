@@ -61,15 +61,13 @@ use ironplc_dsl::{
 use ironplc_problems::text;
 
 use crate::{
-    callee_resolution::FunctionBlocks,
     intermediate_type::IntermediateType,
+    member_selection::Selections,
     result::SemanticResult,
     rule_support::{run_rule, DiagnosticVisitor},
     semantic_context::SemanticContext,
     string_similarity::find_closest_match,
-    type_environment::TypeEnvironment,
-    type_members::{Member, Members, Membership, TypeMembers},
-    variable_type::{self, Declarations, Declared},
+    type_members::{Member, Members, Membership},
 };
 use ironplc_parser::options::CompilerOptions;
 
@@ -80,11 +78,7 @@ pub fn apply(
 ) -> SemanticResult {
     run_rule(
         RuleMemberDeclared {
-            types: context.types(),
-            members: TypeMembers::new(FunctionBlocks::from_library(lib), context.types()),
-            // `Declarations::new` opens the base scope, where declarations
-            // made outside any POU land.
-            declarations: Declarations::new(),
+            selections: Selections::new(lib, context.types()),
             diagnostics: Vec::new(),
         },
         lib,
@@ -92,10 +86,7 @@ pub fn apply(
 }
 
 struct RuleMemberDeclared<'a> {
-    types: &'a TypeEnvironment,
-    members: TypeMembers<'a>,
-    /// The declared type of every variable in scope.
-    declarations: Declarations<'a>,
+    selections: Selections<'a>,
     diagnostics: Vec<Diagnostic>,
 }
 
@@ -106,61 +97,12 @@ impl DiagnosticVisitor for RuleMemberDeclared<'_> {
 }
 
 impl RuleMemberDeclared<'_> {
-    /// The type of the value that `kind` selects, when it is known.
-    ///
-    /// This is not `variable_type::of`: that answers the type of the variable
-    /// a bit access applies to and does not look through a reference, and the
-    /// members of a function block it knows are those the type environment
-    /// holds, which leave out a variable of a string, array or structure type
-    /// and every inherited one.
-    fn selected_type(&self, kind: &SymbolicVariableKind) -> Option<IntermediateType> {
-        match kind {
-            // The id the analyzer resolved the declaration to names every kind
-            // of type a variable can have, a reference among them; the
-            // initializer is the fallback for a declaration without one.
-            SymbolicVariableKind::Named(named) => self
-                .declarations
-                .find(&named.name)?
-                .type_id(self.types)
-                .and_then(|id| self.types.get_by_id(id))
-                .map(|attributes| attributes.representation.clone())
-                .or_else(|| {
-                    variable_type::declared_type(&named.name, &self.declarations, self.types)
-                }),
-            SymbolicVariableKind::Structured(structured) => {
-                let owner = self.selected_type(&structured.record)?;
-                match self.members.of(&owner) {
-                    Membership::Members(members) => {
-                        self.members.type_of(&members.find(&structured.field)?)
-                    }
-                    Membership::NoMembers | Membership::Unresolved => None,
-                }
-            }
-            SymbolicVariableKind::Array(array) => {
-                match self.selected_type(&array.subscripted_variable)? {
-                    IntermediateType::Array { element_type, .. } => Some(*element_type),
-                    _ => None,
-                }
-            }
-            SymbolicVariableKind::Deref(deref) => match self.selected_type(&deref.variable)? {
-                IntermediateType::Reference { target_type } => Some(*target_type),
-                _ => None,
-            },
-            // A bit or a part of an integer has no members, and `THIS^` and
-            // `SUPER^` are reported as not implemented where they are
-            // written.
-            SymbolicVariableKind::BitAccess(_)
-            | SymbolicVariableKind::PartialAccess(_)
-            | SymbolicVariableKind::SelfRef(_) => None,
-        }
-    }
-
     fn check_selection(&mut self, node: &StructuredVariable) {
-        let Some(owner) = self.selected_type(&node.record) else {
+        let Some(owner) = self.selections.selected_type(&node.record) else {
             return;
         };
         let owner_text = node.record.to_string();
-        let diagnostic = match self.members.of(&owner) {
+        let diagnostic = match self.selections.members().of(&owner) {
             Membership::Unresolved => None,
             Membership::NoMembers => Some(
                 Diagnostic::text(
@@ -198,7 +140,7 @@ impl RuleMemberDeclared<'_> {
         owner_text: &str,
         elements: &[StructureElementInit],
     ) -> Vec<Diagnostic> {
-        let Membership::Members(members) = self.members.of(owner) else {
+        let Membership::Members(members) = self.selections.members().of(owner) else {
             return Vec::new();
         };
         let mut found = Vec::new();
@@ -208,7 +150,7 @@ impl RuleMemberDeclared<'_> {
                 continue;
             };
             if let StructInitialValueAssignmentKind::Structure(inner) = &element.init {
-                if let Some(member_type) = self.members.type_of(&member) {
+                if let Some(member_type) = self.selections.members().type_of(&member) {
                     found.extend(self.check_elements(
                         &member_type,
                         &element.name.to_string(),
@@ -245,31 +187,17 @@ fn not_a_member(owner_text: &str, name: &Id, members: &Members<'_>) -> Diagnosti
 impl Visitor<Infallible> for RuleMemberDeclared<'_> {
     type Value = ();
 
-    /// Opens the scope of a declaration. A function block's scope also holds
-    /// the variables it inherits through `EXTENDS`, which its body names
-    /// without a qualifier.
     fn enter_scope(&mut self, node: ScopeNode<'_>) -> Result<(), Infallible> {
-        let block = match &node {
-            ScopeNode::FunctionBlock(block) => Some(block.name.clone()),
-            ScopeNode::Function(_) | ScopeNode::Program(_) | ScopeNode::Method(_) => None,
-        };
-        variable_type::enter_declaration_scope(&mut self.declarations, node);
-        if let Some(name) = block {
-            for decl in self.members.inherited_variables(&name) {
-                self.declarations
-                    .add_if(decl.identifier.symbolic_id(), Declared::of(decl));
-            }
-        }
+        self.selections.enter_scope(node);
         Ok(())
     }
 
     fn exit_scope(&mut self) {
-        self.declarations.exit();
+        self.selections.exit_scope();
     }
 
     fn visit_var_decl(&mut self, node: &VarDecl) -> Result<(), Infallible> {
-        self.declarations
-            .add_if(node.identifier.symbolic_id(), Declared::of(node));
+        self.selections.declare(node);
         node.recurse_visit(self)
     }
 
@@ -282,7 +210,7 @@ impl Visitor<Infallible> for RuleMemberDeclared<'_> {
         &mut self,
         node: &StructureInitializationDeclaration,
     ) -> Result<(), Infallible> {
-        if let Some(attributes) = self.types.get(&node.type_name) {
+        if let Some(attributes) = self.selections.types().get(&node.type_name) {
             let found = self.check_elements(
                 &attributes.representation,
                 &node.type_name.to_string(),
@@ -297,7 +225,7 @@ impl Visitor<Infallible> for RuleMemberDeclared<'_> {
         &mut self,
         node: &FunctionBlockInitialValueAssignment,
     ) -> Result<(), Infallible> {
-        if let Some(attributes) = self.types.get(&node.type_name) {
+        if let Some(attributes) = self.selections.types().get(&node.type_name) {
             let found = self.check_elements(
                 &attributes.representation,
                 &node.type_name.to_string(),
