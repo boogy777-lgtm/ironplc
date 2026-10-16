@@ -603,8 +603,7 @@ mod tests {
     #[test]
     fn error_when_at_end_then_empty_range_where_the_last_token_ends() {
         // The trailing space and comment are after the last token.
-        let (tokens, _) = lex("x  (* end *)
-");
+        let (tokens, _) = lex("x  (* end *)\n");
         let mut parser = Parser::new(&tokens, ParseOptions::default());
         parser.bump();
         parser.error(text::syntax_error_unexpected_input());
@@ -615,8 +614,7 @@ mod tests {
 
     #[test]
     fn error_when_at_end_then_the_same_place_as_an_error_after_the_previous_token() {
-        let (tokens, _) = lex("x 
-");
+        let (tokens, _) = lex("x \n");
         let mut parser = Parser::new(&tokens, ParseOptions::default());
         parser.bump();
         parser.error(text::syntax_error_unexpected_input());
@@ -628,8 +626,7 @@ mod tests {
 
     #[test]
     fn error_when_no_token_then_empty_range_at_the_end_of_the_text() {
-        let (tokens, _) = lex("  
-");
+        let (tokens, _) = lex("  \n");
         let mut parser = Parser::new(&tokens, ParseOptions::default());
         parser.error(text::syntax_error_unexpected_input());
         let (_, errors) = parser.finish();
