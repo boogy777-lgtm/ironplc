@@ -120,7 +120,7 @@ enum Detection {
     /// falls through to another detector, because a manifest that was
     /// found and could not be followed is a broken project, not an
     /// absent one, and answering it with an enumeration would be a guess.
-    Failed(Diagnostic),
+    Failed(Box<Diagnostic>),
 }
 
 /// Discover the project structure at a path.
@@ -153,7 +153,7 @@ pub fn discover(path: &Path) -> Result<DiscoveredProject, Diagnostic> {
                 );
                 return Ok(*project);
             }
-            Detection::Failed(diagnostic) => return Err(diagnostic),
+            Detection::Failed(diagnostic) => return Err(*diagnostic),
             Detection::NotDetected => {}
         }
     }
@@ -258,7 +258,7 @@ fn detect_twincat(path: &Path) -> Detection {
 
     match resolve_manifest(&manifest) {
         Ok(project) => Detection::Detected(Box::new(project)),
-        Err(diagnostic) => Detection::Failed(diagnostic),
+        Err(diagnostic) => Detection::Failed(Box::new(diagnostic)),
     }
 }
 
