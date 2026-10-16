@@ -33,7 +33,7 @@ use std::convert::Infallible;
 /// `NamedInput` arms (`xform_resolve_expr_types`,
 /// `xform_mark_unwritten_constants`, `call_assignment_check`,
 /// `codegen::compile_stmt`), and codegen is never reached because
-/// `ironplc_project::compile` gates it on an empty diagnostic list.
+/// `ironplc_project::compile` gates it on the absence of an error.
 pub fn apply(lib: Library, function_environment: &FunctionEnvironment) -> Outcome {
     let mut resolver = NamedToPositionalResolver {
         function_environment,

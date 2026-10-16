@@ -4,7 +4,7 @@
 //! and PLCopen XML files.
 
 use ironplc_dsl::core::FileId;
-use ironplc_dsl::diagnostic::Diagnostic;
+use ironplc_dsl::diagnostic::{error_count, has_errors, Diagnostic};
 use ironplc_parser::{options::CompilerOptions, tokenize_program};
 use ironplc_sources::{xml, FileType, Source};
 use log::debug;
@@ -38,8 +38,8 @@ fn tokenize_st(content: &str, file_id: &FileId, options: &CompilerOptions) -> Ve
     debug!("{tokens}");
     println!("{tokens}");
 
-    if !diagnostics.is_empty() {
-        println!("Number of errors {}", diagnostics.len());
+    if has_errors(&diagnostics) {
+        println!("Number of errors {}", error_count(&diagnostics));
     }
 
     diagnostics
@@ -138,8 +138,8 @@ fn tokenize_st_body(
     debug!("{tokens}");
     println!("{tokens}");
 
-    if !diagnostics.is_empty() {
-        println!("Number of errors {}", diagnostics.len());
+    if has_errors(&diagnostics) {
+        println!("Number of errors {}", error_count(&diagnostics));
     }
 
     diagnostics

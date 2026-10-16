@@ -13,7 +13,7 @@
 
 use ironplc_codegen::{CodegenOptions, SourceLookup};
 use ironplc_container::Container;
-use ironplc_dsl::diagnostic::Diagnostic;
+use ironplc_dsl::diagnostic::{error_count, has_errors, Diagnostic};
 use ironplc_parser::options::CompilerOptions;
 use log::debug;
 
@@ -57,8 +57,9 @@ pub struct CompileOutput {
 /// hide a real bug in the files that did resolve, but it must still prevent a
 /// container from being produced.
 ///
-/// Analysis always runs. Codegen runs only when nothing at all -- seeded,
-/// parse, or analysis -- reported a problem.
+/// Analysis always runs. Codegen runs only when nothing -- seeded, parse, or
+/// analysis -- reported an error. A warning or an information message is
+/// returned in `diagnostics` beside the container and does not stop codegen.
 ///
 /// `source_lookup` hands codegen the exact bytes the parser saw for each file,
 /// which the container's debug section hashes so a debugger can detect drift.
@@ -79,8 +80,11 @@ pub fn compile(
     // it found; it never short-circuits on the seeded diagnostics.
     diagnostics.extend(project.semantic());
 
-    if !diagnostics.is_empty() {
-        debug!("Skipping codegen, {} problem(s) found", diagnostics.len());
+    if has_errors(&diagnostics) {
+        debug!(
+            "Skipping codegen, {} error(s) found",
+            error_count(&diagnostics)
+        );
         return CompileOutput {
             diagnostics,
             container: None,
@@ -90,8 +94,8 @@ pub fn compile(
 
     let (Some(library), Some(context)) = (project.analyzed_library(), project.semantic_context())
     else {
-        // A clean analysis always caches its artifacts, so this is a compiler
-        // defect rather than a problem with the input.
+        // An analysis that found no error always caches its artifacts, so this
+        // is a compiler defect rather than a problem with the input.
         diagnostics.push(Diagnostic::internal_error());
         return CompileOutput {
             diagnostics,
@@ -135,9 +139,10 @@ mod tests {
     use ironplc_codegen::EmptyLookup;
     use ironplc_container::StableVarEntry;
     use ironplc_dsl::core::{FileId, SourceSpan};
-    use ironplc_dsl::diagnostic::Diagnostic;
+    use ironplc_dsl::diagnostic::{has_errors, Diagnostic};
     use ironplc_parser::options::CompilerOptions;
     use ironplc_problems::text;
+    use spec_test_macro::spec_test;
 
     use super::compile;
     use crate::project::{FileBackedProject, MemoryBackedProject, Project};
@@ -417,6 +422,49 @@ END_PROGRAM
         assert_eq!(
             difference.undeclared,
             vec![crate::sidecar::SidecarKey::new("Main", "other")]
+        );
+    }
+
+    #[spec_test(REQ_DS_project_001)]
+    fn compile_when_an_error_is_found_then_no_container_and_otherwise_a_container() {
+        let mut clean = project_with(VALID_PROGRAM);
+        let built = compile(
+            &mut clean,
+            &CompilerOptions::default(),
+            &EmptyLookup,
+            vec![],
+        );
+        assert!(!has_errors(&built.diagnostics));
+        assert!(built.container.is_some());
+
+        let mut analysis_error =
+            project_with("PROGRAM Main VAR x : INT; END_VAR x := undeclared_var; END_PROGRAM");
+        let rejected = compile(
+            &mut analysis_error,
+            &CompilerOptions::default(),
+            &EmptyLookup,
+            vec![],
+        );
+        assert!(has_errors(&rejected.diagnostics));
+        assert!(rejected.container.is_none());
+
+        let mut seeded = project_with(VALID_PROGRAM);
+        let rejected = compile(
+            &mut seeded,
+            &CompilerOptions::default(),
+            &EmptyLookup,
+            seeded_diagnostic(),
+        );
+        assert!(has_errors(&rejected.diagnostics));
+        assert!(rejected.container.is_none());
+    }
+
+    #[test]
+    fn all_spec_requirements_have_tests() {
+        assert!(
+            crate::spec_requirements::UNTESTED.is_empty(),
+            "Requirements in spec with no conformance test: {:?}",
+            crate::spec_requirements::UNTESTED
         );
     }
 
