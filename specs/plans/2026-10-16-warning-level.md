@@ -2,13 +2,13 @@
 
 ## Goal
 
-Give every diagnostic a severity. A warning is shown in the CLI, the language server, the MCP tools and the playground, but it does not stop `check` or `compile`. The first warning reports a comparison of two values of different strict enumerations (`a = b` where `a : Color`, `b : Mode`). CODESYS reports this case as warning C0354 and still compiles.
+Give every diagnostic a severity: error, warning or information, the three message categories of CODESYS. A warning or an information message is shown in the CLI, the language server, the MCP tools and the playground, but it does not stop `check` or `compile`. The first warning reports a comparison of two values of different strict enumerations (`a = b` where `a : Color`, `b : Mode`). CODESYS reports this case as warning C0354 and still compiles.
 
 Today every diagnostic is an error. `project/src/compile.rs` skips code generation when any diagnostic exists. `ironplc-cli/src/cli.rs` `finish` fails on any diagnostic. The language server sets `DiagnosticSeverity::ERROR` on all of them (`ironplc-cli/src/lsp_project.rs:467`). The MCP tools write `"severity": "error"` (`mcp/src/tools/common.rs:228`).
 
 ## Architecture
 
-- **Where severity is declared.** Severity belongs to the problem code. `problems/resources/problem-codes.csv` gains a `Severity` column, `Error` or `Warning`. The `problems_gen` build step generates `Problem::severity()` from it, and a row without a valid severity fails the build. No list of warnings is kept anywhere else: each code declares its own severity in its own row.
+- **Where severity is declared.** Severity belongs to the problem code. `problems/resources/problem-codes.csv` gains a `Severity` column: `Error`, `Warning` or `Info`. The `problems_gen` build step generates `Problem::severity()` from it, and a row without a valid severity fails the build. No list of warnings is kept anywhere else: each code declares its own severity in its own row.
 - **How a diagnostic gets it.** `Diagnostic` (`dsl/src/diagnostic.rs`) reads its severity from its problem through the private constructor `Diagnostic::problem`. No call site sets it.
 - **Who decides what stops the build.** `Diagnostic::is_error()` is the one test. Every place that now asks whether diagnostics are empty asks whether any is an error:
   - code generation in `project/src/compile.rs`;
@@ -16,11 +16,11 @@ Today every diagnostic is an error. `project/src/compile.rs` skips code generati
   - `SemanticContext::has_diagnostics` callers that gate on failure;
   - the hot-edit and benchmark paths.
 - **What each consumer shows.** Each consumer maps `Severity` with an exhaustive `match`, so a third level added later fails to compile until every consumer handles it:
-  - the CLI prints `warning[P####]`;
-  - the language server uses `DiagnosticSeverity::WARNING`;
-  - MCP writes `"severity": "warning"`;
+  - the CLI prints `warning[P####]` or `info[P####]`;
+  - the language server uses `DiagnosticSeverity::WARNING` or `DiagnosticSeverity::INFORMATION`;
+  - MCP writes `"severity": "warning"` or `"severity": "info"`;
   - the playground and the VS Code extension show the severity they receive.
-- **Problem documentation.** `docs/reference/compiler/problems/P####.rst` says whether the code is a warning. The text comes from one include, so it is not duplicated.
+- **Problem documentation.** `docs/reference/compiler/problems/P####.rst` says whether the code is a warning or an information message. The text comes from one include per level, so it is not duplicated.
 - **The first warning.** A new rule reports `a = b`, `a <> b` and the other comparisons when the operands are values of two different enumerations and at least one of them is strict. Strictness is read through `IntermediateType::is_strict_enumeration`, the one existing answer (ADR-0079). This applies under both policies:
   - `every-enumeration`: the default; IEC dialects;
   - `with-attribute`: an enumeration with `{attribute 'strict'}`, in the CODESYS and TwinCAT dialects.
@@ -30,7 +30,8 @@ Today every diagnostic is an error. `project/src/compile.rs` skips code generati
 ## Not in this change
 
 These come later, with the Messages family of attributes:
-- turning a warning off or making it an error, per code;
+- turning a warning or an information message off, or making it an error, per code;
+- a first information message: none is chosen yet; CODESYS uses this level for notes such as unused code, which IronPLC does not report today;
 - the CODESYS `{warning disable C0354}` pragma and its project settings;
 - a CLI `--deny-warnings` option.
 
@@ -64,8 +65,8 @@ The severity of every existing code stays `Error`.
 
 ### PR 1: prefactor, severity with every code an error
 
-- [ ] `Severity` column, `problems_gen` check, `Problem::severity()`.
-- [ ] `Diagnostic::severity()`, `is_error()`; unit tests.
+- [ ] `Severity` column (`Error`, `Warning`, `Info`), `problems_gen` check, `Problem::severity()`.
+- [ ] `Diagnostic::severity()`, `is_error()`; unit tests for all three levels.
 - [ ] Every failure gate asks `is_error()`. Find them by searching for `is_empty()` and `has_diagnostics()` on diagnostics outside tests.
 - [ ] Every consumer maps `Severity` with an exhaustive match.
 - [ ] ADR-0081 and `specs/design/diagnostic-severity.md` with requirement IDs.
