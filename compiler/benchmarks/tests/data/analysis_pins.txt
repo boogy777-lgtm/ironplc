@@ -448,9 +448,9 @@ parse P0002 expected `:=` after the assignment target
 ## var_sections.st [rusty]
 parse P0002 expected `:=` after the assignment target
 ## var_temp.st [default]
-library eafd3c4bcb9ee68b 2 elements
+library 1deb79f612fbdb0d 3 elements
 ## var_temp.st [rusty]
-library eafd3c4bcb9ee68b 2 elements
+library 1deb79f612fbdb0d 3 elements
 ## wstring_ops.st [default]
 library 31289836dbe98141 1 elements
 ## wstring_ops.st [rusty]
