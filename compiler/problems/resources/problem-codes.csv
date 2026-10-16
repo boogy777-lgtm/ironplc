@@ -1,159 +1,159 @@
-Code,Name,Message
-P0001,OpenComment,End of file before comment closed
-P0002,SyntaxError,Syntax error
-P0003,UnexpectedToken,Unmatched character sequence in source text
-P0004,CStyleComment,C-style comment not allowed
-P0005,UnexpectedElement,Element is not permitted at this compiler state
-P0006,XmlMalformed,XML file is malformed
-P0007,XmlSchemaViolation,XML violates PLCopen schema
-P0008,SfcMissingInitialStep,SFC body does not have an initial step
-P0009,TwinCatMalformed,TwinCAT XML file has invalid structure
-P0010,Std2013Feature,Feature requires IEC 61131-3:2013 (use --dialect iec61131-3-ed3)
-P0011,EmptyVarBlock,Empty variable block requires choosing a dialect or --allow-empty-var-blocks flag
-P0012,InvalidStringEscape,Character string literal contains an escape that is not defined
-P2001,StructureDuplicatedElement,Structure has more than one element with name
-P2002,SubrangeMinStrictlyLessMax,Subrange declaration minimum value is not less than the maximum
-P2003,EnumTypeDeclDuplicateItem,Enumeration type declaration has duplicated value
-P2004,EnumNotDeclared,Enumeration is not declared
-P2005,EnumRecursive,Recursive enumeration for type
-P2006,EnumValueNotDefined,Enumeration uses value that is not defined in the enumeration
-P2007,TypeDeclNameDuplicated,Type declaration name is duplicated
-P2008,UndeclaredUnknownType,Cannot determine kind of type identifier
-P2009,ParentEnumNotDeclared,Parent enumeration is not declared
-P2010,RecursiveTypeCycle,Library has a recursive cycle in resolving type names
-P2011,ParentTypeNotDeclared,Parent type is not declared
-P2012,AliasParentTypeNotDeclared,Alias parent type is not declared
-P2013,ArrayElementTypeNotDeclared,Array element type is not declared
-P2014,SimpleTypeDeclMissingInit,Simple type declaration requires an initializer
-P2015,SubrangeBaseTypeNotNumeric,Subrange base type must be numeric
-P2016,SubrangeOutOfBounds,Subrange is outside base type bounds
-P2017,StructFieldMissingType,Structure field missing type specification
-P2019,InvalidSimpleTypeDecl,Invalid simple type declaration
-P2020,EnumerationTooManyValues,Enumeration has too many unique values
-P2021,StructFieldTypeNotDeclared,Structure field references undeclared type
-P2022,ArrayDimensionEmpty,Array must have at least one dimension
-P2023,ArraySizeOverflow,Array size calculation overflow
-P2024,ArrayDimensionInvalid,Array dimension range is invalid
-P2025,TypeEnvironmentUnknownType,Unknown type
-P2026,ConstantOverflow,Constant value overflows the target type
-P2027,ArrayIndexOutOfBounds,Array index out of bounds
-P2028,RefOperandNotVariable,REF() operand must be a simple variable
-P2029,RefOfEphemeralVariable,REF() of stack-allocated variable (VAR_TEMP or FUNCTION VAR_INPUT/VAR_OUTPUT) would create a dangling reference
-P2030,RefOfArrayElement,REF() of array element is not supported
-P2031,DerefRequiresReferenceType,Dereference operator (^) requires a REF_TO type
-P2032,ReferenceTypeMismatch,Reference type mismatch in assignment
-P2033,ArithmeticOnReference,Arithmetic operations are not allowed on reference types
-P2034,NullRequiresReferenceType,NULL can only be assigned to a REF_TO type
-P2035,OrderingOnReference,Ordering comparison on reference types (only = and <> are allowed)
-P2036,NestedRefToNotSupported,Nested REF_TO (multi-level indirection) is not supported
-P4001,FunctionCallMixedArgTypes,Function call mixes named (formal) and positional (non-format) input arguments
-P4002,FunctionInvocationMissingInput,Function invocation assigns named (formal) input that is not defined
-P4003,FunctionInvocationRequiresFormal,Function invocation requires non-formal inputs but the invocation has formal inputs
-P4004,FunctionInvocationUndefinedOutput,Function invocation assigns output that is not an output variable of the function
-P4005,RecursiveCycle,Library has a recursive cycle
-P4006,ProgramMissingTaskConfig,Program task configuration reference not defined
-P4007,VariableUndefined,Variable not defined before used
-P4008,ConstantMustHaveInitializer,Variable is constant but does not define value
-P4009,FunctionBlockNotConstant,CONSTANT qualifier is not permitted for function block instance type
-P4010,VariableMustBeConst,External var is global constant and must be declared constant
-P4011,DefinitionNameDuplicated,Definition name is duplicated
-P4012,FunctionBlockNotInScope,Function block invocation is not a variable in scope
-P4013,PouDeclNameDuplicated,POU declaration name is duplicated
-P4014,SymbolDeclDuplicated,Symbol declaration name is duplicated
-P4015,StdlibTypeRedefinition,User-defined type has the same name as a standard library type
-P4016,FunctionDeclNameDuplicated,Function declaration name is duplicated
-P4017,FunctionCallUndeclared,Function is not declared
-P4018,FunctionCallWrongArgCount,Function call has wrong number of arguments
-P4019,DuplicateTaskName,Task name is duplicated within a resource
-P4020,NoProgramDeclaration,Source does not contain a PROGRAM declaration
-P4021,ExitOutsideLoop,EXIT statement is not inside a loop
-P4022,InitializerTypeMismatch,Variable initializer type is incompatible with declared type
-P4023,FunctionCallNamedArgUndeclared,Function call has named argument that does not match any declared input parameter
-P4024,FunctionCallDuplicateNamedArg,Function call has duplicate named argument
-P4025,BitAccessOutOfRange,Bit access index is out of range for the variable type
-P4026,FunctionCallArgTypeMismatch,Function call argument type does not match parameter type
-P4027,FunctionCallReturnTypeMismatch,Function return type does not match assignment destination type
-P4028,TopLevelVarGlobalNotAllowed,Top-level VAR_GLOBAL requires choosing a dialect or --allow-top-level-var-global flag
-P4029,ConstantTypeParamNotAllowed,Constant reference in type parameter requires choosing a dialect or --allow-constant-type-params flag
-P4030,UndefinedConstantReference,Constant referenced in type parameter is not defined
-P4031,ConstantNotIntegerType,Constant referenced in type parameter is not an integer type
-P4032,ConstantMissingInitializer,Constant referenced in type parameter has no initializer
-P4033,PartialAccessSyntaxDisabled,Partial-access syntax (.%Xn) requires choosing a dialect or --allow-partial-access-syntax flag
-P4034,StringEncodingMismatch,Cannot mix STRING and WSTRING without an explicit conversion
-P4035,AssignmentTypeMismatch,Assignment value type does not match assignment target type
-P4036,MixedLocatedVarDeclarationNotAllowed,AT-located variable in a plain VAR block requires choosing a dialect or --allow-mixed-located-var-declarations flag
-P4037,ConstantInitializerExpressionNotAllowed,Constant expression in an initializer requires choosing a dialect or --allow-constant-initializer-expressions flag
-P4038,InitializerNotConstantExpression,Initializer expression does not reduce to a constant value
-P4039,ConstantExpressionDivisionByZero,Constant expression divides or takes the modulo of a value by zero
-P4040,ConstantExpressionOverflow,Constant expression result cannot be represented
-P4041,BitStringCaseLabelNotAllowed,Hex/binary/octal bit-string literal as a CASE label requires choosing a dialect or --allow-bit-string-case-labels flag
-P4042,ParenStringLengthNotAllowed,STRING(n)/WSTRING(n) parenthesis length delimiter requires choosing a dialect or --allow-paren-string-length flag
-P4043,StructInitializerExpressionNotAllowed,General expression as a struct/FB-instance initializer value requires choosing a dialect or --allow-struct-initializer-expressions flag
-P4044,ExtendsFieldNameDuplicated,Function block field name is already declared in a base function block via EXTENDS
-P4045,AbstractFunctionBlockInstantiated,Function block is ABSTRACT and cannot be instantiated
-P4046,MethodNotFound,Method is not declared on the function block or any function block in its EXTENDS chain
-P4047,TaskSingleNotSupported,Task SINGLE parameter is not supported
-P4048,TaskParameterOutOfRange,Task INTERVAL or PRIORITY is outside the supported range
-P4049,OperatorOperandTypeMismatch,Operator is not defined for the operand types
-P6001,CannotCanonicalizePath,Unable to canonicalize the path
-P6002,CannotReadMetadata,Unable to read metadata for the path
-P6003,CannotReadDirectory,Unable to read directory
-P6004,CannotReadFile,Unable to read file
-P6005,SymlinkUnsupported,Symlinks are not supported
-P6006,UnsupportedEncoding,File encoding is not supported
-P6007,UnsupportedFileType,File type is not supported
-P6008,XmlUnsupportedVersion,PLCopen XML version is not supported
-P6009,OutputPathConflictsWithInput,Output path conflicts with an input file
-P6010,LibraryManifestInvalid,Compatibility library manifest is malformed or missing a required field
-P6011,LibraryNotFound,Referenced compatibility library not found
-P6012,ProjectManifestUnresolvable,Project manifest does not resolve to a project
-P8001,McpInputValidation,MCP tool input validation error
-P9001,UnsupportedStdLibType,Referenced type is valid but not implemented
-P9002,NoContent,Set of valid source files has no content
-P9003,XmlBodyTypeNotSupported,POU body language is not supported
-P9997,NotSupported,Capability is not supported
-P9998,InternalError,Internal error indicating a bug in the compiler
-P9999,NotImplemented,Capability is not implemented (yet!)
-P2037,AggregateAssignmentTypeMismatch,Assignment between arrays or structures requires identical types
-P4050,ProgramVariableHidesGlobal,Program variable has the same name as a global variable
-P4051,CaseLabelRangeInvalid,CASE label range minimum value is greater than the maximum
-P4052,StringLiteralCharOutOfRange,Character string literal contains a character that the string type cannot represent
-P4053,CaseSelectorTypeInvalid,CASE selector is not an integer or enumeration type
-P4054,FunctionBlockInFunction,Function declares or invokes a function block instance
-P4055,EnumExplicitValueNotAllowed,Explicit enumeration member value requires choosing a dialect or --allow-enum-explicit-values flag
-P4056,EnumBaseTypeNotAllowed,Enumeration base-type suffix requires choosing a dialect or --allow-enum-base-type flag
-P4057,MethodCallWithoutReturnValue,Method has no return value and cannot be used in an expression
-P4058,FunctionCallInOutArgNotVariable,Function call passes an expression that is not a variable to a VAR_IN_OUT parameter
-P4059,FunctionCallInOutArgTypeMismatch,Function call VAR_IN_OUT argument type is not the parameter type
-P4060,InOutArgNotWritable,VAR_IN_OUT argument cannot be proved writable
-P4062,MemberQualifierNotAllowed,Function block qualifier requires choosing a dialect or --allow-fb-inheritance flag
-P4063,MemberQualifierInvalid,Member qualifiers are repeated or conflict or are out of order or not allowed here
-P4065,ContinueOutsideLoop,CONTINUE statement is not inside a loop
-P4072,ConditionTypeInvalid,Condition of IF or ELSIF or WHILE or REPEAT is not BOOL
-P2038,DateLiteralOutOfRange,Date literal is outside the range the date type can represent
-P2039,DurationLiteralOutOfRange,Duration literal is outside the range the duration type can represent
-P2040,RealLiteralOutOfRange,Real literal is outside the range the real type can represent
-P2041,StringLengthOutOfRange,String length is more than a string can hold
-P2042,AmbiguousEnumeratedValue,Enumeration value name is declared by more than one enumeration
-P6013,CannotWriteFile,Unable to write file
-P4066,ThrowOutsideTryCatch,__THROW is not inside a __TRY statement with a __CATCH clause
-P0019,MaxNestingDepthExceeded,Maximum nesting depth exceeded
-P0023,PragmaIfUnmatched,{IF} pragma has no matching {END_IF} or a branch pragma has no {IF}
-P0024,PragmaValueExpected,Expected a pragma condition such as defined(name)
-P0027,JumpDestinationInvalid,JMP destination is not a label defined in this body
-P0042,DuplicateLabelDefinition,Label name is defined more than once in the same body
-P0043,AttributeNotAttached,Attribute pragma is not followed by a declaration it can be attached to
-P4067,EscapedIdentifierNotAllowed,Escaped (backtick) identifier requires choosing a dialect or --allow-escaped-identifiers flag
-P4068,UnicodeIdentifierNotAllowed,Identifier with non-ASCII letters requires choosing a dialect or --allow-unicode-identifiers flag
-P4069,MultipleUnderscoresNotAllowed,Identifier with consecutive underscores requires choosing a dialect or --allow-multiple-underscores flag
-P4070,IncompleteArrayNotAllowed,Incomplete array type ARRAY[*] requires choosing a dialect or --allow-incomplete-array flag
-P4073,SpecialOperatorOperandInvalid,Operands of a CODESYS special operator do not fit the operator
-P4074,SpecialOperatorNotSupported,CODESYS special operator is recognised but not supported
-P4075,FbInstanceArrayNotAllowed,Array of function block instances requires choosing a dialect or --allow-fb-instance-arrays flag
-P4076,AttributeNotAllowedHere,Attribute does not apply to this kind of declaration
-P4077,AttributeValueInvalid,Attribute value is not one the attribute takes
-P4078,AttributeRepeated,Attribute is written more than once before one declaration
-P4079,AttributeForbidsVariableBlock,Attribute does not allow a variable block that its declaration holds
-P4080,MemberNotDeclared,Member is not declared by the type of the value it is selected from
-P4081,MemberNotAssignableOutside,Output or internal variable of a function block is assigned from outside the block
-P4082,InOutMemberAccessedOutside,VAR_IN_OUT of a function block is accessed from outside the block
+Code,Name,Message,Severity
+P0001,OpenComment,End of file before comment closed,Error
+P0002,SyntaxError,Syntax error,Error
+P0003,UnexpectedToken,Unmatched character sequence in source text,Error
+P0004,CStyleComment,C-style comment not allowed,Error
+P0005,UnexpectedElement,Element is not permitted at this compiler state,Error
+P0006,XmlMalformed,XML file is malformed,Error
+P0007,XmlSchemaViolation,XML violates PLCopen schema,Error
+P0008,SfcMissingInitialStep,SFC body does not have an initial step,Error
+P0009,TwinCatMalformed,TwinCAT XML file has invalid structure,Error
+P0010,Std2013Feature,Feature requires IEC 61131-3:2013 (use --dialect iec61131-3-ed3),Error
+P0011,EmptyVarBlock,Empty variable block requires choosing a dialect or --allow-empty-var-blocks flag,Error
+P0012,InvalidStringEscape,Character string literal contains an escape that is not defined,Error
+P2001,StructureDuplicatedElement,Structure has more than one element with name,Error
+P2002,SubrangeMinStrictlyLessMax,Subrange declaration minimum value is not less than the maximum,Error
+P2003,EnumTypeDeclDuplicateItem,Enumeration type declaration has duplicated value,Error
+P2004,EnumNotDeclared,Enumeration is not declared,Error
+P2005,EnumRecursive,Recursive enumeration for type,Error
+P2006,EnumValueNotDefined,Enumeration uses value that is not defined in the enumeration,Error
+P2007,TypeDeclNameDuplicated,Type declaration name is duplicated,Error
+P2008,UndeclaredUnknownType,Cannot determine kind of type identifier,Error
+P2009,ParentEnumNotDeclared,Parent enumeration is not declared,Error
+P2010,RecursiveTypeCycle,Library has a recursive cycle in resolving type names,Error
+P2011,ParentTypeNotDeclared,Parent type is not declared,Error
+P2012,AliasParentTypeNotDeclared,Alias parent type is not declared,Error
+P2013,ArrayElementTypeNotDeclared,Array element type is not declared,Error
+P2014,SimpleTypeDeclMissingInit,Simple type declaration requires an initializer,Error
+P2015,SubrangeBaseTypeNotNumeric,Subrange base type must be numeric,Error
+P2016,SubrangeOutOfBounds,Subrange is outside base type bounds,Error
+P2017,StructFieldMissingType,Structure field missing type specification,Error
+P2019,InvalidSimpleTypeDecl,Invalid simple type declaration,Error
+P2020,EnumerationTooManyValues,Enumeration has too many unique values,Error
+P2021,StructFieldTypeNotDeclared,Structure field references undeclared type,Error
+P2022,ArrayDimensionEmpty,Array must have at least one dimension,Error
+P2023,ArraySizeOverflow,Array size calculation overflow,Error
+P2024,ArrayDimensionInvalid,Array dimension range is invalid,Error
+P2025,TypeEnvironmentUnknownType,Unknown type,Error
+P2026,ConstantOverflow,Constant value overflows the target type,Error
+P2027,ArrayIndexOutOfBounds,Array index out of bounds,Error
+P2028,RefOperandNotVariable,REF() operand must be a simple variable,Error
+P2029,RefOfEphemeralVariable,REF() of stack-allocated variable (VAR_TEMP or FUNCTION VAR_INPUT/VAR_OUTPUT) would create a dangling reference,Error
+P2030,RefOfArrayElement,REF() of array element is not supported,Error
+P2031,DerefRequiresReferenceType,Dereference operator (^) requires a REF_TO type,Error
+P2032,ReferenceTypeMismatch,Reference type mismatch in assignment,Error
+P2033,ArithmeticOnReference,Arithmetic operations are not allowed on reference types,Error
+P2034,NullRequiresReferenceType,NULL can only be assigned to a REF_TO type,Error
+P2035,OrderingOnReference,Ordering comparison on reference types (only = and <> are allowed),Error
+P2036,NestedRefToNotSupported,Nested REF_TO (multi-level indirection) is not supported,Error
+P4001,FunctionCallMixedArgTypes,Function call mixes named (formal) and positional (non-format) input arguments,Error
+P4002,FunctionInvocationMissingInput,Function invocation assigns named (formal) input that is not defined,Error
+P4003,FunctionInvocationRequiresFormal,Function invocation requires non-formal inputs but the invocation has formal inputs,Error
+P4004,FunctionInvocationUndefinedOutput,Function invocation assigns output that is not an output variable of the function,Error
+P4005,RecursiveCycle,Library has a recursive cycle,Error
+P4006,ProgramMissingTaskConfig,Program task configuration reference not defined,Error
+P4007,VariableUndefined,Variable not defined before used,Error
+P4008,ConstantMustHaveInitializer,Variable is constant but does not define value,Error
+P4009,FunctionBlockNotConstant,CONSTANT qualifier is not permitted for function block instance type,Error
+P4010,VariableMustBeConst,External var is global constant and must be declared constant,Error
+P4011,DefinitionNameDuplicated,Definition name is duplicated,Error
+P4012,FunctionBlockNotInScope,Function block invocation is not a variable in scope,Error
+P4013,PouDeclNameDuplicated,POU declaration name is duplicated,Error
+P4014,SymbolDeclDuplicated,Symbol declaration name is duplicated,Error
+P4015,StdlibTypeRedefinition,User-defined type has the same name as a standard library type,Error
+P4016,FunctionDeclNameDuplicated,Function declaration name is duplicated,Error
+P4017,FunctionCallUndeclared,Function is not declared,Error
+P4018,FunctionCallWrongArgCount,Function call has wrong number of arguments,Error
+P4019,DuplicateTaskName,Task name is duplicated within a resource,Error
+P4020,NoProgramDeclaration,Source does not contain a PROGRAM declaration,Error
+P4021,ExitOutsideLoop,EXIT statement is not inside a loop,Error
+P4022,InitializerTypeMismatch,Variable initializer type is incompatible with declared type,Error
+P4023,FunctionCallNamedArgUndeclared,Function call has named argument that does not match any declared input parameter,Error
+P4024,FunctionCallDuplicateNamedArg,Function call has duplicate named argument,Error
+P4025,BitAccessOutOfRange,Bit access index is out of range for the variable type,Error
+P4026,FunctionCallArgTypeMismatch,Function call argument type does not match parameter type,Error
+P4027,FunctionCallReturnTypeMismatch,Function return type does not match assignment destination type,Error
+P4028,TopLevelVarGlobalNotAllowed,Top-level VAR_GLOBAL requires choosing a dialect or --allow-top-level-var-global flag,Error
+P4029,ConstantTypeParamNotAllowed,Constant reference in type parameter requires choosing a dialect or --allow-constant-type-params flag,Error
+P4030,UndefinedConstantReference,Constant referenced in type parameter is not defined,Error
+P4031,ConstantNotIntegerType,Constant referenced in type parameter is not an integer type,Error
+P4032,ConstantMissingInitializer,Constant referenced in type parameter has no initializer,Error
+P4033,PartialAccessSyntaxDisabled,Partial-access syntax (.%Xn) requires choosing a dialect or --allow-partial-access-syntax flag,Error
+P4034,StringEncodingMismatch,Cannot mix STRING and WSTRING without an explicit conversion,Error
+P4035,AssignmentTypeMismatch,Assignment value type does not match assignment target type,Error
+P4036,MixedLocatedVarDeclarationNotAllowed,AT-located variable in a plain VAR block requires choosing a dialect or --allow-mixed-located-var-declarations flag,Error
+P4037,ConstantInitializerExpressionNotAllowed,Constant expression in an initializer requires choosing a dialect or --allow-constant-initializer-expressions flag,Error
+P4038,InitializerNotConstantExpression,Initializer expression does not reduce to a constant value,Error
+P4039,ConstantExpressionDivisionByZero,Constant expression divides or takes the modulo of a value by zero,Error
+P4040,ConstantExpressionOverflow,Constant expression result cannot be represented,Error
+P4041,BitStringCaseLabelNotAllowed,Hex/binary/octal bit-string literal as a CASE label requires choosing a dialect or --allow-bit-string-case-labels flag,Error
+P4042,ParenStringLengthNotAllowed,STRING(n)/WSTRING(n) parenthesis length delimiter requires choosing a dialect or --allow-paren-string-length flag,Error
+P4043,StructInitializerExpressionNotAllowed,General expression as a struct/FB-instance initializer value requires choosing a dialect or --allow-struct-initializer-expressions flag,Error
+P4044,ExtendsFieldNameDuplicated,Function block field name is already declared in a base function block via EXTENDS,Error
+P4045,AbstractFunctionBlockInstantiated,Function block is ABSTRACT and cannot be instantiated,Error
+P4046,MethodNotFound,Method is not declared on the function block or any function block in its EXTENDS chain,Error
+P4047,TaskSingleNotSupported,Task SINGLE parameter is not supported,Error
+P4048,TaskParameterOutOfRange,Task INTERVAL or PRIORITY is outside the supported range,Error
+P4049,OperatorOperandTypeMismatch,Operator is not defined for the operand types,Error
+P6001,CannotCanonicalizePath,Unable to canonicalize the path,Error
+P6002,CannotReadMetadata,Unable to read metadata for the path,Error
+P6003,CannotReadDirectory,Unable to read directory,Error
+P6004,CannotReadFile,Unable to read file,Error
+P6005,SymlinkUnsupported,Symlinks are not supported,Error
+P6006,UnsupportedEncoding,File encoding is not supported,Error
+P6007,UnsupportedFileType,File type is not supported,Error
+P6008,XmlUnsupportedVersion,PLCopen XML version is not supported,Error
+P6009,OutputPathConflictsWithInput,Output path conflicts with an input file,Error
+P6010,LibraryManifestInvalid,Compatibility library manifest is malformed or missing a required field,Error
+P6011,LibraryNotFound,Referenced compatibility library not found,Error
+P6012,ProjectManifestUnresolvable,Project manifest does not resolve to a project,Error
+P8001,McpInputValidation,MCP tool input validation error,Error
+P9001,UnsupportedStdLibType,Referenced type is valid but not implemented,Error
+P9002,NoContent,Set of valid source files has no content,Error
+P9003,XmlBodyTypeNotSupported,POU body language is not supported,Error
+P9997,NotSupported,Capability is not supported,Error
+P9998,InternalError,Internal error indicating a bug in the compiler,Error
+P9999,NotImplemented,Capability is not implemented (yet!),Error
+P2037,AggregateAssignmentTypeMismatch,Assignment between arrays or structures requires identical types,Error
+P4050,ProgramVariableHidesGlobal,Program variable has the same name as a global variable,Error
+P4051,CaseLabelRangeInvalid,CASE label range minimum value is greater than the maximum,Error
+P4052,StringLiteralCharOutOfRange,Character string literal contains a character that the string type cannot represent,Error
+P4053,CaseSelectorTypeInvalid,CASE selector is not an integer or enumeration type,Error
+P4054,FunctionBlockInFunction,Function declares or invokes a function block instance,Error
+P4055,EnumExplicitValueNotAllowed,Explicit enumeration member value requires choosing a dialect or --allow-enum-explicit-values flag,Error
+P4056,EnumBaseTypeNotAllowed,Enumeration base-type suffix requires choosing a dialect or --allow-enum-base-type flag,Error
+P4057,MethodCallWithoutReturnValue,Method has no return value and cannot be used in an expression,Error
+P4058,FunctionCallInOutArgNotVariable,Function call passes an expression that is not a variable to a VAR_IN_OUT parameter,Error
+P4059,FunctionCallInOutArgTypeMismatch,Function call VAR_IN_OUT argument type is not the parameter type,Error
+P4060,InOutArgNotWritable,VAR_IN_OUT argument cannot be proved writable,Error
+P4062,MemberQualifierNotAllowed,Function block qualifier requires choosing a dialect or --allow-fb-inheritance flag,Error
+P4063,MemberQualifierInvalid,Member qualifiers are repeated or conflict or are out of order or not allowed here,Error
+P4065,ContinueOutsideLoop,CONTINUE statement is not inside a loop,Error
+P4072,ConditionTypeInvalid,Condition of IF or ELSIF or WHILE or REPEAT is not BOOL,Error
+P2038,DateLiteralOutOfRange,Date literal is outside the range the date type can represent,Error
+P2039,DurationLiteralOutOfRange,Duration literal is outside the range the duration type can represent,Error
+P2040,RealLiteralOutOfRange,Real literal is outside the range the real type can represent,Error
+P2041,StringLengthOutOfRange,String length is more than a string can hold,Error
+P2042,AmbiguousEnumeratedValue,Enumeration value name is declared by more than one enumeration,Error
+P6013,CannotWriteFile,Unable to write file,Error
+P4066,ThrowOutsideTryCatch,__THROW is not inside a __TRY statement with a __CATCH clause,Error
+P0019,MaxNestingDepthExceeded,Maximum nesting depth exceeded,Error
+P0023,PragmaIfUnmatched,{IF} pragma has no matching {END_IF} or a branch pragma has no {IF},Error
+P0024,PragmaValueExpected,Expected a pragma condition such as defined(name),Error
+P0027,JumpDestinationInvalid,JMP destination is not a label defined in this body,Error
+P0042,DuplicateLabelDefinition,Label name is defined more than once in the same body,Error
+P0043,AttributeNotAttached,Attribute pragma is not followed by a declaration it can be attached to,Error
+P4067,EscapedIdentifierNotAllowed,Escaped (backtick) identifier requires choosing a dialect or --allow-escaped-identifiers flag,Error
+P4068,UnicodeIdentifierNotAllowed,Identifier with non-ASCII letters requires choosing a dialect or --allow-unicode-identifiers flag,Error
+P4069,MultipleUnderscoresNotAllowed,Identifier with consecutive underscores requires choosing a dialect or --allow-multiple-underscores flag,Error
+P4070,IncompleteArrayNotAllowed,Incomplete array type ARRAY[*] requires choosing a dialect or --allow-incomplete-array flag,Error
+P4073,SpecialOperatorOperandInvalid,Operands of a CODESYS special operator do not fit the operator,Error
+P4074,SpecialOperatorNotSupported,CODESYS special operator is recognised but not supported,Error
+P4075,FbInstanceArrayNotAllowed,Array of function block instances requires choosing a dialect or --allow-fb-instance-arrays flag,Error
+P4076,AttributeNotAllowedHere,Attribute does not apply to this kind of declaration,Error
+P4077,AttributeValueInvalid,Attribute value is not one the attribute takes,Error
+P4078,AttributeRepeated,Attribute is written more than once before one declaration,Error
+P4079,AttributeForbidsVariableBlock,Attribute does not allow a variable block that its declaration holds,Error
+P4080,MemberNotDeclared,Member is not declared by the type of the value it is selected from,Error
+P4081,MemberNotAssignableOutside,Output or internal variable of a function block is assigned from outside the block,Error
+P4082,InOutMemberAccessedOutside,VAR_IN_OUT of a function block is accessed from outside the block,Error

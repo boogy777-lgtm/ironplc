@@ -29,6 +29,7 @@ mod architecture;
 mod compile_and_run_tools;
 mod context_tools;
 mod deferred_tools;
+mod diagnostic_severity;
 mod parse_and_check_tools;
 mod reference_lookup_tools;
 mod stateless_surface;

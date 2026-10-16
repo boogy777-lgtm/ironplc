@@ -231,3 +231,123 @@ fn snake_case_of_name_when_camel_case_acronym_and_digits_then_words_split_once()
     assert_eq!(snake_case_of_name("XmlIoError"), "xml_io_error");
     assert_eq!(snake_case_of_name("Simple"), "simple");
 }
+
+#[test]
+fn severity_variant_when_declarable_level_then_its_variant() {
+    for level in ["FatalError", "Error", "Warning", "Information", "Text"] {
+        assert_eq!(severity_variant("P0001", level), Ok(level));
+    }
+}
+
+#[test]
+fn severity_variant_when_missing_unknown_or_suppressed_then_error_names_code_and_value() {
+    for value in [
+        "",
+        "error",
+        "Warn",
+        "Info",
+        " Error",
+        "SuppressedWarning",
+        "SuppressedInformation",
+    ] {
+        let message = severity_variant("P0042", value).expect_err("the value should be refused");
+
+        assert!(message.contains("P0042"), "'{value}': {message}");
+        assert!(
+            message.contains(&format!("'{value}'")),
+            "'{value}': {message}"
+        );
+        assert!(
+            message.contains("FatalError, Error, Warning, Information, Text"),
+            "'{value}': {message}"
+        );
+    }
+}
+
+#[test]
+fn check_problem_codes_header_when_severity_column_present_then_accepted() {
+    assert_eq!(
+        check_problem_codes_header(&["Code", "Name", "Message", "Severity"]),
+        Ok(())
+    );
+}
+
+#[test]
+fn check_problem_codes_header_when_column_missing_or_moved_then_error() {
+    for header in [
+        vec!["Code", "Name", "Message"],
+        vec!["Code", "Name", "Severity", "Message"],
+        vec!["Code", "Name", "Message", "Level"],
+    ] {
+        let message =
+            check_problem_codes_header(&header).expect_err("the header should be refused");
+
+        assert!(message.contains("Code,Name,Message,Severity"), "{message}");
+    }
+}
+
+#[test]
+fn render_severity_enum_when_called_then_the_seven_categories_in_the_order_of_codesys() {
+    let source = render_severity_enum();
+
+    let positions: Vec<usize> = [
+        "FatalError",
+        "Error",
+        "Warning",
+        "Information",
+        "Text",
+        "SuppressedWarning",
+        "SuppressedInformation",
+    ]
+    .iter()
+    .map(|name| {
+        source
+            .find(&format!("    {name},\n"))
+            .unwrap_or_else(|| panic!("no variant {name}: {source}"))
+    })
+    .collect();
+    assert!(
+        positions.windows(2).all(|pair| pair[0] < pair[1]),
+        "{source}"
+    );
+}
+
+#[test]
+fn render_severity_enum_when_called_then_each_question_is_an_exhaustive_match_without_wildcard() {
+    let source = render_severity_enum();
+
+    for function in ["name", "stops_build", "is_shown", "suppressed"] {
+        assert!(
+            source.contains(&format!("pub fn {function}(&self)")),
+            "{source}"
+        );
+    }
+    assert!(!source.contains("_ =>"), "{source}");
+    assert_eq!(source.matches("match self {").count(), 4, "{source}");
+    // Seven arms for each of the four questions.
+    assert_eq!(
+        source.matches("            Severity::").count(),
+        28,
+        "{source}"
+    );
+}
+
+#[test]
+fn render_severity_enum_when_called_then_the_facts_of_each_category() {
+    let source = render_severity_enum();
+
+    for line in [
+        "Severity::FatalError => \"fatal-error\",",
+        "Severity::SuppressedInformation => \"suppressed-information\",",
+        "Severity::FatalError => true,",
+        "Severity::Error => true,",
+        "Severity::Warning => false,",
+        "Severity::SuppressedWarning => false,",
+        "Severity::Warning => Severity::SuppressedWarning,",
+        "Severity::Information => Severity::SuppressedInformation,",
+        "Severity::Text => Severity::Text,",
+        "Severity::Error => Severity::Error,",
+    ] {
+        assert!(source.contains(line), "{line}: {source}");
+    }
+}

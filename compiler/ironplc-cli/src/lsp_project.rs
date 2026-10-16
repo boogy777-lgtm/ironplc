@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use ironplc_analyzer::extractors::TypeSymbolKind;
 use ironplc_dsl::core::{FileId, Located};
-use ironplc_dsl::diagnostic::LineColumn;
+use ironplc_dsl::diagnostic::{LineColumn, Severity};
 use log::error;
 use lsp_types::{
     CodeDescription, DiagnosticRelatedInformation, DiagnosticSeverity, DocumentSymbol,
@@ -196,6 +196,10 @@ impl LspProject {
 
         let mut by_key: BTreeMap<UriKey, Vec<lsp_types::Diagnostic>> = BTreeMap::new();
         for diagnostic in diagnostics {
+            // A suppressed diagnostic is not shown.
+            if lsp_severity(diagnostic.severity()).is_none() {
+                continue;
+            }
             // Resolve every file id this diagnostic touches into a key.
             // De-duplicate so a diagnostic with primary and secondary
             // labels in the same file is published once for that file.
@@ -464,7 +468,7 @@ fn map_diagnostic(
 
     lsp_types::Diagnostic {
         range,
-        severity: Some(DiagnosticSeverity::ERROR),
+        severity: lsp_severity(diagnostic.severity()),
         code: Some(NumberOrString::String(diagnostic.code)),
         code_description,
         source: Some("ironplc".into()),
@@ -472,6 +476,22 @@ fn map_diagnostic(
         related_information,
         tags: None,
         data: None,
+    }
+}
+
+/// The severity the editor shows for a category, or `None` for a category the
+/// editor does not show. No arm is a wildcard: a category added to `Severity`
+/// does not compile until it is shown, or hidden, here.
+///
+/// A text is a line about the build, which the protocol sends as a
+/// `window/logMessage` and not as a diagnostic. That is a larger change than the
+/// mapping, so a text is published as an information message for now.
+fn lsp_severity(severity: Severity) -> Option<DiagnosticSeverity> {
+    match severity {
+        Severity::FatalError | Severity::Error => Some(DiagnosticSeverity::ERROR),
+        Severity::Warning => Some(DiagnosticSeverity::WARNING),
+        Severity::Information | Severity::Text => Some(DiagnosticSeverity::INFORMATION),
+        Severity::SuppressedWarning | Severity::SuppressedInformation => None,
     }
 }
 

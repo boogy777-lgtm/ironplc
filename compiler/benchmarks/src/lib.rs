@@ -19,8 +19,8 @@ use ironplc_parser::parse_program;
 /// Compiles an IEC 61131-3 source string through the full pipeline:
 /// parse → analyze (all semantic rules) → codegen.
 ///
-/// Panics if the source fails to parse, has semantic diagnostics, or fails
-/// to compile. The panic message lists the diagnostic codes so a failing
+/// Panics if the source fails to parse, has a semantic error, or fails
+/// to compile. The panic message lists the error codes so a failing
 /// benchmark program can be fixed without re-running under a debugger.
 #[expect(
     clippy::unwrap_used,
@@ -33,12 +33,10 @@ pub fn compile_st(source: &str) -> Container {
     let codes: Vec<&str> = context
         .diagnostics()
         .iter()
+        .filter(|d| d.stops_build())
         .map(|d| d.code.as_str())
         .collect();
-    assert!(
-        codes.is_empty(),
-        "Source has semantic diagnostics: {codes:?}"
-    );
+    assert!(codes.is_empty(), "Source has semantic errors: {codes:?}");
     let codegen_options = ironplc_codegen::CodegenOptions::default();
     compile(
         &analyzed,

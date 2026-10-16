@@ -225,7 +225,7 @@ pub fn serialize_diagnostic(diag: &Diagnostic) -> serde_json::Value {
         "file": diag.primary.file_id.to_string(),
         "start": diag.primary.location.start,
         "end": diag.primary.location.end,
-        "severity": "error",
+        "severity": diag.severity().name(),
     })
 }
 

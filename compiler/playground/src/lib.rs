@@ -17,7 +17,7 @@ use ironplc_container::debug_format::VariableRenderer;
 use ironplc_container::{Container, InstanceId, TaskId};
 use ironplc_dsl::common::Library;
 use ironplc_dsl::core::FileId;
-use ironplc_dsl::diagnostic::{Diagnostic, LineColumn, DOCS_SECTIONS};
+use ironplc_dsl::diagnostic::{Diagnostic, LineColumn, Severity, DOCS_SECTIONS};
 use ironplc_parser::options::{CompilerOptions, Dialect, FeatureDescriptor};
 use ironplc_project::MemoryBackedProject;
 use ironplc_sources::{parse_source, FileType};
@@ -153,13 +153,17 @@ struct CompileResult {
     diagnostics: Vec<DiagnosticInfo>,
 }
 
-/// A single diagnostic (error or warning) from compilation.
+/// A single diagnostic (error, warning or information) from compilation.
 ///
 /// Line and column fields are 1-based for display, computed from the
 /// diagnostic's byte offsets using the same helper the LSP server uses.
 #[derive(Debug, Serialize, Deserialize)]
 struct DiagnosticInfo {
     code: String,
+    /// The category of the diagnostic ([`Severity::name`]): `"fatal-error"`,
+    /// `"error"`, `"warning"`, `"information"` or `"text"`.
+    #[serde(default = "error_severity")]
+    severity: String,
     message: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     label: String,
@@ -186,6 +190,12 @@ fn is_zero(n: &u32) -> bool {
     *n == 0
 }
 
+/// The severity of a diagnostic that carries none: a host failure on the compile
+/// path is an error.
+fn error_severity() -> String {
+    Severity::Error.name().to_string()
+}
+
 /// Build a [`DiagnosticInfo`] from a compiler diagnostic, computing 1-based
 /// line/column from the supplied source text.
 fn diagnostic_info(diag: &Diagnostic, source: &str) -> DiagnosticInfo {
@@ -198,6 +208,7 @@ fn diagnostic_info(diag: &Diagnostic, source: &str) -> DiagnosticInfo {
     );
     DiagnosticInfo {
         code: diag.code.clone(),
+        severity: diag.severity().name().to_string(),
         message: diag.description(),
         label: diag.primary.message.clone(),
         help: diag.help().to_vec(),
@@ -208,6 +219,16 @@ fn diagnostic_info(diag: &Diagnostic, source: &str) -> DiagnosticInfo {
         compiler_file: diag.source_file.clone().unwrap_or_default(),
         compiler_line: diag.source_line.unwrap_or(0),
     }
+}
+
+/// The [`DiagnosticInfo`] of each diagnostic that is shown: a suppressed warning
+/// and a suppressed information message are left out.
+fn shown_diagnostics(diagnostics: &[Diagnostic], source: &str) -> Vec<DiagnosticInfo> {
+    diagnostics
+        .iter()
+        .filter(|d| d.severity().is_shown())
+        .map(|d| diagnostic_info(d, source))
+        .collect()
 }
 
 /// A structured runtime error surfaced across the WASM boundary.
@@ -297,6 +318,7 @@ fn internal_diagnostic(message: String) -> DiagnosticInfo {
     let code = Diagnostic::internal_error().code;
     DiagnosticInfo {
         code,
+        severity: error_severity(),
         message,
         label: String::new(),
         help: Vec::new(),
@@ -473,11 +495,7 @@ fn compile_inner(source: &str, dialect: &str, allows: &str, libraries: &str) -> 
         return CompileResult {
             ok: false,
             bytecode: None,
-            diagnostics: output
-                .diagnostics
-                .iter()
-                .map(|d| diagnostic_info(d, source))
-                .collect(),
+            diagnostics: shown_diagnostics(&output.diagnostics, source),
         };
     };
 
@@ -492,10 +510,12 @@ fn compile_inner(source: &str, dialect: &str, allows: &str, libraries: &str) -> 
         };
     }
 
+    // The diagnostics that did not stop the build (a warning, an information
+    // message) are returned beside the bytecode.
     CompileResult {
         ok: true,
         bytecode: Some(BASE64.encode(&buf)),
-        diagnostics: vec![],
+        diagnostics: shown_diagnostics(&output.diagnostics, source),
     }
 }
 
@@ -648,7 +668,7 @@ fn run_source_inner(
 
     RunSourceResult {
         ok: run_result.ok,
-        diagnostics: vec![],
+        diagnostics: compile_result.diagnostics,
         variables: run_result.variables,
         scans_completed: run_result.scans_completed,
         error: run_result.error,
@@ -783,7 +803,7 @@ fn load_program_inner(
 
     StepResult {
         ok: true,
-        diagnostics: vec![],
+        diagnostics: compile_result.diagnostics,
         variables: vec![],
         total_scans: 0,
         error: None,

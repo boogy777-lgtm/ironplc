@@ -19,6 +19,9 @@ regex = "1.12.3"
 lazy_static = "1.5.0"
 
 [features]
+# `Diagnostic::with_severity_for_test`, for the tests of a consumer of a category
+# that no problem code declares yet. Dev-dependency use only.
+test-support = []
 # Counts the clones of library elements (`common::library_element_clones`).
 # Only the guard that no step of the analysis keeps a copy of the library
 # enables it, so a product build has the derived `Clone` and no counter.

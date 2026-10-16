@@ -10,6 +10,12 @@ pub use id_agreement::{id_difference, IdDifference};
 pub use project::{FileBackedProject, MemoryBackedProject, Project};
 pub use sidecar::{sidecar_path_for, Sidecar, SidecarKey, SplitVarUids, SyncReport};
 
+// Spec conformance testing infrastructure (test-only).
+#[cfg(test)]
+mod spec_requirements {
+    include!(concat!(env!("OUT_DIR"), "/spec_requirements.rs"));
+}
+
 #[cfg(test)]
 #[ctor::ctor(unsafe)]
 #[expect(

@@ -1136,6 +1136,8 @@ version = "0.247.0"
 dependencies = [
  "csv",
  "ironplc-problems-gen",
+ "ironplc-spec-requirements-gen",
+ "spec_test_macro",
 ]
 
 [[package]]
@@ -1159,11 +1161,13 @@ dependencies = [
  "ironplc-plc2plc",
  "ironplc-problems",
  "ironplc-sources",
+ "ironplc-spec-requirements-gen",
  "ironplc-syntax",
  "ironplc-test",
  "log",
  "rstest",
  "serde_json",
+ "spec_test_macro",
  "tempfile",
 ]
 

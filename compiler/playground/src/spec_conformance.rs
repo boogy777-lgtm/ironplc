@@ -56,3 +56,67 @@ fn playground_spec_req_cl_001_activates_library_from_served_files() {
         "loading the served library file must make PI resolve"
     );
 }
+
+/// REQ-DS-playground-001: The playground writes `Severity::name()` of the
+/// diagnostic as its `severity`.
+#[spec_test(REQ_DS_playground_001)]
+fn playground_spec_req_ds_001_diagnostic_carries_the_name_of_its_category() {
+    use ironplc_dsl::diagnostic::{Diagnostic, Severity};
+
+    let json = crate::compile(
+        "PROGRAM main VAR x : INT; END_VAR x := undeclared; END_PROGRAM",
+        "",
+        "",
+        "",
+    );
+    let value: Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(value["ok"], Value::Bool(false));
+    let diagnostics = value["diagnostics"].as_array().unwrap();
+    assert!(!diagnostics.is_empty());
+    for diagnostic in diagnostics {
+        assert_eq!(
+            diagnostic["severity"].as_str(),
+            Some("error"),
+            "{diagnostic}"
+        );
+    }
+
+    let base = Diagnostic::internal_error();
+    for severity in [
+        Severity::FatalError,
+        Severity::Error,
+        Severity::Warning,
+        Severity::Information,
+        Severity::Text,
+    ] {
+        let info = crate::diagnostic_info(&base.clone().with_severity_for_test(severity), "");
+        let written = serde_json::to_value(&info).unwrap();
+
+        assert_eq!(written["severity"].as_str(), Some(severity.name()));
+    }
+}
+
+/// REQ-DS-playground-002: The playground lists the diagnostics that are shown
+/// and leaves out a suppressed warning and a suppressed information message.
+#[spec_test(REQ_DS_playground_002)]
+fn playground_spec_req_ds_002_suppressed_diagnostics_are_not_listed() {
+    use ironplc_dsl::diagnostic::{Diagnostic, Severity};
+
+    let base = Diagnostic::internal_error();
+    let diagnostics = [
+        base.clone().with_severity_for_test(Severity::Warning),
+        base.clone()
+            .with_severity_for_test(Severity::Warning)
+            .suppress(),
+        base.clone()
+            .with_severity_for_test(Severity::Information)
+            .suppress(),
+        base.clone().with_severity_for_test(Severity::Text),
+        base,
+    ];
+
+    let listed = crate::shown_diagnostics(&diagnostics, "");
+
+    let severities: Vec<&str> = listed.iter().map(|d| d.severity.as_str()).collect();
+    assert_eq!(severities, ["warning", "text", "error"]);
+}

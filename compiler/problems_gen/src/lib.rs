@@ -1,5 +1,6 @@
 //! Build-script helper of `ironplc-problems`: checks `problem-texts.csv` and
-//! generates the module `text` (one function for each row).
+//! generates the module `text` (one function for each row), and checks the
+//! `Severity` column of `problem-codes.csv`.
 //!
 //! It does no file access: `problems/build.rs` reads the files and writes the
 //! result, so every check has a unit test here (Cargo does not run the tests of
@@ -32,6 +33,205 @@ pub fn deprecation_note(name: &str) -> Option<&'static str> {
         .iter()
         .find(|(n, _)| *n == name)
         .map(|(_, note)| *note)
+}
+
+/// The header `problem-codes.csv` must have. `problems/build.rs` reads the
+/// columns by position, so the order is part of the format.
+pub const PROBLEM_CODES_HEADER: [&str; 4] = ["Code", "Name", "Message", "Severity"];
+
+/// One category of a message, with every fact the compiler asks of it.
+struct Level {
+    /// The variant of `Severity` and the value of the `Severity` column.
+    name: &'static str,
+    /// The text of the category where a program reads it, such as the
+    /// `severity` of a diagnostic in a JSON response.
+    wire: &'static str,
+    doc: &'static str,
+    /// Whether a row of `problem-codes.csv` may name the category. A suppressed
+    /// category is only the result of a suppression, never a declaration.
+    declarable: bool,
+    /// Whether a diagnostic of the category stops the build.
+    stops_build: bool,
+    /// Whether a diagnostic of the category is shown.
+    shown: bool,
+    /// The category a diagnostic of this one becomes when it is suppressed. A
+    /// category that cannot be suppressed names itself.
+    suppressed: &'static str,
+}
+
+/// The seven message categories of CODESYS (`Severity.cs`), in its order. This
+/// is the one list: `problems/build.rs` generates `enum Severity` and the
+/// match of each question from it, and a row of `problem-codes.csv` may name
+/// the declarable ones. A level added here does not compile in a consumer that
+/// maps `Severity` with an exhaustive `match` until the consumer handles it.
+const LEVELS: &[Level] = &[
+    Level {
+        name: "FatalError",
+        wire: "fatal-error",
+        doc: "Stops the build and the stages after it, and the run keeps only the fatal diagnostics.",
+        declarable: true,
+        stops_build: true,
+        shown: true,
+        suppressed: "FatalError",
+    },
+    Level {
+        name: "Error",
+        wire: "error",
+        doc: "The program is not valid. It stops the build.",
+        declarable: true,
+        stops_build: true,
+        shown: true,
+        suppressed: "Error",
+    },
+    Level {
+        name: "Warning",
+        wire: "warning",
+        doc: "The program is valid but probably not what was meant. It is shown and does not stop the build.",
+        declarable: true,
+        stops_build: false,
+        shown: true,
+        suppressed: "SuppressedWarning",
+    },
+    Level {
+        name: "Information",
+        wire: "information",
+        doc: "A note about a valid program. It is shown and does not stop the build.",
+        declarable: true,
+        stops_build: false,
+        shown: true,
+        suppressed: "SuppressedInformation",
+    },
+    Level {
+        name: "Text",
+        wire: "text",
+        doc: "A line of text about the build, such as progress, with no code. It does not stop the build.",
+        declarable: true,
+        stops_build: false,
+        shown: true,
+        suppressed: "Text",
+    },
+    Level {
+        name: "SuppressedWarning",
+        wire: "suppressed-warning",
+        doc: "A warning that is disabled. It is not shown and does not stop the build.",
+        declarable: false,
+        stops_build: false,
+        shown: false,
+        suppressed: "SuppressedWarning",
+    },
+    Level {
+        name: "SuppressedInformation",
+        wire: "suppressed-information",
+        doc: "An information message that is disabled. It is not shown and does not stop the build.",
+        declarable: false,
+        stops_build: false,
+        shown: false,
+        suppressed: "SuppressedInformation",
+    },
+];
+
+/// One question the compiler asks of a category: the name of the function, its
+/// documentation, its return type and the arm for a level.
+struct Question {
+    function: &'static str,
+    doc: &'static str,
+    returns: &'static str,
+    arm: fn(&Level) -> String,
+}
+
+const QUESTIONS: &[Question] = &[
+    Question {
+        function: "name",
+        doc: "The text of the category where a program reads it, such as the `severity` of a\n    /// diagnostic in a JSON response.",
+        returns: "&'static str",
+        arm: |level| format!("\"{}\"", level.wire),
+    },
+    Question {
+        function: "stops_build",
+        doc: "Whether a diagnostic of the category stops the build.",
+        returns: "bool",
+        arm: |level| level.stops_build.to_string(),
+    },
+    Question {
+        function: "is_shown",
+        doc: "Whether a diagnostic of the category is shown.",
+        returns: "bool",
+        arm: |level| level.shown.to_string(),
+    },
+    Question {
+        function: "suppressed",
+        doc: "The category a diagnostic of this one becomes when it is suppressed: a warning and\n    /// an information message have a suppressed category and every other category stays.",
+        returns: "Severity",
+        arm: |level| format!("Severity::{}", level.suppressed),
+    },
+];
+
+/// The source of `enum Severity` and of its questions, each an exhaustive
+/// `match` with an arm for every category.
+pub fn render_severity_enum() -> String {
+    let mut out = String::from(concat!(
+        "/// The message category of a diagnostic, the seven of CODESYS. Every problem\n",
+        "/// code declares its category in the `Severity` column of `problem-codes.csv`.\n",
+        "#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]\n",
+        "pub enum Severity {\n",
+    ));
+    for level in LEVELS {
+        out.push_str(&format!("    /// {}\n    {},\n", level.doc, level.name));
+    }
+    out.push_str("}\n\nimpl Severity {\n");
+    for (index, question) in QUESTIONS.iter().enumerate() {
+        if index > 0 {
+            out.push('\n');
+        }
+        out.push_str(&format!(
+            "    /// {}\n    pub fn {}(&self) -> {} {{\n        match self {{\n",
+            question.doc, question.function, question.returns
+        ));
+        for level in LEVELS {
+            out.push_str(&format!(
+                "            Severity::{} => {},\n",
+                level.name,
+                (question.arm)(level)
+            ));
+        }
+        out.push_str("        }\n    }\n");
+    }
+    out.push_str("}\n\n");
+    out
+}
+
+/// The name of the `Severity` variant a row names, or the error that names the
+/// row. The build fails on a missing value, an unknown one or a suppressed
+/// category, so a code cannot be added without deciding whether it stops the
+/// build.
+pub fn severity_variant(code: &str, value: &str) -> Result<&'static str, String> {
+    LEVELS
+        .iter()
+        .find(|level| level.declarable && level.name == value)
+        .map(|level| level.name)
+        .ok_or_else(|| {
+            let allowed: Vec<&str> = LEVELS
+                .iter()
+                .filter(|level| level.declarable)
+                .map(|level| level.name)
+                .collect();
+            format!(
+                "problem-codes.csv {code}: the severity '{value}' is not one of {}",
+                allowed.join(", ")
+            )
+        })
+}
+
+/// Checks the header of `problem-codes.csv`.
+pub fn check_problem_codes_header(header: &[&str]) -> Result<(), String> {
+    if header == PROBLEM_CODES_HEADER {
+        Ok(())
+    } else {
+        Err(format!(
+            "the header of problem-codes.csv is {header:?}, but it must be {}",
+            PROBLEM_CODES_HEADER.join(",")
+        ))
+    }
 }
 
 /// Words a placeholder or a key cannot be: each becomes a parameter or a

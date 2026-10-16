@@ -920,3 +920,43 @@ fn uri_key_when_to_uri_then_round_trips_back_to_original() {
     let back = key.to_uri();
     assert_eq!(back.as_str(), original.as_str());
 }
+
+#[test]
+fn lsp_severity_when_each_category_then_its_editor_severity() {
+    use ironplc_dsl::diagnostic::Severity;
+    use lsp_types::DiagnosticSeverity;
+
+    for (severity, expected) in [
+        (Severity::FatalError, Some(DiagnosticSeverity::ERROR)),
+        (Severity::Error, Some(DiagnosticSeverity::ERROR)),
+        (Severity::Warning, Some(DiagnosticSeverity::WARNING)),
+        (Severity::Information, Some(DiagnosticSeverity::INFORMATION)),
+        (Severity::Text, Some(DiagnosticSeverity::INFORMATION)),
+        (Severity::SuppressedWarning, None),
+        (Severity::SuppressedInformation, None),
+    ] {
+        assert_eq!(super::lsp_severity(severity), expected, "{severity:?}");
+        // What is published is what the category says is shown.
+        assert_eq!(
+            super::lsp_severity(severity).is_some(),
+            severity.is_shown(),
+            "{severity:?}"
+        );
+    }
+}
+
+#[test]
+fn map_diagnostic_when_error_diagnostic_then_editor_error() {
+    use ironplc_problems::text;
+    use lsp_types::DiagnosticSeverity;
+
+    let project = new_empty_project();
+    let diagnostic = Diagnostic::text(
+        SourceSpan::default(),
+        text::syntax_error_a_task_needs_a_priority(),
+    );
+
+    let mapped = super::map_diagnostic(diagnostic, project.wrapped.as_ref());
+
+    assert_eq!(mapped.severity, Some(DiagnosticSeverity::ERROR));
+}

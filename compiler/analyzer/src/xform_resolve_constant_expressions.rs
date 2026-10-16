@@ -44,7 +44,7 @@ struct ConstantInfo {
 /// resolves is replaced. Downstream handling of an unresolved `Constant` is
 /// already defined: `rule_range_limits` skips the node, the array and subrange
 /// intermediates report a problem, and codegen is never reached because
-/// `ironplc_project::compile` gates it on an empty diagnostic list.
+/// `ironplc_project::compile` gates it on the absence of an error.
 pub fn apply(lib: Library, options: &CompilerOptions) -> Outcome {
     let constants = collect_constants(&lib);
 
