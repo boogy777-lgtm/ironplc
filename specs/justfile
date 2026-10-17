@@ -6,7 +6,7 @@ set windows-shell := ["powershell.exe", "-c"]
 # comments, workflows and documentation all over the repository, not only here.
 
 alias ci := default
-default: adr-numbers adr-front-matter design-front-matter plan-citations
+default: adr-numbers adr-front-matter design-front-matter plan-citations critical-rules-sync
 
 # Fail if one ADR number names more than one decision. The four-digit prefix of
 # a file in specs/adrs/ is that decision's identity: prose and code comments cite
@@ -177,3 +177,22 @@ plan-citations:
     exit 1
   fi
   echo "Plan citations: none. Check passed."
+
+# Fail if CLAUDE.md and CURSOR.md disagree on their Critical Rules. Both are
+# entry points to the same steering, so the list is one dependent location
+# written twice; this guard makes a rule added to one file and not the other
+# fail instead of silently dropping out of one tool's context.
+critical-rules-sync:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  cd {{justfile_directory()}}/..
+  rules() { sed -n '/^### Critical Rules/,/^#/{/^[0-9][0-9]*\. /p}' "$1"; }
+  if [ -z "$(rules CLAUDE.md)" ]; then
+    echo "error: no Critical Rules found in CLAUDE.md." >&2
+    exit 1
+  fi
+  if ! diff <(rules CLAUDE.md) <(rules CURSOR.md) >&2; then
+    echo "error: Critical Rules differ between CLAUDE.md and CURSOR.md." >&2
+    exit 1
+  fi
+  echo "Critical rules: CLAUDE.md and CURSOR.md agree. Check passed."

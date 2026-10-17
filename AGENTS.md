@@ -17,6 +17,12 @@ BEFORE changes: read specs/steering/<topic>.md matching touched path
 terminology := specs/steering/glossary.md; !coin_new_terms
 ```
 
+## Design
+
+```
+BEFORE code: read + apply N+1 := specs/steering/development-standards.md#mechanisms-not-patches-n1
+```
+
 ## Gates (MUST pass before PR)
 
 ```
