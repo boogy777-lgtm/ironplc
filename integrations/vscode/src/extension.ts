@@ -25,6 +25,8 @@ import { registerConnectionSupport } from './connection';
 import { registerDevicePanel } from './devicePanel';
 import { registerHaPanel } from './haPanel';
 import { registerBuildCommands } from './buildCommands';
+import { registerBuildApplication } from './buildApplication';
+import { BUILD_AREA_NAME } from './buildAreaLogic';
 import { sourceExtensionsFromLanguages } from './debugAdapterLogic';
 
 /**
@@ -158,7 +160,14 @@ export function activate(context: vscode.ExtensionContext) {
   const connection = registerConnectionSupport(context, result?.path, sourceExtensions, showProblem);
   registerDevicePanel(context, connection);
   registerHaPanel(context, connection);
-  registerBuildCommands(context, result?.path, sourceExtensions, connection, showProblem);
+
+  // The Build message area: one Output channel that every build writes (the
+  // Build command and the device build), cleared when a build starts. The
+  // Precompile area is the Problems panel, which the language client fills.
+  const buildArea = vscode.window.createOutputChannel(BUILD_AREA_NAME);
+  context.subscriptions.push(buildArea);
+  registerBuildApplication(context, result?.path, buildArea, showProblem);
+  registerBuildCommands(context, result?.path, sourceExtensions, connection, showProblem, buildArea);
 
   if (!result) {
     vscode.window.showErrorMessage(

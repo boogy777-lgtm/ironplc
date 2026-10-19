@@ -111,6 +111,11 @@
         "category": "IronPLC Hot Edit"
       },
       {
+        "command": "ironplc.buildApplication",
+        "title": "Build",
+        "category": "IronPLC"
+      },
+      {
         "command": "ironplc.connect",
         "title": "Connect to Device",
         "category": "IronPLC"

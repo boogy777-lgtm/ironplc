@@ -65,6 +65,11 @@ suite('Extension Test Suite', () => {
     assert.ok(commands.includes('ironplc.runProgram'));
   });
 
+  test('ironplc.buildApplication command is registered', async () => {
+    const commands = await vscode.commands.getCommands(true);
+    assert.ok(commands.includes('ironplc.buildApplication'));
+  });
+
   test('ironplc.stopProgram command is registered', async () => {
     const commands = await vscode.commands.getCommands(true);
     assert.ok(commands.includes('ironplc.stopProgram'));
