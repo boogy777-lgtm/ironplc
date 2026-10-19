@@ -19,8 +19,23 @@ Every tool that takes source files shares two input fields:
    identifiers returned by :literal:`list_options`
    (for example, ``iec61131-3-ed2``, ``iec61131-3-ed3``, ``rusty``).
    May also include boolean feature-flag overrides
-   (such as ``allow_c_style_comments``). Call :literal:`list_options`
-   for the authoritative list.
+   (such as ``allow_c_style_comments``) and two lists of warning codes,
+   ``disabled_warnings`` and ``warnings_as_errors``, each an array of strings.
+   Call :literal:`list_options` for the authoritative list.
+
+   ``disabled_warnings``
+      Codes of warnings that are not shown and not counted.
+
+   ``warnings_as_errors``
+      Codes of warnings that are reported as errors, with the same code.
+
+   .. include:: ../../includes/warning-codes.rst
+
+   .. include:: ../../includes/warning-settings-effect.rst
+
+   An option that is not accepted, a list that is not an array of strings and a
+   code that is not accepted are each returned as a diagnostic, and the tool does
+   not run.
 
 All tools return ``diagnostics`` as an array of message objects with the
 fields of the CODESYS scripting class ``ScriptMessage``:
@@ -47,8 +62,9 @@ the set of flags evolves with the compiler.
 
 **Inputs:** none.
 
-**Returns:** an object listing each dialect and each feature flag with
-its option key and default value.
+**Returns:** an object listing each dialect and each option (feature flags,
+behavior policies and the two lists of warnings) with its option key, its type
+(``bool``, ``enum`` or ``string-list``) and its default value.
 
 explain_diagnostic
 ------------------

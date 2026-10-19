@@ -130,6 +130,38 @@ See :doc:`/explanation/enabling-dialects-and-features` for background on dialect
 :doc:`/reference/language/edition-support` for the full list of edition-gated
 features.
 
+ironplc.disabledWarnings
+------------------------
+
+:Type: Array of strings
+:Default: ``[]``
+
+Codes of warnings that are not shown and not counted, for example ``"P4083"``
+or ``"C0354"``.
+
+.. include:: ../../includes/warning-codes.rst
+
+A code that is not accepted is ignored and written to the language server log;
+the other codes of the list are used. The language server reads the setting when
+it starts, so reload the window after changing it. This setting corresponds to
+the ``--disable-warning`` command-line option documented in
+:doc:`/reference/compiler/ironplcc`.
+
+ironplc.warningsAsErrors
+------------------------
+
+:Type: Array of strings
+:Default: ``[]``
+
+Codes of warnings that are reported as errors, with the same code. The codes are
+written as for ``ironplc.disabledWarnings``.
+
+.. include:: ../../includes/warning-settings-effect.rst
+
+The language server reads the setting when it starts, so reload the window after
+changing it. This setting corresponds to the ``--warning-as-error``
+command-line option documented in :doc:`/reference/compiler/ironplcc`.
+
 Settings in settings.json
 =========================
 
@@ -142,5 +174,6 @@ You can also configure these settings directly in your :file:`settings.json` fil
      "ironplc.debugServerPath": "/custom/path/to/ironplcvmd",
      "ironplc.logLevel": "DEBUG",
      "ironplc.logFile": "/tmp/ironplc-debug.log",
-     "ironplc.dialect": "rusty"
+     "ironplc.dialect": "rusty",
+     "ironplc.disabledWarnings": ["P4083"]
    }

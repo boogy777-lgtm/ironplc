@@ -171,6 +171,19 @@ Options
    messages`` (the spelling is that of CODESYS), and drops the later messages
    of that kind. A message that repeats an earlier one is shown once.
 
+``--disable-warning`` *CODE*
+   Do not show, and do not count, the warning with the code *CODE*. Repeat the
+   option to disable more warnings.
+
+   .. include:: ../../includes/warning-codes.rst
+
+``--warning-as-error`` *CODE*
+   Report the warning with the code *CODE* as an error with the same code.
+   Repeat the option to report more warnings. The codes are written as for
+   ``--disable-warning``.
+
+   .. include:: ../../includes/warning-settings-effect.rst
+
 ``--allow-c-style-comments``
    Allow C-style comments (``//`` line comments and ``/* */`` block
    comments). This is an extension not part of the IEC 61131-3
