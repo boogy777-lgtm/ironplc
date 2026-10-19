@@ -94,13 +94,15 @@ get_message_objects
 -------------------
 
 Returns the messages of a check as message objects, as
-``system.get_message_objects`` of the CODESYS scripting API does. The
-messages are those of :literal:`check`, then the line ``Compile complete --
-N errors, M warnings`` that ends a check, a ``Text`` without a code.
+``system.get_message_objects`` of the CODESYS scripting API does. In the
+:ref:`Build area <message-areas>` (the default) the messages are those of
+:literal:`check`, then the line ``Compile complete -- N errors, M warnings`` that
+ends a check, a ``Text`` without a code.
 
-**Inputs:** ``sources``, ``options`` and ``severities`` (integer, optional)
---- the categories to return, as the sum of their ``severity_value``. The
-default is every category, suppressed ones included (4294967295).
+**Inputs:** ``sources``, ``options``, ``severities`` (integer, optional) --- the
+categories to return, as the sum of their ``severity_value``; the default is
+every category, suppressed ones included (4294967295) --- and ``area`` (string,
+optional) --- the area to read, ``Build`` (the default) or ``Precompile``.
 
 **Returns:** an object with ``ok`` and ``messages``, an array of message
 objects.
@@ -109,12 +111,27 @@ get_messages
 ------------
 
 Returns the messages of a check as texts alone, as ``system.get_messages`` of
-the CODESYS scripting API does, with the line that ends the check. Call :literal:`get_message_objects` to see the
-category, the code and the position of each.
+the CODESYS scripting API does, with the line that ends the check in the Build
+area. Call :literal:`get_message_objects` to see the category, the code and the
+position of each.
 
-**Inputs:** ``sources``, ``options``.
+**Inputs:** ``sources``, ``options`` and ``area`` (string, optional) --- the
+area to read, ``Build`` (the default) or ``Precompile``.
 
 **Returns:** an object with ``ok`` and ``messages``, an array of strings.
+
+get_message_areas
+-----------------
+
+Lists the :ref:`areas <message-areas>` of messages that ``get_message_objects``
+and ``get_messages`` can read, as ``system.get_message_categories`` and
+``system.get_message_category_description`` of the CODESYS scripting API do.
+
+**Inputs:** none.
+
+**Returns:** an object with ``areas``, an array of objects with ``name`` (the
+value to give as ``area``), ``source`` (the source an editor shows for a message
+of the area) and ``description``.
 
 symbols
 -------

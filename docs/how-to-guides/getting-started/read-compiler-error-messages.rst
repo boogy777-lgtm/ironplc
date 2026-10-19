@@ -77,7 +77,8 @@ underlines in the editor. To see the full message:
 The :guilabel:`Problems` panel groups messages as the CODESYS Messages view
 does: errors (also fatal errors), warnings and information. A line of text is
 not a problem of a file, so it appears in the :guilabel:`Output` channel of
-IronPLC and not in the :guilabel:`Problems` panel.
+IronPLC and not in the :guilabel:`Problems` panel. Every message in the panel has
+the source ``IronPLC Precompile``; see :ref:`message-areas`.
 
 --------------------------------------
 Common Mistakes

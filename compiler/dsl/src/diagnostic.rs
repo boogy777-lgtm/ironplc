@@ -17,12 +17,14 @@
 pub use ironplc_problems::Severity;
 use ironplc_problems::{CodelessText, Problem, Text};
 
+mod area;
 mod editor_range;
 mod forms;
 mod run;
 
+pub use area::{Area, ShownIn};
 pub use forms::ScriptMessage;
-pub use run::{counts, kept, Counts, Summary, CHECK_SUMMARY, COMPILE_SUMMARY};
+pub use run::{counts, Counts, Summary, CHECK_SUMMARY, COMPILE_SUMMARY};
 
 use crate::common::TypeName;
 use crate::core::{FileId, Id, Located, SourceSpan};
@@ -145,6 +147,10 @@ pub struct Diagnostic {
     /// its row of `problem-codes.csv`.
     codesys: Option<&'static str>,
 
+    /// The areas the message is shown in. It is set where the message is made,
+    /// from whether the message has a position, and never changes.
+    shown_in: ShownIn,
+
     description: String,
 
     /// The primary or first diagnostic.
@@ -230,6 +236,7 @@ impl Diagnostic {
             codeless: None,
             severity: problem.severity(),
             codesys: problem.codesys(),
+            shown_in: ShownIn::EVERYWHERE,
             description: problem.message().to_string(),
             primary,
             described: vec![],
@@ -245,7 +252,11 @@ impl Diagnostic {
     ///
     /// The row declares the category and the text, so the message takes both
     /// from one place and no call site writes either. The message is not about
-    /// a place in a file: its primary label is empty and points nowhere.
+    /// a place in a file: its primary label is empty and points nowhere, so it is
+    /// shown in the Build area alone ([`ShownIn::NO_POSITION`], MSG-022). A
+    /// message without a code that has a position -- the message of a pragma in
+    /// the source -- is made by its own constructor, which sets
+    /// [`ShownIn::EVERYWHERE`].
     pub fn codeless(text: CodelessText) -> Self {
         let (key, severity, message) = text.into_parts();
         Self {
@@ -253,6 +264,7 @@ impl Diagnostic {
             codeless: Some(key),
             severity,
             codesys: None,
+            shown_in: ShownIn::NO_POSITION,
             description: message,
             primary: Label::file(FileId::default(), ""),
             described: vec![],
@@ -526,6 +538,13 @@ impl Diagnostic {
     /// suppressed to.
     pub fn severity(&self) -> Severity {
         self.severity
+    }
+
+    /// Whether the message is shown in the area. A message is written to an area
+    /// only if it is shown there ([`Area::keep`]); the answer is fixed when the
+    /// message is made and is not derived from its place.
+    pub fn shown_in(&self, area: Area) -> bool {
+        self.shown_in.contains(area)
     }
 
     /// Whether the diagnostic stops the build, which is the one question that

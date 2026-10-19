@@ -183,10 +183,12 @@ the row, the scripting name and value of its category, `prefix`, `number` and
 ## What a run keeps
 
 A run collects the messages of its stages in the order they are produced. What
-the run keeps of them is decided in one place, `ironplc_dsl::diagnostic::kept`,
-which the places that collect the messages of a run apply
+the run keeps of them is decided in one place, the keep rule of the area the run
+writes (`Area::keep`, [Message areas](#message-areas)), which the places that
+collect the messages of a run apply
 ([What a build and a check keep](#what-a-build-and-a-check-keep)); a consumer
-that shows the messages never decides it. The rules are those of CODESYS
+that shows the messages never decides it. This section describes the rule of the
+Build area, `ironplc_dsl::diagnostic::kept`. The rules are those of CODESYS
 (`Messages.cs:28-43`, `-.351.cs:65-75`, `-.352.cs:93-215`), with one difference
 by the owner's decision: the warning limit is 500, not 100.
 
@@ -298,24 +300,117 @@ to the semantic context, and they reach the gates above.
 
 ## What a build and a check keep
 
-The messages of a run are collected in two places of `ironplc-project`, and each
-applies `kept` to what it collected, so the command line, the language server and
-the MCP tools never decide it themselves:
+The run names its area, and the rule of the area is applied where the messages
+of the run are collected ([Message areas](#message-areas)), so the command line,
+the language server and the MCP tools never decide it themselves and no caller
+can skip it:
 
-- `Project::semantic` returns the messages that parsing and analysis produced,
-  kept;
-- `ironplc_project::compile` returns the messages of its seeded diagnostics, the
-  analysis and code generation together, kept, so the limit is over the whole
-  run.
+- `Project::semantic(area)` returns the messages that parsing and analysis
+  produced, kept by `area.keep`. The area is a parameter of the run, so a caller
+  that does not name one does not compile;
+- `ironplc_project::compile` writes the Build area. It returns the messages of
+  its seeded diagnostics, the analysis and code generation together, kept by
+  `Area::Build.keep`, so the limit is over the whole run; the analysis inside it
+  is `semantic(Area::Build)`, and keeping again is idempotent;
+- the command `check` and `compile` close their run with a `Summary`, which
+  declares its area and applies the rule of it to what the command collected
+  (the idempotence of `kept` keeps the limit lines single);
+- the MCP tools run `semantic(Area::Build)`, or the area they are asked for
+  (`get_message_objects`, `get_messages`);
+- the language server runs `semantic(Area::Precompile)`.
 
 **REQ-DS-project-003** `compile` returns the messages its run keeps: for 501 errors
 the first 500 and the line of the limit, for 500 errors all of them and no line,
 for 501 warnings the first 500, the line of the limit and the container, and the
 limit is over the seeded diagnostics and the analysis together.
 
-**REQ-DS-project-004** `Project::semantic` returns the messages its run keeps: the
-first 500 errors and the line of the limit for 501 errors, and the same for
-warnings.
+**REQ-DS-project-004** `Project::semantic` keeps the messages by the rule of the
+area it is given: for 501 errors, `Build` returns the first 500 and the line of
+the limit (and the same for 501 warnings), and `Precompile` returns all 501 and no
+line.
+
+## Message areas
+
+CODESYS keeps its messages in separate lists, and a viewer shows one list at a
+time ([Message Ontology](message-ontology.md#message-area)). In IronPLC a list is
+an `Area` (`ironplc_dsl::diagnostic::Area`), a class whose members declare
+themselves:
+
+| Area | CODESYS list | Written by |
+|---|---|---|
+| `Build` | `CompilerMessageCategory` | `ironplcc check`, `ironplcc compile`, the MCP tools, the playground's compile |
+| `Precompile` | `PreCompileMessageCategory` | the language server's analysis while editing |
+
+An area declares its `name` (the name of the Messages view), its `source` (the
+text an editor shows as the source of a diagnostic), a `description`, its
+`capacity` and its keep rule, each in a `match` with an arm for each member and
+no wildcard. A new area is one new member: the compiler then asks for each of
+these, and no consumer of the class changes. The Output channel of the editor is
+a place (`Place` in the language server), not an area.
+
+A run writes exactly one area. A message declares the areas it is shown in
+(`ShownIn`, the CODESYS `ShowAttribute`) when it is made: a message made with a
+position is shown in every area, and a message made without one
+(`Diagnostic::codeless`) is shown in `Build` alone, because CODESYS clears
+`Precompile` from the `ShowAttribute` of a message made without a position
+(`CompilerMessage.cs:26-60`). It is a field set at the construction, not a test
+of the place made by the consumer. A message without a code that has a position,
+such as the message of a pragma in the source, is made by its own constructor,
+and that sets every area.
+
+**REQ-DS-dsl-024** `Area::ALL` holds each member once, at its `index`, and each
+area declares a name, a source and a description: `Build` is named "Build" with
+source "IronPLC Build", and `Precompile` is named "Precompile" with source
+"IronPLC Precompile".
+
+**REQ-DS-dsl-025** A message made with a position is shown in every area; a
+message made by `Diagnostic::codeless`, such as a limit line or a summary line, is
+shown in `Build` alone.
+
+### What each area keeps
+
+**REQ-DS-dsl-026** `Area::Build.keep` keeps what `kept` keeps, as
+[What a run keeps](#what-a-run-keeps) describes: no repeats, at most 500 errors
+and 500 warnings with the line of each limit.
+
+**REQ-DS-dsl-027** `Area::Precompile.keep` keeps, in the order produced, the
+messages that are shown in `Precompile` and are not suppressed, and drops a
+repeat of an earlier message. It writes no line of a limit and a fatal error does
+not end the run, because the precompile of CODESYS has neither
+(`PreCompileContext.cs:2440-2525`); applied to its own result it changes nothing.
+
+The Precompile area holds at most 950 messages. CODESYS applies the limit twice
+(`PreCompileContext.cs:2440-2525`):
+
+- the precompile of one object collects the messages that are shown in
+  `Precompile` and stops at 950 (`list.Count == 950`, `break`);
+- it then removes the earlier messages of that object from the area, and when
+  the area would hold more than 950 in total, it removes the oldest messages of
+  the area, the first stored, so that the total is at most 950
+  (`AddNewMessagesToMessageStorage`).
+
+So the limit is 950 messages per object in one precompile **and** 950 messages in
+the whole area, with the oldest dropped, and not 950 per object only.
+
+IronPLC has no object granularity in the language server: it analyses the whole
+workspace on each edit and publishes per file (LSP `publishDiagnostics` is per
+document). The IronPLC decision is that **the object is the file**:
+
+- each file holds at most its first 950 messages;
+- the area holds at most 950 in total; the files are written in ascending order
+  of their URI and the file that was edited last, which plays the role of the
+  object just precompiled, is written after them, so the messages of the files
+  written first are removed first;
+- a message published to several files (its secondary labels are in other files)
+  counts once for each file it is published to.
+
+`Area::store` is that rule, for any kind of object; the area without a capacity
+(`Build`) stores everything it is given.
+
+**REQ-DS-dsl-028** `Area::Precompile.store` keeps the first 950 messages of an
+object, and when the total of the objects it is given, oldest first, is over 950
+removes the oldest messages first until the total is 950; `Area::Build.store`
+returns what it is given.
 
 ## The first warning
 
@@ -454,9 +549,24 @@ severity `ERROR`, a warning with `WARNING` and an information message with
 and does not publish it as a diagnostic, and publishes a suppressed warning and a
 suppressed information message not at all.
 
-**REQ-DS-cli-011** The language server publishes a message without a code, such as
-the limit line of the errors, with severity `ERROR` and no `code`, and sends the
-text of one that is a `Text`, such as a closing line, as a `window/logMessage`.
+**REQ-DS-cli-011** The language server publishes and logs no message that has no
+position, such as the limit line of the errors or a closing line, because such a
+message is not shown in the Precompile area it writes.
+
+The language server writes the Precompile area ([Message areas](#message-areas)).
+The `source` of each diagnostic it publishes is the `source` of the area, which
+names the product and the area, so that the Problems filter of the editor can
+select the messages of one area. The area also decides what the editor holds.
+
+**REQ-DS-cli-012** The language server publishes every diagnostic with the `source`
+of the Precompile area, "IronPLC Precompile", and a message that is about no file
+of the workspace but has a position, such as one in the built-in library, is
+published for the file edited last.
+
+**REQ-DS-cli-013** The language server publishes at most the first 950 messages of
+a file, and at most 950 in all: the files are written in ascending order of their
+URI and the file edited last after them, and the messages of the files written
+first are removed first. A file that loses all its messages is not published.
 
 ### MCP
 
@@ -485,22 +595,38 @@ and `codesys` (null when the problem has no CODESYS code), and no other name for
 the code, the message and the position.
 
 **REQ-DS-mcp-005** The tool `get_message_objects` takes the sources and the options
-of `check` and an optional `severities`, a mask of `severity_value`s whose default
-is every category (0xFFFFFFFF), and returns the `ScriptMessage` of each message of
-the check whose category is in the mask, as `system.get_message_objects` does:
-the diagnostics of `check` and then the line "Compile complete" that closes the
+of `check`, an optional `severities`, a mask of `severity_value`s whose default
+is every category (0xFFFFFFFF), and an optional `area` (REQ-DS-mcp-008),
+and returns the `ScriptMessage` of each message of the check whose category is in
+the mask, as `system.get_message_objects` does: in the Build area, the
+diagnostics of `check` and then the line "Compile complete" that closes the
 check, a `Text`.
 
 **REQ-DS-mcp-006** The tool `get_messages` takes the sources and the options of
-`check` and returns the text of every message and nothing else, as
-`system.get_messages` does, from the same messages as `get_message_objects` with
-every category.
+`check` and an optional `area`, and returns the text of every message and nothing
+else, as `system.get_messages` does, from the same messages as
+`get_message_objects` with every category.
 
 **REQ-DS-mcp-007** The `ScriptMessage` of a message without a code, such as the
 closing line of a check or a limit line, has a null `prefix`, `number` and
 `codesys`. The `diagnostics` of `check` and `compile` are the problems alone and
 do not hold the closing line, so that an empty list still means a clean program;
 the two queries of the messages hold it, as CODESYS stores it among its messages.
+
+The scripting queries of CODESYS take the list to read as their `category`
+argument. The two queries take it as `area`, by the name the area declares
+(`Area::name`), and the tool `get_message_areas` lists the areas
+([Message areas](#message-areas)).
+
+**REQ-DS-mcp-008** The tools `get_message_objects` and `get_messages` take an
+optional `area`, `Build` by default: the run is made in that area, so that for
+`Precompile` the messages are those the language server keeps over the same
+sources (the messages that have a position, without a limit line) and there is no
+closing line, because the precompile of CODESYS has none; an `area` that no
+member declares is not accepted.
+
+**REQ-DS-mcp-009** The tool `get_message_areas` returns, for each area of
+`Area::ALL`, its `name`, its `source` and a one-line `description`.
 
 **REQ-DS-playground-001** The playground writes `Severity::name()` of the
 diagnostic as its `severity`.

@@ -14,6 +14,7 @@ use ironplc_dsl::common::{
     FunctionDeclaration, Library, LibraryElementKind, ProgramDeclaration, VarDecl,
 };
 use ironplc_dsl::core::FileId;
+use ironplc_dsl::diagnostic::Area;
 use ironplc_dsl::textual::{FbCall, Function};
 use ironplc_dsl::visitor::Visitor;
 use ironplc_project::project::{MemoryBackedProject, Project};
@@ -109,7 +110,7 @@ pub fn build_response(
         project.add_source(FileId::from_string(&src.name), src.content.clone());
     }
 
-    let diagnostics = project.semantic();
+    let diagnostics = project.semantic(Area::Build);
     let has_errors = ironplc_dsl::diagnostic::any_stops_build(&diagnostics);
     let mut diagnostics_json = serialize_diagnostics(&diagnostics, sources);
 

@@ -7,6 +7,7 @@ use ironplc_analyzer::intermediate_type::{ByteSized, IntermediateType};
 use ironplc_analyzer::SemanticContext;
 use ironplc_dsl::common::TypeName;
 use ironplc_dsl::core::FileId;
+use ironplc_dsl::diagnostic::Area;
 use ironplc_project::project::{MemoryBackedProject, Project};
 use serde::Serialize;
 
@@ -96,7 +97,7 @@ pub fn build_response(
         project.add_source(FileId::from_string(&src.name), src.content.clone());
     }
 
-    let diagnostics = project.semantic();
+    let diagnostics = project.semantic(Area::Build);
     let has_errors = ironplc_dsl::diagnostic::any_stops_build(&diagnostics);
     let diagnostics_json = serialize_diagnostics(&diagnostics, sources);
 

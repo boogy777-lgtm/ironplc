@@ -8,6 +8,7 @@ use ironplc_dsl::common::{
     Library, LibraryElementKind, ProgramDeclaration, TypeReference, VarDecl, VariableType,
 };
 use ironplc_dsl::core::FileId;
+use ironplc_dsl::diagnostic::Area;
 use ironplc_project::project::{MemoryBackedProject, Project};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -88,7 +89,7 @@ pub fn build_response(
         project.add_source(FileId::from_string(&src.name), src.content.clone());
     }
 
-    let diagnostics = project.semantic();
+    let diagnostics = project.semantic(Area::Build);
     let has_errors = ironplc_dsl::diagnostic::any_stops_build(&diagnostics);
     let mut diagnostics_json = serialize_diagnostics(&diagnostics, sources);
 

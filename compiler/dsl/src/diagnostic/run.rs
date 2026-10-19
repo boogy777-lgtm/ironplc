@@ -5,10 +5,12 @@
 //! errors and of warnings, and ends a build or a compile with a line that gives
 //! the counts. The rules are written once, here:
 //!
-//! - [`kept`] is the one place that decides which messages of a run stay. It is
-//!   applied where the messages of a run are collected (the analysis of a
-//!   project, the compile pipeline and the summary of a command), never by the
-//!   consumer that shows them.
+//! - [`Area::keep`] is the one place that decides which messages of a run stay:
+//!   the run names its area, and the area's rule is applied where the messages
+//!   of the run are collected (the compile pipeline, the summary of a command,
+//!   the analysis of the language server), never by the consumer that shows
+//!   them. [`kept`] is the rule of the Build area and [`kept_for_precompile`]
+//!   the rule of the Precompile area.
 //! - [`counts`] is the one place that counts the messages of a run.
 //! - [`Summary`] is how a command frames its messages: each command declares its
 //!   lines in one constant.
@@ -20,7 +22,7 @@ use std::collections::HashSet;
 
 use ironplc_problems::{codeless, CodelessText};
 
-use super::{stop_at_fatal, Diagnostic, Severity};
+use super::{stop_at_fatal, Area, Diagnostic, Severity};
 
 /// A kind of message a run counts and limits, with the limit and the line that
 /// is kept when the limit is passed. The limit and the line are declared
@@ -113,7 +115,7 @@ fn limit_keys() -> [&'static str; KINDS.len()] {
 ///
 /// Applying it again to its own result changes nothing, so the layers of a
 /// pipeline can each apply it: a limit line is not counted and is not repeated.
-pub fn kept(diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
+pub(super) fn kept(diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
     let limit_keys = limit_keys();
     let mut seen: HashSet<Identity> = HashSet::new();
     let mut counted = [0usize; KINDS.len()];
@@ -160,6 +162,29 @@ pub fn kept(diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
     stays
 }
 
+/// The messages of a run that the Precompile area keeps: those shown in it that
+/// are not suppressed, in the order they were produced, without repeats.
+///
+/// - A message without a position is not shown in the area
+///   ([`Diagnostic::shown_in`], MSG-022), and a suppressed message is not added
+///   to it (`PreCompileContext.cs:2446`).
+/// - A message that repeats an earlier one (same code, category, place and text)
+///   is dropped, and the first stays, as in the Build area.
+/// - There are no limit lines and a fatal error does not end the run: the
+///   precompile of CODESYS has neither (`PreCompileContext.cs:2440-2525`). Its
+///   cap of 950 is on what the area stores, see [`Area::store`].
+///
+/// Applying it again to its own result changes nothing.
+pub(super) fn kept_for_precompile(diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
+    let mut seen: HashSet<Identity> = HashSet::new();
+    diagnostics
+        .into_iter()
+        .filter(|diagnostic| diagnostic.shown_in(Area::Precompile))
+        .filter(|diagnostic| diagnostic.severity().is_shown())
+        .filter(|diagnostic| seen.insert(identity(diagnostic)))
+        .collect()
+}
+
 /// The counts a summary line reports.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Counts {
@@ -191,6 +216,9 @@ pub fn counts(diagnostics: &[Diagnostic]) -> Counts {
 /// The lines a command puts around the messages of its run, as CODESYS puts them
 /// in its Messages view. Each is a message of category `Text` without a code.
 pub struct Summary {
+    /// The area the command writes: the one whose rule decides what the run
+    /// keeps.
+    area: Area,
     /// The line that opens the run, made from the name of the application, or
     /// none.
     started: Option<fn(&str) -> CodelessText>,
@@ -203,6 +231,7 @@ pub struct Summary {
 /// `check`, which is a compile without code generation: it ends with the line
 /// "Compile complete" (`LanguageModelManagerConsolidated.cs:1972-1989`).
 pub const CHECK_SUMMARY: Summary = Summary {
+    area: Area::Build,
     started: None,
     complete_ok: |c| codeless::compile_complete_ok(c.errors, c.warnings),
     complete_errors: |c| codeless::compile_complete_errors(c.errors, c.warnings),
@@ -212,6 +241,7 @@ pub const CHECK_SUMMARY: Summary = Summary {
 /// "Build complete", "Ready for download" or, when an error stops the build,
 /// "No download possible" (`CompilerPhaseControllerGenerateCode.cs:656-686`).
 pub const COMPILE_SUMMARY: Summary = Summary {
+    area: Area::Build,
     started: Some(|application| codeless::build_started(application)),
     complete_ok: |c| codeless::build_complete_ok(c.errors, c.warnings),
     complete_errors: |c| codeless::build_complete_errors(c.errors, c.warnings),
@@ -237,11 +267,11 @@ impl Summary {
     }
 
     /// The messages of a run as the command shows them: what the run keeps
-    /// ([`kept`]), with the opening line before and the closing line after. The
+    /// ([`Area::keep`] of the area of the command), with the opening line before and the closing line after. The
     /// closing line has the counts of what the run kept, so it shows the state
     /// of the pipeline as it ends.
     pub fn close(&self, application: &str, diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
-        let kept = kept(diagnostics);
+        let kept = self.area.keep(diagnostics);
         let closing = self.closing(&kept);
         let mut closed: Vec<Diagnostic> = self.opening(application).into_iter().collect();
         closed.extend(kept);

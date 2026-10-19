@@ -840,8 +840,11 @@ impl Project for WithText {
         self.inner.tokenize(file_id)
     }
 
-    fn semantic(&mut self) -> Vec<ironplc_dsl::diagnostic::Diagnostic> {
-        let mut diagnostics = self.inner.semantic();
+    fn semantic(
+        &mut self,
+        area: ironplc_dsl::diagnostic::Area,
+    ) -> Vec<ironplc_dsl::diagnostic::Diagnostic> {
+        let mut diagnostics = self.inner.semantic(area);
         diagnostics.push(
             ironplc_dsl::diagnostic::Diagnostic::text(
                 ironplc_dsl::core::SourceSpan::default(),
@@ -849,7 +852,7 @@ impl Project for WithText {
             )
             .with_severity_for_test(ironplc_dsl::diagnostic::Severity::Text),
         );
-        diagnostics
+        area.keep(diagnostics)
     }
 
     fn semantic_context(&self) -> Option<&ironplc_analyzer::SemanticContext> {

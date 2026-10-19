@@ -14,7 +14,7 @@
 use ironplc_codegen::{CodegenOptions, SourceLookup};
 use ironplc_container::Container;
 use ironplc_dsl::diagnostic::{
-    any_stops_build, has_fatal, kept, stop_at_fatal, stops_build_count, Diagnostic,
+    any_stops_build, has_fatal, stop_at_fatal, stops_build_count, Area, Diagnostic,
 };
 use ironplc_parser::options::CompilerOptions;
 use log::debug;
@@ -82,10 +82,11 @@ pub fn compile(
     source_lookup: &dyn SourceLookup,
     diagnostics: Vec<Diagnostic>,
 ) -> CompileOutput {
-    // What a run keeps of its messages is decided here once, over the seeded
-    // diagnostics, the analysis and code generation together.
+    // A compile writes the Build area. What the area keeps of the messages is
+    // decided here once, over the seeded diagnostics, the analysis and code
+    // generation together.
     let mut output = run_stages(project, compiler_options, source_lookup, diagnostics);
-    output.diagnostics = kept(output.diagnostics);
+    output.diagnostics = Area::Build.keep(output.diagnostics);
     output
 }
 
@@ -104,7 +105,7 @@ fn run_stages(
 
     // Parse and analyze. Analysis goes as far as it can and reports everything
     // it found; it never short-circuits on the seeded diagnostics.
-    diagnostics.extend(project.semantic());
+    diagnostics.extend(project.semantic(Area::Build));
 
     if has_fatal(&diagnostics) {
         return stopped(diagnostics);
@@ -179,7 +180,7 @@ mod tests {
     use ironplc_codegen::EmptyLookup;
     use ironplc_container::StableVarEntry;
     use ironplc_dsl::core::{FileId, SourceSpan};
-    use ironplc_dsl::diagnostic::{any_stops_build, Diagnostic, Severity};
+    use ironplc_dsl::diagnostic::{any_stops_build, Area, Diagnostic, Severity};
     use ironplc_parser::options::CompilerOptions;
     use ironplc_problems::text;
     use spec_test_macro::spec_test;
@@ -686,24 +687,35 @@ VAR e1 : E1; e2 : E2; r : BOOL; END_VAR
     }
 
     #[spec_test(REQ_DS_project_004)]
-    fn semantic_when_501_errors_then_500_and_the_line_of_the_limit() {
+    fn semantic_when_build_area_and_501_errors_then_500_and_the_line_of_the_limit() {
         let mut project = project_with(&program_with_errors(501));
 
-        let diagnostics = project.semantic();
+        let diagnostics = project.semantic(Area::Build);
 
         assert_eq!(diagnostics.len(), 501);
+        assert!(diagnostics[..500].iter().all(Diagnostic::has_code));
         assert!(!diagnostics[500].has_code());
     }
 
     #[spec_test(REQ_DS_project_004)]
-    fn semantic_when_501_warnings_then_500_and_the_line_of_the_limit() {
+    fn semantic_when_build_area_and_501_warnings_then_500_and_the_line_of_the_limit() {
         let mut project = project_with(&program_with_warnings(501));
 
-        let diagnostics = project.semantic();
+        let diagnostics = project.semantic(Area::Build);
 
         assert_eq!(diagnostics.len(), 501);
         assert_eq!(diagnostics[500].severity(), Severity::Warning);
         assert!(!diagnostics[500].has_code());
+    }
+
+    #[spec_test(REQ_DS_project_004)]
+    fn semantic_when_precompile_area_and_501_errors_then_all_of_them_and_no_line() {
+        let mut project = project_with(&program_with_errors(501));
+
+        let diagnostics = project.semantic(Area::Precompile);
+
+        assert_eq!(diagnostics.len(), 501);
+        assert!(diagnostics.iter().all(Diagnostic::has_code));
     }
 
     #[test]

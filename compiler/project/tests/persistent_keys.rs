@@ -20,6 +20,7 @@
 use ironplc_codegen::EmptyLookup;
 use ironplc_container::{Container, FbTypeId, VarIndex};
 use ironplc_dsl::core::FileId;
+use ironplc_dsl::diagnostic::Area;
 use ironplc_parser::options::CompilerOptions;
 use ironplc_project::sidecar::declared_var_keys;
 use ironplc_project::{compile, MemoryBackedProject, Project, Sidecar};
@@ -105,7 +106,7 @@ END_PROGRAM",
 fn without_id(source: &str, options: CompilerOptions) -> Result<Vec<String>, String> {
     let mut project = MemoryBackedProject::new(options);
     project.add_source(FileId::from_string("main.st"), source.to_owned());
-    let diagnostics = project.semantic();
+    let diagnostics = project.semantic(Area::Build);
     if !diagnostics.is_empty() {
         return Err(format!("{diagnostics:?}"));
     }
