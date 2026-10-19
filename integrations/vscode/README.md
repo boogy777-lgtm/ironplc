@@ -32,7 +32,7 @@ to write your first PLC program.
 
 * [**Real-time diagnostics**](https://www.ironplc.com/reference/editor/overview.html) — syntax and semantic errors reported as you type
 * [**Syntax highlighting**](https://www.ironplc.com/reference/compiler/source-formats/index.html) — Structured Text and PLCopen XML files
-* [**Build and run**](https://www.ironplc.com/reference/editor/build-tasks.html) — compile and execute programs from the editor
+* [**Build and run**](https://www.ironplc.com/reference/editor/build-tasks.html) — compile and execute programs from the editor; **IronPLC: Build** shows the build messages in the Output panel
 * [**Bytecode viewer**](https://www.ironplc.com/reference/editor/bytecode-viewer.html) — inspect compiled programs
 
 Works with Structured Text (`.st`, `.iec`) and PLCopen XML files,

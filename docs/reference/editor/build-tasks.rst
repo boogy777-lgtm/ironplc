@@ -32,6 +32,25 @@ after the workspace folder (for example, a folder named ``myproject`` produces
 
 Build output appears in the :guilabel:`Terminal` panel.
 
+Building into the Build Area
+============================
+
+The command :guilabel:`IronPLC: Build` compiles the same project as the build
+task and writes the messages to the :guilabel:`IronPLC Build` channel of the
+:guilabel:`Output` panel, the Build area (see :ref:`message-areas`):
+
+#. Open the Command Palette (:kbd:`Ctrl+Shift+P` or :kbd:`Cmd+Shift+P`).
+#. Type "IronPLC: Build" and press :kbd:`Enter`.
+
+The command builds the workspace folder when there is one, else the folder of
+the active editor, else it asks you to select a folder. The channel is cleared
+when the build starts and opens without taking the focus. It shows everything
+the compiler writes, the lines that start and end the build included, also
+when the build has errors: a build with errors is a normal result, and the last
+line says that no download is possible. An error message names the position
+of the problem as :file:`path:line:column`, which the Output panel can turn into
+a link.
+
 Setting as the Default Build Task
 =================================
 
