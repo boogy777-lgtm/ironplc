@@ -81,13 +81,13 @@ pub fn build_response(
 ) -> TypesAllResponse {
     let source_errors = validate_sources(sources);
     if !source_errors.is_empty() {
-        return TypesAllResponse::empty(false, serialize_diagnostics(&source_errors));
+        return TypesAllResponse::empty(false, serialize_diagnostics(&source_errors, &[]));
     }
 
     let options = match parse_options(options_value) {
         Ok(opts) => opts,
         Err(errs) => {
-            return TypesAllResponse::empty(false, serialize_diagnostics(&errs));
+            return TypesAllResponse::empty(false, serialize_diagnostics(&errs, &[]));
         }
     };
 
@@ -98,7 +98,7 @@ pub fn build_response(
 
     let diagnostics = project.semantic();
     let has_errors = ironplc_dsl::diagnostic::any_stops_build(&diagnostics);
-    let diagnostics_json = serialize_diagnostics(&diagnostics);
+    let diagnostics_json = serialize_diagnostics(&diagnostics, sources);
 
     let context = match project.semantic_context() {
         Some(ctx) => ctx,
@@ -386,14 +386,14 @@ mod tests {
     fn build_response_when_empty_source_name_then_p8001() {
         let resp = build_response(&unnamed_source(), &ed2_options());
         assert!(!resp.ok);
-        assert!(resp.diagnostics.iter().any(|d| d["code"] == "P8001"));
+        assert!(resp.diagnostics.iter().any(|d| d["number"] == 8001));
     }
 
     #[test]
     fn build_response_when_missing_dialect_then_p8001() {
         let resp = build_response(&source(VALID_PROGRAM), &serde_json::json!({}));
         assert!(!resp.ok);
-        assert!(resp.diagnostics.iter().any(|d| d["code"] == "P8001"));
+        assert!(resp.diagnostics.iter().any(|d| d["number"] == 8001));
     }
 
     #[test]

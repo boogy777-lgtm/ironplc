@@ -49,7 +49,7 @@ pub fn build_response(container_id: &str, cache: &Mutex<ContainerCache>) -> Cont
         ContainerDropResponse {
             ok: false,
             removed: false,
-            diagnostics: serialize_diagnostics(&[err]),
+            diagnostics: serialize_diagnostics(&[err], &[]),
         }
     }
 }

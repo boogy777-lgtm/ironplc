@@ -244,7 +244,7 @@ fn mcp_spec_req_tol_049_freewheeling_task_needs_a_supplied_cycle_time() {
     // Omitted: rejected, naming the task and what to set.
     let omitted = run(None);
     assert!(!omitted.ok);
-    assert!(omitted.diagnostics.iter().any(|d| d["message"]
+    assert!(omitted.diagnostics.iter().any(|d| d["text"]
         .as_str()
         .unwrap_or("")
         .contains("freewheeling_interval_ms")));
@@ -262,7 +262,7 @@ fn mcp_spec_req_tol_049_freewheeling_task_needs_a_supplied_cycle_time() {
     // Out of range: rejected before the VM starts.
     let rejected = run(Some(0.0));
     assert!(!rejected.ok);
-    assert!(rejected.diagnostics.iter().any(|d| d["message"]
+    assert!(rejected.diagnostics.iter().any(|d| d["text"]
         .as_str()
         .unwrap_or("")
         .contains("freewheeling_interval_ms")));

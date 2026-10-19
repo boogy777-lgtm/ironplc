@@ -38,8 +38,11 @@ fn codesys_when_made_by_each_constructor_then_the_codesys_code_of_its_problem() 
 
     assert_eq!(undeclared(span.clone()).codesys(), Some("C0046"));
     assert_eq!(
-        Diagnostic::text_in_file(FileId::from_string("f"), text::variable_undefined_undefined_variable())
-            .codesys(),
+        Diagnostic::text_in_file(
+            FileId::from_string("f"),
+            text::variable_undefined_undefined_variable()
+        )
+        .codesys(),
         Some("C0046")
     );
     assert_eq!(syntax_error(span.clone()).codesys(), None);
@@ -169,8 +172,8 @@ fn script_message_when_each_category_then_its_scripting_name_and_value() {
 
 #[spec_test(REQ_DS_dsl_010)]
 fn is_in_when_mask_then_true_only_for_the_categories_in_it() {
-    let warning = in_category(undeclared(SourceSpan::default()), Severity::Warning)
-        .script_message(None);
+    let warning =
+        in_category(undeclared(SourceSpan::default()), Severity::Warning).script_message(None);
 
     assert!(warning.is_in(0xFFFF_FFFF));
     assert!(warning.is_in(4));

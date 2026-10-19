@@ -7,33 +7,46 @@ use ironplc_problems::text;
 use spec_test_macro::spec_test;
 
 use crate::tools;
-use crate::tools::common::{serialize_diagnostic, serialize_diagnostics};
+use crate::tools::common::{serialize_diagnostic, serialize_diagnostics, ParseCheckInput};
+use crate::tools::messages::MessageObjectsInput;
 use crate::tools::test_support::{ed2_options, source, SEMANTIC_ERROR_PROGRAM, VALID_PROGRAM};
 
-#[spec_test(REQ_DS_mcp_001)]
-fn mcp_spec_req_ds_001_severity_is_the_name_of_the_category_of_the_diagnostic() {
-    let diagnostic = Diagnostic::text(
+/// A diagnostic in each of the seven categories, in the order of CODESYS, with
+/// the scripting name and the flag value each has.
+const CATEGORIES: [(Severity, &str, u64); 7] = [
+    (Severity::FatalError, "FatalError", 1),
+    (Severity::Error, "Error", 2),
+    (Severity::Warning, "Warning", 4),
+    (Severity::Information, "Information", 8),
+    (Severity::Text, "Text", 16),
+    (Severity::SuppressedWarning, "SuppressedWarning", 32),
+    (Severity::SuppressedInformation, "SuppressedInformation", 64),
+];
+
+fn a_diagnostic() -> Diagnostic {
+    Diagnostic::text(
         SourceSpan::default(),
         text::syntax_error_a_task_needs_a_priority(),
-    );
-    assert_eq!(
-        serialize_diagnostic(&diagnostic)["severity"].as_str(),
-        Some("error")
-    );
+    )
+}
 
-    for (severity, name) in [
-        (Severity::FatalError, "fatal-error"),
-        (Severity::Error, "error"),
-        (Severity::Warning, "warning"),
-        (Severity::Information, "information"),
-        (Severity::Text, "text"),
-        (Severity::SuppressedWarning, "suppressed-warning"),
-        (Severity::SuppressedInformation, "suppressed-information"),
-    ] {
-        let json = serialize_diagnostic(&diagnostic.clone().with_severity_for_test(severity));
+#[spec_test(REQ_DS_mcp_001)]
+fn mcp_spec_req_ds_001_severity_is_the_scripting_name_of_the_category_of_the_diagnostic() {
+    let diagnostic = a_diagnostic();
+    let json = serialize_diagnostic(&diagnostic, &[]);
+    assert_eq!(json["severity"].as_str(), Some("Error"));
+    assert_eq!(json["severity_value"].as_u64(), Some(2));
+
+    for (severity, name, value) in CATEGORIES {
+        let json = serialize_diagnostic(&diagnostic.clone().with_severity_for_test(severity), &[]);
 
         assert_eq!(json["severity"].as_str(), Some(name));
-        assert_eq!(json["severity"].as_str(), Some(severity.name()));
+        assert_eq!(json["severity"].as_str(), Some(severity.script_name()));
+        assert_eq!(json["severity_value"].as_u64(), Some(value));
+        assert_eq!(
+            json["severity_value"].as_u64(),
+            Some(u64::from(severity.script_value()))
+        );
     }
 }
 
@@ -48,20 +61,123 @@ fn mcp_spec_req_ds_002_check_is_ok_only_when_no_diagnostic_is_an_error() {
     assert!(broken
         .diagnostics
         .iter()
-        .all(|d| d["severity"].as_str() == Some("error")));
+        .all(|d| d["severity"].as_str() == Some("Error")));
 }
 
 #[spec_test(REQ_DS_mcp_003)]
 fn mcp_spec_req_ds_003_a_suppressed_diagnostic_is_serialized_with_its_category() {
-    let warning = Diagnostic::text(
-        SourceSpan::default(),
-        text::syntax_error_a_task_needs_a_priority(),
-    )
-    .with_severity_for_test(Severity::Warning);
+    let warning = a_diagnostic().with_severity_for_test(Severity::Warning);
 
-    let json = serialize_diagnostics(&[warning.clone(), warning.suppress()]);
+    let json = serialize_diagnostics(&[warning.clone(), warning.suppress()], &[]);
 
     assert_eq!(json.len(), 2);
-    assert_eq!(json[0]["severity"].as_str(), Some("warning"));
-    assert_eq!(json[1]["severity"].as_str(), Some("suppressed-warning"));
+    assert_eq!(json[0]["severity"].as_str(), Some("Warning"));
+    assert_eq!(json[1]["severity"].as_str(), Some("SuppressedWarning"));
+    assert_eq!(
+        serialize_diagnostic(
+            &a_diagnostic()
+                .with_severity_for_test(Severity::Information)
+                .suppress(),
+            &[]
+        )["severity"]
+            .as_str(),
+        Some("SuppressedInformation")
+    );
+}
+
+#[spec_test(REQ_DS_mcp_004)]
+fn mcp_spec_req_ds_004_a_diagnostic_has_the_fields_of_script_message_and_codesys() {
+    let sources = source(SEMANTIC_ERROR_PROGRAM);
+    let resp = tools::check::build_response(&sources, &ed2_options());
+    let first = &resp.diagnostics[0];
+
+    for field in [
+        "severity",
+        "severity_value",
+        "prefix",
+        "number",
+        "text",
+        "position",
+        "length",
+        "position_text",
+        "object",
+        "codesys",
+    ] {
+        assert!(first.get(field).is_some(), "no field {field}: {first}");
+    }
+    // The names the tools had before are gone.
+    for field in ["code", "message", "file", "start", "end"] {
+        assert!(first.get(field).is_none(), "old field {field}: {first}");
+    }
+    assert_eq!(first["prefix"], "P");
+    assert!(first["number"].is_u64());
+    assert_eq!(first["object"], sources[0].name.as_str());
+    assert!(first["position_text"]
+        .as_str()
+        .unwrap()
+        .starts_with(&format!("{}:", sources[0].name)));
+
+    // `codesys` is the CODESYS code of the same condition, and null otherwise.
+    let with = serialize_diagnostic(
+        &Diagnostic::text(
+            SourceSpan::default(),
+            text::variable_undefined_undefined_variable(),
+        ),
+        &[],
+    );
+    assert_eq!(with["codesys"], "C0046");
+    assert!(serialize_diagnostic(&a_diagnostic(), &[])["codesys"].is_null());
+}
+
+/// The objects of a program that produces an error, for a mask of categories.
+fn objects_with(severities: Option<u32>) -> Vec<serde_json::Value> {
+    let input = MessageObjectsInput {
+        check: ParseCheckInput {
+            sources: source(SEMANTIC_ERROR_PROGRAM),
+            options: ed2_options(),
+        },
+        severities,
+    };
+    tools::messages::build_objects_response(&input).messages
+}
+
+#[spec_test(REQ_DS_mcp_005)]
+fn mcp_spec_req_ds_005_get_message_objects_returns_the_objects_of_the_masked_categories() {
+    let all = objects_with(None);
+    let check = tools::check::build_response(&source(SEMANTIC_ERROR_PROGRAM), &ed2_options());
+
+    // The default is every category: the objects of `check`.
+    assert!(!all.is_empty());
+    assert_eq!(all, check.diagnostics);
+    assert_eq!(objects_with(Some(0xFFFF_FFFF)), all);
+    // The mask selects by `severity_value`: errors are 2 and 1, warnings 4.
+    assert_eq!(objects_with(Some(2)), all);
+    assert_eq!(objects_with(Some(1 | 2)), all);
+    assert!(objects_with(Some(4)).is_empty());
+    assert!(objects_with(Some(0)).is_empty());
+    assert!(objects_with(Some(64)).is_empty());
+}
+
+#[spec_test(REQ_DS_mcp_006)]
+fn mcp_spec_req_ds_006_get_messages_returns_the_texts_of_the_objects() {
+    let objects = objects_with(None);
+    let texts = tools::messages::build_texts_response(&ParseCheckInput {
+        sources: source(SEMANTIC_ERROR_PROGRAM),
+        options: ed2_options(),
+    });
+
+    let expected: Vec<&str> = objects
+        .iter()
+        .map(|object| object["text"].as_str().unwrap())
+        .collect();
+    assert!(!expected.is_empty());
+    assert_eq!(texts.messages, expected);
+    assert!(!texts.ok);
+
+    let clean = tools::messages::build_texts_response(&ParseCheckInput {
+        sources: source(VALID_PROGRAM),
+        options: ed2_options(),
+    });
+    assert!(clean.ok);
+    assert!(clean.messages.is_empty());
 }

@@ -222,16 +222,39 @@ suppressed information message not at all.
 
 ### MCP
 
-**REQ-DS-mcp-001** `serialize_diagnostic` writes `Severity::name()` of the
-diagnostic as its `severity`.
+The tools return a message as a `ScriptMessage` (`serialize_diagnostic`), under
+the names of its fields: `severity`, `severity_value`, `prefix`, `number`, `text`,
+`position`, `length`, `position_text` and `object`, and `codesys` for the CODESYS
+code of the same condition, which CODESYS does not have. The code `P4007` is
+`prefix` `P` and `number` 4007. `position` is a byte offset and `length` a number
+of bytes, with no line and column conversion, and `position_text` is
+`file:line:column` counted from 1, when the text of the file is known.
+
+**REQ-DS-mcp-001** `serialize_diagnostic` writes `Severity::script_name()` of the
+diagnostic as its `severity` and `Severity::script_value()` as its
+`severity_value`.
 
 **REQ-DS-mcp-002** The `ok` of `check` is false when a diagnostic stops the build
 and true when none does. A diagnostic of another category is listed and does not
 make `ok` false, because `ok` asks `any_stops_build`.
 
-**REQ-DS-mcp-003** A suppressed diagnostic is serialized, with `suppressed-warning`
-or `suppressed-information` as its `severity`, so that a tool can see what was
+**REQ-DS-mcp-003** A suppressed diagnostic is serialized, with `SuppressedWarning`
+or `SuppressedInformation` as its `severity`, so that a tool can see what was
 hidden.
+
+**REQ-DS-mcp-004** `serialize_diagnostic` writes the fields of `ScriptMessage`
+and `codesys` (null when the problem has no CODESYS code), and no other name for
+the code, the message and the position.
+
+**REQ-DS-mcp-005** The tool `get_message_objects` takes the sources and the options
+of `check` and an optional `severities`, a mask of `severity_value`s whose default
+is every category (0xFFFFFFFF), and returns the `ScriptMessage` of each diagnostic
+whose category is in the mask, as `system.get_message_objects` does.
+
+**REQ-DS-mcp-006** The tool `get_messages` takes the sources and the options of
+`check` and returns the text of every diagnostic and nothing else, as
+`system.get_messages` does, from the same messages as `get_message_objects` with
+every category.
 
 **REQ-DS-playground-001** The playground writes `Severity::name()` of the
 diagnostic as its `severity`.

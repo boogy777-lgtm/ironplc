@@ -233,7 +233,7 @@ fn mcp_spec_req_tol_221_pou_scope_unknown_pou() {
     assert!(!missing.ok);
     assert!(!missing.found);
     assert!(missing.variables.is_empty());
-    assert!(missing.diagnostics.iter().any(|d| d["code"] == "P8001"));
+    assert!(missing.diagnostics.iter().any(|d| d["number"] == 8001));
 }
 
 // ===========================================================================
@@ -316,7 +316,7 @@ fn mcp_spec_req_tol_231_pou_lineage_unknown_pou() {
     assert!(!resp.found);
     assert!(resp.upstream.is_empty());
     assert!(resp.downstream.is_empty());
-    assert!(resp.diagnostics.iter().any(|d| d["code"] == "P8001"));
+    assert!(resp.diagnostics.iter().any(|d| d["number"] == 8001));
 }
 
 // ===========================================================================

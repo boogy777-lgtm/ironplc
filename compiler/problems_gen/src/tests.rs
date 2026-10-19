@@ -297,16 +297,24 @@ fn codesys_code_when_empty_then_none() {
 
 #[test]
 fn codesys_code_when_c_and_four_digits_then_that_code() {
-    assert_eq!(codesys_code("P4007", "C0046"), Ok(Some("C0046".to_string())));
+    assert_eq!(
+        codesys_code("P4007", "C0046"),
+        Ok(Some("C0046".to_string()))
+    );
 }
 
 #[test]
 fn codesys_code_when_malformed_then_error_names_code_and_value() {
-    for value in ["C046", "C00460", "c0046", "P0046", "C00x6", " C0046", "0046", "C"] {
+    for value in [
+        "C046", "C00460", "c0046", "P0046", "C00x6", " C0046", "0046", "C",
+    ] {
         let message = codesys_code("P0042", value).expect_err("the value should be refused");
 
         assert!(message.contains("P0042"), "'{value}': {message}");
-        assert!(message.contains(&format!("'{value}'")), "'{value}': {message}");
+        assert!(
+            message.contains(&format!("'{value}'")),
+            "'{value}': {message}"
+        );
     }
 }
 

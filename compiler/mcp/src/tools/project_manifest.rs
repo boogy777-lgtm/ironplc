@@ -59,14 +59,18 @@ pub fn build_response(
         return ProjectManifestResponse::empty(
             false,
             vec![],
-            serialize_diagnostics(&source_errors),
+            serialize_diagnostics(&source_errors, &[]),
         );
     }
 
     let options = match parse_options(options_value) {
         Ok(opts) => opts,
         Err(errs) => {
-            return ProjectManifestResponse::empty(false, vec![], serialize_diagnostics(&errs));
+            return ProjectManifestResponse::empty(
+                false,
+                vec![],
+                serialize_diagnostics(&errs, &[]),
+            );
         }
     };
 
@@ -79,7 +83,7 @@ pub fn build_response(
 
     let diagnostics = project.semantic();
     let has_errors = ironplc_dsl::diagnostic::any_stops_build(&diagnostics);
-    let diagnostics_json = serialize_diagnostics(&diagnostics);
+    let diagnostics_json = serialize_diagnostics(&diagnostics, sources);
 
     // REQ-TOL-mcp-201: always attempt to populate a partial manifest. `semantic_context()`
     // is set by `MemoryBackedProject::semantic()` even when analysis fails, as long
@@ -272,14 +276,14 @@ mod tests {
     fn build_response_when_invalid_sources_then_error_diagnostic() {
         let resp = build_response(&unnamed_source(), &ed2_options());
         assert!(!resp.ok);
-        assert!(resp.diagnostics.iter().any(|d| d["code"] == "P8001"));
+        assert!(resp.diagnostics.iter().any(|d| d["number"] == 8001));
     }
 
     #[test]
     fn build_response_when_invalid_options_then_error_diagnostic() {
         let resp = build_response(&source(VALID_PROGRAM), &serde_json::json!({}));
         assert!(!resp.ok);
-        assert!(resp.diagnostics.iter().any(|d| d["code"] == "P8001"));
+        assert!(resp.diagnostics.iter().any(|d| d["number"] == 8001));
     }
 
     #[test]

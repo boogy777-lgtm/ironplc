@@ -42,7 +42,7 @@ fn build_response_when_unknown_container_id_then_ok_false() {
     assert!(resp
         .diagnostics
         .iter()
-        .any(|d| d["message"].as_str().unwrap_or("").contains("c_999")));
+        .any(|d| d["text"].as_str().unwrap_or("").contains("c_999")));
 }
 
 #[test]
@@ -101,7 +101,7 @@ fn build_response_when_container_base64_only_then_mvp_not_implemented() {
     };
     let resp = build_response(&input, &cache);
     assert!(!resp.ok);
-    assert!(resp.diagnostics.iter().any(|d| d["message"]
+    assert!(resp.diagnostics.iter().any(|d| d["text"]
         .as_str()
         .unwrap_or("")
         .contains("container_base64")));
@@ -164,7 +164,7 @@ fn build_response_when_freewheeling_program_and_no_interval_then_ok_false() {
 
     assert!(!resp.ok);
     assert!(resp.diagnostics.iter().any(|d| {
-        let msg = d["message"].as_str().unwrap_or("");
+        let msg = d["text"].as_str().unwrap_or("");
         msg.contains("freewheeling_interval_ms") && msg.contains("Main")
     }));
 }
@@ -242,7 +242,7 @@ fn build_response_when_freewheeling_interval_out_of_range_then_ok_false(#[case] 
     let resp = build_response(&input, &cache);
 
     assert!(!resp.ok);
-    assert!(resp.diagnostics.iter().any(|d| d["message"]
+    assert!(resp.diagnostics.iter().any(|d| d["text"]
         .as_str()
         .unwrap_or("")
         .contains("freewheeling_interval_ms")));
@@ -259,7 +259,7 @@ fn build_response_when_stimuli_supplied_then_phase11_guard_fires() {
     assert!(resp
         .diagnostics
         .iter()
-        .any(|d| d["message"].as_str().unwrap_or("").contains("stimuli")));
+        .any(|d| d["text"].as_str().unwrap_or("").contains("stimuli")));
 }
 
 #[test]
@@ -297,10 +297,10 @@ fn build_response_when_limits_loosen_duration_then_ok_false() {
     });
     let resp = build_response(&input, &cache);
     assert!(!resp.ok);
-    assert!(resp.diagnostics.iter().any(|d| d["message"]
-        .as_str()
-        .unwrap_or("")
-        .contains("max_duration_ms")));
+    assert!(resp
+        .diagnostics
+        .iter()
+        .any(|d| d["text"].as_str().unwrap_or("").contains("max_duration_ms")));
 }
 
 #[test]
@@ -314,7 +314,7 @@ fn build_response_when_wildcard_in_variable_then_ok_false() {
     assert!(resp
         .diagnostics
         .iter()
-        .any(|d| d["message"].as_str().unwrap_or("").contains("Wildcard")));
+        .any(|d| d["text"].as_str().unwrap_or("").contains("Wildcard")));
 }
 
 #[test]
@@ -328,7 +328,7 @@ fn build_response_when_unresolved_variable_then_diagnostic_names_var() {
     assert!(resp
         .diagnostics
         .iter()
-        .any(|d| d["message"].as_str().unwrap_or("").contains("NoSuchVar")));
+        .any(|d| d["text"].as_str().unwrap_or("").contains("NoSuchVar")));
 }
 
 #[test]
@@ -436,7 +436,7 @@ fn build_response_when_container_has_no_tasks_then_ok_false() {
     assert!(resp
         .diagnostics
         .iter()
-        .any(|d| d["message"].as_str().unwrap_or("").contains("no tasks")));
+        .any(|d| d["text"].as_str().unwrap_or("").contains("no tasks")));
 }
 
 #[test]

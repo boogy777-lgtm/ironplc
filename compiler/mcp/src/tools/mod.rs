@@ -5,6 +5,7 @@ pub mod container_drop;
 pub mod explain_diagnostic;
 pub mod hot_edit;
 pub mod list_options;
+pub mod messages;
 pub mod parse;
 pub mod pou_lineage;
 pub mod pou_scope;

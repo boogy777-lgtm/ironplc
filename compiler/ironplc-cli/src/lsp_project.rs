@@ -554,4 +554,7 @@ fn map_label(label: &ironplc_dsl::diagnostic::Label, project: &dyn Project) -> l
 }
 
 #[cfg(test)]
+mod place_tests;
+
+#[cfg(test)]
 mod tests;

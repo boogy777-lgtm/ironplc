@@ -22,12 +22,10 @@ Every tool that takes source files shares two input fields:
    (such as ``allow_c_style_comments``). Call :literal:`list_options`
    for the authoritative list.
 
-All tools return ``diagnostics`` as an array of objects with ``code``,
-``message``, ``file``, ``start``, ``end``, and ``severity`` fields.
-``code`` is a problem code documented in
-:doc:`/reference/compiler/problems/index`. ``severity`` is ``"fatal-error"``,
-``"error"``, ``"warning"``, ``"information"``, ``"text"``,
-``"suppressed-warning"`` or ``"suppressed-information"``.
+All tools return ``diagnostics`` as an array of message objects with the
+fields of the CODESYS scripting class ``ScriptMessage``:
+
+.. include:: ../../includes/message-object-fields.rst
 
 Analysis Tools
 ==============
@@ -91,6 +89,31 @@ before editing.
 **Inputs:** ``sources``, ``options``.
 
 **Returns:** an object with ``ok`` and ``diagnostics``.
+
+get_message_objects
+-------------------
+
+Returns the messages of a check as message objects, as
+``system.get_message_objects`` of the CODESYS scripting API does. The
+messages are those of :literal:`check`.
+
+**Inputs:** ``sources``, ``options`` and ``severities`` (integer, optional)
+--- the categories to return, as the sum of their ``severity_value``. The
+default is every category, suppressed ones included (4294967295).
+
+**Returns:** an object with ``ok`` and ``messages``, an array of message
+objects.
+
+get_messages
+------------
+
+Returns the messages of a check as texts alone, as ``system.get_messages`` of
+the CODESYS scripting API does. Call :literal:`get_message_objects` to see the
+category, the code and the position of each.
+
+**Inputs:** ``sources``, ``options``.
+
+**Returns:** an object with ``ok`` and ``messages``, an array of strings.
 
 symbols
 -------

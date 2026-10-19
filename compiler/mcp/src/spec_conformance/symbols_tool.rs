@@ -65,7 +65,7 @@ fn mcp_spec_req_tol_053_symbols_diagnostics_format() {
     let resp = tools::symbols::build_response(&sources, &options, None);
     assert!(!resp.ok);
     assert!(!resp.diagnostics.is_empty());
-    assert!(resp.diagnostics[0]["code"].as_str().is_some());
+    assert!(resp.diagnostics[0]["number"].is_u64());
 }
 
 #[spec_test(REQ_TOL_mcp_054)]

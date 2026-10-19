@@ -56,7 +56,7 @@ The agent is the sole owner of project state. It holds the files (in its own con
 
 **REQ-STL-mcp-004** File identity inside a single call is carried by the `name` field of each `sources` entry. Names must be valid UTF-8, non-empty, at most 256 bytes, and consist only of printable ASCII (`0x20`-`0x7E`). The allowlist excludes NUL, tabs and control characters; it admits `/` and `\`, which are meaningless to the server -- a name is an opaque key, never a filesystem path. Duplicate names within a single `sources` array are rejected with a diagnostic before any analysis runs. The server does not interpret names as filesystem paths and never touches the filesystem with them; they exist so that diagnostics can cite a file identifier the agent already recognizes in its own context.
 
-**REQ-STL-mcp-005** Every tool response includes a top-level `ok: boolean` field. `ok` is `true` when the tool produced its primary result (for analysis tools, a diagnostics array with no `error`-severity entries; for `compile`, a non-null `container_id`; for `run`, a completed trace) and `false` when it did not. The `ok` field never replaces a tool's specific result fields; it exists as a single uniform success predicate so that agent code handling many tools can share one success check.
+**REQ-STL-mcp-005** Every tool response includes a top-level `ok: boolean` field. `ok` is `true` when the tool produced its primary result (for analysis tools, a diagnostics array with no entry whose category stops the build, that is `FatalError` or `Error`; for `compile`, a non-null `container_id`; for `run`, a completed trace) and `false` when it did not. The `ok` field never replaces a tool's specific result fields; it exists as a single uniform success predicate so that agent code handling many tools can share one success check.
 
 **REQ-STL-mcp-006** The server performs no disk I/O from any tool or resource handler. It does not accept filesystem paths as tool inputs, does not read files relative to any working directory, and does not write compilation or analysis artifacts to disk. The only files the server process ever opens are its own log output (see Logging and Observability) and, optionally, its own binary-embedded problem-code documentation.
 
@@ -64,7 +64,7 @@ The agent is the sole owner of project state. It holds the files (in its own con
 
 Tools are grouped into three categories:
 
-1. **Analysis tools** — `parse`, `check`, `format`, `symbols`, `list_options`, `explain_diagnostic`. Given `sources` and `options`, these run some stage of the compiler and return structured information about the source.
+1. **Analysis tools** — `parse`, `check`, `get_message_objects`, `get_messages`, `format`, `symbols`, `list_options`, `explain_diagnostic`. Given `sources` and `options`, these run some stage of the compiler and return structured information about the source.
 2. **Context tools** — `project_manifest`, `project_io`, `pou_scope`, `pou_lineage`, `types_all`. These are lightweight lookups that answer a specific structural question about a source set without requiring the agent to parse the much larger output of `symbols` itself.
 3. **Execution tools** — `compile`, `container_drop`, `run`. These produce or consume bytecode and drive the VM.
 
@@ -97,8 +97,9 @@ Use this for rapid iteration on code structure. It is faster than `check` and us
     { "kind": "function_block", "name": null, "file": "main.st", "start": 250, "end": 260 }
   ],
   "diagnostics": [
-    { "code": "P0001", "message": "found `END_IF`, expected `;`", "file": "main.st",
-      "start": 142, "end": 143, "severity": "error" }
+    { "severity": "Error", "severity_value": 2, "prefix": "P", "number": 2,
+      "text": "Syntax error: found `END_IF`, expected `;`", "position": 142, "length": 1,
+      "position_text": "main.st:9:4", "object": "main.st", "codesys": null }
   ]
 }
 ```
@@ -119,13 +120,13 @@ This is the highest-value tool. AI assistants use it to validate code they gener
 
 **REQ-TOL-mcp-021** The `check` tool does not run code generation.
 
-**REQ-TOL-mcp-022** The `check` tool returns a `diagnostics` array and a top-level `ok: boolean`. `ok` is `true` when the diagnostics array contains no entries with `severity: "error"`; otherwise `ok` is `false`.
+**REQ-TOL-mcp-022** The `check` tool returns a `diagnostics` array and a top-level `ok: boolean`. `ok` is `true` when the diagnostics array contains no entry whose `severity` is `"FatalError"` or `"Error"`; otherwise `ok` is `false`.
 
-**REQ-TOL-mcp-023** Each diagnostic in the `check` response includes: `code`, `message`, `file`, `start`, `end`, and `severity`. `start` and `end` are 0-indexed byte offsets into the source text of the file identified by `file`. `end` points one past the last byte of the span, so an empty span has `start == end`. Byte offsets are the same offsets the compiler stores internally; no line/column conversion is applied.
+**REQ-TOL-mcp-023** Each diagnostic in the `check` response is a message with the fields of the CODESYS scripting class `ScriptMessage`: `severity` and `severity_value`, `prefix` and `number` (the code `P0042` is `"P"` and `42`), `text`, `position`, `length`, `position_text` and `object`, and the field `codesys` (the CODESYS code of the same condition, or `null`). `position` is a 0-indexed byte offset into the source text of the file named by `object`, and `length` is the number of bytes of the span, so an empty span has `length == 0`. The offsets are the ones the compiler stores internally; no line/column conversion is applied to them. `position_text` is `file:line:column`, counted from 1, for a person. The fields are specified in [Diagnostic Severity](diagnostic-severity.md#mcp).
 
 **REQ-TOL-mcp-024** The `check` tool never returns an MCP-level error for a compiler failure; parse and semantic errors are returned as diagnostics.
 
-**REQ-TOL-mcp-025** The `check` tool rejects an `options` object that is missing `dialect`, that contains a `dialect` value not returned by `list_options`, or that contains any key not returned by `list_options`. Rejection is surfaced as a diagnostic with `severity: "error"` and `ok: false`; the tool does not run.
+**REQ-TOL-mcp-025** The `check` tool rejects an `options` object that is missing `dialect`, that contains a `dialect` value not returned by `list_options`, or that contains any key not returned by `list_options`. Rejection is surfaced as a diagnostic with `severity: "Error"` and `ok: false`; the tool does not run.
 
 **REQ-TOL-mcp-026** The `check` tool accepts individual feature flag overrides in `options` that are applied on top of the dialect preset.
 
@@ -134,8 +135,9 @@ This is the highest-value tool. AI assistants use it to validate code they gener
 {
   "ok": false,
   "diagnostics": [
-    { "code": "P0001", "message": "...", "file": "main.st",
-      "start": 42, "end": 49, "severity": "error" }
+    { "severity": "Error", "severity_value": 2, "prefix": "P", "number": 4007,
+      "text": "...", "position": 42, "length": 7, "position_text": "main.st:4:3",
+      "object": "main.st", "codesys": "C0046" }
   ]
 }
 ```
@@ -188,7 +190,7 @@ This is the full-project answer to "what is declared here?" For questions about 
 
 **REQ-TOL-mcp-052** Each function entry in the `symbols` response includes the function name, return type, and parameter list.
 
-**REQ-TOL-mcp-053** The `symbols` response includes a `diagnostics` array using the same format as `check`, and a top-level `ok` following the same rule as `check` (true when no `error`-severity diagnostics).
+**REQ-TOL-mcp-053** The `symbols` response includes a `diagnostics` array using the same format as `check`, and a top-level `ok` following the same rule as `check` (true when no diagnostic stops the build).
 
 **REQ-TOL-mcp-054** When the `pou` input is present, the `symbols` response includes only the matching POU (in exactly one of `programs`, `functions`, or `function_blocks`) and only the types actually referenced by that POU's declarations. When no POU with the given name exists, the response returns `ok: false`, `found: false`, and an empty `programs`/`functions`/`function_blocks`/`types` set along with a diagnostic, rather than raising an MCP-level error.
 
@@ -664,7 +666,7 @@ Because the server holds no session state, the "unit of observation" is a single
 
 ### Diagnostic Mapping
 
-The existing `Diagnostic` type (from `ironplc-dsl`) carries file ID, source span (byte offsets), problem code, and message. The MCP server serializes those byte offsets directly, as REQ-TOL-mcp-023 requires; it performs no line/column conversion. The caller holds the source text it supplied and can convert if it wants line and column.
+The existing `Diagnostic` type (from `ironplc-dsl`) carries file ID, source span (byte offsets), problem code, and message. The MCP server serializes it as a `ScriptMessage` (`Diagnostic::script_message`), the same value the `check` command writes with `--format json`; the byte offsets are `position` and `length`, as REQ-TOL-mcp-023 requires, and it performs no line/column conversion for them. The caller holds the source text it supplied and can convert if it wants line and column.
 
 This deliberately differs from the LSP server, which converts to 0-indexed UTF-16 columns for the editor protocol. An agent does not need editor coordinates, and byte offsets index the exact source text the caller just supplied, so they cannot disagree with it.
 
@@ -682,6 +684,8 @@ Every MCP tool is registered with a short description string that the client han
 
 - `parse`: "Syntax check only. Use while drafting to confirm the source tokenizes and parses. Do NOT use this to validate a change — it does not catch type errors, undeclared symbols, or any other semantic rule. Call `check` for that."
 - `check`: "Primary validator. Runs parse and full semantic analysis and returns structured diagnostics. ALWAYS run this before reporting success to the user and before calling `compile` or `run`. Self-heal by reading the returned diagnostics, fixing the code, and calling `check` again. Call `explain_diagnostic` to understand any unfamiliar problem code BEFORE editing the source."
+- `get_message_objects`: "The messages of a check as message objects, as `system.get_message_objects` of the CODESYS scripting API: `severity` (FatalError, Error, Warning, Information, Text, SuppressedWarning or SuppressedInformation), `severity_value`, `prefix`, `number`, `text`, `position`, `length`, `position_text`, `object` and `codesys`. `severities` is a mask of `severity_value`s (default: every category, suppressed ones included)."
+- `get_messages`: "The messages of a check as texts alone, as `system.get_messages` of the CODESYS scripting API. Use `get_message_objects` to see the category, the code and the position of each."
 - `format`: "Canonical re-rendering using the project's formatter. Safe to call on any parseable source. The server holds no state between calls; if you want the formatted content saved anywhere, store it yourself."
 - `symbols`: "Full symbol table for a set of sources. Large responses are capped — prefer the `pou` filter or one of the context tools (`pou_scope`, `project_io`, `types_all`) when you only need part of the answer."
 - `list_options`: "Enumerates dialects and feature flags you are allowed to pass in `options`. Every analysis, context, and execution tool requires an `options` object; unknown keys are rejected. Do NOT toggle flags or change dialect to make errors go away — dialect changes are recorded in the log stream."

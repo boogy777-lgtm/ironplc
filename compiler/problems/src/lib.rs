@@ -276,7 +276,10 @@ mod tests {
         // A row with a confirmed counterpart, one that names two problems of
         // one CODESYS code, and rows with none.
         assert_eq!(Problem::VariableUndefined.codesys(), Some("C0046"));
-        assert_eq!(Problem::FunctionInvocationMissingInput.codesys(), Some("C0037"));
+        assert_eq!(
+            Problem::FunctionInvocationMissingInput.codesys(),
+            Some("C0037")
+        );
         assert_eq!(
             Problem::FunctionCallNamedArgUndeclared.codesys(),
             Problem::FunctionInvocationMissingInput.codesys()
@@ -297,7 +300,10 @@ mod tests {
                 .expect_err("the value should be refused");
 
             assert!(message.contains("P0042"), "'{value}': {message}");
-            assert!(message.contains(&format!("'{value}'")), "'{value}': {message}");
+            assert!(
+                message.contains(&format!("'{value}'")),
+                "'{value}': {message}"
+            );
         }
     }
 }

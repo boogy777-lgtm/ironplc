@@ -12,8 +12,9 @@ use ironplc_project::project::{MemoryBackedProject, Project};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::common::{parse_options, serialize_diagnostics, validate_sources, SourceInput};
-use ironplc_dsl::diagnostic::Severity;
+use super::common::{
+    parse_options, pou_not_found_diagnostic, serialize_diagnostics, validate_sources, SourceInput,
+};
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct PouScopeInput {
@@ -66,7 +67,7 @@ pub fn build_response(
             false,
             false,
             pou_name.to_string(),
-            serialize_diagnostics(&source_errors),
+            serialize_diagnostics(&source_errors, &[]),
         );
     }
 
@@ -77,7 +78,7 @@ pub fn build_response(
                 false,
                 false,
                 pou_name.to_string(),
-                serialize_diagnostics(&errs),
+                serialize_diagnostics(&errs, &[]),
             );
         }
     };
@@ -89,7 +90,7 @@ pub fn build_response(
 
     let diagnostics = project.semantic();
     let has_errors = ironplc_dsl::diagnostic::any_stops_build(&diagnostics);
-    let mut diagnostics_json = serialize_diagnostics(&diagnostics);
+    let mut diagnostics_json = serialize_diagnostics(&diagnostics, sources);
 
     let library = match project.analyzed_library() {
         Some(lib) => lib,
@@ -107,7 +108,7 @@ pub fn build_response(
     let variables = match resolve_pou(library, pou_name) {
         Some(vars) => vars,
         None => {
-            diagnostics_json.push(not_found_diagnostic(pou_name));
+            diagnostics_json.push(pou_not_found_diagnostic(pou_name));
             return PouScopeResponse {
                 ok: false,
                 found: false,
@@ -235,17 +236,6 @@ fn render_initial_value(init: &InitialValueAssignmentKind) -> Option<String> {
     }
 }
 
-fn not_found_diagnostic(pou_name: &str) -> serde_json::Value {
-    serde_json::json!({
-        "code": "P8001",
-        "message": format!("No POU named '{}' found.", pou_name),
-        "severity": Severity::Error.name(),
-        "file": "",
-        "start": 0,
-        "end": 0
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -324,7 +314,7 @@ mod tests {
         assert!(!resp.found);
         assert_eq!(resp.pou, "nonexistent");
         assert!(resp.variables.is_empty());
-        assert!(resp.diagnostics.iter().any(|d| d["code"] == "P8001"));
+        assert!(resp.diagnostics.iter().any(|d| d["number"] == 8001));
     }
 
     #[test]
@@ -357,7 +347,7 @@ mod tests {
         let resp = build_response(&unnamed_source(), &ed2_options(), "p");
         assert!(!resp.ok);
         assert!(!resp.found);
-        assert!(resp.diagnostics.iter().any(|d| d["code"] == "P8001"));
+        assert!(resp.diagnostics.iter().any(|d| d["number"] == 8001));
     }
 
     #[test]
@@ -365,7 +355,7 @@ mod tests {
         let resp = build_response(&source(VALID_PROGRAM), &serde_json::json!({}), "p");
         assert!(!resp.ok);
         assert!(!resp.found);
-        assert!(resp.diagnostics.iter().any(|d| d["code"] == "P8001"));
+        assert!(resp.diagnostics.iter().any(|d| d["number"] == 8001));
     }
 
     #[test]

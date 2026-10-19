@@ -3,11 +3,13 @@
 //! Runs parse and full semantic analysis, returning structured diagnostics.
 
 use ironplc_dsl::core::FileId;
-use ironplc_dsl::diagnostic::any_stops_build;
+use ironplc_dsl::diagnostic::{any_stops_build, ScriptMessage};
 use ironplc_project::project::{MemoryBackedProject, Project};
 use serde::Serialize;
 
-use super::common::{parse_options, serialize_diagnostics, validate_sources, SourceInput};
+use super::common::{
+    parse_options, script_message, serialize_message, validate_sources, SourceInput,
+};
 
 /// Response returned by the `check` tool.
 #[derive(Debug, Serialize)]
@@ -16,14 +18,22 @@ pub struct CheckResponse {
     pub diagnostics: Vec<serde_json::Value>,
 }
 
-/// Builds the check response from raw inputs.
-pub fn build_response(sources: &[SourceInput], options_value: &serde_json::Value) -> CheckResponse {
+/// What a check finds: whether no message stops the build, and every message,
+/// of every category, suppressed ones included. The tools `check`,
+/// `get_message_objects` and `get_messages` read it.
+pub struct Checked {
+    pub ok: bool,
+    pub messages: Vec<ScriptMessage>,
+}
+
+/// Validates the inputs, then parses and analyzes the sources.
+pub fn check(sources: &[SourceInput], options_value: &serde_json::Value) -> Checked {
     // Validate sources
     let source_errors = validate_sources(sources);
     if !source_errors.is_empty() {
-        return CheckResponse {
+        return Checked {
             ok: false,
-            diagnostics: serialize_diagnostics(&source_errors),
+            messages: messages_of(&source_errors, &[]),
         };
     }
 
@@ -31,9 +41,9 @@ pub fn build_response(sources: &[SourceInput], options_value: &serde_json::Value
     let options = match parse_options(options_value) {
         Ok(opts) => opts,
         Err(errs) => {
-            return CheckResponse {
+            return Checked {
                 ok: false,
-                diagnostics: serialize_diagnostics(&errs),
+                messages: messages_of(&errs, &[]),
             };
         }
     };
@@ -49,9 +59,28 @@ pub fn build_response(sources: &[SourceInput], options_value: &serde_json::Value
 
     // Run parse + full semantic analysis
     let diagnostics = project.semantic();
-    CheckResponse {
+    Checked {
         ok: !any_stops_build(&diagnostics),
-        diagnostics: serialize_diagnostics(&diagnostics),
+        messages: messages_of(&diagnostics, sources),
+    }
+}
+
+fn messages_of(
+    diagnostics: &[ironplc_dsl::diagnostic::Diagnostic],
+    sources: &[SourceInput],
+) -> Vec<ScriptMessage> {
+    diagnostics
+        .iter()
+        .map(|diagnostic| script_message(diagnostic, sources))
+        .collect()
+}
+
+/// Builds the check response from raw inputs.
+pub fn build_response(sources: &[SourceInput], options_value: &serde_json::Value) -> CheckResponse {
+    let checked = check(sources, options_value);
+    CheckResponse {
+        ok: checked.ok,
+        diagnostics: checked.messages.iter().map(serialize_message).collect(),
     }
 }
 
@@ -84,10 +113,7 @@ mod tests {
     fn build_response_when_semantic_error_then_ok_false() {
         let resp = build_response(&source(SEMANTIC_ERROR_PROGRAM), &ed2_options());
         assert!(!resp.ok);
-        assert!(resp
-            .diagnostics
-            .iter()
-            .any(|d| d["code"].as_str().is_some_and(|c| !c.is_empty())));
+        assert!(resp.diagnostics.iter().any(|d| d["number"].is_u64()));
     }
 
     #[test]
@@ -127,7 +153,7 @@ mod tests {
         assert!(!resp.ok);
         let d = &resp.diagnostics[0];
         // Verify byte offset fields exist
-        assert!(d.get("start").is_some());
-        assert!(d.get("end").is_some());
+        assert!(d.get("position").is_some());
+        assert!(d.get("length").is_some());
     }
 }

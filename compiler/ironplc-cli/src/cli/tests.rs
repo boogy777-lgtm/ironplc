@@ -599,26 +599,10 @@ fn below_header_when_header_written_in_pieces_then_only_what_follows_the_first_n
     write!(out, "error").unwrap();
     write!(out, "[P1]: msg").unwrap();
     out.reset().unwrap();
-    write!(
-        out,
-        "
-rest
-"
-    )
-    .unwrap();
-    write!(
-        out,
-        "more
-"
-    )
-    .unwrap();
+    out.write_all(b"\nrest\n").unwrap();
+    out.write_all(b"more\n").unwrap();
 
-    assert_eq!(
-        out.inner.into_inner(),
-        b"rest
-more
-"
-    );
+    assert_eq!(out.inner.into_inner(), b"rest\nmore\n");
 }
 
 #[test]

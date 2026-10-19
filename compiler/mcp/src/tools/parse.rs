@@ -29,7 +29,7 @@ pub fn build_response(sources: &[SourceInput], options_value: &serde_json::Value
         return ParseResponse {
             ok: false,
             structure: vec![],
-            diagnostics: serialize_diagnostics(&source_errors),
+            diagnostics: serialize_diagnostics(&source_errors, &[]),
         };
     }
 
@@ -40,7 +40,7 @@ pub fn build_response(sources: &[SourceInput], options_value: &serde_json::Value
             return ParseResponse {
                 ok: false,
                 structure: vec![],
-                diagnostics: serialize_diagnostics(&errs),
+                diagnostics: serialize_diagnostics(&errs, &[]),
             };
         }
     };
@@ -73,7 +73,7 @@ pub fn build_response(sources: &[SourceInput], options_value: &serde_json::Value
     ParseResponse {
         ok,
         structure,
-        diagnostics: serialize_diagnostics(&diagnostics),
+        diagnostics: serialize_diagnostics(&diagnostics, sources),
     }
 }
 

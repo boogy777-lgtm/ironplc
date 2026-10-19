@@ -132,9 +132,11 @@ there are 507 named ones, and 0 is `None`, a message without a code. The key
 prefixes `Err_`, `Wrn_`, `Inf_` and `Txt_` are a naming convention.
 
 An IronPLC code is `P` and four digits, declared in `problem-codes.csv`.
-- A `CODESYS` column records the CODESYS code that reports the same condition,
-  where the decompiled checker confirms it (MSG-041).
-- Both message forms show it (MSG-042).
+- A `Codesys` column records the CODESYS code that reports the same condition,
+  where the decompiled checker confirms it (MSG-041). A code that is close but
+  not the same stays empty.
+- Both message forms show it (MSG-042): the header of a person is
+  `Error[P4007] (CODESYS C0046)`, and a program reads it as the field `codesys`.
 
 ## Handling
 
@@ -246,19 +248,28 @@ A message has two forms, both generated from the one list of categories:
 
 - **For a person:** the command line and the editor. They use the words of the
   CODESYS Messages view:
-  - the header is `Error`, `Warning` or `Information`;
+  - the header is `Error` (for a fatal error too), `Warning` or `Information`;
   - a `Text` line has no word and no code;
   - a suppressed message is not shown.
 
   In VS Code, the Problems panel filters Errors, Warnings and Infos, the same
   three switches as the CODESYS Messages view. A `Text` goes to the Output
-  channel, not to the Problems panel.
-- **For a program:** MCP and JSON output. They use the CODESYS scripting model:
-  - the fields of `ScriptMessage`;
-  - the category names `FatalError` … `SuppressedInformation`;
-  - suppressed messages are included.
+  channel, not to the Problems panel: the language server sends it as a
+  `window/logMessage` of type `INFO`.
+- **For a program:** MCP and the JSON output of `ironplcc check --format json`.
+  They use the CODESYS scripting model:
+  - the fields of `ScriptMessage` that a diagnostic has (`severity`,
+    `severity_value`, `prefix`, `number`, `text`, `position`, `length`,
+    `position_text`, `object`), and `codesys`, which CODESYS does not have;
+  - the category names `FatalError` … `SuppressedInformation`, with the flag
+    value of each (`severity_value`);
+  - suppressed messages are included;
+  - two queries, as the scripting API has: `get_message_objects` returns the
+    message objects of the categories in a mask, and `get_messages` returns the
+    texts alone.
 
-MSG-090 to MSG-095.
+The words, names and values of the categories come from the one list of
+categories, not from a literal of a form. MSG-090 to MSG-095.
 
 ## Parity checklist
 
@@ -288,8 +299,8 @@ States:
 | MSG-036 | A warning listed as an error is an `Error` with the same code; this beats a disabled one; nothing lowers an error | `SeverityExtensions.cs`, `WarningHelper.cs:42-51` | planned |
 | MSG-037 | Only a warning code (`Warning` category) can be disabled or raised | `WarningHelper.cs:185-200` | planned |
 | MSG-040 | A message may have no code (user pragma, limit line, summary line) | `CompilerMessage.cs:285-295` | planned |
-| MSG-041 | A problem code records its CODESYS counterpart | — | planned |
-| MSG-042 | Both forms show the CODESYS counterpart | — | planned |
+| MSG-041 | A problem code records its CODESYS counterpart | — | done (REQ-DS-problems-005, -006, -007) |
+| MSG-042 | Both forms show the CODESYS counterpart | — | done (REQ-DS-dsl-006, -007, -011, REQ-DS-cli-001, REQ-DS-mcp-004) |
 | MSG-050 | At most 500 errors and 500 warnings are kept (CODESYS: warnings 100 by default) | `-.352.cs:190-215`, `CompileOptions.cs:363` | owner |
 | MSG-051 | At the limit, the CODESYS line "More than {0} … occured: Skipping all further … messages" is kept, as `Error` or `Warning`, without a code | `-.352.cs:193-213` | planned |
 | MSG-052 | Related positions are dropped once the error limit is passed | `-.352.cs:165` | planned |
@@ -306,10 +317,10 @@ States:
 | MSG-081 | `, Length := n` and `, messageguid 'GUID'` options of a message pragma | `ErrorPragmaParser.cs:102-111,198-212` | planned |
 | MSG-082 | `show_compile` / `show_precompile` choose the areas of a pragma message | `ErrorPragmaParser.cs:218-247` | planned |
 | MSG-083 | Where a pragma message without a show keyword is shown | `ErrorPragmaParser.cs:243-246` | live |
-| MSG-090 | The person form uses the Messages view words `Error`, `Warning`, `Information`; a `Text` has no word | — | planned |
-| MSG-091 | VS Code: `FatalError`/`Error` → Errors, `Warning` → Warnings, `Information` → Infos; `Text` → Output channel; suppressed → not published | — | planned |
-| MSG-092 | The program form uses the fields of `ScriptMessage` and the scripting category names, and includes suppressed messages | scripting help | planned |
-| MSG-093 | The program form has two queries: one that returns message objects (`ScriptMessage`), as `system.get_message_objects` does, and one that returns the texts alone, as `system.get_messages` does | scripting help; a CODESYS Forge script that reads `.severity` from each result | planned |
+| MSG-090 | The person form uses the Messages view words `Error`, `Warning`, `Information`; a `Text` has no word | — | done (REQ-DS-problems-009, REQ-DS-dsl-007, -008, REQ-DS-cli-001, -002) |
+| MSG-091 | VS Code: `FatalError`/`Error` → Errors, `Warning` → Warnings, `Information` → Infos; `Text` → Output channel; suppressed → not published | — | done (REQ-DS-cli-004) |
+| MSG-092 | The program form uses the fields of `ScriptMessage` and the scripting category names, and includes suppressed messages | scripting help | done (REQ-DS-problems-008, REQ-DS-dsl-009, -010, REQ-DS-mcp-001, -003, -004, REQ-DS-cli-003) |
+| MSG-093 | The program form has two queries: one that returns message objects (`ScriptMessage`), as `system.get_message_objects` does, and one that returns the texts alone, as `system.get_messages` does | scripting help; a CODESYS Forge script that reads `.severity` from each result | done (REQ-DS-mcp-005, -006) |
 | MSG-094 | Message texts are rows of the message dictionary, not literals | — | done (ADR-0077) |
 | MSG-095 | The message code is shown as prefix and four digits | `ErrorVisitor.cs:110` | done (`P####`) |
 | MSG-100 | Static analysis rules (SA####) with off / warning / error per rule | static analysis help | n/a for now |
