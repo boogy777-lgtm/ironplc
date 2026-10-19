@@ -2,9 +2,10 @@
 //! as Visual Studio Code.
 
 use crossbeam_channel::{Receiver, Sender};
+use ironplc_dsl::diagnostic::WarningList;
 use ironplc_dsl::stack::within_stack_budget;
 use ironplc_parser::options::{CompilerOptions, Dialect};
-use log::{debug, trace};
+use log::{debug, trace, warn};
 use lsp_server::{Connection, ExtractError, Message, RequestId};
 use lsp_types::{
     notification::{self, LogMessage, Notification, PublishDiagnostics},
@@ -62,7 +63,8 @@ fn to_lower_camel_case(snake: &str) -> String {
 /// Extract parse options from LSP initialization options.
 ///
 /// Reads `"dialect"` to select the base preset, then overlays individual
-/// `--allow-*` flags and `--policy-*` selections.  Recognised dialect values
+/// `--allow-*` flags, `--policy-*` selections and the lists of warnings
+/// (`disabledWarnings` and `warningsAsErrors`).  Recognised dialect values
 /// come from [`Dialect::ALL`] via `FromStr`; unknown or missing values fall
 /// back to the default ([`Dialect::Iec61131_3Ed2`]).
 fn extract_compiler_options(initialize_params: &InitializeParams) -> CompilerOptions {
@@ -102,6 +104,32 @@ fn extract_compiler_options(initialize_params: &InitializeParams) -> CompilerOpt
                         "Ignoring unknown alternative {value:?} for {key} in initializationOptions"
                     );
                 }
+            }
+        }
+
+        // Overlay the lists of warnings: an array of codes, read with the one
+        // function every front end reads a code with. The key of each list is the
+        // lowerCamelCase form of the key `WarningList` declares, so a list added
+        // there is wired in with no edit here. A code that is not accepted is
+        // logged with its message and ignored, like an unknown policy
+        // alternative; the other codes of the list are used.
+        for list in WarningList::ALL {
+            let key = to_lower_camel_case(list.option_key());
+            let Some(value) = opts.get(&key) else {
+                continue;
+            };
+            let Some(entries) = value.as_array() else {
+                warn!("Ignoring {key} in initializationOptions: it must be an array of codes");
+                continue;
+            };
+            let codes: Vec<&str> = entries.iter().filter_map(|entry| entry.as_str()).collect();
+            if codes.len() != entries.len() {
+                warn!(
+                    "Ignoring the entries of {key} in initializationOptions that are not strings"
+                );
+            }
+            for refused in options.messages.add_codes(list, codes) {
+                warn!("Ignoring a code of {key} in initializationOptions: {refused}");
             }
         }
         options

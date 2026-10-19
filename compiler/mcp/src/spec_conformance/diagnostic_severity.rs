@@ -381,8 +381,11 @@ fn mcp_spec_req_ds_010_check_is_framed_by_the_rule_of_the_command_line() {
         SEMANTIC_ERROR_PROGRAM.to_string(),
     );
     use ironplc_project::project::Project;
-    let by_the_command_line =
-        ironplc_dsl::diagnostic::CHECK_SUMMARY.close("main", project.semantic(Area::Build));
+    let by_the_command_line = ironplc_dsl::diagnostic::CHECK_SUMMARY.close(
+        "main",
+        &ironplc_dsl::diagnostic::MessageSettings::default(),
+        project.semantic(Area::Build),
+    );
 
     let response = tools::check::build_response(&sources, &ed2_options());
 
@@ -447,4 +450,159 @@ fn mcp_spec_req_ds_011_compile_that_fails_ends_with_no_download_possible() {
         );
         assert!(texts[0].starts_with("------ Build started: Application: "));
     }
+}
+
+/// A program with one warning, P4083, and no error.
+const ONE_WARNING: &str = "TYPE E1 : (a1, a2); E2 : (b1, b2); END_TYPE
+PROGRAM Main
+VAR e1 : E1; e2 : E2; r : BOOL; END_VAR
+  r := e1 = e2;
+END_PROGRAM
+";
+
+/// The options of the dialect with the given lists of codes.
+fn options_with(extra: serde_json::Value) -> serde_json::Value {
+    let mut options = ed2_options();
+    options
+        .as_object_mut()
+        .unwrap()
+        .extend(extra.as_object().unwrap().clone());
+    options
+}
+
+#[spec_test(REQ_DS_mcp_012)]
+fn mcp_spec_req_ds_012_list_options_lists_each_list_of_warnings_as_an_array_of_codes() {
+    let response = tools::list_options::build_response();
+
+    for list in ironplc_dsl::diagnostic::WarningList::ALL {
+        let flag = response
+            .flags
+            .iter()
+            .find(|flag| flag.id == list.option_key())
+            .unwrap_or_else(|| panic!("list_options does not list {}", list.option_key()));
+
+        assert_eq!(flag.flag_type, "string-list");
+        assert_eq!(flag.default, serde_json::json!([]));
+        assert_eq!(flag.description, list.description());
+    }
+}
+
+#[spec_test(REQ_DS_mcp_012)]
+fn mcp_spec_req_ds_012_check_applies_the_lists_of_warnings() {
+    let source = source(ONE_WARNING);
+
+    let plain = tools::check::build_response(&source, &ed2_options());
+    let disabled = tools::check::build_response(
+        &source,
+        &options_with(serde_json::json!({ "disabled_warnings": ["C0354"] })),
+    );
+    let raised = tools::check::build_response(
+        &source,
+        &options_with(serde_json::json!({ "warnings_as_errors": ["P4083"] })),
+    );
+
+    assert!(plain.ok);
+    assert_eq!(plain.diagnostics[0]["severity"], "Warning");
+    assert_eq!(
+        plain.diagnostics[1]["text"],
+        "Compile complete -- 0 errors, 1 warnings"
+    );
+    assert!(disabled.ok);
+    assert_eq!(disabled.diagnostics.len(), 1, "{:?}", disabled.diagnostics);
+    assert_eq!(
+        disabled.diagnostics[0]["text"],
+        "Compile complete -- 0 errors, 0 warnings"
+    );
+    assert!(!raised.ok);
+    assert_eq!(raised.diagnostics[0]["severity"], "Error");
+    assert_eq!(raised.diagnostics[0]["number"], 4083);
+    assert_eq!(
+        raised.diagnostics[1]["text"],
+        "Compile complete -- 1 errors, 0 warnings"
+    );
+}
+
+#[spec_test(REQ_DS_mcp_012)]
+fn mcp_spec_req_ds_012_compile_applies_the_lists_of_warnings() {
+    let source = source(ONE_WARNING);
+
+    let disabled = compiled(
+        &source,
+        &options_with(serde_json::json!({ "disabled_warnings": ["P4083"] })),
+    );
+    let raised = compiled(
+        &source,
+        &options_with(serde_json::json!({ "warnings_as_errors": ["P4083"] })),
+    );
+
+    assert!(disabled.ok);
+    assert!(disabled.container_id.is_some());
+    assert_eq!(
+        texts_of(&disabled.diagnostics).last().copied(),
+        Some("Build complete -- 0 errors, 0 warnings : Ready for download")
+    );
+    assert!(!raised.ok);
+    assert!(raised.container_id.is_none());
+    assert_eq!(
+        texts_of(&raised.diagnostics).last().copied(),
+        Some("Build complete -- 1 errors, 0 warnings : No download possible")
+    );
+}
+
+#[spec_test(REQ_DS_mcp_012)]
+fn mcp_spec_req_ds_012_a_value_that_is_not_accepted_is_a_diagnostic_and_the_tool_does_not_run() {
+    for options in [
+        // The code of an error, an unknown code, a code in the wrong case.
+        serde_json::json!({ "disabled_warnings": ["P4007"] }),
+        serde_json::json!({ "warnings_as_errors": ["nonsense"] }),
+        serde_json::json!({ "disabled_warnings": ["p4083"] }),
+    ] {
+        let response = tools::check::build_response(&source(ONE_WARNING), &options_with(options));
+
+        assert!(!response.ok);
+        assert_eq!(response.diagnostics[0]["prefix"], "P");
+        assert_eq!(response.diagnostics[0]["number"], 13);
+        assert!(response.diagnostics[0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("P4083, C0354"));
+        // The program was not analyzed: its warning is not among the messages.
+        assert!(!response.diagnostics.iter().any(|d| d["number"] == 4083));
+    }
+}
+
+#[spec_test(REQ_DS_mcp_012)]
+fn mcp_spec_req_ds_012_a_list_that_is_not_an_array_of_strings_is_a_diagnostic() {
+    for value in [
+        serde_json::json!("P4083"),
+        serde_json::json!([4083]),
+        serde_json::json!(true),
+    ] {
+        let response = tools::check::build_response(
+            &source(ONE_WARNING),
+            &options_with(serde_json::json!({ "warnings_as_errors": value })),
+        );
+
+        assert!(!response.ok);
+        assert_eq!(response.diagnostics[0]["number"], 8001);
+        assert!(response.diagnostics[0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("'warnings_as_errors'"));
+    }
+}
+
+#[spec_test(REQ_DS_mcp_012)]
+fn mcp_spec_req_ds_012_the_queries_of_the_messages_apply_the_lists_too() {
+    let objects = tools::messages::build_objects_response(&MessageObjectsInput {
+        check: ParseCheckInput {
+            sources: source(ONE_WARNING),
+            options: options_with(serde_json::json!({ "warnings_as_errors": ["P4083"] })),
+        },
+        severities: None,
+        area: None,
+    });
+
+    assert!(!objects.ok);
+    assert_eq!(objects.messages[0]["severity"], "Error");
 }

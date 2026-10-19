@@ -5,11 +5,13 @@ use clap::Parser;
 use ironplc_cli::cli;
 use ironplc_cli::logger;
 use ironplc_cli::lsp;
+use ironplc_dsl::diagnostic::WarningList;
 use ironplc_dsl::stack::within_stack_budget;
 use ironplc_parser::options::{
     describe_dialects, BehaviorPolicy, CompilerOptions, Dialect, EnumerationStrictness,
     StringToNumFailure, StringToNumNonNumeric,
 };
+use ironplc_problems::WarningSet;
 use ironplc_sources::LibraryName;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -449,11 +451,55 @@ struct FileArgs {
     /// replaces it.
     #[arg(long, value_name = "ALTERNATIVE")]
     policy_enumeration_strictness: Option<ClapEnumerationStrictness>,
+
+    /// Do not show, and do not count, the warning with this code. The code is
+    /// written as the problem list writes it (P4083) or as CODESYS writes it
+    /// (C0354), with the case exact; only the code of a warning is accepted.
+    /// Repeat the flag for more warnings.
+    #[arg(
+        long = "disable-warning",
+        value_name = "CODE",
+        value_parser = parse_warning_code
+    )]
+    disable_warning: Vec<WarningSet>,
+
+    /// Report the warning with this code as an error, with the same code: it
+    /// counts as an error and stops the build. It wins over --disable-warning
+    /// for the same code. The code is written as for --disable-warning. Repeat
+    /// the flag for more warnings.
+    #[arg(
+        long = "warning-as-error",
+        value_name = "CODE",
+        value_parser = parse_warning_code
+    )]
+    warning_as_error: Vec<WarningSet>,
+}
+
+/// Reads the code of a warning given to a flag, with the one function every
+/// front end reads a code with. A code that is not accepted is a usage error
+/// that names the code and lists the ones that are.
+fn parse_warning_code(code: &str) -> Result<WarningSet, String> {
+    WarningSet::from_code(code).map_err(|text| text.to_string())
 }
 
 impl FileArgs {
+    /// The warnings the flags of a list gave. The `match` has an arm for each
+    /// list, so a list added to [`WarningList`] does not compile until it has a
+    /// flag here.
+    fn warnings_given(&self, list: WarningList) -> &[WarningSet] {
+        match list {
+            WarningList::Disabled => &self.disable_warning,
+            WarningList::AsError => &self.warning_as_error,
+        }
+    }
+
     fn compiler_options(&self) -> CompilerOptions {
         let mut options = CompilerOptions::from_dialect(self.dialect.into());
+        for list in WarningList::ALL {
+            for warnings in self.warnings_given(list) {
+                options.messages.add(list, *warnings);
+            }
+        }
         // A policy flag replaces the dialect's selection (unlike an
         // `--allow-*` flag, which can only enable).
         if let Some(policy) = self.policy_string_to_num_non_numeric {
@@ -790,6 +836,92 @@ mod tests {
                     pd.option_key
                 );
             }
+        }
+    }
+
+    /// The flags of the lists of warnings are the ones `WarningList` declares:
+    /// each is accepted, repeatable, reads its code with `WarningSet::from_code`
+    /// (the IronPLC and the CODESYS form) and lands in its own list. The
+    /// behaviour of the flags in the command is `REQ-DS-cli-015`, tested in
+    /// `tests/cli_message_forms.rs`.
+    #[test]
+    fn file_args_when_each_warning_list_flag_passed_then_the_codes_are_in_that_list_only() {
+        #[derive(Parser)]
+        struct TestCli {
+            #[command(flatten)]
+            file_args: FileArgs,
+        }
+
+        for list in WarningList::ALL {
+            let cli = TestCli::try_parse_from(["ironplcc", list.cli_flag(), "P4083"]).unwrap();
+            let options = cli.file_args.compiler_options();
+
+            for other in WarningList::ALL {
+                assert_eq!(
+                    options
+                        .messages
+                        .list(other)
+                        .contains(ironplc_problems::WarningProblem::EnumerationTypesCompared),
+                    other == list,
+                    "`{}` and list {other:?}",
+                    list.cli_flag()
+                );
+            }
+            let cli = TestCli::try_parse_from([
+                "ironplcc",
+                list.cli_flag(),
+                "C0354",
+                list.cli_flag(),
+                "P4083",
+            ])
+            .unwrap();
+            assert!(!cli
+                .file_args
+                .compiler_options()
+                .messages
+                .list(list)
+                .is_empty());
+        }
+    }
+
+    #[test]
+    fn file_args_when_warning_flag_gets_a_code_that_is_not_accepted_then_a_usage_error_that_names_it(
+    ) {
+        #[derive(Parser)]
+        struct TestCli {
+            #[command(flatten)]
+            file_args: FileArgs,
+        }
+
+        for list in WarningList::ALL {
+            for code in ["P4007", "p4083", "nonsense", ""] {
+                let refused = TestCli::try_parse_from(["ironplcc", list.cli_flag(), code])
+                    .err()
+                    .unwrap_or_else(|| panic!("`{} {code}` was accepted", list.cli_flag()))
+                    .to_string();
+
+                assert!(refused.contains("P0013"), "{refused}");
+                assert!(refused.contains(&format!("'{code}'")), "{refused}");
+                assert!(refused.contains("P4083, C0354"), "{refused}");
+            }
+        }
+    }
+
+    #[test]
+    fn file_args_when_no_warning_flag_then_both_lists_are_empty() {
+        #[derive(Parser)]
+        struct TestCli {
+            #[command(flatten)]
+            file_args: FileArgs,
+        }
+
+        let options = TestCli::try_parse_from(["ironplcc"])
+            .unwrap()
+            .file_args
+            .compiler_options();
+
+        for list in WarningList::ALL {
+            assert!(options.messages.list(list).is_empty());
         }
     }
 

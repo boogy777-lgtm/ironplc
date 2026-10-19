@@ -217,7 +217,7 @@ This tool lets an agent discover what flags exist without memorizing them and wi
 
 **REQ-TOL-mcp-061** The `list_options` tool returns a `dialects` array whose entries each contain `id`, `display_name`, and `description`.
 
-**REQ-TOL-mcp-062** The `list_options` tool returns a `flags` array whose entries each contain `id`, `type` (`"bool"`, `"string"`, `"enum"`), `default`, `description`, and — for enum flags — an `allowed_values` array.
+**REQ-TOL-mcp-062** The `list_options` tool returns a `flags` array whose entries each contain `id`, `type` (`"bool"`, `"string"`, `"string-list"`, `"enum"`), `default`, `description`, and — for enum flags — an `allowed_values` array.
 
 **REQ-TOL-mcp-063** The option `id` values returned by `list_options` are the exact keys accepted in the `options` object of `parse`, `check`, and `compile`.
 

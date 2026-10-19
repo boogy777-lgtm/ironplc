@@ -9,7 +9,7 @@
 use std::collections::HashSet;
 
 use ironplc_dsl::core::SourceSpan;
-use ironplc_dsl::diagnostic::{Diagnostic, ScriptMessage};
+use ironplc_dsl::diagnostic::{Diagnostic, ScriptMessage, WarningList};
 use ironplc_parser::options::{CompilerOptions, Dialect};
 use ironplc_problems::{text, Text};
 use schemars::JsonSchema;
@@ -145,6 +145,29 @@ pub fn parse_options(value: &serde_json::Value) -> Result<CompilerOptions, Vec<D
 
     for (key, val) in obj {
         if key == "dialect" {
+            continue;
+        }
+        // A list of warnings (the settings that disable a warning or report it as
+        // an error) is an array of codes. Its key is the one `WarningList`
+        // declares, so a list added there is accepted here with no edit, and each
+        // code is read by the one function every front end reads a code with.
+        if let Some(list) = WarningList::ALL
+            .into_iter()
+            .find(|list| list.option_key() == key)
+        {
+            let codes: Option<Vec<&str>> = val
+                .as_array()
+                .and_then(|entries| entries.iter().map(|entry| entry.as_str()).collect());
+            match codes {
+                Some(codes) => {
+                    for refused in options.messages.add_codes(list, codes) {
+                        errors.push(validation_diagnostic(refused));
+                    }
+                }
+                None => errors.push(validation_diagnostic(
+                    text::mcp_input_validation_option_not_string_array(key),
+                )),
+            }
             continue;
         }
         let is_policy = CompilerOptions::POLICY_DESCRIPTORS

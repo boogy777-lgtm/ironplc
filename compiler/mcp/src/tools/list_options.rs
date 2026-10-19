@@ -4,6 +4,7 @@
 //! callers may pass in an `options` object to analysis, context, and
 //! execution tools.
 
+use ironplc_dsl::diagnostic::WarningList;
 use ironplc_parser::options::{CompilerOptions, Dialect};
 use serde::Serialize;
 
@@ -47,7 +48,9 @@ pub fn build_response() -> ListOptionsResponse {
         .collect();
 
     let mut flags = Vec::with_capacity(
-        CompilerOptions::FEATURE_DESCRIPTORS.len() + CompilerOptions::POLICY_DESCRIPTORS.len(),
+        CompilerOptions::FEATURE_DESCRIPTORS.len()
+            + CompilerOptions::POLICY_DESCRIPTORS.len()
+            + WarningList::ALL.len(),
     );
 
     // All dialect-extension flags from the macro-generated descriptors.
@@ -70,6 +73,18 @@ pub fn build_response() -> ListOptionsResponse {
             default: serde_json::Value::String(pd.default.to_string()),
             description: pd.description.to_string(),
             allowed_values: Some(pd.alternatives.iter().map(|a| a.to_string()).collect()),
+        });
+    }
+
+    // The lists of warnings (the settings that disable a warning or report it as
+    // an error): an array of codes, empty by default.
+    for list in WarningList::ALL {
+        flags.push(FlagInfo {
+            id: list.option_key().to_string(),
+            flag_type: "string-list".into(),
+            default: serde_json::Value::Array(vec![]),
+            description: list.description().to_string(),
+            allowed_values: None,
         });
     }
 
@@ -106,7 +121,9 @@ mod tests {
         let resp = build_response();
         assert_eq!(
             resp.flags.len(),
-            CompilerOptions::FEATURE_DESCRIPTORS.len() + CompilerOptions::POLICY_DESCRIPTORS.len()
+            CompilerOptions::FEATURE_DESCRIPTORS.len()
+                + CompilerOptions::POLICY_DESCRIPTORS.len()
+                + WarningList::ALL.len()
         );
     }
 

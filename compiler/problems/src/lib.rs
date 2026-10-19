@@ -312,7 +312,11 @@ mod tests {
         for severity in ALL {
             assert_eq!(severity.raised(), raised_to(severity), "{severity:?}");
             // Raising an error changes nothing, so nothing lowers one.
-            assert_eq!(severity.raised().raised(), severity.raised(), "{severity:?}");
+            assert_eq!(
+                severity.raised().raised(),
+                severity.raised(),
+                "{severity:?}"
+            );
         }
         assert!(Severity::Warning.raised().stops_build());
     }

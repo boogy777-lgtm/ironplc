@@ -328,6 +328,7 @@ P8001,mcp_input_validation_hot_edit_session_missing,no hot edit session; call `h
 P8001,mcp_input_validation_option_key_unknown,Unknown option key '{key}'.
 P8001,mcp_input_validation_option_not_boolean,Option '{key}' must be a boolean.
 P8001,mcp_input_validation_option_not_string,Option '{key}' must be a string.
+P8001,mcp_input_validation_option_not_string_array,Option '{key}' must be an array of warning codes (strings).
 P8001,mcp_input_validation_option_policy_value_invalid,Option '{key}' must be one of: {allowed}.
 P8001,mcp_input_validation_options_dialect_missing,options.dialect is required and must be a string.
 P8001,mcp_input_validation_options_dialect_unknown,Unknown dialect '{dialect}'. Known dialects: {known}
