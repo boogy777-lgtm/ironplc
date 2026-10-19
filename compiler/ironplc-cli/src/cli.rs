@@ -88,7 +88,7 @@ fn run_check(
     diagnostics.extend(project.semantic(Area::Build));
 
     let application = project.application_name(&project_name(paths));
-    let diagnostics = CHECK_SUMMARY.close(&application, diagnostics);
+    let diagnostics = CHECK_SUMMARY.close(&application, &compiler_options.messages, diagnostics);
     (project, diagnostics)
 }
 
@@ -211,7 +211,11 @@ fn run_compile(
     }
 
     let application = project.application_name(&project_name(paths));
-    let diagnostics = COMPILE_SUMMARY.close(&application, output_result.diagnostics);
+    let diagnostics = COMPILE_SUMMARY.close(
+        &application,
+        &compiler_options.messages,
+        output_result.diagnostics,
+    );
     Ok((project, diagnostics))
 }
 

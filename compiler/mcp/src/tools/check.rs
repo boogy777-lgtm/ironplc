@@ -3,7 +3,7 @@
 //! Runs parse and full semantic analysis, returning structured diagnostics.
 
 use ironplc_dsl::core::FileId;
-use ironplc_dsl::diagnostic::{any_stops_build, Area, Diagnostic, ScriptMessage};
+use ironplc_dsl::diagnostic::{any_stops_build, Area, Diagnostic, MessageSettings, ScriptMessage};
 use ironplc_project::project::{MemoryBackedProject, Project};
 use serde::Serialize;
 
@@ -42,11 +42,12 @@ pub struct Checked {
 fn framed(
     area: Area,
     application: &str,
+    settings: &MessageSettings,
     diagnostics: Vec<Diagnostic>,
     sources: &[SourceInput],
 ) -> Checked {
     let framed = match area.check_summary() {
-        Some(summary) => summary.close(application, diagnostics),
+        Some(summary) => summary.close(application, settings, diagnostics),
         None => diagnostics,
     };
     Checked {
@@ -67,13 +68,19 @@ pub fn check(sources: &[SourceInput], options_value: &serde_json::Value, area: A
     // Validate sources
     let source_errors = validate_sources(sources);
     if !source_errors.is_empty() {
-        return framed(area, &fallback, source_errors, &[]);
+        return framed(
+            area,
+            &fallback,
+            &MessageSettings::default(),
+            source_errors,
+            &[],
+        );
     }
 
     // Parse options
     let options = match parse_options(options_value) {
         Ok(opts) => opts,
-        Err(errs) => return framed(area, &fallback, errs, &[]),
+        Err(errs) => return framed(area, &fallback, &MessageSettings::default(), errs, &[]),
     };
 
     // Construct a fresh in-memory project (REQ-ARC-mcp-010)
@@ -88,7 +95,7 @@ pub fn check(sources: &[SourceInput], options_value: &serde_json::Value, area: A
     // Run parse + full semantic analysis
     let diagnostics = project.semantic(area);
     let application = project.application_name(&fallback);
-    framed(area, &application, diagnostics, sources)
+    framed(area, &application, &options.messages, diagnostics, sources)
 }
 
 /// Builds the check response from raw inputs.

@@ -22,7 +22,7 @@ use std::collections::HashSet;
 
 use ironplc_problems::{codeless, CodelessText};
 
-use super::{stop_at_fatal, Area, Diagnostic, Severity};
+use super::{stop_at_fatal, Area, Diagnostic, MessageSettings, Severity};
 
 /// A kind of message a run counts and limits, with the limit and the line that
 /// is kept when the limit is passed. The limit and the line are declared
@@ -258,11 +258,17 @@ impl Summary {
     }
 
     /// The messages of a run as the command shows them: what the run keeps
-    /// ([`Area::keep`] of the area of the command), with the opening line before and the closing line after. The
+    /// ([`Area::keep`] of the area of the command, with the `settings` of the
+    /// run), with the opening line before and the closing line after. The
     /// closing line has the counts of what the run kept, so it shows the state
     /// of the pipeline as it ends.
-    pub fn close(&self, application: &str, diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
-        let kept = self.area.keep(diagnostics);
+    pub fn close(
+        &self,
+        application: &str,
+        settings: &MessageSettings,
+        diagnostics: Vec<Diagnostic>,
+    ) -> Vec<Diagnostic> {
+        let kept = self.area.keep(settings, diagnostics);
         let closing = self.closing(&kept);
         let mut closed: Vec<Diagnostic> = self.opening(application).into_iter().collect();
         closed.extend(kept);

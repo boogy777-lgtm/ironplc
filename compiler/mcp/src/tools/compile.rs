@@ -12,7 +12,7 @@ use ironplc_dsl::configuration::{
     ConfigurationDeclaration, ProgramConfiguration, TaskConfiguration,
 };
 use ironplc_dsl::core::{FileId, SourceSpan};
-use ironplc_dsl::diagnostic::{Diagnostic, Label, COMPILE_SUMMARY};
+use ironplc_dsl::diagnostic::{Diagnostic, Label, MessageSettings, COMPILE_SUMMARY};
 use ironplc_project::project::{MemoryBackedProject, Project};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -66,6 +66,7 @@ pub struct ProgramInfo {
 /// run framed as the command line frames them.
 fn rejected(
     application: &str,
+    settings: &MessageSettings,
     diagnostics: Vec<Diagnostic>,
     sources: &[SourceInput],
 ) -> CompileResponse {
@@ -75,7 +76,7 @@ fn rejected(
         container_base64: None,
         tasks: vec![],
         programs: vec![],
-        diagnostics: framed(application, diagnostics, sources),
+        diagnostics: framed(application, settings, diagnostics, sources),
     }
 }
 
@@ -87,10 +88,14 @@ fn rejected(
 /// the messages must all be collected before this is called.
 fn framed(
     application: &str,
+    settings: &MessageSettings,
     diagnostics: Vec<Diagnostic>,
     sources: &[SourceInput],
 ) -> Vec<serde_json::Value> {
-    serialize_diagnostics(&COMPILE_SUMMARY.close(application, diagnostics), sources)
+    serialize_diagnostics(
+        &COMPILE_SUMMARY.close(application, settings, diagnostics),
+        sources,
+    )
 }
 
 /// Builds the compile response from raw inputs.
@@ -105,13 +110,13 @@ pub fn build_response(
     // Validate sources (shared infra)
     let source_errors = validate_sources(sources);
     if !source_errors.is_empty() {
-        return rejected(&fallback, source_errors, &[]);
+        return rejected(&fallback, &MessageSettings::default(), source_errors, &[]);
     }
 
     // Parse options (shared infra)
     let compiler_options = match parse_options(options_value) {
         Ok(opts) => opts,
-        Err(errs) => return rejected(&fallback, errs, &[]),
+        Err(errs) => return rejected(&fallback, &MessageSettings::default(), errs, &[]),
     };
 
     // Construct a fresh in-memory project (REQ-ARC-mcp-010)
@@ -134,8 +139,10 @@ pub fn build_response(
     let mut diagnostics = output.diagnostics;
     let application = project.application_name(&fallback);
 
+    let settings = &compiler_options.messages;
+
     let Some(container) = output.container else {
-        return rejected(&application, diagnostics, sources);
+        return rejected(&application, settings, diagnostics, sources);
     };
 
     // The analyzed library and context stay cached on the project; a clean
@@ -143,7 +150,7 @@ pub fn build_response(
     let (Some(library), Some(context)) = (project.analyzed_library(), project.semantic_context())
     else {
         diagnostics.push(Diagnostic::internal_error());
-        return rejected(&application, diagnostics, sources);
+        return rejected(&application, settings, diagnostics, sources);
     };
 
     // Serialize container to bytes
@@ -153,7 +160,7 @@ pub fn build_response(
             SourceSpan::default(),
             format!("Failed to serialize container: {e}"),
         )));
-        return rejected(&application, diagnostics, sources);
+        return rejected(&application, settings, diagnostics, sources);
     }
 
     // Extract task/program metadata from the AST
@@ -208,7 +215,7 @@ pub fn build_response(
                 return CompileResponse {
                     tasks: task_infos,
                     programs: program_infos,
-                    ..rejected(&application, diagnostics, sources)
+                    ..rejected(&application, settings, diagnostics, sources)
                 };
             }
         }
@@ -220,7 +227,7 @@ pub fn build_response(
         container_base64,
         tasks: task_infos,
         programs: program_infos,
-        diagnostics: framed(&application, diagnostics, sources),
+        diagnostics: framed(&application, settings, diagnostics, sources),
     }
 }
 

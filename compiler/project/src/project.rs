@@ -40,7 +40,11 @@ fn run_semantic_analysis(
 ) -> (Vec<Diagnostic>, Option<SemanticContext>, Option<Library>) {
     let (diagnostics, context, library) =
         analyze_sources(source_project, compiler_options, preparsed_libraries);
-    (area.keep(diagnostics), context, library)
+    (
+        area.keep(&compiler_options.messages, diagnostics),
+        context,
+        library,
+    )
 }
 
 /// Parses and analyzes the sources and returns every diagnostic they produce.

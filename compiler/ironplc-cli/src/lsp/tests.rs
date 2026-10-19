@@ -852,7 +852,10 @@ impl Project for WithText {
             )
             .with_severity_for_test(ironplc_dsl::diagnostic::Severity::Text),
         );
-        area.keep(diagnostics)
+        area.keep(
+            &ironplc_dsl::diagnostic::MessageSettings::default(),
+            diagnostics,
+        )
     }
 
     fn semantic_context(&self) -> Option<&ironplc_analyzer::SemanticContext> {

@@ -18,7 +18,7 @@
 //! name, source, description, capacity and keep rule, and no other place
 //! changes. The consumers match on `Area` without a wildcard arm.
 
-use super::{run, Diagnostic, Summary, CHECK_SUMMARY};
+use super::{run, Diagnostic, MessageSettings, Summary, CHECK_SUMMARY};
 
 /// A list of messages, with the rule for what it keeps of the messages of a run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -111,10 +111,20 @@ impl Area {
     ///   error: those are rules of the build (`-.352.cs:93-215`), and the
     ///   precompile of CODESYS has none of them (`PreCompileContext.cs`). Its
     ///   cap is on what it stores, see [`Area::store`].
-    pub fn keep(self, diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
+    ///
+    /// The lists of the settings of the run are applied first, to each message
+    /// ([`MessageSettings::apply`]): a disabled warning is gone before the area
+    /// counts and limits anything, and a warning reported as an error is counted as
+    /// an error. The settings are a parameter, and not a field the caller may
+    /// forget to set, so that no run keeps its messages without them.
+    pub fn keep(self, settings: &MessageSettings, diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
+        let handled: Vec<Diagnostic> = diagnostics
+            .into_iter()
+            .filter_map(|diagnostic| settings.apply(self, diagnostic))
+            .collect();
         match self {
-            Area::Build => run::kept(diagnostics),
-            Area::Precompile => run::kept_for_precompile(diagnostics),
+            Area::Build => run::kept(handled),
+            Area::Precompile => run::kept_for_precompile(handled),
         }
     }
 

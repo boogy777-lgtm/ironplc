@@ -349,7 +349,7 @@ fn check_summary_close_when_counts_then_compile_complete_with_the_counts_last() 
         let mut run = errors(errors_in);
         run.extend(warnings(warnings_in));
 
-        let closed = CHECK_SUMMARY.close("app", run);
+        let closed = CHECK_SUMMARY.close("app", &MessageSettings::default(), run);
 
         assert_eq!(closed.len(), errors_in + warnings_in + 1);
         let last = &closed[closed.len() - 1];
@@ -365,7 +365,7 @@ fn check_summary_close_when_counts_then_compile_complete_with_the_counts_last() 
 
 #[spec_test(REQ_DS_dsl_022)]
 fn check_summary_close_when_limit_passed_then_the_counts_include_the_limit_line() {
-    let closed = CHECK_SUMMARY.close("app", errors(501));
+    let closed = CHECK_SUMMARY.close("app", &MessageSettings::default(), errors(501));
 
     let last = &closed[closed.len() - 1];
     assert_eq!(
@@ -376,7 +376,7 @@ fn check_summary_close_when_limit_passed_then_the_counts_include_the_limit_line(
 
 #[spec_test(REQ_DS_dsl_023)]
 fn compile_summary_close_when_no_error_then_started_first_and_ready_for_download_last() {
-    let closed = COMPILE_SUMMARY.close("Main", warnings(2));
+    let closed = COMPILE_SUMMARY.close("Main", &MessageSettings::default(), warnings(2));
 
     assert_eq!(closed.len(), 4);
     assert_eq!(closed[0].severity(), Severity::Text);
@@ -393,7 +393,7 @@ fn compile_summary_close_when_no_error_then_started_first_and_ready_for_download
 
 #[spec_test(REQ_DS_dsl_023)]
 fn compile_summary_close_when_clean_then_ready_for_download_with_zero_counts() {
-    let closed = COMPILE_SUMMARY.close("Main", vec![]);
+    let closed = COMPILE_SUMMARY.close("Main", &MessageSettings::default(), vec![]);
 
     assert_eq!(closed.len(), 2);
     assert_eq!(
@@ -407,7 +407,7 @@ fn compile_summary_close_when_error_then_no_download_possible() {
     let mut run = errors(2);
     run.extend(warnings(1));
 
-    let closed = COMPILE_SUMMARY.close("Main", run);
+    let closed = COMPILE_SUMMARY.close("Main", &MessageSettings::default(), run);
 
     assert_eq!(
         closed[closed.len() - 1].person_text(),
@@ -417,7 +417,11 @@ fn compile_summary_close_when_error_then_no_download_possible() {
 
 #[test]
 fn close_when_run_has_text_lines_then_they_are_not_counted() {
-    let closed = CHECK_SUMMARY.close("app", vec![in_category(error_at(1), Severity::Text)]);
+    let closed = CHECK_SUMMARY.close(
+        "app",
+        &MessageSettings::default(),
+        vec![in_category(error_at(1), Severity::Text)],
+    );
 
     assert_eq!(
         closed[closed.len() - 1].person_text(),

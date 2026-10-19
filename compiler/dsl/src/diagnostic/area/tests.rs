@@ -86,7 +86,7 @@ fn keep_when_build_area_then_the_rule_of_the_build() {
     let mut produced = errors(501);
     produced.push(error_at(3));
 
-    let stays = Area::Build.keep(produced);
+    let stays = Area::Build.keep(&MessageSettings::default(), produced);
 
     // 500 errors, the line of the limit, and the repeat of the error at 3 gone.
     assert_eq!(stays.len(), 501);
@@ -103,7 +103,7 @@ fn keep_when_precompile_area_and_message_without_a_position_then_dropped() {
         error_at(2),
     ];
 
-    let stays = Area::Precompile.keep(produced);
+    let stays = Area::Precompile.keep(&MessageSettings::default(), produced);
 
     assert_eq!(starts(&stays), [1, 2]);
     assert!(stays.iter().all(Diagnostic::has_code));
@@ -113,7 +113,7 @@ fn keep_when_precompile_area_and_message_without_a_position_then_dropped() {
 fn keep_when_precompile_area_and_suppressed_message_then_dropped() {
     let produced = vec![error_at(1), warning_at(2).suppress(), warning_at(3)];
 
-    let stays = Area::Precompile.keep(produced);
+    let stays = Area::Precompile.keep(&MessageSettings::default(), produced);
 
     assert_eq!(starts(&stays), [1, 3]);
     assert!(stays.iter().all(|d| d.severity().is_shown()));
@@ -121,14 +121,17 @@ fn keep_when_precompile_area_and_suppressed_message_then_dropped() {
 
 #[spec_test(REQ_DS_dsl_027)]
 fn keep_when_precompile_area_and_repeated_message_then_the_first_stays() {
-    let stays = Area::Precompile.keep(vec![error_at(5), error_at(9), error_at(5)]);
+    let stays = Area::Precompile.keep(
+        &MessageSettings::default(),
+        vec![error_at(5), error_at(9), error_at(5)],
+    );
 
     assert_eq!(starts(&stays), [5, 9]);
 }
 
 #[spec_test(REQ_DS_dsl_027)]
 fn keep_when_precompile_area_and_over_500_errors_then_all_stay_and_no_line() {
-    let stays = Area::Precompile.keep(errors(501));
+    let stays = Area::Precompile.keep(&MessageSettings::default(), errors(501));
 
     assert_eq!(stays.len(), 501);
     assert!(stays.iter().all(Diagnostic::has_code));
@@ -139,15 +142,21 @@ fn keep_when_precompile_area_and_fatal_error_then_the_other_messages_stay() {
     let mut fatal = error_at(0);
     fatal.severity = Severity::FatalError;
 
-    let stays = Area::Precompile.keep(vec![error_at(1), fatal, warning_at(2)]);
+    let stays = Area::Precompile.keep(
+        &MessageSettings::default(),
+        vec![error_at(1), fatal, warning_at(2)],
+    );
 
     assert_eq!(starts(&stays), [1, 0, 2]);
 }
 
 #[spec_test(REQ_DS_dsl_027)]
 fn keep_when_precompile_area_applied_to_its_own_result_then_unchanged() {
-    let once = Area::Precompile.keep(vec![error_at(1), error_at(1), warning_at(2).suppress()]);
-    let twice = Area::Precompile.keep(once.clone());
+    let once = Area::Precompile.keep(
+        &MessageSettings::default(),
+        vec![error_at(1), error_at(1), warning_at(2).suppress()],
+    );
+    let twice = Area::Precompile.keep(&MessageSettings::default(), once.clone());
 
     assert_eq!(starts(&once), starts(&twice));
 }
