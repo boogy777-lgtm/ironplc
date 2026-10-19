@@ -13,7 +13,8 @@ use super::run_one_scan;
 /// Compiles and runs one scan the way `ironplcc compile` followed by
 /// `ironplcvm run` do: the semantic rules run as well as the type resolution,
 /// so a program the tool refuses is refused here. The refusal, from either
-/// stage, is the first diagnostic.
+/// stage, is the first diagnostic that stops the build; a warning is let through,
+/// as the tool lets it through.
 pub fn try_check_and_run(
     source: &str,
     options: &CompilerOptions,
@@ -21,7 +22,7 @@ pub fn try_check_and_run(
     let library = parse_program(source, &FileId::default(), options)?;
     let (library, context) = ironplc_analyzer::stages::analyze(&[&library], options)
         .map_err(|mut found| found.remove(0))?;
-    if let Some(first) = context.diagnostics().first() {
+    if let Some(first) = context.diagnostics().iter().find(|d| d.stops_build()) {
         return Err(first.clone());
     }
     let codegen_options = ironplc_codegen::CodegenOptions::from(options);

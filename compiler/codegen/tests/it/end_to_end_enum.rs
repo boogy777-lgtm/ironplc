@@ -237,3 +237,47 @@ END_PROGRAM
         vec!["LEVEL"]
     );
 }
+
+// The comparison of values of two different enumerations is a warning
+// (P4083): the analysis accepts the program and the machine compares the two
+// ordinals. `RED` and `AUTO` are both ordinal 0, `GREEN` is 1.
+#[test]
+fn end_to_end_when_two_enumerations_compared_then_warned_and_the_ordinals_are_compared() {
+    use crate::common::parse_and_run;
+    use ironplc_analyzer::stages::analyze;
+    use ironplc_dsl::{core::FileId, diagnostic::any_stops_build};
+    use ironplc_parser::parse_program;
+
+    let source = "
+TYPE COLOR : (RED, GREEN); END_TYPE
+TYPE MODE : (AUTO, MANUAL); END_TYPE
+PROGRAM main
+  VAR
+    c : COLOR := RED;
+    m : MODE := AUTO;
+    same : BOOL;
+    different : BOOL;
+    low : DINT;
+  END_VAR
+  same := c = m;
+  different := c <> m;
+  low := MIN(c, m);
+END_PROGRAM
+";
+    let options = CompilerOptions::default();
+    let library = parse_program(source, &FileId::default(), &options).unwrap();
+    let (_, context) = analyze(&[&library], &options).unwrap();
+    let codes: Vec<&str> = context
+        .diagnostics()
+        .iter()
+        .map(|d| d.code.as_str())
+        .collect();
+    assert_eq!(codes, vec!["P4083", "P4083", "P4083"]);
+    assert!(!any_stops_build(context.diagnostics()));
+
+    let (_container, bufs) = parse_and_run(source, &options);
+
+    assert_eq!(bufs.vars[2].as_i32(), 1, "same");
+    assert_eq!(bufs.vars[3].as_i32(), 0, "different");
+    assert_eq!(bufs.vars[4].as_i32(), 0, "low");
+}
