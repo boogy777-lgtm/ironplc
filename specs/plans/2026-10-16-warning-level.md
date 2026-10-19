@@ -74,11 +74,12 @@ Per PR below. Shared by most PRs:
 
 ### PR 5: message areas (MSG-020 to MSG-022, MSG-053)
 
-- [ ] An area class with the members `Build` and `Precompile`; each message carries the areas it is shown in.
+- [x] An area class with the members `Build` and `Precompile`; each message carries the areas it is shown in.
   - `check` and `compile` write `Build`.
   - The language server's analysis while editing writes `Precompile`.
-- [ ] The editor `source` per area.
-- [ ] The 950 cap of `Precompile`.
+- [x] The editor `source` per area.
+- [x] The 950 cap of `Precompile`.
+- [x] VS Code shows the Build area in the Output channel `IronPLC Build` (owner's option A); a message panel of our own with an area drop-down is option B, later.
 
 ### PR 6: handling and settings (MSG-030, MSG-031, MSG-036, MSG-037)
 
