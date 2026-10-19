@@ -183,10 +183,12 @@ the row, the scripting name and value of its category, `prefix`, `number` and
 ## What a run keeps
 
 A run collects the messages of its stages in the order they are produced. What
-the run keeps of them is decided in one place, `ironplc_dsl::diagnostic::kept`,
-which the places that collect the messages of a run apply
+the run keeps of them is decided in one place, the keep rule of the area the run
+writes (`Area::keep`, [Message areas](#message-areas)), which the places that
+collect the messages of a run apply
 ([What a build and a check keep](#what-a-build-and-a-check-keep)); a consumer
-that shows the messages never decides it. The rules are those of CODESYS
+that shows the messages never decides it. This section describes the rule of the
+Build area, `ironplc_dsl::diagnostic::kept`. The rules are those of CODESYS
 (`Messages.cs:28-43`, `-.351.cs:65-75`, `-.352.cs:93-215`), with one difference
 by the owner's decision: the warning limit is 500, not 100.
 
@@ -593,22 +595,38 @@ and `codesys` (null when the problem has no CODESYS code), and no other name for
 the code, the message and the position.
 
 **REQ-DS-mcp-005** The tool `get_message_objects` takes the sources and the options
-of `check` and an optional `severities`, a mask of `severity_value`s whose default
-is every category (0xFFFFFFFF), and returns the `ScriptMessage` of each message of
-the check whose category is in the mask, as `system.get_message_objects` does:
-the diagnostics of `check` and then the line "Compile complete" that closes the
+of `check`, an optional `severities`, a mask of `severity_value`s whose default
+is every category (0xFFFFFFFF), and an optional `area` (REQ-DS-mcp-008),
+and returns the `ScriptMessage` of each message of the check whose category is in
+the mask, as `system.get_message_objects` does: in the Build area, the
+diagnostics of `check` and then the line "Compile complete" that closes the
 check, a `Text`.
 
 **REQ-DS-mcp-006** The tool `get_messages` takes the sources and the options of
-`check` and returns the text of every message and nothing else, as
-`system.get_messages` does, from the same messages as `get_message_objects` with
-every category.
+`check` and an optional `area`, and returns the text of every message and nothing
+else, as `system.get_messages` does, from the same messages as
+`get_message_objects` with every category.
 
 **REQ-DS-mcp-007** The `ScriptMessage` of a message without a code, such as the
 closing line of a check or a limit line, has a null `prefix`, `number` and
 `codesys`. The `diagnostics` of `check` and `compile` are the problems alone and
 do not hold the closing line, so that an empty list still means a clean program;
 the two queries of the messages hold it, as CODESYS stores it among its messages.
+
+The scripting queries of CODESYS take the list to read as their `category`
+argument. The two queries take it as `area`, by the name the area declares
+(`Area::name`), and the tool `get_message_areas` lists the areas
+([Message areas](#message-areas)).
+
+**REQ-DS-mcp-008** The tools `get_message_objects` and `get_messages` take an
+optional `area`, `Build` by default: the run is made in that area, so that for
+`Precompile` the messages are those the language server keeps over the same
+sources (the messages that have a position, without a limit line) and there is no
+closing line, because the precompile of CODESYS has none; an `area` that no
+member declares is not accepted.
+
+**REQ-DS-mcp-009** The tool `get_message_areas` returns, for each area of
+`Area::ALL`, its `name`, its `source` and a one-line `description`.
 
 **REQ-DS-playground-001** The playground writes `Severity::name()` of the
 diagnostic as its `severity`.

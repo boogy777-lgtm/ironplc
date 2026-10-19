@@ -114,6 +114,16 @@ diagnostics in a list with their problem codes.
 
    The Problems panel showing diagnostics with problem codes.
 
+.. _message-areas:
+
+Message areas
+-------------
+
+.. include:: ../../includes/message-areas.rst
+
+The extension shows the ``IronPLC Precompile`` area. Type ``IronPLC Precompile``
+in the filter box of the Problems panel to list only its messages.
+
 Run Program
 ===========
 

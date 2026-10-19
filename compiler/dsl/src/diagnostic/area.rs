@@ -18,7 +18,7 @@
 //! name, source, description, capacity and keep rule, and no other place
 //! changes. The consumers match on `Area` without a wildcard arm.
 
-use super::{run, Diagnostic};
+use super::{run, Diagnostic, Summary, CHECK_SUMMARY};
 
 /// A list of messages, with the rule for what it keeps of the messages of a run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -86,6 +86,17 @@ impl Area {
         match self {
             Area::Build => None,
             Area::Precompile => Some(950),
+        }
+    }
+
+    /// The summary that closes a check written to the area, or `None` when the
+    /// area has none. CODESYS ends a compile with "Compile complete"
+    /// (`LanguageModelManagerConsolidated.cs:1972-1989`) and its precompile
+    /// ends with no line (`PreCompileContext.cs`).
+    pub fn check_summary(self) -> Option<&'static Summary> {
+        match self {
+            Area::Build => Some(&CHECK_SUMMARY),
+            Area::Precompile => None,
         }
     }
 

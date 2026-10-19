@@ -14,7 +14,7 @@ use crate::tools::compile::CompileInput;
 use crate::tools::container_drop::ContainerDropInput;
 use crate::tools::explain_diagnostic::ExplainDiagnosticInput;
 use crate::tools::hot_edit::{HotEditAcceptInput, HotEditSession};
-use crate::tools::messages::MessageObjectsInput;
+use crate::tools::messages::{MessageObjectsInput, MessagesInput};
 use crate::tools::pou_lineage::PouLineageInput;
 use crate::tools::pou_scope::PouScopeInput;
 use crate::tools::run::RunInput;
@@ -104,7 +104,7 @@ impl IronPlcMcp {
     /// The message objects of a check.
     #[tool(
         name = "get_message_objects",
-        description = "The messages of a check as message objects, as `system.get_message_objects` of the CODESYS scripting API: `severity` (FatalError, Error, Warning, Information, Text, SuppressedWarning or SuppressedInformation), `severity_value`, `prefix`, `number`, `text`, `position`, `length`, `position_text`, `object` and `codesys`. `severities` is a mask of `severity_value`s (default: every category, suppressed ones included). The last message is the line that ends the check, a Text with a null `prefix` and `number`."
+        description = "The messages of a check as message objects, as `system.get_message_objects` of the CODESYS scripting API: `severity` (FatalError, Error, Warning, Information, Text, SuppressedWarning or SuppressedInformation), `severity_value`, `prefix`, `number`, `text`, `position`, `length`, `position_text`, `object` and `codesys`. `severities` is a mask of `severity_value`s (default: every category, suppressed ones included). `area` is `Build` (default) or `Precompile`, the language server's list while editing; see `get_message_areas`. The last message of the Build area is the line that ends the check, a Text with a null `prefix` and `number`; the Precompile area has none."
     )]
     fn get_message_objects(
         &self,
@@ -119,13 +119,25 @@ impl IronPlcMcp {
     /// The texts of the messages of a check.
     #[tool(
         name = "get_messages",
-        description = "The messages of a check as texts alone, as `system.get_messages` of the CODESYS scripting API. Use `get_message_objects` to see the category, the code and the position of each. The last text is the line that ends the check."
+        description = "The messages of a check as texts alone, as `system.get_messages` of the CODESYS scripting API. Use `get_message_objects` to see the category, the code and the position of each. `area` is `Build` (default) or `Precompile`; see `get_message_areas`. The last text of the Build area is the line that ends the check."
     )]
     fn get_messages(
         &self,
-        params: Parameters<ParseCheckInput>,
+        Parameters(input): Parameters<MessagesInput>,
     ) -> Result<ContentBlock, rmcp::ErrorData> {
-        let response = tools::messages::build_texts_response(&params.0);
+        let response = tools::messages::build_texts_response(&input);
+        let json = serde_json::to_string(&response)
+            .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))?;
+        Ok(ContentBlock::text(json))
+    }
+
+    /// The areas of messages.
+    #[tool(
+        name = "get_message_areas",
+        description = "The areas of messages a query can read, each with its `name`, the `source` an editor shows for it and a one-line `description`, as `system.get_message_categories` and `system.get_message_category_description` of the CODESYS scripting API. Give a `name` as the `area` of `get_message_objects` or `get_messages`."
+    )]
+    fn get_message_areas(&self) -> Result<ContentBlock, rmcp::ErrorData> {
+        let response = tools::message_areas::build_response();
         let json = serde_json::to_string(&response)
             .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))?;
         Ok(ContentBlock::text(json))

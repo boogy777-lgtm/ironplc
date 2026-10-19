@@ -108,6 +108,13 @@ fn ed2_args_with_severities(content: &str, severities: u32) -> String {
     args.to_string()
 }
 
+/// [`ed2_args`] plus the `area` of `get_message_objects` and `get_messages`.
+fn ed2_args_with_area(content: &str, area: &str) -> String {
+    let mut args = tool_args("main.st", content, ed2_options());
+    args["area"] = serde_json::json!(area);
+    args.to_string()
+}
+
 /// [`ed2_args`] plus the `pou` the context tools query.
 fn ed2_args_for_pou(content: &str, pou: &str) -> String {
     let mut args = tool_args("main.st", content, ed2_options());
@@ -179,6 +186,21 @@ fn missing_dialect_args() -> String {
     "get_message_objects",
     ed2_args_with_severities(SEMANTIC_ERROR_PROGRAM, 4),
     r#"\"messages\":[]"#
+)]
+#[case::get_message_objects_precompile_area_has_no_closing_line(
+    "get_message_objects",
+    ed2_args_with_area(VALID_PROGRAM, "Precompile"),
+    r#"\"messages\":[]"#
+)]
+#[case::get_messages_build_area_has_the_closing_line(
+    "get_messages",
+    ed2_args_with_area(VALID_PROGRAM, "Build"),
+    r#"Compile complete"#
+)]
+#[case::get_message_areas_lists_the_precompile_area(
+    "get_message_areas",
+    "{}".to_string(),
+    r#"\"name\":\"Precompile\""#
 )]
 #[case::get_messages_semantic_error_lists_texts_alone(
     "get_messages",

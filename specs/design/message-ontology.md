@@ -68,7 +68,9 @@ fields:
 - `ShowAttribute`, the areas in which the message is shown.
 
 A message without a source position has the position -1 and is never shown in
-Precompile.
+Precompile: its constructor clears `Precompile` from `ShowAttribute`
+(`CompilerMessage.cs:26-60`). It is a property set when the message is made, not a
+filter on its text.
 
 In IronPLC a message is a `Diagnostic` (`compiler/dsl/src/diagnostic.rs`). It has
 a primary label (file and span), a code, a category taken from the code,
@@ -80,7 +82,10 @@ Differences:
   its category and its text are a row of `codeless-texts.csv`, and both forms and
   the editor treat it as a coded one. The limit lines and the summary lines are
   built; the pragma messages are not (MSG-080).
-- A `Diagnostic` has no areas yet (MSG-020).
+- A `Diagnostic` declares the areas it is shown in, as `ShowAttribute` does
+  (MSG-022): a message made with a position is shown in every area, and a message
+  made by `Diagnostic::codeless`, which has no position, in `Build` alone. The
+  field is set by the constructor; no consumer derives it from the place.
 
 ## Category
 
@@ -122,12 +127,37 @@ The areas are an open set: a component adds its own, for example static
 analysis. Each message carries `ShowAttribute` (`None`, `Precompile`, `Compile`,
 `All`), which says the areas it is shown in.
 
-In IronPLC the areas are a class whose members declare themselves (MSG-020):
-- `check` and `compile` write the Build area;
-- the language server's analysis while editing writes the Precompile area;
-- a new area is one new member.
+In IronPLC the areas are a class whose members declare themselves (MSG-020),
+`ironplc_dsl::diagnostic::Area`:
 
-In the editor, the area is the `source` of a diagnostic (MSG-021).
+| Area | Written by | Keeps |
+|---|---|---|
+| `Build` | `ironplcc check`, `ironplcc compile`, the MCP tools, the playground's compile | no repeats, 500 errors and 500 warnings with the limit lines ([Limits](#limits)) |
+| `Precompile` | the language server's analysis while editing | the messages shown in it, no repeats, at most 950 ([Limits](#limits)) |
+
+- Each member declares its name (`name`), the `source` an editor shows
+  (`source`), a one-line `description`, its `capacity` and its keep rule (`keep`),
+  each in an exhaustive `match`.
+- A run writes exactly one area and applies the keep rule of it once, where it
+  collects its messages; a message is written to an area only if it is shown
+  there.
+- A new area is one new member: the compiler asks for each declaration above, and
+  no other place changes.
+- The Output channel of the editor is a place for a `Text`, not an area.
+
+The compile-context list of CODESYS (`CompileContextMessageCategory`) has no
+counterpart yet.
+
+In the editor, the area is the `source` of a diagnostic (MSG-021): `IronPLC
+Build` and `IronPLC Precompile`. They name the product and the area, so the
+filter of the Problems panel selects one area and the origin stays visible. The
+language server writes `Precompile`.
+
+The program form reads one area by its name: the `area` argument of
+`get_message_objects` and `get_messages`, which CODESYS takes as `category`, and
+the tool `get_message_areas`, which lists the areas as
+`system.get_message_categories` does (REQ-DS-mcp-008, -009). The `Precompile`
+area has no closing line, as the precompile of CODESYS has none.
 
 ## Code
 
@@ -193,8 +223,27 @@ messages" as an `Error` without a code.
 Warnings stop at `MaxCompilerWarnings`, default 100, which the user may set to
 no limit. At the limit CODESYS stores the same kind of line as a `Warning`.
 
-The Precompile area keeps at most 950 messages per POU, dropping the oldest
-first.
+The Precompile area keeps at most 950 messages (`PreCompileContext.cs:2440-2525`).
+The limit applies twice:
+- the precompile of one object collects the messages that are shown in
+  `Precompile` and stops at 950 (`list.Count == 950`, `break`);
+- it then removes that object's earlier messages from the area, and when the area
+  would hold more than 950 in total, it removes the oldest messages of the area,
+  the first stored, so that the total is at most 950
+  (`AddNewMessagesToMessageStorage`).
+
+So it is 950 per object in one precompile and 950 in the whole area, oldest
+dropped, not 950 per object only. The precompile has no limit lines and no cut at
+a fatal error: those belong to the build (`-.352.cs:93-215`).
+
+**IronPLC maps the object to the file.** The language server has no object
+granularity: it analyses the whole workspace on each edit and publishes per file.
+Each file keeps its first 950 messages and the area keeps 950 in all. The files
+are written in ascending order of their URI and the file edited last, which plays
+the role of the object just precompiled, after them, so the files written first
+lose their messages first. A message published to several files counts once for
+each file it is published to. The rule is `Area::store`
+([Message areas](diagnostic-severity.md#message-areas)).
 
 **IronPLC differs here, by the owner's decision:** the warning limit is 500, the
 same as the error limit (MSG-050). The texts are those of CODESYS, including the
@@ -309,9 +358,9 @@ States:
 | MSG-004 | A suppressed message is never shown to a person | `-.352.cs:148-151` | done (REQ-DS-playground-002) |
 | MSG-005 | Each code declares its category in one place | — | done (REQ-DS-problems-001, -004) |
 | MSG-006 | A warning is raised by the checker and the build goes on: the first is C0354 `Wrn_EnumComparison` for the comparison of values of two different enumerations (P4083), strict or not | `TypeCheckerVisitor.cs:5423-5438` | done (REQ-DS-analyzer-001 to -005, REQ-DS-cli-005) |
-| MSG-020 | Messages belong to areas (Build, Precompile, …), an open class; each area lists only its own messages | `CompilerMessageCategory.cs`, `PreCompileMessageCategory.cs` | planned |
-| MSG-021 | The editor shows the area as the `source` of a diagnostic, so the Problems filter can select it | — | planned |
-| MSG-022 | A message without a source position is not shown in Precompile | `CompilerMessage.cs:38,63` | planned |
+| MSG-020 | Messages belong to areas (Build, Precompile, …), an open class; each area lists only its own messages | `CompilerMessageCategory.cs`, `PreCompileMessageCategory.cs` | done (REQ-DS-dsl-024, -026, -027, REQ-DS-mcp-008, -009) |
+| MSG-021 | The editor shows the area as the `source` of a diagnostic, so the Problems filter can select it | — | done (REQ-DS-dsl-024, REQ-DS-cli-012) |
+| MSG-022 | A message without a source position is not shown in Precompile | `CompilerMessage.cs:26-60` | done (REQ-DS-dsl-025, -027, REQ-DS-cli-011) |
 | MSG-030 | Handling `Report` / `Suppress` / `Ignore`; an error is dropped by `Suppress` or `Ignore` | `MessageHandling.cs`, `-.278.cs:98-103` | planned |
 | MSG-031 | The settings lists of disabled warnings and warnings as errors are given outside the source, as options | `WarningHelper.cs` | planned |
 | MSG-032 | `{warning disable Cnnnn}` makes a matching warning suppressed until `{warning restore Cnnnn}` | `ErrorVisitor.cs:108-115` | planned |
@@ -326,7 +375,7 @@ States:
 | MSG-050 | At most 500 errors and 500 warnings are kept (CODESYS: warnings 100 by default) | `-.352.cs:190-215`, `CompileOptions.cs:363` | owner (REQ-DS-dsl-017, -018, REQ-DS-project-003, -004) |
 | MSG-051 | At the limit, the CODESYS line "More than {0} … occured: Skipping all further … messages" is kept, as `Error` or `Warning`, without a code | `-.352.cs:193-213` | done (REQ-DS-dsl-017, -018, REQ-DS-cli-010) |
 | MSG-052 | Related positions are dropped once the error limit is passed | `-.352.cs:165` | done (REQ-DS-dsl-019) |
-| MSG-053 | The Precompile area keeps at most 950 messages per POU, oldest dropped first | `PreCompileContext.cs:2507-2525` | planned |
+| MSG-053 | The precompile of one object keeps at most 950 messages, and the Precompile area at most 950 in all, the oldest dropped first; IronPLC: the object is the file | `PreCompileContext.cs:2440-2525` | done (REQ-DS-dsl-028, REQ-DS-cli-013) |
 | MSG-060 | A related position is an `Information` message after its message: "Related position", "Called '{0}'.", "'{0}' using {1} bytes of stack." | `CallTree.cs:324-360` | planned |
 | MSG-061 | The related position of a suppressed warning is `SuppressedInformation` | `CallTree.cs:354` | planned |
 | MSG-070 | Messages keep the order in which they are produced | `Messages.cs:28-43` | done (REQ-DS-dsl-015) |

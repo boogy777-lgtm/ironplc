@@ -3,7 +3,7 @@
 //! Runs parse and full semantic analysis, returning structured diagnostics.
 
 use ironplc_dsl::core::FileId;
-use ironplc_dsl::diagnostic::{any_stops_build, ScriptMessage, CHECK_SUMMARY};
+use ironplc_dsl::diagnostic::{any_stops_build, Area, ScriptMessage};
 use ironplc_project::project::{MemoryBackedProject, Project};
 use serde::Serialize;
 
@@ -28,12 +28,15 @@ pub struct Checked {
     /// among the messages of a compile as a `Text`. The two queries of the
     /// messages return it after the others; the `diagnostics` of `check` are
     /// the problems alone, so that an empty list still means a clean program.
-    /// It is `None` for an input that is not checked.
+    /// It is `None` for an input that is not checked and for an area that has
+    /// no closing line (`Area::check_summary`).
     pub summary: Option<ScriptMessage>,
 }
 
-/// Validates the inputs, then parses and analyzes the sources.
-pub fn check(sources: &[SourceInput], options_value: &serde_json::Value) -> Checked {
+/// Validates the inputs, then parses and analyzes the sources. The check is a
+/// run that writes `area`: the area keeps its messages and decides the line that
+/// closes it.
+pub fn check(sources: &[SourceInput], options_value: &serde_json::Value, area: Area) -> Checked {
     // Validate sources
     let source_errors = validate_sources(sources);
     if !source_errors.is_empty() {
@@ -66,11 +69,13 @@ pub fn check(sources: &[SourceInput], options_value: &serde_json::Value) -> Chec
     }
 
     // Run parse + full semantic analysis
-    let diagnostics = project.semantic();
+    let diagnostics = area.keep(project.semantic());
     Checked {
         ok: !any_stops_build(&diagnostics),
         messages: messages_of(&diagnostics, sources),
-        summary: Some(script_message(&CHECK_SUMMARY.closing(&diagnostics), &[])),
+        summary: area
+            .check_summary()
+            .map(|summary| script_message(&summary.closing(&diagnostics), &[])),
     }
 }
 
@@ -86,7 +91,7 @@ fn messages_of(
 
 /// Builds the check response from raw inputs.
 pub fn build_response(sources: &[SourceInput], options_value: &serde_json::Value) -> CheckResponse {
-    let checked = check(sources, options_value);
+    let checked = check(sources, options_value, Area::Build);
     CheckResponse {
         ok: checked.ok,
         diagnostics: checked.messages.iter().map(serialize_message).collect(),

@@ -2,13 +2,14 @@
 //! (`specs/design/diagnostic-severity.md`, `REQ-DS-mcp-*`).
 
 use ironplc_dsl::core::SourceSpan;
-use ironplc_dsl::diagnostic::{Diagnostic, Severity};
+use ironplc_dsl::diagnostic::{Area, Diagnostic, Severity};
 use ironplc_problems::text;
 use spec_test_macro::spec_test;
 
 use crate::tools;
 use crate::tools::common::{serialize_diagnostic, serialize_diagnostics, ParseCheckInput};
-use crate::tools::messages::MessageObjectsInput;
+use crate::tools::message_areas;
+use crate::tools::messages::{AreaName, MessageObjectsInput, MessagesInput};
 use crate::tools::test_support::{ed2_options, source, SEMANTIC_ERROR_PROGRAM, VALID_PROGRAM};
 
 /// A diagnostic in each of the seven categories, in the order of CODESYS, with
@@ -137,8 +138,40 @@ fn objects_with(severities: Option<u32>) -> Vec<serde_json::Value> {
             options: ed2_options(),
         },
         severities,
+        area: None,
     };
     tools::messages::build_objects_response(&input).messages
+}
+
+fn texts_input(program: &str, area: Option<Area>) -> MessagesInput {
+    MessagesInput {
+        check: ParseCheckInput {
+            sources: source(program),
+            options: ed2_options(),
+        },
+        area: area.map(AreaName),
+    }
+}
+
+/// A program of `count` statements, each of which reads a variable that is not
+/// declared: `count` errors (P4007), each at its own place.
+fn program_with_errors(count: usize) -> String {
+    let mut program = String::from(
+        "PROGRAM Main
+VAR x : INT; END_VAR
+",
+    );
+    for at in 0..count {
+        program.push_str(&format!(
+            "x := undeclared_{at};
+"
+        ));
+    }
+    program.push_str(
+        "END_PROGRAM
+",
+    );
+    program
 }
 
 #[spec_test(REQ_DS_mcp_005)]
@@ -167,10 +200,7 @@ fn mcp_spec_req_ds_005_get_message_objects_returns_the_objects_of_the_masked_cat
 #[spec_test(REQ_DS_mcp_006)]
 fn mcp_spec_req_ds_006_get_messages_returns_the_texts_of_the_objects() {
     let objects = objects_with(None);
-    let texts = tools::messages::build_texts_response(&ParseCheckInput {
-        sources: source(SEMANTIC_ERROR_PROGRAM),
-        options: ed2_options(),
-    });
+    let texts = tools::messages::build_texts_response(&texts_input(SEMANTIC_ERROR_PROGRAM, None));
 
     let expected: Vec<&str> = objects
         .iter()
@@ -180,10 +210,7 @@ fn mcp_spec_req_ds_006_get_messages_returns_the_texts_of_the_objects() {
     assert_eq!(texts.messages, expected);
     assert!(!texts.ok);
 
-    let clean = tools::messages::build_texts_response(&ParseCheckInput {
-        sources: source(VALID_PROGRAM),
-        options: ed2_options(),
-    });
+    let clean = tools::messages::build_texts_response(&texts_input(VALID_PROGRAM, None));
     assert!(clean.ok);
     assert_eq!(
         clean.messages,
@@ -213,4 +240,74 @@ fn mcp_spec_req_ds_007_a_message_without_a_code_has_null_prefix_number_and_codes
     );
     assert_eq!(limit["severity"], "Error");
     assert!(limit["prefix"].is_null() && limit["number"].is_null());
+}
+
+#[spec_test(REQ_DS_mcp_008)]
+fn mcp_spec_req_ds_008_the_area_selects_the_list_of_messages_and_the_default_is_build() {
+    let program = program_with_errors(501);
+    let objects = |area: Option<Area>| {
+        tools::messages::build_objects_response(&MessageObjectsInput {
+            check: ParseCheckInput {
+                sources: source(&program),
+                options: ed2_options(),
+            },
+            severities: None,
+            area: area.map(AreaName),
+        })
+        .messages
+    };
+
+    let by_default = objects(None);
+    let build = objects(Some(Area::Build));
+    let precompile = objects(Some(Area::Precompile));
+
+    // The default is the Build area: 500 errors, the line of the limit and the
+    // line that closes the check.
+    assert_eq!(by_default, build);
+    assert_eq!(build.len(), 502);
+    assert!(build[500]["prefix"].is_null());
+    assert_eq!(build[501]["severity"], "Text");
+    // The Precompile area holds the 501 errors that have a position, without the
+    // line of the limit and without a closing line.
+    assert_eq!(precompile.len(), 501);
+    assert!(precompile.iter().all(|m| m["prefix"] == "P"));
+    assert!(precompile.iter().all(|m| m["severity"] == "Error"));
+
+    let texts = |area| tools::messages::build_texts_response(&texts_input(&program, area)).messages;
+    assert_eq!(texts(None).len(), 502);
+    assert_eq!(texts(Some(Area::Precompile)).len(), 501);
+}
+
+#[spec_test(REQ_DS_mcp_008)]
+fn mcp_spec_req_ds_008_an_unknown_area_is_not_accepted_and_each_area_is_by_its_name() {
+    let accepted = |name: &str| {
+        serde_json::from_value::<MessagesInput>(serde_json::json!({
+            "sources": [{"name": "main.st", "content": VALID_PROGRAM}],
+            "options": ed2_options(),
+            "area": name,
+        }))
+    };
+
+    for area in Area::ALL {
+        assert_eq!(accepted(area.name()).unwrap().area, Some(AreaName(area)));
+    }
+    let error = accepted("Static analysis").unwrap_err().to_string();
+    assert!(error.contains("unknown area"), "{error}");
+    assert!(error.contains("Build, Precompile"), "{error}");
+}
+
+#[spec_test(REQ_DS_mcp_009)]
+fn mcp_spec_req_ds_009_get_message_areas_lists_each_area_with_its_description() {
+    let response = message_areas::build_response();
+
+    assert_eq!(response.areas.len(), Area::ALL.len());
+    for (listed, area) in response.areas.iter().zip(Area::ALL) {
+        assert_eq!(listed.name, area.name());
+        assert_eq!(listed.source, area.source());
+        assert_eq!(listed.description, area.description());
+        assert!(!listed.description.is_empty());
+    }
+    let json = serde_json::to_value(&response).unwrap();
+    assert_eq!(json["areas"][0]["name"], "Build");
+    assert_eq!(json["areas"][1]["name"], "Precompile");
 }
