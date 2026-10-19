@@ -1,0 +1,89 @@
+=====
+P4083
+=====
+
+.. problem-summary:: P4083
+
+This warning occurs when two values of two different enumeration types are
+compared. The message names the declared type of the left value and the declared
+type of the right value. The label is the whole comparison or call.
+
+A warning does not stop the build. ``ironplcc check`` prints it and exits with
+status 0, ``ironplcc compile`` writes the container, and the program runs. The
+comparison compares the numbers the two values stand for, which is rarely what
+was meant: ``Red`` of ``TrafficLight`` and ``Auto`` of ``Mode`` are different
+values that happen to have the same number. CODESYS reports the same condition
+as the warning C0354 and does so whether or not either enumeration is
+``strict``.
+
+The comparisons that are checked are the operators ``=``, ``<>``, ``<``, ``<=``,
+``>`` and ``>=``, their function forms ``EQ``, ``NE``, ``LT``, ``LE``, ``GT`` and
+``GE``, and the selection functions ``MIN`` and ``MAX``, which set their two
+inputs against each other. ``LIMIT``, ``SEL`` and ``MUX`` do not compare their
+inputs with each other and are not checked.
+
+Example
+-------
+
+The following code will generate warning P4083:
+
+.. playground::
+
+   TYPE
+       TrafficLight : (Red, Yellow, Green);
+       Mode : (Auto, Manual);
+   END_TYPE
+
+   PROGRAM main
+   VAR
+       light : TrafficLight := Red;
+       current : Mode := Auto;
+       same : BOOL;
+   END_VAR
+       same := light = current;    (* Warning: TrafficLight compared with Mode *)
+   END_PROGRAM
+
+The comparison is true here, because ``Red`` and ``Auto`` are both the number 0,
+and that is the reason to look at it.
+
+To fix this warning, compare values of one enumeration. If the comparison of the
+numbers is what you want, say so by taking each number into an integer first:
+
+.. playground::
+
+   TYPE
+       TrafficLight : (Red, Yellow, Green);
+       Mode : (Auto, Manual);
+   END_TYPE
+
+   PROGRAM main
+   VAR
+       light : TrafficLight := Red;
+       current : Mode := Auto;
+       light_number : DINT;
+       mode_number : DINT;
+       same : BOOL;
+   END_VAR
+       light_number := light;
+       mode_number := current;
+       same := light_number = mode_number;
+   END_PROGRAM
+
+What is not reported
+--------------------
+
+Two values are of the same enumeration when they are declared with the same
+enumeration or with an alias of it: after ``TYPE Signal : TrafficLight; END_TYPE``
+a ``Signal`` and a ``TrafficLight`` can be compared. A comparison of an
+enumeration with an integer or with a number written in the program is not
+reported, nor is the comparison of a reference to an enumeration (``REF_TO``)
+with another value. The warning is separate from the errors of a strict
+enumeration, such as :doc:`P4035` for a value written with the type of another
+enumeration, and a program can have both.
+
+See Also
+--------
+
+- :doc:`P4035` — a value written with the type of another enumeration
+- :doc:`P4049` — an enumeration used as the operand of arithmetic
+- :doc:`/reference/language/data-types/derived/enumerated-types` — enumerations, and which are strict

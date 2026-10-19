@@ -246,6 +246,13 @@ selection function returns its base type.
   (:doc:`P4027 </reference/compiler/problems/P4027>`): ``light := MAX(light, 1)``
   is an error, and ``number := MAX(light, 1)`` is not.
 
+- Comparing values of two different enumerations is accepted, strict or not, and
+  reported as a warning
+  (:doc:`P4083 </reference/compiler/problems/P4083>`): ``light = mode`` and
+  ``MAX(light, mode)`` compile and run as a comparison of the two numbers.
+  The warning is not raised for an alias of the enumeration, for a number, or
+  for a reference to an enumeration.
+
 .. playground::
 
    TYPE

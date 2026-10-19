@@ -370,3 +370,4 @@ P4080,member_not_declared_method_selected_as_variable,"'{member}' is a method of
 P4081,member_not_assignable_outside_output,"'{member}' is an output of '{owner}' and cannot be assigned from outside the function block: read it, or assign an input"
 P4081,member_not_assignable_outside_internal,"'{member}' is an internal variable of '{owner}' and cannot be assigned from outside the function block: declare it VAR_INPUT to set it from outside"
 P4082,in_out_member_accessed_outside_access,"'{member}' is a VAR_IN_OUT of '{owner}' and cannot be read or assigned from outside the function block: pass a variable for it in the call"
+P4083,enumeration_types_compared,"Comparison of one enumeration type ({left}) with another ({right})"

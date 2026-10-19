@@ -193,7 +193,9 @@ fn analyze_when_enumeration_not_strict_then_every_place_of_the_class_accepts_it(
 }
 
 /// The places that only hold an enumeration are the same whether it is strict
-/// or not (the near cases of the class).
+/// or not (the near cases of the class). The comparison of two different
+/// enumerations is one of them, with the warning P4083 that is tested in
+/// `rule_operator_operand_type_check`.
 #[rstest]
 #[case::iec_without_attribute(IEC)]
 #[case::codesys_with_attribute(CODESYS_ATTRIBUTE)]
@@ -204,7 +206,6 @@ fn analyze_when_enumeration_only_held_or_compared_then_accepted_whether_strict_o
     let options = setup.options();
     for statements in [
         "g := x = 2;",
-        "g := x = z;",
         "i := x;",
         "y := x;",
         "y := a;",

@@ -23,6 +23,10 @@
 //!   family by declaring it `ANY_BIT`; this holds the operator spelling to
 //!   that row.
 //!
+//! A third check is a warning and not an error: the operands of a comparison
+//! (`=`, `<>`, `<`, `<=`, `>`, `>=`, their function forms, `MIN` and `MAX`)
+//! that are values of two different enumerations (P4083). See [`compared`].
+//!
 //! An operand whose resolved type the predicate cannot judge (a subrange,
 //! an enumeration, a structure) is skipped rather than reported, as the
 //! assignment check skips such targets: `p MOD 2` on a subrange of `INT`
@@ -53,6 +57,7 @@
 //! END_PROGRAM
 //! ```
 
+mod compared;
 mod enumerated;
 
 use ironplc_dsl::{
@@ -67,6 +72,7 @@ use ironplc_parser::options::CompilerOptions;
 use ironplc_problems::{text, Text};
 use std::convert::Infallible;
 
+use crate::function_environment::FunctionEnvironment;
 use crate::intermediate_type::IntermediateType;
 use crate::intermediates::arithmetic_overload::{
     resolve_arithmetic_fold, resolve_arithmetic_overload, FoldFailure,
@@ -90,6 +96,7 @@ pub fn apply(
     run_rule(
         RuleOperatorOperandTypeCheck {
             types: context.types(),
+            functions: context.functions(),
             options,
             diagnostics: vec![],
             declarations: Declarations::new(),
@@ -149,6 +156,7 @@ fn checked_unary_form(op: &UnaryOp) -> Option<&'static OperatorFunctionForm> {
 
 struct RuleOperatorOperandTypeCheck<'a> {
     types: &'a TypeEnvironment,
+    functions: &'a FunctionEnvironment,
     options: &'a CompilerOptions,
     diagnostics: Vec<Diagnostic>,
     /// Declared type of every variable in scope, to type the outputs of a
@@ -382,8 +390,12 @@ impl Visitor<Infallible> for RuleOperatorOperandTypeCheck<'_> {
     fn visit_expr(&mut self, node: &Expr) -> Result<Self::Value, Infallible> {
         match &node.kind {
             ExprKind::BinaryOp(binary) => self.check_arithmetic_operator(node, binary),
-            ExprKind::Function(function) => self.check_arithmetic_call(function),
+            ExprKind::Function(function) => {
+                self.check_arithmetic_call(function);
+                self.check_compared_call(node, function);
+            }
             ExprKind::Compare(compare) => {
+                self.check_compared_operator(node, compare);
                 if let Some(form) = checked_compare_form(&compare.op) {
                     self.check_operands(form, &[&compare.left, &compare.right]);
                 }
@@ -400,6 +412,8 @@ impl Visitor<Infallible> for RuleOperatorOperandTypeCheck<'_> {
     }
 }
 
+#[cfg(test)]
+mod compared_tests;
 #[cfg(test)]
 mod enumerated_tests;
 
