@@ -99,8 +99,11 @@ fatal error or an error does not stop the build.
 
 **REQ-DS-dsl-004** `Diagnostic::suppress()` turns a warning into a suppressed
 warning and an information message into a suppressed information message, and
-leaves a diagnostic of any other category as it is. It is the one way to change
-the category of a diagnostic after it is made.
+leaves a diagnostic of any other category as it is. It is the change of category
+that the handling `Suppress` makes ([Handling and settings](#handling-and-settings)).
+Together with `raise`, which turns a warning into an error
+(`Severity::raised()`), it is one of the two ways to change the category of a
+diagnostic after it is made.
 
 **REQ-DS-dsl-005** `stop_at_fatal` returns only the fatal errors of a list that
 holds one, and the list as it is otherwise.
@@ -430,6 +433,144 @@ document). The IronPLC decision is that **the object is the file**:
 object, and when the total of the objects it is given, oldest first, is over 950
 removes the oldest messages first until the total is 950; `Area::Build.store`
 returns what it is given.
+
+## Handling and settings
+
+CODESYS decides each message with a handling (`MessageHandling`: `Report`,
+`Suppress`, `Ignore`) and lets the user list warnings in two settings, given
+outside the source text: `DisabledWarningIds` and `WarningAsErrorIds`
+([Message Ontology](message-ontology.md#handling)). IronPLC has the same in two
+classes, and the rules are written once.
+
+**The handling of a message** is `MessageHandling`, decided by a run about one
+message; the category is what the message is. One function applies it,
+`Diagnostic::handle`, an exhaustive `match` over the handling and the category
+without a wildcard arm:
+
+| Handling | Warning | Information | Error, fatal error | Text, suppressed categories |
+|----------|---------|-------------|--------------------|-----------------------------|
+| `Report` | stays | stays | stays | stay |
+| `Suppress` | `SuppressedWarning` | `SuppressedInformation` | dropped | stay |
+| `Ignore` | dropped | dropped | dropped | dropped |
+
+The warning and the error columns are CODESYS (`MessageHandling.cs`,
+`TypeCheckerVisitor.cs:380-393`, `-.278.cs:98-103`, `:707-724`): `Suppress` stores
+`SuppressedWarning` and drops an error, `Ignore` drops both. CODESYS asks for a
+handling of a warning and of an error only. For an information message the
+category list has `SuppressedInformation`, which CODESYS stores for the related
+position of a suppressed warning, so `Suppress` gives it; a `Text` has no
+suppressed category and stays, and `Ignore` drops any category, as the word says.
+`Diagnostic::suppress()` is the change of category that `Suppress` makes, not a
+second rule.
+
+**REQ-DS-dsl-029** `Diagnostic::handle` gives, for each handling and each of the
+seven categories, the result of the table above: kept as it is, kept in its
+suppressed category, or dropped.
+
+**The settings** are two lists of message codes, `MessageSettings`, a field of
+`CompilerOptions` so that they travel with the options that every project, every
+`compile` and every front end already carries, and no run can start without them:
+
+| List | CLI | MCP `options` | Language server `initializationOptions` | VS Code setting |
+|------|-----|---------------|------------------------------------------|-----------------|
+| disabled warnings | `--disable-warning CODE` | `disabled_warnings` | `disabledWarnings` | `ironplc.disabledWarnings` |
+| warnings as errors | `--warning-as-error CODE` | `warnings_as_errors` | `warningsAsErrors` | `ironplc.warningsAsErrors` |
+
+Each list is a `WarningList`, a class whose members declare their option key, CLI
+flag and description; MCP and the language server derive their keys from the
+declarations, and the command line has a test that its flags are those of the
+declarations. A third list is one member, one field and one arm of the decision.
+
+- **Only a warning can be listed.** A list holds `WarningSet`, a set of
+  `WarningProblem`, a type that is generated from the rows of `problem-codes.csv`
+  that declare `Warning` and has no value for any other problem (CODESYS lists the
+  `Wrn_` ids only, `WarningHelper.cs:185-200`). A new warning in the CSV is a new
+  value of the type and needs no other edit.
+- **A code is read in one place.** `WarningSet::from_code` accepts the IronPLC code
+  as the CSV writes it (`P4083`) and the CODESYS code of the `Codesys` column
+  (`C0354`), which names every warning that reports the condition. The case is
+  exact. A code that is unknown, or is the code of a problem that is not a
+  warning, is refused with a message of `P0013` that names the code and lists the
+  codes that are accepted. The command line, the MCP tools and the language
+  server all read their codes through it, and the pragma `{warning disable}`
+  (MSG-032) will.
+- **The decision is one function** over the category of the message, the area and
+  whether its code is in each list, an exhaustive `match`:
+
+  | Area | Warning in `warnings as errors` | Warning only in `disabled warnings` | Any other message |
+  |------|-------------------------------|-------------------------------------|-------------------|
+  | `Build` | becomes an `Error` with the same code, even if it is also disabled | `Ignore`: not kept, not counted | kept as it is |
+  | `Precompile` | stays a `Warning`, even if it is also disabled | `Ignore`: removed | kept as it is |
+
+  CODESYS converts a warning in `SeverityExtensions.GetSeverity` on the build path
+  only (`-.352.cs:101-110`), and its precompile removes a disabled warning that is
+  not also a warning as an error (`PreCompileContext.cs:2446`,
+  `WarningHelper.cs:42-51`); it converts nothing there. Raising beats disabling in
+  both areas. An error is never changed by a list: only the category `Warning` is
+  asked, so nothing lowers an error.
+- **The rule is applied where the area rule is.** `Area::keep` takes the settings,
+  and applies the decision to each message of the run before its own rule counts
+  and limits them, so a raised warning counts as an error and a disabled warning
+  is not counted. Every place that keeps the messages of a run passes them
+  (`Project::semantic`, `compile`, `Summary::close`), so no caller can leave
+  them out.
+
+**REQ-DS-problems-012** `WarningProblem::ALL` holds, in the order of
+`problem-codes.csv`, exactly the problems whose `Severity` is `Warning`, and
+`WarningProblem::of` is `None` for every other problem.
+
+**REQ-DS-problems-013** `Severity::raised()` is `Error` for `Warning` and the
+category itself for every other category.
+
+**REQ-DS-problems-014** `WarningSet::from_code` accepts the IronPLC code of a
+warning and the CODESYS code of a warning, each exactly as written in the CSV, and
+a CODESYS code names every warning that has it.
+
+**REQ-DS-problems-015** `WarningSet::from_code` refuses a text that is no code of
+IronPLC or of CODESYS, a code that differs in case, and the IronPLC or CODESYS
+code of a problem that is not a warning, with a message of `P0013` that names the
+code as given and lists the codes that are accepted.
+
+**REQ-DS-dsl-030** In the Build area a warning in the list of disabled warnings is
+neither kept nor counted by `Area::keep` and `counts`, and a warning in the list of
+warnings as errors becomes an `Error` with the same code, is counted as an error
+and stops the build; a warning in both lists becomes an error; a warning in
+neither, and every message of another category, stays as it is.
+
+**REQ-DS-dsl-031** In the Precompile area a warning in the list of disabled
+warnings is removed unless it is also in the list of warnings as errors, a warning
+in the list of warnings as errors stays a `Warning`, and no other message
+changes.
+
+**REQ-DS-dsl-032** A list never changes an error: a message of a listed code whose
+category is `FatalError` or `Error` stays as it is in both areas, and applying the
+settings to their own result changes nothing.
+
+**REQ-DS-dsl-033** The members of `WarningList` declare distinct option keys and
+CLI flags, and `MessageSettings` holds a list for each member.
+
+**REQ-DS-project-006** `Project::semantic` and `compile` apply the settings of the
+options the project was made with: a program with the warning P4083 and the code
+disabled has no message about it, with the code as a warning as an error has an
+error, no container and "No download possible", and the same program with neither
+is unchanged.
+
+**REQ-DS-cli-015** `ironplcc check` and `ironplcc compile` take the repeatable
+flags `--disable-warning CODE` and `--warning-as-error CODE`, which read the code
+as `WarningSet::from_code` does: a disabled warning is not written and not
+counted in "Compile complete", a warning as an error is written as an error, counts
+as one and makes the command fail, and a code that is not accepted is refused
+before the command runs.
+
+**REQ-DS-cli-016** The language server reads the lists from the
+`initializationOptions` keys `disabledWarnings` and `warningsAsErrors`, from
+`WarningList`, and a code that is not accepted is logged with its message and
+ignored, like an option value that is unknown.
+
+**REQ-DS-mcp-012** The `options` of the MCP tools accept `disabled_warnings` and
+`warnings_as_errors`, arrays of codes, and `list_options` lists them; `check` and
+`compile` apply them; a value that is not an array of strings, or a code that is
+not accepted, is returned as a diagnostic and the tool does not run.
 
 ## The first warning
 

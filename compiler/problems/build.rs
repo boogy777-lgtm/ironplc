@@ -97,6 +97,31 @@ fn create_problems() -> Result<(), Box<dyn Error>> {
     out.write_all(b"#[expect(deprecated, reason = \"the impl names every variant, including the deprecated compiler-located ones\")]\n")?;
     out.write_all(b"impl Problem {\n")?;
 
+    // Define ALL and from_code(). Both name every variant, the deprecated ones
+    // included, which the `expect` on the impl allows.
+    out.write_all(b"    /// Every problem, in the order of `problem-codes.csv`.\n")?;
+    out.write_all(format!("    pub const ALL: [Problem; {}] = [\n", defs.len()).as_bytes())?;
+    for def in &defs {
+        out.write_all(format!("        Problem::{},\n", def.name).as_bytes())?;
+    }
+    out.write_all(b"    ];\n\n")?;
+    out.write_all(b"    /// The problem that has the code, written exactly as `problem-codes.csv` writes it\n")?;
+    out.write_all(b"    /// (`P4083`), or `None`.\n")?;
+    out.write_all(b"    pub fn from_code(code: &str) -> Option<Problem> {\n")?;
+    out.write_all(b"        match code {\n")?;
+    for def in &defs {
+        out.write_all(
+            format!(
+                "            \"{}\" => Some(Problem::{}),\n",
+                def.code, def.name
+            )
+            .as_bytes(),
+        )?;
+    }
+    out.write_all(b"            _ => None,\n")?;
+    out.write_all(b"        }\n")?;
+    out.write_all(b"    }\n\n")?;
+
     // Define code()
     out.write_all(b"    /// Returns the code for the particular problem as a string.\n")?;
     out.write_all(b"    pub fn code(&self) -> &str {\n")?;
@@ -159,7 +184,14 @@ fn create_problems() -> Result<(), Box<dyn Error>> {
     out.write_all(b"        }\n")?;
     out.write_all(b"    }\n")?;
 
-    out.write_all(b"}\n")?;
+    out.write_all(b"}\n\n")?;
+
+    // The warnings: the type a list of codes in a setting holds.
+    let pairs: Vec<(&str, &str)> = defs
+        .iter()
+        .map(|def| (def.name.as_str(), def.severity))
+        .collect();
+    out.write_all(ironplc_problems_gen::render_warning_problems(&pairs).as_bytes())?;
 
     // Finalize the out file
     out.flush()?;

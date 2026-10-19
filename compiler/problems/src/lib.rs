@@ -12,12 +12,21 @@
 //! - `codeless-texts.csv` makes the module [`codeless`]: the same for a message
 //!   that has no problem code (a limit line, a summary line). Its rows declare
 //!   the [`Severity`] too, because there is no problem to take it from.
+//!
+//! The type [`WarningProblem`] is generated from the same table: one value for
+//! each problem that declares the category Warning, the only problems a setting
+//! can disable or raise. [`WarningSet`] holds them and reads a code written in a
+//! setting.
 
 include!(concat!(env!("OUT_DIR"), "/problems.rs"));
 
 include!(concat!(env!("OUT_DIR"), "/texts.rs"));
 
 include!(concat!(env!("OUT_DIR"), "/codeless.rs"));
+
+mod warning_set;
+
+pub use warning_set::WarningSet;
 
 // Spec conformance testing infrastructure (test-only).
 #[cfg(test)]
@@ -61,6 +70,14 @@ impl Text {
 impl From<Text> for String {
     fn from(text: Text) -> Self {
         text.message
+    }
+}
+
+/// The code and the message, `P0013: ...`, for a place that has a line of text and
+/// no diagnostic: the usage error of a command, the log of the language server.
+impl std::fmt::Display for Text {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.problem.code(), self.message)
     }
 }
 
@@ -273,6 +290,31 @@ mod tests {
             assert_eq!(severity.script_name(), name, "{severity:?}");
             assert_eq!(severity.script_value(), value, "{severity:?}");
         }
+    }
+
+    /// What a setting that raises a warning to an error makes of each category.
+    /// No wildcard: a category added to the list does not compile here until the
+    /// test knows what raising does to it.
+    fn raised_to(severity: Severity) -> Severity {
+        match severity {
+            Severity::FatalError => Severity::FatalError,
+            Severity::Error => Severity::Error,
+            Severity::Warning => Severity::Error,
+            Severity::Information => Severity::Information,
+            Severity::Text => Severity::Text,
+            Severity::SuppressedWarning => Severity::SuppressedWarning,
+            Severity::SuppressedInformation => Severity::SuppressedInformation,
+        }
+    }
+
+    #[spec_test(REQ_DS_problems_013)]
+    fn severity_raised_when_each_category_then_only_a_warning_becomes_an_error() {
+        for severity in ALL {
+            assert_eq!(severity.raised(), raised_to(severity), "{severity:?}");
+            // Raising an error changes nothing, so nothing lowers one.
+            assert_eq!(severity.raised().raised(), severity.raised(), "{severity:?}");
+        }
+        assert!(Severity::Warning.raised().stops_build());
     }
 
     #[spec_test(REQ_DS_problems_009)]
