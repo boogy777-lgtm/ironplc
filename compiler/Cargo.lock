@@ -1249,6 +1249,7 @@ dependencies = [
 name = "ironplc-test"
 version = "0.247.0"
 dependencies = [
+ "ironplc-spec-requirements-gen",
  "toml",
 ]
 

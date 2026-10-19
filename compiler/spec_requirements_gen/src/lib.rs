@@ -86,6 +86,16 @@ fn owner(raw: &str) -> Option<String> {
     parse_req_id(raw).map(|r| r.slug)
 }
 
+/// The crate slug of a package: its name without the `ironplc-` prefix, so
+/// `ironplc-vm-cli` is `vm-cli` and `ironplc-cli` is `cli`. The one rule for
+/// both the generator and the workspace orphan guard, which must agree on which
+/// crate owns a requirement.
+pub fn crate_slug(package_name: &str) -> &str {
+    package_name
+        .strip_prefix("ironplc-")
+        .unwrap_or(package_name)
+}
+
 /// Generates `spec_requirements.rs` in `OUT_DIR` from the given list of spec
 /// markdown filenames (relative to `specs/design/`).
 ///
@@ -108,10 +118,7 @@ pub fn generate(spec_files: &[&str]) {
     // The current crate's slug — `ironplc-vm-cli` → `vm-cli`. This is the set
     // of requirements this crate is accountable for.
     let pkg_name = env::var("CARGO_PKG_NAME").unwrap();
-    let my_slug = pkg_name
-        .strip_prefix("ironplc-")
-        .unwrap_or(&pkg_name)
-        .to_string();
+    let my_slug = crate_slug(&pkg_name).to_string();
 
     let mut requirements = BTreeSet::new();
 
