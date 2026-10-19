@@ -300,6 +300,8 @@ fn apply_when_value_written_with_its_type_then_the_type_is_declared_an_enumerati
 const P4007: &[&str] = &["P4007"];
 const P4026: &[&str] = &["P4026"];
 const P4035: &[&str] = &["P4035"];
+/// The error of the value and the warning of the comparison of two enumerations.
+const P4035_P4083: &[&str] = &["P4035", "P4083"];
 
 /// A name that no enumeration declares is no value: it is a name that is not
 /// declared (P4007), as it is in an assignment to an integer. A name that
@@ -322,7 +324,7 @@ const P4035: &[&str] = &["P4035"];
 #[case::compared_value_of_another_enumeration("b := x = C;", P2006)]
 #[case::compared_on_the_left_value_of_another_enumeration("b := C <> x;", P2006)]
 #[case::compared_with_own_value("b := x = Bx; b := Bx = x;", NONE)]
-#[case::compared_with_qualified_value_of_another_enumeration("b := x = E2#C;", P4035)]
+#[case::compared_with_qualified_value_of_another_enumeration("b := x = E2#C;", P4035_P4083)]
 #[case::compared_with_own_qualified_value("b := x = E1#Bx;", NONE)]
 // An argument.
 #[case::argument_name_of_no_enumeration("b := is_run(Nope);", P4007)]

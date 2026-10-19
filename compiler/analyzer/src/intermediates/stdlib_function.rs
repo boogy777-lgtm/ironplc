@@ -379,7 +379,9 @@ fn get_string_conversion_functions() -> Vec<FunctionSignature> {
 /// A selection function chooses among its inputs and holds what it chooses, so
 /// an enumeration passes through it as the value it is (`ValueUse::Holds`,
 /// the default of a row). `MIN`, `MAX`, `LIMIT` and `SEL` are declared here
-/// beside `MUX` for that reason, though they take the generic `ANY_NUM`.
+/// beside `MUX` for that reason, though they take the generic `ANY_NUM`. `MIN`
+/// and `MAX` also set their two inputs against each other, which a row states
+/// as `comparing` (`ValueUse::Compares`).
 ///
 /// MUX is an extensible multiplexer that selects one of N inputs based on
 /// an integer selector K. Unlike SEL (which uses a BOOL selector and exactly
@@ -394,13 +396,15 @@ fn get_selection_functions() -> Vec<FunctionSignature> {
             "MIN",
             TypeName::from("ANY_NUM"),
             vec![input_param("IN1", "ANY_NUM"), input_param("IN2", "ANY_NUM")],
-        ),
+        )
+        .comparing(),
         // MAX: maximum of two values (ANY_NUM, ANY_NUM -> ANY_NUM)
         FunctionSignature::stdlib(
             "MAX",
             TypeName::from("ANY_NUM"),
             vec![input_param("IN1", "ANY_NUM"), input_param("IN2", "ANY_NUM")],
-        ),
+        )
+        .comparing(),
         // LIMIT: clamp value to range (ANY_NUM, ANY_NUM, ANY_NUM -> ANY_NUM)
         FunctionSignature::stdlib(
             "LIMIT",

@@ -31,5 +31,8 @@ fn main() {
         // Attributes of declarations (`REQ-ATTR-analyzer-*`): the field
         // survives the analysis.
         "attributes.md",
+        // Diagnostic severity (`REQ-DS-analyzer-*`): the first warning, the
+        // comparison of values of two enumerations.
+        "diagnostic-severity.md",
     ]);
 }

@@ -735,3 +735,42 @@ END_PROGRAM
         .unwrap()
         .ends_with("main.st:3:8"));
 }
+
+/// A comparison of values of two enumerations: the warning P4083 and no error.
+const TWO_ENUMERATIONS_COMPARED: &str = "TYPE
+  TrafficLight : (Red, Yellow, Green);
+  Mode : (Auto, Manual);
+END_TYPE
+
+PROGRAM main
+VAR
+  light : TrafficLight := Red;
+  current : Mode := Auto;
+  same : BOOL;
+  result : DINT;
+END_VAR
+  same := light = current;
+  IF same THEN result := 7; END_IF;
+END_PROGRAM
+";
+
+#[spec_test(REQ_DS_cli_005)]
+fn check_and_compile_when_only_a_warning_then_ok_and_the_container_is_written() {
+    use std::io::Write;
+
+    let mut source = tempfile::Builder::new().suffix(".st").tempfile().unwrap();
+    source
+        .write_all(TWO_ENUMERATIONS_COMPARED.as_bytes())
+        .unwrap();
+    let paths = vec![source.path().to_path_buf()];
+    let output = tempfile::NamedTempFile::new().unwrap();
+
+    let checked = check(&paths, CompilerOptions::default(), &[], Output::Silent);
+    let compiled = compile(&paths, output.path(), CompilerOptions::default(), &[], true);
+
+    assert!(checked.is_ok(), "{checked:?}");
+    assert!(compiled.is_ok(), "{compiled:?}");
+    let mut file = std::fs::File::open(output.path()).unwrap();
+    let container = ironplc_container::Container::read_from(&mut file).unwrap();
+    assert_eq!(container.header.num_variables, 4);
+}

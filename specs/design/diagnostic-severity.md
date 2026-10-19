@@ -14,9 +14,11 @@ How the category relates to the other concepts of a message (areas, handling,
 suppression, limits, user messages) is defined in
 [Message Ontology](message-ontology.md).
 
-Every problem code is an error today, so no output depends on the other
-categories yet. This document specifies the mechanism, so that a code that
-declares another category behaves as the category does in every consumer.
+Every problem code is an error but one: P4083, the comparison of values of two
+different enumerations, is the first warning
+([The first warning](#the-first-warning)). This document specifies the
+mechanism, so that a code that declares another category behaves as the category
+does in every consumer.
 
 ## The categories
 
@@ -161,6 +163,53 @@ An analysis pass that collects diagnostics and returns `Err` to stop that pass
 (`semantic_rules`, the `xform_*` passes) is not a gate. Its diagnostics are added
 to the semantic context, and they reach the gates above.
 
+## The first warning
+
+P4083 (`EnumerationTypesCompared`) is a `Warning` with the CODESYS counterpart
+C0354 `Wrn_EnumComparison`, "Comparison of one enumeration type ({0}) with
+another ({1})", raised where CODESYS compares the types of the two operands of a
+comparison (`Phase4_TypeCheck/TypeCheckerVisitor.cs:5423-5438`): both operands are
+enumeration types and they are different enumeration types. CODESYS asks no more
+than that, so the warning does not depend on whether either enumeration is
+strict (the `strict` attribute, [Attributes](attributes.md#strict-and-not-strict)),
+and a comparison of two different enumerations is accepted either way.
+
+The places that compare are the relational operators `=`, `<>`, `<`, `<=`, `>` and
+`>=`, their function forms `EQ`, `NE`, `LT`, `LE`, `GT` and `GE`, and the
+selection functions `MIN` and `MAX`; `LIMIT`, `SEL` and `MUX` do not compare their
+inputs with each other. Each place declares that it compares (the use
+`ValueUse::Compares`: the operator by `ValueUse::of_compare`, a function by its
+row), and the check asks that declaration, never a name.
+
+Two operands are of the same enumeration when `enumeration_declaration` of their
+types is the same: a type alias (`TYPE E3 : E1;`) is the enumeration it names, as
+it is for the values of an enumeration and for `strict`. A reference to an
+enumeration, an integer, an untyped literal and a value of the enumeration itself
+are not enumerations of two types, as in CODESYS, which asks the class of the
+operand type and does not dereference it.
+
+**REQ-DS-analyzer-001** A comparison operator, the function form of one, `MIN` and
+`MAX` whose two operands are values of two different enumerations report P4083,
+once, whether either enumeration is strict or neither is.
+
+**REQ-DS-analyzer-002** P4083 is a warning with the CODESYS counterpart C0354. Its
+primary label is the whole comparison or call, and its text names the declared
+types of the left and of the right operand: "Comparison of one enumeration type
+(E1) with another (E2)". It does not stop the build.
+
+**REQ-DS-analyzer-003** An alias of an enumeration is the enumeration it names: its
+comparison with that enumeration is not reported, and its comparison with another
+enumeration is, naming the alias.
+
+**REQ-DS-analyzer-004** A comparison with an integer or an untyped literal, with a
+value of the same enumeration, with a reference to an enumeration, and a call of
+`LIMIT`, `SEL` or `MUX` are not reported.
+
+**REQ-DS-analyzer-005** P4083 is raised for a comparison independently of the
+other problems of the program, as CODESYS raises it: a program with an error of
+another cause has the error and the warning, and a comparison of two
+enumerations has the warning and no error for the comparison.
+
 ## What each consumer shows
 
 Each consumer that has a type of its own for a category maps `Severity` with a
@@ -204,6 +253,11 @@ message not at all.
 **REQ-DS-cli-003** `ironplcc check --format json` writes to the standard output
 one JSON array that holds the `ScriptMessage` of every diagnostic, a suppressed
 one included, and `[]` when there is none.
+
+**REQ-DS-cli-005** `ironplcc check` writes a warning with its header
+(`Warning[P4083] (CODESYS C0354)`) and its source snippet, and exits with status
+0; `ironplcc compile` of the same program writes the container and exits with
+status 0.
 
 ### The language server
 

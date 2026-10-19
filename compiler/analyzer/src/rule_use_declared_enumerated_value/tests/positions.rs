@@ -36,6 +36,9 @@ const P2006: &[&str] = &["P2006"];
 const P4007: &[&str] = &["P4007"];
 const P4026: &[&str] = &["P4026"];
 const P4035: &[&str] = &["P4035"];
+/// The warning for the comparison of values of two enumerations.
+const P4083: &[&str] = &["P4083"];
+const P4035_P4083: &[&str] = &["P4035", "P4083"];
 /// An unknown name in an initializer of a structure or a function block is a
 /// general expression there, which a dialect gate refuses (P4043) beside the
 /// name that is not declared (P4007).
@@ -99,6 +102,14 @@ impl Expect {
 const HERE: Expect = Expect {
     strict: [NONE, NONE, P2006, P4035, P4007],
     not_strict: [NONE, NONE, NONE, NONE, P4007],
+};
+/// An operand of a comparison with the first enumeration. The value of the other
+/// enumeration is refused as it is in `HERE`, and a value written with its type
+/// is also an operand of the other enumeration, which the comparison reports as
+/// the warning P4083 whether the enumeration is strict or not.
+const COMPARED: Expect = Expect {
+    strict: [NONE, NONE, P2006, P4035_P4083, P4007],
+    not_strict: [NONE, NONE, NONE, P4083, P4007],
 };
 /// The same for a position that expects the second enumeration: `A` is the
 /// other enumeration's value there.
@@ -260,8 +271,8 @@ fn codes_of(source: &str, options: &CompilerOptions) -> Vec<String> {
 )]
 // A label of a CASE, and an operand of a comparison.
 #[case::case_label(Where::Statement("CASE x OF {}: g := TRUE; END_CASE;"), HERE)]
-#[case::compared_on_the_right(Where::Statement("g := x = {};"), HERE)]
-#[case::compared_on_the_left(Where::Statement("g := {} = x;"), HERE)]
+#[case::compared_on_the_right(Where::Statement("g := x = {};"), COMPARED)]
+#[case::compared_on_the_left(Where::Statement("g := {} = x;"), COMPARED)]
 // The initial value of a variable.
 #[case::initial_value(Where::Variable("v : E1 := {};"), DECLARED)]
 #[case::initial_value_alias_of_second(Where::Variable("v : EB := {};"), DECLARED_SECOND)]

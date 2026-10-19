@@ -100,6 +100,8 @@ CODESYS only for which messages the project settings can change: those named
 `Wrn_`. In IronPLC these are the codes declared `Warning`.
 
 The category is implemented in full; see [Diagnostic Severity](diagnostic-severity.md).
+The first problem code that declares `Warning` is P4083, the counterpart of C0354
+(MSG-006).
 
 ## Message area
 
@@ -287,6 +289,7 @@ States:
 | MSG-003 | A `FatalError` clears the earlier messages and drops the later ones | `-.352.cs:93-130` | done (REQ-DS-dsl-005, REQ-DS-project-002) |
 | MSG-004 | A suppressed message is never shown to a person | `-.352.cs:148-151` | done (REQ-DS-playground-002) |
 | MSG-005 | Each code declares its category in one place | — | done (REQ-DS-problems-001, -004) |
+| MSG-006 | A warning is raised by the checker and the build goes on: the first is C0354 `Wrn_EnumComparison` for the comparison of values of two different enumerations (P4083), strict or not | `TypeCheckerVisitor.cs:5423-5438` | done (REQ-DS-analyzer-001 to -005, REQ-DS-cli-005) |
 | MSG-020 | Messages belong to areas (Build, Precompile, …), an open class; each area lists only its own messages | `CompilerMessageCategory.cs`, `PreCompileMessageCategory.cs` | planned |
 | MSG-021 | The editor shows the area as the `source` of a diagnostic, so the Problems filter can select it | — | planned |
 | MSG-022 | A message without a source position is not shown in Precompile | `CompilerMessage.cs:38,63` | planned |

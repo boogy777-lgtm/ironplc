@@ -110,8 +110,21 @@ impl FunctionSignature {
 
     /// States that the function makes a new number from its inputs, so an
     /// enumeration is no number to it (see [`ValueUse::Computes`]).
-    pub fn computing(mut self) -> Self {
-        self.value_use = ValueUse::Computes;
+    pub fn computing(self) -> Self {
+        self.with_use(ValueUse::Computes)
+    }
+
+    /// States that the function sets two of its inputs against each other, so
+    /// two different enumerations among them are reported (see
+    /// [`ValueUse::Compares`]). An enumeration is still accepted as an input.
+    pub fn comparing(self) -> Self {
+        self.with_use(ValueUse::Compares)
+    }
+
+    /// States what the function does with its inputs, for a row whose use is
+    /// derived from another declaration (see [`ValueUse::of_compare`]).
+    pub fn with_use(mut self, value_use: ValueUse) -> Self {
+        self.value_use = value_use;
         self
     }
 
