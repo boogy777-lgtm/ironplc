@@ -96,3 +96,93 @@ fn check_when_format_json_and_no_message_then_stdout_is_an_empty_array(
 
     Ok(())
 }
+
+/// A comparison of values of two different enumerations: the warning P4083,
+/// and no error.
+const TWO_ENUMERATIONS_COMPARED: &str = "TYPE
+  TrafficLight : (Red, Yellow, Green);
+  Mode : (Auto, Manual);
+END_TYPE
+
+PROGRAM main
+VAR
+  light : TrafficLight := Red;
+  current : Mode := Auto;
+  same : BOOL;
+  result : DINT;
+END_VAR
+  same := light = current;
+  IF same THEN result := 7; END_IF;
+END_PROGRAM
+";
+
+/// A warning is written with its word, its code and the CODESYS code of the
+/// same condition, and does not make the command fail.
+#[test]
+fn check_when_only_a_warning_then_header_names_it_and_the_exit_status_is_zero(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let source = st_source(TWO_ENUMERATIONS_COMPARED)?;
+    let mut cmd = Command::new(cargo::cargo_bin!("ironplcc"));
+
+    cmd.arg("check").arg(source.path());
+    let output = cmd.assert().success().get_output().clone();
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Warning[P4083] (CODESYS C0354)")
+            && stderr
+                .contains("Comparison of one enumeration type (TrafficLight) with another (Mode)"),
+        "{stderr}"
+    );
+    assert!(!stderr.contains("Error["), "{stderr}");
+
+    Ok(())
+}
+
+/// The program form gives the category `Warning` (4) of the CODESYS scripting
+/// model, and the command still succeeds.
+#[test]
+fn check_when_only_a_warning_and_format_json_then_the_message_is_a_warning(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let source = st_source(TWO_ENUMERATIONS_COMPARED)?;
+    let mut cmd = Command::new(cargo::cargo_bin!("ironplcc"));
+
+    cmd.arg("check")
+        .arg("--format")
+        .arg("json")
+        .arg(source.path());
+    let output = cmd.assert().success().get_output().clone();
+
+    let messages: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(messages.as_array().map(Vec::len), Some(1));
+    assert_eq!(messages[0]["severity"], "Warning");
+    assert_eq!(messages[0]["severity_value"], 4);
+    assert_eq!(messages[0]["number"], 4083);
+    assert_eq!(messages[0]["codesys"], "C0354");
+
+    Ok(())
+}
+
+/// `compile` prints the warning, exits with status 0 and writes the container.
+#[test]
+fn compile_when_only_a_warning_then_the_container_is_written_and_the_exit_status_is_zero(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let source = st_source(TWO_ENUMERATIONS_COMPARED)?;
+    let output_file = tempfile::Builder::new().suffix(".iplc").tempfile()?;
+    let mut cmd = Command::new(cargo::cargo_bin!("ironplcc"));
+
+    cmd.arg("compile")
+        .arg(source.path())
+        .arg("--output")
+        .arg(output_file.path());
+    let output = cmd.assert().success().get_output().clone();
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Warning[P4083] (CODESYS C0354)"),
+        "{stderr}"
+    );
+    assert!(std::fs::metadata(output_file.path())?.len() > 0);
+
+    Ok(())
+}
