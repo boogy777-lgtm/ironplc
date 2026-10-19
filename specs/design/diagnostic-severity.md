@@ -295,6 +295,27 @@ An analysis pass that collects diagnostics and returns `Err` to stop that pass
 (`semantic_rules`, the `xform_*` passes) is not a gate. Its diagnostics are added
 to the semantic context, and they reach the gates above.
 
+## What a build and a check keep
+
+The messages of a run are collected in two places of `ironplc-project`, and each
+applies `kept` to what it collected, so the command line, the language server and
+the MCP tools never decide it themselves:
+
+- `Project::semantic` returns the messages that parsing and analysis produced,
+  kept;
+- `ironplc_project::compile` returns the messages of its seeded diagnostics, the
+  analysis and code generation together, kept, so the limit is over the whole
+  run.
+
+**REQ-DS-project-003** `compile` returns the messages its run keeps: for 501 errors
+the first 500 and the line of the limit, for 500 errors all of them and no line,
+for 501 warnings the first 500, the line of the limit and the container, and the
+limit is over the seeded diagnostics and the analysis together.
+
+**REQ-DS-project-004** `Project::semantic` returns the messages its run keeps: the
+first 500 errors and the line of the limit for 501 errors, and the same for
+warnings.
+
 ## The first warning
 
 P4083 (`EnumerationTypesCompared`) is a `Warning` with the CODESYS counterpart

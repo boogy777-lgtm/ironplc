@@ -14,7 +14,7 @@
 use ironplc_codegen::{CodegenOptions, SourceLookup};
 use ironplc_container::Container;
 use ironplc_dsl::diagnostic::{
-    any_stops_build, has_fatal, stop_at_fatal, stops_build_count, Diagnostic,
+    any_stops_build, has_fatal, kept, stop_at_fatal, stops_build_count, Diagnostic,
 };
 use ironplc_parser::options::CompilerOptions;
 use log::debug;
@@ -63,7 +63,9 @@ pub struct CompileOutput {
 /// when nothing -- seeded, parse, or analysis -- stops the build. A warning or an
 /// information message is returned in `diagnostics` beside the container and
 /// does not stop codegen. A fatal error ends the run as in CODESYS: no later
-/// stage runs, and `diagnostics` holds the fatal diagnostics alone.
+/// stage runs, and `diagnostics` holds the fatal diagnostics alone. The
+/// diagnostics returned are the ones the run keeps (`kept`): no repeats, at most
+/// 500 errors and 500 warnings with the line CODESYS keeps at the limit.
 ///
 /// `source_lookup` hands codegen the exact bytes the parser saw for each file,
 /// which the container's debug section hashes so a debugger can detect drift.
@@ -75,6 +77,20 @@ pub struct CompileOutput {
 /// map) reads them back through [`Project::analyzed_library`] and
 /// [`Project::semantic_context`] after this returns.
 pub fn compile(
+    project: &mut dyn Project,
+    compiler_options: &CompilerOptions,
+    source_lookup: &dyn SourceLookup,
+    diagnostics: Vec<Diagnostic>,
+) -> CompileOutput {
+    // What a run keeps of its messages is decided here once, over the seeded
+    // diagnostics, the analysis and code generation together.
+    let mut output = run_stages(project, compiler_options, source_lookup, diagnostics);
+    output.diagnostics = kept(output.diagnostics);
+    output
+}
+
+/// The stages of [`compile`], which returns every diagnostic they collected.
+fn run_stages(
     project: &mut dyn Project,
     compiler_options: &CompilerOptions,
     source_lookup: &dyn SourceLookup,
@@ -534,6 +550,160 @@ END_PROGRAM
         // The analysis did not run, so it left nothing on the project.
         assert!(project.semantic_context().is_none());
         assert!(project.analyzed_library().is_none());
+    }
+
+    /// A program of `count` statements, each of which reads a variable that is
+    /// not declared: `count` errors (P4007), each at its own place.
+    fn program_with_errors(count: usize) -> String {
+        let mut source = String::from(
+            "PROGRAM Main
+VAR x : INT; END_VAR
+",
+        );
+        for at in 0..count {
+            source.push_str(&format!(
+                "x := undeclared_{at};
+"
+            ));
+        }
+        source.push_str(
+            "END_PROGRAM
+",
+        );
+        source
+    }
+
+    /// A program of `count` comparisons of values of two different enumerations:
+    /// `count` warnings (P4083) and no error.
+    fn program_with_warnings(count: usize) -> String {
+        let mut source = String::from(
+            "TYPE E1 : (a1, a2); E2 : (b1, b2); END_TYPE
+PROGRAM Main
+VAR e1 : E1; e2 : E2; r : BOOL; END_VAR
+",
+        );
+        for _ in 0..count {
+            source.push_str(
+                "r := e1 = e2;
+",
+            );
+        }
+        source.push_str(
+            "END_PROGRAM
+",
+        );
+        source
+    }
+
+    fn texts(output: &super::CompileOutput, severity: Severity) -> Vec<String> {
+        output
+            .diagnostics
+            .iter()
+            .filter(|d| d.severity() == severity)
+            .map(Diagnostic::person_text)
+            .collect()
+    }
+
+    #[spec_test(REQ_DS_project_003)]
+    fn compile_when_501_errors_then_500_and_the_line_of_the_limit_and_no_container() {
+        let mut project = project_with(&program_with_errors(501));
+
+        let output = compile(
+            &mut project,
+            &CompilerOptions::default(),
+            &EmptyLookup,
+            vec![],
+        );
+
+        assert!(output.container.is_none());
+        assert_eq!(output.diagnostics.len(), 501);
+        let last = &output.diagnostics[500];
+        assert!(!last.has_code());
+        assert_eq!(
+            last.person_text(),
+            "More than 500 errors occured: Skipping all further error messages"
+        );
+    }
+
+    #[spec_test(REQ_DS_project_003)]
+    fn compile_when_500_errors_then_all_stay_and_no_line() {
+        let mut project = project_with(&program_with_errors(500));
+
+        let output = compile(
+            &mut project,
+            &CompilerOptions::default(),
+            &EmptyLookup,
+            vec![],
+        );
+
+        assert_eq!(output.diagnostics.len(), 500);
+        assert!(output.diagnostics.iter().all(Diagnostic::has_code));
+    }
+
+    #[spec_test(REQ_DS_project_003)]
+    fn compile_when_501_warnings_then_500_and_the_line_of_the_limit_and_the_container() {
+        let mut project = project_with(&program_with_warnings(501));
+
+        let output = compile(
+            &mut project,
+            &CompilerOptions::default(),
+            &EmptyLookup,
+            vec![],
+        );
+
+        assert!(output.container.is_some());
+        assert_eq!(output.diagnostics.len(), 501);
+        assert_eq!(
+            texts(&output, Severity::Warning)[500],
+            "More than 500 warnings occured: Skipping all further warning messages"
+        );
+    }
+
+    #[spec_test(REQ_DS_project_003)]
+    fn compile_when_seeded_errors_and_analysis_errors_then_the_limit_is_over_both() {
+        let mut project = project_with(&program_with_errors(400));
+        let seeded: Vec<Diagnostic> = (0..101)
+            .map(|at| {
+                Diagnostic::text(
+                    SourceSpan::range(at, at + 1).with_file_id(&FileId::from_string("seed.st")),
+                    text::cannot_read_file("seeded"),
+                )
+            })
+            .collect();
+
+        let output = compile(
+            &mut project,
+            &CompilerOptions::default(),
+            &EmptyLookup,
+            seeded,
+        );
+
+        // 101 seeded, then 400 of the analysis: the 500th is the 399th of the
+        // analysis and the rest are over the limit.
+        assert_eq!(output.diagnostics.len(), 501);
+        assert!(!output.diagnostics[500].has_code());
+        assert_eq!(output.diagnostics[0].primary.file_id.to_string(), "seed.st");
+    }
+
+    #[spec_test(REQ_DS_project_004)]
+    fn semantic_when_501_errors_then_500_and_the_line_of_the_limit() {
+        let mut project = project_with(&program_with_errors(501));
+
+        let diagnostics = project.semantic();
+
+        assert_eq!(diagnostics.len(), 501);
+        assert!(!diagnostics[500].has_code());
+    }
+
+    #[spec_test(REQ_DS_project_004)]
+    fn semantic_when_501_warnings_then_500_and_the_line_of_the_limit() {
+        let mut project = project_with(&program_with_warnings(501));
+
+        let diagnostics = project.semantic();
+
+        assert_eq!(diagnostics.len(), 501);
+        assert_eq!(diagnostics[500].severity(), Severity::Warning);
+        assert!(!diagnostics[500].has_code());
     }
 
     #[test]
