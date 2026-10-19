@@ -7,14 +7,16 @@
  * with the shared compile path, renders phases and errors, and offers the
  * trial exits. Build refuses while the baseline is stale (E0015, fail-
  * closed) and only in the Connected state, the only state that may send
- * commands.
+ * commands. A build writes the shared Build area (`buildAreaLogic`), which it
+ * receives from the caller and clears when it starts.
  */
 
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as os from 'os';
 import { readFile } from 'fs/promises';
 
-import { compileSourceToContainer } from './taskProviderLogic';
+import { BuildAreaChannel, buildContainer, startBuild } from './buildAreaLogic';
 import { isDebuggableProgram, programKind } from './debugAdapterLogic';
 import { ReportProblem } from './debugAdapter';
 import { ProblemCode } from './problems';
@@ -43,10 +45,8 @@ export function registerBuildCommands(
   sourceExtensions: readonly string[],
   connection: ConnectionFeature,
   reportProblem: ReportProblem,
+  buildArea: BuildAreaChannel,
 ): void {
-  const outputChannel = vscode.window.createOutputChannel('IronPLC Build');
-  context.subscriptions.push(outputChannel);
-
   context.subscriptions.push(
     vscode.commands.registerCommand('ironplc.build', () => build(false)),
     vscode.commands.registerCommand('ironplc.buildTrial', () => build(true)),
@@ -164,15 +164,20 @@ export function registerBuildCommands(
     void vscode.window.showInformationMessage(`IronPLC Build & Trial: ${formatStatusText(post)}.`);
   }
 
-  /** Compiles a source program with the shared compile path; a container is read as-is. */
+  /**
+   * Compiles a source program into the Build area, which shows everything the
+   * compiler wrote, also when it fails; a container is read as-is (nothing is
+   * compiled, but the build has started, so the area is cleared).
+   */
   async function compileProgram(program: string): Promise<Uint8Array> {
     if (programKind(program, sourceExtensions) === 'container') {
+      startBuild(buildArea);
       return readFile(program);
     }
     if (!compilerPath) {
       throw new Error('IronPLC compiler not found');
     }
-    const container = await compileSourceToContainer(compilerPath, program, text => outputChannel.append(text));
+    const container = await buildContainer(buildArea, compilerPath, program, os.tmpdir());
     return readFile(container);
   }
 }

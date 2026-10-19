@@ -54,7 +54,7 @@ fn check_when_undeclared_variable_then_header_has_word_code_and_codesys_code(
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     let first = stderr.lines().next().unwrap_or_default();
-    // The terminal output is colored, so the escapes sit between the parts.
+    // A pipe gets plain text, a terminal gets colors; the escapes are not asserted.
     assert!(
         first.contains("Error[P4007] (CODESYS C0046)") && first.contains("Variable not defined"),
         "first line: {first}"

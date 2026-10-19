@@ -14,3 +14,11 @@ view does, and a message names its area as its source:
    messages, 950 for each file at most. When there are more, the messages of
    the files written first are dropped first, and the file you edited last is
    written last.
+
+In VS Code the ``IronPLC Precompile`` area is the :guilabel:`Problems` panel,
+and the ``IronPLC Build`` area is the :guilabel:`Output` channel of the same
+name. The command :guilabel:`IronPLC: Build` and the device build
+(:guilabel:`IronPLC: Build & Commit`) write that channel; each clears it when
+it starts, as a CODESYS build clears its Build list. Select the channel in the
+drop-down of the :guilabel:`Output` panel, as you select the area in the
+drop-down of the CODESYS Messages view.

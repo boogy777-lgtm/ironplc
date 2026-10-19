@@ -121,8 +121,8 @@ Message areas
 
 .. include:: ../../includes/message-areas.rst
 
-The extension shows the ``IronPLC Precompile`` area. Type ``IronPLC Precompile``
-in the filter box of the Problems panel to list only its messages.
+Type ``IronPLC Precompile`` in the filter box of the Problems panel to list
+only the messages of that area.
 
 Run Program
 ===========

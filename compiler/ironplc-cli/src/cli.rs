@@ -24,7 +24,7 @@ use log::{error, trace};
 use std::{
     collections::{BTreeSet, HashMap},
     fs::{canonicalize, metadata},
-    io::Write,
+    io::{IsTerminal, Write},
     ops::Range,
     path::{Path, PathBuf},
 };
@@ -506,11 +506,46 @@ fn handle_diagnostics(
 
 /// Prints every diagnostic that is shown, in the form for a person.
 fn print_for_person(diagnostics: &[Diagnostic], project: Option<&FileBackedProject>) {
-    write_for_person(
-        &mut StandardStream::stderr(ColorChoice::Always),
-        diagnostics,
-        project,
+    let choice = color_choice(
+        std::io::stderr().is_terminal(),
+        std::env::var_os("NO_COLOR").is_some(),
     );
+    write_for_person(&mut StandardStream::stderr(choice), diagnostics, project);
+}
+
+/// Whether the messages are drawn in colors: only when standard error is a
+/// terminal that did not opt out with `NO_COLOR`. A pipe, a file, a CI log and
+/// an editor's output channel get plain text, as the escapes would be noise
+/// there.
+fn color_choice(stderr_is_terminal: bool, no_color_set: bool) -> ColorChoice {
+    if stderr_is_terminal && !no_color_set {
+        ColorChoice::Always
+    } else {
+        ColorChoice::Never
+    }
+}
+
+/// The path of a file as a person reads it. `canonicalize` gives a Windows path
+/// the verbatim prefix `\\?\` (`\\?\C:\x`, `\\?\UNC\server\x`), which no editor
+/// turns into a link; the prefix is dropped here (`C:\x`, `\\server\x`). Only
+/// the display changes, the file id that is compared elsewhere does not. A path
+/// without the prefix, and a verbatim path of another kind (`\\?\Volume{..}`),
+/// is returned as it is.
+fn display_path(path: &str) -> String {
+    if let Some(rest) = path.strip_prefix(r"\\?\UNC\") {
+        return format!(r"\\{rest}");
+    }
+    if let Some(rest) = path.strip_prefix(r"\\?\") {
+        let mut chars = rest.chars();
+        let is_disk = matches!(
+            (chars.next(), chars.next(), chars.next()),
+            (Some(letter), Some(':'), None | Some('\\')) if letter.is_ascii_alphabetic()
+        );
+        if is_disk {
+            return rest.to_owned();
+        }
+    }
+    path.to_owned()
 }
 
 /// Writes every diagnostic that is shown, in the form for a person, to `writer`.
@@ -536,17 +571,17 @@ fn write_for_person(
         Some(set) => {
             for file_id in unique_files {
                 if let Some(content) = set.get(file_id) {
-                    let id = files.add(file_id.to_string(), content.as_string());
+                    let id = files.add(display_path(&file_id.to_string()), content.as_string());
                     files_to_ids.insert(file_id, id);
                 } else {
-                    let id = files.add(file_id.to_string(), empty_source);
+                    let id = files.add(display_path(&file_id.to_string()), empty_source);
                     files_to_ids.insert(file_id, id);
                 }
             }
         }
         None => {
             for file_id in unique_files {
-                let id = files.add(file_id.to_string(), empty_source);
+                let id = files.add(display_path(&file_id.to_string()), empty_source);
                 files_to_ids.insert(file_id, id);
             }
         }
@@ -828,3 +863,6 @@ mod summary_tests;
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod display_tests;
