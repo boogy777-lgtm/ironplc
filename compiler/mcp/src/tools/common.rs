@@ -226,6 +226,19 @@ pub fn script_message(diag: &Diagnostic, sources: &[SourceInput]) -> ScriptMessa
     diag.script_message(source)
 }
 
+/// The name of the project the sources are, which the line "Build started" gives
+/// when the program has no `CONFIGURATION` to name it
+/// (`Project::application_name`): the name of the first source without its
+/// extension. The command line gives the same, the file name without its
+/// extension. An input with no source has no name.
+pub fn project_name(sources: &[SourceInput]) -> String {
+    sources
+        .first()
+        .and_then(|source| std::path::Path::new(&source.name).file_stem())
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
 /// The JSON of a message: the one place a `ScriptMessage` becomes a tool result.
 pub fn serialize_message(message: &ScriptMessage) -> serde_json::Value {
     serde_json::json!(message)

@@ -3,15 +3,20 @@
 //! Runs parse and full semantic analysis, returning structured diagnostics.
 
 use ironplc_dsl::core::FileId;
-use ironplc_dsl::diagnostic::{any_stops_build, Area, ScriptMessage};
+use ironplc_dsl::diagnostic::{any_stops_build, Area, Diagnostic, ScriptMessage};
 use ironplc_project::project::{MemoryBackedProject, Project};
 use serde::Serialize;
 
 use super::common::{
-    parse_options, script_message, serialize_message, validate_sources, SourceInput,
+    parse_options, project_name, script_message, serialize_message, validate_sources, SourceInput,
 };
 
 /// Response returned by the `check` tool.
+///
+/// `diagnostics` holds the messages of the run as the command line frames them:
+/// the problems and then the line "Compile complete -- N errors, M warnings".
+/// The program with no problem has that line alone, so the list is not empty
+/// for a clean program; `ok` says whether a problem stops the build.
 #[derive(Debug, Serialize)]
 pub struct CheckResponse {
     pub ok: bool,
@@ -23,40 +28,52 @@ pub struct CheckResponse {
 /// `get_message_objects` and `get_messages` read it.
 pub struct Checked {
     pub ok: bool,
+    /// The messages of the run as the area frames them: for the Build area the
+    /// problems and then the line that closes the check, "Compile complete",
+    /// which CODESYS stores among the messages of a compile as a `Text`
+    /// (`Summary::close`, the rule the command line uses). An area that has no
+    /// closing line (`Area::check_summary`) holds the problems alone.
     pub messages: Vec<ScriptMessage>,
-    /// The line that closes the check, "Compile complete", which CODESYS stores
-    /// among the messages of a compile as a `Text`. The two queries of the
-    /// messages return it after the others; the `diagnostics` of `check` are
-    /// the problems alone, so that an empty list still means a clean program.
-    /// It is `None` for an input that is not checked and for an area that has
-    /// no closing line (`Area::check_summary`).
-    pub summary: Option<ScriptMessage>,
+}
+
+/// The messages of a run written to `area`, framed as the area frames them, and
+/// whether none of them stops the build. This is the one place that closes a
+/// check, so every path out of `check` (invalid input too) ends the same way.
+fn framed(
+    area: Area,
+    application: &str,
+    diagnostics: Vec<Diagnostic>,
+    sources: &[SourceInput],
+) -> Checked {
+    let framed = match area.check_summary() {
+        Some(summary) => summary.close(application, diagnostics),
+        None => diagnostics,
+    };
+    Checked {
+        ok: !any_stops_build(&framed),
+        messages: framed
+            .iter()
+            .map(|diagnostic| script_message(diagnostic, sources))
+            .collect(),
+    }
 }
 
 /// Validates the inputs, then parses and analyzes the sources. The check is a
 /// run that writes `area`: the area keeps its messages and decides the line that
 /// closes it.
 pub fn check(sources: &[SourceInput], options_value: &serde_json::Value, area: Area) -> Checked {
+    let fallback = project_name(sources);
+
     // Validate sources
     let source_errors = validate_sources(sources);
     if !source_errors.is_empty() {
-        return Checked {
-            ok: false,
-            messages: messages_of(&source_errors, &[]),
-            summary: None,
-        };
+        return framed(area, &fallback, source_errors, &[]);
     }
 
     // Parse options
     let options = match parse_options(options_value) {
         Ok(opts) => opts,
-        Err(errs) => {
-            return Checked {
-                ok: false,
-                messages: messages_of(&errs, &[]),
-                summary: None,
-            };
-        }
+        Err(errs) => return framed(area, &fallback, errs, &[]),
     };
 
     // Construct a fresh in-memory project (REQ-ARC-mcp-010)
@@ -70,23 +87,8 @@ pub fn check(sources: &[SourceInput], options_value: &serde_json::Value, area: A
 
     // Run parse + full semantic analysis
     let diagnostics = project.semantic(area);
-    Checked {
-        ok: !any_stops_build(&diagnostics),
-        messages: messages_of(&diagnostics, sources),
-        summary: area
-            .check_summary()
-            .map(|summary| script_message(&summary.closing(&diagnostics), &[])),
-    }
-}
-
-fn messages_of(
-    diagnostics: &[ironplc_dsl::diagnostic::Diagnostic],
-    sources: &[SourceInput],
-) -> Vec<ScriptMessage> {
-    diagnostics
-        .iter()
-        .map(|diagnostic| script_message(diagnostic, sources))
-        .collect()
+    let application = project.application_name(&fallback);
+    framed(area, &application, diagnostics, sources)
 }
 
 /// Builds the check response from raw inputs.
@@ -113,7 +115,7 @@ mod tests {
     fn build_response_when_valid_program_then_ok_true() {
         let resp = build_response(&source(VALID_PROGRAM), &ed2_options());
         assert!(resp.ok);
-        assert!(resp.diagnostics.is_empty());
+        assert_eq!(resp.diagnostics.len(), 1);
     }
 
     #[test]

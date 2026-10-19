@@ -179,7 +179,13 @@ fn build_accept_response_when_syntax_error_then_compile_diagnostics_and_no_sessi
     assert!(!resp.ok);
     assert!(resp.v_code.is_none());
     assert!(!resp.diagnostics.is_empty());
-    assert!(resp.diagnostics.iter().all(|d| d["prefix"] == "P"));
+    // The diagnostics are those of the compile tool, which frames them with the
+    // lines of the build: the lines are texts without a code, the rest are
+    // problems of the compiler.
+    assert!(resp
+        .diagnostics
+        .iter()
+        .all(|d| d["prefix"] == "P" || d["severity"] == "Text"));
     // Nothing was established: the next status call still finds no session.
     let status = build_status_response(&session);
     assert!(!status.ok);

@@ -104,24 +104,42 @@ fn mcp_spec_req_tol_021_check_no_codegen() {
     assert!(json.get("container_id").is_none());
 }
 
-/// REQ-TOL-mcp-022: The `check` tool returns `diagnostics` and `ok`.
+/// REQ-TOL-mcp-022: The `check` tool returns `diagnostics` and `ok`; the
+/// diagnostics end with the line that closes the check, and `ok` ignores it.
 #[spec_test(REQ_TOL_mcp_022)]
 fn mcp_spec_req_tol_022_check_returns_diagnostics_and_ok() {
-    // Valid program: ok = true, diagnostics empty
+    // Valid program: ok = true, and the closing line alone
     let sources = source(VALID_PROGRAM);
     let options = ed2_options();
 
     let resp = tools::check::build_response(&sources, &options);
     let json = serde_json::to_value(&resp).unwrap();
     assert_eq!(json["ok"], true);
-    assert!(json["diagnostics"].as_array().unwrap().is_empty());
+    let diagnostics = json["diagnostics"].as_array().unwrap();
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0]["severity"], "Text");
+    assert_eq!(
+        diagnostics[0]["text"],
+        "Compile complete -- 0 errors, 0 warnings"
+    );
 
-    // Invalid program: ok = false, diagnostics non-empty
+    // Invalid program: ok = false, the errors and then the closing line with
+    // their count
     let bad_sources = source(SEMANTIC_ERROR_PROGRAM);
     let resp = tools::check::build_response(&bad_sources, &options);
     let json = serde_json::to_value(&resp).unwrap();
     assert_eq!(json["ok"], false);
-    assert!(!json["diagnostics"].as_array().unwrap().is_empty());
+    let diagnostics = json["diagnostics"].as_array().unwrap();
+    assert!(diagnostics.len() > 1);
+    let last = &diagnostics[diagnostics.len() - 1];
+    assert_eq!(last["severity"], "Text");
+    assert_eq!(
+        last["text"],
+        format!(
+            "Compile complete -- {} errors, 0 warnings",
+            diagnostics.len() - 1
+        )
+    );
 }
 
 /// REQ-TOL-mcp-023: Diagnostic format with byte offsets.

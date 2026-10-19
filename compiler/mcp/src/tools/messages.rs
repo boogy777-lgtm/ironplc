@@ -5,9 +5,10 @@
 //! the message objects of the categories in the mask, and
 //! `system.get_messages(category)` returns the texts alone. The `category` of
 //! CODESYS is the `area` of these tools: `Build` by default, the messages of a
-//! `check` and the line that closes it, "Compile complete", which CODESYS stores
-//! among the messages of a compile as a `Text`; or `Precompile`, the messages
-//! the language server holds while editing, with no closing line.
+//! `check`, which end with the line "Compile complete" that CODESYS stores among
+//! the messages of a compile as a `Text` (`check` frames its messages, so the
+//! queries add nothing to them); or `Precompile`, the messages the language
+//! server holds while editing, with no closing line.
 
 use ironplc_dsl::diagnostic::Area;
 use schemars::JsonSchema;
@@ -110,7 +111,6 @@ pub struct MessagesResponse {
 fn selected(input: &ParseCheckInput, severities: Option<u32>, area: Option<AreaName>) -> Checked {
     let mask = severities.unwrap_or(ALL_SEVERITIES);
     let mut checked = check(&input.sources, &input.options, area_of(area));
-    checked.messages.extend(checked.summary.take());
     checked.messages.retain(|message| message.is_in(mask));
     checked
 }

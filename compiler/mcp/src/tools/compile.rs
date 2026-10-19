@@ -12,13 +12,13 @@ use ironplc_dsl::configuration::{
     ConfigurationDeclaration, ProgramConfiguration, TaskConfiguration,
 };
 use ironplc_dsl::core::{FileId, SourceSpan};
-use ironplc_dsl::diagnostic::{Diagnostic, Label};
+use ironplc_dsl::diagnostic::{Diagnostic, Label, COMPILE_SUMMARY};
 use ironplc_project::project::{MemoryBackedProject, Project};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::common::{
-    parse_options, serialize_diagnostic, serialize_diagnostics, validate_sources, SourceInput,
+    parse_options, project_name, serialize_diagnostics, validate_sources, SourceInput,
 };
 use crate::cache::{CachedContainer, ContainerCache, InsertError, ProgramMeta, TaskKind, TaskMeta};
 
@@ -62,6 +62,37 @@ pub struct ProgramInfo {
     pub task: Option<String>,
 }
 
+/// The response of a compile that failed: no container, and the messages of the
+/// run framed as the command line frames them.
+fn rejected(
+    application: &str,
+    diagnostics: Vec<Diagnostic>,
+    sources: &[SourceInput],
+) -> CompileResponse {
+    CompileResponse {
+        ok: false,
+        container_id: None,
+        container_base64: None,
+        tasks: vec![],
+        programs: vec![],
+        diagnostics: framed(application, diagnostics, sources),
+    }
+}
+
+/// The messages of a build as the tool returns them: the line "Build started"
+/// with the name of the application, the messages the run keeps, and the line
+/// "Build complete" with the counts (`COMPILE_SUMMARY`, the rule the command
+/// line uses). Every path out of `compile` ends here, so a failure ends with
+/// "No download possible" as well as a success ends with "Ready for download";
+/// the messages must all be collected before this is called.
+fn framed(
+    application: &str,
+    diagnostics: Vec<Diagnostic>,
+    sources: &[SourceInput],
+) -> Vec<serde_json::Value> {
+    serialize_diagnostics(&COMPILE_SUMMARY.close(application, diagnostics), sources)
+}
+
 /// Builds the compile response from raw inputs.
 pub fn build_response(
     sources: &[SourceInput],
@@ -69,32 +100,18 @@ pub fn build_response(
     include_bytes: bool,
     cache: &Mutex<ContainerCache>,
 ) -> CompileResponse {
+    let fallback = project_name(sources);
+
     // Validate sources (shared infra)
     let source_errors = validate_sources(sources);
     if !source_errors.is_empty() {
-        return CompileResponse {
-            ok: false,
-            container_id: None,
-            container_base64: None,
-            tasks: vec![],
-            programs: vec![],
-            diagnostics: serialize_diagnostics(&source_errors, &[]),
-        };
+        return rejected(&fallback, source_errors, &[]);
     }
 
     // Parse options (shared infra)
     let compiler_options = match parse_options(options_value) {
         Ok(opts) => opts,
-        Err(errs) => {
-            return CompileResponse {
-                ok: false,
-                container_id: None,
-                container_base64: None,
-                tasks: vec![],
-                programs: vec![],
-                diagnostics: serialize_diagnostics(&errs, &[]),
-            };
-        }
+        Err(errs) => return rejected(&fallback, errs, &[]),
     };
 
     // Construct a fresh in-memory project (REQ-ARC-mcp-010)
@@ -114,51 +131,29 @@ pub fn build_response(
         &ironplc_codegen::EmptyLookup,
         vec![],
     );
-    let mut diagnostics = serialize_diagnostics(&output.diagnostics, sources);
+    let mut diagnostics = output.diagnostics;
+    let application = project.application_name(&fallback);
 
     let Some(container) = output.container else {
-        return CompileResponse {
-            ok: false,
-            container_id: None,
-            container_base64: None,
-            tasks: vec![],
-            programs: vec![],
-            diagnostics,
-        };
+        return rejected(&application, diagnostics, sources);
     };
 
     // The analyzed library and context stay cached on the project; a clean
     // compile guarantees both.
     let (Some(library), Some(context)) = (project.analyzed_library(), project.semantic_context())
     else {
-        let err = Diagnostic::internal_error();
-        diagnostics.push(serialize_diagnostic(&err, &[]));
-        return CompileResponse {
-            ok: false,
-            container_id: None,
-            container_base64: None,
-            tasks: vec![],
-            programs: vec![],
-            diagnostics,
-        };
+        diagnostics.push(Diagnostic::internal_error());
+        return rejected(&application, diagnostics, sources);
     };
 
     // Serialize container to bytes
     let mut bytes = Vec::new();
     if let Err(e) = container.write_to(&mut bytes) {
-        let err = Diagnostic::internal_error_at(Label::span(
+        diagnostics.push(Diagnostic::internal_error_at(Label::span(
             SourceSpan::default(),
             format!("Failed to serialize container: {e}"),
-        ));
-        diagnostics.push(serialize_diagnostic(&err, &[]));
-        return CompileResponse {
-            ok: false,
-            container_id: None,
-            container_base64: None,
-            tasks: vec![],
-            programs: vec![],
-            diagnostics,
-        };
+        )));
+        return rejected(&application, diagnostics, sources);
     }
 
     // Extract task/program metadata from the AST
@@ -204,20 +199,16 @@ pub fn build_response(
         match guard.insert(cached) {
             Ok(id) => id,
             Err(InsertError::TooLarge { size, max }) => {
-                let err = Diagnostic::internal_error_at(Label::span(
+                diagnostics.push(Diagnostic::internal_error_at(Label::span(
                     SourceSpan::default(),
                     format!(
                         "Compiled container ({size} bytes) exceeds cache byte budget ({max} bytes)"
                     ),
-                ));
-                diagnostics.push(serialize_diagnostic(&err, &[]));
+                )));
                 return CompileResponse {
-                    ok: false,
-                    container_id: None,
-                    container_base64: None,
                     tasks: task_infos,
                     programs: program_infos,
-                    diagnostics,
+                    ..rejected(&application, diagnostics, sources)
                 };
             }
         }
@@ -229,20 +220,14 @@ pub fn build_response(
         container_base64,
         tasks: task_infos,
         programs: program_infos,
-        diagnostics,
+        diagnostics: framed(&application, diagnostics, sources),
     }
 }
 
 /// Extracts task and program metadata from the Library's configuration.
 fn extract_task_program_metadata(library: &Library) -> (Vec<TaskMeta>, Vec<ProgramMeta>) {
-    // Find the first ConfigurationDeclaration
-    let config = library.elements.iter().find_map(|e| {
-        if let ironplc_dsl::common::LibraryElementKind::ConfigurationDeclaration(c) = e {
-            Some(c)
-        } else {
-            None
-        }
-    });
+    // The configuration a build compiles (`Library::compiled_configuration`).
+    let config = library.compiled_configuration();
 
     match config {
         Some(config) => extract_from_configuration(config),
