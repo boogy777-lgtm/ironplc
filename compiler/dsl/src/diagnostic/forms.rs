@@ -72,11 +72,15 @@ impl Diagnostic {
 
     /// The header of the diagnostic for a person: the word of its category, the
     /// code, and the CODESYS code when there is one, as in
-    /// `Error[P4007] (CODESYS C0046)`. It is `None` for a category without a
-    /// word: a text is a line with no header, and a suppressed diagnostic is
-    /// not shown.
+    /// `Error[P4007] (CODESYS C0046)`. A message without a code has the word
+    /// alone, `Error`. It is `None` for a category without a word: a text is a
+    /// line with no header, and a suppressed diagnostic is not shown.
     pub fn person_header(&self) -> Option<String> {
         let word = self.severity.person_word()?;
+        if !self.has_code() {
+            // A message without a code has the word alone.
+            return Some(word.to_string());
+        }
         Some(match self.codesys {
             Some(codesys) => format!("{word}[{}] (CODESYS {codesys})", self.code),
             None => format!("{word}[{}]", self.code),
@@ -112,8 +116,14 @@ impl Diagnostic {
             None => (None, None),
         };
         let start = self.primary.location.start;
-        let object = self.primary.file_id.to_string();
-        let position_text = source.map(|source| {
+        // A message without a code is about no object, as a CODESYS message
+        // made without a position is.
+        let object = if self.has_code() {
+            self.primary.file_id.to_string()
+        } else {
+            String::new()
+        };
+        let position_text = source.filter(|_| self.has_code()).map(|source| {
             let at = source.floor_char_boundary(start);
             let at = LineColumn::from_offset(source, at);
             format!("{object}:{}:{}", at.line + 1, at.column + 1)

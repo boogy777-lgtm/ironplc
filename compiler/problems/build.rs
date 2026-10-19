@@ -28,6 +28,7 @@ fn create_problems() -> Result<(), Box<dyn Error>> {
     // Tell Cargo that if the error definitions change, to rerun this build script.
     println!("cargo:rerun-if-changed=resources/problem-codes.csv");
     println!("cargo:rerun-if-changed=resources/problem-texts.csv");
+    println!("cargo:rerun-if-changed=resources/codeless-texts.csv");
 
     // Read the problem-codes.csv into bytes so that we can use it with
     let mut src_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -163,7 +164,25 @@ fn create_problems() -> Result<(), Box<dyn Error>> {
     // Finalize the out file
     out.flush()?;
 
-    create_texts(&defs)
+    create_texts(&defs)?;
+    create_codeless_texts()
+}
+
+/// Writes the module `codeless`, one function for each row of
+/// `codeless-texts.csv`: the messages that have no problem code.
+fn create_codeless_texts() -> Result<(), Box<dyn Error>> {
+    let mut src_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    src_path.push("resources");
+    src_path.push("codeless-texts.csv");
+    let src = fs::read_to_string(src_path)
+        .map_err(|e| format!("Unable to read 'codeless-texts.csv': {e}"))?;
+
+    let codeless = ironplc_problems_gen::generate_codeless_texts(&src)?;
+
+    let mut out_path = PathBuf::from(env::var("OUT_DIR")?);
+    out_path.push("codeless.rs");
+    fs::write(out_path, codeless).map_err(|e| format!("Unable to create 'codeless.rs': {e}"))?;
+    Ok(())
 }
 
 fn create_texts(defs: &[ProblemDef]) -> Result<(), Box<dyn Error>> {

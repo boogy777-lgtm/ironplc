@@ -1,6 +1,6 @@
 //! Provides compiler error definitions.
 //!
-//! Two files in `resources/` are read when this crate is built:
+//! Three files in `resources/` are read when this crate is built:
 //!
 //! - `problem-codes.csv` makes the [`Problem`] enumeration: the code, the name,
 //!   the one generic message and the [`Severity`] of each problem. A row
@@ -9,10 +9,15 @@
 //!   which makes the text a label shows from the arguments the row's template
 //!   names. A call with a missing, an extra or a misspelled argument does not
 //!   compile.
+//! - `codeless-texts.csv` makes the module [`codeless`]: the same for a message
+//!   that has no problem code (a limit line, a summary line). Its rows declare
+//!   the [`Severity`] too, because there is no problem to take it from.
 
 include!(concat!(env!("OUT_DIR"), "/problems.rs"));
 
 include!(concat!(env!("OUT_DIR"), "/texts.rs"));
+
+include!(concat!(env!("OUT_DIR"), "/codeless.rs"));
 
 // Spec conformance testing infrastructure (test-only).
 #[cfg(test)]
@@ -65,6 +70,52 @@ impl std::fmt::Debug for Text {
             .field("code", &self.problem.code())
             .field("message", &self.message)
             .finish()
+    }
+}
+
+/// The text of a message that has no problem code, together with its category
+/// and the key of its row in `codeless-texts.csv`, made by a function of the
+/// module [`codeless`].
+///
+/// The row declares the category, so a codeless message cannot be paired with a
+/// category other than its row's; the key is the identity of the message in
+/// place of a code.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CodelessText {
+    key: &'static str,
+    severity: Severity,
+    message: String,
+}
+
+impl CodelessText {
+    /// The only way to make a text is a function of the module [`codeless`],
+    /// which is a child of this module and so sees this function.
+    fn new(key: &'static str, severity: Severity, message: String) -> Self {
+        CodelessText {
+            key,
+            severity,
+            message,
+        }
+    }
+
+    /// The key of the row, which identifies the message.
+    pub fn key(&self) -> &'static str {
+        self.key
+    }
+
+    /// The category the row declares.
+    pub fn severity(&self) -> Severity {
+        self.severity
+    }
+
+    /// The text with the arguments in place of the placeholders.
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
+    /// Splits the text into its key, its category and its message.
+    pub fn into_parts(self) -> (&'static str, Severity, String) {
+        (self.key, self.severity, self.message)
     }
 }
 
@@ -228,6 +279,95 @@ mod tests {
     fn severity_person_word_when_each_category_then_the_word_of_the_messages_view() {
         for severity in ALL {
             assert_eq!(severity.person_word(), forms(severity).2, "{severity:?}");
+        }
+    }
+
+    #[spec_test(REQ_DS_problems_010)]
+    fn generate_codeless_texts_when_row_is_not_valid_then_error_names_line_and_key() {
+        let header = "Key,Severity,Template
+";
+        for (rows, needle) in [
+            ("a_line,,A", "''"),
+            ("a_line,error,A", "'error'"),
+            ("a_line,SuppressedWarning,A", "'SuppressedWarning'"),
+            ("A_Line,Text,A", "snake_case"),
+            (
+                "a_line,Text,A
+a_line,Text,B",
+                "used by an earlier row",
+            ),
+            ("a_line,Text,{X}", "{X}"),
+        ] {
+            let message = ironplc_problems_gen::generate_codeless_texts(&format!("{header}{rows}"))
+                .expect_err("the row should be refused");
+
+            assert!(
+                message.contains("'a_line'") || message.contains("A_Line"),
+                "{message}"
+            );
+            assert!(message.contains("line "), "{message}");
+            assert!(message.contains(needle), "{rows}: {message}");
+        }
+        let message = ironplc_problems_gen::generate_codeless_texts(
+            "Code,Key,Template
+",
+        )
+        .expect_err("the header should be refused");
+        assert!(message.contains("Key,Severity,Template"), "{message}");
+        assert!(ironplc_problems_gen::generate_codeless_texts(header).is_ok());
+    }
+
+    #[spec_test(REQ_DS_problems_011)]
+    fn codeless_when_each_row_then_the_key_the_category_and_the_text_of_codesys() {
+        let rows = [
+            (
+                codeless::error_limit_exceeded(500),
+                "error_limit_exceeded",
+                Severity::Error,
+                "More than 500 errors occured: Skipping all further error messages",
+            ),
+            (
+                codeless::warning_limit_exceeded(500),
+                "warning_limit_exceeded",
+                Severity::Warning,
+                "More than 500 warnings occured: Skipping all further warning messages",
+            ),
+            (
+                codeless::build_started("Main"),
+                "build_started",
+                Severity::Text,
+                "------ Build started: Application: Main -------",
+            ),
+            (
+                codeless::build_complete_ok(0, 3),
+                "build_complete_ok",
+                Severity::Text,
+                "Build complete -- 0 errors, 3 warnings : Ready for download",
+            ),
+            (
+                codeless::build_complete_errors(2, 1),
+                "build_complete_errors",
+                Severity::Text,
+                "Build complete -- 2 errors, 1 warnings : No download possible",
+            ),
+            (
+                codeless::compile_complete_ok(0, 0),
+                "compile_complete_ok",
+                Severity::Text,
+                "Compile complete -- 0 errors, 0 warnings",
+            ),
+            (
+                codeless::compile_complete_errors(4, 5),
+                "compile_complete_errors",
+                Severity::Text,
+                "Compile complete -- 4 errors, 5 warnings",
+            ),
+        ];
+
+        for (text, key, severity, message) in rows {
+            assert_eq!(text.key(), key);
+            assert_eq!(text.severity(), severity, "{key}");
+            assert_eq!(text.message(), message, "{key}");
         }
     }
 

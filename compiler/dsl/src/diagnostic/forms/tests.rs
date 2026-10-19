@@ -215,3 +215,79 @@ fn split_code_when_letter_and_digits_then_prefix_and_number() {
     assert_eq!(split_code("4007"), None);
     assert_eq!(split_code(""), None);
 }
+
+#[spec_test(REQ_DS_dsl_012)]
+fn codeless_when_a_row_of_the_dictionary_then_no_code_the_category_and_key_of_the_row() {
+    let diagnostic = Diagnostic::codeless(ironplc_problems::codeless::error_limit_exceeded(500));
+
+    assert!(!diagnostic.has_code());
+    assert_eq!(diagnostic.code, "");
+    assert_eq!(diagnostic.severity(), Severity::Error);
+    assert!(diagnostic.stops_build());
+    assert_eq!(diagnostic.codeless_key(), Some("error_limit_exceeded"));
+    assert_eq!(diagnostic.codesys(), None);
+    assert!(diagnostic.file_ids().is_empty());
+    assert!(undeclared(SourceSpan::default()).has_code());
+    assert_eq!(undeclared(SourceSpan::default()).codeless_key(), None);
+}
+
+#[spec_test(REQ_DS_dsl_012)]
+fn codeless_when_made_from_each_row_then_the_category_of_the_row() {
+    use ironplc_problems::codeless;
+
+    assert_eq!(
+        Diagnostic::codeless(codeless::warning_limit_exceeded(500)).severity(),
+        Severity::Warning
+    );
+    assert_eq!(
+        Diagnostic::codeless(codeless::build_started("Main")).severity(),
+        Severity::Text
+    );
+    assert_eq!(
+        Diagnostic::codeless(codeless::compile_complete_ok(0, 0)).severity(),
+        Severity::Text
+    );
+}
+
+#[spec_test(REQ_DS_dsl_013)]
+fn person_header_when_message_without_a_code_then_the_word_alone_and_none_for_a_text() {
+    use ironplc_problems::codeless;
+
+    let error = Diagnostic::codeless(codeless::error_limit_exceeded(500));
+    let warning = Diagnostic::codeless(codeless::warning_limit_exceeded(500));
+    let text = Diagnostic::codeless(codeless::compile_complete_ok(1, 2));
+
+    assert_eq!(error.person_header().as_deref(), Some("Error"));
+    assert_eq!(warning.person_header().as_deref(), Some("Warning"));
+    assert_eq!(text.person_header(), None);
+    assert_eq!(
+        error.person_text(),
+        "More than 500 errors occured: Skipping all further error messages"
+    );
+    assert_eq!(
+        text.person_text(),
+        "Compile complete -- 1 errors, 2 warnings"
+    );
+}
+
+#[spec_test(REQ_DS_dsl_014)]
+fn script_message_when_message_without_a_code_then_no_prefix_number_codesys_or_object() {
+    use ironplc_problems::codeless;
+
+    let message =
+        Diagnostic::codeless(codeless::build_started("Main")).script_message(Some("source text"));
+
+    assert_eq!(message.severity, "Text");
+    assert_eq!(message.severity_value, 16);
+    assert_eq!(message.prefix, None);
+    assert_eq!(message.number, None);
+    assert_eq!(message.codesys, None);
+    assert_eq!(message.object, "");
+    assert_eq!(message.position_text, None);
+    assert_eq!(message.position, 0);
+    assert_eq!(message.length, 0);
+    assert_eq!(
+        message.text,
+        "------ Build started: Application: Main -------"
+    );
+}

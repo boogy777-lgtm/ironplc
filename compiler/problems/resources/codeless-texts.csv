@@ -1,0 +1,8 @@
+Key,Severity,Template
+error_limit_exceeded,Error,More than {limit} errors occured: Skipping all further error messages
+warning_limit_exceeded,Warning,More than {limit} warnings occured: Skipping all further warning messages
+build_started,Text,------ Build started: Application: {application} -------
+build_complete_ok,Text,"Build complete -- {errors} errors, {warnings} warnings : Ready for download"
+build_complete_errors,Text,"Build complete -- {errors} errors, {warnings} warnings : No download possible"
+compile_complete_ok,Text,"Compile complete -- {errors} errors, {warnings} warnings"
+compile_complete_errors,Text,"Compile complete -- {errors} errors, {warnings} warnings"
