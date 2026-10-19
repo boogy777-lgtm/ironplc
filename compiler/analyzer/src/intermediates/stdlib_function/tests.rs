@@ -181,12 +181,17 @@ fn get_selection_functions_when_sel_then_has_three_inputs() {
 }
 
 #[test]
-fn get_selection_functions_when_called_then_every_function_holds() {
+fn get_selection_functions_when_called_then_min_and_max_compare_and_the_others_hold() {
+    use crate::value_type::ValueUse;
     let functions = get_selection_functions();
 
-    assert!(functions
-        .iter()
-        .all(|f| f.value_use == crate::value_type::ValueUse::Holds));
+    for f in &functions {
+        let expected = match f.name.original().as_str() {
+            "MIN" | "MAX" => ValueUse::Compares,
+            _ => ValueUse::Holds,
+        };
+        assert_eq!(f.value_use, expected, "{}", f.name);
+    }
 }
 
 #[test]

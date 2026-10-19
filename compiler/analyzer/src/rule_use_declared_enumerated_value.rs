@@ -70,8 +70,7 @@ use ironplc_dsl::{
     diagnostic::Diagnostic,
     scope::ScopeNode,
     textual::{
-        Assignment, Case, CaseSelectionKind, CompareExpr, CompareOp, FbCall, For, Function,
-        MethodCall,
+        Assignment, Case, CaseSelectionKind, CompareExpr, FbCall, For, Function, MethodCall,
     },
     visitor::Visitor,
 };
@@ -91,6 +90,7 @@ use crate::{
     result::SemanticResult,
     rule_support::{run_rule, DiagnosticVisitor},
     semantic_context::SemanticContext,
+    value_type::ValueUse,
     variable_type::{enter_declaration_scope, Declarations, Declared},
 };
 use ironplc_parser::options::CompilerOptions;
@@ -424,15 +424,7 @@ impl Visitor<Infallible> for RuleDeclaredEnumeratedValues<'_> {
 
     /// A value compared with an enumeration is a value of it.
     fn visit_compare_expr(&mut self, node: &CompareExpr) -> Result<(), Infallible> {
-        if matches!(
-            node.op,
-            CompareOp::Eq
-                | CompareOp::Ne
-                | CompareOp::Lt
-                | CompareOp::Gt
-                | CompareOp::LtEq
-                | CompareOp::GtEq
-        ) {
+        if ValueUse::of_compare(&node.op) == ValueUse::Compares {
             for (value, other) in [(&node.left, &node.right), (&node.right, &node.left)] {
                 self.check_expression_at(Position::ComparedWith(other), &value.kind);
             }

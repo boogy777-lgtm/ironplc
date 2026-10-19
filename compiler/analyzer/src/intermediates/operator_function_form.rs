@@ -14,6 +14,7 @@ use ironplc_dsl::textual::{CompareOp, Operator};
 
 use super::stdlib_function::input_param;
 use crate::function_environment::FunctionSignature;
+use crate::value_type::ValueUse;
 
 /// The operator a standard function is the function form of.
 #[derive(Debug, Clone, PartialEq)]
@@ -287,10 +288,12 @@ impl OperatorFunctionForm {
             ),
         };
         // The function form of an arithmetic operator makes a new number, as
-        // the operator does; comparison and bitwise forms hold their operands.
-        match self.operator {
+        // the operator does; a relational form compares its operands and the
+        // bitwise forms hold them.
+        match &self.operator {
             FormOf::Arithmetic(_) => signature.computing(),
-            FormOf::Compare(_) | FormOf::Not => signature,
+            FormOf::Compare(op) => signature.with_use(ValueUse::of_compare(op)),
+            FormOf::Not => signature,
         }
     }
 }
@@ -397,21 +400,24 @@ mod tests {
     }
 
     /// The function form of an arithmetic operator computes, as the operator
-    /// does; every other form holds its operands.
+    /// does; that of a relational operator compares its operands; every other
+    /// form holds them.
     #[test]
-    fn signature_when_form_of_arithmetic_operator_then_computes_else_holds() {
-        use crate::value_type::ValueUse;
-        let arithmetic =
-            |form: &&OperatorFunctionForm| matches!(form.operator, FormOf::Arithmetic(_));
+    fn signature_when_form_of_an_operator_then_value_use_of_the_operator() {
+        let uses: Vec<(&str, ValueUse)> = OPERATOR_FUNCTION_FORMS
+            .iter()
+            .map(|form| (form.name, form.signature().value_use))
+            .collect();
 
-        assert!(OPERATOR_FUNCTION_FORMS
-            .iter()
-            .filter(arithmetic)
-            .all(|form| form.signature().value_use == ValueUse::Computes));
-        assert!(OPERATOR_FUNCTION_FORMS
-            .iter()
-            .filter(|form| !arithmetic(form))
-            .all(|form| form.signature().value_use == ValueUse::Holds));
+        for (name, value_use) in uses {
+            let expected = match name {
+                "ADD" | "SUB" | "MUL" | "DIV" | "MOD" => ValueUse::Computes,
+                "GT" | "GE" | "EQ" | "LE" | "LT" | "NE" => ValueUse::Compares,
+                "AND" | "OR" | "XOR" | "NOT" => ValueUse::Holds,
+                other => panic!("{other} is a form this test does not place"),
+            };
+            assert_eq!(value_use, expected, "{name}");
+        }
     }
 
     #[test]

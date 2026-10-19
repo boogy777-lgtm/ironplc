@@ -18,7 +18,7 @@
 //! ```
 
 use ironplc_dsl::common::{ConstantKind, GenericTypeName, TypeName};
-use ironplc_dsl::textual::{Expr, ExprKind, ExprType};
+use ironplc_dsl::textual::{CompareOp, Expr, ExprKind, ExprType};
 use ironplc_dsl::type_id::TypeId;
 use ironplc_parser::options::CompilerOptions;
 
@@ -57,15 +57,41 @@ pub(crate) enum ValueType {
 /// cannot answer differently from the others.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ValueUse {
-    /// The place stores, passes, compares, selects or converts the value, and
-    /// the value stays what it is.
+    /// The place stores, passes, selects or converts the value, and the value
+    /// stays what it is.
     #[default]
     Holds,
     /// The place makes a new number from the value.
     Computes,
+    /// The place sets two of its inputs against each other -- a comparison
+    /// operator, the function form of one, `MIN` or `MAX` -- and the value
+    /// stays what it is. An enumeration is accepted here whether it is strict
+    /// or not, as where the place only holds the value; what the use adds is
+    /// that the two inputs are compared, so two different enumerations are
+    /// reported (P4083).
+    Compares,
 }
 
 impl ValueUse {
+    /// The use a binary operator makes of its operands: a relational operator
+    /// compares them and a logical or bitwise operator holds them. The match
+    /// names every operator, so a new one has to be placed here.
+    pub fn of_compare(op: &CompareOp) -> ValueUse {
+        match op {
+            CompareOp::Eq
+            | CompareOp::Ne
+            | CompareOp::Lt
+            | CompareOp::Gt
+            | CompareOp::LtEq
+            | CompareOp::GtEq => ValueUse::Compares,
+            CompareOp::And
+            | CompareOp::Or
+            | CompareOp::Xor
+            | CompareOp::AndThen
+            | CompareOp::OrElse => ValueUse::Holds,
+        }
+    }
+
     /// Whether a value of `representation` is refused by a place that makes
     /// this use of it: a strict enumeration is no number where the place
     /// computes.
