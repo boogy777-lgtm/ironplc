@@ -247,8 +247,8 @@ each file it is published to. The rule is `Area::store`
 
 **IronPLC differs here, by the owner's decision:** the warning limit is 500, the
 same as the error limit (MSG-050). The texts are those of CODESYS, including the
-spelling "occured" (MSG-051). The rule is `ironplc_dsl::diagnostic::kept`, applied
-where the messages of a run are collected
+spelling "occured" (MSG-051). The rule is the keep rule of the Build area (`Area::Build.keep`),
+applied where the messages of a run are collected
 ([What a run keeps](diagnostic-severity.md#what-a-run-keeps)).
 
 ## Related positions
