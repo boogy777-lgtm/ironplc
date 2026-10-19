@@ -184,6 +184,21 @@ mod tests {
         }
     }
 
+    /// The name and the value a program reads for each category, in the CODESYS
+    /// scripting model (`ScriptSystem.Severity`), and the header word of a
+    /// person's form. No wildcard arm, as in `expected`.
+    fn forms(severity: Severity) -> (&'static str, u32, Option<&'static str>) {
+        match severity {
+            Severity::FatalError => ("FatalError", 1, Some("Error")),
+            Severity::Error => ("Error", 2, Some("Error")),
+            Severity::Warning => ("Warning", 4, Some("Warning")),
+            Severity::Information => ("Information", 8, Some("Information")),
+            Severity::Text => ("Text", 16, None),
+            Severity::SuppressedWarning => ("SuppressedWarning", 32, None),
+            Severity::SuppressedInformation => ("SuppressedInformation", 64, None),
+        }
+    }
+
     #[spec_test(REQ_DS_problems_003)]
     fn severity_questions_when_each_category_then_the_answers_of_codesys() {
         for severity in ALL {
@@ -197,6 +212,22 @@ mod tests {
                 severity.suppressed(),
                 "{severity:?}"
             );
+        }
+    }
+
+    #[spec_test(REQ_DS_problems_008)]
+    fn severity_script_name_and_value_when_each_category_then_those_of_codesys_scripting() {
+        for severity in ALL {
+            let (name, value, _) = forms(severity);
+            assert_eq!(severity.script_name(), name, "{severity:?}");
+            assert_eq!(severity.script_value(), value, "{severity:?}");
+        }
+    }
+
+    #[spec_test(REQ_DS_problems_009)]
+    fn severity_person_word_when_each_category_then_the_word_of_the_messages_view() {
+        for severity in ALL {
+            assert_eq!(severity.person_word(), forms(severity).2, "{severity:?}");
         }
     }
 
