@@ -120,7 +120,7 @@ This is the highest-value tool. AI assistants use it to validate code they gener
 
 **REQ-TOL-mcp-021** The `check` tool does not run code generation.
 
-**REQ-TOL-mcp-022** The `check` tool returns a `diagnostics` array and a top-level `ok: boolean`. `ok` is `true` when the diagnostics array contains no entry whose `severity` is `"FatalError"` or `"Error"`; otherwise `ok` is `false`.
+**REQ-TOL-mcp-022** The `check` tool returns a `diagnostics` array and a top-level `ok: boolean`. `diagnostics` holds the messages of the run as the command line `ironplcc check` writes them: the problems found, then the line `Compile complete -- N errors, M warnings`, a message of category `Text` without a code (so a program without a problem has that line alone, and the length of the array does not say whether the program is valid). `ok` is `true` when the diagnostics array contains no entry whose `severity` is `"FatalError"` or `"Error"`; otherwise `ok` is `false`. The framing is the one rule of the command line ([Diagnostic Severity](diagnostic-severity.md#summary-lines), REQ-DS-mcp-010).
 
 **REQ-TOL-mcp-023** Each diagnostic in the `check` response is a message with the fields of the CODESYS scripting class `ScriptMessage`: `severity` and `severity_value`, `prefix` and `number` (the code `P0042` is `"P"` and `42`), `text`, `position`, `length`, `position_text` and `object`, and the field `codesys` (the CODESYS code of the same condition, or `null`). `position` is a 0-indexed byte offset into the source text of the file named by `object`, and `length` is the number of bytes of the span, so an empty span has `length == 0`. The offsets are the ones the compiler stores internally; no line/column conversion is applied to them. `position_text` is `file:line:column`, counted from 1, for a person. The fields are specified in [Diagnostic Severity](diagnostic-severity.md#mcp).
 
@@ -427,7 +427,7 @@ The container handle is the primary transport: agents pass it back to `run` with
 
 **REQ-TOL-mcp-030** The `compile` tool returns a `container_id` string that uniquely identifies the compiled `.iplc` container inside the server process. `container_id` values are opaque strings with no structure the caller should rely on.
 
-**REQ-TOL-mcp-031** The `compile` tool returns `ok: false`, `container_id: null`, and a populated `diagnostics` array on failure.
+**REQ-TOL-mcp-031** The `compile` tool returns `ok: false`, `container_id: null`, and a populated `diagnostics` array on failure. As in `ironplcc compile`, `diagnostics` starts with the line `------ Build started: Application: NAME -------` (NAME is the `CONFIGURATION`) and ends with `Build complete -- N errors, M warnings`, followed by `: Ready for download` or, on failure, `: No download possible`, in every case ([Diagnostic Severity](diagnostic-severity.md#summary-lines), REQ-DS-mcp-011).
 
 **REQ-TOL-mcp-032** The `compile` tool returns a `tasks` array describing each task declared in the program. Each entry contains `name`, `priority`, `kind` (one of `"cyclic"`, `"single"`, `"freewheeling"`), and `interval_ms` (the cyclic interval in milliseconds when `kind == "cyclic"`, otherwise `null`). `kind` describes the task the *container* carries rather than the syntax the source declares: a task whose `INTERVAL` is absent or zero is reported as `"freewheeling"`, because that is what the compiler emits and what `run` will schedule. A program with no `CONFIGURATION` is reported as a single freewheeling task named for the program.
 
