@@ -75,8 +75,11 @@ a primary label (file and span), a code, a category taken from the code,
 secondary labels, described values and help notes.
 
 Differences:
-- A `Diagnostic` always has a code. CODESYS has messages without one: user
-  pragma messages, limit lines, summary lines (MSG-040).
+- CODESYS has messages without a code: user pragma messages, limit lines,
+  summary lines (MSG-040). A `Diagnostic` made by `Diagnostic::codeless` has none:
+  its category and its text are a row of `codeless-texts.csv`, and both forms and
+  the editor treat it as a coded one. The limit lines and the summary lines are
+  built; the pragma messages are not (MSG-080).
 - A `Diagnostic` has no areas yet (MSG-020).
 
 ## Category
@@ -195,7 +198,9 @@ first.
 
 **IronPLC differs here, by the owner's decision:** the warning limit is 500, the
 same as the error limit (MSG-050). The texts are those of CODESYS, including the
-spelling "occured" (MSG-051).
+spelling "occured" (MSG-051). The rule is `ironplc_dsl::diagnostic::kept`, applied
+where the messages of a run are collected
+([What a run keeps](diagnostic-severity.md#what-a-run-keeps)).
 
 ## Related positions
 
@@ -224,6 +229,20 @@ with a summary:
 The counts are those of the run, so the summary shows the state of the build
 pipeline as it ends. `FatalError` and `Error` count as errors; only `Warning`
 counts as a warning. IronPLC: MSG-070 to MSG-074.
+
+CODESYS stores the build and compile lines as messages of category `Text`
+without a code (`CompilerServicesInternal.cs:1246-1274`,
+`CompilerPhaseControllerGenerateCode.cs:656-686`,
+`LanguageModelManagerConsolidated.cs:1972-1989`). So they are messages in both
+forms. The name in "Application: {0}" is the name of the application of the
+CODESYS project; IronPLC has no application object, so it is the name of the
+project: the file name without its extension of the first path, or the name of
+the directory.
+
+Whether the counts include the limit lines is open (MSG-075). CODESYS counts the
+messages it has stored, and it stores the limit line as an `Error` or a `Warning`,
+so the interim choice is that they are included: a run that passes the error limit
+reports 501 errors.
 
 ## User messages
 
@@ -301,21 +320,21 @@ States:
 | MSG-035 | `suppress_messages` on a POU drops all its messages | `Messages.cs:141` | planned |
 | MSG-036 | A warning listed as an error is an `Error` with the same code; this beats a disabled one; nothing lowers an error | `SeverityExtensions.cs`, `WarningHelper.cs:42-51` | planned |
 | MSG-037 | Only a warning code (`Warning` category) can be disabled or raised | `WarningHelper.cs:185-200` | planned |
-| MSG-040 | A message may have no code (user pragma, limit line, summary line) | `CompilerMessage.cs:285-295` | planned |
+| MSG-040 | A message may have no code (user pragma, limit line, summary line) | `CompilerMessage.cs:285-295` | done (REQ-DS-problems-010, -011, REQ-DS-dsl-012, -013, -014, REQ-DS-mcp-007, REQ-DS-cli-010, -011) |
 | MSG-041 | A problem code records its CODESYS counterpart | — | done (REQ-DS-problems-005, -006, -007) |
 | MSG-042 | Both forms show the CODESYS counterpart | — | done (REQ-DS-dsl-006, -007, -011, REQ-DS-cli-001, REQ-DS-mcp-004) |
-| MSG-050 | At most 500 errors and 500 warnings are kept (CODESYS: warnings 100 by default) | `-.352.cs:190-215`, `CompileOptions.cs:363` | owner |
-| MSG-051 | At the limit, the CODESYS line "More than {0} … occured: Skipping all further … messages" is kept, as `Error` or `Warning`, without a code | `-.352.cs:193-213` | planned |
-| MSG-052 | Related positions are dropped once the error limit is passed | `-.352.cs:165` | planned |
+| MSG-050 | At most 500 errors and 500 warnings are kept (CODESYS: warnings 100 by default) | `-.352.cs:190-215`, `CompileOptions.cs:363` | owner (REQ-DS-dsl-017, -018, REQ-DS-project-003, -004) |
+| MSG-051 | At the limit, the CODESYS line "More than {0} … occured: Skipping all further … messages" is kept, as `Error` or `Warning`, without a code | `-.352.cs:193-213` | done (REQ-DS-dsl-017, -018, REQ-DS-cli-010) |
+| MSG-052 | Related positions are dropped once the error limit is passed | `-.352.cs:165` | done (REQ-DS-dsl-019) |
 | MSG-053 | The Precompile area keeps at most 950 messages per POU, oldest dropped first | `PreCompileContext.cs:2507-2525` | planned |
 | MSG-060 | A related position is an `Information` message after its message: "Related position", "Called '{0}'.", "'{0}' using {1} bytes of stack." | `CallTree.cs:324-360` | planned |
 | MSG-061 | The related position of a suppressed warning is `SuppressedInformation` | `CallTree.cs:354` | planned |
-| MSG-070 | Messages keep the order in which they are produced | `Messages.cs:28-43` | planned |
-| MSG-071 | A duplicate message (same code, position, text, category, object) is dropped; the first wins | `-.351.cs:65-75` | planned |
-| MSG-072 | A build starts with "------ Build started: Application: {0} -------" | `CompilerServicesInternal.cs:1246` | planned |
-| MSG-073 | `compile` ends with "Build complete -- {0} errors, {1} warnings : Ready for download" or "… : No download possible", with the counts of the run | `CompilerPhaseControllerGenerateCode.cs:656-686` | planned |
-| MSG-074 | `check` ends with "Compile complete -- {0} errors, {1} warnings"; errors count `FatalError` and `Error`, warnings count `Warning` | `LanguageModelManagerConsolidated.cs:1972-1989` | planned |
-| MSG-075 | Whether the counts include the limit lines | — | live |
+| MSG-070 | Messages keep the order in which they are produced | `Messages.cs:28-43` | done (REQ-DS-dsl-015) |
+| MSG-071 | A duplicate message (same code, position, text, category, object) is dropped; the first wins | `-.351.cs:65-75` | done (REQ-DS-dsl-016) |
+| MSG-072 | A build starts with "------ Build started: Application: {0} -------" | `CompilerServicesInternal.cs:1246` | done (REQ-DS-dsl-023, REQ-DS-cli-007) |
+| MSG-073 | `compile` ends with "Build complete -- {0} errors, {1} warnings : Ready for download" or "… : No download possible", with the counts of the run | `CompilerPhaseControllerGenerateCode.cs:656-686` | done (REQ-DS-dsl-023, REQ-DS-cli-007, -008) |
+| MSG-074 | `check` ends with "Compile complete -- {0} errors, {1} warnings"; errors count `FatalError` and `Error`, warnings count `Warning` | `LanguageModelManagerConsolidated.cs:1972-1989` | done (REQ-DS-dsl-021, -022, REQ-DS-cli-006, -009, REQ-DS-mcp-005, -006) |
+| MSG-075 | Whether the counts include the limit lines | — | live (interim: the counts include the limit lines) |
 | MSG-080 | `{error}`, `{fatalerror}`, `{warning}`, `{info}`, `{text}` create a message of their category; `{warning}` has code C0373, the others none | `PragmaStatementParser.cs:145-198`, `ErrorPragmaParser.cs:95-187` | planned |
 | MSG-081 | `, Length := n` and `, messageguid 'GUID'` options of a message pragma | `ErrorPragmaParser.cs:102-111,198-212` | planned |
 | MSG-082 | `show_compile` / `show_precompile` choose the areas of a pragma message | `ErrorPragmaParser.cs:218-247` | planned |

@@ -4,7 +4,8 @@
 //! build: `system.get_message_objects(category, severities=0xFFFFFFFF)` returns
 //! the message objects of the categories in the mask, and
 //! `system.get_messages(category)` returns the texts alone. The messages are
-//! those of a `check`.
+//! those of a `check` and the line that closes it, "Compile complete", which
+//! CODESYS stores among the messages of a compile as a `Text`.
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -47,6 +48,7 @@ pub struct MessagesResponse {
 fn selected(input: &ParseCheckInput, severities: Option<u32>) -> Checked {
     let mask = severities.unwrap_or(ALL_SEVERITIES);
     let mut checked = check(&input.sources, &input.options);
+    checked.messages.extend(checked.summary.take());
     checked.messages.retain(|message| message.is_in(mask));
     checked
 }

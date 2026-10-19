@@ -9,7 +9,7 @@ use ironplc_analyzer::{stages::analyze, SemanticContext};
 use ironplc_dsl::{
     common::Library,
     core::{FileId, SourceSpan},
-    diagnostic::Diagnostic,
+    diagnostic::{kept, Diagnostic},
 };
 use ironplc_parser::{options::CompilerOptions, token::Token, tokenize_program};
 use ironplc_problems::text;
@@ -22,15 +22,28 @@ use crate::sidecar::{sidecar_path_for, Sidecar, SidecarKey};
 ///
 /// This is the shared implementation used by both [`FileBackedProject`] and
 /// [`MemoryBackedProject`]. It parses each source into a library, merges them,
-/// runs the analyzer, and returns the collected diagnostics (empty when the
+/// runs the analyzer, and returns the diagnostics the run keeps (empty when the
 /// project is clean) plus the semantic context (when type resolution
-/// succeeds).
+/// succeeds). What a run keeps -- no repeats, at most 500 errors and 500
+/// warnings -- is decided by [`kept`], so every consumer of the analysis (the
+/// command line, the language server, the MCP tools) gets the same messages.
 ///
 /// `preparsed_libraries` are compatibility libraries the caller already parsed,
 /// injected alongside the ones the bundled registry loads. They exist for hosts
 /// that cannot read the registry from disk -- the playground fetches its
 /// library text over HTTP -- and are treated identically once loaded.
 fn run_semantic_analysis(
+    source_project: &mut SourceProject,
+    compiler_options: &CompilerOptions,
+    preparsed_libraries: &[Library],
+) -> (Vec<Diagnostic>, Option<SemanticContext>, Option<Library>) {
+    let (diagnostics, context, library) =
+        analyze_sources(source_project, compiler_options, preparsed_libraries);
+    (kept(diagnostics), context, library)
+}
+
+/// Parses and analyzes the sources and returns every diagnostic they produce.
+fn analyze_sources(
     source_project: &mut SourceProject,
     compiler_options: &CompilerOptions,
     preparsed_libraries: &[Library],

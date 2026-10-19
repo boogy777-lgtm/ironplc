@@ -13,7 +13,10 @@ use codespan_reporting::{
 };
 use ironplc_dsl::{
     core::FileId,
-    diagnostic::{any_stops_build, stops_build_count, Diagnostic, Label, ScriptMessage, Severity},
+    diagnostic::{
+        any_stops_build, stops_build_count, Diagnostic, Label, ScriptMessage, Severity,
+        CHECK_SUMMARY, COMPILE_SUMMARY,
+    },
 };
 use ironplc_plc2plc::write_to_string;
 use ironplc_problems::{text, Text};
@@ -66,12 +69,43 @@ pub fn check(
     libraries: &[LibraryName],
     output: Output,
 ) -> Result<(), String> {
+    let (project, diagnostics) = run_check(paths, compiler_options, libraries);
+
+    finish("Check", diagnostics, Some(&project), output)
+}
+
+/// The project and the messages of a check: the problems of discovery and of the
+/// analysis, and, as a check is a compile without code generation, the line
+/// that ends it with its counts.
+fn run_check(
+    paths: &[PathBuf],
+    compiler_options: CompilerOptions,
+    libraries: &[LibraryName],
+) -> (FileBackedProject, Vec<Diagnostic>) {
     let (mut project, mut diagnostics) = create_project(paths, compiler_options, libraries);
 
     // Analyze the set
     diagnostics.extend(project.semantic());
 
-    finish("Check", diagnostics, Some(&project), output)
+    let diagnostics = CHECK_SUMMARY.close(&application_name(paths), diagnostics);
+    (project, diagnostics)
+}
+
+/// The name of the application a command is run for, which the line "Build
+/// started" gives: the name of the project, that is the file name without its
+/// extension of the first path, or the name of the directory.
+fn application_name(paths: &[PathBuf]) -> String {
+    let Some(path) = paths.first() else {
+        return String::new();
+    };
+    let path = canonicalize(path).unwrap_or_else(|_| path.clone());
+    let name = if path.is_dir() {
+        path.file_name()
+    } else {
+        path.file_stem()
+    };
+    name.map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default()
 }
 
 pub fn echo(
@@ -128,6 +162,21 @@ pub fn compile(
     libraries: &[LibraryName],
     suppress_output: bool,
 ) -> Result<(), String> {
+    let (project, diagnostics) = run_compile(paths, output, compiler_options, libraries)?;
+
+    finish("Compile", diagnostics, Some(&project), suppress_output)
+}
+
+/// Runs the build, writes the container when nothing stops it, and returns the
+/// project with the messages of the build: the line that starts it, the problems
+/// and the line that ends it with its counts and whether the container is ready
+/// for download.
+fn run_compile(
+    paths: &[PathBuf],
+    output: &Path,
+    compiler_options: CompilerOptions,
+    libraries: &[LibraryName],
+) -> Result<(FileBackedProject, Vec<Diagnostic>), String> {
     let (mut project, mut diagnostics) = create_project(paths, compiler_options, libraries);
 
     // Refuse to write the container over a loaded source file. `File::create`
@@ -159,12 +208,8 @@ pub fn compile(
             .map_err(|e| format!("Failed to write output file: {e}"))?;
     }
 
-    finish(
-        "Compile",
-        output_result.diagnostics,
-        Some(&project),
-        suppress_output,
-    )
+    let diagnostics = COMPILE_SUMMARY.close(&application_name(paths), output_result.diagnostics);
+    Ok((project, diagnostics))
 }
 
 /// Reconciles the stable variable UID sidecar with the project's
@@ -461,7 +506,19 @@ fn handle_diagnostics(
 
 /// Prints every diagnostic that is shown, in the form for a person.
 fn print_for_person(diagnostics: &[Diagnostic], project: Option<&FileBackedProject>) {
-    let writer = StandardStream::stderr(ColorChoice::Always);
+    write_for_person(
+        &mut StandardStream::stderr(ColorChoice::Always),
+        diagnostics,
+        project,
+    );
+}
+
+/// Writes every diagnostic that is shown, in the form for a person, to `writer`.
+fn write_for_person(
+    writer: &mut impl WriteColor,
+    diagnostics: &[Diagnostic],
+    project: Option<&FileBackedProject>,
+) {
     let config = codespan_reporting::term::Config::default();
 
     let mut files: SimpleFiles<String, &str> = SimpleFiles::new();
@@ -500,15 +557,18 @@ fn print_for_person(diagnostics: &[Diagnostic], project: Option<&FileBackedProje
         .for_each(|d| match display_of(d.severity()) {
             Display::Hidden => {}
             Display::TextOnly => {
-                if let Err(err) = writeln!(writer.lock(), "{}", d.person_text()) {
+                if let Err(err) = writeln!(writer, "{}", d.person_text()) {
+                    error!("Failed writing to terminal: {err}");
+                }
+            }
+            Display::Report(severity) if !d.has_code() => {
+                if let Err(err) = write_line(writer, d, severity) {
                     error!("Failed writing to terminal: {err}");
                 }
             }
             Display::Report(severity) => {
                 let report = map_diagnostic(d, severity, &files_to_ids);
-                if let Err(err) =
-                    write_report(&mut writer.lock(), &config, &files, d, severity, &report)
-                {
+                if let Err(err) = write_report(writer, &config, &files, d, severity, &report) {
                     error!("Failed writing to terminal: {err}");
                 }
             }
@@ -539,6 +599,29 @@ fn json_of(
         })
         .collect();
     serde_json::to_string(&messages)
+}
+
+/// Writes a message that has no code and so no place: its header word, which
+/// the category declares, and its text, on one line. There is no source snippet
+/// and no link to a page about the code.
+fn write_line(
+    out: &mut impl WriteColor,
+    diagnostic: &Diagnostic,
+    severity: CodeSpanSeverity,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let Some(header) = diagnostic.person_header() else {
+        // A category without a header word is a plain line (see `display_of`).
+        writeln!(out, "{}", diagnostic.person_text())?;
+        return Ok(());
+    };
+    let styles = term::Styles::default();
+    out.set_color(styles.header(severity))?;
+    write!(out, "{header}")?;
+    out.set_color(styles.header_message())?;
+    write!(out, ": {}", diagnostic.person_text())?;
+    out.reset()?;
+    writeln!(out)?;
+    Ok(())
 }
 
 /// Writes a diagnostic that has a header: the header of the CODESYS Messages
@@ -739,6 +822,9 @@ fn output_conflicts_with_source(project: &FileBackedProject, output: &Path) -> b
 fn diagnostic(path: &Path, text: Text) -> Vec<Diagnostic> {
     vec![Diagnostic::text_in_file(FileId::from_path(path), text)]
 }
+
+#[cfg(test)]
+mod summary_tests;
 
 #[cfg(test)]
 mod tests;

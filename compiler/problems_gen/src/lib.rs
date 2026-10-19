@@ -249,6 +249,13 @@ pub fn render_severity_enum() -> String {
 /// category, so a code cannot be added without deciding whether it stops the
 /// build.
 pub fn severity_variant(code: &str, value: &str) -> Result<&'static str, String> {
+    declarable_severity(value).map_err(|e| format!("problem-codes.csv {code}: {e}"))
+}
+
+/// The name of the `Severity` variant a declaration names, or the error that
+/// lists the categories a declaration may name. Both tables that declare a
+/// category (`problem-codes.csv` and `codeless-texts.csv`) ask this.
+fn declarable_severity(value: &str) -> Result<&'static str, String> {
     LEVELS
         .iter()
         .find(|level| level.declarable && level.name == value)
@@ -260,7 +267,7 @@ pub fn severity_variant(code: &str, value: &str) -> Result<&'static str, String>
                 .map(|level| level.name)
                 .collect();
             format!(
-                "problem-codes.csv {code}: the severity '{value}' is not one of {}",
+                "the severity '{value}' is not one of {}",
                 allowed.join(", ")
             )
         })
@@ -514,6 +521,9 @@ fn render_texts(texts: &[TextDef]) -> String {
 pub fn generate_texts(src: &str, problems: &[(&str, &str)]) -> Result<String, String> {
     read_texts(src, problems).map(|texts| render_texts(&texts))
 }
+
+mod codeless;
+pub use codeless::{generate_codeless_texts, CODELESS_TEXTS_HEADER};
 
 #[cfg(test)]
 mod tests;

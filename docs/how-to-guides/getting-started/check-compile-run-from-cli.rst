@@ -30,9 +30,13 @@ Run the following command to check your program for errors:
 
    ironplcc check main.st
 
-On success, the command produces no output. If there are errors, IronPLC
-prints diagnostics with the file name, line number, and a description of
-the problem.
+If there are errors, IronPLC prints diagnostics with the file name, line
+number, and a description of the problem. The command ends with a line that
+counts the messages, which on success is:
+
+.. code-block:: text
+
+   Compile complete -- 0 errors, 0 warnings
 
 --------------------------------------
 Compile a Program
@@ -46,6 +50,15 @@ Compile your program into a bytecode container:
 
 On success, the command creates the :file:`main.iplc` file. This file
 contains the compiled bytecode that the IronPLC virtual machine can execute.
+The command prints a line that starts the build and a line that ends it:
+
+.. code-block:: text
+
+   ------ Build started: Application: main -------
+   Build complete -- 0 errors, 0 warnings : Ready for download
+
+If an error stops the build, the last line ends with ``No download possible``
+and the command does not create the file.
 
 --------------------------------------
 Run a Compiled Program

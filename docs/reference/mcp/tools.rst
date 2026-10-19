@@ -95,7 +95,8 @@ get_message_objects
 
 Returns the messages of a check as message objects, as
 ``system.get_message_objects`` of the CODESYS scripting API does. The
-messages are those of :literal:`check`.
+messages are those of :literal:`check`, then the line ``Compile complete --
+N errors, M warnings`` that ends a check, a ``Text`` without a code.
 
 **Inputs:** ``sources``, ``options`` and ``severities`` (integer, optional)
 --- the categories to return, as the sum of their ``severity_value``. The
@@ -108,7 +109,7 @@ get_messages
 ------------
 
 Returns the messages of a check as texts alone, as ``system.get_messages`` of
-the CODESYS scripting API does. Call :literal:`get_message_objects` to see the
+the CODESYS scripting API does, with the line that ends the check. Call :literal:`get_message_objects` to see the
 category, the code and the position of each.
 
 **Inputs:** ``sources``, ``options``.

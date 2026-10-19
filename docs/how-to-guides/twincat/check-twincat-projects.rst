@@ -33,9 +33,9 @@ that holds no :file:`.sln` or :file:`.plcproj` is checked as a folder of
 loose files instead, which ignores what the project files say — see
 :doc:`/reference/compiler/source-formats/twincat` for the full rules.
 
-On success, the command produces no output. If there are problems, IronPLC
-prints diagnostics with the file name, line number, and a description of
-each problem.
+If there are problems, IronPLC prints diagnostics with the file name, line
+number, and a description of each problem. The command ends with a line that
+counts the messages, such as ``Compile complete -- 0 errors, 0 warnings``.
 
 The ``--dialect twincat`` option matters: it tells IronPLC to accept the
 language extensions that TwinCAT accepts, so TwinCAT-specific syntax works

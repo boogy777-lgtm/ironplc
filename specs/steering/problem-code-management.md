@@ -8,6 +8,8 @@ This steering file provides specific guidance for managing problem codes in Iron
 
 **Every user-facing error message MUST have a unique problem code.** This applies to all components — the compiler, the VS Code extension, and any other tooling. Error codes allow users to look up documentation, search for solutions, and report issues precisely. Never display an error to the user without an associated code.
 
+The one exception is a message that CODESYS also keeps without a code: the line at a limit and the lines that open and close a build or a check. Such a message is a row of `compiler/problems/resources/codeless-texts.csv` (`Key,Severity,Template`), made by `Diagnostic::codeless`, and is decided in [ADR-0082](../adrs/0082-a-message-without-a-problem-code-is-a-row-of-its-own-table.md). A problem of the program, and any message a person has to look up, has a code.
+
 - **Compiler errors** use the `P####` prefix (e.g., P2016)
 - **VS Code extension errors** use the `E####` prefix (e.g., E0001)
 

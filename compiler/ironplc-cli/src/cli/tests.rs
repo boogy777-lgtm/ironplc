@@ -737,7 +737,7 @@ END_PROGRAM
 }
 
 /// A comparison of values of two enumerations: the warning P4083 and no error.
-const TWO_ENUMERATIONS_COMPARED: &str = "TYPE
+pub(super) const TWO_ENUMERATIONS_COMPARED: &str = "TYPE
   TrafficLight : (Red, Yellow, Green);
   Mode : (Auto, Manual);
 END_TYPE

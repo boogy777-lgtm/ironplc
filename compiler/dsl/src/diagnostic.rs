@@ -15,12 +15,14 @@
 //! (especially one that works for both command line and language server
 //! protocol).
 pub use ironplc_problems::Severity;
-use ironplc_problems::{Problem, Text};
+use ironplc_problems::{CodelessText, Problem, Text};
 
 mod editor_range;
 mod forms;
+mod run;
 
 pub use forms::ScriptMessage;
+pub use run::{counts, kept, Counts, Summary, CHECK_SUMMARY, COMPILE_SUMMARY};
 
 use crate::common::TypeName;
 use crate::core::{FileId, Id, Located, SourceSpan};
@@ -117,10 +119,22 @@ impl Label {
 
 /// A diagnostic. Diagnostic have a code that is indicative of the category,
 /// a primary location and possibly non-zero set of secondary location.
+///
+/// A message that has no code (a limit line, a summary line) is a diagnostic
+/// too, made by [`Diagnostic::codeless`]: its `code` is empty and
+/// [`Diagnostic::has_code`] is false. Both forms of a message and the editor
+/// mapping treat it as they treat a coded one.
 #[derive(Debug, Clone)]
 pub struct Diagnostic {
-    /// A normally unique value describing the type of diagnostic.
+    /// A normally unique value describing the type of diagnostic. It is empty
+    /// for a message that has no code; ask [`Diagnostic::has_code`] before
+    /// treating it as a code.
     pub code: String,
+
+    /// The key of the row of `codeless-texts.csv` that a message without a
+    /// code was made from, and `None` for a message with a code. It is the
+    /// identity of such a message in place of a code.
+    codeless: Option<&'static str>,
 
     /// The message category of the diagnostic. It is the severity of the problem
     /// code and is set only where the diagnostic is made, so a call site cannot
@@ -213,6 +227,7 @@ impl Diagnostic {
     fn problem(problem: Problem, primary: Label) -> Self {
         Self {
             code: problem.code().to_string(),
+            codeless: None,
             severity: problem.severity(),
             codesys: problem.codesys(),
             description: problem.message().to_string(),
@@ -223,6 +238,41 @@ impl Diagnostic {
             source_file: None,
             source_line: None,
         }
+    }
+
+    /// Creates a message that has no code from a text of the dictionary
+    /// (`ironplc_problems::codeless`): a limit line or a summary line.
+    ///
+    /// The row declares the category and the text, so the message takes both
+    /// from one place and no call site writes either. The message is not about
+    /// a place in a file: its primary label is empty and points nowhere.
+    pub fn codeless(text: CodelessText) -> Self {
+        let (key, severity, message) = text.into_parts();
+        Self {
+            code: String::new(),
+            codeless: Some(key),
+            severity,
+            codesys: None,
+            description: message,
+            primary: Label::file(FileId::default(), ""),
+            described: vec![],
+            help: vec![],
+            secondary: vec![],
+            source_file: None,
+            source_line: None,
+        }
+    }
+
+    /// The key of the row of `codeless-texts.csv` a message without a code was
+    /// made from, and `None` for a message with a code.
+    pub fn codeless_key(&self) -> Option<&'static str> {
+        self.codeless
+    }
+
+    /// Whether the diagnostic has a code. A message made by
+    /// [`Diagnostic::codeless`] has none; every other diagnostic has.
+    pub fn has_code(&self) -> bool {
+        self.codeless.is_none()
     }
 
     /// Creates a diagnostic from a text of the dictionary
@@ -518,7 +568,12 @@ impl Diagnostic {
     /// labels were added. The order is the order a person reads the diagnostic
     /// in, and the same on every run.
     pub fn file_ids(&self) -> Vec<&FileId> {
-        let mut file_ids = vec![&self.primary.file_id];
+        // A message without a code is about no place, so it points into no file.
+        let mut file_ids = if self.has_code() {
+            vec![&self.primary.file_id]
+        } else {
+            vec![]
+        };
 
         for secondary_item in self.secondary.iter() {
             if !file_ids.contains(&&secondary_item.file_id) {

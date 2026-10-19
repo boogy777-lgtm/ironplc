@@ -406,3 +406,69 @@ fn render_severity_enum_when_called_then_the_facts_of_each_category() {
         assert!(source.contains(line), "{line}: {source}");
     }
 }
+
+fn generate_codeless(rows: &str) -> Result<String, String> {
+    generate_codeless_texts(&format!("Key,Severity,Template\n{rows}"))
+}
+
+fn codeless_refused(rows: &str) -> String {
+    generate_codeless(rows).expect_err("the rows should be refused")
+}
+
+#[test]
+fn generate_codeless_texts_when_rows_then_one_function_for_each_with_its_key_and_category() {
+    let out = generate_codeless("limit_line,Error,\"Over {limit}\"\nplain_line,Text,Done")
+        .expect("the rows should be accepted");
+
+    assert!(out.contains("pub fn limit_line(limit: impl std::fmt::Display) -> CodelessText"));
+    assert!(out.contains("CodelessText::new(\"limit_line\", Severity::Error, format!("));
+    assert!(out.contains("pub fn plain_line() -> CodelessText"));
+    assert!(out.contains("CodelessText::new(\"plain_line\", Severity::Text, \"Done\".to_string())"));
+}
+
+#[test]
+fn generate_codeless_texts_when_header_is_not_key_severity_template_then_error() {
+    for header in ["Code,Key,Template", "Key,Template,Severity", "Key,Severity"] {
+        let message = generate_codeless_texts(&format!("{header}\n")).expect_err("refused");
+
+        assert!(message.contains("Key,Severity,Template"), "{message}");
+    }
+}
+
+#[test]
+fn generate_codeless_texts_when_severity_missing_unknown_or_suppressed_then_error_names_row() {
+    for value in [
+        "",
+        "error",
+        "Info",
+        "SuppressedWarning",
+        "SuppressedInformation",
+    ] {
+        let message = codeless_refused(&format!("a_line,{value},A"));
+
+        assert!(message.contains("line 2"), "'{value}': {message}");
+        assert!(message.contains("'a_line'"), "'{value}': {message}");
+        assert!(
+            message.contains(&format!("'{value}'")),
+            "'{value}': {message}"
+        );
+    }
+}
+
+#[test]
+fn generate_codeless_texts_when_key_not_snake_case_or_repeated_then_error() {
+    let message = codeless_refused("Camel,Text,A");
+    assert!(message.contains("snake_case"), "{message}");
+
+    let message = codeless_refused("a_line,Text,A\na_line,Error,B");
+    assert!(message.contains("line 3"), "{message}");
+    assert!(message.contains("used by an earlier row"), "{message}");
+}
+
+#[test]
+fn generate_codeless_texts_when_placeholder_malformed_then_error_names_row() {
+    let message = codeless_refused("a_line,Text,\"{X}\"");
+
+    assert!(message.contains("'a_line'"), "{message}");
+    assert!(message.contains("{X}"), "{message}");
+}

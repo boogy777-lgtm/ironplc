@@ -137,6 +137,139 @@ categories.
 **REQ-DS-dsl-011** `ScriptMessage` has the CODESYS code of the problem as
 `codesys`, and null where the problem has none.
 
+## Messages without a code
+
+A problem code gives a diagnostic its category and its text. Some messages have
+no problem: the line CODESYS keeps when a limit is passed, and the lines that
+open and close a build. CODESYS stores them as messages of its own with the id
+`None` (`CompilerMessage.cs:285-295`); the message ontology numbers this MSG-040.
+
+Their texts are rows of a second table of the message dictionary
+([ADR-0082](../adrs/0082-a-message-without-a-problem-code-is-a-row-of-its-own-table.md)),
+`compiler/problems/resources/codeless-texts.csv`, with the columns
+`Key,Severity,Template`. The row declares the category because there is no
+problem to take it from, and the key replaces the code as the identity of the
+message. The template has the placeholders of `problem-texts.csv`. The build of
+the problems crate makes `ironplc_problems::codeless::<key>(...)`, which returns
+a `CodelessText`, one function for each row; there is no other way to make one,
+so no text and no category of a message without a code is written at a call
+site.
+
+**REQ-DS-problems-010** The header of `codeless-texts.csv` is
+`Key,Severity,Template`. A row whose `Severity` is missing, unknown or a
+suppressed category, whose key is not snake_case or is used by an earlier row, or
+whose template has a malformed placeholder fails the build, and the error names
+the line and the key.
+
+**REQ-DS-problems-011** A function of `codeless` returns a `CodelessText` that has
+the key and the category of its row and the template with the arguments in place;
+the texts of the limit lines, the build lines and the compile lines are those of
+CODESYS (`en.json`: `ErrorLimitExceeded`, `WarningLimitExceeded`, `BuildStarted`,
+`BuildCompleteOK`, `BuildCompleteErrors`, `CompileCompleteOK` and
+`CompileCompleteErrors`), including the spelling "occured".
+
+**REQ-DS-dsl-012** `Diagnostic::codeless` makes a diagnostic from a `CodelessText`
+that has no code (`has_code()` is false and `code` is empty), the category and
+the key of its row, no CODESYS counterpart and no place: it points into no file.
+
+**REQ-DS-dsl-013** The person form of a message without a code is the word of its
+category alone, `Error` or `Warning`, with no brackets and no code, and `None` for
+a text; `person_text()` is its text.
+
+**REQ-DS-dsl-014** The program form of a message without a code has the text of
+the row, the scripting name and value of its category, `prefix`, `number` and
+`codesys` null, an empty `object` and no `position_text`.
+
+## What a run keeps
+
+A run collects the messages of its stages in the order they are produced. What
+the run keeps of them is decided in one place, `ironplc_dsl::diagnostic::kept`,
+which the places that collect the messages of a run apply
+([What a build and a check keep](#what-a-build-and-a-check-keep)); a consumer
+that shows the messages never decides it. The rules are those of CODESYS
+(`Messages.cs:28-43`, `-.351.cs:65-75`, `-.352.cs:93-215`), with one difference
+by the owner's decision: the warning limit is 500, not 100.
+
+- A fatal error ends the run, as above.
+- The messages keep the order in which they were produced; nothing is sorted.
+- A message that repeats an earlier one is dropped and the first stays: the same
+  code, category, place and text.
+- At most 500 errors (`FatalError` and `Error`) and at most 500 warnings
+  (`Warning`) stay. At the first message over a limit, one line of the kind stays
+  in its place, "More than 500 errors occured: Skipping all further error
+  messages" as an `Error` or "More than 500 warnings occured: Skipping all further
+  warning messages" as a `Warning`, and the messages of that kind after it are
+  dropped.
+- Once the error limit is passed, the related positions (the secondary labels) of
+  the messages that follow are dropped.
+
+Each limit is declared with the line of its kind in one entry of one table, so a
+new kind of limit is one entry. A limit line is not counted against its limit, and
+`kept` applied to its own result changes nothing, so each layer of a pipeline can
+apply it.
+
+**REQ-DS-dsl-015** `kept` keeps the messages in the order they were produced and
+does not sort them.
+
+**REQ-DS-dsl-016** `kept` drops a message that has the same code, category, place
+and text as an earlier one, and the earlier one stays; the same text at another
+place, or in another category, is not a repeat.
+
+**REQ-DS-dsl-017** `kept` keeps 500 errors as they are, and for 501 or more keeps
+the first 500, then one line "More than 500 errors occured: Skipping all further
+error messages" of category `Error` without a code, and no later error.
+
+**REQ-DS-dsl-018** `kept` keeps 500 warnings as they are, and for 501 or more
+keeps the first 500, then one line "More than 500 warnings occured: Skipping all
+further warning messages" of category `Warning` without a code, and no later
+warning; the two limits are independent, so a run over both limits has both lines
+and its messages of other categories.
+
+**REQ-DS-dsl-019** `kept` drops the related positions of the messages that follow
+the error limit, and keeps those of the messages before it, the 500th error
+included.
+
+**REQ-DS-dsl-020** `kept` applied to its own result returns it unchanged, and a
+message added after a limit line is still over the limit without a second line.
+
+## Summary lines
+
+A build and a check end with a line that gives the counts of the run, which
+CODESYS stores as a message of category `Text` without a code
+(`CompilerPhaseControllerGenerateCode.cs:656-686`,
+`CompilerServicesInternal.cs:1246-1274`,
+`LanguageModelManagerConsolidated.cs:1972-1989`, `-.404.cs:275`). So they are
+messages like any other: both forms show them, the person form as the plain line,
+the program form as a `Text` with a null `prefix` and `number`, and the language
+server sends them to the Output channel.
+
+- `check` ends with "Compile complete -- {errors} errors, {warnings} warnings".
+- `compile` starts with "------ Build started: Application: {application} -------"
+  and ends with "Build complete -- {errors} errors, {warnings} warnings : Ready
+  for download", or "… : No download possible" when an error stops the build.
+- The application is the name of the project: the file name without its extension
+  of a file given to the command, or the name of the directory.
+- The counts are those of the messages the run kept, which is the state of the
+  pipeline as it ends: `FatalError` and `Error` are errors, only `Warning` is a
+  warning, and a build can succeed with warnings. The counts include the limit
+  lines (MSG-075 in the message ontology is open until it is checked in a running
+  CODESYS; `COUNTS_INCLUDE_LIMIT_LINES` is the one place that changes).
+
+Each command declares its lines in one constant (`CHECK_SUMMARY`,
+`COMPILE_SUMMARY`), and the numbers come from the one function `counts`.
+
+**REQ-DS-dsl-021** `counts` counts a `FatalError` and an `Error` as errors and a
+`Warning` as a warning, and no other category; the limit lines are counted.
+
+**REQ-DS-dsl-022** `CHECK_SUMMARY.close` returns the messages the run keeps and
+then one `Text` "Compile complete -- {errors} errors, {warnings} warnings" with the
+counts of the run, for any counts including zero.
+
+**REQ-DS-dsl-023** `COMPILE_SUMMARY.close` returns a `Text` "Build started" with the
+name of the application, the messages the run keeps, and then one `Text` "Build
+complete" with the counts, ending "Ready for download" when the run has no error
+and "No download possible" when it has one.
+
 ## What stops a build
 
 A place that decides that a program is rejected asks `stops_build`, not whether
@@ -162,6 +295,27 @@ language server.
 An analysis pass that collects diagnostics and returns `Err` to stop that pass
 (`semantic_rules`, the `xform_*` passes) is not a gate. Its diagnostics are added
 to the semantic context, and they reach the gates above.
+
+## What a build and a check keep
+
+The messages of a run are collected in two places of `ironplc-project`, and each
+applies `kept` to what it collected, so the command line, the language server and
+the MCP tools never decide it themselves:
+
+- `Project::semantic` returns the messages that parsing and analysis produced,
+  kept;
+- `ironplc_project::compile` returns the messages of its seeded diagnostics, the
+  analysis and code generation together, kept, so the limit is over the whole
+  run.
+
+**REQ-DS-project-003** `compile` returns the messages its run keeps: for 501 errors
+the first 500 and the line of the limit, for 500 errors all of them and no line,
+for 501 warnings the first 500, the line of the limit and the container, and the
+limit is over the seeded diagnostics and the analysis together.
+
+**REQ-DS-project-004** `Project::semantic` returns the messages its run keeps: the
+first 500 errors and the line of the limit for 501 errors, and the same for
+warnings.
 
 ## The first warning
 
@@ -251,13 +405,39 @@ header and no code, and writes a suppressed warning and a suppressed information
 message not at all.
 
 **REQ-DS-cli-003** `ironplcc check --format json` writes to the standard output
-one JSON array that holds the `ScriptMessage` of every diagnostic, a suppressed
-one included, and `[]` when there is none.
+one JSON array that holds the `ScriptMessage` of every message the run keeps, a
+suppressed one included, and then the message "Compile complete" that closes the
+check; a program without a problem has that message alone.
 
 **REQ-DS-cli-005** `ironplcc check` writes a warning with its header
 (`Warning[P4083] (CODESYS C0354)`) and its source snippet, and exits with status
 0; `ironplcc compile` of the same program writes the container and exits with
 status 0.
+
+**REQ-DS-cli-006** `ironplcc check` ends with the line "Compile complete -- {errors}
+errors, {warnings} warnings", a text without a header, with the counts of the
+messages the run kept: 0 and 0 for a program without a problem, 1 and 0 for one
+error, 0 and 1 for one warning. It does not change the exit status.
+
+**REQ-DS-cli-007** `ironplcc compile` of a program that has only a warning starts
+with the line "------ Build started: Application: {name} -------", where the name
+is the file name without its extension, writes the warning, ends with "Build
+complete -- 0 errors, 1 warnings : Ready for download", writes the container and
+exits with status 0.
+
+**REQ-DS-cli-008** `ironplcc compile` of a program that has an error ends with
+"Build complete -- 1 errors, 0 warnings : No download possible", writes no
+container and exits with a failure status.
+
+**REQ-DS-cli-009** `ironplcc check --format json` gives the closing line as a
+message of category `Text` (16) with a null `prefix` and `number`, last in the
+array.
+
+**REQ-DS-cli-010** A message without a code that is an error or a warning is
+written on one line, its word and its text, as `Error: More than 500 errors
+occured: Skipping all further error messages`, with no source snippet and no link,
+and `ironplcc check` of a source with 501 errors writes 500 errors, that line and
+"Compile complete -- 501 errors, 0 warnings", and fails.
 
 ### The language server
 
@@ -273,6 +453,10 @@ severity `ERROR`, a warning with `WARNING` and an information message with
 `INFORMATION`, sends the text of a `Text` as a `window/logMessage` of type `INFO`
 and does not publish it as a diagnostic, and publishes a suppressed warning and a
 suppressed information message not at all.
+
+**REQ-DS-cli-011** The language server publishes a message without a code, such as
+the limit line of the errors, with severity `ERROR` and no `code`, and sends the
+text of one that is a `Text`, such as a closing line, as a `window/logMessage`.
 
 ### MCP
 
@@ -302,13 +486,21 @@ the code, the message and the position.
 
 **REQ-DS-mcp-005** The tool `get_message_objects` takes the sources and the options
 of `check` and an optional `severities`, a mask of `severity_value`s whose default
-is every category (0xFFFFFFFF), and returns the `ScriptMessage` of each diagnostic
-whose category is in the mask, as `system.get_message_objects` does.
+is every category (0xFFFFFFFF), and returns the `ScriptMessage` of each message of
+the check whose category is in the mask, as `system.get_message_objects` does:
+the diagnostics of `check` and then the line "Compile complete" that closes the
+check, a `Text`.
 
 **REQ-DS-mcp-006** The tool `get_messages` takes the sources and the options of
-`check` and returns the text of every diagnostic and nothing else, as
+`check` and returns the text of every message and nothing else, as
 `system.get_messages` does, from the same messages as `get_message_objects` with
 every category.
+
+**REQ-DS-mcp-007** The `ScriptMessage` of a message without a code, such as the
+closing line of a check or a limit line, has a null `prefix`, `number` and
+`codesys`. The `diagnostics` of `check` and `compile` are the problems alone and
+do not hold the closing line, so that an empty list still means a clean program;
+the two queries of the messages hold it, as CODESYS stores it among its messages.
 
 **REQ-DS-playground-001** The playground writes `Severity::name()` of the
 diagnostic as its `severity`.

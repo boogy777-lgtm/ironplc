@@ -146,13 +146,19 @@ fn mcp_spec_req_ds_005_get_message_objects_returns_the_objects_of_the_masked_cat
     let all = objects_with(None);
     let check = tools::check::build_response(&source(SEMANTIC_ERROR_PROGRAM), &ed2_options());
 
-    // The default is every category: the objects of `check`.
-    assert!(!all.is_empty());
-    assert_eq!(all, check.diagnostics);
+    // The default is every category: the objects of `check`, then the line that
+    // closes the check.
+    assert!(!check.diagnostics.is_empty());
+    assert_eq!(all.len(), check.diagnostics.len() + 1);
+    assert_eq!(all[..check.diagnostics.len()], check.diagnostics[..]);
+    assert_eq!(all[check.diagnostics.len()]["severity"], "Text");
     assert_eq!(objects_with(Some(0xFFFF_FFFF)), all);
-    // The mask selects by `severity_value`: errors are 2 and 1, warnings 4.
-    assert_eq!(objects_with(Some(2)), all);
-    assert_eq!(objects_with(Some(1 | 2)), all);
+    // The mask selects by `severity_value`: errors are 2 and 1, warnings 4, a
+    // text 16.
+    assert_eq!(objects_with(Some(2)), check.diagnostics);
+    assert_eq!(objects_with(Some(1 | 2)), check.diagnostics);
+    assert_eq!(objects_with(Some(2 | 16)), all);
+    assert_eq!(objects_with(Some(16)).len(), 1);
     assert!(objects_with(Some(4)).is_empty());
     assert!(objects_with(Some(0)).is_empty());
     assert!(objects_with(Some(64)).is_empty());
@@ -170,7 +176,7 @@ fn mcp_spec_req_ds_006_get_messages_returns_the_texts_of_the_objects() {
         .iter()
         .map(|object| object["text"].as_str().unwrap())
         .collect();
-    assert!(!expected.is_empty());
+    assert!(expected.len() > 1);
     assert_eq!(texts.messages, expected);
     assert!(!texts.ok);
 
@@ -179,5 +185,32 @@ fn mcp_spec_req_ds_006_get_messages_returns_the_texts_of_the_objects() {
         options: ed2_options(),
     });
     assert!(clean.ok);
-    assert!(clean.messages.is_empty());
+    assert_eq!(
+        clean.messages,
+        vec!["Compile complete -- 0 errors, 0 warnings"]
+    );
+}
+
+#[spec_test(REQ_DS_mcp_007)]
+fn mcp_spec_req_ds_007_a_message_without_a_code_has_null_prefix_number_and_codesys() {
+    let closing = objects_with(Some(16));
+
+    assert_eq!(closing.len(), 1);
+    let line = &closing[0];
+    assert_eq!(line["severity"], "Text");
+    assert_eq!(line["severity_value"], 16);
+    assert!(line["prefix"].is_null());
+    assert!(line["number"].is_null());
+    assert!(line["codesys"].is_null());
+    assert!(line["text"]
+        .as_str()
+        .unwrap()
+        .starts_with("Compile complete -- 1 errors, 0 warnings"));
+    // The same for the line of a limit, which is an `Error` without a code.
+    let limit = serialize_diagnostic(
+        &Diagnostic::codeless(ironplc_problems::codeless::error_limit_exceeded(500)),
+        &[],
+    );
+    assert_eq!(limit["severity"], "Error");
+    assert!(limit["prefix"].is_null() && limit["number"].is_null());
 }

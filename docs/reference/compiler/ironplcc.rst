@@ -38,13 +38,20 @@ Build Commands
 
 :program:`ironplcc check` [*FILES*...]
    Check source files for syntax and semantic correctness without producing
-   output. On success, the command produces no output. The messages are
-   written to standard error for a person; ``--format json`` writes them to
-   standard output for a program.
+   a container. The messages are written to standard error for a person;
+   ``--format json`` writes them to standard output for a program. The last
+   message is the line ``Compile complete -- N errors, M warnings``, which
+   counts the errors (fatal errors and errors) and the warnings of the run. It
+   is a text, with no category word and no code.
 
 :program:`ironplcc compile` [*FILES*...] ``-o`` *OUTPUT*
    Compile source files into a bytecode container (``.iplc``) file. Requires
-   the ``--output`` (``-o``) flag to specify the output file path.
+   the ``--output`` (``-o``) flag to specify the output file path. The command
+   writes the line ``------ Build started: Application: NAME -------`` first,
+   where *NAME* is the file name without its extension (or the name of the
+   directory), and the line ``Build complete -- N errors, M warnings`` last,
+   which ends with ``: Ready for download`` or, when an error stops the build,
+   with ``: No download possible``. A build can succeed with warnings.
 
    .. note::
 
@@ -149,7 +156,17 @@ Options
 
    .. include:: ../../includes/message-object-fields.rst
 
+   A message that has no code, such as a line that counts the messages, is
+   written without brackets and code: a text is the plain line, and an error
+   or a warning is the word, a colon and the text, with no source snippet.
    The exit status is the same in both formats.
+
+   A run keeps at most 500 errors and 500 warnings, as CODESYS keeps at most
+   500 errors. At the first message over a limit, the run keeps one line of
+   that kind, ``More than 500 errors occured: Skipping all further error
+   messages`` or ``More than 500 warnings occured: Skipping all further warning
+   messages`` (the spelling is that of CODESYS), and drops the later messages
+   of that kind. A message that repeats an earlier one is shown once.
 
 ``--allow-c-style-comments``
    Allow C-style comments (``//`` line comments and ``/* */`` block
