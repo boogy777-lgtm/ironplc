@@ -103,6 +103,34 @@ the category of a diagnostic after it is made.
 **REQ-DS-dsl-005** `stop_at_fatal` returns only the fatal errors of a list that
 holds one, and the list as it is otherwise.
 
+## Forms of a diagnostic
+
+A diagnostic has two forms, both generated from the one list of categories: the
+header a person reads and the fields a program reads
+([Message Ontology](message-ontology.md#message-forms)).
+
+**REQ-DS-dsl-006** `Diagnostic::codesys()` returns the `Problem::codesys()` of the
+problem of the diagnostic, whichever constructor made it.
+
+**REQ-DS-dsl-007** `Diagnostic::person_header()` is the word of the category, the
+code in brackets, and `(CODESYS Cnnnn)` when the problem has a CODESYS code, as
+in `Error[P4007] (CODESYS C0046)`. It is `None` for a text and for a suppressed
+category.
+
+**REQ-DS-dsl-008** `Diagnostic::script_message()` has the fields of the CODESYS
+`ScriptMessage` that a diagnostic has: `severity`, `severity_value`, `prefix`,
+`number`, `text`, `position` (the byte offset), `length`, `position_text`
+(`file:line:column` counted from 1, when the text of the file is known) and
+`object` (the file).
+
+**REQ-DS-dsl-009** `ScriptMessage` has, for each of the seven categories, the
+scripting name as `severity` and the value of the CODESYS flag set as
+`severity_value`, and `is_in` tells whether that value is in a mask of
+categories.
+
+**REQ-DS-dsl-010** `ScriptMessage` has the CODESYS code of the problem as
+`codesys`, and null where the problem has none.
+
 ## What stops a build
 
 A place that decides that a program is rejected asks `stops_build`, not whether

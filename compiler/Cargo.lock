@@ -1043,6 +1043,8 @@ dependencies = [
  "paste",
  "regex",
  "rstest",
+ "serde",
+ "serde_json",
  "spec_test_macro",
  "time",
 ]
