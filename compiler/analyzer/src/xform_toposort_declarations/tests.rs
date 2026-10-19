@@ -5,6 +5,7 @@ use ironplc_problems::Problem;
 use crate::test_helpers::parse_only;
 use ironplc_parser::{options::CompilerOptions, parse_program};
 use ironplc_test::cast;
+use spec_test_macro::spec_test;
 
 /// The sort of `library`, as the order and the reachable set when it found
 /// nothing wrong, and as what it found otherwise.
@@ -900,5 +901,62 @@ END_PROGRAM";
         !context.has_diagnostics(),
         "expected type resolution to succeed, got {:?}",
         context.diagnostics()
+    );
+}
+
+fn configuration_names(library: &Library) -> Vec<String> {
+    library
+        .elements
+        .iter()
+        .filter_map(|element| match element {
+            LibraryElementKind::ConfigurationDeclaration(configuration) => {
+                Some(configuration.name.to_string())
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// The first configuration of the sorted library is the first one written:
+/// the sort orders what depends on nothing by the graph, which put the
+/// configurations last-written first.
+#[spec_test(REQ_DS_analyzer_006)]
+fn apply_when_several_configurations_then_they_keep_the_order_written() {
+    let program = "
+PROGRAM main
+  VAR x : INT; END_VAR
+  x := 1;
+END_PROGRAM
+
+CONFIGURATION Zeta
+  RESOURCE r ON PLC
+    TASK t(INTERVAL := T#10ms, PRIORITY := 1);
+    PROGRAM i1 WITH t : main;
+  END_RESOURCE
+END_CONFIGURATION
+
+CONFIGURATION Alpha
+  RESOURCE r ON PLC
+    TASK t(INTERVAL := T#10ms, PRIORITY := 1);
+    PROGRAM i1 WITH t : main;
+  END_RESOURCE
+END_CONFIGURATION
+
+CONFIGURATION Middle
+  RESOURCE r ON PLC
+    TASK t(INTERVAL := T#10ms, PRIORITY := 1);
+    PROGRAM i1 WITH t : main;
+  END_RESOURCE
+END_CONFIGURATION";
+    let library = parse_only(program);
+
+    let (sorted, _) = apply(library).unwrap();
+
+    assert_eq!(configuration_names(&sorted), ["Zeta", "Alpha", "Middle"]);
+    assert_eq!(
+        sorted
+            .compiled_configuration()
+            .map(|configuration| configuration.name.to_string()),
+        Some("Zeta".to_string())
     );
 }

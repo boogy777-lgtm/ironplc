@@ -250,3 +250,88 @@ fn write_for_person_when_warning_without_a_code_then_the_word_and_the_text_on_on
         "Warning: More than 500 warnings occured: Skipping all further warning messages\n"
     );
 }
+
+/// A program with two configurations, `Zeta` written before `Alpha`.
+const TWO_CONFIGURATIONS: &str = "PROGRAM main
+VAR y : INT; END_VAR
+  y := 1;
+END_PROGRAM
+
+CONFIGURATION Zeta
+  RESOURCE r ON PLC
+    TASK t(INTERVAL := T#10ms, PRIORITY := 1);
+    PROGRAM i1 WITH t : main;
+  END_RESOURCE
+END_CONFIGURATION
+
+CONFIGURATION Alpha
+  RESOURCE r ON PLC
+    TASK t(INTERVAL := T#10ms, PRIORITY := 1);
+    PROGRAM i1 WITH t : main;
+  END_RESOURCE
+END_CONFIGURATION
+";
+
+#[spec_test(REQ_DS_cli_014)]
+fn compile_when_configuration_then_the_application_is_its_name_not_the_file() {
+    let (dir, path) = source_named(
+        "Plant.st",
+        &TWO_CONFIGURATIONS[..TWO_CONFIGURATIONS.find("CONFIGURATION Alpha").unwrap()],
+    );
+    let container = dir.path().join("out.iplc");
+
+    let (project, diagnostics) = super::run_compile(
+        std::slice::from_ref(&path),
+        &container,
+        CompilerOptions::default(),
+        &[],
+    )
+    .unwrap();
+    let shown = person_form(&diagnostics, Some(&project));
+
+    assert_eq!(
+        headed_lines(&shown).first().copied(),
+        Some("------ Build started: Application: Zeta -------")
+    );
+}
+
+#[spec_test(REQ_DS_cli_014)]
+fn compile_when_several_configurations_then_the_application_is_the_first_written() {
+    let (dir, path) = source_named("Plant.st", TWO_CONFIGURATIONS);
+    let container = dir.path().join("out.iplc");
+
+    let (project, diagnostics) = super::run_compile(
+        std::slice::from_ref(&path),
+        &container,
+        CompilerOptions::default(),
+        &[],
+    )
+    .unwrap();
+    let shown = person_form(&diagnostics, Some(&project));
+
+    assert_eq!(
+        headed_lines(&shown).first().copied(),
+        Some("------ Build started: Application: Zeta -------")
+    );
+}
+
+#[spec_test(REQ_DS_cli_014)]
+fn compile_when_syntax_error_then_the_application_is_the_name_of_the_file() {
+    // No library is produced, so there is no configuration to name.
+    let (dir, path) = source_named("Plant.st", "PROGRAM END_PROGRAM");
+    let container = dir.path().join("out.iplc");
+
+    let (project, diagnostics) = super::run_compile(
+        std::slice::from_ref(&path),
+        &container,
+        CompilerOptions::default(),
+        &[],
+    )
+    .unwrap();
+    let shown = person_form(&diagnostics, Some(&project));
+
+    assert_eq!(
+        headed_lines(&shown).first().copied(),
+        Some("------ Build started: Application: Plant -------")
+    );
+}

@@ -183,6 +183,27 @@ pub trait Project {
     /// has not been called or if foundational type resolution failed.
     fn analyzed_library(&self) -> Option<&Library>;
 
+    /// The name of the application a build of the project is for, which the
+    /// line "Build started: Application: {name}" gives.
+    ///
+    /// CODESYS names it for the application of its project. IronPLC has no
+    /// application object; the application is the `CONFIGURATION` that is built,
+    /// so the name is the name of that configuration
+    /// ([`Library::compiled_configuration`]: the first one written when the
+    /// program has several). This is the one rule, and the CLI and the MCP tools
+    /// both ask it.
+    ///
+    /// A program with no `CONFIGURATION`, and a program whose analysis did not
+    /// get far enough to produce a library (a syntax error), has no
+    /// configuration to name, and the name is `fallback`: the name of the
+    /// project that the caller knows (the file name without its extension, or
+    /// the name of the directory). Ask after `semantic()` or `compile()`.
+    fn application_name(&self, fallback: &str) -> String {
+        self.analyzed_library()
+            .and_then(Library::compiled_configuration)
+            .map_or_else(|| fallback.to_string(), |c| c.name.to_string())
+    }
+
     /// Gets the sources that are the project.
     fn sources(&self) -> Vec<&Source>;
 

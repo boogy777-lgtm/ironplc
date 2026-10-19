@@ -199,6 +199,9 @@ pub fn apply(lib: Library, type_environment: &mut TypeEnvironment) -> Sorted {
     let mut types_by_name: HashMap<Id, Vec<DataTypeDeclarationKind>> = HashMap::new();
     let mut elems_by_name: HashMap<Id, Vec<LibraryElementKind>> = HashMap::new();
     let mut global_var_decls: Vec<Vec<VarDecl>> = Vec::new();
+    // The names of the configurations, in the order they were written, for
+    // [`keep_configurations_in_written_order`].
+    let mut configuration_order: Vec<Id> = Vec::new();
     for element in lib.elements {
         match element {
             LibraryElementKind::DataTypeDeclaration(decl) => {
@@ -226,6 +229,7 @@ pub fn apply(lib: Library, type_environment: &mut TypeEnvironment) -> Sorted {
                     .push(LibraryElementKind::ProgramDeclaration(decl));
             }
             LibraryElementKind::ConfigurationDeclaration(decl) => {
+                configuration_order.push(decl.name.clone());
                 elems_by_name
                     .entry(decl.name.clone())
                     .or_default()
@@ -266,6 +270,7 @@ pub fn apply(lib: Library, type_environment: &mut TypeEnvironment) -> Sorted {
             .filter_map(|id| elems_by_name.remove(id))
             .flatten(),
     );
+    keep_configurations_in_written_order(&mut elements, &configuration_order);
 
     let failed = FailedDeclarations(failed);
     failed.enter(type_environment);
@@ -274,6 +279,44 @@ pub fn apply(lib: Library, type_environment: &mut TypeEnvironment) -> Sorted {
         reachable,
         diagnostics,
         failed,
+    }
+}
+
+/// Gives the configurations of `elements` the order they were written in,
+/// without moving any of them to a place that is not a configuration's.
+///
+/// why: the sort orders declarations that do not depend on each other by the
+/// graph and not by the source, which put two configurations last-written first.
+/// Code generation compiles the first configuration of the library
+/// ([`Library::compiled_configuration`]) and the line "Build started" names it,
+/// and the owner's rule is that this is the first one written. Only the order of
+/// the configurations among themselves is restored: the analysis reads a
+/// configuration's globals from its place in the library, so the places stay
+/// where the sort put them (a configuration still precedes the programs it
+/// uses, as before).
+fn keep_configurations_in_written_order(elements: &mut [LibraryElementKind], written: &[Id]) {
+    let mut slots: Vec<usize> = Vec::new();
+    let mut taken: Vec<(usize, LibraryElementKind)> = Vec::new();
+    for (at, element) in elements.iter_mut().enumerate() {
+        if let LibraryElementKind::ConfigurationDeclaration(configuration) = &*element {
+            let rank = written
+                .iter()
+                .position(|name| *name == configuration.name)
+                .unwrap_or(usize::MAX);
+            // An empty list of globals stands in for the slot while its
+            // configuration is out; every slot is refilled below.
+            let configuration = std::mem::replace(
+                element,
+                LibraryElementKind::GlobalVarDeclarations(Vec::new()),
+            );
+            slots.push(at);
+            taken.push((rank, configuration));
+        }
+    }
+    // A stable sort: two configurations of one name stay in the order written.
+    taken.sort_by_key(|(rank, _)| *rank);
+    for (slot, (_, configuration)) in slots.into_iter().zip(taken) {
+        elements[slot] = configuration;
     }
 }
 

@@ -120,4 +120,25 @@ impl Library {
         self.elements.extend(other.elements);
         self
     }
+
+    /// The configuration a build compiles: the first one the library declares.
+    ///
+    /// This is the one place that chooses it. Code generation compiles it, the
+    /// MCP tool `compile` reports its tasks, and the line "Build started:
+    /// Application: {name}" names it, so a program with several configurations
+    /// is named for the configuration that is built. The analyzer keeps the
+    /// configurations in the order they were written (`xform_toposort_declarations`),
+    /// so "the first the library declares" is the first in source order.
+    pub fn compiled_configuration(&self) -> Option<&ConfigurationDeclaration> {
+        self.elements.iter().find_map(|element| match element {
+            LibraryElementKind::ConfigurationDeclaration(configuration) => Some(configuration),
+            LibraryElementKind::DataTypeDeclaration(_)
+            | LibraryElementKind::FunctionDeclaration(_)
+            | LibraryElementKind::FunctionBlockDeclaration(_)
+            | LibraryElementKind::ProgramDeclaration(_)
+            | LibraryElementKind::GlobalVarDeclarations(_)
+            | LibraryElementKind::InterfaceDeclaration(_)
+            | LibraryElementKind::NamespaceDeclaration(_) => None,
+        })
+    }
 }

@@ -314,3 +314,42 @@ VAR y : INT; END_VAR
 
     Ok(())
 }
+
+/// The application of a build is the configuration, not the file, in the lines
+/// of the real command (REQ-DS-cli-014).
+#[test]
+fn compile_when_configuration_then_the_build_started_line_names_it(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempfile::tempdir()?;
+    let source = dir.path().join("Plant.st");
+    std::fs::write(
+        &source,
+        "PROGRAM main
+VAR y : INT; END_VAR
+  y := 1;
+END_PROGRAM
+
+CONFIGURATION Line1
+  RESOURCE r ON PLC
+    TASK t(INTERVAL := T#10ms, PRIORITY := 1);
+    PROGRAM i1 WITH t : main;
+  END_RESOURCE
+END_CONFIGURATION
+",
+    )?;
+    let mut cmd = Command::new(cargo::cargo_bin!("ironplcc"));
+
+    cmd.arg("compile")
+        .arg(&source)
+        .arg("--output")
+        .arg(dir.path().join("out.iplc"));
+    let output = cmd.assert().success().get_output().clone();
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(
+        stderr.lines().next(),
+        Some("------ Build started: Application: Line1 -------")
+    );
+
+    Ok(())
+}

@@ -234,7 +234,8 @@ The limit applies twice:
 
 So it is 950 per object in one precompile and 950 in the whole area, oldest
 dropped, not 950 per object only. The precompile has no limit lines and no cut at
-a fatal error: those belong to the build (`-.352.cs:93-215`).
+a fatal error: those belong to the build (`-.352.cs:93-215`). The owner confirmed
+that the Precompile area keeps its messages after a fatal error, as CODESYS does.
 
 **IronPLC maps the object to the file.** The language server has no object
 granularity: it analyses the whole workspace on each edit and publishes per file.
@@ -284,14 +285,18 @@ without a code (`CompilerServicesInternal.cs:1246-1274`,
 `CompilerPhaseControllerGenerateCode.cs:656-686`,
 `LanguageModelManagerConsolidated.cs:1972-1989`). So they are messages in both
 forms. The name in "Application: {0}" is the name of the application of the
-CODESYS project; IronPLC has no application object, so it is the name of the
+CODESYS project. IronPLC has no application object; by the owner's decision the
+application is the `CONFIGURATION` that is built, and the name is its name. A
+program with several configurations is named for the first one written, which
+is the one code generation compiles. A program with no `CONFIGURATION`, or whose
+analysis produced no library, has none to name, and the name is that of the
 project: the file name without its extension of the first path, or the name of
-the directory.
+the directory. One function reads it (`Project::application_name`), and the
+command line and the MCP tools ask it.
 
-Whether the counts include the limit lines is open (MSG-075). CODESYS counts the
-messages it has stored, and it stores the limit line as an `Error` or a `Warning`,
-so the interim choice is that they are included: a run that passes the error limit
-reports 501 errors.
+The counts include the limit lines (MSG-075, decided by the owner): CODESYS
+counts the messages it has stored, and it stores the limit line as an `Error` or a
+`Warning`, so a run that passes the error limit reports 501 errors.
 
 ## User messages
 
@@ -380,10 +385,10 @@ States:
 | MSG-061 | The related position of a suppressed warning is `SuppressedInformation` | `CallTree.cs:354` | planned |
 | MSG-070 | Messages keep the order in which they are produced | `Messages.cs:28-43` | done (REQ-DS-dsl-015) |
 | MSG-071 | A duplicate message (same code, position, text, category, object) is dropped; the first wins | `-.351.cs:65-75` | done (REQ-DS-dsl-016) |
-| MSG-072 | A build starts with "------ Build started: Application: {0} -------" | `CompilerServicesInternal.cs:1246` | done (REQ-DS-dsl-023, REQ-DS-cli-007) |
+| MSG-072 | A build starts with "------ Build started: Application: {0} -------"; owner: the application is the `CONFIGURATION` that is built, and its name is {0} | `CompilerServicesInternal.cs:1246` | owner (REQ-DS-dsl-023, REQ-DS-cli-007, -014, REQ-DS-project-005, REQ-DS-analyzer-006, REQ-DS-mcp-011) |
 | MSG-073 | `compile` ends with "Build complete -- {0} errors, {1} warnings : Ready for download" or "… : No download possible", with the counts of the run | `CompilerPhaseControllerGenerateCode.cs:656-686` | done (REQ-DS-dsl-023, REQ-DS-cli-007, -008) |
-| MSG-074 | `check` ends with "Compile complete -- {0} errors, {1} warnings"; errors count `FatalError` and `Error`, warnings count `Warning` | `LanguageModelManagerConsolidated.cs:1972-1989` | done (REQ-DS-dsl-021, -022, REQ-DS-cli-006, -009, REQ-DS-mcp-005, -006) |
-| MSG-075 | Whether the counts include the limit lines | — | live (interim: the counts include the limit lines) |
+| MSG-074 | `check` ends with "Compile complete -- {0} errors, {1} warnings"; errors count `FatalError` and `Error`, warnings count `Warning`; the MCP `check` returns it among its `diagnostics` | `LanguageModelManagerConsolidated.cs:1972-1989` | done (REQ-DS-dsl-021, -022, REQ-DS-cli-006, -009, REQ-DS-mcp-005, -006, -010) |
+| MSG-075 | The counts of a summary include the limit lines: a run that passes the error limit reports 501 errors | `-.352.cs:206-215` | done (REQ-DS-dsl-021, -022, REQ-DS-cli-010) |
 | MSG-080 | `{error}`, `{fatalerror}`, `{warning}`, `{info}`, `{text}` create a message of their category; `{warning}` has code C0373, the others none | `PragmaStatementParser.cs:145-198`, `ErrorPragmaParser.cs:95-187` | planned |
 | MSG-081 | `, Length := n` and `, messageguid 'GUID'` options of a message pragma | `ErrorPragmaParser.cs:102-111,198-212` | planned |
 | MSG-082 | `show_compile` / `show_precompile` choose the areas of a pragma message | `ErrorPragmaParser.cs:218-247` | planned |

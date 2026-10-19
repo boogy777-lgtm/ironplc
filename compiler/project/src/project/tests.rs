@@ -4,6 +4,7 @@ use ironplc_dsl::core::FileId;
 use ironplc_dsl::diagnostic::Area;
 use ironplc_parser::options::{CompilerOptions, Dialect};
 use ironplc_problems::Problem;
+use spec_test_macro::spec_test;
 use std::path::Path;
 
 use super::{FileBackedProject, LibraryName, MemoryBackedProject, Project};
@@ -841,4 +842,66 @@ fn memory_semantic_when_semantic_error_then_analyzed_library_available() {
     // Type resolution succeeds even with semantic diagnostics, so
     // the analyzed library should be available.
     assert!(project.analyzed_library().is_some());
+}
+
+// -----------------------------------------------------------------
+// The name of the application a build is for (REQ-DS-project-005).
+// -----------------------------------------------------------------
+
+/// A program and two configurations, `Zeta` written before `Alpha`.
+const TWO_CONFIGURATIONS: &str = "
+PROGRAM main
+  VAR x : INT; END_VAR
+  x := 1;
+END_PROGRAM
+
+CONFIGURATION Zeta
+  RESOURCE r ON PLC
+    TASK t(INTERVAL := T#10ms, PRIORITY := 1);
+    PROGRAM i1 WITH t : main;
+  END_RESOURCE
+END_CONFIGURATION
+
+CONFIGURATION Alpha
+  RESOURCE r ON PLC
+    TASK t(INTERVAL := T#10ms, PRIORITY := 1);
+    PROGRAM i1 WITH t : main;
+  END_RESOURCE
+END_CONFIGURATION";
+
+fn analyzed(text: &str) -> MemoryBackedProject {
+    let mut project = MemoryBackedProject::new(CompilerOptions::default());
+    project.add_source(FileId::from_string("plant.st"), text.to_owned());
+    project.semantic(Area::Build);
+    project
+}
+
+#[spec_test(REQ_DS_project_005)]
+fn application_name_when_one_configuration_then_its_name_not_the_fallback() {
+    let project =
+        analyzed(&TWO_CONFIGURATIONS[..TWO_CONFIGURATIONS.find("CONFIGURATION Alpha").unwrap()]);
+
+    assert_eq!(project.application_name("plant"), "Zeta");
+}
+
+#[spec_test(REQ_DS_project_005)]
+fn application_name_when_several_configurations_then_the_first_written() {
+    let project = analyzed(TWO_CONFIGURATIONS);
+
+    assert_eq!(project.application_name("plant"), "Zeta");
+}
+
+#[spec_test(REQ_DS_project_005)]
+fn application_name_when_no_configuration_then_the_fallback() {
+    let project = analyzed("PROGRAM main END_PROGRAM");
+
+    assert_eq!(project.application_name("plant"), "plant");
+}
+
+#[spec_test(REQ_DS_project_005)]
+fn application_name_when_no_library_then_the_fallback() {
+    let project = analyzed("PROGRAM END_PROGRAM");
+
+    assert!(project.analyzed_library().is_none());
+    assert_eq!(project.application_name("plant"), "plant");
 }
