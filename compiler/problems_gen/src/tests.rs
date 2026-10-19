@@ -265,9 +265,9 @@ fn severity_variant_when_missing_unknown_or_suppressed_then_error_names_code_and
 }
 
 #[test]
-fn check_problem_codes_header_when_severity_column_present_then_accepted() {
+fn check_problem_codes_header_when_codesys_column_present_then_accepted() {
     assert_eq!(
-        check_problem_codes_header(&["Code", "Name", "Message", "Severity"]),
+        check_problem_codes_header(&["Code", "Name", "Message", "Severity", "Codesys"]),
         Ok(())
     );
 }
@@ -276,13 +276,37 @@ fn check_problem_codes_header_when_severity_column_present_then_accepted() {
 fn check_problem_codes_header_when_column_missing_or_moved_then_error() {
     for header in [
         vec!["Code", "Name", "Message"],
-        vec!["Code", "Name", "Severity", "Message"],
-        vec!["Code", "Name", "Message", "Level"],
+        vec!["Code", "Name", "Message", "Severity"],
+        vec!["Code", "Name", "Severity", "Message", "Codesys"],
+        vec!["Code", "Name", "Message", "Severity", "Counterpart"],
     ] {
         let message =
             check_problem_codes_header(&header).expect_err("the header should be refused");
 
-        assert!(message.contains("Code,Name,Message,Severity"), "{message}");
+        assert!(
+            message.contains("Code,Name,Message,Severity,Codesys"),
+            "{message}"
+        );
+    }
+}
+
+#[test]
+fn codesys_code_when_empty_then_none() {
+    assert_eq!(codesys_code("P0001", ""), Ok(None));
+}
+
+#[test]
+fn codesys_code_when_c_and_four_digits_then_that_code() {
+    assert_eq!(codesys_code("P4007", "C0046"), Ok(Some("C0046".to_string())));
+}
+
+#[test]
+fn codesys_code_when_malformed_then_error_names_code_and_value() {
+    for value in ["C046", "C00460", "c0046", "P0046", "C00x6", " C0046", "0046", "C"] {
+        let message = codesys_code("P0042", value).expect_err("the value should be refused");
+
+        assert!(message.contains("P0042"), "'{value}': {message}");
+        assert!(message.contains(&format!("'{value}'")), "'{value}': {message}");
     }
 }
 

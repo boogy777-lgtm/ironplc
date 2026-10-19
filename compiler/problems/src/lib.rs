@@ -224,19 +224,49 @@ mod tests {
     }
 
     #[spec_test(REQ_DS_problems_005)]
-    fn check_problem_codes_header_when_not_the_four_columns_then_error() {
+    fn check_problem_codes_header_when_not_the_five_columns_then_error() {
         assert_eq!(
             ironplc_problems_gen::check_problem_codes_header(&[
-                "Code", "Name", "Message", "Severity"
+                "Code", "Name", "Message", "Severity", "Codesys"
             ]),
             Ok(())
         );
         for header in [
-            vec!["Code", "Name", "Message"],
-            vec!["Code", "Name", "Severity", "Message"],
-            vec!["Code", "Name", "Message", "Level"],
+            vec!["Code", "Name", "Message", "Severity"],
+            vec!["Code", "Name", "Message", "Severity", "Counterpart"],
+            vec!["Code", "Name", "Severity", "Message", "Codesys"],
         ] {
             assert!(ironplc_problems_gen::check_problem_codes_header(&header).is_err());
+        }
+    }
+
+    #[spec_test(REQ_DS_problems_006)]
+    fn codesys_when_problem_of_the_csv_then_the_code_of_its_row() {
+        // A row with a confirmed counterpart, one that names two problems of
+        // one CODESYS code, and rows with none.
+        assert_eq!(Problem::VariableUndefined.codesys(), Some("C0046"));
+        assert_eq!(Problem::FunctionInvocationMissingInput.codesys(), Some("C0037"));
+        assert_eq!(
+            Problem::FunctionCallNamedArgUndeclared.codesys(),
+            Problem::FunctionInvocationMissingInput.codesys()
+        );
+        assert_eq!(Problem::SyntaxError.codesys(), None);
+        assert_eq!(Problem::McpInputValidation.codesys(), None);
+    }
+
+    #[spec_test(REQ_DS_problems_007)]
+    fn codesys_code_when_value_is_not_c_and_four_digits_then_error_names_code_and_value() {
+        assert_eq!(ironplc_problems_gen::codesys_code("P0001", ""), Ok(None));
+        assert_eq!(
+            ironplc_problems_gen::codesys_code("P4007", "C0046"),
+            Ok(Some("C0046".to_string()))
+        );
+        for value in ["C046", "C00460", "c0046", "P0046", "C00x6", "0046"] {
+            let message = ironplc_problems_gen::codesys_code("P0042", value)
+                .expect_err("the value should be refused");
+
+            assert!(message.contains("P0042"), "'{value}': {message}");
+            assert!(message.contains(&format!("'{value}'")), "'{value}': {message}");
         }
     }
 }

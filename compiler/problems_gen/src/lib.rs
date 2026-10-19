@@ -1,6 +1,6 @@
 //! Build-script helper of `ironplc-problems`: checks `problem-texts.csv` and
 //! generates the module `text` (one function for each row), and checks the
-//! `Severity` column of `problem-codes.csv`.
+//! `Severity` and `Codesys` columns of `problem-codes.csv`.
 //!
 //! It does no file access: `problems/build.rs` reads the files and writes the
 //! result, so every check has a unit test here (Cargo does not run the tests of
@@ -37,7 +37,7 @@ pub fn deprecation_note(name: &str) -> Option<&'static str> {
 
 /// The header `problem-codes.csv` must have. `problems/build.rs` reads the
 /// columns by position, so the order is part of the format.
-pub const PROBLEM_CODES_HEADER: [&str; 4] = ["Code", "Name", "Message", "Severity"];
+pub const PROBLEM_CODES_HEADER: [&str; 5] = ["Code", "Name", "Message", "Severity", "Codesys"];
 
 /// One category of a message, with every fact the compiler asks of it.
 struct Level {
@@ -220,6 +220,24 @@ pub fn severity_variant(code: &str, value: &str) -> Result<&'static str, String>
                 allowed.join(", ")
             )
         })
+}
+
+/// The CODESYS code a row names, `None` for a row that names none, or the error
+/// that names the row. A CODESYS code is `C` and four digits, the prefix and the
+/// number of a `MessageId` (`C0046`); the build fails on any other value, so a
+/// misspelled code cannot reach the output of a person or a program.
+pub fn codesys_code(code: &str, value: &str) -> Result<Option<String>, String> {
+    if value.is_empty() {
+        return Ok(None);
+    }
+    let digits = value.strip_prefix('C').unwrap_or_default();
+    if digits.len() == 4 && digits.chars().all(|c| c.is_ascii_digit()) {
+        Ok(Some(value.to_string()))
+    } else {
+        Err(format!(
+            "problem-codes.csv {code}: the CODESYS code '{value}' is not C and four digits (such as C0046), or empty"
+        ))
+    }
 }
 
 /// Checks the header of `problem-codes.csv`.

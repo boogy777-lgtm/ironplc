@@ -19,6 +19,9 @@ struct ProblemDef {
     message: String,
     /// The name of the `Severity` variant, taken from the `Severity` column.
     severity: &'static str,
+    /// The CODESYS code that reports the same condition, from the `Codesys`
+    /// column, when the decompiled checker confirms it.
+    codesys: Option<String>,
 }
 
 fn create_problems() -> Result<(), Box<dyn Error>> {
@@ -53,11 +56,15 @@ fn create_problems() -> Result<(), Box<dyn Error>> {
         let severity = record
             .get(3)
             .ok_or_else(|| format!("Record {record:?} is not valid at column 3"))?;
+        let codesys = record
+            .get(4)
+            .ok_or_else(|| format!("Record {record:?} is not valid at column 4"))?;
         defs.push(ProblemDef {
             code: code.to_string(),
             name: name.to_string(),
             message: message.to_string(),
             severity: ironplc_problems_gen::severity_variant(code, severity)?,
+            codesys: ironplc_problems_gen::codesys_code(code, codesys)?,
         });
     }
 
@@ -131,6 +138,22 @@ fn create_problems() -> Result<(), Box<dyn Error>> {
             )
             .as_bytes(),
         )?;
+    }
+    out.write_all(b"        }\n")?;
+    out.write_all(b"    }\n\n")?;
+
+    // Define codesys(). The match names every problem, so the build fails on a
+    // problem the `Codesys` column does not cover.
+    out.write_all(b"    /// Returns the CODESYS code that reports the same condition, such as `C0046`, or `None`\n")?;
+    out.write_all(b"    /// when no CODESYS message is confirmed to be the same condition.\n")?;
+    out.write_all(b"    pub fn codesys(&self) -> Option<&'static str> {\n")?;
+    out.write_all(b"        match self {\n")?;
+    for def in &defs {
+        let arm = match &def.codesys {
+            Some(codesys) => format!("Some(\"{codesys}\")"),
+            None => "None".to_string(),
+        };
+        out.write_all(format!("            Problem::{} => {arm},\n", def.name).as_bytes())?;
     }
     out.write_all(b"        }\n")?;
     out.write_all(b"    }\n")?;
