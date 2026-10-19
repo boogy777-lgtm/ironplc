@@ -300,7 +300,7 @@ fn build_success_response(
         }),
     };
     if let Some(message) = stop_message {
-        diagnostics.push(serialize_diagnostic(&validation(message)));
+        diagnostics.push(serialize_diagnostic(&validation(message), &[]));
     }
 
     let reason_str = reason.as_str().to_string();
@@ -561,7 +561,7 @@ fn fail(diags: Vec<Diagnostic>) -> RunResponse {
             terminated_reason: "error".into(),
             interval_ms: 0.0,
         },
-        diagnostics: serialize_diagnostics(&diags),
+        diagnostics: serialize_diagnostics(&diags, &[]),
     }
 }
 

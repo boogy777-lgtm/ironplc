@@ -30,13 +30,15 @@ This guidance is particularly relevant when working with:
 
 ### CSV Format
 ```csv
-Code,Name,Message
-P2016,SubrangeOutOfBounds,Subrange is outside base type bounds
+Code,Name,Message,Severity,Codesys
+P2016,SubrangeOutOfBounds,Subrange is outside base type bounds,Error,
 ```
 
 - **Code**: P#### format (e.g., P2016)
 - **Name**: PascalCase enum variant name (e.g., SubrangeOutOfBounds)
 - **Message**: Brief, generic description of the error class
+- **Severity**: the message category (`FatalError`, `Error`, `Warning`, `Information` or `Text`); see [Diagnostic Severity](../design/diagnostic-severity.md)
+- **Codesys**: the CODESYS code that reports the same condition (`C` and four digits), only where the decompiled checker confirms it; empty otherwise
 
 ### Documentation Template
 
@@ -261,7 +263,7 @@ Diagnostic::text(fault.span, text::attribute_repeated(name))
   problem, or a placeholder
   or a brace is malformed. There are no rows for P9997, P9998 and P9999: those
   have their own constructors (see below).
-- `problem-codes.csv` keeps its three columns; the texts are in their own file
+- `problem-codes.csv` keeps its columns; the texts are in their own file
   because other tools read that one. See
   [ADR-0077](../adrs/0077-message-texts-in-a-checked-dictionary.md).
 

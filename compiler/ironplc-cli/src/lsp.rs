@@ -7,13 +7,13 @@ use ironplc_parser::options::{CompilerOptions, Dialect};
 use log::{debug, trace};
 use lsp_server::{Connection, ExtractError, Message, RequestId};
 use lsp_types::{
-    notification::{self, Notification, PublishDiagnostics},
+    notification::{self, LogMessage, Notification, PublishDiagnostics},
     request::{self, Request},
-    InitializeParams, OneOf, PublishDiagnosticsParams, SemanticTokens, SemanticTokensFullOptions,
-    SemanticTokensLegend, SemanticTokensOptions, SemanticTokensResult,
-    SemanticTokensServerCapabilities, ServerCapabilities, TextDocumentSyncCapability,
-    TextDocumentSyncKind, Uri, WorkDoneProgressOptions, WorkspaceFoldersServerCapabilities,
-    WorkspaceServerCapabilities,
+    InitializeParams, LogMessageParams, MessageType, OneOf, PublishDiagnosticsParams,
+    SemanticTokens, SemanticTokensFullOptions, SemanticTokensLegend, SemanticTokensOptions,
+    SemanticTokensResult, SemanticTokensServerCapabilities, ServerCapabilities,
+    TextDocumentSyncCapability, TextDocumentSyncKind, Uri, WorkDoneProgressOptions,
+    WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::collections::BTreeSet;
@@ -241,7 +241,8 @@ impl<'a> LspServer<'a> {
     /// client.
     fn publish_workspace_diagnostics(&mut self, edited_uri: &Uri, edited_version: Option<i32>) {
         let edited_key = UriKey::from_uri(edited_uri);
-        let by_key = self.project.semantic_all();
+        let analysis = self.project.semantic_all();
+        let by_key = analysis.problems;
         let mut new_published: BTreeSet<UriKey> = BTreeSet::new();
 
         for (key, diagnostics) in by_key {
@@ -298,6 +299,17 @@ impl<'a> LspServer<'a> {
         }
 
         self.published_uris = new_published;
+
+        // A text is a line about the build, not a problem of a file: the
+        // editor shows it in the Output channel. `INFO`, not `LOG`: the
+        // language client writes a `LOG` message at the debug level, which the
+        // channel hides by default.
+        for message in analysis.log {
+            self.send_notification::<LogMessage>(LogMessageParams {
+                typ: MessageType::INFO,
+                message,
+            });
+        }
     }
 
     /// The main event loop. The event loop receives messages from the other

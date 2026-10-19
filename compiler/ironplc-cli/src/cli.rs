@@ -8,12 +8,12 @@ use codespan_reporting::{
     files::SimpleFiles,
     term::{
         self,
-        termcolor::{ColorChoice, StandardStream},
+        termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor},
     },
 };
 use ironplc_dsl::{
     core::FileId,
-    diagnostic::{any_stops_build, stops_build_count, Diagnostic, Label, Severity},
+    diagnostic::{any_stops_build, stops_build_count, Diagnostic, Label, ScriptMessage, Severity},
 };
 use ironplc_plc2plc::write_to_string;
 use ironplc_problems::{text, Text};
@@ -34,19 +34,44 @@ use ironplc_sources::LibraryName;
 use ironplc_project::tokenizer;
 use ironplc_project::{FileBackedProject, Project};
 
+/// Where the messages of a command go, and in which form.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Output {
+    /// Nowhere: the caller reads the result.
+    Silent,
+    /// To the terminal, in the form for a person: the words of the CODESYS
+    /// Messages view, with the source snippet.
+    Terminal,
+    /// To standard output, in the form for a program: a JSON array with one
+    /// `ScriptMessage` for each message, suppressed messages included.
+    Json,
+}
+
+/// The `suppress_output` flag of a command that has no JSON form: the terminal,
+/// unless the caller asked for none.
+impl From<bool> for Output {
+    fn from(suppress_output: bool) -> Self {
+        if suppress_output {
+            Output::Silent
+        } else {
+            Output::Terminal
+        }
+    }
+}
+
 // Checks specified files.
 pub fn check(
     paths: &[PathBuf],
     compiler_options: CompilerOptions,
     libraries: &[LibraryName],
-    suppress_output: bool,
+    output: Output,
 ) -> Result<(), String> {
     let (mut project, mut diagnostics) = create_project(paths, compiler_options, libraries);
 
     // Analyze the set
     diagnostics.extend(project.semantic());
 
-    finish("Check", diagnostics, Some(&project), suppress_output)
+    finish("Check", diagnostics, Some(&project), output)
 }
 
 pub fn echo(
@@ -275,13 +300,15 @@ fn finish(
     command: &str,
     diagnostics: Vec<Diagnostic>,
     project: Option<&FileBackedProject>,
-    suppress_output: bool,
+    output: impl Into<Output>,
 ) -> Result<(), String> {
-    if diagnostics.is_empty() {
+    let output = output.into();
+    // The JSON form is a list even when it is empty.
+    if diagnostics.is_empty() && output != Output::Json {
         return Ok(());
     }
     trace!("Diagnostics {diagnostics:?}");
-    handle_diagnostics(&diagnostics, project, suppress_output);
+    handle_diagnostics(&diagnostics, project, output);
     if !any_stops_build(&diagnostics) {
         return Ok(());
     }
@@ -419,66 +446,187 @@ fn enumerate_project(
     }
 }
 
-/// Converts an IronPLC diagnostic into the
+/// Shows the diagnostics in the form of `output`.
 fn handle_diagnostics(
     diagnostics: &[Diagnostic],
     project: Option<&FileBackedProject>,
-    suppress_output: bool,
+    output: Output,
 ) {
-    if !suppress_output {
-        let writer = StandardStream::stderr(ColorChoice::Always);
-        let config = codespan_reporting::term::Config::default();
+    match output {
+        Output::Silent => {}
+        Output::Terminal => print_for_person(diagnostics, project),
+        Output::Json => print_for_program(diagnostics, project),
+    }
+}
 
-        let mut files: SimpleFiles<String, &str> = SimpleFiles::new();
+/// Prints every diagnostic that is shown, in the form for a person.
+fn print_for_person(diagnostics: &[Diagnostic], project: Option<&FileBackedProject>) {
+    let writer = StandardStream::stderr(ColorChoice::Always);
+    let config = codespan_reporting::term::Config::default();
 
-        let mut unique_files: BTreeSet<&FileId> = BTreeSet::new();
-        for diagnostic in diagnostics {
-            for file_id in diagnostic.file_ids() {
-                unique_files.insert(file_id);
-            }
+    let mut files: SimpleFiles<String, &str> = SimpleFiles::new();
+
+    let mut unique_files: BTreeSet<&FileId> = BTreeSet::new();
+    for diagnostic in diagnostics {
+        for file_id in diagnostic.file_ids() {
+            unique_files.insert(file_id);
         }
+    }
 
-        let mut files_to_ids: HashMap<&FileId, usize> = HashMap::new();
-        let empty_source = &"".to_owned();
-        match project {
-            Some(set) => {
-                for file_id in unique_files {
-                    if let Some(content) = set.get(file_id) {
-                        let id = files.add(file_id.to_string(), content.as_string());
-                        files_to_ids.insert(file_id, id);
-                    } else {
-                        let id = files.add(file_id.to_string(), empty_source);
-                        files_to_ids.insert(file_id, id);
-                    }
-                }
-            }
-            None => {
-                for file_id in unique_files {
+    let mut files_to_ids: HashMap<&FileId, usize> = HashMap::new();
+    let empty_source = &"".to_owned();
+    match project {
+        Some(set) => {
+            for file_id in unique_files {
+                if let Some(content) = set.get(file_id) {
+                    let id = files.add(file_id.to_string(), content.as_string());
+                    files_to_ids.insert(file_id, id);
+                } else {
                     let id = files.add(file_id.to_string(), empty_source);
                     files_to_ids.insert(file_id, id);
                 }
             }
         }
+        None => {
+            for file_id in unique_files {
+                let id = files.add(file_id.to_string(), empty_source);
+                files_to_ids.insert(file_id, id);
+            }
+        }
+    }
 
-        diagnostics
-            .iter()
-            .for_each(|d| match display_of(d.severity()) {
-                Display::Hidden => {}
-                Display::TextOnly => {
-                    if let Err(err) = writeln!(writer.lock(), "{}", text_of(d)) {
-                        error!("Failed writing to terminal: {err}");
-                    }
+    diagnostics
+        .iter()
+        .for_each(|d| match display_of(d.severity()) {
+            Display::Hidden => {}
+            Display::TextOnly => {
+                if let Err(err) = writeln!(writer.lock(), "{}", d.person_text()) {
+                    error!("Failed writing to terminal: {err}");
                 }
-                Display::Report(severity) => {
-                    let diagnostic = map_diagnostic(d, severity, &files_to_ids);
+            }
+            Display::Report(severity) => {
+                let report = map_diagnostic(d, severity, &files_to_ids);
+                if let Err(err) =
+                    write_report(&mut writer.lock(), &config, &files, d, severity, &report)
+                {
+                    error!("Failed writing to terminal: {err}");
+                }
+            }
+        });
+}
 
-                    if let Err(err) =
-                        term::emit_to_write_style(&mut writer.lock(), &config, &files, &diagnostic)
-                    {
-                        error!("Failed writing to terminal: {err}");
-                    }
-                }
-            });
+/// Prints every diagnostic, suppressed ones included, in the form for a
+/// program.
+fn print_for_program(diagnostics: &[Diagnostic], project: Option<&FileBackedProject>) {
+    match json_of(diagnostics, project) {
+        Ok(json) => println!("{json}"),
+        Err(err) => error!("Failed writing the messages: {err}"),
+    }
+}
+
+/// The form for a program: one JSON array with the `ScriptMessage` of each
+/// diagnostic, in order. A diagnostic of any category is in it, a suppressed one
+/// too, so a tool can see what was hidden.
+fn json_of(
+    diagnostics: &[Diagnostic],
+    project: Option<&FileBackedProject>,
+) -> Result<String, serde_json::Error> {
+    let messages: Vec<ScriptMessage> = diagnostics
+        .iter()
+        .map(|d| {
+            let source = project.and_then(|set| set.get(&d.primary.file_id));
+            d.script_message(source.map(|content| content.as_string()))
+        })
+        .collect();
+    serde_json::to_string(&messages)
+}
+
+/// Writes a diagnostic that has a header: the header of the CODESYS Messages
+/// view, then the source snippet that codespan draws.
+///
+/// codespan prints a header of its own (`error[P4007]: ...`), always in lower
+/// case and with its own word, so the header is written here and the one
+/// codespan writes is dropped (see [`BelowHeader`]).
+fn write_report(
+    out: &mut impl WriteColor,
+    config: &term::Config,
+    files: &SimpleFiles<String, &str>,
+    diagnostic: &Diagnostic,
+    severity: CodeSpanSeverity,
+    report: &CodeSpanDiagnostic<usize>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let Some(header) = diagnostic.person_header() else {
+        // A category without a header word is not drawn as a report (see
+        // `display_of`); codespan draws its own header for it.
+        return Ok(term::emit_to_write_style(out, config, files, report)?);
+    };
+    let styles = term::Styles::default();
+    out.set_color(styles.header(severity))?;
+    write!(out, "{header}")?;
+    out.set_color(styles.header_message())?;
+    write!(out, ": {}", diagnostic.description())?;
+    out.reset()?;
+    writeln!(out)?;
+    Ok(term::emit_to_write_style(
+        &mut BelowHeader::new(out),
+        config,
+        files,
+        report,
+    )?)
+}
+
+/// A writer that drops the first line written to it, the header codespan
+/// renders, and passes on everything after it, with its colors.
+struct BelowHeader<W> {
+    inner: W,
+    in_header: bool,
+}
+
+impl<W> BelowHeader<W> {
+    fn new(inner: W) -> Self {
+        BelowHeader {
+            inner,
+            in_header: true,
+        }
+    }
+}
+
+impl<W: Write> Write for BelowHeader<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if !self.in_header {
+            return self.inner.write(buf);
+        }
+        if let Some(end) = buf.iter().position(|byte| *byte == b'\n') {
+            self.in_header = false;
+            self.inner.write_all(&buf[end + 1..])?;
+        }
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
+    }
+}
+
+impl<W: WriteColor> WriteColor for BelowHeader<W> {
+    fn supports_color(&self) -> bool {
+        self.inner.supports_color()
+    }
+
+    fn set_color(&mut self, spec: &ColorSpec) -> std::io::Result<()> {
+        if self.in_header {
+            Ok(())
+        } else {
+            self.inner.set_color(spec)
+        }
+    }
+
+    fn reset(&mut self) -> std::io::Result<()> {
+        if self.in_header {
+            Ok(())
+        } else {
+            self.inner.reset()
+        }
     }
 }
 
@@ -530,8 +678,8 @@ fn map_diagnostic(
 /// How the terminal shows a diagnostic of a category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Display {
-    /// With its code, labels and notes, under the header codespan prints for the
-    /// severity.
+    /// With its header, code, labels and notes, in the style codespan has for
+    /// the severity.
     Report(CodeSpanSeverity),
     /// As the text alone, without a code: a line about the build.
     TextOnly,
@@ -539,8 +687,9 @@ enum Display {
     Hidden,
 }
 
-/// How the terminal shows a category. codespan prints a header of its own
-/// (`error`, `warning`, `note`), so a fatal error shows as an error and an
+/// How the terminal shows a category. The header word is the one the category
+/// declares (`Severity::person_word`); the style of the header is the one
+/// codespan has for the severity, so a fatal error is drawn as an error and an
 /// information message as a note. No arm is a wildcard: a category added to
 /// `Severity` does not compile until it is shown, or hidden, here.
 fn display_of(severity: Severity) -> Display {
@@ -550,16 +699,6 @@ fn display_of(severity: Severity) -> Display {
         Severity::Information => Display::Report(CodeSpanSeverity::Note),
         Severity::Text => Display::TextOnly,
         Severity::SuppressedWarning | Severity::SuppressedInformation => Display::Hidden,
-    }
-}
-
-/// The text of a diagnostic that is shown as text alone: its label when it has
-/// one, and its description otherwise.
-fn text_of(diagnostic: &Diagnostic) -> String {
-    if diagnostic.primary.message.is_empty() {
-        diagnostic.description()
-    } else {
-        diagnostic.primary.message.clone()
     }
 }
 

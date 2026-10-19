@@ -223,7 +223,7 @@ fn validation_failure(text: Text) -> HotEditResponse {
         v_code: None,
         message: None,
         pairs: None,
-        diagnostics: serialize_diagnostics(&[Diagnostic::text(SourceSpan::default(), text)]),
+        diagnostics: serialize_diagnostics(&[Diagnostic::text(SourceSpan::default(), text)], &[]),
     }
 }
 
@@ -238,9 +238,10 @@ fn internal_failure(message: String) -> HotEditResponse {
         v_code: None,
         message: None,
         pairs: None,
-        diagnostics: vec![serialize_diagnostic(&Diagnostic::internal_error_at(
-            Label::span(SourceSpan::default(), message),
-        ))],
+        diagnostics: vec![serialize_diagnostic(
+            &Diagnostic::internal_error_at(Label::span(SourceSpan::default(), message)),
+            &[],
+        )],
     }
 }
 

@@ -18,6 +18,9 @@ pub use ironplc_problems::Severity;
 use ironplc_problems::{Problem, Text};
 
 mod editor_range;
+mod forms;
+
+pub use forms::ScriptMessage;
 
 use crate::common::TypeName;
 use crate::core::{FileId, Id, Located, SourceSpan};
@@ -124,6 +127,10 @@ pub struct Diagnostic {
     /// decide it; `suppress` is the one change made afterwards.
     severity: Severity,
 
+    /// The CODESYS code that reports the same condition as the problem, from
+    /// its row of `problem-codes.csv`.
+    codesys: Option<&'static str>,
+
     description: String,
 
     /// The primary or first diagnostic.
@@ -207,6 +214,7 @@ impl Diagnostic {
         Self {
             code: problem.code().to_string(),
             severity: problem.severity(),
+            codesys: problem.codesys(),
             description: problem.message().to_string(),
             primary,
             described: vec![],

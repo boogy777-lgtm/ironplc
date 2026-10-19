@@ -22,11 +22,16 @@ help_topics = compiler_help_topics.union(extension_help_topics).union(runtime_he
 problem_infos = dict()
 
 class ProblemCode:
-    def __init__(self, message):
+    def __init__(self, message, codesys=''):
         self.message = message
+        self.codesys = codesys
+
+# The compiler's table is the only one with a `Codesys` column (the fifth): the
+# CODESYS code that reports the same condition, empty when none is confirmed.
+compiler_definition = join('..', 'compiler', 'problems', 'resources', 'problem-codes.csv')
 
 definitions = [
-    join('..', 'compiler', 'problems', 'resources', 'problem-codes.csv'),
+    compiler_definition,
     join('..', 'integrations', 'vscode', 'resources', 'problem-codes.csv'),
     join('..', 'compiler', 'vm', 'resources', 'problem-codes.csv'),
     join('..', 'compiler', 'vm-cli', 'resources', 'problem-codes.csv'),
@@ -45,19 +50,23 @@ for definition in definitions:
             if code not in help_topics:
                 print('Missing help topic for ' + code)
                 exit(1)
-            problem_infos[code] = ProblemCode(row[2])
+            codesys = row[4] if definition == compiler_definition else ''
+            problem_infos[code] = ProblemCode(row[2], codesys)
 
 class ProblemSummary(Directive):
     required_arguments = 1
     def run(self):
         code = self.arguments[0]
         message = problem_infos[code].message
+        codesys = problem_infos[code].codesys
 
         items = [
             ProblemSummary.make_item('Code', code),
             ProblemSummary.make_item('Message', message),
         ]
-        
+        if codesys:
+            items.append(ProblemSummary.make_item('CODESYS', codesys))
+
         return [nodes.definition_list('', *items)]
     
     @staticmethod

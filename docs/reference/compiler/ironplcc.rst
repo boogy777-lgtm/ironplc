@@ -38,7 +38,9 @@ Build Commands
 
 :program:`ironplcc check` [*FILES*...]
    Check source files for syntax and semantic correctness without producing
-   output. On success, the command produces no output.
+   output. On success, the command produces no output. The messages are
+   written to standard error for a person; ``--format json`` writes them to
+   standard output for a program.
 
 :program:`ironplcc compile` [*FILES*...] ``-o`` *OUTPUT*
    Compile source files into a bytecode container (``.iplc``) file. Requires
@@ -134,6 +136,20 @@ Options
    activate several libraries. Applies to the ``check`` and ``compile``
    commands. Libraries referenced by a discovered project file are
    activated automatically and do not need this option.
+
+``--format`` *FORMAT*
+   Select how :program:`ironplcc check` writes its messages. ``text`` (default)
+   writes them for a person, to standard error, as
+   ``Error[P4007] (CODESYS C0046): <text>`` followed by the source snippet:
+   the category word is ``Error``, ``Warning`` or ``Information`` as in the
+   CODESYS Messages view, and the CODESYS code appears when the problem has
+   one. ``json`` writes one JSON array to standard output with an object for
+   each message, suppressed messages included. The object has the fields of the
+   CODESYS ``ScriptMessage``:
+
+   .. include:: ../../includes/message-object-fields.rst
+
+   The exit status is the same in both formats.
 
 ``--allow-c-style-comments``
    Allow C-style comments (``//`` line comments and ``/* */`` block
@@ -547,7 +563,13 @@ Examples
 
       ironplcc check --dialect iec61131-3-ed3 main.st
 
-7. Show available dialects and their features:
+7. Check a source file and read the messages as JSON:
+
+   .. code-block:: shell
+
+      ironplcc check --format json main.st
+
+8. Show available dialects and their features:
 
    .. code-block:: shell
 

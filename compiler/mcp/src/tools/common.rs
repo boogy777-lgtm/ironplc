@@ -9,7 +9,7 @@
 use std::collections::HashSet;
 
 use ironplc_dsl::core::SourceSpan;
-use ironplc_dsl::diagnostic::Diagnostic;
+use ironplc_dsl::diagnostic::{Diagnostic, ScriptMessage};
 use ironplc_parser::options::{CompilerOptions, Dialect};
 use ironplc_problems::{text, Text};
 use schemars::JsonSchema;
@@ -202,36 +202,57 @@ fn resolve_dialect(s: &str) -> Option<Dialect> {
 }
 
 // ───────────────────────────────────────────────────────────────────
-// Diagnostic serialisation (REQ-TOL-mcp-023)
+// Diagnostic serialisation (REQ-TOL-mcp-023, REQ-DS-mcp-001, REQ-DS-mcp-004)
 // ───────────────────────────────────────────────────────────────────
 
-/// Serialises a compiler `Diagnostic` to a JSON value with the fields
-/// required by REQ-TOL-mcp-023: `code`, `message`, `file`, `start`, `end`,
-/// `severity`.
+/// The text of the source `name` among `sources`, for the line and column of a
+/// message in that file.
+fn source_text<'a>(sources: &'a [SourceInput], name: &str) -> Option<&'a str> {
+    sources
+        .iter()
+        .find(|source| source.name == name)
+        .map(|source| source.content.as_str())
+}
+
+/// Reads a compiler `Diagnostic` as a message for a program: the fields of the
+/// CODESYS `ScriptMessage` and `codesys` (`specs/design/diagnostic-severity.md`).
 ///
-/// `start` and `end` are the 0-indexed byte offsets already stored in
-/// the diagnostic — no line/column conversion is performed.
-pub fn serialize_diagnostic(diag: &Diagnostic) -> serde_json::Value {
-    let description = diag.description();
-    let label_msg = diag.primary.message.as_str();
-    let message = if label_msg.is_empty() || description.contains(label_msg) {
-        description
-    } else {
-        format!("{description}: {label_msg}")
-    };
-    serde_json::json!({
-        "code": diag.code,
-        "message": message,
-        "file": diag.primary.file_id.to_string(),
-        "start": diag.primary.location.start,
-        "end": diag.primary.location.end,
-        "severity": diag.severity().name(),
-    })
+/// `position` and `length` are byte offsets already stored in the diagnostic, so
+/// no line/column conversion is applied to them. `sources` are the files the
+/// caller supplied: the `position_text` of a message in one of them is
+/// `file:line:column`, and it is `null` for a message in a file not among them.
+pub fn script_message(diag: &Diagnostic, sources: &[SourceInput]) -> ScriptMessage {
+    let source = source_text(sources, &diag.primary.file_id.to_string());
+    diag.script_message(source)
+}
+
+/// The JSON of a message: the one place a `ScriptMessage` becomes a tool result.
+pub fn serialize_message(message: &ScriptMessage) -> serde_json::Value {
+    serde_json::json!(message)
+}
+
+/// Serialises a compiler `Diagnostic` to the JSON of its `ScriptMessage`.
+pub fn serialize_diagnostic(diag: &Diagnostic, sources: &[SourceInput]) -> serde_json::Value {
+    serialize_message(&script_message(diag, sources))
 }
 
 /// Batch-serialises compiler diagnostics to a JSON array.
-pub fn serialize_diagnostics(diags: &[Diagnostic]) -> Vec<serde_json::Value> {
-    diags.iter().map(serialize_diagnostic).collect()
+pub fn serialize_diagnostics(
+    diags: &[Diagnostic],
+    sources: &[SourceInput],
+) -> Vec<serde_json::Value> {
+    diags
+        .iter()
+        .map(|diag| serialize_diagnostic(diag, sources))
+        .collect()
+}
+
+/// The diagnostic of the tools that name a POU, for a name no source declares.
+pub fn pou_not_found_diagnostic(pou_name: &str) -> serde_json::Value {
+    serialize_diagnostic(
+        &validation_diagnostic(text::mcp_input_validation_pou_not_found(pou_name)),
+        &[],
+    )
 }
 
 // ───────────────────────────────────────────────────────────────────
@@ -239,7 +260,7 @@ pub fn serialize_diagnostics(diags: &[Diagnostic]) -> Vec<serde_json::Value> {
 // ───────────────────────────────────────────────────────────────────
 
 /// Creates a validation `Diagnostic` using the `P8001` problem code.
-fn validation_diagnostic(text: Text) -> Diagnostic {
+pub fn validation_diagnostic(text: Text) -> Diagnostic {
     Diagnostic::text(SourceSpan::default(), text)
 }
 
@@ -500,19 +521,48 @@ mod tests {
             SourceSpan::range(10, 15),
             text::syntax_error_a_task_needs_a_priority(),
         );
-        let json = serialize_diagnostic(&diag);
-        assert_eq!(json["start"], 10);
-        assert_eq!(json["end"], 15);
+        let json = serialize_diagnostic(&diag, &[]);
+        assert_eq!(json["position"], 10);
+        assert_eq!(json["length"], 5);
     }
 
     #[test]
-    fn serialize_diagnostic_when_called_then_has_code_and_message() {
+    fn serialize_diagnostic_when_called_then_has_code_and_text() {
         let diag = Diagnostic::text(
             SourceSpan::range(0, 1),
             text::syntax_error_a_task_needs_a_priority(),
         );
-        let json = serialize_diagnostic(&diag);
-        assert_eq!(json["code"], "P0002");
-        assert!(json["message"].as_str().unwrap().contains("Syntax error"));
+        let json = serialize_diagnostic(&diag, &[]);
+        assert_eq!(json["prefix"], "P");
+        assert_eq!(json["number"], 2);
+        assert!(json["text"].as_str().unwrap().contains("Syntax error"));
+    }
+
+    #[test]
+    fn serialize_diagnostic_when_source_supplied_then_position_text_has_line_and_column() {
+        let mut span = SourceSpan::range(7, 8);
+        span.file_id = ironplc_dsl::core::FileId::from_string("main.st");
+        let diag = Diagnostic::text(span, text::syntax_error_a_task_needs_a_priority());
+        let sources = vec![SourceInput {
+            name: "main.st".into(),
+            content: "a\nbb\nccc".into(),
+        }];
+
+        let json = serialize_diagnostic(&diag, &sources);
+
+        assert_eq!(json["position_text"], "main.st:3:3");
+        assert_eq!(json["object"], "main.st");
+        assert!(serialize_diagnostic(&diag, &[])["position_text"].is_null());
+    }
+
+    #[test]
+    fn pou_not_found_diagnostic_when_called_then_a_validation_message_naming_the_pou() {
+        let json = pou_not_found_diagnostic("Main");
+
+        assert_eq!(json["number"], 8001);
+        assert!(json["text"]
+            .as_str()
+            .unwrap()
+            .ends_with("No POU named 'Main' found."));
     }
 }

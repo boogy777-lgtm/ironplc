@@ -1,6 +1,6 @@
 //! Build-script helper of `ironplc-problems`: checks `problem-texts.csv` and
 //! generates the module `text` (one function for each row), and checks the
-//! `Severity` column of `problem-codes.csv`.
+//! `Severity` and `Codesys` columns of `problem-codes.csv`.
 //!
 //! It does no file access: `problems/build.rs` reads the files and writes the
 //! result, so every check has a unit test here (Cargo does not run the tests of
@@ -37,7 +37,7 @@ pub fn deprecation_note(name: &str) -> Option<&'static str> {
 
 /// The header `problem-codes.csv` must have. `problems/build.rs` reads the
 /// columns by position, so the order is part of the format.
-pub const PROBLEM_CODES_HEADER: [&str; 4] = ["Code", "Name", "Message", "Severity"];
+pub const PROBLEM_CODES_HEADER: [&str; 5] = ["Code", "Name", "Message", "Severity", "Codesys"];
 
 /// One category of a message, with every fact the compiler asks of it.
 struct Level {
@@ -46,6 +46,14 @@ struct Level {
     /// The text of the category where a program reads it, such as the
     /// `severity` of a diagnostic in a JSON response.
     wire: &'static str,
+    /// The value of the category in the CODESYS `Severity` flag set
+    /// (`Severity.cs`), which a program reads as `severity_value` and combines
+    /// into a mask of categories.
+    flag: u32,
+    /// The header word of a person's form, taken from the CODESYS Messages view,
+    /// or `None` for a category that has no header: a text is a line without a
+    /// word, and a suppressed category is not shown.
+    word: Option<&'static str>,
     doc: &'static str,
     /// Whether a row of `problem-codes.csv` may name the category. A suppressed
     /// category is only the result of a suppression, never a declaration.
@@ -68,6 +76,8 @@ const LEVELS: &[Level] = &[
     Level {
         name: "FatalError",
         wire: "fatal-error",
+        flag: 1,
+        word: Some("Error"),
         doc: "Stops the build and the stages after it, and the run keeps only the fatal diagnostics.",
         declarable: true,
         stops_build: true,
@@ -77,6 +87,8 @@ const LEVELS: &[Level] = &[
     Level {
         name: "Error",
         wire: "error",
+        flag: 2,
+        word: Some("Error"),
         doc: "The program is not valid. It stops the build.",
         declarable: true,
         stops_build: true,
@@ -86,6 +98,8 @@ const LEVELS: &[Level] = &[
     Level {
         name: "Warning",
         wire: "warning",
+        flag: 4,
+        word: Some("Warning"),
         doc: "The program is valid but probably not what was meant. It is shown and does not stop the build.",
         declarable: true,
         stops_build: false,
@@ -95,6 +109,8 @@ const LEVELS: &[Level] = &[
     Level {
         name: "Information",
         wire: "information",
+        flag: 8,
+        word: Some("Information"),
         doc: "A note about a valid program. It is shown and does not stop the build.",
         declarable: true,
         stops_build: false,
@@ -104,6 +120,8 @@ const LEVELS: &[Level] = &[
     Level {
         name: "Text",
         wire: "text",
+        flag: 16,
+        word: None,
         doc: "A line of text about the build, such as progress, with no code. It does not stop the build.",
         declarable: true,
         stops_build: false,
@@ -113,6 +131,8 @@ const LEVELS: &[Level] = &[
     Level {
         name: "SuppressedWarning",
         wire: "suppressed-warning",
+        flag: 32,
+        word: None,
         doc: "A warning that is disabled. It is not shown and does not stop the build.",
         declarable: false,
         stops_build: false,
@@ -122,6 +142,8 @@ const LEVELS: &[Level] = &[
     Level {
         name: "SuppressedInformation",
         wire: "suppressed-information",
+        flag: 64,
+        word: None,
         doc: "An information message that is disabled. It is not shown and does not stop the build.",
         declarable: false,
         stops_build: false,
@@ -140,6 +162,28 @@ struct Question {
 }
 
 const QUESTIONS: &[Question] = &[
+    Question {
+        function: "script_name",
+        doc: "The name of the category in the CODESYS scripting model (`ScriptSystem.Severity`),
+    /// which a program reads as the `severity` of a message.",
+        returns: "&'static str",
+        arm: |level| format!("\"{}\"", level.name),
+    },
+    Question {
+        function: "script_value",
+        doc: "The value of the category in the CODESYS `Severity` flag set: 1, 2, 4, 8, 16, 32 and
+    /// 64, which a program reads as the `severity_value` of a message.",
+        returns: "u32",
+        arm: |level| level.flag.to_string(),
+    },
+    Question {
+        function: "person_word",
+        doc: "The header word of a person's form, as in the CODESYS Messages view: `Error` for a
+    /// fatal error and an error, `Warning` and `Information`. A text and a suppressed
+    /// category have none.",
+        returns: "Option<&'static str>",
+        arm: |level| level.word.map_or("None".to_string(), |word| format!("Some(\"{word}\")")),
+    },
     Question {
         function: "name",
         doc: "The text of the category where a program reads it, such as the `severity` of a\n    /// diagnostic in a JSON response.",
@@ -220,6 +264,24 @@ pub fn severity_variant(code: &str, value: &str) -> Result<&'static str, String>
                 allowed.join(", ")
             )
         })
+}
+
+/// The CODESYS code a row names, `None` for a row that names none, or the error
+/// that names the row. A CODESYS code is `C` and four digits, the prefix and the
+/// number of a `MessageId` (`C0046`); the build fails on any other value, so a
+/// misspelled code cannot reach the output of a person or a program.
+pub fn codesys_code(code: &str, value: &str) -> Result<Option<String>, String> {
+    if value.is_empty() {
+        return Ok(None);
+    }
+    let digits = value.strip_prefix('C').unwrap_or_default();
+    if digits.len() == 4 && digits.chars().all(|c| c.is_ascii_digit()) {
+        Ok(Some(value.to_string()))
+    } else {
+        Err(format!(
+            "problem-codes.csv {code}: the CODESYS code '{value}' is not C and four digits (such as C0046), or empty"
+        ))
+    }
 }
 
 /// Checks the header of `problem-codes.csv`.

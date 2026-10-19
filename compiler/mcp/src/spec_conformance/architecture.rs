@@ -49,7 +49,7 @@ fn mcp_spec_req_arc_011_file_id_from_string() {
 
     let resp = tools::parse::build_response(&sources, &options);
     assert!(!resp.ok);
-    assert_eq!(resp.diagnostics[0]["file"], "my_file.st");
+    assert_eq!(resp.diagnostics[0]["object"], "my_file.st");
 }
 
 #[spec_test(REQ_ARC_mcp_012)]

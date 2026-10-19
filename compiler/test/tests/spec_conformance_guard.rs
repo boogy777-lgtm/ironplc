@@ -13,7 +13,8 @@
 //!   `(doc, slug)`.
 //! * **Listings**: every `compiler/*/build.rs` is parsed for the `.md`
 //!   filenames it passes to `generate(&[…])`, recovering the owning slug from
-//!   the `build.rs` directory name, giving the `(slug, doc)` listing set.
+//!   the package name in the crate's `Cargo.toml` by the generator's rule
+//!   (`crate_slug`), giving the `(slug, doc)` listing set.
 //!
 //! The guard asserts that every requirement is slugged and that every
 //! `(slug, doc)` a requirement uses is claimed by a listing crate.
@@ -23,6 +24,8 @@
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
+
+use ironplc_spec_requirements_gen::crate_slug;
 
 // ---------------------------------------------------------------------------
 // Parsers (pure — fixture-tested below)
@@ -146,6 +149,13 @@ fn audit(
     problems
 }
 
+/// The `[package] name` of a crate manifest.
+fn package_name(manifest: &Path) -> String {
+    let text = fs::read_to_string(manifest).unwrap();
+    let value: toml::Table = text.parse().unwrap();
+    value["package"]["name"].as_str().unwrap().to_string()
+}
+
 // ---------------------------------------------------------------------------
 // Live guard over the actual repository
 // ---------------------------------------------------------------------------
@@ -157,8 +167,9 @@ fn every_requirement_slug_is_claimed_by_a_listing_crate() {
     let compiler_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
     let specs_dir = compiler_dir.join("../specs/design");
 
-    // Listings: (slug, doc) for every compiler/<crate>/build.rs, where the slug
-    // is the crate directory name (which equals CARGO_PKG_NAME minus `ironplc-`).
+    // Listings: (slug, doc) for every compiler/<crate>/build.rs. The slug comes
+    // from the package name by the generator's own rule, not from the directory
+    // name: the directory `ironplc-cli` holds the package `ironplc-cli`, slug `cli`.
     let mut listings: BTreeSet<(String, String)> = BTreeSet::new();
     let mut listed_docs: BTreeSet<String> = BTreeSet::new();
     for entry in fs::read_dir(&compiler_dir).unwrap().flatten() {
@@ -167,7 +178,7 @@ fn every_requirement_slug_is_claimed_by_a_listing_crate() {
         if !build_rs.is_file() {
             continue;
         }
-        let slug = dir.file_name().unwrap().to_string_lossy().to_string();
+        let slug = crate_slug(&package_name(&dir.join("Cargo.toml"))).to_string();
         let src = fs::read_to_string(&build_rs).unwrap();
         for md in listed_specs(&src) {
             listings.insert((slug.clone(), md.clone()));

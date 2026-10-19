@@ -14,6 +14,7 @@ use crate::tools::compile::CompileInput;
 use crate::tools::container_drop::ContainerDropInput;
 use crate::tools::explain_diagnostic::ExplainDiagnosticInput;
 use crate::tools::hot_edit::{HotEditAcceptInput, HotEditSession};
+use crate::tools::messages::MessageObjectsInput;
 use crate::tools::pou_lineage::PouLineageInput;
 use crate::tools::pou_scope::PouScopeInput;
 use crate::tools::run::RunInput;
@@ -95,6 +96,36 @@ impl IronPlcMcp {
     fn check(&self, params: Parameters<ParseCheckInput>) -> Result<ContentBlock, rmcp::ErrorData> {
         let input = params.0;
         let response = tools::check::build_response(&input.sources, &input.options);
+        let json = serde_json::to_string(&response)
+            .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))?;
+        Ok(ContentBlock::text(json))
+    }
+
+    /// The message objects of a check.
+    #[tool(
+        name = "get_message_objects",
+        description = "The messages of a check as message objects, as `system.get_message_objects` of the CODESYS scripting API: `severity` (FatalError, Error, Warning, Information, Text, SuppressedWarning or SuppressedInformation), `severity_value`, `prefix`, `number`, `text`, `position`, `length`, `position_text`, `object` and `codesys`. `severities` is a mask of `severity_value`s (default: every category, suppressed ones included)."
+    )]
+    fn get_message_objects(
+        &self,
+        Parameters(input): Parameters<MessageObjectsInput>,
+    ) -> Result<ContentBlock, rmcp::ErrorData> {
+        let response = tools::messages::build_objects_response(&input);
+        let json = serde_json::to_string(&response)
+            .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))?;
+        Ok(ContentBlock::text(json))
+    }
+
+    /// The texts of the messages of a check.
+    #[tool(
+        name = "get_messages",
+        description = "The messages of a check as texts alone, as `system.get_messages` of the CODESYS scripting API. Use `get_message_objects` to see the category, the code and the position of each."
+    )]
+    fn get_messages(
+        &self,
+        params: Parameters<ParseCheckInput>,
+    ) -> Result<ContentBlock, rmcp::ErrorData> {
+        let response = tools::messages::build_texts_response(&params.0);
         let json = serde_json::to_string(&response)
             .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))?;
         Ok(ContentBlock::text(json))

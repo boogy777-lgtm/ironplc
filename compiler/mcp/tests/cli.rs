@@ -101,6 +101,13 @@ fn ed2_args(content: &str) -> String {
     tool_args("main.st", content, ed2_options()).to_string()
 }
 
+/// [`ed2_args`] plus the `severities` mask of `get_message_objects`.
+fn ed2_args_with_severities(content: &str, severities: u32) -> String {
+    let mut args = tool_args("main.st", content, ed2_options());
+    args["severities"] = serde_json::json!(severities);
+    args.to_string()
+}
+
 /// [`ed2_args`] plus the `pou` the context tools query.
 fn ed2_args_for_pou(content: &str, pou: &str) -> String {
     let mut args = tool_args("main.st", content, ed2_options());
@@ -143,13 +150,41 @@ fn missing_dialect_args() -> String {
 #[case::parse_syntax_error_diagnostics_code(
     "parse",
     ed2_args(SYNTAX_ERROR_PROGRAM),
-    r#"\"code\":"#
+    r#"\"severity_value\":"#
 )]
 // check (also the shared error-class representatives)
 #[case::check_valid_program_ok_true("check", ed2_args(VALID_PROGRAM), r#"\"ok\":true"#)]
-#[case::check_semantic_error_diagnostics("check", ed2_args(SEMANTIC_ERROR_PROGRAM), r#"\"code\":"#)]
-#[case::check_empty_source_name_validation_error("check", empty_source_name_args(), "P8001")]
-#[case::check_missing_dialect_validation_error("check", missing_dialect_args(), "P8001")]
+#[case::check_semantic_error_diagnostics(
+    "check",
+    ed2_args(SEMANTIC_ERROR_PROGRAM),
+    r#"\"severity_value\":"#
+)]
+#[case::check_empty_source_name_validation_error(
+    "check",
+    empty_source_name_args(),
+    r#"\"number\":8001"#
+)]
+#[case::check_missing_dialect_validation_error(
+    "check",
+    missing_dialect_args(),
+    r#"\"number\":8001"#
+)]
+// get_message_objects and get_messages
+#[case::get_message_objects_semantic_error_has_scripting_severity(
+    "get_message_objects",
+    ed2_args(SEMANTIC_ERROR_PROGRAM),
+    r#"\"severity\":\"Error\""#
+)]
+#[case::get_message_objects_mask_without_errors_is_empty(
+    "get_message_objects",
+    ed2_args_with_severities(SEMANTIC_ERROR_PROGRAM, 4),
+    r#"\"messages\":[]"#
+)]
+#[case::get_messages_semantic_error_lists_texts_alone(
+    "get_messages",
+    ed2_args(SEMANTIC_ERROR_PROGRAM),
+    r#"\"messages\":[\""#
+)]
 // compile
 #[case::compile_valid_program_container_id_present(
     "compile",
@@ -475,6 +510,6 @@ fn hot_edit_status_when_no_session_then_ok_false() -> Result<(), Box<dyn std::er
         .assert()
         .success()
         .stdout(predicate::str::contains(r#"\"ok\":false"#))
-        .stdout(predicate::str::contains("P8001"));
+        .stdout(predicate::str::contains(r#"\"number\":8001"#));
     Ok(())
 }

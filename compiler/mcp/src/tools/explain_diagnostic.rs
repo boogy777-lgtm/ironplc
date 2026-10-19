@@ -82,7 +82,7 @@ pub fn build_response(code: &str) -> ExplainDiagnosticResponse {
                 description: None,
                 suggested_fix: None,
                 doc_url: None,
-                diagnostics: serialize_diagnostics(&[err]),
+                diagnostics: serialize_diagnostics(&[err], &[]),
             }
         }
     }

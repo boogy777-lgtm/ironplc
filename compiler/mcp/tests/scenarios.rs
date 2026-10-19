@@ -37,11 +37,16 @@ fn scenario_agent_self_heals_syntax_error() {
         "should have at least one diagnostic"
     );
 
-    let code = r1.diagnostics[0]["code"].as_str().unwrap();
-    assert!(!code.is_empty(), "diagnostic code must not be empty");
+    let first = &r1.diagnostics[0];
+    let code = format!(
+        "{}{:04}",
+        first["prefix"].as_str().unwrap(),
+        first["number"].as_u64().unwrap()
+    );
+    assert!(code.len() == 5, "diagnostic code must not be empty");
 
     // Step 2: agent looks up the diagnostic code
-    let explanation = explain_diagnostic::build_response(code);
+    let explanation = explain_diagnostic::build_response(&code);
     assert!(
         explanation.ok,
         "explain_diagnostic should succeed for a real code"
@@ -101,10 +106,7 @@ fn scenario_options_discovery_then_check_accepts_dialect() {
     // The source is valid, so we expect ok: true. More importantly, if the
     // dialect id from list_options were not accepted by check, we would get
     // a validation diagnostic with code P8001 — assert that does not happen.
-    let has_validation_error = resp
-        .diagnostics
-        .iter()
-        .any(|d| d["code"].as_str() == Some("P8001"));
+    let has_validation_error = resp.diagnostics.iter().any(|d| d["number"] == 8001);
     assert!(
         !has_validation_error,
         "dialect id '{}' from list_options was rejected by check as unknown",

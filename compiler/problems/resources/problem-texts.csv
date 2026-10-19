@@ -331,6 +331,7 @@ P8001,mcp_input_validation_options_dialect_missing,options.dialect is required a
 P8001,mcp_input_validation_options_dialect_unknown,Unknown dialect '{dialect}'. Known dialects: {known}
 P8001,mcp_input_validation_options_not_object,options must be a JSON object.
 P8001,mcp_input_validation_problem_code_unknown,Unknown problem code '{code}'.
+P8001,mcp_input_validation_pou_not_found,No POU named '{name}' found.
 P8001,mcp_input_validation_run_container_base64_deferred,`container_base64` ingestion is deferred to a follow-up; pass `container_id` from a prior `compile` call for now.
 P8001,mcp_input_validation_run_container_both,`run` accepts at most one of `container_id` or `container_base64`; both were supplied.
 P8001,mcp_input_validation_run_container_missing,`run` requires exactly one of `container_id` or `container_base64`.
@@ -356,6 +357,7 @@ P8001,mcp_input_validation_source_name_duplicate,Duplicate source name '{name}'.
 P8001,mcp_input_validation_source_name_empty,Source name must not be empty.
 P8001,mcp_input_validation_source_name_not_printable,Source name '{name}' contains characters outside printable ASCII (0x20-0x7E).
 P8001,mcp_input_validation_source_name_too_long,Source name '{name}' exceeds 256-byte limit.
+P8001,mcp_input_validation_symbols_response_too_large,"Response exceeds 256 KiB limit. Use the `pou` filter or a context tool (`pou_scope`, `project_io`, `types_all`) instead."
 P9002,no_content_directory_initialization_unsupported,MemoryBackedProject does not support directory initialization
 P9002,no_content_first_location,First location
 P9002,no_content_multiple_directories_unsupported,This project implementation does not support multiple directories

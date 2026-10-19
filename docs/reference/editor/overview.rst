@@ -90,6 +90,10 @@ The extension reports diagnostics from the IronPLC compiler in real-time:
 
 * **Errors** (red underline): Code that will not compile
 * **Warnings** (yellow underline): Code that may indicate problems
+* **Information**: A note about valid code
+
+A line of text about the build is not a problem of a file. It appears in the
+:guilabel:`Output` channel of IronPLC and not in the :guilabel:`Problems` panel.
 
 Each diagnostic includes a problem code (e.g., P0001) linking to documentation
 that explains the issue and how to resolve it. See :doc:`/reference/compiler/problems/index`

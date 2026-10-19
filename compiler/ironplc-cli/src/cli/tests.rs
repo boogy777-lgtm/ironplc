@@ -1,11 +1,12 @@
 //! Tests for the command-line commands: check, compile, tokenize, uid sync and mapping, and help-URL formatting.
 
 use ironplc_test::shared_resource_path;
+use spec_test_macro::spec_test;
 
 use ironplc_parser::options::CompilerOptions;
 
 use crate::{
-    cli::check, cli::compile, cli::map_uid, cli::sync_uids, cli::tokenize,
+    cli::check, cli::compile, cli::map_uid, cli::sync_uids, cli::tokenize, cli::Output,
     test_helpers::resource_path,
 };
 use ironplc_project::sidecar::Sidecar;
@@ -55,7 +56,7 @@ fn problem_help_url_when_diagnostic_then_url_tagged_for_cli() {
 #[test]
 fn check_first_steps_dir_when_valid_syntax_then_ok() {
     let paths = vec![resource_path("set")];
-    let result = check(&paths, CompilerOptions::default(), &[], true);
+    let result = check(&paths, CompilerOptions::default(), &[], Output::Silent);
     assert!(result.is_ok())
 }
 
@@ -77,7 +78,7 @@ fn check_when_plcproj_references_missing_file_then_error() {
     .unwrap();
 
     let paths = vec![dir.path().to_path_buf()];
-    let result = check(&paths, CompilerOptions::default(), &[], true);
+    let result = check(&paths, CompilerOptions::default(), &[], Output::Silent);
     assert!(result.is_err())
 }
 
@@ -103,7 +104,7 @@ fn check_when_plcproj_named_as_file_argument_then_loads_its_sources() {
     .unwrap();
 
     let paths = vec![dir.path().join("project.plcproj")];
-    let err = check(&paths, CompilerOptions::default(), &[], true).unwrap_err();
+    let err = check(&paths, CompilerOptions::default(), &[], Output::Silent).unwrap_err();
 
     // Exactly the semantic error in A.st: the .plcproj resolved to
     // its sources instead of being parsed as Structured Text, which
@@ -136,12 +137,12 @@ fn check_when_ambiguous_plcproj_directory_then_naming_one_resolves_it() {
         &[dir.path().to_path_buf()],
         CompilerOptions::default(),
         &[],
-        true
+        Output::Silent
     )
     .is_ok());
 
     let named = vec![dir.path().join("ZZZ.plcproj")];
-    let err = check(&named, CompilerOptions::default(), &[], true).unwrap_err();
+    let err = check(&named, CompilerOptions::default(), &[], Output::Silent).unwrap_err();
     assert_eq!(problem_count(&err), 1, "{err}");
 }
 
@@ -174,7 +175,7 @@ fn check_when_plcproj_has_valid_and_missing_entries_then_semantic_error_still_su
     .unwrap();
 
     let paths = vec![dir.path().to_path_buf()];
-    let result = check(&paths, CompilerOptions::default(), &[], true);
+    let result = check(&paths, CompilerOptions::default(), &[], Output::Silent);
     let err = result.unwrap_err();
     assert!(
         problem_count(&err) >= 2,
@@ -206,7 +207,7 @@ fn check_when_plcproj_references_unbundled_library_then_still_runs_analysis() {
     .unwrap();
 
     let paths = vec![dir.path().to_path_buf()];
-    let result = check(&paths, CompilerOptions::default(), &[], true);
+    let result = check(&paths, CompilerOptions::default(), &[], Output::Silent);
     let err = result.unwrap_err();
     assert!(
         problem_count(&err) >= 2,
@@ -465,7 +466,7 @@ fn map_uid_when_new_key_already_mapped_then_error() {
     assert!(result.is_err());
 }
 
-#[test]
+#[spec_test(REQ_DS_cli_002)]
 fn display_of_when_each_category_then_its_terminal_display() {
     use super::Display;
     use codespan_reporting::diagnostic::Severity as CodeSpanSeverity;
@@ -499,24 +500,109 @@ fn display_of_when_each_category_then_its_terminal_display() {
     }
 }
 
-#[test]
-fn text_of_when_label_then_the_label_and_otherwise_the_description() {
-    use ironplc_dsl::core::SourceSpan;
-    use ironplc_dsl::diagnostic::{Diagnostic, Label};
+/// What `write_report` draws for `diagnostic` of the source `text`, without
+/// colors.
+fn drawn(diagnostic: &ironplc_dsl::diagnostic::Diagnostic, text: &str) -> String {
+    use codespan_reporting::files::SimpleFiles;
+    use codespan_reporting::term::termcolor::NoColor;
+    use ironplc_dsl::core::FileId;
+
+    let mut files: SimpleFiles<String, &str> = SimpleFiles::new();
+    let id = files.add("main.st".to_string(), text);
+    let file_id = FileId::from_string("main.st");
+    let files_to_ids = std::collections::HashMap::from([(&file_id, id)]);
+    let Display::Report(severity) = super::display_of(diagnostic.severity()) else {
+        panic!("the category should be drawn as a report");
+    };
+    let report = super::map_diagnostic(diagnostic, severity, &files_to_ids);
+    let mut out = NoColor::new(Vec::new());
+
+    super::write_report(
+        &mut out,
+        &codespan_reporting::term::Config::default(),
+        &files,
+        diagnostic,
+        severity,
+        &report,
+    )
+    .unwrap();
+
+    String::from_utf8(out.into_inner()).unwrap()
+}
+
+use super::Display;
+
+#[spec_test(REQ_DS_cli_001)]
+fn write_report_when_error_with_codesys_code_then_header_then_snippet_without_codespan_header() {
+    use ironplc_dsl::core::{FileId, SourceSpan};
+    use ironplc_dsl::diagnostic::Diagnostic;
     use ironplc_problems::text;
 
-    let labelled = Diagnostic::text(
-        SourceSpan::default(),
-        text::syntax_error_a_task_needs_a_priority(),
-    );
-    assert_eq!(
-        super::text_of(&labelled),
-        "a task needs a `PRIORITY`".to_string()
+    let source = "y := x + 1;
+";
+    let diagnostic = Diagnostic::text(
+        SourceSpan {
+            start: 5,
+            end: 6,
+            file_id: FileId::from_string("main.st"),
+        },
+        text::variable_undefined_undefined_variable(),
     );
 
-    let mut unlabelled = labelled.clone();
-    unlabelled.primary = Label::span(SourceSpan::default(), "");
-    assert_eq!(super::text_of(&unlabelled), unlabelled.description());
+    let output = drawn(&diagnostic, source);
+
+    let mut lines = output.lines();
+    assert_eq!(
+        lines.next(),
+        Some("Error[P4007] (CODESYS C0046): Variable not defined before used")
+    );
+    assert!(lines.next().unwrap().contains("main.st:1:6"), "{output}");
+    assert!(output.contains("y := x + 1;"), "{output}");
+    assert!(!output.contains("error[P4007]"), "{output}");
+}
+
+#[spec_test(REQ_DS_cli_001)]
+fn write_report_when_each_category_that_is_reported_then_its_header_word() {
+    use ironplc_dsl::core::{FileId, SourceSpan};
+    use ironplc_dsl::diagnostic::{Diagnostic, Severity};
+    use ironplc_problems::text;
+
+    let base = Diagnostic::text(
+        SourceSpan {
+            start: 0,
+            end: 1,
+            file_id: FileId::from_string("main.st"),
+        },
+        text::syntax_error_a_task_needs_a_priority(),
+    );
+
+    for (severity, header) in [
+        (Severity::FatalError, "Error[P0002]: Syntax error"),
+        (Severity::Error, "Error[P0002]: Syntax error"),
+        (Severity::Warning, "Warning[P0002]: Syntax error"),
+        (Severity::Information, "Information[P0002]: Syntax error"),
+    ] {
+        let output = drawn(&base.clone().with_severity_for_test(severity), "x");
+
+        assert_eq!(output.lines().next(), Some(header), "{severity:?}");
+    }
+}
+
+#[test]
+fn below_header_when_header_written_in_pieces_then_only_what_follows_the_first_newline() {
+    use codespan_reporting::term::termcolor::{ColorSpec, NoColor, WriteColor};
+    use std::io::Write;
+
+    let mut out = super::BelowHeader::new(NoColor::new(Vec::new()));
+
+    out.set_color(&ColorSpec::new()).unwrap();
+    write!(out, "error").unwrap();
+    write!(out, "[P1]: msg").unwrap();
+    out.reset().unwrap();
+    out.write_all(b"\nrest\n").unwrap();
+    out.write_all(b"more\n").unwrap();
+
+    assert_eq!(out.inner.into_inner(), b"rest\nmore\n");
 }
 
 #[test]
@@ -566,4 +652,86 @@ fn finish_when_errors_then_failure_names_the_error_count() {
     let result = super::finish("Check", diagnostics, None, true);
 
     assert_eq!(result, Err("Check failed with 2 problem(s)".to_string()));
+}
+
+#[spec_test(REQ_DS_cli_003)]
+fn json_of_when_diagnostics_of_each_category_then_an_array_of_script_messages_suppressed_included()
+{
+    use ironplc_dsl::core::{FileId, SourceSpan};
+    use ironplc_dsl::diagnostic::{Diagnostic, Severity};
+    use ironplc_problems::text;
+
+    let made = |severity| {
+        Diagnostic::text(
+            SourceSpan {
+                start: 0,
+                end: 1,
+                file_id: FileId::from_string("main.st"),
+            },
+            text::variable_undefined_undefined_variable(),
+        )
+        .with_severity_for_test(severity)
+    };
+    let all = [
+        Severity::FatalError,
+        Severity::Error,
+        Severity::Warning,
+        Severity::Information,
+        Severity::Text,
+        Severity::SuppressedWarning,
+        Severity::SuppressedInformation,
+    ];
+    let diagnostics: Vec<Diagnostic> = all.iter().map(|s| made(*s)).collect();
+
+    let json = super::json_of(&diagnostics, None).unwrap();
+
+    let messages: serde_json::Value = serde_json::from_str(&json).unwrap();
+    let severities: Vec<&str> = messages
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| m["severity"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        severities,
+        vec![
+            "FatalError",
+            "Error",
+            "Warning",
+            "Information",
+            "Text",
+            "SuppressedWarning",
+            "SuppressedInformation"
+        ]
+    );
+    assert_eq!(messages[0]["codesys"], "C0046");
+    assert_eq!(messages[0]["object"], "main.st");
+    assert_eq!(super::json_of(&[], None).unwrap(), "[]");
+}
+
+#[test]
+fn json_of_when_project_holds_the_file_then_position_text_has_line_and_column() {
+    let temp = tempfile::TempDir::new().unwrap();
+    let path = temp.path().join("main.st");
+    std::fs::write(
+        &path,
+        "PROGRAM main
+  VAR y : INT; END_VAR
+  y := x;
+END_PROGRAM
+",
+    )
+    .unwrap();
+    let (mut project, mut diagnostics) =
+        super::create_project(std::slice::from_ref(&path), CompilerOptions::default(), &[]);
+    use ironplc_project::Project;
+    diagnostics.extend(project.semantic());
+
+    let json = super::json_of(&diagnostics, Some(&project)).unwrap();
+
+    let messages: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert!(messages[0]["position_text"]
+        .as_str()
+        .unwrap()
+        .ends_with("main.st:3:8"));
 }

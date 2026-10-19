@@ -7,8 +7,12 @@ use ironplc_project::project::{MemoryBackedProject, Project};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::common::{parse_options, serialize_diagnostics, validate_sources, SourceInput};
-use ironplc_dsl::diagnostic::Severity;
+use ironplc_problems::text;
+
+use super::common::{
+    parse_options, pou_not_found_diagnostic, serialize_diagnostic, serialize_diagnostics,
+    validate_sources, validation_diagnostic, SourceInput,
+};
 
 const MAX_RESPONSE_BYTES: usize = 256 * 1024;
 
@@ -77,13 +81,18 @@ pub fn build_response(
 ) -> SymbolsResponse {
     let source_errors = validate_sources(sources);
     if !source_errors.is_empty() {
-        return empty_response(false, None, false, serialize_diagnostics(&source_errors));
+        return empty_response(
+            false,
+            None,
+            false,
+            serialize_diagnostics(&source_errors, &[]),
+        );
     }
 
     let options = match parse_options(options_value) {
         Ok(opts) => opts,
         Err(errs) => {
-            return empty_response(false, None, false, serialize_diagnostics(&errs));
+            return empty_response(false, None, false, serialize_diagnostics(&errs, &[]));
         }
     };
 
@@ -94,7 +103,7 @@ pub fn build_response(
 
     let diagnostics = project.semantic();
     let has_errors = ironplc_dsl::diagnostic::any_stops_build(&diagnostics);
-    let diagnostics_json = serialize_diagnostics(&diagnostics);
+    let diagnostics_json = serialize_diagnostics(&diagnostics, sources);
 
     let context = match project.semantic_context() {
         Some(ctx) if !has_errors => ctx,
@@ -144,14 +153,10 @@ pub fn build_response(
                 false,
                 None,
                 true,
-                vec![serde_json::json!({
-                    "code": "P8001",
-                    "message": "Response exceeds 256 KiB limit. Use the `pou` filter or a context tool (`pou_scope`, `project_io`, `types_all`) instead.",
-                    "severity": Severity::Error.name(),
-                    "file": "",
-                    "start": 0,
-                    "end": 0
-                })],
+                vec![serialize_diagnostic(
+                    &validation_diagnostic(text::mcp_input_validation_symbols_response_too_large()),
+                    &[],
+                )],
             );
         }
     }
@@ -245,14 +250,7 @@ fn apply_pou_filter(
 
     if matched_program.is_none() && matched_function.is_none() && matched_fb.is_none() {
         let mut diags = diagnostics;
-        diags.push(serde_json::json!({
-            "code": "P8001",
-            "message": format!("No POU named '{}' found.", pou_name),
-            "severity": Severity::Error.name(),
-            "file": "",
-            "start": 0,
-            "end": 0
-        }));
+        diags.push(pou_not_found_diagnostic(pou_name));
         return empty_response(false, Some(false), false, diags);
     }
 

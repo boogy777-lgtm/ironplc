@@ -18,6 +18,15 @@ use crate::lsp_runner::{RunResult, VmRunner};
 use crate::semantic_tokens::to_semantic_tokens;
 use ironplc_project::Project;
 
+/// What the analysis of the workspace gives the editor.
+#[derive(Debug, Default)]
+pub(crate) struct Analysis {
+    /// The diagnostics for the Problems panel, by the file that shows each.
+    pub(crate) problems: BTreeMap<UriKey, Vec<lsp_types::Diagnostic>>,
+    /// The texts for the Output channel: the messages of category `Text`.
+    pub(crate) log: Vec<String>,
+}
+
 fn to_path_buf(uri: &Uri) -> Result<PathBuf, ()> {
     Ok(PathBuf::from(uri.path().as_str()))
 }
@@ -187,18 +196,26 @@ impl LspProject {
     /// Callers are responsible for emitting `PublishDiagnostics`
     /// notifications for every URI in the returned map and for
     /// emitting empty notifications to clear URIs that previously
-    /// had diagnostics but no longer do.
-    pub(crate) fn semantic_all(&mut self) -> BTreeMap<UriKey, Vec<lsp_types::Diagnostic>> {
+    /// had diagnostics but no longer do, and for sending each text of
+    /// the log as a `window/logMessage`.
+    pub(crate) fn semantic_all(&mut self) -> Analysis {
         let diagnostics = self.wrapped.semantic();
-        if diagnostics.is_empty() {
-            return BTreeMap::new();
-        }
+        self.analysis_of(diagnostics)
+    }
 
-        let mut by_key: BTreeMap<UriKey, Vec<lsp_types::Diagnostic>> = BTreeMap::new();
+    /// Sorts diagnostics to where the editor shows them (see [`Place`]).
+    fn analysis_of(&self, diagnostics: Vec<ironplc_dsl::diagnostic::Diagnostic>) -> Analysis {
+        let mut analysis = Analysis::default();
+
         for diagnostic in diagnostics {
-            // A suppressed diagnostic is not shown.
-            if lsp_severity(diagnostic.severity()).is_none() {
-                continue;
+            match place_of(diagnostic.severity()) {
+                Place::Problems(_) => {}
+                Place::Output => {
+                    analysis.log.push(diagnostic.person_text());
+                    continue;
+                }
+                // A suppressed diagnostic is not shown.
+                Place::Nowhere => continue,
             }
             // Resolve every file id this diagnostic touches into a key.
             // De-duplicate so a diagnostic with primary and secondary
@@ -223,11 +240,15 @@ impl LspProject {
 
             let mapped = map_diagnostic(diagnostic, self.wrapped.as_ref());
             for key in keys {
-                by_key.entry(key).or_default().push(mapped.clone());
+                analysis
+                    .problems
+                    .entry(key)
+                    .or_default()
+                    .push(mapped.clone());
             }
         }
 
-        by_key
+        analysis
     }
 
     /// Run semantic analysis and return only the diagnostics that
@@ -242,7 +263,7 @@ impl LspProject {
         )
     )]
     pub(crate) fn semantic(&mut self, uri: &Uri) -> Vec<lsp_types::Diagnostic> {
-        let mut by_key = self.semantic_all();
+        let mut by_key = self.semantic_all().problems;
         by_key.remove(&UriKey::from_uri(uri)).unwrap_or_default()
     }
 
@@ -468,7 +489,7 @@ fn map_diagnostic(
 
     lsp_types::Diagnostic {
         range,
-        severity: lsp_severity(diagnostic.severity()),
+        severity: place_of(diagnostic.severity()).problem_severity(),
         code: Some(NumberOrString::String(diagnostic.code)),
         code_description,
         source: Some("ironplc".into()),
@@ -479,19 +500,38 @@ fn map_diagnostic(
     }
 }
 
-/// The severity the editor shows for a category, or `None` for a category the
-/// editor does not show. No arm is a wildcard: a category added to `Severity`
-/// does not compile until it is shown, or hidden, here.
-///
-/// A text is a line about the build, which the protocol sends as a
-/// `window/logMessage` and not as a diagnostic. That is a larger change than the
-/// mapping, so a text is published as an information message for now.
-fn lsp_severity(severity: Severity) -> Option<DiagnosticSeverity> {
+/// Where the editor shows a message of a category.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Place {
+    /// In the Problems panel, as a diagnostic of this severity. The panel
+    /// filters Errors, Warnings and Infos, as the CODESYS Messages view does.
+    Problems(DiagnosticSeverity),
+    /// In the Output channel, as a `window/logMessage`: a line about the build
+    /// is not a problem of a file.
+    Output,
+    /// Nowhere: the message is suppressed.
+    Nowhere,
+}
+
+impl Place {
+    /// The severity of the diagnostic, for a place that is the Problems panel.
+    fn problem_severity(self) -> Option<DiagnosticSeverity> {
+        match self {
+            Place::Problems(severity) => Some(severity),
+            Place::Output | Place::Nowhere => None,
+        }
+    }
+}
+
+/// Where the editor shows a category. No arm is a wildcard: a category added to
+/// `Severity` does not compile until it is shown, or hidden, here.
+fn place_of(severity: Severity) -> Place {
     match severity {
-        Severity::FatalError | Severity::Error => Some(DiagnosticSeverity::ERROR),
-        Severity::Warning => Some(DiagnosticSeverity::WARNING),
-        Severity::Information | Severity::Text => Some(DiagnosticSeverity::INFORMATION),
-        Severity::SuppressedWarning | Severity::SuppressedInformation => None,
+        Severity::FatalError | Severity::Error => Place::Problems(DiagnosticSeverity::ERROR),
+        Severity::Warning => Place::Problems(DiagnosticSeverity::WARNING),
+        Severity::Information => Place::Problems(DiagnosticSeverity::INFORMATION),
+        Severity::Text => Place::Output,
+        Severity::SuppressedWarning | Severity::SuppressedInformation => Place::Nowhere,
     }
 }
 
@@ -512,6 +552,9 @@ fn map_label(label: &ironplc_dsl::diagnostic::Label, project: &dyn Project) -> l
         lsp_types::Position::new(0, 0),
     )
 }
+
+#[cfg(test)]
+mod place_tests;
 
 #[cfg(test)]
 mod tests;

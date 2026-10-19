@@ -78,7 +78,7 @@ pub fn build_response(
             container_base64: None,
             tasks: vec![],
             programs: vec![],
-            diagnostics: serialize_diagnostics(&source_errors),
+            diagnostics: serialize_diagnostics(&source_errors, &[]),
         };
     }
 
@@ -92,7 +92,7 @@ pub fn build_response(
                 container_base64: None,
                 tasks: vec![],
                 programs: vec![],
-                diagnostics: serialize_diagnostics(&errs),
+                diagnostics: serialize_diagnostics(&errs, &[]),
             };
         }
     };
@@ -114,7 +114,7 @@ pub fn build_response(
         &ironplc_codegen::EmptyLookup,
         vec![],
     );
-    let mut diagnostics = serialize_diagnostics(&output.diagnostics);
+    let mut diagnostics = serialize_diagnostics(&output.diagnostics, sources);
 
     let Some(container) = output.container else {
         return CompileResponse {
@@ -132,7 +132,7 @@ pub fn build_response(
     let (Some(library), Some(context)) = (project.analyzed_library(), project.semantic_context())
     else {
         let err = Diagnostic::internal_error();
-        diagnostics.push(serialize_diagnostic(&err));
+        diagnostics.push(serialize_diagnostic(&err, &[]));
         return CompileResponse {
             ok: false,
             container_id: None,
@@ -150,7 +150,7 @@ pub fn build_response(
             SourceSpan::default(),
             format!("Failed to serialize container: {e}"),
         ));
-        diagnostics.push(serialize_diagnostic(&err));
+        diagnostics.push(serialize_diagnostic(&err, &[]));
         return CompileResponse {
             ok: false,
             container_id: None,
@@ -210,7 +210,7 @@ pub fn build_response(
                         "Compiled container ({size} bytes) exceeds cache byte budget ({max} bytes)"
                     ),
                 ));
-                diagnostics.push(serialize_diagnostic(&err));
+                diagnostics.push(serialize_diagnostic(&err, &[]));
                 return CompileResponse {
                     ok: false,
                     container_id: None,

@@ -179,14 +179,11 @@ fn build_accept_response_when_syntax_error_then_compile_diagnostics_and_no_sessi
     assert!(!resp.ok);
     assert!(resp.v_code.is_none());
     assert!(!resp.diagnostics.is_empty());
-    assert!(resp
-        .diagnostics
-        .iter()
-        .all(|d| d["code"].as_str().is_some_and(|code| code.starts_with('P'))));
+    assert!(resp.diagnostics.iter().all(|d| d["prefix"] == "P"));
     // Nothing was established: the next status call still finds no session.
     let status = build_status_response(&session);
     assert!(!status.ok);
-    assert!(status.diagnostics.iter().any(|d| d["code"] == "P8001"));
+    assert!(status.diagnostics.iter().any(|d| d["number"] == 8001));
 }
 
 #[test]
@@ -233,7 +230,7 @@ fn build_status_response_when_no_session_then_p8001_diagnostic() {
     let resp = build_status_response(&session);
 
     assert!(!resp.ok);
-    assert!(resp.diagnostics.iter().any(|d| d["code"] == "P8001"));
+    assert!(resp.diagnostics.iter().any(|d| d["number"] == 8001));
 }
 
 #[test]
@@ -243,7 +240,7 @@ fn build_test_response_when_no_session_then_p8001_diagnostic() {
     let resp = build_test_response(&session);
 
     assert!(!resp.ok);
-    assert!(resp.diagnostics.iter().any(|d| d["code"] == "P8001"));
+    assert!(resp.diagnostics.iter().any(|d| d["number"] == 8001));
 }
 
 #[test]

@@ -90,9 +90,10 @@ The Rust identifier form is unchanged — hyphens become underscores:
 
 ### Crate-aware generation
 
-`generate()` derives the current crate's slug from `CARGO_PKG_NAME` (strip the
-`ironplc-` prefix, which equals the crate's directory name — `ironplc-vm-cli`
-→ `vm-cli`). For every requirement it parses, `owner(req)` is the requirement's
+`generate()` derives the current crate's slug from `CARGO_PKG_NAME` with
+`crate_slug`: strip the `ironplc-` prefix, so `ironplc-vm-cli` → `vm-cli` and
+`ironplc-cli` → `cli`. The slug is not the directory name: the package
+`ironplc-cli` lives in the directory `ironplc-cli`. For every requirement it parses, `owner(req)` is the requirement's
 slug; there is no fallback. Then:
 
 - **Build-time rejection:** if a listed doc contains a `**REQ-…**` marker with
@@ -119,7 +120,8 @@ meta-test. A single workspace-level test closes it:
 > The guard parses every enforced `specs/design/*.md` (those listed by some
 > `build.rs`) for requirement IDs, recovering each `(doc, slug)`. It parses
 > every `compiler/*/build.rs` for the `.md` filenames it lists, recovering the
-> crate slug from the `build.rs` directory name, giving the `(slug, doc)`
+> crate slug from the package name in its `Cargo.toml` by `crate_slug`, the
+> rule `generate()` uses, giving the `(slug, doc)`
 > listing set. It asserts every `(slug, doc)` used by a requirement is claimed
 > by a listing crate, and that no enforced requirement lacks a slug. Any orphan
 > or unslugged requirement fails with an actionable message.

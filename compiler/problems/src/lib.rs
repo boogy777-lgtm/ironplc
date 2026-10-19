@@ -184,6 +184,21 @@ mod tests {
         }
     }
 
+    /// The name and the value a program reads for each category, in the CODESYS
+    /// scripting model (`ScriptSystem.Severity`), and the header word of a
+    /// person's form. No wildcard arm, as in `expected`.
+    fn forms(severity: Severity) -> (&'static str, u32, Option<&'static str>) {
+        match severity {
+            Severity::FatalError => ("FatalError", 1, Some("Error")),
+            Severity::Error => ("Error", 2, Some("Error")),
+            Severity::Warning => ("Warning", 4, Some("Warning")),
+            Severity::Information => ("Information", 8, Some("Information")),
+            Severity::Text => ("Text", 16, None),
+            Severity::SuppressedWarning => ("SuppressedWarning", 32, None),
+            Severity::SuppressedInformation => ("SuppressedInformation", 64, None),
+        }
+    }
+
     #[spec_test(REQ_DS_problems_003)]
     fn severity_questions_when_each_category_then_the_answers_of_codesys() {
         for severity in ALL {
@@ -197,6 +212,22 @@ mod tests {
                 severity.suppressed(),
                 "{severity:?}"
             );
+        }
+    }
+
+    #[spec_test(REQ_DS_problems_008)]
+    fn severity_script_name_and_value_when_each_category_then_those_of_codesys_scripting() {
+        for severity in ALL {
+            let (name, value, _) = forms(severity);
+            assert_eq!(severity.script_name(), name, "{severity:?}");
+            assert_eq!(severity.script_value(), value, "{severity:?}");
+        }
+    }
+
+    #[spec_test(REQ_DS_problems_009)]
+    fn severity_person_word_when_each_category_then_the_word_of_the_messages_view() {
+        for severity in ALL {
+            assert_eq!(severity.person_word(), forms(severity).2, "{severity:?}");
         }
     }
 
@@ -224,19 +255,55 @@ mod tests {
     }
 
     #[spec_test(REQ_DS_problems_005)]
-    fn check_problem_codes_header_when_not_the_four_columns_then_error() {
+    fn check_problem_codes_header_when_not_the_five_columns_then_error() {
         assert_eq!(
             ironplc_problems_gen::check_problem_codes_header(&[
-                "Code", "Name", "Message", "Severity"
+                "Code", "Name", "Message", "Severity", "Codesys"
             ]),
             Ok(())
         );
         for header in [
-            vec!["Code", "Name", "Message"],
-            vec!["Code", "Name", "Severity", "Message"],
-            vec!["Code", "Name", "Message", "Level"],
+            vec!["Code", "Name", "Message", "Severity"],
+            vec!["Code", "Name", "Message", "Severity", "Counterpart"],
+            vec!["Code", "Name", "Severity", "Message", "Codesys"],
         ] {
             assert!(ironplc_problems_gen::check_problem_codes_header(&header).is_err());
+        }
+    }
+
+    #[spec_test(REQ_DS_problems_006)]
+    fn codesys_when_problem_of_the_csv_then_the_code_of_its_row() {
+        // A row with a confirmed counterpart, one that names two problems of
+        // one CODESYS code, and rows with none.
+        assert_eq!(Problem::VariableUndefined.codesys(), Some("C0046"));
+        assert_eq!(
+            Problem::FunctionInvocationMissingInput.codesys(),
+            Some("C0037")
+        );
+        assert_eq!(
+            Problem::FunctionCallNamedArgUndeclared.codesys(),
+            Problem::FunctionInvocationMissingInput.codesys()
+        );
+        assert_eq!(Problem::SyntaxError.codesys(), None);
+        assert_eq!(Problem::McpInputValidation.codesys(), None);
+    }
+
+    #[spec_test(REQ_DS_problems_007)]
+    fn codesys_code_when_value_is_not_c_and_four_digits_then_error_names_code_and_value() {
+        assert_eq!(ironplc_problems_gen::codesys_code("P0001", ""), Ok(None));
+        assert_eq!(
+            ironplc_problems_gen::codesys_code("P4007", "C0046"),
+            Ok(Some("C0046".to_string()))
+        );
+        for value in ["C046", "C00460", "c0046", "P0046", "C00x6", "0046"] {
+            let message = ironplc_problems_gen::codesys_code("P0042", value)
+                .expect_err("the value should be refused");
+
+            assert!(message.contains("P0042"), "'{value}': {message}");
+            assert!(
+                message.contains(&format!("'{value}'")),
+                "'{value}': {message}"
+            );
         }
     }
 }

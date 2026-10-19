@@ -70,7 +70,7 @@ fn initialize_many_when_two_folders_then_cross_folder_type_resolves() {
     let folders = vec![workspace_folder(dir1.path()), workspace_folder(dir2.path())];
     proj.initialize_many(&folders);
 
-    let diagnostics = proj.semantic_all();
+    let diagnostics = proj.semantic_all().problems;
     let all_diagnostics: Vec<_> = diagnostics.values().flatten().collect();
     assert!(
         all_diagnostics.is_empty(),
@@ -89,7 +89,7 @@ fn initialize_many_when_single_folder_then_still_works() {
     let folders = vec![workspace_folder(dir.path())];
     proj.initialize_many(&folders);
 
-    let diagnostics = proj.semantic_all();
+    let diagnostics = proj.semantic_all().problems;
     let all_diagnostics: Vec<_> = diagnostics.values().flatten().collect();
     assert!(
         all_diagnostics.is_empty(),
@@ -122,7 +122,7 @@ END_PROGRAM (* open"
     let tokens = proj.tokenize(&url);
     assert!(!tokens.is_empty());
 
-    let published = proj.semantic_all();
+    let published = proj.semantic_all().problems;
     let diagnostics: Vec<_> = published.values().flatten().collect();
     assert!(!diagnostics.is_empty(), "no diagnostic was published");
 }
@@ -742,7 +742,7 @@ fn semantic_all_when_no_errors_then_returns_empty_map() {
         "PROGRAM Main\nVAR\n  x : BOOL;\nEND_VAR\nEND_PROGRAM".to_owned(),
     );
 
-    let by_uri = proj.semantic_all();
+    let by_uri = proj.semantic_all().problems;
     // Empty project (no configuration with a program instance) still
     // analyses cleanly when there are no parse errors. Either way,
     // the contract is "no errors => no entries".
@@ -771,7 +771,7 @@ fn semantic_all_when_two_files_each_have_errors_then_returns_diagnostics_for_eac
     proj.change_text_document(&url_a, "this is not valid IEC 61131-3".to_owned());
     proj.change_text_document(&url_b, "neither is this".to_owned());
 
-    let by_key = proj.semantic_all();
+    let by_key = proj.semantic_all().problems;
 
     assert!(
         by_key.contains_key(&key_a),
@@ -843,7 +843,7 @@ fn semantic_all_when_diagnostic_has_no_openable_file_then_falls_back_to_last_cha
     let url = Uri::from_str(FAKE_PATH).unwrap();
     proj.change_text_document(&url, "PROGRAM Main\nEND_PROGRAM".to_owned());
 
-    let by_key = proj.semantic_all();
+    let by_key = proj.semantic_all().problems;
 
     assert_eq!(
         by_key.keys().collect::<Vec<_>>(),
@@ -858,7 +858,7 @@ fn semantic_all_when_diagnostic_has_no_openable_file_then_falls_back_to_last_cha
 fn semantic_all_when_diagnostic_has_no_openable_file_and_no_last_changed_then_dropped() {
     let mut proj = LspProject::new(Box::new(BuiltInDiagnosticProject));
 
-    assert!(proj.semantic_all().is_empty());
+    assert!(proj.semantic_all().problems.is_empty());
 }
 
 #[test]
@@ -919,30 +919,6 @@ fn uri_key_when_to_uri_then_round_trips_back_to_original() {
     let key = UriKey::from_uri(&original);
     let back = key.to_uri();
     assert_eq!(back.as_str(), original.as_str());
-}
-
-#[test]
-fn lsp_severity_when_each_category_then_its_editor_severity() {
-    use ironplc_dsl::diagnostic::Severity;
-    use lsp_types::DiagnosticSeverity;
-
-    for (severity, expected) in [
-        (Severity::FatalError, Some(DiagnosticSeverity::ERROR)),
-        (Severity::Error, Some(DiagnosticSeverity::ERROR)),
-        (Severity::Warning, Some(DiagnosticSeverity::WARNING)),
-        (Severity::Information, Some(DiagnosticSeverity::INFORMATION)),
-        (Severity::Text, Some(DiagnosticSeverity::INFORMATION)),
-        (Severity::SuppressedWarning, None),
-        (Severity::SuppressedInformation, None),
-    ] {
-        assert_eq!(super::lsp_severity(severity), expected, "{severity:?}");
-        // What is published is what the category says is shown.
-        assert_eq!(
-            super::lsp_severity(severity).is_some(),
-            severity.is_shown(),
-            "{severity:?}"
-        );
-    }
 }
 
 #[test]

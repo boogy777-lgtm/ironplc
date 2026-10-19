@@ -37,9 +37,10 @@ fn mcp_spec_req_tol_011_parse_returns_diagnostics_array() {
     assert!(!diags.is_empty());
     // Verify diagnostic format matches check's format
     let d = &diags[0];
-    assert!(d.get("code").is_some());
-    assert!(d.get("message").is_some());
-    assert!(d.get("file").is_some());
+    assert!(d.get("prefix").is_some());
+    assert!(d.get("number").is_some());
+    assert!(d.get("text").is_some());
+    assert!(d.get("object").is_some());
     assert!(d.get("severity").is_some());
 }
 
@@ -135,16 +136,17 @@ fn mcp_spec_req_tol_023_diagnostic_format() {
     let d = &resp.diagnostics[0];
 
     // All required fields are present
-    assert!(d.get("code").is_some());
-    assert!(d.get("message").is_some());
-    assert!(d.get("file").is_some());
-    assert!(d.get("start").is_some());
-    assert!(d.get("end").is_some());
+    assert!(d.get("prefix").is_some());
+    assert!(d.get("number").is_some());
+    assert!(d.get("text").is_some());
+    assert!(d.get("object").is_some());
+    assert!(d.get("position").is_some());
+    assert!(d.get("length").is_some());
     assert!(d.get("severity").is_some());
 
-    // start/end are 0-indexed byte offsets (numeric)
-    assert!(d["start"].is_number());
-    assert!(d["end"].is_number());
+    // position/length are 0-indexed byte offsets and a byte count (numeric)
+    assert!(d["position"].is_number());
+    assert!(d["length"].is_number());
 }
 
 /// REQ-TOL-mcp-024: The `check` tool never returns an MCP-level error for
