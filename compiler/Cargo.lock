@@ -979,6 +979,7 @@ dependencies = [
  "ironplc-problems",
  "ironplc-project",
  "ironplc-sources",
+ "ironplc-spec-requirements-gen",
  "ironplc-test",
  "ironplc-vm",
  "log",
@@ -987,6 +988,7 @@ dependencies = [
  "predicates",
  "serde",
  "serde_json",
+ "spec_test_macro",
  "tempfile",
 ]
 

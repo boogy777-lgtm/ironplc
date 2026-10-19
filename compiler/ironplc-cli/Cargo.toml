@@ -38,11 +38,17 @@ log = "0.4.29"
 crossbeam-channel = "0.5"
 encoding_rs = "0.8"
 
+[build-dependencies]
+ironplc-spec-requirements-gen = { path = "../spec_requirements_gen" }
+
 [dev-dependencies]
 assert_cmd = { version = "2.2" }
 predicates = { version = "3.1" }
 tempfile = "3"
 ctor = "1.0"
+spec_test_macro = { path = "../spec_test_macro" }
+# A category that no problem code declares yet is built by the tests.
+ironplc-dsl = { path = "../dsl", version = "0.247.0", features = ["test-support"] }
 
 [[bin]]
 name = "ironplcc"

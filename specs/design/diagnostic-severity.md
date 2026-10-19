@@ -117,18 +117,22 @@ code in brackets, and `(CODESYS Cnnnn)` when the problem has a CODESYS code, as
 in `Error[P4007] (CODESYS C0046)`. It is `None` for a text and for a suppressed
 category.
 
-**REQ-DS-dsl-008** `Diagnostic::script_message()` has the fields of the CODESYS
+**REQ-DS-dsl-008** `Diagnostic::person_text()` is the text of the primary label
+when it has one and the description otherwise: the line a person reads for a
+text, with no header and no code.
+
+**REQ-DS-dsl-009** `Diagnostic::script_message()` has the fields of the CODESYS
 `ScriptMessage` that a diagnostic has: `severity`, `severity_value`, `prefix`,
 `number`, `text`, `position` (the byte offset), `length`, `position_text`
 (`file:line:column` counted from 1, when the text of the file is known) and
 `object` (the file).
 
-**REQ-DS-dsl-009** `ScriptMessage` has, for each of the seven categories, the
+**REQ-DS-dsl-010** `ScriptMessage` has, for each of the seven categories, the
 scripting name as `severity` and the value of the CODESYS flag set as
 `severity_value`, and `is_in` tells whether that value is in a mask of
 categories.
 
-**REQ-DS-dsl-010** `ScriptMessage` has the CODESYS code of the problem as
+**REQ-DS-dsl-011** `ScriptMessage` has the CODESYS code of the problem as
 `codesys`, and null where the problem has none.
 
 ## What stops a build
@@ -160,22 +164,63 @@ to the semantic context, and they reach the gates above.
 ## What each consumer shows
 
 Each consumer that has a type of its own for a category maps `Severity` with a
-`match` that has no wildcard arm. A consumer that writes the category as text
-writes `Severity::name()`.
+`match` that has no wildcard arm, and takes every word, name and value of a
+category from the list of categories (`Severity::person_word()`,
+`script_name()`, `script_value()`, `name()`), never from a literal of its own.
+A message has two forms ([Message Ontology](message-ontology.md#message-forms)):
 
-| Category | Command line (codespan) | Language server | MCP `severity` | Playground `severity` |
-|----------|------------------------|-----------------|----------------|-----------------------|
-| `FatalError` | `error` | `ERROR` | `fatal-error` | `fatal-error` |
-| `Error` | `error` | `ERROR` | `error` | `error` |
-| `Warning` | `warning` | `WARNING` | `warning` | `warning` |
-| `Information` | `note` | `INFORMATION` | `information` | `information` |
-| `Text` | the text alone, no code | `INFORMATION` | `text` | `text` |
-| `SuppressedWarning` | not shown | not shown | `suppressed-warning` | not shown |
-| `SuppressedInformation` | not shown | not shown | `suppressed-information` | not shown |
+- **For a person** (the command line and the editor) with the words of the
+  CODESYS Messages view.
+- **For a program** (MCP and the JSON output of the command line) with the
+  fields of the CODESYS scripting class `ScriptMessage` and the scripting names
+  of the categories.
 
-codespan prints its own header, so a fatal error is an `error` and an
-information message a `note`. The language server publishes a text as an
-information message; sending it as a `window/logMessage` is a later change.
+| Category | Command line header | Language server | `severity` (`severity_value`) in MCP and JSON | Playground `severity` |
+|----------|---------------------|-----------------|-----------------------------------------------|-----------------------|
+| `FatalError` | `Error` | `ERROR` | `FatalError` (1) | `fatal-error` |
+| `Error` | `Error` | `ERROR` | `Error` (2) | `error` |
+| `Warning` | `Warning` | `WARNING` | `Warning` (4) | `warning` |
+| `Information` | `Information` | `INFORMATION` | `Information` (8) | `information` |
+| `Text` | the text alone, no header, no code | not a diagnostic; `window/logMessage` of type `INFO` | `Text` (16) | `text` |
+| `SuppressedWarning` | not shown | not published | `SuppressedWarning` (32) | not shown |
+| `SuppressedInformation` | not shown | not published | `SuppressedInformation` (64) | not shown |
+
+### The command line
+
+The header of a message is its word, its code in brackets and, when the problem
+has a CODESYS counterpart, that code: `Error[P4007] (CODESYS C0046): <text>`.
+codespan draws the source snippet below the header and its own header is not
+written.
+
+**REQ-DS-cli-001** The command line writes the header
+`Diagnostic::person_header()` gives for a fatal error, an error, a warning and an
+information message, followed by `: ` and the description, and the source
+snippet below it.
+
+**REQ-DS-cli-002** The command line writes a text as its plain line, with no
+header and no code, and writes a suppressed warning and a suppressed information
+message not at all.
+
+**REQ-DS-cli-003** `ironplcc check --format json` writes to the standard output
+one JSON array that holds the `ScriptMessage` of every diagnostic, a suppressed
+one included, and `[]` when there is none.
+
+### The language server
+
+A fatal error and an error are errors of the Problems panel, a warning is a
+warning and an information message is an information, the three switches of the
+panel, as in the CODESYS Messages view. A text is a line about the build and not
+a problem of a file: it is sent as a `window/logMessage` of type `INFO` (type
+`LOG` is written at the debug level, which the output channel of the language
+client hides by default), so that it appears in the Output channel.
+
+**REQ-DS-cli-004** The language server publishes a fatal error and an error with
+severity `ERROR`, a warning with `WARNING` and an information message with
+`INFORMATION`, sends the text of a `Text` as a `window/logMessage` of type `INFO`
+and does not publish it as a diagnostic, and publishes a suppressed warning and a
+suppressed information message not at all.
+
+### MCP
 
 **REQ-DS-mcp-001** `serialize_diagnostic` writes `Severity::name()` of the
 diagnostic as its `severity`.
@@ -193,7 +238,3 @@ diagnostic as its `severity`.
 
 **REQ-DS-playground-002** The playground lists the diagnostics that are shown and
 leaves out a suppressed warning and a suppressed information message.
-
-The command line and the language server are tested by unit tests of the mapping
-functions (`display_of`, `lsp_severity`) and of `finish`; `ironplc-cli` has no
-conformance listing, so they carry no requirement identifier.

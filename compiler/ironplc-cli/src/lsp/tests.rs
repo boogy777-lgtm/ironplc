@@ -13,6 +13,7 @@ use lsp_types::{
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use spec_test_macro::spec_test;
 use std::collections::{BTreeMap, HashMap};
 use std::str::FromStr;
 
@@ -811,4 +812,86 @@ fn multi_file_when_clean_file_opened_after_broken_file_then_each_publish_targets
     assert!(n.contains_key(&clean_key));
     assert!(!n[&broken_key].diagnostics.is_empty());
     assert!(n[&clean_key].diagnostics.is_empty());
+}
+
+/// A project that does what a memory-backed project does and adds a message of
+/// category `Text` to every analysis: no problem code is a text yet, so the
+/// language server cannot get one from the analyzer.
+struct WithText {
+    inner: ironplc_project::MemoryBackedProject,
+}
+
+impl Project for WithText {
+    fn initialize(&mut self, dir: &std::path::Path) -> Vec<ironplc_dsl::diagnostic::Diagnostic> {
+        self.inner.initialize(dir)
+    }
+
+    fn change_text_document(&mut self, file_id: &ironplc_dsl::core::FileId, content: String) {
+        self.inner.change_text_document(file_id, content);
+    }
+
+    fn tokenize(
+        &self,
+        file_id: &ironplc_dsl::core::FileId,
+    ) -> (
+        Vec<ironplc_parser::token::Token>,
+        Vec<ironplc_dsl::diagnostic::Diagnostic>,
+    ) {
+        self.inner.tokenize(file_id)
+    }
+
+    fn semantic(&mut self) -> Vec<ironplc_dsl::diagnostic::Diagnostic> {
+        let mut diagnostics = self.inner.semantic();
+        diagnostics.push(
+            ironplc_dsl::diagnostic::Diagnostic::text(
+                ironplc_dsl::core::SourceSpan::default(),
+                ironplc_problems::text::syntax_error_a_task_needs_a_priority(),
+            )
+            .with_severity_for_test(ironplc_dsl::diagnostic::Severity::Text),
+        );
+        diagnostics
+    }
+
+    fn semantic_context(&self) -> Option<&ironplc_analyzer::SemanticContext> {
+        self.inner.semantic_context()
+    }
+
+    fn analyzed_library(&self) -> Option<&ironplc_dsl::common::Library> {
+        self.inner.analyzed_library()
+    }
+
+    fn sources(&self) -> Vec<&ironplc_sources::Source> {
+        self.inner.sources()
+    }
+
+    fn sources_mut(&mut self) -> Vec<&mut ironplc_sources::Source> {
+        self.inner.sources_mut()
+    }
+
+    fn find(&self, file_id: &ironplc_dsl::core::FileId) -> Option<&ironplc_sources::Source> {
+        self.inner.find(file_id)
+    }
+}
+
+#[spec_test(REQ_DS_cli_004)]
+fn text_message_when_analysis_has_one_then_sent_as_log_message_and_not_as_a_diagnostic() {
+    let proj = Box::new(WithText {
+        inner: ironplc_project::MemoryBackedProject::new(
+            ironplc_parser::options::CompilerOptions::default(),
+        ),
+    });
+    let mut server = TestServer::new(proj);
+    server.send_notification::<notification::DidChangeTextDocument>(change_doc(
+        &Uri::from_str("file:///workspace/main.st").unwrap(),
+        1,
+        "PROGRAM main\nEND_PROGRAM\n",
+    ));
+
+    // The edited file gets its (empty) publication first, then the log.
+    let published = server.receive_notification::<PublishDiagnosticsParams>();
+    let logged = server.receive_notification::<lsp_types::LogMessageParams>();
+
+    assert!(published.diagnostics.is_empty(), "{:?}", published);
+    assert_eq!(logged.typ, lsp_types::MessageType::INFO);
+    assert_eq!(logged.message, "a task needs a `PRIORITY`");
 }

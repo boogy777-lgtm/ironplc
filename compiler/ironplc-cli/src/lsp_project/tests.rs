@@ -1,5 +1,6 @@
 //! Tests for the LSP project wrapper: document sync, diagnostics, tokens, symbols, and URI keys.
 
+use spec_test_macro::spec_test;
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -70,7 +71,7 @@ fn initialize_many_when_two_folders_then_cross_folder_type_resolves() {
     let folders = vec![workspace_folder(dir1.path()), workspace_folder(dir2.path())];
     proj.initialize_many(&folders);
 
-    let diagnostics = proj.semantic_all();
+    let diagnostics = proj.semantic_all().problems;
     let all_diagnostics: Vec<_> = diagnostics.values().flatten().collect();
     assert!(
         all_diagnostics.is_empty(),
@@ -89,7 +90,7 @@ fn initialize_many_when_single_folder_then_still_works() {
     let folders = vec![workspace_folder(dir.path())];
     proj.initialize_many(&folders);
 
-    let diagnostics = proj.semantic_all();
+    let diagnostics = proj.semantic_all().problems;
     let all_diagnostics: Vec<_> = diagnostics.values().flatten().collect();
     assert!(
         all_diagnostics.is_empty(),
@@ -122,7 +123,7 @@ END_PROGRAM (* open"
     let tokens = proj.tokenize(&url);
     assert!(!tokens.is_empty());
 
-    let published = proj.semantic_all();
+    let published = proj.semantic_all().problems;
     let diagnostics: Vec<_> = published.values().flatten().collect();
     assert!(!diagnostics.is_empty(), "no diagnostic was published");
 }
@@ -742,7 +743,7 @@ fn semantic_all_when_no_errors_then_returns_empty_map() {
         "PROGRAM Main\nVAR\n  x : BOOL;\nEND_VAR\nEND_PROGRAM".to_owned(),
     );
 
-    let by_uri = proj.semantic_all();
+    let by_uri = proj.semantic_all().problems;
     // Empty project (no configuration with a program instance) still
     // analyses cleanly when there are no parse errors. Either way,
     // the contract is "no errors => no entries".
@@ -771,7 +772,7 @@ fn semantic_all_when_two_files_each_have_errors_then_returns_diagnostics_for_eac
     proj.change_text_document(&url_a, "this is not valid IEC 61131-3".to_owned());
     proj.change_text_document(&url_b, "neither is this".to_owned());
 
-    let by_key = proj.semantic_all();
+    let by_key = proj.semantic_all().problems;
 
     assert!(
         by_key.contains_key(&key_a),
@@ -843,7 +844,7 @@ fn semantic_all_when_diagnostic_has_no_openable_file_then_falls_back_to_last_cha
     let url = Uri::from_str(FAKE_PATH).unwrap();
     proj.change_text_document(&url, "PROGRAM Main\nEND_PROGRAM".to_owned());
 
-    let by_key = proj.semantic_all();
+    let by_key = proj.semantic_all().problems;
 
     assert_eq!(
         by_key.keys().collect::<Vec<_>>(),
@@ -858,7 +859,7 @@ fn semantic_all_when_diagnostic_has_no_openable_file_then_falls_back_to_last_cha
 fn semantic_all_when_diagnostic_has_no_openable_file_and_no_last_changed_then_dropped() {
     let mut proj = LspProject::new(Box::new(BuiltInDiagnosticProject));
 
-    assert!(proj.semantic_all().is_empty());
+    assert!(proj.semantic_all().problems.is_empty());
 }
 
 #[test]
@@ -921,28 +922,90 @@ fn uri_key_when_to_uri_then_round_trips_back_to_original() {
     assert_eq!(back.as_str(), original.as_str());
 }
 
-#[test]
-fn lsp_severity_when_each_category_then_its_editor_severity() {
+#[spec_test(REQ_DS_cli_004)]
+fn place_of_when_each_category_then_where_the_editor_shows_it() {
+    use super::Place;
     use ironplc_dsl::diagnostic::Severity;
     use lsp_types::DiagnosticSeverity;
 
     for (severity, expected) in [
-        (Severity::FatalError, Some(DiagnosticSeverity::ERROR)),
-        (Severity::Error, Some(DiagnosticSeverity::ERROR)),
-        (Severity::Warning, Some(DiagnosticSeverity::WARNING)),
-        (Severity::Information, Some(DiagnosticSeverity::INFORMATION)),
-        (Severity::Text, Some(DiagnosticSeverity::INFORMATION)),
-        (Severity::SuppressedWarning, None),
-        (Severity::SuppressedInformation, None),
+        (
+            Severity::FatalError,
+            Place::Problems(DiagnosticSeverity::ERROR),
+        ),
+        (Severity::Error, Place::Problems(DiagnosticSeverity::ERROR)),
+        (
+            Severity::Warning,
+            Place::Problems(DiagnosticSeverity::WARNING),
+        ),
+        (
+            Severity::Information,
+            Place::Problems(DiagnosticSeverity::INFORMATION),
+        ),
+        (Severity::Text, Place::Output),
+        (Severity::SuppressedWarning, Place::Nowhere),
+        (Severity::SuppressedInformation, Place::Nowhere),
     ] {
-        assert_eq!(super::lsp_severity(severity), expected, "{severity:?}");
-        // What is published is what the category says is shown.
+        assert_eq!(super::place_of(severity), expected, "{severity:?}");
+        // What is shown is what the category says is shown.
         assert_eq!(
-            super::lsp_severity(severity).is_some(),
+            super::place_of(severity) != Place::Nowhere,
             severity.is_shown(),
             "{severity:?}"
         );
     }
+}
+
+#[spec_test(REQ_DS_cli_004)]
+fn analysis_of_when_each_category_then_problems_log_or_nothing() {
+    use ironplc_dsl::diagnostic::Severity;
+    use lsp_types::DiagnosticSeverity;
+
+    let mut proj = new_empty_project();
+    let url = Uri::from_str(FAKE_PATH).unwrap();
+    proj.change_text_document(
+        &url,
+        "PROGRAM Main
+END_PROGRAM"
+            .to_owned(),
+    );
+    let file = ironplc_dsl::core::FileId::from_path(std::path::Path::new(FAKE_PATH));
+    let made = |severity| {
+        Diagnostic::text(
+            SourceSpan {
+                start: 0,
+                end: 1,
+                file_id: file.clone(),
+            },
+            ironplc_problems::text::syntax_error_a_task_needs_a_priority(),
+        )
+        .with_severity_for_test(severity)
+    };
+
+    let analysis = proj.analysis_of(vec![
+        made(Severity::FatalError),
+        made(Severity::Error),
+        made(Severity::Warning),
+        made(Severity::Information),
+        made(Severity::Text),
+        made(Severity::SuppressedWarning),
+        made(Severity::SuppressedInformation),
+    ]);
+
+    let published: Vec<_> = analysis.problems.values().flatten().collect();
+    let severities: Vec<_> = published.iter().filter_map(|d| d.severity).collect();
+    assert_eq!(
+        severities,
+        vec![
+            DiagnosticSeverity::ERROR,
+            DiagnosticSeverity::ERROR,
+            DiagnosticSeverity::WARNING,
+            DiagnosticSeverity::INFORMATION
+        ]
+    );
+    // The text is not a diagnostic of the Problems panel; it is one line of the log.
+    assert_eq!(published.len(), 4);
+    assert_eq!(analysis.log, vec!["a task needs a `PRIORITY`".to_string()]);
 }
 
 #[test]

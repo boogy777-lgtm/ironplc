@@ -15,6 +15,22 @@ mod lsp_stack_budget_tests;
 #[cfg(test)]
 mod test_helpers;
 
+// Spec conformance testing infrastructure (test-only).
+#[cfg(test)]
+mod spec_requirements {
+    include!(concat!(env!("OUT_DIR"), "/spec_requirements.rs"));
+}
+
+#[cfg(test)]
+#[test]
+fn all_spec_requirements_have_tests() {
+    assert!(
+        spec_requirements::UNTESTED.is_empty(),
+        "Requirements in spec with no conformance test: {:?}",
+        spec_requirements::UNTESTED
+    );
+}
+
 #[cfg(test)]
 #[ctor::ctor(unsafe)]
 #[expect(

@@ -83,6 +83,17 @@ impl Diagnostic {
         })
     }
 
+    /// The diagnostic as a line of plain text for a person, with no header and no
+    /// code: the text of its primary label when it has one, and its description
+    /// otherwise. This is how a `Text` is shown, a line about the build.
+    pub fn person_text(&self) -> String {
+        if self.primary.message.is_empty() {
+            self.description()
+        } else {
+            self.primary.message.clone()
+        }
+    }
+
     /// The diagnostic as a program reads it. `source` is the text of the file
     /// of the primary label; the line and column of `position_text` need it.
     ///

@@ -95,6 +95,18 @@ fn person_header_when_text_or_suppressed_then_none() {
 }
 
 #[spec_test(REQ_DS_dsl_008)]
+fn person_text_when_label_then_the_label_and_otherwise_the_description() {
+    use crate::diagnostic::Label;
+
+    let labelled = syntax_error(SourceSpan::default());
+    assert_eq!(labelled.person_text(), "a task needs a `PRIORITY`");
+
+    let mut unlabelled = labelled.clone();
+    unlabelled.primary = Label::span(SourceSpan::default(), "");
+    assert_eq!(unlabelled.person_text(), unlabelled.description());
+}
+
+#[spec_test(REQ_DS_dsl_009)]
 fn script_message_when_diagnostic_then_the_fields_of_script_message() {
     let source = "PROGRAM main\nVAR END_VAR\n  x := 1;\nEND_PROGRAM\n";
     let start = source.find("x :=").unwrap();
@@ -118,7 +130,7 @@ fn script_message_when_diagnostic_then_the_fields_of_script_message() {
     assert!(message.text.contains(&diagnostic.description()));
 }
 
-#[spec_test(REQ_DS_dsl_008)]
+#[spec_test(REQ_DS_dsl_009)]
 fn script_message_when_source_unknown_then_no_position_text() {
     let message = undeclared(SourceSpan::default()).script_message(None);
 
@@ -126,7 +138,7 @@ fn script_message_when_source_unknown_then_no_position_text() {
     assert_eq!(message.length, 0);
 }
 
-#[spec_test(REQ_DS_dsl_008)]
+#[spec_test(REQ_DS_dsl_009)]
 fn script_message_when_label_not_in_description_then_the_text_has_both() {
     let message = syntax_error(SourceSpan::default()).script_message(None);
 
@@ -134,7 +146,7 @@ fn script_message_when_label_not_in_description_then_the_text_has_both() {
     assert!(message.text.contains(": "), "{}", message.text);
 }
 
-#[spec_test(REQ_DS_dsl_009)]
+#[spec_test(REQ_DS_dsl_010)]
 fn script_message_when_each_category_then_its_scripting_name_and_value() {
     let expected = [
         (Severity::FatalError, "FatalError", 1),
@@ -155,7 +167,7 @@ fn script_message_when_each_category_then_its_scripting_name_and_value() {
     }
 }
 
-#[spec_test(REQ_DS_dsl_009)]
+#[spec_test(REQ_DS_dsl_010)]
 fn is_in_when_mask_then_true_only_for_the_categories_in_it() {
     let warning = in_category(undeclared(SourceSpan::default()), Severity::Warning)
         .script_message(None);
@@ -167,7 +179,7 @@ fn is_in_when_mask_then_true_only_for_the_categories_in_it() {
     assert!(!warning.is_in(0));
 }
 
-#[spec_test(REQ_DS_dsl_010)]
+#[spec_test(REQ_DS_dsl_011)]
 fn script_message_when_codesys_counterpart_then_codesys_field_else_null() {
     let with = undeclared(SourceSpan::default()).script_message(None);
     let without = syntax_error(SourceSpan::default()).script_message(None);

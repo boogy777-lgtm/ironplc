@@ -91,6 +91,28 @@ clap_policy!(ClapStringToNumNonNumeric, StringToNumNonNumeric);
 clap_policy!(ClapStringToNumFailure, StringToNumFailure);
 clap_policy!(ClapEnumerationStrictness, EnumerationStrictness);
 
+/// How `check` writes its messages.
+#[derive(clap::ValueEnum, Clone, Copy, Debug, Default)]
+enum MessageFormat {
+    /// For a person: stderr, with the words of the CODESYS Messages view
+    /// (Error, Warning, Information) and the source snippet.
+    #[default]
+    Text,
+    /// For a program: one JSON array on stdout with a message object (the
+    /// fields of the CODESYS ScriptMessage) for each message, suppressed
+    /// messages included.
+    Json,
+}
+
+impl From<MessageFormat> for cli::Output {
+    fn from(format: MessageFormat) -> Self {
+        match format {
+            MessageFormat::Text => cli::Output::Terminal,
+            MessageFormat::Json => cli::Output::Json,
+        }
+    }
+}
+
 /// Shared arguments for commands that operate on source files.
 #[derive(clap::Args, Debug)]
 struct FileArgs {
@@ -521,6 +543,11 @@ enum Action {
         /// automatically.
         #[arg(long = "library")]
         libraries: Vec<LibraryName>,
+
+        /// How to write the messages: `text` for a person or `json` for a
+        /// program.
+        #[arg(long, value_enum, default_value_t)]
+        format: MessageFormat,
     },
     /// Compiles source files into a bytecode container (.iplc) file.
     ///
@@ -633,11 +660,12 @@ fn execute(action: Action) -> Result<(), String> {
         Action::Check {
             file_args,
             libraries,
+            format,
         } => cli::check(
             &file_args.files,
             file_args.compiler_options(),
             &libraries,
-            false,
+            format.into(),
         ),
         Action::Compile {
             file_args,
