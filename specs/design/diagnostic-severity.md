@@ -404,13 +404,39 @@ header and no code, and writes a suppressed warning and a suppressed information
 message not at all.
 
 **REQ-DS-cli-003** `ironplcc check --format json` writes to the standard output
-one JSON array that holds the `ScriptMessage` of every diagnostic, a suppressed
-one included, and `[]` when there is none.
+one JSON array that holds the `ScriptMessage` of every message the run keeps, a
+suppressed one included, and then the message "Compile complete" that closes the
+check; a program without a problem has that message alone.
 
 **REQ-DS-cli-005** `ironplcc check` writes a warning with its header
 (`Warning[P4083] (CODESYS C0354)`) and its source snippet, and exits with status
 0; `ironplcc compile` of the same program writes the container and exits with
 status 0.
+
+**REQ-DS-cli-006** `ironplcc check` ends with the line "Compile complete -- {errors}
+errors, {warnings} warnings", a text without a header, with the counts of the
+messages the run kept: 0 and 0 for a program without a problem, 1 and 0 for one
+error, 0 and 1 for one warning. It does not change the exit status.
+
+**REQ-DS-cli-007** `ironplcc compile` of a program that has only a warning starts
+with the line "------ Build started: Application: {name} -------", where the name
+is the file name without its extension, writes the warning, ends with "Build
+complete -- 0 errors, 1 warnings : Ready for download", writes the container and
+exits with status 0.
+
+**REQ-DS-cli-008** `ironplcc compile` of a program that has an error ends with
+"Build complete -- 1 errors, 0 warnings : No download possible", writes no
+container and exits with a failure status.
+
+**REQ-DS-cli-009** `ironplcc check --format json` gives the closing line as a
+message of category `Text` (16) with a null `prefix` and `number`, last in the
+array.
+
+**REQ-DS-cli-010** A message without a code that is an error or a warning is
+written on one line, its word and its text, as `Error: More than 500 errors
+occured: Skipping all further error messages`, with no source snippet and no link,
+and `ironplcc check` of a source with 501 errors writes 500 errors, that line and
+"Compile complete -- 501 errors, 0 warnings", and fails.
 
 ### The language server
 
@@ -426,6 +452,10 @@ severity `ERROR`, a warning with `WARNING` and an information message with
 `INFORMATION`, sends the text of a `Text` as a `window/logMessage` of type `INFO`
 and does not publish it as a diagnostic, and publishes a suppressed warning and a
 suppressed information message not at all.
+
+**REQ-DS-cli-011** The language server publishes a message without a code, such as
+the limit line of the errors, with severity `ERROR` and no `code`, and sends the
+text of one that is a `Text`, such as a closing line, as a `window/logMessage`.
 
 ### MCP
 
@@ -455,13 +485,21 @@ the code, the message and the position.
 
 **REQ-DS-mcp-005** The tool `get_message_objects` takes the sources and the options
 of `check` and an optional `severities`, a mask of `severity_value`s whose default
-is every category (0xFFFFFFFF), and returns the `ScriptMessage` of each diagnostic
-whose category is in the mask, as `system.get_message_objects` does.
+is every category (0xFFFFFFFF), and returns the `ScriptMessage` of each message of
+the check whose category is in the mask, as `system.get_message_objects` does:
+the diagnostics of `check` and then the line "Compile complete" that closes the
+check, a `Text`.
 
 **REQ-DS-mcp-006** The tool `get_messages` takes the sources and the options of
-`check` and returns the text of every diagnostic and nothing else, as
+`check` and returns the text of every message and nothing else, as
 `system.get_messages` does, from the same messages as `get_message_objects` with
 every category.
+
+**REQ-DS-mcp-007** The `ScriptMessage` of a message without a code, such as the
+closing line of a check or a limit line, has a null `prefix`, `number` and
+`codesys`. The `diagnostics` of `check` and `compile` are the problems alone and
+do not hold the closing line, so that an empty list still means a clean program;
+the two queries of the messages hold it, as CODESYS stores it among its messages.
 
 **REQ-DS-playground-001** The playground writes `Severity::name()` of the
 diagnostic as its `severity`.

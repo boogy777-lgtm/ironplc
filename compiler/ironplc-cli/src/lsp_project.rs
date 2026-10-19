@@ -456,10 +456,14 @@ fn map_diagnostic(
     // VS Code). The shared builder supplies the rest, including the reference
     // section: this used to be written out as `compiler`, which linked any
     // non-`P` diagnostic to a page that does not exist.
-    let url_string = diagnostic.help_url(env!("CARGO_PKG_VERSION"), "extension");
-    let code_description = match Uri::from_str(&url_string) {
-        Ok(url) => Some(CodeDescription { href: url }),
-        Err(_) => None,
+    // A message without a code has no page that documents it.
+    let code_description = if diagnostic.has_code() {
+        let url_string = diagnostic.help_url(env!("CARGO_PKG_VERSION"), "extension");
+        Uri::from_str(&url_string)
+            .ok()
+            .map(|url| CodeDescription { href: url })
+    } else {
+        None
     };
 
     let related_information = if diagnostic.secondary.is_empty() {
@@ -490,7 +494,9 @@ fn map_diagnostic(
     lsp_types::Diagnostic {
         range,
         severity: place_of(diagnostic.severity()).problem_severity(),
-        code: Some(NumberOrString::String(diagnostic.code)),
+        code: diagnostic
+            .has_code()
+            .then(|| NumberOrString::String(diagnostic.code)),
         code_description,
         source: Some("ironplc".into()),
         message,

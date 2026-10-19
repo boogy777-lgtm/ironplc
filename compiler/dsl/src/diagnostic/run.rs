@@ -218,23 +218,34 @@ pub const COMPILE_SUMMARY: Summary = Summary {
 };
 
 impl Summary {
-    /// The messages of a run as the command shows them: what the run keeps
-    /// ([`kept`]), with the opening line before and the closing line after. The
-    /// closing line has the counts of what the run kept, so it shows the state
-    /// of the pipeline as it ends.
-    pub fn close(&self, application: &str, diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
-        let mut closed = Vec::new();
-        if let Some(started) = self.started {
-            closed.push(Diagnostic::codeless(started(application)));
-        }
-        closed.extend(kept(diagnostics));
-        let counts = counts(&closed);
+    /// The line that opens the run, if the command has one.
+    pub fn opening(&self, application: &str) -> Option<Diagnostic> {
+        self.started
+            .map(|started| Diagnostic::codeless(started(application)))
+    }
+
+    /// The line that closes a run, with the counts of the messages it kept. It
+    /// says the run has an error when one stops the build.
+    pub fn closing(&self, kept: &[Diagnostic]) -> Diagnostic {
+        let counts = counts(kept);
         let complete = if counts.errors > 0 {
             self.complete_errors
         } else {
             self.complete_ok
         };
-        closed.push(Diagnostic::codeless(complete(counts)));
+        Diagnostic::codeless(complete(counts))
+    }
+
+    /// The messages of a run as the command shows them: what the run keeps
+    /// ([`kept`]), with the opening line before and the closing line after. The
+    /// closing line has the counts of what the run kept, so it shows the state
+    /// of the pipeline as it ends.
+    pub fn close(&self, application: &str, diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
+        let kept = kept(diagnostics);
+        let closing = self.closing(&kept);
+        let mut closed: Vec<Diagnostic> = self.opening(application).into_iter().collect();
+        closed.extend(kept);
+        closed.push(closing);
         closed
     }
 }

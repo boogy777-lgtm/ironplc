@@ -3,7 +3,7 @@
 //! Runs parse and full semantic analysis, returning structured diagnostics.
 
 use ironplc_dsl::core::FileId;
-use ironplc_dsl::diagnostic::{any_stops_build, ScriptMessage};
+use ironplc_dsl::diagnostic::{any_stops_build, ScriptMessage, CHECK_SUMMARY};
 use ironplc_project::project::{MemoryBackedProject, Project};
 use serde::Serialize;
 
@@ -24,6 +24,12 @@ pub struct CheckResponse {
 pub struct Checked {
     pub ok: bool,
     pub messages: Vec<ScriptMessage>,
+    /// The line that closes the check, "Compile complete", which CODESYS stores
+    /// among the messages of a compile as a `Text`. The two queries of the
+    /// messages return it after the others; the `diagnostics` of `check` are
+    /// the problems alone, so that an empty list still means a clean program.
+    /// It is `None` for an input that is not checked.
+    pub summary: Option<ScriptMessage>,
 }
 
 /// Validates the inputs, then parses and analyzes the sources.
@@ -34,6 +40,7 @@ pub fn check(sources: &[SourceInput], options_value: &serde_json::Value) -> Chec
         return Checked {
             ok: false,
             messages: messages_of(&source_errors, &[]),
+            summary: None,
         };
     }
 
@@ -44,6 +51,7 @@ pub fn check(sources: &[SourceInput], options_value: &serde_json::Value) -> Chec
             return Checked {
                 ok: false,
                 messages: messages_of(&errs, &[]),
+                summary: None,
             };
         }
     };
@@ -62,6 +70,7 @@ pub fn check(sources: &[SourceInput], options_value: &serde_json::Value) -> Chec
     Checked {
         ok: !any_stops_build(&diagnostics),
         messages: messages_of(&diagnostics, sources),
+        summary: Some(script_message(&CHECK_SUMMARY.closing(&diagnostics), &[])),
     }
 }
 
