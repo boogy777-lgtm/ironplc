@@ -9,7 +9,7 @@ use ironplc_analyzer::{stages::analyze, SemanticContext};
 use ironplc_dsl::{
     common::Library,
     core::{FileId, SourceSpan},
-    diagnostic::{kept, Diagnostic},
+    diagnostic::Diagnostic,
 };
 use ironplc_parser::{options::CompilerOptions, token::Token, tokenize_program};
 use ironplc_problems::text;
@@ -24,9 +24,10 @@ use crate::sidecar::{sidecar_path_for, Sidecar, SidecarKey};
 /// [`MemoryBackedProject`]. It parses each source into a library, merges them,
 /// runs the analyzer, and returns the diagnostics the run keeps (empty when the
 /// project is clean) plus the semantic context (when type resolution
-/// succeeds). What a run keeps -- no repeats, at most 500 errors and 500
-/// warnings -- is decided by [`kept`], so every consumer of the analysis (the
-/// command line, the language server, the MCP tools) gets the same messages.
+/// succeeds). The diagnostics are every message the analysis produced: what a
+/// run keeps of them is the rule of the area the run writes
+/// ([`Area::keep`](ironplc_dsl::diagnostic::Area::keep)), which the caller
+/// applies once, where it collects the messages of its run.
 ///
 /// `preparsed_libraries` are compatibility libraries the caller already parsed,
 /// injected alongside the ones the bundled registry loads. They exist for hosts
@@ -37,9 +38,7 @@ fn run_semantic_analysis(
     compiler_options: &CompilerOptions,
     preparsed_libraries: &[Library],
 ) -> (Vec<Diagnostic>, Option<SemanticContext>, Option<Library>) {
-    let (diagnostics, context, library) =
-        analyze_sources(source_project, compiler_options, preparsed_libraries);
-    (kept(diagnostics), context, library)
+    analyze_sources(source_project, compiler_options, preparsed_libraries)
 }
 
 /// Parses and analyzes the sources and returns every diagnostic they produce.
@@ -148,7 +147,10 @@ pub trait Project {
     ///
     /// Analysis goes as far as it can and returns every diagnostic that
     /// parsing and analysis produced — an empty vector means the project is
-    /// clean. The analyzed artifacts are cached and available through
+    /// clean. The diagnostics are not yet kept: the caller names the area its
+    /// run writes and applies `Area::keep` once to the messages it collects
+    /// (the Build area for `check` and `compile`, the Precompile area for the
+    /// language server). The analyzed artifacts are cached and available through
     /// `semantic_context()` and `analyzed_library()`.
     fn semantic(&mut self) -> Vec<Diagnostic>;
 

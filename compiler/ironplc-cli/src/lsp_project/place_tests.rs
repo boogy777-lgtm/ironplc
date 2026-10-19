@@ -110,33 +110,26 @@ END_PROGRAM"
 }
 
 #[spec_test(REQ_DS_cli_011)]
-fn analysis_of_when_messages_without_a_code_then_the_error_has_no_code_and_the_text_is_logged() {
-    use ironplc_dsl::diagnostic::Diagnostic;
+fn analysis_of_when_messages_without_a_position_then_neither_published_nor_logged() {
     use ironplc_problems::codeless;
-    use lsp_types::DiagnosticSeverity;
 
     let mut proj = new_empty_project();
     let url = Uri::from_str(FAKE_PATH).unwrap();
-    proj.change_text_document(&url, "PROGRAM Main\nEND_PROGRAM".to_owned());
+    proj.change_text_document(
+        &url,
+        "PROGRAM Main
+END_PROGRAM"
+            .to_owned(),
+    );
 
+    // The limit lines and the closing line are made without a position, so they
+    // are not shown in the Precompile area the language server writes.
     let analysis = proj.analysis_of(vec![
         Diagnostic::codeless(codeless::error_limit_exceeded(500)),
         Diagnostic::codeless(codeless::warning_limit_exceeded(500)),
         Diagnostic::codeless(codeless::compile_complete_errors(501, 501)),
     ]);
 
-    // The limit lines are about no file, so they go to the file edited last.
-    let published: Vec<_> = analysis.problems.values().flatten().collect();
-    assert_eq!(published.len(), 2);
-    assert_eq!(published[0].severity, Some(DiagnosticSeverity::ERROR));
-    assert_eq!(published[1].severity, Some(DiagnosticSeverity::WARNING));
-    assert!(published.iter().all(|d| d.code.is_none()));
-    assert!(published.iter().all(|d| d.code_description.is_none()));
-    assert!(published[0]
-        .message
-        .starts_with("More than 500 errors occured"));
-    assert_eq!(
-        analysis.log,
-        vec!["Compile complete -- 501 errors, 501 warnings".to_string()]
-    );
+    assert!(analysis.problems.is_empty());
+    assert!(analysis.log.is_empty());
 }

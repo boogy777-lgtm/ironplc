@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use ironplc_analyzer::extractors::TypeSymbolKind;
 use ironplc_dsl::core::{FileId, Located};
-use ironplc_dsl::diagnostic::{LineColumn, Severity};
+use ironplc_dsl::diagnostic::{Area, LineColumn, Severity};
 use log::error;
 use lsp_types::{
     CodeDescription, DiagnosticRelatedInformation, DiagnosticSeverity, DocumentSymbol,
@@ -17,6 +17,12 @@ use lsp_types::{SemanticToken, Uri};
 use crate::lsp_runner::{RunResult, VmRunner};
 use crate::semantic_tokens::to_semantic_tokens;
 use ironplc_project::Project;
+
+/// The area the language server writes: the analysis it runs while the user
+/// edits is the check CODESYS calls the precompile. The area decides what the
+/// run keeps, how many messages the editor holds and the `source` of each
+/// diagnostic, so none of them is written here.
+const RUN_AREA: Area = Area::Precompile;
 
 /// What the analysis of the workspace gives the editor.
 #[derive(Debug, Default)]
@@ -203,11 +209,21 @@ impl LspProject {
         self.analysis_of(diagnostics)
     }
 
-    /// Sorts diagnostics to where the editor shows them (see [`Place`]).
+    /// Sorts the messages of a run to where the editor shows them (see
+    /// [`Place`]).
+    ///
+    /// The run writes [`RUN_AREA`], whose rule decides which messages stay
+    /// (`Area::keep`): a message that is not shown in the area never reaches
+    /// the editor. The area then caps what the editor holds (`Area::store`),
+    /// with the file as the object: the files are written in ascending order
+    /// and the most recently edited file last, so the oldest written files lose
+    /// their messages first. A message published to several files counts once
+    /// for each of them.
     fn analysis_of(&self, diagnostics: Vec<ironplc_dsl::diagnostic::Diagnostic>) -> Analysis {
         let mut analysis = Analysis::default();
+        let mut problems: BTreeMap<UriKey, Vec<lsp_types::Diagnostic>> = BTreeMap::new();
 
-        for diagnostic in diagnostics {
+        for diagnostic in RUN_AREA.keep(diagnostics) {
             match place_of(diagnostic.severity()) {
                 Place::Problems(_) => {}
                 Place::Output => {
@@ -240,13 +256,24 @@ impl LspProject {
 
             let mapped = map_diagnostic(diagnostic, self.wrapped.as_ref());
             for key in keys {
-                analysis
-                    .problems
-                    .entry(key)
-                    .or_default()
-                    .push(mapped.clone());
+                problems.entry(key).or_default().push(mapped.clone());
             }
         }
+
+        // The files in the order they are written, the oldest first: the
+        // ascending order of the map, except that the edited file is the newest.
+        let mut written: Vec<(UriKey, Vec<lsp_types::Diagnostic>)> = problems.into_iter().collect();
+        if let Some(edited) = &self.last_changed_uri_key {
+            if let Some(at) = written.iter().position(|(key, _)| key == edited) {
+                let edited = written.remove(at);
+                written.push(edited);
+            }
+        }
+        analysis.problems = RUN_AREA
+            .store(written)
+            .into_iter()
+            .filter(|(_, diagnostics)| !diagnostics.is_empty())
+            .collect();
 
         analysis
     }
@@ -498,7 +525,7 @@ fn map_diagnostic(
             .has_code()
             .then_some(NumberOrString::String(diagnostic.code)),
         code_description,
-        source: Some("ironplc".into()),
+        source: Some(RUN_AREA.source().into()),
         message,
         related_information,
         tags: None,
@@ -558,6 +585,9 @@ fn map_label(label: &ironplc_dsl::diagnostic::Label, project: &dyn Project) -> l
         lsp_types::Position::new(0, 0),
     )
 }
+
+#[cfg(test)]
+mod area_tests;
 
 #[cfg(test)]
 mod place_tests;

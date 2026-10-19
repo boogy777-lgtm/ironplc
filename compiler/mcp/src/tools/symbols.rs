@@ -3,6 +3,7 @@ use ironplc_analyzer::extractors::{
     TypeSymbolView, VariableDirection, VariableSymbol,
 };
 use ironplc_dsl::core::FileId;
+use ironplc_dsl::diagnostic::Area;
 use ironplc_project::project::{MemoryBackedProject, Project};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -101,7 +102,7 @@ pub fn build_response(
         project.add_source(FileId::from_string(&src.name), src.content.clone());
     }
 
-    let diagnostics = project.semantic();
+    let diagnostics = Area::Build.keep(project.semantic());
     let has_errors = ironplc_dsl::diagnostic::any_stops_build(&diagnostics);
     let diagnostics_json = serialize_diagnostics(&diagnostics, sources);
 

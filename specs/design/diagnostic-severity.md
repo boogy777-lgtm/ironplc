@@ -298,24 +298,117 @@ to the semantic context, and they reach the gates above.
 
 ## What a build and a check keep
 
-The messages of a run are collected in two places of `ironplc-project`, and each
-applies `kept` to what it collected, so the command line, the language server and
-the MCP tools never decide it themselves:
+The messages of a run are collected in places that each apply the rule of the
+area the run writes ([Message areas](#message-areas)), so the command line, the
+language server and the MCP tools never decide it themselves:
 
 - `Project::semantic` returns the messages that parsing and analysis produced,
-  kept;
-- `ironplc_project::compile` returns the messages of its seeded diagnostics, the
-  analysis and code generation together, kept, so the limit is over the whole
-  run.
+  all of them: the area is the caller's, so it is the caller that applies
+  `Area::keep`;
+- `ironplc_project::compile` writes the Build area. It returns the messages of
+  its seeded diagnostics, the analysis and code generation together, kept by
+  `Area::Build.keep`, so the limit is over the whole run;
+- the command `check` and `compile` close their run with a `Summary`, which
+  declares its area and applies the rule of it;
+- the MCP tools apply `Area::Build.keep` to the analysis they run, or the area
+  they are asked for (`get_message_objects`, `get_messages`);
+- the language server applies `Area::Precompile.keep`.
 
 **REQ-DS-project-003** `compile` returns the messages its run keeps: for 501 errors
 the first 500 and the line of the limit, for 500 errors all of them and no line,
 for 501 warnings the first 500, the line of the limit and the container, and the
 limit is over the seeded diagnostics and the analysis together.
 
-**REQ-DS-project-004** `Project::semantic` returns the messages its run keeps: the
-first 500 errors and the line of the limit for 501 errors, and the same for
-warnings.
+**REQ-DS-project-004** `Project::semantic` returns every message that parsing and
+analysis produced and applies the rule of no area: for 501 errors it returns 501
+errors and no line of the limit.
+
+**REQ-DS-project-005** The messages of `Project::semantic` kept by
+`Area::Build.keep` are the first 500 errors and the line of the limit for 501
+errors, and the same for warnings.
+
+## Message areas
+
+CODESYS keeps its messages in separate lists, and a viewer shows one list at a
+time ([Message Ontology](message-ontology.md#message-area)). In IronPLC a list is
+an `Area` (`ironplc_dsl::diagnostic::Area`), a class whose members declare
+themselves:
+
+| Area | CODESYS list | Written by |
+|---|---|---|
+| `Build` | `CompilerMessageCategory` | `ironplcc check`, `ironplcc compile`, the MCP tools, the playground's compile |
+| `Precompile` | `PreCompileMessageCategory` | the language server's analysis while editing |
+
+An area declares its `name` (the name of the Messages view), its `source` (the
+text an editor shows as the source of a diagnostic), a `description`, its
+`capacity` and its keep rule, each in a `match` with an arm for each member and
+no wildcard. A new area is one new member: the compiler then asks for each of
+these, and no consumer of the class changes. The Output channel of the editor is
+a place (`Place` in the language server), not an area.
+
+A run writes exactly one area. A message declares the areas it is shown in
+(`ShownIn`, the CODESYS `ShowAttribute`) when it is made: a message made with a
+position is shown in every area, and a message made without one
+(`Diagnostic::codeless`) is shown in `Build` alone, because CODESYS clears
+`Precompile` from the `ShowAttribute` of a message made without a position
+(`CompilerMessage.cs:26-60`). It is a field set at the construction, not a test
+of the place made by the consumer. A message without a code that has a position,
+such as the message of a pragma in the source, is made by its own constructor,
+and that sets every area.
+
+**REQ-DS-dsl-024** `Area::ALL` holds each member once, at its `index`, and each
+area declares a name, a source and a description: `Build` is named "Build" with
+source "IronPLC Build", and `Precompile` is named "Precompile" with source
+"IronPLC Precompile".
+
+**REQ-DS-dsl-025** A message made with a position is shown in every area; a
+message made by `Diagnostic::codeless`, such as a limit line or a summary line, is
+shown in `Build` alone.
+
+### What each area keeps
+
+**REQ-DS-dsl-026** `Area::Build.keep` keeps what `kept` keeps, as
+[What a run keeps](#what-a-run-keeps) describes: no repeats, at most 500 errors
+and 500 warnings with the line of each limit.
+
+**REQ-DS-dsl-027** `Area::Precompile.keep` keeps, in the order produced, the
+messages that are shown in `Precompile` and are not suppressed, and drops a
+repeat of an earlier message. It writes no line of a limit and a fatal error does
+not end the run, because the precompile of CODESYS has neither
+(`PreCompileContext.cs:2440-2525`); applied to its own result it changes nothing.
+
+The Precompile area holds at most 950 messages. CODESYS applies the limit twice
+(`PreCompileContext.cs:2440-2525`):
+
+- the precompile of one object collects the messages that are shown in
+  `Precompile` and stops at 950 (`list.Count == 950`, `break`);
+- it then removes the earlier messages of that object from the area, and when
+  the area would hold more than 950 in total, it removes the oldest messages of
+  the area, the first stored, so that the total is at most 950
+  (`AddNewMessagesToMessageStorage`).
+
+So the limit is 950 messages per object in one precompile **and** 950 messages in
+the whole area, with the oldest dropped, and not 950 per object only.
+
+IronPLC has no object granularity in the language server: it analyses the whole
+workspace on each edit and publishes per file (LSP `publishDiagnostics` is per
+document). The IronPLC decision is that **the object is the file**:
+
+- each file holds at most its first 950 messages;
+- the area holds at most 950 in total; the files are written in ascending order
+  of their URI and the file that was edited last, which plays the role of the
+  object just precompiled, is written after them, so the messages of the files
+  written first are removed first;
+- a message published to several files (its secondary labels are in other files)
+  counts once for each file it is published to.
+
+`Area::store` is that rule, for any kind of object; the area without a capacity
+(`Build`) stores everything it is given.
+
+**REQ-DS-dsl-028** `Area::Precompile.store` keeps the first 950 messages of an
+object, and when the total of the objects it is given, oldest first, is over 950
+removes the oldest messages first until the total is 950; `Area::Build.store`
+returns what it is given.
 
 ## The first warning
 
@@ -454,9 +547,24 @@ severity `ERROR`, a warning with `WARNING` and an information message with
 and does not publish it as a diagnostic, and publishes a suppressed warning and a
 suppressed information message not at all.
 
-**REQ-DS-cli-011** The language server publishes a message without a code, such as
-the limit line of the errors, with severity `ERROR` and no `code`, and sends the
-text of one that is a `Text`, such as a closing line, as a `window/logMessage`.
+**REQ-DS-cli-011** The language server publishes and logs no message that has no
+position, such as the limit line of the errors or a closing line, because such a
+message is not shown in the Precompile area it writes.
+
+The language server writes the Precompile area ([Message areas](#message-areas)).
+The `source` of each diagnostic it publishes is the `source` of the area, which
+names the product and the area, so that the Problems filter of the editor can
+select the messages of one area. The area also decides what the editor holds.
+
+**REQ-DS-cli-012** The language server publishes every diagnostic with the `source`
+of the Precompile area, "IronPLC Precompile", and a message that is about no file
+of the workspace but has a position, such as one in the built-in library, is
+published for the file edited last.
+
+**REQ-DS-cli-013** The language server publishes at most the first 950 messages of
+a file, and at most 950 in all: the files are written in ascending order of their
+URI and the file edited last after them, and the messages of the files written
+first are removed first. A file that loses all its messages is not published.
 
 ### MCP
 
