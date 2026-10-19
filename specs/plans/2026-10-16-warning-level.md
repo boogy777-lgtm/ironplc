@@ -45,32 +45,32 @@ Per PR below. Shared by most PRs:
 
 ### PR 2: message forms (MSG-041, MSG-042, MSG-090 to MSG-093)
 
-- [ ] **The person form.** Our own header renderer, with the Messages view words `Error`, `Warning`, `Information`. A `Text` has no word and no code. codespan stays for the source snippet.
-- [ ] **The program form.**
+- [x] **The person form.** Our own header renderer, with the Messages view words `Error`, `Warning`, `Information`. A `Text` has no word and no code. codespan stays for the source snippet.
+- [x] **The program form.**
   - The `ScriptMessage` field names and the scripting category names, in MCP and in `--format json`.
   - Suppressed messages are included.
   - A query that returns message objects, as `system.get_message_objects` does, beside one that returns the texts alone, as `system.get_messages` does.
-- [ ] **The `CODESYS` column** in `problem-codes.csv`.
+- [x] **The `CODESYS` column** in `problem-codes.csv`.
   - Fill it from the `exact` rows of the code study; the `close` rows only after review.
   - It is shown in both forms and on each problem page.
-- [ ] **VS Code.**
+- [x] **VS Code.**
   - `Text` goes to the Output channel through `window/logMessage`.
   - The Problems mapping is as in the design doc.
   - A suppressed message is not published.
 
-### PR 3: the first warning
+### PR 3: the first warning (P4083, CODESYS C0354)
 
-- [ ] A comparison of two different enumerations, one of them strict, is a `Warning`. It is the CODESYS counterpart of C0354.
-- [ ] Tests: each operator; strict and non-strict pairs; an alias.
-- [ ] End to end: `check` exits 0 and shows the warning, and `compile` writes the container.
+- [x] A comparison or MIN/MAX of two different enumerations, strict or not, is a `Warning`, as CODESYS C0354.
+- [x] Tests: each operator; strict and non-strict pairs; an alias.
+- [x] End to end: `check` exits 0 and shows the warning, and `compile` writes the container.
 
 ### PR 4: codeless messages, limits and summary lines (MSG-040, MSG-050 to MSG-052, MSG-070 to MSG-074)
 
-- [ ] A message may have no code.
-- [ ] The 500 limits, with the CODESYS limit lines.
-- [ ] Related positions are dropped after the error limit.
-- [ ] The build start line and the "Build complete" and "Compile complete" summaries, with the counts of the run.
-- [ ] Production order is kept; duplicates are dropped, the first one wins.
+- [x] A message may have no code.
+- [x] The 500 limits, with the CODESYS limit lines.
+- [x] Related positions are dropped after the error limit.
+- [x] The build start line and the "Build complete" and "Compile complete" summaries, with the counts of the run.
+- [x] Production order is kept; duplicates are dropped, the first one wins.
 
 ### PR 5: message areas (MSG-020 to MSG-022, MSG-053)
 
