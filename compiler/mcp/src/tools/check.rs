@@ -69,7 +69,7 @@ pub fn check(sources: &[SourceInput], options_value: &serde_json::Value, area: A
     }
 
     // Run parse + full semantic analysis
-    let diagnostics = area.keep(project.semantic());
+    let diagnostics = project.semantic(area);
     Checked {
         ok: !any_stops_build(&diagnostics),
         messages: messages_of(&diagnostics, sources),

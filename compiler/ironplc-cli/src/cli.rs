@@ -85,7 +85,7 @@ fn run_check(
     let (mut project, mut diagnostics) = create_project(paths, compiler_options, libraries);
 
     // Analyze the set
-    diagnostics.extend(project.semantic());
+    diagnostics.extend(project.semantic(Area::Build));
 
     let diagnostics = CHECK_SUMMARY.close(&application_name(paths), diagnostics);
     (project, diagnostics)
@@ -238,7 +238,7 @@ pub fn sync_uids(
     };
 
     let (mut project, mut diagnostics) = create_project(paths, compiler_options, &[]);
-    diagnostics.extend(Area::Build.keep(project.semantic()));
+    diagnostics.extend(project.semantic(Area::Build));
     if any_stops_build(&diagnostics) {
         return finish("Sync UIDs", diagnostics, Some(&project), suppress_output);
     }

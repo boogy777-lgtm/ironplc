@@ -12,7 +12,7 @@ use std::time::Duration;
 use ironplc_dsl::{
     common::Library,
     core::FileId,
-    diagnostic::Diagnostic,
+    diagnostic::{Area, Diagnostic},
     stack::{is_on_budget, spawns_by_current_thread},
 };
 use ironplc_parser::{options::CompilerOptions, token::Token};
@@ -67,8 +67,8 @@ impl Project for Recording {
         tokens
     }
 
-    fn semantic(&mut self) -> Vec<Diagnostic> {
-        let diagnostics = self.inner.semantic();
+    fn semantic(&mut self, area: Area) -> Vec<Diagnostic> {
+        let diagnostics = self.inner.semantic(area);
         self.record();
         diagnostics
     }

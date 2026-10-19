@@ -5,7 +5,6 @@ use std::str::FromStr;
 
 use ironplc_dsl::core::{FileId, SourceSpan};
 use ironplc_dsl::diagnostic::Diagnostic;
-use ironplc_parser::token::Token;
 use ironplc_test::cast;
 use ironplc_test::read_shared_resource;
 use lsp_types::Uri;
@@ -790,45 +789,11 @@ fn semantic_all_when_two_files_each_have_errors_then_returns_diagnostics_for_eac
 /// A project whose analysis reports one diagnostic attributed to
 /// `FileId::BuiltIn` -- a stdlib declaration, which has no file behind it
 /// and so no URI an editor could open.
-struct BuiltInDiagnosticProject;
-
-impl ironplc_project::Project for BuiltInDiagnosticProject {
-    fn initialize(&mut self, _dir: &std::path::Path) -> Vec<Diagnostic> {
-        vec![]
-    }
-
-    fn change_text_document(&mut self, _file_id: &FileId, _content: String) {}
-
-    fn tokenize(&self, _file_id: &FileId) -> (Vec<Token>, Vec<Diagnostic>) {
-        (vec![], vec![])
-    }
-
-    fn semantic(&mut self) -> Vec<Diagnostic> {
-        vec![Diagnostic::text(
-            SourceSpan::default().with_file_id(&FileId::builtin()),
-            ironplc_problems::text::parent_type_not_declared_referenced_type(),
-        )]
-    }
-
-    fn semantic_context(&self) -> Option<&ironplc_analyzer::SemanticContext> {
-        None
-    }
-
-    fn analyzed_library(&self) -> Option<&ironplc_dsl::common::Library> {
-        None
-    }
-
-    fn sources(&self) -> Vec<&ironplc_sources::Source> {
-        vec![]
-    }
-
-    fn sources_mut(&mut self) -> Vec<&mut ironplc_sources::Source> {
-        vec![]
-    }
-
-    fn find(&self, _file_id: &FileId) -> Option<&ironplc_sources::Source> {
-        None
-    }
+fn builtin_diagnostic_project() -> super::scripted::Scripted {
+    super::scripted::Scripted(vec![Diagnostic::text(
+        SourceSpan::default().with_file_id(&FileId::builtin()),
+        ironplc_problems::text::parent_type_not_declared_referenced_type(),
+    )])
 }
 
 /// A diagnostic with no openable file is attributed to the last edited
@@ -839,7 +804,7 @@ impl ironplc_project::Project for BuiltInDiagnosticProject {
 fn semantic_all_when_diagnostic_has_no_openable_file_then_falls_back_to_last_changed() {
     use super::UriKey;
 
-    let mut proj = LspProject::new(Box::new(BuiltInDiagnosticProject));
+    let mut proj = LspProject::new(Box::new(builtin_diagnostic_project()));
     let url = Uri::from_str(FAKE_PATH).unwrap();
     proj.change_text_document(&url, "PROGRAM Main\nEND_PROGRAM".to_owned());
 
@@ -856,7 +821,7 @@ fn semantic_all_when_diagnostic_has_no_openable_file_then_falls_back_to_last_cha
 /// diagnostic has nowhere to go.
 #[test]
 fn semantic_all_when_diagnostic_has_no_openable_file_and_no_last_changed_then_dropped() {
-    let mut proj = LspProject::new(Box::new(BuiltInDiagnosticProject));
+    let mut proj = LspProject::new(Box::new(builtin_diagnostic_project()));
 
     assert!(proj.semantic_all().problems.is_empty());
 }

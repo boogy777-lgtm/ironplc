@@ -89,7 +89,7 @@ pub fn build_response(
         project.add_source(FileId::from_string(&src.name), src.content.clone());
     }
 
-    let diagnostics = Area::Build.keep(project.semantic());
+    let diagnostics = project.semantic(Area::Build);
     let has_errors = ironplc_dsl::diagnostic::any_stops_build(&diagnostics);
     let mut diagnostics_json = serialize_diagnostics(&diagnostics, sources);
 

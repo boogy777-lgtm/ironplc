@@ -151,7 +151,7 @@ fn check_when_plcproj_has_valid_and_missing_entries_then_semantic_error_still_su
     // The valid entry must still be loaded and checked -- not just
     // that the overall command fails (which a discovery-time-only
     // failure would also produce), but specifically that
-    // project.semantic() actually ran against it. A.st here has a
+    // project.semantic(ironplc_dsl::diagnostic::Area::Build) actually ran against it. A.st here has a
     // real semantic error (an undeclared variable): if analysis
     // never ran, the failure message would report only the single
     // discovery problem -- a count of 2 or more is what
@@ -725,7 +725,7 @@ END_PROGRAM
     let (mut project, mut diagnostics) =
         super::create_project(std::slice::from_ref(&path), CompilerOptions::default(), &[]);
     use ironplc_project::Project;
-    diagnostics.extend(project.semantic());
+    diagnostics.extend(project.semantic(ironplc_dsl::diagnostic::Area::Build));
 
     let json = super::json_of(&diagnostics, Some(&project)).unwrap();
 

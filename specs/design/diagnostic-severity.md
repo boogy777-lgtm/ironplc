@@ -300,34 +300,34 @@ to the semantic context, and they reach the gates above.
 
 ## What a build and a check keep
 
-The messages of a run are collected in places that each apply the rule of the
-area the run writes ([Message areas](#message-areas)), so the command line, the
-language server and the MCP tools never decide it themselves:
+The run names its area, and the rule of the area is applied where the messages
+of the run are collected ([Message areas](#message-areas)), so the command line,
+the language server and the MCP tools never decide it themselves and no caller
+can skip it:
 
-- `Project::semantic` returns the messages that parsing and analysis produced,
-  all of them: the area is the caller's, so it is the caller that applies
-  `Area::keep`;
+- `Project::semantic(area)` returns the messages that parsing and analysis
+  produced, kept by `area.keep`. The area is a parameter of the run, so a caller
+  that does not name one does not compile;
 - `ironplc_project::compile` writes the Build area. It returns the messages of
   its seeded diagnostics, the analysis and code generation together, kept by
-  `Area::Build.keep`, so the limit is over the whole run;
+  `Area::Build.keep`, so the limit is over the whole run; the analysis inside it
+  is `semantic(Area::Build)`, and keeping again is idempotent;
 - the command `check` and `compile` close their run with a `Summary`, which
-  declares its area and applies the rule of it;
-- the MCP tools apply `Area::Build.keep` to the analysis they run, or the area
-  they are asked for (`get_message_objects`, `get_messages`);
-- the language server applies `Area::Precompile.keep`.
+  declares its area and applies the rule of it to what the command collected
+  (the idempotence of `kept` keeps the limit lines single);
+- the MCP tools run `semantic(Area::Build)`, or the area they are asked for
+  (`get_message_objects`, `get_messages`);
+- the language server runs `semantic(Area::Precompile)`.
 
 **REQ-DS-project-003** `compile` returns the messages its run keeps: for 501 errors
 the first 500 and the line of the limit, for 500 errors all of them and no line,
 for 501 warnings the first 500, the line of the limit and the container, and the
 limit is over the seeded diagnostics and the analysis together.
 
-**REQ-DS-project-004** `Project::semantic` returns every message that parsing and
-analysis produced and applies the rule of no area: for 501 errors it returns 501
-errors and no line of the limit.
-
-**REQ-DS-project-005** The messages of `Project::semantic` kept by
-`Area::Build.keep` are the first 500 errors and the line of the limit for 501
-errors, and the same for warnings.
+**REQ-DS-project-004** `Project::semantic` keeps the messages by the rule of the
+area it is given: for 501 errors, `Build` returns the first 500 and the line of
+the limit (and the same for 501 warnings), and `Precompile` returns all 501 and no
+line.
 
 ## Message areas
 

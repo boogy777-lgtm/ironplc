@@ -22,7 +22,7 @@
 use ironplc_codegen::EmptyLookup;
 use ironplc_container::{Container, PersistentExtent};
 use ironplc_dsl::core::FileId;
-use ironplc_dsl::diagnostic::Diagnostic;
+use ironplc_dsl::diagnostic::{Area, Diagnostic};
 use ironplc_parser::options::CompilerOptions;
 use ironplc_project::sidecar::declared_var_keys;
 use ironplc_project::{compile, MemoryBackedProject, Project, Sidecar};
@@ -225,7 +225,7 @@ fn build(files: &[(&str, &str)], keyed: bool) -> Outcome {
         project.add_source(FileId::from_string(name), (*source).to_owned());
     }
     if keyed {
-        project.semantic();
+        project.semantic(Area::Build);
         if let Some(library) = project.analyzed_library() {
             let mut sidecar = Sidecar::new();
             sidecar.sync(&declared_var_keys(library, &options));

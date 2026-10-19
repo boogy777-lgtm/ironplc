@@ -8,8 +8,7 @@ use ironplc_dsl::diagnostic::Diagnostic;
 use lsp_types::Uri;
 use spec_test_macro::spec_test;
 
-use ironplc_project::FileBackedProject;
-
+use super::scripted::Scripted;
 use super::LspProject;
 
 #[cfg(target_os = "macos")]
@@ -19,8 +18,17 @@ static FAKE_PATH: &str = "file:///localhost/missing.st";
 #[cfg(target_os = "windows")]
 static FAKE_PATH: &str = "file:///C:/missing.st";
 
-fn new_empty_project() -> LspProject {
-    LspProject::new(Box::new(FileBackedProject::new()))
+/// A project whose analysis reports `produced`, with one document edited.
+fn project_reporting(produced: Vec<Diagnostic>) -> LspProject {
+    let mut project = LspProject::new(Box::new(Scripted(produced)));
+    let url = Uri::from_str(FAKE_PATH).unwrap();
+    project.change_text_document(
+        &url,
+        "PROGRAM Main
+END_PROGRAM"
+            .to_owned(),
+    );
+    project
 }
 
 #[spec_test(REQ_DS_cli_004)]
@@ -58,18 +66,10 @@ fn place_of_when_each_category_then_where_the_editor_shows_it() {
 }
 
 #[spec_test(REQ_DS_cli_004)]
-fn analysis_of_when_each_category_then_problems_log_or_nothing() {
+fn semantic_all_when_each_category_then_problems_log_or_nothing() {
     use ironplc_dsl::diagnostic::Severity;
     use lsp_types::DiagnosticSeverity;
 
-    let mut proj = new_empty_project();
-    let url = Uri::from_str(FAKE_PATH).unwrap();
-    proj.change_text_document(
-        &url,
-        "PROGRAM Main
-END_PROGRAM"
-            .to_owned(),
-    );
     let file = ironplc_dsl::core::FileId::from_path(std::path::Path::new(FAKE_PATH));
     let made = |severity| {
         Diagnostic::text(
@@ -82,8 +82,7 @@ END_PROGRAM"
         )
         .with_severity_for_test(severity)
     };
-
-    let analysis = proj.analysis_of(vec![
+    let mut proj = project_reporting(vec![
         made(Severity::FatalError),
         made(Severity::Error),
         made(Severity::Warning),
@@ -92,6 +91,8 @@ END_PROGRAM"
         made(Severity::SuppressedWarning),
         made(Severity::SuppressedInformation),
     ]);
+
+    let analysis = proj.semantic_all();
 
     let published: Vec<_> = analysis.problems.values().flatten().collect();
     let severities: Vec<_> = published.iter().filter_map(|d| d.severity).collect();
@@ -110,25 +111,18 @@ END_PROGRAM"
 }
 
 #[spec_test(REQ_DS_cli_011)]
-fn analysis_of_when_messages_without_a_position_then_neither_published_nor_logged() {
+fn semantic_all_when_messages_without_a_position_then_neither_published_nor_logged() {
     use ironplc_problems::codeless;
-
-    let mut proj = new_empty_project();
-    let url = Uri::from_str(FAKE_PATH).unwrap();
-    proj.change_text_document(
-        &url,
-        "PROGRAM Main
-END_PROGRAM"
-            .to_owned(),
-    );
 
     // The limit lines and the closing line are made without a position, so they
     // are not shown in the Precompile area the language server writes.
-    let analysis = proj.analysis_of(vec![
+    let mut proj = project_reporting(vec![
         Diagnostic::codeless(codeless::error_limit_exceeded(500)),
         Diagnostic::codeless(codeless::warning_limit_exceeded(500)),
         Diagnostic::codeless(codeless::compile_complete_errors(501, 501)),
     ]);
+
+    let analysis = proj.semantic_all();
 
     assert!(analysis.problems.is_empty());
     assert!(analysis.log.is_empty());

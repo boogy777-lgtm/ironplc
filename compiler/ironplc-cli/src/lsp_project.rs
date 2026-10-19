@@ -205,16 +205,16 @@ impl LspProject {
     /// had diagnostics but no longer do, and for sending each text of
     /// the log as a `window/logMessage`.
     pub(crate) fn semantic_all(&mut self) -> Analysis {
-        let diagnostics = self.wrapped.semantic();
+        let diagnostics = self.wrapped.semantic(RUN_AREA);
         self.analysis_of(diagnostics)
     }
 
     /// Sorts the messages of a run to where the editor shows them (see
     /// [`Place`]).
     ///
-    /// The run writes [`RUN_AREA`], whose rule decides which messages stay
-    /// (`Area::keep`): a message that is not shown in the area never reaches
-    /// the editor. The area then caps what the editor holds (`Area::store`),
+    /// The messages are those the analysis kept for [`RUN_AREA`] (`Project::semantic`
+    /// applies `Area::keep`), so a message that is not shown in the area never
+    /// reaches the editor. The area caps what the editor holds (`Area::store`),
     /// with the file as the object: the files are written in ascending order
     /// and the most recently edited file last, so the oldest written files lose
     /// their messages first. A message published to several files counts once
@@ -223,7 +223,7 @@ impl LspProject {
         let mut analysis = Analysis::default();
         let mut problems: BTreeMap<UriKey, Vec<lsp_types::Diagnostic>> = BTreeMap::new();
 
-        for diagnostic in RUN_AREA.keep(diagnostics) {
+        for diagnostic in diagnostics {
             match place_of(diagnostic.severity()) {
                 Place::Problems(_) => {}
                 Place::Output => {
@@ -588,6 +588,9 @@ fn map_label(label: &ironplc_dsl::diagnostic::Label, project: &dyn Project) -> l
 
 #[cfg(test)]
 mod area_tests;
+
+#[cfg(test)]
+mod scripted;
 
 #[cfg(test)]
 mod place_tests;

@@ -1,6 +1,7 @@
 //! Tests for the file-backed and memory-backed projects: document changes, compatibility-library activation and analysis results.
 
 use ironplc_dsl::core::FileId;
+use ironplc_dsl::diagnostic::Area;
 use ironplc_parser::options::{CompilerOptions, Dialect};
 use ironplc_problems::Problem;
 use std::path::Path;
@@ -42,7 +43,7 @@ fn semantic_when_library_not_activated_then_pi_undefined() {
     project.add_source(FileId::from_string("main.st"), PI_PROGRAM.to_owned());
 
     // Dormant by default: PI does not resolve without activation.
-    let result = project.semantic();
+    let result = project.semantic(Area::Build);
     assert!(!result.is_empty());
 }
 
@@ -53,7 +54,7 @@ fn semantic_when_tc2_system_activated_then_pi_resolves() {
     project.add_source(FileId::from_string("main.st"), PI_PROGRAM.to_owned());
 
     // Activating Tc2_System injects the global PI, so the initializer folds.
-    let result = project.semantic();
+    let result = project.semantic(Area::Build);
     assert!(
         result.is_empty(),
         "expected clean analysis, got: {:?}",
@@ -90,7 +91,7 @@ fn semantic_when_plcproj_references_tc2_system_then_pi_resolves() {
     assert!(errors.is_empty(), "unexpected discovery errors: {errors:?}");
 
     // The .plcproj reference alone activated Tc2_System.
-    let result = project.semantic();
+    let result = project.semantic(Area::Build);
     assert!(
         result.is_empty(),
         "expected clean analysis, got: {:?}",
@@ -126,7 +127,7 @@ fn semantic_when_plcproj_has_no_references_then_bool_to_string_resolves() {
     let errors = project.initialize(dir.path());
     assert!(errors.is_empty(), "unexpected discovery errors: {errors:?}");
 
-    let result = project.semantic();
+    let result = project.semantic(Area::Build);
     assert!(
         result.is_empty(),
         "expected clean analysis, got: {:?}",
@@ -143,7 +144,7 @@ fn semantic_when_bare_source_then_bool_to_string_undefined() {
     );
 
     // Dormant by default: no project context, no implicit activation.
-    let result = project.semantic();
+    let result = project.semantic(Area::Build);
     assert!(!result.is_empty());
 }
 
@@ -158,7 +159,7 @@ fn semantic_when_tc2_builtins_activated_explicitly_then_bool_to_string_resolves(
 
     // The CLI `--library Tc2_BuiltIns` path: explicit activation works for
     // source with no project context.
-    let result = project.semantic();
+    let result = project.semantic(Area::Build);
     assert!(
         result.is_empty(),
         "expected clean analysis, got: {:?}",
@@ -177,7 +178,7 @@ fn semantic_when_tc2_math_activated_then_all_four_functions_resolve() {
     project.set_activated_libraries(vec![LibraryName::from("Tc2_Math")]);
     project.add_source(FileId::from_string("main.st"), TC2_MATH_PROGRAM.to_owned());
 
-    let result = project.semantic();
+    let result = project.semantic(Area::Build);
     assert!(
         result.is_empty(),
         "expected clean analysis, got: {:?}",
@@ -192,7 +193,7 @@ fn semantic_when_bare_source_then_tc2_math_functions_undefined() {
 
     // Reference-activated only: dormant with no project context and no
     // explicit activation.
-    let result = project.semantic();
+    let result = project.semantic(Area::Build);
     assert!(!result.is_empty());
 }
 
@@ -209,7 +210,7 @@ fn semantic_when_user_function_named_like_library_function_then_duplicate() {
             .to_owned(),
     );
 
-    let result = project.semantic();
+    let result = project.semantic(Area::Build);
     assert!(
         result
             .iter()
@@ -227,7 +228,7 @@ fn semantic_when_unshipped_library_activated_then_diagnostic() {
         "FUNCTION_BLOCK FB VAR x : INT; END_VAR END_FUNCTION_BLOCK".to_owned(),
     );
 
-    let result = project.semantic();
+    let result = project.semantic(Area::Build);
     let diagnostics = result;
     assert!(
         diagnostics.iter().any(|d| d.code == "P6011"),
@@ -265,7 +266,7 @@ fn semantic_when_preparsed_library_supplied_then_its_function_resolves() {
         CALLS_LIB_FUNCTION.to_owned(),
     );
 
-    let result = project.semantic();
+    let result = project.semantic(Area::Build);
     assert!(
         result.is_empty(),
         "expected clean analysis, got: {:?}",
@@ -281,7 +282,7 @@ fn semantic_when_no_preparsed_library_then_its_function_undefined() {
         CALLS_LIB_FUNCTION.to_owned(),
     );
 
-    let result = project.semantic();
+    let result = project.semantic(Area::Build);
     assert!(!result.is_empty());
 }
 
@@ -297,7 +298,7 @@ fn semantic_when_user_function_named_like_preparsed_library_function_then_duplic
         format!("{LIB_FUNCTION} {CALLS_LIB_FUNCTION}"),
     );
 
-    let result = project.semantic();
+    let result = project.semantic(Area::Build);
     assert!(
         result
             .iter()
@@ -322,7 +323,7 @@ fn semantic_when_every_source_fails_to_parse_then_no_content_not_reported() {
         "PROGRAM END_PROGRAM".to_owned(),
     );
 
-    let result = project.semantic();
+    let result = project.semantic(Area::Build);
     assert!(!result.is_empty());
     assert!(
         !result.iter().any(|d| d.code == "P9002"),
@@ -336,7 +337,7 @@ fn semantic_when_every_source_fails_to_parse_then_no_content_not_reported() {
 fn semantic_when_no_sources_then_no_content_reported() {
     let mut project = MemoryBackedProject::new(CompilerOptions::default());
 
-    let result = project.semantic();
+    let result = project.semantic(Area::Build);
     assert!(
         result.iter().any(|d| d.code == "P9002"),
         "expected P9002 for an empty project, got: {result:?}"
@@ -357,7 +358,7 @@ fn semantic_when_one_of_two_sources_fails_to_parse_then_other_still_analyzed() {
         "PROGRAM main VAR x : INT; END_VAR x := undeclared_var; END_PROGRAM".to_owned(),
     );
 
-    let result = project.semantic();
+    let result = project.semantic(Area::Build);
     assert!(
         result.len() >= 2,
         "expected the syntax error AND the semantic error, got: {result:?}"
@@ -378,7 +379,7 @@ fn semantic_when_source_is_not_valid_then_returns_diagnostics() {
     let mut project = FileBackedProject::default();
     project.change_text_document(&FileId::default(), "AAA".to_owned());
 
-    let result = project.semantic();
+    let result = project.semantic(Area::Build);
 
     assert!(!result.is_empty());
 }
@@ -391,7 +392,7 @@ fn semantic_when_validation_error_then_context_cached() {
     let file_id = FileId::from_string("test.st");
     project.change_text_document(&file_id, content.to_owned());
 
-    let result = project.semantic();
+    let result = project.semantic(Area::Build);
 
     assert!(!result.is_empty());
     assert!(project.semantic_context().is_some());
@@ -411,8 +412,12 @@ fn run_semantic_analysis_when_sources_inserted_out_of_order_then_merges_in_sorte
     use ironplc_sources::SourceProject;
 
     fn element_names(source_project: &mut SourceProject) -> Vec<String> {
-        let (_, _, library) =
-            super::run_semantic_analysis(source_project, &CompilerOptions::default(), &[]);
+        let (_, _, library) = super::run_semantic_analysis(
+            source_project,
+            &CompilerOptions::default(),
+            &[],
+            Area::Build,
+        );
         let library = library.unwrap();
         library
             .elements
@@ -512,7 +517,7 @@ END_CONFIGURATION
 "#;
     project.add_source(FileId::from_string("main.st"), content.to_owned());
 
-    let result = project.semantic();
+    let result = project.semantic(Area::Build);
     assert!(result.is_empty());
 }
 
@@ -524,7 +529,7 @@ fn memory_semantic_when_syntax_error_then_diagnostics() {
         "PROGRAM END_PROGRAM".to_owned(),
     );
 
-    let result = project.semantic();
+    let result = project.semantic(Area::Build);
     assert!(!result.is_empty());
 }
 
@@ -534,7 +539,7 @@ fn memory_semantic_when_semantic_error_then_diagnostics_with_context() {
     let content = "TYPE\nINVALID_RANGE : INT(10..-10);\nEND_TYPE";
     project.add_source(FileId::from_string("test.st"), content.to_owned());
 
-    let result = project.semantic();
+    let result = project.semantic(Area::Build);
     assert!(!result.is_empty());
     assert!(project.semantic_context().is_some());
 }
@@ -731,7 +736,7 @@ END_CONFIGURATION
 "#;
     project.add_source(FileId::from_string("main.st"), content.to_owned());
 
-    let result = project.semantic();
+    let result = project.semantic(Area::Build);
     assert!(result.is_empty());
 }
 
@@ -765,7 +770,7 @@ END_CONFIGURATION
     project.add_source(FileId::from_string("main.st"), program_content.to_owned());
 
     // Counter FB from counter.st should be visible to main.st
-    let result = project.semantic();
+    let result = project.semantic(Area::Build);
     assert!(
         result.is_empty(),
         "Expected no diagnostics, got: {:?}",
@@ -805,7 +810,7 @@ END_CONFIGURATION
 "#;
     project.add_source(FileId::from_string("main.st"), content.to_owned());
 
-    let result = project.semantic();
+    let result = project.semantic(Area::Build);
     assert!(result.is_empty());
     assert!(project.analyzed_library().is_some());
 }
@@ -818,7 +823,7 @@ fn memory_semantic_when_syntax_error_then_analyzed_library_none() {
         "PROGRAM END_PROGRAM".to_owned(),
     );
 
-    let result = project.semantic();
+    let result = project.semantic(Area::Build);
     assert!(!result.is_empty());
     // Foundational analysis fails when parse produces no valid library elements,
     // so analyzed_library should be None.
@@ -831,7 +836,7 @@ fn memory_semantic_when_semantic_error_then_analyzed_library_available() {
     let content = "TYPE\nINVALID_RANGE : INT(10..-10);\nEND_TYPE";
     project.add_source(FileId::from_string("test.st"), content.to_owned());
 
-    let result = project.semantic();
+    let result = project.semantic(Area::Build);
     assert!(!result.is_empty());
     // Type resolution succeeds even with semantic diagnostics, so
     // the analyzed library should be available.
