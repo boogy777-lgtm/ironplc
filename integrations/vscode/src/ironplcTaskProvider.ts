@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { currentCompilerSettings } from './compilerSettings';
 import { buildCompileArgs, outputFileNameForFolder } from './taskProviderLogic';
 
 interface IronplcTaskDefinition extends vscode.TaskDefinition {
@@ -41,7 +42,7 @@ export class IronplcTaskProvider implements vscode.TaskProvider {
     };
 
     const outputFileName = outputFileNameForFolder(folder.name);
-    const details = buildCompileArgs(folder.uri.fsPath, outputFileName);
+    const details = buildCompileArgs(folder.uri.fsPath, outputFileName, currentCompilerSettings());
 
     const execution = new vscode.ShellExecution(
       this.compilerPath,

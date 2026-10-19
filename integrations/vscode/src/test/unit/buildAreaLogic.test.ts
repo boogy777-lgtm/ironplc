@@ -17,7 +17,11 @@ import {
   startBuild,
 } from '../../buildAreaLogic';
 import { ProblemCode } from '../../problems';
+import { CompilerSettings } from '../../compilerSettingsLogic';
 import { rejectWith } from './testHelpers';
+
+const NO_SETTINGS: CompilerSettings = { disabledWarnings: [], warningsAsErrors: [] };
+const WARNING_SETTINGS: CompilerSettings = { disabledWarnings: [], warningsAsErrors: ['P4083'] };
 
 /** An Output channel that records what it shows: the text since the last clear, and every call in order. */
 class MockChannel implements BuildAreaChannel {
@@ -181,7 +185,7 @@ suite('Build area: the callers of a build', () => {
     const { exec, invocations } = compilerThatRuns(WARNING_RUN);
     const folder: FolderRef = { name: 'areas', path: path.join(path.sep, 'work', 'areas') };
 
-    await buildFolder(channel, 'ironplcc', folder, exec);
+    await buildFolder(channel, 'ironplcc', folder, NO_SETTINGS, exec);
 
     assert.deepStrictEqual(invocations, [{
       file: 'ironplcc',
@@ -190,12 +194,38 @@ suite('Build area: the callers of a build', () => {
     }]);
   });
 
+  test('build_folder_when_settings_listed_then_the_build_area_compile_has_the_flags', async () => {
+    const channel = new MockChannel();
+    const { exec, invocations } = compilerThatRuns(WARNING_RUN);
+    const folder: FolderRef = { name: 'areas', path: path.join(path.sep, 'work', 'areas') };
+
+    await buildFolder(channel, 'ironplcc', folder, WARNING_SETTINGS, exec);
+
+    assert.deepStrictEqual(invocations[0].args, [
+      'compile',
+      '--warning-as-error',
+      'P4083',
+      '.',
+      '-o',
+      path.join(folder.path, 'areas.iplc'),
+    ]);
+  });
+
+  test('build_container_when_settings_listed_then_the_device_build_compile_has_the_flags', async () => {
+    const channel = new MockChannel();
+    const { exec, invocations } = compilerThatRuns(WARNING_RUN);
+
+    await buildContainer(channel, 'ironplcc', 'main.st', 'tmp', WARNING_SETTINGS, exec);
+
+    assert.deepStrictEqual(invocations[0].args.slice(0, 3), ['compile', '--warning-as-error', 'P4083']);
+  });
+
   test('build_container_when_compile_succeeds_then_resolves_with_the_container_in_the_output_directory', async () => {
     const channel = new MockChannel();
     const { exec, invocations } = compilerThatRuns(WARNING_RUN);
     const dir = path.join(path.sep, 'tmp');
 
-    const container = await buildContainer(channel, 'ironplcc', path.join(path.sep, 'src', 'main.st'), dir, exec);
+    const container = await buildContainer(channel, 'ironplcc', path.join(path.sep, 'src', 'main.st'), dir, NO_SETTINGS, exec);
 
     assert.strictEqual(container, path.join(dir, 'main.iplc'));
     assert.deepStrictEqual(invocations[0].args, ['compile', path.join(path.sep, 'src', 'main.st'), '-o', container]);
@@ -206,7 +236,7 @@ suite('Build area: the callers of a build', () => {
     const channel = new MockChannel();
     const { exec } = compilerThatRuns(ERROR_RUN);
 
-    const err = await rejectWith(buildContainer(channel, 'ironplcc', 'main.st', 'tmp', exec));
+    const err = await rejectWith(buildContainer(channel, 'ironplcc', 'main.st', 'tmp', NO_SETTINGS, exec));
 
     assert.ok(err instanceof Error);
     assert.ok(err.message.includes('exit code 1'), err.message);
@@ -219,7 +249,7 @@ suite('Build area: the callers of a build', () => {
       throw new Error('spawn ironplcc ENOENT');
     };
 
-    const err = await rejectWith(buildContainer(channel, 'ironplcc', 'main.st', 'tmp', exec));
+    const err = await rejectWith(buildContainer(channel, 'ironplcc', 'main.st', 'tmp', NO_SETTINGS, exec));
 
     assert.ok(err instanceof Error);
     assert.strictEqual(err.message, 'spawn ironplcc ENOENT');

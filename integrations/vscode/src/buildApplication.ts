@@ -8,6 +8,7 @@
 
 import * as vscode from 'vscode';
 
+import { currentCompilerSettings } from './compilerSettings';
 import { ReportProblem } from './debugAdapter';
 import { ProblemCode } from './problems';
 import {
@@ -56,7 +57,7 @@ export function registerBuildApplication(
         reportProblem(ProblemCode.NoCompiler, 'Install the compiler to build.');
         return;
       }
-      const outcome = await buildFolder(buildArea, compilerPath, folder);
+      const outcome = await buildFolder(buildArea, compilerPath, folder, currentCompilerSettings());
       const problem = problemOfOutcome(compilerPath, outcome);
       if (problem) {
         reportProblem(problem.code, problem.context);

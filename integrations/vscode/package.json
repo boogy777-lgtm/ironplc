@@ -282,7 +282,7 @@
           "default": ""
         },
         "ironplc.disabledWarnings": {
-          "markdownDescription": "Codes of warnings that are not shown and not counted, for example `P4083` or its CODESYS code `C0354`. A code is written exactly as the problem list or CODESYS writes it (the case matters), and only the code of a warning is accepted: an error cannot be disabled. A code the compiler does not accept is ignored and written to the language server log. The setting is read when the language server starts, so reload the window after changing it.",
+          "markdownDescription": "Codes of warnings that are not shown and not counted, for example `P4083` or its CODESYS code `C0354`. A code is written exactly as the problem list or CODESYS writes it (the case matters), and only the code of a warning is accepted: an error cannot be disabled. A code the compiler does not accept is ignored and written to the language server log. The setting also applies to every compile the extension starts (Build, the build task, the device build and the debug launch), which read it each time they start; the Problems panel reads it when the language server starts, so reload the window after changing it.",
           "type": "array",
           "items": {
             "type": "string"
@@ -291,7 +291,7 @@
           "uniqueItems": true
         },
         "ironplc.warningsAsErrors": {
-          "markdownDescription": "Codes of warnings that are reported as errors, for example `P4083` or its CODESYS code `C0354`. A build reports such a warning as an error and does not produce a container; the Problems panel keeps showing it as a warning, as the CODESYS Messages view does while you edit. The codes are written as for `#ironplc.disabledWarnings#`, and a code in both lists is reported as an error. The setting is read when the language server starts, so reload the window after changing it.",
+          "markdownDescription": "Codes of warnings that are reported as errors, for example `P4083` or its CODESYS code `C0354`. A build reports such a warning as an error and does not produce a container; the Problems panel keeps showing it as a warning, as the CODESYS Messages view does while you edit. The codes are written as for `#ironplc.disabledWarnings#`, and a code in both lists is reported as an error. The setting applies to every compile the extension starts (Build, the build task, the device build and the debug launch), which read it each time they start.",
           "type": "array",
           "items": {
             "type": "string"

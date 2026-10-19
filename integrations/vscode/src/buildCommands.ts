@@ -17,6 +17,7 @@ import * as os from 'os';
 import { readFile } from 'fs/promises';
 
 import { BuildAreaChannel, buildContainer, startBuild } from './buildAreaLogic';
+import { currentCompilerSettings } from './compilerSettings';
 import { isDebuggableProgram, programKind } from './debugAdapterLogic';
 import { ReportProblem } from './debugAdapter';
 import { ProblemCode } from './problems';
@@ -177,7 +178,7 @@ export function registerBuildCommands(
     if (!compilerPath) {
       throw new Error('IronPLC compiler not found');
     }
-    const container = await buildContainer(buildArea, compilerPath, program, os.tmpdir());
+    const container = await buildContainer(buildArea, compilerPath, program, os.tmpdir(), currentCompilerSettings());
     return readFile(container);
   }
 }

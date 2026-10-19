@@ -16,6 +16,7 @@ import * as path from 'path';
 import { spawn } from 'child_process';
 import { existsSync } from 'fs';
 
+import { currentCompilerSettings } from './compilerSettings';
 import { compileSourceToContainer } from './taskProviderLogic';
 import { programKind } from './debugAdapterLogic';
 import { ReportProblem } from './debugAdapter';
@@ -289,7 +290,12 @@ export function registerConnectionSupport(
     // compiled first — the same single-file compile every other path uses.
     let container = profile.program!;
     if (programKind(container, sourceExtensions) === 'source') {
-      container = await compileSourceToContainer(compilerPath!, container, text => outputChannel.append(text));
+      container = await compileSourceToContainer(
+        compilerPath!,
+        container,
+        text => outputChannel.append(text),
+        currentCompilerSettings(),
+      );
     }
     const vmPath = path.join(path.dirname(compilerPath!), vmFileName(process.platform));
     outputChannel.appendLine(`$ ${vmPath} serve ${container}`);

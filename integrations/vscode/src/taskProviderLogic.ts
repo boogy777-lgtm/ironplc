@@ -2,6 +2,7 @@ import { execFile } from 'child_process';
 import * as os from 'os';
 import * as path from 'path';
 
+import { CompilerSettings, compilerFlags } from './compilerSettingsLogic';
 import { containerOutputPath, firstLine } from './debugAdapterLogic';
 import { ExecFileFn } from './syncUidsLogic';
 
@@ -9,18 +10,26 @@ import { ExecFileFn } from './syncUidsLogic';
  * Builds the `ironplcc compile` argument vector for compiling `input` to the
  * container at `output`. Shared by the build task (which compiles the whole
  * project via `.`) and the debug adapter (which compiles a single source file).
+ *
+ * The compiler settings of the editor are an argument and not an option: every
+ * compile the extension starts is built here, so a site that forgets them does
+ * not type-check (`compilerSettingsLogic.ts`).
  */
-export function compileArgs(input: string, output: string): string[] {
-  return ['compile', input, '-o', output];
+export function compileArgs(input: string, output: string, settings: CompilerSettings): string[] {
+  return ['compile', ...compilerFlags(settings), input, '-o', output];
 }
 
 /**
  * Builds the arguments for the ironplcc compile command.
  */
-export function buildCompileArgs(workspaceFolderPath: string, outputFileName: string): { args: string[]; cwd: string } {
+export function buildCompileArgs(
+  workspaceFolderPath: string,
+  outputFileName: string,
+  settings: CompilerSettings,
+): { args: string[]; cwd: string } {
   const outputPath = path.join(workspaceFolderPath, outputFileName);
   return {
-    args: compileArgs('.', outputPath),
+    args: compileArgs('.', outputPath, settings),
     cwd: workspaceFolderPath,
   };
 }
@@ -82,8 +91,13 @@ function defaultExecFile(file: string, args: string[]): Promise<{ stdout: string
  * compiled first — the same single-file compile the debug launch uses.
  * Resolves with the container path.
  */
-export function compileSourceToContainer(compiler: string, source: string, log: (text: string) => void): Promise<string> {
+export function compileSourceToContainer(
+  compiler: string,
+  source: string,
+  log: (text: string) => void,
+  settings: CompilerSettings,
+): Promise<string> {
   const output = containerOutputPath(source, os.tmpdir());
-  const args = compileArgs(source, output);
+  const args = compileArgs(source, output, settings);
   return runCompiler(compiler, args, log).then(() => output);
 }

@@ -142,10 +142,15 @@ or ``"C0354"``.
 .. include:: ../../includes/warning-codes.rst
 
 A code that is not accepted is ignored and written to the language server log;
-the other codes of the list are used. The language server reads the setting when
-it starts, so reload the window after changing it. This setting corresponds to
-the ``--disable-warning`` command-line option documented in
-:doc:`/reference/compiler/ironplcc`.
+the other codes of the list are used. The setting applies to the
+:guilabel:`Problems` panel and to every compile the extension starts (the
+:guilabel:`IronPLC: Build` command, the build task, the device build and the
+debug launch), which pass it to the compiler as ``--disable-warning``, and the
+compiler refuses a code it does not accept (:doc:`/reference/compiler/problems/P0013`).
+The compiles read the setting each time they start. The language server reads
+it when it starts, so reload the window after changing it for the
+:guilabel:`Problems` panel. This setting corresponds to the ``--disable-warning``
+command-line option documented in :doc:`/reference/compiler/ironplcc`.
 
 ironplc.warningsAsErrors
 ------------------------
@@ -158,9 +163,13 @@ written as for ``ironplc.disabledWarnings``.
 
 .. include:: ../../includes/warning-settings-effect.rst
 
-The language server reads the setting when it starts, so reload the window after
-changing it. This setting corresponds to the ``--warning-as-error``
-command-line option documented in :doc:`/reference/compiler/ironplcc`.
+The setting applies to every compile the extension starts (the
+:guilabel:`IronPLC: Build` command, the build task, the device build and the
+debug launch), which pass it to the compiler as ``--warning-as-error``, and the
+compiles read it each time they start. The :guilabel:`Problems` panel keeps
+showing the warning as a warning, as described above. This setting corresponds to
+the ``--warning-as-error`` command-line option documented in
+:doc:`/reference/compiler/ironplcc`.
 
 Settings in settings.json
 =========================

@@ -22,6 +22,7 @@ import * as path from 'path';
 
 import { ProblemCode } from './problems';
 import { containerOutputPath } from './debugAdapterLogic';
+import { CompilerSettings } from './compilerSettingsLogic';
 import { buildCompileArgs, compileArgs, outputFileNameForFolder } from './taskProviderLogic';
 
 /**
@@ -173,9 +174,10 @@ export function buildFolder(
   channel: BuildAreaChannel,
   compiler: string,
   folder: FolderRef,
+  settings: CompilerSettings,
   run: RunCompilerFn = execCompiler,
 ): Promise<BuildOutcome> {
-  const details = buildCompileArgs(folder.path, outputFileNameForFolder(folder.name));
+  const details = buildCompileArgs(folder.path, outputFileNameForFolder(folder.name), settings);
   return runBuild(channel, compiler, details.args, details.cwd, run);
 }
 
@@ -190,10 +192,11 @@ export async function buildContainer(
   compiler: string,
   source: string,
   outputDir: string,
+  settings: CompilerSettings,
   run: RunCompilerFn = execCompiler,
 ): Promise<string> {
   const output = containerOutputPath(source, outputDir);
-  const outcome = await runBuild(channel, compiler, compileArgs(source, output), undefined, run);
+  const outcome = await runBuild(channel, compiler, compileArgs(source, output, settings), undefined, run);
   if (outcome.kind === 'not-started') {
     throw new Error(outcome.reason);
   }
