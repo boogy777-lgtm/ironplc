@@ -824,4 +824,7 @@ fn diagnostic(path: &Path, text: Text) -> Vec<Diagnostic> {
 }
 
 #[cfg(test)]
+mod summary_tests;
+
+#[cfg(test)]
 mod tests;

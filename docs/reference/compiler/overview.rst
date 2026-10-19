@@ -76,7 +76,8 @@ to check your program's syntax.
 
    ironplcc check main.st
 
-On success, the command produces no output.
+On success, the command prints one line that counts the messages:
+``Compile complete -- 0 errors, 0 warnings``.
 
 -------------------
 Compile the Program
@@ -92,8 +93,9 @@ using the ``compile`` command. Run the commands in
 
    ironplcc compile main.st --output main.iplc
 
-On success, the command produces no output and creates the ``.iplc`` file
-at the specified output path.
+On success, the command prints the lines ``------ Build started: Application: main -------``
+and ``Build complete -- 0 errors, 0 warnings : Ready for download`` and creates
+the ``.iplc`` file at the specified output path.
 
 You can also use the short form ``-o`` for the output flag:
 

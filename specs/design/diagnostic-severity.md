@@ -144,7 +144,8 @@ no problem: the line CODESYS keeps when a limit is passed, and the lines that
 open and close a build. CODESYS stores them as messages of its own with the id
 `None` (`CompilerMessage.cs:285-295`); the message ontology numbers this MSG-040.
 
-Their texts are rows of a second table of the message dictionary,
+Their texts are rows of a second table of the message dictionary
+([ADR-0082](../adrs/0082-a-message-without-a-problem-code-is-a-row-of-its-own-table.md)),
 `compiler/problems/resources/codeless-texts.csv`, with the columns
 `Key,Severity,Template`. The row declares the category because there is no
 problem to take it from, and the key replaces the code as the identity of the

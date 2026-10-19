@@ -6,7 +6,8 @@
 
 ``prefix`` and ``number``
    The problem code, documented in :doc:`/reference/compiler/problems/index`.
-   The code ``P0042`` is ``"P"`` and 42.
+   The code ``P0042`` is ``"P"`` and 42. Both are ``null`` for a message that
+   has no code, such as a line that counts the messages.
 
 ``text``
    The message.

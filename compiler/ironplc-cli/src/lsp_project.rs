@@ -496,7 +496,7 @@ fn map_diagnostic(
         severity: place_of(diagnostic.severity()).problem_severity(),
         code: diagnostic
             .has_code()
-            .then(|| NumberOrString::String(diagnostic.code)),
+            .then_some(NumberOrString::String(diagnostic.code)),
         code_description,
         source: Some("ironplc".into()),
         message,

@@ -104,7 +104,7 @@ impl IronPlcMcp {
     /// The message objects of a check.
     #[tool(
         name = "get_message_objects",
-        description = "The messages of a check as message objects, as `system.get_message_objects` of the CODESYS scripting API: `severity` (FatalError, Error, Warning, Information, Text, SuppressedWarning or SuppressedInformation), `severity_value`, `prefix`, `number`, `text`, `position`, `length`, `position_text`, `object` and `codesys`. `severities` is a mask of `severity_value`s (default: every category, suppressed ones included)."
+        description = "The messages of a check as message objects, as `system.get_message_objects` of the CODESYS scripting API: `severity` (FatalError, Error, Warning, Information, Text, SuppressedWarning or SuppressedInformation), `severity_value`, `prefix`, `number`, `text`, `position`, `length`, `position_text`, `object` and `codesys`. `severities` is a mask of `severity_value`s (default: every category, suppressed ones included). The last message is the line that ends the check, a Text with a null `prefix` and `number`."
     )]
     fn get_message_objects(
         &self,
@@ -119,7 +119,7 @@ impl IronPlcMcp {
     /// The texts of the messages of a check.
     #[tool(
         name = "get_messages",
-        description = "The messages of a check as texts alone, as `system.get_messages` of the CODESYS scripting API. Use `get_message_objects` to see the category, the code and the position of each."
+        description = "The messages of a check as texts alone, as `system.get_messages` of the CODESYS scripting API. Use `get_message_objects` to see the category, the code and the position of each. The last text is the line that ends the check."
     )]
     fn get_messages(
         &self,
