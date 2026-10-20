@@ -86,7 +86,7 @@ pub fn compile(
     // decided here once, over the seeded diagnostics, the analysis and code
     // generation together.
     let mut output = run_stages(project, compiler_options, source_lookup, diagnostics);
-    output.diagnostics = Area::Build.keep(output.diagnostics);
+    output.diagnostics = Area::Build.keep(&compiler_options.messages, output.diagnostics);
     output
 }
 
@@ -811,6 +811,88 @@ VAR e1 : E1; e2 : E2; r : BOOL; END_VAR
         // Callers read metadata back off the project after compiling.
         assert!(project.analyzed_library().is_some());
         assert!(project.semantic_context().is_some());
+    }
+
+    // -----------------------------------------------------------------
+    // The settings of the options reach the rule of the area
+    // (REQ-DS-project-006).
+    // -----------------------------------------------------------------
+
+    /// Options whose list holds the code of the warning P4083.
+    fn options_listing(list: ironplc_dsl::diagnostic::WarningList) -> CompilerOptions {
+        let mut options = CompilerOptions::default();
+        let refused = options.messages.add_codes(list, ["P4083"]);
+        assert!(refused.is_empty());
+        options
+    }
+
+    /// A project made with `options` and a source that has one warning (P4083)
+    /// and no error.
+    fn project_with_options(options: CompilerOptions) -> MemoryBackedProject {
+        let mut project = MemoryBackedProject::new(options);
+        project.add_source(FileId::from_string("main.st"), program_with_warnings(1));
+        project
+    }
+
+    #[spec_test(REQ_DS_project_006)]
+    fn compile_when_the_warning_is_disabled_then_no_message_about_it_and_the_container() {
+        let options = options_listing(ironplc_dsl::diagnostic::WarningList::Disabled);
+        let mut project = project_with_options(options);
+
+        let output = compile(&mut project, &options, &EmptyLookup, vec![]);
+
+        assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+        assert!(output.container.is_some());
+    }
+
+    #[spec_test(REQ_DS_project_006)]
+    fn compile_when_the_warning_is_raised_then_an_error_and_no_container() {
+        let options = options_listing(ironplc_dsl::diagnostic::WarningList::AsError);
+        let mut project = project_with_options(options);
+
+        let output = compile(&mut project, &options, &EmptyLookup, vec![]);
+
+        assert!(output.container.is_none());
+        assert_eq!(output.diagnostics.len(), 1);
+        assert_eq!(output.diagnostics[0].code, "P4083");
+        assert_eq!(output.diagnostics[0].severity(), Severity::Error);
+    }
+
+    #[spec_test(REQ_DS_project_006)]
+    fn compile_when_no_list_names_the_warning_then_a_warning_and_the_container() {
+        let options = CompilerOptions::default();
+        let mut project = project_with_options(options);
+
+        let output = compile(&mut project, &options, &EmptyLookup, vec![]);
+
+        assert!(output.container.is_some());
+        assert_eq!(output.diagnostics.len(), 1);
+        assert_eq!(output.diagnostics[0].severity(), Severity::Warning);
+    }
+
+    #[spec_test(REQ_DS_project_006)]
+    fn semantic_when_build_area_then_the_settings_of_the_project_are_applied() {
+        use ironplc_dsl::diagnostic::WarningList;
+
+        let mut disabled = project_with_options(options_listing(WarningList::Disabled));
+        let mut raised = project_with_options(options_listing(WarningList::AsError));
+
+        assert!(disabled.semantic(Area::Build).is_empty());
+        assert_eq!(raised.semantic(Area::Build)[0].severity(), Severity::Error);
+    }
+
+    #[spec_test(REQ_DS_project_006)]
+    fn semantic_when_precompile_area_then_a_disabled_warning_is_removed_and_a_raised_one_stays() {
+        use ironplc_dsl::diagnostic::WarningList;
+
+        let mut disabled = project_with_options(options_listing(WarningList::Disabled));
+        let mut raised = project_with_options(options_listing(WarningList::AsError));
+
+        assert!(disabled.semantic(Area::Precompile).is_empty());
+        assert_eq!(
+            raised.semantic(Area::Precompile)[0].severity(),
+            Severity::Warning
+        );
     }
 
     // The "clean analysis cached no artifacts" arm has no test: it guards an

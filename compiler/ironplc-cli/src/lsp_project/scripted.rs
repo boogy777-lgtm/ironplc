@@ -2,7 +2,7 @@
 //! what the editor does with the messages of a run.
 
 use ironplc_dsl::core::FileId;
-use ironplc_dsl::diagnostic::{Area, Diagnostic};
+use ironplc_dsl::diagnostic::{Area, Diagnostic, MessageSettings};
 use ironplc_parser::token::Token;
 
 /// The messages are what the analysis produces; `semantic` keeps them by the
@@ -21,7 +21,7 @@ impl ironplc_project::Project for Scripted {
     }
 
     fn semantic(&mut self, area: Area) -> Vec<Diagnostic> {
-        area.keep(self.0.clone())
+        area.keep(&MessageSettings::default(), self.0.clone())
     }
 
     fn semantic_context(&self) -> Option<&ironplc_analyzer::SemanticContext> {

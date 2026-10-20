@@ -15,6 +15,15 @@ view does, and a message names its area as its source:
    the files written first are dropped first, and the file you edited last is
    written last.
 
+A warning can be disabled, or reported as an error, by its code in the settings
+of a run (``--disable-warning`` and ``--warning-as-error`` of
+:program:`ironplcc`, the options ``disabled_warnings`` and ``warnings_as_errors``
+of the MCP tools, and ``ironplc.disabledWarnings`` and
+``ironplc.warningsAsErrors`` in VS Code). A disabled warning is in neither area.
+A warning reported as an error is an error in the ``IronPLC Build`` area, and
+stays a warning in the ``IronPLC Precompile`` area, as in the CODESYS Messages
+view.
+
 In VS Code the ``IronPLC Precompile`` area is the :guilabel:`Problems` panel,
 and the ``IronPLC Build`` area is the :guilabel:`Output` channel of the same
 name. The command :guilabel:`IronPLC: Build` and the device build

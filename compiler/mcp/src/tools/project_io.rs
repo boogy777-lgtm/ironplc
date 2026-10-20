@@ -7,12 +7,11 @@
 use ironplc_analyzer::symbol_environment::{ScopeKind, SymbolInfo, SymbolKind};
 use ironplc_analyzer::SemanticContext;
 use ironplc_dsl::common::VariableType;
-use ironplc_dsl::core::FileId;
 use ironplc_dsl::diagnostic::Area;
-use ironplc_project::project::{MemoryBackedProject, Project};
 use serde::Serialize;
 
-use super::common::{parse_options, serialize_diagnostics, validate_sources, SourceInput};
+use super::check::CheckRun;
+use super::common::SourceInput;
 
 /// A single input or output entry (REQ-TOL-mcp-212).
 #[derive(Debug, Clone, Serialize)]
@@ -48,32 +47,11 @@ pub fn build_response(
     sources: &[SourceInput],
     options_value: &serde_json::Value,
 ) -> ProjectIoResponse {
-    let source_errors = validate_sources(sources);
-    if !source_errors.is_empty() {
-        return ProjectIoResponse::empty(false, serialize_diagnostics(&source_errors, &[]));
-    }
+    let run = CheckRun::start(sources, options_value, Area::Build);
+    let checked = run.finish();
 
-    let options = match parse_options(options_value) {
-        Ok(opts) => opts,
-        Err(errs) => {
-            return ProjectIoResponse::empty(false, serialize_diagnostics(&errs, &[]));
-        }
-    };
-
-    let mut project = MemoryBackedProject::new(options);
-    for src in sources {
-        project.add_source(FileId::from_string(&src.name), src.content.clone());
-    }
-
-    let diagnostics = project.semantic(Area::Build);
-    let has_errors = ironplc_dsl::diagnostic::any_stops_build(&diagnostics);
-    let diagnostics_json = serialize_diagnostics(&diagnostics, sources);
-
-    let context = match project.semantic_context() {
-        Some(ctx) => ctx,
-        None => {
-            return ProjectIoResponse::empty(!has_errors, diagnostics_json);
-        }
+    let Some(context) = run.semantic_context() else {
+        return ProjectIoResponse::empty(checked.ok, checked.diagnostics());
     };
 
     let (mut inputs, mut outputs) = collect_io(context);
@@ -81,10 +59,10 @@ pub fn build_response(
     outputs.sort_by(|a, b| a.name.cmp(&b.name));
 
     ProjectIoResponse {
-        ok: !has_errors,
+        ok: checked.ok,
         inputs,
         outputs,
-        diagnostics: diagnostics_json,
+        diagnostics: checked.diagnostics(),
     }
 }
 

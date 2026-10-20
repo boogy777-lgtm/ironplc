@@ -5,11 +5,13 @@ use clap::Parser;
 use ironplc_cli::cli;
 use ironplc_cli::logger;
 use ironplc_cli::lsp;
+use ironplc_dsl::diagnostic::WarningList;
 use ironplc_dsl::stack::within_stack_budget;
 use ironplc_parser::options::{
     describe_dialects, BehaviorPolicy, CompilerOptions, Dialect, EnumerationStrictness,
     StringToNumFailure, StringToNumNonNumeric,
 };
+use ironplc_problems::WarningSet;
 use ironplc_sources::LibraryName;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -449,11 +451,55 @@ struct FileArgs {
     /// replaces it.
     #[arg(long, value_name = "ALTERNATIVE")]
     policy_enumeration_strictness: Option<ClapEnumerationStrictness>,
+
+    /// Do not show, and do not count, the warning with this code. The code is
+    /// written as the problem list writes it (P4083) or as CODESYS writes it
+    /// (C0354), with the case exact; only the code of a warning is accepted.
+    /// Repeat the flag for more warnings.
+    #[arg(
+        long = "disable-warning",
+        value_name = "CODE",
+        value_parser = parse_warning_code
+    )]
+    disable_warning: Vec<WarningSet>,
+
+    /// Report the warning with this code as an error, with the same code: it
+    /// counts as an error and stops the build. It wins over --disable-warning
+    /// for the same code. The code is written as for --disable-warning. Repeat
+    /// the flag for more warnings.
+    #[arg(
+        long = "warning-as-error",
+        value_name = "CODE",
+        value_parser = parse_warning_code
+    )]
+    warning_as_error: Vec<WarningSet>,
+}
+
+/// Reads the code of a warning given to a flag, with the one function every
+/// front end reads a code with. A code that is not accepted is a usage error
+/// that names the code and lists the ones that are.
+fn parse_warning_code(code: &str) -> Result<WarningSet, String> {
+    WarningSet::from_code(code).map_err(|text| text.to_string())
 }
 
 impl FileArgs {
+    /// The warnings the flags of a list gave. The `match` has an arm for each
+    /// list, so a list added to [`WarningList`] does not compile until it has a
+    /// flag here.
+    fn warnings_given(&self, list: WarningList) -> &[WarningSet] {
+        match list {
+            WarningList::Disabled => &self.disable_warning,
+            WarningList::AsError => &self.warning_as_error,
+        }
+    }
+
     fn compiler_options(&self) -> CompilerOptions {
         let mut options = CompilerOptions::from_dialect(self.dialect.into());
+        for list in WarningList::ALL {
+            for warnings in self.warnings_given(list) {
+                options.messages.add(list, *warnings);
+            }
+        }
         // A policy flag replaces the dialect's selection (unlike an
         // `--allow-*` flag, which can only enable).
         if let Some(policy) = self.policy_string_to_num_non_numeric {
@@ -708,269 +754,4 @@ fn execute(action: Action) -> Result<(), String> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use clap::ValueEnum;
-    use ironplc_dsl::stack::spawns_by_current_thread;
-    use ironplc_test::shared_resource_path;
-
-    #[test]
-    fn clap_dialect_value_variants_when_compared_then_matches_dialect_all() {
-        let clap_variants: Vec<Dialect> =
-            ClapDialect::value_variants().iter().map(|c| c.0).collect();
-        assert_eq!(clap_variants.as_slice(), Dialect::ALL);
-    }
-
-    /// Guards the hand-maintained `FileArgs` flag list against drifting out of
-    /// sync with the compiler's `FEATURE_DESCRIPTORS`: every dialect flag must be
-    /// reachable via its `--allow-*` CLI form and wired through to
-    /// `CompilerOptions`. clap needs a static field per arg, so the list cannot
-    /// be derived — but this test makes an omission fail CI instead of shipping.
-    #[test]
-    fn file_args_when_each_dialect_flag_cli_form_passed_then_option_enabled() {
-        #[derive(Parser)]
-        struct TestCli {
-            #[command(flatten)]
-            file_args: FileArgs,
-        }
-
-        for fd in CompilerOptions::FEATURE_DESCRIPTORS {
-            let cli = TestCli::try_parse_from(["ironplcc", fd.cli_flag]);
-            assert!(
-                cli.is_ok(),
-                "CLI does not accept `{}` (for CompilerOptions.{}): {:?}",
-                fd.cli_flag,
-                fd.option_key,
-                cli.as_ref().err()
-            );
-            let cli = cli.unwrap();
-            let options = cli.file_args.compiler_options();
-            assert_eq!(
-                options.get_flag_by_key(fd.option_key),
-                Some(true),
-                "`{}` parsed but did not enable CompilerOptions.{}",
-                fd.cli_flag,
-                fd.option_key
-            );
-        }
-    }
-
-    /// Guards the hand-maintained `FileArgs` policy list the same way: every
-    /// behavior policy must be settable to each of its alternatives via its
-    /// `--policy-*` CLI form, and a policy flag replaces the dialect's own
-    /// selection rather than merely enabling.
-    #[test]
-    fn file_args_when_each_policy_alternative_passed_then_option_selected() {
-        #[derive(Parser)]
-        struct TestCli {
-            #[command(flatten)]
-            file_args: FileArgs,
-        }
-
-        for pd in CompilerOptions::POLICY_DESCRIPTORS {
-            for alt in pd.alternatives {
-                // `--dialect codesys` selects a non-default alternative for
-                // every policy, so the flag is proven to replace it.
-                let cli =
-                    TestCli::try_parse_from(["ironplcc", "--dialect", "codesys", pd.cli_flag, alt]);
-                assert!(
-                    cli.is_ok(),
-                    "CLI does not accept `{} {alt}` (for CompilerOptions.{}): {:?}",
-                    pd.cli_flag,
-                    pd.option_key,
-                    cli.as_ref().err()
-                );
-                let cli = cli.unwrap();
-                let options = cli.file_args.compiler_options();
-                assert_eq!(
-                    options.get_policy_by_key(pd.option_key),
-                    Some(*alt),
-                    "`{} {alt}` parsed but did not select it for CompilerOptions.{}",
-                    pd.cli_flag,
-                    pd.option_key
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn file_args_when_no_policy_flag_then_dialect_selection_kept() {
-        #[derive(Parser)]
-        struct TestCli {
-            #[command(flatten)]
-            file_args: FileArgs,
-        }
-        let cli = TestCli::try_parse_from(["ironplcc", "--dialect", "twincat"]).unwrap();
-        let options = cli.file_args.compiler_options();
-        assert_eq!(
-            options.policy_string_to_num_non_numeric,
-            StringToNumNonNumeric::IgnoreTrailing
-        );
-        assert_eq!(
-            options.policy_string_to_num_failure,
-            StringToNumFailure::Zero
-        );
-        assert_eq!(
-            options.policy_enumeration_strictness,
-            EnumerationStrictness::WithAttribute
-        );
-    }
-
-    #[test]
-    fn file_args_when_strictness_flag_passed_then_replaces_dialect_selection() {
-        #[derive(Parser)]
-        struct TestCli {
-            #[command(flatten)]
-            file_args: FileArgs,
-        }
-        let cli = TestCli::try_parse_from([
-            "ironplcc",
-            "--dialect",
-            "codesys",
-            "--policy-enumeration-strictness",
-            "every-enumeration",
-        ])
-        .unwrap();
-        let options = cli.file_args.compiler_options();
-        assert_eq!(
-            options.policy_enumeration_strictness,
-            EnumerationStrictness::EveryEnumeration
-        );
-        assert!(TestCli::try_parse_from([
-            "ironplcc",
-            "--policy-enumeration-strictness",
-            "sometimes"
-        ])
-        .is_err());
-    }
-
-    #[test]
-    fn file_args_when_unknown_policy_alternative_then_rejected() {
-        #[derive(Parser)]
-        struct TestCli {
-            #[command(flatten)]
-            file_args: FileArgs,
-        }
-        let result =
-            TestCli::try_parse_from(["ironplcc", "--policy-string-to-num-failure", "wrap"]);
-        assert!(result.is_err());
-    }
-
-    /// Guards the hand-maintained VS Code `ironplc.dialect` settings schema
-    /// against drifting out of sync with `Dialect::ALL`. JSON cannot read the
-    /// Rust enum, so this test parses `integrations/vscode/package.json` and
-    /// compares its dialect picker back to the source of truth: the `enum`
-    /// array must match the `cli_name()` list in order, the three parallel
-    /// label/description arrays must stay index-aligned (same length), and
-    /// every dialect must be mentioned in the `markdownDescription`. Adding a
-    /// `Dialect` variant without updating the extension fails here.
-    #[test]
-    fn vscode_dialect_setting_when_compared_then_matches_dialect_all() {
-        let package_json_path = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../integrations/vscode/package.json"
-        );
-        let text = std::fs::read_to_string(package_json_path);
-        assert!(text.is_ok(), "failed to read {package_json_path}");
-        let text = text.unwrap();
-        let parsed = serde_json::from_str::<serde_json::Value>(&text);
-        assert!(
-            parsed.is_ok(),
-            "failed to parse {package_json_path} as JSON"
-        );
-        let package = parsed.unwrap();
-
-        let dialect = &package["contributes"]["configuration"]["properties"]["ironplc.dialect"];
-        assert!(
-            dialect.is_object(),
-            "ironplc.dialect setting not found in {package_json_path}"
-        );
-
-        let expected_names: Vec<&str> = Dialect::ALL.iter().map(|d| d.cli_name()).collect();
-
-        // The `enum` array must list exactly the dialect cli_names, in order.
-        let enum_values: Vec<&str> = dialect["enum"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|v| v.as_str().unwrap())
-            .collect();
-        assert_eq!(
-            enum_values, expected_names,
-            "ironplc.dialect.enum in package.json does not match Dialect::ALL cli_names"
-        );
-
-        // The parallel label/description arrays must stay index-aligned with
-        // `enum`, so a new dialect cannot leave one array short.
-        for key in ["enumItemLabels", "enumDescriptions"] {
-            let arr = dialect[key].as_array();
-            assert!(arr.is_some(), "ironplc.dialect.{key} must be an array");
-            let len = arr.unwrap().len();
-            assert_eq!(
-                len,
-                expected_names.len(),
-                "ironplc.dialect.{key} has {len} entries but there are {} dialects",
-                expected_names.len()
-            );
-        }
-
-        // The prose description must mention every dialect by cli_name.
-        let markdown = dialect["markdownDescription"].as_str().unwrap();
-        for name in &expected_names {
-            assert!(
-                markdown.contains(name),
-                "ironplc.dialect.markdownDescription does not mention `{name}`"
-            );
-        }
-    }
-
-    /// The threads that running the command makes: the cost of the program's
-    /// own run, which is the run of one command over its files.
-    fn spawns_of_command(arguments: &[&str]) -> usize {
-        let args = Args::try_parse_from(arguments);
-        assert!(args.is_ok(), "the arguments are not a command: {args:?}");
-        let Ok(args) = args else {
-            return usize::MAX;
-        };
-        let before = spawns_by_current_thread();
-        let result = run(args.action);
-        assert_eq!(result, Ok(()), "{arguments:?}");
-        spawns_by_current_thread() - before
-    }
-
-    fn corpus_files() -> Vec<String> {
-        ["steel_thread.st", "bit_access.st", "literal.st"]
-            .iter()
-            .map(|name| shared_resource_path(name).display().to_string())
-            .collect()
-    }
-
-    #[test]
-    fn run_when_check_over_three_files_then_one_thread_for_the_run() {
-        let files = corpus_files();
-        let mut arguments = vec!["ironplcc", "check"];
-        arguments.extend(files.iter().map(String::as_str));
-
-        assert_eq!(spawns_of_command(&arguments), 1);
-    }
-
-    #[test]
-    fn run_when_echo_over_three_files_then_one_thread_for_the_run() {
-        let files = corpus_files();
-        let mut arguments = vec!["ironplcc", "echo"];
-        arguments.extend(files.iter().map(String::as_str));
-
-        assert_eq!(spawns_of_command(&arguments), 1);
-    }
-
-    #[test]
-    fn run_when_compile_over_three_files_then_one_thread_for_the_run() {
-        let files = corpus_files();
-        let output = tempfile::NamedTempFile::new().unwrap();
-        let output = output.path().display().to_string();
-        let mut arguments = vec!["ironplcc", "compile", "--output", output.as_str()];
-        arguments.extend(files.iter().map(String::as_str));
-
-        assert_eq!(spawns_of_command(&arguments), 1);
-    }
-}
+mod tests;

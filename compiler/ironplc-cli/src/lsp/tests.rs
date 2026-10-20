@@ -22,6 +22,8 @@ use ironplc_project::{FileBackedProject, Project};
 
 use super::start_with_connection;
 
+mod warnings;
+
 struct TestServer {
     server_thread: Option<std::thread::JoinHandle<()>>,
     client_connection: Connection,
@@ -44,11 +46,23 @@ impl Drop for TestServer {
 
 impl TestServer {
     fn new(project: Box<dyn Project + Send>) -> Self {
-        let project = LspProject::new(project);
+        Self::start(Some(LspProject::new(project)), None)
+    }
+
+    /// A server that builds its own project from `initializationOptions`, as the
+    /// editor starts it, and not one the test hands it.
+    fn started_with(initialization_options: serde_json::Value) -> Self {
+        Self::start(None, Some(initialization_options))
+    }
+
+    fn start(
+        project: Option<LspProject>,
+        initialization_options: Option<serde_json::Value>,
+    ) -> Self {
         let (server_connection, client_connection) = Connection::memory();
 
         let server_thread = std::thread::spawn(|| {
-            start_with_connection(server_connection, Some(project)).unwrap();
+            start_with_connection(server_connection, project).unwrap();
         });
 
         let mut server = Self {
@@ -59,7 +73,7 @@ impl TestServer {
             notifications: Vec::new(),
         };
 
-        let init = params_with_init_options(None);
+        let init = params_with_init_options(initialization_options);
 
         let initialize_id = server.send_request::<request::Initialize>(init);
         server.receive_response::<InitializeResult>(initialize_id);
@@ -852,7 +866,10 @@ impl Project for WithText {
             )
             .with_severity_for_test(ironplc_dsl::diagnostic::Severity::Text),
         );
-        area.keep(diagnostics)
+        area.keep(
+            &ironplc_dsl::diagnostic::MessageSettings::default(),
+            diagnostics,
+        )
     }
 
     fn semantic_context(&self) -> Option<&ironplc_analyzer::SemanticContext> {

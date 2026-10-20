@@ -184,8 +184,18 @@ CODESYS decides each message with `MessageHandling`
 | `Suppress` | stored as `SuppressedWarning`, not shown | dropped |
 | `Ignore` | dropped | dropped |
 
-IronPLC has `Diagnostic::suppress()` (REQ-DS-dsl-004). `Ignore` and the per-message
-decision are not built yet (MSG-030).
+IronPLC has `MessageHandling` with the same three values, and one function that
+applies it, `Diagnostic::handle`, an exhaustive `match` over the handling and the
+category (MSG-030). The category is what a message is; the handling is what a run
+decides about it. `Diagnostic::suppress()` (REQ-DS-dsl-004) is the change of
+category that `Suppress` makes, not a second rule.
+
+CODESYS asks for a handling of a warning and of an error only. For the other
+categories IronPLC follows the answers its list of categories already gives:
+`Suppress` gives an information message `SuppressedInformation` (CODESYS stores
+that category for the related position of a suppressed warning, MSG-061), leaves a
+`Text` and the two suppressed categories as they are, because they have no
+suppressed category, and `Ignore` drops any category.
 
 ## Suppression sources
 
@@ -196,16 +206,28 @@ mix:
    settings, and the OEM settings.
    - `DisabledWarningIds` and `WarningAsErrorIds` are lists of ids
      (`LanguageModelManager.plugin/.../WarningHelper.cs`).
-   - In IronPLC they are command-line and project options, readable by a
-     program (MSG-031).
+   - In IronPLC they are the two lists of `MessageSettings`, a field of the
+     compiler options, given by the command line (`--disable-warning`,
+     `--warning-as-error`), by the MCP tools (`disabled_warnings`,
+     `warnings_as_errors`) and by the language server
+     (`disabledWarnings`, `warningsAsErrors`, set in VS Code as
+     `ironplc.disabledWarnings` and `ironplc.warningsAsErrors`). A code is read by
+     one function, `WarningSet::from_code`, which accepts the IronPLC code
+     (`P4083`) and the CODESYS code (`C0354`) with the case exact (MSG-031).
+   - Only a warning can be listed: the lists hold a type generated from the
+     problems that declare `Warning` (MSG-037).
+   - Build: a disabled warning is not stored and not counted
+     (`-.352.cs:184-186`). Precompile: it is removed (`PreCompileContext.cs:2446`).
 2. **Source text:** the pragmas `{warning disable Cnnnn}` and
    `{warning restore Cnnnn}`, and the attributes `suppress_warning_N` on a
    variable or a POU and `suppress_messages` on a POU (`Messaging/Messages.cs`,
    `Messaging/ErrorVisitor.cs`). They are read by the parser and the analysis
    (MSG-032 to MSG-035).
 
-Neither kind changes the other. Both act only on warnings and information. An
-error cannot be suppressed by either.
+Neither kind changes the other, and IronPLC keeps them apart: the lists of the
+settings are not read by, and share no state with, the pragmas and attributes.
+Both act only on warnings and information. An error cannot be suppressed by
+either.
 
 ## Raising
 
@@ -213,6 +235,14 @@ A warning whose id is in `WarningAsErrorIds` is reported as an `Error` with the
 same id (`Tools/SeverityExtensions.cs`). Raising beats disabling: an id in both
 lists is an error (`WarningHelper.cs:42-51`). Nothing lowers an error. IronPLC:
 MSG-036.
+
+CODESYS converts the warning on the build path only (`-.352.cs:101-110`): its
+precompile removes a disabled warning that is not also listed as an error and
+converts nothing. IronPLC does the same, in one function over the category, the
+area and the place of the code in each list: in the Build area a warning in the
+list of warnings as errors becomes an `Error` with the same code and counts as an
+error, and in the Precompile area it stays a `Warning`. An error is never changed,
+because only the category `Warning` is asked.
 
 ## Limits
 
@@ -368,14 +398,14 @@ States:
 | MSG-020 | Messages belong to areas (Build, Precompile, …), an open class; each area lists only its own messages | `CompilerMessageCategory.cs`, `PreCompileMessageCategory.cs` | done (REQ-DS-dsl-024, -026, -027, REQ-DS-mcp-008, -009) |
 | MSG-021 | The editor shows the area as the `source` of a diagnostic, so the Problems filter can select it | — | done (REQ-DS-dsl-024, REQ-DS-cli-012) |
 | MSG-022 | A message without a source position is not shown in Precompile | `CompilerMessage.cs:26-60` | done (REQ-DS-dsl-025, -027, REQ-DS-cli-011) |
-| MSG-030 | Handling `Report` / `Suppress` / `Ignore`; an error is dropped by `Suppress` or `Ignore` | `MessageHandling.cs`, `-.278.cs:98-103` | planned |
-| MSG-031 | The settings lists of disabled warnings and warnings as errors are given outside the source, as options | `WarningHelper.cs` | planned |
+| MSG-030 | Handling `Report` / `Suppress` / `Ignore`; an error is dropped by `Suppress` or `Ignore` | `MessageHandling.cs`, `-.278.cs:98-103` | done (REQ-DS-dsl-029) |
+| MSG-031 | The settings lists of disabled warnings and warnings as errors are given outside the source, as options: command line, MCP, language server and VS Code settings | `WarningHelper.cs` | done (REQ-DS-dsl-030, -031, -033, REQ-DS-project-006, REQ-DS-cli-015, -016, REQ-DS-mcp-012) |
 | MSG-032 | `{warning disable Cnnnn}` makes a matching warning suppressed until `{warning restore Cnnnn}` | `ErrorVisitor.cs:108-115` | planned |
 | MSG-033 | The scope of `{warning disable}`, and whether the code is case-sensitive | — | live |
 | MSG-034 | `suppress_warning_N := 'Cnnnn'` on a variable or a POU suppresses that warning | `Messages.cs:286-300,529-540` | planned |
 | MSG-035 | `suppress_messages` on a POU drops all its messages | `Messages.cs:141` | planned |
-| MSG-036 | A warning listed as an error is an `Error` with the same code; this beats a disabled one; nothing lowers an error | `SeverityExtensions.cs`, `WarningHelper.cs:42-51` | planned |
-| MSG-037 | Only a warning code (`Warning` category) can be disabled or raised | `WarningHelper.cs:185-200` | planned |
+| MSG-036 | A warning listed as an error is an `Error` with the same code; this beats a disabled one; nothing lowers an error | `SeverityExtensions.cs`, `WarningHelper.cs:42-51` | done (REQ-DS-dsl-030, -031, -032, REQ-DS-problems-013) |
+| MSG-037 | Only a warning code (`Warning` category) can be disabled or raised | `WarningHelper.cs:185-200` | done (REQ-DS-problems-012, -014, -015) |
 | MSG-040 | A message may have no code (user pragma, limit line, summary line) | `CompilerMessage.cs:285-295` | done (REQ-DS-problems-010, -011, REQ-DS-dsl-012, -013, -014, REQ-DS-mcp-007, REQ-DS-cli-010, -011) |
 | MSG-041 | A problem code records its CODESYS counterpart | — | done (REQ-DS-problems-005, -006, -007) |
 | MSG-042 | Both forms show the CODESYS counterpart | — | done (REQ-DS-dsl-006, -007, -011, REQ-DS-cli-001, REQ-DS-mcp-004) |

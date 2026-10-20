@@ -9,7 +9,7 @@
 use std::collections::HashSet;
 
 use ironplc_dsl::core::SourceSpan;
-use ironplc_dsl::diagnostic::{Diagnostic, ScriptMessage};
+use ironplc_dsl::diagnostic::{Diagnostic, ScriptMessage, WarningList};
 use ironplc_parser::options::{CompilerOptions, Dialect};
 use ironplc_problems::{text, Text};
 use schemars::JsonSchema;
@@ -147,6 +147,29 @@ pub fn parse_options(value: &serde_json::Value) -> Result<CompilerOptions, Vec<D
         if key == "dialect" {
             continue;
         }
+        // A list of warnings (the settings that disable a warning or report it as
+        // an error) is an array of codes. Its key is the one `WarningList`
+        // declares, so a list added there is accepted here with no edit, and each
+        // code is read by the one function every front end reads a code with.
+        if let Some(list) = WarningList::ALL
+            .into_iter()
+            .find(|list| list.option_key() == key)
+        {
+            let codes: Option<Vec<&str>> = val
+                .as_array()
+                .and_then(|entries| entries.iter().map(|entry| entry.as_str()).collect());
+            match codes {
+                Some(codes) => {
+                    for refused in options.messages.add_codes(list, codes) {
+                        errors.push(validation_diagnostic(refused));
+                    }
+                }
+                None => errors.push(validation_diagnostic(
+                    text::mcp_input_validation_option_not_string_array(key),
+                )),
+            }
+            continue;
+        }
         let is_policy = CompilerOptions::POLICY_DESCRIPTORS
             .iter()
             .any(|pd| pd.option_key == key);
@@ -261,11 +284,10 @@ pub fn serialize_diagnostics(
 }
 
 /// The diagnostic of the tools that name a POU, for a name no source declares.
-pub fn pou_not_found_diagnostic(pou_name: &str) -> serde_json::Value {
-    serialize_diagnostic(
-        &validation_diagnostic(text::mcp_input_validation_pou_not_found(pou_name)),
-        &[],
-    )
+/// A tool adds it to the messages of its run before they are framed
+/// (`CheckRun::finish_with`).
+pub fn pou_not_found_diagnostic(pou_name: &str) -> Diagnostic {
+    validation_diagnostic(text::mcp_input_validation_pou_not_found(pou_name))
 }
 
 // ───────────────────────────────────────────────────────────────────
@@ -570,7 +592,7 @@ mod tests {
 
     #[test]
     fn pou_not_found_diagnostic_when_called_then_a_validation_message_naming_the_pou() {
-        let json = pou_not_found_diagnostic("Main");
+        let json = serialize_diagnostic(&pou_not_found_diagnostic("Main"), &[]);
 
         assert_eq!(json["number"], 8001);
         assert!(json["text"]

@@ -1,0 +1,59 @@
+=====
+P0013
+=====
+
+.. problem-summary:: P0013
+
+This error occurs when a setting that lists warnings names a code that cannot
+be listed. Two settings list warnings: the warnings that are disabled and the
+warnings that are reported as errors. They are given to the compiler outside
+the source text: the command line options ``--disable-warning`` and
+``--warning-as-error``, the ``disabled_warnings`` and ``warnings_as_errors``
+options of the MCP tools, and the ``ironplc.disabledWarnings`` and
+``ironplc.warningsAsErrors`` settings of the editor.
+
+.. include:: ../../../includes/warning-codes.rst
+
+The message names the code as it was given and lists the codes that are
+accepted. The command line refuses the code before it reads any file, the MCP
+tools return the message as a diagnostic and do not run, and the language
+server writes the message to its log and goes on without the code.
+
+Example
+-------
+
+The following command generates error P0013, because ``P4007`` is the code of an
+error (a variable that is not defined), and an error cannot be disabled:
+
+.. code-block:: bash
+
+   ironplcc check --disable-warning P4007 main.st
+
+The following command generates error P0013 because the case of the code is not
+the case of the problem list:
+
+.. code-block:: bash
+
+   ironplcc check --disable-warning p4083 main.st
+
+To fix this error, write the code of a warning exactly as the list of problems
+or CODESYS writes it. The warning P4083 is also CODESYS warning C0354, so either
+of these disables it:
+
+.. code-block:: bash
+
+   ironplcc check --disable-warning P4083 main.st
+   ironplcc check --disable-warning C0354 main.st
+
+What the settings do
+--------------------
+
+.. include:: ../../../includes/warning-settings-effect.rst
+
+See Also
+--------
+
+- :doc:`P4083` --- the first warning that can be disabled or reported as an error
+- :doc:`/reference/compiler/ironplcc` --- the command line options
+- :doc:`/reference/editor/settings` --- the editor settings
+- :doc:`/reference/mcp/tools` --- the options of the MCP tools

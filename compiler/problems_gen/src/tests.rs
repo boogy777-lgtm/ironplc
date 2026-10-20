@@ -356,6 +356,7 @@ fn render_severity_enum_when_called_then_each_question_is_an_exhaustive_match_wi
         "stops_build",
         "is_shown",
         "suppressed",
+        "raised",
     ] {
         assert!(
             source.contains(&format!("pub fn {function}(&self)")),
@@ -363,11 +364,11 @@ fn render_severity_enum_when_called_then_each_question_is_an_exhaustive_match_wi
         );
     }
     assert!(!source.contains("_ =>"), "{source}");
-    assert_eq!(source.matches("match self {").count(), 7, "{source}");
-    // Seven arms for each of the seven questions.
+    assert_eq!(source.matches("match self {").count(), 8, "{source}");
+    // Seven arms for each of the eight questions.
     assert_eq!(
         source.matches("            Severity::").count(),
-        49,
+        56,
         "{source}"
     );
 }
@@ -385,6 +386,7 @@ fn render_severity_enum_when_called_then_the_facts_of_each_category() {
         "Severity::SuppressedWarning => false,",
         "Severity::Warning => Severity::SuppressedWarning,",
         "Severity::Information => Severity::SuppressedInformation,",
+        "Severity::Warning => Severity::Error,",
         "Severity::Text => Severity::Text,",
         "Severity::Error => Severity::Error,",
         "Severity::FatalError => \"FatalError\",",
@@ -471,4 +473,63 @@ fn generate_codeless_texts_when_placeholder_malformed_then_error_names_row() {
 
     assert!(message.contains("'a_line'"), "{message}");
     assert!(message.contains("{X}"), "{message}");
+}
+
+fn warning_problems(rows: &[(&str, &str)]) -> String {
+    render_warning_problems(rows)
+}
+
+#[test]
+fn render_warning_problems_when_rows_then_one_variant_for_each_warning_in_order() {
+    let source = warning_problems(&[
+        ("SyntaxError", "Error"),
+        ("EnumerationTypesCompared", "Warning"),
+        ("NotImplemented", "FatalError"),
+        ("VariableShadowed", "Warning"),
+        ("Note", "Information"),
+    ]);
+
+    assert!(
+        source.contains(
+            "pub enum WarningProblem {\n    EnumerationTypesCompared,\n    VariableShadowed,\n}"
+        ),
+        "{source}"
+    );
+    assert!(!source.contains("SyntaxError"), "{source}");
+    assert!(!source.contains("NotImplemented"), "{source}");
+    assert!(!source.contains("Note"), "{source}");
+    assert!(
+        source.contains("pub const ALL: [WarningProblem; 2] = ["),
+        "{source}"
+    );
+}
+
+#[test]
+fn render_warning_problems_when_rows_then_each_answer_is_an_exhaustive_match_without_wildcard() {
+    let source = warning_problems(&[
+        ("EnumerationTypesCompared", "Warning"),
+        ("VariableShadowed", "Warning"),
+    ]);
+
+    assert!(!source.contains("_ =>"), "{source}");
+    assert_eq!(source.matches("match self {").count(), 2, "{source}");
+    for line in [
+        "WarningProblem::EnumerationTypesCompared => Problem::EnumerationTypesCompared,",
+        "WarningProblem::VariableShadowed => Problem::VariableShadowed,",
+        "WarningProblem::EnumerationTypesCompared => 0,",
+        "WarningProblem::VariableShadowed => 1,",
+    ] {
+        assert!(source.contains(line), "{line}: {source}");
+    }
+}
+
+#[test]
+fn render_warning_problems_when_no_warning_then_an_empty_type() {
+    let source = warning_problems(&[("SyntaxError", "Error")]);
+
+    assert!(source.contains("pub enum WarningProblem {\n}"), "{source}");
+    assert!(
+        source.contains("pub const ALL: [WarningProblem; 0] = ["),
+        "{source}"
+    );
 }

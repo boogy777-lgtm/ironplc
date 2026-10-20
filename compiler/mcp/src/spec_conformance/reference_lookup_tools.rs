@@ -46,14 +46,14 @@ fn mcp_spec_req_tol_062_list_options_returns_flags() {
     for flag in &response.flags {
         assert!(!flag.id.is_empty(), "flag id must be non-empty");
         match flag.flag_type.as_str() {
-            "bool" => assert!(flag.allowed_values.is_none()),
+            "bool" | "string-list" => assert!(flag.allowed_values.is_none()),
             "enum" => assert!(
                 flag.allowed_values.as_ref().is_some_and(|v| !v.is_empty()),
                 "enum flag {} must list its allowed values",
                 flag.id
             ),
             other => assert!(
-                matches!(other, "bool" | "enum"),
+                matches!(other, "bool" | "string-list" | "enum"),
                 "flag {} has unexpected type {other}",
                 flag.id
             ),
@@ -81,6 +81,14 @@ fn mcp_spec_req_tol_063_option_ids_match_compiler_options_fields() {
             flag_ids.contains(&fd.option_key),
             "FEATURE_DESCRIPTOR key '{}' missing from list_options response",
             fd.option_key
+        );
+    }
+    // ... and every list of warnings, which `parse_options` accepts as an array.
+    for list in ironplc_dsl::diagnostic::WarningList::ALL {
+        assert!(
+            flag_ids.contains(&list.option_key()),
+            "list '{}' missing from list_options response",
+            list.option_key()
         );
     }
     // ... and every behavior policy, which `parse_options` accepts as well.

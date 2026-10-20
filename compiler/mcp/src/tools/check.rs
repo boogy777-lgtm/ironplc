@@ -2,8 +2,10 @@
 //!
 //! Runs parse and full semantic analysis, returning structured diagnostics.
 
+use ironplc_analyzer::SemanticContext;
+use ironplc_dsl::common::Library;
 use ironplc_dsl::core::FileId;
-use ironplc_dsl::diagnostic::{any_stops_build, Area, Diagnostic, ScriptMessage};
+use ironplc_dsl::diagnostic::{any_stops_build, Area, Diagnostic, MessageSettings, ScriptMessage};
 use ironplc_project::project::{MemoryBackedProject, Project};
 use serde::Serialize;
 
@@ -36,59 +38,140 @@ pub struct Checked {
     pub messages: Vec<ScriptMessage>,
 }
 
-/// The messages of a run written to `area`, framed as the area frames them, and
-/// whether none of them stops the build. This is the one place that closes a
-/// check, so every path out of `check` (invalid input too) ends the same way.
-fn framed(
-    area: Area,
-    application: &str,
-    diagnostics: Vec<Diagnostic>,
-    sources: &[SourceInput],
-) -> Checked {
-    let framed = match area.check_summary() {
-        Some(summary) => summary.close(application, diagnostics),
-        None => diagnostics,
-    };
-    Checked {
-        ok: !any_stops_build(&framed),
-        messages: framed
-            .iter()
-            .map(|diagnostic| script_message(diagnostic, sources))
-            .collect(),
+impl Checked {
+    /// The messages as the JSON the tools return in their `diagnostics`.
+    pub fn diagnostics(&self) -> Vec<serde_json::Value> {
+        self.messages.iter().map(serialize_message).collect()
     }
 }
 
-/// Validates the inputs, then parses and analyzes the sources. The check is a
-/// run that writes `area`: the area keeps its messages and decides the line that
-/// closes it.
+/// A run of the checker over the sources of a request: validate the sources,
+/// read the options, build the project, parse and analyze.
+///
+/// This is the one prelude of every tool that returns the diagnostics of a run
+/// (`check`, `symbols`, `project_manifest`, `project_io`, `types_all`,
+/// `pou_scope`, `pou_lineage`, and the queries of the messages), and the one
+/// place that closes it: [`CheckRun::finish`] frames the messages as the command
+/// line does (`Summary::close`: the closing line "Compile complete", the
+/// application named by `Project::application_name`, the settings of the run), on
+/// every path, including an invalid input. A tool keeps only its own payload and
+/// asks the project of the run for it; none calls `project.semantic` and
+/// serializes the messages itself, so none can return them unframed.
+pub struct CheckRun<'a> {
+    /// The project after the run, or `None` when the input was invalid and
+    /// nothing ran.
+    project: Option<MemoryBackedProject>,
+    /// The messages the run kept, or the problems of the invalid input.
+    diagnostics: Vec<Diagnostic>,
+    area: Area,
+    application: String,
+    settings: MessageSettings,
+    /// The sources, to place a message in them; empty for an invalid input.
+    sources: &'a [SourceInput],
+}
+
+impl<'a> CheckRun<'a> {
+    /// Validates the inputs, then parses and analyzes the sources. The run
+    /// writes `area`: the area keeps its messages and decides the line that
+    /// closes it.
+    pub fn start(
+        sources: &'a [SourceInput],
+        options_value: &serde_json::Value,
+        area: Area,
+    ) -> Self {
+        let fallback = project_name(sources);
+        let invalid = |diagnostics: Vec<Diagnostic>| CheckRun {
+            project: None,
+            diagnostics,
+            area,
+            application: fallback.clone(),
+            settings: MessageSettings::default(),
+            sources: &[],
+        };
+
+        // Validate sources
+        let source_errors = validate_sources(sources);
+        if !source_errors.is_empty() {
+            return invalid(source_errors);
+        }
+
+        // Parse options
+        let options = match parse_options(options_value) {
+            Ok(opts) => opts,
+            Err(errs) => return invalid(errs),
+        };
+
+        // Construct a fresh in-memory project (REQ-ARC-mcp-010)
+        let mut project = MemoryBackedProject::new(options);
+
+        // Load sources (REQ-ARC-mcp-011)
+        for src in sources {
+            let file_id = FileId::from_string(&src.name);
+            project.add_source(file_id, src.content.clone());
+        }
+
+        // Run parse + full semantic analysis
+        let diagnostics = project.semantic(area);
+        let application = project.application_name(&fallback);
+        CheckRun {
+            project: Some(project),
+            diagnostics,
+            area,
+            application,
+            settings: options.messages,
+            sources,
+        }
+    }
+
+    /// Whether the input was invalid (sources or options), so that nothing ran.
+    pub fn is_invalid_input(&self) -> bool {
+        self.project.is_none()
+    }
+
+    /// The semantic context of the run: `None` when the input was invalid or when
+    /// type resolution failed (`Project::semantic_context`).
+    pub fn semantic_context(&self) -> Option<&SemanticContext> {
+        self.project
+            .as_ref()
+            .and_then(|project| project.semantic_context())
+    }
+
+    /// The analyzed library of the run, under the same conditions.
+    pub fn analyzed_library(&self) -> Option<&Library> {
+        self.project
+            .as_ref()
+            .and_then(|project| project.analyzed_library())
+    }
+
+    /// The messages of the run, framed.
+    pub fn finish(&self) -> Checked {
+        self.finish_with(vec![])
+    }
+
+    /// The messages of the run and then `extra`, which the tool found after the
+    /// run (a POU that is not declared), framed: the closing line counts them, and
+    /// `ok` is false when one stops the build.
+    pub fn finish_with(&self, extra: Vec<Diagnostic>) -> Checked {
+        let mut diagnostics = self.diagnostics.clone();
+        diagnostics.extend(extra);
+        let framed = match self.area.check_summary() {
+            Some(summary) => summary.close(&self.application, &self.settings, diagnostics),
+            None => diagnostics,
+        };
+        Checked {
+            ok: !any_stops_build(&framed),
+            messages: framed
+                .iter()
+                .map(|diagnostic| script_message(diagnostic, self.sources))
+                .collect(),
+        }
+    }
+}
+
+/// Validates the inputs, then parses and analyzes the sources, and frames the
+/// messages ([`CheckRun`]).
 pub fn check(sources: &[SourceInput], options_value: &serde_json::Value, area: Area) -> Checked {
-    let fallback = project_name(sources);
-
-    // Validate sources
-    let source_errors = validate_sources(sources);
-    if !source_errors.is_empty() {
-        return framed(area, &fallback, source_errors, &[]);
-    }
-
-    // Parse options
-    let options = match parse_options(options_value) {
-        Ok(opts) => opts,
-        Err(errs) => return framed(area, &fallback, errs, &[]),
-    };
-
-    // Construct a fresh in-memory project (REQ-ARC-mcp-010)
-    let mut project = MemoryBackedProject::new(options);
-
-    // Load sources (REQ-ARC-mcp-011)
-    for src in sources {
-        let file_id = FileId::from_string(&src.name);
-        project.add_source(file_id, src.content.clone());
-    }
-
-    // Run parse + full semantic analysis
-    let diagnostics = project.semantic(area);
-    let application = project.application_name(&fallback);
-    framed(area, &application, diagnostics, sources)
+    CheckRun::start(sources, options_value, area).finish()
 }
 
 /// Builds the check response from raw inputs.
@@ -96,7 +179,7 @@ pub fn build_response(sources: &[SourceInput], options_value: &serde_json::Value
     let checked = check(sources, options_value, Area::Build);
     CheckResponse {
         ok: checked.ok,
-        diagnostics: checked.messages.iter().map(serialize_message).collect(),
+        diagnostics: checked.diagnostics(),
     }
 }
 

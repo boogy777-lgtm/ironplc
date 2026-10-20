@@ -79,6 +79,8 @@ P0011,empty_var_block,Empty variable block
 P0011,empty_var_block_found,empty variable blocks are not enabled in this dialect
 P0012,invalid_string_escape,Escape
 P0012,invalid_string_escape_found,this `$` escape is not defined for character strings
+P0013,warning_code_invalid_unknown,"'{code}' is not the code of a warning; the codes accepted are {accepted}, written exactly so (the case matters)"
+P0013,warning_code_invalid_not_a_warning,"'{code}' is the code of a problem of category {category}, and only the code of a warning can be disabled or raised; the codes accepted are {accepted}"
 P0019,max_nesting_depth_exceeded_over_limit,Maximum nesting depth of {depth} exceeded
 P0023,pragma_if_unmatched_found,Unmatched {{IF}} pragma
 P0024,pragma_value_expected_found,Expected a pragma condition such as `defined(name)`
@@ -326,6 +328,7 @@ P8001,mcp_input_validation_hot_edit_session_missing,no hot edit session; call `h
 P8001,mcp_input_validation_option_key_unknown,Unknown option key '{key}'.
 P8001,mcp_input_validation_option_not_boolean,Option '{key}' must be a boolean.
 P8001,mcp_input_validation_option_not_string,Option '{key}' must be a string.
+P8001,mcp_input_validation_option_not_string_array,Option '{key}' must be an array of warning codes (strings).
 P8001,mcp_input_validation_option_policy_value_invalid,Option '{key}' must be one of: {allowed}.
 P8001,mcp_input_validation_options_dialect_missing,options.dialect is required and must be a string.
 P8001,mcp_input_validation_options_dialect_unknown,Unknown dialect '{dialect}'. Known dialects: {known}

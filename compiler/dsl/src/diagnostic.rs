@@ -20,11 +20,15 @@ use ironplc_problems::{CodelessText, Problem, Text};
 mod area;
 mod editor_range;
 mod forms;
+mod handling;
 mod run;
+mod settings;
 
 pub use area::{Area, ShownIn};
 pub use forms::ScriptMessage;
+pub use handling::MessageHandling;
 pub use run::{counts, Counts, Summary, CHECK_SUMMARY, COMPILE_SUMMARY};
+pub use settings::{MessageSettings, WarningList};
 
 use crate::common::TypeName;
 use crate::core::{FileId, Id, Located, SourceSpan};
@@ -140,7 +144,7 @@ pub struct Diagnostic {
 
     /// The message category of the diagnostic. It is the severity of the problem
     /// code and is set only where the diagnostic is made, so a call site cannot
-    /// decide it; `suppress` is the one change made afterwards.
+    /// decide it; `suppress` and `raise` are the two changes made afterwards.
     severity: Severity,
 
     /// The CODESYS code that reports the same condition as the problem, from
@@ -558,9 +562,21 @@ impl Diagnostic {
     /// Suppresses the diagnostic: a warning becomes a suppressed warning and an
     /// information message a suppressed information message, which are not
     /// shown. A category that cannot be suppressed stays, as in CODESYS. This is
-    /// the one way to change the category of a diagnostic after it is made.
+    /// the change of category that the handling `Suppress` makes
+    /// ([`Diagnostic::handle`]); with [`Diagnostic::raise`] it is one of the two
+    /// ways to change the category of a diagnostic after it is made.
     pub fn suppress(mut self) -> Self {
         self.severity = self.severity.suppressed();
+        self
+    }
+
+    /// Reports a warning as an error: the category becomes `Error` and the code,
+    /// the texts and the places stay (`SeverityExtensions.GetSeverity`). A
+    /// diagnostic of any other category stays as it is, so this never lowers an
+    /// error. It is made by a setting that lists the warning
+    /// ([`MessageSettings`]) and by nothing else.
+    pub fn raise(mut self) -> Self {
+        self.severity = self.severity.raised();
         self
     }
 

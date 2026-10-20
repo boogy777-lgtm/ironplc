@@ -27,6 +27,8 @@ import { registerHaPanel } from './haPanel';
 import { registerBuildCommands } from './buildCommands';
 import { registerBuildApplication } from './buildApplication';
 import { BUILD_AREA_NAME } from './buildAreaLogic';
+import { currentCompilerSettings } from './compilerSettings';
+import { serverInitializationOptions } from './compilerSettingsLogic';
 import { sourceExtensionsFromLanguages } from './debugAdapterLogic';
 
 /**
@@ -399,9 +401,7 @@ function createClient(compilerFilePath: string, config: vscode.WorkspaceConfigur
       { scheme: 'file', language: 'twincat-gvl' },
       { scheme: 'file', language: 'twincat-dut' },
     ],
-    initializationOptions: {
-      dialect: dialect,
-    },
+    initializationOptions: serverInitializationOptions(currentCompilerSettings(), dialect),
   };
 
   // Create the language client and start the client.

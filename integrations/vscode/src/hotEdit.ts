@@ -3,6 +3,7 @@ import * as path from 'path';
 import { spawn, ChildProcessWithoutNullStreams } from 'child_process';
 import { readFile } from 'fs/promises';
 import { existsSync } from 'fs';
+import { currentCompilerSettings } from './compilerSettings';
 import { compileSourceToContainer, runCompiler } from './taskProviderLogic';
 import {
   isDebuggableProgram,
@@ -323,7 +324,12 @@ export function registerHotEditSupport(
 
   /** The serve session loads a compiled container; a source program must be compiled first. */
   function compileToContainer(compiler: string, source: string): Promise<string> {
-    return compileSourceToContainer(compiler, source, text => outputChannel.append(text));
+    return compileSourceToContainer(
+      compiler,
+      source,
+      text => outputChannel.append(text),
+      currentCompilerSettings(),
+    );
   }
 
   /**

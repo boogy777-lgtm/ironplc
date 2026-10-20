@@ -5,12 +5,11 @@
 //! types grouped by kind. Implements REQ-TOL-mcp-200 and REQ-TOL-mcp-201.
 
 use ironplc_analyzer::{IntermediateType, SemanticContext};
-use ironplc_dsl::core::FileId;
 use ironplc_dsl::diagnostic::Area;
-use ironplc_project::project::{MemoryBackedProject, Project};
 use serde::Serialize;
 
-use super::common::{parse_options, serialize_diagnostics, validate_sources, SourceInput};
+use super::check::CheckRun;
+use super::common::SourceInput;
 
 /// Response returned by the `project_manifest` tool.
 #[derive(Debug, Serialize)]
@@ -55,51 +54,30 @@ pub fn build_response(
     sources: &[SourceInput],
     options_value: &serde_json::Value,
 ) -> ProjectManifestResponse {
-    let source_errors = validate_sources(sources);
-    if !source_errors.is_empty() {
-        return ProjectManifestResponse::empty(
-            false,
-            vec![],
-            serialize_diagnostics(&source_errors, &[]),
-        );
-    }
+    let run = CheckRun::start(sources, options_value, Area::Build);
+    let checked = run.finish();
 
-    let options = match parse_options(options_value) {
-        Ok(opts) => opts,
-        Err(errs) => {
-            return ProjectManifestResponse::empty(
-                false,
-                vec![],
-                serialize_diagnostics(&errs, &[]),
-            );
-        }
-    };
+    // An invalid input has no project and lists no file.
+    if run.is_invalid_input() {
+        return ProjectManifestResponse::empty(checked.ok, vec![], checked.diagnostics());
+    }
 
     let files: Vec<String> = sources.iter().map(|s| s.name.clone()).collect();
-
-    let mut project = MemoryBackedProject::new(options);
-    for src in sources {
-        project.add_source(FileId::from_string(&src.name), src.content.clone());
-    }
-
-    let diagnostics = project.semantic(Area::Build);
-    let has_errors = ironplc_dsl::diagnostic::any_stops_build(&diagnostics);
-    let diagnostics_json = serialize_diagnostics(&diagnostics, sources);
 
     // REQ-TOL-mcp-201: always attempt to populate a partial manifest. `semantic_context()`
     // is set by `MemoryBackedProject::semantic()` even when analysis fails, as long
     // as a context could be built from what the parser recognized.
-    let context = match project.semantic_context() {
+    let context = match run.semantic_context() {
         Some(ctx) => ctx,
         None => {
             let mut sorted_files = files;
             sorted_files.sort();
-            return ProjectManifestResponse::empty(!has_errors, sorted_files, diagnostics_json);
+            return ProjectManifestResponse::empty(checked.ok, sorted_files, checked.diagnostics());
         }
     };
 
-    let mut response = populate(context, files, diagnostics_json);
-    response.ok = !has_errors;
+    let mut response = populate(context, files, checked.diagnostics());
+    response.ok = checked.ok;
     response
 }
 

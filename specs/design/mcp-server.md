@@ -190,7 +190,7 @@ This is the full-project answer to "what is declared here?" For questions about 
 
 **REQ-TOL-mcp-052** Each function entry in the `symbols` response includes the function name, return type, and parameter list.
 
-**REQ-TOL-mcp-053** The `symbols` response includes a `diagnostics` array using the same format as `check`, and a top-level `ok` following the same rule as `check` (true when no diagnostic stops the build).
+**REQ-TOL-mcp-053** The `symbols` response includes a `diagnostics` array using the same format as `check` (the messages of the run and then the closing line `Compile complete -- N errors, M warnings`, REQ-DS-mcp-013), and a top-level `ok` following the same rule as `check` (true when no diagnostic stops the build).
 
 **REQ-TOL-mcp-054** When the `pou` input is present, the `symbols` response includes only the matching POU (in exactly one of `programs`, `functions`, or `function_blocks`) and only the types actually referenced by that POU's declarations. When no POU with the given name exists, the response returns `ok: false`, `found: false`, and an empty `programs`/`functions`/`function_blocks`/`types` set along with a diagnostic, rather than raising an MCP-level error.
 
@@ -203,7 +203,7 @@ This is the full-project answer to "what is declared here?" For questions about 
 - `function_blocks: [{ name, variables: [...] }]`
 - `types: [{ name, kind }]`
 - `truncated: bool`
-- `diagnostics: [...]`
+- `diagnostics: [...]` (framed as `check`)
 
 ### `list_options`
 
@@ -217,7 +217,7 @@ This tool lets an agent discover what flags exist without memorizing them and wi
 
 **REQ-TOL-mcp-061** The `list_options` tool returns a `dialects` array whose entries each contain `id`, `display_name`, and `description`.
 
-**REQ-TOL-mcp-062** The `list_options` tool returns a `flags` array whose entries each contain `id`, `type` (`"bool"`, `"string"`, `"enum"`), `default`, `description`, and — for enum flags — an `allowed_values` array.
+**REQ-TOL-mcp-062** The `list_options` tool returns a `flags` array whose entries each contain `id`, `type` (`"bool"`, `"string"`, `"string-list"`, `"enum"`), `default`, `description`, and — for enum flags — an `allowed_values` array.
 
 **REQ-TOL-mcp-063** The option `id` values returned by `list_options` are the exact keys accepted in the `options` object of `parse`, `check`, and `compile`.
 
@@ -266,7 +266,7 @@ The self-healing loop depends on this: without it, an agent sees `P0042` in a di
 
 ## Context Tools
 
-Context tools are lightweight lookups that answer specific structural questions about a source set. They are what `symbols` would return if narrowed to a single concern, and they exist so the agent can request just the slice it needs instead of paying for the full symbol table every time. Every context tool takes the same required `sources` + `options` that the analysis tools take.
+Context tools are lightweight lookups that answer specific structural questions about a source set. They are what `symbols` would return if narrowed to a single concern, and they exist so the agent can request just the slice it needs instead of paying for the full symbol table every time. Every context tool takes the same required `sources` + `options` that the analysis tools take, and returns the `diagnostics` of the run framed as `check` returns them: the messages and then the line `Compile complete -- N errors, M warnings`, so a clean program has that line alone and `ok` says whether a problem stops the build (REQ-DS-mcp-013).
 
 These tools replace the resource URIs (`ironplc://project/manifest`, `ironplc://pou/{name}/scope`, etc.) from earlier drafts of this design. MCP resources cannot take caller-supplied parameters at read time, which is incompatible with the stateless model: there is no session to read from, so the only way for a context lookup to know which source set it is describing is to accept the sources as a tool input.
 
@@ -297,7 +297,11 @@ Returns a flat summary of what is declared across the supplied sources: every fi
   "aliases": [],
   "strings": [],
   "references": [],
-  "diagnostics": []
+  "diagnostics": [
+    { "severity": "Text", "severity_value": 16, "prefix": null, "number": null,
+      "text": "Compile complete -- 0 errors, 0 warnings", "position": 0, "length": 0,
+      "position_text": "", "object": "", "codesys": null }
+  ]
 }
 ```
 
@@ -323,7 +327,11 @@ Returns every variable the caller can drive (`inputs`) and every variable the ca
   "ok": true,
   "inputs":  [{ "name": "Main.Start",    "type": "BOOL", "address": "%IX0.0" }],
   "outputs": [{ "name": "Main.MotorRun", "type": "BOOL", "address": "%QX0.0" }],
-  "diagnostics": []
+  "diagnostics": [
+    { "severity": "Text", "severity_value": 16, "prefix": null, "number": null,
+      "text": "Compile complete -- 0 errors, 0 warnings", "position": 0, "length": 0,
+      "position_text": "", "object": "", "codesys": null }
+  ]
 }
 ```
 
@@ -351,7 +359,11 @@ Returns all variables visible to the named POU, derived from the symbol table bu
     { "name": "Counter",  "type": "DINT", "direction": "Local", "initial_value": "0" },
     { "name": "MotorRun", "type": "BOOL", "direction": "Out",   "initial_value": null }
   ],
-  "diagnostics": []
+  "diagnostics": [
+    { "severity": "Text", "severity_value": 16, "prefix": null, "number": null,
+      "text": "Compile complete -- 0 errors, 0 warnings", "position": 0, "length": 0,
+      "position_text": "", "object": "", "codesys": null }
+  ]
 }
 ```
 
@@ -384,7 +396,11 @@ Returns the upstream and downstream dependencies of the named POU, derived from 
   "downstream": [
     { "name": "Main", "source": "user" }
   ],
-  "diagnostics": []
+  "diagnostics": [
+    { "severity": "Text", "severity_value": 16, "prefix": null, "number": null,
+      "text": "Compile complete -- 0 errors, 0 warnings", "position": 0, "length": 0,
+      "position_text": "", "object": "", "codesys": null }
+  ]
 }
 ```
 
@@ -406,7 +422,11 @@ Returns every user-defined type (UDT, enumeration, type alias, array, subrange, 
     { "name": "MotorState", "kind": "enum", "values": ["Stopped", "Running", "Fault"] },
     { "name": "PidParams", "kind": "struct", "fields": [{ "name": "Kp", "type": "REAL" }] }
   ],
-  "diagnostics": []
+  "diagnostics": [
+    { "severity": "Text", "severity_value": 16, "prefix": null, "number": null,
+      "text": "Compile complete -- 0 errors, 0 warnings", "position": 0, "length": 0,
+      "position_text": "", "object": "", "codesys": null }
+  ]
 }
 ```
 

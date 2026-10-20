@@ -19,20 +19,41 @@ Every tool that takes source files shares two input fields:
    identifiers returned by :literal:`list_options`
    (for example, ``iec61131-3-ed2``, ``iec61131-3-ed3``, ``rusty``).
    May also include boolean feature-flag overrides
-   (such as ``allow_c_style_comments``). Call :literal:`list_options`
-   for the authoritative list.
+   (such as ``allow_c_style_comments``) and two lists of warning codes,
+   ``disabled_warnings`` and ``warnings_as_errors``, each an array of strings.
+   Call :literal:`list_options` for the authoritative list.
+
+   ``disabled_warnings``
+      Codes of warnings that are not shown and not counted.
+
+   ``warnings_as_errors``
+      Codes of warnings that are reported as errors, with the same code.
+
+   .. include:: ../../includes/warning-codes.rst
+
+   .. include:: ../../includes/warning-settings-effect.rst
+
+   An option that is not accepted, a list that is not an array of strings and a
+   code that is not accepted are each returned as a diagnostic, and the tool does
+   not run.
 
 All tools return ``diagnostics`` as an array of message objects with the
 fields of the CODESYS scripting class ``ScriptMessage``:
 
 .. include:: ../../includes/message-object-fields.rst
 
-:literal:`check` and :literal:`compile` return their ``diagnostics`` framed as
-:program:`ironplcc` writes them to the terminal: the messages of the run with the
-line that closes it, and for :literal:`compile` the line that starts it. The
-lines are messages of category ``Text`` without a code, so a program without a
-problem has the closing line alone and ``ok``, not the length of the array, says
-whether a problem stops the build.
+:literal:`check`, :literal:`compile` and the tools that analyze the sources and
+return the ``diagnostics`` of the run (:literal:`symbols`,
+:literal:`project_manifest`, :literal:`project_io`, :literal:`pou_scope`,
+:literal:`pou_lineage` and :literal:`types_all`) return their ``diagnostics``
+framed as :program:`ironplcc` writes them to the terminal: the messages of the
+run with the line ``Compile complete -- N errors, M warnings`` that closes it,
+and for :literal:`compile` the line that starts it and the build line that ends
+it. The lines are messages of category ``Text`` without a code, so a program
+without a problem has the closing line alone and ``ok``, not the length of the
+array, says whether a problem stops the build. A POU that :literal:`symbols`,
+:literal:`pou_scope` or :literal:`pou_lineage` is asked for and the sources do
+not declare is one error of the run, and the closing line counts it.
 
 Analysis Tools
 ==============
@@ -47,8 +68,9 @@ the set of flags evolves with the compiler.
 
 **Inputs:** none.
 
-**Returns:** an object listing each dialect and each feature flag with
-its option key and default value.
+**Returns:** an object listing each dialect and each option (feature flags,
+behavior policies and the two lists of warnings) with its option key, its type
+(``bool``, ``enum`` or ``string-list``) and its default value.
 
 explain_diagnostic
 ------------------

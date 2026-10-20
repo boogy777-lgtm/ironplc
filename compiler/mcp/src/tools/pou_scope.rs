@@ -7,15 +7,12 @@ use ironplc_dsl::common::{
     ConstantKind, FunctionBlockDeclaration, FunctionDeclaration, InitialValueAssignmentKind,
     Library, LibraryElementKind, ProgramDeclaration, TypeReference, VarDecl, VariableType,
 };
-use ironplc_dsl::core::FileId;
 use ironplc_dsl::diagnostic::Area;
-use ironplc_project::project::{MemoryBackedProject, Project};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::common::{
-    parse_options, pou_not_found_diagnostic, serialize_diagnostics, validate_sources, SourceInput,
-};
+use super::check::CheckRun;
+use super::common::{pou_not_found_diagnostic, SourceInput};
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct PouScopeInput {
@@ -62,70 +59,39 @@ pub fn build_response(
     options_value: &serde_json::Value,
     pou_name: &str,
 ) -> PouScopeResponse {
-    let source_errors = validate_sources(sources);
-    if !source_errors.is_empty() {
+    let run = CheckRun::start(sources, options_value, Area::Build);
+
+    let Some(library) = run.analyzed_library() else {
+        let checked = run.finish();
         return PouScopeResponse::empty(
-            false,
+            checked.ok,
             false,
             pou_name.to_string(),
-            serialize_diagnostics(&source_errors, &[]),
+            checked.diagnostics(),
         );
-    }
-
-    let options = match parse_options(options_value) {
-        Ok(opts) => opts,
-        Err(errs) => {
-            return PouScopeResponse::empty(
-                false,
-                false,
-                pou_name.to_string(),
-                serialize_diagnostics(&errs, &[]),
-            );
-        }
-    };
-
-    let mut project = MemoryBackedProject::new(options);
-    for src in sources {
-        project.add_source(FileId::from_string(&src.name), src.content.clone());
-    }
-
-    let diagnostics = project.semantic(Area::Build);
-    let has_errors = ironplc_dsl::diagnostic::any_stops_build(&diagnostics);
-    let mut diagnostics_json = serialize_diagnostics(&diagnostics, sources);
-
-    let library = match project.analyzed_library() {
-        Some(lib) => lib,
-        None => {
-            return PouScopeResponse::empty(
-                !has_errors,
-                false,
-                pou_name.to_string(),
-                diagnostics_json,
-            );
-        }
     };
 
     // REQ-TOL-mcp-221: resolve against Programs, then Functions, then FBs.
     let variables = match resolve_pou(library, pou_name) {
         Some(vars) => vars,
         None => {
-            diagnostics_json.push(pou_not_found_diagnostic(pou_name));
-            return PouScopeResponse {
-                ok: false,
-                found: false,
-                pou: pou_name.to_string(),
-                variables: vec![],
-                diagnostics: diagnostics_json,
-            };
+            let checked = run.finish_with(vec![pou_not_found_diagnostic(pou_name)]);
+            return PouScopeResponse::empty(
+                false,
+                false,
+                pou_name.to_string(),
+                checked.diagnostics(),
+            );
         }
     };
 
+    let checked = run.finish();
     PouScopeResponse {
-        ok: !has_errors,
+        ok: checked.ok,
         found: true,
         pou: pou_name.to_string(),
         variables,
-        diagnostics: diagnostics_json,
+        diagnostics: checked.diagnostics(),
     }
 }
 

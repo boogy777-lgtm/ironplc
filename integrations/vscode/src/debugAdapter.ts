@@ -14,6 +14,7 @@ import {
   programKind,
   resolveProgramPath,
 } from './debugAdapterLogic';
+import { currentCompilerSettings } from './compilerSettings';
 import { compileArgs } from './taskProviderLogic';
 import { ProblemCode } from './problems';
 
@@ -127,7 +128,7 @@ implements vscode.DebugConfigurationProvider {
 
   /** Runs `ironplcc compile` and captures its exit code and output. */
   private compile(program: string, output: string): Promise<CompileResult> {
-    const args = compileArgs(program, output);
+    const args = compileArgs(program, output, currentCompilerSettings());
     this.log.appendLine(`$ ${this.compilerPath} ${args.join(' ')}`);
     return new Promise((resolve) => {
       execFile(this.compilerPath, args, (error, stdout, stderr) => {

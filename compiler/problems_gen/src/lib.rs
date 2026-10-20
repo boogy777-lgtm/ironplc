@@ -65,6 +65,11 @@ struct Level {
     /// The category a diagnostic of this one becomes when it is suppressed. A
     /// category that cannot be suppressed names itself.
     suppressed: &'static str,
+    /// The category a diagnostic of this one becomes when a setting raises it to
+    /// an error. Only a warning is raised (`WarningHelper.cs:185-200`,
+    /// `SeverityExtensions.cs:23`); every other category names itself, so
+    /// nothing lowers an error and nothing else becomes one.
+    raised: &'static str,
 }
 
 /// The seven message categories of CODESYS (`Severity.cs`), in its order. This
@@ -83,6 +88,7 @@ const LEVELS: &[Level] = &[
         stops_build: true,
         shown: true,
         suppressed: "FatalError",
+        raised: "FatalError",
     },
     Level {
         name: "Error",
@@ -94,6 +100,7 @@ const LEVELS: &[Level] = &[
         stops_build: true,
         shown: true,
         suppressed: "Error",
+        raised: "Error",
     },
     Level {
         name: "Warning",
@@ -105,6 +112,7 @@ const LEVELS: &[Level] = &[
         stops_build: false,
         shown: true,
         suppressed: "SuppressedWarning",
+        raised: "Error",
     },
     Level {
         name: "Information",
@@ -116,6 +124,7 @@ const LEVELS: &[Level] = &[
         stops_build: false,
         shown: true,
         suppressed: "SuppressedInformation",
+        raised: "Information",
     },
     Level {
         name: "Text",
@@ -127,6 +136,7 @@ const LEVELS: &[Level] = &[
         stops_build: false,
         shown: true,
         suppressed: "Text",
+        raised: "Text",
     },
     Level {
         name: "SuppressedWarning",
@@ -138,6 +148,7 @@ const LEVELS: &[Level] = &[
         stops_build: false,
         shown: false,
         suppressed: "SuppressedWarning",
+        raised: "SuppressedWarning",
     },
     Level {
         name: "SuppressedInformation",
@@ -149,6 +160,7 @@ const LEVELS: &[Level] = &[
         stops_build: false,
         shown: false,
         suppressed: "SuppressedInformation",
+        raised: "SuppressedInformation",
     },
 ];
 
@@ -208,6 +220,14 @@ const QUESTIONS: &[Question] = &[
         returns: "Severity",
         arm: |level| format!("Severity::{}", level.suppressed),
     },
+    Question {
+        function: "raised",
+        doc: "The category a diagnostic of this one becomes when a setting raises it to an error:
+    /// a warning becomes an `Error` and every other category stays, so nothing lowers an
+    /// error.",
+        returns: "Severity",
+        arm: |level| format!("Severity::{}", level.raised),
+    },
 ];
 
 /// The source of `enum Severity` and of its questions, each an exhaustive
@@ -241,6 +261,72 @@ pub fn render_severity_enum() -> String {
         out.push_str("        }\n    }\n");
     }
     out.push_str("}\n\n");
+    out
+}
+
+/// The category whose problems a setting can list to disable or to raise: the
+/// CODESYS ids that are warnings (`Wrn_`, `WarningHelper.cs:185-200`). The type
+/// `WarningProblem` has one variant for each problem that declares it.
+const LISTABLE_SEVERITY: &str = "Warning";
+
+/// The source of `enum WarningProblem`: one variant for each problem whose
+/// `Severity` column is the listable category, in the order of
+/// `problem-codes.csv`, and its answers, each an exhaustive `match`.
+///
+/// why: a list of codes in a setting may hold only the code of a warning (an
+/// error cannot be disabled or raised). Making the list hold this type, and not
+/// a code, turns that rule from a check somebody must remember into a property of
+/// the type: a code that is not a warning has no value to be listed under. A new
+/// warning in the CSV is a new variant here, and no other place changes.
+///
+/// `problems` takes the pairs `(name of the Problem variant, Severity column)`.
+pub fn render_warning_problems(problems: &[(&str, &str)]) -> String {
+    let names: Vec<&str> = problems
+        .iter()
+        .filter(|(_, severity)| *severity == LISTABLE_SEVERITY)
+        .map(|(name, _)| *name)
+        .collect();
+
+    let mut out = String::new();
+    out.push_str(
+        "/// A problem that declares the category Warning: the only kind of problem a setting\n",
+    );
+    out.push_str(
+        "/// can disable or raise. A value of this type cannot name an error, so a list of\n",
+    );
+    out.push_str("/// these cannot hold the code of an error.\n");
+    out.push_str("#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]\n");
+    out.push_str("pub enum WarningProblem {\n");
+    for name in &names {
+        out.push_str(&format!("    {name},\n"));
+    }
+    out.push_str("}\n\nimpl WarningProblem {\n");
+    out.push_str("    /// Every warning problem, in the order of `problem-codes.csv`.\n");
+    out.push_str(&format!(
+        "    pub const ALL: [WarningProblem; {}] = [\n",
+        names.len()
+    ));
+    for name in &names {
+        out.push_str(&format!("        WarningProblem::{name},\n"));
+    }
+    out.push_str("    ];\n\n");
+    out.push_str("    /// The problem of the warning.\n");
+    out.push_str("    pub const fn problem(self) -> Problem {\n        match self {\n");
+    for name in &names {
+        out.push_str(&format!(
+            "            WarningProblem::{name} => Problem::{name},\n"
+        ));
+    }
+    out.push_str("        }\n    }\n\n");
+    out.push_str(
+        "    /// The position of the warning in [`WarningProblem::ALL`], which is also its bit\n",
+    );
+    out.push_str("    /// in a [`WarningSet`].\n");
+    out.push_str("    pub const fn index(self) -> usize {\n        match self {\n");
+    for (index, name) in names.iter().enumerate() {
+        out.push_str(&format!("            WarningProblem::{name} => {index},\n"));
+    }
+    out.push_str("        }\n    }\n}\n\n");
     out
 }
 

@@ -15,6 +15,8 @@
 use std::fmt;
 use std::str::FromStr;
 
+use ironplc_dsl::diagnostic::MessageSettings;
+
 mod enumeration_strictness;
 
 pub use enumeration_strictness::EnumerationStrictness;
@@ -218,6 +220,13 @@ macro_rules! define_compiler_options {
         pub struct CompilerOptions {
             $(pub $flag_field: bool,)*
             $(pub $policy_field: $policy_type,)*
+            /// The lists of warnings that are disabled and of warnings that are
+            /// reported as errors. They are given outside the source text, by every
+            /// front end, through the one parser of a code, and they travel with the
+            /// options so that every project and every `compile` has them: the place
+            /// that keeps the messages of a run (`Area::keep`) takes them from here.
+            /// Neither dialect nor a flag sets them, so `from_dialect` leaves them empty.
+            pub messages: MessageSettings,
         }
 
         impl CompilerOptions {
