@@ -2,6 +2,7 @@ pub mod compile;
 pub mod disassemble;
 pub mod id_agreement;
 pub mod project;
+pub mod records;
 pub mod sidecar;
 pub mod tokenizer;
 
