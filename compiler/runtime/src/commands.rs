@@ -13,6 +13,7 @@ use core::fmt;
 use std::collections::BTreeMap;
 use std::io::Cursor;
 
+use ironplc_container::integrity::{self, HASH_LEN, NO_HASH};
 use ironplc_container::Container;
 use serde::{Deserialize, Serialize};
 
@@ -175,6 +176,23 @@ pub struct StatusPayload {
     /// additive block shape the engineering connection specifies.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pending_edit: Option<PendingEditRecord>,
+    /// The `contentHash` of the normal (committed) artifact as lowercase
+    /// hexadecimal, taken from the header of the container the host loaded.
+    /// What the device runs, by content: the generation counters restart on a
+    /// reboot, this does not. Absent on the wire when the container carries no
+    /// hash, and from a device that predates the field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_hash: Option<String>,
+    /// The `layoutHash` of the normal artifact, under the same rules as
+    /// [`content_hash`](Self::content_hash).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layout_hash: Option<String>,
+}
+
+/// The wire form of a header hash: lowercase hexadecimal, or `None` for the
+/// all-zero hash, which a container carries when its writer computed none.
+fn wire_hash(hash: &[u8; HASH_LEN]) -> Option<String> {
+    (*hash != NO_HASH).then(|| integrity::hash_hex(hash).to_string())
 }
 
 impl From<HostStatus> for StatusPayload {
@@ -188,6 +206,8 @@ impl From<HostStatus> for StatusPayload {
             migration: status.migration,
             rounds: status.rounds,
             pending_edit: status.pending_edit,
+            content_hash: wire_hash(&status.content_hash),
+            layout_hash: wire_hash(&status.layout_hash),
         }
     }
 }
@@ -579,6 +599,8 @@ mod tests {
                 migration: false,
                 rounds: 0,
                 pending_edit: None,
+                content_hash: None,
+                layout_hash: None,
             },
             redundancy,
         }))
@@ -655,6 +677,8 @@ mod tests {
             migration: true,
             rounds: 42,
             pending_edit: None,
+            content_hash: None,
+            layout_hash: None,
         });
 
         let line = render_response(&response).unwrap();
@@ -668,6 +692,58 @@ mod tests {
         assert_eq!(value["application"], 1);
         assert_eq!(value["migration"], true);
         assert_eq!(value["rounds"], 42);
+    }
+
+    /// The `getStatus` payload of a device that predates the hashes.
+    const STATUS_WITHOUT_HASHES: &str = r#"{"mode":"normal","active":1,"normal":1,"candidate":null,"application":1,"migration":false,"rounds":0}"#;
+
+    #[test]
+    fn status_payload_when_hashes_absent_then_parses_with_none() {
+        let status: StatusPayload = serde_json::from_str(STATUS_WITHOUT_HASHES).unwrap();
+
+        assert_eq!(status.content_hash, None);
+        assert_eq!(status.layout_hash, None);
+    }
+
+    #[test]
+    fn status_payload_when_hashes_and_unknown_field_present_then_parses() {
+        // A reader ignores fields it does not know, which is what keeps the
+        // session protocol at version 1 when a server adds one.
+        let line = STATUS_WITHOUT_HASHES.replace(
+            r#""rounds":0"#,
+            r#""rounds":0,"contentHash":"ab","layoutHash":"cd","fieldOfALaterServer":[1]"#,
+        );
+
+        let status: StatusPayload = serde_json::from_str(&line).unwrap();
+
+        assert_eq!(status.content_hash.as_deref(), Some("ab"));
+        assert_eq!(status.layout_hash.as_deref(), Some("cd"));
+    }
+
+    #[test]
+    fn render_response_when_status_without_hashes_then_fields_are_absent() {
+        let status: StatusPayload = serde_json::from_str(STATUS_WITHOUT_HASHES).unwrap();
+
+        let line = render_response(&Response::Status(status)).unwrap();
+
+        assert!(!line.contains("contentHash"));
+        assert!(!line.contains("layoutHash"));
+    }
+
+    #[test]
+    fn wire_hash_when_no_hash_then_none() {
+        assert_eq!(wire_hash(&NO_HASH), None);
+    }
+
+    #[test]
+    fn wire_hash_when_hash_then_lowercase_hex() {
+        let mut hash = [0u8; HASH_LEN];
+        hash[0] = 0xAB;
+
+        let text = wire_hash(&hash).unwrap();
+
+        assert_eq!(text.len(), 64);
+        assert!(text.starts_with("ab00"));
     }
 
     #[test]

@@ -51,7 +51,7 @@ use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::path::Path;
 
-use ironplc_container::{FileHeader, HEADER_SIZE};
+use ironplc_container::{integrity, FileHeader, HEADER_SIZE};
 use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_parser::options::CompilerOptions;
 use serde_json::{json, Value};
@@ -359,7 +359,7 @@ fn hash_hex(bytes: &[u8]) -> String {
 }
 
 fn hex(bytes: &[u8; 32]) -> String {
-    blake3::Hash::from_bytes(*bytes).to_hex().to_string()
+    integrity::hash_hex(bytes).to_string()
 }
 
 fn unhex(text: &str) -> Option<[u8; 32]> {
