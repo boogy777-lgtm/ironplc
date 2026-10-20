@@ -197,7 +197,7 @@ The state shared by all of them:
 - [ ] Tests: a burst of changes inside the delay is analyzed and published once, for the newest version; a change during a running analysis drops its result and the newer revision is published; requests are answered while an analysis runs; edit-sequence property (untouched text preserved)
 
 ### PR 5: one consumer path, Run is not a build (core, defect)
-- [ ] `ironplc/run` takes the container Build produced; `lsp_runner.rs` loses its compile path; no built application → a message that names Build (Q2)
+- [ ] `ironplc/run` takes the container Build produced; `lsp_runner.rs` loses its compile path; no built application → a message that names Build (Q2); comparison with the sources is left to the online-model plan (Q5)
 - [ ] Debug launch takes only `.iplc` (its own compile at `debugAdapter.ts:131` removed); `RunSession`, `extension.ts` and their tests follow
 - [ ] Fence test of the analysis consumers (Class above)
 - [ ] Same-snapshot agreement test: the CLI `check`, the MCP `check` and the LSP publication of one snapshot, per area, give equal diagnostics
@@ -225,9 +225,32 @@ sequences.
   and contain no delay value. The value would be in the ST editor assembly, which
   we do not have. Either that assembly is supplied, or a default is chosen (for
   example 500 ms) and it is an editor setting.
-- **Q5.** Run when the built application is older than the sources. CODESYS
-  reports the difference at login (download or online change). The plan starts
-  the built application and says that it differs, and does not build.
+- **Q5, answered: online and offline are distinct.** Offline: editing, the
+  background check, Build. Online: login to a PLC (or to the simulation), then
+  Start and Stop of the application that runs there. A build that is older than the
+  sources is a question for login, not for Run. The online model is its own plan.
+  This plan only removes the compile from Run, so Run starts what Build produced.
+  What CODESYS does, verified in the assemblies we have:
+  - Identity of a build:
+    - `CodeId` is a CRC of the code;
+    - `DataId` is a CRC of the signatures and of the layout of the retained and
+      persistent variables;
+    - both are written in phase 6 (`Compiler35220.plugin/-/-.402.cs:196-219`).
+  - Up to date:
+    - the project is compared with the last build (`.compileinfo`,
+      `CompilerPhaseControllerGenerateCode.cs:362-372`);
+    - the project is also compared with the last downloaded set, and a change of
+      simulation mode counts as not up to date
+      (`DownloadedApplicationService.cs:140-150`).
+  - The result says up to date or not, whether an online change is possible, and
+    whether the fast online change is possible.
+  - The device side of login is not in the assemblies we have.
+
+  The IronPLC counterparts already exist in the container: `content_hash`
+  (CodeId), `layout_hash` (DataId, the persistent part only, ADR-0073), and the
+  source hashes in the debug section (up to date against the sources). The session
+  protocol does not report them (`identity` gives generations only), and nothing
+  compares them at login.
 - **Q6.** The budgets, once PR 1 gives the baseline: the latency from the end of
   the delay to the diagnostics (p95), and the retained memory of a session.
 
@@ -240,4 +263,7 @@ sequences.
   only if PR 6 shows the need.
 - Checking per object (CODESYS queues one POU, GVL or DUT signature at a time):
   that is reuse of analysis results, so it belongs to path 2.
-- The case rewrite: message plan, PR 7.
+- The case rewrite: message plan, PR 7, through `textDocument/onTypeFormatting`
+  at the end of a word.
+- The online model (login, comparison of the build with the PLC, download or
+  online change, Start/Stop in the session protocol): its own plan (Q5).
