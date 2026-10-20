@@ -16,7 +16,8 @@ use ironplc_problems::text;
 use ironplc_sources::{FileType, LibraryName, Source, SourceProject};
 use log::{debug, trace};
 
-use crate::sidecar::{sidecar_path_for, Sidecar, SidecarKey};
+use crate::records::RecordKind;
+use crate::sidecar::{Sidecar, SidecarKey};
 
 /// Runs semantic analysis on the given source project and compiler options.
 ///
@@ -318,7 +319,7 @@ impl FileBackedProject {
     /// or malformed sidecar is an empty table, so only a genuine I/O failure
     /// surfaces as a diagnostic.
     fn auto_load_uid_sidecar(&mut self, project_path: &Path) -> Vec<Diagnostic> {
-        let Some(path) = sidecar_path_for(project_path) else {
+        let Some(path) = RecordKind::Uids.path(project_path) else {
             return vec![];
         };
         match self.load_uid_sidecar(&path) {

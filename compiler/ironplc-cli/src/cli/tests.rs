@@ -329,7 +329,7 @@ fn sync_uids_when_valid_project_then_creates_sidecar_and_reports() {
     let result = sync_uids(std::slice::from_ref(&dir), CompilerOptions::default(), true);
 
     assert!(result.is_ok(), "unexpected error: {:?}", result.err());
-    let sidecar_path = ironplc_project::sidecar_path_for(&dir).unwrap();
+    let sidecar_path = ironplc_project::RecordKind::Uids.path(&dir).unwrap();
     let text = std::fs::read_to_string(&sidecar_path).unwrap();
     assert!(text.contains("\"Counter\""));
 }
@@ -340,7 +340,7 @@ fn sync_uids_when_run_twice_then_key_preserved() {
     let dir = project_dir_with_counter(&temp, "proj");
     sync_uids(std::slice::from_ref(&dir), CompilerOptions::default(), true).unwrap();
 
-    let sidecar_path = ironplc_project::sidecar_path_for(&dir).unwrap();
+    let sidecar_path = ironplc_project::RecordKind::Uids.path(&dir).unwrap();
     let before = std::fs::read_to_string(&sidecar_path).unwrap();
     sync_uids(std::slice::from_ref(&dir), CompilerOptions::default(), true).unwrap();
     let after = std::fs::read_to_string(&sidecar_path).unwrap();
@@ -364,7 +364,10 @@ fn sync_uids_when_project_has_error_then_no_sidecar() {
     let result = sync_uids(std::slice::from_ref(&dir), CompilerOptions::default(), true);
 
     assert!(result.is_err());
-    assert!(!ironplc_project::sidecar_path_for(&dir).unwrap().exists());
+    assert!(!ironplc_project::RecordKind::Uids
+        .path(&dir)
+        .unwrap()
+        .exists());
 }
 
 #[test]
@@ -372,7 +375,7 @@ fn sync_uids_when_rename_candidate_then_sidecar_unchanged() {
     let temp = tempfile::TempDir::new().unwrap();
     let dir = project_dir_with_counter(&temp, "proj");
     sync_uids(std::slice::from_ref(&dir), CompilerOptions::default(), true).unwrap();
-    let sidecar_path = ironplc_project::sidecar_path_for(&dir).unwrap();
+    let sidecar_path = ironplc_project::RecordKind::Uids.path(&dir).unwrap();
     let before = std::fs::read_to_string(&sidecar_path).unwrap();
 
     // Rename in the source: the next sync reports a rename candidate
@@ -409,7 +412,7 @@ fn sync_uids_when_candidate_resolved_with_map_uid_then_uid_preserved() {
     let result = sync_uids(std::slice::from_ref(&dir), CompilerOptions::default(), true);
 
     assert!(result.is_ok(), "unexpected error: {:?}", result.err());
-    let sidecar = Sidecar::load(&ironplc_project::sidecar_path_for(&dir).unwrap()).unwrap();
+    let sidecar = Sidecar::load(&ironplc_project::RecordKind::Uids.path(&dir).unwrap()).unwrap();
     let entries: Vec<(String, u64)> = sidecar
         .entries()
         .map(|(key, uid)| (key.name().to_string(), uid))
@@ -422,7 +425,7 @@ fn map_uid_when_old_key_known_then_moves_uid() {
     let temp = tempfile::TempDir::new().unwrap();
     let dir = project_dir_with_counter(&temp, "proj");
     sync_uids(std::slice::from_ref(&dir), CompilerOptions::default(), true).unwrap();
-    let sidecar_path = ironplc_project::sidecar_path_for(&dir).unwrap();
+    let sidecar_path = ironplc_project::RecordKind::Uids.path(&dir).unwrap();
     let before = std::fs::read_to_string(&sidecar_path).unwrap();
     assert!(before.contains("\"Counter\""));
 
@@ -439,7 +442,7 @@ fn map_uid_when_old_key_unknown_then_error_and_sidecar_unchanged() {
     let temp = tempfile::TempDir::new().unwrap();
     let dir = project_dir_with_counter(&temp, "proj");
     sync_uids(std::slice::from_ref(&dir), CompilerOptions::default(), true).unwrap();
-    let sidecar_path = ironplc_project::sidecar_path_for(&dir).unwrap();
+    let sidecar_path = ironplc_project::RecordKind::Uids.path(&dir).unwrap();
     let before = std::fs::read_to_string(&sidecar_path).unwrap();
 
     let result = map_uid(&dir, "main", "Missing", "main", "Ticks");

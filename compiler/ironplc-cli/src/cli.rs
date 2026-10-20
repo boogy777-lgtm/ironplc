@@ -30,7 +30,8 @@ use std::{
 };
 
 use ironplc_parser::options::CompilerOptions;
-use ironplc_project::sidecar::{declared_var_keys, sidecar_path_for, Sidecar, SidecarKey};
+use ironplc_project::sidecar::{declared_var_keys, Sidecar, SidecarKey};
+use ironplc_project::RecordKind;
 use ironplc_sources::discovery::DiscoveredProject;
 use ironplc_sources::LibraryName;
 
@@ -237,7 +238,7 @@ pub fn sync_uids(
     let Some(project_path) = paths.first() else {
         return Err(String::from("Sync UIDs requires a project path"));
     };
-    let Some(sidecar_path) = sidecar_path_for(project_path) else {
+    let Some(sidecar_path) = RecordKind::Uids.path(project_path) else {
         return Err(format!(
             "Cannot derive a sidecar path from {}",
             project_path.display()
@@ -285,7 +286,7 @@ pub fn map_uid(
     new_scope: &str,
     new_name: &str,
 ) -> Result<(), String> {
-    let Some(sidecar_path) = sidecar_path_for(project_path) else {
+    let Some(sidecar_path) = RecordKind::Uids.path(project_path) else {
         return Err(format!(
             "Cannot derive a sidecar path from {}",
             project_path.display()
@@ -418,7 +419,7 @@ fn create_project(
     // Load the UID sidecar derived from the first path so the compile
     // pipeline injects the project's stable variable IDs (ADR 0053). A
     // missing or malformed sidecar is an empty table, not an error.
-    if let Some(sidecar_path) = paths.first().and_then(|path| sidecar_path_for(path)) {
+    if let Some(sidecar_path) = paths.first().and_then(|path| RecordKind::Uids.path(path)) {
         if let Err(err) = project.load_uid_sidecar(&sidecar_path) {
             diagnostics.push(err);
         }
