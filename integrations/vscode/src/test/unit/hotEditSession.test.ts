@@ -443,6 +443,66 @@ suite('encodeRequest identity and edit identity', () => {
   });
 });
 
+const CONTENT_HASH = 'ab'.repeat(32);
+const LAYOUT_HASH = '0f'.repeat(32);
+
+suite('parseResponseLine hashes of the normal artifact', () => {
+  test('parseResponseLine_when_status_without_hashes_then_fields_absent', () => {
+    // A device that predates the fields: the payload parses, with no hash.
+    const response = parseResponseLine(STATUS_LINE);
+
+    assert.strictEqual(response.kind, 'status');
+    if (response.kind === 'status') {
+      assert.strictEqual(response.status.contentHash, undefined);
+      assert.strictEqual(response.status.layoutHash, undefined);
+      assert.ok(!('contentHash' in response.status));
+    }
+  });
+
+  test('parseResponseLine_when_status_with_hashes_then_both_read', () => {
+    const line = STATUS_LINE.slice(0, -1)
+      + `,"contentHash":"${CONTENT_HASH}","layoutHash":"${LAYOUT_HASH}"}`;
+
+    const response = parseResponseLine(line);
+
+    assert.deepStrictEqual(response, {
+      kind: 'status',
+      status: createStatus({ rounds: 42, contentHash: CONTENT_HASH, layoutHash: LAYOUT_HASH }),
+    });
+  });
+
+  test('parseResponseLine_when_status_has_a_field_of_a_later_server_then_ignored', () => {
+    // The protocol stays at version 1 because a reader ignores what it does not know.
+    const line = STATUS_LINE.slice(0, -1) + ',"fieldOfALaterServer":{"a":[1]}}';
+
+    const response = parseResponseLine(line);
+
+    assert.deepStrictEqual(response, { kind: 'status', status: createStatus({ rounds: 42 }) });
+  });
+
+  test('parseResponseLine_when_identity_with_hashes_then_application_carries_them', () => {
+    const line = IDENTITY_LINE.replace(
+      '"rounds":0}}',
+      `"rounds":0,"contentHash":"${CONTENT_HASH}","layoutHash":"${LAYOUT_HASH}"}}`,
+    );
+
+    const response = parseResponseLine(line);
+
+    assert.strictEqual(response.kind, 'identity');
+    if (response.kind === 'identity') {
+      assert.strictEqual(response.identity.application.contentHash, CONTENT_HASH);
+      assert.strictEqual(response.identity.application.layoutHash, LAYOUT_HASH);
+    }
+  });
+
+  test('parseResponseLine_when_hash_is_not_64_lowercase_hex_then_throws', () => {
+    for (const bad of ['"abc"', '"' + 'AB'.repeat(32) + '"', '12']) {
+      const line = STATUS_LINE.slice(0, -1) + `,"contentHash":${bad}}`;
+      assert.throws(() => parseResponseLine(line), HotEditProtocolError);
+    }
+  });
+});
+
 suite('parseResponseLine identity', () => {
   test('parseResponseLine_when_identity_then_device_application_and_no_redundancy', () => {
     const response = parseResponseLine(IDENTITY_LINE);
