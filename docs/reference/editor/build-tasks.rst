@@ -51,6 +51,8 @@ line says that no download is possible. An error message names the position
 of the problem as :file:`path:line:column`, which the Output panel can turn into
 a link.
 
+.. include:: ../../includes/build-up-to-date.rst
+
 Setting as the Default Build Task
 =================================
 
