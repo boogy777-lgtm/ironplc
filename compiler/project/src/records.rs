@@ -20,18 +20,30 @@ use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_problems::text;
 use serde_json::Value;
 
-/// The kinds of engineering record file.
+/// The kinds of engineering record file. A kind may borrow what names its
+/// records (the connection of a download record), hence the lifetime; it stays
+/// `Copy`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RecordKind {
+pub enum RecordKind<'a> {
     /// The stable variable UID table (ADR 0053), `<stem>.uids.json`.
     Uids,
     /// What the last successful build produced and from which inputs,
     /// `<stem>.build.iplcinfo`. The anchor is the output path of the build, so
     /// the record sits beside the container it describes.
     Build,
+    /// What a device received at the last successful download over one
+    /// connection, `<stem>.<connection>.download.iplcinfo`. The anchor is the
+    /// application container; `connection` is the engineering side's name for
+    /// the device (the connection profile), which keys the record because a
+    /// device reports no unique id of its own.
+    Download {
+        /// The name of the connection profile, free text. See
+        /// [`RecordKind::path`] for how it becomes part of a file name.
+        connection: &'a str,
+    },
 }
 
-impl RecordKind {
+impl RecordKind<'_> {
     /// The path of this kind's record for `anchor`.
     ///
     /// The anchor is the path the record belongs to: for [`RecordKind::Uids`]
@@ -41,14 +53,11 @@ impl RecordKind {
     /// the anchor names a directory and the file stem otherwise. Every reader
     /// and writer of a kind resolves its path through here, so compiling a
     /// project and syncing its record address the same file. Returns `None`
-    /// when the anchor has no usable name (for example a root directory).
+    /// when the anchor has no usable name (for example a root directory), and
+    /// for a [`RecordKind::Download`] whose connection name is empty.
     pub fn path(self, anchor: &Path) -> Option<PathBuf> {
-        let stem = if anchor.is_dir() {
-            anchor.file_name()?.to_str()?
-        } else {
-            anchor.file_stem()?.to_str()?
-        };
-        Some(anchor.with_file_name(format!("{stem}.{}", self.suffix())))
+        let stem = stem(anchor)?;
+        Some(anchor.with_file_name(format!("{stem}.{}", self.suffix()?)))
     }
 
     /// The format version of this kind, written into every record of the kind.
@@ -57,16 +66,56 @@ impl RecordKind {
         match self {
             RecordKind::Uids => 1,
             RecordKind::Build => 1,
+            RecordKind::Download { .. } => 1,
         }
     }
 
-    /// The file name suffix after the stem.
-    fn suffix(self) -> &'static str {
+    /// The file name suffix after the stem, or `None` when the kind has no
+    /// usable name.
+    fn suffix(self) -> Option<String> {
         match self {
-            RecordKind::Uids => "uids.json",
-            RecordKind::Build => "build.iplcinfo",
+            RecordKind::Uids => Some("uids.json".to_owned()),
+            RecordKind::Build => Some("build.iplcinfo".to_owned()),
+            RecordKind::Download { connection: "" } => None,
+            RecordKind::Download { connection } => {
+                Some(format!("{}.download.iplcinfo", file_name_part(connection)))
+            }
         }
     }
+}
+
+/// The stem a record of `anchor` is named after: the directory name when the
+/// anchor names a directory, the file stem otherwise. `None` when the anchor
+/// has no usable name (for example a root directory).
+pub(crate) fn stem(anchor: &Path) -> Option<&str> {
+    if anchor.is_dir() {
+        anchor.file_name()?.to_str()
+    } else {
+        anchor.file_stem()?.to_str()
+    }
+}
+
+/// `text` as one part of a file name: the characters `A-Z a-z 0-9 _ -` stay and
+/// every other byte of the UTF-8 text is written as `%` and two uppercase
+/// hexadecimal digits.
+///
+/// why: a connection name is free text that a person types ("My PLC:1"), and it
+/// must be a valid file name on Windows too, where `:`, `"`, `*` and a trailing
+/// space or dot are not allowed. The encoding is injective (the `%` of the text
+/// is encoded as well), so two names never share a file. The `.` is encoded so
+/// that a name cannot write another kind's suffix: the connection `x.build`
+/// does not make a file that looks like `<stem>.x.build.iplcinfo`. Names that
+/// differ only in letter case share a file on a file system that ignores case.
+fn file_name_part(text: &str) -> String {
+    let mut part = String::with_capacity(text.len());
+    for byte in text.bytes() {
+        if byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-' {
+            part.push(char::from(byte));
+        } else {
+            part.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    part
 }
 
 /// The outcome of reading a record that could be read from the file system.
@@ -85,7 +134,7 @@ pub enum RecordRead {
 ///
 /// Fails only on a genuine I/O error; see the module documentation for the
 /// other outcomes.
-pub fn read(kind: RecordKind, path: &Path) -> Result<RecordRead, Diagnostic> {
+pub fn read(kind: RecordKind<'_>, path: &Path) -> Result<RecordRead, Diagnostic> {
     let text = match fs::read_to_string(path) {
         Ok(text) => text,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(RecordRead::Missing),
@@ -110,7 +159,7 @@ pub fn read(kind: RecordKind, path: &Path) -> Result<RecordRead, Diagnostic> {
 /// `body` must be a JSON object; its `version` field is set to
 /// [`RecordKind::version`]. A body that is not an object is a defect of the
 /// caller and is reported as an internal error.
-pub fn write(kind: RecordKind, path: &Path, mut body: Value) -> Result<(), Diagnostic> {
+pub fn write(kind: RecordKind<'_>, path: &Path, mut body: Value) -> Result<(), Diagnostic> {
     let Some(object) = body.as_object_mut() else {
         return Err(Diagnostic::internal_error());
     };
@@ -139,9 +188,9 @@ mod tests {
     }
 
     /// Writes `text` to a fresh temporary file and reads it as a record of `kind`.
-    fn read_kind_text(kind: RecordKind, text: &str) -> RecordRead {
+    fn read_kind_text(kind: RecordKind<'_>, text: &str) -> RecordRead {
         let dir = TempDir::new().unwrap();
-        let path = dir.path().join(format!("test.{}", kind.suffix()));
+        let path = dir.path().join(format!("test.{}", kind.suffix().unwrap()));
         fs::write(&path, text).unwrap();
         read(kind, &path).unwrap()
     }
@@ -171,6 +220,62 @@ mod tests {
         assert_eq!(path, Path::new("some").join("dir").join(expected));
     }
 
+    #[rstest]
+    #[case::plain("PLC1", "app.PLC1.download.iplcinfo")]
+    #[case::kept_characters("a_b-C9", "app.a_b-C9.download.iplcinfo")]
+    #[case::space_and_colon("My PLC:1", "app.My%20PLC%3A1.download.iplcinfo")]
+    #[case::dot_cannot_forge_a_suffix("a.build", "app.a%2Ebuild.download.iplcinfo")]
+    #[case::percent_is_encoded("a%2Eb", "app.a%252Eb.download.iplcinfo")]
+    #[case::windows_forbidden(r#"a\b"c*?<>|"#, "app.a%5Cb%22c%2A%3F%3C%3E%7C.download.iplcinfo")]
+    #[case::trailing_dot_and_space("x. ", "app.x%2E%20.download.iplcinfo")]
+    #[case::non_ascii("Ü", "app.%C3%9C.download.iplcinfo")]
+    fn path_when_download_of_connection_then_sibling_with_encoded_name(
+        #[case] connection: &str,
+        #[case] expected: &str,
+    ) {
+        let path = RecordKind::Download { connection }
+            .path(Path::new("some").join("dir").join("app.iplc").as_path())
+            .unwrap();
+
+        assert_eq!(path, Path::new("some").join("dir").join(expected));
+    }
+
+    #[test]
+    fn path_when_download_of_empty_connection_then_none() {
+        let anchor = Path::new("some").join("app.iplc");
+
+        assert_eq!(RecordKind::Download { connection: "" }.path(&anchor), None);
+    }
+
+    #[test]
+    fn path_when_download_of_different_names_then_different_files() {
+        let anchor = Path::new("app.iplc");
+        let names = ["a.b", "a%2Eb", "a b", "a%20b", "a", "a.build", "A"];
+
+        let paths: std::collections::BTreeSet<_> = names
+            .iter()
+            .map(|connection| RecordKind::Download { connection }.path(anchor).unwrap())
+            .collect();
+
+        assert_eq!(paths.len(), names.len());
+    }
+
+    #[test]
+    fn path_when_download_then_never_the_path_of_another_kind() {
+        let anchor = Path::new("app.iplc");
+        let build = RecordKind::Build.path(anchor).unwrap();
+        let uids = RecordKind::Uids.path(anchor).unwrap();
+
+        let download = RecordKind::Download {
+            connection: "build",
+        }
+        .path(anchor)
+        .unwrap();
+
+        assert_ne!(download, build);
+        assert_ne!(download, uids);
+    }
+
     #[test]
     fn path_when_directory_then_directory_name_stem() {
         let dir = TempDir::new().unwrap();
@@ -191,7 +296,12 @@ mod tests {
 
     #[rstest]
     fn read_when_file_missing_then_missing(
-        #[values(RecordKind::Uids, RecordKind::Build)] kind: RecordKind,
+        #[values(
+            RecordKind::Uids,
+            RecordKind::Build,
+            RecordKind::Download { connection: "My PLC" }
+        )]
+        kind: RecordKind<'_>,
     ) {
         let dir = TempDir::new().unwrap();
 
@@ -202,7 +312,12 @@ mod tests {
 
     #[rstest]
     fn read_when_invalid_then_malformed(
-        #[values(RecordKind::Uids, RecordKind::Build)] kind: RecordKind,
+        #[values(
+            RecordKind::Uids,
+            RecordKind::Build,
+            RecordKind::Download { connection: "My PLC" }
+        )]
+        kind: RecordKind<'_>,
         #[values(
             "this is not json",
             r#"{"version": 2}"#,
