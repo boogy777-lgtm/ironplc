@@ -6,12 +6,11 @@
 use ironplc_analyzer::intermediate_type::{ByteSized, IntermediateType};
 use ironplc_analyzer::SemanticContext;
 use ironplc_dsl::common::TypeName;
-use ironplc_dsl::core::FileId;
 use ironplc_dsl::diagnostic::Area;
-use ironplc_project::project::{MemoryBackedProject, Project};
 use serde::Serialize;
 
-use super::common::{parse_options, serialize_diagnostics, validate_sources, SourceInput};
+use super::check::CheckRun;
+use super::common::SourceInput;
 
 /// A single entry in the `types` array.
 #[derive(Debug, Clone, Serialize)]
@@ -80,41 +79,20 @@ pub fn build_response(
     sources: &[SourceInput],
     options_value: &serde_json::Value,
 ) -> TypesAllResponse {
-    let source_errors = validate_sources(sources);
-    if !source_errors.is_empty() {
-        return TypesAllResponse::empty(false, serialize_diagnostics(&source_errors, &[]));
-    }
+    let run = CheckRun::start(sources, options_value, Area::Build);
+    let checked = run.finish();
 
-    let options = match parse_options(options_value) {
-        Ok(opts) => opts,
-        Err(errs) => {
-            return TypesAllResponse::empty(false, serialize_diagnostics(&errs, &[]));
-        }
-    };
-
-    let mut project = MemoryBackedProject::new(options);
-    for src in sources {
-        project.add_source(FileId::from_string(&src.name), src.content.clone());
-    }
-
-    let diagnostics = project.semantic(Area::Build);
-    let has_errors = ironplc_dsl::diagnostic::any_stops_build(&diagnostics);
-    let diagnostics_json = serialize_diagnostics(&diagnostics, sources);
-
-    let context = match project.semantic_context() {
-        Some(ctx) => ctx,
-        None => {
-            return TypesAllResponse::empty(!has_errors, diagnostics_json);
-        }
+    let Some(context) = run.semantic_context() else {
+        return TypesAllResponse::empty(checked.ok, checked.diagnostics());
     };
 
     let mut types = collect_types(context);
     types.sort_by(|a, b| a.name.cmp(&b.name));
 
     TypesAllResponse {
-        ok: !has_errors,
+        ok: checked.ok,
         types,
-        diagnostics: diagnostics_json,
+        diagnostics: checked.diagnostics(),
     }
 }
 

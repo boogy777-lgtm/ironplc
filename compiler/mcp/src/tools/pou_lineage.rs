@@ -13,17 +13,14 @@ use ironplc_dsl::common::{
     FunctionBlockCallInitializer, FunctionBlockDeclaration, FunctionBlockInitialValueAssignment,
     FunctionDeclaration, Library, LibraryElementKind, ProgramDeclaration, VarDecl,
 };
-use ironplc_dsl::core::FileId;
 use ironplc_dsl::diagnostic::Area;
 use ironplc_dsl::textual::{FbCall, Function};
 use ironplc_dsl::visitor::Visitor;
-use ironplc_project::project::{MemoryBackedProject, Project};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::common::{
-    parse_options, pou_not_found_diagnostic, serialize_diagnostics, validate_sources, SourceInput,
-};
+use super::check::CheckRun;
+use super::common::{pou_not_found_diagnostic, SourceInput};
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct PouLineageInput {
@@ -83,76 +80,44 @@ pub fn build_response(
     options_value: &serde_json::Value,
     pou_name: &str,
 ) -> PouLineageResponse {
-    let source_errors = validate_sources(sources);
-    if !source_errors.is_empty() {
+    let run = CheckRun::start(sources, options_value, Area::Build);
+
+    let Some(library) = run.analyzed_library() else {
+        let checked = run.finish();
         return PouLineageResponse::empty(
-            false,
+            checked.ok,
             false,
             pou_name.to_string(),
-            serialize_diagnostics(&source_errors, &[]),
+            checked.diagnostics(),
         );
-    }
-
-    let options = match parse_options(options_value) {
-        Ok(opts) => opts,
-        Err(errs) => {
-            return PouLineageResponse::empty(
-                false,
-                false,
-                pou_name.to_string(),
-                serialize_diagnostics(&errs, &[]),
-            );
-        }
     };
 
-    let mut project = MemoryBackedProject::new(options);
-    for src in sources {
-        project.add_source(FileId::from_string(&src.name), src.content.clone());
-    }
-
-    let diagnostics = project.semantic(Area::Build);
-    let has_errors = ironplc_dsl::diagnostic::any_stops_build(&diagnostics);
-    let mut diagnostics_json = serialize_diagnostics(&diagnostics, sources);
-
-    let library = match project.analyzed_library() {
-        Some(lib) => lib,
-        None => {
-            return PouLineageResponse::empty(
-                !has_errors,
-                false,
-                pou_name.to_string(),
-                diagnostics_json,
-            );
-        }
-    };
-
-    let context = project.semantic_context();
+    let context = run.semantic_context();
     let graph = build_graph(library, context);
     let canonical = match graph.canonical_name(pou_name) {
         Some(n) => n,
         None => {
-            diagnostics_json.push(pou_not_found_diagnostic(pou_name));
-            return PouLineageResponse {
-                ok: false,
-                found: false,
-                pou: pou_name.to_string(),
-                upstream: vec![],
-                downstream: vec![],
-                diagnostics: diagnostics_json,
-            };
+            let checked = run.finish_with(vec![pou_not_found_diagnostic(pou_name)]);
+            return PouLineageResponse::empty(
+                false,
+                false,
+                pou_name.to_string(),
+                checked.diagnostics(),
+            );
         }
     };
 
     let upstream = graph.transitive_upstream(&canonical);
     let downstream = graph.transitive_downstream(&canonical);
 
+    let checked = run.finish();
     PouLineageResponse {
-        ok: !has_errors,
+        ok: checked.ok,
         found: true,
         pou: canonical,
         upstream,
         downstream,
-        diagnostics: diagnostics_json,
+        diagnostics: checked.diagnostics(),
     }
 }
 

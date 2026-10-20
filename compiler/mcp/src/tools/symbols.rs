@@ -2,18 +2,14 @@ use ironplc_analyzer::extractors::{
     FunctionBlockSymbol as FunctionBlockView, FunctionSymbolView, ProgramSymbol as ProgramView,
     TypeSymbolView, VariableDirection, VariableSymbol,
 };
-use ironplc_dsl::core::FileId;
 use ironplc_dsl::diagnostic::Area;
-use ironplc_project::project::{MemoryBackedProject, Project};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use ironplc_problems::text;
 
-use super::common::{
-    parse_options, pou_not_found_diagnostic, serialize_diagnostic, serialize_diagnostics,
-    validate_sources, validation_diagnostic, SourceInput,
-};
+use super::check::CheckRun;
+use super::common::{pou_not_found_diagnostic, validation_diagnostic, SourceInput};
 
 const MAX_RESPONSE_BYTES: usize = 256 * 1024;
 
@@ -80,36 +76,14 @@ pub fn build_response(
     options_value: &serde_json::Value,
     pou_filter: Option<&str>,
 ) -> SymbolsResponse {
-    let source_errors = validate_sources(sources);
-    if !source_errors.is_empty() {
-        return empty_response(
-            false,
-            None,
-            false,
-            serialize_diagnostics(&source_errors, &[]),
-        );
-    }
+    let run = CheckRun::start(sources, options_value, Area::Build);
+    let checked = run.finish();
 
-    let options = match parse_options(options_value) {
-        Ok(opts) => opts,
-        Err(errs) => {
-            return empty_response(false, None, false, serialize_diagnostics(&errs, &[]));
-        }
-    };
-
-    let mut project = MemoryBackedProject::new(options);
-    for src in sources {
-        project.add_source(FileId::from_string(&src.name), src.content.clone());
-    }
-
-    let diagnostics = project.semantic(Area::Build);
-    let has_errors = ironplc_dsl::diagnostic::any_stops_build(&diagnostics);
-    let diagnostics_json = serialize_diagnostics(&diagnostics, sources);
-
-    let context = match project.semantic_context() {
-        Some(ctx) if !has_errors => ctx,
+    // Symbols are listed only for a program that analyzes without an error.
+    let context = match run.semantic_context() {
+        Some(ctx) if checked.ok => ctx,
         _ => {
-            return empty_response(false, None, false, diagnostics_json);
+            return empty_response(false, None, false, checked.diagnostics());
         }
     };
 
@@ -133,7 +107,7 @@ pub fn build_response(
             &mut functions,
             &mut function_blocks,
             &mut types,
-            diagnostics_json,
+            &run,
         );
     }
 
@@ -145,20 +119,15 @@ pub fn build_response(
         function_blocks,
         types,
         truncated: false,
-        diagnostics: diagnostics_json,
+        diagnostics: checked.diagnostics(),
     };
 
     if let Ok(json) = serde_json::to_string(&response) {
         if json.len() > MAX_RESPONSE_BYTES {
-            return empty_response(
-                false,
-                None,
-                true,
-                vec![serialize_diagnostic(
-                    &validation_diagnostic(text::mcp_input_validation_symbols_response_too_large()),
-                    &[],
-                )],
-            );
+            let too_large = run.finish_with(vec![validation_diagnostic(
+                text::mcp_input_validation_symbols_response_too_large(),
+            )]);
+            return empty_response(false, None, true, too_large.diagnostics());
         }
     }
 
@@ -235,7 +204,7 @@ fn apply_pou_filter(
     functions: &mut Vec<FunctionSymbol>,
     function_blocks: &mut Vec<FunctionBlockSymbol>,
     types: &mut Vec<TypeSymbol>,
-    diagnostics: Vec<serde_json::Value>,
+    run: &CheckRun<'_>,
 ) -> SymbolsResponse {
     let pou_lower = pou_name.to_lowercase();
 
@@ -250,9 +219,8 @@ fn apply_pou_filter(
         .position(|fb| fb.name.to_lowercase() == pou_lower);
 
     if matched_program.is_none() && matched_function.is_none() && matched_fb.is_none() {
-        let mut diags = diagnostics;
-        diags.push(pou_not_found_diagnostic(pou_name));
-        return empty_response(false, Some(false), false, diags);
+        let checked = run.finish_with(vec![pou_not_found_diagnostic(pou_name)]);
+        return empty_response(false, Some(false), false, checked.diagnostics());
     }
 
     let mut referenced_types = std::collections::HashSet::new();
@@ -309,7 +277,7 @@ fn apply_pou_filter(
         function_blocks: filtered_fbs,
         types: filtered_types,
         truncated: false,
-        diagnostics,
+        diagnostics: run.finish().diagnostics(),
     }
 }
 

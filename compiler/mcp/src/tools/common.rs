@@ -284,11 +284,10 @@ pub fn serialize_diagnostics(
 }
 
 /// The diagnostic of the tools that name a POU, for a name no source declares.
-pub fn pou_not_found_diagnostic(pou_name: &str) -> serde_json::Value {
-    serialize_diagnostic(
-        &validation_diagnostic(text::mcp_input_validation_pou_not_found(pou_name)),
-        &[],
-    )
+/// A tool adds it to the messages of its run before they are framed
+/// (`CheckRun::finish_with`).
+pub fn pou_not_found_diagnostic(pou_name: &str) -> Diagnostic {
+    validation_diagnostic(text::mcp_input_validation_pou_not_found(pou_name))
 }
 
 // ───────────────────────────────────────────────────────────────────
@@ -593,7 +592,7 @@ mod tests {
 
     #[test]
     fn pou_not_found_diagnostic_when_called_then_a_validation_message_naming_the_pou() {
-        let json = pou_not_found_diagnostic("Main");
+        let json = serialize_diagnostic(&pou_not_found_diagnostic("Main"), &[]);
 
         assert_eq!(json["number"], 8001);
         assert!(json["text"]

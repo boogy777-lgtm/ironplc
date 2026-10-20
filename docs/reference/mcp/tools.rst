@@ -42,12 +42,18 @@ fields of the CODESYS scripting class ``ScriptMessage``:
 
 .. include:: ../../includes/message-object-fields.rst
 
-:literal:`check` and :literal:`compile` return their ``diagnostics`` framed as
-:program:`ironplcc` writes them to the terminal: the messages of the run with the
-line that closes it, and for :literal:`compile` the line that starts it. The
-lines are messages of category ``Text`` without a code, so a program without a
-problem has the closing line alone and ``ok``, not the length of the array, says
-whether a problem stops the build.
+:literal:`check`, :literal:`compile` and the tools that analyze the sources and
+return the ``diagnostics`` of the run (:literal:`symbols`,
+:literal:`project_manifest`, :literal:`project_io`, :literal:`pou_scope`,
+:literal:`pou_lineage` and :literal:`types_all`) return their ``diagnostics``
+framed as :program:`ironplcc` writes them to the terminal: the messages of the
+run with the line ``Compile complete -- N errors, M warnings`` that closes it,
+and for :literal:`compile` the line that starts it and the build line that ends
+it. The lines are messages of category ``Text`` without a code, so a program
+without a problem has the closing line alone and ``ok``, not the length of the
+array, says whether a problem stops the build. A POU that :literal:`symbols`,
+:literal:`pou_scope` or :literal:`pou_lineage` is asked for and the sources do
+not declare is one error of the run, and the closing line counts it.
 
 Analysis Tools
 ==============

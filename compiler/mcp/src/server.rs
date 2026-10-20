@@ -44,6 +44,31 @@ impl IronPlcMcp {
     pub fn new() -> Self {
         Self::default()
     }
+
+    /// The names of the registered tools that analyze sources: those whose input
+    /// has both `sources` and `options`. A test over these tools
+    /// (`spec_conformance::run_diagnostics`) fails for one it has not classified,
+    /// so a new tool that analyzes cannot return the diagnostics of a run
+    /// unframed without a decision.
+    #[cfg(test)]
+    pub(crate) fn tools_taking_sources_and_options() -> Vec<String> {
+        let mut names: Vec<String> = Self::tool_router()
+            .list_all()
+            .into_iter()
+            .filter(|tool| {
+                let properties = tool
+                    .input_schema
+                    .get("properties")
+                    .and_then(|properties| properties.as_object());
+                properties.is_some_and(|properties| {
+                    properties.contains_key("sources") && properties.contains_key("options")
+                })
+            })
+            .map(|tool| tool.name.to_string())
+            .collect();
+        names.sort();
+        names
+    }
 }
 
 #[tool_router]

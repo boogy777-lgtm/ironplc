@@ -567,6 +567,16 @@ before the command runs.
 `WarningList`, and a code that is not accepted is logged with its message and
 ignored, like an option value that is unknown.
 
+**REQ-DS-mcp-013** Every MCP tool that returns the diagnostics of a check run
+(`symbols`, `project_manifest`, `project_io`, `pou_scope`, `pou_lineage` and
+`types_all`, as `check`) frames them as `check` does, by the one function
+`CheckRun`: the messages and then the line "Compile complete -- {errors} errors,
+{warnings} warnings", with the application and the settings of the run, on every
+path, including an invalid `sources` or `options`. A program without a problem
+has that line alone, a POU that is not declared is counted in the line, and `ok`
+keeps its meaning. A test over the tools of the registry fails for a tool that
+takes `sources` and `options` and is not classified.
+
 **REQ-DS-mcp-012** The `options` of the MCP tools accept `disabled_warnings` and
 `warnings_as_errors`, arrays of codes, and `list_options` lists them; `check` and
 `compile` apply them; a value that is not an array of strings, or a code that is
