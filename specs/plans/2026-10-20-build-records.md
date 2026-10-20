@@ -224,14 +224,11 @@ Parse-tree stage S4 comes after it (plan #142, owner's order).
 - [ ] VS Code: the assemble acknowledgement and the session start write the record; connect compares content; `ironplc.baseline` removed
 - [ ] Tests: a reboot keeps a match; another container is a mismatch; no record is none
 
-## Questions for the owner
+## Owner's answers
 
-- **Q1. Names.** The proposal is `<app>.build.iplcinfo` and
-  `<app>.<connection>.download.iplcinfo`. Do they suit, or would you prefer
-  another form of the iplc family?
-- **Q2. JSON or binary.** JSON is proposed, as the UID sidecar is: it can be read
-  and compared in version control. CODESYS writes binary because it stores the
-  compiled code too. Our container already holds the code.
+- **Q1. Names:** `<app>.build.iplcinfo` and `<app>.<connection>.download.iplcinfo`,
+  accepted.
+- **Q2. Format:** JSON, as the UID sidecar. The container already holds the code.
 
 ## Not included
 
