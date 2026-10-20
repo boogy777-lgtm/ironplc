@@ -34,6 +34,7 @@ to write your first PLC program.
 * [**Syntax highlighting**](https://www.ironplc.com/reference/compiler/source-formats/index.html) — Structured Text and PLCopen XML files
 * [**Build and run**](https://www.ironplc.com/reference/editor/build-tasks.html) — compile and execute programs from the editor; **IronPLC: Build** shows the build messages in the Output panel
 * [**Bytecode viewer**](https://www.ironplc.com/reference/editor/bytecode-viewer.html) — inspect compiled programs
+* [**Device connection**](https://www.ironplc.com/reference/editor/problems/E0015.html) — after a build is downloaded to a device, the extension keeps a download record (`<application>.<connection>.download.iplcinfo`) beside the application container; when you connect again it compares the application the device runs with that record by content and refuses a build over an application that you did not download (E0015)
 * [**Warning settings**](https://www.ironplc.com/reference/editor/settings.html) — `ironplc.disabledWarnings` hides warnings you do not want, and `ironplc.warningsAsErrors` makes a build fail on the ones you do not accept (both apply to every build the extension starts)
 
 Works with Structured Text (`.st`, `.iec`) and PLCopen XML files,
