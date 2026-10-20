@@ -208,13 +208,14 @@ fn check_when_only_a_warning_and_format_json_then_the_message_is_a_warning(
 fn compile_when_only_a_warning_then_the_container_is_written_and_the_exit_status_is_zero(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let source = st_source(TWO_ENUMERATIONS_COMPARED)?;
-    let output_file = tempfile::Builder::new().suffix(".iplc").tempfile()?;
+    let dir = tempfile::tempdir()?;
+    let output_file = dir.path().join("out.iplc");
     let mut cmd = Command::new(cargo::cargo_bin!("ironplcc"));
 
     cmd.arg("compile")
         .arg(source.path())
         .arg("--output")
-        .arg(output_file.path());
+        .arg(&output_file);
     let output = cmd.assert().success().get_output().clone();
 
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -222,7 +223,7 @@ fn compile_when_only_a_warning_then_the_container_is_written_and_the_exit_status
         stderr.contains("Warning[P4083] (CODESYS C0354)"),
         "{stderr}"
     );
-    assert!(std::fs::metadata(output_file.path())?.len() > 0);
+    assert!(std::fs::metadata(&output_file)?.len() > 0);
 
     Ok(())
 }

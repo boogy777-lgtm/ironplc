@@ -30,6 +30,7 @@ use std::{
 };
 
 use ironplc_parser::options::CompilerOptions;
+use ironplc_project::build_record::BuildInputs;
 use ironplc_project::sidecar::{declared_var_keys, Sidecar, SidecarKey};
 use ironplc_project::RecordKind;
 use ironplc_sources::discovery::DiscoveredProject;
@@ -157,15 +158,18 @@ pub fn tokenize(
 /// Compiles source files into a bytecode container (.iplc) file.
 ///
 /// Parses the source files, runs full analysis (type resolution + semantic
-/// checks), and generates bytecode.
+/// checks), and generates bytecode. A build that finds nothing changed since the
+/// last one does none of it and says the application is up to date; `force`
+/// builds anyway ([`up_to_date`]).
 pub fn compile(
     paths: &[PathBuf],
     output: &Path,
     compiler_options: CompilerOptions,
     libraries: &[LibraryName],
+    force: bool,
     suppress_output: bool,
 ) -> Result<(), String> {
-    let (project, diagnostics) = run_compile(paths, output, compiler_options, libraries)?;
+    let (project, diagnostics) = run_compile(paths, output, compiler_options, libraries, force)?;
 
     finish("Compile", diagnostics, Some(&project), suppress_output)
 }
@@ -174,11 +178,17 @@ pub fn compile(
 /// project with the messages of the build: the line that starts it, the problems
 /// and the line that ends it with its counts and whether the container is ready
 /// for download.
+///
+/// When the build record says the container on disk is what this build would
+/// write, nothing runs and the messages are the line that starts the build and
+/// the line that says the application is up to date. After a container is
+/// written, the build record of it is written.
 fn run_compile(
     paths: &[PathBuf],
     output: &Path,
     compiler_options: CompilerOptions,
     libraries: &[LibraryName],
+    force: bool,
 ) -> Result<(FileBackedProject, Vec<Diagnostic>), String> {
     let (mut project, mut diagnostics) = create_project(paths, compiler_options, libraries);
 
@@ -188,6 +198,23 @@ fn run_compile(
     if output_conflicts_with_source(&project, output) {
         diagnostics.extend(diagnostic(output, text::output_path_conflicts_with_input()));
     }
+
+    // The inputs are read from the project that the pipeline below receives.
+    let project_name = project_name(paths);
+    let inputs = BuildInputs::of(
+        &project,
+        &compiler_options,
+        &project_name,
+        env!("CARGO_PKG_VERSION"),
+    );
+    // A problem found so far stops the build, so there is no container to skip.
+    let previous = up_to_date::previous(output, &inputs, !force && !any_stops_build(&diagnostics));
+    if let Some(application) = previous.up_to_date {
+        let opening = COMPILE_SUMMARY.opening(&application);
+        let lines = opening.into_iter().chain([up_to_date::up_to_date_line()]);
+        return Ok((project, lines.collect()));
+    }
+    diagnostics.extend(previous.diagnostics);
 
     // Build a SourceLookup that hands codegen the exact bytes the parser saw
     // for each FileId. The container's debug section SOURCE_FILE_TABLE (tag 6)
@@ -201,22 +228,32 @@ fn run_compile(
     // analysis run against the files that did resolve.
     let output_result =
         ironplc_project::compile(&mut project, &compiler_options, &source_lookup, diagnostics);
+    let mut result_diagnostics = output_result.diagnostics;
+    let application = project.application_name(&project_name);
 
     if let Some(container) = output_result.container {
-        // Write the container to the output file
+        // The header of a container is derived while it is serialized, so the
+        // bytes are made first and the record is taken from them.
+        let mut bytes = Vec::new();
+        container
+            .write_to(&mut bytes)
+            .map_err(|e| format!("Failed to write output file: {e}"))?;
         let mut out_file = std::fs::File::create(output)
             .map_err(|e| format!("Failed to create output file: {e}"))?;
-        container
-            .write_to(&mut out_file)
+        out_file
+            .write_all(&bytes)
             .map_err(|e| format!("Failed to write output file: {e}"))?;
+        drop(out_file);
+
+        // Only a container that was written has a record. A failed build leaves
+        // the record that is there: it still describes the container on disk.
+        if let Err(problem) = up_to_date::write(output, inputs, &application, &bytes) {
+            result_diagnostics.push(problem);
+        }
     }
 
-    let application = project.application_name(&project_name(paths));
-    let diagnostics = COMPILE_SUMMARY.close(
-        &application,
-        &compiler_options.messages,
-        output_result.diagnostics,
-    );
+    let diagnostics =
+        COMPILE_SUMMARY.close(&application, &compiler_options.messages, result_diagnostics);
     Ok((project, diagnostics))
 }
 
@@ -866,8 +903,13 @@ fn diagnostic(path: &Path, text: Text) -> Vec<Diagnostic> {
     vec![Diagnostic::text_in_file(FileId::from_path(path), text)]
 }
 
+mod up_to_date;
+
 #[cfg(test)]
 mod summary_tests;
+
+#[cfg(test)]
+mod up_to_date_tests;
 
 #[cfg(test)]
 mod tests;

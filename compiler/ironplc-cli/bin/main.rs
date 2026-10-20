@@ -611,6 +611,14 @@ enum Action {
         /// `--library Tc2_System`. See `check --library`.
         #[arg(long = "library")]
         libraries: Vec<LibraryName>,
+
+        /// Build even when nothing changed. Without it, a compile whose inputs
+        /// are those recorded in `<output>.build.iplcinfo` (named after the
+        /// output file) and whose output file is the container that record
+        /// describes does not compile, and reports that the application is up to
+        /// date. The record is written after every successful build.
+        #[arg(long)]
+        force: bool,
     },
     /// The echo action reads (parses) the libraries and writes the context to the
     /// standard output.
@@ -717,11 +725,13 @@ fn execute(action: Action) -> Result<(), String> {
             file_args,
             output,
             libraries,
+            force,
         } => cli::compile(
             &file_args.files,
             &output,
             file_args.compiler_options(),
             &libraries,
+            force,
             false,
         ),
         Action::Echo { file_args } => {
