@@ -60,13 +60,6 @@ const WARNINGS: Kind = Kind {
 
 const KINDS: [Kind; 2] = [ERRORS, WARNINGS];
 
-/// Whether the counts of a summary include the limit lines. CODESYS reads the
-/// counts of its summary from the stored messages, and it stores the limit line
-/// as an `Error` or a `Warning`, so the code says they are included (a run that
-/// passes the error limit reports 501 errors). Whether a running CODESYS agrees
-/// is the open item MSG-075; this is the one place that changes when it answers.
-const COUNTS_INCLUDE_LIMIT_LINES: bool = true;
-
 /// What identifies a message, to decide that it repeats an earlier one: its code,
 /// category, place and text, as CODESYS compares id, severity, position, text
 /// and object.
@@ -196,18 +189,16 @@ pub struct Counts {
 
 /// The counts of the messages of a run. This is the one counting function: every
 /// summary line takes its numbers from here.
+///
+/// The counts include the limit lines: a run that passes the error limit reports
+/// 501 errors, the 500 it kept and the line "More than 500 errors occured". This
+/// is the owner's decision, as CODESYS counts what it stores, and it stores the
+/// limit line as an `Error` or a `Warning`.
 pub fn counts(diagnostics: &[Diagnostic]) -> Counts {
-    let limit_keys = limit_keys();
     let [errors, warnings] = KINDS.map(|kind| {
         diagnostics
             .iter()
             .filter(|d| (kind.counts)(d.severity()))
-            .filter(|d| {
-                COUNTS_INCLUDE_LIMIT_LINES
-                    || !d
-                        .codeless_key()
-                        .is_some_and(|key| limit_keys.contains(&key))
-            })
             .count()
     });
     Counts { errors, warnings }

@@ -314,3 +314,100 @@ VAR y : INT; END_VAR
 
     Ok(())
 }
+
+/// The application of a build is the configuration, not the file, in the lines
+/// of the real command (REQ-DS-cli-014).
+#[test]
+fn compile_when_configuration_then_the_build_started_line_names_it(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempfile::tempdir()?;
+    let source = dir.path().join("Plant.st");
+    std::fs::write(
+        &source,
+        "PROGRAM main
+VAR y : INT; END_VAR
+  y := 1;
+END_PROGRAM
+
+CONFIGURATION Line1
+  RESOURCE r ON PLC
+    TASK t(INTERVAL := T#10ms, PRIORITY := 1);
+    PROGRAM i1 WITH t : main;
+  END_RESOURCE
+END_CONFIGURATION
+",
+    )?;
+    let mut cmd = Command::new(cargo::cargo_bin!("ironplcc"));
+
+    cmd.arg("compile")
+        .arg(&source)
+        .arg("--output")
+        .arg(dir.path().join("out.iplc"));
+    let output = cmd.assert().success().get_output().clone();
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(
+        stderr.lines().next(),
+        Some("------ Build started: Application: Line1 -------")
+    );
+
+    Ok(())
+}
+
+/// A container is one PLC: two configurations are rejected, both are named in the
+/// order of the source, and the build is named for the first.
+#[test]
+fn compile_when_two_configurations_then_the_command_fails_naming_both(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempfile::tempdir()?;
+    let source = dir.path().join("Plant.st");
+    let configuration = |name: &str| {
+        format!(
+            "CONFIGURATION {name}
+  RESOURCE r ON PLC
+    TASK t(INTERVAL := T#10ms, PRIORITY := 1);
+    PROGRAM i1 WITH t : main;
+  END_RESOURCE
+END_CONFIGURATION
+"
+        )
+    };
+    std::fs::write(
+        &source,
+        format!(
+            "PROGRAM main
+VAR y : INT; END_VAR
+  y := 1;
+END_PROGRAM
+
+{}
+{}",
+            configuration("Zeta"),
+            configuration("Alpha")
+        ),
+    )?;
+    let container = dir.path().join("out.iplc");
+    let mut cmd = Command::new(cargo::cargo_bin!("ironplcc"));
+
+    cmd.arg("compile")
+        .arg(&source)
+        .arg("--output")
+        .arg(&container);
+    let output = cmd.assert().failure().get_output().clone();
+
+    let stderr = without_colors(&String::from_utf8_lossy(&output.stderr));
+    assert_eq!(
+        stderr.lines().next(),
+        Some("------ Build started: Application: Zeta -------")
+    );
+    assert!(stderr.contains("Error[P9999]"), "{stderr}");
+    assert!(stderr.contains("2nd CONFIGURATION declaration"), "{stderr}");
+    assert!(stderr.contains("1st CONFIGURATION declaration"), "{stderr}");
+    assert!(
+        stderr.contains("Build complete -- 1 errors, 0 warnings : No download possible"),
+        "{stderr}"
+    );
+    assert!(!container.exists());
+
+    Ok(())
+}

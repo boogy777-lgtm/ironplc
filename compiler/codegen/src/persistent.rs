@@ -69,23 +69,10 @@ pub fn global_declarations(library: &Library, options: &CodegenOptions) -> Vec<V
             globals.extend_from_slice(declarations);
         }
     }
-    if let Some(configuration) = compiled_configuration(library) {
+    if let Some(configuration) = library.compiled_configuration() {
         globals.extend_from_slice(&configuration.global_var);
     }
     globals
-}
-
-/// The configuration code generation compiles: the first the library declares.
-pub(crate) fn compiled_configuration(
-    library: &Library,
-) -> Option<&ironplc_dsl::configuration::ConfigurationDeclaration> {
-    library.elements.iter().find_map(|element| {
-        if let LibraryElementKind::ConfigurationDeclaration(configuration) = element {
-            Some(configuration)
-        } else {
-            None
-        }
-    })
 }
 
 /// The variables of `program` code generation lays out as persistent state:

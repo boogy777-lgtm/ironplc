@@ -10,7 +10,10 @@ use crate::tools;
 use crate::tools::common::{serialize_diagnostic, serialize_diagnostics, ParseCheckInput};
 use crate::tools::message_areas;
 use crate::tools::messages::{AreaName, MessageObjectsInput, MessagesInput};
-use crate::tools::test_support::{ed2_options, source, SEMANTIC_ERROR_PROGRAM, VALID_PROGRAM};
+use crate::tools::test_support::{
+    ed2_options, source, unnamed_source, COUNTER_PROGRAM_WITH_TASK, SEMANTIC_ERROR_PROGRAM,
+    VALID_PROGRAM,
+};
 
 /// A diagnostic in each of the seven categories, in the order of CODESYS, with
 /// the scripting name and the flag value each has.
@@ -51,16 +54,26 @@ fn mcp_spec_req_ds_001_severity_is_the_scripting_name_of_the_category_of_the_dia
     }
 }
 
+/// The messages of a response that are not the line that closes the check.
+fn problems_of(diagnostics: &[serde_json::Value]) -> Vec<&serde_json::Value> {
+    diagnostics
+        .iter()
+        .filter(|d| d["severity"].as_str() != Some("Text"))
+        .collect()
+}
+
 #[spec_test(REQ_DS_mcp_002)]
 fn mcp_spec_req_ds_002_check_is_ok_only_when_no_diagnostic_is_an_error() {
     let clean = tools::check::build_response(&source(VALID_PROGRAM), &ed2_options());
     assert!(clean.ok, "diagnostics: {:?}", clean.diagnostics);
-    assert!(clean.diagnostics.is_empty());
+    // The closing line is a `Text`, which does not stop the build.
+    assert!(problems_of(&clean.diagnostics).is_empty());
 
     let broken = tools::check::build_response(&source(SEMANTIC_ERROR_PROGRAM), &ed2_options());
     assert!(!broken.ok);
-    assert!(broken
-        .diagnostics
+    let problems = problems_of(&broken.diagnostics);
+    assert!(!problems.is_empty());
+    assert!(problems
         .iter()
         .all(|d| d["severity"].as_str() == Some("Error")));
 }
@@ -179,17 +192,25 @@ fn mcp_spec_req_ds_005_get_message_objects_returns_the_objects_of_the_masked_cat
     let all = objects_with(None);
     let check = tools::check::build_response(&source(SEMANTIC_ERROR_PROGRAM), &ed2_options());
 
-    // The default is every category: the objects of `check`, then the line that
-    // closes the check.
-    assert!(!check.diagnostics.is_empty());
-    assert_eq!(all.len(), check.diagnostics.len() + 1);
-    assert_eq!(all[..check.diagnostics.len()], check.diagnostics[..]);
-    assert_eq!(all[check.diagnostics.len()]["severity"], "Text");
+    // The default is every category: the diagnostics of `check`, which already
+    // end with the line that closes the check, and that line once.
+    let errors: Vec<serde_json::Value> = problems_of(&check.diagnostics)
+        .into_iter()
+        .cloned()
+        .collect();
+    assert!(!errors.is_empty());
+    assert_eq!(all, check.diagnostics);
+    assert_eq!(
+        all.iter().filter(|d| d["severity"] == "Text").count(),
+        1,
+        "{all:?}"
+    );
+    assert_eq!(all[errors.len()]["severity"], "Text");
     assert_eq!(objects_with(Some(0xFFFF_FFFF)), all);
     // The mask selects by `severity_value`: errors are 2 and 1, warnings 4, a
     // text 16.
-    assert_eq!(objects_with(Some(2)), check.diagnostics);
-    assert_eq!(objects_with(Some(1 | 2)), check.diagnostics);
+    assert_eq!(objects_with(Some(2)), errors);
+    assert_eq!(objects_with(Some(1 | 2)), errors);
     assert_eq!(objects_with(Some(2 | 16)), all);
     assert_eq!(objects_with(Some(16)).len(), 1);
     assert!(objects_with(Some(4)).is_empty());
@@ -310,4 +331,120 @@ fn mcp_spec_req_ds_009_get_message_areas_lists_each_area_with_its_description() 
     let json = serde_json::to_value(&response).unwrap();
     assert_eq!(json["areas"][0]["name"], "Build");
     assert_eq!(json["areas"][1]["name"], "Precompile");
+}
+
+/// The text of the messages of a response.
+fn texts_of(diagnostics: &[serde_json::Value]) -> Vec<&str> {
+    diagnostics
+        .iter()
+        .map(|d| d["text"].as_str().unwrap_or_default())
+        .collect()
+}
+
+#[spec_test(REQ_DS_mcp_010)]
+fn mcp_spec_req_ds_010_check_ends_with_the_closing_line_whatever_ended_the_run() {
+    let closing = "Compile complete -- 1 errors, 0 warnings";
+
+    let analysis = tools::check::build_response(&source(SEMANTIC_ERROR_PROGRAM), &ed2_options());
+    let invalid_sources = tools::check::build_response(&unnamed_source(), &ed2_options());
+    let invalid_options =
+        tools::check::build_response(&source(VALID_PROGRAM), &serde_json::json!({}));
+
+    for response in [&analysis, &invalid_sources, &invalid_options] {
+        let texts = texts_of(&response.diagnostics);
+        assert!(!response.ok);
+        assert_eq!(texts.last().copied(), Some(closing), "{texts:?}");
+        // The line closes the run once, and the problem is before it.
+        assert_eq!(
+            texts
+                .iter()
+                .filter(|t| t.starts_with("Compile complete"))
+                .count(),
+            1,
+            "{texts:?}"
+        );
+        assert_eq!(response.diagnostics.len(), 2, "{texts:?}");
+        assert_eq!(response.diagnostics[1]["severity"], "Text");
+    }
+}
+
+#[spec_test(REQ_DS_mcp_010)]
+fn mcp_spec_req_ds_010_check_is_framed_by_the_rule_of_the_command_line() {
+    // The same messages as `Summary::close` gives the command line for the
+    // same run: the tool adds no line of its own.
+    let sources = source(SEMANTIC_ERROR_PROGRAM);
+    let mut project = ironplc_project::project::MemoryBackedProject::new(
+        ironplc_parser::options::CompilerOptions::default(),
+    );
+    project.add_source(
+        ironplc_dsl::core::FileId::from_string("main.st"),
+        SEMANTIC_ERROR_PROGRAM.to_string(),
+    );
+    use ironplc_project::project::Project;
+    let by_the_command_line =
+        ironplc_dsl::diagnostic::CHECK_SUMMARY.close("main", project.semantic(Area::Build));
+
+    let response = tools::check::build_response(&sources, &ed2_options());
+
+    assert_eq!(
+        response.diagnostics,
+        serialize_diagnostics(&by_the_command_line, &sources)
+    );
+}
+
+fn compiled(
+    sources: &[crate::tools::common::SourceInput],
+    options: &serde_json::Value,
+) -> tools::compile::CompileResponse {
+    let cache = std::sync::Mutex::new(crate::cache::ContainerCache::new(64, 64 * 1024 * 1024));
+    tools::compile::build_response(sources, options, false, &cache)
+}
+
+#[spec_test(REQ_DS_mcp_011)]
+fn mcp_spec_req_ds_011_compile_starts_with_the_application_and_ends_ready_for_download() {
+    let response = compiled(&source(COUNTER_PROGRAM_WITH_TASK), &ed2_options());
+
+    assert!(response.ok, "{:?}", response.diagnostics);
+    // The application is the configuration (`config`), not the source (`main`).
+    assert_eq!(
+        texts_of(&response.diagnostics),
+        [
+            "------ Build started: Application: config -------",
+            "Build complete -- 0 errors, 0 warnings : Ready for download"
+        ]
+    );
+    assert!(response
+        .diagnostics
+        .iter()
+        .all(|d| d["severity"] == "Text" && d["prefix"].is_null()));
+}
+
+#[spec_test(REQ_DS_mcp_011)]
+fn mcp_spec_req_ds_011_compile_of_a_program_without_configuration_is_named_for_the_source() {
+    let response = compiled(&source(VALID_PROGRAM), &ed2_options());
+
+    assert!(response.ok, "{:?}", response.diagnostics);
+    assert_eq!(
+        texts_of(&response.diagnostics).first().copied(),
+        Some("------ Build started: Application: main -------")
+    );
+}
+
+#[spec_test(REQ_DS_mcp_011)]
+fn mcp_spec_req_ds_011_compile_that_fails_ends_with_no_download_possible() {
+    let analysis = compiled(&source(SEMANTIC_ERROR_PROGRAM), &ed2_options());
+    let invalid_sources = compiled(&unnamed_source(), &ed2_options());
+    let invalid_options = compiled(&source(VALID_PROGRAM), &serde_json::json!({}));
+
+    for response in [&analysis, &invalid_sources, &invalid_options] {
+        let texts = texts_of(&response.diagnostics);
+        assert!(!response.ok);
+        assert!(response.container_id.is_none());
+        assert_eq!(
+            texts.last().copied(),
+            Some("Build complete -- 1 errors, 0 warnings : No download possible"),
+            "{texts:?}"
+        );
+        assert!(texts[0].starts_with("------ Build started: Application: "));
+    }
 }

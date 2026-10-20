@@ -72,7 +72,9 @@ fn scenario_agent_self_heals_syntax_error() {
         "fixed code should pass check; diagnostics: {:?}",
         r2.diagnostics
     );
-    assert!(r2.diagnostics.is_empty());
+    // Nothing is left but the line that closes the check.
+    assert_eq!(r2.diagnostics.len(), 1);
+    assert_eq!(r2.diagnostics[0]["severity"], "Text");
 }
 
 /// Scenario: options discovery before first call.

@@ -27,6 +27,13 @@ fields of the CODESYS scripting class ``ScriptMessage``:
 
 .. include:: ../../includes/message-object-fields.rst
 
+:literal:`check` and :literal:`compile` return their ``diagnostics`` framed as
+:program:`ironplcc` writes them to the terminal: the messages of the run with the
+line that closes it, and for :literal:`compile` the line that starts it. The
+lines are messages of category ``Text`` without a code, so a program without a
+problem has the closing line alone and ``ok``, not the length of the array, says
+whether a problem stops the build.
+
 Analysis Tools
 ==============
 
@@ -88,7 +95,9 @@ before editing.
 
 **Inputs:** ``sources``, ``options``.
 
-**Returns:** an object with ``ok`` and ``diagnostics``.
+**Returns:** an object with ``ok`` and ``diagnostics``: the problems found,
+then the line ``Compile complete -- N errors, M warnings``, which counts the
+errors (fatal errors and errors) and the warnings of the run.
 
 get_message_objects
 -------------------
@@ -96,8 +105,8 @@ get_message_objects
 Returns the messages of a check as message objects, as
 ``system.get_message_objects`` of the CODESYS scripting API does. In the
 :ref:`Build area <message-areas>` (the default) the messages are those of
-:literal:`check`, then the line ``Compile complete -- N errors, M warnings`` that
-ends a check, a ``Text`` without a code.
+:literal:`check`, which end with the line ``Compile complete -- N errors, M
+warnings``, a ``Text`` without a code.
 
 **Inputs:** ``sources``, ``options``, ``severities`` (integer, optional) --- the
 categories to return, as the sum of their ``severity_value``; the default is
@@ -224,7 +233,14 @@ the same diagnostics.
 **Returns:** an object with ``ok``, a ``container_id`` string for
 later reference, an optional ``container_base64`` when
 ``include_bytes`` is ``true``, arrays ``tasks`` and ``programs``
-describing the compiled configuration, and ``diagnostics``.
+describing the compiled configuration, and ``diagnostics``: the line
+``------ Build started: Application: NAME -------``, where *NAME* is the name of
+the ``CONFIGURATION`` (the first one written when there are several, which the
+build rejects; for a
+program without one, the name of the first source without its extension), then
+the problems found, then the line ``Build complete -- N errors, M warnings``,
+which ends with ``: Ready for download`` or, when an error stops the build, with
+``: No download possible``.
 
 run
 ---

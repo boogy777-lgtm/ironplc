@@ -87,14 +87,16 @@ fn run_check(
     // Analyze the set
     diagnostics.extend(project.semantic(Area::Build));
 
-    let diagnostics = CHECK_SUMMARY.close(&application_name(paths), diagnostics);
+    let application = project.application_name(&project_name(paths));
+    let diagnostics = CHECK_SUMMARY.close(&application, diagnostics);
     (project, diagnostics)
 }
 
-/// The name of the application a command is run for, which the line "Build
-/// started" gives: the name of the project, that is the file name without its
-/// extension of the first path, or the name of the directory.
-fn application_name(paths: &[PathBuf]) -> String {
+/// The name of the project a command is run for: the file name without its
+/// extension of the first path, or the name of the directory. It is the name of
+/// the application, which the line "Build started" gives, when the program has
+/// no `CONFIGURATION` to name it ([`Project::application_name`]).
+fn project_name(paths: &[PathBuf]) -> String {
     let Some(path) = paths.first() else {
         return String::new();
     };
@@ -208,7 +210,8 @@ fn run_compile(
             .map_err(|e| format!("Failed to write output file: {e}"))?;
     }
 
-    let diagnostics = COMPILE_SUMMARY.close(&application_name(paths), output_result.diagnostics);
+    let application = project.application_name(&project_name(paths));
+    let diagnostics = COMPILE_SUMMARY.close(&application, output_result.diagnostics);
     Ok((project, diagnostics))
 }
 

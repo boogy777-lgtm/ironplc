@@ -93,7 +93,7 @@ using the ``compile`` command. Run the commands in
 
    ironplcc compile main.st --output main.iplc
 
-On success, the command prints the lines ``------ Build started: Application: main -------``
+On success, the command prints the lines ``------ Build started: Application: config -------``
 and ``Build complete -- 0 errors, 0 warnings : Ready for download`` and creates
 the ``.iplc`` file at the specified output path.
 

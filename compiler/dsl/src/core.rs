@@ -210,6 +210,15 @@ impl Id {
         }
     }
 
+    /// Where the identifier is written: the file and the byte offset. Declarations
+    /// ordered by it are in the order a reader finds them in the source, which
+    /// the order of the elements of an analyzed library is not (the analyzer
+    /// sorts them by what they use). Every place that says "the first" or "the
+    /// second" declaration orders by this.
+    pub fn source_position(&self) -> (String, usize) {
+        (self.span.file_id.to_string(), self.span.start)
+    }
+
     pub fn with_position(mut self, loc: SourceSpan) -> Self {
         self.span = loc;
         self

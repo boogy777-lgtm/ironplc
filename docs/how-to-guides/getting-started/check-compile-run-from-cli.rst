@@ -54,11 +54,13 @@ The command prints a line that starts the build and a line that ends it:
 
 .. code-block:: text
 
-   ------ Build started: Application: main -------
+   ------ Build started: Application: config -------
    Build complete -- 0 errors, 0 warnings : Ready for download
 
-If an error stops the build, the last line ends with ``No download possible``
-and the command does not create the file.
+The name after ``Application:`` is the name of the ``CONFIGURATION`` in your
+program (here ``config``); a program without one is named for its file
+(``main``). If an error stops the build, the last line ends with
+``No download possible`` and the command does not create the file.
 
 --------------------------------------
 Run a Compiled Program

@@ -249,19 +249,32 @@ server sends them to the Output channel.
 - `compile` starts with "------ Build started: Application: {application} -------"
   and ends with "Build complete -- {errors} errors, {warnings} warnings : Ready
   for download", or "… : No download possible" when an error stops the build.
-- The application is the name of the project: the file name without its extension
-  of a file given to the command, or the name of the directory.
+- The application is the `CONFIGURATION` that is built: its name, as written. A
+  container is one PLC, so code generation builds one configuration and rejects a
+  program that has more than one (REQ-DS-cli-017); the line "Build started" of
+  that failed build is still named for the first one written, the order the
+  rejection lists them in. A program with no `CONFIGURATION`, and a
+  program whose analysis produced no library (a syntax error), has none to name,
+  and the name is that of the project: the file name without its extension of a
+  file given to the command, or the name of the directory. This is the owner's
+  decision; CODESYS names the application of its project, and IronPLC has no
+  application object. One function reads it, `Project::application_name`, and the
+  command line and the MCP tool `compile` both ask it.
 - The counts are those of the messages the run kept, which is the state of the
   pipeline as it ends: `FatalError` and `Error` are errors, only `Warning` is a
   warning, and a build can succeed with warnings. The counts include the limit
-  lines (MSG-075 in the message ontology is open until it is checked in a running
-  CODESYS; `COUNTS_INCLUDE_LIMIT_LINES` is the one place that changes).
+  lines (MSG-075, the owner's decision: CODESYS counts what it stores, and it
+  stores the limit line as an `Error` or a `Warning`), so a run that passes the
+  error limit reports 501 errors.
 
 Each command declares its lines in one constant (`CHECK_SUMMARY`,
-`COMPILE_SUMMARY`), and the numbers come from the one function `counts`.
+`COMPILE_SUMMARY`), and the numbers come from the one function `counts`. The
+command line and the MCP tools `check` and `compile` close their run with that
+constant, so the framing is one rule and not one copy for each front end.
 
 **REQ-DS-dsl-021** `counts` counts a `FatalError` and an `Error` as errors and a
-`Warning` as a warning, and no other category; the limit lines are counted.
+`Warning` as a warning, and no other category; the limit lines are counted, so a
+run that passes the error limit reports 501 errors.
 
 **REQ-DS-dsl-022** `CHECK_SUMMARY.close` returns the messages the run keeps and
 then one `Text` "Compile complete -- {errors} errors, {warnings} warnings" with the
@@ -271,6 +284,11 @@ counts of the run, for any counts including zero.
 name of the application, the messages the run keeps, and then one `Text` "Build
 complete" with the counts, ending "Ready for download" when the run has no error
 and "No download possible" when it has one.
+
+**REQ-DS-project-005** `Project::application_name` is the name of the first
+configuration by position in the source, as written, whatever the order of the
+analyzed library, and is the fallback it is given when the analyzed library has
+no configuration or the analysis produced no library.
 
 ## What stops a build
 
@@ -377,7 +395,8 @@ and 500 warnings with the line of each limit.
 messages that are shown in `Precompile` and are not suppressed, and drops a
 repeat of an earlier message. It writes no line of a limit and a fatal error does
 not end the run, because the precompile of CODESYS has neither
-(`PreCompileContext.cs:2440-2525`); applied to its own result it changes nothing.
+(`PreCompileContext.cs:2440-2525`; the owner confirmed it); applied to its own
+result it changes nothing.
 
 The Precompile area holds at most 950 messages. CODESYS applies the limit twice
 (`PreCompileContext.cs:2440-2525`):
@@ -516,9 +535,23 @@ error, 0 and 1 for one warning. It does not change the exit status.
 
 **REQ-DS-cli-007** `ironplcc compile` of a program that has only a warning starts
 with the line "------ Build started: Application: {name} -------", where the name
-is the file name without its extension, writes the warning, ends with "Build
-complete -- 0 errors, 1 warnings : Ready for download", writes the container and
-exits with status 0.
+is the file name without its extension (or the name of the directory) when the
+program has no `CONFIGURATION`, writes the warning, ends with "Build complete -- 0
+errors, 1 warnings : Ready for download", writes the container and exits with
+status 0.
+
+**REQ-DS-cli-014** `ironplcc compile` and `ironplcc check --format json` of a
+program that has a `CONFIGURATION` name the application for it: the line "Build
+started" gives the name of the configuration, and the first one written when there
+are several (REQ-DS-cli-017), whatever the name of the file.
+
+**REQ-DS-cli-017** `ironplcc compile` of a program that has more than one
+`CONFIGURATION` fails with P9999, builds no container and chooses none of them: a
+container is one PLC, as a second `PROGRAM` or a second instance is already
+rejected. The message names every configuration, the second by its primary label
+and the others by secondary labels, in the order of the source, and the build
+ends with "No download possible".
+
 
 **REQ-DS-cli-008** `ironplcc compile` of a program that has an error ends with
 "Build complete -- 1 errors, 0 warnings : No download possible", writes no
@@ -599,8 +632,7 @@ of `check`, an optional `severities`, a mask of `severity_value`s whose default
 is every category (0xFFFFFFFF), and an optional `area` (REQ-DS-mcp-008),
 and returns the `ScriptMessage` of each message of the check whose category is in
 the mask, as `system.get_message_objects` does: in the Build area, the
-diagnostics of `check` and then the line "Compile complete" that closes the
-check, a `Text`.
+messages of `check`, which end with the line "Compile complete" (a `Text`), once.
 
 **REQ-DS-mcp-006** The tool `get_messages` takes the sources and the options of
 `check` and an optional `area`, and returns the text of every message and nothing
@@ -609,9 +641,30 @@ else, as `system.get_messages` does, from the same messages as
 
 **REQ-DS-mcp-007** The `ScriptMessage` of a message without a code, such as the
 closing line of a check or a limit line, has a null `prefix`, `number` and
-`codesys`. The `diagnostics` of `check` and `compile` are the problems alone and
-do not hold the closing line, so that an empty list still means a clean program;
-the two queries of the messages hold it, as CODESYS stores it among its messages.
+`codesys`.
+
+The `diagnostics` of `check` and `compile` are the messages of the run as the
+command line frames them, by the one rule `Summary::close`
+([Summary lines](#summary-lines)): the closing line is among them, as CODESYS
+stores it among its messages, so a program without a problem has that line alone
+and `ok`, not the length of the list, says whether a problem stops the build. The
+two queries of the messages read the same messages, and return the closing line
+once.
+
+**REQ-DS-mcp-010** The `diagnostics` of `check` are the messages the run keeps
+and then the line "Compile complete -- {errors} errors, {warnings} warnings" with
+the counts of the run, as the command line writes them, whatever ended the run:
+an analysis, an invalid `sources` or an invalid `options`. The line is a `Text`,
+so it does not change `ok`.
+
+**REQ-DS-mcp-011** The `diagnostics` of `compile` start with the line "------
+Build started: Application: {name} -------", where the name is that of the
+`CONFIGURATION` that is built and, for a program without one, the name of the
+first source without its extension, then hold the messages the run keeps, and end
+with "Build complete -- {errors} errors, {warnings} warnings", followed by " :
+Ready for download" or, when an error stops the build, by " : No download
+possible"; an error found after the analysis, such as a container that does not
+fit the cache, is counted in that line. `ok` keeps its meaning.
 
 The scripting queries of CODESYS take the list to read as their `category`
 argument. The two queries take it as `area`, by the name the area declares
