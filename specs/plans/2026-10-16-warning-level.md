@@ -83,10 +83,12 @@ Per PR below. Shared by most PRs:
 
 ### PR 6: handling and settings (MSG-030, MSG-031, MSG-036, MSG-037)
 
-- [ ] `Report` / `Suppress` / `Ignore` per message.
-- [ ] The options listing disabled warnings and warnings as errors.
+- [x] `Report` / `Suppress` / `Ignore` per message.
+- [x] The options listing disabled warnings and warnings as errors.
   - Raising beats disabling.
   - Only warning codes can be listed.
+  - Raising converts only in the Build area; Precompile keeps the warning, as CODESYS does.
+- [x] Answers to the questions of PR 4 and PR 5: the application is the `CONFIGURATION` (a second one is rejected like a second `PROGRAM`); every MCP tool that returns the messages of a check run frames them; MSG-075 decided.
 
 ### PR 7: suppression in the source text (MSG-032, MSG-034, MSG-035)
 
@@ -105,4 +107,4 @@ Per PR below. Shared by most PRs:
 
 ### Live checks in CODESYS (owner)
 
-MSG-033, MSG-075 and MSG-083.
+MSG-033 (scope of `{warning disable}`; the case is the owner's text-rewrite mechanism) and MSG-083.
