@@ -208,6 +208,8 @@ Parse-tree stage S4 comes after it (plan #142, owner's order).
 
 ## Tasks
 
+Tracking issue: #144.
+
 ### PR 1: one record-path function and reader (prefactor)
 - [ ] `RecordKind { Uids }`, the path function, and the shared versioned fail-soft JSON reader; `.uids.json` behaviour unchanged
 - [ ] Stale comment in `integrity.rs` fixed
