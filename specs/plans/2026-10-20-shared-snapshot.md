@@ -57,16 +57,46 @@ The state shared by all of them:
   identity plus the parse options (`parse_options`, REQ-PT-parser-013). The cache
   keeps only the entries of the current snapshot's activated set (bound), so a
   changed option or activation set invalidates the entry by key, explicitly.
-- **Editor revisions.** The language server keeps the current snapshot and the
-  version of each open document. Before it analyzes, it applies every change already
-  queued, so it analyzes only the newest revision. It publishes an analysis only when
-  the analysis revision equals the current revision. Incremental sync applies range
-  edits through `LineIndex` (REQ-PT-syntax-011). `didClose` returns the file to its
-  text on disk.
-- **No worker thread and no cancellation token at first.** Coalescing queued changes
-  already excludes stale publication on one thread. A worker with cooperative
-  cancellation comes only if the measurements show requests (semantic tokens,
-  symbols) waiting past the budget behind an analysis.
+- **Editor revisions, as CODESYS checks in the background.** The owner asked
+  that a check start after a delay, not on every keystroke. CODESYS does it this way
+  (`Compiler35220.plugin/.../PreCompile/PrecompileChecksWindows.cs`):
+  - an edit queues work and wakes background workers of the lowest priority
+    (`:150-180`, `:565-574`);
+  - an edit never cancels a check that is running, and a worker finishes its
+    current item (`:474-489`);
+  - results are published only when the UI is idle (`Application.Idle`, `:273`,
+    `:363-376`, `:588-601`);
+  - publication reads the current object, so a result for replaced text does not
+    show.
+
+  The delay value is not in the assemblies we have. When to hand the text over
+  is decided by the editor (`IDeferrableLanguageModelProvider`, no implementer in
+  the corpus), and the ST editor assembly is not in the corpus. IronPLC therefore
+  works as follows:
+  - the language server keeps the current snapshot and the version of each open
+    document;
+  - a change restarts a delay timer;
+  - when the delay runs out, one background worker analyzes the newest revision;
+  - an analysis that is running is not cancelled (as in CODESYS);
+  - an analysis is published only when its revision equals the current revision,
+    so a result that is already stale is dropped, and the next revision is
+    analyzed.
+
+  The delay is an editor setting with a default (Q3). Incremental sync applies
+  range edits through `LineIndex` (REQ-PT-syntax-011). `didClose` returns the file
+  to its text on disk. Requests (semantic tokens, symbols) are answered on the
+  loop thread, so they never wait for an analysis. The tokens come from the
+  current snapshot, and the symbols from the newest finished analysis.
+- **Run is not a build (owner).** Run and Stop start and stop the scan of an
+  application. Build is a separate mechanism, and online change (hot edit) belongs
+  to it. Today two run paths compile on their own:
+  - `ironplc/run` compiles the editor text through a private pipeline
+    (`lsp_runner.rs:223-264`);
+  - a debug launch of a `.st` compiles it to a temporary container
+    (`debugAdapter.ts:131`).
+
+  After S4 both start the application that Build produced (`<folder>.iplc`,
+  `buildAreaLogic.ts:172`). The private pipeline is deleted.
 
 ## Class / Inv / N+1
 
@@ -81,6 +111,15 @@ The state shared by all of them:
     and each table row has its reason: syntax-only, benchmark, or test.
   - **N+1:** a new consumer either calls `analyze` or adds a row with a reason.
     `ironplc/run` (`lsp_runner.rs:223`) is the existing defect of this class.
+- **Class "start of a scan":** `ironplc/run`, a debug launch, a device session.
+  Near case outside: Build and online change, which produce or swap an application.
+  - **Inv:** a start takes a built container and never source text.
+  - **Check:** the `ironplc/run` parameters hold a container path and no source
+    text, so a caller that passes text does not type-check (Rust and TypeScript).
+    The debug adapter's launch configuration takes only `.iplc`, and a `.st` is
+    rejected with the existing problem code.
+  - **N+1:** a new way to start (a GUI, a session command `start`) takes the same
+    container input.
 - **Class "input of a library parse":** library text, its version, the parse
   options.
   - **Inv:** the cache key is derived from the same flag list that `parse_options`
@@ -132,7 +171,7 @@ The state shared by all of them:
 - `compiler/playground/src/lib.rs`
 - `compiler/benchmarks/` (new bench `editor_session`)
 - `compiler/syntax/src/` (an edit type with the text property, PR 5)
-- `integrations/vscode/src/runSession.ts` (only if Q2 is "project")
+- `integrations/vscode/src/{runSession,extension,debugAdapter,debugAdapterLogic}.ts`, `package.json` (delay setting), README
 - `specs/design/parse-tree-architecture.md` (S4 status and numbers, S5 decision)
 
 ## Tasks
@@ -152,12 +191,14 @@ The state shared by all of them:
 - [ ] Test: each parse flag toggles a miss; libraries are still analyzed on every run (diagnostics unchanged)
 
 ### PR 4: editor revisions (core)
-- [ ] Document versions stored; queued changes coalesced; publish only when the revision matches
+- [ ] Document versions stored; a change restarts the delay timer; one background worker analyzes the newest revision; publish only when the revision matches
+- [ ] Editor setting for the delay, with its default (Q3), in `COMPILER_SETTINGS`-style declaration once for server and README
 - [ ] Incremental sync through `LineIndex`; `didClose` returns the file to its disk text
-- [ ] Tests: a burst of changes publishes once, for the newest version; a stale analysis is never published; edit-sequence property (untouched text preserved)
+- [ ] Tests: a burst of changes inside the delay is analyzed and published once, for the newest version; a change during a running analysis drops its result and the newer revision is published; requests are answered while an analysis runs; edit-sequence property (untouched text preserved)
 
-### PR 5: one consumer path (core, defect)
-- [ ] `ironplc/run` builds from the language server's snapshot (Q2 decides: current document or whole project)
+### PR 5: one consumer path, Run is not a build (core, defect)
+- [ ] `ironplc/run` takes the container Build produced; `lsp_runner.rs` loses its compile path; no built application → a message that names Build (Q2)
+- [ ] Debug launch takes only `.iplc` (its own compile at `debugAdapter.ts:131` removed); `RunSession`, `extension.ts` and their tests follow
 - [ ] Fence test of the analysis consumers (Class above)
 - [ ] Same-snapshot agreement test: the CLI `check`, the MCP `check` and the LSP publication of one snapshot, per area, give equal diagnostics
 
@@ -169,21 +210,34 @@ S5, if the numbers call for it, gets its own plan PR: safe reparse boundaries, a
 full-file fallback, and local and full trees and diagnostics that agree after edit
 sequences.
 
-## Questions for the owner
+## Owner's answers
 
-- **Q1.** Is the case rewrite you asked for (`bool` → `BOOL`, the CODESYS-like text
-  rewrite) the first rewrite-derived edit in S4? Or does it stay in the message plan
-  (PR 7) and use the S4 edit type once that lands?
-- **Q2.** `ironplc/run` (Run in VS Code) today compiles only the text of the open
-  editor, with no libraries and no other files. After PR 5, should it build the
-  whole project (as `Build` does) or the open document, with the project's
-  libraries and settings?
-- **Q3.** The budgets, once PR 1 gives the baseline, for keystroke-to-diagnostics
-  latency (p95) and the retained memory of a session.
+- **Q1.** The case rewrite (`bool` → `BOOL`) stays in the message plan, PR 7. S4
+  has no rewrite-derived edit, only the editor's range edits.
+- **Q2.** Run and Stop start and stop the scan. They are not a build. Build is a
+  separate mechanism, and it covers online change (hot edit). This is now PR 5.
+- **Q3.** The check starts after a delay, not on every keystroke, as CODESYS does.
+  Done in PR 4.
+
+## Open for the owner
+
+- **Q4.** The value of the delay. The CODESYS assemblies we have publish on UI idle
+  and contain no delay value. The value would be in the ST editor assembly, which
+  we do not have. Either that assembly is supplied, or a default is chosen (for
+  example 500 ms) and it is an editor setting.
+- **Q5.** Run when the built application is older than the sources. CODESYS
+  reports the difference at login (download or online change). The plan starts
+  the built application and says that it differs, and does not build.
+- **Q6.** The budgets, once PR 1 gives the baseline: the latency from the end of
+  the delay to the diagnostics (p95), and the retained memory of a session.
 
 ## Not included
 
 - Reuse of analysis results (precompile model, selective typification): separate
   measured stages (§3.3), path 2.
 - The CODESYS-like library packaging: final stage of the roadmap.
-- A worker thread and cancellation: only if PR 6 shows the need.
+- Cancelling an analysis that is running: CODESYS does not cancel one. It comes
+  only if PR 6 shows the need.
+- Checking per object (CODESYS queues one POU, GVL or DUT signature at a time):
+  that is reuse of analysis results, so it belongs to path 2.
+- The case rewrite: message plan, PR 7.
