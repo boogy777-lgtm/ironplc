@@ -15,7 +15,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-use ironplc_dsl::diagnostic::MessageSettings;
+use ironplc_dsl::diagnostic::{MessageSettings, WarningList};
 
 mod enumeration_strictness;
 
@@ -278,6 +278,40 @@ macro_rules! define_compiler_options {
                     },
                 )*
             ];
+
+            /// Every setting of these options as a `(key, value)` pair of text:
+            /// each flag (`true` or `false`), each policy (the CLI name of the
+            /// selected alternative) and each list of warnings (the codes of its
+            /// members, sorted and joined with commas), under the key of the
+            /// descriptor (`option_key`).
+            ///
+            /// The list is complete by construction. The destructuring below names
+            /// every field of the struct and has no `..`, so a field added to the
+            /// struct, or to this invocation, does not compile until it is listed;
+            /// a flag or policy added to the invocation is listed here without an
+            /// edit. A caller that must notice any change of the options (the
+            /// build record) compares this list.
+            pub fn entries(&self) -> Vec<(&'static str, String)> {
+                let CompilerOptions {
+                    $($flag_field,)*
+                    $($policy_field,)*
+                    messages,
+                } = self;
+                let mut entries: Vec<(&'static str, String)> = vec![
+                    $((stringify!($flag_field), $flag_field.to_string()),)*
+                    $((stringify!($policy_field), $policy_field.cli_name().to_owned()),)*
+                ];
+                for list in WarningList::ALL {
+                    let mut codes: Vec<String> = messages
+                        .list(list)
+                        .iter()
+                        .map(|warning| warning.problem().code().to_owned())
+                        .collect();
+                    codes.sort();
+                    entries.push((list.option_key(), codes.join(",")));
+                }
+                entries
+            }
 
             /// Select a behavior policy alternative by the policy's
             /// `option_key` (the field name from [`PolicyDescriptor`]) and

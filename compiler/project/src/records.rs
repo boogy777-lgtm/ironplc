@@ -25,13 +25,18 @@ use serde_json::Value;
 pub enum RecordKind {
     /// The stable variable UID table (ADR 0053), `<stem>.uids.json`.
     Uids,
+    /// What the last successful build produced and from which inputs,
+    /// `<stem>.build.iplcinfo`. The anchor is the output path of the build, so
+    /// the record sits beside the container it describes.
+    Build,
 }
 
 impl RecordKind {
     /// The path of this kind's record for `anchor`.
     ///
     /// The anchor is the path the record belongs to: for [`RecordKind::Uids`]
-    /// it is the project path argument. The record sits beside the anchor and
+    /// it is the project path argument, for [`RecordKind::Build`] the output
+    /// path of the build. The record sits beside the anchor and
     /// is named `<stem>.<suffix>`, where the stem is the directory name when
     /// the anchor names a directory and the file stem otherwise. Every reader
     /// and writer of a kind resolves its path through here, so compiling a
@@ -51,6 +56,7 @@ impl RecordKind {
     pub fn version(self) -> u64 {
         match self {
             RecordKind::Uids => 1,
+            RecordKind::Build => 1,
         }
     }
 
@@ -58,6 +64,7 @@ impl RecordKind {
     fn suffix(self) -> &'static str {
         match self {
             RecordKind::Uids => "uids.json",
+            RecordKind::Build => "build.iplcinfo",
         }
     }
 }
@@ -128,10 +135,15 @@ mod tests {
 
     /// Writes `text` to a fresh temporary file and reads it as a `Uids` record.
     fn read_text(text: &str) -> RecordRead {
+        read_kind_text(RecordKind::Uids, text)
+    }
+
+    /// Writes `text` to a fresh temporary file and reads it as a record of `kind`.
+    fn read_kind_text(kind: RecordKind, text: &str) -> RecordRead {
         let dir = TempDir::new().unwrap();
-        let path = dir.path().join("test.uids.json");
+        let path = dir.path().join(format!("test.{}", kind.suffix()));
         fs::write(&path, text).unwrap();
-        read(RecordKind::Uids, &path).unwrap()
+        read(kind, &path).unwrap()
     }
 
     #[rstest]
@@ -140,6 +152,20 @@ mod tests {
     fn path_when_file_then_sibling(#[case] file: &str, #[case] expected: &str) {
         let path = RecordKind::Uids
             .path(Path::new("some").join("dir").join(file).as_path())
+            .unwrap();
+
+        assert_eq!(path, Path::new("some").join("dir").join(expected));
+    }
+
+    #[rstest]
+    #[case::output_file("app.iplc", "app.build.iplcinfo")]
+    #[case::dotted_name("My.App.iplc", "My.App.build.iplcinfo")]
+    fn path_when_build_record_of_output_then_sibling_with_stem(
+        #[case] output: &str,
+        #[case] expected: &str,
+    ) {
+        let path = RecordKind::Build
+            .path(Path::new("some").join("dir").join(output).as_path())
             .unwrap();
 
         assert_eq!(path, Path::new("some").join("dir").join(expected));
@@ -163,22 +189,30 @@ mod tests {
         assert_eq!(RecordKind::Uids.path(root), None);
     }
 
-    #[test]
-    fn read_when_file_missing_then_missing() {
+    #[rstest]
+    fn read_when_file_missing_then_missing(
+        #[values(RecordKind::Uids, RecordKind::Build)] kind: RecordKind,
+    ) {
         let dir = TempDir::new().unwrap();
 
-        let result = read(RecordKind::Uids, &dir.path().join("missing.uids.json")).unwrap();
+        let result = read(kind, &dir.path().join("missing.record")).unwrap();
 
         assert_eq!(result, RecordRead::Missing);
     }
+
     #[rstest]
-    #[case::not_json("this is not json")]
-    #[case::wrong_version(r#"{"version": 2}"#)]
-    #[case::missing_version(r#"{"variables": []}"#)]
-    #[case::version_not_integer(r#"{"version": "1"}"#)]
-    #[case::not_an_object("[1]")]
-    fn read_when_invalid_then_malformed(#[case] text: &str) {
-        assert_eq!(read_text(text), RecordRead::Malformed);
+    fn read_when_invalid_then_malformed(
+        #[values(RecordKind::Uids, RecordKind::Build)] kind: RecordKind,
+        #[values(
+            "this is not json",
+            r#"{"version": 2}"#,
+            r#"{"variables": []}"#,
+            r#"{"version": "1"}"#,
+            "[1]"
+        )]
+        text: &str,
+    ) {
+        assert_eq!(read_kind_text(kind, text), RecordRead::Malformed);
     }
 
     #[test]

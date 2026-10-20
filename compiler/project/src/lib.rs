@@ -1,3 +1,4 @@
+pub mod build_record;
 pub mod compile;
 pub mod disassemble;
 pub mod id_agreement;

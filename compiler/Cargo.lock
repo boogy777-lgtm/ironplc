@@ -1155,6 +1155,7 @@ dependencies = [
 name = "ironplc-project"
 version = "0.247.0"
 dependencies = [
+ "blake3",
  "ctor",
  "env_logger",
  "ironplc-analyzer",

@@ -10,6 +10,9 @@ use crate::file_type::FileType;
 use crate::libraries::{LibraryName, LibraryRegistry};
 use crate::source::Source;
 
+/// The name of an activated library and its texts, or why they cannot be read.
+pub type LibraryTexts = (LibraryName, Result<Vec<(String, String)>, Diagnostic>);
+
 /// A project consisting of one or more source files
 pub struct SourceProject {
     /// The source files in the project.
@@ -87,6 +90,18 @@ impl SourceProject {
             }
         }
         (libraries, diagnostics)
+    }
+
+    /// The text of each activated compatibility library, in activation order:
+    /// the name and either the texts the library is made of
+    /// ([`LibraryRegistry::texts`]) or the problem that stops the library from
+    /// loading.
+    pub fn activated_library_texts(&self) -> Vec<LibraryTexts> {
+        let registry = LibraryRegistry::bundled();
+        self.activated_libraries
+            .iter()
+            .map(|name| (name.clone(), registry.texts(name)))
+            .collect()
     }
 
     /// Add a source file to the project by file ID
