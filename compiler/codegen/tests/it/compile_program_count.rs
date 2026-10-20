@@ -147,3 +147,108 @@ fn compile_when_one_program_and_one_instance_then_ok() {
 
     assert!(result.is_ok());
 }
+
+/// A library with a program and one configuration for each name, written in
+/// that order. Every configuration instantiates the program on its own task.
+fn configurations(names: &[&str]) -> String {
+    let declarations: String = names
+        .iter()
+        .map(|name| {
+            format!(
+                "CONFIGURATION {name}
+  RESOURCE res ON PLC
+    TASK t(INTERVAL := T#10ms, PRIORITY := 1);
+    PROGRAM inst WITH t : main;
+  END_RESOURCE
+END_CONFIGURATION
+
+"
+            )
+        })
+        .collect();
+    format!("PROGRAM main\nVAR x : DINT; END_VAR\n  x := x + 1;\nEND_PROGRAM\n\n{declarations}")
+}
+
+/// Byte offset of the name of `configuration` in `source`.
+fn configuration_offset(source: &str, configuration: &str) -> usize {
+    source
+        .find(&format!("CONFIGURATION {configuration}"))
+        .expect("the configuration is in the source")
+        + "CONFIGURATION ".len()
+}
+
+#[test]
+fn compile_when_two_configurations_then_p9999_naming_both_in_source_order() {
+    // `Zeta` is written before `Alpha`, so it is the first whatever the names say
+    // and whatever order the analyzer leaves the elements in.
+    let source = configurations(&["Zeta", "Alpha"]);
+
+    let diagnostic = compile_err(&source);
+
+    assert_eq!(diagnostic.code, "P9999");
+    assert_eq!(
+        diagnostic.primary.location.start,
+        configuration_offset(&source, "Alpha")
+    );
+    assert!(diagnostic
+        .primary
+        .message
+        .contains("2nd CONFIGURATION declaration"));
+    assert!(diagnostic.primary.message.contains("one CONFIGURATION"));
+    assert_eq!(diagnostic.secondary.len(), 1);
+    assert_eq!(
+        diagnostic.secondary[0].location.start,
+        configuration_offset(&source, "Zeta")
+    );
+    assert_eq!(
+        diagnostic.secondary[0].message,
+        "1st CONFIGURATION declaration"
+    );
+}
+
+#[test]
+fn compile_when_three_configurations_then_every_one_is_named_in_source_order() {
+    let source = configurations(&["C3", "C1", "C2"]);
+
+    let diagnostic = compile_err(&source);
+
+    assert_eq!(
+        diagnostic.primary.location.start,
+        configuration_offset(&source, "C1")
+    );
+    let secondary: Vec<(usize, &str)> = diagnostic
+        .secondary
+        .iter()
+        .map(|label| (label.location.start, label.message.as_str()))
+        .collect();
+    assert_eq!(
+        secondary,
+        vec![
+            (
+                configuration_offset(&source, "C3"),
+                "1st CONFIGURATION declaration"
+            ),
+            (
+                configuration_offset(&source, "C2"),
+                "3rd CONFIGURATION declaration"
+            ),
+        ]
+    );
+}
+
+#[test]
+fn compile_when_one_configuration_then_it_compiles() {
+    let source = configurations(&["Only"]);
+
+    assert!(try_parse_and_compile(&source, &CompilerOptions::default()).is_ok());
+}
+
+#[test]
+fn compile_when_two_configurations_then_help_says_a_container_is_one_plc() {
+    let diagnostic = compile_err(&configurations(&["A", "B"]));
+
+    assert!(diagnostic
+        .help()
+        .iter()
+        .any(|help| help.contains("a container carries one PLC")));
+}

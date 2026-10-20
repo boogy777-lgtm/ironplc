@@ -48,8 +48,8 @@ Build Commands
    Compile source files into a bytecode container (``.iplc``) file. Requires
    the ``--output`` (``-o``) flag to specify the output file path. The command
    writes the line ``------ Build started: Application: NAME -------`` first,
-   where *NAME* is the name of the ``CONFIGURATION`` of the program (the first
-   one written when there are several). A program without a
+   where *NAME* is the name of the ``CONFIGURATION`` of the program (a program
+   with more than one is rejected, and named for the first one written). A program without a
    ``CONFIGURATION``, or one that cannot be read far enough to find it, is named
    for the file without its extension (or the name of the directory). The command
    writes the line ``Build complete -- N errors, M warnings`` last,

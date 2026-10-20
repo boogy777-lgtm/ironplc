@@ -84,7 +84,7 @@ use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_dsl::stack::within_stack_budget;
 
 use self::program_container::{compile_program_with_functions, ProgramInputs};
-use self::program_selection::{check_single_program_instance, find_program};
+use self::program_selection::{check_single_program_instance, find_program, select_configuration};
 use self::task_configuration::apply_task_configuration;
 use super::persistent::global_declarations;
 
@@ -110,7 +110,7 @@ fn compile_in_budget(
     sources: &dyn crate::source_lookup::SourceLookup,
 ) -> Result<Container, Diagnostic> {
     let program = find_program(library)?;
-    let config = library.compiled_configuration();
+    let config = select_configuration(library)?;
     if let Some(config) = config {
         check_single_program_instance(config)?;
     }

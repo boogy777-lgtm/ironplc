@@ -14,6 +14,18 @@ requires adding support for the elements to the IronPLC compiler.
 * verify that you have the latest version of the IronPLC compiler
 * report the program so support can be added (see below).
 
+One of several is not supported
+-------------------------------
+
+Version 1 of code generation builds one ``PROGRAM``, one instance of it and one
+``CONFIGURATION`` into a container, because a container is one PLC. A program that
+declares two or more ``PROGRAM`` declarations, instantiates a program more than
+once across its ``RESOURCE`` blocks, or declares two or more ``CONFIGURATION``
+declarations is reported as P9999. The message names every declaration it is
+about, in the order of the source: its primary label is on the second, and a
+secondary label is on each of the others. Compile one ``CONFIGURATION`` at a time,
+for example by keeping each in its own project.
+
 Reporting the program
 ---------------------
 

@@ -287,8 +287,10 @@ without a code (`CompilerServicesInternal.cs:1246-1274`,
 forms. The name in "Application: {0}" is the name of the application of the
 CODESYS project. IronPLC has no application object; by the owner's decision the
 application is the `CONFIGURATION` that is built, and the name is its name. A
-program with several configurations is named for the first one written, which
-is the one code generation compiles. A program with no `CONFIGURATION`, or whose
+program with several configurations is rejected by code generation (P9999,
+naming all of them in source order), because a container is one PLC; the line
+"Build started" of that failed build is named for the first one written. A program
+with no `CONFIGURATION`, or whose
 analysis produced no library, has none to name, and the name is that of the
 project: the file name without its extension of the first path, or the name of
 the directory. One function reads it (`Project::application_name`), and the
@@ -385,7 +387,7 @@ States:
 | MSG-061 | The related position of a suppressed warning is `SuppressedInformation` | `CallTree.cs:354` | planned |
 | MSG-070 | Messages keep the order in which they are produced | `Messages.cs:28-43` | done (REQ-DS-dsl-015) |
 | MSG-071 | A duplicate message (same code, position, text, category, object) is dropped; the first wins | `-.351.cs:65-75` | done (REQ-DS-dsl-016) |
-| MSG-072 | A build starts with "------ Build started: Application: {0} -------"; owner: the application is the `CONFIGURATION` that is built, and its name is {0} | `CompilerServicesInternal.cs:1246` | owner (REQ-DS-dsl-023, REQ-DS-cli-007, -014, REQ-DS-project-005, REQ-DS-analyzer-006, REQ-DS-mcp-011) |
+| MSG-072 | A build starts with "------ Build started: Application: {0} -------"; owner: the application is the `CONFIGURATION` that is built, and its name is {0} | `CompilerServicesInternal.cs:1246` | owner (REQ-DS-dsl-023, REQ-DS-cli-007, -014, REQ-DS-project-005, REQ-DS-cli-017, REQ-DS-mcp-011) |
 | MSG-073 | `compile` ends with "Build complete -- {0} errors, {1} warnings : Ready for download" or "… : No download possible", with the counts of the run | `CompilerPhaseControllerGenerateCode.cs:656-686` | done (REQ-DS-dsl-023, REQ-DS-cli-007, -008) |
 | MSG-074 | `check` ends with "Compile complete -- {0} errors, {1} warnings"; errors count `FatalError` and `Error`, warnings count `Warning`; the MCP `check` returns it among its `diagnostics` | `LanguageModelManagerConsolidated.cs:1972-1989` | done (REQ-DS-dsl-021, -022, REQ-DS-cli-006, -009, REQ-DS-mcp-005, -006, -010) |
 | MSG-075 | The counts of a summary include the limit lines: a run that passes the error limit reports 501 errors | `-.352.cs:206-215` | done (REQ-DS-dsl-021, -022, REQ-DS-cli-010) |

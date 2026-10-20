@@ -295,8 +295,9 @@ fn compile_when_configuration_then_the_application_is_its_name_not_the_file() {
     );
 }
 
-#[spec_test(REQ_DS_cli_014)]
-fn compile_when_several_configurations_then_the_application_is_the_first_written() {
+#[spec_test(REQ_DS_cli_017)]
+fn compile_when_several_configurations_then_p9999_naming_them_and_the_application_is_the_first_written(
+) {
     let (dir, path) = source_named("Plant.st", TWO_CONFIGURATIONS);
     let container = dir.path().join("out.iplc");
 
@@ -308,11 +309,21 @@ fn compile_when_several_configurations_then_the_application_is_the_first_written
     )
     .unwrap();
     let shown = person_form(&diagnostics, Some(&project));
+    let headed = headed_lines(&shown);
 
+    // The build is named for the first written and fails: no container.
     assert_eq!(
-        headed_lines(&shown).first().copied(),
+        headed.first().copied(),
         Some("------ Build started: Application: Zeta -------")
     );
+    assert!(headed[1].starts_with("Error[P9999]"), "{shown}");
+    assert!(shown.contains("2nd CONFIGURATION declaration"), "{shown}");
+    assert!(shown.contains("1st CONFIGURATION declaration"), "{shown}");
+    assert_eq!(
+        headed.last().copied(),
+        Some("Build complete -- 1 errors, 0 warnings : No download possible")
+    );
+    assert!(!container.exists());
 }
 
 #[spec_test(REQ_DS_cli_014)]

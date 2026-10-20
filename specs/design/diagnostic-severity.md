@@ -250,8 +250,10 @@ server sends them to the Output channel.
   and ends with "Build complete -- {errors} errors, {warnings} warnings : Ready
   for download", or "… : No download possible" when an error stops the build.
 - The application is the `CONFIGURATION` that is built: its name, as written. A
-  program with several configurations is named for the first one written, which
-  is the one code generation compiles. A program with no `CONFIGURATION`, and a
+  container is one PLC, so code generation builds one configuration and rejects a
+  program that has more than one (REQ-DS-cli-017); the line "Build started" of
+  that failed build is still named for the first one written, the order the
+  rejection lists them in. A program with no `CONFIGURATION`, and a
   program whose analysis produced no library (a syntax error), has none to name,
   and the name is that of the project: the file name without its extension of a
   file given to the command, or the name of the directory. This is the owner's
@@ -283,14 +285,10 @@ name of the application, the messages the run keeps, and then one `Text` "Build
 complete" with the counts, ending "Ready for download" when the run has no error
 and "No download possible" when it has one.
 
-**REQ-DS-project-005** `Project::application_name` is the name of the
-configuration that code generation compiles, as written, and is the fallback it is
-given when the analyzed library has no configuration or the analysis produced no
-library.
-
-**REQ-DS-analyzer-006** The analyzed library holds the configurations of the
-program in the order they were written, so that the first is the one written
-first.
+**REQ-DS-project-005** `Project::application_name` is the name of the first
+configuration by position in the source, as written, whatever the order of the
+analyzed library, and is the fallback it is given when the analyzed library has
+no configuration or the analysis produced no library.
 
 ## What stops a build
 
@@ -545,7 +543,15 @@ status 0.
 **REQ-DS-cli-014** `ironplcc compile` and `ironplcc check --format json` of a
 program that has a `CONFIGURATION` name the application for it: the line "Build
 started" gives the name of the configuration, and the first one written when there
-are several, whatever the name of the file.
+are several (REQ-DS-cli-017), whatever the name of the file.
+
+**REQ-DS-cli-017** `ironplcc compile` of a program that has more than one
+`CONFIGURATION` fails with P9999, builds no container and chooses none of them: a
+container is one PLC, as a second `PROGRAM` or a second instance is already
+rejected. The message names every configuration, the second by its primary label
+and the others by secondary labels, in the order of the source, and the build
+ends with "No download possible".
+
 
 **REQ-DS-cli-008** `ironplcc compile` of a program that has an error ends with
 "Build complete -- 1 errors, 0 warnings : No download possible", writes no

@@ -235,7 +235,8 @@ later reference, an optional ``container_base64`` when
 ``include_bytes`` is ``true``, arrays ``tasks`` and ``programs``
 describing the compiled configuration, and ``diagnostics``: the line
 ``------ Build started: Application: NAME -------``, where *NAME* is the name of
-the ``CONFIGURATION`` (the first one written when there are several; for a
+the ``CONFIGURATION`` (the first one written when there are several, which the
+build rejects; for a
 program without one, the name of the first source without its extension), then
 the problems found, then the line ``Build complete -- N errors, M warnings``,
 which ends with ``: Ready for download`` or, when an error stops the build, with

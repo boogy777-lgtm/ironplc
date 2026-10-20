@@ -189,9 +189,10 @@ pub trait Project {
     /// CODESYS names it for the application of its project. IronPLC has no
     /// application object; the application is the `CONFIGURATION` that is built,
     /// so the name is the name of that configuration
-    /// ([`Library::compiled_configuration`]: the first one written when the
-    /// program has several). This is the one rule, and the CLI and the MCP tools
-    /// both ask it.
+    /// ([`Library::compiled_configuration`]: the first one written by position
+    /// when the program has several; code generation rejects such a program, and
+    /// the line is still named). This is the one rule, and the CLI and the MCP
+    /// tools both ask it.
     ///
     /// A program with no `CONFIGURATION`, and a program whose analysis did not
     /// get far enough to produce a library (a syntax error), has no
