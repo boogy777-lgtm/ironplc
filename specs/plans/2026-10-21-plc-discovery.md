@@ -211,7 +211,7 @@ Every decision is made in one place, and the clients render it.
   | Data | Discovery (anyone on the network) | Session (after connect; credentials when protected) | Never on the wire |
   |---|---|---|---|
   | device id, name, model, protocol, session port, protected flag | yes | yes | |
-  | firmware version | open device: yes; protected device: open question (reconnaissance value) | yes | |
+  | firmware version | yes, as Rockwell does (ListIdentity gives the revision to anyone, even for a secured controller, and has no setting to hide it). Protection is the interfaces discovery answers on, `--no-discovery`, and network segmentation. Recommended; the owner has not confirmed it | yes | |
   | application identity (name, contentHash, layoutHash, generations) | no | yes | |
   | pending edit record, run state, device settings | no | yes | |
   | credentials, keys | | | yes |
@@ -537,6 +537,24 @@ To Go Online"; CODESYS login choices).
 | 12 | `deviceId` differs from the remembered path | information row "not the controller this project last connected to (id X, was Y)" | — | the rows above apply to this controller (R is looked up by its id) | per row |
 | 13 | connection lost while online | state "unknown" (never the last value) | — | reconnect, then the rows again | — |
 | 14 | the controller restarted while connected; its application was kept by the slots | — | — | reconnect, then row 5 or 7. The comparison is by content, so restarted counters do not matter | per row |
+| 15 | the controller's runtime cannot load this project's container (container format or runtime version) | its runtime version | the container format it needs | update the runtime (as Rockwell prompts for a firmware update); no download | no |
+
+**Rockwell, row by row** (research 2026-10-21). Most of it comes from search
+snippets of Studio 5000 help pages that could not be read in full. Dialog texts
+and button labels are not confirmed.
+
+| Row | Rockwell (Studio 5000 / Logix) | IronPLC |
+|---|---|---|
+| 4 | cannot go online without a project; Download is required | the same, plus an optional device-level connection (settings, rename) |
+| 5 | goes online with no dialog ("correlate"); online changes made by others since are uploaded first | goes online with no dialog. Uploading changes made by others needs the source archive (to-do) |
+| 6–7 | offline edits are **not** carried online: Upload (the controller's version replaces the project), Select File, or Download (overwrite) | the **owner chose CODESYS here**: Login with online change loads the difference, on the engineer's responsibility; Upload and Download remain |
+| 9 | different project: Upload into a new file (Select File); comments and descriptions are lost, since only logic, configuration and data are in the controller | Upload into a new project from the source archive (to-do). The archive keeps comments, which is more than Rockwell keeps |
+| 10 | Accept / Test / Assemble / Cancel pending edits, Finalize All Edits; nothing documented for another workstation or a crash | the same vocabulary (ADR-0064/0065) |
+| 12 | "Match Project to Controller" (Controller Properties, Advanced): opt-in; the project stores the controller serial; on a mismatch the transfer is cancelled, and the engineer either connects to the right controller or updates the serial in the project | default: an information row (owner: any controller). **N+1, later:** the same opt-in per application, "match the application to controller id X" |
+| 13 | the application goes offline; operations in progress do not complete; Go Online again re-correlates | the same, with "unknown" in place of the last state |
+| 15 | a firmware mismatch prompts for a firmware update (firmware kit, ControlFLASH Plus) | update the runtime |
+| — | Change Detection: the controller keeps an Audit Value that changes on forces, mode changes, downloads, firmware updates, and so on; it is blank offline | **N+1, later:** a "controller change detection" class, which tells the engineer that the controller changed since they were last online |
+| — | discovery (ListIdentity) gives the revision to anyone on the network, even for a secured controller; there is no setting to hide it; protection is network segmentation and CIP Security on sessions | see the firmware question in section 3 |
 
 **Gaps that the table shows (for the online-model plan):**
 
