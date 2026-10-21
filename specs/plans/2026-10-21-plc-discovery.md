@@ -80,6 +80,80 @@ with "Scan network" (CODESYS) do.
 
 ## Architecture (proposal)
 
+### 0. Ontology (owner's audit, 2026-10-21)
+
+**The engineering questions.** Every IronLink function answers one of five
+questions. A function that answers none of them is not needed.
+
+1. For which controller is this application meant?
+2. How does this workstation reach it?
+3. Is the device that answers really that controller?
+4. Can a session be opened, and if not, why not?
+5. Once connected, which operations are allowed, and on what grounds?
+
+A session alone says nothing about equality of the program, the run state, or
+permission to act on the process.
+
+**The entities, and what each must not be mixed with:**
+
+| Entity | Meaning | Not to be mixed with |
+|---|---|---|
+| Device | one physical or soft controller instance | an IP address, a name, a tree row |
+| Device id (`deviceId`) | how the instance is recognised (identity check) | the name; the address; authenticity (trust is a separate, later class) |
+| Address | one possible access point | the identity of the device |
+| Route | how this workstation reaches the device (driver, interface, address) | the device itself |
+| Observation | what a discovery or an identify request returned, with its time | a promise that the device is reachable now |
+| Target of an application | the intent: the device this application is meant for (`deviceId`) | an open session |
+| Workstation route record | how this workstation prefers to reach a device | the target of the application, which is shared with the project |
+| Session | the current interaction of this workstation with a device | the stored target |
+
+**Three separate actions follow from this.**
+
+- **Select target** changes the intent.
+- **Find a route** produces observations and routes.
+- **Connect** opens a session.
+
+Each of them can happen without the others:
+
+- a target can be selected while it is unreachable;
+- a device can be discovered without connecting to it;
+- a connection can be made for diagnosis without changing the target. The
+  status bar then says that the session is not with the target.
+
+**Markers are independent; there is no single "state".** A device row can carry
+any combination of these:
+
+- target or not;
+- reachable, unreachable or unknown, from the last observation and its age;
+- session free or busy.
+
+**Busy** means that the device's one engineering session (ADR-0065) is held by
+someone other than this IronLink. It does not block **Select target**. Only
+IronLink decides whether **Connect** is refused, and it says why (V6014). A
+client never disables an action on its own rule.
+
+**Scope of a target: one target per application.** A project with several
+controllers (DCS) has several applications, and so several targets.
+
+### 0a. Thin clients, as a checked property
+
+IronLink makes every decision:
+
+- which observed device matches the target;
+- which routes exist;
+- whether a connect is allowed or refused, and why;
+- which operations a device offers now (a capability list per device and
+  session);
+- what changed after a command.
+
+Clients render these answers. They hold no rule.
+
+- **Check:** a conformance test suite runs against the IronLink command API.
+  The VS Code layer has no decision logic: it maps answers to widgets, and a
+  test fails if it computes enablement on its own.
+- **N+1:** a new discovery method (a new driver) adds observations and routes
+  only. The meaning of target, identity check and session does not change.
+
 ### 1. One port number, one definition
 
 - The IronPLC port (proposal: 49152) is TCP for the session and UDP for
@@ -100,7 +174,18 @@ with "Scan network" (CODESYS) do.
   beside its slots: `deviceId`, device name, and later the port and whether
   discovery is on.
   - The file can be edited offline.
-  - A session command can change it online, through IronLink.
+  - A session command can change the name online, through IronLink.
+  - The **device id is changed only on the device itself**: in its settings
+    file, or later in the device's own local UI. It is never changed over the
+    engineering session (audit 2026-10-21).
+    - The id is the basis of the identity check. Changing it over the network
+      would let an engineer silence a "different device" refusal, which
+      destroys the check.
+    - The scenarios that need a change are local: replacing a device by giving
+      the replacement the id of the one it replaces, and resolving a duplicate
+      after a cloned image.
+    - The format check (32 hex digits) proves the form only. It proves neither
+      uniqueness nor the right to take an identity.
   - Class "device setting": every setting is one row with a type and a check,
     and both ways of changing it go through that row.
 - The field is optional and additive, so the protocol version stays 1 (as
@@ -204,24 +289,54 @@ VS Code part (the Network view, Choose Target, the service process) lives.
 
 - **Browse view in VS Code** ("IronPLC Network", the RSWho analog): it shows
   the tree from the service.
-- **"Select as target" writes the target to two places.** Each holds the
-  `deviceId` and the path (driver and address).
-  - **A project file**, so a project copied to another PC keeps its target, as
-    Set Project Path keeps it in the project. It is versioned JSON in the
-    `RecordKind` family; the name is chosen in stage 6.
-  - **The connection profile** in `settings.json`, for this workstation.
-- **The two places are independent** (owner). Either one can be overwritten
-  without the other. When both exist and differ, connect shows both and asks
-  which to use and which to overwrite. It never chooses silently.
-- **Connect checks the device:**
-  - it goes to the stored address;
-  - it compares `deviceId` from `identity`;
-  - a different id is a new problem code: no session, and the option to
-    re-select;
-  - when the address is not answered, a browse can find the same `deviceId` at a
-    new address and offer it.
-- **The download record (ADR-0083)** stays keyed by the connection. The binding
-  adds which device the connection means.
+- **Two places to store, with different meanings** (the owner's two independent
+  places; the audit gives each one its own meaning):
+  - **Application target file** `<app>.target.iplcinfo`, beside `<app>.iplc`, in
+    the `RecordKind` family (ADR-0083). It holds the intent: the `deviceId`. It
+    may also hold a portable route hint, the last address that is not loopback.
+    It travels with the project, so a project moved to another PC keeps its
+    target and its last known path, as Set Project Path does.
+  - **Workstation route record** (this PC): for a `deviceId`, the route this
+    workstation uses (driver, interface, address). It is keyed by `deviceId`, so
+    it can never name a different device than the target. A loopback address
+    (`127.0.0.1`) is stored only here and never in the project file: it means
+    "this PC" and points elsewhere on every PC.
+  - Each place can be overwritten on its own. They cannot disagree about which
+    device, so no "which device?" dialog is needed. They can only disagree about
+    the route.
+- **Connect to the target:**
+  - the route comes from the workstation record; otherwise from the project's
+    hint; otherwise a browse finds the `deviceId`;
+  - the `deviceId` from `identity` is compared with the target's:
+    - equal: a session;
+    - different: refusal (a new problem code), with three options: show the
+      difference, select another target, cancel. There is never "accept this
+      device instead", and never "change the device id";
+    - unanswered: a browse can find the same `deviceId` at a new address, and
+      the workstation record is updated after a successful connect.
+- **Connect to a device that is not the target** (diagnosis) opens a session and
+  leaves the target unchanged. The status bar shows "session with X, target Y".
+- **Same `deviceId` seen at several addresses:**
+  - when the identity fields of the replies are equal, it is one device with
+    several routes, shown under each driver that saw it, with the same markers
+    and the same target state;
+  - when the identity fields differ, it is an identity conflict: the device is
+    marked, and it cannot be selected as target until resolved.
+  - A cloned settings file is not always detectable. The identity check plus
+    the session refusal (busy) are the defence.
+- **Identify** sends a fresh request to that route and shows the reply with its
+  time. A hover shows the last observation and its age. A physical
+  identification (blinking a LED) is a device operation of a hardware target,
+  named later (section 7). It is not part of Identify.
+- **The download record (ADR-0083)** today is keyed by the connection profile
+  name, because no device id existed. In stage 6 it is keyed by `deviceId`
+  (`<app>.<deviceId>.download.iplcinfo`): what this device received.
+- **What EQUAL means** (the online-model plan, recorded here so that it is not
+  lost): the device's committed application `contentHash` equals the
+  `contentHash` of the application container the project builds now, and the
+  build is up to date (ADR-0083). Run/Stop is a live observation. After the
+  link is lost it is "unknown", never the last value. A working UI shows these
+  only once they exist; no greyed placeholders.
 
 ### 6. GUI skeleton in VS Code
 
@@ -256,23 +371,36 @@ The skeleton follows TwinCAT XAE and SIMATIC AX; the function follows RSLinx.
   - the workstation;
   - one row per driver: a network interface (broadcast) or the address list;
   - the devices under each driver. A device row shows the device name as its
-    label. Its description shows the address, a short `deviceId`, and either
-    "busy" or "target".
+    label. Its description shows the address, a short `deviceId` and the
+    independent markers (section 0): target, reachability with the age of the
+    observation, and session busy. A row stands for one route to a device: one
+    device seen through two drivers has two rows, and both show the same
+    markers.
 - **Actions:**
   - On the view title: "Search network" (refresh, as Broadcast Search) and
     "Add address…" (as Enter Host Name / IP).
-  - On a device: "Select as target", "Connect", "Disconnect", "Identify",
-    "Device settings…" and "Copy device id".
+  - On a device: "Select as target", "Connect", "Disconnect", "Identify"
+    (fresh request), "Rename device…" (the one setting changeable online; the
+    device id is not) and "Copy device id". Which of them are enabled comes
+    from IronLink's capability list (section 0a).
   - On the address-list driver: "Add address…" and "Remove address".
 - **Command "IronPLC: Choose Target…"** (as Choose Target System). It is a
-  QuickPick of the known targets: those of the project file, of the profile, and
-  those recently seen. Its last item, "Search network…", opens the view.
-- **The two places where a target is stored** correspond to the TwinCAT route
-  kinds: the project file is the Project route, and the connection profile is
-  the Static route of this workstation.
-- **Status bar** (as the target in the XAE menu bar): the target name and the
-  connection state. The online model adds EQUAL or DIFFERENT and Run or Stop
-  later, in its own plan. The login choices also wait for that plan.
+  QuickPick of devices for the application's target. It has three groups:
+  - the current target;
+  - the devices with a route on this workstation;
+  - the devices recently observed, with the age of the observation.
+
+  Its last item, "Search network…", opens the view.
+- **The two stores correspond to the TwinCAT route kinds:**
+  - the application target file (intent plus a portable hint) is the Project
+    route;
+  - the workstation route record is the Static route.
+- **Status bar** (as the target in the XAE menu bar). It shows the target name,
+  and the session state relative to the target: none, with the target, or with
+  another device ("session with X, target Y").
+  - EQUAL/DIFFERENT and Run/Stop appear only when the online model provides
+    them, never as placeholders.
+  - The login choices also wait for that plan.
 - **The existing view "IronPLC Device"** stays. It shows the identity of the
   connected device and its application.
 - **Command category** "IronPLC: Network" for the new commands.
@@ -359,7 +487,8 @@ legacy Rockwell hardware (DH+, DH-485, ControlNet, DeviceNet).
    browse, the shell of commands, the CLI.
 5. Service: sessions owned by the service, relaying the session protocol, and
    several clients on one device.
-6. VS Code: the Network view, "Select as target" (project file + profile), the
+6. VS Code: the Network view, "Select as target" (application target file +
+   workstation route record; the download record keyed by `deviceId`), the
    binding check on connect, and connecting through the service. The network
    tree is text rows (RSLinx function). The skeleton of views, commands and
    state follows SIMATIC AX and TwinCAT XAE.
@@ -380,6 +509,12 @@ Tracking issue: #149.
 - **Q4. Where the target is stored:** both in a project file and in the
   connection profile. They are two independent places, and either can be
   overwritten. A project copied to another PC keeps its path (section 5).
+  - The audit of 2026-10-21 gives the two places different meanings: the
+    project holds the intent (`deviceId`) and a route hint, and the workstation
+    holds the route, keyed by `deviceId`.
+  - The places stay independent and overwritable. They can no longer disagree
+    about which device.
+  - To be confirmed by the owner.
 - **Q5. The reply has no hash.** Discovery is identity. Whether the project and
   the PLC are equal is the internal comparison of the online model, shown as
   Schneider shows EQUAL (section 3).
