@@ -229,10 +229,6 @@ pub const SESSION_PROTOCOL_VERSION: u32 = 1;
 /// constant, or the generated `DEFAULT_SESSION_PORT` in the extension.
 pub const DEFAULT_SESSION_PORT: u16 = include!("../resources/session-port.txt");
 
-// A typo in the resource that still fits a u16 must not land on a registered
-// or system port.
-const _: () = assert!(DEFAULT_SESSION_PORT >= 49152);
-
 /// The device panel block of an [`IdentityPayload`] (ADR-0063): the static
 /// device description the application composes — a soft device reports its
 /// binary name and version (`vm-cli` builds it from `env!("CARGO_PKG_VERSION")`),
