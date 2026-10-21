@@ -696,7 +696,13 @@ by hand (`runtime/src/host.rs`, `vm-cli/src/serve.rs`, `vm-cli/src/slot_store.rs
       - The latest API (`@types/vscode` 1.140) changes none of this.
     - The owner targets the current VS Code, not an old one, so
       `engines.vscode` is raised when a feature needs it.
-    - OPEN: the owner chooses between these.
+    - **Owner's choice (2026-10-21): the QuickPick.** It stays open through
+      every stage. The title carries the stage and `step`/`totalSteps`; the
+      `busy` line runs while a stage is in flight; "Finalize all" is a toggle
+      button in the title; the items are Next (labelled with the next stage)
+      and Cancel. An unavailable Cancel shows its reason in the item's
+      description and does nothing. Stages are marked ✔ ● ○ in the prompt
+      line, with no colour.
 - **A test that does not drive outputs** (as the SLC 500 / PLC-5 Remote Test
   mode, where the program is solved but outputs stay off) is a different
   feature. It is named here as a later class, together with the I/O plan.
