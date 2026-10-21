@@ -88,13 +88,21 @@ with "Scan network" (CODESYS) do.
   definition: a generated value, or a test that compares the two.
 - `--listen` without a port uses it.
 
-### 2. Device identity becomes unique
+### 2. Device identity becomes unique; device settings
 
 - `DeviceIdentity` gains `deviceId`. The device generates it on the first start
-  and stores it beside its slots, as a file the device owns. A reboot keeps it.
-  A new device, or a device that was reset, gets a new one.
+  and keeps it. A reboot keeps it. A new device, or a device that was reset,
+  gets a new one.
 - The soft PLC has no serial number, so the id is a random 128-bit value. A
   hardware target may report its serial instead.
+- **Device settings (owner: the id can be changed in the device's own
+  settings).** The device keeps its settings in one file that the device owns,
+  beside its slots: `deviceId`, device name, and later the port and whether
+  discovery is on.
+  - The file can be edited offline.
+  - A session command can change it online, through IronLink.
+  - Class "device setting": every setting is one row with a type and a check,
+    and both ways of changing it go through that row.
 - The field is optional and additive, so the protocol version stays 1 (as
   checked in ADR-0083).
 
@@ -105,19 +113,28 @@ with "Scan network" (CODESYS) do.
   - `--no-discovery` turns it off.
   - Replies are rate-limited per source.
   - The request is fixed-size. Anything else gets no reply and no error.
-- **Reply:** the protocol version, `deviceId`, device name, model and firmware,
-  the session port, and whether the session is busy.
-  - Proposal: also the application name and its `contentHash`, so the browse
-    tree shows what the device runs. This is a question for the owner (Q5).
+- **Reply: identity only.** It holds the protocol version, `deviceId`, device
+  name, model and firmware, the session port, and whether the session is busy.
+  - It has nothing about the application. The owner decided this: discovery
+    and the comparison of the project with the PLC have different
+    responsibilities. Whether the project and the PLC are equal is the internal
+    comparison of the online model (download record, ADR-0083), shown once
+    connected, as Schneider shows EQUAL.
   - Nothing secret.
 - **Wire format:** one small crate (encode and decode, `no_std`-ready), shared
   by the device and the service. It has its own version byte and bounds checks.
   It has fuzz-style tests for truncated and oversized input.
 
-### 4. The communication service on the workstation (the RSLinx analog)
+### 4. IronLink, the communication service on the workstation (the RSLinx analog)
 
-- **A separate binary** (name to choose, proposal `ironplclink`). It runs on
-  the workstation and listens on localhost only.
+- **A separate binary, IronLink** (owner's name; the binary is `ironlink`). It
+  runs on the workstation and listens on localhost only.
+- **Its API is the command mechanism we already have.** The session protocol is
+  JSON commands, framed on TCP (`runtime/src/commands.rs`, `vm-cli/src/tcp.rs`).
+  IronLink speaks the same framing on localhost, with its own commands added.
+- **Every GUI is a thin client of these commands:** the VS Code extension
+  today, and a standalone GUI later. MCP and the command line are thin clients
+  as well.
 - **Drivers**, one per network kind; each is a `Driver` implementation:
   - **broadcast:** discovery on chosen interfaces;
   - **address list:** unicast to configured addresses, for routed networks.
@@ -134,7 +151,7 @@ with "Scan network" (CODESYS) do.
 - **The shell of internal commands.** One command vocabulary, served to every
   client: `browse`, `identify`, `select`, `connect`, `disconnect`, `status`,
   plus the session commands relayed to the device.
-  - The command line uses it (`ironplclink <command>`, and an interactive mode).
+  - The command line uses it (`ironlink <command>`, and an interactive mode).
     VS Code and MCP use the same commands.
   - The session protocol stays as it is. The service relays it. It does not
     reinterpret it.
@@ -142,8 +159,16 @@ with "Scan network" (CODESYS) do.
 ### 5. Target selection and binding
 
 - **Browse view in VS Code** ("IronPLC Network", the RSWho analog): it shows
-  the tree from the service. "Select as target" binds the workspace connection
-  to that `deviceId`, and stores the address it was seen at.
+  the tree from the service.
+- **"Select as target" writes the target to two places.** Each holds the
+  `deviceId` and the path (driver and address).
+  - **A project file**, so a project copied to another PC keeps its target, as
+    Set Project Path keeps it in the project. It is versioned JSON in the
+    `RecordKind` family; the name is chosen in stage 6.
+  - **The connection profile** in `settings.json`, for this workstation.
+- **The two places are independent** (owner). Either one can be overwritten
+  without the other. When both exist and differ, connect shows both and asks
+  which to use and which to overwrite. It never chooses silently.
 - **Connect checks the device:**
   - it goes to the stored address;
   - it compares `deviceId` from `identity`;
@@ -190,44 +215,43 @@ with "Scan network" (CODESYS) do.
 ## Stages (each stage is its own PR or PRs)
 
 1. Prefactor: the port constant, the doc fixes.
-2. Device: persistent `deviceId` in identity; ADR "PLC discovery and target
+2. Device: the device settings file (`deviceId`, name), `deviceId` in identity,
+   and the session command that changes a setting; ADR "PLC discovery and target
    binding".
 3. Device: the discovery wire crate and the responder on `--listen`; docs; a
    problem code for a reply that cannot be parsed, if needed.
-4. Service: the `ironplclink` binary, the broadcast and address-list drivers,
+4. Service: the `ironlink` binary, the broadcast and address-list drivers,
    browse, the shell of commands, the CLI.
 5. Service: sessions owned by the service, relaying the session protocol, and
    several clients on one device.
-6. VS Code: the Network view, "Select as target", the binding check on connect,
-   and connecting through the service.
+6. VS Code: the Network view, "Select as target" (project file + profile), the
+   binding check on connect, and connecting through the service. Names and
+   structure checked against the Beckhoff extension inventory.
 7. MCP: browse and device tools through the service, replacing the in-process
    host where a device is given.
 
 A tracking issue lists them when the plan is approved.
 
-## Questions for the owner
+## Owner's answers (2026-10-21)
 
-- **Q1. Port.** One number for TCP session and UDP discovery, 49152 (as 44818 in
-  EtherNet/IP)? Recommended: yes, configurable on both sides.
-- **Q2. Device id.** A random id generated on first start and kept by the device
-  (survives reboot; reset gives a new one)? Recommended: yes.
-- **Q3. The shell.** Is "a thin shell for internal commands" the one command
-  vocabulary of the workstation service, that the CLI (with an interactive
-  mode), VS Code and MCP all use? Or did you mean a shell on the device itself?
-  And the name `ironplclink`?
-- **Q4. Where the chosen target is stored.** Options:
-  - in the connection profile of the workspace (`settings.json`);
-  - in a file of the project, as Set Project Path stores it in the project.
-
-  Recommended: the profile. It is already per workspace, and VS Code and the
-  service read it.
-- **Q5. What a discovery reply shows.** Identity only, or also the application
-  name and its hash (so the tree shows what runs, CODESYS-like)? It is not
-  secret, but it is visible to anyone on the network. Recommended: include it,
-  and allow `--discovery-minimal`.
-- **Q6. Order.** Does this come before the online-model plan (login choices,
-  Start/Stop) and before the parser S4? Recommended: yes, the online model
-  builds on the bound target.
+- **Q1. Port:** yes. 49152 is used for the TCP session and for UDP discovery,
+  and it is configurable.
+- **Q2. Device id:** yes. In addition, it can be changed in the device's own
+  settings (section 2).
+- **Q3. The shell.** A GUI is a thin client of the commands. It uses the
+  command API, which is the session protocol (section 4). The name is
+  **IronLink**.
+- **Q4. Where the target is stored:** both in a project file and in the
+  connection profile. They are two independent places, and either can be
+  overwritten. A project copied to another PC keeps its path (section 5).
+- **Q5. The reply has no hash.** Discovery is identity. Whether the project and
+  the PLC are equal is the internal comparison of the online model, shown as
+  Schneider shows EQUAL (section 3).
+- **Q6. Order:** no answer yet. The working assumption is that this comes before
+  the online model and S4.
+- **Reference for the GUI ontology (owner):** Beckhoff's TwinCAT extension for
+  VS Code. Its views, commands and settings are studied for their names and
+  structure only.
 
 ## Not included
 
