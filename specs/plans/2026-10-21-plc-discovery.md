@@ -366,7 +366,7 @@ legacy Rockwell hardware (DH+, DH-485, ControlNet, DeviceNet).
 7. MCP: browse and device tools through the service, replacing the in-process
    host where a device is given.
 
-A tracking issue lists them when the plan is approved.
+Tracking issue: #149.
 
 ## Owner's answers (2026-10-21)
 
