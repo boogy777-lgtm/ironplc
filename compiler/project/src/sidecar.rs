@@ -35,12 +35,14 @@
 //!
 //! ## Malformed files
 //!
-//! A missing file loads as an empty sidecar. A malformed file (invalid JSON,
-//! an unexpected shape, duplicate keys, or the reserved UID 0) recovers the
-//! same way, as an empty table: the next [`Sidecar::sync`] then assigns fresh
-//! UIDs, which is the safe no-migration degradation ADR 0053 describes.
-//! Genuine I/O failures (a file that exists but cannot be read) are
-//! diagnostics, not recovery cases.
+//! The file is a [`RecordKind::Uids`] record, so [`crate::records`] owns its
+//! path, its `version` and its fail-soft read. A missing file loads as an empty
+//! sidecar. A file that is not JSON or has another version recovers the same
+//! way, and so does one whose content is malformed (an unexpected shape,
+//! duplicate keys, or the reserved UID 0): an empty table. The next
+//! [`Sidecar::sync`] then assigns fresh UIDs, which is the safe no-migration
+//! degradation ADR 0053 describes. Genuine I/O failures (a file that exists but
+//! cannot be read) are diagnostics, not recovery cases.
 //!
 //! ## UID allocation
 //!
@@ -54,20 +56,16 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use ironplc_codegen::{persistent_scopes, CodegenOptions, FbFieldUidKey};
 use ironplc_dsl::common::{Library, LibraryElementKind};
-use ironplc_dsl::core::{FileId, Id};
+use ironplc_dsl::core::Id;
 use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_parser::options::CompilerOptions;
-use ironplc_problems::text;
 use serde_json::{json, Value};
 
-/// The format version written into the sidecar's `version` field. A loader
-/// accepts only this version; anything else is malformed and recovers empty.
-const FORMAT_VERSION: u64 = 1;
+use crate::records::{self, RecordKind, RecordRead};
 
 /// A sidecar key: the declaration's scope path and name.
 ///
@@ -258,33 +256,17 @@ impl Sidecar {
     /// (see the module documentation); only a genuine I/O failure is an
     /// error.
     pub fn load(path: &Path) -> Result<Sidecar, Diagnostic> {
-        let text = match fs::read_to_string(path) {
-            Ok(text) => text,
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(Sidecar::new()),
-            Err(err) => {
-                return Err(Diagnostic::text_in_file(
-                    FileId::from_path(path),
-                    text::cannot_read_file_with_path(path.display(), err),
-                ))
-            }
-        };
-        Ok(parse(&text).unwrap_or_default())
+        match records::read(RecordKind::Uids, path)? {
+            RecordRead::Present(value) => Ok(parse(&value).unwrap_or_default()),
+            RecordRead::Missing | RecordRead::Malformed => Ok(Sidecar::new()),
+        }
     }
 
     /// Saves the sidecar to `path`, overwriting any existing file. The
     /// serialization is deterministic (sorted keys, fixed field order), so
     /// repeated saves of an equal table produce identical bytes.
     pub fn save(&self, path: &Path) -> Result<(), Diagnostic> {
-        // Serializing a `Value` built only from strings and integers cannot
-        // fail; the error arm guards the type system, not a real case.
-        let text = serde_json::to_string_pretty(&self.to_json())
-            .map_err(|_| Diagnostic::internal_error())?;
-        fs::write(path, text).map_err(|err| {
-            Diagnostic::text_in_file(
-                FileId::from_path(path),
-                text::cannot_write_file(path.display(), err),
-            )
-        })
+        records::write(RecordKind::Uids, path, self.to_json())
     }
 
     /// Reconciles the sidecar with the keys currently declared.
@@ -380,7 +362,8 @@ impl Sidecar {
             .collect()
     }
 
-    /// Serializes as the deterministic JSON shape (sorted entries).
+    /// Serializes the record body as the deterministic JSON shape (sorted
+    /// entries); [`records::write`] adds the `version`.
     fn to_json(&self) -> Value {
         let variables: Vec<Value> = self
             .entries
@@ -394,25 +377,9 @@ impl Sidecar {
             })
             .collect();
         json!({
-            "version": FORMAT_VERSION,
             "variables": variables,
         })
     }
-}
-
-/// Derives the sidecar path `<stem>.uids.json` for a project path argument:
-/// the file stem when `project` names a file, the directory name when it
-/// names a directory. Both `FileBackedProject::initialize` and the `refactor`
-/// commands resolve the sidecar through this function, so compiling a
-/// project and syncing its sidecar address the same file. Returns `None`
-/// when the path has no usable name (for example a root directory).
-pub fn sidecar_path_for(project: &Path) -> Option<PathBuf> {
-    let stem = if project.is_dir() {
-        project.file_name()?.to_str()?
-    } else {
-        project.file_stem()?.to_str()?
-    };
-    Some(project.with_file_name(format!("{stem}.uids.json")))
 }
 
 /// Collects the keys the sidecar tracks for a library: one key for each
@@ -487,13 +454,10 @@ pub fn split_var_uids(ids: &[(SidecarKey, u64)], library: &Library) -> SplitVarU
     split
 }
 
-/// Parses sidecar text into a table. Returns `None` for any deviation from
-/// the format -- the caller recovers as an empty sidecar (see module docs).
-fn parse(text: &str) -> Option<Sidecar> {
-    let value: Value = serde_json::from_str(text).ok()?;
-    if value.get("version")?.as_u64()? != FORMAT_VERSION {
-        return None;
-    }
+/// Parses the value of a [`RecordKind::Uids`] record into a table. Returns
+/// `None` for any deviation from the shape (the version is checked by the
+/// reader) -- the caller recovers as an empty sidecar (see module docs).
+fn parse(value: &Value) -> Option<Sidecar> {
     let variables = value.get("variables")?.as_array()?;
     let mut entries = BTreeMap::new();
     for variable in variables {
@@ -515,9 +479,9 @@ fn parse(text: &str) -> Option<Sidecar> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ironplc_dsl::core::FileId;
     use ironplc_problems::Problem;
     use rstest::rstest;
-    use std::path::Path;
     use tempfile::TempDir;
 
     /// Writes `text` to a fresh temporary sidecar file and loads it.
@@ -762,22 +726,6 @@ mod tests {
             sidecar.keyed_entries(),
             vec![(key("global", "g"), 7), (key("main", "x"), 42)]
         );
-    }
-
-    #[rstest]
-    #[case::file_with_extension("proj.plcproj", "proj.uids.json")]
-    #[case::source_file("main.st", "main.uids.json")]
-    fn sidecar_path_for_when_file_then_sibling(#[case] file: &str, #[case] expected: &str) {
-        let path = sidecar_path_for(Path::new("some").join("dir").join(file).as_path()).unwrap();
-
-        assert_eq!(path, Path::new("some").join("dir").join(expected));
-    }
-
-    #[test]
-    fn sidecar_path_for_when_directory_then_directory_name_stem() {
-        let path = sidecar_path_for(&Path::new("some").join("MyProject")).unwrap();
-
-        assert_eq!(path, Path::new("some").join("MyProject.uids.json"));
     }
 
     #[test]

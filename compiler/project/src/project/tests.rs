@@ -637,7 +637,7 @@ fn initialize_when_sidecar_present_then_stable_var_ids_loaded() {
     let temp = tempfile::TempDir::new().unwrap();
     let dir = project_dir_with_program(&temp, "proj");
     std::fs::write(
-        crate::sidecar::sidecar_path_for(&dir).unwrap(),
+        crate::records::RecordKind::Uids.path(&dir).unwrap(),
         TWO_VAR_SIDECAR,
     )
     .unwrap();
@@ -662,7 +662,7 @@ fn initialize_when_sidecar_present_then_stable_var_ids_loaded() {
 fn initialize_when_sidecar_present_then_sidecar_path_exposed() {
     let temp = tempfile::TempDir::new().unwrap();
     let dir = project_dir_with_program(&temp, "proj");
-    let sidecar_path = crate::sidecar::sidecar_path_for(&dir).unwrap();
+    let sidecar_path = crate::records::RecordKind::Uids.path(&dir).unwrap();
     std::fs::write(&sidecar_path, TWO_VAR_SIDECAR).unwrap();
 
     let mut project = FileBackedProject::default();
@@ -691,7 +691,7 @@ fn initialize_when_sidecar_malformed_then_stable_var_ids_empty() {
     let temp = tempfile::TempDir::new().unwrap();
     let dir = project_dir_with_program(&temp, "proj");
     std::fs::write(
-        crate::sidecar::sidecar_path_for(&dir).unwrap(),
+        crate::records::RecordKind::Uids.path(&dir).unwrap(),
         "this is not a sidecar",
     )
     .unwrap();

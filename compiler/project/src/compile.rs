@@ -273,14 +273,14 @@ END_PROGRAM
     /// UIDs produces a container whose `stable_vars` table carries them.
     #[test]
     fn compile_when_file_backed_project_with_sidecar_then_container_carries_uids() {
-        use crate::sidecar::sidecar_path_for;
+        use crate::records::RecordKind;
 
         let temp = tempfile::tempdir().unwrap();
         let project_dir = temp.path().join("proj");
         std::fs::create_dir(&project_dir).unwrap();
         std::fs::write(project_dir.join("main.st"), VALID_PROGRAM).unwrap();
         std::fs::write(
-            sidecar_path_for(&project_dir).unwrap(),
+            RecordKind::Uids.path(&project_dir).unwrap(),
             r#"{"version": 1, "variables": [{"scope": "main", "name": "x", "uid": 42}]}"#,
         )
         .unwrap();

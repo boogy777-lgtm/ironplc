@@ -10,7 +10,13 @@
 //!   section can be verified, replaced or discarded without touching the
 //!   content hash.
 //!
-//! `layout_hash` is still not computed; it is written as zeros.
+//! `layout_hash` is the third hash and is not computed here. It is the
+//! online-change gate (ADR-0052/0058), not an integrity hash: it covers the
+//! persistent part of the container only (ADR-0073), so a logic-only edit keeps
+//! it equal. [`crate::Container::compute_layout_hash`] (in `layout_hash.rs`)
+//! computes it and [`crate::Container::write_to`] stores it in the header
+//! before the content hash is taken. The content hash covers it (see
+//! [`masked_header`]).
 //!
 //! An all-zero hash is [`NO_HASH`]: the writer did not compute one. A reader
 //! accepts it without checking, which keeps hand-built fixtures and
