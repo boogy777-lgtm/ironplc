@@ -383,8 +383,8 @@ Tracking issue: #149.
 - **Q5. The reply has no hash.** Discovery is identity. Whether the project and
   the PLC are equal is the internal comparison of the online model, shown as
   Schneider shows EQUAL (section 3).
-- **Q6. Order:** no answer yet. The working assumption is that this comes before
-  the online model and S4.
+- **Q6. Order:** communication first (this plan), then the online model, then
+  the parser (S4).
 - **Plan approved** (owner, 2026-10-21). The owner also said:
   - a local soft PLC is one more device, not a driver (section 7);
   - IronLink finds and establishes the route, discovers devices and organises
