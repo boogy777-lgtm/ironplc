@@ -156,6 +156,50 @@ with "Scan network" (CODESYS) do.
   - The session protocol stays as it is. The service relays it. It does not
     reinterpret it.
 
+### 4a. What IronLink is responsible for (owner)
+
+IronLink has three responsibilities:
+
+- it finds and establishes the route;
+- it discovers devices on the network;
+- it organises the session.
+
+Starting a device is not one of them. A soft PLC, local or remote, is started
+on its own and is found like any device.
+
+Today's stdio profile spawns `ironplcvm` from the editor. It stays in the IronPLC
+extension, outside IronLink, until the owner decides whether to keep it.
+
+### 4b. Where the IronLink UI lives in VS Code (question to the owner)
+
+The owner considers a separate VS Code extension that works with the IronPLC
+extension, unless an elegant native way exists. In both options the hard
+boundary is the same: the `ironlink` binary and its command protocol. They are
+what make the CLI, MCP and a future GUI thin. The question is only where the
+VS Code part (the Network view, Choose Target, the service process) lives.
+
+- **A. A separate extension "IronLink"** (`ironplc.ironlink`).
+  - It owns the Network view and Choose Target, and starts and stops `ironlink`.
+  - It exposes a typed API through the standard VS Code mechanism, the
+    `exports` of `activate`. Microsoft's Git extension exposes its API the same
+    way.
+  - The IronPLC extension declares it in `extensionDependencies` and calls
+    `getTarget()`, `openSession()` and `onDidChangeTarget`.
+  - One extension pack installs both.
+  - Cost: two packages, two versions, and the API version of the dependency.
+    Other tools can use IronLink without the compiler.
+- **B. Native, in the IronPLC extension, with an enforced boundary.**
+  - The module `src/ironlink/` exports only one API interface, the same shape
+    as in A.
+  - A check fails the build if any other file imports anything else from it.
+  - Moving it to its own extension later is a move of the folder, without any
+    change to the API.
+  - Cost: one package. The separation holds only through the check.
+- **Recommendation: B now, with the API shaped as A's `exports`.** The boundary
+  is enforced from the first day, and splitting is cheap when a second consumer
+  appears. Choose A if IronLink must be installable without the compiler from
+  the start.
+
 ### 5. Target selection and binding
 
 - **Browse view in VS Code** ("IronPLC Network", the RSWho analog): it shows
@@ -243,7 +287,7 @@ literature, part from snippets; the article the owner gave is secondary).
 | RSLinx | IronLink | When |
 |---|---|---|
 | EtherNet/IP driver: broadcast, device list, Browse Remote Subnet | drivers "broadcast" and "address list" | this plan |
-| Virtual Backplane / SoftLogix driver (a soft PLC on the PC) | driver "local": a spawned `ironplcvm` (today's stdio profile) | this plan, proposal |
+| Virtual Backplane / SoftLogix (a soft PLC on the PC) | not a driver: a soft PLC on the PC is one more device (owner). The device does not know where it runs: Windows or Linux desktop, or embedded. The loopback interface is one more interface of the drivers. | this plan |
 | RSWho Autobrowse / Refresh, Device Properties | `browse`, `identify` | this plan |
 | SDK for third-party applications | the command protocol of IronLink | this plan |
 | DF1 serial, emulators | one more driver each | later |
@@ -269,11 +313,12 @@ legacy Rockwell hardware (DH+, DH-485, ControlNet, DeviceNet).
 
 ## Class / Inv / N+1
 
-- **Class "network driver"** (a way to reach devices): broadcast, address list,
-  and, proposed, local (a spawned `ironplcvm`, as RSLinx treats Virtual
-  Backplane as a driver). Later: a serial port, a remote gateway. Near case
-  outside: the HA pair link. It joins two units of one pair, not the engineer
-  and a device.
+- **Class "network driver"** (a way to reach devices): broadcast, address list.
+  Later: a serial port, a remote gateway.
+  - Near case outside: the HA pair link. It joins two units of one pair, not
+    the engineer and a device.
+  - A soft PLC on the same PC is not a driver. It is a device reached through
+    the loopback interface, as any device (owner).
   - Inv: a driver only produces identities. Sessions do not depend on how a
     device was found.
   - Check: a `Driver` trait with these two implementations, and the service
@@ -340,6 +385,11 @@ A tracking issue lists them when the plan is approved.
   Schneider shows EQUAL (section 3).
 - **Q6. Order:** no answer yet. The working assumption is that this comes before
   the online model and S4.
+- **Plan approved** (owner, 2026-10-21). The owner also said:
+  - a local soft PLC is one more device, not a driver (section 7);
+  - IronLink finds and establishes the route, discovers devices and organises
+    the session (section 4a);
+  - a separate VS Code extension is considered (section 4b, open).
 - **Reference for the GUI ontology (owner): Beckhoff's TwinCAT extension for
   VS Code.** Its views, commands and settings are studied for their names and
   structure only. Search result (2026-10-21):
