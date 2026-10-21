@@ -443,6 +443,8 @@ suite('encodeRequest identity and edit identity', () => {
   });
 });
 
+const DEVICE_ID = '0123456789abcdef0123456789abcdef';
+
 const CONTENT_HASH = 'ab'.repeat(32);
 const LAYOUT_HASH = '0f'.repeat(32);
 
@@ -521,6 +523,54 @@ suite('parseResponseLine identity', () => {
         redundancy: undefined,
       },
     });
+  });
+
+  test('parseResponseLine_when_identity_has_a_device_id_then_it_is_read', () => {
+    const line = IDENTITY_LINE.replace('"name":"ironplcvm",', `"deviceId":"${DEVICE_ID}","name":"ironplcvm",`);
+
+    const response = parseResponseLine(line);
+
+    assert.strictEqual(response.kind, 'identity');
+    if (response.kind === 'identity') {
+      assert.strictEqual(response.identity.device.deviceId, DEVICE_ID);
+      assert.strictEqual(response.identity.device.name, 'ironplcvm');
+    }
+  });
+
+  test('parseResponseLine_when_identity_has_no_device_id_then_the_key_is_absent', () => {
+    // A device that predates the field: the block parses, with no id.
+    const response = parseResponseLine(IDENTITY_LINE);
+
+    assert.strictEqual(response.kind, 'identity');
+    if (response.kind === 'identity') {
+      assert.ok(!('deviceId' in response.identity.device));
+    }
+  });
+
+  test('parseResponseLine_when_device_block_has_a_field_of_a_later_server_then_ignored', () => {
+    // The protocol stays at version 1 because a reader ignores what it does not know.
+    const line = IDENTITY_LINE
+      .replace('"name":"ironplcvm",', `"deviceId":"${DEVICE_ID}","fieldOfALaterServer":{"a":[1]},"name":"ironplcvm",`);
+
+    const response = parseResponseLine(line);
+
+    assert.strictEqual(response.kind, 'identity');
+    if (response.kind === 'identity') {
+      assert.deepStrictEqual(response.identity.device, {
+        deviceId: DEVICE_ID,
+        name: 'ironplcvm',
+        model: 'IronPLC SoftPLC',
+        modification: 'vm-cli',
+        firmwareVersion: '0.13.0',
+      });
+    }
+  });
+
+  test('parseResponseLine_when_device_id_is_malformed_then_throws', () => {
+    for (const bad of ['"abc"', '"' + 'AB'.repeat(16) + '"', '12']) {
+      const line = IDENTITY_LINE.replace('"name":"ironplcvm",', `"deviceId":${bad},"name":"ironplcvm",`);
+      assert.throws(() => parseResponseLine(line), HotEditProtocolError);
+    }
   });
 
   test('parseResponseLine_when_identity_with_redundancy_then_block_parsed', () => {

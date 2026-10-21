@@ -108,6 +108,12 @@ export interface PendingEditRecord {
 
 /** The device panel block of an `identity` response (ADR-0063). */
 export interface DeviceIdentity {
+  /**
+   * The device's unique id: 32 lowercase hexadecimal digits that the device
+   * generates once and keeps. Absent from a device that has none and from a
+   * device that predates the field.
+   */
+  deviceId?: string;
   name: string;
   model: string;
   modification: string;
@@ -353,6 +359,7 @@ function parseIdentity(record: Record<string, unknown>): IdentityInfo {
   return {
     protocol: record.protocol,
     device: {
+      ...parseDeviceId(deviceRecord),
       name: stringField(deviceRecord, 'name'),
       model: stringField(deviceRecord, 'model'),
       modification: stringField(deviceRecord, 'modification'),
@@ -361,6 +368,22 @@ function parseIdentity(record: Record<string, unknown>): IdentityInfo {
     application: parseStatus(application as Record<string, unknown>),
     redundancy: parseRedundancy(record.redundancy),
   };
+}
+
+/**
+ * Reads the optional `deviceId` of a device block: absent means a device that
+ * reports none, so the key stays absent from the result; present, it is 32
+ * lowercase hexadecimal digits.
+ */
+function parseDeviceId(device: Record<string, unknown>): { deviceId?: string } {
+  const value = device.deviceId;
+  if (value === undefined || value === null) {
+    return {};
+  }
+  if (typeof value !== 'string' || !/^[0-9a-f]{32}$/.test(value)) {
+    throw new HotEditProtocolError(null, 'identity response carries a malformed deviceId');
+  }
+  return { deviceId: value };
 }
 
 /** Reads a string field, refusing a malformed block. */
