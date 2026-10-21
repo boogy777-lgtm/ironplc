@@ -29,7 +29,7 @@ mod problem_codes {
 pub use commands::{
     execute, parse_command, render_response, Command, CommandError, DeviceIdentity, EditSpec,
     IdentityPayload, MigrationDecisionSpec, RedundancyIdentity, Response, StatusPayload,
-    TypeChangeDetail, SESSION_PROTOCOL_VERSION,
+    TypeChangeDetail, DEFAULT_SESSION_PORT, SESSION_PROTOCOL_VERSION,
 };
 pub use error::{OnlineChangeError, RuntimeError};
 pub use generation::{ApplicationGeneration, LogicGeneration};
