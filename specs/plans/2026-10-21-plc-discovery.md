@@ -249,9 +249,17 @@ A tracking issue lists them when the plan is approved.
   Schneider shows EQUAL (section 3).
 - **Q6. Order:** no answer yet. The working assumption is that this comes before
   the online model and S4.
-- **Reference for the GUI ontology (owner):** Beckhoff's TwinCAT extension for
-  VS Code. Its views, commands and settings are studied for their names and
-  structure only.
+- **Reference for the GUI ontology (owner): Beckhoff's TwinCAT extension for
+  VS Code.** Its views, commands and settings are studied for their names and
+  structure only. Search result (2026-10-21):
+  - Beckhoff publishes no VS Code extension, on the Marketplace or on Open VSX.
+    TwinCAT 3 Engineering is Visual Studio based (XAE, and the XAE Shell on VS
+    2022), and so is its Target Browser.
+  - Two community extensions were inventoried: "Explorer for TwinCAT" (MIT) and
+    "TwinCAT Structured Text" (GPL-3.0). They cover the project tree, editing
+    and git only. They have no target, route, online state or device commands.
+  - The reference therefore has to be another source. That is a question to the
+    owner.
 
 ## Not included
 
