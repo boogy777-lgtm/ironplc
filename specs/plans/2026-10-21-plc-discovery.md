@@ -561,6 +561,15 @@ To Go Online"; CODESYS login choices).
 
 ## Class / Inv / N+1
 
+- **Class "connection method"** (how IronPLC talks to a controller): stdio and
+  TCP today, which are two real members; USB later.
+  - Near case outside: a discovery driver. It finds a controller and does not
+    carry a session.
+  - Inv: every method implements one transport interface (open, send a frame,
+    receive a frame, close). The session protocol above it is the same.
+  - Check: the session tests run once per registered method. A method that is
+    not registered fails the completeness test.
+  - N+1: USB is one implementation plus its registration and its config row.
 - **Class "network driver"** (a way to reach devices): broadcast, address list.
   Later: a serial port, a remote gateway.
   - Near case outside: the HA pair link. It joins two units of one pair, not
