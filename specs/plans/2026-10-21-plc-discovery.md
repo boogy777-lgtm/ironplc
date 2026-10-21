@@ -233,11 +233,47 @@ The skeleton follows TwinCAT XAE and SIMATIC AX; the function follows RSLinx.
   connected device and its application.
 - **Command category** "IronPLC: Network" for the new commands.
 
+### 7. RSLinx capabilities and the next members (N+1)
+
+Survey of RSLinx Classic and FactoryTalk Linx (2026-10-21; Rockwell help and
+literature, part from snippets; the article the owner gave is secondary).
+
+**Members of this plan's classes** (each is one more member, no redesign):
+
+| RSLinx | IronLink | When |
+|---|---|---|
+| EtherNet/IP driver: broadcast, device list, Browse Remote Subnet | drivers "broadcast" and "address list" | this plan |
+| Virtual Backplane / SoftLogix driver (a soft PLC on the PC) | driver "local": a spawned `ironplcvm` (today's stdio profile) | this plan, proposal |
+| RSWho Autobrowse / Refresh, Device Properties | `browse`, `identify` | this plan |
+| SDK for third-party applications | the command protocol of IronLink | this plan |
+| DF1 serial, emulators | one more driver each | later |
+| Time synchronisation | a device setting + a command | later |
+
+**Classes named now, not built** (they fit none of the plan's classes; naming
+them keeps the design from closing them):
+
+| Class | RSLinx examples | Rule now | When |
+|---|---|---|---|
+| Named path | DDE/OPC topic, FT Linx shortcut, alias topic | the connection profile name is our named path; it never goes into device identity | profile = now; aliases later |
+| Route | CIP path through backplanes and networks, alternate path | the stored path is separate from `deviceId`; one hop today; a multi-hop route is a new version of the path format | later |
+| Data access and subscription | Data Monitor, tag read/write, unsolicited messages | IronLink owns the sessions, so a subscription can fan out to several clients; the relay must not assume request/response forever (ADR-0063 has no push in v1) | next plans (owner's thin-client list: variables read/write/force) |
+| Device operation | ControlFLASH, set IP over USB, EDS upload | long, exclusive, cancellable, with progress; `acceptEdits` is the first one | later |
+| Diagnostic counters and events | driver counters, port statistics, Syslog | read-only, resettable; not device settings | later |
+| Credential and permission | FactoryTalk Security, CIP Security, client access list | secrets never in the project file or device settings; wire auth stays deferred (ADR-0063) | later |
+| Protocol adapter | OPC DA/UA, MQTT, DDE | a server that re-exposes data; a different kind of client | later (OPC UA, MQTT); DDE never |
+| Device description registry | EDS files, installation tool | each device type declares itself | later |
+| Remote service | RSLinx Gateway, Remote Proxy | IronLink listens on localhost; the transport stays behind one interface | later |
+
+Not taken: editions, activation and tag caps (licensing), and drivers for
+legacy Rockwell hardware (DH+, DH-485, ControlNet, DeviceNet).
+
 ## Class / Inv / N+1
 
-- **Class "network driver"** (a way to find devices): broadcast, address list.
-  Later: a remote gateway, a serial port. Near case outside: a stdio session.
-  It is a spawned process, not found on a network.
+- **Class "network driver"** (a way to reach devices): broadcast, address list,
+  and, proposed, local (a spawned `ironplcvm`, as RSLinx treats Virtual
+  Backplane as a driver). Later: a serial port, a remote gateway. Near case
+  outside: the HA pair link. It joins two units of one pair, not the engineer
+  and a device.
   - Inv: a driver only produces identities. Sessions do not depend on how a
     device was found.
   - Check: a `Driver` trait with these two implementations, and the service
