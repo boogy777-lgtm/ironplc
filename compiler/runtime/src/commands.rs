@@ -60,6 +60,24 @@ pub enum Command {
     AssembleEdits,
     /// Discards the staged candidate.
     CancelEdits,
+    /// Changes the device's own settings (`deviceId`, `name`, ...): the
+    /// fields of the command are the settings to change, named as the
+    /// device's settings file names them, and a setting that is not named
+    /// stays as it is. The settings are not the application, so the command is
+    /// allowed while a candidate is staged or under test, and it does not
+    /// touch the hot-edit state.
+    ///
+    /// The runtime holds no settings and no file system: the application that
+    /// owns the settings answers this command itself (`vm-cli` checks the
+    /// values against its table of settings, writes its settings file and
+    /// answers [`Response::Ack`] or a coded error), and [`execute`] refuses it
+    /// for a host that has none. The values stay JSON, so that a new setting
+    /// is a row in that table and not an edit of this vocabulary.
+    SetDeviceSettings {
+        /// The settings to change, by key.
+        #[serde(flatten)]
+        settings: BTreeMap<String, serde_json::Value>,
+    },
 }
 
 /// The optional `edit` identity block of [`Command::AcceptEdits`]
@@ -344,6 +362,16 @@ impl CommandError {
         self.pairs.as_deref()
     }
 
+    /// Builds the refusal of a [`Command::SetDeviceSettings`] by a host that
+    /// has no device settings.
+    fn device_settings_unavailable() -> Self {
+        CommandError {
+            v_code: problem_codes::DEVICE_SETTINGS_UNAVAILABLE,
+            message: "this host has no device settings to change".to_string(),
+            pairs: None,
+        }
+    }
+
     /// Builds the error for an [`Command::AcceptEdits`] payload that does not
     /// parse as a compiled container.
     fn invalid_container(error: impl fmt::Display) -> Self {
@@ -433,6 +461,9 @@ pub fn execute(command: Command, host: &mut RuntimeHost, device: &DeviceIdentity
         Command::UntestEdits => ack_or_error(host.untest()),
         Command::AssembleEdits => ack_or_error(host.assemble()),
         Command::CancelEdits => ack_or_error(host.cancel()),
+        Command::SetDeviceSettings { .. } => {
+            Response::Error(CommandError::device_settings_unavailable())
+        }
     }
 }
 
@@ -726,6 +757,33 @@ mod tests {
                 "sync": "syncReady",
                 "control": "active",
             })
+        );
+    }
+
+    #[test]
+    fn parse_command_when_set_device_settings_then_carries_the_named_settings() {
+        let command =
+            parse_command(r#"{"command":"setDeviceSettings","name":"cell 1","deviceId":"ab"}"#)
+                .unwrap();
+
+        assert_eq!(
+            command,
+            Command::SetDeviceSettings {
+                settings: BTreeMap::from([
+                    ("deviceId".to_string(), serde_json::json!("ab")),
+                    ("name".to_string(), serde_json::json!("cell 1")),
+                ]),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_command_when_set_device_settings_names_nothing_then_empty_settings() {
+        assert_eq!(
+            parse_command(r#"{"command":"setDeviceSettings"}"#).unwrap(),
+            Command::SetDeviceSettings {
+                settings: BTreeMap::new(),
+            }
         );
     }
 
