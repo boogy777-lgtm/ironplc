@@ -19,8 +19,8 @@
 //! written complete. A file that is not JSON, has another version, names a
 //! setting that does not exist or holds a value its row refuses stops the
 //! start (V6015): the device does not guess, because a new id generated over a
-//! damaged file would change the device's identity, and break every project
-//! bound to it, without a word. The operator fixes the file, or deletes it to
+//! damaged file would change the device's identity, and make every record
+//! keyed by the old id lose the device, without a word. The operator fixes the file, or deletes it to
 //! make the device a new one.
 //!
 //! **Change.** A change is checked as a whole, written as a temporary file and

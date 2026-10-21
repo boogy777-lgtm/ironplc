@@ -57,9 +57,9 @@ pub(crate) enum Changeable {
     /// `setDeviceSettings` command.
     OnlineAndFile,
     /// In the settings file only, on the device itself. A setting that the
-    /// engineering session relies on, such as the identity check, is
-    /// `FileOnly`: whoever can change it over the session could silence the
-    /// check.
+    /// engineering session relies on, such as the recognition of the device,
+    /// is `FileOnly`: whoever can change it over the session could give the
+    /// device the identity of another one.
     FileOnly,
 }
 
@@ -75,11 +75,11 @@ struct Row {
     check: fn(&str) -> Result<(), &'static str>,
 }
 
-/// The row of the `deviceId` setting: what binds an engineer's project to
-/// this device. Random, so that two devices never share one, and changeable
-/// on the device only (its settings file), so that an operator can give a
-/// replacement device the id of the one it replaces, and an engineer cannot
-/// change the id over the session to silence a "different device" refusal.
+/// The row of the `deviceId` setting: how a workstation recognises this device
+/// again. Random, so that two devices never share one, and changeable on the
+/// device only (its settings file), so that an operator can give a replacement
+/// device the id of the one it replaces, and nothing can change the id over the
+/// session.
 const DEVICE_ID: Row = Row {
     key: "deviceId",
     initial: Initial::Random128Hex,
