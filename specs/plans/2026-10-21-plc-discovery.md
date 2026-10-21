@@ -202,7 +202,7 @@ Every decision is made in one place, and the clients render it.
   - Replies are rate-limited per source.
   - The request is fixed-size. Anything else gets no reply and no error.
 - **Reply: public identity only.** It holds the protocol version, `deviceId`,
-  device name, model and firmware, the session port, and whether the device is
+  device name, model and runtime version, the session port, and whether the device is
   protected. It does not say whether the session is busy: busy is the answer to
   a connect attempt.
 - **What may be shown, and to whom** (owner: separate what is not confidential
@@ -211,7 +211,7 @@ Every decision is made in one place, and the clients render it.
   | Data | Discovery (anyone on the network) | Session (after connect; credentials when protected) | Never on the wire |
   |---|---|---|---|
   | device id, name, model, protocol, session port, protected flag | yes | yes | |
-  | firmware version | yes, as Rockwell does (ListIdentity gives the revision to anyone, even for a secured controller, and has no setting to hide it). Protection is the interfaces discovery answers on, `--no-discovery`, and network segmentation. Recommended; the owner has not confirmed it | yes | |
+  | runtime version | yes, protected device too, as Rockwell does (ListIdentity gives the revision to anyone, even for a secured controller, and has no setting to hide it). Protection is the interfaces discovery answers on, `--no-discovery`, and network segmentation (owner, 2026-10-21) | yes | |
   | application identity (name, contentHash, layoutHash, generations) | no | yes | |
   | pending edit record, run state, device settings | no | yes | |
   | credentials, keys | | | yes |
@@ -363,8 +363,8 @@ VS Code part (the Network view, Choose Controller, the service process) lives.
   the tree from the service.
 - **The remembered connection path is stored in two places** (owner: both, each
   independent, each can be overwritten). Neither is an intent or a binding.
-  - **The project file** `<app>.path.iplcinfo`, beside `<app>.iplc` (the name is
-    to be confirmed). It holds the `deviceId` of the controller last chosen, and
+  - **The project file** `<app>.path.iplcinfo`, beside `<app>.iplc` (name
+    confirmed by the owner). It holds the `deviceId` of the controller last chosen, and
     a route hint, the last address that is not loopback. It travels with the
     project, so a project moved to another PC keeps its last path, as Set
     Project Path does.
@@ -552,9 +552,9 @@ and button labels are not confirmed.
 | 10 | Accept / Test / Assemble / Cancel pending edits, Finalize All Edits; nothing documented for another workstation or a crash | the same vocabulary (ADR-0064/0065) |
 | 12 | "Match Project to Controller" (Controller Properties, Advanced): opt-in; the project stores the controller serial; on a mismatch the transfer is cancelled, and the engineer either connects to the right controller or updates the serial in the project | default: an information row (owner: any controller). **N+1, later:** the same opt-in per application, "match the application to controller id X" |
 | 13 | the application goes offline; operations in progress do not complete; Go Online again re-correlates | the same, with "unknown" in place of the last state |
-| 15 | a firmware mismatch prompts for a firmware update (firmware kit, ControlFLASH Plus) | update the runtime |
+| 15 | a firmware mismatch prompts for a firmware update (firmware kit, ControlFLASH Plus) | no firmware concept: the message names both versions (row 15) |
 | — | Change Detection: the controller keeps an Audit Value that changes on forces, mode changes, downloads, firmware updates, and so on; it is blank offline | **N+1, later:** a "controller change detection" class, which tells the engineer that the controller changed since they were last online |
-| — | discovery (ListIdentity) gives the revision to anyone on the network, even for a secured controller; there is no setting to hide it; protection is network segmentation and CIP Security on sessions | see the firmware question in section 3 |
+| — | discovery (ListIdentity) gives the revision to anyone on the network, even for a secured controller; there is no setting to hide it; protection is network segmentation and CIP Security on sessions | the same: the runtime version is public (owner, section 3) |
 
 **Gaps that the table shows (for the online-model plan):**
 
@@ -594,8 +594,10 @@ pipeline in a "replace" mode.
   "keep" set.
 - A schedule, I/O or flag change (V4008, V4009, V4007) then has a path. Today
   it has none.
-- "No application" is a built-in empty container (no tasks), so a device
-  without an application needs no new state in the host's state machine.
+- "No application" is a built-in empty container: no ST files, so no
+  programs and no tasks. A device without an application needs no new state in
+  the host's state machine.
+- **Approved by the owner (2026-10-21)**, both points.
 
 Facts below are from a sweep of `main` 3e5a601ed, with the key lines verified
 by hand (`runtime/src/host.rs`, `vm-cli/src/serve.rs`, `vm-cli/src/slot_store.rs`,
@@ -608,7 +610,7 @@ by hand (`runtime/src/host.rs`, `vm-cli/src/serve.rs`, `vm-cli/src/slot_store.rs
 | 3 | offline edits add or rename persistent variables | needs `sync-uids` by hand, else V4020 at accept; VS Code does no pre-check (only MCP does) | the pre-check in the one decision place; the UID sync is a step of the flow | gap |
 | 4 | offline edits change the schedule, I/O sizes or flags (V4008, V4009, V4007) | **no deploy path at all**: no full download, and restarting `serve` does not help | Download = the "replace" mode of the same pipeline | gap |
 | 5 | a candidate staged (not tested) by an earlier TCP session | the next build fails with V4013, which does not name the edit; no exit in the UI | row 10 of the comparison shows the record and its exits | gap |
-| 6 | a candidate under Test, and the TCP session drops | the candidate keeps running under Test with nobody attached, without limit | **owner decision**: keep (Rockwell keeps test edits) or untest automatically on session loss (non-migration only) | decision |
+| 6 | a candidate under Test, and the TCP session drops | the candidate keeps running under Test with nobody attached, without limit | **owner (2026-10-21):** the responsibility lies with the side where the test runs, which is the controller. The candidate stays under Test (as Rockwell keeps test edits); losing the session changes nothing; the next connect shows it in row 10 with its exits | decided |
 | 7 | "Cancel" in the Trial dialog while testing | **always refused (V4015)**: `cancel()` refuses while the candidate is active (`host.rs`), and `resolveTrial` sends cancel directly | Cancel from Testing = untest, then cancel at the boundary | defect |
 | 8 | a migration candidate under Test | no untest (V4011); the dialog still offers Cancel, which cannot work; the only exits are Assemble or a device restart | keep the old buffers so that untest is possible, or say plainly that the only exit is Assemble | gap |
 | 9 | Esc in the Trial dialog | the candidate stays under Test; the code comment says "exits stay available on the next build", but the next build fails with V4013 | the exits come from the comparison (row 10) | defect |
@@ -637,8 +639,10 @@ by hand (`runtime/src/host.rs`, `vm-cli/src/serve.rs`, `vm-cli/src/slot_store.rs
 - **K3, device durability (rows 11 and 12):** the retained/persistent store,
   and the running versus persisted identity.
 - **K4, cyclic execution of the device (row 18).** This comes before Run/Stop.
-- **Defects that can be fixed on their own:** rows 7, 9, 10, 17 and 21, and row
-  16 (removal).
+- **Defects** (rows 7, 9, 10, 17 and 21, and the removal in row 16): fixed
+  inside K1, not as separate patches (owner, 2026-10-21).
+- **Order in the online-model plan (owner, 2026-10-21):** K3 and K4 come
+  first.
 
 ## Class / Inv / N+1
 
@@ -692,7 +696,10 @@ by hand (`runtime/src/host.rs`, `vm-cli/src/serve.rs`, `vm-cli/src/slot_store.rs
    and the session command that changes a setting; ADR "PLC discovery" (its
    text follows the owner's answers of 2026-10-21: no binding).
 3. Device: the discovery wire crate and the responder on `--listen`; docs; a
-   problem code for a reply that cannot be parsed, if needed.
+   problem code for a reply that cannot be parsed, if needed. The identity field
+   `firmwareVersion` (a fixed `"0.13.0"` today, `runtime/src/commands.rs`)
+   becomes `runtimeVersion`, taken from the build, since IronPLC has no firmware
+   concept.
 4. Service: the `ironlink` binary, the broadcast and address-list drivers,
    browse, the shell of commands, the CLI.
 5. Connection methods as a class: one transport interface in Rust and in
@@ -752,12 +759,22 @@ Tracking issue: #149.
     conflict (section 8).
   - To-do: a source archive in the controller, a project-creation mechanism
     with templates, and unpacking as one more way of creating a project.
-  - The firmware version of a protected controller in discovery: no answer yet.
+  - There is no firmware concept in IronPLC; the version is the runtime
+    version. It is public in discovery, for a protected controller too, as
+    Rockwell does (section 3).
 - **Plan approved** (owner, 2026-10-21). The owner also said:
   - a local soft PLC is one more device, not a driver (section 7);
   - IronLink finds and establishes the route, discovers devices and organises
     the session (section 4a);
   - a separate VS Code extension is considered (section 4b, open).
+- **Answers of 2026-10-21 (after the hot-edit audit, section 9):**
+  - Row 6: the responsibility lies with the side where the test runs; the
+    candidate stays under Test after the session drops.
+  - The audit defects are fixed inside class K1.
+  - Download is the "replace" mode of the same pipeline; "no application" is an
+    empty container (no ST files).
+  - K3 and K4 come first in the online-model plan.
+  - The project path file is `<app>.path.iplcinfo`.
 - **Reference for the GUI ontology (owner): Beckhoff's TwinCAT extension for
   VS Code.** Its views, commands and settings are studied for their names and
   structure only. Search result (2026-10-21):
