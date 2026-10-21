@@ -38,7 +38,9 @@ This spec builds on:
   Rockwell-adapted session lifecycle — assemble requires Test, Build &
   Commit is the finalize-equivalent, and the redundant-pair pipeline
 - **[vm-cli.md](vm-cli.md)**: the `ironplcvm serve` session requirements
-  (REQ-VC-vm-cli-018 through REQ-VC-vm-cli-023)
+  (REQ-VC-vm-cli-018 through REQ-VC-vm-cli-029)
+- **[ADR-0084](../adrs/0084-plc-discovery-and-target-binding.md)**: the device
+  id, the device settings and the binding of a project to a device
 - **[HA Redundancy FSM](ha-redundancy-fsm.md)**: the epoch and SYNC/CONTROL
   vocabulary the `identity` response's redundancy block mirrors, and the
   state-machine notation this spec reuses
@@ -181,6 +183,7 @@ redundancy layer is loaded):
   "response": "identity",
   "protocol": 1,
   "device": {
+    "deviceId": "0123456789abcdef0123456789abcdef",
     "name": "ironplcvm",
     "model": "IronPLC SoftPLC",
     "modification": "vm-cli",
@@ -211,9 +214,15 @@ Field set:
 
 - `protocol` — session protocol version, `1` for the version this spec
   defines. A client refuses a higher number.
-- `device` — the panel fields: `name`, `model`, `modification`,
-  `firmwareVersion`. A soft device reports its binary name and version; a
-  hardware target reports its catalog values.
+- `device` — the panel fields: `deviceId`, `name`, `model`, `modification`,
+  `firmwareVersion`. `deviceId` is the device's unique id, 32 lowercase
+  hexadecimal digits that the device generates once, keeps across restarts
+  and lets its operator change (below). It is optional: a host that has none
+  (the MCP in-process host, a hardware target that reports no id) and a device
+  that predates the field omit it, and a client that does not know it ignores
+  it, so the protocol stays at version `1`. `name` is a device setting. A soft
+  device reports its binary name and version as `modification` and
+  `firmwareVersion`; a hardware target reports its catalog values.
 - `application` — the live hot-edit status snapshot (mode, generation
   counters, rounds), the same fields `getStatus` returns
   (`StatusPayload` in `compiler/runtime/src/commands.rs`). Two optional fields say what
@@ -226,6 +235,37 @@ Field set:
 - `redundancy` — optional: `pairId`, configured `role`, ownership `epoch`,
   and the SYNC/CONTROL substates of
   [HA Redundancy FSM](ha-redundancy-fsm.md). Absent means standalone.
+
+### Device settings
+
+The device owns a few settings: values it persists and an operator can change
+offline (by editing the settings file) and online (by the `setDeviceSettings`
+command). Today they are `deviceId` and `name`; `ironplcvm serve` keeps them in
+`<FILE>.device.json` beside the slot store
+([vm-cli.md](vm-cli.md), REQ-VC-vm-cli-025 through REQ-VC-vm-cli-029). Each
+setting is one row of one table in `compiler/vm-cli/src/device_settings.rs`
+(key, first value, check), and the settings file, the command and the `identity`
+answer all go through the rows. A device settings file that cannot be used stops
+the start (V6015) instead of giving the device a new identity.
+The id is what a project binds to ([ADR-0084](../adrs/0084-plc-discovery-and-target-binding.md)).
+
+Request (every field is optional; a setting that is not named stays as it is):
+
+```json
+{"command":"setDeviceSettings","name":"cell 1","deviceId":"fedcba9876543210fedcba9876543210"}
+```
+
+Response: `{"response":"ack"}` once the values are checked and written. The
+command answers `ack`, like every command that changes state; the client reads
+the new values with `identity`, which it does on every (re)opened transport
+anyway. A value that a setting refuses, or a key that is no setting, answers
+V6015, and a settings file that cannot be written answers V6016. In both cases
+the file and the running device are unchanged. The settings are not the
+application, so the command is allowed while a candidate is staged or under
+test, and it does not touch the hot-edit state. The runtime command layer
+(`execute`) has no file system and holds no settings: it refuses the command
+with V4021 for a host that has none, and `ironplcvm serve` answers it itself,
+as it persists the commit of `assembleEdits` through the slot store.
 
 Extensibility is structural, not negotiated: servers add optional fields,
 clients ignore fields they do not know, and every block is an object so
@@ -538,11 +578,13 @@ Everything reused, with its one authority:
 | Client session (request FIFO, response parsing) | `HotEditSession`, `parseResponseLine`, `encodeRequest` in `integrations/vscode/src/hotEditSession.ts` |
 | Transport seam the TCP transport implements | `HotEditTransport` in `integrations/vscode/src/hotEditSession.ts` (stdio impl: `StdioLineTransport` in `integrations/vscode/src/hotEdit.ts`) |
 | Device-panel application state | `StatusPayload` in `compiler/runtime/src/commands.rs` |
+| Device block of `identity` (the id, the name) | `DeviceSettings::identity` in `compiler/vm-cli/src/device_settings.rs`, the one place a `DeviceIdentity` is built |
+| Device settings (the file, the command) | `Device` in `compiler/vm-cli/src/device_settings/device.rs`; `set_device_settings_line` in `compiler/vm-cli/src/serve.rs` |
 | Compile | `compile` in `compiler/ironplc-cli/src/cli.rs`; arg vector `compileArgs` in `integrations/vscode/src/taskProviderLogic.ts` |
 | Upload | `Command::AcceptEdits` in `compiler/runtime/src/commands.rs` |
 | Verify | `verify_load` in `compiler/container/src/load_verify.rs`; `validate_candidate` in `compiler/runtime/src/online_change.rs` |
 | Run control | `Command` variants in `compiler/runtime/src/commands.rs`; boundary round `drive_scan_round` in `compiler/vm-cli/src/serve.rs` |
-| V-code registries | `compiler/vm-cli/resources/problem-codes.csv` (V6013/V6014, the transport codes, beside the existing V6011/V6012), `compiler/runtime/resources/problem-codes.csv` (untouched) |
+| V-code registries | `compiler/vm-cli/resources/problem-codes.csv` (V6013/V6014, the transport codes, beside the existing V6011/V6012; V6015/V6016, the device settings), `compiler/runtime/resources/problem-codes.csv` (V4021, a host without device settings) |
 | E-code registry and rendering | `integrations/vscode/resources/problem-codes.csv` (E0010+), `formatProblem` in `integrations/vscode/src/problems.ts` |
 | Heartbeat | `getStatus` — `Command::GetStatus` in `compiler/runtime/src/commands.rs` |
 | Redundancy block vocabulary | [HA Redundancy FSM](ha-redundancy-fsm.md) (epoch, SYNC/CONTROL) |
