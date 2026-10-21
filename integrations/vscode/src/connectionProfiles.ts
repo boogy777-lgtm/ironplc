@@ -14,6 +14,7 @@
  */
 
 import { ProblemCode } from './problems';
+import { DEFAULT_SESSION_PORT } from './sessionPort';
 
 /** The transport a profile speaks: a spawned child or a remote socket. */
 export type ConnectionTransport = 'stdio' | 'tcp';
@@ -30,7 +31,7 @@ export interface ConnectionProfile {
   program?: string;
   /** The IPv4/IPv6/hostname address of a tcp device. */
   address?: string;
-  /** The tcp port, 1-65535; defaults to 49152 when omitted. */
+  /** The tcp port, 1-65535; defaults to the session port when omitted. */
   port?: number;
   /** The secret-store key the host resolves a username/password pair from. */
   credentialsKey?: string;
@@ -43,9 +44,6 @@ export interface ProfileValidationError {
   profile: string;
   detail: string;
 }
-
-/** The tcp port a profile assumes when none is configured (first IANA dynamic port). */
-export const DEFAULT_TCP_PORT = 49152;
 
 const MAX_PORT = 65535;
 const MAX_HOSTNAME_LENGTH = 253;
@@ -145,7 +143,7 @@ export function validateProfiles(raw: unknown): {
       transport,
       program,
       address,
-      port: transport === 'tcp' ? port ?? DEFAULT_TCP_PORT : undefined,
+      port: transport === 'tcp' ? port ?? DEFAULT_SESSION_PORT : undefined,
       credentialsKey,
     });
     // Only accepted profiles claim their name: an invalid profile must not

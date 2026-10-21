@@ -2,15 +2,15 @@ import * as assert from 'assert';
 
 import {
   ConnectionProfile,
-  DEFAULT_TCP_PORT,
   isValidAddress,
   validateProfiles,
 } from '../../connectionProfiles';
 import { ProblemCode } from '../../problems';
+import { DEFAULT_SESSION_PORT } from '../../sessionPort';
 
 suite('validateProfiles', () => {
   const STDIO_PROFILE = { name: 'Local VM', transport: 'stdio', program: '${workspaceFolder}/main.st' };
-  const TCP_PROFILE = { name: 'Cell 1', transport: 'tcp', address: '192.168.1.10', port: 49152 };
+  const TCP_PROFILE = { name: 'Cell 1', transport: 'tcp', address: '192.168.1.10', port: DEFAULT_SESSION_PORT };
 
   test('validateProfiles_when_empty_array_then_no_profiles_no_errors', () => {
     const result = validateProfiles([]);
@@ -35,10 +35,10 @@ suite('validateProfiles', () => {
     assert.strictEqual(profile.port, undefined);
   });
 
-  test('validateProfiles_when_tcp_profile_omits_port_then_defaults_to_49152', () => {
+  test('validateProfiles_when_tcp_profile_omits_port_then_defaults_to_the_session_port', () => {
     const result = validateProfiles([{ name: 'Cell 1', transport: 'tcp', address: 'plc-01' }]);
     assert.deepStrictEqual(result.errors, []);
-    assert.strictEqual(result.profiles[0].port, DEFAULT_TCP_PORT);
+    assert.strictEqual(result.profiles[0].port, DEFAULT_SESSION_PORT);
   });
 
   test('validateProfiles_when_profile_not_an_object_then_e0010', () => {
@@ -98,7 +98,7 @@ suite('validateProfiles', () => {
   });
 
   test('validateProfiles_when_stdio_with_port_then_e0012', () => {
-    const result = validateProfiles([{ ...STDIO_PROFILE, port: 49152 }]);
+    const result = validateProfiles([{ ...STDIO_PROFILE, port: DEFAULT_SESSION_PORT }]);
     assert.strictEqual(result.errors.length, 1);
     assert.strictEqual(result.errors[0].code, ProblemCode.ConnectionPortInvalid);
   });
@@ -120,7 +120,7 @@ suite('validateProfiles', () => {
   });
 
   test('validateProfiles_when_port_out_of_range_then_e0012', () => {
-    for (const port of [0, 65536, -1, 3.5, '49152']) {
+    for (const port of [0, 65536, -1, 3.5, String(DEFAULT_SESSION_PORT)]) {
       const result = validateProfiles([{ ...TCP_PROFILE, port }]);
       assert.strictEqual(result.errors.length, 1, `expected one error for port ${port}`);
       assert.strictEqual(result.errors[0].code, ProblemCode.ConnectionPortInvalid);
@@ -177,7 +177,7 @@ suite('isValidAddress', () => {
 
 suite('ConnectionProfile', () => {
   test('ConnectionProfile_when_defined_then_compiles', () => {
-    const profile: ConnectionProfile = { name: 'x', transport: 'tcp', address: '::1', port: DEFAULT_TCP_PORT };
+    const profile: ConnectionProfile = { name: 'x', transport: 'tcp', address: '::1', port: DEFAULT_SESSION_PORT };
     assert.strictEqual(profile.transport, 'tcp');
   });
 });
