@@ -18,12 +18,12 @@ situations raise this code:
   settings file only. Today that is ``deviceId``. The message says that the
   field can only be changed on the device itself (its settings file). The
   command is refused as a whole, even when it also names ``name``, and neither
-  the file nor the running device changes. The id is the basis of the identity
-  check, so the engineering session cannot change it.
+  the file nor the running device changes. The id is how a workstation
+  recognises the device again, so the engineering session cannot change it.
 
 The device does not repair a file it cannot read. A device that generated a new
-device id over a damaged file would change its identity, and every project bound
-to the old id would stop recognising it.
+device id over a damaged file would change its identity, and the remembered paths and
+download records keyed by the old id would stop finding it.
 
 The settings and their rules:
 
@@ -58,8 +58,9 @@ Solutions
 
 1. Correct the field that the message names, then start ``serve`` again.
 2. To make the device a new device, delete the settings file. The next start
-   generates a new device id and writes the file. Any project bound to the old
-   id has to select the device again.
+   generates a new device id and writes the file. The remembered paths and
+   download records keyed by the old id no longer find the device, and the
+   engineer chooses the controller again.
 3. To give a replacement device the id of the device it replaces, write that id
    in ``deviceId`` in the settings file of that device, before the first start or
    while the device is stopped. ``setDeviceSettings`` cannot change the id.

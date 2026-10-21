@@ -131,9 +131,9 @@ container. The file is JSON:
 ``deviceId``
    The unique id of the device: 32 lowercase hexadecimal digits. The device
    generates it from 128 random bits when it starts without the file, and keeps
-   it across restarts. The ``identity`` answer reports it. A project binds to a
-   device by this id. Change it in the file only, and only on the device
-   itself: see below.
+   it across restarts. The ``identity`` answer reports it. A workstation
+   recognises the device again by this id. Change it in the file only, and only
+   on the device itself: see below.
 
 ``name``
    The name of the device: 1 to 64 characters, not blank, without control
@@ -165,9 +165,9 @@ setting that it does not name stays as it is:
      - yes
      - yes
 
-The device id is the basis of the identity check, and the session cannot change
-it: an id that an engineer could change over the network could silence a
-"different device" refusal. Give a replacement device the id of the device it
+The device id is how a workstation recognises the device again, and the session
+cannot change it: an id that an engineer could change over the network could give
+a device the identity of another one. Give a replacement device the id of the device it
 replaces, or give a cloned device a new id, by editing the file on that device.
 
 The device checks every named value, writes the file, and answers

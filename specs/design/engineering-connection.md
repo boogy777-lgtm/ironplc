@@ -39,8 +39,8 @@ This spec builds on:
   Commit is the finalize-equivalent, and the redundant-pair pipeline
 - **[vm-cli.md](vm-cli.md)**: the `ironplcvm serve` session requirements
   (REQ-VC-vm-cli-018 through REQ-VC-vm-cli-029)
-- **[ADR-0084](../adrs/0084-plc-discovery-and-target-binding.md)**: the device
-  id, the device settings and the binding of a project to a device
+- **[ADR-0084](../adrs/0084-plc-discovery-and-controller-selection.md)**: the device
+  id, the device settings, discovery, and the remembered connection path
 - **[HA Redundancy FSM](ha-redundancy-fsm.md)**: the epoch and SYNC/CONTROL
   vocabulary the `identity` response's redundancy block mirrors, and the
   state-machine notation this spec reuses
@@ -248,11 +248,11 @@ setting is one row of one table in `compiler/vm-cli/src/device_settings.rs`
 (key, first value, where it may be changed, check), and the settings file, the
 command and the `identity` answer all go through the rows. A device settings file that cannot be used stops
 the start (V6015) instead of giving the device a new identity.
-The id is what a project binds to ([ADR-0084](../adrs/0084-plc-discovery-and-target-binding.md)),
-so it is the basis of the identity check, and it is changed on the device itself
-(its settings file) and never over the engineering session: an id that the
-session could change would let an engineer silence a "different device"
-refusal.
+The id is how a workstation recognises a controller again and the key of the
+download record ([ADR-0084](../adrs/0084-plc-discovery-and-controller-selection.md)). It is changed on the
+device itself (its settings file) and never over the engineering session: an id
+that the session could change would let a session give a device the identity,
+and the records, of another one.
 
 Request (every field is optional; a setting that is not named stays as it is):
 
