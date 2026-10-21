@@ -181,9 +181,9 @@ Every decision is made in one place, and the clients render it.
   - The **device id is changed only on the device itself**: in its settings
     file, or later in the device's own local UI. It is never changed over the
     engineering session (audit 2026-10-21, confirmed by the owner).
-    - The id is the basis of the identity check. Changing it over the network
-      would let an engineer silence a "different device" refusal, which
-      destroys the check.
+    - The id is how a workstation recognises a controller again, and it is the
+      key of the download record. A session must not rewrite what the
+      engineering side uses to recognise the device it talks to.
     - The scenarios that need a change are local: replacing a device by giving
       the replacement the id of the one it replaces, and resolving a duplicate
       after a cloned image.
