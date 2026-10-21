@@ -176,10 +176,11 @@ Every decision is made in one place, and the clients render it.
   beside its slots: `deviceId`, device name, and later the port and whether
   discovery is on.
   - The file can be edited offline.
-  - A session command can change the name online, through IronLink.
+  - A session command can change the name online. IronPLC sends it in its
+    session; IronLink never writes to a controller (owner).
   - The **device id is changed only on the device itself**: in its settings
     file, or later in the device's own local UI. It is never changed over the
-    engineering session (audit 2026-10-21).
+    engineering session (audit 2026-10-21, confirmed by the owner).
     - The id is the basis of the identity check. Changing it over the network
       would let an engineer silence a "different device" refusal, which
       destroys the check.
@@ -285,8 +286,24 @@ transport.
 | New code | discovery + config writer | + relay, session multiplexing, a lifecycle |
 | Today's `ConnectionManager` | stays | moves behind IronLink |
 
-**Recommendation: A now.** B is added as the transport of the first driver that
-is not plain TCP, or when two clients must share one controller.
+**Owner's decision (2026-10-21): A.**
+
+- IronLink finds controllers and routes, and writes the data into the config
+  (the project path file and the workstation route record).
+  - It never writes to a controller.
+  - Connecting, and every conclusion after it, belong to IronPLC.
+- **Build in maximum modularity from the start.** There are two classes, each
+  with its own trait/interface, and each member registers itself:
+  - **Connection method** (how IronPLC talks to a controller). Today: stdio (a
+    spawned local `ironplcvm`) and TCP. These are two real members, so the
+    class is confirmed. Later: USB. A new method is one implementation of the
+    transport interface plus its config row; the session protocol on top does
+    not change. TypeScript already has `HotEditTransport` with the stdio and
+    TCP implementations; Rust (MCP, CLI) gets the same trait.
+  - **Discovery driver** (how IronLink finds controllers). Today: broadcast and
+    address list. Later: USB enumeration. A driver produces observations and
+    routes; each route names the connection method that reaches it.
+- B (IronLink carries the session) stays a named class, not built.
 
 - It is named now ("transport relay", section 7) and not built (ConfirmedClass:
   no second real case yet).
@@ -418,10 +435,11 @@ The skeleton follows TwinCAT XAE and SIMATIC AX; the function follows RSLinx.
 - **Actions:**
   - On the view title: "Search network" (refresh, as Broadcast Search) and
     "Add address…" (as Enter Host Name / IP).
-  - On a device: "Choose", "Connect", "Disconnect", "Identify"
-    (fresh request), "Rename device…" (the one setting changeable online; the
-    device id is not) and "Copy device id". Enablement comes from the one
-    decision place (section 0a).
+  - On a device: "Choose", "Connect", "Identify" (fresh request) and "Copy
+    device id". Enablement comes from the one decision place (section 0a).
+  - "Disconnect" and "Rename device…" act in a session, so they live in the
+    IronPLC Device view, not in IronLink's tree. "Rename device…" is the one
+    setting changeable online; the device id is not.
   - On the address-list driver: "Add address…" and "Remove address".
 - **Command "IronPLC: Choose Controller…"** (as Choose Target System). It is a
   QuickPick of controllers for the application's remembered path. It has three
@@ -510,10 +528,10 @@ To Go Online"; CODESYS login choices).
 | 3 | A protected | "protected" | — | enter credentials (later class); until then none | — |
 | 4 | B none: a new device, a factory reset, or an application lost | "no application" | P, or "not built", or errors | Download (when P exists; else Build first); device-level connection | no: there is nothing to change |
 | 5 | C = P, P up to date. This includes disconnect then connect with nothing changed | EQUAL | EQUAL | online at once, no dialog: monitor; hot edit on later edits | yes |
-| 6 | C = P, sources changed since the build (offline edits started) | = last build | "modified since build" | monitor (the built container matches the controller; modified lines marked); Build, then rows 7 or 8 | after Build |
-| 7 | C = R ≠ P, P up to date, Lc = Lp | "previous download from this project" | "changed since that download" | Login with online change; Login with download; Login without change | yes |
+| 6 | C = P, sources changed since the build (offline edits started) | = last build | "modified since build" | as row 7. "Login with online change" builds first (as CODESYS asks "generate code now?") and then is row 7 or 8 | after the build |
+| 7 | C = R ≠ P, P up to date, Lc = Lp | "previous download from this project" | "changed since that download" | Login without change (with a warning that the project differs); Login with online change (the difference is loaded; it may change the process unpredictably, so it is the engineer's responsibility and is confirmed explicitly); Login with download; Upload into a new project (once the source archive exists) | yes |
 | 8 | C = R ≠ P, Lc ≠ Lp (persistent part changed) | as 7 | as 7 | online change with migration decisions (ADR-0061, V4010), or Download; V4020 (persistent variable without a UID) leaves Download only | with migration |
-| 9 | C ≠ P and C ≠ R: unknown to this project (another project, engineer or workstation) | DIFFERENT, with its application identity | P | Download (overwrite, with a warning); device-level connection; cancel. No online change: the base is unknown. No Upload: a container holds no sources | no |
+| 9 | C ≠ P and C ≠ R: unknown to this project (another project, engineer or workstation) | DIFFERENT, with its application identity | P | Download (overwrite, with a warning); Upload into a new project (once the source archive exists); device-level connection; cancel. No online change: the base is unknown | no |
 | 10 | E staged/under test (this or another session, or after a crash) | the pending edit record | — | resolve it first: test, untest, assemble or cancel (ADR-0064/0065); a new change is blocked until then | after it is resolved |
 | 11 | P build fails | as B | errors | monitor only if C = the container still on disk; otherwise device-level; no download, no change | no |
 | 12 | `deviceId` differs from the remembered path | information row "not the controller this project last connected to (id X, was Y)" | — | the rows above apply to this controller (R is looked up by its id) | per row |
@@ -530,9 +548,16 @@ To Go Online"; CODESYS login choices).
 - **A device without an application (row 4)** is a new device state.
   `ironplcvm serve` needs a container today. The online-model plan adds it:
   serving with no application, and Download as the first load.
-- **Upload is impossible**: a container holds no sources. A later "source
-  archive in the container" (as CODESYS's option to download the sources) would
-  make it possible.
+- **Upload is impossible today**, because a container holds no sources.
+  - **Owner's to-do.** The controller also receives the project sources as an
+    archive with maximum compression.
+  - Upload then reads the archive back and **creates a new project** from it.
+  - This needs a project-creation mechanism with templates, as CODESYS has.
+    Unpacking an uploaded archive is one more way (N+1) of creating a project.
+  - This is its own plan, after the online model.
+- Rows 6 and 7 are one situation, before and after the build. The owner's
+  choices for it (a warning, loading the difference on the engineer's
+  responsibility, or uploading into a new project) are all in row 7.
 
 ## Class / Inv / N+1
 
@@ -580,11 +605,12 @@ To Go Online"; CODESYS login choices).
    problem code for a reply that cannot be parsed, if needed.
 4. Service: the `ironlink` binary, the broadcast and address-list drivers,
    browse, the shell of commands, the CLI.
-5. Only with option B of section 4a: sessions carried by the service (relay,
-   several clients on one device).
+5. Connection methods as a class: one transport interface in Rust and in
+   TypeScript, with the stdio and TCP members registering themselves; MCP
+   gains the TCP method (option A: IronPLC connects directly).
 6. VS Code: the Network view, "Choose" (the project path file and the
    workstation route record; the download record keyed by `deviceId`), and
-   connect (directly with option A, through IronLink with B). The network tree
+   connect directly (option A). The network tree
    is text rows (RSLinx function). The skeleton of views, commands and state
    follows SIMATIC AX and TwinCAT XAE. The go-online comparison and its actions
    are the online-model plan (section 8).
@@ -626,8 +652,17 @@ Tracking issue: #149.
   - Busy is the answer to a connect attempt, not a marker.
   - A protected flag is added, and what is public is separated from what is
     hidden (section 3).
-  - The fundamental question, whether IronLink only finds and records or also
-    carries the session, is open. The recommendation is A (section 4a).
+  - The fundamental question was answered A: IronLink finds and writes the
+    config, never writes to a controller, and IronPLC connects. Maximum
+    modularity: TCP is one connection method of a class, and USB comes later
+    (section 4a).
+  - The device id is changed only on the device itself (confirmed).
+  - Row 6: a warning, loading the difference on the engineer's responsibility,
+    or uploading into a new project. It is merged with row 7, since there is no
+    conflict (section 8).
+  - To-do: a source archive in the controller, a project-creation mechanism
+    with templates, and unpacking as one more way of creating a project.
+  - The firmware version of a protected controller in discovery: no answer yet.
 - **Plan approved** (owner, 2026-10-21). The owner also said:
   - a local soft PLC is one more device, not a driver (section 7);
   - IronLink finds and establishes the route, discovers devices and organises
@@ -649,6 +684,10 @@ Tracking issue: #149.
     then device. No graphical boxes.
 
 ## Not included
+
+- **The source archive in the controller, Upload, and project creation from
+  templates** (owner's to-do, section 8). This is its own plan, after the
+  online model.
 
 - Wire authentication and encryption (ADR-0063 keeps it deferred). The binding
   check is identity, not security.
