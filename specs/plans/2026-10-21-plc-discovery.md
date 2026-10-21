@@ -663,9 +663,23 @@ by hand (`runtime/src/host.rs`, `vm-cli/src/serve.rs`, `vm-cli/src/slot_store.rs
   - Finalize All fills it through every stage.
   - A failed stage stays marked with its V-code, and its exits are shown
     (row 10 of section 8).
-  - Proposal, to be confirmed: the bar is a row of the IronPLC Device view and
-    a status bar item. A VS Code progress notification runs while one stage
-    is in flight.
+  - **The control (owner, 2026-10-21):** a rectangle with the progress bar,
+    and under it two buttons and a checkbox.
+    - **Next** is the command of the next stage. After a stage passes, the
+      button becomes the command of the following one: Build, then Accept,
+      then Test, then Assemble.
+    - **Cancel** is the exit of the current stage: from Accepted it is
+      `cancelEdits`; from Testing it is Untest and then Cancel at the
+      boundary (row 7). Under a migration candidate it is disabled with its
+      reason (V4011, row 8).
+    - **The checkbox "Finalize all":** when it is checked, Next runs every
+      remaining stage in one action.
+    - The labels, the enablement of both buttons and the reasons come from
+      the runtime's K1 function. The control holds no rule.
+    - It replaces today's modal Trial dialog (`buildLogic.ts`).
+    - In VS Code a progress bar with buttons needs a webview view (a native
+      `WebviewViewProvider`); a TreeView cannot draw it. Proposal: a webview
+      view in the IronPLC sidebar, beside the IronPLC Device view.
 - **A test that does not drive outputs** (as the SLC 500 / PLC-5 Remote Test
   mode, where the program is solved but outputs stay off) is a different
   feature. It is named here as a later class, together with the I/O plan.
