@@ -179,6 +179,60 @@ with "Scan network" (CODESYS) do.
 - **The download record (ADR-0083)** stays keyed by the connection. The binding
   adds which device the connection means.
 
+### 6. GUI skeleton in VS Code
+
+The skeleton follows TwinCAT XAE and SIMATIC AX; the function follows RSLinx.
+
+**References** (research 2026-10-21):
+
+- **TwinCAT XAE** (Infosys pages read directly):
+  - "Choose Target System" lists the targets that have a route, and has a
+    Search button.
+  - "Add Route" has a field "Enter Host Name / IP", plus "Broadcast Search" and
+    "Refresh Status".
+  - The search result has the columns Host Name, Connected, Address, AMS NetId,
+    TwinCAT version and OS version.
+  - Routes are of three kinds: Project, Static, Temporary.
+  - The chosen target is shown in the menu bar. The mode is shown as Config, Run
+    or Stop.
+  - On Login with a different program, the choices are Login with Online
+    Change, Login with download and Login without changes.
+- **SIMATIC AX:**
+  - It is built on VS Code ("AX Code"). Most of its documentation is behind
+    early access.
+  - The confirmed parts: the target IP is an `ipAddress` input of a task
+    (`simatic-ax/task-collection`), and SIMATIC AX 2510 adds a "PLC Online Hub"
+    for connections.
+  - No network browse was found.
+
+**The IronPLC elements:**
+
+- **View "IronPLC Network"** in the IronPLC sidebar. It is a TreeView of text
+  rows, as RSWho is:
+  - the workstation;
+  - one row per driver: a network interface (broadcast) or the address list;
+  - the devices under each driver. A device row shows the device name as its
+    label. Its description shows the address, a short `deviceId`, and either
+    "busy" or "target".
+- **Actions:**
+  - On the view title: "Search network" (refresh, as Broadcast Search) and
+    "Add address…" (as Enter Host Name / IP).
+  - On a device: "Select as target", "Connect", "Disconnect", "Identify",
+    "Device settings…" and "Copy device id".
+  - On the address-list driver: "Add address…" and "Remove address".
+- **Command "IronPLC: Choose Target…"** (as Choose Target System). It is a
+  QuickPick of the known targets: those of the project file, of the profile, and
+  those recently seen. Its last item, "Search network…", opens the view.
+- **The two places where a target is stored** correspond to the TwinCAT route
+  kinds: the project file is the Project route, and the connection profile is
+  the Static route of this workstation.
+- **Status bar** (as the target in the XAE menu bar): the target name and the
+  connection state. The online model adds EQUAL or DIFFERENT and Run or Stop
+  later, in its own plan. The login choices also wait for that plan.
+- **The existing view "IronPLC Device"** stays. It shows the identity of the
+  connected device and its application.
+- **Command category** "IronPLC: Network" for the new commands.
+
 ## Class / Inv / N+1
 
 - **Class "network driver"** (a way to find devices): broadcast, address list.
@@ -225,8 +279,9 @@ with "Scan network" (CODESYS) do.
 5. Service: sessions owned by the service, relaying the session protocol, and
    several clients on one device.
 6. VS Code: the Network view, "Select as target" (project file + profile), the
-   binding check on connect, and connecting through the service. Names and
-   structure checked against the Beckhoff extension inventory.
+   binding check on connect, and connecting through the service. The network
+   tree is text rows (RSLinx function). The skeleton of views, commands and
+   state follows SIMATIC AX and TwinCAT XAE.
 7. MCP: browse and device tools through the service, replacing the in-process
    host where a device is given.
 
@@ -258,8 +313,11 @@ A tracking issue lists them when the plan is approved.
   - Two community extensions were inventoried: "Explorer for TwinCAT" (MIT) and
     "TwinCAT Structured Text" (GPL-3.0). They cover the project tree, editing
     and git only. They have no target, route, online state or device commands.
-  - The reference therefore has to be another source. That is a question to the
-    owner.
+  - **Owner's choice:** the GUI skeleton follows Siemens SIMATIC AX (built on VS
+    Code) and TwinCAT XAE. They show how to lay out views, commands and state.
+    The function follows RSLinx: a device tree of the network.
+  - **The tree is text rows** in a VS Code TreeView: workstation, then network,
+    then device. No graphical boxes.
 
 ## Not included
 
