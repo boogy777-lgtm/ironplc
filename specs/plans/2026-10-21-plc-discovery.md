@@ -638,6 +638,38 @@ by hand (`runtime/src/host.rs`, `vm-cli/src/serve.rs`, `vm-cli/src/slot_store.rs
 | 20 | a container larger than about 5 MB | `acceptEdits` sends JSON bytes, about 3.3 times larger, and the frame cap is 16 MiB | binary framing or chunks | later |
 | 21 | docs and code disagree | `serve.rs` says assemble "requests a swap" (it is immediate); MCP says assemble works from staged (it does not); "needs Test" is in fact "active now" | fix the comments | defect (docs) |
 
+**The online-edit stages and their GUI (owner, 2026-10-21).**
+
+- **The model** (Rockwell, from third-party sources; the owner adopted it
+  without a Rockwell primary page):
+  - **Accept** loads the edits into the controller. The new logic does not
+    execute yet; the original keeps running.
+  - **Test** executes the new logic in the running controller, so outputs
+    follow it. The original is kept for Untest. There is no automatic
+    pass/fail check: the engineer observes and decides.
+  - **Untest** returns execution to the original. Assemble is not possible
+    from there.
+  - **Assemble** makes the new logic permanent and deletes the original. It
+    cannot be undone.
+  - **Finalize All** is Accept, Test and Assemble in one action, with no
+    recovery.
+  - IronPLC already has this model (`runtime/src/host.rs`); Finalize All is a
+    client sequence of the three commands.
+- **The GUI is a bar filled stage by stage:** Edited → Built → Accepted →
+  Testing → Assembled.
+  - The stages and the current stage come from the runtime: the same one
+    function as the allowed commands of K1. The client only fills the bar.
+  - Untest moves the fill back to Accepted. Cancel empties it.
+  - Finalize All fills it through every stage.
+  - A failed stage stays marked with its V-code, and its exits are shown
+    (row 10 of section 8).
+  - Proposal, to be confirmed: the bar is a row of the IronPLC Device view and
+    a status bar item. A VS Code progress notification runs while one stage
+    is in flight.
+- **A test that does not drive outputs** (as the SLC 500 / PLC-5 Remote Test
+  mode, where the program is solved but outputs stay off) is a different
+  feature. It is named here as a later class, together with the I/O plan.
+
 **The classes found** (for the online-model plan):
 
 - **K1, the exits of an unfinished edit (rows 5–10).**
