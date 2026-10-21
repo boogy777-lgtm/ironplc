@@ -71,10 +71,12 @@ use ironplc_redundancy::{
     ModuleRegistry, ModuleTiming, PairId, PairLink, RedundancyConfig, Shell, Side, UdpPort,
 };
 use ironplc_runtime::{
-    execute, parse_command, render_response, Command, DeviceIdentity, RedundancyIdentity, Response,
-    RuntimeError, RuntimeHost,
+    execute, parse_command, render_response, Command, RedundancyIdentity, Response, RuntimeError,
+    RuntimeHost,
 };
 
+use crate::device_settings::device::Device;
+use crate::device_settings::Entries;
 use crate::error::{self, VmError};
 use crate::slot_store::SlotStore;
 
@@ -89,20 +91,6 @@ pub(crate) enum Ha<'a> {
     Pair(&'a mut PairLink<UdpPort>),
 }
 
-/// The device panel `vm-cli` answers the `identity` handshake with
-/// (ADR-0063): the served process is a soft device, so it reports its binary
-/// name and its own version — the one composition point for the
-/// application-supplied block the runtime host does not own.
-pub(crate) fn device_identity() -> DeviceIdentity {
-    DeviceIdentity {
-        device_id: None,
-        name: "ironplcvm".into(),
-        model: "IronPLC SoftPLC".into(),
-        modification: "vm-cli".into(),
-        firmware_version: env!("CARGO_PKG_VERSION").to_string(),
-    }
-}
-
 /// Boots the committed artifact from the A/B slot store beside `path`
 /// (seeding the store from the file on first serve), composes the runtime
 /// host with the HA shell (standalone by default; the simulated loopback
@@ -112,16 +100,16 @@ pub fn serve(path: &Path, ha_simulated_peer: bool) -> Result<(), VmError> {
     let mut store = SlotStore::beside(path);
     let container = store.boot()?;
     let (mut host, mut shell) = compose_host(container, ha_simulated_peer)?;
+    let mut device = Device::open(path)?;
 
     let stdin = io::stdin();
     let stdout = io::stdout();
-    let device = device_identity();
     serve_session(
         &mut host,
         stdin.lock(),
         stdout.lock(),
         Some(&mut store),
-        &device,
+        &mut device,
         Some(&mut shell),
     )
     .map_err(|err| {
@@ -222,7 +210,7 @@ pub fn serve_session(
     reader: impl BufRead,
     mut writer: impl Write,
     mut store: Option<&mut SlotStore>,
-    device: &DeviceIdentity,
+    device: &mut Device,
     mut ha: Option<&mut Shell>,
 ) -> io::Result<()> {
     for line in reader.lines() {
@@ -278,23 +266,26 @@ fn pair_notice_for(command: &Command) -> Option<PairNotice> {
 /// `assembleEdits` with a `store` also persists the committed wire bytes
 /// before the response line is written (see [`persist_commit`]); a
 /// `None` store serves the honestly RAM-only session (no persistence).
-/// `device` is the application-composed device panel every command mapping
-/// carries (ADR-0063): it answers the `identity` handshake, the first
-/// command on every transport. In pair mode, an acknowledged hot-edit
+/// `device` holds the device's settings (see [`crate::device_settings`]): its
+/// identity answers the `identity` handshake (ADR-0063), the first command on
+/// every transport, and `setDeviceSettings` changes it. The runtime command
+/// layer has no file system, so the settings command is answered here, the way
+/// the slot store persists the commit of `assembleEdits`. In pair mode, an acknowledged hot-edit
 /// command also owes the pair its ADR-0064 notice (see [`PairNotice`]).
 pub(crate) fn handle_line(
     host: &mut RuntimeHost,
     store: Option<&mut SlotStore>,
-    device: &DeviceIdentity,
+    device: &mut Device,
     mut ha: Option<&mut Ha>,
     line: &str,
 ) -> io::Result<String> {
     match parse_command(line) {
+        Ok(Command::SetDeviceSettings { settings }) => set_device_settings_line(device, &settings),
         Ok(command) => {
             let commits = matches!(command, Command::AssembleEdits);
             let advances = advances_state(&command);
             let pair_notice = pair_notice_for(&command);
-            let mut response = execute(command, host, device);
+            let mut response = execute(command, host, &device.identity());
             // The ADR-0063 identity handshake answers the redundancy
             // block from the composed HA backend: present exactly when a
             // pair is configured, absent standalone — the field the
@@ -530,6 +521,29 @@ fn persist_error_line(err: &VmError) -> String {
         "message": err.to_string(),
     })
     .to_string()
+}
+
+/// Answers `setDeviceSettings`: the acknowledgment once the change is
+/// checked and kept, else the coded refusal (V6015 for a value a setting
+/// refuses, V6016 when the settings file cannot be written) with the device
+/// unchanged. Built directly: the V60xx codes are shell codes that the typed
+/// `Response` cannot carry.
+fn set_device_settings_line(device: &mut Device, settings: &Entries) -> io::Result<String> {
+    match device.change(settings) {
+        Ok(()) => {
+            log::info!("device settings changed");
+            render_line(&Response::Ack)
+        }
+        Err(err) => {
+            log::warn!("device settings not changed: {err}");
+            Ok(serde_json::json!({
+                "response": "error",
+                "vCode": err.v_code(),
+                "message": err.message(),
+            })
+            .to_string())
+        }
+    }
 }
 
 /// Whether acknowledging `command` advances the hot-edit FSM at a scan

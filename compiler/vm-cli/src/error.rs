@@ -57,6 +57,16 @@ impl VmError {
         }
     }
 
+    /// The stable V-code of this error.
+    pub fn v_code(&self) -> &'static str {
+        self.v_code
+    }
+
+    /// What failed, without the code.
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
     /// Returns the process exit code for this error's category.
     pub fn exit_code(&self) -> u8 {
         self.exit_code

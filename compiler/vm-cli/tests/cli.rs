@@ -26,6 +26,7 @@ mod cli {
     mod golden_files;
     mod run_command;
     mod serve_command;
+    mod serve_device;
     mod serve_store;
     mod serve_tcp;
 }

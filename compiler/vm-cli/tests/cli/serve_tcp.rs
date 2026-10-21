@@ -6,6 +6,7 @@ use std::process::Command;
 use std::time::Duration;
 
 use assert_cmd::cargo;
+use spec_test_macro::spec_test;
 use tempfile::TempDir;
 
 use crate::{compiled_bytes, write_compiled_container, COUNTER_PROGRAM};
@@ -50,7 +51,9 @@ fn next_frame_v_code(stream: &mut TcpStream) -> io::Result<String> {
 /// frame per message — the `identity` handshake, the edit FSM at one session
 /// at a time (a second session is refused with one V6014 line), a framing
 /// violation answered with V6013 and dropped, and the listener surviving it
-/// all for a fresh session.
+/// all for a fresh session. The identity carries the device id of the
+/// settings file (REQ-VC-vm-cli-029).
+#[spec_test(REQ_VC_vm_cli_029)]
 #[test]
 fn serve_tcp_when_scripted_then_identity_refusal_framing_drop_and_reconnect(
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -78,6 +81,12 @@ fn serve_tcp_when_scripted_then_identity_refusal_framing_drop_and_reconnect(
     assert_eq!(identity["response"], "identity");
     assert_eq!(identity["protocol"], 1);
     assert_eq!(identity["device"]["name"], "ironplcvm");
+    // The TCP path reports the id of the device settings file (REQ-VC-vm-cli-029).
+    let settings: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(
+        dir.path().join("counter.iplc.device.json"),
+    )?)?;
+    assert_eq!(identity["device"]["deviceId"], settings["deviceId"]);
+    assert_eq!(identity["device"]["deviceId"].as_str().unwrap().len(), 32);
     assert!(identity["device"]["firmwareVersion"]
         .as_str()
         .unwrap()

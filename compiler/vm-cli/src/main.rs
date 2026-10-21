@@ -5,10 +5,13 @@ use std::process::ExitCode;
 use clap::Parser;
 
 mod cli;
+mod device_settings;
 mod error;
 mod ha_pair;
 mod logger;
 mod serve;
+#[cfg(test)]
+mod serve_device_tests;
 #[cfg(test)]
 mod serve_tests;
 mod slot_store;

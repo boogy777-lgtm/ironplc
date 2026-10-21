@@ -48,6 +48,11 @@
 //!
 //! Single owner: only `ironplcvm serve` composes a store — the one
 //! file-backed shell with an assemble path.
+//!
+//! The device's own settings (`<file>.device.json`) sit beside these files
+//! but are a class apart: a slot holds what the engineer sent, a setting holds
+//! what the device is. They belong to [`crate::device_settings`]; this store
+//! neither reads nor lists that file.
 
 use std::fmt;
 use std::fs::{self, File};
@@ -328,8 +333,9 @@ impl SlotStore {
 }
 
 /// The sibling path `<file>.<suffix>` (the suffix appends to the served
-/// file's full name, e.g. `app.iplc.slot-a`).
-fn suffix(file: &Path, extension: &str) -> PathBuf {
+/// file's full name, e.g. `app.iplc.slot-a`). The files of the device beside
+/// the served container share this naming; see [`crate::device_settings`].
+pub(crate) fn suffix(file: &Path, extension: &str) -> PathBuf {
     let mut name = file.as_os_str().to_os_string();
     name.push(".");
     name.push(extension);

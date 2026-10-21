@@ -32,10 +32,11 @@ use std::sync::mpsc::{self, RecvTimeoutError};
 use std::time::Duration;
 
 use ironplc_redundancy::{AdmissionVerdict, PairLink, RedundancyConfig, UdpPort};
-use ironplc_runtime::{DeviceIdentity, RuntimeHost};
+use ironplc_runtime::RuntimeHost;
 
+use crate::device_settings::device::Device;
 use crate::error::{self, VmError};
-use crate::serve::{boot_host, device_identity, drive_scan_round, handle_line, persist_commit, Ha};
+use crate::serve::{boot_host, drive_scan_round, handle_line, persist_commit, Ha};
 use crate::slot_store::SlotStore;
 
 /// The pump cadence: how long the session loop waits for a command line
@@ -70,7 +71,7 @@ pub fn serve_pair(
     })?;
     log::info!("serving the HA pair link on {local} (peer {peer})");
     let mut link = PairLink::new(config, port);
-    let device = device_identity();
+    let mut device = Device::open(path)?;
 
     // The stdin reader thread: the session loop multiplexes commands and
     // the pump over the channel, so the pair link outlives idle periods
@@ -89,7 +90,12 @@ pub fn serve_pair(
     let stdout = io::stdout();
     let mut out = stdout.lock();
     serve_pair_loop(
-        &mut host, &mut store, &mut link, &device, &line_rx, &mut out,
+        &mut host,
+        &mut store,
+        &mut link,
+        &mut device,
+        &line_rx,
+        &mut out,
     )
     .map_err(|err| {
         VmError::io(
@@ -107,7 +113,7 @@ fn serve_pair_loop(
     host: &mut RuntimeHost,
     store: &mut SlotStore,
     link: &mut PairLink<UdpPort>,
-    device: &DeviceIdentity,
+    device: &mut Device,
     line_rx: &mpsc::Receiver<io::Result<String>>,
     out: &mut impl Write,
 ) -> io::Result<()> {

@@ -1,0 +1,32 @@
+=====
+V6016
+=====
+
+.. problem-summary:: V6016
+
+``ironplcvm serve`` could not write the device settings file
+``<FILE>.device.json`` beside the served container. The device writes the file
+when it starts for the first time and whenever ``setDeviceSettings`` changes a
+setting. The write is a temporary file renamed over the settings file, so a
+failed write leaves the file as it was.
+
+At the start, the error stops ``serve``. For a ``setDeviceSettings`` command,
+the session answers this error instead of the acknowledgment, and the running
+device keeps its previous settings.
+
+Typical causes: the directory of the served container is read-only or full, or
+a directory has the name of the settings file or of its temporary file
+``<FILE>.device.json.tmp``.
+
+Solutions
+---------
+
+1. Check the directory beside the served container: free disk space, restore
+   write permissions, and remove any directory that has the name of the
+   settings file or of its temporary file.
+2. Send the command again after the cause is removed.
+
+See Also
+--------
+
+- :doc:`/reference/runtime/problems/V6015` --- the device refuses a setting or its settings file

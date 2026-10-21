@@ -325,6 +325,11 @@ fn active_slot(file: &Path) -> PathBuf {
     file.with_extension(format!("iplc.slot-{slot}"))
 }
 
+/// The device settings file beside a unit's served container.
+fn device_settings_file(file: &Path) -> PathBuf {
+    file.with_extension("iplc.device.json")
+}
+
 /// Boots a converged pair over reserved loopback ports and returns the
 /// sessions with B already at SYNC_READY.
 fn converged_pair(dir: &TempDir) -> (Session, Session) {
@@ -360,6 +365,21 @@ fn converged_pair(dir: &TempDir) -> (Session, Session) {
     let b_status = b.command(r#"{"command":"haStatus"}"#);
     b.record(&b_status);
     assert_eq!(b_status["local"]["role"], "secondary");
+    // Each unit of the pair reports the device id of its own settings file
+    // (REQ-VC-vm-cli-029), and the two units are two devices.
+    let a_identity = a.command(r#"{"command":"identity"}"#);
+    let b_identity = b.command(r#"{"command":"identity"}"#);
+    for (identity, file) in [(&a_identity, &file_a), (&b_identity, &file_b)] {
+        let settings: Value =
+            serde_json::from_str(&std::fs::read_to_string(device_settings_file(file)).unwrap())
+                .unwrap();
+        assert_eq!(identity["device"]["deviceId"], settings["deviceId"]);
+        assert_eq!(identity["device"]["deviceId"].as_str().unwrap().len(), 32);
+    }
+    assert_ne!(
+        a_identity["device"]["deviceId"],
+        b_identity["device"]["deviceId"]
+    );
     (a, b)
 }
 

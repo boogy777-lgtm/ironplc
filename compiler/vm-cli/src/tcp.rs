@@ -31,10 +31,11 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use ironplc_redundancy::Shell;
-use ironplc_runtime::{DeviceIdentity, RuntimeHost};
+use ironplc_runtime::RuntimeHost;
 
+use crate::device_settings::device::Device;
 use crate::error::{self, VmError};
-use crate::serve::{compose_host, device_identity, serve_session};
+use crate::serve::{compose_host, serve_session};
 use crate::slot_store::SlotStore;
 
 /// The largest frame the transport accepts: 16 MiB, the container-upload
@@ -258,7 +259,7 @@ fn write_error_frame(stream: &mut TcpStream, v_code: &str, message: &str) -> io:
 fn serve_connection(
     host: &mut RuntimeHost,
     shell: &mut Shell,
-    device: &DeviceIdentity,
+    device: &mut Device,
     store: &mut SlotStore,
     stream: &mut TcpStream,
 ) -> io::Result<()> {
@@ -274,7 +275,7 @@ fn serve_accepted(
     occupied: Arc<AtomicBool>,
     host: Arc<Mutex<RuntimeHost>>,
     shell: Arc<Mutex<Shell>>,
-    device: DeviceIdentity,
+    device: Arc<Mutex<Device>>,
     store: Arc<Mutex<SlotStore>>,
     mut stream: TcpStream,
     peer: SocketAddr,
@@ -287,7 +288,8 @@ fn serve_accepted(
         let mut host = host.lock().unwrap_or_else(|err| err.into_inner());
         let mut shell = shell.lock().unwrap_or_else(|err| err.into_inner());
         let mut store = store.lock().unwrap_or_else(|err| err.into_inner());
-        serve_connection(&mut host, &mut shell, &device, &mut store, &mut stream)
+        let mut device = device.lock().unwrap_or_else(|err| err.into_inner());
+        serve_connection(&mut host, &mut shell, &mut device, &mut store, &mut stream)
     };
     match result {
         Ok(()) => log::info!("session with {peer} ended"),
@@ -319,7 +321,7 @@ pub fn serve_tcp(path: &Path, addr: SocketAddr, ha_simulated_peer: bool) -> Resu
     let store = SlotStore::beside(path);
     let container = store.boot()?;
     let (host, shell) = compose_host(container, ha_simulated_peer)?;
-    let device = device_identity();
+    let device = Device::open(path)?;
 
     let listener = TcpListener::bind(addr).map_err(|err| {
         VmError::io(
@@ -332,6 +334,7 @@ pub fn serve_tcp(path: &Path, addr: SocketAddr, ha_simulated_peer: bool) -> Resu
     let occupied = Arc::new(AtomicBool::new(false));
     let host = Arc::new(Mutex::new(host));
     let shell = Arc::new(Mutex::new(shell));
+    let device = Arc::new(Mutex::new(device));
     let store = Arc::new(Mutex::new(store));
     loop {
         let (mut stream, peer) = listener.accept().map_err(|err| {
@@ -354,7 +357,7 @@ pub fn serve_tcp(path: &Path, addr: SocketAddr, ha_simulated_peer: bool) -> Resu
         let session_occupied = Arc::clone(&occupied);
         let session_host = Arc::clone(&host);
         let session_shell = Arc::clone(&shell);
-        let session_device = device.clone();
+        let session_device = Arc::clone(&device);
         let session_store = Arc::clone(&store);
         std::thread::Builder::new()
             .name(format!("serve-session-{peer}"))

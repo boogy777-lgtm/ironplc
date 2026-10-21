@@ -1,0 +1,61 @@
+=====
+V6015
+=====
+
+.. problem-summary:: V6015
+
+``ironplcvm serve`` refused a device setting. The message names the field. Two
+situations raise this code:
+
+- The settings file ``<FILE>.device.json`` beside the served container cannot
+  be used. ``serve`` does not start, exits with code 2 and leaves the file as
+  it is. The file is not JSON, has a ``version`` other than 1, names a setting
+  that does not exist, or holds a value that its setting refuses.
+- A ``setDeviceSettings`` command named a setting that does not exist or a
+  value that its setting refuses. The session answers the command with this
+  error, and neither the file nor the running device changes.
+
+The device does not repair a file it cannot read. A device that generated a new
+device id over a damaged file would change its identity, and every project bound
+to the old id would stop recognising it.
+
+The settings and their rules:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Key
+     - Rule
+   * - ``deviceId``
+     - 32 lowercase hexadecimal digits.
+   * - ``name``
+     - 1 to 64 characters, not blank, without control characters.
+
+Example
+-------
+
+This file stops the device, because the id has uppercase digits:
+
+.. code-block:: json
+
+   {
+     "version": 1,
+     "deviceId": "0123456789ABCDEF0123456789ABCDEF",
+     "name": "ironplcvm"
+   }
+
+Solutions
+---------
+
+1. Correct the field that the message names, then start ``serve`` again.
+2. To make the device a new device, delete the settings file. The next start
+   generates a new device id and writes the file. Any project bound to the old
+   id has to select the device again.
+3. To give a replacement device the id of the device it replaces, write that id
+   in ``deviceId`` before the first start, or send ``setDeviceSettings``.
+
+See Also
+--------
+
+- :doc:`/reference/runtime/problems/V6016` --- the device settings file cannot be written
+- :doc:`/reference/runtime/ironplcvm` --- the device settings of ``ironplcvm serve``
