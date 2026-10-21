@@ -223,13 +223,16 @@ following parts.
   not a marker. It is one answer to a connect attempt, and only the attempt can
   know it.
 - **IronLink finds and records; IronPLC connects (option A).** IronLink is a
-  separate binary that listens on localhost only. It discovers controllers, finds
+  separate binary, started by each client as a child process on stdio, as the
+  language server is; it opens no listening port. Its VS Code part is a separate
+  extension, a thin client of the binary. It discovers controllers, finds
   and establishes routes, and writes the remembered path into the project file
   and the workstation route record. It never writes to a controller. Connecting,
   and every conclusion after it, are implemented once in Rust by IronPLC, and the
   editor, the MCP server and the command line render them. Its API is the command
-  mechanism that exists (JSON commands, framed on TCP) with its own commands
-  added. Starting a device is not one of its responsibilities. Option B (IronLink
+  mechanism that exists (JSON commands) with its own commands added. A shared
+  service on localhost is one more member of the same class, built only for a
+  real case. Starting a device is not one of its responsibilities. Option B (IronLink
   carries the session, a transport relay) is named and not built; the session
   protocol stays as it is, so B would change the transport only.
 - **Two classes, each with one interface and members that register themselves.**
