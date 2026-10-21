@@ -537,7 +537,7 @@ To Go Online"; CODESYS login choices).
 | 12 | `deviceId` differs from the remembered path | information row "not the controller this project last connected to (id X, was Y)" | — | the rows above apply to this controller (R is looked up by its id) | per row |
 | 13 | connection lost while online | state "unknown" (never the last value) | — | reconnect, then the rows again | — |
 | 14 | the controller restarted while connected; its application was kept by the slots | — | — | reconnect, then row 5 or 7. The comparison is by content, so restarted counters do not matter | per row |
-| 15 | the controller's runtime cannot load this project's container (container format or runtime version) | its runtime version | the container format it needs | update the runtime (as Rockwell prompts for a firmware update); no download | no |
+| 15 | the runtime rejects the container format (`container/src/header.rs`, `FORMAT_VERSION`); there is no firmware or update flow (owner) | its runtime version | the format the container has | the message names both versions; no download | no |
 
 **Rockwell, row by row** (research 2026-10-21). Most of it comes from search
 snippets of Studio 5000 help pages that could not be read in full. Dialog texts
@@ -576,6 +576,69 @@ and button labels are not confirmed.
 - Rows 6 and 7 are one situation, before and after the build. The owner's
   choices for it (a warning, loading the difference on the engineer's
   responsibility, or uploading into a new project) are all in row 7.
+
+### 9. Audit: unfinished edits in the controller and offline changes (2026-10-21)
+
+**The owner's rule.** Offline edits go through the standard build and load
+mechanism, exactly as a hot edit does:
+
+- build, then `acceptEdits`, `testEdits` and `assembleEdits`;
+- the new code is injected at the next scan boundary;
+- a minimum of new code, and no workarounds.
+
+**The proposal that follows from the rule.** A full download is the same
+pipeline in a "replace" mode.
+
+- At the boundary the application is replaced with a re-initialisation. The
+  machinery is the migration swap (fresh buffers, init runs) with an empty
+  "keep" set.
+- A schedule, I/O or flag change (V4008, V4009, V4007) then has a path. Today
+  it has none.
+- "No application" is a built-in empty container (no tasks), so a device
+  without an application needs no new state in the host's state machine.
+
+Facts below are from a sweep of `main` 3e5a601ed, with the key lines verified
+by hand (`runtime/src/host.rs`, `vm-cli/src/serve.rs`, `vm-cli/src/slot_store.rs`,
+`integrations/vscode/src/buildCommands.ts`, `buildLogic.ts`).
+
+| # | Situation | Today | Required | Kind |
+|---|---|---|---|---|
+| 1 | reconnect, nothing changed | content compare (ADR-0083) → match | go online at once (row 5) | ok |
+| 2 | offline edits, same layout | Build & Commit: accept → test → assemble, swap at the boundary | the same; this is the owner's rule | ok |
+| 3 | offline edits add or rename persistent variables | needs `sync-uids` by hand, else V4020 at accept; VS Code does no pre-check (only MCP does) | the pre-check in the one decision place; the UID sync is a step of the flow | gap |
+| 4 | offline edits change the schedule, I/O sizes or flags (V4008, V4009, V4007) | **no deploy path at all**: no full download, and restarting `serve` does not help | Download = the "replace" mode of the same pipeline | gap |
+| 5 | a candidate staged (not tested) by an earlier TCP session | the next build fails with V4013, which does not name the edit; no exit in the UI | row 10 of the comparison shows the record and its exits | gap |
+| 6 | a candidate under Test, and the TCP session drops | the candidate keeps running under Test with nobody attached, without limit | **owner decision**: keep (Rockwell keeps test edits) or untest automatically on session loss (non-migration only) | decision |
+| 7 | "Cancel" in the Trial dialog while testing | **always refused (V4015)**: `cancel()` refuses while the candidate is active (`host.rs`), and `resolveTrial` sends cancel directly | Cancel from Testing = untest, then cancel at the boundary | defect |
+| 8 | a migration candidate under Test | no untest (V4011); the dialog still offers Cancel, which cannot work; the only exits are Assemble or a device restart | keep the old buffers so that untest is possible, or say plainly that the only exit is Assemble | gap |
+| 9 | Esc in the Trial dialog | the candidate stays under Test; the code comment says "exits stay available on the next build", but the next build fails with V4013 | the exits come from the comparison (row 10) | defect |
+| 10 | Build & Commit fails halfway (test or assemble refused, link lost) | no cleanup: the candidate stays staged or under Test | every failure ends in a state whose exits are shown | defect |
+| 11 | device restart or crash while staged or testing | the candidate and its record are lost (RAM only); the committed application boots with init, so **all variable state is lost: there is no retained store** | a retained/persistent store across restarts (IEC RETAIN); candidate loss is reported | gap (fundamental) |
+| 12 | V6012 at assemble: promoted in RAM, but the slot was not written | the device runs the new code; after a restart the old code returns silently | the device reports both the running and the persisted `contentHash`; the comparison shows "not persisted" | gap |
+| 13 | a rebuilt `.iplc`, and `serve app.iplc` restarted | the slot store wins, so the old application runs and the file is ignored | correct for a device, since the file is only the first seed; the extension must stop expecting "recompile and respawn loads new code", and show the comparison, then online change | gap (client) |
+| 14 | another workstation changed the controller (no local record) | "no record = no check", so the build proceeds (fail-open) | row 9 of the comparison: unknown application, no online change | closed by the new model |
+| 15 | E0015 mismatch with no remedy | the build is refused; the remedy command does not exist | the comparison replaces the refusal | closed by the new model |
+| 16 | the old "IronPLC Hot Edit" commands | bypass the checks, write no record, and can start a second device on the same file | remove them | ΔR<0 |
+| 17 | a panic in the TCP session thread | the occupied flag is never released, so V6014 is answered until restart | a drop guard | defect |
+| 18 | **`serve` runs no cyclic scan** | the program runs one round per acknowledged command (`drive_scan_round`); between commands the device does not execute | the device scans by its task schedule, independent of sessions; this comes before Run/Stop | gap (fundamental) |
+| 19 | HA pair | the peer drops the migration decisions; a Test lost to permit revocation is still acknowledged | the HA plan | gap |
+| 20 | a container larger than about 5 MB | `acceptEdits` sends JSON bytes, about 3.3 times larger, and the frame cap is 16 MiB | binary framing or chunks | later |
+| 21 | docs and code disagree | `serve.rs` says assemble "requests a swap" (it is immediate); MCP says assemble works from staged (it does not); "needs Test" is in fact "active now" | fix the comments | defect (docs) |
+
+**The classes found** (for the online-model plan):
+
+- **K1, the exits of an unfinished edit (rows 5–10).**
+  - Inv: for every host state, the runtime gives the set of allowed commands
+    (one function), and the clients render it.
+  - Check: a test that walks every state.
+- **K2, the deploy modes (rows 2–4, and rows 4 and 9 of the table in section
+  8):** online change, migration, and replace. They are one pipeline, swap at
+  the boundary.
+- **K3, device durability (rows 11 and 12):** the retained/persistent store,
+  and the running versus persisted identity.
+- **K4, cyclic execution of the device (row 18).** This comes before Run/Stop.
+- **Defects that can be fixed on their own:** rows 7, 9, 10, 17 and 21, and row
+  16 (removal).
 
 ## Class / Inv / N+1
 
