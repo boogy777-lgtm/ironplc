@@ -239,28 +239,34 @@ Field set:
 ### Device settings
 
 The device owns a few settings: values it persists and an operator can change
-offline (by editing the settings file) and online (by the `setDeviceSettings`
-command). Today they are `deviceId` and `name`; `ironplcvm serve` keeps them in
+in the settings file, and, when the setting allows it, online by the
+`setDeviceSettings` command. Today they are `deviceId` (the file only) and
+`name` (the file and the command); `ironplcvm serve` keeps them in
 `<FILE>.device.json` beside the slot store
 ([vm-cli.md](vm-cli.md), REQ-VC-vm-cli-025 through REQ-VC-vm-cli-029). Each
 setting is one row of one table in `compiler/vm-cli/src/device_settings.rs`
-(key, first value, check), and the settings file, the command and the `identity`
-answer all go through the rows. A device settings file that cannot be used stops
+(key, first value, where it may be changed, check), and the settings file, the
+command and the `identity` answer all go through the rows. A device settings file that cannot be used stops
 the start (V6015) instead of giving the device a new identity.
-The id is what a project binds to ([ADR-0084](../adrs/0084-plc-discovery-and-target-binding.md)).
+The id is what a project binds to ([ADR-0084](../adrs/0084-plc-discovery-and-target-binding.md)),
+so it is the basis of the identity check, and it is changed on the device itself
+(its settings file) and never over the engineering session: an id that the
+session could change would let an engineer silence a "different device"
+refusal.
 
 Request (every field is optional; a setting that is not named stays as it is):
 
 ```json
-{"command":"setDeviceSettings","name":"cell 1","deviceId":"fedcba9876543210fedcba9876543210"}
+{"command":"setDeviceSettings","name":"cell 1"}
 ```
 
 Response: `{"response":"ack"}` once the values are checked and written. The
 command answers `ack`, like every command that changes state; the client reads
 the new values with `identity`, which it does on every (re)opened transport
 anyway. A value that a setting refuses, or a key that is no setting, answers
-V6015, and a settings file that cannot be written answers V6016. In both cases
-the file and the running device are unchanged. The settings are not the
+V6015, and so does a key whose setting is changed in the file only (`deviceId`),
+whatever else the command names; a settings file that cannot be written answers
+V6016. In every case the file and the running device are unchanged. The settings are not the
 application, so the command is allowed while a candidate is staged or under
 test, and it does not touch the hot-edit state. The runtime command layer
 (`execute`) has no file system and holds no settings: it refuses the command

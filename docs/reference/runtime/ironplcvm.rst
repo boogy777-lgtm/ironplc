@@ -132,7 +132,8 @@ container. The file is JSON:
    The unique id of the device: 32 lowercase hexadecimal digits. The device
    generates it from 128 random bits when it starts without the file, and keeps
    it across restarts. The ``identity`` answer reports it. A project binds to a
-   device by this id.
+   device by this id. Change it in the file only, and only on the device
+   itself: see below.
 
 ``name``
    The name of the device: 1 to 64 characters, not blank, without control
@@ -142,21 +143,41 @@ A device without a settings file is a new device. Delete the file to reset a
 device: the next start generates a new ``deviceId``. A file that lacks a setting
 takes the default of that setting, and the device writes the file complete.
 
-Change a setting offline by editing the file while the device is stopped. Change
-it online with the session command ``setDeviceSettings``. The command names the
-settings to change by their keys; a setting that it does not name stays as it
-is:
+Change a setting by editing the file while the device is stopped. A setting can
+also be changed online, with the session command ``setDeviceSettings``, when the
+table below allows it. The command names the settings to change by their keys; a
+setting that it does not name stays as it is:
 
 .. code-block:: json
 
    {"command": "setDeviceSettings", "name": "cell 1"}
 
+.. list-table::
+   :header-rows: 1
+
+   * - Setting
+     - Changed in the file
+     - Changed by ``setDeviceSettings``
+   * - ``deviceId``
+     - yes
+     - no
+   * - ``name``
+     - yes
+     - yes
+
+The device id is the basis of the identity check, and the session cannot change
+it: an id that an engineer could change over the network could silence a
+"different device" refusal. Give a replacement device the id of the device it
+replaces, or give a cloned device a new id, by editing the file on that device.
+
 The device checks every named value, writes the file, and answers
 ``{"response": "ack"}``. The next ``identity`` answer and the next start report
 the new values. The command works while a candidate is staged, because the
-settings are not the program. A value that a setting refuses is answered with
-:doc:`V6015 <problems/V6015>`, and a file that cannot be written with
-:doc:`V6016 <problems/V6016>`; the file and the device stay as they were.
+settings are not the program. A command that names ``deviceId`` is refused as a
+whole with :doc:`V6015 <problems/V6015>`, even when it also names ``name``. A
+value that a setting refuses is answered with the same code, and a file that
+cannot be written with :doc:`V6016 <problems/V6016>`; the file and the device
+stay as they were.
 
 A settings file that the device cannot use stops :program:`ironplcvm serve`
 with :doc:`V6015 <problems/V6015>`. The device does not replace a damaged file

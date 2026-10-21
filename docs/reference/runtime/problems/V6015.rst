@@ -4,7 +4,7 @@ V6015
 
 .. problem-summary:: V6015
 
-``ironplcvm serve`` refused a device setting. The message names the field. Two
+``ironplcvm serve`` refused a device setting. The message names the field. Three
 situations raise this code:
 
 - The settings file ``<FILE>.device.json`` beside the served container cannot
@@ -14,6 +14,12 @@ situations raise this code:
 - A ``setDeviceSettings`` command named a setting that does not exist or a
   value that its setting refuses. The session answers the command with this
   error, and neither the file nor the running device changes.
+- A ``setDeviceSettings`` command named a setting that is changed in the
+  settings file only. Today that is ``deviceId``. The message says that the
+  field can only be changed on the device itself (its settings file). The
+  command is refused as a whole, even when it also names ``name``, and neither
+  the file nor the running device changes. The id is the basis of the identity
+  check, so the engineering session cannot change it.
 
 The device does not repair a file it cannot read. A device that generated a new
 device id over a damaged file would change its identity, and every project bound
@@ -26,10 +32,13 @@ The settings and their rules:
 
    * - Key
      - Rule
+     - Changed by ``setDeviceSettings``
    * - ``deviceId``
      - 32 lowercase hexadecimal digits.
+     - no, only in the settings file
    * - ``name``
      - 1 to 64 characters, not blank, without control characters.
+     - yes
 
 Example
 -------
@@ -52,7 +61,10 @@ Solutions
    generates a new device id and writes the file. Any project bound to the old
    id has to select the device again.
 3. To give a replacement device the id of the device it replaces, write that id
-   in ``deviceId`` before the first start, or send ``setDeviceSettings``.
+   in ``deviceId`` in the settings file of that device, before the first start or
+   while the device is stopped. ``setDeviceSettings`` cannot change the id.
+4. To change the name of a running device, send ``setDeviceSettings`` with
+   ``name`` only.
 
 See Also
 --------
