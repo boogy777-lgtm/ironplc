@@ -1,20 +1,24 @@
-# PLC Discovery and Target Selection
+# PLC Discovery and Controller Selection
 
 ## Goal
 
-The engineer finds the PLCs on the network, picks the one to work with, and the
-project remembers that choice. This is what RSLinx (Rockwell) and the gateway
+The engineer finds the PLCs on the network, picks the one to connect to, and
+the project remembers the path as a convenience. The project, which is its
+sources, stays the master. This is what RSLinx (Rockwell) and the gateway
 with "Scan network" (CODESYS) do.
 
 - **Discovery.** A PLC answers a "who is there" request on its own port, with
   identity only.
 - **Browse.** A tree with workstation, then network (an interface or a list of
   addresses), then device, as RSWho shows it.
-- **Target selection.** The project binds to a device by its identity, not by
-  its IP address. Connect checks that it is the same device.
-- **A communication service on the workstation**, the RSLinx part. One process
-  owns discovery and the sessions to devices. VS Code, MCP and the command line
-  are thin clients of it, through one shell of internal commands.
+- **Controller selection.** The engineer chooses any controller. The path
+  (`deviceId` and route) is remembered. Connect shows what the controller holds
+  against the project (section 8), and never refuses a controller for being a
+  different one.
+- **A communication service on the workstation**, the RSLinx part. It finds
+  controllers and routes. Whether it also carries the sessions is the open
+  question of section 4a. VS Code, MCP and the command line are thin clients of
+  its commands.
 
 ## Reference (research 2026-10-21)
 
@@ -80,16 +84,23 @@ with "Scan network" (CODESYS) do.
 
 ## Architecture (proposal)
 
-### 0. Ontology (owner's audit, 2026-10-21)
+### 0. Ontology (owner's audit and answers, 2026-10-21)
 
-**The engineering questions.** Every IronLink function answers one of five
-questions. A function that answers none of them is not needed.
+**The project is the master.** The project is its sources. A controller is any
+controller the engineer chooses to connect to; nothing binds a project to one
+device.
 
-1. For which controller is this application meant?
-2. How does this workstation reach it?
-3. Is the device that answers really that controller?
-4. Can a session be opened, and if not, why not?
-5. Once connected, which operations are allowed, and on what grounds?
+**The engineering questions.** Every function answers one of these.
+
+1. Which controllers can this workstation see, and how does it reach each?
+   (IronLink)
+2. Which controller does the engineer connect to now? The engineer chooses.
+3. Which controller answered, and what does it hold compared with the project?
+   (the go-online comparison, section 8)
+4. Can a session be opened, and if not, why not? This is the answer to the
+   connect attempt: unreachable, busy, protected.
+5. Once connected, which operations are allowed, and on what grounds? (the
+   truth table, section 8)
 
 A session alone says nothing about equality of the program, the run state, or
 permission to act on the process.
@@ -98,61 +109,52 @@ permission to act on the process.
 
 | Entity | Meaning | Not to be mixed with |
 |---|---|---|
+| Project | the master: the sources; the build makes the application container | a controller, or what a controller holds |
 | Device | one physical or soft controller instance | an IP address, a name, a tree row |
-| Device id (`deviceId`) | how the instance is recognised (identity check) | the name; the address; authenticity (trust is a separate, later class) |
+| Device id (`deviceId`) | how an instance is recognised again (in the comparison, and as the key of the download record) | the name; the address; authenticity (trust is a separate, later class) |
 | Address | one possible access point | the identity of the device |
 | Route | how this workstation reaches the device (driver, interface, address) | the device itself |
 | Observation | what a discovery or an identify request returned, with its time | a promise that the device is reachable now |
-| Target of an application | the intent: the device this application is meant for (`deviceId`) | an open session |
-| Workstation route record | how this workstation prefers to reach a device | the target of the application, which is shared with the project |
-| Session | the current interaction of this workstation with a device | the stored target |
+| Connection path (remembered) | the controller the engineer last chose, with its route, remembered for convenience (as Set Project Path) | an intent or a binding of the project; an open session |
+| Session | the current interaction of this workstation with a device | the remembered connection path |
 
-**Three separate actions follow from this.**
+**Three separate actions.**
 
-- **Select target** changes the intent.
+- **Choose a controller** remembers a connection path.
 - **Find a route** produces observations and routes.
-- **Connect** opens a session.
+- **Connect** opens a session and shows the go-online comparison.
 
-Each of them can happen without the others:
+**Markers in the tree, from observations only.**
 
-- a target can be selected while it is unreachable;
-- a device can be discovered without connecting to it;
-- a connection can be made for diagnosis without changing the target. The
-  status bar then says that the session is not with the target.
+- Reachability, with the age of the observation.
+- Protected or open: whether the controller requires credentials (section 3).
+- The "last chosen" mark.
 
-**Markers are independent; there is no single "state".** A device row can carry
-any combination of these:
+Busy is not a marker. It is one answer to a connect attempt (V6014).
 
-- target or not;
-- reachable, unreachable or unknown, from the last observation and its age;
-- session free or busy.
-
-**Busy** means that the device's one engineering session (ADR-0065) is held by
-someone other than this IronLink. It does not block **Select target**. Only
-IronLink decides whether **Connect** is refused, and it says why (V6014). A
-client never disables an action on its own rule.
-
-**Scope of a target: one target per application.** A project with several
-controllers (DCS) has several applications, and so several targets.
+**Scope: one remembered path per application.** A project with several
+controllers (DCS) has several applications, and so several paths.
 
 ### 0a. Thin clients, as a checked property
 
-IronLink makes every decision:
+Every decision is made in one place, and the clients render it.
 
-- which observed device matches the target;
-- which routes exist;
-- whether a connect is allowed or refused, and why;
-- which operations a device offers now (a capability list per device and
-  session);
-- what changed after a command.
-
-Clients render these answers. They hold no rule.
+- **Discovery and route decisions are IronLink's:**
+  - which devices were observed;
+  - which routes exist;
+  - which identity fields are public.
+- **Online decisions are IronPLC's.** They are implemented once, in Rust, and
+  every client calls them:
+  - the go-online comparison;
+  - the allowed operations (the truth table, section 8);
+  - the refusal reasons.
+- No client computes enablement on its own rule.
 
 - **Check:** a conformance test suite runs against the IronLink command API.
   The VS Code layer has no decision logic: it maps answers to widgets, and a
   test fails if it computes enablement on its own.
 - **N+1:** a new discovery method (a new driver) adds observations and routes
-  only. The meaning of target, identity check and session does not change.
+  only. The meaning of the comparison and of the session does not change.
 
 ### 1. One port number, one definition
 
@@ -198,8 +200,22 @@ Clients render these answers. They hold no rule.
   - `--no-discovery` turns it off.
   - Replies are rate-limited per source.
   - The request is fixed-size. Anything else gets no reply and no error.
-- **Reply: identity only.** It holds the protocol version, `deviceId`, device
-  name, model and firmware, the session port, and whether the session is busy.
+- **Reply: public identity only.** It holds the protocol version, `deviceId`,
+  device name, model and firmware, the session port, and whether the device is
+  protected. It does not say whether the session is busy: busy is the answer to
+  a connect attempt.
+- **What may be shown, and to whom** (owner: separate what is not confidential
+  from what must be hidden):
+
+  | Data | Discovery (anyone on the network) | Session (after connect; credentials when protected) | Never on the wire |
+  |---|---|---|---|
+  | device id, name, model, protocol, session port, protected flag | yes | yes | |
+  | firmware version | open device: yes; protected device: open question (reconnaissance value) | yes | |
+  | application identity (name, contentHash, layoutHash, generations) | no | yes | |
+  | pending edit record, run state, device settings | no | yes | |
+  | credentials, keys | | | yes |
+  | sources | | | yes (the container holds none) |
+
   - It has nothing about the application. The owner decided this: discovery
     and the comparison of the project with the PLC have different
     responsibilities. Whether the project and the PLC are equal is the internal
@@ -241,7 +257,45 @@ Clients render these answers. They hold no rule.
   - The session protocol stays as it is. The service relays it. It does not
     reinterpret it.
 
-### 4a. What IronLink is responsible for (owner)
+### 4a. Who connects: the fundamental question (owner, 2026-10-21)
+
+Two options for IronLink's responsibility:
+
+- **A. IronLink finds and records.** It finds controllers and routes, and writes
+  the chosen path into the config (the project file and the workstation record).
+  - Connecting, and every conclusion after it, belong to IronPLC.
+  - The extension connects to the device directly over the session protocol, as
+    `ConnectionManager` does today.
+- **B. IronLink carries the session.** IronLink is also the transport: the
+  extension connects through IronLink, which relays the session.
+  - The conclusions still belong to IronPLC. RSLinx does the same: it provides
+    the path and the transport, and Studio 5000 does the go-online comparison
+    and the Upload / Download / Online choice.
+
+**In both options the conclusions belong to IronPLC:** the comparison, the
+allowed actions and hot edit. They are implemented once, in Rust, so that VS
+Code, MCP and the CLI render the same answers. The options differ only in the
+transport.
+
+| | A. Find and record | B. Carry the session |
+|---|---|---|
+| IronLink must run to work online | no (only to search) | yes |
+| VS Code and MCP on one controller at the same time | no: one session per device (ADR-0065); the second gets V6014 | yes, through one session |
+| A driver that is not plain TCP (serial, a gateway) | needs B for that driver | yes |
+| New code | discovery + config writer | + relay, session multiplexing, a lifecycle |
+| Today's `ConnectionManager` | stays | moves behind IronLink |
+
+**Recommendation: A now.** B is added as the transport of the first driver that
+is not plain TCP, or when two clients must share one controller.
+
+- It is named now ("transport relay", section 7) and not built (ConfirmedClass:
+  no second real case yet).
+- IronLink's responsibility is then exactly the owner's first wording: find
+  controllers and write the data into the config.
+
+The earlier text below (4a original) holds for discovery and routes only.
+
+### 4a-bis. What IronLink is responsible for (owner)
 
 IronLink has three responsibilities:
 
@@ -261,15 +315,16 @@ The owner considers a separate VS Code extension that works with the IronPLC
 extension, unless an elegant native way exists. In both options the hard
 boundary is the same: the `ironlink` binary and its command protocol. They are
 what make the CLI, MCP and a future GUI thin. The question is only where the
-VS Code part (the Network view, Choose Target, the service process) lives.
+VS Code part (the Network view, Choose Controller, the service process) lives.
 
 - **A. A separate extension "IronLink"** (`ironplc.ironlink`).
-  - It owns the Network view and Choose Target, and starts and stops `ironlink`.
+  - It owns the Network view and Choose Controller, and starts and stops
+    `ironlink`.
   - It exposes a typed API through the standard VS Code mechanism, the
     `exports` of `activate`. Microsoft's Git extension exposes its API the same
     way.
   - The IronPLC extension declares it in `extensionDependencies` and calls
-    `getTarget()`, `openSession()` and `onDidChangeTarget`.
+    `getConnectionPath()`, `chooseController()` and `onDidChangePath`.
   - One extension pack installs both.
   - Cost: two packages, two versions, and the API version of the dependency.
     Other tools can use IronLink without the compiler.
@@ -285,58 +340,42 @@ VS Code part (the Network view, Choose Target, the service process) lives.
   appears. Choose A if IronLink must be installable without the compiler from
   the start.
 
-### 5. Target selection and binding
+### 5. Choosing a controller and connecting
 
 - **Browse view in VS Code** ("IronPLC Network", the RSWho analog): it shows
   the tree from the service.
-- **Two places to store, with different meanings** (the owner's two independent
-  places; the audit gives each one its own meaning):
-  - **Application target file** `<app>.target.iplcinfo`, beside `<app>.iplc`, in
-    the `RecordKind` family (ADR-0083). It holds the intent: the `deviceId`. It
-    may also hold a portable route hint, the last address that is not loopback.
-    It travels with the project, so a project moved to another PC keeps its
-    target and its last known path, as Set Project Path does.
-  - **Workstation route record** (this PC): for a `deviceId`, the route this
-    workstation uses (driver, interface, address). It is keyed by `deviceId`, so
-    it can never name a different device than the target. A loopback address
-    (`127.0.0.1`) is stored only here and never in the project file: it means
-    "this PC" and points elsewhere on every PC.
-  - Each place can be overwritten on its own. They cannot disagree about which
-    device, so no "which device?" dialog is needed. They can only disagree about
-    the route.
-- **Connect to the target:**
-  - the route comes from the workstation record; otherwise from the project's
-    hint; otherwise a browse finds the `deviceId`;
-  - the `deviceId` from `identity` is compared with the target's:
-    - equal: a session;
-    - different: refusal (a new problem code), with three options: show the
-      difference, select another target, cancel. There is never "accept this
-      device instead", and never "change the device id";
-    - unanswered: a browse can find the same `deviceId` at a new address, and
-      the workstation record is updated after a successful connect.
-- **Connect to a device that is not the target** (diagnosis) opens a session and
-  leaves the target unchanged. The status bar shows "session with X, target Y".
-- **Same `deviceId` seen at several addresses:**
-  - when the identity fields of the replies are equal, it is one device with
-    several routes, shown under each driver that saw it, with the same markers
-    and the same target state;
-  - when the identity fields differ, it is an identity conflict: the device is
-    marked, and it cannot be selected as target until resolved.
-  - A cloned settings file is not always detectable. The identity check plus
-    the session refusal (busy) are the defence.
+- **The remembered connection path is stored in two places** (owner: both, each
+  independent, each can be overwritten). Neither is an intent or a binding.
+  - **The project file** `<app>.path.iplcinfo`, beside `<app>.iplc` (the name is
+    to be confirmed). It holds the `deviceId` of the controller last chosen, and
+    a route hint, the last address that is not loopback. It travels with the
+    project, so a project moved to another PC keeps its last path, as Set
+    Project Path does.
+  - **The workstation route record** (this PC). It holds the route this
+    workstation uses for a `deviceId`. A loopback address is stored only here.
+- **Connect never refuses because the controller is a different one.** It opens
+  the session and shows the go-online comparison (section 8):
+  - what the controller is;
+  - what it holds;
+  - what the project has;
+  - which actions follow.
+
+  When the controller is not the one this project last connected to, the
+  comparison says so as an information row (Rockwell shows the serial number in
+  the same place).
+- **Answers to the connect attempt:**
+  - unreachable: offer a search;
+  - busy (V6014);
+  - protected: credentials needed. This is the later credential class; until it
+    exists a protected controller cannot be connected.
+- **Same `deviceId` seen at several addresses:** when the identity fields are
+  equal, it is one device with several routes. When they differ, it is an
+  identity conflict, which is marked in the tree and in the comparison.
 - **Identify** sends a fresh request to that route and shows the reply with its
-  time. A hover shows the last observation and its age. A physical
-  identification (blinking a LED) is a device operation of a hardware target,
-  named later (section 7). It is not part of Identify.
-- **The download record (ADR-0083)** today is keyed by the connection profile
-  name, because no device id existed. In stage 6 it is keyed by `deviceId`
-  (`<app>.<deviceId>.download.iplcinfo`): what this device received.
-- **What EQUAL means** (the online-model plan, recorded here so that it is not
-  lost): the device's committed application `contentHash` equals the
-  `contentHash` of the application container the project builds now, and the
-  build is up to date (ADR-0083). Run/Stop is a live observation. After the
-  link is lost it is "unknown", never the last value. A working UI shows these
-  only once they exist; no greyed placeholders.
+  time. A hover shows the last observation and its age.
+- **The download record (ADR-0083)** is keyed by `deviceId` in stage 6
+  (`<app>.<deviceId>.download.iplcinfo`): what this project last put on this
+  controller. It is one input of the comparison.
 
 ### 6. GUI skeleton in VS Code
 
@@ -372,32 +411,32 @@ The skeleton follows TwinCAT XAE and SIMATIC AX; the function follows RSLinx.
   - one row per driver: a network interface (broadcast) or the address list;
   - the devices under each driver. A device row shows the device name as its
     label. Its description shows the address, a short `deviceId` and the
-    independent markers (section 0): target, reachability with the age of the
-    observation, and session busy. A row stands for one route to a device: one
+    markers (section 0): last chosen, reachability with the age of the
+    observation, and protected. A row stands for one route to a device: one
     device seen through two drivers has two rows, and both show the same
     markers.
 - **Actions:**
   - On the view title: "Search network" (refresh, as Broadcast Search) and
     "Add address…" (as Enter Host Name / IP).
-  - On a device: "Select as target", "Connect", "Disconnect", "Identify"
+  - On a device: "Choose", "Connect", "Disconnect", "Identify"
     (fresh request), "Rename device…" (the one setting changeable online; the
-    device id is not) and "Copy device id". Which of them are enabled comes
-    from IronLink's capability list (section 0a).
+    device id is not) and "Copy device id". Enablement comes from the one
+    decision place (section 0a).
   - On the address-list driver: "Add address…" and "Remove address".
-- **Command "IronPLC: Choose Target…"** (as Choose Target System). It is a
-  QuickPick of devices for the application's target. It has three groups:
-  - the current target;
+- **Command "IronPLC: Choose Controller…"** (as Choose Target System). It is a
+  QuickPick of controllers for the application's remembered path. It has three
+  groups:
+  - the last chosen controller;
   - the devices with a route on this workstation;
   - the devices recently observed, with the age of the observation.
 
   Its last item, "Search network…", opens the view.
 - **The two stores correspond to the TwinCAT route kinds:**
-  - the application target file (intent plus a portable hint) is the Project
-    route;
+  - the project path file (the last chosen `deviceId` plus a portable hint) is
+    the Project route;
   - the workstation route record is the Static route.
-- **Status bar** (as the target in the XAE menu bar). It shows the target name,
-  and the session state relative to the target: none, with the target, or with
-  another device ("session with X, target Y").
+- **Status bar** (as the target in the XAE menu bar). It shows the chosen
+  controller and the session state: none, connecting, or online with it.
   - EQUAL/DIFFERENT and Run/Stop appear only when the online model provides
     them, never as placeholders.
   - The login choices also wait for that plan.
@@ -439,6 +478,62 @@ them keeps the design from closing them):
 Not taken: editions, activation and tag caps (licensing), and drivers for
 legacy Rockwell hardware (DH+, DH-485, ControlNet, DeviceNet).
 
+### 8. Go online: the truth table (input to the online-model plan)
+
+Owner: when connecting, the engineer sees what is in the controller and what is
+in the project, and so which actions are possible online (Rockwell "Connected
+To Go Online"; CODESYS login choices).
+
+**Rules that hold in every row:**
+
+- Hot edit (online change) exists only inside an online session.
+- Edits made offline are ordinary changes of the sources.
+
+**Inputs at connect:**
+
+- **A, the answer to the attempt:** ok, unreachable, busy, or protected.
+- **B, the controller's application:** none, or present (`C` = its
+  `contentHash`, `Lc` = its `layoutHash`).
+- **P, the project's build:** up to date (`P` = `contentHash` of `<app>.iplc`,
+  `Lp`), sources changed since the build, or the build fails.
+- **R, the download record:** `R` = the `contentHash` this project last put on
+  this `deviceId` (ADR-0083), or none.
+- **E, the pending edit on the controller:** none, or staged/under test (the
+  pending-edit record).
+
+**The table:**
+
+| # | Situation | Controller shows | Project shows | Allowed actions | Hot edit |
+|---|---|---|---|---|---|
+| 1 | A unreachable | — | — | search network, choose another controller | — |
+| 2 | A busy (V6014) | "serves another engineering session" | — | retry, cancel | — |
+| 3 | A protected | "protected" | — | enter credentials (later class); until then none | — |
+| 4 | B none: a new device, a factory reset, or an application lost | "no application" | P, or "not built", or errors | Download (when P exists; else Build first); device-level connection | no: there is nothing to change |
+| 5 | C = P, P up to date. This includes disconnect then connect with nothing changed | EQUAL | EQUAL | online at once, no dialog: monitor; hot edit on later edits | yes |
+| 6 | C = P, sources changed since the build (offline edits started) | = last build | "modified since build" | monitor (the built container matches the controller; modified lines marked); Build, then rows 7 or 8 | after Build |
+| 7 | C = R ≠ P, P up to date, Lc = Lp | "previous download from this project" | "changed since that download" | Login with online change; Login with download; Login without change | yes |
+| 8 | C = R ≠ P, Lc ≠ Lp (persistent part changed) | as 7 | as 7 | online change with migration decisions (ADR-0061, V4010), or Download; V4020 (persistent variable without a UID) leaves Download only | with migration |
+| 9 | C ≠ P and C ≠ R: unknown to this project (another project, engineer or workstation) | DIFFERENT, with its application identity | P | Download (overwrite, with a warning); device-level connection; cancel. No online change: the base is unknown. No Upload: a container holds no sources | no |
+| 10 | E staged/under test (this or another session, or after a crash) | the pending edit record | — | resolve it first: test, untest, assemble or cancel (ADR-0064/0065); a new change is blocked until then | after it is resolved |
+| 11 | P build fails | as B | errors | monitor only if C = the container still on disk; otherwise device-level; no download, no change | no |
+| 12 | `deviceId` differs from the remembered path | information row "not the controller this project last connected to (id X, was Y)" | — | the rows above apply to this controller (R is looked up by its id) | per row |
+| 13 | connection lost while online | state "unknown" (never the last value) | — | reconnect, then the rows again | — |
+| 14 | the controller restarted while connected; its application was kept by the slots | — | — | reconnect, then row 5 or 7. The comparison is by content, so restarted counters do not matter | per row |
+
+**Gaps that the table shows (for the online-model plan):**
+
+- **Monitoring a previous download (rows 7, 9 and 11) needs that container's
+  debug information.** Only the latest `<app>.iplc` is kept, so it is not
+  there. CODESYS keeps the downloaded set (`.compileinfo`) for this.
+  - Proposal: keep a copy of the downloaded container per `deviceId`, beside
+    its download record.
+- **A device without an application (row 4)** is a new device state.
+  `ironplcvm serve` needs a container today. The online-model plan adds it:
+  serving with no application, and Download as the first load.
+- **Upload is impossible**: a container holds no sources. A later "source
+  archive in the container" (as CODESYS's option to download the sources) would
+  make it possible.
+
 ## Class / Inv / N+1
 
 - **Class "network driver"** (a way to reach devices): broadcast, address list.
@@ -479,21 +574,22 @@ legacy Rockwell hardware (DH+, DH-485, ControlNet, DeviceNet).
 
 1. Prefactor: the port constant, the doc fixes.
 2. Device: the device settings file (`deviceId`, name), `deviceId` in identity,
-   and the session command that changes a setting; ADR "PLC discovery and target
-   binding".
+   and the session command that changes a setting; ADR "PLC discovery" (its
+   text follows the owner's answers of 2026-10-21: no binding).
 3. Device: the discovery wire crate and the responder on `--listen`; docs; a
    problem code for a reply that cannot be parsed, if needed.
 4. Service: the `ironlink` binary, the broadcast and address-list drivers,
    browse, the shell of commands, the CLI.
-5. Service: sessions owned by the service, relaying the session protocol, and
-   several clients on one device.
-6. VS Code: the Network view, "Select as target" (application target file +
-   workstation route record; the download record keyed by `deviceId`), the
-   binding check on connect, and connecting through the service. The network
-   tree is text rows (RSLinx function). The skeleton of views, commands and
-   state follows SIMATIC AX and TwinCAT XAE.
-7. MCP: browse and device tools through the service, replacing the in-process
-   host where a device is given.
+5. Only with option B of section 4a: sessions carried by the service (relay,
+   several clients on one device).
+6. VS Code: the Network view, "Choose" (the project path file and the
+   workstation route record; the download record keyed by `deviceId`), and
+   connect (directly with option A, through IronLink with B). The network tree
+   is text rows (RSLinx function). The skeleton of views, commands and state
+   follows SIMATIC AX and TwinCAT XAE. The go-online comparison and its actions
+   are the online-model plan (section 8).
+7. MCP: browse through IronLink; device tools connect the same way as VS Code,
+   replacing the in-process host where a device is given.
 
 Tracking issue: #149.
 
@@ -520,6 +616,18 @@ Tracking issue: #149.
   Schneider shows EQUAL (section 3).
 - **Q6. Order:** communication first (this plan), then the online model, then
   the parser (S4).
+- **Answers of 2026-10-21 (after the audit):**
+  - The project is the master (its sources). A controller is any controller,
+    and the engineer chooses where to connect. There is no binding and no
+    "different device" refusal. Connect shows the comparison instead (sections
+    0, 5 and 8).
+  - Rockwell is the reference for go-online: the engineer sees the controller
+    and the project. A truth table covers the edge cases (section 8).
+  - Busy is the answer to a connect attempt, not a marker.
+  - A protected flag is added, and what is public is separated from what is
+    hidden (section 3).
+  - The fundamental question, whether IronLink only finds and records or also
+    carries the session, is open. The recommendation is A (section 4a).
 - **Plan approved** (owner, 2026-10-21). The owner also said:
   - a local soft PLC is one more device, not a driver (section 7);
   - IronLink finds and establishes the route, discovers devices and organises
