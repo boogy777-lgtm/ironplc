@@ -677,9 +677,23 @@ by hand (`runtime/src/host.rs`, `vm-cli/src/serve.rs`, `vm-cli/src/slot_store.rs
     - The labels, the enablement of both buttons and the reasons come from
       the runtime's K1 function. The control holds no rule.
     - It replaces today's modal Trial dialog (`buildLogic.ts`).
-    - In VS Code a progress bar with buttons needs a webview view (a native
-      `WebviewViewProvider`); a TreeView cannot draw it. Proposal: a webview
-      view in the IronPLC sidebar, beside the IronPLC Device view.
+    - When the current stage has no exit, Cancel is inactive (owner).
+    - **Where (owner):** a native dialog in the middle of the screen. If a
+      native progress bar is impossible, a rectangle with text whose stages
+      turn from grey to coloured.
+    - **What VS Code allows natively** (`@types/vscode` 1.138; the extension
+      declares `^1.75`):
+      - a modal message (`showInformationMessage` with `modal: true`) is
+        centred and native, has buttons and a plain-text `detail`; it has no
+        progress bar, no checkbox, no colour and no disabled button, always
+        adds its own close button, and closes on any button;
+      - a QuickPick is native but at the top centre; it has a `busy`
+        progress line, `step`/`totalSteps` in the title, and title buttons,
+        including a toggle (newer than 1.75); icon colour is applied only in
+        tree views;
+      - a webview can draw the control exactly (bar, colours, a disabled
+        button, a checkbox), but it is an editor tab or a view, not a dialog.
+    - OPEN: the owner chooses between these.
 - **A test that does not drive outputs** (as the SLC 500 / PLC-5 Remote Test
   mode, where the program is solved but outputs stay off) is a different
   feature. It is named here as a later class, together with the I/O plan.
