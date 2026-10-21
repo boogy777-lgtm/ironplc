@@ -99,6 +99,9 @@ fn open_when_new_device_then_file_text_is_the_documented_shape() {
     );
 }
 
+/// REQ-VC-vm-cli-030: the id is changed on the device, in its settings file,
+/// and the next start adopts it.
+#[spec_test(REQ_VC_vm_cli_030)]
 #[test]
 fn open_when_the_file_is_edited_offline_then_the_edited_values_are_the_device() {
     let dir = TempDir::new().unwrap();
@@ -175,6 +178,10 @@ fn open_when_the_file_lacks_a_setting_then_it_takes_the_first_value_and_the_file
     "{\"version\":1,\"deviceId\":\"0102030405060708090A0B0C0D0E0F10\",\"name\":\"x\"}",
     "the field \"deviceId\" must be 32 lowercase hexadecimal digits"
 )]
+#[case::id_with_a_non_hex_digit(
+    "{\"version\":1,\"deviceId\":\"0102030405060708090a0b0c0d0e0f1g\",\"name\":\"x\"}",
+    "the field \"deviceId\" must be 32 lowercase hexadecimal digits"
+)]
 #[case::empty_name(
     "{\"version\":1,\"deviceId\":\"0102030405060708090a0b0c0d0e0f10\",\"name\":\"\"}",
     "the field \"name\" must not be empty"
@@ -234,16 +241,12 @@ fn change_when_valid_then_the_device_and_the_file_hold_it_after_a_restart() {
     let dir = TempDir::new().unwrap();
     let served = served(&dir);
     let mut device = open_counting(&served);
-    let entries = Entries::from([
-        ("name".to_string(), json!("cell 1")),
-        ("deviceId".to_string(), json!("b".repeat(32))),
-    ]);
 
-    device.change(&entries).unwrap();
+    device.change(&name_entry("cell 1")).unwrap();
     let restarted = open_counting(&served);
 
     assert_eq!(device.identity().name, "cell 1");
-    assert_eq!(device.identity().device_id, Some("b".repeat(32)));
+    assert_eq!(device.identity().device_id.as_deref(), Some(COUNTED_ID));
     assert_eq!(restarted.identity(), device.identity());
 }
 
@@ -285,13 +288,45 @@ fn change_when_invalid_then_v6015_and_file_and_device_unchanged() {
     let before_identity = device.identity();
     let entries = Entries::from([
         ("name".to_string(), json!("cell 1")),
-        ("deviceId".to_string(), json!("short")),
+        ("speed".to_string(), json!("fast")),
     ]);
 
     let err = device.change(&entries).unwrap_err();
 
     assert_eq!(err.v_code(), "V6015");
-    assert!(err.message().contains("\"deviceId\""), "{err}");
+    assert!(err.message().contains("\"speed\""), "{err}");
+    assert_eq!(fs::read(settings_path(&served)).unwrap(), before_file);
+    assert_eq!(device.identity(), before_identity);
+}
+
+/// REQ-VC-vm-cli-030: a command naming the id is refused as a whole with
+/// V6015, alone or with the name, and neither the file nor the device changes.
+#[spec_test(REQ_VC_vm_cli_030)]
+#[rstest]
+#[case::the_id_alone(false)]
+#[case::the_id_with_the_name(true)]
+fn change_when_the_device_id_is_named_then_v6015_and_file_and_device_unchanged(
+    #[case] with_name: bool,
+) {
+    let dir = TempDir::new().unwrap();
+    let served = served(&dir);
+    let mut device = open_counting(&served);
+    let before_file = fs::read(settings_path(&served)).unwrap();
+    let before_identity = device.identity();
+    let mut entries = Entries::from([("deviceId".to_string(), json!("b".repeat(32)))]);
+    if with_name {
+        entries.extend(name_entry("cell 1"));
+    }
+
+    let err = device.change(&entries).unwrap_err();
+
+    assert_eq!(err.v_code(), "V6015");
+    assert!(
+        err.message().ends_with(
+            "the field \"deviceId\" can only be changed on the device itself (its settings file)"
+        ),
+        "{err}"
+    );
     assert_eq!(fs::read(settings_path(&served)).unwrap(), before_file);
     assert_eq!(device.identity(), before_identity);
 }

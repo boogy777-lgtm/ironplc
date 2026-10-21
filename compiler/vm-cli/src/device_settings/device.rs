@@ -124,11 +124,12 @@ impl Device {
     }
 
     /// Changes the settings named in `entries` (the `setDeviceSettings`
-    /// command): V6015 when an entry is not acceptable, V6016 when the file
-    /// cannot be written. Nothing changes on an error.
+    /// command): V6015 when an entry is not acceptable, or names a setting that
+    /// is changed in the settings file only, V6016 when the file cannot be
+    /// written. Nothing changes on an error.
     pub(crate) fn change(&mut self, entries: &Entries) -> Result<(), VmError> {
         let mut next = self.settings.clone();
-        next.apply(entries).map_err(|err| {
+        next.apply_online(entries).map_err(|err| {
             VmError::io(
                 error::DEVICE_SETTINGS_INVALID,
                 format!("the device settings are not changed: {err}"),

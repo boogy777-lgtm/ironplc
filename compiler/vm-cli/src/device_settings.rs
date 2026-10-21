@@ -1,16 +1,18 @@
 //! The device settings: the values a device owns, persists and lets its
-//! operator change, offline (edit the settings file) and online (the
-//! `setDeviceSettings` session command).
+//! operator change: in the settings file, and, for the rows that allow it, by
+//! the `setDeviceSettings` session command.
 //!
 //! A setting is one row: its key, where its first value comes from (a fixed
-//! text or 128 random bits) and the check every new value passes. The rows are
+//! text or 128 random bits), where it may be changed ([`Changeable`]) and the
+//! check every new value passes. The rows are
 //! listed once, in the `settings!` table below, and the enum, the list of all
 //! rows and the exhaustive match from a setting to its row are derived from
 //! that list, so a row cannot be forgotten by any user of the table. The file
 //! reader ([`DeviceSettings::resolve`]), the online command
-//! ([`DeviceSettings::apply`]) and the identity ([`DeviceSettings::identity`])
-//! all go through the rows, which is why a new setting is one row, its check
-//! and its line in the reference documentation, and nothing else.
+//! ([`DeviceSettings::apply_online`]) and the identity
+//! ([`DeviceSettings::identity`]) all go through the rows, which is why a new
+//! setting is one row, its check and its line in the reference documentation,
+//! and nothing else.
 //!
 //! The values are text. A setting that is not text (a port, a switch) adds a
 //! type to the row when the first one arrives; nothing here knows where the
@@ -48,23 +50,40 @@ enum Initial {
     Random128Hex,
 }
 
+/// Where a setting may be changed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Changeable {
+    /// In the settings file, and over the engineering session with the
+    /// `setDeviceSettings` command.
+    OnlineAndFile,
+    /// In the settings file only, on the device itself. A setting that the
+    /// engineering session relies on, such as the identity check, is
+    /// `FileOnly`: whoever can change it over the session could silence the
+    /// check.
+    FileOnly,
+}
+
 /// One row of the table of settings.
 struct Row {
     /// The key in the settings file and in the `setDeviceSettings` command.
     key: &'static str,
     /// The value a device without the setting starts with.
     initial: Initial,
+    /// Where a new value may be given.
+    changeable: Changeable,
     /// Whether a new value is acceptable; the reason when it is not.
     check: fn(&str) -> Result<(), &'static str>,
 }
 
 /// The row of the `deviceId` setting: what binds an engineer's project to
-/// this device. Random, so that two devices never share one, and changeable,
-/// so that an operator can give a replacement device the id of the one it
-/// replaces.
+/// this device. Random, so that two devices never share one, and changeable
+/// on the device only (its settings file), so that an operator can give a
+/// replacement device the id of the one it replaces, and an engineer cannot
+/// change the id over the session to silence a "different device" refusal.
 const DEVICE_ID: Row = Row {
     key: "deviceId",
     initial: Initial::Random128Hex,
+    changeable: Changeable::FileOnly,
     check: check_device_id,
 };
 
@@ -72,6 +91,7 @@ const DEVICE_ID: Row = Row {
 const NAME: Row = Row {
     key: "name",
     initial: Initial::Fixed("ironplcvm"),
+    changeable: Changeable::OnlineAndFile,
     check: check_name,
 };
 
@@ -140,6 +160,11 @@ impl DeviceSetting {
     /// The key of the setting in the file and in the command.
     pub(crate) fn key(self) -> &'static str {
         self.row().key
+    }
+
+    /// Where the setting may be changed.
+    pub(crate) fn changeable(self) -> Changeable {
+        self.row().changeable
     }
 
     /// The setting with `key`, if there is one.
@@ -225,9 +250,12 @@ impl DeviceSettings {
         Ok(DeviceSettings { values })
     }
 
-    /// Changes the settings named in `entries` and leaves the others. All or
-    /// nothing: when any entry is not acceptable the settings stay as they were.
-    pub(crate) fn apply(&mut self, entries: &Entries) -> Result<(), SettingsError> {
+    /// Changes the settings named in `entries` and leaves the others: the
+    /// online door, the `setDeviceSettings` command. All or nothing: when any
+    /// entry names a setting that is [`Changeable::FileOnly`], or is not
+    /// acceptable, the settings stay as they were.
+    pub(crate) fn apply_online(&mut self, entries: &Entries) -> Result<(), SettingsError> {
+        refuse_file_only(entries)?;
         let checked = check_entries(entries)?;
         for (key, value) in checked {
             if let Some(setting) = DeviceSetting::from_key(key) {
@@ -263,6 +291,22 @@ impl DeviceSettings {
             firmware_version: env!("CARGO_PKG_VERSION").to_string(),
         }
     }
+}
+
+/// Refuses the first entry whose row cannot be changed online. Read from the
+/// row, so a new file-only setting is refused without an edit here.
+fn refuse_file_only(entries: &Entries) -> Result<(), SettingsError> {
+    for key in entries.keys() {
+        let file_only = DeviceSetting::from_key(key)
+            .is_some_and(|setting| setting.changeable() == Changeable::FileOnly);
+        if file_only {
+            return Err(SettingsError::new(
+                Some(key),
+                "can only be changed on the device itself (its settings file)",
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// Checks every entry against its row and returns the accepted values by key.

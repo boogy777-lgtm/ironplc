@@ -126,16 +126,17 @@ ironplcvm serve <FILE>
 }
 ```
 
-| Key | Value | First value |
-|-----|-------|-------------|
-| `deviceId` | 32 lowercase hexadecimal digits | 128 bits from the operating system's random source |
-| `name` | 1 to 64 characters, not blank, no control characters | `ironplcvm` |
+| Key | Value | First value | Changed |
+|-----|-------|-------------|---------|
+| `deviceId` | 32 lowercase hexadecimal digits | 128 bits from the operating system's random source | in the file only |
+| `name` | 1 to 64 characters, not blank, no control characters | `ironplcvm` | in the file and by `setDeviceSettings` |
 
 - **REQ-VC-vm-cli-025** When `<FILE>.device.json` does not exist, `serve` generates `deviceId`, writes the file and logs one line; every later start with that file reports the same `deviceId`. A device that has no file is a new device, and two new devices have different ids.
 - **REQ-VC-vm-cli-026** When `<FILE>.device.json` is not JSON, has a `version` other than 1, names a setting that does not exist, or holds a value that its setting refuses, `serve` does not start: it exits with code 2 and emits V6015 naming the file and the field, and leaves the file as it is. A device never replaces a file it cannot read with a new identity.
-- **REQ-VC-vm-cli-027** `{"command":"setDeviceSettings", ...}` names the settings to change by their keys. When every named value passes its setting's check, `serve` writes the file, answers `ack`, and reports the new values in `identity` and after a restart. A setting that is not named stays as it is.
+- **REQ-VC-vm-cli-027** `{"command":"setDeviceSettings", ...}` names the settings to change by their keys. When every named setting is one that the device allows to change online and every named value passes its setting's check, `serve` writes the file, answers `ack`, and reports the new values in `identity` and after a restart. A setting that is not named stays as it is.
 - **REQ-VC-vm-cli-028** `setDeviceSettings` with a value that a setting refuses, or with a key that is no setting, answers V6015, and with a file that cannot be written answers V6016. In both cases neither the file nor the running device changes. The command is allowed while a candidate is staged or under test: the settings are not the application.
 - **REQ-VC-vm-cli-029** The `device` block of `identity` carries `deviceId` and `name` from the settings, on stdio, on TCP and in HA pair mode. One function builds the block from the settings and the constants of the build.
+- **REQ-VC-vm-cli-030** `setDeviceSettings` naming a setting that is changed in the settings file only (`deviceId`) answers V6015, whatever the value and whatever else the command names; neither the file nor the running device changes. The next start adopts a `deviceId` edited in the file. The id is the basis of the identity check, so it is changed on the device itself and never over the engineering session.
 
 The session stays one line in, one line out: the scan round an FSM-advancing command drives happens before its response line is written, so the acknowledgment means the swap has been applied, not merely recorded.
 

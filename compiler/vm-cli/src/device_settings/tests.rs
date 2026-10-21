@@ -6,6 +6,7 @@
 
 use rstest::rstest;
 use serde_json::json;
+use spec_test_macro::spec_test;
 
 use super::*;
 
@@ -36,6 +37,20 @@ fn entry(setting: DeviceSetting, value: &str) -> Entries {
 
 fn first_settings() -> DeviceSettings {
     DeviceSettings::resolve(&Entries::new(), &mut counting).unwrap()
+}
+
+/// The rows the `setDeviceSettings` command may change.
+fn online_rows() -> impl Iterator<Item = &'static DeviceSetting> {
+    DeviceSetting::ALL
+        .iter()
+        .filter(|setting| setting.changeable() == Changeable::OnlineAndFile)
+}
+
+/// The rows that are changed in the settings file only.
+fn file_only_rows() -> impl Iterator<Item = &'static DeviceSetting> {
+    DeviceSetting::ALL
+        .iter()
+        .filter(|setting| setting.changeable() == Changeable::FileOnly)
 }
 
 #[test]
@@ -125,13 +140,13 @@ fn resolve_when_a_row_has_an_invalid_value_then_error_naming_the_key() {
 }
 
 #[test]
-fn apply_when_a_row_has_a_valid_value_then_only_that_row_changes() {
-    for setting in DeviceSetting::ALL {
+fn apply_online_when_an_online_row_has_a_valid_value_then_only_that_row_changes() {
+    for setting in online_rows() {
         let (valid, _) = sample(*setting);
         let mut settings = first_settings();
         let before = settings.clone();
 
-        settings.apply(&entry(*setting, valid)).unwrap();
+        settings.apply_online(&entry(*setting, valid)).unwrap();
 
         assert_eq!(settings.get(*setting), valid);
         for other in DeviceSetting::ALL.iter().filter(|other| *other != setting) {
@@ -141,31 +156,88 @@ fn apply_when_a_row_has_a_valid_value_then_only_that_row_changes() {
 }
 
 #[test]
-fn apply_when_a_row_has_an_invalid_value_then_error_and_settings_unchanged() {
-    for setting in DeviceSetting::ALL {
+fn apply_online_when_an_online_row_has_an_invalid_value_then_error_and_settings_unchanged() {
+    for setting in online_rows() {
         let (_, invalid) = sample(*setting);
         let mut settings = first_settings();
         let before = settings.clone();
 
-        let err = settings.apply(&entry(*setting, invalid)).unwrap_err();
+        let err = settings
+            .apply_online(&entry(*setting, invalid))
+            .unwrap_err();
 
         assert!(err.to_string().contains(setting.key()), "{err}");
         assert_eq!(settings, before);
     }
 }
 
+/// REQ-VC-vm-cli-030: a row that is changed in the file only is refused by the
+/// online door, whatever the value, and the settings stay as they were.
+#[spec_test(REQ_VC_vm_cli_030)]
 #[test]
-fn apply_when_one_entry_is_invalid_then_no_entry_is_applied() {
+fn apply_online_when_a_file_only_row_is_named_then_refused_and_settings_unchanged() {
+    for setting in file_only_rows() {
+        let (valid, invalid) = sample(*setting);
+        for value in [valid, invalid] {
+            let mut settings = first_settings();
+            let before = settings.clone();
+
+            let err = settings.apply_online(&entry(*setting, value)).unwrap_err();
+
+            assert_eq!(
+                err.to_string(),
+                format!(
+                    "the field \"{}\" can only be changed on the device itself (its settings file)",
+                    setting.key()
+                )
+            );
+            assert_eq!(settings, before);
+        }
+    }
+}
+
+/// REQ-VC-vm-cli-030: the file door still takes the file-only rows.
+#[spec_test(REQ_VC_vm_cli_030)]
+#[test]
+fn resolve_when_a_file_only_row_has_a_valid_value_then_the_value_is_kept() {
+    for setting in file_only_rows() {
+        let (valid, _) = sample(*setting);
+
+        let settings = DeviceSettings::resolve(&entry(*setting, valid), &mut counting).unwrap();
+
+        assert_eq!(settings.get(*setting), valid);
+    }
+}
+
+#[test]
+fn apply_online_when_a_file_only_row_is_named_with_an_online_row_then_neither_is_applied() {
+    for file_only in file_only_rows() {
+        for online in online_rows() {
+            let mut settings = first_settings();
+            let before = settings.clone();
+            let mut entries = entry(*online, sample(*online).0);
+            entries.extend(entry(*file_only, sample(*file_only).0));
+
+            let err = settings.apply_online(&entries).unwrap_err();
+
+            assert!(err.to_string().contains(file_only.key()), "{err}");
+            assert_eq!(settings, before);
+        }
+    }
+}
+
+#[test]
+fn apply_online_when_one_entry_is_invalid_then_no_entry_is_applied() {
     let mut settings = first_settings();
     let before = settings.clone();
     let entries = Entries::from([
         ("name".to_string(), json!("cell 1")),
-        ("deviceId".to_string(), json!("not an id")),
+        ("nmae".to_string(), json!("cell 2")),
     ]);
 
-    let err = settings.apply(&entries).unwrap_err();
+    let err = settings.apply_online(&entries).unwrap_err();
 
-    assert!(err.to_string().starts_with("the field \"deviceId\""));
+    assert!(err.to_string().starts_with("the field \"nmae\""));
     assert_eq!(settings, before);
 }
 
@@ -184,17 +256,12 @@ fn apply_when_one_entry_is_invalid_then_no_entry_is_applied() {
     json!("a\nb"),
     "the field \"name\" must not contain control characters"
 )]
-#[case::short_id(
+#[case::file_only_id(
     "deviceId",
-    json!("abcd"),
-    "the field \"deviceId\" must be 32 lowercase hexadecimal digits"
+    json!("ffffffffffffffffffffffffffffffff"),
+    "the field \"deviceId\" can only be changed on the device itself (its settings file)"
 )]
-#[case::id_with_a_non_hex_digit(
-    "deviceId",
-    json!("0123456789abcdef0123456789abcdeg"),
-    "the field \"deviceId\" must be 32 lowercase hexadecimal digits"
-)]
-fn apply_when_entry_is_refused_then_message_says_why(
+fn apply_online_when_entry_is_refused_then_message_says_why(
     #[case] key: &str,
     #[case] value: serde_json::Value,
     #[case] expected: &str,
@@ -202,7 +269,7 @@ fn apply_when_entry_is_refused_then_message_says_why(
     let mut settings = first_settings();
 
     let err = settings
-        .apply(&Entries::from([(key.to_string(), value)]))
+        .apply_online(&Entries::from([(key.to_string(), value)]))
         .unwrap_err();
 
     assert_eq!(err.to_string(), expected);
@@ -231,7 +298,7 @@ fn entries_when_settings_then_one_text_entry_for_each_row() {
 fn identity_when_settings_then_carries_the_id_the_name_and_the_build_constants() {
     let mut settings = first_settings();
     settings
-        .apply(&entry(DeviceSetting::Name, "cell 1"))
+        .apply_online(&entry(DeviceSetting::Name, "cell 1"))
         .unwrap();
 
     let identity = settings.identity();

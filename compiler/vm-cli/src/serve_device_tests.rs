@@ -56,22 +56,6 @@ fn serve_session_when_identity_then_device_block_carries_the_device_id_and_name(
 fn serve_session_when_set_device_settings_then_ack_and_identity_reports_the_change() {
     let mut host = counter_host();
     let mut device = Device::in_memory();
-    let new_id = "c".repeat(32);
-    let set =
-        serde_json::json!({"command": "setDeviceSettings", "name": "cell 1", "deviceId": new_id})
-            .to_string();
-
-    let responses = run(&mut host, &mut device, &[&set, r#"{"command":"identity"}"#]);
-
-    assert_eq!(responses[0], serde_json::json!({"response": "ack"}));
-    assert_eq!(responses[1]["device"]["name"], "cell 1");
-    assert_eq!(responses[1]["device"]["deviceId"], new_id.as_str());
-}
-
-#[test]
-fn serve_session_when_set_device_settings_names_one_setting_then_the_other_stays() {
-    let mut host = counter_host();
-    let mut device = Device::in_memory();
 
     let responses = run(
         &mut host,
@@ -82,7 +66,50 @@ fn serve_session_when_set_device_settings_names_one_setting_then_the_other_stays
         ],
     );
 
+    assert_eq!(responses[0], serde_json::json!({"response": "ack"}));
+    assert_eq!(responses[1]["device"]["name"], "cell 1");
     assert_eq!(responses[1]["device"]["deviceId"], TEST_DEVICE_ID);
+}
+
+/// REQ-VC-vm-cli-030: the id is not changed over the session. The command
+/// that names it is refused as a whole, and a command that names the name
+/// alone still works afterwards.
+#[spec_test(REQ_VC_vm_cli_030)]
+#[test]
+fn serve_session_when_set_device_settings_names_the_device_id_then_v6015_and_identity_unchanged() {
+    let mut host = counter_host();
+    let mut device = Device::in_memory();
+    let new_id = "c".repeat(32);
+    let both =
+        serde_json::json!({"command": "setDeviceSettings", "name": "cell 1", "deviceId": new_id})
+            .to_string();
+    let id_alone =
+        serde_json::json!({"command": "setDeviceSettings", "deviceId": new_id}).to_string();
+
+    let responses = run(
+        &mut host,
+        &mut device,
+        &[
+            &both,
+            &id_alone,
+            r#"{"command":"identity"}"#,
+            r#"{"command":"setDeviceSettings","name":"cell 2"}"#,
+            r#"{"command":"identity"}"#,
+        ],
+    );
+
+    for refused in &responses[0..2] {
+        assert_eq!(refused["response"], "error");
+        assert_eq!(refused["vCode"], "V6015");
+        assert!(refused["message"].as_str().unwrap().ends_with(
+            "the field \"deviceId\" can only be changed on the device itself (its settings file)"
+        ));
+    }
+    assert_eq!(responses[2]["device"]["name"], "ironplcvm");
+    assert_eq!(responses[2]["device"]["deviceId"], TEST_DEVICE_ID);
+    assert_eq!(responses[3]["response"], "ack");
+    assert_eq!(responses[4]["device"]["name"], "cell 2");
+    assert_eq!(responses[4]["device"]["deviceId"], TEST_DEVICE_ID);
 }
 
 #[test]
@@ -116,7 +143,7 @@ fn serve_session_when_set_device_settings_invalid_then_v6015_and_identity_unchan
         &mut host,
         &mut device,
         &[
-            r#"{"command":"setDeviceSettings","name":"cell 1","deviceId":"short"}"#,
+            r#"{"command":"setDeviceSettings","name":""}"#,
             r#"{"command":"setDeviceSettings","speed":"fast"}"#,
             r#"{"command":"identity"}"#,
         ],
@@ -127,7 +154,7 @@ fn serve_session_when_set_device_settings_invalid_then_v6015_and_identity_unchan
     assert!(responses[0]["message"]
         .as_str()
         .unwrap()
-        .contains("deviceId"));
+        .contains("\"name\""));
     assert_eq!(responses[1]["vCode"], "V6015");
     assert!(responses[1]["message"].as_str().unwrap().contains("speed"));
     assert_eq!(responses[2]["device"]["name"], "ironplcvm");

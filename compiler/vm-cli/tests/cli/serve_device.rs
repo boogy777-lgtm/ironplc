@@ -1,5 +1,6 @@
 //! Tests of the device settings of `ironplcvm serve`: the id a device
-//! generates, keeps across restarts and lets its operator change, and the
+//! generates, keeps across restarts and lets its operator change in the
+//! settings file only, and the
 //! refusal to start on a settings file that cannot be used.
 
 use std::path::Path;
@@ -68,17 +69,70 @@ fn serve_when_started_twice_then_the_same_device_id_and_another_device_has_anoth
 fn serve_when_settings_changed_through_the_session_then_the_restart_reports_them() {
     let dir = TempDir::new().unwrap();
     let path = served(&dir);
-    let new_id = "d".repeat(32);
-    let set =
-        serde_json::json!({"command": "setDeviceSettings", "name": "cell 1", "deviceId": new_id});
+    let set = serde_json::json!({"command": "setDeviceSettings", "name": "cell 1"});
 
-    let (_, first) = serve_lines(&path, &format!("{set}\n{IDENTITY}"));
+    let (_, first) = serve_lines(
+        &path,
+        &format!(
+            "{set}
+{IDENTITY}"
+        ),
+    );
     let (_, second) = serve_lines(&path, IDENTITY);
 
     assert_eq!(first[0]["response"], "ack");
-    assert_eq!(first[1]["device"]["deviceId"], new_id.as_str());
-    assert_eq!(second[0]["device"]["deviceId"], new_id.as_str());
+    assert_eq!(first[1]["device"]["name"], "cell 1");
     assert_eq!(second[0]["device"]["name"], "cell 1");
+    assert_eq!(
+        second[0]["device"]["deviceId"],
+        first[1]["device"]["deviceId"]
+    );
+}
+
+/// REQ-VC-vm-cli-030: the session cannot change the id: the command is
+/// refused with V6015 and the file is as it was. The operator changes the id in
+/// the file, and the next start is that device.
+#[spec_test(REQ_VC_vm_cli_030)]
+#[test]
+fn serve_when_the_session_names_the_device_id_then_v6015_file_untouched_and_the_file_edit_is_adopted(
+) {
+    let dir = TempDir::new().unwrap();
+    let path = served(&dir);
+    let (_, first) = serve_lines(&path, IDENTITY);
+    let before = std::fs::read_to_string(settings_file(&dir)).unwrap();
+    let new_id = "d".repeat(32);
+    let set = serde_json::json!({"command": "setDeviceSettings", "deviceId": new_id});
+
+    let (_, refused) = serve_lines(
+        &path,
+        &format!(
+            "{set}
+{IDENTITY}"
+        ),
+    );
+
+    assert_eq!(refused[0]["vCode"], "V6015");
+    assert_eq!(
+        refused[0]["message"],
+        "the device settings are not changed: the field \"deviceId\" can only be changed on the device itself (its settings file)"
+    );
+    assert_eq!(
+        refused[1]["device"]["deviceId"],
+        first[0]["device"]["deviceId"]
+    );
+    assert_eq!(
+        std::fs::read_to_string(settings_file(&dir)).unwrap(),
+        before
+    );
+
+    std::fs::write(
+        settings_file(&dir),
+        format!("{{\"version\":1,\"deviceId\":\"{new_id}\",\"name\":\"ironplcvm\"}}"),
+    )
+    .unwrap();
+    let (_, adopted) = serve_lines(&path, IDENTITY);
+
+    assert_eq!(adopted[0]["device"]["deviceId"], new_id.as_str());
 }
 
 /// REQ-VC-vm-cli-026: a damaged settings file stops the start with exit 2 and
