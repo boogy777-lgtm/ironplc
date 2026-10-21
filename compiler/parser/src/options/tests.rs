@@ -571,3 +571,37 @@ fn options_spec_req_cs_010_only_codesys_dialect_enables_special_operators() {
         );
     }
 }
+
+#[test]
+fn entries_when_default_then_one_entry_per_descriptor_and_per_warning_list() {
+    let keys: Vec<&str> = CompilerOptions::default()
+        .entries()
+        .into_iter()
+        .map(|(key, _)| key)
+        .collect();
+
+    let mut expected: Vec<&str> = CompilerOptions::FEATURE_DESCRIPTORS
+        .iter()
+        .map(|flag| flag.option_key)
+        .collect();
+    expected.extend(
+        CompilerOptions::POLICY_DESCRIPTORS
+            .iter()
+            .map(|policy| policy.option_key),
+    );
+    expected.extend(WarningList::ALL.map(WarningList::option_key));
+    assert_eq!(keys, expected);
+}
+
+#[test]
+fn entries_when_warnings_listed_then_sorted_codes_under_the_list_key() {
+    let mut options = CompilerOptions::default();
+    let warnings = ironplc_problems::WarningSet::from_code("P4083").unwrap();
+    options.messages.add(WarningList::Disabled, warnings);
+
+    let entries = options.entries();
+
+    let value_of = |key: &str| entries.iter().find(|(k, _)| *k == key).unwrap().1.clone();
+    assert_eq!(value_of("disabled_warnings"), "P4083");
+    assert_eq!(value_of("warnings_as_errors"), "");
+}

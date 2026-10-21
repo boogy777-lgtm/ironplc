@@ -228,32 +228,34 @@ fn tokenize_when_valid_file_then_ok() -> Result<(), Box<dyn std::error::Error>> 
 
 #[test]
 fn compile_when_valid_file_then_creates_output() -> Result<(), Box<dyn std::error::Error>> {
-    let output = NamedTempFile::new()?;
+    let dir = tempfile::tempdir()?;
+    let output = dir.path().join("out.iplc");
     let mut cmd = Command::new(cargo::cargo_bin!("ironplcc"));
 
     cmd.arg("compile")
         .arg(shared_resource_path("steel_thread.st"))
         .arg("--output")
-        .arg(output.path());
+        .arg(&output);
     cmd.assert().success().stdout(predicate::str::is_empty());
 
-    assert!(output.path().metadata()?.len() > 0);
+    assert!(output.metadata()?.len() > 0);
 
     Ok(())
 }
 
 #[test]
 fn compile_when_short_output_flag_then_creates_output() -> Result<(), Box<dyn std::error::Error>> {
-    let output = NamedTempFile::new()?;
+    let dir = tempfile::tempdir()?;
+    let output = dir.path().join("out.iplc");
     let mut cmd = Command::new(cargo::cargo_bin!("ironplcc"));
 
     cmd.arg("compile")
         .arg(shared_resource_path("steel_thread.st"))
         .arg("-o")
-        .arg(output.path());
+        .arg(&output);
     cmd.assert().success().stdout(predicate::str::is_empty());
 
-    assert!(output.path().metadata()?.len() > 0);
+    assert!(output.metadata()?.len() > 0);
 
     Ok(())
 }
@@ -903,7 +905,8 @@ fn compile_when_bare_value_name_is_declared_by_two_enumerations_then_p2042_and_n
 fn compile_when_shared_value_name_is_qualified_then_creates_output(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let source = st_source(SHARED_VALUE_QUALIFIED)?;
-    let output = NamedTempFile::new()?;
+    let dir = tempfile::tempdir()?;
+    let output = dir.path().join("out.iplc");
 
     let mut check = Command::new(cargo::cargo_bin!("ironplcc"));
     check.arg("check").arg(source.path());
@@ -914,10 +917,10 @@ fn compile_when_shared_value_name_is_qualified_then_creates_output(
         .arg("compile")
         .arg(source.path())
         .arg("--output")
-        .arg(output.path());
+        .arg(&output);
     compile.assert().success();
 
-    assert!(output.path().metadata()?.len() > 0);
+    assert!(output.metadata()?.len() > 0);
 
     Ok(())
 }

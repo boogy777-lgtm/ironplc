@@ -92,6 +92,7 @@ fn compile_when_only_a_warning_then_build_started_first_and_ready_for_download_l
         &container,
         CompilerOptions::default(),
         &[],
+        false,
     )
     .unwrap();
     let shown = person_form(&diagnostics, Some(&project));
@@ -116,6 +117,7 @@ fn compile_when_only_a_warning_then_build_started_first_and_ready_for_download_l
         CompilerOptions::default(),
         &[],
         true,
+        true,
     );
     assert!(result.is_ok());
 }
@@ -124,7 +126,8 @@ fn compile_when_only_a_warning_then_build_started_first_and_ready_for_download_l
 fn compile_when_a_directory_is_given_then_the_application_is_the_name_of_the_directory() {
     let dir = tempfile::Builder::new().prefix("plant").tempdir().unwrap();
     std::fs::write(dir.path().join("a.st"), CLEAN_PROGRAM).unwrap();
-    let container = tempfile::NamedTempFile::new().unwrap();
+    let output_dir = tempfile::TempDir::new().unwrap();
+    let container = output_dir.path().join("out.iplc");
     let name = dir
         .path()
         .file_name()
@@ -134,9 +137,10 @@ fn compile_when_a_directory_is_given_then_the_application_is_the_name_of_the_dir
 
     let (project, diagnostics) = super::run_compile(
         &[dir.path().to_path_buf()],
-        container.path(),
+        &container,
         CompilerOptions::default(),
         &[],
+        false,
     )
     .unwrap();
     let shown = person_form(&diagnostics, Some(&project));
@@ -157,6 +161,7 @@ fn compile_when_an_error_then_no_download_possible_and_no_container_and_failure(
         &container,
         CompilerOptions::default(),
         &[],
+        false,
     )
     .unwrap();
     let shown = person_form(&diagnostics, Some(&project));
@@ -165,6 +170,7 @@ fn compile_when_an_error_then_no_download_possible_and_no_container_and_failure(
         &container,
         CompilerOptions::default(),
         &[],
+        true,
         true,
     );
 
@@ -285,6 +291,7 @@ fn compile_when_configuration_then_the_application_is_its_name_not_the_file() {
         &container,
         CompilerOptions::default(),
         &[],
+        false,
     )
     .unwrap();
     let shown = person_form(&diagnostics, Some(&project));
@@ -306,6 +313,7 @@ fn compile_when_several_configurations_then_p9999_naming_them_and_the_applicatio
         &container,
         CompilerOptions::default(),
         &[],
+        false,
     )
     .unwrap();
     let shown = person_form(&diagnostics, Some(&project));
@@ -337,6 +345,7 @@ fn compile_when_syntax_error_then_the_application_is_the_name_of_the_file() {
         &container,
         CompilerOptions::default(),
         &[],
+        false,
     )
     .unwrap();
     let shown = person_form(&diagnostics, Some(&project));

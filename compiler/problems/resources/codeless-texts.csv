@@ -6,3 +6,5 @@ build_complete_ok,Text,"Build complete -- {errors} errors, {warnings} warnings :
 build_complete_errors,Text,"Build complete -- {errors} errors, {warnings} warnings : No download possible"
 compile_complete_ok,Text,"Compile complete -- {errors} errors, {warnings} warnings"
 compile_complete_errors,Text,"Compile complete -- {errors} errors, {warnings} warnings"
+build_up_to_date,Text,The application is up to date
+record_malformed,Text,"The record {path} cannot be used and is rewritten after the build"

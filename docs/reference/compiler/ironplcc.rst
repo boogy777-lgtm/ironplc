@@ -56,6 +56,21 @@ Build Commands
    which ends with ``: Ready for download`` or, when an error stops the build,
    with ``: No download possible``. A build can succeed with warnings.
 
+   .. include:: ../../includes/build-up-to-date.rst
+
+   After the container is written, the command writes the *build record*
+   :file:`{STEM}.build.iplcinfo` beside it, where *STEM* is the output file name
+   without its extension. The build record is a JSON file that holds the hash
+   of each source and of each file of each activated library, every setting of
+   the compiler, the stable variable UID table, the name of the project, the
+   version of the compiler, and the hashes and the size of the container. The
+   command reads it at the start of the next build to decide whether anything
+   changed. A build that writes no container leaves the build record as it is.
+   A build record that is not valid JSON, or that another version of the
+   compiler wrote in another format, is replaced: the command writes one line
+   that names the file, builds, and writes a new record. Without a build record
+   the command builds and writes one. ``--force`` ignores the build record.
+
    .. note::
 
       The compile command supports Structured Text programs, including
@@ -146,6 +161,11 @@ Options
    activate several libraries. Applies to the ``check`` and ``compile``
    commands. Libraries referenced by a discovered project file are
    activated automatically and do not need this option.
+
+``--force``
+   Build even when nothing changed. Applies to the ``compile`` command. The
+   command compiles and writes the container and the build record as it does
+   for a changed project.
 
 ``--format`` *FORMAT*
    Select how :program:`ironplcc check` writes its messages. ``text`` (default)

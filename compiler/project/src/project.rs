@@ -13,6 +13,7 @@ use ironplc_dsl::{
 };
 use ironplc_parser::{options::CompilerOptions, token::Token, tokenize_program};
 use ironplc_problems::text;
+use ironplc_sources::project::LibraryTexts;
 use ironplc_sources::{FileType, LibraryName, Source, SourceProject};
 use log::{debug, trace};
 
@@ -287,6 +288,12 @@ impl FileBackedProject {
     /// diagnostic per library that could not be loaded.
     pub fn load_activated_libraries(&self) -> (Vec<Library>, Vec<Diagnostic>) {
         self.source_project.load_activated_libraries()
+    }
+
+    /// The text of each activated compatibility library, in activation order
+    /// ([`SourceProject::activated_library_texts`]).
+    pub fn activated_library_texts(&self) -> Vec<LibraryTexts> {
+        self.source_project.activated_library_texts()
     }
 
     /// Sets the engineering-side stable variable IDs, mapping each

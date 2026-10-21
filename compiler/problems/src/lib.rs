@@ -417,6 +417,30 @@ a_line,Text,B",
         }
     }
 
+    /// The lines about the build record are IronPLC's own, not CODESYS text: the
+    /// exact CODESYS wording of "up to date" is not verified.
+    #[test]
+    fn codeless_when_build_record_rows_then_key_the_category_and_the_text() {
+        let rows = [
+            (
+                codeless::build_up_to_date(),
+                "build_up_to_date",
+                "The application is up to date",
+            ),
+            (
+                codeless::record_malformed("app.build.iplcinfo"),
+                "record_malformed",
+                "The record app.build.iplcinfo cannot be used and is rewritten after the build",
+            ),
+        ];
+
+        for (text, key, message) in rows {
+            assert_eq!(text.key(), key);
+            assert_eq!(text.severity(), Severity::Text, "{key}");
+            assert_eq!(text.message(), message, "{key}");
+        }
+    }
+
     #[spec_test(REQ_DS_problems_004)]
     fn severity_variant_when_row_has_no_declarable_category_then_error_names_code_and_value() {
         for severity in ALL {

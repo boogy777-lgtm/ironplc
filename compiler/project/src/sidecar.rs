@@ -382,6 +382,17 @@ impl Sidecar {
     }
 }
 
+/// The serialized body of a sidecar that holds `ids`, without its `version`: the
+/// text [`Sidecar::save`] writes for the table. Equal tables give equal text, so
+/// a caller that must notice a change of the table (the build record) compares
+/// this.
+pub(crate) fn body_text(ids: &[(SidecarKey, u64)]) -> String {
+    let sidecar = Sidecar {
+        entries: ids.iter().cloned().collect(),
+    };
+    sidecar.to_json().to_string()
+}
+
 /// Collects the keys the sidecar tracks for a library: one key for each
 /// persistent declaration code generation lays out (ADR-0074).
 ///

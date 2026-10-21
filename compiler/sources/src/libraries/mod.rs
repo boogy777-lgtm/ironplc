@@ -160,7 +160,7 @@ impl LibraryRegistry {
         let mut names: Vec<LibraryName> = match fs::read_dir(&self.root) {
             Ok(entries) => entries
                 .filter_map(Result::ok)
-                .filter(|entry| entry.path().join("library.toml").is_file())
+                .filter(|entry| entry.path().join(MANIFEST_FILE).is_file())
                 .filter_map(|entry| entry.file_name().to_str().map(LibraryName::from))
                 .collect(),
             Err(_) => Vec::new(),
@@ -170,7 +170,7 @@ impl LibraryRegistry {
     }
 
     fn manifest_path(&self, name: &LibraryName) -> PathBuf {
-        self.root.join(name.as_str()).join("library.toml")
+        self.root.join(name.as_str()).join(MANIFEST_FILE)
     }
 
     /// Whether an immediate subdirectory named exactly (byte-for-byte) equal to
@@ -198,6 +198,40 @@ impl LibraryRegistry {
     /// available, or a `LibraryManifestInvalid` (P6010) diagnostic when the
     /// manifest is malformed or missing a required field (`REQ-CL-sources-002`).
     pub fn load(&self, name: &LibraryName) -> Result<CompatLibrary, Diagnostic> {
+        let located = self.locate(name)?;
+        let library = load_version_library(&located.version_dir, &located.manifest_file_id)?;
+
+        Ok(CompatLibrary {
+            manifest: located.manifest,
+            library,
+        })
+    }
+
+    /// The text a library is made of: its manifest, then each `.st` file of the
+    /// selected version in file name order, each as the path relative to the
+    /// library and the text. It is exactly what [`LibraryRegistry::load`] reads, so
+    /// a caller that must notice a change of the library (the build record)
+    /// compares this and a change of what is loaded cannot escape it.
+    ///
+    /// Fails as [`LibraryRegistry::load`] does when the library cannot be read.
+    pub fn texts(&self, name: &LibraryName) -> Result<Vec<(String, String)>, Diagnostic> {
+        let located = self.locate(name)?;
+        let mut texts = vec![(MANIFEST_FILE.to_owned(), located.manifest_text)];
+        for (path, text) in read_version_texts(&located.version_dir, &located.manifest_file_id)? {
+            texts.push((
+                format!(
+                    "{}/{}",
+                    located.manifest.default_version,
+                    file_name_of(&path)
+                ),
+                text,
+            ));
+        }
+        Ok(texts)
+    }
+
+    /// Finds the library by its exact name and reads its manifest.
+    fn locate(&self, name: &LibraryName) -> Result<LocatedLibrary, Diagnostic> {
         let manifest_path = self.manifest_path(name);
         let manifest_file_id = FileId::from_path(&manifest_path);
 
@@ -211,21 +245,24 @@ impl LibraryRegistry {
             ));
         }
 
-        let content = fs::read_to_string(&manifest_path).map_err(|e| {
+        let manifest_text = fs::read_to_string(&manifest_path).map_err(|e| {
             Diagnostic::text_in_file(
                 manifest_file_id.clone(),
                 text::library_manifest_invalid_manifest_unreadable(e),
             )
         })?;
-        let manifest = LibraryManifest::from_toml(&content, &manifest_file_id)?;
+        let manifest = LibraryManifest::from_toml(&manifest_text, &manifest_file_id)?;
 
         let version_dir = self
             .root
             .join(name.as_str())
             .join(&manifest.default_version);
-        let library = load_version_library(&version_dir, &manifest_file_id)?;
-
-        Ok(CompatLibrary { manifest, library })
+        Ok(LocatedLibrary {
+            manifest,
+            manifest_text,
+            manifest_file_id,
+            version_dir,
+        })
     }
 
     /// Resolve project-declared library references to the set of bundled library
@@ -282,15 +319,30 @@ fn installed_libraries_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/libs")
 }
 
-/// Parse and merge every `.st` file in a version subdirectory into one Library.
-///
-/// Files are parsed with permissive options so a bundled library's declarations
-/// always produce an AST; policy rules (e.g. the top-level `VAR_GLOBAL` gate)
-/// are re-checked in the merged analysis under the *user's* options.
-fn load_version_library(
+/// A library found by name: its manifest and the directory of the version that
+/// is selected.
+struct LocatedLibrary {
+    manifest: LibraryManifest,
+    manifest_text: String,
+    manifest_file_id: FileId,
+    version_dir: PathBuf,
+}
+
+/// The file name of the manifest of a library.
+const MANIFEST_FILE: &str = "library.toml";
+
+fn file_name_of(path: &Path) -> String {
+    path.file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+/// Reads every `.st` file in a version subdirectory, in file name order, with
+/// its path. This is the one function that decides which files make a library.
+fn read_version_texts(
     version_dir: &Path,
     manifest_file_id: &FileId,
-) -> Result<Library, Diagnostic> {
+) -> Result<Vec<(PathBuf, String)>, Diagnostic> {
     let read_dir = fs::read_dir(version_dir).map_err(|e| {
         Diagnostic::text_in_file(
             manifest_file_id.clone(),
@@ -301,8 +353,7 @@ fn load_version_library(
     let mut paths: Vec<PathBuf> = read_dir.filter_map(Result::ok).map(|e| e.path()).collect();
     paths.sort();
 
-    let options = CompilerOptions::default();
-    let mut library = Library::new();
+    let mut texts = Vec::new();
     for path in paths {
         let is_st = path
             .extension()
@@ -310,14 +361,30 @@ fn load_version_library(
         if !is_st {
             continue;
         }
-        let file_id = FileId::from_path(&path);
         let content = fs::read_to_string(&path).map_err(|e| {
             Diagnostic::text_in_file(
-                file_id.clone(),
+                FileId::from_path(&path),
                 text::library_manifest_invalid_library_file_unreadable(e),
             )
         })?;
-        let parsed = parse_program(&content, &file_id, &options)?;
+        texts.push((path, content));
+    }
+    Ok(texts)
+}
+
+/// Parse and merge every `.st` file in a version subdirectory into one Library.
+///
+/// Files are parsed with permissive options so a bundled library's declarations
+/// always produce an AST; policy rules (e.g. the top-level `VAR_GLOBAL` gate)
+/// are re-checked in the merged analysis under the *user's* options.
+fn load_version_library(
+    version_dir: &Path,
+    manifest_file_id: &FileId,
+) -> Result<Library, Diagnostic> {
+    let options = CompilerOptions::default();
+    let mut library = Library::new();
+    for (path, content) in read_version_texts(version_dir, manifest_file_id)? {
+        let parsed = parse_program(&content, &FileId::from_path(&path), &options)?;
         library = library.extend(parsed);
     }
     Ok(library)
@@ -472,6 +539,47 @@ mod tests {
         let registry = LibraryRegistry::with_root(dir.path());
         let err = registry.load(&LibraryName::from("NoVersion")).unwrap_err();
         assert_eq!(err.code, Problem::LibraryManifestInvalid.code());
+    }
+
+    #[test]
+    fn texts_when_library_has_st_files_then_manifest_then_each_file_in_name_order() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let dir = TempDir::new().unwrap();
+        let version_dir = dir.path().join("Multi").join("1.0.0");
+        fs::create_dir_all(&version_dir).unwrap();
+        let manifest = "name = \"Multi\"
+vendor = \"ACME\"
+default_version = \"1.0.0\"
+references = [\"https://example.com\"]
+";
+        fs::write(dir.path().join("Multi").join("library.toml"), manifest).unwrap();
+        fs::write(version_dir.join("b.st"), "B").unwrap();
+        fs::write(version_dir.join("a.st"), "A").unwrap();
+        fs::write(version_dir.join("notes.txt"), "not a source").unwrap();
+
+        let texts = LibraryRegistry::with_root(dir.path())
+            .texts(&LibraryName::from("Multi"))
+            .unwrap();
+
+        assert_eq!(
+            texts,
+            [
+                ("library.toml".to_owned(), manifest.to_owned()),
+                ("1.0.0/a.st".to_owned(), "A".to_owned()),
+                ("1.0.0/b.st".to_owned(), "B".to_owned()),
+            ]
+        );
+    }
+
+    #[test]
+    fn texts_when_library_unknown_then_not_found() {
+        let err = LibraryRegistry::bundled()
+            .texts(&LibraryName::from("DoesNotExist"))
+            .unwrap_err();
+
+        assert_eq!(err.code, Problem::LibraryNotFound.code());
     }
 
     #[test]

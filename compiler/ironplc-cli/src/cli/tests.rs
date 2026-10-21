@@ -250,7 +250,14 @@ fn compile_when_plcproj_references_unbundled_library_then_error_and_no_container
 
     let paths = vec![dir.path().to_path_buf()];
     let output = tempfile::NamedTempFile::new().unwrap();
-    let result = compile(&paths, output.path(), CompilerOptions::default(), &[], true);
+    let result = compile(
+        &paths,
+        output.path(),
+        CompilerOptions::default(),
+        &[],
+        false,
+        true,
+    );
 
     assert!(result.is_err());
     assert_eq!(output.path().metadata().unwrap().len(), 0);
@@ -259,11 +266,20 @@ fn compile_when_plcproj_references_unbundled_library_then_error_and_no_container
 #[test]
 fn compile_when_output_is_valid_container_then_roundtrips() {
     let paths = vec![shared_resource_path("steel_thread.st")];
-    let output = tempfile::NamedTempFile::new().unwrap();
-    compile(&paths, output.path(), CompilerOptions::default(), &[], true).unwrap();
+    let dir = tempfile::TempDir::new().unwrap();
+    let output = dir.path().join("out.iplc");
+    compile(
+        &paths,
+        &output,
+        CompilerOptions::default(),
+        &[],
+        false,
+        true,
+    )
+    .unwrap();
 
     // Verify the output is a valid container by reading it back
-    let mut file = std::fs::File::open(output.path()).unwrap();
+    let mut file = std::fs::File::open(&output).unwrap();
     let container = ironplc_container::Container::read_from(&mut file).unwrap();
     assert_eq!(container.header.num_variables, 2);
     assert_eq!(container.header.num_functions, 2);
@@ -301,6 +317,7 @@ fn compile_when_structured_variable_then_error() {
         output.path(),
         CompilerOptions::default(),
         &[],
+        false,
         true,
     );
     assert!(result.is_err());
@@ -766,14 +783,22 @@ fn check_and_compile_when_only_a_warning_then_ok_and_the_container_is_written() 
         .write_all(TWO_ENUMERATIONS_COMPARED.as_bytes())
         .unwrap();
     let paths = vec![source.path().to_path_buf()];
-    let output = tempfile::NamedTempFile::new().unwrap();
+    let dir = tempfile::TempDir::new().unwrap();
+    let output = dir.path().join("out.iplc");
 
     let checked = check(&paths, CompilerOptions::default(), &[], Output::Silent);
-    let compiled = compile(&paths, output.path(), CompilerOptions::default(), &[], true);
+    let compiled = compile(
+        &paths,
+        &output,
+        CompilerOptions::default(),
+        &[],
+        false,
+        true,
+    );
 
     assert!(checked.is_ok(), "{checked:?}");
     assert!(compiled.is_ok(), "{compiled:?}");
-    let mut file = std::fs::File::open(output.path()).unwrap();
+    let mut file = std::fs::File::open(&output).unwrap();
     let container = ironplc_container::Container::read_from(&mut file).unwrap();
     assert_eq!(container.header.num_variables, 4);
 }
