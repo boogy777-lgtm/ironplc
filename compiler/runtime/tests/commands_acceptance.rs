@@ -24,6 +24,7 @@ use ironplc_runtime::{
 /// The device block composed for the acceptance tests' soft device.
 fn test_device() -> DeviceIdentity {
     DeviceIdentity {
+        device_id: None,
         name: "ironplcvm".into(),
         model: "IronPLC SoftPLC".into(),
         modification: "vm-cli".into(),

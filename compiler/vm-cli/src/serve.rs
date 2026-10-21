@@ -95,6 +95,7 @@ pub(crate) enum Ha<'a> {
 /// application-supplied block the runtime host does not own.
 pub(crate) fn device_identity() -> DeviceIdentity {
     DeviceIdentity {
+        device_id: None,
         name: "ironplcvm".into(),
         model: "IronPLC SoftPLC".into(),
         modification: "vm-cli".into(),

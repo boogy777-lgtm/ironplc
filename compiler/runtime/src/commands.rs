@@ -236,6 +236,14 @@ pub const DEFAULT_SESSION_PORT: u16 = include!("../resources/session-port.txt");
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeviceIdentity {
+    /// The device's unique id: 32 lowercase hexadecimal digits that the
+    /// device generates once, keeps across restarts and lets its operator
+    /// change in its settings. Absent on the wire from a host that has none
+    /// (the MCP in-process host, a hardware target that reports no id) and
+    /// from a device that predates the field; a client ignores what it does
+    /// not know, so the protocol stays at version 1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_id: Option<String>,
     /// The device name (e.g. `"ironplcvm"`).
     pub name: String,
     /// The device model (e.g. `"IronPLC SoftPLC"`).
@@ -588,6 +596,7 @@ mod tests {
     /// version).
     fn test_device() -> DeviceIdentity {
         DeviceIdentity {
+            device_id: None,
             name: "ironplcvm".into(),
             model: "IronPLC SoftPLC".into(),
             modification: "vm-cli".into(),
@@ -597,9 +606,17 @@ mod tests {
 
     /// The identity response over one status snapshot, the `execute` shape.
     fn identity_response(redundancy: Option<RedundancyIdentity>) -> Response {
+        identity_response_of(test_device(), redundancy)
+    }
+
+    /// [`identity_response`] for a device block of the test's choosing.
+    fn identity_response_of(
+        device: DeviceIdentity,
+        redundancy: Option<RedundancyIdentity>,
+    ) -> Response {
         Response::Identity(Box::new(IdentityPayload {
             protocol: SESSION_PROTOCOL_VERSION,
-            device: test_device(),
+            device,
             application: StatusPayload {
                 mode: HostMode::Normal,
                 active: 1,
@@ -639,6 +656,52 @@ mod tests {
         assert_eq!(value["application"]["rounds"], 0);
         // ...and the standalone server answers without the redundancy block.
         assert!(value.get("redundancy").is_none());
+    }
+
+    /// A device id as the device generates it: 32 lowercase hexadecimal digits.
+    const DEVICE_ID: &str = "0123456789abcdef0123456789abcdef";
+
+    #[test]
+    fn render_response_when_identity_without_device_id_then_field_is_absent() {
+        let line = render_response(&identity_response(None)).unwrap();
+
+        assert!(!line.contains("deviceId"));
+    }
+
+    #[test]
+    fn render_response_when_identity_with_device_id_then_field_serializes() {
+        let mut device = test_device();
+        device.device_id = Some(DEVICE_ID.into());
+        let line = render_response(&identity_response_of(device, None)).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+
+        assert_eq!(value["device"]["deviceId"], DEVICE_ID);
+        assert_eq!(value["device"]["name"], "ironplcvm");
+    }
+
+    /// The `device` block of a server that predates `deviceId`.
+    const DEVICE_WITHOUT_ID: &str = r#"{"name":"ironplcvm","model":"IronPLC SoftPLC","modification":"vm-cli","firmwareVersion":"0.13.0"}"#;
+
+    #[test]
+    fn device_identity_when_device_id_absent_then_parses_with_none() {
+        let device: DeviceIdentity = serde_json::from_str(DEVICE_WITHOUT_ID).unwrap();
+
+        assert_eq!(device, test_device());
+    }
+
+    #[test]
+    fn device_identity_when_device_id_and_unknown_field_present_then_parses() {
+        // A reader ignores fields it does not know, which is what keeps the
+        // session protocol at version 1 when a server adds one.
+        let line = DEVICE_WITHOUT_ID.replace(
+            r#""name":"#,
+            &format!(r#""deviceId":"{DEVICE_ID}","fieldOfALaterServer":[1],"name":"#),
+        );
+
+        let device: DeviceIdentity = serde_json::from_str(&line).unwrap();
+
+        assert_eq!(device.device_id.as_deref(), Some(DEVICE_ID));
+        assert_eq!(device.name, "ironplcvm");
     }
 
     #[test]
