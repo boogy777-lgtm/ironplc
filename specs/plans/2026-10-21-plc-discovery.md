@@ -693,6 +693,9 @@ by hand (`runtime/src/host.rs`, `vm-cli/src/serve.rs`, `vm-cli/src/slot_store.rs
         tree views;
       - a webview can draw the control exactly (bar, colours, a disabled
         button, a checkbox), but it is an editor tab or a view, not a dialog.
+      - The latest API (`@types/vscode` 1.140) changes none of this.
+    - The owner targets the current VS Code, not an old one, so
+      `engines.vscode` is raised when a feature needs it.
     - OPEN: the owner chooses between these.
 - **A test that does not drive outputs** (as the SLC 500 / PLC-5 Remote Test
   mode, where the program is solved but outputs stay off) is a different
