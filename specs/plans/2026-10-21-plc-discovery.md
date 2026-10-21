@@ -356,6 +356,15 @@ VS Code part (the Network view, Choose Controller, the service process) lives.
   is enforced from the first day, and splitting is cheap when a second consumer
   appears. Choose A if IronLink must be installable without the compiler from
   the start.
+- **Owner's choice (2026-10-21): A**, a separate extension.
+  - The extension is a thin client of the `ironlink` binary, in the same way as
+    the IronPLC extension is a thin client of the language server (`ironplcc
+    lsp`) and of the debug adapter (`ironplcvm`). The binary decides; the
+    extension renders a TreeView, runs commands and shows a log channel.
+  - Open (proposal): under option A IronLink holds no sessions, so it can be a
+    child process on stdio, started by each client as the language server is.
+    No daemon, no port, no lifecycle. A shared service on localhost is a second
+    member of the same class, built only if a real case needs it.
 
 ### 5. Choosing a controller and connecting
 
@@ -622,7 +631,7 @@ by hand (`runtime/src/host.rs`, `vm-cli/src/serve.rs`, `vm-cli/src/slot_store.rs
 | 15 | E0015 mismatch with no remedy | the build is refused; the remedy command does not exist | the comparison replaces the refusal | closed by the new model |
 | 16 | the old "IronPLC Hot Edit" commands | bypass the checks, write no record, and can start a second device on the same file | remove them | ΔR<0 |
 | 17 | a panic in the TCP session thread | the occupied flag is never released, so V6014 is answered until restart | a drop guard | defect |
-| 18 | **`serve` runs no cyclic scan** | the program runs one round per acknowledged command (`drive_scan_round`); between commands the device does not execute | the device scans by its task schedule, independent of sessions; this comes before Run/Stop | gap (fundamental) |
+| 18 | **`serve` does not run the scan loop** | the scan mechanism exists (the task scheduler in the VM, `run_round(uptime)`, `next_due_us()`), and `ironplcvm run` drives it cyclically (`vm-cli/src/cli.rs`). `ironplcvm serve` does not: it runs one round at clock 0 only after `testEdits`, `untestEdits` or `assembleEdits` (`drive_scan_round`), so between commands the device does not execute | `serve` drives the same loop as `run` (one shared loop, not a copy), and handles session commands between rounds; the swap stays at the round boundary. This comes before Run/Stop | gap (fundamental) |
 | 19 | HA pair | the peer drops the migration decisions; a Test lost to permit revocation is still acknowledged | the HA plan | gap |
 | 20 | a container larger than about 5 MB | `acceptEdits` sends JSON bytes, about 3.3 times larger, and the frame cap is 16 MiB | binary framing or chunks | later |
 | 21 | docs and code disagree | `serve.rs` says assemble "requests a swap" (it is immediate); MCP says assemble works from staged (it does not); "needs Test" is in fact "active now" | fix the comments | defect (docs) |
