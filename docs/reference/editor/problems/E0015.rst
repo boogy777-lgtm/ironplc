@@ -4,26 +4,38 @@ E0015
 
 .. problem-summary:: E0015
 
-The device no longer matches the project baseline this workspace was last
-verified equal against: another engineer edited the device, or the device
-rebooted into a different state. Deploying local edits over unknown device
-state is refused (fail-closed).
+The application on the device is not the one this project last downloaded to
+it: another engineer edited the device, or the device runs something else than
+it did. Deploying local edits over unknown device state is refused
+(fail-closed).
 
 **Solutions**:
 
 1. **Re-sync the project from the device**, rebuild, and connect again —
-   the baseline is refreshed the moment your build is verified on the
-   device.
+   the record of what the device received is refreshed the moment the device
+   acknowledges your build.
 
-2. **Review before building**: while the baseline is stale the connection
-   stays up for monitoring, but Build is refused until the project matches
-   the device again.
+2. **Review before building**: while the application on the device is not the
+   one that was recorded, the connection stays up for monitoring, but Build is
+   refused until the project matches the device again.
 
-The baseline is recorded when the device accepts a build from this
-workspace. It holds the generation counters the device reports and the hash
-of the container this workspace built. Before the extension sends anything,
-it compares the state the device reports now with that record. A workspace
-that has no baseline yet (the first deploy to a device) is not checked.
+When the device acknowledges a build from this workspace, and when a session
+starts with a container, the extension records what the device received in the
+*download record* (:doc:`/reference/compiler/ironplcc`, ``record-download``), a
+file beside the application container, one for each connection. The record
+holds the hashes of the container. When the extension connects, it compares the
+content hash that the device reports with the record, before it sends anything.
+The comparison is by content, so a device that restarted still matches,
+although it starts its generation counters again. A connection that has no
+record yet (the first deploy to a device) is not checked.
+
+A device that does not report the content hash of its application cannot be
+compared. When a record exists for it, the extension reports this problem;
+update the device to the version of the extension, or remove the record.
+
+The extension keeps no record for a stdio connection whose program is a source
+file, because the session compiles it into a container that is not a file in
+your project. It does not check that connection.
 
 See Also
 --------

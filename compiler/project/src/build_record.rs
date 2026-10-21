@@ -51,7 +51,7 @@ use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::path::Path;
 
-use ironplc_container::{FileHeader, HEADER_SIZE};
+use ironplc_container::{integrity, FileHeader, HEADER_SIZE};
 use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_parser::options::CompilerOptions;
 use serde_json::{json, Value};
@@ -264,7 +264,7 @@ impl ContainerIdentity {
         }
     }
 
-    fn to_json(&self) -> Value {
+    pub(crate) fn to_json(&self) -> Value {
         json!({
             "contentHash": hex(&self.content_hash),
             "layoutHash": hex(&self.layout_hash),
@@ -273,11 +273,11 @@ impl ContainerIdentity {
         })
     }
 
-    fn from_json(value: &Value) -> Option<Self> {
+    pub(crate) fn from_json(value: &Value) -> Option<Self> {
         Some(ContainerIdentity {
-            content_hash: unhex(value.get("contentHash")?.as_str()?)?,
-            layout_hash: unhex(value.get("layoutHash")?.as_str()?)?,
-            debug_hash: unhex(value.get("debugHash")?.as_str()?)?,
+            content_hash: integrity::hash_from_hex(value.get("contentHash")?.as_str()?)?,
+            layout_hash: integrity::hash_from_hex(value.get("layoutHash")?.as_str()?)?,
+            debug_hash: integrity::hash_from_hex(value.get("debugHash")?.as_str()?)?,
             size: value.get("size")?.as_u64()?,
         })
     }
@@ -359,13 +359,7 @@ fn hash_hex(bytes: &[u8]) -> String {
 }
 
 fn hex(bytes: &[u8; 32]) -> String {
-    blake3::Hash::from_bytes(*bytes).to_hex().to_string()
-}
-
-fn unhex(text: &str) -> Option<[u8; 32]> {
-    blake3::Hash::from_hex(text)
-        .ok()
-        .map(|hash| *hash.as_bytes())
+    integrity::hash_hex(bytes).to_string()
 }
 
 #[cfg(test)]

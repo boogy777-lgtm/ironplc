@@ -193,7 +193,9 @@ redundancy layer is loaded):
     "candidate": null,
     "application": 1,
     "migration": false,
-    "rounds": 0
+    "rounds": 0,
+    "contentHash": "9f2c4e0a7b1d3c5e8a6f0b2d4c6e8a0f1b3d5c7e9a2c4e6f8b0d2c4e6a8f0b1d",
+    "layoutHash": "3c1a5e7b9d0f2a4c6e8b0d1f3a5c7e9b2d4f6a8c0e1b3d5f7a9c2e4b6d8f0a1c"
   },
   "redundancy": {
     "pairId": "7f3a9c",
@@ -214,7 +216,13 @@ Field set:
   hardware target reports its catalog values.
 - `application` — the live hot-edit status snapshot (mode, generation
   counters, rounds), the same fields `getStatus` returns
-  (`compiler/runtime/src/commands.rs:136`).
+  (`compiler/runtime/src/commands.rs:136`). Two optional fields say what
+  the device runs, by content: `contentHash` and `layoutHash`, the hashes
+  in the header of the normal (committed) artifact as 64 lowercase
+  hexadecimal digits (REQ-VC-vm-cli-024). They are optional on the wire:
+  a device that predates them omits them, and a client that does not know
+  them ignores them, so the protocol stays at version `1`. The client
+  compares `contentHash` with its download record (below).
 - `redundancy` — optional: `pairId`, configured `role`, ownership `epoch`,
   and the SYNC/CONTROL substates of
   [HA Redundancy FSM](ha-redundancy-fsm.md). Absent means standalone.
@@ -474,36 +482,41 @@ controller's code, disconnects, edits offline, builds offline, and
 reconnects to deploy. The deploy is the online build above; the only
 addition is a pre-send baseline check.
 
-1. **Baseline capture, comparison on (re)connect.** The client captures the
-   baseline at the moment the project is verified equal to the device: the
-   application/logic generation counters from `identity` / `getStatus`
-   (`compiler/runtime/src/commands.rs:136`), the active artifact's hash, and
-   the UID-sidecar state (`compiler/project/src/sidecar.rs`, the stable-UID
-   store the migration plan is compiled against). On every (re)connect,
-   before any bytes are sent, the client compares the device's active
-   artifact identity against that baseline. The hash is the authority, not
-   the generation counters: session generations restart on a device reboot,
-   while the container hash is recomputed and verified at every load —
-   `verify_load` (`compiler/container/src/load_verify.rs:288`) and the
-   content-hash check (`compiler/container/src/load_verify.rs:453`) — so a
-   hash comparison means the same thing before and after a reboot.
-2. **Match → the normal online change.** The baseline matches: the build
-   proceeds as above — `acceptEdits` (answering V4010 with the ADR-0061
-   migration decisions), `testEdits` (mandatory per ADR-0064), observe,
-   `assembleEdits`. When the candidate is a migration candidate, the panel
-   surfaces early that untest is unavailable (V4011) — commit or cancel are
-   the only exits.
-3. **Mismatch → coded refusal.** Another engineer edited the device, the
-   device rebooted into a different generation, or the hash simply differs:
-   the baseline is stale and the client refuses with a new E-code in the
-   existing registry (`integrations/vscode/resources/problem-codes.csv`,
-   next free E0015 StaleBaseline). The remedy is to re-sync the project
-   from the device and rebuild. There is no silent deploy over unknown
-   state — fail-closed, the same pattern as the V4007–V4010 staging
-   refusals.
-4. **Empty device → initial deploy.** No baseline exists and none is
-   needed: the same accept → test → assemble sequence runs, the test at
-   the barrier trivial for empty state (ADR-0064).
+1. **Baseline: the download record, comparison on (re)connect.** The
+   baseline is the *download record* of the connection
+   ([ADR-0083](../adrs/0083-build-and-download-records.md)): a file beside
+   the application, `<app>.<connection>.download.iplcinfo`, written by
+   `ironplcc record-download` after every download the engineer's tools
+   make (an acknowledged assemble, or a session started with a container).
+   It holds the identity of the container the device received (the
+   `contentHash` and `layoutHash` of its header). On every (re)connect,
+   before any bytes are sent, the client compares the `contentHash` that
+   `identity` reports (above) with the record. The hash is the authority,
+   not the generation counters: session generations restart on a device
+   reboot, while the container hash is recomputed and verified at every
+   load — `verify_load` (`compiler/container/src/load_verify.rs:288`) and
+   the content-hash check (`compiler/container/src/load_verify.rs:453`) —
+   so a hash comparison means the same thing before and after a reboot.
+2. **Match → the normal online change.** The record and the device agree:
+   the build proceeds as above — `acceptEdits` (answering V4010 with the
+   ADR-0061 migration decisions), `testEdits` (mandatory per ADR-0064),
+   observe, `assembleEdits`. When the candidate is a migration candidate,
+   the panel surfaces early that untest is unavailable (V4011) — commit or
+   cancel are the only exits.
+3. **Mismatch → coded refusal.** Another engineer edited the device, or the
+   hash simply differs: the record is stale and the client refuses with a
+   new E-code in the existing registry
+   (`integrations/vscode/resources/problem-codes.csv`, E0015
+   StaleBaseline). A device that reports no `contentHash` (it predates the
+   field) cannot be compared; with a record present that is a mismatch too,
+   and the remedy is the same: re-sync the project from the device and
+   rebuild. There is no silent deploy over unknown state — fail-closed, the
+   same pattern as the V4007–V4010 staging refusals.
+4. **No record → initial deploy.** No record exists and none is needed
+   (an empty device, or a connection that was never downloaded to): the
+   same accept → test → assemble sequence runs, the test at the barrier
+   trivial for empty state (ADR-0064), and the acknowledged assemble writes
+   the first record.
 
 Offline edits change only the pre-send check; the deploy itself is always
 the same online-change flow.
@@ -529,6 +542,7 @@ Everything reused, with its one authority:
 | Heartbeat | `getStatus` — `compiler/runtime/src/commands.rs:286` |
 | Redundancy block vocabulary | [HA Redundancy FSM](ha-redundancy-fsm.md) (epoch, SYNC/CONTROL) |
 | Baseline identity (artifact hash, UID sidecar) | `compiler/container/src/load_verify.rs:288`; `compiler/project/src/sidecar.rs` |
+| Download record (the baseline) | `compiler/project/src/download_record.rs`; `ironplcc record-download` |
 
 ## Out of Scope
 

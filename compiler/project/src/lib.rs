@@ -1,6 +1,7 @@
 pub mod build_record;
 pub mod compile;
 pub mod disassemble;
+pub mod download_record;
 pub mod id_agreement;
 pub mod project;
 pub mod records;

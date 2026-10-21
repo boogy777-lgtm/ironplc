@@ -112,6 +112,8 @@ ironplcvm serve <FILE>
 - **REQ-VC-vm-cli-022** A failure reading stdin or writing stdout ends the session: the command exits 2 and emits V6011 to stderr.
 - **REQ-VC-vm-cli-023** `testEdits`, `untestEdits` and `assembleEdits` only record a swap that applies at the next scan boundary. After the command layer acknowledges one of them, `serve` drives one scan round at a constant zero uptime (the runtime acceptance-test convention), before the response line is written, so a scripted client reads back state that has actually switched. A trap in the driven round is logged to stderr with the trap's V-code and the session continues.
 
+- **REQ-VC-vm-cli-024** The `application` block of the `identity` and `getStatus` responses carries `contentHash` and `layoutHash`: the `content_hash` and `layout_hash` of the header of the normal (committed) artifact the host holds, as 64 lowercase hexadecimal digits, read from the header and not recomputed. They follow the normal artifact through an assemble and stay those of the normal artifact while a candidate runs under Test. The fields are absent when the header carries the all-zero (no hash) value. The generation counters restart when the process restarts; the hashes do not.
+
 The session stays one line in, one line out: the scan round an FSM-advancing command drives happens before its response line is written, so the acknowledgment means the swap has been applied, not merely recorded.
 
 ## Variable Dump Format

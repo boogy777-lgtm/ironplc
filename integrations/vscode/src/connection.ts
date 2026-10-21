@@ -6,7 +6,7 @@
  * state machine (`connectionState`) driving one `HotEditSession` over a
  * spawned stdio child or a TCP socket — one active connection per workspace
  * (ADR-0065). This module is the glue: it owns the vscode objects (status
- * bar, QuickPick, output channel, `workspaceState`, `SecretStorage`) and
+ * bar, QuickPick, output channel, `SecretStorage`) and
  * renders what the vscode-free logic decides; the device panel and the
  * build commands subscribe to the model it publishes.
  */
@@ -15,9 +15,10 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { spawn } from 'child_process';
 import { existsSync } from 'fs';
+import { readFile } from 'fs/promises';
 
 import { currentCompilerSettings } from './compilerSettings';
-import { compileSourceToContainer } from './taskProviderLogic';
+import { compileSourceToContainer, runCompiler } from './taskProviderLogic';
 import { programKind } from './debugAdapterLogic';
 import { ReportProblem } from './debugAdapter';
 import { ProblemCode } from './problems';
@@ -35,18 +36,17 @@ import {
   OpenedConnection,
 } from './connectionState';
 import {
-  BaselineSnapshot,
   BaselineState,
-  captureBaseline,
-  checkBaseline,
+  FolderRef,
+  planDownload,
+  readBaseline,
+  RunCompiler,
+  writeDownloadRecord,
 } from './baselineLogic';
 import { BuildPhase } from './buildLogic';
 import { DevicePanelModel } from './devicePanelLogic';
 import { StdioLineTransport, vmFileName } from './hotEdit';
 import { connectTcpLineTransport } from './tcpTransport';
-
-/** The `workspaceState` key of the last verified-equal baseline. */
-const BASELINE_STATE_KEY = 'ironplc.baseline';
 
 /** What the connection feature exposes to the device panel and the build commands. */
 export interface ConnectionFeature {
@@ -57,8 +57,15 @@ export interface ConnectionFeature {
   model(): DevicePanelModel;
   setBuildPhase(phase: BuildPhase | null): void;
   updateStatus(status: HotEditStatus): void;
-  /** Captures the verified-equal baseline after our own assemble acknowledged. */
-  captureVerifiedBaseline(bytes: Uint8Array, status: HotEditStatus): void;
+  /**
+   * Handles a download the device acknowledged: records that the device
+   * received the container `container` (the file that was sent), then checks
+   * the device against the record again. The one place a build records an
+   * assemble acknowledgement.
+   */
+  recordDownload(container: string, status: HotEditStatus): Promise<void>;
+  /** Resolves when the check of the device against its download record has finished. */
+  settled(): Promise<void>;
   readonly onDidChangeModel: vscode.Event<DevicePanelModel>;
 }
 
@@ -77,6 +84,7 @@ export function registerConnectionSupport(
   const modelEmitter = new vscode.EventEmitter<DevicePanelModel>();
 
   let baselineState: BaselineState = 'none';
+  let pendingCheck: Promise<void> = Promise.resolve();
   let buildPhase: BuildPhase | null = null;
   let lastStatusOverride: HotEditStatus | null = null;
 
@@ -86,7 +94,7 @@ export function registerConnectionSupport(
       onState: () => render(),
       onIdentity: (identity: IdentityInfo) => {
         lastStatusOverride = null;
-        reconcileBaseline(identity);
+        pendingCheck = reconcileBaseline(identity).then(render);
         render();
       },
       onStatus: (status) => {
@@ -119,26 +127,102 @@ export function registerConnectionSupport(
       lastStatusOverride = status;
       render();
     },
-    captureVerifiedBaseline(bytes: Uint8Array, status: HotEditStatus): void {
-      const snapshot = captureBaseline(status, bytes);
-      void context.workspaceState.update(BASELINE_STATE_KEY, snapshot);
-      baselineState = 'match';
+    async recordDownload(container: string, status: HotEditStatus): Promise<void> {
       lastStatusOverride = status;
+      try {
+        await recordDownloadOf(container, status, false);
+      }
+      catch (err) {
+        void vscode.window.showErrorMessage(
+          `IronPLC: the device received the application, but the download record could not be written: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+      baselineState = await currentBaseline(status);
       render();
     },
+    settled: () => pendingCheck,
     onDidChangeModel: modelEmitter.event,
   };
 
-  function loadBaseline(): BaselineSnapshot | undefined {
-    const stored = context.workspaceState.get<BaselineSnapshot>(BASELINE_STATE_KEY);
-    if (
-      typeof stored === 'object' && stored !== null
-      && typeof stored.active === 'number' && typeof stored.application === 'number'
-      && typeof stored.containerHash === 'string'
-    ) {
-      return stored;
+  /** The compiler, with its command line and output in the connection channel. */
+  function runTool(): RunCompiler | undefined {
+    const compiler = compilerPath;
+    return compiler === undefined
+      ? undefined
+      : args => runCompiler(compiler, args, text => outputChannel.append(text));
+  }
+
+  function workspaceFolders(): FolderRef[] {
+    return (vscode.workspace.workspaceFolders ?? []).map(folder => ({ name: folder.name, path: folder.uri.fsPath }));
+  }
+
+  /**
+   * Records that the device of the current connection received a container,
+   * through the compiler's one writer. `sent` is the file that was sent, or
+   * undefined for the application container itself. Returns whether a record
+   * was written; a download that has no record says why in the connection
+   * channel. A failure of the writer is thrown.
+   */
+  async function recordDownloadOf(
+    sent: string | undefined,
+    status: HotEditStatus,
+    requireDeviceHash: boolean,
+  ): Promise<boolean> {
+    const profile = manager.currentProfile;
+    if (profile === undefined) {
+      return false;
     }
-    return undefined;
+    const plan = planDownload({
+      profile,
+      folders: workspaceFolders(),
+      sourceExtensions,
+      sentContainer: sent,
+      status,
+      requireDeviceHash,
+    });
+    if ('reason' in plan) {
+      outputChannel.appendLine(`No download record: ${plan.reason}.`);
+      return false;
+    }
+    const run = runTool();
+    if (run === undefined) {
+      outputChannel.appendLine('No download record: the IronPLC compiler, which writes it, is not installed.');
+      return false;
+    }
+    await writeDownloadRecord(run, plan.download);
+    return true;
+  }
+
+  /**
+   * Compares the device with the download record of the current connection:
+   * the content hash the device reports against the record, so a reboot, which
+   * restarts the generation counters, keeps a match. A connection without an
+   * application container, or a record that cannot be looked up, is not
+   * checked (none); the reason is in the connection channel.
+   */
+  async function currentBaseline(application: HotEditStatus): Promise<BaselineState> {
+    const profile = manager.currentProfile;
+    const run = runTool();
+    if (profile === undefined || run === undefined) {
+      return 'none';
+    }
+    const plan = planDownload({
+      profile,
+      folders: workspaceFolders(),
+      sourceExtensions,
+      status: application,
+      requireDeviceHash: false,
+    });
+    if ('reason' in plan) {
+      return 'none';
+    }
+    try {
+      return await readBaseline(run, readTextIfPresent, plan.download.anchor, profile.name, application);
+    }
+    catch (err) {
+      outputChannel.appendLine(`The download record could not be checked, so the device is not compared with it: ${err instanceof Error ? err.message : String(err)}`);
+      return 'none';
+    }
   }
 
   function model(): DevicePanelModel {
@@ -163,14 +247,24 @@ export function registerConnectionSupport(
     modelEmitter.fire(current);
   }
 
-  function reconcileBaseline(identity: IdentityInfo): void {
-    const next = checkBaseline(loadBaseline(), identity.application);
+  async function reconcileBaseline(identity: IdentityInfo): Promise<void> {
+    // A session started with a container is a download: record it, when the
+    // device shows that it runs that container, before the check below.
+    if (manager.currentProfile?.transport === 'stdio') {
+      try {
+        await recordDownloadOf(undefined, identity.application, true);
+      }
+      catch (err) {
+        outputChannel.appendLine(`The session start was not recorded: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    const next = await currentBaseline(identity.application);
     const becameStale = next === 'mismatch' && baselineState !== 'mismatch';
     baselineState = next;
     if (becameStale) {
       reportProblem(
         ProblemCode.StaleBaseline,
-        'The device was edited elsewhere or rebooted. Re-sync the project from the device, rebuild, then connect again.',
+        'The application on the device is not the one this project last downloaded to it. Re-sync the project from the device, rebuild, then connect again.',
       );
     }
   }
@@ -348,5 +442,18 @@ function statusTooltip(model: DevicePanelModel): string {
       lines.push('Click for the IronPLC Device panel.');
       return lines.join('\n');
     }
+  }
+}
+
+/** The text of a file, or undefined when there is no such file. */
+async function readTextIfPresent(file: string): Promise<string | undefined> {
+  try {
+    return await readFile(file, 'utf-8');
+  }
+  catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      return undefined;
+    }
+    throw err;
   }
 }

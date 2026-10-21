@@ -903,6 +903,9 @@ fn diagnostic(path: &Path, text: Text) -> Vec<Diagnostic> {
     vec![Diagnostic::text_in_file(FileId::from_path(path), text)]
 }
 
+mod download_record;
+pub use download_record::{record_download, record_download_path, RecordDownload};
+
 mod up_to_date;
 
 #[cfg(test)]

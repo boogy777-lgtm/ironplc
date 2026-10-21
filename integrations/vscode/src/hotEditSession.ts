@@ -77,6 +77,15 @@ export interface HotEditStatus {
   rounds: number;
   /** The pending-edit record written at Accept, when a candidate is staged. */
   pendingEdit?: PendingEditRecord;
+  /**
+   * The `content_hash` of the header of the normal (committed) artifact, as 64
+   * lowercase hexadecimal digits: what the device runs, by content. Optional
+   * on the wire; a device that predates it omits it. Unlike the generation
+   * counters it survives a device restart.
+   */
+  contentHash?: string;
+  /** The `layout_hash` of the normal artifact, under the same rules as `contentHash`. */
+  layoutHash?: string;
 }
 
 /** The baseline block of the pending-edit record (the normal artifact at Accept). */
@@ -275,6 +284,8 @@ function parseStatus(record: Record<string, unknown>): HotEditStatus {
     throw new HotEditProtocolError(null, 'status response is missing the mode');
   }
   const pendingEdit = parsePendingEdit(record.pendingEdit);
+  const contentHash = parseHashField(record, 'contentHash');
+  const layoutHash = parseHashField(record, 'layoutHash');
   return {
     mode: record.mode,
     active: numberField(record, 'active'),
@@ -284,7 +295,24 @@ function parseStatus(record: Record<string, unknown>): HotEditStatus {
     migration: record.migration === true,
     rounds: numberField(record, 'rounds'),
     ...(pendingEdit !== undefined ? { pendingEdit } : {}),
+    ...(contentHash !== undefined ? { contentHash } : {}),
+    ...(layoutHash !== undefined ? { layoutHash } : {}),
   };
+}
+
+/**
+ * Reads an optional header hash of a status payload: absent means a device
+ * that does not report it; present, it is 64 lowercase hexadecimal digits.
+ */
+function parseHashField(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key];
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== 'string' || !/^[0-9a-f]{64}$/.test(value)) {
+    throw new HotEditProtocolError(null, `status response carries a malformed ${key}`);
+  }
+  return value;
 }
 
 /** Reads a numeric field, refusing a malformed status payload. */

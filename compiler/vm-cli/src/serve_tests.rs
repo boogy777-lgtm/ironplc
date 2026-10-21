@@ -279,6 +279,57 @@ fn serve_session_when_identity_then_device_panel_and_status_snapshot() {
     assert!(responses[0].get("redundancy").is_none());
 }
 
+/// The `contentHash` the header of the container in `bytes` states, as the
+/// session writes it.
+fn content_hash_hex(bytes: &[u8]) -> String {
+    let container = Container::read_from(&mut io::Cursor::new(bytes)).unwrap();
+    ironplc_container::integrity::hash_hex(&container.header.content_hash).to_string()
+}
+
+/// REQ-VC-vm-cli-024: the application block reports the hashes of the
+/// header of the container the host loaded.
+#[spec_test(REQ_VC_vm_cli_024)]
+#[test]
+fn serve_session_when_identity_then_application_carries_the_hashes_of_the_loaded_container() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let store = booted_store(&dir);
+    let container = store.boot().unwrap();
+    let hashes = (
+        ironplc_container::integrity::hash_hex(&container.header.content_hash).to_string(),
+        ironplc_container::integrity::hash_hex(&container.header.layout_hash).to_string(),
+    );
+    let (mut host, _shell) = compose_host(container, false).unwrap();
+
+    let responses = run_session(&mut host, &[r#"{"command":"identity"}"#]);
+
+    assert_eq!(responses[0]["application"]["contentHash"], hashes.0);
+    assert_eq!(responses[0]["application"]["layoutHash"], hashes.1);
+}
+
+#[test]
+fn serve_session_when_committed_then_rebooted_then_same_content_hash_and_restarted_counters() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let mut store = booted_store(&dir);
+    let edit = container_bytes(&counter_source(10));
+    let lines = accept_test_assemble_lines(edit.clone());
+    let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
+    let mut host = counter_host();
+    let committed = run_session_with_store(&mut host, &lines, Some(&mut store));
+    assert_eq!(committed[2]["response"], "ack");
+    let after_commit = run_session(&mut host, &[r#"{"command":"identity"}"#]);
+
+    // A reboot: a new host over what the store boots.
+    let (mut rebooted, _shell) = compose_host(store.boot().unwrap(), false).unwrap();
+    let after_reboot = run_session(&mut rebooted, &[r#"{"command":"identity"}"#]);
+
+    let expected = content_hash_hex(&edit);
+    assert_eq!(after_commit[0]["application"]["contentHash"], expected);
+    assert_eq!(after_reboot[0]["application"]["contentHash"], expected);
+    // The counters did restart: the hash is what survives the reboot.
+    assert_eq!(after_commit[0]["application"]["application"], 2);
+    assert_eq!(after_reboot[0]["application"]["application"], 1);
+}
+
 /// REQ-VC-vm-cli-023: a trap in a driven round does not change the
 /// protocol answer (the swap was recorded, so the wire carries the ack);
 /// the trap surfaces with its V-code and the session keeps serving.

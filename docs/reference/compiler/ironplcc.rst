@@ -131,6 +131,40 @@ Refactor Commands
    the function block's type name. The command fails when the old key has no
    UID or the new key already has one.
 
+Download Record Commands
+------------------------
+
+:program:`ironplcc record-download` *APPLICATION* ``--connection`` *NAME*
+   Record that a device received a container over a connection. The command
+   writes the *download record*
+   :file:`{STEM}.{CONNECTION}.download.iplcinfo` beside *APPLICATION*, the
+   application container (:file:`{STEM}.iplc`), where *STEM* is its file name
+   without the extension and *CONNECTION* is the connection name, written with
+   every character other than ``A-Z a-z 0-9 _ -`` as ``%`` and two hexadecimal
+   digits of each byte of its UTF-8 text (``My PLC:1`` is ``My%20PLC%3A1``).
+   There is one record for each connection, and the next download over the
+   connection replaces it. The command prints nothing when it writes the
+   record.
+
+   The download record is a JSON file that holds the connection name, the name
+   of the application (the one the build record gives, else *STEM*), the hashes
+   and the size of the container that was sent, which the command reads from the
+   header of the container, the generation counters that the device reported
+   after the download, and the time in UTC. The editor compares the content hash
+   of the record with the one the device reports when it connects, which
+   :doc:`/reference/editor/problems/E0015` describes.
+
+   The container that was sent is *APPLICATION* unless ``--container`` names
+   another file. The command fails, with a message and without writing, when the
+   connection name is empty, when the container does not exist or does not start
+   with a valid container header, and when ``--device-content-hash`` is not the
+   content hash of the container.
+
+:program:`ironplcc record-download-path` *APPLICATION* ``--connection`` *NAME*
+   Print the path of the download record of the connection for *APPLICATION*,
+   whether or not the record exists. The editor asks for the path instead of
+   deriving it, so the rule that names the file is only in the compiler.
+
 Other Commands
 --------------
 
@@ -166,6 +200,27 @@ Options
    Build even when nothing changed. Applies to the ``compile`` command. The
    command compiles and writes the container and the build record as it does
    for a changed project.
+
+``--connection`` *NAME*
+   The name of the connection that keys a download record. Required by
+   ``record-download`` and ``record-download-path``. It must not be empty.
+
+``--container`` *FILE*
+   The container file that was sent to the device, when it is not the
+   application container itself, for example a container that was compiled for
+   the occasion. Applies to ``record-download``. The record sits beside the
+   application container and holds the identity of this file.
+
+``--device-content-hash`` *HASH*
+   The content hash that the device reports, as 64 hexadecimal digits. Applies
+   to ``record-download``. The record says what the device received, so the
+   command writes it only when *HASH* is the content hash of the container.
+
+``--active`` *N*, ``--normal`` *N*, ``--application`` *N*
+   The generation counters of the device after the download: of the artifact
+   that was executing, of the normal (committed) artifact, and of the
+   application. Applies to ``record-download``. Give all three or none. A
+   device restarts them when it reboots, so they describe one session.
 
 ``--format`` *FORMAT*
    Select how :program:`ironplcc check` writes its messages. ``text`` (default)

@@ -13,4 +13,4 @@ E0011,ConnectionAddressInvalid,Connection address is invalid
 E0012,ConnectionPortInvalid,Connection port is invalid
 E0013,ConnectFailed,Failed to connect to the device
 E0014,ConnectionLost,Connection to the device was lost
-E0015,StaleBaseline,The device no longer matches the last verified project baseline
+E0015,StaleBaseline,The device does not run the application this project last downloaded to it

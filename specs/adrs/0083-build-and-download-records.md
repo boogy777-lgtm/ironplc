@@ -24,10 +24,12 @@ remembers more, and uses it:
   deleted with a warning (`CompiledSetStorage.cs:250-257`).
 
 IronPLC needs the same two memories: what the last successful build produced and
-from which inputs, so that an unchanged build is skipped; and, later, what each
-device received, so that the editor can compare the application on a device with
-what it last sent by content and not by generation counters, which restart when
-the device reboots. Both are engineering-side files: the device never reads
+from which inputs, so that an unchanged build is skipped; and what each device
+received, so that the editor can compare the application on a device with what
+it last sent by content and not by generation counters, which restart when the
+device reboots. Until now the editor kept the second one in its workspace state
+(`ironplc.baseline`: the generation counters and a SHA-256 of the container) and
+compared only the counters, so a rebooted device was reported as changed. Both are engineering-side files: the device never reads
 them. The device's own files (its slots and marker) are a different class and
 stay with the device.
 
@@ -64,13 +66,24 @@ Chosen option: **a family of engineering record files**, because it gives the
 content comparison with one place to find, read and version every record.
 
 - **Names.** The record sits beside `<app>.iplc` and is named for its kind:
-  `<app>.build.iplcinfo` for the build record, and later
+  `<app>.build.iplcinfo` for the build record, and
   `<app>.<connection>.download.iplcinfo` for the download record, one for each
   connection profile (a device reports no unique id, so the engineering side's
   name for the connection keys it). `RecordKind` in `ironplc-project` lists the
   kinds, and its path and version functions are exhaustive matches, so a kind
   without a name or a version does not compile. The UID table is the kind
   `Uids`, with its name unchanged.
+- **The connection in a file name.** A profile name is free text. `<connection>`
+  keeps the characters `A-Z a-z 0-9 _ -` and writes every other byte of the
+  UTF-8 text as `%` and two uppercase hexadecimal digits (`My PLC:1` is
+  `My%20PLC%3A1`). The encoding is injective, because the `%` of the text is
+  encoded as well. It is a valid file name on Windows, where `:` and a trailing
+  space or dot are not allowed. The dot is encoded so that a name cannot write
+  the suffix of another kind: the connection `a.build` is `a%2Ebuild` and does
+  not make a file that looks like a build record. An empty name has no record.
+  Names that differ only in letter case share a file on a file system that
+  ignores case, so a record holds the connection name as written, and a reader
+  treats a record of another name as malformed.
 - **Format.** Every record is JSON with an integer `version`. The reader accepts
   the version of the kind and nothing else. A missing file is no record. A file
   that is not JSON, has another version or has a shape that is not the kind's is
@@ -101,6 +114,56 @@ content comparison with one place to find, read and version every record.
   there: it still describes the container on disk. `--force` builds regardless
   and writes the record.
 
+- **The download record** holds the name of the connection, the name of the
+  application (the one the build record gives when the application has a build
+  record, else the stem of the container), the identity of the container that was
+  sent (`contentHash`, `layoutHash`, `debugHash` and the size, read from its
+  header), the generation counters that the device reported after the download
+  (`active`, `normal`, `application`; they describe one session of the device,
+  which a reboot restarts), and the time in UTC. `ironplcc record-download` is
+  its one writer. It refuses to write when the caller gives the content hash that
+  the device reports and it is not the hash of the container: the record says what
+  the device received, and a device that runs something else received something
+  else. `ironplcc record-download-path` prints the path of the record, so the
+  editor reads the file but never derives its name.
+- **The device reports what it runs.** The `application` block of the answers to
+  `identity` and `getStatus` gains `contentHash` and `layoutHash`: the hashes in
+  the header of the normal (committed) artifact the host holds, as lowercase
+  hexadecimal, read from the header and not recomputed. They are optional on the
+  wire and absent when the header carries no hash. They follow the normal
+  artifact through an assemble and stay those of the normal artifact while a
+  candidate runs under Test. The session protocol stays at version 1, because a
+  server adds optional fields and a client ignores the fields it does not know:
+  no deserializer of these payloads in the Rust workspace denies unknown fields,
+  the parser of the editor reads the fields it names, and a test on each side
+  parses a payload with the fields, without them and with a field of a later
+  server.
+- **Connect compares content.** The editor compares the `contentHash` that the
+  device reports with the record of the connection. A record and the same hash is
+  a match, and a reboot keeps it. A record and another hash, or a device that
+  reports none (it predates the field), is a mismatch, which is the refusal
+  E0015 as before: what a device that cannot say what it runs holds is unknown,
+  and the editor does not build over it. No record is no check.
+- **The download paths.** Every path that puts a container on a device records the
+  download through the one writer, with the application container as the anchor of
+  the record (a stdio connection whose program is a container: that container; any
+  other connection: the container the build task writes in the first workspace
+  folder, `<folder>/<folder>.iplc`) and the file that was sent as the container
+  whose identity is recorded.
+
+  | Path | Record |
+  |---|---|
+  | Build & Commit (the assemble the device acknowledged) | Recorded, with the device's status after the assemble. |
+  | Build & Trial, resolved by assemble | Recorded, the same function. |
+  | A session started with a container (a stdio connection whose program is a `.iplc`, `ironplcvm serve <app.iplc>`) | Recorded when the device reports the hash of that container, which the writer checks. A device that kept a committed application boots that one and not the file, so the file alone does not show what the device holds. |
+  | A stdio connection whose program is a source file | No record. The session compiles the source to a container of its own in the temporary directory; the engineer has no file for it, and there is no application container to name a record after. |
+  | MCP hot-edit assemble | No record: MCP has no project on disk. |
+
+  The editor handles the acknowledgement of an assemble in one function, and a
+  test fails if the workspace state `ironplc.baseline` is read or written anywhere
+  in the extension, if the writer command is built outside one module, or if the
+  extension derives the name of a record file.
+
 ### Consequences
 
 - Good, because an unchanged project costs a read of the files and a hash, and
@@ -116,6 +179,16 @@ content comparison with one place to find, read and version every record.
   in a way that its version does not show (a development build) are compared
   only by the library files and by the version string. A development build that
   changes code generation needs `--force`.
+- Good, because a device reboot no longer reads as a changed application, and a
+  device that was changed elsewhere is found by what it runs.
+- Good, because the format of the download record has one writer and one rule for
+  its name, and the editor, the command line and later tools share them.
+- Bad, because a device that predates `contentHash` cannot be compared, so with a
+  record it is refused until it is updated.
+- Bad, because the download record is per connection profile name: renaming a
+  profile leaves the old record behind and is a connection without a record.
+- Bad, because the connection of a stdio profile that runs a source program is
+  never checked.
 - Neutral: the record holds the absolute paths of the sources, as the debug
   section of the container does, so a moved project builds once.
 
@@ -129,6 +202,21 @@ content comparison with one place to find, read and version every record.
   with a missing, altered and foreign container.
 - `compiler/project/src/records.rs`: the missing, malformed and wrong-version
   cases for each kind.
+- `compiler/project/src/records.rs` and `compiler/project/src/download_record/tests.rs`:
+  the file name of a connection (`My PLC:1`, `a.build`, Unicode, the characters
+  Windows forbids, two names never sharing a file, an empty name), the record that
+  is written and read back, the record of another connection, another version and
+  a damaged shape, the refusal when the device runs another container, and the
+  time format.
+- `compiler/runtime/tests/commands_acceptance.rs` and `compiler/vm-cli/src/serve_tests.rs`:
+  the hashes of the normal artifact after load, during a trial, after a commit and
+  after a restart, and the payload with and without them.
+- `compiler/ironplc-cli/tests/cli_record_download.rs`: `record-download` and
+  `record-download-path` as the editor runs them, the missing file, the file that
+  is not a container, the empty name and the hash that is not the container's.
+- `integrations/vscode/src/test/unit/baselineLogic.test.ts`: a reboot keeps a
+  match, another container is a mismatch, no record is none, a device that reports
+  no hash is a mismatch, the plan of each download path, and the guards above.
 - `compiler/ironplc-cli/src/cli/up_to_date_tests.rs`: the second build is up to
   date and leaves the container untouched, `--force`, a changed source, a changed
   option, a deleted or altered container, and a missing, damaged and

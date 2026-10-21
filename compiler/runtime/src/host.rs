@@ -37,6 +37,7 @@
 
 use std::collections::BTreeMap;
 
+use ironplc_container::integrity::HASH_LEN;
 use ironplc_container::{Container, InstanceId, TaskId, VarIndex};
 use ironplc_vm::{FaultContext, Vm, VmBuffers};
 
@@ -145,6 +146,12 @@ pub struct HostStatus {
     pub rounds: u64,
     /// The pending-edit record written at Accept, if a candidate is staged.
     pub pending_edit: Option<PendingEditRecord>,
+    /// The `content_hash` of the normal artifact's header, as the host loaded
+    /// it. The host does not recompute it; the all-zero hash means the writer
+    /// of the container computed none.
+    pub content_hash: [u8; HASH_LEN],
+    /// The `layout_hash` of the normal artifact's header, as the host loaded it.
+    pub layout_hash: [u8; HASH_LEN],
 }
 
 /// Owns the active artifact, a staged candidate, and the VM's state.
@@ -406,6 +413,8 @@ impl RuntimeHost {
             migration: self.migration.is_some(),
             rounds: self.rounds,
             pending_edit: self.pending_edit.clone(),
+            content_hash: self.normal.header.content_hash,
+            layout_hash: self.normal.header.layout_hash,
         }
     }
 

@@ -40,6 +40,17 @@ fn run_line(host: &mut RuntimeHost, line: &str) -> serde_json::Value {
     serde_json::from_str(&rendered).unwrap()
 }
 
+/// The `contentHash` and `layoutHash` a status reports for the container
+/// compiled from the counter program with `body`: the lowercase hexadecimal of
+/// the hashes in its header.
+fn header_hashes(body: &str) -> (String, String) {
+    let container = common::compile_source(&counter_program(body));
+    (
+        ironplc_container::integrity::hash_hex(&container.header.content_hash).to_string(),
+        ironplc_container::integrity::hash_hex(&container.header.layout_hash).to_string(),
+    )
+}
+
 /// The `AcceptEdits` line for a compiled source snippet without stable
 /// variable IDs.
 fn accept_line(source: &str) -> String {
@@ -433,6 +444,7 @@ fn cancel_edits_when_candidate_staged_then_pending_edit_block_gone() {
 #[test]
 fn get_status_when_fresh_host_then_normal_generation_one_and_no_candidate() {
     let (mut host, _counter) = counter_host(1);
+    let (content_hash, layout_hash) = header_hashes("Counter := Counter + 1;");
 
     let response = execute(Command::GetStatus, &mut host, &test_device());
 
@@ -447,6 +459,8 @@ fn get_status_when_fresh_host_then_normal_generation_one_and_no_candidate() {
             migration: false,
             rounds: 0,
             pending_edit: None,
+            content_hash: Some(content_hash),
+            layout_hash: Some(layout_hash),
         })
     );
 }
@@ -549,6 +563,7 @@ fn cancel_edits_while_testing_then_v4015() {
 #[test]
 fn identity_when_fresh_host_then_device_panel_and_live_status_snapshot() {
     let (mut host, _counter) = counter_host(1);
+    let (content_hash, layout_hash) = header_hashes("Counter := Counter + 1;");
 
     let response = execute(Command::Identity, &mut host, &test_device());
 
@@ -566,8 +581,70 @@ fn identity_when_fresh_host_then_device_panel_and_live_status_snapshot() {
                 migration: false,
                 rounds: 0,
                 pending_edit: None,
+                content_hash: Some(content_hash),
+                layout_hash: Some(layout_hash),
             },
             redundancy: None,
         }))
     );
+}
+
+#[test]
+fn status_when_candidate_staged_and_under_test_then_hashes_are_the_normal_artifacts() {
+    let (mut host, _counter) = counter_host(1);
+    let (content_hash, layout_hash) = header_hashes("Counter := Counter + 1;");
+    run_line(
+        &mut host,
+        &accept_line(&counter_program("Counter := Counter + 10;")),
+    );
+    run_line(&mut host, r#"{"command":"testEdits"}"#);
+    host.run(1, || 0).unwrap();
+
+    let status = run_line(&mut host, r#"{"command":"getStatus"}"#);
+    let identity = run_line(&mut host, r#"{"command":"identity"}"#);
+
+    assert_eq!(status["mode"], "testing");
+    assert_eq!(status["contentHash"], content_hash);
+    assert_eq!(status["layoutHash"], layout_hash);
+    assert_eq!(identity["application"]["contentHash"], content_hash);
+    assert_eq!(identity["application"]["layoutHash"], layout_hash);
+}
+
+#[test]
+fn status_when_candidate_committed_then_hashes_are_the_new_artifacts() {
+    let (mut host, _counter) = counter_host(1);
+    let (before, _) = header_hashes("Counter := Counter + 1;");
+    let (after, after_layout) = header_hashes("Counter := Counter + 10;");
+    run_line(
+        &mut host,
+        &accept_line(&counter_program("Counter := Counter + 10;")),
+    );
+    run_line(&mut host, r#"{"command":"testEdits"}"#);
+    host.run(1, || 0).unwrap();
+    run_line(&mut host, r#"{"command":"assembleEdits"}"#);
+    host.run(1, || 0).unwrap();
+
+    let status = run_line(&mut host, r#"{"command":"getStatus"}"#);
+    let identity = run_line(&mut host, r#"{"command":"identity"}"#);
+
+    assert_ne!(before, after);
+    assert_eq!(status["mode"], "normal");
+    assert_eq!(status["contentHash"], after);
+    assert_eq!(status["layoutHash"], after_layout);
+    assert_eq!(identity["application"]["contentHash"], after);
+}
+
+#[test]
+fn status_when_candidate_cancelled_then_hashes_are_still_the_loaded_artifacts() {
+    let (mut host, _counter) = counter_host(1);
+    let (before, _) = header_hashes("Counter := Counter + 1;");
+    run_line(
+        &mut host,
+        &accept_line(&counter_program("Counter := Counter + 10;")),
+    );
+    run_line(&mut host, r#"{"command":"cancelEdits"}"#);
+
+    let status = run_line(&mut host, r#"{"command":"getStatus"}"#);
+
+    assert_eq!(status["contentHash"], before);
 }

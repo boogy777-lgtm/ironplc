@@ -5,6 +5,7 @@ use clap::Parser;
 use ironplc_cli::cli;
 use ironplc_cli::logger;
 use ironplc_cli::lsp;
+use ironplc_container::integrity::{self, HASH_LEN};
 use ironplc_dsl::diagnostic::WarningList;
 use ironplc_dsl::stack::within_stack_budget;
 use ironplc_parser::options::{
@@ -12,6 +13,7 @@ use ironplc_parser::options::{
     StringToNumFailure, StringToNumNonNumeric,
 };
 use ironplc_problems::WarningSet;
+use ironplc_project::download_record::DeviceGenerations;
 use ironplc_sources::LibraryName;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -653,8 +655,75 @@ enum Action {
         #[command(subcommand)]
         command: RefactorAction,
     },
+    /// Records that a device received a container over a connection: writes
+    /// the download record `<application>.<connection>.download.iplcinfo`
+    /// beside the application container (ADR 0083). The editor calls this
+    /// after the device acknowledged a download, and compares the record with
+    /// the content hash the device reports when it connects. Prints nothing
+    /// when the record is written.
+    RecordDownload {
+        /// The application container: the record is named after it and sits
+        /// beside it. It is also the container that was sent, unless
+        /// `--container` names another file.
+        application: PathBuf,
+
+        /// The name of the connection profile that keys the record. It must
+        /// not be empty.
+        #[arg(long)]
+        connection: String,
+
+        /// The container file that was sent to the device, when it is not the
+        /// application container itself (for example a container compiled
+        /// for the occasion). Its header gives the identity that is recorded.
+        #[arg(long)]
+        container: Option<PathBuf>,
+
+        /// The content hash the device reports (64 hexadecimal digits). When
+        /// given, the record is written only if it is the content hash of the
+        /// container, because the record says what the device received.
+        #[arg(long, value_name = "HASH", value_parser = parse_content_hash)]
+        device_content_hash: Option<[u8; HASH_LEN]>,
+
+        /// Generation of the artifact that was executing, as the device
+        /// reported it after the download. Given together with `--normal` and
+        /// `--application`.
+        #[arg(long, value_name = "N", requires_all = ["normal", "application_generation"])]
+        active: Option<u32>,
+
+        /// Generation of the normal (committed) artifact, as the device
+        /// reported it after the download.
+        #[arg(long, value_name = "N", requires_all = ["active", "application_generation"])]
+        normal: Option<u32>,
+
+        /// Generation of the application manifest, as the device reported it
+        /// after the download.
+        #[arg(
+            long = "application",
+            value_name = "N",
+            requires_all = ["active", "normal"]
+        )]
+        application_generation: Option<u32>,
+    },
+    /// Prints the path of the download record of a connection for an
+    /// application container, which `record-download` writes. The rule that
+    /// names the file is here and nowhere else, so the editor asks instead of
+    /// deriving the name. The record need not exist.
+    RecordDownloadPath {
+        /// The application container the record is named after.
+        application: PathBuf,
+
+        /// The name of the connection profile. It must not be empty.
+        #[arg(long)]
+        connection: String,
+    },
     /// Prints the version number of the compiler.
     Version,
+}
+
+/// Reads the content hash a device reports: 64 hexadecimal digits.
+fn parse_content_hash(text: &str) -> Result<[u8; HASH_LEN], String> {
+    integrity::hash_from_hex(text)
+        .ok_or_else(|| format!("'{text}' is not a hash: expected 64 hexadecimal digits"))
 }
 
 #[derive(clap::Subcommand, Debug)]
@@ -756,6 +825,38 @@ fn execute(action: Action) -> Result<(), String> {
                 new_name,
             } => cli::map_uid(&project, &old_scope, &old_name, &new_scope, &new_name),
         },
+        Action::RecordDownload {
+            application,
+            connection,
+            container,
+            device_content_hash,
+            active,
+            normal,
+            application_generation,
+        } => cli::record_download(&cli::RecordDownload {
+            application: &application,
+            container: container.as_deref(),
+            connection: &connection,
+            device_content_hash,
+            device: match (active, normal, application_generation) {
+                (Some(active), Some(normal), Some(application)) => Some(DeviceGenerations {
+                    active,
+                    normal,
+                    application,
+                }),
+                _ => None,
+            },
+        }),
+        Action::RecordDownloadPath {
+            application,
+            connection,
+        } => {
+            println!(
+                "{}",
+                cli::record_download_path(&application, &connection)?.display()
+            );
+            Ok(())
+        }
         Action::Version => {
             println!("ironplcc version {VERSION}");
             Ok(())

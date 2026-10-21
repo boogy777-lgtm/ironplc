@@ -93,6 +93,21 @@ pub fn debug_hash(debug_section: &[u8]) -> [u8; HASH_LEN] {
     *blake3::hash(debug_section).as_bytes()
 }
 
+/// A header hash as 64 lowercase hexadecimal digits: the one form in which an
+/// engineering record file and the session protocol write the identity of a
+/// container.
+pub fn hash_hex(hash: &[u8; HASH_LEN]) -> impl core::fmt::Display {
+    blake3::Hash::from_bytes(*hash)
+}
+
+/// Reads a hash written by [`hash_hex`]: 64 hexadecimal digits, or `None` for
+/// any other text.
+pub fn hash_from_hex(text: &str) -> Option<[u8; HASH_LEN]> {
+    blake3::Hash::from_hex(text)
+        .ok()
+        .map(|hash| *hash.as_bytes())
+}
+
 /// Checks a header's `content_hash` against the content it covers.
 ///
 /// Succeeds when the header carries [`NO_HASH`] or when the recomputed hash
@@ -143,6 +158,35 @@ mod tests {
             const_section: sections[2],
             code_section: sections[3],
         }
+    }
+
+    #[test]
+    fn hash_hex_when_bytes_then_64_lowercase_digits() {
+        let mut hash = [0u8; HASH_LEN];
+        hash[0] = 0xab;
+        hash[HASH_LEN - 1] = 0x0f;
+
+        let text = std::format!("{}", hash_hex(&hash));
+
+        assert_eq!(text.len(), 64);
+        assert!(text.starts_with("ab00"));
+        assert!(text.ends_with("000f"));
+    }
+
+    #[test]
+    fn hash_from_hex_when_written_by_hash_hex_then_same_hash() {
+        let hash = *blake3::hash(b"x").as_bytes();
+
+        let text = std::format!("{}", hash_hex(&hash));
+
+        assert_eq!(hash_from_hex(&text), Some(hash));
+    }
+
+    #[test]
+    fn hash_from_hex_when_not_64_hex_digits_then_none() {
+        assert_eq!(hash_from_hex(""), None);
+        assert_eq!(hash_from_hex("abcd"), None);
+        assert_eq!(hash_from_hex(&"zz".repeat(32)), None);
     }
 
     #[test]
