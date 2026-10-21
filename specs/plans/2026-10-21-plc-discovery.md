@@ -230,10 +230,11 @@ Every decision is made in one place, and the clients render it.
 ### 4. IronLink, the communication service on the workstation (the RSLinx analog)
 
 - **A separate binary, IronLink** (owner's name; the binary is `ironlink`). It
-  runs on the workstation and listens on localhost only.
+  runs on the workstation as a child process of each client, on stdio (owner,
+  2026-10-21; section 4b). It opens no listening port.
 - **Its API is the command mechanism we already have.** The session protocol is
   JSON commands, framed on TCP (`runtime/src/commands.rs`, `vm-cli/src/tcp.rs`).
-  IronLink speaks the same framing on localhost, with its own commands added.
+  IronLink speaks the same JSON commands on stdio, with its own commands added.
 - **Every GUI is a thin client of these commands:** the VS Code extension
   today, and a standalone GUI later. MCP and the command line are thin clients
   as well.
@@ -361,10 +362,11 @@ VS Code part (the Network view, Choose Controller, the service process) lives.
     the IronPLC extension is a thin client of the language server (`ironplcc
     lsp`) and of the debug adapter (`ironplcvm`). The binary decides; the
     extension renders a TreeView, runs commands and shows a log channel.
-  - Open (proposal): under option A IronLink holds no sessions, so it can be a
-    child process on stdio, started by each client as the language server is.
-    No daemon, no port, no lifecycle. A shared service on localhost is a second
-    member of the same class, built only if a real case needs it.
+  - **Decided (owner, 2026-10-21): stdio.** Under option A IronLink holds no
+    sessions, so it is a child process on stdio, started by each client as the
+    language server is. No daemon, no port, no lifecycle. A shared service on
+    localhost is a second member of the same class, built only if a real case
+    needs it.
 
 ### 5. Choosing a controller and connecting
 
@@ -500,7 +502,7 @@ them keeps the design from closing them):
 | Credential and permission | FactoryTalk Security, CIP Security, client access list | secrets never in the project file or device settings; wire auth stays deferred (ADR-0063) | later |
 | Protocol adapter | OPC DA/UA, MQTT, DDE | a server that re-exposes data; a different kind of client | later (OPC UA, MQTT); DDE never |
 | Device description registry | EDS files, installation tool | each device type declares itself | later |
-| Remote service | RSLinx Gateway, Remote Proxy | IronLink listens on localhost; the transport stays behind one interface | later |
+| Remote service | RSLinx Gateway, Remote Proxy | IronLink runs on stdio; a service on localhost or on another machine is one more member behind the same interface | later |
 
 Not taken: editions, activation and tag caps (licensing), and drivers for
 legacy Rockwell hardware (DH+, DH-485, ControlNet, DeviceNet).
