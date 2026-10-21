@@ -173,15 +173,17 @@ following parts.
   one. A write that fails is V6016.
 - **Discovery says public identity and nothing else.** The reply holds the
   protocol version, the device id, the name, the model, the session port, and
-  whether the device is protected (requires credentials). The firmware version of
-  a protected device is an open question, because it has reconnaissance value.
-  The reply does not say whether the session is busy: busy is the answer to a
-  connect attempt.
+  whether the device is protected (requires credentials). It also holds the
+  runtime version, for a protected device too, as Rockwell's ListIdentity gives
+  the revision to anyone and has no setting to hide it; protection is the
+  interfaces discovery answers on, turning discovery off, and network
+  segmentation. The reply does not say whether the session is busy: busy is the
+  answer to a connect attempt.
 
   | Data | Discovery (anyone on the network) | Session (after connect; credentials when protected) | Never on the wire |
   |---|---|---|---|
   | device id, name, model, protocol, session port, protected flag | yes | yes | |
-  | firmware version | open device: yes; protected device: open question | yes | |
+  | runtime version | yes, protected device too | yes | |
   | application identity (name, `contentHash`, `layoutHash`, generations) | no | yes | |
   | pending edit record, run state, device settings | no | yes | |
   | credentials, keys | | | yes |
@@ -199,8 +201,7 @@ following parts.
   several applications, and so several remembered paths.
 - **The connection path is remembered for convenience, in two independent places,
   each overwritable on its own.** Neither is an intent or a binding.
-  - The **project file** `<app>.path.iplcinfo` (the name is to be confirmed)
-    beside `<app>.iplc` holds the device id of the controller last chosen and a
+  - The **project file** `<app>.path.iplcinfo` beside `<app>.iplc` holds the device id of the controller last chosen and a
     route hint, the last address that is not loopback. It travels with the
     project, so a project moved to another PC keeps its last path (RSLinx's Set
     Project Path).
@@ -291,7 +292,7 @@ them, and are not built:
   subscription must not assume request and response forever (ADR-0063 has no push
   in version 1).
 - **Device operation:** long, exclusive, cancellable operations with progress
-  (firmware update, setting an address). `acceptEdits` is the first one.
+  (a runtime update, setting an address). `acceptEdits` is the first one.
 - **Diagnostic counters and events:** read-only and resettable; not device
   settings.
 - **Credential and permission:** secrets never go into the project file or the
