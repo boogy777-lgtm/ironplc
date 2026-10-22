@@ -14,6 +14,7 @@ use ironplc_parser::options::{
 };
 use ironplc_problems::WarningSet;
 use ironplc_project::download_record::DeviceGenerations;
+use ironplc_project::path_record;
 use ironplc_sources::LibraryName;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -716,8 +717,52 @@ enum Action {
         #[arg(long)]
         connection: String,
     },
+    /// Records the controller last chosen for an application: writes the path
+    /// record `<application>.path.iplcinfo` beside the application container
+    /// (ADR 0083, ADR 0084). It holds the device id, the address that reached
+    /// the controller as a route hint (a loopback address is never the hint,
+    /// because the file travels with the project to another PC) and the time.
+    /// The editor calls this when the engineer chooses a controller. Prints
+    /// nothing when the record is written.
+    RecordPath {
+        /// The application container: the record is named after it and sits
+        /// beside it. It need not exist.
+        application: PathBuf,
+
+        /// The id of the chosen controller: 32 lowercase hexadecimal digits.
+        #[arg(long, value_name = "ID", value_parser = parse_device_id)]
+        device_id: String,
+
+        /// The address that reached the controller: an IP address or a host
+        /// name. A loopback address (127.0.0.0/8, ::1, localhost) is not stored
+        /// as the route hint.
+        #[arg(long, value_name = "ADDRESS", value_parser = parse_address)]
+        address: String,
+
+        /// The session port of the controller at the address.
+        #[arg(long, value_name = "N", value_parser = clap::value_parser!(u16).range(1..))]
+        port: u16,
+    },
+    /// Prints the path of the path record for an application container, which
+    /// `record-path` writes. The rule that names the file is here and nowhere
+    /// else, so the editor asks instead of deriving the name. The record need
+    /// not exist.
+    RecordPathPath {
+        /// The application container the record is named after.
+        application: PathBuf,
+    },
     /// Prints the version number of the compiler.
     Version,
+}
+
+/// Reads the id of a controller: 32 lowercase hexadecimal digits.
+fn parse_device_id(text: &str) -> Result<String, String> {
+    path_record::check_device_id(text).map(|()| text.to_owned())
+}
+
+/// Reads the address of a route: an IP address or a host name.
+fn parse_address(text: &str) -> Result<String, String> {
+    path_record::check_address(text).map(|()| text.to_owned())
 }
 
 /// Reads the content hash a device reports: 64 hexadecimal digits.
@@ -855,6 +900,21 @@ fn execute(action: Action) -> Result<(), String> {
                 "{}",
                 cli::record_download_path(&application, &connection)?.display()
             );
+            Ok(())
+        }
+        Action::RecordPath {
+            application,
+            device_id,
+            address,
+            port,
+        } => cli::record_path(&cli::RecordPath {
+            application: &application,
+            device_id: &device_id,
+            address: &address,
+            session_port: port,
+        }),
+        Action::RecordPathPath { application } => {
+            println!("{}", cli::record_path_path(&application)?.display());
             Ok(())
         }
         Action::Version => {
