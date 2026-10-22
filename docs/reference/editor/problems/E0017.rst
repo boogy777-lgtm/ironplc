@@ -1,0 +1,26 @@
+=====
+E0017
+=====
+
+.. problem-summary:: E0017
+
+The IronLink extension found the :program:`ironlink` program, but the operating
+system could not start it. The message that follows the code gives the reason
+the operating system reported.
+
+**Solutions**:
+
+1. **Check the program**: Run the path shown in the message in a terminal. A program
+   built for another operating system or processor, or one without the permission to
+   execute, does not start.
+
+2. **Check the setting**: If the ``ironlink.path`` setting is set, make sure it names
+   the directory of the installation you want to use.
+
+3. **Read the log**: The ``IronLink`` output channel shows the command that the
+   extension ran.
+
+See Also
+--------
+
+- :doc:`/reference/editor/problems/E0016` --- the program could not be found

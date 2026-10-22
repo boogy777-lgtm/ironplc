@@ -30,6 +30,13 @@ suite('ProblemCode', () => {
     assert.strictEqual(ProblemCode.StaleBaseline, 'E0015');
   });
 
+  test('ProblemCode_when_ironlink_codes_accessed_then_returns_expected_codes', () => {
+    assert.strictEqual(ProblemCode.IronLinkNotFound, 'E0016');
+    assert.strictEqual(ProblemCode.IronLinkStartFailed, 'E0017');
+    assert.strictEqual(ProblemCode.IronLinkExited, 'E0018');
+    assert.strictEqual(ProblemCode.IronLinkProtocolError, 'E0019');
+  });
+
   test('PROBLEM_MESSAGES_when_accessed_then_has_entry_for_each_code', () => {
     for (const code of Object.values(ProblemCode)) {
       assert.ok(PROBLEM_MESSAGES[code], `missing message for ${code}`);

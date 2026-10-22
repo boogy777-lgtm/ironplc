@@ -1,0 +1,213 @@
+{
+  "name": "ironlink",
+  "displayName": "IronLink",
+  "publisher": "ironplc",
+  "description": "Find IronPLC controllers on the network: a view of the controllers and the routes to them, from the ironlink program.",
+  "version": "0.247.0",
+  "icon": "images/logo.png",
+  "engines": {
+    "vscode": "^1.75.0",
+    "node": ">=22.0.0"
+  },
+  "extensionKind": [
+    "ui"
+  ],
+  "license": "MIT",
+  "author": {
+    "name": "Garret Fick"
+  },
+  "categories": [
+    "Other"
+  ],
+  "homepage": "https://www.ironplc.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ironplc/ironplc.git",
+    "directory": "integrations/ironlink"
+  },
+  "bugs": {
+    "url": "https://github.com/ironplc/ironplc/issues"
+  },
+  "qna": "https://github.com/ironplc/ironplc/issues",
+  "activationEvents": [
+    "onView:ironlink.network"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "ironlink.browse",
+        "title": "Search network",
+        "category": "IronLink",
+        "icon": "$(search)"
+      },
+      {
+        "command": "ironlink.addAddress",
+        "title": "Add address…",
+        "category": "IronLink",
+        "icon": "$(add)"
+      },
+      {
+        "command": "ironlink.removeAddress",
+        "title": "Remove address",
+        "category": "IronLink",
+        "icon": "$(remove)"
+      },
+      {
+        "command": "ironlink.identify",
+        "title": "Identify",
+        "category": "IronLink",
+        "icon": "$(question)"
+      },
+      {
+        "command": "ironlink.copyDeviceId",
+        "title": "Copy device id",
+        "category": "IronLink",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "ironlink.choose",
+        "title": "Choose",
+        "category": "IronLink",
+        "icon": "$(check)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ironlink",
+          "title": "IronLink",
+          "icon": "$(radio-tower)"
+        }
+      ]
+    },
+    "views": {
+      "ironlink": [
+        {
+          "id": "ironlink.network",
+          "name": "Network"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "ironlink.network",
+        "contents": "No controllers listed yet.\n[Search network](command:ironlink.browse)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "ironlink.identify",
+          "when": "false"
+        },
+        {
+          "command": "ironlink.copyDeviceId",
+          "when": "false"
+        },
+        {
+          "command": "ironlink.choose",
+          "when": "false"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "ironlink.browse",
+          "when": "view == ironlink.network",
+          "group": "navigation@1"
+        },
+        {
+          "command": "ironlink.addAddress",
+          "when": "view == ironlink.network",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "ironlink.addAddress",
+          "when": "view == ironlink.network && viewItem == driver.addressList",
+          "group": "inline@1"
+        },
+        {
+          "command": "ironlink.removeAddress",
+          "when": "view == ironlink.network && viewItem == driver.addressList",
+          "group": "inline@2"
+        },
+        {
+          "command": "ironlink.identify",
+          "when": "view == ironlink.network && viewItem == device",
+          "group": "inline@1"
+        },
+        {
+          "command": "ironlink.choose",
+          "when": "view == ironlink.network && viewItem == device",
+          "group": "inline@2"
+        },
+        {
+          "command": "ironlink.copyDeviceId",
+          "when": "view == ironlink.network && viewItem == device",
+          "group": "1_clipboard@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "IronLink",
+      "properties": {
+        "ironlink.path": {
+          "markdownDescription": "The directory that contains the `ironlink` program (`ironlink.exe` on Windows). If empty, then discovers `ironlink` in the install locations and then in the directories of the `PATH` environment variable.",
+          "type": "string",
+          "default": "",
+          "editPresentation": "singlelineText"
+        },
+        "ironlink.browse.timeoutMs": {
+          "markdownDescription": "How long a search waits for answers, from 1 to 60000 milliseconds. If empty, then the `ironlink` program uses its own default.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "default": null
+        },
+        "ironlink.browse.attempts": {
+          "markdownDescription": "How many times a search sends its request, from 1 to 10. If empty, then the `ironlink` program uses its own default.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "default": null
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build-common": "npm --prefix ../vscode-common run compile",
+    "vscode:prepublish": "npm run esbuild-base -- --minify",
+    "esbuild-base": "npm run build-common && esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node",
+    "esbuild": "npm run esbuild-base -- --sourcemap",
+    "esbuild-watch": "npm run esbuild-base -- --sourcemap --watch",
+    "test-compile": "npm run build-common && tsc -p ./",
+    "precompile": "npm run build-common",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src/**/*.ts",
+    "test:unit": "c8 --check-coverage --lines 80 --include 'out/*.js' mocha --ui tdd 'out/test/unit/**/*.test.js'",
+    "check-invariants": "node out/test/checkInvariants.js"
+  },
+  "devDependencies": {
+    "@stylistic/eslint-plugin": "^5",
+    "@types/mocha": "^10.0.0",
+    "@types/node": "26.x",
+    "@types/vscode": "^1.75.0",
+    "@typescript-eslint/eslint-plugin": "^8.62.1",
+    "@typescript-eslint/parser": "^8.63.0",
+    "@vscode/vsce": "^4.0.0",
+    "c8": "^12.0.0",
+    "esbuild": "^0.28.1",
+    "eslint": "^10.7.0",
+    "mocha": "^12.0.0",
+    "typescript": "^5.1.6"
+  },
+  "overrides": {
+    "serialize-javascript": "^7.0.5",
+    "uuid": "^14.0.0"
+  }
+}

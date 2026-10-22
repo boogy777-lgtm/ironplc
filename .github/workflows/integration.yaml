@@ -48,6 +48,14 @@ jobs:
       artifact-name: vscode-extension
       marketplace-artifact-name: vscode-extension-marketplace
 
+  ironlink-extension:
+    name: Build IronLink Extension
+    needs: approve
+    uses: ./.github/workflows/partial_ironlink_extension.yaml
+    with:
+      source-revision: ""
+      artifact-name: ironlink-extension
+
   docs:
     name: Build Website
     needs: approve

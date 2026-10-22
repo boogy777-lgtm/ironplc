@@ -50,6 +50,7 @@ to write your first PLC program.
 
 * `compiler/` — Rust workspace (compiler, runtime, MCP server, playground WASM)
 * `integrations/vscode/` — VS Code extension
+* `integrations/ironlink/` — IronLink VS Code extension (finds controllers on the network)
 * `docs/` — Sphinx documentation site ([ironplc.com](https://www.ironplc.com))
 * `playground/` — browser playground
 

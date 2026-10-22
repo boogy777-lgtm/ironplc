@@ -12,3 +12,11 @@ export { StdioLineTransport } from './lineTransport';
 export type { LineRequestChannelErrors } from './lineRequestChannel';
 export { LineRequestChannel } from './lineRequestChannel';
 export { findGatewayViolations } from './gatewayImports';
+export type {
+  ChooseControllerArgument,
+  ExecuteCommand,
+  HandoffArguments,
+  HandoffDeclaration,
+  HandoffName,
+} from './handoff';
+export { HANDOFF_ACTIONS, handoffNames, isHandoffAvailable, runHandoff } from './handoff';

@@ -1,0 +1,15 @@
+.vscode/**
+src/**
+coverage/**
+.gitignore
+justfile
+eslint.config.mjs
+**/tsconfig.json
+**/*.map
+# The extension is bundled into out/extension.js; the per-module output is not shipped.
+out/**
+!out/extension.js
+**/*.ts
+node_modules/
+bom.cdx.json
+bom.cdx.json.sha256

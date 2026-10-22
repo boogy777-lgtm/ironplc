@@ -1,0 +1,25 @@
+=====
+E0018
+=====
+
+.. problem-summary:: E0018
+
+The :program:`ironlink` program ended while the IronLink extension waited for an
+answer from it, or the extension was stopping. The request in flight is lost; the
+next action starts the program again.
+
+**Solutions**:
+
+1. **Read the log**: The ``IronLink`` output channel shows what
+   :program:`ironlink` wrote to its standard error before it ended.
+
+2. **Repeat the action**: The extension starts a new :program:`ironlink` process for
+   the next request.
+
+3. **Update the IronPLC tools**: Report the problem if it repeats with the latest
+   version.
+
+See Also
+--------
+
+- :doc:`/reference/editor/problems/E0017` --- the program could not be started

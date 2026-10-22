@@ -1,0 +1,6 @@
+/node_modules
+/out
+/coverage
+/*.vsix
+/bom.cdx.json
+/bom.cdx.json.sha256
