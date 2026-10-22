@@ -45,7 +45,7 @@ import {
 } from './baselineLogic';
 import { BuildPhase } from './buildLogic';
 import { DevicePanelModel } from './devicePanelLogic';
-import { StdioLineTransport, vmFileName } from './hotEdit';
+import { StdioLineTransport, vmFileName } from './stdioTransport';
 import { connectTcpLineTransport } from './tcpTransport';
 
 /** What the connection feature exposes to the device panel and the build commands. */
