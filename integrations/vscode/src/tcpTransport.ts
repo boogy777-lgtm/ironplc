@@ -1,6 +1,6 @@
 /**
  * The TCP transport of the engineering connection (ADR-0063): the
- * `HotEditTransport` line interface implemented over a socket, one
+ * `LineTransport` line interface implemented over a socket, one
  * 4-byte-little-endian-length-prefixed frame per message instead of one
  * newline-delimited line. The frame replaces only the delimiter — the JSON
  * inside is byte-identical to the stdio line — so `HotEditSession` serves
@@ -14,7 +14,7 @@
 
 import { Socket, createConnection } from 'net';
 
-import { HotEditTransport } from './hotEditSession';
+import { LineTransport } from './vscodeCommon';
 
 /**
  * The largest frame accepted, mirroring the server (16 MiB, the
@@ -25,12 +25,12 @@ import { HotEditTransport } from './hotEditSession';
 export const MAX_FRAME_LENGTH = 16 * 1024 * 1024;
 
 /**
- * Frame-buffers a socket into {@link HotEditTransport}: one frame in, one
+ * Frame-buffers a socket into {@link LineTransport}: one frame in, one
  * line out; one line written, one frame out. Mirrors the stdio
  * `StdioLineTransport`'s shape (listener arrays, single exit) so the session
  * glue treats both transports alike.
  */
-export class TcpLineTransport implements HotEditTransport {
+export class TcpLineTransport implements LineTransport {
   private readonly lineListeners: ((line: string) => void)[] = [];
   private readonly exitListeners: (() => void)[] = [];
   private buffer: Buffer = Buffer.alloc(0);

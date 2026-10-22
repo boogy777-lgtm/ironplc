@@ -10,8 +10,8 @@ import {
   programKind,
 } from './debugAdapterLogic';
 import { ReportProblem } from './debugAdapter';
-import { StdioLineTransport, vmFileName, vmPathBeside } from './stdioTransport';
-import { ProblemCode } from './vscodeCommon';
+import { vmFileName, vmPathBeside } from './stdioTransport';
+import { ProblemCode, StdioLineTransport } from './vscodeCommon';
 import {
   formatStatusDetail,
   formatStatusText,

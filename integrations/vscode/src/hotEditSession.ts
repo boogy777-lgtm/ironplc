@@ -27,6 +27,7 @@ import {
   parseHaResponseLine,
 } from './haProtocol';
 import { SUPPORTED_SESSION_PROTOCOL } from './sessionConstants';
+import { LineRequestChannel, LineTransport } from './vscodeCommon';
 
 /** The commands of the hot-edit protocol, one per `command` tag on the wire. */
 export type HotEditCommand
@@ -471,45 +472,34 @@ export function formatStatusDetail(status: HotEditStatus): string {
  * implements this on the child process's stdio; unit tests inject a mock, so
  * no real child process is needed to exercise the protocol.
  */
-export interface HotEditTransport {
-  /** Writes one line (without the trailing newline) to the peer. */
-  sendLine(line: string): void;
-  /** Registers a listener for each complete line received from the peer. */
-  onLine(listener: (line: string) => void): void;
-  /** Registers a listener for when the peer closes the channel. */
-  onExit(listener: () => void): void;
-}
-
-interface PendingRequest {
-  resolve(line: string): void;
-  reject(reason: Error): void;
-}
+export type HotEditTransport = LineTransport;
 
 /**
  * A client session over one `ironplcvm serve` process. Requests are matched
- * to responses in order: the serve session answers every command line with
- * exactly one response line, so a FIFO of pending requests is sufficient and
- * pipelined callers stay correct. The FIFO resolves the raw response line
+ * to responses in order by a `LineRequestChannel`: the serve session answers
+ * every command line with exactly one response line, so pipelined callers stay
+ * correct. The channel resolves the raw response line
  * and each caller parses it — the hot-edit commands through
  * `parseResponseLine`, the HA engineering commands through
  * `parseHaResponseLine` — so both vocabularies ride one session without a
  * per-layer dispatch.
  */
 export class HotEditSession {
-  private readonly pending: PendingRequest[] = [];
-  private exited = false;
+  private readonly channel: LineRequestChannel;
 
   constructor(
-    private readonly transport: HotEditTransport,
-    private readonly onSessionExit: () => void = () => {},
+    transport: HotEditTransport,
+    onSessionExit: () => void = () => {},
   ) {
-    transport.onLine(line => this.handleLine(line));
-    transport.onExit(() => this.handleExit());
+    this.channel = new LineRequestChannel(transport, {
+      ended: () => new HotEditProtocolError(null, 'the hot edit session has ended.'),
+      exited: () => new HotEditProtocolError(null, 'the ironplcvm process exited.'),
+    }, onSessionExit);
   }
 
   /** False once the peer has closed the channel. */
   get isActive(): boolean {
-    return !this.exited;
+    return this.channel.isActive;
   }
 
   /**
@@ -628,7 +618,7 @@ export class HotEditSession {
 
   /** Rejects pending requests; the transport itself is owned by the glue. */
   dispose(): void {
-    this.rejectPending(new HotEditProtocolError(null, 'the hot edit session has ended.'));
+    this.channel.end();
   }
 
   /**
@@ -642,14 +632,14 @@ export class HotEditSession {
     kind: K,
     params?: { peerFailureConfirmation: number; recoveryBudget: number },
   ): Promise<Extract<HaResponse, { kind: K }>> {
-    const line = await this.requestRaw(encodeHaCommand(command, params));
+    const line = await this.channel.request(encodeHaCommand(command, params));
     let response: HaResponse;
     try {
       response = parseHaResponseLine(line);
     }
     catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
-      this.rejectPending(error);
+      this.channel.rejectPending(error);
       throw error;
     }
     if (response.kind === 'error') {
@@ -667,7 +657,7 @@ export class HotEditSession {
     migration?: MigrationDecisionMap,
     edit?: EditIdentity,
   ): Promise<HotEditResponse> {
-    const line = await this.requestRaw(encodeRequest(command, program, migration, edit));
+    const line = await this.channel.request(encodeRequest(command, program, migration, edit));
     let parsed: HotEditResponse;
     try {
       parsed = parseResponseLine(line);
@@ -675,49 +665,12 @@ export class HotEditSession {
     catch (err) {
       // The wire desynced: no pending request can be matched reliably.
       const error = err instanceof Error ? err : new Error(String(err));
-      this.rejectPending(error);
+      this.channel.rejectPending(error);
       throw error;
     }
     if (parsed.kind === 'error') {
       throw parsed.error;
     }
     return parsed;
-  }
-
-  /** Sends one line and resolves with the raw response line, in order. */
-  private async requestRaw(line: string): Promise<string> {
-    if (this.exited) {
-      throw new HotEditProtocolError(null, 'the hot edit session has ended.');
-    }
-    const response = new Promise<string>((resolve, reject) => {
-      this.pending.push({ resolve, reject });
-    });
-    this.transport.sendLine(line);
-    return response;
-  }
-
-  private handleLine(line: string): void {
-    const pending = this.pending.shift();
-    if (!pending) {
-      // The serve session sends nothing unasked; drop the line defensively.
-      return;
-    }
-    pending.resolve(line);
-  }
-
-  private handleExit(): void {
-    if (this.exited) {
-      return;
-    }
-    this.exited = true;
-    this.rejectPending(new HotEditProtocolError(null, 'the ironplcvm process exited.'));
-    this.onSessionExit();
-  }
-
-  private rejectPending(reason: Error): void {
-    const pending = this.pending.splice(0, this.pending.length);
-    for (const request of pending) {
-      request.reject(reason);
-    }
   }
 }

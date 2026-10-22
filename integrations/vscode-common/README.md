@@ -20,6 +20,15 @@ for what belongs here.
 - `pathForPlatform(platform)` returns `path.win32` or `path.posix`. Compose a
   path for an injected platform with it, never with the host `path.join`.
 - `executableFileName(base, platform)` appends `.exe` on Windows.
+- `LineTransport` is the line-oriented channel a protocol client speaks over
+  (`sendLine`, `onLine`, `onExit`). `StdioLineTransport` frames a child
+  process's stdio as one JSON command per line. `LineRequestChannel` matches
+  each response line to its request in order and fails the pending requests
+  when the peer exits; the protocol that owns it supplies the errors. The
+  hot-edit session of the IronPLC extension and the `ironlink serve` client
+  of the IronLink extension use them.
+- `findGatewayViolations(sourceRoot)` is the check each extension's
+  `checkInvariants` applies to enforce the one-module rule below.
 - The `E####` problem catalog, shared by every IronPLC VS Code extension:
   `resources/problem-codes.csv` is the registry, `scripts/generate-problems.js`
   generates `src/problems.ts` from it (the package's `precompile`; the file is

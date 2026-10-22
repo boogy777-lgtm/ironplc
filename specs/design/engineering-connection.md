@@ -154,10 +154,11 @@ JSON values; they differ only in the envelope:
   stdio line. One frame in, one frame out — the REQ-VC-vm-cli-019 ordering
   guarantee holds verbatim, so the existing client session logic
   (`HotEditSession` in `integrations/vscode/src/hotEditSession.ts`, request FIFO matching)
-  works over either transport behind the `HotEditTransport` interface
-  (`integrations/vscode/src/hotEditSession.ts`), exactly as the stdio
+  works over either transport behind the `LineTransport` interface
+  (`integrations/vscode-common/src/lineTransport.ts`, named `HotEditTransport`
+  in `integrations/vscode/src/hotEditSession.ts`), exactly as the stdio
   line buffer already does (`StdioLineTransport` in
-  `integrations/vscode/src/hotEdit.ts`).
+  `integrations/vscode-common/src/lineTransport.ts`).
 
 A frame whose declared length exceeds 16 MiB (the container-upload
 headroom; `acceptEdits` bytes ride one message, ADR-0055) is a framing
@@ -610,7 +611,7 @@ Everything reused, with its one authority:
 | stdio session server | `serve` in `compiler/vm-cli/src/serve.rs` |
 | Codec error line (codeless, ADR-0055) | `codec_error_line` in `compiler/vm-cli/src/serve.rs` |
 | Client session (request FIFO, response parsing) | `HotEditSession`, `parseResponseLine`, `encodeRequest` in `integrations/vscode/src/hotEditSession.ts` |
-| Transport seam the TCP transport implements | `HotEditTransport` in `integrations/vscode/src/hotEditSession.ts` (stdio impl: `StdioLineTransport` in `integrations/vscode/src/hotEdit.ts`) |
+| Transport seam the TCP transport implements | `LineTransport` in `integrations/vscode-common/src/lineTransport.ts` (`HotEditTransport` in `integrations/vscode/src/hotEditSession.ts`; stdio impl: `StdioLineTransport` in the same shared module) |
 | Device-panel application state | `StatusPayload` in `compiler/runtime/src/commands.rs` |
 | Device block of `identity` (the id, the name) | `DeviceSettings::identity` in `compiler/vm-cli/src/device_settings.rs`, the one place a `DeviceIdentity` is built |
 | Device settings (the file, the command) | `Device` in `compiler/vm-cli/src/device_settings/device.rs`; `set_device_settings_line` in `compiler/vm-cli/src/serve.rs` |
