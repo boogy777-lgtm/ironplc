@@ -161,7 +161,7 @@ suite('findDapServerPath', () => {
   });
 
   test('findDapServerPath_when_only_bundled_then_returns_bundled_source', () => {
-    const expected = path.join('/bundled', DEBUG_SERVER_BINARY);
+    const expected = '/bundled/' + DEBUG_SERVER_BINARY;
     const env = createDapEnv({
       existsSync: p => p === expected,
     });
@@ -172,7 +172,7 @@ suite('findDapServerPath', () => {
   });
 
   test('findDapServerPath_when_win32_then_uses_exe_extension', () => {
-    const expected = path.join('/bundled', DEBUG_SERVER_BINARY + '.exe');
+    const expected = '\\bundled\\' + DEBUG_SERVER_BINARY + '.exe';
     const env = createDapEnv({
       platform: 'win32',
       existsSync: p => p === expected,
@@ -191,7 +191,7 @@ suite('findDapServerPath', () => {
   test('findDapServerPath_when_candidate_missing_on_disk_then_falls_through', () => {
     // The env var points somewhere that does not exist; discovery falls back
     // to the bundled binary.
-    const bundled = path.join('/bundled', DEBUG_SERVER_BINARY);
+    const bundled = '/bundled/' + DEBUG_SERVER_BINARY;
     const env = createDapEnv({
       getEnv: name => name === DEBUG_SERVER_ENV_VAR ? '/env/missing' : undefined,
       existsSync: p => p === bundled,

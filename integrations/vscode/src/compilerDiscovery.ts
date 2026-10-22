@@ -1,4 +1,4 @@
-import * as path from 'path';
+import { pathForPlatform } from './platformPath';
 
 export interface CompilerEnvironment {
   platform: string;
@@ -14,6 +14,7 @@ export interface CompilerDiscoveryResult {
 
 export function findCompilerPath(env: CompilerEnvironment): CompilerDiscoveryResult | undefined {
   const ext = env.platform === 'win32' ? '.exe' : '';
+  const platformPath = pathForPlatform(env.platform);
 
   const trialGenerator: (() => [string | undefined, string])[] = [
     () => {
@@ -37,7 +38,7 @@ export function findCompilerPath(env: CompilerEnvironment): CompilerDiscoveryRes
       if (env.platform !== 'win32' || !localAppData) {
         return [undefined, name];
       }
-      const winAppDataDir = path.join(localAppData, 'Programs', 'IronPLC Compiler', 'bin');
+      const winAppDataDir = platformPath.join(localAppData, 'Programs', 'IronPLC Compiler', 'bin');
       return [winAppDataDir, name];
     },
   ];
@@ -53,7 +54,7 @@ export function findCompilerPath(env: CompilerEnvironment): CompilerDiscoveryRes
       continue;
     }
 
-    const testExe = path.join(testDir, 'ironplcc' + ext);
+    const testExe = platformPath.join(testDir, 'ironplcc' + ext);
     if (!env.existsSync(testExe)) {
       triedLocations.push(trialType + ': (' + testExe + ')');
       continue;

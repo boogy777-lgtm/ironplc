@@ -1,5 +1,4 @@
 import * as assert from 'assert';
-import * as path from 'path';
 import { CompilerEnvironment, CompilerDiscoveryResult, findCompilerPath, formatStartFailure } from '../../compilerDiscovery';
 
 function createTestEnv(overrides?: Partial<CompilerEnvironment>): CompilerEnvironment {
@@ -70,8 +69,8 @@ suite('findCompilerPath', () => {
   });
 
   test('findCompilerPath_when_win32_and_localappdata_exists_then_returns_windows_path', () => {
-    const localAppData = '/tmp/appdata';
-    const expected = path.join(localAppData, 'Programs', 'IronPLC Compiler', 'bin', 'ironplcc.exe');
+    const localAppData = 'C:\\Users\\me\\AppData\\Local';
+    const expected = 'C:\\Users\\me\\AppData\\Local\\Programs\\IronPLC Compiler\\bin\\ironplcc.exe';
     const env = createTestEnv({
       platform: 'win32',
       getEnv: name => name === 'LOCALAPPDATA' ? localAppData : undefined,
@@ -79,8 +78,7 @@ suite('findCompilerPath', () => {
     });
     const result = findCompilerPath(env);
     assert.ok(result);
-    assert.ok(result.path.includes('IronPLC Compiler'));
-    assert.ok(result.path.endsWith('ironplcc.exe'));
+    assert.strictEqual(result.path, expected);
     assert.strictEqual(result.source, 'localappdata');
   });
 
@@ -91,8 +89,8 @@ suite('findCompilerPath', () => {
   });
 
   test('findCompilerPath_when_win32_then_uses_exe_extension', () => {
-    const configDir = '/tmp/compiler';
-    const expected = path.join(configDir, 'ironplcc.exe');
+    const configDir = 'C:\\tools\\ironplc';
+    const expected = 'C:\\tools\\ironplc\\ironplcc.exe';
     const env = createTestEnv({
       platform: 'win32',
       getConfig: key => key === 'path' ? configDir : undefined,
@@ -100,7 +98,30 @@ suite('findCompilerPath', () => {
     });
     const result = findCompilerPath(env);
     assert.ok(result);
-    assert.ok(result.path.endsWith('.exe'));
+    assert.strictEqual(result.path, expected);
+  });
+
+  test('findCompilerPath_when_win32_then_joins_with_backslashes_on_any_host', () => {
+    // A forward-slash directory is normalised to the target platform's
+    // separator; the host's separator must not leak into the result.
+    const expected = 'C:\\tools\\ironplc\\ironplcc.exe';
+    const env = createTestEnv({
+      platform: 'win32',
+      getConfig: key => key === 'path' ? 'C:/tools/ironplc' : undefined,
+      existsSync: p => p === expected,
+    });
+    assert.strictEqual(findCompilerPath(env)?.path, expected);
+  });
+
+  test('findCompilerPath_when_linux_then_joins_with_forward_slashes_on_any_host', () => {
+    // A trailing separator and a doubled one collapse with '/', never a backslash.
+    const expected = '/usr/local/bin/ironplcc';
+    const env = createTestEnv({
+      platform: 'linux',
+      getConfig: key => key === 'path' ? '/usr/local//bin/' : undefined,
+      existsSync: p => p === expected,
+    });
+    assert.strictEqual(findCompilerPath(env)?.path, expected);
   });
 
   test('findCompilerPath_when_linux_then_no_exe_extension', () => {

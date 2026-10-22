@@ -1,4 +1,5 @@
 import * as path from 'path';
+import { pathForPlatform } from './platformPath';
 
 /**
  * Pure decision logic for the IronPLC debug adapter integration. Everything
@@ -161,6 +162,7 @@ export function findDapServerPath(
   compilerDir?: string,
 ): DapDiscoveryResult | undefined {
   const exe = debugServerFileName(env.platform);
+  const platformPath = pathForPlatform(env.platform);
 
   const trials: (() => [string | undefined, string])[] = [
     () => {
@@ -173,7 +175,7 @@ export function findDapServerPath(
     },
     () => {
       // Bundled next to the compiler discovered by `findCompilerPath`.
-      return [compilerDir ? path.join(compilerDir, exe) : undefined, 'bundled'];
+      return [compilerDir ? platformPath.join(compilerDir, exe) : undefined, 'bundled'];
     },
   ];
 
