@@ -102,15 +102,41 @@ const NAME_MAX_CHARS: usize = 64;
 const DEVICE_ID_BYTES: usize = 16;
 
 fn check_device_id(value: &str) -> Result<(), &'static str> {
-    let well_formed = value.len() == DEVICE_ID_BYTES * 2
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte));
-    if well_formed {
-        Ok(())
-    } else {
-        Err("must be 32 lowercase hexadecimal digits")
+    device_id_bytes(value)
+        .map(|_| ())
+        .ok_or("must be 32 lowercase hexadecimal digits")
+}
+
+/// The 16 bytes of a device id; `None` unless `id` is exactly 32 lowercase
+/// hexadecimal digits. The one definition of a well-formed id: the row's check
+/// is this function, and the discovery reply carries these bytes, so an id that
+/// is accepted is an id that can be sent.
+pub(crate) fn device_id_bytes(id: &str) -> Option<[u8; DEVICE_ID_BYTES]> {
+    if id.len() != DEVICE_ID_BYTES * 2 {
+        return None;
     }
+    let mut bytes = [0u8; DEVICE_ID_BYTES];
+    // The length is checked, so there are 16 pairs and no remainder.
+    let (pairs, _) = id.as_bytes().as_chunks::<2>();
+    for (byte, [high, low]) in bytes.iter_mut().zip(pairs.iter().copied()) {
+        *byte = (hex_digit(high)? << 4) | hex_digit(low)?;
+    }
+    Some(bytes)
+}
+
+/// The value of one lowercase hexadecimal digit.
+fn hex_digit(digit: u8) -> Option<u8> {
+    match digit {
+        b'0'..=b'9' => Some(digit - b'0'),
+        b'a'..=b'f' => Some(digit - b'a' + 10),
+        _ => None,
+    }
+}
+
+/// The 32 lowercase hexadecimal digits of a device id: the inverse of
+/// [`device_id_bytes`].
+fn device_id_hex(bytes: &[u8; DEVICE_ID_BYTES]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 fn check_name(value: &str) -> Result<(), &'static str> {
@@ -336,7 +362,7 @@ fn first_value(setting: DeviceSetting, random: Random) -> Result<String, Setting
                     format!("could not be generated, the random source failed: {err}"),
                 )
             })?;
-            Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
+            Ok(device_id_hex(&bytes))
         }
     }
 }
