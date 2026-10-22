@@ -7,8 +7,7 @@
  */
 
 import { ChildProcessWithoutNullStreams } from 'child_process';
-import * as path from 'path';
-
+import { pathForPlatform } from './platformPath';
 import { HotEditTransport } from './hotEditSession';
 
 /** The VM executable name on `platform` (`.exe` on Windows). */
@@ -18,7 +17,8 @@ export function vmFileName(platform: string): string {
 
 /** The VM executable that sits next to the compiler at `compilerPath`. */
 export function vmPathBeside(compilerPath: string, platform: string): string {
-  return path.join(path.dirname(compilerPath), vmFileName(platform));
+  const platformPath = pathForPlatform(platform);
+  return platformPath.join(platformPath.dirname(compilerPath), vmFileName(platform));
 }
 
 /**

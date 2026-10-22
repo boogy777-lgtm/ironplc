@@ -10,7 +10,7 @@ import {
   programKind,
 } from './debugAdapterLogic';
 import { ReportProblem } from './debugAdapter';
-import { StdioLineTransport, vmFileName } from './stdioTransport';
+import { StdioLineTransport, vmFileName, vmPathBeside } from './stdioTransport';
 import { ProblemCode } from './problems';
 import {
   formatStatusDetail,
@@ -106,7 +106,7 @@ export function registerHotEditSupport(
       reportProblem(ProblemCode.NoCompiler, 'Install the compiler to start a hot edit session.');
       return;
     }
-    const vmPath = path.join(compilerDir, vmFileName(process.platform));
+    const vmPath = vmPathBeside(compilerPath, process.platform);
     if (!existsSync(vmPath)) {
       reportProblem(
         ProblemCode.VmNotFound,
