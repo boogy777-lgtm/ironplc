@@ -15,6 +15,7 @@ export { findGatewayViolations } from './gatewayImports';
 export type {
   ChooseControllerArgument,
   CommandSources,
+  ConnectControllerArgument,
   ControllerArgument,
   ExecuteCommand,
   HandoffArguments,

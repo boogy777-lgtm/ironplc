@@ -181,6 +181,7 @@ export function activate(context: vscode.ExtensionContext) {
       reportProblem: showProblem,
       showCoded: showCodedText,
     }),
+    connect: connection.connectController,
   });
   registerHaPanel(context, connection);
 

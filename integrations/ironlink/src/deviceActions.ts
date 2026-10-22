@@ -15,20 +15,21 @@
 
 import { DeviceRowFacts } from './networkTree';
 import {
-  ChooseControllerArgument,
+  ControllerArgument,
   HANDOFF_ACTIONS,
   HandoffName,
   isHandoffAvailable,
 } from './vscodeCommon';
 
 /** An action on a device row. */
-export type DeviceAction = 'identify' | 'copyDeviceId' | 'choose';
+export type DeviceAction = 'identify' | 'copyDeviceId' | 'choose' | 'connect';
 
 /** The command id of each action; the invariants check keeps `package.json` in step with it. */
 export const DEVICE_ACTION_COMMANDS: { readonly [A in DeviceAction]: string } = {
   identify: 'ironlink.identify',
   copyDeviceId: 'ironlink.copyDeviceId',
   choose: 'ironlink.choose',
+  connect: 'ironlink.connect',
 };
 
 /** What the decision depends on besides the row. */
@@ -59,6 +60,8 @@ function handoffOf(action: DeviceAction): HandoffName | undefined {
   switch (action) {
     case 'choose':
       return 'choose';
+    case 'connect':
+      return 'connect';
     case 'identify':
     case 'copyDeviceId':
       return undefined;
@@ -90,7 +93,7 @@ export function decideDeviceAction(
   return { enabled: true };
 }
 
-/** The argument of the `choose` handoff for a row. */
-export function chooseArgument(row: DeviceRowFacts): ChooseControllerArgument {
+/** The argument of a handoff for a row: exactly the device id, address and session port. */
+export function controllerArgument(row: DeviceRowFacts): ControllerArgument {
   return { deviceId: row.deviceId, address: row.address, sessionPort: row.sessionPort };
 }

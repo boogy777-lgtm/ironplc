@@ -634,6 +634,23 @@ The picker rows and the decision of what picking one does are in
 `integrations/vscode/src/chooseControllerLogic.ts`, which has no dependency on the
 editor.
 
+**Connecting to the controller chosen** (`ironplc.connectController`, "Connect to
+Chosen Controller", the `connect` member of the same table of handoff actions)
+goes through the connection method `tcp` like any other connection, by an unsaved
+profile (`controllerProfile` in `connectControllerLogic.ts`) that
+`validateProfiles` checks like a saved one: the name is the device name or its short id,
+the address and the port (the session port) are those of the route. With an
+argument it connects to that route. Without one it resolves the chosen controller
+from the path file and then the route in this order: the workstation route for
+its device id (IronLink, when present), the route hint of the path file, else a
+reason with an offer to choose a controller. When the identity arrives and its
+`deviceId` differs from the controller meant or the controller chosen, an
+information line is written to the connection output and shown in the device
+panel. Connect never refuses on identity. The connection status item names the
+chosen controller while disconnected, and selecting it connects to it
+(`statusBarLogic.ts`); it shows no equality or run state before a controller is
+connected.
+
 ## Integration Map
 
 Everything reused, with its one authority:

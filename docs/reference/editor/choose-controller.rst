@@ -1,6 +1,6 @@
-=================
-Choose Controller
-=================
+==================================
+Choose and Connect to a Controller
+==================================
 
 The command :guilabel:`IronPLC: Network: Choose Controller…` chooses the
 controller of the project. Choosing a controller does two things, and each is
@@ -66,6 +66,53 @@ the address or another controller answers there, the extension shows the error o
 :program:`ironlink` (see :doc:`/reference/ironlink/problems/L6003` and
 :doc:`/reference/ironlink/problems/L6008`) and the path record stays as it was.
 
+Connect to the Chosen Controller
+================================
+
+The command :guilabel:`IronPLC: Network: Connect to Chosen Controller` connects to
+the controller that the path record holds. It opens the session through the
+connection method ``tcp``, by a profile that the extension makes for the occasion
+and does not save: the name of the controller (else its short device ID), the
+address, and the session port. Other connections are made as before, from the
+profiles in the ``ironplc.connections`` setting.
+
+The command finds the address in this order:
+
+#. The route that this PC stores for the device ID of the chosen controller
+   (IronLink), when the IronLink extension is installed.
+#. The route hint of the path record.
+#. Otherwise the command says why there is no address, and offers
+   :guilabel:`Choose Controller…`.
+
+In the Network view of IronLink, :guilabel:`Connect` on the row of a controller
+runs the same command for that controller: it connects to the address of the row
+and does not change the chosen controller.
+
+When the session is open and the controller reports its device ID, the extension
+compares it with the controller it meant and with the controller chosen for the
+project. When they differ, the extension writes an information line to the
+:guilabel:`IronPLC Connection` output channel and shows it in the
+:guilabel:`IronPLC Device` panel, for example::
+
+   The connected controller (a0a1a2a3) is not the controller chosen for this project (00112233).
+
+The connection is never refused because the controller is a different one. A
+controller that is busy is refused as before (see
+:doc:`/reference/runtime/problems/V6014`), and a controller that requires
+credentials cannot be connected yet.
+
+The Status Item
+---------------
+
+While no connection is open and a controller is chosen, the status item at the
+bottom of the window reads :guilabel:`IronPLC: NAME (not connected)`, where NAME
+is the name the controller reported at a connection in this session, else its
+short device ID. Selecting the item connects to the chosen controller. When no
+controller is chosen, the item reads :guilabel:`IronPLC: Not connected` and
+selecting it connects as before, with a profile of the ``ironplc.connections``
+setting. When a connection is open, the
+item shows the connection as before.
+
 Without the IronLink Extension
 ==============================
 
@@ -85,3 +132,7 @@ Problem Codes
      - Meaning
    * - :doc:`E0020 </reference/editor/problems/E0020>`
      - The extension could not remember the chosen controller.
+   * - :doc:`E0010 </reference/editor/problems/E0010>`
+     - The command that connects was run with an argument that is not a controller.
+   * - :doc:`E0013 </reference/editor/problems/E0013>`
+     - The session could not be opened.

@@ -119,6 +119,13 @@ the IronPLC command. When the route cannot be set, the failure is shown with its
 code and the IronPLC command is not called, so nothing is written to the project.
 When the IronPLC command is missing, "Choose" is unavailable and no route is set.
 
+**REQ-IL-ironlink-vscode-101** "Connect" is available if and only if the IronPLC
+command of its handoff action (`connect` in the table of handoff actions) is
+contributed or registered, and is decided by the same function as the other device
+actions. It calls that command with exactly `{deviceId, address, sessionPort}` of
+the row. It sets no route and writes nothing: IronPLC opens the session, and the
+route of this workstation stays as it is.
+
 **REQ-IL-ironlink-vscode-094** "Identify" sends a fresh `identify` to the address
 and session port of the row and shows the reply with its time. No answer is shown
 as a warning, because it is a normal answer of the program, and an answer of

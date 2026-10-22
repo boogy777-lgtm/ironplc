@@ -70,6 +70,12 @@
         "title": "Choose",
         "category": "IronLink",
         "icon": "$(check)"
+      },
+      {
+        "command": "ironlink.connect",
+        "title": "Connect",
+        "category": "IronLink",
+        "icon": "$(plug)"
       }
     ],
     "viewsContainers": {
@@ -108,6 +114,10 @@
         {
           "command": "ironlink.choose",
           "when": "false"
+        },
+        {
+          "command": "ironlink.connect",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -142,6 +152,11 @@
           "command": "ironlink.choose",
           "when": "view == ironlink.network && viewItem == device",
           "group": "inline@2"
+        },
+        {
+          "command": "ironlink.connect",
+          "when": "view == ironlink.network && viewItem == device",
+          "group": "inline@3"
         },
         {
           "command": "ironlink.copyDeviceId",

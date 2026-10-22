@@ -432,6 +432,14 @@ controllers recently observed
 "Choose" is the workstation route (IronLink `routeSet`) and the path file
 (IronPLC); IronLink has no `select` command.
 
+Built since: connecting to the controller chosen (`ironplc.connectController`,
+and the `connect` action of the IronLink Network view): the route is the
+workstation route of the device id, else the route hint of the path file, and the
+session is opened by an unsaved `tcp` profile through the connection method; a
+controller whose `deviceId` differs from the chosen one is shown as an
+information line and never refused
+(`integrations/vscode/src/connectControllerLogic.ts`, `connection.ts`).
+
 What is not built, so the status stays `proposed`: USB enumeration or a gateway as
 discovery drivers, the connection method as a class with a registration check, and
 the go-online comparison.

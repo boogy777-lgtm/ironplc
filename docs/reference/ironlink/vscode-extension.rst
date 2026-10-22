@@ -97,6 +97,14 @@ Actions
    that records the choice. Otherwise, selecting :guilabel:`Choose` shows why it is
    not available and stores nothing.
 
+:guilabel:`Connect`
+   Ask the IronPLC extension to connect to the controller of a row. The extension
+   passes the device id, the address and the session port of the row, and IronPLC
+   opens the session at that address. :guilabel:`Connect` stores no route and
+   changes no project. It is available when the IronPLC extension provides the
+   command that connects. Otherwise, selecting :guilabel:`Connect` shows why it is
+   not available.
+
 An error is shown with its code and a link to the page that describes the code:
 :doc:`L#### codes </reference/ironlink/problems/index>` come from :program:`ironlink`,
 and :doc:`E#### codes </reference/editor/problems/index>` come from the extension.
