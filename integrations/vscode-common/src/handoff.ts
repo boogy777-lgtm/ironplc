@@ -50,9 +50,13 @@ export function isControllerArgument(value: unknown): value is ControllerArgumen
     && candidate.sessionPort <= 65535;
 }
 
+/** The argument of the `connect` handoff: the controller to open a session with. */
+export type ConnectControllerArgument = ControllerArgument;
+
 /** The argument type of each handoff action, keyed by the action's name. */
 export interface HandoffArguments {
   choose: ChooseControllerArgument;
+  connect: ConnectControllerArgument;
 }
 
 /** The name of a handoff action. */
@@ -77,6 +81,12 @@ export const HANDOFF_ACTIONS: { readonly [K in HandoffName]: HandoffDeclaration 
     unavailableReason:
       'Choosing a controller needs the IronPLC extension, and the IronPLC command that records '
       + 'the choice is not available. Install or update the IronPLC extension.',
+  },
+  connect: {
+    command: 'ironplc.connectController',
+    unavailableReason:
+      'Connecting to a controller needs the IronPLC extension, and the IronPLC command that connects '
+      + 'is not available. Install or update the IronPLC extension.',
   },
 };
 

@@ -73,6 +73,17 @@ Chooses the controller of the project and remembers the choice in the project.
 See :doc:`choose-controller` for the list of controllers, the path record that
 remembers the choice, and what the command needs from the IronLink extension.
 
+Connect to Chosen Controller
+----------------------------
+
+Connects to the controller chosen for the project, by the route stored on this PC
+or else the route hint of the project.
+
+:Menu Location: :menuselection:`Command Palette --> IronPLC: Network: Connect to Chosen Controller`
+
+See :doc:`choose-controller` for the order in which the address is found, and for
+the status item that names the chosen controller.
+
 Build Tasks
 ===========
 

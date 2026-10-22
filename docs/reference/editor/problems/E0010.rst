@@ -38,9 +38,18 @@ A valid ``ironplc.connections`` setting with one profile for each transport:
      { "name": "line-1", "transport": "tcp", "address": "192.168.1.10" }
    ]
 
+The command :guilabel:`IronPLC: Network: Connect to Chosen Controller` makes a
+``tcp`` profile of its own for the controller (it is not saved in the setting) and
+checks it with the same rules. It reports this problem when it is run, by another
+extension, a task or a keybinding, with an argument that is not a controller, which
+is an object with the ``deviceId`` (32 lowercase hexadecimal digits), the
+``address`` and the ``sessionPort`` of the controller, or when the address of the
+route is not valid.
+
 See Also
 --------
 
+- :doc:`/reference/editor/choose-controller` --- choosing and connecting to the controller of a project
 - :doc:`/reference/editor/problems/E0011` --- the ``address`` of a profile is invalid
 - :doc:`/reference/editor/problems/E0012` --- the ``port`` of a profile is invalid
 - :doc:`/reference/editor/settings` --- the settings of the extension

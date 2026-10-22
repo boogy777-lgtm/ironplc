@@ -9,7 +9,7 @@
  * steps are injected.
  */
 
-import { chooseArgument } from './deviceActions';
+import { controllerArgument } from './deviceActions';
 import { DeviceRowFacts } from './networkTree';
 import { ChooseControllerArgument, RouteFailure, RouteOutcome, RouteSet, socketAddress } from './vscodeCommon';
 
@@ -31,6 +31,6 @@ export async function chooseDevice(
   if (!route.ok) {
     return { handedOff: false, failure: route };
   }
-  await handoff(chooseArgument(row));
+  await handoff(controllerArgument(row));
   return { handedOff: true, route };
 }

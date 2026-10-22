@@ -29,6 +29,8 @@ export interface DevicePanelModel {
   lastStatus: HotEditStatus | null;
   baseline: BaselineState;
   buildPhase: BuildPhase | null;
+  /** Information lines about the connected controller (not an error); absent or empty when there are none. */
+  notes?: readonly string[];
 }
 
 /** The state row label, per the online-editing-ux status vocabulary. */
@@ -118,6 +120,10 @@ export function devicePanelRows(model: DevicePanelModel): PanelRow[] {
       description: 'stale (E0015) — re-sync from the device, rebuild, then connect',
     });
   }
+
+  (model.notes ?? []).forEach((note, index) => {
+    rows.push({ id: `info.${index}`, label: 'Information', description: note, tooltip: note });
+  });
 
   if (model.buildPhase !== null) {
     rows.push({ id: 'build', label: 'Build', description: buildPhaseLabel(model.buildPhase) });

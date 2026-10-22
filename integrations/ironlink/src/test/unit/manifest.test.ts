@@ -26,12 +26,14 @@ suite('the manifest', () => {
         'ironlink.identify',
         'ironlink.copyDeviceId',
         'ironlink.choose',
+        'ironlink.connect',
       ].sort(),
     );
     assert.deepStrictEqual(DEVICE_ACTION_COMMANDS, {
       identify: 'ironlink.identify',
       copyDeviceId: 'ironlink.copyDeviceId',
       choose: 'ironlink.choose',
+      connect: 'ironlink.connect',
     });
     for (const command of commands) {
       assert.strictEqual(command.category, 'IronLink', command.command);
@@ -46,6 +48,7 @@ suite('the manifest', () => {
     assert.strictEqual(titles[DEVICE_ACTION_COMMANDS.identify], 'Identify');
     assert.strictEqual(titles[DEVICE_ACTION_COMMANDS.copyDeviceId], 'Copy device id');
     assert.strictEqual(titles[DEVICE_ACTION_COMMANDS.choose], 'Choose');
+    assert.strictEqual(titles[DEVICE_ACTION_COMMANDS.connect], 'Connect');
   });
 
   test('views_when_declared_then_the_ironlink_container_holds_the_network_view', () => {

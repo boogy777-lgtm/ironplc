@@ -4,7 +4,7 @@ import {
   DEVICE_ACTION_COMMANDS,
   DeviceAction,
   NO_DEVICE_ROW_REASON,
-  chooseArgument,
+  controllerArgument,
   decideDeviceAction,
 } from '../../deviceActions';
 import { DeviceRowFacts } from '../../networkTree';
@@ -24,12 +24,13 @@ const ROW: DeviceRowFacts = {
 const ALL_ACTIONS = Object.keys(DEVICE_ACTION_COMMANDS) as DeviceAction[];
 const NOTHING = new Set<string>();
 const WITHOUT_IRONPLC = { registeredCommands: new Set(['workbench.action.quickOpen']), contributedCommands: NOTHING };
+const BOTH = [HANDOFF_ACTIONS.choose.command, HANDOFF_ACTIONS.connect.command];
 const WITH_IRONPLC = {
-  registeredCommands: new Set([HANDOFF_ACTIONS.choose.command, 'workbench.action.quickOpen']),
+  registeredCommands: new Set([...BOTH, 'workbench.action.quickOpen']),
   contributedCommands: NOTHING,
 };
-// IronPLC is installed but has not activated: it registered nothing, and its manifest contributes the command.
-const INACTIVE_IRONPLC = { registeredCommands: NOTHING, contributedCommands: new Set([HANDOFF_ACTIONS.choose.command]) };
+// IronPLC is installed but has not activated: it registered nothing, and its manifest contributes the commands.
+const INACTIVE_IRONPLC = { registeredCommands: NOTHING, contributedCommands: new Set(BOTH) };
 
 // REQ-IL-ironlink-vscode-091
 suite('decideDeviceAction', () => {
@@ -91,9 +92,47 @@ suite('decideDeviceAction choose', () => {
 });
 
 // REQ-IL-ironlink-vscode-093
-suite('chooseArgument', () => {
-  test('chooseArgument_when_row_then_has_exactly_device_id_address_and_session_port', () => {
-    assert.deepStrictEqual(chooseArgument(ROW), {
+suite('controllerArgument', () => {
+  test('controllerArgument_when_row_then_has_exactly_device_id_address_and_session_port', () => {
+    assert.deepStrictEqual(controllerArgument(ROW), {
+      deviceId: PRESS_LINE_ID,
+      address: '192.168.1.50',
+      sessionPort: 49152,
+    });
+  });
+});
+
+// REQ-IL-ironlink-vscode-101
+suite('decideDeviceAction connect', () => {
+  test('decideDeviceAction_when_connect_and_the_ironplc_command_is_missing_then_unavailable_with_its_reason', () => {
+    assert.deepStrictEqual(
+      decideDeviceAction('connect', ROW, WITHOUT_IRONPLC),
+      { enabled: false, reason: HANDOFF_ACTIONS.connect.unavailableReason },
+    );
+  });
+
+  test('decideDeviceAction_when_connect_and_only_the_choose_command_exists_then_unavailable', () => {
+    const onlyChoose = { registeredCommands: new Set([HANDOFF_ACTIONS.choose.command]), contributedCommands: NOTHING };
+    assert.strictEqual(decideDeviceAction('connect', ROW, onlyChoose).enabled, false);
+  });
+
+  test('decideDeviceAction_when_connect_and_ironplc_is_installed_but_not_active_then_enabled', () => {
+    assert.deepStrictEqual(decideDeviceAction('connect', ROW, INACTIVE_IRONPLC), { enabled: true });
+  });
+
+  test('decideDeviceAction_when_connect_and_the_ironplc_command_exists_then_enabled', () => {
+    assert.deepStrictEqual(decideDeviceAction('connect', ROW, WITH_IRONPLC), { enabled: true });
+  });
+
+  test('decideDeviceAction_when_connect_and_no_row_then_unavailable_with_the_row_reason', () => {
+    assert.deepStrictEqual(
+      decideDeviceAction('connect', undefined, WITH_IRONPLC),
+      { enabled: false, reason: NO_DEVICE_ROW_REASON },
+    );
+  });
+
+  test('controllerArgument_when_connect_row_then_is_exactly_the_choose_argument', () => {
+    assert.deepStrictEqual(controllerArgument(ROW), {
       deviceId: PRESS_LINE_ID,
       address: '192.168.1.50',
       sessionPort: 49152,

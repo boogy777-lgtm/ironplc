@@ -40,7 +40,15 @@ suite('Handoff command contributions', () => {
     assert.strictEqual(choose.category, 'IronPLC: Network');
   });
 
-  test('handoff_actions_when_listed_then_the_choose_command_is_the_one_the_extension_contributes', () => {
+  test('package_json_when_connect_controller_then_titled_and_in_the_network_category', () => {
+    const connect = contributedCommands().get('ironplc.connectController');
+    assert.ok(connect);
+    assert.strictEqual(connect.title, 'Connect to Chosen Controller');
+    assert.strictEqual(connect.category, 'IronPLC: Network');
+  });
+
+  test('handoff_actions_when_listed_then_the_commands_are_the_ones_the_extension_contributes', () => {
     assert.strictEqual(HANDOFF_ACTIONS.choose.command, 'ironplc.chooseController');
+    assert.strictEqual(HANDOFF_ACTIONS.connect.command, 'ironplc.connectController');
   });
 });

@@ -175,6 +175,24 @@ suite('devicePanelRows', () => {
     assert.ok(row.description!.includes('re-sync'));
   });
 
+  test('devicePanelRows_when_notes_then_an_information_row_for_each_line', () => {
+    const rows = devicePanelRows(model({
+      state: 'connected',
+      identity: identity(),
+      lastStatus: status(),
+      notes: ['The connected controller (a0a1a2a3) is not the controller chosen for this project (00112233).', 'second'],
+    }));
+    const info = rows.filter(candidate => candidate.id.startsWith('info.'));
+    assert.deepStrictEqual(info.map(row => row.label), ['Information', 'Information']);
+    assert.deepStrictEqual(info.map(row => row.id), ['info.0', 'info.1']);
+    assert.strictEqual(info[1].description, 'second');
+  });
+
+  test('devicePanelRows_when_no_notes_then_no_information_row', () => {
+    const rows = devicePanelRows(model({ state: 'connected', identity: identity(), lastStatus: status(), notes: [] }));
+    assert.ok(!rows.some(candidate => candidate.label === 'Information'));
+  });
+
   test('devicePanelRows_when_build_phase_then_phase_row', () => {
     const rows = devicePanelRows(model({
       state: 'connected',

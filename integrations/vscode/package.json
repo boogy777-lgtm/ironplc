@@ -131,6 +131,11 @@
         "category": "IronPLC: Network"
       },
       {
+        "command": "ironplc.connectController",
+        "title": "Connect to Chosen Controller",
+        "category": "IronPLC: Network"
+      },
+      {
         "command": "ironplc.build",
         "title": "Build & Commit",
         "category": "IronPLC"

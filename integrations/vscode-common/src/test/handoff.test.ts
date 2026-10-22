@@ -14,9 +14,13 @@ suite('HANDOFF_ACTIONS', () => {
     assert.strictEqual(HANDOFF_ACTIONS.choose.command, 'ironplc.chooseController');
   });
 
+  test('HANDOFF_ACTIONS_when_connect_then_names_the_ironplc_command', () => {
+    assert.strictEqual(HANDOFF_ACTIONS.connect.command, 'ironplc.connectController');
+  });
+
   test('handoffNames_when_listed_then_each_member_declares_command_and_reason', () => {
     const names = handoffNames();
-    assert.deepStrictEqual(names, ['choose']);
+    assert.deepStrictEqual(names, ['choose', 'connect']);
     for (const name of names) {
       const declaration = HANDOFF_ACTIONS[name];
       assert.ok(declaration.command.startsWith('ironplc.'), `${name}: command is an IronPLC command`);
@@ -45,6 +49,12 @@ suite('isHandoffAvailable', () => {
 
   test('isHandoffAvailable_when_the_command_is_both_contributed_and_registered_then_true', () => {
     assert.strictEqual(isHandoffAvailable('choose', sources(['ironplc.chooseController'], ['ironplc.chooseController'])), true);
+  });
+
+  test('isHandoffAvailable_when_only_the_other_action_is_available_then_false', () => {
+    assert.strictEqual(isHandoffAvailable('connect', sources(['ironplc.chooseController'], ['ironplc.chooseController'])), false);
+    assert.strictEqual(isHandoffAvailable('connect', sources([], ['ironplc.connectController'])), true);
+    assert.strictEqual(isHandoffAvailable('connect', sources(['ironplc.connectController'], [])), true);
   });
 
   test('isHandoffAvailable_when_neither_contributed_nor_registered_then_false', () => {
@@ -86,6 +96,13 @@ suite('runHandoff', () => {
     const argument = { deviceId: '00112233445566778899aabbccddeeff', address: '192.168.1.50', sessionPort: 49152 };
     await runHandoff('choose', argument, async (command, ...args) => { calls.push([command, ...args]); });
     assert.deepStrictEqual(calls, [['ironplc.chooseController', argument]]);
+  });
+
+  test('runHandoff_when_connect_then_executes_the_command_with_the_argument', async () => {
+    const calls: unknown[][] = [];
+    const argument = { deviceId: '00112233445566778899aabbccddeeff', address: '192.168.1.50', sessionPort: 49152 };
+    await runHandoff('connect', argument, async (command, ...args) => { calls.push([command, ...args]); });
+    assert.deepStrictEqual(calls, [['ironplc.connectController', argument]]);
   });
 
   test('runHandoff_when_the_command_fails_then_the_failure_reaches_the_caller', async () => {

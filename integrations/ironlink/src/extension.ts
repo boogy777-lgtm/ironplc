@@ -3,7 +3,7 @@ import { existsSync } from 'fs';
 
 import { BrowseMemory, createIronLinkApi } from './api';
 import { chooseDevice } from './chooseSequence';
-import { ActionContext, DEVICE_ACTION_COMMANDS, DeviceAction, decideDeviceAction } from './deviceActions';
+import { ActionContext, DEVICE_ACTION_COMMANDS, DeviceAction, controllerArgument, decideDeviceAction } from './deviceActions';
 import { describeFailure } from './failures';
 import { IronLinkClient } from './ironlinkClient';
 import { BrowseOptions } from './ironlinkProtocol';
@@ -205,6 +205,13 @@ export function activate(context: vscode.ExtensionContext): IronLinkApi {
     else {
       showFailure(outcome.failure.message, problemHelpUrl(outcome.failure.code, version));
     }
+  });
+
+  // Connect opens no route of its own: IronPLC connects to the address and
+  // session port of the row, and the route of this workstation stays as it is.
+  deviceAction('connect', async node => {
+    await runHandoff('connect', controllerArgument(node.device!), (command, ...args) =>
+      vscode.commands.executeCommand(command, ...args));
   });
 
   return api;

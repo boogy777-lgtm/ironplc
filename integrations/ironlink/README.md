@@ -25,6 +25,9 @@ need the IronPLC extension to see the controllers.
   available when the IronPLC extension provides the command; otherwise the
   extension says why. When the route cannot be stored, the error is shown and
   nothing is handed over.
+* **Connect** — asks the IronPLC extension to connect to the controller of a row.
+  Connect sets no route and is available when the IronPLC extension provides the
+  command; otherwise the extension says why.
 * **API for other extensions** — the extension returns an API when it activates:
   the stored routes, the last search, a new search, setting a route and showing the
   Network view. The IronPLC extension uses it to choose a controller.

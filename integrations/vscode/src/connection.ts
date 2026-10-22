@@ -17,9 +17,16 @@ import { existsSync } from 'fs';
 import { currentCompilerSettings } from './compilerSettings';
 import { runCompiler } from './taskProviderLogic';
 import { ReportProblem } from './debugAdapter';
-import { ProblemCode } from './vscodeCommon';
 import {
-  formatStatusDetail,
+  ControllerArgument,
+  HANDOFF_ACTIONS,
+  IronLinkApi,
+  IronLinkRoute,
+  isControllerArgument,
+  ProblemCode,
+  shortDeviceId,
+} from './vscodeCommon';
+import {
   HotEditStatus,
   IdentityInfo,
 } from './hotEditSession';
@@ -28,6 +35,16 @@ import {
   ConnectionProfile,
   validateProfiles,
 } from './connectionProfiles';
+import { applicationAnchor, ChosenController, readChosen } from './chooseControllerLogic';
+import {
+  connectingText,
+  controllerProfile,
+  identityNotes,
+  resolveChosenRoute,
+  ROUTE_SOURCE_TEXT,
+} from './connectControllerLogic';
+import { accessIronLink } from './ironlinkAccess';
+import { statusCommand, statusText, statusTooltip } from './statusBarLogic';
 import {
   ConnectionManager,
   OpenedConnection,
@@ -66,6 +83,12 @@ export interface ConnectionFeature {
   /** Resolves when the check of the device against its download record has finished. */
   settled(): Promise<void>;
   readonly onDidChangeModel: vscode.Event<DevicePanelModel>;
+  /**
+   * Connects to the controller chosen for the project, or to the controller of
+   * `argument` (`{deviceId, address, sessionPort}`, from the IronLink Network
+   * view). The raw argument is checked here: any extension can run the command.
+   */
+  connectController(argument: unknown): Promise<void>;
 }
 
 export function registerConnectionSupport(
@@ -86,14 +109,28 @@ export function registerConnectionSupport(
   let pendingCheck: Promise<void> = Promise.resolve();
   let buildPhase: BuildPhase | null = null;
   let lastStatusOverride: HotEditStatus | null = null;
+  // The controller chosen for the project (its path file), what the status item
+  // names while disconnected; the names that connected controllers reported
+  // (a path file holds no name); and the controller the current connection was
+  // meant for, with the information lines about it.
+  let chosenController: ChosenController | undefined;
+  const knownNames = new Map<string, string>();
+  let intendedDeviceId: string | undefined;
+  let notes: string[] = [];
 
   const manager = new ConnectionManager({
     open,
     events: {
-      onState: () => render(),
+      onState: (state) => {
+        if (state === 'disconnected') {
+          intendedDeviceId = undefined;
+          notes = [];
+        }
+        render();
+      },
       onIdentity: (identity: IdentityInfo) => {
         lastStatusOverride = null;
-        pendingCheck = reconcileBaseline(identity).then(render);
+        pendingCheck = Promise.all([reconcileBaseline(identity), noteIdentity(identity)]).then(render);
         render();
       },
       onStatus: (status) => {
@@ -142,6 +179,7 @@ export function registerConnectionSupport(
     },
     settled: () => pendingCheck,
     onDidChangeModel: modelEmitter.event,
+    connectController,
   };
 
   /** The compiler, with its command line and output in the connection channel. */
@@ -245,17 +283,67 @@ export function registerConnectionSupport(
       lastStatus: lastStatusOverride ?? snapshot.lastStatus,
       baseline: baselineState,
       buildPhase,
+      notes,
     };
+  }
+
+  /** How the chosen controller is named: the name it reported, else its short device id. */
+  function chosenLabel(): string | undefined {
+    return chosenController === undefined
+      ? undefined
+      : knownNames.get(chosenController.deviceId) ?? shortDeviceId(chosenController.deviceId);
   }
 
   function render(): void {
     const state = manager.currentState;
     const current = model();
-    statusItem.text = statusText(current);
-    statusItem.tooltip = statusTooltip(current);
-    statusItem.command = state === 'disconnected' ? 'ironplc.connect' : 'ironplc.devicePanel.focus';
+    const chosen = chosenLabel();
+    statusItem.text = statusText(current, chosen);
+    statusItem.tooltip = statusTooltip(current, chosen);
+    statusItem.command = statusCommand(state, chosen);
     statusItem.show();
     modelEmitter.fire(current);
+  }
+
+  /**
+   * Reads the controller chosen for the project from its path file. A project
+   * without an application, a missing compiler or a file that is not a record
+   * has none; a read that fails is in the connection channel.
+   */
+  async function refreshChosen(): Promise<void> {
+    const anchor = applicationAnchor(workspaceFolders(), sourceExtensions);
+    // Quiet: this runs whenever the project or its path file changes, and is no
+    // part of what the engineer asked for, so it leaves no line in the channel.
+    const compiler = compilerPath;
+    const run: RunCompiler | undefined = compiler === undefined ? undefined : args => runCompiler(compiler, args, () => {});
+    let next: ChosenController | undefined;
+    if (!('reason' in anchor) && run !== undefined) {
+      try {
+        next = await readChosen(run, readTextIfPresent, anchor.anchor);
+      }
+      catch (err) {
+        outputChannel.appendLine(`The path record could not be read, so no controller is shown as chosen: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    chosenController = next;
+    render();
+  }
+
+  /**
+   * After the identity arrives: remember the name it reports, and say in the
+   * connection channel and the device panel when the controller is not the one
+   * that was meant or chosen. This is information and never a refusal.
+   */
+  async function noteIdentity(identity: IdentityInfo): Promise<void> {
+    const deviceId = identity.device.deviceId;
+    if (deviceId !== undefined) {
+      knownNames.set(deviceId, identity.device.name);
+    }
+    await refreshChosen();
+    notes = identityNotes({ connected: deviceId, intended: intendedDeviceId, chosen: chosenController?.deviceId });
+    for (const line of notes) {
+      outputChannel.appendLine(line);
+    }
   }
 
   async function reconcileBaseline(identity: IdentityInfo): Promise<void> {
@@ -307,22 +395,102 @@ export function registerConnectionSupport(
       return;
     }
 
+    if (await openProfile(profile, undefined) === 'connected') {
+      await config.update('activeConnection', profile.name, vscode.ConfigurationTarget.Workspace);
+    }
+  }
+
+  /**
+   * Opens a profile, saved or not: the one path every connection takes. The
+   * result is `failed` when nothing was opened. `intended` is the device id of
+   * the route being connected to (undefined for a saved profile), which the
+   * information lines compare the answering controller with.
+   */
+  async function openProfile(
+    profile: ConnectionProfile,
+    intended: string | undefined,
+  ): Promise<'connected' | 'failed' | 'already-connected'> {
     if (connectionMethod(profile).needsLocalTools && !ensureLocalTools(profile)) {
-      return;
+      return 'failed';
     }
     if (!(await resolveCredentials(profile))) {
-      return;
+      return 'failed';
     }
 
+    // A connection that is open stays as it is, with the controller it was meant for.
+    if (manager.currentState === 'disconnected') {
+      intendedDeviceId = intended;
+    }
     const result = await manager.connect(profile);
     if (result === 'already-connected') {
       void vscode.window.showInformationMessage(
         `IronPLC is already connected${profileSuffix()}. Run "IronPLC: Disconnect from Device" first.`,
       );
     }
-    else if (result === 'connected') {
-      await config.update('activeConnection', profile.name, vscode.ConfigurationTarget.Workspace);
+    return result;
+  }
+
+  /** The name IronLink last heard for a device, when IronLink has been used. */
+  function observedName(api: IronLinkApi | undefined, deviceId: string): string | undefined {
+    return api?.lastBrowse()?.devices.find(device => device.deviceId === deviceId)?.name;
+  }
+
+  /**
+   * Connects to a controller by an unsaved `tcp` profile made from its route,
+   * validated like a saved one. `source` says where the route came from, for the
+   * connection channel.
+   */
+  async function connectTo(controller: ControllerArgument, source: string, api: IronLinkApi | undefined): Promise<void> {
+    const profile = controllerProfile(
+      controller,
+      observedName(api, controller.deviceId) ?? knownNames.get(controller.deviceId),
+    );
+    const { profiles, errors } = validateProfiles([profile]);
+    for (const failure of errors) {
+      reportProblem(failure.code, `Profile "${failure.profile}": ${failure.detail}`);
     }
+    if (errors.length > 0) {
+      return;
+    }
+    outputChannel.appendLine(connectingText(profiles[0], source));
+    await openProfile(profiles[0], controller.deviceId);
+  }
+
+  async function connectController(argument: unknown): Promise<void> {
+    const access = await accessIronLink(id => vscode.extensions.getExtension(id));
+    const api = access.available ? access.api : undefined;
+    if (argument !== undefined) {
+      if (!isControllerArgument(argument)) {
+        reportProblem(
+          ProblemCode.ConnectionProfileInvalid,
+          'The command was run with an argument that is not a controller: expected {deviceId, address, sessionPort}',
+        );
+        return;
+      }
+      await connectTo(argument, 'the controller given', api);
+      return;
+    }
+
+    await refreshChosen();
+    let routes: IronLinkRoute[] | undefined;
+    if (api !== undefined) {
+      try {
+        routes = await api.routeList();
+      }
+      catch (err) {
+        outputChannel.appendLine(`IronLink did not list the routes of this PC: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    const resolved = resolveChosenRoute(chosenController, routes);
+    if ('reason' in resolved) {
+      const choose = 'Choose Controller…';
+      const picked = await vscode.window.showInformationMessage(resolved.reason, choose);
+      if (picked === choose) {
+        await vscode.commands.executeCommand(HANDOFF_ACTIONS.choose.command);
+      }
+      return;
+    }
+    await connectTo(resolved.route, ROUTE_SOURCE_TEXT[resolved.source], api);
   }
 
   async function pickProfile(profiles: ConnectionProfile[]): Promise<ConnectionProfile | undefined> {
@@ -402,39 +570,19 @@ export function registerConnectionSupport(
     vscode.commands.registerCommand('ironplc.disconnect', () => manager.disconnect()),
   );
 
+  // The status item names the controller chosen for the project, so it follows
+  // the project's path file and the workspace folders.
+  const pathFiles = vscode.workspace.createFileSystemWatcher('**/*.path.iplcinfo');
+  context.subscriptions.push(
+    pathFiles,
+    pathFiles.onDidCreate(() => void refreshChosen()),
+    pathFiles.onDidChange(() => void refreshChosen()),
+    pathFiles.onDidDelete(() => void refreshChosen()),
+    vscode.workspace.onDidChangeWorkspaceFolders(() => void refreshChosen()),
+  );
+
   render();
+  void refreshChosen();
 
   return feature;
-}
-
-function statusText(model: DevicePanelModel): string {
-  switch (model.state) {
-    case 'disconnected':
-      return '$(debug-disconnect) IronPLC: Not connected';
-    case 'connecting':
-      return '$(sync~spin) IronPLC: Connecting…';
-    case 'reconnecting':
-      return '$(sync~spin) IronPLC: Reconnecting…';
-    case 'connected':
-      return `$(plug) IronPLC: ${model.identity?.device.name ?? model.profileName ?? 'Connected'}`;
-  }
-}
-
-function statusTooltip(model: DevicePanelModel): string {
-  switch (model.state) {
-    case 'disconnected':
-      return 'Connect to a device (IronPLC: Connect to Device)';
-    case 'connecting':
-      return 'Opening the transport and running the identity handshake…';
-    case 'reconnecting':
-      return 'The connection was lost; retrying with backoff. The device panel keeps the last data, marked stale.';
-    case 'connected': {
-      const lines = [`Profile: ${model.profileName ?? 'unknown'}`];
-      if (model.lastStatus) {
-        lines.push(formatStatusDetail(model.lastStatus));
-      }
-      lines.push('Click for the IronPLC Device panel.');
-      return lines.join('\n');
-    }
-  }
 }
