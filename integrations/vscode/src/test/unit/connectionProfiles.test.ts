@@ -1,8 +1,8 @@
 import * as assert from 'assert';
 
+import { isValidAddress } from '../../connectionMethods/tcp';
 import {
   ConnectionProfile,
-  isValidAddress,
   validateProfiles,
 } from '../../connectionProfiles';
 import { ProblemCode } from '../../problems';

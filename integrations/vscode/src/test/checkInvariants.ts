@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { connectionTransports } from '../connectionMethods';
 import { DEFAULT_SESSION_PORT, SUPPORTED_SESSION_PROTOCOL } from '../sessionConstants';
 
 const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf-8'));
@@ -89,6 +90,28 @@ for (const protocol of protocolsStated) {
       `specs/design/engineering-connection.md states session protocol ${protocol}, but the protocol is ${SUPPORTED_SESSION_PROTOCOL}`,
     );
   }
+}
+
+// The connection methods are listed in the table (connectionMethods.ts); the
+// `transport` enum of the `ironplc.connections` setting is a second list, and
+// each member has its own module. All three must name the same methods, so a
+// method added to one place and missed in another fails here.
+const methodNames = connectionTransports().sort();
+const transportEnum: string[] = packageJson.contributes.configuration.properties['ironplc.connections']
+  .items.properties.transport.enum;
+if (JSON.stringify([...transportEnum].sort()) !== JSON.stringify(methodNames)) {
+  failures.push(
+    `The 'transport' enum of 'ironplc.connections' in package.json is [${transportEnum.join(', ')}], but the connection methods are [${methodNames.join(', ')}]`,
+  );
+}
+const methodModules = fs.readdirSync(path.join(__dirname, '..', 'connectionMethods'))
+  .filter(file => file.endsWith('.js'))
+  .map(file => file.slice(0, -'.js'.length))
+  .sort();
+if (JSON.stringify(methodModules) !== JSON.stringify(methodNames)) {
+  failures.push(
+    `The modules in connectionMethods/ are [${methodModules.join(', ')}], but the connection methods are [${methodNames.join(', ')}]`,
+  );
 }
 
 if (failures.length > 0) {

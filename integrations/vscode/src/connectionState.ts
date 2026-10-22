@@ -26,6 +26,7 @@
  * transports — no real `ironplcvm` process, socket, or timer needed.
  */
 
+import { connectionMethod } from './connectionMethods';
 import { ConnectionProfile } from './connectionProfiles';
 import { ProblemCode } from './problems';
 import {
@@ -278,14 +279,14 @@ export class ConnectionManager {
     }
   }
 
-  /** Connected → Reconnecting for tcp; a stdio fault lands straight on E0014. */
+  /** Connected → Reconnecting for a method that reconnects (tcp); a stdio fault lands straight on E0014. */
   private enterReconnecting(gen: number): void {
     this.stopHeartbeat?.();
     this.stopHeartbeat = undefined;
     this.teardownSession();
-    // stdio children are never respawned: the fault goes straight to
-    // E0014 without passing through Reconnecting.
-    if (this.profile?.transport !== 'tcp') {
+    // A method that does not reconnect (a stdio child is never respawned)
+    // goes straight to E0014 without passing through Reconnecting.
+    if (this.profile === undefined || !connectionMethod(this.profile).reconnects) {
       this.landDisconnected(ProblemCode.ConnectionLost, this.lastError);
       return;
     }

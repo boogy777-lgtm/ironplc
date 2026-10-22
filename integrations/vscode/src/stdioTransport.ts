@@ -7,12 +7,18 @@
  */
 
 import { ChildProcessWithoutNullStreams } from 'child_process';
+import * as path from 'path';
 
 import { HotEditTransport } from './hotEditSession';
 
 /** The VM executable name on `platform` (`.exe` on Windows). */
 export function vmFileName(platform: string): string {
   return platform === 'win32' ? 'ironplcvm.exe' : 'ironplcvm';
+}
+
+/** The VM executable that sits next to the compiler at `compilerPath`. */
+export function vmPathBeside(compilerPath: string, platform: string): string {
+  return path.join(path.dirname(compilerPath), vmFileName(platform));
 }
 
 /**

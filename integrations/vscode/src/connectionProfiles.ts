@@ -13,20 +13,22 @@
  * before any transport opens — a bad profile fails without network traffic.
  */
 
+import {
+  connectionMethod,
+  ConnectionTransport,
+  describeTransports,
+  isConnectionTransport,
+} from './connectionMethods';
 import { ProblemCode } from './problems';
-import { DEFAULT_SESSION_PORT } from './sessionConstants';
-
-/** The transport a profile speaks: a spawned child or a remote socket. */
-export type ConnectionTransport = 'stdio' | 'tcp';
 
 /**
- * One connection profile as persisted in the `ironplc.connections` setting.
- * Per-transport fields are required by validation, not by the type system:
- * `program` for `stdio`, `address` (and optionally `port`) for `tcp`.
+ * The fields of a connection profile that do not name its connection method.
+ * Per-method fields are required or forbidden by the method's own rules
+ * (`ConnectionMethod.checkFields`), not by the type system: `program` for
+ * `stdio`, `address` (and optionally `port`) for `tcp`.
  */
-export interface ConnectionProfile {
+export interface ConnectionProfileFields {
   name: string;
-  transport: ConnectionTransport;
   /** The source file or `.iplc` container a stdio session loads (`serve <FILE>`). */
   program?: string;
   /** The IPv4/IPv6/hostname address of a tcp device. */
@@ -35,6 +37,14 @@ export interface ConnectionProfile {
   port?: number;
   /** The secret-store key the host resolves a username/password pair from. */
   credentialsKey?: string;
+}
+
+/**
+ * One connection profile as persisted in the `ironplc.connections` setting:
+ * the connection method it speaks and the fields that method reads.
+ */
+export interface ConnectionProfile extends ConnectionProfileFields {
+  transport: ConnectionTransport;
 }
 
 /** One validation failure: the E-code, the offending profile, and the detail. */
@@ -46,7 +56,6 @@ export interface ProfileValidationError {
 }
 
 const MAX_PORT = 65535;
-const MAX_HOSTNAME_LENGTH = 253;
 
 /**
  * Validates the raw `ironplc.connections` setting value and returns the
@@ -85,8 +94,8 @@ export function validateProfiles(raw: unknown): {
       return;
     }
 
-    if (record.transport !== 'stdio' && record.transport !== 'tcp') {
-      errors.push(error(ProblemCode.ConnectionProfileInvalid, name, `the transport must be "stdio" or "tcp", not ${JSON.stringify(record.transport)}`));
+    if (!isConnectionTransport(record.transport)) {
+      errors.push(error(ProblemCode.ConnectionProfileInvalid, name, `the transport must be ${describeTransports()}, not ${JSON.stringify(record.transport)}`));
       return;
     }
     const transport: ConnectionTransport = record.transport;
@@ -113,29 +122,11 @@ export function validateProfiles(raw: unknown): {
       return;
     }
 
-    if (transport === 'stdio') {
-      if (program === undefined || program.trim().length === 0) {
-        errors.push(error(ProblemCode.ConnectionProfileInvalid, name, 'a stdio profile needs the program the spawned session loads'));
-        return;
-      }
-      if (address !== undefined) {
-        errors.push(error(ProblemCode.ConnectionAddressInvalid, name, 'a stdio profile spawns a local session and must not set an address'));
-        return;
-      }
-      if (port !== undefined) {
-        errors.push(error(ProblemCode.ConnectionPortInvalid, name, 'a stdio profile spawns a local session and must not set a port'));
-        return;
-      }
-    }
-    else {
-      if (address === undefined || address.trim().length === 0) {
-        errors.push(error(ProblemCode.ConnectionProfileInvalid, name, 'a tcp profile needs the device address'));
-        return;
-      }
-      if (!isValidAddress(address)) {
-        errors.push(error(ProblemCode.ConnectionAddressInvalid, name, `the address "${address}" is not an IPv4/IPv6 literal or RFC 1123 hostname`));
-        return;
-      }
+    const method = connectionMethod({ transport });
+    const fault = method.checkFields({ name, program, address, port, credentialsKey });
+    if (fault !== undefined) {
+      errors.push(error(fault.code, name, fault.detail));
+      return;
     }
 
     profiles.push({
@@ -143,7 +134,7 @@ export function validateProfiles(raw: unknown): {
       transport,
       program,
       address,
-      port: transport === 'tcp' ? port ?? DEFAULT_SESSION_PORT : undefined,
+      port: port ?? method.defaultPort,
       credentialsKey,
     });
     // Only accepted profiles claim their name: an invalid profile must not
@@ -166,41 +157,4 @@ function profileLabel(entry: unknown, index: number): string {
 
 function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
-}
-
-/**
- * An address is an IPv4 dotted-quad, an IPv6 literal, or an RFC 1123
- * hostname: letters, digits, and hyphens, one-to-63-character labels that do
- * not start or end with a hyphen, at most 253 characters overall. A dotted
- * name whose labels are all digits is treated as a mistyped IPv4 literal and
- * rejected when an octet is out of range (so '999.1.1.1' is not a hostname).
- */
-export function isValidAddress(address: string): boolean {
-  const host = address.trim();
-  if (host.length === 0 || host.length > MAX_HOSTNAME_LENGTH) {
-    return false;
-  }
-  if (isIpv4Address(host) || isIpv6Address(host)) {
-    return true;
-  }
-  const labels = host.split('.');
-  // An all-numeric dotted name is a mistyped IPv4 literal, not a hostname:
-  // '999.1.1.1' must be rejected rather than pass as an RFC 1123 hostname
-  // whose labels happen to be all digits.
-  if (labels.every(label => /^[0-9]+$/.test(label))) {
-    return false;
-  }
-  return labels.every(label => /^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/.test(label));
-}
-
-/** Four decimal octets in 0-255. */
-function isIpv4Address(host: string): boolean {
-  const parts = host.split('.');
-  return parts.length === 4
-    && parts.every(part => /^\d{1,3}$/.test(part) && Number(part) <= 255);
-}
-
-/** Hex groups and `::` compression, loosely — enough to tell a literal from a hostname. */
-function isIpv6Address(host: string): boolean {
-  return host.includes(':') && /^[0-9A-Fa-f:]+$/.test(host);
 }

@@ -12,14 +12,11 @@
  */
 
 import * as vscode from 'vscode';
-import * as path from 'path';
-import { spawn } from 'child_process';
 import { existsSync } from 'fs';
 import { readFile } from 'fs/promises';
 
 import { currentCompilerSettings } from './compilerSettings';
-import { compileSourceToContainer, runCompiler } from './taskProviderLogic';
-import { programKind } from './debugAdapterLogic';
+import { runCompiler } from './taskProviderLogic';
 import { ReportProblem } from './debugAdapter';
 import { ProblemCode } from './problems';
 import {
@@ -27,6 +24,7 @@ import {
   HotEditStatus,
   IdentityInfo,
 } from './hotEditSession';
+import { connectionMethod, OpenContext } from './connectionMethods';
 import {
   ConnectionProfile,
   validateProfiles,
@@ -45,8 +43,7 @@ import {
 } from './baselineLogic';
 import { BuildPhase } from './buildLogic';
 import { DevicePanelModel } from './devicePanelLogic';
-import { StdioLineTransport, vmFileName } from './stdioTransport';
-import { connectTcpLineTransport } from './tcpTransport';
+import { vmFileName, vmPathBeside } from './stdioTransport';
 
 /** What the connection feature exposes to the device panel and the build commands. */
 export interface ConnectionFeature {
@@ -250,7 +247,8 @@ export function registerConnectionSupport(
   async function reconcileBaseline(identity: IdentityInfo): Promise<void> {
     // A session started with a container is a download: record it, when the
     // device shows that it runs that container, before the check below.
-    if (manager.currentProfile?.transport === 'stdio') {
+    const started = manager.currentProfile;
+    if (started !== undefined && connectionMethod(started).recordsSessionStart) {
       try {
         await recordDownloadOf(undefined, identity.application, true);
       }
@@ -295,7 +293,7 @@ export function registerConnectionSupport(
       return;
     }
 
-    if (profile.transport === 'stdio' && !ensureStdioTools()) {
+    if (connectionMethod(profile).needsLocalTools && !ensureLocalTools(profile)) {
       return;
     }
     if (!(await resolveCredentials(profile))) {
@@ -318,7 +316,7 @@ export function registerConnectionSupport(
       profiles.map(profile => ({
         label: profile.name,
         description: profile.transport,
-        detail: profile.transport === 'stdio' ? profile.program : `${profile.address}:${profile.port}`,
+        detail: connectionMethod(profile).detail(profile),
         profile,
       })),
       { title: 'IronPLC: connect to a device' },
@@ -331,13 +329,13 @@ export function registerConnectionSupport(
     return name ? ` to "${name}"` : '';
   }
 
-  /** The stdio profile's tools, reported with the same codes the hot-edit path uses. */
-  function ensureStdioTools(): boolean {
+  /** The tools a method that needs them runs, reported with the same codes the hot-edit path uses. */
+  function ensureLocalTools(profile: ConnectionProfile): boolean {
     if (!compilerPath) {
-      reportProblem(ProblemCode.NoCompiler, 'Install the compiler to start a stdio connection.');
+      reportProblem(ProblemCode.NoCompiler, `Install the compiler to start a ${profile.transport} connection.`);
       return false;
     }
-    const vmPath = path.join(path.dirname(compilerPath), vmFileName(process.platform));
+    const vmPath = vmPathBeside(compilerPath, process.platform);
     if (!existsSync(vmPath)) {
       reportProblem(
         ProblemCode.VmNotFound,
@@ -374,33 +372,15 @@ export function registerConnectionSupport(
     return true;
   }
 
-  async function open(profile: ConnectionProfile): Promise<OpenedConnection> {
-    if (profile.transport === 'tcp') {
-      const transport = await connectTcpLineTransport(profile.address!, profile.port!);
-      return { transport, close: () => transport.dispose() };
-    }
+  const openContext: OpenContext = {
+    compilerPath,
+    sourceExtensions,
+    output: outputChannel,
+    compilerSettings: currentCompilerSettings,
+  };
 
-    // The serve session loads a compiled container, so a source program is
-    // compiled first — the same single-file compile every other path uses.
-    let container = profile.program!;
-    if (programKind(container, sourceExtensions) === 'source') {
-      container = await compileSourceToContainer(
-        compilerPath!,
-        container,
-        text => outputChannel.append(text),
-        currentCompilerSettings(),
-      );
-    }
-    const vmPath = path.join(path.dirname(compilerPath!), vmFileName(process.platform));
-    outputChannel.appendLine(`$ ${vmPath} serve ${container}`);
-    const child = spawn(vmPath, ['serve', container]);
-    child.stderr.on('data', (chunk: Buffer) => outputChannel.append(chunk.toString()));
-    return {
-      transport: new StdioLineTransport(child),
-      close: () => {
-        child.kill();
-      },
-    };
+  function open(profile: ConnectionProfile): Promise<OpenedConnection> {
+    return connectionMethod(profile).open(profile, openContext);
   }
 
   context.subscriptions.push(
