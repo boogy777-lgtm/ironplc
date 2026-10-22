@@ -1,6 +1,6 @@
 [package]
 name = "ironplc-problems-gen"
-description = "Build-script helper that checks problem-texts.csv and generates the text functions of ironplc-problems"
+description = "Build-script helper that checks problem-texts.csv, generates the text functions of ironplc-problems, and generates the code constants of the crates with a problem-codes.csv"
 version = "0.247.0"
 edition.workspace = true
 authors.workspace = true
