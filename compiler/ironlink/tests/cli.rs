@@ -590,5 +590,7 @@ fn version_when_run_then_prints_both_versions() {
     );
 }
 
-#[path = "cli/store.rs"]
-mod store;
+// The children of `tests/cli/`, one per subject; they use the helpers above.
+mod cli {
+    mod store;
+}

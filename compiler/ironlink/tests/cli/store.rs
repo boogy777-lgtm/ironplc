@@ -8,7 +8,7 @@ use std::process::Stdio;
 use serde_json::json;
 use spec_test_macro::spec_test;
 
-use super::{json_of, run, silent_address, Device, Process, Shell, StoreDir};
+use crate::{json_of, run, silent_address, Device, Process, Shell, StoreDir};
 
 /// A fast identify for the commands that send one.
 const FAST: [&str; 4] = ["--timeout-ms", "1500", "--attempts", "1"];
