@@ -784,7 +784,7 @@ by hand (`runtime/src/host.rs`, `vm-cli/src/serve.rs`, `vm-cli/src/slot_store.rs
    tool, not the runtime), documented under `docs/reference/ironlink/`.
    Prefactor: one generator of problem-code constants for every crate that has
    a CSV of codes (three copies today: vm-cli, runtime, redundancy).
-5. Connection methods as a class in TypeScript: one declaration per method
+5. Done (#161). Connection methods as a class in TypeScript: one declaration per method
    (stdio, TCP) holding everything the extension decides by method (profile
    validation, open, description, reconnect, record anchor), in a table the
    type system checks for completeness. Behaviour-preserving. The Rust side of
