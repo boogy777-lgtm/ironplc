@@ -26,6 +26,18 @@ updates:
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
   - package-ecosystem: "npm" # See documentation for possible values
+    directory: "/integrations/vscode-common" # Location of package manifests
+    schedule:
+      interval: "weekly"
+      day: "saturday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    ignore:
+      # Keep TypeScript on the same major as /integrations/vscode (see the
+      # ignore entry there): both build the same sources together.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: "npm" # See documentation for possible values
     directory: "/playground" # Location of package manifests
     schedule:
       interval: "weekly"
