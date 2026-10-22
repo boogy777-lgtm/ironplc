@@ -11,6 +11,9 @@
 //!
 //! The command line of IronLink calls [`execute`] too and renders the
 //! [`Response`] itself, so the shell and the command line cannot disagree.
+//!
+//! The store of the workstation (routes, address list) is passed to the shell;
+//! the shell never looks for the user's directory itself.
 
 use std::io::{self, BufRead, Write};
 
@@ -18,9 +21,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::IronLinkError;
 use crate::service::{
-    browse, identify, version, BrowseRequest, BrowseResult, IdentifyRequest, IdentifyResult,
-    VersionInfo,
+    address_add, address_list, address_remove, browse, identify, route_list, route_remove,
+    route_set, version, AddressAddResult, AddressListResult, AddressRemoveResult, AddressRequest,
+    BrowseRequest, BrowseResult, IdentifyRequest, IdentifyResult, RouteListResult,
+    RouteRemoveRequest, RouteRemoveResult, RouteSetRequest, RouteSetResult, VersionInfo,
 };
+use crate::store::Store;
 
 /// A command of the shell.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
@@ -30,6 +36,18 @@ pub(crate) enum Command {
     Browse(BrowseRequest),
     /// Asks one route for a fresh observation.
     Identify(IdentifyRequest),
+    /// Verifies the route to a device id with an identify and stores it.
+    RouteSet(RouteSetRequest),
+    /// Forgets the route to a device id.
+    RouteRemove(RouteRemoveRequest),
+    /// Lists the stored routes.
+    RouteList,
+    /// Adds a controller address to the stored address list.
+    AddressAdd(AddressRequest),
+    /// Removes a controller address from the stored address list.
+    AddressRemove(AddressRequest),
+    /// Lists the stored address list.
+    AddressList,
     /// Reports the version of IronLink and of the discovery wire it speaks.
     Version,
 }
@@ -40,6 +58,12 @@ pub(crate) enum Command {
 pub(crate) enum Response {
     Browse(BrowseResult),
     Identify(IdentifyResult),
+    RouteSet(RouteSetResult),
+    RouteRemove(RouteRemoveResult),
+    RouteList(RouteListResult),
+    AddressAdd(AddressAddResult),
+    AddressRemove(AddressRemoveResult),
+    AddressList(AddressListResult),
     Version(VersionInfo),
     /// The command failed, or the line was not a command.
     Error(ErrorResponse),
@@ -54,11 +78,20 @@ pub(crate) struct ErrorResponse {
     pub(crate) message: String,
 }
 
-/// Runs a command. This is the whole mapping from command to implementation.
-pub(crate) fn execute(command: &Command) -> Result<Response, IronLinkError> {
+/// Runs a command, with the workstation store `store`. This is the whole
+/// mapping from command to implementation.
+pub(crate) fn execute(command: &Command, store: &Store) -> Result<Response, IronLinkError> {
     match command {
-        Command::Browse(request) => browse(request).map(Response::Browse),
+        Command::Browse(request) => browse(request, store).map(Response::Browse),
         Command::Identify(request) => identify(request).map(Response::Identify),
+        Command::RouteSet(request) => route_set(request, store).map(Response::RouteSet),
+        Command::RouteRemove(request) => route_remove(request, store).map(Response::RouteRemove),
+        Command::RouteList => route_list(store).map(Response::RouteList),
+        Command::AddressAdd(request) => address_add(request, store).map(Response::AddressAdd),
+        Command::AddressRemove(request) => {
+            address_remove(request, store).map(Response::AddressRemove)
+        }
+        Command::AddressList => address_list(store).map(Response::AddressList),
         Command::Version => Ok(Response::Version(version())),
     }
 }
@@ -73,9 +106,9 @@ pub(crate) fn render_response(response: &Response) -> Result<String, IronLinkErr
 /// The response for one input line: the answer to the command, the coded error
 /// of a command that failed, or the codeless codec error of a line that is not
 /// a command.
-fn respond(line: &str) -> Response {
+fn respond(line: &str, store: &Store) -> Response {
     match serde_json::from_str::<Command>(line) {
-        Ok(command) => execute(&command).unwrap_or_else(|err| {
+        Ok(command) => execute(&command, store).unwrap_or_else(|err| {
             Response::Error(ErrorResponse {
                 l_code: Some(err.l_code()),
                 message: err.message().to_string(),
@@ -93,10 +126,14 @@ fn respond(line: &str) -> Response {
 
 /// Reads one command per line from `reader` and writes one response line for
 /// each to `writer`, flushing after every line, until the end of the input.
-pub(crate) fn serve(reader: impl BufRead, mut writer: impl Write) -> Result<(), IronLinkError> {
+pub(crate) fn serve(
+    reader: impl BufRead,
+    mut writer: impl Write,
+    store: &Store,
+) -> Result<(), IronLinkError> {
     for line in reader.lines() {
         let line = line.map_err(|err| IronLinkError::session_io(&err))?;
-        let rendered = render_response(&respond(&line))?;
+        let rendered = render_response(&respond(&line, store))?;
         writeln!(writer, "{rendered}")
             .and_then(|()| writer.flush())
             .map_err(|err: io::Error| IronLinkError::session_io(&err))?;

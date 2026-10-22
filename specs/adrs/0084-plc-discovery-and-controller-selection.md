@@ -412,11 +412,13 @@ Built since: the path file `<app>.path.iplcinfo` of the project, as the record
 kind `Path` of ADR-0083 with `ironplcc record-path` and `record-path-path`
 (`compiler/project/src/path_record.rs`, `compiler/ironplc-cli/tests/cli_record_path.rs`:
 the body, the loopback rule, a bad device id or address, a missing and a
-malformed file).
+malformed file). The workstation route record and the stored address list of
+IronLink (`compiler/ironlink/src/store.rs`, REQ-IL-ironlink-060 to 078): IronLink
+sets a route only after an identify that returned the device id.
 
 What is not built, so the status stays `proposed`: choosing a controller (the
 `select` command of IronLink, and the Choose action of the VS Code extension that
-calls `record-path`), the workstation route record, the browse
+calls `record-path`), the browse
 view in the VS Code extension, USB enumeration or a gateway as discovery drivers,
 the connection method as a class with a registration check, and the go-online
 comparison.

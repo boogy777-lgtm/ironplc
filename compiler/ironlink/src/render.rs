@@ -6,8 +6,12 @@
 use std::net::SocketAddr;
 
 use crate::observation::{group, Device, SeenRoute, Variant};
-use crate::service::{Answer, BrowseResult, DriverReport, IdentifyResult};
+use crate::service::{
+    Answer, BrowseResult, DriverReport, IdentifyResult, RouteListResult, RouteRemoveResult,
+    RouteSetResult,
+};
 use crate::shell::Response;
+use crate::store::routes::RouteEntry;
 
 const INDENT: &str = "  ";
 
@@ -17,6 +21,19 @@ pub(crate) fn text(response: &Response, now_ms: u64) -> String {
     match response {
         Response::Browse(result) => browse_text(result, now_ms),
         Response::Identify(result) => identify_text(result, now_ms),
+        Response::RouteSet(result) => route_set_text(result, now_ms),
+        Response::RouteRemove(result) => route_remove_text(result),
+        Response::RouteList(result) => route_list_text(result, now_ms),
+        Response::AddressAdd(result) if result.added => format!("added {}", result.address),
+        Response::AddressAdd(result) => format!("{} was in the list already", result.address),
+        Response::AddressRemove(result) if result.removed => {
+            format!("removed {}", result.address)
+        }
+        Response::AddressRemove(result) => format!("{} was not in the list", result.address),
+        Response::AddressList(result) if result.addresses.is_empty() => {
+            "no stored addresses".to_string()
+        }
+        Response::AddressList(result) => result.addresses.join("\n"),
         Response::Version(info) => format!(
             "ironlink version {} (discovery wire version {})",
             info.ironlink, info.discovery_wire_version
@@ -32,6 +49,17 @@ fn browse_text(result: &BrowseResult, now_ms: u64) -> String {
     let mut lines = vec![result.workstation.name.clone()];
     for driver in &result.drivers {
         lines.extend(driver_lines(driver, now_ms));
+    }
+    if !result.routes_not_seen.is_empty() {
+        lines.push(format!(
+            "{INDENT}stored routes of devices that did not answer"
+        ));
+        for route in &result.routes_not_seen {
+            lines.push(format!(
+                "{INDENT}{INDENT}{}",
+                route_entry_text(route, now_ms)
+            ));
+        }
     }
     lines.join("\n")
 }
@@ -117,13 +145,63 @@ fn variant_lines(variant: &Variant, id: Option<&str>, depth: usize, now_ms: u64)
     lines
 }
 
-/// `address:port  seen <age> ago`.
+/// `address:port  seen <age> ago`, and the marker `route` when the route record of
+/// this workstation holds this route.
 fn route_text(seen: &SeenRoute, now_ms: u64) -> String {
-    format!(
+    let text = format!(
         "{}  seen {} ago",
         SocketAddr::new(seen.route.address, seen.route.session_port),
         age(now_ms, seen.seen_at)
+    );
+    if seen.routed {
+        format!("{text}  route")
+    } else {
+        text
+    }
+}
+
+/// `id  address:port  driver  verified <age> ago`: a stored route.
+fn route_entry_text(entry: &RouteEntry, now_ms: u64) -> String {
+    format!(
+        "{}  {}  {}  verified {} ago",
+        entry.device_id,
+        SocketAddr::new(entry.route.address, entry.route.session_port),
+        entry.route.driver.label(),
+        age(now_ms, entry.route.verified_at)
     )
+}
+
+fn route_set_text(result: &RouteSetResult, now_ms: u64) -> String {
+    let entry = RouteEntry {
+        device_id: result.device_id.clone(),
+        route: result.route.clone(),
+    };
+    let text = format!("stored route {}", route_entry_text(&entry, now_ms));
+    if result.replaced {
+        format!("{text}  (replaced the earlier route)")
+    } else {
+        text
+    }
+}
+
+fn route_remove_text(result: &RouteRemoveResult) -> String {
+    if result.removed {
+        format!("removed the route to {}", result.device_id)
+    } else {
+        format!("no route to {}", result.device_id)
+    }
+}
+
+fn route_list_text(result: &RouteListResult, now_ms: u64) -> String {
+    if result.routes.is_empty() {
+        return "no routes".to_string();
+    }
+    result
+        .routes
+        .iter()
+        .map(|entry| route_entry_text(entry, now_ms))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn identify_text(result: &IdentifyResult, now_ms: u64) -> String {

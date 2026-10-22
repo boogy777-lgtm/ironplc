@@ -7,6 +7,10 @@
 //! The requests carry what the user typed, as text, and are checked here, so
 //! that the command line and the shell refuse a bad address in the same way and
 //! with the same code (L6004).
+//!
+//! The commands that keep IronLink's own data (the routes and the address list of
+//! the workstation store) are in [`store_commands`]; browse reads the store too.
+//! The store is always passed in: nothing here looks for the user's directory.
 
 use std::net::{IpAddr, SocketAddr};
 
@@ -18,8 +22,17 @@ use crate::collect::{Stop, Window};
 use crate::driver::address_list::AddressList;
 use crate::driver::{Driver, DriverKind, Selection};
 use crate::error::IronLinkError;
-use crate::observation::{group, Device, Heard, Observation, OtherVersion};
+use crate::observation::{group, is_device_id, Device, Heard, Observation, OtherVersion};
 use crate::parallel::map_in_parallel;
+use crate::store::routes::RouteEntry;
+use crate::store::Store;
+
+mod store_commands;
+pub(crate) use store_commands::{
+    address_add, address_list, address_remove, route_list, route_remove, route_set,
+    AddressAddResult, AddressListResult, AddressRemoveResult, AddressRequest, RouteListResult,
+    RouteRemoveRequest, RouteRemoveResult, RouteSetRequest, RouteSetResult,
+};
 
 /// The name shown for the workstation when the environment gives none.
 const UNNAMED_WORKSTATION: &str = "this workstation";
@@ -78,6 +91,10 @@ pub(crate) struct DriverReport {
 pub(crate) struct BrowseResult {
     pub(crate) workstation: Workstation,
     pub(crate) drivers: Vec<DriverReport>,
+    /// The stored routes of devices that no driver heard in this browse. They
+    /// are not observations (those come only from replies); they say that this
+    /// workstation has a route to a device that did not answer now.
+    pub(crate) routes_not_seen: Vec<RouteEntry>,
 }
 
 /// What the route answered to identify.
@@ -127,8 +144,16 @@ pub(crate) fn version() -> VersionInfo {
 }
 
 /// Finds controllers with every driver the request selects, all at the same time.
-pub(crate) fn browse(request: &BrowseRequest) -> Result<BrowseResult, IronLinkError> {
-    let selection = selection_of(request)?;
+///
+/// The address-list driver asks the addresses of the request and the stored
+/// address list; each route of a device that is the stored route of its device
+/// id is marked `routed`.
+pub(crate) fn browse(
+    request: &BrowseRequest,
+    store: &Store,
+) -> Result<BrowseResult, IronLinkError> {
+    let routes = store.routes()?;
+    let selection = selection_of(request, store.addresses()?)?;
     let window = Window::from_options(request.timeout_ms, request.attempts, Stop::AtDeadline)?;
     let drivers: Vec<Box<dyn Driver>> = DriverKind::ALL
         .iter()
@@ -137,20 +162,63 @@ pub(crate) fn browse(request: &BrowseRequest) -> Result<BrowseResult, IronLinkEr
         .into_iter()
         .flatten()
         .collect();
-    let drivers = map_in_parallel(&drivers, |driver| report_of(driver.as_ref(), &window))?;
+    let mut drivers = map_in_parallel(&drivers, |driver| report_of(driver.as_ref(), &window))?;
+    for device in drivers
+        .iter_mut()
+        .flat_map(|driver| driver.devices.iter_mut())
+    {
+        mark_routed(device, &routes);
+    }
+    let routes_not_seen = routes
+        .into_iter()
+        .filter(|route| {
+            !drivers
+                .iter()
+                .flat_map(|driver| &driver.devices)
+                .any(|device| device.device_id == route.device_id)
+        })
+        .collect();
     Ok(BrowseResult {
         workstation: Workstation {
             name: workstation_name(|key| std::env::var(key).ok()),
         },
         drivers,
+        routes_not_seen,
     })
+}
+
+/// Sets `routed` on each route of `device` that is the stored route of its device
+/// id: the same address and the same session port.
+fn mark_routed(device: &mut Device, routes: &[RouteEntry]) {
+    let Some(stored) = routes
+        .iter()
+        .find(|route| route.device_id == device.device_id)
+    else {
+        return;
+    };
+    for seen in device
+        .variants
+        .iter_mut()
+        .flat_map(|variant| variant.routes.iter_mut())
+    {
+        seen.routed = stored.reaches(seen.route.address, seen.route.session_port);
+    }
 }
 
 /// Asks one route for a fresh observation. The answer may be that nothing
 /// answered.
 pub(crate) fn identify(request: &IdentifyRequest) -> Result<IdentifyResult, IronLinkError> {
     let address = parse_target(&request.address, DEFAULT_SESSION_PORT)?;
-    let window = Window::from_options(request.timeout_ms, request.attempts, Stop::OnFirstOutcome)?;
+    identify_at(address, request.timeout_ms, request.attempts)
+}
+
+/// Asks the route `address` for a fresh observation.
+fn identify_at(
+    address: SocketAddr,
+    timeout_ms: Option<u64>,
+    attempts: Option<u32>,
+) -> Result<IdentifyResult, IronLinkError> {
+    let window = Window::from_options(timeout_ms, attempts, Stop::OnFirstOutcome)?;
     let collected = AddressList::new(vec![address]).run(&window)?;
     let answer = match collected.heard.into_iter().next() {
         Some(Heard::Device(observation)) => Answer::Device { observation },
@@ -185,8 +253,11 @@ fn report_of(driver: &dyn Driver, window: &Window) -> Result<DriverReport, IronL
     })
 }
 
-/// What the request names, checked.
-fn selection_of(request: &BrowseRequest) -> Result<Selection, IronLinkError> {
+/// What the request names, checked, with the stored address list `remembered`.
+fn selection_of(
+    request: &BrowseRequest,
+    remembered: Vec<SocketAddr>,
+) -> Result<Selection, IronLinkError> {
     let port = match request.port {
         Some(0) => return Err(IronLinkError::argument_invalid("the port must not be 0")),
         Some(port) => port,
@@ -205,6 +276,7 @@ fn selection_of(request: &BrowseRequest) -> Result<Selection, IronLinkError> {
     Ok(Selection {
         interfaces: without_repeats(interfaces),
         addresses: without_repeats(addresses),
+        remembered,
         port,
     })
 }
@@ -218,6 +290,18 @@ fn without_repeats<T: PartialEq>(items: Vec<T>) -> Vec<T> {
         }
     }
     unique
+}
+
+/// A device id as the user types it: 32 lowercase hexadecimal digits.
+fn parse_device_id(text: &str) -> Result<String, IronLinkError> {
+    if is_device_id(text) {
+        Ok(text.to_string())
+    } else {
+        Err(IronLinkError::argument_invalid(format!(
+            "'{text}' is not a device id; a device id is 32 lowercase hexadecimal digits, \
+             for example 00112233445566778899aabbccddeeff"
+        )))
+    }
 }
 
 /// A local interface, named by one of its addresses.

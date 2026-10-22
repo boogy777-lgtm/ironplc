@@ -20,11 +20,13 @@ datagram it sends is the discovery request. IronPLC connects.
 
 **Built:** the class of discovery drivers with its two members (broadcast and
 address list), the collection they share, the observation and browse model, the
-commands `browse`, `identify`, `serve` and `version`, and the L-codes.
+workstation store (the route record and the address list) with the commands
+`route` and `address`, the commands `browse`, `identify`, `serve` and `version`,
+and the L-codes.
 The project path file `<app>.path.iplcinfo` is not IronLink's: IronPLC writes it
 (`ironplcc record-path`, [engineering-connection.md](engineering-connection.md)).
 **Not built:** choosing a controller (`select` and the Choose action of the
-editor) and the workstation route record, the browse view in the VS Code extension, USB enumeration
+editor), the browse view in the VS Code extension, USB enumeration
 or a gateway as drivers, and the class of connection methods.
 
 ## The class of discovery drivers
@@ -69,7 +71,9 @@ that says IPv6 has no broadcast.
 
 **REQ-IL-ironlink-005** A selection that names no interface and no address means
 the broadcast on `0.0.0.0`; a selection that names only addresses has no
-broadcast; a selection that names interfaces broadcasts from them.
+broadcast; a selection that names interfaces broadcasts from them. The stored
+address list is not something the user named for the browse: it does not change
+this rule (REQ-IL-ironlink-074 below).
 
 ### Address list
 
@@ -210,8 +214,9 @@ and the `undecodable` count.
 `COMPUTERNAME`, else `HOSTNAME`, else "this workstation".
 
 Devices are grouped within a driver, so a device found by two drivers is shown
-under both and a conflict between drivers is not detected. The record of what the
-workstation knows across drivers is the route record, which is not built.
+under both and a conflict between drivers is not detected. The route record of
+the workstation store (below) holds one route for each device id, and marks the
+routes of a browse that it holds.
 
 ## Identify
 
@@ -229,6 +234,117 @@ the command line turns it into L6003.
 { "response": "identify", "address": "192.168.1.50:49152", "timeoutMs": 1000, "answer": "none" }
 ```
 
+## The workstation store
+
+IronLink writes only its own data, and knows no project. The data is what is true
+of THIS workstation, independent of any project: the route record (how this
+workstation reaches a device id) and the address list (the persistent targets of
+the address-list driver). The project path file, which says which controller a
+project goes to, is IronPLC's record
+([ADR-0084](../adrs/0084-plc-discovery-and-controller-selection.md)). There are
+two members and one mechanism: each is a versioned JSON file of one directory per
+user, written atomically and read strictly. A later setting of the workstation is
+one more file of the same store.
+
+**REQ-IL-ironlink-060** The directory of the store is `%APPDATA%\IronPLC\ironlink`
+on Windows, `$HOME/Library/Application Support/IronPLC/ironlink` on macOS, and
+`$XDG_CONFIG_HOME/ironplc/ironlink`, else `$HOME/.config/ironplc/ironlink`, on
+other systems; the environment variables are read directly, with no dependency,
+and an empty variable is not set.
+
+**REQ-IL-ironlink-061** The option `--store DIR` (global) names the directory of
+the store and wins over the environment variable `IRONLINK_STORE`, which wins over
+the directory of the user. When no directory can be determined, the commands that
+need the store fail with L6004 and the others (`version`) do not.
+
+**REQ-IL-ironlink-062** Each file is JSON with `"version": 1`, pretty-printed with
+sorted keys, and written atomically: the text goes to a temporary file in the same
+directory, which is then renamed over the file, so no temporary file is left. The
+directory is created on the first write.
+
+**REQ-IL-ironlink-063** A file that does not exist reads as empty, and reading
+creates nothing.
+
+**REQ-IL-ironlink-064** A file that is not JSON, has another version, or has
+another shape (a missing or extra key, a value of the wrong type, a key that is not
+a device id, a port 0) is L6006 `StoreUnreadable`, which names the file. IronLink
+never changes such a file, not even to add an entry, because writing over it would
+destroy what the user kept: the user fixes or deletes it. The other file of the
+store is read alone.
+
+**REQ-IL-ironlink-065** A file that cannot be written (the directory cannot be
+created, the temporary file cannot be written or renamed) is L6007 `StoreWrite`,
+which names the file; the old file stays.
+
+**REQ-IL-ironlink-066** `routes.json` holds one route for each device id on this
+workstation, the latest set winning; removing a route that does not exist is not an
+error and writes nothing.
+
+```json
+{
+  "routes": {
+    "00112233445566778899aabbccddeeff": {
+      "address": "192.168.1.50",
+      "driver": "addressList",
+      "sessionPort": 49152,
+      "verifiedAt": 1761136000123
+    }
+  },
+  "version": 1
+}
+```
+
+**REQ-IL-ironlink-067** `addresses.json` holds the persistent targets of the
+address-list driver as `IP:PORT`, unique and sorted by address and then port as
+numbers.
+
+```json
+{
+  "addresses": ["10.0.4.7:49152", "192.168.1.50:49152"],
+  "version": 1
+}
+```
+
+### Routes
+
+A route says how THIS workstation reaches a device id. IronLink establishes it
+itself, so a stored route is a verified one, with the time it was verified.
+
+**REQ-IL-ironlink-070** `route set <deviceId> <IP[:PORT]>` sends a fresh identify
+to the address (with the `timeoutMs` and `attempts` of identify) and, only when
+the answer carries that device id, stores the route with the address the device
+answered from, its session port, the driver and `verifiedAt`, the time of the
+answer; a route that exists is replaced and the result says so (`replaced`).
+
+**REQ-IL-ironlink-071** When nothing answers, or the answer is of a discovery
+version this IronLink cannot read, `route set` is L6003; when another device id
+answers it is L6008 `RouteMismatch`, naming both ids; a device id that is not 32
+lowercase hexadecimal digits is L6004, and nothing is sent. In none of these cases
+is anything stored.
+
+**REQ-IL-ironlink-072** `route remove <deviceId>` removes the route and answers
+whether there was one (`removed`); `route list` answers the routes ordered by
+device id.
+
+**REQ-IL-ironlink-073** `address add`, `address remove` and `address list` change
+and show the stored address list; an address is `IP` or `IP:PORT` as in browse,
+stored with its port, and adding an address that is in the list or removing one
+that is not is not an error (`added`, `removed`).
+
+### Browse and the store
+
+**REQ-IL-ironlink-074** The address-list driver of a browse asks the addresses
+named for the browse and then the stored ones, each once; a browse that names no
+interface and no address broadcasts on `0.0.0.0` and also asks the stored list.
+
+**REQ-IL-ironlink-075** Each route of a device in a browse result has `routed`,
+true when the stored route for that device id has that address and session port
+and false otherwise; the text of a browse marks such a route with `route`.
+
+**REQ-IL-ironlink-076** `routesNotSeen` lists the stored routes of device ids that
+no driver heard in the browse. They are not observations (an observation is made
+only from a reply), and the text lists them under their own heading.
+
 ## The shell
 
 `ironlink serve` is the JSON-lines protocol on stdio that a client uses to start
@@ -239,6 +355,12 @@ of `ironplcvm serve` ([engineering-connection.md](engineering-connection.md)).
 |---|---|---|
 | `browse` | `interfaces`, `addresses` (lists of strings), `port`, `timeoutMs`, `attempts` | `browse` result |
 | `identify` | `address`, `timeoutMs`, `attempts` | `identify` result |
+| `routeSet` | `deviceId`, `address`, `timeoutMs`, `attempts` | `{"response":"routeSet","deviceId":..,"route":{..},"replaced":false}` |
+| `routeRemove` | `deviceId` | `{"response":"routeRemove","deviceId":..,"removed":true}` |
+| `routeList` | | `{"response":"routeList","routes":[{"deviceId":..,"address":..,"driver":..,"sessionPort":..,"verifiedAt":..}]}` |
+| `addressAdd` | `address` | `{"response":"addressAdd","address":"10.0.4.7:49152","added":true}` |
+| `addressRemove` | `address` | `{"response":"addressRemove","address":..,"removed":true}` |
+| `addressList` | | `{"response":"addressList","addresses":["10.0.4.7:49152"]}` |
 | `version` | | `{"response":"version","ironlink":"0.247.0","discoveryWireVersion":1}` |
 
 **REQ-IL-ironlink-040** Each command line is answered by one response line, in
@@ -254,10 +376,15 @@ its L-code, and the loop goes on.
 
 **REQ-IL-ironlink-043** End of input ends the loop.
 
+**REQ-IL-ironlink-077** The commands of the store are the shell commands
+`routeSet`, `routeRemove`, `routeList`, `addressAdd`, `addressRemove` and
+`addressList`, answered by the responses of the same names; a failed command is an
+error response with its L-code.
+
 ## The command line
 
-`ironlink browse`, `ironlink identify ADDR`, `ironlink serve` and
-`ironlink version`. The command line and the shell call the same functions and
+`ironlink browse`, `ironlink identify ADDR`, `ironlink route set|remove|list`,
+`ironlink address add|remove|list`, `ironlink serve` and `ironlink version`. The command line and the shell call the same functions and
 differ only in the rendering: the command line prints text rows, and `--json`
 prints the response of the shell.
 
@@ -280,6 +407,11 @@ goes to stderr.
 with code 2 and its L-code (L6004, or L6001 for an interface that is not an
 address of this PC).
 
+**REQ-IL-ironlink-078** `route` and `address` print text rows (or `--json`, the
+response of the shell), and a failed command exits with code 2 and its L-code on
+stderr; the global option `--store` and the variable `IRONLINK_STORE` name the
+store they use.
+
 ## Problem codes
 
 The prefix is `L`: IronLink is the owner's tool and not the runtime. The registry
@@ -295,4 +427,7 @@ errors (exit code 3).
 | L6003 | NoAnswer | identify, from the command line: nothing answered |
 | L6004 | ArgumentInvalid | an address, interface or option value is not valid |
 | L6005 | SessionIo | the command session cannot be read or written |
+| L6006 | StoreUnreadable | a file of the workstation store cannot be read as a file of this version |
+| L6007 | StoreWrite | a file of the workstation store cannot be written |
+| L6008 | RouteMismatch | `route set`: the device at the address has another device id |
 | L9001 | Internal | a violated invariant of IronLink |

@@ -3,8 +3,9 @@
 //! IronLink FINDS controllers and the routes to them. It opens no listening
 //! port, holds no session and never writes to a controller: the only datagram it
 //! sends is the discovery request, and IronPLC is what connects. The commands
-//! are `browse`, `identify`, `serve` (the same two operations as JSON lines on
-//! stdio, for a client that starts IronLink as a child process) and `version`.
+//! are `browse`, `identify`, `route` and `address` (the data of this workstation,
+//! in [`store`]), `serve` (the same operations as JSON lines on stdio, for a
+//! client that starts IronLink as a child process) and `version`.
 //! The design is in `specs/design/ironlink.md`.
 //!
 //! - **Class:** the discovery driver, in [`driver`]: how IronLink finds
@@ -22,8 +23,13 @@
 //!
 //! The command line and the shell call the same functions ([`shell::execute`])
 //! and differ only in how they render the result.
+//!
+//! IronLink writes only its own data, in the workstation store ([`store`]), and
+//! knows no project. The store is found once, here, and passed down: the option
+//! `--store`, else the variable `IRONLINK_STORE`, else the directory of the user.
 
 use std::io::{self, Write};
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::Parser;
@@ -36,12 +42,15 @@ mod parallel;
 mod render;
 mod service;
 mod shell;
+mod store;
 #[cfg(test)]
 mod test_support;
 
 use error::IronLinkError;
+use service::{AddressRequest, RouteRemoveRequest, RouteSetRequest};
 use service::{Answer, BrowseRequest, IdentifyRequest, IdentifyResult};
 use shell::{Command, Response};
+use store::{Platform, Store};
 
 #[cfg(test)]
 mod spec_requirements {
@@ -57,6 +66,15 @@ struct Args {
     /// Turn on verbose logging to stderr. Repeat to increase verbosity.
     #[arg(short, long, action = clap::ArgAction::Count)]
     verbose: u8,
+
+    /// The directory where IronLink keeps the routes and the address list of
+    /// this workstation. Without it, the environment variable IRONLINK_STORE
+    /// names the directory, and without that, the directory of the user
+    /// (Windows: %APPDATA%\IronPLC\ironlink; macOS: ~/Library/Application
+    /// Support/IronPLC/ironlink; others: $XDG_CONFIG_HOME/ironplc/ironlink or
+    /// ~/.config/ironplc/ironlink).
+    #[arg(long, global = true, value_name = "DIR")]
+    store: Option<PathBuf>,
 
     /// Selects the subcommand.
     #[command(subcommand)]
@@ -116,19 +134,145 @@ enum Action {
         #[arg(long)]
         json: bool,
     },
-    /// Serves the commands browse, identify and version as JSON lines on
-    /// stdin and stdout.
+    /// Keeps the routes of this workstation: how it reaches a device id. A
+    /// route is independent of any project.
+    Route {
+        #[command(subcommand)]
+        action: RouteAction,
+    },
+    /// Keeps the address list that browse asks in addition to the addresses
+    /// named for one browse.
+    Address {
+        #[command(subcommand)]
+        action: AddressAction,
+    },
+    /// Serves the commands of IronLink (browse, identify, route, address and
+    /// version) as JSON lines on stdin and stdout.
     Serve,
     /// Prints the version of IronLink and of the discovery wire it speaks.
     Version,
 }
 
+#[derive(clap::Subcommand, Debug)]
+enum RouteAction {
+    /// Sends a fresh identify to ADDR and stores the route to DEVICE_ID only when
+    /// the answer carries that device id. A route that exists is replaced.
+    Set {
+        /// The device id: 32 lowercase hexadecimal digits.
+        device_id: String,
+
+        /// IP, or IP:PORT, of the controller.
+        address: String,
+
+        /// How long to wait for the answer, in milliseconds (default 1000).
+        #[arg(long, value_name = "MS")]
+        timeout_ms: Option<u64>,
+
+        /// How many times to send the request, at least 300 ms apart
+        /// (default 2).
+        #[arg(long, value_name = "N")]
+        attempts: Option<u32>,
+
+        /// Print the JSON response of the shell instead of text.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Forgets the route to DEVICE_ID. A device without a route is not an error.
+    Remove {
+        /// The device id: 32 lowercase hexadecimal digits.
+        device_id: String,
+
+        /// Print the JSON response of the shell instead of text.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Lists the routes of this workstation.
+    List {
+        /// Print the JSON response of the shell instead of text.
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(clap::Subcommand, Debug)]
+enum AddressAction {
+    /// Adds a controller address to the list.
+    Add {
+        /// IP, or IP:PORT (an IP alone takes the IronPLC session port).
+        address: String,
+
+        /// Print the JSON response of the shell instead of text.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Removes a controller address from the list.
+    Remove {
+        /// IP, or IP:PORT (an IP alone takes the IronPLC session port).
+        address: String,
+
+        /// Print the JSON response of the shell instead of text.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Lists the controller addresses of the list.
+    List {
+        /// Print the JSON response of the shell instead of text.
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+impl RouteAction {
+    /// The command of the shell this action is, and whether to print JSON.
+    fn into_command(self) -> (Command, bool) {
+        match self {
+            RouteAction::Set {
+                device_id,
+                address,
+                timeout_ms,
+                attempts,
+                json,
+            } => (
+                Command::RouteSet(RouteSetRequest {
+                    device_id,
+                    address,
+                    timeout_ms,
+                    attempts,
+                }),
+                json,
+            ),
+            RouteAction::Remove { device_id, json } => {
+                (Command::RouteRemove(RouteRemoveRequest { device_id }), json)
+            }
+            RouteAction::List { json } => (Command::RouteList, json),
+        }
+    }
+}
+
+impl AddressAction {
+    /// The command of the shell this action is, and whether to print JSON.
+    fn into_command(self) -> (Command, bool) {
+        match self {
+            AddressAction::Add { address, json } => {
+                (Command::AddressAdd(AddressRequest { address }), json)
+            }
+            AddressAction::Remove { address, json } => {
+                (Command::AddressRemove(AddressRequest { address }), json)
+            }
+            AddressAction::List { json } => (Command::AddressList, json),
+        }
+    }
+}
+
 pub fn main() -> ExitCode {
     let args = Args::parse();
+    let store = Store::resolve(args.store.as_deref(), Platform::current(), |key| {
+        std::env::var(key).ok()
+    });
 
     let result = ironplc_cli_support::logger::configure(args.verbose, None)
         .map_err(|err| IronLinkError::argument_invalid(err.to_string()))
-        .and_then(|()| run(args.action));
+        .and_then(|()| run(args.action, &store));
 
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -139,7 +283,7 @@ pub fn main() -> ExitCode {
     }
 }
 
-fn run(action: Action) -> Result<(), IronLinkError> {
+fn run(action: Action, store: &Store) -> Result<(), IronLinkError> {
     match action {
         Action::Browse {
             interfaces,
@@ -156,7 +300,7 @@ fn run(action: Action) -> Result<(), IronLinkError> {
                 timeout_ms,
                 attempts,
             });
-            show(&shell::execute(&command)?, json)
+            show(&shell::execute(&command, store)?, json)
         }
         Action::Identify {
             address,
@@ -169,7 +313,7 @@ fn run(action: Action) -> Result<(), IronLinkError> {
                 timeout_ms,
                 attempts,
             });
-            let response = shell::execute(&command)?;
+            let response = shell::execute(&command, store)?;
             let unanswered = no_answer_of(&response);
             // The shell answers "nothing answered" as a normal response. Here it
             // is an error with a code, so text mode says it once, on stderr.
@@ -178,11 +322,19 @@ fn run(action: Action) -> Result<(), IronLinkError> {
             }
             unanswered.map_or(Ok(()), Err)
         }
+        Action::Route { action } => {
+            let (command, json) = action.into_command();
+            show(&shell::execute(&command, store)?, json)
+        }
+        Action::Address { action } => {
+            let (command, json) = action.into_command();
+            show(&shell::execute(&command, store)?, json)
+        }
         Action::Serve => {
             let stdin = io::stdin();
-            shell::serve(stdin.lock(), io::stdout().lock())
+            shell::serve(stdin.lock(), io::stdout().lock(), store)
         }
-        Action::Version => show(&shell::execute(&Command::Version)?, false),
+        Action::Version => show(&shell::execute(&Command::Version, store)?, false),
     }
 }
 

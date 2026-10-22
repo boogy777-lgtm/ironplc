@@ -18,6 +18,7 @@ fn selection(interfaces: &[&str], addresses: &[&str]) -> Selection {
             .map(|text| text.parse().unwrap())
             .collect(),
         addresses: addresses.iter().map(|text| text.parse().unwrap()).collect(),
+        remembered: Vec::new(),
         port: PORT,
     }
 }
@@ -103,6 +104,70 @@ fn build_when_selection_names_only_interfaces_then_broadcast_only() {
             "192.168.1.20 -> 255.255.255.255:49152",
             "10.0.0.7 -> 255.255.255.255:49152"
         ]
+    );
+}
+
+/// `selection` with the stored address list `remembered`.
+fn with_remembered(selection: Selection, remembered: &[&str]) -> Selection {
+    Selection {
+        remembered: remembered
+            .iter()
+            .map(|text| text.parse().unwrap())
+            .collect(),
+        ..selection
+    }
+}
+
+#[spec_test(REQ_IL_ironlink_074)]
+#[test]
+fn build_when_nothing_is_named_and_an_address_is_stored_then_broadcast_on_the_default_and_the_stored_list(
+) {
+    let stored = with_remembered(selection(&[], &[]), &["10.0.0.9:49152"]);
+
+    assert_eq!(
+        built(&stored),
+        [
+            (DriverKind::Broadcast, DriverKind::Broadcast),
+            (DriverKind::AddressList, DriverKind::AddressList)
+        ]
+    );
+    assert_eq!(
+        targets_of(&stored, DriverKind::Broadcast),
+        ["0.0.0.0 -> 255.255.255.255:49152"]
+    );
+    assert_eq!(
+        targets_of(&stored, DriverKind::AddressList),
+        ["10.0.0.9:49152"]
+    );
+}
+
+#[spec_test(REQ_IL_ironlink_074)]
+#[test]
+fn build_when_addresses_are_named_and_stored_then_the_union_named_first_each_once() {
+    let both = with_remembered(
+        selection(&[], &["10.0.0.5:49152", "10.0.0.9:49152"]),
+        &["10.0.0.9:49152", "10.0.0.2:7000"],
+    );
+
+    assert_eq!(
+        built(&both),
+        [(DriverKind::AddressList, DriverKind::AddressList)]
+    );
+    assert_eq!(
+        targets_of(&both, DriverKind::AddressList),
+        ["10.0.0.5:49152", "10.0.0.9:49152", "10.0.0.2:7000"]
+    );
+}
+
+#[spec_test(REQ_IL_ironlink_074)]
+#[test]
+fn build_when_interfaces_are_named_and_an_address_is_stored_then_both_drivers_run() {
+    let both = with_remembered(selection(&["192.168.1.20"], &[]), &["10.0.0.9:49152"]);
+
+    assert_eq!(built(&both).len(), 2);
+    assert_eq!(
+        targets_of(&both, DriverKind::Broadcast),
+        ["192.168.1.20 -> 255.255.255.255:49152"]
     );
 }
 

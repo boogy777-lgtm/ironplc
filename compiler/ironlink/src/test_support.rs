@@ -15,6 +15,7 @@ use ironplc_discovery::{encode_reply, is_request, Reply, MAX_REPLY_LEN};
 
 use crate::collect::{Stop, Window};
 use crate::observation::{Heard, Observation, OtherVersion};
+use crate::store::Store;
 
 /// What the fake device says about itself.
 #[derive(Clone, Debug)]
@@ -224,6 +225,15 @@ fn answer_until_stopped(
 /// A window for the tests, with the stop rule of a browse.
 pub(crate) fn window(timeout_ms: u64, attempts: u32) -> Window {
     Window::from_options(Some(timeout_ms), Some(attempts), Stop::AtDeadline).unwrap()
+}
+
+/// A store in a directory that does not exist yet, under a new temporary
+/// directory that the guard removes. Every test of the store, and every test that
+/// runs a command, uses this: no test reaches the directory of the user.
+pub(crate) fn temp_store() -> (tempfile::TempDir, Store) {
+    let guard = tempfile::tempdir().unwrap();
+    let store = Store::at(guard.path().join("ironlink"));
+    (guard, store)
 }
 
 /// The loopback address as an `IpAddr`.

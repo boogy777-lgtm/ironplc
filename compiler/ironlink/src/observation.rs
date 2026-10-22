@@ -177,6 +177,15 @@ pub(crate) fn device_id_hex(bytes: &[u8; 16]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
+/// Whether `text` is a device id as [`device_id_hex`] writes it: 32 lowercase
+/// hexadecimal digits.
+pub(crate) fn is_device_id(text: &str) -> bool {
+    text.len() == 32
+        && text
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
 /// The identity fields of a device: the fields that must be equal in the replies
 /// of one device id for it to be one device (ADR-0084 "One device id at several
 /// addresses"). The session port is not among them: it belongs to the route.
@@ -197,6 +206,10 @@ pub(crate) struct SeenRoute {
     #[serde(flatten)]
     pub(crate) route: Route,
     pub(crate) seen_at: u64,
+    /// Whether the route record of this workstation holds exactly this route
+    /// (this address and this session port) for the device id. Observation does
+    /// not know the record; browse sets it after grouping.
+    pub(crate) routed: bool,
 }
 
 /// The replies that said the same identity, with the routes they came by.
@@ -241,6 +254,7 @@ pub(crate) fn group(observations: Vec<Observation>) -> Vec<Device> {
             .push(SeenRoute {
                 route: observation.route,
                 seen_at: observation.seen_at,
+                routed: false,
             });
     }
 

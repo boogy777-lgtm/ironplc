@@ -23,9 +23,16 @@ impl AddressList {
         AddressList { targets }
     }
 
-    /// The addresses of the selection; `None` when it names none.
+    /// The addresses named for this browse, then the stored ones that were not
+    /// named, each once; `None` when there are none.
     pub(super) fn from_selection(selection: &Selection) -> Option<Self> {
-        (!selection.addresses.is_empty()).then(|| Self::new(selection.addresses.clone()))
+        let mut targets = selection.addresses.clone();
+        for address in &selection.remembered {
+            if !targets.contains(address) {
+                targets.push(*address);
+            }
+        }
+        (!targets.is_empty()).then(|| Self::new(targets))
     }
 
     /// One channel for each address family among the targets, each from a
