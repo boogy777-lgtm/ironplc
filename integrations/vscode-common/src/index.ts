@@ -7,3 +7,8 @@ export type { ToolchainDiscoveryResult, ToolchainEnvironment } from './toolchain
 export { executableFileName, findToolchainExecutable } from './toolchainDiscovery';
 export { ProblemCode, PROBLEM_MESSAGES, formatProblem } from './problems';
 export { problemHelpUrl } from './problemUrl';
+export type { LineTransport } from './lineTransport';
+export { StdioLineTransport } from './lineTransport';
+export type { LineRequestChannelErrors } from './lineRequestChannel';
+export { LineRequestChannel } from './lineRequestChannel';
+export { findGatewayViolations } from './gatewayImports';

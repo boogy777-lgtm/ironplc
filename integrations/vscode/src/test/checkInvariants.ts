@@ -3,6 +3,7 @@ import * as path from 'path';
 
 import { connectionTransports } from '../connectionMethods';
 import { DEFAULT_SESSION_PORT, SUPPORTED_SESSION_PROTOCOL } from '../sessionConstants';
+import { findGatewayViolations } from '../vscodeCommon';
 
 const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf-8'));
 
@@ -116,18 +117,8 @@ if (JSON.stringify(methodModules) !== JSON.stringify(methodNames)) {
 
 // The shared package (integrations/vscode-common) is reached through exactly
 // one module, src/vscodeCommon.ts, so the relative path to it is written once.
-// Any other source or test that names the package's path itself fails here.
-const sourceRoot = path.join(__dirname, '..', '..', 'src');
-const gateway = path.join(sourceRoot, 'vscodeCommon.ts');
-if (!fs.existsSync(gateway)) {
-  failures.push('src/vscodeCommon.ts, the one module that imports the shared package, is missing');
-}
-const packageImport = /(?:from|require[(])[ ]*['"][^'"]*vscode-common[^'"]*['"]/;
-for (const file of findTypeScriptFiles(sourceRoot)) {
-  if (file !== gateway && packageImport.test(fs.readFileSync(file, 'utf-8'))) {
-    failures.push(`${path.relative(sourceRoot, file)} imports the shared package by path; import it from vscodeCommon instead`);
-  }
-}
+// The shared package owns the check, so every extension applies the same one.
+failures.push(...findGatewayViolations(path.join(__dirname, '..', '..', 'src')));
 
 if (failures.length > 0) {
   console.error('Test coverage invariant failures:');
@@ -146,20 +137,6 @@ function findTestFiles(dir: string): string[] {
       results.push(...findTestFiles(fullPath));
     }
     else if (entry.name.endsWith('.js')) {
-      results.push(fullPath);
-    }
-  }
-  return results;
-}
-
-function findTypeScriptFiles(dir: string): string[] {
-  const results: string[] = [];
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      results.push(...findTypeScriptFiles(fullPath));
-    }
-    else if (entry.name.endsWith('.ts')) {
       results.push(fullPath);
     }
   }

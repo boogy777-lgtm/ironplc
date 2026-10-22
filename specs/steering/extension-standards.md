@@ -40,7 +40,10 @@ lifecycle is in [problem-code-management.md](problem-code-management.md).
 `integrations/vscode-common/` is a private npm package (`ironplc-vscode-common`,
 never published) holding code that more than one IronPLC VS Code extension needs.
 Today that is locating the IronPLC toolchain (`findToolchainExecutable`,
-`ToolchainEnvironment`, `pathForPlatform`) and the `E####` problem catalog
+`ToolchainEnvironment`, `pathForPlatform`), the JSON-lines framing and
+in-order request matching for a `serve` child process (`LineTransport`,
+`StdioLineTransport`, `LineRequestChannel`), the check that an extension
+reaches the package through one module (`findGatewayViolations`) and the `E####` problem catalog
 (`problem-codes.csv`, its generator `scripts/generate-problems.js`, the generated
 `ProblemCode`, `PROBLEM_MESSAGES` and `formatProblem`, and `problemHelpUrl`); the
 package's `precompile` generates `src/problems.ts`, which is gitignored. Put code there only when two
@@ -55,7 +58,8 @@ and every other source and test imports from that module. `src/` and `out/` sit
 at the same depth, so the one relative path resolves for tsc, for Node and for
 esbuild; the extension is bundled, so the package is compiled into
 `out/extension.js` and is not packaged into the VSIX. `checkInvariants` fails a
-source that imports the package's path itself. The consumer builds the package
+source that imports the package's path itself (it calls the package's
+`findGatewayViolations`). The consumer builds the package
 (`npm run build-common`) before its own `compile` and `esbuild`, and its
 `just setup` and `just update` run the package's first. The package has its
 own `just ci` (compile and unit tests), which the extension workflow runs. See
