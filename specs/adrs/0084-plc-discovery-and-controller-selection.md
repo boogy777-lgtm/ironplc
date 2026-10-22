@@ -95,8 +95,9 @@ For the identity of a device:
 For who connects (the fundamental question):
 
 - **A. IronLink finds and records (chosen).** IronLink finds controllers and
-  routes and writes the remembered path into the configuration. It never writes
-  to a controller. IronPLC connects, and every conclusion after the connection
+  routes and records the routes it uses on the workstation. The remembered path
+  in the project is written by IronPLC (see the two places below). It never
+  writes to a controller. IronPLC connects, and every conclusion after the connection
   belongs to IronPLC.
 - **B. IronLink carries the session.** IronLink is also the transport, and the
   editor connects through it. RSLinx does this. It lets several clients share one
@@ -204,10 +205,15 @@ following parts.
   - The **project file** `<app>.path.iplcinfo` beside `<app>.iplc` holds the device id of the controller last chosen and a
     route hint, the last address that is not loopback. It travels with the
     project, so a project moved to another PC keeps its last path (RSLinx's Set
-    Project Path).
+    Project Path). It is project data, so **IronPLC writes it**, as a record kind
+    of the record mechanism ([ADR-0083](0083-build-and-download-records.md)):
+    `ironplcc record-path` is its one writer. A loopback address is never the
+    hint; choosing by a loopback address leaves the hint of the same controller
+    as it was.
   - The **workstation route record** holds, for a device id, the route this
-    workstation uses. A loopback address is stored only here, because it means
-    "this PC" and points elsewhere on every PC.
+    workstation uses. **IronLink writes it**, and only it. A loopback address is
+    stored only here, because it means "this PC" and points elsewhere on every
+    PC.
 - **Three separate actions.** *Choose a controller* remembers a connection path.
   *Find a route* produces observations and routes. *Connect* opens a session and
   shows the go-online comparison. Each can happen without the others.
@@ -226,8 +232,9 @@ following parts.
   separate binary, started by each client as a child process on stdio, as the
   language server is; it opens no listening port. Its VS Code part is a separate
   extension, a thin client of the binary. It discovers controllers, finds
-  and establishes routes, and writes the remembered path into the project file
-  and the workstation route record. It never writes to a controller. Connecting,
+  and establishes routes, and writes the workstation route record. It does not
+  write the project file, which IronPLC writes with the record mechanism. It
+  never writes to a controller. Connecting,
   and every conclusion after it, are implemented once in Rust by IronPLC, and the
   editor, the MCP server and the command line render them. Its API is the command
   mechanism that exists (JSON commands) with its own commands added. A shared
@@ -401,9 +408,15 @@ What the code implements so far:
   and the log stays off stdout. A broadcast to the real `255.255.255.255` is a
   manual check, because it depends on the network of the PC.
 
-What is not built, so the status stays `proposed`: choosing a controller and
-writing the remembered path (the `select` command of IronLink), the connection
-path stored in the project file and in the workstation route record, the browse
+Built since: the path file `<app>.path.iplcinfo` of the project, as the record
+kind `Path` of ADR-0083 with `ironplcc record-path` and `record-path-path`
+(`compiler/project/src/path_record.rs`, `compiler/ironplc-cli/tests/cli_record_path.rs`:
+the body, the loopback rule, a bad device id or address, a missing and a
+malformed file).
+
+What is not built, so the status stays `proposed`: choosing a controller (the
+`select` command of IronLink, and the Choose action of the VS Code extension that
+calls `record-path`), the workstation route record, the browse
 view in the VS Code extension, USB enumeration or a gateway as discovery drivers,
 the connection method as a class with a registration check, and the go-online
 comparison.

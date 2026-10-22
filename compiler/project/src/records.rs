@@ -41,6 +41,12 @@ pub enum RecordKind<'a> {
         /// [`RecordKind::path`] for how it becomes part of a file name.
         connection: &'a str,
     },
+    /// The controller last chosen for an application and the route last used
+    /// to reach it, `<stem>.path.iplcinfo`. The anchor is the application
+    /// container. There is one per application, because a project with
+    /// several controllers has several applications; it is a remembered
+    /// convenience, not a binding of the application to a device (ADR 0084).
+    Path,
 }
 
 impl RecordKind<'_> {
@@ -67,6 +73,7 @@ impl RecordKind<'_> {
             RecordKind::Uids => 1,
             RecordKind::Build => 1,
             RecordKind::Download { .. } => 1,
+            RecordKind::Path => 1,
         }
     }
 
@@ -76,6 +83,7 @@ impl RecordKind<'_> {
         match self {
             RecordKind::Uids => Some("uids.json".to_owned()),
             RecordKind::Build => Some("build.iplcinfo".to_owned()),
+            RecordKind::Path => Some("path.iplcinfo".to_owned()),
             RecordKind::Download { connection: "" } => None,
             RecordKind::Download { connection } => {
                 Some(format!("{}.download.iplcinfo", file_name_part(connection)))
@@ -260,11 +268,43 @@ mod tests {
         assert_eq!(paths.len(), names.len());
     }
 
+    #[rstest]
+    #[case::file("app.iplc", "app.path.iplcinfo")]
+    #[case::dotted_name("My.App.iplc", "My.App.path.iplcinfo")]
+    fn path_when_path_record_of_application_then_sibling_with_stem(
+        #[case] application: &str,
+        #[case] expected: &str,
+    ) {
+        let path = RecordKind::Path
+            .path(Path::new("some").join("dir").join(application).as_path())
+            .unwrap();
+
+        assert_eq!(path, Path::new("some").join("dir").join(expected));
+    }
+
+    #[test]
+    fn path_when_path_record_then_never_the_path_of_another_kind() {
+        let anchor = Path::new("app.iplc");
+        let path_record = RecordKind::Path.path(anchor).unwrap();
+
+        assert_ne!(path_record, RecordKind::Uids.path(anchor).unwrap());
+        assert_ne!(path_record, RecordKind::Build.path(anchor).unwrap());
+        // A connection named `path` makes `app.path.download.iplcinfo`, and the
+        // dot of a name is encoded, so no connection reaches `app.path.iplcinfo`.
+        for connection in ["path", "x.path", "path.iplcinfo"] {
+            assert_ne!(
+                path_record,
+                RecordKind::Download { connection }.path(anchor).unwrap()
+            );
+        }
+    }
+
     #[test]
     fn path_when_download_then_never_the_path_of_another_kind() {
         let anchor = Path::new("app.iplc");
         let build = RecordKind::Build.path(anchor).unwrap();
         let uids = RecordKind::Uids.path(anchor).unwrap();
+        let path_record = RecordKind::Path.path(anchor).unwrap();
 
         let download = RecordKind::Download {
             connection: "build",
@@ -274,6 +314,7 @@ mod tests {
 
         assert_ne!(download, build);
         assert_ne!(download, uids);
+        assert_ne!(download, path_record);
     }
 
     #[test]
@@ -299,6 +340,7 @@ mod tests {
         #[values(
             RecordKind::Uids,
             RecordKind::Build,
+            RecordKind::Path,
             RecordKind::Download { connection: "My PLC" }
         )]
         kind: RecordKind<'_>,
@@ -315,6 +357,7 @@ mod tests {
         #[values(
             RecordKind::Uids,
             RecordKind::Build,
+            RecordKind::Path,
             RecordKind::Download { connection: "My PLC" }
         )]
         kind: RecordKind<'_>,

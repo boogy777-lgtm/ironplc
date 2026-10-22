@@ -3,6 +3,7 @@ pub mod compile;
 pub mod disassemble;
 pub mod download_record;
 pub mod id_agreement;
+pub mod path_record;
 pub mod project;
 pub mod records;
 pub mod sidecar;

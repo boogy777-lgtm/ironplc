@@ -21,8 +21,10 @@ datagram it sends is the discovery request. IronPLC connects.
 **Built:** the class of discovery drivers with its two members (broadcast and
 address list), the collection they share, the observation and browse model, the
 commands `browse`, `identify`, `serve` and `version`, and the L-codes.
-**Not built:** choosing a controller and writing the remembered path (`select`
-and the route record), the browse view in the VS Code extension, USB enumeration
+The project path file `<app>.path.iplcinfo` is not IronLink's: IronPLC writes it
+(`ironplcc record-path`, [engineering-connection.md](engineering-connection.md)).
+**Not built:** choosing a controller (`select` and the Choose action of the
+editor) and the workstation route record, the browse view in the VS Code extension, USB enumeration
 or a gateway as drivers, and the class of connection methods.
 
 ## The class of discovery drivers

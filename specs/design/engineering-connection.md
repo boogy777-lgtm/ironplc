@@ -584,6 +584,22 @@ addition is a pre-send baseline check.
 Offline edits change only the pre-send check; the deploy itself is always
 the same online-change flow.
 
+### The path record (the controller last chosen)
+
+Beside the download record sits one more record of the same mechanism
+([ADR-0083](../adrs/0083-build-and-download-records.md)), the *path record*
+`<app>.path.iplcinfo` ([ADR-0084](../adrs/0084-plc-discovery-and-controller-selection.md)).
+It holds the `deviceId` of the controller the engineer last chose, a
+`routeHint` (`{ "address", "sessionPort" }`, or `null`) and `chosenAt` in
+milliseconds since the Unix epoch. It is a remembered convenience and not a
+binding: the engineer can connect to any controller. `ironplcc record-path` is
+its one writer and `record-path-path` prints where it is; the editor reads the
+file itself, as for the download record. The file travels with the project, so
+a loopback address, which means another machine on another PC, is never the
+route hint: choosing by loopback leaves the hint of the same controller as it
+was and clears the hint of another controller. IronLink does not write this
+file; it writes the workstation route record.
+
 ## Integration Map
 
 Everything reused, with its one authority:
@@ -608,6 +624,7 @@ Everything reused, with its one authority:
 | Redundancy block vocabulary | [HA Redundancy FSM](ha-redundancy-fsm.md) (epoch, SYNC/CONTROL) |
 | Baseline identity (artifact hash, UID sidecar) | `verify_load` in `compiler/container/src/load_verify.rs`; `compiler/project/src/sidecar.rs` |
 | Download record (the baseline) | `compiler/project/src/download_record.rs`; `ironplcc record-download` |
+| Path record (the controller last chosen) | `compiler/project/src/path_record.rs`; `ironplcc record-path`, `record-path-path` |
 
 ## Out of Scope
 

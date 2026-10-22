@@ -906,6 +906,9 @@ fn diagnostic(path: &Path, text: Text) -> Vec<Diagnostic> {
 mod download_record;
 pub use download_record::{record_download, record_download_path, RecordDownload};
 
+mod path_record;
+pub use path_record::{record_path, record_path_path, RecordPath};
+
 mod up_to_date;
 
 #[cfg(test)]
