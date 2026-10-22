@@ -14,7 +14,7 @@
 
 use std::net::{IpAddr, SocketAddr};
 
-use ironplc_discovery::WIRE_VERSION;
+use ironplc_discovery::{DeviceId, WIRE_VERSION};
 use ironplc_runtime::DEFAULT_SESSION_PORT;
 use serde::{Deserialize, Serialize};
 
@@ -22,7 +22,7 @@ use crate::collect::{Stop, Window};
 use crate::driver::address_list::AddressList;
 use crate::driver::{Driver, DriverKind, Selection};
 use crate::error::IronLinkError;
-use crate::observation::{group, is_device_id, Device, Heard, Observation, OtherVersion};
+use crate::observation::{group, Device, Heard, Observation, OtherVersion};
 use crate::parallel::map_in_parallel;
 use crate::store::routes::RouteEntry;
 use crate::store::Store;
@@ -293,15 +293,13 @@ fn without_repeats<T: PartialEq>(items: Vec<T>) -> Vec<T> {
 }
 
 /// A device id as the user types it: 32 lowercase hexadecimal digits.
-fn parse_device_id(text: &str) -> Result<String, IronLinkError> {
-    if is_device_id(text) {
-        Ok(text.to_string())
-    } else {
-        Err(IronLinkError::argument_invalid(format!(
+fn parse_device_id(text: &str) -> Result<DeviceId, IronLinkError> {
+    DeviceId::parse(text).map_err(|_| {
+        IronLinkError::argument_invalid(format!(
             "'{text}' is not a device id; a device id is 32 lowercase hexadecimal digits, \
              for example 00112233445566778899aabbccddeeff"
-        )))
-    }
+        ))
+    })
 }
 
 /// A local interface, named by one of its addresses.

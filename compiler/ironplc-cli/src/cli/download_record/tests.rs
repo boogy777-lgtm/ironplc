@@ -5,8 +5,8 @@ use std::fs;
 use std::path::PathBuf;
 
 use ironplc_container::FileHeader;
-use ironplc_project::device_id::DeviceId;
 use ironplc_project::download_record::DeviceGenerations;
+use ironplc_project::DeviceId;
 use ironplc_project::RecordKind;
 use tempfile::TempDir;
 

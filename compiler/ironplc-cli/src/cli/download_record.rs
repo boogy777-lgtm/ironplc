@@ -11,8 +11,8 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use ironplc_container::integrity::HASH_LEN;
-use ironplc_project::device_id::DeviceId;
 use ironplc_project::download_record::{self, DeviceGenerations, Download};
+use ironplc_project::DeviceId;
 
 /// What `record-download` was given.
 pub struct RecordDownload<'a> {

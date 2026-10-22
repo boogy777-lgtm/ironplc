@@ -56,8 +56,8 @@ use ironplc_dsl::diagnostic::Diagnostic;
 use serde_json::{json, Value};
 
 use crate::build_record::{self, BuildRecordRead, ContainerIdentity};
-use crate::device_id::DeviceId;
 use crate::records::{self, RecordKind, RecordRead};
+use ironplc_discovery::DeviceId;
 
 /// The generation counters of a device, as it reported them after a download.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -103,7 +103,7 @@ pub struct DownloadRecord {
 impl DownloadRecord {
     fn to_json(&self) -> Value {
         json!({
-            "deviceId": self.device_id.as_str(),
+            "deviceId": self.device_id.to_string(),
             "application": self.application,
             "container": self.container.to_json(),
             "device": self.device.map(DeviceGenerations::to_json),
@@ -252,7 +252,7 @@ pub fn record_download(download: &Download<'_>, unix_seconds: u64) -> Result<(),
         }
     }
     let record = DownloadRecord {
-        device_id: download.device_id.clone(),
+        device_id: *download.device_id,
         application: application_name(download.anchor, stem),
         container,
         device: download.device,

@@ -7,6 +7,8 @@ use std::net::IpAddr;
 use rstest::rstest;
 use spec_test_macro::spec_test;
 
+use ironplc_discovery::DeviceId;
+
 use super::*;
 use crate::driver::DriverKind;
 use crate::observation::now_ms;
@@ -16,6 +18,11 @@ use crate::test_support::{loopback, temp_store, Behaviour, FakeDevice, FakeIdent
 /// The device id of a fake device made with `id_byte`.
 fn id_of(id_byte: u8) -> String {
     format!("{id_byte:02x}").repeat(16)
+}
+
+/// The same device id as a value.
+fn device_id_of(id_byte: u8) -> DeviceId {
+    DeviceId::from_bytes([id_byte; 16])
 }
 
 fn set_request(device_id: &str, device: &FakeDevice) -> RouteSetRequest {
@@ -61,7 +68,7 @@ fn route_set_when_the_device_answers_with_that_id_then_the_verified_route_is_sto
 
     let result = route_set(&set_request(&id_of(5), &device), &store).unwrap();
 
-    assert_eq!(result.device_id, id_of(5));
+    assert_eq!(result.device_id, device_id_of(5));
     assert!(!result.replaced);
     assert_eq!(result.route.address, loopback());
     assert_eq!(result.route.driver, DriverKind::AddressList);
@@ -70,7 +77,7 @@ fn route_set_when_the_device_answers_with_that_id_then_the_verified_route_is_sto
     assert!(result.route.verified_at <= now_ms(), "{result:?}");
     let stored = store.routes().unwrap();
     assert_eq!(stored.len(), 1);
-    assert_eq!(stored[0].device_id, id_of(5));
+    assert_eq!(stored[0].device_id, device_id_of(5));
     assert_eq!(stored[0].route, result.route);
 }
 
@@ -219,7 +226,7 @@ fn route_remove_when_the_route_exists_then_removed_and_when_absent_then_not_remo
     let first = route_remove(&request, &store).unwrap();
     let second = route_remove(&request, &store).unwrap();
 
-    assert_eq!(first.device_id, id_of(5));
+    assert_eq!(first.device_id, device_id_of(5));
     assert!(first.removed);
     assert!(!second.removed);
     assert!(route_list(&store).unwrap().routes.is_empty());
@@ -250,12 +257,8 @@ fn route_list_when_routes_are_stored_then_ordered_by_device_id() {
 
     let listed = route_list(&store).unwrap();
 
-    let ids: Vec<&str> = listed
-        .routes
-        .iter()
-        .map(|entry| entry.device_id.as_str())
-        .collect();
-    assert_eq!(ids, [id_of(2), id_of(9)]);
+    let ids: Vec<DeviceId> = listed.routes.iter().map(|entry| entry.device_id).collect();
+    assert_eq!(ids, [device_id_of(2), device_id_of(9)]);
     let json = serde_json::to_value(&listed).unwrap();
     assert_eq!(json["routes"][0]["deviceId"], id_of(2));
     assert_eq!(json["routes"][0]["address"], "127.0.0.1");
@@ -374,7 +377,9 @@ fn browse_when_a_route_is_stored_then_that_route_is_marked_routed_and_others_are
     let (_guard, store) = temp_store();
     let routed = FakeDevice::answering(1, "Routed");
     let other = FakeDevice::answering(2, "Other");
-    store.set_route(&id_of(1), route_to(&routed, 5)).unwrap();
+    store
+        .set_route(&device_id_of(1), route_to(&routed, 5))
+        .unwrap();
 
     let result = browse(&browse_request(&[&routed, &other]), &store).unwrap();
 
@@ -409,12 +414,12 @@ fn browse_when_the_stored_route_has_another_address_or_port_then_the_route_is_no
         session_port: device.addr().port().wrapping_add(1).max(1),
         ..route_to(&device, 5)
     };
-    store.set_route(&id_of(1), other_port).unwrap();
+    store.set_route(&device_id_of(1), other_port).unwrap();
 
     let result = browse(&browse_request(&[&device]), &store).unwrap();
     store
         .set_route(
-            &id_of(1),
+            &device_id_of(1),
             RouteRecord {
                 address: "192.0.2.1".parse::<IpAddr>().unwrap(),
                 ..route_to(&device, 5)
@@ -446,17 +451,21 @@ fn browse_when_a_stored_route_is_of_a_device_not_seen_then_it_is_listed_apart_an
     let (_guard, store) = temp_store();
     let seen = FakeDevice::answering(1, "Seen");
     let away = silent_device(2);
-    store.set_route(&id_of(1), route_to(&seen, 5)).unwrap();
-    store.set_route(&id_of(2), route_to(&away, 6)).unwrap();
+    store
+        .set_route(&device_id_of(1), route_to(&seen, 5))
+        .unwrap();
+    store
+        .set_route(&device_id_of(2), route_to(&away, 6))
+        .unwrap();
 
     let result = browse(&browse_request(&[&seen]), &store).unwrap();
 
-    let not_seen: Vec<&str> = result
+    let not_seen: Vec<DeviceId> = result
         .routes_not_seen
         .iter()
-        .map(|entry| entry.device_id.as_str())
+        .map(|entry| entry.device_id)
         .collect();
-    assert_eq!(not_seen, [id_of(2)]);
+    assert_eq!(not_seen, [device_id_of(2)]);
     assert_eq!(result.drivers[0].devices.len(), 1);
     let json = serde_json::to_value(&result).unwrap();
     assert_eq!(json["routesNotSeen"][0]["deviceId"], id_of(2));

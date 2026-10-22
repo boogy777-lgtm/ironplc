@@ -13,9 +13,9 @@ use ironplc_parser::options::{
     StringToNumFailure, StringToNumNonNumeric,
 };
 use ironplc_problems::WarningSet;
-use ironplc_project::device_id::DeviceId;
 use ironplc_project::download_record::DeviceGenerations;
 use ironplc_project::path_record;
+use ironplc_project::DeviceId;
 use ironplc_sources::LibraryName;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -671,7 +671,7 @@ enum Action {
 
         /// The id of the device that received the container, which keys the
         /// record: 32 lowercase hexadecimal digits.
-        #[arg(long, value_name = "ID", value_parser = DeviceId::parse)]
+        #[arg(long, value_name = "ID", value_parser = parse_device_id)]
         device_id: DeviceId,
 
         /// The container file that was sent to the device, when it is not the
@@ -715,7 +715,7 @@ enum Action {
         application: PathBuf,
 
         /// The id of the device: 32 lowercase hexadecimal digits.
-        #[arg(long, value_name = "ID", value_parser = DeviceId::parse)]
+        #[arg(long, value_name = "ID", value_parser = parse_device_id)]
         device_id: DeviceId,
     },
     /// Records the controller last chosen for an application: writes the path
@@ -731,7 +731,7 @@ enum Action {
         application: PathBuf,
 
         /// The id of the chosen controller: 32 lowercase hexadecimal digits.
-        #[arg(long, value_name = "ID", value_parser = DeviceId::parse)]
+        #[arg(long, value_name = "ID", value_parser = parse_device_id)]
         device_id: DeviceId,
 
         /// The address that reached the controller: an IP address or a host
@@ -759,6 +759,11 @@ enum Action {
 /// Reads the address of a route: an IP address or a host name.
 fn parse_address(text: &str) -> Result<String, String> {
     path_record::check_address(text).map(|()| text.to_owned())
+}
+
+/// Reads the id of a device: 32 lowercase hexadecimal digits.
+fn parse_device_id(text: &str) -> Result<DeviceId, String> {
+    DeviceId::parse(text).map_err(|err| format!("'{text}' is not a device id: {err}"))
 }
 
 /// Reads the content hash a device reports: 64 hexadecimal digits.
@@ -905,7 +910,7 @@ fn execute(action: Action) -> Result<(), String> {
             port,
         } => cli::record_path(&cli::RecordPath {
             application: &application,
-            device_id: device_id.as_str(),
+            device_id: &device_id,
             address: &address,
             session_port: port,
         }),

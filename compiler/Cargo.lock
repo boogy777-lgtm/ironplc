@@ -1038,8 +1038,11 @@ dependencies = [
 name = "ironplc-discovery"
 version = "0.247.0"
 dependencies = [
+ "ironplc-discovery",
  "ironplc-spec-requirements-gen",
  "rstest",
+ "serde",
+ "serde_json",
  "spec_test_macro",
 ]
 
@@ -1188,6 +1191,7 @@ dependencies = [
  "ironplc-analyzer",
  "ironplc-codegen",
  "ironplc-container",
+ "ironplc-discovery",
  "ironplc-dsl",
  "ironplc-parser",
  "ironplc-plc2plc",

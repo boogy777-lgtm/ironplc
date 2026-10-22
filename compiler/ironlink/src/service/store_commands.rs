@@ -6,6 +6,7 @@
 //! only when the answer carries the device id, so a stored route is a verified
 //! one and carries the time of the answer. Setting a route again overwrites it.
 
+use ironplc_discovery::DeviceId;
 use serde::{Deserialize, Serialize};
 
 use super::{identify_at, parse_device_id, parse_target, Answer};
@@ -30,7 +31,7 @@ pub(crate) struct RouteSetRequest {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RouteSetResult {
-    pub(crate) device_id: String,
+    pub(crate) device_id: DeviceId,
     pub(crate) route: RouteRecord,
     /// Whether the device had a route, which this one replaced.
     pub(crate) replaced: bool,
@@ -62,8 +63,8 @@ pub(crate) fn route_set(
     if observation.device_id != device_id {
         return Err(IronLinkError::route_mismatch(
             address,
-            &device_id,
-            &observation.device_id,
+            device_id,
+            observation.device_id,
         ));
     }
     let route = RouteRecord {
@@ -91,7 +92,7 @@ pub(crate) struct RouteRemoveRequest {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RouteRemoveResult {
-    pub(crate) device_id: String,
+    pub(crate) device_id: DeviceId,
     /// `false` when the device had no route: that is not an error.
     pub(crate) removed: bool,
 }

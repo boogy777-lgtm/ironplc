@@ -24,7 +24,7 @@ socket; the socket, the rate limit and the rules of when the device answers
 belong to `ironplcvm`, and the sockets of the sender belong to IronLink; both are specified, with their requirement IDs, in
 [vm-cli.md](vm-cli.md#discovery-on-the-listen-address) and [ironlink.md](ironlink.md).
 
-The crate is `#![no_std]` without `alloc` and has no dependencies
+The crate is `#![no_std]` without `alloc` and has no required dependency
 ([ADR-0010](../adrs/0010-no-std-vm-for-embedded-targets.md)), so a device
 without an operating system can answer. It has no `std` feature, so the normal
 build is the `no_std` build. A reply borrows its strings from the datagram or
@@ -65,7 +65,7 @@ The reply is the header (kind 2) followed by the body.
 | **REQ-DW-discovery-011** | 7 | reserved | `u8` | `0` when encoding, ignored when decoding |
 | **REQ-DW-discovery-012** | 8 | session protocol | `u32` | version of the session protocol |
 | **REQ-DW-discovery-013** | 12 | session port | `u16` | TCP port of the session |
-| **REQ-DW-discovery-014** | 14 | device id | 16 bytes | the 128 bits of the device id (its 32 lowercase hexadecimal digits); the crate carries them raw and formats nothing |
+| **REQ-DW-discovery-014** | 14 | device id | 16 bytes | the 128 bits of the device id (its 32 lowercase hexadecimal digits); the wire carries the 16 bytes, which `DeviceId` holds |
 | **REQ-DW-discovery-015** | 30 | device name, model, runtime version | 3 strings | each a `u16` byte length followed by that many UTF-8 bytes, in this order |
 
 **REQ-DW-discovery-016** The bits of the flags byte other than bit 0 are zero when
@@ -115,6 +115,21 @@ and the reserved byte that decoding ignores.
 
 **REQ-DW-discovery-041** Decoding an encoded reply gives the reply, for every
 valid reply.
+
+## Device id
+
+The device id is the 128 bits of REQ-DW-discovery-014, and `DeviceId` is the one
+type that holds it and the one definition of its text: the device, the
+workstation service and the records of a project all use it, and each maps its
+refusal to its own code and message.
+
+**REQ-DW-discovery-050** The text of a device id is exactly 32 lowercase
+hexadecimal digits, two for each byte in order, and `DeviceId::parse` accepts
+that and nothing else: not uppercase, not another length, not a sign, a prefix,
+a separator or surrounding space, not multibyte text of 32 bytes.
+
+**REQ-DW-discovery-051** Formatting a `DeviceId` gives its 32 lowercase digits,
+without an allocator, and parsing the text gives the same id back, for every id.
 
 ## Evolution
 

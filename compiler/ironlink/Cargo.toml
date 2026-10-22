@@ -12,7 +12,7 @@ name = "ironlink"
 path = "src/main.rs"
 
 [dependencies]
-ironplc-discovery = { path = "../discovery", version = "0.247.0" }
+ironplc-discovery = { path = "../discovery", version = "0.247.0", features = ["serde"] }
 # Only for `DEFAULT_SESSION_PORT`, which is defined once there. The crate brings
 # `ironplc-vm` and `ironplc-container` with it; the constant is not worth a
 # second definition.

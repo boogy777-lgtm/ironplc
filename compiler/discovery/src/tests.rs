@@ -12,11 +12,11 @@ use rstest::rstest;
 use spec_test_macro::spec_test;
 
 use crate::{
-    decode_reply, encode_reply, is_request, request, DecodeError, EncodeError, Reply, MAGIC,
-    MAX_REPLY_LEN, REQUEST_LEN, WIRE_VERSION,
+    decode_reply, encode_reply, is_request, request, DecodeError, DeviceId, EncodeError, Reply,
+    MAGIC, MAX_REPLY_LEN, REQUEST_LEN, WIRE_VERSION,
 };
 
-const ID: [u8; 16] = [
+const ID_BYTES: [u8; 16] = [
     0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
 ];
 
@@ -29,7 +29,7 @@ fn typical() -> Reply<'static> {
     Reply {
         protocol: 1,
         session_port: 49152,
-        device_id: ID,
+        device_id: DeviceId::from_bytes(ID_BYTES),
         protected: false,
         name: "Press line 3",
         model: "IronPLC SoftPLC",
@@ -237,7 +237,7 @@ fn encode_reply_when_port_set_then_it_is_little_endian_at_offset_twelve() {
 
 #[spec_test(REQ_DW_discovery_014)]
 fn encode_reply_when_device_id_set_then_its_sixteen_bytes_follow_the_port() {
-    assert_eq!(&typical_bytes()[14..30], &ID);
+    assert_eq!(&typical_bytes()[14..30], &ID_BYTES);
 }
 
 #[spec_test(REQ_DW_discovery_015)]
@@ -304,8 +304,8 @@ fn decode_reply_when_runtime_version_of_protected_device_then_it_is_carried() {
 #[case::max_port(Reply { session_port: u16::MAX, ..typical() })]
 #[case::zero_port(Reply { session_port: 0, ..typical() })]
 #[case::max_protocol(Reply { protocol: u32::MAX, ..typical() })]
-#[case::zero_id(Reply { device_id: [0; 16], ..typical() })]
-#[case::max_id(Reply { device_id: [0xFF; 16], ..typical() })]
+#[case::zero_id(Reply { device_id: DeviceId::from_bytes([0; 16]), ..typical() })]
+#[case::max_id(Reply { device_id: DeviceId::from_bytes([0xFF; 16]), ..typical() })]
 #[case::multibyte_name(Reply { name: "Цех №3 — линия", model: "ПЛК", ..typical() })]
 fn decode_reply_when_edge_values_encoded_then_round_trip(#[case] reply: Reply<'static>) {
     let bytes = encode(&reply);

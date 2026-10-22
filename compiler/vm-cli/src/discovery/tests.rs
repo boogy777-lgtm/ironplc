@@ -108,8 +108,8 @@ fn encode_identity_when_device_then_reply_carries_its_identity_protocol_and_port
     assert_eq!(reply.session_port, SESSION_PORT);
     assert!(!reply.protected);
     assert_eq!(
-        reply.device_id,
-        [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+        reply.device_id.as_bytes(),
+        &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
     );
     assert_eq!(identity.device_id.as_deref(), Some(TEST_DEVICE_ID));
 }
@@ -247,7 +247,7 @@ fn responder_when_request_arrives_on_a_socket_then_replies_with_the_device_ident
     assert_eq!(reply.runtime_version, identity.runtime_version);
     assert_eq!(reply.session_port, SESSION_PORT);
     assert_eq!(reply.protocol, SESSION_PROTOCOL_VERSION);
-    assert_eq!(reply.device_id[0], 1);
+    assert_eq!(reply.device_id.as_bytes()[0], 1);
     assert!(!reply.protected);
 }
 

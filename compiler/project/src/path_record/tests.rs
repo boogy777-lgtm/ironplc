@@ -3,6 +3,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 use ironplc_problems::Problem;
 use rstest::rstest;
@@ -11,8 +12,11 @@ use tempfile::TempDir;
 
 use super::*;
 
-const DEVICE: &str = "0123456789abcdef0123456789abcdef";
-const OTHER_DEVICE: &str = "fedcba9876543210fedcba9876543210";
+const DEVICE_TEXT: &str = "0123456789abcdef0123456789abcdef";
+const OTHER_DEVICE_TEXT: &str = "fedcba9876543210fedcba9876543210";
+static DEVICE: LazyLock<DeviceId> = LazyLock::new(|| DeviceId::parse(DEVICE_TEXT).unwrap());
+static OTHER_DEVICE: LazyLock<DeviceId> =
+    LazyLock::new(|| DeviceId::parse(OTHER_DEVICE_TEXT).unwrap());
 const PORT: u16 = 49152;
 
 /// A directory with the application container name `app.iplc`; the container
@@ -23,7 +27,7 @@ fn application() -> (TempDir, PathBuf) {
     (dir, anchor)
 }
 
-fn choice<'a>(anchor: &'a Path, device_id: &'a str, address: &'a str) -> Choice<'a> {
+fn choice<'a>(anchor: &'a Path, device_id: &'a DeviceId, address: &'a str) -> Choice<'a> {
     Choice {
         anchor,
         device_id,
@@ -55,13 +59,13 @@ fn hint(address: &str, session_port: u16) -> Option<RouteHint> {
 fn record_choice_when_address_not_loopback_then_record_beside_container_with_hint() {
     let (dir, anchor) = application();
 
-    record_choice(&choice(&anchor, DEVICE, "192.168.1.20"), 1_761_148_800_000).unwrap();
+    record_choice(&choice(&anchor, &DEVICE, "192.168.1.20"), 1_761_148_800_000).unwrap();
 
     assert!(dir.path().join("app.path.iplcinfo").is_file());
     assert_eq!(
         read_present(&anchor),
         PathRecord {
-            device_id: DEVICE.to_owned(),
+            device_id: *DEVICE,
             route_hint: hint("192.168.1.20", PORT),
             chosen_at: 1_761_148_800_000,
         }
@@ -72,7 +76,7 @@ fn record_choice_when_address_not_loopback_then_record_beside_container_with_hin
 fn record_choice_then_bytes_are_the_documented_body() {
     let (_dir, anchor) = application();
 
-    record_choice(&choice(&anchor, DEVICE, "plc1.local"), 5).unwrap();
+    record_choice(&choice(&anchor, &DEVICE, "plc1.local"), 5).unwrap();
 
     let body: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(file_of(&anchor)).unwrap()).unwrap();
@@ -80,7 +84,7 @@ fn record_choice_then_bytes_are_the_documented_body() {
         body,
         json!({
             "version": 1,
-            "deviceId": DEVICE,
+            "deviceId": DEVICE_TEXT,
             "routeHint": {"address": "plc1.local", "sessionPort": PORT},
             "chosenAt": 5,
         })
@@ -90,14 +94,14 @@ fn record_choice_then_bytes_are_the_documented_body() {
 #[test]
 fn record_choice_when_second_choice_then_replaces_the_record() {
     let (_dir, anchor) = application();
-    record_choice(&choice(&anchor, DEVICE, "10.0.0.1"), 1).unwrap();
+    record_choice(&choice(&anchor, &DEVICE, "10.0.0.1"), 1).unwrap();
 
-    record_choice(&choice(&anchor, OTHER_DEVICE, "10.0.0.2"), 2).unwrap();
+    record_choice(&choice(&anchor, &OTHER_DEVICE, "10.0.0.2"), 2).unwrap();
 
     assert_eq!(
         read_present(&anchor),
         PathRecord {
-            device_id: OTHER_DEVICE.to_owned(),
+            device_id: *OTHER_DEVICE,
             route_hint: hint("10.0.0.2", PORT),
             chosen_at: 2,
         }
@@ -118,10 +122,10 @@ fn record_choice_when_loopback_and_no_record_then_hint_is_null(
 ) {
     let (_dir, anchor) = application();
 
-    record_choice(&choice(&anchor, DEVICE, address), 7).unwrap();
+    record_choice(&choice(&anchor, &DEVICE, address), 7).unwrap();
 
     let record = read_present(&anchor);
-    assert_eq!(record.device_id, DEVICE);
+    assert_eq!(record.device_id, *DEVICE);
     assert_eq!(record.route_hint, None);
     assert_eq!(record.chosen_at, 7);
 }
@@ -129,12 +133,12 @@ fn record_choice_when_loopback_and_no_record_then_hint_is_null(
 #[test]
 fn record_choice_when_loopback_then_previous_hint_of_the_same_device_is_kept() {
     let (_dir, anchor) = application();
-    record_choice(&choice(&anchor, DEVICE, "192.168.1.20"), 1).unwrap();
+    record_choice(&choice(&anchor, &DEVICE, "192.168.1.20"), 1).unwrap();
 
     record_choice(
         &Choice {
             session_port: 1234,
-            ..choice(&anchor, DEVICE, "127.0.0.1")
+            ..choice(&anchor, &DEVICE, "127.0.0.1")
         },
         2,
     )
@@ -143,7 +147,7 @@ fn record_choice_when_loopback_then_previous_hint_of_the_same_device_is_kept() {
     assert_eq!(
         read_present(&anchor),
         PathRecord {
-            device_id: DEVICE.to_owned(),
+            device_id: *DEVICE,
             route_hint: hint("192.168.1.20", PORT),
             chosen_at: 2,
         }
@@ -153,9 +157,9 @@ fn record_choice_when_loopback_then_previous_hint_of_the_same_device_is_kept() {
 #[test]
 fn record_choice_when_loopback_and_another_device_then_hint_is_null() {
     let (_dir, anchor) = application();
-    record_choice(&choice(&anchor, DEVICE, "192.168.1.20"), 1).unwrap();
+    record_choice(&choice(&anchor, &DEVICE, "192.168.1.20"), 1).unwrap();
 
-    record_choice(&choice(&anchor, OTHER_DEVICE, "::1"), 2).unwrap();
+    record_choice(&choice(&anchor, &OTHER_DEVICE, "::1"), 2).unwrap();
 
     assert_eq!(read_present(&anchor).route_hint, None);
 }
@@ -165,27 +169,9 @@ fn record_choice_when_loopback_and_previous_record_malformed_then_hint_is_null()
     let (_dir, anchor) = application();
     fs::write(file_of(&anchor), "this is not json").unwrap();
 
-    record_choice(&choice(&anchor, DEVICE, "localhost"), 3).unwrap();
+    record_choice(&choice(&anchor, &DEVICE, "localhost"), 3).unwrap();
 
     assert_eq!(read_present(&anchor).route_hint, None);
-}
-
-#[rstest]
-#[case::empty("")]
-#[case::short("0123456789abcdef")]
-#[case::long("0123456789abcdef0123456789abcdef0")]
-#[case::uppercase("0123456789ABCDEF0123456789ABCDEF")]
-#[case::not_hex("0123456789abcdef0123456789abcdeg")]
-#[case::dashes("01234567-89ab-cdef-0123-456789abcdef")]
-#[case::padded(" 0123456789abcdef0123456789abcde")]
-fn record_choice_when_device_id_bad_then_refused_and_nothing_written(#[case] device_id: &str) {
-    let (dir, anchor) = application();
-
-    let err = record_choice(&choice(&anchor, device_id, "10.0.0.1"), 1).unwrap_err();
-
-    assert!(matches!(err, PathError::BadDeviceId(_)), "{err}");
-    assert!(err.to_string().contains("32 lowercase hexadecimal digits"));
-    assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
 }
 
 #[rstest]
@@ -200,7 +186,7 @@ fn record_choice_when_device_id_bad_then_refused_and_nothing_written(#[case] dev
 fn record_choice_when_address_bad_then_refused_and_nothing_written(#[case] address: &str) {
     let (dir, anchor) = application();
 
-    let err = record_choice(&choice(&anchor, DEVICE, address), 1).unwrap_err();
+    let err = record_choice(&choice(&anchor, &DEVICE, address), 1).unwrap_err();
 
     assert!(matches!(err, PathError::BadAddress(_)), "{err}");
     assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
@@ -213,7 +199,7 @@ fn record_choice_when_port_zero_then_refused_and_nothing_written() {
     let err = record_choice(
         &Choice {
             session_port: 0,
-            ..choice(&anchor, DEVICE, "10.0.0.1")
+            ..choice(&anchor, &DEVICE, "10.0.0.1")
         },
         1,
     )
@@ -227,7 +213,7 @@ fn record_choice_when_port_zero_then_refused_and_nothing_written() {
 fn record_choice_when_anchor_has_no_name_then_no_record_path() {
     let root = Path::new(std::path::MAIN_SEPARATOR_STR);
 
-    let err = record_choice(&choice(root, DEVICE, "10.0.0.1"), 1).unwrap_err();
+    let err = record_choice(&choice(root, &DEVICE, "10.0.0.1"), 1).unwrap_err();
 
     assert!(matches!(err, PathError::NoRecordPath(_)));
 }
@@ -240,7 +226,7 @@ fn record_choice_when_directory_unwritable_then_record_diagnostic() {
     let anchor = dir.path().join("app.iplc");
     fs::create_dir(file_of(&anchor)).unwrap();
 
-    let err = record_choice(&choice(&anchor, DEVICE, "10.0.0.1"), 1).unwrap_err();
+    let err = record_choice(&choice(&anchor, &DEVICE, "10.0.0.1"), 1).unwrap_err();
 
     let PathError::Record(problem) = err else {
         panic!("expected a record diagnostic");
@@ -317,14 +303,16 @@ fn read_when_hint_null_then_present_without_hint() {
     let path = dir.path().join("app.path.iplcinfo");
     fs::write(
         &path,
-        format!(r#"{{"version": 1, "deviceId": "{DEVICE}", "routeHint": null, "chosenAt": 9}}"#),
+        format!(
+            r#"{{"version": 1, "deviceId": "{DEVICE_TEXT}", "routeHint": null, "chosenAt": 9}}"#
+        ),
     )
     .unwrap();
 
     assert_eq!(
         read(&path).unwrap(),
         PathRecordRead::Present(PathRecord {
-            device_id: DEVICE.to_owned(),
+            device_id: *DEVICE,
             route_hint: None,
             chosen_at: 9,
         })

@@ -147,12 +147,7 @@ fn serve_listen_when_request_arrives_on_udp_then_reply_with_the_identity_of_the_
         &std::fs::read_to_string(setup.dir.path().join("counter.iplc.device.json")).unwrap(),
     )
     .unwrap();
-    let device_id: String = reply
-        .device_id
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect();
-    assert_eq!(settings["deviceId"], device_id.as_str());
+    assert_eq!(settings["deviceId"], reply.device_id.to_string());
     assert_eq!(reply.name, "ironplcvm");
     assert_eq!(reply.session_port, setup.addr.port());
     assert_eq!(reply.protocol, ironplc_runtime::SESSION_PROTOCOL_VERSION);

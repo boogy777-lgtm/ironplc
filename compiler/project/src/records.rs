@@ -20,7 +20,7 @@ use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_problems::text;
 use serde_json::Value;
 
-use crate::device_id::DeviceId;
+use ironplc_discovery::DeviceId;
 
 /// The kinds of engineering record file. A kind may borrow what names its
 /// records (the device of a download record), hence the lifetime; it stays
@@ -170,7 +170,7 @@ mod tests {
         std::sync::LazyLock::new(|| DeviceId::parse(DEVICE).unwrap());
 
     fn device_id() -> DeviceId {
-        DEVICE_ID.clone()
+        *DEVICE_ID
     }
 
     /// Writes `text` to a fresh temporary file and reads it as a `Uids` record.

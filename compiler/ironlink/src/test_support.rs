@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use ironplc_discovery::{encode_reply, is_request, Reply, MAX_REPLY_LEN};
+use ironplc_discovery::{encode_reply, is_request, DeviceId, Reply, MAX_REPLY_LEN};
 
 use crate::collect::{Stop, Window};
 use crate::observation::{Heard, Observation, OtherVersion};
@@ -20,7 +20,7 @@ use crate::store::Store;
 /// What the fake device says about itself.
 #[derive(Clone, Debug)]
 pub(crate) struct FakeIdentity {
-    pub(crate) device_id: [u8; 16],
+    pub(crate) device_id: DeviceId,
     pub(crate) name: String,
     pub(crate) model: String,
     pub(crate) runtime_version: String,
@@ -31,7 +31,7 @@ impl FakeIdentity {
     /// An identity whose device id is `id_byte` sixteen times.
     pub(crate) fn new(id_byte: u8, name: &str) -> Self {
         FakeIdentity {
-            device_id: [id_byte; 16],
+            device_id: DeviceId::from_bytes([id_byte; 16]),
             name: name.to_string(),
             model: "IronPLC SoftPLC".to_string(),
             runtime_version: "0.247.0".to_string(),

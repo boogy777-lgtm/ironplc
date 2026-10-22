@@ -7,12 +7,13 @@
 //! identity. This crate is only the encoding and decoding of those two
 //! messages, with bounds checks. It opens no socket.
 //!
-//! The crate is `#![no_std]` without `alloc` and has no dependencies, so an
-//! embedded device can use it (ADR-0010). It has no `std` feature: the normal
-//! build is the `no_std` build.
+//! The crate is `#![no_std]` without `alloc` and has no required dependency, so
+//! an embedded device can use it (ADR-0010). It has no `std` feature: the normal
+//! build is the `no_std` build. It also owns [`DeviceId`], the one definition of
+//! a device id, which the reply carries.
 //!
 //! - **Class:** the messages of the discovery wire (request, reply), in
-//!   `lib.rs` and `reply.rs`. A near case outside it: the session protocol
+//!   `lib.rs` and `reply.rs`, and the device id they carry (`device_id.rs`). A near case outside it: the session protocol
 //!   (JSON over stdio or TCP), which this crate does not touch.
 //! - **Inv:** `decode_reply(encode_reply(r))` is `r` for every valid reply;
 //!   every strict prefix of an encoded reply fails to decode; no byte string
@@ -25,9 +26,11 @@
 
 #![no_std]
 
+mod device_id;
 mod error;
 mod reply;
 
+pub use device_id::{DeviceId, DeviceIdError};
 pub use error::{DecodeError, EncodeError};
 pub use reply::{decode_reply, encode_reply, Reply};
 

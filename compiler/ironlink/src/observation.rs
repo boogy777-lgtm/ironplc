@@ -15,7 +15,7 @@ use std::collections::BTreeMap;
 use std::net::IpAddr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use ironplc_discovery::Reply;
+use ironplc_discovery::{DeviceId, Reply};
 use serde::Serialize;
 
 use crate::driver::DriverKind;
@@ -48,8 +48,8 @@ pub(crate) struct Route {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Observation {
-    /// The 128 bits of the device id as 32 lowercase hexadecimal digits.
-    pub(crate) device_id: String,
+    /// The device id, which JSON writes as its 32 lowercase hexadecimal digits.
+    pub(crate) device_id: DeviceId,
     pub(crate) name: String,
     pub(crate) model: String,
     pub(crate) runtime_version: String,
@@ -72,7 +72,7 @@ impl Observation {
         seen_at: u64,
     ) -> Self {
         Observation {
-            device_id: device_id_hex(&reply.device_id),
+            device_id: reply.device_id,
             name: reply.name.to_string(),
             model: reply.model.to_string(),
             runtime_version: reply.runtime_version.to_string(),
@@ -168,24 +168,6 @@ pub(crate) fn now_ms() -> u64 {
         })
 }
 
-/// The 32 lowercase hexadecimal digits of a device id.
-///
-/// `ironplcvm` has the same function, but in a binary crate, which this one
-/// cannot depend on; the discovery crate is `no_std` without an allocator and
-/// formats nothing.
-pub(crate) fn device_id_hex(bytes: &[u8; 16]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
-/// Whether `text` is a device id as [`device_id_hex`] writes it: 32 lowercase
-/// hexadecimal digits.
-pub(crate) fn is_device_id(text: &str) -> bool {
-    text.len() == 32
-        && text
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-}
-
 /// The identity fields of a device: the fields that must be equal in the replies
 /// of one device id for it to be one device (ADR-0084 "One device id at several
 /// addresses"). The session port is not among them: it belongs to the route.
@@ -226,7 +208,7 @@ pub(crate) struct Variant {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Device {
-    pub(crate) device_id: String,
+    pub(crate) device_id: DeviceId,
     /// More than one variant answers under this id.
     pub(crate) conflict: bool,
     pub(crate) variants: Vec<Variant>,
@@ -237,7 +219,7 @@ pub(crate) struct Device {
 /// ordered by the name of their first variant and then by id, variants by
 /// identity, routes by address.
 pub(crate) fn group(observations: Vec<Observation>) -> Vec<Device> {
-    let mut by_id: BTreeMap<String, BTreeMap<Identity, Vec<SeenRoute>>> = BTreeMap::new();
+    let mut by_id: BTreeMap<DeviceId, BTreeMap<Identity, Vec<SeenRoute>>> = BTreeMap::new();
     for observation in observations {
         let identity = Identity {
             name: observation.name,
@@ -280,7 +262,7 @@ pub(crate) fn group(observations: Vec<Observation>) -> Vec<Device> {
             .variants
             .first()
             .map(|variant| variant.identity.name.clone());
-        (first_name, device.device_id.clone())
+        (first_name, device.device_id)
     });
     devices
 }

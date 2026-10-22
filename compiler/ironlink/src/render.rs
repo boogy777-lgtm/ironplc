@@ -5,6 +5,8 @@
 
 use std::net::SocketAddr;
 
+use ironplc_discovery::DeviceId;
+
 use crate::observation::{group, Device, SeenRoute, Variant};
 use crate::service::{
     Answer, BrowseResult, DriverReport, IdentifyResult, RouteListResult, RouteRemoveResult,
@@ -99,7 +101,7 @@ fn driver_lines(driver: &DriverReport, now_ms: u64) -> Vec<String> {
 fn device_lines(device: &Device, depth: usize, now_ms: u64) -> Vec<String> {
     match device.variants.as_slice() {
         [variant] if !device.conflict => {
-            variant_lines(variant, Some(&device.device_id), depth, now_ms)
+            variant_lines(variant, Some(device.device_id), depth, now_ms)
         }
         variants => {
             let mut lines = vec![format!(
@@ -118,7 +120,12 @@ fn device_lines(device: &Device, depth: usize, now_ms: u64) -> Vec<String> {
 
 /// The row of a variant and, below it, one row for each further route. The id is
 /// in the row unless the row is below a conflict header that shows it.
-fn variant_lines(variant: &Variant, id: Option<&str>, depth: usize, now_ms: u64) -> Vec<String> {
+fn variant_lines(
+    variant: &Variant,
+    id: Option<DeviceId>,
+    depth: usize,
+    now_ms: u64,
+) -> Vec<String> {
     let indent = INDENT.repeat(depth);
     let identity = &variant.identity;
     let mut routes = variant.routes.iter();
@@ -173,7 +180,7 @@ fn route_entry_text(entry: &RouteEntry, now_ms: u64) -> String {
 
 fn route_set_text(result: &RouteSetResult, now_ms: u64) -> String {
     let entry = RouteEntry {
-        device_id: result.device_id.clone(),
+        device_id: result.device_id,
         route: result.route.clone(),
     };
     let text = format!("stored route {}", route_entry_text(&entry, now_ms));

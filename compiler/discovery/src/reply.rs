@@ -1,5 +1,6 @@
 //! The reply: the public identity of a device, and its encoding.
 
+use crate::device_id::DeviceId;
 use crate::error::{DecodeError, EncodeError};
 use crate::{KIND_REPLY, MAGIC, MAX_REPLY_LEN, REQUEST_LEN, WIRE_VERSION};
 
@@ -25,8 +26,8 @@ pub struct Reply<'a> {
     pub protocol: u32,
     /// TCP port of the session.
     pub session_port: u16,
-    /// The device id as 16 raw bytes (the 32 hexadecimal digits of the id).
-    pub device_id: [u8; DEVICE_ID_LEN],
+    /// The device id; the wire carries its 16 bytes.
+    pub device_id: DeviceId,
     /// Whether the session requires credentials.
     pub protected: bool,
     /// The device name.
@@ -69,7 +70,7 @@ pub fn encode_reply(reply: &Reply<'_>, out: &mut [u8]) -> Result<usize, EncodeEr
     w.put(&[if reply.protected { FLAG_PROTECTED } else { 0 }, 0])?;
     w.put(&reply.protocol.to_le_bytes())?;
     w.put(&reply.session_port.to_le_bytes())?;
-    w.put(&reply.device_id)?;
+    w.put(reply.device_id.as_bytes())?;
     for s in [reply.name, reply.model, reply.runtime_version] {
         w.put_str(s)?;
     }
@@ -109,7 +110,7 @@ pub fn decode_reply(bytes: &[u8]) -> Result<Reply<'_>, DecodeError> {
 
     let protocol = u32::from_le_bytes(r.array()?);
     let session_port = u16::from_le_bytes(r.array()?);
-    let device_id = r.array()?;
+    let device_id = DeviceId::from_bytes(r.array()?);
     let name = r.string()?;
     let model = r.string()?;
     let runtime_version = r.string()?;
