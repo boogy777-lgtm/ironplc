@@ -13,6 +13,7 @@ these locations in order:
 2. **Environment variable**: The ``IRONPLC`` environment variable
 3. **Homebrew** (macOS only): ``/opt/homebrew/bin/ironplcc``
 4. **Windows AppData**: ``%LOCALAPPDATA%\Programs\IronPLC Compiler\bin\ironplcc.exe``
+5. **System PATH**: each directory of the ``PATH`` environment variable, in order
 
 **Solutions**:
 
