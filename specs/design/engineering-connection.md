@@ -41,6 +41,8 @@ This spec builds on:
   (REQ-VC-vm-cli-018 through REQ-VC-vm-cli-029)
 - **[ADR-0084](../adrs/0084-plc-discovery-and-controller-selection.md)**: the device
   id, the device settings, discovery, and the remembered connection path
+- **[PLC Discovery Wire Format](plc-discovery.md)**: the bytes of the discovery
+  request and reply
 - **[HA Redundancy FSM](ha-redundancy-fsm.md)**: the epoch and SYNC/CONTROL
   vocabulary the `identity` response's redundancy block mirrors, and the
   state-machine notation this spec reuses

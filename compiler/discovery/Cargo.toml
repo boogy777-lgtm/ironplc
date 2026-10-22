@@ -1,0 +1,22 @@
+[package]
+name = "ironplc-discovery"
+description = "Wire format of PLC discovery: the request and the reply shared by the device and the workstation"
+version = "0.247.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# No dependencies, and no `std` feature: the crate is `#![no_std]` without
+# `alloc` (ADR-0010) so that an embedded device can answer discovery, and the
+# plain `cargo build` is therefore already the `no_std` build.
+
+[build-dependencies]
+ironplc-spec-requirements-gen = { path = "../spec_requirements_gen" }
+
+[dev-dependencies]
+spec_test_macro = { path = "../spec_test_macro" }
+rstest = "0.27"
+
+[lints]
+workspace = true
