@@ -2,9 +2,11 @@
 //! generates the module `text` (one function for each row), and checks the
 //! `Severity` and `Codesys` columns of `problem-codes.csv`.
 //!
-//! It does no file access: `problems/build.rs` reads the files and writes the
-//! result, so every check has a unit test here (Cargo does not run the tests of
-//! a build script).
+//! The checks do no file access: `problems/build.rs` reads the files and writes
+//! the result, so every check has a unit test here (Cargo does not run the tests
+//! of a build script). The one file-writing function is `write_code_constants`,
+//! which the build scripts of the crates with a code table call; its text comes
+//! from `generate_code_constants`, which has the tests.
 
 // Problems whose "location" is the compiler's own source rather than the
 // IEC 61131-3 program. These must be constructed through the dedicated
@@ -608,7 +610,9 @@ pub fn generate_texts(src: &str, problems: &[(&str, &str)]) -> Result<String, St
     read_texts(src, problems).map(|texts| render_texts(&texts))
 }
 
+mod code_constants;
 mod codeless;
+pub use code_constants::{generate_code_constants, write_code_constants, ConstantUse};
 pub use codeless::{generate_codeless_texts, CODELESS_TEXTS_HEADER};
 
 #[cfg(test)]
