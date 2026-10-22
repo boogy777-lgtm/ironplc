@@ -1189,11 +1189,11 @@ dependencies = [
 name = "ironplc-redundancy"
 version = "0.247.0"
 dependencies = [
- "csv",
  "ironplc-codegen",
  "ironplc-container",
  "ironplc-dsl",
  "ironplc-parser",
+ "ironplc-problems-gen",
  "ironplc-project",
  "ironplc-runtime",
  "serde",
@@ -1204,11 +1204,11 @@ dependencies = [
 name = "ironplc-runtime"
 version = "0.247.0"
 dependencies = [
- "csv",
  "ironplc-codegen",
  "ironplc-container",
  "ironplc-dsl",
  "ironplc-parser",
+ "ironplc-problems-gen",
  "ironplc-project",
  "ironplc-test",
  "ironplc-vm",
@@ -1283,7 +1283,6 @@ dependencies = [
  "assert_cmd",
  "blake3",
  "clap",
- "csv",
  "ctor",
  "ctrlc",
  "env_logger",
@@ -1295,6 +1294,7 @@ dependencies = [
  "ironplc-discovery",
  "ironplc-dsl",
  "ironplc-parser",
+ "ironplc-problems-gen",
  "ironplc-redundancy",
  "ironplc-runtime",
  "ironplc-spec-requirements-gen",
