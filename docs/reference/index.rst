@@ -13,5 +13,6 @@ Technical reference material for IronPLC tools.
    Compatibility Libraries <compatibility-libraries/index>
    Compiler <compiler/index>
    Runtime <runtime/index>
+   Network (IronLink) <ironlink/index>
    MCP Server <mcp/index>
    Editor Extension <editor/index>

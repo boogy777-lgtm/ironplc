@@ -363,6 +363,7 @@ fn docs_section_when_known_prefix_then_matches_reference_section() {
     assert_eq!(docs_section("P0001"), "compiler");
     assert_eq!(docs_section("V6008"), "runtime");
     assert_eq!(docs_section("E0001"), "editor");
+    assert_eq!(docs_section("L6003"), "ironlink");
 }
 
 #[test]

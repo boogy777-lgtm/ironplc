@@ -1,0 +1,31 @@
+=====
+L9001
+=====
+
+.. problem-summary:: L9001
+
+:program:`ironlink` detected a state that its own design rules out, so it stopped
+with exit code 3. This is an error of :program:`ironlink`, not of the network, the
+command or the controllers. Examples are a worker thread that panicked while it
+waited for answers, a thread that the operating system refused to start, a socket
+whose read timeout could not be set, and a response that could not be written as
+JSON. The message says which.
+
+Nothing was sent to a controller by the failed step, and nothing in a controller
+changed: :program:`ironlink` never writes to a controller. Running the command
+again can succeed, if the cause was a temporary lack of resources on the PC, such
+as threads or memory.
+
+Solutions
+---------
+
+1. Run the command again, with ``-vvvv`` to write the log to standard error.
+2. Close programs to free memory and threads on the PC.
+3. Report the error with the message and the log, so that the cause can be
+   removed.
+
+See Also
+--------
+
+- :doc:`/reference/ironlink/ironlink` --- the commands of :program:`ironlink`
+- :doc:`L6005` --- a command session that cannot be read or written

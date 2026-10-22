@@ -385,8 +385,25 @@ What the code implements so far:
   when the UDP port is taken. `compiler/vm-cli/src/tcp.rs`: `--listen` takes an
   IP address alone and uses the default session port (the rules are
   REQ-VC-vm-cli-031 to 036 in `specs/design/vm-cli.md`).
+- `compiler/ironlink` (`ironlink`; format and rules in `specs/design/ironlink.md`,
+  REQ-IL-ironlink-001 to 054): IronLink with its two discovery drivers, broadcast
+  and address list, as a class whose set is derived from one declaration and
+  whose builder has no wildcard. Tests with fake devices on loopback ports: the
+  drivers find one and two devices and a silent target yields nothing; the
+  request is sent `attempts` times at least 300 ms apart and nothing else is ever
+  sent; undecodable datagrams are counted, a reply of another wire version is its
+  own outcome, and duplicates from one source are merged; the grouping of one
+  device id at several addresses into one device with several routes, and an
+  identity conflict; identify, with no answer as a normal answer of the shell;
+  the shell by lines in and lines out (each command, the codeless codec error);
+  and the program as a process (`compiler/ironlink/tests/cli.rs`): `--json` prints
+  the response of the shell, an identify that nothing answers exits with L6003,
+  and the log stays off stdout. A broadcast to the real `255.255.255.255` is a
+  manual check, because it depends on the network of the PC.
 
-What is not built, so the status stays `proposed`: IronLink and its drivers, the
-browse view, the connection path stored in the project file and in the workstation
-route record, the connection method as a class with a registration check, and the
-go-online comparison.
+What is not built, so the status stays `proposed`: choosing a controller and
+writing the remembered path (the `select` command of IronLink), the connection
+path stored in the project file and in the workstation route record, the browse
+view in the VS Code extension, USB enumeration or a gateway as discovery drivers,
+the connection method as a class with a registration check, and the go-online
+comparison.

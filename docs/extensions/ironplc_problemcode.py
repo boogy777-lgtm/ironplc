@@ -18,7 +18,8 @@ from os.path import join
 compiler_help_topics = set([v.split('.')[0] for v in listdir(join('reference', 'compiler', 'problems'))])
 extension_help_topics = set([v.split('.')[0] for v in listdir(join('reference', 'editor', 'problems'))])
 runtime_help_topics = set([v.split('.')[0] for v in listdir(join('reference', 'runtime', 'problems'))])
-help_topics = compiler_help_topics.union(extension_help_topics).union(runtime_help_topics)
+ironlink_help_topics = set([v.split('.')[0] for v in listdir(join('reference', 'ironlink', 'problems'))])
+help_topics = compiler_help_topics.union(extension_help_topics).union(runtime_help_topics).union(ironlink_help_topics)
 problem_infos = dict()
 
 class ProblemCode:
@@ -37,6 +38,7 @@ definitions = [
     join('..', 'compiler', 'vm-cli', 'resources', 'problem-codes.csv'),
     join('..', 'compiler', 'runtime', 'resources', 'problem-codes.csv'),
     join('..', 'compiler', 'ironplc-redundancy', 'resources', 'problem-codes.csv'),
+    join('..', 'compiler', 'ironlink', 'resources', 'problem-codes.csv'),
 ]
 
 for definition in definitions:
@@ -127,7 +129,7 @@ class ProblemIndex(Directive):
         wrappernode.append(subnode)
         return [wrappernode]
 
-_PROBLEM_PAGE_RE = re.compile(r'^reference/(compiler|editor|runtime)/problems/([PEV]\d+)$')
+_PROBLEM_PAGE_RE = re.compile(r'^reference/(compiler|editor|runtime|ironlink)/problems/([PEVL]\d+)$')
 
 
 def _problem_code_for_docname(docname):
@@ -223,12 +225,13 @@ THIN_PAGE_MIN_TEXT_LENGTH = 900
 
 ALLOWLIST_FILENAME = 'thin_problem_pages_allowlist.txt'
 
-PROBLEM_PAGE_PATTERN = re.compile(r'^[PEV]\d+\.html$')
+PROBLEM_PAGE_PATTERN = re.compile(r'^[PEVL]\d+\.html$')
 
 PROBLEM_PAGE_DIRS = (
     'reference/compiler/problems',
     'reference/editor/problems',
     'reference/runtime/problems',
+    'reference/ironlink/problems',
 )
 
 

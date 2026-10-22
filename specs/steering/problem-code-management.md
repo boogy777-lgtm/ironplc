@@ -218,6 +218,22 @@ V####
 [For V9xxx: explain this is an internal error and ask users to report it]
 ```
 
+### IronLink Codes (L-prefix)
+
+IronLink (`ironlink`, the workstation tool that finds controllers) is the owner's tool and not the runtime, so its codes have their own prefix, `L####`.
+
+- **Registry**: `compiler/ironlink/resources/problem-codes.csv` (`Code,Name,Message`)
+- **Documentation**: `docs/reference/ironlink/problems/L####.rst`
+- **Index**: `docs/reference/ironlink/problems/index.rst` (`.. problem-index:: L`, generated from the pages)
+- **Constants**: generated from the registry by `ironplc_msg_gen::write_code_constants` in `compiler/ironlink/build.rs`; do not write a code as a string
+
+| L-Code Range | Exit Code | Category |
+|-------------|-----------|----------|
+| L6001–L6999 | 2 | IO and network errors (a socket, the command session, an argument the user gave) |
+| L9001–L9999 | 3 | Internal errors of IronLink (a bug) |
+
+To add a code: choose the next number in the range, add the row to the CSV, add the constructor to `compiler/ironlink/src/error.rs`, add the page (the template of the V-codes above, with at least the text the documentation build requires of a problem page), and add a test that the code appears in the output with the right exit code. The message form is `L#### - message`, as with the V-codes.
+
 ## Implementation Patterns
 
 ### Creating Diagnostics

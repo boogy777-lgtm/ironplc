@@ -643,14 +643,19 @@ impl Diagnostic {
 /// arm so that it can also be handed to callers that cannot call into Rust — the
 /// playground's front end asks the WASM crate for it instead of testing code
 /// prefixes itself, which is how a fourth copy of this mapping was removed.
-pub const DOCS_SECTIONS: &[(char, &str)] = &[('P', "compiler"), ('V', "runtime"), ('E', "editor")];
+pub const DOCS_SECTIONS: &[(char, &str)] = &[
+    ('P', "compiler"),
+    ('V', "runtime"),
+    ('E', "editor"),
+    ('L', "ironlink"),
+];
 
 /// The section reported for a code whose family is not in [`DOCS_SECTIONS`].
 pub const UNKNOWN_DOCS_SECTION: &str = "unknown";
 
 /// The www.ironplc.com reference section that documents a problem code, derived
 /// from its leading letter: `P####` → `compiler`, `V####` → `runtime`,
-/// `E####` → `editor`.
+/// `E####` → `editor`, `L####` → `ironlink`.
 ///
 /// Returns [`UNKNOWN_DOCS_SECTION`] for any unrecognized prefix rather than
 /// guessing a section: a `…/reference/unknown/problems/…` URL 404s honestly

@@ -1061,6 +1061,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "ironplc-ironlink"
+version = "0.247.0"
+dependencies = [
+ "clap",
+ "ironplc-cli-support",
+ "ironplc-discovery",
+ "ironplc-msg-gen",
+ "ironplc-runtime",
+ "ironplc-spec-requirements-gen",
+ "log",
+ "rstest",
+ "serde",
+ "serde_json",
+ "spec_test_macro",
+]
+
+[[package]]
 name = "ironplc-mcp"
 version = "0.247.0"
 dependencies = [

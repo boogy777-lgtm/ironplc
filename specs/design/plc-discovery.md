@@ -18,11 +18,11 @@ format has its own owner crate, `ironplc-discovery` (`compiler/discovery`), and
 its own conformance tests, which the requirement IDs below bind to it.
 
 **Built:** the wire format crate (`encode_reply`, `decode_reply`, `request`,
-`is_request`), and the responder in `ironplcvm serve --listen`. **Not built:**
-the sender in IronLink. This crate only encodes and decodes, and opens no
+`is_request`), the responder in `ironplcvm serve --listen`, and the sender in
+IronLink ([ironlink.md](ironlink.md)). This crate only encodes and decodes, and opens no
 socket; the socket, the rate limit and the rules of when the device answers
-belong to `ironplcvm` and are specified, with their requirement IDs, in
-[vm-cli.md](vm-cli.md#discovery-on-the-listen-address).
+belong to `ironplcvm`, and the sockets of the sender belong to IronLink; both are specified, with their requirement IDs, in
+[vm-cli.md](vm-cli.md#discovery-on-the-listen-address) and [ironlink.md](ironlink.md).
 
 The crate is `#![no_std]` without `alloc` and has no dependencies
 ([ADR-0010](../adrs/0010-no-std-vm-for-embedded-targets.md)), so a device
