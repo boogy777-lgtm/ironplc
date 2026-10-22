@@ -784,9 +784,13 @@ by hand (`runtime/src/host.rs`, `vm-cli/src/serve.rs`, `vm-cli/src/slot_store.rs
    tool, not the runtime), documented under `docs/reference/ironlink/`.
    Prefactor: one generator of problem-code constants for every crate that has
    a CSV of codes (three copies today: vm-cli, runtime, redundancy).
-5. Connection methods as a class: one transport interface in Rust and in
-   TypeScript, with the stdio and TCP members registering themselves; MCP
-   gains the TCP method (option A: IronPLC connects directly).
+5. Connection methods as a class in TypeScript: one declaration per method
+   (stdio, TCP) holding everything the extension decides by method (profile
+   validation, open, description, reconnect, record anchor), in a table the
+   type system checks for completeness. Behaviour-preserving. The Rust side of
+   the class (the client transport trait with the stdio and TCP members) moves
+   to stage 7, where MCP is its first user: built earlier, it would have none
+   (2026-10-22).
 6. VS Code: the Network view in the separate IronLink extension (section 4b,
    a thin client of `ironlink` on stdio), "Choose" (the project path file and the
    workstation route record; the download record keyed by `deviceId`), and
@@ -795,7 +799,9 @@ by hand (`runtime/src/host.rs`, `vm-cli/src/serve.rs`, `vm-cli/src/slot_store.rs
    follows SIMATIC AX and TwinCAT XAE. The go-online comparison and its actions
    are the online-model plan (section 8).
 7. MCP: browse through IronLink; device tools connect the same way as VS Code,
-   replacing the in-process host where a device is given.
+   replacing the in-process host where a device is given. This stage builds
+   the Rust client transport trait with its stdio and TCP members (moved from
+   stage 5).
 
 Tracking issue: #149.
 
