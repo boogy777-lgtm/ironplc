@@ -165,6 +165,40 @@ Download Record Commands
    whether or not the record exists. The editor asks for the path instead of
    deriving it, so the rule that names the file is only in the compiler.
 
+Path Record Commands
+--------------------
+
+:program:`ironplcc record-path` *APPLICATION* ``--device-id`` *ID* ``--address`` *ADDRESS* ``--port`` *N*
+   Record the controller that was last chosen for an application. The command
+   writes the *path record* :file:`{STEM}.path.iplcinfo` beside *APPLICATION*,
+   the application container (:file:`{STEM}.iplc`, which need not exist), where
+   *STEM* is its file name without the extension. There is one record for each
+   application, and the next choice replaces it. The command prints nothing
+   when it writes the record.
+
+   The path record is a JSON file that holds the ID of the controller (``deviceId``),
+   a *route hint* (``routeHint``: the ``address`` and the ``sessionPort`` that
+   reached the controller, or ``null``) and the time of the choice in
+   milliseconds since 1970-01-01 UTC (``chosenAt``). The record travels with the
+   project, so a project that is moved to another PC keeps its last path. It is
+   a remembered convenience: it is not a binding of the application to the
+   controller, and you can connect to any controller.
+
+   A loopback address (``127.0.0.0/8``, ``::1`` or ``localhost``) is never
+   stored as the route hint, because it means this PC and points at another
+   machine on every other PC. When *ADDRESS* is loopback, the record keeps the
+   route hint it had for the same controller, and has ``null`` for the hint if
+   it had none or held another controller.
+
+   The command fails, with a message and without writing, when *ID* is not 32
+   lowercase hexadecimal digits, when *ADDRESS* is neither an IP address nor a
+   host name, and when *N* is not a port from 1 to 65535.
+
+:program:`ironplcc record-path-path` *APPLICATION*
+   Print the path of the path record for *APPLICATION*, whether or not the
+   record exists. The editor asks for the path instead of deriving it, so the
+   rule that names the file is only in the compiler.
+
 Other Commands
 --------------
 
@@ -204,6 +238,18 @@ Options
 ``--connection`` *NAME*
    The name of the connection that keys a download record. Required by
    ``record-download`` and ``record-download-path``. It must not be empty.
+
+``--device-id`` *ID*
+   The ID of the controller that was chosen: 32 lowercase hexadecimal digits.
+   Required by ``record-path``.
+
+``--address`` *ADDRESS*
+   The address that reached the controller: an IP address (an IPv6 address
+   without brackets) or a host name. Required by ``record-path``.
+
+``--port`` *N*
+   The session port of the controller at the address, from 1 to 65535.
+   Required by ``record-path``.
 
 ``--container`` *FILE*
    The container file that was sent to the device, when it is not the
