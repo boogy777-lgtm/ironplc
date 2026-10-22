@@ -1,0 +1,43 @@
+=====
+L6007
+=====
+
+.. problem-summary:: L6007
+
+:program:`ironlink` could not write a file of its workstation store. The store is
+the directory where :program:`ironlink` keeps the routes and the address list of
+the PC (see :doc:`/reference/ironlink/ironlink`). A file is written to a
+temporary file in the same directory and then renamed over the old one, so that
+the old file stays whole when the write fails. The message names the file and the
+reason that the operating system gave. :program:`ironlink` exits with code 2; the
+route or the address was not stored.
+
+Typical causes: the directory cannot be created or written (the right is missing,
+the disk is full or read-only, a file has the name of the directory), or the file
+is open in a program that does not allow it to be replaced.
+
+Example
+-------
+
+The store is named by a path below an existing file, so the directory cannot be
+created:
+
+.. code-block:: text
+
+   > ironlink --store C:\Temp\notes.txt\ironlink address add 10.0.4.7
+   Error: L6007 - unable to write C:\Temp\notes.txt\ironlink\addresses.json: Cannot create a file when that file already exists. (os error 183)
+
+Solutions
+---------
+
+1. Check that the directory in the message can be created and written by your
+   user, and that the disk has room.
+2. Choose another directory with ``--store`` or the environment variable
+   ``IRONLINK_STORE``.
+3. Close the program that holds the file open, and run the command again.
+
+See Also
+--------
+
+- :doc:`/reference/ironlink/ironlink` --- where the store is and how to change it
+- :doc:`L6006` --- a file of the store that cannot be read

@@ -1,0 +1,46 @@
+=====
+L6008
+=====
+
+.. problem-summary:: L6008
+
+:program:`ironlink route set` sent a fresh discovery request to the address and a
+device answered, but with another device id than the one the route is for. The
+message names the address and both device ids. :program:`ironlink` exits with
+code 2 and stores nothing: a stored route is one that was verified, and this
+answer verifies a route to another device.
+
+A route says how this PC reaches one device id. The command checks that the
+device at the address is that device before it stores the route, because the
+route is used later without asking the device again.
+
+Typical causes: the address was typed for another device, the device at the
+address was replaced, or the controller was started with a copy of the settings
+of another one and so has another device id than the one that was expected.
+
+Example
+-------
+
+The device at ``10.0.4.7`` has the device id ``0011...eeff``, and the route is
+set for another id:
+
+.. code-block:: text
+
+   > ironlink route set ffeeddccbbaa99887766554433221100 10.0.4.7
+   Error: L6008 - the device at 10.0.4.7:49152 has the device id 00112233445566778899aabbccddeeff, not ffeeddccbbaa99887766554433221100; no route was stored
+
+Solutions
+---------
+
+1. Run :program:`ironlink identify` with the address and read the device id that
+   it answers.
+2. If the device at the address is the one you want, set the route for the id that
+   it answers.
+3. If it is not, find the address of the device you want with
+   :program:`ironlink browse`.
+
+See Also
+--------
+
+- :doc:`/reference/ironlink/ironlink` --- the command :program:`ironlink route set`
+- :doc:`L6003` --- no answer to the identify request of :program:`ironlink route set`
