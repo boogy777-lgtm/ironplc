@@ -2,6 +2,7 @@
 
 status: accepted
 date: 2026-10-20
+amended: 2026-10-22 (the download record is keyed by the id of the device and not by the name of the connection profile; the record is version 2; records under the former name are not read)
 
 ## Context and Problem Statement
 
@@ -50,7 +51,7 @@ stay with the device.
 
 1. **A family of engineering record files beside the application, one
    path function, versioned JSON, fail-soft read (chosen).**
-2. **One file for the build and the downloads.** A download is per connection,
+2. **One file for the build and the downloads.** A download is per device,
    and a build record would be rewritten by every download and the other way
    around.
 3. **State kept by the editor only** (what `ironplc.baseline` does for the
@@ -67,23 +68,32 @@ content comparison with one place to find, read and version every record.
 
 - **Names.** The record sits beside `<app>.iplc` and is named for its kind:
   `<app>.build.iplcinfo` for the build record, and
-  `<app>.<connection>.download.iplcinfo` for the download record, one for each
-  connection profile (a device reports no unique id, so the engineering side's
-  name for the connection keys it). `RecordKind` in `ironplc-project` lists the
+  `<app>.<deviceId>.download.iplcinfo` for the download record, one for each
+  device (every device generates an id of its own, once, and keeps it; the
+  record says what this project last put on that device). `RecordKind` in `ironplc-project` lists the
   kinds, and its path and version functions are exhaustive matches, so a kind
   without a name or a version does not compile. The UID table is the kind
   `Uids`, with its name unchanged.
-- **The connection in a file name.** A profile name is free text. `<connection>`
-  keeps the characters `A-Z a-z 0-9 _ -` and writes every other byte of the
-  UTF-8 text as `%` and two uppercase hexadecimal digits (`My PLC:1` is
-  `My%20PLC%3A1`). The encoding is injective, because the `%` of the text is
-  encoded as well. It is a valid file name on Windows, where `:` and a trailing
-  space or dot are not allowed. The dot is encoded so that a name cannot write
-  the suffix of another kind: the connection `a.build` is `a%2Ebuild` and does
-  not make a file that looks like a build record. An empty name has no record.
-  Names that differ only in letter case share a file on a file system that
-  ignores case, so a record holds the connection name as written, and a reader
-  treats a record of another name as malformed.
+- **The device id in a file name.** `<deviceId>` is the id of the device: 32
+  lowercase hexadecimal digits, held by one type in `ironplc-project`
+  (`DeviceId`) that has no other way to be made than the check of those digits.
+  The digits are valid in a file name on every system and contain no dot, so no
+  id can write the suffix of another kind, and the name needs no encoding. A
+  device id has no letter case to lose, so two devices never share a file. The
+  record holds the id (`deviceId`), and a reader treats a record of another id
+  (a copied or renamed file) as malformed. The name of the connection profile is
+  not part of the record: a profile is a way to reach a device, and a renamed
+  profile or a changed address finds the record of the same device again.
+- **Records under the former name.** Before 2026-10-22 the record was
+  `<app>.<connection>.download.iplcinfo`, keyed by the name of the connection
+  profile, because no device had an id. Those files are not read and not
+  migrated: a device has no record until the next download to it writes
+  `<app>.<deviceId>.download.iplcinfo`, and the editor shows it as "no record",
+  which is no check. The download record is version 2 (it holds `deviceId` where
+  version 1 held `connection`), so a version 1 file is malformed even when it is
+  found under an id's name. A device that reports no id (a host that has none, or
+  a device that predates the field) has no record at all: the editor does not
+  write one and says why in the connection channel.
 - **Format.** Every record is JSON with an integer `version`. The reader accepts
   the version of the kind and nothing else. A missing file is no record. A file
   that is not JSON, has another version or has a shape that is not the kind's is
@@ -114,7 +124,7 @@ content comparison with one place to find, read and version every record.
   there: it still describes the container on disk. `--force` builds regardless
   and writes the record.
 
-- **The download record** holds the name of the connection, the name of the
+- **The download record** holds the id of the device, the name of the
   application (the one the build record gives when the application has a build
   record, else the stem of the container), the identity of the container that was
   sent (`contentHash`, `layoutHash`, `debugHash` and the size, read from its
@@ -185,8 +195,13 @@ content comparison with one place to find, read and version every record.
   its name, and the editor, the command line and later tools share them.
 - Bad, because a device that predates `contentHash` cannot be compared, so with a
   record it is refused until it is updated.
-- Bad, because the download record is per connection profile name: renaming a
-  profile leaves the old record behind and is a connection without a record.
+- Good, because the download record follows the device: renaming a profile or
+  reaching the device by another address finds the same record, and two profiles
+  for one device share it.
+- Bad, because the download records written before the key changed (under the name
+  of a connection profile) are left behind and unread: each device is without a
+  record, and so unchecked, until the next download to it.
+- Bad, because a device that reports no id cannot have a record.
 - Bad, because the connection of a stdio profile that runs a source program is
   never checked.
 - Neutral: the record holds the absolute paths of the sources, as the debug
@@ -202,21 +217,24 @@ content comparison with one place to find, read and version every record.
   with a missing, altered and foreign container.
 - `compiler/project/src/records.rs`: the missing, malformed and wrong-version
   cases for each kind.
+- `compiler/project/src/device_id.rs`: the one check of a device id.
 - `compiler/project/src/records.rs` and `compiler/project/src/download_record/tests.rs`:
-  the file name of a connection (`My PLC:1`, `a.build`, Unicode, the characters
-  Windows forbids, two names never sharing a file, an empty name), the record that
-  is written and read back, the record of another connection, another version and
-  a damaged shape, the refusal when the device runs another container, and the
+  the file name of a device (its id, two ids never sharing a file, never the name
+  of another kind), the record that is written and read back, the record of
+  another device, the former `connection` shape, another version and a damaged
+  shape, the refusal when the device runs another container, and the
   time format.
 - `compiler/runtime/tests/commands_acceptance.rs` and `compiler/vm-cli/src/serve_tests.rs`:
   the hashes of the normal artifact after load, during a trial, after a commit and
   after a restart, and the payload with and without them.
 - `compiler/ironplc-cli/tests/cli_record_download.rs`: `record-download` and
   `record-download-path` as the editor runs them, the missing file, the file that
-  is not a container, the empty name and the hash that is not the container's.
+  is not a container, a device id that is not 32 lowercase hexadecimal digits and the hash that is not the container's.
 - `integrations/vscode/src/test/unit/baselineLogic.test.ts`: a reboot keeps a
   match, another container is a mismatch, no record is none, a device that reports
-  no hash is a mismatch, the plan of each download path, and the guards above.
+  no hash is a mismatch, the plan of each download path, a device that reports no
+  id (nothing recorded, with the reason), a renamed profile (the same plan), and
+  the guards above.
 - `compiler/ironplc-cli/src/cli/up_to_date_tests.rs`: the second build is up to
   date and leaves the container untouched, `--force`, a changed source, a changed
   option, a deleted or altered container, and a missing, damaged and

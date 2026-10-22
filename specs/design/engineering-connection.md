@@ -546,9 +546,10 @@ reconnects to deploy. The deploy is the online build above; the only
 addition is a pre-send baseline check.
 
 1. **Baseline: the download record, comparison on (re)connect.** The
-   baseline is the *download record* of the connection
+   baseline is the *download record* of the device
    ([ADR-0083](../adrs/0083-build-and-download-records.md)): a file beside
-   the application, `<app>.<connection>.download.iplcinfo`, written by
+   the application, `<app>.<deviceId>.download.iplcinfo` (the `deviceId` the
+   device reports in its `identity`), written by
    `ironplcc record-download` after every download the engineer's tools
    make (an acknowledged assemble, or a session started with a container).
    It holds the identity of the container the device received (the

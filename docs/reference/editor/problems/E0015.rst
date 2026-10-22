@@ -22,12 +22,17 @@ it did. Deploying local edits over unknown device state is refused
 When the device acknowledges a build from this workspace, and when a session
 starts with a container, the extension records what the device received in the
 *download record* (:doc:`/reference/compiler/ironplcc`, ``record-download``), a
-file beside the application container, one for each connection. The record
-holds the hashes of the container. When the extension connects, it compares the
+file beside the application container, one for each device, named by the
+device id that the device reports. The record holds the hashes of the
+container. When the extension connects, it compares the
 content hash that the device reports with the record, before it sends anything.
 The comparison is by content, so a device that restarted still matches,
-although it starts its generation counters again. A connection that has no
-record yet (the first deploy to a device) is not checked.
+although it starts its generation counters again. A device that has no
+record yet (the first deploy to it) is not checked. Records that earlier versions
+of the extension wrote under the name of a connection are not read, so such a
+device is not checked until the next download to it. A device that does not
+report a device id has no record: the extension does not write one, and says why
+in the *IronPLC Connection* output channel.
 
 A device that does not report the content hash of its application cannot be
 compared. When a record exists for it, the extension reports this problem;
