@@ -23,6 +23,8 @@ setup:
 # default build cannot see that, because `std` is on. This is a host build, so
 # it catches a `std` *import*; the bare-metal cross-compile ADR-0010's
 # Confirmation asks for is tracked by issue #1573.
+# `ironplc-discovery` is `#![no_std]` with no `std` feature at all, so the first
+# build is already its `no_std` build and it needs no line of its own here.
 compile:
   cargo build
   cargo build -p ironplc-container --no-default-features

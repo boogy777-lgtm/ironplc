@@ -6,6 +6,7 @@ members = [
     "codegen",
     "container",
     "container_derive",
+    "discovery",
     "ironplc-cli",
     "ironplc-redundancy",
     "mcp",

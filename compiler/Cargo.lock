@@ -1035,6 +1035,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ironplc-discovery"
+version = "0.247.0"
+dependencies = [
+ "ironplc-spec-requirements-gen",
+ "rstest",
+ "spec_test_macro",
+]
+
+[[package]]
 name = "ironplc-dsl"
 version = "0.247.0"
 dependencies = [
