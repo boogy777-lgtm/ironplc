@@ -22,11 +22,12 @@
 //! exclusivity. The per-message read timeout drops an idle client the same
 //! way, with V6013 on the wire.
 
-use std::io;
-use std::net::{IpAddr, SocketAddr, TcpListener, TcpStream};
+use std::io::{self, Read};
+use std::net::{IpAddr, Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use ironplc_redundancy::Shell;
 use ironplc_runtime::frame::{
@@ -80,6 +81,52 @@ fn write_error_frame(stream: &mut TcpStream, v_code: &str, message: &str) -> io:
     write_frame(stream, &line)
 }
 
+/// How long a closed connection waits for its peer to finish sending.
+const CLOSE_LINGER: Duration = Duration::from_secs(1);
+
+/// The most input a closing connection reads and discards.
+const CLOSE_DRAIN_LIMIT: usize = 1024 * 1024;
+
+/// Closes a connection after its last frame, so that the peer reads that frame.
+///
+/// Closing a socket with input the device has not read resets the connection,
+/// and a reset discards what the peer has received and not yet read: a client
+/// that writes its `identity` while the device refuses it would lose the
+/// refusal. The close therefore ends the output (a FIN after the frame), reads
+/// and discards what the peer sent until it closes too, and only then drops
+/// the socket. A peer that neither closes nor stops sending is cut off after
+/// [`CLOSE_LINGER`] of silence or [`CLOSE_DRAIN_LIMIT`] bytes.
+fn close_gracefully(stream: &mut TcpStream) {
+    if let Err(err) = stream.shutdown(Shutdown::Write) {
+        log::debug!("unable to end the output of a closing connection: {err}");
+        return;
+    }
+    if let Err(err) = stream.set_read_timeout(Some(CLOSE_LINGER)) {
+        log::debug!("unable to bound the close of a connection: {err}");
+        return;
+    }
+    let mut buffer = [0u8; 4096];
+    let mut drained = 0;
+    while drained < CLOSE_DRAIN_LIMIT {
+        match stream.read(&mut buffer) {
+            Ok(0) | Err(_) => return,
+            Ok(count) => drained += count,
+        }
+    }
+}
+
+/// Answers a connection the device cannot serve with one coded line, then
+/// closes it so the peer reads the line.
+fn refuse(mut stream: TcpStream, peer: SocketAddr) {
+    if let Err(err) =
+        write_error_frame(&mut stream, error::SESSION_REFUSED, SESSION_REFUSED_MESSAGE)
+    {
+        log::warn!("unable to send the session refusal to {peer}: {err}");
+        return;
+    }
+    close_gracefully(&mut stream);
+}
+
 /// Serves one TCP session: the stdio session loop over the framed transport,
 /// with the per-message read timeout the timeout policy sets. `stream` stays
 /// with the caller so a failed session can still receive its V6013 line.
@@ -118,18 +165,24 @@ fn serve_accepted(
         let mut device = device.lock().unwrap_or_else(|err| err.into_inner());
         serve_connection(&mut host, &mut shell, &mut device, &mut store, &mut stream)
     };
+    let mut framing_answered = false;
     match result {
         Ok(()) => log::info!("session with {peer} ended"),
         Err(err) if ends_with_framing_code(&err) => {
             log::warn!("dropping session with {peer}: {err}");
             let message = framing_code_message(&err);
-            if let Err(err) = write_error_frame(&mut stream, error::SESSION_FRAMING, &message) {
-                log::warn!("unable to send the framing error to {peer}: {err}");
+            match write_error_frame(&mut stream, error::SESSION_FRAMING, &message) {
+                Ok(()) => framing_answered = true,
+                Err(err) => log::warn!("unable to send the framing error to {peer}: {err}"),
             }
         }
         Err(err) => log::warn!("session with {peer} ended with an error: {err}"),
     }
+    // The next client may connect while the dropped one finishes its close.
     occupied.store(false, Ordering::SeqCst);
+    if framing_answered {
+        close_gracefully(&mut stream);
+    }
 }
 
 /// Reads the value of `--listen`: `IP:PORT`, or an IP address (v4 or v6) alone,
@@ -203,7 +256,7 @@ pub(crate) fn serve_tcp(
     let device = Arc::new(Mutex::new(device));
     let store = Arc::new(Mutex::new(store));
     loop {
-        let (mut stream, peer) = listener.accept().map_err(|err| {
+        let (stream, peer) = listener.accept().map_err(|err| {
             VmError::io(
                 error::SESSION_IO,
                 format!("unable to accept a connection: {err}"),
@@ -213,10 +266,12 @@ pub(crate) fn serve_tcp(
         // one coded line and is closed, never a session.
         if occupied.swap(true, Ordering::SeqCst) {
             log::info!("refusing {peer}: one engineering session is already active");
-            if let Err(err) =
-                write_error_frame(&mut stream, error::SESSION_REFUSED, SESSION_REFUSED_MESSAGE)
+            // The close waits for the peer, so it does not hold the accept loop.
+            if let Err(err) = std::thread::Builder::new()
+                .name(format!("serve-refusal-{peer}"))
+                .spawn(move || refuse(stream, peer))
             {
-                log::warn!("unable to send the session refusal to {peer}: {err}");
+                log::warn!("unable to spawn the refusal of {peer}: {err}");
             }
             continue;
         }
@@ -250,7 +305,7 @@ pub(crate) fn serve_tcp(
 
 #[cfg(test)]
 mod tests {
-    use std::io::Read;
+    use std::io::Write;
 
     use ironplc_runtime::frame::framing_error;
     use rstest::rstest;
@@ -277,6 +332,28 @@ mod tests {
         assert_eq!(value["response"], "error");
         assert_eq!(value["vCode"], "V6014");
         assert_eq!(value["message"], "one session only");
+    }
+
+    #[test]
+    fn refuse_when_the_peer_already_sent_input_then_the_peer_still_reads_the_refusal() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let (server, peer) = listener.accept().unwrap();
+        client
+            .write_all(b"an identity the device never reads")
+            .unwrap();
+        // Blocks until the input is in the receive buffer of the device.
+        server.peek(&mut [0u8; 1]).unwrap();
+
+        let refusing = std::thread::spawn(move || refuse(server, peer));
+        let line = ironplc_runtime::frame::read_frame(&mut client)
+            .unwrap()
+            .unwrap();
+        drop(client);
+        refusing.join().unwrap();
+
+        let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(value["vCode"], "V6014");
     }
 
     #[test]
