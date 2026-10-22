@@ -312,3 +312,35 @@ fn identity_when_settings_then_carries_the_id_the_name_and_the_build_constants()
     assert_eq!(identity.modification, "vm-cli");
     assert_eq!(identity.runtime_version, env!("CARGO_PKG_VERSION"));
 }
+
+#[test]
+fn device_id_bytes_when_counted_id_then_the_bytes_one_to_sixteen() {
+    let bytes = device_id_bytes("0102030405060708090a0b0c0d0e0f10");
+
+    assert_eq!(
+        bytes,
+        Some([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])
+    );
+}
+
+#[test]
+fn device_id_bytes_when_formatted_again_then_the_same_id() {
+    let id = "00ff7f80a5c3e1d2b4968778695a4b3c";
+
+    let bytes = device_id_bytes(id).unwrap();
+
+    assert_eq!(device_id_hex(&bytes), id);
+}
+
+#[rstest]
+#[case::empty("")]
+#[case::short("0102030405060708090a0b0c0d0e0f1")]
+#[case::long("0102030405060708090a0b0c0d0e0f1000")]
+#[case::uppercase("0102030405060708090A0B0C0D0E0F10")]
+#[case::not_hex("0102030405060708090a0b0c0d0e0f1g")]
+#[case::multibyte("0102030405060708090a0b0c0d0e0f\u{00e4}")]
+#[case::signed("+102030405060708090a0b0c0d0e0f10")]
+fn device_id_bytes_when_not_32_lowercase_hex_digits_then_none(#[case] id: &str) {
+    assert_eq!(device_id_bytes(id), None);
+    assert!(check_device_id(id).is_err());
+}
