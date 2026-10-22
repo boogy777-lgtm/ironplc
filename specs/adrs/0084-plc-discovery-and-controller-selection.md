@@ -285,10 +285,11 @@ following parts.
   builds now, and the build is up to date (ADR-0083). Run and Stop are live
   observations; after the link is lost they are "unknown", never the last value. A
   working UI shows what exists and no placeholders.
-- **The download record is keyed by the device id.** Today it is keyed by the
-  connection profile name, because no device id existed; stage 6 keys it by
+- **The download record is keyed by the device id.** It is
   `<app>.<deviceId>.download.iplcinfo` (what this project last put on this
-  device).
+  device; [ADR-0083](0083-build-and-download-records.md)). It was keyed by the
+  connection profile name while no device had an id; records under that name are
+  not read.
 
 Classes that fit none of the above are named here so that the design does not close
 them, and are not built:

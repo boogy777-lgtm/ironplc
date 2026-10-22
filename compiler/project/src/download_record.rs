@@ -1,6 +1,11 @@
-//! The download record: what a device received at the last successful download
-//! over one connection, kept in `<app>.<connection>.download.iplcinfo` beside
-//! the application container ([`RecordKind::Download`]).
+//! The download record: what this project last put on one device, kept in
+//! `<app>.<deviceId>.download.iplcinfo` beside the application container
+//! ([`RecordKind::Download`]). The device is named by its id (`deviceId`, which
+//! the device generates once and keeps), not by the name of the connection
+//! profile that reached it, so the record follows the device through a renamed
+//! profile or a changed address. A record written under the former name
+//! `<app>.<connection>.download.iplcinfo` is not read: the device shows as
+//! having no record.
 //!
 //! With it the engineering side knows, without asking the device, which
 //! application the device was last given, and on connect it compares that with
@@ -20,8 +25,8 @@
 //!
 //! ```json
 //! {
-//!   "version": 1,
-//!   "connection": "My PLC",
+//!   "version": 2,
+//!   "deviceId": "0123456789abcdef0123456789abcdef",
 //!   "application": "Main",
 //!   "container": { "contentHash": "<hex>", "layoutHash": "<hex>", "debugHash": "<hex>", "size": 1234 },
 //!   "device": { "active": 2, "normal": 2, "application": 2 },
@@ -29,11 +34,11 @@
 //! }
 //! ```
 //!
-//! - `connection` is the name of the connection profile, as given. It is part
-//!   of the file name in an encoded form ([`RecordKind::path`]); a record whose
-//!   `connection` is not the one asked for is another connection's (two names
-//!   that differ only in case share a file on a file system that ignores case)
-//!   and is read as malformed.
+//! - `deviceId` is the id of the device, 32 lowercase hexadecimal digits
+//!   ([`DeviceId`]). It is also the part of the file name ([`RecordKind::path`]);
+//!   a record whose `deviceId` is not the one asked for is another device's (a
+//!   copied or renamed file) and is read as malformed. The name of the
+//!   connection profile is not kept.
 //! - `application` is the name the build record gives the application when the
 //!   application has one, else the stem of the container.
 //! - `container` is the identity of the container that was sent, read from its
@@ -51,6 +56,7 @@ use ironplc_dsl::diagnostic::Diagnostic;
 use serde_json::{json, Value};
 
 use crate::build_record::{self, BuildRecordRead, ContainerIdentity};
+use crate::device_id::DeviceId;
 use crate::records::{self, RecordKind, RecordRead};
 
 /// The generation counters of a device, as it reported them after a download.
@@ -79,11 +85,11 @@ impl DeviceGenerations {
     }
 }
 
-/// What a device received over one connection.
+/// What this project last put on one device.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DownloadRecord {
-    /// The name of the connection profile.
-    pub connection: String,
+    /// The id of the device.
+    pub device_id: DeviceId,
     /// The name of the application.
     pub application: String,
     /// The identity of the container that was sent.
@@ -97,7 +103,7 @@ pub struct DownloadRecord {
 impl DownloadRecord {
     fn to_json(&self) -> Value {
         json!({
-            "connection": self.connection,
+            "deviceId": self.device_id.as_str(),
             "application": self.application,
             "container": self.container.to_json(),
             "device": self.device.map(DeviceGenerations::to_json),
@@ -111,7 +117,7 @@ impl DownloadRecord {
             device => Some(DeviceGenerations::from_json(device)?),
         };
         Some(DownloadRecord {
-            connection: value.get("connection")?.as_str()?.to_owned(),
+            device_id: DeviceId::parse(value.get("deviceId")?.as_str()?).ok()?,
             application: value.get("application")?.as_str()?.to_owned(),
             container: ContainerIdentity::from_json(value.get("container")?)?,
             device,
@@ -125,23 +131,23 @@ impl DownloadRecord {
 pub enum DownloadRecordRead {
     /// There is no file.
     Missing,
-    /// The file is not a download record of this version and connection: it is
+    /// The file is not a download record of this version and device: it is
     /// not JSON, has another version, has a shape that is not the record's, or
-    /// names another connection.
+    /// names another device.
     Malformed,
     /// The record.
     Present(Box<DownloadRecord>),
 }
 
-/// Reads the download record of `connection` at `path`. Fails only on a
+/// Reads the download record of `device_id` at `path`. Fails only on a
 /// genuine I/O error; see [`records::read`].
-pub fn read(connection: &str, path: &Path) -> Result<DownloadRecordRead, Diagnostic> {
+pub fn read(device_id: &DeviceId, path: &Path) -> Result<DownloadRecordRead, Diagnostic> {
     Ok(
-        match records::read(RecordKind::Download { connection }, path)? {
+        match records::read(RecordKind::Download { device_id }, path)? {
             RecordRead::Missing => DownloadRecordRead::Missing,
             RecordRead::Malformed => DownloadRecordRead::Malformed,
             RecordRead::Present(value) => match DownloadRecord::from_json(&value) {
-                Some(record) if record.connection == connection => {
+                Some(record) if record.device_id == *device_id => {
                     DownloadRecordRead::Present(Box::new(record))
                 }
                 _ => DownloadRecordRead::Malformed,
@@ -159,8 +165,8 @@ pub struct Download<'a> {
     /// itself unless the bytes that were sent are another file (a container
     /// compiled for the occasion).
     pub container: &'a Path,
-    /// The name of the connection profile.
-    pub connection: &'a str,
+    /// The id of the device that received the container.
+    pub device_id: &'a DeviceId,
     /// The `contentHash` the device reports it runs, when it reports one. When
     /// given, the record is written only if it is the hash of `container`: the
     /// record says what the device received, and a device that runs something
@@ -173,9 +179,8 @@ pub struct Download<'a> {
 /// Why a download was not recorded.
 #[derive(Debug)]
 pub enum DownloadError {
-    /// No record can be named: the connection name is empty or the anchor has
-    /// no file name.
-    NoRecordPath { anchor: PathBuf, connection: String },
+    /// No record can be named: the anchor has no file name.
+    NoRecordPath { anchor: PathBuf },
     /// The container does not exist or does not start with a valid header.
     NotAContainer(PathBuf),
     /// The device runs another container than the one to record.
@@ -187,9 +192,9 @@ pub enum DownloadError {
 impl fmt::Display for DownloadError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            DownloadError::NoRecordPath { anchor, connection } => write!(
+            DownloadError::NoRecordPath { anchor } => write!(
                 f,
-                "Cannot name a download record for connection \"{connection}\" and application {}: the connection name must not be empty and the application needs a file name",
+                "Cannot name a download record for application {}: it needs a file name",
                 anchor.display()
             ),
             DownloadError::NotAContainer(path) => write!(
@@ -212,32 +217,30 @@ impl fmt::Display for DownloadError {
     }
 }
 
-/// The path of the download record of `connection` for the application
+/// The path of the download record of `device_id` for the application
 /// container `anchor`. The one place the editor asks for it, so the rule that
 /// names the file is [`RecordKind::path`] and nowhere else.
-pub fn record_path(anchor: &Path, connection: &str) -> Result<PathBuf, DownloadError> {
-    RecordKind::Download { connection }
+pub fn record_path(anchor: &Path, device_id: &DeviceId) -> Result<PathBuf, DownloadError> {
+    RecordKind::Download { device_id }
         .path(anchor)
-        .ok_or_else(|| no_record_path(anchor, connection))
+        .ok_or_else(|| no_record_path(anchor))
 }
 
-fn no_record_path(anchor: &Path, connection: &str) -> DownloadError {
+fn no_record_path(anchor: &Path) -> DownloadError {
     DownloadError::NoRecordPath {
         anchor: anchor.to_path_buf(),
-        connection: connection.to_owned(),
     }
 }
 
 /// Writes the download record of `download`, with `unix_seconds` as its time.
 ///
 /// This is the one writer of the record. It overwrites the record of the
-/// connection; nothing is written on an error.
+/// device; nothing is written on an error.
 pub fn record_download(download: &Download<'_>, unix_seconds: u64) -> Result<(), DownloadError> {
-    let path = record_path(download.anchor, download.connection)?;
+    let path = record_path(download.anchor, download.device_id)?;
     // The path has a stem when the anchor has a name; this keeps that fact
     // from being assumed.
-    let stem = records::stem(download.anchor)
-        .ok_or_else(|| no_record_path(download.anchor, download.connection))?;
+    let stem = records::stem(download.anchor).ok_or_else(|| no_record_path(download.anchor))?;
     let container = ContainerIdentity::of_file(download.container)
         .ok_or_else(|| DownloadError::NotAContainer(download.container.to_path_buf()))?;
     if let Some(device_hash) = download.device_content_hash {
@@ -249,7 +252,7 @@ pub fn record_download(download: &Download<'_>, unix_seconds: u64) -> Result<(),
         }
     }
     let record = DownloadRecord {
-        connection: download.connection.to_owned(),
+        device_id: download.device_id.clone(),
         application: application_name(download.anchor, stem),
         container,
         device: download.device,
@@ -257,7 +260,7 @@ pub fn record_download(download: &Download<'_>, unix_seconds: u64) -> Result<(),
     };
     records::write(
         RecordKind::Download {
-            connection: download.connection,
+            device_id: download.device_id,
         },
         &path,
         record.to_json(),

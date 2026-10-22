@@ -134,19 +134,16 @@ Refactor Commands
 Download Record Commands
 ------------------------
 
-:program:`ironplcc record-download` *APPLICATION* ``--connection`` *NAME*
-   Record that a device received a container over a connection. The command
-   writes the *download record*
-   :file:`{STEM}.{CONNECTION}.download.iplcinfo` beside *APPLICATION*, the
-   application container (:file:`{STEM}.iplc`), where *STEM* is its file name
-   without the extension and *CONNECTION* is the connection name, written with
-   every character other than ``A-Z a-z 0-9 _ -`` as ``%`` and two hexadecimal
-   digits of each byte of its UTF-8 text (``My PLC:1`` is ``My%20PLC%3A1``).
-   There is one record for each connection, and the next download over the
-   connection replaces it. The command prints nothing when it writes the
-   record.
+:program:`ironplcc record-download` *APPLICATION* ``--device-id`` *ID*
+   Record that a device received a container. The command writes the
+   *download record* :file:`{STEM}.{ID}.download.iplcinfo` beside *APPLICATION*,
+   the application container (:file:`{STEM}.iplc`), where *STEM* is its file name
+   without the extension and *ID* is the device ID. There is one record for each
+   device, and the next download to the device replaces it. The command prints
+   nothing when it writes the record. A record that an earlier version wrote under
+   the name of a connection is not read.
 
-   The download record is a JSON file that holds the connection name, the name
+   The download record is a JSON file that holds the device ID, the name
    of the application (the one the build record gives, else *STEM*), the hashes
    and the size of the container that was sent, which the command reads from the
    header of the container, the generation counters that the device reported
@@ -156,12 +153,13 @@ Download Record Commands
 
    The container that was sent is *APPLICATION* unless ``--container`` names
    another file. The command fails, with a message and without writing, when the
-   connection name is empty, when the container does not exist or does not start
-   with a valid container header, and when ``--device-content-hash`` is not the
-   content hash of the container.
+   container does not exist or does not start with a valid container header, and
+   when ``--device-content-hash`` is not the
+   content hash of the container. An *ID* that is not 32 lowercase hexadecimal
+   digits is refused before anything is written.
 
-:program:`ironplcc record-download-path` *APPLICATION* ``--connection`` *NAME*
-   Print the path of the download record of the connection for *APPLICATION*,
+:program:`ironplcc record-download-path` *APPLICATION* ``--device-id`` *ID*
+   Print the path of the download record of the device for *APPLICATION*,
    whether or not the record exists. The editor asks for the path instead of
    deriving it, so the rule that names the file is only in the compiler.
 
@@ -235,13 +233,11 @@ Options
    command compiles and writes the container and the build record as it does
    for a changed project.
 
-``--connection`` *NAME*
-   The name of the connection that keys a download record. Required by
-   ``record-download`` and ``record-download-path``. It must not be empty.
-
 ``--device-id`` *ID*
-   The ID of the controller that was chosen: 32 lowercase hexadecimal digits.
-   Required by ``record-path``.
+   The ID of a device: 32 lowercase hexadecimal digits. For ``record-path``, the
+   controller that was chosen. For ``record-download`` and
+   ``record-download-path``, the device that keys the download record. Required
+   by all three.
 
 ``--address`` *ADDRESS*
    The address that reached the controller: an IP address (an IPv6 address

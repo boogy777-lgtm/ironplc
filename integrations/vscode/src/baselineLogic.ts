@@ -8,8 +8,9 @@
  * — fail-closed, the same pattern as the V4007–V4010 staging refusals.
  *
  * What this workspace last put on the device is the *download record*
- * (ADR-0083): a file beside the application container, one per connection
- * profile, written by `ironplcc record-download`. What the device runs is the
+ * (ADR-0083): a file beside the application container, one per device,
+ * keyed by the device's id (`deviceId` of its identity) and written by
+ * `ironplcc record-download`. What the device runs is the
  * `contentHash` of its identity. The comparison is by content, so a device
  * reboot, which restarts the generation counters, keeps a match.
  *
@@ -34,24 +35,24 @@ import { ExecFileFn } from './syncUidsLogic';
 export type BaselineState = 'none' | 'match' | 'mismatch';
 
 /** The version of the download record this client reads (the compiler's `RecordKind::version`). */
-const DOWNLOAD_RECORD_VERSION = 1;
+const DOWNLOAD_RECORD_VERSION = 2;
 
 /** What the check reads of a download record. */
 export interface DownloadRecord {
-  /** The name of the connection profile the record is for. */
-  connection: string;
+  /** The id of the device the record is for. */
+  deviceId: string;
   /** The `contentHash` of the container the device received, 64 lowercase hexadecimal digits. */
   contentHash: string;
 }
 
 /**
- * Reads the download record of `connection` from its file text. A text that is
- * not a record of this version for this connection is no record — as the
- * compiler's reader treats it (fail-soft). The connection is compared because
- * two names that differ only in letter case share a file on a file system that
- * ignores case.
+ * Reads the download record of `deviceId` from its file text. A text that is
+ * not a record of this version for this device is no record — as the
+ * compiler's reader treats it (fail-soft). The device is compared because a
+ * file that was copied or renamed to another device's name is not that
+ * device's record.
  */
-export function parseDownloadRecord(text: string, connection: string): DownloadRecord | undefined {
+export function parseDownloadRecord(text: string, deviceId: string): DownloadRecord | undefined {
   let value: unknown;
   try {
     value = JSON.parse(text);
@@ -64,7 +65,7 @@ export function parseDownloadRecord(text: string, connection: string): DownloadR
   }
   const record = value as Record<string, unknown>;
   const container = record.container;
-  if (record.version !== DOWNLOAD_RECORD_VERSION || record.connection !== connection) {
+  if (record.version !== DOWNLOAD_RECORD_VERSION || record.deviceId !== deviceId) {
     return undefined;
   }
   if (typeof container !== 'object' || container === null) {
@@ -74,13 +75,13 @@ export function parseDownloadRecord(text: string, connection: string): DownloadR
   if (typeof contentHash !== 'string' || !/^[0-9a-f]{64}$/.test(contentHash)) {
     return undefined;
   }
-  return { connection, contentHash };
+  return { deviceId, contentHash };
 }
 
 /**
  * Compares the device's current application snapshot with the download record.
  *
- * - no record: `none` (a first deploy, or a connection never downloaded to);
+ * - no record: `none` (a first deploy, or a device never downloaded to);
  * - a record and the same `contentHash`: `match`;
  * - a record and another `contentHash`, or a device that reports none (it
  *   predates the field, so what it runs cannot be known): `mismatch`, which
@@ -104,7 +105,8 @@ export type Anchor = { anchor: string } | { reason: string };
 
 /**
  * The application container a connection's download record is named after
- * and sits beside (the compiler names the file from it). Which container that
+ * and sits beside (the compiler names the file from it; the device's id is the
+ * rest of the name). Which container that
  * is, or that there is none, is the connection method's rule
  * (`ConnectionMethod.anchor`).
  */
@@ -124,7 +126,8 @@ export interface DownloadToRecord {
   anchor: string;
   /** The container file that was sent. */
   container: string;
-  connection: string;
+  /** The id of the connected device, which keys the record. */
+  deviceId: string;
   /** The device's status after the download: the counters and, when reported, the content hash. */
   status: HotEditStatus;
 }
@@ -143,6 +146,12 @@ export interface DownloadRequest {
    * when absent.
    */
   sentContainer?: string;
+  /**
+   * The id of the connected device, as its identity reports it. A device whose
+   * identity carries none (one that predates the field, or a host that has
+   * none) has no record.
+   */
+  deviceId: string | undefined;
   /** The device's status after the download. */
   status: HotEditStatus;
   /**
@@ -163,6 +172,9 @@ export function planDownload(request: DownloadRequest): DownloadPlan {
   if ('reason' in anchor) {
     return anchor;
   }
+  if (request.deviceId === undefined) {
+    return { reason: 'the device does not report a device id, which keys the record' };
+  }
   if (request.requireDeviceHash && request.status.contentHash === undefined) {
     return { reason: 'the device does not report the content hash of its application, so it cannot be shown that it runs this container' };
   }
@@ -170,7 +182,7 @@ export function planDownload(request: DownloadRequest): DownloadPlan {
     download: {
       anchor: anchor.anchor,
       container: request.sentContainer === undefined ? anchor.anchor : path.resolve(request.sentContainer),
-      connection: request.profile.name,
+      deviceId: request.deviceId,
       status: request.status,
     },
   };
@@ -179,7 +191,7 @@ export function planDownload(request: DownloadRequest): DownloadPlan {
 /** The arguments of `ironplcc record-download` for a download. */
 export function recordDownloadArgs(download: DownloadToRecord): string[] {
   const { status } = download;
-  const args = ['record-download', download.anchor, '--connection', download.connection];
+  const args = ['record-download', download.anchor, '--device-id', download.deviceId];
   if (download.container !== download.anchor) {
     args.push('--container', download.container);
   }
@@ -197,8 +209,8 @@ export function recordDownloadArgs(download: DownloadToRecord): string[] {
 }
 
 /** The arguments of `ironplcc record-download-path`. */
-export function recordDownloadPathArgs(anchor: string, connection: string): string[] {
-  return ['record-download-path', anchor, '--connection', connection];
+export function recordDownloadPathArgs(anchor: string, deviceId: string): string[] {
+  return ['record-download-path', anchor, '--device-id', deviceId];
 }
 
 /** Writes the download record, through the compiler: the one writer of the format. */
@@ -207,7 +219,7 @@ export async function writeDownloadRecord(run: RunCompiler, download: DownloadTo
 }
 
 /**
- * Compares the device with the download record of `connection` for `anchor`.
+ * Compares the device with the download record of `deviceId` for `anchor`.
  * The record's file is the one the compiler names; a file that is not there is
  * no record. `readText` resolves `undefined` for a file that does not exist
  * and rejects for any other failure.
@@ -216,15 +228,15 @@ export async function readBaseline(
   run: RunCompiler,
   readText: (file: string) => Promise<string | undefined>,
   anchor: string,
-  connection: string,
+  deviceId: string,
   application: HotEditStatus,
 ): Promise<BaselineState> {
-  const printed = (await run(recordDownloadPathArgs(anchor, connection))).stdout;
+  const printed = (await run(recordDownloadPathArgs(anchor, deviceId))).stdout;
   const file = printed.replace(/\r?\n$/, '');
   if (file.length === 0) {
     throw new Error('the compiler did not say where the download record is');
   }
   const text = await readText(file);
-  const record = text === undefined ? undefined : parseDownloadRecord(text, connection);
+  const record = text === undefined ? undefined : parseDownloadRecord(text, deviceId);
   return checkBaseline(record, application);
 }

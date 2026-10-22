@@ -5,6 +5,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use ironplc_container::FileHeader;
+use ironplc_project::device_id::DeviceId;
 use ironplc_project::download_record::DeviceGenerations;
 use ironplc_project::RecordKind;
 use tempfile::TempDir;
@@ -26,11 +27,17 @@ fn application() -> (TempDir, PathBuf) {
     (dir, path)
 }
 
-fn args<'a>(application: &'a PathBuf, connection: &'a str) -> RecordDownload<'a> {
+const DEVICE_TEXT: &str = "0123456789abcdef0123456789abcdef";
+
+fn device() -> DeviceId {
+    DeviceId::parse(DEVICE_TEXT).unwrap()
+}
+
+fn args<'a>(application: &'a PathBuf, device_id: &'a DeviceId) -> RecordDownload<'a> {
     RecordDownload {
         application,
         container: None,
-        connection,
+        device_id,
         device_content_hash: None,
         device: None,
     }
@@ -40,15 +47,19 @@ fn args<'a>(application: &'a PathBuf, connection: &'a str) -> RecordDownload<'a>
 fn record_download_when_container_then_ok_and_record_beside_it() {
     let (dir, application) = application();
 
-    record_download(&args(&application, "My PLC")).unwrap();
+    record_download(&args(&application, &device())).unwrap();
 
-    assert!(dir.path().join("app.My%20PLC.download.iplcinfo").is_file());
+    assert!(dir
+        .path()
+        .join(format!("app.{DEVICE_TEXT}.download.iplcinfo"))
+        .is_file());
 }
 
 #[test]
 fn record_download_when_generations_given_then_ok() {
     let (_dir, application) = application();
-    let mut request = args(&application, "plc");
+    let id = device();
+    let mut request = args(&application, &id);
     request.device = Some(DeviceGenerations {
         active: 2,
         normal: 2,
@@ -57,7 +68,7 @@ fn record_download_when_generations_given_then_ok() {
 
     record_download(&request).unwrap();
 
-    let path = RecordKind::Download { connection: "plc" }
+    let path = RecordKind::Download { device_id: &id }
         .path(&application)
         .unwrap();
     assert!(fs::read_to_string(path).unwrap().contains("\"active\": 2"));
@@ -68,34 +79,30 @@ fn record_download_when_container_missing_then_error_and_no_record() {
     let dir = TempDir::new().unwrap();
     let application = dir.path().join("app.iplc");
 
-    let err = record_download(&args(&application, "plc")).unwrap_err();
+    let err = record_download(&args(&application, &device())).unwrap_err();
 
     assert!(err.contains("app.iplc"));
     assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
 }
 
 #[test]
-fn record_download_when_connection_empty_then_error_and_no_record() {
+fn record_download_path_when_device_then_path_of_the_record() {
     let (dir, application) = application();
 
-    let err = record_download(&args(&application, "")).unwrap_err();
+    let path = record_download_path(&application, &device()).unwrap();
 
-    assert!(err.contains("must not be empty"));
-    assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
+    assert_eq!(
+        path,
+        dir.path()
+            .join(format!("app.{DEVICE_TEXT}.download.iplcinfo"))
+    );
 }
 
 #[test]
-fn record_download_path_when_connection_then_path_of_the_record() {
-    let (dir, application) = application();
+fn record_download_path_when_anchor_has_no_file_name_then_error() {
+    let root = PathBuf::from(std::path::MAIN_SEPARATOR_STR);
 
-    let path = record_download_path(&application, "a.build").unwrap();
+    let err = record_download_path(&root, &device()).unwrap_err();
 
-    assert_eq!(path, dir.path().join("app.a%2Ebuild.download.iplcinfo"));
-}
-
-#[test]
-fn record_download_path_when_connection_empty_then_error() {
-    let (_dir, application) = application();
-
-    assert!(record_download_path(&application, "").is_err());
+    assert!(err.contains("needs a file name"), "{err}");
 }

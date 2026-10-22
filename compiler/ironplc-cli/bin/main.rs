@@ -13,6 +13,7 @@ use ironplc_parser::options::{
     StringToNumFailure, StringToNumNonNumeric,
 };
 use ironplc_problems::WarningSet;
+use ironplc_project::device_id::DeviceId;
 use ironplc_project::download_record::DeviceGenerations;
 use ironplc_project::path_record;
 use ironplc_sources::LibraryName;
@@ -656,22 +657,22 @@ enum Action {
         #[command(subcommand)]
         command: RefactorAction,
     },
-    /// Records that a device received a container over a connection: writes
-    /// the download record `<application>.<connection>.download.iplcinfo`
-    /// beside the application container (ADR 0083). The editor calls this
-    /// after the device acknowledged a download, and compares the record with
-    /// the content hash the device reports when it connects. Prints nothing
-    /// when the record is written.
+    /// Records that a device received a container: writes the download record
+    /// `<application>.<device-id>.download.iplcinfo` beside the application
+    /// container (ADR 0083). The editor calls this after the device
+    /// acknowledged a download, and compares the record with the content hash
+    /// the device reports when it connects. Prints nothing when the record is
+    /// written.
     RecordDownload {
         /// The application container: the record is named after it and sits
         /// beside it. It is also the container that was sent, unless
         /// `--container` names another file.
         application: PathBuf,
 
-        /// The name of the connection profile that keys the record. It must
-        /// not be empty.
-        #[arg(long)]
-        connection: String,
+        /// The id of the device that received the container, which keys the
+        /// record: 32 lowercase hexadecimal digits.
+        #[arg(long, value_name = "ID", value_parser = DeviceId::parse)]
+        device_id: DeviceId,
 
         /// The container file that was sent to the device, when it is not the
         /// application container itself (for example a container compiled
@@ -705,7 +706,7 @@ enum Action {
         )]
         application_generation: Option<u32>,
     },
-    /// Prints the path of the download record of a connection for an
+    /// Prints the path of the download record of a device for an
     /// application container, which `record-download` writes. The rule that
     /// names the file is here and nowhere else, so the editor asks instead of
     /// deriving the name. The record need not exist.
@@ -713,9 +714,9 @@ enum Action {
         /// The application container the record is named after.
         application: PathBuf,
 
-        /// The name of the connection profile. It must not be empty.
-        #[arg(long)]
-        connection: String,
+        /// The id of the device: 32 lowercase hexadecimal digits.
+        #[arg(long, value_name = "ID", value_parser = DeviceId::parse)]
+        device_id: DeviceId,
     },
     /// Records the controller last chosen for an application: writes the path
     /// record `<application>.path.iplcinfo` beside the application container
@@ -730,8 +731,8 @@ enum Action {
         application: PathBuf,
 
         /// The id of the chosen controller: 32 lowercase hexadecimal digits.
-        #[arg(long, value_name = "ID", value_parser = parse_device_id)]
-        device_id: String,
+        #[arg(long, value_name = "ID", value_parser = DeviceId::parse)]
+        device_id: DeviceId,
 
         /// The address that reached the controller: an IP address or a host
         /// name. A loopback address (127.0.0.0/8, ::1, localhost) is not stored
@@ -753,11 +754,6 @@ enum Action {
     },
     /// Prints the version number of the compiler.
     Version,
-}
-
-/// Reads the id of a controller: 32 lowercase hexadecimal digits.
-fn parse_device_id(text: &str) -> Result<String, String> {
-    path_record::check_device_id(text).map(|()| text.to_owned())
 }
 
 /// Reads the address of a route: an IP address or a host name.
@@ -872,7 +868,7 @@ fn execute(action: Action) -> Result<(), String> {
         },
         Action::RecordDownload {
             application,
-            connection,
+            device_id,
             container,
             device_content_hash,
             active,
@@ -881,7 +877,7 @@ fn execute(action: Action) -> Result<(), String> {
         } => cli::record_download(&cli::RecordDownload {
             application: &application,
             container: container.as_deref(),
-            connection: &connection,
+            device_id: &device_id,
             device_content_hash,
             device: match (active, normal, application_generation) {
                 (Some(active), Some(normal), Some(application)) => Some(DeviceGenerations {
@@ -894,11 +890,11 @@ fn execute(action: Action) -> Result<(), String> {
         }),
         Action::RecordDownloadPath {
             application,
-            connection,
+            device_id,
         } => {
             println!(
                 "{}",
-                cli::record_download_path(&application, &connection)?.display()
+                cli::record_download_path(&application, &device_id)?.display()
             );
             Ok(())
         }
@@ -909,7 +905,7 @@ fn execute(action: Action) -> Result<(), String> {
             port,
         } => cli::record_path(&cli::RecordPath {
             application: &application,
-            device_id: &device_id,
+            device_id: device_id.as_str(),
             address: &address,
             session_port: port,
         }),

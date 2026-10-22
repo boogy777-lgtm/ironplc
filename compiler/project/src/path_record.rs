@@ -27,7 +27,7 @@
 //! ```
 //!
 //! - `deviceId` is the id of the controller last chosen, 32 lowercase
-//!   hexadecimal digits ([`check_device_id`]).
+//!   hexadecimal digits ([`DeviceId`]).
 //! - `routeHint` is the last address that is not loopback, with the session
 //!   port, or `null`. A loopback address means "this PC" and points at another
 //!   machine on every other PC, so it is never stored here ([`is_loopback`]); it
@@ -44,10 +44,8 @@ use std::path::{Path, PathBuf};
 use ironplc_dsl::diagnostic::Diagnostic;
 use serde_json::{json, Value};
 
+use crate::device_id::DeviceId;
 use crate::records::{self, RecordKind, RecordRead};
-
-/// The number of hexadecimal digits of a device id (128 bits).
-const DEVICE_ID_DIGITS: usize = 32;
 
 /// The longest host name (RFC 1035), and the longest label in it.
 const MAX_HOST_NAME: usize = 253;
@@ -103,7 +101,7 @@ impl PathRecord {
 
     fn from_json(value: &Value) -> Option<Self> {
         let device_id = value.get("deviceId")?.as_str()?;
-        check_device_id(device_id).ok()?;
+        DeviceId::parse(device_id).ok()?;
         let route_hint = match value.get("routeHint")? {
             Value::Null => None,
             hint => Some(RouteHint::from_json(hint)?),
@@ -139,26 +137,6 @@ pub fn read(path: &Path) -> Result<PathRecordRead, Diagnostic> {
             None => PathRecordRead::Malformed,
         },
     })
-}
-
-/// Checks that `text` is a device id: 32 lowercase hexadecimal digits.
-///
-/// why: the id is the identity of a controller, and a mixed-case or short text
-/// would name a controller that no controller reports. The check of the device
-/// itself lives in the `ironplcvm` binary crate, which this crate cannot use;
-/// the format is the one that crate and the discovery protocol write.
-pub fn check_device_id(text: &str) -> Result<(), String> {
-    let well_formed = text.len() == DEVICE_ID_DIGITS
-        && text
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte));
-    if well_formed {
-        Ok(())
-    } else {
-        Err(format!(
-            "'{text}' is not a device id: expected {DEVICE_ID_DIGITS} lowercase hexadecimal digits"
-        ))
-    }
 }
 
 /// Checks that `text` is an address of a route: an IP address (IPv6 without
@@ -278,7 +256,7 @@ pub struct Choice<'a> {
 /// controller, else it is `null`. A record that cannot be used (malformed) holds
 /// no hint to keep.
 pub fn record_choice(choice: &Choice<'_>, chosen_at_ms: u64) -> Result<(), PathError> {
-    check_device_id(choice.device_id).map_err(PathError::BadDeviceId)?;
+    DeviceId::parse(choice.device_id).map_err(PathError::BadDeviceId)?;
     check_address(choice.address).map_err(PathError::BadAddress)?;
     if choice.session_port == 0 {
         return Err(PathError::BadPort);

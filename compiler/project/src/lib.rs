@@ -1,5 +1,6 @@
 pub mod build_record;
 pub mod compile;
+pub mod device_id;
 pub mod disassemble;
 pub mod download_record;
 pub mod id_agreement;

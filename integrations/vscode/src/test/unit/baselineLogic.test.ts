@@ -43,11 +43,14 @@ function withoutHash(): HotEditStatus {
   return rest;
 }
 
+const DEVICE_ID = '0123456789abcdef0123456789abcdef';
+const OTHER_DEVICE_ID = 'fedcba9876543210fedcba9876543210';
+
 /** The text of a download record the compiler wrote for a container with `contentHash`. */
-function recordText(contentHash: string, connection = 'My PLC', overrides?: Record<string, unknown>): string {
+function recordText(contentHash: string, deviceId = DEVICE_ID, overrides?: Record<string, unknown>): string {
   return JSON.stringify({
-    version: 1,
-    connection,
+    version: 2,
+    deviceId,
     application: 'app',
     container: { contentHash, layoutHash: 'cc'.repeat(32), debugHash: 'dd'.repeat(32), size: 100 },
     device: { active: 3, normal: 2, application: 3 },
@@ -56,36 +59,42 @@ function recordText(contentHash: string, connection = 'My PLC', overrides?: Reco
   });
 }
 
-const RECORD: DownloadRecord = { connection: 'My PLC', contentHash: HASH_A };
+const RECORD: DownloadRecord = { deviceId: DEVICE_ID, contentHash: HASH_A };
 
 suite('parseDownloadRecord', () => {
-  test('parseDownloadRecord_when_record_then_connection_and_content_hash', () => {
-    assert.deepStrictEqual(parseDownloadRecord(recordText(HASH_A), 'My PLC'), RECORD);
+  test('parseDownloadRecord_when_record_then_device_id_and_content_hash', () => {
+    assert.deepStrictEqual(parseDownloadRecord(recordText(HASH_A), DEVICE_ID), RECORD);
   });
 
   test('parseDownloadRecord_when_not_json_then_no_record', () => {
-    assert.strictEqual(parseDownloadRecord('{ not json', 'My PLC'), undefined);
-    assert.strictEqual(parseDownloadRecord('[1]', 'My PLC'), undefined);
-    assert.strictEqual(parseDownloadRecord('null', 'My PLC'), undefined);
+    assert.strictEqual(parseDownloadRecord('{ not json', DEVICE_ID), undefined);
+    assert.strictEqual(parseDownloadRecord('[1]', DEVICE_ID), undefined);
+    assert.strictEqual(parseDownloadRecord('null', DEVICE_ID), undefined);
   });
 
   test('parseDownloadRecord_when_other_version_then_no_record', () => {
-    assert.strictEqual(parseDownloadRecord(recordText(HASH_A, 'My PLC', { version: 2 }), 'My PLC'), undefined);
+    assert.strictEqual(parseDownloadRecord(recordText(HASH_A, DEVICE_ID, { version: 1 }), DEVICE_ID), undefined);
   });
 
-  test('parseDownloadRecord_when_record_of_another_connection_then_no_record', () => {
-    // Two names that differ only in case share a file on a case-insensitive file system.
-    assert.strictEqual(parseDownloadRecord(recordText(HASH_A, 'my plc'), 'My PLC'), undefined);
+  test('parseDownloadRecord_when_record_of_another_device_then_no_record', () => {
+    // A file that was copied or renamed to this device's name is not its record.
+    assert.strictEqual(parseDownloadRecord(recordText(HASH_A, OTHER_DEVICE_ID), DEVICE_ID), undefined);
+  });
+
+  test('parseDownloadRecord_when_record_names_a_connection_and_no_device_then_no_record', () => {
+    const former = JSON.stringify({ version: 1, connection: 'My PLC', container: { contentHash: HASH_A } });
+
+    assert.strictEqual(parseDownloadRecord(former, DEVICE_ID), undefined);
   });
 
   test('parseDownloadRecord_when_container_or_hash_malformed_then_no_record', () => {
-    assert.strictEqual(parseDownloadRecord(recordText(HASH_A, 'My PLC', { container: null }), 'My PLC'), undefined);
-    assert.strictEqual(parseDownloadRecord(recordText('abc'), 'My PLC'), undefined);
-    assert.strictEqual(parseDownloadRecord(recordText(HASH_A.toUpperCase()), 'My PLC'), undefined);
+    assert.strictEqual(parseDownloadRecord(recordText(HASH_A, DEVICE_ID, { container: null }), DEVICE_ID), undefined);
+    assert.strictEqual(parseDownloadRecord(recordText('abc'), DEVICE_ID), undefined);
+    assert.strictEqual(parseDownloadRecord(recordText(HASH_A.toUpperCase()), DEVICE_ID), undefined);
   });
 
   test('parseDownloadRecord_when_unknown_extra_keys_then_still_read', () => {
-    assert.deepStrictEqual(parseDownloadRecord(recordText(HASH_A, 'My PLC', { later: true }), 'My PLC'), RECORD);
+    assert.deepStrictEqual(parseDownloadRecord(recordText(HASH_A, DEVICE_ID, { later: true }), DEVICE_ID), RECORD);
   });
 });
 
@@ -157,7 +166,12 @@ suite('connectionAnchor', () => {
 });
 
 suite('planDownload', () => {
-  const base = { folders: FOLDERS, sourceExtensions: SOURCE_EXTENSIONS, requireDeviceHash: false };
+  const base = {
+    folders: FOLDERS,
+    sourceExtensions: SOURCE_EXTENSIONS,
+    requireDeviceHash: false,
+    deviceId: DEVICE_ID as string | undefined,
+  };
 
   test('planDownload_when_assemble_of_another_file_then_anchor_and_sent_container', () => {
     const plan = planDownload({ ...base, profile: TCP, sentContainer: path.join('tmp', 'main.iplc'), status: status() });
@@ -166,7 +180,7 @@ suite('planDownload', () => {
       download: {
         anchor: path.join('work', 'plant', 'plant.iplc'),
         container: path.resolve(path.join('tmp', 'main.iplc')),
-        connection: 'My PLC',
+        deviceId: DEVICE_ID,
         status: status(),
       },
     });
@@ -177,7 +191,7 @@ suite('planDownload', () => {
 
     assert.ok('download' in plan);
     assert.strictEqual(plan.download.container, plan.download.anchor);
-    assert.strictEqual(plan.download.connection, 'local');
+    assert.strictEqual(plan.download.deviceId, DEVICE_ID);
   });
 
   test('planDownload_when_session_start_and_device_reports_no_hash_then_nothing_recorded', () => {
@@ -193,6 +207,22 @@ suite('planDownload', () => {
     assert.ok('download' in plan);
   });
 
+  test('planDownload_when_device_reports_no_id_then_nothing_recorded_with_reason', () => {
+    const plan = planDownload({ ...base, profile: TCP, deviceId: undefined, status: status() });
+
+    assert.ok('reason' in plan);
+    assert.ok(plan.reason.includes('device id'));
+  });
+
+  test('planDownload_when_profile_is_renamed_then_the_plan_is_the_same', () => {
+    const renamed: ConnectionProfile = { ...TCP, name: 'Another name' };
+
+    assert.deepStrictEqual(
+      planDownload({ ...base, profile: renamed, status: status() }),
+      planDownload({ ...base, profile: TCP, status: status() }),
+    );
+  });
+
   test('planDownload_when_stdio_source_then_nothing_recorded_with_reason', () => {
     const plan = planDownload({ ...base, profile: STDIO_SOURCE, sentContainer: 'x.iplc', status: status() });
 
@@ -204,13 +234,13 @@ suite('record commands', () => {
   const download: DownloadToRecord = {
     anchor: path.join('work', 'plant', 'plant.iplc'),
     container: path.join('work', 'plant', 'plant.iplc'),
-    connection: 'My PLC',
+    deviceId: DEVICE_ID,
     status: status(),
   };
 
   test('recordDownloadArgs_when_container_is_the_anchor_then_no_container_flag', () => {
     assert.deepStrictEqual(recordDownloadArgs(download), [
-      'record-download', download.anchor, '--connection', 'My PLC',
+      'record-download', download.anchor, '--device-id', DEVICE_ID,
       '--device-content-hash', HASH_A,
       '--active', '3', '--normal', '2', '--application', '3',
     ]);
@@ -220,7 +250,7 @@ suite('record commands', () => {
     const args = recordDownloadArgs({ ...download, container: path.join('tmp', 'main.iplc') });
 
     assert.deepStrictEqual(args.slice(0, 6), [
-      'record-download', download.anchor, '--connection', 'My PLC',
+      'record-download', download.anchor, '--device-id', DEVICE_ID,
       '--container', path.join('tmp', 'main.iplc'),
     ]);
   });
@@ -231,9 +261,9 @@ suite('record commands', () => {
     assert.ok(!args.includes('--device-content-hash'));
   });
 
-  test('recordDownloadPathArgs_when_anchor_and_connection_then_path_command', () => {
-    assert.deepStrictEqual(recordDownloadPathArgs('a.iplc', 'My PLC'), [
-      'record-download-path', 'a.iplc', '--connection', 'My PLC',
+  test('recordDownloadPathArgs_when_anchor_and_device_id_then_path_command', () => {
+    assert.deepStrictEqual(recordDownloadPathArgs('a.iplc', DEVICE_ID), [
+      'record-download-path', 'a.iplc', '--device-id', DEVICE_ID,
     ]);
   });
 
@@ -280,12 +310,12 @@ suite('readBaseline', () => {
         return recordText(HASH_A);
       },
       anchor,
-      'My PLC',
+      DEVICE_ID,
       status(),
     );
 
     assert.strictEqual(state, 'match');
-    assert.deepStrictEqual(asked, [recordDownloadPathArgs(anchor, 'My PLC')]);
+    assert.deepStrictEqual(asked, [recordDownloadPathArgs(anchor, DEVICE_ID)]);
     assert.deepStrictEqual(read, ['F:\\work\\plant\\the-file-the-compiler-named']);
   });
 
@@ -294,7 +324,7 @@ suite('readBaseline', () => {
       compilerSaying('r'),
       async () => recordText(HASH_A),
       anchor,
-      'My PLC',
+      DEVICE_ID,
       status({ active: 1, normal: 1, application: 1, rounds: 0 }),
     );
 
@@ -306,7 +336,7 @@ suite('readBaseline', () => {
       compilerSaying('r'),
       async () => recordText(HASH_A),
       anchor,
-      'My PLC',
+      DEVICE_ID,
       status({ contentHash: HASH_B }),
     );
 
@@ -314,20 +344,20 @@ suite('readBaseline', () => {
   });
 
   test('readBaseline_when_no_record_file_then_none', async () => {
-    const state = await readBaseline(compilerSaying('r'), async () => undefined, anchor, 'My PLC', status());
+    const state = await readBaseline(compilerSaying('r'), async () => undefined, anchor, DEVICE_ID, status());
 
     assert.strictEqual(state, 'none');
   });
 
   test('readBaseline_when_record_malformed_then_none', async () => {
-    const state = await readBaseline(compilerSaying('r'), async () => '{ broken', anchor, 'My PLC', status());
+    const state = await readBaseline(compilerSaying('r'), async () => '{ broken', anchor, DEVICE_ID, status());
 
     assert.strictEqual(state, 'none');
   });
 
   test('readBaseline_when_compiler_names_no_file_then_rejects', async () => {
     await assert.rejects(
-      readBaseline(async () => ({ stdout: '\n', stderr: '' }), async () => undefined, anchor, 'My PLC', status()),
+      readBaseline(async () => ({ stdout: '\n', stderr: '' }), async () => undefined, anchor, DEVICE_ID, status()),
       /did not say where/,
     );
   });
@@ -337,12 +367,12 @@ suite('readBaseline', () => {
       throw new Error('unknown subcommand');
     };
 
-    await assert.rejects(readBaseline(run, async () => undefined, anchor, 'My PLC', status()), /unknown subcommand/);
+    await assert.rejects(readBaseline(run, async () => undefined, anchor, DEVICE_ID, status()), /unknown subcommand/);
   });
 
   test('readBaseline_when_file_cannot_be_read_then_rejects', async () => {
     await assert.rejects(
-      readBaseline(compilerSaying('r'), async () => { throw new Error('EACCES'); }, anchor, 'My PLC', status()),
+      readBaseline(compilerSaying('r'), async () => { throw new Error('EACCES'); }, anchor, DEVICE_ID, status()),
       /EACCES/,
     );
   });
