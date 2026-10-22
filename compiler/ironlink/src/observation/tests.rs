@@ -146,6 +146,22 @@ fn merge_when_same_device_at_another_address_then_both_kept() {
 
 #[spec_test(REQ_IL_ironlink_011)]
 #[test]
+fn merge_when_same_device_at_same_address_on_another_session_port_then_both_kept() {
+    let mut heard = Vec::new();
+    let mut other_port = observation(1, "A", "10.0.0.1", 100);
+    other_port.route.session_port = other_port.route.session_port.wrapping_add(1);
+
+    merge(
+        &mut heard,
+        Heard::Device(observation(1, "A", "10.0.0.1", 100)),
+    );
+    merge(&mut heard, Heard::Device(other_port));
+
+    assert_eq!(devices(&heard).len(), 2);
+}
+
+#[spec_test(REQ_IL_ironlink_011)]
+#[test]
 fn merge_when_same_address_other_device_then_both_kept() {
     let mut heard = Vec::new();
 

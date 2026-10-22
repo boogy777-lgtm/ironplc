@@ -102,7 +102,7 @@ time, so that the user is told to update IronLink; an outcome is an enum
 (`Heard::Device`, `Heard::OtherVersion`), not a flag.
 
 **REQ-IL-ironlink-011** Repetitions from one source are merged: one observation
-for each (device id, address), with the latest time; one other-version outcome for
+for each (device id, address, session port), with the latest time; one other-version outcome for
 each (address, wire version).
 
 **REQ-IL-ironlink-012** The wait of an identify ends at the first outcome.

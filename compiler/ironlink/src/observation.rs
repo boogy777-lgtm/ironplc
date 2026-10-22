@@ -121,12 +121,16 @@ impl Heard {
     }
 
     /// Whether `other` is a repetition of this outcome from the same source:
-    /// the same device id at the same address, or the same address speaking the
-    /// same other version.
+    /// the same device id on the same route (address and session port), or the
+    /// same address speaking the same other version. The session port is part of
+    /// the key: two processes on one address that share an id (a copied settings
+    /// file) are two routes, and the grouping must see both.
     fn repeated_by(&self, other: &Heard) -> bool {
         match (self, other) {
             (Heard::Device(a), Heard::Device(b)) => {
-                a.device_id == b.device_id && a.route.address == b.route.address
+                a.device_id == b.device_id
+                    && a.route.address == b.route.address
+                    && a.route.session_port == b.route.session_port
             }
             (Heard::OtherVersion(a), Heard::OtherVersion(b)) => {
                 a.address == b.address && a.wire_version == b.wire_version
@@ -138,7 +142,7 @@ impl Heard {
 }
 
 /// Adds `new` to `heard`. A repetition of an outcome already there (the same
-/// device id at the same address) replaces it when it is not older, so one
+/// device id on the same route) replaces it when it is not older, so one
 /// source is one entry, with the latest time and the latest content.
 pub(crate) fn merge(heard: &mut Vec<Heard>, new: Heard) {
     match heard.iter_mut().find(|old| old.repeated_by(&new)) {
