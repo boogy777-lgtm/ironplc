@@ -12,12 +12,12 @@ maintenance = { status = "experimental" }
 
 [build-dependencies]
 csv = "1.4"
-ironplc-problems-gen = { path = "../problems_gen" }
+ironplc-msg-gen = { path = "../msg_gen" }
 ironplc-spec-requirements-gen = { path = "../spec_requirements_gen" }
 
 [dev-dependencies]
 # The conformance tests of the severity column call the check the build runs.
-ironplc-problems-gen = { path = "../problems_gen" }
+ironplc-msg-gen = { path = "../msg_gen" }
 spec_test_macro = { path = "../spec_test_macro" }
 
 [lints.rust]

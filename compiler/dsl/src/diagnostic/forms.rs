@@ -5,7 +5,7 @@
 //! `Information`); a program reads the fields of the CODESYS scripting class
 //! `ScriptMessage` and the scripting names of the categories (`FatalError` ...
 //! `SuppressedInformation`). Both come from the facts the list of categories in
-//! `ironplc-problems-gen` declares for each category, so neither form names a
+//! `ironplc-msg-gen` declares for each category, so neither form names a
 //! category itself: a category added there reaches both without a change here.
 
 use serde::Serialize;

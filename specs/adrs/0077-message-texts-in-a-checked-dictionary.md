@@ -117,8 +117,8 @@ that closes it is a secondary-label constructor that takes a `Text`.
   one row; a call to `Diagnostic::problem` outside the module does not compile.
 - `compiler/analyzer/src/rule_attribute.rs`: the tests of the three codes pass
   unchanged, so the rendered texts are the texts written before.
-- `compiler/problems_gen/src/tests.rs`: the validation and the generation of the
-  rows live in the build-support crate `ironplc-problems-gen`, which does no file
+- `compiler/msg_gen/src/tests.rs`: the validation and the generation of the
+  rows live in the build-support crate `ironplc-msg-gen`, which does no file
   access (`problems/build.rs` reads the files and writes the result), because
   Cargo does not run the tests of a build script. One test for each failure
   (unknown code, key not snake_case, key a Rust keyword, placeholder a Rust

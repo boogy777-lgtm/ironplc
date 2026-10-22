@@ -184,7 +184,7 @@ Runtime errors use the `V####` format and are tracked separately from compiler a
 
 1. **Choose code in the correct range**: V4xxx for execution, V6xxx for IO, V9xxx for internal
 2. **Add to CSV**: For trap errors (V4xxx/V9xxx), update `compiler/vm/resources/problem-codes.csv`. For IO errors (V6xxx), update `compiler/vm-cli/resources/problem-codes.csv`
-3. **Update Rust code**: For trap errors, add the variant to the `Trap` enum in `compiler/vm/src/error.rs` (the `v_code()` and `exit_code()` methods are generated automatically from the CSV by `build.rs`). For IO errors, the constant is generated automatically from the CSV by the shared generator `ironplc_problems_gen::write_code_constants` (the same call serves `runtime` and `ironplc-redundancy`; a new crate with a `problem-codes.csv` adds `ironplc-problems-gen` as a build-dependency and calls it from `build.rs`)
+3. **Update Rust code**: For trap errors, add the variant to the `Trap` enum in `compiler/vm/src/error.rs` (the `v_code()` and `exit_code()` methods are generated automatically from the CSV by `build.rs`). For IO errors, the constant is generated automatically from the CSV by the shared generator `ironplc_msg_gen::write_code_constants` (the same call serves `runtime` and `ironplc-redundancy`; a new crate with a `problem-codes.csv` adds `ironplc-msg-gen` as a build-dependency and calls it from `build.rs`)
 4. **Create documentation**: Add `docs/reference/runtime/problems/V####.rst`
 5. **Add tests**: Verify the error code appears in stderr output with the correct exit code
 
@@ -226,7 +226,7 @@ V####
 
 The text a label shows is a row of `compiler/problems/resources/problem-texts.csv`
 (columns `Code,Key,Template`), not a `format!` at the call site. `problems/build.rs`
-(through the build-support crate `compiler/problems_gen`, which holds the checks and their tests) makes one function for each row in `ironplc_problems::text`, named by `Key`, with
+(through the build-support crate `compiler/msg_gen`, which holds the checks and their tests) makes one function for each row in `ironplc_problems::text`, named by `Key`, with
 one parameter for each distinct placeholder of the template in order of first
 appearance. A missing, extra or misspelled argument does not compile.
 
