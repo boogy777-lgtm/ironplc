@@ -9,9 +9,9 @@ import { IronLinkClient } from './ironlinkClient';
 import { BrowseOptions } from './ironlinkProtocol';
 import { ironLinkLauncher } from './ironlinkProcess';
 import { describeAddressAdd, describeAddressRemove, describeBrowse, describeIdentify, describeRouteSet } from './messages';
-import { NetworkNode, buildNetworkTree, socketAddress } from './networkTree';
+import { NetworkNode, buildNetworkTree } from './networkTree';
 import { browseOptionsFromSettings } from './settings';
-import { IronLinkApi, ToolchainEnvironment, contributedCommandIds, problemHelpUrl, runHandoff } from './vscodeCommon';
+import { IronLinkApi, ToolchainEnvironment, contributedCommandIds, problemHelpUrl, runHandoff, socketAddress } from './vscodeCommon';
 
 /** The Network view: the last search, rendered with the current age of each observation. */
 class NetworkProvider implements vscode.TreeDataProvider<NetworkNode> {

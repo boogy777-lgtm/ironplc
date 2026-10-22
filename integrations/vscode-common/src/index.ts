@@ -15,12 +15,13 @@ export { findGatewayViolations } from './gatewayImports';
 export type {
   ChooseControllerArgument,
   CommandSources,
+  ControllerArgument,
   ExecuteCommand,
   HandoffArguments,
   HandoffDeclaration,
   HandoffName,
 } from './handoff';
-export { HANDOFF_ACTIONS, contributedCommandIds, handoffNames, isHandoffAvailable, runHandoff } from './handoff';
+export { HANDOFF_ACTIONS, contributedCommandIds, handoffNames, isControllerArgument, isHandoffAvailable, runHandoff } from './handoff';
 export type {
   IronLinkApi,
   IronLinkRoute,
@@ -31,3 +32,4 @@ export type {
   RouteSet,
 } from './ironlinkApi';
 export { IRONLINK_API_MEMBERS, IRONLINK_API_VERSION, IRONLINK_EXTENSION_ID } from './ironlinkApi';
+export { formatAge, shortDeviceId, socketAddress } from './deviceText';

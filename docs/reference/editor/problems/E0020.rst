@@ -1,0 +1,58 @@
+=====
+E0020
+=====
+
+.. problem-summary:: E0020
+
+The extension could not remember the controller you chose for the application.
+The choice is written to the *path record* of the application,
+:file:`{STEM}.path.iplcinfo`, beside the application container, by
+:program:`ironplcc record-path`. The extension reports this problem when there is
+no application to name the record after, when :program:`ironplcc record-path`
+refuses or fails, or when the command :guilabel:`IronPLC: Choose Controller…` was
+run by another extension, a task or a keybinding with an argument that is not a
+controller.
+
+The message after the code says which of these happened. For example, no
+workspace folder is open, so there is no application container to name a record
+after:
+
+.. code-block:: text
+
+   E0020 - The chosen controller could not be recorded. no workspace folder is open, so there is no application container to name a record after
+
+Another example is a message of :program:`ironplcc`, such as a device ID that is
+not 32 lowercase hexadecimal digits, or a port that is not from 1 to 65535. The
+message of the compiler is shown as it is.
+
+**Solutions**:
+
+1. **Open the project folder**: The path record sits beside the application
+   container, :file:`{FOLDER}.iplc`, in the first workspace folder, like the
+   download record. Open the folder of the project in the workspace and choose
+   the controller again.
+
+2. **Check the compiler**: The extension writes the record with
+   :program:`ironplcc`. If the message says that the compiler is not found, see
+   :doc:`E0001 </reference/editor/problems/E0001>`.
+
+3. **Check that the folder is writable**: The record is a file in the project
+   folder. A read-only folder, a full disk or a file that another program has
+   locked makes the write fail, and the compiler says so in the message.
+
+4. **Choose from IronLink**: If the argument is not a controller, choose the
+   controller with the :guilabel:`Choose` action of the Network view of the
+   IronLink extension, or run the command without an argument and pick the
+   controller from the list.
+
+The record is a remembered convenience, not a binding: you can connect to any
+controller whether or not the record was written. When the write fails, the
+route that this PC stores for the controller (the data of IronLink) is already
+stored, and the project keeps the controller it had chosen before.
+
+See Also
+--------
+
+- :doc:`/reference/editor/choose-controller` --- choosing the controller of a project
+- :doc:`/reference/compiler/ironplcc` --- the ``record-path`` command
+- :doc:`/reference/editor/problems/E0013` --- the connection could not be opened

@@ -20,6 +20,7 @@ import {
   SeenRoute,
   StoredRoute,
 } from './ironlinkProtocol';
+import { formatAge, shortDeviceId, socketAddress } from './vscodeCommon';
 
 /** The kind of a row; a row's `contextValue` and the `when` clauses of its actions derive from it. */
 export type NodeKind = 'workstation' | 'driver' | 'device' | 'otherVersion' | 'notSeenGroup' | 'notSeenRoute' | 'info';
@@ -54,9 +55,6 @@ export interface NetworkNode {
   children: NetworkNode[];
 }
 
-/** How many hexadecimal digits of the device id the description shows. */
-const SHORT_ID_LENGTH = 8;
-
 /** The `contextValue` of a driver row: `driver.<kind>`, so each driver can have its own actions. */
 export function driverContextValue(kind: string): string {
   return `driver.${kind}`;
@@ -72,40 +70,10 @@ export const CONTEXT_VALUES = {
   info: 'info',
 } as const;
 
-/** `address:port`, with an IPv6 address in brackets. */
-export function socketAddress(address: string, port: number): string {
-  return address.includes(':') ? `[${address}]:${port}` : `${address}:${port}`;
-}
-
-/** The first digits of a device id. */
-export function shortDeviceId(deviceId: string): string {
-  return deviceId.slice(0, SHORT_ID_LENGTH);
-}
-
 /** "Address list" for `addressList`: the words of a driver kind, so a new driver needs no table. */
 export function driverLabel(kind: string): string {
   const words = kind.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase();
   return words.charAt(0).toUpperCase() + words.slice(1);
-}
-
-/** How long ago `seenAt` was at `nowMs`: `just now`, `12 s ago`, `3 min ago`, `2 h ago`, `4 d ago`. */
-export function formatAge(seenAt: number, nowMs: number): string {
-  const seconds = Math.floor(Math.max(0, nowMs - seenAt) / 1000);
-  if (seconds < 1) {
-    return 'just now';
-  }
-  if (seconds < 60) {
-    return `${seconds} s ago`;
-  }
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) {
-    return `${minutes} min ago`;
-  }
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) {
-    return `${hours} h ago`;
-  }
-  return `${Math.floor(hours / 24)} d ago`;
 }
 
 /** The time of an observation in the form the tooltip shows. */

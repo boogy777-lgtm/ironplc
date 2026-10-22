@@ -130,7 +130,7 @@ E0010) and renders through `formatProblem`
 
 Documentation and the codegen lifecycle follow
 `specs/steering/problem-code-management.md` (CSV row, generated
-`vscode-common/src/problems.ts`, `docs/vscode/problems/E####.rst`).
+`vscode-common/src/problems.ts`, `docs/reference/editor/problems/E####.rst`).
 
 ## Mechanism 2 — Establish Connection
 
@@ -602,6 +602,38 @@ route hint: choosing by loopback leaves the hint of the same controller as it
 was and clears the hint of another controller. IronLink does not write this
 file; it writes the workstation route record.
 
+The IronPLC extension writes the file when the engineer chooses a controller
+(`ironplc.chooseController`, "IronPLC: Network: Choose Controller…"). The command
+is one member of the table of handoff actions in `integrations/vscode-common`
+(`HANDOFF_ACTIONS`), which the IronLink extension also reads to run it, so the
+command id is written once. Its parts:
+
+- **With an argument** (`{deviceId, address, sessionPort}`, from the Choose action
+  of the IronLink Network view, which has already stored the workstation route) the
+  command runs `ironplcc record-path` for the application. An argument that is
+  not a controller is refused (E0020), because any extension, task or keybinding
+  can run the command.
+- **Without an argument** (the command palette) a picker lists, in this order, the
+  controller last chosen (read from the file), the controllers with a route on
+  this PC (the IronLink API) and the controllers recently observed (the last
+  search of IronLink, with the age of each observation), and last "Search
+  network…". A controller is listed once, in the first group it belongs to.
+  Picking one stores the route through IronLink (`setRoute`, which verifies it with
+  an identify) and then writes the file. A route that cannot be stored shows the
+  `L####` error of IronLink and leaves the file as it was.
+- **Without the IronLink extension** the picker lists the controller last chosen,
+  if any, and one row that says searching needs IronLink. The IronPLC extension
+  declares no dependency on IronLink, which is not published with it; it finds
+  IronLink by its one id and reads its API (`IronLinkApi`, `apiVersion`).
+- **The application** is the one the connection method `tcp` anchors the download
+  record to (`ConnectionMethod.anchor`), so the two records of an application sit
+  beside one another, and the reason that method gives when there is none (no
+  workspace folder) is the reason shown (E0020).
+
+The picker rows and the decision of what picking one does are in
+`integrations/vscode/src/chooseControllerLogic.ts`, which has no dependency on the
+editor.
+
 ## Integration Map
 
 Everything reused, with its one authority:
@@ -627,6 +659,8 @@ Everything reused, with its one authority:
 | Baseline identity (artifact hash, UID sidecar) | `verify_load` in `compiler/container/src/load_verify.rs`; `compiler/project/src/sidecar.rs` |
 | Download record (the baseline) | `compiler/project/src/download_record.rs`; `ironplcc record-download` |
 | Path record (the controller last chosen) | `compiler/project/src/path_record.rs`; `ironplcc record-path`, `record-path-path` |
+| Choosing a controller (the editor side) | `chooseController` in `integrations/vscode/src/chooseController.ts`; the picker and its decisions in `chooseControllerLogic.ts`; the command id in `HANDOFF_ACTIONS` of `integrations/vscode-common` |
+| The IronLink API the editor reads | `IronLinkApi` in `integrations/vscode-common/src/ironlinkApi.ts`; `accessIronLink` in `integrations/vscode/src/ironlinkAccess.ts` |
 
 ## Out of Scope
 
