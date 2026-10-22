@@ -4,4 +4,7 @@ L6002,SendFailed,Unable to send the discovery request
 L6003,NoAnswer,No answer to the identify request within the time
 L6004,ArgumentInvalid,An address or an option value is not valid
 L6005,SessionIo,Unable to read or write the command session
+L6006,StoreUnreadable,A file of the workstation store cannot be read
+L6007,StoreWrite,A file of the workstation store cannot be written
+L6008,RouteMismatch,The device at the address has another device id than the route names
 L9001,Internal,Internal error of IronLink

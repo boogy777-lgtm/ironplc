@@ -8,7 +8,11 @@ use spec_test_macro::spec_test;
 use super::*;
 use crate::driver::DriverKind;
 use crate::observation::{group, Method, Observation, OtherVersion, Route};
-use crate::service::{VersionInfo, Workstation};
+use crate::service::{
+    AddressAddResult, AddressListResult, AddressRemoveResult, RouteListResult, RouteRemoveResult,
+    RouteSetResult, VersionInfo, Workstation,
+};
+use crate::store::routes::{RouteEntry, RouteRecord};
 
 const NOW: u64 = 1_700_000_100_000;
 
@@ -47,11 +51,16 @@ fn driver_with(
 }
 
 fn browse_response(drivers: Vec<DriverReport>) -> Response {
+    browse_response_with(drivers, Vec::new())
+}
+
+fn browse_response_with(drivers: Vec<DriverReport>, routes_not_seen: Vec<RouteEntry>) -> Response {
     Response::Browse(BrowseResult {
         workstation: Workstation {
             name: "PC-ONE".to_string(),
         },
         drivers,
+        routes_not_seen,
     })
 }
 
@@ -264,4 +273,158 @@ fn age_when_milliseconds_ago_then_the_largest_whole_unit(
 #[test]
 fn age_when_seen_in_the_future_then_zero_seconds() {
     assert_eq!(age(NOW, NOW + 5000), "0s");
+}
+
+fn route_entry(id_byte: u8, address: &str, verified_ago_ms: u64) -> RouteEntry {
+    RouteEntry {
+        device_id: crate::observation::device_id_hex(&[id_byte; 16]),
+        route: RouteRecord {
+            address: address.parse().unwrap(),
+            driver: DriverKind::AddressList,
+            session_port: 49152,
+            verified_at: NOW - verified_ago_ms,
+        },
+    }
+}
+
+#[spec_test(REQ_IL_ironlink_075)]
+#[test]
+fn text_when_a_route_is_the_stored_route_then_it_ends_with_the_route_marker_and_others_do_not() {
+    let mut driver = driver_with(
+        vec![
+            observation(1, "Press", "192.168.1.50", 3000),
+            observation(1, "Press", "192.168.1.51", 3000),
+        ],
+        Vec::new(),
+        0,
+    );
+    driver.devices[0].variants[0].routes[0].routed = true;
+
+    let lines = lines_of(&browse_response(vec![driver]));
+
+    assert_eq!(lines.len(), 4);
+    assert!(
+        lines[2].ends_with("192.168.1.50:49152  seen 3s ago  route"),
+        "{}",
+        lines[2]
+    );
+    assert!(
+        lines[3].ends_with("also 192.168.1.51:49152  seen 3s ago"),
+        "{}",
+        lines[3]
+    );
+}
+
+#[spec_test(REQ_IL_ironlink_076)]
+#[test]
+fn text_when_stored_routes_were_not_seen_then_they_are_listed_under_their_own_heading() {
+    let response = browse_response_with(
+        vec![driver_with(Vec::new(), Vec::new(), 0)],
+        vec![route_entry(2, "192.168.1.60", 120_000)],
+    );
+
+    let lines = lines_of(&response);
+
+    assert_eq!(lines.len(), 5);
+    assert_eq!(lines[2], "    no device answered");
+    assert_eq!(lines[3], "  stored routes of devices that did not answer");
+    assert_eq!(
+        lines[4],
+        format!(
+            "    {}  192.168.1.60:49152  address list  verified 2m ago",
+            "02".repeat(16)
+        )
+    );
+}
+
+#[spec_test(REQ_IL_ironlink_078)]
+#[test]
+fn text_when_a_route_is_set_then_one_row_and_a_note_when_it_replaced_one() {
+    let result = |replaced| {
+        Response::RouteSet(RouteSetResult {
+            device_id: "02".repeat(16),
+            route: route_entry(2, "192.168.1.60", 5000).route,
+            replaced,
+        })
+    };
+
+    assert_eq!(
+        text(&result(false), NOW),
+        format!(
+            "stored route {}  192.168.1.60:49152  address list  verified 5s ago",
+            "02".repeat(16)
+        )
+    );
+    assert!(text(&result(true), NOW).ends_with("  (replaced the earlier route)"));
+}
+
+#[spec_test(REQ_IL_ironlink_078)]
+#[test]
+fn text_when_routes_are_removed_or_listed_then_rows_or_a_statement_of_what_is_missing() {
+    let id = "02".repeat(16);
+    let removed = |removed| {
+        text(
+            &Response::RouteRemove(RouteRemoveResult {
+                device_id: id.clone(),
+                removed,
+            }),
+            NOW,
+        )
+    };
+    let listed = |routes| text(&Response::RouteList(RouteListResult { routes }), NOW);
+
+    assert_eq!(removed(true), format!("removed the route to {id}"));
+    assert_eq!(removed(false), format!("no route to {id}"));
+    assert_eq!(listed(Vec::new()), "no routes");
+    assert_eq!(
+        listed(vec![
+            route_entry(2, "192.168.1.60", 5000),
+            route_entry(3, "192.168.1.61", 90_000)
+        ]),
+        format!(
+            "{}  192.168.1.60:49152  address list  verified 5s ago\n\
+             {}  192.168.1.61:49152  address list  verified 1m ago",
+            "02".repeat(16),
+            "03".repeat(16)
+        )
+    );
+}
+
+#[spec_test(REQ_IL_ironlink_078)]
+#[test]
+fn text_when_addresses_are_added_removed_or_listed_then_what_changed_or_the_list() {
+    let address = "10.0.0.1:49152".to_string();
+    let added = |added| {
+        text(
+            &Response::AddressAdd(AddressAddResult {
+                address: address.clone(),
+                added,
+            }),
+            NOW,
+        )
+    };
+    let removed = |removed| {
+        text(
+            &Response::AddressRemove(AddressRemoveResult {
+                address: address.clone(),
+                removed,
+            }),
+            NOW,
+        )
+    };
+    let listed = |addresses| text(&Response::AddressList(AddressListResult { addresses }), NOW);
+
+    assert_eq!(added(true), "added 10.0.0.1:49152");
+    assert_eq!(added(false), "10.0.0.1:49152 was in the list already");
+    assert_eq!(removed(true), "removed 10.0.0.1:49152");
+    assert_eq!(removed(false), "10.0.0.1:49152 was not in the list");
+    assert_eq!(listed(Vec::new()), "no stored addresses");
+    assert_eq!(
+        listed(vec![
+            "10.0.0.1:49152".to_string(),
+            "10.0.0.2:49152".to_string()
+        ]),
+        "10.0.0.1:49152
+10.0.0.2:49152"
+    );
 }

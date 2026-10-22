@@ -9,11 +9,15 @@
 use std::fmt;
 use std::io;
 use std::net::{IpAddr, SocketAddr};
+use std::path::Path;
 
 mod codes {
     include!(concat!(env!("OUT_DIR"), "/problem_codes.rs"));
 }
-use codes::{ARGUMENT_INVALID, INTERFACE_BIND, INTERNAL, NO_ANSWER, SEND_FAILED, SESSION_IO};
+use codes::{
+    ARGUMENT_INVALID, INTERFACE_BIND, INTERNAL, NO_ANSWER, ROUTE_MISMATCH, SEND_FAILED, SESSION_IO,
+    STORE_UNREADABLE, STORE_WRITE,
+};
 
 /// Exit code for network and IO errors.
 const IO_EXIT_CODE: u8 = 2;
@@ -61,6 +65,18 @@ impl IronLinkError {
         )
     }
 
+    /// `address` answered, but with a discovery reply of another wire version,
+    /// so this IronLink cannot read the device id it carries.
+    pub(crate) fn other_version_answer(address: impl fmt::Display, wire_version: u8) -> Self {
+        Self::io(
+            NO_ANSWER,
+            format!(
+                "no discovery reply this IronLink can read from {address}: it answered with \
+                 discovery version {wire_version}; update IronLink"
+            ),
+        )
+    }
+
     /// An address, an interface or an option value that cannot be used.
     pub(crate) fn argument_invalid(message: impl Into<String>) -> Self {
         Self::io(ARGUMENT_INVALID, message.into())
@@ -71,6 +87,40 @@ impl IronLinkError {
         Self::io(
             SESSION_IO,
             format!("unable to read or write the command session: {err}"),
+        )
+    }
+
+    /// A file of the workstation store cannot be read as a file of this version.
+    /// The file is left as it is: writing over it would destroy what the user
+    /// kept in it.
+    pub(crate) fn store_unreadable(file: &Path, reason: impl fmt::Display) -> Self {
+        Self::io(
+            STORE_UNREADABLE,
+            format!(
+                "unable to read {}: {reason}; IronLink did not change the file, \
+                 fix it or delete it",
+                file.display()
+            ),
+        )
+    }
+
+    /// A file of the workstation store cannot be written.
+    pub(crate) fn store_write(file: &Path, err: &io::Error) -> Self {
+        Self::io(
+            STORE_WRITE,
+            format!("unable to write {}: {err}", file.display()),
+        )
+    }
+
+    /// The device at `address` answered with the device id `found`, and the
+    /// route is for `expected`.
+    pub(crate) fn route_mismatch(address: SocketAddr, expected: &str, found: &str) -> Self {
+        Self::io(
+            ROUTE_MISMATCH,
+            format!(
+                "the device at {address} has the device id {found}, not {expected}; \
+                 no route was stored"
+            ),
         )
     }
 
@@ -140,6 +190,28 @@ mod tests {
     }
 
     #[test]
+    fn store_unreadable_when_created_then_it_names_the_file_and_says_it_was_left_alone() {
+        let err = IronLinkError::store_unreadable(Path::new("dir/routes.json"), "not valid JSON");
+
+        assert!(err.message().contains("routes.json"), "{err}");
+        assert!(err.message().contains("did not change the file"), "{err}");
+        assert_eq!(err.exit_code(), 2);
+    }
+
+    #[test]
+    fn route_mismatch_when_created_then_it_names_both_ids_and_the_address() {
+        let address: SocketAddr = "192.0.2.1:49152".parse().unwrap();
+
+        let err = IronLinkError::route_mismatch(address, "aa", "bb");
+
+        assert_eq!(
+            err.to_string(),
+            "L6008 - the device at 192.0.2.1:49152 has the device id bb, not aa; \
+             no route was stored"
+        );
+    }
+
+    #[test]
     fn constructors_when_called_then_each_has_its_own_code() {
         let ip: IpAddr = "192.0.2.1".parse().unwrap();
         let socket = SocketAddr::new(ip, 1);
@@ -150,8 +222,14 @@ mod tests {
             IronLinkError::send_failed(socket, &io).l_code(),
             IronLinkError::argument_invalid("x").l_code(),
             IronLinkError::session_io(&io).l_code(),
+            IronLinkError::store_unreadable(Path::new("routes.json"), "x").l_code(),
+            IronLinkError::store_write(Path::new("routes.json"), &io).l_code(),
+            IronLinkError::route_mismatch(socket, "a", "b").l_code(),
         ];
 
-        assert_eq!(codes, ["L6001", "L6002", "L6004", "L6005"]);
+        assert_eq!(
+            codes,
+            ["L6001", "L6002", "L6004", "L6005", "L6006", "L6007", "L6008"]
+        );
     }
 }

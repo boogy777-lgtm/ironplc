@@ -6,7 +6,13 @@ use rstest::rstest;
 use spec_test_macro::spec_test;
 
 use super::*;
-use crate::test_support::{Behaviour, FakeDevice, FakeIdentity};
+use crate::test_support::{temp_store, Behaviour, FakeDevice, FakeIdentity};
+
+/// Browses with a store that holds nothing.
+fn browse_in_empty_store(request: &BrowseRequest) -> Result<BrowseResult, IronLinkError> {
+    let (_guard, store) = temp_store();
+    browse(request, &store)
+}
 
 const DEFAULT_PORT: u16 = DEFAULT_SESSION_PORT;
 
@@ -87,7 +93,7 @@ fn selection_of_when_port_given_then_it_is_the_port_of_addresses_without_one() {
         ..BrowseRequest::default()
     };
 
-    let selection = selection_of(&request).unwrap();
+    let selection = selection_of(&request, Vec::new()).unwrap();
 
     assert_eq!(selection.port, 5000);
     assert_eq!(
@@ -102,7 +108,7 @@ fn selection_of_when_port_given_then_it_is_the_port_of_addresses_without_one() {
 
 #[test]
 fn selection_of_when_no_port_then_the_session_port() {
-    let selection = selection_of(&BrowseRequest::default()).unwrap();
+    let selection = selection_of(&BrowseRequest::default(), Vec::new()).unwrap();
 
     assert_eq!(selection.port, DEFAULT_PORT);
 }
@@ -114,7 +120,10 @@ fn selection_of_when_port_is_zero_then_l6004() {
         ..BrowseRequest::default()
     };
 
-    assert_eq!(selection_of(&request).unwrap_err().l_code(), "L6004");
+    assert_eq!(
+        selection_of(&request, Vec::new()).unwrap_err().l_code(),
+        "L6004"
+    );
 }
 
 #[test]
@@ -125,7 +134,7 @@ fn selection_of_when_an_address_is_named_twice_then_it_is_asked_once() {
         ..BrowseRequest::default()
     };
 
-    let selection = selection_of(&request).unwrap();
+    let selection = selection_of(&request, Vec::new()).unwrap();
 
     assert_eq!(selection.interfaces.len(), 1);
     assert_eq!(selection.addresses.len(), 1);
@@ -157,7 +166,7 @@ fn browse_when_two_devices_answer_then_tree_of_workstation_and_one_driver_with_t
     let first = FakeDevice::answering(1, "Press");
     let second = FakeDevice::answering(2, "Lathe");
 
-    let result = browse(&browse_addresses(&[&first, &second])).unwrap();
+    let result = browse_in_empty_store(&browse_addresses(&[&first, &second])).unwrap();
 
     assert!(!result.workstation.name.is_empty());
     assert_eq!(result.drivers.len(), 1);
@@ -182,7 +191,7 @@ fn browse_when_two_devices_answer_then_tree_of_workstation_and_one_driver_with_t
 fn browse_when_result_serialized_then_json_has_workstation_drivers_and_counts() {
     let device = FakeDevice::answering(1, "Press");
 
-    let result = browse(&browse_addresses(&[&device])).unwrap();
+    let result = browse_in_empty_store(&browse_addresses(&[&device])).unwrap();
 
     let json = serde_json::to_value(&result).unwrap();
     assert!(json["workstation"]["name"].is_string());
@@ -202,7 +211,7 @@ fn browse_when_garbage_and_other_version_answer_then_counts_are_reported_per_dri
     let garbage = FakeDevice::start(FakeIdentity::new(1, "Noise"), Behaviour::Garbage);
     let newer = FakeDevice::start(FakeIdentity::new(2, "Newer"), Behaviour::WireVersion(2));
 
-    let result = browse(&browse_addresses(&[&garbage, &newer])).unwrap();
+    let result = browse_in_empty_store(&browse_addresses(&[&garbage, &newer])).unwrap();
 
     let driver = &result.drivers[0];
     assert!(driver.devices.is_empty());
@@ -218,7 +227,10 @@ fn browse_when_interface_is_ipv6_then_l6004_before_anything_is_sent() {
         ..BrowseRequest::default()
     };
 
-    assert_eq!(browse(&request).unwrap_err().l_code(), "L6004");
+    assert_eq!(
+        browse_in_empty_store(&request).unwrap_err().l_code(),
+        "L6004"
+    );
 }
 
 #[test]
@@ -229,7 +241,10 @@ fn browse_when_timeout_is_zero_then_l6004() {
         ..BrowseRequest::default()
     };
 
-    assert_eq!(browse(&request).unwrap_err().l_code(), "L6004");
+    assert_eq!(
+        browse_in_empty_store(&request).unwrap_err().l_code(),
+        "L6004"
+    );
 }
 
 #[spec_test(REQ_IL_ironlink_030)]

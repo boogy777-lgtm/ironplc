@@ -1,0 +1,54 @@
+=====
+L6006
+=====
+
+.. problem-summary:: L6006
+
+:program:`ironlink` could not read a file of its workstation store as a file of
+this version. The store is the directory where :program:`ironlink` keeps the
+routes and the address list of the PC (see :doc:`/reference/ironlink/ironlink`),
+in the files ``routes.json`` and ``addresses.json``. The message names the file
+and says why it cannot be used. :program:`ironlink` exits with code 2, and the
+file is not changed.
+
+The file is not changed because :program:`ironlink` writes a file as a whole.
+If it treated a file that it cannot read as an empty one, the next route or
+address that it stores would overwrite everything the file held. The file is
+yours to fix or delete; :program:`ironlink` does neither.
+
+A file cannot be read when it is not JSON (a half-written or hand-edited file),
+when it has another ``version`` than the one this :program:`ironlink` reads, when
+it has another shape than the one documented (a key is missing or unknown, a
+value has the wrong type, a device id is not 32 lowercase hexadecimal digits, a
+port is 0), or when the operating system refuses to read it. The other file of
+the store is read on its own, so a damaged ``routes.json`` does not stop
+:program:`ironlink address list`, and the reverse. A command that uses both
+files, such as :program:`ironlink browse`, stops at the damaged one.
+
+Example
+-------
+
+The route record has the version 2, which a later :program:`ironlink` might
+write:
+
+.. code-block:: text
+
+   > ironlink route list
+   Error: L6006 - unable to read C:\Users\ann\AppData\Roaming\IronPLC\ironlink\routes.json: the route record has the version 2, and this IronLink reads the version 1; IronLink did not change the file, fix it or delete it
+
+Solutions
+---------
+
+1. Open the file named in the message and correct what the message says. The
+   formats are in :doc:`/reference/ironlink/ironlink`.
+2. If the file came from a later version of :program:`ironlink`, update
+   :program:`ironlink`.
+3. If the content is not needed, delete the file. The routes are set again with
+   :program:`ironlink route set`, and the addresses with
+   :program:`ironlink address add`.
+
+See Also
+--------
+
+- :doc:`/reference/ironlink/ironlink` --- the store and the formats of its files
+- :doc:`L6007` --- a file of the store that cannot be written

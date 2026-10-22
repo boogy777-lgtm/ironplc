@@ -21,17 +21,17 @@
 //!   `browse`, `identify` and the command dispatch are not edited.
 //!
 //! A driver takes what it needs from a [`Selection`] (the interfaces and
-//! addresses the user named) and answers `None` when the selection gives it
-//! nothing to do. The default when the selection names nothing at all (the
-//! broadcast on the interface the operating system picks) is the broadcast
-//! member's own rule, not the dispatcher's.
+//! addresses the user named, and the stored address list) and answers `None`
+//! when the selection gives it nothing to do. The default when the selection
+//! names nothing at all (the broadcast on the interface the operating system
+//! picks) is the broadcast member's own rule, not the dispatcher's.
 
 pub(crate) mod address_list;
 pub(crate) mod broadcast;
 
 use std::net::{IpAddr, SocketAddr};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::collect::{Collected, Window};
 use crate::error::IronLinkError;
@@ -42,7 +42,7 @@ use crate::error::IronLinkError;
 macro_rules! declare_drivers {
     ($($variant:ident => $label:literal),+ $(,)?) => {
         /// A member of the class of discovery drivers.
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
         #[serde(rename_all = "camelCase")]
         pub(crate) enum DriverKind {
             $($variant),+
@@ -68,13 +68,17 @@ declare_drivers! {
 }
 
 /// What the user named: the local interfaces to broadcast from, the addresses to
-/// ask, and the port both use unless an address carries its own.
+/// ask, and the port both use unless an address carries its own. The workstation
+/// store adds the address list the user keeps; it is not something the user named
+/// for this browse, so it does not change what the broadcast defaults to.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Selection {
     /// Local addresses of this PC, by which the interfaces are named.
     pub(crate) interfaces: Vec<IpAddr>,
-    /// Controller addresses, each with its port.
+    /// Controller addresses named for this browse, each with its port.
     pub(crate) addresses: Vec<SocketAddr>,
+    /// Controller addresses of the stored address list, each with its port.
+    pub(crate) remembered: Vec<SocketAddr>,
     /// The discovery port: the session port unless the user gave another.
     pub(crate) port: u16,
 }

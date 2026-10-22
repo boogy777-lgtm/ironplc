@@ -11,6 +11,7 @@
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
+use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver};
@@ -21,6 +22,7 @@ use std::time::{Duration, Instant};
 use ironplc_discovery::{encode_reply, is_request, Reply, MAX_REPLY_LEN};
 use serde_json::{json, Value};
 use spec_test_macro::spec_test;
+use tempfile::TempDir;
 
 /// Spec-conformance requirements generated from `specs/design/ironlink.md`.
 /// See ironlink/build.rs.
@@ -125,8 +127,10 @@ fn silent_address() -> (UdpSocket, SocketAddr) {
     (socket, addr)
 }
 
-/// A started `ironlink`, killed when dropped.
-struct Process(Child);
+/// A started `ironlink`, killed when dropped. It owns the temporary directory of
+/// its store when the test did not name one: a test never reaches the store of the
+/// user, whatever the environment of the machine says.
+struct Process(Child, Option<TempDir>);
 
 impl Drop for Process {
     fn drop(&mut self) {
@@ -143,15 +147,27 @@ struct Finished {
 }
 
 impl Process {
+    /// Starts `ironlink` with a store of its own in a new temporary directory.
     fn spawn(args: &[&str], stdin: Stdio) -> Self {
-        let child = Command::new(env!("CARGO_BIN_EXE_ironlink"))
+        let scratch = tempfile::tempdir().unwrap();
+        let store = scratch.path().join("ironlink");
+        let mut process = Self::spawn_with(args, stdin, |command| {
+            command.env("IRONLINK_STORE", &store);
+        });
+        process.1 = Some(scratch);
+        process
+    }
+
+    /// Starts `ironlink` with the environment `configure` leaves.
+    fn spawn_with(args: &[&str], stdin: Stdio, configure: impl FnOnce(&mut Command)) -> Self {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_ironlink"));
+        command
             .args(args)
             .stdin(stdin)
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .unwrap();
-        Process(child)
+            .stderr(Stdio::piped());
+        configure(&mut command);
+        Process(command.spawn().unwrap(), None)
     }
 
     /// Waits for the process to exit, up to [`PATIENCE`], and reads what it
@@ -181,9 +197,47 @@ impl Process {
     }
 }
 
-/// Runs `ironlink` with `args` to its end.
+/// Runs `ironlink` with `args` to its end, with a store of its own.
 fn run(args: &[&str]) -> Finished {
     Process::spawn(args, Stdio::null()).finish()
+}
+
+/// A directory for the store of a test that runs `ironlink` more than once. The
+/// directory itself does not exist until `ironlink` writes.
+struct StoreDir {
+    scratch: TempDir,
+}
+
+impl StoreDir {
+    fn new() -> Self {
+        StoreDir {
+            scratch: tempfile::tempdir().unwrap(),
+        }
+    }
+
+    fn path(&self) -> PathBuf {
+        self.scratch.path().join("ironlink")
+    }
+
+    /// Runs `ironlink` with `args`, its store named by the variable
+    /// `IRONLINK_STORE`.
+    fn run(&self, args: &[&str]) -> Finished {
+        Process::spawn_with(args, Stdio::null(), |command| {
+            command.env("IRONLINK_STORE", self.path());
+        })
+        .finish()
+    }
+
+    /// Runs `ironlink` with `args` and the shell on its stdin.
+    fn shell(&self) -> Shell {
+        Shell::start_with(&[], |command| {
+            command.env("IRONLINK_STORE", self.path());
+        })
+    }
+
+    fn read(&self, name: &str) -> String {
+        std::fs::read_to_string(self.path().join(name)).unwrap()
+    }
 }
 
 /// A running `ironlink serve`: lines go in, response lines come out.
@@ -195,9 +249,21 @@ struct Shell {
 
 impl Shell {
     fn start(extra_args: &[&str]) -> Self {
+        let scratch = tempfile::tempdir().unwrap();
+        let store = scratch.path().join("ironlink");
+        let mut shell = Self::start_with(extra_args, |command| {
+            command.env("IRONLINK_STORE", &store);
+        });
+        if let Some(process) = shell.process.as_mut() {
+            process.1 = Some(scratch);
+        }
+        shell
+    }
+
+    fn start_with(extra_args: &[&str], configure: impl FnOnce(&mut Command)) -> Self {
         let mut args = extra_args.to_vec();
         args.push("serve");
-        let mut process = Process::spawn(&args, Stdio::piped());
+        let mut process = Process::spawn_with(&args, Stdio::piped(), configure);
         let stdin = process.0.stdin.take().unwrap();
         let stdout = process.0.stdout.take().unwrap();
         let (sender, lines) = mpsc::channel();
@@ -522,4 +588,9 @@ fn version_when_run_then_prints_both_versions() {
             env!("CARGO_PKG_VERSION")
         )
     );
+}
+
+// The children of `tests/cli/`, one per subject; they use the helpers above.
+mod cli {
+    mod store;
 }

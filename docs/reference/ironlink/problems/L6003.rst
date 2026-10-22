@@ -11,6 +11,11 @@ standard output, writes this error to standard error and exits with code 2. With
 which is a normal response; only the command line turns the missing answer into
 an error. The message names the address and the time waited.
 
+:program:`ironlink route set` sends the same request and reports the same error
+when nothing answers, and also when the answer is a discovery reply of a version
+that this :program:`ironlink` cannot read, because it cannot read the device id
+from it. No route is stored in either case.
+
 No answer does not say why. The controller may be switched off or restarting,
 the address may belong to another machine, the controller may not answer
 discovery (``ironplcvm serve --no-discovery``, or a controller that listens only
