@@ -94,6 +94,26 @@ suite('devicePanelRows', () => {
     assert.strictEqual(byId.get('application'), 'Normal (gen 1)');
   });
 
+  test('devicePanelRows_when_device_reports_an_id_then_device_id_row_after_the_name', () => {
+    const rows = devicePanelRows(model({
+      state: 'connected',
+      identity: identity({ device: { ...DEVICE, deviceId: '0123456789abcdef0123456789abcdef' } }),
+      lastStatus: status(),
+    }));
+    assert.strictEqual(descriptions(rows).get('device.id'), '0123456789abcdef0123456789abcdef');
+    const ids = rows.map(row => row.id);
+    assert.strictEqual(ids.indexOf('device.id'), ids.indexOf('device.name') + 1);
+  });
+
+  test('devicePanelRows_when_device_reports_no_id_then_no_device_id_row', () => {
+    const rows = devicePanelRows(model({
+      state: 'connected',
+      identity: identity(),
+      lastStatus: status(),
+    }));
+    assert.ok(!rows.some(row => row.id === 'device.id'));
+  });
+
   test('devicePanelRows_when_redundancy_block_present_then_pair_rows', () => {
     const rows = devicePanelRows(model({
       state: 'connected',

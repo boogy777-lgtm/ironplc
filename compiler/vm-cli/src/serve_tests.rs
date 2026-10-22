@@ -16,13 +16,14 @@ use ironplc_redundancy::Shell;
 use ironplc_runtime::{execute, parse_command, Command, Response, RuntimeHost};
 use spec_test_macro::spec_test;
 
-use crate::serve::{compose_host, device_identity, drive_scan_round, serve_session};
+use crate::device_settings::device::Device;
+use crate::serve::{compose_host, drive_scan_round, serve_session};
 use crate::slot_store::SlotStore;
 
 /// A `PROGRAM main` with one DINT `Counter` incremented by `step` per
 /// scan; same declarations for every step, so two compiles differ only
 /// in scan logic and share a layout.
-fn counter_source(step: i32) -> String {
+pub(crate) fn counter_source(step: i32) -> String {
     format!(
         "PROGRAM main
   VAR
@@ -59,7 +60,7 @@ fn compile_container(source: &str) -> Container {
 }
 
 /// The wire-format bytes an `acceptEdits` command carries for `source`.
-fn container_bytes(source: &str) -> Vec<u8> {
+pub(crate) fn container_bytes(source: &str) -> Vec<u8> {
     let mut bytes = Vec::new();
     compile_container(source).write_to(&mut bytes).unwrap();
     bytes
@@ -154,7 +155,7 @@ fn run_session_with_store(
         io::Cursor::new(input.into_bytes()),
         &mut output,
         store,
-        &device_identity(),
+        &mut Device::in_memory(),
         None,
     )
     .unwrap();
@@ -180,7 +181,7 @@ fn run_ha_session(
         io::Cursor::new(input.into_bytes()),
         &mut output,
         None,
-        &device_identity(),
+        &mut Device::in_memory(),
         Some(shell),
     )
     .unwrap();
@@ -192,7 +193,7 @@ fn run_ha_session(
 
 /// A host over the compiled counter: the standalone-shell composition
 /// grants the permit at startup.
-fn counter_host() -> RuntimeHost {
+pub(crate) fn counter_host() -> RuntimeHost {
     let (host, _shell) = compose_host(compile_container(&counter_source(1)), false).unwrap();
     host
 }
@@ -538,7 +539,7 @@ END_PROGRAM
 #[test]
 fn drive_scan_round_when_round_traps_then_trap_v_code() {
     let mut host = counter_host();
-    let device = device_identity();
+    let device = Device::in_memory().identity();
     let accept = parse_command(
         &serde_json::json!({"command": "acceptEdits", "program": trapping_container_bytes()})
             .to_string(),
@@ -589,7 +590,7 @@ fn serve_session_when_eof_immediately_then_ok_and_silent() {
         io::Cursor::new(Vec::new()),
         &mut output,
         None,
-        &device_identity(),
+        &mut Device::in_memory(),
         None,
     )
     .unwrap();
@@ -627,7 +628,7 @@ fn serve_session_when_stdin_read_fails_then_io_error() {
         FailingReader,
         &mut output,
         None,
-        &device_identity(),
+        &mut Device::in_memory(),
         None,
     )
     .unwrap_err();
@@ -661,7 +662,7 @@ fn serve_session_when_stdout_write_fails_then_io_error() {
         io::Cursor::new(b"{\"command\":\"getStatus\"}\n".to_vec()),
         FailingWriter,
         None,
-        &device_identity(),
+        &mut Device::in_memory(),
         None,
     )
     .unwrap_err();

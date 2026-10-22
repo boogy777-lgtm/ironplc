@@ -1,0 +1,74 @@
+=====
+V6015
+=====
+
+.. problem-summary:: V6015
+
+``ironplcvm serve`` refused a device setting. The message names the field. Three
+situations raise this code:
+
+- The settings file ``<FILE>.device.json`` beside the served container cannot
+  be used. ``serve`` does not start, exits with code 2 and leaves the file as
+  it is. The file is not JSON, has a ``version`` other than 1, names a setting
+  that does not exist, or holds a value that its setting refuses.
+- A ``setDeviceSettings`` command named a setting that does not exist or a
+  value that its setting refuses. The session answers the command with this
+  error, and neither the file nor the running device changes.
+- A ``setDeviceSettings`` command named a setting that is changed in the
+  settings file only. Today that is ``deviceId``. The message says that the
+  field can only be changed on the device itself (its settings file). The
+  command is refused as a whole, even when it also names ``name``, and neither
+  the file nor the running device changes. The id is how a workstation
+  recognises the device again, so the engineering session cannot change it.
+
+The device does not repair a file it cannot read. A device that generated a new
+device id over a damaged file would change its identity, and the remembered paths and
+download records keyed by the old id would stop finding it.
+
+The settings and their rules:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Key
+     - Rule
+     - Changed by ``setDeviceSettings``
+   * - ``deviceId``
+     - 32 lowercase hexadecimal digits.
+     - no, only in the settings file
+   * - ``name``
+     - 1 to 64 characters, not blank, without control characters.
+     - yes
+
+Example
+-------
+
+This file stops the device, because the id has uppercase digits:
+
+.. code-block:: json
+
+   {
+     "version": 1,
+     "deviceId": "0123456789ABCDEF0123456789ABCDEF",
+     "name": "ironplcvm"
+   }
+
+Solutions
+---------
+
+1. Correct the field that the message names, then start ``serve`` again.
+2. To make the device a new device, delete the settings file. The next start
+   generates a new device id and writes the file. The remembered paths and
+   download records keyed by the old id no longer find the device, and the
+   engineer chooses the controller again.
+3. To give a replacement device the id of the device it replaces, write that id
+   in ``deviceId`` in the settings file of that device, before the first start or
+   while the device is stopped. ``setDeviceSettings`` cannot change the id.
+4. To change the name of a running device, send ``setDeviceSettings`` with
+   ``name`` only.
+
+See Also
+--------
+
+- :doc:`/reference/runtime/problems/V6016` --- the device settings file cannot be written
+- :doc:`/reference/runtime/ironplcvm` --- the device settings of ``ironplcvm serve``

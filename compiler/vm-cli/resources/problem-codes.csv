@@ -13,3 +13,5 @@ V6011,SessionIo,Unable to read or write the command session
 V6012,SlotCommitPersist,Unable to persist the assembled commit to the slot store
 V6013,SessionFraming,A received frame is malformed
 V6014,SessionRefused,The device already serves one engineering session
+V6015,DeviceSettingsInvalid,The device settings are not valid
+V6016,DeviceSettingsWrite,Unable to write the device settings file

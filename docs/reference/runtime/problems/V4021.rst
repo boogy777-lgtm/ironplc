@@ -1,0 +1,31 @@
+=====
+V4021
+=====
+
+.. problem-summary:: V4021
+
+A client sent ``setDeviceSettings`` to a host that has no device settings. The
+``ironplcvm serve`` device keeps its settings in a file beside the served
+container and answers this command itself. A host without such a file, such as
+the in-process host that the MCP server runs for hot-edit sessions, refuses the
+command and changes nothing.
+
+The runtime command layer holds no settings and has no file system, so the
+application that owns the settings answers the command. A host that is not such
+an application answers V4021 so that a client learns at once that the command
+cannot work there, and does not wait for a change that never happens. The
+command does not touch the hot-edit state: a refused ``setDeviceSettings``
+leaves a staged candidate, a running test and the application as they were.
+
+Solutions
+---------
+
+1. Send the command to a device that serves a settings file: ``ironplcvm
+   serve`` over standard input and output or over TCP.
+2. Read the device with ``identity`` instead. The command is not needed to
+   read the settings.
+
+See Also
+--------
+
+- :doc:`/reference/runtime/problems/V6015` --- the device refuses a setting or its settings file

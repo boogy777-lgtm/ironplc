@@ -24,6 +24,7 @@ use ironplc_runtime::{
 /// The device block composed for the acceptance tests' soft device.
 fn test_device() -> DeviceIdentity {
     DeviceIdentity {
+        device_id: None,
         name: "ironplcvm".into(),
         model: "IronPLC SoftPLC".into(),
         modification: "vm-cli".into(),
@@ -558,6 +559,23 @@ fn cancel_edits_while_testing_then_v4015() {
 
     assert_eq!(response["response"], "error");
     assert_eq!(response["vCode"], "V4015");
+}
+
+#[test]
+fn set_device_settings_when_host_has_no_settings_then_v4021_and_hot_edit_state_untouched() {
+    let (mut host, _counter) = counter_host(1);
+
+    let response = run_line(
+        &mut host,
+        r#"{"command":"setDeviceSettings","name":"cell 1"}"#,
+    );
+
+    assert_eq!(response["response"], "error");
+    assert_eq!(response["vCode"], "V4021");
+    assert_eq!(
+        run_line(&mut host, r#"{"command":"getStatus"}"#)["mode"],
+        "normal"
+    );
 }
 
 #[test]

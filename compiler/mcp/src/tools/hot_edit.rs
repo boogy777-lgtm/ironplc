@@ -281,6 +281,7 @@ fn dispatch(command: Command, session: &mut HotEditSession, drive_scan: bool) ->
 /// the way `vm-cli` does.
 fn mcp_device_identity() -> DeviceIdentity {
     DeviceIdentity {
+        device_id: None,
         name: "ironplcmcp".into(),
         model: "IronPLC SoftPLC".into(),
         modification: "mcp".into(),

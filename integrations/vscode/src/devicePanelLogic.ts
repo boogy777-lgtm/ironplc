@@ -66,6 +66,9 @@ export function devicePanelRows(model: DevicePanelModel): PanelRow[] {
   const identity = model.identity;
   if (identity !== null) {
     rows.push({ id: 'device.name', label: 'Device', description: identity.device.name });
+    if (identity.device.deviceId !== undefined) {
+      rows.push({ id: 'device.id', label: 'Device id', description: identity.device.deviceId });
+    }
     rows.push({ id: 'device.model', label: 'Model', description: identity.device.model });
     rows.push({ id: 'device.modification', label: 'Modification', description: identity.device.modification });
     rows.push({

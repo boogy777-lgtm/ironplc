@@ -90,7 +90,9 @@ Commands
    Commands are the hot-edit protocol commands: ``getStatus``, ``acceptEdits``
    (the compiled container as a JSON array of byte values, plus an optional
    ``migration`` map of stable-UID decisions — ``"init"`` or ``"preserve"``),
-   ``testEdits``, ``untestEdits``, ``assembleEdits`` and ``cancelEdits``.
+   ``testEdits``, ``untestEdits``, ``assembleEdits`` and ``cancelEdits``, and
+   ``identity`` and ``setDeviceSettings`` for the device itself (see
+   :ref:`ironplcvm-device-settings`).
    Responses are JSON: an acknowledgment, a status payload, or an error
    carrying a stable ``vCode`` and ``message``; a V4010 refusal additionally
    carries a ``pairs`` array naming every out-of-policy type change, so the
@@ -105,6 +107,81 @@ Commands
    swap has been applied when the line reaches the client. A trap in that
    round is logged to stderr with the trap's V-code and the session
    continues.
+
+.. _ironplcvm-device-settings:
+
+Device settings
+===============
+
+:program:`ironplcvm serve` keeps the settings that belong to the device, and not
+to the program it runs, in the file :file:`{FILE}.device.json` beside the served
+container. The file is JSON:
+
+.. code-block:: json
+
+   {
+     "version": 1,
+     "deviceId": "0123456789abcdef0123456789abcdef",
+     "name": "ironplcvm"
+   }
+
+``version``
+   The version of the file. The only version is ``1``.
+
+``deviceId``
+   The unique id of the device: 32 lowercase hexadecimal digits. The device
+   generates it from 128 random bits when it starts without the file, and keeps
+   it across restarts. The ``identity`` answer reports it. A workstation
+   recognises the device again by this id. Change it in the file only, and only
+   on the device itself: see below.
+
+``name``
+   The name of the device: 1 to 64 characters, not blank, without control
+   characters. The default is ``ironplcvm``. The ``identity`` answer reports it.
+
+A device without a settings file is a new device. Delete the file to reset a
+device: the next start generates a new ``deviceId``. A file that lacks a setting
+takes the default of that setting, and the device writes the file complete.
+
+Change a setting by editing the file while the device is stopped. A setting can
+also be changed online, with the session command ``setDeviceSettings``, when the
+table below allows it. The command names the settings to change by their keys; a
+setting that it does not name stays as it is:
+
+.. code-block:: json
+
+   {"command": "setDeviceSettings", "name": "cell 1"}
+
+.. list-table::
+   :header-rows: 1
+
+   * - Setting
+     - Changed in the file
+     - Changed by ``setDeviceSettings``
+   * - ``deviceId``
+     - yes
+     - no
+   * - ``name``
+     - yes
+     - yes
+
+The device id is how a workstation recognises the device again, and the session
+cannot change it: an id that an engineer could change over the network could give
+a device the identity of another one. Give a replacement device the id of the device it
+replaces, or give a cloned device a new id, by editing the file on that device.
+
+The device checks every named value, writes the file, and answers
+``{"response": "ack"}``. The next ``identity`` answer and the next start report
+the new values. The command works while a candidate is staged, because the
+settings are not the program. A command that names ``deviceId`` is refused as a
+whole with :doc:`V6015 <problems/V6015>`, even when it also names ``name``. A
+value that a setting refuses is answered with the same code, and a file that
+cannot be written with :doc:`V6016 <problems/V6016>`; the file and the device
+stay as they were.
+
+A settings file that the device cannot use stops :program:`ironplcvm serve`
+with :doc:`V6015 <problems/V6015>`. The device does not replace a damaged file
+with a new identity.
 
 Options
 =======
