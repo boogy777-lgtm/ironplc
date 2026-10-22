@@ -8,6 +8,33 @@ The IronLink extension found the :program:`ironlink` program, but the operating
 system could not start it. The message that follows the code gives the reason
 the operating system reported.
 
+Why IronLink starts a program
+-----------------------------
+
+The extension does not look for controllers itself. It starts
+:program:`ironlink serve` as a child process and sends it one command at a time,
+the way an editor starts a language server. Starting the process is the first step
+of every search, so the extension reports a failure to start at once and does not
+guess what the program would have answered. The extension finds the file (see
+:doc:`E0016 </reference/editor/problems/E0016>` when it cannot), but only the
+operating system can say whether the file runs.
+
+Examples
+--------
+
+The reason in the message identifies the cause. Two frequent ones:
+
+* ``spawn ... EACCES``: the file exists but has no permission to execute. This
+  happens when :program:`ironlink` was copied from an archive that dropped the
+  permission bits. On Linux and macOS, run ``chmod +x`` on the file.
+* ``spawn ... ENOEXEC`` or a message that the image is not valid: the file is built
+  for another operating system or processor, for example a Linux program on
+  Windows or an Intel program on an Arm-only host. Install the build for this
+  computer.
+
+A third cause is a program that the system blocks, such as a download that your
+security software has quarantined. The reason in the message names the block.
+
 **Solutions**:
 
 1. **Check the program**: Run the path shown in the message in a terminal. A program
@@ -24,3 +51,8 @@ See Also
 --------
 
 - :doc:`/reference/editor/problems/E0016` --- the program could not be found
+- :doc:`/reference/editor/problems/E0018` --- the program started and then ended
+- :doc:`/reference/editor/problems/E0019` --- the program answered with a line that
+  cannot be read
+- :doc:`/reference/ironlink/vscode-extension` --- the IronLink extension
+- :doc:`/reference/ironlink/ironlink` --- the :program:`ironlink` command reference
