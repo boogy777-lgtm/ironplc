@@ -1,0 +1,21 @@
+{
+  "name": "ironplc-vscode-common",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Code shared by IronPLC's VS Code extensions: locating the IronPLC toolchain.",
+  "main": "out/index.js",
+  "types": "out/index.d.ts",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "test:unit": "mocha --ui tdd --recursive out/test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.0",
+    "@types/node": "26.x",
+    "mocha": "^12.0.0",
+    "typescript": "^5.1.6"
+  }
+}

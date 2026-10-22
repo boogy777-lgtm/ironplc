@@ -1,0 +1,30 @@
+set windows-shell := ["powershell.exe", "-c"]
+
+default: compile
+
+# The primary set of tasks for continuous integration validation.
+ci:
+  just compile
+  just test-unit
+
+# Setup required dependencies. Use this to bootstrap a new host.
+setup:
+  npm ci
+
+# Compile the package to out/. Because this is TypeScript with strict checks,
+# this also validates the code. The VS Code extensions that depend on this
+# package build it through their own compile step.
+compile:
+  npm run compile
+
+# Run unit tests.
+test-unit:
+  npm run test:unit
+
+# Updates dependencies to latest version (or at least tries to)
+update:
+  npm update
+
+# Remove build artifacts
+clean:
+  rm -rf out
