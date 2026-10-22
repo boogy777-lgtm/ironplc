@@ -369,8 +369,11 @@ What the code implements so far:
   refusal (V4021) by a host that has no settings.
 - `integrations/vscode/src/test/unit/`: the parser reads the optional `deviceId`
   and ignores what it does not know, and the device panel shows it.
+- `compiler/discovery/src/tests.rs`: the discovery request and reply round-trip,
+  every truncation and any byte string fail without a panic, and only the exact
+  request is recognised (format in `specs/design/plc-discovery.md`).
 
-What is not built, so the status stays `proposed`: the discovery request and reply
+What is not built, so the status stays `proposed`: the device answering discovery
 on UDP, the `--listen` default port, IronLink and its drivers, the browse view, the
 connection path stored in the project file and in the workstation route record,
 the connection method as a class with a registration check, and the go-online
