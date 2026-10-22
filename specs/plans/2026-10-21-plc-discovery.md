@@ -664,7 +664,7 @@ by hand (`runtime/src/host.rs`, `vm-cli/src/serve.rs`, `vm-cli/src/slot_store.rs
   - A failed stage stays marked with its V-code, and its exits are shown
     (row 10 of section 8).
   - **The control (owner, 2026-10-21):** a rectangle with the progress bar,
-    and under it two buttons and a checkbox.
+    and under it three buttons: Next, Finalize all and Cancel.
     - **Next** is the command of the next stage. After a stage passes, the
       button becomes the command of the following one: Build, then Accept,
       then Test, then Assemble.
@@ -672,9 +672,9 @@ by hand (`runtime/src/host.rs`, `vm-cli/src/serve.rs`, `vm-cli/src/slot_store.rs
       `cancelEdits`; from Testing it is Untest and then Cancel at the
       boundary (row 7). Under a migration candidate it is disabled with its
       reason (V4011, row 8).
-    - **The checkbox "Finalize all":** when it is checked, Next runs every
-      remaining stage in one action.
-    - The labels, the enablement of both buttons and the reasons come from
+    - **The button "Finalize all"** runs every remaining stage in one
+      action. It is a button, not a checkbox (owner, 2026-10-22).
+    - The labels, the enablement of the buttons and the reasons come from
       the runtime's K1 function. The control holds no rule.
     - It replaces today's modal Trial dialog (`buildLogic.ts`).
     - When the current stage has no exit, Cancel is inactive (owner).
@@ -698,10 +698,9 @@ by hand (`runtime/src/host.rs`, `vm-cli/src/serve.rs`, `vm-cli/src/slot_store.rs
       `engines.vscode` is raised when a feature needs it.
     - **Owner's choice (2026-10-21): the QuickPick.** It stays open through
       every stage. The title carries the stage and `step`/`totalSteps`; the
-      `busy` line runs while a stage is in flight; "Finalize all" is a toggle
-      button in the title; the items are Next (labelled with the next stage)
-      and Cancel. An unavailable Cancel shows its reason in the item's
-      description and does nothing. Stages are marked ✔ ● ○ in the prompt
+      `busy` line runs while a stage is in flight; the items are Next
+      (labelled with the next stage), Finalize all and Cancel. An unavailable
+      item shows its reason in its description and does nothing. Stages are marked ✔ ● ○ in the prompt
       line, with no colour.
 - **A test that does not drive outputs** (as the SLC 500 / PLC-5 Remote Test
   mode, where the program is solved but outputs stay off) is a different
@@ -855,6 +854,8 @@ Tracking issue: #149.
     empty container (no ST files).
   - K3 and K4 come first in the online-model plan.
   - The project path file is `<app>.path.iplcinfo`.
+- **Answer of 2026-10-22:** "Finalize all" is a button, not a toggle (section
+  9).
 - **Reference for the GUI ontology (owner): Beckhoff's TwinCAT extension for
   VS Code.** Its views, commands and settings are studied for their names and
   structure only. Search result (2026-10-21):
