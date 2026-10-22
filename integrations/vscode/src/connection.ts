@@ -127,14 +127,14 @@ export function registerConnectionSupport(
     async recordDownload(container: string, status: HotEditStatus): Promise<void> {
       lastStatusOverride = status;
       try {
-        await recordDownloadOf(container, status, false);
+        await recordDownloadOf(container, status, false, connectedDeviceId());
       }
       catch (err) {
         void vscode.window.showErrorMessage(
           `IronPLC: the device received the application, but the download record could not be written: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
-      baselineState = await currentBaseline(status);
+      baselineState = await currentBaseline(status, connectedDeviceId());
       render();
     },
     settled: () => pendingCheck,
@@ -149,14 +149,19 @@ export function registerConnectionSupport(
       : args => runCompiler(compiler, args, text => outputChannel.append(text));
   }
 
+  /** The id of the connected device, as its identity reports it; undefined when it reports none. */
+  function connectedDeviceId(): string | undefined {
+    return manager.snapshot().identity?.device.deviceId;
+  }
+
   function workspaceFolders(): FolderRef[] {
     return (vscode.workspace.workspaceFolders ?? []).map(folder => ({ name: folder.name, path: folder.uri.fsPath }));
   }
 
   /**
    * Records that the device of the current connection received a container,
-   * through the compiler's one writer. `sent` is the file that was sent, or
-   * undefined for the application container itself. Returns whether a record
+   * through the compiler's one writer, keyed by the device's id. `sent` is the
+   * file that was sent, or undefined for the application container itself. Returns whether a record
    * was written; a download that has no record says why in the connection
    * channel. A failure of the writer is thrown.
    */
@@ -164,6 +169,7 @@ export function registerConnectionSupport(
     sent: string | undefined,
     status: HotEditStatus,
     requireDeviceHash: boolean,
+    deviceId: string | undefined,
   ): Promise<boolean> {
     const profile = manager.currentProfile;
     if (profile === undefined) {
@@ -174,6 +180,7 @@ export function registerConnectionSupport(
       folders: workspaceFolders(),
       sourceExtensions,
       sentContainer: sent,
+      deviceId,
       status,
       requireDeviceHash,
     });
@@ -191,13 +198,16 @@ export function registerConnectionSupport(
   }
 
   /**
-   * Compares the device with the download record of the current connection:
-   * the content hash the device reports against the record, so a reboot, which
-   * restarts the generation counters, keeps a match. A connection without an
-   * application container, or a record that cannot be looked up, is not
-   * checked (none); the reason is in the connection channel.
+   * Compares the device with its download record: the content hash the device
+   * reports against the record, so a reboot, which restarts the generation
+   * counters, keeps a match. A connection without an application container, a
+   * device that reports no id, or a record that cannot be looked up, is not
+   * checked (none); a lookup failure is in the connection channel.
    */
-  async function currentBaseline(application: HotEditStatus): Promise<BaselineState> {
+  async function currentBaseline(
+    application: HotEditStatus,
+    deviceId: string | undefined,
+  ): Promise<BaselineState> {
     const profile = manager.currentProfile;
     const run = runTool();
     if (profile === undefined || run === undefined) {
@@ -207,6 +217,7 @@ export function registerConnectionSupport(
       profile,
       folders: workspaceFolders(),
       sourceExtensions,
+      deviceId,
       status: application,
       requireDeviceHash: false,
     });
@@ -214,7 +225,7 @@ export function registerConnectionSupport(
       return 'none';
     }
     try {
-      return await readBaseline(run, readTextIfPresent, plan.download.anchor, profile.name, application);
+      return await readBaseline(run, readTextIfPresent, plan.download.anchor, plan.download.deviceId, application);
     }
     catch (err) {
       outputChannel.appendLine(`The download record could not be checked, so the device is not compared with it: ${err instanceof Error ? err.message : String(err)}`);
@@ -250,13 +261,13 @@ export function registerConnectionSupport(
     const started = manager.currentProfile;
     if (started !== undefined && connectionMethod(started).recordsSessionStart) {
       try {
-        await recordDownloadOf(undefined, identity.application, true);
+        await recordDownloadOf(undefined, identity.application, true, identity.device.deviceId);
       }
       catch (err) {
         outputChannel.appendLine(`The session start was not recorded: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
-    const next = await currentBaseline(identity.application);
+    const next = await currentBaseline(identity.application, identity.device.deviceId);
     const becameStale = next === 'mismatch' && baselineState !== 'mismatch';
     baselineState = next;
     if (becameStale) {
