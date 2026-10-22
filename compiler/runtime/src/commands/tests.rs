@@ -118,7 +118,7 @@ fn test_device() -> DeviceIdentity {
         name: "ironplcvm".into(),
         model: "IronPLC SoftPLC".into(),
         modification: "vm-cli".into(),
-        firmware_version: "0.13.0".into(),
+        runtime_version: "0.13.0".into(),
     }
 }
 
@@ -157,14 +157,14 @@ fn render_response_when_identity_then_serializes_every_block() {
     let value: serde_json::Value = serde_json::from_str(&line).unwrap();
 
     assert_eq!(value["response"], "identity");
-    assert_eq!(value["protocol"], 1);
+    assert_eq!(value["protocol"], SESSION_PROTOCOL_VERSION);
     assert_eq!(
         value["device"],
         serde_json::json!({
             "name": "ironplcvm",
             "model": "IronPLC SoftPLC",
             "modification": "vm-cli",
-            "firmwareVersion": "0.13.0",
+            "runtimeVersion": "0.13.0",
         })
     );
     // The application block is the StatusPayload vocabulary verbatim...
@@ -198,7 +198,7 @@ fn render_response_when_identity_with_device_id_then_field_serializes() {
 }
 
 /// The `device` block of a server that predates `deviceId`.
-const DEVICE_WITHOUT_ID: &str = r#"{"name":"ironplcvm","model":"IronPLC SoftPLC","modification":"vm-cli","firmwareVersion":"0.13.0"}"#;
+const DEVICE_WITHOUT_ID: &str = r#"{"name":"ironplcvm","model":"IronPLC SoftPLC","modification":"vm-cli","runtimeVersion":"0.13.0"}"#;
 
 #[test]
 fn device_identity_when_device_id_absent_then_parses_with_none() {
@@ -210,7 +210,7 @@ fn device_identity_when_device_id_absent_then_parses_with_none() {
 #[test]
 fn device_identity_when_device_id_and_unknown_field_present_then_parses() {
     // A reader ignores fields it does not know, which is what keeps the
-    // session protocol at version 1 when a server adds one.
+    // session protocol version when a server adds one.
     let line = DEVICE_WITHOUT_ID.replace(
         r#""name":"#,
         &format!(r#""deviceId":"{DEVICE_ID}","fieldOfALaterServer":[1],"name":"#),
@@ -326,7 +326,7 @@ fn status_payload_when_hashes_absent_then_parses_with_none() {
 #[test]
 fn status_payload_when_hashes_and_unknown_field_present_then_parses() {
     // A reader ignores fields it does not know, which is what keeps the
-    // session protocol at version 1 when a server adds one.
+    // session protocol version when a server adds one.
     let line = STATUS_WITHOUT_HASHES.replace(
         r#""rounds":0"#,
         r#""rounds":0,"contentHash":"ab","layoutHash":"cd","fieldOfALaterServer":[1]"#,

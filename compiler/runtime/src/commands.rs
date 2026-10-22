@@ -230,12 +230,21 @@ impl From<HostStatus> for StatusPayload {
     }
 }
 
-/// The session protocol version this server speaks (ADR-0063): `1` for the
-/// version the engineering connection spec defines. A client refuses a
-/// higher number; an older server answers every command it does not know —
-/// including `identity` — with the codeless codec error, which is the
-/// version negotiation.
-pub const SESSION_PROTOCOL_VERSION: u32 = 1;
+/// The session protocol version this server speaks (ADR-0063). A client
+/// refuses a higher number; an older server answers every command it does
+/// not know — including `identity` — with the codeless codec error, which is
+/// the version negotiation.
+///
+/// The number exists to tell clients that the wire changed. An additive
+/// optional field keeps it, because a client ignores what it does not know. A
+/// rename or a removal of a field raises it, so an old client refuses the new
+/// device with a clear message instead of misreading it.
+///
+/// The value lives in `resources/session-protocol.txt` (a bare integer, so
+/// Rust reads it as the literal below) and the VS Code extension generates its
+/// copy from the same file. State the number nowhere else: read this
+/// constant, or the generated `SUPPORTED_SESSION_PROTOCOL` in the extension.
+pub const SESSION_PROTOCOL_VERSION: u32 = include!("../resources/session-protocol.txt");
 
 /// The engineering port: TCP for the session and, for the services that
 /// share it, UDP for discovery. It is the first port of the IANA
@@ -259,7 +268,7 @@ pub struct DeviceIdentity {
     /// change in its settings. Absent on the wire from a host that has none
     /// (the MCP in-process host, a hardware target that reports no id) and
     /// from a device that predates the field; a client ignores what it does
-    /// not know, so the protocol stays at version 1.
+    /// not know, so adding it keeps the protocol version.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub device_id: Option<String>,
     /// The device name (e.g. `"ironplcvm"`).
@@ -268,8 +277,8 @@ pub struct DeviceIdentity {
     pub model: String,
     /// The device modification (e.g. `"vm-cli"`).
     pub modification: String,
-    /// The firmware version (e.g. `"0.13.0"`).
-    pub firmware_version: String,
+    /// The runtime version (e.g. `"0.13.0"`), the version of this build.
+    pub runtime_version: String,
 }
 
 /// The optional redundancy block of an [`IdentityPayload`] (ADR-0063):

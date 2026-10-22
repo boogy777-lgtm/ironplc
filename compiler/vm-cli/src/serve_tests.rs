@@ -262,14 +262,17 @@ fn serve_session_when_identity_then_device_panel_and_status_snapshot() {
 
     assert_eq!(responses.len(), 2);
     assert_eq!(responses[0]["response"], "identity");
-    assert_eq!(responses[0]["protocol"], 1);
+    assert_eq!(
+        responses[0]["protocol"],
+        ironplc_runtime::SESSION_PROTOCOL_VERSION
+    );
     assert_eq!(responses[0]["device"]["name"], "ironplcvm");
     assert_eq!(responses[0]["device"]["model"], "IronPLC SoftPLC");
     assert_eq!(responses[0]["device"]["modification"], "vm-cli");
-    // The firmware version is the binary's own crate version — the one
+    // The runtime version is the binary's own crate version — the one
     // composition point for the device panel (ADR-0063).
     assert_eq!(
-        responses[0]["device"]["firmwareVersion"],
+        responses[0]["device"]["runtimeVersion"],
         env!("CARGO_PKG_VERSION")
     );
     // The application block is the StatusPayload vocabulary verbatim —
