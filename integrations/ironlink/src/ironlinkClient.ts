@@ -19,6 +19,8 @@ import {
   BrowseResponse,
   IdentifyResponse,
   IronLinkCommand,
+  RouteListResponse,
+  RouteSetResponse,
   ResponseName,
   ResponseOf,
   VersionResponse,
@@ -81,6 +83,19 @@ export class IronLinkClient {
   /** The stored address list. */
   addressList(): Promise<AddressListResponse> {
     return this.send({ command: 'addressList' }, 'addressList');
+  }
+
+  /**
+   * Verifies the route to `deviceId` at `address` (`IP` or `IP:PORT`) with a
+   * fresh identify and stores it on this workstation.
+   */
+  routeSet(deviceId: string, address: string, options: BrowseOptions = {}): Promise<RouteSetResponse> {
+    return this.send({ command: 'routeSet', deviceId, address, ...definedOptions(options) }, 'routeSet');
+  }
+
+  /** The routes stored on this workstation. */
+  routeList(): Promise<RouteListResponse> {
+    return this.send({ command: 'routeList' }, 'routeList');
   }
 
   /** The versions of the program. */

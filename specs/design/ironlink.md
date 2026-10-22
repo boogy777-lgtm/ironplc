@@ -26,8 +26,9 @@ and the L-codes.
 The project path file `<app>.path.iplcinfo` is not IronLink's: IronPLC writes it
 (`ironplcc record-path`, [engineering-connection.md](engineering-connection.md)).
 The VS Code extension, a thin client of the shell with the Network view, is
-built (see [The VS Code extension](#the-vs-code-extension)); its Choose action is
-built up to the handoff to IronPLC.
+built (see [ironlink-vscode-extension.md](ironlink-vscode-extension.md)); its Choose
+action sets the route of this workstation and then hands off to IronPLC, and the
+extension returns an API for the IronPLC extension.
 **Not built:** choosing a controller (`select`, and the IronPLC command that
 records the choice), USB enumeration or a gateway as drivers, and the class of
 connection methods.

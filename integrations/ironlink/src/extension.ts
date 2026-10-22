@@ -1,26 +1,24 @@
 import * as vscode from 'vscode';
 import { existsSync } from 'fs';
 
-import { ActionContext, DEVICE_ACTION_COMMANDS, DeviceAction, chooseArgument, decideDeviceAction } from './deviceActions';
+import { BrowseMemory, createIronLinkApi } from './api';
+import { chooseDevice } from './chooseSequence';
+import { ActionContext, DEVICE_ACTION_COMMANDS, DeviceAction, decideDeviceAction } from './deviceActions';
 import { describeFailure } from './failures';
 import { IronLinkClient } from './ironlinkClient';
-import { BrowseOptions, BrowseResponse } from './ironlinkProtocol';
+import { BrowseOptions } from './ironlinkProtocol';
 import { ironLinkLauncher } from './ironlinkProcess';
-import { describeAddressAdd, describeAddressRemove, describeBrowse, describeIdentify } from './messages';
+import { describeAddressAdd, describeAddressRemove, describeBrowse, describeIdentify, describeRouteSet } from './messages';
 import { NetworkNode, buildNetworkTree, socketAddress } from './networkTree';
 import { browseOptionsFromSettings } from './settings';
-import { ToolchainEnvironment, runHandoff } from './vscodeCommon';
+import { IronLinkApi, ToolchainEnvironment, problemHelpUrl, runHandoff } from './vscodeCommon';
 
 /** The Network view: the last search, rendered with the current age of each observation. */
 class NetworkProvider implements vscode.TreeDataProvider<NetworkNode> {
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this.changed.event;
-  private browse: BrowseResponse | undefined;
 
-  show(browse: BrowseResponse): void {
-    this.browse = browse;
-    this.refresh();
-  }
+  constructor(private readonly memory: BrowseMemory) {}
 
   refresh(): void {
     this.changed.fire();
@@ -42,7 +40,8 @@ class NetworkProvider implements vscode.TreeDataProvider<NetworkNode> {
     if (node) {
       return node.children;
     }
-    return this.browse ? buildNetworkTree(this.browse, Date.now()) : [];
+    const last = this.memory.last();
+    return last ? buildNetworkTree(last.response, Date.now()) : [];
   }
 }
 
@@ -63,12 +62,13 @@ function browseOptions(): BrowseOptions {
 
 let client: IronLinkClient | undefined;
 
-export function activate(context: vscode.ExtensionContext) {
+export function activate(context: vscode.ExtensionContext): IronLinkApi {
   // The version comes from the extension context, not an extension id: the
   // documentation links carry it.
   const version: string = context.extension.packageJSON?.version ?? '';
   const output = vscode.window.createOutputChannel('IronLink');
-  const provider = new NetworkProvider();
+  const memory = new BrowseMemory();
+  const provider = new NetworkProvider(memory);
   const ironlink = new IronLinkClient(
     ironLinkLauncher(toolchainEnvironment, text => output.append(text), line => output.appendLine(line)),
     () => {
@@ -89,6 +89,14 @@ export function activate(context: vscode.ExtensionContext) {
     }
   }));
 
+  const showFailure = (text: string, helpUrl: string) => {
+    output.appendLine(text);
+    void vscode.window.showErrorMessage(text, 'Open Online Help').then(selection => {
+      if (selection === 'Open Online Help') {
+        void vscode.env.openExternal(vscode.Uri.parse(helpUrl));
+      }
+    });
+  };
   const reportFailure = (error: unknown) => {
     const shown = describeFailure(error, version);
     if (shown === undefined) {
@@ -96,13 +104,23 @@ export function activate(context: vscode.ExtensionContext) {
       // VS Code reports it with its stack.
       throw error;
     }
-    output.appendLine(shown.text);
-    void vscode.window.showErrorMessage(shown.text, 'Open Online Help').then(selection => {
-      if (selection === 'Open Online Help') {
-        void vscode.env.openExternal(vscode.Uri.parse(shown.helpUrl));
-      }
-    });
+    showFailure(shown.text, shown.helpUrl);
   };
+
+  // What other extensions see: the same browse and the same program as the view.
+  const api = createIronLinkApi({
+    client: ironlink,
+    memory,
+    now: Date.now,
+    browseOptions,
+    show: result => {
+      output.appendLine(describeBrowse(result));
+      provider.refresh();
+    },
+    revealNetwork: async () => {
+      await vscode.commands.executeCommand('ironlink.network.focus');
+    },
+  });
   // Every command reports its failure the same way.
   const register = (command: string, handler: (...args: any[]) => Promise<void>) => {
     context.subscriptions.push(vscode.commands.registerCommand(command, async (...args: unknown[]) => {
@@ -117,9 +135,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   register('ironlink.browse', async () => {
     await vscode.window.withProgress({ location: { viewId: 'ironlink.network' } }, async () => {
-      const result = await ironlink.browse(browseOptions());
-      output.appendLine(describeBrowse(result));
-      provider.show(result);
+      await api.browse();
     });
   });
 
@@ -174,10 +190,24 @@ export function activate(context: vscode.ExtensionContext) {
     await vscode.env.clipboard.writeText(node.device!.deviceId);
   });
 
+  // The route of this workstation first (IronLink's own data, verified by the
+  // program); the project path file is IronPLC's and is written only after it.
   deviceAction('choose', async node => {
-    await runHandoff('choose', chooseArgument(node.device!), (command, ...args) =>
-      vscode.commands.executeCommand(command, ...args));
+    const outcome = await chooseDevice(
+      node.device!,
+      (deviceId, address) => api.setRoute(deviceId, address),
+      argument => runHandoff('choose', argument, (command, ...args) =>
+        vscode.commands.executeCommand(command, ...args)),
+    );
+    if (outcome.handedOff) {
+      output.appendLine(describeRouteSet(outcome.route));
+    }
+    else {
+      showFailure(outcome.failure.message, problemHelpUrl(outcome.failure.code, version));
+    }
   });
+
+  return api;
 }
 
 async function actionContext(): Promise<ActionContext> {

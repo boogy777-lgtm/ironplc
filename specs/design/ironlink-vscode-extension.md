@@ -109,10 +109,46 @@ register the command.
 `{deviceId, address, sessionPort}` of the row. IronLink writes no project data:
 the project path file is IronPLC's.
 
+**REQ-IL-ironlink-vscode-100** "Choose" first sets the route of this workstation
+for the device of the row (`routeSet` at the address and session port of the row,
+which the program verifies with an identify), and only after that succeeded calls
+the IronPLC command. When the route cannot be set, the failure is shown with its
+code and the IronPLC command is not called, so nothing is written to the project.
+When the IronPLC command is missing, "Choose" is unavailable and no route is set.
+
 **REQ-IL-ironlink-vscode-094** "Identify" sends a fresh `identify` to the address
 and session port of the row and shows the reply with its time. No answer is shown
 as a warning, because it is a normal answer of the program, and an answer of
 another wire version says to update IronLink.
+
+## The API for other extensions
+
+The extension returns an API from `activate`, as the Git extension does, so that
+the IronPLC extension can choose and connect a controller without a second
+program or a second store. The types (`IronLinkApi` and the values it returns)
+are written once in `integrations/vscode-common` (`ironlinkApi.ts`), free of
+`vscode`, and both extensions import them. The IronLink extension is found by its
+one id, `ironplc.ironlink`. It is optional for the IronPLC extension, which does
+not declare a dependency on it.
+
+**REQ-IL-ironlink-vscode-096** The `exports` of `activate` carry `apiVersion` and
+exactly the members of the shared type (`IRONLINK_API_MEMBERS`): `routeList`,
+`lastBrowse`, `browse`, `setRoute` and `revealNetwork`.
+
+**REQ-IL-ironlink-vscode-097** `routeList` returns the routes stored on this
+workstation, as the program lists them. `lastBrowse` is `undefined` before any
+browse and afterwards the devices heard in the last browse (once for each address
+and port, the later observation when two drivers heard one, newest first) with the
+time the browse finished. `browse` runs the browse of the Network view with the
+user's settings, shows the result in the view and remembers it as the last browse.
+
+**REQ-IL-ironlink-vscode-098** `setRoute(deviceId, address)` sends `routeSet` and
+returns the route that was stored, or a failure that carries the `L####` code and
+the text of the program (or the `E####` code when the program could not be run).
+A failure of the program is a value and is not thrown; an error that is not one
+of these is a defect of the extension and is thrown.
+
+**REQ-IL-ironlink-vscode-099** `revealNetwork` focuses the Network view.
 
 ## Packaging
 

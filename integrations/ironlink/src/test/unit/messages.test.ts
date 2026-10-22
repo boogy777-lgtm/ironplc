@@ -6,6 +6,7 @@ import {
   describeAddressRemove,
   describeBrowse,
   describeIdentify,
+  describeRouteSet,
 } from '../../messages';
 import { PRESS_LINE_ID, browseFixture } from './browseFixture';
 
@@ -98,6 +99,25 @@ suite('describeBrowse', () => {
     assert.strictEqual(
       describeBrowse(browseFixture()),
       'Search found 5 routes (broadcast, addressList); 1 stored route not seen.',
+    );
+  });
+});
+
+// REQ-IL-ironlink-vscode-100
+suite('describeRouteSet', () => {
+  const route = { deviceId: PRESS_LINE_ID, address: '192.168.1.50', sessionPort: 49152, driver: 'addressList', verifiedAt: 1 };
+
+  test('describeRouteSet_when_new_then_names_the_short_id_and_the_address', () => {
+    assert.strictEqual(
+      describeRouteSet({ ok: true, route, replaced: false }),
+      'Route to 00112233 is 192.168.1.50:49152.',
+    );
+  });
+
+  test('describeRouteSet_when_replaced_then_says_so', () => {
+    assert.strictEqual(
+      describeRouteSet({ ok: true, route, replaced: true }),
+      'Route to 00112233 is 192.168.1.50:49152 (replaced the earlier route).',
     );
   });
 });

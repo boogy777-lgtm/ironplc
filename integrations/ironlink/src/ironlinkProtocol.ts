@@ -129,6 +129,27 @@ export interface AddressListResponse {
   addresses: string[];
 }
 
+/** The answer to `routeSet`: the route that was verified and stored. */
+export interface RouteSetResponse {
+  response: 'routeSet';
+  deviceId: string;
+  route: {
+    address: string;
+    driver: string;
+    sessionPort: number;
+    /** Milliseconds since the Unix epoch at which the device answered. */
+    verifiedAt: number;
+  };
+  /** Whether the device had a route, which this one replaced. */
+  replaced: boolean;
+}
+
+/** The answer to `routeList`: the routes of this workstation, ordered by device id. */
+export interface RouteListResponse {
+  response: 'routeList';
+  routes: StoredRoute[];
+}
+
 /** The answer to `version`. */
 export interface VersionResponse {
   response: 'version';
@@ -150,6 +171,8 @@ export type IronLinkResponse =
   | AddressAddResponse
   | AddressRemoveResponse
   | AddressListResponse
+  | RouteSetResponse
+  | RouteListResponse
   | VersionResponse
   | ErrorResponse;
 
@@ -172,6 +195,8 @@ export type IronLinkCommand =
   | { command: 'addressAdd'; address: string }
   | { command: 'addressRemove'; address: string }
   | { command: 'addressList' }
+  | ({ command: 'routeSet'; deviceId: string; address: string } & BrowseOptions)
+  | { command: 'routeList' }
   | { command: 'version' };
 
 /** The command line (without its newline) for a command. */

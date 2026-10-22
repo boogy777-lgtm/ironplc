@@ -20,3 +20,13 @@ export type {
   HandoffName,
 } from './handoff';
 export { HANDOFF_ACTIONS, handoffNames, isHandoffAvailable, runHandoff } from './handoff';
+export type {
+  IronLinkApi,
+  IronLinkRoute,
+  BrowseSnapshot,
+  ObservedDevice,
+  RouteFailure,
+  RouteOutcome,
+  RouteSet,
+} from './ironlinkApi';
+export { IRONLINK_API_MEMBERS, IRONLINK_API_VERSION, IRONLINK_EXTENSION_ID } from './ironlinkApi';
