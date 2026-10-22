@@ -14,7 +14,8 @@ const packageJson = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package
 const ironplcPackageJson = JSON.parse(
   fs.readFileSync(path.join(repoRoot, 'integrations', 'vscode', 'package.json'), 'utf-8'),
 );
-const designText = fs.readFileSync(path.join(repoRoot, 'specs', 'design', 'ironlink.md'), 'utf-8');
+const designDoc = 'specs/design/ironlink-vscode-extension.md';
+const designText = fs.readFileSync(path.join(repoRoot, ...designDoc.split('/')), 'utf-8');
 const extensionSource = fs.readFileSync(path.join(sourceRoot, 'extension.ts'), 'utf-8');
 
 // Collect all test file contents
@@ -101,14 +102,15 @@ for (const setting of Object.keys(packageJson.contributes.configuration.properti
   }
 }
 
-// The requirements of the extension (specs/design/ironlink.md, "The VS Code
-// extension") are in the design document and in the tests, both ways. The
-// Rust crate does not own them, so the completeness check is here.
+// The requirements of the extension are in its own design document and in the
+// tests, both ways. No Rust crate lists that document (the Rust guard requires
+// every requirement of a listed document to belong to a listing crate), so the
+// completeness check is here.
 const idPattern = /REQ-IL-ironlink-vscode-\d{3}/g;
 const specified = new Set([...designText.matchAll(/\*\*(REQ-IL-ironlink-vscode-\d{3})\*\*/g)].map(m => m[1]));
 const tested = new Set(testContent.match(idPattern) ?? []);
 if (specified.size === 0) {
-  failures.push('specs/design/ironlink.md specifies no requirement of the VS Code extension');
+  failures.push(`${designDoc} specifies no requirement of the VS Code extension`);
 }
 for (const id of specified) {
   if (!tested.has(id)) {
@@ -117,7 +119,7 @@ for (const id of specified) {
 }
 for (const id of tested) {
   if (!specified.has(id)) {
-    failures.push(`${id} is named by a test but not specified in specs/design/ironlink.md`);
+    failures.push(`${id} is named by a test but not specified in ${designDoc}`);
   }
 }
 

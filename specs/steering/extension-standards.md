@@ -71,7 +71,7 @@ own `just ci` (compile and unit tests), which the extension workflow runs. See
 
 `integrations/ironlink/` is the second extension: **IronLink** (id
 `ironplc.ironlink`, package `ironlink`), the VS Code part of the `ironlink`
-program that finds controllers ([ironlink.md](../design/ironlink.md#the-vs-code-extension)).
+program that finds controllers ([ironlink-vscode-extension.md](../design/ironlink-vscode-extension.md)).
 It follows the same rules as the IronPLC extension, and these differ:
 
 - **Independent.** It works without the IronPLC extension and has its own
