@@ -8,7 +8,7 @@
 import * as path from 'path';
 
 import type { Anchor } from '../baselineLogic';
-import { ProblemCode } from '../problems';
+import { ProblemCode } from '../vscodeCommon';
 import { DEFAULT_SESSION_PORT } from '../sessionConstants';
 import { outputFileNameForFolder } from '../taskProviderLogic';
 import { connectTcpLineTransport } from '../tcpTransport';

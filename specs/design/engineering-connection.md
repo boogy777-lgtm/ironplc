@@ -118,9 +118,9 @@ a single `ironplc.activeConnection` name.
 Validation runs in the editor before any transport opens, so a bad profile
 fails without network traffic — the reference UI's error toast on bad
 settings. Every failure is an E-code from the extension's existing CSV
-registry (`integrations/vscode/resources/problem-codes.csv`, next free
+registry (`integrations/vscode-common/resources/problem-codes.csv`, next free
 E0010) and renders through `formatProblem`
-(generated in `integrations/vscode/src/problems.ts`):
+(generated in `integrations/vscode-common/src/problems.ts`):
 
 | Rule | Code on failure |
 |------|-----------------|
@@ -130,7 +130,7 @@ E0010) and renders through `formatProblem`
 
 Documentation and the codegen lifecycle follow
 `specs/steering/problem-code-management.md` (CSV row, generated
-`problems.ts`, `docs/vscode/problems/E####.rst`).
+`vscode-common/src/problems.ts`, `docs/vscode/problems/E####.rst`).
 
 ## Mechanism 2 — Establish Connection
 
@@ -569,7 +569,7 @@ addition is a pre-send baseline check.
 3. **Mismatch → coded refusal.** Another engineer edited the device, or the
    hash simply differs: the record is stale and the client refuses with a
    new E-code in the existing registry
-   (`integrations/vscode/resources/problem-codes.csv`, E0015
+   (`integrations/vscode-common/resources/problem-codes.csv`, E0015
    StaleBaseline). A device that reports no `contentHash` (it predates the
    field) cannot be compared; with a record present that is a mismatch too,
    and the remedy is the same: re-sync the project from the device and
@@ -619,7 +619,7 @@ Everything reused, with its one authority:
 | Verify | `verify_load` in `compiler/container/src/load_verify.rs`; `validate_candidate` in `compiler/runtime/src/online_change.rs` |
 | Run control | `Command` variants in `compiler/runtime/src/commands.rs`; boundary round `drive_scan_round` in `compiler/vm-cli/src/serve.rs` |
 | V-code registries | `compiler/vm-cli/resources/problem-codes.csv` (V6013/V6014, the transport codes, beside the existing V6011/V6012; V6015/V6016, the device settings), `compiler/runtime/resources/problem-codes.csv` (V4021, a host without device settings) |
-| E-code registry and rendering | `integrations/vscode/resources/problem-codes.csv` (E0010+), `formatProblem` in `integrations/vscode/src/problems.ts` |
+| E-code registry and rendering | `integrations/vscode-common/resources/problem-codes.csv` (E0010+), `formatProblem` in `integrations/vscode-common/src/problems.ts` |
 | Heartbeat | `getStatus` — `Command::GetStatus` in `compiler/runtime/src/commands.rs` |
 | Redundancy block vocabulary | [HA Redundancy FSM](ha-redundancy-fsm.md) (epoch, SYNC/CONTROL) |
 | Baseline identity (artifact hash, UID sidecar) | `verify_load` in `compiler/container/src/load_verify.rs`; `compiler/project/src/sidecar.rs` |

@@ -19,7 +19,7 @@ import {
   describeTransports,
   isConnectionTransport,
 } from './connectionMethods';
-import { ProblemCode } from './problems';
+import { ProblemCode } from './vscodeCommon';
 
 /**
  * The fields of a connection profile that do not name its connection method.

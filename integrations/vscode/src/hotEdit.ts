@@ -11,7 +11,7 @@ import {
 } from './debugAdapterLogic';
 import { ReportProblem } from './debugAdapter';
 import { StdioLineTransport, vmFileName, vmPathBeside } from './stdioTransport';
-import { ProblemCode } from './problems';
+import { ProblemCode } from './vscodeCommon';
 import {
   formatStatusDetail,
   formatStatusText,

@@ -27,7 +27,8 @@ export const CONTAINER_EXTENSION = '.iplc';
  *
  * Each of these strings also exists outside this file — the binary in the
  * compiler's `[[bin]]` target, the setting id in `package.json`, the binary
- * again in the E0007 message in `resources/problem-codes.csv` — and none of
+ * again in the E0007 message in the shared catalog
+ * (`vscode-common/resources/problem-codes.csv`) — and none of
  * those can import a TypeScript constant. Every copy the extension *can*
  * reach reads these constants instead of retyping the string, and the copies
  * it cannot reach are pinned to them by the guards in

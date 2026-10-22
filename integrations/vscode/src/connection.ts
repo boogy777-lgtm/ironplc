@@ -18,7 +18,7 @@ import { readFile } from 'fs/promises';
 import { currentCompilerSettings } from './compilerSettings';
 import { runCompiler } from './taskProviderLogic';
 import { ReportProblem } from './debugAdapter';
-import { ProblemCode } from './problems';
+import { ProblemCode } from './vscodeCommon';
 import {
   formatStatusDetail,
   HotEditStatus,

@@ -30,7 +30,7 @@ import type { Anchor, FolderRef } from './baselineLogic';
 import type { CompilerSettings } from './compilerSettingsLogic';
 import type { ConnectionProfileFields } from './connectionProfiles';
 import type { OpenedConnection } from './connectionState';
-import type { ProblemCode } from './problems';
+import type { ProblemCode } from './vscodeCommon';
 import { stdioMethod } from './connectionMethods/stdio';
 import { tcpMethod } from './connectionMethods/tcp';
 

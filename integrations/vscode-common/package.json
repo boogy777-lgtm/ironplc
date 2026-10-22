@@ -2,13 +2,15 @@
   "name": "ironplc-vscode-common",
   "private": true,
   "version": "0.0.0",
-  "description": "Code shared by IronPLC's VS Code extensions: locating the IronPLC toolchain.",
+  "description": "Code shared by IronPLC's VS Code extensions: locating the IronPLC toolchain and the E#### problem catalog.",
   "main": "out/index.js",
   "types": "out/index.d.ts",
   "engines": {
     "node": ">=22.0.0"
   },
   "scripts": {
+    "generate-problems": "node scripts/generate-problems.js",
+    "precompile": "npm run generate-problems",
     "compile": "tsc -p ./",
     "test:unit": "mocha --ui tdd --recursive out/test"
   },

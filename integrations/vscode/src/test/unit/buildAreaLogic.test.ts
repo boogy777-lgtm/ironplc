@@ -16,7 +16,7 @@ import {
   RunCompilerFn,
   startBuild,
 } from '../../buildAreaLogic';
-import { ProblemCode } from '../../problems';
+import { ProblemCode } from '../../vscodeCommon';
 import { CompilerSettings } from '../../compilerSettingsLogic';
 import { rejectWith } from './testHelpers';
 

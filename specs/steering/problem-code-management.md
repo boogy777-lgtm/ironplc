@@ -18,7 +18,7 @@ The one exception is a message that CODESYS also keeps without a code: the line 
 This guidance is particularly relevant when working with:
 - Files in `compiler/problems/*`
 - Files in `integrations/vscode/src/*` (extension error handling)
-- Files in `integrations/vscode/resources/problem-codes.csv`
+- Files in `integrations/vscode-common/resources/problem-codes.csv`, `scripts/generate-problems.js` and `src/problemUrl.ts`
 
 ## Problem Code Lifecycle
 
@@ -107,27 +107,27 @@ To fix this error, [specific guidance]:
 
 Extension errors use the `E####` format and are tracked separately from compiler problem codes.
 
-- **Registry**: `integrations/vscode/resources/problem-codes.csv`
+- **Registry**: `integrations/vscode-common/resources/problem-codes.csv`, shared by every IronPLC VS Code extension (the IronPLC extension and IronLink); there is one catalog, one generator and one help-URL builder, not a copy per extension
 - **Documentation**: `docs/vscode/problems/E####.rst`
 - **Index**: `docs/vscode/problems/index.rst`
 
 #### Adding New Extension Error Codes
 
 1. **Choose the next available code**: Use the next sequential E#### number
-2. **Add to CSV**: Update `integrations/vscode/resources/problem-codes.csv`
-3. **Run the build**: The `generate-problems` script auto-generates `src/problems.ts` from the CSV
+2. **Add to CSV**: Update `integrations/vscode-common/resources/problem-codes.csv`
+3. **Run the build**: The `generate-problems` script of `integrations/vscode-common` (its `precompile`) auto-generates that package's `src/problems.ts` from the CSV; the file is gitignored
 4. **Create documentation**: Add `docs/vscode/problems/E####.rst`
 5. **Update index**: Add the new entry to `docs/vscode/problems/index.rst`
-6. **Use the generated constants**: Import `ProblemCode` and `formatProblem` from `./problems`
+6. **Use the generated constants**: Import `ProblemCode` and `formatProblem` from the extension's `./vscodeCommon` gateway module
 
 #### Extension Error Message Pattern
 
-Error messages are generated from `integrations/vscode/resources/problem-codes.csv`
-at build time. The generated `src/problems.ts` module provides typed constants and
+Error messages are generated from `integrations/vscode-common/resources/problem-codes.csv`
+at build time. The generated `integrations/vscode-common/src/problems.ts` module provides typed constants and
 a formatting helper. Use `formatProblem()` to compose messages:
 
 ```typescript
-import { ProblemCode, formatProblem } from './problems';
+import { ProblemCode, formatProblem } from './vscodeCommon';
 
 // In VS Code notification messages:
 vscode.window.showErrorMessage(
@@ -499,8 +499,8 @@ Before adding a new compiler problem code:
 Before adding a new extension error code:
 
 - [ ] Code follows E#### format
-- [ ] Added to `integrations/vscode/resources/problem-codes.csv`
-- [ ] Build generates updated `src/problems.ts` (run `npm run generate-problems`)
+- [ ] Added to `integrations/vscode-common/resources/problem-codes.csv`
+- [ ] Build generates updated `integrations/vscode-common/src/problems.ts` (run `npm run generate-problems` in `integrations/vscode-common`)
 - [ ] Error message uses `formatProblem(ProblemCode.Name, context)` — no hardcoded strings
 - [ ] Documentation file created in `docs/vscode/problems/E####.rst`
 - [ ] Added to `docs/vscode/problems/index.rst`
