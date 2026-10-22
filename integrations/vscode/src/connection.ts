@@ -13,7 +13,6 @@
 
 import * as vscode from 'vscode';
 import { existsSync } from 'fs';
-import { readFile } from 'fs/promises';
 
 import { currentCompilerSettings } from './compilerSettings';
 import { runCompiler } from './taskProviderLogic';
@@ -43,11 +42,14 @@ import {
 } from './baselineLogic';
 import { BuildPhase } from './buildLogic';
 import { DevicePanelModel } from './devicePanelLogic';
+import { readTextIfPresent } from './readText';
 import { vmFileName, vmPathBeside } from './stdioTransport';
 
 /** What the connection feature exposes to the device panel and the build commands. */
 export interface ConnectionFeature {
   readonly manager: ConnectionManager;
+  /** The "IronPLC Connection" output channel. */
+  readonly output: vscode.OutputChannel;
   /** The current baseline check result; builds refuse while 'mismatch'. */
   readonly baselineState: BaselineState;
   /** The full panel model for the current moment. */
@@ -112,6 +114,7 @@ export function registerConnectionSupport(
 
   const feature: ConnectionFeature = {
     manager,
+    output: outputChannel,
     get baselineState() {
       return baselineState;
     },
@@ -433,18 +436,5 @@ function statusTooltip(model: DevicePanelModel): string {
       lines.push('Click for the IronPLC Device panel.');
       return lines.join('\n');
     }
-  }
-}
-
-/** The text of a file, or undefined when there is no such file. */
-async function readTextIfPresent(file: string): Promise<string | undefined> {
-  try {
-    return await readFile(file, 'utf-8');
-  }
-  catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      return undefined;
-    }
-    throw err;
   }
 }

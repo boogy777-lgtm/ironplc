@@ -1,5 +1,13 @@
 import * as assert from 'assert';
-import { CommandSources, HANDOFF_ACTIONS, contributedCommandIds, handoffNames, isHandoffAvailable, runHandoff } from '../handoff';
+import {
+  CommandSources,
+  HANDOFF_ACTIONS,
+  contributedCommandIds,
+  handoffNames,
+  isControllerArgument,
+  isHandoffAvailable,
+  runHandoff,
+} from '../handoff';
 
 suite('HANDOFF_ACTIONS', () => {
   test('HANDOFF_ACTIONS_when_choose_then_names_the_ironplc_command', () => {
@@ -85,5 +93,37 @@ suite('runHandoff', () => {
       runHandoff('choose', { deviceId: 'x', address: 'y', sessionPort: 1 }, async () => { throw new Error('boom'); }),
       /boom/,
     );
+  });
+});
+
+suite('isControllerArgument', () => {
+  const valid = { deviceId: '00112233445566778899aabbccddeeff', address: '192.168.1.50', sessionPort: 49152 };
+
+  test('isControllerArgument_when_the_three_fields_are_valid_then_true', () => {
+    assert.strictEqual(isControllerArgument(valid), true);
+  });
+
+  test('isControllerArgument_when_not_an_object_then_false', () => {
+    for (const value of [undefined, null, 'x', 5, []]) {
+      assert.strictEqual(isControllerArgument(value), false, String(value));
+    }
+  });
+
+  test('isControllerArgument_when_a_field_is_wrong_then_false', () => {
+    const wrong: unknown[] = [
+      { ...valid, deviceId: '0011' },
+      { ...valid, deviceId: valid.deviceId.toUpperCase() },
+      { ...valid, deviceId: 5 },
+      { ...valid, address: '' },
+      { ...valid, address: 5 },
+      { ...valid, sessionPort: 0 },
+      { ...valid, sessionPort: 65536 },
+      { ...valid, sessionPort: 1.5 },
+      { ...valid, sessionPort: '49152' },
+      { address: valid.address, sessionPort: valid.sessionPort },
+    ];
+    for (const value of wrong) {
+      assert.strictEqual(isControllerArgument(value), false, JSON.stringify(value));
+    }
   });
 });

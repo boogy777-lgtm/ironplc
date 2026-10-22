@@ -63,6 +63,16 @@ To use this command:
 2. Type "New Structured Text File"
 3. Press Enter
 
+Choose Controller
+-----------------
+
+Chooses the controller of the project and remembers the choice in the project.
+
+:Menu Location: :menuselection:`Command Palette --> IronPLC: Network: Choose Controller…`
+
+See :doc:`choose-controller` for the list of controllers, the path record that
+remembers the choice, and what the command needs from the IronLink extension.
+
 Build Tasks
 ===========
 

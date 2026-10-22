@@ -126,6 +126,11 @@
         "category": "IronPLC"
       },
       {
+        "command": "ironplc.chooseController",
+        "title": "Choose Controller…",
+        "category": "IronPLC: Network"
+      },
+      {
         "command": "ironplc.build",
         "title": "Build & Commit",
         "category": "IronPLC"

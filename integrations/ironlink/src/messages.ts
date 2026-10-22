@@ -11,8 +11,7 @@ import {
   BrowseResponse,
   IdentifyResponse,
 } from './ironlinkProtocol';
-import { shortDeviceId, socketAddress } from './networkTree';
-import { RouteSet } from './vscodeCommon';
+import { RouteSet, shortDeviceId, socketAddress } from './vscodeCommon';
 
 /** A text and how loudly to show it. */
 export interface Notice {

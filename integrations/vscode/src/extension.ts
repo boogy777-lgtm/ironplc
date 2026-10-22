@@ -21,6 +21,8 @@ import {
 import { registerCustomRequests } from './customRequests';
 import { registerHotEditSupport } from './hotEdit';
 import { registerConnectionSupport } from './connection';
+import { chooseController } from './chooseController';
+import { registerHandoffCommands } from './handoffCommands';
 import { registerDevicePanel } from './devicePanel';
 import { registerHaPanel } from './haPanel';
 import { registerBuildCommands } from './buildCommands';
@@ -101,11 +103,21 @@ function openProblemInBrowser(code: ProblemCode) {
  * activation path and the debug adapter.
  */
 function showProblem(code: ProblemCode, context?: string) {
+  showCodedText(code, formatProblem(code, context));
+}
+
+/**
+ * Shows an error whose text already starts with its code, as an error
+ * notification with an "Open Online Help" action that links to the page of the
+ * code. The code may be of another family than this extension's (an `L####` of
+ * IronLink), so it is a string.
+ */
+function showCodedText(code: string, text: string) {
   void vscode.window
-    .showErrorMessage(formatProblem(code, context), 'Open Online Help')
+    .showErrorMessage(text, 'Open Online Help')
     .then((selection) => {
       if (selection === 'Open Online Help') {
-        openProblemInBrowser(code);
+        void vscode.env.openExternal(vscode.Uri.parse(problemHelpUrl(code, extensionVersion)));
       }
     });
 }
@@ -160,6 +172,16 @@ export function activate(context: vscode.ExtensionContext) {
   // report coded problems (or refuse) when a profile or tool is missing.
   const connection = registerConnectionSupport(context, result?.path, sourceExtensions, showProblem);
   registerDevicePanel(context, connection);
+  // The commands that another extension (IronLink) hands a controller to.
+  registerHandoffCommands(context, {
+    choose: chooseController({
+      compilerPath: result?.path,
+      sourceExtensions,
+      output: connection.output,
+      reportProblem: showProblem,
+      showCoded: showCodedText,
+    }),
+  });
   registerHaPanel(context, connection);
 
   // The Build message area: one Output channel that every build writes (the

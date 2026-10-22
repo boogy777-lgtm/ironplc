@@ -150,7 +150,7 @@ The centralized explanation page at `docs/explanation/enabling-dialects-and-feat
 ### Problem Documentation Format
 Each problem code has a corresponding `.rst` file under
 `docs/reference/compiler/problems/` (P-codes),
-`docs/vscode/problems/` (E-codes), or `docs/reference/runtime/problems/`
+`docs/reference/editor/problems/` (E-codes), or `docs/reference/runtime/problems/`
 (V-codes). The `.rst` templates and the full add-a-code lifecycle live in
 [problem-code-management.md](problem-code-management.md) — follow the template
 there rather than an inline copy.

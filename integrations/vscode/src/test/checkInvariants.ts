@@ -3,7 +3,7 @@ import * as path from 'path';
 
 import { connectionTransports } from '../connectionMethods';
 import { DEFAULT_SESSION_PORT, SUPPORTED_SESSION_PROTOCOL } from '../sessionConstants';
-import { findGatewayViolations } from '../vscodeCommon';
+import { findGatewayViolations, HANDOFF_ACTIONS, handoffNames } from '../vscodeCommon';
 
 const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf-8'));
 
@@ -38,6 +38,16 @@ for (const lang of packageJson.contributes.languages) {
 for (const cmd of packageJson.contributes.commands) {
   if (!testContent.includes(cmd.command)) {
     failures.push(`Command '${cmd.command}' has no test reference`);
+  }
+}
+
+// Every action of the shared table of handoffs (IronLink hands a controller to
+// IronPLC) names a command that this extension contributes. handoffCommands.ts
+// registers each of them, which the compiler checks: one handler for each member.
+for (const name of handoffNames()) {
+  const command = HANDOFF_ACTIONS[name].command;
+  if (!packageJson.contributes.commands.some((cmd: { command: string }) => cmd.command === command)) {
+    failures.push(`Handoff action '${name}' names the command '${command}', which package.json does not contribute`);
   }
 }
 

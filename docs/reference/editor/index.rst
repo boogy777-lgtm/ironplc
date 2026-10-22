@@ -11,6 +11,7 @@ development environment.
    Overview <overview>
    Build Tasks <build-tasks>
    Debugging <debugging>
+   Choose Controller <choose-controller>
    Bytecode Viewer <bytecode-viewer>
    Settings <settings>
    Problem Code Index <problems/index>

@@ -10,8 +10,8 @@
  */
 
 import { chooseArgument } from './deviceActions';
-import { DeviceRowFacts, socketAddress } from './networkTree';
-import { ChooseControllerArgument, RouteFailure, RouteOutcome, RouteSet } from './vscodeCommon';
+import { DeviceRowFacts } from './networkTree';
+import { ChooseControllerArgument, RouteFailure, RouteOutcome, RouteSet, socketAddress } from './vscodeCommon';
 
 /** The outcome of Choose. */
 export type ChooseOutcome =

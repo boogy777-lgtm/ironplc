@@ -17,14 +17,37 @@
  * registered nothing.
  */
 
-/** The argument of the `choose` handoff: the controller the engineer chose. */
-export interface ChooseControllerArgument {
+/** A controller, as every handoff names it: the device id and one route to it. */
+export interface ControllerArgument {
   /** The device id, 32 lowercase hexadecimal digits. */
   deviceId: string;
   /** The address the controller answered from (an IP address, no port). */
   address: string;
   /** The TCP port of the controller's session. */
   sessionPort: number;
+}
+
+/** The argument of the `choose` handoff: the controller the engineer chose. */
+export type ChooseControllerArgument = ControllerArgument;
+
+/**
+ * Whether `value` is a {@link ControllerArgument}. A command can be run by any
+ * extension, a keybinding or a task, so the extension that registers it checks
+ * the argument it receives and does not trust its shape.
+ */
+export function isControllerArgument(value: unknown): value is ControllerArgument {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const candidate = value as Record<string, unknown>;
+  return typeof candidate.deviceId === 'string'
+    && /^[0-9a-f]{32}$/.test(candidate.deviceId)
+    && typeof candidate.address === 'string'
+    && candidate.address.length > 0
+    && typeof candidate.sessionPort === 'number'
+    && Number.isInteger(candidate.sessionPort)
+    && candidate.sessionPort >= 1
+    && candidate.sessionPort <= 65535;
 }
 
 /** The argument type of each handoff action, keyed by the action's name. */

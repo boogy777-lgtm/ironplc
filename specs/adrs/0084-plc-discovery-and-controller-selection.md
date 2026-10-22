@@ -422,8 +422,16 @@ Built since: the IronLink extension (`integrations/ironlink`), a thin client of
 `{deviceId, address, sessionPort}` to the IronPLC command named in the handoff
 table of `integrations/vscode-common`.
 
-What is not built, so the status stays `proposed`: choosing a controller (the
-`select` command of IronLink, and the IronPLC command that the Choose action of
-the VS Code extension calls to run `record-path`), USB enumeration or a gateway as discovery drivers,
-the connection method as a class with a registration check, and the go-online
-comparison.
+Built since: the IronLink extension returns an API (`IronLinkApi`, defined in
+`integrations/vscode-common`) and its Choose action sets the workstation route
+before the handoff; the IronPLC command `ironplc.chooseController` writes the
+path file with `ironplcc record-path` from the handoff, or from a picker of the
+controller last chosen, the controllers with a route on this workstation and the
+controllers recently observed
+(`integrations/vscode/src/chooseController.ts`, `chooseControllerLogic.ts`).
+"Choose" is the workstation route (IronLink `routeSet`) and the path file
+(IronPLC); IronLink has no `select` command.
+
+What is not built, so the status stays `proposed`: USB enumeration or a gateway as
+discovery drivers, the connection method as a class with a registration check, and
+the go-online comparison.
