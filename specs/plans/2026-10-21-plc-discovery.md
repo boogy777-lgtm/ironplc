@@ -327,7 +327,7 @@ on its own and is found like any device.
 Today's stdio profile spawns `ironplcvm` from the editor. It stays in the IronPLC
 extension, outside IronLink, until the owner decides whether to keep it.
 
-### 4b. Where the IronLink UI lives in VS Code (question to the owner)
+### 4b. Where the IronLink UI lives in VS Code (owner: A, a separate extension)
 
 The owner considers a separate VS Code extension that works with the IronPLC
 extension, unless an elegant native way exists. In both options the hard
@@ -770,10 +770,10 @@ by hand (`runtime/src/host.rs`, `vm-cli/src/serve.rs`, `vm-cli/src/slot_store.rs
 
 ## Stages (each stage is its own PR or PRs)
 
-1. Prefactor: the port constant, the doc fixes.
+1. Prefactor: the port constant, the doc fixes. Done (#150).
 2. Device: the device settings file (`deviceId`, name), `deviceId` in identity,
    and the session command that changes a setting; ADR "PLC discovery" (its
-   text follows the owner's answers of 2026-10-21: no binding).
+   text follows the owner's answers of 2026-10-21: no binding). Done (#151).
 3. Device: the discovery wire crate and the responder on `--listen`; docs; a
    problem code for a reply that cannot be parsed, if needed. The identity field
    `firmwareVersion` (a fixed `"0.13.0"` today, `runtime/src/commands.rs`)
@@ -784,7 +784,8 @@ by hand (`runtime/src/host.rs`, `vm-cli/src/serve.rs`, `vm-cli/src/slot_store.rs
 5. Connection methods as a class: one transport interface in Rust and in
    TypeScript, with the stdio and TCP members registering themselves; MCP
    gains the TCP method (option A: IronPLC connects directly).
-6. VS Code: the Network view, "Choose" (the project path file and the
+6. VS Code: the Network view in the separate IronLink extension (section 4b,
+   a thin client of `ironlink` on stdio), "Choose" (the project path file and the
    workstation route record; the download record keyed by `deviceId`), and
    connect directly (option A). The network tree
    is text rows (RSLinx function). The skeleton of views, commands and state
