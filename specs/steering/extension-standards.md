@@ -87,8 +87,11 @@ It follows the same rules as the IronPLC extension, and these differ:
   (Choose) runs an IronPLC command named by the table of handoff actions in
   `integrations/vscode-common` (`HANDOFF_ACTIONS`). Each member declares its
   command id, its argument type and the reason shown while the command is
-  missing. The extension tests for the command id with `getCommands`, never for
-  the id of the IronPLC extension, which has two (Open VSX and the Marketplace).
+  missing. The extension tests for the command id, never for the id of the IronPLC
+  extension, which has two (Open VSX and the Marketplace): the command is available
+  when an installed extension contributes it (`contributes.commands`) or when it is
+  registered (`getCommands`), because an installed extension that has not activated
+  has registered nothing and running a contributed command activates it.
   The IronPLC extension imports the same table to register the command.
 - **Same version, same engine.** `version` and `engines.vscode` equal those of
   `integrations/vscode`, and `checkInvariants` fails when they differ. The root

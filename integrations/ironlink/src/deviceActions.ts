@@ -34,7 +34,13 @@ export const DEVICE_ACTION_COMMANDS: { readonly [A in DeviceAction]: string } = 
 /** What the decision depends on besides the row. */
 export interface ActionContext {
   /** The ids of the commands registered in the editor (`getCommands(true)`). */
-  availableCommands: ReadonlySet<string>;
+  registeredCommands: ReadonlySet<string>;
+  /**
+   * The ids of the commands that installed extensions contribute in their
+   * manifests: an extension that is installed but not yet active has registered
+   * nothing, and running a contributed command activates it.
+   */
+  contributedCommands: ReadonlySet<string>;
 }
 
 /** The decision for one action on one row. */
@@ -78,7 +84,7 @@ export function decideDeviceAction(
     return { enabled: false, reason: NO_DEVICE_ROW_REASON };
   }
   const handoff = handoffOf(action);
-  if (handoff !== undefined && !isHandoffAvailable(handoff, context.availableCommands)) {
+  if (handoff !== undefined && !isHandoffAvailable(handoff, { registered: context.registeredCommands, contributed: context.contributedCommands })) {
     return { enabled: false, reason: HANDOFF_ACTIONS[handoff].unavailableReason };
   }
   return { enabled: true };

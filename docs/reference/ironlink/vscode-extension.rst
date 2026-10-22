@@ -85,11 +85,17 @@ Actions
    Copy the device id of a row to the clipboard.
 
 :guilabel:`Choose`
-   Hand the controller of a row to the IronPLC extension, which remembers the
-   connection path of a project. The extension passes the device id, the address and
-   the session port of the row. :guilabel:`Choose` is available when the IronPLC
-   extension provides the command that records the choice. Otherwise, selecting
-   :guilabel:`Choose` shows why it is not available.
+   Store the route to the controller of a row on this PC, and then hand the
+   controller to the IronPLC extension, which remembers the connection path of a
+   project. :program:`ironlink` first asks the controller at the address and port of
+   the row and stores the route only when the controller answers with the device id
+   of the row. When it does not answer, or another controller answers, the extension
+   shows the :doc:`L6003 <problems/L6003>` or :doc:`L6008 <problems/L6008>` error
+   and hands nothing over. After the route is stored, the extension passes the device
+   id, the address and the session port of the row to the IronPLC extension.
+   :guilabel:`Choose` is available when the IronPLC extension provides the command
+   that records the choice. Otherwise, selecting :guilabel:`Choose` shows why it is
+   not available and stores nothing.
 
 An error is shown with its code and a link to the page that describes the code:
 :doc:`L#### codes </reference/ironlink/problems/index>` come from :program:`ironlink`,

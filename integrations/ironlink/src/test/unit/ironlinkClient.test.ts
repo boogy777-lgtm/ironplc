@@ -302,3 +302,45 @@ suite('IronLinkClient unreadable responses', () => {
       && err.message.includes('"addressList" response answered the "version" command'));
   });
 });
+
+// REQ-IL-ironlink-vscode-098
+suite('IronLinkClient routes', () => {
+  test('routeSet_when_called_then_sends_the_device_id_address_and_only_the_options_set', async () => {
+    const fake = new FakeProcess();
+    const client = new IronLinkClient(launcherOf(fake).launcher);
+    const pending = client.routeSet('00112233445566778899aabbccddeeff', '192.168.1.50:49152', { attempts: 3 });
+    await settle();
+    assert.deepStrictEqual(JSON.parse(fake.sent[0]), {
+      command: 'routeSet',
+      deviceId: '00112233445566778899aabbccddeeff',
+      address: '192.168.1.50:49152',
+      attempts: 3,
+    });
+    fake.answer({
+      response: 'routeSet',
+      deviceId: '00112233445566778899aabbccddeeff',
+      route: { address: '192.168.1.50', driver: 'addressList', sessionPort: 49152, verifiedAt: 5 },
+      replaced: false,
+    });
+    assert.strictEqual((await pending).route.sessionPort, 49152);
+  });
+
+  test('routeSet_when_the_program_answers_l6008_then_fails_with_the_l_code', async () => {
+    const fake = new FakeProcess();
+    const client = new IronLinkClient(launcherOf(fake).launcher);
+    const pending = client.routeSet('00112233445566778899aabbccddeeff', '192.168.1.50');
+    await settle();
+    fake.answer({ response: 'error', lCode: 'L6008', message: 'another device answered' });
+    await assert.rejects(pending, (err: unknown) => err instanceof IronLinkCommandError && err.lCode === 'L6008');
+  });
+
+  test('routeList_when_called_then_sends_the_command_and_returns_the_routes', async () => {
+    const fake = new FakeProcess();
+    const client = new IronLinkClient(launcherOf(fake).launcher);
+    const pending = client.routeList();
+    await settle();
+    assert.deepStrictEqual(JSON.parse(fake.sent[0]), { command: 'routeList' });
+    fake.answer({ response: 'routeList', routes: [] });
+    assert.deepStrictEqual((await pending).routes, []);
+  });
+});

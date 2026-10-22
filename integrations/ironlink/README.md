@@ -19,9 +19,15 @@ need the IronPLC extension to see the controllers.
   asks.
 * **Identify** — asks one route again and shows the reply with its time.
 * **Copy device id** — copies the 32-digit id of a controller.
-* **Choose** — hands the controller to the IronPLC extension, which remembers the
-  connection path of a project. Choose is available when the IronPLC extension
-  provides the command; otherwise the extension says why.
+* **Choose** — stores the route to the controller on this PC (the program checks
+  that the controller answers with its device id), then hands the controller to the
+  IronPLC extension, which remembers the connection path of a project. Choose is
+  available when the IronPLC extension provides the command; otherwise the
+  extension says why. When the route cannot be stored, the error is shown and
+  nothing is handed over.
+* **API for other extensions** — the extension returns an API when it activates:
+  the stored routes, the last search, a new search, setting a route and showing the
+  Network view. The IronPLC extension uses it to choose a controller.
 
 IronLink only finds controllers. It opens no listening port, holds no session and
 never writes to a controller or to a project.

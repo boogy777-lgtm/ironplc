@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { HANDOFF_ACTIONS, handoffNames, isHandoffAvailable, runHandoff } from '../handoff';
+import { CommandSources, HANDOFF_ACTIONS, contributedCommandIds, handoffNames, isHandoffAvailable, runHandoff } from '../handoff';
 
 suite('HANDOFF_ACTIONS', () => {
   test('HANDOFF_ACTIONS_when_choose_then_names_the_ironplc_command', () => {
@@ -22,13 +22,53 @@ suite('HANDOFF_ACTIONS', () => {
   });
 });
 
+function sources(registered: string[], contributed: string[]): CommandSources {
+  return { registered: new Set(registered), contributed: new Set(contributed) };
+}
+
 suite('isHandoffAvailable', () => {
-  test('isHandoffAvailable_when_the_command_is_registered_then_true', () => {
-    assert.strictEqual(isHandoffAvailable('choose', new Set(['ironplc.chooseController', 'other'])), true);
+  test('isHandoffAvailable_when_the_command_is_only_contributed_then_true', () => {
+    assert.strictEqual(isHandoffAvailable('choose', sources([], ['ironplc.chooseController', 'other'])), true);
   });
 
-  test('isHandoffAvailable_when_the_command_is_not_registered_then_false', () => {
-    assert.strictEqual(isHandoffAvailable('choose', new Set(['ironplc.runProgram'])), false);
+  test('isHandoffAvailable_when_the_command_is_only_registered_then_true', () => {
+    assert.strictEqual(isHandoffAvailable('choose', sources(['ironplc.chooseController', 'other'], [])), true);
+  });
+
+  test('isHandoffAvailable_when_the_command_is_both_contributed_and_registered_then_true', () => {
+    assert.strictEqual(isHandoffAvailable('choose', sources(['ironplc.chooseController'], ['ironplc.chooseController'])), true);
+  });
+
+  test('isHandoffAvailable_when_neither_contributed_nor_registered_then_false', () => {
+    assert.strictEqual(isHandoffAvailable('choose', sources(['ironplc.runProgram'], ['ironplc.buildApplication'])), false);
+    assert.strictEqual(isHandoffAvailable('choose', sources([], [])), false);
+  });
+});
+
+suite('contributedCommandIds', () => {
+  test('contributedCommandIds_when_manifests_contribute_commands_then_collects_every_id', () => {
+    const ids = contributedCommandIds([
+      { contributes: { commands: [{ command: 'a.one' }, { command: 'a.two' }] } },
+      { contributes: { commands: [{ command: 'b.one' }, { command: 'a.one' }] } },
+    ]);
+    assert.deepStrictEqual([...ids].sort(), ['a.one', 'a.two', 'b.one']);
+  });
+
+  test('contributedCommandIds_when_a_manifest_has_no_or_malformed_commands_then_it_contributes_nothing', () => {
+    const ids = contributedCommandIds([
+      undefined,
+      null,
+      'text',
+      {},
+      { contributes: {} },
+      { contributes: { commands: 'not a list' } },
+      { contributes: { commands: [null, 5, {}, { command: 7 }, { command: 'ok.one' }] } },
+    ]);
+    assert.deepStrictEqual([...ids], ['ok.one']);
+  });
+
+  test('contributedCommandIds_when_no_manifests_then_empty', () => {
+    assert.strictEqual(contributedCommandIds([]).size, 0);
   });
 });
 
