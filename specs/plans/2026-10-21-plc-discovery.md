@@ -778,7 +778,7 @@ by hand (`runtime/src/host.rs`, `vm-cli/src/serve.rs`, `vm-cli/src/slot_store.rs
    `"0.13.0"` is only the example in the doc comment and the tests. A rename is
    not additive, so the session protocol becomes version 2: a client of
    version 1 refuses a device of version 2 with a clear message.
-4. Service: the `ironlink` binary, the broadcast and address-list drivers,
+4. Done (#157–#159). Service: the `ironlink` binary, the broadcast and address-list drivers,
    browse, identify, the shell of commands (`ironlink serve`, JSON lines on
    stdio), the CLI. Its problem codes have their own prefix `L` (a workstation
    tool, not the runtime), documented under `docs/reference/ironlink/`.
