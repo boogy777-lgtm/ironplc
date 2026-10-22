@@ -33,7 +33,7 @@ compiler_definition = join('..', 'compiler', 'problems', 'resources', 'problem-c
 
 definitions = [
     compiler_definition,
-    join('..', 'integrations', 'vscode', 'resources', 'problem-codes.csv'),
+    join('..', 'integrations', 'vscode-common', 'resources', 'problem-codes.csv'),
     join('..', 'compiler', 'vm', 'resources', 'problem-codes.csv'),
     join('..', 'compiler', 'vm-cli', 'resources', 'problem-codes.csv'),
     join('..', 'compiler', 'runtime', 'resources', 'problem-codes.csv'),

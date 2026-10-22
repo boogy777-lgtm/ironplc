@@ -30,8 +30,9 @@ restate them here.
 ## Error Codes
 
 Extension errors use the `E####` prefix and are generated from
-`integrations/vscode/resources/problem-codes.csv`. Never hardcode error strings;
-use the generated `formatProblem(ProblemCode.Name, context)` helper. The full
+`integrations/vscode-common/resources/problem-codes.csv`, the one catalog shared by
+every IronPLC VS Code extension. Never hardcode error strings; use the generated
+`formatProblem(ProblemCode.Name, context)` helper, imported from `./vscodeCommon`. The full
 lifecycle is in [problem-code-management.md](problem-code-management.md).
 
 ## Shared Code for VS Code Extensions
@@ -39,7 +40,10 @@ lifecycle is in [problem-code-management.md](problem-code-management.md).
 `integrations/vscode-common/` is a private npm package (`ironplc-vscode-common`,
 never published) holding code that more than one IronPLC VS Code extension needs.
 Today that is locating the IronPLC toolchain (`findToolchainExecutable`,
-`ToolchainEnvironment`, `pathForPlatform`). Put code there only when two
+`ToolchainEnvironment`, `pathForPlatform`) and the `E####` problem catalog
+(`problem-codes.csv`, its generator `scripts/generate-problems.js`, the generated
+`ProblemCode`, `PROBLEM_MESSAGES` and `formatProblem`, and `problemHelpUrl`); the
+package's `precompile` generates `src/problems.ts`, which is gitignored. Put code there only when two
 extensions need it; extension-specific logic, anything that imports `vscode`,
 and compiler-specific messages stay in the extension. The package has no
 runtime dependencies.
