@@ -186,6 +186,108 @@ suite('findToolchainExecutable', () => {
   });
 });
 
+suite('findToolchainExecutable PATH trial', () => {
+  const pathEnv = (value: string) => (name: string) => name === 'PATH' ? value : undefined;
+
+  test('findToolchainExecutable_when_only_path_holds_it_then_source_is_path', () => {
+    const env = createTestEnv({
+      getEnv: pathEnv('/usr/bin:/opt/tools'),
+      existsSync: p => p === '/opt/tools/ironlink',
+    });
+    assert.deepStrictEqual(
+      findToolchainExecutable(env, 'ironlink'),
+      { path: '/opt/tools/ironlink', source: 'path' },
+    );
+  });
+
+  test('findToolchainExecutable_when_path_has_several_hits_then_first_entry_wins', () => {
+    const env = createTestEnv({
+      getEnv: pathEnv('/first:/second'),
+      existsSync: () => true,
+    });
+    assert.strictEqual(findToolchainExecutable(env, 'ironlink')?.path, '/first/ironlink');
+  });
+
+  test('findToolchainExecutable_when_every_other_trial_hits_then_path_is_tried_last', () => {
+    // Configuration, environment, homebrew and PATH all hold the executable:
+    // each is removed in turn and the next trial in the documented order wins.
+    const holders: Record<string, string> = {
+      configuration: '/cfg/ironlink',
+      environment: '/env/ironlink',
+      homebrew: '/opt/homebrew/bin/ironlink',
+      path: '/onpath/ironlink',
+    };
+    const present = new Set(Object.values(holders));
+    const env = createTestEnv({
+      platform: 'darwin',
+      getConfig: key => key === 'path' ? '/cfg' : undefined,
+      getEnv: name => name === 'IRONPLC' ? '/env' : name === 'PATH' ? '/onpath' : undefined,
+      existsSync: p => present.has(p),
+    });
+    const order: string[] = [];
+    for (let result = findToolchainExecutable(env, 'ironlink'); result;
+      result = findToolchainExecutable(env, 'ironlink')) {
+      order.push(result.source);
+      present.delete(result.path);
+    }
+    assert.deepStrictEqual(order, ['configuration', 'environment', 'homebrew', 'path']);
+  });
+
+  test('findToolchainExecutable_when_win32_and_localappdata_and_path_hold_it_then_localappdata_wins', () => {
+    const local = 'C:\\Users\\me\\AppData\\Local\\Programs\\IronPLC Compiler\\bin\\ironlink.exe';
+    const env = createTestEnv({
+      platform: 'win32',
+      getEnv: name => name === 'LOCALAPPDATA' ? 'C:\\Users\\me\\AppData\\Local'
+        : name === 'PATH' ? 'C:\\tools' : undefined,
+      existsSync: () => true,
+    });
+    const result = findToolchainExecutable(env, 'ironlink');
+    assert.strictEqual(result?.path, local);
+    assert.strictEqual(result?.source, 'localappdata');
+  });
+
+  test('findToolchainExecutable_when_win32_then_path_is_split_on_semicolon', () => {
+    // A drive letter contains a colon that must not split a win32 PATH.
+    const env = createTestEnv({
+      platform: 'win32',
+      getEnv: pathEnv('C:\\Windows;D:\\tools\\bin'),
+      existsSync: p => p === 'D:\\tools\\bin\\ironlink.exe',
+    });
+    assert.deepStrictEqual(
+      findToolchainExecutable(env, 'ironlink'),
+      { path: 'D:\\tools\\bin\\ironlink.exe', source: 'path' },
+    );
+  });
+
+  test('findToolchainExecutable_when_posix_then_path_is_split_on_colon_not_semicolon', () => {
+    const env = createTestEnv({
+      platform: 'linux',
+      getEnv: pathEnv('/a;b:/c'),
+      existsSync: p => p === '/c/ironlink' || p === '/a;b/ironlink',
+    });
+    // '/a;b' is one entry on a posix platform, so it is tried before '/c'.
+    assert.strictEqual(findToolchainExecutable(env, 'ironlink')?.path, '/a;b/ironlink');
+  });
+
+  test('findToolchainExecutable_when_path_has_empty_entries_then_they_are_skipped', () => {
+    const tried: string[] = [];
+    const env = createTestEnv({
+      getEnv: pathEnv(':/bin::/usr/bin:'),
+      existsSync: p => { tried.push(p); return p === '/usr/bin/ironlink'; },
+    });
+    assert.strictEqual(findToolchainExecutable(env, 'ironlink')?.path, '/usr/bin/ironlink');
+    assert.deepStrictEqual(tried, ['/bin/ironlink', '/usr/bin/ironlink']);
+  });
+
+  test('findToolchainExecutable_when_path_is_unset_or_empty_then_returns_undefined', () => {
+    assert.strictEqual(
+      findToolchainExecutable(createTestEnv({ existsSync: () => true, getEnv: pathEnv('') }), 'ironlink'),
+      undefined,
+    );
+    assert.strictEqual(findToolchainExecutable(createTestEnv({ existsSync: () => false }), 'ironlink'), undefined);
+  });
+});
+
 suite('executableFileName', () => {
   test('executableFileName_when_win32_then_appends_exe', () => {
     assert.strictEqual(executableFileName('ironplcvm', 'win32'), 'ironplcvm.exe');

@@ -26,7 +26,8 @@ ironplc.path
 :Default: Empty (auto-discovery)
 
 Specifies the path to the :program:`ironplcc` executable. When empty (the default), the
-extension automatically searches for the compiler in standard locations.
+extension automatically searches for the compiler in standard locations and then in
+the directories of the ``PATH`` environment variable.
 
 Use this setting when:
 

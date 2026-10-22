@@ -10,8 +10,10 @@ for what belongs here.
 
 - `findToolchainExecutable(env, executable)` finds a toolchain executable
   (`ironplcc`, `ironplcvm`, ...) in this order: the `path` setting, the
-  `IRONPLC` environment variable, Homebrew (macOS), and
-  `%LOCALAPPDATA%\Programs\IronPLC Compiler\bin` (Windows). It returns
+  `IRONPLC` environment variable, Homebrew (macOS),
+  `%LOCALAPPDATA%\Programs\IronPLC Compiler\bin` (Windows), and finally each
+  directory of the system `PATH` (`source` is `path`; `PATH` is split with the
+  delimiter of the injected platform and empty entries are skipped). It returns
   `{ path, source }` or `undefined`.
 - `ToolchainEnvironment` is the injected platform, filesystem, environment and
   settings that make discovery unit-testable.

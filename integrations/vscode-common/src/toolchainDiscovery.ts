@@ -33,7 +33,10 @@ export function executableFileName(base: string, platform: string): string {
  * 2. the `IRONPLC` environment variable (`environment`),
  * 3. `/opt/homebrew/bin` on macOS (`homebrew`),
  * 4. `%LOCALAPPDATA%\Programs\IronPLC Compiler\bin` on Windows
- *    (`localappdata`).
+ *    (`localappdata`),
+ * 5. each directory of the system `PATH`, in order (`path`). `PATH` is split
+ *    with the delimiter of the injected platform, and an empty entry is
+ *    skipped. It is the last trial, so every location above still wins.
  *
  * Returns `undefined` when no trial finds the executable.
  */
@@ -44,19 +47,20 @@ export function findToolchainExecutable(
   const fileName = executableFileName(executable, env.platform);
   const platformPath = pathForPlatform(env.platform);
 
-  const trialGenerator: (() => [string | undefined, string])[] = [
+  // Each trial yields the candidate directories for its source, in order.
+  const trialGenerator: (() => [(string | undefined)[], string])[] = [
     () => {
       // Try to get from configuration
-      return [env.getConfig('path'), 'configuration'];
+      return [[env.getConfig('path')], 'configuration'];
     },
     () => {
       // Try to get from environment variable. Not generally set.
-      return [env.getEnv('IRONPLC'), 'environment'];
+      return [[env.getEnv('IRONPLC')], 'environment'];
     },
     () => {
       // Mac well known directory
       const homebrewDir = env.platform === 'darwin' ? '/opt/homebrew/bin' : undefined;
-      return [homebrewDir, 'homebrew'];
+      return [[homebrewDir], 'homebrew'];
     },
     () => {
       // Windows user-install well-known path
@@ -64,23 +68,30 @@ export function findToolchainExecutable(
       const localAppData = env.getEnv('LOCALAPPDATA');
 
       if (env.platform !== 'win32' || !localAppData) {
-        return [undefined, name];
+        return [[], name];
       }
       const winAppDataDir = platformPath.join(localAppData, 'Programs', 'IronPLC Compiler', 'bin');
-      return [winAppDataDir, name];
+      return [[winAppDataDir], name];
+    },
+    () => {
+      // The system PATH, last so every location above still wins. The
+      // delimiter belongs to the injected platform, not to the host.
+      return [(env.getEnv('PATH') ?? '').split(platformPath.delimiter), 'path'];
     },
   ];
 
   for (const trial of trialGenerator) {
-    const [testDir, trialType] = trial();
+    const [testDirs, trialType] = trial();
 
-    if (!testDir) {
-      continue;
-    }
+    for (const testDir of testDirs) {
+      if (!testDir) {
+        continue;
+      }
 
-    const testExe = platformPath.join(testDir, fileName);
-    if (env.existsSync(testExe)) {
-      return { path: testExe, source: trialType };
+      const testExe = platformPath.join(testDir, fileName);
+      if (env.existsSync(testExe)) {
+        return { path: testExe, source: trialType };
+      }
     }
   }
 
