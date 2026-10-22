@@ -9,6 +9,7 @@ use rmcp::{tool, tool_handler, tool_router, ServerHandler};
 
 use crate::cache::ContainerCache;
 use crate::tools;
+use crate::tools::browse_network::BrowseNetworkInput;
 use crate::tools::common::ParseCheckInput;
 use crate::tools::compile::CompileInput;
 use crate::tools::container_drop::ContainerDropInput;
@@ -305,6 +306,27 @@ impl IronPlcMcp {
         Parameters(input): Parameters<RunInput>,
     ) -> Result<ContentBlock, rmcp::ErrorData> {
         let response = tools::run::build_response(&input, &self.cache);
+        let json = serde_json::to_string(&response)
+            .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))?;
+        Ok(ContentBlock::text(json))
+    }
+
+    /// Finds the controllers this workstation can see, through IronLink.
+    #[tool(
+        name = "browse_network",
+        description = "Finds the IronPLC controllers this workstation can see, by asking IronLink (`ironlink`, which ships with IronPLC) to browse: a broadcast, the address list stored on this workstation and any `addresses` you give (`IP` or `IP:PORT`). Returns the browse result as IronLink writes it: the workstation and, for each driver, its devices by device id with the routes by which each answered. An observation is what a device said when it was seen and does not promise that it is reachable now. `timeout_ms` is how long to wait for replies (default 1000, at most 60000) and `attempts` how many times to send the request (default 2, at most 10). Fails with a P8002 diagnostic when `ironlink` is not found, and with the `l_code` of IronLink when it refuses the request."
+    )]
+    async fn browse_network(
+        &self,
+        Parameters(input): Parameters<BrowseNetworkInput>,
+    ) -> Result<ContentBlock, rmcp::ErrorData> {
+        // The browse waits for replies for as long as the caller asked, so it
+        // does not hold the thread that serves every request.
+        let response = tokio::task::spawn_blocking(move || {
+            tools::browse_network::build_response(&input, crate::ironlink::IronLink::locate_here())
+        })
+        .await
+        .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))?;
         let json = serde_json::to_string(&response)
             .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))?;
         Ok(ContentBlock::text(json))

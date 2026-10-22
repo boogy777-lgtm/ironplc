@@ -20,6 +20,8 @@ ironplc-parser = { path = "../parser", version = "0.247.0" }
 ironplc-problems = { path = "../problems", version = "0.247.0" }
 ironplc-project = { path = "../project", version = "0.247.0" }
 ironplc-runtime = { path = "../runtime", version = "0.247.0" }
+# The `stdio` channel to IronLink (and, for device tools, the session to a device).
+ironplc-session-client = { path = "../session-client", version = "0.247.0" }
 ironplc-vm = { path = "../vm", version = "0.247.0", features = ["profiling"] }
 
 base64 = "0.23"
@@ -42,6 +44,8 @@ ironplc-spec-requirements-gen = { path = "../spec_requirements_gen" }
 [dev-dependencies]
 ironplc-test = { path = "../test", version = "0.247.0" }
 
+tempfile = "3"
+ironplc-container = { path = "../container", version = "0.247.0", features = ["test-support"] }
 assert_cmd = { version = "2.2" }
 predicates = { version = "3.1" }
 rstest = "0.27"

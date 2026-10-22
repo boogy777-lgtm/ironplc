@@ -58,17 +58,19 @@ The agent is the sole owner of project state. It holds the files (in its own con
 
 **REQ-STL-mcp-005** Every tool response includes a top-level `ok: boolean` field. `ok` is `true` when the tool produced its primary result (for analysis tools, a diagnostics array with no entry whose category stops the build, that is `FatalError` or `Error`; for `compile`, a non-null `container_id`; for `run`, a completed trace) and `false` when it did not. The `ok` field never replaces a tool's specific result fields; it exists as a single uniform success predicate so that agent code handling many tools can share one success check.
 
-**REQ-STL-mcp-006** The server performs no disk I/O from any tool or resource handler. It does not accept filesystem paths as tool inputs, does not read files relative to any working directory, and does not write compilation or analysis artifacts to disk. The only files the server process ever opens are its own log output (see Logging and Observability) and, optionally, its own binary-embedded problem-code documentation.
+**REQ-STL-mcp-006** The server performs no disk I/O from any tool or resource handler. It does not accept filesystem paths as tool inputs, does not read files relative to any working directory, and does not write compilation or analysis artifacts to disk. The only files the server process ever opens are its own log output (see Logging and Observability) and, optionally, its own binary-embedded problem-code documentation. The network tools (see Network Tools) are the one exception to "no files": they look for the `ironlink` program and start it, and they open TCP connections; they still read no file of the project and take no path as input.
 
 ## Tools
 
-Tools are grouped into three categories:
+Tools are grouped into four categories:
 
 1. **Analysis tools** — `parse`, `check`, `get_message_objects`, `get_messages`, `get_message_areas`, `format`, `symbols`, `list_options`, `explain_diagnostic`. Given `sources` and `options`, these run some stage of the compiler and return structured information about the source.
 2. **Context tools** — `project_manifest`, `project_io`, `pou_scope`, `pou_lineage`, `types_all`. These are lightweight lookups that answer a specific structural question about a source set without requiring the agent to parse the much larger output of `symbols` itself.
 3. **Execution tools** — `compile`, `container_drop`, `run`. These produce or consume bytecode and drive the VM.
 
-Every tool obeys REQ-STL-mcp-001..006: `sources` and `options` are required on every analysis, context, and execution tool; there is no implicit session; and every response carries a top-level `ok: boolean` field in addition to its tool-specific fields.
+4. **Network tools** — `browse_network`. These ask IronLink, the workstation tool that finds controllers, what it sees (see Network Tools); they take no `sources`.
+
+Every analysis, context and execution tool obeys REQ-STL-mcp-001..006: `sources` and `options` are required on every analysis, context, and execution tool; there is no implicit session; and every response carries a top-level `ok: boolean` field in addition to its tool-specific fields.
 
 ### `parse`
 
@@ -572,6 +574,25 @@ A `TraceOptions` object has these fields (all optional):
 }
 ```
 
+## Network Tools
+
+The server finds controllers and talks to them as a thin client, the way the VS Code extension does ([ADR-0084](../adrs/0084-plc-discovery-and-controller-selection.md)): IronPLC connects, and IronLink only finds controllers and keeps the route record and the address list of this workstation. The server therefore never searches the network itself. It starts `ironlink serve` as a child process and speaks its JSON lines on stdio ([ironlink.md](ironlink.md), "The shell"), over the `stdio` connection method of the session client ([session-client.md](session-client.md)). It links no IronLink code, and the `ironlink` crate does not depend on it.
+
+### `browse_network`
+
+Asks IronLink to browse and returns the result as JSON.
+
+- Inputs: `addresses` (array of `IP` or `IP:PORT`, optional), `timeout_ms` (optional) and `attempts` (optional), sent to IronLink only when given, so the defaults and the limits (REQ-IL-ironlink-007, REQ-IL-ironlink-008) stay IronLink's.
+- Returns: `ok`, `browse` (the browse result of IronLink without its `response` tag: `workstation` and `drivers`), `l_code` and `message` when IronLink refuses, and `diagnostics`.
+
+**REQ-TOL-mcp-160** `browse_network` starts `ironlink serve`, sends one `browse` command with the `addresses`, `timeoutMs` and `attempts` it was given, and returns the result of IronLink as the JSON value `browse`, with `ok: true`. The server mirrors none of the types of IronLink.
+
+**REQ-TOL-mcp-161** The server finds the `ironlink` program first in the directory of the running server (the installers ship the programs together) and then in the directories of `PATH`. When it is in neither, the tool returns `ok: false` and a P8002 diagnostic that names where it looked.
+
+**REQ-TOL-mcp-162** An error response of IronLink (`{"response":"error","lCode":...}`) is returned as `ok: false` with its `l_code` and `message`, unchanged.
+
+**REQ-TOL-mcp-163** An `ironlink` that does not start, ends, or does not answer in time is returned as `ok: false` and a P8002 diagnostic that says why.
+
 ## Architecture
 
 ### Transport
@@ -710,6 +731,7 @@ Every MCP tool is registered with a short description string that the client han
 - `format`: "Canonical re-rendering using the project's formatter. Safe to call on any parseable source. The server holds no state between calls; if you want the formatted content saved anywhere, store it yourself."
 - `symbols`: "Full symbol table for a set of sources. Large responses are capped — prefer the `pou` filter or one of the context tools (`pou_scope`, `project_io`, `types_all`) when you only need part of the answer."
 - `list_options`: "Enumerates dialects and feature flags you are allowed to pass in `options`. Every analysis, context, and execution tool requires an `options` object; unknown keys are rejected. Do NOT toggle flags or change dialect to make errors go away — dialect changes are recorded in the log stream."
+- `browse_network`: "Finds the IronPLC controllers this workstation can see, by asking IronLink (`ironlink`, which ships with IronPLC) to browse: a broadcast, the address list stored on this workstation and any `addresses` you give (`IP` or `IP:PORT`). Returns the browse result as IronLink writes it: the workstation and, for each driver, its devices by device id with the routes by which each answered. An observation is what a device said when it was seen and does not promise that it is reachable now. `timeout_ms` is how long to wait for replies (default 1000, at most 60000) and `attempts` how many times to send the request (default 2, at most 10). Fails with a P8002 diagnostic when `ironlink` is not found, and with the `l_code` of IronLink when it refuses the request."
 - `explain_diagnostic`: "Look up the human-readable explanation for a problem code (e.g. `P0042`). Call this before editing code in response to a diagnostic you do not fully understand."
 - `project_manifest`: "Flat summary of what is declared in a source set (file names, POU names, UDT names by kind). Cheap to call; use it at the start of a task to build a mental model before drilling in."
 - `project_io`: "Inputs the caller can drive and outputs the caller can observe, for planning a `run` call. This is the right tool to call before constructing `stimuli` or deciding which variables to `trace`."

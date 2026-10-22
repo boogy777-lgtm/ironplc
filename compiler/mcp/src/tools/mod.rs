@@ -1,3 +1,4 @@
+pub mod browse_network;
 pub mod check;
 pub mod common;
 pub mod compile;
