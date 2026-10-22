@@ -416,9 +416,13 @@ malformed file). The workstation route record and the stored address list of
 IronLink (`compiler/ironlink/src/store.rs`, REQ-IL-ironlink-060 to 078): IronLink
 sets a route only after an identify that returned the device id.
 
+Built since: the IronLink extension (`integrations/ironlink`), a thin client of
+`ironlink serve` with the browse view and the Network tree; its Choose action hands
+`{deviceId, address, sessionPort}` to the IronPLC command named in the handoff
+table of `integrations/vscode-common`.
+
 What is not built, so the status stays `proposed`: choosing a controller (the
-`select` command of IronLink, and the Choose action of the VS Code extension that
-calls `record-path`), the browse
-view in the VS Code extension, USB enumeration or a gateway as discovery drivers,
+`select` command of IronLink, and the IronPLC command that the Choose action of
+the VS Code extension calls to run `record-path`), USB enumeration or a gateway as discovery drivers,
 the connection method as a class with a registration check, and the go-online
 comparison.

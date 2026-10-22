@@ -1,7 +1,8 @@
 # VS Code Extension Standards
 
 This steering file defines the coding standards and conventions for the IronPLC
-VS Code extension under `integrations/vscode/` (TypeScript). It covers README
+VS Code extensions (TypeScript): the IronPLC extension under `integrations/vscode/`
+and the IronLink extension under `integrations/ironlink/`. It covers README
 synchronization and points to the extension-specific testing and error-code
 rules.
 
@@ -14,7 +15,8 @@ rules.
 
 ## Applies To
 
-This guidance is relevant when working with `integrations/vscode/**`.
+This guidance is relevant when working with `integrations/vscode/**`,
+`integrations/ironlink/**` and `integrations/vscode-common/**`.
 Cross-component process rules — planning, prefactoring, the git workflow — live
 in [development-standards.md](development-standards.md).
 
@@ -65,12 +67,50 @@ source that imports the package's path itself (it calls the package's
 own `just ci` (compile and unit tests), which the extension workflow runs. See
 `integrations/vscode-common/README.md`.
 
+## The IronLink Extension
+
+`integrations/ironlink/` is the second extension: **IronLink** (id
+`ironplc.ironlink`, package `ironlink`), the VS Code part of the `ironlink`
+program that finds controllers ([ironlink.md](../design/ironlink.md#the-vs-code-extension)).
+It follows the same rules as the IronPLC extension, and these differ:
+
+- **Independent.** It works without the IronPLC extension and has its own
+  setting for the program (`ironlink.path`, a directory). It finds `ironlink`
+  with the shared `findToolchainExecutable`, the same discovery as the IronPLC
+  extension.
+- **Thin client.** It starts `ironlink serve` as a child process and renders its
+  answers. Decisions (what is routed, what conflicts, what an action may do) are
+  the program's; the extension holds no rule of its own. A device action is
+  available or not by one pure function (`decideDeviceAction`), and the tree is
+  built by a pure function (`buildNetworkTree`); neither imports `vscode`.
+- **Hands off, never writes project data.** An action that belongs to IronPLC
+  (Choose) runs an IronPLC command named by the table of handoff actions in
+  `integrations/vscode-common` (`HANDOFF_ACTIONS`). Each member declares its
+  command id, its argument type and the reason shown while the command is
+  missing. The extension tests for the command id with `getCommands`, never for
+  the id of the IronPLC extension, which has two (Open VSX and the Marketplace).
+  The IronPLC extension imports the same table to register the command.
+- **Same version, same engine.** `version` and `engines.vscode` equal those of
+  `integrations/vscode`, and `checkInvariants` fails when they differ. The root
+  `justfile` `version` recipe sets both.
+- **Its own invariants.** `checkInvariants` also checks that each command is
+  registered and tested, that every device action is on the device row and hidden
+  from the command palette, that each `viewItem` a menu tests is a context value
+  the tree builder makes, that each `REQ-IL-ironlink-vscode-NNN` of the design
+  document is named by a test and the reverse, and, through the shared
+  `findGatewayViolations`, that the package is reached through `src/vscodeCommon.ts`
+  only.
+- **Built and tested in CI, published nowhere.** `partial_ironlink_extension.yaml`
+  builds and tests the shared package and the extension, packages the VSIX and the
+  SBOM and uploads them as build artifacts. There is no marketplace step.
+
 ## README Synchronization
 
 The project has multiple README files that must stay synchronized:
 
 - **Root `README.md`**: Main project overview, mission, progress, and capabilities
 - **`integrations/vscode/README.md`**: VS Code Extension specific documentation for the Marketplace
+- **`integrations/ironlink/README.md`**: IronLink extension documentation; it describes the extension only and does not repeat the main README
 
 **When updating the main README:**
 1. Review if the extension README needs corresponding updates

@@ -14,3 +14,7 @@ E0012,ConnectionPortInvalid,Connection port is invalid
 E0013,ConnectFailed,Failed to connect to the device
 E0014,ConnectionLost,Connection to the device was lost
 E0015,StaleBaseline,The device does not run the application this project last downloaded to it
+E0016,IronLinkNotFound,IronLink program (ironlink) not found
+E0017,IronLinkStartFailed,Failed to start the IronLink program
+E0018,IronLinkExited,The IronLink program exited
+E0019,IronLinkProtocolError,The IronLink program sent a response the extension cannot read

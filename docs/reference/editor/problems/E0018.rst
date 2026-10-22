@@ -1,0 +1,54 @@
+=====
+E0018
+=====
+
+.. problem-summary:: E0018
+
+The :program:`ironlink` program ended while the IronLink extension waited for an
+answer from it, or the extension was stopping. The request in flight is lost; the
+next action starts the program again.
+
+Why the extension reports it
+----------------------------
+
+The extension sends each command as one line and waits for one answer line, in
+order. A program that ends cannot answer, so every command that is still waiting
+fails together with this code instead of waiting forever. The extension does not
+retry the command for you: a search or an identify that was lost may have been
+partly done, and the extension cannot know. It starts a new
+:program:`ironlink` process for the next action, so one failure does not disable
+the view.
+
+Examples
+--------
+
+* The program stops while a search runs, because it was closed by a person or by
+  security software, or because the computer is shutting down. Run the search
+  again.
+* The program ends right after it starts, every time. Its standard error, which
+  the ``IronLink`` output channel shows, names the reason, for example a store
+  file of the workstation that it cannot read (:doc:`L6006 </reference/ironlink/problems/L6006>`).
+  Repeating the action does not help until you fix that cause.
+
+The same code is shown when the extension itself is closing while a command waits.
+In that case nothing is wrong with the program.
+
+**Solutions**:
+
+1. **Read the log**: The ``IronLink`` output channel shows what
+   :program:`ironlink` wrote to its standard error before it ended.
+
+2. **Repeat the action**: The extension starts a new :program:`ironlink` process for
+   the next request.
+
+3. **Update the IronPLC tools**: Report the problem if it repeats with the latest
+   version.
+
+See Also
+--------
+
+- :doc:`/reference/editor/problems/E0016` --- the program could not be found
+- :doc:`/reference/editor/problems/E0017` --- the program could not be started
+- :doc:`/reference/editor/problems/E0019` --- the program answered with a line that
+  cannot be read
+- :doc:`/reference/ironlink/vscode-extension` --- the IronLink extension

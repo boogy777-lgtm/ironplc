@@ -1,0 +1,67 @@
+set windows-shell := ["powershell.exe", "-c"]
+
+default: compile lint
+
+# The primary set of tasks for continuous integration validation.
+ci:
+  just compile
+  just check-invariants
+  just lint
+  just test-unit
+
+# Setup required dependencies. Use this to bootstrap a new host. The shared
+# vscode-common package is installed first because this extension builds it
+# before compiling.
+setup:
+  just --justfile ../vscode-common/justfile setup
+  npm ci
+
+# Compile the application code. Because this is type script, this effectively validates the code.
+compile:
+  npm run compile
+
+# Check the code for compliance with style (lint) rules.
+lint:
+  npm run lint
+
+# Verify that all declared capabilities have test coverage.
+check-invariants:
+  npm run check-invariants
+
+# Run unit tests with coverage enforcement.
+test-unit:
+  npm run test:unit
+
+# Build the VSIX package for this component.
+package filename:
+  npx vsce package --out {{filename}}
+
+# Generate a CycloneDX JSON SBOM (bom.cdx.json) for the IronLink extension.
+sbom version:
+  just _sbom-{{os()}} {{version}}
+
+_sbom-linux version:
+  npx --yes @cyclonedx/cyclonedx-npm@^4.0.0 --output-format JSON --output-file bom.cdx.json --spec-version 1.5 --package-lock-only
+  sha256sum bom.cdx.json > bom.cdx.json.sha256
+
+_sbom-macos version:
+  npx --yes @cyclonedx/cyclonedx-npm@^4.0.0 --output-format JSON --output-file bom.cdx.json --spec-version 1.5 --package-lock-only
+  shasum -a 256 bom.cdx.json > bom.cdx.json.sha256
+
+_sbom-windows version:
+  npx --yes @cyclonedx/cyclonedx-npm@^4.0.0 --output-format JSON --output-file bom.cdx.json --spec-version 1.5 --package-lock-only
+  pwsh -noprofile -command 'Get-FileHash -Path "bom.cdx.json" -Algorithm SHA256 | Select-Object -ExpandProperty Hash | Out-File bom.cdx.json.sha256'
+
+# Sets the version number for this component.
+version version:
+  npm version {{version}}
+
+# Updates dependencies to latest version (or at least tries to)
+update:
+  just --justfile ../vscode-common/justfile update
+  npm update
+
+# Remove build artifacts
+clean:
+  rm -rf out
+  rm -f *.vsix

@@ -1,0 +1,23 @@
+=====
+E0019
+=====
+
+.. problem-summary:: E0019
+
+The :program:`ironlink` program sent a line that the IronLink extension cannot read as
+the answer to its request: the line is not JSON, it is the answer to another command,
+or it reports a command error without an L-code.
+
+The extension and :program:`ironlink` are released together. A mismatch usually means
+that the extension runs with an :program:`ironlink` of another version.
+
+**Solutions**:
+
+1. **Check the version**: Run :program:`ironlink version` and compare it with the
+   version of the IronLink extension.
+
+2. **Check the setting**: If the ``ironlink.path`` setting is set, make sure it names
+   the directory of the installation that matches the extension.
+
+3. **Report the problem**: If the versions match, report the problem with the content
+   of the ``IronLink`` output channel.

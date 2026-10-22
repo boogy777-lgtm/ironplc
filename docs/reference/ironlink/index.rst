@@ -11,4 +11,5 @@ The editor and the other IronPLC programs connect to a controller themselves.
    :maxdepth: 1
 
    Command Reference <ironlink>
+   Visual Studio Code Extension <vscode-extension>
    Problem Code Index <problems/index>

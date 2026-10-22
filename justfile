@@ -10,6 +10,8 @@ _devenv-smoke-windows:
   cd compiler; just compile
   @"CHECK: compile VS code extension (does not include tests)"
   cd integrations\vscode; just setup; just compile
+  @"CHECK: compile IronLink extension (does not include tests)"
+  cd integrations\ironlink; just setup; just compile
   @"CHECK: compile the docs"
   cd docs; just ci
   "SMOKE PASSED"
@@ -19,6 +21,8 @@ _devenv-smoke-unix:
   cd compiler && just compile
   @echo "CHECK: compile VS code extension (does not include tests)"
   cd integrations/vscode && just setup && just compile
+  @echo "CHECK: compile IronLink extension (does not include tests)"
+  cd integrations/ironlink && just setup && just compile
   @echo "CHECK: compile the docs"
   cd docs && just ci
   @echo "SMOKE PASSED"
@@ -107,12 +111,14 @@ _version-windows version:
   @"Set version number to {{version}}"
   cd compiler; just version {{version}}
   cd integrations\vscode; just version {{version}}
+  cd integrations\ironlink; just version {{version}}
   cd docs; just version {{version}}
 
 _version-unix version:
   @echo "Set version number to {{version}}"
   cd compiler && just version {{version}}
   cd integrations/vscode && just version {{version}}
+  cd integrations/ironlink && just version {{version}}
   cd docs && just version {{version}}
 
 commit-branch authorname authoremail branch message:
@@ -132,6 +138,7 @@ commit-version authorname authoremail version:
 update:
   cd compiler && just update
   cd integrations/vscode && just update
+  cd integrations/ironlink && just update
 
 # This is only valid for Windows hosts
 e2e_fspath := env_var_or_default('USERPROFILE', '') + "\\.vscode\\extensions\\"

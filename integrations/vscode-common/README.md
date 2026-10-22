@@ -29,6 +29,13 @@ for what belongs here.
   of the IronLink extension use them.
 - `findGatewayViolations(sourceRoot)` is the check each extension's
   `checkInvariants` applies to enforce the one-module rule below.
+- `HANDOFF_ACTIONS` is the table of actions that one IronPLC extension offers and
+  another performs. Each member of `HandoffArguments` declares the IronPLC
+  command id, its argument type and the reason shown while the command does not
+  exist; today `choose` -> `ironplc.chooseController` with
+  `{ deviceId, address, sessionPort }`. IronLink runs the command
+  (`runHandoff`) and tests for it by command id (`isHandoffAvailable`); the
+  IronPLC extension registers it.
 - The `E####` problem catalog, shared by every IronPLC VS Code extension:
   `resources/problem-codes.csv` is the registry, `scripts/generate-problems.js`
   generates `src/problems.ts` from it (the package's `precompile`; the file is

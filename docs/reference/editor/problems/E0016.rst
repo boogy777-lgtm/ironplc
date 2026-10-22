@@ -1,0 +1,33 @@
+=====
+E0016
+=====
+
+.. problem-summary:: E0016
+
+The IronLink extension could not find the :program:`ironlink` program
+(:program:`ironlink.exe` on Windows).
+
+The extension searches these locations in order and uses the first directory that
+contains the program:
+
+1. **Configuration**: The directory in the ``ironlink.path`` setting
+2. **Environment variable**: The ``IRONPLC`` environment variable
+3. **Homebrew** (macOS only): ``/opt/homebrew/bin``
+4. **Windows AppData**: ``%LOCALAPPDATA%\Programs\IronPLC Compiler\bin``
+5. **System PATH**: each directory of the ``PATH`` environment variable, in order
+
+**Solutions**:
+
+1. **Verify installation**: Open a terminal and run :program:`ironlink version`. If this
+   fails, :program:`ironlink` is not installed or not in your ``PATH``.
+
+2. **Install the IronPLC tools**: See the :doc:`/quickstart/installation` guide.
+
+3. **Configure the directory manually**: If :program:`ironlink` is installed in a
+   non-standard location, set the ``ironlink.path`` setting to the directory that
+   contains it.
+
+See Also
+--------
+
+- :doc:`/reference/ironlink/vscode-extension` --- the IronLink extension
