@@ -792,7 +792,7 @@ by hand (`runtime/src/host.rs`, `vm-cli/src/serve.rs`, `vm-cli/src/slot_store.rs
    the class (the client transport trait with the stdio and TCP members) moves
    to stage 7, where MCP is its first user: built earlier, it would have none
    (2026-10-22).
-6. In three PRs. 6a done (#162 path file, #163 IronLink store). 6a (Rust): IronLink's workstation store (route record and
+6. Done. 6a (#162 path file, #163 IronLink store); 6b (#164–#169: platform paths, the shared package `integrations/vscode-common` with toolchain discovery, the E-code catalog, PATH, the JSON-lines client; the IronLink extension); 6c (#170 download record keyed by `deviceId`, #174 one `DeviceId` type, #171 IronLink API, #172 Choose Controller, #173 connect to the chosen controller and the status bar). #175 moved the extension's TypeScript-tested requirements to their own design doc. 6a (Rust): IronLink's workstation store (route record and
    address list; commands to set, remove and list them; browse marks a device
    with a route), and the project path file as a record kind with an
    `ironplcc` command. 6b: the IronLink extension with the Network view. 6c: the
