@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use ironplc_project::path_record::{self, Choice};
+use ironplc_project::DeviceId;
 
 /// What `record-path` was given.
 pub struct RecordPath<'a> {
@@ -18,7 +19,7 @@ pub struct RecordPath<'a> {
     /// beside.
     pub application: &'a Path,
     /// The id of the controller that was chosen.
-    pub device_id: &'a str,
+    pub device_id: &'a DeviceId,
     /// The address that reached the controller.
     pub address: &'a str,
     /// The session port at the address.

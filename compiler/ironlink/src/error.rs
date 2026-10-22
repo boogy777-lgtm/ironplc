@@ -114,7 +114,11 @@ impl IronLinkError {
 
     /// The device at `address` answered with the device id `found`, and the
     /// route is for `expected`.
-    pub(crate) fn route_mismatch(address: SocketAddr, expected: &str, found: &str) -> Self {
+    pub(crate) fn route_mismatch(
+        address: SocketAddr,
+        expected: impl fmt::Display,
+        found: impl fmt::Display,
+    ) -> Self {
         Self::io(
             ROUTE_MISMATCH,
             format!(

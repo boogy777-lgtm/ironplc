@@ -9,12 +9,12 @@
 use std::collections::BTreeMap;
 use std::net::IpAddr;
 
+use ironplc_discovery::DeviceId;
 use serde::{Deserialize, Serialize};
 
 use super::{Store, StoreFile};
 use crate::driver::DriverKind;
 use crate::error::IronLinkError;
-use crate::observation::is_device_id;
 
 /// How the workstation reaches a device, as it was verified.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -34,7 +34,7 @@ pub(crate) struct RouteRecord {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RouteEntry {
-    pub(crate) device_id: String,
+    pub(crate) device_id: DeviceId,
     #[serde(flatten)]
     pub(crate) route: RouteRecord,
 }
@@ -50,7 +50,7 @@ impl RouteEntry {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RoutesFile {
-    routes: BTreeMap<String, RouteRecord>,
+    routes: BTreeMap<DeviceId, RouteRecord>,
 }
 
 impl StoreFile for RoutesFile {
@@ -59,12 +59,6 @@ impl StoreFile for RoutesFile {
 
     fn check(&self) -> Result<(), String> {
         for (device_id, route) in &self.routes {
-            if !is_device_id(device_id) {
-                return Err(format!(
-                    "names '{device_id}', which is not a device id (32 lowercase hexadecimal \
-                     digits)"
-                ));
-            }
             if route.session_port == 0 {
                 return Err(format!(
                     "has the session port 0 in the route of {device_id}"
@@ -89,11 +83,11 @@ impl Store {
     /// Makes `route` the route of `device_id` and returns the route it replaced.
     pub(crate) fn set_route(
         &self,
-        device_id: &str,
+        device_id: &DeviceId,
         route: RouteRecord,
     ) -> Result<Option<RouteRecord>, IronLinkError> {
         let mut file = self.read::<RoutesFile>()?;
-        let replaced = file.routes.insert(device_id.to_string(), route);
+        let replaced = file.routes.insert(*device_id, route);
         self.write(&file)?;
         Ok(replaced)
     }
@@ -102,7 +96,7 @@ impl Store {
     /// when there was none.
     pub(crate) fn remove_route(
         &self,
-        device_id: &str,
+        device_id: &DeviceId,
     ) -> Result<Option<RouteRecord>, IronLinkError> {
         let mut file = self.read::<RoutesFile>()?;
         let removed = file.routes.remove(device_id);

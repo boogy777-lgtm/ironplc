@@ -19,7 +19,7 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use ironplc_discovery::{encode_reply, is_request, Reply, MAX_REPLY_LEN};
+use ironplc_discovery::{encode_reply, is_request, DeviceId, Reply, MAX_REPLY_LEN};
 use serde_json::{json, Value};
 use spec_test_macro::spec_test;
 use tempfile::TempDir;
@@ -94,7 +94,7 @@ fn answer(socket: &UdpSocket, id_byte: u8, name: &str, stop: &AtomicBool) {
     let reply = Reply {
         protocol: 1,
         session_port: port,
-        device_id: [id_byte; 16],
+        device_id: DeviceId::from_bytes([id_byte; 16]),
         protected: false,
         name,
         model: "IronPLC SoftPLC",

@@ -16,10 +16,12 @@ use crate::store::routes::{RouteEntry, RouteRecord};
 
 const NOW: u64 = 1_700_000_100_000;
 
+const ID: DeviceId = DeviceId::from_bytes([2; 16]);
+
 fn observation(id_byte: u8, name: &str, from: &str, seen_ago_ms: u64) -> Observation {
     let address: IpAddr = from.parse().unwrap();
     Observation {
-        device_id: crate::observation::device_id_hex(&[id_byte; 16]),
+        device_id: DeviceId::from_bytes([id_byte; 16]),
         name: name.to_string(),
         model: "IronPLC SoftPLC".to_string(),
         runtime_version: "0.247.0".to_string(),
@@ -277,7 +279,7 @@ fn age_when_seen_in_the_future_then_zero_seconds() {
 
 fn route_entry(id_byte: u8, address: &str, verified_ago_ms: u64) -> RouteEntry {
     RouteEntry {
-        device_id: crate::observation::device_id_hex(&[id_byte; 16]),
+        device_id: DeviceId::from_bytes([id_byte; 16]),
         route: RouteRecord {
             address: address.parse().unwrap(),
             driver: DriverKind::AddressList,
@@ -342,7 +344,7 @@ fn text_when_stored_routes_were_not_seen_then_they_are_listed_under_their_own_he
 fn text_when_a_route_is_set_then_one_row_and_a_note_when_it_replaced_one() {
     let result = |replaced| {
         Response::RouteSet(RouteSetResult {
-            device_id: "02".repeat(16),
+            device_id: ID,
             route: route_entry(2, "192.168.1.60", 5000).route,
             replaced,
         })
@@ -361,11 +363,10 @@ fn text_when_a_route_is_set_then_one_row_and_a_note_when_it_replaced_one() {
 #[spec_test(REQ_IL_ironlink_078)]
 #[test]
 fn text_when_routes_are_removed_or_listed_then_rows_or_a_statement_of_what_is_missing() {
-    let id = "02".repeat(16);
     let removed = |removed| {
         text(
             &Response::RouteRemove(RouteRemoveResult {
-                device_id: id.clone(),
+                device_id: ID,
                 removed,
             }),
             NOW,
@@ -373,8 +374,8 @@ fn text_when_routes_are_removed_or_listed_then_rows_or_a_statement_of_what_is_mi
     };
     let listed = |routes| text(&Response::RouteList(RouteListResult { routes }), NOW);
 
-    assert_eq!(removed(true), format!("removed the route to {id}"));
-    assert_eq!(removed(false), format!("no route to {id}"));
+    assert_eq!(removed(true), format!("removed the route to {ID}"));
+    assert_eq!(removed(false), format!("no route to {ID}"));
     assert_eq!(listed(Vec::new()), "no routes");
     assert_eq!(
         listed(vec![

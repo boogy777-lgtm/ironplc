@@ -346,3 +346,20 @@ fn run_when_compile_over_three_files_then_one_thread_for_the_run() {
 
     assert_eq!(spawns_of_command(&arguments), 1);
 }
+
+#[test]
+fn parse_device_id_when_32_lowercase_hex_digits_then_the_id() {
+    let id = parse_device_id("0123456789abcdef0123456789abcdef").unwrap();
+
+    assert_eq!(id.to_string(), "0123456789abcdef0123456789abcdef");
+}
+
+#[test]
+fn parse_device_id_when_not_an_id_then_message_names_the_text_and_the_format() {
+    let err = parse_device_id("PLC").unwrap_err();
+
+    assert_eq!(
+        err,
+        "'PLC' is not a device id: expected 32 lowercase hexadecimal digits"
+    );
+}

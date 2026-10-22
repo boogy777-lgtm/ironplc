@@ -75,8 +75,9 @@ content comparison with one place to find, read and version every record.
   without a name or a version does not compile. The UID table is the kind
   `Uids`, with its name unchanged.
 - **The device id in a file name.** `<deviceId>` is the id of the device: 32
-  lowercase hexadecimal digits, held by one type in `ironplc-project`
-  (`DeviceId`) that has no other way to be made than the check of those digits.
+  lowercase hexadecimal digits, held by one type, `DeviceId` of `ironplc-discovery`
+  (which `ironplc-project` re-exports), that has no other way to be made from text
+  than the check of those digits.
   The digits are valid in a file name on every system and contain no dot, so no
   id can write the suffix of another kind, and the name needs no encoding. A
   device id has no letter case to lose, so two devices never share a file. The
@@ -217,7 +218,7 @@ content comparison with one place to find, read and version every record.
   with a missing, altered and foreign container.
 - `compiler/project/src/records.rs`: the missing, malformed and wrong-version
   cases for each kind.
-- `compiler/project/src/device_id.rs`: the one check of a device id.
+- `compiler/discovery/src/device_id/tests.rs`: the one check of a device id.
 - `compiler/project/src/records.rs` and `compiler/project/src/download_record/tests.rs`:
   the file name of a device (its id, two ids never sharing a file, never the name
   of another kind), the record that is written and read back, the record of

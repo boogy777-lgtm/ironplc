@@ -32,11 +32,12 @@ use std::fmt;
 use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::time::Instant;
 
-use ironplc_discovery::{encode_reply, is_request, EncodeError, Reply, MAX_REPLY_LEN, REQUEST_LEN};
+use ironplc_discovery::{
+    encode_reply, is_request, DeviceId, EncodeError, Reply, MAX_REPLY_LEN, REQUEST_LEN,
+};
 use ironplc_runtime::{DeviceIdentity, SESSION_PROTOCOL_VERSION};
 
 use crate::device_settings::device::IdentityView;
-use crate::device_settings::device_id_bytes;
 use crate::error::{self, VmError};
 use rate::RateLimiter;
 
@@ -125,7 +126,7 @@ fn encode_identity(
         .device_id
         .as_deref()
         .ok_or(ReplyError::NoDeviceId)?;
-    let device_id = device_id_bytes(id).ok_or(ReplyError::MalformedDeviceId)?;
+    let device_id = DeviceId::parse(id).map_err(|_| ReplyError::MalformedDeviceId)?;
     let reply = Reply {
         protocol: SESSION_PROTOCOL_VERSION,
         session_port,

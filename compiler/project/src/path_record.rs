@@ -44,8 +44,8 @@ use std::path::{Path, PathBuf};
 use ironplc_dsl::diagnostic::Diagnostic;
 use serde_json::{json, Value};
 
-use crate::device_id::DeviceId;
 use crate::records::{self, RecordKind, RecordRead};
+use ironplc_discovery::DeviceId;
 
 /// The longest host name (RFC 1035), and the longest label in it.
 const MAX_HOST_NAME: usize = 253;
@@ -82,8 +82,8 @@ impl RouteHint {
 /// The controller last chosen for an application.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PathRecord {
-    /// The id of the controller, 32 lowercase hexadecimal digits.
-    pub device_id: String,
+    /// The id of the controller.
+    pub device_id: DeviceId,
     /// The last route that is not loopback, when there was one.
     pub route_hint: Option<RouteHint>,
     /// When the controller was chosen, in milliseconds since the Unix epoch.
@@ -93,21 +93,20 @@ pub struct PathRecord {
 impl PathRecord {
     fn to_json(&self) -> Value {
         json!({
-            "deviceId": self.device_id,
+            "deviceId": self.device_id.to_string(),
             "routeHint": self.route_hint.as_ref().map(RouteHint::to_json),
             "chosenAt": self.chosen_at,
         })
     }
 
     fn from_json(value: &Value) -> Option<Self> {
-        let device_id = value.get("deviceId")?.as_str()?;
-        DeviceId::parse(device_id).ok()?;
+        let device_id = DeviceId::parse(value.get("deviceId")?.as_str()?).ok()?;
         let route_hint = match value.get("routeHint")? {
             Value::Null => None,
             hint => Some(RouteHint::from_json(hint)?),
         };
         Some(PathRecord {
-            device_id: device_id.to_owned(),
+            device_id,
             route_hint,
             chosen_at: value.get("chosenAt")?.as_u64()?,
         })
@@ -189,8 +188,6 @@ pub fn is_loopback(address: &str) -> bool {
 /// Why a path was not recorded.
 #[derive(Debug)]
 pub enum PathError {
-    /// The device id is not 32 lowercase hexadecimal digits.
-    BadDeviceId(String),
     /// The address is neither an IP address nor a host name.
     BadAddress(String),
     /// The session port is 0.
@@ -204,7 +201,7 @@ pub enum PathError {
 impl fmt::Display for PathError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            PathError::BadDeviceId(reason) | PathError::BadAddress(reason) => f.write_str(reason),
+            PathError::BadAddress(reason) => f.write_str(reason),
             PathError::BadPort => f.write_str("The session port must not be 0"),
             PathError::NoRecordPath(anchor) => write!(
                 f,
@@ -240,8 +237,8 @@ pub struct Choice<'a> {
     /// The application container, which the record is named after and sits
     /// beside. It need not exist.
     pub anchor: &'a Path,
-    /// The id of the controller, 32 lowercase hexadecimal digits.
-    pub device_id: &'a str,
+    /// The id of the controller.
+    pub device_id: &'a DeviceId,
     /// The address that reached the controller.
     pub address: &'a str,
     /// The session port at `address`.
@@ -256,7 +253,6 @@ pub struct Choice<'a> {
 /// controller, else it is `null`. A record that cannot be used (malformed) holds
 /// no hint to keep.
 pub fn record_choice(choice: &Choice<'_>, chosen_at_ms: u64) -> Result<(), PathError> {
-    DeviceId::parse(choice.device_id).map_err(PathError::BadDeviceId)?;
     check_address(choice.address).map_err(PathError::BadAddress)?;
     if choice.session_port == 0 {
         return Err(PathError::BadPort);
@@ -264,7 +260,7 @@ pub fn record_choice(choice: &Choice<'_>, chosen_at_ms: u64) -> Result<(), PathE
     let path = record_path(choice.anchor)?;
     let route_hint = if is_loopback(choice.address) {
         match read(&path).map_err(record_error)? {
-            PathRecordRead::Present(previous) if previous.device_id == choice.device_id => {
+            PathRecordRead::Present(previous) if previous.device_id == *choice.device_id => {
                 previous.route_hint
             }
             _ => None,
@@ -276,7 +272,7 @@ pub fn record_choice(choice: &Choice<'_>, chosen_at_ms: u64) -> Result<(), PathE
         })
     };
     let record = PathRecord {
-        device_id: choice.device_id.to_owned(),
+        device_id: *choice.device_id,
         route_hint,
         chosen_at: chosen_at_ms,
     };

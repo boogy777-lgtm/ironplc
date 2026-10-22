@@ -7,9 +7,15 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 
-# No dependencies, and no `std` feature: the crate is `#![no_std]` without
-# `alloc` (ADR-0010) so that an embedded device can answer discovery, and the
-# plain `cargo build` is therefore already the `no_std` build.
+# No `std` feature: the crate is `#![no_std]` without `alloc` (ADR-0010) so that
+# an embedded device can answer discovery, and the plain `cargo build` is
+# therefore already the `no_std` build. The only dependency is optional: serde,
+# without its own `std` or `alloc`, for the crates that write a device id in JSON.
+[features]
+serde = ["dep:serde"]
+
+[dependencies]
+serde = { version = "1.0", default-features = false, optional = true }
 
 [build-dependencies]
 ironplc-spec-requirements-gen = { path = "../spec_requirements_gen" }
@@ -17,6 +23,10 @@ ironplc-spec-requirements-gen = { path = "../spec_requirements_gen" }
 [dev-dependencies]
 spec_test_macro = { path = "../spec_test_macro" }
 rstest = "0.27"
+serde_json = "1.0"
+# Turns the `serde` feature on for this crate's own tests, so that `cargo test -p
+# ironplc-discovery` covers the serde impls without another package asking for them.
+ironplc-discovery = { path = ".", features = ["serde"] }
 
 [lints]
 workspace = true

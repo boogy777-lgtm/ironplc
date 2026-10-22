@@ -6,6 +6,7 @@ use std::fs;
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 
+use ironplc_discovery::DeviceId;
 use rstest::rstest;
 use spec_test_macro::spec_test;
 use tempfile::TempDir;
@@ -16,8 +17,8 @@ use super::*;
 use crate::driver::DriverKind;
 use crate::test_support::temp_store;
 
-const ID_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-const ID_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+const ID_A: DeviceId = DeviceId::from_bytes([0xaa; 16]);
+const ID_B: DeviceId = DeviceId::from_bytes([0xbb; 16]);
 
 fn dir_of(store: &Store) -> PathBuf {
     store.dir().unwrap().to_path_buf()
@@ -161,10 +162,10 @@ fn write_when_first_write_then_the_directory_is_created_and_only_the_file_is_in_
 #[test]
 fn write_when_replacing_a_file_then_no_temporary_file_is_left() {
     let (_guard, store) = temp_store();
-    store.set_route(ID_A, route("10.0.0.1", 49152, 1)).unwrap();
+    store.set_route(&ID_A, route("10.0.0.1", 49152, 1)).unwrap();
 
-    store.set_route(ID_A, route("10.0.0.2", 49152, 2)).unwrap();
-    store.set_route(ID_B, route("10.0.0.3", 49152, 3)).unwrap();
+    store.set_route(&ID_A, route("10.0.0.2", 49152, 2)).unwrap();
+    store.set_route(&ID_B, route("10.0.0.3", 49152, 3)).unwrap();
 
     assert_eq!(names_in(&dir_of(&store)), ["routes.json"]);
 }
@@ -173,8 +174,10 @@ fn write_when_replacing_a_file_then_no_temporary_file_is_left() {
 #[test]
 fn write_when_routes_stored_then_versioned_pretty_json_with_sorted_keys() {
     let (_guard, store) = temp_store();
-    store.set_route(ID_B, route("10.0.0.2", 7000, 20)).unwrap();
-    store.set_route(ID_A, route("10.0.0.1", 49152, 10)).unwrap();
+    store.set_route(&ID_B, route("10.0.0.2", 7000, 20)).unwrap();
+    store
+        .set_route(&ID_A, route("10.0.0.1", 49152, 10))
+        .unwrap();
 
     let text = fs::read_to_string(dir_of(&store).join("routes.json")).unwrap();
 
@@ -217,8 +220,8 @@ fn write_when_addresses_stored_then_versioned_pretty_json() {
 #[test]
 fn routes_when_routes_stored_then_read_back_in_the_order_of_the_device_ids() {
     let (_guard, store) = temp_store();
-    store.set_route(ID_B, route("10.0.0.2", 7000, 20)).unwrap();
-    store.set_route(ID_A, route("fe80::1", 49152, 10)).unwrap();
+    store.set_route(&ID_B, route("10.0.0.2", 7000, 20)).unwrap();
+    store.set_route(&ID_A, route("fe80::1", 49152, 10)).unwrap();
 
     let entries = store.routes().unwrap();
 
@@ -233,9 +236,9 @@ fn routes_when_routes_stored_then_read_back_in_the_order_of_the_device_ids() {
 #[test]
 fn set_route_when_the_device_has_a_route_then_the_latest_replaces_it_and_the_old_one_is_returned() {
     let (_guard, store) = temp_store();
-    let first = store.set_route(ID_A, route("10.0.0.1", 49152, 1)).unwrap();
+    let first = store.set_route(&ID_A, route("10.0.0.1", 49152, 1)).unwrap();
 
-    let second = store.set_route(ID_A, route("10.0.0.9", 49153, 2)).unwrap();
+    let second = store.set_route(&ID_A, route("10.0.0.9", 49153, 2)).unwrap();
 
     assert_eq!(first, None);
     assert_eq!(second, Some(route("10.0.0.1", 49152, 1)));
@@ -249,10 +252,10 @@ fn set_route_when_the_device_has_a_route_then_the_latest_replaces_it_and_the_old
 fn remove_route_when_present_then_removed_and_when_absent_then_none_and_no_file() {
     let (_guard, store) = temp_store();
 
-    let absent = store.remove_route(ID_A).unwrap();
-    store.set_route(ID_A, route("10.0.0.1", 49152, 1)).unwrap();
-    let removed = store.remove_route(ID_A).unwrap();
-    let again = store.remove_route(ID_A).unwrap();
+    let absent = store.remove_route(&ID_A).unwrap();
+    store.set_route(&ID_A, route("10.0.0.1", 49152, 1)).unwrap();
+    let removed = store.remove_route(&ID_A).unwrap();
+    let again = store.remove_route(&ID_A).unwrap();
 
     assert_eq!(absent, None);
     assert_eq!(removed, Some(route("10.0.0.1", 49152, 1)));
@@ -264,7 +267,7 @@ fn remove_route_when_present_then_removed_and_when_absent_then_none_and_no_file(
 fn remove_route_when_absent_from_a_missing_store_then_nothing_is_created() {
     let (_guard, store) = temp_store();
 
-    store.remove_route(ID_A).unwrap();
+    store.remove_route(&ID_A).unwrap();
 
     assert!(!dir_of(&store).exists());
 }
@@ -357,9 +360,9 @@ fn routes_when_the_file_cannot_be_read_as_this_version_then_l6006_naming_the_fil
 
     let read = store.routes().unwrap_err();
     let write = store
-        .set_route(ID_A, route("10.0.0.1", 49152, 1))
+        .set_route(&ID_A, route("10.0.0.1", 49152, 1))
         .unwrap_err();
-    let remove = store.remove_route(ID_A).unwrap_err();
+    let remove = store.remove_route(&ID_A).unwrap_err();
 
     for err in [&read, &write, &remove] {
         assert_eq!(err.l_code(), "L6006", "{err}");
@@ -407,7 +410,7 @@ fn routes_when_the_other_file_is_unreadable_then_a_file_is_read_alone() {
     let (_guard, store) = store_with("addresses.json", "garbage");
 
     let routes = store.routes().unwrap();
-    store.set_route(ID_A, route("10.0.0.1", 49152, 1)).unwrap();
+    store.set_route(&ID_A, route("10.0.0.1", 49152, 1)).unwrap();
 
     assert!(routes.is_empty());
     assert_eq!(store.routes().unwrap().len(), 1);

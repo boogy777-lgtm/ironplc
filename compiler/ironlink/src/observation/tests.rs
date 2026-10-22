@@ -13,7 +13,7 @@ fn address(text: &str) -> IpAddr {
 /// An observation of device `id_byte` named `name`, received from `from`.
 fn observation(id_byte: u8, name: &str, from: &str, seen_at: u64) -> Observation {
     Observation {
-        device_id: device_id_hex(&[id_byte; 16]),
+        device_id: DeviceId::from_bytes([id_byte; 16]),
         name: name.to_string(),
         model: "IronPLC SoftPLC".to_string(),
         runtime_version: "0.247.0".to_string(),
@@ -48,17 +48,6 @@ fn devices(heard: &[Heard]) -> Vec<Observation> {
         .collect()
 }
 
-#[test]
-fn device_id_hex_when_sixteen_bytes_then_32_lowercase_digits() {
-    let mut bytes = [0u8; 16];
-    bytes[1] = 0xab;
-    bytes[15] = 0xff;
-
-    let hex = device_id_hex(&bytes);
-
-    assert_eq!(hex, "00ab00000000000000000000000000ff");
-}
-
 #[spec_test(REQ_IL_ironlink_020)]
 #[test]
 fn observation_when_serialized_then_camel_case_fields_with_route_and_time() {
@@ -86,7 +75,7 @@ fn from_reply_when_reply_decoded_then_fields_copied_and_id_formatted() {
     let reply = Reply {
         protocol: 1,
         session_port: 4000,
-        device_id: [0x12; 16],
+        device_id: DeviceId::from_bytes([0x12; 16]),
         protected: true,
         name: "Cell 7",
         model: "Model X",
@@ -96,7 +85,10 @@ fn from_reply_when_reply_decoded_then_fields_copied_and_id_formatted() {
     let observation =
         Observation::from_reply(&reply, DriverKind::Broadcast, address("10.0.0.9"), 5);
 
-    assert_eq!(observation.device_id, "12121212121212121212121212121212");
+    assert_eq!(
+        observation.device_id.to_string(),
+        "12121212121212121212121212121212"
+    );
     assert_eq!(observation.name, "Cell 7");
     assert!(observation.protected);
     assert_eq!(observation.route.driver, DriverKind::Broadcast);
