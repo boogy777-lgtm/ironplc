@@ -846,7 +846,7 @@ Tracking issue: #149.
   - a local soft PLC is one more device, not a driver (section 7);
   - IronLink finds and establishes the route, discovers devices and organises
     the session (section 4a);
-  - a separate VS Code extension is considered (section 4b, open).
+  - a separate VS Code extension is considered (section 4b; decided A, below).
 - **Answers of 2026-10-21 (after the hot-edit audit, section 9):**
   - Row 6: the responsibility lies with the side where the test runs; the
     candidate stays under Test after the session drops.
