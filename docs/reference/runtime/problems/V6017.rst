@@ -1,0 +1,31 @@
+=====
+V6017
+=====
+
+.. problem-summary:: V6017
+
+``ironplcvm serve --listen`` could not bind the UDP port on which the device
+answers discovery. The device answers discovery on UDP at the address and port
+of its TCP session, so that a workstation can find it. ``serve`` does not start
+and exits with code 2: as with the TCP port, a device that cannot be found is
+reported, not left silent. The message names the address and the operating
+system's reason.
+
+Typical causes: another program, or another ``ironplcvm`` started with the same
+address, already uses that UDP port, or the address does not belong to this
+machine. The TCP port of the session can be free while the UDP port with the same
+number is not, because the two are separate.
+
+Solutions
+---------
+
+1. Stop the program that uses the UDP port, or listen on another port with
+   ``--listen`` *IP*:*PORT*.
+2. Check that the IP address of ``--listen`` is one of this machine's addresses.
+3. To run the device without discovery, add ``--no-discovery``. The device then
+   serves the session only, and a workstation connects to it by its address.
+
+See Also
+--------
+
+- :doc:`/reference/runtime/ironplcvm` --- the ``--listen`` and ``--no-discovery`` options and the discovery answer

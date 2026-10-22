@@ -108,6 +108,22 @@ Commands
    round is logged to stderr with the trap's V-code and the session
    continues.
 
+   ``--listen`` *ADDR*
+      Serve the same protocol on TCP instead of stdin/stdout. *ADDR* is
+      *IP*:*PORT*, or an IP address alone (IPv4 or IPv6), which uses port
+      |session-port|. Write an IPv6 address with a port in brackets, as in
+      ``[::1]:7000``. A host name is not accepted. Each message is one frame, a
+      4-byte little-endian length followed by that many bytes of the same JSON
+      line, and the device serves one engineering session at a time: a second
+      connection receives one error line and is closed. The device also answers
+      discovery on UDP at the same address and port (see
+      :ref:`ironplcvm-discovery`).
+
+   ``--no-discovery``
+      Do not answer discovery. The device then opens no UDP port, and a
+      workstation connects to it by an address it already knows. Requires
+      ``--listen``.
+
 .. _ironplcvm-device-settings:
 
 Device settings
@@ -183,6 +199,39 @@ A settings file that the device cannot use stops :program:`ironplcvm serve`
 with :doc:`V6015 <problems/V6015>`. The device does not replace a damaged file
 with a new identity.
 
+.. _ironplcvm-discovery:
+
+Discovery
+=========
+
+With ``--listen``, :program:`ironplcvm serve` also listens on UDP at the address
+and port of the TCP session, and answers a discovery request with the public
+identity of the device: the device id, the name, the model, the runtime version,
+the session protocol version, the TCP port of the session, and whether the
+device is protected. A protected device requires credentials; no device does
+today, so the answer says that the device is open. The answer says nothing about
+the application or about whether a session is open, and a device answers
+discovery while an engineering session runs. The answer reads the name when it is sent, so
+a name changed with ``setDeviceSettings`` is in the next answer.
+
+The device answers only the request itself, a fixed message of 8 bytes. It sends
+neither an answer nor an error to any other datagram. The answer is longer than
+the request, and the address that a datagram names as its source can be forged,
+so the device limits its answers: at most one answer in 250 ms to one source
+address and at most 64 answers in a second to all sources together. A workstation
+that sends one request and repeats it a few times is within the limits.
+
+The device receives the requests that are sent to the address it listens on. A
+request that a workstation broadcasts to the subnet reaches the device only if
+the operating system delivers broadcasts to the socket. On Linux, a socket that
+is bound to one unicast address does not receive broadcast datagrams, so listen
+on ``0.0.0.0`` for a device that a broadcast scan must find. Other operating
+systems deliver broadcasts differently; test the scan on the system that runs the
+device.
+
+If the UDP port is taken, :program:`ironplcvm serve` stops with
+:doc:`V6017 <problems/V6017>`. Add ``--no-discovery`` to run without discovery.
+
 Options
 =======
 
@@ -219,6 +268,19 @@ Examples
    .. code-block:: shell
 
       ironplcvm serve main.iplc
+
+5. Serve the engineering session on TCP port |session-port| of all IPv4
+   interfaces, and answer discovery there:
+
+   .. code-block:: shell
+
+      ironplcvm serve --listen 0.0.0.0 main.iplc
+
+6. Serve the session on a chosen address and port, without discovery:
+
+   .. code-block:: shell
+
+      ironplcvm serve --listen 192.168.1.20:7000 --no-discovery main.iplc
 
 See Also
 ========

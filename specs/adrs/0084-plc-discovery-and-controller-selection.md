@@ -372,9 +372,21 @@ What the code implements so far:
 - `compiler/discovery/src/tests.rs`: the discovery request and reply round-trip,
   every truncation and any byte string fail without a panic, and only the exact
   request is recognised (format in `specs/design/plc-discovery.md`).
+- `compiler/vm-cli/src/discovery.rs` and `discovery/`: the device answers
+  discovery on UDP at the address and port of `serve --listen`, with the reply
+  built in one place from the identity of the session and read for every
+  request. Tests for the reply built from a device and from a renamed device,
+  for the responder on a loopback socket (it answers the request, and answers no
+  datagram of another length or with one byte changed), and for the rate limit
+  with an injected clock (per source, in total, and the bounded table of
+  sources). `compiler/vm-cli/tests/cli/serve_discovery.rs`: the started device
+  answers on UDP, also while a session is open and after a rename; it does not
+  answer and does not open the port with `--no-discovery`; it stops with V6017
+  when the UDP port is taken. `compiler/vm-cli/src/tcp.rs`: `--listen` takes an
+  IP address alone and uses the default session port (the rules are
+  REQ-VC-vm-cli-031 to 036 in `specs/design/vm-cli.md`).
 
-What is not built, so the status stays `proposed`: the device answering discovery
-on UDP, the `--listen` default port, IronLink and its drivers, the browse view, the
-connection path stored in the project file and in the workstation route record,
-the connection method as a class with a registration check, and the go-online
-comparison.
+What is not built, so the status stays `proposed`: IronLink and its drivers, the
+browse view, the connection path stored in the project file and in the workstation
+route record, the connection method as a class with a registration check, and the
+go-online comparison.

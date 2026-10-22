@@ -24,16 +24,17 @@
 use std::fmt;
 use std::io::{self, BufRead, Read, Write};
 use std::mem;
-use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::net::{IpAddr, SocketAddr, TcpListener, TcpStream};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use ironplc_redundancy::Shell;
-use ironplc_runtime::RuntimeHost;
+use ironplc_runtime::{RuntimeHost, DEFAULT_SESSION_PORT};
 
 use crate::device_settings::device::Device;
+use crate::discovery::{self, Discovery};
 use crate::error::{self, VmError};
 use crate::serve::{compose_host, serve_session};
 use crate::slot_store::SlotStore;
@@ -305,6 +306,24 @@ fn serve_accepted(
     occupied.store(false, Ordering::SeqCst);
 }
 
+/// Reads the value of `--listen`: `IP:PORT`, or an IP address (v4 or v6) alone,
+/// which listens on [`DEFAULT_SESSION_PORT`]. The port is defined once, in the
+/// runtime crate, and read from there. A host name is not accepted: the device
+/// listens on an address it is told, and resolving a name would make the bind
+/// depend on a name service.
+pub(crate) fn parse_listen_address(text: &str) -> Result<SocketAddr, String> {
+    if let Ok(addr) = text.parse::<SocketAddr>() {
+        return Ok(addr);
+    }
+    text.parse::<IpAddr>()
+        .map(|ip| SocketAddr::new(ip, DEFAULT_SESSION_PORT))
+        .map_err(|_| {
+            format!(
+                "`{text}` is not IP:PORT (for IPv6, [IP]:PORT) or an IP address alone, which uses port {DEFAULT_SESSION_PORT}; a host name is not accepted"
+            )
+        })
+}
+
 /// Boots the committed artifact and serves the hot-edit session on `addr`:
 /// one listener, one session at a time. The accept loop is the
 /// single-session authority (ADR-0065): it stays responsive while a session
@@ -317,7 +336,17 @@ fn serve_accepted(
 /// The HA shell is composed exactly like the stdio session — standalone by
 /// default, the simulated pair under `ha_simulated_peer` — and lives as
 /// long as the host: sequential sessions resume the same pair state.
-pub fn serve_tcp(path: &Path, addr: SocketAddr, ha_simulated_peer: bool) -> Result<(), VmError> {
+///
+/// With `discovery` on, the device also answers discovery on UDP at the
+/// address and port the listener actually has (the same number as the session,
+/// ADR-0084), bound before the first connection is accepted: V6017 when it
+/// cannot be.
+pub(crate) fn serve_tcp(
+    path: &Path,
+    addr: SocketAddr,
+    ha_simulated_peer: bool,
+    discovery: Discovery,
+) -> Result<(), VmError> {
     let store = SlotStore::beside(path);
     let container = store.boot()?;
     let (host, shell) = compose_host(container, ha_simulated_peer)?;
@@ -329,7 +358,18 @@ pub fn serve_tcp(path: &Path, addr: SocketAddr, ha_simulated_peer: bool) -> Resu
             format!("unable to listen on {addr}: {err}"),
         )
     })?;
-    log::info!("serving the hot-edit session on {addr}");
+    let session_addr = listener.local_addr().map_err(|err| {
+        VmError::io(
+            error::SESSION_IO,
+            format!("unable to read the address {addr} is bound to: {err}"),
+        )
+    })?;
+    log::info!("serving the hot-edit session on {session_addr}");
+    if discovery == Discovery::Answer {
+        let socket = discovery::bind(session_addr)?;
+        discovery::spawn(socket, device.identity_view(), session_addr.port())?;
+        log::info!("answering discovery on {session_addr} (UDP)");
+    }
 
     let occupied = Arc::new(AtomicBool::new(false));
     let host = Arc::new(Mutex::new(host));
@@ -384,6 +424,9 @@ pub fn serve_tcp(path: &Path, addr: SocketAddr, ha_simulated_peer: bool) -> Resu
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+    use spec_test_macro::spec_test;
+
     use super::*;
 
     /// Frames `line` the way a client writes it: length prefix, line bytes.
@@ -586,5 +629,52 @@ mod tests {
 
         assert_eq!(detail, "session framing error: bad length");
         assert_eq!(timeout, "no message received within 30 s");
+    }
+
+    /// REQ-VC-vm-cli-031: `IP:PORT` is taken as it is.
+    #[spec_test(REQ_VC_vm_cli_031)]
+    #[rstest]
+    #[case::v4("127.0.0.1:7000", "127.0.0.1:7000")]
+    #[case::v6("[::1]:7000", "[::1]:7000")]
+    #[case::port_zero("0.0.0.0:0", "0.0.0.0:0")]
+    fn parse_listen_address_when_ip_and_port_then_that_address(
+        #[case] text: &str,
+        #[case] expected: SocketAddr,
+    ) {
+        assert_eq!(parse_listen_address(text), Ok(expected));
+    }
+
+    /// REQ-VC-vm-cli-031: an IP address alone listens on the default port.
+    #[spec_test(REQ_VC_vm_cli_031)]
+    #[rstest]
+    #[case::v4("127.0.0.1", IpAddr::from([127, 0, 0, 1]))]
+    #[case::v4_any("0.0.0.0", IpAddr::from([0, 0, 0, 0]))]
+    #[case::v6("::1", IpAddr::from(std::net::Ipv6Addr::LOCALHOST))]
+    #[case::v6_any("::", IpAddr::from(std::net::Ipv6Addr::UNSPECIFIED))]
+    fn parse_listen_address_when_ip_alone_then_the_default_session_port(
+        #[case] text: &str,
+        #[case] ip: IpAddr,
+    ) {
+        assert_eq!(
+            parse_listen_address(text),
+            Ok(SocketAddr::new(ip, DEFAULT_SESSION_PORT))
+        );
+    }
+
+    /// REQ-VC-vm-cli-031: a host name or any other text is refused.
+    #[spec_test(REQ_VC_vm_cli_031)]
+    #[rstest]
+    #[case::host_name("localhost")]
+    #[case::host_name_and_port("localhost:7000")]
+    #[case::empty("")]
+    #[case::port_only(":7000")]
+    #[case::port_too_large("127.0.0.1:65536")]
+    #[case::bracketed_ip_alone("[::1]")]
+    #[case::text("not an address")]
+    fn parse_listen_address_when_not_an_address_then_error_naming_the_text(#[case] text: &str) {
+        let err = parse_listen_address(text).unwrap_err();
+
+        assert!(err.contains(&format!("`{text}`")), "{err}");
+        assert!(err.contains(&DEFAULT_SESSION_PORT.to_string()), "{err}");
     }
 }
