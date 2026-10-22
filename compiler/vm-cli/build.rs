@@ -1,6 +1,6 @@
 use std::process;
 
-use ironplc_problems_gen::{write_code_constants, ConstantUse};
+use ironplc_msg_gen::{write_code_constants, ConstantUse};
 
 fn main() {
     match std::env::var("OPT_LEVEL") {
@@ -12,7 +12,7 @@ fn main() {
     }
 
     // The V-code constants come from the shared generator of
-    // `ironplc-problems-gen`. The two binaries that include the file use
+    // `ironplc-msg-gen`. The two binaries that include the file use
     // different subsets of the codes, so the generator reads them all.
     println!("cargo:rerun-if-changed=resources/problem-codes.csv");
     if let Err(err) = write_code_constants("io_codes.rs", ConstantUse::ReadEvery) {

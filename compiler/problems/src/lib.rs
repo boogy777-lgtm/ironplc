@@ -344,7 +344,7 @@ a_line,Text,B",
             ),
             ("a_line,Text,{X}", "{X}"),
         ] {
-            let message = ironplc_problems_gen::generate_codeless_texts(&format!("{header}{rows}"))
+            let message = ironplc_msg_gen::generate_codeless_texts(&format!("{header}{rows}"))
                 .expect_err("the row should be refused");
 
             assert!(
@@ -354,13 +354,13 @@ a_line,Text,B",
             assert!(message.contains("line "), "{message}");
             assert!(message.contains(needle), "{rows}: {message}");
         }
-        let message = ironplc_problems_gen::generate_codeless_texts(
+        let message = ironplc_msg_gen::generate_codeless_texts(
             "Code,Key,Template
 ",
         )
         .expect_err("the header should be refused");
         assert!(message.contains("Key,Severity,Template"), "{message}");
-        assert!(ironplc_problems_gen::generate_codeless_texts(header).is_ok());
+        assert!(ironplc_msg_gen::generate_codeless_texts(header).is_ok());
     }
 
     #[spec_test(REQ_DS_problems_011)]
@@ -444,8 +444,7 @@ a_line,Text,B",
     #[spec_test(REQ_DS_problems_004)]
     fn severity_variant_when_row_has_no_declarable_category_then_error_names_code_and_value() {
         for severity in ALL {
-            let declarable =
-                ironplc_problems_gen::severity_variant("P0001", &format!("{severity:?}"));
+            let declarable = ironplc_msg_gen::severity_variant("P0001", &format!("{severity:?}"));
             let suppressed_result = matches!(
                 severity,
                 Severity::SuppressedWarning | Severity::SuppressedInformation
@@ -453,7 +452,7 @@ a_line,Text,B",
             assert_eq!(declarable.is_ok(), !suppressed_result, "{severity:?}");
         }
         for value in ["", "error", "Warn", "Info", "Fatal"] {
-            let message = ironplc_problems_gen::severity_variant("P0042", value)
+            let message = ironplc_msg_gen::severity_variant("P0042", value)
                 .expect_err("the value should be refused");
 
             assert!(message.contains("P0042"), "'{value}': {message}");
@@ -467,7 +466,7 @@ a_line,Text,B",
     #[spec_test(REQ_DS_problems_005)]
     fn check_problem_codes_header_when_not_the_five_columns_then_error() {
         assert_eq!(
-            ironplc_problems_gen::check_problem_codes_header(&[
+            ironplc_msg_gen::check_problem_codes_header(&[
                 "Code", "Name", "Message", "Severity", "Codesys"
             ]),
             Ok(())
@@ -477,7 +476,7 @@ a_line,Text,B",
             vec!["Code", "Name", "Message", "Severity", "Counterpart"],
             vec!["Code", "Name", "Severity", "Message", "Codesys"],
         ] {
-            assert!(ironplc_problems_gen::check_problem_codes_header(&header).is_err());
+            assert!(ironplc_msg_gen::check_problem_codes_header(&header).is_err());
         }
     }
 
@@ -500,13 +499,13 @@ a_line,Text,B",
 
     #[spec_test(REQ_DS_problems_007)]
     fn codesys_code_when_value_is_not_c_and_four_digits_then_error_names_code_and_value() {
-        assert_eq!(ironplc_problems_gen::codesys_code("P0001", ""), Ok(None));
+        assert_eq!(ironplc_msg_gen::codesys_code("P0001", ""), Ok(None));
         assert_eq!(
-            ironplc_problems_gen::codesys_code("P4007", "C0046"),
+            ironplc_msg_gen::codesys_code("P4007", "C0046"),
             Ok(Some("C0046".to_string()))
         );
         for value in ["C046", "C00460", "c0046", "P0046", "C00x6", "0046"] {
-            let message = ironplc_problems_gen::codesys_code("P0042", value)
+            let message = ironplc_msg_gen::codesys_code("P0042", value)
                 .expect_err("the value should be refused");
 
             assert!(message.contains("P0042"), "'{value}': {message}");

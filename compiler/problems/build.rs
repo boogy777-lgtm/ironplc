@@ -42,7 +42,7 @@ fn create_problems() -> Result<(), Box<dyn Error>> {
     let mut defs = vec![];
     let mut rdr = csv::Reader::from_reader(src);
     let header = rdr.headers()?.clone();
-    ironplc_problems_gen::check_problem_codes_header(&header.iter().collect::<Vec<_>>())?;
+    ironplc_msg_gen::check_problem_codes_header(&header.iter().collect::<Vec<_>>())?;
     for result in rdr.records() {
         let record = result?;
         let code = record
@@ -64,8 +64,8 @@ fn create_problems() -> Result<(), Box<dyn Error>> {
             code: code.to_string(),
             name: name.to_string(),
             message: message.to_string(),
-            severity: ironplc_problems_gen::severity_variant(code, severity)?,
-            codesys: ironplc_problems_gen::codesys_code(code, codesys)?,
+            severity: ironplc_msg_gen::severity_variant(code, severity)?,
+            codesys: ironplc_msg_gen::codesys_code(code, codesys)?,
         });
     }
 
@@ -79,12 +79,12 @@ fn create_problems() -> Result<(), Box<dyn Error>> {
         File::create(out_path).map_err(|e| format!("Unable to create 'problems.rs': {e}"))?;
 
     // Create the severity enumeration
-    out.write_all(ironplc_problems_gen::render_severity_enum().as_bytes())?;
+    out.write_all(ironplc_msg_gen::render_severity_enum().as_bytes())?;
 
     // Create the enumeration definition
     out.write_all(b"#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub enum Problem {\n")?;
     for def in &defs {
-        if let Some(note) = ironplc_problems_gen::deprecation_note(&def.name) {
+        if let Some(note) = ironplc_msg_gen::deprecation_note(&def.name) {
             out.write_all(format!("    #[deprecated(note = \"{note}\")]\n").as_bytes())?;
         }
         out.write_all(format!("    {},\n", def.name).as_bytes())?;
@@ -191,7 +191,7 @@ fn create_problems() -> Result<(), Box<dyn Error>> {
         .iter()
         .map(|def| (def.name.as_str(), def.severity))
         .collect();
-    out.write_all(ironplc_problems_gen::render_warning_problems(&pairs).as_bytes())?;
+    out.write_all(ironplc_msg_gen::render_warning_problems(&pairs).as_bytes())?;
 
     // Finalize the out file
     out.flush()?;
@@ -209,7 +209,7 @@ fn create_codeless_texts() -> Result<(), Box<dyn Error>> {
     let src = fs::read_to_string(src_path)
         .map_err(|e| format!("Unable to read 'codeless-texts.csv': {e}"))?;
 
-    let codeless = ironplc_problems_gen::generate_codeless_texts(&src)?;
+    let codeless = ironplc_msg_gen::generate_codeless_texts(&src)?;
 
     let mut out_path = PathBuf::from(env::var("OUT_DIR")?);
     out_path.push("codeless.rs");
@@ -228,7 +228,7 @@ fn create_texts(defs: &[ProblemDef]) -> Result<(), Box<dyn Error>> {
         .iter()
         .map(|def| (def.code.as_str(), def.name.as_str()))
         .collect();
-    let texts = ironplc_problems_gen::generate_texts(&src, &problems)?;
+    let texts = ironplc_msg_gen::generate_texts(&src, &problems)?;
 
     let mut out_path = PathBuf::from(env::var("OUT_DIR")?);
     out_path.push("texts.rs");

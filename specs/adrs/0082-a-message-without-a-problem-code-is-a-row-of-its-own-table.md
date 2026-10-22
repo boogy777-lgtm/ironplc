@@ -81,7 +81,7 @@ and the consumers keep one list.
 
 ### Confirmation
 
-- `compiler/problems_gen/src/tests.rs` and `compiler/problems/src/lib.rs`: one test
+- `compiler/msg_gen/src/tests.rs` and `compiler/problems/src/lib.rs`: one test
   for each failure of the table (header, missing, unknown or suppressed category,
   key repeated or not snake_case, malformed placeholder) and the texts of the seven
   rows (REQ-DS-problems-010, -011).
