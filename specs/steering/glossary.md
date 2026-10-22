@@ -225,6 +225,15 @@ What a discovery or an identify request returned for a device, with its time.
 *Not to be confused with:* a promise that the device is reachable now. An
 observation ages.
 
+### Discovery driver
+
+One way in which IronLink finds controllers: today a broadcast and a list of
+addresses. A driver sends the discovery request and returns observations and
+routes.
+
+*Not to be confused with:* a connection method (how IronPLC talks to a
+controller once it is found). A driver never carries a session.
+
 ### Connection path
 
 The controller an engineer last chose for an application, with the route to it,
