@@ -91,6 +91,11 @@ export function activate(context: vscode.ExtensionContext) {
 
   const reportFailure = (error: unknown) => {
     const shown = describeFailure(error, version);
+    if (shown === undefined) {
+      // Not an IronLink failure: a defect of the extension, which has no code.
+      // VS Code reports it with its stack.
+      throw error;
+    }
     output.appendLine(shown.text);
     void vscode.window.showErrorMessage(shown.text, 'Open Online Help').then(selection => {
       if (selection === 'Open Online Help') {

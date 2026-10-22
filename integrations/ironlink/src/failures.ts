@@ -10,7 +10,8 @@
  *
  * Both carry a code, so both are shown with a link to the page that documents
  * it (`problemHelpUrl`). No error text is written here: the catalog owns the
- * messages, and the program owns its own.
+ * messages, and the program owns its own. Any other error is a defect of the
+ * extension: it has no code, and is not given one.
  */
 
 import { ProblemCode, formatProblem, problemHelpUrl } from './vscodeCommon';
@@ -50,21 +51,18 @@ export interface ShownFailure {
 }
 
 /**
- * How a failure is shown. `version` is the version of the extension, which the
- * documentation site uses to tell a stale page from a current one. An error
- * that is neither failure is not an IronLink error and has no code: it is
- * shown as the extension's protocol problem rather than as a bare string.
+ * How a failure is shown, or `undefined` for an error that is neither failure.
+ * `version` is the version of the extension, which the documentation site uses
+ * to tell a stale page from a current one. An unknown error is a defect of the
+ * extension and must not be relabelled as a failure of `ironlink` (E0019 means
+ * only what `ironlink` sent): the caller rethrows it.
  */
-export function describeFailure(error: unknown, version: string): ShownFailure {
+export function describeFailure(error: unknown, version: string): ShownFailure | undefined {
   if (error instanceof IronLinkCommandError) {
     return { text: error.message, helpUrl: problemHelpUrl(error.lCode, version) };
   }
   if (error instanceof IronLinkProblem) {
     return { text: error.message, helpUrl: problemHelpUrl(error.problem, version) };
   }
-  const unexpected = new IronLinkProblem(
-    ProblemCode.IronLinkProtocolError,
-    error instanceof Error ? error.message : String(error),
-  );
-  return { text: unexpected.message, helpUrl: problemHelpUrl(unexpected.problem, version) };
+  return undefined;
 }
