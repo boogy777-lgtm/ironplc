@@ -776,9 +776,11 @@ by hand (`runtime/src/host.rs`, `vm-cli/src/serve.rs`, `vm-cli/src/slot_store.rs
    text follows the owner's answers of 2026-10-21: no binding). Done (#151).
 3. Device: the discovery wire crate and the responder on `--listen`; docs; a
    problem code for a reply that cannot be parsed, if needed. The identity field
-   `firmwareVersion` (a fixed `"0.13.0"` today, `runtime/src/commands.rs`)
-   becomes `runtimeVersion`, taken from the build, since IronPLC has no firmware
-   concept.
+   `firmwareVersion` becomes `runtimeVersion` (its own PR). The value is already
+   the build's (`env!("CARGO_PKG_VERSION")`, `vm-cli/src/device_settings.rs`);
+   `"0.13.0"` is only the example in the doc comment and the tests. A rename is
+   not additive, so the session protocol becomes version 2: a client of
+   version 1 refuses a device of version 2 with a clear message.
 4. Service: the `ironlink` binary, the broadcast and address-list drivers,
    browse, the shell of commands, the CLI.
 5. Connection methods as a class: one transport interface in Rust and in
@@ -839,8 +841,9 @@ Tracking issue: #149.
     conflict (section 8).
   - To-do: a source archive in the controller, a project-creation mechanism
     with templates, and unpacking as one more way of creating a project.
-  - There is no firmware concept in IronPLC; the version is the runtime
-    version. It is public in discovery, for a protected controller too, as
+  - There is no firmware concept in IronPLC yet; the version is the runtime
+    version. A firmware (the runtime and the other components) is a later
+    development, and its version is then one more field (owner, 2026-10-22). It is public in discovery, for a protected controller too, as
     Rockwell does (section 3).
 - **Plan approved** (owner, 2026-10-21). The owner also said:
   - a local soft PLC is one more device, not a driver (section 7);
