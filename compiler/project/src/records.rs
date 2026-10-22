@@ -20,8 +20,10 @@ use ironplc_dsl::diagnostic::Diagnostic;
 use ironplc_problems::text;
 use serde_json::Value;
 
+use crate::device_id::DeviceId;
+
 /// The kinds of engineering record file. A kind may borrow what names its
-/// records (the connection of a download record), hence the lifetime; it stays
+/// records (the device of a download record), hence the lifetime; it stays
 /// `Copy`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RecordKind<'a> {
@@ -31,15 +33,15 @@ pub enum RecordKind<'a> {
     /// `<stem>.build.iplcinfo`. The anchor is the output path of the build, so
     /// the record sits beside the container it describes.
     Build,
-    /// What a device received at the last successful download over one
-    /// connection, `<stem>.<connection>.download.iplcinfo`. The anchor is the
-    /// application container; `connection` is the engineering side's name for
-    /// the device (the connection profile), which keys the record because a
-    /// device reports no unique id of its own.
+    /// What this project last put on one device,
+    /// `<stem>.<deviceId>.download.iplcinfo`. The anchor is the application
+    /// container; the record is keyed by the id of the device, which every
+    /// device generates once and keeps.
     Download {
-        /// The name of the connection profile, free text. See
-        /// [`RecordKind::path`] for how it becomes part of a file name.
-        connection: &'a str,
+        /// The id of the device. Being 32 lowercase hexadecimal digits, it is
+        /// a valid part of a file name on every system and cannot write the
+        /// suffix of another kind, so it is used as it is.
+        device_id: &'a DeviceId,
     },
     /// The controller last chosen for an application and the route last used
     /// to reach it, `<stem>.path.iplcinfo`. The anchor is the application
@@ -59,11 +61,10 @@ impl RecordKind<'_> {
     /// the anchor names a directory and the file stem otherwise. Every reader
     /// and writer of a kind resolves its path through here, so compiling a
     /// project and syncing its record address the same file. Returns `None`
-    /// when the anchor has no usable name (for example a root directory), and
-    /// for a [`RecordKind::Download`] whose connection name is empty.
+    /// when the anchor has no usable name (for example a root directory).
     pub fn path(self, anchor: &Path) -> Option<PathBuf> {
         let stem = stem(anchor)?;
-        Some(anchor.with_file_name(format!("{stem}.{}", self.suffix()?)))
+        Some(anchor.with_file_name(format!("{stem}.{}", self.suffix())))
     }
 
     /// The format version of this kind, written into every record of the kind.
@@ -72,22 +73,18 @@ impl RecordKind<'_> {
         match self {
             RecordKind::Uids => 1,
             RecordKind::Build => 1,
-            RecordKind::Download { .. } => 1,
+            RecordKind::Download { .. } => 2,
             RecordKind::Path => 1,
         }
     }
 
-    /// The file name suffix after the stem, or `None` when the kind has no
-    /// usable name.
-    fn suffix(self) -> Option<String> {
+    /// The file name suffix after the stem.
+    fn suffix(self) -> String {
         match self {
-            RecordKind::Uids => Some("uids.json".to_owned()),
-            RecordKind::Build => Some("build.iplcinfo".to_owned()),
-            RecordKind::Path => Some("path.iplcinfo".to_owned()),
-            RecordKind::Download { connection: "" } => None,
-            RecordKind::Download { connection } => {
-                Some(format!("{}.download.iplcinfo", file_name_part(connection)))
-            }
+            RecordKind::Uids => "uids.json".to_owned(),
+            RecordKind::Build => "build.iplcinfo".to_owned(),
+            RecordKind::Path => "path.iplcinfo".to_owned(),
+            RecordKind::Download { device_id } => format!("{device_id}.download.iplcinfo"),
         }
     }
 }
@@ -101,29 +98,6 @@ pub(crate) fn stem(anchor: &Path) -> Option<&str> {
     } else {
         anchor.file_stem()?.to_str()
     }
-}
-
-/// `text` as one part of a file name: the characters `A-Z a-z 0-9 _ -` stay and
-/// every other byte of the UTF-8 text is written as `%` and two uppercase
-/// hexadecimal digits.
-///
-/// why: a connection name is free text that a person types ("My PLC:1"), and it
-/// must be a valid file name on Windows too, where `:`, `"`, `*` and a trailing
-/// space or dot are not allowed. The encoding is injective (the `%` of the text
-/// is encoded as well), so two names never share a file. The `.` is encoded so
-/// that a name cannot write another kind's suffix: the connection `x.build`
-/// does not make a file that looks like `<stem>.x.build.iplcinfo`. Names that
-/// differ only in letter case share a file on a file system that ignores case.
-fn file_name_part(text: &str) -> String {
-    let mut part = String::with_capacity(text.len());
-    for byte in text.bytes() {
-        if byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-' {
-            part.push(char::from(byte));
-        } else {
-            part.push_str(&format!("%{byte:02X}"));
-        }
-    }
-    part
 }
 
 /// The outcome of reading a record that could be read from the file system.
@@ -190,6 +164,15 @@ mod tests {
     use serde_json::json;
     use tempfile::TempDir;
 
+    const DEVICE: &str = "0123456789abcdef0123456789abcdef";
+
+    static DEVICE_ID: std::sync::LazyLock<DeviceId> =
+        std::sync::LazyLock::new(|| DeviceId::parse(DEVICE).unwrap());
+
+    fn device_id() -> DeviceId {
+        DEVICE_ID.clone()
+    }
+
     /// Writes `text` to a fresh temporary file and reads it as a `Uids` record.
     fn read_text(text: &str) -> RecordRead {
         read_kind_text(RecordKind::Uids, text)
@@ -198,7 +181,7 @@ mod tests {
     /// Writes `text` to a fresh temporary file and reads it as a record of `kind`.
     fn read_kind_text(kind: RecordKind<'_>, text: &str) -> RecordRead {
         let dir = TempDir::new().unwrap();
-        let path = dir.path().join(format!("test.{}", kind.suffix().unwrap()));
+        let path = dir.path().join(format!("test.{}", kind.suffix()));
         fs::write(&path, text).unwrap();
         read(kind, &path).unwrap()
     }
@@ -229,43 +212,42 @@ mod tests {
     }
 
     #[rstest]
-    #[case::plain("PLC1", "app.PLC1.download.iplcinfo")]
-    #[case::kept_characters("a_b-C9", "app.a_b-C9.download.iplcinfo")]
-    #[case::space_and_colon("My PLC:1", "app.My%20PLC%3A1.download.iplcinfo")]
-    #[case::dot_cannot_forge_a_suffix("a.build", "app.a%2Ebuild.download.iplcinfo")]
-    #[case::percent_is_encoded("a%2Eb", "app.a%252Eb.download.iplcinfo")]
-    #[case::windows_forbidden(r#"a\b"c*?<>|"#, "app.a%5Cb%22c%2A%3F%3C%3E%7C.download.iplcinfo")]
-    #[case::trailing_dot_and_space("x. ", "app.x%2E%20.download.iplcinfo")]
-    #[case::non_ascii("Ü", "app.%C3%9C.download.iplcinfo")]
-    fn path_when_download_of_connection_then_sibling_with_encoded_name(
-        #[case] connection: &str,
+    #[case::file("app.iplc", "app.0123456789abcdef0123456789abcdef.download.iplcinfo")]
+    #[case::dotted_name(
+        "My.App.iplc",
+        "My.App.0123456789abcdef0123456789abcdef.download.iplcinfo"
+    )]
+    fn path_when_download_of_device_then_sibling_named_by_the_device_id(
+        #[case] application: &str,
         #[case] expected: &str,
     ) {
-        let path = RecordKind::Download { connection }
-            .path(Path::new("some").join("dir").join("app.iplc").as_path())
+        let id = device_id();
+
+        let path = RecordKind::Download { device_id: &id }
+            .path(Path::new("some").join("dir").join(application).as_path())
             .unwrap();
 
         assert_eq!(path, Path::new("some").join("dir").join(expected));
     }
 
     #[test]
-    fn path_when_download_of_empty_connection_then_none() {
-        let anchor = Path::new("some").join("app.iplc");
-
-        assert_eq!(RecordKind::Download { connection: "" }.path(&anchor), None);
-    }
-
-    #[test]
-    fn path_when_download_of_different_names_then_different_files() {
+    fn path_when_download_of_different_devices_then_different_files() {
         let anchor = Path::new("app.iplc");
-        let names = ["a.b", "a%2Eb", "a b", "a%20b", "a", "a.build", "A"];
+        let ids: Vec<DeviceId> = [
+            "0123456789abcdef0123456789abcdef",
+            "fedcba9876543210fedcba9876543210",
+            "00000000000000000000000000000000",
+        ]
+        .iter()
+        .map(|id| DeviceId::parse(id).unwrap())
+        .collect();
 
-        let paths: std::collections::BTreeSet<_> = names
+        let paths: std::collections::BTreeSet<_> = ids
             .iter()
-            .map(|connection| RecordKind::Download { connection }.path(anchor).unwrap())
+            .map(|device_id| RecordKind::Download { device_id }.path(anchor).unwrap())
             .collect();
 
-        assert_eq!(paths.len(), names.len());
+        assert_eq!(paths.len(), ids.len());
     }
 
     #[rstest]
@@ -289,14 +271,15 @@ mod tests {
 
         assert_ne!(path_record, RecordKind::Uids.path(anchor).unwrap());
         assert_ne!(path_record, RecordKind::Build.path(anchor).unwrap());
-        // A connection named `path` makes `app.path.download.iplcinfo`, and the
-        // dot of a name is encoded, so no connection reaches `app.path.iplcinfo`.
-        for connection in ["path", "x.path", "path.iplcinfo"] {
-            assert_ne!(
-                path_record,
-                RecordKind::Download { connection }.path(anchor).unwrap()
-            );
-        }
+        // The id is hexadecimal, so no device makes `app.path.download.iplcinfo`
+        // or any other name that is another kind's.
+        let id = device_id();
+        assert_ne!(
+            path_record,
+            RecordKind::Download { device_id: &id }
+                .path(anchor)
+                .unwrap()
+        );
     }
 
     #[test]
@@ -306,11 +289,11 @@ mod tests {
         let uids = RecordKind::Uids.path(anchor).unwrap();
         let path_record = RecordKind::Path.path(anchor).unwrap();
 
-        let download = RecordKind::Download {
-            connection: "build",
-        }
-        .path(anchor)
-        .unwrap();
+        let id = device_id();
+
+        let download = RecordKind::Download { device_id: &id }
+            .path(anchor)
+            .unwrap();
 
         assert_ne!(download, build);
         assert_ne!(download, uids);
@@ -341,7 +324,7 @@ mod tests {
             RecordKind::Uids,
             RecordKind::Build,
             RecordKind::Path,
-            RecordKind::Download { connection: "My PLC" }
+            RecordKind::Download { device_id: &DEVICE_ID }
         )]
         kind: RecordKind<'_>,
     ) {
@@ -358,12 +341,12 @@ mod tests {
             RecordKind::Uids,
             RecordKind::Build,
             RecordKind::Path,
-            RecordKind::Download { connection: "My PLC" }
+            RecordKind::Download { device_id: &DEVICE_ID }
         )]
         kind: RecordKind<'_>,
         #[values(
             "this is not json",
-            r#"{"version": 2}"#,
+            r#"{"version": 3}"#,
             r#"{"variables": []}"#,
             r#"{"version": "1"}"#,
             "[1]"

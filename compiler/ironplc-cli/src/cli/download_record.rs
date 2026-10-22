@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use ironplc_container::integrity::HASH_LEN;
+use ironplc_project::device_id::DeviceId;
 use ironplc_project::download_record::{self, DeviceGenerations, Download};
 
 /// What `record-download` was given.
@@ -20,8 +21,8 @@ pub struct RecordDownload<'a> {
     pub application: &'a Path,
     /// The container file that was sent, when it is not the application.
     pub container: Option<&'a Path>,
-    /// The name of the connection profile.
-    pub connection: &'a str,
+    /// The id of the device that received the container.
+    pub device_id: &'a DeviceId,
     /// The content hash the device reports, when it reports one.
     pub device_content_hash: Option<[u8; HASH_LEN]>,
     /// The counters the device reported after the download, when known.
@@ -41,7 +42,7 @@ pub fn record_download(args: &RecordDownload<'_>) -> Result<(), String> {
         &Download {
             anchor: args.application,
             container: args.container.unwrap_or(args.application),
-            connection: args.connection,
+            device_id: args.device_id,
             device_content_hash: args.device_content_hash,
             device: args.device,
         },
@@ -50,9 +51,9 @@ pub fn record_download(args: &RecordDownload<'_>) -> Result<(), String> {
     .map_err(|err| err.to_string())
 }
 
-/// The path of the download record of `connection` for `application`.
-pub fn record_download_path(application: &Path, connection: &str) -> Result<PathBuf, String> {
-    download_record::record_path(application, connection).map_err(|err| err.to_string())
+/// The path of the download record of `device_id` for `application`.
+pub fn record_download_path(application: &Path, device_id: &DeviceId) -> Result<PathBuf, String> {
+    download_record::record_path(application, device_id).map_err(|err| err.to_string())
 }
 
 #[cfg(test)]
