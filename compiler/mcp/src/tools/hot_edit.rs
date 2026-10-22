@@ -285,7 +285,7 @@ fn mcp_device_identity() -> DeviceIdentity {
         name: "ironplcmcp".into(),
         model: "IronPLC SoftPLC".into(),
         modification: "mcp".into(),
-        firmware_version: env!("CARGO_PKG_VERSION").to_string(),
+        runtime_version: env!("CARGO_PKG_VERSION").to_string(),
     }
 }
 

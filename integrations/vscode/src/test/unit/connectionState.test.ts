@@ -14,7 +14,7 @@ import {
   IdentityInfo,
 } from '../../hotEditSession';
 import { ProblemCode } from '../../problems';
-import { DEFAULT_SESSION_PORT } from '../../sessionPort';
+import { DEFAULT_SESSION_PORT, SUPPORTED_SESSION_PROTOCOL } from '../../sessionConstants';
 
 /** An in-memory transport: the responder answers commands synchronously. */
 class MockTransport implements HotEditTransport {
@@ -58,10 +58,10 @@ class MockOpened implements OpenedConnection {
   }
 }
 
-const DEVICE = { name: 'ironplcvm', model: 'IronPLC SoftPLC', modification: 'vm-cli', firmwareVersion: '0.13.0' };
+const DEVICE = { name: 'ironplcvm', model: 'IronPLC SoftPLC', modification: 'vm-cli', runtimeVersion: '0.13.0' };
 const APPLICATION = { mode: 'normal', active: 1, normal: 1, candidate: null, application: 1, migration: false, rounds: 0 };
 
-function identityLine(protocol = 1): string {
+function identityLine(protocol = SUPPORTED_SESSION_PROTOCOL): string {
   return JSON.stringify({ response: 'identity', protocol, device: DEVICE, application: APPLICATION });
 }
 
@@ -264,7 +264,7 @@ suite('ConnectionManager', () => {
       open: (profile, openedList) => {
         const target = new MockOpened();
         target.transport.handler = () => {
-          target.transport.emitLine(identityLine(2));
+          target.transport.emitLine(identityLine(SUPPORTED_SESSION_PROTOCOL + 1));
         };
         openedList.push(target);
         return Promise.resolve(target);
@@ -276,7 +276,7 @@ suite('ConnectionManager', () => {
     assert.strictEqual(result, 'failed');
     assert.strictEqual(errors.length, 1);
     assert.strictEqual(errors[0].code, ProblemCode.ConnectFailed);
-    assert.ok(errors[0].context.includes('session protocol 2'));
+    assert.ok(errors[0].context.includes(`session protocol ${SUPPORTED_SESSION_PROTOCOL + 1}`));
   });
 
   test('connect_when_already_connected_then_refuses_without_opening_a_second_transport', async () => {

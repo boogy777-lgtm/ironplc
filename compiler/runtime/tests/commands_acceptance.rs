@@ -28,7 +28,7 @@ fn test_device() -> DeviceIdentity {
         name: "ironplcvm".into(),
         model: "IronPLC SoftPLC".into(),
         modification: "vm-cli".into(),
-        firmware_version: "0.13.0".into(),
+        runtime_version: "0.13.0".into(),
     }
 }
 

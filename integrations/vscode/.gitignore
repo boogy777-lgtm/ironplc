@@ -3,4 +3,4 @@
 /.vscode-test
 /coverage
 /src/problems.ts
-/src/sessionPort.ts
+/src/sessionConstants.ts

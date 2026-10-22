@@ -79,7 +79,10 @@ fn serve_tcp_when_scripted_then_identity_refusal_framing_drop_and_reconnect(
     client.write_all(&tcp_frame(r#"{"command":"identity"}"#))?;
     let identity: serde_json::Value = serde_json::from_str(&read_frame(&mut client)?)?;
     assert_eq!(identity["response"], "identity");
-    assert_eq!(identity["protocol"], 1);
+    assert_eq!(
+        identity["protocol"],
+        ironplc_runtime::SESSION_PROTOCOL_VERSION
+    );
     assert_eq!(identity["device"]["name"], "ironplcvm");
     // The TCP path reports the id of the device settings file (REQ-VC-vm-cli-029).
     let settings: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(
@@ -87,7 +90,7 @@ fn serve_tcp_when_scripted_then_identity_refusal_framing_drop_and_reconnect(
     )?)?;
     assert_eq!(identity["device"]["deviceId"], settings["deviceId"]);
     assert_eq!(identity["device"]["deviceId"].as_str().unwrap().len(), 32);
-    assert!(identity["device"]["firmwareVersion"]
+    assert!(identity["device"]["runtimeVersion"]
         .as_str()
         .unwrap()
         .split('.')

@@ -21,7 +21,7 @@ three mechanisms:
 The reference UI is the owner's desktop IDE layout (Owen Logic style): an
 auth block (login/password), connection parameters (IP address, port, a
 Connect button), a connected-device info panel (IP, name, model,
-modification, firmware version, connection state, application state), an
+modification, runtime version, connection state, application state), an
 error toast on bad settings, and a status bar reading "Not connected".
 
 This spec builds on:
@@ -181,13 +181,13 @@ redundancy layer is loaded):
 ```json
 {
   "response": "identity",
-  "protocol": 1,
+  "protocol": 2,
   "device": {
     "deviceId": "0123456789abcdef0123456789abcdef",
     "name": "ironplcvm",
     "model": "IronPLC SoftPLC",
     "modification": "vm-cli",
-    "firmwareVersion": "0.13.0"
+    "runtimeVersion": "0.13.0"
   },
   "application": {
     "mode": "normal",
@@ -212,17 +212,27 @@ redundancy layer is loaded):
 
 Field set:
 
-- `protocol` — session protocol version, `1` for the version this spec
-  defines. A client refuses a higher number.
+- `protocol` — session protocol version, `2` for the version this spec
+  defines. A client refuses a higher number. The version tells clients that
+  the wire changed: an additive optional field keeps it, because a client
+  ignores what it does not know; a rename or a removal of a field raises it,
+  so an old client refuses the new device ("device speaks session protocol 2,
+  this client supports up to 1") instead of misreading it. Version `2`
+  renamed the device field `firmwareVersion` to `runtimeVersion`: IronPLC has
+  no firmware yet, and the version a device reports is its runtime's. A
+  firmware, the runtime plus other components, will add its own version as
+  one more field. A server does not answer with the old name and a client does
+  not read it. The number is stated once, in
+  `compiler/runtime/resources/session-protocol.txt`.
 - `device` — the panel fields: `deviceId`, `name`, `model`, `modification`,
-  `firmwareVersion`. `deviceId` is the device's unique id, 32 lowercase
+  `runtimeVersion`. `deviceId` is the device's unique id, 32 lowercase
   hexadecimal digits that the device generates once, keeps across restarts
   and lets its operator change (below). It is optional: a host that has none
   (the MCP in-process host, a hardware target that reports no id) and a device
   that predates the field omit it, and a client that does not know it ignores
-  it, so the protocol stays at version `1`. `name` is a device setting. A soft
+  it, so adding it keeps the protocol version. `name` is a device setting. A soft
   device reports its binary name and version as `modification` and
-  `firmwareVersion`; a hardware target reports its catalog values.
+  `runtimeVersion`; a hardware target reports its catalog values.
 - `application` — the live hot-edit status snapshot (mode, generation
   counters, rounds), the same fields `getStatus` returns
   (`StatusPayload` in `compiler/runtime/src/commands.rs`). Two optional fields say what
@@ -230,7 +240,7 @@ Field set:
   in the header of the normal (committed) artifact as 64 lowercase
   hexadecimal digits (REQ-VC-vm-cli-024). They are optional on the wire:
   a device that predates them omits them, and a client that does not know
-  them ignores them, so the protocol stays at version `1`. The client
+  them ignores them, so adding them keeps the protocol version. The client
   compares `contentHash` with its download record (below).
 - `redundancy` — optional: `pairId`, configured `role`, ownership `epoch`,
   and the SYNC/CONTROL substates of

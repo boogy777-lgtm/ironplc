@@ -10,6 +10,7 @@ import {
   HotEditTransport,
   parseResponseLine,
 } from '../../hotEditSession';
+import { SUPPORTED_SESSION_PROTOCOL } from '../../sessionConstants';
 import { rejectWith } from './testHelpers';
 
 /** An in-memory transport: tests feed lines in and record the lines sent out. */
@@ -412,8 +413,8 @@ suite('HotEditSession', () => {
   });
 });
 
-const IDENTITY_LINE = '{"response":"identity","protocol":1,'
-  + '"device":{"name":"ironplcvm","model":"IronPLC SoftPLC","modification":"vm-cli","firmwareVersion":"0.13.0"},'
+const IDENTITY_LINE = `{"response":"identity","protocol":${SUPPORTED_SESSION_PROTOCOL},`
+  + '"device":{"name":"ironplcvm","model":"IronPLC SoftPLC","modification":"vm-cli","runtimeVersion":"0.13.0"},'
   + '"application":{"mode":"normal","active":1,"normal":1,"candidate":null,"application":1,"migration":false,"rounds":0}}';
 
 suite('encodeRequest identity and edit identity', () => {
@@ -474,7 +475,7 @@ suite('parseResponseLine hashes of the normal artifact', () => {
   });
 
   test('parseResponseLine_when_status_has_a_field_of_a_later_server_then_ignored', () => {
-    // The protocol stays at version 1 because a reader ignores what it does not know.
+    // Adding a field keeps the protocol version because a reader ignores what it does not know.
     const line = STATUS_LINE.slice(0, -1) + ',"fieldOfALaterServer":{"a":[1]}}';
 
     const response = parseResponseLine(line);
@@ -512,12 +513,12 @@ suite('parseResponseLine identity', () => {
     assert.deepStrictEqual(response, {
       kind: 'identity',
       identity: {
-        protocol: 1,
+        protocol: SUPPORTED_SESSION_PROTOCOL,
         device: {
           name: 'ironplcvm',
           model: 'IronPLC SoftPLC',
           modification: 'vm-cli',
-          firmwareVersion: '0.13.0',
+          runtimeVersion: '0.13.0',
         },
         application: createStatus(),
         redundancy: undefined,
@@ -548,7 +549,7 @@ suite('parseResponseLine identity', () => {
   });
 
   test('parseResponseLine_when_device_block_has_a_field_of_a_later_server_then_ignored', () => {
-    // The protocol stays at version 1 because a reader ignores what it does not know.
+    // Adding a field keeps the protocol version because a reader ignores what it does not know.
     const line = IDENTITY_LINE
       .replace('"name":"ironplcvm",', `"deviceId":"${DEVICE_ID}","fieldOfALaterServer":{"a":[1]},"name":"ironplcvm",`);
 
@@ -561,7 +562,7 @@ suite('parseResponseLine identity', () => {
         name: 'ironplcvm',
         model: 'IronPLC SoftPLC',
         modification: 'vm-cli',
-        firmwareVersion: '0.13.0',
+        runtimeVersion: '0.13.0',
       });
     }
   });
@@ -592,19 +593,23 @@ suite('parseResponseLine identity', () => {
   });
 
   test('parseResponseLine_when_identity_protocol_higher_than_supported_then_throws', () => {
-    const line = IDENTITY_LINE.replace('"protocol":1', '"protocol":2');
+    const higher = SUPPORTED_SESSION_PROTOCOL + 1;
+    const line = IDENTITY_LINE.replace(`"protocol":${SUPPORTED_SESSION_PROTOCOL}`, `"protocol":${higher}`);
 
-    assert.throws(() => parseResponseLine(line), /session protocol 2/);
+    assert.throws(
+      () => parseResponseLine(line),
+      new RegExp(`device speaks session protocol ${higher}, this client supports up to ${SUPPORTED_SESSION_PROTOCOL}`),
+    );
   });
 
   test('parseResponseLine_when_identity_missing_device_then_throws', () => {
-    const line = '{"response":"identity","protocol":1,"application":{}}';
+    const line = `{"response":"identity","protocol":${SUPPORTED_SESSION_PROTOCOL},"application":{}}`;
 
     assert.throws(() => parseResponseLine(line), HotEditProtocolError);
   });
 
   test('parseResponseLine_when_identity_missing_application_then_throws', () => {
-    const line = '{"response":"identity","protocol":1,"device":{"name":"x","model":"x","modification":"x","firmwareVersion":"x"}}';
+    const line = `{"response":"identity","protocol":${SUPPORTED_SESSION_PROTOCOL},"device":{"name":"x","model":"x","modification":"x","runtimeVersion":"x"}}`;
 
     assert.throws(() => parseResponseLine(line), HotEditProtocolError);
   });

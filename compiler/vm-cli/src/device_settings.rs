@@ -288,7 +288,7 @@ impl DeviceSettings {
             name: self.get(DeviceSetting::Name).to_owned(),
             model: "IronPLC SoftPLC".into(),
             modification: "vm-cli".into(),
-            firmware_version: env!("CARGO_PKG_VERSION").to_string(),
+            runtime_version: env!("CARGO_PKG_VERSION").to_string(),
         }
     }
 }

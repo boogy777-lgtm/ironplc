@@ -310,5 +310,5 @@ fn identity_when_settings_then_carries_the_id_the_name_and_the_build_constants()
     assert_eq!(identity.name, "cell 1");
     assert_eq!(identity.model, "IronPLC SoftPLC");
     assert_eq!(identity.modification, "vm-cli");
-    assert_eq!(identity.firmware_version, env!("CARGO_PKG_VERSION"));
+    assert_eq!(identity.runtime_version, env!("CARGO_PKG_VERSION"));
 }

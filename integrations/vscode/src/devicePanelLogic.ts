@@ -72,9 +72,9 @@ export function devicePanelRows(model: DevicePanelModel): PanelRow[] {
     rows.push({ id: 'device.model', label: 'Model', description: identity.device.model });
     rows.push({ id: 'device.modification', label: 'Modification', description: identity.device.modification });
     rows.push({
-      id: 'device.firmware',
-      label: 'Firmware version',
-      description: identity.device.firmwareVersion,
+      id: 'device.runtime',
+      label: 'Runtime version',
+      description: identity.device.runtimeVersion,
     });
     if (identity.redundancy !== undefined) {
       const redundancy = identity.redundancy;
