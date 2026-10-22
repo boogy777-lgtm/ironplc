@@ -232,9 +232,9 @@ Every decision is made in one place, and the clients render it.
 - **A separate binary, IronLink** (owner's name; the binary is `ironlink`). It
   runs on the workstation as a child process of each client, on stdio (owner,
   2026-10-21; section 4b). It opens no listening port.
-- **Its API is the command mechanism we already have.** The session protocol is
-  JSON commands, framed on TCP (`runtime/src/commands.rs`, `vm-cli/src/tcp.rs`).
-  IronLink speaks the same JSON commands on stdio, with its own commands added.
+- **Its API is the command mechanism we already have:** JSON commands, one per
+  line, as the session protocol on stdio (`runtime/src/commands.rs`). IronLink
+  has its own vocabulary in the same style.
 - **Every GUI is a thin client of these commands:** the VS Code extension
   today, and a standalone GUI later. MCP and the command line are thin clients
   as well.
@@ -246,18 +246,15 @@ Every decision is made in one place, and the clients render it.
   one more implementation.
 - **Browse:** it gives the tree workstation, then driver, then devices, with
   identity and the time last seen.
-- **Sessions:** it owns the sessions to devices.
-  - One engineering session per device stays the rule (ADR-0065).
-  - Through the service, several clients (VS Code and MCP) can use the same
-    device without fighting over the one session. This is the main value of
-    RSLinx.
-- **The shell of internal commands.** One command vocabulary, served to every
-  client: `browse`, `identify`, `select`, `connect`, `disconnect`, `status`,
-  plus the session commands relayed to the device.
-  - The command line uses it (`ironlink <command>`, and an interactive mode).
-    VS Code and MCP use the same commands.
-  - The session protocol stays as it is. The service relays it. It does not
-    reinterpret it.
+- **Sessions are not IronLink's** (owner's decision A, section 4a): IronPLC
+  connects directly. Owning the sessions, so that several clients share one
+  device, is option B, a named class that is not built.
+- **The shell of commands.** One command vocabulary, served to every client:
+  `browse` and `identify` (stage 4); `select`, which writes the chosen path into
+  the project path file and the workstation route record, comes with stage 6.
+  - The command line uses it (`ironlink <command>`), and `ironlink serve` serves
+    the same commands as JSON lines on stdio. VS Code and MCP use the same
+    commands.
 
 ### 4a. Who connects: the fundamental question (owner, 2026-10-21)
 
@@ -774,7 +771,7 @@ by hand (`runtime/src/host.rs`, `vm-cli/src/serve.rs`, `vm-cli/src/slot_store.rs
 2. Device: the device settings file (`deviceId`, name), `deviceId` in identity,
    and the session command that changes a setting; ADR "PLC discovery" (its
    text follows the owner's answers of 2026-10-21: no binding). Done (#151).
-3. Device: the discovery wire crate and the responder on `--listen`; docs; a
+3. Done (#152–#156). Device: the discovery wire crate and the responder on `--listen`; docs; a
    problem code for a reply that cannot be parsed, if needed. The identity field
    `firmwareVersion` becomes `runtimeVersion` (its own PR). The value is already
    the build's (`env!("CARGO_PKG_VERSION")`, `vm-cli/src/device_settings.rs`);
@@ -782,7 +779,11 @@ by hand (`runtime/src/host.rs`, `vm-cli/src/serve.rs`, `vm-cli/src/slot_store.rs
    not additive, so the session protocol becomes version 2: a client of
    version 1 refuses a device of version 2 with a clear message.
 4. Service: the `ironlink` binary, the broadcast and address-list drivers,
-   browse, the shell of commands, the CLI.
+   browse, identify, the shell of commands (`ironlink serve`, JSON lines on
+   stdio), the CLI. Its problem codes have their own prefix `L` (a workstation
+   tool, not the runtime), documented under `docs/reference/ironlink/`.
+   Prefactor: one generator of problem-code constants for every crate that has
+   a CSV of codes (three copies today: vm-cli, runtime, redundancy).
 5. Connection methods as a class: one transport interface in Rust and in
    TypeScript, with the stdio and TCP members registering themselves; MCP
    gains the TCP method (option A: IronPLC connects directly).
