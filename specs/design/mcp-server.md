@@ -593,6 +593,27 @@ Asks IronLink to browse and returns the result as JSON.
 
 **REQ-TOL-mcp-163** An `ironlink` that does not start, ends, or does not answer in time is returned as `ok: false` and a P8002 diagnostic that says why.
 
+### The `device` parameter of the hot-edit tools
+
+The hot-edit tools (`hot_edit_status`, `hot_edit_accept`, `hot_edit_test`, `hot_edit_untest`, `hot_edit_assemble`, `hot_edit_cancel`, [ADR-0056](../adrs/0056-mcp-hot-edit-session-one-host-per-server-process.md)) act on the server's own in-process host. They are the tools that act on a controller; `run` simulates a container in the VM and acts on none. Each takes an optional `device`. With it, the tool connects to that device through the session protocol, as the editor does (`ironplc-session-client`, [session-client.md](session-client.md)), and sends the command that the in-process host would execute.
+
+`device` names the device in one of two ways, and not both:
+
+- `{address, port?}` — a TCP connection to the address; `port` is the session port (49152) when omitted.
+- `{device_id}` — the 32-digit id as `browse_network` reports it. The route is the one IronLink stores for this workstation (`routeList`). The route hint of a project's path file is not read: the server reads no file of the project (REQ-STL-mcp-006) and these tools have no project. An id without a route is an error that says to browse.
+
+A call is one session: connect, `identity`, the command, and a `getStatus` after an acknowledgement for the status snapshot, then the connection is dropped. The device serves one engineering session at a time.
+
+**REQ-TOL-mcp-170** Without `device` the hot-edit tools act on the in-process host exactly as before, and their responses have no `device` field.
+
+**REQ-TOL-mcp-171** With `device` the tool sends the same `Command` over the session protocol and returns the same response: `ok`, `result: "ack"` and the `status` after the command, or `v_code`, `message` and `pairs` of the device's refusal as the device wrote them. The response names the device that answered in `device` (the device block of its `identity`). The server does not refuse a device for being another one than the id asked for; the caller compares the ids.
+
+**REQ-TOL-mcp-172** A device that already serves a session answers V6014, which the tool returns as `v_code`. A refusal of any other device, such as one that needs credentials (a later class), is returned with its code in the same way.
+
+**REQ-TOL-mcp-173** A device that cannot be reached (nothing listens, no answer in time, the connection ends) is returned as `ok: false` with a P8003 diagnostic that names the device and says why, and no `v_code`.
+
+**REQ-TOL-mcp-174** `device` must be `address` with an optional `port`, or `device_id`; any other combination is a P8001 diagnostic. An id is resolved by IronLink's route list; an id without a route is a P8001 diagnostic that says to browse, and IronLink missing or not answering is a P8002 diagnostic.
+
 ## Architecture
 
 ### Transport

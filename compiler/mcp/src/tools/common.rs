@@ -313,6 +313,27 @@ fn truncate(s: &str, max: usize) -> String {
 // Tests
 // ───────────────────────────────────────────────────────────────────
 
+/// The P8002 diagnostics for why IronLink could not be used by a tool that needs
+/// it (`browse_network`, and the `device_id` form of the `device` parameter).
+pub fn ironlink_diagnostics(error: &crate::ironlink::IronLinkError) -> Vec<serde_json::Value> {
+    use crate::ironlink::IronLinkError;
+    let problem = match error {
+        IronLinkError::NotFound { searched } => {
+            text::mcp_iron_link_unavailable_not_found(searched.clone())
+        }
+        IronLinkError::Unavailable { message } => {
+            text::mcp_iron_link_unavailable_failed(message.clone())
+        }
+        IronLinkError::Refused { l_code, message } => {
+            text::mcp_iron_link_unavailable_failed(format!(
+                "it refused the request: {} - {message}",
+                l_code.as_deref().unwrap_or("no code")
+            ))
+        }
+    };
+    serialize_diagnostics(&[Diagnostic::text(SourceSpan::default(), problem)], &[])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

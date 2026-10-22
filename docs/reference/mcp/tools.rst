@@ -338,6 +338,35 @@ particular build.
 **Returns:** an object with ``ok``, ``removed`` (``true`` when the
 entry existed and was evicted), and ``diagnostics``.
 
+Hot-edit Tools
+==============
+
+The six :literal:`hot_edit_*` tools run the online-change protocol of the
+runtime: :literal:`hot_edit_accept` compiles sources and stages them as an edit
+candidate, :literal:`hot_edit_test` runs the candidate at the next scan
+boundary, :literal:`hot_edit_assemble` promotes it, :literal:`hot_edit_untest`
+reverts a test, :literal:`hot_edit_cancel` discards the candidate and
+:literal:`hot_edit_status` reports the state. By default they act on one session
+that the server itself runs: the first :literal:`hot_edit_accept` starts it.
+
+Every one of them takes an optional ``device`` that names a device to act on
+instead, over the session protocol that the editor uses. Name the device by
+``address`` and optionally ``port`` (the session port, 49152, when omitted), or
+by ``device_id``, the id that :literal:`browse_network` reports, for a device
+that IronLink has a route to on this workstation. Do not give both. The server
+does not read the path file of a project, so an id without a route is an error
+that tells you to browse.
+
+With ``device``, :literal:`hot_edit_accept` stages the compiled program on the
+device, which already runs a program, and the result is ``ack``. The response
+has the same fields as without ``device`` and one more, ``device``: the id, name,
+model, modification and runtime version that the device reported. The server does
+not refuse a device for being another one than the id asked for, so compare
+``device.deviceId`` with the id you meant. A device serves one engineering
+session at a time: when another session is open, ``v_code`` is ``V6014``. A
+device that cannot be reached returns a
+:doc:`P8003 </reference/compiler/problems/P8003>` diagnostic.
+
 Network Tools
 =============
 
