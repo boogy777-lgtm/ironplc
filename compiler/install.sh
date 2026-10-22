@@ -28,12 +28,12 @@ LATEST_REDIRECT="https://github.com/${REPO}/releases/latest"
 ISSUES_URL="https://github.com/${REPO}/issues"
 DEFAULT_INSTALL_DIR="${HOME}/.ironplc"
 # Every executable a release archive carries. There is no optional binary: the
-# compiler, the runtime, the MCP server and the debug server are one toolchain,
+# compiler, the runtime, the MCP server, the debug server and IronLink are one toolchain,
 # and the editor resolves ironplcvmd from beside ironplcc, so an install that
 # leaves one out is a broken install and fails rather than warns. This list must
 # match the workspace's [[bin]] targets -- the `shipped_binaries_guard` test
 # reads it from here and fails when it does not.
-BINARIES="ironplcc ironplcvm ironplcmcp ironplcvmd"
+BINARIES="ironplcc ironplcvm ironplcmcp ironplcvmd ironlink"
 
 # ---- output helpers -------------------------------------------------------
 

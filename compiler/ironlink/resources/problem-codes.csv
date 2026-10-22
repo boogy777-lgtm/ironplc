@@ -1,0 +1,7 @@
+Code,Name,Message
+L6001,InterfaceBind,Unable to bind a socket on the local interface
+L6002,SendFailed,Unable to send the discovery request
+L6003,NoAnswer,No answer to the identify request within the time
+L6004,ArgumentInvalid,An address or an option value is not valid
+L6005,SessionIo,Unable to read or write the command session
+L9001,Internal,Internal error of IronLink
