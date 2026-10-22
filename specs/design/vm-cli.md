@@ -140,6 +140,26 @@ ironplcvm serve <FILE>
 
 The session stays one line in, one line out: the scan round an FSM-advancing command drives happens before its response line is written, so the acknowledgment means the swap has been applied, not merely recorded.
 
+#### Discovery on the listen address
+
+`serve --listen <ADDR>` serves the session on TCP. The device also answers
+discovery on UDP at the same address and port, so that a workstation can find it
+(ADR-0084). The bytes of the request and the reply are specified in
+[plc-discovery.md](plc-discovery.md) and are encoded by the `ironplc-discovery`
+crate; this section is what the device does with them.
+
+| Option | Description |
+|--------|-------------|
+| `--listen <ADDR>` | `IP:PORT`, or an IP address alone for the default session port. |
+| `--no-discovery` | Do not open the discovery port. Requires `--listen`. |
+
+- **REQ-VC-vm-cli-031** `--listen` takes `IP:PORT` (for IPv6, `[IP]:PORT`) or an IPv4 or IPv6 address alone, which listens on the default session port. The default port is read from `DEFAULT_SESSION_PORT` of the runtime crate and stated nowhere else. A host name, or any other text, is a usage error.
+- **REQ-VC-vm-cli-032** With `--listen`, `serve` binds a UDP socket to the address and port that the TCP listener has, before it accepts the first connection, and answers a discovery request with one reply on a thread of its own, also while a session is open. The reply carries the device id, name, model and runtime version of the `identity` answer (built from the same identity), the session protocol version, the TCP port of the session and `protected` false (no session credentials exist). The identity is read for every request, so a name changed by `setDeviceSettings` is in the next reply.
+- **REQ-VC-vm-cli-033** A datagram that is not exactly the 8 bytes of the request gets neither a reply nor an error: not an empty datagram, not a shorter or longer one, not the request with one byte changed. The device goes on answering.
+- **REQ-VC-vm-cli-034** The device sends at most one reply per 250 ms to one source IP address (the port does not count), at most 64 replies in any second to all sources together, and remembers at most 256 source addresses (when the table is full, the source with the oldest reply is forgotten). The reply is up to 128 times the size of the request and a source address can be forged, so the limits bound what the device adds to an attack on a third party.
+- **REQ-VC-vm-cli-035** With `--no-discovery` the device opens no UDP socket and answers no request. The flag without `--listen` is a usage error.
+- **REQ-VC-vm-cli-036** When the UDP port cannot be bound, `serve` exits with code 2 and emits V6017, and does not serve the session. A device that cannot be found is reported, as a TCP port that cannot be bound is. `--no-discovery` runs the device without discovery.
+
 ## Variable Dump Format
 
 The `--dump-vars [PATH]` option writes all variable slot values after the VM stops (successfully or from a fault).

@@ -12,14 +12,14 @@ use tempfile::TempDir;
 use crate::{compiled_bytes, write_compiled_container, COUNTER_PROGRAM};
 
 /// One ADR-0063 frame: 4-byte little-endian length, then the line bytes.
-fn tcp_frame(line: &str) -> Vec<u8> {
+pub(super) fn tcp_frame(line: &str) -> Vec<u8> {
     let mut bytes = (line.len() as u32).to_le_bytes().to_vec();
     bytes.extend_from_slice(line.as_bytes());
     bytes
 }
 
 /// Reads exactly one frame from `stream`, returning the line bytes.
-fn read_frame(stream: &mut TcpStream) -> io::Result<String> {
+pub(super) fn read_frame(stream: &mut TcpStream) -> io::Result<String> {
     let mut header = [0u8; 4];
     stream.read_exact(&mut header)?;
     let len = u32::from_le_bytes(header) as usize;
@@ -30,7 +30,7 @@ fn read_frame(stream: &mut TcpStream) -> io::Result<String> {
 
 /// Connects a frame client to `addr` with a read timeout, so a hang fails
 /// instead of blocking the suite.
-fn connect_frame_client(addr: std::net::SocketAddr) -> io::Result<TcpStream> {
+pub(super) fn connect_frame_client(addr: std::net::SocketAddr) -> io::Result<TcpStream> {
     let stream = TcpStream::connect(addr)?;
     stream.set_read_timeout(Some(Duration::from_secs(15)))?;
     Ok(stream)

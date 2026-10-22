@@ -1292,6 +1292,7 @@ dependencies = [
  "ironplc-cli-support",
  "ironplc-codegen",
  "ironplc-container",
+ "ironplc-discovery",
  "ironplc-dsl",
  "ironplc-parser",
  "ironplc-redundancy",

@@ -346,3 +346,26 @@ fn change_when_the_file_cannot_be_written_then_v6016_and_file_and_device_unchang
     assert_eq!(fs::read(settings_path(&served)).unwrap(), before_file);
     assert_eq!(device.identity(), before_identity);
 }
+
+#[test]
+fn identity_view_when_the_device_is_renamed_then_the_view_shows_the_new_name() {
+    let dir = TempDir::new().unwrap();
+    let mut device = open_counting(&served(&dir));
+    let view = device.identity_view();
+
+    device.change(&name_entry("cell 1")).unwrap();
+
+    assert_eq!(view.identity().name, "cell 1");
+    assert_eq!(view.identity(), device.identity());
+}
+
+#[test]
+fn identity_view_when_read_from_another_thread_then_it_is_the_identity_of_the_device() {
+    let dir = TempDir::new().unwrap();
+    let device = open_counting(&served(&dir));
+    let view = device.identity_view();
+
+    let seen = std::thread::spawn(move || view.identity()).join().unwrap();
+
+    assert_eq!(seen, device.identity());
+}

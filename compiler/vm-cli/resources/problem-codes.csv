@@ -15,3 +15,4 @@ V6013,SessionFraming,A received frame is malformed
 V6014,SessionRefused,The device already serves one engineering session
 V6015,DeviceSettingsInvalid,The device settings are not valid
 V6016,DeviceSettingsWrite,Unable to write the device settings file
+V6017,DiscoveryBind,Unable to bind the discovery port

@@ -30,6 +30,7 @@
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use ironplc_runtime::DeviceIdentity;
 
@@ -49,7 +50,12 @@ const BYTE_ORDER_MARK: &[u8] = b"\xEF\xBB\xBF";
 
 /// The settings of one served process, and the file that keeps them.
 pub(crate) struct Device {
-    settings: DeviceSettings,
+    /// Shared with the [`IdentityView`]s of this device, so that a thread that
+    /// answers the network outside a session reads the settings that the
+    /// session changed, and never a copy of them. The session thread holds the
+    /// `Device` itself for as long as its session lasts, so the view cannot go
+    /// through it.
+    settings: Arc<Mutex<DeviceSettings>>,
     /// The settings file; `None` is a device whose settings live in memory
     /// only (the tests of the session).
     file: Option<PathBuf>,
@@ -96,7 +102,7 @@ impl Device {
             }
         }
         Ok(Device {
-            settings,
+            settings: Arc::new(Mutex::new(settings)),
             file: Some(path),
         })
     }
@@ -112,7 +118,9 @@ impl Device {
             Ok(())
         };
         Device {
-            settings: DeviceSettings::resolve(&Entries::new(), &mut fixed).unwrap(),
+            settings: Arc::new(Mutex::new(
+                DeviceSettings::resolve(&Entries::new(), &mut fixed).unwrap(),
+            )),
             file: None,
         }
     }
@@ -120,7 +128,12 @@ impl Device {
     /// The device block of the `identity` answer; see
     /// [`DeviceSettings::identity`].
     pub(crate) fn identity(&self) -> DeviceIdentity {
-        self.settings.identity()
+        lock(&self.settings).identity()
+    }
+
+    /// A handle that reads the identity of this device from other threads.
+    pub(crate) fn identity_view(&self) -> IdentityView {
+        IdentityView(Arc::clone(&self.settings))
     }
 
     /// Changes the settings named in `entries` (the `setDeviceSettings`
@@ -128,22 +141,44 @@ impl Device {
     /// is changed in the settings file only, V6016 when the file cannot be
     /// written. Nothing changes on an error.
     pub(crate) fn change(&mut self, entries: &Entries) -> Result<(), VmError> {
-        let mut next = self.settings.clone();
+        let mut next = lock(&self.settings).clone();
         next.apply_online(entries).map_err(|err| {
             VmError::io(
                 error::DEVICE_SETTINGS_INVALID,
                 format!("the device settings are not changed: {err}"),
             )
         })?;
-        if next == self.settings {
+        if next == *lock(&self.settings) {
             return Ok(());
         }
         if let Some(path) = &self.file {
             write_file(path, &next)?;
         }
-        self.settings = next;
+        *lock(&self.settings) = next;
         Ok(())
     }
+}
+
+/// Reads the identity of a [`Device`] from another thread: the same settings
+/// the device holds, so the next read after `setDeviceSettings` shows the new
+/// name. Cloned freely; it can neither change the settings nor see anything
+/// but the identity.
+#[derive(Clone)]
+pub(crate) struct IdentityView(Arc<Mutex<DeviceSettings>>);
+
+impl IdentityView {
+    /// The identity now; see [`DeviceSettings::identity`].
+    pub(crate) fn identity(&self) -> DeviceIdentity {
+        lock(&self.0).identity()
+    }
+}
+
+/// Locks the settings. The lock is held for a copy or an assignment, never
+/// across I/O. A poisoned lock (a thread panicked while holding it) is
+/// recovered like the session locks in `tcp.rs`: the settings are replaced as
+/// a whole, so there is no half-written value to fear.
+fn lock(settings: &Mutex<DeviceSettings>) -> MutexGuard<'_, DeviceSettings> {
+    settings.lock().unwrap_or_else(|err| err.into_inner())
 }
 
 /// The settings file beside the served container.

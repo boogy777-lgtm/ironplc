@@ -6,6 +6,7 @@ use clap::Parser;
 
 mod cli;
 mod device_settings;
+mod discovery;
 mod error;
 mod ha_pair;
 mod logger;
@@ -89,11 +90,18 @@ enum Action {
         /// Path to the bytecode container file (.iplc).
         file: PathBuf,
 
-        /// Listen on the given TCP address (host:port) instead of stdin/stdout:
-        /// the same session protocol, one 4-byte little-endian length-prefixed
-        /// frame per message, one engineering session at a time.
-        #[arg(long, value_name = "ADDR")]
+        /// Listen on the given TCP address (IP:PORT, or an IP alone for the
+        /// default port) instead of stdin/stdout: the same session protocol,
+        /// one 4-byte little-endian length-prefixed frame per message, one
+        /// engineering session at a time. The device also answers discovery on
+        /// UDP at the same address and port.
+        #[arg(long, value_name = "ADDR", value_parser = tcp::parse_listen_address)]
         listen: Option<SocketAddr>,
+
+        /// Do not answer discovery on UDP (the device is then found only by an
+        /// address that is already known).
+        #[arg(long, requires = "listen")]
+        no_discovery: bool,
 
         /// Compose the HA redundancy shell with a simulated loopback peer
         /// (the demo binding) so every HA state is exercisable through the
@@ -169,13 +177,21 @@ pub fn main() -> ExitCode {
         Action::Serve {
             file,
             listen,
+            no_discovery,
             ha_simulated_peer,
             ha_peer_bind,
             ha_peer_peer,
             ha_role,
             ha_pair_id,
         } => match (listen, ha_peer_bind) {
-            (Some(addr), None) => tcp::serve_tcp(&file, addr, ha_simulated_peer),
+            (Some(addr), None) => {
+                let discovery = if no_discovery {
+                    discovery::Discovery::Off
+                } else {
+                    discovery::Discovery::Answer
+                };
+                tcp::serve_tcp(&file, addr, ha_simulated_peer, discovery)
+            }
             (None, Some(bind)) => {
                 // Clap enforces --ha-role only when it is given; a pair
                 // bind without a role is a usage error, answered here.
