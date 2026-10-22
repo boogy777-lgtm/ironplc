@@ -11,7 +11,10 @@
  * extension registers it; both import this table, so a command id is written
  * once. The command is looked up by its id among the registered commands, never
  * by the id of the extension that registers it, because the IronPLC extension
- * ships under two ids (Open VSX and the Visual Studio Marketplace).
+ * ships under two ids (Open VSX and the Visual Studio Marketplace). It is found
+ * among the commands the installed extensions contribute as well as the ones
+ * registered, because an installed extension that has not activated yet has
+ * registered nothing.
  */
 
 /** The argument of the `choose` handoff: the controller the engineer chose. */
@@ -60,11 +63,50 @@ export function handoffNames(): HandoffName[] {
 }
 
 /**
- * Whether the IronPLC command of `name` is among `availableCommands` (the ids
- * returned by `vscode.commands.getCommands(true)`).
+ * The command ids that can run now, from the two places a command can be known:
+ *
+ * - `registered`: commands an activated extension registered
+ *   (`vscode.commands.getCommands(true)`). An installed extension that has not
+ *   activated yet has registered nothing, so this alone misses it.
+ * - `contributed`: commands an installed extension declares in its manifest
+ *   (`contributes.commands`). Running such a command activates its extension
+ *   (VS Code 1.74 and later, which both extensions require), so it is available
+ *   whether or not the extension is active.
  */
-export function isHandoffAvailable(name: HandoffName, availableCommands: ReadonlySet<string>): boolean {
-  return availableCommands.has(HANDOFF_ACTIONS[name].command);
+export interface CommandSources {
+  registered: ReadonlySet<string>;
+  contributed: ReadonlySet<string>;
+}
+
+/**
+ * The command ids that the manifests (`packageJSON`) of the installed extensions
+ * contribute. A manifest that is not an object, or has no well-formed command
+ * list, contributes nothing.
+ */
+export function contributedCommandIds(manifests: ReadonlyArray<unknown>): Set<string> {
+  const ids = new Set<string>();
+  for (const manifest of manifests) {
+    const commands = (manifest as { contributes?: { commands?: unknown } } | null | undefined)?.contributes?.commands;
+    if (!Array.isArray(commands)) {
+      continue;
+    }
+    for (const entry of commands) {
+      const id = (entry as { command?: unknown } | null | undefined)?.command;
+      if (typeof id === 'string') {
+        ids.add(id);
+      }
+    }
+  }
+  return ids;
+}
+
+/**
+ * Whether the IronPLC command of `name` can be run: an installed extension
+ * contributes it, or an active one has registered it.
+ */
+export function isHandoffAvailable(name: HandoffName, sources: CommandSources): boolean {
+  const command = HANDOFF_ACTIONS[name].command;
+  return sources.contributed.has(command) || sources.registered.has(command);
 }
 
 /** Runs a command by id; `vscode.commands.executeCommand` has this shape. */

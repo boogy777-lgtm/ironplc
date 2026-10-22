@@ -11,7 +11,7 @@ import { ironLinkLauncher } from './ironlinkProcess';
 import { describeAddressAdd, describeAddressRemove, describeBrowse, describeIdentify, describeRouteSet } from './messages';
 import { NetworkNode, buildNetworkTree, socketAddress } from './networkTree';
 import { browseOptionsFromSettings } from './settings';
-import { IronLinkApi, ToolchainEnvironment, problemHelpUrl, runHandoff } from './vscodeCommon';
+import { IronLinkApi, ToolchainEnvironment, contributedCommandIds, problemHelpUrl, runHandoff } from './vscodeCommon';
 
 /** The Network view: the last search, rendered with the current age of each observation. */
 class NetworkProvider implements vscode.TreeDataProvider<NetworkNode> {
@@ -211,7 +211,10 @@ export function activate(context: vscode.ExtensionContext): IronLinkApi {
 }
 
 async function actionContext(): Promise<ActionContext> {
-  return { availableCommands: new Set(await vscode.commands.getCommands(true)) };
+  return {
+    registeredCommands: new Set(await vscode.commands.getCommands(true)),
+    contributedCommands: contributedCommandIds(vscode.extensions.all.map(extension => extension.packageJSON)),
+  };
 }
 
 export function deactivate() {

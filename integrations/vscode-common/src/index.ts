@@ -14,12 +14,13 @@ export { LineRequestChannel } from './lineRequestChannel';
 export { findGatewayViolations } from './gatewayImports';
 export type {
   ChooseControllerArgument,
+  CommandSources,
   ExecuteCommand,
   HandoffArguments,
   HandoffDeclaration,
   HandoffName,
 } from './handoff';
-export { HANDOFF_ACTIONS, handoffNames, isHandoffAvailable, runHandoff } from './handoff';
+export { HANDOFF_ACTIONS, contributedCommandIds, handoffNames, isHandoffAvailable, runHandoff } from './handoff';
 export type {
   IronLinkApi,
   IronLinkRoute,

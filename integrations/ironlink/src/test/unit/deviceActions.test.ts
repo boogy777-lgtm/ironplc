@@ -22,8 +22,14 @@ const ROW: DeviceRowFacts = {
 };
 
 const ALL_ACTIONS = Object.keys(DEVICE_ACTION_COMMANDS) as DeviceAction[];
-const WITHOUT_IRONPLC = { availableCommands: new Set(['workbench.action.quickOpen']) };
-const WITH_IRONPLC = { availableCommands: new Set([HANDOFF_ACTIONS.choose.command, 'workbench.action.quickOpen']) };
+const NOTHING = new Set<string>();
+const WITHOUT_IRONPLC = { registeredCommands: new Set(['workbench.action.quickOpen']), contributedCommands: NOTHING };
+const WITH_IRONPLC = {
+  registeredCommands: new Set([HANDOFF_ACTIONS.choose.command, 'workbench.action.quickOpen']),
+  contributedCommands: NOTHING,
+};
+// IronPLC is installed but has not activated: it registered nothing, and its manifest contributes the command.
+const INACTIVE_IRONPLC = { registeredCommands: NOTHING, contributedCommands: new Set([HANDOFF_ACTIONS.choose.command]) };
 
 // REQ-IL-ironlink-vscode-091
 suite('decideDeviceAction', () => {
@@ -63,11 +69,23 @@ suite('decideDeviceAction choose', () => {
     assert.deepStrictEqual(decideDeviceAction('choose', ROW, WITH_IRONPLC), { enabled: true });
   });
 
+  test('decideDeviceAction_when_choose_and_ironplc_is_installed_but_not_active_then_enabled', () => {
+    assert.deepStrictEqual(decideDeviceAction('choose', ROW, INACTIVE_IRONPLC), { enabled: true });
+  });
+
+  test('decideDeviceAction_when_choose_and_only_another_command_is_contributed_then_unavailable_with_its_reason', () => {
+    const other = { registeredCommands: NOTHING, contributedCommands: new Set(['ironplc.buildApplication']) };
+    assert.deepStrictEqual(
+      decideDeviceAction('choose', ROW, other),
+      { enabled: false, reason: HANDOFF_ACTIONS.choose.unavailableReason },
+    );
+  });
+
   test('decideDeviceAction_when_choose_then_depends_on_the_command_id_and_not_on_an_extension_id', () => {
     // Only registered command ids are in the context; no extension id is asked for.
-    const onlyCommand = { availableCommands: new Set(['ironplc.chooseController']) };
+    const onlyCommand = { registeredCommands: new Set(['ironplc.chooseController']), contributedCommands: NOTHING };
     assert.deepStrictEqual(decideDeviceAction('choose', ROW, onlyCommand), { enabled: true });
-    const lookalike = { availableCommands: new Set(['ironplc.ironplc', 'ironplc.ironplc-vscode']) };
+    const lookalike = { registeredCommands: new Set(['ironplc.ironplc', 'ironplc.ironplc-vscode']), contributedCommands: NOTHING };
     assert.strictEqual(decideDeviceAction('choose', ROW, lookalike).enabled, false);
   });
 });

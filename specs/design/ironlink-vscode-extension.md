@@ -98,9 +98,12 @@ commands are always on the row; an unavailable action is not run and shows its
 reason when it is invoked. No `when` clause repeats the rule.
 
 **REQ-IL-ironlink-vscode-092** "Choose" is available if and only if the IronPLC
-command of the handoff action is registered. The extension tests for the command
-id (`getCommands`) and never for the id of the IronPLC extension, which has two ids
-(Open VSX and Visual Studio Marketplace). The command id, the type of its argument
+command of the handoff action is contributed by an installed extension (the
+`contributes.commands` of its manifest) or is registered (`getCommands`). The
+contributed command counts because an installed extension that has not activated
+yet has registered nothing, and running a contributed command activates it. The
+extension tests for the command id and never for the id of the IronPLC extension,
+which has two ids (Open VSX and Visual Studio Marketplace). The command id, the type of its argument
 and the reason shown when it is missing are declared once, in the table of handoff
 actions of `integrations/vscode-common`, which the IronPLC extension imports to
 register the command.
