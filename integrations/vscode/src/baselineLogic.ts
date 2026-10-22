@@ -26,11 +26,10 @@
 
 import * as path from 'path';
 
-import { programKind } from './debugAdapterLogic';
+import { connectionMethod } from './connectionMethods';
 import { ConnectionProfile } from './connectionProfiles';
 import { HotEditStatus } from './hotEditSession';
 import { ExecFileFn } from './syncUidsLogic';
-import { outputFileNameForFolder } from './taskProviderLogic';
 
 export type BaselineState = 'none' | 'match' | 'mismatch';
 
@@ -105,33 +104,16 @@ export type Anchor = { anchor: string } | { reason: string };
 
 /**
  * The application container a connection's download record is named after
- * and sits beside (the compiler names the file from it).
- *
- * - A stdio profile whose `program` is a container: that container, which the
- *   session serves.
- * - A stdio profile whose `program` is a source file: none. The session compiles
- *   it to a container of its own that the engineer has no file for.
- * - A tcp profile: the container the build task writes in the first workspace
- *   folder, `<folder>/<folder>.iplc`. The first folder is a fixed choice, so a
- *   record is found again whatever file is open.
+ * and sits beside (the compiler names the file from it). Which container that
+ * is, or that there is none, is the connection method's rule
+ * (`ConnectionMethod.anchor`).
  */
 export function connectionAnchor(
   profile: ConnectionProfile,
   folders: readonly FolderRef[],
   sourceExtensions: readonly string[],
 ): Anchor {
-  if (profile.transport === 'stdio') {
-    const program = profile.program ?? '';
-    if (programKind(program, sourceExtensions) === 'container') {
-      return { anchor: path.resolve(program) };
-    }
-    return { reason: `the connection "${profile.name}" runs ${program}, a program that the session compiles itself: there is no application container to name a record after` };
-  }
-  const folder = folders[0];
-  if (folder === undefined) {
-    return { reason: 'no workspace folder is open, so there is no application container to name a record after' };
-  }
-  return { anchor: path.join(folder.path, outputFileNameForFolder(folder.name)) };
+  return connectionMethod(profile).anchor(profile, folders, sourceExtensions);
 }
 
 /** The compiler, as the record commands see it: arguments in, output out. */
