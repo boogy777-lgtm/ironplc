@@ -27,7 +27,7 @@ After extraction, `iplcEditorProvider.ts` imports and calls these functions. The
 - `register()`, `openCustomDocument()`, `resolveCustomEditor()` — VS Code API integration
 - `waitForClient()` — LSP lifecycle management
 
-**`src/compilerDiscovery.ts`** — Compiler discovery with injectable dependencies, extracted from `extension.ts`.
+**Toolchain discovery** — Discovery with injectable dependencies, extracted from `extension.ts`. It lives in the shared package `integrations/vscode-common` (`src/toolchainDiscovery.ts`), which the IronPLC extensions import through `src/vscodeCommon.ts` (see [extension-standards.md](../steering/extension-standards.md#shared-code-for-vs-code-extensions)). `src/compilerDiscovery.ts` keeps only the compiler-specific `formatStartFailure`.
 
 **`src/test/unit/testHelpers.ts`** — Factory functions for test data.
 
@@ -37,15 +37,15 @@ After extraction, `iplcEditorProvider.ts` imports and calls these functions. The
 
 ```
 src/
-├── extension.ts                          # Modified: imports from compilerDiscovery.ts
+├── extension.ts                          # Modified: imports toolchain discovery from vscodeCommon.ts
 ├── iplcEditorProvider.ts                 # Modified: imports from iplcRendering.ts; accepts LanguageClientLike
 ├── iplcRendering.ts                      # NEW: pure rendering functions
-├── compilerDiscovery.ts                  # NEW: compiler discovery with DI
+├── compilerDiscovery.ts                  # NEW: compiler start-failure message
 └── test/
     ├── checkInvariants.ts                # NEW: invariant verification script
     ├── unit/
     │   ├── iplcRendering.test.ts         # NEW: rendering unit tests
-    │   ├── compilerDiscovery.test.ts     # NEW: compiler discovery unit tests
+    │   ├── compilerDiscovery.test.ts     # NEW: start-failure message unit tests
     │   ├── iplcEditorProvider.test.ts    # NEW: mock-based editor provider tests
     │   └── testHelpers.ts               # NEW: test data factories
     └── functional/
@@ -59,12 +59,12 @@ src/
 
 ## Key Interface Definitions
 
-### `CompilerEnvironment`
+### `ToolchainEnvironment`
 
-Defined in `src/compilerDiscovery.ts`. Abstracts platform and configuration dependencies so `findCompilerPath` can be unit-tested without real filesystem or VS Code APIs:
+Defined in `integrations/vscode-common/src/toolchainDiscovery.ts`. Abstracts platform and configuration dependencies so `findToolchainExecutable` can be unit-tested without real filesystem or VS Code APIs. The injected `platform` also decides how paths are composed (`pathForPlatform`), so a test targeting one platform gives the same result on any host:
 
 ```typescript
-export interface CompilerEnvironment {
+export interface ToolchainEnvironment {
   platform: string;
   existsSync: (path: string) => boolean;
   getEnv: (name: string) => string | undefined;
@@ -72,12 +72,12 @@ export interface CompilerEnvironment {
 }
 ```
 
-### `CompilerDiscoveryResult`
+### `ToolchainDiscoveryResult`
 
-Defined in `src/compilerDiscovery.ts`. Return type for compiler discovery:
+Defined in `integrations/vscode-common/src/toolchainDiscovery.ts`. Return type for toolchain discovery:
 
 ```typescript
-export interface CompilerDiscoveryResult {
+export interface ToolchainDiscoveryResult {
   path: string;
   source: string;
 }
@@ -86,10 +86,13 @@ export interface CompilerDiscoveryResult {
 The public function signature is:
 
 ```typescript
-export function findCompilerPath(env: CompilerEnvironment): CompilerDiscoveryResult | undefined;
+export function findToolchainExecutable(
+  env: ToolchainEnvironment,
+  executable: string,
+): ToolchainDiscoveryResult | undefined;
 ```
 
-`extension.ts` creates a `CompilerEnvironment` from real `process`, `fs`, and `vscode.workspace.getConfiguration` and calls `findCompilerPath`.
+`extension.ts` creates a `ToolchainEnvironment` from real `process`, `fs`, and `vscode.workspace.getConfiguration` and calls `findToolchainExecutable(env, 'ironplcc')`.
 
 ### `LanguageClientLike`
 
@@ -185,9 +188,9 @@ export const CLIENT_STATE_RUNNING = 2;
 | File | Purpose |
 |------|---------|
 | `src/iplcRendering.ts` | Pure rendering functions and data interfaces |
-| `src/compilerDiscovery.ts` | Compiler discovery with injectable dependencies |
+| `src/compilerDiscovery.ts` | Compiler start-failure message (discovery itself is in `integrations/vscode-common`) |
 | `src/test/unit/iplcRendering.test.ts` | Unit tests for rendering |
-| `src/test/unit/compilerDiscovery.test.ts` | Unit tests for compiler discovery |
+| `src/test/unit/compilerDiscovery.test.ts` | Unit tests for the start-failure message |
 | `src/test/unit/iplcEditorProvider.test.ts` | Mock-based tests for editor provider |
 | `src/test/unit/testHelpers.ts` | Test data factory functions |
 | `src/test/checkInvariants.ts` | Structural invariant verification script |
@@ -198,8 +201,8 @@ export const CLIENT_STATE_RUNNING = 2;
 ### Modified Files
 | File | Change |
 |------|--------|
-| `src/iplcEditorProvider.ts` | Import from `iplcRendering.ts` and `compilerDiscovery.ts`; accept `LanguageClientLike` interface |
-| `src/extension.ts` | Import `findCompilerPath` from `compilerDiscovery.ts`; create `CompilerEnvironment` adapter |
+| `src/iplcEditorProvider.ts` | Import from `iplcRendering.ts`; accept `LanguageClientLike` interface |
+| `src/extension.ts` | Import `findToolchainExecutable` from `vscodeCommon.ts`; create `ToolchainEnvironment` adapter |
 | `src/test/functional/suite/extension.test.ts` | Add TwinCAT language detection tests |
 | `package.json` | Add `test:unit` script; add `c8` devDependency |
 | `justfile` | Add `check-invariants`, `test-unit` targets; update `ci` target |

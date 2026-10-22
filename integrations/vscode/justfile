@@ -11,8 +11,11 @@ ci:
   just test-unit
   just test
 
-# Setup required dependencies. Use this to bootstrap a new host.
+# Setup required dependencies. Use this to bootstrap a new host. The shared
+# vscode-common package is installed first because this extension builds it
+# before compiling.
 setup:
+  just --justfile ../vscode-common/justfile setup
   npm ci
 
 # Compile the application code. Because this is type script, this effectively validates the code.
@@ -101,6 +104,7 @@ version version:
 
 # Updates dependencies to latest version (or at least tries to)
 update:
+  just --justfile ../vscode-common/justfile update
   npm update
 
 # Publishes a VSIX archive to the Visual Studio Marketplace

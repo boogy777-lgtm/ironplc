@@ -7,12 +7,12 @@
  */
 
 import { ChildProcessWithoutNullStreams } from 'child_process';
-import { pathForPlatform } from './platformPath';
+import { executableFileName, pathForPlatform } from './vscodeCommon';
 import { HotEditTransport } from './hotEditSession';
 
 /** The VM executable name on `platform` (`.exe` on Windows). */
 export function vmFileName(platform: string): string {
-  return platform === 'win32' ? 'ironplcvm.exe' : 'ironplcvm';
+  return executableFileName('ironplcvm', platform);
 }
 
 /** The VM executable that sits next to the compiler at `compilerPath`. */

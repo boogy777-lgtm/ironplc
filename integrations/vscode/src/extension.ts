@@ -9,7 +9,8 @@ import {
 } from 'vscode-languageclient/node';
 import { IplcEditorProvider } from './iplcEditorProvider';
 import { IronplcTaskProvider } from './ironplcTaskProvider';
-import { CompilerEnvironment, findCompilerPath, formatStartFailure } from './compilerDiscovery';
+import { ToolchainEnvironment, findToolchainExecutable } from './vscodeCommon';
+import { formatStartFailure } from './compilerDiscovery';
 import { ProblemCode, formatProblem } from './problems';
 import { problemHelpUrl } from './problemUrl';
 import { RunSession, RunState } from './runSession';
@@ -131,14 +132,14 @@ export function activate(context: vscode.ExtensionContext) {
   // no IronPLC debug session is active.
   registerCustomRequests(context);
 
-  const env: CompilerEnvironment = {
+  const env: ToolchainEnvironment = {
     platform: process.platform,
     existsSync: existsSync,
     getEnv: (name: string) => process.env[name],
     getConfig: (key: string) => vscode.workspace.getConfiguration('ironplc').get<string>(key),
   };
 
-  const result = findCompilerPath(env);
+  const result = findToolchainExecutable(env, 'ironplcc');
   if (result) {
     console.debug(
       'Extension "ironplc" found compiler at "' + result.path

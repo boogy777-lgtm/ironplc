@@ -1,31 +1,23 @@
 import * as path from 'path';
-import { pathForPlatform } from './platformPath';
+import { ToolchainDiscoveryResult, ToolchainEnvironment, executableFileName, pathForPlatform } from './vscodeCommon';
 
 /**
  * Pure decision logic for the IronPLC debug adapter integration. Everything
  * that can be decided without touching the `vscode` API or the filesystem
  * lives here so it can be unit tested directly (mirrors the split used by
- * `compilerDiscovery.ts` and `taskProviderLogic.ts`). The `vscode`-facing glue
+ * `taskProviderLogic.ts`). The `vscode`-facing glue
  * lives in `debugAdapter.ts`.
  */
 
 /**
- * Injected environment for DAP-server discovery, mirroring
- * `CompilerEnvironment` in `compilerDiscovery.ts`. Keeping the platform,
- * filesystem, environment, and configuration behind an interface makes the
- * resolution order testable without a real machine.
+ * Injected environment for DAP-server discovery: the same platform,
+ * filesystem, environment and configuration seams as locating the compiler
+ * (`ToolchainEnvironment`), so the resolution order is testable without a real
+ * machine.
  */
-export interface DapEnvironment {
-  platform: string;
-  existsSync: (path: string) => boolean;
-  getEnv: (name: string) => string | undefined;
-  getConfig: (key: string) => string | undefined;
-}
+export type DapEnvironment = ToolchainEnvironment;
 
-export interface DapDiscoveryResult {
-  path: string;
-  source: string;
-}
+export type DapDiscoveryResult = ToolchainDiscoveryResult;
 
 /** The compiled-container extension the debug server's `launch` expects. */
 export const CONTAINER_EXTENSION = '.iplc';
@@ -60,7 +52,7 @@ export const DEBUG_SERVER_PATH_SETTING_ID = `${CONFIG_SECTION}.${DEBUG_SERVER_PA
 
 /** The debug-server file name on `platform` (`.exe` on Windows). */
 export function debugServerFileName(platform: string): string {
-  return platform === 'win32' ? DEBUG_SERVER_BINARY + '.exe' : DEBUG_SERVER_BINARY;
+  return executableFileName(DEBUG_SERVER_BINARY, platform);
 }
 
 /**

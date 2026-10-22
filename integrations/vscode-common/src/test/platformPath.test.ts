@@ -1,7 +1,6 @@
 import * as assert from 'assert';
 import * as path from 'path';
-import { pathForPlatform } from '../../platformPath';
-import { vmPathBeside } from '../../stdioTransport';
+import { pathForPlatform } from '../platformPath';
 
 suite('pathForPlatform', () => {
   test('pathForPlatform_when_win32_then_joins_with_backslashes', () => {
@@ -19,18 +18,5 @@ suite('pathForPlatform', () => {
   test('pathForPlatform_when_platform_is_a_pure_module_then_is_independent_of_host', () => {
     assert.strictEqual(pathForPlatform('win32'), path.win32);
     assert.strictEqual(pathForPlatform('linux'), path.posix);
-  });
-});
-
-suite('vmPathBeside', () => {
-  test('vmPathBeside_when_win32_then_uses_backslashes_and_exe', () => {
-    assert.strictEqual(
-      vmPathBeside('C:\\Tools\\IronPLC\\ironplcc.exe', 'win32'),
-      'C:\\Tools\\IronPLC\\ironplcvm.exe',
-    );
-  });
-
-  test('vmPathBeside_when_linux_then_uses_forward_slashes_and_no_extension', () => {
-    assert.strictEqual(vmPathBeside('/opt/ironplc/ironplcc', 'linux'), '/opt/ironplc/ironplcvm');
   });
 });

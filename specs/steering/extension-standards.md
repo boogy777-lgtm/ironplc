@@ -34,6 +34,29 @@ Extension errors use the `E####` prefix and are generated from
 use the generated `formatProblem(ProblemCode.Name, context)` helper. The full
 lifecycle is in [problem-code-management.md](problem-code-management.md).
 
+## Shared Code for VS Code Extensions
+
+`integrations/vscode-common/` is a private npm package (`ironplc-vscode-common`,
+never published) holding code that more than one IronPLC VS Code extension needs.
+Today that is locating the IronPLC toolchain (`findToolchainExecutable`,
+`ToolchainEnvironment`, `pathForPlatform`). Put code there only when two
+extensions need it; extension-specific logic, anything that imports `vscode`,
+and compiler-specific messages stay in the extension. The package has no
+runtime dependencies.
+
+A consumer does not declare an npm dependency on it. It reaches the package's
+compiled output (`integrations/vscode-common/out/index`) through exactly one
+module, `src/vscodeCommon.ts` (`export * from '../../vscode-common/out/index';`),
+and every other source and test imports from that module. `src/` and `out/` sit
+at the same depth, so the one relative path resolves for tsc, for Node and for
+esbuild; the extension is bundled, so the package is compiled into
+`out/extension.js` and is not packaged into the VSIX. `checkInvariants` fails a
+source that imports the package's path itself. The consumer builds the package
+(`npm run build-common`) before its own `compile` and `esbuild`, and its
+`just setup` and `just update` run the package's first. The package has its
+own `just ci` (compile and unit tests), which the extension workflow runs. See
+`integrations/vscode-common/README.md`.
+
 ## README Synchronization
 
 The project has multiple README files that must stay synchronized:
