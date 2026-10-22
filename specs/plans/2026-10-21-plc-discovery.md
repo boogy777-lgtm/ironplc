@@ -250,8 +250,9 @@ Every decision is made in one place, and the clients render it.
   connects directly. Owning the sessions, so that several clients share one
   device, is option B, a named class that is not built.
 - **The shell of commands.** One command vocabulary, served to every client:
-  `browse` and `identify` (stage 4); `select`, which writes the chosen path into
-  the project path file and the workstation route record, comes with stage 6.
+  `browse` and `identify` (stage 4); the workstation route record and the
+  address list, IronLink's own data, come with stage 6. The project path file
+  is IronPLC's (owner, 2026-10-22, below).
   - The command line uses it (`ironlink <command>`), and `ironlink serve` serves
     the same commands as JSON lines on stdio. VS Code and MCP use the same
     commands.
@@ -791,7 +792,13 @@ by hand (`runtime/src/host.rs`, `vm-cli/src/serve.rs`, `vm-cli/src/slot_store.rs
    the class (the client transport trait with the stdio and TCP members) moves
    to stage 7, where MCP is its first user: built earlier, it would have none
    (2026-10-22).
-6. VS Code: the Network view in the separate IronLink extension (section 4b,
+6. In three PRs. 6a (Rust): IronLink's workstation store (route record and
+   address list; commands to set, remove and list them; browse marks a device
+   with a route), and the project path file as a record kind with an
+   `ironplcc` command. 6b: the IronLink extension with the Network view. 6c: the
+   IronPLC extension: Choose, connect by route, status bar, the download record
+   keyed by `deviceId`.
+   VS Code: the Network view in the separate IronLink extension (section 4b,
    a thin client of `ironlink` on stdio), "Choose" (the project path file and the
    workstation route record; the download record keyed by `deviceId`), and
    connect directly (option A). The network tree
@@ -867,6 +874,12 @@ Tracking issue: #149.
   - The project path file is `<app>.path.iplcinfo`.
 - **Answer of 2026-10-22:** "Finalize all" is a button, not a toggle (section
   9).
+- **Answer of 2026-10-22: who writes the two stores — split.** IronLink writes
+  only its own data: the workstation route record (and the address list).
+  IronPLC writes the project path file `<app>.path.iplcinfo`, with the record
+  mechanism that writes the build and download records (ADR-0083), because it
+  is project data. "Choose" in the Network view hands the choice to IronPLC.
+  IronLink depends on no compiler crate and knows no project.
 - **Reference for the GUI ontology (owner): Beckhoff's TwinCAT extension for
   VS Code.** Its views, commands and settings are studied for their names and
   structure only. Search result (2026-10-21):
