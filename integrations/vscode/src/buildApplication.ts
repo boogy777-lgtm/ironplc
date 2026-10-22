@@ -10,7 +10,7 @@ import * as vscode from 'vscode';
 
 import { currentCompilerSettings } from './compilerSettings';
 import { ReportProblem } from './debugAdapter';
-import { ProblemCode } from './problems';
+import { ProblemCode } from './vscodeCommon';
 import {
   buildFolder,
   chooseFolder,

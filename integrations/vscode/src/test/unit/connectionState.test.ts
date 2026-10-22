@@ -13,7 +13,7 @@ import {
   HotEditTransport,
   IdentityInfo,
 } from '../../hotEditSession';
-import { ProblemCode } from '../../problems';
+import { ProblemCode } from '../../vscodeCommon';
 import { DEFAULT_SESSION_PORT, SUPPORTED_SESSION_PROTOCOL } from '../../sessionConstants';
 
 /** An in-memory transport: the responder answers commands synchronously. */

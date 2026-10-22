@@ -5,7 +5,7 @@ import {
   ConnectionProfile,
   validateProfiles,
 } from '../../connectionProfiles';
-import { ProblemCode } from '../../problems';
+import { ProblemCode } from '../../vscodeCommon';
 import { DEFAULT_SESSION_PORT } from '../../sessionConstants';
 
 suite('validateProfiles', () => {

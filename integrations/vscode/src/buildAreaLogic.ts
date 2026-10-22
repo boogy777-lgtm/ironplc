@@ -20,7 +20,7 @@
 import { execFile } from 'child_process';
 import * as path from 'path';
 
-import { ProblemCode } from './problems';
+import { ProblemCode } from './vscodeCommon';
 import { containerOutputPath } from './debugAdapterLogic';
 import { CompilerSettings } from './compilerSettingsLogic';
 import { buildCompileArgs, compileArgs, outputFileNameForFolder } from './taskProviderLogic';

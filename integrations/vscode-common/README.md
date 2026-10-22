@@ -18,6 +18,14 @@ for what belongs here.
 - `pathForPlatform(platform)` returns `path.win32` or `path.posix`. Compose a
   path for an injected platform with it, never with the host `path.join`.
 - `executableFileName(base, platform)` appends `.exe` on Windows.
+- The `E####` problem catalog, shared by every IronPLC VS Code extension:
+  `resources/problem-codes.csv` is the registry, `scripts/generate-problems.js`
+  generates `src/problems.ts` from it (the package's `precompile`; the file is
+  gitignored), and the package exports `ProblemCode`, `PROBLEM_MESSAGES` and
+  `formatProblem(code, context?)`. `problemHelpUrl(code, version)` builds the
+  documentation URL of any `P`, `V`, `E` or `L` code. See
+  [problem-code-management.md](../../specs/steering/problem-code-management.md)
+  for how to add a code.
 
 ## Use from an extension
 
@@ -41,5 +49,5 @@ compiled into the bundle and is not shipped in the VSIX.
 
 ```
 just setup      # npm ci
-just ci         # compile and run the unit tests
+just ci         # generate the catalog, compile and run the unit tests
 ```

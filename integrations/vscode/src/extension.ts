@@ -9,10 +9,8 @@ import {
 } from 'vscode-languageclient/node';
 import { IplcEditorProvider } from './iplcEditorProvider';
 import { IronplcTaskProvider } from './ironplcTaskProvider';
-import { ToolchainEnvironment, findToolchainExecutable } from './vscodeCommon';
+import { ProblemCode, ToolchainEnvironment, findToolchainExecutable, formatProblem, problemHelpUrl } from './vscodeCommon';
 import { formatStartFailure } from './compilerDiscovery';
-import { ProblemCode, formatProblem } from './problems';
-import { problemHelpUrl } from './problemUrl';
 import { RunSession, RunState } from './runSession';
 import { findProgramLenses } from './runCodeLensProvider';
 import {

@@ -28,7 +28,7 @@
 
 import { connectionMethod } from './connectionMethods';
 import { ConnectionProfile } from './connectionProfiles';
-import { ProblemCode } from './problems';
+import { ProblemCode } from './vscodeCommon';
 import {
   HotEditProtocolError,
   HotEditSession,

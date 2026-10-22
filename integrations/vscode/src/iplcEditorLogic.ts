@@ -1,5 +1,5 @@
 import { DisassemblyResult, getErrorHtml, getDisassemblyHtml } from './iplcRendering';
-import { ProblemCode, formatProblem } from './problems';
+import { ProblemCode, formatProblem } from './vscodeCommon';
 
 // Numeric values match vscode-languageclient's State enum.
 export const STATE_RUNNING = 2;

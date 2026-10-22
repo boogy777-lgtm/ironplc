@@ -1,6 +1,6 @@
 // generate-problems.js
 //
-// Reads integrations/vscode/resources/problem-codes.csv and generates
+// Reads integrations/vscode-common/resources/problem-codes.csv and generates
 // src/problems.ts with typed constants and a formatting helper.
 //
 // This script is plain JavaScript because it runs before TypeScript

@@ -9,7 +9,7 @@ import * as path from 'path';
 
 import type { Anchor } from '../baselineLogic';
 import { programKind } from '../debugAdapterLogic';
-import { ProblemCode } from '../problems';
+import { ProblemCode } from '../vscodeCommon';
 import { StdioLineTransport, vmPathBeside } from '../stdioTransport';
 import { compileSourceToContainer } from '../taskProviderLogic';
 import type { ConnectionMethod } from '../connectionMethods';

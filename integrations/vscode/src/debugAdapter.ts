@@ -16,7 +16,7 @@ import {
 } from './debugAdapterLogic';
 import { currentCompilerSettings } from './compilerSettings';
 import { compileArgs } from './taskProviderLogic';
-import { ProblemCode } from './problems';
+import { ProblemCode } from './vscodeCommon';
 
 /** The debug type used in `launch.json` and the `debuggers` contribution. */
 export const IRONPLC_DEBUG_TYPE = 'ironplc';

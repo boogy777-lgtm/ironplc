@@ -22,7 +22,7 @@ import { BuildAreaChannel, buildContainer, startBuild } from './buildAreaLogic';
 import { currentCompilerSettings } from './compilerSettings';
 import { isDebuggableProgram, programKind } from './debugAdapterLogic';
 import { ReportProblem } from './debugAdapter';
-import { ProblemCode } from './problems';
+import { ProblemCode } from './vscodeCommon';
 import {
   EditIdentity,
   formatStatusDetail,

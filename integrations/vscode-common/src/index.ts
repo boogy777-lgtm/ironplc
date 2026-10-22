@@ -5,3 +5,5 @@
 export { pathForPlatform } from './platformPath';
 export type { ToolchainDiscoveryResult, ToolchainEnvironment } from './toolchainDiscovery';
 export { executableFileName, findToolchainExecutable } from './toolchainDiscovery';
+export { ProblemCode, PROBLEM_MESSAGES, formatProblem } from './problems';
+export { problemHelpUrl } from './problemUrl';
