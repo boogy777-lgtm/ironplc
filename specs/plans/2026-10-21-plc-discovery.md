@@ -880,6 +880,15 @@ Tracking issue: #149.
   mechanism that writes the build and download records (ADR-0083), because it
   is project data. "Choose" in the Network view hands the choice to IronPLC.
   IronLink depends on no compiler crate and knows no project.
+- **Answers of 2026-10-22 on the IronLink extension (6b):** it works on its
+  own, without the IronPLC extension, as RSLinx works without Studio 5000: it
+  finds the `ironlink` binary itself (its own path setting, PATH, the standard
+  install directory). The discovery of the toolchain directory is one module
+  shared by both extensions, not a copy. "Choose" needs the IronPLC extension;
+  without it the action is unavailable with its reason. Name "IronLink", id
+  `ironplc.ironlink`, publisher `ironplc`, the version shared with the
+  toolchain; the `.vsix` is built and tested in CI, and publishing is a later
+  decision.
 - **Reference for the GUI ontology (owner): Beckhoff's TwinCAT extension for
   VS Code.** Its views, commands and settings are studied for their names and
   structure only. Search result (2026-10-21):
