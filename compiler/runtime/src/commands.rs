@@ -309,7 +309,7 @@ pub struct RedundancyIdentity {
 /// The `application` block reuses the [`StatusPayload`] vocabulary verbatim,
 /// additive optional fields included, so a client renders one shape for both
 /// `identity` and `getStatus`.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IdentityPayload {
     /// The session protocol version; see [`SESSION_PROTOCOL_VERSION`].
@@ -319,12 +319,17 @@ pub struct IdentityPayload {
     /// The live hot-edit status snapshot, the same fields `getStatus` returns.
     pub application: StatusPayload,
     /// The redundancy block; absent on the wire when standalone.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub redundancy: Option<RedundancyIdentity>,
 }
 
 /// The answer to one [`Command`].
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+///
+/// A client reads it with [`parse_response`]. A device answers a line that is
+/// not a command with a codeless codec error (`"vCode": null`), which is not a
+/// [`CommandError`] (that always has a code) and is not read as one: the client
+/// tells it apart before it reads a `Response`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "response", rename_all = "camelCase")]
 pub enum Response {
     /// The device panel and application snapshot (the answer to
@@ -341,24 +346,28 @@ pub enum Response {
 
 /// Why a command failed: a stable V-code plus the host's own description of
 /// the problem. V-codes are generated from `resources/problem-codes.csv`.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+///
+/// The code is owned text because a client reads it from the wire, and a code
+/// that a device raises outside this crate (the transport's V6013 and V6014 of
+/// `ironplcvm`) is not among the constants of this crate.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CommandError {
     /// The stable V-code (e.g. `"V4007"`).
     #[serde(rename = "vCode")]
-    v_code: &'static str,
+    v_code: String,
     /// What failed, in the host's vocabulary.
     message: String,
     /// The V4010 type changes, one entry per problematic entity, so the
     /// client can resubmit the same edit with a `migration` decision map
     /// (ADR 0061). Absent on every other refusal.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pairs: Option<Vec<TypeChangeDetail>>,
 }
 
 impl CommandError {
     /// The stable V-code for this error (e.g. `"V4007"`).
-    pub fn v_code(&self) -> &'static str {
-        self.v_code
+    pub fn v_code(&self) -> &str {
+        &self.v_code
     }
 
     /// What failed, in the host's vocabulary.
@@ -375,7 +384,7 @@ impl CommandError {
     /// has no device settings.
     fn device_settings_unavailable() -> Self {
         CommandError {
-            v_code: problem_codes::DEVICE_SETTINGS_UNAVAILABLE,
+            v_code: problem_codes::DEVICE_SETTINGS_UNAVAILABLE.to_string(),
             message: "this host has no device settings to change".to_string(),
             pairs: None,
         }
@@ -385,7 +394,7 @@ impl CommandError {
     /// parse as a compiled container.
     fn invalid_container(error: impl fmt::Display) -> Self {
         CommandError {
-            v_code: problem_codes::INVALID_CONTAINER,
+            v_code: problem_codes::INVALID_CONTAINER.to_string(),
             message: format!("accept payload is not a valid compiled container: {error}"),
             pairs: None,
         }
@@ -415,7 +424,7 @@ impl From<OnlineChangeError> for CommandError {
             OnlineChangeError::SnapshotCorrupt => problem_codes::SNAPSHOT_CORRUPT,
         };
         CommandError {
-            v_code,
+            v_code: v_code.to_string(),
             message: error.to_string(),
             pairs,
         }
@@ -442,6 +451,19 @@ pub fn parse_command(line: &str) -> Result<Command, serde_json::Error> {
 /// Renders one response as a single line of JSON, without a trailing newline.
 pub fn render_response(response: &Response) -> Result<String, serde_json::Error> {
     serde_json::to_string(response)
+}
+
+/// Renders one command as a single line of JSON, without a trailing newline:
+/// the line a client sends, which [`parse_command`] reads.
+pub fn render_command(command: &Command) -> Result<String, serde_json::Error> {
+    serde_json::to_string(command)
+}
+
+/// Parses one line-delimited response: a single JSON value without its
+/// trailing newline, which [`render_response`] writes. Fields the client does
+/// not know are ignored, so a device may add optional fields (ADR-0063).
+pub fn parse_response(line: &str) -> Result<Response, serde_json::Error> {
+    serde_json::from_str(line)
 }
 
 /// Executes `command` against `host` and returns the response to send.

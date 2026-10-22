@@ -464,3 +464,120 @@ fn command_error_v_code_when_invalid_container_then_v4016() {
         "accept payload is not a valid compiled container: invalid magic number"
     );
 }
+
+fn redundancy_block() -> RedundancyIdentity {
+    RedundancyIdentity {
+        pair_id: "8338076".into(),
+        role: "primary".into(),
+        epoch: 12,
+        sync: "syncReady".into(),
+        control: "active".into(),
+    }
+}
+
+#[rstest]
+#[case::ack(Response::Ack)]
+#[case::standalone_identity(identity_response(None))]
+#[case::redundant_identity(identity_response(Some(redundancy_block())))]
+#[case::status(Response::Status(StatusPayload {
+    mode: HostMode::Testing,
+    active: 2,
+    normal: 1,
+    candidate: Some(2),
+    application: 1,
+    migration: true,
+    rounds: 42,
+    pending_edit: None,
+    content_hash: Some("9f".repeat(32)),
+    layout_hash: Some("3c".repeat(32)),
+}))]
+#[case::coded_error(Response::Error(CommandError::from(OnlineChangeError::NoCandidateStaged)))]
+#[case::type_change_error(Response::Error(CommandError::from(
+    OnlineChangeError::MigrationUnsupported(MigrationError::TypeChangeUnsupported {
+        pairs: vec![TypeChangePair {
+            uid: 7,
+            name: Some("Counter".into()),
+            from: FieldType::I32,
+            to: FieldType::U32,
+            size_equal: true,
+        }],
+    })
+)))]
+fn parse_response_when_rendered_by_the_server_then_the_same_response(#[case] response: Response) {
+    let line = render_response(&response).unwrap();
+
+    assert_eq!(parse_response(&line).unwrap(), response);
+}
+
+#[test]
+fn parse_response_when_device_id_present_then_identity_carries_it() {
+    let mut device = test_device();
+    device.device_id = Some(DEVICE_ID.into());
+    let line = render_response(&identity_response_of(device, None)).unwrap();
+
+    assert!(matches!(
+        parse_response(&line).unwrap(),
+        Response::Identity(payload) if payload.device.device_id.as_deref() == Some(DEVICE_ID)
+    ));
+}
+
+#[test]
+fn parse_response_when_identity_has_a_field_it_does_not_know_then_ignores_it() {
+    let line = r#"{"response":"identity","protocol":2,"future":{"a":1},"device":{"name":"n","model":"m","modification":"x","runtimeVersion":"1.0.0","serial":"s"},"application":{"mode":"normal","active":1,"normal":1,"candidate":null,"application":1,"migration":false,"rounds":0,"extra":true}}"#;
+
+    let response = parse_response(line).unwrap();
+
+    assert!(matches!(response, Response::Identity(_)));
+}
+
+#[test]
+fn parse_response_when_error_code_is_raised_outside_this_crate_then_reads_the_code() {
+    // The transport of `ironplcvm` writes this line for a second session.
+    let line = r#"{"response":"error","vCode":"V6014","message":"the device serves exactly one engineering session"}"#;
+
+    assert!(matches!(
+        parse_response(line).unwrap(),
+        Response::Error(error)
+            if error.v_code() == "V6014"
+                && error.message() == "the device serves exactly one engineering session"
+                && error.pairs().is_none()
+    ));
+}
+
+#[test]
+fn parse_response_when_codec_error_has_no_code_then_not_a_response() {
+    // A line that is not a command is answered without a code (ADR-0055). A
+    // `CommandError` always has a code, so the line is not one.
+    let line = r#"{"response":"error","vCode":null,"message":"unknown variant"}"#;
+
+    assert!(parse_response(line).is_err());
+}
+
+#[test]
+fn parse_response_when_not_json_then_error() {
+    assert!(parse_response("not json").is_err());
+}
+
+#[rstest]
+#[case::identity(Command::Identity)]
+#[case::get_status(Command::GetStatus)]
+#[case::test(Command::TestEdits)]
+#[case::untest(Command::UntestEdits)]
+#[case::assemble(Command::AssembleEdits)]
+#[case::cancel(Command::CancelEdits)]
+#[case::accept(Command::AcceptEdits {
+    program: vec![1, 2, 255],
+    edit: Some(EditSpec { name: Some("rung-4".into()), origin: None }),
+    migration: BTreeMap::from([(1, MigrationDecisionSpec::Init)]),
+})]
+#[case::settings(Command::SetDeviceSettings {
+    settings: BTreeMap::from([("name".to_string(), serde_json::json!("cell 1"))]),
+})]
+fn render_command_when_rendered_then_parse_command_reads_the_same_command(
+    #[case] command: Command,
+) {
+    let line = render_command(&command).unwrap();
+
+    assert!(!line.contains('\n'));
+    assert_eq!(parse_command(&line).unwrap(), command);
+}
