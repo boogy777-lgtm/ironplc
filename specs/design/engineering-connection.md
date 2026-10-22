@@ -164,7 +164,9 @@ transports carry the same JSON values; they differ only in the envelope:
 
 A frame whose declared length exceeds 16 MiB (the container-upload
 headroom; `acceptEdits` bytes ride one message, ADR-0055) is a framing
-error: the device closes the connection and reports V6013.
+error: the device closes the connection and reports V6013. The frame is
+defined once, in `compiler/runtime/src/frame.rs` (`MAX_FRAME`, `read_frame`,
+`write_frame`), which the device and a Rust client both use.
 
 ### The `identity` handshake
 
@@ -377,7 +379,10 @@ refusal never trigger a reconnect: only transport faults do.
 
 ### Timeout policy
 
-All values are v1 defaults, overridable per profile in the settings schema:
+All values are v1 defaults, overridable per profile in the settings schema.
+The connect and the response timeout are the constants `CONNECT_TIMEOUT` and
+`RESPONSE_TIMEOUT` of `compiler/runtime/src/frame.rs`, which the device reads
+for its own per-message limit and a Rust client for its waits:
 
 | Timeout | Default | Fires when |
 |---------|---------|------------|
@@ -661,6 +666,7 @@ Everything reused, with its one authority:
 |-----------------|---------------|
 | Session protocol (commands, codec, dispatch) | `Command`, `Response`, `parse_command`, `render_command`, `parse_response`, `render_response`, `execute` in `compiler/runtime/src/commands.rs` |
 | stdio session server | `serve` in `compiler/vm-cli/src/serve.rs` |
+| Frame of the TCP transport, the connect and response timeouts | `read_frame`, `write_frame`, `FrameReader`, `FrameWriter`, `MAX_FRAME`, `CONNECT_TIMEOUT`, `RESPONSE_TIMEOUT` in `compiler/runtime/src/frame.rs`; the device's use in `compiler/vm-cli/src/tcp.rs` |
 | Codec error line (codeless, ADR-0055) | `codec_error_line` in `compiler/vm-cli/src/serve.rs` |
 | Client session (request FIFO, response parsing) | `HotEditSession`, `parseResponseLine`, `encodeRequest` in `integrations/vscode/src/hotEditSession.ts` |
 | Transport seam the TCP transport implements | `LineTransport` in `integrations/vscode-common/src/lineTransport.ts` (`HotEditTransport` in `integrations/vscode/src/hotEditSession.ts`; stdio impl: `StdioLineTransport` in the same shared module) |
