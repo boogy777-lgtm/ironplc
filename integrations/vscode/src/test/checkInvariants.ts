@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { DEFAULT_SESSION_PORT } from '../sessionPort';
+import { DEFAULT_SESSION_PORT, SUPPORTED_SESSION_PROTOCOL } from '../sessionConstants';
 
 const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf-8'));
 
@@ -59,12 +59,10 @@ if (packageJson.contributes.taskDefinitions) {
 // generated constant. Each file below must state a default at least once, so
 // rewording a sentence cannot silently switch its check off.
 const repoRoot = path.join(__dirname, '..', '..', '..', '..');
+const designText = fs.readFileSync(path.join(repoRoot, 'specs', 'design', 'engineering-connection.md'), 'utf-8');
 const portStatements: Array<[string, string]> = [
   ['package.json', JSON.stringify(packageJson)],
-  [
-    'specs/design/engineering-connection.md',
-    fs.readFileSync(path.join(repoRoot, 'specs', 'design', 'engineering-connection.md'), 'utf-8'),
-  ],
+  ['specs/design/engineering-connection.md', designText],
 ];
 for (const [file, text] of portStatements) {
   const stated = [...text.matchAll(/\bdefaults?(?:\s+to)?\s+(\d+)/gi)].map(m => Number(m[1]));
@@ -75,6 +73,21 @@ for (const [file, text] of portStatements) {
     if (port !== DEFAULT_SESSION_PORT) {
       failures.push(`${file} states default port ${port}, but the session port is ${DEFAULT_SESSION_PORT}`);
     }
+  }
+}
+
+// The design document's identity example states the protocol version; it must
+// agree with the generated constant. The example must be there, so rewording it
+// cannot silently switch the check off.
+const protocolsStated = [...designText.matchAll(/"protocol":\s*(\d+)/g)].map(m => Number(m[1]));
+if (protocolsStated.length === 0) {
+  failures.push('specs/design/engineering-connection.md states no session protocol version');
+}
+for (const protocol of protocolsStated) {
+  if (protocol !== SUPPORTED_SESSION_PROTOCOL) {
+    failures.push(
+      `specs/design/engineering-connection.md states session protocol ${protocol}, but the protocol is ${SUPPORTED_SESSION_PROTOCOL}`,
+    );
   }
 }
 

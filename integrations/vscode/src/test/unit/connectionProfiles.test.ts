@@ -6,7 +6,7 @@ import {
   validateProfiles,
 } from '../../connectionProfiles';
 import { ProblemCode } from '../../problems';
-import { DEFAULT_SESSION_PORT } from '../../sessionPort';
+import { DEFAULT_SESSION_PORT } from '../../sessionConstants';
 
 suite('validateProfiles', () => {
   const STDIO_PROFILE = { name: 'Local VM', transport: 'stdio', program: '${workspaceFolder}/main.st' };

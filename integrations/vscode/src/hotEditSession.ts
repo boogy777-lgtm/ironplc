@@ -26,6 +26,7 @@ import {
   HaTimingBudget,
   parseHaResponseLine,
 } from './haProtocol';
+import { SUPPORTED_SESSION_PROTOCOL } from './sessionConstants';
 
 /** The commands of the hot-edit protocol, one per `command` tag on the wire. */
 export type HotEditCommand
@@ -45,14 +46,6 @@ export type MigrationDecision = 'init' | 'preserve';
  * UID, keyed by the UID's string form, e.g. `{"1":"preserve"}`.
  */
 export type MigrationDecisionMap = Record<string, MigrationDecision>;
-
-/**
- * The session protocol version this client speaks (ADR-0063): `1` for the
- * version the engineering connection spec defines. A client refuses a
- * higher number; an older server answers `identity` with the codeless codec
- * error, which the connection state machine reads as a failed handshake.
- */
-export const SUPPORTED_SESSION_PROTOCOL = 1;
 
 /**
  * The optional `edit` identity block of `acceptEdits` (ADR-0064): the
@@ -117,7 +110,7 @@ export interface DeviceIdentity {
   name: string;
   model: string;
   modification: string;
-  firmwareVersion: string;
+  runtimeVersion: string;
 }
 
 /** The optional redundancy block of an `identity` response (ADR-0063). */
@@ -331,8 +324,10 @@ export function numberField(record: Record<string, unknown>, key: string): numbe
 
 /**
  * Builds an [`IdentityInfo`] from a parsed `identity` response object: the
- * protocol version (a higher number than this client speaks is refused, the
- * version negotiation the engineering connection specifies), the device
+ * protocol version (a higher number than `SUPPORTED_SESSION_PROTOCOL` is
+ * refused, the version negotiation the engineering connection specifies; the
+ * constant is generated from the file the runtime reads as
+ * `SESSION_PROTOCOL_VERSION`, ADR-0063), the device
  * panel block, the application snapshot (the [`parseStatus`] vocabulary),
  * and the optional redundancy block. Unknown top-level blocks are ignored —
  * the field set grows by adding optional fields.
@@ -363,7 +358,7 @@ function parseIdentity(record: Record<string, unknown>): IdentityInfo {
       name: stringField(deviceRecord, 'name'),
       model: stringField(deviceRecord, 'model'),
       modification: stringField(deviceRecord, 'modification'),
-      firmwareVersion: stringField(deviceRecord, 'firmwareVersion'),
+      runtimeVersion: stringField(deviceRecord, 'runtimeVersion'),
     },
     application: parseStatus(application as Record<string, unknown>),
     redundancy: parseRedundancy(record.redundancy),

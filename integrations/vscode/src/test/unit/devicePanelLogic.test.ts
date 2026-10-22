@@ -7,17 +7,18 @@ import {
   DevicePanelModel,
 } from '../../devicePanelLogic';
 import { HotEditStatus, IdentityInfo } from '../../hotEditSession';
+import { SUPPORTED_SESSION_PROTOCOL } from '../../sessionConstants';
 
 const DEVICE = {
   name: 'ironplcvm',
   model: 'IronPLC SoftPLC',
   modification: 'vm-cli',
-  firmwareVersion: '0.13.0',
+  runtimeVersion: '0.13.0',
 };
 
 function identity(overrides?: Partial<IdentityInfo>): IdentityInfo {
   return {
-    protocol: 1,
+    protocol: SUPPORTED_SESSION_PROTOCOL,
     device: DEVICE,
     application: status(),
     ...overrides,
@@ -90,7 +91,7 @@ suite('devicePanelRows', () => {
     assert.strictEqual(byId.get('device.name'), 'ironplcvm');
     assert.strictEqual(byId.get('device.model'), 'IronPLC SoftPLC');
     assert.strictEqual(byId.get('device.modification'), 'vm-cli');
-    assert.strictEqual(byId.get('device.firmware'), '0.13.0');
+    assert.strictEqual(byId.get('device.runtime'), '0.13.0');
     assert.strictEqual(byId.get('application'), 'Normal (gen 1)');
   });
 

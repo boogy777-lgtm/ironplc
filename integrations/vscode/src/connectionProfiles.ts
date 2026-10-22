@@ -14,7 +14,7 @@
  */
 
 import { ProblemCode } from './problems';
-import { DEFAULT_SESSION_PORT } from './sessionPort';
+import { DEFAULT_SESSION_PORT } from './sessionConstants';
 
 /** The transport a profile speaks: a spawned child or a remote socket. */
 export type ConnectionTransport = 'stdio' | 'tcp';
