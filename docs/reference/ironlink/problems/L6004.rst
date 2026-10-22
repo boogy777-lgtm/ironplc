@@ -1,0 +1,47 @@
+=====
+L6004
+=====
+
+.. problem-summary:: L6004
+
+An address, an interface or an option value given to :program:`ironlink` cannot
+be used. The message names the value and the rule it breaks. :program:`ironlink`
+exits with code 2 before it sends anything; on the shell, the command is
+answered with an error line that carries this code and the session continues.
+
+The rules are these:
+
+- An address is an IP address, or *IP*:*PORT*; a host name is not accepted. An
+  IPv6 address with a port is written in brackets, as in ``[::1]:7000``. The
+  port is not 0.
+- An interface is named by an IP address of this PC, such as ``192.168.1.20``.
+  The name of an adapter is not accepted. An IPv6 interface is refused, because
+  IPv6 has no broadcast; ask IPv6 controllers by address.
+- The timeout is from 1 to 60000 milliseconds, and the number of attempts is from
+  1 to 10.
+- The verbosity of ``-v`` is at most four.
+
+Example
+-------
+
+The following commands break the rules:
+
+.. code-block:: text
+
+   ironlink identify press-line-3
+   ironlink browse --interface ::1
+   ironlink browse --address 10.0.4.7 --attempts 0
+
+Solutions
+---------
+
+1. Replace the host name with the IP address of the controller.
+2. Replace an adapter name or an IPv6 interface with an IPv4 address of this PC,
+   or use ``--address``.
+3. Choose a value within the range above.
+
+See Also
+--------
+
+- :doc:`/reference/ironlink/ironlink` --- the options of :program:`ironlink`
+- :doc:`L6001` --- an interface that is not an address of this PC

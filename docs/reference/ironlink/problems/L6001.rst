@@ -1,0 +1,44 @@
+=====
+L6001
+=====
+
+.. problem-summary:: L6001
+
+:program:`ironlink` could not bind a UDP socket on a local address of this PC.
+The broadcast driver binds one socket to each interface that ``--interface``
+names, so that the broadcast leaves through that interface, and the address list
+driver binds one socket to the wildcard address of the family of its targets. The
+message names the address and the reason that the operating system gave.
+:program:`ironlink` exits with code 2 and prints no tree: an interface that was
+named and cannot be used is an error, not a silent gap in the result.
+
+Typical causes: the address given to ``--interface`` is not an address of this
+PC (a mistyped address, an address of another machine, or an address of a network
+adapter that is disabled or unplugged), the address was removed after it was
+read from the network settings, or the program does not have the right to open a
+UDP socket.
+
+Example
+-------
+
+The following command names an address that no PC has, so the bind fails:
+
+.. code-block:: text
+
+   ironlink browse --interface 203.0.113.9
+
+Solutions
+---------
+
+1. Read the addresses of this PC with :program:`ipconfig` on Windows or
+   :program:`ip address` on Linux and macOS, and pass one of them to
+   ``--interface``.
+2. Check that the network adapter that owns the address is enabled and connected.
+3. To broadcast through the interface that the operating system picks, leave out
+   ``--interface``.
+
+See Also
+--------
+
+- :doc:`/reference/ironlink/ironlink` --- the options of :program:`ironlink browse`
+- :doc:`L6004` --- an address or option value that is not valid

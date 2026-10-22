@@ -1,0 +1,39 @@
+=====
+L6003
+=====
+
+.. problem-summary:: L6003
+
+:program:`ironlink identify` sent a fresh discovery request to the address and
+received no discovery reply within the time. The command prints nothing to
+standard output, writes this error to standard error and exits with code 2. With
+``--json``, it first prints the response of the shell with the answer ``none``,
+which is a normal response; only the command line turns the missing answer into
+an error. The message names the address and the time waited.
+
+No answer does not say why. The controller may be switched off or restarting,
+the address may belong to another machine, the controller may not answer
+discovery (``ironplcvm serve --no-discovery``, or a controller that listens only
+for the session), a firewall may drop the datagram or the reply, or the router
+between the PC and the controller may not pass UDP. A controller answers a
+request from one source address at most once in 250 milliseconds; the default of
+two attempts, 300 milliseconds apart, stays outside that limit.
+
+Solutions
+---------
+
+1. Check the address and the port. A controller started with
+   ``ironplcvm serve --listen`` answers discovery on the address and port of
+   its session.
+2. Wait longer with ``--timeout-ms``, or send more requests with ``--attempts``,
+   when the network drops datagrams.
+3. Allow UDP on the discovery port in the firewalls of the PC and of the
+   controller.
+4. Connect to the controller by its address with the editor, which does not use
+   discovery.
+
+See Also
+--------
+
+- :doc:`/reference/ironlink/ironlink` --- the options of :program:`ironlink identify`
+- :doc:`/reference/runtime/ironplcvm` --- how a controller answers discovery

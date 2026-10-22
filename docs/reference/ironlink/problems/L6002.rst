@@ -1,0 +1,37 @@
+=====
+L6002
+=====
+
+.. problem-summary:: L6002
+
+:program:`ironlink` could not send the discovery request to a destination. The
+message names the destination and the reason that the operating system gave.
+:program:`ironlink` stops with exit code 2 and prints no tree. The request is
+the only datagram that :program:`ironlink` sends, so a failure to send it means
+that no controller could have answered through this socket.
+
+Typical causes: the PC has no route to the destination (the network is
+unreachable, the adapter is disconnected, or the PC has no network at all, which
+fails the broadcast to ``255.255.255.255``), the destination is of another
+address family than the socket, or a firewall or a security product on the PC
+refuses the datagram and reports that to the sender.
+
+A request that is sent and not answered is not this error. A controller that is
+switched off, behind a router that does not pass the datagram, or protected by a
+firewall that drops it gives no answer, and :program:`ironlink` reports that the
+controller did not answer, not that sending failed.
+
+Solutions
+---------
+
+1. Check that the PC is connected to the network that holds the controllers.
+2. To find controllers behind a router, give their addresses with ``--address``
+   instead of broadcasting.
+3. Allow outgoing UDP datagrams of :program:`ironlink` on the discovery port
+   in the firewall of the PC.
+
+See Also
+--------
+
+- :doc:`/reference/ironlink/ironlink` --- how :program:`ironlink` finds controllers
+- :doc:`L6001` --- a socket that cannot be bound

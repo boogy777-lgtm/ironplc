@@ -1,0 +1,33 @@
+=====
+L6005
+=====
+
+.. problem-summary:: L6005
+
+:program:`ironlink` could not read a command or write a response. For
+:program:`ironlink serve` the command session is standard input and standard
+output; the message names the reason that the operating system gave.
+:program:`ironlink` exits with code 2. The other commands use the same code when
+they cannot write their result to standard output.
+
+Typical causes: the program that started :program:`ironlink serve` closed its end
+of the pipe while a response was being written, which is how a client that
+stopped reports itself, or the output of :program:`ironlink browse` goes to a
+pipe whose reader has exited, as when it is piped into a command that ends
+early. A client that wants to end the session normally closes standard input,
+which ends :program:`ironlink serve` with exit code 0 and no error.
+
+A line that is not a command is not this error. :program:`ironlink serve`
+answers it with a response line that has no code, and goes on.
+
+Solutions
+---------
+
+1. Close standard input, and do not close standard output, to end the session.
+2. Read the output of the command to its end, or redirect it to a file.
+3. Check that the program that started :program:`ironlink serve` is still running.
+
+See Also
+--------
+
+- :doc:`/reference/ironlink/ironlink` --- the shell and its protocol
