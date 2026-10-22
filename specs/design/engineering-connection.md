@@ -76,9 +76,9 @@ One connection profile describes one target. Fields:
 | `program` | string | stdio only | The source file or `.iplc` container the spawned session loads (the `serve <FILE>` argument). |
 | `address` | string | tcp only | IPv4 dotted-quad, IPv6 literal, or DNS hostname of the device. |
 | `port` | integer | tcp only | TCP port, 1–65535. Default 49152 (first IANA dynamic/private port) when omitted. |
-| `credentials` | string | no | The **secret-store key** the host resolves a username/password pair from — never the credentials themselves. |
+| `credentialsKey` | string | no | The **secret-store key** the host resolves a username/password pair from — never the credentials themselves. |
 
-The profile carries no protocol state and no secrets. `credentials` names
+The profile carries no protocol state and no secrets. `credentialsKey` names
 an entry in the host secret store; for the VS Code extension that store is
 `SecretStorage` (keyed `ironplc-connection/<profile name>`), for a future
 standalone desktop host it is the OS keychain. The reference UI's
@@ -100,8 +100,8 @@ settings (standard editor settings precedence applies):
     "name": "Cell 1 PLC",
     "transport": "tcp",
     "address": "192.168.1.10",
-    "port": 49152,
-    "credentials": "ironplc-connection/cell-1-plc"
+    "port": 50000,
+    "credentialsKey": "ironplc-connection/cell-1-plc"
   }
 ]
 ```
@@ -116,7 +116,7 @@ fails without network traffic — the reference UI's error toast on bad
 settings. Every failure is an E-code from the extension's existing CSV
 registry (`integrations/vscode/resources/problem-codes.csv`, next free
 E0010) and renders through `formatProblem`
-(`integrations/vscode/src/problems.ts:30`):
+(generated in `integrations/vscode/src/problems.ts`):
 
 | Rule | Code on failure |
 |------|-----------------|
@@ -134,15 +134,14 @@ Documentation and the codegen lifecycle follow
 
 The session protocol is the ADR-0055 command layer unchanged: one JSON
 command in, one JSON response out, rendered by `parse_command` /
-`render_response` (`compiler/runtime/src/commands.rs:270`,
-`compiler/runtime/src/commands.rs:275`) and dispatched by `execute`
-(`compiler/runtime/src/commands.rs:284`). Both transports carry the same
+`render_response` and dispatched by `execute`
+(all in `compiler/runtime/src/commands.rs`). Both transports carry the same
 JSON values; they differ only in the envelope:
 
 - **stdio** — the existing behavior: the client spawns
   `ironplcvm serve <FILE>` and speaks newline-delimited JSON over the
-  child's stdin/stdout (`compiler/vm-cli/src/serve.rs:67`,
-  `integrations/vscode/src/hotEdit.ts:133`). One line is one message.
+  child's stdin/stdout (`serve` in `compiler/vm-cli/src/serve.rs`,
+  the `spawn` call in `integrations/vscode/src/hotEdit.ts`). One line is one message.
 - **tcp** — the device listens on the profile's address/port; each message
   travels as one frame: a 4-byte little-endian unsigned length followed by
   exactly that many bytes of one UTF-8 JSON line (no trailing newline).
@@ -150,10 +149,11 @@ JSON values; they differ only in the envelope:
   newline delimiter; the JSON inside the frame is byte-identical to the
   stdio line. One frame in, one frame out — the REQ-VC-vm-cli-019 ordering
   guarantee holds verbatim, so the existing client session logic
-  (`integrations/vscode/src/hotEditSession.ts:258`, request FIFO matching)
+  (`HotEditSession` in `integrations/vscode/src/hotEditSession.ts`, request FIFO matching)
   works over either transport behind the `HotEditTransport` interface
-  (`integrations/vscode/src/hotEditSession.ts:238`), exactly as the stdio
-  line buffer already does (`integrations/vscode/src/hotEdit.ts:460`).
+  (`integrations/vscode/src/hotEditSession.ts`), exactly as the stdio
+  line buffer already does (`StdioLineTransport` in
+  `integrations/vscode/src/hotEdit.ts`).
 
 A frame whose declared length exceeds 16 MiB (the container-upload
 headroom; `acceptEdits` bytes ride one message, ADR-0055) is a framing
@@ -165,7 +165,7 @@ error: the device closes the connection and reports V6013.
 client sends on every (re)opened transport. It fills the reference UI's
 connected-device panel and carries the application state the runtime
 already reports, reusing the `StatusPayload` shape
-(`compiler/runtime/src/commands.rs:136`) as a nested block.
+(`compiler/runtime/src/commands.rs`) as a nested block.
 
 Request:
 
@@ -198,7 +198,7 @@ redundancy layer is loaded):
     "layoutHash": "3c1a5e7b9d0f2a4c6e8b0d1f3a5c7e9b2d4f6a8c0e1b3d5f7a9c2e4b6d8f0a1c"
   },
   "redundancy": {
-    "pairId": "7f3a9c",
+    "pairId": "8338076",
     "role": "primary",
     "epoch": 12,
     "sync": "syncReady",
@@ -216,7 +216,7 @@ Field set:
   hardware target reports its catalog values.
 - `application` — the live hot-edit status snapshot (mode, generation
   counters, rounds), the same fields `getStatus` returns
-  (`compiler/runtime/src/commands.rs:136`). Two optional fields say what
+  (`StatusPayload` in `compiler/runtime/src/commands.rs`). Two optional fields say what
   the device runs, by content: `contentHash` and `layoutHash`, the hashes
   in the header of the normal (committed) artifact as 64 lowercase
   hexadecimal digits (REQ-VC-vm-cli-024). They are optional on the wire:
@@ -231,7 +231,7 @@ Extensibility is structural, not negotiated: servers add optional fields,
 clients ignore fields they do not know, and every block is an object so
 fields can grow inside it. Version negotiation rides the ADR-0055 codec
 behavior: a server that predates `identity` answers the line with the
-codeless codec error (`compiler/vm-cli/src/serve.rs:137`), which the client
+codeless codec error (`codec_error_line` in `compiler/vm-cli/src/serve.rs`), which the client
 reads as "protocol 0 — hot edit only" and keeps the session for hot edit
 commands.
 
@@ -361,28 +361,32 @@ button onto it and reports its phases on the device panel.
 What exists today:
 
 - **Compile → container.** `ironplcc compile <input> -o <output>`
-  (`compiler/ironplc-cli/bin/main.rs:355`, implementation
-  `compiler/ironplc-cli/src/cli.rs:95`). The editor builds the argument
-  vector in one shared helper (`integrations/vscode/src/taskProviderLogic.ts:8`,
-  project-wide form `:15`) and the hot-edit session already compiles a
-  source before serving it (`integrations/vscode/src/hotEdit.ts:357`).
+  (the `Compile` subcommand in `compiler/ironplc-cli/bin/main.rs`,
+  implementation `compile` in `compiler/ironplc-cli/src/cli.rs`). The editor builds the argument
+  vector in one shared helper (`compileArgs` in
+  `integrations/vscode/src/taskProviderLogic.ts`, project-wide form
+  `buildCompileArgs`) and the hot-edit session already compiles a source
+  before serving it (`compileToContainer` in
+  `integrations/vscode/src/hotEdit.ts`).
 - **Upload.** `acceptEdits` carries the compiled container bytes to the
-  host over the session (`compiler/runtime/src/commands.rs:36`), staged by
-  `execute` (`compiler/runtime/src/commands.rs:287`); the client side is
-  `HotEditSession.acceptEdits`
-  (`integrations/vscode/src/hotEditSession.ts:290`).
-- **Verify.** The container verifies at load — hash recomputation in
-  `compiler/container/src/load_verify.rs:282` — and the host compares the
-  candidate's `layout_hash` against the active artifact before staging
-  (`compiler/runtime/src/online_change.rs:30`,
-  `compiler/runtime/src/host.rs:164`). A mismatch or an undecidable
+  host over the session (`Command::AcceptEdits` in
+  `compiler/runtime/src/commands.rs`), staged by `execute`; the client side
+  is `HotEditSession.acceptEdits`
+  (`integrations/vscode/src/hotEditSession.ts`).
+- **Verify.** The container verifies at load — `verify_load` in
+  `compiler/container/src/load_verify.rs` recomputes the layout hash — and
+  the host compares the candidate's `layout_hash` against the active
+  artifact before staging (`validate_candidate` in
+  `compiler/runtime/src/online_change.rs`, called by `RuntimeHost::stage` in
+  `compiler/runtime/src/host.rs`). A mismatch or an undecidable
   migration is a coded refusal (V4007–V4010,
   `compiler/runtime/resources/problem-codes.csv`), not a silent deploy.
 - **Run control.** The hot-edit FSM commands apply or revert the upload at
   a scan boundary: `testEdits` / `untestEdits` / `assembleEdits` /
-  `cancelEdits` (`compiler/runtime/src/commands.rs:49`), with the serve
-  session driving the boundary round before acknowledging
-  (`compiler/vm-cli/src/serve.rs:78`, REQ-VC-vm-cli-023). `getStatus`
+  `cancelEdits` (the `Command` variants in
+  `compiler/runtime/src/commands.rs`), with the serve session driving the
+  boundary round before acknowledging (`drive_scan_round` in
+  `compiler/vm-cli/src/serve.rs`, REQ-VC-vm-cli-023). `getStatus`
   reads back the running generation.
 
 ### Two build modes
@@ -390,9 +394,9 @@ What exists today:
 The same compile feeds two build modes:
 
 - **Offline build.** `ironplcc compile` writes the container artifact
-  (`compiler/ironplc-cli/src/cli.rs:95`) with no connection; the local
-  `run`/`serve <FILE>` path loads that artifact through the same
-  `load_container` call (`compiler/vm-cli/src/serve.rs:31-33`), and CI
+  (`compile` in `compiler/ironplc-cli/src/cli.rs`) with no connection; the
+  local `run`/`serve <FILE>` path loads that artifact through the same
+  `load_container` call (`compiler/vm-cli/src/cli.rs`), and CI
   consumes the same output. Hot edit does not participate.
 - **Online build.** The same compiled bytes delivered over the session:
   `acceptEdits` (staging, load-verify, `layout_hash` comparison), then
@@ -422,18 +426,18 @@ The online build has two commit policies over the same upload
   changes use this manual sequence.
 
 Zero new commands: these are exactly the hot-edit FSM commands — `test`,
-`untest`, `assemble`, `cancel` (`compiler/runtime/src/host.rs:188`,
-`:208`, `:227`, `:249`) — applied at a scan boundary
-(`compiler/runtime/src/host.rs:289`, `:336`), with the serve session
-driving the boundary round before it acknowledges
-(`compiler/vm-cli/src/serve.rs:78`).
+`untest`, `assemble`, `cancel` (the `RuntimeHost` methods of those
+names in `compiler/runtime/src/host.rs`) — applied at a scan boundary
+(`RuntimeHost::apply_pending_swap`), with the serve session driving the
+boundary round before it acknowledges (`drive_scan_round` in
+`compiler/vm-cli/src/serve.rs`).
 
 The device panel renders a Testing phase from the reported `mode`, and
 Revert is disabled or rejected when the status reports `migration: true`:
 a migration candidate has no revert path, so `untestEdits` answers V4011
-UntestUnsupported (`compiler/runtime/src/host.rs:208-220`). The panel
-reads the existing `HostStatus.migration` flag
-(`compiler/runtime/src/host.rs:82`) rather than inferring it.
+UntestUnsupported (`RuntimeHost::untest` in
+`compiler/runtime/src/host.rs`). The panel reads the existing
+`HostStatus.migration` flag (same file) rather than inferring it.
 
 Trial state is host-side: a staged candidate and Testing mode survive a
 session loss, so reconnect reconciliation renders the mode reported by
@@ -494,8 +498,9 @@ addition is a pre-send baseline check.
    `identity` reports (above) with the record. The hash is the authority,
    not the generation counters: session generations restart on a device
    reboot, while the container hash is recomputed and verified at every
-   load — `verify_load` (`compiler/container/src/load_verify.rs:288`) and
-   the content-hash check (`compiler/container/src/load_verify.rs:453`) —
+   load — `verify_load` (`compiler/container/src/load_verify.rs`) and
+   the content-hash check `check_content_hash`
+   (`compiler/container/src/integrity.rs`) —
    so a hash comparison means the same thing before and after a reboot.
 2. **Match → the normal online change.** The record and the device agree:
    the build proceeds as above — `acceptEdits` (answering V4010 with the
@@ -527,21 +532,21 @@ Everything reused, with its one authority:
 
 | Mechanism piece | Existing call |
 |-----------------|---------------|
-| Session protocol (commands, codec, dispatch) | `compiler/runtime/src/commands.rs:32`, `:270`, `:275`, `:284` |
-| stdio session server | `compiler/vm-cli/src/serve.rs:67` |
-| Codec error line (codeless, ADR-0055) | `compiler/vm-cli/src/serve.rs:137` |
-| Client session (request FIFO, response parsing) | `integrations/vscode/src/hotEditSession.ts:258`, `:118`, `:90` |
-| Transport seam the TCP transport implements | `integrations/vscode/src/hotEditSession.ts:238` (stdio impl: `integrations/vscode/src/hotEdit.ts:460`) |
-| Device-panel application state | `compiler/runtime/src/commands.rs:136` (`StatusPayload`) |
-| Compile | `compiler/ironplc-cli/src/cli.rs:95`; arg vector `integrations/vscode/src/taskProviderLogic.ts:8` |
-| Upload | `compiler/runtime/src/commands.rs:36` (`AcceptEdits`) |
-| Verify | `compiler/container/src/load_verify.rs:282`; `compiler/runtime/src/online_change.rs:30` |
-| Run control | `compiler/runtime/src/commands.rs:49`; boundary round `compiler/vm-cli/src/serve.rs:78` |
+| Session protocol (commands, codec, dispatch) | `Command`, `parse_command`, `render_response`, `execute` in `compiler/runtime/src/commands.rs` |
+| stdio session server | `serve` in `compiler/vm-cli/src/serve.rs` |
+| Codec error line (codeless, ADR-0055) | `codec_error_line` in `compiler/vm-cli/src/serve.rs` |
+| Client session (request FIFO, response parsing) | `HotEditSession`, `parseResponseLine`, `encodeRequest` in `integrations/vscode/src/hotEditSession.ts` |
+| Transport seam the TCP transport implements | `HotEditTransport` in `integrations/vscode/src/hotEditSession.ts` (stdio impl: `StdioLineTransport` in `integrations/vscode/src/hotEdit.ts`) |
+| Device-panel application state | `StatusPayload` in `compiler/runtime/src/commands.rs` |
+| Compile | `compile` in `compiler/ironplc-cli/src/cli.rs`; arg vector `compileArgs` in `integrations/vscode/src/taskProviderLogic.ts` |
+| Upload | `Command::AcceptEdits` in `compiler/runtime/src/commands.rs` |
+| Verify | `verify_load` in `compiler/container/src/load_verify.rs`; `validate_candidate` in `compiler/runtime/src/online_change.rs` |
+| Run control | `Command` variants in `compiler/runtime/src/commands.rs`; boundary round `drive_scan_round` in `compiler/vm-cli/src/serve.rs` |
 | V-code registries | `compiler/vm-cli/resources/problem-codes.csv` (V6013/V6014, the transport codes, beside the existing V6011/V6012), `compiler/runtime/resources/problem-codes.csv` (untouched) |
-| E-code registry and rendering | `integrations/vscode/resources/problem-codes.csv` (E0010+), `integrations/vscode/src/problems.ts:30` |
-| Heartbeat | `getStatus` — `compiler/runtime/src/commands.rs:286` |
+| E-code registry and rendering | `integrations/vscode/resources/problem-codes.csv` (E0010+), `formatProblem` in `integrations/vscode/src/problems.ts` |
+| Heartbeat | `getStatus` — `Command::GetStatus` in `compiler/runtime/src/commands.rs` |
 | Redundancy block vocabulary | [HA Redundancy FSM](ha-redundancy-fsm.md) (epoch, SYNC/CONTROL) |
-| Baseline identity (artifact hash, UID sidecar) | `compiler/container/src/load_verify.rs:288`; `compiler/project/src/sidecar.rs` |
+| Baseline identity (artifact hash, UID sidecar) | `verify_load` in `compiler/container/src/load_verify.rs`; `compiler/project/src/sidecar.rs` |
 | Download record (the baseline) | `compiler/project/src/download_record.rs`; `ironplcc record-download` |
 
 ## Out of Scope
@@ -549,9 +554,6 @@ Everything reused, with its one authority:
 - Wire authentication and encryption: v1 sends no credential over the
   session; the profile model and the auth-block UI land now, the
   transport-level authentication decision follows (ADR-0063).
-- Production code: this spec and ADR-0063 are design only; the CSV rows,
-  the `identity` command, the TCP listener, and the profile UI are the
-  implementation that follows.
 - A push/notification channel (deferred with the HA Engineering UI
   Contract); the build-progress gap above records the one place v1 feels
   its absence.

@@ -14,6 +14,7 @@ import {
   IdentityInfo,
 } from '../../hotEditSession';
 import { ProblemCode } from '../../problems';
+import { DEFAULT_SESSION_PORT } from '../../sessionPort';
 
 /** An in-memory transport: the responder answers commands synchronously. */
 class MockTransport implements HotEditTransport {
@@ -89,7 +90,7 @@ interface SetupOptions {
 }
 
 function tcpProfile(): ConnectionProfile {
-  return { name: 'Cell 1', transport: 'tcp', address: '192.168.1.10', port: 49152 };
+  return { name: 'Cell 1', transport: 'tcp', address: '192.168.1.10', port: DEFAULT_SESSION_PORT };
 }
 
 function stdioProfile(): ConnectionProfile {

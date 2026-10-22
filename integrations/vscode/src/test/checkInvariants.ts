@@ -1,6 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { DEFAULT_SESSION_PORT } from '../sessionPort';
+
 const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf-8'));
 
 // Collect all test file contents
@@ -49,6 +51,29 @@ if (packageJson.contributes.taskDefinitions) {
   for (const taskDef of packageJson.contributes.taskDefinitions) {
     if (!testContent.includes(taskDef.type)) {
       failures.push(`Task definition '${taskDef.type}' has no test reference`);
+    }
+  }
+}
+
+// Check that every hand-written statement of the default port agrees with the
+// generated constant. Each file below must state a default at least once, so
+// rewording a sentence cannot silently switch its check off.
+const repoRoot = path.join(__dirname, '..', '..', '..', '..');
+const portStatements: Array<[string, string]> = [
+  ['package.json', JSON.stringify(packageJson)],
+  [
+    'specs/design/engineering-connection.md',
+    fs.readFileSync(path.join(repoRoot, 'specs', 'design', 'engineering-connection.md'), 'utf-8'),
+  ],
+];
+for (const [file, text] of portStatements) {
+  const stated = [...text.matchAll(/\bdefaults?(?:\s+to)?\s+(\d+)/gi)].map(m => Number(m[1]));
+  if (stated.length === 0) {
+    failures.push(`${file} states no default port`);
+  }
+  for (const port of stated) {
+    if (port !== DEFAULT_SESSION_PORT) {
+      failures.push(`${file} states default port ${port}, but the session port is ${DEFAULT_SESSION_PORT}`);
     }
   }
 }

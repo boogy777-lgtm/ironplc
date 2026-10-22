@@ -2,7 +2,7 @@
 
 import codecs
 from sys import path
-from os.path import abspath
+from os.path import abspath, join
 
 # -- Project information -----------------------------------------------------
 
@@ -100,6 +100,15 @@ with open("VERSION", "rb") as fp:
         decoded_text = encoded_text.decode('utf-8')
     
     version = str(decoded_text).strip()
+
+# -- Engineering port --------------------------------------------------------
+
+# The engineering port is defined once, in the runtime crate's resource file.
+# Pages write |session-port| instead of the number.
+with open(join("..", "compiler", "runtime", "resources", "session-port.txt"), encoding="utf-8") as fp:
+    session_port = fp.read().strip()
+
+rst_epilog = f".. |session-port| replace:: {session_port}"
 
 # -- Extensions configuration ---------------------------------------------------
 

@@ -219,6 +219,16 @@ impl From<HostStatus> for StatusPayload {
 /// version negotiation.
 pub const SESSION_PROTOCOL_VERSION: u32 = 1;
 
+/// The engineering port: TCP for the session and, for the services that
+/// share it, UDP for discovery. It is the first port of the IANA
+/// dynamic/private range, so no registered service owns it.
+///
+/// The value lives in `resources/session-port.txt` (a bare integer, so Rust
+/// reads it as the literal below) and the VS Code extension generates its
+/// copy from the same file. State the number nowhere else: read this
+/// constant, or the generated `DEFAULT_SESSION_PORT` in the extension.
+pub const DEFAULT_SESSION_PORT: u16 = include!("../resources/session-port.txt");
+
 /// The device panel block of an [`IdentityPayload`] (ADR-0063): the static
 /// device description the application composes — a soft device reports its
 /// binary name and version (`vm-cli` builds it from `env!("CARGO_PKG_VERSION")`),
