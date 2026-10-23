@@ -137,10 +137,12 @@ Documentation and the codegen lifecycle follow
 ### One session protocol, two transports
 
 The session protocol is the ADR-0055 command layer unchanged: one JSON
-command in, one JSON response out, rendered by `parse_command` /
-`render_response` and dispatched by `execute`
-(all in `compiler/runtime/src/commands.rs`). Both transports carry the same
-JSON values; they differ only in the envelope:
+command in, one JSON response out, read by `parse_command` / `parse_response`,
+written by `render_command` / `render_response` and dispatched by `execute`
+(all in `compiler/runtime/src/commands.rs`). The device and a Rust client use the
+same types for both directions. A line that a device answers without a code (the
+codec error) is not a `Response`, because every `CommandError` has a code. Both
+transports carry the same JSON values; they differ only in the envelope:
 
 - **stdio** — the existing behavior: the client spawns
   `ironplcvm serve <FILE>` and speaks newline-delimited JSON over the
@@ -657,7 +659,7 @@ Everything reused, with its one authority:
 
 | Mechanism piece | Existing call |
 |-----------------|---------------|
-| Session protocol (commands, codec, dispatch) | `Command`, `parse_command`, `render_response`, `execute` in `compiler/runtime/src/commands.rs` |
+| Session protocol (commands, codec, dispatch) | `Command`, `Response`, `parse_command`, `render_command`, `parse_response`, `render_response`, `execute` in `compiler/runtime/src/commands.rs` |
 | stdio session server | `serve` in `compiler/vm-cli/src/serve.rs` |
 | Codec error line (codeless, ADR-0055) | `codec_error_line` in `compiler/vm-cli/src/serve.rs` |
 | Client session (request FIFO, response parsing) | `HotEditSession`, `parseResponseLine`, `encodeRequest` in `integrations/vscode/src/hotEditSession.ts` |
