@@ -14,6 +14,7 @@
 mod commands;
 mod conversion;
 mod error;
+pub mod frame;
 mod generation;
 mod host;
 mod migration;

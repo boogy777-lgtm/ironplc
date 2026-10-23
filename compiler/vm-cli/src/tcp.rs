@@ -2,11 +2,12 @@
 //! `serve_session` loop as stdio, one message per
 //! 4-byte-little-endian-length-prefixed frame instead of one message per
 //! newline-delimited line. The frame replaces only the delimiter; the JSON
-//! inside is byte-identical on both transports.
+//! inside is byte-identical on both transports. The frame and the timeouts are
+//! defined once, in `ironplc_runtime::frame`, which a client reads too.
 //!
 //! One frame is one message: `u32` little-endian length, then exactly that
 //! many bytes of one UTF-8 JSON line (no trailing newline — little-endian
-//! matches the container wire format). A declared length over [`MAX_FRAME`]
+//! matches the container wire format). A declared length over `MAX_FRAME`
 //! (16 MiB, the container-upload headroom), a payload that is not exactly one
 //! line (raw `\n`), non-UTF-8 bytes, or EOF mid-frame is a framing error:
 //! the session answers V6013 on the wire and the connection closes, while
@@ -21,16 +22,16 @@
 //! exclusivity. The per-message read timeout drops an idle client the same
 //! way, with V6013 on the wire.
 
-use std::fmt;
-use std::io::{self, BufRead, Read, Write};
-use std::mem;
+use std::io;
 use std::net::{IpAddr, SocketAddr, TcpListener, TcpStream};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use ironplc_redundancy::Shell;
+use ironplc_runtime::frame::{
+    is_framing_error, write_frame, FrameReader, FrameWriter, RESPONSE_TIMEOUT,
+};
 use ironplc_runtime::{RuntimeHost, DEFAULT_SESSION_PORT};
 
 use crate::device_settings::device::Device;
@@ -39,52 +40,15 @@ use crate::error::{self, VmError};
 use crate::serve::{compose_host, serve_session};
 use crate::slot_store::SlotStore;
 
-/// The largest frame the transport accepts: 16 MiB, the container-upload
-/// headroom (`acceptEdits` bytes ride one message, ADR-0055). A larger
-/// declared length is a framing error — the client must be speaking
-/// something else, and the session must not allocate on its word.
-pub(crate) const MAX_FRAME: usize = 16 * 1024 * 1024;
-
-/// The per-message read timeout: a command's response must arrive within
-/// 30 s of its request, so an idle client is dropped rather than holding the
-/// one engineering session forever.
-const READ_TIMEOUT: Duration = Duration::from_secs(30);
-
 /// The one-line refusal a second connection receives (V6014): it names the
 /// single-session policy the attempt ran into (ADR-0065).
 const SESSION_REFUSED_MESSAGE: &str = "the device serves exactly one engineering session and it is already active; only one session is served at a time";
-
-/// The payload of the io error a framing violation raises, so the session
-/// loop can tell a broken stream (V6013, connection closes) apart from every
-/// other I/O failure — and from the codeless codec error, which breaks one
-/// message only.
-#[derive(Debug)]
-struct FramingError(String);
-
-impl fmt::Display for FramingError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl std::error::Error for FramingError {}
-
-/// Raises `message` as the io error a framing violation surfaces as.
-fn framing(message: String) -> io::Error {
-    io::Error::new(io::ErrorKind::InvalidData, FramingError(message))
-}
-
-/// Whether `err` is a framing violation raised by [`framing`].
-fn is_framing(err: &io::Error) -> bool {
-    err.get_ref()
-        .is_some_and(|inner| inner.is::<FramingError>())
-}
 
 /// Whether a session ended with V6013 on the wire: a framing violation or a
 /// per-message read timeout. Everything else (a reset peer, a broken pipe)
 /// closes the connection silently — there is no peer left to answer.
 fn ends_with_framing_code(err: &io::Error) -> bool {
-    is_framing(err)
+    is_framing_error(err)
         || matches!(
             err.kind(),
             io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
@@ -94,149 +58,13 @@ fn ends_with_framing_code(err: &io::Error) -> bool {
 /// The V6013 message for a dropped session: the framing detail, or the idle
 /// timeout the client exceeded.
 fn framing_code_message(err: &io::Error) -> String {
-    if is_framing(err) {
+    if is_framing_error(err) {
         format!("session framing error: {err}")
     } else {
-        format!("no message received within {} s", READ_TIMEOUT.as_secs())
-    }
-}
-
-/// Reads the 4-byte frame header; `Ok(None)` is a clean EOF at a frame
-/// boundary (the client's orderly hang-up), which ends the session exactly
-/// like EOF on stdio. EOF after a partial header is a framing error: the
-/// stream broke mid-frame.
-fn read_header_or_eof(reader: &mut impl Read) -> io::Result<Option<[u8; 4]>> {
-    let mut header = [0u8; 4];
-    let mut read = 0;
-    while read < header.len() {
-        match reader.read(&mut header[read..]) {
-            Ok(0) if read == 0 => return Ok(None),
-            Ok(0) => return Err(framing("connection closed mid-frame".to_string())),
-            Ok(count) => read += count,
-            Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
-            Err(err) => return Err(err),
-        }
-    }
-    Ok(Some(header))
-}
-
-/// Presents a frame stream as lines: each frame's payload is exactly one JSON
-/// line, so serving it through [`BufRead`] with a `\n` sentinel appended
-/// makes the stdio session loop (`reader.lines()`) serve TCP byte-for-byte
-/// unchanged. Framing violations surface as the io error [`framing`] raises.
-struct FrameReader<R> {
-    inner: R,
-    frame: Vec<u8>,
-    pos: usize,
-}
-
-impl<R: Read> FrameReader<R> {
-    fn new(inner: R) -> Self {
-        FrameReader {
-            inner,
-            frame: Vec::new(),
-            pos: 0,
-        }
-    }
-
-    /// Reads the next frame into the line buffer; `Ok(false)` is a clean EOF
-    /// at a frame boundary.
-    fn next_frame(&mut self) -> io::Result<bool> {
-        let Some(header) = read_header_or_eof(&mut self.inner)? else {
-            return Ok(false);
-        };
-        let len = u32::from_le_bytes(header) as usize;
-        if len > MAX_FRAME {
-            return Err(framing(format!(
-                "frame length {len} exceeds the {MAX_FRAME}-byte session limit"
-            )));
-        }
-        let mut payload = vec![0u8; len];
-        self.inner
-            .read_exact(&mut payload)
-            .map_err(|err| match err.kind() {
-                io::ErrorKind::UnexpectedEof => framing("connection closed mid-frame".to_string()),
-                // A read timeout and friends propagate as-is: the caller maps
-                // them to the same V6013 drop, with the timeout's own message.
-                _ => err,
-            })?;
-        if payload.contains(&b'\n') {
-            return Err(framing("frame payload is not one JSON line".to_string()));
-        }
-        let line = String::from_utf8(payload)
-            .map_err(|_| framing("frame payload is not valid UTF-8".to_string()))?;
-        self.frame.clear();
-        self.frame.extend_from_slice(line.as_bytes());
-        self.frame.push(b'\n');
-        self.pos = 0;
-        Ok(true)
-    }
-}
-
-impl<R: Read> Read for FrameReader<R> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let available = self.fill_buf()?;
-        let count = available.len().min(buf.len());
-        buf[..count].copy_from_slice(&available[..count]);
-        self.consume(count);
-        Ok(count)
-    }
-}
-
-impl<R: Read> BufRead for FrameReader<R> {
-    fn fill_buf(&mut self) -> io::Result<&[u8]> {
-        while self.pos >= self.frame.len() {
-            if !self.next_frame()? {
-                return Ok(&[]);
-            }
-        }
-        Ok(&self.frame[self.pos..])
-    }
-
-    fn consume(&mut self, amt: usize) {
-        self.pos = (self.pos + amt).min(self.frame.len());
-    }
-}
-
-/// Frames what is written to it: the buffered line becomes one frame —
-/// 4-byte little-endian length, then the line bytes without the trailing
-/// newline — on [`Write::flush`]. The session loop writes one line and
-/// flushes per response, so one flush is exactly one frame.
-struct FrameWriter<W> {
-    inner: W,
-    pending: Vec<u8>,
-}
-
-impl<W: Write> FrameWriter<W> {
-    fn new(inner: W) -> Self {
-        FrameWriter {
-            inner,
-            pending: Vec::new(),
-        }
-    }
-}
-
-impl<W: Write> Write for FrameWriter<W> {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.pending.extend_from_slice(buf);
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        let mut line = mem::take(&mut self.pending);
-        if line.is_empty() {
-            return self.inner.flush();
-        }
-        // The session loop delimits lines with writeln!; the frame carries
-        // the line bytes only.
-        if line.last() == Some(&b'\n') {
-            line.pop();
-        }
-        let len = u32::try_from(line.len())
-            .map_err(|_| framing("response line exceeds the frame length field".to_string()))?;
-        self.inner.write_all(&len.to_le_bytes())?;
-        self.inner.write_all(&line)?;
-        self.inner.flush()
+        format!(
+            "no message received within {} s",
+            RESPONSE_TIMEOUT.as_secs()
+        )
     }
 }
 
@@ -249,9 +77,7 @@ fn write_error_frame(stream: &mut TcpStream, v_code: &str, message: &str) -> io:
         "message": message,
     })
     .to_string();
-    let mut writer = FrameWriter::new(&mut *stream);
-    writeln!(writer, "{line}")?;
-    writer.flush()
+    write_frame(stream, &line)
 }
 
 /// Serves one TCP session: the stdio session loop over the framed transport,
@@ -264,7 +90,7 @@ fn serve_connection(
     store: &mut SlotStore,
     stream: &mut TcpStream,
 ) -> io::Result<()> {
-    stream.set_read_timeout(Some(READ_TIMEOUT))?;
+    stream.set_read_timeout(Some(RESPONSE_TIMEOUT))?;
     let reader = FrameReader::new(stream.try_clone()?);
     let writer = FrameWriter::new(stream.try_clone()?);
     serve_session(host, reader, writer, Some(store), device, Some(shell))
@@ -424,166 +250,13 @@ pub(crate) fn serve_tcp(
 
 #[cfg(test)]
 mod tests {
+    use std::io::Read;
+
+    use ironplc_runtime::frame::framing_error;
     use rstest::rstest;
     use spec_test_macro::spec_test;
 
     use super::*;
-
-    /// Frames `line` the way a client writes it: length prefix, line bytes.
-    fn frame_bytes(line: &str) -> Vec<u8> {
-        let mut bytes = (line.len() as u32).to_le_bytes().to_vec();
-        bytes.extend_from_slice(line.as_bytes());
-        bytes
-    }
-
-    /// The lines `FrameReader` assembles from `bytes`, which may split frames
-    /// any way a TCP stream can.
-    fn read_lines(bytes: &[u8]) -> io::Result<Vec<String>> {
-        let mut reader = FrameReader::new(io::Cursor::new(bytes.to_vec()));
-        let mut lines = Vec::new();
-        let mut line = String::new();
-        while reader.read_line(&mut line)? > 0 {
-            lines.push(line.clone());
-            line.clear();
-        }
-        Ok(lines)
-    }
-
-    /// A reader that yields at most `chunk` bytes per read, like a slow peer.
-    struct Chunked {
-        bytes: Vec<u8>,
-        pos: usize,
-        chunk: usize,
-    }
-
-    impl Read for Chunked {
-        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-            if self.pos >= self.bytes.len() {
-                return Ok(0);
-            }
-            let end = (self.pos + self.chunk).min(self.bytes.len());
-            let count = (end - self.pos).min(buf.len());
-            buf[..count].copy_from_slice(&self.bytes[self.pos..self.pos + count]);
-            self.pos += count;
-            Ok(count)
-        }
-    }
-
-    #[test]
-    fn frame_reader_when_one_frame_then_yields_the_line() {
-        let lines = read_lines(&frame_bytes(r#"{"command":"getStatus"}"#)).unwrap();
-
-        assert_eq!(lines, vec![r#"{"command":"getStatus"}"#.to_string() + "\n"]);
-    }
-
-    #[test]
-    fn frame_reader_when_frame_splits_across_reads_then_assembles_the_line() {
-        let bytes = frame_bytes(r#"{"command":"acceptEdits","program":[1,2,3]}"#);
-        let mut reader = FrameReader::new(Chunked {
-            bytes,
-            pos: 0,
-            chunk: 1,
-        });
-
-        let mut line = String::new();
-        reader.read_line(&mut line).unwrap();
-
-        assert_eq!(
-            line,
-            r#"{"command":"acceptEdits","program":[1,2,3]}"#.to_string() + "\n"
-        );
-    }
-
-    #[test]
-    fn frame_reader_when_two_frames_then_yields_two_lines() {
-        let mut bytes = frame_bytes(r#"{"command":"getStatus"}"#);
-        bytes.extend_from_slice(&frame_bytes(r#"{"command":"identity"}"#));
-
-        let lines = read_lines(&bytes).unwrap();
-
-        assert_eq!(lines.len(), 2);
-        assert_eq!(lines[1], r#"{"command":"identity"}"#.to_string() + "\n");
-    }
-
-    #[test]
-    fn frame_reader_when_eof_at_frame_boundary_then_clean_end() {
-        let lines = read_lines(&[]).unwrap();
-
-        assert!(lines.is_empty());
-    }
-
-    #[test]
-    fn frame_reader_when_eof_mid_frame_then_framing_error() {
-        let mut bytes = frame_bytes(r#"{"command":"getStatus"}"#);
-        bytes.truncate(bytes.len() - 3);
-
-        let err = read_lines(&bytes).unwrap_err();
-
-        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
-        assert!(is_framing(&err));
-        assert_eq!(err.to_string(), "connection closed mid-frame");
-    }
-
-    #[test]
-    fn frame_reader_when_length_exceeds_cap_then_framing_error_without_payload_read() {
-        let mut bytes = (MAX_FRAME as u64 + 1).to_le_bytes()[..4].to_vec();
-        bytes.extend_from_slice(&[b'x'; 8]);
-
-        let err = read_lines(&bytes).unwrap_err();
-
-        assert!(is_framing(&err));
-        assert!(err
-            .to_string()
-            .starts_with("frame length 16777217 exceeds the 16777216-byte session limit"));
-    }
-
-    #[test]
-    fn frame_reader_when_payload_is_not_utf8_then_framing_error() {
-        let mut bytes = 2u32.to_le_bytes().to_vec();
-        bytes.extend_from_slice(&[0xff, 0xfe]);
-
-        let err = read_lines(&bytes).unwrap_err();
-
-        assert!(is_framing(&err));
-        assert_eq!(err.to_string(), "frame payload is not valid UTF-8");
-    }
-
-    #[test]
-    fn frame_reader_when_payload_carries_newline_then_framing_error() {
-        let payload = "{\"command\":\"getStatus\"}\n{\"command\":\"getStatus\"}";
-        let mut bytes = (payload.len() as u32).to_le_bytes().to_vec();
-        bytes.extend_from_slice(payload.as_bytes());
-
-        let err = read_lines(&bytes).unwrap_err();
-
-        assert!(is_framing(&err));
-        assert_eq!(err.to_string(), "frame payload is not one JSON line");
-    }
-
-    #[test]
-    fn frame_writer_when_line_flushed_then_one_frame_without_newline() {
-        let mut output = Vec::new();
-        {
-            let mut writer = FrameWriter::new(&mut output);
-            writer.write_all(br#"{"response":"ack"}"#).unwrap();
-            writer.write_all(b"\n").unwrap();
-            writer.flush().unwrap();
-        }
-
-        let expected = r#"{"response":"ack"}"#;
-        let mut expected_bytes = (expected.len() as u32).to_le_bytes().to_vec();
-        expected_bytes.extend_from_slice(expected.as_bytes());
-        assert_eq!(output, expected_bytes);
-    }
-
-    #[test]
-    fn frame_writer_when_flushed_empty_then_no_frame() {
-        let mut output = Vec::new();
-        let mut writer = FrameWriter::new(&mut output);
-        writer.flush().unwrap();
-
-        assert!(output.is_empty());
-    }
 
     #[test]
     fn write_error_frame_then_one_coded_error_line_frame() {
@@ -612,7 +285,9 @@ mod tests {
         let would_block = io::Error::new(io::ErrorKind::WouldBlock, "would block");
         let reset = io::Error::new(io::ErrorKind::ConnectionReset, "reset");
 
-        assert!(ends_with_framing_code(&framing("bad length".to_string())));
+        assert!(ends_with_framing_code(&framing_error(
+            "bad length".to_string()
+        )));
         assert!(ends_with_framing_code(&timeout));
         assert!(ends_with_framing_code(&would_block));
         assert!(!ends_with_framing_code(&reset));
@@ -624,7 +299,7 @@ mod tests {
 
     #[test]
     fn framing_code_message_when_framing_then_detail_when_timeout_then_timeout() {
-        let detail = framing_code_message(&framing("bad length".to_string()));
+        let detail = framing_code_message(&framing_error("bad length".to_string()));
         let timeout = framing_code_message(&io::Error::new(io::ErrorKind::TimedOut, "timed out"));
 
         assert_eq!(detail, "session framing error: bad length");
