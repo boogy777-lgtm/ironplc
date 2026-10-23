@@ -109,6 +109,7 @@ P6010,LibraryManifestInvalid,Compatibility library manifest is malformed or miss
 P6011,LibraryNotFound,Referenced compatibility library not found,Error,
 P6012,ProjectManifestUnresolvable,Project manifest does not resolve to a project,Error,
 P8001,McpInputValidation,MCP tool input validation error,Error,
+P8002,McpIronLinkUnavailable,IronLink could not be used by an MCP tool,Error,
 P9001,UnsupportedStdLibType,Referenced type is valid but not implemented,Error,
 P9002,NoContent,Set of valid source files has no content,Error,
 P9003,XmlBodyTypeNotSupported,POU body language is not supported,Error,

@@ -50,8 +50,19 @@ impl SoftDevice {
     /// Starts a device that serves `container` on a free loopback port and
     /// waits until it listens. It answers no discovery.
     pub fn start(container: &Path) -> SoftDevice {
+        SoftDevice::spawn(container, &["--no-discovery"])
+    }
+
+    /// Like [`start`](Self::start), and the device answers discovery on UDP at
+    /// the same address and port.
+    pub fn start_discoverable(container: &Path) -> SoftDevice {
+        SoftDevice::spawn(container, &[])
+    }
+
+    fn spawn(container: &Path, extra: &[&str]) -> SoftDevice {
         let mut child = Command::new(workspace_binary("ironplcvm"))
-            .args(["-vv", "serve", "--listen", "127.0.0.1:0", "--no-discovery"])
+            .args(["-vv", "serve", "--listen", "127.0.0.1:0"])
+            .args(extra)
             .arg(container)
             .stdin(Stdio::null())
             .stdout(Stdio::null())

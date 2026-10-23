@@ -3,6 +3,7 @@
 //! Exposes IEC 61131-3 compiler capabilities as MCP tools over stdio transport.
 
 pub mod cache;
+pub mod ironlink;
 pub mod logging;
 pub mod runner;
 pub mod server;

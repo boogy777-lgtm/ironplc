@@ -1,0 +1,27 @@
+=====
+P8002
+=====
+
+.. problem-summary:: P8002
+
+This error occurs when an MCP tool needs IronLink and cannot use it. The
+network tools of the MCP server (:literal:`browse_network`) do not search the
+network themselves: they start :program:`ironlink`, the IronLink program that
+ships with IronPLC, and ask it. The tool returns this diagnostic with
+``ok: false``.
+
+Common causes
+-------------
+
+1. The :program:`ironlink` program is neither in the directory of the running
+   MCP server nor on ``PATH``. The installers put the two together, so the usual
+   cause is a copy of :program:`ironplcmcp` that was moved away from the
+   installation.
+2. :program:`ironlink` was found but did not start, ended, or did not answer in
+   time.
+
+To fix this error, install IronPLC with IronLink, or add the directory that
+holds :program:`ironlink` to ``PATH``, and call the tool again.
+
+When IronLink starts and refuses the request, the tool returns the ``l_code`` of
+IronLink (see :doc:`/reference/ironlink/problems/index`) and not this code.

@@ -338,6 +338,38 @@ particular build.
 **Returns:** an object with ``ok``, ``removed`` (``true`` when the
 entry existed and was evicted), and ``diagnostics``.
 
+Network Tools
+=============
+
+browse_network
+--------------
+
+Finds the controllers this workstation can see. The tool does not search the
+network itself: it starts :program:`ironlink`, the IronLink program that ships
+with IronPLC and is found beside :program:`ironplcmcp` or on ``PATH``, and asks
+it to browse. IronLink broadcasts on the local network, asks the controller
+addresses stored on this workstation and asks any address you give.
+
+**Inputs:**
+
+* ``addresses`` (array of strings, optional) --- Controller addresses (``IP`` or
+  ``IP:PORT``) to ask directly, besides the broadcast and the stored address
+  list.
+* ``timeout_ms`` (number, optional) --- How long to wait for replies. IronLink's
+  default is 1000 and its largest value is 60000.
+* ``attempts`` (number, optional) --- How many times to send the request.
+  IronLink's default is 2 and its largest value is 10.
+
+**Returns:** an object with ``ok``, ``browse`` and ``diagnostics``. ``browse`` is
+the browse result of IronLink: the ``workstation`` and, for each driver that ran,
+its ``kind``, ``targets``, ``devices``, ``otherVersions`` and ``undecodable``.
+A device is listed by device id, with the routes by which it answered and the
+time of each answer. An answer says what the device was when it was seen, not
+that it is reachable now. When IronLink refuses the request, ``ok`` is ``false``
+and the object has ``l_code`` (for example ``L6004``) and ``message``. When
+:program:`ironlink` is not found or does not answer, ``ok`` is ``false`` and a
+:doc:`P8002 </reference/compiler/problems/P8002>` diagnostic says why.
+
 See Also
 ========
 

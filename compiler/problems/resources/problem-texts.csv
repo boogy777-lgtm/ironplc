@@ -364,6 +364,8 @@ P8001,mcp_input_validation_symbols_response_too_large,"Response exceeds 256 KiB 
 P9002,no_content_directory_initialization_unsupported,MemoryBackedProject does not support directory initialization
 P9002,no_content_first_location,First location
 P9002,no_content_multiple_directories_unsupported,This project implementation does not support multiple directories
+P8002,mcp_iron_link_unavailable_failed,"IronLink did not answer: {reason}"
+P8002,mcp_iron_link_unavailable_not_found,"The ironlink program was not found in {searched}. Install IronPLC with IronLink, or put ironlink on PATH."
 P9002,no_content_no_documents_to_tokenize,No documents to tokenize
 P9003,xml_body_type_not_supported_implementation,POU uses {language} which is not supported. Use ST (Structured Text) instead.
 P9003,xml_body_type_not_supported_pou,POU '{name}' uses {language} which is not supported. Use ST (Structured Text) instead.

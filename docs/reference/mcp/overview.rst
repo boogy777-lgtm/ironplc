@@ -22,6 +22,10 @@ JSON-RPC stream.
 
 The server exits when its client disconnects.
 
+The server opens no listening socket. A network tool (:literal:`browse_network`)
+starts :program:`ironlink`, the IronLink program that finds controllers, as a
+child process and speaks to it on its standard input and output.
+
 Stateless Design
 ================
 
