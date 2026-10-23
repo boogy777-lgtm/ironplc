@@ -53,6 +53,7 @@ use serde::{Deserialize, Serialize};
 
 use super::common::{serialize_diagnostic, serialize_diagnostics, SourceInput};
 use crate::cache::ContainerCache;
+use crate::tools::device::{DeviceInput, ResolvedDevice};
 
 /// The server's single hot-edit session: the running application the
 /// protocol operates on.
@@ -83,6 +84,19 @@ pub struct HotEditAcceptInput {
     #[serde(default)]
     #[schemars(schema_with = "migration_schema")]
     pub migration: BTreeMap<u64, MigrationDecisionSpec>,
+    /// The device to stage the candidate on (see [`DeviceInput`]). Without it
+    /// the candidate goes to the server's own session.
+    #[serde(default)]
+    pub device: Option<DeviceInput>,
+}
+
+/// Input of the `hot_edit_*` tools that take no sources: where to act.
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+pub struct HotEditDeviceInput {
+    /// The device to act on (see [`DeviceInput`]). Without it the tool acts on
+    /// the server's own session.
+    #[serde(default)]
+    pub device: Option<DeviceInput>,
 }
 
 /// schemars schema function for the UID-keyed `migration` map.
@@ -122,6 +136,13 @@ pub struct HotEditResponse {
     /// The V4010 type changes to decide, one entry per problematic entity
     /// (ADR 0061). Null on success and on every other refusal.
     pub pairs: Option<Vec<TypeChangeDetail>>,
+    /// The device that answered, when the tool acted on a device (the `device`
+    /// parameter): its id, name, model, modification and runtime version, as its
+    /// `identity` reported them. Absent for the in-process host. Compare the id
+    /// with the one asked for: the tool does not refuse a device for being
+    /// another one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub device: Option<DeviceIdentity>,
     /// Compiler diagnostics: compile failures on `hot_edit_accept`, and
     /// validation failures (such as calling a tool before any session
     /// exists) with code P8001.
@@ -138,7 +159,22 @@ impl HotEditResponse {
             v_code: None,
             message: None,
             pairs: None,
+            device: None,
             diagnostics: vec![],
+        }
+    }
+
+    /// Builds the failure response that carries diagnostics alone.
+    fn with_diagnostics(diagnostics: Vec<serde_json::Value>) -> Self {
+        HotEditResponse {
+            ok: false,
+            result: None,
+            status: None,
+            v_code: None,
+            message: None,
+            pairs: None,
+            device: None,
+            diagnostics,
         }
     }
 
@@ -153,6 +189,7 @@ impl HotEditResponse {
             v_code: None,
             message: Some(message),
             pairs: None,
+            device: None,
             diagnostics: vec![],
         }
     }
@@ -169,6 +206,7 @@ impl HotEditResponse {
             v_code: Some(error.v_code().to_string()),
             message: Some(error.message().to_string()),
             pairs: error.pairs().map(<[TypeChangeDetail]>::to_vec),
+            device: None,
             diagnostics: vec![],
         }
     }
@@ -189,6 +227,7 @@ impl HotEditResponse {
                     context.instance_id.raw()
                 )),
                 pairs: None,
+                device: None,
                 diagnostics: vec![],
             },
             RuntimeError::Internal { reason } => {
@@ -206,6 +245,7 @@ impl HotEditResponse {
                     v_code: error.v_code().map(str::to_string),
                     message: Some(error.to_string()),
                     pairs: None,
+                    device: None,
                     diagnostics: vec![],
                 }
             }
@@ -216,15 +256,10 @@ impl HotEditResponse {
 /// Builds the failure response for a P8001 input/session validation error,
 /// the same convention the `run` tool uses for unknown container handles.
 fn validation_failure(text: Text) -> HotEditResponse {
-    HotEditResponse {
-        ok: false,
-        result: None,
-        status: None,
-        v_code: None,
-        message: None,
-        pairs: None,
-        diagnostics: serialize_diagnostics(&[Diagnostic::text(SourceSpan::default(), text)], &[]),
-    }
+    HotEditResponse::with_diagnostics(serialize_diagnostics(
+        &[Diagnostic::text(SourceSpan::default(), text)],
+        &[],
+    ))
 }
 
 /// Builds the failure response for a violated internal invariant — reachable
@@ -238,10 +273,46 @@ fn internal_failure(message: String) -> HotEditResponse {
         v_code: None,
         message: None,
         pairs: None,
+        device: None,
         diagnostics: vec![serialize_diagnostic(
             &Diagnostic::internal_error_at(Label::span(SourceSpan::default(), message)),
             &[],
         )],
+    }
+}
+
+/// Where a hot-edit command is carried out: the server's own host, or a device
+/// reached through the session protocol. The tools build the same [`Command`]
+/// and the same response for both.
+#[derive(Clone, Copy)]
+pub enum Target<'a> {
+    /// The in-process host of the server's single session.
+    InProcess(&'a Mutex<HotEditSession>),
+    /// A device, connected to for the command.
+    Device(&'a ResolvedDevice),
+}
+
+impl<'a> From<&'a Mutex<HotEditSession>> for Target<'a> {
+    fn from(session: &'a Mutex<HotEditSession>) -> Self {
+        Target::InProcess(session)
+    }
+}
+
+impl<'a> From<&'a ResolvedDevice> for Target<'a> {
+    fn from(device: &'a ResolvedDevice) -> Self {
+        Target::Device(device)
+    }
+}
+
+/// Carries out one command on the target. `drive_scan` is for the in-process
+/// host (see [`dispatch`]); a device drives its own scan round.
+fn run(command: Command, target: Target<'_>, drive_scan: bool) -> HotEditResponse {
+    match target {
+        Target::InProcess(session) => {
+            let mut guard = session.lock().unwrap_or_else(|e| e.into_inner());
+            dispatch(command, &mut guard, drive_scan)
+        }
+        Target::Device(device) => device::exchange(device, command),
     }
 }
 
@@ -290,9 +361,8 @@ fn mcp_device_identity() -> DeviceIdentity {
 }
 
 /// Builds the `hot_edit_status` response: the session's status payload.
-pub fn build_status_response(session: &Mutex<HotEditSession>) -> HotEditResponse {
-    let mut guard = session.lock().unwrap_or_else(|e| e.into_inner());
-    dispatch(Command::GetStatus, &mut guard, false)
+pub fn build_status_response<'a>(target: impl Into<Target<'a>>) -> HotEditResponse {
+    run(Command::GetStatus, target.into(), false)
 }
 
 /// Builds the `hot_edit_accept` response without migration decisions.
@@ -301,13 +371,13 @@ pub fn build_status_response(session: &Mutex<HotEditSession>) -> HotEditResponse
 /// [`build_accept_response_with_decisions`](Self::build_accept_response_with_decisions)
 /// with an empty decision map: an out-of-policy type change is refused with a
 /// V4010 that names every problematic pair.
-pub fn build_accept_response(
+pub fn build_accept_response<'a>(
     sources: &[SourceInput],
     options_value: &serde_json::Value,
     cache: &Mutex<ContainerCache>,
-    session: &Mutex<HotEditSession>,
+    target: impl Into<Target<'a>>,
 ) -> HotEditResponse {
-    build_accept_response_with_decisions(sources, options_value, &BTreeMap::new(), cache, session)
+    build_accept_response_with_decisions(sources, options_value, &BTreeMap::new(), cache, target)
 }
 
 /// Builds the `hot_edit_accept` response, resolving out-of-policy type
@@ -322,30 +392,52 @@ pub fn build_accept_response(
 ///   schedule, V4010 type changes, V4013 already staged, ...) comes back with
 ///   its stable V-code. A V4010 refusal carries its pair list, and the caller
 ///   resubmits the identical sources with the decisions map.
-pub fn build_accept_response_with_decisions(
+pub fn build_accept_response_with_decisions<'a>(
     sources: &[SourceInput],
     options_value: &serde_json::Value,
     migration: &BTreeMap<u64, MigrationDecisionSpec>,
     cache: &Mutex<ContainerCache>,
-    session: &Mutex<HotEditSession>,
+    target: impl Into<Target<'a>>,
 ) -> HotEditResponse {
+    match prepare_candidate(sources, options_value, cache) {
+        Ok(candidate) => send_candidate(
+            candidate.program,
+            candidate.ids_out_of_sync,
+            migration,
+            target,
+        ),
+        Err(response) => response,
+    }
+}
+
+/// A compiled program ready to be sent as an edit candidate.
+pub struct Candidate {
+    /// The compiled container in its wire format.
+    pub program: Vec<u8>,
+    /// The workstation's verdict on the stable variable IDs, when they are out
+    /// of sync with the declarations (see [`send_candidate`]).
+    pub ids_out_of_sync: Option<String>,
+}
+
+/// Compiles `sources` for `hot_edit_accept`. Compiling is separate from sending
+/// because it runs on the thread that serves the request, on the stack budget,
+/// while sending to a device waits on the network.
+pub fn prepare_candidate(
+    sources: &[SourceInput],
+    options_value: &serde_json::Value,
+    cache: &Mutex<ContainerCache>,
+) -> Result<Candidate, HotEditResponse> {
     // The compile tool owns the pipeline; calling it keeps `hot_edit_accept`
     // on exactly the compile path the `compile` tool serves, diagnostics and
     // container cache included, so the two can never drift apart.
     let compiled = crate::tools::compile::build_response(sources, options_value, false, cache);
     if !compiled.ok {
-        return HotEditResponse {
-            ok: false,
-            result: None,
-            status: None,
-            v_code: None,
-            message: None,
-            pairs: None,
-            diagnostics: compiled.diagnostics,
-        };
+        return Err(HotEditResponse::with_diagnostics(compiled.diagnostics));
     }
     let Some(container_id) = compiled.container_id else {
-        return internal_failure("compile succeeded without a container id".to_string());
+        return Err(internal_failure(
+            "compile succeeded without a container id".to_string(),
+        ));
     };
     let cached = {
         let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
@@ -354,11 +446,14 @@ pub fn build_accept_response_with_decisions(
             .map(|cached| (cached.iplc_bytes.clone(), cached.ids_out_of_sync.clone()))
     };
     let Some((program, ids_out_of_sync)) = cached else {
-        return internal_failure(format!(
+        return Err(internal_failure(format!(
             "compiled container '{container_id}' was evicted before it could be staged"
-        ));
+        )));
     };
-    send_candidate(program, ids_out_of_sync, migration, session)
+    Ok(Candidate {
+        program,
+        ids_out_of_sync,
+    })
 }
 
 /// Sends a compiled candidate to the session, unless the workstation knows the
@@ -369,29 +464,33 @@ pub fn build_accept_response_with_decisions(
 /// engineer. While it is set the candidate is not sent: the controller refuses a
 /// candidate that goes through a migration while a persistent variable has no ID
 /// (V4020), and says so after the candidate has been transferred.
-fn send_candidate(
+pub fn send_candidate<'a>(
     program: Vec<u8>,
     ids_out_of_sync: Option<String>,
     migration: &BTreeMap<u64, MigrationDecisionSpec>,
-    session: &Mutex<HotEditSession>,
+    target: impl Into<Target<'a>>,
 ) -> HotEditResponse {
     if let Some(difference) = ids_out_of_sync {
         return HotEditResponse::not_sent(difference);
     }
 
-    let mut guard = session.lock().unwrap_or_else(|e| e.into_inner());
-    if guard.host.is_none() {
-        return establish(program, &mut guard);
+    let accept = |program: Vec<u8>| Command::AcceptEdits {
+        program,
+        edit: None,
+        migration: migration.clone(),
+    };
+    match target.into() {
+        Target::InProcess(session) => {
+            let mut guard = session.lock().unwrap_or_else(|e| e.into_inner());
+            if guard.host.is_none() {
+                // The first accept has nothing to stage against: it establishes.
+                return establish(program, &mut guard);
+            }
+            dispatch(accept(program), &mut guard, false)
+        }
+        // A device runs a program already: the candidate is staged against it.
+        Target::Device(device) => device::exchange(device, accept(program)),
     }
-    dispatch(
-        Command::AcceptEdits {
-            program,
-            edit: None,
-            migration: migration.clone(),
-        },
-        &mut guard,
-        false,
-    )
 }
 
 /// Creates the session from the compiled program's wire bytes.
@@ -430,34 +529,33 @@ fn establish(program: Vec<u8>, session: &mut HotEditSession) -> HotEditResponse 
 /// Builds the `hot_edit_test` response: activates the staged candidate at the
 /// next scan boundary and drives one scan round so the candidate is
 /// executing when the call returns.
-pub fn build_test_response(session: &Mutex<HotEditSession>) -> HotEditResponse {
-    let mut guard = session.lock().unwrap_or_else(|e| e.into_inner());
-    dispatch(Command::TestEdits, &mut guard, true)
+pub fn build_test_response<'a>(target: impl Into<Target<'a>>) -> HotEditResponse {
+    run(Command::TestEdits, target.into(), true)
 }
 
 /// Builds the `hot_edit_untest` response: reverts to the original artifact at
 /// the next scan boundary (process state is preserved) and drives one scan
 /// round so the revert is executing when the call returns.
-pub fn build_untest_response(session: &Mutex<HotEditSession>) -> HotEditResponse {
-    let mut guard = session.lock().unwrap_or_else(|e| e.into_inner());
-    dispatch(Command::UntestEdits, &mut guard, true)
+pub fn build_untest_response<'a>(target: impl Into<Target<'a>>) -> HotEditResponse {
+    run(Command::UntestEdits, target.into(), true)
 }
 
 /// Builds the `hot_edit_assemble` response: promotes the staged candidate to
 /// the running application and drives one scan round. Allowed from both the
 /// staged and the testing phase.
-pub fn build_assemble_response(session: &Mutex<HotEditSession>) -> HotEditResponse {
-    let mut guard = session.lock().unwrap_or_else(|e| e.into_inner());
-    dispatch(Command::AssembleEdits, &mut guard, true)
+pub fn build_assemble_response<'a>(target: impl Into<Target<'a>>) -> HotEditResponse {
+    run(Command::AssembleEdits, target.into(), true)
 }
 
 /// Builds the `hot_edit_cancel` response: discards the staged candidate while
 /// the original artifact keeps running. Takes effect immediately, so no scan
 /// round is driven.
-pub fn build_cancel_response(session: &Mutex<HotEditSession>) -> HotEditResponse {
-    let mut guard = session.lock().unwrap_or_else(|e| e.into_inner());
-    dispatch(Command::CancelEdits, &mut guard, false)
+pub fn build_cancel_response<'a>(target: impl Into<Target<'a>>) -> HotEditResponse {
+    run(Command::CancelEdits, target.into(), false)
 }
+
+mod device;
+pub use device::unresolved;
 
 #[cfg(test)]
 mod tests;

@@ -324,6 +324,8 @@ P6011,library_not_found_not_bundled,"project references compatibility library `{
 P6012,project_manifest_unresolvable,{manifest} does not resolve to a project: {reason}
 P6013,cannot_write_file,"{path}, {reason}"
 P8001,mcp_input_validation_container_id_unknown,unknown container_id '{container_id}'
+P8001,mcp_input_validation_device_id_no_route,"This workstation has no route to the device '{device_id}'. Call `browse_network` to find it and name it by `address` (and `port`), or store a route with IronLink."
+P8001,mcp_input_validation_device_selector_invalid,"`device` must name the device by `address` (with an optional `port`) or by `device_id`, not both and not neither; `port` goes with `address`."
 P8001,mcp_input_validation_hot_edit_session_missing,no hot edit session; call `hot_edit_accept` with a program to start one
 P8001,mcp_input_validation_option_key_unknown,Unknown option key '{key}'.
 P8001,mcp_input_validation_option_not_boolean,Option '{key}' must be a boolean.
@@ -366,6 +368,7 @@ P9002,no_content_first_location,First location
 P9002,no_content_multiple_directories_unsupported,This project implementation does not support multiple directories
 P8002,mcp_iron_link_unavailable_failed,"IronLink did not answer: {reason}"
 P8002,mcp_iron_link_unavailable_not_found,"The ironlink program was not found in {searched}. Install IronPLC with IronLink, or put ironlink on PATH."
+P8003,mcp_device_connection_failed,"Cannot reach the device {device}: {reason}"
 P9002,no_content_no_documents_to_tokenize,No documents to tokenize
 P9003,xml_body_type_not_supported_implementation,POU uses {language} which is not supported. Use ST (Structured Text) instead.
 P9003,xml_body_type_not_supported_pou,POU '{name}' uses {language} which is not supported. Use ST (Structured Text) instead.

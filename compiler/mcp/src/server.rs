@@ -13,8 +13,11 @@ use crate::tools::browse_network::BrowseNetworkInput;
 use crate::tools::common::ParseCheckInput;
 use crate::tools::compile::CompileInput;
 use crate::tools::container_drop::ContainerDropInput;
+use crate::tools::device::DeviceInput;
 use crate::tools::explain_diagnostic::ExplainDiagnosticInput;
-use crate::tools::hot_edit::{HotEditAcceptInput, HotEditSession};
+use crate::tools::hot_edit::{
+    HotEditAcceptInput, HotEditDeviceInput, HotEditResponse, HotEditSession, Target,
+};
 use crate::tools::messages::{MessageObjectsInput, MessagesInput};
 use crate::tools::pou_lineage::PouLineageInput;
 use crate::tools::pou_scope::PouScopeInput;
@@ -335,83 +338,151 @@ impl IronPlcMcp {
     /// Reports the hot-edit state of the running application.
     #[tool(
         name = "hot_edit_status",
-        description = "Reports the hot-edit state of the running application: the active mode (normal or testing), the logic and application generation counters, whether a candidate edit is staged, and completed scan rounds. Fails with a diagnostic until `hot_edit_accept` has started a session."
+        description = "Reports the hot-edit state of the running application: the active mode (normal or testing), the logic and application generation counters, whether a candidate edit is staged, and completed scan rounds. Fails with a diagnostic until `hot_edit_accept` has started a session. Pass `device` (`{address, port}` for a TCP connection, or `{device_id}` for a device that IronLink has a route to, see `browse_network`) to act on a device over the session protocol instead of the server's own session; the response then names the device that answered in `device`."
     )]
-    fn hot_edit_status(&self) -> Result<ContentBlock, rmcp::ErrorData> {
-        let response = tools::hot_edit::build_status_response(&self.hot_edit);
-        let json = serde_json::to_string(&response)
-            .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))?;
-        Ok(ContentBlock::text(json))
+    async fn hot_edit_status(
+        &self,
+        Parameters(input): Parameters<HotEditDeviceInput>,
+    ) -> Result<ContentBlock, rmcp::ErrorData> {
+        let response = self
+            .run_hot_edit(input.device, |target| {
+                tools::hot_edit::build_status_response(target)
+            })
+            .await?;
+        hot_edit_json(&response)
     }
 
     /// Compiles sources and feeds them to the hot-edit protocol.
     #[tool(
         name = "hot_edit_accept",
-        description = "Compiles the supplied IEC sources and hands them to the hot-edit protocol. The first call establishes the running application session and reports `established`; each later call stages the compiled program as an edit candidate to activate with `hot_edit_test` and promote with `hot_edit_assemble`, or discard with `hot_edit_cancel`. Compilation failures return the usual diagnostics; staging refusals return a stable V-code such as V4007 (layout change) or V4013 (candidate already staged). A V4010 refusal carries a `pairs` list of out-of-policy type changes; resubmit the identical sources with the `migration` map (`uid -> \"init\" | \"preserve\"`) to resolve them."
+        description = "Compiles the supplied IEC sources and hands them to the hot-edit protocol. The first call establishes the running application session and reports `established`; each later call stages the compiled program as an edit candidate to activate with `hot_edit_test` and promote with `hot_edit_assemble`, or discard with `hot_edit_cancel`. With `device` the candidate is staged on that device, which already runs a program, and the result is `ack`. Compilation failures return the usual diagnostics; staging refusals return a stable V-code such as V4007 (layout change) or V4013 (candidate already staged). A V4010 refusal carries a `pairs` list of out-of-policy type changes; resubmit the identical sources with the `migration` map (`uid -> \"init\" | \"preserve\"`) to resolve them. Pass `device` (`{address, port}` for a TCP connection, or `{device_id}` for a device that IronLink has a route to, see `browse_network`) to act on a device over the session protocol instead of the server's own session; the response then names the device that answered in `device`."
     )]
     async fn hot_edit_accept(
         &self,
         Parameters(input): Parameters<HotEditAcceptInput>,
     ) -> Result<ContentBlock, rmcp::ErrorData> {
-        let response = tools::hot_edit::build_accept_response_with_decisions(
-            &input.sources,
-            &input.options,
-            &input.migration,
-            &self.cache,
-            &self.hot_edit,
-        );
-        let json = serde_json::to_string(&response)
-            .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))?;
-        Ok(ContentBlock::text(json))
+        // Compiling stays on the thread that serves the request (the stack
+        // budget); only the exchange with a device leaves it.
+        let response =
+            match tools::hot_edit::prepare_candidate(&input.sources, &input.options, &self.cache) {
+                Err(response) => response,
+                Ok(candidate) => {
+                    let migration = input.migration;
+                    self.run_hot_edit(input.device, move |target| {
+                        tools::hot_edit::send_candidate(
+                            candidate.program,
+                            candidate.ids_out_of_sync,
+                            &migration,
+                            target,
+                        )
+                    })
+                    .await?
+                }
+            };
+        hot_edit_json(&response)
     }
 
     /// Activates the staged candidate.
     #[tool(
         name = "hot_edit_test",
-        description = "Activates the staged candidate at the next scan boundary and drives one scan round, so the candidate is executing when the call returns. Refusals carry a stable V-code, e.g. V4012 when no candidate is staged."
+        description = "Activates the staged candidate at the next scan boundary and drives one scan round, so the candidate is executing when the call returns. Refusals carry a stable V-code, e.g. V4012 when no candidate is staged. Pass `device` (`{address, port}` for a TCP connection, or `{device_id}` for a device that IronLink has a route to, see `browse_network`) to act on a device over the session protocol instead of the server's own session; the response then names the device that answered in `device`."
     )]
-    fn hot_edit_test(&self) -> Result<ContentBlock, rmcp::ErrorData> {
-        let response = tools::hot_edit::build_test_response(&self.hot_edit);
-        let json = serde_json::to_string(&response)
-            .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))?;
-        Ok(ContentBlock::text(json))
+    async fn hot_edit_test(
+        &self,
+        Parameters(input): Parameters<HotEditDeviceInput>,
+    ) -> Result<ContentBlock, rmcp::ErrorData> {
+        let response = self
+            .run_hot_edit(input.device, |target| {
+                tools::hot_edit::build_test_response(target)
+            })
+            .await?;
+        hot_edit_json(&response)
     }
 
     /// Reverts to the original artifact.
     #[tool(
         name = "hot_edit_untest",
-        description = "Switches back to the original artifact at the next scan boundary and drives one scan round, so the revert is executing when the call returns; process state is preserved. Refused with V4011 after a schema-changing test — promote with `hot_edit_assemble` or discard with `hot_edit_cancel` instead."
+        description = "Switches back to the original artifact at the next scan boundary and drives one scan round, so the revert is executing when the call returns; process state is preserved. Refused with V4011 after a schema-changing test \u{2014} promote with `hot_edit_assemble` or discard with `hot_edit_cancel` instead. Pass `device` (`{address, port}` for a TCP connection, or `{device_id}` for a device that IronLink has a route to, see `browse_network`) to act on a device over the session protocol instead of the server's own session; the response then names the device that answered in `device`."
     )]
-    fn hot_edit_untest(&self) -> Result<ContentBlock, rmcp::ErrorData> {
-        let response = tools::hot_edit::build_untest_response(&self.hot_edit);
-        let json = serde_json::to_string(&response)
-            .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))?;
-        Ok(ContentBlock::text(json))
+    async fn hot_edit_untest(
+        &self,
+        Parameters(input): Parameters<HotEditDeviceInput>,
+    ) -> Result<ContentBlock, rmcp::ErrorData> {
+        let response = self
+            .run_hot_edit(input.device, |target| {
+                tools::hot_edit::build_untest_response(target)
+            })
+            .await?;
+        hot_edit_json(&response)
     }
 
     /// Promotes the staged candidate.
     #[tool(
         name = "hot_edit_assemble",
-        description = "Promotes the staged candidate to the running application and drives one scan round, so the promoted program is executing when the call returns. Works from both the staged and the testing phases. Refusals carry a stable V-code, e.g. V4012 when no candidate is staged."
+        description = "Promotes the staged candidate to the running application and drives one scan round, so the promoted program is executing when the call returns. Works from both the staged and the testing phases. Refusals carry a stable V-code, e.g. V4012 when no candidate is staged. Pass `device` (`{address, port}` for a TCP connection, or `{device_id}` for a device that IronLink has a route to, see `browse_network`) to act on a device over the session protocol instead of the server's own session; the response then names the device that answered in `device`."
     )]
-    fn hot_edit_assemble(&self) -> Result<ContentBlock, rmcp::ErrorData> {
-        let response = tools::hot_edit::build_assemble_response(&self.hot_edit);
-        let json = serde_json::to_string(&response)
-            .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))?;
-        Ok(ContentBlock::text(json))
+    async fn hot_edit_assemble(
+        &self,
+        Parameters(input): Parameters<HotEditDeviceInput>,
+    ) -> Result<ContentBlock, rmcp::ErrorData> {
+        let response = self
+            .run_hot_edit(input.device, |target| {
+                tools::hot_edit::build_assemble_response(target)
+            })
+            .await?;
+        hot_edit_json(&response)
     }
 
     /// Discards the staged candidate.
     #[tool(
         name = "hot_edit_cancel",
-        description = "Discards the staged candidate while the original artifact keeps running. Takes effect immediately. Refused with V4015 while a candidate test is in progress."
+        description = "Discards the staged candidate while the original artifact keeps running. Takes effect immediately. Refused with V4015 while a candidate test is in progress. Pass `device` (`{address, port}` for a TCP connection, or `{device_id}` for a device that IronLink has a route to, see `browse_network`) to act on a device over the session protocol instead of the server's own session; the response then names the device that answered in `device`."
     )]
-    fn hot_edit_cancel(&self) -> Result<ContentBlock, rmcp::ErrorData> {
-        let response = tools::hot_edit::build_cancel_response(&self.hot_edit);
-        let json = serde_json::to_string(&response)
-            .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))?;
-        Ok(ContentBlock::text(json))
+    async fn hot_edit_cancel(
+        &self,
+        Parameters(input): Parameters<HotEditDeviceInput>,
+    ) -> Result<ContentBlock, rmcp::ErrorData> {
+        let response = self
+            .run_hot_edit(input.device, |target| {
+                tools::hot_edit::build_cancel_response(target)
+            })
+            .await?;
+        hot_edit_json(&response)
     }
+}
+
+impl IronPlcMcp {
+    /// Carries out a hot-edit command on the server's own session, or on the
+    /// device the call names. A device is resolved (IronLink is asked for the
+    /// route of an id) and talked to on a thread that may block, so the thread
+    /// that serves every request does not wait on the network.
+    async fn run_hot_edit<F>(
+        &self,
+        device: Option<DeviceInput>,
+        run: F,
+    ) -> Result<HotEditResponse, rmcp::ErrorData>
+    where
+        F: for<'a> FnOnce(Target<'a>) -> HotEditResponse + Send + 'static,
+    {
+        let Some(device) = device else {
+            return Ok(run(Target::from(&*self.hot_edit)));
+        };
+        tokio::task::spawn_blocking(move || {
+            match tools::device::resolve(&device, crate::ironlink::IronLink::locate_here) {
+                Ok(resolved) => run(Target::from(&resolved)),
+                Err(fault) => tools::hot_edit::unresolved(fault),
+            }
+        })
+        .await
+        .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))
+    }
+}
+
+/// The text content of a `hot_edit_*` response.
+fn hot_edit_json(response: &HotEditResponse) -> Result<ContentBlock, rmcp::ErrorData> {
+    let json = serde_json::to_string(response)
+        .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))?;
+    Ok(ContentBlock::text(json))
 }
 
 #[tool_handler(router = self.tool_router)]

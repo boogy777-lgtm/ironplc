@@ -1,0 +1,26 @@
+=====
+P8003
+=====
+
+.. problem-summary:: P8003
+
+This error occurs when an MCP tool acts on a device (the ``device`` parameter
+of the ``hot_edit_*`` tools) and cannot reach it. The tool returns this
+diagnostic with ``ok: false``. The text names the device and says why.
+
+Common causes
+-------------
+
+1. Nothing listens at the address and port: the device is not running, the
+   address or the port is wrong, or a firewall drops the connection.
+2. The device does not answer within the time of the connection (5 seconds to
+   connect and to answer ``identity``, 30 seconds to answer a command).
+3. The connection ended while the tool used it.
+4. The device speaks a session protocol newer than the server reads.
+
+A device that is reached and refuses is not this error: its refusal is returned
+with its own code in ``v_code`` (``V6014`` when the device already serves an
+engineering session).
+
+To fix this error, check that the device runs and listens at the address, find
+it with ``browse_network``, and call the tool again.

@@ -3,6 +3,7 @@ pub mod check;
 pub mod common;
 pub mod compile;
 pub mod container_drop;
+pub mod device;
 pub mod explain_diagnostic;
 pub mod hot_edit;
 pub mod list_options;

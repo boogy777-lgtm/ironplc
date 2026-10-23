@@ -7,13 +7,10 @@
 
 use std::time::Duration;
 
-use ironplc_dsl::core::SourceSpan;
-use ironplc_dsl::diagnostic::Diagnostic;
-use ironplc_problems::{text, Text};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::common::serialize_diagnostics;
+use super::common::ironlink_diagnostics;
 use crate::ironlink::{IronLink, IronLinkError};
 
 /// How long IronLink waits for replies when the call names no time: its own
@@ -87,11 +84,6 @@ fn browse_command(input: &BrowseNetworkInput) -> serde_json::Value {
     command
 }
 
-/// The P8002 diagnostic for `text`, as the tools return it.
-pub fn unavailable_diagnostic(text: Text) -> Vec<serde_json::Value> {
-    serialize_diagnostics(&[Diagnostic::text(SourceSpan::default(), text)], &[])
-}
-
 /// Builds the `browse_network` response from the `ironlink` that was found, or
 /// the reason it was not.
 pub fn build_response(
@@ -123,19 +115,10 @@ pub fn build_response(
 /// The failure response for why IronLink gave no browse result.
 pub fn failure_of(err: IronLinkError) -> BrowseNetworkResponse {
     match err {
-        IronLinkError::NotFound { searched } => BrowseNetworkResponse::failure(
-            None,
-            None,
-            unavailable_diagnostic(text::mcp_iron_link_unavailable_not_found(searched)),
-        ),
-        IronLinkError::Unavailable { message } => BrowseNetworkResponse::failure(
-            None,
-            None,
-            unavailable_diagnostic(text::mcp_iron_link_unavailable_failed(message)),
-        ),
         IronLinkError::Refused { l_code, message } => {
             BrowseNetworkResponse::failure(l_code, Some(message), vec![])
         }
+        other => BrowseNetworkResponse::failure(None, None, ironlink_diagnostics(&other)),
     }
 }
 
