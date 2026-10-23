@@ -12,6 +12,7 @@ members = [
     "ironplc-redundancy",
     "mcp",
     "project",
+    "session-client",
     "plc2plc",
     "dsl",
     "dsl_macro_derive",

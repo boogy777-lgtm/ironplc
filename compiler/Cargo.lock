@@ -1240,6 +1240,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "ironplc-session-client"
+version = "0.247.0"
+dependencies = [
+ "ironplc-container",
+ "ironplc-runtime",
+ "ironplc-spec-requirements-gen",
+ "ironplc-test",
+ "log",
+ "rstest",
+ "serde",
+ "serde_json",
+ "spec_test_macro",
+ "tempfile",
+]
+
+[[package]]
 name = "ironplc-sources"
 version = "0.247.0"
 dependencies = [
