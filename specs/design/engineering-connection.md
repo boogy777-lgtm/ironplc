@@ -402,7 +402,7 @@ category, exit code 2), following the CSV → codegen lifecycle of
 | V6011 | SessionIo | Unable to read or write the command session | The device cannot bind or accept the configured TCP address, or the session stream fails (stdio session I/O) |
 | V6012 | SlotCommitPersist | Unable to persist the assembled commit to the slot store | An acknowledged `assembleEdits` could not be committed to the A/B slot store (the ADR-0064 amendment, which took V6012 before the transport landed) |
 | V6013 | SessionFraming | A received frame is malformed | Bad length prefix, a frame over 16 MiB, a payload that is not one JSON line, non-UTF-8 frame bytes, EOF mid-frame, or the 30 s per-message read timeout; the connection closes |
-| V6014 | SessionRefused | The device already serves one engineering session | A second connection attempt while one engineering session is active (ADR-0065); the attempt receives exactly one refusal line, then the socket closes |
+| V6014 | SessionRefused | The device already serves one engineering session | A second connection attempt while one engineering session is active (ADR-0065); the attempt receives exactly one refusal line, then the socket closes; the device ends its output and discards what the client still sends before it drops the socket, so that a client that has already written its `identity` still reads the refusal |
 
 A JSON line inside a well-formed frame that does not parse as a command
 stays a codeless codec error per ADR-0055 — framing and codec are
