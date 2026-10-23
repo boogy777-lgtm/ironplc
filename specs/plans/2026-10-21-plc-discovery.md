@@ -805,7 +805,7 @@ by hand (`runtime/src/host.rs`, `vm-cli/src/serve.rs`, `vm-cli/src/slot_store.rs
    is text rows (RSLinx function). The skeleton of views, commands and state
    follows SIMATIC AX and TwinCAT XAE. The go-online comparison and its actions
    are the online-model plan (section 8).
-7. MCP: browse through IronLink; device tools connect the same way as VS Code,
+7. Done (#176–#181: the protocol readable by a client, the TCP frame defined once, a graceful close of a refused session, the crate `session-client` with the class of connection methods, the MCP tool `browse_network`, the hot-edit MCP tools with a `device`). MCP: browse through IronLink; device tools connect the same way as VS Code,
    replacing the in-process host where a device is given. This stage builds
    the Rust client transport trait with its stdio and TCP members (moved from
    stage 5).
