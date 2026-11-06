@@ -21,6 +21,13 @@ What still holds, and what does not:
 - Nothing new reached the store: the slot files and the marker name the
   previous committed generation, so a reboot boots that previous
   generation — an honestly recoverable state, never unverified bytes.
+- The state stays visible after the answer: in the ``identity`` of the
+  device, ``persistedContentHash`` (the program the device starts after a
+  restart) differs from ``application.contentHash`` (the program that runs)
+  until a retried assemble persists the commit. See
+  :doc:`/reference/runtime/ironplcvm`.
+- The retained values are not written while the two differ, so a restart does
+  not discard them as belonging to another program.
 
 Solutions
 ---------
