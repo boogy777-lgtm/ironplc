@@ -14,10 +14,11 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 
-import { ReportProblem } from './debugAdapter';
 import { isDebuggableProgram, programKind } from './debugAdapterLogic';
 import { BuildSupport, BUILD_ORIGIN, SentContainer } from './buildCommands';
 import { ConnectionFeature } from './connection';
+import { DOWNLOAD_ACTIONS } from './downloadLogic';
+import { AcceptGate, acceptGate } from './onlineComparisonLogic';
 import { formatStatusText, HotEditStatus } from './hotEditSession';
 import { acceptEditsWithDecisions } from './hotEditMigrationLogic';
 import { createMigrationDecisionUi, resolvePathInteractive } from './hotEdit';
@@ -29,11 +30,6 @@ import {
   reopenItem,
 } from './onlineEditLogic';
 import { OnlineEditIo, runItem, runMessage } from './onlineEditRunner';
-import { ProblemCode } from './vscodeCommon';
-
-/** What the person is told when a build would go over an application that was not downloaded from this project (E0015). */
-export const STALE_BASELINE_DETAIL
-  = 'The application on the device is not the one this project last downloaded to it. Re-sync the project from the device, rebuild, then connect again.';
 
 /** A build made in this dialog: the program and the container that was sent. */
 interface Built {
@@ -51,7 +47,6 @@ export function registerOnlineEditCommands(
   support: BuildSupport,
   connection: ConnectionFeature,
   sourceExtensions: readonly string[],
-  reportProblem: ReportProblem,
   /** Shows an error whose text starts with its code, with the link to the page of the code. */
   showCoded: (code: string, text: string) => void,
 ): void {
@@ -119,8 +114,12 @@ export function registerOnlineEditCommands(
       if (session === undefined) {
         return false;
       }
-      if (connection.baselineState === 'mismatch') {
-        reportProblem(ProblemCode.StaleBaseline, STALE_BASELINE_DETAIL);
+      // The controller is compared with the project again, now: the answer
+      // `hotEdit.allowed` is the one the action of the comparison gave, so this
+      // stage and the go-online dialog cannot disagree (ADR-0089).
+      const gate = acceptGate(await connection.refreshComparison());
+      if (!gate.allowed) {
+        refuse(gate);
         return false;
       }
       if (built === undefined) {
@@ -212,6 +211,25 @@ export function registerOnlineEditCommands(
       running = undefined;
       render();
     }
+  }
+
+  /**
+   * Tells the person why the online change does not begin, in the words of the
+   * comparison (the controller's own refusal keeps its V-code), and offers
+   * Download when the comparison enables it.
+   */
+  function refuse(gate: Extract<AcceptGate, { allowed: false }>): void {
+    const download = 'Download';
+    if (gate.code !== undefined && /^V\d{4}$/.test(gate.code)) {
+      showCoded(gate.code, gate.text);
+      return;
+    }
+    const choices = gate.offerDownload ? [download] : [];
+    void vscode.window.showWarningMessage(`IronPLC Online Edit: ${gate.text}`, ...choices).then((picked) => {
+      if (picked === download) {
+        void vscode.commands.executeCommand(DOWNLOAD_ACTIONS.download.commandId);
+      }
+    });
   }
 
   function show(message: ReturnType<typeof runMessage>): void {

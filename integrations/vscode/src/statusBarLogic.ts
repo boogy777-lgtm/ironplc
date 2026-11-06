@@ -5,13 +5,16 @@
  * in every other state it behaves as it always did. It shows what exists and no
  * placeholders: nothing is said of the equality of the application or of Run and
  * Stop before a controller is connected. Connected, it adds what the device
- * reports about scanning (`running`, `stopped`, `faulted V####`). Vscode-free.
+ * reports about scanning (`running`, `stopped`, `faulted V####`) and the
+ * one-line summary of the go-online comparison (ADR-0089), which a click shows
+ * again. Vscode-free.
  */
 
 import { ConnectionState } from './connectionState';
 import { currentRun, runStateDetail, runStateText } from './controllerRunLogic';
 import { DevicePanelModel } from './devicePanelLogic';
 import { formatStatusDetail } from './hotEditSession';
+import { SHOW_ONLINE_COMPARISON, statusSummary } from './onlineComparisonLogic';
 import { HANDOFF_ACTIONS } from './vscodeCommon';
 
 /**
@@ -31,23 +34,32 @@ export function statusText(model: DevicePanelModel, chosen: string | undefined):
     case 'connected': {
       const name = model.identity?.device.name ?? model.profileName ?? 'Connected';
       const run = currentRun(model);
-      return run === null ? `$(plug) IronPLC: ${name}` : `$(plug) IronPLC: ${name} (${runStateText(run)})`;
+      const line = run === null ? `$(plug) IronPLC: ${name}` : `$(plug) IronPLC: ${name} (${runStateText(run)})`;
+      const summary = statusSummary(model.comparison);
+      return summary === undefined ? line : `${line} — ${summary}`;
     }
   }
 }
 
 export function statusTooltip(model: DevicePanelModel, chosen: string | undefined): string {
   switch (model.state) {
-    case 'disconnected':
-      return chosen === undefined
+    case 'disconnected': {
+      const action = chosen === undefined
         ? 'Connect to a device (IronPLC: Connect to Device)'
         : `Chosen controller: ${chosen}. Click to connect to it (IronPLC: Network: Connect to Chosen Controller).`;
+      const summary = statusSummary(model.comparison);
+      return summary === undefined ? action : `${summary}\n${action}`;
+    }
     case 'connecting':
       return 'Opening the transport and running the identity handshake…';
     case 'reconnecting':
       return 'The connection was lost; retrying with backoff. The device panel keeps the last data, marked stale.';
     case 'connected': {
       const lines = [`Profile: ${model.profileName ?? 'unknown'}`];
+      const summary = statusSummary(model.comparison);
+      if (summary !== undefined) {
+        lines.push(summary);
+      }
       const run = currentRun(model);
       if (run !== null) {
         lines.push(...runStateDetail(run));
@@ -55,7 +67,7 @@ export function statusTooltip(model: DevicePanelModel, chosen: string | undefine
       if (model.lastStatus) {
         lines.push(formatStatusDetail(model.lastStatus));
       }
-      lines.push('Click for the IronPLC Device panel.');
+      lines.push(`Click for the go-online comparison (${SHOW_ONLINE_COMPARISON.title}).`);
       return lines.join('\n');
     }
   }
@@ -63,6 +75,9 @@ export function statusTooltip(model: DevicePanelModel, chosen: string | undefine
 
 /** The command a click on the item runs. */
 export function statusCommand(state: ConnectionState, chosen: string | undefined): string {
+  if (state === 'connected') {
+    return SHOW_ONLINE_COMPARISON.commandId;
+  }
   if (state !== 'disconnected') {
     return 'ironplc.devicePanel.focus';
   }

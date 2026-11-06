@@ -1,28 +1,19 @@
 /**
- * The baseline check of the engineering connection (ADR-0063, "Offline
- * edits, online deploy"): the owner scenario connects, verifies the project
- * equals the controller's code, disconnects, edits offline, and reconnects
- * to deploy. Before any bytes are sent, the client compares what the device
- * runs with what this workspace last put on it; a mismatch means another
- * engineer edited the device, and the deploy refuses with E0015 StaleBaseline
- * — fail-closed, the same pattern as the V4007–V4010 staging refusals.
- *
- * What this workspace last put on the device is the *download record*
- * (ADR-0083): a file beside the application container, one per device,
- * keyed by the device's id (`deviceId` of its identity) and written by
- * `ironplcc record-download`. What the device runs is the
- * `contentHash` of its identity. The comparison is by content, so a device
- * reboot, which restarts the generation counters, keeps a match.
+ * The download record of the engineering connection (ADR-0083): what this
+ * workspace puts on a device, written after the device acknowledged the
+ * assemble. The record is a file beside the application container, one per
+ * device, keyed by the device's id (`deviceId` of its identity) and written by
+ * `ironplcc record-download`. What the record says about the device is read by
+ * the go-online comparison (`ironplcc online-compare`, ADR-0089), never here.
  *
  * Two rules live in the compiler and nowhere else, so this module never
  * derives them: the file name of the record (`ironplcc record-download-path`
- * says where it is) and the format's writer (`ironplcc record-download`).
- * This module only reads the record's JSON, which is allowed, and builds the
- * arguments of the two commands.
+ * says where it is) and the format's writer (`ironplcc record-download`). This
+ * module plans a download (which container the record is named after, and
+ * whether there is anything to record) and builds the arguments of the writer.
  *
- * The module is vscode-free: the decisions are pure and the two compiler
- * commands and the file read are injected, so they unit-test without a
- * compiler or a file system.
+ * The module is vscode-free: the decisions are pure and the compiler command
+ * is injected, so they unit-test without a compiler or a file system.
  */
 
 import * as path from 'path';
@@ -31,68 +22,6 @@ import { connectionMethod } from './connectionMethods';
 import { ConnectionProfile } from './connectionProfiles';
 import { HotEditStatus } from './hotEditSession';
 import { ExecFileFn } from './syncUidsLogic';
-
-export type BaselineState = 'none' | 'match' | 'mismatch';
-
-/** The version of the download record this client reads (the compiler's `RecordKind::version`). */
-const DOWNLOAD_RECORD_VERSION = 2;
-
-/** What the check reads of a download record. */
-export interface DownloadRecord {
-  /** The id of the device the record is for. */
-  deviceId: string;
-  /** The `contentHash` of the container the device received, 64 lowercase hexadecimal digits. */
-  contentHash: string;
-}
-
-/**
- * Reads the download record of `deviceId` from its file text. A text that is
- * not a record of this version for this device is no record — as the
- * compiler's reader treats it (fail-soft). The device is compared because a
- * file that was copied or renamed to another device's name is not that
- * device's record.
- */
-export function parseDownloadRecord(text: string, deviceId: string): DownloadRecord | undefined {
-  let value: unknown;
-  try {
-    value = JSON.parse(text);
-  }
-  catch {
-    return undefined;
-  }
-  if (typeof value !== 'object' || value === null) {
-    return undefined;
-  }
-  const record = value as Record<string, unknown>;
-  const container = record.container;
-  if (record.version !== DOWNLOAD_RECORD_VERSION || record.deviceId !== deviceId) {
-    return undefined;
-  }
-  if (typeof container !== 'object' || container === null) {
-    return undefined;
-  }
-  const contentHash = (container as Record<string, unknown>).contentHash;
-  if (typeof contentHash !== 'string' || !/^[0-9a-f]{64}$/.test(contentHash)) {
-    return undefined;
-  }
-  return { deviceId, contentHash };
-}
-
-/**
- * Compares the device's current application snapshot with the download record.
- *
- * - no record: `none` (a first deploy, or a device never downloaded to);
- * - a record and the same `contentHash`: `match`;
- * - a record and another `contentHash`, or a device that reports none (it
- *   predates the field, so what it runs cannot be known): `mismatch`, which
- *   fails closed into E0015.
- */
-export function checkBaseline(record: DownloadRecord | undefined, application: HotEditStatus): BaselineState {
-  if (record === undefined) {
-    return 'none';
-  }
-  return application.contentHash === record.contentHash ? 'match' : 'mismatch';
-}
 
 /** A workspace folder, as the anchor needs it. */
 export interface FolderRef {
@@ -118,8 +47,11 @@ export function connectionAnchor(
   return connectionMethod(profile).anchor(profile, folders, sourceExtensions);
 }
 
-/** The compiler, as the record commands see it: arguments in, output out. */
-export type RunCompiler = (args: string[]) => ReturnType<ExecFileFn>;
+/**
+ * The compiler, as the commands that call it see it: arguments in (and, for a
+ * command that reads standard input, the text to write to it), output out.
+ */
+export type RunCompiler = (args: string[], input?: string) => ReturnType<ExecFileFn>;
 
 /** One download to record, resolved. */
 export interface DownloadToRecord {
@@ -220,35 +152,7 @@ export function recordDownloadArgs(download: DownloadToRecord): string[] {
   return args;
 }
 
-/** The arguments of `ironplcc record-download-path`. */
-export function recordDownloadPathArgs(anchor: string, deviceId: string): string[] {
-  return ['record-download-path', anchor, '--device-id', deviceId];
-}
-
 /** Writes the download record, through the compiler: the one writer of the format. */
 export async function writeDownloadRecord(run: RunCompiler, download: DownloadToRecord): Promise<void> {
   await run(recordDownloadArgs(download));
-}
-
-/**
- * Compares the device with the download record of `deviceId` for `anchor`.
- * The record's file is the one the compiler names; a file that is not there is
- * no record. `readText` resolves `undefined` for a file that does not exist
- * and rejects for any other failure.
- */
-export async function readBaseline(
-  run: RunCompiler,
-  readText: (file: string) => Promise<string | undefined>,
-  anchor: string,
-  deviceId: string,
-  application: HotEditStatus,
-): Promise<BaselineState> {
-  const printed = (await run(recordDownloadPathArgs(anchor, deviceId))).stdout;
-  const file = printed.replace(/\r?\n$/, '');
-  if (file.length === 0) {
-    throw new Error('the compiler did not say where the download record is');
-  }
-  const text = await readText(file);
-  const record = text === undefined ? undefined : parseDownloadRecord(text, deviceId);
-  return checkBaseline(record, application);
 }

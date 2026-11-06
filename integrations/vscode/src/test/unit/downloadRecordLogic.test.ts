@@ -3,24 +3,18 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import {
-  checkBaseline,
   connectionAnchor,
-  DownloadRecord,
   DownloadToRecord,
   FolderRef,
-  parseDownloadRecord,
   planDownload,
-  readBaseline,
   recordDownloadArgs,
-  recordDownloadPathArgs,
   RunCompiler,
   writeDownloadRecord,
-} from '../../baselineLogic';
+} from '../../downloadRecordLogic';
 import { ConnectionProfile } from '../../connectionProfiles';
 import { HotEditStatus } from '../../hotEditSession';
 
 const HASH_A = 'aa'.repeat(32);
-const HASH_B = 'bb'.repeat(32);
 const SOURCE_EXTENSIONS = ['.st', '.iec'];
 
 function status(overrides?: Partial<HotEditStatus>): HotEditStatus {
@@ -44,91 +38,6 @@ function withoutHash(): HotEditStatus {
 }
 
 const DEVICE_ID = '0123456789abcdef0123456789abcdef';
-const OTHER_DEVICE_ID = 'fedcba9876543210fedcba9876543210';
-
-/** The text of a download record the compiler wrote for a container with `contentHash`. */
-function recordText(contentHash: string, deviceId = DEVICE_ID, overrides?: Record<string, unknown>): string {
-  return JSON.stringify({
-    version: 2,
-    deviceId,
-    application: 'app',
-    container: { contentHash, layoutHash: 'cc'.repeat(32), debugHash: 'dd'.repeat(32), size: 100 },
-    device: { active: 3, normal: 2, application: 3 },
-    time: '2026-10-20T12:00:00Z',
-    ...overrides,
-  });
-}
-
-const RECORD: DownloadRecord = { deviceId: DEVICE_ID, contentHash: HASH_A };
-
-suite('parseDownloadRecord', () => {
-  test('parseDownloadRecord_when_record_then_device_id_and_content_hash', () => {
-    assert.deepStrictEqual(parseDownloadRecord(recordText(HASH_A), DEVICE_ID), RECORD);
-  });
-
-  test('parseDownloadRecord_when_not_json_then_no_record', () => {
-    assert.strictEqual(parseDownloadRecord('{ not json', DEVICE_ID), undefined);
-    assert.strictEqual(parseDownloadRecord('[1]', DEVICE_ID), undefined);
-    assert.strictEqual(parseDownloadRecord('null', DEVICE_ID), undefined);
-  });
-
-  test('parseDownloadRecord_when_other_version_then_no_record', () => {
-    assert.strictEqual(parseDownloadRecord(recordText(HASH_A, DEVICE_ID, { version: 1 }), DEVICE_ID), undefined);
-  });
-
-  test('parseDownloadRecord_when_record_of_another_device_then_no_record', () => {
-    // A file that was copied or renamed to this device's name is not its record.
-    assert.strictEqual(parseDownloadRecord(recordText(HASH_A, OTHER_DEVICE_ID), DEVICE_ID), undefined);
-  });
-
-  test('parseDownloadRecord_when_record_names_a_connection_and_no_device_then_no_record', () => {
-    const former = JSON.stringify({ version: 1, connection: 'My PLC', container: { contentHash: HASH_A } });
-
-    assert.strictEqual(parseDownloadRecord(former, DEVICE_ID), undefined);
-  });
-
-  test('parseDownloadRecord_when_container_or_hash_malformed_then_no_record', () => {
-    assert.strictEqual(parseDownloadRecord(recordText(HASH_A, DEVICE_ID, { container: null }), DEVICE_ID), undefined);
-    assert.strictEqual(parseDownloadRecord(recordText('abc'), DEVICE_ID), undefined);
-    assert.strictEqual(parseDownloadRecord(recordText(HASH_A.toUpperCase()), DEVICE_ID), undefined);
-  });
-
-  test('parseDownloadRecord_when_unknown_extra_keys_then_still_read', () => {
-    assert.deepStrictEqual(parseDownloadRecord(recordText(HASH_A, DEVICE_ID, { later: true }), DEVICE_ID), RECORD);
-  });
-});
-
-suite('checkBaseline', () => {
-  test('checkBaseline_when_no_record_then_none', () => {
-    assert.strictEqual(checkBaseline(undefined, status()), 'none');
-  });
-
-  test('checkBaseline_when_content_hash_equal_then_match', () => {
-    assert.strictEqual(checkBaseline(RECORD, status()), 'match');
-  });
-
-  test('checkBaseline_when_device_rebooted_and_counters_restarted_then_still_match', () => {
-    // A reboot restarts the session generations; the content hash is the same.
-    assert.strictEqual(checkBaseline(RECORD, status({ active: 1, normal: 1, application: 1 })), 'match');
-  });
-
-  test('checkBaseline_when_counters_differ_but_content_equal_then_match', () => {
-    assert.strictEqual(checkBaseline(RECORD, status({ active: 9, application: 9 })), 'match');
-  });
-
-  test('checkBaseline_when_other_container_then_mismatch', () => {
-    assert.strictEqual(checkBaseline(RECORD, status({ contentHash: HASH_B })), 'mismatch');
-  });
-
-  test('checkBaseline_when_device_reports_no_hash_and_record_then_mismatch', () => {
-    // An older device: what it runs cannot be known, so it fails closed.
-    assert.strictEqual(checkBaseline(RECORD, withoutHash()), 'mismatch');
-  });
-
-  test('checkBaseline_when_device_reports_no_hash_and_no_record_then_none', () => {
-    assert.strictEqual(checkBaseline(undefined, withoutHash()), 'none');
-  });
-});
 
 const STDIO_CONTAINER: ConnectionProfile = { name: 'local', transport: 'stdio', program: path.join('plant', 'app.iplc') };
 const STDIO_SOURCE: ConnectionProfile = { name: 'local', transport: 'stdio', program: path.join('plant', 'main.st') };
@@ -283,12 +192,6 @@ suite('record commands', () => {
     assert.ok(!args.includes('--device-content-hash'));
   });
 
-  test('recordDownloadPathArgs_when_anchor_and_device_id_then_path_command', () => {
-    assert.deepStrictEqual(recordDownloadPathArgs('a.iplc', DEVICE_ID), [
-      'record-download-path', 'a.iplc', '--device-id', DEVICE_ID,
-    ]);
-  });
-
   test('writeDownloadRecord_when_download_then_runs_the_writer_once', async () => {
     const calls: string[][] = [];
     const run: RunCompiler = async (args) => {
@@ -307,96 +210,6 @@ suite('record commands', () => {
     };
 
     await assert.rejects(writeDownloadRecord(run, download), /did not receive/);
-  });
-});
-
-suite('readBaseline', () => {
-  /** A compiler that says the record is `file`, recording what it was asked. */
-  function compilerSaying(file: string, asked: string[][] = []): RunCompiler {
-    return async (args) => {
-      asked.push(args);
-      return { stdout: `${file}\r\n`, stderr: '' };
-    };
-  }
-
-  const anchor = path.join('work', 'plant', 'plant.iplc');
-
-  test('readBaseline_when_record_has_the_devices_hash_then_match_and_path_comes_from_the_compiler', async () => {
-    const asked: string[][] = [];
-    const read: string[] = [];
-
-    const state = await readBaseline(
-      compilerSaying('F:\\work\\plant\\the-file-the-compiler-named', asked),
-      async (file) => {
-        read.push(file);
-        return recordText(HASH_A);
-      },
-      anchor,
-      DEVICE_ID,
-      status(),
-    );
-
-    assert.strictEqual(state, 'match');
-    assert.deepStrictEqual(asked, [recordDownloadPathArgs(anchor, DEVICE_ID)]);
-    assert.deepStrictEqual(read, ['F:\\work\\plant\\the-file-the-compiler-named']);
-  });
-
-  test('readBaseline_when_device_rebooted_then_match', async () => {
-    const state = await readBaseline(
-      compilerSaying('r'),
-      async () => recordText(HASH_A),
-      anchor,
-      DEVICE_ID,
-      status({ active: 1, normal: 1, application: 1, rounds: 0 }),
-    );
-
-    assert.strictEqual(state, 'match');
-  });
-
-  test('readBaseline_when_device_runs_another_container_then_mismatch', async () => {
-    const state = await readBaseline(
-      compilerSaying('r'),
-      async () => recordText(HASH_A),
-      anchor,
-      DEVICE_ID,
-      status({ contentHash: HASH_B }),
-    );
-
-    assert.strictEqual(state, 'mismatch');
-  });
-
-  test('readBaseline_when_no_record_file_then_none', async () => {
-    const state = await readBaseline(compilerSaying('r'), async () => undefined, anchor, DEVICE_ID, status());
-
-    assert.strictEqual(state, 'none');
-  });
-
-  test('readBaseline_when_record_malformed_then_none', async () => {
-    const state = await readBaseline(compilerSaying('r'), async () => '{ broken', anchor, DEVICE_ID, status());
-
-    assert.strictEqual(state, 'none');
-  });
-
-  test('readBaseline_when_compiler_names_no_file_then_rejects', async () => {
-    await assert.rejects(
-      readBaseline(async () => ({ stdout: '\n', stderr: '' }), async () => undefined, anchor, DEVICE_ID, status()),
-      /did not say where/,
-    );
-  });
-
-  test('readBaseline_when_compiler_fails_then_rejects', async () => {
-    const run: RunCompiler = async () => {
-      throw new Error('unknown subcommand');
-    };
-
-    await assert.rejects(readBaseline(run, async () => undefined, anchor, DEVICE_ID, status()), /unknown subcommand/);
-  });
-
-  test('readBaseline_when_file_cannot_be_read_then_rejects', async () => {
-    await assert.rejects(
-      readBaseline(compilerSaying('r'), async () => { throw new Error('EACCES'); }, anchor, DEVICE_ID, status()),
-      /EACCES/,
-    );
   });
 });
 
@@ -438,7 +251,19 @@ suite('download record guards', () => {
   });
 
   test('sources_when_scanned_then_the_writer_command_is_built_in_one_module', () => {
-    assert.deepStrictEqual(filesContaining('\'record-download\''), ['baselineLogic.ts']);
+    assert.deepStrictEqual(filesContaining('\'record-download\''), ['downloadRecordLogic.ts']);
+  });
+
+  test('sources_when_scanned_then_the_extension_compares_nothing_with_the_download_record', () => {
+    // The go-online comparison is computed by the compiler (ADR-0089); the
+    // extension reads its JSON. None of the removed client-side pieces is back.
+    for (const removed of ['checkBaseline', 'readBaseline', 'parseDownloadRecord', 'BaselineState', 'StaleBaseline', 'recordDownloadPathArgs']) {
+      assert.deepStrictEqual(filesContaining(removed), [], removed);
+    }
+  });
+
+  test('sources_when_scanned_then_the_comparison_command_is_built_in_one_module', () => {
+    assert.deepStrictEqual(filesContaining('\'online-compare\''), ['onlineComparisonRun.ts']);
   });
 
   test('sources_when_scanned_then_the_record_file_name_rule_is_not_derived_here', () => {

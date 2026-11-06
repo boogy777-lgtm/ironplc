@@ -44,7 +44,6 @@ function model(overrides?: Partial<DevicePanelModel>): DevicePanelModel {
     profileName: null,
     identity: null,
     lastStatus: null,
-    baseline: 'none',
     buildPhase: null,
     ...overrides,
   };
@@ -169,19 +168,6 @@ suite('devicePanelRows', () => {
     assert.strictEqual(byId.get('state'), 'Reconnecting…');
     assert.strictEqual(byId.get('device.name'), 'ironplcvm');
     assert.strictEqual(byId.get('stale'), 'stale — reconnecting');
-  });
-
-  test('devicePanelRows_when_baseline_mismatch_then_resync_guidance', () => {
-    const rows = devicePanelRows(model({
-      state: 'connected',
-      identity: identity(),
-      lastStatus: status(),
-      baseline: 'mismatch',
-    }));
-    const row = rows.find(candidate => candidate.id === 'baseline');
-    assert.ok(row);
-    assert.ok(row.description!.includes('E0015'));
-    assert.ok(row.description!.includes('re-sync'));
   });
 
   test('devicePanelRows_when_notes_then_an_information_row_for_each_line', () => {

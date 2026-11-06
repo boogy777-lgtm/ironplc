@@ -15,8 +15,8 @@
  * - `ACTION_HANDLERS` is the one table from an action of the comparison to what
  *   the editor does when it is chosen. A guard test fails when an `ActionKind`
  *   has no entry, and the type does not compile without one;
- * - `acceptGate` is the answer of `hotEdit.allowed`, which replaced the E0015
- *   check of the Accept stage of Online Edit.
+ * - `acceptGate` is the answer of `hotEdit.allowed`, which decides whether the
+ *   Accept stage of Online Edit may begin.
  *
  * The module is vscode-free: the shell (`onlineComparisonCommands`) renders the
  * model and runs the handler, and the run of the compiler is in

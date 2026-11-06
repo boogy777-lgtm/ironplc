@@ -7,7 +7,7 @@
 
 import * as path from 'path';
 
-import type { Anchor } from '../baselineLogic';
+import type { Anchor } from '../downloadRecordLogic';
 import { ProblemCode } from '../vscodeCommon';
 import { DEFAULT_SESSION_PORT } from '../sessionConstants';
 import { outputFileNameForFolder } from '../taskProviderLogic';

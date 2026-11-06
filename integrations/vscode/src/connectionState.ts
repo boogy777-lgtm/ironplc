@@ -73,10 +73,26 @@ export interface ConnectionSnapshot {
   lastStatus: HotEditStatus | null;
 }
 
+/** Why an identity arrived: a session opened (or opened again), or the device was asked again. */
+export type IdentityCause = 'connected' | 'refreshed';
+
+/**
+ * Why the last connection ended or never opened, as the manager saw it: what the
+ * go-online comparison needs to say which attempt failed (ADR-0089).
+ */
+export interface ConnectionFailure {
+  /** `ConnectFailed` for a connection that never opened, `ConnectionLost` for one that ended. */
+  code: ProblemCode;
+  /** The V-code of the device's refusal, when it refused with one (V6014: it serves another session). */
+  vCode: string | null;
+  /** The message that was reported. */
+  message: string;
+}
+
 /** State/error/identity notifications the glue renders (status bar, panel, problems). */
 export interface ConnectionEvents {
   onState(state: ConnectionState, snapshot: ConnectionSnapshot): void;
-  onIdentity(identity: IdentityInfo): void;
+  onIdentity(identity: IdentityInfo, cause: IdentityCause): void;
   onStatus(status: HotEditStatus): void;
   report(code: ProblemCode, context: string): void;
 }
@@ -138,6 +154,8 @@ export class ConnectionManager {
   private heartbeatMisses = 0;
   private stopHeartbeat: (() => void) | undefined;
   private lastError = '';
+  private lastVCode: string | null = null;
+  private failure: ConnectionFailure | undefined;
 
   constructor(private readonly deps: ConnectionManagerDeps) {
     this.policy = { ...DEFAULT_CONNECTION_POLICY, ...deps.policy };
@@ -154,6 +172,11 @@ export class ConnectionManager {
 
   get currentProfile(): ConnectionProfile | undefined {
     return this.profile;
+  }
+
+  /** Why the connection last failed or ended; undefined before any failure and while a connection is being made. */
+  get lastFailure(): ConnectionFailure | undefined {
+    return this.failure;
   }
 
   snapshot(): ConnectionSnapshot {
@@ -177,6 +200,7 @@ export class ConnectionManager {
     this.generation++;
     const gen = this.generation;
     this.profile = profile;
+    this.failure = undefined;
     this.setState('connecting');
     const outcome = await this.runAttempt(gen);
     if (outcome === 'connected') {
@@ -192,6 +216,7 @@ export class ConnectionManager {
   /** User disconnect: from any state, lands in Disconnected and cancels everything else. */
   disconnect(): void {
     this.generation++;
+    this.failure = undefined;
     this.stopHeartbeat?.();
     this.stopHeartbeat = undefined;
     this.teardownSession();
@@ -229,13 +254,14 @@ export class ConnectionManager {
       this.lastStatus = identity.application;
       this.heartbeatMisses = 0;
       this.setState('connected');
-      this.deps.events.onIdentity(identity);
+      this.deps.events.onIdentity(identity, 'connected');
       this.startHeartbeat(gen);
       return 'connected';
     }
     catch (err) {
       opened?.close();
       this.lastError = describeError(err);
+      this.lastVCode = err instanceof HotEditProtocolError ? err.vCode : null;
       return isCodedRefusal(err) ? 'refused' : 'fault';
     }
   }
@@ -320,7 +346,41 @@ export class ConnectionManager {
     this.landDisconnected(ProblemCode.ConnectionLost, this.lastError);
   }
 
+  /**
+   * Asks the connected device for its identity again and publishes it
+   * (`onIdentity` with the cause `refreshed`). The go-online comparison reads the
+   * identity, so it is asked again when the controller changed (a download) or
+   * before an online change is accepted. Resolves undefined when no session is
+   * open or the device did not answer.
+   */
+  async refreshIdentity(): Promise<IdentityInfo | undefined> {
+    const session = this.activeSession;
+    const gen = this.generation;
+    if (session === undefined) {
+      return undefined;
+    }
+    let identity: IdentityInfo;
+    try {
+      identity = await withTimeout(
+        session.identity(),
+        this.policy.responseTimeoutMs,
+        'the identity answer timed out',
+      );
+    }
+    catch {
+      return undefined;
+    }
+    if (gen !== this.generation || this.state !== 'connected') {
+      return undefined;
+    }
+    this.identity = identity;
+    this.lastStatus = identity.application;
+    this.deps.events.onIdentity(identity, 'refreshed');
+    return identity;
+  }
+
   private landDisconnected(code: ProblemCode, context: string): void {
+    this.failure = { code, vCode: this.lastVCode, message: context };
     this.teardownSession();
     this.profile = undefined;
     this.identity = undefined;

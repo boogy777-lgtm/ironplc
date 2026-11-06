@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as path from 'path';
 import { CompilerSettings, compilerFlags } from '../../compilerSettingsLogic';
-import { buildCompileArgs, compileArgs, outputFileNameForFolder } from '../../taskProviderLogic';
+import { buildCompileArgs, compileArgs, outputFileNameForFolder, runCompiler } from '../../taskProviderLogic';
 
 /** No setting is set: the compile has no flag of the settings. */
 const NONE: CompilerSettings = { disabledWarnings: [], warningsAsErrors: [] };
@@ -73,5 +73,32 @@ suite('outputFileNameForFolder', () => {
 
   test('outputFileNameForFolder_when_name_with_spaces_then_preserves_spaces', () => {
     assert.strictEqual(outputFileNameForFolder('my project'), 'my project.iplc');
+  });
+});
+
+suite('runCompiler', () => {
+  test('runCompiler_when_input_then_the_runner_gets_it_as_the_third_argument', async () => {
+    const calls: unknown[][] = [];
+    const exec = async (...call: unknown[]) => {
+      calls.push(call);
+      return { stdout: 'out', stderr: '' };
+    };
+
+    const result = await runCompiler('ironplcc', ['online-compare', '--identity', '-'], () => {}, exec, '{"protocol":2}');
+
+    assert.deepStrictEqual(calls, [['ironplcc', ['online-compare', '--identity', '-'], '{"protocol":2}']]);
+    assert.strictEqual(result.stdout, 'out');
+  });
+
+  test('runCompiler_when_no_input_then_the_runner_is_called_as_it_always_was', async () => {
+    const calls: unknown[][] = [];
+    const exec = async (...call: unknown[]) => {
+      calls.push(call);
+      return { stdout: '', stderr: '' };
+    };
+
+    await runCompiler('ironplcc', ['check', '.'], () => {}, exec);
+
+    assert.deepStrictEqual(calls, [['ironplcc', ['check', '.']]]);
   });
 });

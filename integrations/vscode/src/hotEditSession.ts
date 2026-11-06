@@ -238,6 +238,13 @@ export interface IdentityInfo {
   runState?: RunState;
   /** Present while the device is faulted. */
   fault?: DeviceFault;
+  /**
+   * The answer as the device sent it (the object of the response line, with its
+   * `response` tag). The go-online comparison reads fields this client does not
+   * model, and `ironplcc online-compare` takes them from here, so what is
+   * compared is what the device said and not this client's reading of it.
+   */
+  wire?: Record<string, unknown>;
 }
 
 /** The run state of an identity: an absent field is `running`, what a device that predates it does. */
@@ -620,6 +627,7 @@ function parseIdentity(record: Record<string, unknown>): IdentityInfo {
     redundancy: parseRedundancy(record.redundancy),
     ...(runState !== undefined ? { runState } : {}),
     ...(fault !== undefined ? { fault } : {}),
+    wire: record,
   };
 }
 

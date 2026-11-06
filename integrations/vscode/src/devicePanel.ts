@@ -2,7 +2,7 @@
  * The "IronPLC Device" panel: a tree view in the Explorer container that
  * renders the engineering-connection model the `connection` feature
  * publishes — connection state, device identity, application state,
- * pending edit, baseline, and build phase. The provider is a thin renderer
+ * pending edit, and build phase. The provider is a thin renderer
  * over the vscode-free `devicePanelLogic` rows: it subscribes to the
  * feature's model event and maps rows to tree items, owning no session or
  * protocol decision.
