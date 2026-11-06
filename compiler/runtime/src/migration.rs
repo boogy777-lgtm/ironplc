@@ -431,6 +431,7 @@ impl StateMigrationPlan {
                 entry.uid,
                 from_index,
                 to_index,
+                base_var,
                 candidate_var,
                 base_section,
                 candidate_section,
@@ -568,11 +569,14 @@ fn entry_difference(base: &VarEntry, candidate: &VarEntry) -> &'static str {
     }
 }
 
-/// Classifies one shared UID's copy from its (identical) candidate entry.
+/// Classifies one shared UID's copy from its base and candidate entries, which
+/// have the same type and flags (the migration planner passes equal entries; the
+/// keep plan of a replace passes entries whose type data it compared itself).
 fn copy_action(
     uid: u64,
     from_index: VarIndex,
     to_index: VarIndex,
+    base_entry: &VarEntry,
     entry: &VarEntry,
     base_section: Option<&TypeSection>,
     candidate_section: Option<&TypeSection>,
@@ -582,6 +586,7 @@ fn copy_action(
             uid,
             from_index,
             to_index,
+            base_entry,
             entry,
             base_section,
             candidate_section,
@@ -615,19 +620,19 @@ fn string_action(from_index: VarIndex, to_index: VarIndex, entry: &VarEntry) -> 
     }
 }
 
-/// Sizes an array or structure copy from the descriptor both containers share
-/// at the entry's descriptor index.
+/// Sizes an array or structure copy from the descriptors of the base and the
+/// candidate entry, which must be equal.
 fn array_action(
     uid: u64,
     from_index: VarIndex,
     to_index: VarIndex,
+    base_entry: &VarEntry,
     entry: &VarEntry,
     base_section: Option<&TypeSection>,
     candidate_section: Option<&TypeSection>,
 ) -> Result<MigrationAction, MigrationError> {
-    let descriptor_index = usize::from(entry.extra);
-    let base_descriptor = array_descriptor(base_section, descriptor_index);
-    let candidate_descriptor = array_descriptor(candidate_section, descriptor_index);
+    let base_descriptor = array_descriptor(base_section, usize::from(base_entry.extra));
+    let candidate_descriptor = array_descriptor(candidate_section, usize::from(entry.extra));
     let (Some(base_descriptor), Some(candidate_descriptor)) =
         (base_descriptor, candidate_descriptor)
     else {
@@ -870,9 +875,11 @@ fn string_current_length(region: &[u8]) -> u16 {
 mod decision;
 mod fb;
 mod identity;
+mod keep;
 
 pub use decision::{MigrationDecision, TypeChangePair};
 pub use identity::{IdentitySide, IdentitySubject, UnidentifiedVariable};
+pub use keep::{replace_keep_plan, KeepPlan, ReinitReason, Reinitialised};
 
 #[cfg(test)]
 mod tests;

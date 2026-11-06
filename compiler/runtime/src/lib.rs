@@ -49,8 +49,8 @@ pub use host::{
     AcceptedEdit, EditBaseline, HostMode, HostStatus, PendingEditRecord, RuntimeHost, ScanCommit,
 };
 pub use migration::{
-    IdentitySide, IdentitySubject, MigrationDecision, MigrationError, StateMigrationPlan,
-    TypeChangePair, UnidentifiedVariable,
+    replace_keep_plan, IdentitySide, IdentitySubject, KeepPlan, MigrationDecision, MigrationError,
+    ReinitReason, Reinitialised, StateMigrationPlan, TypeChangePair, UnidentifiedVariable,
 };
 pub use retained_state::{
     RetainedApplyError, RetainedDecodeError, RetainedImage, RetainedMismatch, RetainedTag,
