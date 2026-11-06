@@ -31,9 +31,10 @@ pub(crate) mod addresses;
 pub(crate) mod routes;
 
 use std::fs;
-use std::io::{self, Write};
+use std::io;
 use std::path::{Path, PathBuf};
 
+use ironplc_cli_support::durable_file;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::Value;
@@ -200,13 +201,7 @@ impl Store {
         let text = render(file)?;
         fs::create_dir_all(dir).map_err(|err| fail(&err))?;
         let temporary = dir.join(format!(".{}.{}.tmp", F::NAME, std::process::id()));
-        let written = write_whole(&temporary, &text).and_then(|()| fs::rename(&temporary, &path));
-        written.map_err(|err| {
-            // The temporary file is of no use after a failure, and its removal
-            // can only fail for the reason the write failed, which is reported.
-            drop(fs::remove_file(&temporary));
-            fail(&err)
-        })
+        durable_file::replace_file(&path, &temporary, text.as_bytes()).map_err(|err| fail(&err))
     }
 }
 
@@ -245,13 +240,6 @@ fn sorted(value: Value) -> Value {
         Value::Array(items) => Value::Array(items.into_iter().map(sorted).collect()),
         other => other,
     }
-}
-
-/// Writes `text` to a new file at `path` and makes sure it is on the disk.
-fn write_whole(path: &Path, text: &str) -> io::Result<()> {
-    let mut file = fs::File::create(path)?;
-    file.write_all(text.as_bytes())?;
-    file.sync_all()
 }
 
 #[cfg(test)]
