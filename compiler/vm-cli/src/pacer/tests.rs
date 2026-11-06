@@ -242,7 +242,31 @@ fn wait_idle_when_no_message_then_waits_one_stop_poll() {
     let (mut pacer, _) = pacer(&clock, None);
     let (_tx, rx) = mpsc::channel::<u8>();
 
-    let result = pacer.wait_idle(&rx);
+    let result = pacer.wait_idle(None, &rx);
+
+    assert_eq!(result, Err(RecvTimeoutError::Timeout));
+    assert_eq!(clock.now_us(), STOP_POLL_US);
+}
+
+#[test]
+fn wait_idle_when_wake_before_stop_poll_then_waits_until_the_wake() {
+    let clock = FakeClock::default();
+    let (mut pacer, _) = pacer(&clock, None);
+    let (_tx, rx) = mpsc::channel::<u8>();
+
+    let result = pacer.wait_idle(Some(5_000), &rx);
+
+    assert_eq!(result, Err(RecvTimeoutError::Timeout));
+    assert_eq!(clock.now_us(), 5_000);
+}
+
+#[test]
+fn wait_idle_when_wake_after_stop_poll_then_waits_one_stop_poll() {
+    let clock = FakeClock::default();
+    let (mut pacer, _) = pacer(&clock, None);
+    let (_tx, rx) = mpsc::channel::<u8>();
+
+    let result = pacer.wait_idle(Some(STOP_POLL_US * 2), &rx);
 
     assert_eq!(result, Err(RecvTimeoutError::Timeout));
     assert_eq!(clock.now_us(), STOP_POLL_US);

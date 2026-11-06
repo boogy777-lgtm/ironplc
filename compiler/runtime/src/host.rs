@@ -172,11 +172,17 @@ fn select_active<'a>(
 }
 
 /// What a call that drives rounds does with the deadlines of the cyclic tasks
-/// when its session of rounds starts.
+/// when its session of rounds starts. The two modes are the two classes of
+/// driver: one handed the clock of each call, and one that paces its rounds and
+/// keeps the task state between them.
 #[derive(Clone, Copy)]
 enum Deadlines {
     /// Every task is ready at the start: the call runs each task once at the
-    /// clock it is given (the driven round of `run`).
+    /// clock it is given (the driven round of `run`). The driver is in
+    /// simulated time and asks for rounds on request: the MCP hot-edit session
+    /// (`compiler/mcp/src/tools/hot_edit.rs`), the HA integration scenarios and
+    /// the runtime acceptance tests. No free-running driver uses it: the device
+    /// loop, which also drives the HA pair, calls `run_paced_round`.
     Restart,
     /// The tasks keep the deadlines and counters the previous round left (the
     /// rounds of a paced driver).

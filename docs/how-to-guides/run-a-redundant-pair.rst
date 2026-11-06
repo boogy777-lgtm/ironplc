@@ -89,8 +89,10 @@ schema-changing edit to stage as a migration candidate (see
 
 Both sessions speak the usual JSON command protocol on stdin/stdout, plus
 the pair overview ``{"command":"haStatus"}`` from each unit's view. The
-pair link stays live between commands — the standby synchronizes,
-replicates, and promotes with no client connected.
+device loop scans and keeps the pair link live between commands: the owner
+scans by itself, and the standby synchronizes, replicates, and promotes with
+no client connected. ``startScan`` and ``stopScan`` work on either unit; a
+stopped owner stays the owner and the standby does not promote.
 
 A scripted session against unit A (one JSON line in, one line out):
 
@@ -130,8 +132,9 @@ Reading the sequence:
 #. ``testEdits``: both selectors switch at the boundary — on the
    standby the migration candidate's replicated image is what flips it.
 #. ``assembleEdits``: one commit transaction; both units promote
-   application generation 2, the candidate is gone, and the epochs
-   converge on the value the assemble boundary minted. Both units
+   application generation 2, the candidate is gone, and the standby adopts
+   the owner's epoch, which trails it (the owner mints one epoch per round it
+   commits, so the epochs are not equal at any instant). Both units
    persist the identical committed bytes to their slot stores.
 
 Takeover mid-Test

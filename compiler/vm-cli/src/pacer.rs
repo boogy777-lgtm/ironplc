@@ -163,10 +163,18 @@ impl<C: Clock> Pacer<C> {
     }
 
     /// Waits for a message while there is no round to wait for (the device is
-    /// not permitted to scan, or is faulted): at most the stop poll interval.
-    pub fn wait_idle<T>(&mut self, rx: &Receiver<T>) -> Result<T, RecvTimeoutError> {
+    /// not permitted to scan, is stopped or is faulted): at most the stop poll
+    /// interval, or until `wake_us` when the caller has something of its own to
+    /// do then (the pump of a pair link) and that comes sooner.
+    pub fn wait_idle<T>(
+        &mut self,
+        wake_us: Option<u64>,
+        rx: &Receiver<T>,
+    ) -> Result<T, RecvTimeoutError> {
         let now_us = self.clock.uptime_us();
-        self.clock.recv_until_us(now_us + STOP_POLL_US, rx)
+        let end_us = now_us + STOP_POLL_US;
+        self.clock
+            .recv_until_us(wake_us.map_or(end_us, |wake_us| wake_us.min(end_us)), rx)
     }
 }
 

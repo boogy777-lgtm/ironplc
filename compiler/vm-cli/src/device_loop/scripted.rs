@@ -14,6 +14,7 @@ use ironplc_runtime::RuntimeHost;
 
 use super::{Core, Submitted};
 use crate::device_settings::device::Device;
+use crate::serve::Ha;
 use crate::slot_store::SlotStore;
 
 /// Serves one command session: reads one line per command from `reader`,
@@ -28,11 +29,11 @@ pub(crate) fn serve_session(
     device: &mut Device,
     shell: Option<&mut Shell>,
 ) -> io::Result<()> {
-    let mut core = Core {
+    let mut core: Core<'_> = Core {
         host,
         store,
         device,
-        shell,
+        ha: shell.map(Ha::Shell),
     };
     for line in reader.lines() {
         let answer = match core.submit(&line?)? {

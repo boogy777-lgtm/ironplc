@@ -16,6 +16,8 @@ use crate::serve::compose_host;
 use crate::serve_retained_tests::Served;
 use crate::serve_tests::{compile_container, container_bytes, counter_source};
 
+mod pair;
+
 /// A program with one cyclic task of `interval` (an IEC duration literal), whose
 /// program adds `step` to `Counter` in each of its rounds.
 fn cyclic_source(step: i32, interval: &str) -> String {
