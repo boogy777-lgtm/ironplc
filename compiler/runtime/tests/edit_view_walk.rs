@@ -189,6 +189,29 @@ fn edit_view_when_finalize_all_then_it_is_enabled_when_accept_is_and_its_steps_r
 }
 
 #[test]
+fn edit_view_when_a_candidate_is_staged_and_no_swap_is_pending_then_the_host_accepts_a_command_that_ends_the_edit(
+) {
+    // The invariant of the class: an unfinished edit always has an exit. A
+    // state that waits for a scan boundary has none to offer; the boundary is
+    // its exit.
+    for state in STATES {
+        let view = view_in(state);
+        if view.stage == EditStage::Idle || view.stage == EditStage::SwapPending {
+            continue;
+        }
+        let exits: Vec<EditCommand> = [EditCommand::Cancel, EditCommand::Assemble]
+            .into_iter()
+            .filter(|command| apply(&mut host_in(state), *command).is_ok())
+            .collect();
+
+        assert!(!exits.is_empty(), "no exit in {state:?}");
+        for exit in exits {
+            assert!(view.commands.edit[&exit].enabled, "{exit:?} in {state:?}");
+        }
+    }
+}
+
+#[test]
 fn edit_view_when_a_command_has_steps_then_the_host_runs_them_all_at_the_next_boundary() {
     for state in STATES {
         for command in EditCommand::ALL {
