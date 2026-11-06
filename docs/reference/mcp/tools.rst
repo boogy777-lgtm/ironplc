@@ -349,6 +349,20 @@ reverts a test, :literal:`hot_edit_cancel` discards the candidate and
 :literal:`hot_edit_status` reports the state. By default they act on one session
 that the server itself runs: the first :literal:`hot_edit_accept` starts it.
 
+Every response carries the ``status`` of the host after the command, and a
+refusal does too. The status has the field ``edit``, which the host builds and
+the tools only pass on: the ``stage`` of the edit, and for each command whether
+the host allows it now, with its ``label`` and, when it does not, the ``reason``
+(``code`` and ``text``) it would refuse with. The ``v_code`` and ``message`` of a
+refused command are that reason: one text, from the host. The ``warning`` of the
+view is present while a candidate exists: a candidate lives in RAM only, and a
+restart of the device loses it. :literal:`hot_edit_assemble` needs a candidate
+that has run under :literal:`hot_edit_test`. :literal:`hot_edit_cancel` ends the
+edit in one call, also while a logic-only candidate runs under test: the host
+reverts to the original program at the next scan boundary and discards the
+candidate there. A candidate of a state migration under test can only be
+assembled, and ``cancel`` is refused with :doc:`V4011 </reference/runtime/problems/V4011>`.
+
 Every one of them takes an optional ``device`` that names a device to act on
 instead, over the session protocol that the editor uses. Name the device by
 ``address`` and optionally ``port`` (the session port, 49152, when omitted), or

@@ -103,6 +103,52 @@ fn build_test_response_when_device_has_no_candidate_then_the_v_code_of_the_devic
     assert_eq!(cancel.v_code.as_deref(), Some("V4012"));
 }
 
+#[spec_test(REQ_TOL_mcp_171)]
+#[test]
+fn build_accept_response_when_device_refuses_then_the_message_is_the_reason_of_the_edit_view() {
+    let (_device, resolved, _dir) = counter_device();
+    let cache = cache();
+    let edit = counter_variant("Counter := Counter + 10;");
+    build_accept_response(&source(&edit), &ed2_options(), &cache, &resolved);
+
+    let second = build_accept_response(&source(&edit), &ed2_options(), &cache, &resolved);
+
+    assert!(!second.ok);
+    let view = second.status.unwrap().edit.unwrap();
+    let reason = view.commands.edit[&ironplc_runtime::EditCommand::Accept]
+        .reason
+        .clone()
+        .unwrap();
+    assert_eq!(second.v_code.as_deref(), Some("V4013"));
+    assert_eq!(second.v_code, Some(reason.code));
+    assert_eq!(second.message, Some(reason.text));
+}
+
+#[spec_test(REQ_TOL_mcp_171)]
+#[test]
+fn build_cancel_response_when_device_runs_the_candidate_under_test_then_one_call_ends_the_edit() {
+    let (_device, resolved, _dir) = counter_device();
+    let cache = cache();
+    let edit = counter_variant("Counter := Counter + 10;");
+    build_accept_response(&source(&edit), &ed2_options(), &cache, &resolved);
+    let tested = build_test_response(&resolved);
+    let view = tested.status.unwrap().edit.unwrap();
+    assert_eq!(view.stage, ironplc_runtime::EditStage::Testing);
+    assert!(view.commands.edit[&ironplc_runtime::EditCommand::Cancel].enabled);
+
+    let cancelled = build_cancel_response(&resolved);
+
+    assert!(
+        cancelled.ok,
+        "{:?} {:?}",
+        cancelled.v_code, cancelled.message
+    );
+    let status = cancelled.status.unwrap();
+    assert_eq!(status.mode, HostMode::Normal);
+    assert_eq!(status.candidate, None);
+    assert_eq!(status.edit.unwrap().stage, ironplc_runtime::EditStage::Idle);
+}
+
 #[spec_test(REQ_TOL_mcp_175)]
 #[test]
 fn build_status_response_when_called_back_to_back_then_no_call_finds_the_device_busy() {

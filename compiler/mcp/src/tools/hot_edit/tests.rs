@@ -230,6 +230,43 @@ fn build_accept_response_when_candidate_already_staged_then_v4013() {
 }
 
 #[test]
+fn build_accept_response_when_refused_then_the_message_is_the_reason_the_edit_view_gives() {
+    let (cache, session) = make_state();
+    session_with_staged_candidate(&cache, &session, "Counter := Counter + 10;");
+
+    let second = counter_variant("Counter := Counter + 20;");
+    let resp = build_accept_response(&source(&second), &ed2_options(), &cache, &session);
+
+    // One text, the host's: the refusal is the reason of the command in the
+    // view that the same response carries, and the tool computes nothing.
+    let view = resp.status.unwrap().edit.unwrap();
+    let reason = view.commands.edit[&ironplc_runtime::EditCommand::Accept]
+        .reason
+        .clone()
+        .unwrap();
+    assert_eq!(resp.v_code, Some(reason.code));
+    assert_eq!(resp.message, Some(reason.text));
+    assert_eq!(view.stage, ironplc_runtime::EditStage::Accepted);
+}
+
+#[test]
+fn build_test_response_when_candidate_staged_then_the_response_carries_the_edit_view_and_its_warning(
+) {
+    let (cache, session) = make_state();
+    session_with_staged_candidate(&cache, &session, "Counter := Counter + 10;");
+
+    let resp = build_test_response(&session);
+
+    let view = resp.status.unwrap().edit.unwrap();
+    assert_eq!(view.stage, ironplc_runtime::EditStage::Testing);
+    assert!(view.commands.edit[&ironplc_runtime::EditCommand::Cancel].enabled);
+    assert_eq!(
+        view.warning.as_deref(),
+        Some("a restart of the device loses this candidate")
+    );
+}
+
+#[test]
 fn build_status_response_when_no_session_then_p8001_diagnostic() {
     let (_cache, session) = make_state();
 

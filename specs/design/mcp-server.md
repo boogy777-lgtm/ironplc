@@ -602,7 +602,7 @@ The hot-edit tools (`hot_edit_status`, `hot_edit_accept`, `hot_edit_test`, `hot_
 - `{address, port?}` — a TCP connection to the address; `port` is the session port (49152) when omitted.
 - `{device_id}` — the 32-digit id as `browse_network` reports it. The route is the one IronLink stores for this workstation (`routeList`). The route hint of a project's path file is not read: the server reads no file of the project (REQ-STL-mcp-006) and these tools have no project. An id without a route is an error that says to browse.
 
-A call is one session: connect, `identity`, the command, and a `getStatus` after an acknowledgement for the status snapshot, then the session is closed gracefully, which returns once the device has released it ([REQ-SC-session-client-013](session-client.md)), so the next call is not refused as busy. The device serves one engineering session at a time.
+A call is one session: connect, `identity`, the command, and a `getStatus` after an acknowledgement or a refusal for the status snapshot (it carries the `edit` view that the device builds, so a refusal shows what the device allows instead; the `vCode` and `message` of the refusal are the `reason` of that command in the view, and the tool computes no enablement), then the session is closed gracefully, which returns once the device has released it ([REQ-SC-session-client-013](session-client.md)), so the next call is not refused as busy. The device serves one engineering session at a time.
 
 **REQ-TOL-mcp-170** Without `device` the hot-edit tools act on the in-process host exactly as before, and their responses have no `device` field.
 
