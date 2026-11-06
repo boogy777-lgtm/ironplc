@@ -346,6 +346,10 @@ traversability). Fields:
 └──────────────────────────────────────────────────────────┘
 ```
 
+The epoch is 64 bits on the wire and everywhere else it is stored or shown
+([ADR-0062](../adrs/0062-measured-failover-timing-and-network-calibration.md),
+the 64-bit amendment); a pair's two units must run the same frame layout.
+
 Both channels carry the same logical content so a receiver can cross-check
 them; the per-channel sequence counters detect a silently repeating link.
 

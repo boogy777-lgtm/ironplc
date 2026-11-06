@@ -260,8 +260,8 @@ Field set:
   adding them keeps the protocol version. The type `BootNote` is the shape of
   every item a device keeps across a restart: a new stored item adds one field
   of that type.
-- `redundancy` — optional: `pairId`, configured `role`, ownership `epoch`,
-  and the SYNC/CONTROL substates of
+- `redundancy` — optional: `pairId`, configured `role`, ownership `epoch`
+  (a 64-bit counter, a JSON number exact up to 2^53), and the SYNC/CONTROL substates of
   [HA Redundancy FSM](ha-redundancy-fsm.md). Absent means standalone.
 
 ### Device settings

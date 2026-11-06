@@ -16,6 +16,13 @@ demo and what the hot-edit synchronization looks like across the pair.
    binding. Promotion on peer death is the takeover *policy* (ADR-0064(e))
    modeled at the verdict layer; the fencing barrier is a later slice.
 
+.. note::
+
+   Run both units of a pair from the same build. The ownership epoch is a
+   64-bit counter and the pair link carries it at that width, so a unit built
+   with the earlier 32-bit epoch does not understand the frames of the other
+   and the two never pair. Mixed versions in one pair are not supported.
+
 What the existing tests already prove
 -------------------------------------
 
