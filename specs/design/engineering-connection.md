@@ -694,7 +694,8 @@ Everything reused, with its one authority:
 | Verify | `verify_load` in `compiler/container/src/load_verify.rs`; `validate_candidate` in `compiler/runtime/src/online_change.rs` |
 | Run control | `Command` variants in `compiler/runtime/src/commands.rs`; the scan and the boundary round of a swap: `DeviceLoop` in `compiler/vm-cli/src/device_loop.rs` (ADR-0086) |
 | Fault of the scan | `FaultNote` in `compiler/runtime/src/commands.rs`; `Device::note_fault` in `compiler/vm-cli/src/device_settings/device.rs` |
-| V-code registries | `compiler/vm-cli/resources/problem-codes.csv` (V6013/V6014, the transport codes, beside the existing V6011/V6012; V6015/V6016, the device settings), `compiler/runtime/resources/problem-codes.csv` (V4021, a host without device settings) |
+| Run state (Run, Stop) | `RunState`, `Command::StartScan` and `Command::StopScan` in `compiler/runtime/src/commands.rs`; `Device::start_scan` and `Device::stop_scan` in `compiler/vm-cli/src/device_settings/device.rs`; `scan_control_line` in `compiler/vm-cli/src/serve.rs` |
+| V-code registries | `compiler/vm-cli/resources/problem-codes.csv` (V6013/V6014, the transport codes, beside the existing V6011/V6012; V6015/V6016, the device settings; V6019, a start of a faulted device), `compiler/runtime/resources/problem-codes.csv` (V4021, a host without device settings; V4022, a host without a scan to start or stop) |
 | E-code registry and rendering | `integrations/vscode-common/resources/problem-codes.csv` (E0010+), `formatProblem` in `integrations/vscode-common/src/problems.ts` |
 | Heartbeat | `getStatus` — `Command::GetStatus` in `compiler/runtime/src/commands.rs` |
 | Redundancy block vocabulary | [HA Redundancy FSM](ha-redundancy-fsm.md) (epoch, SYNC/CONTROL) |

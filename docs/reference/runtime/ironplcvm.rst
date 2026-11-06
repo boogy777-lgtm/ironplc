@@ -95,7 +95,8 @@ Commands
    ``migration`` map of stable-UID decisions — ``"init"`` or ``"preserve"``),
    ``testEdits``, ``untestEdits``, ``assembleEdits`` and ``cancelEdits``, and
    ``identity`` and ``setDeviceSettings`` for the device itself (see
-   :ref:`ironplcvm-device-settings`).
+   :ref:`ironplcvm-device-settings`), and ``startScan`` and ``stopScan`` for the
+   scan (see :ref:`ironplcvm-run-stop`).
    Responses are JSON: an acknowledgment, a status payload, or an error
    carrying a stable ``vCode`` and ``message``; a V4010 refusal additionally
    carries a ``pairs`` array naming every out-of-policy type change, so the
@@ -148,7 +149,7 @@ executed, writes the retained values (see :ref:`ironplcvm-retained-values`) and
 exits with code 0.
 
 A trap in a round stops the scan. The device is *faulted*: it runs no further
-round until it is started again, and it still answers every command. The trap
+round until the device is restarted, and it still answers every command. The trap
 is logged to stderr with its V-code, and the ``identity`` answer carries the
 optional field ``fault`` next to ``application`` for as long as the device is
 faulted:
@@ -162,6 +163,60 @@ faulted:
 running. The field is absent while the device is not faulted. A ``testEdits`` or
 ``untestEdits`` on a faulted device is still applied and acknowledged; the
 program does not run.
+
+.. _ironplcvm-run-stop:
+
+Run and Stop
+============
+
+The operator can stop the scan and start it again without restarting the device.
+Run and Stop are separate from the edit: they change whether the device executes
+rounds, and nothing else. They compile nothing, stage nothing, and leave a staged
+candidate or a test in progress as it was.
+
+``{"command":"startScan"}``
+   The device executes rounds again.
+
+``{"command":"stopScan"}``
+   The device finishes the round that is running, executes no further round, and
+   goes on answering every command.
+
+Both commands answer the run state the device is in afterwards:
+
+.. code-block::
+
+   {"response":"runState","runState":"stopped"}
+
+A ``startScan`` of a running device and a ``stopScan`` of a stopped device are
+acknowledged the same way and change nothing. The ``identity`` answer always
+carries the field ``runState`` next to ``application``, ``running`` or
+``stopped``. The device starts running; it does not keep the state across a
+restart. The run state is apart from a fault: a faulted device reports the state
+it was commanded to, and ``fault`` says why it does not scan.
+
+What a stopped device does:
+
+- It runs no round and answers every command, including ``identity``,
+  ``getStatus`` and the edit commands.
+- It writes the retained values when it is stopped (see
+  :ref:`ironplcvm-retained-values`), because they do not change while it is
+  stopped and a power cut then loses nothing. A write that fails answers
+  :doc:`V6018 <problems/V6018>` instead of the state, and the device is stopped
+  all the same.
+- A ``testEdits``, ``untestEdits`` or ``assembleEdits`` is applied at once
+  without executing the program, as on a faulted device, and is acknowledged
+  after it is applied. The swapped-in program runs from the first round after a
+  ``startScan``.
+
+A ``startScan`` does not catch up. The first round runs at once, every cyclic
+task runs in it once, and the period of each task counts from that round; the
+time spent stopped is neither a burst of rounds nor an overrun.
+
+A faulted device accepts ``stopScan``: it is stopped and still reports its
+``fault``. It refuses ``startScan`` with :doc:`V6019 <problems/V6019>`, because
+starting does not clear the fault; restart the device. A device that serves a
+redundant pair over the pair link does not scan between commands and answers
+both commands with :doc:`V4022 <problems/V4022>`.
 
 .. _ironplcvm-device-settings:
 
@@ -263,10 +318,11 @@ once, when it starts, before the first scan. A variable that is not retained
 starts with its initial value. See :doc:`/reference/language/variables/retention`
 for the variables and their qualifiers.
 
-The device writes the file at three points:
+The device writes the file at four points:
 
 - when :program:`ironplcvm serve` stops, at the end of its input or at
   :kbd:`Ctrl+C`;
+- when ``stopScan`` stops a running device (see :ref:`ironplcvm-run-stop`);
 - when ``assembleEdits`` commits a new program, with the values of the new
   program;
 - every ``retainedSavePeriod`` seconds, at a scan boundary, when the values
