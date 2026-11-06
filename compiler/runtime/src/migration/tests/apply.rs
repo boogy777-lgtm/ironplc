@@ -182,3 +182,30 @@ fn apply_when_region_offset_negative_then_error() {
         }
     );
 }
+
+#[test]
+fn apply_when_string_region_moved_then_the_candidate_slot_keeps_pointing_at_its_own_region() {
+    // The candidate laid its string out after eight bytes of another variable,
+    // so the region lives at offset 8 there and at offset 0 in the base. The
+    // bytes follow the candidate's slot, and the slot must not take the base's
+    // offset, which would aim it at the other variable's bytes.
+    let plan = StateMigrationPlan {
+        actions: vec![MigrationAction::String {
+            from_index: VarIndex::new(0),
+            to_index: VarIndex::new(1),
+            byte_size: 10,
+            candidate_max_length: 4,
+        }],
+    };
+    let mut base_buffers = buffers(vec![Slot::from_i32(0)], 16);
+    base_buffers.data_region[0..10].copy_from_slice(b"\x04\x00\x02\x00\x01\x00WXYZ");
+    let mut candidate_buffers = buffers(vec![Slot::from_i32(0), Slot::from_i32(8)], 24);
+
+    plan.apply(&base_buffers, &mut candidate_buffers).unwrap();
+
+    assert_eq!(candidate_buffers.vars[1], Slot::from_i32(8));
+    assert_eq!(
+        &candidate_buffers.data_region[8..18],
+        b"\x04\x00\x02\x00\x01\x00WXYZ"
+    );
+}

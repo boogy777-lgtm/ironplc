@@ -9,7 +9,7 @@
 //!
 //! | Case | Action |
 //! |---|---|
-//! | UID in both, identical [`VarEntry`] | Copy the slot, and the data-region region it points to for aggregates |
+//! | UID in both, identical [`VarEntry`] | Copy the slot of a scalar, or the data-region region of a string or an aggregate (each side keeps its own offset) |
 //! | UID in both, entry differs only by an admitted type change | Convert the value at the swap per the policy table (ADR 0060) |
 //! | UID only in the candidate | None: the candidate's init image has already initialized it |
 //! | UID only in the base | None: the value belongs to a dropped entity |
@@ -45,7 +45,7 @@
 //!
 //! | Layout | Action |
 //! |---|---|
-//! | Field lists identical | Copy the slot and the whole field region (one 8-byte slot per field) |
+//! | Field lists identical | Copy the whole field region (one 8-byte slot per field) |
 //! | Field lists differ | Match fields by UID; copy each shared-UID field's 8-byte slot, initialise candidate-only UIDs, drop base-only UIDs |
 //!
 //! An instance with a STRING or WSTRING field is migrated by neither path: the
@@ -136,20 +136,20 @@ enum MigrationAction {
         from_index: VarIndex,
         to_index: VarIndex,
     },
-    /// Copy the slot and the STRING/WSTRING region it points to.
+    /// Copy the STRING/WSTRING region the slots point to.
     String {
         from_index: VarIndex,
         to_index: VarIndex,
         byte_size: u32,
         candidate_max_length: u16,
     },
-    /// Copy the slot and the array/struct region it points to.
+    /// Copy the array/struct region the slots point to.
     Array {
         from_index: VarIndex,
         to_index: VarIndex,
         byte_size: u32,
     },
-    /// Copy the slot and the instance's whole field region; used only when
+    /// Copy the instance's whole field region; used only when
     /// the instance's type layout is identical on both sides.
     FbInstance {
         from_index: VarIndex,
@@ -493,9 +493,8 @@ impl StateMigrationPlan {
                     byte_size,
                 } => {
                     // Identical field layout: the region copy carries every
-                    // field value, and the slot copy carries the region
-                    // offset (equal on both sides, so a self-copy when the
-                    // offsets match).
+                    // field value; each instance slot keeps the offset of its
+                    // own region.
                     copy_data_region(base, candidate, from_index, to_index, byte_size, None)?;
                 }
                 MigrationAction::FbField {
@@ -744,9 +743,10 @@ fn convert_region(
 
 /// Copies a variable's data-region region from `base` to `candidate`.
 ///
-/// Both slots hold the region's byte offset, so the copy is
-/// offset-to-offset: a region that moved with its variable migrates, and one
-/// that stayed in place is copied onto itself. The optional maximum length
+/// Each slot holds the byte offset of its own container's region, so the bytes
+/// move offset-to-offset and the candidate's slot is left alone: its init image
+/// aimed it at the candidate's region, and a slot copied from the base would
+/// aim it at whatever the base kept at that offset. The optional maximum length
 /// applies the string-fit check before any byte moves.
 fn copy_data_region(
     base: &VmBuffers,
@@ -769,7 +769,6 @@ fn copy_data_region(
         }
     }
 
-    copy_slot(base, candidate, from_index, to_index)?;
     candidate.data_region[target_span].copy_from_slice(&base.data_region[source_span]);
     Ok(())
 }
