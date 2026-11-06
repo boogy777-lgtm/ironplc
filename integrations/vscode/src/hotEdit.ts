@@ -268,26 +268,7 @@ export function registerHotEditSupport(
   }
 
   /** UI callbacks for the sync resolution flow; the flow logic itself is unit-testable. */
-  const resolutionUi: SyncResolutionUi = {
-    async pickCandidate(candidates: SyncCandidate[]): Promise<SyncCandidate | undefined> {
-      const picked = await vscode.window.showQuickPick(
-        candidates.map(candidate => ({
-          label: `${candidate.kind === 'rename' ? 'Rename' : 'Swap'}: ${describeMapping(candidate)}`,
-          candidate,
-        })),
-        { title: 'Select a candidate to resolve, or press Esc to leave the IDs unresolved' },
-      );
-      return picked?.candidate;
-    },
-    async confirmMapping(mapping: string): Promise<boolean> {
-      const choice = await vscode.window.showInformationMessage(
-        `Map ${mapping}? The recorded variable ID moves to the new declaration.`,
-        'Map',
-        'Cancel',
-      );
-      return choice === 'Map';
-    },
-  };
+  const resolutionUi: SyncResolutionUi = createSyncResolutionUi();
 
   /** UI callbacks for the migration decision flow; the flow logic itself is unit-testable. */
   const migrationUi: MigrationDecisionUi = createMigrationDecisionUi();
@@ -379,6 +360,34 @@ export function registerHotEditSupport(
       sourceExtensions.map(ext => ext.replace('.', '')),
     );
   }
+}
+
+/**
+ * The vscode callbacks of the stable variable ID sync resolution (ADR-0053),
+ * shared by the Sync Variable IDs command and the Download, which syncs first:
+ * pick a rename or swap candidate, then confirm its mapping.
+ */
+export function createSyncResolutionUi(): SyncResolutionUi {
+  return {
+    async pickCandidate(candidates: SyncCandidate[]): Promise<SyncCandidate | undefined> {
+      const picked = await vscode.window.showQuickPick(
+        candidates.map(candidate => ({
+          label: `${candidate.kind === 'rename' ? 'Rename' : 'Swap'}: ${describeMapping(candidate)}`,
+          candidate,
+        })),
+        { title: 'Select a candidate to resolve, or press Esc to leave the IDs unresolved' },
+      );
+      return picked?.candidate;
+    },
+    async confirmMapping(mapping: string): Promise<boolean> {
+      const choice = await vscode.window.showInformationMessage(
+        `Map ${mapping}? The recorded variable ID moves to the new declaration.`,
+        'Map',
+        'Cancel',
+      );
+      return choice === 'Map';
+    },
+  };
 }
 
 /**

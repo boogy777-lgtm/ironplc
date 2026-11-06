@@ -130,6 +130,12 @@ export interface DownloadToRecord {
   deviceId: string;
   /** The device's status after the download: the counters and, when reported, the content hash. */
   status: HotEditStatus;
+  /**
+   * Whether the compiler also keeps a copy of the container that was sent beside
+   * the record (a Download, ADR-0088). The copy's name is the compiler's rule,
+   * like the record's.
+   */
+  keepContainer: boolean;
 }
 
 /** What to record for a download, or why nothing is recorded. */
@@ -154,6 +160,8 @@ export interface DownloadRequest {
   deviceId: string | undefined;
   /** The device's status after the download. */
   status: HotEditStatus;
+  /** Whether the container that was sent is also kept beside the record. Not kept when absent. */
+  keepContainer?: boolean;
   /**
    * Whether the device must report its content hash. A session started with a
    * container does not say what the device holds (a device that kept a
@@ -184,6 +192,7 @@ export function planDownload(request: DownloadRequest): DownloadPlan {
       container: request.sentContainer === undefined ? anchor.anchor : path.resolve(request.sentContainer),
       deviceId: request.deviceId,
       status: request.status,
+      keepContainer: request.keepContainer ?? false,
     },
   };
 }
@@ -194,6 +203,9 @@ export function recordDownloadArgs(download: DownloadToRecord): string[] {
   const args = ['record-download', download.anchor, '--device-id', download.deviceId];
   if (download.container !== download.anchor) {
     args.push('--container', download.container);
+  }
+  if (download.keepContainer) {
+    args.push('--keep-container');
   }
   // With the hash, the compiler writes the record only if the device runs the
   // container: the record says what the device received.

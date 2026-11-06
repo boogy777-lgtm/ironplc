@@ -510,6 +510,12 @@ What exists today:
   goes through test and assemble like any candidate and cannot be reverted once it
   runs (REQ-VC-vm-cli-064); the status carries `candidateMode`. The client writes
   the download record after the assemble, as for every download.
+  The editor's action is `ironplc.download`
+  (`integrations/vscode/src/downloadLogic.ts`, ADR-0088): it syncs the stable
+  variable IDs, compiles once, accepts in the `replace` mode, asks the engineer to
+  confirm the `reinitialised` list, then sends the commands that the edit view of
+  the status names (`next`), and records the download after the assemble with the
+  container that was sent kept beside the record.
 - **Verify.** The container verifies at load — `verify_load` in
   `compiler/container/src/load_verify.rs` recomputes the layout hash — and
   the host compares the candidate's `layout_hash` against the active

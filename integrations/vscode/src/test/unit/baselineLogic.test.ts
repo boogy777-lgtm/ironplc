@@ -182,8 +182,16 @@ suite('planDownload', () => {
         container: path.resolve(path.join('tmp', 'main.iplc')),
         deviceId: DEVICE_ID,
         status: status(),
+        keepContainer: false,
       },
     });
+  });
+
+  test('planDownload_when_keep_container_requested_then_the_plan_keeps_it', () => {
+    const plan = planDownload({ ...base, profile: TCP, sentContainer: 'x.iplc', status: status(), keepContainer: true });
+
+    assert.ok('download' in plan);
+    assert.strictEqual(plan.download.keepContainer, true);
   });
 
   test('planDownload_when_session_start_then_the_application_container_is_the_sent_one', () => {
@@ -236,7 +244,21 @@ suite('record commands', () => {
     container: path.join('work', 'plant', 'plant.iplc'),
     deviceId: DEVICE_ID,
     status: status(),
+    keepContainer: false,
   };
+
+  test('recordDownloadArgs_when_keep_container_then_the_flag_follows_the_container', () => {
+    const args = recordDownloadArgs({ ...download, container: path.join('tmp', 'main.iplc'), keepContainer: true });
+
+    assert.deepStrictEqual(args.slice(0, 7), [
+      'record-download', download.anchor, '--device-id', DEVICE_ID,
+      '--container', path.join('tmp', 'main.iplc'), '--keep-container',
+    ]);
+  });
+
+  test('recordDownloadArgs_when_not_keep_container_then_no_keep_flag', () => {
+    assert.ok(!recordDownloadArgs(download).includes('--keep-container'));
+  });
 
   test('recordDownloadArgs_when_container_is_the_anchor_then_no_container_flag', () => {
     assert.deepStrictEqual(recordDownloadArgs(download), [
@@ -430,10 +452,21 @@ suite('download record guards', () => {
     const source = extensionSources().find(candidate => candidate.file === 'buildCommands.ts');
 
     assert.ok(source);
-    // Defined once; the commit path and the trial's assemble call it; it is the
-    // only place that reaches the connection's recorder.
+    // Defined once; the commit path, the trial's assemble and the Download's
+    // assemble call it; it is the only place that reaches the connection's recorder.
     assert.strictEqual(source.text.split('function acknowledgeAssemble(').length - 1, 1);
-    assert.strictEqual(source.text.split('await acknowledgeAssemble(').length - 1, 2);
+    assert.strictEqual(source.text.split('await acknowledgeAssemble(').length - 1, 3);
     assert.strictEqual(source.text.split('connection.recordDownload(').length - 1, 1);
+  });
+
+  test('buildCommands_when_scanned_then_only_the_download_keeps_the_container_and_registers_its_table_command', () => {
+    const source = extensionSources().find(candidate => candidate.file === 'buildCommands.ts');
+
+    assert.ok(source);
+    // The two build paths record without a copy; the Download, which replaced the
+    // application, keeps the container that was sent beside the record.
+    assert.strictEqual(source.text.split('acknowledgeAssemble(sent.path, status, true)').length - 1, 1);
+    assert.strictEqual(source.text.split('await acknowledgeAssemble(').length - 1, 3);
+    assert.ok(source.text.includes('registerCommand(DOWNLOAD_ACTIONS.download.commandId, download)'));
   });
 });
