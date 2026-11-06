@@ -36,8 +36,9 @@ These are fixed. The plan does not reopen them.
    difference is the engineer's responsibility (the CODESYS choice; confirmed
    explicitly where the process may change unpredictably).
 2. **Download is the "replace" mode** of the same pipeline: at the boundary the
-   application is replaced with a re-initialisation, with an empty "keep" set
-   (the machinery of the migration swap).
+   application is replaced with a re-initialisation (the machinery of the
+   migration swap). Its "keep" set holds only the PERSISTENT variables whose
+   declaration is equal (answer 2 below); everything else is re-initialised.
 3. **No application is an empty container** (no ST files, so no programs and no
    tasks). It adds no state to the host's state machine.
 4. **Test ownership.** A candidate under Test stays under Test when the session
@@ -45,7 +46,7 @@ These are fixed. The plan does not reopen them.
 5. **Audit defects are fixed inside class K1**, not as patches. K1: the runtime
    gives the allowed commands for each state, and the clients only show them.
 6. **Order.** K3 (retained store) and K4 (the cyclic scan in `serve`) come
-   first. K1 comes after them.
+   first. K1 comes after them, then K2, then the dialog (answer 4 below).
 7. **Stage model, after Rockwell.**
    - Accept loads the edit and does not execute it.
    - Test executes the new logic live, outputs follow it, and there is no
@@ -197,17 +198,21 @@ re-checked; the rows that changed are marked.
   - tag equal: apply the image (a warm start keeps RETAIN and PERSISTENT);
   - tag different, or file damaged: discard it and record a boot note, which the
     identity reports (never silent).
-- **Cadence** (see open question 1) is a device setting, a row in the existing
-  table of device settings (`vm-cli/src/device_settings.rs`).
+- **Cadence** (answer 1). The image is written at a controlled stop and at
+  assemble, the CODESYS default. A device setting, a row in the existing table of
+  device settings (`vm-cli/src/device_settings.rs`), adds a periodic write every
+  N seconds when the image changed, as the CODESYS Persistence Manager does. The
+  setting is off by default (N = 0). Every write is atomic (write a temporary
+  file, fsync, rename; prefactor P-B), so a power cut leaves the old image or
+  the new one, never a torn file.
 - **Running versus persisted identity (audit row 12).** The identity reports the
   `contentHash` that runs and the `contentHash` of the slot on disk. When they
   differ the comparison shows "not persisted". V6012 keeps its code and gains the
   field that makes it visible.
 - **The qualifier semantics** (IEC 61131-3): RETAIN survives a warm restart and
   power loss; PERSISTENT (a CODESYS and TwinCAT extension, already in the DSL)
-  survives also a download that keeps the layout. Replace mode (decision 2)
-  re-initialises everything, as the owner approved, so PERSISTENT across a
-  download is not delivered here (see open question 2).
+  survives also a download when its declaration is equal (answer 2, the CODESYS
+  rule). Replace mode keeps exactly those variables; K2 delivers the keep rule.
 
 ### 2. K4: the cyclic device
 
@@ -221,9 +226,10 @@ re-checked; the rows that changed are marked.
   as `drive_scan_round` makes it today. `drive_scan_round` disappears: the next
   round is the boundary.
 - **Pacing in one place.** The deadline computation (`next_due_us`, the sleep,
-  the stop flag) is one function. `run` and the device loop both call it. The
-  executors differ today (`Vm` in `run`, `RuntimeHost` in `serve`); open question
-  3 asks whether `run` also moves onto the host.
+  the stop flag) is one function. `run` and the device loop both call it.
+  `run` keeps its `Vm` executor and `serve` keeps `RuntimeHost` (answer 3): the
+  vendors keep simulation a separate executor, and the VM split once cost 7 %.
+  The reason is written at the pacer's call site in `run`.
 - **Run and Stop.** The host gains a run state (`Running`, `Stopped`) that the
   identity reports. Two session commands start and stop the scan. A stopped host
   executes no rounds but still answers every command. The device boots in
@@ -266,6 +272,11 @@ re-checked; the rows that changed are marked.
 - **A session end never touches the edit.** A drop of the session, clean or by
   panic, leaves the host state as it is (decision 4). The occupied flag is
   released by a drop guard (audit row 17). A test covers the three ends.
+- **A candidate lives in RAM only** (answer 6). A restart of the device loses a
+  staged or tested candidate and boots the assembled application; the boot note
+  says "candidate lost" and the engineer repeats the edit. While a candidate is
+  staged or under Test, `edit` carries a warning that a restart loses it, and
+  the dialog and the comparison show that warning.
 - **Every failure ends in a state whose exits are shown** (audit row 10): after
   a refused or failed command the client re-reads `edit` and renders it.
 - **The comments that disagree with the code** (audit row 21: assemble "requests
@@ -280,8 +291,18 @@ re-checked; the rows that changed are marked.
   automatic from the layout hash). `replace` skips the layout validation, keeps
   nothing, and the boundary swap builds fresh buffers and runs init. The
   container itself is still verified (format, hashes, bytecode verifier).
-- **Retained values in replace.** Replace discards the retained image (decision 2,
-  empty keep set). The new application's tag starts a new retained file.
+- **Retained values in replace.** Replace keeps the PERSISTENT variables whose
+  declaration is equal and re-initialises the rest, RETAIN included (decision 2,
+  answer 2). "Equal" is: the same stable id of ADR-0053 (`stable_vars`) in the
+  running and the candidate container, and equal type data. A variable without a
+  stable id, or with different type data, is re-initialised, and the accept
+  reply lists it, so a reset is never silent. If the engineering side does not
+  yet allocate and persist the stable ids (the population path ADR-0053 left
+  open), that allocation is part of this stage. The new application's tag
+  starts a new retained file that holds the kept values.
+- **The risk the rule accepts** (as CODESYS does): a variable whose meaning
+  changes without a change of declaration keeps its old value. The docs of
+  Download say so.
 - **No application.** The built-in empty container is produced by the container
   crate's builder, with a constant `contentHash`. `ironplcvm serve` without a file
   and with an empty store boots it. "Controller holds no application" is then
@@ -318,6 +339,11 @@ compare(attempt, device, records, project) -> Comparison
   renders it; `baselineLogic.ts` (the TypeScript comparison) and E0015 are
   removed.
 - **The contents hash is the only comparison.** Restarted counters never matter.
+- **How Connect shows it** (answer 5). Row 5 (up to date) connects at once with
+  no dialog. Every other row opens a QuickPick in the style of the edit dialog:
+  the controller, what it holds, the project, and the actions. The status bar
+  shows the row's one-line summary at all times. There is no permanent Online
+  panel; the vendors show a prompt only on a mismatch.
 
 ### 6. The QuickPick dialog
 
@@ -340,18 +366,18 @@ workspace state.
 | 1 | A unreachable | transport error | yes (connect failure) | stage 7 maps it to the row |
 | 2 | A busy | V6014 refusal, graceful close (#178) | yes | stage 7 |
 | 3 | A protected | discovery reply flag (`discovery/src/reply.rs`) | the flag, no credentials | stage 7 shows "protected"; credentials are a later class |
-| 4 | B none: C = `EMPTY_APPLICATION_HASH` | identity `contentHash` | no empty container | stage 6 (K2), row in stage 7 |
+| 4 | B none: C = `EMPTY_APPLICATION_HASH` | identity `contentHash` | no empty container | stage 5 (K2), row in stage 7 |
 | 5 | C = P, up to date | build record, identity | both | stage 7. Online at once, no dialog |
 | 6 | C = P, sources changed | up-to-date check without compile | the check, as part of `compile` | stage 7 (query form) |
 | 7 | C = R, C != P, Lc = Lp | download record v2, build record | both | stage 7 |
 | 8 | C = R, Lc != Lp | as 7, plus layout hashes | both | stage 7. Migration decisions use ADR-0061 |
 | 9 | C != P and C != R | records | both | stage 7. R is looked up by the connected `deviceId`, so another workstation's change lands here (audit row 14 closed) |
-| 10 | E staged or under test | `edit` stage, `pendingEdit` | the record, no `edit` view | K1 (stage 5), row in stage 7 |
+| 10 | E staged or under test | `edit` stage, `pendingEdit` | the record, no `edit` view | K1 (stage 4), row in stage 7 |
 | 11 | P build fails | up-to-date check | partial | stage 7 |
 | 12 | `deviceId` differs from the chosen | path record, identity | both; `connectControllerLogic.ts` already prints it | stage 7 (information row) |
 | 13 | connection lost | session state | client | stage 7 |
 | 14 | controller restarted | boot note, `persistedContentHash` | no | K3 (stage 2), row in stage 7 |
-| 15 | container format refused | `containerFormat` in identity, `FORMAT_VERSION` | no field | stage 6, row in stage 7 |
+| 15 | container format refused | `containerFormat` in identity, `FORMAT_VERSION` | no field | stage 5, row in stage 7 |
 
 New, from the audit: **a controller whose `contentHash` and `persistedContentHash`
 differ** shows "running code is not persisted" beside any row (audit row 12). **A
@@ -404,9 +430,11 @@ level only.
   engineer's deploy.
 - Inv: every mode ends in the one boundary swap, and the part of the old state
   that is kept is a function of the mode (everything persistent for `change`, the
-  planned copy for `migrate`, nothing for `replace`).
+  planned copy for `migrate`, the PERSISTENT variables with an equal declaration
+  for `replace`).
 - Check: a mode enum with an exhaustive match in the swap; one test per mode on
-  the same fixture, asserting kept and re-initialised variables.
+  the same fixture, asserting kept and re-initialised variables; for `replace`,
+  one test each for an equal, a retyped and an id-less PERSISTENT variable.
 - N+1: a new mode (for example "keep the retained image") is one variant and its
   keep rule.
 
@@ -482,8 +510,7 @@ feature PR.
 
 ## Stages (each its own PR or PRs, in the owner's order)
 
-Tracking issue: to be opened when this plan is approved (the standards require
-one when more than one core change PR follows), and linked here.
+Tracking issue: #183.
 
 ### Stage 1: prefactors
 
@@ -499,8 +526,9 @@ one when more than one core change PR follows), and linked here.
       format versions.
 - [ ] 2b runtime: read and apply the retained image next to `persistent_state`;
       tests on the swap (retained image carried in `change`).
-- [ ] 2c device: the retained file, tag, cadence setting, boot result type and
-      boot note; `persistedContentHash` and the boot note in the identity (through
+- [ ] 2c device: the retained file (atomic write at a controlled stop and at
+      assemble), tag, the periodic-write setting (off by default), boot result
+      type and boot note; `persistedContentHash` and the boot note in the identity (through
       the one device block builder; discovery stays identity only).
 - [ ] 2d V6012 made visible: the comparison field and a docs page update.
 
@@ -523,30 +551,36 @@ one when more than one core change PR follows), and linked here.
       drop guard for the occupied flag (row 17), the comments (row 21), session
       end leaves the edit (decision 4) with its test.
 - [ ] 4c MCP tools read `edit` and refuse with its reason.
+- [ ] 4d the "candidate lost" boot note and the warning in `edit` while a
+      candidate is staged or under Test.
 
-### Stage 5: the QuickPick dialog
+### Stage 5: K2, deploy modes (right after K1, answer 4)
 
-- [ ] 5a `onlineEditLogic.ts` and the shell; tests against the golden file.
-- [ ] 5b remove the modal Trial dialog, `runBuildTrial`, `resolveTrial` and the
+- [ ] 5a the empty container; `serve` without a file boots it.
+- [ ] 5b `replace` mode in `AcceptEdits` and the swap; V4007, V4008, V4009 get a
+      path.
+- [ ] 5c the replace keep rule: PERSISTENT variables with an equal stable id and
+      type data are kept, the rest re-initialised and listed in the accept reply;
+      stable-id allocation on the engineering side if it is missing; the Download
+      docs state the accepted risk.
+- [ ] 5d Download as an extension action; the sent container is kept beside the
+      download record.
+- [ ] 5e `containerFormat` in the identity.
+
+### Stage 6: the QuickPick dialog
+
+- [ ] 6a `onlineEditLogic.ts` and the shell; tests against the golden file.
+- [ ] 6b remove the modal Trial dialog, `runBuildTrial`, `resolveTrial` and the
       old Hot Edit commands (audit row 16), each only in its own entries. Raise
       `engines.vscode` only if a used API needs it.
-- [ ] 5c docs and the design doc.
-
-### Stage 6: K2, deploy modes (placed before the comparison, see open question 4)
-
-- [ ] 6a the empty container; `serve` without a file boots it.
-- [ ] 6b `replace` mode in `AcceptEdits` and the swap; V4007, V4008, V4009 get a
-      path.
-- [ ] 6c Download as an extension action; the sent container is kept beside the
-      download record.
-- [ ] 6d `containerFormat` in the identity.
+- [ ] 6c docs and the design doc.
 
 ### Stage 7: the go-online comparison
 
 - [ ] 7a ADR "go-online comparison"; `online_comparison.rs`; the table test over
       all 15 rows plus the new rows.
 - [ ] 7b the `ironplcc` subcommand; the up-to-date check in query form.
-- [ ] 7c the view in the extension; Connect shows it (open question 5); E0015 and
+- [ ] 7c the view in the extension; Connect shows it (answer 5); E0015 and
       `baselineLogic.ts` removed; the information row for another controller.
 - [ ] 7d MCP uses the library function.
 - [ ] 7e close-out: update the design docs, open issues for what is not
@@ -571,50 +605,25 @@ one when more than one core change PR follows), and linked here.
 - **A match-the-application-to-controller option** (Rockwell's Match Project to
   Controller): later, per application.
 
-## Open questions for the owner
+## Owner answers (2026-11-06)
 
-1. **Cadence of the retained write.** Writing at every scan wears the disk and
-   costs time; writing only at a controlled stop loses everything on a power cut.
-   - A: at a controlled stop and at assemble only.
-   - B: A, plus every N seconds when the image changed (N a device setting).
-   - C: at every scan boundary.
-   - Recommendation: B, default 1 second. A soft PLC on a PC has no hold-up
-     power, so a bounded loss is the honest guarantee, and the setting lets a
-     hardware target choose.
-2. **PERSISTENT across a Download.** Decision 2 makes replace re-initialise
-   everything. CODESYS keeps PERSISTENT variables across a download when their
-   layout is equal.
-   - A: Download re-initialises all, PERSISTENT too (as decided, nothing extra).
-   - B: Download keeps variables qualified PERSISTENT whose declaration is equal.
-   - Recommendation: A in this plan, with B as a later keep rule of the K2
-     class (one variant). B needs the UID table of ADR-0053 to match variables.
-3. **Does `run` move onto the host?** The pacer is shared in any case.
-   - A: `run` keeps `Vm` and shares only the pacer. Two executors remain.
-   - B: `run` is rebuilt on `RuntimeHost`, so there is one loop and one executor,
-     as the audit asked.
-   - Recommendation: B, if a release benchmark against `main` shows no cost
-     (the VM split cost 7 % once); otherwise A, with the reason written at the
-     site.
-4. **Where K2 sits in the order.** Your order lists K3, K4, K1, the dialog, then
-   the comparison, and K2 (replace, empty container) is needed by the comparison's
-   Download actions.
-   - A: K2 between the dialog and the comparison (this plan).
-   - B: K2 right after K1, so the dialog already has its Cancel and Download
-     paths.
-   - Recommendation: A; the dialog needs no replace mode.
-5. **How the comparison is shown on Connect.**
-   - A: row 5 connects at once with no dialog. Every other row opens a
-     QuickPick, in the same style as the edit dialog, listing the controller,
-     what it holds, the project, and the actions.
-   - B: a permanent "Online" view (a panel) that always shows the comparison, and
-     no dialog.
-   - Recommendation: A, with the status bar showing the row's one-line summary at
-     all times, so B's information is never more than a click away.
-6. **A candidate when the device restarts.** Today it is lost (RAM). After K3 the
-   device could keep it.
-   - A: the loss is reported (the boot note "candidate lost"), and the
-     engineer repeats the edit.
-   - B: the candidate and its record are persisted, and the device returns to
-     Accepted (never to Testing) after a restart.
-   - Recommendation: A. Code that has not been assembled should not boot, and
-     persisting it adds a store that the K3 tag rule would have to cover.
+The owner took the recommendations revised after a vendor search (CODESYS,
+TwinCAT, Siemens, Rockwell). The sections above apply them.
+
+1. **Cadence of the retained write: B, off by default.** The image is written at
+   a controlled stop and at assemble (the CODESYS default). A device setting adds
+   a periodic write when the image changed (the CODESYS Persistence Manager); it
+   is off by default. Every write is atomic. No vendor documents a write at every
+   scan.
+2. **PERSISTENT across a Download: B.** Download keeps the PERSISTENT variables
+   whose declaration is equal, matched by the ADR-0053 stable id, and
+   re-initialises the rest, as CODESYS does.
+3. **`run` stays on `Vm`: A.** Only the pacer is shared. The vendors keep
+   simulation a separate executor.
+4. **K2 right after K1: B.** CODESYS bases an online change on the last
+   download, so the Download path exists before the dialog.
+5. **Connect: A.** A QuickPick only when the row is not "up to date", and the
+   status bar summary at all times. No vendor keeps a permanent online panel.
+6. **A candidate on restart: A, with a warning.** The candidate is lost and
+   reported; while one is pending, a warning says a restart loses it. Rockwell
+   and CODESYS lose an unassembled online change on a power cycle too.
