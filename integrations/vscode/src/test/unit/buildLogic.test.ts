@@ -3,9 +3,7 @@ import * as assert from 'assert';
 import {
   BuildPhase,
   BuildSession,
-  resolveTrial,
   runBuildCommit,
-  runBuildTrial,
 } from '../../buildLogic';
 import {
   EditIdentity,
@@ -47,18 +45,8 @@ class MockSession implements BuildSession {
     return Promise.resolve();
   }
 
-  async untestEdits(): Promise<void> {
-    this.calls.push('untest');
-    return Promise.resolve();
-  }
-
   async assembleEdits(): Promise<void> {
     this.calls.push('assemble');
-    return Promise.resolve();
-  }
-
-  async cancelEdits(): Promise<void> {
-    this.calls.push('cancel');
     return Promise.resolve();
   }
 
@@ -145,44 +133,5 @@ suite('runBuildCommit', () => {
       (err: unknown) => err instanceof HotEditProtocolError && err.vCode === 'V4007',
     );
     assert.deepStrictEqual(session.calls, ['accept']);
-  });
-});
-
-suite('runBuildTrial', () => {
-  test('runBuildTrial_when_connected_then_stops_after_test_without_assembling', async () => {
-    const session = new MockSession();
-    const recorder = phases();
-
-    const status = await runBuildTrial(session, BYTES, EDIT, decisionsUi(), recorder.onPhase);
-
-    assert.deepStrictEqual(session.calls, ['accept', 'test', 'status']);
-    assert.deepStrictEqual(recorder.phases, ['uploading', 'verifying', 'running']);
-    assert.strictEqual(status.active, 2);
-  });
-});
-
-suite('resolveTrial', () => {
-  test('resolveTrial_when_assemble_then_promotes_and_returns_status', async () => {
-    const session = new MockSession();
-
-    await resolveTrial(session, 'assemble');
-
-    assert.deepStrictEqual(session.calls, ['assemble', 'status']);
-  });
-
-  test('resolveTrial_when_untest_then_reverts_and_returns_status', async () => {
-    const session = new MockSession();
-
-    await resolveTrial(session, 'untest');
-
-    assert.deepStrictEqual(session.calls, ['untest', 'status']);
-  });
-
-  test('resolveTrial_when_cancel_then_discards_and_returns_status', async () => {
-    const session = new MockSession();
-
-    await resolveTrial(session, 'cancel');
-
-    assert.deepStrictEqual(session.calls, ['cancel', 'status']);
   });
 });

@@ -452,10 +452,10 @@ suite('download record guards', () => {
     const source = extensionSources().find(candidate => candidate.file === 'buildCommands.ts');
 
     assert.ok(source);
-    // Defined once; the commit path, the trial's assemble and the Download's
-    // assemble call it; it is the only place that reaches the connection's recorder.
+    // Defined once; the commit path and the Download's assemble call it; it is
+    // the only place that reaches the connection's recorder.
     assert.strictEqual(source.text.split('function acknowledgeAssemble(').length - 1, 1);
-    assert.strictEqual(source.text.split('await acknowledgeAssemble(').length - 1, 3);
+    assert.strictEqual(source.text.split('await acknowledgeAssemble(').length - 1, 2);
     assert.strictEqual(source.text.split('connection.recordDownload(').length - 1, 1);
   });
 
@@ -475,10 +475,10 @@ suite('download record guards', () => {
     const source = extensionSources().find(candidate => candidate.file === 'buildCommands.ts');
 
     assert.ok(source);
-    // The two build paths record without a copy; the Download, which replaced the
+    // The commit path records without a copy; the Download, which replaced the
     // application, keeps the container that was sent beside the record.
     assert.strictEqual(source.text.split('acknowledgeAssemble(sent.path, status, true)').length - 1, 1);
-    assert.strictEqual(source.text.split('await acknowledgeAssemble(').length - 1, 3);
+    assert.strictEqual(source.text.split('await acknowledgeAssemble(').length - 1, 2);
     assert.ok(source.text.includes('registerCommand(DOWNLOAD_ACTIONS.download.commandId, download)'));
   });
 });

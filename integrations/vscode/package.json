@@ -141,11 +141,6 @@
         "category": "IronPLC"
       },
       {
-        "command": "ironplc.buildTrial",
-        "title": "Build & Trial",
-        "category": "IronPLC"
-      },
-      {
         "command": "ironplc.download",
         "title": "Download to Controller",
         "category": "IronPLC"
