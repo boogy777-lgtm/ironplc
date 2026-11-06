@@ -12,27 +12,33 @@ use std::path::Path;
 use ironplc_container::opcode;
 use ironplc_container::opcode::{DecodeStop, DecodedInstruction, Instruction, Operand};
 use ironplc_container::{
-    ConstType, Container, FLAG_HAS_DEBUG_SECTION, FLAG_HAS_SYSTEM_UPTIME, FLAG_HAS_TYPE_SECTION,
+    ConstType, Container, RetainKind, RetainSpace, FLAG_HAS_DEBUG_SECTION, FLAG_HAS_SYSTEM_UPTIME,
+    FLAG_HAS_TYPE_SECTION,
 };
 use serde_json::{json, Value};
 
 /// Disassembles a bytecode container into a structured JSON value.
 ///
-/// The returned JSON has three top-level keys:
+/// The returned JSON has these top-level keys:
 /// - `header`: file header fields
+/// - `taskTable`: tasks and program instances
 /// - `constants`: array of constant pool entries
 /// - `functions`: array of function disassemblies with decoded instructions
+/// - `retainedRuns`: the runs of variable slots and data region bytes that keep
+///   their value across a restart (ADR-0085)
 pub fn disassemble(container: &Container) -> Value {
     let header = disassemble_header(container);
     let task_table = disassemble_task_table(container);
     let constants = disassemble_constants(container);
     let functions = disassemble_functions(container);
+    let retained_runs = disassemble_retained_runs(container);
 
     json!({
         "header": header,
         "taskTable": task_table,
         "constants": constants,
         "functions": functions,
+        "retainedRuns": retained_runs,
     })
 }
 
@@ -113,6 +119,31 @@ fn disassemble_header(container: &Container) -> Value {
             "size": h.task_section_size,
         },
     })
+}
+
+/// Converts the retained runs into a JSON array, one object per run, in the
+/// order the container stores them. A container that retains nothing gives an
+/// empty array.
+fn disassemble_retained_runs(container: &Container) -> Value {
+    let runs: Vec<Value> = container
+        .retained_runs()
+        .iter()
+        .map(|run| {
+            json!({
+                "kind": match run.kind {
+                    RetainKind::Retain => "retain",
+                    RetainKind::Persistent => "persistent",
+                },
+                "space": match run.space {
+                    RetainSpace::Slots => "slots",
+                    RetainSpace::Bytes => "bytes",
+                },
+                "start": run.start,
+                "len": run.len,
+            })
+        })
+        .collect();
+    Value::Array(runs)
 }
 
 /// Converts the task table into a JSON object with tasks and programs.
