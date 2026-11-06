@@ -148,6 +148,8 @@ fn identity_response_of(
             layout_hash: None,
         },
         redundancy,
+        persisted_content_hash: None,
+        retained: None,
     }))
 }
 
@@ -580,4 +582,46 @@ fn render_command_when_rendered_then_parse_command_reads_the_same_command(
 
     assert!(!line.contains('\n'));
     assert_eq!(parse_command(&line).unwrap(), command);
+}
+
+#[test]
+fn render_response_when_identity_without_stored_item_notes_then_fields_are_absent() {
+    let line = render_response(&identity_response(None)).unwrap();
+
+    assert!(!line.contains("persistedContentHash"));
+    assert!(!line.contains("retained"));
+}
+
+#[test]
+fn identity_when_stored_item_notes_then_fields_round_trip() {
+    let Response::Identity(mut payload) = identity_response(None) else {
+        panic!("identity_response builds an identity");
+    };
+    payload.persisted_content_hash = Some("ab".repeat(32));
+    payload.retained = Some(BootNote {
+        result: "discarded".into(),
+        reason: Some("otherApplication".into()),
+    });
+    let line = render_response(&Response::Identity(payload.clone())).unwrap();
+    let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+
+    assert_eq!(value["persistedContentHash"], "ab".repeat(32));
+    assert_eq!(
+        value["retained"],
+        serde_json::json!({"result": "discarded", "reason": "otherApplication"})
+    );
+    assert_eq!(parse_response(&line).unwrap(), Response::Identity(payload));
+}
+
+#[test]
+fn render_response_when_boot_note_has_no_reason_then_reason_is_absent() {
+    let note = BootNote {
+        result: "applied".into(),
+        reason: None,
+    };
+
+    assert_eq!(
+        serde_json::to_value(&note).unwrap(),
+        serde_json::json!({"result": "applied"})
+    );
 }
