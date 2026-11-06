@@ -10,14 +10,15 @@ pub const MAGIC: u32 = 0x49504C43;
 /// v4 added the variable table, v5 the stable variable IDs, v6 the FB field
 /// UIDs, v7 the explicit element stride in array descriptors, and v8 the
 /// persistent extent rows in the type section and a layout hash over the
-/// persistent part only (ADR-0073).
+/// persistent part only (ADR-0073), and v9 the retained run rows in the type
+/// section (ADR-0085).
 ///
 /// The version is the reader's gate, so a merge that lands two incompatible
 /// changes at once (here: the fork's v4-v6 subtables and upstream's v4
 /// element stride) must bump once more, to a number neither side shipped —
 /// readers of either ancestor release must reject the merged format rather
 /// than misparse it.
-pub const FORMAT_VERSION: u16 = 8;
+pub const FORMAT_VERSION: u16 = 9;
 
 /// Flag bit: container expects __SYSTEM_UP_TIME at VarIndex(0) and
 /// __SYSTEM_UP_LTIME at VarIndex(1), written by the VM before each scan.
@@ -200,7 +201,10 @@ impl FileHeader {
 
         let format_version = u16::from_le_bytes([buf[4], buf[5]]);
         if format_version != FORMAT_VERSION {
-            return Err(ContainerError::UnsupportedVersion);
+            return Err(ContainerError::UnsupportedVersion {
+                found: format_version,
+                supported: FORMAT_VERSION,
+            });
         }
 
         let profile = buf[6];
@@ -378,6 +382,10 @@ mod tests {
         bytes[0..4].copy_from_slice(&MAGIC.to_le_bytes());
         bytes[4..6].copy_from_slice(&(FORMAT_VERSION + 1).to_le_bytes());
         let result = FileHeader::from_bytes(&bytes);
-        assert!(matches!(result, Err(ContainerError::UnsupportedVersion)));
+        assert!(matches!(
+            result,
+            Err(ContainerError::UnsupportedVersion { found, supported })
+                if found == FORMAT_VERSION + 1 && supported == FORMAT_VERSION
+        ));
     }
 }

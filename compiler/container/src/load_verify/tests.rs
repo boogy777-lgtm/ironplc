@@ -3,11 +3,12 @@
 use super::*;
 use crate::id_types::{FbTypeId, FunctionId, InstanceId, VarIndex};
 use crate::persistent_extent::PersistentExtent;
+use crate::retained_extent::{RetainKind, RetainSpace, RetainedRun};
 use crate::test_support::round_trip;
 use crate::type_section::{
     FbTypeDescriptor, FieldEntry, StableVarEntry, UserFbDescriptor, VarEntry,
 };
-use crate::ContainerBuilder;
+use crate::{ContainerBuilder, ContainerError};
 use std::vec;
 
 /// A container whose type section exercises every check: two variables
@@ -445,4 +446,138 @@ fn verify_load_when_two_persistent_extents_name_one_instance_then_violation() {
         verify_load(&container),
         Err(LoadViolation::PersistentExtentInstance { instance_id }) if instance_id == InstanceId::new(0)
     ));
+}
+
+/// The consistent container (three variables, 64 bytes of data region, the
+/// whole tables as the persistent extent) with the given retained runs.
+fn container_with_retained(runs: &[RetainedRun]) -> Container {
+    let mut container = consistent_container();
+    container.header.data_region_bytes = 64;
+    container.type_section.as_mut().unwrap().retained_runs = runs.to_vec();
+    container
+}
+
+#[test]
+fn verify_load_when_retained_runs_inside_extent_then_ok() {
+    let container = container_with_retained(&[
+        RetainedRun::slots(RetainKind::Retain, 1, 2),
+        RetainedRun::bytes(RetainKind::Persistent, 8, 16),
+    ]);
+    assert_eq!(verify_load(&container), Ok(()));
+}
+
+#[test]
+fn verify_load_when_no_retained_runs_then_ok() {
+    let container = container_with_retained(&[]);
+    assert_eq!(verify_load(&container), Ok(()));
+    assert!(container.retained_runs().is_empty());
+}
+
+#[test]
+fn verify_load_when_retained_slots_past_variable_table_then_violation() {
+    let container = container_with_retained(&[RetainedRun::slots(RetainKind::Retain, 2, 2)]);
+    assert!(matches!(
+        verify_load(&container),
+        Err(LoadViolation::RetainedRunOutOfExtent {
+            space: RetainSpace::Slots,
+            start: 2,
+            len: 2
+        })
+    ));
+}
+
+#[test]
+fn verify_load_when_retained_bytes_past_data_region_then_violation() {
+    let container = container_with_retained(&[RetainedRun::bytes(RetainKind::Retain, 60, 8)]);
+    assert!(matches!(
+        verify_load(&container),
+        Err(LoadViolation::RetainedRunOutOfExtent {
+            space: RetainSpace::Bytes,
+            start: 60,
+            len: 8
+        })
+    ));
+}
+
+#[test]
+fn verify_load_when_retained_bytes_outside_declared_persistent_extent_then_violation() {
+    // The data region is 64 bytes but only the first 16 are persistent, so a
+    // retained run over working memory is refused although it is inside the
+    // region.
+    let mut container = container_with_extents(&[row(0, 0, 3, 0, 16)]);
+    container.type_section.as_mut().unwrap().retained_runs =
+        vec![RetainedRun::bytes(RetainKind::Retain, 16, 8)];
+    assert!(matches!(
+        verify_load(&container),
+        Err(LoadViolation::RetainedRunOutOfExtent {
+            space: RetainSpace::Bytes,
+            start: 16,
+            ..
+        })
+    ));
+}
+
+#[test]
+fn verify_load_when_retained_runs_overlap_then_violation() {
+    let container = container_with_retained(&[
+        RetainedRun::bytes(RetainKind::Retain, 0, 16),
+        RetainedRun::bytes(RetainKind::Persistent, 8, 8),
+    ]);
+    assert!(matches!(
+        verify_load(&container),
+        Err(LoadViolation::RetainedRunsOutOfOrder {
+            space: RetainSpace::Bytes,
+            start: 8
+        })
+    ));
+}
+
+#[test]
+fn verify_load_when_retained_runs_descend_then_violation() {
+    let container = container_with_retained(&[
+        RetainedRun::slots(RetainKind::Retain, 2, 1),
+        RetainedRun::slots(RetainKind::Retain, 0, 1),
+    ]);
+    assert!(matches!(
+        verify_load(&container),
+        Err(LoadViolation::RetainedRunsOutOfOrder {
+            space: RetainSpace::Slots,
+            start: 0
+        })
+    ));
+}
+
+#[test]
+fn verify_load_when_retained_slots_follow_bytes_then_violation() {
+    let container = container_with_retained(&[
+        RetainedRun::bytes(RetainKind::Retain, 0, 8),
+        RetainedRun::slots(RetainKind::Retain, 0, 1),
+    ]);
+    assert!(matches!(
+        verify_load(&container),
+        Err(LoadViolation::RetainedRunsOutOfOrder {
+            space: RetainSpace::Slots,
+            start: 0
+        })
+    ));
+}
+
+#[test]
+fn read_from_when_retained_run_kind_unknown_then_container_refused() {
+    let run = RetainedRun::slots(RetainKind::Retain, 1, 1);
+    let bytes = crate::test_support::container_bytes(&container_with_retained(&[run]));
+    let at = bytes
+        .windows(RetainedRun::SIZE)
+        .position(|window| window == run.to_bytes())
+        .unwrap();
+    let mut tampered = bytes.clone();
+    tampered[at] = 9;
+    // A zero content hash is the legacy form, so the read reaches the run.
+    let tampered = crate::test_support::with_tampered_header(&tampered, |h| {
+        h.content_hash = [0u8; 32];
+    });
+
+    let result = Container::read_from(&mut std::io::Cursor::new(&tampered));
+
+    assert!(matches!(result, Err(ContainerError::InvalidRetainKind(9))));
 }

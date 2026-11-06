@@ -21,6 +21,7 @@
 //! | A user FB descriptor and the FB type descriptor of the same type ID agree on the number of fields | [`LoadViolation::UserFbFieldCountMismatch`] |
 //! | FB field UIDs name an existing user FB type and a field inside it, ascending | [`LoadViolation::FbFieldUidUnknownType`] / [`LoadViolation::FbFieldUidFieldOutOfBounds`] / [`LoadViolation::FbFieldUidsOutOfOrder`] |
 //! | Persistent extent rows lie inside the variable table and the data region, ascend without overlap, and name distinct program instances of the task table | [`LoadViolation::PersistentExtentOutOfBounds`] / [`LoadViolation::PersistentExtentsOutOfOrder`] / [`LoadViolation::PersistentExtentInstance`] |
+//! | Retained runs lie inside the persistent extent and ascend by space and start without overlap | [`LoadViolation::RetainedRunOutOfExtent`] / [`LoadViolation::RetainedRunsOutOfOrder`] |
 //! | `layout_hash` recomputes over the type section | [`LoadViolation::LayoutHashMismatch`] |
 //!
 //! Note what is deliberately *not* checked: an `FbInstance` variable's
@@ -37,6 +38,7 @@
 use std::vec::Vec;
 
 use crate::id_types::{FbTypeId, FunctionId, InstanceId, VarIndex};
+use crate::retained_extent::{RetainSpace, RetainedRun};
 use crate::type_section::{FieldType, TypeSection, VAR_FLAG_IS_ARRAY};
 use crate::Container;
 
@@ -180,6 +182,24 @@ pub enum LoadViolation {
         /// The program instance the row names.
         instance_id: InstanceId,
     },
+    /// A retained run lies outside every run of the persistent extent in its
+    /// space: what is retained is state, and state is the persistent part.
+    RetainedRunOutOfExtent {
+        /// The space the run indexes.
+        space: RetainSpace,
+        /// The first slot or byte of the run.
+        start: u32,
+        /// The number of slots or bytes of the run.
+        len: u32,
+    },
+    /// Retained runs are not in ascending order of space and start, or two
+    /// runs of one space overlap.
+    RetainedRunsOutOfOrder {
+        /// The space of the offending run.
+        space: RetainSpace,
+        /// The first slot or byte of the offending run.
+        start: u32,
+    },
     /// An FB field UID entry names a type ID that has no user FB descriptor.
     /// Standard-library FBs own their layouts and never carry entries, so an
     /// entry for one (or for a nonexistent type) can only be corrupt.
@@ -313,6 +333,14 @@ impl core::fmt::Display for LoadViolation {
             LoadViolation::PersistentExtentInstance { instance_id } => write!(
                 f,
                 "persistent extent names instance {instance_id}, which is not a distinct program instance"
+            ),
+            LoadViolation::RetainedRunOutOfExtent { space, start, len } => write!(
+                f,
+                "retained run of {len} {space:?} from {start} lies outside the persistent extent"
+            ),
+            LoadViolation::RetainedRunsOutOfOrder { space, start } => write!(
+                f,
+                "retained run of {space:?} at {start} does not follow the previous run"
             ),
             LoadViolation::FbFieldUidUnknownType { type_id } => {
                 write!(f, "FB field UID references user FB {type_id}, which has no descriptor")
@@ -516,7 +544,8 @@ fn verify_type_section(
         }
     }
 
-    verify_persistent_extents(container, type_section)
+    verify_persistent_extents(container, type_section)?;
+    verify_retained_runs(container, type_section)
 }
 
 /// Verifies the persistent extent rows against the tables they index and
@@ -563,6 +592,46 @@ fn verify_persistent_extents(
             });
         }
         instances.push(row.instance_id);
+    }
+    Ok(())
+}
+
+/// Verifies the retained runs against the persistent extent and against each
+/// other. A container that declares no run retains nothing, which holds by
+/// construction.
+fn verify_retained_runs(
+    container: &Container,
+    type_section: &TypeSection,
+) -> Result<(), LoadViolation> {
+    let extents = container.persistent_extents();
+    let mut previous: Option<&RetainedRun> = None;
+    for run in &type_section.retained_runs {
+        let inside = extents.iter().any(|extent| {
+            let allowed = match run.space {
+                RetainSpace::Slots => extent.vars(),
+                RetainSpace::Bytes => extent.data(),
+            };
+            let range = run.range();
+            allowed.start <= range.start && range.end <= allowed.end
+        });
+        if !inside {
+            return Err(LoadViolation::RetainedRunOutOfExtent {
+                space: run.space,
+                start: run.start,
+                len: run.len,
+            });
+        }
+        let out_of_order = previous.is_some_and(|before| {
+            before.space > run.space
+                || (before.space == run.space && u64::from(run.start) < before.end())
+        });
+        if out_of_order {
+            return Err(LoadViolation::RetainedRunsOutOfOrder {
+                space: run.space,
+                start: run.start,
+            });
+        }
+        previous = Some(run);
     }
     Ok(())
 }

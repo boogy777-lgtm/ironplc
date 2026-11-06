@@ -26,7 +26,8 @@ fn container_spec_req_cf_026_wrong_magic_is_rejected() {
 }
 
 /// REQ-CF-container-027: A format_version other than FORMAT_VERSION is
-/// rejected with UnsupportedVersion.
+/// rejected with UnsupportedVersion, which names the version found and the
+/// version supported.
 #[spec_test(REQ_CF_container_027)]
 fn container_spec_req_cf_027_unsupported_version_is_rejected() {
     let mut bytes = [0u8; HEADER_SIZE];
@@ -34,7 +35,8 @@ fn container_spec_req_cf_027_unsupported_version_is_rejected() {
     bytes[4..6].copy_from_slice(&(FORMAT_VERSION + 1).to_le_bytes());
     assert!(matches!(
         FileHeader::from_bytes(&bytes),
-        Err(ContainerError::UnsupportedVersion)
+        Err(ContainerError::UnsupportedVersion { found, supported })
+        if found == FORMAT_VERSION + 1 && supported == FORMAT_VERSION
     ));
 }
 
@@ -76,4 +78,63 @@ fn container_spec_req_cf_029_load_time_verification() {
     header.write_to(&mut legacy).unwrap();
     legacy.extend_from_slice(&buf[HEADER_SIZE..]);
     assert!(crate::Container::read_from(&mut Cursor::new(&legacy)).is_ok());
+}
+
+/// REQ-CF-container-043: The load check refuses a retained run that does not
+/// lie inside the persistent extent in its space, and retained runs that are
+/// not in ascending order of space and start or that overlap.
+#[spec_test(REQ_CF_container_043)]
+fn container_spec_req_cf_043_retained_runs_lie_inside_the_persistent_extent() {
+    use crate::builder::ContainerBuilder;
+    use crate::id_types::FunctionId;
+    use crate::load_verify::LoadViolation;
+    use crate::retained_extent::{RetainKind, RetainedRun};
+    use crate::type_section::{FieldType, VarEntry};
+    use crate::verify_load;
+
+    let entry = || VarEntry {
+        var_type: FieldType::I32,
+        flags: 0,
+        extra: 0,
+    };
+    let with_runs = |runs: &[RetainedRun]| {
+        let mut container = ContainerBuilder::new()
+            .num_variables(2)
+            .data_region_bytes(32)
+            .add_function(FunctionId::INIT, &[0x8C], 0, 2, 0)
+            .add_var_entry(entry())
+            .add_var_entry(entry())
+            .add_retained_run(RetainedRun::slots(RetainKind::Retain, 0, 1))
+            .build();
+        // Keep the runs as given, the way a crafted file carries them.
+        container.type_section.as_mut().unwrap().retained_runs = runs.to_vec();
+        container
+    };
+
+    assert_eq!(
+        verify_load(&with_runs(&[
+            RetainedRun::slots(RetainKind::Retain, 0, 2),
+            RetainedRun::bytes(RetainKind::Persistent, 8, 24),
+        ])),
+        Ok(())
+    );
+    assert!(matches!(
+        verify_load(&with_runs(&[RetainedRun::slots(RetainKind::Retain, 1, 2)])),
+        Err(LoadViolation::RetainedRunOutOfExtent { .. })
+    ));
+    assert!(matches!(
+        verify_load(&with_runs(&[RetainedRun::bytes(
+            RetainKind::Retain,
+            24,
+            16
+        )])),
+        Err(LoadViolation::RetainedRunOutOfExtent { .. })
+    ));
+    assert!(matches!(
+        verify_load(&with_runs(&[
+            RetainedRun::bytes(RetainKind::Retain, 0, 16),
+            RetainedRun::bytes(RetainKind::Retain, 8, 8),
+        ])),
+        Err(LoadViolation::RetainedRunsOutOfOrder { .. })
+    ));
 }

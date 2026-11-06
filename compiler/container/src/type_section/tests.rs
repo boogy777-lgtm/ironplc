@@ -1,6 +1,7 @@
 //! Tests for the type section: binary round-trips, section sizing and malformed-input rejection.
 
 use super::*;
+use crate::retained_extent::RetainKind;
 use std::io::Cursor;
 use std::vec;
 use std::vec::Vec;
@@ -60,6 +61,7 @@ fn type_section_write_read_when_ton_descriptor_then_roundtrips() {
         stable_vars: vec![],
         fb_field_uids: vec![],
         persistent_extents: vec![],
+        retained_runs: vec![],
     };
 
     let mut buf = Vec::new();
@@ -93,6 +95,7 @@ fn type_section_write_read_when_array_descriptors_then_roundtrips() {
         stable_vars: vec![],
         fb_field_uids: vec![],
         persistent_extents: vec![],
+        retained_runs: vec![],
     };
 
     let mut buf = Vec::new();
@@ -131,6 +134,7 @@ fn type_section_write_read_when_fb_and_array_descriptors_then_roundtrips() {
         stable_vars: vec![],
         fb_field_uids: vec![],
         persistent_extents: vec![],
+        retained_runs: vec![],
     };
 
     let mut buf = Vec::new();
@@ -152,8 +156,8 @@ fn type_section_write_read_when_fb_and_array_descriptors_then_roundtrips() {
 #[test]
 fn section_size_when_empty_then_returns_header_counts_only() {
     let section = TypeSection::default();
-    // 2 bytes for each of the seven sub-table counts
-    assert_eq!(section.section_size(), 14);
+    // 2 bytes for each of the eight sub-table counts
+    assert_eq!(section.section_size(), 16);
 }
 
 #[test]
@@ -169,9 +173,10 @@ fn section_size_when_array_descriptors_then_includes_descriptor_bytes() {
         stable_vars: vec![],
         fb_field_uids: vec![],
         persistent_extents: vec![],
+        retained_runs: vec![],
     };
-    // 7 counts(14) + 2 * 12 (descriptors) = 38
-    assert_eq!(section.section_size(), 38);
+    // 8 counts(16) + 2 * 12 (descriptors) = 40
+    assert_eq!(section.section_size(), 40);
 }
 
 fn read_single_descriptor(desc: ArrayDescriptor) -> Result<TypeSection, ContainerError> {
@@ -273,6 +278,7 @@ fn type_section_write_read_when_user_fb_descriptors_then_roundtrips() {
         stable_vars: vec![],
         fb_field_uids: vec![],
         persistent_extents: vec![],
+        retained_runs: vec![],
     };
 
     let mut buf = Vec::new();
@@ -347,8 +353,8 @@ fn section_size_when_variable_table_then_includes_entry_bytes() {
         ],
         ..Default::default()
     };
-    // 7 counts(14) + 2 entries * 4 = 22
-    assert_eq!(section.section_size(), 22);
+    // 8 counts(16) + 2 entries * 4 = 24
+    assert_eq!(section.section_size(), 24);
 }
 
 #[test]
@@ -404,8 +410,8 @@ fn section_size_when_stable_vars_then_includes_entry_bytes() {
         ],
         ..Default::default()
     };
-    // 7 counts(14) + 2 entries * 10 = 34
-    assert_eq!(section.section_size(), 34);
+    // 8 counts(16) + 2 entries * 10 = 36
+    assert_eq!(section.section_size(), 36);
 }
 
 #[test]
@@ -467,6 +473,7 @@ fn type_section_write_read_when_fb_field_uids_then_roundtrips_in_order() {
     let section = TypeSection {
         fb_field_uids: entries.clone(),
         persistent_extents: vec![],
+        retained_runs: vec![],
         ..Default::default()
     };
 
@@ -496,8 +503,8 @@ fn section_size_when_fb_field_uids_then_includes_entry_bytes() {
         ],
         ..Default::default()
     };
-    // 7 counts(14) + 2 entries * 11 = 36
-    assert_eq!(section.section_size(), 36);
+    // 8 counts(16) + 2 entries * 11 = 38
+    assert_eq!(section.section_size(), 38);
 }
 
 #[test]
@@ -567,12 +574,13 @@ fn type_section_section_size_when_fb_types_with_fields_then_includes_field_bytes
         stable_vars: vec![],
         fb_field_uids: vec![],
         persistent_extents: vec![],
+        retained_runs: vec![],
     };
 
-    // Header: 7 counts * 2 = 14
+    // Header: 8 counts * 2 = 16
     // Per descriptor: 4 (header) + 3 fields * 4 = 16
-    // Total: 14 + 16 = 30
-    assert_eq!(section.section_size(), 30);
+    // Total: 16 + 16 = 32
+    assert_eq!(section.section_size(), 32);
 
     let mut buf = Vec::new();
     section.write_to(&mut buf).unwrap();
@@ -631,4 +639,61 @@ fn type_section_read_from_when_no_persistent_extents_then_no_rows() {
     let decoded = TypeSection::read_from(&mut Cursor::new(&buf)).unwrap();
 
     assert!(decoded.persistent_extents.is_empty());
+}
+
+#[test]
+fn type_section_write_read_when_retained_runs_then_roundtrips() {
+    let section = TypeSection {
+        retained_runs: vec![
+            RetainedRun::slots(RetainKind::Retain, 2, 3),
+            RetainedRun::bytes(RetainKind::Persistent, 16, 24),
+        ],
+        ..Default::default()
+    };
+
+    let mut buf = Vec::new();
+    section.write_to(&mut buf).unwrap();
+    let decoded = TypeSection::read_from(&mut Cursor::new(&buf)).unwrap();
+
+    assert_eq!(decoded.retained_runs, section.retained_runs);
+    assert_eq!(buf.len() as u32, section.section_size());
+}
+
+#[test]
+fn type_section_write_to_when_nothing_retained_then_ends_with_zero_count() {
+    let mut buf = Vec::new();
+    TypeSection::default().write_to(&mut buf).unwrap();
+
+    assert_eq!(buf.len(), 16);
+    assert_eq!(&buf[14..16], &0u16.to_le_bytes());
+}
+
+#[test]
+fn type_section_read_from_when_ends_before_retained_runs_then_no_runs() {
+    // A type section that ends after the persistent extents has no retained
+    // runs; the container then retains nothing.
+    let mut buf = Vec::new();
+    for _ in 0..7 {
+        buf.extend_from_slice(&0u16.to_le_bytes());
+    }
+
+    let decoded = TypeSection::read_from(&mut Cursor::new(&buf)).unwrap();
+
+    assert!(decoded.retained_runs.is_empty());
+}
+
+#[test]
+fn type_section_read_from_when_retained_run_kind_unknown_then_error() {
+    let mut buf = Vec::new();
+    for _ in 0..7 {
+        buf.extend_from_slice(&0u16.to_le_bytes());
+    }
+    buf.extend_from_slice(&1u16.to_le_bytes());
+    let mut run = RetainedRun::slots(RetainKind::Retain, 0, 1).to_bytes();
+    run[0] = 0;
+    buf.extend_from_slice(&run);
+
+    let result = TypeSection::read_from(&mut Cursor::new(&buf));
+
+    assert!(matches!(result, Err(ContainerError::InvalidRetainKind(0))));
 }
