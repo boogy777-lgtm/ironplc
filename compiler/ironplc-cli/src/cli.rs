@@ -906,6 +906,9 @@ fn diagnostic(path: &Path, text: Text) -> Vec<Diagnostic> {
 mod download_record;
 pub use download_record::{record_download, record_download_path, RecordDownload};
 
+mod online_compare;
+pub use online_compare::{online_compare, ConnectOutcome, OnlineCompare};
+
 mod path_record;
 pub use path_record::{record_path, record_path_path, RecordPath};
 
