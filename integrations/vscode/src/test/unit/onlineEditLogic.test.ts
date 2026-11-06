@@ -344,7 +344,7 @@ function codeOf(text: string): string {
 }
 
 /** The modules that decide what the dialog shows or sends: they read the edit view and nothing else of a status. */
-const DIALOG_MODULES = ['onlineEditLogic.ts'];
+const DIALOG_MODULES = ['onlineEditLogic.ts', 'onlineEditRunner.ts'];
 
 suite('online edit dialog guards', () => {
   test('dialog_modules_when_scanned_then_they_read_no_status_field_but_edit_and_candidate_mode', () => {
