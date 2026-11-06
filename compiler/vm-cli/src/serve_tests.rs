@@ -19,7 +19,7 @@ use spec_test_macro::spec_test;
 use crate::device_loop::scripted::serve_session;
 use crate::device_settings::device::Device;
 use crate::serve::compose_host;
-use crate::slot_store::SlotStore;
+use crate::slot_store::{Serving, SlotStore};
 
 /// A `PROGRAM main` with one DINT `Counter` incremented by `step` per
 /// scan; same declarations for every step, so two compiles differ only
@@ -284,6 +284,51 @@ fn serve_session_when_identity_then_device_panel_and_status_snapshot() {
     assert!(responses[0].get("redundancy").is_none());
 }
 
+/// REQ-VC-vm-cli-059: the identity names the container format the device runs
+/// and accepts, so a client can compare it with its own before a download.
+#[spec_test(REQ_VC_vm_cli_059)]
+#[test]
+fn serve_session_when_identity_then_container_format_is_the_format_version_of_the_device() {
+    let mut host = counter_host();
+
+    let responses = run_session(&mut host, &[r#"{"command":"identity"}"#]);
+
+    assert_eq!(
+        responses[0]["containerFormat"],
+        u64::from(ironplc_container::FORMAT_VERSION)
+    );
+}
+
+/// REQ-VC-vm-cli-061: a candidate of another container format version is
+/// refused with V4016 naming both versions, and the device holds the
+/// application it held.
+#[spec_test(REQ_VC_vm_cli_061)]
+#[test]
+fn serve_session_when_candidate_has_another_format_version_then_v4016_names_both_versions() {
+    let mut host = counter_host();
+    let other = ironplc_container::FORMAT_VERSION + 1;
+    let mut bytes = container_bytes(&counter_source(2));
+    bytes[4..6].copy_from_slice(&other.to_le_bytes());
+    let accept = serde_json::json!({"command": "acceptEdits", "program": bytes}).to_string();
+
+    let responses = run_session(&mut host, &[&accept, r#"{"command":"getStatus"}"#]);
+
+    assert_eq!(responses[0]["vCode"], "V4016");
+    let message = responses[0]["message"].as_str().unwrap();
+    assert!(
+        message.contains(&format!("format version {other}")),
+        "got: {message}"
+    );
+    assert!(
+        message.contains(&format!(
+            "supports version {}",
+            ironplc_container::FORMAT_VERSION
+        )),
+        "got: {message}"
+    );
+    assert_eq!(responses[1]["candidate"], serde_json::Value::Null);
+}
+
 /// The `contentHash` the header of the container in `bytes` states, as the
 /// session writes it.
 fn content_hash_hex(bytes: &[u8]) -> String {
@@ -406,7 +451,7 @@ fn serve_session_when_driven_round_traps_then_ack_on_wire_and_session_continues(
 fn booted_store(dir: &tempfile::TempDir) -> SlotStore {
     let file = dir.path().join("app.iplc");
     std::fs::write(&file, container_bytes(&counter_source(1))).unwrap();
-    let store = SlotStore::beside(&file);
+    let store = Serving::File(&file).store();
     store.boot().unwrap();
     store
 }

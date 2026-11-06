@@ -287,6 +287,24 @@ Field set:
   adding them keeps the protocol version. The type `BootNote` is the shape of
   every item a device keeps across a restart: a new stored item adds one field
   of that type.
+- `containerFormat` — optional, next to `application`: the container format
+  version the device runs and accepts (`FORMAT_VERSION` of the container crate
+  it is built with), a whole number. A client compares it with the format of
+  the container it has built, so that it can say "container format refused"
+  before it sends the download; a device that receives a container of another
+  format refuses it with V4016, and the message names both versions
+  (REQ-VC-vm-cli-059, REQ-VC-vm-cli-061). A device that predates the field
+  omits it and a client that does not know it ignores it, so adding it keeps
+  the protocol version.
+- The empty application — a controller that holds no application is not in a
+  state of its own. `ironplcvm serve` without a file boots the empty
+  application, a container with no program and no task
+  (`ironplc_container::empty_application`), and the host runs it like any other
+  (REQ-VC-vm-cli-058). "Holds no application" is derived: the `contentHash` of
+  its `application` block is `EMPTY_APPLICATION_HASH`, a constant of the
+  container crate that a test ties to the builder output. A client reads it from
+  the same field it reads the hash of any application and adds no field and no
+  state.
 - `redundancy` — optional: `pairId`, configured `role`, ownership `epoch`
   (a 64-bit counter, a JSON number exact up to 2^53), and the SYNC/CONTROL substates of
   [HA Redundancy FSM](ha-redundancy-fsm.md). Absent means standalone.

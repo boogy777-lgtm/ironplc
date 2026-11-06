@@ -28,6 +28,7 @@ fn all_spec_requirements_have_tests() {
 
 mod code_and_constants;
 mod content_hash;
+mod empty_application;
 mod enum_def_payload;
 mod file_header;
 mod file_layout;

@@ -778,6 +778,12 @@ impl RuntimeHost {
         earliest_due_us(&self.buffers.tasks)
     }
 
+    /// Whether a round of the artifact that executes could run a task. A `None` from
+    /// [`next_due_us`](Self::next_due_us) does not say it; see [`ironplc_vm::has_runnable_task`].
+    pub fn has_runnable_task(&self) -> bool {
+        ironplc_vm::has_runnable_task(&self.buffers.tasks)
+    }
+
     /// Restarts the deadlines of the cyclic tasks from `uptime_us`: the call of
     /// a paced driver that resumes after a gap in which it ran no round (the
     /// operator stopped the scan, or the permit was revoked). A deadline that

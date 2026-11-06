@@ -71,7 +71,6 @@
 //! notices) through the [`Ha`] backend enum.
 
 use std::io;
-use std::path::Path;
 use std::sync::mpsc::Receiver;
 
 use ironplc_container::Container;
@@ -92,7 +91,7 @@ use crate::device_settings::device::Device;
 use crate::device_settings::Entries;
 use crate::error::{self, VmError};
 use crate::pacer::{Pacer, SystemClock};
-use crate::slot_store::SlotStore;
+use crate::slot_store::{Serving, SlotStore};
 
 /// The HA backend one session serves: the demo binding's simulator shell,
 /// or the real pair link over the UDP binding (the two-process pair).
@@ -109,16 +108,17 @@ pub(crate) enum Ha<'a, P: NicPort = UdpPort> {
     Pair(&'a mut PairLink<P>),
 }
 
-/// Boots the committed artifact from the A/B slot store beside `path`
-/// (seeding the store from the file on first serve), composes the runtime
+/// Boots the committed artifact from the A/B slot store beside `serving`
+/// (seeding the store from the file on first serve, or with the empty
+/// application when the device serves no file), composes the runtime
 /// host with the HA shell (standalone by default; the simulated loopback
 /// pair under `ha_simulated_peer`), and serves commands on stdin and stdout
 /// while the device loop scans, until stdin reaches EOF or Ctrl+C.
-pub fn serve(path: &Path, ha_simulated_peer: bool) -> Result<(), VmError> {
-    let store = SlotStore::beside(path);
+pub fn serve(serving: Serving<'_>, ha_simulated_peer: bool) -> Result<(), VmError> {
+    let store = serving.store();
     let container = store.boot()?;
     let (mut host, shell) = compose_host(container, ha_simulated_peer)?;
-    let mut device = Device::open(path)?;
+    let mut device = Device::open(serving.anchor())?;
     device.boot_application(&mut host);
 
     serve_stdio(|pacer, commands| {

@@ -11,6 +11,7 @@ use tempfile::TempDir;
 
 use super::*;
 use crate::serve::boot_host;
+use crate::slot_store::Serving;
 
 /// The pair configuration of both units of the tests: the exchanges are
 /// confirmed in two ticks and a peer is dead after two missed ones, so a death
@@ -96,7 +97,7 @@ impl PairRig {
         let dir = TempDir::new().unwrap();
         let file = dir.path().join("app.iplc");
         std::fs::write(&file, container_bytes(source)).unwrap();
-        let store = SlotStore::beside(&file);
+        let store = Serving::File(&file).store();
         let host = boot_host(store.boot().unwrap()).unwrap();
         let clock = FakeClock::default();
         let (handle, commands) = channel();

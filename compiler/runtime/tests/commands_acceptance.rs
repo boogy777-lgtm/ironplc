@@ -671,6 +671,7 @@ fn identity_when_fresh_host_then_device_panel_and_live_status_snapshot() {
             candidate_lost: None,
             fault: None,
             run_state: RunState::Running,
+            container_format: Some(ironplc_container::FORMAT_VERSION),
         }))
     );
 }

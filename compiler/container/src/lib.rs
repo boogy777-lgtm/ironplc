@@ -9,6 +9,7 @@ mod char_width;
 pub mod cmp_op;
 mod const_type;
 mod container_ref;
+mod empty_application;
 mod error;
 pub mod fb_type;
 mod header;
@@ -56,6 +57,7 @@ pub use char_width::CharWidth;
 pub use code_section::FuncEntry;
 pub use const_type::ConstType;
 pub use container_ref::{ContainerRef, StableVarEntryRef, VarEntryRef};
+pub use empty_application::EMPTY_APPLICATION_HASH;
 pub use error::ContainerError;
 pub use header::{
     FileHeader, FLAG_HAS_DEBUG_SECTION, FLAG_HAS_SYSTEM_UPTIME, FLAG_HAS_TYPE_SECTION,
@@ -91,6 +93,8 @@ pub use debug_section::{
     DebugSection, EnumDefEntry, FuncNameEntry, LineMapEntry, SourceFileEntry, StringLayoutEntry,
     VarNameEntry, SOURCE_FILE_HASH_LEN,
 };
+#[cfg(feature = "std")]
+pub use empty_application::{empty_application, empty_application_bytes};
 #[cfg(feature = "std")]
 pub use load_verify::{verify_load, LoadViolation};
 #[cfg(feature = "std")]

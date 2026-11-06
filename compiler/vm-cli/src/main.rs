@@ -96,8 +96,11 @@ enum Action {
     Version,
     /// Loads a bytecode container file and serves hot-edit commands on stdin/stdout.
     Serve {
-        /// Path to the bytecode container file (.iplc).
-        file: PathBuf,
+        /// Path to the bytecode container file (.iplc). Without it the device
+        /// boots the application it committed before (its files are named
+        /// `ironplcvm.*` in the current directory), and the empty application
+        /// when it has none.
+        file: Option<PathBuf>,
 
         /// Listen on the given TCP address (IP:PORT, or an IP alone for the
         /// default port) instead of stdin/stdout: the same session protocol,
@@ -192,40 +195,43 @@ pub fn main() -> ExitCode {
             ha_peer_peer,
             ha_role,
             ha_pair_id,
-        } => match (listen, ha_peer_bind) {
-            (Some(addr), None) => {
-                let discovery = if no_discovery {
-                    discovery::Discovery::Off
-                } else {
-                    discovery::Discovery::Answer
-                };
-                tcp::serve_tcp(&file, addr, ha_simulated_peer, discovery)
-            }
-            (None, Some(bind)) => {
-                // Clap enforces --ha-role only when it is given; a pair
-                // bind without a role is a usage error, answered here.
-                match ha_role {
-                    Some(role) => {
-                        let config = ironplc_redundancy::RedundancyConfig::pair(
-                            ironplc_redundancy::PairId::new(ha_pair_id),
-                            role.configured(),
-                        );
-                        ha_pair::serve_pair(&file, config, bind, ha_peer_peer.unwrap_or(bind))
-                    }
-                    None => Err(error::VmError::io(
-                        error::SESSION_IO,
-                        "--ha-peer-bind requires --ha-role <primary|secondary>".to_string(),
-                    )),
+        } => {
+            let serving = slot_store::Serving::from_argument(file.as_deref());
+            match (listen, ha_peer_bind) {
+                (Some(addr), None) => {
+                    let discovery = if no_discovery {
+                        discovery::Discovery::Off
+                    } else {
+                        discovery::Discovery::Answer
+                    };
+                    tcp::serve_tcp(serving, addr, ha_simulated_peer, discovery)
                 }
+                (None, Some(bind)) => {
+                    // Clap enforces --ha-role only when it is given; a pair
+                    // bind without a role is a usage error, answered here.
+                    match ha_role {
+                        Some(role) => {
+                            let config = ironplc_redundancy::RedundancyConfig::pair(
+                                ironplc_redundancy::PairId::new(ha_pair_id),
+                                role.configured(),
+                            );
+                            ha_pair::serve_pair(serving, config, bind, ha_peer_peer.unwrap_or(bind))
+                        }
+                        None => Err(error::VmError::io(
+                            error::SESSION_IO,
+                            "--ha-peer-bind requires --ha-role <primary|secondary>".to_string(),
+                        )),
+                    }
+                }
+                (None, None) => serve::serve(serving, ha_simulated_peer),
+                // Clap conflicts the two transports; the defensive arm keeps
+                // the dispatch total without a panicking construct.
+                (Some(_), Some(_)) => Err(error::VmError::io(
+                    error::SESSION_IO,
+                    "--listen and --ha-peer-bind cannot be combined".to_string(),
+                )),
             }
-            (None, None) => serve::serve(&file, ha_simulated_peer),
-            // Clap conflicts the two transports; the defensive arm keeps
-            // the dispatch total without a panicking construct.
-            (Some(_), Some(_)) => Err(error::VmError::io(
-                error::SESSION_IO,
-                "--listen and --ha-peer-bind cannot be combined".to_string(),
-            )),
-        },
+        }
     });
 
     match result {

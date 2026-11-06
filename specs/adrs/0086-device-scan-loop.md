@@ -2,7 +2,7 @@
 
 status: accepted
 date: 2026-11-06
-amended: 2026-11-06 (added Run and Stop, stage 3c; the HA pair on the loop, stage 3d)
+amended: 2026-11-06 (added Run and Stop, stage 3c; the HA pair on the loop, stage 3d; nothing to run, stage 5a)
 
 ## Context and Problem Statement
 
@@ -388,6 +388,26 @@ Start of a Primary and of a Secondary; the takeover round runs in the iteration
 of the promotion; a stopped survivor runs no round until the start.
 `compiler/vm-cli/src/pacer/tests.rs` covers the wake of the idle wait. The
 two-process tests are `compiler/vm-cli/tests/ha_pair.rs`.
+
+## Nothing to run (stage 5a)
+
+`earliest_due_us` answers `None` for a program of freewheeling tasks, whose next
+round starts at once, and answered `None` for an application with no task at
+all, so the loop took the second for the first and ran rounds that executed
+nothing, as fast as it could. The empty application (a container with no program
+and no task; `ironplc_container::empty_application`) is such an application, and
+a device without a program holds it.
+
+The scheduler gets the question that tells them apart, `has_runnable_task`: an
+enabled cyclic or freewheeling task exists (an event task is never ready in a
+round). The host exposes it, and `Core::has_work` is "the device may scan and a
+task is runnable". The loop runs a scheduled round and waits for a deadline only
+when it has work, and otherwise waits as a device that may not scan waits, on its
+command channel for at most the stop poll. A round for a command that needs a
+boundary is still run. No branch names the empty application: an artifact of
+disabled tasks idles the same way. REQ-VC-vm-cli-060 states it and
+`device_loop/tests.rs` drives it on the fake clock (no round, every wait is the
+stop poll).
 
 ## More Information
 
