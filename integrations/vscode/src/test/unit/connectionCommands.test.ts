@@ -16,6 +16,8 @@ const CONNECTION_COMMANDS: { id: string; title: string }[] = [
   { id: 'ironplc.disconnect', title: 'Disconnect from Device' },
   { id: 'ironplc.build', title: 'Build & Commit' },
   { id: 'ironplc.buildTrial', title: 'Build & Trial' },
+  { id: 'ironplc.runController', title: 'Run Controller' },
+  { id: 'ironplc.stopController', title: 'Stop Controller' },
 ];
 
 const DEVICE_PANEL_VIEW = 'ironplc.devicePanel';

@@ -58,6 +58,7 @@ import {
   writeDownloadRecord,
 } from './baselineLogic';
 import { BuildPhase } from './buildLogic';
+import { ControllerRun } from './controllerRunLogic';
 import { DevicePanelModel } from './devicePanelLogic';
 import { readTextIfPresent } from './readText';
 import { vmFileName, vmPathBeside } from './stdioTransport';
@@ -73,6 +74,12 @@ export interface ConnectionFeature {
   model(): DevicePanelModel;
   setBuildPhase(phase: BuildPhase | null): void;
   updateStatus(status: HotEditStatus): void;
+  /**
+   * Shows what the device said about scanning in answer to Run or Stop, until the
+   * next identity or the end of the connection. The model holds no run state of
+   * its own: this is the device's answer.
+   */
+  updateRun(run: ControllerRun): void;
   /**
    * Handles a download the device acknowledged: records that the device
    * received the container `container` (the file that was sent), then checks
@@ -109,6 +116,7 @@ export function registerConnectionSupport(
   let pendingCheck: Promise<void> = Promise.resolve();
   let buildPhase: BuildPhase | null = null;
   let lastStatusOverride: HotEditStatus | null = null;
+  let lastRunOverride: ControllerRun | null = null;
   // The controller chosen for the project (its path file), what the status item
   // names while disconnected; the names that connected controllers reported
   // (a path file holds no name); and the controller the current connection was
@@ -125,11 +133,13 @@ export function registerConnectionSupport(
         if (state === 'disconnected') {
           intendedDeviceId = undefined;
           notes = [];
+          lastRunOverride = null;
         }
         render();
       },
       onIdentity: (identity: IdentityInfo) => {
         lastStatusOverride = null;
+        lastRunOverride = null;
         pendingCheck = Promise.all([reconcileBaseline(identity), noteIdentity(identity)]).then(render);
         render();
       },
@@ -162,6 +172,10 @@ export function registerConnectionSupport(
     },
     updateStatus(status: HotEditStatus): void {
       lastStatusOverride = status;
+      render();
+    },
+    updateRun(run: ControllerRun): void {
+      lastRunOverride = run;
       render();
     },
     async recordDownload(container: string, status: HotEditStatus): Promise<void> {
@@ -283,6 +297,7 @@ export function registerConnectionSupport(
       lastStatus: lastStatusOverride ?? snapshot.lastStatus,
       baseline: baselineState,
       buildPhase,
+      run: lastRunOverride,
       notes,
     };
   }

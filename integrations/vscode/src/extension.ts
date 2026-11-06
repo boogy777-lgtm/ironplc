@@ -27,6 +27,7 @@ import { registerDevicePanel } from './devicePanel';
 import { registerHaPanel } from './haPanel';
 import { registerBuildCommands } from './buildCommands';
 import { registerBuildApplication } from './buildApplication';
+import { registerControllerRunCommands } from './controllerRunCommands';
 import { BUILD_AREA_NAME } from './buildAreaLogic';
 import { currentCompilerSettings } from './compilerSettings';
 import { serverInitializationOptions } from './compilerSettingsLogic';
@@ -192,6 +193,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(buildArea);
   registerBuildApplication(context, result?.path, buildArea, showProblem);
   registerBuildCommands(context, result?.path, sourceExtensions, connection, showProblem, buildArea);
+  registerControllerRunCommands(context, connection, showCodedText);
 
   if (!result) {
     vscode.window.showErrorMessage(

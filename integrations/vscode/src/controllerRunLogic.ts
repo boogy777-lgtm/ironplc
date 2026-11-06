@@ -92,18 +92,19 @@ export function runStateDetail(run: ControllerRun): string[] {
   return lines;
 }
 
-/** What a Run or Stop came to. */
-export type ScanOutcome =
-  /** No controller is connected: nothing was sent. */
-  | { kind: 'noSession'; message: string }
-  /** The device answered with the state it left; `run` is what to show from now on. */
-  | { kind: 'done'; run: ControllerRun; message: string }
-  /**
-   * The device refused or the transport failed. `vCode` is the code of the
-   * refusal (null for a transport error) and `text` starts with it. `run` is
-   * the state the device reported afterwards, when it could be asked.
-   */
-  | { kind: 'refused'; vCode: string | null; text: string; run?: ControllerRun };
+/**
+ * What a Run or Stop came to:
+ * - `noSession`: no controller is connected, nothing was sent;
+ * - `done`: the device answered with the state it left, and `run` is what to
+ *   show from now on;
+ * - `refused`: the device refused or the transport failed. `vCode` is the code
+ *   of the refusal (null for a transport error) and `text` starts with it.
+ *   `run` is the state the device reported afterwards, when it could be asked.
+ */
+export type ScanOutcome
+  = | { kind: 'noSession'; message: string }
+    | { kind: 'done'; run: ControllerRun; message: string }
+    | { kind: 'refused'; vCode: string | null; text: string; run?: ControllerRun };
 
 /** The message when no controller is connected (the one the build commands show). */
 export const NO_CONTROLLER_MESSAGE = 'No device is connected. Run "IronPLC: Connect to Device" first.';
