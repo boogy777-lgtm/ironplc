@@ -41,6 +41,7 @@ use ironplc_container::integrity::HASH_LEN;
 use ironplc_container::{Container, InstanceId, TaskId, VarIndex};
 use ironplc_vm::{FaultContext, Vm, VmBuffers};
 
+use crate::edit_guard::{edit_guard, edit_state, EditCommand, EditState};
 use crate::error::{OnlineChangeError, RuntimeError};
 use crate::generation::{ApplicationGeneration, LogicGeneration};
 use crate::migration::{MigrationDecision, StateMigrationPlan};
@@ -61,7 +62,7 @@ pub enum HostMode {
 
 /// A swap requested by `test` or `untest`, applied at the next boundary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum PendingSwap {
+pub(crate) enum PendingSwap {
     Test,
     Untest,
 }
@@ -228,6 +229,21 @@ impl RuntimeHost {
         self.execution_permitted = false;
     }
 
+    /// Where the unfinished edit stands, derived from the host fields.
+    fn edit_state(&self) -> EditState {
+        edit_state(
+            self.candidate.is_some(),
+            self.active_is_candidate,
+            self.pending,
+            self.migration.is_some(),
+        )
+    }
+
+    /// The transition table's answer for `command` in the current edit state.
+    fn guard(&self, command: EditCommand) -> Result<(), OnlineChangeError> {
+        edit_guard(self.edit_state(), command)
+    }
+
     /// Stages `candidate` after validating it against the normal artifact.
     ///
     /// Equivalent to [`stage_with_decisions`](Self::stage_with_decisions)
@@ -262,12 +278,7 @@ impl RuntimeHost {
         decisions: &BTreeMap<u64, MigrationDecision>,
         edit: Option<AcceptedEdit>,
     ) -> Result<(), OnlineChangeError> {
-        if self.candidate.is_some() {
-            return Err(OnlineChangeError::CandidateAlreadyStaged);
-        }
-        if self.active_is_candidate || self.pending.is_some() {
-            return Err(OnlineChangeError::NotAllowedInThisMode);
-        }
+        self.guard(EditCommand::Accept)?;
 
         let migration = if self.normal.header.layout_hash == candidate.header.layout_hash {
             validate_candidate(&self.normal, &candidate)?;
@@ -308,12 +319,7 @@ impl RuntimeHost {
 
     /// Requests that the candidate become active at the next scan boundary.
     pub fn test(&mut self) -> Result<(), OnlineChangeError> {
-        if self.candidate.is_none() {
-            return Err(OnlineChangeError::NoCandidateStaged);
-        }
-        if self.active_is_candidate || self.pending.is_some() {
-            return Err(OnlineChangeError::NotAllowedInThisMode);
-        }
+        self.guard(EditCommand::Test)?;
         self.pending = Some(PendingSwap::Test);
         Ok(())
     }
@@ -328,15 +334,7 @@ impl RuntimeHost {
     /// [`OnlineChangeError::UntestUnsupported`] and the state is left
     /// unchanged. Assemble or cancel while the original is active instead.
     pub fn untest(&mut self) -> Result<(), OnlineChangeError> {
-        if self.candidate.is_none() || !self.active_is_candidate {
-            return Err(OnlineChangeError::NoTestInProgress);
-        }
-        if self.pending.is_some() {
-            return Err(OnlineChangeError::NotAllowedInThisMode);
-        }
-        if self.migration.is_some() {
-            return Err(OnlineChangeError::UntestUnsupported);
-        }
+        self.guard(EditCommand::Untest)?;
         self.pending = Some(PendingSwap::Untest);
         Ok(())
     }
@@ -353,15 +351,7 @@ impl RuntimeHost {
     /// committed latch for the shell to persist (see
     /// [`take_committed_wire`](Self::take_committed_wire)).
     pub fn assemble(&mut self) -> Result<(), OnlineChangeError> {
-        if self.candidate.is_none() {
-            return Err(OnlineChangeError::NoCandidateStaged);
-        }
-        if self.pending.is_some() {
-            return Err(OnlineChangeError::NotAllowedInThisMode);
-        }
-        if !self.active_is_candidate {
-            return Err(OnlineChangeError::AssembleWithoutTest);
-        }
+        self.guard(EditCommand::Assemble)?;
 
         if let Some(next) = self.candidate.take() {
             self.normal = next;
@@ -380,12 +370,7 @@ impl RuntimeHost {
 
     /// Discards the staged candidate while the normal artifact is active.
     pub fn cancel(&mut self) -> Result<(), OnlineChangeError> {
-        if self.candidate.is_none() {
-            return Err(OnlineChangeError::NoCandidateStaged);
-        }
-        if self.active_is_candidate || self.pending.is_some() {
-            return Err(OnlineChangeError::NotAllowedInThisMode);
-        }
+        self.guard(EditCommand::Cancel)?;
         self.candidate = None;
         self.candidate_wire = None;
         self.pending_edit = None;

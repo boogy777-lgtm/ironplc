@@ -13,6 +13,7 @@
 
 mod commands;
 mod conversion;
+mod edit_guard;
 mod error;
 pub mod frame;
 mod generation;
