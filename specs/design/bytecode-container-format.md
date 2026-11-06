@@ -73,7 +73,7 @@ Per-file source integrity lives in the debug section's `SOURCE_FILE_TABLE` (tag 
 | Requirement | Offset | Field | Type | Description |
 |-------------|--------|-------|------|-------------|
 | **REQ-CF-container-002** | 0 | magic | u32 | `0x49504C43` ("IPLC" in ASCII) |
-| **REQ-CF-container-003** | 4 | format_version | u16 | Container format version (currently 8; bumped to 2 from 1 by ADR-0033 opcode-encoding migration, to 3 by ADR-0035 WSTRING string-header/constant-pool encoding tags, to 4 by the variable table added to the type section, to 5 by the stable variable IDs added to the type section, to 6 by the FB field UIDs added to the type section, to 7 by ADR-0069's explicit array element stride, and to 8 by the persistent extent added to the type section with a layout hash over the persistent part, ADR-0073) |
+| **REQ-CF-container-003** | 4 | format_version | u16 | Container format version (currently 9; bumped to 2 from 1 by ADR-0033 opcode-encoding migration, to 3 by ADR-0035 WSTRING string-header/constant-pool encoding tags, to 4 by the variable table added to the type section, to 5 by the stable variable IDs added to the type section, to 6 by the FB field UIDs added to the type section, to 7 by ADR-0069's explicit array element stride, and to 8 by the persistent extent added to the type section with a layout hash over the persistent part, ADR-0073, and to 9 by the retained runs added to the type section, ADR-0085) |
 | | 6 | profile | u8 | Reserved for future VM profile definitions; must be zero |
 | **REQ-CF-container-007** | 7 | flags | u8 | Bit 0: has system uptime variables (`FLAG_HAS_SYSTEM_UPTIME`); Bit 1: has debug section (`FLAG_HAS_DEBUG_SECTION`); Bit 2: has type section (`FLAG_HAS_TYPE_SECTION`); bits 3–7 reserved. No bit indicates a signature section (see below) |
 | | 8 | content_hash | [u8; 32] | BLAKE3 over the masked header, task table, type section, constant pool and code section (see Content Hash Scope). Computed and written by the container writer; the reader verifies a nonzero value against the section bytes, and a zero value (a container written before this hash was populated) is accepted as legacy |
@@ -166,9 +166,9 @@ Present when `debug_sig_offset` is nonzero, which requires a debug section (`fla
 
 Present when `flags` bit 2 is set. Required for on-device verification (ADR-0006). May be stripped for constrained targets using the signature fallback.
 
-The type section describes the aggregate types a program uses. The interpreter reads the array descriptors (element stride and bounds) and the user FB descriptors (body dispatch) at runtime; the FB type descriptors are for the verifier; the stable variable IDs are for the online-change migration planner ([ADR-0053](../adrs/0053-stable-variable-ids-for-declaration-level-hot-edit.md)), and the interpreter ignores them; the FB field UIDs are for per-field FB instance migration ([ADR-0059](../adrs/0059-fb-field-stable-ids.md)), and the interpreter ignores them too; the persistent extent says which part of the variable table and of the data region is state ([ADR-0073](../adrs/0073-state-layout-is-the-persistent-part.md)), and the interpreter ignores it as well.
+The type section describes the aggregate types a program uses. The interpreter reads the array descriptors (element stride and bounds) and the user FB descriptors (body dispatch) at runtime; the FB type descriptors are for the verifier; the stable variable IDs are for the online-change migration planner ([ADR-0053](../adrs/0053-stable-variable-ids-for-declaration-level-hot-edit.md)), and the interpreter ignores them; the FB field UIDs are for per-field FB instance migration ([ADR-0059](../adrs/0059-fb-field-stable-ids.md)), and the interpreter ignores them too; the persistent extent says which part of the variable table and of the data region is state ([ADR-0073](../adrs/0073-state-layout-is-the-persistent-part.md)), and the interpreter ignores it as well; the retained runs say which slots and bytes of that state keep their value across a restart ([ADR-0085](../adrs/0085-retained-variables-in-the-container.md)), and the interpreter ignores them too.
 
-**REQ-CF-container-018** The type section is seven sub-tables in this order, each prefixed by a u16 count: FB type descriptors, array descriptors, user FB descriptors, variable table, stable variable IDs, FB field UIDs, persistent extent rows.
+**REQ-CF-container-018** The type section is eight sub-tables in this order, each prefixed by a u16 count: FB type descriptors, array descriptors, user FB descriptors, variable table, stable variable IDs, FB field UIDs, persistent extent rows, retained runs.
 
 | Offset | Field | Type | Description |
 |--------|-------|------|-------------|
@@ -184,6 +184,10 @@ The type section describes the aggregate types a program uses. The interpreter r
 | varies | stable_vars | [StableVarEntry; num_stable_vars] | 10 bytes each (see below) |
 | varies | num_fb_field_uids | u16 | Number of FB field UID entries |
 | varies | fb_field_uids | [FbFieldUidEntry; num_fb_field_uids] | 11 bytes each (see below) |
+| varies | num_persistent_extents | u16 | Number of persistent extent rows |
+| varies | persistent_extents | [PersistentExtent; num_persistent_extents] | 14 bytes each (see below) |
+| varies | num_retained_runs | u16 | Number of retained runs |
+| varies | retained_runs | [RetainedRun; num_retained_runs] | 10 bytes each (see below) |
 
 ### FB Type Descriptors
 
@@ -320,7 +324,7 @@ Each FbFieldUidEntry (11 bytes, fixed size):
 
 ### Persistent Extent
 
-The persistent extent is the seventh and last sub-table of the type section ([REQ-CF-container-018](#type-section)). The variable table holds, in this order, the global variables, the variables of the program, and then the working slots: the parameters, locals and return value of functions, and the working slots of function block bodies and methods. Only the first two parts are state that outlives a scan. The extent declares them as data, one row per program instance, so that every reader that has to tell state from working memory reads one definition instead of computing it.
+The persistent extent is the seventh sub-table of the type section ([REQ-CF-container-018](#type-section)). The variable table holds, in this order, the global variables, the variables of the program, and then the working slots: the parameters, locals and return value of functions, and the working slots of function block bodies and methods. Only the first two parts are state that outlives a scan. The extent declares them as data, one row per program instance, so that every reader that has to tell state from working memory reads one definition instead of computing it.
 
 Each row (14 bytes, fixed size) names two runs:
 
@@ -336,7 +340,34 @@ The compiler writes one row, taken at the point where it has assigned the last p
 
 **REQ-CF-container-038** The persistent extent is emitted with a u16 count, followed by that many 14-byte rows (`instance_id`, `var_start`, `var_count`, `data_start`, `data_len`); a container that declares no row has the whole variable table and the whole data region as its persistent extent.
 
-**REQ-CF-container-029** The container reader verifies a container at load time (ADR-0006). When `content_hash` is nonzero it must equal the digest defined in [Content Hash Scope](#content-hash-scope) (checked by `ironplc_container::integrity` before any section is parsed, REQ-CF-container-037); when `layout_hash` is nonzero it must recompute over the persistent extent, the variables in it, the array descriptors they name and the FB type descriptors ([Layout Hash and Online Change](#layout-hash-and-online-change)); and the type section's tables must be internally consistent — the variable table count matches `num_variables`, variable entries set no reserved flag bits, array variables reference an existing array descriptor, FB type IDs and stable variable IDs are distinct (stable IDs ascending and within `num_variables`), user FB descriptors reference an existing function and a field range within the variable table, a user FB descriptor and the FB type descriptor of the same type ID agree on the number of fields, array descriptor element types are defined tags, FB field UIDs name an existing user FB descriptor and a field ordinal within its `num_fields` (entries ascending), and the persistent extent rows lie within the variable table and the data region, ascend without overlapping, and name distinct program instances of the task table. A violated invariant is rejected with `ContainerError::VerificationFailed` carrying the specific violation; a hash field of all zeros is a container written before this verification existed and is accepted as legacy. When `debug_hash` is nonzero but does not match the debug section, the debug section is discarded (non-fatal), per step 13 of the Loading Sequence. Implemented by `ironplc_container::verify_load` and the hash checks in `Container::read_from` (ADR-0058).
+**REQ-CF-container-029** The container reader verifies a container at load time (ADR-0006). When `content_hash` is nonzero it must equal the digest defined in [Content Hash Scope](#content-hash-scope) (checked by `ironplc_container::integrity` before any section is parsed, REQ-CF-container-037); when `layout_hash` is nonzero it must recompute over the persistent extent, the variables in it, the array descriptors they name and the FB type descriptors ([Layout Hash and Online Change](#layout-hash-and-online-change)); and the type section's tables must be internally consistent — the variable table count matches `num_variables`, variable entries set no reserved flag bits, array variables reference an existing array descriptor, FB type IDs and stable variable IDs are distinct (stable IDs ascending and within `num_variables`), user FB descriptors reference an existing function and a field range within the variable table, a user FB descriptor and the FB type descriptor of the same type ID agree on the number of fields, array descriptor element types are defined tags, FB field UIDs name an existing user FB descriptor and a field ordinal within its `num_fields` (entries ascending), and the persistent extent rows lie within the variable table and the data region, ascend without overlapping, and name distinct program instances of the task table, and the retained runs lie inside the persistent extent and ascend without overlapping (REQ-CF-container-043). A violated invariant is rejected with `ContainerError::VerificationFailed` carrying the specific violation; a hash field of all zeros is a container written before this verification existed and is accepted as legacy. When `debug_hash` is nonzero but does not match the debug section, the debug section is discarded (non-fatal), per step 13 of the Loading Sequence. Implemented by `ironplc_container::verify_load` and the hash checks in `Container::read_from` (ADR-0058).
+
+### Retained Runs
+
+The retained runs are the eighth and last sub-table of the type section ([REQ-CF-container-018](#type-section)). A variable declared `RETAIN` or `PERSISTENT` is state whose value the device keeps across a restart. The runs declare those variables as data, so that the runtime and the device read one declaration and never walk the layout themselves ([ADR-0085](../adrs/0085-retained-variables-in-the-container.md)).
+
+A run (10 bytes, fixed size) is a kind, the address space it indexes, and a run in that space:
+
+| Offset | Field | Type | Description |
+|--------|-------|------|-------------|
+| 0 | kind | u8 | 1 = `Retain` (declared `RETAIN`), 2 = `Persistent` (declared `PERSISTENT`) |
+| 1 | space | u8 | 0 = slots of the variable table, 1 = bytes of the data region |
+| 2 | start | u32 | Index of the first slot or byte of the run |
+| 6 | len | u32 | Number of slots or bytes of the run |
+
+Both kinds survive a restart and are saved at one; only `Persistent` is also kept across a download whose declaration is equal. The two spaces are separate address spaces with no pairing between them: a variable that owns a slot and bytes (a string, an array, a structure, a function block instance) is one run in each space, and a field of a function block instance whose type declares it `RETAIN` is a run of bytes only. The writer sorts the runs by space and start and merges adjacent runs of one kind, so one declaration has one byte stream. A container that declares no run retains nothing; unlike the persistent extent there is no default. The retained runs are not part of the layout hash (changing a qualifier moves no storage) and are part of the content hash like every sub-table.
+
+**REQ-CF-container-040** The retained runs are emitted with a u16 count (zero when nothing is retained), followed by that many 10-byte rows (`kind`, `space`, `start`, `len`); a container that declares no run retains nothing, and a type section that ends before the sub-table reads as no runs.
+
+**REQ-CF-container-041** The container reader refuses a retained run whose `kind` is not 1 or 2 with `ContainerError::InvalidRetainKind`, and one whose `space` is not 0 or 1 with `ContainerError::InvalidRetainSpace`.
+
+**REQ-CF-container-042** The container writer stores the retained runs sorted by space and start, with empty runs dropped and adjacent runs of one kind merged, whatever the order and the split in which they were declared.
+
+**REQ-CF-container-043** The load check refuses a retained run that does not lie inside one run of the persistent extent in its space (`LoadViolation::RetainedRunOutOfExtent`), and retained runs that are not in ascending order of space and start or that overlap (`LoadViolation::RetainedRunsOutOfOrder`).
+
+**REQ-CF-container-044** The retained runs are excluded from `layout_hash`: two containers that differ only in the qualifiers of their variables have the same layout hash and different retained runs.
+
+**REQ-CF-codegen-029** The compiler declares the retained runs at the point where it assigns the storage of each persistent declaration (a global or a variable of the program): a variable declared `RETAIN` or `PERSISTENT` contributes its slot and every byte of its data region storage; an instance of a function block (or an array of instances) declared without a qualifier contributes, for each instance, the slots and the string runs of the fields its type declares `RETAIN` or `PERSISTENT`; a declaration qualified `NON_RETAIN`, a declaration without a qualifier, and every working slot (the locals of functions and methods, the `VAR_TEMP` of programs and function blocks) contribute nothing.
 
 ### Function Signatures (planned, not emitted)
 
@@ -779,7 +810,7 @@ layout_hash = BLAKE3(
 )
 ```
 
-The hash covers what determines the memory layout of the persistent state: where it is, what each variable is, what each array is (by content, so the position of a descriptor in the table does not matter) and what each function block holds. It excludes the count of variables of the whole table, the variable table entries outside the extent (the working slots), array descriptors that no persistent variable names, the user FB descriptors (function IDs and the position of the block's working slots), the stable variable IDs, code, constants, and debug info — those can change freely without affecting persistent memory.
+The hash covers what determines the memory layout of the persistent state: where it is, what each variable is, what each array is (by content, so the position of a descriptor in the table does not matter) and what each function block holds. It excludes the count of variables of the whole table, the variable table entries outside the extent (the working slots), array descriptors that no persistent variable names, the user FB descriptors (function IDs and the position of the block's working slots), the stable variable IDs, the retained runs, code, constants, and debug info — those can change freely without affecting persistent memory.
 
 ### Online change protocol
 
@@ -828,7 +859,7 @@ Type-changing migration is policy-gated ([ADR-0060](../adrs/0060-type-changing-m
 
 ## Versioning
 
-The `format_version` field allows future changes to the container format. The VM must reject versions it does not support. The current version is 8 (`FORMAT_VERSION`; see the header table for the history), and the reader rejects any other value. A container of an earlier version is refused with `ContainerError::UnsupportedVersion` and is never read with the old meaning.
+The `format_version` field allows future changes to the container format. The VM must reject versions it does not support. The current version is 9 (`FORMAT_VERSION`; see the header table for the history), and the reader rejects any other value. A container of an earlier version is refused with `ContainerError::UnsupportedVersion` and is never read with the old meaning.
 
 Rules for version increments:
 - Adding new optional sections → minor version (backward compatible)
@@ -846,3 +877,4 @@ Version history:
 | 6 | The FB field UIDs in the type section ([ADR-0059](../adrs/0059-fb-field-stable-ids.md)) |
 | 7 | The explicit element stride in array descriptors ([ADR-0069](../adrs/0069-explicit-element-stride-in-array-descriptors.md)) |
 | 8 | The persistent extent in the type section, and a layout hash over the persistent part only ([ADR-0073](../adrs/0073-state-layout-is-the-persistent-part.md)) |
+| 9 | The retained runs in the type section ([ADR-0085](../adrs/0085-retained-variables-in-the-container.md)) |
