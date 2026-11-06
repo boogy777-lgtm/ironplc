@@ -39,7 +39,9 @@ use std::collections::BTreeMap;
 
 use ironplc_container::integrity::HASH_LEN;
 use ironplc_container::{Container, InstanceId, TaskId, VarIndex};
-use ironplc_vm::{earliest_due_us, rearm_cyclic_deadlines, FaultContext, Vm, VmBuffers};
+use ironplc_vm::{
+    earliest_due_us, has_runnable_task, rearm_cyclic_deadlines, FaultContext, Vm, VmBuffers,
+};
 
 use crate::edit_guard::{edit_answer, edit_state, EditCommand, EditState, Steps, ITSELF};
 use crate::error::{OnlineChangeError, RuntimeError};
@@ -776,6 +778,17 @@ impl RuntimeHost {
     /// freewheeling tasks only): the time a paced driver waits for.
     pub fn next_due_us(&self) -> Option<u64> {
         earliest_due_us(&self.buffers.tasks)
+    }
+
+    /// Whether a round of the artifact that executes could run a task: an
+    /// enabled cyclic or freewheeling task exists. The empty application, an
+    /// artifact of disabled tasks and one of event tasks have none, so a paced
+    /// driver that asks has nothing to wait for and nothing to run, which
+    /// [`next_due_us`](Self::next_due_us) alone does not say (it answers `None`
+    /// for a freewheeling task too, and a driver then runs the next round at
+    /// once). See [`has_runnable_task`].
+    pub fn has_runnable_task(&self) -> bool {
+        has_runnable_task(&self.buffers.tasks)
     }
 
     /// Restarts the deadlines of the cyclic tasks from `uptime_us`: the call of

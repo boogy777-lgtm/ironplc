@@ -136,3 +136,26 @@ fn execution_permitted_when_granted_then_revoked_then_follows_the_latch() {
     host.revoke_execution_permit();
     assert!(!host.execution_permitted());
 }
+
+#[test]
+fn has_runnable_task_when_freewheeling_or_cyclic_task_then_true() {
+    let freewheeling = permitted_host(container(TaskType::Freewheeling, 0));
+    let cyclic = permitted_host(container(TaskType::Cyclic, 1_000));
+
+    assert!(freewheeling.has_runnable_task());
+    assert!(cyclic.has_runnable_task());
+}
+
+#[test]
+fn has_runnable_task_when_empty_application_then_false_and_a_round_is_harmless() {
+    let mut host = permitted_host(ironplc_container::empty_application().unwrap());
+
+    assert!(!host.has_runnable_task());
+    assert_eq!(host.next_due_us(), None);
+    host.run_paced_round(0, |_| {}).unwrap();
+    host.run_paced_round(1_000_000, |_| {}).unwrap();
+    assert_eq!(
+        host.status().content_hash,
+        ironplc_container::EMPTY_APPLICATION_HASH
+    );
+}

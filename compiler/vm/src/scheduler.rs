@@ -29,6 +29,25 @@ pub fn earliest_due_us(task_states: &[TaskState]) -> Option<u64> {
         .min()
 }
 
+/// Whether a round could execute a task: some enabled task is cyclic or
+/// freewheeling. The match mirrors [`TaskScheduler::collect_ready_tasks`] (an
+/// event task is never ready in a round), so "no task is runnable" and "a round
+/// finds no ready task, whatever the time" are the same fact.
+///
+/// A driver that paces rounds uses it to tell "nothing to wait for" (no
+/// deadline, a freewheeling task: run the next round at once) from "nothing to
+/// run" (the empty application, or only disabled tasks: idle until something
+/// else happens). [`earliest_due_us`] cannot tell them apart; both answer `None`.
+pub fn has_runnable_task(task_states: &[TaskState]) -> bool {
+    task_states.iter().any(|t| {
+        t.enabled
+            && match t.task_type {
+                TaskType::Freewheeling | TaskType::Cyclic => true,
+                TaskType::Event => false,
+            }
+    })
+}
+
 /// Restarts the deadlines of the cyclic tasks of `task_states` from `uptime_us`,
 /// for a driver that resumes a scan after a gap in which it ran no round.
 ///
@@ -395,5 +414,53 @@ mod tests {
         let sched = TaskScheduler::new(&mut task_states);
 
         assert_eq!(sched.next_due_us(), None);
+    }
+
+    fn state_of(task_type: TaskType, enabled: bool) -> TaskState {
+        TaskState {
+            task_type,
+            enabled,
+            ..TaskState::default()
+        }
+    }
+
+    #[test]
+    fn has_runnable_task_when_no_task_then_false_and_no_deadline() {
+        assert!(!has_runnable_task(&[]));
+        assert_eq!(earliest_due_us(&[]), None);
+    }
+
+    #[test]
+    fn has_runnable_task_when_only_freewheeling_then_true_and_no_deadline() {
+        let states = [state_of(TaskType::Freewheeling, true)];
+
+        assert!(has_runnable_task(&states));
+        assert_eq!(earliest_due_us(&states), None);
+    }
+
+    #[test]
+    fn has_runnable_task_when_enabled_cyclic_then_true() {
+        assert!(has_runnable_task(&[state_of(TaskType::Cyclic, true)]));
+    }
+
+    #[test]
+    fn has_runnable_task_when_tasks_disabled_or_event_then_false() {
+        let states = [
+            state_of(TaskType::Freewheeling, false),
+            state_of(TaskType::Cyclic, false),
+            state_of(TaskType::Event, true),
+        ];
+
+        assert!(!has_runnable_task(&states));
+    }
+
+    #[test]
+    fn has_runnable_task_when_false_then_no_round_finds_a_ready_task() {
+        let mut states = [state_of(TaskType::Event, true)];
+        let mut buf = [0usize; 1];
+
+        let ready = TaskScheduler::new(&mut states).collect_ready_tasks(u64::MAX, &mut buf);
+
+        assert!(ready.is_empty());
     }
 }

@@ -31,7 +31,9 @@ pub use freewheeling::{
 };
 #[cfg(feature = "profiling")]
 pub use profile::InstructionProfile;
-pub use scheduler::{earliest_due_us, rearm_cyclic_deadlines, ProgramInstanceState, TaskState};
+pub use scheduler::{
+    earliest_due_us, has_runnable_task, rearm_cyclic_deadlines, ProgramInstanceState, TaskState,
+};
 pub use value::Slot;
 pub use vm::{
     ExecuteOutcome, FaultContext, Phase, RoundOutcome, VariableView, Vm, VmFaulted, VmReady,
