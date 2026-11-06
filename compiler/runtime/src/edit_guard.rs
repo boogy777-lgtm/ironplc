@@ -26,28 +26,30 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::candidate::CandidateKind;
 use crate::error::OnlineChangeError;
 use crate::host::{PendingEditRecord, PendingSwap};
 
 /// Where the unfinished edit of a host stands, derived from its fields by
 /// [`edit_state`].
 ///
-/// `migration` says whether the staged candidate is a migration candidate,
-/// i.e. whether the host holds a state migration plan.
+/// `kind` says how the staged candidate takes over the state
+/// ([`CandidateKind`]); only a change can be reverted once it executes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum EditState {
     /// No candidate is staged.
     NoCandidate,
     /// A candidate is staged and the normal artifact executes.
-    Accepted { migration: bool },
+    Accepted { kind: CandidateKind },
     /// The candidate executes and the normal artifact is kept for untest.
-    Testing { migration: bool },
+    Testing { kind: CandidateKind },
     /// A test is requested: the candidate is staged and becomes active at the
     /// next scan boundary.
-    TestPending { migration: bool },
+    TestPending { kind: CandidateKind },
     /// An untest is requested: the candidate is active and the normal
     /// artifact becomes active at the next scan boundary. An untest of a
-    /// migration candidate is refused, so this state never has a migration.
+    /// candidate that cannot be reverted is refused, so this state is always a
+    /// change.
     UntestPending,
 }
 
@@ -135,16 +137,16 @@ pub(crate) fn edit_state(
     candidate_staged: bool,
     active_is_candidate: bool,
     pending: Option<PendingSwap>,
-    migration: bool,
+    kind: CandidateKind,
 ) -> EditState {
     if !candidate_staged {
         return EditState::NoCandidate;
     }
     match pending {
-        Some(PendingSwap::Test) => EditState::TestPending { migration },
+        Some(PendingSwap::Test) => EditState::TestPending { kind },
         Some(PendingSwap::Untest) => EditState::UntestPending,
-        None if active_is_candidate => EditState::Testing { migration },
-        None => EditState::Accepted { migration },
+        None if active_is_candidate => EditState::Testing { kind },
+        None => EditState::Accepted { kind },
     }
 }
 
@@ -172,7 +174,7 @@ pub(crate) fn edit_guard(
             Assemble => Err(NoCandidateStaged),
             Cancel => Err(NoCandidateStaged),
         },
-        EditState::Accepted { migration: _ } => match command {
+        EditState::Accepted { kind: _ } => match command {
             Accept => Err(CandidateAlreadyStaged(None)),
             Test => Ok(ITSELF),
             Untest => Err(NoTestInProgress),
@@ -180,20 +182,21 @@ pub(crate) fn edit_guard(
             Assemble => Err(AssembleWithoutTest),
             Cancel => Ok(ITSELF),
         },
-        EditState::Testing { migration } => match command {
+        EditState::Testing { kind } => match command {
             Accept => Err(CandidateAlreadyStaged(None)),
             Test => Err(NotAllowedInThisMode),
-            // A migration candidate has no revert path, and discarding it
-            // would be one: the old buffers are not kept.
-            Untest if migration => Err(UntestUnsupported),
+            // A candidate that rebuilds the state (a migration or a replace) has
+            // no revert path, and discarding it would be one: the old buffers
+            // are not kept.
+            Untest if !kind.reverts() => Err(UntestUnsupported),
             Untest => Ok(ITSELF),
             Assemble => Ok(ITSELF),
-            Cancel if migration => Err(UntestUnsupported),
+            Cancel if !kind.reverts() => Err(UntestUnsupported),
             // A logic-only candidate is reverted first (untest), then
             // discarded at the boundary that applied the revert.
             Cancel => Ok(UNTEST_THEN_CANCEL),
         },
-        EditState::TestPending { migration: _ } => match command {
+        EditState::TestPending { kind: _ } => match command {
             Accept => Err(CandidateAlreadyStaged(None)),
             Test => Err(NotAllowedInThisMode),
             // The candidate is not active, so there is no test to revert.
@@ -257,15 +260,36 @@ mod tests {
         assert_eq!(labels, ["Accept", "Test", "Untest", "Assemble", "Cancel"]);
     }
 
-    /// Every state, with both values of the migration flag where it counts.
-    const ALL_STATES: [EditState; 8] = [
+    /// Every state, with each kind of candidate where it counts.
+    const ALL_STATES: [EditState; 11] = [
         EditState::NoCandidate,
-        EditState::Accepted { migration: false },
-        EditState::Accepted { migration: true },
-        EditState::Testing { migration: false },
-        EditState::Testing { migration: true },
-        EditState::TestPending { migration: false },
-        EditState::TestPending { migration: true },
+        EditState::Accepted {
+            kind: CandidateKind::Change,
+        },
+        EditState::Accepted {
+            kind: CandidateKind::Migrate,
+        },
+        EditState::Accepted {
+            kind: CandidateKind::Replace,
+        },
+        EditState::Testing {
+            kind: CandidateKind::Change,
+        },
+        EditState::Testing {
+            kind: CandidateKind::Migrate,
+        },
+        EditState::Testing {
+            kind: CandidateKind::Replace,
+        },
+        EditState::TestPending {
+            kind: CandidateKind::Change,
+        },
+        EditState::TestPending {
+            kind: CandidateKind::Migrate,
+        },
+        EditState::TestPending {
+            kind: CandidateKind::Replace,
+        },
         EditState::UntestPending,
     ];
 
@@ -291,7 +315,12 @@ mod tests {
 
     #[test]
     fn edit_guard_when_cancel_in_testing_then_untest_then_cancel() {
-        let steps = edit_guard(EditState::Testing { migration: false }, EditCommand::Cancel);
+        let steps = edit_guard(
+            EditState::Testing {
+                kind: CandidateKind::Change,
+            },
+            EditCommand::Cancel,
+        );
 
         assert_eq!(steps, Ok(&[EditCommand::Untest, EditCommand::Cancel][..]));
     }

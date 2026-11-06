@@ -41,6 +41,7 @@ use ironplc_container::integrity::HASH_LEN;
 use ironplc_container::{Container, InstanceId, TaskId, VarIndex};
 use ironplc_vm::{earliest_due_us, rearm_cyclic_deadlines, FaultContext, Vm, VmBuffers};
 
+use crate::candidate::CandidateKind;
 use crate::edit_guard::{edit_answer, edit_state, EditCommand, EditState, Steps, ITSELF};
 use crate::error::{OnlineChangeError, RuntimeError};
 use crate::generation::{ApplicationGeneration, LogicGeneration};
@@ -284,8 +285,18 @@ impl RuntimeHost {
             self.candidate.is_some(),
             self.active_is_candidate,
             self.pending,
-            self.migration.is_some(),
+            self.candidate_kind(),
         )
+    }
+
+    /// How the staged candidate takes over the state; a change when none is
+    /// staged, where the kind is not read.
+    fn candidate_kind(&self) -> CandidateKind {
+        if self.migration.is_some() {
+            CandidateKind::Migrate
+        } else {
+            CandidateKind::Change
+        }
     }
 
     /// The transition table's answer for `command` in the current edit state:

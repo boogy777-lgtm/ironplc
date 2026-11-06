@@ -376,7 +376,9 @@ fn status_payload_when_edit_absent_then_parses_with_none_and_renders_without_it(
 fn status_payload_when_edit_view_present_then_round_trips_through_the_wire() {
     let mut payload: StatusPayload = serde_json::from_str(STATUS_WITHOUT_HASHES).unwrap();
     payload.edit = Some(Box::new(crate::edit_view::view_of(
-        crate::edit_guard::EditState::Testing { migration: true },
+        crate::edit_guard::EditState::Testing {
+            kind: crate::candidate::CandidateKind::Migrate,
+        },
         None,
     )));
 
