@@ -61,6 +61,33 @@ suite('encodeHaCommand', () => {
 });
 
 suite('parseHaResponseLine', () => {
+  test('parseHaResponseLine_when_epochs_above_u32_max_then_full_values_kept', () => {
+    const line = HA_STATUS_LINE
+      .replace('"control":"active","epoch":2}', '"control":"active","epoch":4294967299}')
+      .replace('"control":"idle","epoch":2}', '"control":"idle","epoch":4294967298}')
+      .replace('"epoch":2,"applicationGeneration"', '"epoch":4294967299,"applicationGeneration"');
+
+    const response = parseHaResponseLine(line);
+
+    assert.strictEqual(response.kind, 'haStatus');
+    if (response.kind === 'haStatus') {
+      assert.strictEqual(response.status.epoch, 4294967299);
+      assert.strictEqual(response.status.local.epoch, 4294967299);
+      assert.strictEqual(response.status.peer?.epoch, 4294967298);
+    }
+  });
+
+  test('parseHaResponseLine_when_owner_epoch_above_u32_max_then_full_value_kept', () => {
+    const line = HA_BARRIER_LINE.replace('"ownerEpoch":2,', '"ownerEpoch":4294967299,');
+
+    const response = parseHaResponseLine(line);
+
+    assert.strictEqual(response.kind, 'haBarrier');
+    if (response.kind === 'haBarrier') {
+      assert.strictEqual(response.barrier.modules[0].ownerEpoch, 4294967299);
+    }
+  });
+
   test('parseHaResponseLine_when_status_then_every_field', () => {
     const response = parseHaResponseLine(HA_STATUS_LINE);
 

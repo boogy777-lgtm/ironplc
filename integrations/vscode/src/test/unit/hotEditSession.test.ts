@@ -593,6 +593,18 @@ suite('parseResponseLine identity', () => {
     }
   });
 
+  test('parseResponseLine_when_identity_epoch_above_u32_max_then_value_kept_exactly', () => {
+    const line = IDENTITY_LINE.slice(0, -1)
+      + ',"redundancy":{"pairId":"7f3a9c","role":"primary","epoch":9007199254740991,"sync":"syncReady","control":"active"}}';
+
+    const response = parseResponseLine(line);
+
+    assert.strictEqual(response.kind, 'identity');
+    if (response.kind === 'identity') {
+      assert.strictEqual(response.identity.redundancy?.epoch, Number.MAX_SAFE_INTEGER);
+    }
+  });
+
   test('parseResponseLine_when_identity_protocol_higher_than_supported_then_throws', () => {
     const higher = SUPPORTED_SESSION_PROTOCOL + 1;
     const line = IDENTITY_LINE.replace(`"protocol":${SUPPORTED_SESSION_PROTOCOL}`, `"protocol":${higher}`);

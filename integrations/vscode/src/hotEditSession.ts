@@ -135,6 +135,7 @@ export interface DeviceIdentity {
 export interface RedundancyIdentity {
   pairId: string;
   role: string;
+  /** The 64-bit ownership epoch as a JSON number, exact up to 2^53 (ADR-0062). */
   epoch: number;
   sync: string;
   control: string;

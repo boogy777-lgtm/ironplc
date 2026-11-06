@@ -68,7 +68,11 @@ export interface HaUnit {
   control?: string;
   /** The latched CONTROL alarm, if any. */
   alarm?: string;
-  /** The unit's current epoch. */
+  /**
+   * The unit's current epoch: a 64-bit counter on the device (ADR-0062).
+   * A JSON number here, exact up to 2^53 (about 285 years at a million
+   * rounds per second); never narrow it to 32 bits.
+   */
   epoch: number;
 }
 
