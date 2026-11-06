@@ -310,7 +310,13 @@ fn build_start_response_when_in_process_then_v4022() {
     )
     .map_err(|response| response.diagnostics)
     .unwrap();
-    crate::tools::hot_edit::send_candidate(candidate.program, None, &Default::default(), &session);
+    crate::tools::hot_edit::send_candidate(
+        candidate.program,
+        None,
+        &Default::default(),
+        ironplc_runtime::AcceptMode::Change,
+        &session,
+    );
 
     let started = build_start_response(&session);
 

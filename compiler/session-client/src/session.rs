@@ -151,6 +151,7 @@ fn describe(response: &Response) -> &'static str {
         Response::Identity(_) => "an identity",
         Response::Status(_) => "a status",
         Response::Ack => "an acknowledgement",
+        Response::Accepted { .. } => "an acceptance",
         Response::RunState { .. } => "a run state",
         Response::Error(_) => "an error",
     }

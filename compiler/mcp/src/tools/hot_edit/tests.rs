@@ -3,7 +3,7 @@
 use super::*;
 use crate::tools::test_support::{ed2_options, source, COUNTER_PROGRAM, SYNTAX_ERROR_PROGRAM};
 use ironplc_container::VarIndex;
-use ironplc_runtime::HostMode;
+use ironplc_runtime::{AcceptMode, HostMode};
 
 fn make_state() -> (Mutex<ContainerCache>, Mutex<HotEditSession>) {
     (
@@ -139,6 +139,7 @@ fn send_candidate_when_ids_are_out_of_sync_then_not_sent_and_no_session() {
         program,
         Some("the stable variable IDs are out of sync with the declarations".to_string()),
         &BTreeMap::new(),
+        AcceptMode::Change,
         &session,
     );
 
@@ -404,6 +405,7 @@ END_PROGRAM
                 program: bytes,
                 edit: None,
                 migration: BTreeMap::new(),
+                mode: AcceptMode::Change,
             },
             guard.host.as_mut().unwrap(),
             &mcp_device_identity(),
@@ -510,6 +512,7 @@ END_PROGRAM
             program: bytes,
             edit: None,
             migration: BTreeMap::new(),
+            mode: AcceptMode::Change,
         },
         &mut guard,
         false,
@@ -571,6 +574,7 @@ END_PROGRAM
             program: bytes,
             edit: None,
             migration: BTreeMap::from([(1, MigrationDecisionSpec::Preserve)]),
+            mode: AcceptMode::Change,
         },
         &mut guard,
         false,
@@ -629,6 +633,7 @@ END_PROGRAM
             program: bytes,
             edit: None,
             migration: BTreeMap::from([(1, MigrationDecisionSpec::Init)]),
+            mode: AcceptMode::Change,
         },
         &mut guard,
         false,
@@ -771,6 +776,7 @@ fn dispatch_when_accept_payload_is_not_a_container_then_v4016() {
             program: vec![1, 2, 3],
             edit: None,
             migration: BTreeMap::new(),
+            mode: AcceptMode::Change,
         },
         &mut guard,
         false,
@@ -778,4 +784,78 @@ fn dispatch_when_accept_payload_is_not_a_container_then_v4016() {
 
     assert!(!resp.ok);
     assert_eq!(resp.v_code.as_deref(), Some("V4016"));
+}
+
+/// A program with another layout than `COUNTER_PROGRAM`: a second variable.
+const TWO_VARIABLES_PROGRAM: &str = "PROGRAM Main
+VAR
+  Counter : INT;
+  Other : INT;
+END_VAR
+  Counter := Counter + 1;
+END_PROGRAM";
+
+#[test]
+fn build_accept_response_when_replace_then_another_layout_is_staged_and_the_answer_lists_the_reset()
+{
+    let (cache, session) = make_state();
+    establish_counter_session(&cache, &session);
+
+    let resp = build_accept_response_with_decisions(
+        &source(TWO_VARIABLES_PROGRAM),
+        &ed2_options(),
+        &BTreeMap::new(),
+        AcceptMode::Replace,
+        &cache,
+        &session,
+    );
+
+    assert!(
+        resp.ok,
+        "v_code: {:?} message: {:?}",
+        resp.v_code, resp.message
+    );
+    assert_eq!(resp.result.as_deref(), Some("ack"));
+    assert_eq!(resp.reinitialised.as_ref().map(Vec::len), Some(0));
+    let status = resp.status.unwrap();
+    assert!(status.candidate.is_some());
+    let serialized = serde_json::to_value(&status).unwrap();
+    assert_eq!(serialized["candidateMode"], "replace");
+    // The same program as a change is refused: no stable IDs to migrate by.
+    let (cache, session) = make_state();
+    establish_counter_session(&cache, &session);
+    let change = build_accept_response(
+        &source(TWO_VARIABLES_PROGRAM),
+        &ed2_options(),
+        &cache,
+        &session,
+    );
+    assert!(!change.ok);
+    assert_eq!(change.v_code.as_deref(), Some("V4007"));
+    assert!(change.reinitialised.is_none());
+}
+
+#[test]
+fn send_candidate_when_replace_and_ids_are_out_of_sync_then_the_candidate_is_still_sent() {
+    let (cache, session) = make_state();
+    establish_counter_session(&cache, &session);
+    let program = {
+        let mut bytes = Vec::new();
+        compile_container(TWO_VARIABLES_PROGRAM)
+            .write_to(&mut bytes)
+            .unwrap();
+        bytes
+    };
+    let _ = &cache;
+
+    let resp = send_candidate(
+        program,
+        Some("the stable variable IDs are out of sync with the declarations".to_string()),
+        &BTreeMap::new(),
+        AcceptMode::Replace,
+        &session,
+    );
+
+    assert!(resp.ok, "v_code: {:?}", resp.v_code);
+    assert!(resp.status.unwrap().candidate.is_some());
 }

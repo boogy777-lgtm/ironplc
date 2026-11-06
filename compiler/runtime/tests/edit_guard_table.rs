@@ -13,7 +13,7 @@
 mod common;
 
 use common::edit_states::{body_candidate, host_in, State, STATES};
-use ironplc_runtime::{HostMode, OnlineChangeError, RuntimeHost};
+use ironplc_runtime::{CandidateKind, HostMode, OnlineChangeError, RuntimeHost};
 
 /// An edit command.
 #[derive(Clone, Copy, Debug)]
@@ -50,7 +50,7 @@ fn expected(state: State) -> [Result<(), OnlineChangeError>; 5] {
             Err(NoCandidateStaged),
             Err(NoCandidateStaged),
         ],
-        State::Accepted | State::AcceptedMigration => [
+        State::Accepted | State::AcceptedMigration | State::AcceptedReplace => [
             Err(CandidateAlreadyStaged(None)),
             OK,
             Err(NoTestInProgress),
@@ -66,14 +66,14 @@ fn expected(state: State) -> [Result<(), OnlineChangeError>; 5] {
             OK,
             OK,
         ],
-        State::TestingMigration => [
+        State::TestingMigration | State::TestingReplace => [
             Err(CandidateAlreadyStaged(None)),
             Err(NotAllowedInThisMode),
             Err(UntestUnsupported),
             OK,
             Err(UntestUnsupported),
         ],
-        State::TestPending | State::TestPendingMigration => [
+        State::TestPending | State::TestPendingMigration | State::TestPendingReplace => [
             Err(CandidateAlreadyStaged(None)),
             Err(NotAllowedInThisMode),
             Err(NoTestInProgress),
@@ -102,20 +102,78 @@ fn apply(host: &mut RuntimeHost, command: Command) -> Result<(), OnlineChangeErr
 
 #[test]
 fn host_in_when_each_state_is_built_then_it_is_in_that_state() {
-    for (state, candidate, mode, migration) in [
-        (State::NoCandidate, false, HostMode::Normal, false),
-        (State::Accepted, true, HostMode::Normal, false),
-        (State::AcceptedMigration, true, HostMode::Normal, true),
-        (State::Testing, true, HostMode::Testing, false),
-        (State::TestingMigration, true, HostMode::Testing, true),
-        (State::TestPending, true, HostMode::Normal, false),
-        (State::TestPendingMigration, true, HostMode::Normal, true),
-        (State::UntestPending, true, HostMode::Testing, false),
+    for (state, candidate, mode, kind) in [
+        (State::NoCandidate, false, HostMode::Normal, None),
+        (
+            State::Accepted,
+            true,
+            HostMode::Normal,
+            Some(CandidateKind::Change),
+        ),
+        (
+            State::AcceptedMigration,
+            true,
+            HostMode::Normal,
+            Some(CandidateKind::Migrate),
+        ),
+        (
+            State::Testing,
+            true,
+            HostMode::Testing,
+            Some(CandidateKind::Change),
+        ),
+        (
+            State::TestingMigration,
+            true,
+            HostMode::Testing,
+            Some(CandidateKind::Migrate),
+        ),
+        (
+            State::TestPending,
+            true,
+            HostMode::Normal,
+            Some(CandidateKind::Change),
+        ),
+        (
+            State::TestPendingMigration,
+            true,
+            HostMode::Normal,
+            Some(CandidateKind::Migrate),
+        ),
+        (
+            State::UntestPending,
+            true,
+            HostMode::Testing,
+            Some(CandidateKind::Change),
+        ),
+        (
+            State::AcceptedReplace,
+            true,
+            HostMode::Normal,
+            Some(CandidateKind::Replace),
+        ),
+        (
+            State::TestingReplace,
+            true,
+            HostMode::Testing,
+            Some(CandidateKind::Replace),
+        ),
+        (
+            State::TestPendingReplace,
+            true,
+            HostMode::Normal,
+            Some(CandidateKind::Replace),
+        ),
     ] {
         let status = host_in(state).status();
         assert_eq!(status.candidate.is_some(), candidate, "{state:?}");
         assert_eq!(status.mode, mode, "{state:?}");
-        assert_eq!(status.migration, migration, "{state:?}");
+        assert_eq!(status.kind, kind, "{state:?}");
+        assert_eq!(
+            status.migration,
+            kind == Some(CandidateKind::Migrate),
+            "{state:?}"
+        );
     }
 }
 

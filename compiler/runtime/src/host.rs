@@ -29,6 +29,14 @@
 //! reverse mapping for added or removed variables, so once it executes it can
 //! only be assembled (cancel would be a revert, which is refused as well).
 //!
+//! A *replace candidate* (the `replace` mode of an accept, a Download, ADR-0088)
+//! takes the same road with another keep rule: the layout is not compared, the
+//! buffers are built fresh and initialized by the candidate's init image, and
+//! only the `PERSISTENT` variables with an equal declaration are copied over
+//! them ([`replace_keep_plan`]). It has no untest path either. The three ways a
+//! candidate takes over the state are the kinds of [`CandidateKind`]; the swap
+//! (`apply_test_swap`) is one exhaustive match over them.
+//!
 //! `run` never holds a [`VmRunning`](ironplc_vm::VmRunning) borrow across a
 //! mutation of the host fields: the VM borrows the active container and the
 //! buffers for the duration of one session of rounds, and is dropped before
@@ -41,15 +49,18 @@ use ironplc_container::integrity::HASH_LEN;
 use ironplc_container::{Container, InstanceId, TaskId, VarIndex};
 use ironplc_vm::{earliest_due_us, rearm_cyclic_deadlines, FaultContext, Vm, VmBuffers};
 
+use crate::candidate::{CandidateKind, Carry};
 use crate::edit_guard::{edit_answer, edit_state, EditCommand, EditState, Steps, ITSELF};
 use crate::error::{OnlineChangeError, RuntimeError};
 use crate::generation::{ApplicationGeneration, LogicGeneration};
-use crate::migration::{MigrationDecision, StateMigrationPlan};
+use crate::migration::{replace_keep_plan, MigrationDecision, Reinitialised, StateMigrationPlan};
 use crate::online_change::{
     has_stable_vars, swap_buffers, validate_candidate, validate_migration_candidate,
 };
 use crate::retained_state::{RetainedApplyError, RetainedImage};
 use crate::snapshot::StateSnapshot;
+
+mod redundancy;
 
 /// Which artifact is executing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -144,6 +155,10 @@ pub struct HostStatus {
     /// Whether the staged candidate is a migration candidate, i.e. one whose
     /// layout hash differs and which carries a state migration plan.
     pub migration: bool,
+    /// How the staged candidate takes over the state; `None` when none is
+    /// staged. A migration and a replace rebuild the state at the swap, so
+    /// neither can be reverted once it executes.
+    pub kind: Option<CandidateKind>,
     /// Completed scan rounds since the host was created.
     pub rounds: u64,
     /// The pending-edit record written at Accept, if a candidate is staged.
@@ -216,7 +231,8 @@ pub struct RuntimeHost {
     /// boundary that applies it, and are dropped with it when the boundary
     /// does not apply it. Empty unless `pending` is set.
     after_swap: Steps,
-    migration: Option<StateMigrationPlan>,
+    /// How the staged candidate takes over the state; `Change` when none is staged.
+    carry: Carry,
     execution_permitted: bool,
 }
 
@@ -252,7 +268,7 @@ impl RuntimeHost {
             application_generation: ApplicationGeneration::new(1),
             pending: None,
             after_swap: ITSELF,
-            migration: None,
+            carry: Carry::Change,
             execution_permitted: false,
         })
     }
@@ -282,8 +298,14 @@ impl RuntimeHost {
             self.candidate.is_some(),
             self.active_is_candidate,
             self.pending,
-            self.migration.is_some(),
+            self.candidate_kind(),
         )
+    }
+
+    /// How the staged candidate takes over the state; a change when none is
+    /// staged, where the kind is not read.
+    fn candidate_kind(&self) -> CandidateKind {
+        self.carry.kind()
     }
 
     /// The transition table's answer for `command` in the current edit state:
@@ -366,12 +388,12 @@ impl RuntimeHost {
     ) -> Result<(), OnlineChangeError> {
         self.guard(EditCommand::Accept)?;
 
-        let migration = if self.normal.header.layout_hash == candidate.header.layout_hash {
+        let carry = if self.normal.header.layout_hash == candidate.header.layout_hash {
             validate_candidate(&self.normal, &candidate)?;
-            None
+            Carry::Change
         } else if has_stable_vars(&self.normal) && has_stable_vars(&candidate) {
             validate_migration_candidate(&self.normal, &candidate)?;
-            Some(
+            Carry::Migrate(
                 StateMigrationPlan::build_with_decisions(&self.normal, &candidate, decisions)
                     .map_err(OnlineChangeError::MigrationUnsupported)?,
             )
@@ -381,6 +403,45 @@ impl RuntimeHost {
             return Err(OnlineChangeError::LayoutIncompatible);
         };
 
+        self.install_candidate(candidate, carry, edit);
+        Ok(())
+    }
+
+    /// Stages `candidate` as a replacement of the running application (the
+    /// `replace` mode of an accept, a Download; ADR-0088).
+    ///
+    /// The layout, the schedule and the process-image sizes are not compared:
+    /// the candidate takes the place of the application, and at the swap its
+    /// state is built fresh and its init image runs. Only the `PERSISTENT`
+    /// variables whose declaration is equal keep their value ([`replace_keep_plan`]),
+    /// and the answer lists those that start again, so a reset is never silent.
+    /// The candidate is a `Container`, which the caller has loaded and verified
+    /// (format, hashes, bytecode verifier).
+    ///
+    /// Like every candidate it is accepted only while none is staged, then goes
+    /// through test and assemble. It has no revert once it runs.
+    pub fn stage_replacing(
+        &mut self,
+        candidate: Container,
+        edit: Option<AcceptedEdit>,
+    ) -> Result<Vec<Reinitialised>, OnlineChangeError> {
+        self.guard(EditCommand::Accept)?;
+
+        let keep = replace_keep_plan(&self.normal, &candidate)
+            .map_err(OnlineChangeError::MigrationUnsupported)?;
+        let reinitialised = keep.reinitialised().to_vec();
+        self.install_candidate(candidate, Carry::Replace(keep), edit);
+        Ok(reinitialised)
+    }
+
+    /// Records `candidate` as the staged candidate, the step every mode of the
+    /// accept ends in.
+    fn install_candidate(
+        &mut self,
+        candidate: Container,
+        carry: Carry,
+        edit: Option<AcceptedEdit>,
+    ) {
         let generation = LogicGeneration::new(self.next_logic_generation);
         self.next_logic_generation = self.next_logic_generation.saturating_add(1);
         let (wire, name, origin) = match edit {
@@ -390,7 +451,7 @@ impl RuntimeHost {
         self.candidate = Some(candidate);
         self.candidate_wire = wire;
         self.candidate_generation = Some(generation);
-        self.migration = migration;
+        self.carry = carry;
         self.pending_edit = Some(PendingEditRecord {
             name,
             origin,
@@ -400,7 +461,6 @@ impl RuntimeHost {
                 content_hash: self.normal.header.content_hash,
             },
         });
-        Ok(())
     }
 
     /// Requests that the candidate become active at the next scan boundary.
@@ -446,7 +506,7 @@ impl RuntimeHost {
                 self.normal_generation = generation;
             }
             self.active_is_candidate = false;
-            self.migration = None;
+            self.carry = Carry::Change;
             self.application_generation =
                 ApplicationGeneration::new(self.application_generation.raw().saturating_add(1));
         }
@@ -471,7 +531,7 @@ impl RuntimeHost {
         self.candidate_wire = None;
         self.pending_edit = None;
         self.candidate_generation = None;
-        self.migration = None;
+        self.carry = Carry::Change;
     }
 
     /// Whether a requested swap waits for the next scan boundary. A command
@@ -497,7 +557,8 @@ impl RuntimeHost {
             } else {
                 HostMode::Normal
             },
-            migration: self.migration.is_some(),
+            migration: self.carry.kind() == CandidateKind::Migrate,
+            kind: self.candidate.is_some().then(|| self.carry.kind()),
             rounds: self.rounds,
             pending_edit: self.pending_edit.clone(),
             candidate_content_hash: self
@@ -558,163 +619,6 @@ impl RuntimeHost {
         image
             .apply(container, &mut self.buffers)
             .map_err(RetainedApplyError::Mismatch)
-    }
-
-    /// Applies a replicated snapshot to this host while it drives no
-    /// scans (the HA redundancy architecture, "Minimal Seams" 4): the
-    /// mirror of `apply_migration_swap` with a replicated image in the
-    /// migration plan's place. The host is the single authority; every
-    /// refusal is coded and fail-closed — a mismatched image is refused,
-    /// never guessed:
-    ///
-    /// - a snapshot whose byte lengths do not match its declared layout
-    ///   is corrupt ([`OnlineChangeError::SnapshotCorrupt`]);
-    /// - a snapshot of the layout currently executing copies both
-    ///   persistent regions wholesale — the steady-state replication a
-    ///   monitoring peer applies;
-    /// - a snapshot of the staged candidate's layout while the original
-    ///   is active is the pair's Test of a migration candidate arriving
-    ///   over replication: the buffers are rebuilt from the candidate's
-    ///   init image (exactly `apply_migration_swap`'s first half), every
-    ///   persistent byte is overwritten with the replicated image, and
-    ///   the selector flips to the candidate. The migration marker stays
-    ///   set — untest stays refused (V4011) and the replicated image is
-    ///   authoritative over a local plan application;
-    /// - a snapshot of the normal layout while the candidate is active
-    ///   is the pair's Untest: refused on a migration candidate
-    ///   ([`OnlineChangeError::UntestUnsupported`]), otherwise the
-    ///   selector flips back with the carried state (ADR-0064(f): the
-    ///   candidate is kept, process state is not rolled back);
-    /// - anything else names a layout this host does not hold:
-    ///   [`OnlineChangeError::LayoutIncompatible`].
-    ///
-    /// "Idle" is a borrow-checker property: this method takes
-    /// `&mut self`, so no scan session can be live across it.
-    pub fn apply_state_snapshot(
-        &mut self,
-        snapshot: &StateSnapshot,
-    ) -> Result<(), OnlineChangeError> {
-        if !snapshot.is_consistent() {
-            return Err(OnlineChangeError::SnapshotCorrupt);
-        }
-        if self.pending.is_some() {
-            // A boundary operation is in flight; no replica may land
-            // until it completes.
-            return Err(OnlineChangeError::NotAllowedInThisMode);
-        }
-
-        let active = select_active(&self.normal, &self.candidate, self.active_is_candidate);
-        if snapshot.layout_matches(active) {
-            return Self::copy_persistent(snapshot, active, &mut self.buffers);
-        }
-
-        if !self.active_is_candidate
-            && self
-                .candidate
-                .as_ref()
-                .is_some_and(|candidate| snapshot.layout_matches(candidate))
-        {
-            return self.apply_advance(snapshot);
-        }
-
-        if self.active_is_candidate && snapshot.layout_matches(&self.normal) {
-            if self.migration.is_some() {
-                // Untest after a schema-changing test is forbidden
-                // (V4011); a retreat image names exactly that.
-                return Err(OnlineChangeError::UntestUnsupported);
-            }
-            Self::copy_persistent(snapshot, &self.normal, &mut self.buffers)?;
-            self.active_is_candidate = false;
-            return Ok(());
-        }
-
-        Err(OnlineChangeError::LayoutIncompatible)
-    }
-
-    /// Flips the execution selector to the staged candidate without a
-    /// boundary state swap — the takeover-during-Testing path of
-    /// ADR-0064(e): the standby takes over executing the CANDIDATE,
-    /// because the state has already moved under the candidate and
-    /// reverting to the original would be an untest, which migration
-    /// candidates forbid. The caller certifies the replicated state
-    /// moved: a migration candidate whose image has not advanced on this
-    /// host is refused, never executed over unmigrated state
-    /// ([`OnlineChangeError::NotAllowedInThisMode`]). Idempotent once
-    /// the candidate is active.
-    pub fn takeover_testing(&mut self) -> Result<(), OnlineChangeError> {
-        if self.candidate.is_none() {
-            return Err(OnlineChangeError::NoCandidateStaged);
-        }
-        if self.active_is_candidate {
-            return Ok(());
-        }
-        if self.pending.is_some() {
-            return Err(OnlineChangeError::NotAllowedInThisMode);
-        }
-        if self.migration.is_some() {
-            return Err(OnlineChangeError::NotAllowedInThisMode);
-        }
-        self.active_is_candidate = true;
-        Ok(())
-    }
-
-    /// Applies a pending `test`/`untest` at a boundary without driving
-    /// scan rounds. The monitor-mode host of a redundant pair drives no
-    /// scans — its composition root keeps it idle — so its boundary is
-    /// wherever the root chooses; this is how the Secondary mirrors the
-    /// pair's Untest for a layout-preserving candidate (both layouts hash
-    /// identically, so the retreat never appears in the replication
-    /// stream). The execution permit is not re-validated here: this path
-    /// drives no scans, and refusing the mirror would leave the pair's
-    /// edit lifecycle diverged. Shells that drive rounds never need this:
-    /// `run` applies pending swaps at round boundaries with the permit
-    /// re-check (scenario T07).
-    pub fn apply_pending_at_boundary(&mut self) -> Result<(), RuntimeError> {
-        self.apply_pending_swap(false)
-    }
-
-    /// Overwrites the persistent extent of `buffers`, which `container`
-    /// laid out, with the bytes of the snapshot. The caller has already proven
-    /// the layout identity; the buffers may be larger than the image says (a
-    /// body that needs more working slots or working bytes than the one that
-    /// produced it), and the working part is left as it is.
-    fn copy_persistent(
-        snapshot: &StateSnapshot,
-        container: &Container,
-        buffers: &mut VmBuffers,
-    ) -> Result<(), OnlineChangeError> {
-        if snapshot.write_to(container, buffers) {
-            Ok(())
-        } else {
-            Err(OnlineChangeError::SnapshotCorrupt)
-        }
-    }
-
-    /// The replicated Test advance of a migration candidate: rebuild the
-    /// buffers from the candidate's init image (its declared initial
-    /// values), then let the replicated image overwrite every persistent
-    /// byte — the candidate-only entities keep the init values the
-    /// primary's post-migration image carries, the shared entities carry
-    /// the replicated values. An init image that traps here — when the
-    /// identical container initialized on the peer — means the replica
-    /// is divergent, so it is refused as corrupt.
-    fn apply_advance(&mut self, snapshot: &StateSnapshot) -> Result<(), OnlineChangeError> {
-        let Some(candidate) = self.candidate.as_ref() else {
-            return Err(OnlineChangeError::NoCandidateStaged);
-        };
-        let mut advanced = {
-            let mut advanced = VmBuffers::from_container(candidate);
-            Vm::new()
-                .load(candidate, &mut advanced)
-                .map_err(|_| OnlineChangeError::SnapshotCorrupt)?
-                .start()
-                .map_err(|_| OnlineChangeError::SnapshotCorrupt)?;
-            advanced
-        };
-        Self::copy_persistent(snapshot, candidate, &mut advanced)?;
-        self.buffers = advanced;
-        self.active_is_candidate = true;
-        Ok(())
     }
 
     /// Drives up to `rounds` scan rounds, applying a pending swap first.
@@ -901,16 +805,7 @@ impl RuntimeHost {
         }
         match swap {
             PendingSwap::Test => {
-                if self.migration.is_some() {
-                    self.apply_migration_swap()?;
-                } else {
-                    let Some(candidate) = self.candidate.as_ref() else {
-                        return Err(RuntimeError::internal(
-                            "swap to candidate without a staged candidate",
-                        ));
-                    };
-                    swap_buffers(candidate, &mut self.buffers, self.rounds);
-                }
+                self.apply_test_swap()?;
                 self.active_is_candidate = true;
                 Ok(())
             }
@@ -933,33 +828,31 @@ impl RuntimeHost {
         Ok(())
     }
 
-    /// Adopts the migration candidate's freshly initialized buffers with the
-    /// plan applied.
+    /// Applies the swap of a test at the boundary: the state of the candidate,
+    /// built the way its kind says. The one place a kind is turned into a state;
+    /// the match is exhaustive, so a new [`CandidateKind`] does not compile until
+    /// it says what it keeps.
     ///
-    /// The candidate's init image runs once here, so entities with no source
-    /// UID carry the candidate's declared initial values. The migration plan
-    /// then copies every entity the two layouts share, and the old buffers are
-    /// dropped: a schema change has no untest path.
-    fn apply_migration_swap(&mut self) -> Result<(), RuntimeError> {
-        let (Some(candidate), Some(plan)) = (self.candidate.as_ref(), self.migration.as_ref())
-        else {
+    /// - A change carries the persistent part of the running buffers over
+    ///   ([`swap_buffers`]); the old logic can come back (untest).
+    /// - A migration and a replace build the candidate's buffers fresh, run its
+    ///   init image once, and copy the planned values over it ([`rebuild_state`]):
+    ///   the entities with nothing to copy carry the candidate's declared initial
+    ///   values, and the old buffers are dropped, so neither has an untest path.
+    fn apply_test_swap(&mut self) -> Result<(), RuntimeError> {
+        let Some(candidate) = self.candidate.as_ref() else {
             return Err(RuntimeError::internal(
-                "migration swap without a staged candidate or plan",
+                "swap to candidate without a staged candidate",
             ));
         };
-
-        let mut migrated = VmBuffers::from_container(candidate);
-        Vm::new()
-            .load(candidate, &mut migrated)
-            .map_err(load_trap)?
-            .start()
-            .map_err(RuntimeError::Trap)?;
-
-        plan.apply(&self.buffers, &mut migrated)
-            .map_err(|_| RuntimeError::internal("state migration failed at the scan boundary"))?;
-
-        self.buffers = migrated;
-        Ok(())
+        match &self.carry {
+            Carry::Change => {
+                swap_buffers(candidate, &mut self.buffers, self.rounds);
+                Ok(())
+            }
+            Carry::Migrate(plan) => rebuild_state(candidate, plan, &mut self.buffers),
+            Carry::Replace(keep) => rebuild_state(candidate, keep.plan(), &mut self.buffers),
+        }
     }
 
     /// Reads a variable value as an i32 from the host's buffers.
@@ -997,4 +890,25 @@ fn now_millis() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_millis() as u64)
         .unwrap_or(0)
+}
+
+/// Replaces `buffers` by the fresh, initialized buffers of `candidate` with the
+/// copies of `plan` applied from the old ones.
+fn rebuild_state(
+    candidate: &Container,
+    plan: &StateMigrationPlan,
+    buffers: &mut VmBuffers,
+) -> Result<(), RuntimeError> {
+    let mut rebuilt = VmBuffers::from_container(candidate);
+    Vm::new()
+        .load(candidate, &mut rebuilt)
+        .map_err(load_trap)?
+        .start()
+        .map_err(RuntimeError::Trap)?;
+
+    plan.apply(buffers, &mut rebuilt)
+        .map_err(|_| RuntimeError::internal("state migration failed at the scan boundary"))?;
+
+    *buffers = rebuilt;
+    Ok(())
 }

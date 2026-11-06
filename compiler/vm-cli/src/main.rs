@@ -20,6 +20,8 @@ mod serve_device_tests;
 #[cfg(test)]
 mod serve_edit_tests;
 #[cfg(test)]
+mod serve_replace_tests;
+#[cfg(test)]
 mod serve_retained_tests;
 #[cfg(test)]
 mod serve_tests;

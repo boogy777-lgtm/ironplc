@@ -11,6 +11,7 @@ mod error_display;
 mod fb_layout;
 mod identity;
 mod instance_arrays;
+mod keep;
 mod variable_plans;
 
 use std::sync::atomic::{AtomicU64, Ordering};

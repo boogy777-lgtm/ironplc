@@ -28,7 +28,9 @@
 use std::collections::BTreeMap;
 
 use ironplc_container::Container;
-use ironplc_runtime::{AcceptedEdit, HostMode, LogicGeneration, RuntimeHost, StateSnapshot};
+use ironplc_runtime::{
+    AcceptedEdit, CandidateKind, HostMode, LogicGeneration, RuntimeHost, StateSnapshot,
+};
 
 use crate::config::PairId;
 use crate::epoch::Epoch;
@@ -525,7 +527,7 @@ impl CrossloadReceiver {
     pub fn assemble_candidate(&mut self, host: &mut RuntimeHost) -> CrossloadMessage {
         match host.status().mode {
             HostMode::Testing => {}
-            HostMode::Normal if !host.status().migration => {
+            HostMode::Normal if host.status().kind == Some(CandidateKind::Change) => {
                 if host.takeover_testing().is_err() {
                     return self.refused(CrossloadRefusal::CandidateRejected);
                 }

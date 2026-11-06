@@ -29,6 +29,7 @@ fn parse_command_when_accept_edits_then_carries_program_bytes() {
             program: vec![1, 2, 255],
             edit: None,
             migration: BTreeMap::new(),
+            mode: AcceptMode::Change,
         }
     );
 }
@@ -49,6 +50,7 @@ fn parse_command_when_accept_edits_with_migration_then_carries_decisions() {
                 (1, MigrationDecisionSpec::Init),
                 (2, MigrationDecisionSpec::Preserve),
             ]),
+            mode: AcceptMode::Change,
         }
     );
 }
@@ -69,6 +71,7 @@ fn parse_command_when_accept_edits_with_edit_then_carries_identity() {
                 origin: Some("ws-9".into()),
             }),
             migration: BTreeMap::new(),
+            mode: AcceptMode::Change,
         }
     );
 }
@@ -142,6 +145,7 @@ fn identity_response_of(
             candidate: None,
             application: 1,
             migration: false,
+            candidate_mode: None,
             rounds: 0,
             pending_edit: None,
             content_hash: None,
@@ -316,6 +320,7 @@ fn render_response_when_status_then_serializes_every_field() {
         candidate: Some(2),
         application: 1,
         migration: true,
+        candidate_mode: None,
         rounds: 42,
         pending_edit: None,
         content_hash: None,
@@ -376,7 +381,9 @@ fn status_payload_when_edit_absent_then_parses_with_none_and_renders_without_it(
 fn status_payload_when_edit_view_present_then_round_trips_through_the_wire() {
     let mut payload: StatusPayload = serde_json::from_str(STATUS_WITHOUT_HASHES).unwrap();
     payload.edit = Some(Box::new(crate::edit_view::view_of(
-        crate::edit_guard::EditState::Testing { migration: true },
+        crate::edit_guard::EditState::Testing {
+            kind: crate::candidate::CandidateKind::Migrate,
+        },
         None,
     )));
 
@@ -534,6 +541,7 @@ fn redundancy_block() -> RedundancyIdentity {
     candidate: Some(2),
     application: 1,
     migration: true,
+    candidate_mode: None,
     rounds: 42,
     pending_edit: None,
     content_hash: Some("9f".repeat(32)),
@@ -622,6 +630,7 @@ fn parse_response_when_not_json_then_error() {
     program: vec![1, 2, 255],
     edit: Some(EditSpec { name: Some("rung-4".into()), origin: None }),
     migration: BTreeMap::from([(1, MigrationDecisionSpec::Init)]),
+    mode: AcceptMode::Replace,
 })]
 #[case::settings(Command::SetDeviceSettings {
     settings: BTreeMap::from([("name".to_string(), serde_json::json!("cell 1"))]),
@@ -803,6 +812,22 @@ fn render_response_when_identity_then_container_format_is_the_format_version() {
 }
 
 #[test]
+fn parse_command_when_accept_edits_with_replace_mode_then_carries_the_mode() {
+    let command =
+        parse_command(r#"{"command":"acceptEdits","program":[1],"mode":"replace"}"#).unwrap();
+
+    assert_eq!(
+        command,
+        Command::AcceptEdits {
+            program: vec![1],
+            edit: None,
+            migration: BTreeMap::new(),
+            mode: AcceptMode::Replace,
+        }
+    );
+}
+
+#[test]
 fn parse_response_when_identity_lacks_container_format_then_it_is_unknown() {
     let line = render_response(&identity_response(None)).unwrap();
     let mut value: serde_json::Value = serde_json::from_str(&line).unwrap();
@@ -813,4 +838,64 @@ fn parse_response_when_identity_lacks_container_format_then_it_is_unknown() {
     };
 
     assert_eq!(parsed.container_format, None);
+}
+
+#[test]
+fn render_command_when_accept_edits_in_the_default_mode_then_the_mode_is_not_on_the_wire() {
+    let command = Command::AcceptEdits {
+        program: vec![1],
+        edit: None,
+        migration: BTreeMap::new(),
+        mode: AcceptMode::Change,
+    };
+
+    assert_eq!(
+        render_command(&command).unwrap(),
+        r#"{"command":"acceptEdits","program":[1]}"#
+    );
+}
+
+#[test]
+fn parse_command_when_accept_edits_mode_is_unknown_then_error() {
+    assert!(
+        parse_command(r#"{"command":"acceptEdits","program":[1],"mode":"migrate"}"#).is_err(),
+        "migrate is selected by the host, a client cannot ask for it"
+    );
+}
+
+#[test]
+fn render_response_when_accepted_then_lists_the_reinitialised_variables() {
+    let response = Response::Accepted {
+        reinitialised: vec![
+            Reinitialised {
+                uid: Some(7),
+                name: Some("Count".to_string()),
+                reason: crate::migration::ReinitReason::TypeChanged,
+            },
+            Reinitialised {
+                uid: None,
+                name: None,
+                reason: crate::migration::ReinitReason::NoStableId,
+            },
+        ],
+    };
+
+    let line = render_response(&response).unwrap();
+
+    assert_eq!(
+        line,
+        r#"{"response":"accepted","reinitialised":[{"uid":7,"name":"Count","reason":"typeChanged"},{"reason":"noStableId"}]}"#
+    );
+    assert_eq!(parse_response(&line).unwrap(), response);
+    assert!(response.is_acknowledgment());
+}
+
+#[test]
+fn is_acknowledgment_when_each_response_then_only_the_acknowledgments_are() {
+    assert!(Response::Ack.is_acknowledgment());
+    assert!(!Response::RunState {
+        run_state: RunState::Running
+    }
+    .is_acknowledgment());
+    assert!(!Response::Error(CommandError::scan_control_unavailable()).is_acknowledgment());
 }

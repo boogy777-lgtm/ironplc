@@ -477,5 +477,187 @@
       "stage": "swapPending",
       "warning": "a restart of the device loses this candidate"
     }
+  },
+  {
+    "state": "AcceptedReplace",
+    "view": {
+      "commands": {
+        "accept": {
+          "enabled": false,
+          "label": "Accept",
+          "reason": {
+            "code": "V4013",
+            "text": "a candidate is already staged"
+          }
+        },
+        "assemble": {
+          "enabled": false,
+          "label": "Assemble",
+          "reason": {
+            "code": "V4017",
+            "text": "assemble requires the candidate to have executed under Test"
+          }
+        },
+        "cancel": {
+          "enabled": true,
+          "label": "Cancel"
+        },
+        "finalizeAll": {
+          "enabled": false,
+          "label": "Finalize all",
+          "reason": {
+            "code": "V4013",
+            "text": "a candidate is already staged"
+          },
+          "steps": [
+            "accept",
+            "test",
+            "assemble"
+          ]
+        },
+        "test": {
+          "enabled": true,
+          "label": "Test"
+        },
+        "untest": {
+          "enabled": false,
+          "label": "Untest",
+          "reason": {
+            "code": "V4014",
+            "text": "no test is in progress"
+          }
+        }
+      },
+      "next": {
+        "command": "test",
+        "label": "Test"
+      },
+      "stage": "accepted",
+      "warning": "a restart of the device loses this candidate"
+    }
+  },
+  {
+    "state": "TestingReplace",
+    "view": {
+      "commands": {
+        "accept": {
+          "enabled": false,
+          "label": "Accept",
+          "reason": {
+            "code": "V4013",
+            "text": "a candidate is already staged"
+          }
+        },
+        "assemble": {
+          "enabled": true,
+          "label": "Assemble"
+        },
+        "cancel": {
+          "enabled": false,
+          "label": "Cancel",
+          "reason": {
+            "code": "V4011",
+            "text": "untest and cancel are not supported after a schema-changing test; assemble instead"
+          }
+        },
+        "finalizeAll": {
+          "enabled": false,
+          "label": "Finalize all",
+          "reason": {
+            "code": "V4013",
+            "text": "a candidate is already staged"
+          },
+          "steps": [
+            "accept",
+            "test",
+            "assemble"
+          ]
+        },
+        "test": {
+          "enabled": false,
+          "label": "Test",
+          "reason": {
+            "code": "V4015",
+            "text": "operation not allowed in the current hot-edit phase"
+          }
+        },
+        "untest": {
+          "enabled": false,
+          "label": "Untest",
+          "reason": {
+            "code": "V4011",
+            "text": "untest and cancel are not supported after a schema-changing test; assemble instead"
+          }
+        }
+      },
+      "next": {
+        "command": "assemble",
+        "label": "Assemble"
+      },
+      "stage": "testingReplace",
+      "warning": "a restart of the device loses this candidate"
+    }
+  },
+  {
+    "state": "TestPendingReplace",
+    "view": {
+      "commands": {
+        "accept": {
+          "enabled": false,
+          "label": "Accept",
+          "reason": {
+            "code": "V4013",
+            "text": "a candidate is already staged"
+          }
+        },
+        "assemble": {
+          "enabled": false,
+          "label": "Assemble",
+          "reason": {
+            "code": "V4015",
+            "text": "operation not allowed in the current hot-edit phase"
+          }
+        },
+        "cancel": {
+          "enabled": false,
+          "label": "Cancel",
+          "reason": {
+            "code": "V4015",
+            "text": "operation not allowed in the current hot-edit phase"
+          }
+        },
+        "finalizeAll": {
+          "enabled": false,
+          "label": "Finalize all",
+          "reason": {
+            "code": "V4013",
+            "text": "a candidate is already staged"
+          },
+          "steps": [
+            "accept",
+            "test",
+            "assemble"
+          ]
+        },
+        "test": {
+          "enabled": false,
+          "label": "Test",
+          "reason": {
+            "code": "V4015",
+            "text": "operation not allowed in the current hot-edit phase"
+          }
+        },
+        "untest": {
+          "enabled": false,
+          "label": "Untest",
+          "reason": {
+            "code": "V4014",
+            "text": "no test is in progress"
+          }
+        }
+      },
+      "stage": "swapPending",
+      "warning": "a restart of the device loses this candidate"
+    }
   }
 ]

@@ -251,8 +251,8 @@ Field set:
   compares `contentHash` with its download record (below).
   A third optional field, `edit`, is the edit view (ADR-0087): which edit
   commands the host allows now, and why not for the others. It has `stage`
-  (`idle`, `accepted`, `testing`, `testingMigration`, or `swapPending` while a
-  test or an untest waits for the next scan boundary), `commands` and `next`.
+  (`idle`, `accepted`, `testing`, `testingMigration`, `testingReplace`, or
+  `swapPending` while a test or an untest waits for the next scan boundary), `commands` and `next`.
   `commands` has one entry for each of `accept`, `test`, `untest`, `assemble`
   and `cancel`, and for `finalizeAll`, a composite whose `steps` (`accept`,
   `test`, `assemble`) the client runs in order and which is enabled when its
@@ -274,8 +274,8 @@ Field set:
   (REQ-VC-vm-cli-056). A candidate lives in RAM only; the note holds the `name`,
   `origin`, `stage` and candidate hash of the edit and is never used to restore
   it. `candidateLost` has `name` and `origin` when the accept gave them, and
-  `stage` (`accepted`, `testing`, `testingMigration`) unless the note was
-  damaged.
+  `stage` (`accepted`, `testing`, `testingMigration`, `testingReplace`) unless
+  the note was damaged.
 - `persistedContentHash` and `retained` — optional, next to `application`:
   what the device keeps beside the application (REQ-VC-vm-cli-040).
   `persistedContentHash` is the `contentHash` of the application the device
@@ -499,6 +499,17 @@ What exists today:
   `compiler/runtime/src/commands.rs`), staged by `execute`; the client side
   is `HotEditSession.acceptEdits`
   (`integrations/vscode/src/hotEditSession.ts`).
+  The command has the optional field `mode`, `change` (the default) or `replace`
+  (ADR-0088). A `replace` accept is a Download: the host does not compare the
+  layout, the schedule or the image sizes, the new application is built fresh at
+  the test boundary, and only the `PERSISTENT` variables whose declaration is equal
+  (the same stable variable ID, qualifier and type data) keep their value
+  (`replace_keep_plan` in `compiler/runtime/src/migration/keep.rs`). The device
+  answers `accepted` with the `reinitialised` list of the `PERSISTENT` variables
+  that start again and why, instead of `ack` (REQ-VC-vm-cli-062). The candidate
+  goes through test and assemble like any candidate and cannot be reverted once it
+  runs (REQ-VC-vm-cli-064); the status carries `candidateMode`. The client writes
+  the download record after the assemble, as for every download.
 - **Verify.** The container verifies at load — `verify_load` in
   `compiler/container/src/load_verify.rs` recomputes the layout hash — and
   the host compares the candidate's `layout_hash` against the active
@@ -565,7 +576,9 @@ Revert is disabled or rejected when the status reports `migration: true`:
 a migration candidate has no revert path, so `untestEdits` answers V4011
 UntestUnsupported (`RuntimeHost::untest` in
 `compiler/runtime/src/host.rs`). The panel reads the existing
-`HostStatus.migration` flag (same file) rather than inferring it.
+`HostStatus.migration` flag (same file) rather than inferring it. A replace
+candidate (`candidateMode` `replace`, stage `testingReplace`) has no revert path
+either; the panel reads the edit view, which says so.
 
 Trial state is host-side: a staged candidate and Testing mode survive a
 session loss, so reconnect reconciliation renders the mode reported by

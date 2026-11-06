@@ -51,7 +51,7 @@ pub(crate) struct EditMarker {
     name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     origin: Option<String>,
-    /// `accepted`, `testing` or `testingMigration`.
+    /// `accepted`, `testing`, `testingMigration` or `testingReplace`.
     stage: EditStage,
     /// The `contentHash` of the candidate in the form the session reports it;
     /// all zeros when the writer of the container computed none.
@@ -75,7 +75,10 @@ impl Wanted {
         match stage {
             EditStage::Idle => Wanted::NoFile,
             EditStage::SwapPending => Wanted::AsItIs,
-            EditStage::Accepted | EditStage::Testing | EditStage::TestingMigration => {
+            EditStage::Accepted
+            | EditStage::Testing
+            | EditStage::TestingMigration
+            | EditStage::TestingReplace => {
                 let record = status.pending_edit.as_ref();
                 Wanted::Note(EditMarker {
                     version: FILE_VERSION,

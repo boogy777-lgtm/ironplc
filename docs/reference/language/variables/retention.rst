@@ -28,7 +28,8 @@ Qualifiers
    * - ``RETAIN``
      - Value is preserved across power cycles
    * - ``PERSISTENT``
-     - Value is preserved across power cycles
+     - Value is preserved across power cycles and across a download whose
+       declaration of the variable is equal
    * - ``NON_RETAIN``
      - Value is reset to initial value on restart
    * - ``CONSTANT``
@@ -50,13 +51,36 @@ only to the program they were written for: after a different program starts, the
 variables take their initial values and the ``identity`` answer says why. See
 :ref:`ironplcvm-retained-values` for the file, the setting, and the answer.
 
+Across a download
+-----------------
+
+A download replaces the program on the device. :program:`ironplcvm serve` keeps
+the value of a ``PERSISTENT`` variable across it when the declaration is equal in
+the program that runs and in the program that is downloaded: the same variable,
+with the same ``PERSISTENT`` qualifier and the same type, string length, array
+bounds or function block type. Every other variable starts again at its initial
+value, a ``RETAIN`` variable included: ``RETAIN`` survives a restart and not a
+download. This is how CODESYS behaves.
+
+The device recognises the same variable by its stable variable ID, which the
+project keeps in the file :file:`{name}.uids.json` (create and update it with
+``ironplcc refactor sync-uids``). A ``PERSISTENT`` variable without an ID in the
+running program, or in the downloaded one, starts again. The answer to the
+download lists every ``PERSISTENT`` variable of the running program that starts
+again, and why, so a reset is never silent; see :ref:`ironplcvm-replace`.
+
+The rule is by declaration. A variable whose meaning changes while its
+declaration stays equal keeps its old value, as in CODESYS: change the name of the
+variable, or give it a new type, when the old value must not be kept.
+
 What does not work yet
 ----------------------
 
 - :program:`ironplcvm run` starts every variable with its
   initial value.
-- A download of a different program does not keep ``PERSISTENT`` variables.
-  Only ``assembleEdits`` carries state to a new program.
+- A ``PERSISTENT`` field of a function block instance that is itself declared
+  without a qualifier is not kept by a download. Declare the instance
+  ``PERSISTENT`` to keep all its data.
 
 Example
 -------

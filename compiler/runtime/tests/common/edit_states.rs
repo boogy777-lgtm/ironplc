@@ -24,11 +24,17 @@ pub enum State {
     TestPending,
     /// Test of a migration candidate requested, not yet applied.
     TestPendingMigration,
+    /// Candidate staged as a replace (a download), original executing.
+    AcceptedReplace,
+    /// Replace candidate executing.
+    TestingReplace,
+    /// Test of a replace candidate requested, not yet applied.
+    TestPendingReplace,
     /// Untest requested while the candidate executes, not yet applied.
     UntestPending,
 }
 
-pub const STATES: [State; 8] = [
+pub const STATES: [State; 11] = [
     State::NoCandidate,
     State::Accepted,
     State::AcceptedMigration,
@@ -37,6 +43,9 @@ pub const STATES: [State; 8] = [
     State::TestPending,
     State::TestPendingMigration,
     State::UntestPending,
+    State::AcceptedReplace,
+    State::TestingReplace,
+    State::TestPendingReplace,
 ];
 
 fn program(extra_variable: bool, step: i32) -> String {
@@ -67,6 +76,12 @@ pub fn body_candidate() -> Container {
 /// A candidate that adds a variable, so its layout hash differs.
 fn migration_candidate() -> Container {
     compile_with_ids(&program(true, 2), &IDS)
+}
+
+/// A candidate that replaces the application: another layout and no stable
+/// IDs to match it by, which a replace does not need.
+fn replace_candidate() -> Container {
+    compile_with_ids(&program(true, 3), &[])
 }
 
 /// A fresh, permitted host driven into `state`.
@@ -100,6 +115,18 @@ pub fn host_in(state: State) -> RuntimeHost {
             host.test().unwrap();
             host.run(1, || 0).unwrap();
             host.untest().unwrap();
+        }
+        State::AcceptedReplace => {
+            host.stage_replacing(replace_candidate(), None).unwrap();
+        }
+        State::TestingReplace => {
+            host.stage_replacing(replace_candidate(), None).unwrap();
+            host.test().unwrap();
+            host.run(1, || 0).unwrap();
+        }
+        State::TestPendingReplace => {
+            host.stage_replacing(replace_candidate(), None).unwrap();
+            host.test().unwrap();
         }
     }
     host

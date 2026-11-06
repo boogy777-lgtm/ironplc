@@ -48,8 +48,8 @@ use ironplc_dsl::core::SourceSpan;
 use ironplc_dsl::diagnostic::{Diagnostic, Label};
 use ironplc_problems::{text, Text};
 use ironplc_runtime::{
-    execute, Command, CommandError, DeviceIdentity, MigrationDecisionSpec, Response, RunState,
-    RuntimeError, RuntimeHost, StatusPayload, TypeChangeDetail,
+    execute, AcceptMode, Command, CommandError, DeviceIdentity, MigrationDecisionSpec,
+    Reinitialised, Response, RunState, RuntimeError, RuntimeHost, StatusPayload, TypeChangeDetail,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -87,6 +87,14 @@ pub struct HotEditAcceptInput {
     #[serde(default)]
     #[schemars(schema_with = "migration_schema")]
     pub migration: BTreeMap<u64, MigrationDecisionSpec>,
+    /// How the compiled program takes the place of the running application:
+    /// `"change"` (the default) continues it, as a body edit or a state
+    /// migration; `"replace"` is a Download, which replaces the application
+    /// and keeps only the `PERSISTENT` variables whose declaration is equal.
+    /// See the tool description.
+    #[serde(default)]
+    #[schemars(schema_with = "mode_schema")]
+    pub mode: AcceptMode,
     /// The device to stage the candidate on (see [`DeviceInput`]). Without it
     /// the candidate goes to the server's own session.
     #[serde(default)]
@@ -122,6 +130,18 @@ pub fn migration_schema(_generator: &mut schemars::SchemaGenerator) -> schemars:
         "type": "object",
         "description": "Engineer decisions for out-of-policy type changes (ADR 0061): stable variable UID -> \"init\" | \"preserve\".",
         "additionalProperties": { "type": "string", "enum": ["init", "preserve"] }
+    })
+}
+
+/// schemars schema function for the `mode` of `hot_edit_accept`: the runtime
+/// type does not implement `JsonSchema`, and a client chooses between the two
+/// modes it may ask for (`migrate` is the host's choice).
+pub fn mode_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    schemars::json_schema!({
+        "type": "string",
+        "enum": ["change", "replace"],
+        "default": "change",
+        "description": "change: continue the running application (a body edit, or a state migration when the layout differs). replace: a Download; replaces the application, keeps only the PERSISTENT variables whose declaration is equal and lists the others in `reinitialised`."
     })
 }
 
@@ -165,6 +185,13 @@ pub struct HotEditResponse {
     /// `running` or `stopped`. Absent for every other tool.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub run_state: Option<RunState>,
+    /// The `PERSISTENT` variables of the running application that an accepted
+    /// `replace` reinitialises, each with its stable ID, its name when known and
+    /// the reason (`noStableId`, `notInCandidate`, `qualifierChanged`,
+    /// `typeChanged`, `unsupportedType`). Present (possibly empty) on a `replace`
+    /// that was accepted, absent otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reinitialised: Option<Vec<Reinitialised>>,
     /// Compiler diagnostics: compile failures on `hot_edit_accept`, and
     /// validation failures (such as calling a tool before any session
     /// exists) with code P8001.
@@ -183,6 +210,7 @@ impl HotEditResponse {
             pairs: None,
             device: None,
             run_state: None,
+            reinitialised: None,
             diagnostics: vec![],
         }
     }
@@ -198,6 +226,7 @@ impl HotEditResponse {
             pairs: None,
             device: None,
             run_state: None,
+            reinitialised: None,
             diagnostics,
         }
     }
@@ -215,6 +244,7 @@ impl HotEditResponse {
             pairs: None,
             device: None,
             run_state: None,
+            reinitialised: None,
             diagnostics: vec![],
         }
     }
@@ -233,6 +263,7 @@ impl HotEditResponse {
             pairs: error.pairs().map(<[TypeChangeDetail]>::to_vec),
             device: None,
             run_state: None,
+            reinitialised: None,
             diagnostics: vec![],
         }
     }
@@ -262,6 +293,7 @@ impl HotEditResponse {
                 pairs: None,
                 device: None,
                 run_state: None,
+                reinitialised: None,
                 diagnostics: vec![],
             },
             RuntimeError::Internal { reason } => {
@@ -281,6 +313,7 @@ impl HotEditResponse {
                     pairs: None,
                     device: None,
                     run_state: None,
+                    reinitialised: None,
                     diagnostics: vec![],
                 }
             }
@@ -310,6 +343,7 @@ fn internal_failure(message: String) -> HotEditResponse {
         pairs: None,
         device: None,
         run_state: None,
+        reinitialised: None,
         diagnostics: vec![serialize_diagnostic(
             &Diagnostic::internal_error_at(Label::span(SourceSpan::default(), message)),
             &[],
@@ -370,6 +404,11 @@ fn dispatch(command: Command, session: &mut HotEditSession, drive_scan: bool) ->
 
     match execute(command, host, &mcp_device_identity()) {
         Response::Status(status) => HotEditResponse::ok("ack", status),
+        Response::Accepted { reinitialised } => {
+            let mut response = HotEditResponse::ok("ack", StatusPayload::from(host.status()));
+            response.reinitialised = Some(reinitialised);
+            response
+        }
         Response::Ack => {
             // A command that left a swap pending (cancel under Test is untest,
             // then cancel) is finished by the boundary round, as one that
@@ -428,7 +467,14 @@ pub fn build_accept_response<'a>(
     cache: &Mutex<ContainerCache>,
     target: impl Into<Target<'a>>,
 ) -> HotEditResponse {
-    build_accept_response_with_decisions(sources, options_value, &BTreeMap::new(), cache, target)
+    build_accept_response_with_decisions(
+        sources,
+        options_value,
+        &BTreeMap::new(),
+        AcceptMode::Change,
+        cache,
+        target,
+    )
 }
 
 /// Builds the `hot_edit_accept` response, resolving out-of-policy type
@@ -447,6 +493,7 @@ pub fn build_accept_response_with_decisions<'a>(
     sources: &[SourceInput],
     options_value: &serde_json::Value,
     migration: &BTreeMap<u64, MigrationDecisionSpec>,
+    mode: AcceptMode,
     cache: &Mutex<ContainerCache>,
     target: impl Into<Target<'a>>,
 ) -> HotEditResponse {
@@ -455,6 +502,7 @@ pub fn build_accept_response_with_decisions<'a>(
             candidate.program,
             candidate.ids_out_of_sync,
             migration,
+            mode,
             target,
         ),
         Err(response) => response,
@@ -519,9 +567,13 @@ pub fn send_candidate<'a>(
     program: Vec<u8>,
     ids_out_of_sync: Option<String>,
     migration: &BTreeMap<u64, MigrationDecisionSpec>,
+    mode: AcceptMode,
     target: impl Into<Target<'a>>,
 ) -> HotEditResponse {
-    if let Some(difference) = ids_out_of_sync {
+    // A replace needs no stable IDs to be accepted: a persistent variable
+    // without one starts again and the answer lists it, so the verdict that
+    // protects a migration from V4020 does not stop a Download.
+    if let Some(difference) = ids_out_of_sync.filter(|_| mode == AcceptMode::Change) {
         return HotEditResponse::not_sent(difference);
     }
 
@@ -529,6 +581,7 @@ pub fn send_candidate<'a>(
         program,
         edit: None,
         migration: migration.clone(),
+        mode,
     };
     match target.into() {
         Target::InProcess(session) => {

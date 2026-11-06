@@ -49,6 +49,11 @@ fn carry_out(session: &mut Session, command: Command) -> Result<HotEditResponse,
     match answer {
         Response::Status(status) => Ok(HotEditResponse::ok("ack", status)),
         Response::Ack => status_after(session, None),
+        Response::Accepted { reinitialised } => {
+            let mut response = status_after(session, None)?;
+            response.reinitialised = Some(reinitialised);
+            Ok(response)
+        }
         // The scan control answers the state it left: the response carries it
         // beside the status.
         Response::RunState { run_state } => status_after(session, Some(run_state)),

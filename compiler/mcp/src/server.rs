@@ -356,7 +356,7 @@ impl IronPlcMcp {
     /// Compiles sources and feeds them to the hot-edit protocol.
     #[tool(
         name = "hot_edit_accept",
-        description = "Compiles the supplied IEC sources and hands them to the hot-edit protocol. The first call establishes the running application session and reports `established`; each later call stages the compiled program as an edit candidate to activate with `hot_edit_test` and, once it has run under test, promote with `hot_edit_assemble`, or discard with `hot_edit_cancel`. With `device` the candidate is staged on that device, which already runs a program, and the result is `ack`. Compilation failures return the usual diagnostics; staging refusals return a stable V-code such as V4007 (layout change) or V4013 (candidate already staged). A V4010 refusal carries a `pairs` list of out-of-policy type changes; resubmit the identical sources with the `migration` map (`uid -> \"init\" | \"preserve\"`) to resolve them. Pass `device` (`{address, port}` for a TCP connection, or `{device_id}` for a device that IronLink has a route to, see `browse_network`) to act on a device over the session protocol instead of the server's own session; the response then names the device that answered in `device`."
+        description = "Compiles the supplied IEC sources and hands them to the hot-edit protocol. The first call establishes the running application session and reports `established`; each later call stages the compiled program as an edit candidate to activate with `hot_edit_test` and, once it has run under test, promote with `hot_edit_assemble`, or discard with `hot_edit_cancel`. With `device` the candidate is staged on that device, which already runs a program, and the result is `ack`. Compilation failures return the usual diagnostics; staging refusals return a stable V-code such as V4007 (layout change) or V4013 (candidate already staged). A V4010 refusal carries a `pairs` list of out-of-policy type changes; resubmit the identical sources with the `migration` map (`uid -> \"init\" | \"preserve\"`) to resolve them. `mode` is `change` (the default: a body edit, or a state migration when the layout differs) or `replace`, a Download: the layout is not compared, the application is replaced and re-initialised at the boundary, and only the `PERSISTENT` variables whose declaration is equal (the same stable variable ID and type) keep their value, while every other variable, `RETAIN` ones included, starts again. The accepted result lists the `PERSISTENT` variables that start again in `reinitialised` (`uid`, `name`, `reason`: `noStableId`, `notInCandidate`, `qualifierChanged`, `typeChanged`, `unsupportedType`). A variable whose meaning changes without a change of its declaration keeps its old value. A replace goes through `hot_edit_test` and `hot_edit_assemble` like any candidate and cannot be reverted once it runs (V4011); the `migration` map is not read in `replace` mode. Pass `device` (`{address, port}` for a TCP connection, or `{device_id}` for a device that IronLink has a route to, see `browse_network`) to act on a device over the session protocol instead of the server's own session; the response then names the device that answered in `device`."
     )]
     async fn hot_edit_accept(
         &self,
@@ -369,11 +369,13 @@ impl IronPlcMcp {
                 Err(response) => response,
                 Ok(candidate) => {
                     let migration = input.migration;
+                    let mode = input.mode;
                     self.run_hot_edit(input.device, move |target| {
                         tools::hot_edit::send_candidate(
                             candidate.program,
                             candidate.ids_out_of_sync,
                             &migration,
+                            mode,
                             target,
                         )
                     })

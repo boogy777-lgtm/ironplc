@@ -25,8 +25,14 @@ host refuses the edit:
 The running application is untouched and continues to scan with the original
 process image.
 
+A candidate that must come with other image sizes is a download: accept it in
+``replace`` mode, ``{"command":"acceptEdits","program":[...],"mode":"replace"}``. A
+replace does not compare the process-image sizes; the new application starts from
+its initial values and only its ``PERSISTENT`` variables with an equal declaration
+keep their value (see :ref:`ironplcvm-replace`).
+
 To fix this error, compile the candidate against the same hardware
 configuration as the running application so the input, output, and memory
 image sizes match exactly. If the process image must grow — new I/O modules,
-for example — that is a deployment change, not an online change: stop the
-runtime and load the candidate as a new application.
+for example — that is a deployment change, not an online change: send the candidate in
+``replace`` mode.

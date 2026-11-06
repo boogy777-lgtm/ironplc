@@ -313,7 +313,7 @@ fn same_fb_descriptors(a: &[FbTypeDescriptor], b: &[FbTypeDescriptor]) -> bool {
 /// Whether a field of an FB type is a STRING or a WSTRING, whose characters
 /// live outside its slot, so that the slot holds where the value is rather
 /// than the value.
-fn has_string_field(fields: &[FieldEntry]) -> bool {
+pub(super) fn has_string_field(fields: &[FieldEntry]) -> bool {
     fields
         .iter()
         .any(|field| matches!(field.field_type, FieldType::String | FieldType::WString))

@@ -11,6 +11,7 @@
 //! [`commands`] module exposes the same protocol to external clients as typed,
 //! line-delimited JSON commands with stable V-codes.
 
+mod candidate;
 mod commands;
 mod conversion;
 mod edit_guard;
@@ -30,6 +31,7 @@ mod problem_codes {
     include!(concat!(env!("OUT_DIR"), "/problem_codes.rs"));
 }
 
+pub use candidate::{AcceptMode, CandidateKind};
 pub use commands::{
     execute, parse_command, parse_response, render_command, render_response, BootNote,
     CandidateLost, Command, CommandError, DeviceIdentity, EditSpec, FaultNote, IdentityPayload,
@@ -47,8 +49,8 @@ pub use host::{
     AcceptedEdit, EditBaseline, HostMode, HostStatus, PendingEditRecord, RuntimeHost, ScanCommit,
 };
 pub use migration::{
-    IdentitySide, IdentitySubject, MigrationDecision, MigrationError, StateMigrationPlan,
-    TypeChangePair, UnidentifiedVariable,
+    replace_keep_plan, IdentitySide, IdentitySubject, KeepPlan, MigrationDecision, MigrationError,
+    ReinitReason, Reinitialised, StateMigrationPlan, TypeChangePair, UnidentifiedVariable,
 };
 pub use retained_state::{
     RetainedApplyError, RetainedDecodeError, RetainedImage, RetainedMismatch, RetainedTag,

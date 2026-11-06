@@ -22,9 +22,15 @@ V4008 and the original schedule keeps running:
    {"command":"acceptEdits","program":[...]}
    {"response":"error","vCode":"V4008","message":"candidate task schedule is incompatible with the active application"}
 
+To change the schedule on purpose, accept the candidate in ``replace`` mode:
+``{"command":"acceptEdits","program":[...],"mode":"replace"}``. A replace does not
+compare the task schedule; the new application starts from its initial values and
+only its ``PERSISTENT`` variables with an equal declaration keep their value (see
+:ref:`ironplcvm-replace`).
+
 To fix this error, keep the candidate's task configuration identical to the
 running application's — priorities, task types, intervals, and watchdog
 times must all match — and change only program logic. When the schedule
-itself must change, stop the runtime and load the candidate as a new
-application; a tested schedule change cannot be untested back because task
-identity is not part of the carried-over state.
+itself must change, send the candidate in ``replace`` mode; a tested schedule
+change cannot be untested back because task identity is not part of the
+carried-over state.

@@ -13,6 +13,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::candidate::CandidateKind;
 use crate::commands::CommandError;
 use crate::edit_guard::{
     edit_answer, EditCommand, EditState, Steps, FINALIZE_ALL_LABEL, FINALIZE_ALL_STEPS,
@@ -22,8 +23,8 @@ use crate::host::{HostStatus, PendingEditRecord};
 
 /// Where the unfinished edit stands, in the words a client shows.
 ///
-/// A coarser view of the edit state: whether the candidate is a migration
-/// candidate matters only once it runs (a migration candidate has no revert),
+/// A coarser view of the edit state: the kind of the candidate matters only
+/// once it runs (a migration or a replace has no revert),
 /// and a requested swap that has not yet reached a scan boundary is one
 /// transient stage whichever way it goes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -37,6 +38,8 @@ pub enum EditStage {
     Testing,
     /// The candidate of a state migration executes and cannot be reverted.
     TestingMigration,
+    /// The candidate of a replace (a download) executes and cannot be reverted.
+    TestingReplace,
     /// A test or an untest is requested and waits for the next scan boundary.
     SwapPending,
 }
@@ -148,12 +151,17 @@ pub const CANDIDATE_LOST_WARNING: &str = "a restart of the device loses this can
 fn stage(state: EditState) -> EditStage {
     match state {
         EditState::NoCandidate => EditStage::Idle,
-        EditState::Accepted { migration: _ } => EditStage::Accepted,
-        EditState::Testing { migration: false } => EditStage::Testing,
-        EditState::Testing { migration: true } => EditStage::TestingMigration,
-        EditState::TestPending { migration: _ } | EditState::UntestPending => {
-            EditStage::SwapPending
-        }
+        EditState::Accepted { kind: _ } => EditStage::Accepted,
+        EditState::Testing {
+            kind: CandidateKind::Change,
+        } => EditStage::Testing,
+        EditState::Testing {
+            kind: CandidateKind::Migrate,
+        } => EditStage::TestingMigration,
+        EditState::Testing {
+            kind: CandidateKind::Replace,
+        } => EditStage::TestingReplace,
+        EditState::TestPending { kind: _ } | EditState::UntestPending => EditStage::SwapPending,
     }
 }
 
@@ -165,6 +173,7 @@ fn warning(stage: EditStage) -> Option<&'static str> {
         EditStage::Accepted
         | EditStage::Testing
         | EditStage::TestingMigration
+        | EditStage::TestingReplace
         | EditStage::SwapPending => Some(CANDIDATE_LOST_WARNING),
     }
 }
@@ -175,9 +184,9 @@ fn warning(stage: EditStage) -> Option<&'static str> {
 fn next_command(state: EditState) -> Option<EditCommand> {
     match state {
         EditState::NoCandidate => Some(EditCommand::Accept),
-        EditState::Accepted { migration: _ } => Some(EditCommand::Test),
-        EditState::Testing { migration: _ } => Some(EditCommand::Assemble),
-        EditState::TestPending { migration: _ } | EditState::UntestPending => None,
+        EditState::Accepted { kind: _ } => Some(EditCommand::Test),
+        EditState::Testing { kind: _ } => Some(EditCommand::Assemble),
+        EditState::TestPending { kind: _ } | EditState::UntestPending => None,
     }
 }
 
@@ -228,8 +237,13 @@ mod tests {
         pending: Option<PendingSwap>,
         migration: bool,
     ) -> EditView {
+        let kind = if migration {
+            CandidateKind::Migrate
+        } else {
+            CandidateKind::Change
+        };
         view_of(
-            edit_state(candidate_staged, active_is_candidate, pending, migration),
+            edit_state(candidate_staged, active_is_candidate, pending, kind),
             None,
         )
     }

@@ -127,6 +127,7 @@ fn session_when_connected_by_a_method_then_identity_first_and_the_edit_commands_
         program: container(),
         edit: None,
         migration: Default::default(),
+        mode: Default::default(),
     };
     assert_eq!(session.send(&accept).unwrap(), Response::Ack);
     let status = session.send(&Command::GetStatus).unwrap();
