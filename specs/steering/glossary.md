@@ -263,6 +263,56 @@ connection of ADR-0065.
 *Not to be confused with:* the remembered connection path. A session says
 nothing about whether the device runs the project's program.
 
+## Online model terms
+
+These words describe what a running device keeps and where an online edit
+stands. "Persistent" has two meanings in IEC 61131-3 practice, and the entries
+keep them apart: one is about an online change, the other about a restart and a
+download.
+
+### Retained variable
+
+A variable whose value is meant to survive a restart of the device: one
+declared `RETAIN` or `PERSISTENT`. The saved values of an application are its
+retained image. `PERSISTENT` adds survival across a download when the
+declaration is equal (as in CODESYS).
+
+*Not to be confused with:* the persistent part. A retained variable is about a
+restart; the persistent part is about an online change, and holds variables of
+every qualifier.
+
+### Persistent part
+
+The part of the application state that is read after the scan that wrote it:
+the global variables, the program variables and the function block instance
+data ([ADR-0073](../adrs/0073-state-layout-is-the-persistent-part.md)). An
+online change keeps all of it, and its layout is the layout an online change
+compares.
+
+*Not to be confused with:* a variable declared `PERSISTENT`. The persistent part
+is kept by an online change whatever the qualifier of a variable; it is lost at
+a restart unless the variable is retained.
+
+### Run state
+
+Whether the device executes scan rounds: running or stopped. Run and Stop change
+it and compile nothing. A stopped device still answers every session command.
+
+*Not to be confused with:* the edit stage (a device can run or stop while an
+edit is in any stage), or a fault, which stops the scan by itself and is
+reported apart from the run state.
+
+### Edit stage
+
+Where an unfinished online edit stands on the device: none (no candidate),
+accepted (the candidate is loaded and does not execute), or testing (the
+candidate executes and the original is kept for untest). Assemble ends the edit
+and makes the candidate permanent; cancel and untest are the ways back.
+
+*Not to be confused with:* a stage of a plan, or the runtime method `stage`,
+which is the accept operation. In this vocabulary the word "stage" alone names
+the edit stage.
+
 ---
 
 ## How the terms compose
