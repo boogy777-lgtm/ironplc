@@ -57,12 +57,14 @@ fn expected(state: State) -> [Result<(), OnlineChangeError>; 5] {
             Err(AssembleWithoutTest),
             OK,
         ],
+        // Cancel is allowed here since stage 4b: the host reverts at the next
+        // boundary and discards the candidate there (two steps, one command).
         State::Testing => [
             Err(CandidateAlreadyStaged),
             Err(NotAllowedInThisMode),
             OK,
             OK,
-            Err(NotAllowedInThisMode),
+            OK,
         ],
         State::TestingMigration => [
             Err(CandidateAlreadyStaged),

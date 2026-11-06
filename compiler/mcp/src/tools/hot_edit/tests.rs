@@ -663,7 +663,7 @@ fn build_cancel_response_when_candidate_staged_then_discards_candidate() {
 }
 
 #[test]
-fn build_cancel_response_while_testing_then_v4015() {
+fn build_cancel_response_while_testing_then_the_candidate_is_reverted_and_discarded_in_one_call() {
     let (cache, session) = make_state();
     session_with_staged_candidate(&cache, &session, "Counter := Counter + 10;");
     let tested = build_test_response(&session);
@@ -671,8 +671,11 @@ fn build_cancel_response_while_testing_then_v4015() {
 
     let resp = build_cancel_response(&session);
 
-    assert!(!resp.ok);
-    assert_eq!(resp.v_code.as_deref(), Some("V4015"));
+    assert!(resp.ok, "{:?} {:?}", resp.v_code, resp.message);
+    let status = resp.status.unwrap();
+    assert_eq!(status.mode, HostMode::Normal);
+    assert_eq!(status.candidate, None);
+    assert_eq!(status.edit.unwrap().stage, ironplc_runtime::EditStage::Idle);
 }
 
 #[test]

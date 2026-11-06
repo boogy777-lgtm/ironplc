@@ -475,7 +475,14 @@ impl CrossloadReceiver {
     /// from this unit's lifecycle.
     pub fn cancel_candidate(&mut self, host: &mut RuntimeHost) -> CrossloadMessage {
         match host.cancel() {
-            Ok(()) => CrossloadMessage::Accepted,
+            // A mirror that executes the candidate (a unit that took over under
+            // Test) reverts and discards at its boundary; this unit drives no
+            // scans, so the boundary is here. Without a swap pending it is a
+            // no-op.
+            Ok(()) => match host.apply_pending_at_boundary() {
+                Ok(()) => CrossloadMessage::Accepted,
+                Err(_) => self.refused(CrossloadRefusal::CandidateRejected),
+            },
             Err(_) => self.refused(CrossloadRefusal::CandidateRejected),
         }
     }

@@ -25,7 +25,8 @@ use std::path::PathBuf;
 
 use common::edit_states::{body_candidate, host_in, State, STATES};
 use ironplc_runtime::{
-    edit_view, CommandError, EditCommand, EditStage, EditView, OnlineChangeError, RuntimeHost,
+    edit_view, CommandError, EditCommand, EditStage, EditView, HostMode, OnlineChangeError,
+    RuntimeHost,
 };
 
 /// The environment variable that makes the golden test rewrite its file.
@@ -132,11 +133,11 @@ fn edit_view_when_finalize_all_then_it_is_enabled_when_accept_is_and_its_steps_r
         let finalize = &view.commands.finalize_all;
 
         assert_eq!(
-            finalize.view.enabled,
+            finalize.enabled,
             apply(&mut host_in(state), EditCommand::Accept).is_ok(),
             "{state:?}"
         );
-        if finalize.view.enabled {
+        if finalize.enabled {
             // The client runs the steps in order; a swap applies at the scan
             // boundary between them.
             let mut host = host_in(state);
@@ -150,6 +151,39 @@ fn edit_view_when_finalize_all_then_it_is_enabled_when_accept_is_and_its_steps_r
                 edit_view(&status).stage,
                 EditStage::Idle,
                 "finalized from {state:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn edit_view_when_a_command_has_steps_then_the_host_runs_them_all_at_the_next_boundary() {
+    for state in STATES {
+        for command in EditCommand::ALL {
+            let steps = view_in(state).commands.edit[&command].steps.clone();
+            if steps.is_empty() {
+                continue;
+            }
+            let mut host = host_in(state);
+
+            assert_eq!(apply(&mut host, command), Ok(()), "{command:?} in {state:?}");
+            // One command was sent: the swap of its first step waits for the
+            // boundary and the view says so.
+            assert_eq!(
+                edit_view(&host.status()).stage,
+                EditStage::SwapPending,
+                "{command:?} in {state:?}"
+            );
+            host.run(1, || 0).unwrap();
+
+            // The boundary applied the revert and discarded the candidate.
+            let status = host.status();
+            assert_eq!(status.candidate, None, "{command:?} in {state:?}");
+            assert_eq!(status.mode, HostMode::Normal, "{command:?} in {state:?}");
+            assert_eq!(
+                edit_view(&status).stage,
+                EditStage::Idle,
+                "{command:?} in {state:?}"
             );
         }
     }

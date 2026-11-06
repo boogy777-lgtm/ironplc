@@ -28,13 +28,16 @@
 //! binding's surfaces have no binding there and answer the codec error,
 //! the same shape a vocabulary the session does not speak answers.
 //!
-//! The FSM-advancing commands (`testEdits`, `untestEdits`, `assembleEdits`)
-//! only *request* a swap; the host applies it at the next scan boundary
-//! ([`RuntimeHost::run_paced_round`]). The loop does not wait for the period
-//! for it: the next round is the boundary, and the response line is written
-//! after it ([`Executing::awaits_boundary`]), so the acknowledgment means the
-//! swap has been applied and a client reads back state that has actually
-//! switched. A trap in a round is the application's own fault: the device
+//! The commands that swap the executing artifact (`testEdits`, `untestEdits`,
+//! and `cancelEdits` while the candidate executes, which is untest then cancel)
+//! only *request* the swap; the host applies it at the next scan boundary
+//! ([`RuntimeHost::run_paced_round`]) and runs the rest of the command's steps
+//! there. The loop does not wait for the period for it: the next round is the
+//! boundary, and the response line is written after it
+//! ([`Executing::awaits_boundary`]), so the acknowledgment means the swap has
+//! been applied and a client reads back state that has actually switched.
+//! `assembleEdits` takes effect at once; it also answers after a boundary, so
+//! that the promoted program has executed by the time the client reads. A trap in a round is the application's own fault: the device
 //! scans no more, keeps answering, and reports the fault in `identity`.
 //!
 //! `assembleEdits` is also the single commit point (ADR-0064 amendment): the
@@ -305,9 +308,10 @@ pub(crate) struct Executing {
 
 impl Executing {
     /// Whether the response has to wait for a scan boundary: the command is an
-    /// acknowledged request of a swap (`testEdits`, `untestEdits`,
-    /// `assembleEdits`), and the acknowledgment means the swap has been
-    /// applied, not merely recorded.
+    /// acknowledged request of a swap (`testEdits`, `untestEdits`, or a command
+    /// with steps that starts with one, such as `cancelEdits` under Test) or
+    /// `assembleEdits`, and the acknowledgment means the swap has been applied,
+    /// not merely recorded.
     pub(crate) fn awaits_boundary(&self) -> bool {
         self.advances && matches!(self.response, Response::Ack)
     }
@@ -341,9 +345,12 @@ pub(crate) fn execute_line<P: NicPort>(
         }
         Ok(command) => {
             let commits = matches!(command, Command::AssembleEdits);
-            let advances = advances_state(&command);
             let pair_notice = pair_notice_for(&command);
+            let advances_by_name = advances_state(&command);
             let mut response = execute(command, host, &device.identity());
+            // Whatever command left a swap pending has a boundary to wait for;
+            // which commands do is the host's table, not a list of names here.
+            let advances = advances_by_name || host.swap_pending();
             // The facts of the device (what it would boot, what it did with
             // the retained file at boot, whether its scan trapped): the
             // device owns them, the runtime layer leaves the fields empty.
@@ -673,9 +680,12 @@ fn set_device_settings_line(device: &mut Device, settings: &Entries) -> io::Resu
     }
 }
 
-/// Whether acknowledging `command` advances the hot-edit FSM at a scan
-/// boundary. `testEdits`/`untestEdits`/`assembleEdits` only *request* a swap;
-/// `acceptEdits` and `cancelEdits` take effect without one.
+/// Whether the response of `command` is written after a scan boundary whatever
+/// the host did with it: `assembleEdits` is promoted at once, and answers after
+/// one round so that the promoted program has executed (the MCP tool does the
+/// same). `testEdits` and `untestEdits` leave a pending swap, which makes any
+/// command wait ([`RuntimeHost::swap_pending`]); `acceptEdits` takes effect
+/// without a boundary.
 fn advances_state(command: &Command) -> bool {
     matches!(
         command,

@@ -349,7 +349,10 @@ fn dispatch(command: Command, session: &mut HotEditSession, drive_scan: bool) ->
     match execute(command, host, &mcp_device_identity()) {
         Response::Status(status) => HotEditResponse::ok("ack", status),
         Response::Ack => {
-            if drive_scan {
+            // A command that left a swap pending (cancel under Test is untest,
+            // then cancel) is finished by the boundary round, as one that
+            // advances the FSM by name.
+            if drive_scan || host.swap_pending() {
                 if let Err(error) = host.run(1, || 0) {
                     return HotEditResponse::runtime_error(error);
                 }

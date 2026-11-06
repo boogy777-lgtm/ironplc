@@ -187,12 +187,12 @@
           "label": "Assemble"
         },
         "cancel": {
-          "enabled": false,
+          "enabled": true,
           "label": "Cancel",
-          "reason": {
-            "code": "V4015",
-            "text": "operation not allowed in the current hot-edit phase"
-          }
+          "steps": [
+            "untest",
+            "cancel"
+          ]
         },
         "finalizeAll": {
           "enabled": false,

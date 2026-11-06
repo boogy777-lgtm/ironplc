@@ -38,7 +38,7 @@ pub use commands::{
 };
 pub use edit_guard::EditCommand;
 pub use edit_view::{
-    edit_view, CommandView, Commands, EditStage, EditView, FinalizeAll, NextCommand, Reason,
+    edit_view, CommandView, Commands, EditStage, EditView, NextCommand, Reason,
 };
 pub use error::{OnlineChangeError, RuntimeError};
 pub use generation::{ApplicationGeneration, LogicGeneration};

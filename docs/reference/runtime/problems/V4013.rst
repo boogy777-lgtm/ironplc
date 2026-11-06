@@ -23,8 +23,7 @@ A session accepts one edit and immediately tries to accept another:
    {"response":"error","vCode":"V4013","message":"a candidate is already staged"}
 
 To fix this error, decide the fate of the staged candidate first. Send
-``cancelEdits`` to discard it while the original artifact is active, or
-``assembleEdits`` to commit it — and note that neither is available once the
-candidate is under test, when only ``assembleEdits`` remains. Then send the
-new ``acceptEdits`` again; the second edit is refused again until the staged
-one is resolved.
+``cancelEdits`` to discard it, or ``assembleEdits`` to commit it after it has
+run under test — a candidate of a state migration that is under test can only be
+assembled. Then send the new ``acceptEdits`` again; the second edit is refused
+again until the staged one is resolved.

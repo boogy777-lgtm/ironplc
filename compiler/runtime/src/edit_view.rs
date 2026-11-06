@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::commands::CommandError;
 use crate::edit_guard::{
-    edit_guard, EditCommand, EditState, FINALIZE_ALL_LABEL, FINALIZE_ALL_STEPS,
+    edit_guard, EditCommand, EditState, Steps, FINALIZE_ALL_LABEL, FINALIZE_ALL_STEPS,
 };
 use crate::error::OnlineChangeError;
 use crate::host::HostStatus;
@@ -73,30 +73,25 @@ pub struct CommandView {
     /// Why the command is not allowed. Absent when it is.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<Reason>,
+    /// The commands that make up this one, in order; absent for a command that
+    /// is a single operation. For an edit command it is what the device runs
+    /// for the one command the client sends (Cancel while the candidate
+    /// executes is untest, then cancel). For `finalizeAll` it is what the
+    /// client runs, one command after the other.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub steps: Vec<EditCommand>,
 }
 
 impl CommandView {
     /// The view of a command that the table answers with `answer`.
-    fn new(label: &str, answer: Result<(), OnlineChangeError>) -> Self {
+    fn new(label: &str, answer: Result<Steps, OnlineChangeError>) -> Self {
         CommandView {
             enabled: answer.is_ok(),
             label: label.to_string(),
+            steps: answer.as_ref().map(|steps| steps.to_vec()).unwrap_or_default(),
             reason: answer.err().map(Reason::from),
         }
     }
-}
-
-/// The composite command "finalize all": the client runs the `steps` in
-/// order. It is enabled when the first step is, and carries the reason of
-/// that step when not.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FinalizeAll {
-    /// The enablement, label and reason, as for any command.
-    #[serde(flatten)]
-    pub view: CommandView,
-    /// The commands to run, in order.
-    pub steps: Vec<EditCommand>,
 }
 
 /// Every command of the view: the five edit commands, keyed by their wire
@@ -107,8 +102,8 @@ pub struct Commands {
     /// The edit commands. A new [`EditCommand`] is a new key.
     #[serde(flatten)]
     pub edit: BTreeMap<EditCommand, CommandView>,
-    /// The composite command.
-    pub finalize_all: FinalizeAll,
+    /// The composite command; its `steps` are always present.
+    pub finalize_all: CommandView,
 }
 
 /// The command that the Next item of a client runs.
@@ -175,15 +170,11 @@ pub(crate) fn view_of(state: EditState) -> EditView {
     // The composite row is enabled when its first step is. The pattern is
     // irrefutable: the row has at least one step by its type.
     let [first, ..] = FINALIZE_ALL_STEPS;
+    let mut finalize_all = CommandView::new(FINALIZE_ALL_LABEL, edit_guard(state, first));
+    finalize_all.steps = FINALIZE_ALL_STEPS.to_vec();
     EditView {
         stage: stage(state),
-        commands: Commands {
-            edit,
-            finalize_all: FinalizeAll {
-                view: CommandView::new(FINALIZE_ALL_LABEL, edit_guard(state, first)),
-                steps: FINALIZE_ALL_STEPS.to_vec(),
-            },
-        },
+        commands: Commands { edit, finalize_all },
         next: next_command(state).map(|command| NextCommand {
             command,
             label: command.label().to_string(),
@@ -242,7 +233,7 @@ mod tests {
         assert_eq!(view.stage, EditStage::Idle);
         assert_eq!(enabled(&view), [EditCommand::Accept]);
         assert_eq!(next(&view), Some(EditCommand::Accept));
-        assert!(view.commands.finalize_all.view.enabled);
+        assert!(view.commands.finalize_all.enabled);
         assert_eq!(code(&view, EditCommand::Test), Some("V4012"));
         assert_eq!(code(&view, EditCommand::Untest), Some("V4014"));
     }
@@ -265,9 +256,30 @@ mod tests {
         let view = view(true, true, None, false);
 
         assert_eq!(view.stage, EditStage::Testing);
-        assert_eq!(enabled(&view), [EditCommand::Untest, EditCommand::Assemble]);
+        assert_eq!(
+            enabled(&view),
+            [EditCommand::Untest, EditCommand::Assemble, EditCommand::Cancel]
+        );
         assert_eq!(next(&view), Some(EditCommand::Assemble));
-        assert_eq!(code(&view, EditCommand::Cancel), Some("V4015"));
+        assert_eq!(code(&view, EditCommand::Cancel), None);
+    }
+
+    #[test]
+    fn edit_view_when_testing_then_cancel_shows_its_two_steps_and_no_other_command_has_any() {
+        let view = view(true, true, None, false);
+
+        assert_eq!(
+            view.commands.edit[&EditCommand::Cancel].steps,
+            [EditCommand::Untest, EditCommand::Cancel]
+        );
+        assert_eq!(
+            EditCommand::ALL
+                .into_iter()
+                .filter(|command| *command != EditCommand::Cancel)
+                .filter(|command| !view.commands.edit[command].steps.is_empty())
+                .count(),
+            0
+        );
     }
 
     #[test]
@@ -291,7 +303,7 @@ mod tests {
             assert_eq!(view.stage, EditStage::SwapPending);
             assert_eq!(enabled(&view), []);
             assert_eq!(next(&view), None);
-            assert!(!view.commands.finalize_all.view.enabled);
+            assert!(!view.commands.finalize_all.enabled);
         }
     }
 
@@ -344,11 +356,11 @@ mod tests {
             let finalize = &view.commands.finalize_all;
 
             assert_eq!(
-                finalize.view.enabled,
+                finalize.enabled,
                 view.commands.edit[&EditCommand::Accept].enabled
             );
             assert_eq!(
-                finalize.view.reason,
+                finalize.reason,
                 view.commands.edit[&EditCommand::Accept].reason
             );
             assert_eq!(
@@ -359,7 +371,7 @@ mod tests {
                     EditCommand::Assemble
                 ]
             );
-            assert_eq!(finalize.view.label, "Finalize all");
+            assert_eq!(finalize.label, "Finalize all");
         }
     }
 
