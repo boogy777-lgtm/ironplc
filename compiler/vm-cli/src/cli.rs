@@ -13,6 +13,7 @@ use ironplc_vm::{VariableView, Vm, VmBuffers};
 use serde_json::json;
 
 use crate::error::{self, VmError};
+use crate::pacer::Pacer;
 
 const BUILD_OPT_LEVEL: &str = env!("BUILD_OPT_LEVEL");
 
@@ -64,23 +65,17 @@ pub fn run(path: &Path, dump_vars: Option<&Path>, scans: Option<u64>) -> Result<
         )
     })?;
 
-    let start = Instant::now();
+    let mut pacer = Pacer::start(stop_flag, scans);
     let mut rounds = 0u64;
     loop {
-        if stop_flag.load(Ordering::Relaxed) {
+        if pacer.should_stop(rounds) {
             running.request_stop();
         }
         if running.stop_requested() {
             break;
         }
-        if let Some(max) = scans {
-            if rounds >= max {
-                break;
-            }
-        }
 
-        let uptime_us = start.elapsed().as_micros() as u64;
-        if let Err(ctx) = running.run_round(uptime_us) {
+        if let Err(ctx) = running.run_round(pacer.uptime_us()) {
             let faulted = running.fault(ctx);
             let err = VmError::from_trap(faulted.trap(), faulted.task_id(), faulted.instance_id());
             if let Some(dump_path) = dump_vars {
@@ -90,15 +85,7 @@ pub fn run(path: &Path, dump_vars: Option<&Path>, scans: Option<u64>) -> Result<
         }
         rounds += 1;
 
-        // Sleep until the next cyclic task is due to avoid burning CPU.
-        // Freewheeling-only programs (next_due_us returns None) run every round.
-        if let Some(due_us) = running.next_due_us() {
-            let now_us = start.elapsed().as_micros() as u64;
-            let sleep_us = due_us.saturating_sub(now_us);
-            if sleep_us > 0 {
-                std::thread::sleep(std::time::Duration::from_micros(sleep_us));
-            }
-        }
+        pacer.wait_for(running.next_due_us());
     }
 
     let stopped = running.stop();

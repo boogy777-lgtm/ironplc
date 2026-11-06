@@ -10,6 +10,7 @@ mod discovery;
 mod error;
 mod ha_pair;
 mod logger;
+mod pacer;
 mod serve;
 #[cfg(test)]
 mod serve_device_tests;
