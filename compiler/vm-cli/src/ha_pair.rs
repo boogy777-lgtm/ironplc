@@ -114,6 +114,9 @@ pub(crate) fn pump<P: NicPort>(
             None => log::error!("the peer committed but this unit has no slot store"),
         }
     }
+    // The tick mirrors the pair's edit on this host without a command, so the
+    // note of the unfinished edit is made to say what the edit is now.
+    device.edit_changed(host);
 }
 
 /// Applies the pair link's verdict to the host's execution permit (the

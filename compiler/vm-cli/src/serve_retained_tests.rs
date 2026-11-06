@@ -103,7 +103,7 @@ pub(crate) fn host_after(step: i32, rounds: u64) -> RuntimeHost {
 }
 
 /// Runs `lines` through one session and returns the parsed response per line.
-fn session(
+pub(crate) fn session(
     host: &mut RuntimeHost,
     device: &mut Device,
     store: Option<&mut SlotStore>,
@@ -129,7 +129,7 @@ fn session(
 }
 
 /// The `identity` answer of the device.
-fn identity(host: &mut RuntimeHost, device: &mut Device) -> serde_json::Value {
+pub(crate) fn identity(host: &mut RuntimeHost, device: &mut Device) -> serde_json::Value {
     session(host, device, None, &[r#"{"command":"identity"}"#]).remove(0)
 }
 

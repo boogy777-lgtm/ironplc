@@ -15,6 +15,11 @@
 //! A write that fails is V6018. At the periodic point it is logged and the
 //! device goes on; at the other two the caller reports it (the wire at
 //! assemble, the exit of the process at a stop). Nothing stops the device.
+//!
+//! The note of an unfinished edit ([`EditMarkerStore`]) is kept beside it:
+//! [`Device::edit_changed`] makes the file say what the host's edit is, and the
+//! boot reads and removes it, so that `identity` reports the candidate that a
+//! restart lost.
 
 use ironplc_runtime::{IdentityPayload, RuntimeHost, StatusPayload};
 
@@ -45,6 +50,18 @@ impl Device {
                 }
             }
             self.kept.retained_boot = Some(result);
+        }
+        if let Some(store) = &mut self.kept.edit_marker {
+            self.kept.candidate_lost = store.boot();
+        }
+    }
+
+    /// The edit of `host` may have changed (a command ran, a pair unit
+    /// mirrored one): the note of the unfinished edit is made to say what the
+    /// edit is now. Writes only when the note changes.
+    pub(crate) fn edit_changed(&mut self, host: &RuntimeHost) {
+        if let Some(store) = &mut self.kept.edit_marker {
+            store.sync(&host.status());
         }
     }
 
@@ -86,6 +103,7 @@ impl Device {
     pub(crate) fn complete_identity(&self, payload: &mut IdentityPayload) {
         payload.persisted_content_hash = self.kept.persisted_content_hash.clone();
         payload.retained = self.kept.retained_boot.map(BootResult::note);
+        payload.candidate_lost = self.kept.candidate_lost.clone();
         payload.fault = self.fault.clone();
         payload.run_state = self.run_state;
     }

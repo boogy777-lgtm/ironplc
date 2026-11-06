@@ -31,13 +31,16 @@ mod problem_codes {
 }
 
 pub use commands::{
-    execute, parse_command, parse_response, render_command, render_response, BootNote, Command,
-    CommandError, DeviceIdentity, EditSpec, FaultNote, IdentityPayload, MigrationDecisionSpec,
-    RedundancyIdentity, Response, RunState, StatusPayload, TypeChangeDetail, DEFAULT_SESSION_PORT,
-    SESSION_PROTOCOL_VERSION,
+    execute, parse_command, parse_response, render_command, render_response, BootNote,
+    CandidateLost, Command, CommandError, DeviceIdentity, EditSpec, FaultNote, IdentityPayload,
+    MigrationDecisionSpec, RedundancyIdentity, Response, RunState, StatusPayload, TypeChangeDetail,
+    DEFAULT_SESSION_PORT, SESSION_PROTOCOL_VERSION,
 };
 pub use edit_guard::EditCommand;
-pub use edit_view::{edit_view, CommandView, Commands, EditStage, EditView, NextCommand, Reason};
+pub use edit_view::{
+    edit_view, CommandView, Commands, EditStage, EditView, NextCommand, Reason,
+    CANDIDATE_LOST_WARNING,
+};
 pub use error::{OnlineChangeError, RuntimeError, StagedEdit};
 pub use generation::{ApplicationGeneration, LogicGeneration};
 pub use host::{

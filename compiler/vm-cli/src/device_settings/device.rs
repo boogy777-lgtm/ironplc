@@ -35,9 +35,10 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use ironplc_cli_support::durable_file;
-use ironplc_runtime::{DeviceIdentity, FaultNote, RunState, RuntimeHost};
+use ironplc_runtime::{CandidateLost, DeviceIdentity, FaultNote, RunState, RuntimeHost};
 
 use super::{os_random, DeviceSetting, DeviceSettings, Entries, Random, SettingsError};
+use crate::edit_marker_store::EditMarkerStore;
 use crate::error::{self, VmError};
 use crate::retained_store::RetainedStore;
 use crate::slot_store::suffix;
@@ -90,6 +91,12 @@ struct Kept {
     /// session reports hashes. Set at boot and after each commit that reached
     /// the slot store.
     persisted_content_hash: Option<String>,
+    /// The note file of an unfinished edit beside the served container; `None`
+    /// for a device in memory.
+    edit_marker: Option<EditMarkerStore>,
+    /// The edit the previous run left unfinished, found in the note file at
+    /// boot; `None` when there was none, and before boot.
+    candidate_lost: Option<CandidateLost>,
 }
 
 impl Device {
@@ -139,6 +146,8 @@ impl Device {
                 retained: Some(RetainedStore::beside(served)),
                 retained_boot: None,
                 persisted_content_hash: None,
+                edit_marker: Some(EditMarkerStore::beside(served)),
+                candidate_lost: None,
             },
             fault: None,
             run_state: RunState::Running,
@@ -164,6 +173,8 @@ impl Device {
                 retained: None,
                 retained_boot: None,
                 persisted_content_hash: None,
+                edit_marker: None,
+                candidate_lost: None,
             },
             fault: None,
             run_state: RunState::Running,

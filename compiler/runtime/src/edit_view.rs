@@ -131,7 +131,17 @@ pub struct EditView {
     /// pending (`stage` says so): there is nothing to run until the boundary.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next: Option<NextCommand>,
+    /// What the engineer should know about the edit as it stands. Present
+    /// while a candidate exists: it lives in RAM only, and a restart of the
+    /// device loses it ([`CANDIDATE_LOST_WARNING`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub warning: Option<String>,
 }
+
+/// The warning of an edit with a candidate, defined once. The candidate is not
+/// kept across a restart (owner decision): the device boots the assembled
+/// application and its boot note says the candidate was lost.
+pub const CANDIDATE_LOST_WARNING: &str = "a restart of the device loses this candidate";
 
 /// The stage of an edit state. Exhaustive: a new state does not compile until
 /// it is named here.
@@ -144,6 +154,18 @@ fn stage(state: EditState) -> EditStage {
         EditState::TestPending { migration: _ } | EditState::UntestPending => {
             EditStage::SwapPending
         }
+    }
+}
+
+/// The warning that goes with a stage. Exhaustive: a new stage does not
+/// compile until it says whether it has a candidate to lose.
+fn warning(stage: EditStage) -> Option<&'static str> {
+    match stage {
+        EditStage::Idle => None,
+        EditStage::Accepted
+        | EditStage::Testing
+        | EditStage::TestingMigration
+        | EditStage::SwapPending => Some(CANDIDATE_LOST_WARNING),
     }
 }
 
@@ -176,13 +198,15 @@ pub(crate) fn view_of(state: EditState, pending: Option<&PendingEditRecord>) -> 
     let [first, ..] = FINALIZE_ALL_STEPS;
     let mut finalize_all = CommandView::new(FINALIZE_ALL_LABEL, edit_answer(state, first, pending));
     finalize_all.steps = FINALIZE_ALL_STEPS.to_vec();
+    let stage = stage(state);
     EditView {
-        stage: stage(state),
+        stage,
         commands: Commands { edit, finalize_all },
         next: next_command(state).map(|command| NextCommand {
             command,
             label: command.label().to_string(),
         }),
+        warning: warning(stage).map(str::to_string),
     }
 }
 
@@ -398,6 +422,33 @@ mod tests {
             serde_json::json!(["accept", "test", "assemble"])
         );
         assert_eq!(json["commands"]["finalizeAll"]["label"], "Finalize all");
+    }
+
+    #[test]
+    fn edit_view_when_a_candidate_exists_then_it_warns_that_a_restart_loses_it() {
+        for (candidate, active, pending, migration) in [
+            (true, false, None, false),
+            (true, false, None, true),
+            (true, true, None, false),
+            (true, true, None, true),
+            (true, false, Some(PendingSwap::Test), false),
+        ] {
+            let view = view(candidate, active, pending, migration);
+
+            assert_eq!(
+                view.warning.as_deref(),
+                Some("a restart of the device loses this candidate")
+            );
+        }
+    }
+
+    #[test]
+    fn edit_view_when_no_candidate_then_there_is_no_warning_on_the_wire() {
+        let view = view(false, false, None, false);
+        let json = serde_json::to_value(&view).unwrap();
+
+        assert_eq!(view.warning, None);
+        assert!(json.get("warning").is_none());
     }
 
     #[test]

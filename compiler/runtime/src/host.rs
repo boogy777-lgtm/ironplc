@@ -148,6 +148,10 @@ pub struct HostStatus {
     pub rounds: u64,
     /// The pending-edit record written at Accept, if a candidate is staged.
     pub pending_edit: Option<PendingEditRecord>,
+    /// The `content_hash` of the staged candidate's header, if one is staged;
+    /// the all-zero hash means the writer of the container computed none. What
+    /// a device that keeps a note of the unfinished edit writes into it.
+    pub candidate_content_hash: Option<[u8; HASH_LEN]>,
     /// The `content_hash` of the normal artifact's header, as the host loaded
     /// it. The host does not recompute it; the all-zero hash means the writer
     /// of the container computed none.
@@ -496,6 +500,10 @@ impl RuntimeHost {
             migration: self.migration.is_some(),
             rounds: self.rounds,
             pending_edit: self.pending_edit.clone(),
+            candidate_content_hash: self
+                .candidate
+                .as_ref()
+                .map(|candidate| candidate.header.content_hash),
             content_hash: self.normal.header.content_hash,
             layout_hash: self.normal.header.layout_hash,
             edit_state: self.edit_state(),

@@ -110,7 +110,8 @@
         "command": "test",
         "label": "Test"
       },
-      "stage": "accepted"
+      "stage": "accepted",
+      "warning": "a restart of the device loses this candidate"
     }
   },
   {
@@ -167,7 +168,8 @@
         "command": "test",
         "label": "Test"
       },
-      "stage": "accepted"
+      "stage": "accepted",
+      "warning": "a restart of the device loses this candidate"
     }
   },
   {
@@ -224,7 +226,8 @@
         "command": "assemble",
         "label": "Assemble"
       },
-      "stage": "testing"
+      "stage": "testing",
+      "warning": "a restart of the device loses this candidate"
     }
   },
   {
@@ -285,7 +288,8 @@
         "command": "assemble",
         "label": "Assemble"
       },
-      "stage": "testingMigration"
+      "stage": "testingMigration",
+      "warning": "a restart of the device loses this candidate"
     }
   },
   {
@@ -346,7 +350,8 @@
           }
         }
       },
-      "stage": "swapPending"
+      "stage": "swapPending",
+      "warning": "a restart of the device loses this candidate"
     }
   },
   {
@@ -407,7 +412,8 @@
           }
         }
       },
-      "stage": "swapPending"
+      "stage": "swapPending",
+      "warning": "a restart of the device loses this candidate"
     }
   },
   {
@@ -468,7 +474,8 @@
           }
         }
       },
-      "stage": "swapPending"
+      "stage": "swapPending",
+      "warning": "a restart of the device loses this candidate"
     }
   }
 ]

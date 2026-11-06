@@ -441,6 +441,10 @@ pub(crate) fn finish_line<P: NicPort>(
             }
         }
     }
+    // The note of the unfinished edit follows the host: after the commit, so an
+    // assemble that reached the slot store removes it, and whatever the answer,
+    // because the promotion in RAM stands in every case.
+    device.edit_changed(host);
     // The pair hears about a committed lifecycle only after the
     // local commit stands (a V6012 answer owes the peer nothing).
     if acked && rendered.is_none() {

@@ -151,6 +151,7 @@ fn identity_response_of(
         redundancy,
         persisted_content_hash: None,
         retained: None,
+        candidate_lost: None,
         fault: None,
         run_state: RunState::Running,
     }))
@@ -660,6 +661,33 @@ fn identity_when_stored_item_notes_then_fields_round_trip() {
         serde_json::json!({"result": "discarded", "reason": "otherApplication"})
     );
     assert_eq!(parse_response(&line).unwrap(), Response::Identity(payload));
+}
+
+#[test]
+fn identity_when_candidate_lost_then_the_note_round_trips_with_name_origin_and_stage() {
+    let Response::Identity(mut payload) = identity_response(None) else {
+        panic!("identity_response builds an identity");
+    };
+    payload.candidate_lost = Some(crate::CandidateLost {
+        name: Some("fix pump".into()),
+        origin: None,
+        stage: Some(crate::EditStage::Testing),
+    });
+    let line = render_response(&Response::Identity(payload.clone())).unwrap();
+    let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+
+    assert_eq!(
+        value["candidateLost"],
+        serde_json::json!({"name": "fix pump", "stage": "testing"})
+    );
+    assert_eq!(parse_response(&line).unwrap(), Response::Identity(payload));
+}
+
+#[test]
+fn identity_when_no_candidate_was_lost_then_the_field_is_absent() {
+    let line = render_response(&identity_response(None)).unwrap();
+
+    assert!(!line.contains("candidateLost"));
 }
 
 #[test]
