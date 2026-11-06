@@ -2,7 +2,7 @@
 
 status: accepted
 date: 2026-11-06
-amended: 2026-11-06 (added Run and Stop, stage 3c)
+amended: 2026-11-06 (added Run and Stop, stage 3c; the HA pair on the loop, stage 3d)
 
 ## Context and Problem Statement
 
@@ -137,10 +137,10 @@ the device settings; session threads send it a command line with a reply channel
     counters on the same code the loop runs. The loop tests drive `DeviceLoop` one
     `step` at a time on a fake clock.
 
-Not part of this decision: the HA pair path (`serve_pair`, `ha_pair.rs`) keeps its
-own pump and keeps `drive_scan_round`, now documented as the path of the pair
-until it moves onto the loop (stage 3d of the plan); Run and Stop commands and the
-`runState` field (stage 3c); a Run command that clears a fault.
+Not part of this decision (as decided at the time): the HA pair path (`serve_pair`,
+`ha_pair.rs`), which kept its own pump until it moved onto the loop (stage 3d,
+below); Run and Stop commands and the `runState` field (stage 3c); a Run command
+that clears a fault.
 
 ### Consequences
 
@@ -155,8 +155,8 @@ until it moves onto the loop (stage 3d of the plan); Run and Stop commands and t
 - Good, because TCP gets the controlled stop the retained file needed.
 - Neutral, because a freewheeling program keeps a core busy while the device is
   connected or not, as `run` does today.
-- Bad, because the pair path now has a second way to run a round
-  (`drive_scan_round`) until stage 3d; it is the only caller and is marked.
+- Bad, because the pair path had a second way to run a round until stage 3d
+  (`drive_scan_round`); stage 3d deleted it.
 - Bad, because every command crosses a thread boundary and pays one channel hop;
   commands are rare and the hop is microseconds.
 
@@ -201,7 +201,7 @@ until it moves onto the loop (stage 3d of the plan); Run and Stop commands and t
   loop: a session sends commands, a second client is refused with V6014.
 - The existing `serve_tests.rs`, `serve_device_tests.rs` and
   `serve_retained_tests.rs` run unchanged on the scripted session of `Core`; the
-  HA pair tests are not touched.
+  HA pair tests ran against the pair path until stage 3d.
 
 ## Run and Stop (stage 3c)
 
@@ -258,9 +258,9 @@ run state, and two commands that change it.
    without a round of logic, through the path the loop already uses for a
    faulted device (`apply_pending_at_boundary`), so the acknowledgment still
    means applied. `Core::round` has one test for both: the device does not scan.
-8. **The pair path.** The HA pair path does not run on the loop yet (stage 3d)
-   and does not scan between commands, so it has no scan to start or stop and
-   answers both commands with V4022 rather than report a state it cannot keep.
+8. **The pair path.** Stage 3d put the HA pair on the loop, so it has a scan to
+   start and stop and answers both commands like every device (see "HA pair on
+   the loop (stage 3d)"). It answered V4022 until then.
 9. **MCP.** `device_start` and `device_stop` take the `device` parameter of the
    other device tools (required: the in-process host has no scan loop) and send
    the command through the session client. They compile nothing.
@@ -272,6 +272,123 @@ are idempotent, a stop writes the retained file, a start of a faulted device is
 refused, a swap on a stopped device is applied without a round);
 `compiler/vm/src/scheduler.rs` tests the deadline restart; `serve_device.rs`
 runs the commands against a real process.
+
+## HA pair on the loop (stage 3d)
+
+The HA pair (`ironplcvm serve --ha-peer-bind`) was the last driver of the host
+that did not run on the loop: `serve_pair` kept its own command-driven loop
+(`recv_timeout`, a link tick per wait, a boundary round after a swap request), so
+a pair unit did not scan between commands. After this stage it is a composition
+of the loop, as the standalone and the simulated shells are.
+
+1. **One backend, not a second driver.** The loop owns an HA backend
+   (`Backend` in `device_loop.rs`): the shell of the standalone and the simulated
+   pair, or a `PairLink<P>` for any `NicPort`. `Core` holds the `Ha` dispatch
+   enum of `serve.rs` (now generic over the port, with the UDP binding as the
+   default), so `execute_line`, `finish_line` and `paced_round` are the same
+   functions for every composition. A hardware binding (EtherNet/IP) is another
+   `NicPort` under the same link: nothing in the loop changes. `serve_pair`
+   composes the host, the slot store, the device and the link, and hands them to
+   `serve_stdio`, the session of `serve`. `serve_pair_loop`, `handle_line` and
+   `drive_scan_round` are deleted.
+2. **The pump.** Once per `PUMP_PERIOD_US` (5 ms) the loop calls `ha_pair::pump`:
+   one `PairLink::tick`, the execution permit reconciled from the verdict of the
+   link (`apply_pair_permit`, unchanged), and the persistence of a peer-applied
+   assemble (`commit_assembled`, unchanged). The pump runs before the loop reads
+   `can_scan`, so a verdict that the tick decides is the verdict of that
+   iteration. The tick is paced by time and never by rounds: the liveness of the
+   link counts exchanges, so a link ticked once per round of a freewheeling
+   program (millions per second) would count a peer that answers every 5 ms as
+   dead. The plan's wording "after each round" is therefore read as "no later
+   than the pump period after a round": a round never delays the next tick by
+   more than one period, and a long round is followed by a tick at once.
+3. **The wait.** With a pair composed the wait of the loop ends at
+   `min(next deadline of a cyclic task, next pump)`, capped by the stop poll as
+   before. A device that does not scan (a standby, a stopped unit, a faulted one)
+   waits for the pump. A freewheeling program still does not wait, and looks at
+   the clock once per round to find the pump due.
+4. **Commit routing.** The round is the paced round of the loop and its commit
+   callback is `notify_commit`, which calls `PairLink::on_scan_commit` for the
+   pair as it calls `Shell::on_scan_commit` for the shell. The owner mints one
+   epoch per committed round (ADR-0062, ADR-0066), as before; what changes is
+   that rounds are no longer rare.
+5. **The takeover round.** The survivor of a confirmed peer death is promoted
+   inside a tick; the pump grants the permit; the unit could not scan in the
+   previous iteration, so the loop restarts the deadlines of its cyclic tasks
+   (decision 4 of stage 3c) and the round is due at once. The first round of the
+   survivor is therefore the boundary round it owes the pair, in the iteration
+   of the promotion, and it mints the next epoch. The previous code drove that
+   round by hand at a constant zero clock, with every task ready; the round of
+   the loop runs each cyclic task once and keeps its period from then on. A
+   pending swap is applied at that boundary as before.
+6. **Stop on a pair unit.** The pair honours `startScan` and `stopScan`; the
+   V4022 branch is gone. A stop of a Primary stops its rounds, so it stops its
+   scan commits and its epoch mint. It does not change the ownership: the verdict
+   stays Primary, the link keeps being ticked at the pump cadence, and the
+   Secondary keeps seeing a live Primary. The redundancy rules promote a
+   Secondary only on a commanded swap or on the proven death of the Primary
+   (`ha-redundancy-fsm.md`, "Promotion is a career ladder with exactly two
+   rungs"; ADR-0064(e)); a stopped Primary is neither, so no promotion follows
+   and no new failover policy is added. No invariant of the HA ADRs requires the
+   Primary to scan: `CAN_EXECUTE_OUTPUTS` is a property of the CONTROL chart and
+   of the ownership of the I/O, and the `control` field of `identity` reports the
+   permit (ownership) while `runState` reports the scan. A Secondary that is
+   promoted while stopped holds the verdict and the permit and runs no round
+   until a start: the operator's stop stands over the promotion. The death of a
+   stopped Primary promotes the Secondary as any death does, provided the owner
+   was proven live before (the epoch advanced on the wire at least once).
+7. **The mode of `run_rounds`.** `Deadlines::{Restart, Keep}` stays. The pair no
+   longer calls `run_with_commit`, but the mode is not a patch of the pair: it
+   separates two classes of driver, the one that paces its rounds on a clock and
+   keeps the task state between them (`run_paced_round`, `Keep`: the pacer of
+   `run` and the device loop, pair included) and the one that is handed the clock
+   of each call, in simulated time, on request (`run`, `run_with_commit`,
+   `Restart`: the in-process host of the MCP hot-edit session,
+   `compiler/mcp/src/tools/hot_edit.rs`, the HA integration scenarios and the
+   runtime acceptance tests). The documentation of the enum names the members.
+8. **The simulated pair.** `--ha-simulated-peer` keeps its command cadence: the
+   shell ticks once per command line (its clock is the simulation's), and the
+   loop reports every round to `Shell::on_scan_commit`. That mints one epoch per
+   committed round, as ADR-0062 says, and adopts it on the simulated peer in the
+   same call, so the two epochs stay equal. The scan term of the calibration
+   (`record_scan`, the interval between two committed boundaries measured in
+   ticks) is the one number the continuous rounds change: with a tick per command
+   and a round every few microseconds, almost every interval is 0 ticks and the
+   one that spans a command is 1, so the term measures commands, not scans. It
+   contradicts no rule of the ADR (the term is a measured diagnostic and not an
+   arbiter) and is left as it is; a hardware binding measures it in its own time.
+
+### Consequences of stage 3d
+
+- Good, because there is one driver loop for every composition of `serve`: the
+  pair is ticked, permitted and scanned by the code that does it for the others,
+  and a unit of a pair honours Run and Stop.
+- Good, because the owner of a pair now runs its application between commands,
+  with the pacing of `run`.
+- Bad, because the pair-wide epoch is a `u32` that saturates, and it is minted
+  once per committed round (ADR-0062). A freewheeling program commits millions of
+  rounds per second, and a task of 1 ms commits 1000 per second: the epoch
+  stops advancing after about 20 minutes and about 50 days respectively. The
+  owner-alive evidence of the takeover is a latch, so failover still works after
+  a saturation, but the epoch stops protecting against stale packets. This is a
+  defect of the producer rule that continuous scanning exposes and not of the
+  loop, and it is an open item: a wider epoch, or an epoch minted per pump period
+  instead of per round, is a decision for the redundancy ADRs.
+- Bad, because the two-process test
+  `ha_pair_when_accept_test_assemble_then_both_units_commit_one_generation`
+  assumed that the owner commits rounds only on commands: it waits for the epoch
+  of the owner to equal the epoch it last observed from the standby, which cannot
+  hold while the owner commits rounds all the time (the standby trails by
+  design). The test is reported and was not edited.
+
+Confirmation: `compiler/vm-cli/src/device_loop/tests/pair.rs` drives the loop with
+a loopback `PairLink` on the fake clock: the Primary scans with no command and
+each commit reaches the link; the Secondary runs no round; the link is ticked
+once per pump period when idle, when scanning, and with a slow task; Stop and
+Start of a Primary and of a Secondary; the takeover round runs in the iteration
+of the promotion; a stopped survivor runs no round until the start.
+`compiler/vm-cli/src/pacer/tests.rs` covers the wake of the idle wait. The
+two-process tests are `compiler/vm-cli/tests/ha_pair.rs`.
 
 ## More Information
 

@@ -143,6 +143,14 @@ applied them, and the device runs that round without waiting for the period.
 A device that holds no execution permit (a secondary unit of a redundant pair)
 runs no round and still answers every command.
 
+A unit of a redundant pair (see :doc:`/how-to-guides/run-a-redundant-pair`)
+is served by the same loop. The loop ticks the pair link every 5 ms, whether the
+unit scans or not, and sets the execution permit from the verdict of the link
+before it decides whether a round is due. The owner of the pair therefore scans
+between commands, and the standby, which holds no execution permit, runs no
+round and still synchronizes with the owner and answers every command. The
+owner mints one pair epoch for each round it commits.
+
 :kbd:`Ctrl+C` stops the device in order, on stdin/stdout and on TCP alike: the
 device finishes the round that is running, answers the commands it has
 executed, writes the retained values (see :ref:`ironplcvm-retained-values`) and
@@ -214,9 +222,16 @@ time spent stopped is neither a burst of rounds nor an overrun.
 
 A faulted device accepts ``stopScan``: it is stopped and still reports its
 ``fault``. It refuses ``startScan`` with :doc:`V6019 <problems/V6019>`, because
-starting does not clear the fault; restart the device. A device that serves a
-redundant pair over the pair link does not scan between commands and answers
-both commands with :doc:`V4022 <problems/V4022>`.
+starting does not clear the fault; restart the device.
+
+``startScan`` and ``stopScan`` work the same on a unit of a redundant pair. A
+stopped owner runs no round and so mints no epoch, but it stays the owner: its
+pair link keeps being ticked, so the standby sees a live owner and does not
+promote itself, and no failover follows from the stop. The ``control`` field of
+the ``redundancy`` block of ``identity`` reports ownership and ``runState``
+reports the scan, apart from each other. A standby that is promoted after the
+death of its peer runs the takeover round at once, unless the operator stopped
+it: the stop stands until a ``startScan``.
 
 .. _ironplcvm-device-settings:
 

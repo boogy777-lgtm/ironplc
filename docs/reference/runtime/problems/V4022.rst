@@ -17,15 +17,13 @@ answers the command. A host that is not such an application answers V4022 so
 that a client learns at once that the command cannot work there, and does not
 wait for rounds that never start or stop. The command does not touch the
 hot-edit state: a refused ``startScan`` or ``stopScan`` leaves a staged
-candidate, a running test and the application as they were. The same
-code answers the command on a device that serves a redundant pair over the pair
-link, which does not scan between commands yet.
+candidate, a running test and the application as they were.
 
 Solutions
 ---------
 
 1. Send the command to a device that scans by itself: ``ironplcvm serve`` over
-   standard input and output or over TCP, without a pair link.
+   standard input and output, over TCP or as a unit of a redundant pair.
 2. Read the device with ``identity`` instead. Its ``runState`` field says whether
    the device executes rounds; the command is not needed to read it.
 
