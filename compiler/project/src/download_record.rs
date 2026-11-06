@@ -21,6 +21,15 @@
 //! one writer. The record is read by the editor from the file; [`read`] here is
 //! the reference reader that the format is tested against.
 //!
+//! ## The kept container
+//!
+//! A download that replaced the application (ADR-0088) asks the writer to keep
+//! the container that was sent: [`kept_container_path`] names the copy,
+//! `<app>.<deviceId>.download.iplc`, beside the record. It is the bytes the
+//! device received, which a later comparison of the device with this project
+//! reads. The writer copies it after the record, so a record exists whenever a
+//! copy does.
+//!
 //! ## Format
 //!
 //! ```json
@@ -49,6 +58,7 @@
 //! - `time` is RFC 3339, in UTC.
 
 use std::fmt;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use ironplc_container::integrity::{self, HASH_LEN};
@@ -174,6 +184,11 @@ pub struct Download<'a> {
     pub device_content_hash: Option<[u8; HASH_LEN]>,
     /// The counters the device reported after the download, when known.
     pub device: Option<DeviceGenerations>,
+    /// Whether to keep a copy of `container` beside the record, at
+    /// [`kept_container_path`]: the bytes the device received, for the
+    /// comparison of the device with them later. A download that replaced the
+    /// application (ADR-0088) keeps one; an online change does not.
+    pub keep_container: bool,
 }
 
 /// Why a download was not recorded.
@@ -187,6 +202,8 @@ pub enum DownloadError {
     DeviceRunsOther { device: String, container: String },
     /// The record could not be written.
     Record(Diagnostic),
+    /// The record was written but the copy of the container could not be.
+    KeepContainer { path: PathBuf, error: String },
 }
 
 impl fmt::Display for DownloadError {
@@ -206,6 +223,11 @@ impl fmt::Display for DownloadError {
                 f,
                 "The device reports content hash {device}, but the container has {container}: the device did not receive this container, so no download record is written"
             ),
+            DownloadError::KeepContainer { path, error } => write!(
+                f,
+                "The download record is written, but the container could not be kept at {}: {error}",
+                path.display()
+            ),
             DownloadError::Record(problem) => write!(
                 f,
                 "{}: {}: {}",
@@ -224,6 +246,13 @@ pub fn record_path(anchor: &Path, device_id: &DeviceId) -> Result<PathBuf, Downl
     RecordKind::Download { device_id }
         .path(anchor)
         .ok_or_else(|| no_record_path(anchor))
+}
+
+/// The path where the container of a download is kept beside the download
+/// record of `device_id` for `anchor`: the record's name with the extension
+/// `iplc` in place of `iplcinfo`. The one place that names it.
+pub fn kept_container_path(anchor: &Path, device_id: &DeviceId) -> Result<PathBuf, DownloadError> {
+    record_path(anchor, device_id).map(|record| record.with_extension("iplc"))
 }
 
 fn no_record_path(anchor: &Path) -> DownloadError {
@@ -265,7 +294,15 @@ pub fn record_download(download: &Download<'_>, unix_seconds: u64) -> Result<(),
         &path,
         record.to_json(),
     )
-    .map_err(DownloadError::Record)
+    .map_err(DownloadError::Record)?;
+    if download.keep_container {
+        let kept = kept_container_path(download.anchor, download.device_id)?;
+        fs::copy(download.container, &kept).map_err(|err| DownloadError::KeepContainer {
+            path: kept.clone(),
+            error: err.to_string(),
+        })?;
+    }
+    Ok(())
 }
 
 /// The name of the application of `anchor`: the one its build record gives, and

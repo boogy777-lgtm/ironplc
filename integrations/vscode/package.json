@@ -146,6 +146,11 @@
         "category": "IronPLC"
       },
       {
+        "command": "ironplc.download",
+        "title": "Download to Controller",
+        "category": "IronPLC"
+      },
+      {
         "command": "ironplc.runController",
         "title": "Run Controller",
         "category": "IronPLC"

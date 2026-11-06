@@ -27,6 +27,8 @@ pub struct RecordDownload<'a> {
     pub device_content_hash: Option<[u8; HASH_LEN]>,
     /// The counters the device reported after the download, when known.
     pub device: Option<DeviceGenerations>,
+    /// Whether to keep a copy of the container that was sent beside the record.
+    pub keep_container: bool,
 }
 
 /// Writes the download record. Prints nothing; every failure is the error
@@ -45,6 +47,7 @@ pub fn record_download(args: &RecordDownload<'_>) -> Result<(), String> {
             device_id: args.device_id,
             device_content_hash: args.device_content_hash,
             device: args.device,
+            keep_container: args.keep_container,
         },
         unix_seconds,
     )

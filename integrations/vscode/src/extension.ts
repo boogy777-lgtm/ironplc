@@ -192,7 +192,7 @@ export function activate(context: vscode.ExtensionContext) {
   const buildArea = vscode.window.createOutputChannel(BUILD_AREA_NAME);
   context.subscriptions.push(buildArea);
   registerBuildApplication(context, result?.path, buildArea, showProblem);
-  registerBuildCommands(context, result?.path, sourceExtensions, connection, showProblem, buildArea);
+  registerBuildCommands(context, result?.path, sourceExtensions, connection, showProblem, buildArea, showCodedText);
   registerControllerRunCommands(context, connection, showCodedText);
 
   if (!result) {

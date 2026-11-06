@@ -116,6 +116,37 @@ fn record_download_when_generations_and_matching_device_hash_then_record_holds_t
 }
 
 #[test]
+fn record_download_when_keep_container_then_copy_of_the_sent_container_beside_the_record() {
+    let (dir, application) = compiled_application();
+
+    record_download(&application)
+        .args(["--device-id", DEVICE, "--keep-container"])
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty());
+
+    assert_eq!(
+        fs::read(dir.path().join(format!("app.{DEVICE}.download.iplc"))).unwrap(),
+        fs::read(&application).unwrap()
+    );
+}
+
+#[test]
+fn record_download_when_no_keep_container_then_no_copy() {
+    let (dir, application) = compiled_application();
+
+    record_download(&application)
+        .args(["--device-id", DEVICE])
+        .assert()
+        .success();
+
+    assert!(!dir
+        .path()
+        .join(format!("app.{DEVICE}.download.iplc"))
+        .exists());
+}
+
+#[test]
 fn record_download_when_device_hash_differs_then_fails_and_writes_nothing() {
     let (dir, application) = compiled_application();
 

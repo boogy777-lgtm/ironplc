@@ -59,6 +59,7 @@ fn download<'a>(anchor: &'a Path, device_id: &'a DeviceId) -> Download<'a> {
         device_id,
         device_content_hash: None,
         device: None,
+        keep_container: false,
     }
 }
 
@@ -94,6 +95,99 @@ fn record_download_when_container_then_record_beside_it_with_its_identity() {
     assert_eq!(record.container.content_hash, [1; HASH_LEN]);
     assert_eq!(record.device, None);
     assert_eq!(record.time, "1970-01-01T00:00:00Z");
+}
+
+#[test]
+fn record_download_when_keep_container_then_copy_of_the_sent_bytes_beside_the_record() {
+    let (dir, anchor) = application();
+    let sent = dir.path().join("sent.iplc");
+    write_container(&sent, 9);
+
+    record_download(
+        &Download {
+            container: &sent,
+            keep_container: true,
+            ..download(&anchor, &DEVICE)
+        },
+        0,
+    )
+    .unwrap();
+
+    let kept = dir
+        .path()
+        .join("app.0123456789abcdef0123456789abcdef.download.iplc");
+    assert_eq!(kept_container_path(&anchor, &DEVICE).unwrap(), kept);
+    assert_eq!(fs::read(&kept).unwrap(), fs::read(&sent).unwrap());
+    assert_eq!(
+        read_present(&anchor, &DEVICE).container.content_hash,
+        [9; HASH_LEN]
+    );
+}
+
+#[test]
+fn record_download_when_not_keep_container_then_no_copy() {
+    let (dir, anchor) = application();
+
+    record_download(&download(&anchor, &DEVICE), 0).unwrap();
+
+    assert!(!kept_container_path(&anchor, &DEVICE).unwrap().exists());
+    assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 2);
+}
+
+#[test]
+fn record_download_when_two_devices_keep_container_then_one_copy_each() {
+    let (_dir, anchor) = application();
+
+    for device in [&*DEVICE, &*OTHER_DEVICE] {
+        record_download(
+            &Download {
+                keep_container: true,
+                ..download(&anchor, device)
+            },
+            0,
+        )
+        .unwrap();
+    }
+
+    let first = kept_container_path(&anchor, &DEVICE).unwrap();
+    let second = kept_container_path(&anchor, &OTHER_DEVICE).unwrap();
+    assert_ne!(first, second);
+    assert!(first.is_file() && second.is_file());
+}
+
+#[test]
+fn record_download_when_device_runs_another_container_then_nothing_is_kept() {
+    let (_dir, anchor) = application();
+
+    let result = record_download(
+        &Download {
+            device_content_hash: Some([7; HASH_LEN]),
+            keep_container: true,
+            ..download(&anchor, &DEVICE)
+        },
+        0,
+    );
+
+    assert!(matches!(result, Err(DownloadError::DeviceRunsOther { .. })));
+    assert!(!kept_container_path(&anchor, &DEVICE).unwrap().exists());
+}
+
+#[test]
+fn record_download_when_the_copy_cannot_be_written_then_keep_container_error() {
+    let (_dir, anchor) = application();
+    fs::create_dir(kept_container_path(&anchor, &DEVICE).unwrap()).unwrap();
+
+    let result = record_download(
+        &Download {
+            keep_container: true,
+            ..download(&anchor, &DEVICE)
+        },
+        0,
+    );
+
+    let error = result.unwrap_err();
+    assert!(matches!(error, DownloadError::KeepContainer { .. }));
+    assert!(error.to_string().contains("could not be kept"));
 }
 
 #[test]

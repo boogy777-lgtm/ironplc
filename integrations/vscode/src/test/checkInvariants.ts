@@ -3,6 +3,7 @@ import * as path from 'path';
 
 import { connectionTransports } from '../connectionMethods';
 import { SCAN_ACTIONS, scanActionNames } from '../controllerRunLogic';
+import { DOWNLOAD_ACTIONS, downloadActionNames } from '../downloadLogic';
 import { DEFAULT_SESSION_PORT, SUPPORTED_SESSION_PROTOCOL } from '../sessionConstants';
 import { findGatewayViolations, HANDOFF_ACTIONS, handoffNames } from '../vscodeCommon';
 
@@ -68,6 +69,23 @@ for (const name of scanActionNames()) {
   }
   if (!readme.includes(`**IronPLC: ${title}**`)) {
     failures.push(`README.md does not name the command '${title}' of the scan action '${name}'`);
+  }
+}
+
+// Every editor action that deploys a build by replacing the application (the
+// table DOWNLOAD_ACTIONS, which buildCommands.ts registers member by member) is
+// contributed with the title the table gives it and is named in the README.
+for (const name of downloadActionNames()) {
+  const { commandId, title } = DOWNLOAD_ACTIONS[name];
+  const contributed = packageJson.contributes.commands.find((cmd: { command: string }) => cmd.command === commandId);
+  if (contributed === undefined) {
+    failures.push(`Download action '${name}' names the command '${commandId}', which package.json does not contribute`);
+  }
+  else if (contributed.title !== title) {
+    failures.push(`Download action '${name}' is titled '${title}', but package.json titles '${commandId}' '${contributed.title}'`);
+  }
+  if (!readme.includes(`**IronPLC: ${title}**`)) {
+    failures.push(`README.md does not name the command '${title}' of the download action '${name}'`);
   }
 }
 

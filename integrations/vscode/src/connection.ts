@@ -84,9 +84,10 @@ export interface ConnectionFeature {
    * Handles a download the device acknowledged: records that the device
    * received the container `container` (the file that was sent), then checks
    * the device against the record again. The one place a build records an
-   * assemble acknowledgement.
+   * assemble acknowledgement. `keepContainer` also keeps a copy of the container
+   * beside the record (a Download that replaced the application).
    */
-  recordDownload(container: string, status: HotEditStatus): Promise<void>;
+  recordDownload(container: string, status: HotEditStatus, keepContainer: boolean): Promise<void>;
   /** Resolves when the check of the device against its download record has finished. */
   settled(): Promise<void>;
   readonly onDidChangeModel: vscode.Event<DevicePanelModel>;
@@ -178,10 +179,10 @@ export function registerConnectionSupport(
       lastRunOverride = run;
       render();
     },
-    async recordDownload(container: string, status: HotEditStatus): Promise<void> {
+    async recordDownload(container: string, status: HotEditStatus, keepContainer: boolean): Promise<void> {
       lastStatusOverride = status;
       try {
-        await recordDownloadOf(container, status, false, connectedDeviceId());
+        await recordDownloadOf(container, status, false, connectedDeviceId(), keepContainer);
       }
       catch (err) {
         void vscode.window.showErrorMessage(
@@ -225,6 +226,7 @@ export function registerConnectionSupport(
     status: HotEditStatus,
     requireDeviceHash: boolean,
     deviceId: string | undefined,
+    keepContainer = false,
   ): Promise<boolean> {
     const profile = manager.currentProfile;
     if (profile === undefined) {
@@ -237,6 +239,7 @@ export function registerConnectionSupport(
       sentContainer: sent,
       deviceId,
       status,
+      keepContainer,
       requireDeviceHash,
     });
     if ('reason' in plan) {

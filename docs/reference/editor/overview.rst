@@ -101,6 +101,47 @@ restart the device to clear the fault. These commands differ from the Run lens
 over a program, which compiles the program in the editor and runs it in the
 language server.
 
+Download to Controller
+----------------------
+
+Replaces the application on the connected controller with the project. The
+command needs an open connection and sends the container in the replace mode of
+the session, which :ref:`ironplcvm-replace` describes.
+
+:Menu Location: :menuselection:`Command Palette --> IronPLC: Download to Controller`
+
+The command runs these steps and stops at the first that fails:
+
+#. It syncs the stable variable IDs of the project
+   (:program:`ironplcc refactor sync-uids`), so the controller can match a
+   ``PERSISTENT`` variable of the running application with its declaration in the
+   new one. If the sync lists rename or swap candidates, you resolve them as for
+   :guilabel:`IronPLC Hot Edit: Sync Variable IDs`; if you leave them open, nothing
+   is sent.
+#. It compiles the program once, in the :guilabel:`Output` channel of the build,
+   and sends the container.
+#. It shows a confirmation that names every ``PERSISTENT`` variable the controller
+   will re-initialise and why, and says that the replacement cannot be undone once
+   it runs. :guilabel:`Cancel` discards the candidate on the controller and the
+   running application is untouched.
+#. :guilabel:`Download` runs the steps that the controller offers next (test, then
+   assemble). The editor does not decide which command is allowed: it follows the
+   edit view that the controller reports, and a refusal is shown with the problem
+   code of the controller and the state it reports.
+
+The variables declared ``PERSISTENT`` whose declaration is equal keep their
+values, and every other variable, a ``RETAIN`` variable included, starts again;
+:doc:`/reference/language/variables/retention` states the rule. A project that
+was never synced has no variable IDs, so the confirmation lists every
+``PERSISTENT`` variable as having no stable variable ID. A download goes ahead
+when the application on the controller is not the one the project last downloaded
+to it, and the confirmation says that what was changed there is lost.
+
+After the controller acknowledged the assemble, the editor writes the download
+record of the controller (:program:`ironplcc record-download`) and keeps the
+container that was sent beside it, as :file:`{STEM}.{ID}.download.iplc`. The names
+are described with ``record-download`` in :doc:`/reference/compiler/ironplcc`.
+
 Build Tasks
 ===========
 

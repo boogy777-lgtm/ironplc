@@ -1,13 +1,15 @@
 /**
  * The build commands of the engineering connection: `ironplc.build` (Build &
- * Commit, the finalize-equivalent) and `ironplc.buildTrial` (Build & Trial,
- * with the verification checkpoint between upload and resolve). Both reuse
+ * Commit, the finalize-equivalent), `ironplc.buildTrial` (Build & Trial,
+ * with the verification checkpoint between upload and resolve) and
+ * `ironplc.download` (Download, the replace mode, ADR-0088). All reuse
  * the connected `HotEditSession` and the vscode-free sequencing in
- * `buildLogic`; this module is glue — it resolves the program, compiles it
+ * `buildLogic` and `downloadLogic`; this module is glue — it resolves the program, compiles it
  * with the shared compile path, renders phases and errors, and offers the
  * trial exits. Build refuses while the baseline is stale (E0015, fail-
  * closed) and only in the Connected state, the only state that may send
- * commands. The device's acknowledgement of an assemble (Build & Commit, or
+ * commands; Download does not refuse a stale baseline, because it replaces the
+ * application and says so in its confirmation. The device's acknowledgement of an assemble (Build & Commit, or
  * the assemble that resolves a trial) is handled in one function,
  * `acknowledgeAssemble`, which records the download. A build writes the shared Build area (`buildAreaLogic`), which it
  * receives from the caller and clears when it starts.
@@ -28,8 +30,21 @@ import {
   formatStatusDetail,
   formatStatusText,
   HotEditProtocolError,
+  HotEditSession,
   HotEditStatus,
 } from './hotEditSession';
+import { runCompiler } from './taskProviderLogic';
+import { MapUidError, syncVariableIds } from './syncUidsLogic';
+import { NO_CONTROLLER_MESSAGE } from './controllerRunLogic';
+import {
+  DOWNLOAD_ACTIONS,
+  DownloadIo,
+  DownloadOutcome,
+  formatReplaceConfirmation,
+  outcomeMessage,
+  runDownload,
+  syncIdsStep,
+} from './downloadLogic';
 import { ConnectionFeature } from './connection';
 import {
   BuildSession,
@@ -38,7 +53,7 @@ import {
   runBuildTrial,
   TrialResolution,
 } from './buildLogic';
-import { createMigrationDecisionUi, resolvePathInteractive } from './hotEdit';
+import { createMigrationDecisionUi, createSyncResolutionUi, resolvePathInteractive } from './hotEdit';
 
 /** The container a build sends: the file it is read from, and its bytes. */
 interface SentContainer {
@@ -49,6 +64,9 @@ interface SentContainer {
 /** The advisory origin label every build stamps on its pending-edit record. */
 const BUILD_ORIGIN = 'ironplc-vscode';
 
+/** A step of a Download failed and the person has been told: the sequence stops quietly. */
+class ReportedError extends Error {}
+
 export function registerBuildCommands(
   context: vscode.ExtensionContext,
   compilerPath: string | undefined,
@@ -56,22 +74,35 @@ export function registerBuildCommands(
   connection: ConnectionFeature,
   reportProblem: ReportProblem,
   buildArea: BuildAreaChannel,
+  /** Shows an error whose text starts with its code, with the link to the page of the code. */
+  showCoded: (code: string, text: string) => void,
 ): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('ironplc.build', () => build(false)),
     vscode.commands.registerCommand('ironplc.buildTrial', () => build(true)),
+    vscode.commands.registerCommand(DOWNLOAD_ACTIONS.download.commandId, download),
   );
 
-  async function build(trial: boolean): Promise<void> {
-    const session: BuildSession | undefined = connection.manager.activeSession;
+  /**
+   * The session of the open connection, or undefined with a warning when there
+   * is none. The check of the device against its download record may still be
+   * running, so it is awaited: what follows reads its result.
+   */
+  async function connectedSession(): Promise<HotEditSession | undefined> {
+    const session = connection.manager.activeSession;
     if (!session) {
-      void vscode.window.showWarningMessage(
-        'No device is connected. Run "IronPLC: Connect to Device" first.',
-      );
+      void vscode.window.showWarningMessage(NO_CONTROLLER_MESSAGE);
+      return undefined;
+    }
+    await connection.settled();
+    return session;
+  }
+
+  async function build(trial: boolean): Promise<void> {
+    const session: BuildSession | undefined = await connectedSession();
+    if (!session) {
       return;
     }
-    // The check of the device against its download record may still be running.
-    await connection.settled();
     if (connection.baselineState === 'mismatch') {
       reportProblem(
         ProblemCode.StaleBaseline,
@@ -142,8 +173,126 @@ export function registerBuildCommands(
    * Build & Commit and for the assemble that resolves a trial; it records the
    * download.
    */
-  async function acknowledgeAssemble(container: string, status: HotEditStatus): Promise<void> {
-    await connection.recordDownload(container, status);
+  async function acknowledgeAssemble(container: string, status: HotEditStatus, keepContainer = false): Promise<void> {
+    await connection.recordDownload(container, status, keepContainer);
+  }
+
+  /**
+   * Download (ADR-0088): sync the variable IDs, compile, accept in the replace
+   * mode, confirm what is re-initialised, then follow the device's edit view to
+   * the assemble. `downloadLogic` sequences; this function is the UI and the
+   * mapping of each failure to the way it is reported.
+   */
+  async function download(): Promise<void> {
+    const session = await connectedSession();
+    if (!session) {
+      return;
+    }
+    const program = await resolvePathInteractive(
+      'Select the program to download',
+      candidate => isDebuggableProgram(candidate, sourceExtensions),
+      'IronPLC programs',
+      ['iplc', ...sourceExtensions.map(ext => ext.replace('.', ''))],
+    );
+    if (!program) {
+      return;
+    }
+
+    const title = 'Download';
+    const io: DownloadIo<SentContainer> = {
+      syncIds: () => syncIdsStep(
+        programKind(program, sourceExtensions) === 'container',
+        () => syncProjectIds(program),
+      ),
+      compile: async () => {
+        try {
+          return await compileProgram(program);
+        }
+        catch (err) {
+          reportProblem(
+            ProblemCode.CompileFailed,
+            `${program}: ${err instanceof Error ? err.message : String(err)} (see the "IronPLC Build" output for details).`,
+          );
+          throw new ReportedError('compile failed');
+        }
+      },
+      confirm: async (request) => {
+        const { message, detail } = formatReplaceConfirmation(request);
+        const choice = await vscode.window.showWarningMessage(message, { modal: true, detail }, title);
+        return choice === title;
+      },
+      acknowledge: async (sent, status) => {
+        await acknowledgeAssemble(sent.path, status, true);
+      },
+      onPhase: phase => connection.setBuildPhase(phase),
+    };
+    try {
+      const outcome = await runDownload(
+        session,
+        io,
+        { name: path.basename(program), origin: BUILD_ORIGIN },
+        connection.baselineState === 'mismatch',
+      );
+      showDownloadOutcome(outcome, title);
+    }
+    catch (err) {
+      if (err instanceof ReportedError) {
+        return;
+      }
+      void vscode.window.showErrorMessage(
+        `IronPLC ${title}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+    finally {
+      connection.setBuildPhase(null);
+    }
+  }
+
+  /** Shows what a Download came to: the state the device reported, then the message at its level. */
+  function showDownloadOutcome(outcome: DownloadOutcome, title: string): void {
+    if ('status' in outcome && outcome.status !== undefined) {
+      connection.updateStatus(outcome.status);
+    }
+    const message = outcomeMessage(outcome, title, formatStatusText);
+    if (message.level === 'info') {
+      void vscode.window.showInformationMessage(message.text);
+    }
+    else if (message.level === 'warning') {
+      void vscode.window.showWarningMessage(message.text);
+    }
+    else if (message.vCode !== undefined) {
+      showCoded(message.vCode, message.text);
+    }
+    else {
+      void vscode.window.showErrorMessage(message.text);
+    }
+  }
+
+  /**
+   * Syncs the stable variable IDs of the project the program belongs to, so the
+   * container carries them and the device can keep `PERSISTENT` variables. The
+   * same flow as the Sync Variable IDs command, with its resolution UI.
+   */
+  async function syncProjectIds(program: string) {
+    if (!compilerPath) {
+      reportProblem(ProblemCode.NoCompiler, 'Install the compiler to download.');
+      throw new ReportedError('no compiler');
+    }
+    try {
+      return await syncVariableIds(
+        compilerPath,
+        program,
+        (compiler, args) => runCompiler(compiler, args, text => connection.output.append(text)),
+        createSyncResolutionUi(),
+      );
+    }
+    catch (err) {
+      reportProblem(
+        err instanceof MapUidError ? ProblemCode.MapUidFailed : ProblemCode.CompileFailed,
+        `${program}: ${err instanceof Error ? err.message : String(err)} (see the "IronPLC Connection" output for details).`,
+      );
+      throw new ReportedError('sync failed');
+    }
   }
 
   /** Build & Trial: accept → test, then hold for the engineer's resolution. */

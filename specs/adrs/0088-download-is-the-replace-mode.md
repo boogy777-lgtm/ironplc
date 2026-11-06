@@ -2,6 +2,7 @@
 
 status: accepted
 date: 2026-11-06
+amended: 2026-11-07 (stage 5d: the editor's Download, see "The editor's Download")
 
 ## Context and Problem Statement
 
@@ -192,6 +193,40 @@ The client writes the download record (`ironplcc record-download`,
 assemble (`acknowledgeAssemble` in `integrations/vscode/src/buildCommands.ts`, which
 calls `connection.recordDownload`). A replace follows the same ladder, so the record
 is written after the replace is assembled and not before. Nothing changes there.
+
+### The editor's Download
+
+The command `ironplc.download` ("IronPLC: Download to Controller",
+`integrations/vscode/src/downloadLogic.ts`, wired in `buildCommands.ts`) is the
+client action on the replace mode. It needs an open connection and, in this order:
+
+1. syncs the stable variable IDs (`ironplcc refactor sync-uids` with its
+   resolution dialogs); rename or swap candidates left open stop the Download
+   before anything is sent, because D5 says a project without IDs keeps nothing;
+2. compiles once, with the compile path of the Build commands;
+3. sends `acceptEdits` with `"mode": "replace"`;
+4. shows a modal confirmation that lists every entry of `reinitialised` with the
+   reason in plain words, says that the replacement cannot be undone once it
+   runs, and adds that whatever was changed on the controller is lost when the
+   device is not the one the project last downloaded to (a Download is the way
+   to fix that state, so it does not refuse with E0015 as Build does). Cancel
+   sends `cancelEdits`, which the view allows before Test;
+5. follows the edit view: it sends the `next` command while a candidate is staged
+   (test, then assemble), reads the status after each, never sends a command the
+   view disables (it shows the view's reason), is bounded by the steps of
+   `finalizeAll`, and on a refusal cancels the candidate when, and only when, the
+   view allows it; it shows the code of the device and the stage it reports;
+6. after the device acknowledged the assemble, writes the download record and
+   passes `--keep-container` to `ironplcc record-download`, which keeps a copy of
+   the container that was sent as `<app>.<deviceId>.download.iplc` beside the
+   record (`kept_container_path` in `compiler/project/src/download_record.rs`, the
+   one place that names it). The extension never derives the name.
+
+The actions are the members of one table (`DOWNLOAD_ACTIONS`); the Download that
+keeps the application running, chosen in the go-online comparison, is a later
+entry. A device that answers an accept in the `replace` mode with `ack` does not
+know the mode and has staged an ordinary candidate: the client cancels it and
+says that the device does not support a Download.
 
 ## Consequences
 
