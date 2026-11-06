@@ -626,6 +626,22 @@ Run and Stop are a mechanism of their own beside Build ([ADR-0086](../adrs/0086-
 
 **REQ-TOL-mcp-178** A refusal of the device comes back as `v_code` and `message`, with no `run_state`: V6019 for a start of a faulted device (a stop of a faulted device is accepted), and V4022 from a host that has no scan loop.
 
+### The go-online comparison: `online_compare`
+
+`online_compare` is the device tool that asks what the editor asks when it goes online: what the controller is, what it holds, what the project has, and which actions follow ([ADR-0089](../adrs/0089-go-online-comparison.md)). It takes the `device` parameter of the hot-edit tools (REQ-TOL-mcp-174), here required, and optionally `sources` and `options`. The decisions are not the tool's: it connects, reads the `identity`, and calls `ironplc_project::online_comparison::compare`, the one function that the editor (through `ironplcc online-compare`) and the command line also call, so the three give the same answer for the same controller and project.
+
+The server reads no file of the project (REQ-STL-mcp-006), so it has none of the records that the editor reads. The project is the `sources` of the call, when they are given: they are compiled, and the container that comes out is the build (P), up to date by construction. The comparison has no "previous download" row and no "other controller" row; a controller that holds anything but the compiled sources is `otherApplication`.
+
+**REQ-TOL-mcp-179** `online_compare` connects to the device named by `device`, reads its `identity`, and returns `ok: true` with `comparison`, the object that `ironplcc online-compare` prints: the headline `row`, the information rows, every action with its `enabled` state and its `reason`, and `hotEdit`. The call ends its session before it returns, so calls that follow one another never find the device busy.
+
+**REQ-TOL-mcp-180** Without `sources` the controller is compared with no project (`project.status` is `neverBuilt`). With `sources` and `options` they are compiled by the path of the `compile` tool, and the container is the project's last build: a controller that runs it is `upToDate`, and a controller that runs anything else is `otherApplication`. No file is read.
+
+**REQ-TOL-mcp-181** A controller that cannot be reached (nothing listens, no answer in time, the connection ends) is the comparison with row `unreachable`, and a controller that serves another session (V6014) is the comparison with row `busy`; both have `ok: true`, `connected: false` and no `controller`. A device that is another one than the id asked for is not refused: it is compared, and the caller compares the ids.
+
+**REQ-TOL-mcp-182** `device` is validated as for the hot-edit tools (REQ-TOL-mcp-174); an invalid combination, an id without a route and IronLink that is missing are diagnostics with `ok: false` and no `comparison`. A refusal of the device other than V6014 comes back as `v_code` and `message` with no `comparison`, and a session that fails in the protocol is a P8003 diagnostic.
+
+**REQ-TOL-mcp-183** When the `sources` do not build, the comparison is made with `project.status` `buildFails`, the information row `buildFails`, and `hotEdit.allowed` false, and `diagnostics` holds the messages of the build framed as `compile` frames them (REQ-DS-mcp-011).
+
 ## Architecture
 
 ### Transport

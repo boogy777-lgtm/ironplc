@@ -535,3 +535,25 @@ fn hot_edit_status_when_no_session_then_ok_false() -> Result<(), Box<dyn std::er
         .stdout(predicate::str::contains(r#"\"number\":8001"#));
     Ok(())
 }
+
+/// The comparison of a controller that cannot be reached is an answer, not an
+/// MCP-level error: row 1, `ok` true.
+#[test]
+fn online_compare_when_nothing_listens_then_the_row_is_unreachable(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let port = std::net::TcpListener::bind("127.0.0.1:0")?
+        .local_addr()?
+        .port();
+    let stdin = mcp_tool_call(
+        "online_compare",
+        &format!(r#"{{"device":{{"address":"127.0.0.1","port":{port}}}}}"#),
+    );
+    Command::cargo_bin("ironplcmcp")?
+        .write_stdin(stdin)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(r#"\"ok\":true"#))
+        .stdout(predicate::str::contains(r#"\"row\":\"unreachable\""#))
+        .stdout(predicate::str::contains(r#"\"rowNumber\":1"#));
+    Ok(())
+}

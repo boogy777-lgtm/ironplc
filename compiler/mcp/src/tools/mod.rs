@@ -9,6 +9,7 @@ pub mod hot_edit;
 pub mod list_options;
 pub mod message_areas;
 pub mod messages;
+pub mod online_compare;
 pub mod parse;
 pub mod pou_lineage;
 pub mod pou_scope;
