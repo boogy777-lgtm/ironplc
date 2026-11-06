@@ -84,6 +84,79 @@ or else the route hint of the project.
 See :doc:`choose-controller` for the order in which the address is found, and for
 the status item that names the chosen controller.
 
+.. _editor-go-online:
+
+Go Online
+---------
+
+When a connection opens, the editor compares the controller with the project and
+shows what follows. The comparison is made by :program:`ironplcc online-compare`
+(:doc:`/reference/compiler/ironplcc`), which the editor runs with the answer of the
+controller to ``identity``; the editor renders what the command prints and decides
+nothing of it. Going online never refuses because the controller is a different
+one.
+
+:Menu Location: :menuselection:`Command Palette --> IronPLC: Show Online Comparison`
+
+When the controller runs the last build of the project and the sources are those of
+that build, the connection is online at once and no dialog opens. In every other
+case a dialog (a Quick Pick, in the style of the :ref:`online edit dialog
+<editor-online-edit>`) opens. Its title is the one-line summary of the situation.
+Under it, lines say what the controller is and holds (its ID, runtime version, run
+state, the application by its hash and the stage of an unfinished edit), what the
+project has, the last download of the project to this controller, and the
+conditions that stand beside the situation: another controller than the one last
+chosen, a project that does not build, an unfinished online change, a controller
+that restarted, a container format the controller refuses.
+
+The items are the actions that follow. Each is enabled or disabled by the
+comparison, and a disabled one shows its reason; selecting it does nothing.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 75
+
+   * - Action
+     - What it does
+   * - :guilabel:`Monitor`
+     - Stays connected and changes nothing. Enabled whenever the controller was
+       reached.
+   * - :guilabel:`Online change`
+     - Opens :ref:`Online Edit <editor-online-edit>`. Enabled when the controller
+       holds the last build or the last download, the project builds and the
+       controller accepts an edit.
+   * - :guilabel:`Download`
+     - Runs :ref:`Download to Controller <editor-download>`. Enabled when the
+       project builds and the controller accepts an edit, whatever the controller
+       holds.
+   * - :guilabel:`Search the network`
+     - Searches the network for controllers with the IronLink extension.
+   * - :guilabel:`Choose another controller`
+     - Runs :guilabel:`IronPLC: Network: Choose Controller…`.
+   * - :guilabel:`Retry`
+     - Connects again. Enabled after a connection that did not open or was lost.
+   * - :guilabel:`Resolve the unfinished edit`
+     - Opens :ref:`Online Edit <editor-online-edit>` at the stage of the edit that
+       is unfinished on the controller.
+   * - :guilabel:`Upload`
+     - Not available yet; always disabled.
+
+A connection that fails opens the same dialog with the situation that applies: the
+controller cannot be reached, it serves another session
+(:doc:`V6014 </reference/runtime/problems/V6014>`), it is protected, or the
+connection was lost.
+
+A controller that holds neither the last build of the project nor what the project
+last downloaded to it is a controller that this workstation did not load. An online change is not offered for
+it, with or without a download record; :guilabel:`Download` is the way in, and it
+writes the record that makes the next online change possible.
+
+The status item at the bottom of the window shows the one-line summary of the
+situation while a connection is open, and selecting it shows the dialog again. The
+comparison is made again after a download, after an assemble from the online edit
+dialog, when a lost connection is restored, and before the Accept stage of an
+online edit.
+
 Run Controller and Stop Controller
 ----------------------------------
 
@@ -150,8 +223,8 @@ dialog says so while the candidate exists. A refused command is shown with the
 problem code of the controller, and the dialog shows the state the controller
 reports afterwards.
 
-The Accept stage begins only when the go-online comparison allows an online change;
-when it does not, the editor says why in the words of the comparison and offers
+The Accept stage begins only when the go-online comparison allows an online change
+(:ref:`editor-go-online`); when it does not, the editor says why in the words of the comparison and offers
 :guilabel:`Download` when the comparison enables it. When the
 controller acknowledges the assemble, the editor writes the download record of the
 controller (:program:`ironplcc record-download`), as :ref:`Download to Controller

@@ -96,10 +96,14 @@ project. When they differ, the extension writes an information line to the
 
    The connected controller (a0a1a2a3) is not the controller chosen for this project (00112233).
 
-The connection is never refused because the controller is a different one. A
-controller that is busy is refused as before (see
+The connection is never refused because the controller is a different one: the
+go-online comparison (:ref:`editor-go-online`) lists this difference as an
+information line beside what the controller holds and what the project has. A
+controller that is busy is not connected (see
 :doc:`/reference/runtime/problems/V6014`), and a controller that requires
-credentials cannot be connected yet.
+credentials cannot be connected yet; the dialog of the comparison says so, and offers
+:guilabel:`Retry`, :guilabel:`Search the network` and :guilabel:`Choose another
+controller`.
 
 The Status Item
 ---------------
@@ -111,7 +115,8 @@ short device ID. Selecting the item connects to the chosen controller. When no
 controller is chosen, the item reads :guilabel:`IronPLC: Not connected` and
 selecting it connects as before, with a profile of the ``ironplc.connections``
 setting. When a connection is open, the
-item shows the connection as before.
+item shows the name of the controller, its run state and the one-line summary of the
+go-online comparison, and selecting it shows the comparison again.
 
 Without the IronLink Extension
 ==============================
