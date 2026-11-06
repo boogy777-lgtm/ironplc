@@ -8,6 +8,10 @@
 
 // Test-target boundary: the workspace denies panicking constructs in
 // production code; tests assert by panicking, so they are exempt here.
+#![expect(
+    clippy::unwrap_used,
+    reason = "integration test target: the helpers of this file unwrap, like its tests"
+)]
 
 mod common;
 

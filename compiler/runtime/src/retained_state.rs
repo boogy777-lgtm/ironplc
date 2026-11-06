@@ -245,8 +245,10 @@ impl RetainedImage {
             .ok_or(RetainedDecodeError::Truncated)?;
         let vars = input
             .take(slot_bytes)?
-            .chunks_exact(SLOT_LEN)
-            .map(|chunk| u64::from_le_bytes(array_of(chunk)))
+            .as_chunks::<SLOT_LEN>()
+            .0
+            .iter()
+            .map(|chunk| u64::from_le_bytes(*chunk))
             .collect();
         let data = input.take(data_len)?.to_vec();
         if !input.0.is_empty() {
