@@ -1,7 +1,7 @@
 use std::net::TcpListener;
 use std::sync::Mutex;
 
-use ironplc_runtime::HostMode;
+use ironplc_runtime::{HostMode, RunState};
 use ironplc_session_client::Session;
 use ironplc_test::device::SoftDevice;
 use spec_test_macro::spec_test;
@@ -10,8 +10,8 @@ use tempfile::TempDir;
 use super::*;
 use crate::cache::ContainerCache;
 use crate::tools::hot_edit::{
-    build_accept_response, build_assemble_response, build_cancel_response, build_status_response,
-    build_test_response, HotEditSession,
+    build_accept_response, build_assemble_response, build_cancel_response, build_start_response,
+    build_status_response, build_stop_response, build_test_response, HotEditSession,
 };
 use crate::tools::test_support::{ed2_options, source, COUNTER_PROGRAM};
 use ironplc_session_client::{Endpoint, TcpEndpoint};
@@ -161,4 +161,113 @@ fn build_status_response_when_in_process_then_the_shape_has_no_device() {
     let json = serde_json::to_value(&response).unwrap();
     assert!(json.get("device").is_none());
     assert_eq!(json["diagnostics"][0]["number"], 8001);
+}
+
+/// A device that serves a program that traps in its first round.
+fn trapping_device() -> (SoftDevice, ResolvedDevice, TempDir) {
+    let candidate = crate::tools::hot_edit::prepare_candidate(
+        &source(
+            "PROGRAM Main
+VAR
+  Counter : DINT;
+END_VAR
+  Counter := 1 / Counter;
+END_PROGRAM",
+        ),
+        &ed2_options(),
+        &cache(),
+    )
+    .map_err(|response| response.diagnostics)
+    .unwrap();
+    let dir = TempDir::new().unwrap();
+    let file = dir.path().join("trapping.iplc");
+    std::fs::write(&file, candidate.program).unwrap();
+    let device = SoftDevice::start(&file);
+    let resolved = tcp_device(device.address().port());
+    (device, resolved, dir)
+}
+
+#[spec_test(REQ_TOL_mcp_176)]
+#[test]
+fn build_stop_response_when_device_then_stopped_and_start_then_running_with_the_status() {
+    let (_device, resolved, _dir) = counter_device();
+
+    let stopped = build_stop_response(&resolved);
+    let stopped_again = build_stop_response(&resolved);
+    let started = build_start_response(&resolved);
+
+    assert!(stopped.ok, "{:?} {:?}", stopped.v_code, stopped.message);
+    assert_eq!(stopped.result.as_deref(), Some("ack"));
+    assert_eq!(stopped.run_state, Some(RunState::Stopped));
+    assert_eq!(stopped.status.unwrap().mode, HostMode::Normal);
+    assert_eq!(stopped.device.unwrap().name, "ironplcvm");
+    assert_eq!(stopped_again.run_state, Some(RunState::Stopped));
+    assert_eq!(started.run_state, Some(RunState::Running));
+    assert!(started.status.is_some());
+}
+
+#[spec_test(REQ_TOL_mcp_177)]
+#[test]
+fn build_stop_response_when_candidate_staged_then_the_edit_is_untouched() {
+    let (_device, resolved, _dir) = counter_device();
+    let cache = cache();
+    let edit = counter_variant("Counter := Counter + 10;");
+    build_accept_response(&source(&edit), &ed2_options(), &cache, &resolved);
+    build_test_response(&resolved);
+
+    let stopped = build_stop_response(&resolved);
+    let started = build_start_response(&resolved);
+
+    assert_eq!(stopped.status.unwrap().mode, HostMode::Testing);
+    let status = started.status.unwrap();
+    assert_eq!(status.mode, HostMode::Testing);
+    assert!(status.candidate.is_some());
+}
+
+/// Starts the device until it refuses: the device traps in its first round,
+/// which runs on its own thread, so a start that comes first is acknowledged.
+fn start_until_refused(device: &ResolvedDevice) -> crate::tools::hot_edit::HotEditResponse {
+    let mut response = build_start_response(device);
+    for _ in 0..100 {
+        if !response.ok {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        response = build_start_response(device);
+    }
+    response
+}
+
+#[spec_test(REQ_TOL_mcp_178)]
+#[test]
+fn build_start_response_when_device_is_faulted_then_v6019_and_stop_is_accepted() {
+    let (_device, resolved, _dir) = trapping_device();
+
+    let started = start_until_refused(&resolved);
+    let stopped = build_stop_response(&resolved);
+
+    assert!(!started.ok);
+    assert_eq!(started.v_code.as_deref(), Some("V6019"));
+    assert_eq!(started.run_state, None);
+    assert!(stopped.ok);
+    assert_eq!(stopped.run_state, Some(RunState::Stopped));
+}
+
+#[spec_test(REQ_TOL_mcp_178)]
+#[test]
+fn build_start_response_when_in_process_then_v4022() {
+    let session = Mutex::new(HotEditSession::default());
+    let candidate = crate::tools::hot_edit::prepare_candidate(
+        &source(COUNTER_PROGRAM),
+        &ed2_options(),
+        &cache(),
+    )
+    .map_err(|response| response.diagnostics)
+    .unwrap();
+    crate::tools::hot_edit::send_candidate(candidate.program, None, &Default::default(), &session);
+
+    let started = build_start_response(&session);
+
+    assert!(!started.ok);
+    assert_eq!(started.v_code.as_deref(), Some("V4022"));
 }

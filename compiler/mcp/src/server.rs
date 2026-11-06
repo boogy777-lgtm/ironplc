@@ -16,7 +16,8 @@ use crate::tools::container_drop::ContainerDropInput;
 use crate::tools::device::DeviceInput;
 use crate::tools::explain_diagnostic::ExplainDiagnosticInput;
 use crate::tools::hot_edit::{
-    HotEditAcceptInput, HotEditDeviceInput, HotEditResponse, HotEditSession, Target,
+    DeviceScanInput, HotEditAcceptInput, HotEditDeviceInput, HotEditResponse, HotEditSession,
+    Target,
 };
 use crate::tools::messages::{MessageObjectsInput, MessagesInput};
 use crate::tools::pou_lineage::PouLineageInput;
@@ -445,6 +446,40 @@ impl IronPlcMcp {
         let response = self
             .run_hot_edit(input.device, |target| {
                 tools::hot_edit::build_cancel_response(target)
+            })
+            .await?;
+        hot_edit_json(&response)
+    }
+
+    /// Starts the scan of a device.
+    #[tool(
+        name = "device_start",
+        description = "Starts the scan of a device: it executes scan rounds again. Run and Stop are apart from the edit: this compiles nothing and does not touch a staged candidate or a test in progress. Starting a running device changes nothing. `device` is required (`{address, port}` for a TCP connection, or `{device_id}` for a device that IronLink has a route to, see `browse_network`). The response carries `run_state` (`running`) and the `status` after the command, and names the device that answered in `device`. A faulted device refuses with V6019: a start does not clear a fault, restart the device. A host without a scan loop refuses with V4022."
+    )]
+    async fn device_start(
+        &self,
+        Parameters(input): Parameters<DeviceScanInput>,
+    ) -> Result<ContentBlock, rmcp::ErrorData> {
+        let response = self
+            .run_hot_edit(Some(input.device), |target| {
+                tools::hot_edit::build_start_response(target)
+            })
+            .await?;
+        hot_edit_json(&response)
+    }
+
+    /// Stops the scan of a device.
+    #[tool(
+        name = "device_stop",
+        description = "Stops the scan of a device: it finishes the round it is in, executes no further round, and goes on answering every command, including the edit commands, which it applies without executing the program. Run and Stop are apart from the edit: this compiles nothing. A running device writes its retained values when it stops. Stopping a stopped device changes nothing; a faulted device can be stopped and still reports its fault. `device` is required (`{address, port}` for a TCP connection, or `{device_id}` for a device that IronLink has a route to, see `browse_network`). The response carries `run_state` (`stopped`) and the `status` after the command, and names the device that answered in `device`."
+    )]
+    async fn device_stop(
+        &self,
+        Parameters(input): Parameters<DeviceScanInput>,
+    ) -> Result<ContentBlock, rmcp::ErrorData> {
+        let response = self
+            .run_hot_edit(Some(input.device), |target| {
+                tools::hot_edit::build_stop_response(target)
             })
             .await?;
         hot_edit_json(&response)

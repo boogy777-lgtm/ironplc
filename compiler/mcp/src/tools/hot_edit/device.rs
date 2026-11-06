@@ -3,7 +3,8 @@
 //! The command is the same [`Command`] the in-process host executes, and the
 //! response has the same shape, so the contract of a tool does not fork: a
 //! refusal of the device is its V-code and message, a success is `"ack"` with
-//! the status after the command. The device drives the scan round of
+//! the status after the command (the scan control, `startScan` and `stopScan`,
+//! also carries the run state it left). The device drives the scan round of
 //! `testEdits`, `untestEdits` and `assembleEdits` itself before it
 //! acknowledges, so there is nothing for the tool to drive.
 //!
@@ -13,7 +14,7 @@
 //! while another session is open is refused with V6014, which the tool returns.
 
 use ironplc_problems::text;
-use ironplc_runtime::{Command, Response};
+use ironplc_runtime::{Command, Response, RunState};
 use ironplc_session_client::{Session, SessionError};
 
 use super::{internal_failure, validation_failure, HotEditResponse};
@@ -39,10 +40,26 @@ pub(super) fn exchange(device: &ResolvedDevice, command: Command) -> HotEditResp
 fn carry_out(session: &mut Session, command: Command) -> Result<HotEditResponse, SessionError> {
     match session.send(&command)? {
         Response::Status(status) => Ok(HotEditResponse::ok("ack", status)),
-        Response::Ack => match session.send(&Command::GetStatus)? {
-            Response::Status(status) => Ok(HotEditResponse::ok("ack", status)),
-            other => Ok(unexpected(&other)),
-        },
+        Response::Ack => status_after(session, None),
+        // The scan control answers the state it left: the response carries it
+        // beside the status.
+        Response::RunState { run_state } => status_after(session, Some(run_state)),
+        other => Ok(unexpected(&other)),
+    }
+}
+
+/// The status after an acknowledged command, with the run state the command
+/// answered, if it did.
+fn status_after(
+    session: &mut Session,
+    run_state: Option<RunState>,
+) -> Result<HotEditResponse, SessionError> {
+    match session.send(&Command::GetStatus)? {
+        Response::Status(status) => {
+            let mut response = HotEditResponse::ok("ack", status);
+            response.run_state = run_state;
+            Ok(response)
+        }
         other => Ok(unexpected(&other)),
     }
 }

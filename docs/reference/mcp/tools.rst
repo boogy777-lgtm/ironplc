@@ -367,6 +367,33 @@ session at a time: when another session is open, ``v_code`` is ``V6014``. A
 device that cannot be reached returns a
 :doc:`P8003 </reference/compiler/problems/P8003>` diagnostic.
 
+Run and Stop Tools
+==================
+
+The two :literal:`device_*` tools start and stop the scan of a device. They are
+apart from the edit: they change whether the device executes scan rounds and
+nothing else. They compile nothing, and a staged candidate or a test in progress
+is as it was after either tool.
+
+:literal:`device_start`
+   Starts the scan: the device executes rounds again. The first round runs at
+   once and the period of each cyclic task counts from it.
+
+:literal:`device_stop`
+   Stops the scan: the device finishes the round it is in and executes no
+   further round. It goes on answering every command, and it applies an edit
+   command without executing the program. A running device writes its retained
+   values when it stops.
+
+Both take a required ``device``, named the way the :literal:`hot_edit_*` tools
+name it above. The server's own session has no scan to start or stop. The
+response has the fields of the :literal:`hot_edit_*` tools and one more,
+``run_state``: ``running`` after a start, ``stopped`` after a stop. A start of a
+running device and a stop of a stopped device are acknowledged and change
+nothing. A faulted device accepts a stop and refuses a start with
+:doc:`V6019 </reference/runtime/problems/V6019>`, because a start does not clear a
+fault; restart the device. See :ref:`ironplcvm-run-stop` for what the device does.
+
 Network Tools
 =============
 
