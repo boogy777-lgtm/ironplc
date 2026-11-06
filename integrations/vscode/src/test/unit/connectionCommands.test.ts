@@ -14,9 +14,8 @@ import * as path from 'path';
 const CONNECTION_COMMANDS: { id: string; title: string }[] = [
   { id: 'ironplc.connect', title: 'Connect to Device' },
   { id: 'ironplc.disconnect', title: 'Disconnect from Device' },
-  { id: 'ironplc.build', title: 'Build & Commit' },
-  { id: 'ironplc.buildTrial', title: 'Build & Trial' },
   { id: 'ironplc.download', title: 'Download to Controller' },
+  { id: 'ironplc.onlineEdit', title: 'Online Edit' },
   { id: 'ironplc.runController', title: 'Run Controller' },
   { id: 'ironplc.stopController', title: 'Stop Controller' },
 ];

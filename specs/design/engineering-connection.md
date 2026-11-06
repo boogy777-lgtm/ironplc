@@ -35,8 +35,8 @@ This spec builds on:
   binding decisions — dual transport with one protocol, deferred wire
   authentication, build as reuse
 - **[ADR-0064](../adrs/0064-online-change-on-a-redundant-pair.md)**: the
-  Rockwell-adapted session lifecycle — assemble requires Test, Build &
-  Commit is the finalize-equivalent, and the redundant-pair pipeline
+  Rockwell-adapted session lifecycle — assemble requires Test, Finalize all
+  is the finalize-equivalent, and the redundant-pair pipeline
 - **[vm-cli.md](vm-cli.md)**: the `ironplcvm serve` session requirements
   (REQ-VC-vm-cli-018 through REQ-VC-vm-cli-029)
 - **[ADR-0084](../adrs/0084-plc-discovery-and-controller-selection.md)**: the device
@@ -554,37 +554,47 @@ The same compile feeds two build modes:
 The only difference between the modes is the delivery envelope: compile
 and the container bytes are identical (DRY).
 
-### Trial-run (testEdits) in the build pipeline
+### The online edit dialog in the build pipeline
 
-The online build has two commit policies over the same upload
-(ADR-0064):
+The online build is an edit that passes four stages (ADR-0064), and the editor
+shows it as one dialog, **IronPLC: Online Edit** (`ironplc.onlineEdit`): a
+Quick Pick that stays open through all stages. It replaces the Build & Commit
+and Build & Trial commands and the modal trial dialog. The stages are Build
+(`ironplcc compile`, the editor's only step that is not a device command),
+Accept (`acceptEdits`), Test (`testEdits`) and Assemble (`assembleEdits`); the
+exits are Untest and Cancel (`untestEdits`, `cancelEdits`; while the candidate
+executes the device first reverts to the normal artifact, as one command).
 
-- **Build & Commit** — the finalize-equivalent: one action executing
-  `acceptEdits` → `testEdits` → `assembleEdits` automatically; Test is
-  never skipped. Intended for non-safety changes.
-- **Build & Trial** — the full manual sequence with verification
-  checkpoints between the steps: `acceptEdits`, then `testEdits` to run
-  the candidate and observe it, then resolve it with `assembleEdits`
-  (promote), `untestEdits` (revert to the normal artifact), or
-  `cancelEdits` (discard; while the candidate executes the device first
-  reverts to the normal artifact, as one command). Safety-critical
-  changes use this manual sequence.
-
-Zero new commands: these are exactly the hot-edit FSM commands — `test`,
+Zero new commands: the commands are exactly the hot-edit FSM commands — `test`,
 `untest`, `assemble`, `cancel` (the `RuntimeHost` methods of those
 names in `compiler/runtime/src/host.rs`) — applied at a scan boundary
 (`RuntimeHost::apply_pending_swap`), with the device loop running the boundary
 round before it acknowledges (`DeviceLoop::step` in
 `compiler/vm-cli/src/device_loop.rs`).
 
-The device panel renders a Testing phase from the reported `mode`, and
-Revert is disabled or rejected when the status reports `migration: true`:
-a migration candidate has no revert path, so `untestEdits` answers V4011
-UntestUnsupported (`RuntimeHost::untest` in
-`compiler/runtime/src/host.rs`). The panel reads the existing
-`HostStatus.migration` flag (same file) rather than inferring it. A replace
-candidate (`candidateMode` `replace`, stage `testingReplace`) has no revert path
-either; the panel reads the edit view, which says so.
+**What the dialog shows.** The title names the edit stage and carries the step
+and the total (`step`/`totalSteps` of the Quick Pick); the prompt line marks the
+stages `✔` (done), `●` (current) and `○` (to do), without colour; the busy line
+shows while a command runs. The items are **Next** (labelled with the next
+stage: Build, Accept, Test, Assemble), **Finalize all** (an item that runs the
+steps the device names, not a toggle) and **Cancel** (the exit of the current
+stage). The labels, which items are enabled and the reason of a disabled one
+(a V-code and its text, in the description of the item) are the `edit` view of
+the status (ADR-0087): the editor holds no table of its own. It holds exactly
+one fact, that a build of the current sources succeeded in this dialog; while the
+device is idle and the fact is missing, Next is Build and Finalize all starts
+with Build, and every other case follows the view. Cancel under Test is one
+command that the device runs as untest then cancel; under a migration or a
+replace candidate it is disabled with V4011 and Assemble is the exit. The
+`warning` of the view (a restart of the device loses the candidate) is shown as
+a line of the dialog, and a candidate staged by a Download (stage
+`testingReplace`) is shown with the same stages.
+
+**Closing and reopening.** `ignoreFocusOut` keeps the dialog open when focus
+moves; Esc hides it and leaves the candidate where it is, and a status bar item
+reopens it while a candidate exists. After every command, refused or failed
+ones included, the editor reads the status again and renders the view, so every
+failure ends in a state whose exits are shown.
 
 Trial state is host-side: a staged candidate and Testing mode survive a
 session loss, so reconnect reconciliation renders the mode reported by
@@ -592,19 +602,18 @@ session loss, so reconnect reconciliation renders the mode reported by
 
 The design adds only the wiring and the reporting:
 
-1. **Build button → existing commands.** With the profile in Connected,
-   Build runs: compile locally (the shared helper), send the bytes with
+1. **The dialog → existing commands.** With the profile in Connected, the
+   stages run: compile locally (the shared helper), send the bytes with
    `acceptEdits` (with the ADR-0061 migration decisions when the host
-   answers V4010), then `testEdits` and `assembleEdits` to promote — as
-   one finalize-equivalent action for Build & Commit, or with
-   verification checkpoints between the steps when the engineer chose
-   trial-run. Assemble requires the candidate to have executed under
+   answers V4010), then `testEdits` and `assembleEdits` to promote — one stage at
+   a time with Next, or as the steps of Finalize all with the status read again
+   between them. Assemble requires the candidate to have executed under
    Test; a host that is asked to assemble from Accepted refuses with the
    runtime CSV's assemble-without-test code (ADR-0064). A full initial
    deploy onto an empty device is the same `acceptEdits` → `testEdits` →
    `assembleEdits` sequence; the host's staging path makes no distinction
    that would need new commands, and the test at the barrier is trivial
-   for empty state.
+   for empty state. The acknowledged assemble writes the download record.
 2. **Build status on the device panel.** The panel derives its phases
    from the client's own position in the sequence — compiling (local
    compile running) → uploading (awaiting the `acceptEdits` response) →

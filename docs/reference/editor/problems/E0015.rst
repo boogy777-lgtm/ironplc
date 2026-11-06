@@ -16,8 +16,9 @@ it did. Deploying local edits over unknown device state is refused
    acknowledges your build.
 
 2. **Review before building**: while the application on the device is not the
-   one that was recorded, the connection stays up for monitoring, but Build is
-   refused until the project matches the device again.
+   one that was recorded, the connection stays up for monitoring, but the Accept
+   stage of the online edit dialog is refused until the project matches the device
+   again.
 
 When the device acknowledges a build from this workspace, and when a session
 starts with a container, the extension records what the device received in the

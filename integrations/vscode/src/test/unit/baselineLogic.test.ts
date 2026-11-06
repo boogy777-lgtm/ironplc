@@ -452,21 +452,34 @@ suite('download record guards', () => {
     const source = extensionSources().find(candidate => candidate.file === 'buildCommands.ts');
 
     assert.ok(source);
-    // Defined once; the commit path, the trial's assemble and the Download's
-    // assemble call it; it is the only place that reaches the connection's recorder.
+    // Defined once; the Download's assemble calls it and the dialog's assemble
+    // reaches it through the build support; it is the only place that reaches
+    // the connection's recorder.
     assert.strictEqual(source.text.split('function acknowledgeAssemble(').length - 1, 1);
-    assert.strictEqual(source.text.split('await acknowledgeAssemble(').length - 1, 3);
+    assert.strictEqual(source.text.split('await acknowledgeAssemble(').length - 1, 1);
     assert.strictEqual(source.text.split('connection.recordDownload(').length - 1, 1);
+  });
+
+  test('onlineEditCommands_when_scanned_then_it_compiles_and_records_through_the_build_support_only', () => {
+    const source = extensionSources().find(candidate => candidate.file === 'onlineEditCommands.ts');
+
+    assert.ok(source);
+    // The compile and the recorder exist once, in buildCommands.ts; the dialog calls them.
+    assert.strictEqual(source.text.split('support.compile(').length - 1, 1);
+    assert.strictEqual(source.text.split('support.acknowledgeAssemble(').length - 1, 1);
+    for (const own of ['recordDownload(', 'buildContainer(', 'runCompiler(', 'compileSourceToContainer(']) {
+      assert.ok(!source.text.includes(own), `onlineEditCommands.ts calls ${own}`);
+    }
   });
 
   test('buildCommands_when_scanned_then_only_the_download_keeps_the_container_and_registers_its_table_command', () => {
     const source = extensionSources().find(candidate => candidate.file === 'buildCommands.ts');
 
     assert.ok(source);
-    // The two build paths record without a copy; the Download, which replaced the
+    // The dialog records without a copy; the Download, which replaced the
     // application, keeps the container that was sent beside the record.
     assert.strictEqual(source.text.split('acknowledgeAssemble(sent.path, status, true)').length - 1, 1);
-    assert.strictEqual(source.text.split('await acknowledgeAssemble(').length - 1, 3);
+    assert.strictEqual(source.text.split('await acknowledgeAssemble(').length - 1, 1);
     assert.ok(source.text.includes('registerCommand(DOWNLOAD_ACTIONS.download.commandId, download)'));
   });
 });

@@ -7,6 +7,7 @@ import {
   preservablePairs,
 } from '../../hotEditMigrationLogic';
 import {
+  EditIdentity,
   HotEditProtocolError,
   MigrationDecisionMap,
   TypeChangePair,
@@ -21,6 +22,7 @@ import { rejectWith } from './testHelpers';
 class MockAcceptClient {
   private readonly outcomes: (HotEditProtocolError | undefined)[] = [];
   readonly migrations: (MigrationDecisionMap | undefined)[] = [];
+  readonly edits: (EditIdentity | undefined)[] = [];
 
   /** Queues the outcome (an error, or success when omitted) per call, in order. */
   respond(...outcomes: (HotEditProtocolError | undefined)[]): MockAcceptClient {
@@ -28,8 +30,9 @@ class MockAcceptClient {
     return this;
   }
 
-  acceptEdits = async (_program: Uint8Array, migration?: MigrationDecisionMap): Promise<void> => {
+  acceptEdits = async (_program: Uint8Array, migration?: MigrationDecisionMap, edit?: EditIdentity): Promise<void> => {
     this.migrations.push(migration);
+    this.edits.push(edit);
     const outcome = this.outcomes[this.migrations.length - 1];
     if (outcome) {
       throw outcome;
@@ -153,6 +156,16 @@ suite('acceptEditsWithDecisions', () => {
     await acceptEditsWithDecisions(client, PROGRAM, ui);
 
     assert.deepStrictEqual(client.migrations, [undefined, { [1]: 'init', [2]: 'preserve' }]);
+  });
+
+  test('acceptEditsWithDecisions_when_pairs_then_the_edit_identity_rides_both_attempts', async () => {
+    const edit: EditIdentity = { name: 'main.st', origin: 'ironplc-vscode' };
+    const client = new MockAcceptClient().respond(refusal([pair({ uid: 1 })]));
+    const { ui } = scriptedUi([]);
+
+    await acceptEditsWithDecisions(client, PROGRAM, ui, edit);
+
+    assert.deepStrictEqual(client.edits, [edit, edit]);
   });
 
   test('acceptEditsWithDecisions_when_cancelled_then_rethrows_original_refusal', async () => {

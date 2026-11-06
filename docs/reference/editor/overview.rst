@@ -101,6 +101,63 @@ restart the device to clear the fault. These commands differ from the Run lens
 over a program, which compiles the program in the editor and runs it in the
 language server.
 
+.. _editor-online-edit:
+
+Online Edit
+-----------
+
+Changes the running application of the connected controller in stages, in one
+dialog that stays open. The command needs an open connection.
+
+:Menu Location: :menuselection:`Command Palette --> IronPLC: Online Edit`
+
+An online edit passes four stages: :guilabel:`Build` (the editor compiles the
+program), :guilabel:`Accept` (the controller loads the compiled program as a
+candidate and checks it against the running one), :guilabel:`Test` (the
+controller runs the candidate while the original is kept) and :guilabel:`Assemble`
+(the candidate becomes the running application). The dialog is a Quick Pick:
+
+* The title names the stage of the edit on the controller and shows the step
+  (for example ``3/4``). The line below the input marks each stage as done
+  (``✔``), current (``●``) or still to do (``○``). A progress bar shows while a
+  stage runs.
+* :guilabel:`Next` runs the current stage and is labelled with it (Build, Accept,
+  Test or Assemble).
+* :guilabel:`Finalize all` runs the remaining stages in order and reads the state
+  of the controller again between them. It is available when no candidate is
+  staged; the controller refuses it otherwise.
+* :guilabel:`Cancel` is the exit of the current stage. While the candidate is
+  running it first returns to the original program, then discards the candidate.
+  A candidate that migrates variables of a changed type, or a candidate sent by
+  :ref:`Download to Controller <editor-download>`, cannot be reverted once it runs
+  (:doc:`V4011 </reference/runtime/problems/V4011>`); :guilabel:`Assemble` is the only
+  exit then. The description of a disabled item gives the reason, and selecting it
+  does nothing.
+
+The labels, which items are available and the reason for one that is not come from
+the controller itself (the ``edit`` view of its status, described in
+:ref:`ironplcvm-edit-view`); the editor adds none of its own. The one
+thing the editor decides is that a build of the current sources succeeded in the
+dialog: until then, :guilabel:`Next` is :guilabel:`Build` and
+:guilabel:`Finalize all` starts with it. Editing a source file after the build
+makes the build stale.
+
+The dialog stays open when focus moves to another window. :kbd:`Esc` hides it and
+leaves the candidate where it is; the status bar item :guilabel:`Online Edit`,
+shown while a candidate exists, opens the dialog again. A candidate lives only in
+the memory of the controller, so a restart of the controller loses it, and the
+dialog says so while the candidate exists. A refused command is shown with the
+problem code of the controller, and the dialog shows the state the controller
+reports afterwards.
+
+The Accept stage refuses (:doc:`E0015 <problems/E0015>`) when the application on
+the controller is not the one the project last downloaded to it. When the
+controller acknowledges the assemble, the editor writes the download record of the
+controller (:program:`ironplcc record-download`), as :ref:`Download to Controller
+<editor-download>` does.
+
+.. _editor-download:
+
 Download to Controller
 ----------------------
 

@@ -1,18 +1,17 @@
 /**
- * The build commands of the engineering connection: `ironplc.build` (Build &
- * Commit, the finalize-equivalent), `ironplc.buildTrial` (Build & Trial,
- * with the verification checkpoint between upload and resolve) and
- * `ironplc.download` (Download, the replace mode, ADR-0088). All reuse
- * the connected `HotEditSession` and the vscode-free sequencing in
- * `buildLogic` and `downloadLogic`; this module is glue — it resolves the program, compiles it
- * with the shared compile path, renders phases and errors, and offers the
- * trial exits. Build refuses while the baseline is stale (E0015, fail-
- * closed) and only in the Connected state, the only state that may send
- * commands; Download does not refuse a stale baseline, because it replaces the
- * application and says so in its confirmation. The device's acknowledgement of an assemble (Build & Commit, or
- * the assemble that resolves a trial) is handled in one function,
- * `acknowledgeAssemble`, which records the download. A build writes the shared Build area (`buildAreaLogic`), which it
- * receives from the caller and clears when it starts.
+ * The build support of the engineering connection and the Download
+ * (`ironplc.download`, the replace mode, ADR-0088). The online-edit dialog
+ * (`onlineEditCommands`) sends an edit step by step and shares the compile, the
+ * session and the record of an acknowledged assemble through `BuildSupport`, so
+ * each exists once. The Download reuses the connected `HotEditSession` and the
+ * vscode-free sequencing in `downloadLogic`; this module is glue: it resolves
+ * the program, compiles it with the shared compile path, and renders phases and
+ * errors. Download does not refuse a stale baseline, because it replaces the
+ * application and says so in its confirmation. The device's acknowledgement of
+ * an assemble (the dialog's Assemble, the Download) is handled in one function,
+ * `acknowledgeAssemble`, which records the download. A build writes the shared
+ * Build area (`buildAreaLogic`), which it receives from the caller and clears
+ * when it starts.
  */
 
 import * as vscode from 'vscode';
@@ -26,10 +25,7 @@ import { isDebuggableProgram, programKind } from './debugAdapterLogic';
 import { ReportProblem } from './debugAdapter';
 import { ProblemCode } from './vscodeCommon';
 import {
-  EditIdentity,
-  formatStatusDetail,
   formatStatusText,
-  HotEditProtocolError,
   HotEditSession,
   HotEditStatus,
 } from './hotEditSession';
@@ -46,26 +42,37 @@ import {
   syncIdsStep,
 } from './downloadLogic';
 import { ConnectionFeature } from './connection';
-import {
-  BuildSession,
-  resolveTrial,
-  runBuildCommit,
-  runBuildTrial,
-  TrialResolution,
-} from './buildLogic';
-import { createMigrationDecisionUi, createSyncResolutionUi, resolvePathInteractive } from './hotEdit';
+import { createSyncResolutionUi, resolvePathInteractive } from './hotEdit';
 
 /** The container a build sends: the file it is read from, and its bytes. */
-interface SentContainer {
+export interface SentContainer {
   path: string;
   bytes: Uint8Array;
 }
 
 /** The advisory origin label every build stamps on its pending-edit record. */
-const BUILD_ORIGIN = 'ironplc-vscode';
+export const BUILD_ORIGIN = 'ironplc-vscode';
 
 /** A step of a Download failed and the person has been told: the sequence stops quietly. */
 class ReportedError extends Error {}
+
+/**
+ * What the commands that send a build share, so each step exists once: the
+ * session of the open connection, the compile into the Build area and the
+ * handling of an acknowledged assemble. The Download and the online-edit dialog
+ * use them.
+ */
+export interface BuildSupport {
+  /** The session of the open connection, or undefined with a warning when there is none. */
+  connectedSession(): Promise<HotEditSession | undefined>;
+  /**
+   * Compiles the program into the Build area (or reads the container). A
+   * failure is reported as E0006 and answers undefined.
+   */
+  compile(program: string): Promise<SentContainer | undefined>;
+  /** The device acknowledged an assemble of `container`: records the download. */
+  acknowledgeAssemble(container: string, status: HotEditStatus, keepContainer?: boolean): Promise<void>;
+}
 
 export function registerBuildCommands(
   context: vscode.ExtensionContext,
@@ -76,10 +83,8 @@ export function registerBuildCommands(
   buildArea: BuildAreaChannel,
   /** Shows an error whose text starts with its code, with the link to the page of the code. */
   showCoded: (code: string, text: string) => void,
-): void {
+): BuildSupport {
   context.subscriptions.push(
-    vscode.commands.registerCommand('ironplc.build', () => build(false)),
-    vscode.commands.registerCommand('ironplc.buildTrial', () => build(true)),
     vscode.commands.registerCommand(DOWNLOAD_ACTIONS.download.commandId, download),
   );
 
@@ -98,80 +103,10 @@ export function registerBuildCommands(
     return session;
   }
 
-  async function build(trial: boolean): Promise<void> {
-    const session: BuildSession | undefined = await connectedSession();
-    if (!session) {
-      return;
-    }
-    if (connection.baselineState === 'mismatch') {
-      reportProblem(
-        ProblemCode.StaleBaseline,
-        'The application on the device is not the one this project last downloaded to it. Re-sync the project from the device, rebuild, then connect again.',
-      );
-      return;
-    }
-
-    const program = await resolvePathInteractive(
-      trial ? 'Select the program to build and trial' : 'Select the program to build',
-      candidate => isDebuggableProgram(candidate, sourceExtensions),
-      'IronPLC programs',
-      ['iplc', ...sourceExtensions.map(ext => ext.replace('.', ''))],
-    );
-    if (!program) {
-      return;
-    }
-
-    connection.setBuildPhase('compiling');
-    let sent: SentContainer;
-    try {
-      sent = await compileProgram(program);
-    }
-    catch (err) {
-      connection.setBuildPhase(null);
-      reportProblem(
-        ProblemCode.CompileFailed,
-        `${program}: ${err instanceof Error ? err.message : String(err)} (see the "IronPLC Build" output for details).`,
-      );
-      return;
-    }
-
-    const edit: EditIdentity = { name: path.basename(program), origin: BUILD_ORIGIN };
-    try {
-      if (trial) {
-        await runTrial(session, sent, edit);
-      }
-      else {
-        const status = await runBuildCommit(
-          session,
-          sent.bytes,
-          edit,
-          createMigrationDecisionUi(),
-          phase => connection.setBuildPhase(phase),
-        );
-        await acknowledgeAssemble(sent.path, status);
-        void vscode.window.showInformationMessage(`IronPLC Build: ${formatStatusText(status)}.`);
-      }
-    }
-    catch (err) {
-      if (err instanceof HotEditProtocolError) {
-        void vscode.window.showErrorMessage(`IronPLC Build: ${err.toString()}`);
-      }
-      else {
-        void vscode.window.showErrorMessage(
-          `IronPLC Build: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
-    }
-    finally {
-      connection.setBuildPhase(null);
-    }
-  }
-
   /**
    * The device acknowledged an assemble of the container file `container`: the
    * device now runs it. The one place that handles that acknowledgement, for
-   * Build & Commit and for the assemble that resolves a trial; it records the
-   * download.
+   * Build & Commit, the dialog and the Download; it records the download.
    */
   async function acknowledgeAssemble(container: string, status: HotEditStatus, keepContainer = false): Promise<void> {
     await connection.recordDownload(container, status, keepContainer);
@@ -205,16 +140,11 @@ export function registerBuildCommands(
         () => syncProjectIds(program),
       ),
       compile: async () => {
-        try {
-          return await compileProgram(program);
-        }
-        catch (err) {
-          reportProblem(
-            ProblemCode.CompileFailed,
-            `${program}: ${err instanceof Error ? err.message : String(err)} (see the "IronPLC Build" output for details).`,
-          );
+        const sent = await compileReported(program);
+        if (sent === undefined) {
           throw new ReportedError('compile failed');
         }
+        return sent;
       },
       confirm: async (request) => {
         const { message, detail } = formatReplaceConfirmation(request);
@@ -295,44 +225,18 @@ export function registerBuildCommands(
     }
   }
 
-  /** Build & Trial: accept → test, then hold for the engineer's resolution. */
-  async function runTrial(session: BuildSession, sent: SentContainer, edit: EditIdentity): Promise<void> {
-    const status = await runBuildTrial(
-      session,
-      sent.bytes,
-      edit,
-      createMigrationDecisionUi(),
-      phase => connection.setBuildPhase(phase),
-    );
-    connection.updateStatus(status);
-
-    // A migration candidate has no revert path (untest answers V4011), so
-    // the exit list omits Untest — commit or cancel are the only exits.
-    const exits = status.migration
-      ? ['Assemble', 'Cancel']
-      : ['Assemble', 'Untest', 'Cancel'];
-    const picked = await vscode.window.showInformationMessage(
-      `IronPLC Build & Trial (the candidate is running under Test):\n${formatStatusDetail(status)}`,
-      ...exits,
-    );
-    const resolution: TrialResolution | undefined = picked === 'Assemble'
-      ? 'assemble'
-      : picked === 'Untest'
-        ? 'untest'
-        : picked === 'Cancel'
-          ? 'cancel'
-          : undefined;
-    if (resolution === undefined) {
-      // Esc keeps the candidate under Test; the device panel shows the
-      // Testing state and the exits stay available on the next build.
-      return;
+  /** Compiles the program; a failure is reported as E0006 and answers undefined. */
+  async function compileReported(program: string): Promise<SentContainer | undefined> {
+    try {
+      return await compileProgram(program);
     }
-    const post = await resolveTrial(session, resolution);
-    connection.updateStatus(post);
-    if (resolution === 'assemble') {
-      await acknowledgeAssemble(sent.path, post);
+    catch (err) {
+      reportProblem(
+        ProblemCode.CompileFailed,
+        `${program}: ${err instanceof Error ? err.message : String(err)} (see the "IronPLC Build" output for details).`,
+      );
+      return undefined;
     }
-    void vscode.window.showInformationMessage(`IronPLC Build & Trial: ${formatStatusText(post)}.`);
   }
 
   /**
@@ -353,4 +257,6 @@ export function registerBuildCommands(
     const container = await buildContainer(buildArea, compilerPath, program, os.tmpdir(), currentCompilerSettings());
     return { path: container, bytes: await readFile(container) };
   }
+
+  return { connectedSession, compile: compileReported, acknowledgeAssemble };
 }
